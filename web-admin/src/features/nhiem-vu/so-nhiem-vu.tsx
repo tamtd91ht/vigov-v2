@@ -13,6 +13,7 @@ import {
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
+import { StaffCombobox } from "@/components/staff-combobox";
 import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import {
@@ -49,6 +50,7 @@ import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import type {
   identity_boPhanRa,
+  identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
   identity_khoiNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
@@ -139,13 +141,17 @@ import {
   cauTuKetLuan,
   chiaNhomVanBan,
   chuyenSangDuoc,
+  clickableTransitions,
+  kanbanDropHint,
+  kanbanMoveDoneText,
+  kanbanMovePendingText,
+  kanbanMoveRefusedPrefix,
   coKhoiVanBanChiDao,
   cotPhaiDoc,
   docBangNhanTrangThai,
   docDanhBaChonNguoi,
   dongCuaNhom,
   dongVanBan,
-  duocBamChuyen,
   duocTraLai,
   duongDanTuLoc,
   formSuaTuChiTiet,
@@ -190,6 +196,7 @@ import {
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
+import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 
 /**
@@ -493,8 +500,12 @@ export function SoNhiemVu({
   // Tăng khi một đề nghị lùi hạn vừa gửi xong từ drawer — hàng chờ phải thấy nó. KHÔNG gắn vào
   // `lanTai`: mỗi lần ghi trên sổ mà đọc lại hàng chờ là vứt mọi trang `Xem thêm` lãnh đạo đã mở.
   const [lanHangCho, datLanHangCho] = useState(0);
+  // Kanban moves — separate from the drawer's `dangGui`/`loiGhi`: the answer belongs on the card
+  // that was moved, not in a drawer that may be showing another task.
+  const [kanbanPending, setKanbanPending] = useState<KanbanMove["pending"]>(null);
+  const [kanbanResult, setKanbanResult] = useState<KanbanMoveResult | null>(null);
 
-  const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
+  const khoa =`${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
   // gì làm câu trả lời cũ hết hiệu lực.
   const khoaKanban = `${JSON.stringify(loc)}|${lanTai}`;
@@ -666,6 +677,25 @@ export function SoNhiemVu({
     goi.then(xongGhi);
   }
 
+  /**
+   * NO OPTIMISTIC MOVE. The card stays where it is, marked pending, until the server answers;
+   * only then does the board reload. A card that jumps and silently jumps back is a change the
+   * clerk believes was made.
+   */
+  function moveOnKanban(task: petitions_nhiemVuRa, target: TrangThaiNhiemVu, via: KanbanMoveVia) {
+    if (kanbanPending !== null) return;
+    setKanbanResult(null);
+    setKanbanPending({ code: task.code, target });
+    moveTaskStatus(task.code, target, via).then((r) => {
+      setKanbanPending(null);
+      setKanbanResult(r);
+      if (!r.ok) return;
+      // The drawer re-reads only if it shows this very task (`docLai`); the board re-reads always.
+      guiDrawer({ loai: "docLai", ma: task.code });
+      datLanTai((n) => n + 1);
+    });
+  }
+
   return (
     <section className="man-nhiem-vu" aria-labelledby="tieu-de-so-nhiem-vu">
       <h2 id="tieu-de-so-nhiem-vu">Sổ nhiệm vụ của xã</h2>
@@ -697,6 +727,7 @@ export function SoNhiemVu({
           danhBaLanhDao={kqDanhBaLanhDao}
           // `POST /api/v1/tasks` nhận `documents`; màn Biên bản thì không — xem prop.
           coDanhSachVanBan
+          staffSearch
           dangGui={dangGui}
           loi={loiGhi}
           huy={() => {
@@ -797,6 +828,12 @@ export function SoNhiemVu({
           moNhiemVu={(n) => {
             guiDrawer({ loai: "mo", nhiemVu: n });
             datLoiGhi(null);
+          }}
+          move={{
+            permissions: quyen,
+            pending: kanbanPending,
+            result: kanbanResult,
+            move: moveOnKanban,
           }}
         />
       )}
@@ -966,8 +1003,9 @@ export function KhoiChuaDung() {
  * `Sắp đến hạn` đều bị máy chủ TỪ CHỐI bằng 400 kèm lý do, nên vẽ chúng ra là vẽ hai ô mà mỗi lần
  * bấm đổi quyển sổ thành một trang lỗi.
  *
- * Ô `Người thực hiện` là Ô CHỌN từ danh bạ chọn người (`GET /api/v1/staff-directory`, mọi cán bộ
- * đăng nhập đọc được). Giá trị là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp.
+ * Ô `Người thực hiện` là Ô GÕ TÊN ĐỂ TÌM (`StaffCombobox`) trên danh bạ chọn người
+ * (`GET /api/v1/staff-directory`, mọi cán bộ đăng nhập đọc được). Chữ gõ lọc TẠI CHỖ, không đi lên
+ * mạng hay đường dẫn; giá trị là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp.
  */
 export function HangLoc({
   loc,
@@ -1142,14 +1180,14 @@ export function HangLoc({
 
       {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
           chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4). */}
-      <OChonCanBo
+      <StaffCombobox
         id="loc-nguoi-thuc-hien"
-        nhan="Người thực hiện"
-        nhanTrong={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
-        giaTri={loc.nguoiThucHienMa ?? ""}
-        danhBa={db.ds}
-        khoa={db.dangTai}
-        dat={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
+        label="Người thực hiện"
+        emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
+        value={loc.nguoiThucHienMa ?? ""}
+        directory={db.ds}
+        disabled={db.dangTai}
+        onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
       />
       {db.loi !== null && (
         <p className="thong-bao-loi" role="alert">
@@ -1174,6 +1212,54 @@ export function HangLoc({
   );
 }
 
+/** Which gesture started a Kanban move — only focus handling differs, never the request. */
+export type KanbanMoveVia = "menu" | "drag";
+
+/** The server's answer to one Kanban move. A refusal keeps the server's sentence VERBATIM. */
+export type KanbanMoveResult =
+  | {
+      readonly code: string;
+      readonly target: TrangThaiNhiemVu;
+      readonly via: KanbanMoveVia;
+      readonly ok: true;
+    }
+  | {
+      readonly code: string;
+      readonly target: TrangThaiNhiemVu;
+      readonly via: KanbanMoveVia;
+      readonly ok: false;
+      readonly message: string;
+    };
+
+/**
+ * Everything the board needs to move cards. `null` (the default) = a READ-ONLY board: no drag,
+ * no menu. Closed by default, so a caller that forgets the prop gets fewer controls, never more.
+ */
+export type KanbanMove = {
+  /** The session's `task.*` keys. Hiding is convenience — the route checks again (rule 5). */
+  readonly permissions: QuyenNhiemVu;
+  /** A move waiting for the server. One at a time: every control is disabled meanwhile. */
+  readonly pending: { readonly code: string; readonly target: TrangThaiNhiemVu } | null;
+  readonly result: KanbanMoveResult | null;
+  readonly move: (task: petitions_nhiemVuRa, target: TrangThaiNhiemVu, via: KanbanMoveVia) => void;
+};
+
+/**
+ * The ONE call both Kanban paths make — the drawer's route, `POST /api/v1/tasks/{ma}/status`,
+ * through the same `doiTrangThaiNhiemVu`. No note: the optional note lives in the drawer.
+ */
+export function moveTaskStatus(
+  code: string,
+  target: TrangThaiNhiemVu,
+  via: KanbanMoveVia,
+): Promise<KanbanMoveResult> {
+  return doiTrangThaiNhiemVu(code, target).then((kq) =>
+    kq.ok
+      ? { code, target, via, ok: true as const }
+      : { code, target, via, ok: false as const, message: kq.thongBao },
+  );
+}
+
 /** Một cột của bảng Kanban: mã trạng thái, và pha đọc của riêng nó. */
 export type CotKanban = {
   readonly ma: TrangThaiNhiemVu;
@@ -1184,16 +1270,19 @@ export type CotKanban = {
  * Bảng Kanban §4.1 — năm cột ứng với năm trạng thái CHÍNH.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * KHÔNG CÓ KÉO-THẢ, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH VỀ KHẢ NĂNG TIẾP CẬN, KHÔNG PHẢI MỘT VIỆC CÒN DANG DỞ.
+ * KÉO-THẢ CÓ, VÀ CÓ MỘT LỐI BÀN PHÍM NGANG HÀNG (28/09/2026).
  *
- * Kéo-thả HTML5 không có lối bàn phím tương đương. Một bảng chỉ đổi được trạng thái bằng cách kéo
- * là một bảng mà cán bộ dùng bàn phím — hoặc cầm chuột không vững, cụ thể là phần lớn người dùng
- * lớn tuổi của màn này — KHÔNG thao tác được (`skills/accessibility-elderly`). Nên thẻ mở drawer,
- * và drawer có nguyên khối `Chuyển trạng thái` §6: CÙNG một tuyến `POST /api/v1/tasks/{ma}/status`,
- * cùng một chỗ in NGUYÊN VĂN câu từ chối của máy chủ — kể cả câu liệt kê mã việc con còn lại. Kanban
- * vì thế không đổi trạng thái tệ hơn Danh sách; nó đổi ở đúng chỗ Danh sách đổi.
+ * Kéo-thả HTML5 một mình không có lối bàn phím: cán bộ dùng bàn phím, trình đọc màn hình, hay cầm
+ * chuột không vững sẽ không thao tác được (`skills/accessibility-elderly`). Nên mỗi thẻ có thêm nút
+ * `Chuyển sang cột…` (`KanbanMoveMenu`), liệt kê ĐÚNG các bước drawer liệt kê
+ * (`clickableTransitions`). Hai lối gọi CÙNG một hàm (`move.move` → `moveTaskStatus`), tức cùng
+ * tuyến `POST /api/v1/tasks/{ma}/status` của drawer, và câu từ chối của máy chủ hiện NGUYÊN VĂN
+ * trên chính thẻ — kể cả câu liệt kê mã việc con còn lại.
  *
- * Sự vắng mặt ấy ra tới màn hình qua `PHAN_CHUA_DUNG`, không nằm lại trong chú thích này.
+ * KHÔNG DI CHUYỂN LẠC QUAN: thẻ ở nguyên cột, hiện "đang chuyển", tới khi máy chủ trả lời. Cột chỉ
+ * nhận thả khi vòng đời có bước ấy — thả vào cột khác thì trình duyệt không cho thả.
+ *
+ * Không có `move` (mặc định `null`) thì bảng CHỈ ĐỌC: không kéo, không nút.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * Năm cột xếp dọc dưới 768px và nằm cạnh nhau từ 768px (xem khối đầu tệp). KHÔNG CÓ chấm màu đầu
@@ -1210,11 +1299,14 @@ export function BangKanban({
   bayGio,
   maDangMo,
   moNhiemVu,
+  move = null,
 }: {
   cot: readonly CotKanban[];
   danhMuc: DanhMucNhiemVu;
   /** Danh bạ tra theo mã — họ tên người thực hiện trên thẻ. `null` = chưa có, thẻ hiện mã. */
   danhBa?: DanhBaTheoMa | null;
+  /** Moving cards — see `KanbanMove`. `null` = read-only board. */
+  move?: KanbanMove | null;
   /**
    * Nhãn và thứ tự của xã: tên cột VÀ thứ tự cột. §4.1 cố định năm cột chính; thứ tự năm cột ấy
    * theo `order` xã đặt (`theoThuTuXa`). Xếp Ở ĐÂY chứ không ở chỗ gọi, để thứ tự vẽ ra kiểm được
@@ -1225,6 +1317,18 @@ export function BangKanban({
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
 }) {
+  // The card being dragged. Held here, not in `dataTransfer`: `dragover` cannot read the payload,
+  // and the column must know DURING the drag whether the lifecycle allows the drop.
+  const [dragging, setDragging] = useState<petitions_nhiemVuRa | null>(null);
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const result = move?.result ?? null;
+
+  useEffect(() => {
+    // A menu move that succeeded reloads the board, and the button that had focus is gone with
+    // the card. Put focus on the sentence that says where the card went, not on `<body>`.
+    if (result !== null && result.ok && result.via === "menu") statusRef.current?.focus();
+  }, [result]);
+
   // Bộ lọc Trạng thái đang chọn một trạng thái rẽ nhánh (hoặc một mã lạ): KHÔNG cột nào khớp. Vẽ
   // năm cột rỗng ở đây là nói với cán bộ rằng xã không có việc nào — đúng điều ngược lại.
   if (cot.length === 0) {
@@ -1242,12 +1346,59 @@ export function BangKanban({
     0,
   );
 
+  const dropAllowed = (target: TrangThaiNhiemVu): boolean =>
+    move !== null &&
+    move.pending === null &&
+    dragging !== null &&
+    clickableTransitions(dragging.status, move.permissions).includes(target);
+
+  const statusText =
+    move === null
+      ? ""
+      : move.pending !== null
+        ? kanbanMovePendingText(nhanTT, move.pending.code, move.pending.target)
+        : result !== null && result.ok
+          ? kanbanMoveDoneText(nhanTT, result.code, result.target)
+          : "";
+
   return (
     <>
+      {/* ALWAYS IN THE DOM while moves are possible: a live region inserted later is one not every
+          screen reader announces. `tabIndex={-1}` so focus can land here after a menu move. */}
+      {move !== null && (
+        <p ref={statusRef} role="status" tabIndex={-1} className="trang-thai-chuyen-cot">
+          {statusText}
+        </p>
+      )}
       <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
         <div className="bang-kanban">
           {cotSap.map((c) => (
-            <section key={c.ma} className="cot-kanban" aria-labelledby={`cot-kanban-${c.ma}`}>
+            <section
+              key={c.ma}
+              className={dropAllowed(c.ma) ? "cot-kanban cot-nhan-tha" : "cot-kanban"}
+              aria-labelledby={`cot-kanban-${c.ma}`}
+              onDragOver={
+                move === null
+                  ? undefined
+                  : (e) => {
+                      // Accepting `dragover` IS what makes a column a drop target. A column the
+                      // lifecycle does not allow never accepts it, so the drop cannot happen.
+                      if (!dropAllowed(c.ma)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }
+              }
+              onDrop={
+                move === null
+                  ? undefined
+                  : (e) => {
+                      e.preventDefault();
+                      const task = dragging;
+                      setDragging(null);
+                      if (task !== null && dropAllowed(c.ma)) move.move(task, c.ma, "drag");
+                    }
+              }
+            >
               <h3 id={`cot-kanban-${c.ma}`}>
                 {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
                     của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
@@ -1258,6 +1409,8 @@ export function BangKanban({
                   </span>
                 )}
               </h3>
+              {/* Words, not only the outline colour, say where the card may go (a11y §8). */}
+              {dropAllowed(c.ma) && <p className="goi-y-tha">{kanbanDropHint(nhanTT, c.ma)}</p>}
 
               {/* NĂM CỘT LÀ NĂM CÂU TRẢ LỜI RỜI NHAU. Một cột hỏng thì bốn cột kia vẫn là sổ —
                   và câu hỏng của nó hiện nguyên văn ở đúng cột ấy, không nuốt thành một lỗi chung. */}
@@ -1282,6 +1435,9 @@ export function BangKanban({
                         bayGio={bayGio}
                         maDangMo={maDangMo}
                         moNhiemVu={moNhiemVu}
+                        move={move}
+                        onDragStart={setDragging}
+                        onDragEnd={() => setDragging(null)}
                       />
                     </li>
                   ))}
@@ -1318,6 +1474,9 @@ export function TheNhiemVu({
   bayGio,
   maDangMo,
   moNhiemVu,
+  move = null,
+  onDragStart,
+  onDragEnd,
 }: {
   nhiemVu: petitions_nhiemVuRa;
   danhMuc: DanhMucNhiemVu;
@@ -1327,11 +1486,44 @@ export function TheNhiemVu({
   bayGio: Date;
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
+  /** See `BangKanban`. `null` = no drag, no menu. */
+  move?: KanbanMove | null;
+  onDragStart?: (task: petitions_nhiemVuRa) => void;
+  onDragEnd?: () => void;
 }) {
   const treHan = oHan(nhiemVu.due_at, bayGio).phanTre !== "";
+  // Same list as the drawer's buttons. Empty (no `task.update`, or a dead-end status) → neither a
+  // drag handle nor a menu: a control that can only be refused is not offered.
+  const targets = move === null ? [] : clickableTransitions(nhiemVu.status, move.permissions);
+  const busy = move !== null && move.pending !== null;
+  const pendingHere = move?.pending?.code === nhiemVu.code ? move.pending : null;
+  const lastResult = move?.result ?? null;
+  const refusal =
+    lastResult !== null && !lastResult.ok && lastResult.code === nhiemVu.code ? lastResult : null;
+  const canReturn =
+    move !== null &&
+    duocTraLai(move.permissions) &&
+    MOI_TRANG_THAI.some((t) => laBuocTraLai(nhiemVu.status, t) && chuyenSangDuoc(nhiemVu.status, t));
 
   return (
-    <article className="the-nhiem-vu" aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}>
+    <article
+      className="the-nhiem-vu"
+      aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}
+      aria-busy={pendingHere !== null ? true : undefined}
+      draggable={targets.length > 0 && !busy ? true : undefined}
+      onDragStart={
+        targets.length > 0 && !busy
+          ? (e) => {
+              e.dataTransfer.effectAllowed = "move";
+              // Some browsers start no drag without a payload. The code is a business code,
+              // not personal data (rule 3).
+              e.dataTransfer.setData("text/plain", nhiemVu.code);
+              onDragStart?.(nhiemVu);
+            }
+          : undefined
+      }
+      onDragEnd={targets.length > 0 ? () => onDragEnd?.() : undefined}
+    >
       <p className="ma-muc">{nhiemVu.code}</p>
       <p id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the">
         {nhiemVu.title}
@@ -1350,14 +1542,37 @@ export function TheNhiemVu({
           <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
         </p>
       )}
-      <button
-        type="button"
-        className="nut-phu"
-        onClick={() => moNhiemVu(nhiemVu)}
-        aria-expanded={nhiemVu.code === maDangMo}
-      >
-        {nhiemVu.code === maDangMo ? "Đang mở" : `Mở ${nhiemVu.code}`}
-      </button>
+      {pendingHere !== null && (
+        <p className="dong-phu">
+          {kanbanMovePendingText(nhanTT, pendingHere.code, pendingHere.target)}
+        </p>
+      )}
+      {/* THE SERVER'S SENTENCE, VERBATIM — the list of unfinished child tasks lives in it. */}
+      {refusal !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {kanbanMoveRefusedPrefix(nhanTT, refusal.target)} {refusal.message}
+        </p>
+      )}
+      <div className="cum-nut-the">
+        <button
+          type="button"
+          className="nut-phu"
+          onClick={() => moNhiemVu(nhiemVu)}
+          aria-expanded={nhiemVu.code === maDangMo}
+        >
+          {nhiemVu.code === maDangMo ? "Đang mở" : `Mở ${nhiemVu.code}`}
+        </button>
+        {move !== null && targets.length > 0 && (
+          <KanbanMoveMenu
+            code={nhiemVu.code}
+            targets={targets}
+            labels={nhanTT}
+            disabled={busy}
+            showReturnNote={canReturn}
+            onMove={(t) => move.move(nhiemVu, t, "menu")}
+          />
+        )}
+      </div>
     </article>
   );
 }
@@ -1605,9 +1820,8 @@ export function ChiTietNhiemVu({
   // Bước trả lại KHÔNG phải một nút `Chuyển sang …`: nó cần lý do bắt buộc, nên có khối riêng.
   // Để nó lọt vào hàng nút thường là cho một cú bấm gửi lý do rỗng — đúng câu 400 của máy chủ.
   const coBuocTraLai = buocChuyen.some((t) => laBuocTraLai(nhiemVu.status, t));
-  const buocBamDuoc = buocChuyen.filter(
-    (t) => !laBuocTraLai(nhiemVu.status, t) && duocBamChuyen(quyen, t),
-  );
+  // Shared with the Kanban menu — one list, so the two cannot offer different steps.
+  const buocBamDuoc = clickableTransitions(nhiemVu.status, quyen);
 
   return (
     <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-nhiem-vu">
@@ -2488,6 +2702,7 @@ export function FormGiaoViec({
   danhBa,
   danhBaLanhDao,
   coDanhSachVanBan = false,
+  staffSearch = false,
   dangGui,
   loi,
   huy,
@@ -2495,6 +2710,12 @@ export function FormGiaoViec({
   maChaCoSan,
   tieuDeCoSan,
 }: {
+  /**
+   * The three staff fields become type-to-search boxes (`StaffCombobox`). ONLY the Nhiệm vụ
+   * screen sets it. Off by default so the Biên bản screen, which reuses this form, keeps its
+   * native `<select>` until it is decided to adopt the box — a scope call, not a technical one.
+   */
+  staffSearch?: boolean;
   danhMuc: DanhMucNhiemVu;
   /**
    * Câu trả lời nguyên vẹn của danh bạ chọn người; `null` = chưa đọc xong. BẮT BUỘC, không tuỳ
@@ -2764,14 +2985,15 @@ export function FormGiaoViec({
           {cauLoiDanhBaGiaoViec(db.loi)}
         </p>
       )}
-      <OChonCanBo
+      <StaffPicker
+        search={staffSearch}
         id="giao-nguoi-thuc-hien"
-        nhan="Người thực hiện"
-        nhanTrong={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
-        giaTri={nguoiThucHien}
-        danhBa={db.ds}
-        khoa={db.dangTai}
-        dat={datNguoiThucHien}
+        label="Người thực hiện"
+        emptyLabel={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
+        value={nguoiThucHien}
+        directory={db.ds}
+        disabled={db.dangTai}
+        onChange={datNguoiThucHien}
       />
 
       {/* LÃNH ĐẠO GIAO VIỆC — CHỈ NGƯỜI CẦM `task.extend` (`danhBaLanhDao`). Ba ca có chữ: đọc hỏng
@@ -2790,14 +3012,17 @@ export function FormGiaoViec({
           </p>
         </div>
       ) : (
-        <OChonCanBo
+        // `dbLanhDao` — the `?permission=task.extend` directory, so typing can only ever find an
+        // approver (ADR 0038). The whole-commune `db` must never feed this box.
+        <StaffPicker
+          search={staffSearch}
           id="giao-lanh-dao"
-          nhan="Lãnh đạo giao việc"
-          nhanTrong={nhanTrongOChonCanBo(dbLanhDao, CHUA_XAC_DINH)}
-          giaTri={lanhDaoGiaoViec}
-          danhBa={dbLanhDao.ds}
-          khoa={dbLanhDao.dangTai}
-          dat={datLanhDaoGiaoViec}
+          label="Lãnh đạo giao việc"
+          emptyLabel={nhanTrongOChonCanBo(dbLanhDao, CHUA_XAC_DINH)}
+          value={lanhDaoGiaoViec}
+          directory={dbLanhDao.ds}
+          disabled={dbLanhDao.dangTai}
+          onChange={datLanhDaoGiaoViec}
         />
       )}
       {/* KHÔNG CHỈ LÀ NƠI NHẬN THÔNG BÁO: ô này quyết định AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN (ADR
@@ -2812,14 +3037,15 @@ export function FormGiaoViec({
       )}
 
       {theoVanBan && (
-        <OChonCanBo
+        <StaffPicker
+          search={staffSearch}
           id="giao-chuyen-vien"
-          nhan="Chuyên viên Văn phòng tham mưu / theo dõi"
-          nhanTrong={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
-          giaTri={chuyenVien}
-          danhBa={db.ds}
-          khoa={db.dangTai}
-          dat={datChuyenVien}
+          label="Chuyên viên Văn phòng tham mưu / theo dõi"
+          emptyLabel={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
+          value={chuyenVien}
+          directory={db.ds}
+          disabled={db.dangTai}
+          onChange={datChuyenVien}
         />
       )}
 
@@ -2900,6 +3126,52 @@ export function FormGiaoViec({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * The form's staff field: `StaffCombobox` when `search`, otherwise the native `OChonCanBo` the
+ * Biên bản screen still uses. Same props either way, so the switch is one boolean.
+ */
+function StaffPicker({
+  search,
+  id,
+  label,
+  emptyLabel,
+  value,
+  directory,
+  disabled,
+  onChange,
+}: {
+  search: boolean;
+  id: string;
+  label: string;
+  emptyLabel: string;
+  value: string;
+  directory: readonly identity_canBoChonNguoiRa[];
+  disabled: boolean;
+  onChange: (code: string) => void;
+}) {
+  return search ? (
+    <StaffCombobox
+      id={id}
+      label={label}
+      emptyLabel={emptyLabel}
+      value={value}
+      directory={directory}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  ) : (
+    <OChonCanBo
+      id={id}
+      nhan={label}
+      nhanTrong={emptyLabel}
+      giaTri={value}
+      danhBa={directory}
+      khoa={disabled}
+      dat={onChange}
+    />
   );
 }
 

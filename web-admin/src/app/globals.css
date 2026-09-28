@@ -1429,6 +1429,122 @@ body {
   overflow: hidden;
 }
 
+/* Kanban moves (28/09/2026). The card's two buttons wrap instead of overflowing at 320px, and
+ * every target is 44px tall (`skills/accessibility-elderly`) — a slip here moves the wrong task. */
+.cum-nut-the {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+}
+
+.cum-nut-the .nut-phu,
+.menu-chuyen-cot button {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.menu-chuyen-cot {
+  list-style: none;
+  margin: 0.375rem 0 0;
+  padding: 0.25rem;
+  display: grid;
+  gap: 0.25rem;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+}
+
+.menu-chuyen-cot button {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.menu-chuyen-cot button:focus {
+  border-color: var(--xanh);
+  outline: 2px solid var(--xanh);
+}
+
+/* A column that accepts the dragged card. The outline is the SECOND signal: `.goi-y-tha` says it
+ * in words (a11y §8 — colour is never the only signal). */
+.cot-nhan-tha {
+  outline: 3px dashed var(--xanh);
+  outline-offset: 2px;
+}
+
+.goi-y-tha,
+.trang-thai-chuyen-cot {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.trang-thai-chuyen-cot:empty {
+  margin: 0;
+}
+
+/* Staff type-to-search box (`components/staff-combobox.tsx`). The list sits IN THE FLOW under the
+ * input, not floating over the form: nothing to position, nothing hidden behind it at 320px. */
+.hop-tim-can-bo {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.hop-tim-can-bo input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.nut-mo-danh-sach {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.goi-y-tim {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  color: var(--xam-chu);
+}
+
+.goi-y-tim:empty {
+  margin: 0;
+}
+
+.danh-sach-goi-y {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+}
+
+.danh-sach-goi-y li {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+/* The highlighted option: outline AND background, so it is not colour alone. */
+.danh-sach-goi-y li.dang-tro {
+  background: var(--nen);
+  outline: 2px solid var(--xanh);
+}
+
 @media (min-width: 768px) {
   .bang-kanban {
     display: flex;

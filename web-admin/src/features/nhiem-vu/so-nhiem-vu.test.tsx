@@ -718,7 +718,9 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     // ô gõ mã. Ba ô nay đổ từ `GET /api/v1/staff-directory`, nên mục ấy rời danh sách; phần còn
     // thiếu thu lại đúng một điều — ô tìm theo tên đặc tả vẽ.
     expect(html).not.toContain("admin.user");
-    expect(html).toContain("Gõ tên để tìm…");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-02 lượt web 1): ô tìm theo tên nay đã dựng, nên mục
+    // cuối cùng của nhóm ấy cũng rời danh sách.
+    expect(html).not.toContain("Gõ tên để tìm…");
   });
 });
 
@@ -731,6 +733,13 @@ function oChon(html: string, id: string): string {
   const dau = html.indexOf(`<select id="${id}"`);
   expect(dau).toBeGreaterThanOrEqual(0);
   return html.slice(dau, html.indexOf("</select>", dau));
+}
+
+/** The listbox of ONE `StaffCombobox`, by input id — so a match cannot come from another box. */
+function comboboxListbox(html: string, id: string): string {
+  const start = html.indexOf(`<ul id="${id}-danh-sach"`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  return html.slice(start, html.indexOf("</ul>", start));
 }
 
 function veForm(danhBa: KetQua<identity_danhBaChonNguoiRa> | null): string {
@@ -1543,6 +1552,33 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
     const html = veHaiDanhBa(DANH_BA, null);
     expect(oChon(html, "giao-lanh-dao")).toContain("disabled");
     expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">Giao việc<\/button>/);
+  });
+
+  it("màn Nhiệm vụ (`staffSearch`): ô GÕ TÊN của lãnh đạo vẫn chỉ gợi người cầm `task.extend`", () => {
+    // TASK-02 lượt web 1 (28/09/2026). Đổi loại ô KHÔNG được đổi nguồn: ô tìm đổ từ `db` cả xã sẽ
+    // để gõ ra một người không bao giờ duyệt được lùi hạn — và cột ấy không sửa lại được sau.
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
+        danhBaLanhDao={CHI_LANH_DAO}
+        staffSearch
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    const approvers = comboboxListbox(html, "giao-lanh-dao");
+    expect(approvers).toContain(`data-value="${LANH_DAO}"`);
+    expect(approvers).not.toContain(`data-value="${NGUOI_KHAC}"`);
+    for (const id of ["giao-nguoi-thuc-hien", "giao-chuyen-vien"]) {
+      expect(comboboxListbox(html, id)).toContain(`data-value="${NGUOI_KHAC}"`);
+    }
+    // Không còn `<select>` nào cho ba ô cán bộ trên màn Nhiệm vụ.
+    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao", "giao-chuyen-vien"]) {
+      expect(html).not.toContain(`<select id="${id}"`);
+    }
   });
 
   it("máy chủ từ chối lãnh đạo (400) hoặc không kiểm được (503): câu NGUYÊN VĂN trên form", () => {

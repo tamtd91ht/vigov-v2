@@ -284,10 +284,12 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(veThe({}, "NV19")).toContain("Đang mở");
   });
 
-  it("KHÔNG kéo-thả trang trí: không thuộc tính `draggable` nào trên thẻ", () => {
-    // VẾ CHỊU LỰC. Một thẻ `draggable` mà thả xuống không gọi tuyến nào là một thao tác trông như
-    // đã đổi trạng thái và không đổi gì — cán bộ tin việc đã chuyển, máy chủ không biết gì cả.
+  it("bảng CHỈ ĐỌC (không `move`): không `draggable`, không nút chuyển cột", () => {
+    // ĐỔI CÓ CHỦ Ý 28/09/2026 (TASK-02 lượt web 1): kéo-thả nay CÓ, nhưng chỉ khi bên gọi trao
+    // `move`. Vế chịu lực giữ nguyên: một thẻ `draggable` mà thả xuống không gọi tuyến nào là một
+    // thao tác trông như đã đổi trạng thái và không đổi gì. Ca có `move`: `kanban-move.test.tsx`.
     const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu()]) }));
+    expect(html).not.toContain("Chuyển sang cột…");
     expect(html).not.toContain("draggable");
     expect(html).not.toContain("ondrop");
   });
@@ -304,12 +306,11 @@ describe("thẻ nhiệm vụ §4.1", () => {
 });
 
 describe("phần chưa dựng được của lượt này ra tới danh sách, không nằm trong chú thích mã", () => {
-  it("kéo-thả được khai là KHÔNG dựng, và lý do là lối bàn phím", () => {
-    const keoTha = PHAN_CHUA_DUNG.find((p) => p.ten.includes("KÉO-THẢ"));
-    expect(keoTha).toBeDefined();
-    expect(keoTha?.viSao).toContain("bàn phím");
-    // Và nó chỉ đúng chỗ đổi trạng thái thay thế, cùng tuyến.
-    expect(keoTha?.viSao).toContain("/status");
+  it("kéo-thả ĐÃ DỰNG kèm lối bàn phím: mục cũ rời danh sách", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-02 lượt web 1): bài này từng canh mục "KÉO-THẢ … KHÔNG
+    // dựng". Nay có kéo-thả VÀ nút `Chuyển sang cột…`; một mục còn nằm đó sau khi đã dựng là mục
+    // đẩy người sau đi dựng lại thứ đã có.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("KÉO-THẢ"))).toBeUndefined();
   });
 
   it("con số thật của cột và chế độ xem thứ ba đều được khai", () => {

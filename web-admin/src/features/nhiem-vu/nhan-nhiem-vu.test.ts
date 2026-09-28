@@ -356,9 +356,23 @@ describe("phần chưa dựng được", () => {
     const moiLyDo = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
     expect(moiLyDo).not.toContain("admin.user");
     expect(moiLyDo).not.toContain("ô gõ mã cán bộ");
-    const oTim = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Gõ tên để tìm…"));
-    expect(oTim).toBeDefined();
-    expect(oTim?.viSao).toContain("danh bạ chọn người");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-02 lượt web 1): ô tìm theo tên đã dựng
+    // (`components/staff-combobox.tsx`), nên mục `Gõ tên để tìm…` cũng rời danh sách.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("Gõ tên để tìm…"))).toBeUndefined();
+  });
+
+  it("TASK-02 lượt web 1 (28/09/2026): đúng HAI mục rời — 16 → 14 — và hai mục viết lại theo quyết định", () => {
+    // A literal count on purpose: the task removed exactly #12 (type-to-search) and #14
+    // (drag-drop). A 15 here means one was left behind; a 13 means an unrelated entry was lost.
+    expect(PHAN_CHUA_DUNG.length).toBe(14);
+    const deadline = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sửa `Hạn hoàn thành`"));
+    expect(deadline?.viSao).toBe(LY_DO_KHONG_SUA_HAN);
+    expect(LY_DO_KHONG_SUA_HAN).toContain("28/09/2026");
+    expect(LY_DO_KHONG_SUA_HAN).toContain("tỷ lệ đúng hạn báo cáo lên lãnh đạo");
+    const forwarded = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`Chuyển tiếp`"));
+    expect(forwarded?.viSao).toContain("28/09/2026");
+    expect(forwarded?.viSao).toContain("CÙNG nhiệm vụ");
+    expect(forwarded?.viSao).toContain("Phần máy chủ cho nghĩa ấy đang làm");
   });
 
   it("hai mục về văn bản chỉ đạo nói ĐÚNG thứ còn thiếu hôm nay, không còn nói bảng chưa có", () => {

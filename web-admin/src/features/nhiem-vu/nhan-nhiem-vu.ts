@@ -754,6 +754,69 @@ export function duocBamChuyen(quyen: QuyenNhiemVu, sangTrangThai: string): boole
  * về CẶP (từ, sang), không bao giờ chỉ về trạng thái đích.
  */
 
+/**
+ * The plain `Chuyển sang …` steps this account may take from `status` — lifecycle shape
+ * (`chuyenSangDuoc`) minus the return step (it needs a mandatory reason, `KhoiTraLai`) minus what
+ * the session's keys do not allow (`duocBamChuyen`).
+ *
+ * ONE LIST FOR THE DRAWER AND THE KANBAN. Two filters would drift, and the drifted one would
+ * offer a Kanban move the drawer hides — or hide one the drawer offers. Order is `MOI_TRANG_THAI`.
+ */
+export function clickableTransitions(status: string, quyen: QuyenNhiemVu): TrangThaiNhiemVu[] {
+  return MOI_TRANG_THAI.filter(
+    (t) => chuyenSangDuoc(status, t) && !laBuocTraLai(status, t) && duocBamChuyen(quyen, t),
+  );
+}
+
+/* ── MOVING A CARD ON THE KANBAN (§4.1) ─────────────────────────────────────────────────────
+ *
+ * Two paths, one route: drag a card onto a column, or the card's `Chuyển sang cột…` menu. Both
+ * send `POST /api/v1/tasks/{ma}/status` — the drawer's route — and neither moves the card before
+ * the server answers: a card that jumps and then silently jumps back is a change the clerk
+ * believes happened.
+ */
+
+/** The card's menu button. Visible text; the accessible name adds the code (`kanbanMoveButtonName`). */
+export const KANBAN_MOVE_BUTTON = "Chuyển sang cột…";
+
+/** Accessible name: contains the visible text (WCAG 2.5.3) plus which card, among twenty. */
+export function kanbanMoveButtonName(code: string): string {
+  return `${KANBAN_MOVE_BUTTON} (${code})`;
+}
+
+/** A branch status has no column — say the card will leave the board, before it does. */
+export function kanbanMoveItemLabel(bang: BangNhanTrangThai, target: string): string {
+  const label = nhanTrangThai(bang, target);
+  return (TRANG_THAI_CHINH as readonly string[]).includes(target)
+    ? label
+    : `${label} — thẻ sẽ rời bảng Kanban`;
+}
+
+export function kanbanMovePendingText(bang: BangNhanTrangThai, code: string, target: string): string {
+  return `Đang chuyển ${code} sang “${nhanTrangThai(bang, target)}”… Thẻ ở nguyên cột cũ cho tới khi máy chủ trả lời.`;
+}
+
+export function kanbanMoveDoneText(bang: BangNhanTrangThai, code: string, target: string): string {
+  return `Đã chuyển ${code} sang “${nhanTrangThai(bang, target)}”.`;
+}
+
+/**
+ * Prefix of a refusal. The server's sentence follows VERBATIM in the same line — it is the only
+ * place the list of unfinished child tasks reaches the screen.
+ */
+export function kanbanMoveRefusedPrefix(bang: BangNhanTrangThai, target: string): string {
+  return `Chưa chuyển được sang “${nhanTrangThai(bang, target)}”.`;
+}
+
+export function kanbanDropHint(bang: BangNhanTrangThai, target: string): string {
+  return `Thả vào đây để chuyển sang “${nhanTrangThai(bang, target)}”.`;
+}
+
+/** The return step is not in the menu; say where it is instead of letting it look missing. */
+export const KANBAN_RETURN_NOTE =
+  "Trả lại để làm tiếp cần ghi lý do — bấm “Mở” trên thẻ và dùng khối “Trả lại để làm tiếp” " +
+  "trong phần chi tiết.";
+
 /** Cặp (từ, sang) này có phải bước trả lại không — cùng vị từ với `domain.LaTraLaiLamTiep`. */
 export function laBuocTraLai(tu: string, sang: string): boolean {
   return tu === "cho-duyet" && sang === "dang-thuc-hien";
@@ -1751,12 +1814,14 @@ export const LY_DO_KHONG_SUA_MA =
 /**
  * Vì sao `Hạn xử lý` không sửa được. MỘT câu, dùng ở HAI chỗ — mục `PHAN_CHUA_DUNG` và dòng chỉ
  * đọc trong form `✎ Sửa` — để hai chỗ không trôi khỏi nhau (luật 9, cấm #2).
+ *
+ * Owner's decision of 28/09/2026: kept on purpose, not a gap waiting for server work.
  */
 export const LY_DO_KHONG_SUA_HAN =
-  "`PATCH /api/v1/tasks/{ma}` không nhận `due_at`. Hạn ấn định MỘT LẦN lúc tạo việc và sau đó " +
-  "chỉ dịch được qua đường đề nghị lùi hạn có người duyệt (§5.8) — cố ý, vì hạn là cam kết đã " +
-  "đưa ra, và `han_ban_dau` bị trigger `nhiem_vu_bat_bien` cấm ghi lại sau khi tạo. Một ô ngày " +
-  "sửa trực tiếp ở form sẽ là đường vòng qua đúng vòng duyệt ấy.";
+  "Giữ có chủ ý — chủ đầu tư quyết định ngày 28/09/2026: hạn hoàn thành chỉ dịch được qua đề " +
+  "nghị lùi hạn có người duyệt (§5.8), không sửa trực tiếp. Sửa thẳng một ô ngày sẽ làm đổi tỷ " +
+  "lệ đúng hạn báo cáo lên lãnh đạo, trong khi con số ấy phải đếm theo đúng cam kết đã đưa ra. " +
+  "Vì vậy `PATCH /api/v1/tasks/{ma}` không nhận `due_at`.";
 
 /** Vì sao `Cơ quan chủ trì` và `Chuyên viên` không sửa được. Cùng quy tắc một câu hai chỗ. */
 export const LY_DO_KHONG_SUA_CHU_TRI =
@@ -2106,12 +2171,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hai việc ấy ra.",
   },
   {
-    ten: "`Chuyển tiếp` không nối hai nhiệm vụ (§6)",
+    ten: "`Chuyển tiếp` — giao tiếp cùng nhiệm vụ cho nơi khác (§6)",
     viSao:
-      "§6 viết chuyển tiếp `sinh bản ghi liên kết`, nhưng KHÔNG CỘT NÀO nối hai nhiệm vụ với " +
-      "nhau. Hệ quả có thật, và nó hiện ngay trên màn: một nhiệm vụ cha còn việc con đã " +
-      "`chuyen-tiep` thì KHÔNG hoàn thành được — máy chủ chỉ tính `hoan-thanh` là xong, vì nó " +
-      "không có đường nào lần theo để biết việc đã chuyển đi có xong ở nơi khác hay chưa.",
+      "Nghĩa của `Chuyển tiếp` đã được chủ đầu tư quyết định ngày 28/09/2026: vẫn là CÙNG nhiệm " +
+      "vụ ấy, làm tiếp, được giao cho một đơn vị hoặc một người khác — không sinh nhiệm vụ mới. " +
+      "Phần máy chủ cho nghĩa ấy đang làm. Cho tới khi xong, bước `chuyen-tiep` trên màn vẫn chạy " +
+      "theo cách cũ: nhiệm vụ dừng ở trạng thái ấy, không có lối ra, và một nhiệm vụ cha còn việc " +
+      "con đã `chuyen-tiep` thì chưa hoàn thành được.",
   },
   {
     ten: "Bộ lọc `Liên quan đến tôi` (§3)",
@@ -2179,14 +2245,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "phản hồi chi tiết.",
   },
   {
-    ten: "Ô tìm cán bộ `Gõ tên để tìm…` của `Lãnh đạo giao việc` và `Chuyên viên theo dõi` (§7)",
-    viSao:
-      "Đặc tả vẽ hai ô ấy là hộp tìm kiếm gõ tên. Màn này dùng ô chọn thả xuống thường của trình " +
-      "duyệt — cùng loại ô màn Phản ánh và Biên bản đang dùng — đổ từ danh bạ chọn người, có nhãn " +
-      "và đi được bằng bàn phím; ô `Lãnh đạo giao việc` chỉ gợi những người đang có quyền duyệt gia " +
-      "hạn. Chỉ nhảy được theo chữ cái đầu, chưa lọc được theo một phần họ tên.",
-  },
-  {
     ten: "Sắp xếp theo `Hạn`, `Tên việc`, `Ưu tiên` và các cột khác của bảng Danh sách (§4.2)",
     viSao:
       "§4.2 cho mọi cột một mũi tên ⇅, nhưng máy chủ chỉ sắp được theo `Mã` và `Ngày giao` — hai " +
@@ -2195,17 +2253,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "việc` hay trích lời phản ánh của người dân, nên không đưa được lên đường dẫn. `Ưu tiên` là mã " +
       "danh mục, xếp theo chữ cái sẽ ra một thứ tự không phải thứ tự của thang ưu tiên. Sắp lại " +
       "trong trình duyệt chỉ xếp được 20 dòng đang hiện, trông như xếp cả sổ mà không phải.",
-  },
-  {
-    ten: "KÉO-THẢ thẻ giữa các cột Kanban (§4.1)",
-    viSao:
-      "Không dựng, và lý do là KHẢ NĂNG TIẾP CẬN chứ không phải công sức: kéo-thả HTML5 không có " +
-      "lối bàn phím tương đương, nên một bảng chỉ đổi được trạng thái bằng cách kéo là một bảng " +
-      "cán bộ dùng bàn phím — hoặc dùng chuột không vững — không thao tác được " +
-      "(`skills/accessibility-elderly`). Đổi trạng thái trên Kanban đi qua drawer: bấm `Mở NV…` " +
-      "trên thẻ, dùng khối `Chuyển trạng thái` §6. ĐÓ LÀ CÙNG MỘT TUYẾN " +
-      "(`POST /api/v1/tasks/{ma}/status`) và cùng chỗ in NGUYÊN VĂN câu từ chối của máy chủ — kể " +
-      "cả câu liệt kê mã việc con còn lại khi hoàn thành việc cha.",
   },
   {
     ten: "SỐ LƯỢNG THẬT của mỗi cột Kanban (§4.1)",
