@@ -392,6 +392,10 @@ tích hợp đọc. `feedback` chỉ được giữ ở đúng nơi nó đã có
 
 ## Quy ước đặt tên
 
+> **28/09/2026 → ADR 0051:** hai dòng "Bảng, cột" và "Kiểu Go" dưới đây, cùng câu *"tên bảng dùng
+> tiếng Việt"*, chỉ còn đúng cho mã và bảng **đã có**. Định danh, tệp, bảng và cột **mới** viết tiếng
+> Anh — `kb/10-decisions/0051-english-code-identifiers.md`. Giá trị enum vẫn tiếng Việt không dấu.
+
 | Loại | Quy ước | Ví dụ |
 |---|---|---|
 | Bảng, cột | `snake_case` **tiếng Việt** không dấu, theo nghiệp vụ | `don_thu`, `ngay_tiep_nhan` |

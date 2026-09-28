@@ -31,6 +31,7 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/audit_actor_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/env_contract_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/english_identifier_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/miniapp_sibling_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require_sync_guard.py\"" }

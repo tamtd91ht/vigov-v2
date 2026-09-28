@@ -73,6 +73,10 @@ Ba nguồn cùng mô tả một fact mà kết luận khác nhau là đúng th�
 vì đó là thứ mã đang chạy, và đổi mã thì phải sửa 8 thư mục + 9 `.proto` + đường dẫn import
 để đổi lấy đúng một thứ: sự nhất quán với một bảng trong tài liệu.
 
+> **Dòng "Tên bảng, tên cột" dưới đây ĐÃ BỊ ADR 0051 THAY cho mã MỚI (2026-09-28):** định danh,
+> tệp, bảng và cột mới viết tiếng Anh; bảng cũ giữ nguyên. Bảng dưới giữ nguyên văn ngày 16/09; sự
+> thật hiện hành thuộc về `kb/10-decisions/0051-english-code-identifiers.md`.
+
 Ranh giới ngôn ngữ sau khi chốt:
 
 | Loại | Ngôn ngữ | Ví dụ |

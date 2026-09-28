@@ -31,16 +31,7 @@ worked examples and the k8s snippets live there; what cannot drift silently live
 | 5 | Splitting an address list or a DSN to keep **one host** | Correct-looking for as long as there is one node, silently wrong on the day of the second |
 | 6 | A commune-specific value in the environment | Rule 1, invariant 10: the environment carries PLATFORM-wide constants only. Per-commune values are read at runtime |
 
-**Why invariant 3 is the one that pays for itself:** a role name in source and a cluster key in
-the manifest means moving the log workload from kafka-02 to kafka-05 is one line in one file.
-The same change with `KAFKA_02_ADDRESS` in Go is: edit source, review, rebuild every image that
-reads it, release them together, and hope nobody missed one. The mechanism costs nothing on the
-day it is written and cannot be retrofitted cheaply.
-
-**Why invariant 5 cannot wait:** "single node today, we will add the list later" means the code
-that keeps the first host survives review, because with one node it is indistinguishable from
-correct. The defect ships, and it surfaces on the day the platform moves to HA — as a cluster
-that mysteriously only ever talks to one member.
+Why invariants 3 and 5 cost nothing now and a release of every image later: `skills/infra-config` §2–§3.
 
 ## STOP CONDITIONS — ask the user, never decide alone
 

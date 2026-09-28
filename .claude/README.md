@@ -21,6 +21,7 @@ is not documentation — **it is the only control mechanism**.
 | 9 `knowledge-single-source` | One fact one place; never hand-write what can be generated | `doc_guard` | BLOCK |
 | 10 `citizen-commitment` | An SLA deadline is a commitment; overdue is derived, never stored | `citizen_commitment_guard` | BLOCK |
 | 11 `infra-config-contract` | One name per role, read in one place, cluster-shaped, role in code and cluster in the manifest | `env_contract_guard` | BLOCK |
+| 12 `english-identifiers` | New code is named in English; existing names are not renamed (ADR 0051) | `english_identifier_guard` | BLOCK |
 
 **Adding a rule you cannot write a hook for** means the rule cannot be checked, which means
 it will drift — **it belongs in `skills/`, not in `rules/critical/`.**

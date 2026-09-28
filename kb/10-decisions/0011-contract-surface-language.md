@@ -49,6 +49,9 @@ không lần nào khác giá còn bằng 0 nữa.
 | Tên bảng, cột, định danh nghiệp vụ tầng domain | **Tiếng Việt không dấu** | `don_thu`, `ngay_tiep_nhan` |
 | Chuỗi người đọc | **Tiếng Việt có dấu** | `"Không có nhiệm vụ"` |
 
+> **Dòng "Tên bảng, cột, định danh nghiệp vụ tầng domain" ĐÃ BỊ ADR 0051 THAY cho mã MỚI
+> (2026-09-28)** — `kb/10-decisions/0051-english-code-identifiers.md`. Giá trị enum vẫn theo tệp này.
+
 Cách áp dụng nằm ở `.claude/skills/rest-api-design/SKILL.md`; bảng ánh xạ khái niệm sang
 tên tài nguyên nằm ở `kb/00-foundation/ubiquitous-language.md`. Tệp này chỉ trả lời **vì sao**.
 

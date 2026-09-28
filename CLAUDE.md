@@ -157,8 +157,8 @@ did not. Nothing worth recording? Say that sentence out loud — never write an 
 | **Plan multi-step work** | State `1. [step] → verified by: [how]` before starting |
 
 Prose in documentation (`kb/`) is written in **Vietnamese** — the people supervising this
-project read Vietnamese. Everything else — identifiers, file names, code comments, this
-brain — is in **English**.
+project read Vietnamese. Everything else — new identifiers and file names (rule 12), code
+comments, this brain — is in **English**.
 
 ---
 
@@ -174,8 +174,8 @@ own: if you see a risk, **state the risk**, then do what was asked.
 
 | Location | Contents |
 |---|---|
-| `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **23 hooks**: 13 rule hooks + 10 cross-cutting |
+| `rules/critical/` | **12 rules**, always loaded (below). Each names an enforcing hook |
+| `hooks/` | **24 hooks**: 14 rule hooks + 10 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **13 agents** — 5 build, 5 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
@@ -208,3 +208,4 @@ Extending the brain: `.claude/README.md`.
 @.claude/rules/critical/9-knowledge-single-source.md
 @.claude/rules/critical/10-citizen-commitment.md
 @.claude/rules/critical/11-infra-config-contract.md
+@.claude/rules/critical/12-english-identifiers.md

@@ -24,7 +24,7 @@ This is the **first** of three isolation dimensions. All three must hold:
 | 4 | `tenant_id` travels in `context.Context`, never as a function argument |
 | 5 | Every query goes through a **scoped** repository. No path to the raw store |
 | 6 | Every unique key is **composite with `tenant_id`** |
-| 7 | Realtime rooms, cache keys, file paths, queues: prefixed `t:<tenant_id>` |
+| 7 | Realtime rooms, cache keys, file paths, queues: prefixed `t:<tenant_id>` (object keys: `t_<tenant_id>`, ADR 0052) |
 | 8 | Tokens carry `tenant_id`; every request compares it with the commune derived from `Host`. Mismatch = **401 + alert** |
 | 9 | Background work carries `tenant_id` **inside the message**. A consumer without it **refuses; it never guesses** |
 | 10 | Commune-specific values are read **at runtime** from per-tenant configuration — not from environment variables, never baked into a bundle |
@@ -41,10 +41,7 @@ This is the **first** of three isolation dimensions. All three must hold:
 | 6 | A cross-commune query without `// @cross-tenant: <reason>` | Cross reads must be explicit and audited |
 | 7 | Deleting data of a merged commune | Archival records. Mark inactive, keep the data |
 
-**Why invariant #2 is the expensive one:** Vietnam periodically reorganises commune-level
-administrative units. If `tenant_id` carries meaning, the first merger forces **rewriting
-foreign keys across all historical data** — rewriting archival records, which the law does
-not permit. Getting it right now costs nothing. → `skills/admin-unit-merge`
+Why #2 costs nothing now and a rewrite of archival records at the first merger: `skills/admin-unit-merge`.
 
 ## STOP CONDITIONS — ask the user, never decide alone
 
