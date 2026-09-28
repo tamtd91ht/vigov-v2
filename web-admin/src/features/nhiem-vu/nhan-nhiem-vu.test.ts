@@ -75,6 +75,8 @@ import {
   ariaSapXep,
   bamCotSapXep,
   canMoveTask,
+  canWriteLogEntry,
+  logEntryNote,
   isReopen,
   lacksApprovalFor,
   laBuocTraLai,
@@ -1254,11 +1256,14 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     expect(
       PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Nhật ký & Trao đổi (§5.9)")),
     ).toBeUndefined();
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi nhật ký` (§5.9)"));
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ô ghi tay nay GHI được (60011e8); mục chỉ còn `📎 Đính kèm`,
+    // thứ máy chủ không nhận. Mục cũ nói "chờ luật người đang giữ việc" — luật ấy đã có.
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi nhật ký (§5.9)"));
     expect(muc).toBeDefined();
+    expect(muc?.ten).toContain("📎 Đính kèm");
     expect(PHAN_CHUA_DUNG.some((p) => `${p.ten} ${p.viSao}`.includes("Tiếp tục"))).toBe(false);
     expect(muc?.viSao).toContain("/log-entries");
-    expect(muc?.viSao).toContain("người đang giữ việc");
+    expect(muc?.viSao).not.toContain("người đang giữ việc");
     expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
       "không có tuyến nhật ký nào",
     );
@@ -1452,5 +1457,35 @@ describe("§4.2 — sắp xếp bảng Danh sách", () => {
     expect(ariaSapXep({ cot: "code", chieu: "asc" }, "code")).toBe("ascending");
     expect(ariaSapXep({ cot: "code", chieu: "desc" }, "code")).toBe("descending");
     expect(ariaSapXep({ cot: "code", chieu: "asc" }, "created_at")).toBe("none");
+  });
+});
+
+describe("ô ghi tay §5.9 — ai thấy, và thân gửi đi", () => {
+  const TASK = {
+    assignee: "CB-2026-THUCHIEN",
+    monitor: "CB-2026-THEODOI",
+    assigner: "CB-2026-LANHDAO",
+    created_by: "CB-2026-NGUOITAO",
+  };
+  const KHONG = quyenNhiemVu([]);
+
+  it("ĐƯỢC — `task.update`, hoặc người thực hiện / theo dõi / giao việc / tạo (máy chủ `TaskWorkRightFor`)", () => {
+    expect(canWriteLogEntry(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]), TASK, "CB-2026-NGUOIKHAC")).toBe(true);
+    for (const ma of Object.values(TASK)) expect(canWriteLogEntry(KHONG, TASK, ma)).toBe(true);
+  });
+
+  it("BỊ TỪ CHỐI — người ngoài, kể cả cầm `task.approve`; phiên rỗng trên việc thiếu người theo dõi", () => {
+    expect(canWriteLogEntry(KHONG, TASK, "CB-2026-NGUOIKHAC")).toBe(false);
+    expect(canWriteLogEntry(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]), TASK, "CB-2026-NGUOIKHAC")).toBe(
+      false,
+    );
+    // `"" === ""` would open the form on every task with an empty field to every unread session.
+    expect(canWriteLogEntry(KHONG, { ...TASK, monitor: "" }, "")).toBe(false);
+  });
+
+  it("nội dung: cắt khoảng trắng như máy chủ; rỗng ⇒ `null` (nút khoá)", () => {
+    expect(logEntryNote("")).toBeNull();
+    expect(logEntryNote("  \n\t ")).toBeNull();
+    expect(logEntryNote("  Đã gửi công văn \n")).toBe("Đã gửi công văn");
   });
 });

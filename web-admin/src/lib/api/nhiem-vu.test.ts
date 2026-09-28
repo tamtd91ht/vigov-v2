@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addTaskLogEntry,
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
   duongDanHangChoLuiHan,
@@ -125,9 +126,12 @@ describe("MƯỜI TÊN THAM SỐ — đọc lại từng cái một", () => {
     expect(
       new URL(duongDanSoNhiemVu({ sapXep: "due_at" }), "https://xa.example").searchParams.get("sort"),
     ).toBe("due_at");
-    // `title` vẫn KHÔNG sắp được: tên việc hay trích lời người dân, không đưa lên đường dẫn.
-    // @ts-expect-error — `sapXep` chỉ nhận `created_at` | `code` | `due_at`.
-    duongDanSoNhiemVu({ sapXep: "title" });
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (P9): `title` và `priority` nay sắp được. Tên việc vẫn KHÔNG
+    // lên đường dẫn — con trỏ của máy chủ chỉ mang id dòng neo (core/page KindRef).
+    const title = new URL(duongDanSoNhiemVu({ sapXep: "title" }), "https://xa.example");
+    expect(title.searchParams.get("sort")).toBe("title");
+    // @ts-expect-error — cột thô `tieu_de` không bao giờ là một cách sắp của hợp đồng.
+    duongDanSoNhiemVu({ sapXep: "tieu_de" });
   });
 
   it("đường dẫn tương đối, không host, không `tenant_id`", () => {
@@ -546,5 +550,45 @@ describe("TASK-03 lượt web 2 — parent by register code, `task=` on the queu
   it("list `parent=` filter", () => {
     expect(duongDanSoNhiemVu({ parent: "NV19" })).toBe("/api/v1/tasks?parent=NV19");
     expect(duongDanSoNhiemVu({ parent: "" })).toBe("/api/v1/tasks");
+  });
+});
+
+describe("POST /api/v1/tasks/{ma}/log-entries — ô ghi tay §5.9 (60011e8)", () => {
+  const ROW = {
+    id: "01JNHATKY",
+    at: "2026-09-28T02:00:00Z",
+    actor_code: "CB-2026-3H8N2W",
+    status: "dang-thuc-hien",
+    unit: "",
+    assignee: "",
+    note: "Đã gửi công văn.",
+  };
+
+  it("đúng tuyến, POST, thân CHỈ `note`, kèm `Idempotency-Key` bên gọi đưa — 201 trả dòng mới", async () => {
+    const gia = batFetch(
+      new Response(JSON.stringify(ROW), { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+    const r = await addTaskLogEntry("NV 19", "Đã gửi công văn.", "khoa-gia-cua-bai-kiem");
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV%2019/log-entries");
+    expect(gia.mock.calls[0]?.[1]?.method).toBe("POST");
+    expect(than(gia)).toEqual({ note: "Đã gửi công văn." });
+    const dau = gia.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(dau["Idempotency-Key"]).toBe("khoa-gia-cua-bai-kiem");
+    expect(r).toEqual({ ok: true, duLieu: ROW });
+  });
+
+  it("403 của máy chủ ra NGUYÊN VĂN — câu ấy nói ai được ghi", async () => {
+    const cau =
+      "nhiệm vụ: chỉ người thực hiện, chuyên viên theo dõi, lãnh đạo giao việc, người tạo nhiệm vụ " +
+      "hoặc cán bộ có quyền cập nhật nhiệm vụ mới ghi được nhật ký của nhiệm vụ này";
+    batFetch(
+      new Response(JSON.stringify({ code: "forbidden", message: cau, trace_id: "01JTRACE" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const r = await addTaskLogEntry("NV19", "x", "k");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.thongBao).toBe(cau);
   });
 });

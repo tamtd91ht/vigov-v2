@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
-import { layNhatKyNhiemVu } from "@/lib/api/nhiem-vu";
+import { addTaskLogEntry, layNhatKyNhiemVu } from "@/lib/api/nhiem-vu";
 import type {
   page_Result_petitions_nhatKyNhiemVuRa,
   petitions_nhatKyNhiemVuRa,
@@ -12,17 +12,25 @@ import type {
 
 import {
   DANG_TAI_NHAT_KY_NHIEM_VU,
+  LOG_ENTRY_BUTTON,
+  LOG_ENTRY_DONE,
+  LOG_ENTRY_LABEL,
+  LOG_ENTRY_MAX,
+  LOG_ENTRY_NOTE,
+  LOG_ENTRY_PLACEHOLDER,
   NHAN_XEM_THEM_NHAT_KY_NHIEM_VU,
   NHAT_KY_RONG,
   TIEU_DE_NHAT_KY_NHIEM_VU,
   gopTrangNhatKy,
   hienDongNhatKy,
+  logEntryNote,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
 
 /**
- * Nhật ký & Trao đổi của MỘT nhiệm vụ (§5.9) — NỬA ĐỌC: dòng thời gian mới nhất trước, `Xem thêm`
- * theo con trỏ. Không có ô ghi tay — xem `PHAN_CHUA_DUNG`.
+ * Nhật ký & Trao đổi của MỘT nhiệm vụ (§5.9): dòng thời gian mới nhất trước, `Xem thêm` theo con
+ * trỏ, và — cho người `canWriteLogEntry` cho phép — ô ghi tay (`TaskLogEntryForm`). `📎 Đính kèm` không
+ * có — xem `PHAN_CHUA_DUNG`.
  *
  * CÙNG KHUÔN `features/phan-anh/nhat-ky-phieu.tsx`, KHÔNG DÙNG CHUNG THÀNH PHẦN: hai hợp đồng khác
  * hình dạng (dòng phiếu có `action` và dòng `phan-cong` riêng; dòng nhiệm vụ không có `action`, còn
@@ -65,6 +73,7 @@ export function NhatKyNhiemVu({
   danhBa,
   tenBoPhan,
   lanLamMoi,
+  canWrite,
 }: {
   maNhiemVu: string;
   nhanTT: BangNhanTrangThai;
@@ -76,12 +85,20 @@ export function NhatKyNhiemVu({
    * ghi thêm một dòng, nên trang đang hiện đã cũ.
    */
   lanLamMoi: number;
+  /**
+   * Show the manual entry form — `canWriteLogEntry`. REQUIRED: a caller that forgets it gets a red
+   * `tsc`, not a form that silently appears for every reader (or vanishes for every writer).
+   */
+  canWrite: boolean;
 }) {
   const [doc, datDoc] = useState<TrangDoc | null>(null);
   const [dangTaiThem, datDangTaiThem] = useState(false);
   const [loiThem, datLoiThem] = useState<{ khoa: string; thongBao: string } | null>(null);
+  // Bumped after a 201: the server appended a row, so the page on screen is stale. Part of the read
+  // key, so the first page is read again — never a local splice of the reply into the list.
+  const [written, setWritten] = useState(0);
 
-  const khoaDoc = `${maNhiemVu}|${lanLamMoi}`;
+  const khoaDoc = `${maNhiemVu}|${lanLamMoi}|${written}`;
 
   useEffect(() => {
     let bo = false;
@@ -138,7 +155,91 @@ export function NhatKyNhiemVu({
       loiThem={loiThemHienTai}
       dangTaiThem={dangTaiThem}
       xemThem={xemThem}
+      form={
+        canWrite ? (
+          <TaskLogEntryForm taskCode={maNhiemVu} onWritten={() => setWritten((n) => n + 1)} />
+        ) : null
+      }
     />
+  );
+}
+
+/**
+ * The manual entry form (§5.9) — `POST /api/v1/tasks/{ma}/log-entries`.
+ *
+ * THE IDEMPOTENCY KEY LIVES FOR ONE ENTRY: made when the form mounts, REUSED on a retry after a
+ * failure (the first send may have reached the server and written the row), replaced only after a
+ * 201. The table is append-only — a duplicate made by a double send can never be removed.
+ *
+ * NO OPTIMISTIC ROW: the entry appears when the timeline is read again after the 201.
+ */
+export function TaskLogEntryForm({
+  taskCode,
+  onWritten,
+}: {
+  taskCode: string;
+  onWritten: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [sending, setSending] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const note = logEntryNote(text);
+  const fieldId = `ghi-nhat-ky-${taskCode}`;
+
+  return (
+    <form
+      className="form-danh-muc"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (note === null || sending) return;
+        setSending(true);
+        setDone(false);
+        addTaskLogEntry(taskCode, note, key).then((r) => {
+          setSending(false);
+          if (!r.ok) {
+            // THE SERVER'S SENTENCE VERBATIM — the 403 names who may write.
+            setRefusal(r.thongBao);
+            return;
+          }
+          setRefusal(null);
+          setText("");
+          setKey(crypto.randomUUID());
+          setDone(true);
+          onWritten();
+        });
+      }}
+    >
+      <div className="o-nhap">
+        <label htmlFor={fieldId}>{LOG_ENTRY_LABEL}</label>
+        <textarea
+          id={fieldId}
+          name={fieldId}
+          rows={3}
+          maxLength={LOG_ENTRY_MAX}
+          placeholder={LOG_ENTRY_PLACEHOLDER}
+          aria-describedby={`${fieldId}-ghi-chu`}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            setDone(false);
+          }}
+        />
+      </div>
+      <p id={`${fieldId}-ghi-chu`} className="ghi-chu">
+        {LOG_ENTRY_NOTE}
+      </p>
+      {refusal !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {refusal}
+        </p>
+      )}
+      {done && <p role="status">{LOG_ENTRY_DONE}</p>}
+      <button type="submit" className="nut-chinh" disabled={sending || note === null}>
+        {LOG_ENTRY_BUTTON}
+      </button>
+    </form>
   );
 }
 
@@ -163,6 +264,7 @@ export function KhoiNhatKyNhiemVu({
   loiThem,
   dangTaiThem,
   xemThem,
+  form = null,
 }: {
   maNhiemVu: string;
   tai: TaiNhatKyNhiemVu;
@@ -172,11 +274,16 @@ export function KhoiNhatKyNhiemVu({
   loiThem: string | null;
   dangTaiThem: boolean;
   xemThem: () => void;
+  /** The manual entry form, or `null` for an account that may only read (see `NhatKyNhiemVu`). */
+  form?: ReactNode;
 }) {
   const idTieuDe = `tieu-de-nhat-ky-nhiem-vu-${maNhiemVu}`;
   return (
     <section className="khoi-chi-tiet" aria-labelledby={idTieuDe}>
       <h4 id={idTieuDe}>{TIEU_DE_NHAT_KY_NHIEM_VU}</h4>
+      {/* The form ABOVE the timeline, as §5.9 draws it: newest first, so the row just written
+          appears right under the field that wrote it. */}
+      {form}
 
       {tai.pha === "dangTai" && <p role="status">{DANG_TAI_NHAT_KY_NHIEM_VU}</p>}
       {tai.pha === "loi" && (

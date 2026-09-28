@@ -17,6 +17,8 @@
  *                                                              đến sau tám tuyến trên; `task=` lọc
  *                                                              theo một nhiệm vụ)
  *   GET    /api/v1/task-counts                                 task.read    (số thật đầu cột Kanban)
+ *   POST   /api/v1/tasks/{ma}/log-entries                      task.read    + Idempotency-Key (ô ghi tay
+ *                                                              §5.9; ai ghi được là việc của dòng)
  *
  * HAI DÒNG CUỐI KHÔNG ĐƯỢC GỘP, và đó là toàn bộ ADR 0038: `task.extend` nhãn là **"Duyệt gia
  * hạn"** — quyền QUYẾT ĐỊNH. Gắn nó lên tuyến ĐỀ NGHỊ sẽ thành "chỉ người duyệt được mới xin
@@ -62,18 +64,21 @@ import type {
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
   petitions_get_tasks_by_ma_log_entries,
+  petitions_nhatKyNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_patch_tasks_by_ma,
   petitions_post_tasks,
   petitions_post_tasks_by_ma_extensions,
   petitions_post_tasks_by_ma_extensions_by_deNghiID_decision,
   petitions_post_tasks_by_ma_assignment,
+  petitions_post_tasks_by_ma_log_entries,
   petitions_post_tasks_by_ma_status,
   petitions_quyetDinhLuiHanVao,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
   petitions_taskAssignmentIn,
   petitions_taskCountsOut,
+  petitions_taskLogEntryIn,
   petitions_vanBanNhiemVuVao,
   petitions_xoaNhiemVuVao,
 } from "./schema.gen";
@@ -533,6 +538,31 @@ export function doiTrangThaiNhiemVu(
       : { status: trangThai };
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "POST", than, 200),
+  );
+}
+
+/**
+ * POST /api/v1/tasks/{ma}/log-entries — §5.9 manual timeline entry (60011e8). 201, the new row.
+ *
+ * THE ROUTE'S GATE IS `task.read`; who may write is decided on the row (`TaskWorkRightFor`: assignee or
+ * `task.update` fully, monitor / assigner / creator log-only; anybody else 403). The refusal comes back
+ * verbatim.
+ *
+ * `idempotencyKey` IS A PARAMETER, NOT MADE HERE — same reason as `taoNhiemVu`: the route requires it,
+ * and a key made per call would turn a retry after a lost response into a SECOND entry in an
+ * append-only table, which nobody can ever remove. The form holds the key and reuses it on retry.
+ *
+ * The note is sent as given; the server trims it and refuses a blank or over-long one.
+ */
+export function addTaskLogEntry(
+  code: string,
+  note: string,
+  idempotencyKey: string,
+): Promise<KetQua<petitions_nhatKyNhiemVuRa>> {
+  const mau: petitions_post_tasks_by_ma_log_entries["duongDan"] = "/api/v1/tasks/{ma}/log-entries";
+  const body: petitions_taskLogEntryIn = { note };
+  return docThanLoiGoi<petitions_nhatKyNhiemVuRa>(
+    goiGhi(duongDanNhiemVu(mau, code), "POST", body, 201, { "Idempotency-Key": idempotencyKey }),
   );
 }
 

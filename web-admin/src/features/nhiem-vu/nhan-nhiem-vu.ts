@@ -597,8 +597,8 @@ export const NHAT_KY_RONG = "Chưa có ghi chép nào.";
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHẬT KÝ & TRAO ĐỔI §5.9 — NỬA ĐỌC (`GET /api/v1/tasks/{ma}/log-entries`)
  *
- * Ô ghi tay `Đã làm được gì, còn vướng gì…` KHÔNG có ở đây: tuyến ghi chưa dựng, chờ luật "ai
- * đang giữ việc thì được ghi". Xem `PHAN_CHUA_DUNG`.
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ô ghi tay `Đã làm được gì, còn vướng gì…` NAY CÓ —
+ * `POST /api/v1/tasks/{ma}/log-entries` (60011e8). Chỉ `📎 Đính kèm` còn thiếu: xem `PHAN_CHUA_DUNG`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Tiêu đề khối — nguyên văn §5.9. */
@@ -608,6 +608,42 @@ export const TIEU_DE_NHAT_KY_NHIEM_VU = "Nhật ký & Trao đổi";
 export const DANG_TAI_NHAT_KY_NHIEM_VU = "Đang tải nhật ký…";
 
 export const NHAN_XEM_THEM_NHAT_KY_NHIEM_VU = "Xem thêm";
+
+/* ── MANUAL ENTRY (§5.9) ─────────────────────────────────────────────────────────────────── */
+
+/** Placeholder and button — verbatim §5.9. */
+export const LOG_ENTRY_PLACEHOLDER = "Đã làm được gì, còn vướng gì…";
+export const LOG_ENTRY_BUTTON = "➤ Ghi nhật ký";
+/** A visible label: a placeholder alone vanishes on the first keystroke and is no label (a11y). */
+export const LOG_ENTRY_LABEL = "Ghi vào nhật ký của nhiệm vụ";
+/** The table is append-only (rule 7): said BEFORE the click, since nothing undoes it. */
+export const LOG_ENTRY_NOTE = "Dòng đã ghi không sửa, không xoá được — đọc lại trước khi bấm ghi.";
+export const LOG_ENTRY_DONE = "Đã ghi vào nhật ký.";
+
+/**
+ * May this account see the entry form on this task — the server's `TaskWorkRightFor`
+ * (`service-petitions/internal/domain/task_participant.go:60-76`), read the same way: `task.update`;
+ * else, with a non-empty session code, the assignee, the monitor, the assigner or the creator.
+ *
+ * CONVENIENCE, NOT PROTECTION (rule 5, forbidden #1): the server decides again on the row read FOR
+ * UPDATE, and its 403 shows verbatim. The empty-code check is the one that matters: without it
+ * `"" === ""` would offer the form on every task with an unset monitor to every unread session.
+ */
+export function canWriteLogEntry(
+  quyen: QuyenNhiemVu,
+  task: Pick<petitions_nhiemVuRa, "assignee" | "monitor" | "assigner" | "created_by">,
+  staffCode: string,
+): boolean {
+  if (quyen.capNhat) return true;
+  if (staffCode === "") return false;
+  return [task.assignee, task.monitor, task.assigner, task.created_by].includes(staffCode);
+}
+
+/** The text to send, or `null` (button disabled): trimmed, as the server trims before it checks. */
+export function logEntryNote(text: string): string | null {
+  const s = text.trim();
+  return s === "" ? null : s;
+}
 
 /**
  * Người ghi một dòng: `Họ tên (CB-…)` khi danh bạ có họ tên, còn lại là MÃ.
@@ -918,6 +954,13 @@ export function reopenNote(bang: BangNhanTrangThai): string {
  * lệch khỏi máy chủ thì câu từ chối của máy chủ vẫn ra nguyên văn.
  */
 export const LY_DO_TRA_LAI_TOI_DA = 5000;
+
+/**
+ * Server bound for one timeline entry — the SAME `NoiDungNhatKyToiDa` the return reason uses
+ * (`LY_DO_TRA_LAI_TOI_DA`), because both are one row's `noi_dung`. One constant, not a second 5000. Declared AFTER it: a
+ * `const` read before its line throws at module load.
+ */
+export const LOG_ENTRY_MAX = LY_DO_TRA_LAI_TOI_DA;
 
 export const NHAN_NUT_TRA_LAI = "Trả lại để làm tiếp";
 export const NHAN_LY_DO_TRA_LAI = "Lý do trả lại (bắt buộc)";
@@ -2372,11 +2415,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hình là dựng nguồn thứ hai cho một con số mà mọi chỗ `sắp đến hạn` phải đọc từ một cột duy nhất.",
   },
   {
-    ten: "Ô ghi tay `Ghi nhật ký` (§5.9)",
+    ten: "Nút `📎 Đính kèm` của ô Ghi nhật ký (§5.9)",
     viSao:
-      "Khối Nhật ký & Trao đổi nay ĐỌC được (`GET /api/v1/tasks/{ma}/log-entries`), nhưng chưa " +
-      "GHI được: tuyến `POST` một dòng ghi tay chưa dựng, vì còn chờ luật người đang giữ việc — ai " +
-      "được ghi vào nhật ký của một nhiệm vụ. Mọi dòng hiện có là dòng máy chủ tự ghi ở mỗi thao tác.",
+      "Ô ghi tay nay GHI được (`POST /api/v1/tasks/{ma}/log-entries`), nhưng chỉ nhận chữ: tuyến ấy " +
+      "không nhận tệp, và nhật ký nhiệm vụ chưa có kho tệp nào để đặt tệp vào. Vẽ nút 📎 lúc này là " +
+      "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",

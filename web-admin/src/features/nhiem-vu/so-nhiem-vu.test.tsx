@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -1371,10 +1374,49 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(html).not.toContain(nhuTrongHTML(NHAT_KY_RONG));
   });
 
-  it("KHÔNG có ô ghi tay — tuyến ghi chưa dựng, chờ luật người đang giữ việc", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ca này ghim "KHÔNG có ô ghi tay — tuyến ghi chưa dựng". Tuyến
+  // nay có (60011e8), nên ô hiện cho người được ghi và VẮNG cho người không được — cả hai chiều dưới.
+  it("CÓ ô ghi tay cho người cầm `task.update`: nhãn, gợi ý §5.9, nút khoá khi trống, không 📎", () => {
     const html = veChiTiet();
-    expect(html).not.toContain("Đã làm được gì, còn vướng gì");
-    expect(html).not.toContain("Ghi nhật ký</button>");
+    expect(html).toContain('<label for="ghi-nhat-ky-NV19">Ghi vào nhật ký của nhiệm vụ</label>');
+    expect(html).toContain('placeholder="Đã làm được gì, còn vướng gì…"');
+    expect(html).toMatch(/<textarea id="ghi-nhat-ky-NV19"[^>]*maxLength="5000"/);
+    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">➤ Ghi nhật ký<\/button>/);
+    expect(html).toContain("Dòng đã ghi không sửa, không xoá được");
+    expect(html).not.toContain("📎");
+    // The form sits INSIDE the §5.9 block, above the timeline.
+    const khoi = html.slice(html.indexOf('aria-labelledby="tieu-de-nhat-ky-nhiem-vu-NV19"'));
+    expect(khoi.indexOf("ghi-nhat-ky-NV19")).toBeLessThan(khoi.indexOf("Đang tải nhật ký"));
+  });
+
+  it("CÓ ô cho người liên quan KHÔNG có khoá: người thực hiện, theo dõi, giao việc, tạo", () => {
+    const task = { monitor: "CB-2026-THEODOI" };
+    for (const ma of ["CB-2026-3H8N2W", "CB-2026-THEODOI", LANH_DAO, "CB-2026-VANTHU"]) {
+      const html = veChiTiet(task, ma, { pha: "dangTai" }, quyenNhiemVu([]));
+      expect(html).toContain('id="ghi-nhat-ky-NV19"');
+    }
+  });
+
+  it("KHÔNG có ô — người ngoài không khoá; phiên chưa đọc trên việc chưa có người theo dõi", () => {
+    expect(veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu([]))).not.toContain(
+      "Ghi nhật ký</button>",
+    );
+    const html = veChiTiet({ monitor: "" }, "", { pha: "dangTai" }, quyenNhiemVu([]));
+    expect(html).not.toContain('id="ghi-nhat-ky-NV19"');
+    // The timeline itself still reads.
+    expect(html).toContain("Nhật ký &amp; Trao đổi");
+  });
+
+  it("sau 201: nhật ký ĐỌC LẠI (khoá đọc mang bộ đếm), khoá chống trùng thay mới — dây nối (đọc mã)", () => {
+    // No DOM here, so `onSubmit` cannot run. What is pinned: the read key includes the counter the
+    // form bumps; the key is replaced only on success and reused otherwise.
+    const src = readFileSync(fileURLToPath(new URL("./nhat-ky-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).toContain("const khoaDoc = `${maNhiemVu}|${lanLamMoi}|${written}`;");
+    expect(src).toContain("onWritten={() => setWritten((n) => n + 1)}");
+    expect(src).toContain("addTaskLogEntry(taskCode, note, key)");
+    const ok = src.indexOf("setRefusal(null);");
+    expect(src.indexOf("setKey(crypto.randomUUID());")).toBeGreaterThan(ok);
+    expect(src.indexOf("setRefusal(r.thongBao);")).toBeLessThan(ok);
   });
 
   it("rỗng: câu §5.9 nguyên văn, không danh sách, không `Xem thêm`", () => {

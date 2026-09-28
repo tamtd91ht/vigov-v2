@@ -151,6 +151,7 @@ import {
   cauTuKetLuan,
   chiaNhomVanBan,
   canMoveTask,
+  canWriteLogEntry,
   clickableTransitions,
   lacksApprovalFor,
   reasonMove,
@@ -2251,7 +2252,7 @@ export function ChiTietNhiemVu({
         </div>
       )}
 
-      {/* §5.9 — NỬA ĐỌC. `key` theo mã: đổi nhiệm vụ là dựng lại khối, không mang "Xem thêm" đang
+      {/* §5.9 — đọc, và ô ghi tay cho người được ghi. `key` theo mã: đổi nhiệm vụ là dựng lại khối, không mang "Xem thêm" đang
           chạy hay câu lỗi của việc cũ sang việc mới. */}
       <NhatKyNhiemVu
         key={nhiemVu.code}
@@ -2260,6 +2261,8 @@ export function ChiTietNhiemVu({
         danhBa={danhBaMa}
         tenBoPhan={tenBoPhan}
         lanLamMoi={lanLamMoiNhatKy}
+        // Assignee / `task.update` / monitor / assigner / creator — convenience; the row decides.
+        canWrite={canWriteLogEntry(quyen, nhiemVu, maNguoiDangNhap)}
       />
 
       {loiGhi !== null && (
