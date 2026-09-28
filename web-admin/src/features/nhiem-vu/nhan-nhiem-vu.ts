@@ -2587,11 +2587,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
   },
   {
-    ten: "⬆ Nhập từ Excel (§8) · 🗑 Xoá đã chọn (§2) · Xuất Sổ theo dõi (§4.3)",
+    ten: "⬆ Nhập từ Excel (§8) · Xuất Sổ theo dõi (§4.3)",
     viSao:
-      "Ba tuyến §10 đề xuất — `nhap-excel`, `xoa-nhieu`, `xuat-so-theo-doi` — không có trong hợp " +
-      "đồng. Xoá từng nhiệm vụ thì có (`DELETE /api/v1/tasks/{ma}`, kèm lý do bắt buộc), nên thao " +
-      "tác hàng loạt là bấm từng dòng chứ không phải một nút gom.",
+      "Hai tuyến §10 đề xuất — `nhap-excel`, `xuat-so-theo-doi` — chưa có trong hợp đồng, nên hai " +
+      "nút này chưa vẽ. (`🗑 Xoá đã chọn` §2 đã dựng: không cần tuyến gom, màn hình gọi tuyến xoá " +
+      "từng nhiệm vụ lần lượt, cùng một lý do.)",
   },
   {
     ten: "Chế độ xem `Sổ theo dõi` (§4.3)",

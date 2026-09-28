@@ -218,6 +218,17 @@ import {
   type ReasonMove,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
+import { BatchDeleteBar } from "./batch-delete-bar";
+import {
+  EMPTY_SELECTION,
+  keepFailed,
+  runBatchDelete,
+  selectLabel,
+  toggleSelected,
+  type BatchDeleteResult,
+  type TaskSelection,
+  type TaskSelectionState,
+} from "./batch-delete";
 import { ChildTasks, ParentTaskField } from "./child-tasks";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { KanbanMoveMenu } from "./kanban-move-menu";
@@ -548,6 +559,11 @@ export function SoNhiemVu({
   const [childFormSending, setChildFormSending] = useState(false);
   const [childFormError, setChildFormError] = useState<string | null>(null);
   const [childCreated, setChildCreated] = useState<{ parent: string; text: string } | null>(null);
+  // `🗑 Xoá đã chọn` (§2). Survives paging and view switches on purpose: the clerk selects across
+  // pages; the bar always says how many are selected, so nothing is chosen out of sight silently.
+  const [selection, setSelection] = useState<TaskSelectionState>(EMPTY_SELECTION);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  const [batchResults, setBatchResults] = useState<readonly BatchDeleteResult[] | null>(null);
 
   const khoa =`${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
@@ -746,6 +762,39 @@ export function SoNhiemVu({
     });
   }
 
+  /**
+   * One soft delete per selected task, sequentially, one shared reason (`runBatchDelete`). NO
+   * OPTIMISTIC REMOVAL: rows leave the board only when the register is read again after the last
+   * answer. Failed tasks stay selected, each with the server's sentence.
+   */
+  async function runBatch(reason: string): Promise<void> {
+    const tasks = [...selection.values()];
+    if (tasks.length === 0 || batchProgress !== null) return;
+    setBatchResults(null);
+    setBatchProgress({ done: 0, total: tasks.length });
+    const results = await runBatchDelete(tasks, reason, xoaNhiemVu, (done) =>
+      setBatchProgress({ done, total: tasks.length }),
+    );
+    setBatchProgress(null);
+    setBatchResults(results);
+    setSelection((s) => keepFailed(s, results));
+    // A drawer showing a task that is now deleted would show a record that is gone.
+    if (maDrawer !== null && results.some((r) => r.ok && r.code === maDrawer)) guiDrawer({ loai: "dong" });
+    datLanTai((n) => n + 1);
+  }
+
+  // `null` without `task.delete`: no checkbox anywhere (convenience — the route checks, rule 5).
+  const taskSelection: TaskSelection | null = quyen.xoa
+    ? {
+        selected: selection,
+        toggle: (t) => {
+          setBatchResults(null);
+          setSelection((s) => toggleSelected(s, t));
+        },
+        disabled: batchProgress !== null,
+      }
+    : null;
+
   return (
     <section className="man-nhiem-vu" aria-labelledby="tieu-de-so-nhiem-vu">
       <h2 id="tieu-de-so-nhiem-vu">Sổ nhiệm vụ của xã</h2>
@@ -868,6 +917,19 @@ export function SoNhiemVu({
       )}
       {!drillDownActive && <p className="ghi-chu">{GHI_CHU_THIEU_SO_THEO_DOI}</p>}
 
+      {quyen.xoa && (selection.size > 0 || batchResults !== null || batchProgress !== null) && (
+        <BatchDeleteBar
+          count={selection.size}
+          progress={batchProgress}
+          results={batchResults}
+          onRun={(reason) => void runBatch(reason)}
+          onClear={() => {
+            setSelection(EMPTY_SELECTION);
+            setBatchResults(null);
+          }}
+        />
+      )}
+
       {viewMode === "kanban" && (
         <BangKanban
           cot={cotKanban}
@@ -888,6 +950,7 @@ export function SoNhiemVu({
             result: kanbanResult,
             move: moveOnKanban,
           }}
+          selection={taskSelection}
         />
       )}
 
@@ -918,6 +981,7 @@ export function SoNhiemVu({
               datLocDaDoi(moi.loc);
               datNganXep(moi.nganXep);
             }}
+            selection={taskSelection}
           />
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
           <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
@@ -1464,7 +1528,9 @@ export type CotKanban = {
  * cột lẫn viền trái tô theo mức ưu tiên: hai thứ ấy là màu, và màu không bao giờ là tín hiệu duy
  * nhất (a11y) — mức ưu tiên hiện thành CHỮ trên thẻ, tình trạng trễ hiện thành chữ `Trễ N ngày`.
  *
- * KHÔNG CÓ Ô TICK CHỌN HÀNG LOẠT, cùng lý do bảng §4.2 không có: `Xoá đã chọn` không có tuyến nào.
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W4): mỗi thẻ có `☐ Chọn` (§4.1) cho `🗑 Xoá đã chọn` khi phiên cầm
+ * `task.delete` — `selection`, mặc định `null` = không ô tick. Trước đó: "không có tuyến nào"; nay
+ * nút gom gọi từng tuyến xoá một (require a037b76).
  */
 export function BangKanban({
   cot,
@@ -1476,6 +1542,7 @@ export function BangKanban({
   moNhiemVu,
   counts,
   move = null,
+  selection = null,
 }: {
   cot: readonly CotKanban[];
   danhMuc: DanhMucNhiemVu;
@@ -1488,6 +1555,8 @@ export function BangKanban({
   counts: TrangThaiTai<petitions_taskCountsOut>;
   /** Moving cards — see `KanbanMove`. `null` = read-only board. */
   move?: KanbanMove | null;
+  /** `☐ Chọn` on every card — see `TaskSelection`. `null` = no checkbox. */
+  selection?: TaskSelection | null;
   /**
    * Nhãn và thứ tự của xã: tên cột VÀ thứ tự cột. §4.1 cố định năm cột chính; thứ tự năm cột ấy
    * theo `order` xã đặt (`theoThuTuXa`). Xếp Ở ĐÂY chứ không ở chỗ gọi, để thứ tự vẽ ra kiểm được
@@ -1621,6 +1690,7 @@ export function BangKanban({
                         maDangMo={maDangMo}
                         moNhiemVu={moNhiemVu}
                         move={move}
+                        selection={selection}
                         onDragStart={setDragging}
                         onDragEnd={() => setDragging(null)}
                       />
@@ -1671,6 +1741,7 @@ export function TheNhiemVu({
   maDangMo,
   moNhiemVu,
   move = null,
+  selection = null,
   onDragStart,
   onDragEnd,
 }: {
@@ -1684,6 +1755,8 @@ export function TheNhiemVu({
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
   /** See `BangKanban`. `null` = no drag, no menu. */
   move?: KanbanMove | null;
+  /** `☐ Chọn` (§4.1) — see `TaskSelection`. `null` = no checkbox. */
+  selection?: TaskSelection | null;
   onDragStart?: (task: petitions_nhiemVuRa) => void;
   onDragEnd?: () => void;
 }) {
@@ -1719,6 +1792,18 @@ export function TheNhiemVu({
       }
       onDragEnd={targets.length > 0 ? () => onDragEnd?.() : undefined}
     >
+      {selection !== null && (
+        <label className="o-chon">
+          <input
+            type="checkbox"
+            aria-label={selectLabel(nhiemVu.code)}
+            checked={selection.selected.has(nhiemVu.code)}
+            disabled={selection.disabled}
+            onChange={() => selection.toggle(nhiemVu)}
+          />{" "}
+          Chọn
+        </label>
+      )}
       <p className="ma-muc">{nhiemVu.code}</p>
       <p id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the">
         {nhiemVu.title}
@@ -1815,8 +1900,10 @@ function OTieuDeSapXepNhiemVu({
  * máy chủ chỉ sắp được theo `code` và `created_at`. Một cách sắp không có cột nào hiện giá trị của nó
  * là một thứ tự cán bộ không kiểm được bằng mắt.
  *
- * KHÔNG CÓ CỘT Ô TICK: `Xoá đã chọn` không có tuyến nào (xem `PHAN_CHUA_DUNG`), và một ô tick
- * không dẫn tới thao tác nào là một ô tick mời cán bộ chọn hai mươi dòng rồi không tìm thấy nút.
+ * CỘT Ô TICK `☐` (§4.2) — CHỈ khi phiên cầm `task.delete` (`selection`, mặc định `null`). ĐỔI CHIỀU
+ * CÓ CHỦ Ý 28/09/2026 (W4): trước đó không có cột này vì `Xoá đã chọn` chưa dựng; một ô tick không
+ * dẫn tới thao tác nào mời cán bộ chọn hai mươi dòng rồi không tìm thấy nút — nên vẫn KHÔNG vẽ nó cho
+ * tài khoản không xoá được.
  *
  * CHIP `{n} việc con` (#6) under the title, from the server's `child_count` — never counted from
  * the page on screen, which would give a number that depends on the page.
@@ -1837,6 +1924,7 @@ export function BangNhiemVu({
   moNhiemVu,
   sapXep,
   doiSapXep,
+  selection = null,
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
@@ -1851,6 +1939,8 @@ export function BangNhiemVu({
   sapXep: SapXepSo;
   /** Bấm một tiêu đề sắp được. Bên gọi đưa về trang đầu — xem `bamSapXep`. */
   doiSapXep: (cot: CotSapXepNhiemVu) => void;
+  /** The `☐` column — see `TaskSelection`. `null` = no column. */
+  selection?: TaskSelection | null;
 }) {
   if (nhiemVu.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
 
@@ -1859,6 +1949,11 @@ export function BangNhiemVu({
       <table className="bang-danh-muc">
         <thead>
           <tr>
+            {selection !== null && (
+              <th scope="col">
+                <span className="an-thi-giac">Chọn</span>
+              </th>
+            )}
             <OTieuDeSapXepNhiemVu
               cot="code"
               nhan={NHAN_COT_MA}
@@ -1908,6 +2003,17 @@ export function BangNhiemVu({
                 data-tre-han={o.phanTre !== "" ? "" : undefined}
                 className={o.phanTre !== "" ? "dong-qua-han" : undefined}
               >
+                {selection !== null && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={selectLabel(n.code)}
+                      checked={selection.selected.has(n.code)}
+                      disabled={selection.disabled}
+                      onChange={() => selection.toggle(n)}
+                    />
+                  </td>
+                )}
                 <td className="ma-muc">{n.code}</td>
                 <td>
                   {n.title}
