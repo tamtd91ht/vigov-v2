@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-28",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -124,6 +124,14 @@
       "bang_chung": "config/config.go: CITIZEN_SESSION_BRIDGE_LISTEN_ADDR (ConfigMap) + CITIZEN_SESSION_BRIDGE_KEYS (Secret, danh sách) — cả hai hoặc không, một nửa thì Load từ chối; CITIZEN_SESSION_TTL mặc định 720h, sai thì từ chối (không lùi về mặc định). .env.example có ba dòng giữ chỗ. grpcx/grpcx.go: OpenCitizenSession + ResolveMiniApp vào methodsWithoutTenant (chủ dự án chốt 25/09/2026). grpcx/bridge_auth.go UnaryServerBridgeKey: metadata x-vigov-bridge-key, so hằng thời gian với mọi khoá, khoá < 32 byte thì panic lúc dựng. httpx/citizen.go: XaTuPhien từ chối phiên CitizenID rỗng (403 chua_xac_thuc_so); XaTuPhienChiXem(lyDo) nhận nó. identityclient chấp nhận citizen_id rỗng. platformclient/mini_app.go: MiniApp, XaTrongNguCanh phân biệt 'không có' với 'không gọi được'. go test ./... xanh — kiểm 2026-09-25",
       "no_confirm": [],
       "tiep_theo": "Chưa có tuyến nào khai XaTuPhienChiXem — tuyến đầu tiên là hồ sơ hiển thị xã (việc riêng). tools/check_env_map.py sẽ đòi ba biến mới trong bảng deploy/cau-hinh/README.md."
+    },
+    {
+      "id": "object-storage-core",
+      "viec": "core/storage — thư viện kho tệp MinIO (ADR 0052) + cấu hình OBJECT_STORAGE_*",
+      "trang_thai": "dang_lam",
+      "bang_chung": "7eabf3e (28/09/2026): core/storage (khoá theo lớp/xã/thời gian, danh sách đóng, presigned POST ép dung lượng+loại ký theo tên miền công khai, SniffMIME, Promote có kiểm ETag/đích/loại, SHA256 streaming, PresignDownload + Content-Disposition làm sạch, PublicURL, PurgeAllVersions từ chối records) + core/config ObjectStorage (7 biến, đều tuỳ chọn; thiếu → ErrNotConfigured; nhiều host → từ chối) + .env.example + deploy/cau-hinh/README.md. Phụ thuộc mới minio-go v7.3.0. make check xanh (9 module -race, standalone, check_env_map 29 biến). Ca tích hợp MinIO thật SKIP — máy không có MinIO/Docker.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY với MinIO thật: chạy TestIntegrationUploadPromoteDownloadPurge (hướng dẫn ở .env.example mục tests) trước khi service nào dùng. Card tiếp: (1) core/malwarescan — ClamAV clamd INSTREAM, MALWARE_SCANNER_ADDRESS, thiếu/không tới được thì từ chối; (2) hợp đồng platform cho dung lượng/loại tối đa theo mục đích (contract-designer, Vihat cấu hình ở khu vận hành ADR 0048); (3) comms: bảng stored_file + tuyến tải lên + video xử lý ngay + đăng lên public; (4) vigovctl storage purge; (5) phần công dân chờ cầu phiên. Devops: tạo ba bucket, luật vòng đời temp (upload/ 1 ngày, export/ 7 ngày), versioning bucket private, chính sách đọc ẩn danh chỉ GetObject cho public, khoá truy cập theo service giới hạn …/{service}/*, CORS, khai tên miền MinIO với Zalo (vihat-miniapp)."
     }
   ]
 }

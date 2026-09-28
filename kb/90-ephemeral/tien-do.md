@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 7ce822a
+derived_from_commit: 7eabf3e
 expires: 2026-12-27
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -27,7 +27,7 @@ tức tin `git log` chứ đừng tin tệp này.
 
 | | |
 |---|---|
-| ĐANG LÀM | 53 |
+| ĐANG LÀM | 54 |
 | chưa làm | 34 |
 | treo | 14 |
 | xong | 183 |
@@ -291,10 +291,11 @@ Cập nhật 2026-09-28 · 27 mục
 
 ## `core`
 
-Cập nhật 2026-09-26 · 15 mục
+Cập nhật 2026-09-28 · 16 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
+| `object-storage-core` — core/storage — thư viện kho tệp MinIO (ADR 0052) + cấu hình OBJECT_STORAGE_* | ĐANG LÀM | 7eabf3e (28/09/2026): core/storage (khoá theo lớp/xã/thời gian, danh sách đóng, presigned POST ép dung lượng+loại ký theo tên miền công khai, SniffMIME, Promote có kiểm ETag/đích/loại, SHA256 streaming, PresignDownload + Content-Disposition làm sạch, PublicURL, PurgeAllVersions từ chối records) + core/config ObjectStorage (7 biến, đều tuỳ chọn; thiếu → ErrNotConfigured; nhiều host → từ chối) + .env.example + deploy/cau-hinh/README.md. Phụ thuộc mới minio-go v7.3.0. make check xanh (9 module -race, standalone, check_env_map 29 biến). Ca tích hợp MinIO thật SKIP — máy không có MinIO/Docker. | — | CHƯA CHẠY với MinIO thật: chạy TestIntegrationUploadPromoteDownloadPurge (hướng dẫn ở .env.example mục tests) trước khi service nào dùng. Card tiếp: (1) core/malwarescan — ClamAV clamd INSTREAM, MALWARE_SCANNER_ADDRESS, thiếu/không tới được thì từ chối; (2) hợp đồng platform cho dung lượng/loại tối đa theo mục đích (contract-designer, Vihat cấu hình ở khu vận hành ADR 0048); (3) comms: bảng stored_file + tuyến tải lên + video xử lý ngay + đăng lên public; (4) vigovctl storage purge; (5) phần công dân chờ cầu phiên. Devops: tạo ba bucket, luật vòng đời temp (upload/ 1 ngày, export/ 7 ngày), versioning bucket private, chính sách đọc ẩn danh chỉ GetObject cho public, khoá truy cập theo service giới hạn …/{service}/*, CORS, khai tên miền MinIO với Zalo (vihat-miniapp). |
 | `kho-phien-cong-dan-dem` — Đệm TTL ngắn cho đường tra cứu phiên công dân (ADR 0022 đòi) | chưa làm | core/httpx/citizen.go:72-74 khai đây là đường nóng và đòi đệm có TTL ngắn, vô hiệu khi thu hồi; service-identity/internal/store/phien_cong_dan.go ghi rõ đã HOÃN và vì sao — kiểm 2026-09-20 | — | Hoãn có lý do, không phải bỏ quên: identity chạy nhiều bản sao và ADR 0010 chốt chỉ có PostgreSQL, nên không có kênh nào để một lần thu hồi ở bản sao A với tới bản sao B. Cửa sổ lệch sẽ đúng bằng TTL, và ca hỏng là nút 'đăng xuất màn hình này' ở quầy một cửa. Đo trước, rồi mới đệm, kèm kênh vô hiệu hoá thật |
 | `backfill-theo-xa` — Backfill dữ liệu theo từng xã | treo | core/migrate chỉ lo DDL — kiểm 2026-09-20 | — | luật 7 bất biến 5 (migration chạy per-commune, resumable, ghi tiến độ) mới đạt một nửa. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể — ADR 0013, mục Giới hạn |
 | `xac-thuc-ben-goi-grpc` — Xác thực bên gọi trên cổng gRPC — một cặp header, giá trị từ secret k8s | xong | core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; MetadataCallerKey ở core/grpcx/grpcx.go:110; GRPCCallerKey ở core/config/config.go:128. Phép kiểm đáng tin là ĐỘT BIẾN chứ không phải `make check` xanh: gỡ UnaryServerCallerAuth -> 2 ca đỏ. Mốc e3ed99b — kiểm 2026-09-20. ADR 0025 | — | Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai. Bằng chứng cũ của mục này từng viện `make check` rc=0 — e3ed99b đo được lượt xanh ấy xanh vì lý do sai, nên bằng chứng nay là phép đột biến |

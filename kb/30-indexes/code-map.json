@@ -1068,11 +1068,15 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:581"
+      "at": "core/config/config.go:608"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:412"
+      "at": "core/config/config.go:423"
+    },
+    "config.CheckBucketPrefix": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:177"
     },
     "config.ChoPhep": {
       "kind": "func",
@@ -1080,23 +1084,43 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:81"
+      "at": "core/config/config.go:88"
+    },
+    "config.Configured": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:120"
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:434"
+      "at": "core/config/config.go:445"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:769"
+      "at": "core/config/config.go:807"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:450"
+      "at": "core/config/config.go:461"
+    },
+    "config.Missing": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:99"
     },
     "config.NguonCORS": {
       "kind": "type",
       "at": "core/config/cors.go:21"
+    },
+    "config.ObjectStorage": {
+      "kind": "type",
+      "at": "core/config/object_storage.go:31"
+    },
+    "config.ParsePublicMediaBaseURL": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:229"
+    },
+    "config.ParseSingleEndpoint": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:192"
     },
     "config.PhanTichNguonCORS": {
       "kind": "func",
@@ -1104,11 +1128,15 @@
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:641"
+      "at": "core/config/config.go:679"
     },
     "config.Rong": {
       "kind": "func",
       "at": "core/config/cors.go:31"
+    },
+    "config.String": {
+      "kind": "func",
+      "at": "core/config/object_storage.go:130"
     },
     "crosstenant.DinhDanh": {
       "kind": "type",
@@ -4433,6 +4461,154 @@
     "staffauth.StaffPrincipal": {
       "kind": "type",
       "at": "core/staffauth/staffauth.go:72"
+    },
+    "storage.Bucket": {
+      "kind": "type",
+      "at": "core/storage/storage.go:82"
+    },
+    "storage.BucketName": {
+      "kind": "func",
+      "at": "core/storage/storage.go:172"
+    },
+    "storage.Class": {
+      "kind": "type",
+      "at": "core/storage/key.go:17"
+    },
+    "storage.Client": {
+      "kind": "type",
+      "at": "core/storage/storage.go:103"
+    },
+    "storage.Config": {
+      "kind": "type",
+      "at": "core/storage/storage.go:47"
+    },
+    "storage.ContentDisposition": {
+      "kind": "func",
+      "at": "core/storage/disposition.go:22"
+    },
+    "storage.ExportPath": {
+      "kind": "func",
+      "at": "core/storage/key.go:148"
+    },
+    "storage.ExtForMIME": {
+      "kind": "func",
+      "at": "core/storage/mime.go:44"
+    },
+    "storage.Format": {
+      "kind": "func",
+      "at": "core/storage/storage.go:471"
+    },
+    "storage.GoString": {
+      "kind": "func",
+      "at": "core/storage/storage.go:469"
+    },
+    "storage.Key": {
+      "kind": "type",
+      "at": "core/storage/key.go:103"
+    },
+    "storage.LogValue": {
+      "kind": "func",
+      "at": "core/storage/storage.go:470"
+    },
+    "storage.New": {
+      "kind": "func",
+      "at": "core/storage/storage.go:113"
+    },
+    "storage.NewObjectID": {
+      "kind": "func",
+      "at": "core/storage/key.go:116"
+    },
+    "storage.ObjectInfo": {
+      "kind": "type",
+      "at": "core/storage/storage.go:277"
+    },
+    "storage.ParseExportKey": {
+      "kind": "func",
+      "at": "core/storage/key.go:249"
+    },
+    "storage.ParseKey": {
+      "kind": "func",
+      "at": "core/storage/key.go:192"
+    },
+    "storage.ParseUploadKey": {
+      "kind": "func",
+      "at": "core/storage/key.go:240"
+    },
+    "storage.Path": {
+      "kind": "func",
+      "at": "core/storage/key.go:125"
+    },
+    "storage.PresignDownload": {
+      "kind": "func",
+      "at": "core/storage/storage.go:480"
+    },
+    "storage.PresignUpload": {
+      "kind": "func",
+      "at": "core/storage/storage.go:231"
+    },
+    "storage.PresignedPost": {
+      "kind": "type",
+      "at": "core/storage/storage.go:209"
+    },
+    "storage.PresignedURL": {
+      "kind": "type",
+      "at": "core/storage/storage.go:463"
+    },
+    "storage.Promote": {
+      "kind": "func",
+      "at": "core/storage/storage.go:391"
+    },
+    "storage.Promoted": {
+      "kind": "type",
+      "at": "core/storage/storage.go:364"
+    },
+    "storage.PublicURL": {
+      "kind": "func",
+      "at": "core/storage/storage.go:501"
+    },
+    "storage.PurgeAllVersions": {
+      "kind": "func",
+      "at": "core/storage/storage.go:522"
+    },
+    "storage.Purpose": {
+      "kind": "type",
+      "at": "core/storage/key.go:56"
+    },
+    "storage.ReadHead": {
+      "kind": "func",
+      "at": "core/storage/storage.go:304"
+    },
+    "storage.SHA256": {
+      "kind": "func",
+      "at": "core/storage/storage.go:340"
+    },
+    "storage.SanitizeFilename": {
+      "kind": "func",
+      "at": "core/storage/disposition.go:40"
+    },
+    "storage.Service": {
+      "kind": "type",
+      "at": "core/storage/key.go:32"
+    },
+    "storage.SniffMIME": {
+      "kind": "func",
+      "at": "core/storage/mime.go:76"
+    },
+    "storage.Stat": {
+      "kind": "func",
+      "at": "core/storage/storage.go:287"
+    },
+    "storage.String": {
+      "kind": "func",
+      "at": "core/storage/storage.go:468"
+    },
+    "storage.URL": {
+      "kind": "func",
+      "at": "core/storage/storage.go:467"
+    },
+    "storage.UploadPath": {
+      "kind": "func",
+      "at": "core/storage/key.go:138"
     },
     "store.Allows": {
       "kind": "func",
