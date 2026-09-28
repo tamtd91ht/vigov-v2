@@ -150,6 +150,12 @@ type phieuCuaToiRa struct {
 	Content string `json:"content"`
 	Address string `json:"address"`
 
+	// Lat and Lng echo the scene location the citizen sent (ADR 0050), so they can see the pin they
+	// placed — on this surface for the same reason `address` is. Absent when none was sent;
+	// omitempty pointers, the phieuPhanAnhRa shape.
+	Lat *float64 `json:"lat,omitempty"`
+	Lng *float64 `json:"lng,omitempty"`
+
 	// ReporterName and ReporterPhone are ALWAYS MASKED ON THIS SURFACE — "Nguyễn V. A." and
 	// "09****0000" — even though the citizen reading them is the person who typed them.
 	//
@@ -233,6 +239,8 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 		FieldLabel: nhan,
 		Content:    p.NoiDung,
 		Address:    p.DiaChi,
+		Lat:        p.Lat,
+		Lng:        p.Lng,
 		Anonymous:  p.AnDanh,
 		ClockFrom:  p.GocDemHan,
 		Result:     p.KetQuaXuLy,

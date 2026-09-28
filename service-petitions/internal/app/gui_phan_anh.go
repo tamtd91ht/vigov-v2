@@ -155,6 +155,16 @@ type YeuCauGuiPhanAnh struct {
 	// (ADR 0008), because without them there is no anti-spam, the citizen cannot find their own
 	// petition, and a defamatory report becomes untraceable.
 	AnDanh bool
+
+	// Lat and Lng are the OPTIONAL scene location (ADR 0050). The citizen app obtains them from the
+	// vihat-miniapp backend, which holds the Zalo app secret that exchanges the getLocation token
+	// (ADR 0032), and forwards them with the petition. They are CLIENT-SUPPLIED DESCRIPTION of where
+	// the problem is and grant nothing: no isolation decision reads them.
+	//
+	// STILL OPTIONAL. ADR 0050 point 9 defers the mandatory photos-and-location check until both
+	// actually work end to end; requiring it before then would refuse every petition.
+	Lat *float64
+	Lng *float64
 }
 
 // GuiPhanAnh owns the citizen intake.
@@ -232,6 +242,10 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		return domain.PhieuPhanAnh{}, err
 	}
 	dienThoai, err := domain.ChuanHoaDienThoai(yc.DienThoai)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	lat, lng, err := domain.NormaliseSceneLocation(yc.Lat, yc.Lng)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -326,6 +340,8 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		CongDanID: congDan.ID,
 		NoiDung:   noiDung,
 		DiaChi:    diaChi,
+		Lat:       lat,
+		Lng:       lng,
 
 		NguoiGuiHoTen:     hoTen,
 		NguoiGuiDienThoai: dienThoai,
@@ -377,6 +393,10 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// WHAT IS HERE INSTEAD ANSWERS WHAT AN INSPECTION ACTUALLY ASKS: which channel it came in
 		// through, what the authority committed to and by when, and which optional boxes the citizen
 		// filled — without one character of what they typed.
+		//
+		// THE SCENE LOCATION IS A BOOLEAN HERE, never the two numbers: raw coordinates in an
+		// append-only ledger are rule 6, forbidden #4 in its plainest form. `has_scene_location` is
+		// English because it is a new key (rule 12) — the `publication_status` precedent beside it.
 		delta, err := json.Marshal(map[string]any{
 			"kenh_tiep_nhan":     string(kenhCongDan),
 			"trang_thai":         string(moi.TrangThai),
@@ -387,6 +407,7 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 			"truong_da_dien":     truongDaDien(moi),
 			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
 			"publication_status": string(moi.PublicationStatus),
+			"has_scene_location": moi.Lat != nil,
 		})
 		if err != nil {
 			return fmt.Errorf("gui_phan_anh: mã hoá delta: %w", err)

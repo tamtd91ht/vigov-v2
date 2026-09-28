@@ -7,7 +7,8 @@ package http
 // Everything else in this repository is written by staff, whose identity is issued by an
 // administrator and whose every act is attributable. This one is written by whoever is holding a
 // phone that received an OTP (rule 4). That difference is why nothing on this path is taken from
-// the request except the four values a citizen genuinely types.
+// the request except what the citizen genuinely supplies: the four boxes they type, the anonymous
+// flag, and the optional scene location their device reported (ADR 0050).
 //
 // FIVE FACTS ABOUT THE RECORD COME FROM SOMEWHERE ELSE, and each of them is a lever if it does not:
 //
@@ -61,6 +62,15 @@ type guiPhanAnhVao struct {
 	Reporter  string `json:"reporter_name"`
 	Phone     string `json:"reporter_phone"`
 	Anonymous bool   `json:"anonymous"`
+
+	// Lat and Lng are the OPTIONAL scene location, JSON numbers, both or neither. Pointers so
+	// "not sent" (and `null`) stays distinct from a genuine 0 — the equator and the prime meridian
+	// are real places. A string is a decode error and answers 400 before the use case; range, the
+	// both-or-neither rule and rounding are domain.NormaliseSceneLocation's. They are client-supplied
+	// description of where the problem is and are on no isolation path, which is why they are
+	// accepted rather than refused like the block below.
+	Lat *float64 `json:"lat"`
+	Lng *float64 `json:"lng"`
 
 	// --- refused, every one of them ----------------------------------------------------------
 
@@ -163,6 +173,8 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		HoTen:     vao.Reporter,
 		DienThoai: vao.Phone,
 		AnDanh:    vao.Anonymous,
+		Lat:       vao.Lat,
+		Lng:       vao.Lng,
 	}, congDan)
 	if err != nil {
 		h.traLoiLoiGui(w, r, err)
@@ -179,7 +191,8 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 
 	// LOGGED: the code and the commune, and NOTHING ELSE. The code is a business identifier and is
 	// what an operator or a citizen quotes; the name, the number and the text of the report are
-	// citizen personal data and never enter a log line (rule 3, invariants 1 and 2).
+	// citizen personal data and never enter a log line (rule 3, invariants 1 and 2). So do the
+	// scene coordinates: sent from the spot they are often the citizen's doorstep.
 	h.d.Log.Info("đã tiếp nhận phản ánh của công dân",
 		"xa", string(tenant.MustFrom(ctx)), "ma_tra_cuu", p.MaTraCuu)
 

@@ -28,6 +28,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"unicode/utf8"
 )
@@ -68,7 +69,66 @@ var (
 	ErrDiaChiQuaDai    = errors.New("phan_anh: `address` quá dài")
 	ErrHoTenQuaDai     = errors.New("phan_anh: `reporter_name` quá dài")
 	ErrDienThoaiQuaDai = errors.New("phan_anh: `reporter_phone` quá dài")
+
+	// The scene location's two refusals. The sentences NAME THE RULE AND NEVER THE VALUE: a
+	// coordinate sent from the spot is often the citizen's own doorstep (rule 3 lists home
+	// coordinates as personal data), and this text is returned to the client and may be logged.
+	ErrSceneLocationIncomplete = errors.New(
+		"phan_anh: `lat` và `lng` phải gửi cùng nhau — không nhận một toạ độ đơn lẻ")
+	ErrSceneLocationOutOfRange = errors.New(
+		"phan_anh: toạ độ ngoài phạm vi — `lat` từ -90 đến 90, `lng` từ -180 đến 180")
 )
+
+// SceneLocationDecimals is the precision `phieu_phan_anh.lat`/`lng` hold: NUMERIC(9,6), migration
+// 0004. About 11 cm at the equator — far finer than any phone's fix, so rounding to it loses nothing
+// a citizen actually measured.
+const SceneLocationDecimals = 6
+
+// NormaliseSceneLocation checks the optional scene location a citizen sends with a petition and
+// rounds it to the precision the column stores.
+//
+// BOTH OR NEITHER. One coordinate alone is not a place; storing it would put a pin on a line
+// across the whole planet. Refused rather than dropped, so a client with a bug learns of it.
+//
+// THE WORLD'S RANGE AND NOT VIETNAM'S. vigov-require validates `ge=-90, le=90` / `ge=-180,
+// le=180` and nothing narrower (apps/api/app/modules/feedback/schemas.py:28-29). A national bounding
+// box invented here would be a business rule nobody stated, and it would refuse the island
+// communes the day one is onboarded with a box drawn around the mainland.
+//
+// ROUNDED HERE, NOT LEFT TO POSTGRESQL. The database would round the same way on insert (NUMERIC
+// rounds half away from zero, as math.Round does), but the 201 is built from the in-memory row;
+// rounding once here is what makes the value the citizen is shown byte-equal to the value stored.
+//
+// NaN and ±Inf are refused even though encoding/json cannot produce them: this function is pure
+// and its callers are not all going to be a JSON decoder.
+func NormaliseSceneLocation(lat, lng *float64) (*float64, *float64, error) {
+	switch {
+	case lat == nil && lng == nil:
+		return nil, nil, nil
+	case lat == nil || lng == nil:
+		return nil, nil, ErrSceneLocationIncomplete
+	}
+	if !coordinateWithin(*lat, 90) || !coordinateWithin(*lng, 180) {
+		return nil, nil, ErrSceneLocationOutOfRange
+	}
+	la, ln := roundCoordinate(*lat), roundCoordinate(*lng)
+	return &la, &ln, nil
+}
+
+func coordinateWithin(v, bound float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= -bound && v <= bound
+}
+
+// roundCoordinate rounds to SceneLocationDecimals. A -0 result is folded to 0 so the wire never
+// carries "-0", which a client could render as a distinct value.
+func roundCoordinate(v float64) float64 {
+	p := math.Pow10(SceneLocationDecimals)
+	r := math.Round(v*p) / p
+	if r == 0 {
+		return 0
+	}
+	return r
+}
 
 // ChuanHoaNoiDung trims and bounds the report text.
 //
@@ -130,6 +190,7 @@ func LaLoiGuiPhanAnh(err error) bool {
 	for _, mot := range []error{
 		ErrNoiDungTrong, ErrNoiDungQuaDai,
 		ErrDiaChiQuaDai, ErrHoTenQuaDai, ErrDienThoaiQuaDai,
+		ErrSceneLocationIncomplete, ErrSceneLocationOutOfRange,
 	} {
 		if errors.Is(err, mot) {
 			return true

@@ -204,8 +204,13 @@ type PhieuPhanAnh struct {
 
 	DiaChi string
 	ThonID string
-	Lat    *float64
-	Lng    *float64
+
+	// Lat and Lng are the SCENE LOCATION (ADR 0050): where the problem is, as the citizen's device
+	// reported it. Both nil or both set — NormaliseSceneLocation refuses one alone. Shown wherever
+	// DiaChi is shown, anonymous petitions included, but NEVER logged and never in an audit delta:
+	// sent from the spot it is often the citizen's own doorstep (rule 3, home coordinates).
+	Lat *float64
+	Lng *float64
 
 	// PERSONAL DATA (rule 3, Decree 13/2023). Never logged, never in an error message, never in
 	// a file name or a cache key. Masked on the way out unless the caller holds an explicit

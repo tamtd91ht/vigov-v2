@@ -181,7 +181,8 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// 201 carries the lookup code (rule 10, invariant 1) in the SAME shape the GET answers, with the
 	// contact details masked — see HandlerCongDan.GuiPhieu.
 	//
-	// 400 is a body that is not JSON, a body over 64 KiB, an empty or over-long field, and a body
+	// 400 is a body that is not JSON, a body over 64 KiB, an empty or over-long field, a scene
+	// location that is not two numbers in range sent together (`lat`/`lng`, both optional), and a body
 	// naming something the client does not decide (người gửi, lĩnh vực, kênh, mã, trạng thái, hạn).
 	//
 	// 401 is the answer to THREE situations, folded together exactly as on the read route (ADR 0022):

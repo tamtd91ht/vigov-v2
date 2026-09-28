@@ -94,6 +94,19 @@ type phieuPhanAnhRa struct {
 	Content string `json:"content"`
 	Address string `json:"address"`
 
+	// Lat and Lng are the SCENE LOCATION (ADR 0050, docs/ui-ux/09 §8.4) — the map pin beside the
+	// address. ABSENT when the citizen sent none; both present otherwise.
+	//
+	// UNDER `feedback.read`, like `address` (owner's decision): it is where the problem is, a place
+	// the citizen chose to send, not a home address from a profile. AND SHOWN ON AN ANONYMOUS
+	// PETITION, exactly as `address` is — anonymity hides the reporter's identity, and the place is
+	// what the officer has to go to.
+	//
+	// OMITEMPTY POINTERS: absent means "not sent", while a real 0 still travels as 0; omitempty also
+	// makes tools/apidoc declare them optional so yesterday's fixtures stay valid.
+	Lat *float64 `json:"lat,omitempty"`
+	Lng *float64 `json:"lng,omitempty"`
+
 	// ReporterName and ReporterPhone are MASKED — "Nguyễn V. A." and "09****5678" — unless the
 	// caller holds `feedback.unmask`, in which case they carry the real values and the request
 	// has already written an audit entry for the disclosure (rule 6, invariant 7).
@@ -231,6 +244,8 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		FieldLabel: nhan,
 		Content:    p.NoiDung,
 		Address:    p.DiaChi,
+		Lat:        p.Lat,
+		Lng:        p.Lng,
 		Anonymous:  p.AnDanh,
 		ClockFrom:  p.GocDemHan,
 		BookedAt:   p.VaoSoLuc,

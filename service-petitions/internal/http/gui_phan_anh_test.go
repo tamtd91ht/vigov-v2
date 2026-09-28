@@ -94,6 +94,12 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 	if s.loi != nil {
 		return domain.PhieuPhanAnh{}, s.loi
 	}
+	// The scene location goes through the SAME domain rule the real use case applies, so the 400s
+	// asserted in intake_scene_location_test.go are the route mapping a real refusal.
+	lat, lng, err := domain.NormaliseSceneLocation(yc.Lat, yc.Lng)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
 
 	s.dem++
 	// A DIFFERENT CODE EVERY TIME. Were it constant, the duplicate-request test would pass even if
@@ -105,6 +111,8 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 		CongDanID:         congDan.ID,
 		NoiDung:           yc.NoiDung,
 		DiaChi:            yc.DiaChi,
+		Lat:               lat,
+		Lng:               lng,
 		NguoiGuiHoTen:     yc.HoTen,
 		NguoiGuiDienThoai: yc.DienThoai,
 		AnDanh:            yc.AnDanh,
