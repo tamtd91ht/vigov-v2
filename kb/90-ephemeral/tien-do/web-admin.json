@@ -251,6 +251,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa mở trình duyệt ở 320px. Đường 200 của PUT publication (vẽ lại ngăn + tải lại danh sách) chỉ có ca API, SoPhanAnh chưa có khung test. Nhãn công khai theo đặc tả §8.3/require feedback-display.ts:75-94. PHAN_CHUA_DUNG còn 8 (thêm dòng §8.6 'cán bộ không nhập hộ đánh giá' — quyết định người dùng 27/09, CHƯA CÓ ADR ghi nó). Lọc không đẩy lên URL (các lọc khác cũng không).",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "cau-hinh-sau-phan-chua-dung-28-09",
+      "viec": "Cấu hình — dựng các phần trong PHAN_CHUA_DUNG: tạo tám vai trò mẫu, xoá + nhập Excel bộ phận, tab Trường bản đồ, tab Máy chủ thư, tab Nhật ký hệ thống, tab Lời hệ thống; Thu–Chi đọc scope_notice",
+      "trang_thai": "xong",
+      "bang_chung": "9cbfb29, 78d86e3. web-admin tsc sạch, eslint sạch, vitest 2522/2522, gen-api-types --check khớp. Người dùng 28/09/2026: 'làm xong 8 phần của cấu hình', 'làm theo đề xuất, đối chiếu vigov-require'.",
+      "no_confirm": [],
+      "tiep_theo": "PHAN_CHUA_DUNG còn 3 mục: Tự động hoá (chưa có bộ lập lịch/việc nền — người dùng chọn hoãn), 32 câu report.* (ADR 0024 chưa chốt chủ), nhập Excel §2 Thôn/§3 Người dùng/§5 Danh mục. CHƯA KIỂM: mở trên trình duyệt thật, bề rộng 320px; câu chữ mới chưa rà ngôn ngữ hành chính. Nhật ký chỉ hiện mã cán bộ, chưa tra tên qua staff-directory (§6). Nhà cung cấp chọn: cảnh báo feedback.classify/unmask bỏ qua vai trò quan-tri-he-thong; gen-api-types nhận {} trần thành JsonValue.",
+      "menu": "cau-hinh"
     }
   ]
 }
