@@ -33,6 +33,7 @@ import {
   coQuyen,
 } from "@/lib/quyen";
 import type {
+  identity_caLamViecRa,
   identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
   petitions_mucUuTienRa,
@@ -1941,14 +1942,13 @@ export function thanGiaoViec(
  * NÚT `✎ SỬA` CỦA KHỐI §5.4 — THÂN `PATCH /api/v1/tasks/{ma}`
  *
  * NHỮNG Ô SỬA ĐƯỢC LÀ GIAO CỦA HAI TẬP: các trường §5.4 vẽ, và các trường
- * `petitions_suaNhiemVuVao` nhận. Ra năm ô và ba danh sách: `title` · `result_summary` · `note` ·
- * `leader_approved` · `superior_acknowledged` · `documents`. Bốn trường §5.4 còn lại HIỆN mà
- * KHÔNG SỬA ĐƯỢC, mỗi trường một lý do ra tới màn:
+ * `petitions_suaNhiemVuVao` nhận: `code` · `due_at` · `title` · `result_summary` · `note` ·
+ * `leader_approved` · `superior_acknowledged` · `documents`. Hai trường §5.4 còn lại HIỆN mà KHÔNG
+ * SỬA ĐƯỢC Ở ĐÂY — `Cơ quan chủ trì` và `Chuyên viên`, sửa ở khối §5.7 (`LY_DO_KHONG_SUA_CHU_TRI`).
  *
- *   Mã nhiệm vụ          mã đã cấp — trigger `nhiem_vu_bat_bien`, luật 7 bất biến 3
- *   Hạn xử lý            PATCH không có `due_at` — hạn chỉ dịch qua đề nghị lùi hạn (§5.8)
- *   Cơ quan chủ trì      PATCH không có `lead_unit`
- *   Chuyên viên          PATCH không có `monitor`
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `Mã nhiệm vụ` (3c3525f — đổi mã, mã cũ giữ lại không cấp lại)
+ * và `Hạn xử lý` (f27fd6e — SỬA hạn, không phải lùi hạn) nay sửa được. Mỗi lần lưu từ form này mang
+ * `expected_updated_at` (d2ed15e): ai đó đã ghi nhiệm vụ kể từ lúc mở form thì máy chủ từ chối 409.
  *
  * `description`, `priority`, `bloc`, `progress`, `parent` hợp đồng CÓ nhận nhưng §5.4 KHÔNG vẽ, nên
  * không có ô ở đây: nút `✎ Sửa` nằm ở góc khối §5.4 và sửa đúng khối ấy.
@@ -1963,21 +1963,87 @@ export const NHAN_NUT_SUA = "✎ Sửa";
 export const NHAN_NUT_LUU = "Lưu";
 export const NHAN_NUT_HUY = "Huỷ";
 
-/** Mã sổ là mã ĐÃ CẤP: không đổi, không cấp lại (luật 7, bất biến 3; trigger `nhiem_vu_bat_bien`). */
-export const LY_DO_KHONG_SUA_MA =
-  "Mã nhiệm vụ đã cấp thì giữ nguyên suốt đời hồ sơ, không sửa và không cấp lại.";
+/** Server bound of a register code (`MaNhiemVuToiDa`, `nhiem_vu_ghi.go:36`). */
+export const TASK_CODE_MAX = 32;
 
 /**
- * Vì sao `Hạn xử lý` không sửa được. MỘT câu, dùng ở HAI chỗ — mục `PHAN_CHUA_DUNG` và dòng chỉ
- * đọc trong form `✎ Sửa` — để hai chỗ không trôi khỏi nhau (luật 9, cấm #2).
- *
- * Owner's decision of 28/09/2026: kept on purpose, not a gap waiting for server work.
+ * Under the `Mã nhiệm vụ` field. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this was `LY_DO_KHONG_SUA_MA` ("không
+ * sửa và không cấp lại"). Renaming now exists (3c3525f); what survives of the old rule is the half
+ * that matters for records: the old code is reserved for ever and never reissued (rule 7, inv 3).
+ * The second sentence is the server's own warning (`nhiem_vu_ghi.go:215-217`): the old code 404s.
  */
-export const LY_DO_KHONG_SUA_HAN =
-  "Giữ có chủ ý — chủ đầu tư quyết định ngày 28/09/2026: hạn hoàn thành chỉ dịch được qua đề " +
-  "nghị lùi hạn có người duyệt (§5.8), không sửa trực tiếp. Sửa thẳng một ô ngày sẽ làm đổi tỷ " +
-  "lệ đúng hạn báo cáo lên lãnh đạo, trong khi con số ấy phải đếm theo đúng cam kết đã đưa ra. " +
-  "Vì vậy `PATCH /api/v1/tasks/{ma}` không nhận `due_at`.";
+export const CODE_EDIT_NOTE =
+  "Đổi mã thì mã cũ vẫn được giữ lại và không bao giờ cấp cho việc khác. Đường dẫn hay tin nhắn " +
+  "đã gửi mang mã cũ sẽ không mở được nhiệm vụ này nữa.";
+
+/**
+ * Under the deadline fields. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this replaces `LY_DO_KHONG_SUA_HAN`
+ * (the owner's earlier "only through an approved extension"), reversed by the owner's adoption of
+ * require 93cff7f. What the server does (`nhiem_vu_ghi.go:220-225`): a CORRECTION, no approver;
+ * `original_due_at` follows only while the task was never extended; the timeline says which.
+ */
+export const DUE_EDIT_NOTE =
+  "Đây là SỬA hạn cho đúng, không phải lùi hạn: không cần lãnh đạo duyệt. Nhiệm vụ chưa từng được " +
+  "duyệt lùi hạn thì hạn ban đầu đổi theo; đã từng được duyệt lùi hạn thì chỉ hạn xử lý đổi, hạn " +
+  "ban đầu giữ nguyên. Nhật ký ghi rõ trường hợp nào đã xảy ra. Muốn xin thêm thời gian thì dùng " +
+  "khối Đề nghị lùi hạn.";
+
+/** The time field was left empty for one of these reasons — said under it, never a silent blank. */
+export const DUE_TIME_NO_CALENDAR =
+  "Chưa điền sẵn giờ: không đọc được lịch làm việc của xã. Nhập giờ của hạn.";
+export const DUE_TIME_NO_SHIFT =
+  "Chưa điền sẵn giờ: theo lịch làm việc hằng tuần, xã không có ca nào vào thứ này. Nhập giờ của hạn.";
+export const DUE_TIME_LOADING = "Đang đọc lịch làm việc của xã để điền sẵn giờ…";
+export function dueTimeFilledNote(time: string): string {
+  return `Giờ ${time} điền sẵn theo giờ kết thúc ca cuối trong ngày của lịch làm việc của xã. Sửa được.`;
+}
+
+/** The commune's weekly calendar as the edit form holds it. */
+export type CalendarLoad =
+  | { readonly pha: "dangTai" }
+  | { readonly pha: "loi" }
+  | { readonly pha: "xong"; readonly shifts: readonly Pick<identity_caLamViecRa, "weekday" | "end">[] };
+
+/**
+ * The sentence under the time field, or `null`. DERIVED from the fields, not stored: "pre-filled"
+ * is said while the time still equals the calendar default for the chosen date AND the deadline was
+ * changed in this form — so it disappears the moment the clerk types another hour.
+ */
+export function dueTimeHint(
+  cal: CalendarLoad,
+  f: Pick<FormSuaNhiemVu, "dueDate" | "dueTime">,
+  goc: Pick<petitions_nhiemVuRa, "due_at">,
+): string | null {
+  if (f.dueDate === "") return null;
+  if (f.dueTime === "") {
+    if (cal.pha === "dangTai") return DUE_TIME_LOADING;
+    if (cal.pha === "loi") return DUE_TIME_NO_CALENDAR;
+    return defaultDueTime(cal.shifts, f.dueDate) === "" ? DUE_TIME_NO_SHIFT : null;
+  }
+  if (cal.pha !== "xong") return null;
+  const changed = f.dueDate !== ngayChoONhap(goc.due_at) || f.dueTime !== timeForInput(goc.due_at);
+  return changed && f.dueTime === defaultDueTime(cal.shifts, f.dueDate)
+    ? dueTimeFilledNote(f.dueTime)
+    : null;
+}
+
+/**
+ * Added under the server's refusal when a re-read after a failed save shows the task CHANGED since
+ * the form opened (409 `task_changed`, d2ed15e). Detected from the data — `updated_at` of the fresh
+ * read against the snapshot — not from the error `code`, which this screen never branches on
+ * (`lib/api/goi.ts`). The form is NOT refreshed underneath the clerk: saving on top of a version
+ * they have not seen is exactly what the lock exists to stop.
+ */
+export const TASK_CHANGED_NOTE =
+  "Nhiệm vụ đã được đọc lại. Chưa lưu gì — bấm Huỷ rồi ✎ Sửa để sửa trên bản mới nhất.";
+
+/** A fresh read that proves the task moved on since `snapshotUpdatedAt`. */
+export function changedSince(
+  fresh: KetQua<Pick<petitions_nhiemVuRa, "updated_at">>,
+  snapshotUpdatedAt: string,
+): boolean {
+  return fresh.ok && fresh.duLieu.updated_at !== snapshotUpdatedAt;
+}
 
 /**
  * Why `Cơ quan chủ trì` and `Chuyên viên` are read-only in the §5.4 `✎ Sửa` form — and WHERE they
@@ -2035,6 +2101,11 @@ export type DongVanBanSua = DongVanBanNhap & { readonly id: string };
 
 /** Mọi ô sửa được của form `✎ Sửa`. */
 export type FormSuaNhiemVu = {
+  /** Register code, as typed (trimmed at send). */
+  readonly code: string;
+  /** Deadline date `YYYY-MM-DD` and time `HH:MM`, both in the commune's time zone; `""` = empty. */
+  readonly dueDate: string;
+  readonly dueTime: string;
   readonly tieuDe: string;
   readonly tomTatKetQua: string;
   readonly ghiChu: string;
@@ -2054,6 +2125,9 @@ export function formSuaTuChiTiet(
   ds: readonly petitions_nhiemVuVanBanRa[],
 ): FormSuaNhiemVu {
   return {
+    code: n.code,
+    dueDate: ngayChoONhap(n.due_at),
+    dueTime: timeForInput(n.due_at),
     tieuDe: n.title,
     tomTatKetQua: n.result_summary,
     ghiChu: n.note,
@@ -2077,6 +2151,58 @@ export function formSuaTuChiTiet(
 }
 
 const KHUON_NGAY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^\d{2}:\d{2}$/;
+
+/**
+ * Instant → `HH:MM` for `<input type="time">`, in the commune's time zone (same reason as
+ * `ngayChoONhap`: slicing the ISO string reads UTC). Seconds are dropped — see `thanSuaNhiemVu` for
+ * why an untouched field never re-sends them.
+ */
+export function timeForInput(iso: string | null): string {
+  if (iso === null || iso === "") return "";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: MUI_GIO,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(t));
+}
+
+/** Date + time fields → the RFC 3339 instant PATCH takes. Same `+07:00` as `mocCuoiNgay`. */
+export function dueAtFromInputs(date: string, time: string): string {
+  return `${date}T${time}:00+07:00`;
+}
+
+/**
+ * The default time of a deadline on `date` (`YYYY-MM-DD`): the END OF THE LAST SESSION that weekday
+ * in the commune's weekly calendar (`GET /api/v1/working-hours`) — the afternoon shift's end on an
+ * ordinary day (user decision 28/09/2026). `""` when that weekday has no session: the field stays
+ * empty and required rather than inventing an hour.
+ *
+ * NEVER A HARD-CODED `17:00`: the calendar is per-commune configuration (rule 1, invariant 10).
+ *
+ * ⚠ WEEKLY CALENDAR ONLY. Public holidays and swap working days are not read: on a weekend swap day
+ * the field stays empty (the clerk types the hour); on a holiday the default is that weekday's usual
+ * hour. It is a pre-filled suggestion the clerk sees and can change, never a computed deadline —
+ * computing deadlines in working hours stays `identity`'s (ADR 0007).
+ */
+export function defaultDueTime(
+  shifts: readonly Pick<identity_caLamViecRa, "weekday" | "end">[],
+  date: string,
+): string {
+  if (!KHUON_NGAY.test(date)) return "";
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  // The calendar's weekday is ISO 8601: 1 = Monday … 7 = Sunday (`domain/lich_lam_viec.go:22`).
+  const iso = day === 0 ? 7 : day;
+  const ends = shifts
+    .filter((c) => c.weekday === iso)
+    .map((c) => c.end.slice(0, 5))
+    .filter((e) => TIME_PATTERN.test(e))
+    .sort();
+  return ends.length === 0 ? "" : (ends[ends.length - 1] as string);
+}
 
 /** Ba danh sách có khác tập đã đọc hay không — so theo `id`, sau khi cắt khoảng trắng. */
 function vanBanDaDoi(
@@ -2121,6 +2247,15 @@ export function thanSuaNhiemVu(
   gocVanBan: readonly petitions_nhiemVuVanBanRa[],
 ): petitions_suaNhiemVuVao | null {
   const than: petitions_suaNhiemVuVao = {};
+  const code = f.code.trim();
+  if (code !== goc.code) than.code = code;
+  // THE DEADLINE IS COMPARED FIELD BY FIELD WITH WHAT THE FORM OPENED WITH, not instant by instant:
+  // a stored `23:59:59` shows as `23:59`, and re-composing it would send `23:59:00` — a one-second
+  // "correction" nobody made, written to the timeline and, on a never-extended task, to the original
+  // deadline §11.3 counts against.
+  if (f.dueDate !== ngayChoONhap(goc.due_at) || f.dueTime !== timeForInput(goc.due_at)) {
+    if (f.dueDate !== "" && f.dueTime !== "") than.due_at = dueAtFromInputs(f.dueDate, f.dueTime);
+  }
   const tieuDe = f.tieuDe.trim();
   if (tieuDe !== goc.title) than.title = tieuDe;
   const tomTat = f.tomTatKetQua.trim();
@@ -2144,14 +2279,30 @@ export function thanSuaNhiemVu(
     );
   }
 
-  return Object.keys(than).length === 0 ? null : than;
+  if (Object.keys(than).length === 0) return null;
+  // EVERY PATCH FROM THIS FORM CARRIES THE TOKEN of the task as the form opened it (d2ed15e): if
+  // anybody wrote the task since, the server refuses with 409 instead of this save overwriting it.
+  if (goc.updated_at !== "") than.expected_updated_at = goc.updated_at;
+  return than;
 }
 
 /**
  * Câu chặn nút `Lưu`, hoặc `null`. Cùng phép kiểm dòng văn bản với form tạo (`canhBaoVanBan`),
  * cộng hai điều chỉ form sửa gặp: tiêu đề bị xoá trắng, và một ngày văn bản sai khuôn đọc từ máy chủ.
  */
-export function canhBaoSua(f: FormSuaNhiemVu): string | null {
+export function canhBaoSua(f: FormSuaNhiemVu, goc?: Pick<petitions_nhiemVuRa, "due_at">): string | null {
+  if (f.code.trim() === "") return "Ô Mã nhiệm vụ không được để trống.";
+  if (f.dueDate === "" && f.dueTime === "") {
+    // A deadline cannot be cleared (`due_at` null = "leave it"), so emptying both fields would look
+    // saved while nothing changed. Refuse and say so.
+    if (goc !== undefined && goc.due_at !== null && goc.due_at !== "") {
+      return "Hạn xử lý không xoá được — chỉ sửa sang ngày giờ khác.";
+    }
+  } else if (f.dueDate === "" || !KHUON_NGAY.test(f.dueDate)) {
+    return "Chọn ngày của hạn xử lý.";
+  } else if (f.dueTime === "" || !TIME_PATTERN.test(f.dueTime)) {
+    return "Nhập giờ của hạn xử lý.";
+  }
   if (f.tieuDe.trim() === "") {
     return `Ô ${NHAN_TIEU_DE_THEO_VAN_BAN} không được để trống.`;
   }
@@ -2420,10 +2571,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Ô ghi tay nay GHI được (`POST /api/v1/tasks/{ma}/log-entries`), nhưng chỉ nhận chữ: tuyến ấy " +
       "không nhận tệp, và nhật ký nhiệm vụ chưa có kho tệp nào để đặt tệp vào. Vẽ nút 📎 lúc này là " +
       "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
-  },
-  {
-    ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",
-    viSao: LY_DO_KHONG_SUA_HAN,
   },
   {
     ten: "⬆ Nhập từ Excel (§8) · 🗑 Xoá đã chọn (§2) · Xuất Sổ theo dõi (§4.3)",

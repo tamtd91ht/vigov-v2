@@ -49,7 +49,17 @@ import {
   KHOA_SUA_LOI,
   KHOA_SUA_NHOM_LA,
   LY_DO_KHONG_SUA_CHU_TRI,
-  LY_DO_KHONG_SUA_HAN,
+  CODE_EDIT_NOTE,
+  DUE_EDIT_NOTE,
+  DUE_TIME_LOADING,
+  DUE_TIME_NO_CALENDAR,
+  DUE_TIME_NO_SHIFT,
+  changedSince,
+  defaultDueTime,
+  dueAtFromInputs,
+  dueTimeFilledNote,
+  dueTimeHint,
+  timeForInput,
   canhBaoSua,
   formSuaTuChiTiet,
   lyDoKhoaSua,
@@ -420,7 +430,8 @@ describe("phần chưa dựng được", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (giao lại, `task.assign`): 10 → 7. Exactly three entries left,
     // all built by the §5.7 block — the unit/assignee box, `Chuyển tiếp`, and editing lead unit /
     // monitor. An 8 means one was left behind; a 6 means an unrelated entry was lost.
-    expect(PHAN_CHUA_DUNG.length).toBe(7);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): 7 → 6 — `Sửa Hạn hoàn thành` was built.
+    expect(PHAN_CHUA_DUNG.length).toBe(6);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
@@ -430,10 +441,9 @@ describe("phần chưa dựng được", () => {
     expect(sort?.ten).toBe("Sắp xếp theo `Tên việc` và `Ưu tiên` của bảng Danh sách (§4.2)");
     expect(sort?.viSao).toContain("`Hạn`");
     expect(sort?.viSao).not.toContain("làm mất hẳn mọi việc không có hạn");
-    const deadline = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sửa `Hạn hoàn thành`"));
-    expect(deadline?.viSao).toBe(LY_DO_KHONG_SUA_HAN);
-    expect(LY_DO_KHONG_SUA_HAN).toContain("28/09/2026");
-    expect(LY_DO_KHONG_SUA_HAN).toContain("tỷ lệ đúng hạn báo cáo lên lãnh đạo");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): the entry "Sửa `Hạn hoàn thành`" (kept on purpose by the
+    // owner's earlier decision) is gone — the owner adopted require 93cff7f and the form now edits it.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sửa `Hạn hoàn thành`"))).toBeUndefined();
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the three entries the §5.7 block built are gone.
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`Chuyển tiếp`"))).toBeUndefined();
     expect(ten).not.toContain("Ô đổi bộ phận / người thực hiện");
@@ -834,25 +844,30 @@ describe("✎ Sửa — thân PATCH chỉ mang thứ đã đổi", () => {
   });
 
   it("đổi MỘT trường vô hướng ⇒ thân có ĐÚNG trường ấy", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): every body now also carries `expected_updated_at` — the
+    // `updated_at` of the task as the form opened it (d2ed15e) — so a concurrent write is a 409.
     expect(thanSuaNhiemVu({ ...formGoc(), ghiChu: " Ghi chú giả mới " }, chiTiet(), VB_GOC)).toEqual({
       note: "Ghi chú giả mới",
+      expected_updated_at: "2026-06-01T02:00:00Z",
     });
     expect(thanSuaNhiemVu({ ...formGoc(), capTrenCongNhan: true }, chiTiet(), VB_GOC)).toEqual({
       superior_acknowledged: true,
+      expected_updated_at: "2026-06-01T02:00:00Z",
     });
     expect(thanSuaNhiemVu({ ...formGoc(), tomTatKetQua: "Đã xong giả" }, chiTiet(), VB_GOC)).toEqual({
       result_summary: "Đã xong giả",
+      expected_updated_at: "2026-06-01T02:00:00Z",
     });
   });
 
   it("xoá trắng ghi chú là MỘT THAY ĐỔI — gửi chuỗi rỗng, không bỏ qua", () => {
     const f = { ...formSuaTuChiTiet(chiTiet({ note: "Cũ" }), VB_GOC), ghiChu: "" };
-    expect(thanSuaNhiemVu(f, chiTiet({ note: "Cũ" }), VB_GOC)).toEqual({ note: "" });
+    expect(thanSuaNhiemVu(f, chiTiet({ note: "Cũ" }), VB_GOC)).toEqual({ note: "", expected_updated_at: "2026-06-01T02:00:00Z" });
   });
 
   it("không đụng tới văn bản ⇒ `documents` VẮNG MẶT", () => {
     const than = thanSuaNhiemVu({ ...formGoc(), tieuDe: "Tiêu đề giả mới" }, chiTiet(), VB_GOC);
-    expect(than).toEqual({ title: "Tiêu đề giả mới" });
+    expect(than).toEqual({ title: "Tiêu đề giả mới", expected_updated_at: "2026-06-01T02:00:00Z" });
     expect(than).not.toHaveProperty("documents");
   });
 
@@ -927,11 +942,17 @@ describe("✎ Sửa — thân PATCH chỉ mang thứ đã đổi", () => {
   });
 
   it("gỡ HẾT mọi dòng ⇒ `documents: []`, không phải vắng mặt", () => {
-    expect(thanSuaNhiemVu({ ...formGoc(), vanBan: [] }, chiTiet(), VB_GOC)).toEqual({ documents: [] });
+    expect(thanSuaNhiemVu({ ...formGoc(), vanBan: [] }, chiTiet(), VB_GOC)).toEqual({
+      documents: [],
+      expected_updated_at: "2026-06-01T02:00:00Z",
+    });
   });
 
-  it("không bao giờ có `code`, `due_at`, `assigner`, `lead_unit`, `monitor`, `position`", () => {
+  it("KHÔNG đổi mã, KHÔNG đổi hạn ⇒ không có `code`, `due_at`; không bao giờ `assigner`, `lead_unit`, `monitor`, `position`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `code` và `due_at` từng "không bao giờ" có. Nay chúng đi
+    // khi cán bộ ĐỔI chúng (ca riêng bên dưới); ca này ghim rằng không đổi thì chúng vắng mặt.
     const f: FormSuaNhiemVu = {
+      ...formGoc(),
       tieuDe: "Tiêu đề giả khác",
       tomTatKetQua: "Kết quả giả",
       ghiChu: "Ghi chú giả",
@@ -997,8 +1018,9 @@ describe("✎ Sửa — khi nào nút mở, khi nào Lưu khoá", () => {
     expect(cau).toContain("không đúng khuôn ngày");
   });
 
-  it("lý do không sửa được Hạn là MỘT câu dùng chung; Cơ quan chủ trì nay CHỈ đường sang §5.7", () => {
-    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_HAN)).toBe(true);
+  it("Hạn nay sửa được (không còn mục chưa dựng); Cơ quan chủ trì nay CHỈ đường sang §5.7", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim câu `LY_DO_KHONG_SUA_HAN` trong phần chưa dựng.
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Hạn hoàn thành"))).toBe(false);
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (quyết định của người dùng): câu này từng nói "`PATCH` không
     // nhận `lead_unit` và `monitor`" và đứng trong phần chưa dựng. Hai trường ấy nay sửa ở khối
     // Giao việc, chuyển việc (`task.assign`), nên câu chỉ đường sang đó và rời phần chưa dựng.
@@ -1099,7 +1121,9 @@ describe("✎ Sửa — đọc lại trước khi lưu: không gỡ lặng lẽ 
   it("trọn luồng `gỡ hết`: thân `[]` ⇒ phải đọc lại ⇒ người khác vừa thêm một dòng ⇒ KHÔNG gửi", () => {
     // Đây là ca một lần bấm xoá mềm cả dòng cán bộ chưa từng thấy nếu bất cứ mắt xích nào hỏng.
     const than = thanSuaNhiemVu({ ...formGoc(), vanBan: [] }, chiTiet(), VB_GOC);
-    expect(than).toEqual({ documents: [] });
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): the body now also carries the lock token (d2ed15e). The
+    // re-read stays: it keeps the typed text and names the cause before the server's 409 would.
+    expect(than).toEqual({ documents: [], expected_updated_at: "2026-06-01T02:00:00Z" });
     expect(than !== null && canDocLaiTruocKhiLuu(than)).toBe(true);
     const docLai = { ok: true, duLieu: chiTiet({ documents: [...VB_GOC, DONG_NGUOI_KHAC] }) } as const;
     expect(loiSauKhiDocLai(docLai, VB_GOC)).toBe(VAN_BAN_VUA_BI_DOI);
@@ -1487,5 +1511,126 @@ describe("ô ghi tay §5.9 — ai thấy, và thân gửi đi", () => {
     expect(logEntryNote("")).toBeNull();
     expect(logEntryNote("  \n\t ")).toBeNull();
     expect(logEntryNote("  Đã gửi công văn \n")).toBe("Đã gửi công văn");
+  });
+});
+
+describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6e, d2ed15e)", () => {
+  const TOKEN = "2026-06-01T02:00:00Z";
+
+  it("form mở với mã và hạn của nhiệm vụ — ngày VÀ giờ theo múi giờ Việt Nam", () => {
+    const f = formGoc();
+    expect(f.code).toBe("NV19");
+    expect(f.dueDate).toBe("2026-06-20");
+    expect(f.dueTime).toBe("23:59");
+    // 00:30 ở +07 là 17:30 UTC hôm trước: đọc theo UTC sẽ ra sai cả ngày lẫn giờ.
+    expect(timeForInput("2026-06-19T17:30:00Z")).toBe("00:30");
+    expect(timeForInput(null)).toBe("");
+    expect(timeForInput("không phải ngày")).toBe("");
+  });
+
+  it("đổi mã ⇒ `code` đã cắt khoảng trắng; gõ lại đúng mã cũ ⇒ không có gì để lưu", () => {
+    expect(thanSuaNhiemVu({ ...formGoc(), code: "  NV19A " }, chiTiet(), VB_GOC)).toEqual({
+      code: "NV19A",
+      expected_updated_at: TOKEN,
+    });
+    expect(thanSuaNhiemVu({ ...formGoc(), code: " NV19 " }, chiTiet(), VB_GOC)).toBeNull();
+  });
+
+  it("đổi hạn ⇒ `due_at` là MỘT MỐC `+07:00` ghép từ ngày và giờ", () => {
+    expect(dueAtFromInputs("2026-07-01", "16:30")).toBe("2026-07-01T16:30:00+07:00");
+    expect(thanSuaNhiemVu({ ...formGoc(), dueDate: "2026-07-01", dueTime: "16:30" }, chiTiet(), VB_GOC)).toEqual({
+      due_at: "2026-07-01T16:30:00+07:00",
+      expected_updated_at: TOKEN,
+    });
+    // Chỉ đổi giờ cũng là một lần sửa hạn.
+    expect(thanSuaNhiemVu({ ...formGoc(), dueTime: "17:00" }, chiTiet(), VB_GOC)?.due_at).toBe(
+      "2026-06-20T17:00:00+07:00",
+    );
+  });
+
+  it("KHÔNG đụng tới hạn ⇒ không gửi `23:59:00` thay cho `23:59:59` đã lưu", () => {
+    // The stored second is invisible in an HH:MM field; re-composing it would be a false correction.
+    const than = thanSuaNhiemVu({ ...formGoc(), ghiChu: "x" }, chiTiet(), VB_GOC);
+    expect(than).not.toHaveProperty("due_at");
+  });
+
+  it("việc CHƯA CÓ HẠN: đặt hạn lần đầu được; để trống thì không gửi gì", () => {
+    const khongHan = chiTiet({ due_at: null, original_due_at: null });
+    const f = formSuaTuChiTiet(khongHan, VB_GOC);
+    expect([f.dueDate, f.dueTime]).toEqual(["", ""]);
+    expect(thanSuaNhiemVu(f, khongHan, VB_GOC)).toBeNull();
+    expect(canhBaoSua(f, khongHan)).toBeNull();
+    expect(thanSuaNhiemVu({ ...f, dueDate: "2026-07-01", dueTime: "17:00" }, khongHan, VB_GOC)?.due_at).toBe(
+      "2026-07-01T17:00:00+07:00",
+    );
+  });
+
+  it("chặn Lưu: mã trống; ngày mà thiếu giờ; giờ mà thiếu ngày; xoá hạn đang có", () => {
+    expect(canhBaoSua({ ...formGoc(), code: "  " }, chiTiet())).toContain("Mã nhiệm vụ");
+    expect(canhBaoSua({ ...formGoc(), dueTime: "" }, chiTiet())).toBe("Nhập giờ của hạn xử lý.");
+    expect(canhBaoSua({ ...formGoc(), dueDate: "" }, chiTiet())).toBe("Chọn ngày của hạn xử lý.");
+    // `due_at: null` means "leave it" on the server: an emptied deadline would look saved and not be.
+    expect(canhBaoSua({ ...formGoc(), dueDate: "", dueTime: "" }, chiTiet())).toContain("không xoá được");
+    expect(canhBaoSua(formGoc(), chiTiet())).toBeNull();
+  });
+
+  it("câu dưới hai ô nói rõ: SỬA hạn không phải lùi hạn, và khi nào hạn ban đầu đổi theo", () => {
+    expect(DUE_EDIT_NOTE).toContain("không phải lùi hạn");
+    expect(DUE_EDIT_NOTE).toContain("chưa từng được duyệt lùi hạn thì hạn ban đầu đổi theo");
+    expect(DUE_EDIT_NOTE).toContain("chỉ hạn xử lý đổi");
+    expect(CODE_EDIT_NOTE).toContain("không bao giờ cấp cho việc khác");
+  });
+});
+
+describe("giờ mặc định của hạn — giờ kết thúc ca cuối theo lịch làm việc CỦA XÃ", () => {
+  // ISO weekday: 1 = Monday … 7 = Sunday. 2026-07-01 is a Wednesday (3), 2026-07-05 a Sunday (7).
+  const LICH = [
+    { weekday: 3, end: "11:30:00" },
+    { weekday: 3, end: "17:00:00" },
+    { weekday: 6, end: "11:30" },
+  ];
+
+  it("ca cuối của đúng thứ ấy — không phải một giờ gõ cứng", () => {
+    expect(defaultDueTime(LICH, "2026-07-01")).toBe("17:00");
+    expect(defaultDueTime(LICH, "2026-07-04")).toBe("11:30");
+    // Another commune's calendar gives another hour from the same code.
+    expect(defaultDueTime([{ weekday: 3, end: "16:30" }], "2026-07-01")).toBe("16:30");
+  });
+
+  it("Chủ nhật là 7 theo ISO, KHÔNG phải 0 — chỉ ngày này tách được hai cách đánh số", () => {
+    // Measured: mapping JS `getUTCDay()` straight through (0 = Sunday) left every other case green,
+    // because Monday–Saturday coincide under both numberings.
+    expect(defaultDueTime([{ weekday: 7, end: "11:00" }], "2026-07-05")).toBe("11:00");
+    expect(defaultDueTime([{ weekday: 0, end: "11:00" }], "2026-07-05")).toBe("");
+  });
+
+  it("thứ không có ca, ngày hỏng, lịch rỗng ⇒ `\"\"` (ô giờ trống và bắt buộc)", () => {
+    expect(defaultDueTime(LICH, "2026-07-05")).toBe("");
+    expect(defaultDueTime(LICH, "05/07/2026")).toBe("");
+    expect(defaultDueTime([], "2026-07-01")).toBe("");
+  });
+
+  it("câu dưới ô giờ: đang đọc lịch / không đọc được / không có ca / đã điền sẵn — suy ra, không lưu", () => {
+    const goc = chiTiet();
+    const moi = { dueDate: "2026-07-01", dueTime: "" };
+    expect(dueTimeHint({ pha: "dangTai" }, moi, goc)).toBe(DUE_TIME_LOADING);
+    expect(dueTimeHint({ pha: "loi" }, moi, goc)).toBe(DUE_TIME_NO_CALENDAR);
+    expect(dueTimeHint({ pha: "xong", shifts: LICH }, { dueDate: "2026-07-05", dueTime: "" }, goc)).toBe(
+      DUE_TIME_NO_SHIFT,
+    );
+    const filled = { dueDate: "2026-07-01", dueTime: "17:00" };
+    expect(dueTimeHint({ pha: "xong", shifts: LICH }, filled, goc)).toBe(dueTimeFilledNote("17:00"));
+    // The clerk typed another hour: the "pre-filled" sentence goes.
+    expect(dueTimeHint({ pha: "xong", shifts: LICH }, { ...filled, dueTime: "15:00" }, goc)).toBeNull();
+    // Deadline untouched: nothing to say.
+    expect(dueTimeHint({ pha: "xong", shifts: LICH }, { dueDate: "2026-06-20", dueTime: "23:59" }, goc)).toBeNull();
+  });
+});
+
+describe("409 `task_changed` — phát hiện bằng DỮ LIỆU đọc lại, không bằng mã lỗi", () => {
+  it("đọc lại có `updated_at` khác bản chụp ⇒ đã đổi; bằng nhau hoặc đọc hỏng ⇒ không nói vậy", () => {
+    expect(changedSince({ ok: true, duLieu: { updated_at: "B" } }, "A")).toBe(true);
+    expect(changedSince({ ok: true, duLieu: { updated_at: "A" } }, "A")).toBe(false);
+    expect(changedSince({ ok: false, thongBao: "x" }, "A")).toBe(false);
   });
 });

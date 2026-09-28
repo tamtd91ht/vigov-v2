@@ -458,14 +458,18 @@ export function taoNhiemVu(
  * `null` NGHĨA LÀ "KHÔNG ĐỔI", không phải "xoá trắng" — mọi trường là con trỏ ở máy chủ. Chuỗi
  * rỗng thì KHÁC HẲN: nó là "xoá nội dung ô này", một việc hợp lệ với ghi chú và tóm tắt kết quả.
  *
- * KHÔNG CÓ `due_at` VÀ KHÔNG CÓ `assigner`, và cả hai sự vắng mặt là TỪ CHỐI chứ không phải bỏ
- * sót: hạn dịch được đúng một đường — đề nghị lùi hạn có người duyệt (§5.8); còn `assigner`
- * CHÍNH LÀ người duyệt theo ADR 0038, nên một tài khoản `task.update` sửa được cột ấy là một tài
- * khoản tự đặt mình làm người duyệt đề nghị của chính mình.
+ * KHÔNG CÓ `assigner`, và sự vắng mặt ấy là TỪ CHỐI chứ không phải bỏ sót: `assigner` CHÍNH LÀ người
+ * duyệt theo ADR 0038, nên một tài khoản `task.update` sửa được cột ấy là một tài khoản tự đặt mình
+ * làm người duyệt đề nghị của chính mình.
+ *
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `code` (đổi mã, 3c3525f — 409 `code_taken`), `due_at` (SỬA hạn,
+ * f27fd6e — một mốc RFC 3339, không phải lùi hạn) và `expected_updated_at` (khoá lạc quan, d2ed15e —
+ * 409 `task_changed`) nay ĐI trên dây. Trước đó cả ba bị bỏ ở đây vì máy chủ chưa nhận.
  *
  * DỰNG TỪNG TRƯỜNG, KHÔNG GỬI THẲNG `than` — cùng lý do `taoNhiemVu`: một đối tượng mang thêm
- * `due_at` hay `code` vẫn qua được `tsc` (kiểu cấu trúc), và đi thẳng lên dây. Chỉ trường có giá trị
- * mới có mặt; `null` bị bỏ, vì với máy chủ nó cùng nghĩa với vắng mặt.
+ * `assigner` hay `status` vẫn qua được `tsc` (kiểu cấu trúc), và đi thẳng lên dây. Chỉ trường có giá
+ * trị mới có mặt; `null` bị bỏ, vì với máy chủ nó cùng nghĩa với vắng mặt — nên một hạn không XOÁ được
+ * qua đây, đúng như máy chủ (`due_at` null/vắng = giữ nguyên).
  *
  * ⚠ `documents: []` PHẢI SỐNG SÓT QUA ĐÂY. Trên tuyến này mảng rỗng là "gỡ hết mọi dòng" — khác hẳn
  * vắng mặt ("không đụng tới khối"). Mỗi dòng cũng dựng lại từng trường: `id` giữ nguyên (thiếu nó là
@@ -478,6 +482,8 @@ export function suaNhiemVu(
   const mau: petitions_patch_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
 
   const thanGui: petitions_suaNhiemVuVao = {};
+  if (than.code !== undefined && than.code !== null) thanGui.code = than.code;
+  if (than.due_at !== undefined && than.due_at !== null) thanGui.due_at = than.due_at;
   if (than.bloc !== undefined && than.bloc !== null) thanGui.bloc = than.bloc;
   if (than.title !== undefined && than.title !== null) thanGui.title = than.title;
   if (than.description !== undefined && than.description !== null) {
@@ -504,6 +510,10 @@ export function suaNhiemVu(
       if (d.date !== undefined && d.date !== "") dong.date = d.date;
       return dong;
     });
+  }
+  // The token of the task AS THE SCREEN READ IT, sent back unchanged — never recomputed here.
+  if (than.expected_updated_at !== undefined && than.expected_updated_at !== null) {
+    thanGui.expected_updated_at = than.expected_updated_at;
   }
 
   return docThanLoiGoi<petitions_nhiemVuRa>(

@@ -33,6 +33,7 @@ import {
   layMucUuTienNhiemVu,
 } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
+import { layLichLamViec } from "@/lib/api/lich-lam-viec";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
@@ -95,8 +96,6 @@ import {
   KANBAN_COUNTS_ERROR,
   KHONG_DOC_DUOC_VAN_BAN,
   LY_DO_KHONG_SUA_CHU_TRI,
-  LY_DO_KHONG_SUA_HAN,
-  LY_DO_KHONG_SUA_MA,
   LY_DO_TRA_LAI_TOI_DA,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
@@ -151,6 +150,14 @@ import {
   cauTuKetLuan,
   chiaNhomVanBan,
   canMoveTask,
+  changedSince,
+  CODE_EDIT_NOTE,
+  defaultDueTime,
+  DUE_EDIT_NOTE,
+  dueTimeHint,
+  TASK_CHANGED_NOTE,
+  TASK_CODE_MAX,
+  type CalendarLoad,
   canWriteLogEntry,
   clickableTransitions,
   lacksApprovalFor,
@@ -1077,16 +1084,23 @@ export function SoNhiemVu({
           // nên `ghiXong` thay cả trường vô hướng lẫn khối văn bản, rồi đọc lại sổ như mọi lần ghi
           // khác. Hỏng: trả `KetQua` nguyên vẹn về form, để form GIỮ chữ cán bộ đã gõ và in câu máy
           // chủ — không đóng form, không xoá gì.
-          suaKhoiVanBan={(than) =>
-            suaNhiemVu(drawer.nhiemVu.code, than).then((kq) => {
+          // RENAME (3c3525f): the reply carries the NEW code; `ghiXong` takes the reply, so the drawer,
+          // its next detail read and every block keyed by code switch to it — the old code 404s.
+          // FAILURE: re-read the drawer (a 409 `task_changed` means the task moved on) — the form
+          // keeps what was typed and says so; it does not adopt the new version itself.
+          suaKhoiVanBan={(than) => {
+            const code = drawer.nhiemVu.code;
+            return suaNhiemVu(code, than).then((kq) => {
               if (kq.ok) {
                 datLoiGhi(null);
                 guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
                 datLanTai((n) => n + 1);
+              } else {
+                guiDrawer({ loai: "docLai", ma: code });
               }
               return kq;
-            })
-          }
+            });
+          }}
           docLaiChiTiet={() => layNhiemVu(drawer.nhiemVu.code)}
           // §5.7 — same refresh as `✎ Sửa`: `ghiXong` takes the returned task (keeping the document
           // block, which this reply does not carry) and bumps `luotDoc`, so the detail AND the
@@ -2608,8 +2622,14 @@ const CHUA_CO_GI_DOI = "Chưa có gì thay đổi để lưu.";
  * với chi tiết mới nhất: "không đổi" nghĩa là cán bộ chưa đụng tới, nên một lần đọc lại chi tiết giữa
  * chừng (sau một lần đổi trạng thái) không được biến những ô cán bộ để yên thành "đã đổi".
  *
- * KHÔNG CÓ KHOÁ LẠC QUAN: hợp đồng không có trường phiên bản hay `etag`. Nếu người khác vừa lưu, lần
- * lưu này thắng ở đúng những trường nó gửi — và chỉ gửi trường đã đổi là để phạm vi ấy nhỏ nhất.
+ * KHOÁ LẠC QUAN (d2ed15e): mọi lần lưu mang `expected_updated_at` của BẢN CHỤP. Ai đó đã ghi nhiệm vụ
+ * kể từ lúc mở form thì máy chủ từ chối 409 và câu của nó hiện nguyên văn; form đọc lại để biết chắc
+ * (`changedSince`) và nói cán bộ mở lại form — nó KHÔNG tự thay bản chụp, vì lưu đè lên một phiên bản
+ * cán bộ chưa thấy là đúng điều khoá sinh ra để chặn. Bên gọi đọc lại drawer sau mỗi lần lưu hỏng.
+ *
+ * GIỜ CỦA HẠN (quyết định của người dùng 28/09/2026): chọn một ngày khi ô giờ còn trống thì giờ điền
+ * sẵn là giờ kết thúc ca cuối của thứ ấy theo lịch làm việc của xã (`defaultDueTime`,
+ * `GET /api/v1/working-hours`). Không có ca, hoặc không đọc được lịch: ô giờ để trống và BẮT BUỘC.
  *
  * Dòng văn bản dùng LẠI `NhomVanBanNhap` của form tạo: cùng ô, cùng giới hạn, cùng cách kiểm (quyết
  * định của người dùng 24/09/2026). Không có thao tác chuyển dòng sang nhóm khác — máy chủ từ chối
@@ -2642,6 +2662,30 @@ export function FormSuaKhoiVanBan({
   const [f, datF] = useState<FormSuaNhiemVu>(() => formSuaTuChiTiet(nhiemVu, vanBan));
   const [dangLuu, datDangLuu] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
+  const [staleNote, setStaleNote] = useState(false);
+  // The commune's weekly calendar — read once per opening of the form, only for the default hour.
+  const [calendar, setCalendar] = useState<CalendarLoad>({ pha: "dangTai" });
+
+  useEffect(() => {
+    let dropped = false;
+    layLichLamViec().then((r) => {
+      if (dropped) return;
+      const cal: CalendarLoad = r.ok ? { pha: "xong", shifts: r.duLieu.items } : { pha: "loi" };
+      setCalendar(cal);
+      // A date chosen while the calendar was still loading gets its default now — only if the time
+      // is still empty, never over an hour the clerk typed.
+      if (cal.pha === "xong") {
+        datF((cu) =>
+          cu.dueDate !== "" && cu.dueTime === ""
+            ? { ...cu, dueTime: defaultDueTime(cal.shifts, cu.dueDate) }
+            : cu,
+        );
+      }
+    });
+    return () => {
+      dropped = true;
+    };
+  }, []);
   const demKhoaVanBan = useRef(0);
   // Mở form thì tiêu điểm vào ô đầu tiên sửa được; sau đó là ô vừa thêm / nút thêm của nhóm vừa gỡ.
   const oCanTieuDiem = useRef<string | null>("sua-tieu-de");
@@ -2653,7 +2697,18 @@ export function FormSuaKhoiVanBan({
   }, [f.vanBan]);
 
   const than = thanSuaNhiemVu(f, goc.nhiemVu, goc.vanBan);
-  const chan = canhBaoSua(f);
+  const chan = canhBaoSua(f, goc.nhiemVu);
+  const timeHint = dueTimeHint(calendar, f, goc.nhiemVu);
+
+  function changeDueDate(date: string) {
+    datF((cu) => ({
+      ...cu,
+      dueDate: date,
+      // Only an EMPTY time is filled: an hour already there (read from the task, or typed) stays.
+      dueTime:
+        cu.dueTime === "" && calendar.pha === "xong" ? defaultDueTime(calendar.shifts, date) : cu.dueTime,
+    }));
+  }
 
   function doi(sua: Partial<FormSuaNhiemVu>) {
     datF((cu) => ({ ...cu, ...sua }));
@@ -2699,15 +2754,18 @@ export function FormSuaKhoiVanBan({
       }
     }
 
-    luu(than).then((kq) => {
-      datDangLuu(false);
+    luu(than).then(async (kq) => {
       if (!kq.ok) {
         // Ở LẠI chế độ sửa, giữ nguyên chữ đã gõ, in NGUYÊN VĂN câu máy chủ — kể cả câu 409 "gỡ dòng
-        // ấy rồi thêm lại ở nhóm mới" hay "dòng không còn thuộc nhiệm vụ này".
+        // ấy rồi thêm lại ở nhóm mới", "mã đã được cấp" hay "nhiệm vụ vừa được người khác sửa".
         datLoi(kq.thongBao);
+        setStaleNote(changedSince(await docLai(), goc.nhiemVu.updated_at));
+        datDangLuu(false);
         return;
       }
+      datDangLuu(false);
       datLoi(null);
+      setStaleNote(false);
       xong();
     });
   }
@@ -2719,14 +2777,23 @@ export function FormSuaKhoiVanBan({
     <form onSubmit={gui} aria-labelledby="tieu-de-sua-khoi-van-ban">
       <h5 id="tieu-de-sua-khoi-van-ban">Sửa {TIEU_DE_KHOI_VAN_BAN.toLowerCase()}</h5>
 
-      {/* HAI Ô CHỈ ĐỌC ĐẦU TIÊN, đúng thứ tự bảng §5.4, mỗi ô kèm lý do không sửa được. */}
-      <dl className="danh-sach-truong">
-        <dt>Mã nhiệm vụ</dt>
-        <dd>
-          {nhiemVu.code}
-          <span className="dong-phu">{LY_DO_KHONG_SUA_MA}</span>
-        </dd>
-      </dl>
+      {/* Đúng thứ tự bảng §5.4: Mã, Nội dung, Hạn, rồi hai ô chỉ đọc. */}
+      <div className="o-nhap">
+        <label htmlFor="sua-ma-nhiem-vu">Mã nhiệm vụ</label>
+        <input
+          id="sua-ma-nhiem-vu"
+          name="sua-ma-nhiem-vu"
+          value={f.code}
+          required
+          maxLength={TASK_CODE_MAX}
+          autoComplete="off"
+          aria-describedby="sua-ma-nhiem-vu-ghi-chu"
+          onChange={(e) => doi({ code: e.target.value })}
+        />
+        <p id="sua-ma-nhiem-vu-ghi-chu" className="ghi-chu">
+          {CODE_EDIT_NOTE}
+        </p>
+      </div>
 
       <div className="o-nhap">
         <label htmlFor="sua-tieu-de">{NHAN_TIEU_DE_THEO_VAN_BAN}</label>
@@ -2741,12 +2808,39 @@ export function FormSuaKhoiVanBan({
         />
       </div>
 
+      <fieldset className="o-nhap" aria-describedby="sua-han-ghi-chu">
+        <legend>Hạn xử lý</legend>
+        <label htmlFor="sua-han-ngay">Ngày</label>
+        <input
+          id="sua-han-ngay"
+          name="sua-han-ngay"
+          type="date"
+          value={f.dueDate}
+          onChange={(e) => changeDueDate(e.target.value)}
+        />
+        <label htmlFor="sua-han-gio">Giờ</label>
+        <input
+          id="sua-han-gio"
+          name="sua-han-gio"
+          type="time"
+          value={f.dueTime}
+          // Required as soon as a date is there: the server stores the instant as sent and defaults
+          // no hour (`nhiem_vu_ghi.go:220-221`).
+          required={f.dueDate !== ""}
+          aria-describedby={timeHint !== null ? "sua-han-gio-goi-y" : undefined}
+          onChange={(e) => doi({ dueTime: e.target.value })}
+        />
+        {timeHint !== null && (
+          <p id="sua-han-gio-goi-y" className="ghi-chu">
+            {timeHint}
+          </p>
+        )}
+        <p id="sua-han-ghi-chu" className="ghi-chu">
+          {DUE_EDIT_NOTE}
+        </p>
+      </fieldset>
+
       <dl className="danh-sach-truong">
-        <dt>Hạn xử lý</dt>
-        <dd>
-          {nhanNgay(nhiemVu.due_at)}
-          <span className="dong-phu">{LY_DO_KHONG_SUA_HAN}</span>
-        </dd>
         <dt>Cơ quan chủ trì tham mưu</dt>
         <dd>{tenCoQuanChuTri}</dd>
         <dt>Chuyên viên Văn phòng tham mưu / theo dõi</dt>
@@ -2824,6 +2918,7 @@ export function FormSuaKhoiVanBan({
       {loi !== null && (
         <p className="thong-bao-loi" role="alert">
           {loi}
+          {staleNote && ` ${TASK_CHANGED_NOTE}`}
         </p>
       )}
 

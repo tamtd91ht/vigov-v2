@@ -246,19 +246,36 @@ describe("thân của sáu tuyến ghi", () => {
     expect(than(gia)).not.toHaveProperty("documents");
   });
 
-  it("sửa nhiệm vụ: PATCH đúng đường dẫn, DỰNG TỪNG TRƯỜNG — `due_at`/`code`/`assigner` không lọt", async () => {
+  it("sửa nhiệm vụ: PATCH đúng đường dẫn, DỰNG TỪNG TRƯỜNG — `assigner`/`status` không lọt", async () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim `due_at` và `code` KHÔNG lên dây. Máy chủ nay
+    // nhận cả hai (f27fd6e, 3c3525f) cùng `expected_updated_at` (d2ed15e); `assigner` vẫn bị chặn.
     const gia = batFetch(OK_JSON());
     await suaNhiemVu("NV19", {
       note: "Ghi chú giả",
       leader_approved: false,
-      due_at: "2030-01-01T00:00:00+07:00",
+      due_at: "2030-01-01T17:00:00+07:00",
       code: "NV99",
+      expected_updated_at: "2026-06-01T02:00:00.123456Z",
       assigner: "CB-00001",
+      status: "hoan-thanh",
     } as never);
     expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19");
     expect(gia.mock.calls[0]?.[1]?.method).toBe("PATCH");
     // `false` là MỘT GIÁ TRỊ (bỏ tick), không phải vắng mặt.
-    expect(than(gia)).toEqual({ note: "Ghi chú giả", leader_approved: false });
+    expect(than(gia)).toEqual({
+      note: "Ghi chú giả",
+      leader_approved: false,
+      due_at: "2030-01-01T17:00:00+07:00",
+      code: "NV99",
+      // Sent back UNCHANGED — the server compares it with the stored instant.
+      expected_updated_at: "2026-06-01T02:00:00.123456Z",
+    });
+  });
+
+  it("sửa nhiệm vụ: `due_at: null` KHÔNG xoá hạn — bị bỏ như mọi `null`", async () => {
+    const gia = batFetch(OK_JSON());
+    await suaNhiemVu("NV19", { due_at: null, code: null, expected_updated_at: null, note: "x" });
+    expect(than(gia)).toEqual({ note: "x" });
   });
 
   it("sửa nhiệm vụ: `documents: []` SỐNG SÓT (gỡ hết), `id` giữ nguyên, `position` không đi", async () => {

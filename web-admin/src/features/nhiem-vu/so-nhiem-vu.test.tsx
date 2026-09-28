@@ -46,8 +46,8 @@ import {
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
   LY_DO_KHONG_SUA_CHU_TRI,
-  LY_DO_KHONG_SUA_HAN,
-  LY_DO_KHONG_SUA_MA,
+  CODE_EDIT_NOTE,
+  DUE_EDIT_NOTE,
   NHAN_NUT_SUA,
   NHAT_KY_RONG,
   O_TRONG,
@@ -1299,21 +1299,44 @@ describe("§5.4 — form `✎ Sửa`", () => {
     );
   }
 
-  it("Mã, Hạn, Cơ quan chủ trì, Chuyên viên HIỆN mà KHÔNG có ô nhập — mỗi thứ kèm lý do", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim "Mã, Hạn HIỆN mà KHÔNG có ô nhập". Chủ đầu tư nay
+  // cho sửa cả hai (3c3525f, f27fd6e); Cơ quan chủ trì và Chuyên viên vẫn chỉ đọc ở đây.
+  it("Mã và Hạn (ngày + giờ) là Ô NHẬP có nhãn và câu giải thích; Cơ quan chủ trì, Chuyên viên vẫn chỉ đọc", () => {
     const html = veForm();
-    expect(html).toContain("NV19");
-    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_MA));
-    expect(html).toContain("20/6/2026");
-    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_HAN));
+    expect(html).toContain('<label for="sua-ma-nhiem-vu">Mã nhiệm vụ</label>');
+    expect(html).toMatch(/<input id="sua-ma-nhiem-vu"[^>]*maxLength="32"[^>]*value="NV19"/);
+    expect(html).toContain(nhuTrongHTML(CODE_EDIT_NOTE));
+    expect(html).toContain("<legend>Hạn xử lý</legend>");
+    expect(html).toMatch(/<input id="sua-han-ngay"[^>]*type="date"[^>]*value="2026-06-20"/);
+    // The time is REQUIRED once a date is there — the server defaults no hour.
+    expect(html).toMatch(/<input id="sua-han-gio"[^>]*type="time"[^>]*required=""[^>]*value="23:59"/);
+    expect(html).toContain(nhuTrongHTML(DUE_EDIT_NOTE));
     expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY");
     expect(html).toContain("CB-00001");
     expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_CHU_TRI));
-    // Không ô ngày nào cho hạn, không ô mã, không ô chọn bộ phận — `type="date"` còn lại chỉ là
-    // ngày của từng văn bản.
-    expect(html).not.toContain('id="sua-ma"');
-    expect(html).not.toContain('id="sua-han"');
     expect(html).not.toContain("<select");
-    expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length);
+    // One date field for the deadline, plus one per document.
+    expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length + 1);
+  });
+
+  it("việc CHƯA CÓ HẠN: hai ô trống, ô giờ CHƯA bắt buộc khi chưa chọn ngày; không có giờ gõ cứng", () => {
+    const html = veForm({ due_at: null, original_due_at: null });
+    expect(html).toMatch(/<input id="sua-han-ngay"[^>]*value=""/);
+    expect(html).toMatch(/<input id="sua-han-gio"[^>]*value=""/);
+    expect(html).not.toMatch(/<input id="sua-han-gio"[^>]*required=""/);
+    expect(html).not.toContain("17:00");
+  });
+
+  it("dây nối: lịch làm việc đọc từ `layLichLamViec`, giờ điền sẵn chỉ vào ô TRỐNG, lỗi lưu đọc lại (đọc mã)", () => {
+    // No DOM: the effect and the change handler never run here. Pinned by source instead.
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).toContain("layLichLamViec().then((r) => {");
+    expect(src).toContain(
+      'cu.dueTime === "" && calendar.pha === "xong" ? defaultDueTime(calendar.shifts, date) : cu.dueTime',
+    );
+    expect(src).toContain("setStaleNote(changedSince(await docLai(), goc.nhiemVu.updated_at));");
+    expect(src).toContain('guiDrawer({ loai: "docLai", ma: code });');
+    expect(src).not.toMatch(/dueTime: "1\d:\d\d"/);
   });
 
   it("năm ô sửa được có nhãn thật, và chú thích BẮT BUỘC của hai ô tick vẫn hiện", () => {
