@@ -471,7 +471,11 @@ func (k *khoNhiemVuGia) doIssuedCode(q string, args []driver.Value) (driver.Rows
 	defer k.mu.Unlock()
 	switch {
 	case strings.Contains(q, "MAX("):
-		return &rowsNVGia{cot: []string{"so"}, hang: [][]driver.Value{{k.soLonNhat}}}, nil
+		// THE HIGH-WATER MARK MOVES WITH EVERY TASK ALREADY INSERTED BY THIS RUN, as the real read
+		// inside one transaction sees its own inserts — which is what lets the spreadsheet import book
+		// many rows in one transaction and issue each its own number. A single create sees zero inserts
+		// and reads soLonNhat unchanged.
+		return &rowsNVGia{cot: []string{"so"}, hang: [][]driver.Value{{k.soLonNhat + k.taskInsertsLocked()}}}, nil
 	case strings.Contains(q, "count(*)"):
 		if len(args) < 2 {
 			return nil, fmt.Errorf("driver giả: câu đếm mã thiếu tham số: %q", q)
@@ -483,6 +487,17 @@ func (k *khoNhiemVuGia) doIssuedCode(q string, args []driver.Value) (driver.Rows
 		return &rowsNVGia{cot: []string{"n"}, hang: [][]driver.Value{{n}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
+}
+
+// taskInsertsLocked counts `INSERT INTO nhiem_vu (` statements recorded so far. The caller holds k.mu.
+func (k *khoNhiemVuGia) taskInsertsLocked() int64 {
+	var n int64
+	for _, l := range k.lenh {
+		if strings.Contains(l.sql, "INSERT INTO nhiem_vu (") {
+			n++
+		}
+	}
+	return n
 }
 
 // doVanBan answers the two reads of the document block.

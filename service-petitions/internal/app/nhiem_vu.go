@@ -654,116 +654,149 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 				return err
 			}
 		}
-		if yc.ParentCode != "" {
-			// THE PARENT IS RESOLVED FIRST AND UNDER THE LOCK. A cycle cannot be closed by a row
-			// that does not exist yet, and the check runs anyway — see kiemChuTrinh.
-			cha, err := uc.nhanCha(ctx, tx, yc.ParentCode)
-			if err != nil {
-				return err
-			}
-			if err := uc.kiemChuTrinh(ctx, tx, moi.ID, cha.ID); err != nil {
-				return err
-			}
-			moi.NhiemVuChaID = cha.ID
-			// The reply's two tree facts are KNOWN here, so no read is spent on them: the parent is
-			// the row just resolved, and a task that did not exist a statement ago has no children.
-			moi.ParentCode = cha.Ma
-			moi.ChildCount = 0
-		}
-
-		if yc.TuSinhMa {
-			so, err := uc.kho.SoLonNhatDaCap(ctx, tx)
-			if err != nil {
-				return err
-			}
-			moi.Ma = domain.MaNhiemVuTiepTheo(so)
-		} else {
-			// THE UNIQUE KEY IS THE REAL GUARD; THIS IS THE READABLE MESSAGE. It counts soft-deleted
-			// rows, because an issued number is never reissued (rule 7, invariant 3).
-			daDung, err := uc.kho.MaDaDung(ctx, tx, moi.Ma)
-			if err != nil {
-				return err
-			}
-			if daDung {
-				return petstore.ErrMaNhiemVuDaTonTai
-			}
-		}
-
-		if err := uc.kho.Tao(ctx, tx, moi); err != nil {
-			return err
-		}
-
-		// §5.4'S DOCUMENT BLOCK, IN THE SAME TRANSACTION AS THE TASK IT BELONGS TO. A line is a
-		// field value of the row above, so a task committed without its lines would be a record
-		// missing part of what the clerk typed — and there is no second act that would put them
-		// back.
-		//
-		// WHAT IS WRITTEN WAS DECIDED BEFORE THE TRANSACTION OPENED (see the top of this function);
-		// `Them` is every item, `Sua` and `Xoa` are empty by construction.
-		if err := uc.apDungVanBan(ctx, tx, moi.ID, thayDoiVB, nguoi.ID, bayGio); err != nil {
-			return err
-		}
-		var err error
-		if moi.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, moi.ID); err != nil {
-			return err
-		}
-
-		// THE FIRST TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer renders "Chưa có ghi chép
-		// nào." for an empty log, and a task that was given to somebody with no entry saying so
-		// would render exactly that on the day it was created.
-		if err := uc.ghiNhatKy(ctx, tx, moi, bayGio, nguoi.ID, "Giao việc mới: "+moi.Ma); err != nil {
-			return err
-		}
-
-		// THE DELTA HAS NO "truoc", because there was nothing before. It names what was committed
-		// to — the deadline above all, since that is the figure §11.3 measures against for ever.
-		delta, err := json.Marshal(map[string]any{
-			"sau": map[string]any{
-				"ma":         moi.Ma,
-				"loai":       moi.Loai,
-				"trang_thai": string(moi.TrangThai),
-				"nguon_giao": string(moi.NguonGiao),
-				// THE RECORD THE WORK CAME FROM, and it is here because a task can now be born from a
-				// MEETING CONCLUSION (§3 of chapter 04). `nguon_giao` alone says "from a meeting
-				// conclusion"; without `nguon_id` the entry cannot say WHICH, and that link is the whole
-				// reason the split route exists ("giữ liên kết ngược về kết luận gốc để truy vết được về
-				// sau"). It is EMPTY for a directly-assigned task, which is most of them.
-				"nguon_id":              moi.NguonID,
-				"han_xu_ly":             lucRaVet(moi.HanXuLy),
-				"han_ban_dau":           lucRaVet(moi.HanXuLy),
-				"lanh_dao_giao_viec_ma": moi.LanhDaoGiaoViecMa,
-				"nhiem_vu_cha_id":       moi.NhiemVuChaID,
-				// The parent's REGISTER NUMBER, from the row nhanCha resolved — what a reader of the
-				// trail can act on without looking the id up (empty for a root task).
-				"ma_nhiem_vu_cha": moi.ParentCode,
-			},
-			"ma_tu_sinh": yc.TuSinhMa,
-			// HOW MANY DOCUMENT LINES WERE FILED, AND NOT WHAT THEY SAY. `trich_yeu` is the subject
-			// line of an administrative document and routinely names a citizen's case; `audit_log` is
-			// append-only and never deleted (rule 6, invariant 4), so a copy there would be a second
-			// permanent store of that text (rule 3, forbidden #5). The count is what an inspection
-			// can act on — it says the block was filled in at creation — and the text itself lives on
-			// rows the archival trigger already protects.
-			"so_dong_van_ban": len(thayDoiVB.Them),
-			// `ghi_chu` IS DELIBERATELY ABSENT, mirroring Sua's delta, which records no note either.
-			// It is free text that may name a citizen, and `audit_log` is permanent (rule 3, forbidden
-			// #5). Recording it here and not on PATCH would make the two doors into one column leave
-			// two different trails.
-		})
-		if err != nil {
-			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
-		}
-		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViTaoNhiemVu,
-			Subject: moi.Ma,
-			Delta:   delta,
-		})
+		return uc.createInTx(ctx, tx, &moi, createInTxRequest{
+			ParentCode: yc.ParentCode, TuSinhMa: yc.TuSinhMa, Documents: thayDoiVB,
+			LogPrefix: "Giao việc mới: ",
+		}, nguoi, bayGio)
 	})
 	if err != nil {
 		return domain.NhiemVu{}, bocNhiemVu(ctx, "giao việc mới", err)
 	}
 	return moi, nil
+}
+
+// createInTxRequest is what createInTx needs beyond the task itself. LogPrefix begins the first
+// timeline row (the register number follows); ExtraDelta adds top-level keys to the audit delta
+// (the import marks its entries `nguon_tao`). Neither can remove or rename a key create writes.
+type createInTxRequest struct {
+	ParentCode string
+	TuSinhMa   bool
+	Documents  domain.ThayDoiVanBan
+	LogPrefix  string
+	ExtraDelta map[string]any
+}
+
+// createInTx is the IN-TRANSACTION HALF of booking one task — parent under the lock, the register
+// number, the INSERT, the document block, the first timeline row and the audit entry — shared by
+// TaoTuNguon (one task per transaction) and the spreadsheet import (every row in ONE transaction,
+// task_import.go). ONE implementation, so the two doors cannot book a task differently.
+//
+// `n` is filled in place: the minted number, the parent's number, the stored document block.
+func (uc *GhiNhiemVu) createInTx(ctx context.Context, tx *store.ScopedTx, n *domain.NhiemVu,
+	req createInTxRequest, nguoi audit.Actor, bayGio time.Time) error {
+
+	thayDoiVB := req.Documents
+	if req.ParentCode != "" {
+		// THE PARENT IS RESOLVED FIRST AND UNDER THE LOCK. A cycle cannot be closed by a row
+		// that does not exist yet, and the check runs anyway — see kiemChuTrinh.
+		cha, err := uc.nhanCha(ctx, tx, req.ParentCode)
+		if err != nil {
+			return err
+		}
+		if err := uc.kiemChuTrinh(ctx, tx, n.ID, cha.ID); err != nil {
+			return err
+		}
+		n.NhiemVuChaID = cha.ID
+		// The reply's two tree facts are KNOWN here, so no read is spent on them: the parent is
+		// the row just resolved, and a task that did not exist a statement ago has no children.
+		n.ParentCode = cha.Ma
+		n.ChildCount = 0
+	}
+
+	if req.TuSinhMa {
+		so, err := uc.kho.SoLonNhatDaCap(ctx, tx)
+		if err != nil {
+			return err
+		}
+		n.Ma = domain.MaNhiemVuTiepTheo(so)
+	} else {
+		// THE UNIQUE KEY IS THE REAL GUARD; THIS IS THE READABLE MESSAGE. It counts soft-deleted
+		// rows, because an issued number is never reissued (rule 7, invariant 3).
+		daDung, err := uc.kho.MaDaDung(ctx, tx, n.Ma)
+		if err != nil {
+			return err
+		}
+		if daDung {
+			return petstore.ErrMaNhiemVuDaTonTai
+		}
+	}
+
+	if err := uc.kho.Tao(ctx, tx, *n); err != nil {
+		return err
+	}
+
+	// §5.4'S DOCUMENT BLOCK, IN THE SAME TRANSACTION AS THE TASK IT BELONGS TO. A line is a
+	// field value of the row above, so a task committed without its lines would be a record
+	// missing part of what the clerk typed — and there is no second act that would put them
+	// back.
+	//
+	// WHAT IS WRITTEN WAS DECIDED BEFORE THE TRANSACTION OPENED (see the top of this function);
+	// `Them` is every item, `Sua` and `Xoa` are empty by construction.
+	if err := uc.apDungVanBan(ctx, tx, n.ID, thayDoiVB, nguoi.ID, bayGio); err != nil {
+		return err
+	}
+	var err error
+	if n.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, n.ID); err != nil {
+		return err
+	}
+
+	// THE FIRST TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer renders "Chưa có ghi chép
+	// nào." for an empty log, and a task that was given to somebody with no entry saying so
+	// would render exactly that on the day it was created.
+	if err := uc.ghiNhatKy(ctx, tx, *n, bayGio, nguoi.ID, req.LogPrefix+n.Ma); err != nil {
+		return err
+	}
+
+	// THE DELTA HAS NO "truoc", because there was nothing before. It names what was committed
+	// to — the deadline above all, since that is the figure §11.3 measures against for ever.
+	entry := map[string]any{
+		"sau": map[string]any{
+			"ma":         n.Ma,
+			"loai":       n.Loai,
+			"trang_thai": string(n.TrangThai),
+			"nguon_giao": string(n.NguonGiao),
+			// THE RECORD THE WORK CAME FROM, and it is here because a task can now be born from a
+			// MEETING CONCLUSION (§3 of chapter 04). `nguon_giao` alone says "from a meeting
+			// conclusion"; without `nguon_id` the entry cannot say WHICH, and that link is the whole
+			// reason the split route exists ("giữ liên kết ngược về kết luận gốc để truy vết được về
+			// sau"). It is EMPTY for a directly-assigned task, which is most of them.
+			"nguon_id":              n.NguonID,
+			"han_xu_ly":             lucRaVet(n.HanXuLy),
+			"han_ban_dau":           lucRaVet(n.HanXuLy),
+			"lanh_dao_giao_viec_ma": n.LanhDaoGiaoViecMa,
+			"nhiem_vu_cha_id":       n.NhiemVuChaID,
+			// The parent's REGISTER NUMBER, from the row nhanCha resolved — what a reader of the
+			// trail can act on without looking the id up (empty for a root task).
+			"ma_nhiem_vu_cha": n.ParentCode,
+		},
+		"ma_tu_sinh": req.TuSinhMa,
+		// HOW MANY DOCUMENT LINES WERE FILED, AND NOT WHAT THEY SAY. `trich_yeu` is the subject
+		// line of an administrative document and routinely names a citizen's case; `audit_log` is
+		// append-only and never deleted (rule 6, invariant 4), so a copy there would be a second
+		// permanent store of that text (rule 3, forbidden #5). The count is what an inspection
+		// can act on — it says the block was filled in at creation — and the text itself lives on
+		// rows the archival trigger already protects.
+		"so_dong_van_ban": len(thayDoiVB.Them),
+		// `ghi_chu` IS DELIBERATELY ABSENT, mirroring Sua's delta, which records no note either.
+		// It is free text that may name a citizen, and `audit_log` is permanent (rule 3, forbidden
+		// #5). Recording it here and not on PATCH would make the two doors into one column leave
+		// two different trails.
+	}
+	for k, v := range req.ExtraDelta {
+		if _, taken := entry[k]; !taken { // an extra key never overwrites what create records
+			entry[k] = v
+		}
+	}
+	delta, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
+	}
+	return audit.Write(ctx, tx, audit.Entry{
+		Actor:   nguoi,
+		Action:  HanhViTaoNhiemVu,
+		Subject: n.Ma,
+		Delta:   delta,
+	})
 }
 
 // chuanHoaTaoNhiemVu validates and trims the request. IT RUNS BEFORE THE TRANSACTION OPENS: a

@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     118 tuyến của 5 dịch vụ — identity 41 · petitions 40 · finance 16 · comms 12 · documents 9
+#     121 tuyến của 5 dịch vụ — petitions 43 · identity 41 · finance 16 · comms 12 · documents 9
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới

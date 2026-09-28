@@ -588,6 +588,30 @@
     },
     {
       "service": "petitions",
+      "method": "PUT",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/publication",
+      "operation_id": "petitions_put_citizen_reports_by_maTraCuu_publication",
+      "task_id": "5a9723c838a3",
+      "summary": "Đặt trạng thái công khai của phiếu phản ánh — cho hiện công khai hoặc ẩn khỏi trang công khai (không đổi trạng thái xử lý)",
+      "screen": "09-phan-anh-nguoi-dan §14.4",
+      "permission_kind": "permission",
+      "permission": "feedback.assign",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT đặt một trạng thái tuyệt đối; đã đúng giá trị thì use case không ghi gì, nên gửi lại để lại đúng một dòng và đúng một vết",
+      "request_schema": "petitions.publicationIn",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
       "method": "POST",
       "path": "/api/v1/citizen-reports/{maTraCuu}/referral",
       "operation_id": "petitions_post_citizen_reports_by_maTraCuu_referral",
@@ -3563,6 +3587,50 @@
         "403": "httpx.Error",
         "409": "httpx.Error",
         "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/tasks/import-template",
+      "operation_id": "petitions_get_tasks_import_template",
+      "task_id": "4c862521336d",
+      "summary": "Tải tệp Excel mẫu để nhập nhiệm vụ",
+      "screen": "02-nhiem-vu §8",
+      "permission_kind": "permission",
+      "permission": "task.create",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/tasks/imports",
+      "operation_id": "petitions_post_tasks_imports",
+      "task_id": "33cd2654acbf",
+      "summary": "Nhập nhiệm vụ từ tệp Excel theo mẫu — kiểm mọi dòng trước, một dòng sai thì không nhập dòng nào; mã nhiệm vụ cấp tự động",
+      "screen": "02-nhiem-vu §8",
+      "permission_kind": "permission",
+      "permission": "task.create",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "200": "petitions.taskImportResultOut",
+        "201": "petitions.taskImportResultOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },

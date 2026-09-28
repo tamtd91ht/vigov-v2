@@ -226,6 +226,9 @@ type mayChu struct {
 
 	// registerExport is the Sổ theo dõi export — task_register_export_test.go.
 	registerExport *registerExportFake
+
+	// taskImport is the spreadsheet import — task_import_test.go.
+	taskImport *taskImportFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -268,6 +271,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	overdue := overdueQueueSample()
 	filterIdentity := taskFilterIdentitySample()
 	registerExport := &registerExportFake{}
+	taskImport := &taskImportFake{}
 
 	m := &mayChu{
 		d: Deps{
@@ -308,6 +312,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			DanhSachNhiemVu:      nhiemVu,
 			TaskFilterIdentity:   filterIdentity,
 			TaskRegisterExport:   registerExport,
+			TaskImport:           taskImport,
 			DeNghiChoDuyet:       deNghiCho,
 			GhiNhiemVu:           ghiNhiemVu,
 			DanhSachBienBan:      bienBan,
@@ -338,6 +343,7 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		filterIdentity: filterIdentity,
 		registerExport: registerExport,
+		taskImport:     taskImport,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -428,6 +434,7 @@ func depsDay() Deps {
 		DanhSachNhiemVu:    nhiemVuMau(),
 		TaskFilterIdentity: taskFilterIdentitySample(),
 		TaskRegisterExport: &registerExportFake{},
+		TaskImport:         &taskImportFake{},
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
 		DanhSachBienBan:    bienBanMau(),
@@ -478,6 +485,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// `soon=true` and `scope=related`: a nil here panics on the first officer who ticks the box.
 		"thiếu đường hỏi identity cho bộ lọc nhiệm vụ": func(d *Deps) { d.TaskFilterIdentity = nil },
 		"thiếu use case xuất sổ theo dõi":              func(d *Deps) { d.TaskRegisterExport = nil },
+		"thiếu use case nhập nhiệm vụ":                 func(d *Deps) { d.TaskImport = nil },
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },

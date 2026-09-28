@@ -258,6 +258,10 @@ func chay(log *slog.Logger) error {
 		// the same identity client for the three name lookups, and *store.DB because it opens the
 		// transaction its audit entry is written in.
 		TaskRegisterExport: app.NewTaskRegisterExport(kho, nhiemVu, dinhDanh),
+		// The spreadsheet import books through `ghiNhiemVu` — the create path itself — so a task
+		// imported and a task typed in are booked by one implementation. The identity client answers
+		// the unit-code, bloc and assignable-staff checks; the two catalogue stores the type/priority.
+		TaskImport: app.NewTaskImport(ghiNhiemVu, dinhDanh, loaiNhiemVu, mucUuTien),
 		// The approval queue of extension requests (§5.8) — the SAME store the two extension acts
 		// write through, so the queue lists exactly the rows those acts leave pending.
 		DeNghiChoDuyet: deNghiLuiHan,

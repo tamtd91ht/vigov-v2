@@ -60,6 +60,38 @@ export type comms_loaiTaiNguyenRa = {
   "tier": number;
 };
 
+export type comms_mailSettingsIn = {
+  "host": string;
+  "port": number;
+  "security": string;
+  "username": string;
+  "from_address": string;
+  "from_name"?: string;
+  "is_enabled"?: boolean;
+  "password"?: string;
+};
+
+export type comms_mailSettingsOut = {
+  "configured": boolean;
+  "host": string;
+  "port": number;
+  "security": string;
+  "username": string;
+  "from_address": string;
+  "from_name": string;
+  "is_enabled": boolean;
+  "password_set": boolean;
+  "encryption_configured": boolean;
+};
+
+export type comms_mailTestIn = {
+  "recipient": string;
+};
+
+export type comms_mailTestOut = {
+  "sent": boolean;
+};
+
 export type comms_mapFieldSchemaListOut = {
   "items": Array<comms_mapFieldSchemaOut>;
 };
@@ -1031,6 +1063,18 @@ export type identity_nhomQuyenRa = {
   "permissions": Array<identity_quyenMucRa>;
 };
 
+export type identity_orgUnitDeleteIn = {
+  "reason": string;
+};
+
+export type identity_orgUnitHoldingsOut = {
+  "staff": number;
+  "child_units": number;
+  "open_petitions": number;
+  "open_tasks": number;
+  "open_incoming_documents": number;
+};
+
 export type identity_orgUnitImportCreatedOut = {
   "created": Array<identity_orgUnitImportUnitOut>;
 };
@@ -1066,6 +1110,13 @@ export type identity_orgUnitImportUnitOut = {
   "parent_row"?: number;
   "parent_code": string;
   "order": number;
+};
+
+export type identity_orgUnitInUseOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "holdings": identity_orgUnitHoldingsOut;
 };
 
 export type identity_phanHoiDangNhap = {
@@ -1662,6 +1713,8 @@ export type petitions_phieuCuaToiRa = {
   "result": string;
   "reason"?: string;
   "receiving_body"?: string;
+  "rating"?: number | null;
+  "rated_at"?: string | null;
 };
 
 export type petitions_phieuCuaToiTomTatRa = {
@@ -1673,6 +1726,8 @@ export type petitions_phieuCuaToiTomTatRa = {
   "clock_from": string;
   "acknowledge_due": string | null;
   "resolve_due": string | null;
+  "rating"?: number | null;
+  "rated_at"?: string | null;
 };
 
 export type petitions_phieuPhanAnhRa = {
@@ -1700,12 +1755,26 @@ export type petitions_phieuPhanAnhRa = {
   "receiving_body"?: string;
   "branch_ended_at"?: string | null;
   "has_citizen"?: boolean | null;
+  "publication_status"?: string;
   "public": boolean;
+  "rating"?: number | null;
+  "rating_comment"?: string;
+  "rated_at"?: string | null;
+  "reopen_count"?: number | null;
+};
+
+export type petitions_publicationIn = {
+  "status": string;
 };
 
 export type petitions_quyetDinhLuiHanVao = {
   "decision": string;
   "note"?: string;
+};
+
+export type petitions_ratingInput = {
+  "stars": number;
+  "comment"?: string;
 };
 
 export type petitions_suaBienBanVao = {
@@ -1829,6 +1898,20 @@ export type petitions_taskAssignmentIn = {
 
 export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
+};
+
+export type petitions_taskImportErrorOut = {
+  "row": number;
+  "column": string;
+  "message": string;
+};
+
+export type petitions_taskImportResultOut = {
+  "total_rows": number;
+  "created": number;
+  "committed": boolean;
+  "errors": Array<petitions_taskImportErrorOut>;
+  "codes": Array<string>;
 };
 
 export type petitions_taskLogEntryIn = {
@@ -2297,7 +2380,7 @@ export type petitions_get_citizen_report_summary = {
   };
 };
 
-/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên) */
+/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên) */
 export type petitions_get_citizen_reports = {
   duongDan: "/api/v1/citizen-reports";
   phuongThuc: "GET";
@@ -2315,6 +2398,7 @@ export type petitions_get_citizen_reports = {
     "late"?: string;
     "metric"?: string;
     "q"?: string;
+    "rating_max"?: string;
     "scope"?: string;
     "status"?: string;
     "to"?: string;
@@ -2448,6 +2532,27 @@ export type petitions_post_citizen_reports_by_maTraCuu_log_entries = {
   than: petitions_ghiChuPhieuVao;
   phanHoi: {
     201: petitions_nhatKyPhieuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/citizen-reports/{maTraCuu}/publication — Đặt trạng thái công khai của phiếu phản ánh — cho hiện công khai hoặc ẩn khỏi trang công khai (không đổi trạng thái xử lý) */
+export type petitions_put_citizen_reports_by_maTraCuu_publication = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/publication";
+  phuongThuc: "PUT";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_publicationIn;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -3221,6 +3326,63 @@ export type finance_delete_investment_projects_by_id = {
   };
 };
 
+/** GET /api/v1/mail-settings — Cấu hình máy chủ thư của xã — không bao giờ trả mật khẩu, chỉ báo đã đặt hay chưa */
+export type comms_get_mail_settings = {
+  duongDan: "/api/v1/mail-settings";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mailSettingsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/mail-settings — Lưu cấu hình máy chủ thư của xã — mật khẩu chỉ ghi, để trống là giữ nguyên, đổi máy chủ/cổng/tài khoản thì phải nhập lại */
+export type comms_put_mail_settings = {
+  duongDan: "/api/v1/mail-settings";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_mailSettingsIn;
+  phanHoi: {
+    200: comms_mailSettingsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/mail-settings/test-messages — Gửi một thư thử cố định tới địa chỉ quản trị viên nhập, qua máy chủ thư đã lưu của xã */
+export type comms_post_mail_settings_test_messages = {
+  duongDan: "/api/v1/mail-settings/test-messages";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_mailTestIn;
+  phanHoi: {
+    200: comms_mailTestOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
 /** GET /api/v1/map-asset-types — Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu */
 export type comms_get_map_asset_types = {
   duongDan: "/api/v1/map-asset-types";
@@ -3709,6 +3871,26 @@ export type petitions_get_my_citizen_reports_by_maTraCuu = {
   };
 };
 
+/** POST /api/v1/my-citizen-reports/{maTraCuu}/rating — Công dân chấm 1–5 sao cho phiếu phản ánh CỦA CHÍNH MÌNH khi phiếu đã xử lý / chờ xác nhận — 1–2 sao tự mở lại phiếu (không tính lại hạn) */
+export type petitions_post_my_citizen_reports_by_maTraCuu_rating = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/rating";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_ratingInput;
+  phanHoi: {
+    200: petitions_phieuCuaToiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/org-units — Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc */
 export type identity_get_org_units = {
   duongDan: "/api/v1/org-units";
@@ -3820,6 +4002,28 @@ export type identity_patch_org_units_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/org-units/{id} — Xoá mềm một bộ phận, kèm lý do bắt buộc — từ chối khi bộ phận còn cán bộ, bộ phận con hay hồ sơ chưa xong */
+export type identity_delete_org_units_by_id = {
+  duongDan: "/api/v1/org-units/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_orgUnitDeleteIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: identity_orgUnitInUseOut;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -5076,6 +5280,46 @@ export type petitions_post_tasks = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/tasks/import-template — Tải tệp Excel mẫu để nhập nhiệm vụ */
+export type petitions_get_tasks_import_template = {
+  duongDan: "/api/v1/tasks/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/tasks/imports — Nhập nhiệm vụ từ tệp Excel theo mẫu — kiểm mọi dòng trước, một dòng sai thì không nhập dòng nào; mã nhiệm vụ cấp tự động */
+export type petitions_post_tasks_imports = {
+  duongDan: "/api/v1/tasks/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+    "dry_run"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskImportResultOut;
+    201: petitions_taskImportResultOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

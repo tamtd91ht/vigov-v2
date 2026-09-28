@@ -194,6 +194,13 @@ type (
 			render func(app.TaskRegisterData) ([]byte, error)) ([]byte, int, error)
 	}
 
+	// TaskImporter is the spreadsheet import (§8), for POST /api/v1/tasks/imports.
+	// *app.TaskImport satisfies it. It WRITES — every task, its trail, one batch entry — in one
+	// transaction, so it is its own interface.
+	TaskImporter interface {
+		Import(ctx context.Context, sheet [][]string, dryRun bool, actor audit.Actor) (app.TaskImportResult, error)
+	}
+
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
 	// GET /api/v1/task-extensions. *petstore.DeNghiLuiHanStore satisfies it.
 	//
@@ -466,6 +473,9 @@ type Deps struct {
 	// The Sổ theo dõi export — reads, resolves names, renders, and audits (app.TaskRegisterExport).
 	TaskRegisterExport TaskRegisterExporter
 
+	// The spreadsheet import — checks every row, then books them all in one transaction (app.TaskImport).
+	TaskImport TaskImporter
+
 	// The approval queue of extension requests (§5.8) — a read over `de_nghi_lui_han` joined to its
 	// task. The two extension WRITES stay on GhiNhiemVu below.
 	DeNghiChoDuyet DeNghiLuiHanChoDuyetDoc
@@ -556,6 +566,8 @@ func Register(mux *http.ServeMux, d Deps) {
 			"trên GET /api/v1/tasks sẽ panic khi có người gọi")
 	case d.TaskRegisterExport == nil:
 		panic("petitions/http: thiếu use case xuất sổ theo dõi — GET /api/v1/tasks/register-export sẽ panic khi có người gọi")
+	case d.TaskImport == nil:
+		panic("petitions/http: thiếu use case nhập nhiệm vụ từ Excel — POST /api/v1/tasks/imports sẽ panic khi có người gọi")
 	case d.DeNghiChoDuyet == nil:
 		panic("petitions/http: thiếu đường đọc hàng chờ duyệt lùi hạn — GET /api/v1/task-extensions sẽ panic khi có người gọi")
 	case d.GhiNhiemVu == nil:
@@ -1180,6 +1192,51 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/register-export",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.ExportTaskRegister)))
+
+	// NHẬP TỪ EXCEL (§8) — `task.create`, the key of POST /api/v1/tasks: the import IS task creation,
+	// row by row, through the same create path (app.createInTx). NO KEY INVENTED.
+	//
+	// multipart/form-data, field `file`, at most 2 MB (413 above it); zip parts, unzipped size and rows
+	// scanned are bounded before any XML is parsed (task_import.go). `dry_run=true` checks everything —
+	// identity included — and writes nothing. Every row is checked first; ONE refused row and nothing is
+	// written (200, `committed: false`, the row report: row, column, sentence — never the cell's value).
+	// All rows pass → ONE transaction books every task with an auto-issued number (201, `codes`).
+	//
+	// 400 not an .xlsx / not the template's heading row / no task row · 422 over 500 rows · 503 identity
+	// could not check the codes (nothing written).
+	//
+	// idem.Required(idem.DongKhiHong): the act ISSUES REGISTER NUMBERS, and a number once issued is never
+	// issued again (rule 7, invariant 3) — a double submit would book the whole file twice, permanently.
+	// A retry of the same key is told the first issued number.
+	//
+	// @summary  Nhập nhiệm vụ từ tệp Excel theo mẫu — kiểm mọi dòng trước, một dòng sai thì không nhập dòng nào; mã nhiệm vụ cấp tự động
+	// @screen   02-nhiem-vu §8
+	// @reply    200 taskImportResultOut
+	// @reply    201 taskImportResultOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/tasks/imports",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportTasks))))
+
+	// MẪU NHẬP (§8, "⬇ Tải mẫu nhiệm vụ") — the heading row and one invented example row. `task.create`,
+	// the import's own key: the template is only useful to somebody who may import. A GET; no idem.*.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập nhiệm vụ
+	// @screen   02-nhiem-vu §8
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/tasks/import-template",
+		authz.RequirePermission(d.Checker, "task.create")(
+			http.HandlerFunc(h.ImportTemplate)))
 
 	// SỐ LƯỢNG THEO TRẠNG THÁI (§4.1) — the real number over each Kanban column, under EXACTLY the
 	// filters of GET /api/v1/tasks (one parser, one predicate builder; see task_counts.go). `task.read`,

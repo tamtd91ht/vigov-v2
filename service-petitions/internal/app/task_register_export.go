@@ -225,31 +225,7 @@ func (uc *TaskRegisterExport) Export(ctx context.Context, req RegisterExportRequ
 // ceiling, and merges the answers. Blank keys are dropped (a task with no unit asks nothing).
 func lookupChunked[V any](ctx context.Context, keys []string,
 	call func(context.Context, []string) (map[string]V, error)) (map[string]V, error) {
-
-	seen := make(map[string]struct{}, len(keys))
-	uniq := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if k == "" {
-			continue
-		}
-		if _, dup := seen[k]; dup {
-			continue
-		}
-		seen[k] = struct{}{}
-		uniq = append(uniq, k)
-	}
-	out := make(map[string]V, len(uniq))
-	for start := 0; start < len(uniq); start += identityclient.MaxLookupKeysPerCall {
-		end := min(start+identityclient.MaxLookupKeysPerCall, len(uniq))
-		got, err := call(ctx, uniq[start:end])
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range got {
-			out[k] = v
-		}
-	}
-	return out, nil
+	return lookupChunkedAt(ctx, keys, identityclient.MaxLookupKeysPerCall, call)
 }
 
 // registerFilterSummary is the filter as the trail records it: WHICH filters were set and their CODED

@@ -266,8 +266,9 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 		nguon_giao, nguon_id, bo_phan_id, nguoi_thuc_hien_ma, lanh_dao_giao_viec_ma,
 		co_quan_chu_tri_id, chuyen_vien_theo_doi_ma,
 		han_xu_ly, han_ban_dau, tien_do, tom_tat_ket_qua, ghi_chu,
-		nhiem_vu_cha_id, nguoi_tao_ma, cap_nhat_luc)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`
+		nhiem_vu_cha_id, nguoi_tao_ma, cap_nhat_luc,
+		lanh_dao_phe_duyet_hoan_thanh, cap_tren_cong_nhan_hoan_thanh)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), n.ID, n.Ma, n.Loai, rongThanhNull(n.Khoi), n.TieuDe,
@@ -282,7 +283,11 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 		// `cap_nhat_luc` WRITTEN, NOT DEFAULTED (28/09/2026): the value the create reply carries as
 		// `updated_at`, so a client can PATCH with it without first re-reading the task. The caller
 		// passes it at microsecond precision, the column's own.
-		n.UpdatedAt)
+		n.UpdatedAt,
+		// §5.4's two approval marks, APPENDED AT THE TAIL (positions stay put for every reader of the
+		// arguments). False on every create; the spreadsheet import sets them from its two `x` columns
+		// (P11, user decision 28/09/2026). They change no status.
+		n.LanhDaoPheDuyetHoanThanh, n.CapTrenCongNhanHoanThanh)
 	if err != nil {
 		return fmt.Errorf("nhiem_vu: ghi nhiệm vụ: %w", err)
 	}
