@@ -21,14 +21,112 @@ package vigov.petitions.v1;
 //     caller may see.
 //   * field numbers are never reused; a removed field becomes `reserved`
 //   * new fields are always optional with a safe default
-//
-// No business RPCs yet — this is the skeleton.
 
 service PetitionsService {
   rpc Health(HealthRequest) returns (HealthResponse);
+
+  // CountOrgUnitHoldings answers how many OPEN records of this service one org unit (identity's
+  // `bo_phan.id`) is still holding, in the commune named by "x-tenant-id".
+  //
+  // # WHY IT EXISTS
+  //
+  // Identity refuses to delete an org unit while it still holds records in other services (user
+  // decision 2026-09-28, docs/ui-ux/14-cau-hinh.md §12 rule 4: "Xoá bộ phận có cán bộ hoặc hồ sơ
+  // đang giữ ⇒ chặn, yêu cầu chuyển trước"). Identity owns `bo_phan`; THIS service owns the rows
+  // that point at it, with no foreign key across the boundary (rule 2, forbidden #2). So the only
+  // way identity can learn "is anything still here" is to ask the owner. Reading this service's
+  // tables from identity is the path this RPC exists to make unnecessary.
+  //
+  // # WHAT "HOLDS" AND "OPEN" MEAN — THE WHOLE CONTRACT IS THESE TWO PREDICATES
+  //
+  // A record BLOCKS the delete when all three hold: it is live (`deleted_at IS NULL`), it is not
+  // finished (below), and the unit is named in one of the columns that say who holds it NOW.
+  //
+  //   Petition (`phieu_phan_anh`)
+  //     held by   `bo_phan_id`
+  //     open      every status EXCEPT `da-dong`, `khong-tiep-nhan`, `chuyen-cap-tren`.
+  //               `da-xu-ly` and `cho-dan-xac-nhan` ARE open: the citizen can still reject the
+  //               result and send it back to `dang-xu-ly`, into the hands of this unit.
+  //
+  //   Task (`nhiem_vu`)
+  //     held by   `bo_phan_id` OR `co_quan_chu_tri_id` (the lead unit, "cơ quan chủ trì tham
+  //               mưu") — both are identity's `bo_phan` ids and both are answerable for the work.
+  //               A task naming the unit in both columns counts ONCE.
+  //     open      every status EXCEPT `hoan-thanh`. `tam-dung` and legacy `chuyen-tiep` ARE open:
+  //               both have a way back into active work (domain.chuyenDuocSangNhiemVu).
+  //
+  // # WHAT DELIBERATELY DOES NOT BLOCK, and why
+  //
+  //   soft-deleted rows      not records anyone holds any more (rule 7, invariant 2 — every read
+  //                          path excludes them, this one included).
+  //   finished rows          a closed petition / finished task is an archival record that NAMES
+  //                          the unit as a historical fact. The unit's own row stays in identity,
+  //                          soft deleted, so the name still renders (rule 7, invariant 1).
+  //   log / timeline rows    `nhat_ky_nhiem_vu.bo_phan_id`, `nhat_ky_phan_anh.bo_phan_id` record
+  //                          who held something WHEN — history, never "held now".
+  //
+  // ⚠ CONSEQUENCE OF "FINISHED DOES NOT BLOCK", stated rather than discovered: BOTH lifecycles can
+  // REOPEN. `da-dong` → `dang-xu-ly` (ADR 0008, per-commune `cho_phep_mo_lai`) and `hoan-thanh` →
+  // `dang-thuc-hien`. A record reopened after its unit was deleted lands back on a deleted unit.
+  // That is the reopen path's problem to answer (reassign on reopen), not this predicate's — and
+  // counting every closed record would make a unit that ever touched a petition undeletable for
+  // the life of the archive.
+  //
+  // # A POINT-IN-TIME ANSWER, NOT A LOCK
+  //
+  // Nothing here stops an assignment to this unit from being written a millisecond after the
+  // answer. The window is narrowed by the assignment write path already refusing units that are
+  // not live (IdentityService.ResolveLiveOrgUnits), and the residue is accepted and declared in
+  // kb/30-indexes/transaction-boundaries.json under `chan_xoa_bo_phan_con_giu_ho_so`. NEVER cached.
+  //
+  // # The commune travels in metadata; no personal data; not audited
+  //
+  // An id in, two counts out. "x-tenant-id" is what scopes the count to one commune — an id of
+  // another commune counts zero — so this method is NOT a candidate for
+  // core/grpcx.methodsWithoutTenant (ADR 0012, decision 1). The audited act is identity's delete,
+  // inside identity's own transaction.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  both counts, each ≥ 0. Zero and zero means "holds nothing open here".
+  //                       An unknown id, an id of another commune and an id of a deleted unit all
+  //                       answer zero: this service cannot tell them apart and does not try.
+  //   INVALID_ARGUMENT    `org_unit_id` blank. A blank id matches the rows whose column is empty,
+  //                       which is not a question anybody means to ask.
+  //   UNAVAILABLE etc.    the call did not happen. The caller REFUSES THE DELETE — an outage is
+  //                       never "holds nothing" (fail closed).
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc CountOrgUnitHoldings(CountOrgUnitHoldingsRequest) returns (CountOrgUnitHoldingsResponse);
 }
 
 message HealthRequest {}
 message HealthResponse {
   bool ok = 1;
+}
+
+message CountOrgUnitHoldingsRequest {
+  // ONE org unit — identity's `bo_phan.id` (the ULID), the value this service stores in
+  // `bo_phan_id` / `co_quan_chu_tri_id`. Not `bo_phan.ma`, the slug.
+  //
+  // ONE AND NOT A LIST, deliberately: the only caller deletes one unit per act, and a list would
+  // bring a ceiling, a subset rule and a partial-answer rule for no caller that needs them. A
+  // screen wanting counts for the whole org chart is a different question and a different RPC.
+  string org_unit_id = 1;
+}
+
+// Counts BY KIND, not one total: the refusal tells the administrator what to move first
+// ("còn 3 phản ánh, 2 nhiệm vụ") — "yêu cầu chuyển trước" is unanswerable from a bare number.
+//
+// A kind added later is a new field; a caller built before it reads zero for it, which is the
+// one direction that can WEAKEN the refusal. Adding a kind therefore means updating the caller
+// (core/petitionsclient) in the same change, and that file says so.
+message CountOrgUnitHoldingsResponse {
+  // Live petitions not in `da-dong` / `khong-tiep-nhan` / `chuyen-cap-tren` whose `bo_phan_id`
+  // is the unit.
+  uint32 open_petitions = 1;
+
+  // Live tasks not in `hoan-thanh` whose `bo_phan_id` or `co_quan_chu_tri_id` is the unit —
+  // each task once.
+  uint32 open_tasks = 2;
 }

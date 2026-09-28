@@ -21,14 +21,57 @@ package vigov.documents.v1;
 //     caller may see.
 //   * field numbers are never reused; a removed field becomes `reserved`
 //   * new fields are always optional with a safe default
-//
-// No business RPCs yet — this is the skeleton.
 
 service DocumentsService {
   rpc Health(HealthRequest) returns (HealthResponse);
+
+  // CountOrgUnitHoldings answers how many OPEN records of this service one org unit (identity's
+  // `bo_phan.id`) is still holding, in the commune named by "x-tenant-id".
+  //
+  // THE SAME QUESTION, THE SAME SHAPE AND THE SAME STATUS CODES AS
+  // vigov.petitions.v1.PetitionsService.CountOrgUnitHoldings — read the reasoning there (why it
+  // exists, point-in-time, fail closed, not tenant-exempt). Only the predicate below is this
+  // service's own, because only this service owns these statuses.
+  //
+  // # WHAT "HOLDS" AND "OPEN" MEAN HERE
+  //
+  //   Incoming document (`van_ban_den`)
+  //     held by   `bo_phan_dang_giu_id` — the "ĐANG GIỮ" column of the register.
+  //     open      live, and NOT domain.TrangThaiVanBanDen.DaKetThuc(): i.e. every status except
+  //               `da-giai-quyet`, `chuyen-cap-tren`, `luu-khong-thu-ly`. Those three are truly
+  //               final — a finished document is never routed again (domain.ChoChuyen) — so unlike
+  //               petitions there is no reopen hazard on this side.
+  //
+  // # WHAT DELIBERATELY DOES NOT BLOCK
+  //
+  //   soft-deleted rows              no longer held by anyone (rule 7, invariant 2).
+  //   finished documents             archival records naming the unit as history.
+  //   routing history (`den_bo_phan_id`, `tu_bo_phan_id`)   who held it WHEN, never "held now".
+  //
+  // THE ONE EXECUTABLE SOURCE OF "FINISHED" IS DaKetThuc, not the list above. The server must count
+  // with FinishedIncomingStatuses (derived from it), so a status added there reaches this answer
+  // in the same edit — the list in this comment is explanation, not a second definition.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc CountOrgUnitHoldings(CountOrgUnitHoldingsRequest) returns (CountOrgUnitHoldingsResponse);
 }
 
 message HealthRequest {}
 message HealthResponse {
   bool ok = 1;
+}
+
+message CountOrgUnitHoldingsRequest {
+  // ONE org unit — identity's `bo_phan.id` (the ULID). Blank is INVALID_ARGUMENT. One and not a
+  // list, for the reason given on the petitions request.
+  string org_unit_id = 1;
+}
+
+// By kind, for the same reason as the petitions response. A kind added later (an outgoing
+// document register, a citizen letter register with its own holder column) is a new field AND
+// an update to core/documentsclient in the same change — a caller that reads zero for a kind it
+// does not know weakens the refusal.
+message CountOrgUnitHoldingsResponse {
+  // Live incoming documents, not finished, whose `bo_phan_dang_giu_id` is the unit.
+  uint32 open_incoming_documents = 1;
 }
