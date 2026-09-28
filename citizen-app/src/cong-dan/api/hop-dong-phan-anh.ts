@@ -5,6 +5,14 @@
  *   POST /api/v1/my-citizen-reports            Bearer + Idempotency-Key  → 201 phieuCuaToiRa
  *   GET  /api/v1/my-citizen-reports/{maTraCuu} Bearer                    → 200 phieuCuaToiRa · 404
  *   GET  /api/v1/my-citizen-reports            Bearer                    → 200 trang phieuCuaToiTomTatRa
+ *   POST /api/v1/my-citizen-reports/{maTraCuu}/rating
+ *                                              Bearer + Idempotency-Key  → 200 phieuCuaToiRa · 404 · 409
+ *
+ * TUYẾN ĐÁNH GIÁ (ADR 0050 điểm 2; `service-petitions/internal/http/petition_rating.go`, commit 7359484):
+ * thân `{stars: 1..5, comment?: string ≤ 1000 ký tự}` — HAI khoá, không gì khác (`RATING_FIELDS`). 200 trả
+ * ĐÚNG khuôn của GET, nay có thêm `rating` (số nguyên) và `rated_at` (RFC3339), cả hai TUỲ CHỌN và đi cùng
+ * nhau. 409 `petition_state` là phiếu không ở trạng thái đánh giá được, vừa đổi trạng thái, hoặc lần gửi
+ * cùng khoá còn đang chạy. Nhận xét KHÔNG được trả lại — máy chủ cố ý không gửi nó về.
  *
  * TUYẾN DANH SÁCH (26/09/2026), NGUYÊN VĂN HỢP ĐỒNG ĐÃ GIAO:
  *
@@ -122,7 +130,60 @@ export type PhieuCuaToi = {
   readonly ly_do: string;
   /** Cơ quan nhận phiếu — chỉ có ở `chuyen-cap-tren`, RỖNG ở mọi trạng thái khác. */
   readonly co_quan_nhan: string;
+  /**
+   * The citizen's own star rating, 1..5 — `null` until they rate. A later rating REPLACES an earlier
+   * one on the server, so this is always the latest. The comment is never sent back (see the header).
+   */
+  readonly rating: number | null;
+  /** When that rating was recorded (RFC3339), `null` exactly when `rating` is. */
+  readonly rated_at: string | null;
 };
+
+/** Stars bounds and comment limit — COPIED from `service-petitions/internal/domain/petition_rating.go`. */
+export const RATING_MIN_STARS = 1;
+export const RATING_MAX_STARS = 5;
+/** Counted in CHARACTERS (code points), as the server's `utf8.RuneCountInString`. */
+export const RATING_COMMENT_MAX_LEN = 1000;
+
+/** The two keys the rating route accepts. Exported for the test, never for another file to build a body. */
+export const RATING_FIELDS = ["stars", "comment"] as const;
+
+/**
+ * The server's rule for "may be rated now" (`domain.RatingOpen`): `da-xu-ly` and `cho-dan-xac-nhan`,
+ * nothing else. Written as the two codes, NOT as "the group 'Đã xử lý xong'": the group table is a display
+ * decision that may change; this is the server's lifecycle rule, and a status added to that group later
+ * must not silently become rateable here. FAIL CLOSED — an unknown code is not rateable.
+ */
+export function isRateable(trang_thai: string): boolean {
+  return trang_thai === "da-xu-ly" || trang_thai === "cho-dan-xac-nhan";
+}
+
+/**
+ * Stars + comment → request body. THE ONLY PLACE the two field names are written.
+ *
+ * A BLANK COMMENT IS LEFT OUT, not sent as `""`: the server treats blank as absent anyway, and not sending
+ * free text nobody typed is the rule-3 habit (invariant 6: only the fields actually needed).
+ */
+export function ratingBody(stars: number, comment: string): string {
+  const c = comment.trim();
+  return JSON.stringify(c === "" ? { stars } : { stars, comment: c });
+}
+
+/**
+ * `rating` / `rated_at` of a response body → the pair, or `null` if MALFORMED.
+ *
+ * Both absent is "not rated" (`omitempty`). Present, `rating` must be an integer in 1..5 and `rated_at` a
+ * string; ONE WITHOUT THE OTHER is malformed too — the server writes them together, and a star count with
+ * no instant (or the reverse) is a response this client does not understand.
+ */
+function readRating(t: Record<string, unknown>): { rating: number | null; rated_at: string | null } | null {
+  const r = t["rating"];
+  const at = t["rated_at"];
+  if (r === undefined && at === undefined) return { rating: null, rated_at: null };
+  if (typeof r !== "number" || !Number.isInteger(r) || r < RATING_MIN_STARS || r > RATING_MAX_STARS) return null;
+  if (typeof at !== "string" || at === "") return null;
+  return { rating: r, rated_at: at };
+}
 
 /**
  * Giới hạn hai trường của hai nhánh kết thúc — CHÉP từ `service-petitions/internal/domain/
@@ -180,8 +241,10 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
   };
   const ly_do = tuyChon("reason", DO_DAI_NHANH_KET_THUC.ly_do);
   const co_quan_nhan = tuyChon("receiving_body", DO_DAI_NHANH_KET_THUC.co_quan_nhan);
+  const rating = readRating(t);
 
   if (
+    rating === null ||
     ma === null ||
     ma === "" ||
     trang_thai === null ||
@@ -221,6 +284,8 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     ly_do: nhanh ? ly_do : "",
     // Cơ quan nhận chỉ có nghĩa khi phiếu ĐƯỢC CHUYỂN; ở `khong-tiep-nhan` không ai nhận cả.
     co_quan_nhan: trang_thai === "chuyen-cap-tren" ? co_quan_nhan : "",
+    rating: rating.rating,
+    rated_at: rating.rated_at,
   };
 }
 
@@ -260,6 +325,9 @@ export type PhieuCuaToiTomTat = {
   readonly goc_dem_han: string;
   readonly han_tiep_nhan: string | null;
   readonly han_xu_ly_xong: string | null;
+  /** Same pair, same rule as on `PhieuCuaToi`. */
+  readonly rating: number | null;
+  readonly rated_at: string | null;
 };
 
 /** Một trang. `con_nua = false` thì `con_tro` luôn rỗng. */
@@ -287,7 +355,9 @@ function docTomTat(than: unknown): PhieuCuaToiTomTat | null {
   const goc = chuoi("clock_from");
   const han_tiep_nhan = chuoiHoacNull("acknowledge_due");
   const han_xu_ly = chuoiHoacNull("resolve_due");
+  const rating = readRating(t);
   if (
+    rating === null ||
     ma === null ||
     ma === "" ||
     trang_thai === null ||
@@ -309,6 +379,8 @@ function docTomTat(than: unknown): PhieuCuaToiTomTat | null {
     goc_dem_han: goc,
     han_tiep_nhan,
     han_xu_ly_xong: han_xu_ly,
+    rating: rating.rating,
+    rated_at: rating.rated_at,
   };
 }
 
@@ -364,4 +436,13 @@ export function diaChiDanhSach(con_tro: string): string {
 export function diaChiTraCuu(ma_tra_cuu: string): string {
   const goc = diaChiViGov("petitions", DUONG_DAN_PHAN_ANH_CUA_TOI);
   return goc === "" ? "" : `${goc}/${encodeURIComponent(ma_tra_cuu)}`;
+}
+
+/**
+ * Address of the rating route for one lookup code, or EMPTY. Built on `diaChiTraCuu` so the code is
+ * encoded exactly once, the same way — the route is a sub-path of that resource on the server too.
+ */
+export function ratingAddress(ma_tra_cuu: string): string {
+  const one = diaChiTraCuu(ma_tra_cuu);
+  return one === "" ? "" : `${one}/rating`;
 }

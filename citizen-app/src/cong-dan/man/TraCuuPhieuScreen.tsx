@@ -14,13 +14,22 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type KetQuaGoi, traCuuPhieu } from "../api/goi-vigov";
+import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
 import { QUAY_LAI, TRA_CUU } from "./noi-dung";
 import { ONhapDong } from "./o-nhap";
+import { PetitionRating } from "./PetitionRating";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
+
+/** What the rating block needs from the screen that shows the petition. */
+export type RatingHooks = {
+  readonly onRated: (petition: PhieuCuaToi) => void;
+  readonly onReload: (code: string) => void;
+  readonly reopenWithPhone?: ReopenWithPhone;
+};
 
 /** Độ dài tối đa ô mã. Mã do máy chủ sinh ngẫu nhiên và ngắn hơn nhiều; đây chỉ là trần ô nhập. */
 const MA_TOI_DA = 64;
@@ -31,7 +40,7 @@ const MA_TOI_DA = 64;
  * `chua-co-phien` / `chua-cau-hinh` không tới được đây trong luồng thường (màn đã dừng trước), nên
  * chúng hiện đúng khối "kênh chưa mở" chứ không một câu lỗi.
  */
-export function KetQuaTraCuu({ kq }: { kq: KetQuaGoi }): ReactNode {
+export function KetQuaTraCuu({ kq, rating }: { kq: KetQuaGoi; rating?: RatingHooks }): ReactNode {
   switch (kq.kieu) {
     case "xong":
       // Câu ngắn trong `role="status"`, thẻ phiếu NGOÀI vùng thông báo: tìm thấy thì người không
@@ -42,6 +51,17 @@ export function KetQuaTraCuu({ kq }: { kq: KetQuaGoi }): ReactNode {
             {TRA_CUU.tim_thay}
           </p>
           <ThePhieu phieu={kq.phieu} />
+          {/* Keyed by the code: the SAME block survives the re-render from its own 200 (so it can say
+              "sent"), and a different petition gets a fresh one. */}
+          {rating !== undefined && (
+            <PetitionRating
+              key={kq.phieu.ma_tra_cuu}
+              petition={kq.phieu}
+              onRated={rating.onRated}
+              onReload={() => rating.onReload(kq.phieu.ma_tra_cuu)}
+              reopenWithPhone={rating.reopenWithPhone}
+            />
+          )}
         </>
       );
     case "chua-co-phien":
@@ -82,11 +102,17 @@ export function TraCuuPhieuScreen({
   onQuayLai,
   ma_ban_dau = "",
   reopenWithPhone,
+  onChanged,
 }: {
   onQuayLai: () => void;
   ma_ban_dau?: string;
   /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
   reopenWithPhone?: ReopenWithPhone;
+  /**
+   * The citizen changed the petition from here (a rating — which may also have reopened it). The shell
+   * uses it to reload "Phản ánh của tôi", which would otherwise still show the old status.
+   */
+  onChanged?: () => void;
 }) {
   const [phien] = useState(layPhienViGov);
   const phone = usePhoneVerification(reopenWithPhone);
@@ -119,8 +145,10 @@ export function TraCuuPhieuScreen({
     );
   }
 
-  async function tra() {
-    if (ma.trim() === "") {
+  /** `code` absent = the code in the box; present = re-read that petition (the rating block's reload). */
+  async function tra(code?: string) {
+    const target = code ?? ma;
+    if (target.trim() === "") {
       datThieuMa(true);
       return;
     }
@@ -128,15 +156,24 @@ export function TraCuuPhieuScreen({
     phone.reset();
     datDangTra(true);
     datKq(null);
-    const result = await traCuuPhieu(ma);
+    const result = await traCuuPhieu(target);
     datDangTra(false);
     if (result.kieu === "can-xac-thuc-so") {
-      // Gọi lại với CÙNG mã đã tra — `tra` của lần dựng này đã đọc `ma` ấy.
-      phone.onPhoneRequired(() => void tra());
+      // Gọi lại với CÙNG mã đã tra.
+      phone.onPhoneRequired(() => void tra(target));
       return;
     }
     datKq(result);
   }
+
+  const rating: RatingHooks = {
+    onRated: (petition) => {
+      datKq({ kieu: "xong", phieu: petition });
+      onChanged?.();
+    },
+    onReload: (code) => void tra(code),
+    reopenWithPhone,
+  };
 
   return (
     <section className="cd-man" aria-label={TRA_CUU.tieu_de}>
@@ -177,7 +214,7 @@ export function TraCuuPhieuScreen({
           onDecline={phone.decline}
         />
       )}
-      {kq !== null && <KetQuaTraCuu kq={kq} />}
+      {kq !== null && <KetQuaTraCuu kq={kq} rating={rating} />}
     </section>
   );
 }

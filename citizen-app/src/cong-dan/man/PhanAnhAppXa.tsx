@@ -20,13 +20,14 @@
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { DO_DAI_TOI_DA } from "../api/hop-dong-phan-anh";
+import { DO_DAI_TOI_DA, RATING_COMMENT_MAX_LEN } from "../api/hop-dong-phan-anh";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { GUI, giaiThichTrangThai, KHAN_CAP, nhanTrangThai, THE_PHIEU, TRA_CUU, XA_PA, XA_TN } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
+import { StarPicker } from "./star-picker";
 import {
   duocDanhGia,
   type FeedbackDraftStore,
@@ -203,11 +204,10 @@ export function DongThoiGian({ phieu }: { phieu: PhieuTN }) {
   );
 }
 
-const NHAN_SAO = ["Rất không hài lòng", "Không hài lòng", "Bình thường", "Hài lòng", "Rất hài lòng"] as const;
-
 /**
  * Đánh giá — theo prototype (`RatingBlock.tsx`): năm sao, mỗi sao một vùng chạm riêng, nhãn bằng chữ, nhận
- * xét tuỳ ý. Chỉ đọc khi đã chấm.
+ * xét tuỳ ý. Chỉ đọc khi đã chấm. Hàng sao là `StarPicker`, dùng chung với khối đánh giá thật
+ * (`PetitionRating.tsx`) — một bản, không hai.
  */
 export function KhoiDanhGia(props: { phieu: PhieuTN; onGui?: (sao: number, nhan_xet: string) => void }) {
   // Có `onGui` là đang chấm (lần đầu, hoặc chấm lại sau khi mở lại) — ô trống, không điền sẵn lần cũ.
@@ -219,28 +219,12 @@ export function KhoiDanhGia(props: { phieu: PhieuTN; onGui?: (sao: number, nhan_
     <section className="xa-the xa-the--dem xa-khoi">
       <h2 className="xa-dau-khoi__tieu-de">{chi_doc ? XA_PA.da_danh_gia : XA_PA.danh_gia_tieu_de}</h2>
       {!chi_doc && <p className="xa-phu">{XA_PA.danh_gia_vi_sao}</p>}
-      <div className="xa-sao" role={chi_doc ? "img" : "radiogroup"} aria-label={chi_doc ? XA_PA.da_cham(sao) : XA_PA.cham_diem}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            disabled={chi_doc}
-            role={chi_doc ? undefined : "radio"}
-            aria-checked={chi_doc ? undefined : sao === n}
-            aria-label={`${n} sao — ${NHAN_SAO[n - 1]}`}
-            className={`xa-sao__nut${n <= sao ? " xa-sao__nut--on" : ""}`}
-            onClick={() => datSao(n)}
-          >
-            <BieuTuong ten="star" co={32} />
-          </button>
-        ))}
-      </div>
-      <p className="xa-giua">{sao > 0 ? NHAN_SAO[sao - 1] : XA_PA.cham_vao_sao}</p>
+      <StarPicker stars={sao} onPick={chi_doc ? undefined : datSao} />
       {chi_doc ? (
         da?.nhan_xet ? <p className="xa-giu-dong">“{da.nhan_xet}”</p> : null
       ) : (
         <>
-          <ONhapDoan id="xa-nhan-xet" nhan={XA_PA.nhan_xet} gia_tri={nhan_xet} toi_da={1000} onDoi={datNhanXet} />
+          <ONhapDoan id="xa-nhan-xet" nhan={XA_PA.nhan_xet} gia_tri={nhan_xet} toi_da={RATING_COMMENT_MAX_LEN} onDoi={datNhanXet} />
           <button type="button" className="xa-nut" disabled={sao === 0} onClick={() => props.onGui?.(sao, nhan_xet)}>
             {XA_PA.gui_danh_gia}
           </button>

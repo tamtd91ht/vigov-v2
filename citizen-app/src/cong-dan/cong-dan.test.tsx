@@ -267,6 +267,8 @@ describe("trình đọc màn hình: đổi bước và kết quả được báo
     ket_qua: "",
     ly_do: "",
     co_quan_nhan: "",
+    rating: null,
+    rated_at: null,
   };
 
   /** Thẻ mở của phần tử mang `id` — rỗng khi không có. */

@@ -498,6 +498,8 @@ describe("phản ánh của tôi — lời gọi và đọc trang", () => {
       goc_dem_han: "2026-09-24T01:30:00Z",
       han_tiep_nhan: "2026-09-24T03:30:00Z",
       han_xu_ly_xong: "2026-09-26T09:00:00Z",
+      rating: null,
+      rated_at: null,
     });
     expect(kq.trang.muc[1]!.han_tiep_nhan).toBeNull();
     expect(kq.trang.muc[1]!.han_xu_ly_xong).toBeNull();
@@ -573,8 +575,10 @@ describe("phản ánh của tôi — màn hình", () => {
     goc_dem_han: "2026-09-24T01:30:00Z",
     han_tiep_nhan: "2026-09-24T03:30:00Z",
     han_xu_ly_xong: null,
+    rating: null,
+    rated_at: null,
   });
-  const xong = (muc: PhieuCuaToiTomTat[], con_tro: string) =>
+  const xong =(muc: PhieuCuaToiTomTat[], con_tro: string) =>
     ({ kieu: "xong", trang: { muc, con_tro, con_nua: con_tro !== "" } }) as const;
   const ve = (ds: typeof DANH_SACH_DAU) =>
     renderToStaticMarkup(

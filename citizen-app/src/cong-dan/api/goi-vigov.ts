@@ -34,6 +34,7 @@ import {
   docTrangPhieuCuaToi,
   isPhoneNotVerified,
   type PhieuCuaToi,
+  ratingAddress,
   type TrangPhieuCuaToi,
 } from "./hop-dong-phan-anh";
 import {
@@ -227,6 +228,36 @@ export async function phanAnhCuaToi(con_tro: string): Promise<KetQuaDanhSach> {
   if (kq.kieu === "xong") return { kieu: "xong", trang: kq.gia_tri };
   if (kq.kieu === "dang-xu-ly-truoc" || kq.kieu === "kenh-chua-mo") return { kieu: "loi-may-chu" };
   return kq;
+}
+
+/**
+ * The citizen rates THEIR OWN petition `ma_tra_cuu` (ADR 0050 point 2). `attempt` is one user act — body
+ * from `ratingBody`, one `Idempotency-Key` — and calling again with the SAME attempt is "send again" after a
+ * lost answer: the server replays the first result instead of recording a second rating (`lan-gui.ts`).
+ *
+ * NO "WHOSE" OR "WHICH COMMUNE" PARAMETER: both come from the session on the server (rule 4, forbidden #1;
+ * rule 1, forbidden #2). 200 is the petition as it now stands (same shape as the GET), so the screen
+ * re-renders from it — including a status the server changed.
+ *
+ * 409 IS `dang-xu-ly-truoc` HERE AND MEANS TWO THINGS: `petition_state` (not rateable in this status, or it
+ * changed meanwhile) and idem's "the same key is still in flight". Both have the same next step for the
+ * citizen — reload the petition — so the screen does not need to tell them apart. 503 is not in this
+ * route's contract and becomes `loi-may-chu`, as on the list route.
+ */
+export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise<KetQuaGoi> {
+  const ma = ma_tra_cuu.trim();
+  const cong = moCong(ratingAddress(ma === "" ? "x" : ma));
+  if ("kieu" in cong) return cong;
+  if (ma === "") return { kieu: "khong-thay" };
+  const kq = thanhPhieu(
+    await goi(
+      cong.dia_chi,
+      { method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
+      docPhieu,
+      { kieu: "khong-thay" },
+    ),
+  );
+  return kq.kieu === "kenh-chua-mo" ? { kieu: "loi-may-chu" } : kq;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════

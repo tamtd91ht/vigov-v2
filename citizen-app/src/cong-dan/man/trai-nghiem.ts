@@ -278,6 +278,10 @@ export function taoPhieuTraiNghiem(nhap: NhapPhieu, luc_gui_iso: string, ma: str
     ket_qua: "",
     ly_do: "",
     co_quan_nhan: "",
+    // The experience keeps its rating in `danh_gia` (it needs the comment and the reopen count, which the
+    // real response does not carry); these two fields of the real contract stay empty here.
+    rating: null,
+    rated_at: null,
   };
 }
 

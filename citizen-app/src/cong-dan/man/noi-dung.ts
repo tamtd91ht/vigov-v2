@@ -176,6 +176,7 @@ export const PHONE_VERIFICATION_TASK = {
   submit: "phản ánh chưa được gửi",
   lookup: "chưa tra cứu được phiếu",
   mine: "chưa xem được phản ánh của bạn",
+  rate: "đánh giá chưa được gửi",
 } as const;
 
 export type PhoneVerificationTask = keyof typeof PHONE_VERIFICATION_TASK;
@@ -225,6 +226,78 @@ export const TRA_CUU = {
   loi_may_chu: "Hệ thống của xã đang gặp sự cố. Hãy chờ vài phút rồi tra cứu lại.",
   loi_mang: "Không tra được vì mạng yếu hoặc mất kết nối. Hãy kiểm tra mạng rồi tra cứu lại.",
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * ĐÁNH GIÁ KẾT QUẢ XỬ LÝ — trên phiếu mở ở màn tra cứu (ADR 0050 điểm 2, `PetitionRating.tsx`)
+ *
+ * KHÔNG CÂU NÀO NÓI NGƯỠNG SAO MỞ LẠI PHIẾU (ADR 0050: "Giao diện dân không nói ngưỡng"): người dân chấm
+ * theo điều họ thấy, không theo hệ quả họ được báo trước. Khi máy chủ đã mở lại, câu `reopened` chỉ nói
+ * SỰ VIỆC đã xảy ra — tình trạng mới đã hiện trên thẻ phiếu.
+ *
+ * Nhãn năm mức sao và câu "chạm vào sao" dùng chung với bản trải nghiệm (`star-picker.tsx`), không chép.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const RATING = {
+  title: "Đánh giá kết quả xử lý",
+  your_rating: "Đánh giá của bạn",
+  why: "Đánh giá của bạn giúp Ủy ban nhân dân xã biết việc đã được giải quyết đúng mong muốn chưa.",
+  comment_label: "Nhận xét thêm (không bắt buộc)",
+  submit: "Gửi đánh giá",
+  retry: "Gửi lại",
+  reload: "Tải lại phiếu",
+  rate_again: "Đánh giá lại",
+  sending: "Đang gửi đánh giá…",
+  sent: "Đã gửi đánh giá. Cảm ơn bạn.",
+  rated: (n: number) => `Bạn đã đánh giá ${n} sao.`,
+  reopened: "Phản ánh đã được chuyển lại cho Ủy ban nhân dân xã xử lý tiếp. Tình trạng mới ghi ở trên.",
+} as const;
+
+/**
+ * Câu cho từng nhánh không thành của lần gửi đánh giá. `can_retry`: nút "Gửi lại" dùng lại CÙNG lần gửi
+ * (cùng khoá chống trùng). `can_reload`: nút "Tải lại phiếu" — khi việc cần làm là xem tình trạng mới.
+ */
+export const RATING_ERROR: Readonly<
+  Record<
+    "session-expired" | "not-found" | "state-changed" | "invalid" | "server-fault" | "network" | "no-key",
+    { text: string; can_retry: boolean; can_reload: boolean }
+  >
+> = {
+  "session-expired": {
+    text: "Phiên làm việc đã hết hạn nên đánh giá chưa được gửi. Hãy đóng ứng dụng, mở lại rồi đánh giá lại.",
+    can_retry: false,
+    can_reload: false,
+  },
+  "not-found": {
+    text: "Không tìm thấy phiếu này nữa nên đánh giá chưa được gửi. Hãy liên hệ Ủy ban nhân dân xã để hỏi.",
+    can_retry: false,
+    can_reload: false,
+  },
+  "state-changed": {
+    text: "Tình trạng phiếu vừa thay đổi, hoặc lần gửi trước còn đang được xử lý, nên đánh giá chưa được ghi nhận. Hãy bấm “Tải lại phiếu” để xem tình trạng hiện tại.",
+    can_retry: false,
+    can_reload: true,
+  },
+  invalid: {
+    text: "Đánh giá chưa được gửi vì có ô chưa đúng. Hãy chọn từ 1 đến 5 sao, viết nhận xét ngắn lại rồi bấm “Gửi đánh giá”.",
+    can_retry: false,
+    can_reload: false,
+  },
+  "server-fault": {
+    text: "Hệ thống của xã đang gặp sự cố nên chưa nhận được đánh giá. Hãy chờ vài phút rồi bấm “Gửi lại”.",
+    can_retry: true,
+    can_reload: false,
+  },
+  network: {
+    text: "Không gửi được vì mạng yếu hoặc mất kết nối. Hãy kiểm tra mạng rồi bấm “Gửi lại”.",
+    can_retry: true,
+    can_reload: false,
+  },
+  "no-key": {
+    text: "Điện thoại này chưa gửi được đánh giá an toàn. Hãy cập nhật ứng dụng Zalo rồi thử lại, hoặc liên hệ trực tiếp Ủy ban nhân dân xã.",
+    can_retry: false,
+    can_reload: false,
+  },
+};
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * MÀN "PHẢN ÁNH CỦA TÔI" — danh sách phiếu của chính người dân

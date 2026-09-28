@@ -62,6 +62,13 @@ export function KenhCongDan({
   // Đọc MỘT LẦN lúc dựng, cùng cách ba màn phản ánh đọc (`useState(layPhienViGov)`): phiên chỉ được
   // ghi trước khi kênh mở, ở bước xác nhận xã.
   const [co_phien] = useState(() => layPhienViGov() !== null);
+  /**
+   * Bumped when the citizen changes a petition from its detail (a rating). The kept list below is keyed by
+   * it, so it is re-read from the server instead of showing the status from before — a 1–2 star rating
+   * reopens the petition, and "Quay lại" must not show it as still resolved. The cost: the pages loaded
+   * with "Xem thêm" are loaded again from the first.
+   */
+  const [listVersion, setListVersion] = useState(0);
   const veChon = () => datMan({ kieu: "chon" });
 
   if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} reopenWithPhone={reopenWithPhone} />;
@@ -81,6 +88,7 @@ export function KenhCongDan({
       <>
         <div hidden={dang_mo_phieu}>
           <PhanAnhCuaToiScreen
+            key={listVersion}
             onQuayLai={veChon}
             onMoPhieu={(ma) => datMan({ kieu: "tra-cuu", ma, tu_danh_sach: true })}
             onGuiPhanAnh={() => datMan({ kieu: "gui" })}
@@ -93,6 +101,7 @@ export function KenhCongDan({
             ma_ban_dau={man.ma}
             onQuayLai={() => datMan({ kieu: "cua-toi" })}
             reopenWithPhone={reopenWithPhone}
+            onChanged={() => setListVersion((v) => v + 1)}
           />
         )}
       </>

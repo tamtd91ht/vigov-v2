@@ -2444,6 +2444,14 @@ body {
   margin: 0 0 12px;
 }
 
+/* Đánh giá kết quả xử lý — cùng khung với thẻ phiếu ngay trên. Hàng sao dùng `.xa-sao` chung. */
+.cd-danh-gia {
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
 .cd-phieu__nhan {
   font-size: var(--text-small);
   color: var(--ink-muted);
