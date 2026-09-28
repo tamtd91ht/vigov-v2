@@ -201,6 +201,41 @@
       "source": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:68"
     },
     {
+      "entity": "OperatorAccount",
+      "service": "identity",
+      "scope": "platform",
+      "table": "operator_account",
+      "source": "service-identity/migrations/0012_operator_accounts.sql:93"
+    },
+    {
+      "entity": "OperatorAuditEntry",
+      "service": "identity",
+      "scope": "platform",
+      "table": "operator_audit_log",
+      "source": "service-identity/migrations/0012_operator_accounts.sql:295"
+    },
+    {
+      "entity": "OperatorPermissionGrant",
+      "service": "identity",
+      "scope": "platform",
+      "table": "operator_permission_grant",
+      "source": "service-identity/migrations/0012_operator_accounts.sql:204"
+    },
+    {
+      "entity": "OperatorRecoveryCode",
+      "service": "identity",
+      "scope": "platform",
+      "table": "operator_recovery_code",
+      "source": "service-identity/migrations/0012_operator_accounts.sql:248"
+    },
+    {
+      "entity": "OperatorSession",
+      "service": "identity",
+      "scope": "platform",
+      "table": "operator_session",
+      "source": "service-identity/migrations/0012_operator_accounts.sql:164"
+    },
+    {
       "entity": "OutboxEvent",
       "service": "petitions",
       "scope": "tenant",

@@ -231,6 +231,19 @@ Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở A
 hoặc trong `.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng
 lại và hỏi**, đừng tự dịch rồi viết route — đường dẫn không sửa lại được sau khi một xã chạy thật.
 
+### Miền vận hành ViHAT — ADR 0048
+
+Chốt 28/09/2026 bởi **chủ dự án** (ADR 0048 §*Chốt* và §*Chốt bước 1*). Không tài nguyên URL nào
+ở đây: tuyến tới ở bước 2, trên host vận hành — đừng điền sẵn.
+
+| Khái niệm | Thực thể / bảng | Vì sao không phải từ dễ đoán |
+|---|---|---|
+| **Người vận hành** (nhân sự ViHAT) | `operator_account` | **Không** `admin`, `superadmin`, `platform_user`: `quan_tri` đã là vai trò **của một xã**, và "superadmin" là đúng thứ luật 5 cấm #2. `operator` nói miền chứ không nói mức quyền. Mã nghiệp vụ `VH-00001` |
+| Phiên người vận hành | `operator_session` | Không dùng lại `phien` (cán bộ) hay `CitizenSession`: ba lớp tin cậy, ba bảng |
+| Cấp quyền vận hành | `operator_permission_grant` · khoá `ops.<nhóm>.<việc>` | **Không** phải dòng trong `quyen`/`vai_tro_quyen` (theo xã). Cấp thẳng cho tài khoản, không qua vai trò |
+| Mã khôi phục | `operator_recovery_code` | *Recovery code* — mã dùng một lần khi mất ứng dụng xác thực. Không gọi `backup_code` |
+| Vết vận hành | `operator_audit_log` | Vết **không có xã** của miền vận hành trong `identity`; khác `platform_audit_log` (thuộc `platform`, luật 2) |
+
 ### Danh mục tham chiếu — ADR 0024
 
 Tám danh mục **đã có bảng và đã có tuyến đọc** (2026-09-20). Tên thực thể chốt từ trước khi có

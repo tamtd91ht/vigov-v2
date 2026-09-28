@@ -162,11 +162,37 @@ do chính tả ở đó). Đề xuất `t:<tenant_id>` ở dòng #8 đọc theo 
 | # | Câu | Ghi chú |
 |---|---|---|
 | 5 | Ghi vết lần **liệt kê xã liên xã** của người vận hành | Đề xuất ở §Thiết kế #5 chưa được xác nhận |
-| 6 | **Định dạng mã nghiệp vụ** của người vận hành | Đề xuất `VH-…` ở trên, chưa chốt |
+| 6 | ~~**Định dạng mã nghiệp vụ** của người vận hành~~ | **Đóng 28/09/2026** — `VH-00001`, §*Chốt bước 1* |
 | 7 | Ai thắng khi người vận hành và cán bộ xã cùng sửa `ho_so_hien_thi_xa` | Chưa có đề xuất — cần chủ dự án |
 | 9 | **Hình dạng vết** của lần phát hành QR | Đề xuất ở §Thiết kế #9 chưa được xác nhận |
 | 11 | On-premise: ai vận hành | Tuỳ hợp đồng; mã không đổi |
 | 12 | Gỡ hai dòng cũ `admin*.vigov.vn` → Xã Thăng Bình | Phải xong **trước khi** host vận hành lên sống |
+
+### Chốt bước 1 — 28/09/2026 (cổng ROUTING §0.3)
+
+Chủ dự án chọn đúng đề xuất ở cả bốn câu. Ghi thêm, không sửa phần trên.
+
+| Câu | Đã chốt | Vì sao |
+|---|---|---|
+| Còn mở #6 — mã nghiệp vụ | **`VH-` + 5 chữ số** từ một dãy toàn nền tảng (`VH-00001`), cấp một lần, không cấp lại (luật 7 bất biến 3). Câu #6 **đóng** | Nhìn là phân biệt với mã cán bộ xã trong cùng một cột "ai" (luật 6 bất biến 8). Không dùng tên hay email: dữ liệu cá nhân nằm trong vết |
+| Ai tạo, ai cấp quyền | **CLI phía máy chủ** trong `service-identity`, devops chạy: tạo tài khoản (mật khẩu tạm in **một lần**, buộc đổi + đăng ký TOTP ở lần đầu), cấp / thu hồi `ops.*`, khoá / mở, đặt lại MFA. Bắt buộc số ticket; vết ghi `actor = system`, ticket ở `reason`. **Không** thêm khoá quản lý người vận hành | Ít người, không cần màn hình; thêm khoá là điều kiện dừng #1. Seed bằng biến môi trường bị bác: một bí mật chung mở quyền trên mọi xã |
+| Token và bí mật | Token dạng **`op1.`**, không có trường xã, ký bằng biến mới **`OPERATOR_SESSION_SIGNING_KEYS`** (tách khỏi `SESSION_SIGNING_KEYS`). Bí mật TOTP mã hoá AES-256-GCM bằng biến mới **`OPERATOR_TOTP_ENCRYPTION_KEY`**. Cả hai **tuỳ chọn**: vắng → đăng nhập vận hành từ chối, service vẫn khởi động | Khoá riêng: một bộ kiểm lẫn miền cũng hỏng MAC, không chỉ dựa vào một dòng kiểm. Mã hoá: lộ bản sao lưu DB không lộ yếu tố thứ hai. Câu *"tạm thời không cần mã hoá"* (ADR 0052 §8) nói về tệp trên MinIO, không nói về thông tin đăng nhập |
+| Tham số | Phiên **8 giờ** tuyệt đối, không refresh · sai mật khẩu/TOTP **5 lần → khoá 15 phút** (lưu PG) · TOTP 30 s / 6 số / SHA1 / lệch ±1 bước, **chặn dùng lại** mã · **10 mã khôi phục**, băm SHA-256, tạo lại thì huỷ bộ cũ · mật khẩu tối thiểu 12 như cán bộ · đổi mật khẩu / khoá / đổi quyền → thu hồi mọi phiên · vết ở bảng mới **`operator_audit_log`** (identity, không `tenant_id`, chỉ ghi thêm) | Đăng nhập cán bộ hôm nay chưa có khoá sai nhiều lần; miền vận hành chạm mọi xã nên không chờ |
+
+**Sửa cùng ngày, sau rà bảo mật (luật 13, TCVN 14423 §5.5.2.2):** chủ dự án đổi ba con số ở dòng
+*Tham số* và thêm hai điều — dòng trên giữ nguyên làm lịch sử, bảng này thắng.
+
+| Điều | Đã chốt | Vì sao |
+|---|---|---|
+| Thời gian khoá sau 5 lần sai | **12 giờ** (thay 15 phút) + lệnh `operatorctl unlock` (bắt buộc ticket, ghi vết) | TCVN đòi 12 giờ–30 ngày và mở khoá khẩn cấp bởi quản trị. Giá: đoán được email là khoá được người vận hành 12 giờ → tuyến ở bước 2 **phải** giới hạn theo địa chỉ IP, không chỉ theo tài khoản |
+| Phiên nhàn rỗi | **5 phút** (thêm vào hạn tuyệt đối 8 giờ) | TCVN: phiên quản trị ≤ 5 phút nhàn rỗi. Không có thì token lộ dùng được suốt 8 giờ |
+| Mật khẩu tạm / mã TOTP chờ | **24 giờ / 10 phút**, kiểm bằng SQL. Quá hạn thì devops cấp lại bằng `reset-mfa` | Không hạn thì ai thấy mật khẩu tạm trước người nhận là tự đăng ký ứng dụng xác thực của mình và chiếm tài khoản |
+| Vết bắt đầu đăng ký TOTP | Thêm hành động `operator.totp_enrollment_started` | Luật 6 bất biến 1 — thay mã chờ là ghi vào trạng thái thông tin đăng nhập |
+| Khoá khi đã có phiên | Khoá do người **cầm phiên** đoán sai (đổi mật khẩu, tạo lại mã khôi phục) → **thu hồi mọi phiên**. Khoá do đăng nhập sai **từ ngoài** → không đăng xuất người thật | Không thì kẻ cầm token lộ vẫn dùng tiếp sau khi bị khoá; còn thu hồi ở nhánh ngoài thì ai cũng đăng xuất được người vận hành bằng cách cố nhập sai |
+
+Bảng thứ tư và thứ năm (`operator_recovery_code`, `operator_audit_log`) thêm vào ba bảng ở #1. Tuyến
+gRPC/HTTP **không** thuộc bước 1 — thêm RPC không xã vào `methodsWithoutTenant` là điều kiện dừng
+riêng (ADR 0012), hỏi ở bước 2.
 
 ### Thứ tự dựng
 
