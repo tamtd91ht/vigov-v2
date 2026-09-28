@@ -339,6 +339,15 @@
       "tiep_theo": "QUYẾT ĐỊNH CỦA NGƯỜI DÙNG cho các ô này (định nghĩa, hai khoá, kỳ, ngưỡng 48 giờ làm việc, những gì khối Cần xử lý ngay hiện) nay ở kb/10-decisions/0053-tong-quan-dem-truc-tiep-o-service-so-huu.md — đọc ADR ấy, không suy từ chú thích Go. Mục (4) dưới đây ĐÃ CÓ ĐÁP ÁN: ADR 0053 §5 không hiện bộ phận đang giữ (luật 3). Vẫn dang_lam vì ca PostgreSQL chưa chạy (ADR 0053 §9). || (1) make kb để sinh openapi.json + thẻ việc web cho bốn tuyến. (2) Chạy summary_metrics_pg_test.go khi có VIGOV_TEST_DSN; viết ca PostgreSQL cho phía phản ánh (A ∪ B, on_time + late = on_time_sample) khi có CSDL để dựng dữ liệu mẫu đúng các CHECK của 0004/0005/0011. (3) tools/apidoc chỉ ghi khoá RequirePermission TRONG CÙNG khi hai khoá lồng nhau — openapi.json của bốn tuyến chỉ ghi report.read; cần sửa ở tools/ (ngoài phạm vi service). (4) Khối Cần xử lý ngay theo docs/ui-ux/01 §5 còn muốn nhãn bộ phận đang giữ (bo_phan_id) — chưa trả, chờ quyết.",
       "menu": "tong-quan-dieu-hanh",
       "no_confirm": []
+    },
+    {
+      "id": "hop-dong-403-chua-xac-thuc-so",
+      "viec": "BACKEND DEPENDENCY (từ /develop-miniapp phan-anh-nguoi-dan): khai 403 chua_xac_thuc_so trên ba tuyến my-citizen-reports — middleware trả nó nhưng hợp đồng nói không có",
+      "trang_thai": "chua_lam",
+      "bang_chung": "core/httpx/citizen.go:199-200 trả 403 chua_xac_thuc_so khi phiên không có CitizenID; routes_cong_dan.go:104,135,204 dùng XaTuPhien; chú thích routes_cong_dan.go ~:194 ghi 'THERE IS NO 403', @reply và kb/20-contracts/openapi.json không khai 403. citizen-app đã xử lý mã này ở 1e33603 dựa trên middleware, không dựa trên hợp đồng.",
+      "no_confirm": [],
+      "tiep_theo": "Thêm @reply 403 cho ba tuyến, sửa chú thích ~:194, make kb để openapi có 403. Kèm: chú thích gui_phan_anh.go:72-74 viện '#23 đóng hướng kia (ADR 0028)' đã lỗi thời sau ADR 0050 điểm 1 (hành vi từ chối field vẫn đúng tới khi dựng may-chu-no-adr-0050 (1)); may-chu-no-adr-0050 (7) 'nhận an_danh' ĐÃ CÓ từ 4231e34 (gui_phan_anh.go:63,165) — kiểm phần ẩn phía cán bộ trước khi đóng.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
