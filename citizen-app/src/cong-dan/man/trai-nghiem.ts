@@ -231,13 +231,27 @@ export function kiemNhapPhieu(
 }
 
 /**
- * Mã tra cứu trải nghiệm: tiền tố `TN-` (không lẫn với mã thật) + 8 ký tự không đoán được (luật 4 bất
- * biến 4). `ngau_nhien` truyền vào để test cố định được.
+ * CSPRNG bytes — same source as `api/lan-gui.ts` (`crypto.getRandomValues`). No `crypto` means THROW, never a
+ * weaker fallback: a guessable lookup code is exactly what rule 4 invariant 4 and rule 13 forbid.
  */
-export function maPhieuTraiNghiem(ngau_nhien: () => number = Math.random): string {
+function cryptoBytes(n: number): Uint8Array {
+  const bytes = new Uint8Array(n);
+  globalThis.crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+/**
+ * Mã tra cứu trải nghiệm: tiền tố `TN-` (không lẫn với mã thật) + 8 ký tự không đoán được (luật 4 bất
+ * biến 4). `randomBytes` is injectable so a test can pin the output; the default is the CSPRNG above.
+ *
+ * The alphabet has exactly 32 symbols, so `byte % 32` is unbiased (256 is a multiple of 32) — do not add or
+ * remove a symbol without switching to rejection sampling.
+ */
+export function maPhieuTraiNghiem(randomBytes: (n: number) => Uint8Array = cryptoBytes): string {
   const BANG = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(8);
   let ma = "";
-  for (let i = 0; i < 8; i += 1) ma += BANG[Math.floor(ngau_nhien() * BANG.length) % BANG.length];
+  for (let i = 0; i < 8; i += 1) ma += BANG[bytes[i]! % BANG.length];
   return `TN-${ma}`;
 }
 
