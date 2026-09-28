@@ -66,8 +66,7 @@ FROM bo_phan bp
 LEFT JOIN nguoi_dung nd
        ON nd.tenant_id  = bp.tenant_id
       AND nd.bo_phan_id = bp.id
-      AND nd.deleted_at IS NULL
-      AND nd.dang_hoat_dong
+      AND ` + staffCountedInUnit + `
 WHERE bp.tenant_id = $1
   AND bp.deleted_at IS NULL
 GROUP BY bp.id, bp.ma, bp.ten, bp.cha_id, bp.thu_tu

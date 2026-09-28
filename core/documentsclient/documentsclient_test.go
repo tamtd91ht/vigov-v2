@@ -180,3 +180,30 @@ func TestOrgUnitHoldingsWithoutTenantRefusedBeforeWire(t *testing.T) {
 		t.Errorf("lời gọi tới được máy chủ %d lần dù không mang xã", srv.calls)
 	}
 }
+
+// AN EMPTY ADDRESS IS REFUSED BY NAME, never dialled: a client with no address would answer every
+// org-unit delete with an outage somebody then goes looking for in a service that is running.
+func TestDialEmptyAddressRefusedByName(t *testing.T) {
+	c, err := Dial("", fakeCallerKey, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err == nil || c != nil {
+		t.Fatalf("Dial(\"\") = %v, %v — muốn từ chối", c, err)
+	}
+	if !strings.Contains(err.Error(), "DOCUMENTS_GRPC_ADDR") {
+		t.Errorf("lỗi phải nêu tên biến DOCUMENTS_GRPC_ADDR: %v", err)
+	}
+}
+
+// grpc.NewClient connects lazily, so an address that answers nothing still builds a client — the
+// service starts while documents is down — and Close releases it.
+func TestDialLazyAndClose(t *testing.T) {
+	c, err := Dial("documents.invalid:9090", fakeCallerKey, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := c.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+	if err := New(nil, nil).Close(); err != nil {
+		t.Errorf("Close trên client dựng bằng New: %v", err)
+	}
+}

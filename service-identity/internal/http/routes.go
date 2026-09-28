@@ -236,11 +236,12 @@ type (
 	//
 	// A USE CASE, NOT A STORE, and separate from BoPhanDanhMuc for the reason CanBoGhiDanhBa is
 	// separate from CanBoDanhBa: every method opens the transaction the write and its audit entry
-	// share (rule 6, invariant 3), and the move carries the cycle check (app.SoDoToChuc.Sua). NO Xoa:
-	// a delete needs a cross-service contract that does not exist (rule 2, stop condition #2).
+	// share (rule 6, invariant 3), and the move carries the cycle check (app.SoDoToChuc.Sua). Remove
+	// asks petitions and documents before its transaction (app/org_unit_delete.go).
 	BoPhanGhi interface {
 		Them(ctx context.Context, yc app.YeuCauThemBoPhan, nguoi app.NguoiThucHien) (domain.BoPhan, error)
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaBoPhan, nguoi app.NguoiThucHien) (domain.BoPhan, error)
+		Remove(ctx context.Context, id, reason string, actor app.NguoiThucHien) error
 	}
 
 	// OrgUnitImporting is the Excel import of the same chart: POST /api/v1/org-units/import-previews
@@ -558,7 +559,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	case d.BoPhan == nil:
 		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
 	case d.GhiBoPhan == nil:
-		panic("identity/http: thiếu use case ghi sơ đồ tổ chức — POST và PATCH /api/v1/org-units sẽ panic khi có người gọi")
+		panic("identity/http: thiếu use case ghi sơ đồ tổ chức — POST, PATCH và DELETE /api/v1/org-units sẽ panic khi có người gọi")
 	case d.OrgUnitImports == nil:
 		panic("identity/http: thiếu use case nhập sơ đồ tổ chức từ Excel — POST /api/v1/org-units/import-previews và /imports sẽ panic khi có người gọi")
 	case d.VaiTroMuc == nil:
@@ -1289,16 +1290,16 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachBoPhan)))
 
-	// --- the org chart, WRITE. TWO ROUTES, BOTH `admin.org` -------------------------------------
+	// --- the org chart, WRITE. THREE ROUTES, ALL `admin.org` ------------------------------------
 	//
 	// `admin.org` WAS DECIDED BY THE USER ON 2026-09-24 and it exists in the `quyen` table (migration
 	// 0001:282, "Quản lý sơ đồ tổ chức") — no key is invented (rule 5, invariant 3c). The READ above
 	// stays AnyAuthenticated, and the asymmetry is deliberate: unit names fill boxes on every screen,
 	// reshaping the chart is one job.
 	//
-	// NO DELETE ROUTE. Refusing to remove a unit that still holds staff OR records in documents,
-	// petitions or comms needs a cross-service contract (rule 2, stop condition #2); a delete that
-	// checked only the staff half would orphan the other three silently.
+	// THE DELETE (§12.4) came on 2026-09-28 with the contract it was waiting for: petitions and
+	// documents answer CountOrgUnitHoldings, so the refusal covers what the unit holds in all three
+	// services — not only the staff half this service can see.
 
 	// Adding a unit. POST /api/v1/org-units
 	//
@@ -1352,6 +1353,43 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.org")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi tên, cha và thứ tự đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaBoPhan))))
+
+	// Removing a unit. DELETE /api/v1/org-units/{id}
+	//
+	// USER DECISION 2026-09-28: refused while the unit holds live staff, live child units, or open
+	// petitions / tasks / incoming documents (finance projects do not count). Petitions and documents
+	// are ASKED over gRPC before the transaction; an unanswered question refuses the delete — it is
+	// never read as "holds nothing". Order and reasons: app/org_unit_delete.go.
+	//
+	// A SOFT DELETE: `deleted_at`, `deleted_by` (the remover's STAFF CODE), `delete_reason` (rule 7,
+	// invariant 1). The code stays taken for ever — `UNIQUE (tenant_id, ma)` is not partial — and
+	// ResolveOrgUnitNames keeps printing the name beside old records that still point at the unit.
+	//
+	// A BODY ON A DELETE, the convention DELETE /api/v1/staff/{id} follows: the reason is mandatory,
+	// and a query string would put free text about a government record into every access log.
+	//
+	// @summary  Xoá mềm một bộ phận, kèm lý do bắt buộc — từ chối khi bộ phận còn cán bộ, bộ phận con hay hồ sơ chưa xong
+	// @screen   14-cau-hinh §12.4
+	// 400 is a missing or over-long `reason`.
+	// 404 is an id matching no live unit OF THIS COMMUNE — one answer for an invented id, a
+	// soft-deleted unit and another commune's unit.
+	// 409 is `org_unit_in_use`, with `holdings` counting each kind — "chuyển trước khi xoá".
+	// 503 is `org_unit_delete_unavailable` (petitions or documents did not answer — retry) or
+	// `org_unit_delete_not_configured` (this deployment has no address for one of them).
+	//
+	// @request  orgUnitDeleteIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 orgUnitInUseOut
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("DELETE /api/v1/org-units/{id}",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.KhongCan("xoá một bộ phận đã xoá cho cùng một kết quả: lượt đọc và câu UPDATE đều mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.DeleteOrgUnit))))
 
 	// --- the org chart, IMPORT FROM EXCEL. THREE ROUTES, ALL `admin.org` ------------------------
 	//

@@ -6,7 +6,7 @@
 //
 // Same shape as core/petitionsclient, for the same reasons, including the two read there first:
 // the new identity → documents edge is not a startup cycle (grpc.NewClient connects lazily), and
-// there is NO Dial yet because a new plaintext channel is a rule 13 STOP condition for the owner.
+// the channel is plaintext by the owner's decision of 2026-09-28 (the `@security-exception` in Dial).
 package documentsclient
 
 import (
@@ -16,10 +16,14 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	documentsv1 "github.com/vihat/vigov/core/gen/vigov/documents/v1"
+	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/secret"
 )
 
 // CallTimeout bounds one call — the same number as every other inter-service client.
@@ -42,17 +46,47 @@ func (h OrgUnitHoldings) Any() bool {
 
 // Client asks documents over gRPC. No cache.
 type Client struct {
-	cl  documentsv1.DocumentsServiceClient
-	log *slog.Logger
+	cl   documentsv1.DocumentsServiceClient
+	conn *grpc.ClientConn // nil when the client was injected through New
+	log  *slog.Logger
+}
+
+// Dial opens the connection to documents — the shape of petitionsclient.Dial, for its reasons.
+func Dial(addr string, khoa secret.Secret, log *slog.Logger) (*Client, error) {
+	if addr == "" {
+		return nil, fmt.Errorf("documentsclient: thiếu địa chỉ DOCUMENTS_GRPC_ADDR")
+	}
+	conn, err := grpc.NewClient(addr,
+		// @security-exception: service-to-service gRPC has no TLS yet — same channel as identityclient/platformclient (tools/security_debt.json, expires 2026-12-28), converted together when internal TLS lands; carries one org-unit id and one count, no personal data
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(
+			grpcx.UnaryClientCallerAuth(khoa),
+			grpcx.UnaryClientInterceptor(),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("documentsclient: mở kết nối tới %s: %w", addr, err)
+	}
+	c := New(documentsv1.NewDocumentsServiceClient(conn), log)
+	c.conn = conn
+	return c, nil
 }
 
 // New wraps a generated client. The connection under it MUST carry grpcx.UnaryClientCallerAuth
-// then grpcx.UnaryClientInterceptor (rule 1, invariant 8).
+// then grpcx.UnaryClientInterceptor (rule 1, invariant 8). Dial builds exactly that.
 func New(cl documentsv1.DocumentsServiceClient, log *slog.Logger) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
 	return &Client{cl: cl, log: log}
+}
+
+// Close releases the connection. Safe on a client built with New.
+func (c *Client) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+	return c.conn.Close()
 }
 
 // OrgUnitHoldings asks how many open incoming documents the unit holds in the commune the context

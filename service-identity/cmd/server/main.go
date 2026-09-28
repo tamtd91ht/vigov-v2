@@ -22,11 +22,13 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/documentsclient"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/migrate"
+	"github.com/vihat/vigov/core/petitionsclient"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/store"
@@ -266,9 +268,31 @@ func run(log *slog.Logger) error {
 	roleTemplates := app.NewRoleTemplateSeeder(kho, idstore.NewRoleTemplateStore(kho))
 	// The WRITE surface of the org chart: POST and PATCH /api/v1/org-units, under `admin.org` (user
 	// decision 2026-09-24). Given the SAME *idstore.BoPhanStore as the read field: the move's cycle
-	// check reads the rows it then writes, under locks, inside one transaction. No delete — see
-	// app.SoDoToChuc.
+	// check reads the rows it then writes, under locks, inside one transaction.
 	ghiBoPhan := app.NewSoDoToChuc(kho, boPhan)
+	// THE DELETE ASKS petitions AND documents (user decision 2026-09-28; app/org_unit_delete.go).
+	//
+	// BOTH ADDRESSES OR NEITHER. With either unset the delete route answers 503
+	// `org_unit_delete_not_configured` and every other route is unaffected — a missing address must
+	// not stop identity from starting (it is optional in core/config), and it must never let a
+	// delete through on half the question. grpc.NewClient connects lazily, so a dialled owner that is
+	// down refuses deletes (503) rather than delaying startup.
+	if cfg.PetitionsGRPCAddr != "" && cfg.DocumentsGRPCAddr != "" {
+		petitions, err := petitionsclient.Dial(cfg.PetitionsGRPCAddr, cfg.GRPCCallerKey, log)
+		if err != nil {
+			return err
+		}
+		defer petitions.Close()
+		documents, err := documentsclient.Dial(cfg.DocumentsGRPCAddr, cfg.GRPCCallerKey, log)
+		if err != nil {
+			return err
+		}
+		defer documents.Close()
+		ghiBoPhan.WithHoldingsSources(petitions, documents)
+	} else {
+		log.Warn("xoá bộ phận TẮT — thiếu PETITIONS_GRPC_ADDR hoặc DOCUMENTS_GRPC_ADDR; DELETE /api/v1/org-units/{id} sẽ trả 503",
+			"co_petitions", cfg.PetitionsGRPCAddr != "", "co_documents", cfg.DocumentsGRPCAddr != "")
+	}
 	// The Excel import of the same chart (user decision 2026-09-28): the SAME store, so an imported
 	// unit is inserted and its parent locked by the very statements the form uses.
 	orgUnitImports := app.NewOrgUnitImporter(kho, boPhan)
@@ -322,7 +346,8 @@ func run(log *slog.Logger) error {
 		VaiTro: vaiTro,
 		BoPhan: boPhan,
 		// Sơ đồ tổ chức: một kho ĐỌC (kèm số cán bộ mỗi bộ phận), một use case GHI (thêm, đổi tên, dời,
-		// đổi thứ tự) dưới khoá `admin.org`. Chưa có tuyến xoá — lý lẽ ở app/so_do_to_chuc.go.
+		// đổi thứ tự, xoá mềm) dưới khoá `admin.org`. Xoá hỏi petitions và documents trước — xem
+		// app/org_unit_delete.go.
 		GhiBoPhan: ghiBoPhan,
 		// Nhập sơ đồ tổ chức từ Excel — toàn bộ tệp hoặc không gì cả, dưới khoá `admin.org`.
 		OrgUnitImports: orgUnitImports,

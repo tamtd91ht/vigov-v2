@@ -17,14 +17,12 @@ import (
 //	GET   /api/v1/org-units        the whole chart, with each unit's staff count — AnyAuthenticated
 //	POST  /api/v1/org-units        add a unit                                  — `admin.org`
 //	PATCH /api/v1/org-units/{id}   rename, move (change parent), re-rank       — `admin.org`
+//	DELETE /api/v1/org-units/{id}  soft delete, refused while the unit holds    — `admin.org`
+//	                               anything (org_unit_delete.go)
 //
 // WHO MAY RESHAPE THE CHART WAS ANSWERED ON 2026-09-24: `admin.org`, the key migration 0001:282
-// already seeds ("Quản lý sơ đồ tổ chức"). No key was invented (rule 5, invariant 3c).
-//
-// THERE IS STILL NO DELETE, and that half of the old question remains open: removing a unit must be
-// refused while it holds staff OR is named by records in `documents`, `petitions` or `comms`, and
-// this service cannot see the last three without a cross-service contract (rule 2, stop condition
-// #2). The `🗑` button of §1 has no route. See app.SoDoToChuc.
+// already seeds ("Quản lý sơ đồ tổ chức"). No key was invented (rule 5, invariant 3c). The delete
+// (§12.4) was decided on 2026-09-28, under the same key.
 
 // boPhanRa is one node as it leaves the API.
 //

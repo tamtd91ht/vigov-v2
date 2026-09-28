@@ -50,6 +50,25 @@ type khoBoPhanGia struct {
 	// loiSau fails the FIRST statement containing this substring — see khoSLAGia.loiSau.
 	loiSau string
 	daNo   bool
+
+	// staff is the live-staff count per unit id, as the delete's counts see it. staffUnderLock, when
+	// set, replaces it for the count taken INSIDE the transaction — a member of staff added between
+	// the first read and the lock. deletedAtLock makes the lock see the unit already soft-deleted.
+	staff          map[string]int
+	staffUnderLock map[string]int
+	deletedAtLock  bool
+}
+
+// childrenOf counts the LIVE units of commune xa whose parent is id — the predicate the store's
+// subquery states. Caller holds k.mu.
+func (k *khoBoPhanGia) childrenOf(xa tenant.ID, id string) int {
+	n := 0
+	for _, h := range k.hang {
+		if h.xa == xa && h.cha == id && !h.daXoa {
+			n++
+		}
+	}
+	return n
 }
 
 func (k *khoBoPhanGia) ghi(q string, args []driver.NamedValue) {
@@ -127,6 +146,37 @@ func (c *connBoPhanGia) QueryContext(_ context.Context, q string, args []driver.
 	defer c.k.mu.Unlock()
 
 	switch {
+	case strings.Contains(q, "SELECT bp.id, bp.ma") && strings.Contains(q, "count(*)"):
+		// The delete's first read (idstore.BoPhanStore.LiveForDelete): one LIVE unit of the commune
+		// at $1, with its counts. Refused outright if the statement stops naming the commune.
+		if !strings.Contains(q, "bp.tenant_id = $1 AND bp.id = $2 AND bp.deleted_at IS NULL") {
+			return nil, fmt.Errorf("driver giả: lượt đọc để xoá không lọc theo xã hay theo dòng sống: %q", q)
+		}
+		xa, id := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)
+		cot := []string{"id", "ma", "ten", "cha_id", "thu_tu", "staff", "children"}
+		for _, h := range c.k.hang {
+			if h.id == id && h.xa == xa && !h.daXoa {
+				return &rowsGia{cot: cot, hang: [][]driver.Value{
+					{h.id, h.ma, h.ten, h.cha, int64(h.thuTu), int64(c.k.staff[id]), int64(c.k.childrenOf(xa, id))},
+				}}, nil
+			}
+		}
+		return &rowsGia{cot: cot}, nil
+
+	case strings.HasPrefix(q, "SELECT (SELECT count(*)"):
+		// The re-count under the lock (idstore.BoPhanStore.LocalHoldings).
+		if !strings.Contains(q, "bp.tenant_id = $1 AND bp.id = $2") {
+			return nil, fmt.Errorf("driver giả: đếm lại không lọc theo xã: %q", q)
+		}
+		xa, id := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)
+		staff := c.k.staff
+		if c.k.staffUnderLock != nil {
+			staff = c.k.staffUnderLock
+		}
+		return &rowsGia{cot: []string{"staff", "children"}, hang: [][]driver.Value{
+			{int64(staff[id]), int64(c.k.childrenOf(xa, id))},
+		}}, nil
+
 	case strings.Contains(q, "FOR UPDATE") && strings.Contains(q, "FROM bo_phan"):
 		cot := []string{"id", "ma", "ten", "cha_id", "thu_tu", "da_xoa"}
 		// Answer as the statement asks: scoped when it names the commune at $1, unscoped otherwise.
@@ -138,7 +188,7 @@ func (c *connBoPhanGia) QueryContext(_ context.Context, q string, args []driver.
 		for _, h := range c.k.hang {
 			if h.id == id && (!theoXa || h.xa == xa) {
 				return &rowsGia{cot: cot, hang: [][]driver.Value{
-					{h.id, h.ma, h.ten, h.cha, int64(h.thuTu), h.daXoa},
+					{h.id, h.ma, h.ten, h.cha, int64(h.thuTu), h.daXoa || c.k.deletedAtLock},
 				}}, nil
 			}
 		}

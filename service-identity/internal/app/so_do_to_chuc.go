@@ -3,13 +3,10 @@ package app
 // The use cases behind the WRITE surface of the commune's org chart (14-cau-hinh.md §1), under
 // `admin.org` ("Quản lý sơ đồ tổ chức", migration 0001:282) — user decision 2026-09-24.
 //
-//	Them  add a unit, at the root or under a parent
-//	Sua   rename it, move it under another parent (or to the root), change its rank
-//
-// THERE IS NO XOA, deliberately. Removing a unit must be refused while it still holds staff OR is
-// named by records in `documents`, `petitions` or `comms`; this service can see the first and cannot
-// see the other three without a cross-service contract nobody has designed (rule 2, stop condition
-// #2). A delete that checked only the half it can see would orphan the other half silently.
+//	Them    add a unit, at the root or under a parent
+//	Sua     rename it, move it under another parent (or to the root), change its rank
+//	Remove  soft-delete it, refused while it holds staff, child units or open records in
+//	        petitions / documents (user decision 2026-09-28) — org_unit_delete.go
 //
 // ANY KIND OF UNIT IS ACCEPTED — Đảng uỷ, HĐND, MTTQ as well as the UBND's own units (user decision
 // 2026-09-24; the reason the resource is `org-units`, domain.BoPhan). There is no kind column and no
@@ -31,13 +28,19 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// KhoBoPhan is the store, declared at the point of use. EVERY METHOD TAKES THE TRANSACTION, so the
-// write and its audit entry cannot land in two.
+// KhoBoPhan is the store, declared at the point of use. EVERY WRITE TAKES THE TRANSACTION, so the
+// write and its audit entry cannot land in two. LiveForDelete is the one read outside it: the
+// delete's first look, taken before the calls to petitions and documents so no lock is held across
+// the network (org_unit_delete.go).
 type KhoBoPhan interface {
 	KhoaBoPhan(ctx context.Context, tx *store.ScopedTx, id string) (domain.BoPhan, bool, error)
 	MaCungGoc(ctx context.Context, tx *store.ScopedTx, goc string) ([]string, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, bp domain.BoPhan) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, bp domain.BoPhan) error
+
+	LiveForDelete(ctx context.Context, id string) (domain.BoPhan, domain.OrgUnitHoldings, error)
+	LocalHoldings(ctx context.Context, tx *store.ScopedTx, id string) (domain.OrgUnitHoldings, error)
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string) error
 }
 
 // The business verbs written into the trail.
@@ -61,6 +64,11 @@ type SoDoToChuc struct {
 
 	// Injected so a test can pin it. In production: ulid.Moi.
 	sinhID func() (string, error)
+
+	// The two owners the delete asks. nil until WithHoldingsSources — the delete then answers
+	// ErrOrgUnitDeleteNotConfigured and nothing else changes.
+	petitions PetitionHoldingsSource
+	documents DocumentHoldingsSource
 }
 
 func NewSoDoToChuc(db *store.DB, kho KhoBoPhan) *SoDoToChuc {
@@ -349,6 +357,7 @@ func LaLoiDauVaoBoPhan(err error) bool {
 		domain.ErrThieuTenBoPhan, domain.ErrTenBoPhanQuaDai, domain.ErrTenBoPhanKyTuLa,
 		domain.ErrMaBoPhanSaiDinhDang, domain.ErrMaBoPhanQuaDai, domain.ErrTenKhongSinhDuocMa,
 		domain.ErrThuTuBoPhanAm, domain.ErrThuTuBoPhanQuaLon, domain.ErrIDChaQuaDai,
+		domain.ErrOrgUnitDeleteReasonMissing, domain.ErrOrgUnitDeleteReasonTooLong,
 	} {
 		if errors.Is(err, e) {
 			return true

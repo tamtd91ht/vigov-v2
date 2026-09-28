@@ -16,14 +16,11 @@
 // a request makes it. What the two edges DO create is mutual runtime coupling on the org-unit
 // delete — that act now fails while petitions is down, deliberately (fail closed, below).
 //
-// # THERE IS NO Dial IN THIS PACKAGE — YET, AND DELIBERATELY
+// # THE CHANNEL IS PLAINTEXT, BY THE OWNER'S DECISION OF 2026-09-28
 //
-// Every existing inter-service client dials with plaintext transport credentials, recorded as debt
-// in tools/security_debt.json. A Dial here would be a NEW unencrypted channel (identity →
-// petitions), which rule 13 lists as a STOP condition: the owner decides it, not the code. Until
-// that is answered, the caller builds the connection and hands the generated client to New. When
-// it is answered, Dial belongs here, built exactly like identityclient.Dial: caller key first,
-// then grpcx.UnaryClientInterceptor.
+// A new unencrypted channel is a rule 13 STOP condition; the owner answered it: the same transport
+// as identityclient and platformclient, marked with `@security-exception` on the one line in Dial
+// rather than a second ledger entry, and converted together with those two when internal TLS lands.
 package petitionsclient
 
 import (
@@ -33,10 +30,14 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
+	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/secret"
 )
 
 // CallTimeout bounds one call. The same number as identityclient.HanGoi, deliberately: two
@@ -69,18 +70,55 @@ func (h OrgUnitHoldings) Any() bool {
 // Client asks petitions over gRPC. NO CACHE: the answer is a point in time and is read once per
 // delete.
 type Client struct {
-	cl  petitionsv1.PetitionsServiceClient
-	log *slog.Logger
+	cl   petitionsv1.PetitionsServiceClient
+	conn *grpc.ClientConn // nil when the client was injected through New, e.g. in a test
+	log  *slog.Logger
+}
+
+// Dial opens the connection to petitions. Built exactly like identityclient.Dial: grpc.NewClient
+// connects lazily (identity must start while petitions is down — the delete then refuses, it does
+// not hang startup), and the caller key goes FIRST, then the commune.
+//
+// khoa is the deployment's caller key (config.GRPCCallerKey); an empty one panics inside
+// grpcx.UnaryClientCallerAuth at construction, for the reason identityclient.Dial gives.
+func Dial(addr string, khoa secret.Secret, log *slog.Logger) (*Client, error) {
+	if addr == "" {
+		// Fail closed and BY NAME. The caller decides what an unconfigured owner means (identity:
+		// the org-unit delete answers 503 "not configured"); this package never guesses an address.
+		return nil, fmt.Errorf("petitionsclient: thiếu địa chỉ PETITIONS_GRPC_ADDR")
+	}
+	conn, err := grpc.NewClient(addr,
+		// @security-exception: service-to-service gRPC has no TLS yet — same channel as identityclient/platformclient (tools/security_debt.json, expires 2026-12-28), converted together when internal TLS lands; carries one org-unit id and two counts, no personal data
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(
+			grpcx.UnaryClientCallerAuth(khoa),
+			grpcx.UnaryClientInterceptor(),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("petitionsclient: mở kết nối tới %s: %w", addr, err)
+	}
+	c := New(petitionsv1.NewPetitionsServiceClient(conn), log)
+	c.conn = conn
+	return c, nil
 }
 
 // New wraps a generated client. The connection under it MUST carry, in this order,
 // grpcx.UnaryClientCallerAuth and grpcx.UnaryClientInterceptor — the commune travels in metadata
-// and nowhere else (rule 1, invariant 8).
+// and nowhere else (rule 1, invariant 8). Dial builds exactly that.
 func New(cl petitionsv1.PetitionsServiceClient, log *slog.Logger) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
 	return &Client{cl: cl, log: log}
+}
+
+// Close releases the connection. Safe on a client built with New.
+func (c *Client) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+	return c.conn.Close()
 }
 
 // OrgUnitHoldings asks how many open petitions and tasks the unit holds in the commune the context

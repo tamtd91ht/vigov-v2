@@ -43,12 +43,13 @@ func TestBoPhanTraThuTuVaSoCanBo(t *testing.T) {
 // ghiBoPhanGia stands in for *app.SoDoToChuc. It records the actor, the commune and the request, so
 // a handler that dropped or swapped any of them turns something red.
 type ghiBoPhanGia struct {
-	goi       int
-	nguoiCuoi app.NguoiThucHien
-	xaCuoi    tenant.ID
-	idCuoi    string
-	themCuoi  app.YeuCauThemBoPhan
-	suaCuoi   app.YeuCauSuaBoPhan
+	goi        int
+	nguoiCuoi  app.NguoiThucHien
+	xaCuoi     tenant.ID
+	idCuoi     string
+	themCuoi   app.YeuCauThemBoPhan
+	suaCuoi    app.YeuCauSuaBoPhan
+	lastReason string
 
 	kq  domain.BoPhan
 	loi error
@@ -70,6 +71,12 @@ func (g *ghiBoPhanGia) Sua(ctx context.Context, id string, yc app.YeuCauSuaBoPha
 	g.goi++
 	g.nguoiCuoi, g.xaCuoi, g.idCuoi, g.suaCuoi = nguoi, tenant.MustFrom(ctx), id, yc
 	return g.kq, g.loi
+}
+
+func (g *ghiBoPhanGia) Remove(ctx context.Context, id, reason string, nguoi app.NguoiThucHien) error {
+	g.goi++
+	g.nguoiCuoi, g.xaCuoi, g.idCuoi, g.lastReason = nguoi, tenant.MustFrom(ctx), id, reason
+	return g.loi
 }
 
 // dungMayChuSoDo grants `admin.org` in commune A and nothing in commune B. The harness default
@@ -95,6 +102,7 @@ func moiTuyenSoDo() []tuyenSoDo {
 	return []tuyenSoDo{
 		{"thêm bộ phận", "POST", duongBoPhan, `{"name":"VĂN PHÒNG HĐND","parent_id":"bp-001"}`, http.StatusCreated},
 		{"sửa bộ phận", "PATCH", duongBoPhan + "/bp-002", `{"name":"TỔ MỘT CỬA LIÊN THÔNG"}`, http.StatusOK},
+		{"xoá bộ phận", "DELETE", duongBoPhan + "/bp-002", `{"reason":"sáp nhập vào Văn phòng"}`, http.StatusNoContent},
 	}
 }
 

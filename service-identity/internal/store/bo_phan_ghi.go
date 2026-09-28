@@ -23,9 +23,8 @@ import (
 //  3. `ma` APPEARS IN NO UPDATE. The code is an issued identifier; it is written once by Chen and
 //     never again (rule 7, invariant 3).
 //
-// THERE IS NO DELETE. Refusing to remove a unit that still holds staff OR records in documents,
-// petitions or comms needs a cross-service contract that does not exist (rule 2, stop condition #2;
-// user decision 2026-09-24). The soft-delete columns exist; no method here writes them.
+// THE SOFT DELETE IS IN org_unit_delete.go (user decision 2026-09-28): it is the only statement
+// that writes the soft-delete columns, and CapNhat above can neither set nor clear them.
 
 var (
 	// ErrKhongTimThayBoPhan — the unit NAMED IN THE PATH matches no live row of this commune. The
