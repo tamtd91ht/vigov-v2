@@ -194,6 +194,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		TaskFilterIdentity:   taskFilterIdentitySample(),
 		TaskRegisterExport:   &registerExportFake{},
 		TaskImport:           &taskImportFake{},
+		AuditLog:             &auditLogFake{},
 		Log:                  im,
 	})
 

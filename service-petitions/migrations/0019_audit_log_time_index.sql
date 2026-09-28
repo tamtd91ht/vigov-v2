@@ -1,0 +1,77 @@
+-- 0019 — the index behind the audit-log reader, `GET /api/v1/petitions-audit-entries` (ADR 0054).
+--
+-- THE QUERY IT SERVES is core/audit.Log.Read (core/audit/read.go, readPage), on this service's own
+-- `audit_log`:
+--
+--   WHERE tenant_id = $1 [AND at >= $x] [AND at < $y] [AND actor_id = …] [AND action = … | <> …]
+--         [AND subject = …] [AND subject NOT IN (<restricted-field subquery>)] [AND (at, id) < ($a, $b)]
+--   ORDER BY at DESC, id DESC LIMIT $n
+--
+-- The `NOT IN` is internal/store.RestrictedPetitionAuditSubjects (ADR 0054 §4, ADR 0030): the lookup
+-- codes of the commune's `can-bo` petitions, applied unless the reader holds `feedback.restricted`.
+-- It reads `phieu_phan_anh` by tenant_id; this file adds nothing for it — its row count per commune is
+-- the restricted field's, which is small by nature.
+--
+-- NO EXISTING INDEX SERVES IT. The only index on `audit_log` is 0001's `audit_log_lookup`
+-- (tenant_id, subject, at DESC), which starts with `subject`: a read by time — the screen's default —
+-- cannot use it, so every page would read and sort the commune's whole trail (ADR 0054 §1 "Cái giá").
+--
+-- WHY THESE COLUMNS, IN THIS ORDER:
+--
+--   tenant_id      first, like every index in this system (rule 1), and the hash partition key.
+--   at DESC,       the one order the reader uses and its tie-break, in the direction it writes
+--   id DESC        them, so `(at, id) < (…)` is a range scan that stops after LIMIT rows.
+--
+-- actor/action/subject are NOT key columns: they are optional exact filters over a page walked in
+-- time order; the subject filter keeps `audit_log_lookup`.
+--
+-- WHY A NEW FILE AND NOT AN EDIT OF 0001: core/migrate compares the checksum of every applied file at
+-- startup. Editing an applied file stops the service or leaves two databases with one version number.
+--
+-- ---------------------------------------------------------------------------
+-- THE LOCK THIS TAKES, AND WHY IT IS ACCEPTABLE — read before applying to a large trail.
+--
+-- PLAIN `CREATE INDEX` on the partitioned parent, the convention of this service's 0014:
+-- CONCURRENTLY is refused on a partitioned parent, and core/migrate runs each file in ONE
+-- transaction where CONCURRENTLY is refused anyway. The statement cascades to all 32 partitions and
+-- to every partition attached later. It takes a SHARE lock on the parent and each partition: READS
+-- PROCEED, WRITES WAIT — and every business write in this service writes `audit_log` in its own
+-- transaction (rule 6, invariant 3), so EVERY write of this service waits — petition intake from
+-- citizens included — until COMMIT of the sum of the 32 builds.
+--
+-- ACCEPTABLE AT CURRENT SIZES — AN ASSUMPTION ABOUT PRODUCTION, NOT A MEASUREMENT. The operator
+-- applying it checks first:
+--
+--   SELECT count(*), pg_size_pretty(pg_total_relation_size('audit_log')) FROM audit_log;
+--
+-- If that reads in the millions, this file is the wrong tool: per-partition
+-- `CREATE INDEX CONCURRENTLY` outside core/migrate, then `CREATE INDEX … ON ONLY audit_log` and
+-- `ALTER INDEX … ATTACH PARTITION` — a procedure run by a person, not at service start-up.
+--
+-- ---------------------------------------------------------------------------
+-- THE FIVE MIGRATION QUESTIONS.
+--
+--   1. ROWS PER COMMUNE: zero written. The index READS every row of `audit_log` once, to build. It
+--      is a schema object over the parent, not commune data; there is no per-commune progress to
+--      record because there is no per-commune write, and communes onboarded later get it for free.
+--   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one transaction, progress row
+--      inside it. IF NOT EXISTS makes a retry free.
+--   3. HOW IT IS REVERSED: see REVERSAL below. Nothing is lost.
+--   4. READ PATHS THAT CHANGE MEANING WHILE HALF-APPLIED: none — an index changes plans, never
+--      results, and it is invisible outside its transaction until COMMIT.
+--   5. RETENTION: `audit_log` is append-only business data kept at least 12 months (rule 6). No row,
+--      column, constraint or trigger is touched; 0002's append-only triggers are unchanged.
+-- ---------------------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS audit_log_by_time
+    ON audit_log (tenant_id, at DESC, id DESC);
+
+-- ---------------------------------------------------------------------------
+-- REVERSAL. Complete and lossless at any time — an index holds no record. In ONE transaction:
+--
+--   DROP INDEX IF EXISTS audit_log_by_time;   (the 32 partition indexes go with it)
+--
+-- and remove this file's row from `schema_migration`, otherwise the runner still believes it is in
+-- place. core/migrate has no automatic rollback (ADR 0013); this is done by a person. The only
+-- consequence is a slower audit-log screen, never a wrong one.
+-- ---------------------------------------------------------------------------

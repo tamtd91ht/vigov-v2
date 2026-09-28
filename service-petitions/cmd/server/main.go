@@ -21,6 +21,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
 	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
@@ -292,7 +293,11 @@ func chay(log *slog.Logger) error {
 		TaskSummary:          nhiemVu,
 		CitizenReportSummary: phieu,
 		OverdueQueue:         app.NewOverdueQueue(nhiemVu, phieu, dinhDanh),
-		Log:                  log,
+		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
+		// The restricted-field subquery withholds `can-bo` petitions' entries unless the handler
+		// found `feedback.restricted` on the reader (ADR 0054 §4, ADR 0030).
+		AuditLog: audit.NewLog(kho, audit.WithHiddenSubjects(petstore.RestrictedPetitionAuditSubjects)),
+		Log:      log,
 	})
 
 	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather

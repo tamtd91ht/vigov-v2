@@ -320,7 +320,10 @@ func dungMayChu(t *testing.T) *mayChu {
 			TaskSummary:          taskSummary,
 			CitizenReportSummary: reportSummary,
 			OverdueQueue:         overdue,
-			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The audit-log reader: present because Register refuses a nil one; its suite is
+			// audit_entries_test.go.
+			AuditLog: &auditLogFake{},
+			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
 		loai:       loai,
@@ -443,6 +446,7 @@ func depsDay() Deps {
 		TaskSummary:          taskSummarySample(),
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
+		AuditLog:             &auditLogFake{},
 	}
 }
 
@@ -497,6 +501,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu đường đếm tổng quan nhiệm vụ": func(d *Deps) { d.TaskSummary = nil },
 		"thiếu đường đếm tổng quan phản ánh": func(d *Deps) { d.CitizenReportSummary = nil },
 		"thiếu use case hàng đợi quá hạn":    func(d *Deps) { d.OverdueQueue = nil },
+		// The audit-log reader (ADR 0054): a nil here panics on the first administrator opening it.
+		"thiếu bộ đọc nhật ký hệ thống": func(d *Deps) { d.AuditLog = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

@@ -188,6 +188,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		TaskFilterIdentity:   taskFilterIdentitySample(),
 		TaskRegisterExport:   &registerExportFake{},
 		TaskImport:           &taskImportFake{},
+		AuditLog:             &auditLogFake{},
 		Log:                  im,
 	})
 

@@ -28,6 +28,7 @@ import (
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/staffauth"
+	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
@@ -407,7 +408,11 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		TaskSummary:          petstore.NewNhiemVuStore(nil),
 		CitizenReportSummary: petstore.NewPhieuPhanAnhStore(nil),
 		OverdueQueue:         app.NewOverdueQueue(nil, nil, nil),
-		Log:                  log,
+		// Never invoked here; Register refuses a nil. Built exactly as main() builds it, so the
+		// real restricted-field subquery passes WithHiddenSubjects' wiring-time check in this test
+		// too. Own suite: internal/http/audit_entries_test.go.
+		AuditLog: audit.NewLog(pkgstore.New(nil), audit.WithHiddenSubjects(petstore.RestrictedPetitionAuditSubjects)),
+		Log:      log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.
