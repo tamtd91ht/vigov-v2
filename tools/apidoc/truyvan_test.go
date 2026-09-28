@@ -541,8 +541,9 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 		{"GET /api/v1/tasks", []string{
 			"assignee", "bloc", "from", "include", "late", "metric", "parent", "priority", "q", "scope", "soon",
 			"source", "status", "to", "type", "unit"}},
+		// `rating_max` thêm ở 7359484 (lọc theo số sao dân chấm, ADR 0050 điểm 2).
 		{"GET /api/v1/citizen-reports", []string{
-			"channel", "field", "from", "hamlet", "late", "metric", "q", "scope", "status", "to", "unit"}},
+			"channel", "field", "from", "hamlet", "late", "metric", "q", "rating_max", "scope", "status", "to", "unit"}},
 	} {
 		x, ok := theoKhoa[tr.khoa]
 		if !ok {
