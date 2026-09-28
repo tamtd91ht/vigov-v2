@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 0999114
+derived_from_commit: 6391614
 expires: 2026-12-27
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,7 +30,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
-| **02** Quản lý nhiệm vụ | 13 | 13/13 | ✓ |
+| **02** Quản lý nhiệm vụ | 14 | 14/14 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **162 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **163 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -110,12 +110,12 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `core` | 14 | 1 | 1 | 1 |
 | `deploy` | 14 | 3 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
-| `proto` | 10 | 0 | 0 | 0 |
+| `proto` | 11 | 0 | 0 | 0 |
 | `service-comms` | 10 | 3 | 2 | 4 |
 | `service-documents` | 7 | 3 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
-| `service-identity` | 22 | 9 | 0 | 1 |
-| `service-petitions` | 22 | 9 | 8 | 0 |
+| `service-identity` | 23 | 9 | 0 | 1 |
+| `service-petitions` | 22 | 10 | 7 | 0 |
 | `service-platform` | 6 | 3 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |

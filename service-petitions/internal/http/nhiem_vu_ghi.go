@@ -658,6 +658,11 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Trả lại nhiệm vụ đang chờ duyệt để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của "+
 				"bạn mới có quyền cập nhật tiến độ.", "")
+	case errors.Is(err, domain.ErrNotTaskParticipant):
+		// vigov-require a37ec96: the gate let a `task.read` holder in; the row says they are neither
+		// the assignee nor related to this task. The domain's own sentence names who may write.
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			cauTuChoi(err, domain.ErrNotTaskParticipant), "")
 	case errors.Is(err, app.ErrReopenNeedsApproval):
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Mở lại nhiệm vụ đã hoàn thành cần quyền duyệt hoàn thành. Tài khoản của bạn mới có "+

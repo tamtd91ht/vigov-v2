@@ -57,6 +57,11 @@ type ghiNhiemVuGia struct {
 
 	ycAssignment app.TaskAssignmentRequest
 
+	// logText and taskUpdate are what the log-entry route handed down: the text, and the ONE fact
+	// "does the caller hold `task.update`" (a37ec96's commune-wide "full" case).
+	logText    string
+	taskUpdate app.TaskUpdateRight
+
 	// duyet is the fact the STATUS route hands down: does the caller hold `task.approve`?
 	//
 	// RECORDED RATHER THAN ACTED ON. Which moves it refuses is app.duocHoanThanh's and is proved over
@@ -144,6 +149,20 @@ func (g *ghiNhiemVuGia) Reassign(ctx context.Context, ma string, req app.TaskAss
 	g.ghi(ctx, "giao-lai", ma, nguoi)
 	g.ycAssignment = req
 	return g.tra()
+}
+
+func (g *ghiNhiemVuGia) AddLogEntry(ctx context.Context, ma, text string, actor audit.Actor,
+	update app.TaskUpdateRight) (domain.NhatKyNhiemVu, error) {
+	g.ghi(ctx, "nhat-ky", ma, actor)
+	g.logText, g.taskUpdate = text, update
+	if g.loi != nil {
+		return domain.NhatKyNhiemVu{}, g.loi
+	}
+	return domain.NhatKyNhiemVu{
+		ID: "nk-001", NhiemVuID: "nv-001", NguoiMa: actor.ID,
+		ThoiDiem:             time.Date(2026, 9, 28, 2, 0, 0, 0, time.UTC),
+		TrangThaiTaiThoiDiem: domain.DangThucHien, NoiDung: text,
+	}, nil
 }
 
 // --- fixtures --------------------------------------------------------------------------------------
@@ -243,6 +262,11 @@ func caCacTuyenGhiNhiemVu() []caGhiNhiemVu {
 		{"giao lại", http.MethodPost, taskAssignmentPath(maNVThu),
 			taskAssignmentIn{Unit: strPtr("bp-dia-chinh")},
 			authz.Perm("task.assign"), authz.Perm("task.update"), http.StatusOK},
+		// GHI NHẬT KÝ (vigov-require a37ec96) — the GATE is `task.read`; who may write is the use
+		// case's (assignee / related / task.update). `task.create` without `task.read` must not open it.
+		{"ghi nhật ký", http.MethodPost, taskLogEntriesPath(maNVThu),
+			taskLogEntryIn{Note: "Đã gửi công văn sang huyện."},
+			authz.Perm("task.read"), authz.Perm("task.create"), http.StatusCreated},
 	}
 }
 

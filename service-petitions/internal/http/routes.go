@@ -205,6 +205,11 @@ type (
 		// another unit/person, plus lead unit and monitor. See internal/app/task_assignment.go.
 		Reassign(ctx context.Context, ma string, req app.TaskAssignmentRequest, nguoi audit.Actor) (
 			domain.NhiemVu, error)
+		// AddLogEntry is the manual timeline entry (§5.9, vigov-require a37ec96). It takes the ONE fact
+		// "does the caller hold `task.update`", which only ever WIDENS to people who may already edit
+		// every task of the commune; who else may write is decided on the row (app/task_log_entry.go).
+		AddLogEntry(ctx context.Context, ma, text string, nguoi audit.Actor, update app.TaskUpdateRight) (
+			domain.NhatKyNhiemVu, error)
 	}
 
 	// BienBanDanhSach is the paginated read of the meeting-minutes register, for
@@ -1121,8 +1126,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 0001_init.sql:304). The log is part of the task a reader of the register already sees. NO KEY
 	// WAS INVENTED (rule 5, invariant 3c).
 	//
-	// STILL ABSENT: POST …/log-entries (a manual note). Who may write one is the holder-rule
-	// question, and it is not decided here.
+	// The WRITE half (POST, manual entry) is declared right below.
 	//
 	// 404 is the single answer GET /api/v1/tasks/{ma} gives, for the same three causes — the task is
 	// read first through the same reader, and the log only after. 401 is RequirePermission's answer to
@@ -1139,6 +1143,43 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/{ma}/log-entries",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DocNhatKyNhiemVu)))
+
+	// GHI NHẬT KÝ (§5.9) — one manual entry on the task's timeline, text only (no attachments: no file
+	// store yet). Allowed on every status, `hoan-thanh` included: it appends, it moves nothing.
+	//
+	// `task.read` AT THE GATE, AND THAT IS vigov-require a37ec96 RATHER THAN A RELAXATION (user decision
+	// 28/09/2026). The answer to "may this person write here" depends on THIS task: the assignee and a
+	// holder of the commune-wide `task.update` may; the monitor, the assigning leader and the author may
+	// write the log too (a37ec96's "related" people); anybody else gets 403 from the use case, on the
+	// row read FOR UPDATE (domain/task_participant.go). Gating on `task.update` would lock out exactly
+	// the specialist a37ec96 was written for. `task.read` is seeded (service-identity/migrations/
+	// 0001_init.sql:304); NO KEY WAS INVENTED (rule 5, invariant 3c). A TASKS-ONLY rule: ADR 0038 forbids
+	// carrying the petition holder rule across, and this is not it.
+	//
+	// ⚠ ONE HALF OF a37ec96's "related" set IS MISSING: officers of the task's unit / lead unit. The
+	// principal carries no unit and identity has no RPC for it, so they are refused (fail closed).
+	//
+	// idem.Required(idem.MoKhiHong), the petition note's declaration and for its reason: an entry is
+	// bound to no status, so a double submit would leave a duplicate in an APPEND-ONLY table nobody can
+	// ever remove (rule 7). MoKhiHong: a cache outage lets an entry through rather than refusing an
+	// officer mid-work.
+	//
+	// ONE TRANSACTION: the timeline row and the audit entry (`ghi_nhat_ky_nhiem_vu`); the text is in the
+	// row only, the delta carries its length (rule 6, forbidden #4).
+	//
+	// @summary  Ghi một dòng nhật ký vào Nhật ký & Trao đổi của nhiệm vụ — người thực hiện, người liên quan hoặc cán bộ có quyền cập nhật (không đổi trạng thái)
+	// @screen   02-nhiem-vu §5.9
+	// @request  taskLogEntryIn
+	// @reply    201 nhatKyNhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/log-entries",
+		authz.RequirePermission(d.Checker, "task.read")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.AddTaskLogEntry))))
 
 	// GIAO VIỆC MỚI (§7) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
 	//

@@ -3435,6 +3435,29 @@
     {
       "service": "petitions",
       "method": "POST",
+      "path": "/api/v1/tasks/{ma}/log-entries",
+      "operation_id": "petitions_post_tasks_by_ma_log_entries",
+      "task_id": "8545881203ce",
+      "summary": "Ghi một dòng nhật ký vào Nhật ký & Trao đổi của nhiệm vụ — người thực hiện, người liên quan hoặc cán bộ có quyền cập nhật (không đổi trạng thái)",
+      "screen": "02-nhiem-vu §5.9",
+      "permission_kind": "permission",
+      "permission": "task.read",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.taskLogEntryIn",
+      "reply_schemas": {
+        "201": "petitions.nhatKyNhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
       "path": "/api/v1/tasks/{ma}/status",
       "operation_id": "petitions_post_tasks_by_ma_status",
       "task_id": "bf5719ad43c6",

@@ -1722,6 +1722,10 @@ export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
 };
 
+export type petitions_taskLogEntryIn = {
+  "note": string;
+};
+
 export type petitions_taskStatusCountOut = {
   "status": string;
   "count": number;
@@ -4948,6 +4952,26 @@ export type petitions_get_tasks_by_ma_log_entries = {
   than: never;
   phanHoi: {
     200: page_Result_petitions_nhatKyNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/tasks/{ma}/log-entries — Ghi một dòng nhật ký vào Nhật ký & Trao đổi của nhiệm vụ — người thực hiện, người liên quan hoặc cán bộ có quyền cập nhật (không đổi trạng thái) */
+export type petitions_post_tasks_by_ma_log_entries = {
+  duongDan: "/api/v1/tasks/{ma}/log-entries";
+  phuongThuc: "POST";
+  thamSo: {
+    "ma": string;
+  };
+  truyVan: {
+  };
+  than: petitions_taskLogEntryIn;
+  phanHoi: {
+    201: petitions_nhatKyNhiemVuRa;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
