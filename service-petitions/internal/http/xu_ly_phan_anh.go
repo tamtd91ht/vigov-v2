@@ -403,8 +403,9 @@ var (
 		"`channel` không phải một trong bốn kênh tiếp nhận")
 	errLocTreHanKhongHopLe = errors.New(
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
-	// errPhamViKhongHopLe (the unknown-`scope` refusal) is SHARED with the task list — nhiem_vu.go —
-	// because the accepted values are the same two words.
+	// errPhamViKhongHopLe (the unknown-`scope` refusal) is declared in nhiem_vu.go. The task list has
+	// accepted `related` since 28/09/2026 and refuses with its own errTaskScopeInvalid; this list still
+	// takes the two words that sentence names.
 	errPhamViLienQuanChuaCo = errors.New(
 		"`scope=related` chưa dùng được với phiếu phản ánh: thế nào là \"liên quan\" và người liên quan " +
 			"được làm gì chưa được chốt")

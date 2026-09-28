@@ -154,7 +154,7 @@ func TestTaskCountsTakesTheListFilters(t *testing.T) {
 }
 
 func TestTaskCountsRefusesWhatTheListRefuses(t *testing.T) {
-	for _, q := range []string{"?status=chua-thuc-hien", "?scope=related", "?soon=true", "?late=1",
+	for _, q := range []string{"?status=chua-thuc-hien", "?scope=toan-quoc", "?soon=1", "?late=1",
 		"?metric=completed", "?parent=" + strings.Repeat("N", domain.MaNhiemVuToiDa+1)} {
 		t.Run(q, func(t *testing.T) {
 			m := dungMayChu(t)

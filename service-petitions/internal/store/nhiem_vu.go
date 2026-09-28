@@ -219,19 +219,11 @@ var ErrTimNhiemVuQuaDai = fmt.Errorf(
 //
 // A STRUCT AND NOT A STRING OF SQL: every field below becomes a BOUND PARAMETER.
 //
-// THE FILTERS OF §3 THAT ARE NOT HERE ARE NOT HERE ON PURPOSE, and both absences are refusals the
-// handler makes explicitly rather than silent omissions — see locNhiemVuTuQuery:
-//
-//	`sap_den_han`        the threshold is the commune's own `sla.gio_sap_den_han`
-//	                     (service-identity/migrations/0008_sla.sql:178) and identity exposes no RPC
-//	                     that returns it (ADR 0029 §118). The specification's "mặc định 72 giờ" is a
-//	                     DEFAULT FOR A COMMUNE TO OVERRIDE, not a constant for this service to hold:
-//	                     a second copy of that number in Go is exactly what the BA/PM note calls the
-//	                     one-threshold-not-two rule.
-//	`lien-quan-den-toi`  it needs "bộ phận tôi đang giữ", and the staff principal carries NO
-//	                     department — proto/vigov/identity/v1/identity.proto returns none, and
-//	                     §1283-1297 explains at length why that message is kept narrow. Rule 2, stop
-//	                     condition #2.
+// §3's "Sắp đến hạn" and "Liên quan đến tôi" ARE HERE SINCE 28/09/2026 (DueSoon*, Related), each
+// resolved by the handler from identity BEFORE the store is reached: the threshold instant from
+// ResolveDueSoonCutoff (identity walks the commune's own `sla.gio_sap_den_han` in working hours —
+// no hour count lives here), and the caller's own unit(s) from StaffOrgUnits. The store sees only
+// bound values.
 type LocNhiemVu struct {
 	TrangThai string // "" = every status
 	Loai      string // "" = every task type
@@ -270,6 +262,52 @@ type LocNhiemVu struct {
 	// page, the same answer as a task with no children, so the filter reveals nothing about records
 	// the caller cannot see.
 	ParentCode string
+
+	// DueSoonFrom and DueSoonUntil are §3's "Sắp đến hạn": `DueSoonFrom < han_xu_ly <= DueSoonUntil`,
+	// unfinished work only. BOTH ZERO = no filter; the store refuses one without the other
+	// (ErrTaskDueSoonWindow), because a half-open window is a different question.
+	//
+	// DueSoonFrom IS THE SAME `now` THE HANDLER PASSED TO identity AS asOf, and DueSoonUntil is
+	// identity's answer for it — one instant for both ends, so a task cannot fall between the two.
+	DueSoonFrom  time.Time
+	DueSoonUntil time.Time
+
+	// Related is §3's "Liên quan đến tôi" (`scope=related`). nil = no filter. A POINTER so the struct
+	// stays comparable (the handler tests compare it whole) while carrying a list.
+	Related *TaskRelatedScope
+}
+
+// TaskRelatedScope is who "tôi" is for `scope=related`, resolved by the handler from the SESSION —
+// never from the request (rule 4, invariant 2 in its staff form).
+//
+// StaffCode is authz.Principal.Ma. OrgUnits is identity's StaffOrgUnits answer for that code: EMPTY
+// IS AN ORDINARY ANSWER and means the unit clause matches nothing — never "every unit".
+type TaskRelatedScope struct {
+	StaffCode string
+	OrgUnits  []string
+}
+
+// ErrTaskDueSoonWindow — one end of the due-soon window without the other, or an inverted window.
+var ErrTaskDueSoonWindow = errors.New("nhiem_vu: cửa sổ `sắp đến hạn` thiếu một đầu hoặc bị ngược")
+
+// ErrTaskRelatedNoStaff — `scope=related` with no staff code. Refused rather than run: with no code
+// every personal clause matches nothing and the tab would show only the unit's work, silently.
+var ErrTaskRelatedNoStaff = errors.New("nhiem_vu: `scope=related` không có mã cán bộ")
+
+// validateTaskListScope refuses the two shapes of LocNhiemVu that cannot be served honestly.
+func validateTaskListScope(loc LocNhiemVu) error {
+	if loc.DueSoonFrom.IsZero() != loc.DueSoonUntil.IsZero() {
+		return ErrTaskDueSoonWindow
+	}
+	// Equal ends are an EMPTY window (a zero threshold), which is a true empty page; an end BEFORE
+	// the start is a broken answer from identity and is refused.
+	if !loc.DueSoonFrom.IsZero() && loc.DueSoonUntil.Before(loc.DueSoonFrom) {
+		return ErrTaskDueSoonWindow
+	}
+	if loc.Related != nil && loc.Related.StaffCode == "" {
+		return ErrTaskRelatedNoStaff
+	}
+	return nil
 }
 
 // dieuKienTimNhiemVu is the free-text predicate, built with the placeholder already chosen.
@@ -359,6 +397,28 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		dieuKien += " AND " + dieuKienTreHan
 	}
 
+	if !loc.DueSoonFrom.IsZero() {
+		// §3's "Sắp đến hạn": the CURRENT commitment (`han_xu_ly`, after any approved extension —
+		// the same column the late filter reads) falls inside (from, until], and the work is not
+		// finished. `ngay_hoan_thanh IS NULL` is the same "not finished" dieuKienTreHan uses; a
+		// `chuyen-tiep` row is unfinished and so is included.
+		//
+		// BOTH ENDS ARE BOUND VALUES from the handler, not now(): `from` is the asOf identity
+		// computed `until` for, so the window is one instant wide at its start. The late filter
+		// reads the database clock; the two differ by the app/DB clock skew, which is why a task at
+		// the exact boundary is decided by `>` here and `<` there rather than both claiming it.
+		args = append(args, loc.DueSoonFrom)
+		from := "$" + strconv.Itoa(len(args)+1)
+		args = append(args, loc.DueSoonUntil)
+		until := "$" + strconv.Itoa(len(args)+1)
+		dieuKien += " AND han_xu_ly IS NOT NULL AND ngay_hoan_thanh IS NULL" +
+			" AND han_xu_ly > " + from + " AND han_xu_ly <= " + until
+	}
+
+	if loc.Related != nil {
+		dieuKien += relatedCondition(loc.Related, &args)
+	}
+
 	if loc.Metric != "" {
 		// THE FIGURE'S OWN PREDICATE, NOT A LOOK-ALIKE — see task_summary.go. ANDed with every other
 		// filter, so the page equals the figure only when no other filter narrows it.
@@ -367,6 +427,58 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		dieuKien += extra
 	}
 	return dieuKien, args
+}
+
+// relatedCondition is §3's "Liên quan đến tôi" — "tôi giao, tôi theo dõi, tôi đã xử lý, hoặc bộ
+// phận tôi đang giữ" — as ONE OR over bound values, appended to args.
+//
+// THE CLAUSES, and where each comes from (vigov-require 0053854, tasks/repository.py `_mine_clause`,
+// read against this schema):
+//
+//	nguoi_thuc_hien_ma       I hold it. require includes the assignee in "involved" too, so the
+//	                         `related` tab is a SUPERSET of `mine`, never a different list.
+//	lanh_dao_giao_viec_ma    "tôi giao" — the leader named as having handed it out
+//	nguoi_tao_ma             "tôi giao" as require spells it (`created_by`): the officer who
+//	                         entered the assignment. Both are kept; either is "I gave this out".
+//	chuyen_vien_theo_doi_ma  "tôi theo dõi"
+//	nhat_ky_nhiem_vu         "tôi đã xử lý" — I wrote an entry on its timeline (require: a progress
+//	                         report of mine). Every act on a task writes one there as its actor, so
+//	                         a status move or a manual log entry by me counts. The timeline is
+//	                         append-only (migration 0006) — no soft-delete column to filter.
+//	bo_phan_id,              "bộ phận tôi đang giữ" — held by, or led by, one of my live units
+//	co_quan_chu_tri_id       (require matches both org_unit_id and lead_org_unit_id). NO units →
+//	                         the clause is ABSENT, which matches nothing, never every unit.
+//
+// ALL COLUMNS ARE STAFF BUSINESS CODES OR UNIT ids — no personal data (rule 3). The timeline clause is
+// `id IN (…)` rather than a correlated EXISTS so the outer `id` binds to the task relation under both
+// shapes DanhSach reads (`nhiem_vu` and the aliased due-sort table) without naming either.
+//
+// ⚠ NO INDEX SERVES `nhat_ky_nhiem_vu.nguoi_ma`; the subquery scans this commune's timeline rows.
+// Bounded by one commune and affordable today; an index is a migration this pass does not own.
+func relatedCondition(r *TaskRelatedScope, args *[]any) string {
+	*args = append(*args, r.StaffCode)
+	me := "$" + strconv.Itoa(len(*args)+1) // $1 is the commune
+	clauses := []string{
+		"nguoi_thuc_hien_ma = " + me,
+		"lanh_dao_giao_viec_ma = " + me,
+		"nguoi_tao_ma = " + me,
+		"chuyen_vien_theo_doi_ma = " + me,
+		"id IN (SELECT nk.nhiem_vu_id FROM nhat_ky_nhiem_vu nk WHERE nk.tenant_id = $1 AND nk.nguoi_ma = " + me + ")",
+	}
+	if len(r.OrgUnits) > 0 {
+		var b strings.Builder
+		b.WriteString("(")
+		for i, u := range r.OrgUnits {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			*args = append(*args, u)
+			b.WriteString("$" + strconv.Itoa(len(*args)+1))
+		}
+		b.WriteString(")")
+		clauses = append(clauses, "bo_phan_id IN "+b.String(), "co_quan_chu_tri_id IN "+b.String())
+	}
+	return " AND (" + strings.Join(clauses, " OR ") + ")"
 }
 
 // dieuKienTreHan is THE ONE SQL SPELLING of domain.NhiemVu.TreHan. Two readers use it: the
@@ -455,6 +567,9 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 	if err := validateTaskMetric(loc); err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
+	if err := validateTaskListScope(loc); err != nil {
+		return page.NewResult[domain.NhiemVu](), err
+	}
 	// An ascending `due_at` request arrives parsed against SapXepNhiemVu (the list tools/apidoc
 	// reads), naming the DESCENDING key; switch it to the ascending one before anything else.
 	yc, err := forDueDirection(yc)
@@ -509,6 +624,9 @@ func (s *NhiemVuStore) CountByStatus(ctx context.Context, loc LocNhiemVu) (
 	map[domain.TrangThaiNhiemVu]int, error) {
 
 	if err := validateTaskMetric(loc); err != nil {
+		return nil, err
+	}
+	if err := validateTaskListScope(loc); err != nil {
 		return nil, err
 	}
 	dieuKien, args := locNhiemVuThanhSQL(loc)

@@ -42,7 +42,9 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
@@ -420,16 +422,12 @@ const QuyenDocNhiemVu authz.Perm = "task.read"
 // allowed, and it is not an identity claim: an account that may read the register may read all of
 // it, so naming a colleague narrows the page rather than widening any right.
 //
-// # TWO OF §3'S FILTERS ARE REFUSED RATHER THAN IGNORED, AND THAT IS THE POINT
+// # TWO OF §3'S FILTERS ASK IDENTITY FIRST, AND NEITHER FALLS BACK
 //
-// A filter silently dropped returns a page that answers a DIFFERENT question from the one the
-// screen asked, and the screen has no way to know — which on this surface means an officer
-// believing they are looking at every task of one kind. Both refusals name what is missing:
-//
-//	scope=related  needs "bộ phận tôi đang giữ", and the staff principal carries no department
-//	soon=true      needs the commune's own `sla.gio_sap_den_han`, which identity exposes no RPC for
-//
-// See locNhiemVuTuQuery.
+// `scope=related` asks identity for the caller's own unit(s) (StaffOrgUnits) and `soon=true` for
+// the commune's due-soon cutoff (ResolveDueSoonCutoff). A failure is never "drop the filter" — that
+// returns a page answering a different question, with nothing on screen to say so. See
+// taskFilterFromRequest for the status each failure answers.
 func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -550,23 +548,40 @@ func taskListIncludeFromQuery(q map[string][]string) (bool, error) {
 	return false, nil
 }
 
-// taskFilterFromRequest turns the query string into the store's filter, resolving `scope=mine` from
-// the SESSION. It writes the refusal itself and reports false when it did.
+// taskFilterNeeds names the parts of the filter locNhiemVuTuQuery may NOT fill in, because they come
+// from the session or from identity and that function has neither.
+type taskFilterNeeds struct {
+	mine    bool // `scope=mine`    — the caller's own code, from the session
+	related bool // `scope=related` — the caller's own code AND units (identity StaffOrgUnits)
+	soon    bool // `soon=true`     — the commune's cutoff (identity ResolveDueSoonCutoff)
+}
+
+// taskFilterFromRequest turns the query string into the store's filter, resolving `scope=mine` and
+// `scope=related` from the SESSION and `soon=true` from identity. It writes the refusal itself and
+// reports false when it did.
 //
 // ONE FUNCTION FOR BOTH ROUTES THAT TAKE THESE FILTERS — the register list and the per-status
 // counts. The count over a Kanban column must be the count of the cards under it, so both routes
 // must turn one query string into one filter; two copies of this would drift at the first new filter.
+//
+// # WHAT EACH IDENTITY FAILURE ANSWERS — NONE OF THEM IS AN EMPTY OR UNFILTERED PAGE
+//
+//	ErrDueSoonNotConfigured  409 `due_soon_not_configured` — the commune has set no threshold. A
+//	                         configuration fact, not a fault; never 72 hours (rule 10, forbidden #3)
+//	anything else            503 `task_filter_unavailable` — the answer was not obtained. Retryable
+//	                         when identity was unreachable; the same 503 for a broken contract,
+//	                         because the client can do nothing different either way
 func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 	q map[string][]string) (petstore.LocNhiemVu, bool) {
 
 	ctx := r.Context()
-	loc, canChuThe, err := locNhiemVuTuQuery(q)
+	loc, needs, err := locNhiemVuTuQuery(q)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return loc, false
 	}
 
-	if canChuThe {
+	if needs.mine || needs.related {
 		// FAIL CLOSED. With no business code to compare against, the honest answers are "refuse" and
 		// "return the whole register" — and the second is a screen labelled `Giao cho tôi` showing
 		// every task in the commune, which nobody would report as a fault. An empty `.Ma` on a staff
@@ -574,23 +589,65 @@ func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 		// routes next door treat the same condition.
 		principal, ok := authz.From(ctx)
 		if !ok || principal.Ma == "" {
-			h.d.Log.Error("bộ lọc `scope=mine` chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
+			h.d.Log.Error("bộ lọc phạm vi của tôi chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
 				"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path)
 			httpx.WriteError(w, http.StatusInternalServerError, "internal",
 				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 			return loc, false
 		}
-		loc.NguoiThucHienMa = principal.Ma
+		if needs.mine {
+			loc.NguoiThucHienMa = principal.Ma
+		}
+		if needs.related {
+			// THE CALLER'S OWN CODE, FROM THE SESSION — StaffOrgUnits' contract (rule 4, invariant 2
+			// in its staff form). The answer NARROWS this list and grants nothing (rule 5).
+			units, err := h.d.TaskFilterIdentity.StaffOrgUnits(ctx, principal.Ma)
+			if err != nil {
+				h.taskFilterUnavailable(w, r, "không lấy được bộ phận của người đăng nhập", err)
+				return loc, false
+			}
+			loc.Related = &petstore.TaskRelatedScope{StaffCode: principal.Ma, OrgUnits: units}
+		}
+	}
+
+	if needs.soon {
+		// ONE `now` FOR BOTH ENDS OF THE WINDOW: it is the asOf identity walks the working hours from,
+		// and the lower bound the store compares against — so no task falls between the two.
+		now := time.Now().UTC()
+		cutoff, err := h.d.TaskFilterIdentity.DueSoonCutoff(ctx, identityv1.WorkKind_WORK_KIND_NHIEM_VU,
+			// "" IS THE DEFAULT ROW, and a real request: a task carries no field (linh_vuc).
+			"", now)
+		switch {
+		case errors.Is(err, identityclient.ErrDueSoonNotConfigured):
+			httpx.WriteError(w, http.StatusConflict, "due_soon_not_configured",
+				"Xã chưa cấu hình ngưỡng sắp đến hạn cho nhiệm vụ, nên chưa lọc được việc sắp đến hạn. "+
+					"Vui lòng cấu hình tại Cấu hình → Thời hạn xử lý.", "")
+			return loc, false
+		case err != nil:
+			h.taskFilterUnavailable(w, r, "không lấy được ngưỡng sắp đến hạn của xã", err)
+			return loc, false
+		}
+		loc.DueSoonFrom, loc.DueSoonUntil = now, cutoff
 	}
 	return loc, true
+}
+
+// taskFilterUnavailable answers a filter identity could not resolve. WARN, like every identity
+// refusal in this service — this process is healthy, and the wrapped chain carries only the gRPC
+// status core/identityclient already logged (no staff code, no personal data).
+func (h *Handler) taskFilterUnavailable(w http.ResponseWriter, r *http.Request, what string, err error) {
+	h.d.Log.Warn("CẢNH BÁO: từ chối lọc danh sách nhiệm vụ — "+what,
+		"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path, "err", err)
+	httpx.WriteError(w, http.StatusServiceUnavailable, "task_filter_unavailable",
+		"Chưa áp dụng được bộ lọc này nên chưa hiện danh sách. Vui lòng thử lại sau ít phút.", "")
 }
 
 // locNhiemVuTuQuery validates the filters. EVERY VALUE BECOMES A BOUND PARAMETER in the store;
 // nothing here builds SQL.
 //
-// The second return value says whether the caller asked for `Giao cho tôi` — the one filter whose
-// value this function may NOT fill in, because it comes from the session and this function has no
-// context.
+// The second return value names the filters whose values this function may NOT fill in — `Giao cho
+// tôi`, `Liên quan đến tôi` and `Sắp đến hạn` — because they come from the session or from identity
+// and this function has neither (taskFilterNeeds).
 //
 // AN UNKNOWN `status` OR `source` IS REFUSED RATHER THAN IGNORED, for the reason the handler above
 // states at length.
@@ -601,7 +658,7 @@ func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
 // handler (rule 2, forbidden #2). A code that matches nothing returns an empty page, which is a true
 // answer — and the database already refuses an invalid `type` or `priority` on the WRITE path
 // through a real foreign key, which is where that check belongs.
-func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error) {
+func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, taskFilterNeeds, error) {
 	lay := func(k string) string {
 		if v, ok := q[k]; ok && len(v) > 0 {
 			return v[0]
@@ -610,19 +667,19 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	}
 
 	var (
-		loc       petstore.LocNhiemVu
-		canChuThe bool
+		loc   petstore.LocNhiemVu
+		needs taskFilterNeeds
 	)
 
 	if s := lay("status"); s != "" {
 		if !domain.TrangThaiNhiemVu(s).HopLe() {
-			return loc, false, errTrangThaiNhiemVuKhongHopLe
+			return loc, needs, errTrangThaiNhiemVuKhongHopLe
 		}
 		loc.TrangThai = s
 	}
 	if s := lay("source"); s != "" {
 		if !domain.NguonGiao(s).HopLe() {
-			return loc, false, errNguonGiaoKhongHopLe
+			return loc, needs, errNguonGiaoKhongHopLe
 		}
 		loc.NguonGiao = s
 	}
@@ -634,7 +691,7 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	loc.NguoiThucHienMa = lay("assignee")
 	loc.Tim = lay("q")
 	if len(loc.Tim) > petstore.TimNhiemVuToiDa {
-		return loc, false, petstore.ErrTimNhiemVuQuaDai
+		return loc, needs, petstore.ErrTimNhiemVuQuaDai
 	}
 
 	// §5.10: the DIRECT children of one task, named by its register number. NOT VALIDATED AGAINST
@@ -644,7 +701,7 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	// issued number can have, so the value cannot become a payload.
 	loc.ParentCode = lay("parent")
 	if len([]rune(loc.ParentCode)) > domain.MaNhiemVuToiDa {
-		return loc, false, errParentCodeTooLong
+		return loc, needs, errParentCodeTooLong
 	}
 
 	// `late=true` IS THE ONLY ACCEPTED SPELLING, and anything else is refused rather than read as
@@ -652,39 +709,34 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	// the whole register while the box on their screen is ticked.
 	if s := lay("late"); s != "" {
 		if s != "true" {
-			return loc, false, errLocTreHanNhiemVuKhongHopLe
+			return loc, needs, errLocTreHanNhiemVuKhongHopLe
 		}
 		loc.ChiTreHan = true
 	}
 
-	// §3's "Sắp đến hạn" checkbox. REFUSED, WITH THE REASON, RATHER THAN IMPLEMENTED AGAINST 72.
-	//
-	// The threshold is per commune — `sla.gio_sap_den_han`, keyed by (tenant_id, loai_viec,
-	// linh_vuc) at service-identity/migrations/0008_sla.sql:178, :218 — and identity publishes no
-	// RPC that returns it (ADR 0029 §118). The "mặc định 72 giờ" in §3 is the DEFAULT A COMMUNE
-	// OVERRIDES, and hard-coding it here would create the second source of one number that the
-	// BA/PM note calls out by name: every screen showing "sắp đến hạn" must read that one column.
-	if lay("soon") != "" {
-		return loc, false, errLocSapDenHanChuaCo
+	// §3's "Sắp đến hạn" checkbox. `soon=true` IS THE ONLY ACCEPTED SPELLING, for the reason `late`
+	// has one. The window itself is resolved by taskFilterFromRequest from identity, which walks the
+	// commune's own `sla.gio_sap_den_han` in working hours — the "mặc định 72 giờ" of §3 is a
+	// commune's default to override, and no copy of it lives in this service.
+	if s := lay("soon"); s != "" {
+		if s != "true" {
+			return loc, needs, errTaskSoonInvalid
+		}
+		needs.soon = true
 	}
 
 	// §3's scope tabs. `all` is the default and needs no predicate.
 	switch s := lay("scope"); s {
 	case "", "all":
 	case "mine":
-		canChuThe = true
+		needs.mine = true
 	case "related":
-		// REFUSED, WITH THE REASON. Three of §3's four clauses are expressible here; the fourth —
-		// "bộ phận tôi đang giữ" — needs the caller's own department, and the staff principal does
-		// not carry one: proto/vigov/identity/v1/identity.proto returns no `bo_phan` and explains at
-		// §1283-1297 why that message is deliberately narrow. Rule 2, stop condition #2.
-		//
-		// ANSWERING WITH THE THREE CLAUSES WOULD BE WORSE THAN REFUSING: an officer whose department
-		// holds a task would not see it on the tab named for exactly that, and a short list reports
-		// nothing.
-		return loc, false, errPhamViChuaHoTro
+		// "tôi giao, tôi theo dõi, tôi đã xử lý, hoặc bộ phận tôi đang giữ" — all four clauses, the
+		// last from identity's StaffOrgUnits (petstore.relatedCondition lists them). Never three of
+		// them: a tab missing the department's work reports nothing.
+		needs.related = true
 	default:
-		return loc, false, errPhamViKhongHopLe
+		return loc, needs, errTaskScopeInvalid
 	}
 
 	// `che_do_xem` (Kanban / Danh sách / Sổ theo dõi) IS DELIBERATELY NOT READ. It chooses a LAYOUT
@@ -694,10 +746,10 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	// The overview drill-down (`metric`, plus `from`/`to` for a period figure) — summary.go. ANDed with
 	// every filter above; absent, it changes nothing.
 	if err := parseTaskMetric(q, &loc); err != nil {
-		return loc, false, err
+		return loc, needs, err
 	}
 
-	return loc, canChuThe, nil
+	return loc, needs, nil
 }
 
 var (
@@ -707,11 +759,14 @@ var (
 		"`source` không phải một trong bốn nguồn giao việc")
 	errLocTreHanNhiemVuKhongHopLe = errors.New(
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
+	// errPhamViKhongHopLe is now the PETITION list's unknown-scope refusal only (xu_ly_phan_anh.go):
+	// that list still takes `all` and `mine`. The task list accepts `related` too — errTaskScopeInvalid.
 	errPhamViKhongHopLe = errors.New(
 		"`scope` chỉ nhận `all` hoặc `mine`")
-	errPhamViChuaHoTro = errors.New(
-		"`scope=related` chưa dùng được: bộ lọc này cần bộ phận của chính người đăng nhập, " +
-			"mà hợp đồng phiên cán bộ hiện không trả về bộ phận")
+	errTaskScopeInvalid = errors.New(
+		"`scope` chỉ nhận `all`, `mine` hoặc `related`")
+	errTaskSoonInvalid = errors.New(
+		"`soon` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc việc sắp đến hạn")
 	errParentCodeTooLong = fmt.Errorf(
 		"`parent` là mã nhiệm vụ của việc cha (ví dụ NV19), tối đa %d ký tự", domain.MaNhiemVuToiDa)
 	errTaskIncludeInvalid = errors.New(
@@ -719,9 +774,6 @@ var (
 	// errDocumentsBlockMissing never reaches a client (it becomes the generic 500).
 	errDocumentsBlockMissing = errors.New(
 		"danh sách nhiệm vụ: kho không trả khối văn bản cho một nhiệm vụ đã hỏi")
-	errLocSapDenHanChuaCo = errors.New(
-		"`soon` chưa dùng được: ngưỡng `sắp đến hạn` là số giờ của từng xã trong bảng `sla`, " +
-			"và chưa có đường đọc số ấy — máy chủ không tự đặt một con số thay xã")
 )
 
 // --- one task ------------------------------------------------------------------------------------

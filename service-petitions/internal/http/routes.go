@@ -29,9 +29,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -166,6 +168,22 @@ type (
 		// asked id comes back with a non-nil slice. On this interface and not on NhiemVuDoc because
 		// it is the list's projection, bound to the same page the list just read.
 		DocumentsForTasks(ctx context.Context, taskIDs []string) (map[string][]domain.NhiemVuVanBan, error)
+	}
+
+	// TaskFilterIdentity is what the task list's two identity-backed filters ask identity, for
+	// GET /api/v1/tasks and GET /api/v1/task-counts. *identityclient.Client satisfies it as it is.
+	//
+	//	DueSoonCutoff  `soon=true` — the commune's own "sắp đến hạn" threshold, walked in WORKING
+	//	               hours by identity (ADR 0007, 0029). Never a number held here.
+	//	StaffOrgUnits  `scope=related` — the caller's OWN live unit(s), by the session's business code.
+	//	               It NARROWS a list; it grants nothing and must never guard a write (rule 5).
+	//
+	// ONE CALL EACH PER REQUEST, never per row, and neither answer is cached (rule 1: a process
+	// cache keyed without the commune serves one commune's answer to another).
+	TaskFilterIdentity interface {
+		DueSoonCutoff(ctx context.Context, kind identityv1.WorkKind, linhVuc string, asOf time.Time) (
+			time.Time, error)
+		StaffOrgUnits(ctx context.Context, staffCode string) ([]string, error)
 	}
 
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
@@ -429,6 +447,9 @@ type Deps struct {
 	NhiemVu         NhiemVuDoc
 	DanhSachNhiemVu NhiemVuDanhSach
 
+	// Identity's two answers behind `soon=true` and `scope=related` on the task list and counts.
+	TaskFilterIdentity TaskFilterIdentity
+
 	// The approval queue of extension requests (§5.8) — a read over `de_nghi_lui_han` joined to its
 	// task. The two extension WRITES stay on GhiNhiemVu below.
 	DeNghiChoDuyet DeNghiLuiHanChoDuyetDoc
@@ -514,6 +535,9 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
 	case d.DanhSachNhiemVu == nil:
 		panic("petitions/http: thiếu đường đọc danh sách nhiệm vụ — GET /api/v1/tasks sẽ panic khi có người gọi")
+	case d.TaskFilterIdentity == nil:
+		panic("petitions/http: thiếu đường hỏi identity cho bộ lọc nhiệm vụ — `soon=true` và `scope=related` " +
+			"trên GET /api/v1/tasks sẽ panic khi có người gọi")
 	case d.DeNghiChoDuyet == nil:
 		panic("petitions/http: thiếu đường đọc hàng chờ duyệt lùi hạn — GET /api/v1/task-extensions sẽ panic khi có người gọi")
 	case d.GhiNhiemVu == nil:
@@ -1051,14 +1075,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST /api/v1/tasks/{ma}/assignment, below. PATCH still cannot move `bo_phan_id` or
 	// `nguoi_thuc_hien_ma` — folding it in would hand assignment to every holder of `task.update`.
 
-	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)
 	// @screen   02-nhiem-vu §3, §4, §5.10
-	// 400 covers a filter the server REFUSES rather than ignores, and two of those refusals are not
-	// bad input at all — they are missing contracts, answered with a sentence naming what is
-	// missing instead of a page that answers a different question:
+	// 400 covers a filter the server REFUSES rather than ignores.
 	//
-	//	scope=related  needs the caller's own department; the staff principal carries none
-	//	soon=true      needs the commune's own `sla.gio_sap_den_han`; identity exposes no RPC for it
+	// `soon=true` and `scope=related` ASK IDENTITY FIRST (taskFilterFromRequest), and neither falls
+	// back to a page without the filter:
+	//
+	//	409 due_soon_not_configured  `soon=true` in a commune that has set no due-soon threshold
+	//	503 task_filter_unavailable  identity did not answer either question
 	//
 	// `parent=<register number>` lists the DIRECT children of that task; a number matching nothing
 	// in this commune is an empty page, the same answer a childless task gets. `sort=due_at` puts the
@@ -1075,7 +1100,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/tasks",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachNhiemVu)))
@@ -1088,9 +1115,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// A top-level `task-counts` and not `tasks/counts`, which `tasks/{ma}` would read as a task
 	// numbered `counts`. ALL SEVEN codes, zeros included, in the codes' default order.
 	//
-	// 400 is the list's own set of refusals, with the same sentences; paging parameters are ignored.
-	// 401 is RequirePermission's answer to no session AND to a session of another commune. NO idem.*
-	// DECLARATION: a GET changes no state. NO AUDIT ENTRY: counts, no personal data.
+	// 400, 409 and 503 are the list's own refusals, with the same sentences; paging parameters are
+	// ignored. 401 is RequirePermission's answer to no session AND to a session of another commune.
+	// NO idem.* DECLARATION: a GET changes no state. NO AUDIT ENTRY: counts, no personal data.
 	//
 	// @summary  Số nhiệm vụ theo từng trạng thái, cùng bộ lọc với danh sách nhiệm vụ — số thật trên đầu mỗi cột Kanban
 	// @screen   02-nhiem-vu §4.1
@@ -1098,7 +1125,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/task-counts",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.TaskCounts)))

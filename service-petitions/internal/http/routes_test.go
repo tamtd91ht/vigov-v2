@@ -220,6 +220,9 @@ type mayChu struct {
 	taskSummary   *taskSummaryFake
 	reportSummary *citizenReportSummaryFake
 	overdue       *overdueQueueFake
+
+	// filterIdentity answers `soon=true` and `scope=related` — task_filter_identity_test.go.
+	filterIdentity *taskFilterIdentityFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -260,6 +263,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	taskSummary := taskSummarySample()
 	reportSummary := citizenReportSummarySample()
 	overdue := overdueQueueSample()
+	filterIdentity := taskFilterIdentitySample()
 
 	m := &mayChu{
 		d: Deps{
@@ -298,6 +302,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			NhatKyPhieu:          nhatKy,
 			NhiemVu:              nhiemVu,
 			DanhSachNhiemVu:      nhiemVu,
+			TaskFilterIdentity:   filterIdentity,
 			DeNghiChoDuyet:       deNghiCho,
 			GhiNhiemVu:           ghiNhiemVu,
 			DanhSachBienBan:      bienBan,
@@ -325,6 +330,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		taskSummary:   taskSummary,
 		reportSummary: reportSummary,
 		overdue:       overdue,
+
+		filterIdentity: filterIdentity,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -411,12 +418,13 @@ func depsDay() Deps {
 		XuLyPhieu:           &xuLyPhieuGia{},
 		NhatKyPhieu:         nhatKyMau(),
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
-		NhiemVu:         nhiemVuMau(),
-		DanhSachNhiemVu: nhiemVuMau(),
-		DeNghiChoDuyet:  deNghiChoDuyetMau(),
-		GhiNhiemVu:      &ghiNhiemVuGia{},
-		DanhSachBienBan: bienBanMau(),
-		GhiBienBan:      &ghiBienBanGia{},
+		NhiemVu:            nhiemVuMau(),
+		DanhSachNhiemVu:    nhiemVuMau(),
+		TaskFilterIdentity: taskFilterIdentitySample(),
+		DeNghiChoDuyet:     deNghiChoDuyetMau(),
+		GhiNhiemVu:         &ghiNhiemVuGia{},
+		DanhSachBienBan:    bienBanMau(),
+		GhiBienBan:         &ghiBienBanGia{},
 		// The leadership overview.
 		TaskSummary:          taskSummarySample(),
 		CitizenReportSummary: citizenReportSummarySample(),
@@ -460,6 +468,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu kho nhiệm vụ":                 func(d *Deps) { d.NhiemVu = nil },
 		"thiếu đường đọc danh sách nhiệm vụ": func(d *Deps) { d.DanhSachNhiemVu = nil },
 		"thiếu đường đọc hàng chờ lùi hạn":   func(d *Deps) { d.DeNghiChoDuyet = nil },
+		// `soon=true` and `scope=related`: a nil here panics on the first officer who ticks the box.
+		"thiếu đường hỏi identity cho bộ lọc nhiệm vụ": func(d *Deps) { d.TaskFilterIdentity = nil },
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },

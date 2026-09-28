@@ -245,6 +245,9 @@ func chay(log *slog.Logger) error {
 		// layer here would carry nothing.
 		NhiemVu:         nhiemVu,
 		DanhSachNhiemVu: nhiemVu,
+		// `soon=true` and `scope=related` on the task list and counts ask identity — the SAME client
+		// every other identity question here uses, so they agree about identity's health.
+		TaskFilterIdentity: dinhDanh,
 		// The approval queue of extension requests (§5.8) — the SAME store the two extension acts
 		// write through, so the queue lists exactly the rows those acts leave pending.
 		DeNghiChoDuyet: deNghiLuiHan,

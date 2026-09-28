@@ -4520,7 +4520,9 @@ export type petitions_get_task_counts = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -4758,7 +4760,7 @@ export type petitions_delete_task_types_by_id = {
   };
 };
 
-/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) */
+/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) */
 export type petitions_get_tasks = {
   duongDan: "/api/v1/tasks";
   phuongThuc: "GET";
@@ -4792,7 +4794,9 @@ export type petitions_get_tasks = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

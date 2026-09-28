@@ -2964,7 +2964,9 @@
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },
@@ -3233,7 +3235,7 @@
       "path": "/api/v1/tasks",
       "operation_id": "petitions_get_tasks",
       "task_id": "cc3579e36137",
-      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)",
+      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)",
       "screen": "02-nhiem-vu §3, §4, §5.10",
       "permission_kind": "permission",
       "permission": "task.read",
@@ -3243,7 +3245,9 @@
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },

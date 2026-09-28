@@ -25,6 +25,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
@@ -379,6 +380,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		NhatKyPhieu:     petstore.NewPhieuPhanAnhStore(nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
+		// A typed nil client: never invoked here (no request sends `soon` or `scope=related`), and
+		// Register refuses a nil interface. Own suite: internal/http/task_filter_identity_test.go.
+		TaskFilterIdentity: (*identityclient.Client)(nil),
 		// Never invoked here; Register refuses a nil. Own suite:
 		// internal/http/de_nghi_lui_han_cho_duyet_test.go.
 		DeNghiChoDuyet: petstore.NewDeNghiLuiHanStore(nil),

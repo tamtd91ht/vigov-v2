@@ -560,6 +560,7 @@ func TestDanhSachNhiemVuBoLocKhongHopLeBiTuChoiChuKhongBiBoQua(t *testing.T) {
 		"nguồn giao bịa":                       "?source=excel",
 		"ô trễ hạn gửi `1` thay vì `true`":     "?late=1",
 		"phạm vi bịa":                          "?scope=toan-quoc",
+		"ô sắp đến hạn gửi `1` thay vì `true`": "?soon=1",
 	} {
 		t.Run(ten, func(t *testing.T) {
 			m := dungMayChu(t)
@@ -567,36 +568,6 @@ func TestDanhSachNhiemVuBoLocKhongHopLeBiTuChoiChuKhongBiBoQua(t *testing.T) {
 			doiMa(t, w, http.StatusBadRequest)
 			if m.nhiemVu.goi != 0 {
 				t.Errorf("chạy %d truy vấn dù bộ lọc bị từ chối", m.nhiemVu.goi)
-			}
-		})
-	}
-}
-
-// TestHaiBoLocChuaCoDuongDocThiNoiThangRaChuKhongDoanBua is the pair this pass refuses on purpose.
-//
-// Both need a number or a field that no contract exposes today, and both would be trivially easy to
-// fake: 72 hours is written in §3, and three of `related`'s four clauses are expressible. Faking
-// either produces a screen that is wrong and silent — a "sắp đến hạn" list measured against a
-// threshold no commune chose, or a "Liên quan đến tôi" tab missing the tasks the officer's own
-// department holds.
-func TestHaiBoLocChuaCoDuongDocThiNoiThangRaChuKhongDoanBua(t *testing.T) {
-	for ten, tr := range map[string]struct{ truyVan, chua string }{
-		"sắp đến hạn":       {"?soon=true", "sla"},
-		"liên quan đến tôi": {"?scope=related", "bộ phận"},
-	} {
-		t.Run(ten, func(t *testing.T) {
-			m := dungMayChu(t)
-			w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks"+tr.truyVan, canBoCuaXa(xaA))
-
-			doiMa(t, w, http.StatusBadRequest)
-			if m.nhiemVu.goi != 0 {
-				t.Errorf("chạy %d truy vấn cho một bộ lọc chưa cài đặt được", m.nhiemVu.goi)
-			}
-			// THE MESSAGE HAS TO NAME WHAT IS MISSING. A bare "invalid_request" here reads as "the
-			// client sent rubbish", and the next person to see it re-implements the filter with a
-			// guessed constant.
-			if e := loiTra(t, w); !strings.Contains(e.Message, tr.chua) {
-				t.Errorf("thông báo không nói thiếu gì (%q): %q", tr.chua, e.Message)
 			}
 		})
 	}

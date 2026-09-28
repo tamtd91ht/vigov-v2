@@ -60,9 +60,10 @@ type taskStatusCountOut struct {
 func (h *Handler) TaskCounts(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// THE LIST'S OWN FILTER PARSING, refusals included: an unknown status, `scope=related`, `soon`,
-	// a malformed metric period — each is the same 400 with the same sentence the list gives, before
-	// any statement runs.
+	// THE LIST'S OWN FILTER PARSING, refusals included: an unknown status, a malformed `soon`, a
+	// malformed metric period — each is the same 400 with the same sentence the list gives, before
+	// any statement runs; and `soon=true` / `scope=related` ask identity exactly as the list does
+	// (409 / 503 on the same conditions).
 	loc, ok := h.taskFilterFromRequest(w, r, r.URL.Query())
 	if !ok {
 		return
