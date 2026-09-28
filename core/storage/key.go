@@ -63,11 +63,15 @@ const (
 	PurposeTenantLogo        Purpose = "tenant-logo"        // commune display-profile logo (platform)
 	PurposePetitionPhoto     Purpose = "petition-photo"     // scene photo on a petition (petitions) — blocked on ADR 0052 §12
 	PurposeDocumentScan      Purpose = "document-scan"      // scan of an administrative document (documents)
+	// File attached to a task log entry (petitions; Nhiệm vụ §5.9 "Đính kèm"). Staff-uploaded work
+	// evidence on an administrative task, so its key class is ClassRecords — never auto-purged.
+	PurposeTaskAttachment Purpose = "task-attachment"
 )
 
 var knownPurposes = map[Purpose]bool{
 	PurposeContentVideo: true, PurposeContentImage: true, PurposeContentAttachment: true,
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
+	PurposeTaskAttachment: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

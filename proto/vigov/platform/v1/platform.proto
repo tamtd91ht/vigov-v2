@@ -284,6 +284,7 @@ enum UploadPurpose {
   UPLOAD_PURPOSE_TENANT_LOGO = 4;         // commune display-profile logo (platform)
   UPLOAD_PURPOSE_PETITION_PHOTO = 5;      // scene photo on a petition (petitions) — ADR 0052 §12
   UPLOAD_PURPOSE_DOCUMENT_SCAN = 6;       // scan of an administrative document (documents)
+  UPLOAD_PURPOSE_TASK_ATTACHMENT = 7;     // file attached to a task log entry (petitions)
 }
 
 // UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no

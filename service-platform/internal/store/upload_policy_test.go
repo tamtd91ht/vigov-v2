@@ -118,16 +118,68 @@ func purposeEnumOf(p string) (int32, bool) {
 	return v, ok && v != 0
 }
 
+var (
+	purposeCheckDefine = regexp.MustCompile(`(?s)upload_policy_purpose_known CHECK \(purpose IN \((.*?)\)\)`)
+	purposeCheckDrop   = regexp.MustCompile(`DROP CONSTRAINT (?:IF EXISTS )?upload_policy_purpose_known\b`)
+	sqlLineComment     = regexp.MustCompile(`(?m)--.*$`)
+)
+
+// currentPurposeCheck returns the value list of upload_policy_purpose_known as the LAST migration
+// touching it leaves it, and that file's name. Every migration is read in filename order (the order
+// pkg/migrate applies them), comments stripped so reversal prose cannot pose as a definition; within
+// a file the last DROP or definition wins. A trailing DROP with no re-definition fails the test: the
+// database would then hold no copy of the list at all.
+//
+// WHY NOT A FIXED FILE NAME: the constraint is re-defined by a new migration every time core/storage
+// gains a purpose (0008 is immutable once applied). A test pinned to 0008 would compare storage with
+// a list the database no longer holds — red for the right change, or green for the wrong one.
+func currentPurposeCheck(t *testing.T) (list, file string) {
+	t.Helper()
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	dropped := false
+	for _, e := range entries { // fs.ReadDir sorts by filename
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		b, err := fs.ReadFile(migrations.FS, e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		sql := sqlLineComment.ReplaceAllString(string(b), "")
+		lastDefine, lastDrop := -1, -1
+		var defineList string
+		if ms := purposeCheckDefine.FindAllStringSubmatchIndex(sql, -1); ms != nil {
+			m := ms[len(ms)-1]
+			lastDefine, defineList = m[0], sql[m[2]:m[3]]
+		}
+		if ms := purposeCheckDrop.FindAllStringIndex(sql, -1); ms != nil {
+			lastDrop = ms[len(ms)-1][0]
+		}
+		switch {
+		case lastDefine > lastDrop:
+			list, file, dropped = defineList, e.Name(), false
+		case lastDrop > lastDefine:
+			file, dropped = e.Name(), true
+		}
+	}
+	if dropped {
+		t.Fatalf("%s drops upload_policy_purpose_known without re-defining it", file)
+	}
+	if file == "" {
+		t.Fatal("purpose CHECK not found in any migration")
+	}
+	return list, file
+}
+
 // The CHECK list on upload_policy.purpose is the database's copy of the closed list; it must equal
 // core/storage's, or the operator can store a purpose nobody can use (or cannot store one they need).
 func TestUploadPolicyPurposeCheckMatchesStorage(t *testing.T) {
-	sql := readUploadPolicyMigration(t)
-	m := regexp.MustCompile(`(?s)upload_policy_purpose_known CHECK \(purpose IN \((.*?)\)\)`).FindStringSubmatch(sql)
-	if m == nil {
-		t.Fatal("purpose CHECK not found")
-	}
+	list, file := currentPurposeCheck(t)
 	var got []string
-	for _, q := range strings.Split(m[1], ",") {
+	for _, q := range strings.Split(list, ",") {
 		got = append(got, strings.Trim(strings.TrimSpace(q), "'"))
 	}
 	var want []string
@@ -136,7 +188,7 @@ func TestUploadPolicyPurposeCheckMatchesStorage(t *testing.T) {
 	}
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
-		t.Errorf("CHECK purposes = %v, core/storage = %v", got, want)
+		t.Errorf("CHECK purposes (%s) = %v, core/storage = %v — add a migration re-defining the CHECK", file, got, want)
 	}
 }
 
