@@ -683,6 +683,26 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/comms-audit-entries",
+      "operation_id": "comms_get_comms_audit_entries",
+      "task_id": "f17818bf42c6",
+      "summary": "Nhật ký hệ thống của phân hệ Thông tin – truyền thông — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
+      "screen": "14-cau-hinh §12.1",
+      "permission_kind": "permission",
+      "permission": "admin.audit",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_audit.EntryView",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/commune-news",
       "operation_id": "comms_get_commune_news",
       "task_id": "b0dbfeba1b92",
@@ -1133,6 +1153,129 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/documents-audit-entries",
+      "operation_id": "documents_get_documents_audit_entries",
+      "task_id": "e365f66890f6",
+      "summary": "Nhật ký hệ thống của phân hệ Văn bản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
+      "screen": "14-cau-hinh §12.1",
+      "permission_kind": "permission",
+      "permission": "admin.audit",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_audit.EntryView",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/finance-audit-entries",
+      "operation_id": "finance_get_finance_audit_entries",
+      "task_id": "0efad67997b0",
+      "summary": "Nhật ký hệ thống của phân hệ Tài chính — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
+      "screen": "14-cau-hinh §12.1",
+      "permission_kind": "permission",
+      "permission": "admin.audit",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_audit.EntryView",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/finance-system-messages",
+      "operation_id": "finance_get_finance_system_messages",
+      "task_id": "53b57e74f70a",
+      "summary": "Lời hệ thống của phân hệ Tài chính: câu mặc định, câu xã đang dùng và ai sửa lần cuối",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.systemMessageListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "DELETE",
+      "path": "/api/v1/finance-system-messages/{code}/override",
+      "operation_id": "finance_delete_finance_system_messages_by_code_override",
+      "task_id": "f7be014f3f42",
+      "summary": "Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Tài chính",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì",
+      "reply_schemas": {
+        "204": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "PUT",
+      "path": "/api/v1/finance-system-messages/{code}/override",
+      "operation_id": "finance_put_finance_system_messages_by_code_override",
+      "task_id": "99a6593bd150",
+      "summary": "Xã sửa lời một câu hệ thống của phân hệ Tài chính",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "finance.rewordSystemMessageIn",
+      "reply_schemas": {
+        "200": "finance.systemMessageOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/identity-audit-entries",
+      "operation_id": "identity_get_identity_audit_entries",
+      "task_id": "a14523f8d801",
+      "summary": "Nhật ký hệ thống của phân hệ Tổ chức & tài khoản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
+      "screen": "14-cau-hinh §12.1",
+      "permission_kind": "permission",
+      "permission": "admin.audit",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_audit.EntryView",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
     },
     {
       "service": "documents",
@@ -2352,6 +2495,89 @@
         "403": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/petitions-audit-entries",
+      "operation_id": "petitions_get_petitions_audit_entries",
+      "task_id": "311473428114",
+      "summary": "Nhật ký hệ thống của phân hệ Tiếp dân – Nhiệm vụ — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
+      "screen": "14-cau-hinh §12.1",
+      "permission_kind": "permission",
+      "permission": "admin.audit",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_audit.EntryView",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/petitions-system-messages",
+      "operation_id": "petitions_get_petitions_system_messages",
+      "task_id": "78e4355ec38b",
+      "summary": "Lời hệ thống của phân hệ Tiếp dân – Nhiệm vụ: câu mặc định, câu xã đang dùng và ai sửa lần cuối",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.systemMessageListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "DELETE",
+      "path": "/api/v1/petitions-system-messages/{code}/override",
+      "operation_id": "petitions_delete_petitions_system_messages_by_code_override",
+      "task_id": "34c0bf672688",
+      "summary": "Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì",
+      "reply_schemas": {
+        "204": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "PUT",
+      "path": "/api/v1/petitions-system-messages/{code}/override",
+      "operation_id": "petitions_put_petitions_system_messages_by_code_override",
+      "task_id": "3c5641ccdbdb",
+      "summary": "Xã sửa lời một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "petitions.rewordSystemMessageIn",
+      "reply_schemas": {
+        "200": "petitions.systemMessageOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },

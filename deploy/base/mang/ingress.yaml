@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     121 tuyến của 5 dịch vụ — petitions 43 · identity 41 · finance 16 · comms 12 · documents 9
+#     130 tuyến của 5 dịch vụ — petitions 46 · identity 42 · finance 19 · comms 13 · documents 10
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -55,9 +55,9 @@ spec:
                 name: web-admin
                 port: { name: http }
     #
-    # comms — 7 tài nguyên: /api/v1/announcements · /api/v1/commune-news
-    #   /api/v1/content-categories · /api/v1/content-items · /api/v1/mail-settings
-    #   /api/v1/map-asset-types · /api/v1/map-field-schemas
+    # comms — 8 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
+    #   /api/v1/commune-news · /api/v1/content-categories · /api/v1/content-items
+    #   /api/v1/mail-settings · /api/v1/map-asset-types · /api/v1/map-field-schemas
     - host: "comms.api.vigov.vn"
       http:
         paths:
@@ -68,8 +68,9 @@ spec:
                 name: comms
                 port: { name: rest }
     #
-    # documents — 5 tài nguyên: /api/v1/document-types · /api/v1/incoming-document-overdue-queue
-    #   /api/v1/incoming-document-summary · /api/v1/incoming-documents · /api/v1/outgoing-documents
+    # documents — 6 tài nguyên: /api/v1/document-types · /api/v1/documents-audit-entries
+    #   /api/v1/incoming-document-overdue-queue · /api/v1/incoming-document-summary
+    #   /api/v1/incoming-documents · /api/v1/outgoing-documents
     - host: "documents.api.vigov.vn"
       http:
         paths:
@@ -80,9 +81,10 @@ spec:
                 name: documents
                 port: { name: rest }
     #
-    # finance — 7 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
+    # finance — 9 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
     #   /api/v1/budget-lines · /api/v1/budget-sheets · /api/v1/capital-plan-categories
-    #   /api/v1/disbursements · /api/v1/investment-projects
+    #   /api/v1/disbursements · /api/v1/finance-audit-entries · /api/v1/finance-system-messages
+    #   /api/v1/investment-projects
     - host: "finance.api.vigov.vn"
       http:
         paths:
@@ -93,11 +95,11 @@ spec:
                 name: finance
                 port: { name: rest }
     #
-    # identity — 15 tài nguyên: /api/v1/commune-staff · /api/v1/communes · /api/v1/org-units
-    #   /api/v1/public-holidays · /api/v1/residential-unit-types · /api/v1/residential-units
-    #   /api/v1/role-permissions · /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff
-    #   /api/v1/staff-directory · /api/v1/swap-working-days · /api/v1/task-blocs
-    #   /api/v1/working-hours
+    # identity — 16 tài nguyên: /api/v1/commune-staff · /api/v1/communes
+    #   /api/v1/identity-audit-entries · /api/v1/org-units · /api/v1/public-holidays
+    #   /api/v1/residential-unit-types · /api/v1/residential-units · /api/v1/role-permissions
+    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-directory
+    #   /api/v1/swap-working-days · /api/v1/task-blocs · /api/v1/working-hours
     - host: "identity.api.vigov.vn"
       http:
         paths:
@@ -108,11 +110,11 @@ spec:
                 name: identity
                 port: { name: rest }
     #
-    # petitions — 13 tài nguyên: /api/v1/citizen-report-summary · /api/v1/citizen-reports
+    # petitions — 15 tài nguyên: /api/v1/citizen-report-summary · /api/v1/citizen-reports
     #   /api/v1/meetings · /api/v1/my-citizen-reports · /api/v1/overdue-citizen-reports
-    #   /api/v1/overdue-tasks · /api/v1/task-counts · /api/v1/task-extensions
-    #   /api/v1/task-priorities · /api/v1/task-statuses · /api/v1/task-summary · /api/v1/task-types
-    #   /api/v1/tasks
+    #   /api/v1/overdue-tasks · /api/v1/petitions-audit-entries · /api/v1/petitions-system-messages
+    #   /api/v1/task-counts · /api/v1/task-extensions · /api/v1/task-priorities
+    #   /api/v1/task-statuses · /api/v1/task-summary · /api/v1/task-types · /api/v1/tasks
     - host: "petitions.api.vigov.vn"
       http:
         paths:
