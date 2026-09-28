@@ -243,3 +243,182 @@ func (s *StoredFileStore) AttachmentsByLogEntries(ctx context.Context, logEntryI
 	}
 	return out, nil
 }
+
+// ByID reads one live (not soft-deleted) row of this commune, WITHOUT a lock — the completion
+// step's pre-read (before any object-store I/O) and the download. nil means no such live row here;
+// the caller answers it exactly as it answers "not yours" (rule 4, forbidden #2).
+func (s *StoredFileStore) ByID(ctx context.Context, id string) (*domain.StoredFile, error) {
+	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file",
+		"AND id = $2 AND deleted_at IS NULL", id)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc tệp: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("stored_file: đọc tệp: %w", err)
+		}
+		return nil, nil
+	}
+	f, err := scanStoredFile(rows)
+	if err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// LinkedLogEntry returns the log entry a file is attached to, "" when it is on none. A file is on at
+// most one entry (primary key (tenant_id, stored_file_id)), so there is no list to choose from.
+func (s *StoredFileStore) LinkedLogEntry(ctx context.Context, fileID string) (string, error) {
+	rows, err := s.db.For(ctx).Query(ctx, "log_entry_id", "task_log_attachment",
+		"AND stored_file_id = $2", fileID)
+	if err != nil {
+		return "", fmt.Errorf("task_log_attachment: đọc dòng gắn tệp: %w", err)
+	}
+	defer rows.Close()
+	var entry string
+	if rows.Next() {
+		if err := rows.Scan(&entry); err != nil {
+			return "", fmt.Errorf("task_log_attachment: quét dòng gắn tệp: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("task_log_attachment: duyệt dòng gắn tệp: %w", err)
+	}
+	return entry, nil
+}
+
+// countForSubjectTail is platform's `max_files_per_subject` count (proto UploadPolicy): the files of
+// one purpose on one subject that are NOT deleted, failed, rejected — and not purged either, because
+// a purged row is one that came from failed/rejected (records are never purged, stored_file_guard),
+// and counting it would bring a refused file back into the limit.
+//
+// A `pending` / `scanning` row counts ONLY WHILE IT CAN STILL RECEIVE BYTES — created at or after
+// `pendingSince`, which the caller sets to now minus the presigned POST's lifetime. A row whose form
+// expired unused would otherwise hold one slot of the limit for ever: nothing moves an abandoned
+// upload out of `pending` (no worker; a completion call that finds nothing marks it `failed`, but only
+// if somebody makes that call).
+const countForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
+	AND deleted_at IS NULL
+	AND (status IN ('stored', 'processing', 'ready')
+	     OR (status IN ('pending', 'scanning') AND created_at >= $5))`
+
+// countStoredForSubjectTail is the same count with no `pending` row in it — the completion step's
+// re-check, where the row being completed is itself pending and must not count against itself.
+const countStoredForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
+	AND deleted_at IS NULL AND status IN ('stored', 'processing', 'ready')`
+
+// CountForSubjectTx counts inside the caller's transaction — the upload request, which holds the
+// task row FOR UPDATE, so two requests for one task are serialised and cannot both pass the limit.
+// A zero pendingSince counts no pending row at all.
+func (s *StoredFileStore) CountForSubjectTx(ctx context.Context, tx *store.ScopedTx,
+	subjectType, subjectID, purpose string, pendingSince time.Time) (int, error) {
+
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context.
+	if pendingSince.IsZero() {
+		return scanCount(tx.Query(ctx, "count(*)", "stored_file", countStoredForSubjectTail,
+			subjectType, subjectID, purpose))
+	}
+	// Same: `tenant_id = $1` is ScopedTx.Query's, never this call's.
+	return scanCount(tx.Query(ctx, "count(*)", "stored_file", countForSubjectTail,
+		subjectType, subjectID, purpose, pendingSince))
+}
+
+// CountForSubject is CountForSubjectTx outside a transaction — the completion step's pre-check,
+// which runs BEFORE the object leaves the temp bucket (a file promoted to the private bucket is a
+// `records` object and can never be purged again, so the refusal has to come first).
+func (s *StoredFileStore) CountForSubject(ctx context.Context,
+	subjectType, subjectID, purpose string, pendingSince time.Time) (int, error) {
+
+	if pendingSince.IsZero() {
+		return scanCount(s.db.For(ctx).Query(ctx, "count(*)", "stored_file", countStoredForSubjectTail,
+			subjectType, subjectID, purpose))
+	}
+	return scanCount(s.db.For(ctx).Query(ctx, "count(*)", "stored_file", countForSubjectTail,
+		subjectType, subjectID, purpose, pendingSince))
+}
+
+func scanCount(rows *sql.Rows, err error) (int, error) {
+	if err != nil {
+		return 0, fmt.Errorf("stored_file: đếm tệp: %w", err)
+	}
+	defer rows.Close()
+	var n int
+	if rows.Next() {
+		if err := rows.Scan(&n); err != nil {
+			return 0, fmt.Errorf("stored_file: quét số đếm: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("stored_file: duyệt số đếm: %w", err)
+	}
+	return n, nil
+}
+
+// MaxAttachCandidates bounds one link request's id list. A log entry can only carry files the same
+// officer uploaded for the same task, so this bounds the STATEMENT, not the business: the business
+// limit is platform's per-task count, enforced when the uploads were issued.
+const MaxAttachCandidates = 100
+
+// attachCandidatesHead is read by position in lockstep with AttachCandidates' Scan: storedFileCols,
+// then the link. `FOR UPDATE OF f`: the outer join's nullable side cannot be locked, and the file row
+// is the one a concurrent soft delete or a second link would touch.
+const attachCandidatesHead = `SELECT ` + storedFileCols + `, a.log_entry_id FROM stored_file f
+	LEFT JOIN task_log_attachment a ON a.tenant_id = $1 AND a.stored_file_id = f.id
+	WHERE f.tenant_id = $1 AND f.deleted_at IS NULL AND f.id IN (`
+
+// AttachCandidates reads the files a log entry asks to carry, INSIDE the entry's transaction, each
+// with the entry it is already on (if any), and LOCKS the file rows. Ids that match no live row of
+// this commune are simply absent from the map. Both tables are constrained to $1.
+func (s *StoredFileStore) AttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
+	map[string]domain.AttachCandidate, error) {
+
+	out := make(map[string]domain.AttachCandidate, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	if len(ids) > MaxAttachCandidates || !distinctNonEmpty(ids) {
+		return nil, ErrAttachmentList
+	}
+	marks := make([]string, 0, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, string(tx.TenantID()))
+	for i, id := range ids {
+		marks = append(marks, "$"+strconv.Itoa(i+2))
+		args = append(args, id)
+	}
+	stmt := attachCandidatesHead + strings.Join(marks, ", ") + `) FOR UPDATE OF f`
+	// $1 is tx.TenantID() and BOTH tables carry `tenant_id = $1` (attachCandidatesHead).
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, args...)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc tệp để gắn: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			c           domain.AttachCandidate
+			status      string
+			mime, sha   sql.NullString
+			size        sql.NullInt64
+			retainUntil sql.NullTime
+			linked      sql.NullString
+		)
+		f := &c.File
+		if err := rows.Scan(&f.ID, &f.Bucket, &f.ObjectKey, &f.RetentionClass, &f.Purpose,
+			&f.SubjectType, &f.SubjectID, &f.OriginalName, &mime, &size, &sha, &status, &f.UploadedBy,
+			&retainUntil, &f.LegalHold, &f.CreatedAt, &f.UpdatedAt, &linked); err != nil {
+			return nil, fmt.Errorf("stored_file: quét tệp để gắn: %w", err)
+		}
+		f.Status = domain.StoredFileStatus(status)
+		f.MIMEType, f.SizeBytes, f.SHA256 = mime.String, size.Int64, sha.String
+		if retainUntil.Valid {
+			f.RetainUntil = retainUntil.Time
+		}
+		c.LinkedTo = linked.String
+		out[f.ID] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt tệp để gắn: %w", err)
+	}
+	return out, nil
+}

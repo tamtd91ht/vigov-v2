@@ -292,6 +292,20 @@
       "source": "service-petitions/migrations/0013_nhat_ky_phan_anh.sql:76"
     },
     {
+      "entity": "PetitionsStoredFile",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "stored_file",
+      "source": "service-petitions/migrations/0021_task_log_attachment.sql:46"
+    },
+    {
+      "entity": "PetitionsSystemMessageOverride",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "system_message_override",
+      "source": "service-petitions/migrations/0020_system_message_override.sql:24"
+    },
+    {
       "entity": "PlatformAuditEntry",
       "service": "platform",
       "scope": "platform",
@@ -355,6 +369,13 @@
       "source": "service-identity/migrations/0006_lich_lam_viec.sql:259"
     },
     {
+      "entity": "SystemMessageOverride",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "system_message_override",
+      "source": "service-finance/migrations/0010_system_message_override.sql:26"
+    },
+    {
       "entity": "Task",
       "service": "petitions",
       "scope": "tenant",
@@ -388,6 +409,13 @@
       "scope": "tenant",
       "table": "task_issued_code",
       "source": "service-petitions/migrations/0015_task_issued_code.sql:111"
+    },
+    {
+      "entity": "TaskLogAttachment",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "task_log_attachment",
+      "source": "service-petitions/migrations/0021_task_log_attachment.sql:290"
     },
     {
       "entity": "TaskLogEntry",

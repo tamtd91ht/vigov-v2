@@ -265,6 +265,11 @@ type GhiNhiemVu struct {
 	// over (task_org_units.go). nil means not wired, and an act naming a unit then REFUSES.
 	orgUnits OrgUnitChecker
 
+	// files links uploaded attachments to a manual log entry (task_log_entry.go, migration 0021). nil
+	// means not wired, and an entry carrying `attachments` then REFUSES; an entry without any is
+	// unaffected.
+	files LogAttachmentLinker
+
 	// sinhID is injected so a test can pin every generated id. In production it is ulid.Moi.
 	sinhID func() (string, error)
 
@@ -279,9 +284,9 @@ type GhiNhiemVu struct {
 }
 
 func NewGhiNhiemVu(db *store.DB, kho KhoNhiemVuGhi, deNghi KhoDeNghiLuiHan,
-	giaoViec KiemCanBoGiaoViec, orgUnits OrgUnitChecker) *GhiNhiemVu {
+	giaoViec KiemCanBoGiaoViec, orgUnits OrgUnitChecker, files LogAttachmentLinker) *GhiNhiemVu {
 	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, giaoViec: giaoViec, orgUnits: orgUnits,
-		sinhID: ulid.Moi}
+		files: files, sinhID: ulid.Moi}
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the

@@ -250,8 +250,29 @@ type (
 		// AddLogEntry is the manual timeline entry (§5.9, vigov-require a37ec96). It takes the ONE fact
 		// "does the caller hold `task.update`", which only ever WIDENS to people who may already edit
 		// every task of the commune; who else may write is decided on the row (app/task_log_entry.go).
-		AddLogEntry(ctx context.Context, ma, text string, nguoi audit.Actor, update app.TaskUpdateRight) (
-			domain.NhatKyNhiemVu, error)
+		// `attachments` are completed uploads of the same officer for the same task (migration 0021),
+		// linked in the entry's transaction; the reply carries them.
+		AddLogEntry(ctx context.Context, ma, text string, attachments []string, nguoi audit.Actor,
+			update app.TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error)
+	}
+
+	// TaskAttachmentActs is §5.9's `📎 Đính kèm` — request an upload, complete it, hand out a download
+	// link (ADR 0052 §1). *app.TaskAttachments satisfies it. ITS OWN INTERFACE and not three more
+	// methods on GhiNhiemVuUseCase: its dependencies are the object store, the scanner and platform's
+	// limits, any of which may be absent in a deployment while the six task acts keep working.
+	TaskAttachmentActs interface {
+		RequestUpload(ctx context.Context, ma string, req app.AttachmentUploadRequest, nguoi audit.Actor,
+			update app.TaskUpdateRight) (app.AttachmentUpload, error)
+		Complete(ctx context.Context, ma, id string, nguoi audit.Actor, update app.TaskUpdateRight) (
+			domain.StoredFile, error)
+		DownloadLink(ctx context.Context, ma, id string, reader audit.Actor) (app.AttachmentDownload, error)
+	}
+
+	// TaskLogAttachmentReader reads the attachments of ONE PAGE of timeline entries in one statement,
+	// for GET /api/v1/tasks/{ma}/log-entries. *petstore.StoredFileStore satisfies it.
+	TaskLogAttachmentReader interface {
+		AttachmentsByLogEntries(ctx context.Context, logEntryIDs []string) (
+			map[string][]domain.TaskLogAttachment, error)
 	}
 
 	// BienBanDanhSach is the paginated read of the meeting-minutes register, for
@@ -487,6 +508,12 @@ type Deps struct {
 	// writing the row outside a transaction — the exact defect core/audit was shaped to prevent.
 	GhiNhiemVu GhiNhiemVuUseCase
 
+	// §5.9's attachments: the three acts (app.TaskAttachments — built even when object storage, the
+	// scanner or platform's limits are not configured; its routes then answer 503 and nothing else
+	// changes), and the batched read the timeline renders them from.
+	TaskAttachments    TaskAttachmentActs
+	TaskLogAttachments TaskLogAttachmentReader
+
 	// The MEETING MINUTES register — one read path in this pass (migration 0007). It is the ORIGIN
 	// of the tasks above: a conclusion is split into a task and the task keeps a permanent back-link
 	// to it through `nguon_giao`/`nguon_id`, which is why both registers live in this service.
@@ -587,6 +614,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		// in the state it was in before this pass, readable and unchangeable, while four other
 		// subsystems stand on it.
 		panic("petitions/http: thiếu use case ghi nhiệm vụ — sáu tuyến giao việc/sửa/chuyển trạng thái/xoá/lùi hạn sẽ panic khi có người gọi")
+	case d.TaskAttachments == nil:
+		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
+	case d.TaskLogAttachments == nil:
+		panic("petitions/http: thiếu đường đọc tệp đính kèm của nhật ký — GET /api/v1/tasks/{ma}/log-entries sẽ panic khi có người gọi")
 	case d.DanhSachBienBan == nil:
 		panic("petitions/http: thiếu đường đọc danh sách biên bản họp — GET /api/v1/meetings sẽ panic khi có người gọi")
 	case d.GhiBienBan == nil:
@@ -1329,8 +1360,9 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DocNhatKyNhiemVu)))
 
-	// GHI NHẬT KÝ (§5.9) — one manual entry on the task's timeline, text only (no attachments: no file
-	// store yet). Allowed on every status, `hoan-thanh` included: it appends, it moves nothing.
+	// GHI NHẬT KÝ (§5.9) — one manual entry on the task's timeline, with the officer's completed uploads
+	// as optional `attachments` (linked in the entry's transaction; the attachment routes are right
+	// below). Allowed on every status, `hoan-thanh` included: it appends, it moves nothing.
 	//
 	// `task.read` AT THE GATE, AND THAT IS vigov-require a37ec96 RATHER THAN A RELAXATION (user decision
 	// 28/09/2026). The answer to "may this person write here" depends on THIS task: the assignee and a
@@ -1367,6 +1399,86 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.read")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.AddTaskLogEntry))))
+
+	// 📎 ĐÍNH KÈM (§5.9) — ADR 0052's three-step upload, then the file rides on the next log entry
+	// (`attachments` on the POST above). internal/app/task_attachment.go has the whole flow.
+	//
+	// `task.read` AT THE GATE ON ALL THREE, for the log-entry route's reason: whether this person may
+	// upload onto THIS task is the log-entry right (assignee / related person / `task.update`), decided
+	// on the row by the use case — an upload exists only to be attached to an entry. `task.read` is
+	// seeded (service-identity/migrations/0001_init.sql:304); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// THE LIMITS ARE PLATFORM'S (ADR 0052 §10): size, types and the per-task count are read from
+	// ListUploadPolicies on every request. Not configured → 503 `storage_not_configured`, as is a missing
+	// object store or scanner — the rest of the service keeps serving.
+	//
+	// idem.Required(idem.MoKhiHong): a double submit issues a second pending row, which holds one slot of
+	// the per-task count for the form's 15 minutes and can never be deleted (rule 7). MoKhiHong for the
+	// log entry's reason — a cache outage must not stop an officer mid-work; the residue is one unused
+	// pending row, never a second stored file.
+	//
+	// @summary  Xin tải một tệp đính kèm cho nhật ký nhiệm vụ — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @screen   02-nhiem-vu §5.9
+	// @request  taskAttachmentUploadIn
+	// @reply    201 taskAttachmentUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/attachments",
+		authz.RequirePermission(d.Checker, "task.read")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestTaskAttachmentUpload))))
+
+	// HOÀN TẤT TẢI LÊN — `completion`, a nominalised sub-resource (skills/rest-api-design §3), not
+	// `complete`. Only the officer the upload was issued to; anybody else's id answers 404.
+	//
+	// Stat · sniff (the client's type is never trusted) · the CURRENT policy · ClamAV · sha256 · copy to
+	// the private bucket at the records key · `stored` and the trail in ONE transaction. Infected, wrong
+	// type, too large, over the count → 422 and the temp object deleted. Scanner or platform down → 503,
+	// nothing written, the file stays retryable and is NEVER stored unscanned (ADR 0052 §9).
+	//
+	// idem.KhongCan: a second completion of a stored file answers that same file and writes nothing;
+	// two in flight at once serialise on the row lock and the loser lands on the winner's row.
+	//
+	// @summary  Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ
+	// @screen   02-nhiem-vu §5.9
+	// @reply    200 taskAttachmentOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/attachments/{id}/completion",
+		authz.RequirePermission(d.Checker, "task.read")(
+			idem.KhongCan("hoàn tất lần hai trên tệp đã lưu trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
+				http.HandlerFunc(h.CompleteTaskAttachment))))
+
+	// TẢI VỀ — `task.read`, the key of the timeline the file is shown on. A file on a log entry is part of
+	// the task every reader sees; a file not yet attached only its uploader may fetch (domain.MayDownload).
+	// Another commune's, another task's → 404, one answer.
+	//
+	// THE REPLY IS A LINK, NOT THE BYTES: a presigned GET on OBJECT_STORAGE_PUBLIC_ENDPOINT valid for
+	// storage.MaxDownloadTTL, `attachment` for PDF, served from the object store's domain and never the
+	// commune's (ADR 0052 §4). A bearer credential for its lifetime — `Cache-Control: no-store`, never
+	// logged. NOT AUDITED: staff reading a staff file inside their own commune (see DownloadLink).
+	//
+	// @summary  Liên kết tải về một tệp đính kèm của nhiệm vụ (sống tối đa 15 phút)
+	// @screen   02-nhiem-vu §5.9
+	// @reply    200 taskAttachmentDownloadOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/tasks/{ma}/attachments/{id}/download",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.TaskAttachmentDownload)))
 
 	// GIAO VIỆC MỚI (§7) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
 	//

@@ -397,8 +397,13 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// above: this file is about the EDGE CHAIN, it asserts on a read route, and Register refuses
 		// a nil dependency at construction. A use case that is never invoked cannot dereference the
 		// nil handle. Its own four-case suite lives in internal/http/nhiem_vu_ghi_test.go.
-		GhiNhiemVu:      app.NewGhiNhiemVu(nil, nil, nil, nil, nil),
-		DanhSachBienBan: khoBienBan{},
+		GhiNhiemVu: app.NewGhiNhiemVu(nil, nil, nil, nil, nil, nil),
+		// §5.9's attachments, with NO object store, scanner or policy — the not-configured shape a
+		// deployment without OBJECT_STORAGE_* runs in. Never invoked here; Register refuses a nil. Own
+		// suites: internal/app/task_attachment_test.go and internal/http/task_attachment_test.go.
+		TaskAttachments:    app.NewTaskAttachments(nil, nil, nil, nil, nil, nil),
+		TaskLogAttachments: petstore.NewStoredFileStore(nil),
+		DanhSachBienBan:    khoBienBan{},
 		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
 		// suite lives in internal/http/bien_ban_hop_ghi_test.go.

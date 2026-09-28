@@ -1,6 +1,12 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
+)
 
 // This service's file metadata (ADR 0052 §5, migration 0021) and the attachment of a file to a task
 // progress-log entry (docs/ui-ux/02-nhiem-vu.md §5.9 `📎 Đính kèm`).
@@ -126,4 +132,98 @@ type TaskLogAttachment struct {
 	MIMEType     string
 	SizeBytes    int64
 	Status       StoredFileStatus
+}
+
+// --- the attachment rules of §5.9 (the use case is internal/app/task_attachment.go) --------------
+
+// MaxOriginalNameRunes is migration 0021's `char_length(original_name) <= 255`.
+const MaxOriginalNameRunes = 255
+
+var (
+	// ErrAttachmentNameInvalid: the declared file name is empty, longer than MaxOriginalNameRunes,
+	// not UTF-8, or carries a control character (migration 0021, stored_file_original_name_shape).
+	// ONE SENTENCE, and it never quotes the name: a name can carry a person's name (rule 3).
+	ErrAttachmentNameInvalid = errors.New(
+		"tệp đính kèm: tên tệp không hợp lệ — cần có tên, không quá 255 ký tự và không chứa ký tự điều khiển")
+
+	// ErrAttachmentSizeInvalid: the declared size is not a positive number of bytes.
+	ErrAttachmentSizeInvalid = errors.New("tệp đính kèm: kích thước tệp khai báo không hợp lệ")
+
+	// ErrAttachmentListInvalid: an empty id, or one id twice, in a log entry's `attachments`.
+	ErrAttachmentListInvalid = errors.New(
+		"tệp đính kèm: danh sách tệp không hợp lệ — mỗi tệp chỉ được nêu một lần")
+
+	// ErrAttachmentNotUsable refuses linking a file to a log entry. ONE SENTENCE FOR EVERY CAUSE —
+	// unknown id, another commune's, another task's, another officer's, not finished, rejected,
+	// already on an entry — because telling them apart would tell a caller which ids exist on work
+	// they did not upload (rule 4, forbidden #2, applied to staff).
+	ErrAttachmentNotUsable = errors.New(
+		"tệp đính kèm: chỉ đính kèm được tệp chính bạn đã tải lên cho nhiệm vụ này, đã tải xong " +
+			"và chưa gắn vào dòng nhật ký nào")
+)
+
+// CleanAttachmentName returns the name a file is recorded under.
+//
+// ONLY THE LAST PATH ELEMENT IS KEPT: some browsers still send `C:\fakepath\bien-ban.pdf`, and a
+// directory is nothing the record needs. Surrounding space is trimmed. Nothing else is rewritten —
+// the name is what the officer will recognise in the timeline; the download sanitises it for
+// Content-Disposition (core/storage.ContentDisposition), and it never reaches an object key.
+func CleanAttachmentName(s string) (string, error) {
+	if i := strings.LastIndexAny(s, `/\`); i >= 0 {
+		s = s[i+1:]
+	}
+	s = strings.TrimSpace(s)
+	if s == "" || !utf8.ValidString(s) || utf8.RuneCountInString(s) > MaxOriginalNameRunes {
+		return "", ErrAttachmentNameInvalid
+	}
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return "", ErrAttachmentNameInvalid
+	}
+	return s, nil
+}
+
+// CheckAttachmentList refuses an empty id or a duplicate before any transaction opens.
+func CheckAttachmentList(ids []string) error {
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" || seen[id] {
+			return ErrAttachmentListInvalid
+		}
+		seen[id] = true
+	}
+	return nil
+}
+
+// AttachCandidate is one file a log entry asks to carry, read under lock with its current link.
+type AttachCandidate struct {
+	File StoredFile
+	// LinkedTo is the log entry the file is already attached to; "" when it is on none.
+	LinkedTo string
+}
+
+// CheckAttachable is the write path's copy of migration 0021's `task_log_attachment_check`, plus
+// "not yet on any entry" (the table's primary key). The trigger stays the floor; this is what turns a
+// refusal into a sentence instead of a 500.
+func CheckAttachable(c AttachCandidate, taskID, author string) error {
+	f := c.File
+	if author == "" || f.SubjectType != StoredFileSubjectTask || f.SubjectID != taskID ||
+		f.UploadedBy != author || !f.Status.Attachable() || c.LinkedTo != "" {
+		return ErrAttachmentNotUsable
+	}
+	return nil
+}
+
+// MayDownload decides whether one reader of a task may be handed a link to one of its files.
+//
+//   - the file belongs to THIS task and reached the destination (stored / ready);
+//   - AND it is on a log entry — part of the record every reader of the task sees — OR the reader is
+//     the officer who uploaded it (checking a file before pressing `➤ Ghi nhật ký`).
+//
+// A file uploaded but never attached is nobody's business but its uploader's: it is not part of the
+// task's record, and handing it to every `task.read` holder would publish a draft.
+func MayDownload(f StoredFile, taskID, linkedTo, reader string) bool {
+	if f.SubjectType != StoredFileSubjectTask || f.SubjectID != taskID || !f.Status.Attachable() {
+		return false
+	}
+	return linkedTo != "" || (reader != "" && f.UploadedBy == reader)
 }

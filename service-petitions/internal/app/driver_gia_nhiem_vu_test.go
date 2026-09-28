@@ -91,6 +91,11 @@ type khoNhiemVuGia struct {
 
 	doiDong int64
 
+	// storedFiles is `stored_file` keyed by file id (each row carries its `tenant_id`), and fileLinks
+	// is `task_log_attachment` (file id -> log entry id). driver_gia_stored_file_test.go.
+	storedFiles map[string]map[string]driver.Value
+	fileLinks   map[string]string
+
 	loi    error
 	loiSau string
 	daNo   bool
@@ -323,6 +328,10 @@ func (c *connNVGia) ExecContext(_ context.Context, q string, args []driver.Named
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
 	}
+	// `stored_file` and `task_log_attachment` (migration 0021) — driver_gia_stored_file_test.go.
+	if res, handled, err := c.k.execStoredFile(q, args); handled {
+		return res, err
+	}
 	if strings.Contains(q, "INSERT INTO task_issued_code") {
 		// $2 is the code. A code already issued is refused, as the ledger's primary key refuses it.
 		code := fmt.Sprint(args[1].Value)
@@ -363,6 +372,10 @@ func (c *connNVGia) QueryContext(_ context.Context, q string, args []driver.Name
 	}
 
 	switch {
+	// ABOVE every `nhiem_vu` branch for the reason the document block's is: a statement naming both
+	// tables must be answered by the file fake. driver_gia_stored_file_test.go.
+	case strings.Contains(q, "FROM stored_file"), strings.Contains(q, "FROM task_log_attachment"):
+		return c.k.doStoredFile(q, cot, gt)
 	case strings.Contains(q, "FROM task_issued_code"):
 		return c.k.doIssuedCode(q, gt)
 	case strings.Contains(q, "FROM nhat_ky_nhiem_vu"):
@@ -665,7 +678,7 @@ func dungGhiNhiemVu(t *testing.T, k *khoNhiemVuGia) (*GhiNhiemVu, context.Contex
 	// THE UNIT CHECK ANSWERS EVERY ASKED ID AS LIVE by default, so the tests about other rules are not
 	// about it; the tests about it replace uc.orgUnits (task_org_units_test.go).
 	uc := NewGhiNhiemVu(kho, petstore.NewNhiemVuStore(kho), petstore.NewDeNghiLuiHanStore(kho), nil,
-		&orgUnitsFake{allLive: true})
+		&orgUnitsFake{allLive: true}, petstore.NewStoredFileStore(kho))
 
 	// IDS ARE HANDED OUT IN ORDER so a test can name the one it expects. The first id of a create is
 	// the task, the second is its timeline row.

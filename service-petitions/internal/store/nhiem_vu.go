@@ -867,6 +867,32 @@ func (s *NhiemVuStore) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, e
 	return mot[0], nil
 }
 
+// LiveByCode is TheoMa's row and nothing else — no meeting back-link, no tree facts — for a caller
+// that needs only the task's identity and holders (the attachment acts, app/task_attachment.go). One
+// statement where TheoMa runs three. The same live filter; the same ErrNhiemVuKhongTonTai.
+func (s *NhiemVuStore) LiveByCode(ctx context.Context, code string) (domain.NhiemVu, error) {
+	rows, err := s.db.For(ctx).Query(ctx, cotNhiemVu, "nhiem_vu",
+		`AND ma = $2 AND deleted_at IS NULL`, code)
+	if err != nil {
+		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: đọc theo mã: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: đọc theo mã: %w", err)
+		}
+		return domain.NhiemVu{}, ErrNhiemVuKhongTonTai
+	}
+	n, err := quetNhiemVu(rows)
+	if err != nil {
+		return domain.NhiemVu{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: duyệt kết quả: %w", err)
+	}
+	return n, nil
+}
+
 // quetNhiemVu reads one row of cotNhiemVu.
 //
 // POSITIONAL, IN LOCKSTEP WITH cotNhiemVu. database/sql binds by POSITION, so a destination inserted

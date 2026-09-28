@@ -1657,6 +1657,7 @@ export type petitions_nhatKyNhiemVuRa = {
   "unit": string;
   "assignee": string;
   "note": string;
+  "attachments": Array<petitions_taskAttachmentOut>;
 };
 
 export type petitions_nhatKyPhieuRa = {
@@ -1808,6 +1809,12 @@ export type petitions_phieuPhanAnhRa = {
   "rating_comment"?: string;
   "rated_at"?: string | null;
   "reopen_count"?: number | null;
+};
+
+export type petitions_presignedUploadOut = {
+  "url": string;
+  "fields": Record<string, string>;
+  "expires_at": string;
 };
 
 export type petitions_publicationIn = {
@@ -1962,6 +1969,30 @@ export type petitions_taskAssignmentIn = {
   "note"?: string;
 };
 
+export type petitions_taskAttachmentDownloadOut = {
+  "url": string;
+  "expires_at": string;
+};
+
+export type petitions_taskAttachmentOut = {
+  "id": string;
+  "file_name": string;
+  "mime_type": string;
+  "size_bytes": number;
+  "status": string;
+};
+
+export type petitions_taskAttachmentUploadIn = {
+  "file_name": string;
+  "content_type": string;
+  "size": number;
+};
+
+export type petitions_taskAttachmentUploadOut = {
+  "attachment": petitions_taskAttachmentOut;
+  "upload": petitions_presignedUploadOut;
+};
+
 export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
 };
@@ -1982,6 +2013,7 @@ export type petitions_taskImportResultOut = {
 
 export type petitions_taskLogEntryIn = {
   "note": string;
+  "attachments"?: Array<string>;
 };
 
 export type petitions_taskStatusCountOut = {
@@ -5742,6 +5774,72 @@ export type petitions_post_tasks_by_ma_assignment = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/tasks/{ma}/attachments — Xin tải một tệp đính kèm cho nhật ký nhiệm vụ — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type petitions_post_tasks_by_ma_attachments = {
+  duongDan: "/api/v1/tasks/{ma}/attachments";
+  phuongThuc: "POST";
+  thamSo: {
+    "ma": string;
+  };
+  truyVan: {
+  };
+  than: petitions_taskAttachmentUploadIn;
+  phanHoi: {
+    201: petitions_taskAttachmentUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/tasks/{ma}/attachments/{id}/completion — Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
+export type petitions_post_tasks_by_ma_attachments_by_id_completion = {
+  duongDan: "/api/v1/tasks/{ma}/attachments/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "ma": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskAttachmentOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/tasks/{ma}/attachments/{id}/download — Liên kết tải về một tệp đính kèm của nhiệm vụ (sống tối đa 15 phút) */
+export type petitions_get_tasks_by_ma_attachments_by_id_download = {
+  duongDan: "/api/v1/tasks/{ma}/attachments/{id}/download";
+  phuongThuc: "GET";
+  thamSo: {
+    "ma": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskAttachmentDownloadOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };

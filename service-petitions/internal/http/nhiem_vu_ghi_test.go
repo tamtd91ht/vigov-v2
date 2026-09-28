@@ -59,8 +59,9 @@ type ghiNhiemVuGia struct {
 
 	// logText and taskUpdate are what the log-entry route handed down: the text, and the ONE fact
 	// "does the caller hold `task.update`" (a37ec96's commune-wide "full" case).
-	logText    string
-	taskUpdate app.TaskUpdateRight
+	logText        string
+	taskUpdate     app.TaskUpdateRight
+	logAttachments []string
 
 	// duyet is the fact the STATUS route hands down: does the caller hold `task.approve`?
 	//
@@ -152,18 +153,24 @@ func (g *ghiNhiemVuGia) Reassign(ctx context.Context, ma string, req app.TaskAss
 	return g.tra()
 }
 
-func (g *ghiNhiemVuGia) AddLogEntry(ctx context.Context, ma, text string, actor audit.Actor,
-	update app.TaskUpdateRight) (domain.NhatKyNhiemVu, error) {
+func (g *ghiNhiemVuGia) AddLogEntry(ctx context.Context, ma, text string, attachments []string,
+	actor audit.Actor, update app.TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error) {
 	g.ghi(ctx, "nhat-ky", ma, actor)
-	g.logText, g.taskUpdate = text, update
+	g.logText, g.taskUpdate, g.logAttachments = text, update, attachments
 	if g.loi != nil {
-		return domain.NhatKyNhiemVu{}, g.loi
+		return domain.NhatKyNhiemVu{}, nil, g.loi
+	}
+	var files []domain.TaskLogAttachment
+	for _, id := range attachments {
+		files = append(files, domain.TaskLogAttachment{LogEntryID: "nk-001", FileID: id,
+			OriginalName: "bien-ban-" + id + ".pdf", MIMEType: "application/pdf", SizeBytes: 1024,
+			Status: domain.StoredFileStored})
 	}
 	return domain.NhatKyNhiemVu{
 		ID: "nk-001", NhiemVuID: "nv-001", NguoiMa: actor.ID,
 		ThoiDiem:             time.Date(2026, 9, 28, 2, 0, 0, 0, time.UTC),
 		TrangThaiTaiThoiDiem: domain.DangThucHien, NoiDung: text,
-	}, nil
+	}, files, nil
 }
 
 // --- fixtures --------------------------------------------------------------------------------------

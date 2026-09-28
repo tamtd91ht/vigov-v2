@@ -177,18 +177,22 @@ func TestNhatKyNVDungQuyenDungXaThi200(t *testing.T) {
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &tho)
 	for _, dong := range tho.Items {
-		for _, k := range []string{"id", "at", "actor_code", "status", "unit", "assignee", "note"} {
+		for _, k := range []string{"id", "at", "actor_code", "status", "unit", "assignee", "note", "attachments"} {
 			if _, co := dong[k]; !co {
 				t.Errorf("thiếu trường %q", k)
 			}
 		}
-		for _, cam := range []string{"action", "attachments", "actor_name", "task_id", "nhiem_vu_id"} {
+		for _, cam := range []string{"action", "actor_name", "task_id", "nhiem_vu_id"} {
 			if _, co := dong[cam]; co {
 				t.Errorf("có trường %q — bảng không giữ nó, hoặc là id nội bộ của nhiệm vụ", cam)
 			}
 		}
-		if len(dong) != 7 {
-			t.Errorf("dòng có %d trường, muốn đúng 7: %v", len(dong), dong)
+		if len(dong) != 8 {
+			t.Errorf("dòng có %d trường, muốn đúng 8: %v", len(dong), dong)
+		}
+		// `attachments` (migration 0021) is ALWAYS an array — [] for an entry with none, never null.
+		if ds, la := dong["attachments"].([]any); !la || len(ds) != 0 {
+			t.Errorf("attachments = %#v, muốn [] cho dòng không có tệp", dong["attachments"])
 		}
 	}
 	if strings.Contains(w.Body.String(), "Của xã B.") {

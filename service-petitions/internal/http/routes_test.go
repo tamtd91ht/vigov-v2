@@ -229,6 +229,10 @@ type mayChu struct {
 
 	// taskImport is the spreadsheet import — task_import_test.go.
 	taskImport *taskImportFake
+
+	// The task attachments — task_attachment_test.go.
+	taskAttachments *taskAttachmentsFake
+	logAttachments  *logAttachmentsFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -272,6 +276,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	filterIdentity := taskFilterIdentitySample()
 	registerExport := &registerExportFake{}
 	taskImport := &taskImportFake{}
+	taskAttachments := &taskAttachmentsFake{}
+	logAttachments := &logAttachmentsFake{}
 
 	m := &mayChu{
 		d: Deps{
@@ -315,6 +321,8 @@ func dungMayChu(t *testing.T) *mayChu {
 			TaskImport:           taskImport,
 			DeNghiChoDuyet:       deNghiCho,
 			GhiNhiemVu:           ghiNhiemVu,
+			TaskAttachments:      taskAttachments,
+			TaskLogAttachments:   logAttachments,
 			DanhSachBienBan:      bienBan,
 			GhiBienBan:           ghiBienBan,
 			TaskSummary:          taskSummary,
@@ -351,6 +359,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		filterIdentity: filterIdentity,
 		registerExport: registerExport,
 		taskImport:     taskImport,
+
+		taskAttachments: taskAttachments,
+		logAttachments:  logAttachments,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -444,6 +455,8 @@ func depsDay() Deps {
 		TaskImport:         &taskImportFake{},
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
+		TaskAttachments:    &taskAttachmentsFake{},
+		TaskLogAttachments: &logAttachmentsFake{},
 		DanhSachBienBan:    bienBanMau(),
 		GhiBienBan:         &ghiBienBanGia{},
 		// The leadership overview.
@@ -502,6 +515,10 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// and with it §3, the ONE path by which a conclusion becomes a task and keeps a back-link to
 		// where it came from.
 		"thiếu use case ghi biên bản": func(d *Deps) { d.GhiBienBan = nil },
+		// §5.9's attachments: a nil use case panics on the first `📎 Đính kèm`; a nil reader panics on
+		// EVERY timeline read, attachments or not.
+		"thiếu use case tệp đính kèm nhiệm vụ":     func(d *Deps) { d.TaskAttachments = nil },
+		"thiếu đường đọc tệp đính kèm của nhật ký": func(d *Deps) { d.TaskLogAttachments = nil },
 		// The leadership overview: two tiles' worth of figures and the "Cần xử lý ngay" panel.
 		"thiếu đường đếm tổng quan nhiệm vụ": func(d *Deps) { d.TaskSummary = nil },
 		"thiếu đường đếm tổng quan phản ánh": func(d *Deps) { d.CitizenReportSummary = nil },

@@ -65,16 +65,18 @@ type nhatKyNhiemVuRa struct {
 	// Note is the entry text. Staff-internal free text about the work.
 	Note string `json:"note"`
 
-	// NO `attachments` FIELD, ON PURPOSE — `dinh_kem` exists but nothing writes it (no file store),
-	// and an untyped array on the wire is refused by web-admin's type generator. The petition
-	// logbook leaves its twin off for the same reason; the day the store exists it is added as an
-	// OPTIONAL field.
+	// Attachments are the files written with this entry (`📎 Đính kèm`, migration 0021's
+	// `task_log_attachment`), in the order they were attached. ALWAYS AN ARRAY, [] for an entry with
+	// none — never null. Read for a whole page in ONE statement (AttachmentsByLogEntries), never per row.
+	// `nhat_ky_nhiem_vu.dinh_kem` is not read: nothing writes it, and the link table is the one source.
+	Attachments []taskAttachmentOut `json:"attachments"`
 }
 
-func nhatKyNhiemVuRaNgoai(e domain.NhatKyNhiemVu) nhatKyNhiemVuRa {
+func nhatKyNhiemVuRaNgoai(e domain.NhatKyNhiemVu, files []domain.TaskLogAttachment) nhatKyNhiemVuRa {
 	return nhatKyNhiemVuRa{
 		ID: e.ID, At: e.ThoiDiem, ActorCode: e.NguoiMa, Status: string(e.TrangThaiTaiThoiDiem),
 		Unit: e.BoPhanID, Assignee: e.NguoiPhuTrachMa, Note: e.NoiDung,
+		Attachments: taskAttachmentsOut(files),
 	}
 }
 
@@ -126,6 +128,22 @@ func (h *Handler) DocNhatKyNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The page's attachments, ONE statement for the whole page, keyed by the entry ids just read — so a
+	// file is shown only under an entry of THIS task in THIS commune (the reader binds the commune from
+	// the context, and the ids came from the task read above).
+	ids := make([]string, 0, len(kq.Items))
+	for _, e := range kq.Items {
+		ids = append(ids, e.ID)
+	}
+	files, err := h.d.TaskLogAttachments.AttachmentsByLogEntries(ctx, ids)
+	if err != nil {
+		h.d.Log.Error("đọc tệp đính kèm của nhật ký nhiệm vụ: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	// make(..., 0, ...) so an empty timeline marshals as [] and never as null.
 	ra := page.Result[nhatKyNhiemVuRa]{
 		Items:      make([]nhatKyNhiemVuRa, 0, len(kq.Items)),
@@ -133,7 +151,7 @@ func (h *Handler) DocNhatKyNhiemVu(w http.ResponseWriter, r *http.Request) {
 		HasMore:    kq.HasMore,
 	}
 	for _, e := range kq.Items {
-		ra.Items = append(ra.Items, nhatKyNhiemVuRaNgoai(e))
+		ra.Items = append(ra.Items, nhatKyNhiemVuRaNgoai(e, files[e.ID]))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -146,6 +164,11 @@ func (h *Handler) DocNhatKyNhiemVu(w http.ResponseWriter, r *http.Request) {
 // characters.
 type taskLogEntryIn struct {
 	Note string `json:"note"`
+
+	// Attachments are ids returned by POST /api/v1/tasks/{ma}/attachments and COMPLETED through
+	// …/{id}/completion, by the same officer, for this task. Optional; each id at most once. They are
+	// linked in the entry's own transaction and can never be added to the entry later (append-only log).
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // PermTaskUpdate is the commune-wide edit key — a37ec96's first "full" case. A constant because it is
@@ -168,14 +191,17 @@ func (h *Handler) AddTaskLogEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	row, err := h.d.GhiNhiemVu.AddLogEntry(ctx, r.PathValue("ma"), in.Note, actor, h.hasTaskUpdate(r))
+	row, files, err := h.d.GhiNhiemVu.AddLogEntry(ctx, r.PathValue("ma"), in.Note, in.Attachments, actor,
+		h.hasTaskUpdate(r))
 	if err != nil {
-		h.traLoiLoiNhiemVu(w, r, "ghi nhật ký", err)
+		// Through the attachment mapper: it answers the two attachment refusals and hands every task
+		// refusal on to traLoiLoiNhiemVu unchanged.
+		h.answerTaskAttachmentError(w, r, "ghi nhật ký", err)
 		return
 	}
 	// What a retry carrying the same Idempotency-Key is told: the row's id, never the text.
 	idem.RecordCode(ctx, row.ID)
-	vietJSON(w, http.StatusCreated, nhatKyNhiemVuRaNgoai(row))
+	vietJSON(w, http.StatusCreated, nhatKyNhiemVuRaNgoai(row, files))
 }
 
 // hasTaskUpdate: does this account hold `task.update`? FAIL CLOSED — no principal is `false`.

@@ -29,10 +29,13 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
+	"github.com/vihat/vigov/core/malwarescan"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
+	"github.com/vihat/vigov/core/storage"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -207,7 +210,42 @@ func chay(log *slog.Logger) error {
 	// so the two never disagree about identity's health.
 	// Passed a SECOND time as the UNIT check (ResolveLiveOrgUnits, 28/09/2026): `unit` / `lead_unit`
 	// on creation and on the assignment act are verified live in this commune before either writes.
-	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh)
+	//
+	// `storedFiles` (migration 0021) is passed as the LINKER of a log entry's attachments: the entry and
+	// its files are written in one transaction, by this use case.
+	storedFiles := petstore.NewStoredFileStore(kho)
+	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh, storedFiles)
+
+	// §5.9's `📎 Đính kèm` (ADR 0052). The three dependencies are OPTIONAL AT STARTUP, each on its own:
+	// absent = the attachment routes answer 503 "chưa cấu hình kho lưu tệp" and EVERYTHING ELSE SERVES
+	// (rule 11 invariant 8 — the service answers every other request without them). ADR 0052 §Hệ quả
+	// leaves "required at startup" vs "optional + refuse" to the owner; until that is decided this is the
+	// second, which fails closed on the upload and open on nothing. A value that is present but malformed
+	// was already refused by config.Load, and is refused again here.
+	//
+	// DECLARED AS THE INTERFACES AND LEFT nil WHEN ABSENT: a nil *storage.Client assigned into the
+	// interface would be a non-nil interface, pass the use case's nil check, and panic on first use.
+	var objects app.ObjectStore
+	switch c, err := storage.New(cfg.ObjectStorage); {
+	case err == nil:
+		objects = c
+	case errors.Is(err, storage.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — đính kèm nhiệm vụ bị từ chối", "service", "petitions", "err", err)
+	default:
+		return err
+	}
+	var scanner app.MalwareScanner
+	switch s, err := malwarescan.New(cfg.MalwareScanner); {
+	case err == nil:
+		scanner = s
+	case errors.Is(err, malwarescan.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình máy quét mã độc — đính kèm nhiệm vụ bị từ chối", "service", "petitions", "err", err)
+	default:
+		return err
+	}
+	// Platform's per-purpose limits over the SAME connection the directory uses — its interceptors put
+	// "x-tenant-id" on every call, which ListUploadPolicies requires; the reader caches per commune.
+	policies := uploadpolicy.New(nenTang.Client(), log)
 
 	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
 
@@ -276,6 +314,11 @@ func chay(log *slog.Logger) error {
 		// has a leader TYPE the task's deadline, so nothing on this path derives one. See the header
 		// of internal/app/nhiem_vu.go. The identity client it does hold is the assigner check only.
 		GhiNhiemVu: ghiNhiemVu,
+		// §5.9's attachments: the SAME task store (the holder rule reads the row the acts lock) and the
+		// SAME stored-file store the log entry links through, so a file the upload route issued is the
+		// row the entry attaches and the timeline reads back.
+		TaskAttachments:    app.NewTaskAttachments(kho, nhiemVu, storedFiles, objects, scanner, policies),
+		TaskLogAttachments: storedFiles,
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register

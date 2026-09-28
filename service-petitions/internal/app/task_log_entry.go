@@ -13,11 +13,24 @@ package app
 // its LENGTH and the row id, never the words — staff free text about the work can name a citizen's
 // case, and audit_log is append-only for ever (rule 6, forbidden #4).
 //
-// NO ATTACHMENTS IN THIS PASS: `dinh_kem` exists but there is no file store.
+// # ATTACHMENTS (`📎 Đính kèm`, migration 0021)
+//
+// An entry may carry files the SAME officer uploaded for the SAME task and completed beforehand
+// (task_attachment.go). They are linked IN THIS TRANSACTION, after the row exists — migration 0021's
+// trigger refuses a link to an entry another transaction wrote, because the log is append-only and a
+// later link would be an edit. The candidates are read FOR UPDATE and checked here first
+// (domain.CheckAttachable), so a wrong id is a 400 with a sentence rather than the trigger's 500.
+// `nhat_ky_nhiem_vu.dinh_kem` is NOT written: the link table is the one source (migration 0021).
+//
+// NO POLICY CALL ON THIS PATH, on purpose: platform's per-task count is enforced when each upload is
+// ISSUED and again when it is COMPLETED, and a file can be linked only once, so the set an entry can
+// carry is already bounded by it. Asking platform again here would make writing a log entry fail
+// whenever platform does, for a limit that cannot be exceeded at this point.
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"unicode/utf8"
 
@@ -25,6 +38,17 @@ import (
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
+
+// LogAttachmentLinker is the part of *store.StoredFileStore the log entry needs.
+type LogAttachmentLinker interface {
+	AttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
+		map[string]domain.AttachCandidate, error)
+	LinkToLogEntry(ctx context.Context, tx *store.ScopedTx, logEntryID string, fileIDs []string) error
+}
+
+// errAttachmentsNotWired: an entry with attachments reached a use case built without the file store.
+// A wiring fault (500), never a reason to drop the files silently and write the text alone.
+var errAttachmentsNotWired = errors.New("nhat_ky_nhiem_vu: chưa nối kho tệp đính kèm")
 
 // ActionTaskLogEntry is the verb in the trail — Vietnamese snake_case like every other value this
 // service writes (an inspection reads it; ADR 0011), and the task twin of `ghi_chu_phan_anh`.
@@ -43,19 +67,28 @@ type TaskUpdateRight bool
 //
 // THE CHECK RUNS ON THE ROW READ `FOR UPDATE`, so it is decided against the holder as it stands at this
 // instant — a reassignment committing concurrently cannot let the previous holder write after it.
-func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, actor audit.Actor,
-	update TaskUpdateRight) (domain.NhatKyNhiemVu, error) {
+func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, attachmentIDs []string,
+	actor audit.Actor, update TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error) {
 
 	text, err := domain.KiemNoiDungNhatKy(text)
 	if err != nil {
-		return domain.NhatKyNhiemVu{}, err
+		return domain.NhatKyNhiemVu{}, nil, err
 	}
 	if err := coCanBoThucHien(actor); err != nil {
-		return domain.NhatKyNhiemVu{}, err
+		return domain.NhatKyNhiemVu{}, nil, err
+	}
+	if err := domain.CheckAttachmentList(attachmentIDs); err != nil {
+		return domain.NhatKyNhiemVu{}, nil, err
+	}
+	if len(attachmentIDs) > 0 && uc.files == nil {
+		return domain.NhatKyNhiemVu{}, nil, errAttachmentsNotWired
 	}
 
 	now := uc.nayHoac()
-	var row domain.NhatKyNhiemVu
+	var (
+		row      domain.NhatKyNhiemVu
+		attached []domain.TaskLogAttachment
+	)
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		n, err := uc.kho.TheoMaDeSua(ctx, tx, ma)
@@ -65,6 +98,27 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, actor au
 		right := domain.TaskWorkRightFor(n, actor.ID, bool(update))
 		if err := domain.CheckMayWriteLogEntry(right); err != nil {
 			return err
+		}
+		// The files, read under lock and checked BEFORE the entry is written, so a refusal writes nothing.
+		attached = make([]domain.TaskLogAttachment, 0, len(attachmentIDs))
+		if len(attachmentIDs) > 0 {
+			cands, err := uc.files.AttachCandidates(ctx, tx, attachmentIDs)
+			if err != nil {
+				return err
+			}
+			for _, fid := range attachmentIDs {
+				c, ok := cands[fid]
+				if !ok {
+					return domain.ErrAttachmentNotUsable
+				}
+				if err := domain.CheckAttachable(c, n.ID, actor.ID); err != nil {
+					return err
+				}
+				attached = append(attached, domain.TaskLogAttachment{
+					FileID: fid, OriginalName: c.File.OriginalName, MIMEType: c.File.MIMEType,
+					SizeBytes: c.File.SizeBytes, Status: c.File.Status,
+				})
+			}
 		}
 
 		id, err := uc.sinhID()
@@ -87,6 +141,14 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, actor au
 		if err := uc.kho.GhiNhatKy(ctx, tx, row); err != nil {
 			return err
 		}
+		if len(attachmentIDs) > 0 {
+			if err := uc.files.LinkToLogEntry(ctx, tx, id, attachmentIDs); err != nil {
+				return err
+			}
+			for i := range attached {
+				attached[i].LogEntryID = id
+			}
+		}
 
 		delta, err := json.Marshal(map[string]any{
 			"nhat_ky_id":               id,
@@ -95,6 +157,8 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, actor au
 			// WHICH DOOR the writer came through — an inspection asks "was this the holder, or somebody
 			// related". A code, not a name.
 			"quyen_ghi": taskWorkRightCode(right),
+			// The file IDS, never their names (personal data when they describe a case — rule 3).
+			"tep_dinh_kem": attachmentIDs,
 		})
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
@@ -107,9 +171,9 @@ func (uc *GhiNhiemVu) AddLogEntry(ctx context.Context, ma, text string, actor au
 		})
 	})
 	if err != nil {
-		return domain.NhatKyNhiemVu{}, bocNhiemVu(ctx, "ghi nhật ký", err)
+		return domain.NhatKyNhiemVu{}, nil, bocNhiemVu(ctx, "ghi nhật ký", err)
 	}
-	return row, nil
+	return row, attached, nil
 }
 
 // taskWorkRightCode names the right in the trail: `day-du` (holder or `task.update`) or `ghi-nhat-ky`
