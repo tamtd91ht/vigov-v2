@@ -59,6 +59,8 @@
 //	OBJECT_STORAGE_REGION               ConfigMap  optional — default us-east-1 (see ObjectStorage.Region)
 //	OBJECT_STORAGE_BUCKET_PREFIX        ConfigMap  optional — absent = uploads refused; malformed refused by Load
 //	MALWARE_SCANNER_ADDRESS             ConfigMap  optional — absent = uploads refused (malwarescan.ErrNotConfigured); malformed refused by Load
+//	OPERATOR_SESSION_SIGNING_KEYS       Secret     optional — identity only; absent = operator sign-in refused (ADR 0048); an entry shared with SESSION_SIGNING_KEYS refused by Load
+//	OPERATOR_TOTP_ENCRYPTION_KEY        Secret     optional — identity only; absent = operator sign-in refused; not base64 of exactly 32 bytes refused by Load
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -417,6 +419,23 @@ type Config struct {
 	// MalwareScanner is the clamd connection of ADR 0052 §9, consumed by core/malwarescan.New.
 	// Optional; the reasons are on the type (malware_scanner.go).
 	MalwareScanner MalwareScanner
+
+	// OperatorSessionSigningKeys sign and verify the OPERATOR realm token (`op1.`, ADR 0048
+	// owner's decision #2) — a SEPARATE list from SessionSigningKeys, refused by Load if any entry
+	// is shared with it. First entry signs, every entry verifies. Read by identity only.
+	//
+	// OPTIONAL: absent means operator sign-in is refused (operatorauth.ErrNotConfigured) while
+	// every other request is served. Why optional and not required: operator.go. k8s SECRET,
+	// secret.Secret (rule 8). Minimum length is owned by operatorauth.NewTokenSigner.
+	OperatorSessionSigningKeys []secret.Secret
+
+	// OperatorTOTPEncryptionKeys encrypt operator TOTP secrets at rest (AES-256-GCM, ADR 0048
+	// owner's decision #10). Read from OPERATOR_TOTP_ENCRYPTION_KEY — singular name, but a
+	// comma-separated LIST so the key can rotate: first entry encrypts, every entry decrypts.
+	// Each entry is standard base64 of exactly 32 bytes; the value held here is the DECODED key.
+	//
+	// OPTIONAL, same reason and same refusal as OperatorSessionSigningKeys. k8s SECRET.
+	OperatorTOTPEncryptionKeys []secret.Secret
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -563,7 +582,20 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Operator realm (ADR 0048): optional, absent is not an error — see operator.go. A malformed
+	// value is, and so is a signing key shared with the staff realm.
+	operatorSigningKeys, err := parseOperatorSigningKeys(os.Getenv("OPERATOR_SESSION_SIGNING_KEYS"), khoa)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+	operatorTOTPKeys, err := parseOperatorTOTPKeys(os.Getenv("OPERATOR_TOTP_ENCRYPTION_KEY"))
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	cfg := Config{
+		OperatorSessionSigningKeys:     operatorSigningKeys,
+		OperatorTOTPEncryptionKeys:     operatorTOTPKeys,
 		ObjectStorage:                  objectStorage,
 		MalwareScanner:                 MalwareScanner{Addresses: scannerAddresses},
 		TrustedProxies:                 proxy,
@@ -676,6 +708,9 @@ func (c Config) CanhBao() []string {
 		ra = append(ra, "OBJECT_STORAGE_* đã cấu hình nhưng MALWARE_SCANNER_ADDRESS trống — "+
 			"mọi lần tải tệp lên sẽ bị từ chối vì không quét được mã độc")
 	}
+	// Operator realm half-configured: the same "typo'd key" shape. Silent when neither is set —
+	// only identity reads them, and only a deployment with an operator area sets them.
+	ra = append(ra, c.operatorWarnings()...)
 	// Only reachable in dev — Load refuses to start anywhere else.
 	if len(c.SessionSigningKeys) == 0 {
 		ra = append(ra, "SESSION_SIGNING_KEYS trống — không ký và không đọc được phiên đăng nhập")

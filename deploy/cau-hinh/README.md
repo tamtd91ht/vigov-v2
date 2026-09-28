@@ -70,7 +70,7 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `REDIS_DSN` | pod xanh, nhưng 6 tuyến `POST` (cán bộ, văn bản đến/đi, chi, dự toán) trả 503 |
 | Secret TLS sai tên theo môi trường | Ingress lên, chỉ HTTPS đứt |
 
-## 4. Toàn bộ 30 biến — để đối chiếu
+## 4. Toàn bộ 32 biến — để đối chiếu
 
 `tools/check_env_map.py` đối chiếu bảng này với `core/config/config.go` trong `make check`.
 
@@ -106,6 +106,8 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `OBJECT_STORAGE_REGION` | không | ConfigMap — trống thì `us-east-1` (mặc định của MinIO); phải trùng region của máy chủ, sai thì mọi presigned URL trả 403 |
 | `OBJECT_STORAGE_BUCKET_PREFIX` | không | ConfigMap — bucket là `{prefix}-private`, `-public`, `-temp` (ví dụ tiền tố `vigov-prod`); sai dạng thì pod không khởi động |
 | `MALWARE_SCANNER_ADDRESS` | không | ConfigMap — chỉ dịch vụ nhận tải tệp (ADR 0052 §9). Danh sách `host:port` của `clamd` (thường cổng 3310), ngăn bằng dấu phẩy; một Service k8s trước các replica là một mục. Trống thì **mọi lần tải lên bị từ chối** (không bao giờ lưu tệp chưa quét) và log khởi động báo nếu kho tệp đã cấu hình; có scheme, thiếu cổng hoặc trùng mục thì pod không khởi động |
+| `OPERATOR_SESSION_SIGNING_KEYS` | không | Secret `bi-mat-identity` — **chỉ `identity`**. Khoá ký token người vận hành (ADR 0048). Danh sách `<khoa-moi>,<khoa-cu>`, mỗi khoá ≥ 32 byte. **Không bao giờ** trùng một khoá của `SESSION_SIGNING_KEYS` — trùng thì pod không khởi động. Trống thì mọi lần đăng nhập vận hành bị từ chối |
+| `OPERATOR_TOTP_ENCRYPTION_KEY` | không | Secret `bi-mat-identity` — **chỉ `identity`**. Khoá mã hoá bí mật TOTP của người vận hành (AES-256-GCM). Mỗi mục là base64 chuẩn của **đúng 32 byte** (`openssl rand -base64 32`); danh sách `<khoa-moi>,<khoa-cu>`, khoá đầu mã hoá, mọi khoá giải mã. Sai dạng hoặc trùng mục thì pod không khởi động. Trống thì mọi lần đăng nhập vận hành bị từ chối |
 
 Vì sao từng quyết định như vậy: `deploy/README.md` mục 3.
 
