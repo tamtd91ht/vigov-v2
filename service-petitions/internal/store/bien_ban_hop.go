@@ -394,6 +394,13 @@ func (s *BienBanHopStore) NhiemVuCuaKetLuan(ctx context.Context, bienBanID strin
 		// The rows are DROPPED rather than trimmed and returned — see ErrQuaNhieuNhiemVuKetLuan.
 		return nil, ErrQuaNhieuNhiemVuKetLuan
 	}
+	// THE SAME TWO TREE FACTS the task register's own reads carry (`parent` as a register number,
+	// `child_count`), because this route answers in the same nhiemVuRa shape. Closed first: one
+	// connection, no cursor held open under the next statement.
+	rows.Close()
+	if err := attachTreeFacts(ctx, scopedTreeQuery(s.db.For(ctx)), ra); err != nil {
+		return nil, err
+	}
 	return ra, nil
 }
 

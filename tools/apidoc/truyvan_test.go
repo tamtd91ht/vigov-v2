@@ -535,9 +535,11 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 		khoa string
 		ten  []string
 	}{
+		// `parent` THÊM 28/09/2026 (TASK-01, người dùng duyệt thiết kế): lọc việc con trực tiếp theo
+		// mã sổ của việc cha (§5.10) — một thay đổi hợp đồng có chủ ý, không phải trích nhầm.
 		{"GET /api/v1/tasks", []string{
-			"assignee", "bloc", "from", "late", "metric", "priority", "q", "scope", "soon", "source",
-			"status", "to", "type", "unit"}},
+			"assignee", "bloc", "from", "late", "metric", "parent", "priority", "q", "scope", "soon",
+			"source", "status", "to", "type", "unit"}},
 		{"GET /api/v1/citizen-reports", []string{
 			"channel", "field", "from", "hamlet", "late", "metric", "q", "scope", "status", "to", "unit"}},
 	} {

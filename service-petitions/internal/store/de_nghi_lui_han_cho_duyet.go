@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -42,6 +43,15 @@ var mocDeNghiChoDuyet = store.NewMoc[domain.DeNghiLuiHanChoDuyet](SapXepDeNghiCh
 // principal — never from the request (rule 4, invariant 2 in its staff form). "" = the whole commune.
 type LocDeNghiChoDuyet struct {
 	LanhDaoGiaoViecMa string
+
+	// TaskCode narrows the queue to ONE task's pending requests, by its REGISTER NUMBER (`NV19`) —
+	// §5.8's approve/reject block inside that task's drawer. "" = every task.
+	//
+	// Compared with the JOINED task's `ma`, so a number of another commune, of a soft-deleted task,
+	// or of nothing at all yields an empty page — the same answer as a task with nothing pending.
+	// Served by `de_nghi_lui_han_theo_nhiem_vu` (tenant_id, nhiem_vu_id, thoi_diem DESC) of migration
+	// 0006 once `UNIQUE (tenant_id, ma)` has resolved the one task.
+	TaskCode string
 }
 
 // bangDeNghiChoDuyet is the joined relation the page is cut from, as a DERIVED TABLE.
@@ -106,6 +116,11 @@ func (s *DeNghiLuiHanStore) ChoDuyet(ctx context.Context, loc LocDeNghiChoDuyet,
 	if loc.LanhDaoGiaoViecMa != "" {
 		args = append(args, loc.LanhDaoGiaoViecMa)
 		dieuKien = ` AND lanh_dao_giao_viec_ma = $3`
+	}
+	if loc.TaskCode != "" {
+		// NUMBERED FROM WHAT IS ALREADY BOUND: $3 when `approver=me` is absent, $4 when it is present.
+		args = append(args, loc.TaskCode)
+		dieuKien += ` AND nhiem_vu_ma = $` + strconv.Itoa(len(args)+1)
 	}
 
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{

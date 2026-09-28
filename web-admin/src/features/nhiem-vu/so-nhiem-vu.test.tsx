@@ -100,6 +100,7 @@ const NGUOI_KHAC = "CB-2026-0P4X1Z";
 function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
+    child_count: 0,
     type: "theo-van-ban",
     bloc: "khoi-dang",
     priority: "cao",

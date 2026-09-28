@@ -1495,6 +1495,7 @@ export type petitions_nhiemVuRa = {
   "leader_approved": boolean;
   "superior_acknowledged": boolean;
   "parent": string;
+  "child_count": number;
   "created_by": string;
   "created_at": string;
   "documents"?: Array<petitions_nhiemVuVanBanRa> | null;
@@ -1706,6 +1707,15 @@ export type petitions_taoNhiemVuVao = {
   "due_at"?: string | null;
   "parent"?: string;
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
+};
+
+export type petitions_taskCountsOut = {
+  "by_status": Array<petitions_taskStatusCountOut>;
+};
+
+export type petitions_taskStatusCountOut = {
+  "status": string;
+  "count": number;
 };
 
 export type petitions_taskSummaryOut = {
@@ -4464,7 +4474,40 @@ export type identity_delete_task_blocs_by_id = {
   };
 };
 
-/** GET /api/v1/task-extensions — Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc */
+/** GET /api/v1/task-counts — Số nhiệm vụ theo từng trạng thái, cùng bộ lọc với danh sách nhiệm vụ — số thật trên đầu mỗi cột Kanban */
+export type petitions_get_task_counts = {
+  duongDan: "/api/v1/task-counts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "assignee"?: string;
+    "bloc"?: string;
+    "from"?: string;
+    "late"?: string;
+    "metric"?: string;
+    "parent"?: string;
+    "priority"?: string;
+    "q"?: string;
+    "scope"?: string;
+    "soon"?: string;
+    "source"?: string;
+    "status"?: string;
+    "to"?: string;
+    "type"?: string;
+    "unit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskCountsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-extensions — Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc; `task=NV19` chỉ lấy đề nghị của một nhiệm vụ */
 export type petitions_get_task_extensions = {
   duongDan: "/api/v1/task-extensions";
   phuongThuc: "GET";
@@ -4476,6 +4519,7 @@ export type petitions_get_task_extensions = {
     "sort"?: "requested_at";
     "order"?: "asc" | "desc";
     "approver"?: string;
+    "task"?: string;
   };
   than: never;
   phanHoi: {
@@ -4697,7 +4741,7 @@ export type petitions_delete_task_types_by_id = {
   };
 };
 
-/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn */
+/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) */
 export type petitions_get_tasks = {
   duongDan: "/api/v1/tasks";
   phuongThuc: "GET";
@@ -4706,13 +4750,14 @@ export type petitions_get_tasks = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "created_at" | "code";
+    "sort"?: "created_at" | "code" | "due_at";
     "order"?: "asc" | "desc";
     "assignee"?: string;
     "bloc"?: string;
     "from"?: string;
     "late"?: string;
     "metric"?: string;
+    "parent"?: string;
     "priority"?: string;
     "q"?: string;
     "scope"?: string;

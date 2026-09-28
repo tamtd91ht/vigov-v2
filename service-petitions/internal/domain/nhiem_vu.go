@@ -262,6 +262,20 @@ type NhiemVu struct {
 	// which is correct business and is stated in ADR 0037 rather than discovered from a screen.
 	NhiemVuChaID string
 
+	// ParentCode is the parent's REGISTER NUMBER (`NV19`) — the value `parent` carries on the wire,
+	// in both directions. EMPTY for a root task.
+	//
+	// NOT A COLUMN: it is resolved from NhiemVuChaID by one batched read per page
+	// (store.attachTreeFacts), or set by the write use case from the parent it just resolved. The
+	// internal id is in no response field (only inside the opaque paging cursor, as its tie-break);
+	// the code is what every screen and every request names.
+	ParentCode string
+
+	// ChildCount is the number of LIVE (not soft-deleted) DIRECT children — §4.1's `{n} việc con`
+	// chip. Counted by the store for the whole page in one statement, never derived from the page
+	// itself: a count taken from the rows on screen changes with the page the reader is on.
+	ChildCount int
+
 	TomTatKetQua string
 	GhiChu       string
 

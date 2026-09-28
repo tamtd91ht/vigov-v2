@@ -691,6 +691,7 @@ describe("chặn nút `Giao việc` vì ba danh sách", () => {
 function chiTiet(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
+    child_count: 0,
     type: "theo-van-ban",
     bloc: "",
     priority: "",

@@ -12310,9 +12310,198 @@
         }
       }
     },
+    "/api/v1/task-counts": {
+      "get": {
+        "summary": "Số nhiệm vụ theo từng trạng thái, cùng bộ lọc với danh sách nhiệm vụ — số thật trên đầu mỗi cột Kanban",
+        "operationId": "petitions_get_task_counts",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §4.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "b17919b05e82",
+        "parameters": [
+          {
+            "name": "assignee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bloc",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "late",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "soon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskCountsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/task-extensions": {
       "get": {
-        "summary": "Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc",
+        "summary": "Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc; `task=NV19` chỉ lấy đề nghị của một nhiệm vụ",
         "operationId": "petitions_get_task_extensions",
         "tags": [
           "petitions"
@@ -12373,6 +12562,14 @@
           },
           {
             "name": "approver",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task",
             "in": "query",
             "required": false,
             "schema": {
@@ -13351,12 +13548,12 @@
     },
     "/api/v1/tasks": {
       "get": {
-        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn",
+        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)",
         "operationId": "petitions_get_tasks",
         "tags": [
           "petitions"
         ],
-        "x-vigov-screen": "02-nhiem-vu §3, §4",
+        "x-vigov-screen": "02-nhiem-vu §3, §4, §5.10",
         "x-vigov-permission": {
           "kind": "permission",
           "key": "task.read"
@@ -13393,7 +13590,8 @@
               "type": "string",
               "enum": [
                 "created_at",
-                "code"
+                "code",
+                "due_at"
               ],
               "default": "created_at"
             }
@@ -13445,6 +13643,14 @@
           },
           {
             "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent",
             "in": "query",
             "required": false,
             "schema": {
@@ -20218,6 +20424,9 @@
           "parent": {
             "type": "string"
           },
+          "child_count": {
+            "type": "integer"
+          },
           "created_by": {
             "type": "string"
           },
@@ -20248,6 +20457,7 @@
           "assignee",
           "assigner",
           "bloc",
+          "child_count",
           "code",
           "completed_at",
           "created_at",
@@ -21099,6 +21309,37 @@
           "auto_code",
           "title",
           "type"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskCountsOut": {
+        "type": "object",
+        "properties": {
+          "by_status": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.taskStatusCountOut"
+            }
+          }
+        },
+        "required": [
+          "by_status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskStatusCountOut": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "status"
         ],
         "additionalProperties": false
       },

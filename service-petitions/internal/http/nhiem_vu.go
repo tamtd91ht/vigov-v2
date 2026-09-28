@@ -37,6 +37,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -149,17 +150,31 @@ type nhiemVuRa struct {
 	LeaderApproved       bool `json:"leader_approved"`
 	SuperiorAcknowledged bool `json:"superior_acknowledged"`
 
-	// Parent is `nhiem_vu_cha_id` — the task this one hangs off (§5.10), EMPTY for a root task.
+	// Parent is the REGISTER NUMBER (`NV19`) of the task this one hangs off (§5.10), EMPTY for a root
+	// task.
 	//
-	// IT IS AN INTERNAL id AND NOT A REGISTER NUMBER, unlike `code` above, and the two are not
-	// interchangeable here: the drawer sends this value straight back when it re-parents a task, and
-	// a register number would have to be resolved to a row on every such call — a second lookup that
-	// can fail, on the one field whose wrong value builds a cycle.
+	// A REGISTER NUMBER SINCE 28/09/2026, AND NO LONGER THE PARENT'S INTERNAL id. The create and
+	// update bodies take a number in their own `parent` (resolved in this commune, inside the
+	// transaction), so this field is the same kind of value in both directions: a drawer can send
+	// back exactly what it read, and "Thêm việc con" under NV19 sends `parent: "NV19"` — the `code`
+	// the drawer already holds. It was an id before, and no client could ever form a request with it,
+	// because no response FIELD carries a task's own id (the opaque `next_cursor` embeds one as its
+	// tie-break, which is not something a request field accepts).
+	//
+	// Resolved for a whole page in one statement (store.attachTreeFacts), never one read per row.
 	//
 	// ⚠ NOTHING ABOUT THE PARENT'S DEADLINE IS ON THIS RESPONSE, and that is ADR 0037 decision 2: a
 	// sub-task has a deadline OF ITS OWN or none, so a child may be overdue while its parent is not.
 	// A screen showing one red dot on the parent would be showing a fact nobody recorded.
 	Parent string `json:"parent"`
+
+	// ChildCount is the number of LIVE direct children — §4.1's `{n} việc con` chip and the size of
+	// §5.10's block. Soft-deleted children are not counted (rule 7, invariant 2). The children
+	// themselves are GET /api/v1/tasks?parent=<code>.
+	//
+	// COUNTED BY THE SERVER, for the whole page in one statement, and never from the rows a client
+	// happens to hold: the same task would read `2 việc con` on one page and `3` on the next.
+	ChildCount int `json:"child_count"`
 
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
@@ -318,7 +333,8 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		Note:                 n.GhiChu,
 		LeaderApproved:       n.LanhDaoPheDuyetHoanThanh,
 		SuperiorAcknowledged: n.CapTrenCongNhanHoanThanh,
-		Parent:               n.NhiemVuChaID,
+		Parent:               n.ParentCode,
+		ChildCount:           n.ChildCount,
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
 		// nil IN, nil OUT — the register list never loads the block, and `null` on the wire says
@@ -389,6 +405,11 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 	thamSo := r.URL.Query()
 
 	// Parsed BEFORE the store is touched: a rejected page request must run no statement at all.
+	//
+	// ONE PACKAGE-LEVEL ALLOWLIST, and it has to stay that shape: tools/apidoc finds the list by this
+	// identifier and publishes its columns (`created_at`, `code`, `due_at`) as the `sort` enum. For
+	// `sort=due_at&order=asc` the store switches to the ascending key itself (petstore.DanhSach), so
+	// tasks without a deadline come LAST in both directions.
 	yc, err := page.Parse(thamSo, petstore.SapXepNhiemVu)
 	if err != nil {
 		// page.HTTPError owns the mapping so every service answers a bad cursor the same way. It
@@ -399,27 +420,9 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc, canChuThe, err := locNhiemVuTuQuery(thamSo)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+	loc, ok := h.taskFilterFromRequest(w, r, thamSo)
+	if !ok {
 		return
-	}
-
-	if canChuThe {
-		// FAIL CLOSED. With no business code to compare against, the honest answers are "refuse" and
-		// "return the whole register" — and the second is a screen labelled `Giao cho tôi` showing
-		// every task in the commune, which nobody would report as a fault. An empty `.Ma` on a staff
-		// principal is a wiring fault, so it is a 500 an operator can find, exactly as the four write
-		// routes next door treat the same condition.
-		principal, ok := authz.From(ctx)
-		if !ok || principal.Ma == "" {
-			h.d.Log.Error("bộ lọc `scope=mine` chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
-				"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal",
-				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
-			return
-		}
-		loc.NguoiThucHienMa = principal.Ma
 	}
 
 	kq, err := h.d.DanhSachNhiemVu.DanhSach(ctx, loc, yc)
@@ -447,6 +450,41 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 		ra.Items = append(ra.Items, nhiemVuRaNgoai(n))
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// taskFilterFromRequest turns the query string into the store's filter, resolving `scope=mine` from
+// the SESSION. It writes the refusal itself and reports false when it did.
+//
+// ONE FUNCTION FOR BOTH ROUTES THAT TAKE THESE FILTERS — the register list and the per-status
+// counts. The count over a Kanban column must be the count of the cards under it, so both routes
+// must turn one query string into one filter; two copies of this would drift at the first new filter.
+func (h *Handler) taskFilterFromRequest(w http.ResponseWriter, r *http.Request,
+	q map[string][]string) (petstore.LocNhiemVu, bool) {
+
+	ctx := r.Context()
+	loc, canChuThe, err := locNhiemVuTuQuery(q)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return loc, false
+	}
+
+	if canChuThe {
+		// FAIL CLOSED. With no business code to compare against, the honest answers are "refuse" and
+		// "return the whole register" — and the second is a screen labelled `Giao cho tôi` showing
+		// every task in the commune, which nobody would report as a fault. An empty `.Ma` on a staff
+		// principal is a wiring fault, so it is a 500 an operator can find, exactly as the four write
+		// routes next door treat the same condition.
+		principal, ok := authz.From(ctx)
+		if !ok || principal.Ma == "" {
+			h.d.Log.Error("bộ lọc `scope=mine` chạy mà chủ thể không có mã cán bộ — SAI CẤU HÌNH ROUTE",
+				"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path)
+			httpx.WriteError(w, http.StatusInternalServerError, "internal",
+				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+			return loc, false
+		}
+		loc.NguoiThucHienMa = principal.Ma
+	}
+	return loc, true
 }
 
 // locNhiemVuTuQuery validates the filters. EVERY VALUE BECOMES A BOUND PARAMETER in the store;
@@ -499,6 +537,16 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	loc.Tim = lay("q")
 	if len(loc.Tim) > petstore.TimNhiemVuToiDa {
 		return loc, false, petstore.ErrTimNhiemVuQuaDai
+	}
+
+	// §5.10: the DIRECT children of one task, named by its register number. NOT VALIDATED AGAINST
+	// THE REGISTER, for the reason `type` and `unit` are not: a number that matches nothing is an
+	// empty page, which is true — and the same page a task with no children gets, so the filter
+	// cannot be used to learn which numbers exist. Only its LENGTH is bounded, at the length an
+	// issued number can have, so the value cannot become a payload.
+	loc.ParentCode = lay("parent")
+	if len([]rune(loc.ParentCode)) > domain.MaNhiemVuToiDa {
+		return loc, false, errParentCodeTooLong
 	}
 
 	// `late=true` IS THE ONLY ACCEPTED SPELLING, and anything else is refused rather than read as
@@ -566,6 +614,8 @@ var (
 	errPhamViChuaHoTro = errors.New(
 		"`scope=related` chưa dùng được: bộ lọc này cần bộ phận của chính người đăng nhập, " +
 			"mà hợp đồng phiên cán bộ hiện không trả về bộ phận")
+	errParentCodeTooLong = fmt.Errorf(
+		"`parent` là mã nhiệm vụ của việc cha (ví dụ NV19), tối đa %d ký tự", domain.MaNhiemVuToiDa)
 	errLocSapDenHanChuaCo = errors.New(
 		"`soon` chưa dùng được: ngưỡng `sắp đến hạn` là số giờ của từng xã trong bảng `sla`, " +
 			"và chưa có đường đọc số ấy — máy chủ không tự đặt một con số thay xã")

@@ -449,7 +449,7 @@ func TestTachKetLuan_DuongDanDiXuongUseCaseVaThanKhongDoi(t *testing.T) {
 	han := time.Date(2026, 8, 20, 9, 30, 0, 0, time.UTC)
 	than := thanTachNhiemVu()
 	than.DueAt = &han
-	than.Parent = "nv-cha-001"
+	than.Parent = "NV19" // a REGISTER NUMBER, as on POST /api/v1/tasks
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTachNV(idBBThu, 3), canBoCuaXa(xaA), than)
 	doiMa(t, w, http.StatusCreated)
@@ -460,7 +460,7 @@ func TestTachKetLuan_DuongDanDiXuongUseCaseVaThanKhongDoi(t *testing.T) {
 	}
 	yc := m.ghiBienBan.ycTach
 	if yc.TieuDe != than.Title || yc.Loai != than.Type || !yc.TuSinhMa ||
-		yc.LanhDaoGiaoViecMa != than.Assigner || yc.NhiemVuChaID != "nv-cha-001" {
+		yc.LanhDaoGiaoViecMa != than.Assigner || yc.ParentCode != "NV19" {
 		t.Errorf("thân yêu cầu tới use case = %+v", yc)
 	}
 	if !yc.HanXuLy.Equal(han) {

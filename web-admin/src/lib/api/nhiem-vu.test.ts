@@ -119,9 +119,14 @@ describe("MƯỜI TÊN THAM SỐ — đọc lại từng cái một", () => {
     expect(q.get("sort")).toBe("code");
     expect(q.get("order")).toBe("asc");
     expect(duongDanSoNhiemVu({ limit: 20 })).toBe("/api/v1/tasks?limit=20");
-    // Chỉ hai cột máy chủ nhận — `han_xu_ly` bị từ chối vì là cột NULL (store/nhiem_vu.go:83-85).
-    // @ts-expect-error — `sapXep` chỉ nhận `created_at` | `code`.
-    duongDanSoNhiemVu({ sapXep: "due_at" });
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-01): máy chủ nay nhận `due_at` — việc không có hạn
+    // luôn xếp cuối, cả hai chiều. Kiểu `sapXep` đọc từ enum `sort` của hợp đồng, nên nó tự nhận.
+    expect(
+      new URL(duongDanSoNhiemVu({ sapXep: "due_at" }), "https://xa.example").searchParams.get("sort"),
+    ).toBe("due_at");
+    // `title` vẫn KHÔNG sắp được: tên việc hay trích lời người dân, không đưa lên đường dẫn.
+    // @ts-expect-error — `sapXep` chỉ nhận `created_at` | `code` | `due_at`.
+    duongDanSoNhiemVu({ sapXep: "title" });
   });
 
   it("đường dẫn tương đối, không host, không `tenant_id`", () => {

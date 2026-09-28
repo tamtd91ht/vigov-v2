@@ -291,8 +291,16 @@ func TestNhiemVuCuaKetLuanBuocXaCapNguonVaLoaiDongDaXoa(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NhiemVuCuaKetLuan: %v", err)
 	}
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh, muốn 2", len(k.lenh))
+	// The conclusion, the tasks, then the two tree facts of the nhiemVuRa shape (child count and the
+	// parent's register number), each ONE statement for the whole list.
+	if len(k.lenh) != 4 {
+		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	}
+	for _, l := range k.lenh[2:] {
+		if l.args[0] != string(xaThu) || !strings.Contains(l.sql, "tenant_id = $1") ||
+			!strings.Contains(l.sql, "deleted_at IS NULL") {
+			t.Errorf("câu dữ kiện cây không buộc xã hoặc không loại dòng đã xoá: %q %v", l.sql, l.args)
+		}
 	}
 
 	// 1. The conclusion, through a join bound to the commune on BOTH tables, both live.
@@ -377,9 +385,10 @@ func TestNguonHopMotCauChoCaTrangVaBuocXaHaiBang(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// NO N+1: the page, then ONE back-link statement, whatever the number of tasks.
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh cho 3 nhiệm vụ, muốn 2 (không N+1)", len(k.lenh))
+	// NO N+1: the page, then ONE back-link statement, then ONE statement per tree fact — whatever the
+	// number of tasks.
+	if len(k.lenh) != 4 {
+		t.Fatalf("chạy %d câu lệnh cho 3 nhiệm vụ, muốn 4 (không N+1)", len(k.lenh))
 	}
 	l := k.lenh[1]
 	for _, can := range []string{"k.tenant_id = $1", "b.tenant_id = $1", "b.deleted_at IS NULL",
@@ -418,7 +427,13 @@ func TestNguonHopKhongChayKhiKhongCoNhiemVuTuKetLuan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(k.lenh) != 1 || n.NguonHop != nil {
-		t.Errorf("nhiệm vụ giao trực tiếp: %d câu lệnh, liên kết %+v — muốn 1 câu, không liên kết", len(k.lenh), n.NguonHop)
+	// The task and its two tree facts — and NO back-link statement: none of them touches ket_luan_hop.
+	if len(k.lenh) != 3 || n.NguonHop != nil {
+		t.Errorf("nhiệm vụ giao trực tiếp: %d câu lệnh, liên kết %+v — muốn 3 câu (nhiệm vụ + 2 dữ kiện cây), không liên kết", len(k.lenh), n.NguonHop)
+	}
+	for _, l := range k.lenh {
+		if strings.Contains(l.sql, "ket_luan_hop") {
+			t.Errorf("chạy câu liên kết ngược cho một nhiệm vụ giao trực tiếp: %q", l.sql)
+		}
 	}
 }

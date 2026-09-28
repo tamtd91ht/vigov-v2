@@ -150,16 +150,31 @@ func TestTaoViecCon_KhongChepHanCuaCha(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	yc := taoMau()
-	yc.NhiemVuChaID = idNVGoc
+	// The parent is named by its REGISTER NUMBER — what the wire carries since 28/09/2026.
+	yc.ParentCode = maNVGoc
 	yc.HanXuLy = time.Time{} // the form left "Hạn hoàn thành" empty
 
-	if _, err := uc.Tao(ctx, yc, canBoThu()); err != nil {
+	n, err := uc.Tao(ctx, yc, canBoThu())
+	if err != nil {
 		t.Fatalf("giao việc con: %v", err)
 	}
 
 	chen := k.cau("INSERT INTO nhiem_vu")
 	if len(chen) != 1 {
 		t.Fatalf("ghi %d dòng nhiệm vụ, muốn 1", len(chen))
+	}
+	// $22 is `nhiem_vu_cha_id`: the number was RESOLVED to the parent's internal id, and the column
+	// holds the id — the number is never stored in its place.
+	if chen[0].args[21] != idNVGoc {
+		t.Errorf("nhiem_vu_cha_id = %v, muốn id nội bộ của %s (%s)", chen[0].args[21], maNVGoc, idNVGoc)
+	}
+	// The reply carries the parent's NUMBER and a zero child count, both known without a read.
+	if n.ParentCode != maNVGoc || n.ChildCount != 0 {
+		t.Errorf("phản hồi: parent=%q child_count=%d, muốn %q và 0", n.ParentCode, n.ChildCount, maNVGoc)
+	}
+	// The trail names the parent by register number, not only by its ULID.
+	if d := auditDeltaText(t, k); !strings.Contains(d, `"ma_nhiem_vu_cha":"`+maNVGoc+`"`) {
+		t.Errorf("vết kiểm toán thiếu mã việc cha: %s", d)
 	}
 	// $17 and $18 are `han_xu_ly` and `han_ban_dau` — the two columns the schema requires to arrive
 	// together. Both must be NULL: the child was given no deadline of its own.
@@ -264,18 +279,29 @@ func TestTaoNhiemVu_GhiChuQuaDaiThiTuChoiNhuPATCH(t *testing.T) {
 	}
 }
 
+// ONE ANSWER FOR EVERY WRONG PARENT. An unknown number, and an INTERNAL id sent where a number is now
+// expected (the old contract), both land on ErrChaKhongTonTai — never on a silent root task, and never
+// on a different error that would tell the caller the value exists in some other form. Another
+// commune's number is the same case to this layer: the locking read is bound to this commune.
 func TestTaoNhiemVu_ChaKhongTonTaiThiTuChoiVaKhongGhiGi(t *testing.T) {
-	k := khoNVMau()
-	uc, ctx := dungGhiNhiemVu(t, k)
+	for name, parent := range map[string]string{
+		"unknown register number":        "NV99",
+		"internal id sent as the parent": idNVGoc,
+	} {
+		t.Run(name, func(t *testing.T) {
+			k := khoNVMau()
+			uc, ctx := dungGhiNhiemVu(t, k)
 
-	yc := taoMau()
-	yc.NhiemVuChaID = "01JKHONGCOTRONGSONHIEMVU0"
+			yc := taoMau()
+			yc.ParentCode = parent
 
-	_, err := uc.Tao(ctx, yc, canBoThu())
-	if !errors.Is(err, domain.ErrChaKhongTonTai) {
-		t.Fatalf("lỗi = %v, muốn ErrChaKhongTonTai", err)
+			_, err := uc.Tao(ctx, yc, canBoThu())
+			if !errors.Is(err, domain.ErrChaKhongTonTai) {
+				t.Fatalf("lỗi = %v, muốn ErrChaKhongTonTai", err)
+			}
+			khongGhiGi(t, k)
+		})
 	}
-	khongGhiGi(t, k)
 }
 
 func TestTaoNhiemVu_MaTuNhapDaDungThiTuChoi(t *testing.T) {
@@ -384,8 +410,8 @@ func TestSuaNhiemVu_ChuTrinhBaTangBiChan(t *testing.T) {
 	k.themCon(idNVChau, maNVChau, idNVCon, domain.DangThucHien) // C under B
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	chau := idNVChau
-	_, err := uc.Sua(ctx, maNVGoc, petstore.SuaNhiemVu{NhiemVuChaID: &chau}, canBoThu())
+	chau := maNVChau
+	_, err := uc.Sua(ctx, maNVGoc, petstore.SuaNhiemVu{ParentCode: &chau}, canBoThu())
 
 	if !errors.Is(err, domain.ErrChuTrinhCayNhiemVu) {
 		t.Fatalf("lỗi = %v, muốn ErrChuTrinhCayNhiemVu — "+
@@ -400,8 +426,8 @@ func TestSuaNhiemVu_TuLamChaCuaMinhBiChan(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	minh := idNVGoc
-	_, err := uc.Sua(ctx, maNVGoc, petstore.SuaNhiemVu{NhiemVuChaID: &minh}, canBoThu())
+	minh := maNVGoc
+	_, err := uc.Sua(ctx, maNVGoc, petstore.SuaNhiemVu{ParentCode: &minh}, canBoThu())
 	if !errors.Is(err, domain.ErrChuTrinhCayNhiemVu) {
 		t.Fatalf("lỗi = %v, muốn ErrChuTrinhCayNhiemVu", err)
 	}
@@ -417,14 +443,98 @@ func TestSuaNhiemVu_ChuyenSangNhanhKhacVanDuoc(t *testing.T) {
 	k.nhiemVu[idNVChau] = dongNhiemVuGia(idNVChau, maNVChau, nil)
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	goc2 := idNVChau
-	if _, err := uc.Sua(ctx, maNVCon, petstore.SuaNhiemVu{NhiemVuChaID: &goc2}, canBoThu()); err != nil {
+	goc2 := maNVChau
+	after, err := uc.Sua(ctx, maNVCon, petstore.SuaNhiemVu{ParentCode: &goc2}, canBoThu())
+	if err != nil {
 		t.Fatalf("chuyển việc con sang nhánh khác bị từ chối: %v", err)
 	}
-	if !k.coCau("UPDATE nhiem_vu") {
-		t.Error("không ghi gì dù đổi cha hợp lệ")
+	updates := k.cau("UPDATE nhiem_vu")
+	if len(updates) != 1 {
+		t.Fatal("không ghi gì dù đổi cha hợp lệ")
+	}
+	// $12 is `nhiem_vu_cha_id`: the INTERNAL id the number resolved to.
+	if updates[0].args[11] != idNVChau {
+		t.Errorf("nhiem_vu_cha_id = %v, muốn %s", updates[0].args[11], idNVChau)
+	}
+	// THE REPLY'S TREE FACTS come from the rows inside the act's transaction: the NEW parent's number,
+	// and NV20's own child count (none in this tree).
+	if after.ParentCode != maNVChau || after.ChildCount != 0 {
+		t.Errorf("phản hồi: parent=%q child_count=%d, muốn %q và 0", after.ParentCode, after.ChildCount, maNVChau)
+	}
+	for _, l := range k.cau("GROUP BY nhiem_vu_cha_id") {
+		if !l.trongGiaoDich {
+			t.Error("đếm việc con cho phản hồi chạy NGOÀI giao dịch của hành vi")
+		}
+	}
+	// THE TRAIL NAMES BOTH PARENTS BY REGISTER NUMBER — the old one (NV19) and the new one (NV21) —
+	// not only by ULIDs nobody can read years later.
+	delta := auditDeltaText(t, k)
+	for _, want := range []string{`"ma_nhiem_vu_cha":"` + maNVGoc + `"`, `"ma_nhiem_vu_cha":"` + maNVChau + `"`} {
+		if !strings.Contains(delta, want) {
+			t.Errorf("vết kiểm toán thiếu %s: %s", want, delta)
+		}
 	}
 	chiGhiTrongGiaoDich(t, k)
+}
+
+// auditDeltaText returns the one audit entry's arguments as text, whatever type the delta was bound as.
+func auditDeltaText(t *testing.T, k *khoNhiemVuGia) string {
+	t.Helper()
+	var b strings.Builder
+	for _, a := range vetKiemToan(t, k).args {
+		switch v := a.(type) {
+		case []byte:
+			b.Write(v)
+		case string:
+			b.WriteString(v)
+		}
+		b.WriteString(" ")
+	}
+	return b.String()
+}
+
+// TestReplyTreeFactsOnStatusMove — a status reply carries the SAME `parent` and `child_count` the reads
+// do. NV20 hangs off NV19 and has NV21 under it; a reply saying `parent: ""`, `child_count: 0` would
+// be a statement about the record that is false, made by the act that just changed it.
+func TestReplyTreeFactsOnStatusMove(t *testing.T) {
+	k := khoNVMau()
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
+	k.themCon(idNVChau, maNVChau, idNVCon, domain.DangThucHien)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	after, err := uc.DoiTrangThai(ctx, maNVCon,
+		YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)}, canBoThu(), false)
+	if err != nil {
+		t.Fatalf("đổi trạng thái: %v", err)
+	}
+	if after.ParentCode != maNVGoc || after.ChildCount != 1 {
+		t.Errorf("phản hồi: parent=%q child_count=%d, muốn %q và 1", after.ParentCode, after.ChildCount, maNVGoc)
+	}
+	// ONE count statement and ONE parent statement for the reply — batched, not per anything.
+	if n := len(k.cau("GROUP BY nhiem_vu_cha_id")); n != 1 {
+		t.Errorf("chạy %d câu đếm việc con, muốn 1", n)
+	}
+	if n := len(k.cau("AND id IN (")); n != 1 {
+		t.Errorf("chạy %d câu đọc mã việc cha, muốn 1", n)
+	}
+}
+
+// TestPatchCannotSmuggleParentID — the resolved id is the use case's to fill. A caller that sets
+// NhiemVuChaID directly (no ParentCode) moves NOTHING: the field is cleared on entry, so the only door
+// to a new parent is a register number resolved under the lock.
+func TestPatchCannotSmuggleParentID(t *testing.T) {
+	k := khoNVMau()
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
+	k.nhiemVu[idNVChau] = dongNhiemVuGia(idNVChau, maNVChau, nil)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	id := idNVChau
+	if _, err := uc.Sua(ctx, maNVCon, petstore.SuaNhiemVu{NhiemVuChaID: &id}, canBoThu()); err != nil {
+		t.Fatalf("sửa: %v", err)
+	}
+	if k.coCau("UPDATE nhiem_vu") {
+		t.Error("một id nội bộ đặt thẳng vào NhiemVuChaID đã đổi được cha — cửa id phải đóng")
+	}
 }
 
 // --- 3. đổi trạng thái, và ADR 0037 quyết định 4 -------------------------------------------------------

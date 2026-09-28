@@ -363,6 +363,33 @@ func (k *khoNhiemVuGia) doNhiemVu(q string, cot []string, args []driver.Value) (
 	defer k.mu.Unlock()
 
 	switch {
+	// THE REPLY'S TWO TREE FACTS (store.attachTreeFacts). ABOVE THE `count(*)` BRANCH, which would
+	// otherwise answer the child count with the duplicate-code counter. Both read the same map the
+	// tree walks read, so a reply's `child_count` and `parent` agree with the tree the rules decided on.
+	case strings.Contains(q, "GROUP BY nhiem_vu_cha_id"):
+		var hang [][]driver.Value
+		for _, parentID := range args[1:] {
+			var n int64
+			for _, r := range k.nhiemVu {
+				if r["nhiem_vu_cha_id"] == parentID {
+					n++
+				}
+			}
+			if n > 0 {
+				hang = append(hang, []driver.Value{parentID, n})
+			}
+		}
+		return &rowsNVGia{cot: cot, hang: hang}, nil
+
+	case strings.Contains(q, "AND id IN ("):
+		var ds []map[string]driver.Value
+		for _, id := range args[1:] {
+			if r, co := k.nhiemVu[fmt.Sprint(id)]; co {
+				ds = append(ds, r)
+			}
+		}
+		return dungRows(cot, ds)
+
 	// THE COLUMN NAME IS REPLACED FOR THESE TWO. `cotTrongSelect` splits the SELECT list on commas,
 	// and `COALESCE(MAX(substring(ma from 3)::bigint), 0)` carries one — so the generic reader sees
 	// two columns where the store scans one. An aggregate answers ONE value by construction, so the

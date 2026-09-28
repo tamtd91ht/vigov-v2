@@ -88,27 +88,10 @@ func (s *NhiemVuStore) TheoMaDeSua(ctx context.Context, tx *store.ScopedTx, ma s
 	return n, nil
 }
 
-// TheoIDDeSua is TheoMaDeSua keyed by the INTERNAL id.
-//
-// A SECOND METHOD RATHER THAN A FLAG, and it exists for exactly one caller: the parent named on a
-// create or a re-parent request arrives as an id, not as a register number. Locking it too is what
-// stops the parent being soft-deleted in the window between "this parent is live" and the INSERT
-// that hangs a child off it — which would produce the orphan ADR 0037 decision 3 exists to prevent.
-func (s *NhiemVuStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (
-	domain.NhiemVu, error) {
-
-	const stmt = `SELECT ` + cotNhiemVu + ` FROM nhiem_vu
-		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`
-
-	n, err := quetNhiemVu(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return domain.NhiemVu{}, ErrNhiemVuKhongTonTai
-	}
-	if err != nil {
-		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: đọc nhiệm vụ cha để sửa: %w", err)
-	}
-	return n, nil
-}
+// THERE IS NO `TheoIDDeSua` ANY MORE (removed 28/09/2026). Its one caller was the parent named on a
+// create or re-parent request, which then arrived as an internal id; it now arrives as a register
+// number and is locked through TheoMaDeSua above, so the orphan window ADR 0037 decision 3 cares
+// about is closed by the same read.
 
 // --- the tree (ADR 0037) ---------------------------------------------------------------------------
 
@@ -327,13 +310,22 @@ type SuaNhiemVu struct {
 	LanhDaoPheDuyetHoanThanh *bool
 	CapTrenCongNhanHoanThanh *bool
 
-	// NhiemVuChaID re-parents the task. An empty string DETACHES it into a root task, which is why
-	// this is a pointer to a string rather than a string: "" and "not mentioned" are two different
-	// requests.
+	// ParentCode re-parents the task, naming the new parent by its REGISTER NUMBER (`NV19`) — what the
+	// PATCH body's `parent` carries. An empty string DETACHES it into a root task, which is why this
+	// is a pointer to a string rather than a string: "" and "not mentioned" are two different requests.
 	//
 	// ⚠ THIS IS THE FIELD THE CYCLE CHECK EXISTS FOR. A task created under a parent cannot close a
 	// cycle — a brand-new row has no descendants — so `A → B → C → A` can only ever be built by
 	// MOVING an existing task under one of its own descendants, i.e. here.
+	ParentCode *string
+
+	// NhiemVuChaID is the RESOLVED form of ParentCode — the parent's internal id, which is what the
+	// column holds and what CoGiDoi / Apdung compare and fold.
+	//
+	// ⚠ NEVER SET FROM A REQUEST. app.GhiNhiemVu.Sua clears it on entry and fills it only from the
+	// row ParentCode resolved to, under the lock, inside the transaction. An internal id arriving from
+	// outside the service would be a value no client can legitimately know (the wire carries no task
+	// id), so accepting one would only serve a caller guessing ids.
 	NhiemVuChaID *string
 
 	// VanBan is §5.4's document block — the three dynamic lists of §7.2, sent WHOLE.

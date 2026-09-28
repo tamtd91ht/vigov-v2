@@ -47,6 +47,10 @@ type nhiemVuGia struct {
 	goi     int
 	locCuoi petstore.LocNhiemVu
 
+	// lastPage is the page request the list route handed down — how the `sort=due_at` cases prove the
+	// handler parsed against the allowlist of the requested direction.
+	lastPage page.Request
+
 	// vanBan is §5.4's document block, KEYED BY THE TASK'S INTERNAL id — the key the real store uses,
 	// so a handler that passed the register number instead would come back empty here too.
 	vanBan map[string][]domain.NhiemVuVanBan
@@ -79,17 +83,36 @@ func (n *nhiemVuGia) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, err
 	return domain.NhiemVu{}, petstore.ErrNhiemVuKhongTonTai
 }
 
-func (n *nhiemVuGia) DanhSach(ctx context.Context, loc petstore.LocNhiemVu, _ page.Request) (
+func (n *nhiemVuGia) DanhSach(ctx context.Context, loc petstore.LocNhiemVu, yc page.Request) (
 	page.Result[domain.NhiemVu], error) {
 
 	n.goi++
 	n.locCuoi = loc
+	n.lastPage = yc
 	if n.loi != nil {
 		return page.Result[domain.NhiemVu]{}, n.loi
 	}
 	kq := page.NewResult[domain.NhiemVu]()
 	kq.Items = append(kq.Items, n.theo[tenant.MustFrom(ctx)]...)
 	return kq, nil
+}
+
+// CountByStatus counts the commune's fixtures per status, reading the commune from the context. It
+// shares `goi` and `locCuoi` with DanhSach, so the four guard cases of GET /api/v1/task-counts prove
+// no read ran with the same counter, and the filter the route handed down is the one asserted.
+func (n *nhiemVuGia) CountByStatus(ctx context.Context, loc petstore.LocNhiemVu) (
+	map[domain.TrangThaiNhiemVu]int, error) {
+
+	n.goi++
+	n.locCuoi = loc
+	if n.loi != nil {
+		return nil, n.loi
+	}
+	counts := map[domain.TrangThaiNhiemVu]int{}
+	for _, nv := range n.theo[tenant.MustFrom(ctx)] {
+		counts[nv.TrangThai]++
+	}
+	return counts, nil
 }
 
 // VanBanCuaNhiemVu reads the document block, and IT READS THE COMMUNE FROM THE CONTEXT exactly as
@@ -147,6 +170,9 @@ func nhiemVuMau() *nhiemVuGia {
 				LanhDaoGiaoViecMa: "CB-00007", ChuyenVienTheoDoiMa: "CB-00412",
 				HanXuLy: mocHanNVA, HanBanDau: mocHanGocNVA,
 				TienDo: 40, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA,
+				// The two tree facts the store attaches (store.attachTreeFacts): NV19 is a root
+				// with three live children.
+				ChildCount: 3,
 			},
 			{
 				ID: "nv-002", Ma: maNhiemVuXo,
@@ -159,6 +185,9 @@ func nhiemVuMau() *nhiemVuGia {
 				HanXuLy:         mocHanNVA, HanBanDau: mocHanGocNVA,
 				NgayHoanThanh: mocXongNVA,
 				TienDo:        100, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA,
+				// A child of NV19: the INTERNAL parent id is in no response field, and the wire
+				// carries the register number the store resolved.
+				NhiemVuChaID: "nv-001", ParentCode: maNhiemVuA,
 			},
 		},
 		xaB: {

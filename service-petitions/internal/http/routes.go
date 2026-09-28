@@ -148,10 +148,18 @@ type (
 			page.Result[domain.NhatKyNhiemVu], error)
 	}
 
-	// NhiemVuDanhSach is the paginated read of the task register, for GET /api/v1/tasks.
+	// NhiemVuDanhSach is the paginated read of the task register, for GET /api/v1/tasks, and its
+	// per-status count, for GET /api/v1/task-counts.
+	//
+	// ONE INTERFACE FOR BOTH because they are one question asked two ways — which tasks match these
+	// filters, and how many per status — under one permission, over one filter struct. Splitting
+	// them would let the two be wired to different readers, and a count that came from somewhere
+	// other than the list is the drift the route exists to prevent.
 	NhiemVuDanhSach interface {
 		DanhSach(ctx context.Context, loc petstore.LocNhiemVu, yc page.Request) (
 			page.Result[domain.NhiemVu], error)
+		CountByStatus(ctx context.Context, loc petstore.LocNhiemVu) (
+			map[domain.TrangThaiNhiemVu]int, error)
 	}
 
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
@@ -1025,14 +1033,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	// cannot move `bo_phan_id` or `nguoi_thuc_hien_ma` — folding it in would hand assignment to every
 	// holder of `task.update`. Reported as a finding.
 
-	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn
-	// @screen   02-nhiem-vu §3, §4
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)
+	// @screen   02-nhiem-vu §3, §4, §5.10
 	// 400 covers a filter the server REFUSES rather than ignores, and two of those refusals are not
 	// bad input at all — they are missing contracts, answered with a sentence naming what is
 	// missing instead of a page that answers a different question:
 	//
 	//	scope=related  needs the caller's own department; the staff principal carries none
 	//	soon=true      needs the commune's own `sla.gio_sap_den_han`; identity exposes no RPC for it
+	//
+	// `parent=<register number>` lists the DIRECT children of that task; a number matching nothing
+	// in this commune is an empty page, the same answer a childless task gets. `sort=due_at` puts the
+	// tasks WITHOUT a deadline LAST in both directions, and the cursor stays exact across that
+	// boundary (petstore.SapXepNhiemVu, petstore.DanhSach). Every row carries `parent` as a register number and
+	// `child_count`, both resolved for the whole page in two statements.
 	//
 	// 500 additionally covers `scope=mine` on a principal with no staff business code — a wiring
 	// fault, refused rather than silently widened to the whole register.
@@ -1047,6 +1061,29 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachNhiemVu)))
+
+	// SỐ LƯỢNG THEO TRẠNG THÁI (§4.1) — the real number over each Kanban column, under EXACTLY the
+	// filters of GET /api/v1/tasks (one parser, one predicate builder; see task_counts.go). `task.read`,
+	// the list's own key: the count reveals nothing the list does not, and a second key would let an
+	// account see a board whose headers it may not read. NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// A top-level `task-counts` and not `tasks/counts`, which `tasks/{ma}` would read as a task
+	// numbered `counts`. ALL SEVEN codes, zeros included, in the codes' default order.
+	//
+	// 400 is the list's own set of refusals, with the same sentences; paging parameters are ignored.
+	// 401 is RequirePermission's answer to no session AND to a session of another commune. NO idem.*
+	// DECLARATION: a GET changes no state. NO AUDIT ENTRY: counts, no personal data.
+	//
+	// @summary  Số nhiệm vụ theo từng trạng thái, cùng bộ lọc với danh sách nhiệm vụ — số thật trên đầu mỗi cột Kanban
+	// @screen   02-nhiem-vu §4.1
+	// @reply    200 taskCountsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-counts",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.TaskCounts)))
 
 	// @summary  Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19)
 	// @screen   02-nhiem-vu §5
@@ -1305,7 +1342,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// widened to the whole commune. 401 is RequirePermission's answer to no session AND to a session of
 	// another commune. NO idem.* DECLARATION: a GET changes no state.
 	//
-	// @summary  Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc
+	// `task=<register number>` narrows to ONE task's pending requests (§5.8's block inside its drawer);
+	// a number matching no live task of this commune is an empty page, the same answer as a task with
+	// nothing pending. 400 when it is longer than an issued number can be. Combines with `approver=me`.
+	//
+	// @summary  Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc; `task=NV19` chỉ lấy đề nghị của một nhiệm vụ
 	// @screen   02-nhiem-vu §5.8
 	// @reply    200 page.Result[deNghiChoDuyetRa]
 	// @reply    400 httpx.Error

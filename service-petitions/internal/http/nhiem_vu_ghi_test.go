@@ -416,14 +416,15 @@ func TestTaoNhiemVu_ThanDiNguyenVenXuongUseCase(t *testing.T) {
 	han := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 	vao := thanTaoNV()
 	vao.DueAt = &han
-	vao.Parent = "nv-cha-001"
+	// A REGISTER NUMBER, since 28/09/2026 — the `code` a drawer open on the parent already holds.
+	vao.Parent = "NV19"
 	vao.Assigner = "CB-00007"
 
 	doiMa(t, m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao),
 		http.StatusCreated)
 
 	yc := m.ghiNhiemVu.ycTao
-	if !yc.TuSinhMa || yc.Loai != "theo-van-ban" || yc.NhiemVuChaID != "nv-cha-001" {
+	if !yc.TuSinhMa || yc.Loai != "theo-van-ban" || yc.ParentCode != "NV19" {
 		t.Fatalf("yêu cầu tới use case = %+v", yc)
 	}
 	// THE DEADLINE THE FORM CARRIED, UNCHANGED. Nothing between the wire and the column derives it.
@@ -540,11 +541,37 @@ func TestSuaNhiemVu_TruongKhongGuiThiKhongDongToi(t *testing.T) {
 		"tien_do":     sua.TienDo != nil,
 		"ghi_chu":     sua.GhiChu != nil,
 		"muc_uu_tien": sua.MucUuTien != nil,
-		"cha":         sua.NhiemVuChaID != nil,
+		"cha":         sua.ParentCode != nil,
+		// The RESOLVED id is never filled from the wire — only app.Sua fills it, under the lock.
+		"cha_id": sua.NhiemVuChaID != nil,
 	} {
 		if v {
 			t.Errorf("trường %q không gửi lên mà vẫn tới use case", ten)
 		}
+	}
+}
+
+// TestPatchTaskParentIsRegisterCode — PATCH's `parent` is a REGISTER NUMBER and reaches the use case as
+// ParentCode, and ONLY there: the resolved internal id stays empty until the use case resolves it
+// inside the transaction. `""` (detach) must survive as a pointer to an empty string, not as nil.
+func TestPatchTaskParentIsRegisterCode(t *testing.T) {
+	for name, value := range map[string]string{"move under another parent": "NV07", "detach to a root": ""} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.update"))
+
+			parent := value
+			doiMa(t, m.goiGhiNV(t, http.MethodPatch, hostA, duongNV(maNVThu), canBoCuaXa(xaA),
+				suaNhiemVuVao{Parent: &parent}), http.StatusOK)
+
+			sua := m.ghiNhiemVu.ycSua
+			if sua.ParentCode == nil || *sua.ParentCode != value {
+				t.Fatalf("ParentCode = %v, muốn %q", sua.ParentCode, value)
+			}
+			if sua.NhiemVuChaID != nil {
+				t.Errorf("id nội bộ của cha bị điền từ thân yêu cầu: %q", *sua.NhiemVuChaID)
+			}
+		})
 	}
 }
 

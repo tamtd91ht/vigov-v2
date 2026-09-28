@@ -138,6 +138,14 @@ func (khoNhiemVu) DanhSach(ctx context.Context, _ petstore.LocNhiemVu, _ page.Re
 	return page.NewResult[domain.NhiemVu](), nil
 }
 
+// CountByStatus — GET /api/v1/task-counts, the same single assertion: the commune reached the store.
+func (khoNhiemVu) CountByStatus(ctx context.Context, _ petstore.LocNhiemVu) (
+	map[domain.TrangThaiNhiemVu]int, error) {
+
+	_ = tenant.MustFrom(ctx)
+	return map[domain.TrangThaiNhiemVu]int{}, nil
+}
+
 // VanBanCuaNhiemVu — §5.4's document block, asserting the same one thing: the commune reached the
 // store. It is unreachable in practice from these tests, because TheoMa above always refuses first.
 func (khoNhiemVu) VanBanCuaNhiemVu(ctx context.Context, _ string) ([]domain.NhiemVuVanBan, error) {

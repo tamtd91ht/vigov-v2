@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -78,11 +79,27 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 // the Sổ theo dõi's own order (§4.3). It is NOT NULL and carries UNIQUE (tenant_id, ma), so the
 // cursor has a stable total order.
 //
-// WHAT IS DELIBERATELY ABSENT, and each absence is a different rule:
+// `due_at` IS OFFERED SINCE 28/09/2026 (the owner approved the design that day), AND IT IS NOT
+// `han_xu_ly` ITSELF. The column is NULLABLE, and `(col, id) > (…)` is NULL for a NULL col, so a
+// plain sort on it would make every task with no deadline vanish from page two onward — the reason
+// this allowlist refused it until now. What it sorts on instead is a NOT NULL key computed per row in
+// taskByDueTable: the deadline, or a SENTINEL for "no deadline" chosen per DIRECTION so those tasks
+// come LAST both ways (after the latest deadline ascending, after the earliest descending). Because
+// the key is never NULL, store.QueryPage's keyset stays a total order across the NULL boundary and
+// keeps owning the ORDER BY, the anchor and the limit+1 — nothing here re-implements them.
 //
-//	han_xu_ly    NULLABLE — `(col, id) > (…)` is NULL for a NULL col, so every task with no
-//	             deadline would vanish from page two onward. §4.2 offers it as a column sort; a
-//	             screen that needs late work first asks with `late=true`.
+// ONE PARAMETER, TWO ALLOWLISTS: `sort=due_at` maps to `due_sort_desc` here and to `due_sort_asc` in
+// taskSortAscAllowlist. HANDLERS PARSE AGAINST SapXepNhiemVu ONLY — it is the one package-level list
+// tools/apidoc reads to publish the `sort` enum (`created_at`, `code`, `due_at`) in openapi.json, so a
+// second list reachable from the handler would hide the enum. DanhSach then REBUILDS an ascending
+// `due_at` request against taskSortAscAllowlist (forDueDirection), carrying the limit and the
+// anchor over unchanged. The cursor records both the parameter and the direction (page.Decode), so a
+// cursor from one direction cannot be replayed on the other. A request whose key and direction still
+// disagree after that is refused — that pairing is what puts the no-deadline tasks last.
+//
+// WHAT IS STILL DELIBERATELY ABSENT, and each absence is a different rule:
+//
+//	han_xu_ly    as a raw column, for the NULL reason above — `due_at` is the only way in.
 //	tieu_de      a sort key travels in a URL, an access log and a browser history, and a task
 //	             title quotes a citizen's complaint often enough that it is not a safe thing to
 //	             put there (rule 3, forbidden #4).
@@ -92,7 +109,102 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 var SapXepNhiemVu = page.NewAllowlist(page.Desc,
 	page.Col("created_at", "tao_luc", page.KindTime),
 	page.Col("code", "ma", page.KindText),
+	page.Col("due_at", dueSortDescColumn, page.KindTime),
 )
+
+// taskSortAscAllowlist is SapXepNhiemVu for `order=asc`: identical but for the key `due_at` maps to.
+// Same default (created_at, descending), so a request naming no sort reads the same page from both.
+var taskSortAscAllowlist = page.NewAllowlist(page.Desc,
+	page.Col("created_at", "tao_luc", page.KindTime),
+	page.Col("code", "ma", page.KindText),
+	page.Col("due_at", dueSortAscColumn, page.KindTime),
+)
+
+// forDueDirection turns an ASCENDING `due_at` request parsed against SapXepNhiemVu into the same
+// request against taskSortAscAllowlist, so it sorts on the ascending key. Every other request is
+// returned as it is.
+//
+// NOTHING IS RE-VALIDATED BY HAND: the rebuilt request goes through page.New, which decodes the
+// re-encoded anchor exactly as it decodes a client's cursor. The anchor itself is the one the
+// client sent, so page two continues from the same row.
+func forDueDirection(yc page.Request) (page.Request, error) {
+	if yc.Column().SQL != dueSortDescColumn || yc.Dir() != page.Asc {
+		return yc, nil
+	}
+	asc, ok := columnOf(taskSortAscAllowlist, "due_at")
+	if !ok {
+		return page.Request{}, ErrTaskSortDirection
+	}
+	cursor := ""
+	if a, ok := yc.After(); ok {
+		cursor = page.Encode(asc, page.Asc, a)
+	}
+	return page.New(taskSortAscAllowlist, "due_at", string(page.Asc), strconv.Itoa(yc.Limit()), cursor)
+}
+
+// columnOf finds one allowlisted column by its parameter name.
+func columnOf(a page.Allowlist, param string) (page.Column, bool) {
+	for _, c := range a.Columns() {
+		if c.Param == param {
+			return c, true
+		}
+	}
+	return page.Column{}, false
+}
+
+// The two computed sort keys and their sentinels.
+//
+// THE SENTINELS ARE GO VALUES AND THE SQL LITERALS ARE BUILT FROM THEM (timestamptzLiteral), because
+// the anchor of a no-deadline row is read in Go (mocNhiemVu / taskAscAnchors) and compared in SQL:
+// two hand-written spellings of one instant that differed by a second would re-open the exact hole
+// this key closes — the first no-deadline row of page two would sort on the wrong side of the anchor.
+//
+//	desc       the zero time.Time, 0001-01-01 00:00:00 UTC — smaller than any deadline a commune can
+//	           set, and EXACTLY what quetNhiemVu leaves in HanXuLy for a NULL
+//	ascending  9999-12-31 00:00:00 UTC — larger than any deadline a commune can set
+//
+// A real deadline equal to a sentinel would tie with the no-deadline rows and be ordered among them
+// by id — still no row lost or repeated, because (key, id) is still a total order.
+const (
+	dueSortAscColumn  = "due_sort_asc"
+	dueSortDescColumn = "due_sort_desc"
+)
+
+var (
+	dueSortAscNoDeadline  = time.Date(9999, 12, 31, 0, 0, 0, 0, time.UTC)
+	dueSortDescNoDeadline = time.Time{}
+)
+
+// timestamptzLiteral spells an instant as a PostgreSQL literal. Only ever called on the two sentinels
+// above — never on a value from a request.
+func timestamptzLiteral(t time.Time) string {
+	return "TIMESTAMPTZ '" + t.UTC().Format("2006-01-02 15:04:05") + "+00'"
+}
+
+// taskByDueTable is the relation a `sort=due_at` page is cut from: every column of `nhiem_vu`, plus
+// the two NOT NULL keys. A DERIVED TABLE handed to store.QueryPage, the shape bangDeNghiChoDuyet
+// already uses, so QueryPage keeps owning the whole keyset.
+//
+// `SELECT nhiem_vu.*` SO EVERY FILTER OF locNhiemVuThanhSQL READS THE SAME UNQUALIFIED COLUMNS it
+// reads on the plain table — one predicate builder for both shapes.
+//
+// `tenant_id = $1` INSIDE AS WELL AS OUTSIDE: QueryPage adds the outer one; the inner one keeps the
+// partition pruning and the commune bound visible in the text of the subquery itself (rule 1,
+// invariant 5), rather than resting on the planner pushing the outer predicate down.
+//
+// ⚠ NO INDEX SERVES THIS ORDER. `nhiem_vu_han` (migration 0006) is on the raw column and excludes
+// NULLs, so ordering by the COALESCE key sorts the commune's live rows in memory. That is bounded by
+// one commune's register and affordable at today's sizes; an expression index on the two keys is a
+// migration, which this pass does not own — reported.
+var taskByDueTable = `(SELECT nhiem_vu.*, COALESCE(han_xu_ly, ` + timestamptzLiteral(dueSortAscNoDeadline) +
+	`) AS ` + dueSortAscColumn + `, COALESCE(han_xu_ly, ` + timestamptzLiteral(dueSortDescNoDeadline) +
+	`) AS ` + dueSortDescColumn + ` FROM nhiem_vu WHERE tenant_id = $1) AS nv`
+
+// ErrTaskSortDirection means a `due_at` key reached DanhSach with the direction it was not built for —
+// a caller parsed against SapXepNhiemVu while asking for `asc`, or the reverse. Refused rather than
+// served: the page would put every task without a deadline FIRST, while the screen says it sorts
+// them last.
+var ErrTaskSortDirection = errors.New("nhiem_vu: khoá sắp xếp theo hạn không khớp chiều sắp xếp")
 
 // TimNhiemVuToiDa bounds the free-text search. Longer than any phrase a clerk types, short enough
 // that the pattern cannot become a payload.
@@ -148,6 +260,15 @@ type LocNhiemVu struct {
 	// ignore it. Both are validated by the handler and again by DanhSach (validateTaskMetric).
 	Metric domain.TaskMetric
 	Period domain.Period
+
+	// ParentCode restricts the page to the DIRECT children of the task carrying this register number
+	// (§5.10's "Nhiệm vụ con" block). "" = no restriction.
+	//
+	// A CODE AND NOT AN INTERNAL id, resolved inside the statement against this commune's LIVE tasks.
+	// A number that matches nothing — another commune's, a soft-deleted one, a typo — yields an empty
+	// page, the same answer as a task with no children, so the filter reveals nothing about records
+	// the caller cannot see.
+	ParentCode string
 }
 
 // dieuKienTimNhiemVu is the free-text predicate, built with the placeholder already chosen.
@@ -196,6 +317,14 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 	}
 	if loc.NguonGiao != "" {
 		them(" AND nguon_giao = $%d", loc.NguonGiao)
+	}
+	if loc.ParentCode != "" {
+		// THE PARENT IS RESOLVED BY ITS REGISTER NUMBER INSIDE THE STATEMENT, against this commune's
+		// LIVE rows. `UNIQUE (tenant_id, ma)` makes the scalar subquery return at most one id; a number
+		// that matches nothing makes it NULL, `= NULL` matches no row, and the page is empty — the
+		// same answer a childless task gets. Served by `nhiem_vu_cha` (migration 0008).
+		them(" AND nhiem_vu_cha_id = (SELECT p.id FROM nhiem_vu p"+
+			" WHERE p.tenant_id = $1 AND p.ma = $%d AND p.deleted_at IS NULL)", loc.ParentCode)
 	}
 	if loc.Tim != "" {
 		// ILIKE ON TWO COLUMNS — the register number a clerk remembers and the title. A leading
@@ -256,11 +385,61 @@ const dieuKienTreHan = `han_xu_ly IS NOT NULL AND (
 // a scanned row. store.NewMoc compares the two lists AT CONSTRUCTION, so a sort added to
 // SapXepNhiemVu without a reader here is a panic at startup rather than an error on the first
 // request that uses it — which would be after release.
+//
+// `due_at` READS THE SAME KEY THE SQL SORTS ON, sentinel included: a no-deadline task's anchor is the
+// sentinel of ITS direction, which is why the two directions have two readers. A NULL deadline scans
+// to the zero time.Time, which is exactly dueSortDescNoDeadline, so the descending reader is the raw
+// field; the ascending one substitutes its own sentinel.
 var mocNhiemVu = store.NewMoc[domain.NhiemVu](SapXepNhiemVu,
 	map[string]func(domain.NhiemVu) page.Key{
 		"created_at": func(n domain.NhiemVu) page.Key { return page.TimeKey(n.TaoLuc) },
 		"code":       func(n domain.NhiemVu) page.Key { return page.TextKey(n.Ma) },
+		"due_at":     dueDescKey,
 	})
+
+// taskAscAnchors is mocNhiemVu for taskSortAscAllowlist. Only `due_at` differs.
+var taskAscAnchors = store.NewMoc[domain.NhiemVu](taskSortAscAllowlist,
+	map[string]func(domain.NhiemVu) page.Key{
+		"created_at": func(n domain.NhiemVu) page.Key { return page.TimeKey(n.TaoLuc) },
+		"code":       func(n domain.NhiemVu) page.Key { return page.TextKey(n.Ma) },
+		"due_at":     dueAscKey,
+	})
+
+// dueAscKey and dueDescKey are the Go spelling of the two COALESCE keys in taskByDueTable. NAMED, so
+// the test that walks pages across the NULL boundary drives the very readers the cursor is built
+// from rather than a copy of them.
+func dueAscKey(n domain.NhiemVu) page.Key {
+	if n.HanXuLy.IsZero() {
+		return page.TimeKey(dueSortAscNoDeadline)
+	}
+	return page.TimeKey(n.HanXuLy)
+}
+
+func dueDescKey(n domain.NhiemVu) page.Key {
+	if n.HanXuLy.IsZero() {
+		return page.TimeKey(dueSortDescNoDeadline)
+	}
+	return page.TimeKey(n.HanXuLy)
+}
+
+// taskPageShape picks the relation and the anchor readers for one page request, and refuses a
+// `due_at` key paired with the direction it was not built for (ErrTaskSortDirection).
+func taskPageShape(yc page.Request) (string, store.Moc[domain.NhiemVu], error) {
+	switch yc.Column().SQL {
+	case dueSortAscColumn:
+		if yc.Dir() != page.Asc {
+			return "", store.Moc[domain.NhiemVu]{}, ErrTaskSortDirection
+		}
+		return taskByDueTable, taskAscAnchors, nil
+	case dueSortDescColumn:
+		if yc.Dir() != page.Desc {
+			return "", store.Moc[domain.NhiemVu]{}, ErrTaskSortDirection
+		}
+		return taskByDueTable, mocNhiemVu, nil
+	}
+	// Every other key is a real NOT NULL column of the plain table, identical in both allowlists.
+	return "nhiem_vu", mocNhiemVu, nil
+}
 
 // DanhSach reads ONE PAGE of the commune's task register.
 //
@@ -275,16 +454,26 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 	if err := validateTaskMetric(loc); err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
+	// An ascending `due_at` request arrives parsed against SapXepNhiemVu (the list tools/apidoc
+	// reads), naming the DESCENDING key; switch it to the ascending one before anything else.
+	yc, err := forDueDirection(yc)
+	if err != nil {
+		return page.NewResult[domain.NhiemVu](), fmt.Errorf("nhiem_vu: dựng lại yêu cầu sắp theo hạn: %w", err)
+	}
+	table, anchors, err := taskPageShape(yc)
+	if err != nil {
+		return page.NewResult[domain.NhiemVu](), err
+	}
 	dieuKien, args := locNhiemVuThanhSQL(loc)
 
 	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotNhiemVu,
-		Table:   "nhiem_vu",
+		Table:   table,
 		// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
 		// `nhiem_vu_so` is built on exactly this predicate.
 		Filter: `AND deleted_at IS NULL` + dieuKien,
 		Args:   args,
-	}, yc, mocNhiemVu, func(rows *sql.Rows) (domain.NhiemVu, string, error) {
+	}, yc, anchors, func(rows *sql.Rows) (domain.NhiemVu, string, error) {
 		n, err := quetNhiemVu(rows)
 		if err != nil {
 			return domain.NhiemVu{}, "", err
@@ -297,7 +486,54 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 	if err := s.ganNguonHop(ctx, kq.Items); err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
+	// `parent` (the register number) and `child_count` for the WHOLE PAGE, two statements at most.
+	if err := attachTreeFacts(ctx, scopedTreeQuery(s.db.For(ctx)), kq.Items); err != nil {
+		return page.NewResult[domain.NhiemVu](), err
+	}
 	return kq, nil
+}
+
+// CountByStatus counts the commune's live tasks PER STATUS under the SAME filters as DanhSach —
+// GET /api/v1/task-counts, the number over each Kanban column.
+//
+// THE SAME PREDICATE BUILDER AS THE LIST (locNhiemVuThanhSQL), NOT A LOOK-ALIKE. A column header
+// counted with one spelling of the filters and filled with another would read "12" over a column of
+// eleven cards the day either is edited — the drift the overview figures avoid by sharing
+// taskMetricCondition, and this count shares it too, through the same builder.
+//
+// ONE STATEMENT, so the seven counts describe one instant of the register. A status with no row
+// is ABSENT from the map; the handler answers it as 0, because every code of the closed list is a
+// column on the board.
+func (s *NhiemVuStore) CountByStatus(ctx context.Context, loc LocNhiemVu) (
+	map[domain.TrangThaiNhiemVu]int, error) {
+
+	if err := validateTaskMetric(loc); err != nil {
+		return nil, err
+	}
+	dieuKien, args := locNhiemVuThanhSQL(loc)
+
+	rows, err := s.db.For(ctx).Query(ctx, "trang_thai, count(*)", "nhiem_vu",
+		`AND deleted_at IS NULL`+dieuKien+` GROUP BY trang_thai`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("nhiem_vu: đếm theo trạng thái: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[domain.TrangThaiNhiemVu]int, 7)
+	for rows.Next() {
+		var (
+			status string
+			n      int64
+		)
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, fmt.Errorf("nhiem_vu: đếm theo trạng thái: đọc dòng: %w", err)
+		}
+		counts[domain.TrangThaiNhiemVu(status)] = int(n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("nhiem_vu: đếm theo trạng thái: %w", err)
+	}
+	return counts, nil
 }
 
 // cauNguonHop resolves, for a batch of conclusion ids, the meeting and ordinal each belongs to — the
@@ -414,6 +650,9 @@ func (s *NhiemVuStore) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, e
 
 	mot := []domain.NhiemVu{n}
 	if err := s.ganNguonHop(ctx, mot); err != nil {
+		return domain.NhiemVu{}, err
+	}
+	if err := attachTreeFacts(ctx, scopedTreeQuery(s.db.For(ctx)), mot); err != nil {
 		return domain.NhiemVu{}, err
 	}
 	return mot[0], nil

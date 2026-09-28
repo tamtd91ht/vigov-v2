@@ -4,6 +4,7 @@ package http
 //
 //	GET /api/v1/task-extensions               task.read   every PENDING request of the commune
 //	GET /api/v1/task-extensions?approver=me   task.read   only those whose task names ME as leader
+//	GET /api/v1/task-extensions?task=NV19     task.read   only those filed on that one task
 //
 // READ ONLY, AND IT GRANTS NOTHING. Who may DECIDE a request is unchanged: `task.extend` at the gate
 // of POST /api/v1/tasks/{ma}/extensions/{deNghiID}/decision and ADR 0038's named-leader rule inside
@@ -21,6 +22,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -89,6 +91,10 @@ func deNghiChoDuyetRaNgoai(d domain.DeNghiLuiHanChoDuyet) deNghiChoDuyetRa {
 var errNguoiDuyetKhongHopLe = errors.New(
 	"`approver` chỉ nhận `me`; bỏ hẳn tham số để xem mọi đề nghị đang chờ duyệt của xã")
 
+// errTaskCodeTooLong — `task` is longer than any register number can be.
+var errTaskCodeTooLong = fmt.Errorf(
+	"`task` là mã nhiệm vụ (ví dụ NV19), tối đa %d ký tự", domain.MaNhiemVuToiDa)
+
 // DanhSachDeNghiLuiHan serves one page of the commune's pending extension requests, oldest first.
 // GET /api/v1/task-extensions
 //
@@ -131,6 +137,18 @@ func (h *Handler) DanhSachDeNghiLuiHan(w http.ResponseWriter, r *http.Request) {
 		loc.LanhDaoGiaoViecMa = principal.Ma
 	default:
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errNguoiDuyetKhongHopLe.Error(), "")
+		return
+	}
+
+	// `task=NV19` — ONE task's pending requests, by register number, for §5.8's block in its drawer.
+	// Not looked up here: the store compares it with the joined task's `ma`, so a number of another
+	// commune or of nothing is an empty page, indistinguishable from a task with nothing pending.
+	// Bounded at the length an issued number can have; the value is not echoed.
+	if v := thamSo["task"]; len(v) > 0 {
+		loc.TaskCode = v[0]
+	}
+	if len([]rune(loc.TaskCode)) > domain.MaNhiemVuToiDa {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", errTaskCodeTooLong.Error(), "")
 		return
 	}
 

@@ -86,6 +86,13 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		"b.id":           "bb-042",
 		"b.ten_cuoc_hop": "Giao ban UBND xã tháng 8",
 		"k.thu_tu":       int64(3),
+
+		// The child-count statement's second column (store.attachTreeFacts). The fake answers every
+		// statement from this same map, so the count statement reads (`nhiem_vu_cha_id`, `count(*)`)
+		// = ("nv-cha-001", 2): a count for a task NOT on the page, which the mapping must ignore.
+		// What the batching and mapping do is asserted with a fake of its own in
+		// task_tree_facts_test.go.
+		"count(*)": int64(2),
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -102,9 +109,10 @@ func TestTheoMaBuocXaVaLoaiDongDaXoa(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaThu), maNhiemVuThu); err != nil {
 		t.Fatalf("đọc nhiệm vụ: %v", err)
 	}
-	// TWO statements: the task, then its meeting back-link (the fixture task is `ket-luan-hop`).
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh, muốn 2", len(k.lenh))
+	// FOUR statements: the task, its meeting back-link (the fixture task is `ket-luan-hop`), and the two
+	// tree facts — its child count and its parent's register number (the fixture has a parent).
+	if len(k.lenh) != 4 {
+		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
 	}
 	l := k.lenh[0]
 
@@ -136,14 +144,15 @@ func TestTheoMaXaTrongContextQuyetDinhChuKhongPhaiThamSo(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaKhac), maNhiemVuThu); err != nil {
 		t.Fatal(err)
 	}
-	// Two statements per call (task + back-link): [0],[1] are commune A's, [2],[3] commune B's. EVERY
-	// one of B's must carry B — the back-link is a join, the half that could name A's meeting.
-	if len(k.lenh) != 4 {
-		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	// Four statements per call (task + back-link + child count + parent code): [0..3] are commune A's,
+	// [4..7] commune B's. EVERY one of B's must carry B — the back-link is a join, the half that could
+	// name A's meeting, and the two tree statements are the ones that could count or name A's tasks.
+	if len(k.lenh) != 8 {
+		t.Fatalf("chạy %d câu lệnh, muốn 8", len(k.lenh))
 	}
 	for i, l := range k.lenh {
 		muon := string(xaThu)
-		if i >= 2 {
+		if i >= 4 {
 			muon = string(xaKhac)
 		}
 		if l.args[0] != muon {
@@ -276,9 +285,10 @@ func chayDanhSachNhiemVu(t *testing.T, loc LocNhiemVu) lenhGia {
 		t.Fatalf("DanhSach: %v", err)
 	}
 	// The page, then ONE back-link statement for the whole page (the fixture task is
-	// `ket-luan-hop`). The page statement is the one these cases inspect.
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh, muốn 2", len(k.lenh))
+	// `ket-luan-hop`), then the two tree-fact statements. The page statement is the one these cases
+	// inspect.
+	if len(k.lenh) != 4 {
+		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
 	}
 	return k.lenh[0]
 }
@@ -396,15 +406,30 @@ func TestDanhSachNhiemVuLocTreHanLaSUYRA(t *testing.T) {
 // TestSapXepNhiemVuKhongNhanCotCoTheNULL — page.QueryPage compares `(sort, id) > (…)`, which is NULL
 // for a NULL sort column, so a nullable sort column makes every row carrying NULL vanish from page
 // two onward. The allowlist is the only thing standing in the way.
+//
+// ⚠ `due_at` MOVED FROM THE REFUSED LIST TO THE ACCEPTED ONE ON 28/09/2026, ON PURPOSE (owner-approved
+// design, TASK-01 #13). It no longer names the nullable `han_xu_ly`: it names a NOT NULL COALESCE key
+// (due_sort_asc / due_sort_desc) computed per row, with a per-direction sentinel that puts tasks
+// without a deadline LAST — see SapXepNhiemVu. The property this test exists for is unchanged and is
+// still asserted below: NO allowlisted key may be a nullable column. The raw `han_xu_ly` stays
+// refused, and the NULL-boundary walk itself is TestDueSortWalkAcrossNullBoundary.
 func TestSapXepNhiemVuKhongNhanCotCoTheNULL(t *testing.T) {
-	for _, cot := range []string{"due_at", "han_xu_ly", "completed_at", "priority", "title"} {
-		if _, err := page.Parse(url.Values{"sort": {cot}}, SapXepNhiemVu); err == nil {
-			t.Errorf("nhận sắp xếp theo %q — cột đó NULL được, và dòng NULL sẽ biến mất từ trang 2", cot)
+	for _, list := range []page.Allowlist{SapXepNhiemVu, taskSortAscAllowlist} {
+		for _, cot := range []string{"han_xu_ly", "completed_at", "priority", "title"} {
+			if _, err := page.Parse(url.Values{"sort": {cot}}, list); err == nil {
+				t.Errorf("nhận sắp xếp theo %q — cột đó NULL được, và dòng NULL sẽ biến mất từ trang 2", cot)
+			}
 		}
-	}
-	for _, cot := range []string{"created_at", "code"} {
-		if _, err := page.Parse(url.Values{"sort": {cot}}, SapXepNhiemVu); err != nil {
-			t.Errorf("từ chối sắp xếp theo %q: %v", cot, err)
+		for _, cot := range []string{"created_at", "code", "due_at"} {
+			if _, err := page.Parse(url.Values{"sort": {cot}}, list); err != nil {
+				t.Errorf("từ chối sắp xếp theo %q: %v", cot, err)
+			}
+		}
+		// `due_at` MUST NOT reach the statement as the raw nullable column.
+		for _, c := range list.Columns() {
+			if c.SQL == "han_xu_ly" || c.SQL == "ngay_hoan_thanh" || c.SQL == "han_ban_dau" {
+				t.Errorf("tham số %q trỏ thẳng vào cột NULL được %q", c.Param, c.SQL)
+			}
 		}
 	}
 }

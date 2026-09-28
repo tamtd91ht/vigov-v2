@@ -91,8 +91,9 @@ import (
 //
 // *petstore.NhiemVuStore satisfies it as it is.
 type KhoNhiemVuGhi interface {
+	// TheoMaDeSua is the locking read of every act AND of the parent named on a create or re-parent
+	// request, which arrives as a register number (nhanCha).
 	TheoMaDeSua(ctx context.Context, tx *store.ScopedTx, ma string) (domain.NhiemVu, error)
-	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.NhiemVu, error)
 
 	// The two tree reads. ONE LEVEL EACH, and the recursion is this layer's — see duyetCaCay.
 	ConTrucTiep(ctx context.Context, tx *store.ScopedTx, chaID string) ([]domain.NhiemVuTomTat, error)
@@ -129,6 +130,11 @@ type KhoNhiemVuGhi interface {
 	SuaVanBan(ctx context.Context, tx *store.ScopedTx, v domain.NhiemVuVanBan) error
 	XoaMemVanBan(ctx context.Context, tx *store.ScopedTx, nhiemVuID, id, nguoiMa string,
 		luc time.Time) error
+
+	// AttachTreeFactsTx fills the parent's register number and the live child count on the tasks a
+	// reply is about to carry, inside the act's transaction — so a PATCH or status reply states the
+	// same `parent` and `child_count` the reads do, instead of "" and 0 for a task that has both.
+	AttachTreeFactsTx(ctx context.Context, tx *store.ScopedTx, ds []domain.NhiemVu) error
 }
 
 // KhoDeNghiLuiHan is the extension-request table.
@@ -361,21 +367,45 @@ func (uc *GhiNhiemVu) kiemChuTrinh(ctx context.Context, tx *store.ScopedTx, id, 
 	return domain.ErrCayNhiemVuQuaLon
 }
 
-// nhanCha validates a proposed parent INSIDE the transaction: it must be a live task of this
-// commune, and it must not close a cycle.
+// nhanCha resolves a proposed parent INSIDE the transaction, from the REGISTER NUMBER the request
+// carried (`NV19`), and holds its row. The caller then runs kiemChuTrinh on the id it returns.
+//
+// A NUMBER, NOT AN INTERNAL id, since 28/09/2026: the wire carries no task id at all, so an id-taking
+// field could only be filled by a caller guessing — which is why §5.10 "Thêm việc con" could not form
+// a request before. The number is resolved against THIS commune's LIVE rows through the same locking
+// read the act itself uses (TheoMaDeSua).
+//
+// ONE ANSWER FOR EVERY WAY A PARENT CAN BE WRONG — unknown number, another commune's number, a
+// soft-deleted task: domain.ErrChaKhongTonTai, the 409 `task_tree` the route already gave for an
+// unknown id. Telling them apart would tell a caller which numbers exist in a register it cannot
+// read.
 //
 // THE PARENT IS READ `FOR UPDATE`, not merely checked for existence. Between "this parent is live"
 // and the INSERT that hangs a child off it, the parent can be soft-deleted — and ADR 0037 decision
 // 3 refuses that delete only while children EXIST, so a child created in that window is exactly the
 // orphan the decision exists to prevent. Holding the parent's row closes it.
-func (uc *GhiNhiemVu) nhanCha(ctx context.Context, tx *store.ScopedTx, id, chaID string) error {
-	if _, err := uc.kho.TheoIDDeSua(ctx, tx, chaID); err != nil {
+func (uc *GhiNhiemVu) nhanCha(ctx context.Context, tx *store.ScopedTx, parentCode string) (
+	domain.NhiemVu, error) {
+
+	cha, err := uc.kho.TheoMaDeSua(ctx, tx, parentCode)
+	if err != nil {
 		if errors.Is(err, petstore.ErrNhiemVuKhongTonTai) {
-			return domain.ErrChaKhongTonTai
+			return domain.NhiemVu{}, domain.ErrChaKhongTonTai
 		}
+		return domain.NhiemVu{}, err
+	}
+	return cha, nil
+}
+
+// attachReplyTreeFacts fills `parent` (register number) and `child_count` on the task an act is about
+// to reply with, inside that act's transaction. One task, so at most two statements.
+func (uc *GhiNhiemVu) attachReplyTreeFacts(ctx context.Context, tx *store.ScopedTx, n *domain.NhiemVu) error {
+	one := []domain.NhiemVu{*n}
+	if err := uc.kho.AttachTreeFactsTx(ctx, tx, one); err != nil {
 		return err
 	}
-	return uc.kiemChuTrinh(ctx, tx, id, chaID)
+	*n = one[0]
+	return nil
 }
 
 // duocHoanThanh is ADR 0037 DECISION 4, on the tree read under the lock.
@@ -446,12 +476,14 @@ type YeuCauTaoNhiemVu struct {
 	// rather than worked around.
 	HanXuLy time.Time
 
-	// NhiemVuChaID makes this a sub-task of §5.10. EMPTY IS A ROOT TASK.
+	// ParentCode makes this a sub-task of §5.10, naming the parent by its REGISTER NUMBER (`NV19`).
+	// EMPTY IS A ROOT TASK. Resolved inside the transaction by nhanCha — see there for why a number
+	// and not an id, and why every wrong number gets one answer.
 	//
 	// ⚠ ADR 0037 DECISION 2 IS ENFORCED BY THIS STRUCT HAVING NOTHING TO DO WITH THE PARENT'S
 	// DEADLINE. A child's deadline is whatever the form carried in HanXuLy above — there is no line
 	// anywhere in this file that reads the parent's `han_xu_ly`, and that absence IS the rule.
-	NhiemVuChaID string
+	ParentCode string
 
 	// VanBan is §7.2's three dynamic lists, on the create form. OPTIONAL, and empty is the ordinary
 	// case: §7.3 removes the whole block for a `co-ban` task, and even a `theo-van-ban` task is
@@ -549,12 +581,21 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 				return err
 			}
 		}
-		if moi.NhiemVuChaID != "" {
-			// THE PARENT IS VALIDATED FIRST AND UNDER THE LOCK. A cycle cannot be closed by a row
+		if yc.ParentCode != "" {
+			// THE PARENT IS RESOLVED FIRST AND UNDER THE LOCK. A cycle cannot be closed by a row
 			// that does not exist yet, and the check runs anyway — see kiemChuTrinh.
-			if err := uc.nhanCha(ctx, tx, moi.ID, moi.NhiemVuChaID); err != nil {
+			cha, err := uc.nhanCha(ctx, tx, yc.ParentCode)
+			if err != nil {
 				return err
 			}
+			if err := uc.kiemChuTrinh(ctx, tx, moi.ID, cha.ID); err != nil {
+				return err
+			}
+			moi.NhiemVuChaID = cha.ID
+			// The reply's two tree facts are KNOWN here, so no read is spent on them: the parent is
+			// the row just resolved, and a task that did not exist a statement ago has no children.
+			moi.ParentCode = cha.Ma
+			moi.ChildCount = 0
 		}
 
 		if yc.TuSinhMa {
@@ -619,6 +660,9 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 				"han_ban_dau":           lucRaVet(moi.HanXuLy),
 				"lanh_dao_giao_viec_ma": moi.LanhDaoGiaoViecMa,
 				"nhiem_vu_cha_id":       moi.NhiemVuChaID,
+				// The parent's REGISTER NUMBER, from the row nhanCha resolved — what a reader of the
+				// trail can act on without looking the id up (empty for a root task).
+				"ma_nhiem_vu_cha": moi.ParentCode,
 			},
 			"ma_tu_sinh": yc.TuSinhMa,
 			// HOW MANY DOCUMENT LINES WERE FILED, AND NOT WHAT THEY SAY. `trich_yeu` is the subject
@@ -726,9 +770,10 @@ func chuanHoaTaoNhiemVu(yc YeuCauTaoNhiemVu) (domain.NhiemVu, error) {
 		ChuyenVienTheoDoiMa: yc.ChuyenVienTheoDoiMa,
 		// ONE VALUE FOR BOTH CLOCKS, and the store writes them from this single field. ADR 0037
 		// decision 2 lives in what is NOT here: nothing reads the parent's deadline.
-		HanXuLy:      yc.HanXuLy,
-		HanBanDau:    yc.HanXuLy,
-		NhiemVuChaID: yc.NhiemVuChaID,
+		HanXuLy:   yc.HanXuLy,
+		HanBanDau: yc.HanXuLy,
+		// NhiemVuChaID IS NOT SET HERE: the parent arrives as a register number and is resolved to
+		// an id only inside the transaction, under the lock (TaoTuNguon, nhanCha).
 	}
 	return moi, nil
 }
@@ -797,6 +842,9 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.NhiemVu{}, err
 	}
+	// THE RESOLVED PARENT id IS THIS FUNCTION'S TO FILL AND NOBODY ELSE'S. Cleared on entry, so the
+	// only way a parent reaches the UPDATE is through ParentCode, resolved under the lock below.
+	sua.NhiemVuChaID = nil
 
 	// ONE INSTANT FOR THE WHOLE ACT, read before the transaction opens. `deleted_at` on a removed
 	// document line comes from it, and a clock read per statement would stamp the lines of one Save
@@ -809,6 +857,22 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		truoc, err := uc.kho.TheoMaDeSua(ctx, tx, ma)
 		if err != nil {
 			return err
+		}
+
+		// THE NEW PARENT, BY REGISTER NUMBER, RESOLVED AND LOCKED BEFORE "did anything change" is
+		// asked — the comparison is between two INTERNAL ids, and the request carried a number. ""
+		// detaches the task and needs no lookup. The cycle check comes later, and only if the parent
+		// actually moves.
+		if sua.ParentCode != nil {
+			chaID := ""
+			if *sua.ParentCode != "" {
+				cha, err := uc.nhanCha(ctx, tx, *sua.ParentCode)
+				if err != nil {
+					return err
+				}
+				chaID = cha.ID
+			}
+			sua.NhiemVuChaID = &chaID
 		}
 
 		// §5.4'S DOCUMENT BLOCK, READ AND DIFFED UNDER THE TASK'S LOCK.
@@ -845,7 +909,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			// to a client exactly like a task whose lines had just been deleted.
 			sau = truoc
 			sau.VanBan = vanBanTruoc
-			return nil
+			return uc.attachReplyTreeFacts(ctx, tx, &sau)
 		}
 
 		sau = sua.Apdung(truoc)
@@ -853,8 +917,9 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		if sau.NhiemVuChaID != truoc.NhiemVuChaID && sau.NhiemVuChaID != "" {
 			// THE ONE PATH THAT CAN CLOSE A CYCLE. A task created under a parent has no descendants
 			// to loop back through; MOVING an existing task under one of its own descendants is how
-			// `A → B → C → A` is built, and this is where it is refused.
-			if err := uc.nhanCha(ctx, tx, truoc.ID, sau.NhiemVuChaID); err != nil {
+			// `A → B → C → A` is built, and this is where it is refused. The parent row is already
+			// held — nhanCha locked it above.
+			if err := uc.kiemChuTrinh(ctx, tx, truoc.ID, sau.NhiemVuChaID); err != nil {
 				return err
 			}
 		}
@@ -872,14 +937,24 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		if sau.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, truoc.ID); err != nil {
 			return err
 		}
+		// THE TREE FACTS OF BOTH SIDES IN ONE BATCH: `sau` for the reply, `truoc` so the trail can name
+		// the OLD parent by its register number too. Same two statements as for one task.
+		both := []domain.NhiemVu{truoc, sau}
+		if err := uc.kho.AttachTreeFactsTx(ctx, tx, both); err != nil {
+			return err
+		}
+		truoc, sau = both[0], both[1]
 
 		delta, err := json.Marshal(map[string]any{
+			// THE PARENT BY ITS REGISTER NUMBER AS WELL AS ITS id (rule 6's reader): an inspection
+			// years from now reads `NV19` without a lookup; the id stays for the row it points at.
 			"truoc": map[string]any{
 				"tieu_de":         truoc.TieuDe,
 				"khoi":            truoc.Khoi,
 				"muc_uu_tien":     truoc.MucUuTien,
 				"tien_do":         truoc.TienDo,
 				"nhiem_vu_cha_id": truoc.NhiemVuChaID,
+				"ma_nhiem_vu_cha": truoc.ParentCode,
 				"so_dong_van_ban": len(vanBanTruoc),
 			},
 			"sau": map[string]any{
@@ -888,6 +963,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				"muc_uu_tien":     sau.MucUuTien,
 				"tien_do":         sau.TienDo,
 				"nhiem_vu_cha_id": sau.NhiemVuChaID,
+				"ma_nhiem_vu_cha": sau.ParentCode,
 				"so_dong_van_ban": len(sau.VanBan),
 			},
 			// WHAT HAPPENED TO THE BLOCK, IN COUNTS AND IDS — NEVER IN TEXT. `trich_yeu` is the
@@ -1076,6 +1152,9 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 		sau = truoc
 		sau.TrangThai = moiTT
 		sau.NgayHoanThanh = xongLuc
+		if err := uc.attachReplyTreeFacts(ctx, tx, &sau); err != nil {
+			return err
+		}
 
 		noiDung := ghiChu
 		if noiDung == "" {

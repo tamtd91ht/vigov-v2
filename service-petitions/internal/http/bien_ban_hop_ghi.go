@@ -222,6 +222,10 @@ type tachKetLuanVao struct {
 	// Parent makes the new task a sub-task (§5.10 of chapter 02). A conclusion CAN be split into a
 	// child of an existing task — the two facts are independent: `nguon_giao` says where the work
 	// came from, `nhiem_vu_cha_id` says which work it belongs under.
+	//
+	// THE PARENT'S REGISTER NUMBER (`NV19`), exactly as POST /api/v1/tasks takes it — this door hands
+	// the same app.YeuCauTaoNhiemVu to the same create use case, so one field has one meaning on both.
+	// Resolved in this commune, among live tasks, inside the transaction (app.nhanCha).
 	Parent string `json:"parent,omitempty"`
 }
 
@@ -361,7 +365,7 @@ func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request
 		LanhDaoGiaoViecMa:   vao.Assigner,
 		CoQuanChuTriID:      vao.LeadUnit,
 		ChuyenVienTheoDoiMa: vao.Monitor,
-		NhiemVuChaID:        vao.Parent,
+		ParentCode:          vao.Parent,
 		// NguonGiao AND NguonID ARE DELIBERATELY NOT SET HERE. The use case fills them from the
 		// conclusion it resolves out of the path — see app.TachKetLuanThanhNhiemVu.
 	}

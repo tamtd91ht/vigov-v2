@@ -131,17 +131,21 @@ type taoNhiemVuVao struct {
 	// deadline can never be given one. That consequence is reported rather than worked around.
 	DueAt *time.Time `json:"due_at,omitempty"`
 
-	// Parent makes this a sub-task (§5.10). It carries the parent's INTERNAL id.
+	// Parent makes this a sub-task (§5.10). It carries the parent's REGISTER NUMBER (`NV19`) — the
+	// `code` the drawer already holds for the task it is open on.
 	//
-	// ⚠ AND NO CLIENT CAN SUPPLY IT TODAY. This comment used to end "…which is what the drawer
-	// already holds for the task it is open on"; that was measured false on 23/09/2026. `nhiemVuRa`
-	// (`nhiem_vu.go:73-165`) emits `code` and `parent` and NEVER its own `id`, so a drawer open on
-	// NV19 knows NV19's parent and never NV19 itself. §5.10 "Thêm việc con" therefore cannot form a
-	// request at all, and the admin web reports that on screen rather than drawing a dead button.
+	// A NUMBER SINCE 28/09/2026 (the owner chose this way out of the two recorded on 23/09): it used
+	// to take the parent's INTERNAL id, which no response FIELD has ever carried (the opaque
+	// `next_cursor` embeds one as its tie-break, but it is not a field), so §5.10 "Thêm việc con"
+	// could not form a request at all. The number is resolved in THIS commune, among LIVE tasks,
+	// inside the transaction (app.nhanCha); an unknown number, another commune's number and a
+	// soft-deleted task all get the one 409 `task_tree` answer an invalid parent always got, so the
+	// field reveals nothing about records the caller cannot see. `loai` already travels as a code
+	// the same way.
 	//
-	// Two ways out, and neither may be picked here: emit `id` on `nhiemVuRa`, or let `parent` take
-	// the business code — the same shape `loai` already uses, which the `loai_nhiem_vu` foreign key
-	// settles in favour of codes. It changes a published contract, so it is the owner's call.
+	// ⚠ AN INTERNAL id SENT HERE IS NOW JUST A NUMBER THAT MATCHES NOTHING — 409, never a silent
+	// root task. No caller in this repository sent one (checked 28/09/2026: web-admin never sets it,
+	// the Go tests set it only through the use case).
 	Parent string `json:"parent,omitempty"`
 
 	// Documents is §7.2's three dynamic lists. OPTIONAL, and its absence is the ordinary request:
@@ -215,8 +219,10 @@ type suaNhiemVuVao struct {
 	LeaderApproved       *bool `json:"leader_approved,omitempty"`
 	SuperiorAcknowledged *bool `json:"superior_acknowledged,omitempty"`
 
-	// Parent re-parents the task; an empty string detaches it into a root task. THIS IS THE ONE
-	// FIELD THAT CAN CLOSE A CYCLE — see app.kiemChuTrinh.
+	// Parent re-parents the task under the task carrying this REGISTER NUMBER (`NV19`); an empty
+	// string detaches it into a root task. The same kind of value GET returns in `parent`, so a
+	// drawer can send back exactly what it read. THIS IS THE ONE FIELD THAT CAN CLOSE A CYCLE — see
+	// app.kiemChuTrinh; naming the task itself is a cycle of one and is refused the same way.
 	Parent *string `json:"parent,omitempty"`
 
 	// Documents replaces §5.4's document block WHOLE. A POINTER TO A SLICE, and the double
@@ -433,7 +439,7 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 		LanhDaoGiaoViecMa:   vao.Assigner,
 		CoQuanChuTriID:      vao.LeadUnit,
 		ChuyenVienTheoDoiMa: vao.Monitor,
-		NhiemVuChaID:        vao.Parent,
+		ParentCode:          vao.Parent,
 		VanBan:              vanBan,
 	}
 	if vao.DueAt != nil {
@@ -486,7 +492,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 		GhiChu:                   vao.Note,
 		LanhDaoPheDuyetHoanThanh: vao.LeaderApproved,
 		CapTrenCongNhanHoanThanh: vao.SuperiorAcknowledged,
-		NhiemVuChaID:             vao.Parent,
+		ParentCode:               vao.Parent,
 		VanBan:                   vanBan,
 	}, nguoi)
 	if err != nil {
