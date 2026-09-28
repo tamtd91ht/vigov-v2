@@ -1127,14 +1127,15 @@ export function duongDanTuLoc(loc: {
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * §4.2 — SẮP XẾP BẢNG DANH SÁCH ("cột có thể sắp xếp (icon ⇅)")
  *
- * BA CỘT, vì máy chủ sắp được ba: `created_at`, `code` và — từ ad7f821 — `due_at`
- * (`petitions_get_tasks["truyVan"]["sort"]`). Việc KHÔNG CÓ HẠN luôn nằm CUỐI ở cả hai chiều (máy
- * chủ quyết, `NO_DEADLINE_LAST_NOTE` nói ra). Vì sao `Tên việc` và `Ưu tiên` vẫn không có mũi
- * tên nằm ở `PHAN_CHUA_DUNG`. Một mũi tên sắp theo trang đang mở — chỉ 20 dòng — sẽ trông như sắp
- * cả sổ trong khi chỉ xếp lại một lát cắt tuỳ con trỏ, nên không có mũi tên nào sắp ở trình duyệt.
+ * NĂM CỘT, đúng năm cột máy chủ sắp được (`petitions_get_tasks["truyVan"]["sort"]`): `created_at`,
+ * `code`, `due_at` (ad7f821), và — ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b, backend P9) — `title` và
+ * `priority`. `priority` xếp theo THỨ TỰ XÃ ĐẶT ở danh mục mức ưu tiên (`thu_tu`), không theo mã chữ
+ * cái (`store/nhiem_vu.go:104-109`). Việc KHÔNG CÓ HẠN và việc KHÔNG CÓ MỨC ƯU TIÊN luôn nằm CUỐI ở
+ * cả hai chiều (máy chủ quyết, hai câu `…_LAST_NOTE` nói ra). Không mũi tên nào sắp ở trình duyệt:
+ * sắp trang đang mở — 20 dòng — trông như sắp cả sổ mà không phải.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code", "due_at"];
+const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code", "due_at", "title", "priority"];
 
 function laCotSapXep(s: string): s is CotSapXepNhiemVu {
   return (MOI_COT_SAP_XEP as readonly string[]).includes(s);
@@ -1166,6 +1167,8 @@ export function sapXepDayDu(loc: {
  *   `code`        TĂNG DẦN — NV01, NV02… là thứ tự của chính quyển sổ (§4.3)
  *   `created_at`  GIẢM DẦN — việc mới giao lên đầu, như lúc mở màn
  *   `due_at`      TĂNG DẦN — hạn sớm nhất (kể cả hạn đã qua) lên đầu: câu hỏi "việc nào gấp nhất"
+ *   `title`       TĂNG DẦN — A → Z, theo collation của cơ sở dữ liệu
+ *   `priority`    TĂNG DẦN — đúng thứ tự xã xếp danh mục mức ưu tiên, mục đầu danh mục lên đầu
  *
  * ⚠ ĐỔI CÁCH SẮP LÀ VỀ TRANG ĐẦU, và đó không phải lựa chọn giao diện: con trỏ mang `sort`/`order`
  * bên trong và máy chủ trả 400 `invalid_cursor` cho con trỏ của một cách sắp khác
@@ -1190,6 +1193,8 @@ export function ariaSapXep(
 export const NHAN_COT_MA = "Mã";
 export const NHAN_COT_NGAY_GIAO = "Ngày giao";
 export const DUE_COLUMN_LABEL = "Hạn";
+export const TITLE_COLUMN_LABEL = "Tên việc";
+export const PRIORITY_COLUMN_LABEL = "Ưu tiên";
 
 /**
  * Under the list, always visible. The server puts tasks WITHOUT a deadline last in BOTH directions;
@@ -1197,6 +1202,15 @@ export const DUE_COLUMN_LABEL = "Hạn";
  */
 export const NO_DEADLINE_LAST_NOTE =
   "Sắp theo Hạn: việc không có hạn luôn nằm cuối danh sách, dù sắp tăng hay giảm.";
+
+/**
+ * Same reason as `NO_DEADLINE_LAST_NOTE`, for `priority` — and it says WHAT the order is: the
+ * commune's own catalogue order, which the clerk can check on the Danh mục screen. Without it,
+ * ascending reads as "lowest first" to one clerk and "most urgent first" to another.
+ */
+export const NO_PRIORITY_LAST_NOTE =
+  "Sắp theo Ưu tiên: theo đúng thứ tự xã xếp danh mục mức ưu tiên; việc chưa có mức ưu tiên luôn nằm " +
+  "cuối danh sách, dù sắp tăng hay giảm.";
 
 /** Một dòng nhật ký đã dịch sang chữ để vẽ. */
 export type DongNhatKyHien = {
@@ -2578,15 +2592,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Ba tuyến §10 đề xuất — `nhap-excel`, `xoa-nhieu`, `xuat-so-theo-doi` — không có trong hợp " +
       "đồng. Xoá từng nhiệm vụ thì có (`DELETE /api/v1/tasks/{ma}`, kèm lý do bắt buộc), nên thao " +
       "tác hàng loạt là bấm từng dòng chứ không phải một nút gom.",
-  },
-  {
-    ten: "Sắp xếp theo `Tên việc` và `Ưu tiên` của bảng Danh sách (§4.2)",
-    viSao:
-      "§4.2 cho mọi cột một mũi tên ⇅, nhưng máy chủ chỉ sắp được theo `Mã`, `Ngày giao` và `Hạn` " +
-      "— ba cột có mũi tên trên bảng. `Tên việc` hay trích lời phản ánh của người dân, nên không " +
-      "đưa được lên đường dẫn. `Ưu tiên` là mã danh mục, xếp theo chữ cái sẽ ra một thứ tự không " +
-      "phải thứ tự của thang ưu tiên. Sắp lại trong trình duyệt chỉ xếp được 20 dòng đang hiện, " +
-      "trông như xếp cả sổ mà không phải.",
   },
   {
     ten: "Chế độ xem `Sổ theo dõi` (§4.3)",

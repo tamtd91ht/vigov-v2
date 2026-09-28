@@ -1811,7 +1811,7 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
   });
 });
 
-describe("§4.2 — tiêu đề sắp được: Mã, Ngày giao và Hạn, không cột nào khác", () => {
+describe("§4.2 — tiêu đề sắp được: Mã, Tên việc, Ngày giao, Ưu tiên và Hạn", () => {
   function veBangSapXep(sapXep: SapXepSo): string {
     return renderToStaticMarkup(
       <BangNhiemVu
@@ -1829,15 +1829,27 @@ describe("§4.2 — tiêu đề sắp được: Mã, Ngày giao và Hạn, khôn
   }
 
   // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was "đúng HAI nút sắp" with `Hạn` as plain text. The server sorts
-  // by `due_at` since ad7f821, so `Hạn` gets the third button; `Tên việc` stays plain.
-  it("đúng BA nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở hai cột kia", () => {
+  // by `due_at` since ad7f821, so `Hạn` gets the third button.
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): was "đúng BA", with `Tên việc` plain. Backend P9 sorts by
+  // `title` and `priority` too — five buttons; the other columns stay plain text.
+  it("đúng NĂM nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở các cột kia", () => {
     const html = veBangSapXep({ cot: "code", chieu: "asc" });
-    expect(html.split('class="nut-sap-xep"').length - 1).toBe(3);
+    expect(html.split('class="nut-sap-xep"').length - 1).toBe(5);
     expect(html).toContain('<th scope="col" aria-sort="ascending"><button type="button" class="nut-sap-xep">Mã ↑</button></th>');
+    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Tên việc ⇅</button>');
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ngày giao ⇅</button>');
+    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ưu tiên ⇅</button>');
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Hạn ⇅</button>');
     // Các cột còn lại là chữ thường — không mũi tên nào hứa một cách sắp máy chủ không có.
-    expect(html).toContain('<th scope="col">Tên việc</th>');
+    expect(html).toContain('<th scope="col">Người thực hiện</th>');
+    expect(html).toContain('<th scope="col">Trạng thái</th>');
+  });
+
+  it("đang sắp theo Ưu tiên giảm dần: mũi tên xuống ở đúng cột ấy; câu `chưa có mức ưu tiên nằm cuối` có sẵn", () => {
+    const html = veBangSapXep({ cot: "priority", chieu: "desc" });
+    expect(html).toContain('aria-sort="descending"><button type="button" class="nut-sap-xep">Ưu tiên ↓</button>');
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).toContain('<p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>');
   });
 
   it("mặc định (`created_at` giảm dần): mũi tên xuống ở Ngày giao; ô ngày hiện ngày giao", () => {

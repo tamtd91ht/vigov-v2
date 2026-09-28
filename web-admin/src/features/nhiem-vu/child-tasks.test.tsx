@@ -366,7 +366,8 @@ describe("(#13) `Hạn` sortable — `sort=due_at`, with the note about tasks wi
         doiSapXep={() => {}}
       />,
     );
-    expect(out.split('class="nut-sap-xep"').length - 1).toBe(3);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 3 → 5 — `Tên việc` and `Ưu tiên` sort too (backend P9).
+    expect(out.split('class="nut-sap-xep"').length - 1).toBe(5);
     expect(out).toContain('aria-sort="ascending"><button type="button" class="nut-sap-xep">Hạn ↑</button>');
   });
 

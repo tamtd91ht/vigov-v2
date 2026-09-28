@@ -95,6 +95,7 @@ import {
   transitionNeedsReason,
   quyenNhiemVu,
   sapXepDayDu,
+  NO_PRIORITY_LAST_NOTE,
   yeuCauTraLai,
   type DongVanBanNhap,
   type DongVanBanSua,
@@ -431,16 +432,14 @@ describe("phần chưa dựng được", () => {
     // all built by the §5.7 block — the unit/assignee box, `Chuyển tiếp`, and editing lead unit /
     // monitor. An 8 means one was left behind; a 6 means an unrelated entry was lost.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): 7 → 6 — `Sửa Hạn hoàn thành` was built.
-    expect(PHAN_CHUA_DUNG.length).toBe(6);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 6 → 5 — the sort entry was built (backend P9).
+    expect(PHAN_CHUA_DUNG.length).toBe(5);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
     expect(ten).not.toContain("ngay trong drawer");
     expect(ten).not.toContain("SỐ LƯỢNG THẬT");
-    const sort = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sắp xếp theo"));
-    expect(sort?.ten).toBe("Sắp xếp theo `Tên việc` và `Ưu tiên` của bảng Danh sách (§4.2)");
-    expect(sort?.viSao).toContain("`Hạn`");
-    expect(sort?.viSao).not.toContain("làm mất hẳn mọi việc không có hạn");
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sắp xếp theo"))).toBeUndefined();
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): the entry "Sửa `Hạn hoàn thành`" (kept on purpose by the
     // owner's earlier decision) is gone — the owner adopted require 93cff7f and the form now edits it.
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sửa `Hạn hoàn thành`"))).toBeUndefined();
@@ -1437,9 +1436,12 @@ describe("§3 — bộ lọc ↔ đường dẫn", () => {
   it("`sort`/`order` lạ bị bỏ — máy chủ trả 400 cho chúng (`core/page/page.go:336-355`)", () => {
     // `due_at` IS a server column since 28/09/2026 (#13) — only the bad `order` is dropped.
     expect(locTuDuongDan("?sort=due_at&order=up")).toEqual({ sapXep: "due_at" });
-    expect(locTuDuongDan("?sort=title&order=up")).toEqual({});
-    expect(locTuDuongDan("?sort=title")).toEqual({});
-    expect(locTuDuongDan("?sort=priority")).toEqual({});
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): `title` and `priority` were dropped here as unknown columns.
+    // The server sorts by both now (backend P9); a genuinely unknown column is still dropped.
+    expect(locTuDuongDan("?sort=title&order=up")).toEqual({ sapXep: "title" });
+    expect(locTuDuongDan("?sort=title")).toEqual({ sapXep: "title" });
+    expect(locTuDuongDan("?sort=priority")).toEqual({ sapXep: "priority" });
+    expect(locTuDuongDan("?sort=tieu_de")).toEqual({});
     expect(locTuDuongDan("?order=desc")).toEqual({ chieu: "desc" });
   });
 });
@@ -1475,6 +1477,22 @@ describe("§4.2 — sắp xếp bảng Danh sách", () => {
     const t = new URLSearchParams(duongDanTuLoc({ sapXep: "due_at", chieu: "asc" }));
     expect(t.get("sort")).toBe("due_at");
     expect(locTuDuongDan(`?${t.toString()}`)).toEqual({ sapXep: "due_at", chieu: "asc" });
+  });
+
+  it("`Tên việc` và `Ưu tiên` sắp được: bấm lần đầu TĂNG (A→Z; đúng thứ tự danh mục của xã), bấm lại thì đảo", () => {
+    expect(bamCotSapXep(SAP_XEP_MAC_DINH, "title")).toEqual({ cot: "title", chieu: "asc" });
+    expect(bamCotSapXep(SAP_XEP_MAC_DINH, "priority")).toEqual({ cot: "priority", chieu: "asc" });
+    expect(bamCotSapXep({ cot: "priority", chieu: "asc" }, "priority")).toEqual({
+      cot: "priority",
+      chieu: "desc",
+    });
+    for (const cot of ["title", "priority"] as const) {
+      const t = new URLSearchParams(duongDanTuLoc({ sapXep: cot, chieu: "desc" }));
+      expect(t.get("sort")).toBe(cot);
+      expect(locTuDuongDan(`?${t.toString()}`)).toEqual({ sapXep: cot, chieu: "desc" });
+    }
+    expect(NO_PRIORITY_LAST_NOTE).toContain("thứ tự xã xếp danh mục mức ưu tiên");
+    expect(NO_PRIORITY_LAST_NOTE).toContain("luôn nằm cuối");
   });
 
   it("`aria-sort` chỉ ở cột đang sắp, đúng chiều", () => {

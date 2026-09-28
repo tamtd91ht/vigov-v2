@@ -119,6 +119,9 @@ import {
   NHAN_THEM_VAN_BAN,
   NHAN_TIEU_DE_THEO_VAN_BAN,
   NO_DEADLINE_LAST_NOTE,
+  NO_PRIORITY_LAST_NOTE,
+  PRIORITY_COLUMN_LABEL,
+  TITLE_COLUMN_LABEL,
   O_TRONG,
   PHAM_VI_CUA_TOI,
   PHAM_VI_TOAN_XA,
@@ -918,6 +921,7 @@ export function SoNhiemVu({
           />
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
           <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
+          <p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>
           <nav className="dieu-huong-trang" aria-label="Phân trang sổ nhiệm vụ">
             <button
               type="button"
@@ -1818,7 +1822,9 @@ function OTieuDeSapXepNhiemVu({
  * the page on screen, which would give a number that depends on the page.
  *
  * `Hạn` IS SORTABLE (#13, `due_at`); tasks without a deadline stay last in both directions, and
- * the screen says so under the table (`NO_DEADLINE_LAST_NOTE`).
+ * the screen says so under the table (`NO_DEADLINE_LAST_NOTE`). `Tên việc` and `Ưu tiên` are sortable
+ * too since backend P9 (`title`, `priority` — the commune's catalogue order, no-priority rows last,
+ * `NO_PRIORITY_LAST_NOTE`).
  */
 export function BangNhiemVu({
   nhiemVu,
@@ -1859,7 +1865,12 @@ export function BangNhiemVu({
               sapXep={sapXep}
               doiSapXep={doiSapXep}
             />
-            <th scope="col">Tên việc</th>
+            <OTieuDeSapXepNhiemVu
+              cot="title"
+              nhan={TITLE_COLUMN_LABEL}
+              sapXep={sapXep}
+              doiSapXep={doiSapXep}
+            />
             <OTieuDeSapXepNhiemVu
               cot="created_at"
               nhan={NHAN_COT_NGAY_GIAO}
@@ -1868,7 +1879,12 @@ export function BangNhiemVu({
             />
             <th scope="col">Người thực hiện</th>
             <th scope="col">Bộ phận</th>
-            <th scope="col">Ưu tiên</th>
+            <OTieuDeSapXepNhiemVu
+              cot="priority"
+              nhan={PRIORITY_COLUMN_LABEL}
+              sapXep={sapXep}
+              doiSapXep={doiSapXep}
+            />
             <OTieuDeSapXepNhiemVu
               cot="due_at"
               nhan={DUE_COLUMN_LABEL}
