@@ -7,8 +7,8 @@
  * giả: một bản tin bịa trong app mang tên cơ quan nhà nước là một thông tin sai do xã phát hành.
  *
  * KHÔNG LẤY TỪ BẢN MẪU: quét căn cước (dữ liệu định danh — luật 3, điều kiện dừng), đăng nhập, đăng xuất, lưu
- * cài đặt xuống máy (`localStorage` cấm ở nửa này — `ranh-gioi-hai-nua.test.ts` §3b; cỡ chữ và công tắc
- * thông báo sống trong bộ nhớ của lần mở).
+ * cài đặt xuống máy (`localStorage` cấm ở nửa này — `ranh-gioi-hai-nua.test.ts` §3b; cỡ chữ sống trong
+ * bộ nhớ của lần mở; công tắc thông báo bỏ tới khi có thông báo thật).
  */
 import { useState } from "react";
 
@@ -22,22 +22,26 @@ import { chuCaiDau, type LayTenZalo } from "./trai-nghiem";
 /* ═══════════════════════════════ TRA CỨU HỒ SƠ ═══════════════════════════════ */
 
 /**
- * Tra cứu hồ sơ một cửa. CHƯA có hệ thống một cửa nào nối vào ViGov, nên mọi lần tra nói thật điều ấy —
- * không bao giờ trả một kết quả dựng ra. Mã gõ vào không rời máy.
+ * Tra cứu hồ sơ một cửa — theo spec kho yêu cầu (`05-nghiep-vu.md:148`): SỐ ĐIỆN THOẠI ĐẦY ĐỦ + 4 SỐ CUỐI
+ * của số hồ sơ, cả hai bắt buộc. CHƯA có hệ thống một cửa nào nối vào ViGov, nên mọi lần tra nói thật điều
+ * ấy — không bao giờ trả một kết quả dựng ra. Hai ô gõ vào không rời máy.
  */
 export function TraCuuHoSoXa({ onQuayLai }: { onQuayLai: () => void }) {
-  const [ma, datMa] = useState("");
+  const [phone, setPhone] = useState("");
+  const [lastFour, setLastFour] = useState("");
   const [ket_qua, datKetQua] = useState<string | null>(null);
+  const complete = phone.replace(/\D/g, "").length >= 9 && /^\d{4}$/.test(lastFour.trim());
   return (
     <>
       <DauManCon tieu_de={XA_TN.tra_cuu_tieu_de} onQuayLai={onQuayLai} />
       <TrangCon>
         <div className="xa-the xa-the--dem xa-khoi">
-          <ONhapDong id="xa-ma-ho-so" nhan={XA_TN.o_ma_ho_so} goi_y={XA_TN.goi_y_ma_ho_so} gia_tri={ma} toi_da={40} onDoi={datMa} />
+          <ONhapDong id="xa-sdt-ho-so" nhan={XA_TN.o_so_dien_thoai_ho_so} goi_y={XA_TN.goi_y_so_dien_thoai_ho_so} gia_tri={phone} toi_da={20} kieu_ban_phim="tel" onDoi={setPhone} />
+          <ONhapDong id="xa-bon-so-cuoi" nhan={XA_TN.o_bon_so_cuoi} goi_y={XA_TN.goi_y_bon_so_cuoi} gia_tri={lastFour} toi_da={4} kieu_ban_phim="tel" onDoi={setLastFour} />
           <button
             type="button"
             className="xa-nut"
-            onClick={() => datKetQua(ma.trim() === "" ? XA_TN.tra_cuu_can_ma : XA_TN.tra_cuu_chua_ket_noi)}
+            onClick={() => datKetQua(complete ? XA_TN.tra_cuu_chua_ket_noi : XA_TN.tra_cuu_can_ma)}
           >
             <BieuTuong ten="search" co={20} />
             {XA_TN.nut_tra_cuu}
@@ -78,7 +82,6 @@ export function CaNhanXa(props: {
   onMoPhanAnh: () => void;
   onMoTraCuu: () => void;
 }) {
-  const [nhan_tb, datNhanTb] = useState(true);
   const co_chu: ReadonlyArray<[CoChu, string]> = [
     ["vua", XA_TN.co_chu_vua],
     ["lon", XA_TN.co_chu_lon],
@@ -140,21 +143,10 @@ export function CaNhanXa(props: {
       </div>
 
       <h2 className="xa-dau-khoi xa-dau-khoi__tieu-de">{XA_TN.muc_thong_bao}</h2>
-      <div className="xa-the xa-the--dem xa-hang xa-hang--tinh">
-        <span className="xa-hang__chu">
-          <strong>{XA_TN.nhan_thong_bao}</strong>
-          <span className="xa-phu">{XA_TN.nhan_thong_bao_phu}</span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={nhan_tb}
-          aria-label={XA_TN.nhan_thong_bao}
-          className={`xa-cong-tac${nhan_tb ? " xa-cong-tac--bat" : ""}`}
-          onClick={() => datNhanTb((v) => !v)}
-        >
-          <span className="xa-cong-tac__nut" />
-        </button>
+      {/* No switch until notifications exist: a switch wired to nothing lets a citizen believe they opted out
+          of messages the commune will later send. The real opt-out lives on the server, next to ZNS. */}
+      <div className="xa-the xa-the--dem">
+        <p className="xa-phu">{XA_TN.thong_bao_chua_co}</p>
       </div>
 
       <h2 className="xa-dau-khoi xa-dau-khoi__tieu-de">{XA_TN.ve_ung_dung}</h2>

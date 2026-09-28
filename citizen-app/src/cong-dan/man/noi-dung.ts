@@ -402,7 +402,7 @@ export const XA_TN = {
   o_tra_cuu_ho_so: "Tra cứu hồ sơ",
   o_truyen_thanh: "Truyền thanh",
   o_video: "Video",
-  o_ban_do: "Bản đồ kinh tế",
+  o_ban_do: "Bản đồ tiện ích",
   chua_co_phieu: "Bà con chưa gửi phản ánh nào.",
   // Phản ánh
   loc_tat_ca: "Tất cả",
@@ -472,19 +472,26 @@ export const XA_TN = {
   nut_ve_trang_chu: "Về trang chủ",
   // Tra cứu hồ sơ
   tra_cuu_tieu_de: "Tra cứu hồ sơ một cửa",
-  o_ma_ho_so: "Mã hồ sơ",
-  goi_y_ma_ho_so: "Mã in trên giấy hẹn trả kết quả",
+  // Hai ô, cả hai bắt buộc (spec 05-nghiep-vu.md:148, chủ dự án 28/09/2026 "theo require"): số điện thoại
+  // một mình thì cầm danh bạ là tra ra hàng xóm; bốn số cuối nằm trên giấy biên nhận của chính người nộp.
+  o_so_dien_thoai_ho_so: "Số điện thoại đã khai khi nộp hồ sơ",
+  goi_y_so_dien_thoai_ho_so: "Nhập đủ số, ví dụ 0900000000",
+  o_bon_so_cuoi: "4 số cuối của số hồ sơ",
+  goi_y_bon_so_cuoi: "In trên giấy biên nhận",
   nut_tra_cuu: "Tra cứu",
   tra_cuu_chua_ket_noi:
     "Ứng dụng chưa kết nối với hệ thống một cửa của xã, nên chưa tra được hồ sơ. Bà con hãy liên hệ Bộ phận một cửa của Ủy ban nhân dân xã.",
-  tra_cuu_can_ma: "Vui lòng nhập mã hồ sơ cần tra cứu.",
+  tra_cuu_can_ma: "Bà con nhập đủ số điện thoại và 4 số cuối của số hồ sơ.",
   // Màn chưa có dữ liệu
   truyen_thanh_tieu_de: "Truyền thanh",
   truyen_thanh_trong: "Chưa có bản tin truyền thanh nào trên ứng dụng.",
   video_tieu_de: "Video tuyên truyền",
   video_trong: "Chưa có video tuyên truyền nào trên ứng dụng.",
-  ban_do_tieu_de: "Bản đồ kinh tế số",
-  ban_do_trong: "Chưa có dữ liệu bản đồ kinh tế trên ứng dụng.",
+  // SRS M6.1.12 gọi màn phía dân là "Bản đồ tiện ích"; "bản đồ kinh tế số" là màn M5 của cán bộ.
+  ban_do_tieu_de: "Bản đồ tiện ích",
+  ban_do_trong: "Chưa có dữ liệu bản đồ tiện ích (chợ, trường, trạm y tế, di tích…) trên ứng dụng.",
+  thong_bao_chua_co:
+    "Ứng dụng chưa gửi thông báo. Khi có, kết quả phản ánh và tin khẩn của xã sẽ gửi qua tin nhắn Zalo.",
   thong_bao_trong: "Chưa có thông báo nào.",
   // Cá nhân
   tab_ca_nhan: "Cá nhân",
@@ -501,8 +508,6 @@ export const XA_TN = {
   co_chu_rat_lon: "Rất lớn",
   xem_truoc_co_chu: "Xem trước: kích thước chữ hiện tại",
   muc_thong_bao: "Thông báo",
-  nhan_thong_bao: "Nhận thông báo từ chính quyền xã",
-  nhan_thong_bao_phu: "Kết quả phản ánh, tin khẩn của xã",
   ve_ung_dung: "Về ứng dụng",
   don_vi: "Đơn vị",
   dang_xuat: "Đăng xuất",
@@ -556,10 +561,20 @@ export const XA_PA = {
   dia_chi: "Nơi xảy ra",
   goi_y_dia_chi: "Thôn, tổ, đường, số nhà…",
   ten_nguoi_pa: "Họ và tên",
-  goi_y_ten: "Để trống nếu bà con muốn giấu tên",
+  goi_y_ten: "Họ tên người gửi phản ánh",
+  thieu_nguoi_gui: "Bà con nhập họ tên người gửi, hoặc bật “Gửi ẩn danh”.",
+  an_danh: "Gửi ẩn danh",
+  an_danh_giai_thich: "Bật lên thì cán bộ không thấy họ tên và số điện thoại của bà con.",
+  tac_phong_rieng:
+    "Phản ánh về thái độ, tác phong cán bộ chỉ lãnh đạo xã được xem và không bao giờ hiện công khai.",
+  anh_bat_buoc: "Ảnh hoặc video (bắt buộc, tối đa 5 tệp)",
+  anh_sap_co: "Ứng dụng chưa gửi được ảnh, video — tính năng sắp có. Trong lúc chờ, bà con mô tả thật rõ sự việc.",
+  vi_tri_bat_buoc: "Vị trí trên bản đồ (bắt buộc)",
+  vi_tri_sap_co: "Ứng dụng chưa ghim được vị trí trên bản đồ — tính năng sắp có. Bà con ghi rõ nơi xảy ra ở ô dưới.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
-  chi_mo_ta_bat_buoc: "Chỉ phần mô tả là bắt buộc.",
+  bat_buoc: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí, họ tên người gửi.",
+  bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí.",
   gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
   // Bản trải nghiệm KHÔNG gửi gì: câu này không được nói "đã gửi" hay hứa cán bộ phản hồi.
   xong_tieu_de: "Đã lưu phản ánh (bản trải nghiệm)",

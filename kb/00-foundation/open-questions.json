@@ -159,7 +159,11 @@
     ],
     "decision": "CÓ, nhưng là cấu hình theo xã: cho_phep_mo_lai (true), nguong_sao_mo_lai (2), so_lan_mo_lai_toi_da (1), tinh_lai_han_khi_mo_lai (true). Đổi cấu hình KHÔNG hồi tố. Không cho mở lại thì dân gửi phiếu mới và số liệu đếm trùng một vụ việc.",
     "decided_on": "2026-09-16",
-    "adr": "kb/10-decisions/0008-petition-lifecycle-config.md"
+    "adr": "kb/10-decisions/0008-petition-lifecycle-config.md",
+    "revised_on": "2026-09-28",
+    "revised_by": "chủ dự án (\"8 mục làm theo require nhé\", rồi \"đồng ý, làm cả 3 việc và 8 mục luôn\")",
+    "revision_adr": "kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md",
+    "revision": "THEO KHO YÊU CẦU (ADR 0050 điểm 2, vòng 2): 1 hoặc 2 sao thì phiếu TỰ MỞ LẠI (spec 05-nghiep-vu.md:206, SRS.md:324), KHÔNG trần số lần, KHÔNG tính lại hạn (API kho yêu cầu service.py:817-821); ngưỡng là con số cố định, không phải cấu hình. Từ 3 sao ở 'chờ dân xác nhận': ghi điểm, giữ nguyên trạng thái. Thay nguong_sao_mo_lai, so_lan_mo_lai_toi_da, tinh_lai_han_khi_mo_lai ở trên, và thay quyết định 27/09 '1–2 sao vào hàng lãnh đạo xem, không tự mở lại'. cho_phep_mo_lai: chưa ai nói, không tự quyết. Trường `decision` ở trên giữ nguyên chữ vì là lịch sử; trường này thắng khi nói khác."
   },
   {
     "id": 9,

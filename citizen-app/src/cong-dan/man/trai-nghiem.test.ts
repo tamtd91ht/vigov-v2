@@ -26,7 +26,7 @@ import {
   VONG_DOI,
 } from "./trai-nghiem";
 
-const CAU = { thieu: "thiếu", qua_dai: (n: number) => `quá ${n}` };
+const CAU = { thieu: "thiếu", thieu_nguoi_gui: "thiếu người gửi", qua_dai: (n: number) => `quá ${n}` };
 const NHAP: NhapPhieu = {
   linh_vuc: "Rác thải – Vệ sinh môi trường",
   noi_dung: "  Rác tồn đọng đầu ngõ 12 ",
@@ -94,9 +94,13 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     for (const tt of VONG_DOI) expect(TRANG_THAI[tt], tt).toBeDefined();
   });
 
-  it("nội dung bắt buộc, các ô khác không; giới hạn độ dài của máy chủ", () => {
+  it("bắt buộc theo SRS M4.2: mô tả, và người gửi khi không ẩn danh; giới hạn độ dài của máy chủ", () => {
     expect(kiemNhapPhieu({ ...NHAP, noi_dung: " " }, CAU)).toEqual({ noi_dung: "thiếu" });
-    expect(kiemNhapPhieu({ ...NHAP, dia_chi: "", ho_ten: "", dien_thoai: "" }, CAU)).toEqual({});
+    // Không ẩn danh mà bỏ trống họ tên: thiếu người gửi. Nơi xảy ra và số điện thoại vẫn tuỳ chọn.
+    expect(kiemNhapPhieu({ ...NHAP, dia_chi: "", ho_ten: "", dien_thoai: "" }, CAU)).toEqual({ ho_ten: "thiếu người gửi" });
+    expect(kiemNhapPhieu({ ...NHAP, dia_chi: "", dien_thoai: "" }, CAU)).toEqual({});
+    // Ẩn danh thì không cần họ tên.
+    expect(kiemNhapPhieu({ ...NHAP, an_danh: true, ho_ten: "" }, CAU)).toEqual({});
     expect(kiemNhapPhieu({ ...NHAP, noi_dung: "a".repeat(4001) }, CAU).noi_dung).toBe("quá 4000");
     // Ẩn danh thì họ tên dài không còn là lỗi: ô ấy không được gửi.
     expect(kiemNhapPhieu({ ...NHAP, an_danh: true, ho_ten: "a".repeat(300) }, CAU)).toEqual({});

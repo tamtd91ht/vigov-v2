@@ -93,6 +93,14 @@ export const VONG_DOI: readonly string[] = [
  * từ nó lúc tạo phiếu. KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã, và chỉ `identity` đếm hạn (luật 10 cấm
  * #2, #3). Gỡ danh sách này khi có tuyến đọc danh mục lĩnh vực của xã.
  */
+/**
+ * The staff-conduct field — SRS M4.3.8 + R-05: a separate route, by default only the Party Secretary and
+ * the Chairman see it, NEVER public (spec 05-nghiep-vu.md:204), and each commune can switch it off. A
+ * constant so the send screen can tell the citizen exactly that; once commune config exists, a commune that
+ * switched it off must not show this field at all.
+ */
+export const STAFF_CONDUCT_FIELD = "Thái độ / tác phong cán bộ";
+
 export const LINH_VUC_TAM: readonly string[] = [
   "Rác thải – Vệ sinh môi trường",
   "Hạ tầng giao thông",
@@ -103,7 +111,7 @@ export const LINH_VUC_TAM: readonly string[] = [
   "Xây dựng không phép",
   "Ô nhiễm (tiếng ồn, khí thải, nước thải)",
   "Y tế – Giáo dục",
-  "Thái độ / tác phong cán bộ",
+  STAFF_CONDUCT_FIELD,
   "An toàn thực phẩm",
   "Khác",
 ];
@@ -179,7 +187,7 @@ export const NHAN_BUOC: Readonly<Record<string, string>> = {
 
 /**
  * Năm ô của hợp đồng thật (`TRUONG_DUOC_NHAN`) cộng lĩnh vực dân chọn (ADR 0050 — máy chủ CHƯA nhận
- * trường này). `an_danh` luôn `false` từ Mini App: không có công tắc; để trống tên là giấu tên (ADR 0050 #3).
+ * trường này). `an_danh` do công tắc "Gửi ẩn danh" của bà con đặt (SRS M4.2, ADR 0050 #3).
  */
 export type NhapPhieu = {
   readonly linh_vuc: string;
@@ -194,13 +202,24 @@ export type LoiNhapPhieu = Partial<Record<"noi_dung" | "dia_chi" | "ho_ten" | "d
 
 const soKyTu = (s: string): number => [...s].length;
 
-/** Kiểm lúc bấm gửi, cùng giới hạn máy chủ (`DO_DAI_TOI_DA`). Rỗng là hợp lệ. THUẦN. */
-export function kiemNhapPhieu(nhap: NhapPhieu, cau: { thieu: string; qua_dai: (toi_da: number) => string }): LoiNhapPhieu {
+/**
+ * Kiểm lúc bấm gửi, cùng giới hạn máy chủ (`DO_DAI_TOI_DA`). THUẦN.
+ *
+ * Bắt buộc theo SRS M4.2 (chủ dự án 28/09/2026: "theo require"): mô tả, và NGƯỜI GỬI khi không ẩn danh —
+ * họ tên; gửi ẩn danh thì không. Lĩnh vực bắt buộc do bước 1 (không qua được nếu chưa chọn). Ảnh/video và
+ * vị trí trên bản đồ cũng bắt buộc theo SRS, nhưng ứng dụng CHƯA có hai thứ ấy — chặn nút gửi vì chúng thì
+ * bản trải nghiệm không gửi được phiếu nào; màn hình nói rõ là "bắt buộc — sắp có" (ADR 0050).
+ */
+export function kiemNhapPhieu(
+  nhap: NhapPhieu,
+  cau: { thieu: string; thieu_nguoi_gui: string; qua_dai: (toi_da: number) => string },
+): LoiNhapPhieu {
   const loi: LoiNhapPhieu = {};
   if (nhap.noi_dung.trim() === "") loi.noi_dung = cau.thieu;
   else if (soKyTu(nhap.noi_dung.trim()) > DO_DAI_TOI_DA.noi_dung) loi.noi_dung = cau.qua_dai(DO_DAI_TOI_DA.noi_dung);
   if (soKyTu(nhap.dia_chi.trim()) > DO_DAI_TOI_DA.dia_chi) loi.dia_chi = cau.qua_dai(DO_DAI_TOI_DA.dia_chi);
-  if (!nhap.an_danh && soKyTu(nhap.ho_ten.trim()) > DO_DAI_TOI_DA.ho_ten) loi.ho_ten = cau.qua_dai(DO_DAI_TOI_DA.ho_ten);
+  if (!nhap.an_danh && nhap.ho_ten.trim() === "") loi.ho_ten = cau.thieu_nguoi_gui;
+  else if (!nhap.an_danh && soKyTu(nhap.ho_ten.trim()) > DO_DAI_TOI_DA.ho_ten) loi.ho_ten = cau.qua_dai(DO_DAI_TOI_DA.ho_ten);
   if (!nhap.an_danh && soKyTu(nhap.dien_thoai.trim()) > DO_DAI_TOI_DA.dien_thoai) {
     loi.dien_thoai = cau.qua_dai(DO_DAI_TOI_DA.dien_thoai);
   }

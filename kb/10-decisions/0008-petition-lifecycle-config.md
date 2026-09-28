@@ -52,6 +52,10 @@ cả lĩnh vực. Hard-code thì xã đó không dùng được, mà nới ra sa
 | `so_lan_mo_lai_toi_da` | `1` | Chặn vòng lặp vô hạn |
 | `tinh_lai_han_khi_mo_lai` | `true` | Hạn mới tính từ thời điểm mở lại |
 
+> 28/09/2026 (vòng 2) → ADR 0050 điểm 2: 1 hoặc 2 sao thì phiếu **tự mở lại**, **không trần** số lần,
+> **không tính lại hạn** — thay giá trị đã chốt của `nguong_sao_mo_lai`, `so_lan_mo_lai_toi_da`,
+> `tinh_lai_han_khi_mo_lai` ở bảng trên. `cho_phep_mo_lai` chưa ai nói — xem ADR 0050 §Cái giá.
+
 Đổi `cho_phep_mo_lai` **không hồi tố**: phiếu đã đóng theo luật cũ giữ nguyên luật cũ. Nếu
 không thì báo cáo quá khứ đổi theo — dạng sai lệch mà thanh tra sẽ hỏi.
 
@@ -70,6 +74,9 @@ trùng. Vòng đời một chiều nghe gọn hơn nhưng đẩy sai lệch sang
 > 28/09/2026 → ADR 0050 điểm 3: app riêng của xã hôm nay **không có công tắc ẩn danh** (để trống tên là
 > giấu tên) — chờ chủ dự án, vì kho yêu cầu tự mâu thuẫn. Cờ `an_danh` phía máy chủ và luật mở lại ở
 > trên **không đổi**.
+>
+> 28/09/2026 (vòng 2) → ADR 0050 điểm 3: app riêng **có lại** công tắc "Gửi ẩn danh" — bật thì không gửi
+> họ tên, số điện thoại. Dòng trỏ ngay trên đã bị thay.
 
 **Ẩn danh nghĩa là ẩn với ai:**
 

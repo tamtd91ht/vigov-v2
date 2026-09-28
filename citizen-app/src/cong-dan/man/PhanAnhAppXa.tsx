@@ -42,6 +42,7 @@ import {
   type PhieuTN,
   taoPhieuTraiNghiem,
   traPhieuTraiNghiem,
+  STAFF_CONDUCT_FIELD,
   VONG_DOI,
 } from "./trai-nghiem";
 
@@ -457,7 +458,7 @@ export function GuiPhanAnhTN(props: {
     dia_chi: "",
     ho_ten: props.ho_ten ?? "",
     dien_thoai: "",
-    // Không có công tắc ẩn danh trên Mini App (ADR 0050 #3): để trống tên là giấu tên.
+    // Gửi ẩn danh là tuỳ chọn của bà con (SRS M4.2, ADR 0050 #3): bật thì không gửi họ tên, số điện thoại.
     an_danh: false,
   });
   const [loi, datLoi] = useState<LoiNhapPhieu>({});
@@ -467,7 +468,11 @@ export function GuiPhanAnhTN(props: {
   const co_noi_dung = nhap.linh_vuc !== "" || nhap.noi_dung.trim() !== "" || nhap.dia_chi.trim() !== "";
 
   function gui() {
-    const l = kiemNhapPhieu(nhap, { thieu: XA_PA.thieu_mo_ta, qua_dai: (n) => GUI.qua_dai(XA_TN.o_nay, n) });
+    const l = kiemNhapPhieu(nhap, {
+      thieu: XA_PA.thieu_mo_ta,
+      thieu_nguoi_gui: XA_PA.thieu_nguoi_gui,
+      qua_dai: (n) => GUI.qua_dai(XA_TN.o_nay, n),
+    });
     datLoi(l);
     if (Object.keys(l).length > 0) return;
     const phieu = taoPhieuTraiNghiem(nhap, new Date().toISOString(), maPhieuTraiNghiem());
@@ -539,24 +544,55 @@ export function GuiPhanAnhTN(props: {
                 {XA_TN.doi}
               </button>
             </div>
-            <p className="xa-phu">{GUI.chua_ho_tro_anh}</p>
+            {nhap.linh_vuc === STAFF_CONDUCT_FIELD && (
+              <div className="xa-ghi-chu">
+                <BieuTuong ten="shield" co={22} />
+                <p>{XA_PA.tac_phong_rieng}</p>
+              </div>
+            )}
+            {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ứng dụng CHƯA có hai thứ ấy: nói thẳng là
+                bắt buộc và sắp có, không chặn nút gửi (xem `kiemNhapPhieu`). */}
+            <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
+            <p className="xa-phu">{XA_PA.anh_sap_co}</p>
+            <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
+            <p className="xa-phu">{XA_PA.vi_tri_sap_co}</p>
             <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={nhap.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={doi("dia_chi")} />
             {loi.dia_chi && <p className="xa-loi-o" role="alert">{loi.dia_chi}</p>}
             {props.lay_ma_vi_tri && <NutViTri lay={props.lay_ma_vi_tri} />}
-            {props.lay_ten && (
-              <NutLayTen
-                lay={props.lay_ten}
-                onTen={(t) => {
-                  datNhap((x) => ({ ...x, ho_ten: t }));
-                  props.onTen(t);
-                }}
-              />
+            <div className="xa-hang xa-hang--tinh xa-hang--sat">
+              <span className="xa-hang__chu">
+                <strong>{XA_PA.an_danh}</strong>
+                <span className="xa-phu">{XA_PA.an_danh_giai_thich}</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={nhap.an_danh}
+                aria-label={XA_PA.an_danh}
+                className={`xa-cong-tac${nhap.an_danh ? " xa-cong-tac--bat" : ""}`}
+                onClick={() => datNhap((t) => ({ ...t, an_danh: !t.an_danh }))}
+              >
+                <span className="xa-cong-tac__nut" />
+              </button>
+            </div>
+            {!nhap.an_danh && (
+              <>
+                {props.lay_ten && (
+                  <NutLayTen
+                    lay={props.lay_ten}
+                    onTen={(t) => {
+                      datNhap((x) => ({ ...x, ho_ten: t }));
+                      props.onTen(t);
+                    }}
+                  />
+                )}
+                <ONhapDong id="xa-ho-ten" nhan={XA_PA.ten_nguoi_pa} goi_y={XA_PA.goi_y_ten} gia_tri={nhap.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={doi("ho_ten")} />
+                {loi.ho_ten && <p className="xa-loi-o" role="alert">{loi.ho_ten}</p>}
+                <ONhapDong id="xa-dien-thoai" nhan={XA_PA.so_dien_thoai} goi_y={XA_PA.goi_y_so} gia_tri={nhap.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={doi("dien_thoai")} />
+                {loi.dien_thoai && <p className="xa-loi-o" role="alert">{loi.dien_thoai}</p>}
+              </>
             )}
-            <ONhapDong id="xa-ho-ten" nhan={XA_PA.ten_nguoi_pa} goi_y={XA_PA.goi_y_ten} gia_tri={nhap.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={doi("ho_ten")} />
-            {loi.ho_ten && <p className="xa-loi-o" role="alert">{loi.ho_ten}</p>}
-            <ONhapDong id="xa-dien-thoai" nhan={XA_PA.so_dien_thoai} goi_y={XA_PA.goi_y_so} gia_tri={nhap.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={doi("dien_thoai")} />
-            {loi.dien_thoai && <p className="xa-loi-o" role="alert">{loi.dien_thoai}</p>}
-            <p className="xa-phu">{XA_PA.chi_mo_ta_bat_buoc}</p>
+            <p className="xa-phu">{nhap.an_danh ? XA_PA.bat_buoc_an_danh : XA_PA.bat_buoc}</p>
             <div className="xa-ghi-chu">
               <BieuTuong ten="alert" co={22} />
               <p>{KHAN_CAP}</p>
