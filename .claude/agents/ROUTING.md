@@ -6,8 +6,8 @@
 > again. Any design where one agent "coordinates the others" does not run — v1 had exactly
 > that design and it could never have worked.
 
-Thirteen agents: **eight that write, five read-only** (`context-scout`, `cross-context-scout`,
-`isolation-reviewer`, `domain-expert`, `progress-reviewer`). Each has a **write boundary**; two
+Fourteen agents: **eight that write, six read-only** (`context-scout`, `cross-context-scout`,
+`isolation-reviewer`, `security-reviewer`, `domain-expert`, `progress-reviewer`). Each has a **write boundary**; two
 agents never own the same path.
 
 ---
@@ -279,6 +279,7 @@ top to bottom; **the first match wins**.
 | 8 | Adding or changing a **citizen-facing screen or submission flow** | `citizen-app-builder` |
 | 9 | Business behaviour: **status, SLA, workflow, terminology, figures** | `domain-expert` (read-only) → then the relevant builder |
 | 10 | Suspected **data leak**, wrong permission, wrong 401/403 | `isolation-reviewer` |
+| 10b | Suspected **attack surface**: brute force, weak transport or crypto, missing lockout / idle lock / header, a vulnerable dependency | `security-reviewer` |
 | 11 | Tests red, or "what should this be tested with" | `test-designer` |
 | 12 | An **invariant, boundary, or decision changed** | `knowledge-keeper` |
 | 13 | Preparing a **release / UAT / handover** | §5.3 release sequence |
@@ -434,8 +435,8 @@ Go and runs no repo-wide command can still go alongside it.
 and `petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
 only when neither touches `core/**` or adds a dependency.
 
-The five **read-only** agents (`context-scout`, `cross-context-scout`, `isolation-reviewer`,
-`domain-expert`, `progress-reviewer`) hold no write tool and conflict with nothing — they run
+The six **read-only** agents (`context-scout`, `cross-context-scout`, `isolation-reviewer`,
+`security-reviewer`, `domain-expert`, `progress-reviewer`) hold no write tool and conflict with nothing — they run
 alongside anything, including each other.
 
 → Decision procedure, shared state, and why verification stays serial:
@@ -461,6 +462,7 @@ work that has to be redone. Never run two builders on the same change in paralle
 |---|---|
 | Data from another commune is visible | `isolation-reviewer` |
 | A citizen can see someone else's record | `isolation-reviewer` |
+| Login can be guessed, a session never idles out, a header or TLS is missing | `security-reviewer` |
 | 401/403 wrong, or a role can do too much | `isolation-reviewer` |
 | Figures wrong, status wrong, deadline wrong | `domain-expert` |
 | A field is missing on screen but present in the API | `contract-designer` (contract drift) |
@@ -482,6 +484,7 @@ work that has to be redone. Never run two builders on the same change in paralle
 |---|---|---|
 | 1 | `test-designer` | **Never** |
 | 2 | `isolation-reviewer` | The change touches no data, permission, file, queue, or realtime path |
+| 2b | `security-reviewer` | The change touches no login, session, password, cryptography, upload, dependency or unauthenticated route |
 | 3 | `knowledge-keeper` | The change altered no invariant, boundary, or decision |
 | 4 | Update `kb/90-ephemeral/tien-do/<module>.json` (`/progress`), then `make kb` | **Never** — `progress_guard` blocks the session from ending otherwise |
 
@@ -499,10 +502,11 @@ with a stale map.
 ```
 domain-expert        → business behaviour is correct
 isolation-reviewer   → all three dimensions, full scope
+security-reviewer    → rule 13 + TCVN 14423, full scope; `make vuln` green
 test-designer        → priority 1-3 coverage exists
 knowledge-keeper     → /knowledge-health clean
 progress-reviewer    → the ledger is true before anyone hands it over
-main session         → /review-compliance · /review-isolation · make check
+main session         → /review-compliance · /review-isolation · /review-security · make check
                      → two-commune isolation test (rule 1)
 ```
 
@@ -561,6 +565,7 @@ Dispatching costs a context switch and loses the thread. Do it directly when:
 | `knowledge-keeper` | write | `kb/` curated tiers, ADRs, documentation discipline |
 | `require-watcher` | write | `kb/50-doi-chieu/**` only — what BA/PM changed in `../vigov-require`, and which module here must answer it |
 | `isolation-reviewer` | **read only** | Three isolation dimensions, including cross-file relations |
+| `security-reviewer` | **read only** | Rule 13 and TCVN 14423 in code — above all the ABSENCES no hook sees: lockout, idle lock, rate limit, security events |
 | `domain-expert` | **read only** | Vietnamese public administration business correctness |
 | `progress-reviewer` | **read only** | The progress ledger as a record: lost items, `xong` without evidence, modules gone quiet |
 | `context-scout` | **read only** | Discovery 1 (§0.2): the request's own area — symbols, call paths, recent commits, current behaviour |

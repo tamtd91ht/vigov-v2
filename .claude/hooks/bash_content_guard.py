@@ -60,6 +60,24 @@ PIIS = [
     (re.compile(c.VN_CCCD), "hardcoded national ID"),
 ]
 
+# Rule 13 — the SAME decision security_guard makes, imported rather than copied. Applied only
+# when the command visibly writes a code file: a heredoc feeding `git commit -m` routinely
+# QUOTES `insecure.NewCredentials()` while explaining a fix, and blocking a commit message for
+# naming the thing it removes is the noise that gets a guard switched off.
+import security_guard as sg  # noqa: E402
+
+CODE_TARGET = re.compile(
+    r"(?:>>?|\btee\b(?:\s+-a)?)\s*['\"]?([\w./\-]+\.(?:go|tsx?|jsx?|mjs|cjs|ya?ml))\b")
+
+
+def scan_security(cmd: str) -> list[str]:
+    m = CODE_TARGET.search(cmd)
+    if not m:
+        return []
+    return [f"line {ln}: {label} — rule 13, in the content about to be written"
+            for ln, label in sg.quet(cmd, m.group(1))]
+
+
 # Read-only commands — not a write path, skip cheaply
 READ_ONLY_HEAD = re.compile(r"^\s*(cat|head|tail|grep|rg|ls|wc|git\s+(log|diff|show|status))\b")
 
@@ -102,7 +120,7 @@ def main() -> None:
     if not form:
         sys.exit(0)
 
-    hits = scan(cmd)
+    hits = scan(cmd) + scan_security(cmd)
     if not hits:
         sys.exit(0)
 
@@ -121,6 +139,7 @@ def main() -> None:
             "",
             "  → Rule 3: .claude/rules/critical/3-personal-data.md",
             "  → Rule 8: .claude/rules/critical/8-secrets-config.md",
+            "  → Rule 13: .claude/rules/critical/13-security-baseline.md",
         ],
         tool=c.tool_of(data),
         path="",

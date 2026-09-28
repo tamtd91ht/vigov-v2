@@ -36,6 +36,15 @@ pipeline {
     disableConcurrentBuilds()
   }
 
+  // CHẠY MỖI ĐÊM, không chỉ khi có commit — vì stage 'Quét lỗ hổng' dưới đây trả lời một câu
+  // mà mã không đổi vẫn đổi đáp án: "hôm nay có lỗ hổng nào MỚI CÔNG BỐ cho thư viện đang
+  // dùng không". Không có lịch thì một kho im lặng hai tuần là hai tuần không ai biết
+  // (TCVN 14423 §5.7.1b: theo dõi lỗ hổng mới liên tục). `H` rải giờ chạy, tránh dồn máy
+  // chủ dùng chung. Lịch có hiệu lực sau lượt chạy ĐẦU TIÊN của Jenkinsfile này.
+  triggers {
+    cron('H 2 * * *')
+  }
+
   stages {
 
     stage('Kiểm công cụ') {
@@ -132,6 +141,19 @@ pipeline {
         // `PYTHON` do stage 'Kiểm công cụ' chọn. Trên máy build `python` là 2.7 và `python3`
         // là 3.6 — cả hai đều không chạy được `tools/*.py` (xem đầu Makefile).
         sh 'make check PYTHON="$PYTHON"'
+      }
+    }
+
+    stage('Quét lỗ hổng') {
+      steps {
+        // Luật 13 · TCVN 14423 §5.17.2.4. NẰM NGOÀI `make check` có chủ ý (xem mục `vuln` trong
+        // Makefile): nó cần mạng ra vuln.go.dev và registry.npmjs.org — máy này vốn đã ra được,
+        // vì stage 'Phụ thuộc web' chạy `npm ci`. Mất mạng thì stage ĐỎ, không bỏ qua.
+        //
+        // KẾT QUẢ PHỤ THUỘC BẢN `go` CỦA MÁY NÀY: govulncheck chấm thư viện chuẩn theo bộ công
+        // cụ đang chạy nó. Đo 28/09/2026 trên go1.26.2: mọi phát hiện đều ở thư viện chuẩn
+        // (crypto/tls, crypto/x509, net, encoding/…), vá hết ở go1.26.6.
+        sh 'make vuln PYTHON="$PYTHON"'
       }
     }
   }

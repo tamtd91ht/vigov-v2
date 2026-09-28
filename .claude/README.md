@@ -22,6 +22,7 @@ is not documentation — **it is the only control mechanism**.
 | 10 `citizen-commitment` | An SLA deadline is a commitment; overdue is derived, never stored | `citizen_commitment_guard` | BLOCK |
 | 11 `infra-config-contract` | One name per role, read in one place, cluster-shaped, role in code and cluster in the manifest | `env_contract_guard` | BLOCK |
 | 12 `english-identifiers` | New code is named in English; existing names are not renamed (ADR 0051) | `english_identifier_guard` | BLOCK |
+| 13 `security-baseline` | TCVN 14423: encrypted transport, strong crypto, no raw HTML, safe cookies, security headers, no known-vulnerable dependency | `security_guard` + `tools/check_security.py` + `make vuln` | BLOCK |
 
 **Adding a rule you cannot write a hook for** means the rule cannot be checked, which means
 it will drift — **it belongs in `skills/`, not in `rules/critical/`.**
@@ -86,7 +87,7 @@ done while tests are red" is a **more common** failure than "wrote a secret into
 
 ## Agents — `agents/ROUTING.md` is the entry point
 
-Thirteen agents: eight that write, five read-only. The main session reads `agents/ROUTING.md`,
+Fourteen agents: eight that write, six read-only. The main session reads `agents/ROUTING.md`,
 runs the development workflow of its §0 (discover → synthesize → gate → decompose → implement →
 validate → commit → document), catches the event, dispatches, and runs the mandatory follow-up.
 The table below lists the original nine; the full index is ROUTING §9.

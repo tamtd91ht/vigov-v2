@@ -212,6 +212,12 @@ no page count — so a screen that needs those declares offset and says why.
 `docs/ui-ux/` specifies **no pagination at all**; it was copied from a single-commune
 prototype where every list rendered whole. Do not read that absence as permission.
 
+**Rate limits (rule 13 invariant 7).** A route reachable without a staff session — `Public`,
+login, the citizen session bridge, `CitizenOnly` — is a brute-force target. Until
+`core/ratelimit` exists this is a review item (`/review-security`); from then on it is declared
+beside `idem.*` and `rest_api_guard` checks the declaration. Key and dimensions:
+`skills/security-baseline` §7.
+
 ## Checklist before adding a route
 
 ```
@@ -222,6 +228,7 @@ prototype where every list rendered whole. Do not read that absence as permissio
 [ ] citizen route separate from the staff route (rule 4)
 [ ] state-changing  -> idem.Required(MoKhiHong|DongKhiHong) or idem.KhongCan("<reason>")
 [ ] list route      -> cursor, bounded limit, allowlisted sort
+[ ] no staff session -> rate limit (rule 13) — ask the user first: a new unauthenticated route is a STOP
 [ ] non-CRUD action -> nominalised sub-resource, not a verb
 [ ] tests: 401 · 403 wrong permission · 403 right permission WRONG COMMUNE · 200
 ```

@@ -1,0 +1,4 @@
+{
+  "_schema": "Tolerated known vulnerabilities, read by tools/check_vuln.py (`make vuln`). TCVN 14423 §5.3.2.3b: a list of tolerated software WITH the controls that reduce its risk. Entry: {id: GO-yyyy-nnnn | GHSA-…, scope: module dir or app dir or \"*\", reason, mitigation, expires: YYYY-MM-DD}. Expired -> red. No longer matching -> red until deleted.",
+  "exceptions": []
+}

@@ -174,11 +174,11 @@ own: if you see a risk, **state the risk**, then do what was asked.
 
 | Location | Contents |
 |---|---|
-| `rules/critical/` | **12 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **24 hooks**: 14 rule hooks + 10 cross-cutting |
+| `rules/critical/` | **13 rules**, always loaded (below). Each names an enforcing hook |
+| `hooks/` | **25 hooks**: 15 rule hooks + 10 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
-| `agents/` | **13 agents** — 5 build, 5 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
+| `agents/` | **14 agents** — 5 build, 6 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
 **Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a
@@ -209,3 +209,4 @@ Extending the brain: `.claude/README.md`.
 @.claude/rules/critical/10-citizen-commitment.md
 @.claude/rules/critical/11-infra-config-contract.md
 @.claude/rules/critical/12-english-identifiers.md
+@.claude/rules/critical/13-security-baseline.md

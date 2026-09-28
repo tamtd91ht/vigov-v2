@@ -33,6 +33,8 @@
 kb
 docs
 tasks
+# Văn bản tiêu chuẩn bên ngoài (TCVN 14423:2026, PDF) — tài liệu tham chiếu, không chạy ở đâu.
+rule
 
 # ---- manifest k8s: mô tả CÁCH CHẠY ảnh, nên nó không thể nằm TRONG ảnh --------------
 deploy

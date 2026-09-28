@@ -3,7 +3,7 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks quyen vet-actor khoaduynhat envmap buildfiles lint build standalone test web kb proto tidy
+.PHONY: check brain hooks quyen vet-actor khoaduynhat envmap buildfiles security lint build standalone test web vuln kb proto tidy
 
 # Danh sách module, HỎI CHÍNH GO — không gõ tay, và không bóc tách văn bản go.work.
 #
@@ -30,8 +30,12 @@ MODULES  := $(addsuffix /...,$(MOD_DIRS))
 # cứu được: gọi `python <tệp>` là bỏ qua shebang. Jenkinsfile tự chọn bản 3.8+ rồi truyền `PYTHON=…`.
 PYTHON ?= python
 
+# Pinned, not @latest: a scanner that changes under the gate makes yesterday's green
+# unreproducible. Override with an installed binary: `make vuln GOVULNCHECK=govulncheck`.
+GOVULNCHECK ?= go run golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-check: brain hooks quyen vet-actor khoaduynhat envmap buildfiles lint build standalone test web   ## Full verification — run before saying it is done
+
+check: brain hooks quyen vet-actor khoaduynhat envmap buildfiles security lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	$(PYTHON) tools/check_brain.py
@@ -88,6 +92,20 @@ buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch 
 	@# ngay: chạy bằng root, thiếu zoneinfo, hoặc đánh rơi `core/**` khỏi đường kích hoạt để
 	@# rồi một bản vá trong mã dùng chung không kích hoạt dịch vụ nào cả.
 	$(PYTHON) tools/check_build.py
+
+security:                       ## Luật 13 — mức nền an ninh mạng trên TOÀN kho (không cần mạng)
+	@# `.claude/hooks/security_guard.py` chặn lúc GHI nhưng chỉ thấy một lần sửa. Đây là câu hỏi
+	@# còn lại: hôm nay cả kho còn giữ mức nền không — và mọi vi phạm đã có trên đĩa phải nằm
+	@# trong `tools/security_debt.json` với lý do và hạn. Sổ nợ là bánh cóc: nợ hết hạn thì đỏ,
+	@# nợ đã sửa mà chưa xoá dòng cũng đỏ.
+	$(PYTHON) tools/check_security.py
+
+vuln:                           ## Luật 13 — lỗ hổng đã biết của thư viện bên thứ ba (CẦN MẠNG; không nằm trong check)
+	@# TÁCH KHỎI `check` theo quyết định của chủ dự án 28/09/2026 (phương án B): hai bộ quét tải
+	@# cơ sở dữ liệu lỗ hổng mỗi lần chạy, nên trong `check` chúng làm đỏ máy mất mạng và làm
+	@# đỏ một commit hôm qua còn xanh vì có công bố mới qua đêm. Chạy BẮT BUỘC ở cổng Jenkins
+	@# `vigov-gate` và chạy mỗi đêm. KHÔNG BAO GIỜ BỎ QUA khi mất mạng — đỏ và nói lý do.
+	$(PYTHON) tools/check_vuln.py "$(GOVULNCHECK)"
 
 lint:
 	@# gofmt -l PRINTS unformatted files and still EXITS 0, so for as long as this target

@@ -34,4 +34,12 @@ A cookie scoped to the parent domain is sent to **every subdomain**. One line of
 configuration, harmless-looking, written once — and it **disables the entire isolation
 between communes**, while every functional test stays green.
 
-→ Rule 1 · Rule 5 · `kb/00-foundation/multi-tenant-model.md`
+## Security headers and CSRF (rule 13)
+
+Every app sends CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy` and a framing policy —
+from `next.config.ts` `headers()` or at the ingress; `tools/check_security.py` fails the gate
+otherwise (today both apps are dated debt). Never `dangerouslySetInnerHTML`, never `eval`.
+State-changing requests refuse a foreign `Origin` on top of SameSite=Lax. Recipe:
+`skills/security-baseline` §5.
+
+→ Rule 1 · Rule 5 · Rule 13 · `kb/00-foundation/multi-tenant-model.md`

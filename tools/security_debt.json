@@ -1,0 +1,40 @@
+{
+  "_schema": "Rule 13 debt ledger, read by tools/check_security.py. One entry per (file, label). An entry is a PROMISE with a date: expired -> the gate goes red; fixed -> the gate goes red until the entry is deleted. Never add an entry without a reason the user has seen.",
+  "debt": [
+    {
+      "file": "core/identityclient/identityclient.go",
+      "label": "plaintext-grpc",
+      "tcvn": "5.4.2.4",
+      "reason": "Service-to-service gRPC has no TLS yet; the only boundary is a NetworkPolicy that deploy/README.md says is not applied to the live cluster. Carries the staff session token on the identity hop.",
+      "expires": "2026-12-28"
+    },
+    {
+      "file": "core/platformclient/directory.go",
+      "label": "plaintext-grpc",
+      "tcvn": "5.4.2.4",
+      "reason": "Same channel as identityclient: plaintext gRPC to service-platform, which holds every commune's directory.",
+      "expires": "2026-12-28"
+    },
+    {
+      "file": "core/malwarescan/malwarescan.go",
+      "label": "non-crypto-random",
+      "tcvn": "6.16.2.8",
+      "reason": "Legitimate: rand.IntN picks which ClamAV host to try first (load spreading), no secret derives from it. Convert to an inline `// @security-exception:` comment the next time the file is edited, then delete this entry.",
+      "expires": "2026-12-28"
+    },
+    {
+      "file": "web-admin",
+      "label": "missing-security-headers",
+      "tcvn": "5.17.2.3",
+      "reason": "next.config.ts sets no CSP, HSTS, nosniff, Referrer-Policy or framing header, and neither does the ingress. Priority P0 in kb/90-ephemeral/tcvn-14423-danh-gia.md (K9).",
+      "expires": "2026-11-30"
+    },
+    {
+      "file": "platform-admin",
+      "label": "missing-security-headers",
+      "tcvn": "5.17.2.3",
+      "reason": "Has no next.config at all yet. The operator console (ADR 0048) is the most privileged surface in the system; headers must land before it is deployed.",
+      "expires": "2026-11-30"
+    }
+  ]
+}

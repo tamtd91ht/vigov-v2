@@ -673,6 +673,62 @@ CASES = [
        "func h() {\n\t// @env-ok: công cụ dựng, chạy ngoài tiến trình phục vụ\n"
        "\taddr := os.Getenv(\"DATABASE_DSN\")\n}")),
 
+    # --- rule 13 · security baseline (TCVN 14423) ---
+    #
+    # Each BLOCK case is one of the downgrades the hook exists for; each PASS case is a way the
+    # SAME text legitimately appears — in a comment, in a test, behind a stated exception. The
+    # PASS cases matter as much: measured before enabling, every repo mention of
+    # `dangerouslySetInnerHTML` sat in a comment, and a hook that fired on them would be off
+    # within a day.
+    ("security_guard", "plaintext gRPC dial", BLOCK,
+     w("core/fooclient/client.go",
+       "func dial() {\n\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")),
+    ("security_guard", "TLS verification switched off", BLOCK,
+     w("core/fooclient/client.go", "var cfg = &tls.Config{InsecureSkipVerify: true}\n")),
+    ("security_guard", "sslmode=disable in a manifest", BLOCK,
+     w("deploy/base/foo/configmap.yaml", "data:\n  DSN: postgres://h:5432/db?sslmode=disable\n")),
+    ("security_guard", "weak hash imported", BLOCK,
+     w("core/foo/hash.go", "import (\n\t\"crypto/md5\"\n)\n")),
+    ("security_guard", "math/rand imported", BLOCK,
+     w("core/foo/code.go", "import (\n\t\"math/rand/v2\"\n)\n")),
+    ("security_guard", "raw HTML in a React component", BLOCK,
+     w("web-admin/src/features/x/view.tsx",
+       "export function V({h}: {h: string}) {\n  return <div dangerouslySetInnerHTML={{ __html: h }} />;\n}\n")),
+    ("security_guard", "eval in browser code", BLOCK,
+     w("web-admin/src/lib/x.ts", "export const run = (s: string) => eval(s);\n")),
+    ("security_guard", "session cookie without HttpOnly", BLOCK,
+     w("web-admin/src/lib/session.ts", "cookies().set(\"s\", v, { httpOnly: false, secure: true });\n")),
+    # Placed above a HARMLESS import on purpose: above `math/rand` the case would stay green
+    # through the math/rand pattern even if the empty-reason check died — green for the wrong
+    # reason, the failure this file keeps finding in its own cases.
+    ("security_guard", "@security-exception with no reason", BLOCK,
+     w("core/foo/pick.go", "import (\n\t// @security-exception:\n\t\"crypto/rand\"\n)\n")),
+    ("security_guard", "@security-exception with a reason", PASS,
+     w("core/foo/pick.go",
+       "import (\n\t// @security-exception: picks which scanner host to try first, not a secret\n"
+       "\t\"math/rand/v2\"\n)\n")),
+    ("security_guard", "banned name only inside a comment", PASS,
+     w("web-admin/src/features/x/view.tsx",
+       "/** Rendered as text nodes — never `dangerouslySetInnerHTML`, never eval(). */\n"
+       "export function V({t}: {t: string}) {\n  return <p>{t}</p>;\n}\n")),
+    ("security_guard", "apostrophe in TSX text does not unmask a later comment", PASS,
+     w("web-admin/src/features/x/view.tsx",
+       "export const A = () => <p>don't</p>;\n// never dangerouslySetInnerHTML here\n")),
+    ("security_guard", "test harness dialing without TLS", PASS,
+     w("core/fooclient/client_test.go",
+       "func TestX(t *testing.T) {\n\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")),
+    ("security_guard", "crypto/rand is the right import", PASS,
+     w("core/foo/code.go", "import (\n\t\"crypto/rand\"\n)\n")),
+
+    # bash_content_guard carries rule 13 only when the shell VISIBLY writes a code file. The
+    # commit-message case is the reason: a heredoc explaining a fix quotes the very call it
+    # removes, and blocking that is noise.
+    ("bash_content_guard", "heredoc writing plaintext gRPC into a .go file", BLOCK,
+     b("cat > core/fooclient/client.go <<'EOF'\nfunc dial() {\n"
+       "\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}\nEOF")),
+    ("bash_content_guard", "commit message quoting the removed call", PASS,
+     b("git commit -F - <<'EOF'\nfix: drop insecure.NewCredentials() from the identity client\nEOF")),
+
     # --- rule 5 — khoá quyền phải TỒN TẠI trong bảng `quyen` ---
     #
     # BA CA BLOCK LÀ BA CHUỖI CÓ THẬT, không phải ví dụ nghĩ ra: `finance.read`, `map.read` và

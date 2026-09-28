@@ -153,7 +153,15 @@ Name the variable and say which object should hold it.
 
 ---
 
-→ Rule: `.claude/rules/critical/11-infra-config-contract.md`
+## 8. ENCRYPTED AND VERIFIED BY DEFAULT (rule 13)
+
+Every dependency above is reached over TLS **with verification**: `sslmode=verify-full`,
+`rediss://`, Kafka `SASL_SSL`, an `https://` MinIO endpoint, gRPC with `credentials.NewTLS`.
+The CA bundle is a ConfigMap, a client key is a Secret (§5). `security_guard` blocks the
+plaintext spellings; the two gRPC clients still dialling in plaintext are dated debt in
+`tools/security_debt.json`. Details: `skills/security-baseline` §3.
+
+→ Rule: `.claude/rules/critical/11-infra-config-contract.md` · rule 13
 → Enforcement: `hooks/env_contract_guard.py` (BLOCK)
 → Related: rule 8 (secrets), rule 1 invariant 10 (commune values are read at runtime, never
   from the environment — the environment carries PLATFORM-wide constants only)
