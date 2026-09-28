@@ -24041,6 +24041,18 @@
           "anonymous": {
             "type": "boolean"
           },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "citizen_id": {
             "type": [
               "string",
@@ -24113,7 +24125,9 @@
           "cong_dan_id",
           "content",
           "field",
+          "lat",
           "linh_vuc",
+          "lng",
           "reporter_name",
           "reporter_phone",
           "resolve_due",
@@ -24667,6 +24681,18 @@
           "address": {
             "type": "string"
           },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "reporter_name": {
             "type": "string"
           },
@@ -24822,6 +24848,18 @@
           },
           "address": {
             "type": "string"
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "reporter_name": {
             "type": "string"

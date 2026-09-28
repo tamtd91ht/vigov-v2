@@ -1591,6 +1591,8 @@ export type petitions_guiPhanAnhVao = {
   "reporter_name": string;
   "reporter_phone": string;
   "anonymous": boolean;
+  "lat": number | null;
+  "lng": number | null;
   "citizen_id": string | null;
   "cong_dan_id": string | null;
   "field": string | null;
@@ -1752,6 +1754,8 @@ export type petitions_phieuCuaToiRa = {
   "field_label": string;
   "content": string;
   "address": string;
+  "lat"?: number | null;
+  "lng"?: number | null;
   "reporter_name": string;
   "reporter_phone": string;
   "anonymous": boolean;
@@ -1788,6 +1792,8 @@ export type petitions_phieuPhanAnhRa = {
   "field_label": string;
   "content": string;
   "address": string;
+  "lat"?: number | null;
+  "lng"?: number | null;
   "reporter_name": string;
   "reporter_phone": string;
   "anonymous": boolean;
