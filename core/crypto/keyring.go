@@ -57,11 +57,11 @@ import (
 // label)[:4] is stable across list order and, being a PRF output, says nothing about the key —
 // the operatorauth sealer precedent.
 const (
-	formatVersion byte = 0x01
-	kekIDSize          = 4
-	nonceSize          = 12
-	tagSize            = 16
-	wrapHeaderSize     = 1 + kekIDSize
+	formatVersion  byte = 0x01
+	kekIDSize           = 4
+	nonceSize           = 12
+	tagSize             = 16
+	wrapHeaderSize      = 1 + kekIDSize
 	// KeyLength is the exact length of a KEK and of a DEK: AES-256 takes 32 bytes and nothing else.
 	KeyLength = 32
 
