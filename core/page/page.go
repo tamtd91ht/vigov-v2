@@ -70,6 +70,17 @@ const (
 	KindTime Kind = "time" // timestamptz — the common case: ngay_tao, cap_nhat_luc
 	KindText Kind = "text" // text — a business code such as `ma`
 	KindInt  Kind = "int"  // bigint — a counter or a sequence number
+
+	// KindRef is a sort key that NEVER TRAVELS: the cursor carries only the anchor row's id, and
+	// store.QueryPage looks the key up from that row, server-side, in the same statement.
+	//
+	// FOR A COLUMN WHOSE VALUE MUST NOT BE IN A URL — a task title quotes a citizen's complaint often
+	// enough that encoding it into `next_cursor` would put it in an access log and a browser history
+	// (rule 3, forbidden #4). The price, stated: if the anchor row's key is edited between two pages,
+	// the walk resumes from the row's NEW position, so a few rows between the old and new position may
+	// be skipped or repeated. The column must still be NOT NULL, and the paged relation must be a
+	// plain table the lookup can name (store.QueryPage refuses anything else).
+	KindRef Kind = "ref"
 )
 
 // NOT SUPPORTED, and the reason, so the next person does not have to rediscover it:
@@ -152,7 +163,7 @@ func Col(param, sqlName string, k Kind) Column {
 		panic("page: tên cột không phải định danh: " + sqlName)
 	}
 	switch k {
-	case KindTime, KindText, KindInt:
+	case KindTime, KindText, KindInt, KindRef:
 	default:
 		panic("page: kiểu khoá sắp xếp không hỗ trợ: " + string(k))
 	}
@@ -226,6 +237,7 @@ type Key struct {
 func TimeKey(t time.Time) Key  { return Key{kind: KindTime, t: t} }
 func TextKey(s string) Key     { return Key{kind: KindText, s: s} }
 func IntKey(n int64) Key       { return Key{kind: KindInt, n: n} }
+func RefKey() Key              { return Key{kind: KindRef} } // KindRef: nothing to carry, by design
 func (k Key) Kind() Kind       { return k.kind }
 func (k Key) Time() time.Time  { return k.t }
 func (k Key) Text() string     { return k.s }
@@ -252,6 +264,8 @@ func (k Key) wire() string {
 		return k.t.UTC().Format(time.RFC3339Nano)
 	case KindInt:
 		return strconv.FormatInt(k.n, 10)
+	case KindRef:
+		return ""
 	default:
 		return k.s
 	}
@@ -276,6 +290,13 @@ func parseKey(kind Kind, raw string) (Key, error) {
 			return Key{}, fmt.Errorf("%w: mốc rỗng", ErrCursor)
 		}
 		return TextKey(raw), nil
+	case KindRef:
+		// A ref cursor carrying a key is not one this package wrote — and the key would be exactly
+		// the value the kind exists to keep out of URLs.
+		if raw != "" {
+			return Key{}, fmt.Errorf("%w: con trỏ theo dòng không được mang khoá", ErrCursor)
+		}
+		return RefKey(), nil
 	default:
 		return Key{}, fmt.Errorf("%w: kiểu khoá %q", ErrCursor, kind)
 	}

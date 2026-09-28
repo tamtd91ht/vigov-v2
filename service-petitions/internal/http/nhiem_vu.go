@@ -440,9 +440,10 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 	// Parsed BEFORE the store is touched: a rejected page request must run no statement at all.
 	//
 	// ONE PACKAGE-LEVEL ALLOWLIST, and it has to stay that shape: tools/apidoc finds the list by this
-	// identifier and publishes its columns (`created_at`, `code`, `due_at`) as the `sort` enum. For
-	// `sort=due_at&order=asc` the store switches to the ascending key itself (petstore.DanhSach), so
-	// tasks without a deadline come LAST in both directions.
+	// identifier and publishes its columns (`created_at`, `code`, `due_at`, `priority`, `title`) as the
+	// `sort` enum. For `order=asc` on `due_at` or `priority` the store switches to the ascending key
+	// itself (petstore.DanhSach), so tasks without a deadline / a priority come LAST in both directions.
+	// `title` is a server-side-anchor sort: its cursor carries the row id only, never the title.
 	yc, err := page.Parse(thamSo, petstore.SapXepNhiemVu)
 	if err != nil {
 		// page.HTTPError owns the mapping so every service answers a bad cursor the same way. It

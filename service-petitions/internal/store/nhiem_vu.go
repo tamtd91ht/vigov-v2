@@ -98,41 +98,62 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 // cursor from one direction cannot be replayed on the other. A request whose key and direction still
 // disagree after that is refused — that pairing is what puts the no-deadline tasks last.
 //
-// WHAT IS STILL DELIBERATELY ABSENT, and each absence is a different rule:
+// `priority` AND `title` ARE OFFERED SINCE 28/09/2026 (§4.2's sortable columns), each in the one shape
+// that is not wrong:
 //
-//	han_xu_ly    as a raw column, for the NULL reason above — `due_at` is the only way in.
-//	tieu_de      a sort key travels in a URL, an access log and a browser history, and a task
-//	             title quotes a citizen's complaint often enough that it is not a safe thing to
-//	             put there (rule 3, forbidden #4).
-//	muc_uu_tien  it is a code, not a rank: the ORDER of the scale lives in the catalogue's
-//	             `thu_tu`, and sorting the register alphabetically by code would put `cao` above
-//	             `khan` — a board that looks sorted and is not.
+//	priority  NOT the code — a code is not a rank, and alphabetically `cao` sorts above `khan`, a
+//	          board that looks sorted and is not. The key is the commune's OWN catalogue order,
+//	          `muc_uu_tien_nhiem_vu.thu_tu`, joined in taskByPriorityTable; a task with NO priority
+//	          sorts LAST in both directions through the same two-key/sentinel scheme as `due_at`
+//	          (priority_sort_asc / priority_sort_desc). The cursor carries that integer, which is
+//	          no personal data.
+//	title     KindRef (core/page): the cursor carries ONLY the anchor row's id and the title is
+//	          looked up server-side from that row. A task title quotes a citizen's complaint often
+//	          enough that putting it in `next_cursor` — a URL, an access log, a browser history —
+//	          is rule 3, forbidden #4. `tieu_de` is NOT NULL (migration 0006 refuses a blank one).
+//	          Order is the database collation's; if the anchor's title is edited between two pages
+//	          the walk resumes from its new position (page.KindRef states the cost).
+//
+// WHAT IS STILL DELIBERATELY ABSENT: `han_xu_ly` as a raw column, for the NULL reason above — `due_at`
+// is the only way in.
 var SapXepNhiemVu = page.NewAllowlist(page.Desc,
 	page.Col("created_at", "tao_luc", page.KindTime),
 	page.Col("code", "ma", page.KindText),
 	page.Col("due_at", dueSortDescColumn, page.KindTime),
+	page.Col("priority", prioritySortDescColumn, page.KindInt),
+	page.Col("title", "tieu_de", page.KindRef),
 )
 
-// taskSortAscAllowlist is SapXepNhiemVu for `order=asc`: identical but for the key `due_at` maps to.
-// Same default (created_at, descending), so a request naming no sort reads the same page from both.
+// taskSortAscAllowlist is SapXepNhiemVu for `order=asc`: identical but for the keys `due_at` and
+// `priority` map to. Same default (created_at, descending), so a request naming no sort reads the
+// same page from both.
 var taskSortAscAllowlist = page.NewAllowlist(page.Desc,
 	page.Col("created_at", "tao_luc", page.KindTime),
 	page.Col("code", "ma", page.KindText),
 	page.Col("due_at", dueSortAscColumn, page.KindTime),
+	page.Col("priority", prioritySortAscColumn, page.KindInt),
+	page.Col("title", "tieu_de", page.KindRef),
 )
 
-// forDueDirection turns an ASCENDING `due_at` request parsed against SapXepNhiemVu into the same
-// request against taskSortAscAllowlist, so it sorts on the ascending key. Every other request is
-// returned as it is.
+// ascendingParamOf names the params whose ascending key differs from the descending one.
+var ascendingParamOf = map[string]string{
+	dueSortDescColumn:      "due_at",
+	prioritySortDescColumn: "priority",
+}
+
+// forDueDirection turns an ASCENDING `due_at` or `priority` request parsed against SapXepNhiemVu into
+// the same request against taskSortAscAllowlist, so it sorts on the ascending key. Every other request
+// is returned as it is.
 //
 // NOTHING IS RE-VALIDATED BY HAND: the rebuilt request goes through page.New, which decodes the
 // re-encoded anchor exactly as it decodes a client's cursor. The anchor itself is the one the
 // client sent, so page two continues from the same row.
 func forDueDirection(yc page.Request) (page.Request, error) {
-	if yc.Column().SQL != dueSortDescColumn || yc.Dir() != page.Asc {
+	param, twoKeys := ascendingParamOf[yc.Column().SQL]
+	if !twoKeys || yc.Dir() != page.Asc {
 		return yc, nil
 	}
-	asc, ok := columnOf(taskSortAscAllowlist, "due_at")
+	asc, ok := columnOf(taskSortAscAllowlist, param)
 	if !ok {
 		return page.Request{}, ErrTaskSortDirection
 	}
@@ -140,7 +161,7 @@ func forDueDirection(yc page.Request) (page.Request, error) {
 	if a, ok := yc.After(); ok {
 		cursor = page.Encode(asc, page.Asc, a)
 	}
-	return page.New(taskSortAscAllowlist, "due_at", string(page.Asc), strconv.Itoa(yc.Limit()), cursor)
+	return page.New(taskSortAscAllowlist, param, string(page.Asc), strconv.Itoa(yc.Limit()), cursor)
 }
 
 // columnOf finds one allowlisted column by its parameter name.
@@ -200,6 +221,30 @@ func timestamptzLiteral(t time.Time) string {
 var taskByDueTable = `(SELECT nhiem_vu.*, COALESCE(han_xu_ly, ` + timestamptzLiteral(dueSortAscNoDeadline) +
 	`) AS ` + dueSortAscColumn + `, COALESCE(han_xu_ly, ` + timestamptzLiteral(dueSortDescNoDeadline) +
 	`) AS ` + dueSortDescColumn + ` FROM nhiem_vu WHERE tenant_id = $1) AS nv`
+
+// The two computed PRIORITY keys, same scheme as the due-date pair above: the catalogue's `thu_tu`,
+// or a per-direction sentinel so a task with no priority comes LAST both ways. The sentinels are the
+// int64 extremes, so no `thu_tu` a commune can type (an INT) ties with them.
+const (
+	prioritySortAscColumn  = "priority_sort_asc"
+	prioritySortDescColumn = "priority_sort_desc"
+)
+
+// taskByPriorityTable is the relation a `sort=priority` page is cut from: every column of `nhiem_vu`
+// plus the two NOT NULL keys, through a LEFT JOIN on the commune's priority catalogue.
+//
+//	m.tenant_id = $1          the joined table is bound to the commune too (QueryJoin's contract) —
+//	                          `UNIQUE (tenant_id, ma)` then makes the join at most one row per task
+//	no deleted_at on m         a priority removed from the catalogue keeps its place in the order: the
+//	                          tasks still carry the code (a real FOREIGN KEY), and the order they were
+//	                          given is still the commune's
+//	LEFT                      a task with no priority keeps its row, with the sentinel
+//
+// ⚠ NO INDEX SERVES THIS ORDER; the commune's live rows are sorted in memory, as for `due_at`.
+var taskByPriorityTable = `(SELECT nhiem_vu.*, COALESCE(m.thu_tu::bigint, 9223372036854775807) AS ` +
+	prioritySortAscColumn + `, COALESCE(m.thu_tu::bigint, -9223372036854775808) AS ` + prioritySortDescColumn +
+	` FROM nhiem_vu LEFT JOIN muc_uu_tien_nhiem_vu m ON m.tenant_id = $1 AND m.ma = nhiem_vu.muc_uu_tien` +
+	` WHERE nhiem_vu.tenant_id = $1) AS nv`
 
 // ErrTaskSortDirection means a `due_at` key reached DanhSach with the direction it was not built for —
 // a caller parsed against SapXepNhiemVu while asking for `asc`, or the reverse. Refused rather than
@@ -508,15 +553,28 @@ var mocNhiemVu = store.NewMoc[domain.NhiemVu](SapXepNhiemVu,
 		"created_at": func(n domain.NhiemVu) page.Key { return page.TimeKey(n.TaoLuc) },
 		"code":       func(n domain.NhiemVu) page.Key { return page.TextKey(n.Ma) },
 		"due_at":     dueDescKey,
+		"priority":   priorityKey,
+		"title":      titleKey,
 	})
 
-// taskAscAnchors is mocNhiemVu for taskSortAscAllowlist. Only `due_at` differs.
+// taskAscAnchors is mocNhiemVu for taskSortAscAllowlist. Only `due_at` differs: `priority` reads the
+// key the statement itself scanned for THIS direction, so one reader serves both.
 var taskAscAnchors = store.NewMoc[domain.NhiemVu](taskSortAscAllowlist,
 	map[string]func(domain.NhiemVu) page.Key{
 		"created_at": func(n domain.NhiemVu) page.Key { return page.TimeKey(n.TaoLuc) },
 		"code":       func(n domain.NhiemVu) page.Key { return page.TextKey(n.Ma) },
 		"due_at":     dueAscKey,
+		"priority":   priorityKey,
+		"title":      titleKey,
 	})
+
+// priorityKey reads the priority key the page statement scanned into PriorityRank — the catalogue
+// position, or the sentinel of the direction being read (taskByPriorityTable).
+func priorityKey(n domain.NhiemVu) page.Key { return page.IntKey(n.PriorityRank) }
+
+// titleKey is empty BY DESIGN: `title` is page.KindRef, so the cursor carries the row id alone and the
+// title never leaves the server (rule 3, forbidden #4).
+func titleKey(domain.NhiemVu) page.Key { return page.RefKey() }
 
 // dueAscKey and dueDescKey are the Go spelling of the two COALESCE keys in taskByDueTable. NAMED, so
 // the test that walks pages across the NULL boundary drives the very readers the cursor is built
@@ -535,24 +593,43 @@ func dueDescKey(n domain.NhiemVu) page.Key {
 	return page.TimeKey(n.HanXuLy)
 }
 
-// taskPageShape picks the relation and the anchor readers for one page request, and refuses a
-// `due_at` key paired with the direction it was not built for (ErrTaskSortDirection).
-func taskPageShape(yc page.Request) (string, store.Moc[domain.NhiemVu], error) {
-	switch yc.Column().SQL {
-	case dueSortAscColumn:
-		if yc.Dir() != page.Asc {
-			return "", store.Moc[domain.NhiemVu]{}, ErrTaskSortDirection
+// taskPageShape picks the relation, the anchor readers and — for `priority` — the extra key column to
+// scan for one page request, and refuses a two-key sort paired with the direction it was not built
+// for (ErrTaskSortDirection).
+func taskPageShape(yc page.Request) (string, store.Moc[domain.NhiemVu], string, error) {
+	col, dir := yc.Column().SQL, yc.Dir()
+	switch col {
+	case dueSortAscColumn, prioritySortAscColumn:
+		if dir != page.Asc {
+			return "", store.Moc[domain.NhiemVu]{}, "", ErrTaskSortDirection
 		}
-		return taskByDueTable, taskAscAnchors, nil
-	case dueSortDescColumn:
-		if yc.Dir() != page.Desc {
-			return "", store.Moc[domain.NhiemVu]{}, ErrTaskSortDirection
+	case dueSortDescColumn, prioritySortDescColumn:
+		if dir != page.Desc {
+			return "", store.Moc[domain.NhiemVu]{}, "", ErrTaskSortDirection
 		}
-		return taskByDueTable, mocNhiemVu, nil
 	}
-	// Every other key is a real NOT NULL column of the plain table, identical in both allowlists.
-	return "nhiem_vu", mocNhiemVu, nil
+	switch col {
+	case dueSortAscColumn:
+		return taskByDueTable, taskAscAnchors, "", nil
+	case dueSortDescColumn:
+		return taskByDueTable, mocNhiemVu, "", nil
+	case prioritySortAscColumn:
+		return taskByPriorityTable, taskAscAnchors, col, nil
+	case prioritySortDescColumn:
+		return taskByPriorityTable, mocNhiemVu, col, nil
+	}
+	// Every other key is a real NOT NULL column of the plain table, identical in both allowlists —
+	// `title` included, which MUST page the plain table: its anchor is looked up by name there.
+	return "nhiem_vu", mocNhiemVu, "", nil
 }
+
+// scanWithTail scans a row of cotNhiemVu followed by extra trailing columns — the priority key.
+type scanWithTail struct {
+	r    quangKiem
+	tail []any
+}
+
+func (s scanWithTail) Scan(dest ...any) error { return s.r.Scan(append(dest, s.tail...)...) }
 
 // DanhSach reads ONE PAGE of the commune's task register.
 //
@@ -576,24 +653,37 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 	if err != nil {
 		return page.NewResult[domain.NhiemVu](), fmt.Errorf("nhiem_vu: dựng lại yêu cầu sắp theo hạn: %w", err)
 	}
-	table, anchors, err := taskPageShape(yc)
+	table, anchors, rankColumn, err := taskPageShape(yc)
 	if err != nil {
 		return page.NewResult[domain.NhiemVu](), err
 	}
 	dieuKien, args := locNhiemVuThanhSQL(loc)
+	columns := cotNhiemVu
+	if rankColumn != "" {
+		// APPENDED AT THE TAIL, like every addition to the positional scan.
+		columns += ", " + rankColumn
+	}
 
 	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
-		Columns: cotNhiemVu,
+		Columns: columns,
 		Table:   table,
 		// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
 		// `nhiem_vu_so` is built on exactly this predicate.
 		Filter: `AND deleted_at IS NULL` + dieuKien,
 		Args:   args,
 	}, yc, anchors, func(rows *sql.Rows) (domain.NhiemVu, string, error) {
-		n, err := quetNhiemVu(rows)
+		var (
+			rank int64
+			src  quangKiem = rows
+		)
+		if rankColumn != "" {
+			src = scanWithTail{r: rows, tail: []any{&rank}}
+		}
+		n, err := quetNhiemVu(src)
 		if err != nil {
 			return domain.NhiemVu{}, "", err
 		}
+		n.PriorityRank = rank
 		return n, n.ID, nil
 	})
 	if err != nil {

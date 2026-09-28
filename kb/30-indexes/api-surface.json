@@ -2319,6 +2319,27 @@
     },
     {
       "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/roles/defaults",
+      "operation_id": "identity_post_roles_defaults",
+      "task_id": "c6dd84e90381",
+      "summary": "Gieo 8 vai trò mẫu (14-cau-hinh §4.1) cho xã — vai trò đã có hay đã xoá thì giữ nguyên, không bù quyền",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "khong-can",
+      "idempotency_reason": "bộ gieo chỉ CHÈN vai trò mẫu mà xã chưa có mã, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, ma) chặn dòng thứ hai — nên lần bấm thứ hai không tạo gì, không cấp thêm quyền nào và không để vết",
+      "reply_schemas": {
+        "200": "identity.seedRoleTemplatesOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "PUT",
       "path": "/api/v1/roles/{id}/permissions",
       "operation_id": "identity_put_roles_by_id_permissions",
@@ -3235,7 +3256,7 @@
       "path": "/api/v1/tasks",
       "operation_id": "petitions_get_tasks",
       "task_id": "cc3579e36137",
-      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)",
+      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
       "screen": "02-nhiem-vu §3, §4, §5.10",
       "permission_kind": "permission",
       "permission": "task.read",

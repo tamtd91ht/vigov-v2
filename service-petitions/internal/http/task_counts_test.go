@@ -258,14 +258,37 @@ func TestTaskListDueSortReachesTheStoreWithItsDirection(t *testing.T) {
 	}
 }
 
-// Still refused: the raw nullable column, the title (PII in a URL), the priority code, and a bad order.
+// Still refused: the raw nullable column, the raw priority code column, an unknown key, and a bad
+// order. `title` and `priority` are ACCEPTED since 28/09/2026 (P9) — TestTaskListPriorityAndTitleSorts.
 func TestTaskListSortsStillRefused(t *testing.T) {
-	for _, q := range []string{"?sort=han_xu_ly", "?sort=title", "?sort=priority", "?sort=due_at&order=ngang"} {
+	for _, q := range []string{"?sort=han_xu_ly", "?sort=muc_uu_tien", "?sort=tieu_de", "?sort=due_at&order=ngang"} {
 		t.Run(q, func(t *testing.T) {
 			m := dungMayChu(t)
 			doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/tasks"+q, canBoCuaXa(xaA)), http.StatusBadRequest)
 			if m.nhiemVu.goi != 0 {
 				t.Error("chạy truy vấn dù tiêu chí sắp xếp bị từ chối")
+			}
+		})
+	}
+}
+
+// TestTaskListPriorityAndTitleSorts — both keys reach the store with the direction asked, parsed against
+// the one allowlist tools/apidoc publishes.
+func TestTaskListPriorityAndTitleSorts(t *testing.T) {
+	for _, tc := range []struct {
+		q, param string
+		dir      page.Dir
+	}{
+		{"?sort=priority&order=asc", "priority", page.Asc},
+		{"?sort=priority", "priority", page.Desc},
+		{"?sort=title&order=asc", "title", page.Asc},
+		{"?sort=title&order=desc", "title", page.Desc},
+	} {
+		t.Run(tc.q, func(t *testing.T) {
+			m := dungMayChu(t)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, "/api/v1/tasks"+tc.q, canBoCuaXa(xaA)), http.StatusOK)
+			if got := m.nhiemVu.lastPage; got.Column().Param != tc.param || got.Dir() != tc.dir {
+				t.Errorf("kho nhận %s %s, muốn %s %s", got.Column().Param, got.Dir(), tc.param, tc.dir)
 			}
 		})
 	}

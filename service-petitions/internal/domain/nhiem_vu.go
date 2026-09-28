@@ -293,6 +293,12 @@ type NhiemVu struct {
 	// itself: a count taken from the rows on screen changes with the page the reader is on.
 	ChildCount int
 
+	// PriorityRank is the keyset anchor of a register page sorted by `priority`: this commune's
+	// catalogue position (`muc_uu_tien_nhiem_vu.thu_tu`) of the task's priority, or the direction's
+	// no-priority sentinel — read by the store in the same statement. ZERO ON EVERY OTHER READ, and
+	// never on the wire: it is a position in one sorted read, not a fact about the task.
+	PriorityRank int64
+
 	TomTatKetQua string
 	GhiChu       string
 

@@ -619,6 +619,10 @@ var (
 	reGioiHan = regexp.MustCompile(`LIMIT \$(\d+)`)
 )
 
+// reRef reads a page.KindRef anchor: the key is looked up from the anchor row by id.
+var reRef = regexp.MustCompile(`AND \(([a-z_]+), ([a-z_]+)\) ([<>]) \(\(SELECT r\.([a-z_]+) FROM ([a-z_]+) r ` +
+	`WHERE r\.tenant_id = \$1 AND r\.id = \$(\d+)\), \$(\d+)\)`)
+
 // chay is the whole fake engine: filter by commune, apply the anchor comparison, order, limit.
 //
 // It reads the statement rather than being told what to do, which is what makes a mutation in
@@ -635,7 +639,30 @@ func chay(q string, args []driver.Value) (*hangGia, error) {
 		ra = append(ra, h)
 	}
 
-	if m := reCap.FindStringSubmatch(q); m != nil {
+	if m := reRef.FindStringSubmatch(q); m != nil {
+		// A page.KindRef anchor: the key is the ANCHOR ROW's own value, looked up in the same
+		// commune — exactly what the subquery does in PostgreSQL. No such row → NULL → no row passes.
+		key, tieBreak, op, lookupCol := m[1], m[2], m[3], m[4]
+		idArg, _ := strconv.Atoi(m[6])
+		var anchor *hang
+		for i := range duLieu {
+			if duLieu[i].xa == args[0] && duLieu[i].id == lay(idArg) {
+				anchor = &duLieu[i]
+			}
+		}
+		if anchor == nil {
+			ra = nil
+		} else {
+			anchorValue := anchor.giaTri(lookupCol)
+			ra = loc(ra, func(h hang) bool {
+				c := soSanh(h.giaTri(key), anchorValue)
+				if c == 0 {
+					c = soSanh(h.giaTri(tieBreak), anchor.id)
+				}
+				return hop(c, op)
+			})
+		}
+	} else if m := reCap.FindStringSubmatch(q); m != nil {
 		khoa, phaHoa, op := m[1], m[2], m[3]
 		mkA, _ := strconv.Atoi(m[4])
 		mkB, _ := strconv.Atoi(m[5])

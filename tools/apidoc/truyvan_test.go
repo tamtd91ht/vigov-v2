@@ -537,8 +537,9 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 	}{
 		// `parent` THÊM 28/09/2026 (TASK-01, người dùng duyệt thiết kế): lọc việc con trực tiếp theo
 		// mã sổ của việc cha (§5.10) — một thay đổi hợp đồng có chủ ý, không phải trích nhầm.
+		// `include` THÊM 28/09/2026 (P7): `include=documents` kèm khối văn bản cho Sổ theo dõi (§4.3).
 		{"GET /api/v1/tasks", []string{
-			"assignee", "bloc", "from", "late", "metric", "parent", "priority", "q", "scope", "soon",
+			"assignee", "bloc", "from", "include", "late", "metric", "parent", "priority", "q", "scope", "soon",
 			"source", "status", "to", "type", "unit"}},
 		{"GET /api/v1/citizen-reports", []string{
 			"channel", "field", "from", "hamlet", "late", "metric", "q", "scope", "status", "to", "unit"}},

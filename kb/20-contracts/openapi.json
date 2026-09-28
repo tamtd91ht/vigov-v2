@@ -9867,6 +9867,73 @@
         }
       }
     },
+    "/api/v1/roles/defaults": {
+      "post": {
+        "summary": "Gieo 8 vai trò mẫu (14-cau-hinh §4.1) cho xã — vai trò đã có hay đã xoá thì giữ nguyên, không bù quyền",
+        "operationId": "identity_post_roles_defaults",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.role"
+        },
+        "x-vigov-task": "c6dd84e90381",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.seedRoleTemplatesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/roles/{id}/permissions": {
       "parameters": [
         {
@@ -13568,7 +13635,7 @@
     },
     "/api/v1/tasks": {
       "get": {
-        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)",
+        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
         "operationId": "petitions_get_tasks",
         "tags": [
           "petitions"
@@ -13611,7 +13678,9 @@
               "enum": [
                 "created_at",
                 "code",
-                "due_at"
+                "due_at",
+                "priority",
+                "title"
               ],
               "default": "created_at"
             }
@@ -18823,6 +18892,55 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "identity.roleTemplateRefOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "vai_tro.ma, e.g. \"chu-tich-ubnd\""
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "identity.seedRoleTemplatesOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.roleTemplateRefOut"
+            },
+            "description": "vai trò vừa tạo, kèm đủ quyền của mẫu"
+          },
+          "skipped_existing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.roleTemplateRefOut"
+            },
+            "description": "xã đã có vai trò mang mã này — giữ NGUYÊN, kể cả quyền"
+          },
+          "skipped_deleted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.roleTemplateRefOut"
+            },
+            "description": "xã đã XOÁ vai trò mang mã này — không tạo lại, không khôi phục"
+          }
+        },
+        "required": [
+          "created",
+          "skipped_deleted",
+          "skipped_existing"
         ],
         "additionalProperties": false
       },

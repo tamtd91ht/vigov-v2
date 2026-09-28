@@ -1001,6 +1001,21 @@ export type identity_quyenMucRa = {
   "label": string;
 };
 
+export type identity_roleTemplateRefOut = {
+  /** vai_tro.ma, e.g. "chu-tich-ubnd" */
+  "code": string;
+  "name": string;
+};
+
+export type identity_seedRoleTemplatesOut = {
+  /** vai trò vừa tạo, kèm đủ quyền của mẫu */
+  "created": Array<identity_roleTemplateRefOut>;
+  /** xã đã có vai trò mang mã này — giữ NGUYÊN, kể cả quyền */
+  "skipped_existing": Array<identity_roleTemplateRefOut>;
+  /** xã đã XOÁ vai trò mang mã này — không tạo lại, không khôi phục */
+  "skipped_deleted": Array<identity_roleTemplateRefOut>;
+};
+
 export type identity_suaBoPhanVao = {
   "name"?: string | null;
   "parent_id"?: string | null;
@@ -3930,6 +3945,24 @@ export type identity_get_roles = {
   };
 };
 
+/** POST /api/v1/roles/defaults — Gieo 8 vai trò mẫu (14-cau-hinh §4.1) cho xã — vai trò đã có hay đã xoá thì giữ nguyên, không bù quyền */
+export type identity_post_roles_defaults = {
+  duongDan: "/api/v1/roles/defaults";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_seedRoleTemplatesOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PUT /api/v1/roles/{id}/permissions — Lưu phân quyền của MỘT vai trò (một cột ma trận) — gửi toàn bộ danh sách quyền */
 export type identity_put_roles_by_id_permissions = {
   duongDan: "/api/v1/roles/{id}/permissions";
@@ -4760,7 +4793,7 @@ export type petitions_delete_task_types_by_id = {
   };
 };
 
-/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) */
+/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title` */
 export type petitions_get_tasks = {
   duongDan: "/api/v1/tasks";
   phuongThuc: "GET";
@@ -4769,7 +4802,7 @@ export type petitions_get_tasks = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "created_at" | "code" | "due_at";
+    "sort"?: "created_at" | "code" | "due_at" | "priority" | "title";
     "order"?: "asc" | "desc";
     "assignee"?: string;
     "bloc"?: string;

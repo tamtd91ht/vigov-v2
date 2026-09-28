@@ -419,19 +419,23 @@ func TestDanhSachNhiemVuLocTreHanLaSUYRA(t *testing.T) {
 // refused, and the NULL-boundary walk itself is TestDueSortWalkAcrossNullBoundary.
 func TestSapXepNhiemVuKhongNhanCotCoTheNULL(t *testing.T) {
 	for _, list := range []page.Allowlist{SapXepNhiemVu, taskSortAscAllowlist} {
-		for _, cot := range []string{"han_xu_ly", "completed_at", "priority", "title"} {
+		// `priority` and `title` are accepted since 28/09/2026 (P9) and neither names a nullable column:
+		// `priority` is the NOT NULL COALESCE key of taskByPriorityTable, `title` is `tieu_de` (NOT
+		// NULL, migration 0006) — asserted by the column loop below.
+		for _, cot := range []string{"han_xu_ly", "completed_at", "muc_uu_tien"} {
 			if _, err := page.Parse(url.Values{"sort": {cot}}, list); err == nil {
 				t.Errorf("nhận sắp xếp theo %q — cột đó NULL được, và dòng NULL sẽ biến mất từ trang 2", cot)
 			}
 		}
-		for _, cot := range []string{"created_at", "code", "due_at"} {
+		for _, cot := range []string{"created_at", "code", "due_at", "priority", "title"} {
 			if _, err := page.Parse(url.Values{"sort": {cot}}, list); err != nil {
 				t.Errorf("từ chối sắp xếp theo %q: %v", cot, err)
 			}
 		}
 		// `due_at` MUST NOT reach the statement as the raw nullable column.
 		for _, c := range list.Columns() {
-			if c.SQL == "han_xu_ly" || c.SQL == "ngay_hoan_thanh" || c.SQL == "han_ban_dau" {
+			if c.SQL == "han_xu_ly" || c.SQL == "ngay_hoan_thanh" || c.SQL == "han_ban_dau" ||
+				c.SQL == "muc_uu_tien" {
 				t.Errorf("tham số %q trỏ thẳng vào cột NULL được %q", c.Param, c.SQL)
 			}
 		}

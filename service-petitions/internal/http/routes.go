@@ -1075,7 +1075,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST /api/v1/tasks/{ma}/assignment, below. PATCH still cannot move `bo_phan_id` or
 	// `nguoi_thuc_hien_ma` — folding it in would hand assignment to every holder of `task.update`.
 
-	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`
 	// @screen   02-nhiem-vu §3, §4, §5.10
 	// 400 covers a filter the server REFUSES rather than ignores.
 	//

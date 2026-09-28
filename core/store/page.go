@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/vihat/vigov/core/page"
@@ -159,6 +160,19 @@ func QueryPage[T any](
 			fmt.Fprintf(&tail, " AND id %s $%d", op, next)
 			args = append(args, a.ID)
 			next++
+		} else if col.Kind == page.KindRef {
+			// THE KEY IS LOOKED UP, NOT CARRIED (page.KindRef): the anchor row's own value, read in
+			// the same statement from the same commune ($1). The lookup does NOT filter
+			// `deleted_at`, on purpose: an anchor soft-deleted between two pages still marks where
+			// the walk stopped. An id naming no row of this commune makes the comparison NULL and
+			// the page empty — a forged cursor reads nothing, never another commune's row.
+			if !reSQLTable.MatchString(spec.Table) {
+				return out, fmt.Errorf("store: sắp theo khoá tra từ dòng cần bảng trần, không phải %q", spec.Table)
+			}
+			fmt.Fprintf(&tail, " AND (%s, id) %s ((SELECT r.%s FROM %s r WHERE r.tenant_id = $1 AND r.id = $%d), $%d)",
+				col.SQL, op, col.SQL, spec.Table, next, next)
+			args = append(args, a.ID)
+			next++
 		} else {
 			fmt.Fprintf(&tail, " AND (%s, id) %s ($%d, $%d)", col.SQL, op, next, next+1)
 			args = append(args, a.Key.Value(), a.ID)
@@ -218,6 +232,9 @@ func QueryPage[T any](
 	}
 	return out, nil
 }
+
+// reSQLTable is a plain table name — what a KindRef anchor lookup can name in its own FROM.
+var reSQLTable = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 
 // hopLe refuses a spec that would take the ordering back off QueryPage.
 //
