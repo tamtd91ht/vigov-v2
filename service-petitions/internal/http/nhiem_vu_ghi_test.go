@@ -866,10 +866,11 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 			"tải lại"},
 		{"bước chuyển sai lúc", domain.ErrChuyenTrangThaiNhiemVuSaiLuc, http.StatusConflict, "task_state",
 			domain.ErrChuyenTrangThaiNhiemVuSaiLuc.Error()},
-		{"tạm dừng về sai trạng thái", domain.ChuyenTrangThaiDuoc(domain.TamDung, domain.DangThucHien,
-			domain.MoiGiao), http.StatusConflict, "task_state", "đúng trạng thái trước đó"},
-		{"không biết trạng thái trước", domain.ErrTiepTucKhongBietTrangThaiTruoc, http.StatusConflict,
-			"task_state", domain.ErrTiepTucKhongBietTrangThaiTruoc.Error()},
+		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: two rows for the pause-resume history rule stood here
+		// ("tạm dừng về sai trạng thái", "không biết trạng thái trước"). The rule was dropped to follow
+		// require 52ec9b5; this row is the refusal a paused task can still meet.
+		{"tạm dừng sang chờ duyệt", domain.ChuyenTrangThaiDuoc(domain.TamDung, domain.ChoDuyet),
+			http.StatusConflict, "task_state", domain.ErrChuyenTrangThaiNhiemVuSaiLuc.Error()},
 		{"đã có đề nghị chờ duyệt", domain.ErrDaCoDeNghiChoDuyet, http.StatusConflict, "task_state",
 			domain.ErrDaCoDeNghiChoDuyet.Error()},
 		{"đề nghị đã quyết định", domain.ErrDeNghiDaQuyetDinh, http.StatusConflict, "task_state",
@@ -890,6 +891,8 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 			domain.ErrThieuLyDoTraLai.Error()},
 		{"thiếu quyền trả lại", app.ErrKhongDuocTraLai, http.StatusForbidden, "forbidden",
 			"Trả lại nhiệm vụ đang chờ duyệt"},
+		{"thiếu quyền mở lại", app.ErrReopenNeedsApproval, http.StatusForbidden, "forbidden",
+			"Mở lại nhiệm vụ đã hoàn thành"},
 		{"trùng văn bản", domain.ErrVanBanTrungTrongYeuCau, http.StatusBadRequest, "invalid_request",
 			domain.ErrVanBanTrungTrongYeuCau.Error()},
 	} {

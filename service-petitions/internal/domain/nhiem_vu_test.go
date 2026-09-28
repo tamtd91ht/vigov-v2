@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -8,8 +9,8 @@ import (
 // The task lifecycle and the two derived deadline questions.
 //
 // WHAT THESE PROVE, AND IT IS THE HALF THAT NEVER REACHES A DATABASE: the seven codes are the seven
-// of §6 and nothing else · the map admits exactly the moves §6 draws · `hoan-thanh` and
-// `chuyen-tiep` are terminal · late is DERIVED and a task finished late STAYS late · and the ONE
+// of §6 and nothing else · the map admits exactly the moves of vigov-require 52ec9b5's table minus
+// `chuyen-tiep` as a target (user decision 28/09/2026) · no status is terminal · late is DERIVED and a task finished late STAYS late · and the ONE
 // distinction most likely to produce a plausible wrong figure — `han_xu_ly` for "is it late now"
 // against `han_ban_dau` for the on-time ratio.
 
@@ -65,122 +66,149 @@ func TestChoDuyetLuiHanKhongPhaiTrangThai(t *testing.T) {
 	}
 }
 
-func TestLuongChinhTheoDungSoDoDacTa(t *testing.T) {
-	// §6, :227 read left to right. Each step and NOTHING ELSE on the main flow.
-	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
-		{MoiGiao, DaTiepNhanNV},
-		{DaTiepNhanNV, DangThucHien},
-		{DangThucHien, ChoDuyet},
-		{ChoDuyet, HoanThanh},
-	} {
-		if !c.tu.ChuyenSangDuoc(c.den) {
-			t.Errorf("%s -> %s bị từ chối, sơ đồ §6 có bước này", c.tu, c.den)
-		}
-	}
-
-	// SKIPPING A STEP IS REFUSED. A task that jumped to `hoan-thanh` is finished work nobody did,
-	// and §11.3's on-time ratio would count it.
-	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
-		{MoiGiao, DangThucHien},
-		{MoiGiao, HoanThanh},
-		{DaTiepNhanNV, HoanThanh},
-		{DangThucHien, HoanThanh},
-		// And backwards: §6 draws no arrow the other way on the main flow.
-		{DangThucHien, DaTiepNhanNV},
-		{HoanThanh, DangThucHien},
-	} {
-		if c.tu.ChuyenSangDuoc(c.den) {
-			t.Errorf("%s -> %s được nhận, sơ đồ §6 không có bước này", c.tu, c.den)
-		}
-	}
+// requireTable is vigov-require's ALLOWED_TRANSITIONS at anchor 0053854
+// (apps/api/app/modules/tasks/service.py:63-102, commit 52ec9b5), TRANSCRIBED BY HAND with the
+// mapping NEW=moi-giao, ACCEPTED=da-tiep-nhan, IN_PROGRESS=dang-thuc-hien, PENDING_APPROVAL=cho-duyet,
+// DONE=hoan-thanh, PAUSED=tam-dung, TRANSFERRED=chuyen-tiep — and with the ONE departure the user
+// decided on 28/09/2026: `chuyen-tiep` removed as a TARGET (forwarding is the assignment act). A
+// second copy of the table on purpose: an edit to the map that nobody meant fails here.
+var requireTable = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
+	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung}, // require also: TRANSFERRED
+	DaTiepNhanNV: {DangThucHien, TamDung},               // require also: TRANSFERRED
+	DangThucHien: {HoanThanh, ChoDuyet, TamDung},        // require also: TRANSFERRED
+	ChoDuyet:     {HoanThanh, DangThucHien},             //
+	TamDung:      {DangThucHien, DaTiepNhanNV, MoiGiao}, //
+	ChuyenTiep:   {DaTiepNhanNV, DangThucHien},          //
+	HoanThanh:    {DangThucHien},                        // the reopen
 }
 
-// TestTraLaiLamTiepLaMuiTenLuiDuyNhat pins the owner's decision of 2026-09-27: `cho-duyet` may go
-// back to `dang-thuc-hien`, and NO OTHER backward arrow was added with it. A map loosened "while we
-// were there" would let work leave review into any earlier state.
-func TestTraLaiLamTiepLaMuiTenLuiDuyNhat(t *testing.T) {
-	if !ChoDuyet.ChuyenSangDuoc(DangThucHien) {
-		t.Fatal("cho-duyet -> dang-thuc-hien bị từ chối — chủ đầu tư đã quyết định có bước trả lại")
-	}
-	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
-		{ChoDuyet, DaTiepNhanNV},
-		{ChoDuyet, MoiGiao},
-		{DangThucHien, MoiGiao},
-		{DaTiepNhanNV, MoiGiao},
-		{HoanThanh, ChoDuyet},
-	} {
-		if c.tu.ChuyenSangDuoc(c.den) {
-			t.Errorf("%s -> %s được nhận — chỉ có một mũi tên lùi là cho-duyet -> dang-thuc-hien", c.tu, c.den)
-		}
-	}
-	// The predicate names that one move and nothing else — in particular NOT the ordinary forward
-	// step into the same status, which needs neither the approval key nor a reason.
-	if !LaTraLaiLamTiep(ChoDuyet, DangThucHien) {
-		t.Error("LaTraLaiLamTiep không nhận cho-duyet -> dang-thuc-hien")
-	}
-	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
-		{DaTiepNhanNV, DangThucHien},
-		{TamDung, DangThucHien},
-		{ChoDuyet, HoanThanh},
-		{ChoDuyet, TamDung},
-	} {
-		if LaTraLaiLamTiep(c.tu, c.den) {
-			t.Errorf("LaTraLaiLamTiep(%s, %s) = true — bước thường bị đòi quyền duyệt và lý do", c.tu, c.den)
-		}
-	}
-}
-
-func TestHaiNhanhRoiDuocTuMoiBuocChuaXong(t *testing.T) {
-	// §6, :229-231: the fan-in. `tam-dung` leaves from every unfinished main state.
-	for _, tu := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet} {
-		if !tu.ChuyenSangDuoc(TamDung) {
-			t.Errorf("%s không tạm dừng được", tu)
-		}
-		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this used to require `chuyen-tiep` to be reachable from every
-		// working state. The owner decided forwarding is the assignment act on the SAME row
-		// (task_assignment.go), so NO state may move into `chuyen-tiep` any more.
-		if tu.ChuyenSangDuoc(ChuyenTiep) {
-			t.Errorf("%s vẫn chuyển sang chuyen-tiep được — chuyển tiếp nay là thao tác giao lại", tu)
-		}
-	}
-	// The code itself stays VALID: rows that already hold it are records (rule 7).
-	if !ChuyenTiep.HopLe() || !ChuyenTiep.KetThuc() {
-		t.Error("chuyen-tiep phải còn là mã hợp lệ và là trạng thái kết thúc cho các dòng cũ")
-	}
-}
-
-func TestHaiTrangThaiKetThuc(t *testing.T) {
-	for _, m := range []TrangThaiNhiemVu{HoanThanh, ChuyenTiep} {
-		if !m.KetThuc() {
-			t.Errorf("%s không phải trạng thái kết thúc", m)
-		}
-	}
-	for _, m := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung} {
-		if m.KetThuc() {
-			t.Errorf("%s bị coi là kết thúc — việc rơi vào đó sẽ nằm lại vĩnh viễn", m)
-		}
-	}
-}
-
-// TestTamDungChiVeDuocTrangThaiTruoc guards the ONE entry that is not a plain lookup.
+// TestLifecycleIsRequireTable pins EVERY pair of the 7×7 grid against requireTable.
 //
-// §6 says a paused task resumes at "(trạng thái trước)". `ChuyenSangDuoc` answers SHAPE and is
-// deliberately loose; `TamDungVeDuoc` is the rule, and it is what stops a pause from becoming a
-// shortcut to `hoan-thanh`.
-func TestTamDungChiVeDuocTrangThaiTruoc(t *testing.T) {
-	for _, m := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet} {
-		if !TamDungVeDuoc(m) {
-			t.Errorf("tạm dừng không về được %s", m)
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this replaces TestLuongChinhTheoDungSoDoDacTa,
+// TestTraLaiLamTiepLaMuiTenLuiDuyNhat, TestHaiTrangThaiKetThuc and TestTamDungChiVeDuocTrangThaiTruoc,
+// which pinned the strict chain of §6: no skipping (moi-giao → dang-thuc-hien, dang-thuc-hien →
+// hoan-thanh were refused), no reopen, `hoan-thanh` and `chuyen-tiep` terminal, resume only to the
+// state before the pause. The user decided to follow vigov-require 52ec9b5 instead.
+func TestLifecycleIsRequireTable(t *testing.T) {
+	all := []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, HoanThanh, TamDung, ChuyenTiep}
+	for _, from := range all {
+		for _, to := range all {
+			want := false
+			for _, m := range requireTable[from] {
+				if m == to {
+					want = true
+				}
+			}
+			if got := from.ChuyenSangDuoc(to); got != want {
+				t.Errorf("%s -> %s: ChuyenSangDuoc = %v, bảng require (đã bỏ đích chuyen-tiep) = %v",
+					from, to, got, want)
+			}
 		}
 	}
-	for _, m := range []TrangThaiNhiemVu{HoanThanh, ChuyenTiep, TamDung, "moi-nghi-ra"} {
-		if TamDungVeDuoc(m) {
-			t.Errorf("tạm dừng về được %s — việc chưa ai làm sẽ thành việc đã xong", m)
+}
+
+// TestNewEdgesOfRequire names each edge the strict chain did not have, so a regression names the
+// edge rather than a grid cell.
+func TestNewEdgesOfRequire(t *testing.T) {
+	for _, c := range []struct{ from, to TrangThaiNhiemVu }{
+		{MoiGiao, DangThucHien},    // skip acknowledgement
+		{DangThucHien, HoanThanh},  // skip review (still needs task.approve)
+		{HoanThanh, DangThucHien},  // reopen (needs task.approve)
+		{ChuyenTiep, DaTiepNhanNV}, // legacy forwarded row moves on
+		{ChuyenTiep, DangThucHien}, // legacy forwarded row moves on
+		{TamDung, MoiGiao},         // resume regardless of history
+		{TamDung, DaTiepNhanNV},    //
+		{TamDung, DangThucHien},    //
+	} {
+		if err := ChuyenTrangThaiDuoc(c.from, c.to); err != nil {
+			t.Errorf("%s -> %s bị từ chối: %v", c.from, c.to, err)
 		}
 	}
-	// And the shape half really is looser than the rule, or the two functions would be one.
-	if TamDung.ChuyenSangDuoc(HoanThanh) {
-		t.Error("sơ đồ cho tạm dừng nhảy thẳng sang hoàn thành")
+	// And the edges require does NOT have, which the old map did.
+	for _, c := range []struct{ from, to TrangThaiNhiemVu }{
+		{ChoDuyet, TamDung}, // require's PENDING_APPROVAL has no PAUSED
+		{TamDung, ChoDuyet}, // nothing resumes into review
+	} {
+		if err := ChuyenTrangThaiDuoc(c.from, c.to); !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
+			t.Errorf("%s -> %s: lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", c.from, c.to, err)
+		}
+	}
+}
+
+// TestNoStatusIsTerminal: every status has a way out since 28/09/2026 — which is why callers that
+// mean "finished" name `hoan-thanh` (CheckAssignable, ConChuaXong).
+func TestNoStatusIsTerminal(t *testing.T) {
+	for m := range chuyenDuocSangNhiemVu {
+		if len(m.AllowedTransitions()) == 0 {
+			t.Errorf("%s không có bước ra — ngõ cụt", m)
+		}
+	}
+	// The code itself stays VALID and is never a target (rule 7 for the rows that hold it).
+	if !ChuyenTiep.HopLe() {
+		t.Error("chuyen-tiep phải còn là mã hợp lệ cho các dòng cũ")
+	}
+	for m := range chuyenDuocSangNhiemVu {
+		if m.ChuyenSangDuoc(ChuyenTiep) {
+			t.Errorf("%s vẫn chuyển sang chuyen-tiep được — chuyển tiếp nay là thao tác giao lại", m)
+		}
+	}
+}
+
+// TestAllowedTransitionsIsTheMap: the list a screen draws is the map the write path enforces — for
+// every status, the list holds exactly the targets ChuyenTrangThaiDuoc accepts.
+func TestAllowedTransitionsIsTheMap(t *testing.T) {
+	all := []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, HoanThanh, TamDung, ChuyenTiep}
+	for _, from := range all {
+		listed := map[TrangThaiNhiemVu]bool{}
+		for _, m := range from.AllowedTransitions() {
+			listed[m] = true
+		}
+		for _, to := range all {
+			accepted := ChuyenTrangThaiDuoc(from, to) == nil
+			if accepted != listed[to] {
+				t.Errorf("%s -> %s: danh sách = %v, đường ghi chấp nhận = %v", from, to, listed[to], accepted)
+			}
+		}
+	}
+	// A fresh slice: editing it must not edit the lifecycle.
+	l := MoiGiao.AllowedTransitions()
+	l[0] = HoanThanh
+	if MoiGiao.AllowedTransitions()[0] != DaTiepNhanNV {
+		t.Error("AllowedTransitions trả lát cắt của chính bản đồ — sửa nó là sửa vòng đời")
+	}
+	// Unknown status: an empty list, never nil.
+	if l := TrangThaiNhiemVu("ma-cu-la").AllowedTransitions(); l == nil || len(l) != 0 {
+		t.Errorf("trạng thái lạ: %v, muốn [] không nil", l)
+	}
+}
+
+// TestNeedsApproval names the three moves that need `task.approve` and pins that the ordinary steps
+// do not (user decision 28/09/2026, plus the owner's return decision of 27/09).
+func TestNeedsApproval(t *testing.T) {
+	for _, c := range []struct {
+		from, to TrangThaiNhiemVu
+		want     bool
+	}{
+		{ChoDuyet, HoanThanh, true},
+		{DangThucHien, HoanThanh, true}, // the new direct completion is NOT an unguarded shortcut
+		{HoanThanh, DangThucHien, true}, // reopen
+		{ChoDuyet, DangThucHien, true},  // return
+		{MoiGiao, DangThucHien, false},
+		{DaTiepNhanNV, DangThucHien, false},
+		{TamDung, DangThucHien, false},
+		{ChuyenTiep, DangThucHien, false},
+		{DangThucHien, ChoDuyet, false},
+		{DangThucHien, TamDung, false},
+	} {
+		if got := NeedsApproval(c.from, c.to); got != c.want {
+			t.Errorf("NeedsApproval(%s, %s) = %v, muốn %v", c.from, c.to, got, c.want)
+		}
+	}
+	if !IsReopen(HoanThanh, DangThucHien) || IsReopen(ChoDuyet, DangThucHien) || IsReopen(TamDung, DangThucHien) {
+		t.Error("IsReopen phải nhận đúng một bước hoan-thanh -> dang-thuc-hien")
+	}
+	if !LaTraLaiLamTiep(ChoDuyet, DangThucHien) || LaTraLaiLamTiep(HoanThanh, DangThucHien) {
+		t.Error("LaTraLaiLamTiep phải nhận đúng một bước cho-duyet -> dang-thuc-hien")
 	}
 }
 

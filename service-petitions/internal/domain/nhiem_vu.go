@@ -50,48 +50,58 @@ const (
 // TASK one on purpose: `DaTiepNhan` was there first, it is referenced across the petition use
 // cases, and renaming it to make this file read prettier would edit code that is already right.
 
-// chuyenDuocSangNhiemVu is the whole lifecycle of `docs/ui-ux/02-nhiem-vu.md` §6, and the ABSENCES
-// are as deliberate as the entries.
+// chuyenDuocSangNhiemVu is the whole lifecycle, and the ABSENCES are as deliberate as the entries.
 //
-// THE NAME CARRIES A SUFFIX FOR THE REASON THE `DaTiepNhanNV` CONSTANT DOES: the petition lifecycle
-// already owns the unsuffixed name in this package, and two lifecycles cannot share one map name.
-// The compiler says so loudly, which is the right place to find it.
+// THE TABLE IS vigov-require's `ALLOWED_TRANSITIONS` (commit 52ec9b5, read at anchor
+// 0053854:apps/api/app/modules/tasks/service.py:63-102), mapped one-to-one onto the seven codes
+// (NEW=moi-giao, ACCEPTED=da-tiep-nhan, IN_PROGRESS=dang-thuc-hien, PENDING_APPROVAL=cho-duyet,
+// DONE=hoan-thanh, PAUSED=tam-dung, TRANSFERRED=chuyen-tiep) — user decision 28/09/2026, which
+// replaced the strict chain of `docs/ui-ux/02-nhiem-vu.md` §6 (reconciliation note
+// kb/50-doi-chieu/2026-09-26-feat-m8-multitenant-foundation-nhiem-vu.md, conflict #1). Require's
+// reason, quoted: "A commune runs three steps: not started, doing it, done … communes that want
+// those still have them — but they are not on the way any more." So `da-tiep-nhan` and `cho-duyet`
+// are OPTIONAL steps, not gates.
 //
-// THE MAIN FLOW is the diagram at :227 read left to right. `tam-dung` is reachable from each of the
-// four unfinished main states, which is what the fan-in at :229-231 draws; the diagram's second
-// branch, `chuyen-tiep`, is no longer a move (see below).
+// # THE DEPARTURES FROM REQUIRE, EACH A DECISION OF THE USER ON 28/09/2026
 //
-// `hoan-thanh` AND `chuyen-tiep` ARE TERMINAL, and they appear as keys with EMPTY lists rather
-// than being left out, so "a state with no way out" is visibly different from "a state nobody
-// wrote down". Neither is a guess dressed up as a rule:
+//	chuyen-tiep AS A TARGET   dropped from every list. Forwarding is the assignment act on the SAME row
+//	                          (POST /api/v1/tasks/{ma}/assignment, commit 764bb92), and CheckStatusTarget
+//	                          refuses the code with a sentence naming that act. Require lists it from
+//	                          moi-giao, da-tiep-nhan and dang-thuc-hien.
+//	chuyen-tiep AS A SOURCE   kept as require has it: legacy rows already there move on to
+//	                          da-tiep-nhan / dang-thuc-hien, so they are no longer dead ends.
+//	approval                  the map says only which moves EXIST. Every move INTO `hoan-thanh`, the
+//	                          reopen OUT of it, and the return cho-duyet → dang-thuc-hien (owner decision
+//	                          27/09/2026) additionally need `task.approve` — NeedsApproval, enforced in
+//	                          the write use case. Require's table has no such key.
 //
-//	hoan-thanh   §6 draws no arrow leaving it, and §5.4's two approval tick boxes say in the
-//	             interface itself that they "không làm đổi trạng thái nhiệm vụ".
-//	chuyen-tiep  NO LONGER A TARGET OF ANY MOVE — owner decision 28/09/2026. "Chuyển tiếp" is now the
-//	             SAME ROW handed to another unit or person: the assignment act
-//	             (POST /api/v1/tasks/{ma}/assignment, task_assignment.go), which resets the status to
-//	             `moi-giao` and leaves the deadline alone. The code STAYS in this map, in the CHECK
-//	             constraint and in the labels, because rows that already hold it are records and are
-//	             never rewritten (rule 7). It stays TERMINAL for those rows: the "another task in
-//	             another department" reading §6 drew had no link column, so nothing can continue
-//	             them. CheckStatusTarget refuses it as a target with a sentence naming the new act.
+// # NO STATUS IS TERMINAL ANY MORE
 //
-// `tam-dung` IS THE ONE ENTRY THAT IS NOT A PLAIN LOOKUP — see the note on TamDungVeDuoc.
+// `hoan-thanh` reopens to `dang-thuc-hien` (require: "Reopening is deliberate: work signed off and
+// then found wanting is a thing that happens, and the alternative is a second task that hides the
+// first one's history"), and `chuyen-tiep` leaves as above. Callers that mean "finished" must ask
+// for `hoan-thanh` by name (CheckAssignable, ConChuaXong), never for "has no way out".
 //
-// `cho-duyet` → `dang-thuc-hien` IS THE ONE BACKWARD ARROW, and it is the owner's decision of
-// 2026-09-27 rather than §6's diagram: "Trả lại để làm tiếp / yêu cầu bổ sung". Without it a
-// reviewer who finds the work incomplete has only `tam-dung` (which resumes back into `cho-duyet`)
-// or `hoan-thanh` (signing off work they just judged unfinished). It adds NO STATUS — ADR 0035 §C's
-// closed list is untouched. The map only says the shape exists; who may take it and what it must
-// carry is LaTraLaiLamTiep's, enforced in the write use case.
+// # `tam-dung` IS A PLAIN LOOKUP NOW
+//
+// Until 28/09/2026 a paused task could resume only into the state it was paused FROM, read from the
+// timeline. Require resumes to any of three states regardless of history, and the user chose to
+// follow it: the history rule, its timeline read and its "unknown previous state" refusal are gone,
+// which is also what lets allowed_transitions be computed from this map alone, with no read per row.
+// Two consequences worth knowing: `cho-duyet` can no longer be paused (require lists no such edge),
+// and nothing resumes INTO `cho-duyet` — a legacy row paused from review goes back through
+// `dang-thuc-hien`, and so re-enters review, rather than skipping it.
+//
+// THE ORDER OF EACH LIST IS THE ORDER A SCREEN SHOWS THE CHOICES IN (allowed_transitions): forward
+// steps first, then the side steps. Go map iteration is random; these slices are not.
 var chuyenDuocSangNhiemVu = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
-	MoiGiao:      {DaTiepNhanNV, TamDung},
+	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung},
 	DaTiepNhanNV: {DangThucHien, TamDung},
-	DangThucHien: {ChoDuyet, TamDung},
-	ChoDuyet:     {HoanThanh, DangThucHien, TamDung},
-	TamDung:      {MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet},
-	HoanThanh:    {},
-	ChuyenTiep:   {},
+	DangThucHien: {ChoDuyet, HoanThanh, TamDung},
+	ChoDuyet:     {HoanThanh, DangThucHien},
+	TamDung:      {MoiGiao, DaTiepNhanNV, DangThucHien},
+	ChuyenTiep:   {DaTiepNhanNV, DangThucHien},
+	HoanThanh:    {DangThucHien},
 }
 
 // ErrChuyenTrangThaiNhiemVuKhongHopLe is returned for a move the lifecycle does not have.
@@ -109,21 +119,7 @@ func (t TrangThaiNhiemVu) HopLe() bool {
 }
 
 // ChuyenSangDuoc reports whether the lifecycle HAS this move — which is a question about SHAPE and
-// not about permission.
-//
-// ⚠ IT IS DELIBERATELY LOOSE FOR `tam-dung`, AND READING THAT AS A BUG WOULD BE THE MISTAKE. §6
-// says a paused task resumes at "(trạng thái trước)" — the state it was paused FROM — so the legal
-// target is a fact about this task's history and not about the status alone. This map cannot know
-// it, and a map that pretended to would be wrong for three of the four cases.
-//
-// WHERE THE MISSING HALF LIVES: `nhat_ky_nhiem_vu.trang_thai_tai_thoi_diem` records the state at
-// every step (migration 0006), so the state before the pause is READ from the log, in the write use
-// case, inside the transaction that holds the row. It is NOT a column on the task: that would be a
-// second copy of a fact the log already holds, which is rule 9's one-line test, and the copy that
-// drifts is the one a screen reads.
-//
-// The same split the petition lifecycle makes: a transition being SHAPED correctly and a transition
-// being PERMITTED are two questions, and conflating them puts business rules in a lookup table.
+// not about permission (NeedsApproval is the other question).
 func (t TrangThaiNhiemVu) ChuyenSangDuoc(m TrangThaiNhiemVu) bool {
 	for _, cho := range chuyenDuocSangNhiemVu[t] {
 		if cho == m {
@@ -133,19 +129,19 @@ func (t TrangThaiNhiemVu) ChuyenSangDuoc(m TrangThaiNhiemVu) bool {
 	return false
 }
 
-// KetThuc reports whether the lifecycle has no way out of this status.
-func (t TrangThaiNhiemVu) KetThuc() bool {
-	return t.HopLe() && len(chuyenDuocSangNhiemVu[t]) == 0
-}
-
-// TamDungVeDuoc reports whether a task PAUSED from `tu` may resume into it.
+// AllowedTransitions is the list of statuses the lifecycle lets a task in `t` move to — THE SAME MAP
+// the write path enforces (ChuyenTrangThaiDuoc), so a screen that draws only these choices cannot
+// offer a move the server refuses on shape.
 //
-// A SEPARATE FUNCTION RATHER THAN A LOOSER MAP, so the caller has to have gone and found the
-// previous state before it can ask. `ChuyenSangDuoc(TamDung, X)` answers "is X a shape the pause
-// can return to"; this answers "is X the state this task was actually paused from", and only the
-// second is a rule. A paused task that resumed into `hoan-thanh` would be finished work nobody did.
-func TamDungVeDuoc(tu TrangThaiNhiemVu) bool {
-	return tu == MoiGiao || tu == DaTiepNhanNV || tu == DangThucHien || tu == ChoDuyet
+// ⚠ IT IS THE SHAPE, NOT THE CALLER'S RIGHTS AND NOT THE TREE. A move for which NeedsApproval is true
+// is listed for everybody and answers 403 to a caller without `task.approve`; completing a parent
+// with unfinished sub-tasks is listed and answers 409. Both are decided on the row under the lock.
+//
+// A FRESH SLICE, never the map's own: a caller that appended to it would otherwise edit the
+// lifecycle for every later request. Never nil — an unknown status (a legacy value no map knows)
+// has no moves, which is `[]` on the wire, not `null`.
+func (t TrangThaiNhiemVu) AllowedTransitions() []TrangThaiNhiemVu {
+	return append([]TrangThaiNhiemVu{}, chuyenDuocSangNhiemVu[t]...)
 }
 
 // LaTraLaiLamTiep reports whether this move is "Trả lại để làm tiếp" — the reviewer sending work
@@ -156,11 +152,28 @@ func TamDungVeDuoc(tu TrangThaiNhiemVu) bool {
 // could have signed it off), and a REASON is mandatory — the officer receiving the work back has to
 // be told what is missing, and the timeline is the only place that says so.
 //
-// IT ASKS ABOUT THE CURRENT STATUS, NOT THE PAUSE HISTORY. A task paused from `cho-duyet` can only
-// resume INTO `cho-duyet` (ChuyenTrangThaiDuoc), so the return is never reachable from `tam-dung`
-// directly and cannot be used to skip review by pausing first.
+// IT ASKS ABOUT THE CURRENT STATUS. Nothing resumes into `cho-duyet` and `cho-duyet` cannot be paused
+// (the map above), so pausing cannot be used to leave review without this check.
 func LaTraLaiLamTiep(tu, sang TrangThaiNhiemVu) bool {
 	return tu == ChoDuyet && sang == DangThucHien
+}
+
+// IsReopen reports whether this move takes signed-off work back into progress — require's
+// `DONE → IN_PROGRESS` (user decision 28/09/2026).
+//
+// It needs `task.approve` for the reason the return from review does: undoing a sign-off is the
+// signer's verdict, not the officer's. It clears `ngay_hoan_thanh` (the schema's biconditional
+// `nhiem_vu_hoan_thanh_co_ngay` demands it), so the OLD instant survives only in the timeline row
+// and the audit entry the act writes — ReopenLogText and the write use case.
+func IsReopen(tu, sang TrangThaiNhiemVu) bool {
+	return tu == HoanThanh && sang == DangThucHien
+}
+
+// NeedsApproval reports whether the move needs `task.approve` on top of `task.update`: every move
+// INTO `hoan-thanh`, the reopen out of it, and the return from review. ONE PREDICATE so the write
+// path and anything that later wants to reflect the caller's rights cannot disagree.
+func NeedsApproval(tu, sang TrangThaiNhiemVu) bool {
+	return sang == HoanThanh || IsReopen(tu, sang) || LaTraLaiLamTiep(tu, sang)
 }
 
 // LaTrangThaiChinh reports whether this is one of the five columns the Kanban board draws.

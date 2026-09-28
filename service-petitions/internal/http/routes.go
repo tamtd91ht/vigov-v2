@@ -1215,16 +1215,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// THE SAME NARROWER KEY GUARDS ONE MORE MOVE: `cho-duyet` → `dang-thuc-hien`, "Trả lại để làm tiếp"
 	// (owner decision 2026-09-27), which also requires a non-empty `note` as its reason. Decided in
 	// app.DoiTrangThai on the locked row, because `dang-thuc-hien` is also the ordinary step from
-	// `da-tiep-nhan` and only the CURRENT status tells the two apart.
+	// `da-tiep-nhan` and only the CURRENT status tells the two apart. AND A THIRD since 28/09/2026: the
+	// REOPEN `hoan-thanh` → `dang-thuc-hien` (require 52ec9b5), which clears `ngay_hoan_thanh` and keeps
+	// the cleared instant in the timeline row and the audit entry (domain.NeedsApproval names all three).
 	//
-	// THE TARGET IS ON THE WIRE, unlike the petition path's `…/status`. §6's lifecycle BRANCHES at
-	// every state, so there is no single "next" for the server to choose — what the server owns is
-	// the MAP, and a move the diagram does not draw is refused with a 409.
+	// THE TARGET IS ON THE WIRE, unlike the petition path's `…/status`. The lifecycle (require
+	// 52ec9b5's table, domain/nhiem_vu.go) BRANCHES at every state, so there is no single "next" for
+	// the server to choose — what the server owns is the MAP, published per task as
+	// `allowed_transitions`, and a move the map does not have is refused with a 409.
 	//
 	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
 	// one step and the second request answers 409.
 	//
-	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt
 	// @screen   02-nhiem-vu §6
 	// @request  doiTrangThaiVao
 	// @reply    200 nhiemVuRa

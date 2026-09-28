@@ -454,9 +454,10 @@ func (s *NhiemVuStore) Sua(ctx context.Context, tx *store.ScopedTx, id string, n
 // instant is a row §11.3's on-time ratio cannot classify, and it would drop out of the denominator
 // silently.
 //
-// LEAVING `hoan-thanh` IS NOT A PATH THE LIFECYCLE HAS — §6 draws no arrow out of it — so this
-// statement never has to clear the instant, and deliberately cannot: there is no expression here
-// that writes NULL into it.
+// LEAVING `hoan-thanh` (the reopen, require 52ec9b5, user decision 28/09/2026) WRITES NULL: the
+// caller passes a zero time for every step but the completion, and khongThanhNull turns it into NULL,
+// which is exactly what the biconditional demands. The instant being cleared is NOT kept on this row;
+// the use case writes it into the timeline row and the audit entry in the same transaction.
 //
 // THE WHERE CLAUSE CARRIES THE EXPECTED STATUS. Two officers moving one task at the same moment
 // cannot both succeed; the second matches no row and is told to reload.
@@ -481,7 +482,7 @@ func (s *NhiemVuStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id 
 // ⚠ NO `han_*` COLUMN IS IN THE SET LIST, AND THAT ABSENCE IS THE DECISION. A deadline moves only
 // through an approved extension (ADR 0038, DoiHanXuLy); a hand-over that could move it would let a
 // `task.assign` holder rewrite a commitment the leader made. `ngay_hoan_thanh` is absent too: the act
-// refuses terminal tasks, so the column is NULL on every row this reaches.
+// refuses `hoan-thanh` tasks (domain.CheckAssignable), so the column is NULL on every row this reaches.
 //
 // THE WHERE CLAUSE CARRIES THE EXPECTED STATUS, like DoiTrangThai: this act can move the lifecycle
 // (back to `moi-giao`), so two officers acting at once cannot both succeed.
@@ -587,9 +588,8 @@ func doiMotDongNhiemVu(kq sql.Result, viec string) error {
 // "correct the timeline" can only ever mean writing another entry that carries the correction.
 //
 // IT IS WRITTEN IN THE SAME TRANSACTION AS THE ACT IT DESCRIBES. A status change that committed
-// without its timeline row would leave a gap an officer reads as "nothing happened here", and the
-// resume rule of §6 — which derives the state before a pause FROM this table — would then answer
-// from a history with a hole in it.
+// without its timeline row would leave a gap an officer reads as "nothing happened here" — and for a
+// reopen, this row is the only place a commune can still read when the work had been declared finished.
 func (s *NhiemVuStore) GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error {
 	const stmt = `INSERT INTO nhat_ky_nhiem_vu (
 		tenant_id, id, nhiem_vu_id, thoi_diem, nguoi_ma, trang_thai_tai_thoi_diem,
@@ -605,51 +605,6 @@ func (s *NhiemVuStore) GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e doma
 		return fmt.Errorf("nhat_ky_nhiem_vu: ghi nhật ký: %w", err)
 	}
 	return nil
-}
-
-// TranDocNhatKy bounds how far back the resume rule looks.
-//
-// # WHY THE WINDOW IS BOUNDED AT ALL
-//
-// §6's "(trạng thái trước)" is the row before the pause, and in every real timeline it is within a
-// handful of entries. Reading the whole log to find it would make the cost of resuming a task grow
-// with how much was written on it, inside a transaction holding the row lock. When the answer is
-// not in the window the use case REFUSES and says so — it does not guess, which is the one thing
-// that would put work into a state nobody chose.
-const TranDocNhatKy = 50
-
-// NhatKyGanNhat reads the newest entries of one task, NEWEST FIRST.
-//
-// IT RETURNS domain.MocNhatKy AND NOT THE WHOLE ROW, and the narrowness is the point: the only
-// caller is the resume rule, which needs one column. A method returning the full entries would be a
-// method a later edit could make the rule depend on the author or the text of — neither of which
-// decides where a paused task resumes to.
-func (s *NhiemVuStore) NhatKyGanNhat(ctx context.Context, tx *store.ScopedTx, nhiemVuID string,
-	n int) ([]domain.MocNhatKy, error) {
-
-	const stmt = `SELECT trang_thai_tai_thoi_diem FROM nhat_ky_nhiem_vu
-		WHERE tenant_id = $1 AND nhiem_vu_id = $2
-		ORDER BY thoi_diem DESC, id DESC
-		LIMIT $3`
-
-	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), nhiemVuID, n)
-	if err != nil {
-		return nil, fmt.Errorf("nhat_ky_nhiem_vu: đọc nhật ký gần nhất: %w", err)
-	}
-	defer rows.Close()
-
-	var ra []domain.MocNhatKy
-	for rows.Next() {
-		var tt string
-		if err := rows.Scan(&tt); err != nil {
-			return nil, fmt.Errorf("nhat_ky_nhiem_vu: đọc dòng nhật ký: %w", err)
-		}
-		ra = append(ra, domain.MocNhatKy{TrangThai: domain.TrangThaiNhiemVu(tt)})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("nhat_ky_nhiem_vu: duyệt nhật ký: %w", err)
-	}
-	return ra, nil
 }
 
 // --- the extension requests (§5.8) --------------------------------------------------------------------

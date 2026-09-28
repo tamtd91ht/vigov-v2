@@ -180,8 +180,9 @@ const (
 // `chuyen-tiep` or `tam-dung` therefore counts as NOT done, and a late one makes the conclusion
 // `qua-han`. That is the literal reading of the decision, not a judgement: how those two states
 // should count is an OPEN question for the customer (ledger service-petitions/
-// bien-ban-hop-tang-du-lieu, "đếm nhiệm vụ chuyen-tiep/tam-dung"). Consequence worth knowing: a
-// conclusion whose only task was forwarded (`chuyen-tiep` is terminal) never reaches `hoan-thanh`.
+// bien-ban-hop-tang-du-lieu, "đếm nhiệm vụ chuyen-tiep/tam-dung"). Since 28/09/2026 `chuyen-tiep` is
+// no longer terminal (require 52ec9b5): a forwarded task moves on and, once `hoan-thanh`, counts. A
+// REOPENED task likewise stops counting, and the conclusion drops back from `hoan-thanh`.
 //
 // THE MARK WINS EVEN IF LIVE TASKS EXIST. The use case refuses to set it while a live task points at
 // the conclusion (decision 4), so the combination should not occur; if it does, the mark is the one

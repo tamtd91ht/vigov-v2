@@ -79,15 +79,16 @@ func TestAssignmentSameValuesIsNoChange(t *testing.T) {
 	}
 }
 
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: a legacy `chuyen-tiep` row was refused here as terminal. It is no
+// longer terminal (require 52ec9b5, user decision) and forwarding IS this act, so it may be handed
+// over; only `hoan-thanh` is refused — reopening is its own act, gated by `task.approve`.
 func TestAssignmentTerminalRefused(t *testing.T) {
-	for _, s := range []TrangThaiNhiemVu{HoanThanh, ChuyenTiep} {
-		n := assignedTask()
-		n.TrangThai = s
-		if err := CheckAssignable(n); !errors.Is(err, ErrTaskClosedForAssignment) {
-			t.Errorf("%s: lỗi = %v, muốn ErrTaskClosedForAssignment", s, err)
-		}
+	n := assignedTask()
+	n.TrangThai = HoanThanh
+	if err := CheckAssignable(n); !errors.Is(err, ErrTaskClosedForAssignment) {
+		t.Errorf("hoan-thanh: lỗi = %v, muốn ErrTaskClosedForAssignment", err)
 	}
-	for _, s := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung} {
+	for _, s := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung, ChuyenTiep} {
 		n := assignedTask()
 		n.TrangThai = s
 		if err := CheckAssignable(n); err != nil {

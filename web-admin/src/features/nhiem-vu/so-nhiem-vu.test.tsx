@@ -109,6 +109,7 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
+    allowed_transitions: [],
     type: "theo-van-ban",
     bloc: "khoi-dang",
     priority: "cao",

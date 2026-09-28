@@ -2,8 +2,9 @@ package store
 
 // The READ of the task progress log `nhat_ky_nhiem_vu` (migration 0006, §5.9). SQL, and nothing else.
 //
-// ITS WRITE LIVES IN nhiem_vu_ghi.go (GhiNhatKy), inside the transaction of the act it describes, and
-// so does NhatKyGanNhat — the narrow read the resume rule takes under the row lock. This file is the
+// ITS WRITE LIVES IN nhiem_vu_ghi.go (GhiNhatKy), inside the transaction of the act it describes.
+// (The narrow read the pause-resume rule once took there was removed on 28/09/2026 with the rule
+// itself — require 52ec9b5 resumes without looking at history.) This file is the
 // page a screen renders, shaped like the petition logbook's read (nhat_ky_phan_anh.go,
 // NhatKyCuaPhieu) so the two timelines page, order and scan alike.
 //

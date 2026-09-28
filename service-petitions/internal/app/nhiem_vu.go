@@ -114,8 +114,6 @@ type KhoNhiemVuGhi interface {
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, nguoiMa, lyDo string, luc time.Time) error
 
 	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error
-	NhatKyGanNhat(ctx context.Context, tx *store.ScopedTx, nhiemVuID string, n int) (
-		[]domain.MocNhatKy, error)
 
 	// §5.4's document block (migration 0009). FOUR METHODS ON THIS INTERFACE AND NOT A FIFTH
 	// INTERFACE, unlike KhoDeNghiLuiHan below, and the difference is what the rows ARE: a line is a
@@ -212,6 +210,14 @@ var ErrKhongDuocDuyetHoanThanh = errors.New(
 // who tried to return work that "completing needs the approval right" names an act they never tried.
 var ErrKhongDuocTraLai = errors.New(
 	"nhiem_vu: trả lại nhiệm vụ đang chờ duyệt cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
+
+// ErrReopenNeedsApproval refuses the reopen (`hoan-thanh` → `dang-thuc-hien`, require 52ec9b5) to
+// somebody without `task.approve` — user decision 28/09/2026. Undoing a sign-off is the signer's act:
+// an officer holding only `task.update` could otherwise pull finished work out of §11.3's completed
+// figures at will. Its own sentinel for the reason ErrKhongDuocTraLai has one: the sentence names the
+// act that was tried.
+var ErrReopenNeedsApproval = errors.New(
+	"nhiem_vu: mở lại nhiệm vụ đã hoàn thành cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
 
 // ErrLanhDaoGiaoViecKhongHopLe refuses a new task whose "Lãnh đạo giao việc" code identity did not
 // answer as an active staff member of THIS commune (owner decision 2026-09-27).
@@ -1050,10 +1056,10 @@ func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
 //
 // THE TARGET IS A PARAMETER HERE AND IS NOT ONE ON THE PETITION PATH, and the difference is the
 // shape of the two lifecycles. A petition has ONE main flow, so "advance" names the next step
-// unambiguously and a target on the wire would let a client skip steps. §6's task lifecycle
-// BRANCHES at every state — `tam-dung` leaves all four working states, and `cho-duyet` can go back
-// — so there is no single "next", and the server's job is to refuse the moves the diagram does not
-// draw rather than to choose among them. (`chuyen-tiep` was the second branch until 28/09/2026; it
+// unambiguously and a target on the wire would let a client skip steps. The task lifecycle (require
+// 52ec9b5's table since 28/09/2026) BRANCHES at every state — optional steps, pause, return, reopen
+// — so there is no single "next", and the server's job is to refuse the moves the map does not
+// have rather than to choose among them. (`chuyen-tiep` was the second branch until 28/09/2026; it
 // is now the assignment act, task_assignment.go.)
 type YeuCauDoiTrangThai struct {
 	TrangThai string
@@ -1068,14 +1074,16 @@ type YeuCauDoiTrangThai struct {
 	GhiChu string
 }
 
-// DoiTrangThai moves the task. Route permission: `task.update`; the step INTO `hoan-thanh`
+// DoiTrangThai moves the task. Route permission: `task.update`; every step INTO `hoan-thanh`
 // additionally needs `task.approve` and an entirely finished sub-tree; the return from `cho-duyet`
-// to `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason.
+// to `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason; the REOPEN
+// `hoan-thanh` → `dang-thuc-hien` additionally needs `task.approve`, clears `ngay_hoan_thanh`, and
+// keeps the cleared instant in the timeline row and the audit entry. domain.NeedsApproval names the
+// three.
 //
 // # THE THREE CHECKS, IN THIS ORDER, INSIDE THE TRANSACTION
 //
-//  1. §6's SHAPE — is this move on the diagram at all, and for a paused task, is it the resume the
-//     timeline supports.
+//  1. THE SHAPE — is this move in the lifecycle map (require 52ec9b5's table, domain/nhiem_vu.go).
 //  2. THE PERMISSION for the final step (`task.approve`).
 //  3. ADR 0037 DECISION 4 — the whole sub-tree, recursively.
 //
@@ -1112,21 +1120,7 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			return err
 		}
 
-		// §6's "(trạng thái trước)" — DERIVED FROM THE TIMELINE, never from a column. Read only when
-		// the task is actually paused: on every other path it is not a question, and asking anyway
-		// would put a query on the common path to answer something nobody used.
-		truocTamDung := domain.TrangThaiNhiemVu("")
-		if truoc.TrangThai == domain.TamDung {
-			nhatKy, err := uc.kho.NhatKyGanNhat(ctx, tx, truoc.ID, petstore.TranDocNhatKy)
-			if err != nil {
-				return err
-			}
-			if tt, co := domain.TrangThaiTruocTamDung(nhatKy); co {
-				truocTamDung = tt
-			}
-		}
-
-		if err := domain.ChuyenTrangThaiDuoc(truoc.TrangThai, moiTT, truocTamDung); err != nil {
+		if err := domain.ChuyenTrangThaiDuoc(truoc.TrangThai, moiTT); err != nil {
 			return err
 		}
 
@@ -1139,6 +1133,16 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 				return err
 			}
 			xongLuc = bayGio
+		}
+
+		// REOPEN (require 52ec9b5, user decision 28/09/2026): `hoan-thanh` → `dang-thuc-hien`, gated by
+		// `task.approve` like the sign-off it undoes. xongLuc stays zero, so the UPDATE writes NULL into
+		// `ngay_hoan_thanh` — the schema's biconditional demands it. The instant being cleared is kept
+		// in the timeline sentence and in the audit entry's `truoc`, both written below in this
+		// transaction; nothing else remembers it.
+		moLai := domain.IsReopen(truoc.TrangThai, moiTT)
+		if moLai && !bool(duyet) {
+			return ErrReopenNeedsApproval
 		}
 
 		// "TRẢ LẠI ĐỂ LÀM TIẾP" (owner decision 2026-09-27). PERMISSION BEFORE REASON, for the order
@@ -1173,13 +1177,33 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 		if noiDung == "" {
 			noiDung = domain.NoiDungChuyenTrangThai(truoc.TrangThai, moiTT)
 		}
+		if moLai {
+			// The officer's line is APPENDED to the sentence carrying the old instant, and the whole row
+			// is bounded as one entry: a note near the limit is refused rather than truncated, because a
+			// cut sentence in an append-only table can never be completed.
+			if noiDung, err = domain.KiemNoiDungNhatKy(domain.ReopenLogText(truoc.NgayHoanThanh, ghiChu)); err != nil {
+				return err
+			}
+		}
 		if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID, noiDung); err != nil {
 			return err
 		}
 
+		truocVet := map[string]any{"trang_thai": string(truoc.TrangThai)}
+		sauVet := map[string]any{"trang_thai": string(moiTT)}
+		// `ngay_hoan_thanh` IS A SIGNIFICANT FIELD (rule 6, invariant 5) on the two moves that change
+		// it: completing sets it, reopening clears it — and for the reopen this `truoc` value is the
+		// only durable record of when the work had been declared finished.
+		if !xongLuc.IsZero() {
+			sauVet["ngay_hoan_thanh"] = xongLuc
+		}
+		if moLai {
+			truocVet["ngay_hoan_thanh"] = truoc.NgayHoanThanh
+			sauVet["ngay_hoan_thanh"] = nil
+		}
 		vet := map[string]any{
-			"truoc": map[string]any{"trang_thai": string(truoc.TrangThai)},
-			"sau":   map[string]any{"trang_thai": string(moiTT)},
+			"truoc": truocVet,
+			"sau":   sauVet,
 			// DERIVED AT THE INSTANT OF THE ACT AND RECORDED, never stored as a column (rule 10,
 			// invariant 3). An entry states what was true at one moment; a column would be read as
 			// the current truth later, which is the defect that rule forbids.
@@ -1192,6 +1216,10 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			// can name a citizen's case. The flag is what lets an inspection find every return.
 			vet["tra_lai"] = true
 			vet["do_dai_ly_do"] = len([]rune(ghiChu))
+		}
+		if moLai {
+			// The flag lets an inspection find every reopen; the note's TEXT stays out, as above.
+			vet["mo_lai"] = true
 		}
 		delta, err := json.Marshal(vet)
 		if err != nil {
@@ -1624,9 +1652,7 @@ func idVanBanDaGo(xoa []domain.NhiemVuVanBan) []string {
 // ghiNhatKy appends one timeline entry for an act on this task.
 //
 // ONE FUNCTION FOR EVERY ACT THAT WRITES ONE, so the convention cannot differ between them: the
-// entry carries THE STATE THE TASK IS IN AFTER the act, which is what domain.TrangThaiTruocTamDung
-// reads when a paused task is resumed. An act that recorded the state BEFORE itself would make every
-// resume read one row too far back — and no test of a single transition could show it.
+// entry carries THE STATE THE TASK IS IN AFTER the act — the chip §5.9 draws on that row.
 //
 // THE DEPARTMENT AND THE OFFICER ARE COPIED FROM THE TASK, so §5.9's "thông tin bộ phận/phụ trách"
 // renders who was holding the work at that step. They are NOT personal data: both are staff

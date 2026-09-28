@@ -19,9 +19,11 @@ package domain
 //
 // # TWO ASSUMPTIONS STATED BY THE MAIN SESSION (28/09/2026), implemented and named as such
 //
-//	only NON-TERMINAL tasks   `hoan-thanh` is signed-off work and a historical `chuyen-tiep` row is a
-//	                          closed record; handing either to somebody new would reopen it through a
-//	                          side door (CheckAssignable)
+//	not a FINISHED task       `hoan-thanh` is signed-off work; handing it to somebody new would reopen it
+//	                          through a side door (CheckAssignable). Reopening is its own act, gated by
+//	                          `task.approve`. CHANGED 28/09/2026: a legacy `chuyen-tiep` row is no longer
+//	                          terminal (require 52ec9b5) and MAY be handed over — forwarding is exactly
+//	                          this act now
 //
 // # ONE ASSUMPTION OF THIS PASS, stated because nobody decided it
 //
@@ -59,9 +61,9 @@ var (
 	ErrAssignmentNoChange = errors.New(
 		"nhiệm vụ: bộ phận, người thực hiện, cơ quan chủ trì và chuyên viên theo dõi đã đúng như yêu cầu — không có gì để đổi")
 
-	// ErrTaskClosedForAssignment — the task is terminal (first assumption above). 409.
+	// ErrTaskClosedForAssignment — the task is `hoan-thanh` (first assumption above). 409.
 	ErrTaskClosedForAssignment = errors.New(
-		"nhiệm vụ: nhiệm vụ đã kết thúc (hoàn thành hoặc đã chuyển tiếp trước đây) nên không giao lại được")
+		"nhiệm vụ: nhiệm vụ đã hoàn thành nên không giao lại được — mở lại nhiệm vụ trước nếu cần giao tiếp")
 )
 
 // TaskAssignmentChange is the request after validation. A nil pointer is "not mentioned" and leaves
@@ -111,9 +113,13 @@ func (c TaskAssignmentChange) StaffCodes() []string {
 	return codes
 }
 
-// CheckAssignable refuses a terminal task (the main session's assumption in the header).
+// CheckAssignable refuses a finished task (the assumption in the header).
+//
+// IT NAMES `hoan-thanh` AND DOES NOT ASK "IS THERE A WAY OUT": since 28/09/2026 every status has one
+// (hoan-thanh reopens), and the handover writes no `ngay_hoan_thanh`, so reassigning a finished task
+// into `moi-giao` would also break the schema's biconditional.
 func CheckAssignable(n NhiemVu) error {
-	if n.TrangThai.KetThuc() {
+	if n.TrangThai == HoanThanh {
 		return ErrTaskClosedForAssignment
 	}
 	return nil

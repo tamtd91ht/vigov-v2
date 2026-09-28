@@ -107,60 +107,36 @@ func TestLoiConChuaXoaNoiRoMayViec(t *testing.T) {
 	}
 }
 
-// --- §6: pausing and resuming -------------------------------------------------------------------
+// --- pausing and resuming, reopen ----------------------------------------------------------------
 
-func TestTrangThaiTruocTamDungBoQuaMoiDongTamDung(t *testing.T) {
-	// NEWEST FIRST. The head of the timeline is the pause itself and an entry written while paused;
-	// the first row that is not `tam-dung` is the state the task was paused FROM.
-	truoc, co := TrangThaiTruocTamDung([]MocNhatKy{
-		{TrangThai: TamDung},
-		{TrangThai: TamDung},
-		{TrangThai: DangThucHien},
-		{TrangThai: DaTiepNhanNV},
-	})
-	if !co || truoc != DangThucHien {
-		t.Fatalf("trạng thái trước tạm dừng = %q (%v), muốn %q", truoc, co, DangThucHien)
+// TestResumeIgnoresHistory — ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: replaces six tests that pinned "resume only
+// to the state before the pause", read from the timeline (TrangThaiTruocTamDung, TamDungVeDuoc,
+// ErrTiepTucKhongBietTrangThaiTruoc — all removed). vigov-require 52ec9b5 resumes to any of three
+// states regardless of history, and the user chose to follow it. What still holds: a pause never
+// resumes straight into `hoan-thanh` or into review.
+func TestResumeIgnoresHistory(t *testing.T) {
+	for _, to := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien} {
+		if err := ChuyenTrangThaiDuoc(TamDung, to); err != nil {
+			t.Errorf("tam-dung -> %s bị từ chối: %v", to, err)
+		}
+	}
+	for _, to := range []TrangThaiNhiemVu{HoanThanh, ChoDuyet} {
+		if err := ChuyenTrangThaiDuoc(TamDung, to); !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
+			t.Errorf("tam-dung -> %s: lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", to, err)
+		}
 	}
 }
 
-func TestTrangThaiTruocTamDungNhatKyRongThiKhongDoan(t *testing.T) {
-	if _, co := TrangThaiTruocTamDung(nil); co {
-		t.Fatal("đoán ra trạng thái trước từ nhật ký rỗng — phải từ chối, không được mặc định")
+// TestReopenLogTextKeepsTheOldInstant: the cleared `ngay_hoan_thanh` survives in the timeline row.
+func TestReopenLogTextKeepsTheOldInstant(t *testing.T) {
+	luc := time.Date(2026, 9, 20, 3, 0, 0, 0, time.UTC)
+	s := ReopenLogText(luc, "")
+	if !strings.Contains(s, "2026-09-20T03:00:00Z") || !strings.Contains(s, "hoan-thanh → dang-thuc-hien") {
+		t.Errorf("câu mở lại = %q — phải ghi mốc hoàn thành cũ và hai mã", s)
 	}
-	if _, co := TrangThaiTruocTamDung([]MocNhatKy{{TrangThai: TamDung}}); co {
-		t.Fatal("đoán ra trạng thái trước khi nhật ký chỉ có tạm dừng")
-	}
-}
-
-func TestChuyenTrangThaiTiepTucVeDungTrangThaiTruoc(t *testing.T) {
-	if err := ChuyenTrangThaiDuoc(TamDung, DangThucHien, DangThucHien); err != nil {
-		t.Fatalf("tiếp tục về đúng trạng thái trước bị từ chối: %v", err)
-	}
-}
-
-func TestChuyenTrangThaiTiepTucSaiTrangThaiThiTuChoi(t *testing.T) {
-	// The task was paused from `moi-giao`; resuming it into `dang-thuc-hien` would skip a step
-	// nobody took. ChuyenSangDuoc alone would allow it — which is why the resume rule is a second
-	// function and not a looser map.
-	err := ChuyenTrangThaiDuoc(TamDung, DangThucHien, MoiGiao)
-	if !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
-	}
-}
-
-func TestChuyenTrangThaiTiepTucVeHoanThanhThiTuChoi(t *testing.T) {
-	// A timeline CAN hold `hoan-thanh`, and resuming a pause into it would be finished work nobody
-	// did. TamDungVeDuoc is what stops it.
-	err := ChuyenTrangThaiDuoc(TamDung, HoanThanh, HoanThanh)
-	if !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
-	}
-}
-
-func TestChuyenTrangThaiTamDungKhongBietTrangThaiTruocThiTuChoi(t *testing.T) {
-	err := ChuyenTrangThaiDuoc(TamDung, DangThucHien, "")
-	if !errors.Is(err, ErrTiepTucKhongBietTrangThaiTruoc) {
-		t.Fatalf("lỗi = %v, muốn ErrTiepTucKhongBietTrangThaiTruoc", err)
+	if s2 := ReopenLogText(luc, "Nghiệm thu thiếu hạng mục."); !strings.HasPrefix(s2, s) ||
+		!strings.HasSuffix(s2, "Nghiệm thu thiếu hạng mục.") {
+		t.Errorf("câu mở lại kèm ghi chú = %q — ghi chú phải nối SAU câu có mốc cũ", s2)
 	}
 }
 
@@ -181,29 +157,37 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was `true`. Forwarding is now the assignment act, and the
 		// status move is refused with ErrForwardingIsAssignment (TestForwardingIsNoLongerAStatusMove).
 		{DangThucHien, ChuyenTiep, false},
-		// The jumps §6 does not draw. A client able to skip steps makes every intermediate state
-		// optional in practice while looking mandatory in the map.
+		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the next four were `false` under §6's strict chain; require
+		// 52ec9b5's table has them (user decision).
+		{MoiGiao, DangThucHien, true},
+		{DangThucHien, HoanThanh, true},
+		{HoanThanh, DangThucHien, true},
+		{ChuyenTiep, DangThucHien, true},
+		// Still refused by require's table too.
 		{MoiGiao, HoanThanh, false},
 		{DaTiepNhanNV, ChoDuyet, false},
-		{HoanThanh, DangThucHien, false},
-		{ChuyenTiep, DangThucHien, false},
+		{DaTiepNhanNV, HoanThanh, false},
+		{HoanThanh, ChoDuyet, false},
+		{HoanThanh, MoiGiao, false},
+		{ChuyenTiep, HoanThanh, false},
 	} {
-		err := ChuyenTrangThaiDuoc(ca.tu, ca.sang, "")
+		err := ChuyenTrangThaiDuoc(ca.tu, ca.sang)
 		if ca.duoc && err != nil {
 			t.Errorf("%s → %s bị từ chối: %v", ca.tu, ca.sang, err)
 		}
 		if !ca.duoc && err == nil {
-			t.Errorf("%s → %s được chấp nhận — vòng đời §6 không có bước này", ca.tu, ca.sang)
+			t.Errorf("%s → %s được chấp nhận — vòng đời không có bước này", ca.tu, ca.sang)
 		}
 	}
 }
 
 // TestForwardingIsNoLongerAStatusMove — owner decision 28/09/2026. From EVERY state, including a paused
-// one, `chuyen-tiep` as a target answers the sentinel that names the assignment act — not the generic
-// "no such move", which would send the caller looking for an intermediate status.
+// one and a legacy `chuyen-tiep` row, `chuyen-tiep` as a target answers the sentinel that names the
+// assignment act — not the generic "no such move", which would send the caller looking for an
+// intermediate status.
 func TestForwardingIsNoLongerAStatusMove(t *testing.T) {
-	for _, from := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung, HoanThanh} {
-		err := ChuyenTrangThaiDuoc(from, ChuyenTiep, DangThucHien)
+	for _, from := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung, HoanThanh, ChuyenTiep} {
+		err := ChuyenTrangThaiDuoc(from, ChuyenTiep)
 		if !errors.Is(err, ErrForwardingIsAssignment) {
 			t.Errorf("%s → chuyen-tiep: lỗi = %v, muốn ErrForwardingIsAssignment", from, err)
 		}
@@ -213,19 +197,6 @@ func TestForwardingIsNoLongerAStatusMove(t *testing.T) {
 	}
 	if err := CheckStatusTarget("moi-nghi-ra"); !errors.Is(err, ErrTrangThaiNhiemVuKhongBiet) {
 		t.Errorf("mã lạ: lỗi = %v, muốn ErrTrangThaiNhiemVuKhongBiet", err)
-	}
-}
-
-// TestTamDungTuChoDuyetKhongNhayThangVeDangThucHien: the new return edge is from `cho-duyet` ONLY. A
-// task paused while under review resumes into review, so pausing cannot be used as a side door
-// around the approval key the return requires.
-func TestTamDungTuChoDuyetKhongNhayThangVeDangThucHien(t *testing.T) {
-	if err := ChuyenTrangThaiDuoc(TamDung, ChoDuyet, ChoDuyet); err != nil {
-		t.Fatalf("tạm dừng từ chờ duyệt không tiếp tục về chờ duyệt được: %v", err)
-	}
-	err := ChuyenTrangThaiDuoc(TamDung, DangThucHien, ChoDuyet)
-	if !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc — tạm dừng thành đường vòng qua bước trả lại", err)
 	}
 }
 
@@ -248,7 +219,7 @@ func TestKiemLyDoTraLai(t *testing.T) {
 }
 
 func TestChuyenTrangThaiLaKhongBietThiTuChoi(t *testing.T) {
-	err := ChuyenTrangThaiDuoc(DangThucHien, TrangThaiNhiemVu("dang-lam-do"), "")
+	err := ChuyenTrangThaiDuoc(DangThucHien, TrangThaiNhiemVu("dang-lam-do"))
 	if !errors.Is(err, ErrTrangThaiNhiemVuKhongBiet) {
 		t.Fatalf("lỗi = %v, muốn ErrTrangThaiNhiemVuKhongBiet", err)
 	}

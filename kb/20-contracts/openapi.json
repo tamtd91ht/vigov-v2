@@ -14632,7 +14632,7 @@
         }
       ],
       "post": {
-        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do",
+        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt",
         "operationId": "petitions_post_tasks_by_ma_status",
         "tags": [
           "petitions"
@@ -20481,6 +20481,12 @@
           "status": {
             "type": "string"
           },
+          "allowed_transitions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "source": {
             "type": "string"
           },
@@ -20571,6 +20577,7 @@
           }
         },
         "required": [
+          "allowed_transitions",
           "assignee",
           "assigner",
           "bloc",

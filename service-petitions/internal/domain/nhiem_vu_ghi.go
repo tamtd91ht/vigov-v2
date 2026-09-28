@@ -408,17 +408,16 @@ const MuoiMaDauTien = 10
 
 // ConChuaXong is DECISION 4's VERDICT over a tree that has already been read.
 //
-// # WHAT COUNTS AS "XONG" IS `hoan-thanh` AND NOTHING ELSE, AND THAT HAS A COST WORTH STATING
+// # WHAT COUNTS AS "XONG" IS `hoan-thanh` AND NOTHING ELSE
 //
 // §11.4 says it in the specification's own words: "Nhiệm vụ cha hoàn thành chỉ khi toàn bộ nhiệm vụ
-// con đã HOÀN THÀNH". So `chuyen-tiep` — the other terminal status — does NOT satisfy it, and a
-// parent with a child that was forwarded to another department cannot be completed here.
+// con đã HOÀN THÀNH". So a legacy `chuyen-tiep` child does NOT satisfy it.
 //
-// THAT IS FAIL-CLOSED AND IT IS REPORTED RATHER THAN SOFTENED. §6 says a forwarded task "sinh bản
-// ghi liên kết", and NO COLUMN LINKS THE TWO ROWS (migration 0006 states the absence, and this pass
-// did not invent one) — so this service cannot tell whether the forwarded work was ever finished
-// somewhere else. Treating `chuyen-tiep` as done would let a parent be completed on the strength of
-// a link nobody can follow, and the completion figure that reaches leadership would count it.
+// SINCE 28/09/2026 THAT NO LONGER BLOCKS THE PARENT FOR EVER. `chuyen-tiep` is not terminal any
+// more (user decision, require 52ec9b5): the forwarded child moves on to `da-tiep-nhan` /
+// `dang-thuc-hien` on the SAME row and is finished there, and then the parent can be completed.
+// Counting `chuyen-tiep` as done would still be wrong — it is work somebody else is now holding,
+// not work anybody finished.
 //
 // THE ORDER OF THE RETURNED CODES IS THE ORDER THE CALLER READ THE TREE IN, so a refusal listing
 // three codes lists the same three every time — a message that reshuffles itself reads as two
@@ -476,29 +475,6 @@ func CheckStatusTarget(moi TrangThaiNhiemVu) error {
 	return nil
 }
 
-// ErrTiepTucKhongBietTrangThaiTruoc refuses resuming a paused task when the log cannot say what it
-// was paused FROM.
-//
-// # WHY THIS IS A REFUSAL AND NOT A DEFAULT
-//
-// §6 says a paused task resumes into "(trạng thái TRƯỚC)". There is no `trang_thai_truoc` column
-// and there must not be one — the fact is already in `nhat_ky_nhiem_vu`, and a second copy is what
-// rule 9's one-line test forbids. When the log holds no state before the pause, the honest answer
-// is that this task cannot be resumed automatically; picking `dang-thuc-hien` "because it is the
-// usual one" would move work into a state nobody put it in, and the timeline would then say so.
-var ErrTiepTucKhongBietTrangThaiTruoc = errors.New(
-	"nhiệm vụ: nhật ký không ghi trạng thái trước lần tạm dừng nên chưa xác định được bước tiếp tục")
-
-// MocNhatKy is one timeline row as the resume rule needs it: the state the task was in at that
-// moment, newest first.
-//
-// A NARROWER TYPE THAN NhatKyNhiemVu ON PURPOSE. The resume rule needs ONE column, and a function
-// taking the whole row would be a function a later edit could make depend on the author, the
-// department or the text — none of which decides where a paused task resumes to.
-type MocNhatKy struct {
-	TrangThai TrangThaiNhiemVu
-}
-
 // NhatKyNhiemVu is one entry of "Nhật ký & Trao đổi" (§5.9) — a BUSINESS record the drawer renders,
 // written in the same transaction as the act it describes.
 //
@@ -521,9 +497,8 @@ type NhatKyNhiemVu struct {
 	// timeline row. STORED rather than derived: the task's current state is one value, and the
 	// timeline needs the state at each step.
 	//
-	// THE CONVENTION IS "THE STATE THE ACT LANDED IT IN", and it is what TrangThaiTruocTamDung
-	// reads. Writing the state BEFORE the act instead would make every resume read one row too far
-	// back, which no test of a single transition could show.
+	// THE CONVENTION IS "THE STATE THE ACT LANDED IT IN" — the chip of a reopen row reads
+	// `dang-thuc-hien`, of a completion row `hoan-thanh`.
 	TrangThaiTaiThoiDiem TrangThaiNhiemVu
 
 	// Who was holding the task at this step. Both empty when this entry changed no assignment —
@@ -579,47 +554,37 @@ func NoiDungChuyenTrangThai(tu, sang TrangThaiNhiemVu) string {
 	return fmt.Sprintf("Chuyển trạng thái: %s → %s", tu, sang)
 }
 
-// TrangThaiTruocTamDung derives §6's "(trạng thái trước)" from the timeline.
+// ReopenLogText is the timeline entry of a reopen (IsReopen). It ALWAYS carries the completion
+// instant being cleared, and the officer's own line after it when there is one.
 //
-// # THE DERIVATION, AND WHY IT IS A FUNCTION OVER ROWS RATHER THAN A QUERY
+// # WHY THE OLD INSTANT IS WRITTEN INTO THE SENTENCE
 //
-// `nhat_ky` arrives NEWEST FIRST. The rows at the head are the pause itself (and any entry written
-// while paused, which carries `tam-dung` too); the first row that is NOT `tam-dung` is the state
-// the task was paused from. Written here, the rule is testable against a handful of rows; written
-// as SQL it would be testable only against a PostgreSQL this build environment does not have.
+// The schema's biconditional forces `ngay_hoan_thanh` back to NULL on reopen, and §11.3's on-time
+// ratio is measured from it — so without this line the timeline would say the task was reopened and
+// nobody could read, from the business record, WHEN it had been declared finished. The audit entry
+// holds the same instant as its `truoc` value; this is the copy a commune can see.
 //
-// THE ANSWER IS STILL CHECKED AGAINST TamDungVeDuoc by the caller: a timeline can hold
-// `hoan-thanh` (a task completed, reopened by an administrator in some future pass), and resuming a
-// pause into `hoan-thanh` would be finished work nobody did.
-func TrangThaiTruocTamDung(nhatKy []MocNhatKy) (TrangThaiNhiemVu, bool) {
-	for _, m := range nhatKy {
-		if m.TrangThai == TamDung {
-			continue
-		}
-		return m.TrangThai, true
+// RFC 3339 AND NOT A LOCAL RENDERING, for the reason NoiDungChuyenTrangThai quotes codes: a frozen
+// display string outlives a change of rendering, and an instant with its offset is unambiguous.
+func ReopenLogText(completedAt time.Time, note string) string {
+	line := fmt.Sprintf("Mở lại: %s → %s (đã hoàn thành lúc %s)", HoanThanh, DangThucHien,
+		completedAt.Format(time.RFC3339))
+	if note != "" {
+		line += " — " + note
 	}
-	return "", false
+	return line
 }
 
-// ChuyenTrangThaiDuoc is the whole of §6's shape check for ONE move.
+// ChuyenTrangThaiDuoc is the whole shape check for ONE move: a known target that is not the retired
+// `chuyen-tiep`, and a move the lifecycle map has from the current status.
 //
-// `truocTamDung` IS ONLY CONSULTED WHEN THE TASK IS PAUSED, and the caller passes "" when it is
-// not. That asymmetry is the rule itself: from every other status the map decides alone, while from
-// `tam-dung` the legal target is a fact about THIS TASK'S HISTORY that no map can hold — see
-// TrangThaiNhiemVu.ChuyenSangDuoc, which is deliberately loose for exactly this case.
-func ChuyenTrangThaiDuoc(hienTai, moi, truocTamDung TrangThaiNhiemVu) error {
+// A PLAIN LOOKUP FROM EVERY STATUS, `tam-dung` INCLUDED, since 28/09/2026 (see chuyenDuocSangNhiemVu):
+// the resume-to-previous-state rule and its timeline read were dropped to follow require.
+//
+// WHO may take the move is NeedsApproval's question, answered in the write use case.
+func ChuyenTrangThaiDuoc(hienTai, moi TrangThaiNhiemVu) error {
 	if err := CheckStatusTarget(moi); err != nil {
 		return err
-	}
-	if hienTai == TamDung {
-		if truocTamDung == "" {
-			return ErrTiepTucKhongBietTrangThaiTruoc
-		}
-		if !TamDungVeDuoc(truocTamDung) || moi != truocTamDung {
-			return kemChiTiet(ErrChuyenTrangThaiNhiemVuSaiLuc,
-				"việc đang tạm dừng chỉ tiếp tục về đúng trạng thái trước đó")
-		}
-		return nil
 	}
 	if !hienTai.ChuyenSangDuoc(moi) {
 		return ErrChuyenTrangThaiNhiemVuSaiLuc

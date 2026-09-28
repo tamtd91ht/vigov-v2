@@ -648,9 +648,8 @@ func TestDoiTrangThai_GhiNhatKyCungGiaoDichVaMangTrangThaiSau(t *testing.T) {
 	if len(nk) != 1 {
 		t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(nk))
 	}
-	// $6 is `trang_thai_tai_thoi_diem`. IT CARRIES THE STATE THE ACT LANDED THE TASK IN — which is
-	// what the resume rule reads back. Recording the state BEFORE the act would make every resume
-	// read one row too far back.
+	// $6 is `trang_thai_tai_thoi_diem`. IT CARRIES THE STATE THE ACT LANDED THE TASK IN — the chip
+	// §5.9 draws on the row.
 	if nk[0].args[5] != string(domain.ChoDuyet) {
 		t.Errorf("trạng thái tại thời điểm = %v, muốn %q", nk[0].args[5], domain.ChoDuyet)
 	}
@@ -769,85 +768,191 @@ func TestTraLai_BuocThuongVaoDangThucHienKhongBiDoi(t *testing.T) {
 	chiGhiTrongGiaoDich(t, k)
 }
 
-// TestTraLai_TamDungSauTraLaiTiepTucVeDangThucHien: after a return the newest timeline row is
-// `dang-thuc-hien`, so a later pause resumes there — the "(trạng thái trước)" rule reads the return
-// like any other step.
-func TestTraLai_TamDungSauTraLaiTiepTucVeDangThucHien(t *testing.T) {
-	k := khoNVMau()
-	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
-	// NEWEST FIRST: paused, returned to dang-thuc-hien, before that under review.
-	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.DangThucHien), string(domain.ChoDuyet)}
-	uc, ctx := dungGhiNhiemVu(t, k)
-
-	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false); err != nil {
-		t.Fatalf("tiếp tục sau khi trả lại bị từ chối: %v", err)
-	}
-}
-
-// TestTamDung_TuChoDuyetKhongTraLaiDuocQuaTamDung: paused FROM review, a task cannot resume straight
-// into `dang-thuc-hien` — not even with the approval key and a reason. Resume first, then return.
-func TestTamDung_TuChoDuyetKhongTraLaiDuocQuaTamDung(t *testing.T) {
-	k := khoNVMau()
-	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
-	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.ChoDuyet)}
-	uc, ctx := dungGhiNhiemVu(t, k)
-
-	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDoTraLaiThu},
-		canBoThu(), true)
-	if !errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
-	}
-	khongGhiGi(t, k)
-}
-
-// TestTamDung_TiepTucVeDungTrangThaiTruocDocTuNhatKy is §6's "(trạng thái trước)".
+// --- the lifecycle of require 52ec9b5 (user decision 28/09/2026) ------------------------------------
 //
-// THERE IS NO `trang_thai_truoc` COLUMN AND THERE MUST NOT BE ONE: the fact is already in
-// `nhat_ky_nhiem_vu`, and a second copy is what rule 9's one-line test forbids.
-func TestTamDung_TiepTucVeDungTrangThaiTruocDocTuNhatKy(t *testing.T) {
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: five tests stood here that pinned "a paused task resumes only into the
+// state before the pause, read from the timeline" (TestTraLai_TamDungSauTraLaiTiepTucVeDangThucHien,
+// TestTamDung_TuChoDuyetKhongTraLaiDuocQuaTamDung, TestTamDung_TiepTucVeDungTrangThaiTruocDocTuNhatKy,
+// TestTamDung_TiepTucSaiTrangThaiThiTuChoi, TestTamDung_NhatKyKhongNoiDuocThiTuChoiChuKhongDoan). The
+// user chose require's table, which resumes to moi-giao / da-tiep-nhan / dang-thuc-hien regardless of
+// history; the rule, its timeline read and its refusal are gone. The tests below replace them.
+
+// mocHoanThanhCu is the completion instant a reopen clears — distinct from every other fixture instant.
+var mocHoanThanhCu = time.Date(2026, 9, 20, 3, 0, 0, 0, time.UTC)
+
+func khoNVHoanThanh() *khoNhiemVuGia {
 	k := khoNVMau()
-	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
-	// NEWEST FIRST: paused, and before that the task was `da-tiep-nhan`.
-	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.DaTiepNhanNV)}
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.HoanThanh)
+	k.nhiemVu[idNVGoc]["ngay_hoan_thanh"] = mocHoanThanhCu
+	return k
+}
+
+// TestReopen_ClearsCompletionAndTrailKeepsOldInstant: `hoan-thanh` → `dang-thuc-hien` writes NULL into
+// `ngay_hoan_thanh` (the schema's biconditional), and the instant it clears survives in the timeline
+// row AND as the audit entry's `truoc` value — all in one transaction.
+func TestReopen_ClearsCompletionAndTrailKeepsOldInstant(t *testing.T) {
+	k := khoNVHoanThanh()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), true)
+	if err != nil {
+		t.Fatalf("mở lại: %v", err)
+	}
+	if sau.TrangThai != domain.DangThucHien || !sau.NgayHoanThanh.IsZero() {
+		t.Errorf("phản hồi = %s / %v, muốn dang-thuc-hien và ngày hoàn thành rỗng", sau.TrangThai, sau.NgayHoanThanh)
+	}
+
+	doi := k.cau("UPDATE nhiem_vu")
+	if len(doi) != 1 || doi[0].args[3] != nil || doi[0].args[4] != string(domain.HoanThanh) {
+		t.Fatalf("UPDATE phải ghi NULL vào ngay_hoan_thanh và chờ hoan-thanh: %+v", doi)
+	}
+
+	nk := k.cau("INSERT INTO nhat_ky_nhiem_vu")
+	if len(nk) != 1 {
+		t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(nk))
+	}
+	text, _ := nk[0].args[8].(string)
+	if !strings.Contains(text, "2026-09-20T03:00:00Z") {
+		t.Errorf("dòng nhật ký %q không giữ mốc hoàn thành cũ", text)
+	}
+
+	delta, _ := vetKiemToan(t, k).args[7].([]byte)
+	for _, co := range []string{`"mo_lai":true`, `"ngay_hoan_thanh":"2026-09-20T03:00:00Z"`,
+		`"ngay_hoan_thanh":null`, `"trang_thai":"hoan-thanh"`, `"trang_thai":"dang-thuc-hien"`} {
+		if !strings.Contains(string(delta), co) {
+			t.Errorf("delta thiếu %s: %s", co, delta)
+		}
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestReopen_NoteAppendedNeverAudited: the officer's line follows the sentence carrying the old
+// instant on the timeline, and its TEXT never reaches audit_log (rule 3).
+func TestReopen_NoteAppendedNeverAudited(t *testing.T) {
+	const note = "Nghiệm thu thiếu hạng mục thôn 3."
+	k := khoNVHoanThanh()
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DaTiepNhanNV)}, canBoThu(), false); err != nil {
-		t.Fatalf("tiếp tục về trạng thái trước bị từ chối: %v", err)
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: note}, canBoThu(), true); err != nil {
+		t.Fatalf("mở lại: %v", err)
 	}
-	if !k.coCau("FROM nhat_ky_nhiem_vu") {
-		t.Error("không đọc nhật ký — trạng thái trước phải SUY RA, không được đoán")
+	text, _ := k.cau("INSERT INTO nhat_ky_nhiem_vu")[0].args[8].(string)
+	if !strings.Contains(text, "2026-09-20T03:00:00Z") || !strings.HasSuffix(text, note) {
+		t.Errorf("dòng nhật ký = %q — phải có mốc cũ rồi ghi chú", text)
+	}
+	delta, _ := vetKiemToan(t, k).args[7].([]byte)
+	if strings.Contains(string(delta), note) {
+		t.Errorf("ghi chú tự do lọt vào audit_log: %s", delta)
 	}
 }
 
-func TestTamDung_TiepTucSaiTrangThaiThiTuChoi(t *testing.T) {
-	k := khoNVMau()
-	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
-	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.DaTiepNhanNV)}
+// TestReopen_WithoutApprovalRefused: `task.update` alone opens the route but not the reopen.
+func TestReopen_WithoutApprovalRefused(t *testing.T) {
+	k := khoNVHoanThanh()
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	// It was paused from `da-tiep-nhan`; resuming into `dang-thuc-hien` would skip a step nobody
-	// took.
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
 		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false)
-	if !errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc) {
-		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
+	if !errors.Is(err, ErrReopenNeedsApproval) {
+		t.Fatalf("lỗi = %v, muốn ErrReopenNeedsApproval", err)
 	}
 	khongGhiGi(t, k)
 }
 
-func TestTamDung_NhatKyKhongNoiDuocThiTuChoiChuKhongDoan(t *testing.T) {
+// TestReopen_OnlyToInProgress: require's DONE has one way out.
+func TestReopen_OnlyToInProgress(t *testing.T) {
+	for _, to := range []domain.TrangThaiNhiemVu{domain.MoiGiao, domain.DaTiepNhanNV, domain.ChoDuyet, domain.TamDung} {
+		t.Run(string(to), func(t *testing.T) {
+			k := khoNVHoanThanh()
+			uc, ctx := dungGhiNhiemVu(t, k)
+			_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(to)}, canBoThu(), true)
+			if !errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc) {
+				t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
+			}
+			khongGhiGi(t, k)
+		})
+	}
+}
+
+// TestDirectCompletion_NeedsApprovalAndTree: the new `dang-thuc-hien` → `hoan-thanh` edge skips review
+// but NOT the key and NOT ADR 0037 decision 4 (user decision: every move into `hoan-thanh`).
+func TestDirectCompletion_NeedsApprovalAndTree(t *testing.T) {
+	k := khoNVMau() // dang-thuc-hien
+	uc, ctx := dungGhiNhiemVu(t, k)
+	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false); !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
+		t.Fatalf("thiếu quyền duyệt: lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
+	}
+	khongGhiGi(t, k)
+
+	k = khoNVMau()
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
+	uc, ctx = dungGhiNhiemVu(t, k)
+	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true); !errors.Is(err, domain.ErrConChuaXong) {
+		t.Fatalf("con chưa xong: lỗi = %v, muốn ErrConChuaXong", err)
+	}
+
+	k = khoNVMau()
+	uc, ctx = dungGhiNhiemVu(t, k)
+	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+	if err != nil {
+		t.Fatalf("hoàn thành thẳng từ dang-thuc-hien: %v", err)
+	}
+	if sau.NgayHoanThanh != mocThaoTacNV {
+		t.Errorf("ngày hoàn thành = %v, muốn %v", sau.NgayHoanThanh, mocThaoTacNV)
+	}
+	delta, _ := vetKiemToan(t, k).args[7].([]byte)
+	if !strings.Contains(string(delta), `"ngay_hoan_thanh":"2026-09-23T08:05:00Z"`) {
+		t.Errorf("delta không ghi ngày hoàn thành mới: %s", delta)
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestOrdinaryNewEdgesNeedNoApproval: skipping acknowledgement, resuming anywhere require allows, and
+// moving a legacy forwarded row on are ordinary `task.update` moves — and the resume reads NO timeline.
+func TestOrdinaryNewEdgesNeedNoApproval(t *testing.T) {
+	for _, c := range []struct{ from, to domain.TrangThaiNhiemVu }{
+		{domain.MoiGiao, domain.DangThucHien},
+		{domain.TamDung, domain.MoiGiao},
+		{domain.TamDung, domain.DaTiepNhanNV},
+		{domain.TamDung, domain.DangThucHien},
+		{domain.ChuyenTiep, domain.DaTiepNhanNV},
+		{domain.ChuyenTiep, domain.DangThucHien},
+	} {
+		t.Run(string(c.from)+"->"+string(c.to), func(t *testing.T) {
+			k := khoNVMau()
+			k.nhiemVu[idNVGoc]["trang_thai"] = string(c.from)
+			uc, ctx := dungGhiNhiemVu(t, k)
+			sau, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(c.to)}, canBoThu(), false)
+			if err != nil {
+				t.Fatalf("bị từ chối: %v", err)
+			}
+			if sau.TrangThai != c.to {
+				t.Errorf("trạng thái sau = %s, muốn %s", sau.TrangThai, c.to)
+			}
+			if k.coCau("FROM nhat_ky_nhiem_vu") {
+				t.Error("đọc nhật ký để tiếp tục — luật trạng thái trước đã bỏ theo require")
+			}
+			chiGhiTrongGiaoDich(t, k)
+		})
+	}
+}
+
+// TestLegacyForwardedChildStillBlocksParent: a `chuyen-tiep` child is work somebody else holds, not
+// work anybody finished — ADR 0037 decision 4 still refuses the parent (ConChuaXong names it).
+func TestLegacyForwardedChildStillBlocksParent(t *testing.T) {
 	k := khoNVMau()
-	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
-	// No timeline at all — the log cannot say what it was paused from.
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.ChuyenTiep)
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false)
-	if !errors.Is(err, domain.ErrTiepTucKhongBietTrangThaiTruoc) {
-		t.Fatalf("lỗi = %v, muốn ErrTiepTucKhongBietTrangThaiTruoc", err)
+	_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+	if !errors.Is(err, domain.ErrConChuaXong) || !strings.Contains(err.Error(), maNVCon) {
+		t.Fatalf("lỗi = %v, muốn ErrConChuaXong nêu %s", err, maNVCon)
 	}
 	khongGhiGi(t, k)
 }

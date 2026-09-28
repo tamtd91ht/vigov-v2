@@ -300,6 +300,37 @@ func TestDocNhiemVuDuQuyenDungXaThi200(t *testing.T) {
 	}
 }
 
+// --- allowed_transitions (require 56cfc3b, added 28/09/2026) ---------------------------------------
+
+// TestAllowedTransitionsOnDetailAndList: both reads carry the lifecycle's moves, computed from the
+// same map the write path enforces, in the map's order — and `hoan-thanh` lists the reopen.
+func TestAllowedTransitionsOnDetailAndList(t *testing.T) {
+	m := dungMayChu(t)
+
+	w := m.goi(t, http.MethodGet, hostA, duongNhiemVu(maNhiemVuA), canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	if got := strings.Join(docNhiemVu(t, w.Body.Bytes()).AllowedTransitions, ","); got != "cho-duyet,hoan-thanh,tam-dung" {
+		t.Errorf("chi tiết dang-thuc-hien: allowed_transitions = %q", got)
+	}
+
+	w = m.goi(t, http.MethodGet, hostA, "/api/v1/tasks", canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"allowed_transitions":[`) {
+		t.Errorf("sổ không mang allowed_transitions dạng mảng: %s", w.Body.String())
+	}
+	muon := map[string]string{maNhiemVuA: "cho-duyet,hoan-thanh,tam-dung", maNhiemVuXo: "dang-thuc-hien"}
+	for _, it := range docTrangNhiemVu(t, w.Body.Bytes()).Items {
+		if got := strings.Join(it.AllowedTransitions, ","); got != muon[it.Code] {
+			t.Errorf("sổ %s: allowed_transitions = %q, muốn %q", it.Code, got, muon[it.Code])
+		}
+		for _, s := range it.AllowedTransitions {
+			if s == string(domain.ChuyenTiep) {
+				t.Errorf("sổ %s liệt kê chuyen-tiep — chuyển tiếp là thao tác giao lại", it.Code)
+			}
+		}
+	}
+}
+
 // --- rule 1: a number of another commune is simply not there -------------------------------------
 
 func TestDocNhiemVuMaCuaXaKhacThi404(t *testing.T) {

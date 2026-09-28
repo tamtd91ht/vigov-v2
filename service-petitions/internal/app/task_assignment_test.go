@@ -149,20 +149,40 @@ func TestReassign_DeadlineUntouched(t *testing.T) {
 	}
 }
 
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: a legacy `chuyen-tiep` row was refused here too. It is no longer
+// terminal (require 52ec9b5) — see TestReassign_LegacyForwardedRowCanBeHandedOver.
 func TestReassign_TerminalRefusedWritesNothing(t *testing.T) {
-	for _, status := range []domain.TrangThaiNhiemVu{domain.HoanThanh, domain.ChuyenTiep} {
-		t.Run(string(status), func(t *testing.T) {
-			k := khoNVMau()
-			k.nhiemVu[idNVGoc]["trang_thai"] = string(status)
-			uc, ctx := dungGhiNhiemVu(t, k)
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.HoanThanh)
+	uc, ctx := dungGhiNhiemVu(t, k)
 
-			_, err := uc.Reassign(ctx, maNVGoc,
-				reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-dia-chinh")}), canBoThu())
-			if !errors.Is(err, domain.ErrTaskClosedForAssignment) {
-				t.Fatalf("lỗi = %v, muốn ErrTaskClosedForAssignment", err)
-			}
-			khongGhiGi(t, k)
-		})
+	_, err := uc.Reassign(ctx, maNVGoc,
+		reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-dia-chinh")}), canBoThu())
+	if !errors.Is(err, domain.ErrTaskClosedForAssignment) {
+		t.Fatalf("lỗi = %v, muốn ErrTaskClosedForAssignment", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestReassign_LegacyForwardedRowCanBeHandedOver: a row already in `chuyen-tiep` is handed to its new
+// holder and lands in `moi-giao` — forwarding IS this act now, and the row is not a dead end.
+func TestReassign_LegacyForwardedRowCanBeHandedOver(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChuyenTiep)
+	uc, ctx := dungGhiNhiemVu(t, k)
+	uc.giaoViec = &giaoViecGia{duocTatCa: true}
+
+	after, err := uc.Reassign(ctx, maNVGoc,
+		reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-dia-chinh")}), canBoThu())
+	if err != nil {
+		t.Fatalf("giao lại dòng chuyen-tiep cũ: %v", err)
+	}
+	if after.TrangThai != domain.MoiGiao {
+		t.Errorf("trạng thái sau = %q, muốn moi-giao", after.TrangThai)
+	}
+	upd := k.cau("UPDATE nhiem_vu")
+	if len(upd) != 1 || upd[0].args[7] != string(domain.ChuyenTiep) {
+		t.Errorf("UPDATE phải chờ đúng trạng thái chuyen-tiep: %v", upd)
 	}
 }
 

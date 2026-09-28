@@ -31,8 +31,10 @@ var ErrTaskMetricInvalid = errors.New("nhiem_vu: chỉ số tổng quan không h
 // work is still owed.
 //
 // `tam-dung` IS EXCLUDED ON PURPOSE — a suspended task is its own figure, and counting it here too
-// would put one task in two tiles that a leader reads as disjoint. `hoan-thanh` and `chuyen-tiep` are
-// terminal. Sub-tasks are counted as their own rows: `nhiem_vu_cha_id` is not consulted, because each
+// would put one task in two tiles that a leader reads as disjoint. `hoan-thanh` is done. A legacy
+// `chuyen-tiep` row is NOT counted either — ⚠ since 28/09/2026 it is no longer terminal (require
+// 52ec9b5: it can move on to `da-tiep-nhan` / `dang-thuc-hien`), so whether it is "work still owed"
+// for this figure is an open point reported to the owner, not changed silently here. Sub-tasks are counted as their own rows: `nhiem_vu_cha_id` is not consulted, because each
 // sub-task carries its own assignee and its own deadline and the register lists it as a row.
 var taskInProgressCondition = `trang_thai IN ('` + string(domain.MoiGiao) + `', '` +
 	string(domain.DaTiepNhanNV) + `', '` + string(domain.DangThucHien) + `', '` +
@@ -43,7 +45,7 @@ var taskInProgressCondition = `trang_thai IN ('` + string(domain.MoiGiao) + `', 
 //
 // ⚠ IT IS DELIBERATELY NOT dieuKienTreHan (nhiem_vu.go), and the difference is the reason it exists.
 // dieuKienTreHan answers "was this task late" — it stays true for a task FINISHED late, forever, and
-// for a terminal `chuyen-tiep` task whose deadline has passed. The overview's tile answers "what is
+// for a legacy `chuyen-tiep` task whose deadline has passed. The overview's tile answers "what is
 // late and still waiting on somebody", which is a stock of open work: a task finished late last month
 // is not something a leader can act on today. The register's `late=true` box keeps its own meaning,
 // untouched.

@@ -95,6 +95,20 @@ type nhiemVuRa struct {
 	// the LABEL and the ORDER belong to the commune, which is why neither travels here.
 	Status string `json:"status"`
 
+	// AllowedTransitions lists the status codes this task may move to from Status — computed by the
+	// server from THE SAME MAP POST …/status enforces (domain.TrangThaiNhiemVu.AllowedTransitions), in
+	// the order a picker shows them. vigov-require 56cfc3b's `allowed_transitions`: the screen draws
+	// these and keeps no second copy of the lifecycle. ADDED 28/09/2026, additive to a published reply.
+	//
+	// ⚠ IT IS THE LIFECYCLE'S SHAPE, THE SAME FOR EVERY CALLER. Moving INTO `hoan-thanh`, reopening
+	// it, and returning `cho-duyet` → `dang-thuc-hien` are listed for everybody and answer 403 without
+	// `task.approve`; completing a parent with unfinished sub-tasks is listed and answers 409. Both are
+	// decided on the row under the lock, never from this list. `chuyen-tiep` is never listed —
+	// forwarding is POST …/assignment.
+	//
+	// ALWAYS AN ARRAY, never null: `[]` is "no move from here" (a status no map knows).
+	AllowedTransitions []string `json:"allowed_transitions"`
+
 	// Source is one of the four codes of §3, and SourceID points at the record it came from — a
 	// meeting conclusion, an incoming letter, a petition. SourceID is EMPTY for `truc-tiep`, which
 	// the schema enforces.
@@ -321,6 +335,7 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		Title:                n.TieuDe,
 		Description:          n.MoTa,
 		Status:               string(n.TrangThai),
+		AllowedTransitions:   allowedTransitionsOut(n.TrangThai),
 		Source:               string(n.NguonGiao),
 		SourceID:             n.NguonID,
 		Unit:                 n.BoPhanID,
@@ -363,6 +378,17 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		ra.ConclusionNo = n.NguonHop.ThuTu
 	}
 	return ra
+}
+
+// allowedTransitionsOut renders the lifecycle's moves as codes. Computed from the status alone, so a
+// page of fifty tasks costs no read at all — nothing here depends on history.
+func allowedTransitionsOut(t domain.TrangThaiNhiemVu) []string {
+	moves := t.AllowedTransitions()
+	out := make([]string, 0, len(moves))
+	for _, m := range moves {
+		out = append(out, string(m))
+	}
+	return out
 }
 
 // QuyenDocNhiemVu guards both read routes. The key exists in `quyen` —

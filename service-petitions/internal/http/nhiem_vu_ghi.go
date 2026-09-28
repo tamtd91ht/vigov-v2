@@ -658,6 +658,10 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Trả lại nhiệm vụ đang chờ duyệt để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của "+
 				"bạn mới có quyền cập nhật tiến độ.", "")
+	case errors.Is(err, app.ErrReopenNeedsApproval):
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			"Mở lại nhiệm vụ đã hoàn thành cần quyền duyệt hoàn thành. Tài khoản của bạn mới có "+
+				"quyền cập nhật tiến độ.", "")
 	case domain.LaLoiThamQuyenLuiHan(err):
 		// ADR 0038's two layers, plus the open question failing CLOSED. The sentence is the domain's
 		// own: it names what is missing — the leader on the record — which is the only thing the
@@ -686,10 +690,9 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, petstore.ErrNhiemVuDaChuyenTrang):
 		httpx.WriteError(w, http.StatusConflict, "task_state",
 			"Nhiệm vụ đã thay đổi trong lúc bạn đang mở màn hình. Hãy tải lại rồi thao tác lại.", "")
-	case errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc),
-		errors.Is(err, domain.ErrTiepTucKhongBietTrangThaiTruoc):
+	case errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc):
 		httpx.WriteError(w, http.StatusConflict, "task_state", cauTuChoi(err,
-			domain.ErrChuyenTrangThaiNhiemVuSaiLuc, domain.ErrTiepTucKhongBietTrangThaiTruoc), "")
+			domain.ErrChuyenTrangThaiNhiemVuSaiLuc), "")
 	case errors.Is(err, domain.ErrDaCoDeNghiChoDuyet), errors.Is(err, domain.ErrDeNghiDaQuyetDinh),
 		errors.Is(err, domain.ErrNhiemVuChuaCoHan):
 		httpx.WriteError(w, http.StatusConflict, "task_state", cauTuChoi(err,

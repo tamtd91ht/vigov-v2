@@ -49,6 +49,7 @@ import {
 const TASK: petitions_nhiemVuRa = {
   code: "NV19",
   child_count: 0,
+  allowed_transitions: [],
   type: "co-ban",
   bloc: "",
   priority: "",
