@@ -73,6 +73,15 @@ func parseOperatorSigningKeys(raw string, staff []Khoa) ([]secret.Secret, error)
 // Duplicates are refused for the same reason a duplicate endpoint is: they are always a paste
 // mistake, and here they would also give two entries the same key id.
 func parseOperatorTOTPKeys(raw string) ([]secret.Secret, error) {
+	return parseAES256KeyList(raw, ErrOperatorTOTPKeyInvalid)
+}
+
+// parseAES256KeyList is the one decoder for every "comma-separated list of base64 AES-256 keys"
+// variable (OPERATOR_TOTP_ENCRYPTION_KEY, SECRET_ENCRYPTION_KEYS). ONE FORMAT, ONE PARSER: two
+// copies of this loop are two places for the length check or the duplicate check to drift, and an
+// operator who learned the format on one variable must be able to rely on it for the other.
+// errInvalid names the variable in every error, so the caller's sentinel says which one was wrong.
+func parseAES256KeyList(raw string, errInvalid error) ([]secret.Secret, error) {
 	entries := danhSach(raw)
 	out := make([]secret.Secret, 0, len(entries))
 	for i, entry := range entries {
@@ -81,15 +90,15 @@ func parseOperatorTOTPKeys(raw string) ([]secret.Secret, error) {
 			// The decoder's own error is NOT wrapped: it quotes the offending byte offset and,
 			// through it, part of the material.
 			return nil, fmt.Errorf("%w: entry %d is not standard base64 (generate with "+
-				"`openssl rand -base64 32`)", ErrOperatorTOTPKeyInvalid, i+1)
+				"`openssl rand -base64 32`)", errInvalid, i+1)
 		}
 		if len(key) != OperatorKeyLength {
 			return nil, fmt.Errorf("%w: entry %d decodes to %d bytes, AES-256 needs exactly %d",
-				ErrOperatorTOTPKeyInvalid, i+1, len(key), OperatorKeyLength)
+				errInvalid, i+1, len(key), OperatorKeyLength)
 		}
 		for j, prev := range out {
 			if subtle.ConstantTimeCompare(key, prev.Lo()) == 1 {
-				return nil, fmt.Errorf("%w: entry %d repeats entry %d", ErrOperatorTOTPKeyInvalid, i+1, j+1)
+				return nil, fmt.Errorf("%w: entry %d repeats entry %d", errInvalid, i+1, j+1)
 			}
 		}
 		out = append(out, secret.Secret(key))

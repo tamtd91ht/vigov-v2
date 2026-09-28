@@ -61,6 +61,7 @@
 //	MALWARE_SCANNER_ADDRESS             ConfigMap  optional — absent = uploads refused (malwarescan.ErrNotConfigured); malformed refused by Load
 //	OPERATOR_SESSION_SIGNING_KEYS       Secret     optional — identity only; absent = operator sign-in refused (ADR 0048); an entry shared with SESSION_SIGNING_KEYS refused by Load
 //	OPERATOR_TOTP_ENCRYPTION_KEY        Secret     optional — identity only; absent = operator sign-in refused; not base64 of exactly 32 bytes refused by Load
+//	SECRET_ENCRYPTION_KEYS              Secret     optional — services storing per-commune secrets (ADR 0009); absent = those operations refused (crypto.ErrNotConfigured); same format and refusal as above
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -436,6 +437,11 @@ type Config struct {
 	//
 	// OPTIONAL, same reason and same refusal as OperatorSessionSigningKeys. k8s SECRET.
 	OperatorTOTPEncryptionKeys []secret.Secret
+
+	// SecretEncryptionKeys are the KEKs of ADR 0009, consumed by core/crypto.NewKeyring. Read from
+	// SECRET_ENCRYPTION_KEYS, same format as OPERATOR_TOTP_ENCRYPTION_KEY; the value held here is
+	// the DECODED key. Optional; the reasons, and why the backup is not: secret_encryption.go.
+	SecretEncryptionKeys []secret.Secret
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -593,7 +599,15 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Per-commune secret encryption (ADR 0009): optional — see secret_encryption.go. Malformed is
+	// fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
+	secretEncryptionKeys, err := parseAES256KeyList(os.Getenv("SECRET_ENCRYPTION_KEYS"), ErrSecretEncryptionKeysInvalid)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	cfg := Config{
+		SecretEncryptionKeys:           secretEncryptionKeys,
 		OperatorSessionSigningKeys:     operatorSigningKeys,
 		OperatorTOTPEncryptionKeys:     operatorTOTPKeys,
 		ObjectStorage:                  objectStorage,
