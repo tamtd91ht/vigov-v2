@@ -412,6 +412,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-report-summary",
+      "operation_id": "petitions_get_citizen_report_summary",
+      "task_id": "7faa1955f707",
+      "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)",
+      "screen": "01-tong-quan-dieu-hanh §4.5",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenReportSummaryOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-reports",
       "operation_id": "petitions_get_citizen_reports",
       "task_id": "db9a4ae6ade1",
@@ -1086,6 +1106,47 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/incoming-document-overdue-queue",
+      "operation_id": "documents_get_incoming_document_overdue_queue",
+      "task_id": "e28d898bd9d1",
+      "summary": "Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng",
+      "screen": "01-tong-quan-dieu-hanh §5",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.overdueQueueOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/incoming-document-summary",
+      "operation_id": "documents_get_incoming_document_summary",
+      "task_id": "52fdfdfdfda2",
+      "summary": "Ba số của khối Văn bản trên Tổng quan: đến trong kỳ, chưa xử lý xong, quá hạn xử lý",
+      "screen": "01-tong-quan-dieu-hanh §4.2",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.incomingSummaryOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes.go"
@@ -1956,6 +2017,48 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/overdue-citizen-reports",
+      "operation_id": "petitions_get_overdue_citizen_reports",
+      "task_id": "5434763c78f9",
+      "summary": "Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không",
+      "screen": "01-tong-quan-dieu-hanh §5",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.overdueQueueOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/overdue-tasks",
+      "operation_id": "petitions_get_overdue_tasks",
+      "task_id": "a42edd22ed55",
+      "summary": "Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không",
+      "screen": "01-tong-quan-dieu-hanh §5",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.overdueQueueOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
     },
     {
       "service": "identity",
@@ -2991,6 +3094,26 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-summary",
+      "operation_id": "petitions_get_task_summary",
+      "task_id": "cf770d6c2e47",
+      "summary": "Tổng quan nhiệm vụ của xã — số đang thực hiện · quá hạn · tạm dừng (hiện trạng) và hoàn thành · mẫu đúng hạn · đúng hạn trong kỳ [from, to)",
+      "screen": "01-tong-quan-dieu-hanh §4.1",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.taskSummaryOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"

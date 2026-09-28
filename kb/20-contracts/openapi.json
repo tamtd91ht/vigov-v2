@@ -1719,6 +1719,91 @@
         }
       }
     },
+    "/api/v1/citizen-report-summary": {
+      "get": {
+        "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)",
+        "operationId": "petitions_get_citizen_report_summary",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §4.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "7faa1955f707",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenReportSummaryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-reports": {
       "get": {
         "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
@@ -1798,6 +1883,14 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "hamlet",
             "in": "query",
             "required": false,
@@ -1807,6 +1900,14 @@
           },
           {
             "name": "late",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
             "in": "query",
             "required": false,
             "schema": {
@@ -1831,6 +1932,14 @@
           },
           {
             "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
             "in": "query",
             "required": false,
             "schema": {
@@ -4702,6 +4811,178 @@
         }
       }
     },
+    "/api/v1/incoming-document-overdue-queue": {
+      "get": {
+        "summary": "Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng",
+        "operationId": "documents_get_incoming_document_overdue_queue",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "e28d898bd9d1",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.overdueQueueOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/incoming-document-summary": {
+      "get": {
+        "summary": "Ba số của khối Văn bản trên Tổng quan: đến trong kỳ, chưa xử lý xong, quá hạn xử lý",
+        "operationId": "documents_get_incoming_document_summary",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §4.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "52fdfdfdfda2",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.incomingSummaryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/incoming-documents": {
       "get": {
         "summary": "Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ",
@@ -4773,7 +5054,23 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "holding_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
             "in": "query",
             "required": false,
             "schema": {
@@ -4790,6 +5087,14 @@
           },
           {
             "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
             "in": "query",
             "required": false,
             "schema": {
@@ -8449,6 +8754,180 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overdue-citizen-reports": {
+      "get": {
+        "summary": "Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không",
+        "operationId": "petitions_get_overdue_citizen_reports",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "5434763c78f9",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.overdueQueueOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overdue-tasks": {
+      "get": {
+        "summary": "Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không",
+        "operationId": "petitions_get_overdue_tasks",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "a42edd22ed55",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.overdueQueueOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -12442,6 +12921,91 @@
         }
       }
     },
+    "/api/v1/task-summary": {
+      "get": {
+        "summary": "Tổng quan nhiệm vụ của xã — số đang thực hiện · quá hạn · tạm dừng (hiện trạng) và hoàn thành · mẫu đúng hạn · đúng hạn trong kỳ [from, to)",
+        "operationId": "petitions_get_task_summary",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "01-tong-quan-dieu-hanh §4.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "cf770d6c2e47",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskSummaryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/task-types": {
       "get": {
         "summary": "Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc",
@@ -12864,7 +13428,23 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "late",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
             "in": "query",
             "required": false,
             "schema": {
@@ -12913,6 +13493,14 @@
           },
           {
             "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
             "in": "query",
             "required": false,
             "schema": {
@@ -14819,6 +15407,41 @@
         ],
         "additionalProperties": false
       },
+      "documents.incomingSummaryOut": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "RFC 3339, echoed"
+          },
+          "to": {
+            "type": "string",
+            "description": "RFC 3339, echoed — the period is [from, to)"
+          },
+          "as_of": {
+            "type": "string",
+            "description": "RFC 3339"
+          },
+          "arrived": {
+            "type": "integer"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "arrived",
+          "as_of",
+          "from",
+          "open",
+          "overdue",
+          "to"
+        ],
+        "additionalProperties": false
+      },
       "documents.lichSuChuyenRa": {
         "type": "object",
         "properties": {
@@ -14911,6 +15534,58 @@
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "documents.overdueQueueItemOut": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "due_at": {
+            "type": "string"
+          },
+          "critical": {
+            "type": "boolean"
+          },
+          "holding_unit": {
+            "type": "string",
+            "description": "identity's `bo_phan.id`"
+          }
+        },
+        "required": [
+          "code",
+          "critical",
+          "due_at",
+          "id",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "documents.overdueQueueOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.overdueQueueItemOut"
+            }
+          },
+          "as_of": {
+            "type": "string",
+            "description": "RFC 3339 — the instant \"overdue\" and \"critical\" were judged at"
+          }
+        },
+        "required": [
+          "as_of",
+          "items"
         ],
         "additionalProperties": false
       },
@@ -18885,6 +19560,34 @@
         ],
         "additionalProperties": false
       },
+      "petitions.citizenReportSummaryOut": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "integer"
+          },
+          "in_progress": {
+            "type": "integer"
+          },
+          "on_time_sample": {
+            "type": "integer"
+          },
+          "on_time": {
+            "type": "integer"
+          },
+          "late": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "in_progress",
+          "late",
+          "on_time",
+          "on_time_sample",
+          "received"
+        ],
+        "additionalProperties": false
+      },
       "petitions.danhSachLoaiNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -19599,6 +20302,50 @@
           "position",
           "reference",
           "summary"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.overdueItemOut": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "category_code": {
+            "type": "string"
+          },
+          "missed_deadline": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "critical": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "category_code",
+          "code",
+          "critical",
+          "kind",
+          "missed_deadline"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.overdueQueueOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.overdueItemOut"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },
@@ -20352,6 +21099,38 @@
           "auto_code",
           "title",
           "type"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskSummaryOut": {
+        "type": "object",
+        "properties": {
+          "in_progress": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          },
+          "suspended": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "on_time_sample": {
+            "type": "integer"
+          },
+          "on_time": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "completed",
+          "in_progress",
+          "on_time",
+          "on_time_sample",
+          "overdue",
+          "suspended"
         ],
         "additionalProperties": false
       },

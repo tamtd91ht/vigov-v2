@@ -6,7 +6,11 @@
 // A path no entry covers must be refused, never sent to a default service (rule 1).
 export type DichVuAPI = "comms" | "documents" | "finance" | "identity" | "petitions";
 export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly dichVu: DichVuAPI }> = [
+  { tienTo: "/api/v1/incoming-document-overdue-queue", dichVu: "documents" },
+  { tienTo: "/api/v1/incoming-document-summary", dichVu: "documents" },
   { tienTo: "/api/v1/capital-plan-categories", dichVu: "finance" },
+  { tienTo: "/api/v1/overdue-citizen-reports", dichVu: "petitions" },
+  { tienTo: "/api/v1/citizen-report-summary", dichVu: "petitions" },
   { tienTo: "/api/v1/residential-unit-types", dichVu: "identity" },
   { tienTo: "/api/v1/investment-projects", dichVu: "finance" },
   { tienTo: "/api/v1/content-categories", dichVu: "comms" },
@@ -30,10 +34,12 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/commune-staff", dichVu: "identity" },
   { tienTo: "/api/v1/content-items", dichVu: "comms" },
   { tienTo: "/api/v1/disbursements", dichVu: "finance" },
+  { tienTo: "/api/v1/overdue-tasks", dichVu: "petitions" },
   { tienTo: "/api/v1/task-statuses", dichVu: "petitions" },
   { tienTo: "/api/v1/working-hours", dichVu: "identity" },
   { tienTo: "/api/v1/budget-lines", dichVu: "finance" },
   { tienTo: "/api/v1/commune-news", dichVu: "comms" },
+  { tienTo: "/api/v1/task-summary", dichVu: "petitions" },
   { tienTo: "/api/v1/task-blocs", dichVu: "identity" },
   { tienTo: "/api/v1/task-types", dichVu: "petitions" },
   { tienTo: "/api/v1/org-units", dichVu: "identity" },

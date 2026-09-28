@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     100 tuyến của 5 dịch vụ — identity 37 · petitions 32 · finance 16 · comms 8 · documents 7
+#     106 tuyến của 5 dịch vụ — identity 37 · petitions 36 · finance 16 · documents 9 · comms 8
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -67,8 +67,8 @@ spec:
                 name: comms
                 port: { name: rest }
     #
-    # documents — 3 tài nguyên: /api/v1/document-types · /api/v1/incoming-documents
-    #   /api/v1/outgoing-documents
+    # documents — 5 tài nguyên: /api/v1/document-types · /api/v1/incoming-document-overdue-queue
+    #   /api/v1/incoming-document-summary · /api/v1/incoming-documents · /api/v1/outgoing-documents
     - host: "documents.api.vigov.vn"
       http:
         paths:
@@ -107,9 +107,10 @@ spec:
                 name: identity
                 port: { name: rest }
     #
-    # petitions — 8 tài nguyên: /api/v1/citizen-reports · /api/v1/meetings
-    #   /api/v1/my-citizen-reports · /api/v1/task-extensions · /api/v1/task-priorities
-    #   /api/v1/task-statuses · /api/v1/task-types · /api/v1/tasks
+    # petitions — 12 tài nguyên: /api/v1/citizen-report-summary · /api/v1/citizen-reports
+    #   /api/v1/meetings · /api/v1/my-citizen-reports · /api/v1/overdue-citizen-reports
+    #   /api/v1/overdue-tasks · /api/v1/task-extensions · /api/v1/task-priorities
+    #   /api/v1/task-statuses · /api/v1/task-summary · /api/v1/task-types · /api/v1/tasks
     - host: "petitions.api.vigov.vn"
       http:
         paths:
