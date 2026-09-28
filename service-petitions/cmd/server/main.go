@@ -297,7 +297,11 @@ func chay(log *slog.Logger) error {
 		// The restricted-field subquery withholds `can-bo` petitions' entries unless the handler
 		// found `feedback.restricted` on the reader (ADR 0054 §4, ADR 0030).
 		AuditLog: audit.NewLog(kho, audit.WithHiddenSubjects(petstore.RestrictedPetitionAuditSubjects)),
-		Log:      log,
+		// "Lời hệ thống": a commune's wording of the six `feedback.*` sentences. The use case owns the
+		// transaction the override row and its audit entry share (rule 6, invariant 3), and is also
+		// what every configurable refusal reads its sentence through.
+		SystemMessages: app.NewSystemMessages(kho, petstore.NewSystemMessageOverrideStore(kho)),
+		Log:            log,
 	})
 
 	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather

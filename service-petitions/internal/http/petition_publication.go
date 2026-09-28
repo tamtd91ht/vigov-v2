@@ -51,9 +51,11 @@ func (h *Handler) SetPublication(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, domain.ErrNeverPublic):
 		// 409 AND NOT 400: the request is well formed and the caller holds the right; it is THIS record
 		// that can never be public. The code is the requirement's own, `never_public`
-		// (`service.py:781`), and so is the sentence (`admin/messages.py:64-65`).
+		// (`service.py:781`). THE SENTENCE IS THE COMMUNE'S "Lời hệ thống" wording of
+		// `feedback.never_public` (ADR 0024), the shipped default when it has none or when the wording
+		// cannot be read — the 409 and the code do not depend on it.
 		httpx.WriteError(w, http.StatusConflict, "never_public",
-			"Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.", "")
+			h.systemMessage(ctx, domain.KeyFeedbackNeverPublic), "")
 	default:
 		// 404 (unknown / other commune / soft deleted / restricted without the key), 409 on a lost
 		// race, 500 otherwise — the one mapping every write route shares.

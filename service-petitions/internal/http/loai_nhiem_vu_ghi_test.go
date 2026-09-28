@@ -195,6 +195,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		TaskRegisterExport:   &registerExportFake{},
 		TaskImport:           &taskImportFake{},
 		AuditLog:             &auditLogFake{},
+		SystemMessages:       &systemMessagesFake{},
 		Log:                  im,
 	})
 

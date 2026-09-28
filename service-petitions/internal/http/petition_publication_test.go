@@ -55,7 +55,8 @@ func TestPublicationRefusalMapping(t *testing.T) {
 		text string
 	}{
 		{"lĩnh vực tác phong cán bộ", fmt.Errorf("bọc xã 01JX: %w", domain.ErrNeverPublic),
-			http.StatusConflict, "never_public", "không bao giờ được hiển thị công khai"},
+			// The shipped default of `feedback.never_public` — the harness's fake has no override.
+			http.StatusConflict, "never_public", "Phản ánh về thái độ, tác phong cán bộ không được hiển thị công khai."},
 		{"giá trị sai", domain.ErrPublicationStatusInvalid, http.StatusBadRequest, "invalid_request", "cong-khai"},
 		{"phiếu hạn chế", fmt.Errorf("bọc: %w", app.ErrPhieuHanChe), http.StatusNotFound, "", ""},
 		{"không có phiếu", petstore.ErrPhieuKhongTonTai, http.StatusNotFound, "", ""},

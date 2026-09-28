@@ -323,7 +323,11 @@ func dungMayChu(t *testing.T) *mayChu {
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
-			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// "Lời hệ thống": the fake answers the SHIPPED DEFAULT unless a test sets an override, so
+			// every refusal case in this package reads the sentence a commune that never touched the
+			// screen reads. Its suite is system_messages_test.go.
+			SystemMessages: &systemMessagesFake{},
+			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
 		loai:       loai,
@@ -447,6 +451,7 @@ func depsDay() Deps {
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
 		AuditLog:             &auditLogFake{},
+		SystemMessages:       &systemMessagesFake{},
 	}
 }
 
@@ -503,6 +508,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu use case hàng đợi quá hạn":    func(d *Deps) { d.OverdueQueue = nil },
 		// The audit-log reader (ADR 0054): a nil here panics on the first administrator opening it.
 		"thiếu bộ đọc nhật ký hệ thống": func(d *Deps) { d.AuditLog = nil },
+		// "Lời hệ thống": a nil here panics inside a REFUSAL — the answer meant to explain a mistake.
+		"thiếu use case lời hệ thống": func(d *Deps) { d.SystemMessages = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

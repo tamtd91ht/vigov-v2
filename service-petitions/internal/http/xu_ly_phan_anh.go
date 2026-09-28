@@ -756,7 +756,9 @@ func (h *Handler) tuChoiXuLy(w http.ResponseWriter, r *http.Request, status int,
 	if p, ok := authz.From(ctx); ok {
 		canBo = p.Ma
 	}
-	cau, co := cauTuChoiPhieu(err)
+	// The commune's wording for the refusals it may reword (refusalMessageKeys), the fixed sentence for
+	// the rest. The status and the code above do not depend on which.
+	cau, co := h.refusalSentence(ctx, err)
 	if !co {
 		// A MAPPING BUG, NOT A CASE: the caller matched a sentinel this table does not hold — somebody
 		// added a refusal to domain.LaLoiXuLyPhanAnh and not here. The generic sentence goes out
@@ -779,6 +781,10 @@ func (h *Handler) tuChoiXuLy(w http.ResponseWriter, r *http.Request, status int,
 // switch that uses it, and every row is pinned by TestTuChoiXuLyCauCoDinhKhongLoNoiBo.
 //
 // THE LIMITS ARE READ FROM domain, never retyped, so a bound that changes changes the sentence too.
+//
+// THREE REFUSALS ARE NOT HERE: ErrKhongConCamKet, ErrThieuBoPhan and ErrThieuLyDo read the commune's
+// "Lời hệ thống" wording instead (refusalMessageKeys, system_messages.go). A row here as well would be
+// a second sentence for one refusal, and the one nobody reads is the one that drifts.
 var cacCauTuChoiPhieu = []struct {
 	goc error
 	cau string
@@ -791,12 +797,10 @@ var cacCauTuChoiPhieu = []struct {
 		"thái hiện tại."},
 	{domain.ErrKetThucNhanhSaiLuc, "Chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước " +
 		"phân loại. Hãy tải lại phiếu để xem trạng thái hiện tại."},
-	{domain.ErrKhongConCamKet, "Phiếu đã kết thúc nên không còn thao tác nào trên phiếu này."},
 
 	// --- 400: about what was typed ---
 	{domain.ErrThieuLinhVuc, "Chưa chọn lĩnh vực: phân loại phải chốt lĩnh vực của phiếu."},
 	{domain.ErrLinhVucSaiDang, "Mã lĩnh vực không hợp lệ. Hãy chọn lĩnh vực trong danh sách."},
-	{domain.ErrThieuBoPhan, "Chưa chọn bộ phận nhận xử lý."},
 	{domain.ErrBoPhanQuaDai, fmt.Sprintf("Mã bộ phận quá dài (tối đa %d ký tự).", domain.BoPhanToiDa)},
 	{domain.ErrCanBoQuaDai, fmt.Sprintf("Mã cán bộ quá dài (tối đa %d ký tự).", domain.CanBoToiDa)},
 	{domain.ErrThieuKetQua, "Chưa nhập kết quả xử lý: không đóng phiếu mà không có kết quả cho người " +
@@ -804,7 +808,6 @@ var cacCauTuChoiPhieu = []struct {
 	{domain.ErrKetQuaQuaNgan, fmt.Sprintf("Kết quả xử lý quá ngắn (tối thiểu %d ký tự): người dân "+
 		"phải đọc được xã đã làm gì.", domain.KetQuaToiThieu)},
 	{domain.ErrKetQuaQuaDai, fmt.Sprintf("Kết quả xử lý quá dài (tối đa %d ký tự).", domain.KetQuaToiDa)},
-	{domain.ErrThieuLyDo, "Chưa nhập lý do: người dân phải đọc được vì sao."},
 	{domain.ErrLyDoQuaNgan, fmt.Sprintf("Lý do quá ngắn (tối thiểu %d ký tự): người dân phải đọc được "+
 		"vì sao.", domain.LyDoToiThieu)},
 	{domain.ErrLyDoQuaDai, fmt.Sprintf("Lý do quá dài (tối đa %d ký tự).", domain.LyDoToiDa)},

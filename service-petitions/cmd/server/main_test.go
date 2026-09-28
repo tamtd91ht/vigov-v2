@@ -412,7 +412,10 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// real restricted-field subquery passes WithHiddenSubjects' wiring-time check in this test
 		// too. Own suite: internal/http/audit_entries_test.go.
 		AuditLog: audit.NewLog(pkgstore.New(nil), audit.WithHiddenSubjects(petstore.RestrictedPetitionAuditSubjects)),
-		Log:      log,
+		// Never invoked here; Register refuses a nil. Own suites: internal/http/system_messages_test.go
+		// and internal/app/system_message_test.go.
+		SystemMessages: app.NewSystemMessages(nil, nil),
+		Log:            log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.

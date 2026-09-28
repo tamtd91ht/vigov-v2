@@ -992,9 +992,11 @@ func TestTuChoiXuLyCauCoDinhKhongLoNoiBo(t *testing.T) {
 		{domain.ErrThieuGhiChu, http.StatusBadRequest, "invalid_request"},
 		{domain.ErrGhiChuQuaDai, http.StatusBadRequest, "invalid_request"},
 	}
-	if len(cacCa) != len(cacCauTuChoiPhieu) {
-		t.Fatalf("bảng câu có %d dòng, bài kiểm có %d — một từ chối mới phải có mặt ở cả hai",
-			len(cacCauTuChoiPhieu), len(cacCa))
+	// The fixed table PLUS the configurable refusals (refusalMessageKeys): together they are every
+	// refusal the write routes can answer, and a refusal is in exactly one of the two.
+	if len(cacCa) != len(cacCauTuChoiPhieu)+len(refusalMessageKeys) {
+		t.Fatalf("bảng câu có %d + %d dòng, bài kiểm có %d — một từ chối mới phải có mặt ở cả hai",
+			len(cacCauTuChoiPhieu), len(refusalMessageKeys), len(cacCa))
 	}
 	for _, ca := range cacCa {
 		t.Run(ca.goc.Error(), func(t *testing.T) {
@@ -1014,7 +1016,13 @@ func TestTuChoiXuLyCauCoDinhKhongLoNoiBo(t *testing.T) {
 			if loi.Code != ca.ma {
 				t.Errorf("mã lỗi = %q, muốn %q", loi.Code, ca.ma)
 			}
+			// A configurable refusal answers the SHIPPED DEFAULT here (the harness's fake has no
+			// override); the override and the failed-read cases are system_messages_test.go's.
 			muon, co := cauTuChoiPhieu(ca.goc)
+			if key, configurable := refusalMessageKey(ca.goc); configurable {
+				m, _ := domain.LookupShippedMessage(key)
+				muon, co = m.DefaultText, m.DefaultText != ""
+			}
 			if !co {
 				t.Fatalf("không có câu cố định cho %v", ca.goc)
 			}

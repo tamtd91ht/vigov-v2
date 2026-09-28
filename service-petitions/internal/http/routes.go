@@ -514,6 +514,12 @@ type Deps struct {
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
 
+	// SystemMessages is "Lời hệ thống" for the sentences this service raises (migration 0020): the
+	// three configuration routes, AND the read every configurable refusal branch sends its sentence
+	// through (refusalMessageKeys). *app.SystemMessages in production. Refused at construction when
+	// missing — a nil one would panic inside a refusal, on the path meant to explain a mistake.
+	SystemMessages SystemMessageService
+
 	Log *slog.Logger
 }
 
@@ -605,6 +611,9 @@ func Register(mux *http.ServeMux, d Deps) {
 			"GET /api/v1/overdue-citizen-reports sẽ panic khi có người gọi")
 	case d.AuditLog == nil:
 		panic("petitions/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/petitions-audit-entries sẽ panic khi có người gọi")
+	case d.SystemMessages == nil:
+		panic("petitions/http: thiếu use case lời hệ thống — các tuyến /api/v1/petitions-system-messages và " +
+			"mọi câu từ chối xã được sửa lời sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -2266,4 +2275,72 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/petitions-audit-entries",
 		authz.RequirePermission(d.Checker, "admin.audit")(
 			http.HandlerFunc(h.ListAuditEntries)))
+
+	// --- LỜI HỆ THỐNG — the sentences this service raises, reworded per commune (migration 0020) ----
+	//
+	// THE SAME THREE ROUTES AS service-finance's `finance-system-messages`, under this service's own
+	// first segment: ADR 0024 splits the keys by the service that RAISES them, and tools/ingress refuses
+	// two services on one first segment (ADR 0054 §3). The six `feedback.*` keys are listed here.
+	//
+	// `{code}` AND NOT `{key}`, and the response field is `code`: tools/apidoc's credential guard
+	// refuses the word `key` in a response field, and the path parameter names the same thing.
+	//
+	// `override` IS A SUB-RESOURCE: the commune's own wording is a state PUT sets and DELETE removes,
+	// and the message itself survives both — a shipped key cannot be deleted (14-cau-hinh §7).
+	//
+	// `admin.lookup` — "Quản lý danh mục" — ON ALL THREE, the key the requirement repository guards
+	// this screen with (../vigov-require/docs/spec/04-api.md:41-44), seeded at
+	// service-identity/migrations/0001_init.sql:274, and the key finance's half uses. NO KEY INVENTED
+	// (rule 5, invariant 3c). READ IS NOT AnyAuthenticated: this list is the configuration screen; an
+	// officer being refused gets the sentence inside the refusal, not from here.
+
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Lời hệ thống của phân hệ Tiếp dân – Nhiệm vụ: câu mặc định, câu xã đang dùng và ai sửa lần cuối
+	// @screen   14-cau-hinh §7
+	// @reply    200 systemMessageListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/petitions-system-messages",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(h.ListSystemMessages)))
+
+	// PUT, a full replacement of the one field this resource has. Empty `text` is 400 and names the
+	// DELETE below — an empty sentence is not a state this screen offers.
+	//
+	// idem.KhongCan: app.Reword writes nothing and files no entry when the text in force already
+	// equals the text sent — so a retry leaves one row, one entry.
+	//
+	// @summary  Xã sửa lời một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ
+	// @screen   14-cau-hinh §7
+	// @request  rewordSystemMessageIn
+	// @reply    200 systemMessageOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/petitions-system-messages/{code}/override",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.RewordSystemMessage))))
+
+	// "Khôi phục câu mặc định". A soft delete of the commune's live wording (rule 7, invariant 1);
+	// the history stays on disk and in audit_log. 204 also when the commune is already on the
+	// default — the state asked for holds, and nothing is written.
+	//
+	// idem.KhongCan: the second request finds no live wording and writes nothing.
+	//
+	// @summary  Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ
+	// @screen   14-cau-hinh §7
+	// @reply    204 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/petitions-system-messages/{code}/override",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì")(
+				http.HandlerFunc(h.RestoreSystemMessage))))
 }
