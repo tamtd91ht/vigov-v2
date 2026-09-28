@@ -15,6 +15,10 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-16
 
+> **Bảng §Quyết định ĐÃ ĐƯỢC ADR 0052 BỔ SUNG (2026-09-28):** thêm **MinIO** (lưu trữ đối tượng)
+> và **ClamAV** (quét mã độc). Bảng dưới giữ nguyên văn ngày 16/09; sự thật hiện hành về hai thành
+> phần ấy thuộc về `kb/10-decisions/0052-object-storage-minio.md`.
+
 ## Bối cảnh
 
 ADR 0004 chốt `tenant_id` là shard key nhưng không nói dùng CSDL nào, và không nhắc tới hàng

@@ -85,7 +85,7 @@ thuộc phạm vi hợp đồng. Bằng chứng khảo sát và đường quay l
 | `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |
 
 **Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`core/audit`) và lưu trữ tệp
-(`core/storage`). Lý do ở ADR 0001.
+(`core/storage`). Lý do ở ADR 0001; kho, bucket, khoá và vòng đời tệp ở ADR 0052.
 
 **`identity` giữ thêm đơn vị dân cư — mở rộng công khai, không phải lệ.** Thôn / tổ dân phố là
 đơn vị **trong bộ máy xã**, đổi cùng nhịp với sơ đồ tổ chức, nên nằm cạnh nó. Kèm theo là hai
