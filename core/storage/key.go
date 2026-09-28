@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,20 @@ const (
 var knownPurposes = map[Purpose]bool{
 	PurposeContentVideo: true, PurposeContentImage: true, PurposeContentAttachment: true,
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
+}
+
+// Purposes returns the closed list, sorted, as a fresh slice the caller may keep.
+//
+// For code that meets a purpose it did not build from a constant: core/platformclient/uploadpolicy
+// derives one from the platform's UploadPurpose enum and must refuse a spelling this build does not
+// hold, and its drift test compares the two lists in both directions (platform.proto, UploadPurpose).
+func Purposes() []Purpose {
+	out := make([]Purpose, 0, len(knownPurposes))
+	for p := range knownPurposes {
+		out = append(out, p)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Variants (ADR 0052 §3: `original`, `mp4-720p`, `poster`, `thumb-320`…). CLOSED, not merely

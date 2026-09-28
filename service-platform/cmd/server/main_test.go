@@ -64,8 +64,16 @@ func (hoSoGia) Doc(ctx context.Context) (domain.HoSoHienThi, error) {
 	return domain.HoSoHienThi{DiaChiTruSo: "Trụ sở thử"}, nil
 }
 
+// policiesFake answers one policy whatever the commune — like the real store, which has none.
+type policiesFake struct{}
+
+func (policiesFake) ListUploadPolicies(context.Context) ([]domain.UploadPolicy, error) {
+	return []domain.UploadPolicy{{Purpose: "tenant-logo", MaxBytes: 10485760,
+		AllowedMIMETypes: []string{"image/png"}}}, nil
+}
+
 func depsGia() svcgrpc.Deps {
-	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}}
+	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}, Policies: policiesFake{}}
 }
 
 // moMay starts the real server on an in-memory connection and returns a client dialled with the
@@ -220,6 +228,37 @@ func TestGetTenantProfileQuaChuoiThat(t *testing.T) {
 	}
 	if res.GetProfile().GetOfficeAddress() != "Trụ sở thử" {
 		t.Errorf("hồ sơ = %+v", res.GetProfile())
+	}
+}
+
+// ListUploadPolicies is NOT exempt from "x-tenant-id" (platform.proto: "not a candidate for
+// exemption"). Through the real chain: key without commune is refused by the SERVER's interceptor;
+// key and commune gets the answer; no key is refused before anything else.
+func TestListUploadPoliciesThroughRealChain(t *testing.T) {
+	keyOnly := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+	if _, err := keyOnly.ListUploadPolicies(context.Background(),
+		&platformv1.ListUploadPoliciesRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no commune: code = %v, want InvalidArgument (err: %v)", status.Code(err), err)
+	}
+
+	full := moMay(t, grpc.WithChainUnaryInterceptor(
+		grpcx.UnaryClientCallerAuth(khoaGoiGia),
+		grpcx.UnaryClientInterceptor(),
+	))
+	res, err := full.ListUploadPolicies(tenant.Into(context.Background(), ulidThu),
+		&platformv1.ListUploadPoliciesRequest{})
+	if err != nil {
+		t.Fatalf("key and commune still refused: %v", err)
+	}
+	if len(res.GetPolicies()) != 1 ||
+		res.GetPolicies()[0].GetPurpose() != platformv1.UploadPurpose_UPLOAD_PURPOSE_TENANT_LOGO {
+		t.Errorf("policies = %+v", res.GetPolicies())
+	}
+
+	noKey := moMay(t)
+	if _, err := noKey.ListUploadPolicies(tenant.Into(context.Background(), ulidThu),
+		&platformv1.ListUploadPoliciesRequest{}); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("no key: code = %v, want Unauthenticated", status.Code(err))
 	}
 }
 

@@ -95,7 +95,7 @@ func danhBaMau() *danhBaGia {
 // or missing metadata.
 func dung(t *testing.T, dir svcgrpc.Directory) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
-	return dungVoi(t, svcgrpc.Deps{Dir: dir, Apps: soMiniAppMau(), HoSo: hoSoMau()})
+	return dungVoi(t, svcgrpc.Deps{Dir: dir, Apps: soMiniAppMau(), HoSo: hoSoMau(), Policies: samplePolicies()})
 }
 
 // dungVoi is dung with every dependency chosen by the test.

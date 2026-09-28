@@ -213,10 +213,14 @@ func run(log *slog.Logger) error {
 	//
 	// The display profile is a commune's own content, so it gets the SCOPED store (core/store),
 	// never the directory's raw handle.
+	//
+	// Upload limits are platform-wide configuration with no commune column (migration 0008), so
+	// they get their own raw-handle reader — not the directory, which reads only the registry.
 	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{
-		Dir:  danhBa,
-		Apps: danhBa,
-		HoSo: svcstore.NewHoSoHienThiStore(store.New(db)),
+		Dir:      danhBa,
+		Apps:     danhBa,
+		HoSo:     svcstore.NewHoSoHienThiStore(store.New(db)),
+		Policies: svcstore.NewUploadPolicyStore(db),
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)

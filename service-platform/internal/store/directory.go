@@ -29,8 +29,10 @@ type Directory struct {
 	db *sql.DB
 }
 
-// NewDirectory is deliberately the only constructor in this package that takes a raw *sql.DB.
-// Any second one appearing here is a bug: see the comment on Directory.
+// NewDirectory is one of exactly TWO constructors in this package that take a raw *sql.DB. The
+// other is NewUploadPolicyStore (upload_policy.go), which reads platform-wide configuration with
+// no tenant_id column. Any third one appearing here is a bug unless its table, too, has no commune
+// column — a commune's own content goes through core/store.Scoped, as HoSoHienThiStore does.
 func NewDirectory(db *sql.DB) *Directory { return &Directory{db: db} }
 
 // cotXa is the SELECT list every query in this file shares, in the ONE order quetXa scans.

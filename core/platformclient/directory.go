@@ -112,6 +112,12 @@ func (d *Directory) voi(conn *grpc.ClientConn) *Directory {
 	return d
 }
 
+// Client returns the underlying stub, carrying the interceptors Dial installed (caller key, then
+// commune). For readers that live outside this package to keep their dependencies out of every
+// service — core/platformclient/uploadpolicy — so they reuse this connection instead of dialling a
+// second one with a hand-copied interceptor chain.
+func (d *Directory) Client() platformv1.PlatformServiceClient { return d.cl }
+
 // Close releases the connection. Safe on an injected client.
 func (d *Directory) Close() error {
 	if d.conn == nil {
