@@ -121,8 +121,9 @@ mã phiếu tuần tự `PA-2026-0004` (luật 4 bất biến 4).
   là của app chung ViHAT và vẫn đúng: app chung không nhận kho nháp, và kho mặc định không mở bộ nhớ khi
   dựng app chung. **Cái giá phải trả khi viết chính sách của app riêng để nộp Zalo duyệt:** phải khai
   nháp này — có họ tên và số điện thoại, tên khoá, và lúc nào nó bị xoá (gửi xong, "Bỏ nháp", huỷ). Thiết
-  bị cho mượn thì người sau thấy nháp của người trước. **Nháp không có hạn** — giữ bao lâu là luật nghiệp
-  vụ, còn mở. Khoá **không** mang tiền tố `t:<tenant>` vì một app riêng = một origin = một xã: không có
+  bị cho mượn thì người sau thấy nháp của người trước. **Nháp không có hạn tự xoá** — ĐÃ CHỐT 28/09/2026 vòng 6
+  (chủ dự án: “nháp không có hạn tự xoá, theo require”; `store/draft.ts` không có hạn): nháp chỉ mất
+  khi gửi xong, "Bỏ nháp" hoặc huỷ. Khoá **không** mang tiền tố `t:<tenant>` vì một app riêng = một origin = một xã: không có
   hai xã chung một bộ nhớ.
 - **Điểm 8 — không có bảng công khai, nhưng máy chủ vẫn nợ kiểm duyệt:** SRS xếp M4.3.1 mức P0
   (`SRS.md:318`). Sổ: `service-petitions/may-chu-no-adr-0050`.
