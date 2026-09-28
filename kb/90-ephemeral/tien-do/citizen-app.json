@@ -237,6 +237,15 @@
       "no_confirm": [],
       "tiep_theo": "CÒN NỢ: (1) câu chính sách riêng tư — mục Đăng nhập của content/chinh-sach-rieng-tu.ts và đoạn getPhoneNumber ở DOAN_CHINH_SACH_TUNG_QUYEN chưa nói phoneToken đi qua máy chủ ViHAT tới identity ViGov để mở lại phiên xã; văn bản pháp lý của chủ dự án, KHÔNG tự viết; ca chinh-sach.test.ts đang ghim khoảng hở đúng một trường, duyệt xong thì đổi thành khoá hai chiều. (2) câu chữ PHONE_VERIFICATION (noi-dung.ts) và câu KHAI_BAO_LOI_GOI mở rộng chưa qua duyệt ngôn ngữ hành chính. (3) GIẢ ĐỊNH NHÀ CUNG CẤP CHỌN: 'cùng xã' so bằng TÊN XÃ hiển thị (phiên chỉ giữ token + ten_xa); cầu có chuyển communePrimaryHost — so bằng nó chặt hơn nếu hai xã trùng tên. (4) app riêng không có đường mở lại (chưa có phiên). (5) Chưa chạy đầu-cuối: chờ UNKNOWN #2. BACKEND DEPENDENCY: khai 403 chua_xac_thuc_so ở service-petitions/internal/http/routes_cong_dan.go (~:194 ghi 'THERE IS NO 403') và openapi ba tuyến my-citizen-reports.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "phan-anh-sua-nho-28-09",
+      "viec": "Phản ánh (09) kênh công dân — ba sửa nhỏ lượt /develop-miniapp 28/09: (T2) mã phiếu trải nghiệm bằng CSPRNG; (T4) app riêng xếp mã trạng thái lạ theo groupOf chung; (T5) chú thích/script lỗi thời",
+      "trang_thai": "xong",
+      "bang_chung": "T2 195fe45 (trai-nghiem.ts cryptoBytes, experience-ticket-code.test.ts). T4 b6cef55 (nhomCua = groupOf, chip --unknown trung tính, unknown-status-commune-app.test.tsx). T5 f49bc7d (chỉ chú thích + câu in của check:api). citizen-app vitest 961/961, tsc sạch; make -k check: citizen-app + web-admin (2203/2203) + mọi check_*.py PASS; lint/build/test Go ĐỎ vì việc CHƯA COMMIT của phiên song song ở service-identity (org_units.go) và service-petitions (nhiem_vu*), không phải do lượt này.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN LẠI, chưa làm: (1) PhanAnhAppXa DongThoiGian vẫn hiện nguyên mã trạng thái lạ (NHAN_BUOC[tt] ?? tt, buocDaQua trả [tt]) — cùng loại lỗi T4 đã sửa cho chip. (2) phase1-collects-nothing.test.ts:158-159 chú thích lỗi thời ('cả hai cổng đóng', tên tệp cong-dan.test.ts). (3) PHÁT HIỆN: make check chạy check:api nhưng nó KHÔNG kiểm gì — không gì so kiểu REST viết tay của citizen-app với kb/20-contracts/openapi.json; một phép kiểm hợp đồng thật là việc riêng. (4) maPhieuTraiNghiem ném khi thiếu crypto thì nút gửi app riêng im lặng (webview Zalo có crypto). (5) T3 truy cập (công tắc ẩn danh hiện chữ, chuyển tiêu điểm theo bước, lý do nút Gửi khoá, tiêu điểm kết quả tra cứu) người dùng CHƯA chọn làm lượt này.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
