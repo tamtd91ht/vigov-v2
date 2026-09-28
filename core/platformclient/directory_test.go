@@ -267,3 +267,10 @@ func (k kiemHan) GetTenantProfile(context.Context, *platformv1.GetTenantProfileR
 	...grpc.CallOption) (*platformv1.GetTenantProfileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// ListUploadPolicies is platform-wide upload configuration (ADR 0052 §10), read by file-owning
+// services — not a Host resolution. Present for the interface alone, like the four above.
+func (k kiemHan) ListUploadPolicies(context.Context, *platformv1.ListUploadPoliciesRequest,
+	...grpc.CallOption) (*platformv1.ListUploadPoliciesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}

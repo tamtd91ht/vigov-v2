@@ -2,7 +2,13 @@ syntax = "proto3";
 
 package vigov.platform.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // The platform service owns the commune registry and NOTHING ELSE.
+//
+// (Amended 2026-09-28, ADR 0052 §10: plus platform-wide OPERATING CONFIGURATION that Vihat sets in
+// the operations zone — today the upload policies below. Configuration about how the platform
+// runs, never a commune's business content; the sentence that follows is unchanged by it.)
 //
 // It deliberately has no RPC that returns business content. The vendor operating the platform
 // admin console cannot read a commune's petitions or documents because THERE IS NO PATH — not
@@ -156,6 +162,160 @@ service PlatformService {
   //   OK + profile        fields that were not declared are "" — same rule as Tenant.province.
   //   INVALID_ARGUMENT    no "x-tenant-id" (refused by the interceptor before this RPC runs).
   rpc GetTenantProfile(GetTenantProfileRequest) returns (GetTenantProfileResponse);
+
+  // ListUploadPolicies returns the upload limits — maximum size per file, allowed file types,
+  // and a per-record file count — for EVERY purpose that has one configured (ADR 0052 §10).
+  //
+  // Its callers are the services that own files (comms, platform, petitions, documents), at step
+  // (a) "request upload" and again at step (c) "complete" of ADR 0052 §1. Vihat sets the values in
+  // the operations zone (ADR 0048); this service owns them.
+  //
+  // # ONE CALL RETURNS ALL OF THEM — THERE IS NO PER-PURPOSE GET, ON PURPOSE
+  //
+  // The whole set is a handful of rows that change a few times a year. One call fills a caller's
+  // cache for every purpose it serves; a per-purpose RPC would be N calls and N cache entries for
+  // the same few hundred bytes (ADR 0012, decision 2: batch by default).
+  //
+  // # ABSENT MEANS "NOT CONFIGURED", AND THE CALLER REFUSES
+  //
+  // A purpose with no entry in `policies` has no limit configured — or had one that Vihat
+  // withdrew. The caller REFUSES every upload for that purpose. It never substitutes a default
+  // size, a default type list, or the storage allow-list on its own (ADR 0052 §10, and its STOP
+  // CONDITION #4: a limit defaulted in code instead of read from platform). An EMPTY `policies`
+  // is an ordinary answer, not an error: it means no uploads are allowed anywhere.
+  //
+  // An entry the caller cannot use is treated exactly like an absent one — refuse:
+  //   * `purpose` is UPLOAD_PURPOSE_UNSPECIFIED or a value the caller's build does not know;
+  //   * `max_bytes` <= 0;
+  //   * `allowed_mime_types` empty AFTER dropping every value the caller's core/storage allow-list
+  //     does not hold. A policy can only NARROW the allow-list, never widen it: a type storage
+  //     cannot sniff is a type that would be refused at complete anyway, so accepting it at step
+  //     (a) would hand out an upload slot that can only fail.
+  //
+  // # WHAT A CALLER MAY DECIDE FROM IT
+  //
+  // A caller MAY refuse from it and MUST refuse from it: a declared size above `max_bytes`, a
+  // declared or sniffed type outside `allowed_mime_types`, one file past `max_files_per_subject`.
+  // It is the ONLY source of these limits. It is enforced at three points, and a caller needs all
+  // three, because the first two are checks of what the client CLAIMS:
+  //   (a) request upload — declared size and type against the policy; the presigned POST carries
+  //       `content-length-range` [1, max_bytes], so MinIO itself refuses a bigger body;
+  //   (b) the upload — MinIO enforces that range; the service never sees the bytes;
+  //   (c) complete — stat size and SNIFFED type against the policy CURRENT AT COMPLETE. A policy
+  //       tightened between (a) and (c) rejects the file at (c); that is intended.
+  //
+  // # THE COMMUNE TRAVELS IN METADATA, AND THE ANSWER IS "THE EFFECTIVE POLICY FOR THAT COMMUNE"
+  //
+  // Not exempt from "x-tenant-id", and not a candidate for exemption. Every caller holds a commune
+  // at upload time — an upload is always into one commune's tree (ADR 0052 §3) — so requiring it
+  // costs nothing, while exempting the method would be a STOP CONDITION (ADR 0012, decision 1).
+  //
+  // TODAY THE ANSWER DOES NOT DEPEND ON THE COMMUNE: every commune gets the platform-wide policy.
+  // A per-commune override is OPEN — not decided, not built. The contract is already worded as
+  // "effective policy for the commune in x-tenant-id" so that an override, if the owner ever
+  // decides one, is a server-side change with no contract change and no caller change — PROVIDED
+  // callers key their cache by commune from day one (see caching below). A caller that caches one
+  // global answer is correct today and silently wrong the day an override ships.
+  //
+  // "x-tenant-id" is a claim by the caller, not evidence (ADR 0025, see the service comment). It
+  // is harmless here: nothing in the answer is secret, and nothing in it is business content.
+  //
+  // # CACHING — REQUIRED OF EVERY CALLER
+  //
+  //   * Cache the whole answer per commune (key "t:<tenant_id>", rule 1 invariant 7) for at most
+  //     60 seconds. A change Vihat makes is therefore live everywhere within one TTL; there is no
+  //     event and no invalidation call, and none is needed at this rate of change.
+  //   * The TTL covers the "not configured" answer exactly as it covers a configured one — a
+  //     purpose absent from the answer is re-asked after the TTL, never remembered as absent for
+  //     longer. Do NOT cache errors.
+  //   * On a failed refresh after the TTL has expired: REFUSE the upload with a retryable error
+  //     (503). Do NOT serve the expired answer, and never fall back to any built-in value. A
+  //     platform outage longer than one TTL stops uploads; that is the price of fail-closed, the
+  //     same one ADR 0012 decision 4 already pays for Host resolution.
+  //
+  // # Reading this is NOT audited
+  //
+  // Platform-wide configuration, no personal data, and no caller identity on this port (ADR
+  // 0025). CHANGING a policy is audited, in this service, by the operations-zone write path.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more policies. A purpose not listed is NOT CONFIGURED: refuse.
+  //   INVALID_ARGUMENT    no "x-tenant-id" (refused by the interceptor before this RPC runs).
+  //   NOT_FOUND           NEVER produced. Not configured is an ABSENT entry, never an error, so a
+  //                       caller cannot confuse "not configured" with "the call failed".
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor
+  //                       (ADR 0025) and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "not configured" and NOT "allowed":
+  //                       use a cached answer still inside its TTL, otherwise refuse with 503.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ListUploadPolicies(ListUploadPoliciesRequest) returns (ListUploadPoliciesResponse);
+}
+
+// Empty on purpose: the commune is "x-tenant-id" in metadata, and the answer is always the whole
+// set (see the RPC). A purpose filter would save nothing and add a way to ask wrongly.
+message ListUploadPoliciesRequest {}
+
+message ListUploadPoliciesResponse {
+  // At most one entry per purpose. A purpose not listed is NOT CONFIGURED — see the RPC.
+  repeated UploadPolicy policies = 1;
+}
+
+// UploadPurpose says what an uploaded file is for. CLOSED LIST.
+//
+// IT MIRRORS core/storage.Purpose VALUE FOR VALUE, AND THE SPELLING IS DERIVED, NOT MAPPED: strip
+// the "UPLOAD_PURPOSE_" prefix, lowercase, "_" -> "-". UPLOAD_PURPOSE_CONTENT_VIDEO is
+// "content-video". There is deliberately no hand-written mapping table — a table is a third copy
+// of the list, and the third copy is the one that drifts. A test in core compares this enum with
+// storage's closed list in both directions; a purpose added to one and not the other turns it red.
+//
+// Adding a purpose is: one constant in core/storage, one value here, one row of limits in
+// platform — in the same commit. A purpose here with no platform row is simply not configured, so
+// its uploads are refused, which is the safe order to be half-done in.
+//
+// A purpose never equals a service name (IAM wildcard, ADR 0052 §Cái giá); core/storage enforces
+// that, and the derivation above means this enum inherits it.
+enum UploadPurpose {
+  UPLOAD_PURPOSE_UNSPECIFIED = 0;
+  UPLOAD_PURPOSE_CONTENT_VIDEO = 1;       // Mini App content, type video (comms)
+  UPLOAD_PURPOSE_CONTENT_IMAGE = 2;       // Mini App content cover image (comms)
+  UPLOAD_PURPOSE_CONTENT_ATTACHMENT = 3;  // Mini App content attachment (comms)
+  UPLOAD_PURPOSE_TENANT_LOGO = 4;         // commune display-profile logo (platform)
+  UPLOAD_PURPOSE_PETITION_PHOTO = 5;      // scene photo on a petition (petitions) — ADR 0052 §12
+  UPLOAD_PURPOSE_DOCUMENT_SCAN = 6;       // scan of an administrative document (documents)
+}
+
+// UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no
+// business content (ADR 0003).
+message UploadPolicy {
+  UploadPurpose purpose = 1;
+
+  // Maximum size of ONE file, in BYTES (not KB, not MB; 10 MB is 10485760). Always > 0 in a usable
+  // entry. It becomes the upper bound of the presigned POST's `content-length-range`, and the size
+  // stat'ed at complete is checked against it again.
+  int64 max_bytes = 2;
+
+  // Allowed SNIFFED types, as IANA media types, spelled exactly as the core/storage MIME constants
+  // ("image/jpeg", "video/quicktime", "application/pdf" ...). Never file extensions. The platform
+  // refuses to save a value outside that allow-list, and a caller drops any value its own build of
+  // core/storage does not hold (see the RPC). Order carries no meaning.
+  repeated string allowed_mime_types = 3;
+
+  // Maximum number of live files of this purpose attached to ONE business record (the file's
+  // subject: one petition, one content item, one commune profile) — NOT per request: ADR 0052's
+  // upload is one presigned POST per file, so "per request" would always be one. The owning
+  // service counts its own `stored_file` rows for (subject, purpose) that are not deleted, failed
+  // or rejected, and refuses the upload that would exceed this.
+  //
+  // PRESENCE IS THE SIGNAL. Absent means Vihat deliberately set NO count limit for this purpose —
+  // an explicit choice in the operations zone (a NULL in the store), not a default: size and type
+  // limits still apply in full. When present it is always >= 1.
+  optional int32 max_files_per_subject = 4;
+
+  // When this policy last changed. For diagnostics and the operations screen; a caller never
+  // decides anything from it.
+  google.protobuf.Timestamp updated_at = 5;
 }
 
 // Empty on purpose: the commune is "x-tenant-id" in metadata, never a field (see the RPC).
