@@ -150,6 +150,23 @@ type GhiDanhMucMiniApp interface {
 	Them(ctx context.Context, yc domain.YeuCauThemDanhMuc, nguoi audit.Actor) (domain.DanhMucMiniApp, error)
 }
 
+// --- the map field schema (docs/ui-ux/14-cau-hinh.md §6) -----------------------------------------
+//
+// Read and write split the same way as the catalogue above: the read is a store call, each write
+// opens a TRANSACTION and puts its audit entry inside it (rule 6, invariant 3).
+
+// MapFieldSchemaReader is the READ half. assetTypeCode "" means every group.
+type MapFieldSchemaReader interface {
+	List(ctx context.Context, assetTypeCode string) ([]domain.MapFieldSchema, error)
+}
+
+// MapFieldSchemaWriter is the WRITE half.
+type MapFieldSchemaWriter interface {
+	Create(ctx context.Context, req app.CreateMapFieldRequest, actor audit.Actor) (domain.MapFieldSchema, error)
+	Update(ctx context.Context, id string, req app.UpdateMapFieldRequest, actor audit.Actor) (domain.MapFieldSchema, error)
+	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
+}
+
 type Deps struct {
 	// Checker WAS unused and deliberately outside the refusal switch, and the comment here said so:
 	// no mounted route declared authz.RequirePermission. The three catalogue WRITE routes below do,
@@ -171,6 +188,10 @@ type Deps struct {
 	GhiNoiDung        GhiNoiDungMiniApp
 	DanhMucNoiDung    DanhMucMiniAppDoc
 	GhiDanhMucNoiDung GhiDanhMucMiniApp
+
+	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
+	MapFieldSchemas      MapFieldSchemaReader
+	WriteMapFieldSchemas MapFieldSchemaWriter
 
 	Log *slog.Logger
 }
@@ -208,8 +229,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.GhiDanhMucNoiDung == nil {
 		panic("comms/http: thiếu use case ghi danh mục Mini App — POST /api/v1/content-categories sẽ panic khi có người gọi")
 	}
+	if d.MapFieldSchemas == nil {
+		panic("comms/http: thiếu kho trường bản đồ — GET /api/v1/map-field-schemas sẽ panic khi có người gọi")
+	}
+	if d.WriteMapFieldSchemas == nil {
+		panic("comms/http: thiếu use case ghi trường bản đồ — POST/PATCH/DELETE /api/v1/map-field-schemas sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
-		panic("comms/http: thiếu authz.Checker — mười một tuyến có khai quyền sẽ không kiểm được quyền")
+		panic("comms/http: thiếu authz.Checker — mười lăm tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -618,4 +645,93 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.ThemDanhMucNoiDung))))
+
+	// --- the map field schema (Cấu hình → Trường bản đồ) ----------------------------------------------
+	//
+	// `map-field-schemas` IS VENDOR-CHOSEN: ubiquitous-language.md §Tên tài nguyên trên URL has no row
+	// for it. It follows the entity `MapFieldSchema` (migration 0007) and the sibling
+	// `map-asset-types`.
+	//
+	// THE KEYS ARE THE ONES ../vigov-require GIVES THESE FOUR ROUTES (docs/spec/04-api.md:58-61):
+	// `asset.read` to read, `admin.lookup` to change. Both are seeded at
+	// service-identity/migrations/0001_init.sql (:281, :287); no key was invented (rule 5, 3c).
+	//
+	// `asset.read` AND NOT AnyAuthenticated, unlike GET /map-asset-types: a type's LABEL is shown on
+	// every map screen, while a form's field definitions are only needed by whoever reads or edits
+	// the map's records — exactly the holders of `asset.read`.
+	//
+	// NO idem.* DECLARATION ON THE GET: it changes no state.
+	//
+	// @summary  Các trường tuỳ biến của biểu mẫu tài nguyên bản đồ — của một nhóm hoặc mọi nhóm, kể cả trường đang tắt
+	// @screen   14-cau-hinh §6
+	// @reply    200 mapFieldSchemaListOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/map-field-schemas",
+		authz.RequirePermission(d.Checker, "asset.read")(
+			http.HandlerFunc(h.ListMapFieldSchemas)))
+
+	// idem.Required(MoKhiHong) — same reasoning as POST /map-asset-types: the real guard is
+	// UNIQUE (tenant_id, asset_type_code, field_code), which counts soft-deleted rows, so a cache
+	// outage cannot produce a duplicate field. The key only turns a double submit into a replayed 201.
+	//
+	// 409 `asset_type_missing` when the code is not a live row of THIS commune's type catalogue —
+	// which, while every catalogue ships empty (migration 0003), is every request.
+	//
+	// @summary  Thêm một trường tuỳ biến vào biểu mẫu của một nhóm tài nguyên bản đồ
+	// @screen   14-cau-hinh §6
+	// @request  createMapFieldSchemaIn
+	// @reply    201 mapFieldSchemaOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/map-field-schemas",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateMapFieldSchema))))
+
+	// PATCH edits label · options (relabel/append only) · is_required · sort_order · is_active
+	// (`Tắt` / re-enable). The field's type, key and group are immutable and a body naming any of them
+	// is refused with 400.
+	//
+	// idem.KhongCan: `options` is the whole list, not a delta, and app.MapFieldSchemas.Update writes
+	// and audits nothing when nothing moved — so a second identical request leaves one state and one
+	// entry.
+	//
+	// @summary  Sửa nhãn, lựa chọn (chỉ đổi nhãn hoặc thêm), bắt buộc, thứ tự hoặc bật/tắt một trường bản đồ
+	// @screen   14-cau-hinh §6
+	// @request  updateMapFieldSchemaIn
+	// @reply    200 mapFieldSchemaOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/map-field-schemas/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("options là cả danh sách chứ không phải phần thêm, và app.MapFieldSchemas.Update không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết")(
+				http.HandlerFunc(h.UpdateMapFieldSchema))))
+
+	// `Xoá` — a SOFT DELETE with a mandatory reason. The row leaves every read path, its key stays
+	// taken forever, and values already stored under it stay in the records (docs/ui-ux/14-cau-hinh.md
+	// :202). Different from `Tắt`, which is PATCH is_active=false and stays listed.
+	//
+	// @summary  Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại
+	// @screen   14-cau-hinh §6
+	// @request  deleteMapFieldSchemaIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/map-field-schemas/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xoá một trường đã xoá trả 404: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.DeleteMapFieldSchema))))
 }

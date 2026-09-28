@@ -1,0 +1,315 @@
+package http
+
+// The routes behind `Cấu hình → Trường bản đồ` (docs/ui-ux/14-cau-hinh.md §6):
+// GET · POST /api/v1/map-field-schemas, PATCH · DELETE /api/v1/map-field-schemas/{id}.
+//
+// `map-field-schemas` IS A VENDOR-CHOSEN NOUN. kb/00-foundation/ubiquitous-language.md §Tên tài
+// nguyên trên URL has no row for this concept; the noun follows the entity (`MapFieldSchema`,
+// migration 0007) and the sibling `map-asset-types`. Filling that row belongs to its owner.
+//
+// NO ASSET REGISTER EXISTS YET, so these fields describe values nobody can store. See
+// internal/app/map_field_schema.go for what that changes about each rule.
+//
+// THE COMMUNE IS NEVER HANDLED HERE. Every call below passes the request context, and the store
+// behind it reaches the database only through db.For(ctx) — tenant_id is $1 of every statement
+// (rule 1, invariants 4 and 5).
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-comms/internal/app"
+	"github.com/vihat/vigov/service-comms/internal/domain"
+	commsstore "github.com/vihat/vigov/service-comms/internal/store"
+)
+
+// fieldOptionOut / fieldOptionIn — one entry of a `chon` list.
+type fieldOptionOut struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type fieldOptionIn struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// mapFieldSchemaOut is one field as it leaves the API. Nothing here is personal data (rule 3): it
+// describes a form, not a person.
+type mapFieldSchemaOut struct {
+	ID            string `json:"id"`
+	AssetTypeCode string `json:"asset_type_code"` // `code` of a row of GET /api/v1/map-asset-types
+	// FieldCode is `Mã trường` ("legal_form"). NOT `field_key`, the name ../vigov-require uses:
+	// tools/apidoc refuses a response field whose name holds the word `key` unless it is declared a
+	// customer-approved credential, and this is no credential. `code` is also this repository's
+	// word for an issued `ma` (map-asset-types answers `code`).
+	FieldCode string `json:"field_code"`
+	Label     string `json:"label"`
+	// ValueType is one of van-ban · so-nguyen · so-thap-phan · dung-sai · ngay · chon (ADR 0011:
+	// values Vietnamese without diacritics). The screen labels them Văn bản · Số nguyên ·
+	// Số thập phân · Đúng/Sai · Ngày · Chọn trong danh sách.
+	ValueType  string           `json:"value_type"`
+	Options    []fieldOptionOut `json:"options"` // [] unless value_type is `chon`, never null
+	IsRequired bool             `json:"is_required"`
+	SortOrder  int              `json:"sort_order"`
+	// IsActive false is `Tắt`: still listed, can be re-enabled. A deleted field is not listed.
+	IsActive bool `json:"is_active"`
+}
+
+// mapFieldSchemaListOut wraps the list in an object; no cursor — the whole list or a refusal, like
+// map-asset-types.
+type mapFieldSchemaListOut struct {
+	Items []mapFieldSchemaOut `json:"items"`
+}
+
+func mapFieldSchemaToOut(m domain.MapFieldSchema) mapFieldSchemaOut {
+	opts := make([]fieldOptionOut, 0, len(m.Options))
+	for _, o := range m.Options {
+		opts = append(opts, fieldOptionOut{Value: o.Value, Label: o.Label})
+	}
+	return mapFieldSchemaOut{
+		ID: m.ID, AssetTypeCode: m.AssetTypeCode, FieldCode: m.FieldCode, Label: m.Label,
+		ValueType: m.ValueType, Options: opts, IsRequired: m.IsRequired,
+		SortOrder: m.SortOrder, IsActive: m.IsActive,
+	}
+}
+
+func optionsFromIn(in []fieldOptionIn) []domain.FieldOption {
+	out := make([]domain.FieldOption, 0, len(in))
+	for _, o := range in {
+		out = append(out, domain.FieldOption{Value: o.Value, Label: o.Label})
+	}
+	return out
+}
+
+// createMapFieldSchemaIn is the body of POST. `omitempty` on the optional fields so tools/apidoc
+// does not mark them required.
+type createMapFieldSchemaIn struct {
+	AssetTypeCode string          `json:"asset_type_code"`
+	FieldCode     string          `json:"field_code"`
+	Label         string          `json:"label"`
+	ValueType     string          `json:"value_type"`
+	Options       []fieldOptionIn `json:"options,omitempty"`
+	IsRequired    bool            `json:"is_required,omitempty"`
+	SortOrder     int             `json:"sort_order,omitempty"`
+}
+
+// updateMapFieldSchemaIn is the body of PATCH. Every editable field is a pointer: sort_order 0,
+// is_required false and is_active false are real values, and a dialog editing only the label must
+// not reset them.
+//
+// `options` IS THE WHOLE NEW LIST, not a delta: it must keep every value the row has (relabel and
+// append only). A full list makes the PATCH idempotent — sending it twice changes nothing.
+//
+// `asset_type_code`, `field_code` AND `value_type` ARE HERE ONLY TO BE REFUSED — all three are
+// immutable, and a client that sends them back is told so rather than left to assume it could.
+type updateMapFieldSchemaIn struct {
+	Label      *string          `json:"label,omitempty"`
+	Options    *[]fieldOptionIn `json:"options,omitempty"`
+	IsRequired *bool            `json:"is_required,omitempty"`
+	SortOrder  *int             `json:"sort_order,omitempty"`
+	IsActive   *bool            `json:"is_active,omitempty"`
+
+	AssetTypeCode *string `json:"asset_type_code,omitempty"`
+	FieldCode     *string `json:"field_code,omitempty"`
+	ValueType     *string `json:"value_type,omitempty"`
+}
+
+// deleteMapFieldSchemaIn — the reason is mandatory (rule 7, invariant 1) and travels in the body,
+// never the query string, where free text would land in every access log.
+type deleteMapFieldSchemaIn struct {
+	Reason string `json:"reason"`
+}
+
+// ListMapFieldSchemas — GET /api/v1/map-field-schemas[?asset_type_code=<code>]
+//
+// No audit entry: a configuration list read inside the commune it belongs to (rule 6, invariant 7
+// audits full personal data and cross-commune reads, neither of which this is).
+func (h *Handler) ListMapFieldSchemas(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var typeCode string
+	if raw := r.URL.Query().Get("asset_type_code"); raw != "" {
+		c, err := domain.ChuanHoaMa(raw)
+		if err != nil {
+			// Not echoed: the message names the parameter, not what was sent.
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+				"Tham số `asset_type_code` không đúng dạng mã nhóm tài nguyên.", "")
+			return
+		}
+		typeCode = c
+	}
+
+	// Scoped in the store: MapFieldSchemaStore.List reads through db.For(ctx).Query.
+	list, err := h.d.MapFieldSchemas.List(ctx, typeCode)
+	if err != nil {
+		if errors.Is(err, commsstore.ErrTooManyMapFieldSchemas) {
+			h.d.Log.Error("trường bản đồ vượt trần — TỪ CHỐI thay vì cắt bớt",
+				"xa", string(tenant.MustFrom(ctx)), "tran", commsstore.MapFieldSchemaCeiling)
+		} else {
+			h.d.Log.Error("trường bản đồ: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
+	out := mapFieldSchemaListOut{Items: make([]mapFieldSchemaOut, 0, len(list))}
+	for _, m := range list {
+		out.Items = append(out.Items, mapFieldSchemaToOut(m))
+	}
+	vietJSON(w, http.StatusOK, out)
+}
+
+// CreateMapFieldSchema — POST /api/v1/map-field-schemas
+func (h *Handler) CreateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
+	var in createMapFieldSchemaIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.missingPrincipal(w, r)
+		return
+	}
+	// Scoped in the use case: app.MapFieldSchemas opens db.For(ctx).Tx.
+	row, err := h.d.WriteMapFieldSchemas.Create(r.Context(), app.CreateMapFieldRequest{
+		AssetTypeCode: in.AssetTypeCode,
+		FieldCode:     in.FieldCode,
+		Label:         in.Label,
+		ValueType:     in.ValueType,
+		Options:       optionsFromIn(in.Options),
+		IsRequired:    in.IsRequired,
+		SortOrder:     in.SortOrder,
+	}, actor)
+	if err != nil {
+		h.writeMapFieldSchemaError(w, r, "thêm", err)
+		return
+	}
+	// The business address, not the body: the body would go into Redis, a cache, not a record store.
+	idem.RecordCode(r.Context(), row.Subject())
+	vietJSON(w, http.StatusCreated, mapFieldSchemaToOut(row))
+}
+
+// UpdateMapFieldSchema — PATCH /api/v1/map-field-schemas/{id}
+func (h *Handler) UpdateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
+	var in updateMapFieldSchemaIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	switch {
+	case in.AssetTypeCode != nil:
+		h.writeMapFieldSchemaError(w, r, "sửa", domain.ErrAssetTypeImmutable)
+		return
+	case in.FieldCode != nil:
+		h.writeMapFieldSchemaError(w, r, "sửa", domain.ErrFieldCodeImmutable)
+		return
+	case in.ValueType != nil:
+		h.writeMapFieldSchemaError(w, r, "sửa", domain.ErrValueTypeImmutable)
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.missingPrincipal(w, r)
+		return
+	}
+	req := app.UpdateMapFieldRequest{
+		Label: in.Label, IsRequired: in.IsRequired, SortOrder: in.SortOrder, IsActive: in.IsActive,
+	}
+	if in.Options != nil {
+		opts := optionsFromIn(*in.Options)
+		req.Options = &opts
+	}
+	// Scoped in the use case: app.MapFieldSchemas opens db.For(ctx).Tx.
+	row, err := h.d.WriteMapFieldSchemas.Update(r.Context(), r.PathValue("id"), req, actor)
+	if err != nil {
+		h.writeMapFieldSchemaError(w, r, "sửa", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, mapFieldSchemaToOut(row))
+}
+
+// DeleteMapFieldSchema — DELETE /api/v1/map-field-schemas/{id}. Soft delete; 204, no body.
+func (h *Handler) DeleteMapFieldSchema(w http.ResponseWriter, r *http.Request) {
+	var in deleteMapFieldSchemaIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.missingPrincipal(w, r)
+		return
+	}
+	// Scoped in the use case: app.MapFieldSchemas opens db.For(ctx).Tx.
+	if err := h.d.WriteMapFieldSchemas.Delete(r.Context(), r.PathValue("id"), in.Reason, actor); err != nil {
+		h.writeMapFieldSchemaError(w, r, "xoá", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// missingPrincipal — a write route reached with no principal carrying a business code. The route
+// sits behind RequirePermission, so this is a wiring fault or an identity older than `ma`; either
+// way rule 6 does not permit a write whose trail cannot name who made it.
+func (h *Handler) missingPrincipal(w http.ResponseWriter, r *http.Request) {
+	h.d.Log.Error("tuyến ghi trường bản đồ chạy mà không có chủ thể mang mã cán bộ",
+		"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
+	httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+}
+
+// writeMapFieldSchemaError maps a use-case failure onto a status. 409 for a rule about the data
+// (the caller holds the permission; this row or this state refuses), 400 for a rule about the
+// request, 404 for a row not in this commune, 500 for everything not listed — never a default 400.
+func (h *Handler) writeMapFieldSchemaError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	switch {
+	case errors.Is(err, commsstore.ErrMapFieldSchemaNotFound):
+		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy trường bản đồ này.", "")
+	case errors.Is(err, commsstore.ErrAssetTypeMissing):
+		httpx.WriteError(w, http.StatusConflict, "asset_type_missing",
+			"Nhóm tài nguyên đã chọn không có trong danh mục loại tài nguyên bản đồ của xã. "+
+				"Hãy thêm nhóm ở tab Danh mục trước.", "")
+	case errors.Is(err, commsstore.ErrFieldCodeTaken):
+		httpx.WriteError(w, http.StatusConflict, "field_code_taken",
+			"Nhóm này đã có một trường mang mã này. Hãy chọn mã khác.", "")
+	case errors.Is(err, commsstore.ErrFieldCodeRetired):
+		// Says WHY a key nowhere on the screen is taken — without it this reads as a bug.
+		httpx.WriteError(w, http.StatusConflict, "field_code_retired",
+			"Mã này đã dùng cho một trường đã xoá của nhóm. Mã đã cấp thì không cấp lại, vì dữ liệu "+
+				"cũ vẫn lưu theo mã đó. Hãy chọn mã khác.", "")
+	case errors.Is(err, commsstore.ErrMapFieldSchemaFull):
+		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
+			"Xã đã đạt số trường bản đồ tối đa. Hãy xoá bớt trường không dùng.", "")
+	case errors.Is(err, domain.ErrOptionRemoved):
+		httpx.WriteError(w, http.StatusConflict, "option_removed", err.Error(), "")
+	case isMapFieldSchemaInputError(err):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+	default:
+		// The wrapped error never reaches the client (rule 3, forbidden #3).
+		h.d.Log.Error("trường bản đồ: "+op+" lỗi hệ thống",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+	}
+}
+
+// isMapFieldSchemaInputError lists the request refusals explicitly — see laLoiDauVao for why a
+// default of 400 is wrong.
+func isMapFieldSchemaInputError(err error) bool {
+	for _, e := range []error{
+		domain.ErrMaTrong, domain.ErrMaSaiDinhDang, domain.ErrMaQuaDai,
+		domain.ErrFieldCodeEmpty, domain.ErrFieldCodeShape, domain.ErrFieldCodeTooLong,
+		domain.ErrFieldLabelEmpty, domain.ErrFieldLabelTooLong,
+		domain.ErrValueTypeUnknown, domain.ErrSortOrderRange,
+		domain.ErrOptionsRequired, domain.ErrOptionsNotAllowed, domain.ErrOptionsTooMany,
+		domain.ErrOptionValueEmpty, domain.ErrOptionValueTooLong,
+		domain.ErrOptionLabelEmpty, domain.ErrOptionLabelTooLong, domain.ErrOptionValueDup,
+		domain.ErrAssetTypeImmutable, domain.ErrFieldCodeImmutable, domain.ErrValueTypeImmutable,
+		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+	} {
+		if errors.Is(err, e) {
+			return true
+		}
+	}
+	return false
+}

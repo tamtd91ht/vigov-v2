@@ -170,7 +170,10 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		GhiNoiDung:        &ghiNoiDungGia{},
 		DanhMucNoiDung:    &soDanhMucNDGia{},
 		GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
-		Log:               im,
+		// And the map field schema — see map_field_schema_test.go.
+		MapFieldSchemas:      &fakeMapFieldSchemas{},
+		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
+		Log:                  im,
 	})
 
 	var h http.Handler = mux

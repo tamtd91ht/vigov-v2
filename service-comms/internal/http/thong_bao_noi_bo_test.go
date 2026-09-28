@@ -160,7 +160,10 @@ func dungMayChuThongBao(t *testing.T) *mayChuThongBao {
 		GhiNoiDung:        &ghiNoiDungGia{},
 		DanhMucNoiDung:    &soDanhMucNDGia{},
 		GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
-		Log:               im,
+		// And the map field schema — see map_field_schema_test.go.
+		MapFieldSchemas:      &fakeMapFieldSchemas{},
+		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
+		Log:                  im,
 	})
 
 	// The real edge chain in the real order. idem.Middleware sits INSIDE TenantMiddleware because

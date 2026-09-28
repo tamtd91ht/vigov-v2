@@ -164,7 +164,11 @@ func dungMayChu(t *testing.T) *mayChu {
 			GhiNoiDung:        &ghiNoiDungGia{},
 			DanhMucNoiDung:    &soDanhMucNDGia{},
 			GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
-			Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The map field schema: present because Register refuses a nil one; its four-case
+			// suite is map_field_schema_test.go.
+			MapFieldSchemas:      &fakeMapFieldSchemas{},
+			WriteMapFieldSchemas: &fakeMapFieldSchemas{},
+			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

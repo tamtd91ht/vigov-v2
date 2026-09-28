@@ -154,6 +154,10 @@ func main() {
 	noiDung := commsstore.NewNoiDungMiniAppStore(kho)
 	danhMucNoiDung := commsstore.NewDanhMucMiniAppStore(kho)
 
+	// The map field schema (migration 0007). One store behind the read route and the write use
+	// case; the use case owns the transaction its audit entry shares.
+	mapFieldSchemas := commsstore.NewMapFieldSchemaStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -168,8 +172,10 @@ func main() {
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.
-		GhiLoaiTaiNguyen: commsapp.NewDanhMucLoaiTaiNguyen(kho, loaiTaiNguyen),
-		Log:              log,
+		GhiLoaiTaiNguyen:     commsapp.NewDanhMucLoaiTaiNguyen(kho, loaiTaiNguyen),
+		MapFieldSchemas:      mapFieldSchemas,
+		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(kho, mapFieldSchemas),
+		Log:                  log,
 	})
 
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`

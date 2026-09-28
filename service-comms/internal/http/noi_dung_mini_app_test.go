@@ -194,7 +194,10 @@ func dungMayChuND(t *testing.T) *mayChuND {
 		GhiNoiDung:        ghi,
 		DanhMucNoiDung:    soDM,
 		GhiDanhMucNoiDung: ghiDM,
-		Log:               im,
+		// Present because Register refuses a nil one — see map_field_schema_test.go.
+		MapFieldSchemas:      &fakeMapFieldSchemas{},
+		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
+		Log:                  im,
 	})
 
 	// The real edge chain in the real order. idem.Middleware sits INSIDE TenantMiddleware because the
