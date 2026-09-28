@@ -170,6 +170,18 @@ export type documents_goVanBanVao = {
   "reason": string;
 };
 
+export type documents_incomingSummaryOut = {
+  /** RFC 3339, echoed */
+  "from": string;
+  /** RFC 3339, echoed — the period is [from, to) */
+  "to": string;
+  /** RFC 3339 */
+  "as_of": string;
+  "arrived": number;
+  "open": number;
+  "overdue": number;
+};
+
 export type documents_lichSuChuyenRa = {
   "id": string;
   "document_id": string;
@@ -201,6 +213,22 @@ export type documents_loaiVanBanRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type documents_overdueQueueItemOut = {
+  "kind": string;
+  "id": string;
+  "code": string;
+  "due_at": string;
+  "critical": boolean;
+  /** identity's `bo_phan.id` */
+  "holding_unit"?: string;
+};
+
+export type documents_overdueQueueOut = {
+  "items": Array<documents_overdueQueueItemOut>;
+  /** RFC 3339 — the instant "overdue" and "critical" were judged at */
+  "as_of": string;
 };
 
 export type documents_suaLoaiVanBanVao = {
@@ -1292,6 +1320,14 @@ export type petitions_chuyenCapTrenVao = {
   "note"?: string;
 };
 
+export type petitions_citizenReportSummaryOut = {
+  "received": number;
+  "in_progress": number;
+  "on_time_sample": number;
+  "on_time": number;
+  "late": number;
+};
+
 export type petitions_danhSachLoaiNhiemVuRa = {
   "items": Array<petitions_loaiNhiemVuRa>;
 };
@@ -1476,6 +1512,18 @@ export type petitions_nhiemVuVanBanRa = {
   "position": number;
 };
 
+export type petitions_overdueItemOut = {
+  "kind": string;
+  "code": string;
+  "category_code": string;
+  "missed_deadline": string;
+  "critical": boolean;
+};
+
+export type petitions_overdueQueueOut = {
+  "items": Array<petitions_overdueItemOut>;
+};
+
 export type petitions_phanCongVao = {
   "unit": string;
   "assignee"?: string;
@@ -1658,6 +1706,15 @@ export type petitions_taoNhiemVuVao = {
   "due_at"?: string | null;
   "parent"?: string;
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
+};
+
+export type petitions_taskSummaryOut = {
+  "in_progress": number;
+  "overdue": number;
+  "suspended": number;
+  "completed": number;
+  "on_time_sample": number;
+  "on_time": number;
 };
 
 export type petitions_themKetLuanVao = {
@@ -2088,6 +2145,26 @@ export type finance_delete_capital_plan_categories_by_id = {
   };
 };
 
+/** GET /api/v1/citizen-report-summary — Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to) */
+export type petitions_get_citizen_report_summary = {
+  duongDan: "/api/v1/citizen-report-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "from"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenReportSummaryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên) */
 export type petitions_get_citizen_reports = {
   duongDan: "/api/v1/citizen-reports";
@@ -2101,11 +2178,14 @@ export type petitions_get_citizen_reports = {
     "order"?: "asc" | "desc";
     "channel"?: string;
     "field"?: string;
+    "from"?: string;
     "hamlet"?: string;
     "late"?: string;
+    "metric"?: string;
     "q"?: string;
     "scope"?: string;
     "status"?: string;
+    "to"?: string;
     "unit"?: string;
   };
   than: never;
@@ -2719,6 +2799,46 @@ export type documents_delete_document_types_by_id = {
   };
 };
 
+/** GET /api/v1/incoming-document-overdue-queue — Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng */
+export type documents_get_incoming_document_overdue_queue = {
+  duongDan: "/api/v1/incoming-document-overdue-queue";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit": string;
+  };
+  than: never;
+  phanHoi: {
+    200: documents_overdueQueueOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/incoming-document-summary — Ba số của khối Văn bản trên Tổng quan: đến trong kỳ, chưa xử lý xong, quá hạn xử lý */
+export type documents_get_incoming_document_summary = {
+  duongDan: "/api/v1/incoming-document-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "from"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: documents_incomingSummaryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/incoming-documents — Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ */
 export type documents_get_incoming_documents = {
   duongDan: "/api/v1/incoming-documents";
@@ -2731,9 +2851,12 @@ export type documents_get_incoming_documents = {
     "sort"?: "number" | "created_at";
     "order"?: "asc" | "desc";
     "document_type"?: string;
+    "from"?: string;
     "holding_unit"?: string;
+    "metric"?: string;
     "q"?: string;
     "status"?: string;
+    "to"?: string;
     "year"?: string;
   };
   than: never;
@@ -3513,6 +3636,46 @@ export type documents_delete_outgoing_documents_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/overdue-citizen-reports — Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không */
+export type petitions_get_overdue_citizen_reports = {
+  duongDan: "/api/v1/overdue-citizen-reports";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_overdueQueueOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/overdue-tasks — Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không */
+export type petitions_get_overdue_tasks = {
+  duongDan: "/api/v1/overdue-tasks";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_overdueQueueOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -4437,6 +4600,26 @@ export type petitions_patch_task_statuses_by_code = {
   };
 };
 
+/** GET /api/v1/task-summary — Tổng quan nhiệm vụ của xã — số đang thực hiện · quá hạn · tạm dừng (hiện trạng) và hoàn thành · mẫu đúng hạn · đúng hạn trong kỳ [from, to) */
+export type petitions_get_task_summary = {
+  duongDan: "/api/v1/task-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "from"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskSummaryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-types — Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc */
 export type petitions_get_task_types = {
   duongDan: "/api/v1/task-types";
@@ -4527,13 +4710,16 @@ export type petitions_get_tasks = {
     "order"?: "asc" | "desc";
     "assignee"?: string;
     "bloc"?: string;
+    "from"?: string;
     "late"?: string;
+    "metric"?: string;
     "priority"?: string;
     "q"?: string;
     "scope"?: string;
     "soon"?: string;
     "source"?: string;
     "status"?: string;
+    "to"?: string;
     "type"?: string;
     "unit"?: string;
   };
