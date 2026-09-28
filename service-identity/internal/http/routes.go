@@ -284,6 +284,14 @@ type (
 		Luu(ctx context.Context, vaiTroID string, dsQuyen []string, nguoi app.NguoiThucHien) ([]string, error)
 	}
 
+	// RoleTemplateSeeding seeds the eight template roles of 14-cau-hinh.md §4.1, for
+	// POST /api/v1/roles/defaults (user decision 2026-09-28). A USE CASE, NOT A STORE: it opens the
+	// transaction every role, grant and audit entry share (rule 6, invariant 3), and carries the #14
+	// refusal (app.RoleTemplateSeeder).
+	RoleTemplateSeeding interface {
+		SeedDefaults(ctx context.Context, actor app.NguoiThucHien) (app.RoleTemplateResult, error)
+	}
+
 	// The three reference reads of migration 0005 (ADR 0024). THREE INTERFACES AND NOT ONE WIDE
 	// READER, although all three have the identical method signature and two of them are satisfied
 	// by stores built the same way.
@@ -450,6 +458,8 @@ type Deps struct {
 	MaTran    MaTranQuyenDoc
 	// GhiPhanQuyen — the column save behind the same matrix. A use case: see PhanQuyenGhi.
 	GhiPhanQuyen PhanQuyenGhi
+	// RoleTemplates — the template-role seed behind POST /api/v1/roles/defaults. See RoleTemplateSeeding.
+	RoleTemplates RoleTemplateSeeding
 	// The three reference reads of migration 0005. Three fields, three interfaces — see the note
 	// above them.
 	ThonToDanPho   ThonToDanPhoDanhSach
@@ -545,6 +555,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho ma trận phân quyền — GET /api/v1/role-permissions sẽ panic khi có người gọi")
 	case d.GhiPhanQuyen == nil:
 		panic("identity/http: thiếu use case lưu phân quyền — PUT /api/v1/roles/{id}/permissions sẽ panic khi có người gọi")
+	case d.RoleTemplates == nil:
+		panic("identity/http: thiếu use case gieo vai trò mẫu — POST /api/v1/roles/defaults sẽ panic khi có người gọi")
 	case d.ThonToDanPho == nil:
 		panic("identity/http: thiếu kho thôn/tổ dân phố — GET /api/v1/residential-units sẽ panic khi có người gọi")
 	case d.LoaiDonViDanCu == nil:
@@ -1446,6 +1458,39 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.role")(
 			idem.KhongCan("PUT mang tập quyền tuyệt đối: lưu đúng tập vai trò đang giữ thì use case không ghi gì và không để vết, nên lần gửi thứ hai cho cùng một kết quả")(
 				http.HandlerFunc(h.LuuPhanQuyenVaiTro))))
+
+	// Seeding the eight template roles of §4.1. POST /api/v1/roles/defaults
+	//
+	// USER DECISION 2026-09-28: there is no "create role" route; a commune gets its working roles by
+	// this one explicit act, on the precedent of POST /api/v1/sla/defaults. NEVER called
+	// automatically — not at the first `admin` sign-in.
+	//
+	// `roles/defaults` — the literal cannot shadow `roles/{id}/permissions` (different depth) and
+	// mirrors `sla/defaults`, so the two seed buttons of Cấu hình share one shape.
+	//
+	// RequirePermission("admin.role") — "Phân quyền", the key that already guards creating and
+	// changing grants on the same screen; no key invented (rule 5, invariant 3c). On top of it the
+	// use case refuses a caller who does not hold EVERY key the templates grant (#14):
+	//
+	//	403 permission_escalation   the caller lacks at least one template key — nothing written
+	//	409 role_exists             a concurrent run committed the same code first
+	//
+	// idem.KhongCan, AND THE PROTECTION IS THE STATE: the use case reads the commune's role codes
+	// inside the transaction and only ever INSERTS the ones absent; `UNIQUE (tenant_id, ma)` refuses a
+	// second row. A second request therefore creates nothing, grants nothing, audits nothing, and
+	// reports every template as already present.
+	//
+	// @summary  Gieo 8 vai trò mẫu (14-cau-hinh §4.1) cho xã — vai trò đã có hay đã xoá thì giữ nguyên, không bù quyền
+	// @screen   14-cau-hinh §4
+	// @reply    200 seedRoleTemplatesOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/roles/defaults",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			idem.KhongCan("bộ gieo chỉ CHÈN vai trò mẫu mà xã chưa có mã, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, ma) chặn dòng thứ hai — nên lần bấm thứ hai không tạo gì, không cấp thêm quyền nào và không để vết")(
+				http.HandlerFunc(h.SeedRoleTemplates))))
 
 	// --- the three reference reads of migration 0005 ---------------------------------------------
 	//

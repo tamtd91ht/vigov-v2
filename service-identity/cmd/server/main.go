@@ -260,6 +260,10 @@ func run(log *slog.Logger) error {
 	// case over its own store: it locks the holders of `admin.user` and `admin.role`, then the role,
 	// and writes the grant change and its audit entry in one transaction.
 	ghiPhanQuyen := app.NewPhanQuyenVaiTro(kho, idstore.NewPhanQuyenStore(kho))
+	// The template-role seed: POST /api/v1/roles/defaults (user decision 2026-09-28). Explicit, per
+	// commune, never called at sign-in; it takes the same two locks as the column save above, in the
+	// same order, so the two cannot deadlock against each other.
+	roleTemplates := app.NewRoleTemplateSeeder(kho, idstore.NewRoleTemplateStore(kho))
 	// The WRITE surface of the org chart: POST and PATCH /api/v1/org-units, under `admin.org` (user
 	// decision 2026-09-24). Given the SAME *idstore.BoPhanStore as the read field: the move's cycle
 	// check reads the rows it then writes, under locks, inside one transaction. No delete — see
@@ -325,6 +329,9 @@ func run(log *slog.Logger) error {
 		// internal/http/quyen.go và app/phan_quyen_vai_tro.go.
 		MaTran:       maTranQuyen,
 		GhiPhanQuyen: ghiPhanQuyen,
+		// Gieo 8 vai trò mẫu (§4.1) theo một thao tác tường minh của người quản trị — xem
+		// app/role_template.go.
+		RoleTemplates: roleTemplates,
 		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
 		// vụ) có thêm tuyến GHI dưới khoá `admin.lookup` — người dùng quyết 24/09/2026: danh mục đầy đủ.
 		// Danh sách thôn/tổ dân phố vẫn chỉ đọc.

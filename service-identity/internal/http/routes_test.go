@@ -675,6 +675,8 @@ type mayChu struct {
 	maTran    *maTranGia
 	// ghiPhanQuyen is the column save of the same matrix — a use case. See phanQuyenGhiGia.
 	ghiPhanQuyen *phanQuyenGhiGia
+	// roleTemplates is the template-role seed — see roleTemplatesFake in role_template_test.go.
+	roleTemplates *roleTemplatesFake
 	// The three reference reads of migration 0005.
 	thonToDanPho   *thonToDanPhoGia
 	loaiDonViDanCu *loaiDonViDanCuGia
@@ -733,6 +735,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	vaiTroMuc := vaiTroMucMau()
 	maTran := maTranMau()
 	ghiPhanQuyen := phanQuyenGhiMau()
+	roleTemplates := roleTemplatesSample()
 	thonToDanPho := thonToDanPhoMau()
 	loaiDonViDanCu := loaiDonViDanCuMau()
 	khoiNhiemVu := khoiNhiemVuMau()
@@ -760,6 +763,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		MaTran:    maTran,
 		// The column save. Register panics without it.
 		GhiPhanQuyen: ghiPhanQuyen,
+		// The template-role seed. Register panics without it.
+		RoleTemplates: roleTemplates,
 		// Three fields, three fakes — Register panics if any of them is missing, which is how an
 		// unwired route is caught at construction rather than by the first person to call it.
 		ThonToDanPho:   thonToDanPho,
@@ -831,7 +836,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		vaiTroMuc: vaiTroMuc,
 		maTran:    maTran,
 
-		ghiPhanQuyen: ghiPhanQuyen,
+		ghiPhanQuyen:  ghiPhanQuyen,
+		roleTemplates: roleTemplates,
 
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,
