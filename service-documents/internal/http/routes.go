@@ -29,6 +29,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -136,6 +137,17 @@ type GhiVanBanDi interface {
 	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
+// IncomingSummaryReader counts the dashboard figures of the incoming register.
+// *docstore.VanBanDenStore satisfies it.
+type IncomingSummaryReader interface {
+	CountIncomingSummary(ctx context.Context, window domain.ArrivalWindow, now time.Time) (domain.IncomingSummary, error)
+}
+
+// OverdueQueueReader is the "CẦN XỬ LÝ NGAY" queue. *app.IncomingDashboard satisfies it.
+type OverdueQueueReader interface {
+	OverdueQueue(ctx context.Context, now time.Time, limit int) ([]app.OverdueQueueItem, error)
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	// Checker guards the routes declared with authz.RequirePermission. THREE ROUTES NOW USE ONE,
@@ -153,6 +165,15 @@ type Deps struct {
 	ChiTietVanBanDen ChiTietVanBanDen
 	VanBanDi         VanBanDiDanhSach
 	GhiVanBanDi      GhiVanBanDi
+
+	// The leadership dashboard's incoming-register block (/tong-quan §4.2, §5). Both refused at
+	// construction when missing.
+	IncomingSummary IncomingSummaryReader
+	OverdueQueue    OverdueQueueReader
+
+	// Clock is the instant `overdue` is judged at, for the summary, the queue and the drill-down.
+	// A TEST SEAM: nil in production means the real clock, UTC.
+	Clock func() time.Time
 
 	Log *slog.Logger
 }
@@ -180,6 +201,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("documents/http: thiếu kho sổ văn bản đi — GET /api/v1/outgoing-documents sẽ panic khi có người gọi")
 	case d.GhiVanBanDi == nil:
 		panic("documents/http: thiếu use case ghi sổ văn bản đi — các tuyến cấp số / sửa / gỡ sẽ panic")
+	case d.IncomingSummary == nil:
+		panic("documents/http: thiếu kho đếm tổng quan văn bản đến — GET /api/v1/incoming-document-summary sẽ panic khi có người gọi")
+	case d.OverdueQueue == nil:
+		panic("documents/http: thiếu use case hàng đợi quá hạn — GET /api/v1/incoming-document-overdue-queue sẽ panic khi có người gọi")
 	case d.Checker == nil:
 		panic("documents/http: thiếu authz.Checker — mọi tuyến ghi sẽ không kiểm được quyền")
 	}
@@ -515,6 +540,55 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/incoming-documents/{id}/routings",
 		authz.RequirePermission(d.Checker, "document.read")(
 			http.HandlerFunc(h.LichSuChuyenVanBanDen)))
+
+	// --- TỔNG QUAN ĐIỀU HÀNH — the incoming register's block ------------------------------------------
+	//
+	// TWO KEYS, BOTH REQUIRED, NESTED: `report.read` because this is the dashboard (the key the
+	// reporting service is built around), AND `document.read` because the figures and the queue are
+	// read out of the commune's correspondence. Holding one is 403. Both keys are seeded at
+	// service-identity/migrations/0001_init.sql — no key was invented (rule 5, invariant 3c).
+	//
+	// ⚠ tools/apidoc RECORDS ONE KEY PER ROUTE and keeps the LAST RequirePermission it visits, so
+	// kb/20-contracts/openapi.json will list `document.read` alone for these two routes. The runtime
+	// check is both keys; the contract under-states it. Reported rather than worked around.
+	//
+	// SINGULAR NOUNS, ON PURPOSE: each is ONE resource per commune — the summary and the queue — not a
+	// collection with ids. The drill-down lists behind the figures are the ordinary collection,
+	// GET /api/v1/incoming-documents?metric=…, so the rows are the register's own shape.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Ba số của khối Văn bản trên Tổng quan: đến trong kỳ, chưa xử lý xong, quá hạn xử lý
+	// @screen   01-tong-quan-dieu-hanh §4.2
+	// @reply    200 incomingSummaryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/incoming-document-summary",
+		authz.RequirePermission(d.Checker, "report.read")(
+			authz.RequirePermission(d.Checker, "document.read")(
+				http.HandlerFunc(h.IncomingDocumentSummary))))
+
+	// THE "CẦN XỬ LÝ NGAY" ROWS of the incoming register: at most 10 overdue documents, the longest
+	// missed deadline first, each marked `critical` once 48 WORKING hours have passed since it was missed.
+	// Keys as above.
+	//
+	// 503 when identity cannot count the working hours: every `critical` flag depends on it, and a
+	// queue answered without it would say nothing is urgent.
+	//
+	// @summary  Văn bản đến quá hạn cần xử lý ngay (tối đa 10), trễ lâu nhất trước, kèm cờ nghiêm trọng
+	// @screen   01-tong-quan-dieu-hanh §5
+	// @reply    200 overdueQueueOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/incoming-document-overdue-queue",
+		authz.RequirePermission(d.Checker, "report.read")(
+			authz.RequirePermission(d.Checker, "document.read")(
+				http.HandlerFunc(h.IncomingDocumentOverdueQueue))))
 
 	// --- SỔ VĂN BẢN ĐI --------------------------------------------------------------------------
 	//

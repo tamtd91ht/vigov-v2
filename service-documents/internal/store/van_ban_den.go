@@ -84,6 +84,11 @@ type LocVanBanDen struct {
 	LoaiVanBan string // "" = every type
 	BoPhan     string // "" = every department, including none
 	Tim        string // "" = no text search
+
+	// Metric narrows the list to exactly one dashboard figure's rows (zero Metric = no such filter).
+	// It is built by metricPredicate — the SAME function CountIncomingSummary counts with — so the
+	// drill-down behind a figure has as many rows as the figure says.
+	Metric IncomingMetricFilter
 }
 
 // cotVanBanDen IS READ BY POSITION in the scans below, and the list has one group that swaps with
@@ -141,7 +146,10 @@ func docMotDongVanBanDen(quet func(...any) error) (domain.VanBanDen, error) {
 func (s *VanBanDenStore) DanhSach(ctx context.Context, loc LocVanBanDen,
 	yc page.Request) (page.Result[domain.VanBanDen], error) {
 
-	dieuKien, args := locThanhSQL(loc)
+	dieuKien, args, err := locThanhSQL(loc)
+	if err != nil {
+		return page.NewResult[domain.VanBanDen](), err
+	}
 
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotVanBanDen,
@@ -164,7 +172,7 @@ func (s *VanBanDenStore) DanhSach(ctx context.Context, loc LocVanBanDen,
 // ONE FUNCTION BUILDING BOTH HALVES, because the placeholder numbers and the argument order are one
 // fact: written apart, a filter added to one half and forgotten in the other produces a query that
 // silently reads the wrong column's value.
-func locThanhSQL(loc LocVanBanDen) (string, []any) {
+func locThanhSQL(loc LocVanBanDen) (string, []any, error) {
 	var (
 		dieuKien string
 		args     []any
@@ -194,7 +202,16 @@ func locThanhSQL(loc LocVanBanDen) (string, []any) {
 		dieuKien += fmt.Sprintf(" AND (trich_yeu ILIKE $%d OR COALESCE(so_ky_hieu,'') ILIKE $%d)",
 			len(args)+1, len(args)+1)
 	}
-	return dieuKien, args
+	if loc.Metric.Metric != "" {
+		// The same binder numbering as `them` above ($1 is the commune), and the same predicate the
+		// figure is counted with.
+		pred, err := metricPredicate(loc.Metric, newBinder(&args))
+		if err != nil {
+			return "", nil, err
+		}
+		dieuKien += " AND (" + pred + ")"
+	}
+	return dieuKien, args, nil
 }
 
 // mocVanBanDen BINDS each allowlisted sort column to the way that column's cursor value is read out

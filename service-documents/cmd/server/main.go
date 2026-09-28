@@ -198,7 +198,11 @@ func run(log *slog.Logger) error {
 		ChiTietVanBanDen: ghiVanBanDen,
 		VanBanDi:         vanBanDi,
 		GhiVanBanDi:      ghiVanBanDi,
-		Log:              log,
+		// /tong-quan. The queue takes the SAME identity client the register books deadlines with:
+		// `critical` is 48 working hours of this commune's calendar, counted by identity (ADR 0007).
+		IncomingSummary: vanBanDen,
+		OverdueQueue:    app.NewIncomingDashboard(vanBanDen, dinhDanh),
+		Log:             log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

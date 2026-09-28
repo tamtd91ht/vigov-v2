@@ -409,7 +409,7 @@ func (h *Handler) DanhSachVanBanDen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc, err := locVanBanDenTuQuery(thamSo)
+	loc, err := locVanBanDenTuQuery(thamSo, h.now())
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return
@@ -524,8 +524,17 @@ func (h *Handler) LichSuChuyenVanBanDen(w http.ResponseWriter, r *http.Request) 
 // AN UNKNOWN `status` IS REFUSED RATHER THAN IGNORED. A filter silently dropped returns the WHOLE
 // register to a screen that asked for one slice of it, and the screen has no way to know — which on
 // this surface means a clerk believing they are looking at every document of one kind.
-func locVanBanDenTuQuery(q url.Values) (docstore.LocVanBanDen, error) {
+//
+// `metric` (+ `from`/`to` for `arrived`) IS THE DASHBOARD DRILL-DOWN: it narrows the list to exactly
+// the rows one figure of GET /api/v1/incoming-document-summary counted — see metricFromQuery. `now` is
+// the instant `overdue` is judged at; it is ignored by every other filter.
+func locVanBanDenTuQuery(q url.Values, now time.Time) (docstore.LocVanBanDen, error) {
 	var loc docstore.LocVanBanDen
+	m, err := metricFromQuery(q, now)
+	if err != nil {
+		return loc, err
+	}
+	loc.Metric = m
 	if s := q.Get("year"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 2000 || n > 2200 {

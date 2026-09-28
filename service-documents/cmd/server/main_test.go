@@ -137,6 +137,8 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		ChiTietVanBanDen: app.NewVanBanDen(nil, nil, nil, nil),
 		VanBanDi:         docstore.NewVanBanDiStore(nil),
 		GhiVanBanDi:      app.NewVanBanDi(nil, nil, nil),
+		IncomingSummary:  docstore.NewVanBanDenStore(nil),
+		OverdueQueue:     app.NewIncomingDashboard(docstore.NewVanBanDenStore(nil), nil),
 
 		Log: log,
 	})

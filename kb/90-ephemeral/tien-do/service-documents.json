@@ -114,6 +114,15 @@
       "bang_chung": "service-documents/cmd/server/main.go:215: Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
       "no_confirm": [],
       "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
+    },
+    {
+      "id": "tong-quan-van-ban-den",
+      "viec": "Khối Văn bản trên /tong-quan: GET /api/v1/incoming-document-summary (đến trong kỳ · chưa xử lý xong · quá hạn), GET /api/v1/incoming-document-overdue-queue (tối đa 10, cờ critical = 48 giờ làm việc qua identity), bộ lọc `metric` (+ from/to) trên GET /api/v1/incoming-documents dùng CHUNG vị từ với con số",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Vị từ một chỗ: service-documents/internal/store/incoming_dashboard.go metricPredicate — CountIncomingSummary, locThanhSQL (drill-down) và OverdueIncoming cùng gọi. `open` lấy danh sách trạng thái kết thúc từ domain.FinishedIncomingStatuses (suy từ DaKetThuc); `overdue` = open AND han_xu_ly_xong < now (đúng QuaHan). Kỳ [from,to) đổi sang ngày theo Asia/Ho_Chi_Minh ở domain/incoming_dashboard.go ArrivalWindowFor (tzdata nhúng). Hai tuyến mới lồng hai RequirePermission report.read + document.read (routes.go). `go build` + `go vet` + `go test -count=1 -p 1 ./...` trong service-documents XANH, gofmt -l rỗng, tools/check_quyen.py PASS — kiểm 2026-09-28. ⚠ TestPgEachDrillDownHasAsManyRowsAsItsFigure (số dòng drill-down = con số, trên PostgreSQL thật) BỎ QUA vì VIGOV_TEST_DSN chưa đặt — phần SQL CHƯA được chứng minh chạy đúng.",
+      "no_confirm": [],
+      "tiep_theo": "Phiên chính: chạy make check sau khi builder service-petitions xong; chạy go test ./internal/store với VIGOV_TEST_DSN để TestPgEachDrillDownHasAsManyRowsAsItsFigure thật sự chạy, rồi mới đổi sang `xong`. tools/apidoc chỉ ghi MỘT khoá quyền cho hai tuyến mới (khoá RequirePermission cuối cùng) — hợp đồng openapi.json ghi thiếu report.read. Ngưỡng 48 giờ làm việc và mốc `ngay_den` (đặc tả §4.2 ghi 'vào sổ trong kỳ') cần khách xác nhận.",
+      "menu": "tong-quan-dieu-hanh"
     }
   ]
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -244,6 +245,10 @@ type mayChu struct {
 	di      *vanBanDiGia
 	ghiDi   *ghiVanBanDiGia
 
+	// The dashboard block — see incoming_dashboard_test.go.
+	summary *fakeSummaryReader
+	queue   *fakeQueueReader
+
 	// khoIdem is nil BY DEFAULT, and that is deliberate: a nil store is a valid deployment (local
 	// development with no Redis) and it is what makes the CheDoHong each route DECLARED the thing
 	// under test rather than Redis behaviour. The two routes that ISSUE A NUMBER declare
@@ -277,6 +282,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		ID: "vbdi-moi", SoDi: 12, Nam: 2026, LoaiVanBan: "cong-van",
 		TrichYeu: "Trả lời đơn của công dân", NoiNhan: "UBND huyện",
 	}}
+	summary := sampleSummaryReader()
+	queue := sampleQueueReader()
 
 	m := &mayChu{
 		thuMuc:  thuMucMau(),
@@ -297,8 +304,13 @@ func dungMayChu(t *testing.T) *mayChu {
 			ChiTietVanBanDen: chiTiet,
 			VanBanDi:         di,
 			GhiVanBanDi:      ghiDi,
+			IncomingSummary:  summary,
+			OverdueQueue:     queue,
+			Clock:            func() time.Time { return testNow },
 			Log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
+		summary: summary,
+		queue:   queue,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -419,6 +431,8 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 		"thiếu kho sổ văn bản đi":                 func(d *Deps) { d.VanBanDi = nil },
 		"thiếu use case ghi văn bản đi":           func(d *Deps) { d.GhiVanBanDi = nil },
 		"thiếu Checker":                           func(d *Deps) { d.Checker = nil },
+		"missing incoming summary reader":         func(d *Deps) { d.IncomingSummary = nil },
+		"missing overdue queue":                   func(d *Deps) { d.OverdueQueue = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			d := Deps{
@@ -430,6 +444,8 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 				ChiTietVanBanDen: chiTietVanBanDenMau(),
 				VanBanDi:         vanBanDiMau(),
 				GhiVanBanDi:      &ghiVanBanDiGia{},
+				IncomingSummary:  sampleSummaryReader(),
+				OverdueQueue:     sampleQueueReader(),
 			}
 			bo(&d)
 			defer func() {
