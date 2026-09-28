@@ -56,8 +56,12 @@ export type TaskMetric = DrillDownMetric<"tasks">;
 export type CitizenReportMetric = DrillDownMetric<"citizen-reports">;
 export type IncomingDocumentMetric = DrillDownMetric<"incoming-documents">;
 
-/** Câu hiện khi đường dẫn mang tham số lọc mà không dùng được. */
-export const INVALID_DRILL_DOWN_LINE = "Đường dẫn lọc không hợp lệ — đang hiện toàn bộ danh sách.";
+/**
+ * Câu hiện khi đường dẫn mang tham số lọc mà không dùng được. KHÔNG nói "toàn bộ danh sách": sổ văn bản
+ * đến vẫn lọc theo năm hiện tại khi mở bình thường, nên câu ấy sai ở đó (rà cách ly 28/09/2026).
+ */
+export const INVALID_DRILL_DOWN_LINE =
+  "Đường dẫn lọc không hợp lệ — đang hiện danh sách như khi mở màn bình thường.";
 
 /** Chữ thay cho kỳ ở số liệu tồn: nó đếm quyển sổ như đang đứng, không trong khoảng nào. */
 export const STOCK_PERIOD_LABEL = "tính đến hiện tại";

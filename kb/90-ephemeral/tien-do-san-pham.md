@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 085c023
+derived_from_commit: 1d54414
 expires: 2026-12-27
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -29,7 +29,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | Chương | Tuyến | Đã gọi | Màn web |
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
-| **01** Tổng quan điều hành | 6 | 0/6 | ✗ |
+| **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
 | **02** Quản lý nhiệm vụ | 11 | 11/11 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
@@ -55,7 +55,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
-| 1 | Tổng quan | — | — | ✗ | |
+| 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | **không khai** |
 | 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 16 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
@@ -70,9 +70,9 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 8 |
 
-**10/14** mục menu có màn thật. **71** phần chưa dựng đang hiện trên các màn ấy.
+**11/14** mục menu có màn thật. **71** phần chưa dựng đang hiện trên các màn ấy.
 
-⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
+⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
 đặc tả đã dựng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**, nên con số 0 ở đó sẽ là
 một lời trấn an không có gì đứng sau.

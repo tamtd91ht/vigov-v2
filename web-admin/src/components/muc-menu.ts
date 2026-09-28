@@ -11,6 +11,7 @@ import {
   QUYEN_XEM_NOI_DUNG,
   QUYEN_XEM_PHAN_ANH,
   QUYEN_XEM_VAN_BAN,
+  REPORT_READ_PERMISSION,
 } from "@/lib/quyen";
 
 /**
@@ -89,7 +90,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
   {
     ten: "ĐIỀU HÀNH",
     muc: [
-      { nhan: "Tổng quan", duong: null, khoa: null },
+      { nhan: "Tổng quan", duong: "/tong-quan", khoa: REPORT_READ_PERMISSION },
       { nhan: "Nhiệm vụ", duong: "/nhiem-vu", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
       { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },

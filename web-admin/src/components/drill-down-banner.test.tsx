@@ -59,7 +59,7 @@ describe("DrillDownBanner", () => {
     );
     expect(html).toContain(INVALID_DRILL_DOWN_LINE);
     expect(INVALID_DRILL_DOWN_LINE).toBe(
-      "Đường dẫn lọc không hợp lệ — đang hiện toàn bộ danh sách.",
+      "Đường dẫn lọc không hợp lệ — đang hiện danh sách như khi mở màn bình thường.",
     );
     expect(html).not.toContain("Đang xem");
   });

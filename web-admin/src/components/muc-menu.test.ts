@@ -17,6 +17,7 @@ const DU_QUYEN = [
   "task.read",
   "announcement.create",
   "content.read",
+  "report.read",
 ] as const;
 
 function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
@@ -28,7 +29,7 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
   });
 
-  it("KHÔNG quyền nào: mười mục có màn biến mất, bốn mục chưa có màn Ở LẠI", () => {
+  it("KHÔNG quyền nào: mười một mục có màn biến mất, ba mục chưa có màn Ở LẠI", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -45,12 +46,14 @@ describe("locMenu", () => {
       "Biên bản họp",
       "Thông báo",
       "Nội dung Mini App",
+      "Tổng quan",
     ]) {
       expect(ten).not.toContain(n);
     }
-    // Bốn mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
-    // quyền sẽ buộc phải ĐOÁN một khoá cho một màn chưa tồn tại.
-    expect(ten).toHaveLength(4);
+    // Ba mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
+    // quyền sẽ buộc phải ĐOÁN một khoá cho một màn chưa tồn tại. `Tổng quan` rời nhóm này ngày
+    // 28/09/2026, khi màn `/tong-quan` ra đời.
+    expect(ten).toHaveLength(3);
     expect(ten).toContain("Sổ tay lãnh đạo");
     expect(ten).toContain("Báo cáo");
   });
@@ -67,7 +70,7 @@ describe("locMenu", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.audit", "admin.user.delete"]));
     expect(ten).not.toContain("Cấu hình");
     expect(ten).not.toContain("Danh bạ cán bộ");
-    expect(ten).toHaveLength(4);
+    expect(ten).toHaveLength(3);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -75,7 +78,7 @@ describe("locMenu", () => {
     // này. Máy chủ trả sổ cho người ấy, nên menu không được giấu lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.read"]));
     expect(ten).toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(5);
+    expect(ten).toHaveLength(4);
   });
 
   it("chỉ có `document.route` (KHÔNG có `document.read`): KHÔNG thấy mục Văn bản & Đơn thư", () => {
@@ -83,7 +86,22 @@ describe("locMenu", () => {
     // lượt đọc, nên một mục menu dẫn tới đó là hứa một chức năng không dùng được.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.route", "document.create"]));
     expect(ten).not.toContain("Văn bản & Đơn thư");
+    expect(ten).toHaveLength(3);
+  });
+
+  it("chỉ có `report.read`: THẤY mục Tổng quan, và không mục nào khác", () => {
+    const ten = tenMuc(locMenu(NHOM_MENU, ["report.read"]));
+    expect(ten).toContain("Tổng quan");
     expect(ten).toHaveLength(4);
+  });
+
+  it("có mọi khoá mô-đun nhưng THIẾU `report.read`: KHÔNG thấy mục Tổng quan — ca bị từ chối", () => {
+    // Mỗi tuyến số liệu của Tổng quan đòi `report.read` CÙNG khoá đọc của mô-đun. Thiếu khoá thứ
+    // nhất thì mọi khối trên trang đều 403, nên một mục menu dẫn tới đó là hứa một trang rỗng.
+    const ten = tenMuc(
+      locMenu(NHOM_MENU, ["task.read", "document.read", "feedback.read", "budget.read"]),
+    );
+    expect(ten).not.toContain("Tổng quan");
   });
 
   it("nhóm rỗng thì biến mất, không để lại một nhãn nhóm trống", () => {
@@ -98,8 +116,8 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     // thời hạn — việc mà thiếu nó xã không nhận được phản ánh nào — không tìm thấy lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.sla"]));
     expect(ten).toContain("Cấu hình");
-    // Và KHÔNG mở thêm mục nào khác: bốn mục chưa có màn + đúng một mục này.
-    expect(ten).toHaveLength(5);
+    // Và KHÔNG mở thêm mục nào khác: ba mục chưa có màn + đúng một mục này.
+    expect(ten).toHaveLength(4);
   });
 
   it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla"])(

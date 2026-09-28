@@ -363,6 +363,22 @@ export const QUYEN_CONG_KHAI_DANH_BA = "content.update";
 export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
 
 /**
+ * `report.read` — "Xem báo cáo" (`service-identity/migrations/0001_init.sql:305`). The gate of the
+ * leadership overview `/tong-quan`, its menu item, and HALF of every block's gate on that page.
+ *
+ * HALF, NOT ALL: each figure route checks `report.read` AND the read key of the module it counts —
+ * `task.read`, `document.read`, `feedback.read` (the `routes.go` of `service-petitions` and
+ * `service-documents`), while `x-vigov-permission` in openapi shows only one of the two. A block is
+ * therefore shown only when BOTH keys are held (`features/dashboard/figures.ts` `canSeeBlock`):
+ * `report.read` alone must not surface task figures to an account that cannot read one task.
+ *
+ * English name (rule 12): the older constants above are Vietnamese and stay so.
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — the server checks both keys on every call (rule 5, #1).
+ */
+export const REPORT_READ_PERMISSION = "report.read";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ
