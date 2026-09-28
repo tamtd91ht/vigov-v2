@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: f4faaad
+derived_from_commit: eac633e
 expires: 2026-12-28
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,22 +30,22 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
-| **02** Quản lý nhiệm vụ | 17 | 14/17 | ✓ |
+| **02** Quản lý nhiệm vụ | 20 | 20/20 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
 | **07** Thu – Chi ngân sách xã | 12 | 12/12 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 15 | 10/11 +4 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 15 | 11/11 +4 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 8 | 6/6 +2 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 6 | 5/5 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
-| **14** Cấu hình hệ thống | 71 | 59/71 | ✓ |
+| **14** Cấu hình hệ thống | 82 | 82/82 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **180 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **194 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -56,21 +56,21 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
 | 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | **không khai** |
-| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 3 |
+| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 0 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 6 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 2 |
 | 8 | Thông báo | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 12 |
-| 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 8 |
+| 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 9 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
 | 11 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 11 |
 | 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 3 |
 | 13 | Báo cáo | — | — | ✗ | |
-| 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 8 |
+| 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 3 |
 
-**11/14** mục menu có màn thật. **57** phần chưa dựng đang hiện trên các màn ấy.
+**11/14** mục menu có màn thật. **50** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -96,7 +96,7 @@ một lời trấn an không có gì đứng sau.
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/rating` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -107,18 +107,18 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 2 | 9 | 6 |
-| `citizen-app` | 18 | 9 | 3 | 0 |
-| `core` | 15 | 1 | 1 | 1 |
+| `citizen-app` | 19 | 9 | 3 | 0 |
+| `core` | 18 | 1 | 1 | 1 |
 | `deploy` | 14 | 3 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
-| `proto` | 12 | 0 | 0 | 0 |
-| `service-comms` | 10 | 3 | 2 | 4 |
-| `service-documents` | 7 | 3 | 4 | 0 |
-| `service-finance` | 15 | 3 | 0 | 0 |
-| `service-identity` | 24 | 9 | 0 | 1 |
-| `service-petitions` | 25 | 11 | 5 | 0 |
+| `proto` | 13 | 0 | 0 | 0 |
+| `service-comms` | 13 | 3 | 2 | 4 |
+| `service-documents` | 9 | 3 | 4 | 0 |
+| `service-finance` | 17 | 3 | 0 | 0 |
+| `service-identity` | 28 | 9 | 0 | 1 |
+| `service-petitions` | 29 | 12 | 5 | 0 |
 | `service-platform` | 6 | 3 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |
-| `web-admin` | 10 | 15 | 3 | 1 |
+| `web-admin` | 12 | 15 | 3 | 1 |
 

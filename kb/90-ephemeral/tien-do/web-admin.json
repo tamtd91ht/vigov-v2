@@ -260,6 +260,15 @@
       "no_confirm": [],
       "tiep_theo": "PHAN_CHUA_DUNG còn 3 mục: Tự động hoá (chưa có bộ lập lịch/việc nền — người dùng chọn hoãn), 32 câu report.* (ADR 0024 chưa chốt chủ), nhập Excel §2 Thôn/§3 Người dùng/§5 Danh mục. CHƯA KIỂM: mở trên trình duyệt thật, bề rộng 320px; câu chữ mới chưa rà ngôn ngữ hành chính. Nhật ký chỉ hiện mã cán bộ, chưa tra tên qua staff-directory (§6). Nhà cung cấp chọn: cảnh báo feedback.classify/unmask bỏ qua vai trò quan-tri-he-thong; gen-api-types nhận {} trần thành JsonValue.",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "phan-anh-vi-tri-hien-truong",
+      "viec": "Phản ánh (09): dòng Vị trí hiện trường — địa chỉ + toạ độ dân gửi kèm, dạng chữ",
+      "trang_thai": "xong",
+      "bang_chung": "b3e6a98 · typecheck, lint sạch; vitest phan-anh 5 tệp/214 ca; check:api khớp — trên worktree sạch.",
+      "tiep_theo": "KHÔNG có bản đồ nhỏ/bản đồ nhiệt: gửi toạ độ dân ra một nguồn tile bên ngoài là luật 3 điểm dừng #2 + CSP luật 13 — CHỦ DỰ ÁN CHƯA CHỌN nhà cung cấp bản đồ. Ghi ở PHAN_CHUA_DUNG (9 mục). Thiếu tên thôn cạnh địa chỉ (hợp đồng không trả).",
+      "menu": "phan-anh-nguoi-dan",
+      "no_confirm": []
     }
   ]
 }
