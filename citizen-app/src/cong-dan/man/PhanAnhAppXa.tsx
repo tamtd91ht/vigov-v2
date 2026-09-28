@@ -201,10 +201,11 @@ const NHAN_SAO = ["Rất không hài lòng", "Không hài lòng", "Bình thườ
  * xét tuỳ ý. Chỉ đọc khi đã chấm.
  */
 export function KhoiDanhGia(props: { phieu: PhieuTN; onGui?: (sao: number, nhan_xet: string) => void }) {
-  const da = props.phieu.danh_gia;
+  // Có `onGui` là đang chấm (lần đầu, hoặc chấm lại sau khi mở lại) — ô trống, không điền sẵn lần cũ.
+  const chi_doc = props.onGui === undefined;
+  const da = chi_doc ? props.phieu.danh_gia : null;
   const [sao, datSao] = useState(da?.sao ?? 0);
   const [nhan_xet, datNhanXet] = useState(da?.nhan_xet ?? "");
-  const chi_doc = da !== null || props.onGui === undefined;
   return (
     <section className="xa-the xa-the--dem xa-khoi">
       <h2 className="xa-dau-khoi__tieu-de">{chi_doc ? XA_PA.da_danh_gia : XA_PA.danh_gia_tieu_de}</h2>
@@ -234,7 +235,6 @@ export function KhoiDanhGia(props: { phieu: PhieuTN; onGui?: (sao: number, nhan_
           <button type="button" className="xa-nut" disabled={sao === 0} onClick={() => props.onGui?.(sao, nhan_xet)}>
             {XA_PA.gui_danh_gia}
           </button>
-          <p className="xa-phu">{XA_PA.mo_lai_neu_thap}</p>
         </>
       )}
     </section>
@@ -267,12 +267,12 @@ export function ThanPhieuTN({ phieu, onDanhGia }: { phieu: PhieuTN; onDanhGia?: 
           </Dong>
         )}
         {phieu.trang_thai === "khong-tiep-nhan" && (
-          <Dong nhan={THE_PHIEU.ly_do_khong_tiep_nhan}>{phieu.ly_do || THE_PHIEU.chua_ghi}</Dong>
+          <Dong nhan={THE_PHIEU.ly_do_khong_tiep_nhan}>{phieu.ly_do || XA_PA.chua_ghi}</Dong>
         )}
         {phieu.trang_thai === "chuyen-cap-tren" && (
           <>
-            <Dong nhan={THE_PHIEU.co_quan_tiep_nhan}>{phieu.co_quan_nhan || THE_PHIEU.chua_ghi}</Dong>
-            <Dong nhan={THE_PHIEU.ly_do_chuyen}>{phieu.ly_do || THE_PHIEU.chua_ghi}</Dong>
+            <Dong nhan={THE_PHIEU.co_quan_tiep_nhan}>{phieu.co_quan_nhan || XA_PA.chua_ghi}</Dong>
+            <Dong nhan={THE_PHIEU.ly_do_chuyen}>{phieu.ly_do || XA_PA.chua_ghi}</Dong>
           </>
         )}
       </div>
@@ -280,8 +280,11 @@ export function ThanPhieuTN({ phieu, onDanhGia }: { phieu: PhieuTN; onDanhGia?: 
         <h2 className="xa-dau-khoi__tieu-de">{XA_PA.tien_trinh}</h2>
         <DongThoiGian phieu={phieu} />
       </div>
-      {duocDanhGia(phieu) && onDanhGia && <KhoiDanhGia phieu={phieu} onGui={onDanhGia} />}
-      {phieu.danh_gia !== null && <KhoiDanhGia phieu={phieu} />}
+      {duocDanhGia(phieu) && onDanhGia ? (
+        <KhoiDanhGia key={`cham-${phieu.so_lan_mo_lai}`} phieu={phieu} onGui={onDanhGia} />
+      ) : (
+        phieu.danh_gia !== null && <KhoiDanhGia phieu={phieu} />
+      )}
     </>
   );
 }
@@ -484,7 +487,8 @@ export function GuiPhanAnhTN(props: {
       <DauManCon tieu_de={GUI.tieu_de} onQuayLai={buoc === 3 ? props.onQuayLai : lui} />
       <ThanhBuoc buoc={buoc} />
       <TrangCon>
-        {buoc !== 3 && <GhiChuTraiNghiem cau={XA_PA.ghi_chu_gui} />}
+        {/* Kể cả màn "Đã lưu": bà con không được tưởng một phiếu chưa gửi đã tới xã. */}
+        <GhiChuTraiNghiem cau={buoc === 3 ? XA_PA.ghi_chu_phieu : XA_PA.ghi_chu_gui} />
         {hoi_huy && (
           <div className="xa-the xa-the--dem xa-khoi" role="alertdialog" aria-label={XA_TN.hoi_huy_tieu_de}>
             <h2 className="xa-dau-khoi__tieu-de">{XA_TN.hoi_huy_tieu_de}</h2>

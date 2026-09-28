@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { danhBaCanBoXa } from "../api/goi-vigov";
 import type { CanBoCongKhai } from "../api/hop-dong-cong-khai";
 import { dichGoi, sauKhiTaiDanhBa, type TrangDanhBa } from "./DanhBaCanBoScreen";
-import { DANH_BA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
+import { DANH_BA, XA_GIAO_DIEN, XA_PA, XA_TN } from "./noi-dung";
 
 import { BieuTuong } from "./BieuTuong";
 import { KhoiTrangThai } from "./khung-xa";
@@ -109,7 +109,7 @@ function TheCanBoXa({ cb }: { cb: CanBoCongKhai }) {
 const CAU_LOI = {
   "loi-mang": DANH_BA.loi_mang,
   "loi-may-chu": DANH_BA.loi_may_chu,
-  "khong-hop-le": DANH_BA.khong_hop_le,
+  "khong-hop-le": XA_PA.danh_ba_khong_hop_le,
 } as const;
 
 export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
@@ -131,7 +131,7 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
       />
     );
   }
-  if (trang.can_bo.length === 0) return <KhoiTrangThai bieu_tuong="users" cau={DANH_BA.trong} />;
+  if (trang.can_bo.length === 0) return <KhoiTrangThai bieu_tuong="users" cau={XA_PA.danh_ba_trong} />;
 
   return (
     <>

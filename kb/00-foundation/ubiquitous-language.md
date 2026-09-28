@@ -68,12 +68,12 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Lĩnh vực | `linh_vuc` | Rác thải, giao thông, trật tự đô thị… — **mã do nền tảng cấp và đóng; xã chỉ đổi được NHÃN, không thêm mã** (ADR 0026). Dòng này trước 20/09/2026 ghi "cấu hình theo xã" và **đã sai**: câu ấy đúng cho bảy danh mục của ADR 0024, không đúng cho danh mục này — số liệu lĩnh vực phải cộng được giữa các xã |
 | Trạng thái phiếu | `trang_thai` | Chín giá trị, danh sách đóng — §Chín trạng thái ngay dưới |
 | Tiếp nhận | `tiep_nhan` | **Mốc bắt đầu đếm hạn** — không phải lúc phân công |
-| Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn (câu mở #23 đã đóng theo hướng này, ADR 0028). Cũng là **hành vi ấn định `han_xu_ly_xong`** cho phiếu dân tự gửi |
+| Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn (câu mở #23 đã đóng theo hướng này, ADR 0028). *28/09/2026 → ADR 0050: kênh Mini App cho dân chọn, lĩnh vực ấy là của phiếu và `han_xu_ly_xong` đặt lúc tạo phiếu; cán bộ vẫn đổi được ở bước này.* Cũng là **hành vi ấn định `han_xu_ly_xong`** cho phiếu dân tự gửi |
 | Phân công | `phan_cong` | Giao cán bộ/đơn vị xử lý |
 | Nghiệm thu | `nghiem_thu` | Xác nhận đã xử lý trên thực địa, thường kèm ảnh |
 | Đóng phiếu | `dong_phieu` | Kết thúc — **bắt buộc có kết quả dân đọc được** |
 | Hạn tiếp nhận | `han_tiep_nhan` | Hạn **có cán bộ đọc phiếu**. Đặt lúc **sinh phiếu**, lấy dòng mặc định của bảng SLA. **Cho phép `NULL`, nghĩa là "KHÔNG ÁP DỤNG"** — phiếu nhập hộ, vì chính cán bộ là người vào sổ. `NULL` ở đây **không** phải "chưa có", và báo cáo phải **loại** các dòng ấy, tuyệt đối không đọc thành 0 giờ (ADR 0028) |
-| Hạn xử lý xong | `han_xu_ly_xong` | Hạn **xử lý xong**, lấy theo lĩnh vực. Với phiếu dân tự gửi thì đặt lúc **chốt lĩnh vực**, nên **`NULL` trong khoảng chờ phân loại — nghĩa là "CHƯA CÓ"**. Với phiếu nhập hộ thì đặt ngay lúc vào sổ (ADR 0028) |
+| Hạn xử lý xong | `han_xu_ly_xong` | Hạn **xử lý xong**, lấy theo lĩnh vực. Với phiếu dân tự gửi thì đặt lúc **chốt lĩnh vực**, nên **`NULL` trong khoảng chờ phân loại — nghĩa là "CHƯA CÓ"**. Với phiếu nhập hộ thì đặt ngay lúc vào sổ (ADR 0028). *28/09/2026 → ADR 0050: phiếu gửi qua Mini App đặt ngay lúc tạo phiếu, từ lĩnh vực dân chọn — không có khoảng `NULL` chờ phân loại.* |
 | Hạn xử lý *(nói chung)* | `sla_deadline` | Từ dùng chung cho **một** trong hai cột trên khi ngữ cảnh đã rõ. Mỗi hạn tính **một lần, tại hành vi ấn định nó**, rồi lưu; tính bằng **giờ làm việc**. Hai cột, hai thời điểm ấn định, **một** gốc đếm — ADR 0028 |
 | Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` + `ngay_lam_bu` của xã — **cả BA bảng**, ADR 0007. Thiếu bảng thứ ba là đếm xuyên ngày làm bù như thể xã đóng cửa, và ngày làm bù dồn quanh Tết và Quốc khánh. Tên tài nguyên URL và hình dạng từng dòng: §Lịch làm việc của xã |
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |

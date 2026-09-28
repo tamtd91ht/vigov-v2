@@ -4,7 +4,8 @@
  *
  * PHIẾU TRẢI NGHIỆM MANG ĐÚNG KIỂU `PhieuCuaToi` CỦA HỢP ĐỒNG THẬT (`api/hop-dong-phan-anh.ts`): năm ô
  * gửi đi (nội dung · nơi xảy ra · họ tên · điện thoại · ẩn danh), trạng thái trong bảng `TRANG_THAI`,
- * lĩnh vực do cán bộ chốt (rỗng khi mới gửi), hai mốc hạn, kết quả, lý do, cơ quan nhận. Ngày nối máy
+ * lĩnh vực dân chọn lúc gửi (ADR 0050 #1; bản trải nghiệm chưa có mã danh mục nên `linh_vuc` và
+ * `nhan_linh_vuc` cùng mang tên — máy chủ trả mã và nhãn riêng), hai mốc hạn, kết quả, lý do, cơ quan nhận. Ngày nối máy
  * chủ, màn hình giữ nguyên — chỉ nguồn dữ liệu đổi.
  *
  * PHIẾU TRẢI NGHIỆM KHÔNG ĐI VÀO HỆ THỐNG CỦA XÃ. Một phiếu mang danh tính giả mà vào sổ phản ánh thật
@@ -87,7 +88,7 @@ export const VONG_DOI: readonly string[] = [
 ];
 
 /**
- * DANH MỤC LĨNH VỰC TẠM — mười hai tên của prototype khách (`../vigov-require/apps/miniapp`), cho bước
+ * DANH MỤC LĨNH VỰC TẠM — mười hai tên của SRS kho yêu cầu (`../vigov-require/docs/SRS.md:310`; mock của prototype chỉ có 8), cho bước
  * "chọn lĩnh vực gần đúng nhất". Theo ADR 0050, lĩnh vực dân chọn LÀ lĩnh vực của phiếu và máy chủ đặt hạn
  * từ nó lúc tạo phiếu. KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã, và chỉ `identity` đếm hạn (luật 10 cấm
  * #2, #3). Gỡ danh sách này khi có tuyến đọc danh mục lĩnh vực của xã.
@@ -107,8 +108,11 @@ export const LINH_VUC_TAM: readonly string[] = [
   "Khác",
 ];
 
-/** Đánh giá của dân sau khi xử lý (ADR 0050 điểm 2). */
-export type DanhGia = { readonly sao: number; readonly nhan_xet: string };
+/**
+ * Đánh giá của dân sau khi xử lý (ADR 0050 điểm 2). `sau_lan_mo_lai` ghi số lần mở lại LÚC CHẤM: phiếu bị
+ * mở lại rồi xử lý xong lần nữa thì được chấm lại, và lần chấm mới thay lần cũ (`service.py:813`).
+ */
+export type DanhGia = { readonly sao: number; readonly nhan_xet: string; readonly sau_lan_mo_lai: number };
 
 /** Phiếu trải nghiệm = phiếu của hợp đồng thật + đánh giá (khi có) + số lần mở lại. */
 export type PhieuTN = PhieuCuaToi & { readonly danh_gia: DanhGia | null; readonly so_lan_mo_lai: number };
@@ -125,15 +129,19 @@ export function apDanhGia(p: PhieuTN, sao: number, nhan_xet: string): PhieuTN {
   const mo_lai = s <= SAO_MO_LAI;
   return {
     ...p,
-    danh_gia: { sao: s, nhan_xet: nhan_xet.trim() },
+    danh_gia: { sao: s, nhan_xet: nhan_xet.trim(), sau_lan_mo_lai: p.so_lan_mo_lai },
     trang_thai: mo_lai ? "dang-xu-ly" : p.trang_thai,
     so_lan_mo_lai: p.so_lan_mo_lai + (mo_lai ? 1 : 0),
   };
 }
 
-/** Được chấm khi phiếu đã xử lý xong và chưa chấm (prototype: `canRate = status === "resolved"`). */
+/**
+ * Được chấm khi phiếu đã xử lý xong và chưa chấm KỂ TỪ LẦN MỞ LẠI GẦN NHẤT (prototype: `canRate = status
+ * === "resolved"`; máy chủ ghi đè đánh giá mỗi lần chấm).
+ */
 export function duocDanhGia(p: PhieuTN): boolean {
-  return nhomCua(p.trang_thai) === "da-xu-ly-xong" && p.danh_gia === null;
+  if (nhomCua(p.trang_thai) !== "da-xu-ly-xong") return false;
+  return p.danh_gia === null || p.danh_gia.sau_lan_mo_lai < p.so_lan_mo_lai;
 }
 
 /**
@@ -186,7 +194,7 @@ export type LoiNhapPhieu = Partial<Record<"noi_dung" | "dia_chi" | "ho_ten" | "d
 
 const soKyTu = (s: string): number => [...s].length;
 
-/** Kiểm trước bước xác nhận, cùng giới hạn máy chủ (`DO_DAI_TOI_DA`). Rỗng là hợp lệ. THUẦN. */
+/** Kiểm lúc bấm gửi, cùng giới hạn máy chủ (`DO_DAI_TOI_DA`). Rỗng là hợp lệ. THUẦN. */
 export function kiemNhapPhieu(nhap: NhapPhieu, cau: { thieu: string; qua_dai: (toi_da: number) => string }): LoiNhapPhieu {
   const loi: LoiNhapPhieu = {};
   if (nhap.noi_dung.trim() === "") loi.noi_dung = cau.thieu;

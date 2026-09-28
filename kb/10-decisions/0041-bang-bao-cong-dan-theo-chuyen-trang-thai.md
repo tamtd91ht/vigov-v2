@@ -52,6 +52,9 @@ Ba câu trả lời cho một lời cam kết với người dân. Câu nào đ�
 
 Tương lai, khi dựng: **mở lại phiếu** và **gia hạn** cũng báo (hạn mới + lý do).
 
+> 28/09/2026 → ADR 0050 điểm 2: nay có một bước chuyển **do dân gây ra** — chấm dưới ngưỡng thì mở lại
+> phiếu (mới ở bản trải nghiệm, máy chủ chưa có tuyến).
+
 ### Không báo
 
 `dang-phan-loai` (nội bộ, và ngay sau đó là giao việc), `dang-xu-ly` (lời "bộ phận nào, đến bao giờ"
@@ -97,5 +100,5 @@ ghi nhận.
 |---|---|---|
 | 1 | **Kết quả xử lý và tên bộ phận KHÔNG đi trong sự kiện.** `proto/vigov/petitions/v1/events.proto:186-195` cấm chuyển tiếp văn bản cán bộ viết; service chỉ giữ `bo_phan_id`, tên ở `identity`. Muốn mang theo là **đổi hợp đồng** và một quyết định luật 3 bất biến 6 | contract-designer + người dùng |
 | 2 | `khong-tiep-nhan`, `chuyen-cap-tren`: lý do, cơ quan tiếp nhận, nơi đi tiếp chưa có cột nào giữ. Ai dựng tuyến phải quyết lưu ở đâu và cái nào được đi trong tin | người dựng tuyến |
-| 3 | Mở lại và gia hạn không phải trạng thái đích riêng, nên bảng khoá theo trạng thái không biểu diễn được. Ai dựng phải mở rộng cơ chế, không thêm danh sách thứ hai | người dựng tuyến |
+| 3 | Mở lại và gia hạn không phải trạng thái đích riêng, nên bảng khoá theo trạng thái không biểu diễn được. Ai dựng phải mở rộng cơ chế, không thêm danh sách thứ hai. 28/09/2026 → ADR 0050: mở lại do dân chấm thấp nay là việc có thật, không còn "tương lai" | người dựng tuyến |
 | 4 | **Chưa gửi được thật.** Chưa có relay outbox / client Kafka (luật 11 điều kiện dừng #1); chưa có mẫu ZNS theo xã (ADR 0018) | người dùng |

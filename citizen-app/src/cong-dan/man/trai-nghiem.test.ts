@@ -168,6 +168,13 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     expect(cao.trang_thai).toBe("da-xu-ly");
     expect(cao.so_lan_mo_lai).toBe(0);
     expect(duocDanhGia(cao)).toBe(false);
+    // Mở lại rồi xử lý xong lần nữa: được chấm lại, lần mới thay lần cũ (`service.py:813`).
+    expect(duocDanhGia(thap)).toBe(false);
+    const xong_lai = { ...thap, trang_thai: "da-xu-ly" };
+    expect(duocDanhGia(xong_lai)).toBe(true);
+    const cham_lai = apDanhGia(xong_lai, 4, "");
+    expect(cham_lai.danh_gia?.sao).toBe(4);
+    expect(duocDanhGia(cham_lai)).toBe(false);
     // Số sao ngoài khoảng bị kẹp về 1..5, không bao giờ ghi 0 hay 9.
     expect(apDanhGia(xong, 9, "").danh_gia?.sao).toBe(5);
     expect(apDanhGia(xong, 0, "").danh_gia?.sao).toBe(1);

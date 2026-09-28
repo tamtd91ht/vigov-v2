@@ -218,6 +218,9 @@ phía chặt.
 
 **MỞ LẠI KHI NÀO:** có màn hình web hoàn chỉnh và có phản hồi các bên.
 
+> 28/09/2026 → ADR 0050 điểm 5: app riêng của xã cho người dân thấy **bốn nhóm** và nhãn từng bước của
+> prototype (gộp ở client, chín mã và chín nhãn phía cán bộ không đổi). Phạm vi app chung: chờ chủ dự án.
+
 ## Bổ sung 2026-09-20 (muộn hơn trong ngày) — #23 và #24 đã đóng, ADR 0028
 
 **Ba điều đổi ở tệp này, và đúng ba điều đó:**

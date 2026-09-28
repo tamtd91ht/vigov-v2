@@ -409,7 +409,6 @@ export const XA_TN = {
   loc_trong: "Chưa có phản ánh nào ở trạng thái này.",
   loc_nhom: "Lọc phản ánh theo tình trạng",
   buoc_linh_vuc: "Lĩnh vực",
-  chon_linh_vuc: "Bà con chọn lĩnh vực gần đúng nhất với sự việc.",
   doi: "Đổi",
   su_kien_tieu_de: "Sự kiện",
   su_kien_trong: "Chưa có sự kiện nào được đăng.",
@@ -432,9 +431,6 @@ export const XA_TN = {
   loc_chuyen_muc: "Lọc tin theo chuyên mục",
   tin_lien_quan: "Tin liên quan",
   nhom_khac: "Cán bộ khác",
-  loc_dang_cho: "Đang chờ",
-  loc_dang_xu_ly: "Đang xử lý",
-  loc_da_xong: "Đã xong",
   chua_tinh_han: "Bản trải nghiệm chưa tính hạn. Khi gửi thật, hạn được tính theo giờ làm việc của xã.",
   ghi_chu_tra_cuu_tn: "Bản trải nghiệm: chỉ tra được các phiếu bà con đã gửi trên điện thoại này trong lần mở ứng dụng này.",
   o_nay: "này",
@@ -450,7 +446,6 @@ export const XA_TN = {
   hoi_huy_cau: "Nội dung bà con đã nhập sẽ không được lưu lại.",
   tiep_tuc_nhap: "Tiếp tục nhập",
   huy_bo: "Huỷ bỏ",
-  ma_phieu: "Mã phiếu",
   gui_luc: "Gửi lúc",
   noi_xay_ra: "Nơi xảy ra",
   mo_ta: "Mô tả",
@@ -474,11 +469,6 @@ export const XA_TN = {
   nut_tiep: "Tiếp tục",
   nut_lui: "Quay lại",
   nut_gui: "Gửi phản ánh",
-  ghi_chu_gui_tn:
-    "Bản trải nghiệm: phản ánh sẽ được lưu trên điện thoại này để bà con xem thử, chưa được gửi tới Ủy ban nhân dân xã.",
-  xong_tieu_de: "Đã ghi nhận phản ánh (bản trải nghiệm)",
-  xong_mo_ta: "Phản ánh được lưu trên điện thoại này. Khi ứng dụng hoàn thiện, phản ánh sẽ được gửi thẳng tới Ủy ban nhân dân xã.",
-  nut_theo_doi: "Xem phiếu này",
   nut_ve_trang_chu: "Về trang chủ",
   // Tra cứu hồ sơ
   tra_cuu_tieu_de: "Tra cứu hồ sơ một cửa",
@@ -541,7 +531,12 @@ export const XA_PA = {
   cham_vao_sao: "Chạm vào sao để chấm điểm",
   nhan_xet: "Nhận xét thêm (không bắt buộc)",
   gui_danh_gia: "Gửi đánh giá",
-  mo_lai_neu_thap: "Chấm 1 hoặc 2 sao thì phiếu được mở lại để cán bộ xử lý tiếp.",
+  // Không nói ngưỡng sao mở lại: ngưỡng và số lần mở lại là cấu hình TỪNG XÃ (ADR 0008), không phải hằng.
+  chua_ghi: "Ứng dụng chưa nhận được thông tin này. Bà con hãy liên hệ Ủy ban nhân dân xã để hỏi.",
+  // App riêng không có mã QR để quét lại (khác câu chung `DANH_BA`).
+  danh_ba_trong:
+    "Hiện chưa có cán bộ nào được công khai số điện thoại trên ứng dụng. Bà con hãy đến trụ sở Ủy ban nhân dân xã để được hướng dẫn.",
+  danh_ba_khong_hop_le: "Chưa tải được danh bạ của xã. Bà con hãy đóng ứng dụng rồi mở lại.",
   giau_ten: "Giấu tên",
   ma_phieu: "Mã phiếu",
   du_kien_xong: "Dự kiến xử lý xong",
@@ -566,8 +561,9 @@ export const XA_PA = {
   goi_y_so: "Để cán bộ liên hệ khi cần",
   chi_mo_ta_bat_buoc: "Chỉ phần mô tả là bắt buộc.",
   gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
-  xong_tieu_de: "Đã gửi phản ánh",
-  xong_mo_ta: "Cảm ơn bà con. Cán bộ sẽ tiếp nhận và phản hồi.",
+  // Bản trải nghiệm KHÔNG gửi gì: câu này không được nói "đã gửi" hay hứa cán bộ phản hồi.
+  xong_tieu_de: "Đã lưu phản ánh (bản trải nghiệm)",
+  xong_mo_ta: "Phản ánh chỉ nằm trên máy này, cán bộ chưa nhận được. Khi ứng dụng kết nối xong, phản ánh sẽ gửi thẳng tới cán bộ.",
   ma_phieu_cua_ba_con: "Mã phiếu của bà con",
   theo_doi: "Theo dõi phiếu này",
 } as const;

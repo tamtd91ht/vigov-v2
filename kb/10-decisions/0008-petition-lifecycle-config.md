@@ -67,6 +67,10 @@ trùng. Vòng đời một chiều nghe gọn hơn nhưng đẩy sai lệch sang
 | 3 | Có tuỳ chọn **gửi ẩn danh** — cờ `an_danh` trên phiếu |
 | 4 | Hai endpoint đọc nội dung công khai (`nội dung Mini App`, `danh bạ`) khai `Public("nội dung xã chủ động công bố")` |
 
+> 28/09/2026 → ADR 0050 điểm 3: app riêng của xã hôm nay **không có công tắc ẩn danh** (để trống tên là
+> giấu tên) — chờ chủ dự án, vì kho yêu cầu tự mâu thuẫn. Cờ `an_danh` phía máy chủ và luật mở lại ở
+> trên **không đổi**.
+
 **Ẩn danh nghĩa là ẩn với ai:**
 
 | Với | Thấy danh tính người gửi? |

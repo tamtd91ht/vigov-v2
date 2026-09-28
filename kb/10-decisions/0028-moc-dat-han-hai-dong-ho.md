@@ -81,6 +81,10 @@ mới biết phiếu ấy có phải an ninh trật tự hay không.
 > 28/09/2026 — dòng đầu của bảng trên được **sửa một phần bởi ADR 0049**: dân được chọn "lĩnh vực gần
 > đúng nhất" như một GỢI Ý cho cán bộ; lĩnh vực của phiếu và hạn xử lý xong vẫn do cán bộ chốt, nên lỗ
 > khai thác nói ở dòng ấy vẫn đóng.
+>
+> 28/09/2026 → ADR 0050 (thay 0049): với kênh **Mini App**, lĩnh vực dân chọn LÀ lĩnh vực của phiếu và
+> hạn xử lý xong đặt lúc tạo phiếu — câu "lỗ khai thác vẫn đóng" ở trên **không còn đúng** cho kênh ấy;
+> chủ dự án chấp nhận cái giá (ADR 0050 §Cái giá).
 
 Đường được chọn không hứa rộng hơn với ai, không cho ai tự nâng mức khẩn của mình, và trả
 lại đủ **12 dòng SLA** cho kênh công dân.

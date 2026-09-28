@@ -3192,17 +3192,9 @@ button.xa-o-nhanh {
   font-size: var(--text-small);
   font-weight: 700;
 }
-.xa-chip-tt--moi {
-  background: var(--xa-xanh-nhat);
-  color: var(--xa-navy);
-}
 .xa-chip-tt--dang-xu-ly {
   background: var(--xa-cam-nhat);
   color: var(--xa-cam-dam);
-}
-.xa-chip-tt--da-xu-ly {
-  background: var(--xa-luc-nhat);
-  color: var(--xa-luc-dam);
 }
 
 /* chip lọc — cuộn ngang */

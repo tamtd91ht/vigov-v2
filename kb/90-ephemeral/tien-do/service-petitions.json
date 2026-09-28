@@ -312,6 +312,15 @@
       "tiep_theo": "Phát hiện cho #27, không tự INSERT khoá mới (luật 5 bất biến 3c). Cấp quyền ký biên bản là cấp luôn quyền duyệt nhiệm vụ — hỏi chủ dự án có chấp nhận không.",
       "menu": "nhiem-vu",
       "no_confirm": []
+    },
+    {
+      "id": "may-chu-no-adr-0050",
+      "viec": "Nợ máy chủ của ADR 0050 (kênh công dân theo kho yêu cầu) — Mini App app riêng đã dựng giao diện, phiếu vẫn chỉ trong bộ nhớ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Cái giá. Bảng chuyển internal/domain/phieu_phan_anh.go:74-84 không có cạnh da-xu-ly → dang-xu-ly (chỉ cho-dan-xac-nhan và da-dong về được dang-xu-ly). Tuyến công dân hiện chỉ ba (sổ phan-anh-tuyen-cong-dan-con-thieu).",
+      "tiep_theo": "(1) Nhận lĩnh vực trên POST công dân (hôm nay 400). (2) Đặt cả han_tiep_nhan và han_xu_ly_xong lúc tạo phiếu cho kênh Mini App (ADR 0050 điểm 1; hạn chỉ identity đếm — luật 10 cấm #2). (3) Tuyến đọc danh mục lĩnh vực cho Mini App. (4) Tuyến chấm sao + mở lại theo cấu hình theo xã của ADR 0008 (cho_phep_mo_lai, nguong_sao_mo_lai, so_lan_mo_lai_toi_da, tinh_lai_han_khi_mo_lai) — CHỜ CHỦ DỰ ÁN trước khi viết: quyết định 27/09 ('1–2 sao vào hàng lãnh đạo xem, không tự mở lại', mục phan-anh-tuyen-cong-dan-con-thieu) ngược ADR 0050 điểm 2; ≥3 sao ở cho-dan-xac-nhan có đóng phiếu không. (5) Cạnh da-xu-ly → dang-xu-ly nếu chấm thấp ở 'đã xử lý' mở lại (đổi bảng chuyển = luật 10 điều kiện dừng #2, cần ADR). (6) Đổi phoneToken ra số điện thoại: cần app secret, mà mặt nào ký bằng app secret thì thuộc vihat-miniapp (ADR 0032); app riêng của xã cần app secret CỦA APP XÃ và nơi giữ chưa quyết (citizen-app/api-con-thieu-app-rieng mục 1) — KHÔNG giao cho service này, chưa giao cho ai.",
+      "menu": "phan-anh-nguoi-dan",
+      "no_confirm": []
     }
   ]
 }
