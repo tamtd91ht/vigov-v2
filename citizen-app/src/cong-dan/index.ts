@@ -12,7 +12,9 @@
  *   1. RANH GIỚI HAI CHIỀU ĐỀU CẤM, và nặng nhất: KHÔNG TỆP NÀO NGOÀI `./cong-dan/` NHẬP CLIENT API
  *      CỦA ViGov (`./cong-dan/api/`) — kể cả `App.tsx`.
  *   2. KHÔNG LƯU TRỮ ĐỊNH DANH. `localStorage` · `sessionStorage` · `IndexedDB` là chung giữa hai
- *      nửa theo cấu tạo; không phiên, không số điện thoại, không xã đã chọn được ghi xuống máy.
+ *      nửa theo cấu tạo; không phiên, không số điện thoại, không xã đã chọn được ghi xuống máy. MỘT
+ *      ngoại lệ, và nó không nằm trong nửa này: nháp phản ánh của APP RIÊNG của xã (ADR 0050 #7) do lớp
+ *      vỏ tiêm vào (`FeedbackDraftStore`); tệp duy nhất chạm kho là `src/app-rieng/feedback-draft-store.ts`.
  *   3. MỖI LỜI GỌI SDK KHAI MỤC ĐÍCH TẠI CHỖ (`KHAI_BAO_LOI_GOI`). Nửa này hôm nay KHÔNG gọi SDK nào.
  *
  * ⚠ KHÔNG CÒN SAU `resolve.alias` (27/09/2026): bản dựng chỉ còn một, và nó mang kênh này. Kênh
@@ -26,6 +28,6 @@
  */
 export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
 export { TrangXa, type XaCuaApp } from "./man/TrangXa";
-export type { KetQuaLayTen, KetQuaViTri, LayMaViTri, LayTenZalo } from "./man/trai-nghiem";
+export type { FeedbackDraftStore, KetQuaLayTen, KetQuaViTri, LayMaViTri, LayTenZalo, NhapPhieu } from "./man/trai-nghiem";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";

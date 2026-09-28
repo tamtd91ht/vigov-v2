@@ -4,17 +4,20 @@
  * Người đọc là công dân, thường lớn tuổi, thường đang bực vì chính việc họ báo (`skills/
  * accessibility-elderly`): câu ngắn, một ý, không viết tắt, không mã lỗi, luôn nói việc cần làm tiếp.
  */
+import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * CHÍN TRẠNG THÁI (ADR 0027) — nhãn lấy NGUYÊN VĂN bảng khách đã duyệt
- * (`kb/00-foundation/ubiquitous-language.md` §"Chín trạng thái"; cùng bảng `web-admin/src/features/
- * phan-anh/nhan-phieu.ts`). Xã KHÔNG đổi nhãn (ADR 0027, bổ sung 20/09 cuối ngày).
+ * CHÍN TRẠNG THÁI (ADR 0027) — người dân KHÔNG thấy chín nhãn ấy nữa mà thấy BỐN NHÓM (ADR 0050 #5,
+ * chủ dự án 28/09/2026 mở phạm vi sang cả app chung: "3 điểm còn lại cũng theo require nhé"). Nhãn
+ * nhóm nằm ở `status-groups.ts`; chín nhãn của cán bộ vẫn ở `web-admin/src/features/phan-anh/
+ * nhan-phieu.ts`, không đổi. Bảng dưới chỉ còn là danh sách chín mã + câu giải thích cho dân.
  *
- * ⚠ BẢN CHÉP TAY, VÌ HỢP ĐỒNG KHAI `status` LÀ `string` TRƠN — cùng lỗ hổng `nhan-phieu.ts` đã báo.
- * Mã lạ không hiện nguyên mã (một chuỗi `dang-xu-ly` vô nghĩa với người dân) mà hiện một câu trung
- * tính kèm việc cần làm.
+ * ⚠ HỢP ĐỒNG KHAI `status` LÀ `string` TRƠN — cùng lỗ hổng `nhan-phieu.ts` đã báo. Mã lạ không hiện
+ * nguyên mã (một chuỗi `dang-xu-ly` vô nghĩa với người dân) và KHÔNG bị đoán vào một nhóm (một phiếu
+ * còn mở mà hiện "Đã đóng" là nói sai với dân): nó hiện một câu trung tính kèm việc cần làm.
  *
- * `giai_thich` là DÒNG PHỤ cho người dân, không thay nhãn. Bốn dòng có câu:
+ * `giai_thich` là DÒNG PHỤ cho người dân, không thay nhãn. Với bốn nhóm, dòng phụ là chỗ DUY NHẤT phân
+ * biệt "Không tiếp nhận" / "Chuyển cấp trên" với "Đã đóng" thường — đừng gỡ nó. Bốn dòng có câu:
  *   `da-tiep-nhan`   "Đã gửi, đang chờ cán bộ xã xem." — theo góp ý nghiệp vụ của lượt này: phần mềm
  *                    tự sinh trạng thái ấy, chưa ai ở xã đọc phiếu, nên "đã tiếp nhận" trần dễ bị
  *                    hiểu là xã đã nhận việc.
@@ -24,23 +27,18 @@
  *                    nhận mà thẻ phiếu hiện ngay bên dưới (migration 0011). Chưa qua khách duyệt câu chữ.
  * Năm dòng còn lại để `null` — không bịa câu chưa ai duyệt, đúng khuôn `cauGiaiThichTrangThai`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
-export const TRANG_THAI: Readonly<Record<string, { nhan: string; giai_thich: string | null }>> = {
-  "da-tiep-nhan": { nhan: "Đã tiếp nhận", giai_thich: "Đã gửi, đang chờ cán bộ xã xem." },
-  "dang-phan-loai": {
-    nhan: "Đang phân loại",
-    giai_thich: "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.",
-  },
-  "da-chuyen-xu-ly": { nhan: "Đã chuyển xử lý", giai_thich: null },
-  "dang-xu-ly": { nhan: "Đang xử lý", giai_thich: null },
-  "da-xu-ly": { nhan: "Đã xử lý", giai_thich: null },
-  "cho-dan-xac-nhan": { nhan: "Chờ dân xác nhận", giai_thich: null },
-  "da-dong": { nhan: "Đã đóng", giai_thich: null },
+export const TRANG_THAI: Readonly<Record<string, { giai_thich: string | null }>> = {
+  "da-tiep-nhan": { giai_thich: "Đã gửi, đang chờ cán bộ xã xem." },
+  "dang-phan-loai": { giai_thich: "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không." },
+  "da-chuyen-xu-ly": { giai_thich: null },
+  "dang-xu-ly": { giai_thich: null },
+  "da-xu-ly": { giai_thich: null },
+  "cho-dan-xac-nhan": { giai_thich: null },
+  "da-dong": { giai_thich: null },
   "khong-tiep-nhan": {
-    nhan: "Không tiếp nhận",
     giai_thich: "Ủy ban nhân dân xã không tiếp nhận phản ánh này. Lý do ghi ở dưới.",
   },
   "chuyen-cap-tren": {
-    nhan: "Chuyển cấp trên",
     giai_thich:
       "Ủy ban nhân dân xã đã chuyển phản ánh tới cơ quan có thẩm quyền. Tên cơ quan ghi ở dưới.",
   },
@@ -49,8 +47,10 @@ export const TRANG_THAI: Readonly<Record<string, { nhan: string; giai_thich: str
 export const TRANG_THAI_CHUA_CO_NHAN =
   "Trạng thái mới, ứng dụng chưa có tên gọi. Bạn hãy hỏi Ủy ban nhân dân xã và đọc mã tra cứu.";
 
+/** Nhãn người dân thấy: một trong bốn nhóm, hoặc câu trung tính cho mã lạ (không đoán nhóm). */
 export function nhanTrangThai(ma: string): string {
-  return TRANG_THAI[ma]?.nhan ?? TRANG_THAI_CHUA_CO_NHAN;
+  const nhom = groupOf(ma);
+  return nhom === null ? TRANG_THAI_CHUA_CO_NHAN : STATUS_GROUP_LABEL[nhom];
 }
 
 export function giaiThichTrangThai(ma: string): string | null {
@@ -581,4 +581,11 @@ export const XA_PA = {
   xong_mo_ta: "Phản ánh chỉ nằm trên máy này, cán bộ chưa nhận được. Khi ứng dụng kết nối xong, phản ánh sẽ gửi thẳng tới cán bộ.",
   ma_phieu_cua_ba_con: "Mã phiếu của bà con",
   theo_doi: "Theo dõi phiếu này",
+  // Nháp đang soạn (ADR 0050 #7, prototype `NewFeedbackPage.tsx:426-453`) — chỉ app riêng của xã có nháp.
+  draft_title: "Bà con có một phản ánh đang soạn dở. Tiếp tục?",
+  draft_body: "Nội dung bà con đã nhập vẫn được giữ nguyên.",
+  draft_resume: "Tiếp tục",
+  draft_discard: "Bỏ nháp",
+  draft_kept_on_phone:
+    "Phản ánh đang soạn được giữ trên điện thoại này cho tới khi bà con gửi đi hoặc bỏ nháp.",
 } as const;

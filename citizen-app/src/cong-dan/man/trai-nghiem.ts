@@ -17,6 +17,8 @@
  */
 import { DO_DAI_TOI_DA, type PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
+import { groupOf, STATUS_GROUP_LABEL, type StatusFilter, type StatusGroup, STEP_LABEL } from "./status-groups";
+
 /**
  * HỌ TÊN TỪ ZALO — HÀNH ĐỘNG XIN QUYỀN DUY NHẤT (chủ dự án, 28/09/2026: "không còn đăng nhập nữa, chỉ cần
  * xin quyền để lấy được name, phone number"). Lớp vỏ tiêm hàm thật (`getUserInfo`); nửa này chỉ khai kiểu.
@@ -153,37 +155,24 @@ export function duocDanhGia(p: PhieuTN): boolean {
 }
 
 /**
- * BỐN NHÓM NGƯỜI DÂN THẤY (ADR 0050 điểm 5, prototype `StatusChip.tsx` + `feedback-adapter.ts:79-89`): chín
- * trạng thái của cán bộ gộp về bốn. Gộp ở đây, không ở máy chủ — bảng của cán bộ vẫn đủ chín.
+ * BỐN NHÓM NGƯỜI DÂN THẤY (ADR 0050 điểm 5) — bảng gộp và hai bảng nhãn nay nằm ở `status-groups.ts`, dùng
+ * chung cho màn công dân của CẢ app chung lẫn app riêng (chủ dự án 28/09/2026). Ba tên cũ dưới đây giữ lại
+ * cho các tệp đang nhập chúng; chúng trỏ về đúng một bảng, không phải một bản chép.
  */
-export type NhomLoc = "tat-ca" | "da-tiep-nhan" | "dang-xu-ly" | "da-xu-ly-xong" | "da-dong";
+export type NhomLoc = StatusFilter;
 
-export function nhomCua(trang_thai: string): Exclude<NhomLoc, "tat-ca"> {
-  if (trang_thai === "da-tiep-nhan" || trang_thai === "dang-phan-loai") return "da-tiep-nhan";
-  if (trang_thai === "da-chuyen-xu-ly" || trang_thai === "dang-xu-ly") return "dang-xu-ly";
-  if (trang_thai === "da-xu-ly" || trang_thai === "cho-dan-xac-nhan") return "da-xu-ly-xong";
-  return "da-dong";
+/**
+ * Nhóm của app riêng — KHÔNG ĐỔI HÀNH VI: mã lạ rơi vào "Đã đóng". Phiếu của app này sinh trong bộ nhớ với
+ * một trong chín mã, nên nhánh ấy hôm nay không tới được; ngày app đọc phiếu từ máy chủ phải xét lại (theo
+ * `groupOf`, như app chung — mã lạ không được thành "Đã đóng").
+ */
+export function nhomCua(trang_thai: string): StatusGroup {
+  return groupOf(trang_thai) ?? "da-dong";
 }
 
-export const NHAN_NHOM: Readonly<Record<Exclude<NhomLoc, "tat-ca">, string>> = {
-  "da-tiep-nhan": "Đã tiếp nhận",
-  "dang-xu-ly": "Đang xử lý",
-  "da-xu-ly-xong": "Đã xử lý xong",
-  "da-dong": "Đã đóng",
-};
+export const NHAN_NHOM = STATUS_GROUP_LABEL;
 
-/** Nhãn từng bước trên dòng thời gian — chữ của prototype (`feedback-adapter.ts:91-101`). */
-export const NHAN_BUOC: Readonly<Record<string, string>> = {
-  "da-tiep-nhan": "Đã tiếp nhận",
-  "dang-phan-loai": "Đang phân loại",
-  "da-chuyen-xu-ly": "Đã chuyển bộ phận xử lý",
-  "dang-xu-ly": "Đang xử lý",
-  "da-xu-ly": "Đã xử lý xong",
-  "cho-dan-xac-nhan": "Chờ bà con xác nhận",
-  "da-dong": "Đã đóng",
-  "khong-tiep-nhan": "Không tiếp nhận",
-  "chuyen-cap-tren": "Chuyển cấp trên",
-};
+export const NHAN_BUOC = STEP_LABEL;
 
 /**
  * Năm ô của hợp đồng thật (`TRUONG_DUOC_NHAN`) cộng lĩnh vực dân chọn (ADR 0050 — máy chủ CHƯA nhận
@@ -198,7 +187,22 @@ export type NhapPhieu = {
   readonly an_danh: boolean;
 };
 
-export type LoiNhapPhieu = Partial<Record<"noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai", string>>;
+/**
+ * DRAFT OF A FEEDBACK BEING WRITTEN — commune's own app ONLY (ADR 0050 #7; owner, 28/09/2026: "3 điểm còn
+ * lại cũng theo require nhé", prototype `store/draft.ts`). The shell (`App.tsx`, `AppRieng` only) injects
+ * it, exactly like `LayTenZalo`: this half never touches a storage API itself (`ranh-gioi-hai-nua.test.ts`
+ * §3b), and the shared ViHAT app never receives one, so its "không lưu gì xuống máy" promise still holds.
+ *
+ * `load` returns `null` for "no draft", a malformed one, or storage that is unavailable; `save`/`clear`
+ * never throw. The draft never leaves the phone.
+ */
+export type FeedbackDraftStore = {
+  readonly load: () => NhapPhieu | null;
+  readonly save: (draft: NhapPhieu) => void;
+  readonly clear: () => void;
+};
+
+export type LoiNhapPhieu =Partial<Record<"noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai", string>>;
 
 const soKyTu = (s: string): number => [...s].length;
 

@@ -28,7 +28,10 @@ import indexHtmlRaw from "../index.html?raw";
  *
  *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN — có mặt trong bản dựng duy nhất
  *   từ 27/09/2026, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
- *     `getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
+ *     `localStorage`                   →  miễn ĐÚNG MỘT TỆP (28/09/2026): nháp phản ánh của APP RIÊNG
+ *                                          của xã — App ID riêng, origin riêng (ADR 0050 #7). App chung
+ *                                          vẫn "không lưu gì xuống máy"
+ *     `getSetting`/`authorize` · `sessionStorage`/cookie/IndexedDB · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
  *
  *   ⚠ HAI DÒNG GIỮA VỪA ĐỔI 22/09/2026 (giai đoạn B: bề mặt "tư vấn & báo giá"). Ứng dụng từ hôm
@@ -188,6 +191,27 @@ const TEP_O_GHI_CHU = "./features/yeu-cau/OGhiChu.tsx";
  */
 const TEP_O_NHAP_CONG_DAN = "./cong-dan/man/o-nhap.tsx";
 
+/**
+ * THE ONE FILE ALLOWED `localStorage` — 28/09/2026, and this is the FIRST narrowing the storage ban has
+ * ever had. Read all of it before touching the line.
+ *
+ *   WHY: ADR 0050 #7, owner decision 28/09/2026 ("3 điểm còn lại cũng theo require nhé") — the commune's
+ *   OWN app keeps a feedback being written on the phone, as the requirements prototype does
+ *   (`apps/miniapp/src/store/draft.ts`).
+ *
+ *   WHY IT DOES NOT BREAK THE PROMISE THIS BAN WAS WRITTEN FOR: the commune's own app is a SEPARATE Zalo App
+ *   ID (built with `--vao-thang`, `XA_CO_DINH !== null`, `App.tsx` renders `AppRieng`), i.e. a separate
+ *   origin with no privacy policy published yet (ADR 0047). The SHARED ViHAT app's "không lưu gì xuống máy"
+ *   (`content/chinh-sach-rieng-tu.ts`) STILL STANDS: only `AppRieng` passes the store down, the store opens
+ *   no storage when `XA_CO_DINH === null`, and `ranh-gioi-hai-nua.test.ts` §3b pins both.
+ *
+ *   WHAT WAS NOT NARROWED: only `localStorage` left the absolute ban, and only for this ONE FILE (not its
+ *   directory — the "SÁT BÊN" case below). `sessionStorage`, `document.cookie` and IndexedDB stay banned in
+ *   every file, this one included; a session token, a phone number kept "for convenience" anywhere else, or
+ *   in `cong-dan/**`, `features/**`, `App.tsx`, is still red.
+ */
+const FEEDBACK_DRAFT_STORE_FILE = "./commune-app/feedback-draft-store.ts";
+
 /** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
 function viPham(
   day: Tripwire,
@@ -197,7 +221,13 @@ function viPham(
     .filter((f) => day.pattern.test(f.code))
     .filter(
       (f) =>
-        !(day.chi_trong !== undefined && day.chi_trong.some((tien_to) => f.path.startsWith(tien_to))),
+        !(
+          day.chi_trong !== undefined &&
+          // A DIRECTORY entry (ends in "/") exempts by prefix; a FILE entry exempts that exact path only.
+          // Tightened 28/09/2026: by prefix, "./x/store.ts" also exempted "./x/store.tsx" — a second file
+          // nobody named, which is exactly how a one-file exception widens without a red line.
+          day.chi_trong.some((tien_to) => (tien_to.endsWith("/") ? f.path.startsWith(tien_to) : f.path === tien_to))
+        ),
     )
     .map((f) => f.path);
 }
@@ -338,9 +368,22 @@ const TRIPWIRES: readonly Tripwire[] = [
     // của nó: một `IDBOpenDBRequest` nhận về từ hàm khác, một `IDBTransaction` truyền vào. Lý do
     // của lệnh cấm này nay có thêm một vế — xem `ranh-gioi-hai-nua.test.ts` §3b: một bundle là
     // MỘT origin, nên kho lưu trữ là CHUNG giữa nửa thương mại và nửa nhà nước, theo cấu tạo.
+    //
+    // THU HẸP 28/09/2026 — `localStorage` RỜI LỆNH CẤM NÀY, SANG LỆNH CẤM CÓ PHẠM VI NGAY DƯỚI, không bị
+    // xoá: nó được phép ở ĐÚNG MỘT TỆP (`FEEDBACK_DRAFT_STORE_FILE`, nháp của app riêng — ADR 0050 #7). Ba
+    // thứ còn lại ở đây vẫn tuyệt đối, kể cả trong tệp ấy.
     what: "device-side storage of user state — the session ticket lives in memory, never on the device",
     pattern:
-      /localStorage|sessionStorage|document\.cookie|indexedDB|\bIDB(?:Factory|Database|OpenDBRequest|Transaction|ObjectStore)\b/,
+      /sessionStorage|document\.cookie|indexedDB|\bIDB(?:Factory|Database|OpenDBRequest|Transaction|ObjectStore)\b/,
+  },
+  {
+    // THE FIFTH NARROWED BAN (28/09/2026) — see `FEEDBACK_DRAFT_STORE_FILE`. Same pattern the absolute ban
+    // above used for this name, so every form (`window.localStorage`, `globalThis.localStorage`) is caught.
+    what:
+      'localStorage outside "src/commune-app/feedback-draft-store.ts" — that ONE file keeps the commune ' +
+      "app's feedback draft; the shared app stores nothing on the device",
+    pattern: /localStorage/,
+    chi_trong: [FEEDBACK_DRAFT_STORE_FILE],
   },
   {
     what: "geolocation — GPS in this system may suggest a commune and never decide one, and phase 1 has no commune at all",
@@ -372,7 +415,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     expect(paths).toContain(`${THU_MUC_TINH_NANG}zalo-api.ts`);
     // Cùng lý do, cho ba ngoại lệ hẹp nhất trong tệp này: một tệp được miễn mà lượt quét không hề
     // đọc tới thì "miễn" và "không tồn tại" là một, và ngày nó đổi tên sẽ không có gì báo.
-    for (const tep of [...TEP_GOI_MANG, TEP_O_GHI_CHU, TEP_O_NHAP_CONG_DAN]) {
+    for (const tep of [...TEP_GOI_MANG, TEP_O_GHI_CHU, TEP_O_NHAP_CONG_DAN, FEEDBACK_DRAFT_STORE_FILE]) {
       expect(paths, `tệp được miễn không nằm trong lượt quét: ${tep}`).toContain(tep);
     }
   });
@@ -387,7 +430,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
             ? ""
             : `\nThứ này chỉ được phép ở: ${tripwire.chi_trong
                 .map((t) => `"src${t.slice(1)}"`)
-                .join(" · ")}. Lệnh cấm localStorage/cookie/indexedDB KHÔNG được nới theo — nó là thứ biến "không lưu gì xuống máy bạn" thành một ràng buộc kiểm được.`
+                .join(" · ")}. Lệnh cấm sessionStorage/cookie/indexedDB KHÔNG được nới theo, và localStorage chỉ được ở đúng một tệp nháp của app riêng — đó là thứ biến "không lưu gì xuống máy bạn" của app chung thành một ràng buộc kiểm được.`
         }`,
       ).toEqual([]);
     });
@@ -435,7 +478,9 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // BỐN TỪ 22/09/2026 (trước đó ba): lệnh cấm ô nhập vừa mất tính tuyệt đối. Con số này ghim
     // đúng một sự thật — có bao nhiêu lệnh cấm đã được thu hẹp — và nó đỏ lên ngay khi ai đó thu
     // hẹp cái thứ năm, tức đúng lúc phải có một cuộc trò chuyện.
-    expect(co_pham_vi.length, "số lệnh cấm ĐƯỢC THU HẸP vừa đổi").toBe(4);
+    // NĂM TỪ 28/09/2026: `localStorage` rời lệnh cấm lưu trữ tuyệt đối sang một lệnh cấm một-tệp (nháp của
+    // app riêng, ADR 0050 #7).
+    expect(co_pham_vi.length, "số lệnh cấm ĐƯỢC THU HẸP vừa đổi").toBe(5);
 
     const VI_PHAM = [
       { path: "./App.tsx", code: 'const { token } = await getPhoneNumber();' },
@@ -490,6 +535,19 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       // chúng KHÔNG được mở ô nhập. Sửa `chi_trong` thành `"./cong-dan/man/"` là hai dòng này đỏ.
       { path: "./cong-dan/man/GuiPhanAnhScreen.tsx", code: "<textarea />" },
       { path: "./cong-dan/man/TraCuuPhieuScreen.tsx", code: '<input type="text" />' },
+
+      // localStorage — THE SAME CALL the draft store makes, placed anywhere else, is still red: the state
+      // half (the screen that USES the store, and its neighbours), the commercial half, the shell, and a
+      // file SÁT BÊN the allowed one inside `commune-app/` (red if `chi_trong` became a directory).
+      { path: "./cong-dan/man/PhanAnhAppXa.tsx", code: 'localStorage.setItem("vigov.feedback.draft.v1", s);' },
+      { path: "./cong-dan/man/TrangXa.tsx", code: "window.localStorage.getItem(k);" },
+      { path: "./cong-dan/api/goi-vigov.ts", code: 'localStorage.setItem("phien", t);' },
+      { path: "./features/dang-nhap/kho-phien.tsx", code: 'localStorage.setItem("phien", t);' },
+      { path: "./features/yeu-cau/OGhiChu.tsx", code: 'localStorage.setItem("nhap", ghi_chu);' },
+      { path: "./App.tsx", code: "globalThis.localStorage.removeItem(k);" },
+      { path: "./lib/xa-co-dinh.ts", code: "localStorage.getItem(k);" },
+      { path: "./commune-app/other-store.ts", code: 'localStorage.setItem("x", v);' },
+      { path: "./commune-app/feedback-draft-store.tsx", code: 'localStorage.setItem("x", v);' },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
@@ -507,6 +565,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       ...TEP_GOI_MANG.map((path) => ({ path, code: 'await fetch(dia_chi, { method: "POST" });' })),
       { path: TEP_O_GHI_CHU, code: "<textarea value={ghi_chu} onChange={doi} />" },
       { path: TEP_O_NHAP_CONG_DAN, code: "<textarea value={noi_dung} onChange={doi} />" },
+      { path: FEEDBACK_DRAFT_STORE_FILE, code: "storage.setItem(KEY, v); globalThis.localStorage;" },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {
@@ -550,20 +609,39 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     const VI_PHAM = [
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await authorize({ scopes: ["scope.userInfo"] });' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const q = await getSetting();" },
-      ...TEP_GOI_MANG.map((path) => ({ path, code: 'localStorage.setItem("phien", phien.token);' })),
       ...TEP_GOI_MANG.map((path) => ({ path, code: 'document.cookie = "phien=" + token;' })),
       { path: "./features/dang-nhap/kho-phien.tsx", code: 'sessionStorage.setItem("phien", t);' },
       { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: "sessionStorage.setItem(k, v);" },
+      { path: "./App.tsx", code: "indexedDB.open('phien');" },
+      // THE DRAFT FILE IS ALLOWED `localStorage` AND NOTHING ELSE (28/09/2026): a session in
+      // `sessionStorage`, a cookie, an IndexedDB there is still red — a one-file exception for one API is
+      // not a storage file.
+      { path: FEEDBACK_DRAFT_STORE_FILE, code: 'sessionStorage.setItem("phien", t);' },
+      { path: FEEDBACK_DRAFT_STORE_FILE, code: 'document.cookie = "nhap=" + v;' },
+      { path: FEEDBACK_DRAFT_STORE_FILE, code: 'indexedDB.open("nhap");' },
+    ];
+    for (const tep of VI_PHAM) {
+      const bat = TUYET_DOI.some((day) => viPham(day, [tep]).length === 1);
+      expect(bat, `lệnh cấm tuyệt đối không bắt được: ${tep.path} — ${tep.code}`).toBe(true);
+    }
+
+    // `localStorage` LEFT THE ABSOLUTE BAN on 28/09/2026 (one-file ban now). These rows were here before and
+    // stay red — through that one-file ban, which must catch them in every file but the draft store.
+    const localStorageBan = TRIPWIRES.find((t) => t.what.startsWith("localStorage outside"));
+    expect(localStorageBan, "the one-file localStorage ban is gone — storage is then unguarded").toBeDefined();
+    expect(localStorageBan!.chi_trong, "the localStorage exception widened past one file").toEqual([
+      FEEDBACK_DRAFT_STORE_FILE,
+    ]);
+    for (const tep of [
+      ...TEP_GOI_MANG.map((path) => ({ path, code: 'localStorage.setItem("phien", phien.token);' })),
       { path: "./features/yeu-cau/TuVanBaoGiaScreen.tsx", code: 'localStorage.setItem("nhap", ghi_chu);' },
       // Ô GHI CHÚ ĐƯỢC MIỄN CHO `<textarea>`, VÀ CHỈ CHO `<textarea>`: một `localStorage` đặt ở
       // đúng tệp ấy — "lưu tạm chữ người dùng đang gõ cho tiện" — vẫn phải ĐỎ. Đây là cách một
       // ngoại lệ hẹp bị hiểu thành một ngoại lệ rộng.
       { path: TEP_O_GHI_CHU, code: 'localStorage.setItem("nhap", ghi_chu);' },
-      { path: "./App.tsx", code: "indexedDB.open('phien');" },
-    ];
-    for (const tep of VI_PHAM) {
-      const bat = TUYET_DOI.some((day) => viPham(day, [tep]).length === 1);
-      expect(bat, `lệnh cấm tuyệt đối không bắt được: ${tep.path} — ${tep.code}`).toBe(true);
+      { path: TEP_O_NHAP_CONG_DAN, code: 'localStorage.setItem("nhap", noi_dung);' },
+    ]) {
+      expect(viPham(localStorageBan!, [tep]), `localStorage lọt ở: ${tep.path} — ${tep.code}`).toEqual([tep.path]);
     }
   });
 

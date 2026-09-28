@@ -14,7 +14,10 @@
  *   · trải nghiệm — phiếu phản ánh CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`), gắn nhãn, KHÔNG gửi vào hệ thống;
  *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
- * KHÔNG LẤY TỪ BẢN MẪU: router, `localStorage`, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
+ * NHÁP PHẢN ÁNH (ADR 0050 #7, chủ dự án 28/09/2026): có, như bản mẫu — nhưng nửa này KHÔNG chạm kho lưu
+ * trữ; lớp vỏ tiêm `draftStore` (chỉ `AppRieng`), tệp duy nhất chạm kho là `commune-app/feedback-draft-store.ts`.
+ *
+ * KHÔNG LẤY TỪ BẢN MẪU: router, lưu trữ trực tiếp, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
  * quét căn cước, số ngày cam kết viết cứng (luật 10). Bước chọn lĩnh vực CÓ, và lĩnh vực ấy là của phiếu (ADR 0050, thay ADR 0049).
  *
  * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
@@ -31,7 +34,7 @@ import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-
 import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
-import { apDanhGia, type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
+import { apDanhGia, type FeedbackDraftStore, type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -280,10 +283,12 @@ function AppCuaXa(props: {
   xa: XaCuaApp;
   lay_ten?: LayTenZalo;
   lay_ma_vi_tri?: LayMaViTri;
+  draftStore?: FeedbackDraftStore;
 }) {
   const { ten_mien, xa } = props;
   // HỌ TÊN VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy. Không đăng
-  // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên xin quyền Zalo ở chỗ cần.
+  // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên xin quyền Zalo ở chỗ cần. Thứ DUY NHẤT sống
+  // qua lần đóng app là NHÁP đang soạn, qua `draftStore` lớp vỏ tiêm (ADR 0050 #7).
   const [ho_ten, datHoTen] = useState<string | null>(null);
   const [phieu, datPhieu] = useState<readonly PhieuTN[]>([]);
   const [co_chu, datCoChu] = useState<CoChu>("vua");
@@ -315,6 +320,7 @@ function AppCuaXa(props: {
           lay_ten={props.lay_ten}
           onTen={datHoTen}
           lay_ma_vi_tri={props.lay_ma_vi_tri}
+          draftStore={props.draftStore}
           onQuayLai={ve}
           onDaGui={(p) => datPhieu((ds) => [p, ...ds])}
           onXemPhieu={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
@@ -458,8 +464,13 @@ export function TrangXa(props: {
    * phản ánh không có nút vị trí (chạy thử ngoài Zalo, test).
    */
   lay_ma_vi_tri?: LayMaViTri;
+  /**
+   * Nháp phản ánh đang soạn (ADR 0050 #7), do lớp vỏ tiêm — CHỈ app riêng của xã. Không truyền thì không
+   * có nháp (app chung, chạy thử, test): nửa này không tự chạm kho lưu trữ nào.
+   */
+  draftStore?: FeedbackDraftStore;
 }) {
-  const { ten_mien, lay_ten, lay_ma_vi_tri } = props;
+  const { ten_mien, lay_ten, lay_ma_vi_tri, draftStore } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -478,7 +489,9 @@ export function TrangXa(props: {
   }, [lan]);
 
   if (trang.kieu === "xong") {
-    return <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_ten={lay_ten} lay_ma_vi_tri={lay_ma_vi_tri} />;
+    return (
+      <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_ten={lay_ten} lay_ma_vi_tri={lay_ma_vi_tri} draftStore={draftStore} />
+    );
   }
 
   return (

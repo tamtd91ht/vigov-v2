@@ -6,6 +6,7 @@ import { TRUONG_DUOC_NHAN } from "../api/hop-dong-phan-anh";
 import { locCanBo, nhomTheoBoPhan } from "./DanhBaXa";
 import { TRANG_THAI } from "./noi-dung";
 import { buocDaQua } from "./PhanAnhAppXa";
+import { groupOf, STATUS_GROUP_LABEL, STEP_LABEL } from "./status-groups";
 import { chuyenMucCua, tinLienQuan } from "./TinTucAppXa";
 import {
   apDanhGia,
@@ -148,7 +149,17 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
       "chuyen-cap-tren": "da-dong",
     };
     for (const [tt, nhom] of Object.entries(bang)) expect(nhomCua(tt), tt).toBe(nhom);
+    for (const [code, group] of Object.entries(bang)) expect(groupOf(code), code).toBe(group);
+    // PINNED: the shared module does NOT guess a group for an unknown code (the shared app shows a neutral
+    // sentence); the commune app's `nhomCua` keeps its old fallback, "Đã đóng" — unreachable today because
+    // its tickets are created in memory with one of the nine codes.
+    expect(groupOf("trang-thai-moi")).toBeNull();
+    expect(groupOf("toString")).toBeNull();
+    expect(nhomCua("trang-thai-moi")).toBe("da-dong");
     expect(Object.keys(NHAN_NHOM)).toHaveLength(4);
+    // One table, two names — not two copies that can drift.
+    expect(NHAN_NHOM).toBe(STATUS_GROUP_LABEL);
+    expect(NHAN_BUOC).toBe(STEP_LABEL);
     // Mọi trạng thái của cán bộ có nhãn bước trên dòng thời gian — không bước nào hiện mã thô.
     for (const tt of Object.keys(TRANG_THAI)) expect(NHAN_BUOC[tt], tt).toBeDefined();
   });

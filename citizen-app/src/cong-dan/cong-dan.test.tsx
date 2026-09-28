@@ -20,7 +20,17 @@ import {
   PHAN_ANH_TRONG,
 } from "./man/GuiPhanAnhScreen";
 import { KenhCongDan } from "./man/KenhCongDan";
-import { CUA_TOI, KENH_CHUA_MO, GUI, LOI_GUI, nhanTrangThai, giaiThichTrangThai, TRA_CUU, TRANG_THAI } from "./man/noi-dung";
+import {
+  CUA_TOI,
+  KENH_CHUA_MO,
+  GUI,
+  LOI_GUI,
+  nhanTrangThai,
+  giaiThichTrangThai,
+  TRA_CUU,
+  TRANG_THAI,
+  TRANG_THAI_CHUA_CO_NHAN,
+} from "./man/noi-dung";
 import * as NOI_DUNG from "./man/noi-dung";
 import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
 import { thoiDiemVN } from "../lib/thoi-diem";
@@ -160,7 +170,7 @@ describe("chữ của màn hình", () => {
     expect(thoiDiemVN("khong-phai-thoi-diem")).toBeNull();
   });
 
-  it("đủ chín trạng thái của ADR 0027, nhãn nguyên văn, và `da-tiep-nhan` có câu cho người dân", () => {
+  it("đủ chín trạng thái của ADR 0027, người dân thấy bốn nhóm, và `da-tiep-nhan` có câu cho người dân", () => {
     expect(Object.keys(TRANG_THAI).sort()).toEqual(
       [
         "da-tiep-nhan",
@@ -178,6 +188,17 @@ describe("chữ của màn hình", () => {
     expect(giaiThichTrangThai("da-tiep-nhan")).toContain("chờ cán bộ");
     // Mã lạ: không hiện mã thô cho người dân.
     expect(nhanTrangThai("ma-la")).not.toContain("ma-la");
+    // PINNED (ADR 0050 #5 in the shared app): an unknown code is the neutral sentence, NOT a guessed group.
+    // "Đã đóng" on a ticket that may still be open tells the citizen the commune has stopped working on it.
+    expect(nhanTrangThai("ma-la")).toBe(TRANG_THAI_CHUA_CO_NHAN);
+    for (const label of ["Đã đóng", "Đã tiếp nhận", "Đang xử lý", "Đã xử lý xong"]) {
+      expect(nhanTrangThai("ma-la")).not.toBe(label);
+    }
+    // Inherited keys are not codes: `groupOf` reads own keys only.
+    expect(nhanTrangThai("toString")).toBe(TRANG_THAI_CHUA_CO_NHAN);
+    // The nine staff labels that were merged away no longer reach the citizen.
+    expect(nhanTrangThai("cho-dan-xac-nhan")).toBe("Đã xử lý xong");
+    expect(nhanTrangThai("khong-tiep-nhan")).toBe("Đã đóng");
   });
 
   it("nội dung bắt buộc, độ dài theo máy chủ, và ẩn danh không tính họ tên", () => {

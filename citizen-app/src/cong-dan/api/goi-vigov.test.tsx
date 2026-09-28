@@ -20,7 +20,7 @@ vi.mock("./dia-chi-vigov", () => ({
 }));
 
 import { KetQuaGui } from "../man/GuiPhanAnhScreen";
-import { CUA_TOI, GUI, THE_PHIEU, TRA_CUU, TRANG_THAI } from "../man/noi-dung";
+import { CUA_TOI, GUI, THE_PHIEU, TRA_CUU, TRANG_THAI, TRANG_THAI_CHUA_CO_NHAN } from "../man/noi-dung";
 import {
   batDauTai,
   DANH_SACH_DAU,
@@ -342,7 +342,8 @@ describe("tra cứu phiếu — lý do và cơ quan nhận của hai nhánh kế
 
   it("không tiếp nhận: hiện lý do, KHÔNG hiện cơ quan nhận (không ai nhận cả)", async () => {
     const html = await veTra({ ...PHIEU_RA, status: "khong-tiep-nhan", reason: LY_DO, receiving_body: CO_QUAN });
-    expect(html).toContain("Không tiếp nhận");
+    // Chip là nhóm "Đã đóng" (ADR 0050 #5); dòng phụ ngay dưới nói vì sao — xã không tiếp nhận.
+    expect(html).toContain('<strong class="cd-phieu__trang-thai">Đã đóng</strong>');
     expect(html).toContain(TRANG_THAI["khong-tiep-nhan"]!.giai_thich!);
     expect(html).toContain(THE_PHIEU.ly_do_khong_tiep_nhan);
     expect(html).toContain(LY_DO);
@@ -353,7 +354,8 @@ describe("tra cứu phiếu — lý do và cơ quan nhận của hai nhánh kế
 
   it("chuyển cấp trên: cơ quan tiếp nhận, lý do chuyển, và việc làm tiếp", async () => {
     const html = await veTra({ ...PHIEU_RA, status: "chuyen-cap-tren", reason: LY_DO, receiving_body: CO_QUAN });
-    expect(html).toContain("Chuyển cấp trên");
+    // Chip là nhóm "Đã đóng" (ADR 0050 #5); dòng phụ ngay dưới nói phiếu đã chuyển đi.
+    expect(html).toContain('<strong class="cd-phieu__trang-thai">Đã đóng</strong>');
     expect(html).toContain(TRANG_THAI["chuyen-cap-tren"]!.giai_thich!);
     expect(html).toContain(THE_PHIEU.co_quan_tiep_nhan);
     expect(html).toContain(CO_QUAN);
@@ -640,15 +642,33 @@ describe("phản ánh của tôi — màn hình", () => {
     expect(sauKhiTai(DANH_SACH_DAU, { kieu: "chua-co-phien" }).kenh_dong).toBe(true);
   });
 
-  it("thẻ: mã to, trạng thái bằng chữ đã duyệt, lĩnh vực, trích đoạn, mốc +07 — đủ chín trạng thái", () => {
-    expect(Object.keys(TRANG_THAI)).toHaveLength(9);
-    for (const [ma_tt, { nhan }] of Object.entries(TRANG_THAI)) {
+  it("thẻ: mã to, trạng thái bằng một trong BỐN NHÓM, lĩnh vực, trích đoạn, mốc +07 — đủ chín trạng thái", () => {
+    // ADR 0050 #5, chủ dự án 28/09/2026: app chung cũng hiện bốn nhóm cho người dân (không còn chín nhãn).
+    const EXPECTED_GROUP: Record<string, string> = {
+      "da-tiep-nhan": "Đã tiếp nhận",
+      "dang-phan-loai": "Đã tiếp nhận",
+      "da-chuyen-xu-ly": "Đang xử lý",
+      "dang-xu-ly": "Đang xử lý",
+      "da-xu-ly": "Đã xử lý xong",
+      "cho-dan-xac-nhan": "Đã xử lý xong",
+      "da-dong": "Đã đóng",
+      "khong-tiep-nhan": "Đã đóng",
+      "chuyen-cap-tren": "Đã đóng",
+    };
+    expect(Object.keys(TRANG_THAI).sort()).toEqual(Object.keys(EXPECTED_GROUP).sort());
+    for (const [code, label] of Object.entries(EXPECTED_GROUP)) {
       const html = renderToStaticMarkup(
-        createElement(ThePhieuTomTat, { phieu: phieu("PA7K2QX9M4TD", ma_tt), onMo: () => {} }),
+        createElement(ThePhieuTomTat, { phieu: phieu("PA7K2QX9M4TD", code), onMo: () => {} }),
       );
-      expect(html, ma_tt).toContain(`<strong class="cd-the-cua-toi__trang-thai">${nhan}</strong>`);
-      expect(html, ma_tt).not.toContain(ma_tt);
+      expect(html, code).toContain(`<strong class="cd-the-cua-toi__trang-thai">${label}</strong>`);
+      expect(html, code).not.toContain(code);
     }
+    // Unknown code: the neutral sentence — never guessed into "Đã đóng" or any group, never the raw code.
+    const unknown = renderToStaticMarkup(
+      createElement(ThePhieuTomTat, { phieu: phieu("PA7K2QX9M4TD", "trang-thai-moi"), onMo: () => {} }),
+    );
+    expect(unknown).toContain(`<strong class="cd-the-cua-toi__trang-thai">${TRANG_THAI_CHUA_CO_NHAN}</strong>`);
+    expect(unknown).not.toContain("trang-thai-moi");
 
     const html = renderToStaticMarkup(
       createElement(ThePhieuTomTat, {

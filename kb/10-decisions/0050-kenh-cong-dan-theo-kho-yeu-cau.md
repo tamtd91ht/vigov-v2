@@ -3,7 +3,7 @@ id: 0050-kenh-cong-dan-theo-kho-yeu-cau
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: da72a61
+derived_from_commit: c3e47d0
 expires: null
 owns_facts:
   - "nguyên tắc chủ dự án 28/09/2026 cho kênh công dân: xung đột thì theo kho yêu cầu, không xung đột thì theo prototype"
@@ -14,7 +14,9 @@ owns_facts:
   - "phản ánh 'Thái độ / tác phong cán bộ': luồng riêng, mặc định chỉ Bí thư/Chủ tịch xem, không công khai, xã tắt được"
   - "tra cứu hồ sơ phía dân: số điện thoại đầy đủ + 4 số cuối số hồ sơ"
   - "chatbot OA mức P1; hỏi đáp TTHC, lịch tiếp công dân, khảo sát (P1) và thanh toán (P2) thuộc phạm vi"
-  - "người dân thấy bốn nhóm trạng thái và được gọi là 'bà con'"
+  - "người dân thấy bốn nhóm trạng thái, ở cả app chung lẫn app riêng (vòng 4, 28/09/2026); chỉ app riêng xưng 'bà con'"
+  - "nháp phản ánh giữ trên máy CHỈ trong app riêng của xã: một khoá, sáu trường, họ tên và số điện thoại ghi rỗng khi ẩn danh (vòng 4, 28/09/2026)"
+  - "không có màn phiếu công khai phía dân; kiểm duyệt pending/approved/hidden là việc của cán bộ ở máy chủ; phiếu tác phong cán bộ không bao giờ công khai (vòng 4, 28/09/2026)"
 ---
 
 # 0050. Kênh công dân theo kho yêu cầu — xung đột thì theo yêu cầu, còn lại theo prototype
@@ -31,6 +33,11 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 > mục luôn"*. "Require" là `../vigov-require` tại `0053854`; chỗ `docs/SRS.md` và
 > `docs/spec/05-nghiep-vu.md` nói khác nhau thì theo spec (cụ thể hơn, mới hơn) — chủ dự án duyệt cách
 > đọc ấy. Điểm 2, 3, 9, 10 chuyển từ CHỜ sang ĐÃ CHỐT; thêm điểm 11–13.
+>
+> 28/09/2026, **vòng 4** — chủ dự án: *"3 điểm còn lại cũng theo require nhé"*. Phiên chính nhắc lại
+> cách hiểu trước khi dựng — nháp giữ lĩnh vực, mô tả, nơi xảy ra, họ tên, số điện thoại và cờ ẩn danh
+> như `store/draft.ts` của kho yêu cầu, chỉ trong app riêng của xã — chủ dự án không phản đối. Phạm vi
+> điểm 5, điểm 7, điểm 8 chuyển từ CHỜ sang ĐÃ CHỐT.
 
 ## Bối cảnh
 
@@ -47,17 +54,17 @@ xung đột với require thì làm theo prototype"*.
 | 2 | Đánh giá | Dân chấm **1–5 sao** kèm nhận xét tuỳ ý khi phiếu ở "đã xử lý" / "chờ dân xác nhận". Phiếu mở lại rồi xử lý xong lần nữa thì dân **chấm lại được**, lần mới thay lần cũ (`service.py:813`; mã: `DanhGia.sau_lan_mo_lai`). **Vòng 2, 28/09/2026 — ĐÃ CHỐT:** (i) chấm **từ 3 sao** ở "chờ dân xác nhận" thì ghi nhận điểm, **giữ nguyên trạng thái** (`service.py:822-823`; tài liệu không nói) — phiếu chờ cán bộ đóng; (ii) chấm **1 hoặc 2 sao** thì phiếu **tự mở lại** về đang xử lý (`05-nghiep-vu.md:206`, `SRS.md:324`), **không trần số lần**, **không tính lại hạn** (`service.py:817-821` chỉ đổi trạng thái, cộng `reopen_count`, xoá `closed_at`). Ngưỡng là con số cố định "1 hoặc 2 sao", không phải cấu hình. Dòng này **thay** quyết định 27/09 "1–2 sao vào hàng lãnh đạo xem, KHÔNG tự mở lại" (`kb/90-ephemeral/ban-giao-phien.md:76`, sổ `service-petitions/phan-anh-tuyen-cong-dan-con-thieu`) và **thay** giá trị đã chốt của `nguong_sao_mo_lai`, `so_lan_mo_lai_toi_da`, `tinh_lai_han_khi_mo_lai` trong ADR 0008:50-53. `SAO_MO_LAI = 2` chỉ sống trong bản trải nghiệm (phiếu trong bộ nhớ), bỏ khi có đường máy chủ. Giao diện dân **không nói ngưỡng** | `service.py:804-840`; `SRS.md:324` (M4.3.7); `05-nghiep-vu.md:206`; `RatingBlock.tsx` | ADR 0041: thêm một bước chuyển do dân gây ra (kèm thông báo); ADR 0008 phần mở lại; quyết định 27/09 |
 | 3 | Ẩn danh | **Vòng 2, 28/09/2026 — ĐÃ CHỐT:** trả lại công tắc **"Gửi ẩn danh"** tuỳ chọn (`SRS.md:308` *"Tuỳ chọn: gửi ẩn danh"*). Bật thì Mini App **không gửi họ tên, không gửi số điện thoại**; cán bộ không thấy cả hai (cờ `an_danh` phía máy chủ, `service-petitions/internal/http/phieu_phan_anh.go:208-220`). Thay cách cũ "để trống ô tên là giấu tên" của prototype (`NewFeedbackPage.tsx:376-400`) — cách ấy yếu hơn vì số điện thoại (đã che) vẫn tới cán bộ. Mã: `kiemNhapPhieu` bỏ yêu cầu người gửi khi `an_danh` (`citizen-app/src/cong-dan/man/trai-nghiem.ts:213-224`); công tắc ở `PhanAnhAppXa.tsx:561-577` | `SRS.md:308`; `schemas.py:116` | ADR 0008 phía Mini App: nay có công tắc cho cờ `an_danh` đã chốt ở đó |
 | 4 | Số điện thoại | Lấy từ tài khoản Zalo (xin quyền → máy chủ đổi mã ra số); sửa được | `NewFeedbackPage.tsx:90-116`; `SRS.md:432` | — (cần máy chủ đổi mã; trước đó dân tự gõ) |
-| 5 | Nhãn trạng thái | Người dân thấy **bốn nhóm**: Đã tiếp nhận · Đang xử lý · Đã xử lý xong · Đã đóng; dòng thời gian dùng nhãn từng bước của prototype | `StatusChip.tsx`, `feedback-adapter.ts:79-101` | Chỉ phía người dân; cán bộ vẫn chín trạng thái (ADR 0027) |
+| 5 | Nhãn trạng thái | Người dân thấy **bốn nhóm**: Đã tiếp nhận · Đang xử lý · Đã xử lý xong · Đã đóng; dòng thời gian dùng nhãn từng bước của prototype. **Vòng 4, 28/09/2026 — ĐÃ CHỐT phạm vi:** áp cho **cả app chung** (`AppChung`), không chỉ app riêng. Một bảng duy nhất: `citizen-app/src/cong-dan/man/status-groups.ts:22-32` (`groupOf`, `STATUS_GROUP_LABEL`, `STEP_LABEL`); app chung đọc qua `nhanTrangThai` (`noi-dung.ts:51-54`); `trai-nghiem.ts:169-175` giữ `nhomCua`/`NHAN_NHOM`/`NHAN_BUOC` làm tên cũ trỏ về bảng ấy. Mã lạ: `groupOf` trả `null`, app chung hiện câu trung tính `TRANG_THAI_CHUA_CO_NHAN` (`noi-dung.ts:47-48`) thay vì đoán nhóm | `StatusChip.tsx`, `feedback-adapter.ts:79-101` | Chỉ phía người dân; cán bộ vẫn chín trạng thái (ADR 0027); mã trên dây không đổi |
 | 6 | Xưng hô | "bà con" | toàn bộ prototype | `noi-dung.ts` phía công dân |
-| 7 | Nháp | Theo yêu cầu: phản ánh đang soạn được giữ trên máy. **CHƯA LÀM** — xem Cái giá | `store/draft.ts`, `NewFeedbackPage.tsx:426-453` | Chờ: sửa chính sách quyền riêng tư + nới hai dây bẫy lưu trữ |
-| 8 | Phiếu công khai | Yêu cầu ghi nhận: phiếu được kiểm duyệt thì hiện công khai (`pending`/`approved`/`hidden`), phiếu về tác phong cán bộ **không bao giờ** công khai. **Chưa dựng màn** — prototype không có màn này | `05-nghiep-vu.md:192-193, 204` | Chạm luật 4 bất biến 6 và luật 3 — cần thiết kế riêng trước khi dựng |
+| 7 | Nháp | **Vòng 4, 28/09/2026 — ĐÃ CHỐT, ĐÃ DỰNG, chỉ app riêng.** Phản ánh đang soạn giữ trong `localStorage`, một khoá `vigov.feedback.draft.v1` như kho yêu cầu. Tệp duy nhất được chạm bộ nhớ máy: `citizen-app/src/commune-app/feedback-draft-store.ts` — ghi đúng sáu trường của `NhapPhieu`, dựng lại từng trường (`:45-55`); bật "Gửi ẩn danh" thì họ tên, số điện thoại **ghi rỗng** (`:51-52`); dựng app chung (`XA_CO_DINH === null`) thì không mở bộ nhớ nào (`:128-130`). Chỉ `AppRieng` tiêm nó (`App.tsx:212-216`). Mở màn gửi mà có nháp thì hỏi "Tiếp tục" / "Bỏ nháp" (`PhanAnhAppXa.tsx:487-491`); xoá khi gửi, bỏ nháp, huỷ (`:523, 529, 542`). Hai dây bẫy nay cấm mọi lưu trữ **trừ đúng tệp ấy**: `phase1-collects-nothing.test.ts:383-386`, `ranh-gioi-hai-nua.test.ts:403, 439` (§3b). Khác kho yêu cầu: không giữ ảnh (`photoSeeds`) vì app chưa tải được ảnh; không `savedAt` | `store/draft.ts:11`, `types/index.ts:71-81`, `NewFeedbackPage.tsx:426-453` | Dòng chính sách quyền riêng tư app riêng của ADR 0047 (`0047:252`) — xem Cái giá |
+| 8 | Phiếu công khai | **Vòng 4, 28/09/2026 — ĐÃ CHỐT theo kho yêu cầu:** **không có màn bảng công khai** phía dân — prototype Mini App không có màn nào như vậy (không một chỗ `moderation` trong `apps/miniapp/src`). Thứ kho yêu cầu có là **kiểm duyệt của cán bộ ở máy chủ**: trạng thái kiểm duyệt riêng `pending`/`approved`/`hidden` (`05-nghiep-vu.md:192-193`), tuyến cán bộ `POST /{feedback_id}/moderation` (`router.py:349-361`), duyệt `approved` bị từ chối nếu lĩnh vực thuộc loại không công khai (`service.py:776-782`), phiếu loại ấy sinh ra đã `hidden` (`service.py:301-307`); SRS M4.3.1 mức **P0** (`SRS.md:318`); phiếu tác phong cán bộ **không bao giờ** công khai (`05-nghiep-vu.md:204`). Mini App: không dựng màn. Máy chủ: nợ ba thứ ấy — xem Cái giá | `05-nghiep-vu.md:192-193, 204`; `SRS.md:318`; `router.py:349-361`; `service.py:301-307, 776-782` | — |
 | 9 | Trường bắt buộc | **Vòng 2, 28/09/2026 — ĐÃ CHỐT theo `SRS.md:308`:** lĩnh vực, mô tả, ảnh/video (≤5 tệp), vị trí trên bản đồ, người gửi (họ tên) — trừ khi gửi ẩn danh. Thay cách của prototype (chỉ bắt buộc mô tả, `NewFeedbackPage.tsx:412-415`) và của API kho yêu cầu (`field_code` + `content`, `schemas.py:106-107`). Mã: `kiemNhapPhieu` bắt người gửi khi không ẩn danh (`trai-nghiem.ts:221`), lĩnh vực do bước 1 chặn; màn gửi hiện ảnh và vị trí là "bắt buộc — sắp có" (`PhanAnhAppXa.tsx:553-558`). **Cái giá:** ứng dụng chưa tải được ảnh (chưa có kho tệp nối vào) và chưa đổi được vị trí ra toạ độ, nên bản trải nghiệm **không chặn nút gửi** vì hai ô ấy — chặn thì không gửi được phiếu nào. Máy chủ **phải kiểm đủ năm ô** khi kho tệp và vị trí đã có | `SRS.md:308` | Prototype `NewFeedbackPage.tsx:412-415` |
 | 10 | "Thái độ / tác phong cán bộ" lúc gửi | **Vòng 2, 28/09/2026 — ĐÃ CHỐT:** dân **chọn được** lĩnh vực này (`STAFF_CONDUCT_FIELD`, `trai-nghiem.ts:102`, theo `SRS.md:310`). Phiếu loại này đi **luồng riêng**, mặc định **chỉ Bí thư/Chủ tịch xem**, **không bao giờ công khai**, **xã tắt được** tính năng (`SRS.md:325` M4.3.8; `SRS.md:591` R-05; `05-nghiep-vu.md:204`). Màn gửi báo dân chỉ lãnh đạo xã xem (`PhanAnhAppXa.tsx:547-552`). **Còn thiếu để dựng:** (a) một khoá quyền chỉ-lãnh-đạo mà bảng `quyen` chưa có — theo luật 5 bất biến 3c đây là **phát hiện cho câu mở #27**, không phải một `INSERT` mới; (b) cờ bật/tắt theo xã. Xã tắt thì màn gửi không được hiện lĩnh vực này. ADR 0041:63-66 (lời báo cho dân với lĩnh vực `can-bo`) giữ nguyên | `SRS.md:310, 325, 591`; `05-nghiep-vu.md:204` | — |
 | 11 | Tra cứu hồ sơ TTHC (M6.1.3) | **Vòng 2, 28/09/2026 — ĐÃ CHỐT theo spec:** dân nhập **số điện thoại đầy đủ + 4 số cuối số hồ sơ**, cả hai bắt buộc; sai mảnh nào cũng trả **cùng một câu "không thấy"**; giới hạn **20 lần tra / 10 phút / một địa chỉ**; kết quả là **danh sách hồ sơ** của người ấy (`05-nghiep-vu.md:148-156`). "Nhập mã biên nhận" của `SRS.md:407` bị spec thay. Màn: `TraCuuHoSoXa` (`citizen-app/src/cong-dan/man/TienIchAppXa.tsx:29`). **Chưa có:** hệ thống một cửa nào nối vào, và service sở hữu thực thể hồ sơ (luật 2 điều kiện dừng #1) | `05-nghiep-vu.md:148-156` | `SRS.md:407` |
 | 12 | Chatbot OA | **Vòng 2, 28/09/2026 — ĐÃ CHỐT mức P1** (`SRS.md:434`, mục riêng của kênh Zalo). Chạy trên **OA của từng xã** — phía `service-comms` (ADR 0018), **không** phải Mini App, **không** phải `vihat-miniapp` | `SRS.md:434` | — |
 | 13 | Phạm vi M6.1 còn lại | **Vòng 2, 28/09/2026 — ĐÃ CHỐT thuộc phạm vi**, đúng mức ưu tiên của `SRS.md:412-417`: M6.1.8 hỏi đáp TTHC (P1), M6.1.10 lịch tiếp công dân + đăng ký lịch gặp (P1), M6.1.11 khảo sát – lấy ý kiến (P1), M6.1.13 thanh toán phí – lệ phí (P2). **Chưa có service nào sở hữu** cả bốn — luật 2 điều kiện dừng #1: tới lượt thì contract-designer đề xuất, chủ dự án quyết | `SRS.md:412-417` | — |
 
-Phạm vi điểm 5: **CHỜ CHỦ DỰ ÁN** cho app chung — màn công dân của app chung vẫn hiện chín nhãn.
+Phạm vi điểm 5: **ĐÃ CHỐT vòng 4** — cả app chung lẫn app riêng (dòng 5 ở bảng trên).
 
 Chỗ không xung đột: theo prototype (bước 2 là bước gửi; bước 3 là màn kết quả — bản trải nghiệm ghi
 "Đã lưu phản ánh (bản trải nghiệm)" vì phiếu chỉ nằm trong bộ nhớ máy, **chưa gửi tới xã**; trang chủ 2
@@ -81,7 +88,8 @@ mã phiếu tuần tự `PA-2026-0004` (luật 4 bất biến 4).
 - **Máy chủ phải đổi**: nhận `field` khi dân gửi (hôm nay bị từ chối 400), đặt cả hai hạn lúc tạo phiếu
   cho kênh Mini App, tuyến danh mục lĩnh vực, tuyến chấm sao + tự mở lại ở 1–2 sao (điểm 2), tuyến đổi
   mã số điện thoại, nhận `an_danh` từ Mini App (điểm 3), kiểm đủ năm trường bắt buộc (điểm 9), luồng
-  tác phong cán bộ (điểm 10). Bảng chuyển trạng thái của máy chủ **không có cạnh `da-xu-ly → dang-xu-ly`**
+  tác phong cán bộ (điểm 10), kiểm duyệt `pending`/`approved`/`hidden` + tuyến cán bộ + luật phiếu tác
+  phong cán bộ không bao giờ tới `approved` (điểm 8). Bảng chuyển trạng thái của máy chủ **không có cạnh `da-xu-ly → dang-xu-ly`**
   (`service-petitions/internal/domain/phieu_phan_anh.go:74-84`, chỉ `cho-dan-xac-nhan` và `da-dong` về
   được `dang-xu-ly`) — cần thêm nếu chấm thấp ở "đã xử lý" mở lại phiếu. Sổ:
   `service-petitions/may-chu-no-adr-0050`.
@@ -101,19 +109,34 @@ mã phiếu tuần tự `PA-2026-0004` (luật 4 bất biến 4).
 - **Điểm 11, 13 — chưa có chủ sở hữu:** hồ sơ một cửa, hỏi đáp TTHC, lịch tiếp công dân, khảo sát, thanh
   toán đều chưa có service sở hữu (luật 2 điều kiện dừng #1). Tra cứu hồ sơ không cần phiên là điều kiện
   dừng luật 4 #2 — hỏi khi dựng máy chủ.
-- **Còn CHỜ CHỦ DỰ ÁN** (không tự quyết): phạm vi điểm 5; nháp trên máy
-  (điểm 7); thiết kế phiếu công khai (điểm 8).
-- **Nháp trên máy (điểm 7) CHƯA LÀM, có chủ đích.** Hai dây bẫy (`phase1-collects-nothing.test.ts`,
-  `ranh-gioi-hai-nua.test.ts` §3b) cấm MỌI lưu trữ trên máy vì hai nửa dùng chung một origin và thiết bị
-  cho mượn được; câu "không lưu lại" trong chính sách quyền riêng tư đã khai với Zalo đứng được nhờ chúng.
-  Làm điểm 7 là SỬA chính sách ấy trước (nộp lại), rồi mới mở một ngoại lệ hẹp: một khoá, chỉ lĩnh vực ·
-  nội dung · nơi xảy ra, không họ tên, không số điện thoại, xoá khi gửi. Cần chủ dự án đồng ý cái giá ấy.
+- **Còn CHỜ CHỦ DỰ ÁN** cho mảng phản ánh: **không còn điểm nào** sau vòng 4 (28/09/2026). Những gì còn
+  treo ở đây là việc chưa dựng, hoặc câu mở đã có số (#27) — không phải câu hỏi chưa được trả lời.
+- **Điểm 5 — app riêng còn một chỗ đoán nhóm:** `nhomCua` (`trai-nghiem.ts:169-171`) cho mã lạ rơi vào
+  "Đã đóng", khác app chung (câu trung tính). Hôm nay không tới được vì phiếu app riêng sinh trong bộ nhớ
+  với một trong chín mã; ngày app riêng đọc phiếu từ máy chủ phải đổi sang `groupOf`, nếu không một phiếu
+  đang mở có thể hiện "Đã đóng" với dân.
+- **Điểm 7 — nháp có họ tên và số điện thoại trên máy, vì sao không phá lời hứa nào:** app riêng là một
+  Zalo App ID riêng, tức một origin riêng, và **chưa có chính sách quyền riêng tư** (ADR 0047:252). Câu
+  "không lưu bất kỳ dữ liệu nào của bạn xuống máy" (`citizen-app/src/content/chinh-sach-rieng-tu.ts:229`)
+  là của app chung ViHAT và vẫn đúng: app chung không nhận kho nháp, và kho mặc định không mở bộ nhớ khi
+  dựng app chung. **Cái giá phải trả khi viết chính sách của app riêng để nộp Zalo duyệt:** phải khai
+  nháp này — có họ tên và số điện thoại, tên khoá, và lúc nào nó bị xoá (gửi xong, "Bỏ nháp", huỷ). Thiết
+  bị cho mượn thì người sau thấy nháp của người trước. **Nháp không có hạn** — giữ bao lâu là luật nghiệp
+  vụ, còn mở. Khoá **không** mang tiền tố `t:<tenant>` vì một app riêng = một origin = một xã: không có
+  hai xã chung một bộ nhớ.
+- **Điểm 8 — không có bảng công khai, nhưng máy chủ vẫn nợ kiểm duyệt:** SRS xếp M4.3.1 mức P0
+  (`SRS.md:318`). Sổ: `service-petitions/may-chu-no-adr-0050`.
 
 ## ĐIỀU KIỆN DỪNG
 
 1. Tính hạn ở client, ở bất kỳ đâu ngoài `identity`
-2. Dựng màn phiếu công khai khi chưa có thiết kế che dữ liệu cá nhân và loại trừ phiếu tác phong cán bộ
-3. Lưu họ tên / số điện thoại / mã phiên vào bộ nhớ máy
+2. Dựng màn phiếu công khai phía dân (kho yêu cầu không có màn này), hoặc để phiếu tác phong cán bộ tới
+   `approved`
+3. Lưu trên máy vượt ranh giới điểm 7 — bất kỳ vế nào sau đây:
+   - lưu **mã phiên** (session token) ở bất kỳ đâu;
+   - lưu **bất cứ thứ gì** trên máy trong **app chung**;
+   - lưu **nhiều hơn sáu trường** nháp của `NhapPhieu`;
+   - lưu ở tệp nào khác ngoài `citizen-app/src/commune-app/feedback-draft-store.ts`
 4. Chép cách lấy xã từ header client hoặc mã phiếu tuần tự của kho yêu cầu
 
-→ ADR 0027 · 0028 · 0041 · 0008 · 0018 · 0049 (bị thay) · câu mở #8, #27 · luật 1, 2, 3, 4, 5, 10
+→ ADR 0027 · 0028 · 0041 · 0008 · 0018 · 0047 · 0049 (bị thay) · câu mở #8, #27 · luật 1, 2, 3, 4, 5, 10

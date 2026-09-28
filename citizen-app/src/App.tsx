@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 
+import { feedbackDraftStore } from "./commune-app/feedback-draft-store";
 import { TabBar } from "./components/TabBar";
 import {
   KenhCongDan,
@@ -209,7 +210,11 @@ export function App() {
  * chủ dự án chọn 28/09/2026; lớp vỏ này chỉ chọn nó.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  return <TrangXa ten_mien={ten_mien} lay_ten={layTenChoXa} lay_ma_vi_tri={layMaViTri} />;
+  // `feedbackDraftStore` goes to THIS app only (ADR 0050 #7): a separate App ID, a separate origin. The
+  // shared app below never receives it — `ranh-gioi-hai-nua.test.ts` §3b reads `AppChung`'s body for it.
+  return (
+    <TrangXa ten_mien={ten_mien} lay_ten={layTenChoXa} lay_ma_vi_tri={layMaViTri} draftStore={feedbackDraftStore} />
+  );
 }
 
 /**

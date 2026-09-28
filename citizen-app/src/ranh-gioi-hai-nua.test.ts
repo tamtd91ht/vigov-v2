@@ -105,6 +105,10 @@ const KHU_VUC: Readonly<Record<Nua | "trung-lap", readonly string[]>> = {
     "./components/",
     "./lib/",
     "./features/kham-pha/",
+    // Shell pieces of the commune's OWN app (28/09/2026) — today only the feedback-draft store `AppRieng`
+    // injects (§3b). Neutral like `lib/`: it serves neither the commercial half nor the state half's
+    // screens; and §3b pins that `App.tsx` is the only file importing it.
+    "./commune-app/",
   ],
 };
 
@@ -379,18 +383,68 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
 const KHO_LUU_TRU =
   /\blocalStorage\b|\bsessionStorage\b|\bindexedDB\b|\bIDBFactory\b|\bIDBDatabase\b|\bIDBOpenDBRequest\b|\bIDBTransaction\b|\bIDBObjectStore\b|\bdocument\s*\.\s*cookie\b/;
 
+/**
+ * THE ONE-FILE EXCEPTION — 28/09/2026, the first this constraint has ever had.
+ *
+ *   WHY: ADR 0050 #7, owner decision 28/09/2026 ("3 điểm còn lại cũng theo require nhé"): the commune's
+ *   OWN app keeps a feedback being written on the phone, as the requirements prototype does.
+ *
+ *   WHY THE "ONE ORIGIN" ARGUMENT ABOVE DOES NOT APPLY TO IT: the commune's own app is a SEPARATE Zalo App
+ *   ID (`--vao-thang`, `XA_CO_DINH !== null`, `App.tsx` renders `AppRieng`) — a separate origin, with no
+ *   commercial half in it and no privacy policy published yet (ADR 0047). The SHARED ViHAT app, whose two
+ *   halves DO share one origin, still writes nothing: its promise "không lưu gì xuống máy" stands, and the
+ *   cases below pin the three things that keep it — (1) `localStorage` in this ONE file only, nothing else
+ *   of the pattern even here; (2) `App.tsx` is the only importer of that file; (3) `AppChung` never
+ *   references the store (and the store itself opens no storage when `XA_CO_DINH === null`).
+ *
+ *   The state half (`./cong-dan/**`) still touches no storage API: it receives the store as a prop, the way
+ *   it receives `lay_ten` / `lay_ma_vi_tri`.
+ */
+const DRAFT_STORE_FILE = "./commune-app/feedback-draft-store.ts";
+
 function luuXuongMay(tep: readonly TepNguon[]): string[] {
-  return tep.filter((f) => KHO_LUU_TRU.test(f.code)).map((f) => f.path);
+  return tep
+    .filter((f) => KHO_LUU_TRU.test(f.code))
+    .filter((f) => f.path !== DRAFT_STORE_FILE || KHO_LUU_TRU.test(f.code.replace(/\blocalStorage\b/g, " ")))
+    .map((f) => f.path);
 }
 
+/** Every production file that imports the draft store — the answer must be exactly `App.tsx`. */
+function draftStoreImporters(files: readonly TepNguon[]): string[] {
+  return files
+    .filter((f) =>
+      tenModuleNhap(f.code).some((ten) => {
+        const toi = giaiDuongDan(f.path, ten);
+        return toi !== null && (toi === DRAFT_STORE_FILE || `${toi}.ts` === DRAFT_STORE_FILE);
+      }),
+    )
+    .map((f) => f.path);
+}
+
+/** The body of `AppChung` in `App.tsx` source — from its declaration to the end of the file. */
+function sharedAppBody(appSource: string): string {
+  const start = appSource.indexOf("function AppChung(");
+  return start < 0 ? "" : appSource.slice(start);
+}
+
+/** The body of `AppRieng` — from its declaration up to `AppChung`. */
+function communeAppBody(appSource: string): string {
+  const start = appSource.indexOf("export function AppRieng(");
+  const end = appSource.indexOf("function AppChung(");
+  return start < 0 || end < start ? "" : appSource.slice(start, end);
+}
+
+const DRAFT_STORE_REFERENCE = /feedbackDraftStore|feedback-draft-store|createFeedbackDraftStore|draftStore/;
+
 describe("3b — không nửa nào ghi định danh xuống thiết bị", () => {
-  it("không tệp sản xuất nào chạm localStorage · sessionStorage · IndexedDB", () => {
+  it("không tệp sản xuất nào chạm localStorage · sessionStorage · IndexedDB (trừ đúng một tệp nháp, chỉ localStorage)", () => {
     expect(
       luuXuongMay(TEP_SAN_XUAT),
       "một nửa vừa ghi trạng thái xuống máy. Hai nửa dùng CHUNG một origin, nên thứ ghi ra đọc " +
         "được từ nửa kia; và một thiết bị cho mượn được thì thứ ghi ra sống sót qua người dùng " +
         "tiếp theo. Phiếu phiên, số điện thoại và xã đã chọn sống trong `useState` — mất khi đóng " +
-        "app, đúng như chính sách quyền riêng tư đang khai.",
+        "app, đúng như chính sách quyền riêng tư đang khai. Ngoại lệ duy nhất: `localStorage` trong " +
+        `\`${DRAFT_STORE_FILE}\` (nháp của app riêng, ADR 0050 #7).`,
     ).toEqual([]);
   });
 
@@ -427,11 +481,78 @@ describe("3b — không nửa nào ghi định danh xuống thiết bị", () =>
       "./cong-dan/phien.ts",
     ]);
 
+    // THE ONE-FILE EXCEPTION (28/09/2026) IS ONE FILE AND ONE API. The same call the draft store makes, in
+    // any other file — the screen that uses the store, the rest of the state half, the commercial half, the
+    // shell, a sibling in `commune-app/`, a `.tsx` twin — is still red.
+    const SAME_CALL = 'localStorage.setItem("vigov.feedback.draft.v1", JSON.stringify(d));';
+    for (const path of [
+      "./cong-dan/man/PhanAnhAppXa.tsx",
+      "./cong-dan/man/TrangXa.tsx",
+      "./cong-dan/api/goi-vigov.ts",
+      "./features/dang-nhap/kho-phien.tsx",
+      "./features/yeu-cau/OGhiChu.tsx",
+      "./App.tsx",
+      "./lib/xa-co-dinh.ts",
+      "./commune-app/other-store.ts",
+      "./commune-app/feedback-draft-store.tsx",
+    ]) {
+      expect(luuXuongMay([{ path, code: SAME_CALL }]), `localStorage lọt ở: ${path}`).toEqual([path]);
+    }
+    // In the allowed file itself: `localStorage` passes, every OTHER storage API is still red.
+    expect(luuXuongMay([{ path: DRAFT_STORE_FILE, code: SAME_CALL }])).toEqual([]);
+    for (const dong of ['sessionStorage.setItem("so", so);', 'indexedDB.open("nhap");', 'document.cookie = "p=" + t;']) {
+      expect(luuXuongMay([{ path: DRAFT_STORE_FILE, code: `${SAME_CALL}\n${dong}` }]), `lọt ở tệp nháp: ${dong}`).toEqual([
+        DRAFT_STORE_FILE,
+      ]);
+    }
+
     // Và không kêu oan ở thứ chỉ TRÔNG giống: một biến tên `luuTam` trong bộ nhớ không phải kho
     // lưu trữ của trình duyệt, và một dây bẫy kêu oan là một dây bẫy sắp bị tắt.
     for (const dong of ["const [luuTam, datLuuTam] = useState(null);", "const kho = new Map();"]) {
       expect(luuXuongMay([{ path: "./App.tsx", code: dong }]), `kêu oan ở: ${dong}`).toEqual([]);
     }
+  });
+
+  it("the draft store exists where the exception points, and ONLY App.tsx imports it", () => {
+    // An exception pointing at a file the sweep never reads exempts nothing — and the day that file is
+    // renamed, the exception silently points at nothing.
+    expect(TEP_SAN_XUAT.map((f) => f.path)).toContain(DRAFT_STORE_FILE);
+    expect(
+      draftStoreImporters(TEP_SAN_XUAT),
+      "a file other than App.tsx imports the feedback-draft store. Only the commune's own app may hold it; " +
+        "a commercial screen or the state half reaching it puts device storage back into the shared app.",
+    ).toEqual(["./App.tsx"]);
+
+    // Must-still-catch: an import from anywhere else, in any form.
+    for (const tep of [
+      { path: "./features/yeu-cau/TuVanBaoGiaScreen.tsx", code: 'import { feedbackDraftStore } from "../../commune-app/feedback-draft-store";' },
+      { path: "./cong-dan/man/PhanAnhAppXa.tsx", code: 'const s = await import("../../commune-app/feedback-draft-store");' },
+      { path: "./lib/launch-params.ts", code: 'import { feedbackDraftStore } from "@/commune-app/feedback-draft-store";' },
+    ]) {
+      expect(draftStoreImporters([tep]), `nhập kho nháp lọt từ: ${tep.path}`).toEqual([tep.path]);
+    }
+  });
+
+  it("AppChung (the shared ViHAT app) never receives the draft store; AppRieng does", () => {
+    const app = RAW_SOURCES["./App.tsx"] ?? "";
+    const shared = sharedAppBody(boChuThich(app));
+    const commune = communeAppBody(boChuThich(app));
+    // Both slices must be non-empty — an empty slice is green for the wrong reason.
+    expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
+    expect(commune.length, "không tìm thấy `export function AppRieng(` trong App.tsx").toBeGreaterThan(0);
+    expect(
+      shared,
+      "AppChung references the feedback-draft store. The shared app promises 'không lưu gì xuống máy', and " +
+        "its two halves share one origin — the draft belongs to the commune's own App ID only (ADR 0050 #7).",
+    ).not.toMatch(DRAFT_STORE_REFERENCE);
+    expect(commune, "AppRieng no longer injects the draft store — the draft feature is dead").toMatch(
+      /draftStore=\{feedbackDraftStore\}/,
+    );
+
+    // Must-still-catch: the same wiring written into AppChung is red.
+    const wired = `${app}\n<TrangXa draftStore={feedbackDraftStore} />`;
+    expect(sharedAppBody(wired)).toMatch(DRAFT_STORE_REFERENCE);
+    expect(sharedAppBody("function AppChung() { return <KenhCongDan draftStore={x} />; }")).toMatch(DRAFT_STORE_REFERENCE);
   });
 });
 

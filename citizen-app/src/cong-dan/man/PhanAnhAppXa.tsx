@@ -8,6 +8,8 @@
  *   · Người dân thấy BỐN nhóm trạng thái; dòng thời gian chỉ các bước ĐÃ QUA, nhãn của prototype (#5).
  *   · Chấm 1–5 sao khi phiếu đã xử lý xong; 1–2 sao mở lại phiếu (#2).
  *   · Xưng "bà con" (#6).
+ *   · Nháp đang soạn giữ trên máy (#7, chủ dự án 28/09/2026) — qua `draftStore` lớp vỏ tiêm; tệp này không
+ *     chạm kho lưu trữ nào. Mở màn gửi mà có nháp thì hỏi "Tiếp tục" / "Bỏ nháp"; gửi xong hoặc huỷ là xoá.
  *
  * Tên xã hiện ngay trên nút gửi — người dân đọc lại nơi nhận ở bước cuối (`skills/zalo-miniapp-multi-
  * tenant` REQUIRED #5), dù prototype không có bước xác nhận riêng.
@@ -15,7 +17,7 @@
  * PHIẾU CHỈ TRONG MÁY (`trai-nghiem.ts`): không một byte nào tới máy chủ của xã. Mọi màn gắn nhãn.
  * Mọi ô nhập đi qua `o-nhap.tsx` — tệp duy nhất của nửa nhà nước được có ô nhập.
  */
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { DO_DAI_TOI_DA } from "../api/hop-dong-phan-anh";
 import { thoiDiemVN } from "../../lib/thoi-diem";
@@ -26,6 +28,7 @@ import { GUI, giaiThichTrangThai, KHAN_CAP, THE_PHIEU, TRA_CUU, XA_PA, XA_TN } f
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import {
   duocDanhGia,
+  type FeedbackDraftStore,
   type KetQuaLayTen,
   type KetQuaViTri,
   kiemNhapPhieu,
@@ -440,6 +443,28 @@ function NutViTri({ lay }: { lay: LayMaViTri }) {
   );
 }
 
+/**
+ * "Tiếp tục" on a found draft → the form to show and the step to open. PURE, exported for tests.
+ *
+ * A field no longer offered (the catalogue changed) is not restored: the citizen picks again on step 1.
+ * Otherwise step 2, the writing step, as the prototype does (`NewFeedbackPage.tsx:222`). An empty name in
+ * the draft (an anonymous one keeps none) falls back to the name taken from Zalo in this session.
+ */
+export function restoreDraft(draft: NhapPhieu, zaloName: string | null): { form: NhapPhieu; step: 1 | 2 } {
+  const field = LINH_VUC_TAM.includes(draft.linh_vuc) ? draft.linh_vuc : "";
+  return {
+    form: {
+      linh_vuc: field,
+      noi_dung: draft.noi_dung,
+      dia_chi: draft.dia_chi,
+      ho_ten: draft.ho_ten !== "" ? draft.ho_ten : (zaloName ?? ""),
+      dien_thoai: draft.dien_thoai,
+      an_danh: draft.an_danh,
+    },
+    step: field !== "" ? 2 : 1,
+  };
+}
+
 export function GuiPhanAnhTN(props: {
   ten_xa: string;
   /** Họ tên đã lấy từ Zalo ở lần mở này, hoặc `null`. */
@@ -447,11 +472,23 @@ export function GuiPhanAnhTN(props: {
   lay_ten?: LayTenZalo;
   onTen: (ho_ten: string) => void;
   lay_ma_vi_tri?: LayMaViTri;
+  /**
+   * Draft kept on the phone (ADR 0050 #7) — injected by the shell for the commune's own app only. Absent:
+   * no draft at all, nothing survives closing the app (shared app, tests).
+   */
+  draftStore?: FeedbackDraftStore;
   onQuayLai: () => void;
   onDaGui: (phieu: PhieuTN) => void;
   onXemPhieu: (ma: string) => void;
 }) {
+  const { draftStore } = props;
   const [buoc, datBuoc] = useState<1 | 2 | 3>(1);
+  /**
+   * A draft found when the screen opened, until the citizen picks "Tiếp tục" or "Bỏ nháp". While it is
+   * pending the form is hidden and nothing is saved, so the old draft cannot be overwritten by a new one
+   * before the citizen has answered (the prototype asks first, `NewFeedbackPage.tsx:79`).
+   */
+  const [draftOffer, setDraftOffer] = useState<NhapPhieu | null>(() => draftStore?.load() ?? null);
   const [nhap, datNhap] = useState<NhapPhieu>({
     linh_vuc: "",
     noi_dung: "",
@@ -467,6 +504,32 @@ export function GuiPhanAnhTN(props: {
   const doi = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => datNhap((t) => ({ ...t, [k]: v }));
   const co_noi_dung = nhap.linh_vuc !== "" || nhap.noi_dung.trim() !== "" || nhap.dia_chi.trim() !== "";
 
+  // Save as the citizen types, on the writing step only (the prototype's rule, `NewFeedbackPage.tsx:124`).
+  // Not while a found draft is still waiting for an answer, and not after sending (step 3).
+  useEffect(() => {
+    if (draftStore === undefined || draftOffer !== null || buoc !== 2 || nhap.linh_vuc === "") return;
+    draftStore.save(nhap);
+  }, [draftStore, draftOffer, buoc, nhap]);
+
+  function resumeDraft() {
+    if (draftOffer === null) return;
+    const restored = restoreDraft(draftOffer, props.ho_ten);
+    datNhap(restored.form);
+    setDraftOffer(null);
+    datBuoc(restored.step);
+  }
+
+  function discardDraft() {
+    draftStore?.clear();
+    setDraftOffer(null);
+  }
+
+  /** "Huỷ bỏ" in the cancel dialog: what was typed is dropped — on the phone too. */
+  function cancelFeedback() {
+    draftStore?.clear();
+    props.onQuayLai();
+  }
+
   function gui() {
     const l = kiemNhapPhieu(nhap, {
       thieu: XA_PA.thieu_mo_ta,
@@ -476,6 +539,7 @@ export function GuiPhanAnhTN(props: {
     datLoi(l);
     if (Object.keys(l).length > 0) return;
     const phieu = taoPhieuTraiNghiem(nhap, new Date().toISOString(), maPhieuTraiNghiem());
+    draftStore?.clear();
     props.onDaGui(phieu);
     datXong(phieu);
     datBuoc(3);
@@ -501,13 +565,29 @@ export function GuiPhanAnhTN(props: {
             <button type="button" className="xa-nut" onClick={() => datHoiHuy(false)}>
               {XA_TN.tiep_tuc_nhap}
             </button>
-            <button type="button" className="xa-nut xa-nut--phu xa-nut--do-vien" onClick={props.onQuayLai}>
+            <button type="button" className="xa-nut xa-nut--phu xa-nut--do-vien" onClick={cancelFeedback}>
               {XA_TN.huy_bo}
             </button>
           </div>
         )}
 
-        {buoc === 1 && (
+        {draftOffer !== null && (
+          <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-nhap-tieu-de">
+            <h2 className="xa-dau-khoi__tieu-de" id="xa-nhap-tieu-de">
+              {XA_PA.draft_title}
+            </h2>
+            <p>{XA_PA.draft_body}</p>
+            <p className="xa-phu">{XA_PA.draft_kept_on_phone}</p>
+            <button type="button" className="xa-nut" onClick={resumeDraft}>
+              {XA_PA.draft_resume}
+            </button>
+            <button type="button" className="xa-nut xa-nut--phu" onClick={discardDraft}>
+              {XA_PA.draft_discard}
+            </button>
+          </section>
+        )}
+
+        {buoc === 1 && draftOffer === null && (
           <div className="xa-the xa-the--dem xa-khoi">
             <p>{XA_PA.chon_linh_vuc}</p>
             <div className="xa-luoi-lv" role="radiogroup" aria-label={XA_TN.buoc_linh_vuc}>
@@ -593,6 +673,7 @@ export function GuiPhanAnhTN(props: {
               </>
             )}
             <p className="xa-phu">{nhap.an_danh ? XA_PA.bat_buoc_an_danh : XA_PA.bat_buoc}</p>
+            {draftStore !== undefined && <p className="xa-phu">{XA_PA.draft_kept_on_phone}</p>}
             <div className="xa-ghi-chu">
               <BieuTuong ten="alert" co={22} />
               <p>{KHAN_CAP}</p>
