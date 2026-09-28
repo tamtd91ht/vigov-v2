@@ -538,9 +538,15 @@ func (k *khoNhiemVuGia) doDeNghi(q string, cot []string, args []driver.Value) (d
 	defer k.mu.Unlock()
 
 	if strings.Contains(q, "count(*)") {
+		// TWO COUNTS READ THIS TABLE: the pending check (DangChoDuyet) and the approved count a deadline
+		// correction asks (ApprovedCount). The status literal in the statement says which.
+		want := "cho-duyet"
+		if strings.Contains(q, "'da-duyet'") {
+			want = "da-duyet"
+		}
 		var n int64
 		for _, r := range k.deNghi {
-			if r["nhiem_vu_id"] == args[1] && r["trang_thai"] == "cho-duyet" {
+			if r["nhiem_vu_id"] == args[1] && r["trang_thai"] == want {
 				n++
 			}
 		}

@@ -144,10 +144,14 @@ func TestPgKhongDoiDuocHanBanDau(t *testing.T) {
 		t.Fatalf("gia hạn bị chặn: %v", err)
 	}
 
+	// A VALUE OF ITS OWN IS STILL REFUSED. Since migration 0016 `han_ban_dau` may FOLLOW a correction
+	// (= the new `han_xu_ly`, no approved extension); setting it to anything else is the rewrite 0006
+	// forbade. (Setting it to `han_xu_ly` here would now pass: that is the correction rule —
+	// task_deadline_correction_pg_test.go covers both branches.)
 	if _, err := db.Exec(
 		`UPDATE nhiem_vu SET han_ban_dau = $3 WHERE tenant_id = $1 AND id = $2`,
-		xa, "nv-han-1", mocHanPg); err == nil {
-		t.Error("đổi được `han_ban_dau` — mọi lần gia hạn sẽ đọc thành đúng hạn (§11.3)")
+		xa, "nv-han-1", mocXongPg); err == nil {
+		t.Error("đổi được `han_ban_dau` sang giá trị riêng — mọi lần gia hạn sẽ đọc thành đúng hạn (§11.3)")
 	}
 }
 

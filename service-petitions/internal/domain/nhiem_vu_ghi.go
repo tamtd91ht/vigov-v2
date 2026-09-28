@@ -153,7 +153,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
-		ErrForwardingIsAssignment,
+		ErrForwardingIsAssignment, ErrDueAtEmpty,
 		ErrAssignmentEmpty, ErrAssignmentUnitEmpty, ErrAssignmentFieldTooLong,
 	} {
 		if errors.Is(err, mot) {
@@ -675,7 +675,16 @@ var (
 	// produce a row the database refuses. Saying it here, before anything is written, turns a
 	// constraint error into a sentence naming what is missing.
 	ErrNhiemVuChuaCoHan = errors.New(
-		"nhiệm vụ: nhiệm vụ này chưa có hạn xử lý nên không có gì để lùi — hạn chỉ ấn định được lúc tạo việc")
+		"nhiệm vụ: nhiệm vụ này chưa có hạn xử lý nên không có gì để lùi — hãy sửa hạn trên nhiệm vụ trước")
+
+	// ErrDueAtEmpty refuses a deadline correction carrying the zero instant (`0001-01-01T00:00:00Z`).
+	//
+	// A CORRECTION CANNOT CLEAR A DEADLINE: JSON null is "not mentioned", and the zero instant is not a
+	// date anybody committed to. Clearing would also break `nhiem_vu_hai_han_cung_co_cung_khong` once an
+	// extension has frozen `han_ban_dau` — and nobody has specified what "no deadline any more" means
+	// for a commitment already reported upward.
+	ErrDueAtEmpty = errors.New(
+		"nhiệm vụ: `due_at` phải là một thời điểm cụ thể — không xoá được hạn xử lý bằng cách sửa")
 
 	// ErrHanMoiKhongLui refuses a "lùi hạn" that does not move the deadline later.
 	//

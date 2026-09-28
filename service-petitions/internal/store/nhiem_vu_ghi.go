@@ -17,11 +17,12 @@ package store
 //  4. EVERY UPDATE THAT MOVES THE LIFECYCLE CARRIES THE EXPECTED STATUS in its WHERE clause, so two
 //     officers acting on one task at the same moment cannot both succeed. The second matches no row
 //     and the caller sees a refusal, never a silent overwrite.
-//  5. `han_ban_dau`, `nguoi_tao_ma`, `nguon_giao` AND `nguon_id` APPEAR IN NO UPDATE HERE, and `ma`
-//     appears in exactly ONE — ChangeCode, which issues the new code into `task_issued_code` in the
-//     same call (migration 0015; user decision 28/09/2026). `han_ban_dau` is refused by the
-//     `nhiem_vu_bat_bien` trigger underneath, and so is a change of `ma` that skipped the ledger; the
-//     last three are facts about how the row came into being.
+//  5. `nguoi_tao_ma`, `nguon_giao` AND `nguon_id` APPEAR IN NO UPDATE HERE — facts about how the row
+//     came into being. `ma` appears in exactly ONE — ChangeCode, which issues the new code into
+//     `task_issued_code` in the same call (migration 0015). `han_ban_dau` appears in exactly ONE —
+//     CorrectDeadline, written from the same value as `han_xu_ly`, and only when the task has had no
+//     approved extension (migration 0016). The `nhiem_vu_bat_bien` trigger refuses every other
+//     change of either (user decisions 28/09/2026).
 //  6. THERE IS NO `DELETE` STATEMENT IN THIS FILE AND THERE MUST NEVER BE ONE. A task is an
 //     administrative record carrying the commune's own progress log (rule 7; §11.5 says so in the
 //     specification's own words), and the trigger refuses a hard delete anyway.
@@ -292,13 +293,12 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 //
 // # WHAT IS NOT IN THIS STRUCT IS THE DESIGN, AND EACH ABSENCE IS A DIFFERENT RULE
 //
-//	han_ban_dau            the trigger refuses it, and rule 7 is why: the original commitment is the
-//	                       denominator of §11.3.
+//	han_ban_dau            never set from the wire. It FOLLOWS a correction of `han_xu_ly` while the
+//	                       task has had no approved extension (app.Sua decides, CorrectDeadline writes,
+//	                       migration 0016's trigger enforces), and is frozen after one.
 //	                       (`ma` IS in the struct since 28/09/2026 — see Code — but is written by
-//	                       ChangeCode, never by Sua's UPDATE.)
-//	han_xu_ly              IT MOVES THROUGH THE EXTENSION FLOW AND NOWHERE ELSE. A PATCH able to
-//	                       rewrite a deadline would make `de_nghi_lui_han` decorative — the leader's
-//	                       approval could be walked around by the person who wanted more time.
+//	                       ChangeCode, never by Sua's UPDATE. `han_xu_ly` likewise — see DueAt — is
+//	                       written by CorrectDeadline.)
 //	trang_thai,            the lifecycle is §6's and moves through its own route, which writes a
 //	ngay_hoan_thanh        timeline row and checks the tree (ADR 0037 decision 4).
 //	lanh_dao_giao_viec_ma  ADR 0038 makes that column the APPROVER of extensions. A PATCH guarded by
@@ -330,6 +330,15 @@ type SuaNhiemVu struct {
 	// trigger refuses a change of `ma` that skipped the ledger, so a Sua that wrote it would only ever
 	// fail, inside the business transaction.
 	Code *string
+
+	// DueAt CORRECTS the deadline — the PATCH body's `due_at` (vigov-require 93cff7f, user decision
+	// 28/09/2026). A correction, NOT an extension: it records that the commitment was typed wrong, and
+	// needs no leader's approval. Whether `han_ban_dau` follows is app.Sua's decision (no approved
+	// extension → it follows); the instant is stored exactly as sent, at the column's precision — no
+	// hour is added or defaulted here (rule 10, forbidden #2).
+	//
+	// ⚠ Apdung folds it into HanXuLy only, and store.Sua DOES NOT WRITE IT: CorrectDeadline does.
+	DueAt *time.Time
 
 	Khoi         *string
 	TieuDe       *string
@@ -392,6 +401,7 @@ type SuaNhiemVu struct {
 func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 	switch {
 	case s.Code != nil && *s.Code != n.Ma,
+		s.DueAt != nil && !s.DueAt.Equal(n.HanXuLy),
 		s.Khoi != nil && *s.Khoi != n.Khoi,
 		s.TieuDe != nil && *s.TieuDe != n.TieuDe,
 		s.MoTa != nil && *s.MoTa != n.MoTa,
@@ -416,6 +426,11 @@ func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 func (s SuaNhiemVu) Apdung(n domain.NhiemVu) domain.NhiemVu {
 	if s.Code != nil {
 		n.Ma = *s.Code
+	}
+	if s.DueAt != nil {
+		// HanXuLy ONLY. HanBanDau depends on whether an extension was ever approved, which a fold over
+		// one row cannot know — app.Sua sets it after asking.
+		n.HanXuLy = *s.DueAt
 	}
 	if s.Khoi != nil {
 		n.Khoi = *s.Khoi
@@ -511,6 +526,34 @@ func (s *NhiemVuStore) ChangeCode(ctx context.Context, tx *store.ScopedTx, id, o
 	return doiMotDongNhiemVu(kq, "đổi mã")
 }
 
+// CorrectDeadline writes a CORRECTED deadline (PATCH `due_at`, user decision 28/09/2026).
+//
+// `withOriginal` is the caller's answer to "has this task ever had an approved extension?" — false →
+// true here: `han_ban_dau` follows, written from THE SAME VALUE as `han_xu_ly`, which is the shape
+// migration 0016's trigger admits and the only one. After an approved extension the caller passes
+// false and only `han_xu_ly` moves; the trigger refuses the other form anyway, so a wrong answer from
+// the caller is a refused act, never a rewritten denominator.
+//
+// THE WHERE CLAUSE CARRIES THE DEADLINE THE CALLER READ (`IS NOT DISTINCT FROM`, because it may be
+// NULL on a task created without one). An extension approved in between moves `han_xu_ly`, this
+// matches no row, and the officer is told to reload — rather than a correction silently overwriting an
+// approval, or `han_ban_dau` following on the strength of a count taken before it.
+func (s *NhiemVuStore) CorrectDeadline(ctx context.Context, tx *store.ScopedTx, id string,
+	old, due time.Time, withOriginal bool) error {
+
+	stmt := `UPDATE nhiem_vu SET han_xu_ly = $3, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND han_xu_ly IS NOT DISTINCT FROM $4 AND deleted_at IS NULL`
+	if withOriginal {
+		stmt = `UPDATE nhiem_vu SET han_xu_ly = $3, han_ban_dau = $3, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND han_xu_ly IS NOT DISTINCT FROM $4 AND deleted_at IS NULL`
+	}
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, due, khongThanhNull(old))
+	if err != nil {
+		return fmt.Errorf("nhiem_vu: sửa hạn xử lý: %w", err)
+	}
+	return doiMotDongNhiemVu(kq, "sửa hạn xử lý")
+}
+
 // UpdatedAtTx reads `cap_nhat_luc` of one task INSIDE the caller's transaction — after the act's own
 // write, so it answers the value that write set (now() is the transaction's instant). The write
 // replies carry it as `updated_at`, and a stale value there would make the client's NEXT PATCH fail
@@ -563,9 +606,9 @@ func (s *NhiemVuStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id 
 // Reassign writes the four holder columns and the status the assignment act lands the task in
 // (owner decision 28/09/2026; domain/task_assignment.go).
 //
-// ⚠ NO `han_*` COLUMN IS IN THE SET LIST, AND THAT ABSENCE IS THE DECISION. A deadline moves only
-// through an approved extension (ADR 0038, DoiHanXuLy); a hand-over that could move it would let a
-// `task.assign` holder rewrite a commitment the leader made. `ngay_hoan_thanh` is absent too: the act
+// ⚠ NO `han_*` COLUMN IS IN THE SET LIST, AND THAT ABSENCE IS THE DECISION. A deadline moves through
+// an approved extension (ADR 0038, DoiHanXuLy) or a `task.update` correction (CorrectDeadline); a
+// hand-over that could move it would let a `task.assign` holder rewrite a commitment the leader made. `ngay_hoan_thanh` is absent too: the act
 // refuses `hoan-thanh` tasks (domain.CheckAssignable), so the column is NULL on every row this reaches.
 //
 // THE WHERE CLAUSE CARRIES THE EXPECTED STATUS, like DoiTrangThai: this act can move the lifecycle
@@ -589,7 +632,10 @@ func (s *NhiemVuStore) Reassign(ctx context.Context, tx *store.ScopedTx, id stri
 
 // DoiHanXuLy moves the CURRENT commitment, and only it.
 //
-// # THIS IS THE ONLY STATEMENT IN THE SERVICE THAT MOVES A TASK'S DEADLINE, AND IT NAMES ONE COLUMN
+// # THIS IS THE STATEMENT AN EXTENSION MOVES A DEADLINE WITH, AND IT NAMES ONE COLUMN
+//
+// (The other statement that moves `han_xu_ly` is CorrectDeadline — a CORRECTION through PATCH, user
+// decision 28/09/2026 — which is a different act with a different rule for `han_ban_dau`.)
 //
 // §5.8 promises it on the screen — "Hạn gốc vẫn được giữ lại để báo cáo đúng hạn không bị lùi
 // theo" — and this statement is what makes the promise true rather than intended: `han_ban_dau` is
@@ -748,6 +794,26 @@ func (s *DeNghiLuiHanStore) DangChoDuyet(ctx context.Context, tx *store.ScopedTx
 		return false, fmt.Errorf("de_nghi_lui_han: kiểm tra đề nghị đang chờ: %w", err)
 	}
 	return n > 0, nil
+}
+
+// ApprovedCount counts the requests on this task that were ever APPROVED — the question a deadline
+// correction asks before letting `han_ban_dau` follow (migration 0016).
+//
+// `deleted_at` DELIBERATELY ABSENT FROM THE PREDICATE, and that is the one read of this table that
+// counts removed rows: an approval that moved the deadline moved it, whatever happened to the request
+// row afterwards. Excluding it would let a soft delete re-open `han_ban_dau` under §11.3's ratio — the
+// same predicate the trigger in 0016 uses, so the sentence and the floor agree.
+func (s *DeNghiLuiHanStore) ApprovedCount(ctx context.Context, tx *store.ScopedTx, nhiemVuID string) (
+	int, error) {
+
+	const stmt = `SELECT count(*) FROM de_nghi_lui_han
+		WHERE tenant_id = $1 AND nhiem_vu_id = $2 AND trang_thai = 'da-duyet'`
+
+	var n int
+	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), nhiemVuID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("de_nghi_lui_han: đếm đề nghị đã duyệt: %w", err)
+	}
+	return n, nil
 }
 
 // TheoIDDeSua reads one live request of ONE TASK, under the lock.

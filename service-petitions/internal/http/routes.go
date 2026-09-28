@@ -1241,7 +1241,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// request header (see suaNhiemVuVao). With the token, a double click's second request finds its
 	// own first write and answers 409 `task_changed` — still no second write, so KhongCan holds.
 	//
-	// @summary  Sửa thông tin mô tả hoặc mã của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)
+	// @summary  Sửa thông tin mô tả, mã hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công; sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)
 	// @screen   02-nhiem-vu §5.4
 	// @request  suaNhiemVuVao
 	// @reply    200 nhiemVuRa

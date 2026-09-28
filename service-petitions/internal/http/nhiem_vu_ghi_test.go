@@ -626,6 +626,8 @@ func TestSuaNhiemVu_TruongKhongGuiThiKhongDongToi(t *testing.T) {
 		"cha":         sua.ParentCode != nil,
 		// An absent `code` must never read as a rename (to "" or to anything).
 		"ma": sua.Code != nil,
+		// An absent `due_at` must never read as a correction.
+		"han": sua.DueAt != nil,
 		// The RESOLVED id is never filled from the wire — only app.Sua fills it, under the lock.
 		"cha_id": sua.NhiemVuChaID != nil,
 	} {
@@ -651,6 +653,24 @@ func TestPatchTaskCodeReachesUseCase(t *testing.T) {
 	}
 	if sua := m.ghiNhiemVu.ycSua; sua.Code == nil || *sua.Code != code {
 		t.Fatalf("Code = %v, muốn %q", sua.Code, code)
+	}
+}
+
+// TestPatchTaskDueAtReachesUseCaseAsSent — PATCH's `due_at` (correction, user decision 28/09/2026)
+// reaches the use case as the SAME INSTANT the body carried, offset and all: no hour is defaulted and
+// nothing is re-read as local time here (rule 10, forbidden #2). Which deadline columns move is
+// app.Sua's decision.
+func TestPatchTaskDueAtReachesUseCaseAsSent(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.update"))
+
+	due := time.Date(2026, 10, 5, 9, 15, 0, 0, time.FixedZone("ICT", 7*3600))
+	doiMa(t, m.goiGhiNV(t, http.MethodPatch, hostA, duongNV(maNVThu), canBoCuaXa(xaA),
+		suaNhiemVuVao{DueAt: &due}), http.StatusOK)
+
+	sua := m.ghiNhiemVu.ycSua
+	if sua.DueAt == nil || !sua.DueAt.Equal(due) {
+		t.Fatalf("DueAt = %v, muốn %v", sua.DueAt, due)
 	}
 }
 

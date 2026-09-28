@@ -30,7 +30,8 @@ package app
 // THE DATABASE IS THE FLOOR AND THIS LAYER IS THE SENTENCE. Said once, here:
 //
 //	the seven statuses               migration 0006, `nhiem_vu_trang_thai_hop_le`
-//	`han_ban_dau` immutable                  0006, trigger `nhiem_vu_bat_bien`
+//	`han_ban_dau` moves only with a correction before any approved extension
+//	                                         0016, trigger `nhiem_vu_bat_bien` replaced again
 //	`ma` changes only via the ledger         0015, same trigger replaced + `task_issued_code`
 //	an issued code is never issued again     0015, PRIMARY KEY (tenant_id, code), append-only
 //	hard removal refused outright            0006, same trigger
@@ -109,6 +110,10 @@ type KhoNhiemVuGhi interface {
 	// ChangeCode is the ONE statement pair that moves `ma`: it issues the new code into
 	// `task_issued_code`, then renames the row (migration 0015). The old code stays issued.
 	ChangeCode(ctx context.Context, tx *store.ScopedTx, id, oldCode, newCode string) error
+	// CorrectDeadline writes a PATCH `due_at` correction; `withOriginal` carries `han_ban_dau` along
+	// (only when no extension was ever approved — migration 0016 refuses it otherwise).
+	CorrectDeadline(ctx context.Context, tx *store.ScopedTx, id string, old, due time.Time,
+		withOriginal bool) error
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
 		tu, sang domain.TrangThaiNhiemVu, ngayHoanThanh time.Time) error
 	DoiHanXuLy(ctx context.Context, tx *store.ScopedTx, id string, hanCu, hanMoi time.Time) error
@@ -162,6 +167,9 @@ type KhoDeNghiLuiHan interface {
 		domain.DeNghiLuiHan, error)
 	QuyetDinh(ctx context.Context, tx *store.ScopedTx, id string, sang domain.TrangThaiDeNghi,
 		nguoiDuyetMa string, luc time.Time) error
+	// ApprovedCount — requests on this task ever approved, soft-deleted ones included. A deadline
+	// correction lets `han_ban_dau` follow only when it is zero (migration 0016).
+	ApprovedCount(ctx context.Context, tx *store.ScopedTx, nhiemVuID string) (int, error)
 }
 
 // The business verbs written into the trail. Vietnamese snake_case, like every other action this
@@ -891,8 +899,7 @@ func (uc *GhiNhiemVu) kiemLanhDaoGiaoViec(ctx context.Context, ma string) error 
 // Sua changes the descriptive fields of a task. Permission: `task.update`.
 //
 // WHAT IT MAY AND MAY NOT MOVE IS petstore.SuaNhiemVu's list, and the reasoning for each absence is
-// there. The two that matter most: it cannot move `han_xu_ly` (that is the extension flow, decided
-// by the leader named on the record) and it cannot rewrite `lanh_dao_giao_viec_ma` (that column IS
+// there. The one that matters most: it cannot rewrite `lanh_dao_giao_viec_ma` (that column IS
 // the approver under ADR 0038, so a `task.update` holder able to rewrite it could name themselves
 // the approver of their own extension requests).
 //
@@ -907,6 +914,18 @@ func (uc *GhiNhiemVu) kiemLanhDaoGiaoViec(ctx context.Context, ma string) error 
 // ledger is append-only, so neither a rename nor the next auto-generated code can hand it out again
 // (rule 7, invariant 3). The rename writes a timeline row naming both codes and the audit entry
 // carries `ma` before and after.
+//
+// # CORRECTING THE DEADLINE (`due_at`, vigov-require 93cff7f, user decision 28/09/2026)
+//
+// A CORRECTION, NOT AN EXTENSION: the commitment was typed wrong, or the assigning document says
+// another date. It needs `task.update` and no leader's approval. If the task has NEVER had an approved
+// extension, `han_ban_dau` follows the new value — the two columns were one fact typed twice, and
+// leaving the typo in the original would keep it as §11.3's denominator for ever. After an approved
+// extension only `han_xu_ly` moves, and `han_ban_dau` keeps the commitment the extension replaced.
+// Migration 0016's trigger holds the same rule underneath. The instant is stored as sent, at the
+// column's microsecond precision: no hour is defaulted and no duration is added here (rule 10,
+// forbidden #2) — the form's own default (require b9a9718: +7 days, 17:00) is the client's.
+// A task created without a deadline can be given one this way; a deadline cannot be cleared.
 func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemVu,
 	nguoi audit.Actor) (domain.NhiemVu, error) {
 
@@ -1008,6 +1027,22 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			}
 		}
 
+		// THE DEADLINE CORRECTION'S ONE QUESTION, asked on the locked row: has an extension ever been
+		// approved? Asked inside the transaction, after the lock — an approval racing this act holds the
+		// same row lock, so the count cannot be taken against a state that is about to change.
+		dueCorrected := !sau.HanXuLy.Equal(truoc.HanXuLy)
+		withOriginal := false
+		if dueCorrected {
+			approved, err := uc.deNghi.ApprovedCount(ctx, tx, truoc.ID)
+			if err != nil {
+				return err
+			}
+			withOriginal = approved == 0
+			if withOriginal {
+				sau.HanBanDau = sau.HanXuLy
+			}
+		}
+
 		if sau.NhiemVuChaID != truoc.NhiemVuChaID && sau.NhiemVuChaID != "" {
 			// THE ONE PATH THAT CAN CLOSE A CYCLE. A task created under a parent has no descendants
 			// to loop back through; MOVING an existing task under one of its own descendants is how
@@ -1025,8 +1060,29 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				return err
 			}
 		}
+		if dueCorrected {
+			if err := uc.kho.CorrectDeadline(ctx, tx, truoc.ID, truoc.HanXuLy, sau.HanXuLy,
+				withOriginal); err != nil {
+				return err
+			}
+		}
 		if err := uc.kho.Sua(ctx, tx, truoc.ID, sau); err != nil {
 			return err
+		}
+		if dueCorrected {
+			// THE TIMELINE ROW SAYS WHICH BRANCH WAS TAKEN, because the drawer shows both deadlines and
+			// an officer reading "Hạn ban đầu" unchanged after a correction must be able to see why.
+			// Instants as RFC 3339 UTC — the same spelling the audit entry uses; rendering them in the
+			// commune's zone needs a per-commune setting this service does not read.
+			text := "Sửa hạn xử lý: " + instantOrDash(truoc.HanXuLy) + " → " + instantOrDash(sau.HanXuLy)
+			if withOriginal {
+				text += " (hạn ban đầu đi theo — chưa có lần gia hạn nào được duyệt)"
+			} else {
+				text += " (hạn ban đầu giữ nguyên — đã có gia hạn được duyệt)"
+			}
+			if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID, text); err != nil {
+				return err
+			}
 		}
 		if renamed {
 			// THE TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer is where an officer who knew the
@@ -1064,7 +1120,11 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			"truoc": map[string]any{
 				// `ma` BEFORE AND AFTER, always — equal when the Save did not rename. An inspection that
 				// holds NV12 from the minutes finds, in this pair, the entry that turned it into NV15.
-				"ma":              truoc.Ma,
+				"ma": truoc.Ma,
+				// BOTH DEADLINES, BEFORE AND AFTER, always (rule 6, invariant 5): a correction moves one
+				// or both, and which one is exactly what an inspection of §11.3's ratio asks.
+				"han_xu_ly":       lucRaVet(truoc.HanXuLy),
+				"han_ban_dau":     lucRaVet(truoc.HanBanDau),
 				"tieu_de":         truoc.TieuDe,
 				"khoi":            truoc.Khoi,
 				"muc_uu_tien":     truoc.MucUuTien,
@@ -1075,6 +1135,8 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			},
 			"sau": map[string]any{
 				"ma":              sau.Ma,
+				"han_xu_ly":       lucRaVet(sau.HanXuLy),
+				"han_ban_dau":     lucRaVet(sau.HanBanDau),
 				"tieu_de":         sau.TieuDe,
 				"khoi":            sau.Khoi,
 				"muc_uu_tien":     sau.MucUuTien,
@@ -1122,6 +1184,15 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 // chuanHoaSuaNhiemVu trims and bounds the fields that were actually sent. A nil pointer is "not
 // mentioned" and is left alone — see petstore.SuaNhiemVu.
 func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
+	if sua.DueAt != nil {
+		if sua.DueAt.IsZero() {
+			return domain.ErrDueAtEmpty
+		}
+		// PRECISION, NOT ARITHMETIC: the column keeps microseconds, so the value compared, stored and
+		// replied is the one the database will hold. Nothing is added to the instant.
+		due := sua.DueAt.UTC().Truncate(time.Microsecond)
+		sua.DueAt = &due
+	}
 	if sua.Code != nil {
 		// THE SAME CHECK A TYPED CODE PASSES ON CREATE — one value space for `ma`, whichever door it came
 		// through. An empty string is refused here, not read as "not mentioned": nil is that.
@@ -1677,6 +1748,14 @@ func (uc *GhiNhiemVu) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string,
 		return domain.DeNghiLuiHan{}, bocNhiemVu(ctx, "quyết định lùi hạn", err)
 	}
 	return sau, nil
+}
+
+// instantOrDash is lucRaVet for a sentence: "—" for a task that had no deadline, never an empty gap.
+func instantOrDash(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	return lucRaVet(t)
 }
 
 // hanSauQuyetDinh is the deadline the task carries once the decision lands — the requested one when

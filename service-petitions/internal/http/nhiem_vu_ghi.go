@@ -126,9 +126,9 @@ type taoNhiemVuVao struct {
 	// DueAt is "Hạn hoàn thành". A POINTER, so "no deadline" is expressible: §7.1 does not mark the
 	// field required, and §4.1 renders such a task as `Hạn —`.
 	//
-	// ⚠ IT IS THE ONLY MOMENT THIS VALUE CAN EVER BE SET. `han_ban_dau` takes the same instant and
-	// migration 0006's trigger refuses every later change to it, so a task created without a
-	// deadline can never be given one. That consequence is reported rather than worked around.
+	// `han_ban_dau` takes the same instant. Since 28/09/2026 PATCH `due_at` can CORRECT it later (and
+	// give a deadline to a task created without one); `han_ban_dau` follows only while no extension
+	// was ever approved (migration 0016).
 	DueAt *time.Time `json:"due_at,omitempty"`
 
 	// Parent makes this a sub-task (§5.10). It carries the parent's REGISTER NUMBER (`NV19`) — the
@@ -205,8 +205,7 @@ type vanBanNhiemVuVao struct {
 //
 // WHAT IS NOT HERE IS petstore.SuaNhiemVu's list and its reasoning (`code` IS here since 28/09/2026
 // and is written through the issued-code ledger, never by the plain UPDATE). The two that matter most:
-// `due_at` is absent because a deadline moves through the extension flow and nowhere else, and
-// `assigner` is absent because that column IS the approver under ADR 0038 — a `task.update` holder
+// `due_at` IS here since 28/09/2026 as a CORRECTION (see DueAt), and `assigner` is absent because that column IS the approver under ADR 0038 — a `task.update` holder
 // able to rewrite it could name themselves the approver of their own extension requests.
 type suaNhiemVuVao struct {
 	// Code RENAMES the task (vigov-require 7764c8a, user decision 28/09/2026). Same format a typed code
@@ -216,7 +215,15 @@ type suaNhiemVuVao struct {
 	// ⚠ THE `{ma}` OF EVERY TASK ROUTE CHANGES WITH IT. The reply carries the new `code`; a client
 	// holding the old one (an open drawer, a copied link) gets 404 from then on — the old code is not
 	// resolved to the task. OPTIONAL, like every field of this published body (rule 2, invariant 4).
-	Code          *string `json:"code,omitempty"`
+	Code *string `json:"code,omitempty"`
+
+	// DueAt CORRECTS "Hạn hoàn thành" (vigov-require 93cff7f, user decision 28/09/2026) — an RFC 3339
+	// instant, stored as sent; the server adds and defaults no hour. A correction, NOT an extension:
+	// no leader approves it. While the task has never had an approved extension, `original_due_at`
+	// follows it; after one, only `due_at` moves. `null`/absent leaves the deadline alone — a deadline
+	// cannot be cleared, and the zero instant is refused (400).
+	DueAt *time.Time `json:"due_at,omitempty"`
+
 	Bloc          *string `json:"bloc,omitempty"`
 	Title         *string `json:"title,omitempty"`
 	Body          *string `json:"description,omitempty"`
@@ -513,6 +520,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 
 	n, err := h.d.GhiNhiemVu.Sua(r.Context(), r.PathValue("ma"), petstore.SuaNhiemVu{
 		Code:                     vao.Code,
+		DueAt:                    vao.DueAt,
 		Khoi:                     vao.Bloc,
 		TieuDe:                   vao.Title,
 		MoTa:                     vao.Body,
