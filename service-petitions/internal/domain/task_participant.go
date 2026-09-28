@@ -23,14 +23,16 @@ package domain
 //	anybody else                                                          none
 //
 // "full" may change the status and write the log; "log" may only write the log; "none" touches
-// nothing. Require's reason, quoted from the docstring: related people "nói được 'tôi đã gửi công văn
+// nothing. BOTH ROUTES APPLY IT (user decision 28/09/2026): POST …/log-entries (CheckMayWriteLogEntry)
+// and POST …/status (CheckMayChangeStatus), each gated by `task.read` exactly as a37ec96's router is. Require's reason, quoted from the docstring: related people "nói được 'tôi đã gửi công văn
 // sang huyện', còn tuyên bố việc xong thì thuộc về người chịu trách nhiệm".
 //
 // ⚠ THE UNIT HALF IS MISSING, AND IT FAILS CLOSED. a37ec96 also lets any officer of the task's unit or
-// lead unit write the log. authz.Principal carries no unit, and identity's contract has no "which unit
-// is this officer in" RPC — the same gap task_assignment.go reports for unit ids. So an officer who is
-// related ONLY through their unit is refused here (403) where require would let them write. Reported
-// as a finding for the contract owner rather than faked.
+// lead unit write the log. authz.Principal carries no unit. identity now has ResolveStaffOrgUnits, but
+// its contract says in so many words that its answer "narrows a LIST; it grants nothing, and the
+// caller must never use it in a guard" (proto/vigov/identity/v1/identity.proto, on that RPC) — and
+// "may write on this task" IS a guard. So an officer related ONLY through their unit is still refused
+// here (403) where require would let them write, until the contract owner decides otherwise.
 //
 // THE CODES ARE STAFF BUSINESS CODES (`CB-…`), compared with Principal.Ma — the value every `…_ma`
 // column holds (rule 6, invariant 8). AN EMPTY CODE MATCHES NOTHING: a task with nobody assigned must
@@ -71,6 +73,22 @@ func TaskWorkRightFor(n NhiemVu, staffCode string, communeWideUpdate bool) TaskW
 		}
 	}
 	return TaskWorkNone
+}
+
+// ErrStatusNeedsHolder refuses a status move to anybody below TaskWorkFull — a related person, or an
+// officer who only reads the register. a37ec96's `status_needs_holder`: "chỉ người thực hiện mới đổi
+// được trạng thái nhiệm vụ". 403.
+var ErrStatusNeedsHolder = errors.New(
+	"nhiệm vụ: chỉ người thực hiện hoặc cán bộ có quyền cập nhật nhiệm vụ mới đổi được trạng thái")
+
+// CheckMayChangeStatus is a37ec96's `_assert_may_work(changing_status=True)`: only TaskWorkFull moves
+// the status. It decides WHO may move at all; which moves additionally need `task.approve` is
+// NeedsApproval's, checked after it.
+func CheckMayChangeStatus(r TaskWorkRight) error {
+	if r != TaskWorkFull {
+		return ErrStatusNeedsHolder
+	}
+	return nil
 }
 
 // CheckMayWriteLogEntry refuses a manual timeline entry to TaskWorkNone. Both other rights may write:

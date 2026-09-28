@@ -22,12 +22,12 @@ package app
 //	                                  carries — BEFORE the transaction, for the reason
 //	                                  kiemLanhDaoGiaoViec gives. A code of another commune, unknown,
 //	                                  locked or account-less is ONE refusal (rule 1: no existence leak).
-//	unit ids (unit, lead unit)        NOT CHECKED. identity's contract has no "does this unit exist in
-//	                                  this commune" RPC, and this service may not read identity's tables
-//	                                  (rule 2, forbidden #2). The same gap task creation and the
-//	                                  petition assignment carry (domain.KiemPhanCong). Reported as a
-//	                                  finding for the contract owner; a fabricated check here would look
-//	                                  like one and verify nothing.
+//	unit ids (unit, lead unit)        identity.ResolveLiveOrgUnits (since 28/09/2026), also BEFORE the
+//	                                  transaction — checkLiveOrgUnits (task_org_units.go). Unknown,
+//	                                  removed or another commune's id is ONE refusal (400); identity
+//	                                  down is 503 and nothing is written. Task creation checks the same
+//	                                  two columns. (The PETITION assignment, domain.KiemPhanCong, still
+//	                                  does not — outside this card.)
 //
 // # NOTIFYING THE NEW HOLDER — NOT DONE, ON PURPOSE
 //
@@ -90,6 +90,16 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 	// differ is known only under the lock, and a gRPC call inside the transaction would hold a
 	// government register's row lock for a network round trip. A client sends only what it changes.
 	if err := uc.checkAssignableStaff(ctx, change.StaffCodes()); err != nil {
+		return domain.NhiemVu{}, err
+	}
+	// The unit ids SENT, for the same reason and at the same moment (task_org_units.go).
+	var units []string
+	for _, u := range []*string{change.Unit, change.LeadUnit} {
+		if u != nil {
+			units = append(units, *u)
+		}
+	}
+	if err := uc.checkLiveOrgUnits(ctx, units...); err != nil {
 		return domain.NhiemVu{}, err
 	}
 

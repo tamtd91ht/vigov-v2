@@ -268,7 +268,7 @@ func TestStatusMoveIntoForwardingRefused(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.ChuyenTiep)}, canBoThu(), true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.ChuyenTiep)}, canBoThu(), true, true)
 	if !errors.Is(err, domain.ErrForwardingIsAssignment) {
 		t.Fatalf("lỗi = %v, muốn ErrForwardingIsAssignment", err)
 	}

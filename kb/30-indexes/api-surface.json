@@ -3464,7 +3464,7 @@
       "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt",
       "screen": "02-nhiem-vu §6",
       "permission_kind": "permission",
-      "permission": "task.update",
+      "permission": "task.read",
       "idempotency": "khong-can",
       "idempotency_reason": "câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ chuyển đúng một bước và lần thứ hai trả 409",
       "request_schema": "petitions.doiTrangThaiVao",

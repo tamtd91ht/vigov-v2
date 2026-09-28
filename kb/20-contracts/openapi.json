@@ -14741,7 +14741,7 @@
         "x-vigov-screen": "02-nhiem-vu §6",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "task.update"
+          "key": "task.read"
         },
         "x-vigov-task": "bf5719ad43c6",
         "requestBody": {

@@ -526,7 +526,7 @@ func TestReplyTreeFactsOnStatusMove(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	after, err := uc.DoiTrangThai(ctx, maNVCon,
-		YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)}, canBoThu(), false)
+		YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)}, canBoThu(), false, true)
 	if err != nil {
 		t.Fatalf("đổi trạng thái: %v", err)
 	}
@@ -577,7 +577,7 @@ func TestHoanThanh_ChauChuaXongThiChan(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true)
 
 	if !errors.Is(err, domain.ErrConChuaXong) {
 		t.Fatalf("lỗi = %v, muốn ErrConChuaXong — duyệt một tầng con là chưa đủ", err)
@@ -597,7 +597,7 @@ func TestHoanThanh_CaCayXongThiQua(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true)
 	if err != nil {
 		t.Fatalf("hoàn thành khi cả cây đã xong bị từ chối: %v", err)
 	}
@@ -622,7 +622,7 @@ func TestHoanThanh_ThieuQuyenDuyetThiTuChoi(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false, true)
 
 	if !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
 		t.Fatalf("lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
@@ -640,7 +640,7 @@ func TestDoiTrangThai_GhiNhatKyCungGiaoDichVaMangTrangThaiSau(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)}, canBoThu(), false); err != nil {
+		YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)}, canBoThu(), false, true); err != nil {
 		t.Fatalf("đổi trạng thái: %v", err)
 	}
 
@@ -669,7 +669,7 @@ func TestTraLai_BaCauGhiTrongMotGiaoDich(t *testing.T) {
 
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
 		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: "  " + lyDoTraLaiThu + " "},
-		canBoThu(), true)
+		canBoThu(), true, true)
 	if err != nil {
 		t.Fatalf("trả lại để làm tiếp bị từ chối: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestTraLai_ChiCoTaskUpdateThiTuChoi(t *testing.T) {
 
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
 		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDoTraLaiThu},
-		canBoThu(), false)
+		canBoThu(), false, true)
 	if !errors.Is(err, ErrKhongDuocTraLai) {
 		t.Fatalf("lỗi = %v, muốn ErrKhongDuocTraLai", err)
 	}
@@ -741,7 +741,7 @@ func TestTraLai_ThieuLyDoThiTuChoi(t *testing.T) {
 
 			_, err := uc.DoiTrangThai(ctx, maNVGoc,
 				YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDo},
-				canBoThu(), true)
+				canBoThu(), true, true)
 			if !errors.Is(err, domain.ErrThieuLyDoTraLai) {
 				t.Fatalf("lỗi = %v, muốn ErrThieuLyDoTraLai", err)
 			}
@@ -758,7 +758,7 @@ func TestTraLai_BuocThuongVaoDangThucHienKhongBiDoi(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false); err != nil {
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false, true); err != nil {
 		t.Fatalf("bước thường bị từ chối: %v", err)
 	}
 	delta, _ := vetKiemToan(t, k).args[7].([]byte)
@@ -795,7 +795,7 @@ func TestReopen_ClearsCompletionAndTrailKeepsOldInstant(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), true, true)
 	if err != nil {
 		t.Fatalf("mở lại: %v", err)
 	}
@@ -835,7 +835,7 @@ func TestReopen_NoteAppendedNeverAudited(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: note}, canBoThu(), true); err != nil {
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: note}, canBoThu(), true, true); err != nil {
 		t.Fatalf("mở lại: %v", err)
 	}
 	text, _ := k.cau("INSERT INTO nhat_ky_nhiem_vu")[0].args[8].(string)
@@ -854,7 +854,7 @@ func TestReopen_WithoutApprovalRefused(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	_, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false)
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false, true)
 	if !errors.Is(err, ErrReopenNeedsApproval) {
 		t.Fatalf("lỗi = %v, muốn ErrReopenNeedsApproval", err)
 	}
@@ -867,7 +867,7 @@ func TestReopen_OnlyToInProgress(t *testing.T) {
 		t.Run(string(to), func(t *testing.T) {
 			k := khoNVHoanThanh()
 			uc, ctx := dungGhiNhiemVu(t, k)
-			_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(to)}, canBoThu(), true)
+			_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(to)}, canBoThu(), true, true)
 			if !errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc) {
 				t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
 			}
@@ -882,7 +882,7 @@ func TestDirectCompletion_NeedsApprovalAndTree(t *testing.T) {
 	k := khoNVMau() // dang-thuc-hien
 	uc, ctx := dungGhiNhiemVu(t, k)
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false); !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false, true); !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
 		t.Fatalf("thiếu quyền duyệt: lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
 	}
 	khongGhiGi(t, k)
@@ -891,14 +891,14 @@ func TestDirectCompletion_NeedsApprovalAndTree(t *testing.T) {
 	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
 	uc, ctx = dungGhiNhiemVu(t, k)
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true); !errors.Is(err, domain.ErrConChuaXong) {
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true); !errors.Is(err, domain.ErrConChuaXong) {
 		t.Fatalf("con chưa xong: lỗi = %v, muốn ErrConChuaXong", err)
 	}
 
 	k = khoNVMau()
 	uc, ctx = dungGhiNhiemVu(t, k)
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true)
 	if err != nil {
 		t.Fatalf("hoàn thành thẳng từ dang-thuc-hien: %v", err)
 	}
@@ -927,7 +927,7 @@ func TestOrdinaryNewEdgesNeedNoApproval(t *testing.T) {
 			k := khoNVMau()
 			k.nhiemVu[idNVGoc]["trang_thai"] = string(c.from)
 			uc, ctx := dungGhiNhiemVu(t, k)
-			sau, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(c.to)}, canBoThu(), false)
+			sau, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(c.to)}, canBoThu(), false, true)
 			if err != nil {
 				t.Fatalf("bị từ chối: %v", err)
 			}
@@ -950,7 +950,7 @@ func TestLegacyForwardedChildStillBlocksParent(t *testing.T) {
 	k.themCon(idNVCon, maNVCon, idNVGoc, domain.ChuyenTiep)
 	uc, ctx := dungGhiNhiemVu(t, k)
 
-	_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true)
+	_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true)
 	if !errors.Is(err, domain.ErrConChuaXong) || !strings.Contains(err.Error(), maNVCon) {
 		t.Fatalf("lỗi = %v, muốn ErrConChuaXong nêu %s", err, maNVCon)
 	}

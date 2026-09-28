@@ -512,10 +512,10 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 
 // DoiTrangThaiNhiemVu moves the task along §6. POST /api/v1/tasks/{ma}/status
 //
-// THIS HANDLER ANSWERS ONE EXTRA QUESTION AND DECIDES NOTHING. The route's gate already refused
-// anyone without `task.update`. What is read here is whether the caller ALSO holds `task.approve`,
-// and that single fact is handed down; whether the move is permitted — the permission AND the whole
-// sub-tree being finished — is app.duocHoanThanh's, inside the transaction.
+// THIS HANDLER ANSWERS TWO QUESTIONS AND DECIDES NOTHING. The route's gate refused anyone without
+// `task.read` (vigov-require a37ec96). What is read here is whether the caller holds `task.update`
+// (with being the assignee, who may move at all) and `task.approve` (which moves need it); both facts
+// are handed down, and the decisions are app.DoiTrangThai's, inside the transaction.
 func (h *Handler) DoiTrangThaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 	var vao doiTrangThaiVao
 	if !docThan(w, r, &vao) {
@@ -529,7 +529,7 @@ func (h *Handler) DoiTrangThaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 
 	n, err := h.d.GhiNhiemVu.DoiTrangThai(r.Context(), r.PathValue("ma"),
 		app.YeuCauDoiTrangThai{TrangThai: vao.Status, GhiChu: vao.Note},
-		nguoi, h.coQuyenDuyetHoanThanh(r))
+		nguoi, h.coQuyenDuyetHoanThanh(r), h.hasTaskUpdate(r))
 	if err != nil {
 		h.traLoiLoiNhiemVu(w, r, "chuyển trạng thái", err)
 		return
@@ -658,6 +658,11 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Trả lại nhiệm vụ đang chờ duyệt để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của "+
 				"bạn mới có quyền cập nhật tiến độ.", "")
+	case errors.Is(err, domain.ErrStatusNeedsHolder):
+		// vigov-require a37ec96 `status_needs_holder`: the gate let a `task.read` holder in; only the
+		// assignee or a holder of `task.update` moves the status.
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			cauTuChoi(err, domain.ErrStatusNeedsHolder), "")
 	case errors.Is(err, domain.ErrNotTaskParticipant):
 		// vigov-require a37ec96: the gate let a `task.read` holder in; the row says they are neither
 		// the assignee nor related to this task. The domain's own sentence names who may write.
@@ -727,6 +732,20 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 			"xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "assignee_check_unavailable",
 			"Chưa kiểm tra được lãnh đạo giao việc nên nhiệm vụ CHƯA được tạo. "+
+				"Vui lòng thử lại sau ít phút.", "")
+
+	// --- the unit check (ResolveLiveOrgUnits, user decision 28/09/2026) -----------------------------
+	case errors.Is(err, app.ErrOrgUnitNotLive):
+		// ONE SENTENCE for unknown, removed, another commune; the id is not echoed (rule 1).
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Bộ phận được chọn không nhận được việc. Hãy chọn bộ phận khác trong danh sách.", "")
+	case errors.Is(err, app.ErrOrgUnitUnchecked):
+		// 503: the check did not happen, and nothing was written. The same code the staff checks use,
+		// so a client retries all of them the same way.
+		h.d.Log.Warn("CẢNH BÁO: từ chối ghi nhiệm vụ vì chưa kiểm được bộ phận nhận việc",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "assignee_check_unavailable",
+			"Chưa kiểm tra được bộ phận nhận việc nên nhiệm vụ CHƯA được ghi. "+
 				"Vui lòng thử lại sau ít phút.", "")
 
 	// --- 400: about what was sent, document block --------------------------------------------------

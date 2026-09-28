@@ -194,8 +194,11 @@ type (
 		Tao(ctx context.Context, yc app.YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error)
 		Sua(ctx context.Context, ma string, sua petstore.SuaNhiemVu, nguoi audit.Actor) (
 			domain.NhiemVu, error)
+		// `update` is "does the caller hold `task.update`" — a37ec96's commune-wide "full" case, which
+		// together with being the assignee decides who may move the status at all (the route is gated
+		// by `task.read`). `duyet` then narrows the moves that need `task.approve`.
 		DoiTrangThai(ctx context.Context, ma string, yc app.YeuCauDoiTrangThai, nguoi audit.Actor,
-			duyet app.QuyenDuyetHoanThanh) (domain.NhiemVu, error)
+			duyet app.QuyenDuyetHoanThanh, update app.TaskUpdateRight) (domain.NhiemVu, error)
 		Xoa(ctx context.Context, ma, lyDo string, nguoi audit.Actor) error
 		DeNghiLuiHan(ctx context.Context, ma string, yc app.YeuCauDeNghiLuiHan, nguoi audit.Actor) (
 			domain.DeNghiLuiHan, error)
@@ -1157,7 +1160,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// carrying the petition holder rule across, and this is not it.
 	//
 	// ⚠ ONE HALF OF a37ec96's "related" set IS MISSING: officers of the task's unit / lead unit. The
-	// principal carries no unit and identity has no RPC for it, so they are refused (fail closed).
+	// principal carries no unit, and identity's ResolveStaffOrgUnits says of its own answer that the
+	// caller "must never use it in a guard" (identity.proto) — so they are refused (fail closed) until
+	// the contract owner decides otherwise (domain/task_participant.go).
 	//
 	// idem.Required(idem.MoKhiHong), the petition note's declaration and for its reason: an entry is
 	// bound to no status, so a double submit would leave a duplicate in an APPEND-ONLY table nobody can
@@ -1244,14 +1249,21 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("app.Sua so dòng đọc được với dòng sắp ghi và KHÔNG ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaNhiemVu))))
 
-	// CHUYỂN TRẠNG THÁI (§6) — `task.update` at the gate, `task.approve` for the last step.
+	// CHUYỂN TRẠNG THÁI — `task.read` at the gate, the HOLDER RULE in the use case, `task.approve` for
+	// the moves that need it.
 	//
-	// ⚠ TWO KEYS, ONE ROUTE, AND THAT IS RULE 5 INVARIANT 3b RATHER THAN A RELAXATION OF IT. §6 names
-	// both: `task.update` is "Cập nhật tiến độ" and `task.approve` is "Duyệt hoàn thành" — an officer
-	// reports progress on their own work and somebody else signs it off. A route declares ONE
-	// permission, so the gate is the broader key (an account without it is refused here, before
-	// anything is read) and the narrower one is consulted in the handler and decided in
-	// app.duocHoanThanh, inside the transaction. NEITHER KEY IS INVENTED; both are seeded.
+	// THE GATE IS `task.read` SINCE 28/09/2026, AND THAT IS vigov-require a37ec96 (user decision: "base
+	// on require"). a37ec96 moved its progress/status route from `task.update` to `task.read` because
+	// the answer depends on THIS task: the ASSIGNEE may move their own task without the commune-wide
+	// key, a holder of `task.update` may move any task, and a related person (monitor, assigner,
+	// author) may only write the log. Decided on the row read FOR UPDATE (app.DoiTrangThai,
+	// domain.CheckMayChangeStatus); refused with 403 `ErrStatusNeedsHolder`. This WIDENS the route to
+	// the assignee — deliberately; before, a specialist handed a task could not report on it at all.
+	//
+	// `task.approve` IS STILL ON TOP: every move into `hoan-thanh`, the reopen and the return from
+	// review need it (domain.NeedsApproval), consulted in the handler and decided in the use case —
+	// so the assignee without it can move the work along but cannot sign it off. NO KEY IS INVENTED:
+	// `task.read`, `task.update` and `task.approve` are all seeded (0001_init.sql).
 	//
 	// THE SAME NARROWER KEY GUARDS ONE MORE MOVE: `cho-duyet` → `dang-thuc-hien`, "Trả lại để làm tiếp"
 	// (owner decision 2026-09-27), which also requires a non-empty `note` as its reason. Decided in
@@ -1279,7 +1291,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/tasks/{ma}/status",
-		authz.RequirePermission(d.Checker, "task.update")(
+		authz.RequirePermission(d.Checker, "task.read")(
 			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ chuyển đúng một bước và lần thứ hai trả 409")(
 				http.HandlerFunc(h.DoiTrangThaiNhiemVu))))
 

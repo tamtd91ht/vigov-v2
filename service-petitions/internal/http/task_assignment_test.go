@@ -98,7 +98,7 @@ func TestReassignTask_ErrorsMapToStatusAndCode(t *testing.T) {
 // whose sentence names the assignment act, so the web knows where to send the user.
 func TestStatusRouteForwardingAnswers400NamingAssignment(t *testing.T) {
 	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"))
+	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"))
 	m.ghiNhiemVu.loi = fmt.Errorf("nhiem_vu: chuyển trạng thái cho xã x: %w", domain.ErrForwardingIsAssignment)
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),

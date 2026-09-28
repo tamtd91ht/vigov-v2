@@ -198,7 +198,9 @@ func chay(log *slog.Logger) error {
 	// the body, and a task is created only if identity answers that code as an active staff member of
 	// this commune (ResolveAssignableStaff). The SAME client the petition path's assignee check uses,
 	// so the two never disagree about identity's health.
-	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh)
+	// Passed a SECOND time as the UNIT check (ResolveLiveOrgUnits, 28/09/2026): `unit` / `lead_unit`
+	// on creation and on the assignment act are verified live in this commune before either writes.
+	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh)
 
 	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
 

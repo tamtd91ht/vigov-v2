@@ -118,9 +118,9 @@ func (g *ghiNhiemVuGia) Sua(ctx context.Context, ma string, sua petstore.SuaNhie
 }
 
 func (g *ghiNhiemVuGia) DoiTrangThai(ctx context.Context, ma string, yc app.YeuCauDoiTrangThai,
-	nguoi audit.Actor, duyet app.QuyenDuyetHoanThanh) (domain.NhiemVu, error) {
+	nguoi audit.Actor, duyet app.QuyenDuyetHoanThanh, update app.TaskUpdateRight) (domain.NhiemVu, error) {
 	g.ghi(ctx, "trang-thai", ma, nguoi)
-	g.ycTrangT, g.duyet = yc, duyet
+	g.ycTrangT, g.duyet, g.taskUpdate = yc, duyet, update
 	return g.tra()
 }
 
@@ -238,14 +238,17 @@ func caCacTuyenGhiNhiemVu() []caGhiNhiemVu {
 			authz.Perm("task.create"), authz.Perm("task.read"), http.StatusCreated},
 		{"sửa", http.MethodPatch, duongNV(maNVThu), suaNhiemVuVao{},
 			authz.Perm("task.update"), authz.Perm("task.create"), http.StatusOK},
+		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the status route's gate was `task.update`; it is `task.read`
+		// now (vigov-require a37ec96) and the holder rule is the use case's (app.DoiTrangThai).
+		// `task.approve` alone still does not open it.
 		{"chuyển trạng thái", http.MethodPost, duongTrangThaiNV(maNVThu),
 			doiTrangThaiVao{Status: string(domain.ChoDuyet)},
-			authz.Perm("task.update"), authz.Perm("task.approve"), http.StatusOK},
-		// "Trả lại để làm tiếp": the GATE is still `task.update` — `task.approve` alone does not open
-		// the route. The second key and the reason are decided in app (TestTraLai_* there).
+			authz.Perm("task.read"), authz.Perm("task.approve"), http.StatusOK},
+		// "Trả lại để làm tiếp": the same gate. The second key and the reason are decided in app
+		// (TestTraLai_* there).
 		{"trả lại để làm tiếp", http.MethodPost, duongTrangThaiNV(maNVThu),
 			doiTrangThaiVao{Status: string(domain.DangThucHien), Note: "Thiếu biên bản nghiệm thu."},
-			authz.Perm("task.update"), authz.Perm("task.approve"), http.StatusOK},
+			authz.Perm("task.read"), authz.Perm("task.approve"), http.StatusOK},
 		{"xoá", http.MethodDelete, duongNV(maNVThu), xoaNhiemVuVao{Reason: "Trùng với NV05."},
 			authz.Perm("task.delete"), authz.Perm("task.update"), http.StatusNoContent},
 		// ⚠ FILING AN EXTENSION IS `task.update`, NOT `task.extend` — ADR 0038: the second key is
@@ -382,12 +385,52 @@ func TestTuyenGhiNhiemVuChuTheLaMaCanBo(t *testing.T) {
 
 // --- the second key on the status route ----------------------------------------------------------------
 
-// TestDoiTrangThai_ChiCoTaskUpdateThiQuaCongVoiQuyenDuyetLaFalse proves the gate and the second key
-// are two different questions: holding `task.update` opens the route, and the fact handed down says
-// this account may NOT sign work off.
+// TestStatusRoute_HandsDownTaskUpdateFactFromThatKey: since 28/09/2026 (vigov-require a37ec96) the
+// gate is `task.read`, and whether the caller holds `task.update` is a FACT handed down — the use case
+// grants the move to that holder or to the assignee. `task.approve` must not be read as it.
+func TestStatusRoute_HandsDownTaskUpdateFactFromThatKey(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		perms []authz.Perm
+		want  bool
+	}{
+		{"chỉ task.read (người thực hiện không có quyền cả xã)", []authz.Perm{"task.read"}, false},
+		{"task.read + task.approve", []authz.Perm{"task.read", "task.approve"}, false},
+		{"task.read + task.update", []authz.Perm{"task.read", "task.update"}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, c.perms...)
+			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
+				doiTrangThaiVao{Status: string(domain.DangThucHien)})
+			doiMa(t, w, http.StatusOK)
+			if bool(m.ghiNhiemVu.taskUpdate) != c.want {
+				t.Errorf("sự thật task.update truyền xuống = %v, muốn %v", m.ghiNhiemVu.taskUpdate, c.want)
+			}
+		})
+	}
+}
+
+// TestStatusRoute_HolderRefusalIs403: the use case's holder refusal maps to 403 with its sentence.
+func TestStatusRoute_HolderRefusalIs403(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.read"))
+	m.ghiNhiemVu.loi = bocNhuApp(domain.ErrStatusNeedsHolder)
+
+	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
+		doiTrangThaiVao{Status: string(domain.DangThucHien)})
+	doiMa(t, w, http.StatusForbidden)
+	if e := loiTra(t, w); e.Message != domain.ErrStatusNeedsHolder.Error() {
+		t.Errorf("câu = %q", e.Message)
+	}
+}
+
+// TestDoiTrangThai_ChiCoTaskUpdateThiQuaCongVoiQuyenDuyetLaFalse proves the second key is its own
+// question: the account may move work (`task.read` opens the route, `task.update` makes it a holder)
+// and the fact handed down says it may NOT sign work off.
 func TestDoiTrangThai_ChiCoTaskUpdateThiQuaCongVoiQuyenDuyetLaFalse(t *testing.T) {
 	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"))
+	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"))
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
 		doiTrangThaiVao{Status: string(domain.ChoDuyet)})
@@ -400,7 +443,7 @@ func TestDoiTrangThai_ChiCoTaskUpdateThiQuaCongVoiQuyenDuyetLaFalse(t *testing.T
 
 func TestDoiTrangThai_CoTaskApproveThiQuyenDuyetLaTrue(t *testing.T) {
 	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"), authz.Perm("task.approve"))
+	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"), authz.Perm("task.approve"))
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
 		doiTrangThaiVao{Status: string(domain.HoanThanh)})
@@ -415,7 +458,7 @@ func TestDoiTrangThai_CoTaskApproveThiQuyenDuyetLaTrue(t *testing.T) {
 // `task.approve` fact handed down is true — the two inputs app.DoiTrangThai decides the return on.
 func TestTraLai_LyDoVaQuyenDuyetDiXuongUseCase(t *testing.T) {
 	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"), authz.Perm("task.approve"))
+	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"), authz.Perm("task.approve"))
 
 	const lyDo = "Thiếu biên bản nghiệm thu."
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
@@ -434,8 +477,8 @@ func TestTraLai_LyDoVaQuyenDuyetDiXuongUseCase(t *testing.T) {
 // An account holding every neighbouring task key but not `task.approve` must still be told no.
 func TestDoiTrangThai_KhongDocTuKhoaQuyenLangGieng(t *testing.T) {
 	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"), authz.Perm("task.extend"),
-		authz.Perm("task.create"), authz.Perm("task.delete"), authz.Perm("task.read"))
+	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"), authz.Perm("task.extend"),
+		authz.Perm("task.create"), authz.Perm("task.delete"))
 
 	m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
 		doiTrangThaiVao{Status: string(domain.HoanThanh)})
@@ -708,7 +751,7 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 	} {
 		t.Run(ca.ten, func(t *testing.T) {
 			m := dungMayChu(t)
-			m.capQuyen(t, authz.Perm("task.update"))
+			m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"))
 			m.ghiNhiemVu.loi = ca.loi
 
 			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
@@ -922,7 +965,7 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 	} {
 		t.Run(ca.ten, func(t *testing.T) {
 			m := dungMayChu(t)
-			m.capQuyen(t, authz.Perm("task.update"))
+			m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"))
 			m.ghiNhiemVu.loi = bocNhuApp(ca.loi)
 
 			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),

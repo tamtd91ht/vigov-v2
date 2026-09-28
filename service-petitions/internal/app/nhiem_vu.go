@@ -244,6 +244,10 @@ type GhiNhiemVu struct {
 	// means the check is not wired, and creation with a non-empty code then REFUSES (fail closed).
 	giaoViec KiemCanBoGiaoViec
 
+	// orgUnits verifies the client-supplied unit / lead-unit ids before a task is created or handed
+	// over (task_org_units.go). nil means not wired, and an act naming a unit then REFUSES.
+	orgUnits OrgUnitChecker
+
 	// sinhID is injected so a test can pin every generated id. In production it is ulid.Moi.
 	sinhID func() (string, error)
 
@@ -258,8 +262,9 @@ type GhiNhiemVu struct {
 }
 
 func NewGhiNhiemVu(db *store.DB, kho KhoNhiemVuGhi, deNghi KhoDeNghiLuiHan,
-	giaoViec KiemCanBoGiaoViec) *GhiNhiemVu {
-	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, giaoViec: giaoViec, sinhID: ulid.Moi}
+	giaoViec KiemCanBoGiaoViec, orgUnits OrgUnitChecker) *GhiNhiemVu {
+	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, giaoViec: giaoViec, orgUnits: orgUnits,
+		sinhID: ulid.Moi}
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -576,6 +581,10 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 	// BEFORE THE TRANSACTION, and HERE ONCE, because both doors — POST /api/v1/tasks and the meeting
 	// conclusion split — arrive at this function. See kiemLanhDaoGiaoViec.
 	if err := uc.kiemLanhDaoGiaoViec(ctx, moi.LanhDaoGiaoViecMa); err != nil {
+		return domain.NhiemVu{}, err
+	}
+	// The unit and the lead unit, likewise before the transaction (task_org_units.go).
+	if err := uc.checkLiveOrgUnits(ctx, moi.BoPhanID, moi.CoQuanChuTriID); err != nil {
 		return domain.NhiemVu{}, err
 	}
 	moi.NguoiTaoMa = nguoi.ID
@@ -1081,10 +1090,20 @@ type YeuCauDoiTrangThai struct {
 // keeps the cleared instant in the timeline row and the audit entry. domain.NeedsApproval names the
 // three.
 //
-// # THE THREE CHECKS, IN THIS ORDER, INSIDE THE TRANSACTION
+// # WHO MAY MOVE AT ALL — vigov-require a37ec96 (user decision 28/09/2026)
+//
+// The route's gate is `task.read`; the holder rule is checked FIRST on the row read FOR UPDATE: the
+// assignee (nguoi_thuc_hien_ma == Principal.Ma) or a holder of the commune-wide `task.update` —
+// domain.TaskWorkRightFor / CheckMayChangeStatus. A related person (monitor, assigner, author) may
+// write the log but not move the status; anybody else is refused too. Both answer 403
+// (domain.ErrStatusNeedsHolder). It comes before the shape check so a caller who may not move the
+// task learns nothing about which moves exist from here.
+//
+// # THEN THE THREE CHECKS, IN THIS ORDER, INSIDE THE TRANSACTION
 //
 //  1. THE SHAPE — is this move in the lifecycle map (require 52ec9b5's table, domain/nhiem_vu.go).
-//  2. THE PERMISSION for the final step (`task.approve`).
+//  2. THE PERMISSION for the final step (`task.approve`) — ON TOP of the holder rule: the assignee
+//     without `task.approve` still cannot complete, reopen or return.
 //  3. ADR 0037 DECISION 4 — the whole sub-tree, recursively.
 //
 // The return to `dang-thuc-hien` runs its own pair after the shape check: `task.approve`, then the
@@ -1094,7 +1113,7 @@ type YeuCauDoiTrangThai struct {
 // from the error message, which of its sub-tasks are still open — routing information about work
 // they were just refused.
 func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiTrangThai,
-	nguoi audit.Actor, duyet QuyenDuyetHoanThanh) (domain.NhiemVu, error) {
+	nguoi audit.Actor, duyet QuyenDuyetHoanThanh, update TaskUpdateRight) (domain.NhiemVu, error) {
 
 	moiTT := domain.TrangThaiNhiemVu(yc.TrangThai)
 	// BEFORE THE TRANSACTION: an unknown code and the retired `chuyen-tiep` target (owner decision
@@ -1117,6 +1136,12 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		truoc, err := uc.kho.TheoMaDeSua(ctx, tx, ma)
 		if err != nil {
+			return err
+		}
+
+		// a37ec96's holder rule, on the locked row — see the note above the function.
+		if err := domain.CheckMayChangeStatus(
+			domain.TaskWorkRightFor(truoc, nguoi.ID, bool(update))); err != nil {
 			return err
 		}
 
