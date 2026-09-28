@@ -16,6 +16,13 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-20 · **Nối tiếp ADR 0028** · **Liên quan câu mở #27**
 
+> **Sửa chữ 28/09/2026:** dòng `feedback.restricted` ở bảng dưới (và chú thích
+> `service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:17`) gọi lĩnh vực `can-bo` là
+> *"tố cáo tác phong cán bộ"* — **sai tên**. Lĩnh vực ấy là **phản ánh** *"Thái độ / tác phong cán
+> bộ"* (`docs/ui-ux/09-phan-anh-nguoi-dan.md:76`); tố cáo đi theo Luật Tố cáo, là đơn thư, không
+> phải phiếu phản ánh. Quyết định không đổi. Chú thích migration **giữ nguyên** — sửa là đổi checksum
+> của migration đã chạy (ADR 0013). Vai trò mẫu nào giữ khoá nào: ADR 0055.
+
 ## Bối cảnh
 
 Hai hành vi trong phân hệ phản ánh **không có khoá nào canh**. Luật 5 nói hậu quả bằng một câu:

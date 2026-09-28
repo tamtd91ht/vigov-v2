@@ -151,7 +151,7 @@ xoá mềm thì từ chối, không tạo lại.
 | Host `*.api` là host dành riêng → biên trả 404 mọi tuyến cần xã | Mini App gọi qua đó cần xã đến từ **phiên** (ADR 0005, 0045), không từ Host — chưa dựng |
 | Gỡ hai dòng `admin*.vigov.vn` rồi `VALIDATE` | Quyết định của chủ dự án (luật 7) |
 | Ca `_pg_test` của gieo (ON CONFLICT trên bảng phân mảnh, ba lần đăng nhập đầu đồng thời) chưa chạy trên PostgreSQL thật | Test xanh ở máy không Docker là SKIP, không phải bằng chứng |
-| Ai được **tạo vai trò mới** | Chưa ai quyết; gieo chỉ tạo đúng một vai trò |
+| Ai được **tạo vai trò mới** | Chưa ai quyết; gieo chỉ tạo đúng một vai trò. **28/09/2026 → ADR 0055:** không có chức năng tạo vai trò; tám vai trò mẫu gieo bằng `POST /api/v1/roles/defaults` (`kb/10-decisions/0055-default-role-templates.md`) |
 
 ## Sửa đổi 26/09/2026 (cùng ngày, chủ dự án trả lời bảng "việc còn mở")
 
