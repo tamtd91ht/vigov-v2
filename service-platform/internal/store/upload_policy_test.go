@@ -1,7 +1,8 @@
 package store
 
-// Checks on migration 0008 and on the read statement that run WITHOUT a database. The pg tests
-// beside this file prove the behaviour; these pin what a one-row fixture cannot: the seed values the
+// Checks on the upload_policy migrations (0008 and every later seed) and on the read statement that
+// run WITHOUT a database. The pg tests beside this file prove the behaviour; these pin what a one-row
+// fixture cannot: the seed values the
 // owner confirmed, the link between the seed and core/storage's allow-list, and the clauses whose
 // loss would turn nothing red.
 //
@@ -40,6 +41,7 @@ type seedRow struct {
 	maxBytes int64
 	mimes    []string
 	maxFiles string // "NULL" or a number, as written
+	file     string // the migration that seeds it; set by allSeeds
 }
 
 var seedRowPattern = regexp.MustCompile(
@@ -62,7 +64,43 @@ func parseSeed(t *testing.T, sql string) []seedRow {
 	return out
 }
 
-// The owner's values of 2026-09-28, exactly.
+// allSeeds returns the seed rows of EVERY migration, in the order pkg/migrate applies them, each
+// tagged with its file. Comments are stripped first, so reversal prose cannot pose as a seed.
+//
+// WHY EVERY FILE AND NOT 0008: a purpose gains its policy in a later migration whenever its limits
+// are decided after 0008 was applied (0010 for task-attachment). A test reading only 0008 would
+// never see that row — a MIME typo there would ship green. A purpose seeded twice fails the test:
+// ON CONFLICT DO NOTHING makes the second row a silent no-op, so the pinned value would describe a
+// row the database never holds.
+func allSeeds(t *testing.T) []seedRow {
+	t.Helper()
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	var out []seedRow
+	seen := map[string]string{}
+	for _, e := range entries { // fs.ReadDir sorts by filename
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		b, err := fs.ReadFile(migrations.FS, e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		for _, r := range parseSeed(t, sqlLineComment.ReplaceAllString(string(b), "")) {
+			if prev, dup := seen[r.purpose]; dup {
+				t.Errorf("purpose %q seeded in %s and again in %s — the second is a no-op", r.purpose, prev, e.Name())
+			}
+			seen[r.purpose] = e.Name()
+			r.file = e.Name()
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// The owner's values, exactly: six of 2026-09-28 (0008), task-attachment of 2026-09-29 (0010).
 func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 	images := []string{"image/jpeg", "image/png", "image/webp", "image/heic"}
 	want := map[string]seedRow{
@@ -72,8 +110,16 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 		"petition-photo":     {maxBytes: 10485760, mimes: images, maxFiles: "5"},
 		"document-scan":      {maxBytes: 52428800, mimes: []string{"application/pdf", "image/jpeg", "image/png"}, maxFiles: "NULL"},
 		"content-attachment": {maxBytes: 52428800, mimes: []string{"application/pdf"}, maxFiles: "NULL"},
+		// Người dùng chốt 29/09/2026: the document-scan values.
+		"task-attachment": {maxBytes: 52428800, mimes: []string{"application/pdf", "image/jpeg", "image/png"}, maxFiles: "NULL", file: "0010_upload_policy_seed_task_attachment.sql"},
 	}
-	rows := parseSeed(t, readUploadPolicyMigration(t))
+	for p, w := range want {
+		if w.file == "" {
+			w.file = uploadPolicyMigration
+			want[p] = w
+		}
+	}
+	rows := allSeeds(t)
 	if len(rows) != len(want) {
 		t.Fatalf("seed rows = %d, want %d — the pattern or the seed changed", len(rows), len(want))
 	}
@@ -83,7 +129,7 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 			t.Errorf("unexpected seed purpose %q", r.purpose)
 			continue
 		}
-		if r.maxBytes != w.maxBytes || !slices.Equal(r.mimes, w.mimes) || r.maxFiles != w.maxFiles {
+		if r.maxBytes != w.maxBytes || !slices.Equal(r.mimes, w.mimes) || r.maxFiles != w.maxFiles || r.file != w.file {
 			t.Errorf("%s = %+v, want %+v", r.purpose, r, w)
 		}
 		delete(want, r.purpose)
@@ -96,7 +142,11 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 // Every seeded MIME value is one core/storage can sniff; every seeded purpose is one core/storage
 // holds AND one the proto enum can name.
 func TestUploadPolicySeedWithinStorageAllowList(t *testing.T) {
-	for _, r := range parseSeed(t, readUploadPolicyMigration(t)) {
+	rows := allSeeds(t)
+	if len(rows) == 0 {
+		t.Fatal("no seed rows parsed — the pattern or the seed changed")
+	}
+	for _, r := range rows {
 		for _, m := range r.mimes {
 			if _, ok := storage.ExtForMIME(m); !ok {
 				t.Errorf("%s: MIME %q is not in core/storage's allow-list (core/storage/mime.go)", r.purpose, m)
@@ -223,6 +273,36 @@ func TestUploadPolicyMigrationConstraintsAndTriggers(t *testing.T) {
 	}
 	if strings.Count(sql, "@scope:  platform") != 2 {
 		t.Error("both tables must declare @scope: platform")
+	}
+}
+
+// Every migration that seeds a policy writes its trail entry the way 0008 does: in the same
+// statement, from what the INSERT returned, so a re-run writes no second entry — and the entry's
+// reason names the file that wrote it.
+func TestUploadPolicySeedFilesWriteTrail(t *testing.T) {
+	files := map[string]bool{}
+	for _, r := range allSeeds(t) {
+		files[r.file] = true
+	}
+	for f := range files {
+		b, err := fs.ReadFile(migrations.FS, f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		sql := sqlLineComment.ReplaceAllString(string(b), "")
+		for _, clause := range []string{
+			"WITH seeded AS (",
+			"ON CONFLICT (purpose) DO NOTHING",
+			"RETURNING purpose, max_bytes, allowed_mime_types, max_files_per_subject",
+			"INSERT INTO platform_audit_log (actor, action, subject, before, after, reason)",
+			"'system', 'upload_policy.seeded'",
+			"FROM seeded s;",
+			"'migration " + f + ":",
+		} {
+			if !strings.Contains(sql, clause) {
+				t.Errorf("%s seeds a policy but lacks %q", f, clause)
+			}
+		}
 	}
 }
 

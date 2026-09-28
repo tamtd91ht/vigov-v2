@@ -16,8 +16,9 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(ps) != 6 {
-		t.Fatalf("policies = %d, want the 6 seeded", len(ps))
+	// 0008 seeds six, 0010 seeds task-attachment.
+	if len(ps) != 7 {
+		t.Fatalf("policies = %d, want the 7 seeded", len(ps))
 	}
 	for _, p := range ps {
 		switch p.Purpose {
@@ -38,8 +39,8 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 		WHERE action = 'upload_policy.seeded' AND actor = 'system'`).Scan(&entries); err != nil {
 		t.Fatalf("count trail: %v", err)
 	}
-	if entries != 6 {
-		t.Errorf("seed trail entries = %d, want 6 — one per seeded policy, same transaction", entries)
+	if entries != 7 {
+		t.Errorf("seed trail entries = %d, want 7 — one per seeded policy, same transaction", entries)
 	}
 }
 
@@ -59,8 +60,8 @@ func TestPgUploadPolicySoftDeletedIsAbsent(t *testing.T) {
 			t.Fatal("soft-deleted policy still served")
 		}
 	}
-	if len(ps) != 5 {
-		t.Errorf("policies = %d, want 5", len(ps))
+	if len(ps) != 6 {
+		t.Errorf("policies = %d, want 6", len(ps))
 	}
 }
 
