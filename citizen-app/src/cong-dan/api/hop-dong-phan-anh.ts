@@ -37,7 +37,7 @@
  * `citizen_id`/`cong_dan_id` (người gửi — lấy từ phiên, luật 4), `field`/`linh_vuc` (lĩnh vực — cán
  * bộ chốt, ADR 0028 / #23), `channel`, `code`, `status`, `clock_from`, `acknowledge_due`,
  * `resolve_due`. Nhắc tới BẤT KỲ trường nào trong đó là 400. Xã thì không có trường nào cả — xã lấy
- * từ phiên (ADR 0022). `cong-dan.test.ts` khẳng định thân gửi đi đúng bằng năm khoá dưới.
+ * từ phiên (ADR 0022). `goi-vigov.test.tsx` khẳng định thân gửi đi đúng bằng năm khoá dưới.
  */
 
 import { diaChiViGov } from "./dia-chi-vigov";

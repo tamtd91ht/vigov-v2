@@ -12,8 +12,11 @@
  * ⚠ KHÔNG CÓ Ô CHỌN LĨNH VỰC: lĩnh vực do cán bộ chốt (ADR 0028, #23). Không có ô chọn xã: xã lấy
  * từ phiên (ADR 0022). Không có ảnh: chưa có kho lưu ảnh, và màn hình nói thẳng điều đó.
  *
- * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ BIỂU MẪU và KHÔNG GỌI MẠNG — hôm nay là luôn luôn
- * (`api/phien-vigov.ts`).
+ * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ BIỂU MẪU và KHÔNG GỌI MẠNG (`api/phien-vigov.ts`). The session
+ * bridge exists end to end — `vihat-miniapp` opens a ViGov citizen session for a login carrying
+ * `communeHostHint` and forwards `vigovSession`, which `api/mo-phien-vigov.ts` records — but in practice
+ * the session is still empty: its Zalo account-id step always refuses (`vihat-miniapp`
+ * `internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) and the bridge answers 503.
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
@@ -279,7 +282,7 @@ export function GuiPhanAnhScreen({
   /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
   reopenWithPhone?: ReopenWithPhone;
 }) {
-  // Đọc một lần lúc dựng. `null` hôm nay — xem `api/phien-vigov.ts`. Mở lại phiên kèm số không đổi
+  // Đọc một lần lúc dựng. `null` until the bridge issues a session (in practice still, see the header). Mở lại phiên kèm số không đổi
   // TÊN XÃ (`reopenSessionWithPhone` từ chối phiên khác xã), nên bản đọc một lần này vẫn đúng.
   const [phien] = useState(layPhienViGov);
   const phone = usePhoneVerification(reopenWithPhone);

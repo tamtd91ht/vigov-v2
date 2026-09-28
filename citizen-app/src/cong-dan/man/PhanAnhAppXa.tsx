@@ -4,7 +4,8 @@
  *
  *   · Gửi: Lĩnh vực → Mô tả (gửi ngay ở đây) → Đã gửi. Lĩnh vực dân chọn LÀ lĩnh vực của phiếu (ADR 0050
  *     #1); máy chủ đặt hạn từ nó — Mini App không tự tính hạn (luật 10 cấm #2).
- *   · Không công tắc ẩn danh: để trống ô tên là giấu tên (#3). Tên xin quyền Zalo (`NutLayTen`).
+ *   · Công tắc "Gửi ẩn danh" (#3, SRS M4.2): bật thì ẩn ô tên và số, phiếu không giữ hai ô ấy; tắt thì họ
+ *     tên bắt buộc (`kiemNhapPhieu`). Tên xin quyền Zalo (`NutLayTen`).
  *   · Người dân thấy BỐN nhóm trạng thái; dòng thời gian chỉ các bước ĐÃ QUA, nhãn của prototype (#5).
  *   · Chấm 1–5 sao khi phiếu đã xử lý xong; 1–2 sao mở lại phiếu (#2).
  *   · Xưng "bà con" (#6).

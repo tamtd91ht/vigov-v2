@@ -4,8 +4,10 @@
  * ⚠ CHỈ PHIẾU CỦA MÌNH, VÀ MÁY CHỦ QUYẾT ĐIỀU ĐÓ: lời gọi không mang một tham số nào nói "của ai"
  * hay "xã nào" (`api/goi-vigov.ts` `phanAnhCuaToi`). Công dân và xã lấy từ phiên (luật 4, bất biến 2).
  *
- * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG GỌI MẠNG — hôm nay là luôn luôn (`api/phien-vigov.ts`). Màn nói
- * "kênh chưa mở" như hai màn kia.
+ * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG GỌI MẠNG (`api/phien-vigov.ts`). Màn nói "kênh chưa mở" như hai màn
+ * kia. In practice the session is still empty: the bridge is wired (`api/mo-phien-vigov.ts` records
+ * `vigovSession`) but `vihat-miniapp`'s Zalo account-id step always refuses
+ * (`internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) → 503.
  *
  * ⚠ NÚT "XEM THÊM", KHÔNG CUỘN VÔ HẠN (`skills/accessibility-elderly`): danh sách tự dài ra khi
  * ngón tay chỉ định kéo xuống là danh sách người lớn tuổi không tìm lại được chỗ mình đang đọc.
@@ -206,7 +208,7 @@ export function PhanAnhCuaToiScreen(props: {
   /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
   reopenWithPhone?: ReopenWithPhone;
 }) {
-  // Đọc một lần lúc dựng. `null` hôm nay — xem `api/phien-vigov.ts`.
+  // Đọc một lần lúc dựng. `null` until the bridge issues a session (in practice still, see the header).
   const [phien] = useState(layPhienViGov);
   const [ds, datDs] = useState<DanhSach>(DANH_SACH_DAU);
   const phone = usePhoneVerification(props.reopenWithPhone);
