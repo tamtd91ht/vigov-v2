@@ -7,13 +7,16 @@ derived_from_commit: null
 expires: null
 owns_facts:
   - "ai được đóng phiếu phản ánh và điều kiện đóng"
-  - "quy tắc mở lại phiếu sau đánh giá thấp"
   - "công dân phải đăng nhập mới gửi được phản ánh, và ẩn danh nghĩa là gì"
+# "quy tắc mở lại phiếu sau đánh giá thấp" CHUYỂN CHỦ sang ADR 0050 ngày 28/09/2026 (chủ dự án: theo kho
+# yêu cầu — 1–2 sao tự mở lại, không trần, không tính lại hạn, xã không tắt được). Mục "Mở lại phiếu"
+# bên dưới giữ lại làm lịch sử; một sự thật, một chủ (luật 9).
 ---
 
 # 0008. Vòng đời phiếu phản ánh là cấu hình theo xã
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-16 · **Đóng câu hỏi mở #7 và #8**
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-16 · **Đóng câu hỏi mở #7 và #8** · **Phần mở lại phiếu (#8)
+BỊ THAY bởi ADR 0050** (28/09/2026)
 
 ## Bối cảnh
 
