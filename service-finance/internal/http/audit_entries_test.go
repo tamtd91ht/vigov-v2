@@ -59,18 +59,19 @@ func newAuditHarness(t *testing.T) *auditHarness {
 	checker := &checkerDanhMucGia{}
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:     checker,
-		HangMuc:     hangMucMau(),
-		GhiHangMuc:  &ghiDanhMucGia{},
-		DuAn:        duAnMau(),
-		GhiDuAn:     &ghiDuAnGia{},
-		GhiChungTu:  &ghiChungTuGia{},
-		Nguong:      nguongMacDinh(),
-		NganSach:    nganSachMau(),
-		GhiNganSach: &ghiNganSachGia{},
-		AuditLog:    log,
-		Nay:         func() time.Time { return lucDaQua7096 },
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Checker:        checker,
+		HangMuc:        hangMucMau(),
+		GhiHangMuc:     &ghiDanhMucGia{},
+		DuAn:           duAnMau(),
+		GhiDuAn:        &ghiDuAnGia{},
+		GhiChungTu:     &ghiChungTuGia{},
+		Nguong:         nguongMacDinh(),
+		NganSach:       nganSachMau(),
+		GhiNganSach:    &ghiNganSachGia{},
+		AuditLog:       log,
+		SystemMessages: &systemMessagesFake{},
+		Nay:            func() time.Time { return lucDaQua7096 },
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux
 	h = chuTheGhi(h)

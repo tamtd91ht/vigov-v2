@@ -162,7 +162,10 @@ func main() {
 		GhiNganSach: app.NewNganSach(kho, nganSach),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
-		Log:      log,
+		// "Lời hệ thống": a commune's wording of the sentences this service raises. The use case
+		// owns the transaction the override row and its audit entry share (rule 6, invariant 3).
+		SystemMessages: app.NewSystemMessages(kho, fistore.NewSystemMessageOverrideStore(kho)),
+		Log:            log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

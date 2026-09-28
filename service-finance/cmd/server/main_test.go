@@ -134,10 +134,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		Nguong:     nguongTrong{},
 		// The budget board, same reasoning again: built on a nil *store.DB and never called from this
 		// file, present because Register refuses a nil dependency at construction.
-		NganSach:    khoNganSachTrong{},
-		GhiNganSach: app.NewNganSach(nil, nil),
-		AuditLog:    audit.NewLog(pkgstore.New(nil)),
-		Log:         log,
+		NganSach:       khoNganSachTrong{},
+		GhiNganSach:    app.NewNganSach(nil, nil),
+		AuditLog:       audit.NewLog(pkgstore.New(nil)),
+		SystemMessages: app.NewSystemMessages(nil, nil),
+		Log:            log,
 	})
 
 	danhBa := thuMucGia{

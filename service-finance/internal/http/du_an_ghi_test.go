@@ -130,13 +130,14 @@ func dungMayChuDuAnGhi(t *testing.T) *mayChuDuAnGhi {
 		DuAn:       duAnMau(),
 		GhiDuAn:    ghi,
 		// Present so Register accepts the Deps; never called from this file.
-		GhiChungTu:  &ghiChungTuGia{},
-		Nguong:      nguongMau(),
-		NganSach:    &nganSachGia{},
-		GhiNganSach: &ghiNganSachGia{},
-		AuditLog:    &auditLogFake{},
-		Nay:         func() time.Time { return lucDaQua7096 },
-		Log:         im,
+		GhiChungTu:     &ghiChungTuGia{},
+		Nguong:         nguongMau(),
+		NganSach:       &nganSachGia{},
+		GhiNganSach:    &ghiNganSachGia{},
+		AuditLog:       &auditLogFake{},
+		SystemMessages: &systemMessagesFake{},
+		Nay:            func() time.Time { return lucDaQua7096 },
+		Log:            im,
 	})
 
 	var h http.Handler = mux

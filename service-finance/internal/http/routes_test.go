@@ -224,11 +224,12 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// record the commune and the acting person. Register refuses a nil dependency at
 		// construction, so both have to be present here — and a fake that is never invoked cannot
 		// answer anything wrongly.
-		NganSach:    &nganSachGia{},
-		GhiNganSach: &ghiNganSachGia{},
-		AuditLog:    &auditLogFake{},
-		Nay:         func() time.Time { return lucDaQua7096 },
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NganSach:       &nganSachGia{},
+		GhiNganSach:    &ghiNganSachGia{},
+		AuditLog:       &auditLogFake{},
+		SystemMessages: &systemMessagesFake{},
+		Nay:            func() time.Time { return lucDaQua7096 },
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

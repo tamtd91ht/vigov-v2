@@ -371,18 +371,19 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:     checker,
-		HangMuc:     hangMucMau(),
-		GhiHangMuc:  &ghiDanhMucGia{},
-		DuAn:        duAnMau(),
-		GhiDuAn:     &ghiDuAnGia{},
-		GhiChungTu:  &ghiChungTuGia{},
-		Nguong:      nguongMacDinh(),
-		NganSach:    doc,
-		GhiNganSach: ghi,
-		AuditLog:    &auditLogFake{},
-		Nay:         func() time.Time { return lucDaQua7096 },
-		Log:         im,
+		Checker:        checker,
+		HangMuc:        hangMucMau(),
+		GhiHangMuc:     &ghiDanhMucGia{},
+		DuAn:           duAnMau(),
+		GhiDuAn:        &ghiDuAnGia{},
+		GhiChungTu:     &ghiChungTuGia{},
+		Nguong:         nguongMacDinh(),
+		NganSach:       doc,
+		GhiNganSach:    ghi,
+		AuditLog:       &auditLogFake{},
+		SystemMessages: &systemMessagesFake{},
+		Nay:            func() time.Time { return lucDaQua7096 },
+		Log:            im,
 	})
 
 	var h http.Handler = mux
