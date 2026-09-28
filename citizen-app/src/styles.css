@@ -2232,6 +2232,11 @@ body {
   color: var(--ink-muted);
 }
 
+/* "Lấy vị trí hiện tại" under the address box — one block: button, why, one status line. */
+.cd-vi-tri {
+  margin: 0 0 8px;
+}
+
 /* Tên xã của phiên — đầu mỗi màn. Viền trái + chữ đậm, không chỉ màu. */
 .cd-xa {
   margin: 0 0 12px;

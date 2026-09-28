@@ -25,6 +25,7 @@ import {
   DO_DAI_TOI_DA,
   type PhanAnhMoi,
   type PhieuCuaToi,
+  type SceneLocation,
   thanGuiPhanAnh,
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui";
@@ -32,9 +33,16 @@ import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
-import { GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI } from "./noi-dung";
+import { GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI, SEND_LOCATION_WORDS } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
+import {
+  formatCoordinates,
+  type GetSceneLocation,
+  SceneLocationControl,
+  type SceneLocationFailure,
+  useSceneLocation,
+} from "./scene-location";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const PHAN_ANH_TRONG: PhanAnhMoi = {
@@ -81,13 +89,25 @@ export const ID_DAU_BUOC = {
 
 /* ─────────────────────────── bước 1: nhập ─────────────────────────── */
 
+/**
+ * The location control's state on the input step. `null` = the shell injected no location function
+ * (outside Zalo, tests): no button at all, rather than a button that can only fail.
+ */
+export type InputStepLocation = {
+  locating: boolean;
+  failure: SceneLocationFailure | null;
+  onLocate: () => void;
+} | null;
+
 export function BuocNhap(props: {
   pa: PhanAnhMoi;
   loi: string | null;
   onDoi: (pa: PhanAnhMoi) => void;
   onTiep: () => void;
+  location?: InputStepLocation;
 }) {
   const { pa, onDoi } = props;
+  const location = props.location ?? null;
   return (
     <div className="cd-buoc">
       <p className="cd-khan-cap" role="note">
@@ -111,6 +131,18 @@ export function BuocNhap(props: {
         toi_da={DO_DAI_TOI_DA.dia_chi}
         onDoi={(v) => onDoi({ ...pa, dia_chi: v })}
       />
+      {/* UNDER the address box, which stays optional and editable: the location adds a point, it never
+          fills or replaces the words the citizen typed (`scene-location.tsx`). */}
+      {location !== null && (
+        <SceneLocationControl
+          words={SEND_LOCATION_WORDS}
+          look="shared"
+          locating={location.locating}
+          location={pa.scene_location ?? null}
+          failure={location.failure}
+          onLocate={location.onLocate}
+        />
+      )}
 
       {/* NÚT BẬT/TẮT, KHÔNG PHẢI Ô ĐÁNH DẤU: trạng thái nói bằng CHỮ ("Đang bật"), không bằng một
           dấu tích nhỏ hay một màu (README §Non-negotiables #6), và đích chạm to bằng cả dòng. */}
@@ -162,7 +194,14 @@ export function BuocNhap(props: {
 
 /* ─────────────────────── bước 2: xác nhận xã ─────────────────────── */
 
-export function BuocXacNhan(props: { ten_xa: string; onGui: () => void; onSua: () => void }) {
+export function BuocXacNhan(props: {
+  ten_xa: string;
+  onGui: () => void;
+  onSua: () => void;
+  /** The location that goes with the petition, if any — said here, at the last step, before sending. */
+  location?: SceneLocation | null;
+}) {
+  const location = props.location ?? null;
   return (
     <div className="cd-buoc" aria-labelledby={ID_DAU_BUOC["xac-nhan"]}>
       <h2 className="cd-tieu-de-phu" id={ID_DAU_BUOC["xac-nhan"]} tabIndex={-1}>
@@ -171,6 +210,7 @@ export function BuocXacNhan(props: { ten_xa: string; onGui: () => void; onSua: (
       <p className="cd-cau">{GUI.xac_nhan_cau}</p>
       <p className="cd-xa-xac-nhan">{props.ten_xa}</p>
       <p className="cd-ghi-chu">{GUI.xac_nhan_hau_qua}</p>
+      {location !== null && <p className="cd-cau">{GUI.confirm_location(formatCoordinates(location))}</p>}
       <button type="button" className="cd-nut" onClick={props.onGui}>
         {GUI.nut_gui(props.ten_xa)}
       </button>
@@ -277,10 +317,16 @@ export function buocSauKhiGui(kq: KetQuaGoi): Buoc | "kenh-chua-mo" {
 export function GuiPhanAnhScreen({
   onQuayLai,
   reopenWithPhone,
+  getSceneLocation,
 }: {
   onQuayLai: () => void;
   /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
   reopenWithPhone?: ReopenWithPhone;
+  /**
+   * "Lấy vị trí hiện tại" — injected by the shell (`App.tsx`: Zalo codes + `vihat-miniapp` exchange).
+   * Needs no ViGov session: the route is public. Absent = no location button.
+   */
+  getSceneLocation?: GetSceneLocation;
 }) {
   // Đọc một lần lúc dựng. `null` until the bridge issues a session (in practice still, see the header). Mở lại phiên kèm số không đổi
   // TÊN XÃ (`reopenSessionWithPhone` từ chối phiên khác xã), nên bản đọc một lần này vẫn đúng.
@@ -291,6 +337,16 @@ export function GuiPhanAnhScreen({
   const [kenhDong, datKenhDong] = useState(false);
   /** Lần gửi đang dở. Giữ qua "Gửi lại"; bỏ khi người dân quay lại sửa (`api/lan-gui.ts`). */
   const [lan, datLan] = useState<LanGui | null>(null);
+  /**
+   * The location lives IN the form (`pa.scene_location`) so the body is built from exactly what the
+   * screen shows. Functional update: the citizen may type while the exchange runs, and their words must
+   * not be overwritten by a copy of the form taken before the tap. A new location is a new body, so the
+   * pending send (and its Idempotency-Key) is dropped, exactly as `onDoi` does for a typed change.
+   */
+  const sceneLocation = useSceneLocation(getSceneLocation, (location) => {
+    datPa((t) => ({ ...t, scene_location: location }));
+    datLan(null);
+  });
 
   // Đổi bước → tiêu điểm tới đầu bước mới (`ID_DAU_BUOC`). So với bước TRƯỚC, không dùng cờ "lần
   // đầu": StrictMode chạy hiệu ứng hai lần lúc gắn, và cờ ấy sẽ kéo tiêu điểm ngay khi mở màn.
@@ -370,11 +426,27 @@ export function GuiPhanAnhScreen({
             const loi = kiemPhanAnh(pa);
             datBuoc(loi === null ? { kieu: "xac-nhan" } : { kieu: "nhap", loi });
           }}
+          location={
+            getSceneLocation === undefined
+              ? null
+              : {
+                  locating: sceneLocation.locating,
+                  failure: sceneLocation.failure,
+                  onLocate: () => void sceneLocation.locate(),
+                }
+          }
         />
       );
       break;
     case "xac-nhan":
-      than = <BuocXacNhan ten_xa={phien.ten_xa} onGui={guiLanDau} onSua={suaLai} />;
+      than = (
+        <BuocXacNhan
+          ten_xa={phien.ten_xa}
+          onGui={guiLanDau}
+          onSua={suaLai}
+          location={pa.scene_location ?? null}
+        />
+      );
       break;
     case "dang-gui":
       than = <DangGui />;
@@ -385,6 +457,7 @@ export function GuiPhanAnhScreen({
           phieu={buoc.phieu}
           onGuiKhac={() => {
             datPa(PHAN_ANH_TRONG);
+            sceneLocation.reset();
             datBuoc({ kieu: "nhap", loi: null });
           }}
         />

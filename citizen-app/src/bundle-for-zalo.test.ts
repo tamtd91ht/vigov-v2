@@ -43,7 +43,7 @@ import {
 // một trong hai: mỗi hàm là "thân yêu cầu" của đúng tuyến nó phục vụ, và đổi tên để tiện cho một
 // tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
 import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
-import { DUONG_DAN_PHIEN, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
+import { DUONG_DAN_PHIEN, LOCATION_PATH, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
 import { nhanNguon, TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha/goi-y";
 import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
@@ -341,6 +341,13 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
       expect(dem(truong), `bundle không mang tên trường "${truong}" của hợp đồng đăng nhập`).toBeGreaterThan(0);
     }
     expect((ban.match(/fetch\s*\(/g) ?? []).length, "bundle không có một lời gọi mạng nào").toBeGreaterThan(0);
+  });
+
+  it("mang đúng MỘT đường gọi tuyến đổi mã vị trí, và hai tên trường của nó", () => {
+    // 29/09/2026 — `vihat-miniapp` `POST /api/v1/location`. 0 = the location button cannot reach the
+    // server; 2+ = a second caller appeared somewhere.
+    expect(dem(LOCATION_PATH), "bundle phải nhắc tuyến đổi mã vị trí ĐÚNG MỘT lần").toBe(1);
+    expect(dem("locationToken"), "bundle không mang tên trường locationToken").toBeGreaterThan(0);
   });
 
   it("mang đúng MỘT đường gọi tuyến yêu cầu", () => {

@@ -659,19 +659,21 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
     // Cột `roi_khoi_may` rỗng nghĩa là KHÔNG CÓ GÌ rời khỏi máy — một khẳng định, không phải một
     // ô chưa điền. Ba lời gọi của luồng đăng nhập là ba lời gọi duy nhất có dữ liệu đi ra, và
     // chúng phải nói ra; ca này đỏ lên nếu ai đó làm rỗng một trong ba.
-    for (const ten of ["getPhoneNumber", "getAccessToken"]) {
+    // `getLocation` JOINED THIS LIST 29/09/2026: on "Gửi phản ánh" its code now goes to `vihat-miniapp`
+    // `POST /api/v1/location` to become coordinates. Until that day this case pinned the opposite
+    // ("the location code never leaves the phone") — and its message said what flipping it means: the
+    // privacy policy now owes a section, pinned in `content/chinh-sach.test.ts`.
+    for (const ten of ["getPhoneNumber", "getAccessToken", "getLocation"]) {
       const khai = KHAI_BAO_LOI_GOI.find((k) => k.api === ten)!;
       expect(
         khai.roi_khoi_may.trim().length,
         `${ten} gửi một mã tới máy chủ nhưng bảng khai nói không có gì rời khỏi máy`,
       ).toBeGreaterThan(0);
     }
-    // Và chiều ngược lại: `getLocation` KHÔNG gửi gì đi — mã vị trí ở lại trên máy, và màn hình
-    // nói thẳng rằng vì thế nó chưa xếp được văn phòng theo khoảng cách.
-    expect(
-      KHAI_BAO_LOI_GOI.find((k) => k.api === "getLocation")!.roi_khoi_may,
-      "bảng khai nói mã vị trí rời khỏi máy — nếu đúng thì chính sách quyền riêng tư đang thiếu một mục",
-    ).toBe("");
+    // The Contact screen still sends nothing for it — the row must keep saying so, not only the new half.
+    const location = KHAI_BAO_LOI_GOI.find((k) => k.api === "getLocation")!;
+    expect(location.roi_khoi_may).toMatch(/Gửi phản ánh/);
+    expect(location.roi_khoi_may).toMatch(/Liên hệ: không có gì rời khỏi máy/);
   });
 
   it("nửa nhà nước khai đúng một lời gọi riêng (getUserInfo) — và bảng nói ra nó thừa hưởng những gì", () => {

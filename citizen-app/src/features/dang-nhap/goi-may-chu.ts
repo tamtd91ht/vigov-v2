@@ -30,7 +30,7 @@
  * khi ứng dụng đóng — đúng cách lớp khám phá giữ xã đã chọn. Dây bẫy cấm `localStorage` /
  * `sessionStorage` / `cookie` / `indexedDB` KHÔNG được nới một dòng nào cho tệp này.
  */
-import type { MaDangNhap } from "../tinh-nang/zalo-api";
+import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 
 import {
   type BridgeRequestWithPhone,
@@ -38,7 +38,11 @@ import {
   diaChiPhien,
   docTraLoi,
   docTraLoiCauViGov,
+  type ExchangedLocation,
+  locationAddress,
+  locationBody,
   type Phien,
+  readLocation,
   type PhienViGovQuaCau,
   thanYeuCau,
   thanYeuCauCauViGov,
@@ -164,6 +168,78 @@ export function reopenViGovSessionWithPhone(
   dia_chi: string = diaChiPhien(),
 ): Promise<KetQuaCauViGov> {
   return callBridge(bridgeBodyWithPhone(yc), dia_chi);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * LOCATION EXCHANGE — `POST /api/v1/location`, same server and same host as the two calls above
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * One branch per thing the citizen does next — the only criterion for a separate branch:
+ *
+ *   `xong`                 200 with coordinates inside the world's range
+ *   `qua-nhieu-lan`        429 — wait a few minutes (pressing again at once fails the same way)
+ *   `zalo-khong-tra-loi`   502 — every Zalo failure, the ~2-minute token expiry included: press again
+ *   `yeu-cau-hong`         400 / 405 — a body the server could not read; a fresh tap builds a fresh one
+ *   `tam-ngung`            503 — the route is not wired on that server; pressing again changes nothing
+ *   `khong-goi-duoc`       network, timeout, an unknown status, a 200 body out of shape
+ *   `chua-khai-host`       the build has no `vihat-miniapp` address — nothing is sent
+ */
+export type LocationExchangeResult =
+  | { kieu: "xong"; location: ExchangedLocation }
+  | { kieu: "qua-nhieu-lan" }
+  | { kieu: "zalo-khong-tra-loi" }
+  | { kieu: "yeu-cau-hong" }
+  | { kieu: "tam-ngung" }
+  | { kieu: "khong-goi-duoc" }
+  | { kieu: "chua-khai-host" };
+
+/**
+ * Exchange the two Zalo codes for coordinates.
+ *
+ * NEVER THROWS, and NEVER LOGS: the body carries a code that locates a real person, and the answer is
+ * where they stand — often their doorstep (rule 3). `address` is only for tests to pass a fake address
+ * (the real one is read at build time and is empty under Vitest), exactly like `phatHanhPhien`.
+ */
+export async function exchangeLocation(
+  codes: LocationCodes,
+  address: string = locationAddress(),
+): Promise<LocationExchangeResult> {
+  if (address === "") return { kieu: "chua-khai-host" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HAN_CHO_MS);
+
+  try {
+    const response = await fetch(address, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: locationBody(codes),
+      signal: controller.signal,
+    });
+
+    switch (response.status) {
+      case 200: {
+        const location = readLocation(await response.json());
+        return location === null ? { kieu: "khong-goi-duoc" } : { kieu: "xong", location };
+      }
+      case 400:
+      case 405:
+        return { kieu: "yeu-cau-hong" };
+      case 429:
+        return { kieu: "qua-nhieu-lan" };
+      case 502:
+        return { kieu: "zalo-khong-tra-loi" };
+      case 503:
+        return { kieu: "tam-ngung" };
+      default:
+        return { kieu: "khong-goi-duoc" };
+    }
+  } catch {
+    return { kieu: "khong-goi-duoc" };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Lời gọi cầu, dùng chung cho hai thân — một chỗ `fetch`, một bảng mã trạng thái. */

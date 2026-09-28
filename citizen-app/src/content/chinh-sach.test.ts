@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
-import { bridgeBodyWithPhone, thanYeuCauCauViGov, TRUONG_GUI_DI_CAU_VIGOV } from "../features/dang-nhap/hop-dong";
+import {
+  bridgeBodyWithPhone,
+  LOCATION_FIELDS,
+  locationBody,
+  thanYeuCauCauViGov,
+  TRUONG_GUI_DI_CAU_VIGOV,
+} from "../features/dang-nhap/hop-dong";
 import {
   DOAN_CHINH_SACH_TINH_NANG,
   TOKEN_KHONG_CHUA_GI,
@@ -187,6 +193,32 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       // Câu chính sách của bước xác nhận xã VẪN ĐÚNG: thân của bước ấy vẫn không mang mã số.
       expect(khoaThan()).not.toContain("phoneToken");
     });
+  });
+
+  /**
+   * ⚠ KHOẢNG HỞ CÒN NỢ — ĐỔI MÃ VỊ TRÍ (29/09/2026, `vihat-miniapp` `POST /api/v1/location`).
+   *
+   *   "Lấy vị trí hiện tại" on the send screen sends two codes to the ViHAT Group server and brings
+   *   coordinates back. The route is declared in the Zalo submission (`ket-xuat-ho-so.ts`,
+   *   `LOCATION_FIELDS`), but the policy text has no section for it yet, and two policy sentences say
+   *   the opposite for the app as a whole (`ben-thu-ba`: "ứng dụng không hề có vị trí của bạn";
+   *   `DOAN_CHINH_SACH_TUNG_QUYEN`: "Ứng dụng chỉ nhận một mã, không nhận toạ độ"). Legal wording is
+   *   the project owner's — not written here. This case pins the gap at EXACTLY the two declared keys:
+   *   a third key in that body is red, and the day the section is approved this case becomes a two-way
+   *   lock like the ones above.
+   */
+  it("đổi mã vị trí: thân gửi đúng hai khoá đã khai — mục chính sách cho tuyến này CÒN NỢ", () => {
+    const keys = Object.keys(
+      JSON.parse(locationBody({ access_token: "m", location_token: "v" })) as Record<string, unknown>,
+    ).sort();
+    expect(keys).toEqual(LOCATION_FIELDS.map((t) => t.khoa).sort());
+    const policy = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
+    for (const t of LOCATION_FIELDS) {
+      expect(
+        policy,
+        "the policy now declares the location exchange — turn this case into a two-way lock",
+      ).not.toContain(t.trong_chinh_sach);
+    }
   });
 
   it("mục về bề mặt yêu cầu nói đủ: phải đăng nhập · ZNS không chắc chắn · trần gọi lại · 24 tháng", () => {

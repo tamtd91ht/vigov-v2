@@ -35,14 +35,11 @@ export type KetQuaLayTen =
   | { readonly kieu: "khong-lay-duoc" };
 export type LayTenZalo = () => Promise<KetQuaLayTen>;
 
-/**
- * MÃ VỊ TRÍ — kết quả của nút "Lấy vị trí hiện tại" ở màn gửi phản ánh. `getLocation` của zmp-sdk CHỈ
- * trả một token (toạ độ đã `@deprecated`); đổi token ra toạ độ cần máy chủ có app secret — chưa có. Nên
- * màn hình chỉ báo "đã nhận mã", không bao giờ vẽ một điểm hay một địa chỉ đoán ra. Token KHÔNG rời
- * máy và không được giữ lại: bản trải nghiệm không có chỗ nào gửi nó đi.
+/*
+ * VỊ TRÍ HIỆN TẠI — the token-only `LayMaViTri` that stood here was replaced on 29/09/2026 by
+ * `GetSceneLocation` (`scene-location.tsx`): the shell now exchanges the `getLocation` token at
+ * `vihat-miniapp` `POST /api/v1/location` and hands down real coordinates, never a guessed address.
  */
-export type KetQuaViTri = "da-nhan-ma" | "tu-choi" | "ngoai-zalo" | "khong-lay-duoc";
-export type LayMaViTri = () => Promise<KetQuaViTri>;
 
 /** Che số điện thoại khi hiện ra (luật 3 bất biến 3): giữ 2 số đầu, 4 số cuối — cùng khuôn máy chủ. */
 export function cheSoDienThoai(so: string): string {

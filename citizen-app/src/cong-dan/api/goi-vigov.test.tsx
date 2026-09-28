@@ -37,6 +37,7 @@ import {
   docPhieu,
   docTrangPhieuCuaToi,
   DUONG_DAN_PHAN_ANH_CUA_TOI,
+  OPTIONAL_SCENE_FIELDS,
   type PhanAnhMoi,
   type PhieuCuaToiTomTat,
   SO_DONG_MOI_TRANG,
@@ -152,6 +153,31 @@ describe("gửi phản ánh — khoá chống trùng, bearer, thân", () => {
       expect(than, `thân gửi đi mang trường bị từ chối: ${cam}`).not.toHaveProperty(cam);
     }
     expect(than["content"]).toBe("Ổ gà lớn trước cổng chợ");
+
+    // 29/09/2026 (ViGov b5d17bb): the ONLY keys allowed beyond the five are the optional pair `lat`/`lng`,
+    // and only together. The same refused list still holds with a location attached.
+    const allowed = [...TRUONG_DUOC_NHAN, ...OPTIONAL_SCENE_FIELDS].sort();
+    const with_location = JSON.parse(
+      thanGuiPhanAnh({ ...PA, scene_location: { lat: 15.57, lng: 108.47 } }),
+    ) as Record<string, unknown>;
+    expect(Object.keys(with_location).sort()).toEqual(allowed);
+    const partial = JSON.parse(thanGuiPhanAnh({ ...PA, scene_location: { lat: 15.57 } as never })) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(partial).sort(), "a half location went on the wire").toEqual([...TRUONG_DUOC_NHAN].sort());
+  });
+
+  it("POST with a location: `lat`/`lng` are JSON numbers in the body, never on the address", async () => {
+    datFetch(traLoi(201, { ...PHIEU_RA, lat: 15.57, lng: 108.47 }));
+    const kq = await guiPhanAnh(taoLanGui(thanGuiPhanAnh({ ...PA, scene_location: { lat: 15.57, lng: 108.47 } })));
+    expect(kq.kieu).toBe("xong");
+    const body = JSON.parse(loi_goi[0]!.tuy_chon.body as string) as Record<string, unknown>;
+    expect(body["lat"]).toBe(15.57);
+    expect(body["lng"]).toBe(108.47);
+    // Coordinates are personal data (often a doorstep): never in the URL (rule 3, forbidden #4).
+    expect(loi_goi[0]!.dia_chi).toBe(`https://vigov.vidu.vn${DUONG_DAN_PHAN_ANH_CUA_TOI}`);
+    expect(loi_goi[0]!.dia_chi).not.toMatch(/15\.57|108\.47/);
   });
 
   it("gửi ẩn danh thì KHÔNG gửi họ tên và số điện thoại", () => {

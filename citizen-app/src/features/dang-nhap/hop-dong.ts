@@ -39,7 +39,7 @@ import type { TruongGuiDi } from "../../api/hop-dong-yeu-cau";
 
 import { laTenMien } from "../../lib/launch-params";
 
-import type { MaDangNhap } from "../tinh-nang/zalo-api";
+import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 
 /**
  * Đường dẫn tuyến phát hành phiên. Không chứa gì của người dùng (luật 3, cấm #4).
@@ -306,6 +306,78 @@ export function docTraLoiCauViGov(than: unknown): PhienViGovQuaCau | "khong-co-p
     da_xac_thuc_so: v.phoneVerified,
     ten_mien_xa: docTenMienPhien(v.communePrimaryHost),
   };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * LOCATION EXCHANGE — `POST /api/v1/location` (`vihat-miniapp` 0dada0f, `internal/httpapi/vi_tri.go`)
+ *
+ *   send   : { "accessToken": "<getAccessToken()>", "locationToken": "<token of getLocation()>" }
+ *   receive: 200 { "latitude": number, "longitude": number }   (Cache-Control: no-store)
+ *   errors : { "message", "code" } — 400 invalid_request · 405 method_not_allowed · 429 rate_limited
+ *            (10 / 5 min / IP, its own bucket) · 502 zalo_location_unavailable (EVERY Zalo failure,
+ *            expired token included) · 503 unavailable
+ *
+ * SAME SERVER AND SAME HOST as the login route: `diaChiApi`, one address for the app (the skill's
+ * "The API host is singular"). Public on the server side, like `/sessions`: what stands in the way is
+ * the Zalo-issued token plus the per-IP limit — so no ViGov session and no commercial ticket is sent.
+ *
+ * The server's `message` is NOT read: the screen says its own sentence per branch (the rule of
+ * `cong-dan/api/goi-vigov.ts`), and the branch is chosen by status code, which the contract fixes.
+ *
+ * ⚠ NOTHING IS KEPT. The two codes live for one call; the coordinates go back to the screen, which
+ *   shows them and sends them only inside a petition the citizen submits. `vihat-miniapp` stores and
+ *   logs neither (README §`POST /api/v1/location`).
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Path of the location exchange. Carries nothing of the user (rule 3, forbidden #4). */
+export const LOCATION_PATH = "/api/v1/location";
+
+/** Full address of the route, or EMPTY when the build has no host — `goi-may-chu.ts` fails closed. */
+export function locationAddress(): string {
+  return diaChiApi(LOCATION_PATH);
+}
+
+/**
+ * The two fields this route takes off the phone — and the sentence declaring each, for the Zalo
+ * submission (`content/ket-xuat-ho-so.ts`). Locked both ways with `locationBody` by
+ * `ket-xuat-ho-so.test.ts`, exactly as the three login bodies are.
+ */
+export const LOCATION_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "accessToken",
+    trong_chinh_sach:
+      "mã phiên Zalo của bạn, để máy chủ đổi được mã vị trí — mã này KHÔNG chứa tên hay ảnh đại diện của bạn",
+  },
+  {
+    khoa: "locationToken",
+    trong_chinh_sach:
+      "mã vị trí do Zalo cấp sau khi bạn đồng ý chia sẻ — TOẠ ĐỘ KHÔNG NẰM TRONG MÃ NÀY, chỉ máy chủ đổi được mã thành toạ độ, và máy chủ không lưu toạ độ ấy",
+  },
+];
+
+/** The two Zalo codes → the request body. THE ONLY PLACE the two wire names are written. */
+export function locationBody(codes: LocationCodes): string {
+  return JSON.stringify({ accessToken: codes.access_token, locationToken: codes.location_token });
+}
+
+/** Coordinates as read from the server, in our names. */
+export type ExchangedLocation = { latitude: number; longitude: number };
+
+/**
+ * 200 body → coordinates, or `null` when MALFORMED.
+ *
+ * Checked field by field, never cast: a missing key would become `undefined` and reach the petition as
+ * `null` — a half location. Out of the world's range is malformed too (the server already refuses such
+ * a reading, `vihat-miniapp` README table, 502), and ViGov answers 400 to it — better said here, as
+ * "try again", than at the moment the citizen presses send.
+ */
+export function readLocation(body: unknown): ExchangedLocation | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { latitude, longitude } = body as Record<string, unknown>;
+  if (typeof latitude !== "number" || typeof longitude !== "number") return null;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude };
 }
 
 /**

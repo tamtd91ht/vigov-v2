@@ -20,6 +20,7 @@ import { DanhBaCanBoScreen } from "./DanhBaCanBoScreen";
 import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
 import { CHUA_DANG_NHAP_XA, CUA_TOI, DANH_BA, GUI, QUAY_LAI, TIN_XA, TRA_CUU } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
+import type { GetSceneLocation } from "./scene-location";
 import { TinTucXaScreen } from "./TinTucXaScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
@@ -47,6 +48,7 @@ export function KenhCongDan({
   onDong,
   ten_mien = null,
   reopenWithPhone,
+  getSceneLocation,
 }: {
   /** Không truyền = không có nút "Quay lại" (app riêng của xã: kênh là màn gốc, không có chỗ để về). */
   onDong?: () => void;
@@ -57,6 +59,8 @@ export function KenhCongDan({
    * (`App.tsx`), ba màn phản ánh chỉ gọi nó SAU cú bấm đồng ý của công dân (`phone-verification.tsx`).
    */
   reopenWithPhone?: ReopenWithPhone;
+  /** "Lấy vị trí hiện tại" on the send screen — the shell builds it (`App.tsx`); absent = no button. */
+  getSceneLocation?: GetSceneLocation;
 }) {
   const [man, datMan] = useState<Man>({ kieu: "chon" });
   // Đọc MỘT LẦN lúc dựng, cùng cách ba màn phản ánh đọc (`useState(layPhienViGov)`): phiên chỉ được
@@ -71,7 +75,9 @@ export function KenhCongDan({
   const [listVersion, setListVersion] = useState(0);
   const veChon = () => datMan({ kieu: "chon" });
 
-  if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} reopenWithPhone={reopenWithPhone} />;
+  if (man.kieu === "gui") {
+    return <GuiPhanAnhScreen onQuayLai={veChon} reopenWithPhone={reopenWithPhone} getSceneLocation={getSceneLocation} />;
+  }
   if (man.kieu === "tin-tuc" && ten_mien !== null) {
     return <TinTucXaScreen ten_mien={ten_mien} onQuayLai={veChon} />;
   }

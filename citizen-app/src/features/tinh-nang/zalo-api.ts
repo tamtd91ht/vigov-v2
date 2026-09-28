@@ -224,12 +224,16 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // mới — và câu `de_lam_gi` phải kể cả hai, vì đây là câu màn Quản lý quyền đọc cho người dùng.
     // "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi" THÊM 28/09/2026: lần mở lại phiên kèm số
     // điện thoại (dòng `getPhoneNumber` ngay dưới) lấy lại mã phiên này trước.
+    // "Vị trí nơi xảy ra sự việc" THÊM 29/09/2026: the location exchange (`vihat-miniapp`
+    // `POST /api/v1/location`) needs this token beside the `getLocation` one — same call, one more
+    // place the code goes, so the sentence tells it.
     man: "Liên hệ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
-    tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã",
+    tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
     hoi_nguoi_dung: false,
-    roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập, hoặc để mở phiên làm việc với xã.",
+    roi_khoi_may:
+      "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập, để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
   },
   {
     // "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi" THÊM 28/09/2026 (quyết định của người
@@ -265,12 +269,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     nua: "ca-hai",
     // "Gửi phản ánh" THÊM 28/09/2026: ứng dụng riêng của một xã (`--vao-thang`) có nút "Lấy vị trí hiện
     // tại" để cán bộ tìm đúng nơi xảy ra sự việc. Cùng một lời gọi, cùng ranh giới: chỉ nhận MÃ.
-    man: "Liên hệ · Gửi phản ánh (ứng dụng của xã)",
+    // 29/09/2026: "Gửi phản ánh" (both apps) now EXCHANGES the code — `vihat-miniapp` `POST
+    // /api/v1/location` (0dada0f) turns it into coordinates, which come back to the phone, are shown to
+    // the citizen, and go to the commune only inside a petition the citizen sends. "Tìm văn phòng" is
+    // unchanged: it still only takes the code and exchanges nothing.
+    man: "Liên hệ · Gửi phản ánh",
     tinh_nang: "Tìm văn phòng gần bạn · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ — để tìm văn phòng gần bạn, hoặc để ghi nơi xảy ra sự việc khi gửi phản ánh tới xã. Toạ độ KHÔNG về máy bạn, nên bản dựng này chưa xếp được văn phòng theo khoảng cách, chưa hiện được điểm trên bản đồ, và nói thẳng điều đó trên màn hình.",
+      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Ở màn Liên hệ, mã chỉ ở lại trên máy: bản dựng này chưa xếp được văn phòng theo khoảng cách và nói thẳng điều đó trên màn hình. Ở màn Gửi phản ánh, khi bạn bấm “Lấy vị trí hiện tại”, mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
-    roi_khoi_may: "",
+    roi_khoi_may:
+      "Ở màn Gửi phản ánh: mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi. Ở màn Liên hệ: không có gì rời khỏi máy.",
   },
 ];
 
@@ -378,6 +387,30 @@ export function layTenZalo(): Promise<KetQuaXin<string>> {
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
 export function xinTokenViTri(): Promise<KetQuaXin<string>> {
   return xin(async (sdk) => (await sdk.getLocation()).token ?? "");
+}
+
+/**
+ * The two codes the location exchange needs (`vihat-miniapp` `POST /api/v1/location`): the Zalo
+ * access token and the one-use `getLocation` token. Both are CODES, not data — the coordinates are
+ * obtained only by the server, with the app secret (the same boundary as `MaDangNhap`).
+ */
+export type LocationCodes = {
+  access_token: string;
+  location_token: string;
+};
+
+/**
+ * `getAccessToken` first, then `getLocation` — same order and same reason as `xinMaDangNhap`: the first
+ * asks nobody (`index.d.ts` line 3009), so a failure there happens BEFORE the citizen is shown Zalo's
+ * location dialog, not after they have agreed to it. The location token lives about two minutes and is
+ * single-use, so the caller exchanges it immediately; nothing here keeps either code.
+ */
+export function requestLocationCodes(): Promise<KetQuaXin<LocationCodes>> {
+  return xin(async (sdk) => {
+    const access_token = await sdk.getAccessToken();
+    const { token } = await sdk.getLocation();
+    return { access_token, location_token: token ?? "" };
+  });
 }
 
 /** Nội dung mã QR — API DUY NHẤT ở đây trả về dữ liệu thật, không phải token. */

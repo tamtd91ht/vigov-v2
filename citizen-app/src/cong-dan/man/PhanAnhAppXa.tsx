@@ -20,22 +20,26 @@
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { DO_DAI_TOI_DA, RATING_COMMENT_MAX_LEN } from "../api/hop-dong-phan-anh";
+import { DO_DAI_TOI_DA, RATING_COMMENT_MAX_LEN, type SceneLocation } from "../api/hop-dong-phan-anh";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { GUI, giaiThichTrangThai, KHAN_CAP, nhanTrangThai, THE_PHIEU, TRA_CUU, XA_PA, XA_TN } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
+import {
+  type GetSceneLocation,
+  SceneLocationControl,
+  type SceneLocationWords,
+  useSceneLocation,
+} from "./scene-location";
 import { StarPicker } from "./star-picker";
 import {
   duocDanhGia,
   type FeedbackDraftStore,
   type KetQuaLayTen,
-  type KetQuaViTri,
   kiemNhapPhieu,
   LINH_VUC_TAM,
-  type LayMaViTri,
   type LayTenZalo,
   type LoiNhapPhieu,
   maPhieuTraiNghiem,
@@ -399,36 +403,42 @@ export function NutLayTen({ lay, onTen }: { lay: LayTenZalo; onTen: (ho_ten: str
   );
 }
 
-const CAU_VI_TRI: Readonly<Record<KetQuaViTri, string>> = {
-  "da-nhan-ma": XA_TN.vi_tri_da_nhan,
-  "tu-choi": XA_TN.vi_tri_tu_choi,
-  "ngoai-zalo": XA_TN.vi_tri_ngoai_zalo,
-  "khong-lay-duoc": XA_TN.vi_tri_khong_lay_duoc,
+/** "Bà con" words for the shared location control (`scene-location.tsx`), from `XA_TN` / `XA_PA`. */
+export const COMMUNE_LOCATION_WORDS: SceneLocationWords = {
+  button: XA_TN.vi_tri_nut,
+  button_again: XA_TN.location_again,
+  locating: XA_TN.vi_tri_dang_lay,
+  why: XA_PA.vi_tri_vi_sao,
+  found: XA_TN.location_found,
+  failures: {
+    "tu-choi": XA_TN.vi_tri_tu_choi,
+    "ngoai-zalo": XA_TN.vi_tri_ngoai_zalo,
+    "qua-nhieu-lan": XA_TN.location_rate_limited,
+    "thu-lai": XA_TN.vi_tri_khong_lay_duoc,
+    "tam-ngung": XA_TN.location_unavailable,
+  },
 };
 
-/** Nút "Lấy vị trí hiện tại". Chỉ có khi lớp vỏ tiêm hàm lấy mã vị trí (chạy trong Zalo). */
-function NutViTri({ lay }: { lay: LayMaViTri }) {
-  const [dang, datDang] = useState(false);
-  const [kq, datKq] = useState<KetQuaViTri | null>(null);
-  async function bam() {
-    if (dang) return;
-    datDang(true);
-    datKq(await lay().catch(() => "khong-lay-duoc" as const));
-    datDang(false);
-  }
+/**
+ * "Lấy vị trí hiện tại" of the experience form — only when the shell injects the function (inside Zalo).
+ *
+ * THE COORDINATES STAY ON THIS SCREEN: the experience ticket is the real contract's `PhieuCuaToi`, which
+ * carries no location, and the ticket never reaches the commune anyway (`trai-nghiem.ts`). They are
+ * shown so the citizen sees the exchange worked, and they are NOT put in the draft on the phone (the
+ * draft keeps the six `NhapPhieu` fields, like the prototype's `saveDraft`, which keeps no `coords`).
+ */
+function CommuneLocation({ get }: { get: GetSceneLocation }) {
+  const [location, setLocation] = useState<SceneLocation | null>(null);
+  const { locating, failure, locate } = useSceneLocation(get, setLocation);
   return (
-    <div className="xa-vi-tri">
-      <button type="button" className="xa-nut xa-nut--phu" onClick={() => void bam()} disabled={dang}>
-        <BieuTuong ten="pin" co={20} />
-        {dang ? XA_TN.vi_tri_dang_lay : XA_TN.vi_tri_nut}
-      </button>
-      <p className="xa-phu">{XA_PA.vi_tri_vi_sao}</p>
-      {kq !== null && (
-        <p className={kq === "da-nhan-ma" ? "xa-phu" : "xa-loi-o"} role="status">
-          {CAU_VI_TRI[kq]}
-        </p>
-      )}
-    </div>
+    <SceneLocationControl
+      words={COMMUNE_LOCATION_WORDS}
+      look="commune"
+      locating={locating}
+      location={location}
+      failure={failure}
+      onLocate={() => void locate()}
+    />
   );
 }
 
@@ -460,7 +470,8 @@ export function GuiPhanAnhTN(props: {
   ho_ten: string | null;
   lay_ten?: LayTenZalo;
   onTen: (ho_ten: string) => void;
-  lay_ma_vi_tri?: LayMaViTri;
+  /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
+  getSceneLocation?: GetSceneLocation;
   /**
    * Draft kept on the phone (ADR 0050 #7) — injected by the shell for the commune's own app only. Absent:
    * no draft at all, nothing survives closing the app (shared app, tests).
@@ -619,15 +630,15 @@ export function GuiPhanAnhTN(props: {
                 <p>{XA_PA.tac_phong_rieng}</p>
               </div>
             )}
-            {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ứng dụng CHƯA có hai thứ ấy: nói thẳng là
-                bắt buộc và sắp có, không chặn nút gửi (xem `kiemNhapPhieu`). */}
+            {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ảnh CHƯA có; vị trí hiện tại lấy được
+                (29/09/2026) nhưng chưa có bản đồ. Không chặn nút gửi vì hai ô ấy (xem `kiemNhapPhieu`). */}
             <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
             <p className="xa-phu">{XA_PA.anh_sap_co}</p>
             <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
             <p className="xa-phu">{XA_PA.vi_tri_sap_co}</p>
             <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={nhap.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={doi("dia_chi")} />
             {loi.dia_chi && <p className="xa-loi-o" role="alert">{loi.dia_chi}</p>}
-            {props.lay_ma_vi_tri && <NutViTri lay={props.lay_ma_vi_tri} />}
+            {props.getSceneLocation && <CommuneLocation get={props.getSceneLocation} />}
             <div className="xa-hang xa-hang--tinh xa-hang--sat">
               <span className="xa-hang__chu">
                 <strong>{XA_PA.an_danh}</strong>

@@ -41,7 +41,8 @@
  * Nguồn đối chiếu (đọc, không sửa): `service-petitions/internal/http/gui_phan_anh.go`,
  * `phieu_cua_toi.go`, `routes_cong_dan.go`.
  *
- * ⚠ NĂM TRƯỜNG, VÀ CHỈ NĂM TRƯỜNG. `guiPhanAnhVao` khai thêm mười trường CHỈ ĐỂ TỪ CHỐI:
+ * ⚠ NĂM TRƯỜNG, cộng HAI TUỲ CHỌN `lat`/`lng` (29/09/2026, `OPTIONAL_SCENE_FIELDS`, cả hai hoặc không).
+ * `guiPhanAnhVao` khai thêm mười trường CHỈ ĐỂ TỪ CHỐI:
  * `citizen_id`/`cong_dan_id` (người gửi — lấy từ phiên, luật 4), `field`/`linh_vuc` (lĩnh vực — cán
  * bộ chốt, ADR 0028 / #23), `channel`, `code`, `status`, `clock_from`, `acknowledge_due`,
  * `resolve_due`. Nhắc tới BẤT KỲ trường nào trong đó là 400. Xã thì không có trường nào cả — xã lấy
@@ -74,6 +75,40 @@ export const DO_DAI_TOI_DA = {
   dien_thoai: 32,
 } as const;
 
+/**
+ * THE TWO OPTIONAL KEYS (ViGov b5d17bb, `service-petitions/internal/http/gui_phan_anh.go` `Lat`/`Lng`):
+ * JSON numbers, BOTH OR NEITHER, -90..90 / -180..180; anything else is 400. The server rounds to 6
+ * digits (NUMERIC(9,6)); the 201 and GET-by-code echo them, omitted when absent. They describe where the
+ * problem is and grant nothing — the commune still comes only from the session (ADR 0022).
+ */
+export const OPTIONAL_SCENE_FIELDS = ["lat", "lng"] as const;
+
+/**
+ * Where the problem is, as exchanged from the citizen's own `getLocation` tap (`vihat-miniapp`
+ * `POST /api/v1/location`). Never a guessed address, never typed: the address box stays the citizen's.
+ */
+export type SceneLocation = { readonly lat: number; readonly lng: number };
+
+/**
+ * A location ViGov will accept — both numbers finite and inside the world's range. The same bounds as
+ * the server's `domain.NormaliseSceneLocation`; checked here so a bad pair is dropped WHOLE, never sent
+ * as a half the server would answer 400 to after the citizen pressed send.
+ */
+export function isSceneLocation(v: unknown): v is SceneLocation {
+  if (typeof v !== "object" || v === null) return false;
+  const { lat, lng } = v as Record<string, unknown>;
+  return (
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
 /** Thứ công dân gõ — đặt tên theo việc, không theo dây. */
 export type PhanAnhMoi = {
   noi_dung: string;
@@ -81,22 +116,34 @@ export type PhanAnhMoi = {
   ho_ten: string;
   dien_thoai: string;
   an_danh: boolean;
+  /**
+   * OPTIONAL: set only by the citizen's "Lấy vị trí hiện tại" tap; absent or `null` = nothing sent.
+   * Optional in the type so every existing literal of this type stays valid.
+   */
+  scene_location?: SceneLocation | null;
 };
 
 /**
- * `PhanAnhMoi` → thân yêu cầu. CHỖ DUY NHẤT năm tên trường gửi đi được viết ra.
+ * `PhanAnhMoi` → thân yêu cầu. CHỖ DUY NHẤT năm tên trường gửi đi được viết ra — and the two optional
+ * ones (`OPTIONAL_SCENE_FIELDS`).
  *
  * ẨN DANH THÌ KHÔNG GỬI HỌ TÊN VÀ SỐ ĐIỆN THOẠI — gửi chuỗi rỗng. Người bấm "Gửi ẩn danh" đã nói
  * họ không muốn tên mình gắn với phiếu; gửi hai ô ấy đi rồi trông vào máy chủ che là giữ lời hứa
  * bằng hệ thống của người khác (luật 3, bất biến 6: chỉ gửi đúng thứ cần).
+ *
+ * `lat`/`lng` GO TOGETHER OR NOT AT ALL: only a pair passing `isSceneLocation` is written, so a half
+ * pair (or `NaN`, or out of range) sends neither key. The anonymous switch does not remove them: the
+ * server keeps them like `address` (b5d17bb), and they exist only because the citizen tapped for them.
  */
 export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
+  const location = isSceneLocation(pa.scene_location) ? pa.scene_location : null;
   return JSON.stringify({
     content: pa.noi_dung.trim(),
     address: pa.dia_chi.trim(),
     reporter_name: pa.an_danh ? "" : pa.ho_ten.trim(),
     reporter_phone: pa.an_danh ? "" : pa.dien_thoai.trim(),
     anonymous: pa.an_danh,
+    ...(location === null ? {} : { lat: location.lat, lng: location.lng }),
   });
 }
 

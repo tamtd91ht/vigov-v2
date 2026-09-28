@@ -4,6 +4,7 @@
  * Người đọc là công dân, thường lớn tuổi, thường đang bực vì chính việc họ báo (`skills/
  * accessibility-elderly`): câu ngắn, một ý, không viết tắt, không mã lỗi, luôn nói việc cần làm tiếp.
  */
+import type { SceneLocationWords } from "./scene-location";
 import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -114,7 +115,29 @@ export const GUI = {
   se_xem_truoc: (moc: string) => `Phiếu sẽ được cán bộ xã xem trước ${moc} (giờ Việt Nam).`,
   gui_phieu_khac: "Gửi phản ánh khác",
   nut_gui_lai: "Gửi lại",
+  /** Shown on the confirmation step when a location is attached — the citizen sees what goes with it. */
+  confirm_location: (coordinates: string) => `Kèm vị trí hiện tại: ${coordinates}.`,
 } as const;
+
+/**
+ * "Lấy vị trí hiện tại" on the live form — "bạn", like every sentence of the shared app's citizen screens.
+ * Every failure says what to do next and names the address box as the way that always works (the button
+ * sits under it, hence "ô trên"). The box stays optional, as it is on this form and in the prototype.
+ */
+export const SEND_LOCATION_WORDS: SceneLocationWords = {
+  button: "Lấy vị trí hiện tại",
+  button_again: "Lấy lại vị trí hiện tại",
+  locating: "Đang lấy vị trí…",
+  why: "Để cán bộ xã tìm đúng nơi xảy ra sự việc. Zalo sẽ hỏi bạn có đồng ý chia sẻ vị trí không. Vị trí chỉ tới xã khi bạn gửi phản ánh.",
+  found: (coordinates) => `Đã lấy vị trí hiện tại (${coordinates}). Bạn vẫn nên ghi rõ nơi xảy ra ở ô trên.`,
+  failures: {
+    "tu-choi": "Bạn chưa đồng ý chia sẻ vị trí. Bạn vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.",
+    "ngoai-zalo": "Chỉ lấy được vị trí khi mở ứng dụng trong Zalo. Hãy ghi rõ nơi xảy ra ở ô trên.",
+    "qua-nhieu-lan": "Bạn đã thử lấy vị trí nhiều lần. Hãy chờ vài phút rồi bấm lại, hoặc ghi rõ nơi xảy ra ở ô trên.",
+    "thu-lai": "Chưa lấy được vị trí. Hãy bấm lại nút, hoặc ghi rõ nơi xảy ra ở ô trên.",
+    "tam-ngung": "Ứng dụng tạm thời chưa lấy được vị trí. Hãy ghi rõ nơi xảy ra ở ô trên.",
+  },
+};
 
 /**
  * Câu cho từng nhánh không thành của lần gửi. `co_the_gui_lai` quyết định nút "Gửi lại" (CÙNG khoá
@@ -549,13 +572,18 @@ export const XA_TN = {
   ghi_chu_tra_cuu_tn: "Bản trải nghiệm: chỉ tra được các phiếu bà con đã gửi trên điện thoại này trong lần mở ứng dụng này.",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",
+  location_again: "Lấy lại vị trí hiện tại",
   vi_tri_dang_lay: "Đang lấy vị trí…",
   vi_tri_vi_sao: "Để cán bộ xã tìm đúng nơi xảy ra sự việc. Zalo sẽ hỏi bà con có đồng ý chia sẻ vị trí không.",
-  vi_tri_da_nhan:
-    "Đã nhận mã vị trí từ Zalo. Ứng dụng chưa đổi được mã này thành địa điểm trên bản đồ, nên bà con hãy ghi rõ nơi xảy ra ở ô trên.",
+  // Prototype `AddressBlock.tsx:112`: "Đã ghi nhận vị trí (lat, lng)". Coordinates, never a guessed address.
+  location_found: (coordinates: string) =>
+    `Đã lấy vị trí hiện tại (${coordinates}). Bà con vẫn ghi rõ nơi xảy ra ở ô trên.`,
   vi_tri_tu_choi: "Bà con chưa đồng ý chia sẻ vị trí. Bà con vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.",
-  vi_tri_ngoai_zalo: "Chỉ lấy được vị trí khi mở ứng dụng trong Zalo.",
-  vi_tri_khong_lay_duoc: "Chưa lấy được vị trí. Hãy ghi rõ nơi xảy ra ở ô trên.",
+  vi_tri_ngoai_zalo: "Chỉ lấy được vị trí khi mở ứng dụng trong Zalo. Bà con hãy ghi rõ nơi xảy ra ở ô trên.",
+  location_rate_limited:
+    "Bà con đã thử lấy vị trí nhiều lần. Bà con chờ vài phút rồi bấm lại, hoặc ghi rõ nơi xảy ra ở ô trên.",
+  vi_tri_khong_lay_duoc: "Chưa lấy được vị trí. Bà con bấm lại nút, hoặc ghi rõ nơi xảy ra ở ô trên.",
+  location_unavailable: "Ứng dụng tạm thời chưa lấy được vị trí. Bà con hãy ghi rõ nơi xảy ra ở ô trên.",
   hoi_huy_tieu_de: "Huỷ gửi phản ánh?",
   hoi_huy_cau: "Nội dung bà con đã nhập sẽ không được lưu lại.",
   tiep_tuc_nhap: "Tiếp tục nhập",
@@ -684,7 +712,9 @@ export const XA_PA = {
   anh_bat_buoc: "Ảnh hoặc video (bắt buộc, tối đa 5 tệp)",
   anh_sap_co: "Ứng dụng chưa gửi được ảnh, video — tính năng sắp có. Trong lúc chờ, bà con mô tả thật rõ sự việc.",
   vi_tri_bat_buoc: "Vị trí trên bản đồ (bắt buộc)",
-  vi_tri_sap_co: "Ứng dụng chưa ghim được vị trí trên bản đồ — tính năng sắp có. Bà con ghi rõ nơi xảy ra ở ô dưới.",
+  // 29/09/2026: the app now takes the current location (button under the address box); a MAP pin is still
+  // not there, and a location is still not enforced (ADR 0050 #9 — the server keeps it optional, b5d17bb).
+  vi_tri_sap_co: "Bà con bấm “Lấy vị trí hiện tại” ở dưới để gửi kèm vị trí, và ghi rõ nơi xảy ra ở ô dưới.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí, họ tên người gửi.",

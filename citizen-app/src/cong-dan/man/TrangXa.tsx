@@ -34,7 +34,8 @@ import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-
 import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
-import { apDanhGia, type FeedbackDraftStore, type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
+import type { GetSceneLocation } from "./scene-location";
+import { apDanhGia, type FeedbackDraftStore, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -282,7 +283,7 @@ function AppCuaXa(props: {
   ten_mien: string;
   xa: XaCuaApp;
   lay_ten?: LayTenZalo;
-  lay_ma_vi_tri?: LayMaViTri;
+  getSceneLocation?: GetSceneLocation;
   draftStore?: FeedbackDraftStore;
 }) {
   const { ten_mien, xa } = props;
@@ -319,7 +320,7 @@ function AppCuaXa(props: {
           ho_ten={ho_ten}
           lay_ten={props.lay_ten}
           onTen={datHoTen}
-          lay_ma_vi_tri={props.lay_ma_vi_tri}
+          getSceneLocation={props.getSceneLocation}
           draftStore={props.draftStore}
           onQuayLai={ve}
           onDaGui={(p) => datPhieu((ds) => [p, ...ds])}
@@ -460,17 +461,17 @@ export function TrangXa(props: {
    */
   lay_ten?: LayTenZalo;
   /**
-   * Lấy MÃ vị trí (`getLocation`), do lớp vỏ tiêm — nửa này không nhập zmp-sdk. Không truyền thì màn gửi
-   * phản ánh không có nút vị trí (chạy thử ngoài Zalo, test).
+   * Lấy vị trí hiện tại (`getLocation` + đổi toạ độ ở `vihat-miniapp`), do lớp vỏ tiêm — nửa này không
+   * nhập zmp-sdk. Không truyền thì màn gửi phản ánh không có nút vị trí (chạy thử ngoài Zalo, test).
    */
-  lay_ma_vi_tri?: LayMaViTri;
+  getSceneLocation?: GetSceneLocation;
   /**
    * Nháp phản ánh đang soạn (ADR 0050 #7), do lớp vỏ tiêm — CHỈ app riêng của xã. Không truyền thì không
    * có nháp (app chung, chạy thử, test): nửa này không tự chạm kho lưu trữ nào.
    */
   draftStore?: FeedbackDraftStore;
 }) {
-  const { ten_mien, lay_ten, lay_ma_vi_tri, draftStore } = props;
+  const { ten_mien, lay_ten, getSceneLocation, draftStore } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -490,7 +491,13 @@ export function TrangXa(props: {
 
   if (trang.kieu === "xong") {
     return (
-      <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_ten={lay_ten} lay_ma_vi_tri={lay_ma_vi_tri} draftStore={draftStore} />
+      <AppCuaXa
+        ten_mien={ten_mien}
+        xa={trang.xa}
+        lay_ten={lay_ten}
+        getSceneLocation={getSceneLocation}
+        draftStore={draftStore}
+      />
     );
   }
 

@@ -21,6 +21,8 @@ import {
 import {
   BRIDGE_FIELDS_WITH_PHONE,
   DUONG_DAN_PHIEN,
+  LOCATION_FIELDS,
+  LOCATION_PATH,
   TRUONG_GUI_DI_CAU_VIGOV,
   TRUONG_GUI_DI_PHIEN,
 } from "../features/dang-nhap/hop-dong";
@@ -318,6 +320,9 @@ const HOST_CONG_KHAI: TruongGuiDi = {
 /** Ba màn phản ánh nơi xã có thể cần xác nhận số điện thoại — chép, khoá như `TEN_MAN_CONG_KHAI`. */
 export const PHONE_VERIFICATION_SCREENS = "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi";
 
+/** The send screen, where "Lấy vị trí hiện tại" sits — copied like the line above; the test pins it. */
+export const SEND_SCREEN_NAME = "Gửi phản ánh";
+
 /** Ba tên màn, chép từ `cong-dan/man/noi-dung.ts` cùng lý do ranh giới — test khoá từng chữ. */
 export const TEN_MAN_CONG_KHAI = {
   danh_ba: "Danh bạ cán bộ xã",
@@ -383,7 +388,8 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
  * từng được công bố, cùng lý do khối số phiên bản ở đó nêu.
  *
  * ⚠ CHƯA KHAI Ở ĐÂY: các tuyến phản ánh của ViGov (`petitions`) — gửi phản ánh, "Phản ánh của tôi",
- * tra cứu. Chúng mang nội dung phản ánh, họ tên và số điện thoại. Việc khai chúng chưa thuộc lượt nào.
+ * tra cứu. Chúng mang nội dung phản ánh, họ tên và số điện thoại — và từ 29/09/2026 cả toạ độ `lat`/`lng`
+ * khi công dân đã bấm lấy vị trí. Việc khai chúng chưa thuộc lượt nào.
  */
 export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
@@ -425,6 +431,22 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: PHONE_VERIFICATION_SCREENS,
     truong: BRIDGE_FIELDS_WITH_PHONE,
+  },
+  {
+    // 29/09/2026 — the location exchange (`vihat-miniapp` 0dada0f). A SECOND route to the same server,
+    // run only on the citizen's tap on "Lấy vị trí hiện tại" in the send screen of either app. The screen
+    // name is copied from `cong-dan/man/noi-dung.ts` `GUI.tieu_de` (this file may not import the state
+    // half — same reason as `TEN_MAN_CONG_KHAI`); the test pins it word for word.
+    //
+    // ⚠ THE PRIVACY-POLICY SECTION THIS ROW NEEDS IS STILL OWED — legal wording is the project owner's,
+    //   not written here (same stance as `bridgeBodyWithPhone`). `chinh-sach.test.ts` pins the gap.
+    tuyen: LOCATION_PATH,
+    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
+    khi_nao:
+      "người dùng tự bấm “Lấy vị trí hiện tại” khi gửi phản ánh và đồng ý chia sẻ vị trí trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
+    man: SEND_SCREEN_NAME,
+    truong: LOCATION_FIELDS,
   },
   ...DUONG_CONG_KHAI.slice(1),
 ];

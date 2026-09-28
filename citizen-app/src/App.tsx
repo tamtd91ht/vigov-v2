@@ -3,15 +3,16 @@ import { type ReactNode, useEffect, useState } from "react";
 import { feedbackDraftStore } from "./commune-app/feedback-draft-store";
 import { TabBar } from "./components/TabBar";
 import {
+  type GetSceneLocation,
   KenhCongDan,
   type KetQuaMoPhien,
   type KetThucXacNhan,
-  type LayMaViTri,
   type LayTenZalo,
   type MoPhienViGov,
   NutVaoKenhCongDan,
   type ReopenWithPhone,
   type ReopenWithPhoneResult,
+  type SceneLocationResult,
   TrangXa,
   XacNhanXa,
 } from "./cong-dan";
@@ -23,7 +24,8 @@ import {
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
 } from "./features/dang-nhap/cau-vigov";
-import { layTenZalo, xinTokenViTri } from "./features/tinh-nang/zalo-api";
+import { type CurrentLocationResult, getCurrentLocation } from "./features/dang-nhap/current-location";
+import { layTenZalo } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
@@ -247,16 +249,47 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
   // `feedbackDraftStore` goes to THIS app only (ADR 0050 #7): a separate App ID, a separate origin. The
   // shared app below never receives it — `ranh-gioi-hai-nua.test.ts` §3b reads `AppChung`'s body for it.
   return (
-    <TrangXa ten_mien={ten_mien} lay_ten={layTenChoXa} lay_ma_vi_tri={layMaViTri} draftStore={feedbackDraftStore} />
+    <TrangXa
+      ten_mien={ten_mien}
+      lay_ten={layTenChoXa}
+      getSceneLocation={getSceneLocation}
+      draftStore={feedbackDraftStore}
+    />
   );
 }
 
 /**
- * CẦU VỊ TRÍ CHO APP RIÊNG — lớp vỏ dựng hàm, nửa nhà nước chỉ khai kiểu (`LayMaViTri`), như
- * hàm mở phiên của đường QR. `getLocation` CHỈ trả một token; token BỊ BỎ ở đây, không đi xuống nửa kia và không
- * rời máy (bảng khai `getLocation`: `roi_khoi_may: ""`). Đổi token ra toạ độ cần máy chủ có app secret —
- * chưa có; ngày có, tuyến ấy nhận token tại đây.
+ * THE LOCATION BRIDGE, for BOTH apps — the shell builds it, the state half only declares its type
+ * (`GetSceneLocation`), exactly like the session opener of the QR path. `getCurrentLocation` takes the
+ * Zalo codes and exchanges them at `vihat-miniapp` `POST /api/v1/location` (public: no ViGov session and
+ * no commercial ticket is involved, so the commune's own app — which has no session — can use it too).
+ * The CODES stop in `features/dang-nhap/current-location.ts`; only coordinates or a branch come down.
+ *
+ * Table by WHAT THE CITIZEN DOES NEXT, not by status code:
+ *   xong                                                        → the location
+ *   tu-choi · ngoai-zalo · qua-nhieu-lan                        → the same branch
+ *   zalo-khong-tra-loi · khong-goi-duoc · yeu-cau-hong ·
+ *   khong-lay-duoc-ma                                           → `thu-lai` (a fresh tap gets fresh codes)
+ *   tam-ngung · chua-khai-host                                  → `tam-ngung` (pressing again changes nothing)
  */
+export function toSceneLocationResult(result: CurrentLocationResult): SceneLocationResult {
+  switch (result.kieu) {
+    case "xong":
+      return { kind: "xong", location: { lat: result.location.latitude, lng: result.location.longitude } };
+    case "tu-choi":
+    case "ngoai-zalo":
+    case "qua-nhieu-lan":
+      return { kind: result.kieu };
+    case "tam-ngung":
+    case "chua-khai-host":
+      return { kind: "tam-ngung" };
+    default:
+      return { kind: "thu-lai" };
+  }
+}
+
+const getSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCurrentLocation());
+
 /**
  * CẦU HỌ TÊN — `getUserInfo` kèm hộp xin quyền của Zalo. Chỉ tên đi xuống nửa nhà nước; tên rỗng là
  * "không lấy được", không bao giờ một chuỗi rỗng giả làm tên.
@@ -266,11 +299,6 @@ const layTenChoXa: LayTenZalo = async () => {
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   const ho_ten = kq.du_lieu.trim();
   return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };
-};
-
-const layMaViTri: LayMaViTri = async () => {
-  const kq = await xinTokenViTri();
-  return kq.kieu === "xong" ? "da-nhan-ma" : kq.kieu;
 };
 
 function AppChung() {
@@ -364,6 +392,7 @@ function AppChung() {
         ten_mien={xa === null ? null : xa.ten_mien}
         // Chỉ có khi lần mở này đi qua bước xác nhận xã — nơi DUY NHẤT phiên ViGov được mở.
         reopenWithPhone={goiY === null ? undefined : reopenWithPhoneFor(goiY.ten_mien)}
+        getSceneLocation={getSceneLocation}
       />
     );
   } else if (dangKhamPha && goiY !== null) {
