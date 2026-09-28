@@ -90,9 +90,9 @@ mã phiếu tuần tự `PA-2026-0004` (luật 4 bất biến 4).
   lên lãnh đạo sẽ phản ánh đúng điều đó. **Không trần số lần** nên một phiếu có thể quay vòng mãi; theo
   dõi bằng `so_lan_mo_lai`. Chấm từ 3 sao **không đóng** phiếu — phiếu nằm ở "chờ dân xác nhận" tới khi
   cán bộ đóng.
-- **Điểm 2 — chưa ai nói:** cờ `cho_phep_mo_lai` (ADR 0008:50) — xã còn được **tắt** việc mở lại hay không.
-  Kho yêu cầu không có công tắc ấy; vòng 2 không nhắc tới. Không tự quyết: hỏi chủ dự án trước khi viết
-  tuyến chấm sao.
+- **Điểm 2 — cờ `cho_phep_mo_lai` (ADR 0008:50): ĐÃ CHỐT 28/09/2026 (vòng 3, chủ dự án: "theo require, không cho xã tắt mở lại").** Mở lại khi chấm 1–2 sao
+  là luật cố định của mọi xã, như kho yêu cầu (`service.py:817-821` không có công tắc). Cờ ấy KHÔNG
+  được dựng; máy chủ không đọc cấu hình nào để quyết có mở lại hay không.
 - **Điểm 9 — năm ô bắt buộc mà hai ô chưa làm được:** bản trải nghiệm hiện "bắt buộc — sắp có" và vẫn cho
   gửi. Ngày máy chủ bắt đủ năm ô mà ứng dụng chưa có ảnh và vị trí thì **không phiếu nào gửi được** — hai
   việc phải lên cùng lúc.
@@ -101,7 +101,7 @@ mã phiếu tuần tự `PA-2026-0004` (luật 4 bất biến 4).
 - **Điểm 11, 13 — chưa có chủ sở hữu:** hồ sơ một cửa, hỏi đáp TTHC, lịch tiếp công dân, khảo sát, thanh
   toán đều chưa có service sở hữu (luật 2 điều kiện dừng #1). Tra cứu hồ sơ không cần phiên là điều kiện
   dừng luật 4 #2 — hỏi khi dựng máy chủ.
-- **Còn CHỜ CHỦ DỰ ÁN** (không tự quyết): phạm vi điểm 5; cờ `cho_phep_mo_lai` (trên); nháp trên máy
+- **Còn CHỜ CHỦ DỰ ÁN** (không tự quyết): phạm vi điểm 5; nháp trên máy
   (điểm 7); thiết kế phiếu công khai (điểm 8).
 - **Nháp trên máy (điểm 7) CHƯA LÀM, có chủ đích.** Hai dây bẫy (`phase1-collects-nothing.test.ts`,
   `ranh-gioi-hai-nua.test.ts` §3b) cấm MỌI lưu trữ trên máy vì hai nửa dùng chung một origin và thiết bị

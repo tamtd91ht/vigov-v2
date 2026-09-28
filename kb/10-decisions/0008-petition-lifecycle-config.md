@@ -54,7 +54,7 @@ cả lĩnh vực. Hard-code thì xã đó không dùng được, mà nới ra sa
 
 > 28/09/2026 (vòng 2) → ADR 0050 điểm 2: 1 hoặc 2 sao thì phiếu **tự mở lại**, **không trần** số lần,
 > **không tính lại hạn** — thay giá trị đã chốt của `nguong_sao_mo_lai`, `so_lan_mo_lai_toi_da`,
-> `tinh_lai_han_khi_mo_lai` ở bảng trên. `cho_phep_mo_lai` chưa ai nói — xem ADR 0050 §Cái giá.
+> `tinh_lai_han_khi_mo_lai` ở bảng trên. `cho_phep_mo_lai` cũng bị bỏ 28/09/2026 (vòng 3, chủ dự án: “theo require, không cho xã tắt mở lại”): mở lại là luật cố định, không cờ.
 
 Đổi `cho_phep_mo_lai` **không hồi tố**: phiếu đã đóng theo luật cũ giữ nguyên luật cũ. Nếu
 không thì báo cáo quá khứ đổi theo — dạng sai lệch mà thanh tra sẽ hỏi.
