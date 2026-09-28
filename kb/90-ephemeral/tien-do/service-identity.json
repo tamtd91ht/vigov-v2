@@ -287,6 +287,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai GỌI: bọc core/identityclient (ngoài phạm vi lượt này) và service-petitions dùng ba RPC (bỏ errPhamViChuaHoTro/errLocSapDenHanChuaCo, kiểm unit/lead unit trước khi ghi). CẦN NGƯỜI DÙNG XÁC NHẬN: (1) #3 trả MỐC CUỐI thay vì 'số giờ' như yêu cầu ghi — lý do ADR 0029 §Bổ sung 28/09; (2) tên tiếng Anh 'due soon' cho 'Sắp đến hạn' chưa có trong ubiquitous-language (luật 12). Ca pg SKIP (không VIGOV_TEST_DSN).",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "grpc-ten-bo-phan-nhan-khoi-ma-bo-phan",
+      "viec": "Máy chủ ba RPC: tên bộ phận theo id (kể cả đã xoá), nhãn khối nhiệm vụ theo mã (kể cả đã xoá), mã bộ phận → id bộ phận còn hiệu lực",
+      "trang_thai": "xong",
+      "bang_chung": "Chưa commit. internal/grpc/reference_names.go (+_test), store/reference_names.go (+_pg_test), domain/reference_names.go; Deps.OrgUnitNames/TaskBlocLabels tách khỏi OrgUnits (vị từ khác nhau); LiveIDsByCode trên OrgUnitReader dùng chung liveOrgUnit. gofmt/vet/go test -count=1 -p 1 ./... xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai GỌI: service-petitions dùng ba RPC cho xuất Sổ theo dõi .xlsx và nhập nhiệm vụ từ Excel (agent khác). Rule 3 bất biến 4: xuất Excel CÓ họ tên cán bộ (ResolveStaffNames) — hợp đồng nói việc che là của BÊN GỌI; câu mở #11 chỉ bỏ che trên màn hình nội bộ, chưa ai quyết cho tệp xuất. Ca pg SKIP (không VIGOV_TEST_DSN).",
+      "menu": "nhiem-vu"
     }
   ]
 }

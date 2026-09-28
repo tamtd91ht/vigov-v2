@@ -123,7 +123,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// The org-unit reads. Its fake lives in org_units_test.go and answers NOTHING by default, so
 		// a test has to say which units it made live and who sits where.
 		OrgUnits: &orgUnitFake{},
-		Quyen:    quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
+		// The register display reads. Fakes in reference_names_test.go; they answer NOTHING by default.
+		OrgUnitNames:   &orgUnitNameFake{},
+		TaskBlocLabels: &taskBlocLabelFake{},
+		Quyen:          quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
 		// The citizen session registry — a default that answers successfully, like every other
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
 		// is about. Its fakes live in phien_cong_dan_test.go, beside the handler they exercise.
@@ -569,20 +572,22 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 	}
 	du := func() Deps {
 		return Deps{
-			Signer:       ky,
-			Phien:        &phienGia{},
-			CanBo:        canBoGia{},
-			Lo:           &loGia{},
-			Ten:          &tenGia{},
-			GiaoViec:     &giaoViecGia{},
-			OrgUnits:     &orgUnitFake{},
-			Quyen:        quyenGia{},
-			PhienCongDan: &phienCongDanGia{},
-			Lich:         &lichGia{},
-			NghiLe:       &nghiLeGia{},
-			LamBu:        &lamBuGia{},
-			SLA:          &slaGia{},
-			Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Signer:         ky,
+			Phien:          &phienGia{},
+			CanBo:          canBoGia{},
+			Lo:             &loGia{},
+			Ten:            &tenGia{},
+			GiaoViec:       &giaoViecGia{},
+			OrgUnits:       &orgUnitFake{},
+			OrgUnitNames:   &orgUnitNameFake{},
+			TaskBlocLabels: &taskBlocLabelFake{},
+			Quyen:          quyenGia{},
+			PhienCongDan:   &phienCongDanGia{},
+			Lich:           &lichGia{},
+			NghiLe:         &nghiLeGia{},
+			LamBu:          &lamBuGia{},
+			SLA:            &slaGia{},
+			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
 
@@ -600,6 +605,9 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"thiếu kho giao việc": func(d *Deps) { d.GiaoViec = nil },
 		// Missing it is every unit assignment in the calling services answering 503.
 		"thiếu kho bộ phận": func(d *Deps) { d.OrgUnits = nil },
+		// Missing either is a task register that cannot print its unit or bloc columns.
+		"thiếu kho tên bộ phận":        func(d *Deps) { d.OrgUnitNames = nil },
+		"thiếu kho nhãn khối nhiệm vụ": func(d *Deps) { d.TaskBlocLabels = nil },
 		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
 		// this one lookup, so the whole citizen channel of the platform goes with it.
 		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },

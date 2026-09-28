@@ -138,6 +138,18 @@ type orgUnitFake struct{}
 
 func (orgUnitFake) LiveIDs(context.Context, []string) ([]string, error)    { return nil, nil }
 func (orgUnitFake) UnitsOfStaff(context.Context, string) ([]string, error) { return nil, nil }
+func (orgUnitFake) LiveIDsByCode(context.Context, []string) ([]domain.OrgUnitCodeMatch, error) {
+	return nil, nil
+}
+func (orgUnitFake) NamesByID(context.Context, []string) ([]domain.OrgUnitName, error) {
+	return nil, nil
+}
+
+type taskBlocLabelFake struct{}
+
+func (taskBlocLabelFake) LabelsByCode(context.Context, []string) ([]domain.TaskBlocLabel, error) {
+	return nil, nil
+}
 
 func noiDayGia(t *testing.T) svcgrpc.Deps {
 	t.Helper()
@@ -156,7 +168,10 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		GiaoViec: giaoViecGia{},
 		// Answers nothing — these wiring tests only need the two org-unit RPCs reachable.
 		OrgUnits: orgUnitFake{},
-		Quyen:    quyenGia{},
+		// Answer nothing — the register display reads only need to be wired for NewServer to build.
+		OrgUnitNames:   orgUnitFake{},
+		TaskBlocLabels: taskBlocLabelFake{},
+		Quyen:          quyenGia{},
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).
 		PhienCongDan: phienCongDanGia{},

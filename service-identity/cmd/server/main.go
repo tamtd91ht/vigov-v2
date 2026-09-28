@@ -496,6 +496,10 @@ func run(log *slog.Logger) error {
 		// The org-unit reads behind ResolveLiveOrgUnits and ResolveStaffOrgUnits — the SAME
 		// *idstore.BoPhanStore the org chart route reads, so "live" means one thing on both.
 		OrgUnits: boPhan,
+		// The DISPLAY reads for the task register printout (ResolveOrgUnitNames,
+		// ResolveTaskBlocLabels). Same stores, separate fields: these answer removed rows on purpose.
+		OrgUnitNames:   boPhan,
+		TaskBlocLabels: khoiNhiemVu,
 		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.

@@ -687,6 +687,153 @@ service IdentityService {
   // across requests: a person moved to another unit must see the new unit's work on the next load.
   rpc ResolveStaffOrgUnits(ResolveStaffOrgUnitsRequest) returns (ResolveStaffOrgUnitsResponse);
 
+  // ResolveOrgUnitNames turns the org-unit ids an ALREADY-STORED RECORD carries into the names a
+  // person can read — INCLUDING ids whose `bo_phan` row has since been removed from the org chart.
+  //
+  // WHY IT EXISTS (2026-09-28): service-petitions prints the task register ("Sổ theo dõi",
+  // docs/ui-ux/02-nhiem-vu.md §4.3) as .xlsx on the server. Two of its columns — "Cơ quan chủ trì
+  // tham mưu" and "Đơn vị thực hiện" — are units, and the task stores identity's `bo_phan.id`
+  // (`co_quan_chu_tri_id`, `bo_phan_id`) AS A VALUE. Nothing outside this service can turn that id
+  // into a name without opening this schema (rule 2, forbidden #2).
+  //
+  // # IT MIRRORS ResolveStaffNames, AND FOR THE SAME REASON IT ANSWERS REMOVED UNITS
+  //
+  // The register is an ARCHIVAL printout. A task filed in 2026 against a unit removed from the org
+  // chart in 2027 still holds that unit's id, and the printout must say what the record holds — a
+  // blank "Đơn vị thực hiện" on a printed register is an unattributed line on an administrative
+  // record. So a soft-deleted unit is ANSWERED, carrying its name and RECORD_STANDING_REMOVED. That
+  // single difference is why this is not ResolveLiveOrgUnits with a name added: that RPC is the one
+  // a caller DECIDES from, and widening it to removed units would let a write hand work to a unit
+  // that no longer exists.
+  //
+  // # IT RESOLVES A NAME. IT DECIDES NOTHING
+  //
+  // Never read "this id resolved" as "this unit is live" or "this unit can hold work": it may have
+  // resolved PRECISELY BECAUSE the unit was removed. "Live" is ResolveLiveOrgUnits' question.
+  //
+  // # THE NAME IS TODAY'S NAME OF THAT UNIT — stated, not hidden
+  //
+  // `bo_phan.ten` can be edited. The record holds the unit's id, not the name it had when the task
+  // was filed, so a renamed unit prints under its current name. That is what the data supports: a
+  // historical name is a fact the RECORD would have to carry, and no lookup can reconstruct it.
+  //
+  // # A LOOKUP BY IDS THE CALLER ALREADY HOLDS — NEVER A LIST
+  //
+  // The four properties ResolveStaffNames states hold here verbatim: one request field and it is a
+  // list of ids; an empty list answers empty, never "every unit"; the response never carries an id
+  // that was not requested; the answer is cut by "x-tenant-id". An id of another commune is ABSENT,
+  // indistinguishable from an id that names nothing (rule 1). Not a candidate for
+  // core/grpcx.methodsWithoutTenant (ADR 0012, decision 1).
+  //
+  // # No personal data; not audited
+  //
+  // A unit's name is an org-chart fact, not personal data. The read is not audited for the reason
+  // ResolveStaffNames gives (ADR 0025's caller key names no "who"); the export the caller builds
+  // is the caller's act.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY, never an error.
+  //   INVALID_ARGUMENT    more than 200 ids in one call. Never a silent truncation.
+  //   NOT_FOUND           NEVER produced. An id that resolves to nothing is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen, and IT IS NOT "no name". A printout rendering an
+  //                       outage as blanks writes an absence onto an archival record. Fail the export.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveOrgUnitNames(ResolveOrgUnitNamesRequest) returns (ResolveOrgUnitNamesResponse);
+
+  // ResolveTaskBlocLabels turns the task-bloc codes an ALREADY-STORED RECORD carries
+  // (`khoi_nhiem_vu.ma`, `khoi-uy-ban`) into the labels a person can read (`Khối Uỷ ban`) —
+  // INCLUDING codes whose catalogue row has since been removed.
+  //
+  // WHY IT EXISTS (2026-09-28): the task register printout (docs/ui-ux/02-nhiem-vu.md §4.3 :121)
+  // prints the bloc label under each task's title. `khoi_nhiem_vu` is identity's (ADR 0024, and
+  // ADR 0024:130 forbids moving it), and the task holds the code AS A VALUE with no foreign key
+  // (service-petitions/migrations/0006_nhiem_vu.sql:215).
+  //
+  // # SAME SHAPE AND SAME DISCIPLINE AS ResolveOrgUnitNames
+  //
+  // Removed codes are ANSWERED, flagged RECORD_STANDING_REMOVED, because the printout must show
+  // what the record holds. `(tenant_id, ma)` is UNIQUE across removed rows too (migration 0005:335),
+  // so one code names at most one row and the label is never ambiguous. A catalogue row that is
+  // merely switched off (`dang_dung = false`) is LIVE: standing reads `deleted_at` and nothing else.
+  //
+  // THE LABEL IS TODAY'S LABEL of that code — `nhan` is editable, and the record holds only the
+  // code. Stated for the reason ResolveOrgUnitNames states it.
+  //
+  // IT RESOLVES A LABEL. IT DECIDES NOTHING: a caller validating a bloc code before WRITING it reads
+  // GET /api/v1/task-blocs' predicate, not this one, which answers removed codes on purpose.
+  //
+  // A lookup by codes the caller already holds, never a list; an empty list answers empty; the
+  // response never carries a code that was not requested; another commune's code is ABSENT. No
+  // personal data; not audited; not exempt from "x-tenant-id".
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY.
+  //   INVALID_ARGUMENT    more than 200 codes in one call. Never a silent truncation.
+  //   NOT_FOUND           NEVER produced. An unknown code is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen, and it is NOT "no label". Fail the export.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveTaskBlocLabels(ResolveTaskBlocLabelsRequest) returns (ResolveTaskBlocLabelsResponse);
+
+  // ResolveLiveOrgUnitCodes turns org-unit BUSINESS CODES (`bo_phan.ma`, the slug
+  // `van-phong-dang-uy`) into the id of the LIVE unit carrying that code, in the commune named by
+  // "x-tenant-id".
+  //
+  // WHY IT EXISTS (2026-09-28): the task Excel import. A clerk types a unit's CODE into a
+  // spreadsheet — an id is a ULID nobody can type — and the task stores the unit's `bo_phan.id`. The
+  // import must translate one into the other, and the translation is this service's: `bo_phan` is
+  // identity's table (rule 2, forbidden #2).
+  //
+  // # THE PREDICATE IS ResolveLiveOrgUnits', AND A CALLER DECIDES FROM THIS
+  //
+  // A code is answered when a `bo_phan` row of this commune carries it and `deleted_at IS NULL` —
+  // EXACTLY the "live" predicate of ResolveLiveOrgUnits and of GET /api/v1/org-units (store constant
+  // liveOrgUnit). THE THREE MUST NEVER DIVERGE: an id this RPC returns that ResolveLiveOrgUnits would
+  // refuse is an import row that writes a unit an ordinary assignment could not. The returned id may
+  // be written as the task's unit without asking ResolveLiveOrgUnits again (same point-in-time
+  // window, accepted for the reason ResolveAssignableStaff states). An ABSENT code MUST be refused by
+  // the caller — the import row is rejected with one sentence, never written with a blank unit and
+  // never matched by name instead.
+  //
+  // `(tenant_id, ma)` is UNIQUE (migration 0001:86), across removed rows too, so one code maps to at
+  // most one unit. A removed unit's code is therefore never re-issued to a new unit and cannot
+  // silently re-point an old spreadsheet at a different unit.
+  //
+  // # ONE ANSWER FOR EVERY REFUSAL — absent
+  //
+  // Unknown, soft-deleted and another commune's code are indistinguishable (rule 1). THE CODES ARE
+  // GUESSABLE SLUGS, unlike a ULID, and that is stated rather than denied: whoever can call this can
+  // learn that "van-phong-dang-uy" is a live unit of THIS commune — which GET /api/v1/org-units
+  // already shows every signed-in account of it. What the commune cut prevents is learning anything
+  // about ANOTHER commune's org chart, and that is the property that matters (rule 1).
+  //
+  // # A LOOKUP BY CODES THE CALLER ALREADY HOLDS — NEVER A LIST
+  //
+  // One request field, a list of codes. An empty list answers empty, never "every live unit". The
+  // response never carries a code that was not requested. No personal data; not audited (the audited
+  // act is the import's write of the task); not exempt from "x-tenant-id".
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY — it is "no live unit
+  //                       carries this code".
+  //   INVALID_ARGUMENT    more than 200 codes in one call. Never a silent truncation: a clamped batch
+  //                       would reject real import rows as "unknown unit". 200, not
+  //                       ResolveLiveOrgUnits' 50, because an import is many assignments at once and
+  //                       its distinct unit codes are bounded by the org chart, not by one form.
+  //   NOT_FOUND           NEVER produced. An unknown code is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "unknown unit": fail the import with a
+  //                       retryable error, never reject rows as unknown and never write them unchecked.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveLiveOrgUnitCodes(ResolveLiveOrgUnitCodesRequest) returns (ResolveLiveOrgUnitCodesResponse);
+
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 
   // AdvanceWorkingHours moves an instant forward through ONE commune's working calendar and
@@ -1818,6 +1965,136 @@ message ResolveStaffOrgUnitsResponse {
   // EMPTY IS AN ORDINARY ANSWER — no unit, unknown code, removed record, removed unit — see the RPC.
   // It means the unit clause of the caller's filter matches nothing. It never means "every unit".
   repeated string org_unit_ids = 1;
+}
+
+message ResolveOrgUnitNamesRequest {
+  // THE ORG-UNIT IDS an already-stored record carries — identity's `bo_phan.id`, the value
+  // service-petitions stores in `bo_phan_id` and `co_quan_chu_tri_id`. Duplicates are collapsed by
+  // the server; order carries no meaning; a blank string matches nothing and is absent.
+  //
+  // AT MOST 200 ids per call — the ResolveStaffNames ceiling, and the same number on purpose, so a
+  // caller printing a register batches identically for names of people and names of units. More is
+  // INVALID_ARGUMENT, never a silent truncation.
+  //
+  // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS EMPTY. It is NOT "every unit".
+  //
+  // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN: a predicate here turns a lookup into a listing
+  // of the org chart, removed units included.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated OrgUnitName: adding a field later must not change the RPC signature.
+message ResolveOrgUnitNamesResponse {
+  // FEWER ITEMS THAN IDS REQUESTED IS A VALID RESPONSE, and the order is NOT the order of `ids`.
+  // The caller MUST map by OrgUnitName.id — assuming index alignment prints one unit's name on
+  // another unit's line of an archival register.
+  //
+  // AN ID IS ABSENT when it names no row, or a row of ANOTHER COMMUNE than the one in
+  // "x-tenant-id" — deliberately indistinguishable (rule 1). A soft-deleted unit is NOT absent: it
+  // is answered with RECORD_STANDING_REMOVED, which is the point of this RPC.
+  repeated OrgUnitName items = 1;
+}
+
+// OrgUnitName is what it takes to print ONE unit's name beside ONE line of a record, and nothing
+// else. Named after what it holds (the ADR 0023 discipline StaffName follows): no parent, no slug,
+// no ordering, no staff count — none is needed to print a line, and each is a sentence somebody has
+// to say out loud before it is added.
+message OrgUnitName {
+  // Echoed from the request — the KEY the caller maps by, never a position. `bo_phan.id`.
+  string id = 1;
+
+  // The unit's name exactly as `bo_phan.ten` holds it TODAY (upper-case by convention). `name` and
+  // not `label`: `bo_phan.ten` is a proper name, the distinction kb/00-foundation/
+  // ubiquitous-language.md draws between `ten` and `nhan`.
+  //
+  // NEVER EMPTY IN AN OK RESPONSE: `bo_phan.ten` is NOT NULL, so an empty string is a contract fault.
+  string name = 2;
+
+  // Whether the unit is still on the commune's org chart. NEVER UNSPECIFIED in an OK response.
+  RecordStanding standing = 3;
+}
+
+message ResolveTaskBlocLabelsRequest {
+  // THE TASK-BLOC CODES an already-stored record carries — `khoi_nhiem_vu.ma` (`khoi-uy-ban`), the
+  // value service-petitions stores in `nhiem_vu.khoi`. `ma` and not `codes`, for the reason
+  // ResolveStaffNamesRequest.ma gives (ADR 0011).
+  //
+  // Duplicates are collapsed; order carries no meaning; a blank string is absent. AT MOST 200 codes
+  // per call — the ResolveStaffNames ceiling, far above a catalogue capped at 100 rows
+  // (store.TranDanhMucKhoiNhiemVu). More is INVALID_ARGUMENT, never a silent truncation. An empty list
+  // answers empty — NOT "the whole catalogue", which is GET /api/v1/task-blocs' job. No second field.
+  repeated string ma = 1;
+}
+
+// Wrapped, not a bare repeated TaskBlocLabel: adding a field later must not change the RPC signature.
+message ResolveTaskBlocLabelsResponse {
+  // Fewer items than codes is ORDINARY; order is meaningless; map by TaskBlocLabel.ma. A code is
+  // absent when it names no row or a row of another commune — indistinguishable (rule 1). A removed
+  // code is answered, flagged RECORD_STANDING_REMOVED.
+  repeated TaskBlocLabel items = 1;
+}
+
+// TaskBlocLabel is what it takes to print one bloc's label beside one task, and nothing else.
+message TaskBlocLabel {
+  // Echoed from the request — the KEY the caller maps by. `khoi_nhiem_vu.ma`.
+  string ma = 1;
+
+  // The label exactly as `khoi_nhiem_vu.nhan` holds it TODAY (`Khối Uỷ ban`). `label` because the
+  // column is `nhan` (ubiquitous-language.md). NEVER EMPTY in an OK response: the column is NOT NULL.
+  string label = 2;
+
+  // Whether the catalogue row is still in the catalogue (`deleted_at IS NULL`). A row switched off
+  // with `dang_dung = false` is LIVE. NEVER UNSPECIFIED in an OK response.
+  RecordStanding standing = 3;
+}
+
+// RecordStanding says whether a commune's reference ROW (an org unit, a catalogue entry) has been
+// soft deleted — `deleted_at` and nothing else. It is derived per request and stored nowhere, so
+// its values are English (ADR 0011's test, as for StaffRecordStanding).
+//
+// SEPARATE FROM StaffRecordStanding ON PURPOSE: that enum carries a long argument about what a
+// removed STAFF record does and does not say about a person, and none of it applies to a unit or a
+// bloc. One enum for both would make either argument read as if it covered the other.
+//
+// THE ZERO VALUE IS UNSPECIFIED RATHER THAN A BOOL'S `false`: a forgotten assignment must be loud,
+// not silently claim one of the two real answers.
+enum RecordStanding {
+  RECORD_STANDING_UNSPECIFIED = 0;
+
+  // The row is live: `deleted_at IS NULL`.
+  RECORD_STANDING_LIVE = 1;
+
+  // The row has been soft deleted (rule 7: the row is kept, which is the only reason it can be
+  // answered). A caller may say the unit / entry is no longer in use; it may not decide anything.
+  RECORD_STANDING_REMOVED = 2;
+}
+
+message ResolveLiveOrgUnitCodesRequest {
+  // THE ORG-UNIT BUSINESS CODES a caller holds from outside the system — `bo_phan.ma`, the slug a
+  // clerk types into an import spreadsheet. `ma` and not `codes` (ADR 0011).
+  //
+  // Duplicates are collapsed; order carries no meaning; a blank string is absent. AT MOST 200 codes
+  // per call; more is INVALID_ARGUMENT, never a silent truncation. An empty list answers empty — NOT
+  // "every live unit". No second field.
+  repeated string ma = 1;
+}
+
+// Wrapped, not a bare map: adding a field later must not change the RPC signature.
+message ResolveLiveOrgUnitCodesResponse {
+  // One item per requested code that a LIVE unit of this commune carries, each code at most once, in
+  // no meaningful order; map by OrgUnitCodeMatch.ma. A code is ABSENT when it names no row, a removed
+  // row, or a row of another commune — one answer, and the caller refuses every one of them.
+  // The response never carries a code that was not requested.
+  repeated OrgUnitCodeMatch items = 1;
+}
+
+// OrgUnitCodeMatch pairs a requested unit code with the id of the live unit carrying it.
+message OrgUnitCodeMatch {
+  // Echoed from the request — the KEY the caller maps by. `bo_phan.ma`.
+  string ma = 1;
+
+  // The live unit's `bo_phan.id` — the value the caller stores. NEVER EMPTY in an OK response.
+  string id = 2;
 }
 
 message ListCitizenCommunesRequest { string citizen_id = 1; }

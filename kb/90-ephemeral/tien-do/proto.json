@@ -92,6 +92,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai GỌI: bọc core/identityclient (ngoài phạm vi lượt này) và service-petitions dùng ba RPC (bỏ errPhamViChuaHoTro/errLocSapDenHanChuaCo, kiểm unit/lead unit trước khi ghi). CẦN NGƯỜI DÙNG XÁC NHẬN: (1) #3 trả MỐC CUỐI thay vì 'số giờ' như yêu cầu ghi — lý do ADR 0029 §Bổ sung 28/09; (2) tên tiếng Anh 'due soon' cho 'Sắp đến hạn' chưa có trong ubiquitous-language (luật 12). Ca pg SKIP (không VIGOV_TEST_DSN).",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "identity-ten-bo-phan-nhan-khoi-ma-bo-phan",
+      "viec": "identity.ResolveOrgUnitNames + ResolveTaskBlocLabels + ResolveLiveOrgUnitCodes, enum RecordStanding (cộng thêm) — cho in Sổ theo dõi nhiệm vụ và nhập nhiệm vụ từ Excel",
+      "trang_thai": "xong",
+      "bang_chung": "Chưa commit (phiên chính commit). buf lint + buf breaking --against '.git#ref=HEAD' xanh; buf generate chạy lại được. Hai RPC hiển thị trả CẢ dòng đã xoá mềm (cờ REMOVED); RPC mã→id chỉ trả bộ phận còn hiệu lực (vị từ liveOrgUnit). Trần 200 mỗi lời gọi cho cả ba. transaction-boundaries: in_so_theo_doi_nhiem_vu_xlsx, nhap_nhiem_vu_xlsx_tra_ma_bo_phan.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai GỌI: service-petitions dùng ba RPC cho xuất Sổ theo dõi .xlsx và nhập nhiệm vụ từ Excel (agent khác). Rule 3 bất biến 4: xuất Excel CÓ họ tên cán bộ (ResolveStaffNames) — hợp đồng nói việc che là của BÊN GỌI; câu mở #11 chỉ bỏ che trên màn hình nội bộ, chưa ai quyết cho tệp xuất. Ca pg SKIP (không VIGOV_TEST_DSN).",
+      "menu": "nhiem-vu"
     }
   ]
 }

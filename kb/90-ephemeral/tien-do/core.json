@@ -140,6 +140,15 @@
       "bang_chung": "95de79b: Reader.Policy(ctx, storage.Purpose) cache 60s theo khoá t:<tenant>, platform không tới được → ErrUnavailable (từ chối, không có mặc định); thu hẹp MIME vào danh sách của storage; storage.Purposes() + TestEnumAndStoragePurposesMatchBothWays chống lệch enum proto. Gói con để minio-go không vào bản dựng Docker của service không dùng kho tệp (make standalone xanh).",
       "no_confirm": [],
       "tiep_theo": "Khoá cache theo xã không giới hạn số lượng — chấp nhận được với số xã hiện tại; xem lại nếu vượt hàng nghìn xã."
+    },
+    {
+      "id": "identityclient-ten-bo-phan-nhan-khoi-ma-bo-phan",
+      "viec": "core/identityclient: OrgUnitNames, TaskBlocLabels, LiveOrgUnitIDsByCode (trần MaxLookupKeysPerCall = 200, lỗi qua wrapCallError → ErrIdentityUnavailable)",
+      "trang_thai": "xong",
+      "bang_chung": "Chưa commit. identityclient/reference_names.go (+_test): khoá không được hỏi / mục thiếu tên-nhãn-trạng thái / id rỗng / hai id cho một mã là lỗi hợp đồng; rỗng không lên mạng; vượt trần từ chối tại chỗ. go vet + go test -count=1 -p 1 ./... xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Bên gọi phải tự chia lô 200 khoá.",
+      "menu": "nhiem-vu"
     }
   ]
 }

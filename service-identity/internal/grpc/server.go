@@ -170,6 +170,12 @@ type Deps struct {
 	// in, unit ids out; the "live" predicate is the org chart's, shared by constant in the store.
 	OrgUnits OrgUnitReader
 
+	// The DISPLAY reads behind ResolveOrgUnitNames and ResolveTaskBlocLabels (reference_names.go).
+	// Both answer REMOVED rows on purpose — the task register is an archival printout — so
+	// OrgUnitNames must never be merged into OrgUnits, whose live predicate a write decides from.
+	OrgUnitNames   OrgUnitNamer
+	TaskBlocLabels TaskBlocLabeler
+
 	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
 	//
 	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
@@ -238,6 +244,10 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho kiểm cán bộ giao việc được — ResolveAssignableStaff sẽ panic, và mọi tuyến giao việc phải trả 503")
 	case d.OrgUnits == nil:
 		panic("identity/grpc: thiếu kho bộ phận — ResolveLiveOrgUnits và ResolveStaffOrgUnits sẽ panic, và mọi tuyến giao việc theo bộ phận phải trả 503")
+	case d.OrgUnitNames == nil:
+		panic("identity/grpc: thiếu kho tên bộ phận — ResolveOrgUnitNames sẽ panic, và sổ theo dõi nhiệm vụ không in được tên bộ phận")
+	case d.TaskBlocLabels == nil:
+		panic("identity/grpc: thiếu kho nhãn khối nhiệm vụ — ResolveTaskBlocLabels sẽ panic, và sổ theo dõi nhiệm vụ không in được nhãn khối")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 // MaxOrgUnitsPerCall is the ceiling on ResolveLiveOrgUnitsRequest.ids, declared where it is enforced.
@@ -22,6 +23,9 @@ const MaxOrgUnitsPerCall = 50
 type OrgUnitReader interface {
 	LiveIDs(ctx context.Context, ids []string) ([]string, error)
 	UnitsOfStaff(ctx context.Context, ma string) ([]string, error)
+	// LiveIDsByCode is the read behind ResolveLiveOrgUnitCodes (reference_names.go). HERE and not
+	// on OrgUnitNamer because the caller writes the id it returns: it must share the live predicate.
+	LiveIDsByCode(ctx context.Context, codes []string) ([]domain.OrgUnitCodeMatch, error)
 }
 
 // ResolveLiveOrgUnits answers which of the requested `bo_phan` ids are live units of the commune named

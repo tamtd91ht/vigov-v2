@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 type orgUnitFake struct {
@@ -25,6 +26,9 @@ type orgUnitFake struct {
 	calls     int
 	askedIDs  []string
 	askedCode string
+
+	byCode     map[string]string         // live unit code → id, for LiveIDsByCode
+	extraCodes []domain.OrgUnitCodeMatch // matches returned WITHOUT being asked — a contract fault
 }
 
 func (f *orgUnitFake) LiveIDs(_ context.Context, ids []string) ([]string, error) {
@@ -40,6 +44,21 @@ func (f *orgUnitFake) LiveIDs(_ context.Context, ids []string) ([]string, error)
 		}
 	}
 	return append(out, f.extra...), nil
+}
+
+func (f *orgUnitFake) LiveIDsByCode(_ context.Context, codes []string) ([]domain.OrgUnitCodeMatch, error) {
+	f.calls++
+	f.askedIDs = codes
+	if f.err != nil {
+		return nil, f.err
+	}
+	var out []domain.OrgUnitCodeMatch
+	for _, c := range codes {
+		if id, ok := f.byCode[c]; ok {
+			out = append(out, domain.OrgUnitCodeMatch{Ma: c, ID: id})
+		}
+	}
+	return append(out, f.extraCodes...), nil
 }
 
 func (f *orgUnitFake) UnitsOfStaff(_ context.Context, ma string) ([]string, error) {
