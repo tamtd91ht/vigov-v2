@@ -117,6 +117,13 @@
       "source": "service-comms/migrations/0006_noi_dung_mini_app.sql:236"
     },
     {
+      "entity": "DataEncryptionKey",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "data_encryption_key",
+      "source": "service-comms/migrations/0008_mail_settings.sql:52"
+    },
+    {
       "entity": "DisbursementSettings",
       "service": "finance",
       "scope": "tenant",
@@ -173,11 +180,25 @@
       "source": "service-documents/migrations/0004_so_van_ban.sql:290"
     },
     {
+      "entity": "MailSettings",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "mail_settings",
+      "source": "service-comms/migrations/0008_mail_settings.sql:115"
+    },
+    {
       "entity": "MapAssetType",
       "service": "comms",
       "scope": "tenant",
       "table": "loai_tai_nguyen_ban_do",
       "source": "service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql:205"
+    },
+    {
+      "entity": "MapFieldSchema",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "map_field_schema",
+      "source": "service-comms/migrations/0007_map_field_schema.sql:127"
     },
     {
       "entity": "Meeting",

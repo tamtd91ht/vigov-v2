@@ -1806,7 +1806,7 @@
     },
     "/api/v1/citizen-reports": {
       "get": {
-        "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
+        "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
         "operationId": "petitions_get_citizen_reports",
         "tags": [
           "petitions"
@@ -1916,6 +1916,14 @@
           },
           {
             "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rating_max",
             "in": "query",
             "required": false,
             "schema": {
@@ -6143,6 +6151,271 @@
         }
       }
     },
+    "/api/v1/mail-settings": {
+      "get": {
+        "summary": "Cấu hình máy chủ thư của xã — không bao giờ trả mật khẩu, chỉ báo đã đặt hay chưa",
+        "operationId": "comms_get_mail_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "3926a21d32ec",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mailSettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Lưu cấu hình máy chủ thư của xã — mật khẩu chỉ ghi, để trống là giữ nguyên, đổi máy chủ/cổng/tài khoản thì phải nhập lại",
+        "operationId": "comms_put_mail_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "b68a04fb4d9d",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.mailSettingsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mailSettingsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mail-settings/test-messages": {
+      "post": {
+        "summary": "Gửi một thư thử cố định tới địa chỉ quản trị viên nhập, qua máy chủ thư đã lưu của xã",
+        "operationId": "comms_post_mail_settings_test_messages",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "a4a5701f056d",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.mailTestIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mailTestOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/map-asset-types": {
       "get": {
         "summary": "Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu",
@@ -8446,6 +8719,124 @@
         }
       }
     },
+    "/api/v1/my-citizen-reports/{maTraCuu}/rating": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Công dân chấm 1–5 sao cho phiếu phản ánh CỦA CHÍNH MÌNH khi phiếu đã xử lý / chờ xác nhận — 1–2 sao tự mở lại phiếu (không tính lại hạn)",
+        "operationId": "petitions_post_my_citizen_reports_by_maTraCuu_rating",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8",
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
+        },
+        "x-vigov-task": "44fab0784f5d",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.ratingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuCuaToiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/org-units": {
       "get": {
         "summary": "Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc",
@@ -8855,6 +9246,104 @@
           }
         }
       ],
+      "delete": {
+        "summary": "Xoá mềm một bộ phận, kèm lý do bắt buộc — từ chối khi bộ phận còn cán bộ, bộ phận con hay hồ sơ chưa xong",
+        "operationId": "identity_delete_org_units_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §12.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "a1cfd928dffa",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.orgUnitDeleteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.orgUnitInUseOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "summary": "Sửa tên, dời bộ phận cha, đổi thứ tự một bộ phận — mã đã cấp không đổi",
         "operationId": "identity_patch_org_units_by_id",
@@ -16359,6 +16848,116 @@
         ],
         "additionalProperties": false
       },
+      "comms.mailSettingsIn": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "security": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "from_address": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "from_address",
+          "host",
+          "port",
+          "security",
+          "username"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mailSettingsOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "security": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "from_address": {
+            "type": "string"
+          },
+          "from_name": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "password_set": {
+            "type": "boolean"
+          },
+          "encryption_configured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured",
+          "encryption_configured",
+          "from_address",
+          "from_name",
+          "host",
+          "is_enabled",
+          "password_set",
+          "port",
+          "security",
+          "username"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mailTestIn": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mailTestOut": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent"
+        ],
+        "additionalProperties": false
+      },
       "comms.mapFieldSchemaListOut": {
         "type": "object",
         "properties": {
@@ -19851,6 +20450,46 @@
         ],
         "additionalProperties": false
       },
+      "identity.orgUnitDeleteIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "identity.orgUnitHoldingsOut": {
+        "type": "object",
+        "properties": {
+          "staff": {
+            "type": "integer"
+          },
+          "child_units": {
+            "type": "integer"
+          },
+          "open_petitions": {
+            "type": "integer"
+          },
+          "open_tasks": {
+            "type": "integer"
+          },
+          "open_incoming_documents": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "child_units",
+          "open_incoming_documents",
+          "open_petitions",
+          "open_tasks",
+          "staff"
+        ],
+        "additionalProperties": false
+      },
       "identity.orgUnitImportCreatedOut": {
         "type": "object",
         "properties": {
@@ -19977,6 +20616,30 @@
           "parent_code",
           "parent_id",
           "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.orgUnitInUseOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "holdings": {
+            "$ref": "#/components/schemas/identity.orgUnitHoldingsOut"
+          }
+        },
+        "required": [
+          "code",
+          "holdings",
+          "message",
+          "trace_id"
         ],
         "additionalProperties": false
       },
@@ -22220,6 +22883,19 @@
           },
           "receiving_body": {
             "type": "string"
+          },
+          "rating": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
@@ -22270,6 +22946,19 @@
             "format": "date-time"
           },
           "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rating": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rated_at": {
             "type": [
               "string",
               "null"
@@ -22383,6 +23072,28 @@
           },
           "public": {
             "type": "boolean"
+          },
+          "rating": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rating_comment": {
+            "type": "string"
+          },
+          "rated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "reopen_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -22420,6 +23131,21 @@
         },
         "required": [
           "decision"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.ratingInput": {
+        "type": "object",
+        "properties": {
+          "stars": {
+            "type": "integer"
+          },
+          "comment": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stars"
         ],
         "additionalProperties": false
       },

@@ -435,7 +435,7 @@
       "path": "/api/v1/citizen-reports",
       "operation_id": "petitions_get_citizen_reports",
       "task_id": "db9a4ae6ade1",
-      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
+      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
       "screen": "09-phan-anh-nguoi-dan §2, §4",
       "permission_kind": "permission",
       "permission": "feedback.read",
@@ -1420,6 +1420,73 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/mail-settings",
+      "operation_id": "comms_get_mail_settings",
+      "task_id": "3926a21d32ec",
+      "summary": "Cấu hình máy chủ thư của xã — không bao giờ trả mật khẩu, chỉ báo đã đặt hay chưa",
+      "screen": "14-cau-hinh §10",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mailSettingsOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "PUT",
+      "path": "/api/v1/mail-settings",
+      "operation_id": "comms_put_mail_settings",
+      "task_id": "b68a04fb4d9d",
+      "summary": "Lưu cấu hình máy chủ thư của xã — mật khẩu chỉ ghi, để trống là giữ nguyên, đổi máy chủ/cổng/tài khoản thì phải nhập lại",
+      "screen": "14-cau-hinh §10",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lưu là ghi đè cả cấu hình bằng trạng thái trong thân; không đổi gì và không kèm mật khẩu thì không ghi và không có vết, kèm mật khẩu thì lần thứ hai chỉ niêm lại cùng mật khẩu và ghi đúng một vết nói điều đó",
+      "request_schema": "comms.mailSettingsIn",
+      "reply_schemas": {
+        "200": "comms.mailSettingsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/mail-settings/test-messages",
+      "operation_id": "comms_post_mail_settings_test_messages",
+      "task_id": "a4a5701f056d",
+      "summary": "Gửi một thư thử cố định tới địa chỉ quản trị viên nhập, qua máy chủ thư đã lưu của xã",
+      "screen": "14-cau-hinh §10",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.mailTestIn",
+      "reply_schemas": {
+        "200": "comms.mailTestOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/map-asset-types",
       "operation_id": "comms_get_map_asset_types",
       "task_id": "1107344fbd75",
@@ -1954,6 +2021,29 @@
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },
     {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/my-citizen-reports/{maTraCuu}/rating",
+      "operation_id": "petitions_post_my_citizen_reports_by_maTraCuu_rating",
+      "task_id": "44fab0784f5d",
+      "summary": "Công dân chấm 1–5 sao cho phiếu phản ánh CỦA CHÍNH MÌNH khi phiếu đã xử lý / chờ xác nhận — 1–2 sao tự mở lại phiếu (không tính lại hạn)",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.ratingInput",
+      "reply_schemas": {
+        "200": "petitions.phieuCuaToiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/org-units",
@@ -2057,6 +2147,31 @@
         "413": "httpx.Error",
         "415": "httpx.Error",
         "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/org-units/{id}",
+      "operation_id": "identity_delete_org_units_by_id",
+      "task_id": "a1cfd928dffa",
+      "summary": "Xoá mềm một bộ phận, kèm lý do bắt buộc — từ chối khi bộ phận còn cán bộ, bộ phận con hay hồ sơ chưa xong",
+      "screen": "14-cau-hinh §12.4",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một bộ phận đã xoá cho cùng một kết quả: lượt đọc và câu UPDATE đều mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do",
+      "request_schema": "identity.orgUnitDeleteIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "identity.orgUnitInUseOut",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
     },
