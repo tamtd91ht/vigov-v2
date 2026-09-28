@@ -465,10 +465,10 @@ func TestRegisterFailureBindsThresholdAndLockEnd(t *testing.T) {
 	})
 	a := stmts[0].args
 	if a[0] != accountID || !a[1].(time.Time).Equal(t0) || a[2] != int64(domain.MaxFailedAttempts) ||
-		!a[3].(time.Time).Equal(t0.Add(15*time.Minute)) {
-		t.Errorf("RegisterFailure args = %#v", a)
+		!a[3].(time.Time).Equal(t0.Add(12*time.Hour)) {
+		t.Errorf("RegisterFailure args = %#v — the lock must end 12h later (owner 28/09/2026, TASK-04)", a)
 	}
-	if !locked || !until.Equal(t0.Add(15*time.Minute)) {
+	if !locked || !until.Equal(t0.Add(12*time.Hour)) {
 		t.Errorf("count 0 after update must mean 'this failure locked': locked=%v until=%v", locked, until)
 	}
 
@@ -648,7 +648,7 @@ func TestListAccountsScansEveryRow(t *testing.T) {
 	enrolled := t0.Add(-time.Hour)
 	row := func(id, code string, disabled any) []driver.Value {
 		return []driver.Value{id, code, "a@example.test", "Name", false, enrolled, false, int64(0), nil,
-			disabled, "", "", t0, "system", t0}
+			disabled, "", "", t0, "system", t0, nil, nil}
 	}
 	r := &recorder{queryRows: map[string][][]driver.Value{"ORDER BY code": {
 		row(accountID, "VH-00001", nil), row("01JD9A00000000000000000002", "VH-00002", t0),

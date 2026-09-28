@@ -248,21 +248,24 @@ func (t *fakeOperatorTx) CreateAccount(_ context.Context, in operatorstore.NewAc
 	}
 	t.st.nextCode++
 	code, _ := domain.FormatOperatorCode(t.st.nextCode)
+	exp := now.Add(domain.TemporaryPasswordLifetime)
 	a := domain.OperatorAccount{ID: fmt.Sprintf("01JFAKE%019d", t.st.nextCode), Code: code, Email: in.Email,
-		DisplayName: in.DisplayName, MustChangePassword: true, CreatedAt: now, CreatedBy: in.CreatedBy, UpdatedAt: now}
+		DisplayName: in.DisplayName, MustChangePassword: true, CreatedAt: now, CreatedBy: in.CreatedBy, UpdatedAt: now,
+		TemporaryPasswordExpiresAt: &exp}
 	t.st.accounts[a.ID] = a
 	t.st.creds[a.ID] = fakeCreds{passwordHash: in.PasswordHash}
 	return a, nil
 }
 
-func (t *fakeOperatorTx) SetPendingTOTP(_ context.Context, id string, sealed []byte, _ time.Time) error {
+func (t *fakeOperatorTx) SetPendingTOTP(_ context.Context, id string, sealed []byte, now time.Time) error {
 	t.op("SetPendingTOTP")
 	a, c := t.st.accounts[id], t.st.creds[id]
-	if c.totpSealed != nil || a.Disabled() {
+	if c.totpSealed != nil || a.Disabled() || !a.MustChangePassword || a.TemporaryPasswordExpiredAt(now) {
 		return operatorstore.ErrStateConflict
 	}
 	c.pendingTOTP = sealed
-	a.TOTPPending = true
+	n := now
+	a.TOTPPending, a.PendingTOTPCreatedAt = true, &n
 	t.st.creds[id], t.st.accounts[id] = c, a
 	return nil
 }
@@ -279,12 +282,14 @@ func (t *fakeOperatorTx) revokeAll(id, reason string) {
 func (t *fakeOperatorTx) ActivateTOTP(_ context.Context, id, hash string, step int64, proved []byte, now time.Time) error {
 	t.op("ActivateTOTP")
 	a, c := t.st.accounts[id], t.st.creds[id]
-	if c.pendingTOTP == nil || !bytes.Equal(c.pendingTOTP, proved) || a.Disabled() {
+	if c.pendingTOTP == nil || !bytes.Equal(c.pendingTOTP, proved) || a.Disabled() ||
+		a.PendingTOTPExpiredAt(now) || !a.MustChangePassword || a.TemporaryPasswordExpiredAt(now) {
 		return operatorstore.ErrStateConflict
 	}
 	c.totpSealed, c.pendingTOTP, c.lastStep, c.passwordHash = c.pendingTOTP, nil, &step, hash
 	n := now
 	a.TOTPEnrolledAt, a.TOTPPending, a.MustChangePassword = &n, false, false
+	a.PendingTOTPCreatedAt, a.TemporaryPasswordExpiresAt = nil, nil
 	t.st.creds[id], t.st.accounts[id] = c, a
 	t.revokeAll(id, operatorstore.RevokeReasonPasswordChanged)
 	return nil
@@ -332,10 +337,14 @@ func (t *fakeOperatorTx) ResetFailures(_ context.Context, id string, now time.Ti
 	return nil
 }
 
-func (t *fakeOperatorTx) SetPassword(_ context.Context, id, hash string, mustChange bool, _ time.Time) error {
+func (t *fakeOperatorTx) SetPassword(_ context.Context, id, hash string, mustChange bool, now time.Time) error {
 	t.op("SetPassword")
 	a, c := t.st.accounts[id], t.st.creds[id]
-	c.passwordHash, a.MustChangePassword = hash, mustChange
+	c.passwordHash, a.MustChangePassword, a.TemporaryPasswordExpiresAt = hash, mustChange, nil
+	if mustChange {
+		exp := now.Add(domain.TemporaryPasswordLifetime)
+		a.TemporaryPasswordExpiresAt = &exp
+	}
 	t.st.creds[id], t.st.accounts[id] = c, a
 	t.revokeAll(id, operatorstore.RevokeReasonPasswordChanged)
 	return nil
@@ -365,6 +374,34 @@ func (t *fakeOperatorTx) Disable(_ context.Context, id, by, reason string, now t
 	return nil
 }
 
+func (t *fakeOperatorTx) Unlock(_ context.Context, id string, _ time.Time) error {
+	t.op("Unlock")
+	a, ok := t.st.accounts[id]
+	if !ok {
+		return operatorstore.ErrNotFound
+	}
+	a.FailedAttempts, a.LockedUntil = 0, nil
+	t.st.accounts[id] = a
+	return nil
+}
+
+func (t *fakeOperatorTx) RevokeAllSessions(_ context.Context, id, reason string, _ time.Time) (int64, error) {
+	t.op("RevokeAllSessions")
+	var n int64
+	for _, s := range t.st.sessions {
+		if s.accountID == id && !s.revoked {
+			n++
+		}
+	}
+	t.revokeAll(id, reason)
+	return n, nil
+}
+
+// idle mirrors the SQL `coalesce(last_seen_at, created_at) > now − SessionIdleTimeout`, negated.
+func idle(s fakeSession, now time.Time) bool {
+	return !s.lastSeen.After(now.Add(-domain.SessionIdleTimeout))
+}
+
 func (t *fakeOperatorTx) Enable(_ context.Context, id string, _ time.Time) error {
 	t.op("Enable")
 	a := t.st.accounts[id]
@@ -380,7 +417,7 @@ func (t *fakeOperatorTx) ResetMFA(_ context.Context, id string, _ time.Time) err
 	t.op("ResetMFA")
 	a, c := t.st.accounts[id], t.st.creds[id]
 	c.totpSealed, c.pendingTOTP, c.lastStep = nil, nil, nil
-	a.TOTPEnrolledAt, a.TOTPPending = nil, false
+	a.TOTPEnrolledAt, a.TOTPPending, a.PendingTOTPCreatedAt = nil, false, nil
 	t.st.creds[id], t.st.accounts[id] = c, a
 	for i := range t.st.codes {
 		if t.st.codes[i].accountID == id && !t.st.codes[i].used {
@@ -401,7 +438,7 @@ func (t *fakeOperatorTx) CreateSession(_ context.Context, sid, id, _, _ string, 
 func (t *fakeOperatorTx) CheckSession(_ context.Context, sid string, now time.Time) (operatorstore.OperatorSession, error) {
 	t.op("CheckSession")
 	s, ok := t.st.sessions[sid]
-	if !ok || s.revoked || !now.Before(s.expires) || t.st.accounts[s.accountID].Disabled() {
+	if !ok || s.revoked || !now.Before(s.expires) || t.st.accounts[s.accountID].Disabled() || idle(s, now) {
 		return operatorstore.OperatorSession{}, operatorstore.ErrNotFound
 	}
 	return operatorstore.OperatorSession{AccountID: s.accountID, AccountCode: t.st.accounts[s.accountID].Code,
@@ -422,7 +459,7 @@ func (t *fakeOperatorTx) RevokeSession(_ context.Context, sid, reason string, _ 
 func (t *fakeOperatorTx) TouchSession(_ context.Context, sid string, now time.Time) error {
 	t.op("TouchSession")
 	s, ok := t.st.sessions[sid]
-	if !ok || s.revoked || !now.Before(s.expires) {
+	if !ok || s.revoked || !now.Before(s.expires) || idle(s, now) {
 		return operatorstore.ErrNotFound
 	}
 	s.lastSeen = now

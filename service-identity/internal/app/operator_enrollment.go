@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/vihat/vigov/core/password"
 	"github.com/vihat/vigov/core/secret"
@@ -48,9 +49,10 @@ type OperatorEnrollmentStart struct {
 // Only for an account with NO active factor. Replacing an active factor is an MFA reset — a CLI act
 // with a ticket, audited — never something a password alone can do.
 //
-// NOT AUDITED: a pending secret grants nothing until CompleteEnrollment proves it, and that is
-// audited (totp_enrolled). There is no audit verb for "enrolment started" on the owner's list;
-// flagged in the TASK-03 report rather than invented here (rule 6, stop condition #1).
+// AUDITED as totp_enrollment_started (owner's decision 28/09/2026, TASK-04), in the same
+// transaction as the pending secret. The pending secret expires after domain.PendingTOTPLifetime
+// (10 minutes) and the temporary password after domain.TemporaryPasswordLifetime (24 hours); past
+// either, enrolment is refused.
 func (a *OperatorAuth) BeginEnrollment(ctx context.Context, in OperatorEnrollmentRequest) (OperatorEnrollmentStart, error) {
 	if err := a.configured(); err != nil {
 		return OperatorEnrollmentStart{}, err
@@ -77,7 +79,9 @@ func (a *OperatorAuth) BeginEnrollment(ctx context.Context, in OperatorEnrollmen
 		if !passwordOK {
 			return a.registerFailure(ctx, tx, acc, in.IP, now)
 		}
-		if acc.TOTPEnrolled() {
+		// Enrolment is reachable only with a USABLE temporary password: an account that already has
+		// a factor, or whose temporary password is past its 24 hours (not counted — not a guess).
+		if acc.TOTPEnrolled() || !acc.MustChangePassword || acc.TemporaryPasswordExpiredAt(now) {
 			return nil
 		}
 		sealed, err := a.sealer.Seal(totpSecret, []byte(acc.ID))
@@ -86,8 +90,17 @@ func (a *OperatorAuth) BeginEnrollment(ctx context.Context, in OperatorEnrollmen
 		}
 		if err := tx.SetPendingTOTP(ctx, acc.ID, sealed, now); err != nil {
 			if errors.Is(err, operatorstore.ErrStateConflict) {
-				return nil // enrolled or disabled between the read and the write
+				return nil // enrolled, disabled or expired between the read and the write
 			}
+			return err
+		}
+		// Owner's decision 28/09/2026 (TASK-04): the start of an enrolment is a write to credential
+		// state and is audited, in this transaction, by the operator who started it.
+		if err := tx.AppendAudit(ctx, domain.OperatorAuditEntry{
+			OccurredAt: now, Actor: acc.Code, ActorIP: in.IP,
+			Action: domain.OperatorAuditTOTPEnrollmentStarted, Subject: acc.Code,
+			After: map[string]any{"pending_expires_at": now.Add(domain.PendingTOTPLifetime).UTC().Format(time.RFC3339)},
+		}); err != nil {
 			return err
 		}
 		// The label is the operator CODE — never the email, which would put personal data into a
@@ -175,6 +188,12 @@ func (a *OperatorAuth) CompleteEnrollment(ctx context.Context, in OperatorEnroll
 		}
 		if acc.TOTPEnrolled() || len(creds.PendingTOTPSecretSealed) == 0 {
 			return nil // nothing to complete: BeginEnrollment was not called, or already done
+		}
+		// Past 24 hours for the temporary password, or 10 minutes for the pending secret: refused,
+		// not counted. The operator starts the enrolment again (or devops reissues the password).
+		// The store's activateTOTP enforces both limits again in SQL.
+		if !acc.MustChangePassword || acc.TemporaryPasswordExpiredAt(now) || acc.PendingTOTPExpiredAt(now) {
+			return nil
 		}
 		pending, err := a.sealer.Open(creds.PendingTOTPSecretSealed, []byte(acc.ID))
 		if err != nil {

@@ -21,6 +21,7 @@ func TestParseArgsRequiresTicketOnEveryMutatingCommand(t *testing.T) {
 		{"enable", "--code", "VH-00001", "--reason", "back"},
 		{"reset-mfa", "--code", "VH-00001"},
 		{"reset-mfa", "--code", "VH-00001", "--ticket", "   "},
+		{"unlock", "--code", "VH-00001"},
 	} {
 		_, err := parseArgs(args)
 		if !errors.Is(err, errUsage) || !strings.Contains(err.Error(), "--ticket is required") {
@@ -93,6 +94,10 @@ func (f *fakeAdmin) Enable(_ context.Context, code, reason, ticket string) error
 	f.calls = append(f.calls, "enable "+code+"|"+reason+"|"+ticket)
 	return nil
 }
+func (f *fakeAdmin) Unlock(_ context.Context, code, ticket string) error {
+	f.calls = append(f.calls, "unlock "+code+"|"+ticket)
+	return nil
+}
 func (f *fakeAdmin) ResetMFA(_ context.Context, code, ticket string) (secret.Secret, error) {
 	f.calls = append(f.calls, "reset-mfa "+code+"|"+ticket)
 	return f.temp, nil
@@ -113,6 +118,7 @@ func TestExecutePassesArgumentsInPlaceAndPrintsSecretOnce(t *testing.T) {
 		{"disable", "--code", "VH-00001", "--reason", "left", "--ticket", "OPS-4"},
 		{"enable", "--code", "VH-00001", "--reason", "back", "--ticket", "OPS-5"},
 		{"reset-mfa", "--code", "VH-00001", "--ticket", "OPS-6"},
+		{"unlock", "--code", "VH-00001", "--ticket", "OPS-7"},
 	} {
 		c, err := parseArgs(args)
 		if err != nil {
@@ -133,6 +139,7 @@ func TestExecutePassesArgumentsInPlaceAndPrintsSecretOnce(t *testing.T) {
 		"disable VH-00001|left|OPS-4",
 		"enable VH-00001|back|OPS-5",
 		"reset-mfa VH-00001|OPS-6",
+		"unlock VH-00001|OPS-7",
 	}
 	if strings.Join(f.calls, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("calls:\n%s\nwant:\n%s", strings.Join(f.calls, "\n"), strings.Join(want, "\n"))

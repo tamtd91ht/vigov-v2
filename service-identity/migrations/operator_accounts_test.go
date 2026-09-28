@@ -102,3 +102,29 @@ func TestMigration0013SessionLifetimeCap(t *testing.T) {
 		}
 	}
 }
+
+const file0014 = "0014_operator_credential_expiry.sql"
+
+// Two expiry columns, a backfill that only fills NULLs with a FINITE value, and the two CHECKs that
+// make "NULL means forever" unrepresentable. The interval ↔ domain agreement is checked in
+// internal/store/operatorstore.
+func TestMigration0014CredentialExpiry(t *testing.T) {
+	sql := maChay(t, file0014)
+	for _, want := range []string{
+		"alter table operator_account add column if not exists temporary_password_expires_at timestamptz",
+		"alter table operator_account add column if not exists pending_totp_created_at timestamptz",
+		"set temporary_password_expires_at = now() + interval '24 hours' where must_change_password and temporary_password_expires_at is null",
+		"set pending_totp_created_at = now() where pending_totp_secret_sealed is not null and pending_totp_created_at is null",
+		"add constraint operator_account_temporary_password_expires check (not must_change_password or temporary_password_expires_at is not null)",
+		"add constraint operator_account_pending_totp_dated check (pending_totp_secret_sealed is null or pending_totp_created_at is not null)",
+	} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("0014 NO LONGER contains %q", want)
+		}
+	}
+	for _, bad := range []string{"drop table", "drop column", "delete from", "truncate", "set must_change_password"} {
+		if strings.Contains(sql, bad) {
+			t.Errorf("0014 contains %q in its executable part", bad)
+		}
+	}
+}

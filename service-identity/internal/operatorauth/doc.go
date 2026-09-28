@@ -1,5 +1,6 @@
 // Package operatorauth holds the cryptographic building blocks of the ViHAT OPERATOR realm
-// (ADR 0048, owner's decisions of 2026-09-28 #2 and #10): the `op1.` session token, TOTP, the
+// (ADR 0048, owner's decisions of 2026-09-28 #2+4 — the realm token — and #10 — MFA required; the
+// parameters are in §"Chốt bước 1 — 28/09/2026", rows "Token và bí mật" and "Tham số"): the `op1.` session token, TOTP, the
 // AES-256-GCM sealer for TOTP secrets at rest, and one-time recovery codes.
 //
 // PURE FUNCTIONS AND VALUE TYPES ONLY: no database, no transport, no clock of its own (every

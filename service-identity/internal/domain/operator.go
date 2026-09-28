@@ -139,10 +139,31 @@ const (
 	// the password five free TOTP guesses per lockout window on top of the password guesses.
 	MaxFailedAttempts = 5
 
-	// LockoutDuration — 15 minutes. Long enough to make online guessing of a 6-digit TOTP
-	// impractical (5 guesses per 15 minutes), short enough that an operator who mistyped is not
-	// stuck waiting for somebody to run the CLI.
-	LockoutDuration = 15 * time.Minute
+	// LockoutDuration — 12 HOURS (owner's decision 28/09/2026, TASK-04, replacing the 15 minutes of
+	// ADR 0048 §"Chốt bước 1"; TCVN 14423:2026 §5.5.2.2). Five guesses per half-day makes online
+	// guessing of a password + 6-digit TOTP hopeless. The cost is deliberate: an operator who
+	// mistyped five times waits, or asks devops for `operatorctl unlock` — a ticketed, audited act,
+	// which is exactly the human check an account that reaches every commune should get.
+	LockoutDuration = 12 * time.Hour
+
+	// SessionIdleTimeout — 5 MINUTES without a request ends the session (owner's decision
+	// 28/09/2026, TASK-04; TCVN 14423 caps an ADMINISTRATIVE session's idle time at 5 minutes). It
+	// sits UNDER SessionLifetime, never instead of it: activity keeps a session alive for at most 8
+	// hours in total. Enforced in operatorstore's checkSession SQL against last_seen_at, which every
+	// successful ResolveSession moves forward.
+	SessionIdleTimeout = 5 * time.Minute
+
+	// TemporaryPasswordLifetime — 24 HOURS from issue (CreateOperator, ResetMFA) for the operator to
+	// sign in, choose their own password and enrol TOTP (owner's decision 28/09/2026, TASK-04). A
+	// temporary password travels by hand — chat, paper, phone — so it must stop working on its own
+	// soon after the person it was meant for had their chance. Expired → the uniform refusal; devops
+	// reissues with `operatorctl reset-mfa`.
+	TemporaryPasswordLifetime = 24 * time.Hour
+
+	// PendingTOTPLifetime — 10 MINUTES between BeginEnrollment and CompleteEnrollment (owner's
+	// decision 28/09/2026, TASK-04). A QR code left on a screen, or a provisioning URI in a
+	// screenshot, stops being bindable soon after it is shown. Expired → start the enrolment again.
+	PendingTOTPLifetime = 10 * time.Minute
 
 	// RecoveryCodeCount — 10 single-use codes per batch. Regenerating voids the whole previous
 	// batch, so there is never more than one live set to lose.
@@ -171,6 +192,31 @@ type OperatorAccount struct {
 	CreatedAt          time.Time
 	CreatedBy          string
 	UpdatedAt          time.Time
+
+	// TemporaryPasswordExpiresAt is when the temporary password stops working; set whenever
+	// MustChangePassword is. PendingTOTPCreatedAt is when BeginEnrollment stored the pending secret.
+	TemporaryPasswordExpiresAt *time.Time
+	PendingTOTPCreatedAt       *time.Time
+}
+
+// TemporaryPasswordExpiredAt reports whether the account's password is a temporary one that can no
+// longer be used at now. NIL COUNTS AS EXPIRED: a temporary password with no recorded expiry is one
+// that would work forever, and "no value" must never be the permissive answer on a security path
+// (migration 0014's CHECK makes the state unreachable; this makes it harmless if it is reached).
+func (a OperatorAccount) TemporaryPasswordExpiredAt(now time.Time) bool {
+	if !a.MustChangePassword {
+		return false
+	}
+	return a.TemporaryPasswordExpiresAt == nil || !now.Before(*a.TemporaryPasswordExpiresAt)
+}
+
+// PendingTOTPExpiredAt reports whether the pending enrolment secret can no longer be completed at
+// now. No pending secret, or no recorded creation time, counts as expired (same reason).
+func (a OperatorAccount) PendingTOTPExpiredAt(now time.Time) bool {
+	if !a.TOTPPending || a.PendingTOTPCreatedAt == nil {
+		return true
+	}
+	return !now.Before(a.PendingTOTPCreatedAt.Add(PendingTOTPLifetime))
 }
 
 // String renders an account WITHOUT its personal fields (rule 3; security review of TASK-03,
@@ -237,6 +283,10 @@ const (
 	// every live code of the previous batch — a write to credential state — and rule 6, invariant 1
 	// asks every write to leave an entry. Stated as an assumption in the TASK-02 report.
 	OperatorAuditRecoveryCodesRegenerated OperatorAuditAction = "operator.recovery_codes_regenerated"
+	// Owner's decisions 28/09/2026 (TASK-04): lifting a failure lockout by CLI, and the start of an
+	// enrolment (a pending secret stored — a write to credential state, audited like the rest).
+	OperatorAuditUnlocked              OperatorAuditAction = "operator.unlocked"
+	OperatorAuditTOTPEnrollmentStarted OperatorAuditAction = "operator.totp_enrollment_started"
 )
 
 // Valid reports whether a is one of the declared actions. The database only checks the SHAPE of
@@ -247,7 +297,7 @@ func (a OperatorAuditAction) Valid() bool {
 		OperatorAuditLoggedOut, OperatorAuditTOTPEnrolled, OperatorAuditRecoveryCodeUsed,
 		OperatorAuditPermissionGranted, OperatorAuditPermissionRevoked, OperatorAuditAccountDisabled,
 		OperatorAuditAccountEnabled, OperatorAuditMFAReset, OperatorAuditPasswordChanged,
-		OperatorAuditRecoveryCodesRegenerated:
+		OperatorAuditRecoveryCodesRegenerated, OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted:
 		return true
 	}
 	return false

@@ -243,8 +243,12 @@ func (o *OperatorAdmin) Disable(ctx context.Context, code, reason, ticket string
 	return o.setDisabled(ctx, code, reason, ticket, true)
 }
 
-// Enable lifts the administrative lock. It does not touch the failure lockout, which expires by
-// itself.
+// Enable lifts the administrative lock. It DOES NOT clear a failure lockout, and that is a choice:
+// disable/enable and the lockout are two locks for two reasons (a decision about a person vs.
+// somebody guessing their credentials), each with its own audited verb. Enabling an account while
+// its credentials are under attack must not quietly also end the protection against that attack;
+// devops who mean both run `enable` and `unlock` — two entries, two tickets or one ticket twice.
+// The lockout otherwise expires by itself after domain.LockoutDuration.
 func (o *OperatorAdmin) Enable(ctx context.Context, code, reason, ticket string) error {
 	return o.setDisabled(ctx, code, reason, ticket, false)
 }
@@ -296,6 +300,47 @@ func (o *OperatorAdmin) setDisabled(ctx context.Context, code, reason, ticket st
 		return fmt.Errorf("%s: %w", event, err)
 	}
 	o.adminLog(event, subject, full)
+	return nil
+}
+
+// ErrOperatorNotLocked — `unlock` on an account with no lock and no failures: nothing to lift, and
+// an entry saying something was lifted would be false.
+var ErrOperatorNotLocked = errors.New("operator admin: operator is not locked and has no failed attempts")
+
+// Unlock lifts a failure lockout before its 12 hours are up and restarts the failure count (owner's
+// decision 28/09/2026, TASK-04). Ticketed and audited as operator.unlocked, actor system. It lifts
+// ONLY the failure lockout — not a disable (Enable), and it does not restore any session.
+func (o *OperatorAdmin) Unlock(ctx context.Context, code, ticket string) error {
+	reason, err := ticketReason(ticket, "")
+	if err != nil {
+		return err
+	}
+	now := o.clock()
+	var subject string
+	err = o.store.InTx(ctx, func(tx OperatorTx) error {
+		acc, err := byCode(ctx, tx, code)
+		if err != nil {
+			return err
+		}
+		subject = acc.Code
+		locked := acc.LockedAt(now)
+		if !locked && acc.FailedAttempts == 0 {
+			return ErrOperatorNotLocked
+		}
+		if err := tx.Unlock(ctx, acc.ID, now); err != nil {
+			return err
+		}
+		return tx.AppendAudit(ctx, domain.OperatorAuditEntry{
+			OccurredAt: now, Actor: domain.SystemActor, Action: domain.OperatorAuditUnlocked, Subject: acc.Code,
+			Before: map[string]any{"locked": locked, "failed_attempts": acc.FailedAttempts},
+			After:  map[string]any{"locked": false, "failed_attempts": 0},
+			Reason: reason,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("operator.unlocked: %w", err)
+	}
+	o.adminLog("operator.unlocked", subject, reason)
 	return nil
 }
 
@@ -354,7 +399,9 @@ const (
 	OperatorStatusDisabled           = "disabled"
 	OperatorStatusLocked             = "locked"
 	OperatorStatusEnrollmentRequired = "enrollment_required"
-	OperatorStatusActive             = "active"
+	// OperatorStatusTemporaryPasswordExpired — the 24 hours passed unused; `reset-mfa` reissues.
+	OperatorStatusTemporaryPasswordExpired = "temporary_password_expired"
+	OperatorStatusActive                   = "active"
 )
 
 // OperatorListing is one line of the CLI's `list`. The email is MASKED (core/privacy.MaskEmail):
@@ -386,6 +433,8 @@ func (o *OperatorAdmin) List(ctx context.Context) ([]OperatorListing, error) {
 			status = OperatorStatusDisabled
 		case acc.LockedAt(now):
 			status = OperatorStatusLocked
+		case acc.TemporaryPasswordExpiredAt(now):
+			status = OperatorStatusTemporaryPasswordExpired
 		case acc.MustChangePassword || !acc.TOTPEnrolled():
 			status = OperatorStatusEnrollmentRequired
 		}

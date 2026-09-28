@@ -26,7 +26,7 @@ import (
 // there is no commune to read, and inventing one would be a default on the isolation path.
 //
 // THE SHAPE OF EVERY CREDENTIAL CHECK BELOW, and why it commits on failure: a failed attempt is
-// COUNTED (5 consecutive → locked 15 minutes, owner's decision). The counter lives in the database,
+// COUNTED (5 consecutive → locked domain.LockoutDuration, 12 hours, owner's decision). The counter lives in the database,
 // so the transaction that reads the account must COMMIT the increment even though the sign-in
 // fails. Each flow therefore runs one transaction whose closure returns nil for a refused attempt
 // and records the outcome in a variable; the error returned to the caller is chosen after commit.
@@ -175,6 +175,12 @@ func (a *OperatorAuth) Login(ctx context.Context, in OperatorLoginRequest) (Oper
 			return a.registerFailure(ctx, tx, acc, in.IP, now)
 		}
 		if acc.MustChangePassword || !acc.TOTPEnrolled() {
+			// A temporary password past its 24 hours is refused like any wrong credential — not
+			// counted (it is not a guess), and not "enrolment required", which would promise a path
+			// that no longer exists. Devops reissues with `operatorctl reset-mfa`.
+			if acc.TemporaryPasswordExpiredAt(now) {
+				return nil
+			}
 			decided = outcomeEnrollmentRequired
 			return nil
 		}
@@ -315,11 +321,30 @@ func (a *OperatorAuth) timingEqualiser() string {
 	return a.timingHash
 }
 
-// registerFailure counts one failed credential attempt and, when this failure is the one that
-// locks the account, writes the lock into the trail IN THE SAME TRANSACTION. Returns nil for a
-// refusal so the count commits (see the note at the top of this file).
+// registerFailure counts one failed credential attempt FROM OUTSIDE — a sign-in or an enrolment,
+// by somebody who holds no session. A lockout it causes does NOT revoke sessions (owner's decision
+// 28/09/2026, TASK-04): anybody who knows an operator's email can cause it, and revoking would let
+// them sign the real operator out at will.
 func (a *OperatorAuth) registerFailure(ctx context.Context, tx OperatorTx, acc domain.OperatorAccount,
 	ip string, now time.Time) error {
+	return a.countFailure(ctx, tx, acc, ip, now, false)
+}
+
+// registerSessionHolderFailure counts one failed attempt by the HOLDER OF A SESSION re-proving a
+// factor (password change, recovery-code regeneration). A lockout it causes REVOKES EVERY SESSION
+// of the account in the same transaction (owner's decision 28/09/2026, TASK-04): somebody holding a
+// live session and guessing its owner's password or TOTP is most likely holding a stolen session.
+func (a *OperatorAuth) registerSessionHolderFailure(ctx context.Context, tx OperatorTx, acc domain.OperatorAccount,
+	ip string, now time.Time) error {
+	return a.countFailure(ctx, tx, acc, ip, now, true)
+}
+
+// countFailure counts one failed credential attempt and, when this failure is the one that locks
+// the account, writes the lock into the trail IN THE SAME TRANSACTION (and, for a session holder,
+// revokes every session there too). Returns nil for a refusal so the count commits (see the note at
+// the top of this file).
+func (a *OperatorAuth) countFailure(ctx context.Context, tx OperatorTx, acc domain.OperatorAccount,
+	ip string, now time.Time, revokeSessions bool) error {
 	lockedNow, until, err := tx.RegisterFailure(ctx, acc.ID, now)
 	if errors.Is(err, operatorstore.ErrAccountLocked) {
 		return nil // a concurrent attempt locked it first; that attempt wrote the entry
@@ -330,10 +355,18 @@ func (a *OperatorAuth) registerFailure(ctx context.Context, tx OperatorTx, acc d
 	if !lockedNow {
 		return nil
 	}
+	after := map[string]any{"locked_until": until.UTC().Format(time.RFC3339)}
+	if revokeSessions {
+		n, err := tx.RevokeAllSessions(ctx, acc.ID, operatorstore.RevokeReasonLockedOut, now)
+		if err != nil {
+			return err
+		}
+		after["sessions_revoked"] = n
+	}
 	if err := tx.AppendAudit(ctx, domain.OperatorAuditEntry{
 		OccurredAt: now, Actor: domain.SystemActor, ActorIP: ip,
 		Action: domain.OperatorAuditLoginLockedOut, Subject: acc.Code,
-		After:  map[string]any{"locked_until": until.UTC().Format(time.RFC3339)},
+		After:  after,
 		Reason: lockoutReason,
 	}); err != nil {
 		return err
@@ -342,7 +375,7 @@ func (a *OperatorAuth) registerFailure(ctx context.Context, tx OperatorTx, acc d
 	// already names it. An alert on this line is what tells somebody an operator is being attacked.
 	a.log.Warn("operator account locked", "event", "operator.login_locked_out", "outcome", "locked",
 		"actor", domain.SystemActor, "subject", acc.Code, "ip", ip,
-		"locked_until", until.UTC().Format(time.RFC3339))
+		"locked_until", until.UTC().Format(time.RFC3339), "sessions_revoked", revokeSessions)
 	return nil
 }
 
@@ -666,14 +699,14 @@ func (a *OperatorAuth) reauthenticate(ctx context.Context, tx OperatorTx, accoun
 		return totpRejected, err
 	}
 	if requirePassword && password.KiemTra(currentPassword, creds.PasswordHash) != nil {
-		return totpRejected, a.registerFailure(ctx, tx, acc, ip, now)
+		return totpRejected, a.registerSessionHolderFailure(ctx, tx, acc, ip, now)
 	}
 	v, err := a.verifyActiveTOTP(ctx, tx, acc, creds, totpCode, now)
 	if err != nil {
 		return totpRejected, err
 	}
 	if v == totpRejected {
-		return totpRejected, a.registerFailure(ctx, tx, acc, ip, now)
+		return totpRejected, a.registerSessionHolderFailure(ctx, tx, acc, ip, now)
 	}
 	return v, nil
 }

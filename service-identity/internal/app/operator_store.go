@@ -33,6 +33,7 @@ type OperatorTx interface {
 	ResetFailures(ctx context.Context, accountID string, now time.Time) error
 	SetPassword(ctx context.Context, accountID, passwordHash string, mustChange bool, now time.Time) error
 	UpgradePasswordHash(ctx context.Context, accountID, oldHash, newHash string, now time.Time) error
+	Unlock(ctx context.Context, accountID string, now time.Time) error
 	Disable(ctx context.Context, accountID, by, reason string, now time.Time) error
 	Enable(ctx context.Context, accountID string, now time.Time) error
 	ResetMFA(ctx context.Context, accountID string, now time.Time) error
@@ -40,6 +41,7 @@ type OperatorTx interface {
 	CreateSession(ctx context.Context, sid, accountID, ip, userAgent string, now time.Time) (time.Time, error)
 	CheckSession(ctx context.Context, sid string, now time.Time) (operatorstore.OperatorSession, error)
 	RevokeSession(ctx context.Context, sid, reason string, now time.Time) error
+	RevokeAllSessions(ctx context.Context, accountID, reason string, now time.Time) (int64, error)
 	TouchSession(ctx context.Context, sid string, now time.Time) error
 
 	Grant(ctx context.Context, accountID string, key domain.OperatorPermission, by, reason string, now time.Time) error

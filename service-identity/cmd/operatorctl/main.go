@@ -50,7 +50,8 @@ const usage = `operatorctl — operator accounts of the Vihat operator realm (AD
   operatorctl revoke    --code VH-00001 --permission ops.<key> --ticket <n>
   operatorctl disable   --code VH-00001 --reason <text> --ticket <n>
   operatorctl enable    --code VH-00001 --reason <text> --ticket <n>
-  operatorctl reset-mfa --code VH-00001 --ticket <n>
+  operatorctl unlock    --code VH-00001 --ticket <n>      lift a failure lockout (12 h) early
+  operatorctl reset-mfa --code VH-00001 --ticket <n>      also reissues an expired temporary password
   operatorctl list
 
 Reads the identity service's environment (DATABASE_DSN, ENV, ...). Does not run migrations.
@@ -105,7 +106,7 @@ func parseArgs(args []string) (command, error) {
 		fs.StringVar(&c.code, "code", "", "")
 		fs.StringVar(&c.reason, "reason", "", "")
 		required = []string{"code", "reason", "ticket"}
-	case "reset-mfa":
+	case "reset-mfa", "unlock":
 		fs.StringVar(&c.code, "code", "", "")
 		required = []string{"code", "ticket"}
 	case "list":
@@ -138,6 +139,7 @@ type admin interface {
 	Revoke(ctx context.Context, code, permission, ticket string) error
 	Disable(ctx context.Context, code, reason, ticket string) error
 	Enable(ctx context.Context, code, reason, ticket string) error
+	Unlock(ctx context.Context, code, ticket string) error
 	ResetMFA(ctx context.Context, code, ticket string) (secret.Secret, error)
 	List(ctx context.Context) ([]app.OperatorListing, error)
 }
@@ -171,7 +173,12 @@ func execute(ctx context.Context, c command, a admin, stdout io.Writer) error {
 		if err := a.Enable(ctx, c.code, c.reason, c.ticket); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "enabled %s\n", c.code)
+		fmt.Fprintf(stdout, "enabled %s — a failure lockout, if any, is NOT lifted (use unlock)\n", c.code)
+	case "unlock":
+		if err := a.Unlock(ctx, c.code, c.ticket); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "unlocked %s — failure lockout lifted, failure count reset\n", c.code)
 	case "reset-mfa":
 		temp, err := a.ResetMFA(ctx, c.code, c.ticket)
 		if err != nil {

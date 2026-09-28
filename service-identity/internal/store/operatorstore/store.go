@@ -39,6 +39,10 @@ const (
 	RevokeReasonDisabled        = "account_disabled"
 	RevokeReasonGrantChanged    = "permission_changed"
 	RevokeReasonMFAReset        = "mfa_reset"
+	// RevokeReasonLockedOut — a SESSION HOLDER re-proving a factor (password change, recovery-code
+	// regeneration) reached the failure limit: whoever holds that session is guessing, so every
+	// session of the account ends (owner's decision 28/09/2026, TASK-04). Written by the use case.
+	RevokeReasonLockedOut = "locked_out"
 )
 
 // querier is what both *sql.DB and *sql.Tx offer. Reads are written once against it and exposed on
@@ -114,7 +118,8 @@ func requireOne(res sql.Result, op string, none error) error {
 // accountColumns — no secret column is selected here. Secrets are read only by Credentials.
 const accountColumns = `id, code, email, display_name, must_change_password, totp_enrolled_at,
 	pending_totp_secret_sealed IS NOT NULL, failed_attempts, locked_until, disabled_at,
-	coalesce(disabled_by, ''), coalesce(disabled_reason, ''), created_at, created_by, updated_at`
+	coalesce(disabled_by, ''), coalesce(disabled_reason, ''), created_at, created_by, updated_at,
+	temporary_password_expires_at, pending_totp_created_at`
 
 const (
 	selectAccountByID    = `SELECT ` + accountColumns + ` FROM operator_account WHERE id = $1`
@@ -122,21 +127,35 @@ const (
 	selectAccountByEmail = `SELECT ` + accountColumns + ` FROM operator_account WHERE lower(email) = lower($1)`
 )
 
-func scanAccount(row *sql.Row) (domain.OperatorAccount, error) {
+// scanner is what both *sql.Row and *sql.Rows offer: one column list, one scan, for single reads
+// and the listing alike.
+type scanner interface{ Scan(dest ...any) error }
+
+func scanAccountFrom(row scanner) (domain.OperatorAccount, error) {
 	var a domain.OperatorAccount
-	var enrolled, locked, disabled sql.NullTime
+	var enrolled, locked, disabled, tempExpires, pendingCreated sql.NullTime
 	err := row.Scan(&a.ID, &a.Code, &a.Email, &a.DisplayName, &a.MustChangePassword, &enrolled,
 		&a.TOTPPending, &a.FailedAttempts, &locked, &disabled, &a.DisabledBy, &a.DisabledReason,
-		&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt)
+		&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &tempExpires, &pendingCreated)
+	if err != nil {
+		return domain.OperatorAccount{}, err
+	}
+	a.TOTPEnrolledAt = timePtr(enrolled)
+	a.LockedUntil = timePtr(locked)
+	a.DisabledAt = timePtr(disabled)
+	a.TemporaryPasswordExpiresAt = timePtr(tempExpires)
+	a.PendingTOTPCreatedAt = timePtr(pendingCreated)
+	return a, nil
+}
+
+func scanAccount(row *sql.Row) (domain.OperatorAccount, error) {
+	a, err := scanAccountFrom(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.OperatorAccount{}, ErrNotFound
 	}
 	if err != nil {
 		return domain.OperatorAccount{}, fmt.Errorf("operatorstore: read account: %w", err)
 	}
-	a.TOTPEnrolledAt = timePtr(enrolled)
-	a.LockedUntil = timePtr(locked)
-	a.DisabledAt = timePtr(disabled)
 	return a, nil
 }
 
@@ -200,16 +219,10 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.OperatorAccount, err
 	defer rows.Close()
 	var out []domain.OperatorAccount
 	for rows.Next() {
-		var a domain.OperatorAccount
-		var enrolled, locked, disabled sql.NullTime
-		if err := rows.Scan(&a.ID, &a.Code, &a.Email, &a.DisplayName, &a.MustChangePassword, &enrolled,
-			&a.TOTPPending, &a.FailedAttempts, &locked, &disabled, &a.DisabledBy, &a.DisabledReason,
-			&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt); err != nil {
+		a, err := scanAccountFrom(rows)
+		if err != nil {
 			return nil, fmt.Errorf("operatorstore: list accounts: scan: %w", err)
 		}
-		a.TOTPEnrolledAt = timePtr(enrolled)
-		a.LockedUntil = timePtr(locked)
-		a.DisabledAt = timePtr(disabled)
 		out = append(out, a)
 	}
 	if err := rows.Err(); err != nil {
@@ -339,8 +352,9 @@ type NewAccount struct {
 const (
 	nextOperatorCode = `SELECT nextval('operator_code_seq')`
 	insertAccount    = `INSERT INTO operator_account
-	(id, code, email, display_name, password_hash, must_change_password, created_at, created_by, updated_at)
-	VALUES ($1, $2, $3, $4, $5, true, $6, $7, $6)`
+	(id, code, email, display_name, password_hash, must_change_password, created_at, created_by, updated_at,
+	 temporary_password_expires_at)
+	VALUES ($1, $2, $3, $4, $5, true, $6, $7, $6, $8)`
 )
 
 // CreateAccount inserts a new operator, allocating its code from operator_code_seq.
@@ -374,8 +388,12 @@ func (t *Tx) CreateAccount(ctx context.Context, in NewAccount, now time.Time) (d
 		return domain.OperatorAccount{}, err
 	}
 
+	// The temporary password's expiry is set HERE, from domain.TemporaryPasswordLifetime, so no
+	// caller can create an account whose temporary password works forever (migration 0014's CHECK
+	// refuses the row anyway).
+	expires := temporaryPasswordExpiry(now)
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). Inserts one account row.
-	_, err = t.tx.ExecContext(ctx, insertAccount, id, code, email, name, in.PasswordHash, now, in.CreatedBy)
+	_, err = t.tx.ExecContext(ctx, insertAccount, id, code, email, name, in.PasswordHash, now, in.CreatedBy, expires)
 	if err != nil {
 		if uniqueViolation(err) == "operator_account_email_unique" {
 			return domain.OperatorAccount{}, ErrEmailTaken
@@ -384,16 +402,28 @@ func (t *Tx) CreateAccount(ctx context.Context, in NewAccount, now time.Time) (d
 	}
 	return domain.OperatorAccount{
 		ID: id, Code: code, Email: email, DisplayName: name, MustChangePassword: true,
-		CreatedAt: now, CreatedBy: in.CreatedBy, UpdatedAt: now,
+		CreatedAt: now, CreatedBy: in.CreatedBy, UpdatedAt: now, TemporaryPasswordExpiresAt: &expires,
 	}, nil
 }
 
+// temporaryPasswordExpiry is now + domain.TemporaryPasswordLifetime at PostgreSQL's microsecond
+// precision, so the value returned is the value stored.
+func temporaryPasswordExpiry(now time.Time) time.Time {
+	return now.Add(domain.TemporaryPasswordLifetime).Truncate(time.Microsecond)
+}
+
+// setPendingTOTP — stores the pending secret with its creation instant, and only while the account
+// still holds a USABLE temporary password: enrolment is the first sign-in's job, and a temporary
+// password past its expiry must not open it (owner's decision 28/09/2026, TASK-04). The use case
+// checks the same at its locked read; this is the database's copy of the rule.
 const setPendingTOTP = `UPDATE operator_account
-	SET pending_totp_secret_sealed = $2, updated_at = $3
-	WHERE id = $1 AND totp_secret_sealed IS NULL AND disabled_at IS NULL`
+	SET pending_totp_secret_sealed = $2, pending_totp_created_at = $3, updated_at = $3
+	WHERE id = $1 AND totp_secret_sealed IS NULL AND disabled_at IS NULL
+	  AND must_change_password AND temporary_password_expires_at > $3`
 
 // SetPendingTOTP stores the sealed secret of an enrolment in progress. Refused (ErrStateConflict)
-// when a factor is already active — replacing an active factor goes through ResetMFA, audited.
+// when a factor is already active — replacing an active factor goes through ResetMFA, audited — or
+// when the temporary password has expired.
 func (t *Tx) SetPendingTOTP(ctx context.Context, accountID string, sealed []byte, now time.Time) error {
 	if len(sealed) == 0 {
 		return ErrMissingField
@@ -407,11 +437,17 @@ func (t *Tx) SetPendingTOTP(ctx context.Context, accountID string, sealed []byte
 	return requireOne(res, "set pending totp", ErrStateConflict)
 }
 
+// activateTOTP — besides the proved ciphertext ($5), fires only while the pending secret is younger
+// than domain.PendingTOTPLifetime ($6 = now − lifetime) and the temporary password is still usable.
+// Both limits are passed in from Go, so the SQL holds no interval of its own to drift.
 const activateTOTP = `UPDATE operator_account
 	SET totp_secret_sealed = pending_totp_secret_sealed, pending_totp_secret_sealed = NULL,
+	    pending_totp_created_at = NULL, temporary_password_expires_at = NULL,
 	    totp_enrolled_at = $2, totp_last_step = $3, password_hash = $4,
 	    must_change_password = false, updated_at = $2
-	WHERE id = $1 AND pending_totp_secret_sealed = $5 AND disabled_at IS NULL`
+	WHERE id = $1 AND pending_totp_secret_sealed = $5 AND disabled_at IS NULL
+	  AND pending_totp_created_at > $6
+	  AND must_change_password AND temporary_password_expires_at > $2`
 
 // ActivateTOTP promotes the pending secret to the active factor, records the step of the code that
 // proved it (so that very code cannot be replayed), sets the operator's own password and clears
@@ -427,7 +463,8 @@ func (t *Tx) ActivateTOTP(ctx context.Context, accountID, passwordHash string, s
 	}
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
 	// account id.
-	res, err := t.tx.ExecContext(ctx, activateTOTP, accountID, now, step, passwordHash, provedSealed)
+	res, err := t.tx.ExecContext(ctx, activateTOTP, accountID, now, step, passwordHash, provedSealed,
+		now.Add(-domain.PendingTOTPLifetime))
 	if err != nil {
 		return fmt.Errorf("operatorstore: activate totp: %w", err)
 	}
@@ -541,18 +578,23 @@ func (t *Tx) ResetFailures(ctx context.Context, accountID string, now time.Time)
 }
 
 const setPassword = `UPDATE operator_account
-	SET password_hash = $2, must_change_password = $3, updated_at = $4
+	SET password_hash = $2, must_change_password = $3, updated_at = $4, temporary_password_expires_at = $5
 	WHERE id = $1`
 
 // SetPassword replaces the password hash and revokes every live session (owner's decision).
-// mustChange = true when the CLI sets a temporary password.
+// mustChange = true when the CLI sets a temporary password: its expiry is then set here, from
+// domain.TemporaryPasswordLifetime; an operator's own password (mustChange = false) has none.
 func (t *Tx) SetPassword(ctx context.Context, accountID, passwordHash string, mustChange bool, now time.Time) error {
 	if passwordHash == "" {
 		return ErrMissingField
 	}
+	var expires any // NULL for the operator's own password
+	if mustChange {
+		expires = temporaryPasswordExpiry(now)
+	}
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
 	// account id.
-	res, err := t.tx.ExecContext(ctx, setPassword, accountID, passwordHash, mustChange, now)
+	res, err := t.tx.ExecContext(ctx, setPassword, accountID, passwordHash, mustChange, now, expires)
 	if err != nil {
 		return fmt.Errorf("operatorstore: set password: %w", err)
 	}
@@ -613,6 +655,28 @@ func (t *Tx) Disable(ctx context.Context, accountID, by, reason string, now time
 	return err
 }
 
+const unlockAccount = `UPDATE operator_account
+	SET failed_attempts = 0, locked_until = NULL, updated_at = $2
+	WHERE id = $1`
+
+// Unlock lifts a FAILURE lockout early and restarts the failure count — the CLI's `unlock`, a
+// ticketed act the caller audits in this transaction (owner's decision 28/09/2026, TASK-04: the
+// lockout is 12 hours, so a human path out of it is needed).
+//
+// UNLIKE ResetFailures IT CLEARS A LOCK STILL IN FORCE — that is its whole purpose, and why only the
+// ticketed CLI reaches it; no sign-in path calls it. It does not revoke sessions: a lockout never
+// revoked them (unless a session holder caused it, which already revoked them) and lifting it has
+// nothing to take back. It does not touch disabled_at: disable/enable is the other, separate lock.
+func (t *Tx) Unlock(ctx context.Context, accountID string, now time.Time) error {
+	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
+	// account id.
+	res, err := t.tx.ExecContext(ctx, unlockAccount, accountID, now)
+	if err != nil {
+		return fmt.Errorf("operatorstore: unlock: %w", err)
+	}
+	return requireOne(res, "unlock", ErrNotFound)
+}
+
 const enableAccount = `UPDATE operator_account
 	SET disabled_at = NULL, disabled_by = NULL, disabled_reason = NULL, updated_at = $2
 	WHERE id = $1 AND disabled_at IS NOT NULL`
@@ -632,7 +696,7 @@ func (t *Tx) Enable(ctx context.Context, accountID string, now time.Time) error 
 const (
 	resetMFA = `UPDATE operator_account
 	SET totp_secret_sealed = NULL, totp_enrolled_at = NULL, totp_last_step = NULL,
-	    pending_totp_secret_sealed = NULL, updated_at = $2
+	    pending_totp_secret_sealed = NULL, pending_totp_created_at = NULL, updated_at = $2
 	WHERE id = $1`
 	voidLiveRecoveryCodes = `UPDATE operator_recovery_code
 	SET voided_at = $2
@@ -688,12 +752,20 @@ func (t *Tx) CreateSession(ctx context.Context, sid, accountID, ip, userAgent st
 	return expires, nil
 }
 
-// checkSession — a session is live when it is not revoked, not expired, and its account is not
-// disabled. One answer for every failure, so the caller cannot leak WHICH condition failed.
+// checkSession — a session is live when it is not revoked, not past its ABSOLUTE expiry, not IDLE
+// (last activity newer than $3 = now − domain.SessionIdleTimeout; owner's decision 28/09/2026,
+// TASK-04), and its account is not disabled. One answer for every failure, so the caller cannot
+// leak WHICH condition failed. last_seen_at is NOT NULL today; the coalesce keeps a NULL from ever
+// meaning "never idle".
 const checkSession = `SELECT s.operator_account_id, a.code, s.created_at, s.expires_at
 	FROM operator_session s
 	JOIN operator_account a ON a.id = s.operator_account_id
-	WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > $2 AND a.disabled_at IS NULL`
+	WHERE s.id = $1 AND s.revoked_at IS NULL AND s.expires_at > $2 AND a.disabled_at IS NULL
+	  AND coalesce(s.last_seen_at, s.created_at) > $3`
+
+// idleCutoff is the oldest last activity a live session may have at now. Computed in Go from the
+// one constant, passed to SQL — no interval literal in the statement to drift from it.
+func idleCutoff(now time.Time) time.Time { return now.Add(-domain.SessionIdleTimeout) }
 
 func checkSessionOn(ctx context.Context, q querier, sid string, now time.Time) (OperatorSession, error) {
 	if sid == "" {
@@ -702,7 +774,7 @@ func checkSessionOn(ctx context.Context, q querier, sid string, now time.Time) (
 	var s OperatorSession
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). At most one row, keyed on
 	// the hash of the bearer's own sid.
-	err := q.QueryRowContext(ctx, checkSession, hashSecret(sid), now).Scan(
+	err := q.QueryRowContext(ctx, checkSession, hashSecret(sid), now, idleCutoff(now)).Scan(
 		&s.AccountID, &s.AccountCode, &s.CreatedAt, &s.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return OperatorSession{}, ErrNotFound
@@ -768,13 +840,16 @@ func (t *Tx) RevokeAllSessions(ctx context.Context, accountID, reason string, no
 
 const touchSession = `UPDATE operator_session
 	SET last_seen_at = $2
-	WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2`
+	WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2
+	  AND coalesce(last_seen_at, created_at) > $3`
 
-// TouchSession records activity. It NEVER extends expires_at — the lifetime is absolute.
+// TouchSession records activity, which is what keeps a session inside the idle timeout. It NEVER
+// extends expires_at — the lifetime is absolute — and it cannot revive a session that has already
+// gone idle: the same cutoff as checkSession guards the UPDATE.
 func (t *Tx) TouchSession(ctx context.Context, sid string, now time.Time) error {
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on the hash
 	// of the bearer's own sid.
-	res, err := t.tx.ExecContext(ctx, touchSession, hashSecret(sid), now)
+	res, err := t.tx.ExecContext(ctx, touchSession, hashSecret(sid), now, idleCutoff(now))
 	if err != nil {
 		return fmt.Errorf("operatorstore: touch session: %w", err)
 	}

@@ -200,7 +200,7 @@ func TestOperatorLockoutAfterFiveAndGenericWhileLocked(t *testing.T) {
 		t.Fatalf("a refused attempt during the lock changed it: %+v", got)
 	}
 
-	// After 15 minutes the lock has expired by itself.
+	// After domain.LockoutDuration (12 hours) the lock has expired by itself.
 	h.clock.t = until.Add(time.Second)
 	if _, err := login(h, opEmail, pw, h.currentCode(t, code), ""); err != nil {
 		t.Fatalf("after the lock: %v", err)

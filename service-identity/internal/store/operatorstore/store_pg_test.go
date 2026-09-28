@@ -307,9 +307,15 @@ func TestPGSessionLifecycle(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create sessions: %v", err)
 	}
-	got, err := s.CheckSession(ctx, sidA, now.Add(time.Hour))
+	got, err := s.CheckSession(ctx, sidA, now.Add(time.Minute))
 	if err != nil || got.AccountCode != a.Code {
 		t.Fatalf("live session: %+v %v", got, err)
+	}
+	// Absolute lifetime even with recent activity: last seen one minute before the 8 hours are up
+	// (inside the idle window), still refused at 8h.
+	if _, err := sharedDB.ExecContext(ctx, `UPDATE operator_session SET last_seen_at = $2 WHERE id = $1`,
+		sha(sidA), now.Add(domain.SessionLifetime-time.Minute)); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := s.CheckSession(ctx, sidA, now.Add(domain.SessionLifetime)); !errors.Is(err, ErrNotFound) {
 		t.Errorf("at 8h: err = %v, want ErrNotFound (absolute lifetime)", err)

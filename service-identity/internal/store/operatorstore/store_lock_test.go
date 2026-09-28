@@ -69,7 +69,7 @@ func TestFactorAcceptingStatementsCarryTheLockGuard(t *testing.T) {
 func TestResetFailuresRefusesWhileLocked(t *testing.T) {
 	enrolled := t0.Add(-time.Hour)
 	lockedRow := []driver.Value{accountID, "VH-00001", "a@example.test", "Name", false, enrolled, false,
-		int64(0), t0.Add(10 * time.Minute), nil, "", "", t0, "system", t0}
+		int64(0), t0.Add(10 * time.Minute), nil, "", "", t0, "system", t0, nil, nil}
 	r := &recorder{zeroRows: true, queryRows: map[string][][]driver.Value{"WHERE id = $1": {lockedRow}}}
 	db := sql.OpenDB(recConnector{r: r})
 	defer db.Close()

@@ -93,8 +93,17 @@ func TestSecurityConstants(t *testing.T) {
 	if MaxFailedAttempts != 5 {
 		t.Errorf("MaxFailedAttempts = %d, owner decided 5", MaxFailedAttempts)
 	}
-	if LockoutDuration != 15*time.Minute {
-		t.Errorf("LockoutDuration = %v, owner decided 15m", LockoutDuration)
+	if LockoutDuration != 12*time.Hour {
+		t.Errorf("LockoutDuration = %v, owner decided 12h (28/09/2026, TCVN 14423 §5.5.2.2)", LockoutDuration)
+	}
+	if SessionIdleTimeout != 5*time.Minute {
+		t.Errorf("SessionIdleTimeout = %v, owner decided 5m", SessionIdleTimeout)
+	}
+	if TemporaryPasswordLifetime != 24*time.Hour {
+		t.Errorf("TemporaryPasswordLifetime = %v, owner decided 24h", TemporaryPasswordLifetime)
+	}
+	if PendingTOTPLifetime != 10*time.Minute {
+		t.Errorf("PendingTOTPLifetime = %v, owner decided 10m", PendingTOTPLifetime)
 	}
 	if RecoveryCodeCount != 10 {
 		t.Errorf("RecoveryCodeCount = %d, owner decided 10", RecoveryCodeCount)
@@ -140,6 +149,44 @@ func TestOperatorAuditEntryValidate(t *testing.T) {
 	} {
 		if err := c.e.Validate(); !errors.Is(err, c.want) {
 			t.Errorf("%s: err = %v, want %v", name, err, c.want)
+		}
+	}
+}
+
+// NIL IS EXPIRED on both helpers: no recorded instant must never mean "works forever".
+func TestOperatorCredentialExpiryHelpers(t *testing.T) {
+	now := time.Date(2026, 9, 28, 8, 0, 0, 0, time.UTC)
+	later, earlier := now.Add(time.Minute), now.Add(-time.Minute)
+	cases := []struct {
+		name string
+		a    OperatorAccount
+		want bool
+	}{
+		{"own password", OperatorAccount{}, false},
+		{"temporary, valid", OperatorAccount{MustChangePassword: true, TemporaryPasswordExpiresAt: &later}, false},
+		{"temporary, at expiry", OperatorAccount{MustChangePassword: true, TemporaryPasswordExpiresAt: &now}, true},
+		{"temporary, past", OperatorAccount{MustChangePassword: true, TemporaryPasswordExpiresAt: &earlier}, true},
+		{"temporary, no expiry", OperatorAccount{MustChangePassword: true}, true},
+	}
+	for _, c := range cases {
+		if got := c.a.TemporaryPasswordExpiredAt(now); got != c.want {
+			t.Errorf("%s: expired=%v, want %v", c.name, got, c.want)
+		}
+	}
+	created := now.Add(-PendingTOTPLifetime + time.Second)
+	if (OperatorAccount{TOTPPending: true, PendingTOTPCreatedAt: &created}).PendingTOTPExpiredAt(now) {
+		t.Error("pending 1 s inside its lifetime reported expired")
+	}
+	old := now.Add(-PendingTOTPLifetime)
+	if !(OperatorAccount{TOTPPending: true, PendingTOTPCreatedAt: &old}).PendingTOTPExpiredAt(now) {
+		t.Error("pending at its lifetime reported live")
+	}
+	if !(OperatorAccount{TOTPPending: true}).PendingTOTPExpiredAt(now) || !(OperatorAccount{}).PendingTOTPExpiredAt(now) {
+		t.Error("an undated or absent pending secret must count as expired")
+	}
+	for _, a := range []OperatorAuditAction{OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted} {
+		if !a.Valid() {
+			t.Errorf("%s is not on the closed list", a)
 		}
 	}
 }
