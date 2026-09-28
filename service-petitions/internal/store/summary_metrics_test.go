@@ -152,27 +152,47 @@ func TestTaskMetricAfterOtherFiltersShiftsPlaceholders(t *testing.T) {
 }
 
 // TestTaskOverdueIsOpenWorkOnly — the tile counts work still OWED: not a task finished late
-// (dieuKienTreHan's meaning, kept for the register's `late=true`), not `chuyen-tiep`, not `tam-dung`.
+// (dieuKienTreHan's meaning, kept for the register's `late=true`), not `tam-dung`. A legacy
+// `chuyen-tiep` row IS open work since P13 (28/09/2026) and so is counted, overdue included.
 func TestTaskOverdueIsOpenWorkOnly(t *testing.T) {
 	c := taskMetricCondition(domain.TaskOverdue, "", "")
 	if strings.Contains(c, "ngay_hoan_thanh") {
 		t.Error("quá hạn của tổng quan xét cả việc đã hoàn thành — việc xong trễ tháng trước không phải việc đang chờ")
 	}
 	if strings.Contains(c, dieuKienTreHan) {
-		t.Error("quá hạn của tổng quan dùng lại dieuKienTreHan — điều kiện ấy khớp cả việc chuyen-tiep mãi mãi")
+		t.Error("quá hạn của tổng quan dùng lại dieuKienTreHan — điều kiện ấy khớp cả việc xong trễ mãi mãi")
 	}
-	for _, s := range []domain.TrangThaiNhiemVu{domain.MoiGiao, domain.DaTiepNhanNV, domain.DangThucHien, domain.ChoDuyet} {
+	for _, s := range []domain.TrangThaiNhiemVu{domain.MoiGiao, domain.DaTiepNhanNV, domain.DangThucHien,
+		domain.ChoDuyet, domain.ChuyenTiep} {
 		if !strings.Contains(c, "'"+string(s)+"'") {
 			t.Errorf("thiếu trạng thái %s", s)
 		}
 	}
-	for _, s := range []domain.TrangThaiNhiemVu{domain.TamDung, domain.HoanThanh, domain.ChuyenTiep} {
+	for _, s := range []domain.TrangThaiNhiemVu{domain.TamDung, domain.HoanThanh} {
 		if strings.Contains(c, "'"+string(s)+"'") {
 			t.Errorf("trạng thái %s lọt vào quá hạn", s)
 		}
 	}
 	if !strings.Contains(c, "han_xu_ly IS NOT NULL AND han_xu_ly < now()") || strings.Contains(c, "han_ban_dau") {
 		t.Errorf("quá hạn phải đo theo han_xu_ly hiện hành với đồng hồ CSDL: %q", c)
+	}
+}
+
+// TestTaskInProgressCountsLegacyForwarded (P13) — the in-progress figure and its drill-down share one
+// predicate, and a `chuyen-tiep` row is in it; `tam-dung` and `hoan-thanh` stay out.
+func TestTaskInProgressCountsLegacyForwarded(t *testing.T) {
+	c := taskMetricCondition(domain.TaskInProgress, "", "")
+	if !strings.Contains(c, "'"+string(domain.ChuyenTiep)+"'") {
+		t.Errorf("đang thực hiện không đếm việc chuyen-tiep cũ: %q", c)
+	}
+	for _, s := range []domain.TrangThaiNhiemVu{domain.TamDung, domain.HoanThanh} {
+		if strings.Contains(c, "'"+string(s)+"'") {
+			t.Errorf("trạng thái %s lọt vào đang thực hiện", s)
+		}
+	}
+	where, _ := locNhiemVuThanhSQL(LocNhiemVu{Metric: domain.TaskInProgress})
+	if !strings.Contains(where, c) {
+		t.Errorf("danh sách bấm vào không dùng cùng điều kiện với con số: %q", where)
 	}
 }
 

@@ -48,7 +48,7 @@ func TestPgTaskFiguresEqualTheirDrillDownLists(t *testing.T) {
 		{"t06", "NV06", "hoan-thanh", future, inPeriod.Add(-time.Hour), inPeriod},           // completed, sample — late vs ORIGINAL though extended
 		{"t07", "NV07", "hoan-thanh", nil, nil, inPeriod},                                   // completed only (nothing promised)
 		{"t08", "NV08", "hoan-thanh", past, past, beforePeriod},                             // outside the period
-		{"t09", "NV09", "chuyen-tiep", past, past, nil},                                     // terminal: in no figure
+		{"t09", "NV09", "chuyen-tiep", past, past, nil},                                     // legacy forwarded: in_progress, overdue (P13)
 		{"t10", "NV10", "hoan-thanh", past.Add(-time.Hour), past.Add(-time.Hour), inPeriod}, // finished late: NOT overdue
 	}
 	for _, f := range fixtures {
@@ -80,7 +80,8 @@ func TestPgTaskFiguresEqualTheirDrillDownLists(t *testing.T) {
 	}
 	// completed: t05 t06 t07 t10 · sample: t05 t06 t10 (t07 promised nothing) · on time: t05 only —
 	// t06 was extended but missed its ORIGINAL deadline, t10 finished late.
-	want := domain.TaskSummary{InProgress: 3, Overdue: 1, Suspended: 1, Completed: 4, OnTimeSample: 3, OnTime: 1}
+	// in progress: t01 t02 t03 t09 · overdue: t02 t09 (P13: a legacy `chuyen-tiep` row is open work).
+	want := domain.TaskSummary{InProgress: 4, Overdue: 2, Suspended: 1, Completed: 4, OnTimeSample: 3, OnTime: 1}
 	if got != want {
 		t.Errorf("= %+v, muốn %+v", got, want)
 	}
