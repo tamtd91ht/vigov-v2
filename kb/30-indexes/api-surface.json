@@ -875,6 +875,25 @@
     {
       "service": "identity",
       "method": "GET",
+      "path": "/api/v1/commune-profiles",
+      "operation_id": "identity_get_commune_profiles",
+      "task_id": "5c84a99b7030",
+      "summary": "Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo",
+      "permission_kind": "public",
+      "permission_reason": "Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.communeProfilesOut",
+        "400": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes_cong_dan.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
       "path": "/api/v1/commune-staff",
       "operation_id": "identity_get_commune_staff",
       "task_id": "82e815221f91",

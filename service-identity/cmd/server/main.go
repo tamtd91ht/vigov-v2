@@ -502,7 +502,7 @@ func run(log *slog.Logger) error {
 	//     sit behind httpx.CitizenEdge. `nenTang` is the SAME platform client every Host resolution
 	//     uses; `canBo` is the SAME staff store, reached only through its DanhBaCongKhai read.
 	muxCongKhai := http.NewServeMux()
-	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Log: log})
+	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Profile: nenTang, Log: log})
 	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
 	ngoai := dungNgoai(h, ck)
@@ -842,6 +842,7 @@ func dungNgoai(canBo, congKhai http.Handler) *http.ServeMux {
 	})
 	ngoai.Handle(svchttp.MauDanhMucXa, congKhai)
 	ngoai.Handle(svchttp.MauDanhBaCongKhai, congKhai)
+	ngoai.Handle(svchttp.CommuneProfilesPath, congKhai)
 	ngoai.Handle("/", canBo)
 	return ngoai
 }

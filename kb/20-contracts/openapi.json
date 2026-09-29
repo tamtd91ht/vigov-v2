@@ -3907,6 +3907,73 @@
         }
       }
     },
+    "/api/v1/commune-profiles": {
+      "get": {
+        "summary": "Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo",
+        "operationId": "identity_get_commune_profiles",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "5c84a99b7030",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.communeProfilesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/commune-staff": {
       "get": {
         "summary": "Danh bạ cán bộ xã đã công khai trên Zalo Mini App, theo tên miền của xã — chỉ người đã đồng ý công khai",
@@ -25781,6 +25848,45 @@
           "errors",
           "message",
           "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.communeProfileOut": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "office_address": {
+            "type": "string"
+          },
+          "hotline": {
+            "type": "string"
+          },
+          "office_hours_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hotline",
+          "name",
+          "office_address",
+          "office_hours_text"
+        ],
+        "additionalProperties": false
+      },
+      "identity.communeProfilesOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.communeProfileOut"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },

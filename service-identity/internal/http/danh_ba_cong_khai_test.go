@@ -236,9 +236,10 @@ func TestDanhBaCongKhaiLoiKhoLa500KhongLoDuLieuCaNhan(t *testing.T) {
 		var nhatKy bytes.Buffer
 		mux := http.NewServeMux()
 		RegisterCongKhai(mux, DepsCongKhai{
-			Xa:     &nenTangXaGia{},
-			DanhBa: &danhBaCongKhaiGia{loi: loi},
-			Log:    slog.New(slog.NewJSONHandler(&nhatKy, nil)),
+			Xa:      &nenTangXaGia{},
+			DanhBa:  &danhBaCongKhaiGia{loi: loi},
+			Profile: &profileReaderFake{},
+			Log:     slog.New(slog.NewJSONHandler(&nhatKy, nil)),
 		})
 		w := goiDanhBa(mux, qHost(hostQR))
 		if w.Code != http.StatusInternalServerError {

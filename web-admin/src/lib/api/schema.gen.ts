@@ -1163,6 +1163,17 @@ export type identity_catalogueImportRejectedOut = {
   "errors": Array<identity_catalogueImportErrorOut>;
 };
 
+export type identity_communeProfileOut = {
+  "name": string;
+  "office_address": string;
+  "hotline": string;
+  "office_hours_text": string;
+};
+
+export type identity_communeProfilesOut = {
+  "items": Array<identity_communeProfileOut>;
+};
+
 export type identity_cotPhanQuyenRa = {
   "role_id": string;
   /** sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào */
@@ -3304,6 +3315,24 @@ export type comms_get_commune_news_by_id = {
     200: comms_tinXaRa;
     400: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/commune-profiles — Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo */
+export type identity_get_commune_profiles = {
+  duongDan: "/api/v1/commune-profiles";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: identity_communeProfilesOut;
+    400: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };

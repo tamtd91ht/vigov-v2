@@ -35,6 +35,10 @@ type DepsCongKhai struct {
 	// domain.CanBoCongKhai, which has no field for anything the owner did not allow out.
 	DanhBa DocDanhBaCongKhai
 
+	// Profile is the commune display-profile read — PLATFORM data over gRPC (ADR 0045 decision 5), for
+	// the commune the host resolved to. Never a store of this service.
+	Profile TenantProfileReader
+
 	Log *slog.Logger
 }
 
@@ -46,8 +50,9 @@ type DepsCongKhai struct {
 // The routes below spell them as LITERALS because tools/apidoc reads the pattern from the source;
 // danh_muc_xa_test.go and danh_ba_cong_khai_test.go assert the literal and the constant agree.
 const (
-	MauDanhMucXa      = "/api/v1/communes"
-	MauDanhBaCongKhai = "/api/v1/commune-staff"
+	MauDanhMucXa        = "/api/v1/communes"
+	MauDanhBaCongKhai   = "/api/v1/commune-staff"
+	CommuneProfilesPath = "/api/v1/commune-profiles"
 )
 
 // RegisterCongKhai mounts the public routes onto their OWN mux — the one behind the public chain.
@@ -57,6 +62,9 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	}
 	if d.DanhBa == nil {
 		panic("identity/http: thiếu kho danh bạ công khai — GET /api/v1/commune-staff sẽ panic khi có người gọi")
+	}
+	if d.Profile == nil {
+		panic("identity/http: thiếu lối đọc hồ sơ hiển thị xã — GET /api/v1/commune-profiles sẽ panic khi có người gọi")
 	}
 	h := newHandlerCongKhai(d)
 
@@ -127,4 +135,42 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	mux.Handle("GET /api/v1/commune-staff",
 		authz.Public("danh bạ cán bộ xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/12-danh-ba-can-bo.md:117): người dân gọi điện cho xã không cần tài khoản; chỉ trả người được quản trị công khai từng người kèm đồng ý đã ghi nhận (#12)")(
 			http.HandlerFunc(h.DanhBaCongKhai)))
+
+	// --- the commune's display profile (office address, hotline, office hours) ----------------------
+	//
+	// `commune-profiles` — plural collection, `?host=` a filter on it, exactly like `communes`
+	// (skills/rest-api-design REQUIRED #1). The data is service-platform's `ho_so_hien_thi_xa` (ADR 0045
+	// decision 5), read over gRPC GetTenantProfile for the commune the host resolved to.
+	//
+	// PLACED ON IDENTITY'S PUBLIC CHAIN by the coordinator's decision of 2026-09-29: this chain already
+	// resolves `?host=` through the platform registry and already dials the platform, so a second public
+	// edge would duplicate host resolution, CORS and the one-shape-for-negatives rule.
+	//
+	// PUBLIC (user decision 2026-09-29): a citizen opening the Mini App reads how to reach the commune
+	// office before any session exists; every field is the commune's own published office information.
+	//
+	// RATE LIMIT (rule 13, invariant 7): none declared, the same as the two routes above — there is no
+	// core/ratelimit to declare against yet (skills/security-baseline §7, "enforced from phase 2"). When it
+	// lands, all three public routes take their declaration together.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo
+	// @consumer citizen-app
+	// NO @screen: docs/ui-ux/ has no section for the Mini App commune screen.
+	//
+	// 200 carries ZERO or ONE profile. `items: []` for a domain no active commune holds — identical to
+	// GET /api/v1/communes. An active commune with no declared profile is one item with "" fields.
+	//
+	// 400 is `host` missing, repeated, or not a bare lowercase hostname. The platform is not asked.
+	//
+	// 503 is the platform registry or the profile read unreachable — never an empty profile.
+	//
+	// @reply    200 communeProfilesOut
+	// @reply    400 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/commune-profiles",
+		authz.Public("Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân")(
+			http.HandlerFunc(h.CommuneProfiles)))
 }

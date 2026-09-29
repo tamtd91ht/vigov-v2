@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
@@ -42,6 +43,13 @@ func (danhBaThu) DanhBaCongKhai(ctx context.Context) ([]domain.CanBoCongKhai, er
 	return nil, nil
 }
 
+type profileStub struct{}
+
+func (profileStub) TenantProfile(ctx context.Context) (platformclient.TenantProfile, bool, error) {
+	tenant.MustFrom(ctx) // the handler must have resolved the commune before reading
+	return platformclient.TenantProfile{}, false, nil
+}
+
 // canBoDanhDau stands in for the whole staff chain: it only records that it was reached.
 type canBoDanhDau struct{ goi int }
 
@@ -57,7 +65,7 @@ func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau) {
 		t.Fatalf("PhanTichNguonCORS: %v", err)
 	}
 	mux := http.NewServeMux()
-	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}})
+	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}, Profile: profileStub{}})
 	cb := &canBoDanhDau{}
 	return dungNgoai(cb, dungBienCongKhai(mux, nguon)), cb
 }
@@ -76,7 +84,7 @@ func goiThu(h http.Handler, method, path, origin string) *httptest.ResponseRecor
 	return w
 }
 
-var tuyenCongKhai = []string{svchttp.MauDanhMucXa, svchttp.MauDanhBaCongKhai}
+var tuyenCongKhai = []string{svchttp.MauDanhMucXa, svchttp.MauDanhBaCongKhai, svchttp.CommuneProfilesPath}
 
 func TestTuyenCongKhaiDiChuoiCongKhaiKhongCanPhien(t *testing.T) {
 	for _, p := range tuyenCongKhai {
@@ -95,7 +103,7 @@ func TestTuyenCanBoVanOChuoiCanBo(t *testing.T) {
 	// Sent through the public chain, the staff sign-in read would have no commune from `Host`, and the
 	// register and the picker would have no staff session check at all.
 	for _, path := range []string{"/api/v1/communes/current", "/api/v1/communes/", "/api/v1/staff",
-		"/api/v1/staff-directory", "/api/v1/commune-staff/x"} {
+		"/api/v1/staff-directory", "/api/v1/commune-staff/x", "/api/v1/commune-profiles/x"} {
 		h, cb := dungNgoaiThu(t)
 		goiThu(h, http.MethodGet, path, "")
 		if cb.goi != 1 {
