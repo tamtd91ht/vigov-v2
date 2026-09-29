@@ -35,6 +35,15 @@
       "tiep_theo": "Chưa có gì PHÁT RA các câu này: màn /bao-cao và thông báo báo cáo chưa dựng — câu sửa được lưu nhưng chưa hiện ở đâu. Việc NGOÀI KHO: tạo CSDL vigov_reporting + Secret reporting-secrets (DATABASE_DSN, GRPC_CALLER_KEY), job Jenkins vigov-svc-reporting, DNS reporting.api.vigov.vn. Chưa có graceful shutdown.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "doi-ten-tieng-anh-lop-a",
+      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A",
+      "trang_thai": "xong",
+      "bang_chung": "29/09/2026: 5 định danh cmd/server/main.go (chayMigration->runMigrations, kho->scopedDB, canhBao/huy/kq). Không đổi tệp, proto không có tên Việt (descriptor set y hệt HEAD). Không có lớp B: audit_log, system_message_override và mọi cột đã tiếng Anh. go vet/test service-reporting xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Lớp C: khoá thông điệp report.metric.fiscal.expense_* -> expenditure_* (X12) lưu theo xã trong system_message_override.message_key — cần migration cập nhật dòng + CHECK mới. Khoá report.*.feedback / petition_arrived chờ người dùng (X1 chưa nói về khoá thông điệp đã lưu).",
+      "menu": null
     }
   ]
 }

@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 65 |
 | chưa làm | 30 |
 | treo | 14 |
-| xong | 239 |
+| xong | 240 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -802,7 +802,7 @@ Cập nhật 2026-09-29 · 13 mục
 
 ## `service-reporting`
 
-Cập nhật 2026-09-29 · 4 mục
+Cập nhật 2026-09-29 · 5 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -810,6 +810,7 @@ Cập nhật 2026-09-29 · 4 mục
 | `listen-addr-mac-dinh-8080` — cmd/server đọc cfg.ListenAddr (mặc định :8080) thay cho cfg.ListenAddrHoac(":8088") | xong | service-reporting/cmd/server/main.go:74: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8088 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go. | — | — |
 | `ip-khach-qua-proxy-tin-cay` — Gắn httpx.ClientIPTuProxyTinCay ngoài cùng chuỗi HTTP — IP thật trong vết kiểm toán sau proxy đã cấu hình | xong | service-reporting/cmd/server/main.go:79 (khung, chưa có chuỗi biên — bọc sẵn ngoài mux): Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng. | — | Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng). |
 | `loi-he-thong-bao-cao` — Lời hệ thống report.* — 38 khoá, GET/PUT/DELETE /api/v1/reporting-system-messages (ADR 0024 bổ sung 29/09) | xong | 35314b7 (tuyến, migration 0003, lần đầu có CSDL/identity/platform) · 8e10ca3 (manifest k8s) · 7db98fb (gofmt, go.sum standalone) · go test ./... xanh; check_quyen/audit_actor PASS | — | Chưa có gì PHÁT RA các câu này: màn /bao-cao và thông báo báo cáo chưa dựng — câu sửa được lưu nhưng chưa hiện ở đâu. Việc NGOÀI KHO: tạo CSDL vigov_reporting + Secret reporting-secrets (DATABASE_DSN, GRPC_CALLER_KEY), job Jenkins vigov-svc-reporting, DNS reporting.api.vigov.vn. Chưa có graceful shutdown. |
+| `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A | xong | 29/09/2026: 5 định danh cmd/server/main.go (chayMigration->runMigrations, kho->scopedDB, canhBao/huy/kq). Không đổi tệp, proto không có tên Việt (descriptor set y hệt HEAD). Không có lớp B: audit_log, system_message_override và mọi cột đã tiếng Anh. go vet/test service-reporting xanh. | — | Lớp C: khoá thông điệp report.metric.fiscal.expense_* -> expenditure_* (X12) lưu theo xã trong system_message_override.message_key — cần migration cập nhật dòng + CHECK mới. Khoá report.*.feedback / petition_arrived chờ người dùng (X1 chưa nói về khoá thông điệp đã lưu). |
 
 ## `tools`
 
