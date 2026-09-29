@@ -428,6 +428,72 @@
     },
     {
       "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/capital-plan-categories/import-previews",
+      "operation_id": "finance_post_capital_plan_categories_import_previews",
+      "task_id": "1baed6b0ed85",
+      "summary": "Kiểm tra một tệp Excel hạng mục kế hoạch vốn trước khi nhập — không ghi gì",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục",
+      "reply_schemas": {
+        "200": "finance.catalogueImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/capital-plan-categories/import-template",
+      "operation_id": "finance_get_capital_plan_categories_import_template",
+      "task_id": "9c8001a9c916",
+      "summary": "Tải tệp Excel mẫu để nhập hạng mục kế hoạch vốn",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/capital-plan-categories/imports",
+      "operation_id": "finance_post_capital_plan_categories_imports",
+      "task_id": "dde2b6a38e2e",
+      "summary": "Nhập hạng mục kế hoạch vốn từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "finance.catalogueImportCreatedOut",
+        "400": "finance.catalogueImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "finance",
       "method": "DELETE",
       "path": "/api/v1/capital-plan-categories/{id}",
       "operation_id": "finance_delete_capital_plan_categories_by_id",
@@ -4233,6 +4299,72 @@
     },
     {
       "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/task-priorities/import-previews",
+      "operation_id": "petitions_post_task_priorities_import_previews",
+      "task_id": "60dac6862ce0",
+      "summary": "Kiểm tra một tệp Excel mức ưu tiên nhiệm vụ trước khi nhập — không ghi gì",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục",
+      "reply_schemas": {
+        "200": "petitions.catalogueImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-priorities/import-template",
+      "operation_id": "petitions_get_task_priorities_import_template",
+      "task_id": "6f7d162f9f1c",
+      "summary": "Tải tệp Excel mẫu để nhập mức ưu tiên nhiệm vụ — không có cột Thứ tự",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/task-priorities/imports",
+      "operation_id": "petitions_post_task_priorities_imports",
+      "task_id": "43b80856ff5f",
+      "summary": "Nhập mức ưu tiên nhiệm vụ từ tệp Excel — xếp sau các mức đang có; toàn bộ tệp hoặc không gì cả",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "petitions.catalogueImportCreatedOut",
+        "400": "petitions.catalogueImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "petitions",
       "method": "DELETE",
       "path": "/api/v1/task-priorities/{id}",
       "operation_id": "petitions_delete_task_priorities_by_id",
@@ -4380,6 +4512,72 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/task-types/import-previews",
+      "operation_id": "petitions_post_task_types_import_previews",
+      "task_id": "e12bf302d0d9",
+      "summary": "Kiểm tra một tệp Excel loại nhiệm vụ trước khi nhập — không ghi gì",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục",
+      "reply_schemas": {
+        "200": "petitions.catalogueImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-types/import-template",
+      "operation_id": "petitions_get_task_types_import_template",
+      "task_id": "61b8ff925b8b",
+      "summary": "Tải tệp Excel mẫu để nhập loại nhiệm vụ",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/task-types/imports",
+      "operation_id": "petitions_post_task_types_imports",
+      "task_id": "25ceb15777e5",
+      "summary": "Nhập loại nhiệm vụ từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "petitions.catalogueImportCreatedOut",
+        "400": "petitions.catalogueImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_catalogue_import.go"
     },
     {
       "service": "petitions",

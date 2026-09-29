@@ -557,6 +557,40 @@ export type finance_bangRa = {
   "loaded_at"?: string;
 };
 
+export type finance_catalogueImportCreatedOut = {
+  "created": Array<finance_catalogueImportEntryOut>;
+};
+
+export type finance_catalogueImportEntryOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "label": string;
+  "order": number;
+};
+
+export type finance_catalogueImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type finance_catalogueImportPreviewOut = {
+  "valid": boolean;
+  "entries": Array<finance_catalogueImportEntryOut>;
+  "errors": Array<finance_catalogueImportErrorOut>;
+};
+
+export type finance_catalogueImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<finance_catalogueImportErrorOut>;
+};
+
 export type finance_chiSoNamRa = {
   "year": number;
   /** Thu đạt dự toán */
@@ -1825,6 +1859,40 @@ export type petitions_bienBanRa = {
   "created_at": string;
 };
 
+export type petitions_catalogueImportCreatedOut = {
+  "created": Array<petitions_catalogueImportEntryOut>;
+};
+
+export type petitions_catalogueImportEntryOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "label": string;
+  "order": number;
+};
+
+export type petitions_catalogueImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type petitions_catalogueImportPreviewOut = {
+  "valid": boolean;
+  "entries": Array<petitions_catalogueImportEntryOut>;
+  "errors": Array<petitions_catalogueImportErrorOut>;
+};
+
+export type petitions_catalogueImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<petitions_catalogueImportErrorOut>;
+};
+
 export type petitions_chuyenCapTrenVao = {
   "reason": string;
   "receiving_body": string;
@@ -2803,6 +2871,64 @@ export type finance_post_capital_plan_categories = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/capital-plan-categories/import-previews — Kiểm tra một tệp Excel hạng mục kế hoạch vốn trước khi nhập — không ghi gì */
+export type finance_post_capital_plan_categories_import_previews = {
+  duongDan: "/api/v1/capital-plan-categories/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_catalogueImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/capital-plan-categories/import-template — Tải tệp Excel mẫu để nhập hạng mục kế hoạch vốn */
+export type finance_get_capital_plan_categories_import_template = {
+  duongDan: "/api/v1/capital-plan-categories/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/capital-plan-categories/imports — Nhập hạng mục kế hoạch vốn từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type finance_post_capital_plan_categories_imports = {
+  duongDan: "/api/v1/capital-plan-categories/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: finance_catalogueImportCreatedOut;
+    400: finance_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -6300,6 +6426,64 @@ export type petitions_post_task_priorities = {
   };
 };
 
+/** POST /api/v1/task-priorities/import-previews — Kiểm tra một tệp Excel mức ưu tiên nhiệm vụ trước khi nhập — không ghi gì */
+export type petitions_post_task_priorities_import_previews = {
+  duongDan: "/api/v1/task-priorities/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_catalogueImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-priorities/import-template — Tải tệp Excel mẫu để nhập mức ưu tiên nhiệm vụ — không có cột Thứ tự */
+export type petitions_get_task_priorities_import_template = {
+  duongDan: "/api/v1/task-priorities/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-priorities/imports — Nhập mức ưu tiên nhiệm vụ từ tệp Excel — xếp sau các mức đang có; toàn bộ tệp hoặc không gì cả */
+export type petitions_post_task_priorities_imports = {
+  duongDan: "/api/v1/task-priorities/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: petitions_catalogueImportCreatedOut;
+    400: petitions_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PATCH /api/v1/task-priorities/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một mức ưu tiên nhiệm vụ */
 export type petitions_patch_task_priorities_by_id = {
   duongDan: "/api/v1/task-priorities/{id}";
@@ -6429,6 +6613,64 @@ export type petitions_post_task_types = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-types/import-previews — Kiểm tra một tệp Excel loại nhiệm vụ trước khi nhập — không ghi gì */
+export type petitions_post_task_types_import_previews = {
+  duongDan: "/api/v1/task-types/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_catalogueImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-types/import-template — Tải tệp Excel mẫu để nhập loại nhiệm vụ */
+export type petitions_get_task_types_import_template = {
+  duongDan: "/api/v1/task-types/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-types/imports — Nhập loại nhiệm vụ từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type petitions_post_task_types_imports = {
+  duongDan: "/api/v1/task-types/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: petitions_catalogueImportCreatedOut;
+    400: petitions_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     500: httpx_Error;
   };
 };
