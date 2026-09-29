@@ -22,13 +22,165 @@ package vigov.comms.v1;
 //   * field numbers are never reused; a removed field becomes `reserved`
 //   * new fields are always optional with a safe default
 //
-// No business RPCs yet — this is the skeleton.
+// ONE business RPC (2026-09-29): DeliverStaffNotifications, for the automation jobs.
 
 service CommsService {
   rpc Health(HealthRequest) returns (HealthResponse);
+
+  // DeliverStaffNotifications puts notices into the header-bell inbox of named STAFF of the commune
+  // in "x-tenant-id" — the unified inbox of docs/ui-ux/08-thong-bao.md §8 ("Nhắc sắp/quá hạn — sinh
+  // bởi job Nhắc việc sắp đến hạn và đã quá hạn").
+  //
+  // WHY IT EXISTS (user decision 2026-09-29): the automation jobs of docs/ui-ux/14-cau-hinh.md §9 run
+  // in service-petitions and service-documents, and their staff notices are delivered by comms.
+  // service-comms/migrations/0005_thong_bao_noi_bo.sql:63-69 refused to invent this inbox because
+  // it is fed by OTHER services — an inter-service contract whose source of truth is `.proto`. This
+  // is that contract.
+  //
+  // # NOT AN ANNOUNCEMENT, AND NOT THE CITIZEN CHANNEL
+  //
+  // `Thông báo` names three things (ubiquitous-language.md: `announcements` · `public-notices` ·
+  // `notifications`). This RPC is the THIRD: a system notice to one member of staff. It is not an
+  // internal announcement (§5 — authored by a person holding `announcement.create`, frozen, counted
+  // for acknowledgement) and never reaches a citizen. Writing reminders into the announcement book
+  // would bury the commune's real announcements under machine-generated rows and fake an author.
+  //
+  // # IDEMPOTENT BY THE CALLER'S KEY — rule 2, invariant 5
+  //
+  // A notice is delivered AT MOST ONCE per (commune, `idempotency_key`, recipient). A retried run, a
+  // second replica, or a later run redoing a crashed one sends the same key and creates nothing new.
+  // The FIRST delivery wins: a repeat with a different title is not an update, it is a duplicate.
+  //
+  // THE KEY IS BUILT FROM THE BUSINESS ITEM, NEVER FROM THE RUN — a crashed run is redone by a later
+  // run with another run id, and a key carrying the run id sends everything twice. The recipes the
+  // jobs use (the caller owns them; comms treats the key as opaque):
+  //
+  //   sla_reminders, one digest per person per day   sla_reminders:due_soon:<work_kind>:<YYYY-MM-DD>
+  //   sla_reminders, overdue, once per day late      sla_reminders:overdue:<work_kind>:<record id>:<YYYY-MM-DD>
+  //   escalation, once per level, ever               escalation:<work_kind>:<record id>:<unit_head|chairman>
+  //   weekly_digest, once per ISO week               weekly_digest:<work_kind>:<YYYY-Www>
+  //
+  // The date is the LOCAL date (Asia/Ho_Chi_Minh) of the run's `claimed_at`
+  // (identity.v1.AutomationRun). `<record id>` is the record's internal id — never a citizen's
+  // phone, name or anything else rule 3 lists.
+  //
+  // # WHAT A NOTICE MAY SAY — rule 3
+  //
+  // `title` and `body` are Vietnamese sentences the caller composes, and they are STORED and SHOWN.
+  // They carry business codes (a task's title, an arrival number, a count) and NEVER citizen personal
+  // data: not a petition's content, not a citizen's name, phone, address or coordinates. The
+  // reference system put a petition's summary in the body (../vigov-require/apps/api/app/workers/
+  // sla.py, `row.summary[:280]`); that is the line not to copy. A recipient who needs the content
+  // follows `link` to a screen that checks their permission.
+  //
+  // # WHO MAY BE ADDRESSED
+  //
+  // Staff business codes of THIS commune — from identity (ResolveOrgUnitPermissionHolders,
+  // ResolveLeadershipStaff) or the holder codes the caller's own records store. Comms does NOT
+  // re-resolve them: a code that names nobody in this commune yields a row nobody in this commune can
+  // read, because the inbox is read by (commune, signed-in code). That is harmless, and the caller
+  // is still responsible for not sending one.
+  //
+  // # ONE TRANSACTION, ONE AUDIT ENTRY (rule 6)
+  //
+  // Every notice of one call, and ONE audit entry with the system principal, commit together or not
+  // at all. The entry's delta carries kinds, recipient codes and counts — never `title` or `body`,
+  // for the reason service-comms/internal/app/thong_bao_noi_bo.go gives for announcements: free text
+  // can name a person and the trail is never deleted.
+  //
+  // NEVER LOG THIS REQUEST. The generated String() prints `title` and `body` in full. Log counts.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  every notice either created or already present — see the response.
+  //   INVALID_ARGUMENT    the CALLER is wrong, and NOTHING is written: empty or over-long
+  //                       `notifications`, an empty or over-long key, kind unspecified, no recipient
+  //                       or too many, an empty or over-long title or body, a `link` that is not a
+  //                       relative path. All or nothing — a half-delivered batch cannot be told from a
+  //                       whole one.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    nothing written. Retrying the SAME request is safe and expected: the keys
+  //                       make it deliver once.
+  rpc DeliverStaffNotifications(DeliverStaffNotificationsRequest) returns (DeliverStaffNotificationsResponse);
 }
 
 message HealthRequest {}
 message HealthResponse {
   bool ok = 1;
+}
+
+// What a notice is about — what the bell draws as its icon and what a filter groups by. Named for
+// the four notices the automation jobs send today; the other bell items of 08-thong-bao.md §8
+// (extension request, task assigned) are added when a producer exists, never reserved ahead.
+//
+// English identifiers on the wire; the value comms stores in its inbox column follows ADR 0011
+// (Vietnamese enum values) and is comms' mapping.
+enum StaffNotificationKind {
+  STAFF_NOTIFICATION_KIND_UNSPECIFIED = 0;
+
+  // "Bạn có N việc sắp đến hạn" — one per person per day, pointing at the filtered list.
+  STAFF_NOTIFICATION_KIND_DUE_SOON = 1;
+
+  // One late record, once per day late.
+  STAFF_NOTIFICATION_KIND_OVERDUE = 2;
+
+  // One late record crossing a threshold of ResolveEscalationInstants, once per level.
+  STAFF_NOTIFICATION_KIND_ESCALATION = 3;
+
+  // The Monday summary for leadership.
+  STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST = 4;
+}
+
+message DeliverStaffNotificationsRequest {
+  // 1 TO 100 notices; empty or more is INVALID_ARGUMENT, never a silent truncation. A run with more
+  // pages. The TOTAL number of recipients across the call is at most 1 000 — one transaction must
+  // stay bounded.
+  repeated StaffNotification notifications = 1;
+}
+
+// One notice, addressed to one or more staff of this commune.
+message StaffNotification {
+  // The caller's key — see the RPC comment for the recipes. 1 to 200 printable ASCII characters.
+  // Deduplication is per (commune, key, recipient), so one key addresses a whole set of recipients
+  // and a recipient added in a later call with the same key still receives it once.
+  string idempotency_key = 1;
+
+  // UNSPECIFIED is INVALID_ARGUMENT.
+  StaffNotificationKind kind = 2;
+
+  // Staff business codes (`CB-…`, `nguoi_dung.ma`) — NEVER an internal id (rule 6, invariant 8: the
+  // inbox is read by the code the session carries). 1 to 200; duplicates collapsed.
+  repeated string recipient_ma = 3;
+
+  // The bell's first line, Vietnamese, 1 to 200 characters. No citizen personal data — see the RPC.
+  string title = 4;
+
+  // The bell's second line (`mo_ta`), 0 to 500 characters; "" draws none. Same rule as `title`.
+  string body = 5;
+
+  // Where the bell item leads, in web-admin: a RELATIVE PATH starting with a single "/" (the route
+  // segments are Vietnamese — `/nhiem-vu?soon=true`). "" means the item
+  // leads nowhere. Anything with a scheme, a host or "//" is INVALID_ARGUMENT: a stored absolute URL
+  // is an open redirect waiting in every recipient's bell. No personal data in it (rule 3,
+  // forbidden #4). At most 300 characters.
+  string link = 6;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message DeliverStaffNotificationsResponse {
+  // One item per requested notice, mapped by `idempotency_key` — a key requested twice in one call
+  // is INVALID_ARGUMENT, so the key is unambiguous.
+  repeated StaffNotificationDelivery items = 1;
+}
+
+message StaffNotificationDelivery {
+  // Echoed — the KEY the caller maps by.
+  string idempotency_key = 1;
+
+  // Recipients for whom this call CREATED an inbox row.
+  uint32 created = 2;
+
+  // Recipients who already had this key — a retry or a redone run. Not an error.
+  uint32 already_delivered = 3;
 }

@@ -110,6 +110,15 @@
       "tiep_theo": "—",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "hop-dong-tac-vu-tu-dong",
+      "viec": "Hợp đồng cho ba tác vụ Tự động hoá (14-cau-hinh.md §9, người dùng chốt 29/09/2026): identity.ClaimDueAutomationRuns + RecordAutomationRunOutcome + ResolveEscalationInstants + ResolveOrgUnitPermissionHolders + ResolveLeadershipStaff; comms.DeliverStaffNotifications (cộng thêm)",
+      "trang_thai": "xong",
+      "bang_chung": "Chưa commit (phiên chính commit). buf lint + buf breaking --against '.git#ref=HEAD' xanh; buf generate chạy lại được; go build ./... xanh ở core và cả bảy service; go test core/grpcx, core/identityclient, service-identity/internal/grpc, service-identity/cmd/server ok. Chưa có cài đặt máy chủ nào — IdentityService trả Unimplemented cho năm RPC mới qua UnimplementedIdentityServiceServer; CommsService chưa đăng ký máy chủ gRPC nào. transaction-boundaries: chay_tac_vu_tu_dong_theo_xa.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai CÀI và chưa ai GỌI: (1) identity — bảng cài đặt tác vụ + trạng thái lượt chạy theo (tác vụ, loại việc), màn admin.sla, năm RPC; (2) comms — hộp thư chuông (hop_thu_thong_bao, 08-thong-bao.md §8) + đăng ký CommsService; (3) petitions/documents — bộ chạy. CẦN NGƯỜI DÙNG XÁC NHẬN: mốc neo của gio_bao_lanh_dao/gio_bao_chu_tich là HẠN ĐÃ LỠ (cách đọc của hợp đồng); 'Báo Chủ tịch' đi tới cả LÃNH ĐẠO (la_lanh_dao, gồm Phó CT); thời gian ân hạn 'việc bộ phận giữ chưa phân công' chưa có nguồn số liệu nên chưa có trong hợp đồng.",
+      "menu": "cau-hinh"
     }
   ]
 }

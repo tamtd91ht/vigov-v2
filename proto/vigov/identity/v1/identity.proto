@@ -33,6 +33,18 @@ import "google/protobuf/timestamp.proto";
 // hours, and all three walk the same one implementation of the count. Until 2026-09-28 this
 // paragraph said "no third path exists"; a fourth is a sentence somebody has to write here first.
 //
+// THAT SENTENCE, WRITTEN 2026-09-29: ResolveEscalationInstants is the fourth. It is both halves
+// again — `gio_bao_lanh_dao` / `gio_bao_chu_tich` counted forward from a deadline a record already
+// missed — for the automation runner's `escalation` job (user decision 2026-09-29: the jobs run
+// in the service owning the data, their per-commune settings live here next to `sla`). It too
+// answers INSTANTS and walks the same forward count; the reason it is not a field on any of the
+// three is on its own comment.
+//
+// AND IT OWNS ONE MORE THING SINCE THE SAME DATE: the per-commune SETTINGS OF THE AUTOMATION JOBS
+// (docs/ui-ux/14-cau-hinh.md §9, "Tự động hoá") and their run state. ClaimDueAutomationRuns and
+// RecordAutomationRunOutcome are the whole of what crosses this boundary for them; the schedule
+// itself never does, so there is one implementation of "is this job due".
+//
 // CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
 //
 //   metadata key: "x-tenant-id"  (lowercase — gRPC lowercases every key)
@@ -1252,6 +1264,334 @@ service IdentityService {
   // or its threshold must see the filter change on the next load (ADR 0007 decision 6 governs stored
   // commitments; nothing is stored here).
   rpc ResolveDueSoonCutoff(ResolveDueSoonCutoffRequest) returns (ResolveDueSoonCutoffResponse);
+
+  // ResolveEscalationInstants answers, for ONE commune, ONE kind of work and ONE field, and for
+  // each deadline a record has ALREADY MISSED, the two instants at which that lateness reaches the
+  // commune's escalation thresholds: `sla.gio_bao_lanh_dao` (tell the unit head) and
+  // `sla.gio_bao_chu_tich` (tell the chairman).
+  //
+  // WHY IT EXISTS (user decision 2026-09-29): the `escalation` job of docs/ui-ux/14-cau-hinh.md §9
+  // runs in the service owning the late records — service-petitions (tasks, petitions) and
+  // service-documents (incoming documents) — and needs to know, per late record, whether the
+  // lateness has crossed each threshold. Both thresholds are the commune's own numbers in the `sla`
+  // table, counted in WORKING HOURS (ADR 0007).
+  //
+  // # THE ANCHOR — the question ADR 0029 left open, and the reading this contract takes
+  //
+  // `gio_bao_*` count FROM THE DEADLINE THE RECORD MISSED. That is §9's sentence ("việc trễ quá số
+  // ngày đã đặt thì báo lên trưởng bộ phận") with §8's TWO columns instead of §9's doubling — the
+  // user's 2026-09-29 decision names two thresholds, not one doubled. It is NOT "after receipt"
+  // (§8's heading is silent on the anchor, and counting from receipt would escalate a record that
+  // is not late at all). Migration 0008's column comments still say "anchor undecided"; that text
+  // is in an applied migration and is superseded here, not edited there.
+  //
+  // WHICH DEADLINE is the caller's: it passes the instant its record stores and has passed. A
+  // petition has two clocks (ADR 0028); the runner names which one it escalates on, and nothing
+  // here can tell them apart — they are both just instants.
+  //
+  // # WHY IT RETURNS INSTANTS AND NOT THE NUMBER OF HOURS
+  //
+  // ADR 0029 §Bổ sung 22/09: an RPC that reads `sla` returns instants, never hours. With 24 in hand
+  // the only arithmetic within a caller's reach is `deadline + 24h`, which counts nights, weekends,
+  // `ngay_nghi_le` and `ngay_lam_bu` as working time — rule 10, forbidden #2. Here the error would
+  // tell a commune's chairman that work is two days late on a Monday morning after a weekend that
+  // was not working time at all.
+  //
+  // # WHY PER DEADLINE AND FORWARD, NOT ONE CUTOFF LIKE ResolveDueSoonCutoff
+  //
+  // A cutoff ("every deadline at or before X has crossed the threshold at as_of") needs the count
+  // walked BACKWARD from `as_of`, and there is no backward walk in this service: one would be a
+  // second implementation of the count, the thing ADR 0007 forbids. Counting FORWARD from each
+  // missed deadline is the same walk every deadline in this system is computed with
+  // (domain.TienGioLamViec), so one implementation stays one. The cost is a longer request — one
+  // entry per distinct missed deadline — paid by a job that runs at most once a day per commune.
+  //
+  // # WHY A FIFTH RPC AND NOT A FLAG ON ResolveDeadlines
+  //
+  // ResolveDeadlines FIXES a commitment once and the caller stores it; this answers a comparison
+  // the caller makes and must never store (below). A flag would put the two behind one call site,
+  // and ADR 0029 §119's argument — a reviewer must be able to tell the two apart — applies again.
+  // DeadlineKind stays a two-value enum for the same reason: these are not deadlines of the record.
+  //
+  // # THE COMPARISON THE CALLER MAKES, and nothing else
+  //
+  //   unit head is due   ⟺   unit_head_due_at <= as_of
+  //   chairman is due    ⟺   chairman_due_at  <= as_of
+  //
+  // `as_of` is the runner's `now` — the `claimed_at` of its AutomationRun. NEVER STORE EITHER
+  // INSTANT: storing one builds an "escalated at" state from a comparison, the class rule 10,
+  // invariant 3 forbids, and a commune correcting its holidays would leave it stale. What the caller
+  // DOES store is the fact that it notified someone at a level — an act that happened — and the
+  // notification's idempotency key already makes that act happen once (DeliverStaffNotifications).
+  //
+  // # One field per call
+  //
+  // Thresholds differ per field (`linh_vuc`), exactly as for ResolveDueSoonCutoff: group the late
+  // records by field and ask once per group. Tasks carry no field: send "".
+  //
+  // # A commune with no configuration is REFUSED — FAILED_PRECONDITION, never a number
+  //
+  // The three `sla` cases of ResolveDeadlines, the four calendar faults of AdvanceWorkingHours, and
+  // a non-positive or absurd `gio_bao_*`. The runner records the run as
+  // AUTOMATION_RUN_OUTCOME_CONFIGURATION_MISSING and notifies nobody — never a default 24.
+  //
+  // # The commune travels in metadata; not audited; retry is safe
+  //
+  // "x-tenant-id" names WHOSE thresholds and WHOSE calendar; not a candidate for
+  // core/grpcx.methodsWithoutTenant (ADR 0012, decision 1). A read of configuration: it writes
+  // nothing, publishes nothing, leaves no audit entry. The audited acts are the notifications.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  one item per DISTINCT missed deadline requested — all of them, or the call
+  //                       fails. No partial success: every entry is counted against one commune's
+  //                       one table and one calendar, so anything that stops one stops all.
+  //   INVALID_ARGUMENT    the CALLER is wrong: `work_kind` unspecified, `missed_deadlines` empty or
+  //                       over 500, an unset or invalid entry.
+  //   FAILED_PRECONDITION the COMMUNE'S CONFIGURATION is missing or wrong — above.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "nothing crossed a threshold": the run
+  //                       fails with AUTOMATION_RUN_OUTCOME_DEPENDENCY_UNAVAILABLE and notifies
+  //                       nobody; the next scheduled run tries again.
+  rpc ResolveEscalationInstants(ResolveEscalationInstantsRequest) returns (ResolveEscalationInstantsResponse);
+
+  // ResolveOrgUnitPermissionHolders answers, for org units of the commune named by "x-tenant-id",
+  // which staff sitting IN each unit hold ONE named permission key there — the recipients of a
+  // notice that belongs to "whoever runs this unit's work".
+  //
+  // WHY IT EXISTS (user decision 2026-09-29): the `escalation` job's first level tells the head of
+  // the unit holding the late work (§9 "báo lên trưởng bộ phận"; §8 "Báo lãnh đạo trực tiếp"), and
+  // `sla_reminders` tells the unit when late work has no named holder. `bo_phan` has NO head column
+  // (migration 0001:73-88), so "head" must be derived, and the derivation belongs to the service
+  // that owns units, roles and grants.
+  //
+  // # WHY BY PERMISSION, AND NOT BY ROLE NAME OR A NEW COLUMN
+  //
+  //   A ROLE CODE (`truong-bo-phan`) would be the ad hoc role-string comparison rule 5 forbids (#3),
+  //   and roles are per commune: a commune of eight staff has no "Trưởng bộ phận" at all, while one
+  //   of forty routes the same work through a deputy chairman (0001:103-105).
+  //   A HEAD COLUMN on `bo_phan` is a new fact nobody enters today, and a notice aimed at a column
+  //   nobody filled reaches nobody, silently.
+  //   A PERMISSION KEY is what the commune already configures on the Phân quyền screen: the person
+  //   who may hand out this unit's work is the person who should hear that it is late. The caller
+  //   names the key that means "hands out work" in ITS domain — `task.assign` for tasks,
+  //   `feedback.assign` for petitions, `document.route` for incoming documents. All three are rows
+  //   of the `quyen` table (0001:296-307).
+  //
+  // WHAT THAT COSTS, STATED: anybody in the unit whose role grants the key is answered, not one
+  // "head". A commune granting `task.assign` to every chuyên viên notifies every chuyên viên. That
+  // is the commune's grant working as configured, and it is visible on the screen that sets it.
+  //
+  // # THE PREDICATE
+  //
+  // A staff code is answered for unit U when its `nguoi_dung` row, in this commune, satisfies
+  // ResolveAssignableStaff's predicate EXACTLY (not deleted, `co_tai_khoan`, `dang_hoat_dong` — a
+  // locked or account-less person can never read a notice), has `bo_phan_id = U`, U is a LIVE unit
+  // (ResolveLiveOrgUnits' predicate), and its role, not soft-deleted, grants `permission_key` in
+  // `vai_tro_quyen` of this commune. Membership is DIRECT: a parent unit's staff are not answered
+  // for a child unit.
+  //
+  // # THE KEY MUST EXIST — rule 5, invariant 3c
+  //
+  // A `permission_key` that is not a row of `quyen` is INVALID_ARGUMENT, never an empty answer. An
+  // empty answer is ordinary (nobody holds it) and would be recorded as "no recipient"; a typo
+  // answered the same way would make a job that notifies nobody, forever, with every test green.
+  //
+  // # A LOOKUP BY UNITS THE CALLER ALREADY HOLDS — NEVER A ROSTER
+  //
+  // The units are the ones the caller's late records store. An empty `org_unit_ids` answers empty,
+  // never "every unit". Codes only — no name, no contact detail, no internal id — so it carries no
+  // personal data; log counts, not codes.
+  //
+  // # Not audited; not exempt from "x-tenant-id"; retry is safe
+  //
+  // A read that decides only who is TOLD; it grants nothing and the caller must never use it in a
+  // guard. The audited act is the notification.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items; a unit with no holder, a removed unit, an unknown unit
+  //                       and another commune's unit are ALL absent — one answer (rule 1).
+  //   INVALID_ARGUMENT    `permission_key` empty or not a row of `quyen`; more than 50 unit ids.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "nobody to tell": fail the run.
+  rpc ResolveOrgUnitPermissionHolders(ResolveOrgUnitPermissionHoldersRequest) returns (ResolveOrgUnitPermissionHoldersResponse);
+
+  // ResolveLeadershipStaff answers the staff codes of the commune's LEADERSHIP (`Lãnh đạo`,
+  // kb/00-foundation/ubiquitous-language.md: Chủ tịch / Phó chủ tịch) — the accounts whose role
+  // carries `vai_tro.la_lanh_dao = true`.
+  //
+  // WHY IT EXISTS (user decision 2026-09-29): the `escalation` job's second level (§8 "Báo Chủ
+  // tịch"), the `weekly_digest` job (§9 "Bản tin đầu tuần cho lãnh đạo"), and the fallback of
+  // `sla_reminders` for late work that has neither a holder nor a unit. The reference system picks
+  // exactly this set — roles marked as leadership (../vigov-require/apps/api/app/workers/sla.py,
+  // `_leaders`) — and the flag is the `Lãnh đạo` label the commune sets per role on the Phân quyền
+  // screen (docs/ui-ux/14-cau-hinh.md §4).
+  //
+  // # "BÁO CHỦ TỊCH" REACHES THE LEADERSHIP, NOT ONLY THE CHAIRMAN — stated, not hidden
+  //
+  // Singling out the chairman would need a role-code comparison (`chu-tich-ubnd`), which rule 5
+  // forbids (#3) and which a commune that renamed its roles would silently break. The template
+  // roles flag both Chủ tịch and Phó Chủ tịch (ADR 0055 §4). If the customer wants the chairman
+  // alone, that is a new fact on the role (a second flag) and an additive field here — not a
+  // string match in a runner.
+  //
+  // # A ROSTER, AND WHY THAT IS ACCEPTABLE HERE WHEN IT IS NOT ELSEWHERE
+  //
+  // The other lookups in this service refuse to list. This one lists, deliberately: the question
+  // has no key the caller could already hold. What bounds it: codes only (no personal data); the
+  // set is the handful of people a commune marked as leadership; and every signed-in account of
+  // the commune already sees each of them on GET /api/v1/staff-directory. It is NOT a path to the
+  // wider roster: there is no filter field, and adding one is a new RPC with its own argument.
+  //
+  // # THE PREDICATE
+  //
+  // ResolveAssignableStaff's predicate EXACTLY (not deleted, `co_tai_khoan`, `dang_hoat_dong`),
+  // AND the account's role is a live `vai_tro` row of this commune with `la_lanh_dao = true`.
+  //
+  // # EMPTY IS AN ORDINARY ANSWER, NOT A FALLBACK TRIGGER
+  //
+  // A commune that flagged no role has no leadership to tell. The runner records the items as
+  // "without recipient" on its outcome — it never falls back to "everyone", to the unit holders,
+  // or to an administrator.
+  //
+  // # Not audited; not exempt from "x-tenant-id"; retry is safe
+  //
+  // "x-tenant-id" is the whole scope: another commune's leadership is unreachable. The audited act
+  // is the notification.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more codes.
+  //   FAILED_PRECONDITION more than 50 leadership accounts — a configuration anomaly (a role flagged
+  //                       by mistake), refused rather than truncated: a truncated list tells some
+  //                       leaders and not others with nothing reporting which.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "no leadership": fail the run.
+  rpc ResolveLeadershipStaff(ResolveLeadershipStaffRequest) returns (ResolveLeadershipStaffResponse);
+
+  // ClaimDueAutomationRuns answers, for the commune named by "x-tenant-id", which of the job scopes
+  // the calling runner owns are DUE NOW — and CLAIMS each one it answers, atomically, so that no
+  // other replica of any service runs it for this slot.
+  //
+  // WHY IT EXISTS (user decision 2026-09-29): the jobs of docs/ui-ux/14-cau-hinh.md §9 run
+  // IN-PROCESS in the service owning the data, and their per-commune settings — on/off, cadence,
+  // last run — are owned HERE, next to `sla` (ADR 0029's test: read by two services, owned by
+  // neither, changes with the commune's administrative policy), edited under `admin.sla`.
+  //
+  // # WHY THE SCHEDULE NEVER LEAVES THIS SERVICE
+  //
+  // The reference system hands the runner the settings and lets it decide `_is_due`
+  // (../vigov-require/apps/api/app/workers/scheduler.py:57-95). Here two services run jobs, each
+  // with several replicas. Handing out the settings would put "is this due" in petitions AND in
+  // documents — two implementations of one rule, drifting on exactly the edge cases (the minute a
+  // slot opens, a restart inside it, the day a job is switched on). And two replicas reading the
+  // same settings would both decide "due" and both run. A CLAIM answers both: one implementation of
+  // the schedule, and a conditional write that only one caller can win.
+  //
+  // # A SCOPE IS (job, kind of work), BECAUSE ONE JOB RUNS IN TWO SERVICES
+  //
+  // `sla_reminders` sweeps tasks and petitions (service-petitions) AND incoming documents
+  // (service-documents). One `last_run_at` per job would let whichever service ran first mark the
+  // job done for the other. So run state is kept per AutomationRunScope; the SETTING (enabled,
+  // cadence) stays per job, one row a commune edits once. Each scope has EXACTLY ONE owning runner —
+  // the service owning that WorkKind's data (WorkKind's own comment names it). Identity cannot see
+  // which service is calling (ADR 0025: one shared caller key), so a runner claiming a scope it does
+  // not own would silently take that scope's runs away from its owner. That is the caller's
+  // obligation and it is stated here because nothing can enforce it.
+  //
+  // # WHAT "DUE" MEANS — the promise, whichever way the server implements it
+  //
+  //   ONE SCHEDULE PER JOB, fixed by the job, set by the commune (Asia/Ho_Chi_Minh, §9):
+  //     sla_reminders   every N minutes, N >= 5
+  //     escalation      daily at HH:MM
+  //     weekly_digest   weekly on a weekday at HH:MM
+  //   A scope is due when its job is ENABLED and a scheduled slot has opened since the scope was
+  //   last claimed. A slot that opened while no runner was ticking is run ONCE, at the next claim —
+  //   never replayed once per missed slot, and never skipped for the day (the reference system's
+  //   five-minute window loses the whole day to a restart at 07:06).
+  //   A slot that opened BEFORE the job was last switched on never counts: enabling escalation at
+  //   15:00 runs it tomorrow at the configured hour, not at 15:00 today.
+  //   NO SETTING ROW MEANS OFF (§9: "Mặc định tắt hết"). There is no default schedule anywhere.
+  //
+  // # WHAT THE CLAIM WRITES, AND WHY IT IS NOT AUDITED
+  //
+  // It moves the scope's `last_claimed_at` to the server's now and issues a `run_id`. That is a
+  // LEASE, not a business act, and it is written at up to every five minutes per scope per commune;
+  // an audit entry per lease would bury the entries that carry legal weight. The run's trail is
+  // RecordAutomationRunOutcome's entry, and every notice the run sends is audited where it is
+  // written (DeliverStaffNotifications). A lease with no recorded outcome — the runner died — is
+  // visible on the configuration screen as a run with no result, which is what it is.
+  //
+  // THE SERVER'S CLOCK, NOT THE CALLER'S. `claimed_at` comes from this service, so every replica of
+  // every runner agrees about when a slot opened. The runner uses `claimed_at` as its `now` for the
+  // whole run — the `as_of` it sends to ResolveDueSoonCutoff, the instant it compares deadlines and
+  // escalation instants against, and the local date in its idempotency keys. Two clocks inside one
+  // run put a record on neither list or on both.
+  //
+  // # HOW THE RUNNER FINDS COMMUNES TO ASK ABOUT — the answer that keeps this call per commune
+  //
+  // There is deliberately no "which communes have job X enabled" RPC. It would be a cross-commune
+  // read travelling without "x-tenant-id", i.e. a new member of core/grpcx.methodsWithoutTenant —
+  // a STOP CONDITION under ADR 0012, decision 1 — and its answer would be the list of every
+  // commune's ULID, the prefix of every key in the system (rule 1, invariant 7). Instead the runner
+  // iterates the communes IT ALREADY HOLDS DATA FOR (a commune with no task, petition or document in
+  // that service has nothing for the job to do), skips any commune platform's GetTenant reports as
+  // not `active` (a merged commune is inactive and keeps its data — rule 7, invariant 6), and asks
+  // this RPC once per commune with that commune in "x-tenant-id". The enumeration is a cross-commune
+  // read of tenant IDENTIFIERS in the runner's own store and carries its own `// @cross-tenant:`.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more runs. ABSENT MEANS "NOTHING TO DO NOW" — not enabled, not due,
+  //                       or won by another replica; the three are indistinguishable and the runner
+  //                       does nothing for all of them.
+  //   INVALID_ARGUMENT    `scopes` empty or over 10, or an entry with an unspecified job or kind.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen, so NOTHING WAS CLAIMED as far as the runner may
+  //                       assume: run nothing for this commune on this tick, try at the next. (If the
+  //                       claim committed and the reply was lost, that slot is skipped — the safe
+  //                       direction: a missed reminder, never a doubled one.)
+  //
+  // RETRYING IS NOT A NO-OP: a retry after a lost reply finds the slot already claimed and answers
+  // absent. That is the intended behaviour and the reason the runner never retries a claim in a loop.
+  rpc ClaimDueAutomationRuns(ClaimDueAutomationRunsRequest) returns (ClaimDueAutomationRunsResponse);
+
+  // RecordAutomationRunOutcome writes the result of ONE claimed run — what the configuration screen
+  // shows as "Chạy lần cuối … · kết quả" (§9, `ket_qua_lan_cuoi`) — and the run's audit entry.
+  //
+  // # ONE AUDIT ENTRY PER RUN, IN THE SAME TRANSACTION (rule 6, invariants 3 and 6)
+  //
+  // A background job is a system action and is audited with the system principal
+  // (core/audit.SystemActor). The entry names the job, the scope, the run id and the counts below.
+  // It is written with the outcome or not at all.
+  //
+  // # WHAT CROSSES: a closed outcome and three counts — no free text
+  //
+  // There is no "message" field, deliberately. A runner's error string is where a petition's
+  // content, a citizen's phone number or a staff member's name ends up (rule 3, forbidden #3 and
+  // #5), and this record is shown on a screen and kept in the trail. The outcome enum says which
+  // PERSON has to act — the commune's configuration, the operator, or nobody.
+  //
+  // # IDEMPOTENT: THE FIRST OUTCOME FOR A RUN WINS (rule 2, invariant 5)
+  //
+  // A second call for the same `run_id` answers OK and changes nothing — whether it repeats the
+  // first outcome or contradicts it. A runner retrying after a lost reply therefore cannot write two
+  // entries, and a slow replica cannot overwrite a newer result.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  recorded, or already recorded (first write wins).
+  //   INVALID_ARGUMENT    `run_id` empty, or `outcome` unspecified.
+  //   NOT_FOUND           no run with that id was claimed IN THIS COMMUNE — unknown and another
+  //                       commune's run are one answer (rule 1).
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    not recorded. Retrying is safe and expected.
+  rpc RecordAutomationRunOutcome(RecordAutomationRunOutcomeRequest) returns (RecordAutomationRunOutcomeResponse);
 }
 
 message Staff {
@@ -2266,6 +2606,11 @@ enum WorkKind {
 //   the second column. Nothing may compute an escalation from them until somebody answers "after
 //   what", because a commune's leadership would be notified on a basis nobody chose and the
 //   message would not say which.
+//
+//   (2026-09-29: the user decided the escalation job reads BOTH columns; the anchor this contract
+//   takes is the missed deadline — see ResolveEscalationInstants. They are STILL not a third value
+//   here: an escalation instant is a comparison the runner makes, not a clock of the record that
+//   anybody stores.)
 enum DeadlineKind {
   DEADLINE_KIND_UNSPECIFIED = 0;
 
@@ -2436,3 +2781,214 @@ message ResolveDueSoonCutoffResponse {
   // adds it names the screen and carries the warning on `Deadline`.
   google.protobuf.Timestamp due_soon_until = 1;
 }
+
+message ResolveEscalationInstantsRequest {
+  // Which kind of work the late records are. UNSPECIFIED is INVALID_ARGUMENT — no default kind.
+  WorkKind work_kind = 1;
+
+  // The field code, "" FOR THE DEFAULT ROW — same meaning, same fallback and same caveat as
+  // ResolveDeadlinesRequest.linh_vuc. One field per call: group late records by field.
+  string linh_vuc = 2;
+
+  // The deadlines the caller's records have MISSED — each the stored instant (`han_xu_ly_xong`,
+  // `han_tiep_nhan`, a task's `han`) exactly as the record holds it. The count of each threshold
+  // starts here; an instant outside working hours starts at the next working session (ADR 0007,
+  // decision 8), the same walk as every deadline.
+  //
+  // NOT COMPARED WITH `now` here: any instant is answerable, and whether it is in fact missed is
+  // the caller's comparison against its own `claimed_at`.
+  //
+  // DUPLICATES ARE COLLAPSED (many records share a deadline); order carries no meaning. Map the
+  // response by `missed_deadline`, compared as an instant (seconds and nanos), never by position.
+  //
+  // 1 TO 500 ENTRIES. Empty or more is INVALID_ARGUMENT, never a silent truncation — a truncated
+  // answer would leave late records un-escalated with nothing reporting it. 500 bounds one server
+  // walk per entry; a commune with more distinct late deadlines in one field pages.
+  repeated google.protobuf.Timestamp missed_deadlines = 3;
+}
+
+// Wrapped, not a bare repeated EscalationInstants: adding a field later must not change the RPC
+// signature.
+message ResolveEscalationInstantsResponse {
+  // ONE ITEM PER DISTINCT `missed_deadlines` ENTRY — ALL OF THEM, OR THE CALL FAILS. Map by
+  // `missed_deadline`; len(items) can be smaller than the request because duplicates collapse.
+  repeated EscalationInstants items = 1;
+}
+
+// The two escalation instants of one missed deadline.
+//
+// NAMED FOR WHO IS TOLD, and the names are chosen against a real collision:
+// kb/00-foundation/ubiquitous-language.md uses `Lãnh đạo` for Chủ tịch / Phó chủ tịch, while §8's
+// "Báo lãnh đạo trực tiếp" means the head of the unit holding the work (§9: "báo lên trưởng bộ
+// phận"). A field called `leader_due_at` would read as the leadership and invert the two levels.
+message EscalationInstants {
+  // Echoed from the request — the KEY the caller maps by.
+  google.protobuf.Timestamp missed_deadline = 1;
+
+  // The EARLIEST instant at which `sla.gio_bao_lanh_dao` working hours have elapsed since
+  // `missed_deadline` in this commune's calendar. Level one: tell the head of the unit holding the
+  // work (ResolveOrgUnitPermissionHolders). NEVER UNSET in an OK response. NEVER STORED.
+  google.protobuf.Timestamp unit_head_due_at = 2;
+
+  // The EARLIEST instant at which `sla.gio_bao_chu_tich` working hours have elapsed since
+  // `missed_deadline`. Level two: tell the leadership (ResolveLeadershipStaff). NEVER UNSET in an OK
+  // response. NEVER STORED.
+  //
+  // NOT NECESSARILY LATER THAN `unit_head_due_at`: the schema has no ordering check between the
+  // columns (0008, `sla_gio_phai_duong` — deliberately), so a commune may configure the chairman's
+  // threshold below the unit head's. The caller evaluates the two levels independently and never
+  // infers one from the other.
+  google.protobuf.Timestamp chairman_due_at = 3;
+}
+
+message ResolveOrgUnitPermissionHoldersRequest {
+  // THE ORG-UNIT IDS the caller's records store — identity's `bo_phan.id`. Duplicates collapsed;
+  // order meaningless; a blank string is absent. AT MOST 50, the ResolveLiveOrgUnits ceiling; more is
+  // INVALID_ARGUMENT, never a silent truncation. An empty list answers empty — NOT "every unit".
+  repeated string org_unit_ids = 1;
+
+  // ONE flat permission key, "<nhóm>.<việc>" (rule 5, invariant 3b), that MUST be a row of `quyen`
+  // (invariant 3c) — otherwise INVALID_ARGUMENT. The caller's domain key for "hands out this unit's
+  // work": `task.assign`, `feedback.assign`, `document.route`.
+  //
+  // ONE key, not a list: "holds any of" and "holds all of" are two different questions, and the
+  // caller that needs a second key asks a second time.
+  string permission_key = 2;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ResolveOrgUnitPermissionHoldersResponse {
+  // One item per requested unit that is live in this commune AND has at least one holder. Map by
+  // OrgUnitPermissionHolders.org_unit_id. Never an id that was not requested.
+  repeated OrgUnitPermissionHolders items = 1;
+}
+
+message OrgUnitPermissionHolders {
+  // Echoed from the request — the KEY the caller maps by. `bo_phan.id`.
+  string org_unit_id = 1;
+
+  // Staff business codes (`nguoi_dung.ma`, `CB-…`) — what DeliverStaffNotifications addresses and
+  // what every holder check compares with. At least one; each at most once; order meaningless.
+  repeated string staff_ma = 2;
+}
+
+// No field, and that is the design: the question has no parameter, and any filter added here turns
+// the leadership lookup into a roster query. Wrapped so a field can still be added additively.
+message ResolveLeadershipStaffRequest {}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ResolveLeadershipStaffResponse {
+  // Staff business codes of the commune's leadership — see the predicate on the RPC. Each at most
+  // once, order meaningless, at most 50. EMPTY IS ORDINARY: a commune that flagged no role.
+  repeated string staff_ma = 1;
+}
+
+// AutomationJob is one of the commune-switchable background jobs of docs/ui-ux/14-cau-hinh.md §9.
+//
+// THREE, BY THE USER'S 2026-09-29 DECISION. §9 lists five: `refresh_dashboards` is DROPPED and
+// `send_scheduled_reports` is DEFERRED, by that same decision. A value for either is
+// added when it is decided, never reserved speculatively.
+//
+// ENGLISH VALUES, and ADR 0011's rule for enum values does not bite: these are keys of the SOFTWARE's
+// jobs, identical in every commune, not values written into an archival record. They follow the
+// reference system's job keys (../vigov-require/apps/api/app/modules/admin/automation.py:47-100),
+// with `sla_checker` renamed `sla_reminders` by the same decision. The string stored in identity's
+// settings table is the lower-case suffix (`sla_reminders`), and the server owns that mapping.
+enum AutomationJob {
+  AUTOMATION_JOB_UNSPECIFIED = 0;
+
+  // "Nhắc việc sắp đến hạn và đã quá hạn" — every N minutes. Runs per WorkKind in its owning service.
+  AUTOMATION_JOB_SLA_REMINDERS = 1;
+
+  // "Leo thang việc trễ hạn" — daily. Reads ResolveEscalationInstants.
+  AUTOMATION_JOB_ESCALATION = 2;
+
+  // "Bản tin đầu tuần cho lãnh đạo" — weekly. Addresses ResolveLeadershipStaff.
+  AUTOMATION_JOB_WEEKLY_DIGEST = 3;
+}
+
+// The unit of run state: one job, over one kind of work, run by the one service that owns that
+// kind's data. See ClaimDueAutomationRuns for why run state cannot be per job alone.
+message AutomationRunScope {
+  // UNSPECIFIED is INVALID_ARGUMENT.
+  AutomationJob job = 1;
+
+  // UNSPECIFIED is INVALID_ARGUMENT. VAN_BAN_DEN belongs to service-documents; PHAN_ANH and
+  // NHIEM_VU to service-petitions.
+  WorkKind work_kind = 2;
+}
+
+message ClaimDueAutomationRunsRequest {
+  // The scopes THIS runner owns and is ready to run now. 1 TO 10 entries; duplicates collapsed.
+  // Ten is the whole cross product today (three jobs × three kinds = nine) plus one.
+  repeated AutomationRunScope scopes = 1;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ClaimDueAutomationRunsResponse {
+  // One run per requested scope that was due AND won by this call. A SUBSET of the request; never a
+  // scope that was not requested. Absent: see the RPC's status table.
+  repeated AutomationRun runs = 1;
+}
+
+// One claimed run: this caller, and nobody else, runs `scope` for this commune now.
+message AutomationRun {
+  // A ULID issued by this service. The key RecordAutomationRunOutcome is called with, and what the
+  // run's audit entry names. NOT an idempotency key for notices: a crashed run's work is redone by a
+  // later run with a different id, and a notice keyed on the run would be sent twice. Notice keys
+  // are built from the business item — see DeliverStaffNotifications.
+  string run_id = 1;
+
+  // Echoed — what was claimed.
+  AutomationRunScope scope = 2;
+
+  // This service's clock at the claim. THE RUNNER'S `now` FOR THE WHOLE RUN — see the RPC comment.
+  // NEVER UNSET in an OK response.
+  google.protobuf.Timestamp claimed_at = 3;
+}
+
+// How one run ended. Closed on purpose — no free text crosses (see RecordAutomationRunOutcome).
+// Each value names WHO acts next, which is the only thing the configuration screen needs to say.
+enum AutomationRunOutcome {
+  AUTOMATION_RUN_OUTCOME_UNSPECIFIED = 0;
+
+  // Ran to the end. Zero notices is a success too — nothing was due.
+  AUTOMATION_RUN_OUTCOME_SUCCEEDED = 1;
+
+  // An identity call answered FAILED_PRECONDITION: the commune has no usable `sla` row or its
+  // calendar is faulty. The commune's administrator acts (Cấu hình → Thời hạn xử lý). Nobody was
+  // notified from a default.
+  AUTOMATION_RUN_OUTCOME_CONFIGURATION_MISSING = 2;
+
+  // A dependency (identity, comms, the runner's own database) was unavailable. The operator acts;
+  // the next scheduled run retries. Notices already delivered stay delivered and are not repeated
+  // (their idempotency keys).
+  AUTOMATION_RUN_OUTCOME_DEPENDENCY_UNAVAILABLE = 3;
+
+  // Anything else. The operator acts, from the runner's own logs (which carry codes, never content).
+  AUTOMATION_RUN_OUTCOME_FAILED = 4;
+}
+
+message RecordAutomationRunOutcomeRequest {
+  // The id ClaimDueAutomationRuns issued. Empty is INVALID_ARGUMENT.
+  string run_id = 1;
+
+  // UNSPECIFIED is INVALID_ARGUMENT.
+  AutomationRunOutcome outcome = 2;
+
+  // Records the run looked at (open tasks, petitions, documents in its scope). A count, for the
+  // screen and the trail — never a list of them.
+  uint32 records_examined = 3;
+
+  // Recipient notices NEWLY created by this run — the sum of
+  // DeliverStaffNotificationsResponse's `created` counts. Already-delivered duplicates not counted.
+  uint32 notices_delivered = 4;
+
+  // Records that were due a notice and had NOBODY to receive it (no holder, no unit holder, no
+  // leadership). NOT an error — but the one count a commune must see, because each is late work
+  // nobody is being told about.
+  uint32 records_without_recipient = 5;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message RecordAutomationRunOutcomeResponse {}
