@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 66 |
 | chưa làm | 30 |
 | treo | 14 |
-| xong | 243 |
+| xong | 245 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -238,6 +238,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `service-finance` | `loi-he-thong-budget-scope-notice` — Lời hệ thống budget.scope_notice — xã sửa câu; scope_notice trên tuyến dự án (§7) | xong | — | — |
 | `service-finance` | `nhap-excel-hang-muc-ke-hoach-von` — Nhập Excel Hạng mục kế hoạch vốn (ADR 0059 §3) | xong | — | — |
 | `service-finance` | `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | — | Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26). |
+| `service-finance` | `sua-trao-co-hang-muc-ke-hoach-von` — Sửa lỗi đọc tráo la_mac_dinh / dang_dung trên đường GHI của danh mục hạng mục kế hoạch vốn | xong | — | Không cần rà dữ liệu: người dùng xác nhận 30/09/2026 chưa có dữ liệu thật trên môi trường nào. Cùng lỗi ở petitions task_type / task_priority — sửa ở commit riêng. |
 | `service-identity` | `danh-muc-dan-cu-tuyen-doc` — Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs | xong | — | Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions |
 | `service-identity` | `lich-lam-viec` — Lịch làm việc của xã — tuần làm việc, ngày nghỉ lễ, ngày làm bù | xong | — | BA ĐIỀU NGƯỜI VIẾT HÀM ĐẾM HẠN PHẢI BIẾT, cả ba đã ghi trong tệp: (1) lịch RỖNG nghĩa là xã KHÔNG có giờ làm việc nào — phải TỪ CHỐI tính hạn, tuyệt đối không rơi về mặc định 'thứ Hai đến thứ Sáu 8-17', vì một mặc định ở đây là cam kết do phần mềm bịa ra rồi nói với dân; (2) một ngày có mặt ở cả ngay_nghi_le lẫn ngay_lam_bu là lỗi cấu hình, phải từ chối chứ không chọn bên thắng; (3) KHÔNG có ràng buộc chống chồng ca trong lich_lam_viec — cần extension btree_gist, mà migration hỏng vì thiếu extension thì service không khởi động được (ADR 0013), nên đường ghi phải tự kiểm và phải có ca test. Năm câu ADR 0007 để mở vẫn để mở: lược đồ chỉ bảo đảm MỌI đáp án đều diễn đạt được mà không cần migration thứ hai |
 | `service-identity` | `rpc-han-xu-ly` — Tuyến gRPC ResolveDeadlines — tra bảng `sla` lấy số giờ rồi cộng qua CHÍNH đường AdvanceWorkingHours đang có | xong | — | XÃ CHƯA CẤU HÌNH → FAILED_PRECONDITION, và HÔM NAY ĐÓ LÀ MỌI XÃ: migration 0008 cố ý không gieo dòng nào. Tức hợp đồng đã hết chặn nhưng DỮ LIỆU thì chưa — tuyến ghi của petitions/documents gọi vào đây sẽ nhận từ chối cho tới khi có đường ghi bảng `sla` (mục `bang-sla` (2), ADR 0026 điều kiện dừng #2) và một màn hình cấu hình. Đó là fail-closed đúng ý luật 10 cấm #3, không phải lỗi để đi vòng. MÃ LỖI PHÂN BIỆT BA THỨ và đừng gộp: InvalidArgument = sửa service đang gọi · FailedPrecondition = mở màn hình cấu hình của xã (thiếu dòng SLA, thiếu dòng mặc định, số giờ không dương, hoặc bốn lỗi lịch) · Internal = kho hỏng hoặc lược đồ mất CHECK (ErrQuaNhieuDongSLA, ErrLoaiViecLa). MỘT CHỖ HẸP HƠN, cố ý: số giờ vượt trần 2000 từ DÒNG CẤU HÌNH trả FailedPrecondition chứ không InvalidArgument như AdvanceWorkingHours — cùng hình dạng, khác NGUỒN của con số. CHƯA KIỂM ĐƯỢC: 8 ca sla_pg_test.go vẫn SKIP vì thiếu VIGOV_TEST_DSN, nên phép đọc thật của SLAStore (phạm vi hoá theo xã, ORDER BY NULLS FIRST) chưa có phép kiểm nào chạy — cùng nợ với mục sql-chua-chay. |
@@ -341,7 +342,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-09-29 · 33 mục
+Cập nhật 2026-09-30 · 34 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -378,6 +379,7 @@ Cập nhật 2026-09-29 · 33 mục
 | `cham-sao-qua-mang` — Dân chấm sao phiếu thật qua mạng — khối đánh giá trên màn tra cứu/phiếu của tôi gọi POST …/my-citizen-reports/{code}/rating | xong | 139d9ab · npm run typecheck sạch; npm test 35 tệp / 986 ca xanh (petition-rating.test.tsx 25 ca). Hàng sao dùng chung star-picker.tsx với bản trải nghiệm. | — | CHƯA GỌI THỬ THẬT: trên máy thật vẫn chưa có phiên ViGov (ADR 0045 UNKNOWN #2), nên khối này chưa tới được. Câu lỗi là câu của client theo nhánh (goi-vigov.ts:73-74 không mang câu máy chủ). Chưa có ca DOM cho phần nối state (repo không có jsdom). Bản trải nghiệm vẫn giữ dữ liệu trong bộ nhớ. |
 | `lay-vi-tri-that` — Lấy vị trí hiện tại ra toạ độ thật — đổi mã getLocation qua vihat-miniapp, gửi lat/lng kèm phiếu | xong | eac633e · typecheck sạch; npm test 37 tệp/1019 ca xanh; thử đột biến bỏ rào cặp lat/lng → hai ca đỏ. | — | NỢ CHỦ DỰ ÁN — CÂU PHÁP LÝ: chinh-sach-rieng-tu.ts:465 ('ứng dụng không hề có vị trí của bạn') và features/tinh-nang/noi-dung.ts:488 ('chỉ nhận một mã, không nhận toạ độ') nay SAI một phần; chưa viết câu thay (chinh-sach.test.ts ghim khoảng hở). App riêng của xã (App ID khác) sẽ nhận 502 cho tới khi vihat-miniapp hỗ trợ nhiều App ID (README nợ #14). Chưa gọi Zalo thật (vihat-miniapp README nợ #16). |
 | `ho-ten-lay-luc-mo-app-xa` — App xã: họ tên lấy MỘT LẦN lúc mở app (getUserInfo), trong app chỉ hiện; bỏ nút Lấy từ Zalo; sửa vỡ khối Tiện ích của tôi ở màn Cá nhân | xong | NGƯỜI DÙNG CHỐT 29/09/2026 (đảo ea76c9d 'xin quyền tại chỗ cần'): lúc mở app xã TrangXa gọi getUserInfo im lặng (autoRequestPermission:false) một lần; chưa cho phép thì hiện thẻ giải thích trên trang chủ (điền sẵn họ tên phiếu, chỉ gửi khi bấm gửi) với Đồng ý (mới mở hộp quyền Zalo) / Không, tôi sẽ tự gõ tên — đúng chính sách 3.3.4 (khung.tsx:6-10: xin quyền lúc khởi động phải có màn giải thích). NutLayTen xoá khỏi Cá nhân và form Gửi phản ánh; form điền sẵn hoặc để trống cho gõ (vẫn bắt buộc); Cá nhân hiện 'Chưa xác định'. CSS: hai quy tắc .xa-the trùng tên hoà vào nhau (của thẻ xác nhận xã ~1061 có display:flex) làm hai hàng Tiện ích nằm ngang và mất đường kẻ — thu hẹp về .goi-y .xa-the, thêm margin cho .xa-the của app xã và cho h2.xa-dau-khoi. Kiểm: tsc sạch · vitest 38 tệp / 1033 ca (name-at-entry.test.tsx 14 ca, gồm ca canh CSS). CHƯA xem trên máy thật. | — | Mã từ chối của getUserInfo là -1401 nhưng laTuChoi (zalo-api.ts) chỉ biết -201 — từ chối rơi vào nhánh 'không lấy được' (người dân thấy như nhau). Bấm Không thì lần mở sau thẻ hiện lại (tên chỉ sống trong bộ nhớ). Muốn hộp quyền mở NGAY lúc khởi động, không thẻ: sửa nhỏ ở TrangXa, nhưng trái hướng dẫn 3.3.4. |
+| `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: thư mục, tệp, định danh nửa ViGov | xong | 30/09/2026: src/cong-dan -> src/citizen (man -> screens), features/dang-nhap -> log-in, features/goi-y-giai-phap -> solution-suggestion; 79 tệp git mv; Petition* -> CitizenReport*/CommuneReport* (X1). Giữ: 9 mã trạng thái, loại tin (tin-tuc...), khoá bản nháp vigov.feedback.draft.v1 và trường của nó (X37 là lớp C), nửa thương mại (X38). Rào hai nửa (two-halves-boundary, phase1-collects-nothing) chuyển tên mới; đột biến 5 chỗ vi phạm -> đỏ 4 ca, gỡ -> xanh. tsc sạch, vitest 1131/1131, build được, test_hooks 359/359. | — | Lớp C: bản nháp v2 đọc được v1 (X37); Mini App chưa lên Zalo nên C1+C3 cùng một bản (X39). Chú thích trong nửa thương mại còn nhắc đường dẫn cũ (cong-dan/, dang-nhap/). |
 
 ## `core`
 
@@ -573,7 +575,7 @@ Cập nhật 2026-09-30 · 18 mục
 
 ## `service-finance`
 
-Cập nhật 2026-09-30 · 22 mục
+Cập nhật 2026-09-30 · 23 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -599,6 +601,7 @@ Cập nhật 2026-09-30 · 22 mục
 | `loi-he-thong-budget-scope-notice` — Lời hệ thống budget.scope_notice — xã sửa câu; scope_notice trên tuyến dự án (§7) | xong | fdd3903, 8cf36fb, cce8bba (trường 'key'→'code' vì apidoc). go test ok. | — | — |
 | `nhap-excel-hang-muc-ke-hoach-von` — Nhập Excel Hạng mục kế hoạch vốn (ADR 0059 §3) | xong | 5a576de · go test ./... xanh | — | — |
 | `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | 30/09/2026: 60 tệp git mv + 17 tệp sửa tại chỗ. Kiểu theo từ điển: InvestmentProject (X6), DisbursementVoucher (X7), BudgetEntry (X11), CapitalPlanCategory, FundingSource, BasisPoints, Tier*/Source*. Giữ: SQL, giá trị enum, thẻ JSON, 36 DTO HTTP tên Việt (tên component openapi), proto (chỉ Health), tên của core. Worktree sạch: vet+test service-finance xanh, test_hooks, check_* PASS; openapi không đổi. | — | Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26). |
+| `sua-trao-co-hang-muc-ke-hoach-von` — Sửa lỗi đọc tráo la_mac_dinh / dang_dung trên đường GHI của danh mục hạng mục kế hoạch vốn | xong | 30/09/2026: scanCategory (dùng bởi ByIDForUpdate — Update/SoftDelete) quét dang_dung vào IsDefault và ngược lại, có từ 14e4819 (22/09). ListCategories quét đúng nên test đọc danh sách không thấy; driver giả tầng app chép thứ tự SAI nên test đường ghi xanh theo lỗi. Sửa: List dùng chung scanCategory; driver giả chép từ danh sách cột. Đột biến đưa lỗi trở lại -> đỏ 3 ca (store TestListReadsEveryColumnCorrectly; app TestDisableIsRefusedOnlyOnTier3, TestUpdateSetDefaultClearsOldDefaultFirstInSameTransaction). go test -p 1 service-finance xanh. | — | Không cần rà dữ liệu: người dùng xác nhận 30/09/2026 chưa có dữ liệu thật trên môi trường nào. Cùng lỗi ở petitions task_type / task_priority — sửa ở commit riêng. |
 
 ## `service-identity`
 
