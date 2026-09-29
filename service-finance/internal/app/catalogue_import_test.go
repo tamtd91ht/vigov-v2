@@ -195,7 +195,7 @@ func categoryImportRows() []domain.CatalogueImportRow {
 }
 
 func newRealImporter(db *store.DB) *CapitalPlanCategoryImporter {
-	uc := NewCapitalPlanCategoryImporter(db, fistore.NewHangMucKeHoachVonStore(db))
+	uc := NewCapitalPlanCategoryImporter(db, fistore.NewCapitalPlanCategoryStore(db))
 	pinImportIDs(uc)
 	return uc
 }
@@ -253,14 +253,14 @@ func TestCatalogueImport_CommitsRowsAndOneEntryPerRowInOneTransaction(t *testing
 		t.Fatalf("%d vết, muốn một vết cho mỗi dòng", len(stmts))
 	}
 	for i, s := range stmts {
-		if s.tx != 1 || s.args[1] != importStaffCode || s.args[4] != HanhViThemHangMuc || s.args[5] != codes[i] {
+		if s.tx != 1 || s.args[1] != importStaffCode || s.args[4] != ActionCreateCapitalPlanCategory || s.args[5] != codes[i] {
 			t.Errorf("vết %d: tx=%d actor=%v action=%v subject=%v", i, s.tx, s.args[1], s.args[4], s.args[5])
 		}
 		d := deltas[i]
 		if d["nguon"] != catalogueImportSource || d["lo_nhap"] != res.Batch || d["dong"] != float64(i+2) || d["so_dong"] != float64(2) {
 			t.Errorf("delta %v", d)
 		}
-		if sau, _ := d["sau"].(map[string]any); sau["ma"] != codes[i] || sau["nguon"] != domain.NguonDonVi {
+		if after, _ := d["sau"].(map[string]any); after["ma"] != codes[i] || after["nguon"] != domain.SourceCommune {
 			t.Errorf("delta.sau %v", d["sau"])
 		}
 	}
@@ -312,7 +312,7 @@ func TestCatalogueImport_UniqueKeyRaceIsCodeTakenAndRollsBack(t *testing.T) {
 	db, g := openImportDB(t)
 	g.failOn["INSERT INTO hang_muc_ke_hoach_von"] = errors.New(`ERROR: duplicate key value violates unique constraint "hang_muc_ke_hoach_von_p03_tenant_id_ma_key" (SQLSTATE 23505)`)
 	_, err := newRealImporter(db).Import(importCtx(), categoryImportRows(), importActor())
-	if !errors.Is(err, fistore.ErrMaDaTonTai) || g.end(1) != "rollback" {
+	if !errors.Is(err, fistore.ErrCodeTaken) || g.end(1) != "rollback" {
 		t.Errorf("lỗi = %v, kết thúc %q", err, g.end(1))
 	}
 }

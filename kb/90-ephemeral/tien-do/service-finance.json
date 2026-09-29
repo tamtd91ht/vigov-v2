@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-finance",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-09-30",
   "muc": [
     {
       "id": "hang-muc-ke-hoach-von-tuyen-doc",
@@ -175,6 +175,15 @@
       "bang_chung": "5a576de · go test ./... xanh",
       "tiep_theo": "—",
       "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "doi-ten-tieng-anh-lop-a",
+      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: 60 tệp git mv + 17 tệp sửa tại chỗ. Kiểu theo từ điển: InvestmentProject (X6), DisbursementVoucher (X7), BudgetEntry (X11), CapitalPlanCategory, FundingSource, BasisPoints, Tier*/Source*. Giữ: SQL, giá trị enum, thẻ JSON, 36 DTO HTTP tên Việt (tên component openapi), proto (chỉ Health), tên của core. Worktree sạch: vet+test service-finance xanh, test_hooks, check_* PASS; openapi không đổi.",
+      "no_confirm": [],
+      "tiep_theo": "Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26).",
       "menu": "cau-hinh"
     }
   ]

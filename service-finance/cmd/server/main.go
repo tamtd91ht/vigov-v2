@@ -63,11 +63,11 @@ func main() {
 	// to hand it to. It has one now, and a second pool opened later for the store would be a second
 	// place the DSN is read and a second set of connections to size.
 	//
-	// THE CONFIG COMES BACK OUT WITH IT. It used to be read and dropped inside moCSDL, which was
+	// THE CONFIG COMES BACK OUT WITH IT. It used to be read and dropped inside openDatabase, which was
 	// enough while the DSN was the only thing anybody needed; the two gRPC addresses below are read
 	// from the same Config, and reading the environment a second time would be a second answer to
 	// one question.
-	cfg, db, err := moCSDL(log)
+	cfg, db, err := openDatabase(log)
 	if err != nil {
 		log.Error("không mở được cơ sở dữ liệu", "service", "finance", "err", err)
 		os.Exit(1)
@@ -83,7 +83,7 @@ func main() {
 	// It is wired ahead of the rest on purpose. The schema is what every other step will be
 	// written against, and `0002_audit_log_append_only.sql` — which turns "append-only" from a
 	// comment into a database constraint — had been committed and never applied by anything.
-	if err := chayMigration(db, log); err != nil {
+	if err := runMigrations(db, log); err != nil {
 		log.Error("migration không chạy được", "service", "finance", "err", err)
 		os.Exit(1)
 	}
@@ -91,37 +91,37 @@ func main() {
 	// pkgstore.New is the ONLY handle the stores get. There is deliberately no path from here that
 	// hands a raw *sql.DB to business code: a repository that can be built without a commune is a
 	// repository that can query across communes (rule 1, invariant 5).
-	kho := pkgstore.New(db)
+	storeDB := pkgstore.New(db)
 
 	// 3. directory — Host -> commune, over gRPC to the platform service. There is no second way to
 	// resolve a commune: the registry tables belong to the platform service, and a connection to
 	// another service's schema is rule 2, forbidden #2. The cache is what makes a network call per
 	// request affordable at 200+ communes (ADR 0004, decision 5).
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
+	platform, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ nền tảng", "service", "finance", "err", err)
 		os.Exit(1)
 	}
-	defer nenTang.Close()
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
+	defer platform.Close()
+	directory := tenant.NewCachedDirectory(platform, cfg.TenantCacheTTL())
 
 	// 4. identity — session cookie -> staff principal, over gRPC. This service owns no session
 	// registry and may not import identity's (rule 2, forbidden #1), so the principal comes from
 	// the contract: ResolveStaffPrincipal, once per staff request, with no cache.
-	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
+	identity, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ định danh", "service", "finance", "err", err)
 		os.Exit(1)
 	}
-	defer dinhDanh.Close()
+	defer identity.Close()
 
 	// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware obtained
 	// for THIS request and holds no state of its own. The disbursement routes declare
 	// authz.RequirePermission("budget.read"), so it is now load-bearing rather than wired ahead of
 	// its first user — Register refuses to start without it.
 	//
-	// Deps.Nay is left nil ON PURPOSE: in production the derived disbursement figures are computed
-	// against the real clock (Handler.nay). Only tests replace it, so that the delay arithmetic can
+	// Deps.Now is left nil ON PURPOSE: in production the derived disbursement figures are computed
+	// against the real clock (Handler.now). Only tests replace it, so that the delay arithmetic can
 	// be exercised on the first and last days of a budget year.
 	mux := http.NewServeMux()
 	// Idempotency store. An empty REDIS_DSN happens in DEV only — local development with no cache —
@@ -142,45 +142,45 @@ func main() {
 		idemStore = r
 	}
 
-	hangMuc := fistore.NewHangMucKeHoachVonStore(kho)
-	chungTu := fistore.NewChungTuGiaiNganStore(kho)
-	nganSach := fistore.NewNganSachStore(kho)
+	categories := fistore.NewCapitalPlanCategoryStore(storeDB)
+	vouchers := fistore.NewDisbursementVoucherStore(storeDB)
+	budget := fistore.NewBudgetStore(storeDB)
 
 	svchttp.Register(mux, svchttp.Deps{
-		Checker: staffauth.Checker{},
-		HangMuc: hangMuc,
+		Checker:               staffauth.Checker{},
+		CapitalPlanCategories: categories,
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening
 		// one is precisely what it is for.
-		GhiHangMuc: app.NewDanhMucHangMuc(kho, hangMuc),
+		CapitalPlanCategoryWriter: app.NewCapitalPlanCategoryService(storeDB, categories),
 		// Its Excel import (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME store,
 		// so an imported row is inserted by the statement the create form runs.
-		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(kho, hangMuc),
-		DuAn:                       fistore.NewDuAnStore(kho),
+		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(storeDB, categories),
+		InvestmentProjects:         fistore.NewInvestmentProjectStore(storeDB),
 		// The investment project write path. A SECOND STORE BESIDE THE READ ONE, not the same handle
-		// wearing two interfaces: every method of DuAnGhiStore takes the caller's transaction, and
+		// wearing two interfaces: every method of InvestmentProjectWriteStore takes the caller's transaction, and
 		// creating a project is two writes — the project and its funding allocation lines (§9) —
 		// which have to land together or not at all, with the audit entry inside the same
 		// transaction (rule 6, invariant 3).
-		GhiDuAn: app.NewDuAn(kho, fistore.NewDuAnGhiStore(kho)),
+		InvestmentProjectWriter: app.NewInvestmentProjectService(storeDB, fistore.NewInvestmentProjectWriteStore(storeDB)),
 		// The disbursement voucher write path — six use cases, each opening one transaction that
 		// carries the business write AND its audit entry. Same reason as above, and it matters more
 		// here: these rows are money inside a figure the commune reports upward.
-		GhiChungTu: app.NewChungTuGiaiNgan(kho, chungTu),
+		DisbursementVoucherWriter: app.NewDisbursementVoucherService(storeDB, vouchers),
 		// The commune's own slow-project threshold. WIRED RATHER THAN DEFAULTED: Register panics
 		// without it, because a nil store would mean every commune silently judged by the vendor's
 		// 10 points with nothing on the screen saying so (migration 0005, open question #31).
-		Nguong: fistore.NewCauHinhGiaiNganStore(kho),
+		DelayThresholds: fistore.NewDisbursementSettingsStore(storeDB),
 		// The budget board. ONE STORE BEHIND BOTH the read interface and the write use case, exactly
 		// as the catalogue is wired: the transaction the use case opens is the transaction the store
 		// writes in, and a second handle would be a second pool.
-		NganSach:    nganSach,
-		GhiNganSach: app.NewNganSach(kho, nganSach),
+		Budget:       budget,
+		BudgetWriter: app.NewBudgetService(storeDB, budget),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog: audit.NewLog(kho),
+		AuditLog: audit.NewLog(storeDB),
 		// "Lời hệ thống": a commune's wording of the sentences this service raises. The use case
 		// owns the transaction the override row and its audit entry share (rule 6, invariant 3).
-		SystemMessages: app.NewSystemMessages(kho, fistore.NewSystemMessageOverrideStore(kho)),
+		SystemMessages: app.NewSystemMessages(storeDB, fistore.NewSystemMessageOverrideStore(storeDB)),
 		Log:            log,
 	})
 
@@ -192,7 +192,7 @@ func main() {
 		Addr: addr,
 		// OUTERMOST, around the whole edge chain: every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, directory, dinhDanh, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(buildEdge(mux, directory, identity, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -209,14 +209,14 @@ func main() {
 	// 20 GIÂY, và con số ấy phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest (45). Ngược
 	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
 	// trông như đang canh mà không bao giờ chạy tới cuối.
-	dungLai := make(chan os.Signal, 1)
-	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	// Có đệm: `ListenAndServe` hỏng sau khi đã có ai đọc kênh là một goroutine rò lại mãi mãi.
-	loi := make(chan error, 1)
+	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			loi <- err
+			errCh <- err
 		}
 	}()
 
@@ -228,13 +228,13 @@ func main() {
 	// ⚠ `os.Exit` KHÔNG CHẠY `defer`. Mọi thứ phải dọn khi tiến trình dừng phải nằm TRƯỚC lời
 	// gọi ấy, không nằm trong một `defer` phía trên.
 	select {
-	case err := <-loi:
+	case err := <-errCh:
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
-	case <-dungLai:
+	case <-stop:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "finance")
-		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
-		defer huy()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Error("đóng không sạch", "err", err)
 			os.Exit(1)
@@ -242,7 +242,7 @@ func main() {
 	}
 }
 
-// dungBien builds the edge chain this binary serves.
+// buildEdge builds the edge chain this binary serves.
 //
 // IT IS A FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN. core/staffauth proves what the
 // authentication middleware does and core/httpx proves what TenantMiddleware does; neither can see
@@ -264,28 +264,28 @@ func main() {
 // process is alive, which is true or false regardless of which commune is asking. Behind Host
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
-func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+func buildEdge(mux http.Handler, directory tenant.Directory, identity staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
-	h = staffauth.Middleware(dinhDanh, log)(h)
+	h = staffauth.Middleware(identity, log)(h)
 	// idem.Middleware sits AFTER TenantMiddleware because the idempotency key is prefixed with the
 	// commune (rule 1, invariant 7). Mounted the other way round it would build keys with no
 	// commune in them, so two communes whose clients generate the same key collide — one commune's
 	// request answered with another commune's result, which is a breach between two authorities
 	// through a cache key.
 	h = idem.Middleware(idemStore, log)(h)
-	h = httpx.TenantMiddleware(danhBa)(h)
+	h = httpx.TenantMiddleware(directory)(h)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
-	ngoai := http.NewServeMux()
-	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	outer := http.NewServeMux()
+	outer.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	ngoai.Handle("/", h)
-	return ngoai
+	outer.Handle("/", h)
+	return outer
 }
 
 // traceID returns the id a caller can quote when reporting a problem.
@@ -294,7 +294,7 @@ func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Reso
 // single citizen complaint can be followed across services. Same shape and same TODO as identity's.
 func traceID(context.Context) string { return "" }
 
-// moCSDL reads the configuration and opens this service's OWN database.
+// openDatabase reads the configuration and opens this service's OWN database.
 //
 // "Its own" is not a manner of speaking: a connection string to a schema this service does not own
 // is a read path around the contract (rule 2, forbidden #2).
@@ -302,7 +302,7 @@ func traceID(context.Context) string { return "" }
 // IT RETURNS THE CONFIG TOO, because the caller now needs the two gRPC addresses out of it. Reading
 // the environment a second time up there would be a second answer to one question, and the copy
 // that drifts is the one nobody is looking at.
-func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
+func openDatabase(log *slog.Logger) (config.Config, *sql.DB, error) {
 	// Platform-wide constants only. Per-commune values are read at RUNTIME (rule 1, invariant
 	// 10) — there is nothing per-commune on this path in any case: the schema is shared by every
 	// commune the process serves, partitioned by tenant_id rather than split per commune.
@@ -310,8 +310,8 @@ func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
 	if err != nil {
 		return config.Config{}, nil, err
 	}
-	for _, canhBao := range cfg.CanhBao() {
-		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
+	for _, warn := range cfg.CanhBao() {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", warn)
 	}
 
 	// .Lo() is the ONE place the DSN leaves secret.DSN with its password intact: the driver
@@ -321,8 +321,8 @@ func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
 		return config.Config{}, nil, err
 	}
 
-	ctx, huy := context.WithTimeout(context.Background(), 30*time.Second)
-	defer huy()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return config.Config{}, nil, fmt.Errorf("finance: không nối được cơ sở dữ liệu: %w", err)
@@ -330,18 +330,18 @@ func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
 	return cfg, db, nil
 }
 
-// chayMigration applies this service's embedded migrations to the pool opened above.
-func chayMigration(db *sql.DB, log *slog.Logger) error {
-	ctx, huy := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer huy()
+// runMigrations applies this service's embedded migrations to the pool opened above.
+func runMigrations(db *sql.DB, log *slog.Logger) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
-	kq, err := migrate.Chay(ctx, db, migrations.FS, "finance")
+	res, err := migrate.Chay(ctx, db, migrations.FS, "finance")
 	if err != nil {
 		return err
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator
 	// finds out the replica is already at the schema they expected, without opening a psql
 	// prompt.
-	log.Info("migration xong", "service", "finance", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
+	log.Info("migration xong", "service", "finance", "da_ap", res.DaAp, "bo_qua", len(res.BoQua))
 	return nil
 }

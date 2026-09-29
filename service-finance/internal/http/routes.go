@@ -66,10 +66,10 @@ import (
 // argument accepted for GET /api/v1/org-units and for all eight catalogue reads). Changing the list
 // is administration of the commune's own configuration, which is precisely what this key is for.
 
-// HangMucKeHoachVonDanhMuc is the commune's capital plan category catalogue, for
+// CapitalPlanCategoryCatalogue is the commune's capital plan category catalogue, for
 // GET /api/v1/capital-plan-categories.
 //
-// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.HangMucKeHoachVonStore.
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.CapitalPlanCategoryStore.
 // WHY: the properties this route exists to hold — the permission declaration, the commune check
 // ahead of any read, the refusal instead of a truncated list — have to be testable without a
 // PostgreSQL, or they get tested once and then never again. There is no PostgreSQL reachable from
@@ -77,28 +77,28 @@ import (
 // satisfies this as it is; nothing was changed to accommodate it.
 //
 // NO page.Request PARAMETER: this route returns the whole list on purpose. The reason is on
-// fistore.HangMucKeHoachVonStore.DanhSach, and the bound that replaces the missing `limit` is
-// fistore.TranDanhMucHangMuc.
-type HangMucKeHoachVonDanhMuc interface {
-	DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, error)
+// fistore.CapitalPlanCategoryStore.ListCategories, and the bound that replaces the missing `limit` is
+// fistore.MaxCapitalPlanCategories.
+type CapitalPlanCategoryCatalogue interface {
+	ListCategories(ctx context.Context) ([]domain.CapitalPlanCategory, error)
 }
 
-// DuAnTienDo is the commune's investment projects with their DERIVED disbursement figures, for
+// InvestmentProjectReader is the commune's investment projects with their DERIVED disbursement figures, for
 // GET /api/v1/investment-projects and .../{id}.
 //
-// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.DuAnStore — the same reason
-// HangMucKeHoachVonDanhMuc gives: the properties these routes exist to hold (the permission
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.InvestmentProjectStore — the same reason
+// CapitalPlanCategoryCatalogue gives: the properties these routes exist to hold (the permission
 // declaration, the commune check ahead of any read, a refusal rather than a truncated list that
 // gets totalled) have to be testable without a PostgreSQL, or they get tested once and never
 // again. There is no PostgreSQL reachable from this repository's build environment.
-type DuAnTienDo interface {
-	DanhSach(ctx context.Context, loc fistore.LocDuAn) ([]domain.TienDoDuAn, error)
-	ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, error)
+type InvestmentProjectReader interface {
+	ListInvestmentProjects(ctx context.Context, filter fistore.InvestmentProjectFilter) ([]domain.InvestmentProjectProgress, error)
+	GetInvestmentProject(ctx context.Context, id string) (domain.InvestmentProjectProgress, error)
 }
 
-// GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
-// than three more methods on DuAnTienDo — the same reason GhiChungTu is separate from DuAnTienDo and
-// GhiHangMuc from HangMucKeHoachVonDanhMuc.
+// InvestmentProjectWriter is the WRITE half of the investment project register, and it is its own interface rather
+// than three more methods on InvestmentProjectReader — the same reason DisbursementVoucherWriter is separate from InvestmentProjectReader and
+// CapitalPlanCategoryWriter from CapitalPlanCategoryCatalogue.
 //
 // The reads are store calls; each of these three opens a TRANSACTION and writes an audit entry
 // inside it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever
@@ -109,14 +109,14 @@ type DuAnTienDo interface {
 // IT MATTERS MORE HERE THAN ON THE CATALOGUE, because creating a project is TWO writes: the project
 // and its funding allocation lines (§9). A project committed with half its allocation is a §6 card
 // that is wrong with nothing on any screen saying so.
-type GhiDuAn interface {
-	Them(ctx context.Context, yc app.YeuCauThemDuAn, nguoi audit.Actor) (app.KetQuaThemDuAn, error)
-	Sua(ctx context.Context, id string, yc app.YeuCauSuaDuAn, nguoi audit.Actor) (domain.DuAn, error)
-	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+type InvestmentProjectWriter interface {
+	CreateInvestmentProject(ctx context.Context, req app.CreateInvestmentProjectRequest, actor audit.Actor) (app.CreateInvestmentProjectResult, error)
+	UpdateInvestmentProject(ctx context.Context, id string, req app.UpdateInvestmentProjectRequest, actor audit.Actor) (domain.InvestmentProject, error)
+	DeleteInvestmentProject(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
-// GhiHangMuc is the WRITE half of the capital plan category catalogue, and it is a second
+// CapitalPlanCategoryWriter is the WRITE half of the capital plan category catalogue, and it is a second
 // interface rather than three more methods on the read one — on purpose.
 //
 // The read is a store call; each of these three opens a TRANSACTION and writes an audit entry
@@ -124,15 +124,15 @@ type GhiDuAn interface {
 // method was nearest and could end up writing the row outside a transaction, which is the exact
 // defect core/audit was shaped to make impossible. Two interfaces, two obligations, visible at the
 // point of use.
-type GhiHangMuc interface {
-	Them(ctx context.Context, yc app.YeuCauThemHangMuc, nguoi audit.Actor) (domain.HangMucKeHoachVon, error)
-	Sua(ctx context.Context, id string, yc app.YeuCauSuaHangMuc, nguoi audit.Actor) (domain.HangMucKeHoachVon, error)
-	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+type CapitalPlanCategoryWriter interface {
+	CreateCategory(ctx context.Context, req app.CreateCapitalPlanCategoryRequest, actor audit.Actor) (domain.CapitalPlanCategory, error)
+	UpdateCategory(ctx context.Context, id string, req app.UpdateCapitalPlanCategoryRequest, actor audit.Actor) (domain.CapitalPlanCategory, error)
+	DeleteCategory(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
-// GhiChungTu is the WRITE half of the disbursement voucher register, and it is its own interface
-// rather than more methods on DuAnTienDo for the same reason GhiHangMuc is separate from
-// HangMucKeHoachVonDanhMuc.
+// DisbursementVoucherWriter is the WRITE half of the disbursement voucher register, and it is its own interface
+// rather than more methods on InvestmentProjectReader for the same reason CapitalPlanCategoryWriter is separate from
+// CapitalPlanCategoryCatalogue.
 //
 // The reads are store calls; each of these six opens a TRANSACTION and writes an audit entry inside
 // it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever method
@@ -144,16 +144,16 @@ type GhiHangMuc interface {
 // seventh lifecycle move cannot silently fall into a default branch that allows it. It is also what
 // lets each route declare the permission the specification assigns to THAT act — `budget.update`
 // for entry and correction, `budget.confirm` for confirmation and the lock.
-type GhiChungTu interface {
-	Them(ctx context.Context, yc app.YeuCauThemChungTu, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
-	Sua(ctx context.Context, id string, yc app.YeuCauSuaChungTu, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
-	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
-	XacNhan(ctx context.Context, id string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
-	Khoa(ctx context.Context, id string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
-	MoKhoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+type DisbursementVoucherWriter interface {
+	CreateVoucher(ctx context.Context, req app.CreateDisbursementVoucherRequest, actor audit.Actor) (domain.DisbursementVoucher, error)
+	UpdateVoucher(ctx context.Context, id string, req app.UpdateDisbursementVoucherRequest, actor audit.Actor) (domain.DisbursementVoucher, error)
+	Remove(ctx context.Context, id, reason string, actor audit.Actor) error
+	Confirm(ctx context.Context, id string, actor audit.Actor) (domain.DisbursementVoucher, error)
+	Lock(ctx context.Context, id string, actor audit.Actor) (domain.DisbursementVoucher, error)
+	Unlock(ctx context.Context, id, reason string, actor audit.Actor) (domain.DisbursementVoucher, error)
 }
 
-// NguongCham is the commune's own slow-project warning threshold (§13 rule 5, migration 0005).
+// DelayThresholdReader is the commune's own slow-project warning threshold (§13 rule 5, migration 0005).
 //
 // AN INTERFACE AT THE POINT OF USE, like the two reads above, and for one extra reason worth
 // stating: this value decides whether a commune's KPI card reads "29 dự án chậm" or "0", so the two
@@ -161,11 +161,11 @@ type GhiChungTu interface {
 // nothing — must be reachable without a PostgreSQL. There is none in this repository's build
 // environment, so "needs a database" means "never runs", and this is precisely the read that must
 // not silently fall back to a default.
-type NguongCham interface {
-	NguongCanhBaoCham(ctx context.Context, nam int) (domain.NguongCanhBaoCham, error)
+type DelayThresholdReader interface {
+	DelayThreshold(ctx context.Context, year int) (domain.DelayThreshold, error)
 }
 
-// NganSachDoc is the commune's budget board, for GET /api/v1/budget-sheets and
+// BudgetReader is the commune's budget board, for GET /api/v1/budget-sheets and
 // GET /api/v1/budget-indicators.
 //
 // AN INTERFACE DECLARED AT THE POINT OF USE, like the reads above and for the same reason: the
@@ -178,48 +178,48 @@ type NguongCham interface {
 // `Thu xã hưởng` minus the expenditure sheet's `Chi ngân sách` (ADR 0035 #32), so it needs both
 // sheets of one year. A dedicated store method would put that subtraction in SQL, where the ADR's
 // reasoning could not be read and the two candidate revenue columns are one edit apart.
-type NganSachDoc interface {
-	BangDayDu(ctx context.Context, nam int, loai domain.LoaiBang) (domain.BangDayDu, error)
+type BudgetReader interface {
+	FullSheet(ctx context.Context, year int, kind domain.SheetKind) (domain.FullSheet, error)
 
-	// DotCuaKhoanMuc is the `⇄` dialog's list (GET /api/v1/budget-lines/{id}/entries).
-	DotCuaKhoanMuc(ctx context.Context, khoanMucID string) (domain.DotCuaKhoanMuc, error)
+	// LineEntries is the `⇄` dialog's list (GET /api/v1/budget-lines/{id}/entries).
+	LineEntries(ctx context.Context, lineID string) (domain.LineEntries, error)
 }
 
-// GhiNganSach is the WRITE half of the budget board, and it is its own interface rather than more
-// methods on NganSachDoc — the same reason GhiChungTu is separate from DuAnTienDo.
+// BudgetWriter is the WRITE half of the budget board, and it is its own interface rather than more
+// methods on BudgetReader — the same reason DisbursementVoucherWriter is separate from InvestmentProjectReader.
 //
 // The reads are store calls; each of these six opens a TRANSACTION and writes an audit entry inside
 // it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever method
 // was nearest and could end up writing the row outside a transaction.
 //
-// SEVEN METHODS AND NOT ONE `Sua(op)`: the caller names the act at the call site, so an eighth cannot
+// SEVEN METHODS AND NOT ONE `Update(op)`: the caller names the act at the call site, so an eighth cannot
 // silently fall into a default branch that allows it. It is also what lets each route declare the
-// permission that act deserves — and DatDongTong in particular is NOT an edit: it decides which row
+// permission that act deserves — and SetHeadline in particular is NOT an edit: it decides which row
 // the commune's reported total is read from (ADR 0035 §A).
-type GhiNganSach interface {
-	TaoBang(ctx context.Context, yc app.YeuCauTaoBang, nguoi audit.Actor) (domain.BangNganSach, error)
-	GoBang(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
-	SuaBang(ctx context.Context, id string, yc app.YeuCauSuaBang, nguoi audit.Actor) (domain.BangNganSach, error)
-	ThemKhoanMuc(ctx context.Context, yc app.YeuCauThemKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
-	SuaKhoanMuc(ctx context.Context, id string, yc app.YeuCauSuaKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
-	GoKhoanMuc(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
-	DatDongTong(ctx context.Context, id string, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
-	GhiDot(ctx context.Context, yc app.YeuCauGhiDot, nguoi audit.Actor) (domain.DotThuChi, error)
-	GoDot(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+type BudgetWriter interface {
+	CreateSheet(ctx context.Context, req app.CreateBudgetSheetRequest, actor audit.Actor) (domain.BudgetSheet, error)
+	RemoveSheet(ctx context.Context, id, reason string, actor audit.Actor) error
+	UpdateSheet(ctx context.Context, id string, req app.UpdateBudgetSheetRequest, actor audit.Actor) (domain.BudgetSheet, error)
+	CreateLine(ctx context.Context, req app.CreateBudgetLineRequest, actor audit.Actor) (domain.BudgetLine, error)
+	UpdateLine(ctx context.Context, id string, req app.UpdateBudgetLineRequest, actor audit.Actor) (domain.BudgetLine, error)
+	RemoveLine(ctx context.Context, id, reason string, actor audit.Actor) error
+	SetHeadline(ctx context.Context, id string, actor audit.Actor) (domain.BudgetLine, error)
+	RecordEntry(ctx context.Context, req app.RecordBudgetEntryRequest, actor audit.Actor) (domain.BudgetEntry, error)
+	RemoveEntry(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
 type Deps struct {
-	Checker     authz.Checker
-	HangMuc     HangMucKeHoachVonDanhMuc
-	GhiHangMuc  GhiHangMuc
-	DuAn        DuAnTienDo
-	GhiDuAn     GhiDuAn
-	GhiChungTu  GhiChungTu
-	Nguong      NguongCham
-	NganSach    NganSachDoc
-	GhiNganSach GhiNganSach
+	Checker                   authz.Checker
+	CapitalPlanCategories     CapitalPlanCategoryCatalogue
+	CapitalPlanCategoryWriter CapitalPlanCategoryWriter
+	InvestmentProjects        InvestmentProjectReader
+	InvestmentProjectWriter   InvestmentProjectWriter
+	DisbursementVoucherWriter DisbursementVoucherWriter
+	DelayThresholds           DelayThresholdReader
+	Budget                    BudgetReader
+	BudgetWriter              BudgetWriter
 
-	// CapitalPlanCategoryImports is the Excel import of the HangMuc catalogue (ADR 0059 §3), three
+	// CapitalPlanCategoryImports is the Excel import of the capital plan category catalogue (ADR 0059 §3), three
 	// routes in routes_catalogue_import.go. See CatalogueImporting.
 	CapitalPlanCategoryImports CatalogueImporting
 
@@ -231,10 +231,10 @@ type Deps struct {
 	// *app.SystemMessages in production. Refused at construction when missing.
 	SystemMessages SystemMessageService
 
-	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
-	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
+	// Now is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
+	// where Handler.now falls back to time.Now — see the reason there. It exists so the delay
 	// arithmetic of §3 can be exercised at the two dates it is most fragile on.
-	Nay func() time.Time
+	Now func() time.Time
 
 	Log *slog.Logger
 }
@@ -257,25 +257,25 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.Checker == nil {
 		panic("finance/http: thiếu authz.Checker — các tuyến giải ngân khai budget.read và sẽ panic khi có người gọi")
 	}
-	if d.HangMuc == nil {
+	if d.CapitalPlanCategories == nil {
 		panic("finance/http: thiếu kho danh mục hạng mục kế hoạch vốn — GET /api/v1/capital-plan-categories sẽ panic khi có người gọi")
 	}
-	if d.GhiHangMuc == nil {
+	if d.CapitalPlanCategoryWriter == nil {
 		panic("finance/http: thiếu use case ghi danh mục hạng mục kế hoạch vốn — POST/PATCH/DELETE /api/v1/capital-plan-categories sẽ panic khi có người gọi")
 	}
 	if d.CapitalPlanCategoryImports == nil {
 		panic("finance/http: thiếu use case nhập Excel hạng mục kế hoạch vốn — ba tuyến /api/v1/capital-plan-categories/import* sẽ panic khi có người gọi")
 	}
-	if d.DuAn == nil {
+	if d.InvestmentProjects == nil {
 		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
-	if d.GhiDuAn == nil {
+	if d.InvestmentProjectWriter == nil {
 		panic("finance/http: thiếu use case ghi dự án đầu tư — POST/PATCH/DELETE /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
-	if d.GhiChungTu == nil {
+	if d.DisbursementVoucherWriter == nil {
 		panic("finance/http: thiếu use case ghi chứng từ giải ngân — các tuyến /api/v1/disbursements sẽ panic khi có người gọi")
 	}
-	if d.Nguong == nil {
+	if d.DelayThresholds == nil {
 		// REFUSED AT CONSTRUCTION RATHER THAN DEFAULTED AT REQUEST TIME, and that is the whole point
 		// of migration 0005. A nil store here would have to fall back to the software's 10 points on
 		// every read — which is exactly the state the migration was written to end: every commune
@@ -283,10 +283,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		// refuses to start is a deployment that fails visibly.
 		panic("finance/http: thiếu kho cấu hình giải ngân — ngưỡng cảnh báo chậm sẽ im lặng về mặc định của phần mềm")
 	}
-	if d.NganSach == nil {
+	if d.Budget == nil {
 		panic("finance/http: thiếu kho bảng thu-chi ngân sách — các tuyến /api/v1/budget-sheets sẽ panic khi có người gọi")
 	}
-	if d.GhiNganSach == nil {
+	if d.BudgetWriter == nil {
 		panic("finance/http: thiếu use case ghi thu-chi ngân sách — các tuyến ghi ngân sách sẽ panic khi có người gọi")
 	}
 	if d.AuditLog == nil {
@@ -350,7 +350,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @summary  Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc
 	// @screen   14-cau-hinh §5
 	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
-	// commune's catalogue exceeding fistore.TranDanhMucHangMuc — which this route REFUSES rather
+	// commune's catalogue exceeding fistore.MaxCapitalPlanCategories — which this route REFUSES rather
 	// than truncating, because a silently short list is a category missing from a classifier.
 	//
 	// 401 comes from authz.AnyAuthenticated: no session, or a token issued for another commune.
@@ -361,7 +361,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/capital-plan-categories",
 		authz.AnyAuthenticated("tên hạng mục xuất hiện ở ô phân loại dòng kế hoạch vốn và mọi bộ lọc của các màn hình tài chính — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
-			http.HandlerFunc(h.DanhSachHangMucKeHoachVon)))
+			http.HandlerFunc(h.ListCapitalPlanCategories)))
 
 	// --- disbursement tracking: the commune's investment projects -----------------------------
 	//
@@ -403,7 +403,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/investment-projects",
 		authz.RequirePermission(d.Checker, "budget.read")(
-			http.HandlerFunc(h.DanhSachDuAn)))
+			http.HandlerFunc(h.ListInvestmentProjects)))
 
 	// 404 covers both "no such project" and "a project of another commune", deliberately — see the
 	// handler. There is no path here that could answer differently for the two, because the store
@@ -421,7 +421,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.read")(
-			http.HandlerFunc(h.ChiTietDuAn)))
+			http.HandlerFunc(h.GetInvestmentProject)))
 
 	// --- the commune enters, corrects and withdraws its own investment projects ------------------
 	//
@@ -466,7 +466,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// inside two budget years (§14's commune carries 63 projects in ONE year). A project code is an
 	// ISSUED CODE: rule 7, invariant 3 forbids reissuing one and forbidden #4 forbids renumbering
 	// one. Refusing writes nothing and can be loosened with one function; generating cannot be taken
-	// back. This is a finding for the user — domain.ErrThieuMaDuAn carries the full argument.
+	// back. This is a finding for the user — domain.ErrInvestmentProjectCodeMissing carries the full argument.
 	//
 	// 409 AND NOT 403 for a code already issued: the caller holds `budget.update` and is allowed to
 	// enter projects. What is refused is this value against the state of the data.
@@ -484,7 +484,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/investment-projects",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.ThemDuAn))))
+				http.HandlerFunc(h.CreateInvestmentProject))))
 
 	// PATCH AND NOT PUT: several fields have a meaningful zero — a description cleared to "", an
 	// officer unassigned back to "Chưa phân công", a plan revised down to 0 — so a full replacement
@@ -505,7 +505,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// gave it. Revising a plan DOES move the denominator of §3's delay score and §7.2's ratio, which
 	// is exactly why the audit entry carries the before/after pair.
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: the update use case
 	// compares the project it read against the project it would write and, when nothing moved, writes
 	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
 	// state and one entry in the ledger. Were that comparison removed, this declaration would become
@@ -523,7 +523,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaDuAn))))
+				http.HandlerFunc(h.UpdateInvestmentProject))))
 
 	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — the same decision the
 	// voucher's `🗑 Gỡ` route had to make, made the same way and for a heavier reason.
@@ -559,7 +559,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the rows sit in `chung_tu_giai_ngan`, and the commune's own totals stop agreeing with the sum
 	// of its own vouchers. Cascading would soft delete somebody else's payment records — including
 	// LOCKED ones, which `chung_tu_da_khoa` refuses outright — as a side effect. store
-	// .ErrDuAnConChungTu carries the full argument. This is a finding for the user.
+	// .ErrInvestmentProjectHasVouchers carries the full argument. This is a finding for the user.
 	//
 	// idem.KhongCan — removing an already-removed project is a 404 either way, and the second request
 	// cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
@@ -577,7 +577,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("xoá một dự án đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
-				http.HandlerFunc(h.XoaDuAn))))
+				http.HandlerFunc(h.DeleteInvestmentProject))))
 
 	// --- the commune adds a capital plan category of its own -------------------------------------------
 	//
@@ -614,7 +614,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/capital-plan-categories",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.ThemHangMuc))))
+				http.HandlerFunc(h.CreateCapitalPlanCategory))))
 
 	// --- the commune edits one row --------------------------------------------------------------
 	//
@@ -625,7 +625,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// reorder at every tier, disable at tiers 1 and 2, and `ma` nowhere. The refusal is a 409
 	// naming the tier, and the trigger refuses the same thing underneath (ADR 0024).
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: the update use case
 	// compares the row it read against the row it would write and, when nothing moved, writes
 	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
 	// state and one entry in the ledger. Were that comparison removed, this declaration would
@@ -644,7 +644,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/capital-plan-categories/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaHangMuc))))
+				http.HandlerFunc(h.UpdateCapitalPlanCategory))))
 
 	// --- the commune retires one of its own rows ------------------------------------------------
 	//
@@ -676,7 +676,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/capital-plan-categories/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
-				http.HandlerFunc(h.XoaHangMuc))))
+				http.HandlerFunc(h.DeleteCapitalPlanCategory))))
 
 	// --- the disbursement voucher register (§8.2) -----------------------------------------------
 	//
@@ -689,7 +689,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// would put a project id in every one of them that nothing reads and nothing checks. A segment
 	// the server ignores is a segment a client will eventually get wrong, and nobody will notice.
 	// The project is a FIELD of the create body, where it is validated against this commune's live
-	// projects (fistore.ErrKhongThayDuAnCuaChungTu).
+	// projects (fistore.ErrVoucherInvestmentProjectNotFound).
 	//
 	// THE TWO PERMISSION KEYS BELOW ARE THE SPECIFICATION'S OWN, checked rather than assumed:
 	// docs/ui-ux/06-giai-ngan.md:202 — "`budget.update` (nhập/sửa), `budget.confirm` (xác nhận,
@@ -726,7 +726,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/disbursements",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.ThemChungTu))))
+				http.HandlerFunc(h.CreateVoucher))))
 
 	// PATCH AND NOT PUT: `counterparty` and `voucher_no` are optional and their empty string is a
 	// meaningful value, so a full replacement cannot tell "not mentioned" from "cleared".
@@ -745,7 +745,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// takes nothing back from either. A LOCKED voucher is still refused outright (409); the only way
 	// to a frozen figure is still the unlock route, with a reason, by somebody else.
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: the update use case
 	// compares the voucher it read against the voucher it would write and, when nothing moved,
 	// writes NOTHING — no UPDATE, no state change and no audit entry. So the same request sent twice
 	// leaves one row in one state and one entry in the ledger. Were that comparison removed, this
@@ -765,7 +765,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/disbursements/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaChungTu))))
+				http.HandlerFunc(h.UpdateVoucher))))
 
 	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — this is the decision
 	// migration 0005:39-42 deferred to the route, so here it is.
@@ -808,13 +808,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/disbursements/{id}",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một chứng từ đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.GoChungTu))))
+				http.HandlerFunc(h.RemoveVoucher))))
 
 	// `confirmation` IS A NOMINALISED SUB-RESOURCE, NOT THE VERB `confirm`: a verb in a path is what
 	// skills/rest-api-design forbids and `rest_api_guard` reports, and the nominalisation it names
 	// for this verb is exactly `confirmation`. The act becomes a record you can point at.
 	//
-	// POST AND NO DELETE, DELIBERATELY. A confirmation cannot be taken back — domain.ChoXacNhan
+	// POST AND NO DELETE, DELIBERATELY. A confirmation cannot be taken back — domain.CanConfirm
 	// refuses a second one, because overwriting `nguoi_xac_nhan_id` would be editing a historical
 	// fact (rule 7, forbidden #5). The way back from `Đã xác nhận` does not exist and is not being
 	// invented here; the way back from `Đã khoá` does, and it is the route below.
@@ -833,7 +833,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/disbursements/{id}/confirmation",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("xác nhận lần thứ hai gặp chứng từ đã ở `da-xac-nhan` và trả 409 mà không ghi gì — một lần xác nhận, một dòng vết")(
-				http.HandlerFunc(h.XacNhanChungTu))))
+				http.HandlerFunc(h.ConfirmVoucher))))
 
 	// `lockout` IS THE NOUN THIS SYSTEM ALREADY SETTLED FOR THIS EXACT SHAPE — a STATE that POST
 	// creates and DELETE removes, rather than a verb in a path. See
@@ -847,7 +847,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// commune is live on this path.
 	//
 	// LOCKING FROM `Kế toán nhập` IS REFUSED (409) even though §8.2's screen draws both buttons on
-	// such a row, and domain.ErrChuaXacNhanThiChuaKhoaDuoc carries the reason: unlocking has to put
+	// such a row, and domain.ErrLockRequiresConfirmation carries the reason: unlocking has to put
 	// the voucher back in the state it was in BEFORE the lock, and the row does not store what that
 	// was. Requiring the chain makes "before the lock" always `Đã xác nhận`, so an unlock restores
 	// exactly what was there and invents nothing. The alternative is one more column that exists
@@ -864,7 +864,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/disbursements/{id}/lockout",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("khoá lần thứ hai gặp chứng từ đã ở `da-khoa` và trả 409 mà không ghi gì — người khoá và thời điểm khoá không bị ghi đè")(
-				http.HandlerFunc(h.KhoaChungTu))))
+				http.HandlerFunc(h.LockVoucher))))
 
 	// --- the unlock: the most expensive route in this file ---------------------------------------
 	//
@@ -908,7 +908,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/disbursements/{id}/lockout",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("mở khoá lần thứ hai gặp chứng từ đã ở `da-xac-nhan` và trả 409 mà không ghi gì — `so_lan_mo_khoa` không tăng hai lần vì một lần thử lại")(
-				http.HandlerFunc(h.MoKhoaChungTu))))
+				http.HandlerFunc(h.UnlockVoucher))))
 
 	// --- the commune's revenue/expenditure budget board (07-thu-chi-ngan-sach) --------------------
 	//
@@ -955,7 +955,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/budget-sheets",
 		authz.RequirePermission(d.Checker, "budget.read")(
-			http.HandlerFunc(h.DocBangNganSach)))
+			http.HandlerFunc(h.GetBudgetSheet)))
 
 	// ITS OWN ROUTE BECAUSE `Cân đối thu - chi` NEEDS BOTH SHEETS (ADR 0035 #32: revenue's
 	// `Thu xã hưởng` minus expenditure's `Chi ngân sách`), so it cannot be a field on either sheet's
@@ -977,7 +977,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/budget-indicators",
 		authz.RequirePermission(d.Checker, "budget.read")(
-			http.HandlerFunc(h.DocChiSoNganSach)))
+			http.HandlerFunc(h.GetBudgetIndicators)))
 
 	// `budget.update` — creating the year's sheet with its columns is data entry by the accountant,
 	// which is what §9 rule 7 assigns this key to.
@@ -986,7 +986,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// unique key that could tell a double-submitted form from a deliberate second sheet — `lan` makes
 	// the second one legitimate by construction, because a commune really does reload a year after a
 	// `🗑 Gỡ`. With nothing underneath, a cache outage plus a double click is TWO live sheets for one
-	// year, which is the state `CoBangConSong` refuses and which a retry would otherwise create by
+	// year, which is the state `HasLiveSheet` refuses and which a retry would otherwise create by
 	// racing it. A 503 costs a commune one retry on an act performed twice a year.
 	//
 	// @summary  Tạo bảng thu hoặc chi cho một năm ngân sách, kèm bộ cột của biểu
@@ -1002,7 +1002,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/budget-sheets",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.TaoBangNganSach))))
+				http.HandlerFunc(h.CreateBudgetSheet))))
 
 	// `budget.confirm` ON §6's `🗑 Gỡ`, AND THE SPECIFICATION ASSIGNS NONE — the screen's own dialog
 	// calls it irreversible. It takes a whole year of figures off every report in one act, including
@@ -1030,7 +1030,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/budget-sheets/{id}",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một bảng đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.GoBangNganSach))))
+				http.HandlerFunc(h.RemoveBudgetSheet))))
 
 	// `budget.update` — correcting a sheet's title, its cut-off date (`Luỹ kế đến`) and its DISPLAY
 	// unit is data entry by the accountant, the same weight as editing a line (§9 rule 7).
@@ -1039,7 +1039,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `trieu-dong`, validated in internal/domain. Changing it changes only how the figures are
 	// DISPLAYED — every stored figure is đồng and none is converted.
 	//
-	// idem.KhongCan, FOR THE REASON THE LINE PATCH HAS IT: app.SuaBang compares what it read against
+	// idem.KhongCan, FOR THE REASON THE LINE PATCH HAS IT: app.UpdateSheet compares what it read against
 	// what it would write and, when nothing moved, writes nothing — no UPDATE, no audit entry. The
 	// same request sent twice leaves one row in one state and one entry in the ledger.
 	//
@@ -1058,7 +1058,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/budget-sheets/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.SuaBang không ghi gì khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaBangNganSach))))
+				http.HandlerFunc(h.UpdateBudgetSheet))))
 
 	// `budget.update` — `＋ Thêm khoản mục con` and `⊞ Thêm khoản mục cấp cao nhất` (§4.3).
 	//
@@ -1084,7 +1084,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/budget-lines",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.ThemKhoanMucNganSach))))
+				http.HandlerFunc(h.CreateBudgetLine))))
 
 	// PATCH AND NOT PUT: `no` is optional and its empty string is a meaningful value, so a full
 	// replacement cannot tell "not mentioned" from "cleared" — and the same holds cell by cell, which
@@ -1097,7 +1097,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// real form has a parent that is NOT the sum of its children (khoản mục ngoài cân đối, the
 	// `Trong đó:` lines), the number on the screen will differ from the paper the commune signed.
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.SuaKhoanMuc
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.UpdateLine
 	// compares what it read against what it would write and, when nothing moved, writes NOTHING — no
 	// UPDATE, no cell, no audit entry. So the same request sent twice leaves one row in one state and
 	// one entry in the ledger.
@@ -1121,7 +1121,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/budget-lines/{id}",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.SuaKhoanMuc không ghi gì khi không có trường và không có ô nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaKhoanMucNganSach))))
+				http.HandlerFunc(h.UpdateBudgetLine))))
 
 	// `budget.confirm` ON `🗑 Gỡ khoản mục`, for the same reason the sheet's removal takes it and
 	// chosen the same way — tight now, loosened later with one line if the customer says so. A line's
@@ -1152,7 +1152,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/budget-lines/{id}",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một khoản mục đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.GoKhoanMucNganSach))))
+				http.HandlerFunc(h.RemoveBudgetLine))))
 
 	// --- the star: the most consequential route on this screen ------------------------------------
 	//
@@ -1186,7 +1186,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/budget-lines/{id}/headline",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("đánh dấu lại đúng dòng đang là dòng tổng để lại đúng một dòng được đánh dấu và đúng trạng thái ấy")(
-				http.HandlerFunc(h.DatDongTongNganSach))))
+				http.HandlerFunc(h.SetBudgetHeadline))))
 
 	// --- the batches: the `⇄ Các đợt thu, chi` dialog (§5, migration 0008) ----------------------------
 	//
@@ -1203,7 +1203,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `budget.read` — the batches of one line of the commune's own budget. The list carries
 	// `counterparty` ("Đơn vị, cá nhân"), which may name a person, so it is MASKED
 	// (privacy.MaskName) for every caller — no full-view key exists (rule 3 stop condition #1,
-	// open question #27). See internal/http/dot_thu_chi.go for the stated costs. Never logged.
+	// open question #27). See internal/http/budget_entry.go for the stated costs. Never logged.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -1216,7 +1216,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/budget-lines/{id}/entries",
 		authz.RequirePermission(d.Checker, "budget.read")(
-			http.HandlerFunc(h.DocDotThuChi)))
+			http.HandlerFunc(h.ListBudgetEntries)))
 
 	// `budget.update` — `+ Ghi đợt` is data entry by the accountant.
 	//
@@ -1242,7 +1242,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/budget-lines/{id}/entries",
 		authz.RequirePermission(d.Checker, "budget.update")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.GhiDotThuChi))))
+				http.HandlerFunc(h.RecordBudgetEntry))))
 
 	// `budget.confirm` — removing a batch changes the figure of a line in `entries` mode, which may
 	// already have been read off a screen; the same weight, and the same key, as removing a line.
@@ -1265,7 +1265,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/budget-entries/{id}",
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một đợt đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.GoDotThuChi))))
+				http.HandlerFunc(h.RemoveBudgetEntry))))
 
 	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
 	//

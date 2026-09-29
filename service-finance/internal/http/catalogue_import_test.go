@@ -35,10 +35,10 @@ import (
 
 // catalogueImportFake stands in for *app.CapitalPlanCategoryImporter, recording the commune.
 type catalogueImportFake struct {
-	calls     int
-	lastRows  []domain.CatalogueImportRow
-	lastActor audit.Actor
-	lastXa    tenant.ID
+	calls      int
+	lastRows   []domain.CatalogueImportRow
+	lastActor  audit.Actor
+	lastTenant tenant.ID
 
 	res app.CatalogueImportResult
 	err error
@@ -46,13 +46,13 @@ type catalogueImportFake struct {
 
 func (f *catalogueImportFake) Preview(ctx context.Context, rows []domain.CatalogueImportRow) (app.CatalogueImportResult, error) {
 	f.calls++
-	f.lastRows, f.lastXa = rows, tenant.MustFrom(ctx)
+	f.lastRows, f.lastTenant = rows, tenant.MustFrom(ctx)
 	return f.res, f.err
 }
 
 func (f *catalogueImportFake) Import(ctx context.Context, rows []domain.CatalogueImportRow, actor audit.Actor) (app.CatalogueImportResult, error) {
 	f.calls++
-	f.lastRows, f.lastActor, f.lastXa = rows, actor, tenant.MustFrom(ctx)
+	f.lastRows, f.lastActor, f.lastTenant = rows, actor, tenant.MustFrom(ctx)
 	return f.res, f.err
 }
 
@@ -64,7 +64,7 @@ const (
 type catalogueImportHarness struct {
 	h       http.Handler
 	fake    *catalogueImportFake
-	checker *checkerDanhMucGia
+	checker *fakeCatalogueChecker
 }
 
 // newCatalogueImportHarness mounts the REAL routes through Register behind the real edge chain, with
@@ -76,29 +76,29 @@ func newCatalogueImportHarness(t *testing.T) *catalogueImportHarness {
 		Batch:   "01JBATCH0000000000000000FF",
 		Entries: []domain.PlannedCatalogueEntry{{Row: 2, ID: "hm-1", Code: "xay-dung-moi", Label: "Xây dựng mới", Order: 3}},
 	}}
-	checker := &checkerDanhMucGia{}
-	im := slog.New(slog.NewTextHandler(io.Discard, nil))
+	checker := &fakeCatalogueChecker{}
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 	Register(mux, Deps{
 		Checker:                    checker,
-		HangMuc:                    hangMucMau(),
-		GhiHangMuc:                 &ghiDanhMucGia{},
+		CapitalPlanCategories:      sampleCategories(),
+		CapitalPlanCategoryWriter:  &fakeCategoryWriter{},
 		CapitalPlanCategoryImports: fake,
-		DuAn:                       duAnMau(),
-		GhiDuAn:                    &ghiDuAnGia{},
-		GhiChungTu:                 &ghiChungTuGia{},
-		Nguong:                     nguongMacDinh(),
-		NganSach:                   &nganSachGia{},
-		GhiNganSach:                &ghiNganSachGia{},
+		InvestmentProjects:         sampleInvestmentProjects(),
+		InvestmentProjectWriter:    &fakeInvestmentProjectWriter{},
+		DisbursementVoucherWriter:  &fakeVoucherWriter{},
+		DelayThresholds:            defaultThresholds(),
+		Budget:                     &fakeBudgetReader{},
+		BudgetWriter:               &fakeBudgetWriter{},
 		AuditLog:                   &auditLogFake{},
 		SystemMessages:             &systemMessagesFake{},
-		Nay:                        func() time.Time { return lucDaQua7096 },
-		Log:                        im,
+		Now:                        func() time.Time { return atElapsed7096 },
+		Log:                        quiet,
 	})
 	var h http.Handler = mux
-	h = chuTheGhi(h)
-	h = idem.Middleware(moiKhoIdem(), im)(h)
-	h = httpx.TenantMiddleware(thuMucMau())(h)
+	h = injectPrincipal(h)
+	h = idem.Middleware(newFakeIdemStore(), quiet)(h)
+	h = httpx.TenantMiddleware(sampleDirectory())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &catalogueImportHarness{h: h, fake: fake, checker: checker}
@@ -106,14 +106,14 @@ func newCatalogueImportHarness(t *testing.T) *catalogueImportHarness {
 
 // grantLookup gives `admin.lookup` IN COMMUNE A ONLY.
 func (m *catalogueImportHarness) grantLookup() {
-	m.checker.co = map[tenant.ID]map[authz.Perm]struct{}{xaA: {"admin.lookup": {}}}
+	m.checker.grants = map[tenant.ID]map[authz.Perm]struct{}{tenantA: {"admin.lookup": {}}}
 }
 
 // send goes through the chain. file == nil sends a GET.
 func (m *catalogueImportHarness) send(t *testing.T, method, host, path string, file []byte, p *authz.Principal, key string) *httptest.ResponseRecorder {
 	t.Helper()
 	var body io.Reader
-	ct := ""
+	contentType := ""
 	if file != nil {
 		var buf bytes.Buffer
 		mw := multipart.NewWriter(&buf)
@@ -130,19 +130,19 @@ func (m *catalogueImportHarness) send(t *testing.T, method, host, path string, f
 		if err := mw.Close(); err != nil {
 			t.Fatal(err)
 		}
-		body, ct = &buf, mw.FormDataContentType()
+		body, contentType = &buf, mw.FormDataContentType()
 	}
 	r := httptest.NewRequest(method, "https://"+host+path, body)
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
-	if ct != "" {
-		r.Header.Set("Content-Type", ct)
+	if contentType != "" {
+		r.Header.Set("Content-Type", contentType)
 	}
 	if key != "" {
 		r.Header.Set(idem.Header, key)
 	}
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), principalCtxKey{}, *p))
 	}
 	w := httptest.NewRecorder()
 	m.h.ServeHTTP(w, r)
@@ -212,9 +212,9 @@ func TestCatalogueImports_401WithoutPrincipal(t *testing.T) {
 // 403 with `budget.update` — a real key of this service that is not `admin.lookup`.
 func TestCatalogueImports_403WrongPermission(t *testing.T) {
 	m := newCatalogueImportHarness(t)
-	m.checker.co = map[tenant.ID]map[authz.Perm]struct{}{xaA: {"budget.update": {}}}
+	m.checker.grants = map[tenant.ID]map[authz.Perm]struct{}{tenantA: {"budget.update": {}}}
 	for _, rt := range catalogueImportRoutes() {
-		if w := m.call(t, rt, hostA, canBoGhi(xaA)); w.Code != http.StatusForbidden {
+		if w := m.call(t, rt, hostA, writerPrincipal(tenantA)); w.Code != http.StatusForbidden {
 			t.Errorf("%s: mã = %d, muốn 403", rt.name, w.Code)
 		}
 	}
@@ -228,14 +228,14 @@ func TestCatalogueImports_403RightPermissionWrongCommune(t *testing.T) {
 	m := newCatalogueImportHarness(t)
 	m.grantLookup()
 	for _, rt := range catalogueImportRoutes() {
-		if w := m.call(t, rt, hostB, canBoGhi(xaB)); w.Code != http.StatusForbidden {
+		if w := m.call(t, rt, hostB, writerPrincipal(tenantB)); w.Code != http.StatusForbidden {
 			t.Errorf("%s: mã = %d, muốn 403", rt.name, w.Code)
 		}
 	}
 	if m.fake.calls != 0 {
 		t.Errorf("sai xã mà use case đã chạy %d lần", m.fake.calls)
 	}
-	if got := m.checker.hoiKhoaCuoi(); got != "admin.lookup" {
+	if got := m.checker.lastAskedKey(); got != "admin.lookup" {
 		t.Errorf("tuyến hỏi khoá %q, muốn \"admin.lookup\"", got)
 	}
 }
@@ -245,7 +245,7 @@ func TestCatalogueImports_2xxRightCommuneAndStaffCode(t *testing.T) {
 	for _, rt := range catalogueImportRoutes() {
 		m := newCatalogueImportHarness(t)
 		m.grantLookup()
-		w := m.call(t, rt, hostA, canBoGhi(xaA))
+		w := m.call(t, rt, hostA, writerPrincipal(tenantA))
 		if w.Code != rt.ok {
 			t.Fatalf("%s: mã = %d, muốn %d — %s", rt.name, w.Code, rt.ok, w.Body.String())
 		}
@@ -255,11 +255,11 @@ func TestCatalogueImports_2xxRightCommuneAndStaffCode(t *testing.T) {
 			}
 			continue
 		}
-		if m.fake.calls != 1 || m.fake.lastXa != xaA {
-			t.Errorf("%s: gọi %d lần, xã %q", rt.name, m.fake.calls, m.fake.lastXa)
+		if m.fake.calls != 1 || m.fake.lastTenant != tenantA {
+			t.Errorf("%s: gọi %d lần, xã %q", rt.name, m.fake.calls, m.fake.lastTenant)
 		}
 		if rt.ok == http.StatusCreated {
-			if m.fake.lastActor.ID != maCanBoGhi || m.fake.lastActor.IP == "" {
+			if m.fake.lastActor.ID != writerStaffCode || m.fake.lastActor.IP == "" {
 				t.Errorf("%s: vết phải mang MÃ CÁN BỘ: %+v", rt.name, m.fake.lastActor)
 			}
 			var out catalogueImportCreatedOut
@@ -277,8 +277,8 @@ func TestCatalogueImports_2xxRightCommuneAndStaffCode(t *testing.T) {
 func TestCatalogueImports_TemplateRoundTrip(t *testing.T) {
 	m := newCatalogueImportHarness(t)
 	m.grantLookup()
-	w := m.send(t, "GET", hostA, catalogueImportBase+"/import-template", nil, canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
+	w := m.send(t, "GET", hostA, catalogueImportBase+"/import-template", nil, writerPrincipal(tenantA), "")
+	wantStatus(t, w, http.StatusOK)
 	if w.Header().Get("Content-Type") != catalogueXLSXMIME || w.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("header %v", w.Header())
 	}
@@ -306,8 +306,8 @@ func TestCatalogueImports_TemplateRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	w = m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", buf.Bytes(), canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
+	w = m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", buf.Bytes(), writerPrincipal(tenantA), "")
+	wantStatus(t, w, http.StatusOK)
 	got := m.fake.lastRows
 	if len(got) != 2 || got[0].Label != "Xây dựng mới" || got[0].Order != "3" || got[1].Code != "sua-chua" || got[0].Row != 2 {
 		t.Errorf("dòng tới use case %+v", got)
@@ -322,8 +322,8 @@ func TestCatalogueImports_StatusMapping(t *testing.T) {
 	m.fake.err = &app.CatalogueImportRejected{Errors: []domain.CatalogueImportError{
 		{Row: 3, Column: domain.CatalogueImportColCode, Message: "Mã trùng"},
 	}}
-	w := m.send(t, "POST", hostA, path, sampleCategoryWorkbook(t), canBoGhi(xaA), catalogueImportKey)
-	doiMa(t, w, http.StatusBadRequest)
+	w := m.send(t, "POST", hostA, path, sampleCategoryWorkbook(t), writerPrincipal(tenantA), catalogueImportKey)
+	wantStatus(t, w, http.StatusBadRequest)
 	var out catalogueImportRejectedOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || out.Code != "import_invalid" || len(out.Errors) != 1 || out.Errors[0].Row != 3 {
 		t.Errorf("phản hồi: %+v (%v)", out, err)
@@ -333,11 +333,11 @@ func TestCatalogueImports_StatusMapping(t *testing.T) {
 		code int
 		id   string
 	}{
-		{fistore.ErrMaDaTonTai, http.StatusConflict, "catalogue_changed"},
+		{fistore.ErrCodeTaken, http.StatusConflict, "catalogue_changed"},
 		{errors.New("cơ sở dữ liệu không phản hồi"), http.StatusInternalServerError, "internal"},
 	} {
 		m.fake.err = c.err
-		w := m.send(t, "POST", hostA, path, sampleCategoryWorkbook(t), canBoGhi(xaA), catalogueImportKey)
+		w := m.send(t, "POST", hostA, path, sampleCategoryWorkbook(t), writerPrincipal(tenantA), catalogueImportKey)
 		var e httpx.Error
 		_ = json.Unmarshal(w.Body.Bytes(), &e)
 		if w.Code != c.code || e.Code != c.id || strings.Contains(w.Body.String(), "không phản hồi") {
@@ -347,8 +347,8 @@ func TestCatalogueImports_StatusMapping(t *testing.T) {
 
 	m.fake.err = nil
 	m.fake.res = app.CatalogueImportResult{Errors: []domain.CatalogueImportError{{Row: 2, Message: "x"}}}
-	w = m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", sampleCategoryWorkbook(t), canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
+	w = m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", sampleCategoryWorkbook(t), writerPrincipal(tenantA), "")
+	wantStatus(t, w, http.StatusOK)
 	if !strings.Contains(w.Body.String(), `"valid":false`) || !strings.Contains(w.Body.String(), `"entries":[]`) {
 		t.Errorf("xem trước tệp lỗi: %s", w.Body.String())
 	}
@@ -364,7 +364,7 @@ func TestCatalogueImports_WrongHeaderNeverEchoesCells(t *testing.T) {
 		catalogueImportBase + "/import-previews": http.StatusOK,
 		catalogueImportBase + "/imports":         http.StatusBadRequest,
 	} {
-		w := m.send(t, "POST", hostA, path, data, canBoGhi(xaA), catalogueImportKey)
+		w := m.send(t, "POST", hostA, path, data, writerPrincipal(tenantA), catalogueImportKey)
 		if w.Code != code || !strings.Contains(w.Body.String(), `"row":1`) || strings.Contains(w.Body.String(), "0900000000") {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
@@ -378,7 +378,7 @@ func TestCatalogueImports_WrongHeaderNeverEchoesCells(t *testing.T) {
 func TestCatalogueImports_NotAWorkbookIsRefusedWithAFixedSentence(t *testing.T) {
 	m := newCatalogueImportHarness(t)
 	m.grantLookup()
-	w := m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", []byte("Nguyễn Văn A,0900000000"), canBoGhi(xaA), "")
+	w := m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", []byte("Nguyễn Văn A,0900000000"), writerPrincipal(tenantA), "")
 	if w.Code != http.StatusUnsupportedMediaType || strings.Contains(w.Body.String(), "0900000000") {
 		t.Errorf("%d %s", w.Code, w.Body.String())
 	}
@@ -391,10 +391,10 @@ func TestCatalogueImports_NotAWorkbookIsRefusedWithAFixedSentence(t *testing.T) 
 func TestCatalogueImports_ImportNeedsIdempotencyKey(t *testing.T) {
 	m := newCatalogueImportHarness(t)
 	m.grantLookup()
-	if w := m.send(t, "POST", hostA, catalogueImportBase+"/imports", sampleCategoryWorkbook(t), canBoGhi(xaA), ""); w.Code/100 != 4 {
+	if w := m.send(t, "POST", hostA, catalogueImportBase+"/imports", sampleCategoryWorkbook(t), writerPrincipal(tenantA), ""); w.Code/100 != 4 {
 		t.Errorf("nhập không khoá chống trùng: %d", w.Code)
 	}
-	if w := m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", sampleCategoryWorkbook(t), canBoGhi(xaA), ""); w.Code != http.StatusOK {
+	if w := m.send(t, "POST", hostA, catalogueImportBase+"/import-previews", sampleCategoryWorkbook(t), writerPrincipal(tenantA), ""); w.Code != http.StatusOK {
 		t.Errorf("xem trước phải không cần khoá: %d", w.Code)
 	}
 	if m.fake.calls != 1 {

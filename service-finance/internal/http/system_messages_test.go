@@ -25,7 +25,7 @@ import (
 // answered. The fallback rule and the transaction are app/system_message_test.go's.
 //
 // ITS OWN HARNESS, for the reason audit_entries_test.go gives: the "right permission, wrong
-// commune" case needs checkerDanhMucGia, whose grants are keyed by commune.
+// commune" case needs fakeCatalogueChecker, whose grants are keyed by commune.
 
 const systemMessagesPath = "/api/v1/finance-system-messages"
 
@@ -94,51 +94,51 @@ func (f *systemMessagesFake) Restore(ctx context.Context, key string, actor audi
 type systemMessagesHarness struct {
 	h       http.Handler
 	svc     *systemMessagesFake
-	checker *checkerDanhMucGia
+	checker *fakeCatalogueChecker
 }
 
 func newSystemMessagesHarness(t *testing.T) *systemMessagesHarness {
 	t.Helper()
 	svc := &systemMessagesFake{}
-	checker := &checkerDanhMucGia{}
+	checker := &fakeCatalogueChecker{}
 	lg := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:        checker,
-		HangMuc:        hangMucMau(),
-		GhiHangMuc:     &ghiDanhMucGia{},
-		DuAn:           duAnMau(),
-		GhiDuAn:        &ghiDuAnGia{},
-		GhiChungTu:     &ghiChungTuGia{},
-		Nguong:         nguongMacDinh(),
-		NganSach:       nganSachMau(),
-		GhiNganSach:    &ghiNganSachGia{},
-		AuditLog:       &auditLogFake{},
-		SystemMessages: svc,
-		Nay:            func() time.Time { return lucDaQua7096 },
-		Log:            lg,
+		Checker:                   checker,
+		CapitalPlanCategories:     sampleCategories(),
+		CapitalPlanCategoryWriter: &fakeCategoryWriter{},
+		InvestmentProjects:        sampleInvestmentProjects(),
+		InvestmentProjectWriter:   &fakeInvestmentProjectWriter{},
+		DisbursementVoucherWriter: &fakeVoucherWriter{},
+		DelayThresholds:           defaultThresholds(),
+		Budget:                    sampleBudget(),
+		BudgetWriter:              &fakeBudgetWriter{},
+		AuditLog:                  &auditLogFake{},
+		SystemMessages:            svc,
+		Now:                       func() time.Time { return atElapsed7096 },
+		Log:                       lg,
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
 		CapitalPlanCategoryImports: &catalogueImportFake{},
 	})
 	var h http.Handler = mux
-	h = chuTheGhi(h)
+	h = injectPrincipal(h)
 	h = idem.Middleware(nil, lg)(h)
-	h = httpx.TenantMiddleware(thuMucMau())(h)
+	h = httpx.TenantMiddleware(sampleDirectory())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &systemMessagesHarness{h: h, svc: svc, checker: checker}
 }
 
-func (s *systemMessagesHarness) grant(xa tenant.ID, perm ...authz.Perm) {
-	if s.checker.co == nil {
-		s.checker.co = map[tenant.ID]map[authz.Perm]struct{}{}
+func (s *systemMessagesHarness) grant(tenantID tenant.ID, perm ...authz.Perm) {
+	if s.checker.grants == nil {
+		s.checker.grants = map[tenant.ID]map[authz.Perm]struct{}{}
 	}
-	if s.checker.co[xa] == nil {
-		s.checker.co[xa] = map[authz.Perm]struct{}{}
+	if s.checker.grants[tenantID] == nil {
+		s.checker.grants[tenantID] = map[authz.Perm]struct{}{}
 	}
 	for _, p := range perm {
-		s.checker.co[xa][p] = struct{}{}
+		s.checker.grants[tenantID][p] = struct{}{}
 	}
 }
 
@@ -152,7 +152,7 @@ func (s *systemMessagesHarness) call(method, host, path string, p *authz.Princip
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.Header.Set("Content-Type", "application/json")
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), principalCtxKey{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.h.ServeHTTP(w, r)
@@ -178,8 +178,8 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
-			doiMa(t, s.call(rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
+			s.grant(tenantA, "admin.lookup")
+			wantStatus(t, s.call(rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
 			if s.svc.calls != 0 {
 				t.Error("use case ran with no session")
 			}
@@ -193,14 +193,14 @@ func TestSystemMessages_403WrongPermission(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "budget.read", "budget.confirm", "admin.audit")
-			doiMa(t, s.call(rt.method, hostA, rt.path, canBoGhi(xaA), rt.body), http.StatusForbidden)
+			s.grant(tenantA, "budget.read", "budget.confirm", "admin.audit")
+			wantStatus(t, s.call(rt.method, hostA, rt.path, writerPrincipal(tenantA), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
 				t.Error("use case ran without admin.lookup")
 			}
 			// The key the ROUTE asked for, against a literal: a fake checker grants any string, so
 			// only this catches a key the `quyen` table lacks (rule 5, invariant 3c).
-			if got := s.checker.hoiKhoaCuoi(); got != "admin.lookup" {
+			if got := s.checker.lastAskedKey(); got != "admin.lookup" {
 				t.Errorf("route asked for %q, want admin.lookup", got)
 			}
 		})
@@ -212,8 +212,8 @@ func TestSystemMessages_403RightPermissionWrongCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
-			doiMa(t, s.call(rt.method, hostB, rt.path, canBoGhi(xaB), rt.body), http.StatusForbidden)
+			s.grant(tenantA, "admin.lookup")
+			wantStatus(t, s.call(rt.method, hostB, rt.path, writerPrincipal(tenantB), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
 				t.Error("commune A's grant let commune B configure its sentences")
 			}
@@ -225,15 +225,15 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
-			doiMa(t, s.call(rt.method, hostA, rt.path, canBoGhi(xaA), rt.body), rt.ok)
-			if s.svc.calls != 1 || s.svc.commune != xaA {
+			s.grant(tenantA, "admin.lookup")
+			wantStatus(t, s.call(rt.method, hostA, rt.path, writerPrincipal(tenantA), rt.body), rt.ok)
+			if s.svc.calls != 1 || s.svc.commune != tenantA {
 				t.Fatalf("calls=%d commune=%q, want one call in the Host's commune", s.svc.calls, s.svc.commune)
 			}
 			if rt.method != http.MethodGet {
 				// Rule 6, invariant 8: the trail names the BUSINESS CODE, never the internal id.
-				if s.svc.actor.ID != maCanBoGhi || s.svc.actor.ID == idCanBoGhi || s.svc.actor.IP != "10.0.0.7" {
-					t.Errorf("actor = %+v, want business code %s and socket IP", s.svc.actor, maCanBoGhi)
+				if s.svc.actor.ID != writerStaffCode || s.svc.actor.ID == writerInternalID || s.svc.actor.IP != "10.0.0.7" {
+					t.Errorf("actor = %+v, want business code %s and socket IP", s.svc.actor, writerStaffCode)
 				}
 				if s.svc.key != domain.KeyBudgetScopeNotice {
 					t.Errorf("key = %q", s.svc.key)
@@ -247,15 +247,15 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 
 func TestListSystemMessagesShape(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(tenantA, "admin.lookup")
 	at := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
 	s.svc.list = []domain.SystemMessage{{
 		Key: domain.KeyBudgetScopeNotice, Description: "d", DefaultText: "Mặc định.",
 		CurrentText: "Câu của xã.", Overridden: true, UpdatedAt: &at, UpdatedBy: "CB-00777",
 	}}
-	w := s.call(http.MethodGet, hostA, systemMessagesPath+"?tenant_id=01JOTHERCOMMUNE", canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
-	if s.svc.commune != xaA {
+	w := s.call(http.MethodGet, hostA, systemMessagesPath+"?tenant_id=01JOTHERCOMMUNE", writerPrincipal(tenantA), "")
+	wantStatus(t, w, http.StatusOK)
+	if s.svc.commune != tenantA {
 		t.Errorf("read in %q — the commune is the Host's, never a query parameter", s.svc.commune)
 	}
 	var out struct {
@@ -277,10 +277,10 @@ func TestListSystemMessagesShape(t *testing.T) {
 
 func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(tenantA, "admin.lookup")
 	s.svc.list = []domain.SystemMessage{{Key: domain.KeyBudgetScopeNotice, DefaultText: "M.", CurrentText: "M."}}
-	w := s.call(http.MethodGet, hostA, systemMessagesPath, canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
+	w := s.call(http.MethodGet, hostA, systemMessagesPath, writerPrincipal(tenantA), "")
+	wantStatus(t, w, http.StatusOK)
 	if strings.Contains(w.Body.String(), "updated_by") || strings.Contains(w.Body.String(), "updated_at") {
 		t.Errorf("a key nobody changed names somebody: %s", w.Body.String())
 	}
@@ -288,10 +288,10 @@ func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 
 func TestRewordSystemMessagePassesTextAndReturnsMessage(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(tenantA, "admin.lookup")
 	s.svc.result = domain.SystemMessage{Key: domain.KeyBudgetScopeNotice, CurrentText: "Câu của xã.", Overridden: true}
-	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"Câu của xã."}`)
-	doiMa(t, w, http.StatusOK)
+	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), `{"text":"Câu của xã."}`)
+	wantStatus(t, w, http.StatusOK)
 	if s.svc.text != "Câu của xã." || s.svc.op != "reword" {
 		t.Errorf("text=%q op=%q", s.svc.text, s.svc.op)
 	}
@@ -315,11 +315,11 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(tenantA, "admin.lookup")
 			s.svc.err = c.err
-			w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":""}`)
-			doiMa(t, w, c.want)
-			e := loiTra(t, w)
+			w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), `{"text":""}`)
+			wantStatus(t, w, c.want)
+			e := errorBody(t, w)
 			if e.Code != c.code || strings.Contains(e.Message, "connection reset") {
 				t.Errorf("error = %+v", e)
 			}
@@ -330,12 +330,12 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 func TestEmptyTextNamesTheRestoreAction(t *testing.T) {
 	// 400 on empty text must tell the administrator what to do instead.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(tenantA, "admin.lookup")
 	s.svc.err = domain.ErrMessageTextEmpty
-	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"  "}`)
-	doiMa(t, w, http.StatusBadRequest)
-	if !strings.Contains(loiTra(t, w).Message, "Khôi phục câu mặc định") {
-		t.Errorf("message %q does not point to the restore action", loiTra(t, w).Message)
+	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), `{"text":"  "}`)
+	wantStatus(t, w, http.StatusBadRequest)
+	if !strings.Contains(errorBody(t, w).Message, "Khôi phục câu mặc định") {
+		t.Errorf("message %q does not point to the restore action", errorBody(t, w).Message)
 	}
 }
 
@@ -343,14 +343,14 @@ func TestUnknownKeyIs404OnBothWrites(t *testing.T) {
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(tenantA, "admin.lookup")
 			s.svc.err = domain.ErrUnknownMessageKey
 			body := ""
 			if method == http.MethodPut {
 				body = `{"text":"x"}`
 			}
-			w := s.call(method, hostA, overridePath("feedback.reason_required"), canBoGhi(xaA), body)
-			doiMa(t, w, http.StatusNotFound)
+			w := s.call(method, hostA, overridePath("feedback.reason_required"), writerPrincipal(tenantA), body)
+			wantStatus(t, w, http.StatusNotFound)
 			if s.svc.key != "feedback.reason_required" {
 				t.Errorf("key reaching use case = %q", s.svc.key)
 			}
@@ -360,8 +360,8 @@ func TestUnknownKeyIs404OnBothWrites(t *testing.T) {
 
 func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
-	doiMa(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":`),
+	s.grant(tenantA, "admin.lookup")
+	wantStatus(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), `{"text":`),
 		http.StatusBadRequest)
 	if s.svc.calls != 0 {
 		t.Error("malformed body reached the use case")
@@ -369,10 +369,10 @@ func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 }
 
 func TestSystemMessageWriteWithoutBusinessCodeIs500(t *testing.T) {
-	// canBoCua carries no `Ma`: the trail could not name who acted, so nothing is written.
+	// staffOf carries no `Ma`: the trail could not name who acted, so nothing is written.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
-	doiMa(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoCua(xaA), ""),
+	s.grant(tenantA, "admin.lookup")
+	wantStatus(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), staffOf(tenantA), ""),
 		http.StatusInternalServerError)
 	if s.svc.calls != 0 {
 		t.Error("write ran for a principal with no business code")
@@ -383,7 +383,7 @@ func TestSystemMessageWritesNeedNoIdempotencyKey(t *testing.T) {
 	// Both writes declare idem.KhongCan; the harness sends no Idempotency-Key at all, so a 200/204
 	// here is the declaration under test. Making them Required would break the Lưu button.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
-	doiMa(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"x"}`), http.StatusOK)
-	doiMa(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), ""), http.StatusNoContent)
+	s.grant(tenantA, "admin.lookup")
+	wantStatus(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), `{"text":"x"}`), http.StatusOK)
+	wantStatus(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), writerPrincipal(tenantA), ""), http.StatusNoContent)
 }

@@ -15,7 +15,7 @@
       "consumers": [
         {
           "service": "comms",
-          "at": "service-comms/internal/event/phieu_doi_trang_thai.go:137"
+          "at": "service-comms/internal/event/citizen_report_status_changed.go:139"
         }
       ],
       "unclassified_mentions": [

@@ -14,8 +14,8 @@ package domain
 // `Thứ tự` stays: the category list is flat, `thu_tu` only arranges it (unlike petitions' priority
 // scale, where the order is the meaning and the file position ranks).
 //
-// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/capital-plan-categories — ChuanHoaNhan,
-// ChuanHoaMa, KiemTraThuTu — so a row that could not be typed into the form cannot be imported. What
+// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/capital-plan-categories — NormalizeLabel,
+// NormalizeCode, ValidateSortOrder — so a row that could not be typed into the form cannot be imported. What
 // differs, deliberately (identity's two differences):
 //
 //   - NO `-2` SUFFIX ON A DERIVED CODE. A file imported twice must not produce `xay-dung-moi-2`; a
@@ -50,7 +50,7 @@ func CatalogueImportColumns() []string {
 	return []string{CatalogueImportColLabel, CatalogueImportColCode, CatalogueImportColOrder}
 }
 
-// MaxCatalogueImportRows bounds one file: the catalogue's own ceiling (store.TranDanhMucHangMuc, 200).
+// MaxCatalogueImportRows bounds one file: the catalogue's own ceiling (store.MaxCapitalPlanCategories, 200).
 // The ceiling check below is the binding one — it counts the rows already there.
 const MaxCatalogueImportRows = 200
 
@@ -189,9 +189,9 @@ func PlanCatalogueImport(rows []CatalogueImportRow, existing []ExistingCatalogue
 		p := PlannedCatalogueEntry{Row: r.Row}
 		labelOK, codeOK := false, false
 
-		if label, err := ChuanHoaNhan(r.Label); err != nil {
-			if errors.Is(err, ErrNhanQuaDai) {
-				rowErr(r, CatalogueImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", NhanToiDa))
+		if label, err := NormalizeLabel(r.Label); err != nil {
+			if errors.Is(err, ErrLabelTooLong) {
+				rowErr(r, CatalogueImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", LabelMax))
 			} else {
 				rowErr(r, CatalogueImportColLabel, "Thiếu tên hiển thị (hoặc có ký tự điều khiển).")
 			}
@@ -201,9 +201,9 @@ func PlanCatalogueImport(rows []CatalogueImportRow, existing []ExistingCatalogue
 
 		typed := strings.TrimSpace(r.Code) != ""
 		if typed {
-			if code, err := ChuanHoaMa(r.Code); err != nil {
-				if errors.Is(err, ErrMaQuaDai) {
-					rowErr(r, CatalogueImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", MaToiDa))
+			if code, err := NormalizeCode(r.Code); err != nil {
+				if errors.Is(err, ErrCodeTooLong) {
+					rowErr(r, CatalogueImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", CodeMax))
 				} else {
 					rowErr(r, CatalogueImportColCode, "Mã chỉ gồm chữ thường a-z, số và dấu gạch ngang đơn, ví dụ xay-dung-moi.")
 				}
@@ -268,7 +268,7 @@ func parseCatalogueOrder(raw string) (int, string) {
 	if s == "" {
 		return 0, ""
 	}
-	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d (chỉ gồm chữ số).", ThuTuToiDa)
+	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d (chỉ gồm chữ số).", SortOrderMax)
 	if len(s) > 4 {
 		return 0, msg
 	}
@@ -278,7 +278,7 @@ func parseCatalogueOrder(raw string) (int, string) {
 		}
 	}
 	n, err := strconv.Atoi(s)
-	if err != nil || KiemTraThuTu(n) != nil {
+	if err != nil || ValidateSortOrder(n) != nil {
 		return 0, msg
 	}
 	return n, ""
@@ -312,7 +312,7 @@ var vietnameseBaseLetter = func() map[rune]rune {
 }()
 
 // DeriveCatalogueCode derives a code from a label: "Xây dựng mới" → "xay-dung-moi". Lower-case,
-// diacritics stripped (đ → d), every run of anything else one '-', cut at MaToiDa on a word boundary,
+// diacritics stripped (đ → d), every run of anything else one '-', cut at CodeMax on a word boundary,
 // then checked with the form's own validator so a derived code is always a code the form accepts.
 // false when nothing usable remains. NOT guaranteed free: that is the planner's check.
 func DeriveCatalogueCode(label string) (string, bool) {
@@ -334,14 +334,14 @@ func DeriveCatalogueCode(label string) (string, bool) {
 		sep = true
 	}
 	code := b.String()
-	if len(code) > MaToiDa {
-		code = code[:MaToiDa]
+	if len(code) > CodeMax {
+		code = code[:CodeMax]
 		if i := strings.LastIndexByte(code, '-'); i > 0 {
 			code = code[:i]
 		}
 		code = strings.TrimRight(code, "-")
 	}
-	if _, err := ChuanHoaMa(code); err != nil {
+	if _, err := NormalizeCode(code); err != nil {
 		return "", false
 	}
 	return code, true

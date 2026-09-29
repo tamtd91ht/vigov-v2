@@ -29,7 +29,7 @@ import (
 // misled: this service has NO staff-authentication middleware of its own yet. The identity service
 // has one (XacThuc: cookie -> session registry -> account -> Principal) and finance may not import
 // it — reaching into another service's internal/ breaks the boundary at compile time (rule 2,
-// forbidden #1). So xacThucGia below puts the Principal into the context directly, exactly as that
+// forbidden #1). So fakeAuth below puts the Principal into the context directly, exactly as that
 // middleware will when this service gets one.
 //
 // The GUARD ITSELF IS REAL: authz.AnyAuthenticated is the shipped code, and it performs the commune
@@ -44,60 +44,60 @@ const (
 
 	// The internal staff id, the value identity's Checker matches on (`nd.id = $2`). Never a
 	// business code: a swap there makes every guarded route answer 403 with nothing to show why.
-	idNoiBo = "nd-01JINTERNALIDCUACANBO"
+	internalStaffID = "nd-01JINTERNALIDCUACANBO"
 )
 
 var (
-	xaA = tenant.ID("01JA" + strings.Repeat("A", 22))
-	xaB = tenant.ID("01JB" + strings.Repeat("B", 22))
+	tenantA = tenant.ID("01JA" + strings.Repeat("A", 22))
+	tenantB = tenant.ID("01JB" + strings.Repeat("B", 22))
 )
 
-// canBoCua builds the principal core/staffauth.Middleware builds for one commune — the same shape,
+// staffOf builds the principal core/staffauth.Middleware builds for one commune — the same shape,
 // injected directly so this package's properties stay testable without a fake identity service.
 // The real middleware is driven end to end in cmd/server/main_test.go.
-func canBoCua(xa tenant.ID) *authz.Principal {
-	return &authz.Principal{ID: idNoiBo, Kind: "staff", TenantID: xa}
+func staffOf(tenantID tenant.ID) *authz.Principal {
+	return &authz.Principal{ID: internalStaffID, Kind: "staff", TenantID: tenantID}
 }
 
 // --- fakes ------------------------------------------------------------------------------------
 
-type thuMucGia map[string]tenant.Tenant
+type fakeDirectory map[string]tenant.Tenant
 
-func (m thuMucGia) ByHost(_ context.Context, host string) (tenant.Tenant, bool) {
+func (m fakeDirectory) ByHost(_ context.Context, host string) (tenant.Tenant, bool) {
 	t, ok := m[host]
 	return t, ok
 }
 
-// thuMucMau is the platform registry for the two test communes. A NEW MAP PER CALL, so a test that
+// sampleDirectory is the platform registry for the two test communes. A NEW MAP PER CALL, so a test that
 // rewrites one copy cannot change another's.
-func thuMucMau() thuMucGia {
-	return thuMucGia{
-		hostA: {ID: xaA, Host: hostA, Name: "Xã Thăng Bình", Province: "Thành phố Đà Nẵng", Active: true},
-		hostB: {ID: xaB, Host: hostB, Name: "Xã Bình Dương", Active: true},
+func sampleDirectory() fakeDirectory {
+	return fakeDirectory{
+		hostA: {ID: tenantA, Host: hostA, Name: "Xã Thăng Bình", Province: "Thành phố Đà Nẵng", Active: true},
+		hostB: {ID: tenantB, Host: hostB, Name: "Xã Bình Dương", Active: true},
 	}
 }
 
-// hangMucGia is the capital plan category catalogue, KEYED BY COMMUNE, reading the commune from
+// fakeCategoryCatalogue is the capital plan category catalogue, KEYED BY COMMUNE, reading the commune from
 // the context exactly as *store.Scoped does. Keyed any other way, the isolation case in
-// hang_muc_ke_hoach_von_test.go would pass while proving nothing.
+// capital_plan_category_test.go would pass while proving nothing.
 //
-// `goi` counts the reads. The count is what proves the commune check happens BEFORE any store
+// `calls` counts the reads. The count is what proves the commune check happens BEFORE any store
 // access, rather than merely producing the right answer afterwards.
-type hangMucGia struct {
-	theo map[tenant.ID][]domain.HangMucKeHoachVon
-	loi  error
-	goi  int
+type fakeCategoryCatalogue struct {
+	byTenant map[tenant.ID][]domain.CapitalPlanCategory
+	err      error
+	calls    int
 }
 
-func (h *hangMucGia) DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, error) {
-	h.goi++
-	if h.loi != nil {
-		return nil, h.loi
+func (h *fakeCategoryCatalogue) ListCategories(ctx context.Context) ([]domain.CapitalPlanCategory, error) {
+	h.calls++
+	if h.err != nil {
+		return nil, h.err
 	}
-	return h.theo[tenant.MustFrom(ctx)], nil
+	return h.byTenant[tenant.MustFrom(ctx)], nil
 }
 
-// hangMucMau gives commune A three categories and commune B one with a DIFFERENT name. Two
+// sampleCategories gives commune A three categories and commune B one with a DIFFERENT name. Two
 // communes whose catalogues were named the same could not show a leak.
 //
 // THREE PROPERTIES ARE BUILT INTO THIS FIXTURE, each for a specific failure:
@@ -112,34 +112,34 @@ func (h *hangMucGia) DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, 
 //
 // Real category codes, written the way ADR 0011 requires: Vietnamese without diacritics. No row is
 // seeded anywhere but here — the table itself ships empty for every commune on purpose.
-func hangMucMau() *hangMucGia {
-	return &hangMucGia{theo: map[tenant.ID][]domain.HangMucKeHoachVon{
-		xaA: {
+func sampleCategories() *fakeCategoryCatalogue {
+	return &fakeCategoryCatalogue{byTenant: map[tenant.ID][]domain.CapitalPlanCategory{
+		tenantA: {
 			// A FOURTH PROPERTY, ADDED WITH THE WRITE ROUTES: the three tiers of ADR 0024 are all
 			// represented, because the tier is what the configuration screen reads to decide which
 			// buttons it may draw. A fixture where every row was `don-vi` could not tell a mapper
 			// that always answers tier 1 from one that reads the columns.
-			{ID: "hm-001", Ma: "xay-dung-moi", Nhan: "Xây dựng mới", LaMacDinh: true, DangDung: true,
-				Nguon: domain.NguonDonVi},
-			{ID: "hm-002", Ma: "cai-tao-nang-cap", Nhan: "Cải tạo, nâng cấp", DangDung: true,
-				ThuTu: 2, Nguon: domain.NguonHeThong},
-			{ID: "hm-003", Ma: "tra-no", Nhan: "Trả nợ",
-				ThuTu: 3, Nguon: domain.NguonHeThong, MaNguonReNhanh: true},
+			{ID: "hm-001", Code: "xay-dung-moi", Label: "Xây dựng mới", IsDefault: true, IsActive: true,
+				Source: domain.SourceCommune},
+			{ID: "hm-002", Code: "cai-tao-nang-cap", Label: "Cải tạo, nâng cấp", IsActive: true,
+				SortOrder: 2, Source: domain.SourceSystem},
+			{ID: "hm-003", Code: "tra-no", Label: "Trả nợ",
+				SortOrder: 3, Source: domain.SourceSystem, BranchedInSource: true},
 		},
-		xaB: {
-			{ID: "hm-b-001", Ma: "giai-phong-mat-bang", Nhan: "Giải phóng mặt bằng XÃ B",
-				DangDung: true, Nguon: domain.NguonDonVi},
+		tenantB: {
+			{ID: "hm-b-001", Code: "giai-phong-mat-bang", Label: "Giải phóng mặt bằng XÃ B",
+				IsActive: true, Source: domain.SourceCommune},
 		},
 	}}
 }
 
-// checkerGia grants nothing to anybody, in any commune.
+// fakeChecker grants nothing to anybody, in any commune.
 //
 // THAT IS THE HONEST FIXTURE FOR THIS SERVICE TODAY: no route here declares RequirePermission, so
 // a checker that granted something would be describing an enforcement path that does not exist. It
 // is wired anyway, so that the AnyAuthenticated route is proved to answer 200 for an account
 // holding NO permission at all — which is the whole reason that declaration was chosen.
-// checkerGia grants exactly the permissions it was built with, and nothing else, in any commune.
+// fakeChecker grants exactly the permissions it was built with, and nothing else, in any commune.
 //
 // IT USED TO GRANT NOTHING AT ALL, and the comment here said why: no route declared
 // RequirePermission, so a checker that granted something would have described an enforcement path
@@ -150,85 +150,87 @@ func hangMucMau() *hangMucGia {
 // THE COMMUNE IS NOT COMPARED HERE, deliberately: authz.RequirePermission does that comparison
 // itself, before it ever calls Allows. A checker that also compared would hide a guard that had
 // stopped comparing.
-type checkerGia struct{ cho map[authz.Perm]bool }
+type fakeChecker struct{ allow map[authz.Perm]bool }
 
-func (c checkerGia) Allows(_ context.Context, _ authz.Principal, perm authz.Perm) bool {
-	return c.cho[perm]
+func (c fakeChecker) Allows(_ context.Context, _ authz.Principal, perm authz.Perm) bool {
+	return c.allow[perm]
 }
 
-// khongQuyen is an account that can sign in and holds nothing. It is the fixture the
+// noPermissions is an account that can sign in and holds nothing. It is the fixture the
 // AnyAuthenticated route needs — that declaration exists precisely so such an account gets 200.
-func khongQuyen() checkerGia { return checkerGia{} }
+func noPermissions() fakeChecker { return fakeChecker{} }
 
-// coQuyen grants one real key. `budget.read` is one of the three `budget.*` rows loaded by
+// withPermission grants one real key. `budget.read` is one of the three `budget.*` rows loaded by
 // service-identity/migrations/0001_init.sql; a fixture granting an invented key would prove a
 // route reachable that no administrator could ever grant access to.
-func coQuyen(perm authz.Perm) checkerGia { return checkerGia{cho: map[authz.Perm]bool{perm: true}} }
+func withPermission(perm authz.Perm) fakeChecker {
+	return fakeChecker{allow: map[authz.Perm]bool{perm: true}}
+}
 
 // --- harness ----------------------------------------------------------------------------------
 
-type mayChu struct {
-	d       Deps
-	mux     *http.ServeMux
-	thuMuc  thuMucGia
-	hangMuc *hangMucGia
-	duAn    *duAnGia
+type testServer struct {
+	d                  Deps
+	mux                *http.ServeMux
+	directory          fakeDirectory
+	categories         *fakeCategoryCatalogue
+	investmentProjects *fakeInvestmentProjectReader
 }
 
-// dungMayChu mounts the REAL routes through Register.
+// newTestServer mounts the REAL routes through Register.
 //
 // Building from Register rather than from a stand-in route is what makes every case below prove
 // something about what ships: a route mounted without a permission declaration, or mounted at a
 // different path, fails here rather than in production.
-func dungMayChu(t *testing.T) *mayChu {
+func newTestServer(t *testing.T) *testServer {
 	t.Helper()
 
-	return dungMayChuVoi(t, khongQuyen())
+	return newTestServerWith(t, noPermissions())
 }
 
-// dungMayChuVoi mounts the REAL routes with a chosen permission set.
+// newTestServerWith mounts the REAL routes with a chosen permission set.
 //
-// The clock is FIXED at lucDaQua7096 — the instant §3 uses in its worked examples, 70,96% of the
+// The clock is FIXED at atElapsed7096 — the instant §3 uses in its worked examples, 70,96% of the
 // 2026 budget year. A test that let the routes read the wall clock would assert a different delay
 // score every day it ran, so it would end up asserting nothing.
-func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
+func newTestServerWith(t *testing.T, c fakeChecker) *testServer {
 	t.Helper()
 
-	hangMuc := hangMucMau()
-	duAn := duAnMau()
+	categories := sampleCategories()
+	investmentProjects := sampleInvestmentProjects()
 	d := Deps{
-		Checker: c,
-		HangMuc: hangMuc,
+		Checker:               c,
+		CapitalPlanCategories: categories,
 		// The write use case, so Register accepts the Deps. NOTHING IN THIS FILE CALLS IT: the
-		// write routes have their own four-case suite in hang_muc_ke_hoach_von_ghi_test.go, with a
+		// write routes have their own four-case suite in capital_plan_category_write_test.go, with a
 		// fake that records the commune and the acting person. Register refuses a nil dependency at
 		// construction, so it has to be present here — and a fake that is never invoked cannot
 		// answer anything wrongly.
-		GhiHangMuc: &ghiDanhMucGia{},
-		DuAn:       duAn,
+		CapitalPlanCategoryWriter: &fakeCategoryWriter{},
+		InvestmentProjects:        investmentProjects,
 		// The voucher write use case and the commune's threshold, so Register accepts the Deps.
 		// NOTHING IN THIS FILE CALLS THE FIRST: the write routes have their own four-case suite in
-		// chung_tu_giai_ngan_test.go, with a fake that records the commune and the acting person.
-		// The threshold IS read here, by the two project routes. nguongMacDinh() leaves EVERY commune
+		// disbursement_voucher_test.go, with a fake that records the commune and the acting person.
+		// The threshold IS read here, by the two project routes. defaultThresholds() leaves EVERY commune
 		// on the software's 10 points — the state of every commune today — so the delay assertions in
-		// du_an_test.go stay about the projects rather than about a threshold fixture. The case where
-		// a commune has chosen its own figure lives beside the fake, in chung_tu_giai_ngan_test.go.
+		// investment_project_test.go stay about the projects rather than about a threshold fixture. The case where
+		// a commune has chosen its own figure lives beside the fake, in disbursement_voucher_test.go.
 		// The project write use case, so Register accepts the Deps. NOTHING IN THIS FILE CALLS IT:
-		// the three write routes have their own four-case suite in du_an_ghi_test.go, with a fake
+		// the three write routes have their own four-case suite in investment_project_write_test.go, with a fake
 		// that records the commune and the acting person.
-		GhiDuAn:    &ghiDuAnGia{},
-		GhiChungTu: &ghiChungTuGia{},
-		Nguong:     nguongMacDinh(),
+		InvestmentProjectWriter:   &fakeInvestmentProjectWriter{},
+		DisbursementVoucherWriter: &fakeVoucherWriter{},
+		DelayThresholds:           defaultThresholds(),
 		// The budget board, so Register accepts the Deps. NOTHING IN THIS FILE CALLS EITHER: the
-		// eight budget routes have their own suite in thu_chi_ngan_sach_test.go, with fakes that
+		// eight budget routes have their own suite in budget_test.go, with fakes that
 		// record the commune and the acting person. Register refuses a nil dependency at
 		// construction, so both have to be present here — and a fake that is never invoked cannot
 		// answer anything wrongly.
-		NganSach:       &nganSachGia{},
-		GhiNganSach:    &ghiNganSachGia{},
+		Budget:         &fakeBudgetReader{},
+		BudgetWriter:   &fakeBudgetWriter{},
 		AuditLog:       &auditLogFake{},
 		SystemMessages: &systemMessagesFake{},
-		Nay:            func() time.Time { return lucDaQua7096 },
+		Now:            func() time.Time { return atElapsed7096 },
 		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 
 		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
@@ -238,15 +240,15 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 	mux := http.NewServeMux()
 	Register(mux, d)
 
-	return &mayChu{d: d, mux: mux, thuMuc: thuMucMau(), hangMuc: hangMuc, duAn: duAn}
+	return &testServer{d: d, mux: mux, directory: sampleDirectory(), categories: categories, investmentProjects: investmentProjects}
 }
 
-// xacThucGia stands in for the staff-authentication middleware this service does not have yet.
+// fakeAuth stands in for the staff-authentication middleware this service does not have yet.
 // See the note at the top of this file.
 //
 // A nil principal means "no session" — the request reaches the route with nothing in the context,
 // which is exactly the state a request with no cookie arrives in.
-func xacThucGia(p *authz.Principal) func(http.Handler) http.Handler {
+func fakeAuth(p *authz.Principal) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if p == nil {
@@ -258,7 +260,7 @@ func xacThucGia(p *authz.Principal) func(http.Handler) http.Handler {
 	}
 }
 
-// goi runs one request through the real edge chain, in the real order:
+// call runs one request through the real edge chain, in the real order:
 //
 //	StripTenantHeaders  a client naming its own commune is a client granting itself access
 //	Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
@@ -269,12 +271,12 @@ func xacThucGia(p *authz.Principal) func(http.Handler) http.Handler {
 // The chain is rebuilt per call rather than once, so the principal can differ between calls
 // without any test assembling the order by hand — the ORDER is the property most of these tests
 // are about, and a copy assembled per test is a copy that drifts out of it.
-func (m *mayChu) goi(t *testing.T, method, host, path string, p *authz.Principal) *httptest.ResponseRecorder {
+func (m *testServer) call(t *testing.T, method, host, path string, p *authz.Principal) *httptest.ResponseRecorder {
 	t.Helper()
 
 	var h http.Handler = m.mux
-	h = xacThucGia(p)(h)
-	h = httpx.TenantMiddleware(m.thuMuc)(h)
+	h = fakeAuth(p)(h)
+	h = httpx.TenantMiddleware(m.directory)(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
@@ -286,14 +288,14 @@ func (m *mayChu) goi(t *testing.T, method, host, path string, p *authz.Principal
 	return w
 }
 
-func doiMa(t *testing.T, w *httptest.ResponseRecorder, muon int) {
+func wantStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
-	if w.Code != muon {
-		t.Fatalf("mã trạng thái = %d, muốn %d — thân: %s", w.Code, muon, w.Body.String())
+	if w.Code != want {
+		t.Fatalf("mã trạng thái = %d, muốn %d — thân: %s", w.Code, want, w.Body.String())
 	}
 }
 
-func loiTra(t *testing.T, w *httptest.ResponseRecorder) httpx.Error {
+func errorBody(t *testing.T, w *httptest.ResponseRecorder) httpx.Error {
 	t.Helper()
 	var e httpx.Error
 	if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
@@ -304,7 +306,7 @@ func loiTra(t *testing.T, w *httptest.ResponseRecorder) httpx.Error {
 
 // --- wiring -------------------------------------------------------------------------------------
 
-func TestRegisterThieuKhoThiPanicNgayLucDung(t *testing.T) {
+func TestRegisterWithoutStorePanicsAtConstruction(t *testing.T) {
 	// AT CONSTRUCTION, NOT AT REQUEST TIME. A route mounted without its store would accept requests
 	// it cannot honour, and the first person to find out would be a member of staff in front of a
 	// government screen. A process that refuses to start is a deployment that fails visibly.
@@ -316,14 +318,14 @@ func TestRegisterThieuKhoThiPanicNgayLucDung(t *testing.T) {
 	Register(http.NewServeMux(), Deps{})
 }
 
-func TestHostKhongThuocXaNaoTra404(t *testing.T) {
+func TestHostOfNoCommuneIs404(t *testing.T) {
 	// Rule 1, invariant 3: cannot resolve the commune -> 404, never a default commune. 404 also
 	// reveals nothing about which communes exist on the platform.
-	m := dungMayChu(t)
+	m := newTestServer(t)
 
-	w := m.goi(t, "GET", "khong-ai-biet.example.gov.vn", duongHangMuc, canBoCua(xaA))
-	doiMa(t, w, http.StatusNotFound)
-	if m.hangMuc.goi != 0 {
+	w := m.call(t, "GET", "khong-ai-biet.example.gov.vn", categoryPath, staffOf(tenantA))
+	wantStatus(t, w, http.StatusNotFound)
+	if m.categories.calls != 0 {
 		t.Error("tên miền không thuộc xã nào mà vẫn đọc danh mục")
 	}
 }

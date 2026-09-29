@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 66 |
 | chưa làm | 30 |
 | treo | 14 |
-| xong | 242 |
+| xong | 243 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -237,6 +237,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `service-finance` | `nhat-ky-he-thong-finance` — GET /api/v1/finance-audit-entries (ADR 0054) | xong | — | — |
 | `service-finance` | `loi-he-thong-budget-scope-notice` — Lời hệ thống budget.scope_notice — xã sửa câu; scope_notice trên tuyến dự án (§7) | xong | — | — |
 | `service-finance` | `nhap-excel-hang-muc-ke-hoach-von` — Nhập Excel Hạng mục kế hoạch vốn (ADR 0059 §3) | xong | — | — |
+| `service-finance` | `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | — | Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26). |
 | `service-identity` | `danh-muc-dan-cu-tuyen-doc` — Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs | xong | — | Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions |
 | `service-identity` | `lich-lam-viec` — Lịch làm việc của xã — tuần làm việc, ngày nghỉ lễ, ngày làm bù | xong | — | BA ĐIỀU NGƯỜI VIẾT HÀM ĐẾM HẠN PHẢI BIẾT, cả ba đã ghi trong tệp: (1) lịch RỖNG nghĩa là xã KHÔNG có giờ làm việc nào — phải TỪ CHỐI tính hạn, tuyệt đối không rơi về mặc định 'thứ Hai đến thứ Sáu 8-17', vì một mặc định ở đây là cam kết do phần mềm bịa ra rồi nói với dân; (2) một ngày có mặt ở cả ngay_nghi_le lẫn ngay_lam_bu là lỗi cấu hình, phải từ chối chứ không chọn bên thắng; (3) KHÔNG có ràng buộc chống chồng ca trong lich_lam_viec — cần extension btree_gist, mà migration hỏng vì thiếu extension thì service không khởi động được (ADR 0013), nên đường ghi phải tự kiểm và phải có ca test. Năm câu ADR 0007 để mở vẫn để mở: lược đồ chỉ bảo đảm MỌI đáp án đều diễn đạt được mà không cần migration thứ hai |
 | `service-identity` | `rpc-han-xu-ly` — Tuyến gRPC ResolveDeadlines — tra bảng `sla` lấy số giờ rồi cộng qua CHÍNH đường AdvanceWorkingHours đang có | xong | — | XÃ CHƯA CẤU HÌNH → FAILED_PRECONDITION, và HÔM NAY ĐÓ LÀ MỌI XÃ: migration 0008 cố ý không gieo dòng nào. Tức hợp đồng đã hết chặn nhưng DỮ LIỆU thì chưa — tuyến ghi của petitions/documents gọi vào đây sẽ nhận từ chối cho tới khi có đường ghi bảng `sla` (mục `bang-sla` (2), ADR 0026 điều kiện dừng #2) và một màn hình cấu hình. Đó là fail-closed đúng ý luật 10 cấm #3, không phải lỗi để đi vòng. MÃ LỖI PHÂN BIỆT BA THỨ và đừng gộp: InvalidArgument = sửa service đang gọi · FailedPrecondition = mở màn hình cấu hình của xã (thiếu dòng SLA, thiếu dòng mặc định, số giờ không dương, hoặc bốn lỗi lịch) · Internal = kho hỏng hoặc lược đồ mất CHECK (ErrQuaNhieuDongSLA, ErrLoaiViecLa). MỘT CHỖ HẸP HƠN, cố ý: số giờ vượt trần 2000 từ DÒNG CẤU HÌNH trả FailedPrecondition chứ không InvalidArgument như AdvanceWorkingHours — cùng hình dạng, khác NGUỒN của con số. CHƯA KIỂM ĐƯỢC: 8 ca sla_pg_test.go vẫn SKIP vì thiếu VIGOV_TEST_DSN, nên phép đọc thật của SLAStore (phạm vi hoá theo xã, ORDER BY NULLS FIRST) chưa có phép kiểm nào chạy — cùng nợ với mục sql-chua-chay. |
@@ -572,7 +573,7 @@ Cập nhật 2026-09-30 · 18 mục
 
 ## `service-finance`
 
-Cập nhật 2026-09-29 · 21 mục
+Cập nhật 2026-09-30 · 22 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -597,6 +598,7 @@ Cập nhật 2026-09-29 · 21 mục
 | `nhat-ky-he-thong-finance` — GET /api/v1/finance-audit-entries (ADR 0054) | xong | f1871ed; chỉ mục migration 0009. | — | — |
 | `loi-he-thong-budget-scope-notice` — Lời hệ thống budget.scope_notice — xã sửa câu; scope_notice trên tuyến dự án (§7) | xong | fdd3903, 8cf36fb, cce8bba (trường 'key'→'code' vì apidoc). go test ok. | — | — |
 | `nhap-excel-hang-muc-ke-hoach-von` — Nhập Excel Hạng mục kế hoạch vốn (ADR 0059 §3) | xong | 5a576de · go test ./... xanh | — | — |
+| `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | 30/09/2026: 60 tệp git mv + 17 tệp sửa tại chỗ. Kiểu theo từ điển: InvestmentProject (X6), DisbursementVoucher (X7), BudgetEntry (X11), CapitalPlanCategory, FundingSource, BasisPoints, Tier*/Source*. Giữ: SQL, giá trị enum, thẻ JSON, 36 DTO HTTP tên Việt (tên component openapi), proto (chỉ Health), tên của core. Worktree sạch: vet+test service-finance xanh, test_hooks, check_* PASS; openapi không đổi. | — | Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26). |
 
 ## `service-identity`
 

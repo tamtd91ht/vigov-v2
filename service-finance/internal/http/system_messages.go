@@ -23,7 +23,7 @@ import (
 type SystemMessageService interface {
 	Messages(ctx context.Context) ([]domain.SystemMessage, error)
 	// Text is the sentence in force for one key — what a route that EMITS the sentence reads
-	// (`scope_notice` on the investment-project reads, du_an.go).
+	// (`scope_notice` on the investment-project reads, investment_project.go).
 	Text(ctx context.Context, key string) (string, error)
 	Reword(ctx context.Context, key, text string, actor audit.Actor) (domain.SystemMessage, error)
 	Restore(ctx context.Context, key string, actor audit.Actor) (domain.SystemMessage, error)
@@ -75,18 +75,18 @@ func (h *Handler) ListSystemMessages(w http.ResponseWriter, r *http.Request) {
 	for _, m := range all {
 		out.Items = append(out.Items, systemMessageToOut(m))
 	}
-	vietJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // RewordSystemMessage serves PUT /api/v1/finance-system-messages/{code}/override.
 func (h *Handler) RewordSystemMessage(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.writeSystemMessageError(w, r, "sửa", errNoActor)
 		return
 	}
 	var in rewordSystemMessageIn
-	if !docThan(w, r, &in) {
+	if !readBody(w, r, &in) {
 		return
 	}
 	m, err := h.d.SystemMessages.Reword(r.Context(), r.PathValue("code"), in.Text, actor)
@@ -94,12 +94,12 @@ func (h *Handler) RewordSystemMessage(w http.ResponseWriter, r *http.Request) {
 		h.writeSystemMessageError(w, r, "sửa", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, systemMessageToOut(m))
+	writeJSON(w, http.StatusOK, systemMessageToOut(m))
 }
 
 // RestoreSystemMessage serves DELETE /api/v1/finance-system-messages/{code}/override.
 func (h *Handler) RestoreSystemMessage(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.writeSystemMessageError(w, r, "khôi phục", errNoActor)
 		return
