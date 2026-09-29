@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { cauBoQua, cauGieoTuan, nhanLinhVuc, nhanLoaiViec, nhanSoGio } from "./nhan-thoi-han";
+import {
+  cauBoQua,
+  cauGieoTuan,
+  hoursCellLabel,
+  nhanLinhVuc,
+  nhanLoaiViec,
+  nhanSoGio,
+} from "./nhan-thoi-han";
 
 /**
  * Câu chữ của tab Thời hạn xử lý. Bốn quyết định dưới đây trông như chuyện trình bày và không
@@ -16,9 +23,17 @@ describe("nhanSoGio — đơn vị luôn đi kèm", () => {
   });
 });
 
+describe("hoursCellLabel — ô có thể chưa đặt", () => {
+  it("null đọc là 'Không báo', con số vẫn kèm đơn vị", () => {
+    expect(hoursCellLabel(null)).toBe("Không báo");
+    expect(hoursCellLabel(8)).toBe("8 giờ làm việc");
+  });
+});
+
 describe("nhanLoaiViec", () => {
-  it("dịch ba mã của ràng buộc CHECK sang tiếng Việt hành chính", () => {
+  it("dịch bốn mã của ràng buộc CHECK sang tiếng Việt hành chính", () => {
     expect(nhanLoaiViec("van-ban-den")).toBe("Văn bản đến");
+    expect(nhanLoaiViec("don-thu")).toBe("Đơn thư");
     expect(nhanLoaiViec("phan-anh")).toBe("Phản ánh của người dân");
     expect(nhanLoaiViec("nhiem-vu")).toBe("Nhiệm vụ");
   });

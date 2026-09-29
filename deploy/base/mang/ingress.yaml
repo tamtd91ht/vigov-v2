@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     135 tuyến của 6 dịch vụ — petitions 49 · identity 42 · finance 19 · comms 13 · documents 10 · reporting 2
+#     144 tuyến của 6 dịch vụ — petitions 49 · identity 45 · comms 19 · finance 19 · documents 10 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -55,9 +55,10 @@ spec:
                 name: web-admin
                 port: { name: http }
     #
-    # comms — 8 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
+    # comms — 9 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
     #   /api/v1/commune-news · /api/v1/content-categories · /api/v1/content-items
     #   /api/v1/mail-settings · /api/v1/map-asset-types · /api/v1/map-field-schemas
+    #   /api/v1/notifications
     - host: "comms.api.vigov.vn"
       http:
         paths:
@@ -95,11 +96,12 @@ spec:
                 name: finance
                 port: { name: rest }
     #
-    # identity — 16 tài nguyên: /api/v1/commune-staff · /api/v1/communes
-    #   /api/v1/identity-audit-entries · /api/v1/org-units · /api/v1/public-holidays
-    #   /api/v1/residential-unit-types · /api/v1/residential-units · /api/v1/role-permissions
-    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-directory
-    #   /api/v1/swap-working-days · /api/v1/task-blocs · /api/v1/working-hours
+    # identity — 17 tài nguyên: /api/v1/automation-jobs · /api/v1/commune-staff
+    #   /api/v1/communes · /api/v1/identity-audit-entries · /api/v1/org-units
+    #   /api/v1/public-holidays · /api/v1/residential-unit-types · /api/v1/residential-units
+    #   /api/v1/role-permissions · /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff
+    #   /api/v1/staff-directory · /api/v1/swap-working-days · /api/v1/task-blocs
+    #   /api/v1/working-hours
     - host: "identity.api.vigov.vn"
       http:
         paths:

@@ -18,7 +18,7 @@ import type { DichVuAPI } from "@/lib/api/dinh-tuyen.gen";
  * the k8s Service name and REST port (`deploy/base/<service>/service.yaml`), decided by the user.
  *
  * WHY THE TYPE IS A MAPPED TYPE OVER `DichVuAPI`: the route table is generated from the
- * contract (`dinh-tuyen.gen.ts`). The day a sixth service gains a REST route, this object stops
+ * contract (`dinh-tuyen.gen.ts`). The day another service gains a REST route, this object stops
  * compiling until someone says where that service lives — instead of the gateway silently
  * having no origin for it.
  */
@@ -28,6 +28,7 @@ const BIEN_GOC: { readonly [K in DichVuAPI]: { readonly bien: string; readonly m
   petitions: { bien: "PETITIONS_HTTP_ADDR", macDinh: "http://petitions:8080" },
   finance: { bien: "FINANCE_HTTP_ADDR", macDinh: "http://finance:8080" },
   comms: { bien: "COMMS_HTTP_ADDR", macDinh: "http://comms:8080" },
+  reporting: { bien: "REPORTING_HTTP_ADDR", macDinh: "http://reporting:8080" },
 };
 
 /**

@@ -29,7 +29,12 @@ import type {
   identity_dongSLARa,
   identity_ngayNghiLeRa,
 } from "@/lib/api/schema.gen";
-import { gieoThoiHanMacDinh, layThoiHanXuLy, suaThoiHanXuLy } from "@/lib/api/thoi-han-xu-ly";
+import {
+  UNASSIGNED_HOLD_KEY,
+  gieoThoiHanMacDinh,
+  layThoiHanXuLy,
+  suaThoiHanXuLy,
+} from "@/lib/api/thoi-han-xu-ly";
 import { namTheoDongHoMay } from "@/lib/nam";
 
 import { khoiCanhBao, tinhTrangBang, type KhoiCanhBao } from "./chua-cau-hinh";
@@ -72,12 +77,13 @@ import {
   O_TEN_NGAY_LAM_BU,
   O_TEN_NGAY_NGHI,
   O_THU,
+  UNASSIGNED_HOLD_HINT,
   cauGieoNgayLe,
   cauGieoThoiHan,
   cauGieoTuan,
+  hoursCellLabel,
   nhanLinhVuc,
   nhanLoaiViec,
-  nhanSoGio,
 } from "./nhan-thoi-han";
 import { quyetDinhGhiThoiHan } from "./quyen-tab";
 import { COT_GIO, NHAN_COT, banTuDong, soanSua, type BanNhapGio } from "./sua-thoi-han";
@@ -150,6 +156,7 @@ const GIO_TRONG: BanNhapGio = {
   due_soon_hours: "",
   escalate_leader_hours: "",
   escalate_president_hours: "",
+  unassigned_hold_hours: "",
 };
 
 export const BAN_TRONG: BanNhap = {
@@ -643,7 +650,7 @@ function KhungTai({ kq, dangTai }: { kq: KetQua<unknown> | null; dangTai: string
  * Bảng thời hạn xử lý.
  *
  * KHÔNG CÓ NÚT THÊM DÒNG — xem khối chú thích đầu tệp (ADR 0026 điều kiện dừng #2). Có nút SỬA,
- * vì `PATCH` chỉ nhận năm con số và không nhận mã lĩnh vực nào.
+ * vì `PATCH` chỉ nhận sáu con số và không nhận mã lĩnh vực nào.
  */
 export function BangThoiHan({
   kq,
@@ -726,7 +733,7 @@ export function BangThoiHan({
                         {nhanLinhVuc(d.field, d.is_default)}
                       </td>
                       {COT_GIO.map((c) => (
-                        <td key={c}>{nhanSoGio(d[c])}</td>
+                        <td key={c}>{hoursCellLabel(d[c])}</td>
                       ))}
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
@@ -1175,7 +1182,13 @@ export function BieuMauThoiHan({
                 inputMode="numeric"
                 value={ban.gio[c]}
                 onChange={(e) => datBan({ ...ban, gio: { ...ban.gio, [c]: e.target.value } })}
+                aria-describedby={c === UNASSIGNED_HOLD_KEY ? "giai-thich-giu-viec" : undefined}
               />
+              {c === UNASSIGNED_HOLD_KEY && (
+                <p className="ghi-chu" id="giai-thich-giu-viec">
+                  {UNASSIGNED_HOLD_HINT}
+                </p>
+              )}
             </div>
           ))}
         </>

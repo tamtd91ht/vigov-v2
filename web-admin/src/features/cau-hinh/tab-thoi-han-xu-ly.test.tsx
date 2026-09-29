@@ -12,7 +12,14 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { quyetDinhGhiThoiHan } from "./quyen-tab";
-import { ManThoiHanXuLy, type DuLieuTab, type ThaoTacThoiHan } from "./tab-thoi-han-xu-ly";
+import { banTuDong } from "./sua-thoi-han";
+import {
+  BAN_TRONG,
+  BieuMauThoiHan,
+  ManThoiHanXuLy,
+  type DuLieuTab,
+  type ThaoTacThoiHan,
+} from "./tab-thoi-han-xu-ly";
 
 /**
  * NĂM ĐIỀU TỆP NÀY CANH, và cả năm đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
@@ -66,6 +73,7 @@ const DONG_SLA: identity_dongSLARa = {
   due_soon_hours: 4,
   escalate_leader_hours: 8,
   escalate_president_hours: 16,
+  unassigned_hold_hours: 8,
 };
 
 function ok<T>(duLieu: T): KetQua<T> {
@@ -230,6 +238,92 @@ describe("bảng thời hạn xử lý", () => {
     });
 
     expect(html).toContain("Mặc định cho mọi lĩnh vực");
+  });
+});
+
+describe("cột thứ sáu và loại việc thứ tư (migration 0016 của identity)", () => {
+  it("bảng có cột 'Báo khi bộ phận giữ việc chưa giao quá' và con số kèm đơn vị", () => {
+    const html = ve({
+      thoiHan: ok<identity_danhSachSLARa>({
+        items: [{ ...DONG_SLA, unassigned_hold_hours: 12 }],
+        problems: [],
+      }),
+    });
+
+    expect(html).toContain("Báo khi bộ phận giữ việc chưa giao quá");
+    expect(html).toContain("12 giờ làm việc");
+  });
+
+  it("ngưỡng CHƯA ĐẶT hiện 'Không báo' — không một con số nào thay cho lựa chọn của xã", () => {
+    // NULL = không báo (ADR 0029 §Bổ sung 29/09). Một ô trống đọc ra là "chưa tải xong"; một con số
+    // mặc định là nói dối rằng xã sẽ được báo.
+    const html = ve({
+      thoiHan: ok<identity_danhSachSLARa>({
+        items: [{ ...DONG_SLA, unassigned_hold_hours: null }],
+        problems: [],
+      }),
+    });
+
+    expect(html).toContain("<td>Không báo</td>");
+    expect(html).not.toContain("null");
+  });
+
+  it("dòng `don-thu` đọc là 'Đơn thư', không hiện mã thô", () => {
+    const html = ve({
+      thoiHan: ok<identity_danhSachSLARa>({
+        items: [{ ...DONG_SLA, work_kind: "don-thu", field: "", is_default: true }],
+        problems: [],
+      }),
+    });
+
+    expect(html).toContain("<td>Đơn thư</td>");
+    expect(html).not.toContain("don-thu");
+  });
+
+  it("ghi chú nói rõ mốc đếm đã chốt NHƯNG phần mềm chưa tự gửi lời báo nào", () => {
+    const html = ve();
+
+    expect(html).toContain("đếm từ lúc việc đã quá hạn");
+    expect(html).toContain("CHƯA tự gửi lời báo nào");
+    expect(html).not.toContain("mốc bắt đầu đếm chưa được chốt");
+  });
+
+  it("biểu mẫu sửa có ô thứ sáu, nhãn kèm đơn vị, và câu 'để trống là không báo' gắn vào ô", () => {
+    const html = renderToStaticMarkup(
+      <BieuMauThoiHan
+        dangMo={{ kieu: "suaThoiHan", dong: DONG_SLA }}
+        ban={{ ...BAN_TRONG, gio: banTuDong(DONG_SLA) }}
+        datBan={() => {}}
+        loiTaiCho=""
+        loiMayChu=""
+        dangGui={false}
+        onGui={() => {}}
+        onHuy={() => {}}
+      />,
+    );
+
+    expect(html).toContain("Báo khi bộ phận giữ việc chưa giao quá (giờ làm việc)");
+    expect(html).toContain('name="unassigned_hold_hours"');
+    expect(html).toContain('aria-describedby="giai-thich-giu-viec"');
+    expect(html).toContain("Để trống nếu đơn vị không muốn được báo");
+  });
+
+  it("máy chủ từ chối (400 Chủ tịch < lãnh đạo) → biểu mẫu hiện NGUYÊN câu máy chủ", () => {
+    const cau = "Số giờ báo Chủ tịch không được nhỏ hơn số giờ báo lãnh đạo trực tiếp.";
+    const html = renderToStaticMarkup(
+      <BieuMauThoiHan
+        dangMo={{ kieu: "suaThoiHan", dong: DONG_SLA }}
+        ban={{ ...BAN_TRONG, gio: banTuDong(DONG_SLA) }}
+        datBan={() => {}}
+        loiTaiCho=""
+        loiMayChu={cau}
+        dangGui={false}
+        onGui={() => {}}
+        onHuy={() => {}}
+      />,
+    );
+
+    expect(html).toContain(cau);
   });
 });
 

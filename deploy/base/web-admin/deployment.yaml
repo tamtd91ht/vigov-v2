@@ -57,7 +57,7 @@ spec:
 
           # web-admin là CỔNG của `/api/v1/*` (quyết định 25/09/2026: k8s chỉ cấp Secret +
           # ConfigMap, định tuyến nằm trong ứng dụng). Nó đọc `*_HTTP_ADDR` — địa chỉ nội bộ
-          # của năm dịch vụ Go — và `ENV` từ ConfigMap chung. Không đặt thì mặc định
+          # của sáu dịch vụ Go có REST (`goc-dich-vu.ts`) — và `ENV` từ ConfigMap chung. Không đặt thì mặc định
           # `http://<dịch vụ>:8080`, tức đúng tên Service trong cùng namespace.
           # KHÔNG có `secretRef`: web-admin không giữ bí mật nào.
           envFrom:

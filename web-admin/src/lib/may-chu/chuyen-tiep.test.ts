@@ -23,6 +23,7 @@ const BIEN = [
   "PETITIONS_HTTP_ADDR",
   "FINANCE_HTTP_ADDR",
   "COMMS_HTTP_ADDR",
+  "REPORTING_HTTP_ADDR",
 ] as const;
 
 type DaNhan = { dichVu: string; method: string; url: string; headers: IncomingHttpHeaders; than: Buffer };
@@ -68,6 +69,7 @@ beforeAll(async () => {
     ["PETITIONS_HTTP_ADDR", "petitions"],
     ["FINANCE_HTTP_ADDR", "finance"],
     ["COMMS_HTTP_ADDR", "comms"],
+    ["REPORTING_HTTP_ADDR", "reporting"],
   ] as const) {
     GOC[bien] = await dungMayGia(dv);
   }
@@ -190,8 +192,9 @@ describe("chuyenTiep — chọn dịch vụ theo ĐOẠN đường dẫn", () =>
     await chuyenTiep(yeuCau("/api/v1/role-permissions"));
     await chuyenTiep(yeuCau("/api/v1/tasks"));
     await chuyenTiep(yeuCau("/api/v1/incoming-documents/abc"));
+    await chuyenTiep(yeuCau("/api/v1/reporting-system-messages"));
 
-    expect(nhan.map((n) => n.dichVu)).toEqual(["identity", "identity", "petitions", "documents"]);
+    expect(nhan.map((n) => n.dichVu)).toEqual(["identity", "identity", "petitions", "documents", "reporting"]);
   });
 
   it("chuSoHuu không khớp theo ký tự: /api/v1/rolesX không phải của ai", () => {
@@ -338,6 +341,7 @@ describe("gocDichVu — biến môi trường", () => {
     process.env.FINANCE_HTTP_ADDR = "   ";
     expect(gocDichVu("finance").href).toBe("http://finance:8080/");
     expect(gocDichVu("comms").href).toBe("http://comms:8080/");
+    expect(gocDichVu("reporting").href).toBe("http://reporting:8080/");
   });
 
   it("giá trị hỏng thì NÉM, nêu TÊN biến và KHÔNG nêu giá trị", () => {

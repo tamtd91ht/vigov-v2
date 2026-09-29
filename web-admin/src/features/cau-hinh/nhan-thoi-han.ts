@@ -84,21 +84,50 @@ export const DAN_THOI_HAN_2 =
   "nhiệm vụ lấy ra việc nào, và con số trong thông báo ở chuông. Mặc định 72 giờ, tức ba ngày.";
 
 /**
- * HAI CỘT CUỐI SỬA ĐƯỢC NHƯNG PHẦN MỀM CHƯA DÙNG — và không nói ra thì đó là một lời hứa suông.
+ * BA CỘT CUỐI SỬA ĐƯỢC NHƯNG PHẦN MỀM CHƯA GỬI BÁO THEO CHÚNG — và không nói ra thì đó là một lời
+ * hứa suông.
  *
- * Đặc tả ghi hai cột ấy là "sau 24 giờ" mà không nói sau CÁI GÌ; §9 lại đếm từ lúc trễ hạn và nhân
- * đôi cho Chủ tịch thay vì đọc cột thứ hai. Chưa ai chốt mốc đếm, nên máy chủ mang hai con số đi
- * mà cấm mọi chỗ tính leo thang từ chúng (`service-identity/internal/http/sla.go`; ADR 0029). Cán
- * bộ điền hai ô này rồi chờ phần mềm tự báo lãnh đạo sẽ chờ mãi.
+ * Mốc đếm ĐÃ CHỐT (29/09/2026, ADR 0029 §Bổ sung 29/09): hai ngưỡng báo lãnh đạo đếm từ HẠN ĐÃ LỠ,
+ * bằng giờ làm việc, Chủ tịch không được báo trước lãnh đạo trực tiếp; ngưỡng thứ ba đếm lúc bộ
+ * phận giữ việc mà chưa giao ai. Nhưng tới 29/09/2026 CHƯA có bên chạy nào: `service-identity` đã
+ * có `ResolveEscalationInstants` và `ResolveUnassignedHoldInstants`, và KHÔNG service nào gọi chúng
+ * (ADR 0058). Ngày bên chạy ấy lên và việc tự động hoá được bật, câu "CHƯA tự gửi" dưới đây thành
+ * sai — sửa nó cùng lượt dựng ấy. Cán bộ điền các ô này rồi chờ phần mềm tự báo sẽ chờ mãi.
  */
 export const GHI_CHU_HAI_COT_LEO_THANG =
-  "Hai cột Báo lãnh đạo và Báo Chủ tịch lưu được con số của đơn vị, nhưng phần mềm CHƯA tự gửi " +
-  "báo cáo leo thang theo hai cột này: mốc bắt đầu đếm chưa được chốt. Đừng dựa vào chúng để theo " +
-  "dõi việc trễ hạn.";
+  "Hai cột Báo lãnh đạo trực tiếp và Báo Chủ tịch đếm từ lúc việc đã quá hạn, theo giờ làm việc; " +
+  "số giờ Báo Chủ tịch không được nhỏ hơn số giờ Báo lãnh đạo trực tiếp. Cột Báo khi bộ phận giữ " +
+  "việc chưa giao đếm thời gian một bộ phận giữ việc mà chưa giao cho ai; để trống là không báo. " +
+  "Phần mềm lưu được các con số này nhưng CHƯA tự gửi lời báo nào theo chúng. Đừng dựa vào chúng " +
+  "để theo dõi việc trễ hạn.";
 
 /**
- * Mã loại việc → tên đọc được. Ba mã là đúng ba giá trị ràng buộc CHECK của CSDL nhận
- * (`sla_loai_viec_hop_le`).
+ * Column heading and input label (with " (giờ làm việc)" appended by the form) for the sixth figure.
+ * "Giao" and not "phân công" because the staff screens that act on it say "Giao việc".
+ */
+export const UNASSIGNED_HOLD_LABEL = "Báo khi bộ phận giữ việc chưa giao quá";
+
+/**
+ * Under the sixth input. An empty box is a MEANING here ("do not report"), unlike the other five,
+ * so it has to be said at the box — otherwise clearing it reads as a mistake to be refilled.
+ */
+export const UNASSIGNED_HOLD_HINT =
+  "Để trống nếu đơn vị không muốn được báo về việc bộ phận giữ mà chưa giao cho ai.";
+
+/** Table cell for an unset sixth figure. NULL is the commune's choice, never replaced by a number. */
+export const UNASSIGNED_HOLD_OFF = "Không báo";
+
+/**
+ * Local refusal mirroring the server's ordering rule (`domain.ErrChairmanBeforeUnitHead`). The
+ * server still checks and its sentence still wins if the two ever disagree.
+ */
+export const PRESIDENT_BELOW_LEADER_ERROR =
+  "Số giờ Báo Chủ tịch không được nhỏ hơn số giờ Báo lãnh đạo trực tiếp: Chủ tịch được báo cùng " +
+  "lúc hoặc sau lãnh đạo trực tiếp, không bao giờ trước.";
+
+/**
+ * Mã loại việc → tên đọc được. Bốn mã là đúng bốn giá trị ràng buộc CHECK của CSDL nhận
+ * (`sla_loai_viec_hop_le`; `don-thu` từ migration 0016 của `service-identity`).
  *
  * MÃ LẠ THÌ HIỆN NGUYÊN MÃ, không hiện một tên đoán ra: một loại việc lạ trong bảng nghĩa là CSDL
  * không còn đúng lược đồ mà mã này được dựng theo, và che nó bằng một cái tên đẹp là xoá đúng dấu
@@ -108,6 +137,8 @@ export function nhanLoaiViec(ma: string): string {
   switch (ma) {
     case "van-ban-den":
       return "Văn bản đến";
+    case "don-thu":
+      return "Đơn thư";
     case "phan-anh":
       return "Phản ánh của người dân";
     case "nhiem-vu":
@@ -138,6 +169,11 @@ export function nhanLinhVuc(linhVuc: string, laMacDinh: boolean): string {
  */
 export function nhanSoGio(gio: number): string {
   return `${gio} giờ làm việc`;
+}
+
+/** A cell that may be unset (only the sixth figure is): `null` reads "Không báo", never a number. */
+export function hoursCellLabel(hours: number | null): string {
+  return hours === null ? UNASSIGNED_HOLD_OFF : nhanSoGio(hours);
 }
 
 /* ---- kết quả các lượt gieo ------------------------------------------------------------------ */

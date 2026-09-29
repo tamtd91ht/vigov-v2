@@ -35,6 +35,7 @@ const DONG = {
   due_soon_hours: 24,
   escalate_leader_hours: 24,
   escalate_president_hours: 48,
+  unassigned_hold_hours: 8,
 };
 
 afterEach(() => {
@@ -86,6 +87,27 @@ describe("PATCH /api/v1/sla/{id}", () => {
     expect(than).not.toHaveProperty("work_kind");
     expect(than).not.toHaveProperty("field");
     expect(than).not.toHaveProperty("id");
+  });
+
+  it("ngưỡng giữ việc: `null` ĐI LÊN THẬT (tắt báo), `undefined` thì vắng hẳn (giữ nguyên)", async () => {
+    // Máy chủ phân biệt ba trạng thái (`sla.go:286-288`). Nếu `null` bị bỏ khỏi thân như năm cột kia
+    // thì "tắt báo" thành "giữ nguyên" và màn hình vẫn báo Đã lưu.
+    const gia = ghiGia(200, DONG);
+    await suaThoiHanXuLy(DONG.id, { unassigned_hold_hours: null });
+    await suaThoiHanXuLy(DONG.id, { unassigned_hold_hours: 16 });
+    await suaThoiHanXuLy(DONG.id, { resolve_hours: 56 });
+
+    expect(String(loiGoi(gia, 0).tuyChon.body)).toBe('{"unassigned_hold_hours":null}');
+    expect(JSON.parse(String(loiGoi(gia, 1).tuyChon.body))).toEqual({ unassigned_hold_hours: 16 });
+    expect(JSON.parse(String(loiGoi(gia, 2).tuyChon.body))).not.toHaveProperty("unassigned_hold_hours");
+  });
+
+  it("400 Báo Chủ tịch < Báo lãnh đạo: câu máy chủ về nguyên văn", async () => {
+    const cau = "Số giờ báo Chủ tịch không được nhỏ hơn số giờ báo lãnh đạo trực tiếp.";
+    ghiGia(400, { code: "invalid_request", message: cau, trace_id: "" });
+    const kq = await suaThoiHanXuLy(DONG.id, { escalate_president_hours: 4 });
+
+    expect(kq).toEqual({ ok: false, thongBao: cau });
   });
 
   it("id vào đường dẫn ĐÃ MÃ HOÁ, không ghép thẳng", async () => {

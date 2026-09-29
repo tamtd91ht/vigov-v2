@@ -110,6 +110,40 @@ export type comms_mailTestOut = {
   "sent": boolean;
 };
 
+export type comms_mapAssetTypeImportCreatedOut = {
+  "created": Array<comms_mapAssetTypeImportRowOut>;
+};
+
+export type comms_mapAssetTypeImportErrorOut = {
+  /** spreadsheet row (header = 1); 0 = the whole file */
+  "row": number;
+  /** the header's column name; "" = the whole row or file */
+  "column": string;
+  "message": string;
+};
+
+export type comms_mapAssetTypeImportPreviewOut = {
+  "valid": boolean;
+  "types": Array<comms_mapAssetTypeImportRowOut>;
+  "errors": Array<comms_mapAssetTypeImportErrorOut>;
+};
+
+export type comms_mapAssetTypeImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<comms_mapAssetTypeImportErrorOut>;
+};
+
+export type comms_mapAssetTypeImportRowOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "label": string;
+  "order": number;
+};
+
 export type comms_mapFieldSchemaListOut = {
   "items": Array<comms_mapFieldSchemaOut>;
 };
@@ -126,6 +160,14 @@ export type comms_mapFieldSchemaOut = {
   "is_required": boolean;
   "sort_order": number;
   "is_active": boolean;
+};
+
+export type comms_markAllReadOut = {
+  "marked": number;
+};
+
+export type comms_markReadIn = {
+  "read": boolean | null;
 };
 
 export type comms_noiDungRa = {
@@ -147,6 +189,17 @@ export type comms_noiDungRa = {
   "author_code": string;
   "created_at": string;
   "updated_at": string;
+};
+
+export type comms_notificationOut = {
+  "id": string;
+  "kind": string;
+  "title": string;
+  "body": string;
+  "link": string;
+  "read": boolean;
+  "read_at": string | null;
+  "created_at": string;
 };
 
 export type comms_phatHanhThongBaoVao = {
@@ -228,6 +281,10 @@ export type comms_tinXaRa = {
   "published_on": string;
   "category_name": string;
   "body"?: string | null;
+};
+
+export type comms_unreadCountOut = {
+  "unread": number;
 };
 
 export type comms_updateMapFieldSchemaIn = {
@@ -853,6 +910,53 @@ export type httpx_Error = {
   "trace_id": string;
 };
 
+export type identity_automationJobOut = {
+  "job": string;
+  "schedule_kind": string;
+  "configured": boolean;
+  "enabled": boolean;
+  /** interval jobs only, else null */
+  "interval_minutes": number | null;
+  /** interval jobs only: 5 */
+  "min_interval_minutes": number | null;
+  /** daily/weekly, 0–23, Asia/Ho_Chi_Minh */
+  "run_hour": number | null;
+  /** daily/weekly, 0–59 */
+  "run_minute": number | null;
+  "weekday": number | null;
+  /** always Asia/Ho_Chi_Minh */
+  "timezone": string;
+  /** last switch-on; slots before it never run */
+  "enabled_at": string | null;
+  /** last "run now" press, or null */
+  "run_requested_at": string | null;
+  "last_runs": Array<identity_automationRunOut>;
+};
+
+export type identity_automationJobsOut = {
+  "items": Array<identity_automationJobOut>;
+};
+
+export type identity_automationRunOut = {
+  "work_kind": string;
+  "run_id": string;
+  "trigger": string;
+  "claimed_at": string;
+  "outcome": string | null;
+  "records_examined": number | null;
+  "notices_delivered": number | null;
+  "records_without_recipient": number | null;
+  "recorded_at": string | null;
+};
+
+export type identity_automationSettingIn = {
+  "enabled": boolean | null;
+  "interval_minutes": number | null;
+  "run_hour": number | null;
+  "run_minute": number | null;
+  "weekday": number | null;
+};
+
 export type identity_boPhanDaGhiRa = {
   "id": string;
   "code": string;
@@ -1035,6 +1139,7 @@ export type identity_dongSLARa = {
   "due_soon_hours": number;
   "escalate_leader_hours": number;
   "escalate_president_hours": number;
+  "unassigned_hold_hours": number | null;
 };
 
 export type identity_gieoLichRa = {
@@ -1102,6 +1207,8 @@ export type identity_nhomQuyenRa = {
   "name": string;
   "permissions": Array<identity_quyenMucRa>;
 };
+
+export type identity_optionalHoursIn = Record<string, never>;
 
 export type identity_orgUnitDeleteIn = {
   "reason": string;
@@ -1249,6 +1356,7 @@ export type identity_suaSLAVao = {
   "due_soon_hours": number | null;
   "escalate_leader_hours": number | null;
   "escalate_president_hours": number | null;
+  "unassigned_hold_hours": identity_optionalHoursIn;
 };
 
 export type identity_thanDangNhap = {
@@ -1403,6 +1511,13 @@ export type page_Result_audit_EntryView = {
 
 export type page_Result_comms_noiDungRa = {
   "items": Array<comms_noiDungRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_comms_notificationOut = {
+  "items": Array<comms_notificationOut>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -2159,6 +2274,64 @@ export type comms_post_announcements = {
     403: httpx_Error;
     500: httpx_Error;
     501: httpx_Error;
+  };
+};
+
+/** GET /api/v1/automation-jobs — Ba việc tự động hoá của xã — công tắc, nhịp chạy, lượt chạy gần nhất theo từng loại việc */
+export type identity_get_automation_jobs = {
+  duongDan: "/api/v1/automation-jobs";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_automationJobsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/automation-jobs/{job} — Lưu công tắc và nhịp chạy của một việc tự động hoá — bật có hiệu lực từ nhịp kế tiếp */
+export type identity_put_automation_jobs_by_job = {
+  duongDan: "/api/v1/automation-jobs/{job}";
+  phuongThuc: "PUT";
+  thamSo: {
+    "job": string;
+  };
+  truyVan: {
+  };
+  than: identity_automationSettingIn;
+  phanHoi: {
+    200: identity_automationJobOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/automation-jobs/{job}/runs — Yêu cầu chạy ngay một việc tự động hoá — các bên chạy nhận ở nhịp gõ kế tiếp (≤ 1 phút) */
+export type identity_post_automation_jobs_by_job_runs = {
+  duongDan: "/api/v1/automation-jobs/{job}/runs";
+  phuongThuc: "POST";
+  thamSo: {
+    "job": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    202: identity_automationJobOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
   };
 };
 
@@ -3697,6 +3870,63 @@ export type comms_post_map_asset_types = {
   };
 };
 
+/** POST /api/v1/map-asset-types/import-previews — Kiểm tra một tệp Excel danh mục loại tài nguyên bản đồ trước khi nhập — không ghi gì */
+export type comms_post_map_asset_types_import_previews = {
+  duongDan: "/api/v1/map-asset-types/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapAssetTypeImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/map-asset-types/import-template — Tải tệp Excel mẫu để nhập danh mục loại tài nguyên bản đồ */
+export type comms_get_map_asset_types_import_template = {
+  duongDan: "/api/v1/map-asset-types/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/map-asset-types/imports — Nhập danh mục loại tài nguyên bản đồ từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type comms_post_map_asset_types_imports = {
+  duongDan: "/api/v1/map-asset-types/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: comms_mapAssetTypeImportCreatedOut;
+    400: comms_mapAssetTypeImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PATCH /api/v1/map-asset-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại tài nguyên bản đồ */
 export type comms_patch_map_asset_types_by_id = {
   duongDan: "/api/v1/map-asset-types/{id}";
@@ -4166,6 +4396,83 @@ export type petitions_post_my_citizen_reports_by_maTraCuu_rating = {
     401: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/notifications — Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang */
+export type comms_get_notifications = {
+  duongDan: "/api/v1/notifications";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_notificationOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/notifications — Đọc hết — đánh dấu đã đọc mọi thông báo chưa đọc trong hộp chuông của chính mình */
+export type comms_patch_notifications = {
+  duongDan: "/api/v1/notifications";
+  phuongThuc: "PATCH";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_markReadIn;
+  phanHoi: {
+    200: comms_markAllReadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/notifications/unread-count — Số thông báo chưa đọc trong hộp chuông của chính cán bộ đang đăng nhập — cho huy hiệu đỏ */
+export type comms_get_notifications_unread_count = {
+  duongDan: "/api/v1/notifications/unread-count";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_unreadCountOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/notifications/{id} — Đánh dấu đã đọc một thông báo trong hộp chuông của chính mình */
+export type comms_patch_notifications_by_id = {
+  duongDan: "/api/v1/notifications/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_markReadIn;
+  phanHoi: {
+    200: comms_notificationOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };

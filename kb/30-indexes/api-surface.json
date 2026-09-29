@@ -47,6 +47,71 @@
       "declared_in": "service-comms/internal/http/routes.go"
     },
     {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/automation-jobs",
+      "operation_id": "identity_get_automation_jobs",
+      "task_id": "144b8fda6213",
+      "summary": "Ba việc tự động hoá của xã — công tắc, nhịp chạy, lượt chạy gần nhất theo từng loại việc",
+      "screen": "14-cau-hinh §9",
+      "permission_kind": "permission",
+      "permission": "admin.sla",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.automationJobsOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PUT",
+      "path": "/api/v1/automation-jobs/{job}",
+      "operation_id": "identity_put_automation_jobs_by_job",
+      "task_id": "df2c8ac45a7c",
+      "summary": "Lưu công tắc và nhịp chạy của một việc tự động hoá — bật có hiệu lực từ nhịp kế tiếp",
+      "screen": "14-cau-hinh §9",
+      "permission_kind": "permission",
+      "permission": "admin.sla",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi lựa chọn không đổi, nên lần gửi thứ hai để lại đúng một dòng và một vết",
+      "request_schema": "identity.automationSettingIn",
+      "reply_schemas": {
+        "200": "identity.automationJobOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/automation-jobs/{job}/runs",
+      "operation_id": "identity_post_automation_jobs_by_job_runs",
+      "task_id": "5641897ec49a",
+      "summary": "Yêu cầu chạy ngay một việc tự động hoá — các bên chạy nhận ở nhịp gõ kế tiếp (≤ 1 phút)",
+      "screen": "14-cau-hinh §9",
+      "permission_kind": "permission",
+      "permission": "admin.sla",
+      "idempotency": "khong-can",
+      "idempotency_reason": "một dấu yêu cầu cho mỗi việc, mỗi phạm vi nhận đúng một lần bằng lượt nhận của chính nó; bấm hai lần trước nhịp gõ kế tiếp vẫn chỉ một lượt chạy mỗi loại việc",
+      "reply_schemas": {
+        "202": "identity.automationJobOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
       "service": "finance",
       "method": "DELETE",
       "path": "/api/v1/budget-entries/{id}",
@@ -1694,6 +1759,71 @@
     },
     {
       "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-asset-types/import-previews",
+      "operation_id": "comms_post_map_asset_types_import_previews",
+      "task_id": "75b4427010b6",
+      "summary": "Kiểm tra một tệp Excel danh mục loại tài nguyên bản đồ trước khi nhập — không ghi gì",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục",
+      "reply_schemas": {
+        "200": "comms.mapAssetTypeImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_map_asset_type_import.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-asset-types/import-template",
+      "operation_id": "comms_get_map_asset_types_import_template",
+      "task_id": "27f27c805f7c",
+      "summary": "Tải tệp Excel mẫu để nhập danh mục loại tài nguyên bản đồ",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_map_asset_type_import.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-asset-types/imports",
+      "operation_id": "comms_post_map_asset_types_imports",
+      "task_id": "4e504292b619",
+      "summary": "Nhập danh mục loại tài nguyên bản đồ từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "comms.mapAssetTypeImportCreatedOut",
+        "400": "comms.mapAssetTypeImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_map_asset_type_import.go"
+    },
+    {
+      "service": "comms",
       "method": "DELETE",
       "path": "/api/v1/map-asset-types/{id}",
       "operation_id": "comms_delete_map_asset_types_by_id",
@@ -2209,6 +2339,90 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "operation_id": "comms_get_notifications",
+      "task_id": "9b9046314049",
+      "summary": "Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang",
+      "screen": "15-phu-luc-giao-dien-chung §3.2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "hộp chuông là thông báo gửi ĐÍCH DANH cho chính cán bộ đang đăng nhập; mọi câu đọc lọc theo mã cán bộ của phiên nên mỗi tài khoản chỉ đọc được hộp thư của mình, và bảng quyen không có khoá nào cho việc này — đòi một khoá có sẵn sẽ giấu thông báo khỏi đúng người được gửi",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_comms.notificationOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_staff_notification.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/notifications",
+      "operation_id": "comms_patch_notifications",
+      "task_id": "4fe8bf95b2da",
+      "summary": "Đọc hết — đánh dấu đã đọc mọi thông báo chưa đọc trong hộp chuông của chính mình",
+      "screen": "15-phu-luc-giao-dien-chung §3.2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "nút Đọc hết của chuông chỉ đánh dấu thông báo gửi cho chính cán bộ đang đăng nhập, lọc theo mã cán bộ của phiên",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lần thứ hai không còn thông báo chưa đọc nào nên không ghi gì và không có vết",
+      "request_schema": "comms.markReadIn",
+      "reply_schemas": {
+        "200": "comms.markAllReadOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_staff_notification.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/notifications/unread-count",
+      "operation_id": "comms_get_notifications_unread_count",
+      "task_id": "a57eede40b47",
+      "summary": "Số thông báo chưa đọc trong hộp chuông của chính cán bộ đang đăng nhập — cho huy hiệu đỏ",
+      "screen": "15-phu-luc-giao-dien-chung §3.2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "huy hiệu chuông đếm thông báo chưa đọc của chính cán bộ đang đăng nhập, lọc theo mã cán bộ của phiên; không có khoá quyền nào cho việc này trong bảng quyen",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.unreadCountOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_staff_notification.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/notifications/{id}",
+      "operation_id": "comms_patch_notifications_by_id",
+      "task_id": "ba5fdd201982",
+      "summary": "Đánh dấu đã đọc một thông báo trong hộp chuông của chính mình",
+      "screen": "15-phu-luc-giao-dien-chung §3.2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "cán bộ đánh dấu đã đọc thông báo gửi cho chính mình; câu ghi lọc theo mã cán bộ của phiên nên không chạm được hộp thư của người khác",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đánh dấu một thông báo đã đọc lần thứ hai không ghi gì và không có vết: read_at chỉ đặt một lần",
+      "request_schema": "comms.markReadIn",
+      "reply_schemas": {
+        "200": "comms.notificationOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_staff_notification.go"
     },
     {
       "service": "identity",

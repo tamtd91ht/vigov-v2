@@ -225,6 +225,257 @@
         }
       }
     },
+    "/api/v1/automation-jobs": {
+      "get": {
+        "summary": "Ba việc tự động hoá của xã — công tắc, nhịp chạy, lượt chạy gần nhất theo từng loại việc",
+        "operationId": "identity_get_automation_jobs",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §9",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "144b8fda6213",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.automationJobsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/automation-jobs/{job}": {
+      "parameters": [
+        {
+          "name": "job",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Lưu công tắc và nhịp chạy của một việc tự động hoá — bật có hiệu lực từ nhịp kế tiếp",
+        "operationId": "identity_put_automation_jobs_by_job",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §9",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "df2c8ac45a7c",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.automationSettingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.automationJobOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/automation-jobs/{job}/runs": {
+      "parameters": [
+        {
+          "name": "job",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Yêu cầu chạy ngay một việc tự động hoá — các bên chạy nhận ở nhịp gõ kế tiếp (≤ 1 phút)",
+        "operationId": "identity_post_automation_jobs_by_job_runs",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §9",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "5641897ec49a",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.automationJobOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/budget-entries/{id}": {
       "parameters": [
         {
@@ -7383,6 +7634,246 @@
         }
       }
     },
+    "/api/v1/map-asset-types/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel danh mục loại tài nguyên bản đồ trước khi nhập — không ghi gì",
+        "operationId": "comms_post_map_asset_types_import_previews",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "75b4427010b6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetTypeImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-asset-types/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập danh mục loại tài nguyên bản đồ",
+        "operationId": "comms_get_map_asset_types_import_template",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "27f27c805f7c",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-asset-types/imports": {
+      "post": {
+        "summary": "Nhập danh mục loại tài nguyên bản đồ từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "comms_post_map_asset_types_imports",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "4e504292b619",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetTypeImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetTypeImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/map-asset-types/{id}": {
       "parameters": [
         {
@@ -9635,6 +10126,351 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "summary": "Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang",
+        "operationId": "comms_get_notifications",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §3.2",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "hộp chuông là thông báo gửi ĐÍCH DANH cho chính cán bộ đang đăng nhập; mọi câu đọc lọc theo mã cán bộ của phiên nên mỗi tài khoản chỉ đọc được hộp thư của mình, và bảng quyen không có khoá nào cho việc này — đòi một khoá có sẵn sẽ giấu thông báo khỏi đúng người được gửi"
+        },
+        "x-vigov-task": "9b9046314049",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at"
+              ],
+              "default": "created_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_comms.notificationOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Đọc hết — đánh dấu đã đọc mọi thông báo chưa đọc trong hộp chuông của chính mình",
+        "operationId": "comms_patch_notifications",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §3.2",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "nút Đọc hết của chuông chỉ đánh dấu thông báo gửi cho chính cán bộ đang đăng nhập, lọc theo mã cán bộ của phiên"
+        },
+        "x-vigov-task": "4fe8bf95b2da",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.markReadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.markAllReadOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "summary": "Số thông báo chưa đọc trong hộp chuông của chính cán bộ đang đăng nhập — cho huy hiệu đỏ",
+        "operationId": "comms_get_notifications_unread_count",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §3.2",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "huy hiệu chuông đếm thông báo chưa đọc của chính cán bộ đang đăng nhập, lọc theo mã cán bộ của phiên; không có khoá quyền nào cho việc này trong bảng quyen"
+        },
+        "x-vigov-task": "a57eede40b47",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.unreadCountOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Đánh dấu đã đọc một thông báo trong hộp chuông của chính mình",
+        "operationId": "comms_patch_notifications_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §3.2",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "cán bộ đánh dấu đã đọc thông báo gửi cho chính mình; câu ghi lọc theo mã cán bộ của phiên nên không chạm được hộp thư của người khác"
+        },
+        "x-vigov-task": "ba5fdd201982",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.markReadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.notificationOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -18885,6 +19721,124 @@
         ],
         "additionalProperties": false
       },
+      "comms.mapAssetTypeImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeImportRowOut"
+            }
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetTypeImportErrorOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "description": "spreadsheet row (header = 1); 0 = the whole file"
+          },
+          "column": {
+            "type": "string",
+            "description": "the header's column name; \"\" = the whole row or file"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetTypeImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeImportRowOut"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "types",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetTypeImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetTypeImportRowOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string",
+            "description": "only once created"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "order",
+          "row"
+        ],
+        "additionalProperties": false
+      },
       "comms.mapFieldSchemaListOut": {
         "type": "object",
         "properties": {
@@ -18946,6 +19900,33 @@
           "options",
           "sort_order",
           "value_type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.markAllReadOut": {
+        "type": "object",
+        "properties": {
+          "marked": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked"
+        ],
+        "additionalProperties": false
+      },
+      "comms.markReadIn": {
+        "type": "object",
+        "properties": {
+          "read": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "read"
         ],
         "additionalProperties": false
       },
@@ -19030,6 +20011,51 @@
           "type",
           "updated_at",
           "view_count"
+        ],
+        "additionalProperties": false
+      },
+      "comms.notificationOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "body",
+          "created_at",
+          "id",
+          "kind",
+          "link",
+          "read",
+          "read_at",
+          "title"
         ],
         "additionalProperties": false
       },
@@ -19349,6 +20375,18 @@
           "published_on",
           "summary",
           "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.unreadCountOut": {
+        "type": "object",
+        "properties": {
+          "unread": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread"
         ],
         "additionalProperties": false
       },
@@ -21577,6 +22615,218 @@
         ],
         "additionalProperties": false
       },
+      "identity.automationJobOut": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string"
+          },
+          "schedule_kind": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "interval_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "interval jobs only, else null"
+          },
+          "min_interval_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "interval jobs only: 5"
+          },
+          "run_hour": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "daily/weekly, 0–23, Asia/Ho_Chi_Minh"
+          },
+          "run_minute": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "daily/weekly, 0–59"
+          },
+          "weekday": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": "string",
+            "description": "always Asia/Ho_Chi_Minh"
+          },
+          "enabled_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "last switch-on; slots before it never run"
+          },
+          "run_requested_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "last \"run now\" press, or null"
+          },
+          "last_runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.automationRunOut"
+            }
+          }
+        },
+        "required": [
+          "configured",
+          "enabled",
+          "enabled_at",
+          "interval_minutes",
+          "job",
+          "last_runs",
+          "min_interval_minutes",
+          "run_hour",
+          "run_minute",
+          "run_requested_at",
+          "schedule_kind",
+          "timezone",
+          "weekday"
+        ],
+        "additionalProperties": false
+      },
+      "identity.automationJobsOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.automationJobOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.automationRunOut": {
+        "type": "object",
+        "properties": {
+          "work_kind": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "claimed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "records_examined": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "notices_delivered": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "records_without_recipient": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "recorded_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "claimed_at",
+          "notices_delivered",
+          "outcome",
+          "recorded_at",
+          "records_examined",
+          "records_without_recipient",
+          "run_id",
+          "trigger",
+          "work_kind"
+        ],
+        "additionalProperties": false
+      },
+      "identity.automationSettingIn": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "interval_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_hour": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_minute": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "weekday": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "interval_minutes",
+          "run_hour",
+          "run_minute",
+          "weekday"
+        ],
+        "additionalProperties": false
+      },
       "identity.boPhanDaGhiRa": {
         "type": "object",
         "properties": {
@@ -22210,6 +23460,12 @@
           },
           "escalate_president_hours": {
             "type": "integer"
+          },
+          "unassigned_hold_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -22221,6 +23477,7 @@
           "id",
           "is_default",
           "resolve_hours",
+          "unassigned_hold_hours",
           "work_kind"
         ],
         "additionalProperties": false
@@ -22448,6 +23705,11 @@
           "name",
           "permissions"
         ],
+        "additionalProperties": false
+      },
+      "identity.optionalHoursIn": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "identity.orgUnitDeleteIn": {
@@ -23038,6 +24300,9 @@
               "integer",
               "null"
             ]
+          },
+          "unassigned_hold_hours": {
+            "$ref": "#/components/schemas/identity.optionalHoursIn"
           }
         },
         "required": [
@@ -23045,7 +24310,8 @@
           "due_soon_hours",
           "escalate_leader_hours",
           "escalate_president_hours",
-          "resolve_hours"
+          "resolve_hours",
+          "unassigned_hold_hours"
         ],
         "additionalProperties": false
       },
@@ -23566,6 +24832,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/comms.noiDungRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_comms.notificationOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.notificationOut"
             }
           },
           "next_cursor": {
