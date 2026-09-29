@@ -5107,6 +5107,256 @@
         }
       }
     },
+    "/api/v1/document-types/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel danh mục loại văn bản trước khi nhập — không ghi gì",
+        "operationId": "documents_post_document_types_import_previews",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "4edb89856f3b",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.documentTypeImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-types/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập danh mục loại văn bản",
+        "operationId": "documents_get_document_types_import_template",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "e658cbfd95b6",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/document-types/imports": {
+      "post": {
+        "summary": "Nhập danh mục loại văn bản từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "documents_post_document_types_imports",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "5dce373c2e06",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.documentTypeImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.documentTypeImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/document-types/{id}": {
       "parameters": [
         {
@@ -12867,6 +13117,256 @@
         }
       }
     },
+    "/api/v1/residential-unit-types/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel loại đơn vị dân cư trước khi nhập — không ghi gì",
+        "operationId": "identity_post_residential_unit_types_import_previews",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "3e15b4544104",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-unit-types/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập loại đơn vị dân cư",
+        "operationId": "identity_get_residential_unit_types_import_template",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "d136c7518644",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-unit-types/imports": {
+      "post": {
+        "summary": "Nhập loại đơn vị dân cư từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "identity_post_residential_unit_types_imports",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "1c2867223c73",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/residential-unit-types/{id}": {
       "parameters": [
         {
@@ -14608,6 +15108,256 @@
         }
       }
     },
+    "/api/v1/staff/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel cán bộ trước khi nhập — không ghi gì, không sinh mật khẩu",
+        "operationId": "identity_post_staff_import_previews",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "e69eeb60e490",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.staffImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập cán bộ — kèm danh sách chọn Bộ phận và Vai trò; không có cột Mã",
+        "operationId": "identity_get_staff_import_template",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "ebffea5256f1",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff/imports": {
+      "post": {
+        "summary": "Nhập cán bộ từ tệp Excel — tạo cán bộ, gán vai trò, cấp tài khoản; toàn bộ tệp hoặc không gì cả",
+        "operationId": "identity_post_staff_imports",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "6cac045ed838",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.staffImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.staffImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff/searches": {
       "post": {
         "summary": "Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL",
@@ -15965,6 +16715,256 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/task-blocs/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel khối nhiệm vụ trước khi nhập — không ghi gì",
+        "operationId": "identity_post_task_blocs_import_previews",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "d48eadb074f1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/task-blocs/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập khối nhiệm vụ",
+        "operationId": "identity_get_task_blocs_import_template",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "47271ba82af1",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/task-blocs/imports": {
+      "post": {
+        "summary": "Nhập khối nhiệm vụ từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "identity_post_task_blocs_imports",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "3ab67434376d",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.catalogueImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -21040,6 +22040,124 @@
         ],
         "additionalProperties": false
       },
+      "documents.documentTypeImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.documentTypeImportRowOut"
+            }
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "documents.documentTypeImportErrorOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "description": "spreadsheet row (header = 1); 0 = the whole file"
+          },
+          "column": {
+            "type": "string",
+            "description": "the header's column name; \"\" = the whole row or file"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "documents.documentTypeImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.documentTypeImportRowOut"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.documentTypeImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "types",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "documents.documentTypeImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.documentTypeImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "documents.documentTypeImportRowOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string",
+            "description": "only once created"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "order",
+          "row"
+        ],
+        "additionalProperties": false
+      },
       "documents.goVanBanVao": {
         "type": "object",
         "properties": {
@@ -23651,6 +24769,124 @@
         ],
         "additionalProperties": false
       },
+      "identity.catalogueImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.catalogueImportEntryOut"
+            }
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "identity.catalogueImportEntryOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string",
+            "description": "only once created"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "order",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.catalogueImportErrorOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "description": "dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp"
+          },
+          "column": {
+            "type": "string",
+            "description": "tên cột như trên tiêu đề; \"\" = lỗi của cả dòng hoặc cả tệp"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.catalogueImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.catalogueImportEntryOut"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.catalogueImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "entries",
+          "errors",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "identity.catalogueImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.catalogueImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
+        ],
+        "additionalProperties": false
+      },
       "identity.cotPhanQuyenRa": {
         "type": "object",
         "properties": {
@@ -24733,6 +25969,198 @@
           "created",
           "skipped_deleted",
           "skipped_existing"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.staffImportCreatedPersonOut"
+            }
+          }
+        },
+        "required": [
+          "batch_id",
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportCreatedPersonOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string"
+          },
+          "org_unit_code": {
+            "type": "string"
+          },
+          "role_code": {
+            "type": "string"
+          },
+          "account_issued": {
+            "type": "boolean"
+          },
+          "temporary_password": {
+            "type": "string",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Mật khẩu tạm dùng MỘT LẦN cho từng người được cấp tài khoản, người dùng chốt 29/09/2026 (ADR 0059 §1, câu mở #9): trả duy nhất trong phản hồi này, không lưu bản trần, không có trong vết, lần gửi lại cùng Idempotency-Key chỉ trả mã lô. Bắt buộc đổi ở lần đăng nhập đầu."
+          }
+        },
+        "required": [
+          "account_issued",
+          "code",
+          "full_name",
+          "id",
+          "login",
+          "org_unit_code",
+          "role_code",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportErrorOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "description": "dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp"
+          },
+          "column": {
+            "type": "string",
+            "description": "tên cột như trên tiêu đề; \"\" = lỗi của cả dòng hoặc cả tệp"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportPlannedOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "description": "\"\" = no address → no account"
+          },
+          "position": {
+            "type": "string"
+          },
+          "org_unit_code": {
+            "type": "string"
+          },
+          "org_unit_name": {
+            "type": "string"
+          },
+          "role_code": {
+            "type": "string"
+          },
+          "role_name": {
+            "type": "string"
+          },
+          "office_phone": {
+            "type": "string"
+          },
+          "mobile": {
+            "type": "string",
+            "description": "masked (rule 3, #16)"
+          },
+          "issues_account": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email",
+          "full_name",
+          "issues_account",
+          "mobile",
+          "office_phone",
+          "org_unit_code",
+          "org_unit_name",
+          "position",
+          "role_code",
+          "role_name",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.staffImportPlannedOut"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.staffImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "people",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.staffImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
         ],
         "additionalProperties": false
       },

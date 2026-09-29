@@ -326,6 +326,40 @@ export type documents_danhSachLoaiVanBanRa = {
   "items": Array<documents_loaiVanBanRa>;
 };
 
+export type documents_documentTypeImportCreatedOut = {
+  "created": Array<documents_documentTypeImportRowOut>;
+};
+
+export type documents_documentTypeImportErrorOut = {
+  /** spreadsheet row (header = 1); 0 = the whole file */
+  "row": number;
+  /** the header's column name; "" = the whole row or file */
+  "column": string;
+  "message": string;
+};
+
+export type documents_documentTypeImportPreviewOut = {
+  "valid": boolean;
+  "types": Array<documents_documentTypeImportRowOut>;
+  "errors": Array<documents_documentTypeImportErrorOut>;
+};
+
+export type documents_documentTypeImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<documents_documentTypeImportErrorOut>;
+};
+
+export type documents_documentTypeImportRowOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "label": string;
+  "order": number;
+};
+
 export type documents_goVanBanVao = {
   "reason": string;
 };
@@ -1056,6 +1090,40 @@ export type identity_capTaiKhoanRa = {
   "temporary_password": string;
 };
 
+export type identity_catalogueImportCreatedOut = {
+  "created": Array<identity_catalogueImportEntryOut>;
+};
+
+export type identity_catalogueImportEntryOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "label": string;
+  "order": number;
+};
+
+export type identity_catalogueImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type identity_catalogueImportPreviewOut = {
+  "valid": boolean;
+  "entries": Array<identity_catalogueImportEntryOut>;
+  "errors": Array<identity_catalogueImportErrorOut>;
+};
+
+export type identity_catalogueImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<identity_catalogueImportErrorOut>;
+};
+
 export type identity_cotPhanQuyenRa = {
   "role_id": string;
   /** sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào */
@@ -1355,6 +1423,61 @@ export type identity_seedRoleTemplatesOut = {
   "skipped_existing": Array<identity_roleTemplateRefOut>;
   /** xã đã XOÁ vai trò mang mã này — không tạo lại, không khôi phục */
   "skipped_deleted": Array<identity_roleTemplateRefOut>;
+};
+
+export type identity_staffImportCreatedOut = {
+  "batch_id": string;
+  "created": Array<identity_staffImportCreatedPersonOut>;
+};
+
+export type identity_staffImportCreatedPersonOut = {
+  "row": number;
+  "id": string;
+  "code": string;
+  "full_name": string;
+  "login": string;
+  "org_unit_code": string;
+  "role_code": string;
+  "account_issued": boolean;
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Mật khẩu tạm dùng MỘT LẦN cho từng người được cấp tài khoản, người dùng chốt 29/09/2026 (ADR 0059 §1, câu mở #9): trả duy nhất trong phản hồi này, không lưu bản trần, không có trong vết, lần gửi lại cùng Idempotency-Key chỉ trả mã lô. Bắt buộc đổi ở lần đăng nhập đầu. */
+  "temporary_password"?: string;
+};
+
+export type identity_staffImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type identity_staffImportPlannedOut = {
+  "row": number;
+  "full_name": string;
+  /** "" = no address → no account */
+  "email": string;
+  "position": string;
+  "org_unit_code": string;
+  "org_unit_name": string;
+  "role_code": string;
+  "role_name": string;
+  "office_phone": string;
+  /** masked (rule 3, #16) */
+  "mobile": string;
+  "issues_account": boolean;
+};
+
+export type identity_staffImportPreviewOut = {
+  "valid": boolean;
+  "people": Array<identity_staffImportPlannedOut>;
+  "errors": Array<identity_staffImportErrorOut>;
+};
+
+export type identity_staffImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<identity_staffImportErrorOut>;
 };
 
 export type identity_suaBoPhanVao = {
@@ -3382,6 +3505,64 @@ export type documents_post_document_types = {
   };
 };
 
+/** POST /api/v1/document-types/import-previews — Kiểm tra một tệp Excel danh mục loại văn bản trước khi nhập — không ghi gì */
+export type documents_post_document_types_import_previews = {
+  duongDan: "/api/v1/document-types/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_documentTypeImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/document-types/import-template — Tải tệp Excel mẫu để nhập danh mục loại văn bản */
+export type documents_get_document_types_import_template = {
+  duongDan: "/api/v1/document-types/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/document-types/imports — Nhập danh mục loại văn bản từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type documents_post_document_types_imports = {
+  duongDan: "/api/v1/document-types/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: documents_documentTypeImportCreatedOut;
+    400: documents_documentTypeImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
 /** PATCH /api/v1/document-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại văn bản */
 export type documents_patch_document_types_by_id = {
   duongDan: "/api/v1/document-types/{id}";
@@ -5079,6 +5260,64 @@ export type identity_post_residential_unit_types = {
   };
 };
 
+/** POST /api/v1/residential-unit-types/import-previews — Kiểm tra một tệp Excel loại đơn vị dân cư trước khi nhập — không ghi gì */
+export type identity_post_residential_unit_types_import_previews = {
+  duongDan: "/api/v1/residential-unit-types/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_catalogueImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/residential-unit-types/import-template — Tải tệp Excel mẫu để nhập loại đơn vị dân cư */
+export type identity_get_residential_unit_types_import_template = {
+  duongDan: "/api/v1/residential-unit-types/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/residential-unit-types/imports — Nhập loại đơn vị dân cư từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type identity_post_residential_unit_types_imports = {
+  duongDan: "/api/v1/residential-unit-types/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_catalogueImportCreatedOut;
+    400: identity_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PATCH /api/v1/residential-unit-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại đơn vị dân cư */
 export type identity_patch_residential_unit_types_by_id = {
   duongDan: "/api/v1/residential-unit-types/{id}";
@@ -5492,6 +5731,64 @@ export type identity_put_staff_current_password = {
   };
 };
 
+/** POST /api/v1/staff/import-previews — Kiểm tra một tệp Excel cán bộ trước khi nhập — không ghi gì, không sinh mật khẩu */
+export type identity_post_staff_import_previews = {
+  duongDan: "/api/v1/staff/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_staffImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/staff/import-template — Tải tệp Excel mẫu để nhập cán bộ — kèm danh sách chọn Bộ phận và Vai trò; không có cột Mã */
+export type identity_get_staff_import_template = {
+  duongDan: "/api/v1/staff/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/staff/imports — Nhập cán bộ từ tệp Excel — tạo cán bộ, gán vai trò, cấp tài khoản; toàn bộ tệp hoặc không gì cả */
+export type identity_post_staff_imports = {
+  duongDan: "/api/v1/staff/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_staffImportCreatedOut;
+    400: identity_staffImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/staff/searches — Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL */
 export type identity_post_staff_searches = {
   duongDan: "/api/v1/staff/searches";
@@ -5801,6 +6098,64 @@ export type identity_post_task_blocs = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-blocs/import-previews — Kiểm tra một tệp Excel khối nhiệm vụ trước khi nhập — không ghi gì */
+export type identity_post_task_blocs_import_previews = {
+  duongDan: "/api/v1/task-blocs/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_catalogueImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-blocs/import-template — Tải tệp Excel mẫu để nhập khối nhiệm vụ */
+export type identity_get_task_blocs_import_template = {
+  duongDan: "/api/v1/task-blocs/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-blocs/imports — Nhập khối nhiệm vụ từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type identity_post_task_blocs_imports = {
+  duongDan: "/api/v1/task-blocs/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_catalogueImportCreatedOut;
+    400: identity_catalogueImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     500: httpx_Error;
   };
 };
