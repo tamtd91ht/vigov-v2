@@ -4,7 +4,9 @@
 
 ## Owns
 
-— (projections only)
+ReportingSystemMessageOverride — a commune's own wording of the 38 `report.*` sentences
+(`system_message_override`, migration 0003; ADR 0024 §Phụ, *Bổ sung 29/09/2026*). The one table here
+a commune edits; still NO source business data — everything else is a projection.
 
 Ownership is authoritative in `kb/30-indexes/data-ownership.json` (GENERATED — run `make kb`).
 No other service may open this service's schema; they read through gRPC or events (rule 2).
