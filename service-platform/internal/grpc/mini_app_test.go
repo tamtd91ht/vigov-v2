@@ -91,7 +91,8 @@ func hoSoMau() hoSoGia {
 }
 
 func mayTrucTiep(apps svcgrpc.SoMiniApp) *svcgrpc.Server {
-	return svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: apps, HoSo: hoSoMau(), Policies: samplePolicies()},
+	return svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: apps, HoSo: hoSoMau(), Policies: samplePolicies(),
+		Fields: sampleFields()},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
@@ -242,7 +243,7 @@ func TestGetTenantProfileXaKhacKhongDocDuocHoSoXaNay(t *testing.T) {
 func TestGetTenantProfileCSDLHongTraInternal(t *testing.T) {
 	t.Parallel()
 	cli, _ := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoGia{hong: true},
-		Policies: samplePolicies()})
+		Policies: samplePolicies(), Fields: sampleFields()})
 	_, err := cli.GetTenantProfile(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.GetTenantProfileRequest{})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal", status.Code(err))
@@ -255,6 +256,7 @@ func TestNewServerThieuPhuThuocThiPanic(t *testing.T) {
 			t.Fatal("dựng được máy chủ thiếu HoSo")
 		}
 	}()
-	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), Policies: samplePolicies()},
+	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), Policies: samplePolicies(),
+		Fields: sampleFields()},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

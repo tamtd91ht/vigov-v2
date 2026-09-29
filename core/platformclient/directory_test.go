@@ -274,3 +274,10 @@ func (k kiemHan) ListUploadPolicies(context.Context, *platformv1.ListUploadPolic
 	...grpc.CallOption) (*platformv1.ListUploadPoliciesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// ListPetitionFields is tier 1 of the petition field catalogue (ADR 0060) — not a Host resolution.
+// Present for the interface alone, like the five above.
+func (k kiemHan) ListPetitionFields(context.Context, *platformv1.ListPetitionFieldsRequest,
+	...grpc.CallOption) (*platformv1.ListPetitionFieldsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}

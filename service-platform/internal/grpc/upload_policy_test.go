@@ -43,7 +43,8 @@ func samplePolicies() policiesFake {
 
 func policyClient(t *testing.T, p svcgrpc.UploadPolicies) platformv1.PlatformServiceClient {
 	t.Helper()
-	cli, _ := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(), Policies: p})
+	cli, _ := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(), Policies: p,
+		Fields: sampleFields()})
 	return cli
 }
 
@@ -121,7 +122,7 @@ func TestListUploadPoliciesSameForEveryCommune(t *testing.T) {
 func TestListUploadPoliciesWithoutCommuneRefused(t *testing.T) {
 	t.Parallel()
 	_, raw := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
-		Policies: samplePolicies()})
+		Policies: samplePolicies(), Fields: sampleFields()})
 	_, err := raw.ListUploadPolicies(ctxTest(t), &platformv1.ListUploadPoliciesRequest{})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("code = %v, want InvalidArgument", status.Code(err))

@@ -3,7 +3,8 @@
 // It answers registry questions — "which commune owns this Host", "what is this commune called",
 // "which mode and commune does this Mini App have" — plus ONE commune-scoped read, that commune's
 // own display profile (ADR 0045, decision 5) — plus platform-wide operating configuration, today
-// the upload limits (ADR 0052 §10, upload_policy.go). It is deliberately incapable of answering a
+// the upload limits (ADR 0052 §10, upload_policy.go) — plus tier 1 of the petition field catalogue
+// (ADR 0026, ADR 0060, petition_field.go). It is deliberately incapable of answering a
 // question about a commune's business content. ADR 0003: the
 // vendor operating the platform cannot read a commune's petitions or documents because THERE
 // IS NO PATH, not because a flag is switched off. A flag can be flipped; a path has to be
@@ -60,12 +61,19 @@ type UploadPolicies interface {
 	ListUploadPolicies(ctx context.Context) ([]domain.UploadPolicy, error)
 }
 
+// PetitionFields reads tier 1 of the petition field catalogue (migration 0011), retired codes
+// included. No commune argument: one code set for every commune (ADR 0026).
+type PetitionFields interface {
+	ListPetitionFields(ctx context.Context) ([]domain.PetitionField, error)
+}
+
 // Deps are what the server reads. Every field is required.
 type Deps struct {
 	Dir      Directory
 	Apps     SoMiniApp
 	HoSo     HoSoHienThi
 	Policies UploadPolicies
+	Fields   PetitionFields
 }
 
 // Server implements platformv1.PlatformServiceServer.
@@ -76,16 +84,17 @@ type Server struct {
 	apps     SoMiniApp
 	hoSo     HoSoHienThi
 	policies UploadPolicies
+	fields   PetitionFields
 	log      *slog.Logger
 }
 
 // NewServer panics on a missing dependency, at construction: a nil one would otherwise surface as
 // a panic on the first call of that RPC, in production, as a 500 nobody can explain.
 func NewServer(d Deps, log *slog.Logger) *Server {
-	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || log == nil {
+	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || d.Fields == nil || log == nil {
 		panic("platform grpc: NewServer thiếu phụ thuộc")
 	}
-	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, log: log}
+	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, fields: d.Fields, log: log}
 }
 
 // ResolveHost maps an incoming Host to a commune.

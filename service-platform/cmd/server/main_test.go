@@ -72,8 +72,16 @@ func (policiesFake) ListUploadPolicies(context.Context) ([]domain.UploadPolicy, 
 		AllowedMIMETypes: []string{"image/png"}}}, nil
 }
 
+// fieldsFake answers one code whatever the commune — like the real store, which has none.
+type fieldsFake struct{}
+
+func (fieldsFake) ListPetitionFields(context.Context) ([]domain.PetitionField, error) {
+	return []domain.PetitionField{{Code: "khac", DefaultLabel: "Khác", SortOrder: 12, Active: true}}, nil
+}
+
 func depsGia() svcgrpc.Deps {
-	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}, Policies: policiesFake{}}
+	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}, Policies: policiesFake{},
+		Fields: fieldsFake{}}
 }
 
 // moMay starts the real server on an in-memory connection and returns a client dialled with the

@@ -10,6 +10,9 @@ import "google/protobuf/timestamp.proto";
 // the operations zone — today the upload policies below. Configuration about how the platform
 // runs, never a commune's business content; the sentence that follows is unchanged by it.)
 //
+// (Amended 2026-09-29, ADR 0060: plus TIER 1 of the petition field catalogue — the code set ADR 0026
+// placed here. Codes and platform defaults shared by every commune; no commune's content, no counts.)
+//
 // It deliberately has no RPC that returns business content. The vendor operating the platform
 // admin console cannot read a commune's petitions or documents because THERE IS NO PATH — not
 // because a permission flag is switched off. A flag can be flipped; a path has to be written,
@@ -251,6 +254,116 @@ service PlatformService {
   //
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc ListUploadPolicies(ListUploadPoliciesRequest) returns (ListUploadPoliciesResponse);
+
+  // ListPetitionFields returns TIER 1 of the petition field catalogue — the closed code set every
+  // commune shares (ADR 0026) — as the one read path business services use for it (ADR 0060).
+  //
+  // Its callers: service-petitions (validate the field a citizen picks, or a staff member
+  // classifies into, BEFORE asking identity for a deadline; label petitions whose commune set no
+  // tier-2 label), service-identity (validate the field of a new SLA row), and anything that must
+  // name a field code to a person. Direction is BUSINESS → PLATFORM only (ADR 0026 §3, condition 2).
+  //
+  // # WHY THE CALLER MUST CHECK THE CODE HERE AND NOT RELY ON ANYBODY DOWNSTREAM
+  //
+  // Field codes are held AS VALUES in other services' databases — no foreign key can cross the
+  // boundary. identity's ResolveDeadlines cannot tell a misspelled code from a code the commune has
+  // no SLA row for, and answers the DEFAULT row for both (identity.proto, ResolveDeadlines). The
+  // membership check against this answer is therefore the ONLY thing that keeps a code outside the
+  // set out of an archival petition.
+  //
+  // # ONE CALL RETURNS THE WHOLE SET, INCLUDING RETIRED CODES
+  //
+  // A few dozen rows at most. There is no per-code lookup (ADR 0012, decision 2). Retired codes
+  // (`active` false) ARE returned: a petition filed under a code before it was retired still needs
+  // its label, for as long as the record exists. What a caller may do with each:
+  //
+  //   code in answer, active     accept for new intake and for classification; label it.
+  //   code in answer, !active    REFUSE for new intake and classification; still label it on read.
+  //   code NOT in answer         not a tier-1 code. REFUSE on any write. On a read path it can only
+  //                              be data written before this check existed — never render the raw
+  //                              code as though it were a label (ADR 0026 §2, `ve-sinh-moi-truong`).
+  //
+  // A commune's own on/off switch, order and wording are TIER 2 and live in service-petitions — not
+  // here, and never added here (ADR 0060, stop condition #3). A code this answer marks active may
+  // still be switched off by one commune; the caller applies tier 2 on top.
+  //
+  // # CODES ARE FOREVER
+  //
+  // A code in this answer is never renamed and never removed (the store refuses both — see
+  // service-platform/migrations/0011_petition_field.sql). That is what makes the caching rule below
+  // safe without an invalidation event.
+  //
+  // # THE COMMUNE TRAVELS IN METADATA; THE ANSWER DOES NOT DEPEND ON IT
+  //
+  // Not exempt from "x-tenant-id", and not a candidate: every caller holds a commune (a citizen
+  // session or a staff Host), and exempting is a STOP CONDITION (ADR 0012, decision 1). Tier 1 is
+  // by definition the same for every commune, so the answer never varies with it.
+  //
+  // # CACHING — ALLOWED, AT MOST 60 SECONDS, NEVER PAST EXPIRY
+  //
+  //   * One cached answer may serve every commune (tier 1 has no per-commune variant — see above).
+  //   * At most 60 seconds. Because codes are only ever ADDED, a stale answer can only (a) lack a
+  //     just-added code → the caller refuses it: fail closed; (b) carry an old default label; or (c)
+  //     still mark a just-retired code active → a real tier-1 code is accepted for one more minute.
+  //     None lets a code outside the set in (ADR 0060 §2).
+  //   * On a failed refresh after expiry: REFUSE (503). Do NOT serve the expired answer and never
+  //     fall back to a built-in list. Do NOT cache errors.
+  //
+  // # Reading this is NOT audited
+  //
+  // Platform-wide configuration, no personal data, and no caller identity on this port (ADR 0025).
+  // CHANGING a code's row is audited in platform_audit_log by the operations-zone write path
+  // (not built — ADR 0048).
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more fields. EMPTY is not an error, and it means no code is valid:
+  //                       every intake is refused. It is never "anything goes".
+  //   INVALID_ARGUMENT    no "x-tenant-id" (refused by the interceptor before this RPC runs).
+  //   NOT_FOUND           NEVER produced.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "the code is valid" and NOT "the code is
+  //                       unknown": use a cached answer still inside its TTL, otherwise refuse (503).
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ListPetitionFields(ListPetitionFieldsRequest) returns (ListPetitionFieldsResponse);
+}
+
+// Empty on purpose: the commune is "x-tenant-id" in metadata, and the answer is always the whole set
+// (see the RPC). A filter would save nothing and add a way to ask wrongly — an "active only" flag
+// would hand a read path the list that drops old petitions' labels.
+message ListPetitionFieldsRequest {}
+
+message ListPetitionFieldsResponse {
+  // Ordered by sort_order, then code. At most one entry per code. A code not listed is NOT a tier-1
+  // code — see the RPC.
+  repeated PetitionField fields = 1;
+}
+
+// PetitionField is one tier-1 field code with its platform defaults. Presentation shared by every
+// commune — no counts, no petitions, no person, no commune's content (ADR 0026 §3 condition 1 as
+// widened by ADR 0060 §4). A field carrying any of those is the moment to reopen ADR 0003.
+message PetitionField {
+  // The code petitions and SLA rows store: Vietnamese without diacritics, kebab-case ("rac-thai"),
+  // at most 64 characters. Never renamed, never removed.
+  string code = 1;
+
+  // Shown when the commune set no tier-2 label. Never empty in a usable entry.
+  string default_label = 2;
+
+  // Default display order, >= 1, ascending. A commune may reorder in tier 2.
+  int32 sort_order = 3;
+
+  // A lucide icon name ("Trash2"). "" = not declared: render a neutral icon, never guess one. A name
+  // the client does not know is treated as "".
+  string icon = 4;
+
+  // One of "blue", "green", "orange", "purple", "cyan", "red" — the citizen app's tones. "" = not
+  // declared; a value the client does not know is treated as "".
+  string tone = 5;
+
+  // false = RETIRED platform-wide: refuse for new intake and classification, keep labelling on read.
+  // Plain bool on purpose: an entry missing it reads as retired, which refuses — the safe direction.
+  bool active = 6;
 }
 
 // Empty on purpose: the commune is "x-tenant-id" in metadata, and the answer is always the whole

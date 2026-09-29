@@ -226,12 +226,15 @@ func run(log *slog.Logger) error {
 	// never the directory's raw handle.
 	//
 	// Upload limits are platform-wide configuration with no commune column (migration 0008), so
-	// they get their own raw-handle reader — not the directory, which reads only the registry.
+	// they get their own raw-handle reader — not the directory, which reads only the registry. The
+	// tier-1 petition field codes (migration 0011, ADR 0060) are the same kind of table and get the
+	// same kind of reader.
 	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
 		Dir:      danhBa,
 		Apps:     danhBa,
 		HoSo:     svcstore.NewHoSoHienThiStore(store.New(db)),
 		Policies: svcstore.NewUploadPolicyStore(db),
+		Fields:   svcstore.NewPetitionFieldStore(db),
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())

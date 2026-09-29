@@ -26,6 +26,27 @@
       "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:417"
     },
     {
+      "entity": "AutomationJobSetting",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "automation_job_setting",
+      "source": "service-identity/migrations/0017_automation_jobs.sql:45"
+    },
+    {
+      "entity": "AutomationRun",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "automation_run",
+      "source": "service-identity/migrations/0017_automation_jobs.sql:143"
+    },
+    {
+      "entity": "AutomationRunScope",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "automation_run_scope",
+      "source": "service-identity/migrations/0017_automation_jobs.sql:112"
+    },
+    {
       "entity": "BudgetColumn",
       "service": "finance",
       "scope": "tenant",
@@ -278,6 +299,13 @@
       "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:214"
     },
     {
+      "entity": "PetitionField",
+      "service": "platform",
+      "scope": "platform",
+      "table": "petition_field",
+      "source": "service-platform/migrations/0011_petition_field.sql:60"
+    },
+    {
       "entity": "PetitionFieldLabel",
       "service": "petitions",
       "scope": "tenant",
@@ -341,6 +369,13 @@
       "source": "service-identity/migrations/0006_lich_lam_viec.sql:192"
     },
     {
+      "entity": "ReportingSystemMessageOverride",
+      "service": "reporting",
+      "scope": "tenant",
+      "table": "system_message_override",
+      "source": "service-reporting/migrations/0003_system_message_override.sql:30"
+    },
+    {
       "entity": "ResidentialUnit",
       "service": "identity",
       "scope": "tenant",
@@ -360,6 +395,13 @@
       "scope": "tenant",
       "table": "ghep_phien",
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:453"
+    },
+    {
+      "entity": "StaffNotification",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "staff_notification",
+      "source": "service-comms/migrations/0010_staff_notification.sql:92"
     },
     {
       "entity": "SwapWorkingDay",
