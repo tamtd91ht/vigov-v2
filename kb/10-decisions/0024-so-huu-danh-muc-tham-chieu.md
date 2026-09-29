@@ -12,6 +12,7 @@ owns_facts:
   - "vì sao mọi bảng danh mục tham chiếu mang tenant_id trong khi bảng quyen thì không"
   - "chủ sở hữu bảy nhóm danh mục đã chốt, và ba nhóm còn chờ khách"
   - "quy tắc chia khoá của bảng loi_he_thong theo bên phát ra câu nói"
+  - "38 khoá report.* thuộc service reporting, cơ chế ba tuyến ghi đè, và vì sao zalo.* không vào — chốt 29/09/2026"
 ---
 
 # 0024. Danh mục tham chiếu: mỗi nhóm một bảng, đặt trong service sở hữu
@@ -145,7 +146,7 @@ thị nó.
 |---|---|---|---|
 | `feedback.*` | 6 | `petitions` | **Chốt** — cả sáu câu đều do đúng một nhánh từ chối trong luồng xử lý phiếu phát ra |
 | `budget.scope_notice` | 1 | `finance` | **Chốt** — câu này đi kèm **mọi số liệu API trả về** của giải ngân, nên nó sinh ra tại chỗ tính số liệu |
-| `report.*` | 32 | — | **CHƯA CHỐT**, xem §Ba ô để trống |
+| `report.*` | ~~32~~ 38 | `reporting` | ~~**CHƯA CHỐT**~~ **Chốt 29/09/2026** — §Phụ, mục *Bổ sung 29/09/2026* |
 
 **Bác lập luận "hai kênh cùng đọc nên phải để chỗ dùng chung".** Đặc tả nói các câu `feedback.*`
 hiện ở **cả web quản trị lẫn Mini App**, và từ đó rất dễ kết luận rằng chúng phải nằm ở một nơi
@@ -230,9 +231,9 @@ migration**: chủ bộ mã đóng và số mục (4 hay 5) chưa chốt — ADR
 | ~~Câu hỏi này chưa nằm trong `open-questions.json`~~ **nay đã nằm: câu mở #21** | Lúc viết ADR này nội dung mới chỉ được chuyển cho người dùng, vì tệp ấy đang thuộc phạm vi một phiên song song. Nó đã được ghi vào từ đó. **Đừng soạn lại một câu thứ hai cho cùng việc này** |
 | **Đừng đóng #21 bằng ADR 0027** | ADR 0027 chốt danh sách trạng thái của **phiếu phản ánh** là cố định. Đó là vòng đời khác, đối tượng khác, người vận hành khác. Hai vòng đời trả lời giống nhau là chuyện có thể, nhưng phải do khách nói |
 
-### Phụ: 32 khoá `report.*` của `loi_he_thong`
+### Phụ: 32 khoá `report.*` của `loi_he_thong` — **ĐÃ CHỐT 29/09/2026**, xem *Bổ sung* ngay dưới bảng
 
-Chưa chốt. Ba lối ra đã nêu, chưa chọn cái nào, và cả ba đều phải trả lời **cùng một câu**:
+~~Chưa chốt.~~ Ba lối ra đã nêu, chưa chọn cái nào, và cả ba đều phải trả lời **cùng một câu**:
 `reporting` **không sở hữu dữ liệu gốc nào** — vậy nó có được sở hữu **chữ** không?
 
 | Lối ra | Được | Mất |
@@ -242,6 +243,46 @@ Chưa chốt. Ba lối ra đã nêu, chưa chọn cái nào, và cả ba đều 
 | Coi toàn bộ là **cấu hình trình bày**, không phải chữ nghiệp vụ | Tránh được cả hai vướng trên | Cần một khái niệm mới chưa có trong hệ thống, và khái niệm mới đặt sai chỗ là đúng thứ ADR này đang dọn |
 
 Chốt việc này **trước khi** viết bảng `loi_he_thong` đầu tiên, không phải sau.
+
+#### Bổ sung 29/09/2026 — `report.*` về `reporting`, 38 khoá
+
+> **Người dùng, 29/09/2026:** `service-reporting` sở hữu **toàn bộ** khoá `report.*` — lối ra
+> *"Cả 32 khoá về `reporting`"* ở bảng trên.
+
+**Lý do người dùng nêu:** chính phép thử của ADR này — *câu thuộc service PHÁT RA nó*. Nơi phát
+ra các câu `report.*` là tệp xuất `/bao-cao` và thông báo báo cáo (`report.notification.week`,
+`report.notification.month`), và cả hai sẽ do `reporting` phát ra. Lối ra "chia theo tiền tố
+khối" bị bỏ vì nó dựa vào nơi **đếm** con số, không vào nơi **nói** câu chữ.
+
+**Bộ khoá: 38, theo kho yêu cầu, không theo đúng số của đặc tả.**
+
+| Nguồn | Số khoá |
+|---|---|
+| `docs/ui-ux/14-cau-hinh.md:226-261` — nhóm `bao-cao` của §7 | 32 |
+| `../vigov-require/apps/api/app/modules/admin/messages.py:278-316` — khối thu – chi ngân sách: `report.block.fiscal`, `report.metric.fiscal.revenue_percent`, `…revenue_amount`, `…expense_percent`, `…expense_amount`, `…balance` | 6 |
+
+Sáu khoá thu – chi không có trong đặc tả v2 nhưng có khối số liệu thật đứng sau (Thu – Chi ngân
+sách nằm trong `/tong-quan` đợt 1, ADR 0053 §1). Thiếu chúng thì báo cáo in ra tên biến ngay trên
+trang lãnh đạo ký — lý do kho yêu cầu tự ghi ở `messages.py:275-277`.
+
+**Không vào:** nhóm `zalo.*` của kho yêu cầu (`messages.py:317` trở đi). Nó không có trong §7 của
+đặc tả, và nó là câu gửi cán bộ qua Zalo — không phải câu của báo cáo.
+
+**Cơ chế: cùng hình dạng ba tuyến đã chạy ở `petitions` và `finance`.** Danh sách, `PUT
+…/{code}/override`, `DELETE …/{code}/override`, cả ba dưới `admin.lookup`
+(`service-petitions/internal/http/routes.go:2417-2457`,
+`service-finance/internal/http/routes.go:1312-1349`). Câu mặc định nằm **trong mã**; bảng chỉ giữ
+câu xã **ghi đè**, mang `tenant_id`, khôi phục là xoá mềm. Đoạn đầu URL là của riêng `reporting`
+(một đoạn đầu một service, ADR 0054 §3).
+
+**Cái giá, đúng cột "Mất" của bảng trên — nay trả thật:** `reporting` lần đầu giữ **dữ liệu xã
+sửa được**, tức không còn là read model thuần. Ghi ở `kb/00-foundation/domain-boundaries.md`
+§Bảy service. Cái giá ấy dừng ở câu chữ: `reporting` vẫn **không** sở hữu dữ liệu nghiệp vụ gốc
+nào, và ADR 0053 §1 vẫn giữ `/tong-quan` ngoài `reporting`.
+
+**Câu "chốt trước khi viết bảng đầu tiên" đã không được giữ.** Bảng lời hệ thống của `petitions`
+và `finance` có trước ngày chốt này. Không hỏng gì, vì hai bảng ấy chỉ giữ khoá của chính service
+mình và không đụng `report.*`.
 
 ## Phải trả
 

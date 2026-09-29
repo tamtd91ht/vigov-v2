@@ -22,6 +22,11 @@ owns_facts:
 > 28/09/2026 → ADR 0053: /tong-quan đếm trực tiếp, không qua reporting
 > (`kb/10-decisions/0053-tong-quan-dem-truc-tiep-o-service-so-huu.md`).
 
+> 29/09/2026 → ADR 0058: việc nền của tab Tự động hoá (nhắc hạn, leo thang, bản tin) chạy trong
+> tiến trình của service sở hữu dữ liệu, **không** qua RabbitMQ — dòng RabbitMQ ở §Quyết định và
+> bảng §Vì sao tách Kafka và RabbitMQ không còn áp cho các việc ấy
+> (`kb/10-decisions/0058-automation-jobs-in-owning-service.md`).
+
 ## Bối cảnh
 
 ADR 0004 chốt `tenant_id` là shard key nhưng không nói dùng CSDL nào, và không nhắc tới hàng

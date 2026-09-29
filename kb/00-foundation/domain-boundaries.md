@@ -82,7 +82,7 @@ thuộc phạm vi hợp đồng. Bằng chứng khảo sát và đường quay l
 | `petitions` | Tiếp dân — phản ánh và nhiệm vụ phát sinh |
 | `finance` | Tài chính – kế toán — dự toán, giải ngân |
 | `comms` | Thông tin – truyền thông — tin bài, truyền thanh, bản đồ, thông báo |
-| `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |
+| `reporting` | Read model — **không sở hữu dữ liệu nghiệp vụ gốc nào**. Một ngoại lệ công khai từ 29/09/2026: câu chữ `report.*` xã ghi đè (ADR 0024 §Phụ, *Bổ sung 29/09/2026*) |
 
 **Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`core/audit`) và lưu trữ tệp
 (`core/storage`). Lý do ở ADR 0001; kho, bucket, khoá và vòng đời tệp ở ADR 0052.
