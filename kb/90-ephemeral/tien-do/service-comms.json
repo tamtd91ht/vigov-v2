@@ -184,6 +184,24 @@
       "tiep_theo": "—",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "hop-chuong-can-bo",
+      "viec": "Hộp chuông cán bộ + gRPC DeliverStaffNotifications (ADR 0058 §3)",
+      "trang_thai": "xong",
+      "bang_chung": "4c220a9 (bảng staff_notification, gRPC server đầu tiên của comms, GET/PATCH /api/v1/notifications) · 3148543 (cổng 9090 trong cụm) · go test ./... xanh",
+      "tiep_theo": "Thông báo phát hành từ sổ Thông báo (§8 dòng đầu) CHƯA vào chuông. Chưa chạy PostgreSQL thật. Sau khi triển khai phải kubectl apply -k để Service có cổng 9090.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhap-excel-loai-tai-nguyen-ban-do",
+      "viec": "Nhập Excel Loại tài nguyên bản đồ (ADR 0059 §3)",
+      "trang_thai": "xong",
+      "bang_chung": "4c220a9 · kèm sửa lỗi có sẵn docMotDongLoaiTaiNguyen đọc lệch cột (PATCH/DELETE 500 trên PG thật)",
+      "tiep_theo": "Một dòng vết cho cả tệp (khác identity một dòng/hàng).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

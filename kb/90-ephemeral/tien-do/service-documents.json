@@ -141,6 +141,15 @@
       "tiep_theo": "—",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "bo-chay-tu-dong-hoa-van-ban",
+      "viec": "Bộ chạy Tự động hoá cho văn bản đến + nhập Excel Loại văn bản",
+      "trang_thai": "xong",
+      "bang_chung": "120df73 · go test ./... xanh",
+      "tiep_theo": "ĐƠN THƯ KHÔNG CHẠY: chưa có sổ đơn thư (không bảng, không cột hạn) — người dùng đã duyệt nhắc hạn đơn thư 29/09; bật bằng một dòng automationKinds khi có sổ.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

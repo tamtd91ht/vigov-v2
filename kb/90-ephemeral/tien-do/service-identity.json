@@ -332,6 +332,33 @@
       "tiep_theo": "Ca pg chưa chạy.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "tu-dong-hoa-theo-xa",
+      "viec": "Tự động hoá theo xã — /api/v1/automation-jobs + 6 RPC cho bộ chạy; SLA thêm don-thu và unassigned_hold_hours (ADR 0058, 0029)",
+      "trang_thai": "xong",
+      "bang_chung": "1796286 + b994f35 (hợp đồng) · d3b60a2 (migrations 0016, 0017; nhận lượt bằng ghi có điều kiện) · go test ./... xanh",
+      "tiep_theo": "CHƯA chạy PostgreSQL thật cho câu nhận lượt (automation_pg_test SKIP). Tên tài nguyên automation-jobs chưa được người dùng duyệt (ubiquitous-language).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "thon-to-dan-pho-ghi-va-nhap",
+      "viec": "Thôn / Tổ dân phố — thêm, sửa, ngừng/dùng lại, nhập Excel (ADR 0059 §2)",
+      "trang_thai": "xong",
+      "bang_chung": "e687f07 (migration 0018) · go test ./... xanh",
+      "tiep_theo": "Không có xoá, không gộp/tách (luật 1 đk dừng #3).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhap-excel-can-bo-cap-tai-khoan",
+      "viec": "Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3)",
+      "trang_thai": "xong",
+      "bang_chung": "fbbae7b (migration 0019 email nullable) · go test ./... xanh",
+      "tiep_theo": "CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

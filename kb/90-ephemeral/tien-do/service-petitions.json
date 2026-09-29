@@ -411,6 +411,24 @@
       "tiep_theo": "Người dùng quyết 29/09: cán bộ xem toạ độ dưới feedback.read (vị trí hiện trường dân tự gửi, như address; require hiện cùng địa chỉ). Vết chỉ ghi has_scene_location. CHƯA kiểm NUMERIC(9,6) trên PostgreSQL thật. Vẫn tuỳ chọn (ADR 0050 điểm 9). Chưa có thôn (thon_id) trên phản hồi cán bộ.",
       "menu": "phan-anh-nguoi-dan",
       "no_confirm": []
+    },
+    {
+      "id": "bo-chay-tu-dong-hoa",
+      "viec": "Bộ chạy Tự động hoá cho nhiệm vụ + phản ánh (ADR 0058)",
+      "trang_thai": "xong",
+      "bang_chung": "765f32b (+ COMMS_GRPC_ADDR, core/commsclient, core/identityclient/automation) · go test ./... xanh",
+      "tiep_theo": "Chưa chạy với PG/identity/comms thật. Hạn tiếp nhận phản ánh (han_tiep_nhan) chưa được nhắc. Liên kết ?q= trên web chưa kiểm là khớp mã.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhap-excel-danh-muc-nhiem-vu",
+      "viec": "Nhập Excel Loại nhiệm vụ, Mức ưu tiên nhiệm vụ (ADR 0059 §3)",
+      "trang_thai": "xong",
+      "bang_chung": "ce8069a · go test ./... xanh",
+      "tiep_theo": "Mức ưu tiên nhập nối sau mức cuối.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

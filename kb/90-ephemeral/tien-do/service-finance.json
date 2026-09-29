@@ -167,6 +167,15 @@
       "tiep_theo": "—",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "nhap-excel-hang-muc-ke-hoach-von",
+      "viec": "Nhập Excel Hạng mục kế hoạch vốn (ADR 0059 §3)",
+      "trang_thai": "xong",
+      "bang_chung": "5a576de · go test ./... xanh",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }
