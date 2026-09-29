@@ -18,7 +18,7 @@ worked examples and the k8s snippets live there; what cannot drift silently live
 | 5 | Address values are **cluster-shaped from the first line written** — a comma-separated `host:port` list, or a DSN whose host part may carry several hosts — even when the deployment has one node |
 | 6 | Every variable has a line in `.env.example`, with a **placeholder**. Never a real value, never a plausible-looking one (rule 8) |
 | 7 | Anything that would hurt in a log line is `secret.Secret` and comes from a **Secret**; everything else comes from a **ConfigMap** |
-| 8 | Required vs optional is decided **per variable, with the reason written beside it**. Required means the service cannot serve one request without it |
+| 8 | Each service **declares the variable groups it uses**; `Load` reads and validates only those. In prod/staging a variable is required **if and only if its service declares the group** — "used ⇒ required" is derived, not chosen per variable (ADR 0057). Fields with a documented default are not "unset"; dev refuses at use; one-off bootstrap switches are never prod-required |
 
 ## STRICTLY FORBIDDEN
 

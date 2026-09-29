@@ -11,12 +11,12 @@ import (
 
 // Operator realm configuration (ADR 0048, owner's decisions of 2026-09-28 #2 and #10).
 //
-// BOTH VARIABLES ARE OPTIONAL, and "optional" is decided per variable with the reason here (rule
-// 11 invariant 8): without them every staff and citizen request is still served; only OPERATOR
-// sign-in stops, and it stops by REFUSING (operatorauth answers ErrNotConfigured), never by
-// falling back to anything. Making them required would stop all eight services on every machine
-// that has no operator area — which is the on-premise deployment of ADR 0048 condition #1 — to
-// protect one flow in one service (rule 11 stop condition #2).
+// GROUP config.OperatorRealm, WHICH NO SERVICE DECLARES YET: ADR 0048 is not wired into identity's
+// main, so neither variable is read anywhere today. Once identity declares the group, staging and
+// prod refuse to start it without both; a deployment with no operator area (the on-premise case of
+// ADR 0048 condition #1) is then one whose main does NOT declare it — an owner's call, not a
+// default. In dev, absent means operator sign-in is REFUSED (operatorauth answers
+// ErrNotConfigured), never a fallback.
 //
 // ROTATION: both are lists, first entry signs/encrypts, every entry verifies/decrypts. HOW OFTEN
 // they rotate is not decided — the same gap SESSION_SIGNING_KEYS carries under ADR 0025 and rule
@@ -109,12 +109,13 @@ func parseAES256KeyList(raw string, errInvalid error) ([]secret.Secret, error) {
 // OperatorRealmConfigured reports whether BOTH operator variables are set — the only state in
 // which operator sign-in can succeed. One without the other is reported by CanhBao.
 func (c Config) OperatorRealmConfigured() bool {
-	return len(c.OperatorSessionSigningKeys) > 0 && len(c.OperatorTOTPEncryptionKeys) > 0
+	c.require("OperatorRealmConfigured", OperatorRealm)
+	return len(c.operatorSessionSigningKeys) > 0 && len(c.operatorTOTPEncryptionKeys) > 0
 }
 
 // operatorHalfConfigured names the missing variable when exactly one of the two is set.
 func (c Config) operatorHalfConfigured() string {
-	hasSign, hasTOTP := len(c.OperatorSessionSigningKeys) > 0, len(c.OperatorTOTPEncryptionKeys) > 0
+	hasSign, hasTOTP := len(c.operatorSessionSigningKeys) > 0, len(c.operatorTOTPEncryptionKeys) > 0
 	switch {
 	case hasSign && !hasTOTP:
 		return "OPERATOR_TOTP_ENCRYPTION_KEY"

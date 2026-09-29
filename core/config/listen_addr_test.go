@@ -18,12 +18,12 @@ func TestListenAddrMacDinh8080ChoMoiDichVu(t *testing.T) {
 				"LISTEN_ADDR":  "",
 			})
 
-			cfg, err := Load(dv)
+			cfg, err := Load(dv, Uses(HTTPServer))
 			if err != nil {
 				t.Fatalf("Load lỗi: %v", err)
 			}
-			if cfg.ListenAddr != ":8080" {
-				t.Errorf("ListenAddr = %q, muốn :8080", cfg.ListenAddr)
+			if cfg.ListenAddr() != ":8080" {
+				t.Errorf("ListenAddr = %q, muốn :8080", cfg.ListenAddr())
 			}
 		})
 	}
@@ -38,12 +38,12 @@ func TestListenAddrChiKhoangTrangVanLa8080(t *testing.T) {
 		"LISTEN_ADDR":  "  \n",
 	})
 
-	cfg, err := Load("comms")
+	cfg, err := Load("comms", Uses(HTTPServer))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.ListenAddr != ":8080" {
-		t.Errorf("ListenAddr = %q, muốn :8080", cfg.ListenAddr)
+	if cfg.ListenAddr() != ":8080" {
+		t.Errorf("ListenAddr = %q, muốn :8080", cfg.ListenAddr())
 	}
 }
 
@@ -56,11 +56,11 @@ func TestListenAddrDocTuMoiTruongCoCatKhoangTrang(t *testing.T) {
 		"LISTEN_ADDR":  " :8087\n",
 	})
 
-	cfg, err := Load("comms")
+	cfg, err := Load("comms", Uses(HTTPServer))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.ListenAddr != ":8087" {
-		t.Errorf("ListenAddr = %q, muốn :8087", cfg.ListenAddr)
+	if cfg.ListenAddr() != ":8087" {
+		t.Errorf("ListenAddr = %q, muốn :8087", cfg.ListenAddr())
 	}
 }

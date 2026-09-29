@@ -35,6 +35,17 @@ import (
 	"github.com/vihat/vigov/service-platform/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// platform: serves REST and the inter-service port, and caches its own registry. Calls nobody over gRPC, holds no cache store.
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.GRPCServer,
+	config.TenantCache,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -47,7 +58,7 @@ func main() {
 func run(log *slog.Logger) error {
 	// 1. config — platform-wide constants from the environment ONLY. Per-commune values are
 	//    read at RUNTIME from the database (rule 1, invariant 10).
-	cfg, err := config.Load("platform")
+	cfg, err := config.Load("platform", configUses)
 	if err != nil {
 		return err
 	}
@@ -107,7 +118,7 @@ func run(log *slog.Logger) error {
 	// tenant.Directory with no platform logic in it, and the other seven services wrap their
 	// gRPC-backed directory with the same one. Two copies would be two invalidation rules.
 	danhBa := svcstore.NewDirectory(db)
-	directory := tenant.NewCachedDirectory(danhBa, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(danhBa, cfg.TenantCacheTTL())
 
 	// 4. checker — authz.Checker backed by the identity service.
 	// TODO(next): identity does not expose the permission contract yet. Until it does, no
@@ -160,10 +171,10 @@ func run(log *slog.Logger) error {
 	ngoai.Handle("/", h)
 
 	srv := &http.Server{
-		Addr: cfg.ListenAddr,
+		Addr: cfg.ListenAddr(),
 		// OUTERMOST, around everything above, so every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names.
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(ngoai),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(ngoai),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -216,14 +227,14 @@ func run(log *slog.Logger) error {
 	//
 	// Upload limits are platform-wide configuration with no commune column (migration 0008), so
 	// they get their own raw-handle reader — not the directory, which reads only the registry.
-	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{
+	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
 		Dir:      danhBa,
 		Apps:     danhBa,
 		HoSo:     svcstore.NewHoSoHienThiStore(store.New(db)),
 		Policies: svcstore.NewUploadPolicyStore(db),
 	}, log)
 
-	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err
 	}
@@ -237,14 +248,14 @@ func run(log *slog.Logger) error {
 	// nobody is reading any more would leak it.
 	loi := make(chan error, 2)
 	go func() {
-		log.Info("khởi động", "service", "platform", "addr", cfg.ListenAddr,
+		log.Info("khởi động", "service", "platform", "addr", cfg.ListenAddr(),
 			"env", cfg.Env, "dsn", cfg.Redacted().DatabaseDSN)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			loi <- err
 		}
 	}()
 	go func() {
-		log.Info("khởi động gRPC", "service", "platform", "addr", cfg.GRPCListenAddr)
+		log.Info("khởi động gRPC", "service", "platform", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so no ErrServerClosed equivalent to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
 			loi <- err

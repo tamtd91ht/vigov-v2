@@ -52,23 +52,40 @@ func fullObjectStorage() map[string]string {
 	}
 }
 
+// uploadUses is what a service storing files declares, plus PublicMedia so the media base URL is
+// read too (only a publisher declares that one).
+var uploadUses = Uses(ObjectStore, PublicMedia, MalwareScan)
+
+// Declared and absent starts ONLY in dev — staging and prod refuse it (uses_test.go). Undeclared,
+// it starts silently everywhere, which is every service but petitions.
 func TestObjectStorageAbsentIsNotConfiguredAndStarts(t *testing.T) {
+	withObjectStorage(t, EnvDev, nil)
+	cfg, err := Load("petitions", uploadUses)
+	if err != nil {
+		t.Fatalf("absent object storage must not stop the service in dev: %v", err)
+	}
+	if cfg.ObjectStorage().Configured() {
+		t.Fatal("Configured() = true with nothing set")
+	}
+	if len(cfg.ObjectStorage().Missing()) != 5 {
+		t.Errorf("Missing() = %v", cfg.ObjectStorage().Missing())
+	}
+	for _, w := range cfg.CanhBao() {
+		if strings.Contains(w, "OBJECT_STORAGE") {
+			t.Errorf("nothing set must be silent, got %q", w)
+		}
+	}
+
 	for _, env := range []string{EnvDev, EnvStaging, EnvProd} {
-		t.Run(env, func(t *testing.T) {
+		t.Run("undeclared "+env, func(t *testing.T) {
 			withObjectStorage(t, env, nil)
-			cfg, err := Load("comms")
+			cfg, err := Load("platform", Uses())
 			if err != nil {
-				t.Fatalf("absent object storage must not stop the service: %v", err)
-			}
-			if cfg.ObjectStorage.Configured() {
-				t.Fatal("Configured() = true with nothing set")
-			}
-			if len(cfg.ObjectStorage.Missing()) != 5 {
-				t.Errorf("Missing() = %v", cfg.ObjectStorage.Missing())
+				t.Fatalf("undeclared object storage must not stop the service: %v", err)
 			}
 			for _, w := range cfg.CanhBao() {
 				if strings.Contains(w, "OBJECT_STORAGE") {
-					t.Errorf("nothing set must be silent, got %q", w)
+					t.Errorf("undeclared must be silent, got %q", w)
 				}
 			}
 		})
@@ -77,11 +94,11 @@ func TestObjectStorageAbsentIsNotConfiguredAndStarts(t *testing.T) {
 
 func TestObjectStorageFullLoads(t *testing.T) {
 	withObjectStorage(t, EnvProd, fullObjectStorage())
-	cfg, err := Load("comms")
+	cfg, err := Load("petitions", uploadUses)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	o := cfg.ObjectStorage
+	o := cfg.ObjectStorage()
 	if !o.Configured() {
 		t.Fatalf("Configured() = false, missing %v", o.Missing())
 	}
@@ -106,13 +123,13 @@ func TestObjectStorageFullLoads(t *testing.T) {
 
 func TestObjectStorageSecretsNeverRender(t *testing.T) {
 	withObjectStorage(t, EnvDev, fullObjectStorage())
-	cfg, err := Load("comms")
+	cfg, err := Load("petitions", uploadUses)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	for _, out := range []string{
-		cfg.ObjectStorage.String(),
-		fmt.Sprintf("%v", cfg.ObjectStorage),
+		cfg.ObjectStorage().String(),
+		fmt.Sprintf("%v", cfg.ObjectStorage()),
 		fmt.Sprintf("%+v", cfg),
 		fmt.Sprintf("%#v", cfg),
 	} {
@@ -128,7 +145,7 @@ func TestObjectStorageMultipleHostsRefused(t *testing.T) {
 			vals := fullObjectStorage()
 			vals[name] = "https://minio-a.example:9000,https://minio-b.example:9000"
 			withObjectStorage(t, EnvDev, vals)
-			_, err := Load("comms")
+			_, err := Load("petitions", uploadUses)
 			if !errors.Is(err, ErrObjectStorageInvalid) {
 				t.Fatalf("err = %v, want ErrObjectStorageInvalid", err)
 			}
@@ -157,7 +174,7 @@ func TestObjectStorageMalformedRefused(t *testing.T) {
 			vals := fullObjectStorage()
 			vals[c[0]] = c[1]
 			withObjectStorage(t, EnvDev, vals)
-			if _, err := Load("comms"); !errors.Is(err, ErrObjectStorageInvalid) {
+			if _, err := Load("petitions", uploadUses); !errors.Is(err, ErrObjectStorageInvalid) {
 				t.Fatalf("err = %v, want ErrObjectStorageInvalid", err)
 			}
 		})
@@ -169,7 +186,7 @@ func TestObjectStorageHalfConfiguredWarns(t *testing.T) {
 		"OBJECT_STORAGE_ENDPOINT":   "http://minio.internal.example:9000",
 		"OBJECT_STORAGE_ACCESS_KEY": fakeAccessKey,
 	})
-	cfg, err := Load("comms")
+	cfg, err := Load("petitions", uploadUses)
 	if err != nil {
 		t.Fatalf("half configuration must not stop the service: %v", err)
 	}
@@ -190,7 +207,7 @@ func TestObjectStoragePlainHTTPPublicEndpointWarnsOutsideDev(t *testing.T) {
 	vals := fullObjectStorage()
 	vals["OBJECT_STORAGE_PUBLIC_ENDPOINT"] = "http://files.example.test"
 	withObjectStorage(t, EnvStaging, vals)
-	cfg, err := Load("comms")
+	cfg, err := Load("petitions", uploadUses)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -203,11 +220,11 @@ func TestObjectStorageRegionOverride(t *testing.T) {
 	vals := fullObjectStorage()
 	vals["OBJECT_STORAGE_REGION"] = " ap-southeast-1 "
 	withObjectStorage(t, EnvDev, vals)
-	cfg, err := Load("comms")
+	cfg, err := Load("petitions", uploadUses)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.ObjectStorage.Region != "ap-southeast-1" {
-		t.Errorf("region = %q", cfg.ObjectStorage.Region)
+	if cfg.ObjectStorage().Region != "ap-southeast-1" {
+		t.Errorf("region = %q", cfg.ObjectStorage().Region)
 	}
 }

@@ -23,6 +23,15 @@ import (
 	"github.com/vihat/vigov/service-reporting/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// reporting: REST only, and calls no other service: no gRPC server, no gRPC client, so no GRPC_CALLER_KEY.
+var configUses = config.Uses(
+	config.HTTPServer,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -72,11 +81,11 @@ func main() {
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
-	addr := cfg.ListenAddr
+	addr := cfg.ListenAddr()
 	log.Info("starting", "service", "reporting", "addr", addr)
 	// OUTERMOST already, so that when the edge chain above is wired it sits inside this and every
 	// layer reads one client address per request (TRUSTED_PROXY_CIDRS, rule 6 invariant 2).
-	if err := http.ListenAndServe(addr, httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(mux)); err != nil {
+	if err := http.ListenAndServe(addr, httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(mux)); err != nil {
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
@@ -91,7 +100,7 @@ func chayMigration(log *slog.Logger) (config.Config, error) {
 	// Platform-wide constants only. Per-commune values are read at RUNTIME (rule 1, invariant
 	// 10) — there is nothing per-commune on this path in any case: the schema is shared by every
 	// commune the process serves, partitioned by tenant_id rather than split per commune.
-	cfg, err := config.Load("reporting")
+	cfg, err := config.Load("reporting", configUses)
 	if err != nil {
 		return config.Config{}, err
 	}

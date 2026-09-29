@@ -27,43 +27,44 @@
 //	k8s ConfigMap  anything not credentialed: a host, a port, an address list, an exchange
 //	               name, an index prefix, a database number, a TTL. Plain Go types
 //
-//	Variable                    Object      Refusal
-//	------------------------------------------------------------------------------------
-//	DATABASE_DSN                Secret      REQUIRED — Load refuses, by name
-//	GRPC_CALLER_KEY             Secret      REQUIRED — Load refuses, by name (ADR 0025)
-//	SESSION_SIGNING_KEYS        Secret      REQUIRED outside dev — Load refuses, by name
-//	ENV                         ConfigMap   REQUIRED — Load refuses, by name
-//	REDIS_DSN                   Secret      optional — empty means no cache; CanhBao reports it
-//	PLATFORM_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
-//	IDENTITY_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
-//	PETITIONS_GRPC_ADDR         ConfigMap   optional here, refused by name at Dial (identity only)
-//	DOCUMENTS_GRPC_ADDR         ConfigMap   optional here, refused by name at Dial (identity only)
-//	LISTEN_ADDR                ConfigMap   optional — default :8080
-//	GRPC_LISTEN_ADDR            ConfigMap   optional — default :9090
-//	TENANT_CACHE_TTL            —           optional — default 30s, not set in the cluster
-//	RABBITMQ_DSN                Secret      optional — refused by name at connect time
-//	RABBITMQ_EXCHANGE           ConfigMap   optional — refused by name at connect time
-//	ELASTICSEARCH_ADDRS         ConfigMap   optional — refused by name at connect time
-//	ELASTICSEARCH_API_KEY       Secret      optional — refused by name at connect time
-//	ELASTICSEARCH_INDEX_PREFIX  ConfigMap   optional — refused by name at connect time
-//	DANGEROUS_AUTH_BYPASS       ConfigMap   optional — refused outright when ENV=prod
-//	TRUSTED_PROXY_CIDRS         ConfigMap   optional — empty trusts nobody; malformed refused by Load
-//	CITIZEN_CORS_ALLOWED_ORIGINS  ConfigMap optional — empty = no CORS on the citizen edge; `*`/http refused by Load
-//	CITIZEN_SESSION_BRIDGE_LISTEN_ADDR  ConfigMap  optional — both bridge vars or neither; one alone refused by Load
-//	CITIZEN_SESSION_BRIDGE_KEYS         Secret     optional — both bridge vars or neither; one alone refused by Load
-//	CITIZEN_SESSION_TTL                 ConfigMap  optional — default 720h (30 days); malformed refused by Load
-//	IDENTITY_ADMIN_SEED_PASSWORD        Secret     optional — empty = off; shorter than password.DaiToiThieu = off, reported by identity at startup
-//	OBJECT_STORAGE_ENDPOINT             ConfigMap  optional — absent = uploads refused (storage.ErrNotConfigured); >1 host or malformed refused by Load
-//	OBJECT_STORAGE_PUBLIC_ENDPOINT      ConfigMap  optional — as above; presigned URLs are signed against this host
-//	OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL  ConfigMap  optional — absent = storage.PublicURL refused; malformed refused by Load
-//	OBJECT_STORAGE_ACCESS_KEY           Secret     optional — one pair per service (ADR 0052 §3); absent = uploads refused
-//	OBJECT_STORAGE_SECRET_KEY           Secret     optional — as above
-//	OBJECT_STORAGE_REGION               ConfigMap  optional — default us-east-1 (see ObjectStorage.Region)
-//	OBJECT_STORAGE_BUCKET_PREFIX        ConfigMap  optional — absent = uploads refused; malformed refused by Load
-//	MALWARE_SCANNER_ADDRESS             ConfigMap  optional — absent = uploads refused (malwarescan.ErrNotConfigured); malformed refused by Load
-//	OPERATOR_SESSION_SIGNING_KEYS       Secret     optional — identity only; absent = operator sign-in refused (ADR 0048); an entry shared with SESSION_SIGNING_KEYS refused by Load
-//	OPERATOR_TOTP_ENCRYPTION_KEY        Secret     optional — identity only; absent = operator sign-in refused; not base64 of exactly 32 bytes refused by Load
-//	SECRET_ENCRYPTION_KEYS              Secret     optional — services storing per-commune secrets (ADR 0009); absent = those operations refused (crypto.ErrNotConfigured); same format and refusal as above
+//	Variable                              Object     Group                When empty
+//	-------------------------------------------------------------------------------------------------
+//	ENV                                   ConfigMap  (base, every service)  refused everywhere
+//	DATABASE_DSN                          Secret     (base, every service)  refused everywhere
+//	DANGEROUS_AUTH_BYPASS                 ConfigMap  (base, every service)  off; "true" refused when ENV=prod
+//	LISTEN_ADDR                           ConfigMap  HTTPServer             default :8080
+//	TRUSTED_PROXY_CIDRS                   ConfigMap  HTTPServer             refused in staging/prod; dev trusts nobody
+//	GRPC_LISTEN_ADDR                      ConfigMap  GRPCServer             default :9090
+//	GRPC_CALLER_KEY                       Secret     GRPCServer + clients   refused everywhere (ADR 0025)
+//	PLATFORM_GRPC_ADDR                    ConfigMap  PlatformClient         refused in staging/prod; dev: refused at Dial
+//	IDENTITY_GRPC_ADDR                    ConfigMap  IdentityClient         refused in staging/prod; dev: refused at Dial
+//	PETITIONS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    refused in staging/prod; dev: delete answers 503
+//	DOCUMENTS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    as above
+//	TENANT_CACHE_TTL                      —          TenantCache            default 30s, not set in the cluster
+//	REDIS_DSN                             Secret     Redis                  refused in staging/prod; dev: no cache
+//	SESSION_SIGNING_KEYS                  Secret     StaffSessionSigning    refused in staging/prod; dev: no sessions
+//	CITIZEN_CORS_ALLOWED_ORIGINS          ConfigMap  CitizenCORS            refused in staging/prod; dev: no CORS
+//	CITIZEN_SESSION_BRIDGE_LISTEN_ADDR    ConfigMap  CitizenBridge          refused in staging/prod; dev: both or neither
+//	CITIZEN_SESSION_BRIDGE_KEYS           Secret     CitizenBridge          as above
+//	CITIZEN_SESSION_TTL                   ConfigMap  CitizenBridge          default 720h; malformed refused
+//	IDENTITY_ADMIN_SEED_PASSWORD          Secret     AdminSeed              off, in EVERY environment (bootstrap switch)
+//	OBJECT_STORAGE_ENDPOINT               ConfigMap  ObjectStore            refused in staging/prod; dev: uploads refused
+//	OBJECT_STORAGE_PUBLIC_ENDPOINT        ConfigMap  ObjectStore            as above
+//	OBJECT_STORAGE_ACCESS_KEY             Secret     ObjectStore            as above; one pair per service (ADR 0052 §3)
+//	OBJECT_STORAGE_SECRET_KEY             Secret     ObjectStore            as above
+//	OBJECT_STORAGE_BUCKET_PREFIX          ConfigMap  ObjectStore            as above
+//	OBJECT_STORAGE_REGION                 ConfigMap  ObjectStore            default us-east-1
+//	OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL  ConfigMap  PublicMedia            refused in staging/prod; dev: PublicURL refused
+//	MALWARE_SCANNER_ADDRESS               ConfigMap  MalwareScan            refused in staging/prod; dev: uploads refused
+//	SECRET_ENCRYPTION_KEYS                Secret     SecretEncryption       refused in staging/prod; dev: those operations refused
+//	OPERATOR_SESSION_SIGNING_KEYS         Secret     OperatorRealm          refused in staging/prod; dev: operator sign-in refused
+//	OPERATOR_TOTP_ENCRYPTION_KEY          Secret     OperatorRealm          as above
+//	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ               refused in staging/prod once declared
+//	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
+//
+// An UNDECLARED group is not read at all, in any environment — see Group (uses.go). Which service
+// declares which group is each main's `configUses`; a malformed value of a declared group is
+// refused in every environment, by name.
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -91,7 +92,19 @@ import (
 )
 
 // Config holds what is genuinely the same for every commune on this deployment.
+//
+// TWO KINDS OF FIELD. The base values every caller of Load reads — Env, DatabaseDSN,
+// DangerousAuthBypass — are plain exported fields. Every other value belongs to a Group (uses.go)
+// and is held unexported behind an accessor of the same name (cfg.RedisDSN()), which panics when
+// the service did not declare that group: an undeclared group is never loaded, and its zero value
+// would read as "feature off" with nothing pointing at the missing declaration.
+//
+// The field comments below keep the accessor's name, because that is the name every caller reads.
 type Config struct {
+	// service and uses are what Load was called with; the accessors check uses.
+	service string
+	uses    Usage
+
 	// ListenAddr is the address this process serves on: LISTEN_ADDR, or ":8080" when unset.
 	//
 	// ONE DEFAULT FOR EVERY SERVICE, decided by the owner on 2026-09-25 — and it reverses
@@ -106,7 +119,7 @@ type Config struct {
 	//
 	// Running several services on one machine: set LISTEN_ADDR per process (.env.example lists
 	// suggested ports). Collisions there are loud (bind: address already in use) and cheap.
-	ListenAddr string
+	listenAddr string
 
 	// GRPCListenAddr is the address this process serves gRPC on — a SEPARATE port from
 	// ListenAddr, not a shared one.
@@ -119,7 +132,7 @@ type Config struct {
 	//
 	// It is a PLATFORM-WIDE constant: a port is a property of the process, and one process
 	// serves every commune (rule 8, invariant 5).
-	GRPCListenAddr string
+	grpcListenAddr string
 
 	// DatabaseDSN is the connection string for THIS service's own schema. A service never
 	// holds a DSN for another service's database — that is rule 2, and a second DSN appearing
@@ -139,12 +152,13 @@ type Config struct {
 	// It is a PLATFORM-WIDE constant, not a per-commune value: one Redis serves every commune
 	// on this deployment, and the keys carry the commune in their prefix (rule 1, invariant 7).
 	//
-	// Empty is allowed, and only means local development with no cache: every route then
-	// behaves per the CheDoHong it declared — idem.MoKhiHong passes, idem.DongKhiHong answers
-	// 503. A service must not fail to start because a cache is absent.
+	// Group Redis. REQUIRED IN STAGING/PROD for a service that declares it (since 2026-09-29; it
+	// used to be a warning): without it a double-submitted POST creates a second permanent record.
+	// Empty in dev means no cache: every route then behaves per the CheDoHong it declared —
+	// idem.MoKhiHong passes, idem.DongKhiHong answers 503.
 	//
 	// Same type, same reason as DatabaseDSN: it carries a credential.
-	RedisDSN secret.DSN
+	redisDSN secret.DSN
 
 	// RabbitMQDSN is the broker for DELAYED background work — deadline reminders, escalation,
 	// and the five automation jobs. ADR 0010 fixes what it is and is not for: background tasks
@@ -155,16 +169,11 @@ type Config struct {
 	// DatabaseDSN — secret.DSN redacts the password on every rendering path while keeping the
 	// host readable, so a startup line still says which broker this process opened.
 	//
-	// OPTIONAL, AND THAT IS THE WHOLE ARGUMENT OF THIS FIELD. Nothing in this repository
-	// publishes or consumes a task yet. Making it required at Load would stop all eight services
-	// from starting on any machine that has not set it — refusing to run working code in order
-	// to protect code that does not exist. Required belongs to what is actually used:
-	// DATABASE_DSN, because every service opens a database in its first thirty lines.
-	//
-	// IT IS THE IdentityGRPCAddr PRECEDENT, NOT A THIRD PATTERN: empty is allowed here, and the
-	// first thing that genuinely needs a broker refuses BY NAME at connect time, so the operator
-	// reads "thiếu RABBITMQ_DSN" rather than watching reminders silently never fire.
-	RabbitMQDSN secret.DSN
+	// Group RabbitMQ, WHICH NO SERVICE DECLARES YET: nothing in this repository publishes or
+	// consumes a task. Required belongs to what is actually used, and config.Uses is how "used"
+	// is said — the first service that wires a job declares the group, and from then on staging
+	// and prod refuse to start it without the broker, by name.
+	rabbitMQDSN secret.DSN
 
 	// RabbitMQExchange is the exchange the background-task publisher binds to.
 	//
@@ -175,7 +184,7 @@ type Config struct {
 	// and named what it is for; it did not name an exchange, a queue or a routing key. Writing
 	// "vigov.tasks" here would record that decision in a source file instead of in an ADR, and
 	// the next person would read it as settled. Empty until whoever wires the first job names it.
-	RabbitMQExchange string
+	rabbitMQExchange string
 
 	// ElasticsearchAddrs are the search cluster nodes, comma-separated in the environment.
 	//
@@ -188,11 +197,10 @@ type Config struct {
 	// an incident somebody answers for, not a display bug. Reporting figures come from the
 	// PostgreSQL read model.
 	//
-	// OPTIONAL, and more clearly so than RabbitMQ: ADR 0010 itself says to consider DEFERRING
+	// Group Elasticsearch, which no service declares: ADR 0010 itself says to consider DEFERRING
 	// Elastic, on the grounds that pg_trgm + unaccent is probably enough at ~10,000 records per
 	// commune, and that it should be added when search is measured slow rather than assumed so.
-	// A deployment with this empty is the deployment ADR 0010 expects today.
-	ElasticsearchAddrs []string
+	elasticsearchAddrs []string
 
 	// ElasticsearchAPIKey authenticates to the search cluster.
 	//
@@ -200,11 +208,10 @@ type Config struct {
 	// reason as GRPCCallerKey. An API key differs from a DSN in that there is no host inside it
 	// worth keeping readable, so it collapses to *** on every path.
 	//
-	// OPTIONAL, like the addresses. A cluster reachable without authentication is a legitimate
-	// choice inside a closed network and a bad one for an index holding petition contents
-	// (rule 3), so it is not refused here — it is REPORTED at every startup outside dev by
-	// CanhBao, which is where a choice somebody has to own belongs.
-	ElasticsearchAPIKey secret.Secret
+	// Required in staging/prod with the rest of the group: an index holding petition contents
+	// holds citizen personal data (rule 3), and "reachable without authentication" is not a
+	// default anybody should inherit. It used to be a CanhBao warning.
+	elasticsearchAPIKey secret.Secret
 
 	// ElasticsearchIndexPrefix namespaces this deployment's indices.
 	//
@@ -216,7 +223,7 @@ type Config struct {
 	// in the context. A prefix read from the environment cannot be per-commune anyway — one
 	// process serves every commune, so an environment variable holding a commune's name gives
 	// every commune whichever one was deployed last (rule 8, invariant 5).
-	ElasticsearchIndexPrefix string
+	elasticsearchIndexPrefix string
 
 	// PlatformGRPCAddr is where the platform service answers ResolveHost — the RPC that maps an
 	// incoming Host to a commune (proto/vigov/platform/v1/platform.proto).
@@ -226,35 +233,34 @@ type Config struct {
 	// resolving communes against something that is not the registry. Rule 1, forbidden #1 is
 	// about defaults on the isolation path, and the address of the registry is on it.
 	//
-	// Empty is allowed HERE because the platform service itself does not call anybody: it holds
-	// the registry. Every other service refuses to start without it, and says so by name.
-	PlatformGRPCAddr string
+	// Group PlatformClient, which platform itself never declares: it holds the registry and calls
+	// nobody. A declaring service is refused in staging/prod without it; in dev, platformclient.Dial
+	// refuses the empty address by name.
+	platformGRPCAddr string
 
 	// IdentityGRPCAddr is where the identity service answers ResolveStaffPrincipal — the RPC that
 	// turns a staff member's session cookie into the principal every guard needs
 	// (proto/vigov/identity/v1/identity.proto).
 	//
-	// EXACTLY THE SHAPE OF PlatformGRPCAddr ABOVE, AND FOR THE SAME REASON: no default, empty
-	// allowed here, refused by name at Dial. A guessed address would not fail closed in an obvious
+	// EXACTLY THE SHAPE OF PlatformGRPCAddr ABOVE, AND FOR THE SAME REASON: no default, refused at
+	// Load in staging/prod, refused by name at Dial in dev. A guessed address would not fail closed in an obvious
 	// way — it would make every staff request answer 503 while identity was healthy, which reads as
 	// "identity is down" and sends somebody to inspect the wrong service for an afternoon.
 	//
-	// Empty is allowed HERE because two services do not need it: identity itself builds its
-	// principal from its own session registry (its XacThuc), and platform holds the registry and
-	// calls nobody. Every service that guards a staff route refuses to start without it, and says
-	// so by name — identityclient.Dial("").
+	// Group IdentityClient, which two services never declare: identity itself builds its principal
+	// from its own session registry (its XacThuc), and platform holds the registry and calls nobody.
 	//
 	// CLUSTER-INTERNAL ADDRESS ONLY. A WORKING SESSION TOKEN travels on this hop and there is no
 	// TLS on it (ADR 0025); an address that leaves the cluster puts every staff session on the wire
 	// in the clear.
-	IdentityGRPCAddr string
+	identityGRPCAddr string
 
 	// PetitionsGRPCAddr and DocumentsGRPCAddr are where petitions and documents answer
 	// CountOrgUnitHoldings — the question identity asks before it soft-deletes an org unit (menu
 	// Cấu hình §12.4; proto/vigov/{petitions,documents}/v1).
 	//
-	// THE SHAPE OF IdentityGRPCAddr: no default, empty allowed here, refused by name at Dial. Only
-	// identity reads them. A guessed address would not fail open — an unreachable owner refuses the
+	// Group OrgUnitOwnerClients, identity only. THE SHAPE OF IdentityGRPCAddr: no default, refused
+	// at Load in staging/prod; in dev, empty makes org-unit delete answer 503. A guessed address would not fail open — an unreachable owner refuses the
 	// delete (fail closed, core/petitionsclient) — but it would refuse EVERY org-unit delete with a
 	// "try again" message while both services are healthy, which sends somebody to inspect the
 	// wrong service.
@@ -262,8 +268,8 @@ type Config struct {
 	// CLUSTER-INTERNAL ADDRESS ONLY. The hop is plaintext (ADR 0025; tools/security_debt.json). What
 	// travels on it is one org-unit id and two counts — no session token, no personal data — but the
 	// caller key does, and an address that leaves the cluster puts that key on the wire.
-	PetitionsGRPCAddr string
-	DocumentsGRPCAddr string
+	petitionsGRPCAddr string
+	documentsGRPCAddr string
 
 	// GRPCCallerKey authenticates the CALLER on the inter-service gRPC port. ONE key, shared by
 	// every service on the deployment, read from GRPC_CALLER_KEY and sourced from a k8s secret.
@@ -277,8 +283,9 @@ type Config struct {
 	// IT IS A PLATFORM-WIDE CONSTANT, not a per-commune value: it says nothing about which
 	// commune a call is for (rule 8, invariant 5). The commune travels separately, in metadata.
 	//
-	// REQUIRED, IN EVERY ENVIRONMENT, WITH NO DEV EXEMPTION (ADR 0025, invariant 3). Not the
-	// shape of PlatformGRPCAddr above, which is allowed to be empty here: an address that is
+	// REQUIRED, IN EVERY ENVIRONMENT, WITH NO DEV EXEMPTION (ADR 0025, invariant 3), for every
+	// service declaring a gRPC group (GRPCServer or a client); a service with neither — reporting —
+	// never reads it. Not the shape of PlatformGRPCAddr above, which dev allows empty: an address that is
 	// missing produces a service that answers nothing, while a KEY that is missing would
 	// produce a server that answers EVERYTHING. "Runs without the key" is the one configuration
 	// that must not be reachable, so it is refused at the earliest point that can name the
@@ -291,11 +298,11 @@ type Config struct {
 	//
 	// Same type, same reason as the signing keys: the bytes ARE the credential, so the type has
 	// to refuse to render them (rule 8, invariant 1).
-	GRPCCallerKey secret.Secret
+	grpcCallerKey secret.Secret
 
 	// TenantCacheTTL bounds how long a deactivated commune keeps being served, and how long a
 	// reassigned domain keeps resolving to the old commune (ADR 0004, decision 5).
-	TenantCacheTTL time.Duration
+	tenantCacheTTL time.Duration
 
 	// SessionSigningKeys signs and verifies the session cookie. FIRST ENTRY SIGNS, EVERY ENTRY
 	// VERIFIES — see pkg/token.
@@ -308,9 +315,12 @@ type Config struct {
 	// token (rule 1, invariant 8), not a property of the key. Per-commune keys would mean the
 	// key material has to be resolved before the token can be read, which is the wrong order.
 	//
-	// Empty is refused outside dev by Load: a service with no signing key cannot tell a real
-	// token from a forged one, and silence is the one response that is not allowed.
-	SessionSigningKeys []Khoa
+	// Group StaffSessionSigning, IDENTITY ONLY: identity is the one service that issues and reads
+	// the token; every other service asks identity (ResolveStaffPrincipal). Empty is refused in
+	// staging/prod: a service with no signing key cannot tell a real token from a forged one.
+	// LEAST PRIVILEGE: whoever holds this value can forge a staff token for every commune, so it
+	// belongs in identity's Secret and nowhere else (deploy/cau-hinh/README.md).
+	sessionSigningKeys []Khoa
 
 	// Env is "dev" | "staging" | "prod". It decides nothing about business behaviour; it is
 	// used for log verbosity and for refusing dangerous flags in production.
@@ -328,11 +338,10 @@ type Config struct {
 	// ingress-nginx and web-admin run in, and it belongs to whoever operates the cluster — this
 	// repository cannot know it, so it has no default.
 	//
-	// OPTIONAL, AND EMPTY MEANS TRUST NOBODY — the behaviour before this field existed. A process
-	// with no configured proxy records the address on its own socket, which behind web-admin is
-	// web-admin's pod IP: wrong for an investigator, but never FORGED. That is the right failure
-	// for an audit trail (rule 6, invariant 2), and it is why blank is tolerated where a
-	// malformed value is not.
+	// Group HTTPServer. REQUIRED IN STAGING/PROD (2026-09-29). Empty means TRUST NOBODY: the
+	// process records the address on its own socket, which behind ingress and web-admin is a pod
+	// IP — never FORGED, but wrong on EVERY audit entry in a cluster (rule 6, invariant 2), which
+	// is why a cluster must set it. In dev, empty is still that safe failure.
 	//
 	// MALFORMED IS FATAL, NOT SKIPPED. Skipping a typo'd entry silently trusts fewer hops than
 	// the operator wrote, and a "fixed" parser that fell back to trusting everything would let any
@@ -341,7 +350,7 @@ type Config struct {
 	//
 	// 0.0.0.0/0 AND ::/0 ARE REFUSED BY NAME: trusting the whole internet as a proxy is exactly
 	// trusting a forged X-Forwarded-For from anyone, which is the thing the boundary exists to stop.
-	TrustedProxies []netip.Prefix
+	trustedProxies []netip.Prefix
 
 	// CitizenCORSAllowedOrigins are the browser origins allowed to call the CITIZEN edge
 	// cross-origin — the Zalo Mini App webview, which is served from a Zalo domain and calls
@@ -355,14 +364,13 @@ type Config struct {
 	// k8s CONFIGMAP: an origin list is not a credential. PLATFORM-WIDE: one Mini App serves every
 	// commune, so the origin it runs from is the same for all of them (rule 8, invariant 5).
 	//
-	// OPTIONAL, AND EMPTY MEANS NO CORS HEADERS AT ALL — the browser then blocks the Mini App, which
-	// is the fail-closed direction. Not required, because without it every service still serves
-	// every same-origin and server-to-server request (rule 11, invariant 8); only the Mini App flow
-	// stops, and it stops loudly on the first device test.
+	// Group CitizenCORS (identity, petitions, comms). EMPTY MEANS NO CORS HEADERS AT ALL — the
+	// browser then blocks the Mini App, the fail-closed direction. Refused in staging/prod for a
+	// declaring service: a citizen edge the Mini App cannot reach is not a working deployment of it.
 	//
 	// `*` AND ANY NON-https ENTRY ARE REFUSED BY Load, never skipped: allow-all is the one value
 	// that must not be reachable, and a skipped typo would read as "CORS is broken" for an afternoon.
-	CitizenCORSAllowedOrigins NguonCORS
+	citizenCORSAllowedOrigins NguonCORS
 
 	// CitizenSessionBridgeListenAddr is the address service-identity serves the citizen-session
 	// bridge on (ADR 0045 §Tin cậy): a SECOND gRPC listener, serving CitizenSessionBridgeService and
@@ -377,13 +385,13 @@ type Config struct {
 	// NetworkPolicy rule that admits only the vihat-miniapp pods, and a default the code knows but
 	// the manifest does not is exactly the drift that opened the 8080 incident (ListenAddr above).
 	//
-	// OPTIONAL, AND ONLY TOGETHER WITH THE KEYS. Without the bridge identity still serves every
-	// staff request, so this is "cannot serve one flow", not "cannot serve one request" (rule 11,
-	// invariant 8). Both empty = bridge not started. Exactly one set = Load refuses: an address with
+	// Group CitizenBridge, identity only. REQUIRED IN STAGING/PROD with the keys (identity declares
+	// the bridge, so a deployment without it is a Mini App nobody can sign in to). In dev, ONLY
+	// TOGETHER WITH THE KEYS: both empty = bridge not started. Exactly one set = Load refuses: an address with
 	// no key is a port that would have to choose between answering nobody and answering everybody,
 	// and keys with no address are credentials sitting in a process that never uses them — the
 	// usual cause of both is a typo'd key in the manifest (ADR 0045 §Cấu hình).
-	CitizenSessionBridgeListenAddr string
+	citizenSessionBridgeListenAddr string
 
 	// CitizenSessionBridgeKeys authenticate the bridge caller. ANY entry in the list is accepted;
 	// vihat-miniapp sends ONE.
@@ -397,7 +405,7 @@ type Config struct {
 	// k8s SECRET, secret.Secret: the bytes are the credential (rule 8). Strength is checked where
 	// the key is USED — the bridge interceptor refuses a short key at construction — for the reason
 	// khoaKy gives: one owner per rule.
-	CitizenSessionBridgeKeys []secret.Secret
+	citizenSessionBridgeKeys []secret.Secret
 
 	// CitizenSessionTTL is how long a citizen session issued through the bridge lives.
 	//
@@ -406,21 +414,21 @@ type Config struct {
 	// 1 invariant 10 does not apply. Not the 7 days of vihat-miniapp's own session — that is that
 	// repository's policy (ADR 0045 CÒN MỞ #4 records why the two are separate).
 	//
-	// OPTIONAL WITH THAT DEFAULT, because the owner stated the default; a deployment that says
+	// NEVER REQUIRED — IT HAS THAT DEFAULT, because the owner stated it; a deployment that says
 	// nothing gets the decided number, not a guessed one. A MALFORMED OR NON-POSITIVE VALUE IS
 	// REFUSED rather than falling back like TENANT_CACHE_TTL does: silently turning a typo into 30
 	// days would hide that the operator meant something else for the lifetime of a credential.
 	// Go duration syntax — "720h", not "30d".
-	CitizenSessionTTL time.Duration
+	citizenSessionTTL time.Duration
 
 	// IdentityAdminSeedPassword is the password of the default administrator identity creates in
 	// a commune at that commune's FIRST sign-in as `admin` (owner's decision, 2026-09-26; ledger
 	// item `xa-moi-khong-co-vai-tro-va-quyen`). Read by identity only.
 	//
-	// OPTIONAL, AND EMPTY MEANS THE FEATURE IS OFF — rule 11 invariant 8. Every service serves
-	// every request without it; identity merely stops seeding. Making it required would stop
-	// every service on every machine that has not set it, for a bootstrap step that is meant to
-	// be removed once every commune has changed its admin password.
+	// Group AdminSeed. NEVER REQUIRED, NOT EVEN IN PROD, AND EMPTY MEANS THE FEATURE IS OFF — rule
+	// 11 invariant 8. It is a one-off bootstrap switch, meant to be REMOVED from the Secret once
+	// every commune has changed its admin password; requiring it would force a live credential for
+	// the highest-privileged account to stay in the cluster forever.
 	//
 	// k8s SECRET (`bi-mat-identity`), secret.Secret: it is a live credential that opens the
 	// highest-privileged account of every commune not yet seeded (rule 8, rule 11 invariant 7).
@@ -429,48 +437,43 @@ type Config struct {
 	//
 	// Trimmed: a trailing newline pasted into a Secret would otherwise make the typed password
 	// never match, and the refusal would read as "wrong password" with nothing pointing here.
-	IdentityAdminSeedPassword secret.Secret
+	identityAdminSeedPassword secret.Secret
 
-	// ObjectStorage is the MinIO/S3 connection of ADR 0052, consumed by core/storage.New. Every
-	// field optional; the reasons are on the type (object_storage.go).
-	ObjectStorage ObjectStorage
+	// ObjectStorage is the MinIO/S3 connection of ADR 0052, consumed by core/storage.New. Groups
+	// ObjectStore and PublicMedia; what each field requires is on the type (object_storage.go).
+	objectStorage ObjectStorage
 
 	// MalwareScanner is the clamd connection of ADR 0052 §9, consumed by core/malwarescan.New.
-	// Optional; the reasons are on the type (malware_scanner.go).
-	MalwareScanner MalwareScanner
+	// Group MalwareScan; the reasons are on the type (malware_scanner.go).
+	malwareScanner MalwareScanner
 
 	// OperatorSessionSigningKeys sign and verify the OPERATOR realm token (`op1.`, ADR 0048
 	// owner's decision #2) — a SEPARATE list from SessionSigningKeys, refused by Load if any entry
 	// is shared with it. First entry signs, every entry verifies. Read by identity only.
 	//
-	// OPTIONAL: absent means operator sign-in is refused (operatorauth.ErrNotConfigured) while
-	// every other request is served. Why optional and not required: operator.go. k8s SECRET,
+	// Group OperatorRealm, which no service declares yet (ADR 0048 is not wired): absent means
+	// operator sign-in is refused (operatorauth.ErrNotConfigured). See operator.go. k8s SECRET,
 	// secret.Secret (rule 8). Minimum length is owned by operatorauth.NewTokenSigner.
-	OperatorSessionSigningKeys []secret.Secret
+	operatorSessionSigningKeys []secret.Secret
 
 	// OperatorTOTPEncryptionKeys encrypt operator TOTP secrets at rest (AES-256-GCM, ADR 0048
 	// owner's decision #10). Read from OPERATOR_TOTP_ENCRYPTION_KEY — singular name, but a
 	// comma-separated LIST so the key can rotate: first entry encrypts, every entry decrypts.
 	// Each entry is standard base64 of exactly 32 bytes; the value held here is the DECODED key.
 	//
-	// OPTIONAL, same reason and same refusal as OperatorSessionSigningKeys. k8s SECRET.
-	OperatorTOTPEncryptionKeys []secret.Secret
+	// Group OperatorRealm, same reason and same refusal as OperatorSessionSigningKeys. k8s SECRET.
+	operatorTOTPEncryptionKeys []secret.Secret
 
 	// SecretEncryptionKeys are the KEKs of ADR 0009, consumed by core/crypto.NewKeyring. Read from
 	// SECRET_ENCRYPTION_KEYS, same format as OPERATOR_TOTP_ENCRYPTION_KEY; the value held here is
-	// the DECODED key. Optional; the reasons, and why the backup is not: secret_encryption.go.
-	SecretEncryptionKeys []secret.Secret
+	// the DECODED key. Group SecretEncryption (comms); why the backup is not optional:
+	// secret_encryption.go.
+	secretEncryptionKeys []secret.Secret
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
 // owner's decision of 2026-09-25 (ADR 0045, answer to CÒN MỞ #4).
 const ThoiHanPhienCongDanMacDinh = 30 * 24 * time.Hour
-
-// CauPhienBat reports whether the citizen-session bridge listener is configured. Load guarantees
-// the address and the keys are either both present or both absent.
-func (c Config) CauPhienBat() bool {
-	return c.CitizenSessionBridgeListenAddr != "" && len(c.CitizenSessionBridgeKeys) > 0
-}
 
 const (
 	EnvDev     = "dev"
@@ -501,181 +504,238 @@ var (
 	ErrThoiHanPhienHong   = errors.New("config: CITIZEN_SESSION_TTL không hợp lệ")
 )
 
-// Load reads the configuration for one service.
+// Load reads the configuration for one service: the base variables, plus the groups in uses.
 //
 // It FAILS instead of defaulting. A service that starts with a guessed database or a guessed
 // listen address is a service that will be debugged at the wrong layer — and in this system a
 // wrong guess on the isolation path is a data breach, not an inconvenience.
-func Load(serviceName string) (Config, error) {
-	var thieu []string
-
-	dsn := os.Getenv("DATABASE_DSN")
-	if dsn == "" {
-		thieu = append(thieu, "DATABASE_DSN")
-	}
-
+//
+// WHAT uses CHANGES (uses.go). An undeclared group is not read at all: a malformed petitions-only
+// OBJECT_STORAGE_ENDPOINT in the shared ConfigMap cannot stop platform. A declared group is held
+// to its requirement: in staging and prod, every variable of it without a stated default must be
+// set, and the refusal names each missing variable.
+func Load(serviceName string, uses Usage) (Config, error) {
+	// ENV first: every other requirement depends on it. An ENV nobody recognises fails as
+	// ErrEnvKhongHopLe before anything else — reporting "missing REDIS_DSN" for a typo in ENV
+	// would send the reader to the wrong variable.
 	env := strings.ToLower(strings.TrimSpace(os.Getenv("ENV")))
-	if env == "" {
-		thieu = append(thieu, "ENV")
-	}
-
-	// Required everywhere, dev included. A missing database DSN produces a service that cannot
-	// answer; a missing caller key would produce a gRPC port that answers ANYTHING that reaches
-	// it, silently and on every RPC. There is no environment in which that is a tolerable
-	// default (ADR 0025, invariant 3).
-	khoaGoi := strings.TrimSpace(os.Getenv("GRPC_CALLER_KEY"))
-	if khoaGoi == "" {
-		thieu = append(thieu, "GRPC_CALLER_KEY")
-	}
-
-	// A missing signing key is fatal everywhere except dev, where it only means this process
-	// cannot issue or read a session. Outside dev the alternative would be a service that
-	// accepts forged tokens, or one that invents a key per replica and signs everybody out on
-	// every restart — both fail silently, which is the one thing not allowed here.
-	//
-	// Named environments only, so an ENV nobody recognises still fails as ErrEnvKhongHopLe
-	// below — reporting "missing key" for a typo in ENV would send the reader to the wrong
-	// variable.
-	khoa := khoaKy(os.Getenv("SESSION_SIGNING_KEYS"))
-	if len(khoa) == 0 && (env == EnvStaging || env == EnvProd) {
-		thieu = append(thieu, "SESSION_SIGNING_KEYS")
-	}
-
-	if len(thieu) > 0 {
-		return Config{}, fmt.Errorf("%w: %s (service %s)",
-			ErrThieuBienMoiTruong, strings.Join(thieu, ", "), serviceName)
-	}
-
 	switch env {
-	case EnvDev, EnvStaging, EnvProd:
+	case "", EnvDev, EnvStaging, EnvProd:
 	default:
 		return Config{}, fmt.Errorf("%w: %q", ErrEnvKhongHopLe, env)
 	}
+	r := &reader{uses: uses, strict: env == EnvStaging || env == EnvProd}
 
-	proxy, err := proxyTinCay(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	// ---- base: every caller of Load -------------------------------------------------------
+	r.read("ENV", env, requiredEverywhere)
+	dsn := r.read("DATABASE_DSN", os.Getenv("DATABASE_DSN"), requiredEverywhere)
+	// Optional: empty is off, the only safe state; "on" is refused below when ENV=prod.
+	bypass := r.read("DANGEROUS_AUTH_BYPASS", os.Getenv("DANGEROUS_AUTH_BYPASS"), optional)
+
+	// ---- HTTPServer -----------------------------------------------------------------------
+	// Optional: the default :8080 is what the Service, the probes and the NetworkPolicy assume.
+	listen := r.read("LISTEN_ADDR", os.Getenv("LISTEN_ADDR"), optional, HTTPServer)
+	// Required in prod: in a cluster every request arrives through ingress, so "trust nobody"
+	// records the ingress pod's IP on EVERY audit entry — an audit trail that is wrong for every
+	// commune at once (rule 6, invariant 2). In dev, empty still means trust nobody.
+	proxyRaw := r.read("TRUSTED_PROXY_CIDRS", os.Getenv("TRUSTED_PROXY_CIDRS"), requiredInProd, HTTPServer)
+
+	// ---- the inter-service port and its clients -------------------------------------------
+	// Optional: the default :9090 is the port every gRPC Service in the cluster targets.
+	grpcListen := r.read("GRPC_LISTEN_ADDR", os.Getenv("GRPC_LISTEN_ADDR"), optional, GRPCServer)
+	// Required EVERYWHERE, dev included, for any process on the gRPC surface (ADR 0025, invariant
+	// 3): a missing key would produce a port that answers ANYTHING that reaches it, silently and on
+	// every RPC. A service with no gRPC server and no gRPC client (reporting) never reads it.
+	callerKey := r.read("GRPC_CALLER_KEY", os.Getenv("GRPC_CALLER_KEY"), requiredEverywhere,
+		GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients)
+	// Required in prod; in dev empty is allowed here and refused by name at Dial.
+	platformAddr := r.read("PLATFORM_GRPC_ADDR", os.Getenv("PLATFORM_GRPC_ADDR"), requiredInProd, PlatformClient)
+	identityAddr := r.read("IDENTITY_GRPC_ADDR", os.Getenv("IDENTITY_GRPC_ADDR"), requiredInProd, IdentityClient)
+	// Required in prod; in dev empty means org-unit delete answers 503 (fail closed).
+	petitionsAddr := r.read("PETITIONS_GRPC_ADDR", os.Getenv("PETITIONS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
+	documentsAddr := r.read("DOCUMENTS_GRPC_ADDR", os.Getenv("DOCUMENTS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
+
+	// ---- TenantCache ----------------------------------------------------------------------
+	// Optional: the default 30s is the decided value (ADR 0004 decision 5), deliberately not in
+	// the cluster.
+	tenantTTL := r.read("TENANT_CACHE_TTL", os.Getenv("TENANT_CACHE_TTL"), optional, TenantCache)
+
+	// ---- Redis ----------------------------------------------------------------------------
+	// Required in prod: without it a double-submitted POST creates a second permanent record,
+	// and rule 7 forbids deleting it. In dev, empty = no cache; each route's idem mode decides.
+	redis := r.read("REDIS_DSN", os.Getenv("REDIS_DSN"), requiredInProd, Redis)
+
+	// ---- StaffSessionSigning (identity only) ----------------------------------------------
+	// Required in prod: a service that issues staff sessions with no key either accepts forged
+	// tokens or invents a key per replica and signs everybody out on every restart. In dev,
+	// empty = this process cannot issue or read a session, reported by CanhBao.
+	signingRaw := r.read("SESSION_SIGNING_KEYS", os.Getenv("SESSION_SIGNING_KEYS"), requiredInProd, StaffSessionSigning)
+
+	// ---- CitizenCORS ----------------------------------------------------------------------
+	// Required in prod: empty sends no CORS headers and the browser blocks the Mini App on this
+	// edge. In dev, empty is that fail-closed state.
+	corsRaw := r.read("CITIZEN_CORS_ALLOWED_ORIGINS", os.Getenv("CITIZEN_CORS_ALLOWED_ORIGINS"), requiredInProd, CitizenCORS)
+
+	// ---- CitizenBridge (identity only) ----------------------------------------------------
+	// Both required in prod: a declared bridge that is not started is a Mini App nobody can sign
+	// in to. In dev, both-or-neither (below).
+	bridgeAddr := r.read("CITIZEN_SESSION_BRIDGE_LISTEN_ADDR", os.Getenv("CITIZEN_SESSION_BRIDGE_LISTEN_ADDR"), requiredInProd, CitizenBridge)
+	bridgeKeysRaw := r.read("CITIZEN_SESSION_BRIDGE_KEYS", os.Getenv("CITIZEN_SESSION_BRIDGE_KEYS"), requiredInProd, CitizenBridge)
+	// Optional: the default 720h is the owner's decision (ADR 0045, CÒN MỞ #4).
+	sessionTTLRaw := r.read("CITIZEN_SESSION_TTL", os.Getenv("CITIZEN_SESSION_TTL"), optional, CitizenBridge)
+
+	// ---- AdminSeed (identity only) --------------------------------------------------------
+	// Optional IN EVERY ENVIRONMENT, prod included: a one-off bootstrap switch, meant to be
+	// REMOVED once every commune has changed its admin password. Empty = off, by design.
+	seed := r.read("IDENTITY_ADMIN_SEED_PASSWORD", os.Getenv("IDENTITY_ADMIN_SEED_PASSWORD"), optional, AdminSeed)
+
+	// ---- ObjectStore / PublicMedia / MalwareScan (ADR 0052) -------------------------------
+	// Required in prod: a declared store that is absent refuses every upload. In dev, absent
+	// makes storage.New answer ErrNotConfigured (fail closed).
+	osEndpoint := r.read("OBJECT_STORAGE_ENDPOINT", os.Getenv("OBJECT_STORAGE_ENDPOINT"), requiredInProd, ObjectStore)
+	osPublic := r.read("OBJECT_STORAGE_PUBLIC_ENDPOINT", os.Getenv("OBJECT_STORAGE_PUBLIC_ENDPOINT"), requiredInProd, ObjectStore)
+	osAccess := r.read("OBJECT_STORAGE_ACCESS_KEY", os.Getenv("OBJECT_STORAGE_ACCESS_KEY"), requiredInProd, ObjectStore)
+	osSecret := r.read("OBJECT_STORAGE_SECRET_KEY", os.Getenv("OBJECT_STORAGE_SECRET_KEY"), requiredInProd, ObjectStore)
+	osPrefix := r.read("OBJECT_STORAGE_BUCKET_PREFIX", os.Getenv("OBJECT_STORAGE_BUCKET_PREFIX"), requiredInProd, ObjectStore)
+	// Optional: the default us-east-1 is MinIO's own (see ObjectStorage.Region).
+	osRegion := r.read("OBJECT_STORAGE_REGION", os.Getenv("OBJECT_STORAGE_REGION"), optional, ObjectStore)
+	// Required in prod for a service that publishes public media; no service declares it yet.
+	osMedia := r.read("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL", os.Getenv("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL"), requiredInProd, PublicMedia)
+	// Required in prod: without a scanner every upload is refused (ADR 0052 §9, fail closed).
+	scannerRaw := r.read("MALWARE_SCANNER_ADDRESS", os.Getenv("MALWARE_SCANNER_ADDRESS"), requiredInProd, MalwareScan)
+
+	// ---- SecretEncryption (ADR 0009) ------------------------------------------------------
+	// Required in prod: without it every save/read of a commune secret is refused.
+	secretKeysRaw := r.read("SECRET_ENCRYPTION_KEYS", os.Getenv("SECRET_ENCRYPTION_KEYS"), requiredInProd, SecretEncryption)
+
+	// ---- OperatorRealm (ADR 0048; no service declares it yet) -----------------------------
+	// Required in prod once declared: a declared operator area that cannot sign anybody in.
+	opSigningRaw := r.read("OPERATOR_SESSION_SIGNING_KEYS", os.Getenv("OPERATOR_SESSION_SIGNING_KEYS"), requiredInProd, OperatorRealm)
+	opTOTPRaw := r.read("OPERATOR_TOTP_ENCRYPTION_KEY", os.Getenv("OPERATOR_TOTP_ENCRYPTION_KEY"), requiredInProd, OperatorRealm)
+
+	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
+	// Required in prod once declared — the service that declares one is the one that connects to
+	// it. An Elasticsearch without an API key would hold petition contents unguarded (rule 3).
+	rabbitDSN := r.read("RABBITMQ_DSN", os.Getenv("RABBITMQ_DSN"), requiredInProd, RabbitMQ)
+	rabbitExchange := r.read("RABBITMQ_EXCHANGE", os.Getenv("RABBITMQ_EXCHANGE"), requiredInProd, RabbitMQ)
+	esAddrs := r.read("ELASTICSEARCH_ADDRS", os.Getenv("ELASTICSEARCH_ADDRS"), requiredInProd, Elasticsearch)
+	esKey := r.read("ELASTICSEARCH_API_KEY", os.Getenv("ELASTICSEARCH_API_KEY"), requiredInProd, Elasticsearch)
+	esPrefix := r.read("ELASTICSEARCH_INDEX_PREFIX", os.Getenv("ELASTICSEARCH_INDEX_PREFIX"), requiredInProd, Elasticsearch)
+
+	if len(r.missing) > 0 {
+		return Config{}, fmt.Errorf("%w: %s (service %s, ENV=%s)",
+			ErrThieuBienMoiTruong, strings.Join(r.missing, ", "), serviceName, env)
+	}
+
+	// ---- parse what was read; a MALFORMED value of a declared group is fatal ---------------
+	proxy, err := proxyTinCay(proxyRaw)
 	if err != nil {
 		return Config{}, err
 	}
 
-	nguonCORS, err := PhanTichNguonCORS(os.Getenv("CITIZEN_CORS_ALLOWED_ORIGINS"))
+	nguonCORS, err := PhanTichNguonCORS(corsRaw)
 	if err != nil {
 		return Config{}, err
 	}
 
 	// The citizen-session bridge: both halves or neither (see the fields). Named in the error,
 	// never with a value — the keys are credentials (rule 8).
-	diaChiCau := strings.TrimSpace(os.Getenv("CITIZEN_SESSION_BRIDGE_LISTEN_ADDR"))
 	var khoaCau []secret.Secret
-	for _, phan := range danhSach(os.Getenv("CITIZEN_SESSION_BRIDGE_KEYS")) {
+	for _, phan := range danhSach(bridgeKeysRaw) {
 		khoaCau = append(khoaCau, secret.Secret(phan))
 	}
 	switch {
-	case diaChiCau != "" && len(khoaCau) == 0:
+	case bridgeAddr != "" && len(khoaCau) == 0:
 		return Config{}, fmt.Errorf("%w: CITIZEN_SESSION_BRIDGE_LISTEN_ADDR có giá trị nhưng "+
 			"CITIZEN_SESSION_BRIDGE_KEYS trống — cổng cầu không có khoá (service %s)", ErrCauPhienNuaVoi, serviceName)
-	case diaChiCau == "" && len(khoaCau) > 0:
+	case bridgeAddr == "" && len(khoaCau) > 0:
 		return Config{}, fmt.Errorf("%w: CITIZEN_SESSION_BRIDGE_KEYS có giá trị nhưng "+
 			"CITIZEN_SESSION_BRIDGE_LISTEN_ADDR trống — khoá nằm trong một tiến trình không mở cổng cầu (service %s)",
 			ErrCauPhienNuaVoi, serviceName)
 	}
 
-	thoiHanPhien, err := thoiHanPhienCongDan(os.Getenv("CITIZEN_SESSION_TTL"))
-	if err != nil {
-		return Config{}, err
+	var thoiHanPhien time.Duration
+	if uses.has(CitizenBridge) {
+		if thoiHanPhien, err = thoiHanPhienCongDan(sessionTTLRaw); err != nil {
+			return Config{}, err
+		}
 	}
 
-	// Object storage (ADR 0052): optional, and absent is not an error — see ObjectStorage. A
-	// MALFORMED value is, including more than one endpoint host.
-	objectStorage, err := parseObjectStorage(
-		os.Getenv("OBJECT_STORAGE_ENDPOINT"),
-		os.Getenv("OBJECT_STORAGE_PUBLIC_ENDPOINT"),
-		os.Getenv("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL"),
-		os.Getenv("OBJECT_STORAGE_ACCESS_KEY"),
-		os.Getenv("OBJECT_STORAGE_SECRET_KEY"),
-		os.Getenv("OBJECT_STORAGE_REGION"),
-		os.Getenv("OBJECT_STORAGE_BUCKET_PREFIX"),
-	)
+	var objectStorage ObjectStorage
+	if uses.has(ObjectStore) || uses.has(PublicMedia) {
+		objectStorage, err = parseObjectStorage(osEndpoint, osPublic, osMedia, osAccess, osSecret, osRegion, osPrefix)
+		if err != nil {
+			return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+		}
+	}
+
+	scannerAddresses, err := ParseMalwareScannerAddresses(scannerRaw)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
-	// Malware scanner (ADR 0052 §9): optional like object storage — see MalwareScanner. A
-	// malformed entry is fatal.
-	scannerAddresses, err := ParseMalwareScannerAddresses(os.Getenv("MALWARE_SCANNER_ADDRESS"))
+	// The overlap check compares against the staff keys as SET, not as declared: "the operator
+	// realm shares no key material with staff sessions" is a property of the deployment's bytes,
+	// and a service declaring OperatorRealm without StaffSessionSigning must not skip it.
+	operatorSigningKeys, err := parseOperatorSigningKeys(opSigningRaw, khoaKy(os.Getenv("SESSION_SIGNING_KEYS")))
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+	operatorTOTPKeys, err := parseOperatorTOTPKeys(opTOTPRaw)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
-	// Operator realm (ADR 0048): optional, absent is not an error — see operator.go. A malformed
-	// value is, and so is a signing key shared with the staff realm.
-	operatorSigningKeys, err := parseOperatorSigningKeys(os.Getenv("OPERATOR_SESSION_SIGNING_KEYS"), khoa)
-	if err != nil {
-		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
-	}
-	operatorTOTPKeys, err := parseOperatorTOTPKeys(os.Getenv("OPERATOR_TOTP_ENCRYPTION_KEY"))
-	if err != nil {
-		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
-	}
-
-	// Per-commune secret encryption (ADR 0009): optional — see secret_encryption.go. Malformed is
-	// fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
-	secretEncryptionKeys, err := parseAES256KeyList(os.Getenv("SECRET_ENCRYPTION_KEYS"), ErrSecretEncryptionKeysInvalid)
+	// Malformed is fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
+	secretEncryptionKeys, err := parseAES256KeyList(secretKeysRaw, ErrSecretEncryptionKeysInvalid)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
 	cfg := Config{
-		SecretEncryptionKeys:           secretEncryptionKeys,
-		OperatorSessionSigningKeys:     operatorSigningKeys,
-		OperatorTOTPEncryptionKeys:     operatorTOTPKeys,
-		ObjectStorage:                  objectStorage,
-		MalwareScanner:                 MalwareScanner{Addresses: scannerAddresses},
-		TrustedProxies:                 proxy,
-		CitizenCORSAllowedOrigins:      nguonCORS,
-		CitizenSessionBridgeListenAddr: diaChiCau,
-		CitizenSessionBridgeKeys:       khoaCau,
-		CitizenSessionTTL:              thoiHanPhien,
-		IdentityAdminSeedPassword:      secret.Secret(strings.TrimSpace(os.Getenv("IDENTITY_ADMIN_SEED_PASSWORD"))),
-		// Trimmed: a trailing newline pasted into a ConfigMap would otherwise reach net.Listen
-		// as part of the port. The five services that used to read it per-service trimmed too.
-		ListenAddr:       firstNonEmpty(strings.TrimSpace(os.Getenv("LISTEN_ADDR")), ":8080"),
-		GRPCListenAddr:   firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
-		DatabaseDSN:      secret.DSN(dsn),
-		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
-		PlatformGRPCAddr: strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
-		IdentityGRPCAddr: strings.TrimSpace(os.Getenv("IDENTITY_GRPC_ADDR")),
-		// Trimmed for the same reason as the two above; see PetitionsGRPCAddr.
-		PetitionsGRPCAddr: strings.TrimSpace(os.Getenv("PETITIONS_GRPC_ADDR")),
-		DocumentsGRPCAddr: strings.TrimSpace(os.Getenv("DOCUMENTS_GRPC_ADDR")),
-		// NONE OF THE FOLLOWING FIVE APPEARS IN `thieu` ABOVE, and that is a decision rather
-		// than an omission. Nothing in this repository connects to RabbitMQ or Elasticsearch
-		// yet; a variable made required at Load stops all eight services from starting until
-		// four more values are set, in order to protect code that does not exist. Each is
-		// refused BY NAME by the first thing that genuinely needs it — the IDENTITY_GRPC_ADDR
-		// precedent — so an absent broker is a named refusal at connect time, never a reminder
-		// that silently never fires.
-		//
-		// Trimmed for the same reason as GRPC_CALLER_KEY below: a trailing newline pasted out
-		// of a k8s Secret or ConfigMap turns into a connection error that names the wrong cause.
-		RabbitMQDSN:              secret.DSN(strings.TrimSpace(os.Getenv("RABBITMQ_DSN"))),
-		RabbitMQExchange:         strings.TrimSpace(os.Getenv("RABBITMQ_EXCHANGE")),
-		ElasticsearchAddrs:       danhSach(os.Getenv("ELASTICSEARCH_ADDRS")),
-		ElasticsearchAPIKey:      secret.Secret(strings.TrimSpace(os.Getenv("ELASTICSEARCH_API_KEY"))),
-		ElasticsearchIndexPrefix: strings.TrimSpace(os.Getenv("ELASTICSEARCH_INDEX_PREFIX")),
-		// Trimmed above: a trailing newline pasted out of a k8s secret would make the key
-		// compare unequal at the far end, and the refusal it produces says "unauthenticated" —
-		// which sends the reader looking for a missing variable rather than for an invisible
-		// character.
-		GRPCCallerKey:       secret.Secret(khoaGoi),
-		TenantCacheTTL:      duration(os.Getenv("TENANT_CACHE_TTL"), 30*time.Second),
-		SessionSigningKeys:  khoa,
+		service:             serviceName,
+		uses:                uses,
+		DatabaseDSN:         secret.DSN(dsn),
 		Env:                 env,
-		DangerousAuthBypass: boolean(os.Getenv("DANGEROUS_AUTH_BYPASS")),
+		DangerousAuthBypass: boolean(bypass),
+
+		listenAddr:     firstNonEmpty(listen, ":8080"),
+		trustedProxies: proxy,
+
+		grpcListenAddr:    firstNonEmpty(grpcListen, ":9090"),
+		grpcCallerKey:     secret.Secret(callerKey),
+		platformGRPCAddr:  platformAddr,
+		identityGRPCAddr:  identityAddr,
+		petitionsGRPCAddr: petitionsAddr,
+		documentsGRPCAddr: documentsAddr,
+		tenantCacheTTL:    duration(tenantTTL, 30*time.Second),
+
+		redisDSN:           secret.DSN(redis),
+		sessionSigningKeys: khoaKy(signingRaw),
+
+		citizenCORSAllowedOrigins:      nguonCORS,
+		citizenSessionBridgeListenAddr: bridgeAddr,
+		citizenSessionBridgeKeys:       khoaCau,
+		citizenSessionTTL:              thoiHanPhien,
+		identityAdminSeedPassword:      secret.Secret(seed),
+
+		objectStorage:              objectStorage,
+		malwareScanner:             MalwareScanner{Addresses: scannerAddresses},
+		secretEncryptionKeys:       secretEncryptionKeys,
+		operatorSessionSigningKeys: operatorSigningKeys,
+		operatorTOTPEncryptionKeys: operatorTOTPKeys,
+
+		rabbitMQDSN:              secret.DSN(rabbitDSN),
+		rabbitMQExchange:         rabbitExchange,
+		elasticsearchAddrs:       danhSach(esAddrs),
+		elasticsearchAPIKey:      secret.Secret(esKey),
+		elasticsearchIndexPrefix: esPrefix,
 	}
 
 	// A dangerous flag left on in production is the failure mode rule 8 invariant 7 exists
 	// for: it is switched on for a local afternoon and nobody remembers to switch it off.
-	// Refusing to start is the only response that cannot be ignored.
+	// Refusing to start is the only response that cannot be ignored. Every service, whatever it
+	// declared.
 	if cfg.Env == EnvProd && cfg.DangerousAuthBypass {
 		return Config{}, fmt.Errorf("%w: DANGEROUS_AUTH_BYPASS", ErrCoBienNguyHiem)
 	}
@@ -685,75 +745,65 @@ func Load(serviceName string) (Config, error) {
 
 // CanhBao lists the dangerous settings currently in force, for logging at startup.
 // Empty in a correctly configured deployment.
+//
+// ONLY DECLARED GROUPS SPEAK. A pod that never uploads says nothing about OBJECT_STORAGE_*, and
+// one that holds no cache says nothing about REDIS_DSN: the shared ConfigMap hands every pod every
+// key, and a list that warns about somebody else's dependency is a list operators learn to scroll
+// past — which costs the DANGEROUS_AUTH_BYPASS line its only reader.
+//
+// What staging/prod already REFUSE (a declared variable left empty) has no line here: Load never
+// returns such a Config, so a warning for it would be dead code that reads like a safety net.
 func (c Config) CanhBao() []string {
 	var ra []string
 	if c.DangerousAuthBypass {
 		ra = append(ra, "DANGEROUS_AUTH_BYPASS đang BẬT — mọi kiểm tra xác thực bị bỏ qua")
 	}
-	if c.Env != EnvProd && c.TenantCacheTTL > time.Minute {
+	if c.uses.has(TenantCache) && c.Env != EnvProd && c.tenantCacheTTL > time.Minute {
 		ra = append(ra, "TENANT_CACHE_TTL dài hơn 1 phút — thay đổi tên miền sẽ chậm có hiệu lực")
 	}
-	// Without Redis there is no duplicate protection: a double-submitted POST creates a second
-	// petition with a second lookup code already shown to the citizen, and rule 7 forbids
-	// deleting it. Tolerable while developing, never silently in a real environment.
-	if c.Env != EnvDev && c.RedisDSN == "" {
-		ra = append(ra, "REDIS_DSN trống — chống trùng request không hoạt động, "+
-			"route khai idem.DongKhiHong sẽ trả 503")
-	}
-	// A HALF-CONFIGURED DEPENDENCY, WHICH IS THE ONE STATE NOBODY MEANS TO BE IN. Both pairs
-	// below report a name that was set while the thing it names has nowhere to go — and the
-	// usual cause is a typo'd key in the ConfigMap or the Secret, which leaves the intended
-	// variable empty while a plausible-looking one is present.
-	//
-	// DELIBERATELY SILENT WHEN BOTH ARE EMPTY. Nothing uses RabbitMQ or Elasticsearch yet, so a
-	// warning on every startup of all eight services would be noise in every environment — and
-	// a CanhBao list that is never empty is a list operators learn to scroll past, which costs
-	// the DANGEROUS_AUTH_BYPASS line above its only reader.
-	if c.RabbitMQExchange != "" && c.RabbitMQDSN == "" {
+	// A HALF-CONFIGURED DEPENDENCY, WHICH IS THE ONE STATE NOBODY MEANS TO BE IN — reachable in
+	// dev only, where an empty declared variable is allowed. The usual cause is a typo'd key,
+	// which leaves the intended variable empty while a plausible-looking one is present.
+	if c.uses.has(RabbitMQ) && c.rabbitMQExchange != "" && c.rabbitMQDSN == "" {
 		ra = append(ra, "RABBITMQ_EXCHANGE có giá trị nhưng RABBITMQ_DSN trống — "+
 			"tác vụ nền không có chỗ để gửi; kiểm lại tên khoá trong k8s Secret")
 	}
-	if !c.ElasticsearchAPIKey.Rong() && len(c.ElasticsearchAddrs) == 0 {
+	if c.uses.has(Elasticsearch) && !c.elasticsearchAPIKey.Rong() && len(c.elasticsearchAddrs) == 0 {
 		ra = append(ra, "ELASTICSEARCH_API_KEY có giá trị nhưng ELASTICSEARCH_ADDRS trống — "+
 			"một khoá đang nằm trong môi trường của tiến trình không bao giờ dùng tới nó")
 	}
-	// An index holding petition contents is an index holding citizen personal data (rule 3).
-	// Reachable without authentication is a choice somebody may legitimately make inside a
-	// closed network — it is not refused, it is said out loud so it is owned. Dev is exempt:
-	// a local single-node Elastic has no credential to configure.
-	if c.Env != EnvDev && len(c.ElasticsearchAddrs) > 0 && c.ElasticsearchAPIKey.Rong() {
-		ra = append(ra, "ELASTICSEARCH_ADDRS có giá trị nhưng ELASTICSEARCH_API_KEY trống — "+
-			"cụm tìm kiếm chứa nội dung phản ánh đang mở, không xác thực")
+	if c.uses.has(ObjectStore) {
+		// Object storage half-configured: the same "typo'd key" shape. Silent when nothing is set.
+		if o := c.objectStorage; !o.untouched() && !o.Configured() {
+			ra = append(ra, "OBJECT_STORAGE_* cấu hình nửa vời — thiếu "+strings.Join(o.Missing(), ", ")+
+				"; mọi lần tải tệp lên sẽ bị từ chối")
+		}
+		// A presigned URL is a bearer credential (ADR 0052 §Cái giá). Over plain http it travels
+		// in the clear from the browser to the store. Set, so not refused — but said out loud.
+		if c.Env != EnvDev && strings.HasPrefix(c.objectStorage.PublicEndpoint, "http://") {
+			ra = append(ra, "OBJECT_STORAGE_PUBLIC_ENDPOINT dùng http:// — presigned URL đi qua mạng không mã hoá")
+		}
+		// Storage without a scanner: every upload is refused at complete (ADR 0052 §9, fail
+		// closed). Nobody configures storage meaning "refuse every upload", so it is said at
+		// startup rather than at the first citizen — including when MalwareScan is not declared.
+		if c.objectStorage.Configured() && !(c.uses.has(MalwareScan) && c.malwareScanner.Configured()) {
+			ra = append(ra, "OBJECT_STORAGE_* đã cấu hình nhưng MALWARE_SCANNER_ADDRESS trống — "+
+				"mọi lần tải tệp lên sẽ bị từ chối vì không quét được mã độc")
+		}
 	}
-	// Object storage half-configured: the same "typo'd key" shape as the pairs above. Silent
-	// when nothing is set — most services never upload.
-	if o := c.ObjectStorage; !o.untouched() && !o.Configured() {
-		ra = append(ra, "OBJECT_STORAGE_* cấu hình nửa vời — thiếu "+strings.Join(o.Missing(), ", ")+
-			"; mọi lần tải tệp lên sẽ bị từ chối")
+	if c.uses.has(OperatorRealm) {
+		ra = append(ra, c.operatorWarnings()...)
 	}
-	// A presigned URL is a bearer credential (ADR 0052 §Cái giá). Over plain http it travels in
-	// the clear from the browser to the store.
-	if c.Env != EnvDev && strings.HasPrefix(c.ObjectStorage.PublicEndpoint, "http://") {
-		ra = append(ra, "OBJECT_STORAGE_PUBLIC_ENDPOINT dùng http:// — presigned URL đi qua mạng không mã hoá")
-	}
-	// Storage without a scanner: every upload is refused at complete (ADR 0052 §9, fail closed).
-	// Not an error — the service still serves everything else — but nobody configures storage
-	// meaning "refuse every upload", so it is said at startup rather than at the first citizen.
-	if c.ObjectStorage.Configured() && !c.MalwareScanner.Configured() {
-		ra = append(ra, "OBJECT_STORAGE_* đã cấu hình nhưng MALWARE_SCANNER_ADDRESS trống — "+
-			"mọi lần tải tệp lên sẽ bị từ chối vì không quét được mã độc")
-	}
-	// Operator realm half-configured: the same "typo'd key" shape. Silent when neither is set —
-	// only identity reads them, and only a deployment with an operator area sets them.
-	ra = append(ra, c.operatorWarnings()...)
-	// Only reachable in dev — Load refuses to start anywhere else.
-	if len(c.SessionSigningKeys) == 0 {
-		ra = append(ra, "SESSION_SIGNING_KEYS trống — không ký và không đọc được phiên đăng nhập")
-	}
-	// One key means the key can never be rotated without signing out every cán bộ of every xã
-	// at once (rule 8, invariant 6). Not an error, but somebody has to know before it is needed.
-	if len(c.SessionSigningKeys) == 1 && c.Env == EnvProd {
-		ra = append(ra, "SESSION_SIGNING_KEYS chỉ có một khoá — xoay khoá sẽ đăng xuất toàn bộ cán bộ")
+	if c.uses.has(StaffSessionSigning) {
+		// Only reachable in dev — Load refuses to start anywhere else.
+		if len(c.sessionSigningKeys) == 0 {
+			ra = append(ra, "SESSION_SIGNING_KEYS trống — không ký và không đọc được phiên đăng nhập")
+		}
+		// One key means the key can never be rotated without signing out every cán bộ of every
+		// xã at once (rule 8, invariant 6). Not an error, but somebody has to know before it is needed.
+		if len(c.sessionSigningKeys) == 1 && c.Env == EnvProd {
+			ra = append(ra, "SESSION_SIGNING_KEYS chỉ có một khoá — xoay khoá sẽ đăng xuất toàn bộ cán bộ")
+		}
 	}
 	return ra
 }
@@ -768,11 +818,11 @@ func (c Config) CanhBao() []string {
 // that cannot leak even through .Lo(): hand THIS to anything that has to keep a copy.
 func (c Config) Redacted() Config {
 	c.DatabaseDSN = secret.DSN(c.DatabaseDSN.String())
-	c.RedisDSN = secret.DSN(c.RedisDSN.String())
+	c.redisDSN = secret.DSN(c.redisDSN.String())
 	// Every DSN field, not merely the two that existed when this function was written. A DSN
 	// added to the struct and forgotten here is a value that still leaks through .Lo() to
 	// anything holding a "redacted" copy.
-	c.RabbitMQDSN = secret.DSN(c.RabbitMQDSN.String())
+	c.rabbitMQDSN = secret.DSN(c.rabbitMQDSN.String())
 	return c
 }
 
@@ -894,10 +944,18 @@ func proxyTinCay(raw string) ([]netip.Prefix, error) {
 // at this function's boundary: `log.Info("khoá", "k", cfg.KhoaKyBytes())` printed the whole
 // platform's signing keys as numbers, and nothing on the way there was a Khoa any more. The
 // keys become raw bytes at exactly one place now — inside token.NewSigner, through Lo().
-func (c Config) KhoaKyBytes() []secret.Secret {
-	ra := make([]secret.Secret, 0, len(c.SessionSigningKeys))
-	ra = append(ra, c.SessionSigningKeys...)
+func (c Config) KhoaKyBytes() []secret.Secret { // vi-name-ok: existing exported name, only its body changed (rule 12 invariant 3)
+	c.require("KhoaKyBytes", StaffSessionSigning)
+	ra := make([]secret.Secret, 0, len(c.sessionSigningKeys))
+	ra = append(ra, c.sessionSigningKeys...)
 	return ra
+}
+
+// CauPhienBat reports whether the citizen-session bridge listener is configured. Load guarantees
+// the address and the keys are either both present or both absent.
+func (c Config) CauPhienBat() bool { // vi-name-ok: existing exported name, only its body changed (rule 12 invariant 3)
+	c.require("CauPhienBat", CitizenBridge)
+	return c.citizenSessionBridgeListenAddr != "" && len(c.citizenSessionBridgeKeys) > 0
 }
 
 func boolean(s string) bool {

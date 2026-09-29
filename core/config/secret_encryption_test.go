@@ -16,7 +16,7 @@ var (
 
 func TestSecretEncryptionAbsentIsNotAnError(t *testing.T) {
 	datMoiTruong(t, operatorBase())
-	cfg, err := Load("comms")
+	cfg, err := Load("comms", Uses(SecretEncryption))
 	if err != nil {
 		t.Fatalf("absent SECRET_ENCRYPTION_KEYS must not stop the service: %v", err)
 	}
@@ -29,12 +29,12 @@ func TestSecretEncryptionLoadsDecodedInOrder(t *testing.T) {
 	env := operatorBase()
 	env["SECRET_ENCRYPTION_KEYS"] = " " + kekFake + " , " + kekOld + ","
 	datMoiTruong(t, env)
-	cfg, err := Load("comms")
+	cfg, err := Load("comms", Uses(SecretEncryption))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.SecretEncryptionKeys) != 2 ||
-		string(cfg.SecretEncryptionKeys[0].Lo()) != "kek-FAKE-NOT-A-REAL-KEY-32-byte!" {
+	if len(cfg.SecretEncryptionKeys()) != 2 ||
+		string(cfg.SecretEncryptionKeys()[0].Lo()) != "kek-FAKE-NOT-A-REAL-KEY-32-byte!" {
 		t.Fatal("KEKs must be held DECODED, in order — the FIRST entry is the one that wraps")
 	}
 	for _, verb := range []string{"%v", "%+v", "%#v", "%s", "%d", "%x"} {
@@ -55,7 +55,7 @@ func TestSecretEncryptionMalformedIsRefused(t *testing.T) {
 			env := operatorBase()
 			env["SECRET_ENCRYPTION_KEYS"] = raw
 			datMoiTruong(t, env)
-			_, err := Load("comms")
+			_, err := Load("comms", Uses(SecretEncryption))
 			if !errors.Is(err, ErrSecretEncryptionKeysInvalid) {
 				t.Fatalf("want ErrSecretEncryptionKeysInvalid, got %v", err)
 			}

@@ -12,14 +12,12 @@ import (
 
 // ObjectStorage is the S3/MinIO connection of ADR 0052. core/storage.New consumes it.
 //
-// EVERY FIELD IS OPTIONAL AT Load, AND THAT IS THE OWNER'S DECISION (ADR 0052 §Hệ quả left
-// "required at startup, or optional and every upload refused" open; the card that built this
-// chose the second). Rule 11 invariant 8 is the reason: a service without object storage still
-// serves every route that is not an upload — comms still serves its articles, platform still
-// resolves hosts. Required at Load would stop all eight services on every machine that has not
-// set seven more values, to protect a feature only some of them have.
+// READ ONLY BY A SERVICE THAT DECLARES config.ObjectStore (and config.PublicMedia for
+// PublicMediaBaseURL) — petitions today. Every other service never reads these values, so it is
+// never stopped by them. A DECLARING service is refused in staging/prod without Endpoint,
+// PublicEndpoint, the key pair and BucketPrefix (Region has a default); in dev they may be absent.
 //
-// WHAT "OPTIONAL" DOES NOT MEAN: a default. Absent settings make storage.New return
+// WHAT "ABSENT IN DEV" DOES NOT MEAN: a default. Absent settings make storage.New return
 // storage.ErrNotConfigured, and the caller refuses the upload (fail closed). Half the settings
 // present is reported by CanhBao at every startup — the usual cause is a typo'd key in the
 // ConfigMap or Secret, and the named refusal at the first upload is too late to be the only

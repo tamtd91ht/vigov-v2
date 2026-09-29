@@ -11,11 +11,10 @@ import "errors"
 // base64 of EXACTLY 32 bytes, newest FIRST. The first entry wraps new DEKs; every entry unwraps.
 // One format for both on purpose: an operator who has rotated one of them already knows the other.
 //
-// OPTIONAL AT Load, decided per variable (rule 11 invariant 8, stop condition #2): only a service
-// that stores per-commune secrets reads it — comms first — and every other service serves every
-// request without it. A service that needs it and lacks it REFUSES the operation by name
-// (crypto.ErrNotConfigured), never falls back to storing a secret in the clear (ADR 0009 #3).
-// Making it required would stop all eight services on every machine to protect one feature.
+// GROUP config.SecretEncryption: only a service that stores per-commune secrets declares it —
+// comms — and no other service reads it. The declaring service is refused in staging/prod without
+// it; in dev it REFUSES the operation by name (crypto.ErrNotConfigured), never falls back to
+// storing a secret in the clear (ADR 0009 #3).
 //
 // k8s SECRET, secret.Secret: the bytes are the key that opens every commune's secrets.
 //
@@ -28,4 +27,7 @@ import "errors"
 var ErrSecretEncryptionKeysInvalid = errors.New("config: SECRET_ENCRYPTION_KEYS is invalid")
 
 // SecretEncryptionConfigured reports whether at least one KEK is configured.
-func (c Config) SecretEncryptionConfigured() bool { return len(c.SecretEncryptionKeys) > 0 }
+func (c Config) SecretEncryptionConfigured() bool {
+	c.require("SecretEncryptionConfigured", SecretEncryption)
+	return len(c.secretEncryptionKeys) > 0
+}

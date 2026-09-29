@@ -21,17 +21,17 @@ func TestGRPCListenAddrMacDinh(t *testing.T) {
 		"GRPC_LISTEN_ADDR": "",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses(HTTPServer, GRPCServer))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.GRPCListenAddr != ":9090" {
-		t.Errorf("GRPCListenAddr = %q, muốn :9090", cfg.GRPCListenAddr)
+	if cfg.GRPCListenAddr() != ":9090" {
+		t.Errorf("GRPCListenAddr = %q, muốn :9090", cfg.GRPCListenAddr())
 	}
 	// The whole point of a second variable: the two surfaces must not end up on one listener.
 	// gRPC needs HTTP/2 and the REST surface is served over HTTP/1.1.
-	if cfg.GRPCListenAddr == cfg.ListenAddr {
-		t.Errorf("gRPC và HTTP mặc định trùng cổng %q", cfg.ListenAddr)
+	if cfg.GRPCListenAddr() == cfg.ListenAddr() {
+		t.Errorf("gRPC và HTTP mặc định trùng cổng %q", cfg.ListenAddr())
 	}
 }
 
@@ -42,12 +42,12 @@ func TestGRPCListenAddrDocTuMoiTruong(t *testing.T) {
 		"GRPC_LISTEN_ADDR": "127.0.0.1:19090",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses(GRPCServer))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.GRPCListenAddr != "127.0.0.1:19090" {
-		t.Errorf("GRPCListenAddr = %q", cfg.GRPCListenAddr)
+	if cfg.GRPCListenAddr() != "127.0.0.1:19090" {
+		t.Errorf("GRPCListenAddr = %q", cfg.GRPCListenAddr())
 	}
 }
 
@@ -57,21 +57,21 @@ func TestPlatformGRPCAddrKhongCoMacDinh(t *testing.T) {
 	// refuse every request or resolve communes against something that is not the registry —
 	// rule 1, forbidden #1, a default on the isolation path.
 	//
-	// Empty is allowed HERE because the platform service holds the registry and calls nobody.
-	// Refusing to start belongs to the services that need it: platformclient.Dial("") fails by
-	// name so the operator reads which variable is missing, not "404 for every domain".
+	// Empty is allowed HERE in dev only: platformclient.Dial("") fails by name so the operator
+	// reads which variable is missing, not "404 for every domain". In staging and prod a service
+	// declaring PlatformClient is refused at Load (uses_test.go). Platform itself never declares it.
 	datMoiTruong(t, map[string]string{
 		"DATABASE_DSN":       dsnGia,
 		"ENV":                EnvDev,
 		"PLATFORM_GRPC_ADDR": "",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("documents", Uses(PlatformClient))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.PlatformGRPCAddr != "" {
-		t.Errorf("PlatformGRPCAddr = %q, phải để trống chứ không đoán", cfg.PlatformGRPCAddr)
+	if cfg.PlatformGRPCAddr() != "" {
+		t.Errorf("PlatformGRPCAddr = %q, phải để trống chứ không đoán", cfg.PlatformGRPCAddr())
 	}
 }
 
@@ -82,14 +82,14 @@ func TestPlatformGRPCAddrDocTuMoiTruong(t *testing.T) {
 		"PLATFORM_GRPC_ADDR": "  platform.noi-bo:9090  ",
 	})
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(PlatformClient))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
 	// Trimmed: a trailing space pasted from a deployment manifest turns into a dial error that
 	// reads like the platform is down.
-	if cfg.PlatformGRPCAddr != "platform.noi-bo:9090" {
-		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr)
+	if cfg.PlatformGRPCAddr() != "platform.noi-bo:9090" {
+		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr())
 	}
 }
 
@@ -100,20 +100,21 @@ func TestKhoaGoiNoiBoDocTuMoiTruong(t *testing.T) {
 		"GRPC_CALLER_KEY": "  " + khoaGoiNoiBoGia + "\n",
 	})
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(GRPCServer))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
 	// Trimmed. A trailing newline pasted out of a k8s secret compares unequal at the far end,
 	// and the refusal it produces reads "unauthenticated" — which sends the reader hunting for
 	// a missing variable instead of an invisible character.
-	if string(cfg.GRPCCallerKey) != khoaGoiNoiBoGia {
-		t.Errorf("GRPCCallerKey đọc sai: %q", string(cfg.GRPCCallerKey))
+	if string(cfg.GRPCCallerKey()) != khoaGoiNoiBoGia {
+		t.Errorf("GRPCCallerKey đọc sai: %q", string(cfg.GRPCCallerKey()))
 	}
 }
 
 func TestKhoaGoiNoiBoThieuThiChanKhoiDongOMoiMoiTruong(t *testing.T) {
-	// NO DEV EXEMPTION, unlike SESSION_SIGNING_KEYS (ADR 0025, invariant 3). A signing key that
+	// NO DEV EXEMPTION for a service on the gRPC surface, unlike SESSION_SIGNING_KEYS (ADR 0025,
+	// invariant 3; uses_test.go pins that reporting, which has none, never reads it). A signing key that
 	// is missing in dev means this process cannot read a session — annoying, local, visible. A
 	// CALLER KEY that is missing means a gRPC port that accepts anything reaching it, and
 	// "works fine locally" is exactly how that configuration reaches a cluster.
@@ -129,7 +130,7 @@ func TestKhoaGoiNoiBoThieuThiChanKhoiDongOMoiMoiTruong(t *testing.T) {
 			})
 			t.Setenv("GRPC_CALLER_KEY", "")
 
-			_, err := Load("comms")
+			_, err := Load("comms", Uses(PlatformClient))
 			if !errors.Is(err, ErrThieuBienMoiTruong) {
 				t.Fatalf("muốn ErrThieuBienMoiTruong, nhận %v", err)
 			}
@@ -152,7 +153,7 @@ func TestKhoaGoiNoiBoKhongTuHienRaKhiGhiLog(t *testing.T) {
 		"GRPC_CALLER_KEY":      khoaGoiNoiBoGia,
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses(GRPCServer))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,10 +163,10 @@ func TestKhoaGoiNoiBoKhongTuHienRaKhiGhiLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range []string{
-		fmt.Sprintf("%v", cfg.GRPCCallerKey),
-		fmt.Sprintf("%s", cfg.GRPCCallerKey),
-		fmt.Sprintf("%d", cfg.GRPCCallerKey),
-		fmt.Sprintf("%#v", cfg.GRPCCallerKey),
+		fmt.Sprintf("%v", cfg.GRPCCallerKey()),
+		fmt.Sprintf("%s", cfg.GRPCCallerKey()),
+		fmt.Sprintf("%d", cfg.GRPCCallerKey()),
+		fmt.Sprintf("%#v", cfg.GRPCCallerKey()),
 		fmt.Sprintf("%+v", cfg),
 		fmt.Sprintf("%v", cfg.Redacted()),
 		string(tho),
@@ -176,7 +177,7 @@ func TestKhoaGoiNoiBoKhongTuHienRaKhiGhiLog(t *testing.T) {
 	}
 
 	// ...but it must still be reachable for the interceptor.
-	if string(cfg.GRPCCallerKey.Lo()) != khoaGoiNoiBoGia {
+	if string(cfg.GRPCCallerKey().Lo()) != khoaGoiNoiBoGia {
 		t.Error("Lo() không trả về khoá thật — interceptor sẽ từ chối mọi lời gọi")
 	}
 }
@@ -187,21 +188,21 @@ func TestIdentityGRPCAddrKhongCoMacDinh(t *testing.T) {
 	// services depends on it. A guessed default does not fail closed in a readable way: every
 	// staff request answers 503 while identity is perfectly healthy.
 	//
-	// Empty is allowed HERE because identity builds its own principal and platform calls nobody.
-	// Refusing to start belongs to the services that need it: identityclient.Dial("") fails by
-	// name, so the operator reads which variable is missing.
+	// Empty is allowed HERE in dev only: identityclient.Dial("") fails by name, so the operator
+	// reads which variable is missing. In staging and prod a declared IdentityClient is refused at
+	// Load. Identity and platform never declare it.
 	datMoiTruong(t, map[string]string{
 		"DATABASE_DSN":       dsnGia,
 		"ENV":                EnvDev,
 		"IDENTITY_GRPC_ADDR": "",
 	})
 
-	cfg, err := Load("identity")
+	cfg, err := Load("documents", Uses(IdentityClient))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.IdentityGRPCAddr != "" {
-		t.Errorf("IdentityGRPCAddr = %q, phải để trống chứ không đoán", cfg.IdentityGRPCAddr)
+	if cfg.IdentityGRPCAddr() != "" {
+		t.Errorf("IdentityGRPCAddr = %q, phải để trống chứ không đoán", cfg.IdentityGRPCAddr())
 	}
 }
 
@@ -212,14 +213,14 @@ func TestIdentityGRPCAddrDocTuMoiTruong(t *testing.T) {
 		"IDENTITY_GRPC_ADDR": "  identity.noi-bo:9090\n",
 	})
 
-	cfg, err := Load("documents")
+	cfg, err := Load("documents", Uses(IdentityClient))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
 	// Trimmed: a trailing newline pasted from a deployment manifest turns into a dial error that
 	// reads like identity is down.
-	if cfg.IdentityGRPCAddr != "identity.noi-bo:9090" {
-		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr)
+	if cfg.IdentityGRPCAddr() != "identity.noi-bo:9090" {
+		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr())
 	}
 }
 
@@ -233,13 +234,13 @@ func TestOrgUnitOwnerGRPCAddrsHaveNoDefault(t *testing.T) {
 		"PETITIONS_GRPC_ADDR": "",
 		"DOCUMENTS_GRPC_ADDR": "",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(OrgUnitOwnerClients))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.PetitionsGRPCAddr != "" || cfg.DocumentsGRPCAddr != "" {
+	if cfg.PetitionsGRPCAddr() != "" || cfg.DocumentsGRPCAddr() != "" {
 		t.Errorf("địa chỉ phải để trống chứ không đoán: petitions=%q documents=%q",
-			cfg.PetitionsGRPCAddr, cfg.DocumentsGRPCAddr)
+			cfg.PetitionsGRPCAddr(), cfg.DocumentsGRPCAddr())
 	}
 }
 
@@ -250,15 +251,15 @@ func TestOrgUnitOwnerGRPCAddrsReadTrimmedAndApart(t *testing.T) {
 		"PETITIONS_GRPC_ADDR": " petitions.noi-bo:9090\n",
 		"DOCUMENTS_GRPC_ADDR": "  documents.noi-bo:9090 ",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(OrgUnitOwnerClients))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.PetitionsGRPCAddr != "petitions.noi-bo:9090" {
-		t.Errorf("PetitionsGRPCAddr = %q", cfg.PetitionsGRPCAddr)
+	if cfg.PetitionsGRPCAddr() != "petitions.noi-bo:9090" {
+		t.Errorf("PetitionsGRPCAddr = %q", cfg.PetitionsGRPCAddr())
 	}
-	if cfg.DocumentsGRPCAddr != "documents.noi-bo:9090" {
-		t.Errorf("DocumentsGRPCAddr = %q", cfg.DocumentsGRPCAddr)
+	if cfg.DocumentsGRPCAddr() != "documents.noi-bo:9090" {
+		t.Errorf("DocumentsGRPCAddr = %q", cfg.DocumentsGRPCAddr())
 	}
 }
 
@@ -274,14 +275,14 @@ func TestHaiDiaChiGRPCKhongLanNhau(t *testing.T) {
 		"IDENTITY_GRPC_ADDR": "identity.noi-bo:9090",
 	})
 
-	cfg, err := Load("petitions")
+	cfg, err := Load("petitions", Uses(PlatformClient, IdentityClient))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.PlatformGRPCAddr != "platform.noi-bo:9090" {
-		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr)
+	if cfg.PlatformGRPCAddr() != "platform.noi-bo:9090" {
+		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr())
 	}
-	if cfg.IdentityGRPCAddr != "identity.noi-bo:9090" {
-		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr)
+	if cfg.IdentityGRPCAddr() != "identity.noi-bo:9090" {
+		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr())
 	}
 }

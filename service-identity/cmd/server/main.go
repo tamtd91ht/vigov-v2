@@ -43,6 +43,24 @@ import (
 	"github.com/vihat/vigov/service-identity/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// identity: the ONLY service that issues staff sessions (StaffSessionSigning) and the citizen-session bridge. It asks petitions and documents before deleting an org unit; it never dials identity.
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.GRPCServer,
+	config.PlatformClient,
+	config.TenantCache,
+	config.Redis,
+	config.StaffSessionSigning,
+	config.CitizenCORS,
+	config.CitizenBridge,
+	config.AdminSeed,
+	config.OrgUnitOwnerClients,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -55,7 +73,7 @@ func main() {
 func run(log *slog.Logger) error {
 	// 1. config — platform-wide constants from the environment ONLY. Per-commune values are
 	//    read at RUNTIME from the platform service (rule 1, invariant 10).
-	cfg, err := config.Load("identity")
+	cfg, err := config.Load("identity", configUses)
 	if err != nil {
 		return err
 	}
@@ -125,12 +143,12 @@ func run(log *slog.Logger) error {
 	// The caller key goes with the address: the port answers nothing without it (ADR 0025).
 	// An empty key panics inside the client interceptor, at construction — before this service
 	// can start making calls that would all be refused.
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
 	defer nenTang.Close()
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 4. stores and the permission checker. Every one of them is built on *store.DB, which only
 	//    hands out scoped access — there is no path here to an unscoped query (rule 1,
@@ -218,9 +236,9 @@ func run(log *slog.Logger) error {
 	// decision 2026-09-26; app/gieo_quan_tri.go). Empty = off, silently: off is the expected state
 	// once every commune has changed its admin password. A value too short to be a password is
 	// said ONCE here, by name — never the value, never its length (rule 3, rule 8).
-	if err := dangNhap.BatGieoQuanTri(cfg.IdentityAdminSeedPassword); err != nil {
+	if err := dangNhap.BatGieoQuanTri(cfg.IdentityAdminSeedPassword()); err != nil {
 		log.Warn("gieo quản trị mặc định TẮT", "ly_do", err.Error())
-	} else if !cfg.IdentityAdminSeedPassword.Rong() {
+	} else if !cfg.IdentityAdminSeedPassword().Rong() {
 		log.Info("gieo quản trị mặc định BẬT — gỡ IDENTITY_ADMIN_SEED_PASSWORD khi mọi xã đã đổi mật khẩu admin")
 	}
 	dangXuat := app.NewDangXuat(kho, phien)
@@ -278,13 +296,13 @@ func run(log *slog.Logger) error {
 	// not stop identity from starting (it is optional in core/config), and it must never let a
 	// delete through on half the question. grpc.NewClient connects lazily, so a dialled owner that is
 	// down refuses deletes (503) rather than delaying startup.
-	if cfg.PetitionsGRPCAddr != "" && cfg.DocumentsGRPCAddr != "" {
-		petitions, err := petitionsclient.Dial(cfg.PetitionsGRPCAddr, cfg.GRPCCallerKey, log)
+	if cfg.PetitionsGRPCAddr() != "" && cfg.DocumentsGRPCAddr() != "" {
+		petitions, err := petitionsclient.Dial(cfg.PetitionsGRPCAddr(), cfg.GRPCCallerKey(), log)
 		if err != nil {
 			return err
 		}
 		defer petitions.Close()
-		documents, err := documentsclient.Dial(cfg.DocumentsGRPCAddr, cfg.GRPCCallerKey, log)
+		documents, err := documentsclient.Dial(cfg.DocumentsGRPCAddr(), cfg.GRPCCallerKey(), log)
 		if err != nil {
 			return err
 		}
@@ -292,7 +310,7 @@ func run(log *slog.Logger) error {
 		ghiBoPhan.WithHoldingsSources(petitions, documents)
 	} else {
 		log.Warn("xoá bộ phận TẮT — thiếu PETITIONS_GRPC_ADDR hoặc DOCUMENTS_GRPC_ADDR; DELETE /api/v1/org-units/{id} sẽ trả 503",
-			"co_petitions", cfg.PetitionsGRPCAddr != "", "co_documents", cfg.DocumentsGRPCAddr != "")
+			"co_petitions", cfg.PetitionsGRPCAddr() != "", "co_documents", cfg.DocumentsGRPCAddr() != "")
 	}
 	// The Excel import of the same chart (user decision 2026-09-28): the SAME store, so an imported
 	// unit is inserted and its parent locked by the very statements the form uses.
@@ -311,19 +329,18 @@ func run(log *slog.Logger) error {
 	// it costs nothing, and a construction panic surfaces on every machine rather than only on the
 	// one that configures the bridge.
 	cauPhien := app.NewCauPhienCongDan(kho, nenTang, taiKhoanZalo, crosstenant.NewDinhDanhStore(),
-		phienCongDan, cfg.CitizenSessionTTL, log)
+		phienCongDan, cfg.CitizenSessionTTL(), log)
 
-	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
-	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
-	//    not fail to start because a cache is absent; the missing cache is already reported by
-	//    cfg.CanhBao() above.
+	// 7. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
+	//    cache — and the routes then behave per the CheDoHong each one declared. Staging and prod
+	//    refuse to start without it (config.Redis is declared in configUses).
 	//
 	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
 	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
 	// idem would then call methods on it instead of taking its documented no-cache path.
 	var idemStore idem.Store
-	if cfg.RedisDSN != "" {
-		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
 		if err != nil {
 			return err
 		}
@@ -463,15 +480,15 @@ func run(log *slog.Logger) error {
 	//     uses; `canBo` is the SAME staff store, reached only through its DanhBaCongKhai read.
 	muxCongKhai := http.NewServeMux()
 	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Log: log})
-	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins)
+	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
 	ngoai := dungNgoai(h, ck)
 
 	srv := &http.Server{
-		Addr: cfg.ListenAddr,
+		Addr: cfg.ListenAddr(),
 		// OUTERMOST, around everything above: the login trail, XacThuc's cross-commune alert and
 		// every audited write must name one client address per request (TRUSTED_PROXY_CIDRS).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(ngoai),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(ngoai),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -502,7 +519,7 @@ func run(log *slog.Logger) error {
 	// credential issued for commune A yields nothing at all when the metadata names commune B,
 	// and nothing here mints credentials on a caller's say-so. Per-service identity (mTLS or a
 	// mesh) is what closes the rest, and it is required before a real deployment.
-	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{
+	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
 		// The SAME signer the HTTP side and app.DangNhap were given — see step 5. A second signer
 		// here would verify tokens with a key that did not sign them, and every staff request in
 		// the four calling services would come back with no principal while identity's own routes
@@ -566,9 +583,9 @@ func run(log *slog.Logger) error {
 		Log: log,
 	}, log)
 
-	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
-		return fmt.Errorf("identity: không mở được cổng gRPC %q: %w", cfg.GRPCListenAddr, err)
+		return fmt.Errorf("identity: không mở được cổng gRPC %q: %w", cfg.GRPCListenAddr(), err)
 	}
 
 	// 10b. The citizen-session bridge — a SECOND gRPC listener (ADR 0045 §Tin cậy), serving
@@ -589,10 +606,10 @@ func run(log *slog.Logger) error {
 	var cauSrv *grpc.Server
 	var cauLis net.Listener
 	if cfg.CauPhienBat() {
-		cauSrv = dungCongCau(cfg.CitizenSessionBridgeKeys, svcgrpc.NewCauServer(cauPhien, log), log)
-		cauLis, err = net.Listen("tcp", cfg.CitizenSessionBridgeListenAddr)
+		cauSrv = dungCongCau(cfg.CitizenSessionBridgeKeys(), svcgrpc.NewCauServer(cauPhien, log), log)
+		cauLis, err = net.Listen("tcp", cfg.CitizenSessionBridgeListenAddr())
 		if err != nil {
-			return fmt.Errorf("identity: không mở được cổng cầu phiên %q: %w", cfg.CitizenSessionBridgeListenAddr, err)
+			return fmt.Errorf("identity: không mở được cổng cầu phiên %q: %w", cfg.CitizenSessionBridgeListenAddr(), err)
 		}
 	} else {
 		log.Info("cổng cầu phiên công dân KHÔNG mở — CITIZEN_SESSION_BRIDGE_LISTEN_ADDR / _KEYS chưa khai")
@@ -608,18 +625,18 @@ func run(log *slog.Logger) error {
 	// nobody is reading any more would leak it.
 	loi := make(chan error, 3)
 	go func() {
-		log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr,
+		log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr(),
 			"env", cfg.Env,
 			// secret.DSN redacts the password on every rendering path and keeps the host, so
 			// this line still says which database was opened (rule 8).
 			"dsn", cfg.DatabaseDSN,
-			"nen_tang", cfg.PlatformGRPCAddr)
+			"nen_tang", cfg.PlatformGRPCAddr())
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			loi <- err
 		}
 	}()
 	go func() {
-		log.Info("khởi động gRPC", "service", "identity", "addr", cfg.GRPCListenAddr)
+		log.Info("khởi động gRPC", "service", "identity", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed equivalent to
 		// filter out here.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
@@ -629,7 +646,7 @@ func run(log *slog.Logger) error {
 	if cauSrv != nil {
 		go func() {
 			log.Info("khởi động cổng cầu phiên công dân", "service", "identity",
-				"addr", cfg.CitizenSessionBridgeListenAddr, "so_khoa_cau", len(cfg.CitizenSessionBridgeKeys))
+				"addr", cfg.CitizenSessionBridgeListenAddr(), "so_khoa_cau", len(cfg.CitizenSessionBridgeKeys()))
 			if err := cauSrv.Serve(cauLis); err != nil {
 				loi <- err
 			}
@@ -708,7 +725,7 @@ func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *gr
 			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
 			// without the key accepts every call it is supposed to refuse, and nothing looks
 			// wrong — no error, no failed request, no metric moving. config.Load already requires
-			// the variable, so a process that starts is a process that authenticates; this is the
+			// the variable (config.GRPCServer), so a process that starts is a process that authenticates; this is the
 			// second lock on the same door, for the day somebody constructs a server elsewhere.
 			grpcx.UnaryServerCallerAuth(khoaGoi, log),
 			// The commune is lifted out of metadata into context here, once, before any handler,

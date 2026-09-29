@@ -41,6 +41,20 @@ import (
 	"github.com/vihat/vigov/service-documents/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// documents: serves REST and CountOrgUnitHoldings; resolves communes and staff through platform and identity.
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.GRPCServer,
+	config.PlatformClient,
+	config.IdentityClient,
+	config.TenantCache,
+	config.Redis,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -58,7 +72,7 @@ func run(log *slog.Logger) error {
 	//    at RUNTIME from the platform service (rule 1, invariant 10). There is nothing per-commune
 	//    on this path in any case: the schema is one set of tables for every commune this process
 	//    serves, partitioned by tenant_id rather than split per commune.
-	cfg, err := config.Load("documents")
+	cfg, err := config.Load("documents", configUses)
 	if err != nil {
 		return err
 	}
@@ -130,12 +144,12 @@ func run(log *slog.Logger) error {
 	// forbidden #2. The cache is what makes a network call per request affordable at 200+ communes
 	// (ADR 0004, decision 5). The caller key goes with the address: the port answers nothing
 	// without it (ADR 0025).
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
 	defer nenTang.Close()
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 5. identity — session cookie -> staff principal, over gRPC.
 	//
@@ -147,7 +161,7 @@ func run(log *slog.Logger) error {
 	//
 	// DIALLED, AND THEN REFUSED AT CONSTRUCTION IF THE ADDRESS IS MISSING. Starting without it
 	// would produce a service that answers 503 to every member of staff while identity is healthy.
-	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr, cfg.GRPCCallerKey, log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
@@ -171,16 +185,16 @@ func run(log *slog.Logger) error {
 	ghiVanBanDen := app.NewVanBanDen(kho, vanBanDen, daySo, dinhDanh)
 	ghiVanBanDi := app.NewVanBanDi(kho, vanBanDi, daySo)
 
-	// 6. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
-	//    cache — and each route then behaves per the CheDoHong it declared. A service must not fail
-	//    to start because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	// 6. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
+	//    cache — and each route then behaves per the CheDoHong it declared. Staging and prod refuse
+	//    to start without it (config.Redis is declared in configUses).
 	//
 	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
 	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
 	// idem would call methods on it instead of taking its documented no-cache path.
 	var idemStore idem.Store
-	if cfg.RedisDSN != "" {
-		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
 		if err != nil {
 			return err
 		}
@@ -216,7 +230,7 @@ func run(log *slog.Logger) error {
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
-	addr := cfg.ListenAddr
+	addr := cfg.ListenAddr()
 	log.Info("starting", "service", "documents", "addr", addr,
 		// secret.DSN redacts the password on every rendering path and keeps the host, so this line
 		// still says which database was opened (rule 8).
@@ -225,7 +239,7 @@ func run(log *slog.Logger) error {
 		Addr: addr,
 		// OUTERMOST, around the whole edge chain: every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, directory, dinhDanh, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	// ĐÓNG ÊM. Trước 2026-09-22 bốn dịch vụ này gọi thẳng `http.ListenAndServe`, nên `SIGTERM`
@@ -248,8 +262,8 @@ func run(log *slog.Logger) error {
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{Incoming: vanBanDen, Log: log})
-	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Incoming: vanBanDen, Log: log})
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err
 	}
@@ -265,7 +279,7 @@ func run(log *slog.Logger) error {
 		}
 	}()
 	go func() {
-		log.Info("starting gRPC", "service", "documents", "addr", cfg.GRPCListenAddr)
+		log.Info("starting gRPC", "service", "documents", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
 			loi <- err

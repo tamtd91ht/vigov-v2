@@ -223,7 +223,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	cfg, err := config.Load("identity")
+	// No group declared: this tool opens identity's database and nothing else, so it must not
+	// refuse to run for a missing Redis or bridge key (core/config/uses.go).
+	cfg, err := config.Load("identity", config.Uses())
 	if err != nil {
 		fmt.Fprintf(stderr, "operatorctl: configuration: %v\n", err)
 		return exitFail

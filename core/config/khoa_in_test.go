@@ -24,8 +24,8 @@ const khoaThu = "khoa-ky-gia-KHONG-PHAI-KHOA-THAT-de-kiem-tra-in"
 func bienThe(t *testing.T, cfg Config) map[string]string {
 	t.Helper()
 
-	k := cfg.SessionSigningKeys[0]
-	conTro := &cfg.SessionSigningKeys[0]
+	k := cfg.SessionSigningKeys()[0]
+	conTro := &cfg.SessionSigningKeys()[0]
 
 	thoCfg, err := json.Marshal(cfg)
 	if err != nil {
@@ -53,8 +53,8 @@ func bienThe(t *testing.T, cfg Config) map[string]string {
 		"fmt %#v cả struct":        fmt.Sprintf("%#v", cfg),
 		"fmt %v con trỏ struct":    fmt.Sprintf("%v", &cfg),
 		"fmt %+v con trỏ struct":   fmt.Sprintf("%+v", &cfg),
-		"fmt %v danh sách khoá":    fmt.Sprintf("%v", cfg.SessionSigningKeys),
-		"fmt %+v danh sách khoá":   fmt.Sprintf("%+v", cfg.SessionSigningKeys),
+		"fmt %v danh sách khoá":    fmt.Sprintf("%v", cfg.SessionSigningKeys()),
+		"fmt %+v danh sách khoá":   fmt.Sprintf("%+v", cfg.SessionSigningKeys()),
 		"fmt %v Redacted":          fmt.Sprintf("%v", cfg.Redacted()),
 		"fmt %+v Redacted":         fmt.Sprintf("%+v", cfg.Redacted()),
 		"json cả struct":           string(thoCfg),
@@ -76,7 +76,7 @@ func TestKhoaKhongHienRaTrenMoiDuongIn(t *testing.T) {
 		"ENV":                  EnvProd,
 		"SESSION_SIGNING_KEYS": khoaThu + "," + khoaThu + "-cu",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestKhoaKhongHienRaQuaSlog(t *testing.T) {
 		"ENV":                  EnvProd,
 		"SESSION_SIGNING_KEYS": khoaThu,
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,10 +141,10 @@ func TestKhoaKhongHienRaQuaSlog(t *testing.T) {
 			}
 			log := slog.New(h)
 
-			k := cfg.SessionSigningKeys[0]
+			k := cfg.SessionSigningKeys()[0]
 			log.Info("khoá", "k", k)
-			log.Info("con trỏ khoá", "k", &cfg.SessionSigningKeys[0])
-			log.Info("danh sách", "keys", cfg.SessionSigningKeys)
+			log.Info("con trỏ khoá", "k", &cfg.SessionSigningKeys()[0])
+			log.Info("danh sách", "keys", cfg.SessionSigningKeys())
 			log.Info("cả cấu hình", "cfg", cfg)
 			log.Info("cả cấu hình con trỏ", "cfg", &cfg)
 			log.Info("cấu hình đã che", "cfg", cfg.Redacted())
@@ -179,7 +179,7 @@ func TestDsnKhongLoMatKhauKhiGhiCaCauHinh(t *testing.T) {
 		"REDIS_DSN":            redisGia,
 		"SESSION_SIGNING_KEYS": khoaThu,
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestKhoaKyBytesKhongLoKhoaKhiGhiLog(t *testing.T) {
 		"ENV":                  EnvProd,
 		"SESSION_SIGNING_KEYS": khoaThu + "," + khoaThu + "-cu",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}

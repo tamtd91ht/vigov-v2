@@ -17,7 +17,7 @@ func napCORS(t *testing.T, v string) (Config, error) {
 		"ENV":                          EnvDev,
 		"CITIZEN_CORS_ALLOWED_ORIGINS": v,
 	})
-	return Load("petitions")
+	return Load("petitions", Uses(CitizenCORS))
 }
 
 func TestNguonCORSKhopTheoBang(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNguonCORSTrongLaTat(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%q: Load lỗi: %v", v, err)
 		}
-		if !cfg.CitizenCORSAllowedOrigins.Rong() || cfg.CitizenCORSAllowedOrigins.ChoPhep("https://h5.zdn.vn") {
+		if !cfg.CitizenCORSAllowedOrigins().Rong() || cfg.CitizenCORSAllowedOrigins().ChoPhep("https://h5.zdn.vn") {
 			t.Errorf("%q: danh sách trống mà vẫn cho phép", v)
 		}
 	}
@@ -76,8 +76,8 @@ func TestNguonCORSDeXuatNapDuoc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load lỗi với giá trị đề xuất: %v", err)
 	}
-	if len(cfg.CitizenCORSAllowedOrigins) != 4 {
-		t.Errorf("số mục = %d, muốn 4", len(cfg.CitizenCORSAllowedOrigins))
+	if len(cfg.CitizenCORSAllowedOrigins()) != 4 {
+		t.Errorf("số mục = %d, muốn 4", len(cfg.CitizenCORSAllowedOrigins()))
 	}
 }
 

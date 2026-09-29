@@ -24,7 +24,7 @@ func operatorBase() map[string]string {
 
 func TestOperatorAbsentIsNotAnError(t *testing.T) {
 	datMoiTruong(t, operatorBase())
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(OperatorRealm))
 	if err != nil {
 		t.Fatalf("absent operator variables must not stop the service: %v", err)
 	}
@@ -44,19 +44,19 @@ func TestOperatorBothSetLoadsInOrder(t *testing.T) {
 	env["OPERATOR_TOTP_ENCRYPTION_KEY"] = totpKeyFake + "," + totpKeyOld
 	datMoiTruong(t, env)
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(OperatorRealm))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cfg.OperatorRealmConfigured() {
 		t.Fatal("both set, yet OperatorRealmConfigured is false")
 	}
-	if len(cfg.OperatorSessionSigningKeys) != 2 ||
-		string(cfg.OperatorSessionSigningKeys[0].Lo()) != operatorSigningKeyFake {
+	if len(cfg.OperatorSessionSigningKeys()) != 2 ||
+		string(cfg.OperatorSessionSigningKeys()[0].Lo()) != operatorSigningKeyFake {
 		t.Fatal("signing keys: order or trimming lost — the FIRST entry must be the one that signs")
 	}
-	if len(cfg.OperatorTOTPEncryptionKeys) != 2 ||
-		string(cfg.OperatorTOTPEncryptionKeys[0].Lo()) != "totp-key-FAKE-NOT-REAL-32-bytes!" {
+	if len(cfg.OperatorTOTPEncryptionKeys()) != 2 ||
+		string(cfg.OperatorTOTPEncryptionKeys()[0].Lo()) != "totp-key-FAKE-NOT-REAL-32-bytes!" {
 		t.Fatal("TOTP keys must be held DECODED, in order")
 	}
 }
@@ -70,7 +70,7 @@ func TestOperatorHalfConfiguredIsReported(t *testing.T) {
 			env := operatorBase()
 			env[tc.set] = tc.value
 			datMoiTruong(t, env)
-			cfg, err := Load("identity")
+			cfg, err := Load("identity", Uses(OperatorRealm))
 			if err != nil {
 				t.Fatalf("half-configured is a warning, not a refusal: %v", err)
 			}
@@ -96,7 +96,7 @@ func TestOperatorSigningKeySharedWithStaffIsRefused(t *testing.T) {
 	env["OPERATOR_SESSION_SIGNING_KEYS"] = operatorSigningKeyFake + "," + khoaGia
 	datMoiTruong(t, env)
 
-	_, err := Load("identity")
+	_, err := Load("identity", Uses(OperatorRealm))
 	if !errors.Is(err, ErrOperatorSigningKeysInvalid) {
 		t.Fatalf("a key shared between realms must be refused, got %v", err)
 	}
@@ -122,7 +122,7 @@ func TestOperatorTOTPKeyMalformedIsRefused(t *testing.T) {
 			env := operatorBase()
 			env["OPERATOR_TOTP_ENCRYPTION_KEY"] = raw
 			datMoiTruong(t, env)
-			_, err := Load("identity")
+			_, err := Load("identity", Uses(OperatorRealm))
 			if !errors.Is(err, ErrOperatorTOTPKeyInvalid) {
 				t.Fatalf("want ErrOperatorTOTPKeyInvalid, got %v", err)
 			}
@@ -138,7 +138,7 @@ func TestOperatorKeysNeverRender(t *testing.T) {
 	env["OPERATOR_SESSION_SIGNING_KEYS"] = operatorSigningKeyFake
 	env["OPERATOR_TOTP_ENCRYPTION_KEY"] = totpKeyFake
 	datMoiTruong(t, env)
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(OperatorRealm))
 	if err != nil {
 		t.Fatal(err)
 	}

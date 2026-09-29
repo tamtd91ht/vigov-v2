@@ -54,6 +54,9 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 	// does not exist yet, because nothing in this repository connects to either. Required
 	// belongs to what is actually used: DATABASE_DSN, opened in every service's first thirty
 	// lines. These are refused BY NAME at connect time instead, the IDENTITY_GRPC_ADDR pattern.
+	//
+	// Since config.Uses (2026-09-29) the guarantee is sharper: NO service declares RabbitMQ or
+	// Elasticsearch, so in every environment they are not even read.
 	for _, env := range []string{EnvDev, EnvStaging, EnvProd} {
 		t.Run(env, func(t *testing.T) {
 			datMoiTruong(t, nenChay(env))
@@ -64,16 +67,9 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 				t.Setenv(bien, "")
 			}
 
-			cfg, err := Load("petitions")
+			cfg, err := Load("petitions", Uses(StaffSessionSigning, Redis))
 			if err != nil {
 				t.Fatalf("thiếu hạ tầng chưa ai dùng mà chặn khởi động: %v", err)
-			}
-			if cfg.RabbitMQDSN != "" || cfg.RabbitMQExchange != "" {
-				t.Errorf("RabbitMQ phải rỗng chứ không đoán: %q %q", cfg.RabbitMQDSN, cfg.RabbitMQExchange)
-			}
-			if len(cfg.ElasticsearchAddrs) != 0 || !cfg.ElasticsearchAPIKey.Rong() ||
-				cfg.ElasticsearchIndexPrefix != "" {
-				t.Errorf("Elasticsearch phải rỗng chứ không đoán: %v", cfg.ElasticsearchAddrs)
 			}
 			// AND IT MUST BE SILENT. A deployment that uses neither is the deployment ADR 0010
 			// expects today; warning about it at every startup of eight services teaches
@@ -83,6 +79,26 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 				t.Errorf("không dùng RabbitMQ/Elastic thì không được cảnh báo: %v", cfg.CanhBao())
 			}
 		})
+	}
+
+	// Declared, in dev: empty is read as empty — never guessed.
+	datMoiTruong(t, nenChay(EnvDev))
+	for _, bien := range []string{
+		"RABBITMQ_DSN", "RABBITMQ_EXCHANGE",
+		"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_INDEX_PREFIX",
+	} {
+		t.Setenv(bien, "")
+	}
+	cfg, err := Load("reporting", Uses(RabbitMQ, Elasticsearch))
+	if err != nil {
+		t.Fatalf("dev, khai nhóm mà biến trống vẫn phải khởi động: %v", err)
+	}
+	if cfg.RabbitMQDSN() != "" || cfg.RabbitMQExchange() != "" {
+		t.Errorf("RabbitMQ phải rỗng chứ không đoán: %q %q", cfg.RabbitMQDSN(), cfg.RabbitMQExchange())
+	}
+	if len(cfg.ElasticsearchAddrs()) != 0 || !cfg.ElasticsearchAPIKey().Rong() ||
+		cfg.ElasticsearchIndexPrefix() != "" {
+		t.Errorf("Elasticsearch phải rỗng chứ không đoán: %v", cfg.ElasticsearchAddrs())
 	}
 }
 
@@ -100,31 +116,31 @@ func TestHaTangDocTuMoiTruong(t *testing.T) {
 		"ELASTICSEARCH_INDEX_PREFIX": " vigov \n",
 	})
 
-	cfg, err := Load("reporting")
+	cfg, err := Load("reporting", Uses(RabbitMQ, Elasticsearch))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
 	// Trimmed everywhere. A trailing newline pasted out of a k8s Secret produces a connection
 	// error naming the wrong cause — exactly what cost an afternoon on GRPC_CALLER_KEY.
-	if cfg.RabbitMQDSN.Lo() != amqpGia {
-		t.Errorf("RabbitMQDSN đọc sai: %q", cfg.RabbitMQDSN.Lo())
+	if cfg.RabbitMQDSN().Lo() != amqpGia {
+		t.Errorf("RabbitMQDSN đọc sai: %q", cfg.RabbitMQDSN().Lo())
 	}
-	if cfg.RabbitMQExchange != "vigov.tac-vu" {
-		t.Errorf("RabbitMQExchange = %q", cfg.RabbitMQExchange)
+	if cfg.RabbitMQExchange() != "vigov.tac-vu" {
+		t.Errorf("RabbitMQExchange = %q", cfg.RabbitMQExchange())
 	}
-	if string(cfg.ElasticsearchAPIKey.Lo()) != esKhoaGia {
+	if string(cfg.ElasticsearchAPIKey().Lo()) != esKhoaGia {
 		t.Error("ElasticsearchAPIKey đọc sai — client sẽ bị cụm tìm kiếm từ chối")
 	}
-	if cfg.ElasticsearchIndexPrefix != "vigov" {
-		t.Errorf("ElasticsearchIndexPrefix = %q", cfg.ElasticsearchIndexPrefix)
+	if cfg.ElasticsearchIndexPrefix() != "vigov" {
+		t.Errorf("ElasticsearchIndexPrefix = %q", cfg.ElasticsearchIndexPrefix())
 	}
 	muon := []string{"http://es-1.noi-bo:9200", "http://es-2.noi-bo:9200"}
-	if len(cfg.ElasticsearchAddrs) != len(muon) {
-		t.Fatalf("đọc %d địa chỉ, muốn %d: %q", len(cfg.ElasticsearchAddrs), len(muon), cfg.ElasticsearchAddrs)
+	if len(cfg.ElasticsearchAddrs()) != len(muon) {
+		t.Fatalf("đọc %d địa chỉ, muốn %d: %q", len(cfg.ElasticsearchAddrs()), len(muon), cfg.ElasticsearchAddrs())
 	}
 	for i := range muon {
-		if cfg.ElasticsearchAddrs[i] != muon[i] {
-			t.Errorf("địa chỉ %d = %q, muốn %q", i, cfg.ElasticsearchAddrs[i], muon[i])
+		if cfg.ElasticsearchAddrs()[i] != muon[i] {
+			t.Errorf("địa chỉ %d = %q, muốn %q", i, cfg.ElasticsearchAddrs()[i], muon[i])
 		}
 	}
 }
@@ -149,7 +165,7 @@ func TestBienBatBuocThieuThiTuChoiDungTen(t *testing.T) {
 		t.Run(c.bien, func(t *testing.T) {
 			datMoiTruong(t, c.moi)
 
-			_, err := Load("documents")
+			_, err := Load("documents", Uses(GRPCServer))
 			if !errors.Is(err, ErrThieuBienMoiTruong) {
 				t.Fatalf("muốn ErrThieuBienMoiTruong, nhận %v", err)
 			}
@@ -176,9 +192,11 @@ func TestRabbitMQDSNKhongLoMatKhau(t *testing.T) {
 		"ENV":                  EnvProd,
 		"SESSION_SIGNING_KEYS": khoaGia,
 		"RABBITMQ_DSN":         amqpGia,
+		// Declared in prod means every variable of the group, so the exchange too.
+		"RABBITMQ_EXCHANGE": "vigov.tac-vu",
 	})
 
-	cfg, err := Load("comms")
+	cfg, err := Load("comms", Uses(RabbitMQ))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,14 +208,14 @@ func TestRabbitMQDSNKhongLoMatKhau(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, nil))
 	log.Info("khởi động", "cfg", cfg)
-	log.Info("chỉ broker", "dsn", cfg.RabbitMQDSN)
+	log.Info("chỉ broker", "dsn", cfg.RabbitMQDSN())
 	log.With("cfg", cfg.Redacted()).Info("kèm sẵn")
 
 	for _, ra := range []string{
-		fmt.Sprintf("%v", cfg.RabbitMQDSN),
-		fmt.Sprintf("%s", cfg.RabbitMQDSN),
-		fmt.Sprintf("%q", cfg.RabbitMQDSN),
-		fmt.Sprintf("%#v", cfg.RabbitMQDSN),
+		fmt.Sprintf("%v", cfg.RabbitMQDSN()),
+		fmt.Sprintf("%s", cfg.RabbitMQDSN()),
+		fmt.Sprintf("%q", cfg.RabbitMQDSN()),
+		fmt.Sprintf("%#v", cfg.RabbitMQDSN()),
 		fmt.Sprintf("%+v", cfg),
 		fmt.Sprintf("%v", cfg.Redacted()),
 		string(tho),
@@ -213,7 +231,7 @@ func TestRabbitMQDSNKhongLoMatKhau(t *testing.T) {
 		t.Errorf("che quá tay — không đọc ra được đang nối tới broker nào:\n%s", buf.String())
 	}
 	// ...and the material must still arrive intact at whoever dials.
-	if cfg.RabbitMQDSN.Lo() != amqpGia {
+	if cfg.RabbitMQDSN().Lo() != amqpGia {
 		t.Error("Lo() không trả về DSN thật — sẽ không nối được broker")
 	}
 }
@@ -228,9 +246,11 @@ func TestElasticsearchAPIKeyKhongHienRaKhiGhiLog(t *testing.T) {
 		"SESSION_SIGNING_KEYS":  khoaGia,
 		"ELASTICSEARCH_ADDRS":   "http://es-1.noi-bo:9200",
 		"ELASTICSEARCH_API_KEY": esKhoaGia,
+		// Declared in prod means every variable of the group, so the prefix too.
+		"ELASTICSEARCH_INDEX_PREFIX": "vigov",
 	})
 
-	cfg, err := Load("reporting")
+	cfg, err := Load("reporting", Uses(Elasticsearch))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,16 +262,16 @@ func TestElasticsearchAPIKeyKhongHienRaKhiGhiLog(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	log.Info("khởi động", "cfg", cfg)
-	log.Info("chỉ khoá", "k", cfg.ElasticsearchAPIKey)
+	log.Info("chỉ khoá", "k", cfg.ElasticsearchAPIKey())
 	log.With("cfg", cfg.Redacted()).Info("kèm sẵn")
 
 	ra := []string{
-		fmt.Sprintf("%v", cfg.ElasticsearchAPIKey),
-		fmt.Sprintf("%s", cfg.ElasticsearchAPIKey),
-		fmt.Sprintf("%q", cfg.ElasticsearchAPIKey),
-		fmt.Sprintf("%#v", cfg.ElasticsearchAPIKey),
-		fmt.Sprintf("%d", cfg.ElasticsearchAPIKey),
-		fmt.Sprintf("%c", cfg.ElasticsearchAPIKey),
+		fmt.Sprintf("%v", cfg.ElasticsearchAPIKey()),
+		fmt.Sprintf("%s", cfg.ElasticsearchAPIKey()),
+		fmt.Sprintf("%q", cfg.ElasticsearchAPIKey()),
+		fmt.Sprintf("%#v", cfg.ElasticsearchAPIKey()),
+		fmt.Sprintf("%d", cfg.ElasticsearchAPIKey()),
+		fmt.Sprintf("%c", cfg.ElasticsearchAPIKey()),
 		fmt.Sprintf("%+v", cfg),
 		fmt.Sprintf("%v", cfg.Redacted()),
 		string(tho),
@@ -268,7 +288,7 @@ func TestElasticsearchAPIKeyKhongHienRaKhiGhiLog(t *testing.T) {
 		}
 	}
 	// ...but it must still be reachable for whoever builds the client.
-	if string(cfg.ElasticsearchAPIKey.Lo()) != esKhoaGia {
+	if string(cfg.ElasticsearchAPIKey().Lo()) != esKhoaGia {
 		t.Error("Lo() không trả về khoá thật — cụm tìm kiếm sẽ từ chối")
 	}
 }
@@ -294,29 +314,36 @@ func TestCanhBaoKhiHaTangCauHinhNuaVoi(t *testing.T) {
 			moi:   map[string]string{"ELASTICSEARCH_API_KEY": esKhoaGia, "ELASTICSEARCH_ADDRS": ""},
 			phaiC: "ELASTICSEARCH_ADDRS",
 		},
-		{
-			// An index holding petition contents is an index holding citizen personal data
-			// (rule 3). Not refused — a closed network is a legitimate choice — but said out
-			// loud so somebody owns it.
-			ten:   "địa chỉ có nhưng không xác thực",
-			moi:   map[string]string{"ELASTICSEARCH_ADDRS": "http://es-1.noi-bo:9200", "ELASTICSEARCH_API_KEY": ""},
-			phaiC: "ELASTICSEARCH_API_KEY",
-		},
 	}
+	// Dev only: in staging and prod a declared group with an empty variable no longer loads at
+	// all — the case below, which used to be a warning, is now that refusal.
 	for _, c := range cases {
 		t.Run(c.ten, func(t *testing.T) {
-			datMoiTruong(t, nenChay(EnvProd))
+			datMoiTruong(t, nenChay(EnvDev))
 			datMoiTruong(t, c.moi)
 
-			cfg, err := Load("petitions")
+			cfg, err := Load("reporting", Uses(RabbitMQ, Elasticsearch))
 			if err != nil {
-				t.Fatalf("cấu hình nửa vời phải CẢNH BÁO chứ không chặn khởi động: %v", err)
+				t.Fatalf("cấu hình nửa vời ở dev phải CẢNH BÁO chứ không chặn khởi động: %v", err)
 			}
 			canh := strings.Join(cfg.CanhBao(), " | ")
 			if !strings.Contains(canh, c.phaiC) {
 				t.Errorf("cảnh báo phải gọi đúng tên biến %s, nhận: %q", c.phaiC, canh)
 			}
 		})
+	}
+
+	// An index holding petition contents is an index holding citizen personal data (rule 3).
+	// Outside dev, a declared Elasticsearch with no API key used to be a warning; it is refused
+	// now, by name, because every variable of a declared group is required there.
+	datMoiTruong(t, nenChay(EnvProd))
+	datMoiTruong(t, map[string]string{
+		"ELASTICSEARCH_ADDRS": "http://es-1.noi-bo:9200", "ELASTICSEARCH_API_KEY": "",
+		"ELASTICSEARCH_INDEX_PREFIX": "vigov",
+	})
+	_, err := Load("reporting", Uses(Elasticsearch))
+	if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), "ELASTICSEARCH_API_KEY") {
+		t.Errorf("Elastic không xác thực ở prod phải bị từ chối và gọi tên biến, nhận %v", err)
 	}
 }
 
@@ -329,7 +356,7 @@ func TestElasticKhongXacThucODevThiKhongCanhBao(t *testing.T) {
 		"ELASTICSEARCH_API_KEY": "",
 	})
 
-	cfg, err := Load("reporting")
+	cfg, err := Load("reporting", Uses(Elasticsearch))
 	if err != nil {
 		t.Fatal(err)
 	}

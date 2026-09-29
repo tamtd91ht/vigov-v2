@@ -18,7 +18,7 @@ func napProxy(t *testing.T, v string) (Config, error) {
 		"ENV":                 EnvDev,
 		"TRUSTED_PROXY_CIDRS": v,
 	})
-	return Load("identity")
+	return Load("identity", Uses(HTTPServer))
 }
 
 func TestProxyTinCayDocDuocCidrVaIpTron(t *testing.T) {
@@ -34,12 +34,12 @@ func TestProxyTinCayDocDuocCidrVaIpTron(t *testing.T) {
 		// A mapped bare IP is the IPv4 host: the request side unmaps before comparing.
 		netip.MustParsePrefix("198.51.100.7/32"),
 	}
-	if len(cfg.TrustedProxies) != len(muon) {
-		t.Fatalf("TrustedProxies = %v, muốn %v", cfg.TrustedProxies, muon)
+	if len(cfg.TrustedProxies()) != len(muon) {
+		t.Fatalf("TrustedProxies = %v, muốn %v", cfg.TrustedProxies(), muon)
 	}
 	for i := range muon {
-		if cfg.TrustedProxies[i] != muon[i] {
-			t.Errorf("mục %d = %v, muốn %v", i, cfg.TrustedProxies[i], muon[i])
+		if cfg.TrustedProxies()[i] != muon[i] {
+			t.Errorf("mục %d = %v, muốn %v", i, cfg.TrustedProxies()[i], muon[i])
 		}
 	}
 }
@@ -50,8 +50,8 @@ func TestProxyTinCayCidrCoBitThuaDuocChuanHoa(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if len(cfg.TrustedProxies) != 1 || cfg.TrustedProxies[0] != netip.MustParsePrefix("10.0.0.0/8") {
-		t.Errorf("TrustedProxies = %v", cfg.TrustedProxies)
+	if len(cfg.TrustedProxies()) != 1 || cfg.TrustedProxies()[0] != netip.MustParsePrefix("10.0.0.0/8") {
+		t.Errorf("TrustedProxies = %v", cfg.TrustedProxies())
 	}
 }
 
@@ -61,8 +61,8 @@ func TestProxyTinCayTrongLaKhongTinAi(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%q: Load lỗi: %v", v, err)
 		}
-		if cfg.TrustedProxies != nil {
-			t.Errorf("%q: TrustedProxies = %v, muốn nil", v, cfg.TrustedProxies)
+		if cfg.TrustedProxies() != nil {
+			t.Errorf("%q: TrustedProxies = %v, muốn nil", v, cfg.TrustedProxies())
 		}
 	}
 }

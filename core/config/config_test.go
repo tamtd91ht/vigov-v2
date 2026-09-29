@@ -56,15 +56,15 @@ func TestLoadDayDu(t *testing.T) {
 		"TENANT_CACHE_TTL": "15s",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses(HTTPServer, TenantCache))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if cfg.ListenAddr != ":8081" {
-		t.Errorf("ListenAddr = %q", cfg.ListenAddr)
+	if cfg.ListenAddr() != ":8081" {
+		t.Errorf("ListenAddr = %q", cfg.ListenAddr())
 	}
-	if cfg.TenantCacheTTL != 15*time.Second {
-		t.Errorf("TenantCacheTTL = %v", cfg.TenantCacheTTL)
+	if cfg.TenantCacheTTL() != 15*time.Second {
+		t.Errorf("TenantCacheTTL = %v", cfg.TenantCacheTTL())
 	}
 	if cfg.Env != EnvDev {
 		t.Errorf("Env = %q", cfg.Env)
@@ -93,7 +93,7 @@ func TestLoadThieuBienThiHong(t *testing.T) {
 			t.Setenv("ENV", "")
 			datMoiTruong(t, c.moi)
 
-			_, err := Load("platform")
+			_, err := Load("platform", Uses(GRPCServer))
 			if !errors.Is(err, ErrThieuBienMoiTruong) {
 				t.Errorf("muốn ErrThieuBienMoiTruong, nhận %v", err)
 			}
@@ -104,7 +104,7 @@ func TestLoadThieuBienThiHong(t *testing.T) {
 func TestLoadEnvKhongHopLe(t *testing.T) {
 	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": "production"})
 
-	if _, err := Load("platform"); !errors.Is(err, ErrEnvKhongHopLe) {
+	if _, err := Load("platform", Uses()); !errors.Is(err, ErrEnvKhongHopLe) {
 		t.Errorf("ENV=production phải bị từ chối, nhận %v", err)
 	}
 }
@@ -119,7 +119,7 @@ func TestCoNguyHiemBiChanOProd(t *testing.T) {
 		"DANGEROUS_AUTH_BYPASS": "true",
 	})
 
-	if _, err := Load("platform"); !errors.Is(err, ErrCoBienNguyHiem) {
+	if _, err := Load("platform", Uses()); !errors.Is(err, ErrCoBienNguyHiem) {
 		t.Fatalf("cờ nguy hiểm ở prod phải chặn khởi động, nhận %v", err)
 	}
 }
@@ -131,7 +131,7 @@ func TestCoNguyHiemChoPhepODev(t *testing.T) {
 		"DANGEROUS_AUTH_BYPASS": "true",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses())
 	if err != nil {
 		t.Fatalf("dev phải khởi động được: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestRedactedGiauMatKhau(t *testing.T) {
 	// monitoring at once, and it cannot be recalled from any of them.
 	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvDev})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,30 +193,28 @@ func TestRedisDSNTuyChon(t *testing.T) {
 	})
 	t.Setenv("REDIS_DSN", "")
 
-	cfg, err := Load("petitions")
+	cfg, err := Load("petitions", Uses(Redis))
 	if err != nil {
 		t.Fatalf("REDIS_DSN trống phải khởi động được: %v", err)
 	}
-	if cfg.RedisDSN != "" {
-		t.Errorf("RedisDSN = %q, muốn rỗng", cfg.RedisDSN)
+	if cfg.RedisDSN() != "" {
+		t.Errorf("RedisDSN = %q, muốn rỗng", cfg.RedisDSN())
 	}
 	if len(cfg.CanhBao()) != 0 {
 		t.Errorf("ở dev, thiếu Redis chưa cần cảnh báo: %v", cfg.CanhBao())
 	}
 
-	// Outside dev it must never be silent: no Redis means no duplicate protection, and a
-	// duplicated petition cannot be deleted afterwards (rule 7).
+	// Outside dev it is REFUSED, by name — it used to be a warning. No Redis means no duplicate
+	// protection, and a duplicated petition cannot be deleted afterwards (rule 7); a warning in a
+	// pod log is not what stands between a double-submitted POST and a second permanent record.
 	datMoiTruong(t, map[string]string{
 		"DATABASE_DSN":         dsnGia,
 		"ENV":                  EnvStaging,
 		"SESSION_SIGNING_KEYS": khoaGia,
 	})
-	cfg, err = Load("petitions")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cfg.CanhBao()) == 0 {
-		t.Error("thiếu REDIS_DSN ngoài dev phải được cảnh báo")
+	_, err = Load("petitions", Uses(Redis))
+	if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), "REDIS_DSN") {
+		t.Errorf("thiếu REDIS_DSN ở staging phải bị từ chối và gọi tên biến, nhận %v", err)
 	}
 }
 
@@ -229,11 +227,11 @@ func TestRedisDSNCungBiCheMatKhau(t *testing.T) {
 		"REDIS_DSN":    redisGia,
 	})
 
-	cfg, err := Load("petitions")
+	cfg, err := Load("petitions", Uses(Redis))
 	if err != nil {
 		t.Fatal(err)
 	}
-	an := cfg.Redacted().RedisDSN.String()
+	an := cfg.Redacted().RedisDSN().String()
 	if strings.Contains(an, "khong-phai-mat-khau-that") {
 		t.Errorf("mật khẩu Redis lọt ra sau khi che: %q", an)
 	}
@@ -250,7 +248,7 @@ func TestKhoaKyThieuThiChanKhoiDongNgoaiDev(t *testing.T) {
 			datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": env})
 			t.Setenv("SESSION_SIGNING_KEYS", "")
 
-			_, err := Load("identity")
+			_, err := Load("identity", Uses(StaffSessionSigning))
 			if !errors.Is(err, ErrThieuBienMoiTruong) {
 				t.Fatalf("muốn ErrThieuBienMoiTruong, nhận %v", err)
 			}
@@ -265,7 +263,7 @@ func TestKhoaKyThieuODevThiChayNhungCoCanhBao(t *testing.T) {
 	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvDev})
 	t.Setenv("SESSION_SIGNING_KEYS", "")
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatalf("dev phải khởi động được: %v", err)
 	}
@@ -283,7 +281,7 @@ func TestKhoaKyDocTheoThuTu(t *testing.T) {
 		"SESSION_SIGNING_KEYS": khoaGia + "-moi , " + khoaGia + "-cu ,,",
 	})
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +294,7 @@ func TestKhoaKyDocTheoThuTu(t *testing.T) {
 	}
 	// One key in prod is legal but must be said out loud: rotating it signs everybody out.
 	datMoiTruong(t, map[string]string{"SESSION_SIGNING_KEYS": khoaGia})
-	cfg, err = Load("identity")
+	cfg, err = Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,20 +313,20 @@ func TestKhoaKyKhongTuHienRaKhiGhiLog(t *testing.T) {
 		"SESSION_SIGNING_KEYS": khoaGia,
 	})
 
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(StaffSessionSigning))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tho, err := json.Marshal(cfg.SessionSigningKeys)
+	tho, err := json.Marshal(cfg.SessionSigningKeys())
 	if err != nil {
 		t.Fatal(err)
 	}
 	renders := []string{
-		fmt.Sprintf("%v", cfg.SessionSigningKeys),
-		fmt.Sprintf("%s", cfg.SessionSigningKeys),
+		fmt.Sprintf("%v", cfg.SessionSigningKeys()),
+		fmt.Sprintf("%s", cfg.SessionSigningKeys()),
 		fmt.Sprintf("%+v", cfg),
-		fmt.Sprintf("%#v", cfg.SessionSigningKeys),
+		fmt.Sprintf("%#v", cfg.SessionSigningKeys()),
 		fmt.Sprintf("%v", cfg.Redacted()),
 		string(tho),
 	}
@@ -353,11 +351,11 @@ func TestTtlMacDinhKhiSai(t *testing.T) {
 		"TENANT_CACHE_TTL": "khong-phai-thoi-gian",
 	})
 
-	cfg, err := Load("platform")
+	cfg, err := Load("platform", Uses(TenantCache))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.TenantCacheTTL != 30*time.Second {
-		t.Errorf("TTL sai định dạng phải về mặc định 30s, nhận %v", cfg.TenantCacheTTL)
+	if cfg.TenantCacheTTL() != 30*time.Second {
+		t.Errorf("TTL sai định dạng phải về mặc định 30s, nhận %v", cfg.TenantCacheTTL())
 	}
 }

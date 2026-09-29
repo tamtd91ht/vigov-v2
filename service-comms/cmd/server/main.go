@@ -37,6 +37,21 @@ import (
 	"github.com/vihat/vigov/service-comms/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// comms: REST only — no gRPC server; the one service storing per-commune secrets (SecretEncryption).
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.PlatformClient,
+	config.IdentityClient,
+	config.TenantCache,
+	config.Redis,
+	config.CitizenCORS,
+	config.SecretEncryption,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -61,7 +76,7 @@ func main() {
 	// 1. config — platform-wide constants only. Per-commune values are read at RUNTIME (rule 1,
 	// invariant 10); there is nothing per-commune on this path in any case, because the schema is
 	// shared by every commune the process serves and partitioned by tenant_id.
-	cfg, err := config.Load("comms")
+	cfg, err := config.Load("comms", configUses)
 	if err != nil {
 		log.Error("cấu hình không nạp được", "service", "comms", "err", err)
 		os.Exit(1)
@@ -107,17 +122,17 @@ func main() {
 	//
 	// NEITHER CLIENT IS CLOSED ON A defer, for the reason already stated on the pool above: this
 	// process exits through os.Exit, which runs no defers.
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ nền tảng", "service", "comms", "err", err)
 		os.Exit(1)
 	}
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 4. identity — session cookie -> staff principal, over gRPC. This service owns no session
 	// registry and may not import identity's (rule 2, forbidden #1), so the principal comes from
 	// the contract: ResolveStaffPrincipal, once per staff request, with no cache.
-	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr, cfg.GRPCCallerKey, log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ định danh", "service", "comms", "err", err)
 		os.Exit(1)
@@ -127,16 +142,16 @@ func main() {
 	// for THIS request and holds no state of its own. No mounted route declares
 	// authz.RequirePermission yet; wiring it now is what makes the first one that does work rather
 	// than meet a nil interface at request time.
-	// Idempotency store. An empty REDIS_DSN is a valid deployment — local development with no cache
-	// — and each route then behaves per the CheDoHong it declared. A service must not fail to start
-	// because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	// Idempotency store. An empty REDIS_DSN happens in DEV only — local development with no cache —
+	// and each route then behaves per the CheDoHong it declared. Staging and prod refuse to start
+	// without it (config.Redis is declared in configUses).
 	//
 	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
 	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
 	// idem would call methods on it instead of taking its documented no-cache path.
 	var idemStore idem.Store
-	if cfg.RedisDSN != "" {
-		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
 		if err != nil {
 			log.Error("không mở được Redis cho chống trùng thao tác", "service", "comms", "err", err)
 			os.Exit(1)
@@ -170,7 +185,7 @@ func main() {
 	// value never reaches here — config.Load refuses it and the pod does not start.
 	var envelope *crypto.Envelope
 	if cfg.SecretEncryptionConfigured() {
-		envelope, err = crypto.New(cfg.SecretEncryptionKeys, commsstore.NewDataEncryptionKeyStore(kho))
+		envelope, err = crypto.New(cfg.SecretEncryptionKeys(), commsstore.NewDataEncryptionKeyStore(kho))
 		if err != nil {
 			log.Error("không dựng được bộ niêm bí mật theo xã", "service", "comms", "err", err)
 			os.Exit(1)
@@ -217,17 +232,17 @@ func main() {
 		DanhMuc: danhMucNoiDung,
 		Log:     log,
 	})
-	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins)
+	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
-	addr := cfg.ListenAddr
+	addr := cfg.ListenAddr()
 	log.Info("starting", "service", "comms", "addr", addr)
 	srv := &http.Server{
 		Addr: addr,
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, congKhai, directory, dinhDanh, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, congKhai, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

@@ -45,6 +45,23 @@ import (
 	"github.com/vihat/vigov/service-petitions/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// petitions: the one service storing uploads (scene photographs), so the only one declaring ObjectStore and MalwareScan.
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.GRPCServer,
+	config.PlatformClient,
+	config.IdentityClient,
+	config.TenantCache,
+	config.Redis,
+	config.CitizenCORS,
+	config.ObjectStore,
+	config.MalwareScan,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -68,7 +85,7 @@ func chay(log *slog.Logger) error {
 	// service (rule 1, invariant 10) — there is nothing per-commune on this path in any case: the
 	// schema is shared by every commune the process serves, partitioned by tenant_id rather than
 	// split per commune.
-	cfg, err := config.Load("petitions")
+	cfg, err := config.Load("petitions", configUses)
 	if err != nil {
 		return err
 	}
@@ -109,12 +126,12 @@ func chay(log *slog.Logger) error {
 	// resolve a commune: the registry tables belong to the platform service, and a connection to
 	// another service's schema is rule 2, forbidden #2. The cache is what makes a network call per
 	// request affordable at 200+ communes (ADR 0004, decision 5).
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
 	defer nenTang.Close()
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 2 + 3. identity — session cookie -> staff principal, over gRPC, and the Checker that reads
 	// the permission set it returns.
@@ -124,7 +141,7 @@ func chay(log *slog.Logger) error {
 	// and a second implementation of "is this session still valid" would disagree with the first on
 	// the day a session is revoked. One RPC, once per staff request, with no cache — the argument
 	// is on ResolveStaffPrincipal in proto/vigov/identity/v1/identity.proto.
-	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr, cfg.GRPCCallerKey, log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
@@ -144,16 +161,16 @@ func chay(log *slog.Logger) error {
 	// whether identity is reachable at the exact moment that matters.
 	soPhien := identityclient.NewSoPhienCongDan(dinhDanh)
 
-	// Idempotency store. An empty REDIS_DSN is a valid deployment — local development with no cache
-	// — and each route then behaves per the CheDoHong it declared. A service must not fail to start
-	// because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	// Idempotency store. An empty REDIS_DSN happens in DEV only — local development with no cache —
+	// and each route then behaves per the CheDoHong it declared. Staging and prod refuse to start
+	// without it (config.Redis is declared in configUses).
 	//
 	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
 	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
 	// idem would call methods on it instead of taking its documented no-cache path.
 	var idemStore idem.Store
-	if cfg.RedisDSN != "" {
-		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
 		if err != nil {
 			return err
 		}
@@ -216,17 +233,16 @@ func chay(log *slog.Logger) error {
 	storedFiles := petstore.NewStoredFileStore(kho)
 	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh, dinhDanh, storedFiles)
 
-	// §5.9's `📎 Đính kèm` (ADR 0052). The three dependencies are OPTIONAL AT STARTUP, each on its own:
-	// absent = the attachment routes answer 503 "chưa cấu hình kho lưu tệp" and EVERYTHING ELSE SERVES
-	// (rule 11 invariant 8 — the service answers every other request without them). ADR 0052 §Hệ quả
-	// leaves "required at startup" vs "optional + refuse" to the owner; until that is decided this is the
-	// second, which fails closed on the upload and open on nothing. A value that is present but malformed
-	// was already refused by config.Load, and is refused again here.
+	// §5.9's `📎 Đính kèm` (ADR 0052). config.ObjectStore and config.MalwareScan are declared, so
+	// staging and prod refuse to START without them (owner's decision of 2026-09-29: a declared group
+	// is required there). In DEV they may be absent: the attachment routes then answer 503 "chưa cấu
+	// hình kho lưu tệp" and everything else serves — fail closed on the upload, open on nothing. A
+	// value that is present but malformed was already refused by config.Load, and is refused again here.
 	//
 	// DECLARED AS THE INTERFACES AND LEFT nil WHEN ABSENT: a nil *storage.Client assigned into the
 	// interface would be a non-nil interface, pass the use case's nil check, and panic on first use.
 	var objects app.ObjectStore
-	switch c, err := storage.New(cfg.ObjectStorage); {
+	switch c, err := storage.New(cfg.ObjectStorage()); {
 	case err == nil:
 		objects = c
 	case errors.Is(err, storage.ErrNotConfigured):
@@ -235,7 +251,7 @@ func chay(log *slog.Logger) error {
 		return err
 	}
 	var scanner app.MalwareScanner
-	switch s, err := malwarescan.New(cfg.MalwareScanner); {
+	switch s, err := malwarescan.New(cfg.MalwareScanner()); {
 	case err == nil:
 		scanner = s
 	case errors.Is(err, malwarescan.ErrNotConfigured):
@@ -379,14 +395,14 @@ func chay(log *slog.Logger) error {
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
-	addr := cfg.ListenAddr
+	addr := cfg.ListenAddr()
 	log.Info("starting", "service", "petitions", "addr", addr)
 	srv := &http.Server{
 		Addr: addr,
 		// OUTERMOST, around BOTH chains (staff and citizen): every layer reads one client address
 		// per request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh,
-			idemStore, cfg.CitizenCORSAllowedOrigins, log)),
+		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh,
+			idemStore, cfg.CitizenCORSAllowedOrigins(), log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -410,8 +426,8 @@ func chay(log *slog.Logger) error {
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{Petitions: phieu, Tasks: nhiemVu, Log: log})
-	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Petitions: phieu, Tasks: nhiemVu, Log: log})
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err
 	}
@@ -427,7 +443,7 @@ func chay(log *slog.Logger) error {
 		}
 	}()
 	go func() {
-		log.Info("starting gRPC", "service", "petitions", "addr", cfg.GRPCListenAddr)
+		log.Info("starting gRPC", "service", "petitions", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
 			loi <- err

@@ -35,6 +35,19 @@ import (
 	"github.com/vihat/vigov/service-finance/migrations"
 )
 
+// configUses is every configuration group this binary reads — and so, in staging and prod, every
+// group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
+// not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
+//
+// finance: REST only — no gRPC server; resolves communes and staff through platform and identity.
+var configUses = config.Uses(
+	config.HTTPServer,
+	config.PlatformClient,
+	config.IdentityClient,
+	config.TenantCache,
+	config.Redis,
+)
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
@@ -84,18 +97,18 @@ func main() {
 	// resolve a commune: the registry tables belong to the platform service, and a connection to
 	// another service's schema is rule 2, forbidden #2. The cache is what makes a network call per
 	// request affordable at 200+ communes (ADR 0004, decision 5).
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ nền tảng", "service", "finance", "err", err)
 		os.Exit(1)
 	}
 	defer nenTang.Close()
-	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 4. identity — session cookie -> staff principal, over gRPC. This service owns no session
 	// registry and may not import identity's (rule 2, forbidden #1), so the principal comes from
 	// the contract: ResolveStaffPrincipal, once per staff request, with no cache.
-	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr, cfg.GRPCCallerKey, log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ định danh", "service", "finance", "err", err)
 		os.Exit(1)
@@ -111,16 +124,16 @@ func main() {
 	// against the real clock (Handler.nay). Only tests replace it, so that the delay arithmetic can
 	// be exercised on the first and last days of a budget year.
 	mux := http.NewServeMux()
-	// Idempotency store. An empty REDIS_DSN is a valid deployment — local development with no cache
-	// — and each route then behaves per the CheDoHong it declared. A service must not fail to start
-	// because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	// Idempotency store. An empty REDIS_DSN happens in DEV only — local development with no cache —
+	// and each route then behaves per the CheDoHong it declared. Staging and prod refuse to start
+	// without it (config.Redis is declared in configUses).
 	//
 	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
 	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
 	// idem would call methods on it instead of taking its documented no-cache path.
 	var idemStore idem.Store
-	if cfg.RedisDSN != "" {
-		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
 		if err != nil {
 			log.Error("không mở được Redis cho chống trùng thao tác", "err", err)
 			os.Exit(1)
@@ -170,13 +183,13 @@ func main() {
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
-	addr := cfg.ListenAddr
+	addr := cfg.ListenAddr()
 	log.Info("starting", "service", "finance", "addr", addr)
 	srv := &http.Server{
 		Addr: addr,
 		// OUTERMOST, around the whole edge chain: every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, directory, dinhDanh, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -290,7 +303,7 @@ func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
 	// Platform-wide constants only. Per-commune values are read at RUNTIME (rule 1, invariant
 	// 10) — there is nothing per-commune on this path in any case: the schema is shared by every
 	// commune the process serves, partitioned by tenant_id rather than split per commune.
-	cfg, err := config.Load("finance")
+	cfg, err := config.Load("finance", configUses)
 	if err != nil {
 		return config.Config{}, nil, err
 	}

@@ -21,11 +21,11 @@ func TestMatKhauGieoQuanTriTrongLaTat(t *testing.T) {
 		"SESSION_SIGNING_KEYS":         khoaGia,
 		"IDENTITY_ADMIN_SEED_PASSWORD": "",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(AdminSeed))
 	if err != nil {
 		t.Fatalf("Load lỗi khi biến trống: %v", err)
 	}
-	if !cfg.IdentityAdminSeedPassword.Rong() {
+	if !cfg.IdentityAdminSeedPassword().Rong() {
 		t.Error("biến trống mà mật khẩu gieo có giá trị")
 	}
 }
@@ -38,11 +38,11 @@ func TestMatKhauGieoQuanTriDocVaCatKhoangTrang(t *testing.T) {
 		"ENV":                          EnvDev,
 		"IDENTITY_ADMIN_SEED_PASSWORD": " " + matKhauGieoGia + "\n",
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(AdminSeed))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
-	if got := string(cfg.IdentityAdminSeedPassword.Lo()); got != matKhauGieoGia {
+	if got := string(cfg.IdentityAdminSeedPassword().Lo()); got != matKhauGieoGia {
 		t.Errorf("mật khẩu gieo đọc sai (dài %d)", len(got))
 	}
 }
@@ -55,7 +55,7 @@ func TestMatKhauGieoQuanTriKhongTuHienRaKhiGhiLog(t *testing.T) {
 		"ENV":                          EnvDev,
 		"IDENTITY_ADMIN_SEED_PASSWORD": matKhauGieoGia,
 	})
-	cfg, err := Load("identity")
+	cfg, err := Load("identity", Uses(AdminSeed))
 	if err != nil {
 		t.Fatalf("Load lỗi: %v", err)
 	}
