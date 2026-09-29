@@ -271,17 +271,17 @@ func (h *Handler) PreviewDocumentTypeImport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if len(rowErrs) > 0 {
-		vietJSON(w, http.StatusOK, documentTypeImportPreviewOut{
+		writeJSON(w, http.StatusOK, documentTypeImportPreviewOut{
 			Types: []documentTypeImportRowOut{}, Errors: documentTypeErrorsOut(rowErrs)})
 		return
 	}
-	res, err := h.d.GhiLoaiVanBan.PreviewDocumentTypeImport(r.Context(), rows)
+	res, err := h.d.DocumentTypeWriter.PreviewDocumentTypeImport(r.Context(), rows)
 	if err != nil {
 		h.d.Log.Error("nhập loại văn bản: xem trước lỗi hệ thống", "xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	vietJSON(w, http.StatusOK, documentTypeImportPreviewOut{
+	writeJSON(w, http.StatusOK, documentTypeImportPreviewOut{
 		Valid:  len(res.Errors) == 0,
 		Types:  documentTypeRowsOut(res.Types),
 		Errors: documentTypeErrorsOut(res.Errors),
@@ -290,7 +290,7 @@ func (h *Handler) PreviewDocumentTypeImport(w http.ResponseWriter, r *http.Reque
 
 // ImportDocumentTypes serves POST /api/v1/document-types/imports.
 func (h *Handler) ImportDocumentTypes(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.d.Log.Error("tuyến nhập loại văn bản chạy mà không có mã cán bộ — SAI CẤU HÌNH ROUTE hoặc định danh cũ",
 			"xa", string(tenant.MustFrom(r.Context())))
@@ -309,7 +309,7 @@ func (h *Handler) ImportDocumentTypes(w http.ResponseWriter, r *http.Request) {
 		writeDocumentTypeImportRejected(w, rowErrs)
 		return
 	}
-	res, err := h.d.GhiLoaiVanBan.ImportDocumentTypes(r.Context(), rows, actor)
+	res, err := h.d.DocumentTypeWriter.ImportDocumentTypes(r.Context(), rows, actor)
 	if err != nil {
 		var rej *app.DocumentTypeImportRejected
 		if errors.As(err, &rej) {
@@ -323,13 +323,13 @@ func (h *Handler) ImportDocumentTypes(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Chưa loại nào được tạo. Vui lòng kiểm tra lại tệp rồi thử lại.", "")
 		return
 	}
-	vietJSON(w, http.StatusCreated, documentTypeImportCreatedOut{Created: documentTypeRowsOut(res.Types)})
+	writeJSON(w, http.StatusCreated, documentTypeImportCreatedOut{Created: documentTypeRowsOut(res.Types)})
 }
 
 // writeDocumentTypeImportRejected is 400 with every error — like every other refusal of what a client
 // sent in this service.
 func writeDocumentTypeImportRejected(w http.ResponseWriter, errs []domain.DocumentTypeImportError) {
-	vietJSON(w, http.StatusBadRequest, documentTypeImportRejectedOut{
+	writeJSON(w, http.StatusBadRequest, documentTypeImportRejectedOut{
 		Code:    "import_invalid",
 		Message: "Tệp có lỗi nên chưa loại nào được tạo. Hãy sửa các dòng được liệt kê rồi nhập lại.",
 		Errors:  documentTypeErrorsOut(errs),

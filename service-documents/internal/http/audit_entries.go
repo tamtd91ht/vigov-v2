@@ -24,7 +24,7 @@ type AuditLogReader interface {
 //
 // NO `tenant_id` IS READ FROM THE QUERY — the commune is the context's, fixed from Host (rule 1).
 func (h *Handler) ListAuditEntries(w http.ResponseWriter, r *http.Request) {
-	reader, ok := nguoiThucHien(r)
+	reader, ok := actorFrom(r)
 	if !ok {
 		h.d.Log.Error("nhật ký hệ thống: không dựng được người đọc",
 			"xa", string(tenant.MustFrom(r.Context())))
@@ -50,5 +50,5 @@ func (h *Handler) ListAuditEntries(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, status, code, msg, "")
 		return
 	}
-	vietJSON(w, http.StatusOK, res)
+	writeJSON(w, http.StatusOK, res)
 }

@@ -22,7 +22,7 @@ import (
 )
 
 // OrgUnitHoldingsCounter is "open incoming documents this unit holds", in the commune of ctx.
-// *store.VanBanDenStore satisfies it.
+// *store.IncomingDocumentStore satisfies it.
 type OrgUnitHoldingsCounter interface {
 	CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error)
 }

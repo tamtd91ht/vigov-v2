@@ -54,6 +54,8 @@ import (
 // paperwork, not anything about a person. That is what makes this route's AnyAuthenticated
 // declaration a question about convenience rather than about privacy — see the reason on the route
 // itself.
+//
+// THE TYPE NAME STAYS VIETNAMESE: it is a component name of kb/20-contracts/openapi.json (routes.go).
 type loaiVanBanRa struct {
 	ID    string `json:"id"`    // ULID — what a document record would reference
 	Code  string `json:"code"`  // "cong-van" — the value a document record stores, never renumbered
@@ -88,7 +90,7 @@ type loaiVanBanRa struct {
 	// Tier is 1, 2 or 3 and is what the screen needs to decide which buttons to draw: tier 3 has no
 	// `Tắt`, tiers 2 and 3 have no `🗑`.
 	//
-	// DERIVED, NEVER STORED (domain.TangCua). A stored tier would be a second copy of a fact that
+	// DERIVED, NEVER STORED (domain.TierOf). A stored tier would be a second copy of a fact that
 	// already lives in two columns, and the copies drift — this system has a rule about that
 	// (rule 10, invariant 3, for the same shape of mistake on `is_overdue`).
 	//
@@ -107,25 +109,25 @@ type loaiVanBanRa struct {
 //
 // THERE IS NO next_cursor AND NO has_more, and their absence is the contract: this route returns
 // the WHOLE list or it fails. A `has_more` here would invite exactly the paging behaviour the
-// route was designed not to need — see docstore.LoaiVanBanStore.DanhSach.
+// route was designed not to need — see docstore.DocumentTypeStore.List.
 type danhSachLoaiVanBanRa struct {
 	Items []loaiVanBanRa `json:"items"`
 }
 
-func loaiVanBanRaNgoai(l domain.LoaiVanBan) loaiVanBanRa {
+func renderDocumentType(dt domain.DocumentType) loaiVanBanRa {
 	return loaiVanBanRa{
-		ID:        l.ID,
-		Code:      l.Ma,
-		Label:     l.Nhan,
-		Active:    l.DangDung,
-		IsDefault: l.LaMacDinh,
-		Order:     l.ThuTu,
-		Source:    l.Nguon,
-		Tier:      int(l.Tang()),
+		ID:        dt.ID,
+		Code:      dt.Code,
+		Label:     dt.Label,
+		Active:    dt.IsActive,
+		IsDefault: dt.IsDefault,
+		Order:     dt.SortOrder,
+		Source:    dt.Source,
+		Tier:      int(dt.Tier()),
 	}
 }
 
-// DanhSachLoaiVanBan serves the commune's document-type catalogue. GET /api/v1/document-types
+// ListDocumentTypes serves the commune's document-type catalogue. GET /api/v1/document-types
 //
 // NO AUDIT ENTRY, and that is a decision rather than an omission. Rule 6, invariant 7 audits
 // reading FULL personal data and reading ACROSS communes; this is neither — it is a reference list
@@ -134,12 +136,13 @@ func loaiVanBanRaNgoai(l domain.LoaiVanBan) loaiVanBanRa {
 // carry none.
 //
 // NO idem.* DECLARATION: a GET changes no state.
-func (h *Handler) DanhSachLoaiVanBan(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListDocumentTypes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	lvb, err := h.d.LoaiVanBan.DanhSach(ctx)
+	// Scoped: the store reads through s.db.For(ctx) — tenant_id is $1 of the catalogue query.
+	types, err := h.d.DocumentTypes.List(ctx)
 	if err != nil {
-		if errors.Is(err, docstore.ErrQuaNhieuLoaiVanBan) {
+		if errors.Is(err, docstore.ErrTooManyDocumentTypes) {
 			// REFUSED, NOT TRUNCATED. This list is what a document is registered under, and
 			// numbering follows the type (ADR 0024), so a list missing a type files the document
 			// under the wrong one with nothing on the screen to show it. The log line names the
@@ -147,7 +150,7 @@ func (h *Handler) DanhSachLoaiVanBan(w http.ResponseWriter, r *http.Request) {
 			// thirty times the shipped code list, so reaching it means the data is wrong, not that
 			// the commune is large.
 			h.d.Log.Error("danh mục loại văn bản vượt trần — TỪ CHỐI thay vì cắt bớt",
-				"xa", string(tenant.MustFrom(ctx)), "tran", docstore.TranDanhMucLoaiVanBan)
+				"xa", string(tenant.MustFrom(ctx)), "tran", docstore.MaxDocumentTypes)
 			httpx.WriteError(w, http.StatusInternalServerError, "internal",
 				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 			return
@@ -168,11 +171,11 @@ func (h *Handler) DanhSachLoaiVanBan(w http.ResponseWriter, r *http.Request) {
 	//
 	// THE ORDER IS THE STORE'S and is not touched here: `thu_tu` is the order the commune arranged
 	// its own catalogue in, and a handler that re-sorted would silently overrule it.
-	ra := danhSachLoaiVanBanRa{Items: make([]loaiVanBanRa, 0, len(lvb))}
-	for _, mot := range lvb {
-		ra.Items = append(ra.Items, loaiVanBanRaNgoai(mot))
+	out := danhSachLoaiVanBanRa{Items: make([]loaiVanBanRa, 0, len(types))}
+	for _, one := range types {
+		out.Items = append(out.Items, renderDocumentType(one))
 	}
-	vietJSON(w, http.StatusOK, ra)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // --- the write routes ------------------------------------------------------------------------------
@@ -236,20 +239,20 @@ type xoaLoaiVanBanVao struct {
 	Reason string `json:"reason"`
 }
 
-// ThemLoaiVanBan adds one document type the commune owns. POST /api/v1/document-types
-func (h *Handler) ThemLoaiVanBan(w http.ResponseWriter, r *http.Request) {
-	var vao themLoaiVanBanVao
-	if !docThan(w, r, &vao) {
+// CreateDocumentType adds one document type the commune owns. POST /api/v1/document-types
+func (h *Handler) CreateDocumentType(w http.ResponseWriter, r *http.Request) {
+	var in themLoaiVanBanVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
 	// BEFORE ANYTHING ELSE. A body naming `source` or `tier` is refused outright, so the caller
 	// learns that provenance is not theirs to set rather than watching the field disappear.
-	if vao.Source != nil || vao.Tier != nil {
-		h.traLoiLoiGhi(w, r, "thêm", domain.ErrNguonDoTuClient)
+	if in.Source != nil || in.Tier != nil {
+		h.writeCatalogueError(w, r, "thêm", domain.ErrClientSuppliedSource)
 		return
 	}
 
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.d.Log.Error("tuyến ghi danh mục chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
 			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
@@ -258,39 +261,40 @@ func (h *Handler) ThemLoaiVanBan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	moi, err := h.d.GhiLoaiVanBan.Them(r.Context(), app.YeuCauThemLoaiVanBan{
-		Ma:        vao.Code,
-		Nhan:      vao.Label,
-		ThuTu:     vao.Order,
-		LaMacDinh: vao.IsDefault,
-	}, nguoi)
+	// Scoped: the use case opens uc.db.For(ctx).Tx — tenant_id is $1 of every statement.
+	created, err := h.d.DocumentTypeWriter.Create(r.Context(), app.CreateDocumentTypeRequest{
+		Code:      in.Code,
+		Label:     in.Label,
+		SortOrder: in.Order,
+		IsDefault: in.IsDefault,
+	}, actor)
 	if err != nil {
-		h.traLoiLoiGhi(w, r, "thêm", err)
+		h.writeCatalogueError(w, r, "thêm", err)
 		return
 	}
 
 	// What a retry carrying the same Idempotency-Key is told about. THE CODE AND NOT THE BODY: the
 	// body would go into Redis, which is a cache and not a record store (skills/rest-api-design §4).
-	idem.RecordCode(r.Context(), moi.Ma)
-	vietJSON(w, http.StatusCreated, loaiVanBanRaNgoai(moi))
+	idem.RecordCode(r.Context(), created.Code)
+	writeJSON(w, http.StatusCreated, renderDocumentType(created))
 }
 
-// SuaLoaiVanBan edits one row. PATCH /api/v1/document-types/{id}
-func (h *Handler) SuaLoaiVanBan(w http.ResponseWriter, r *http.Request) {
-	var vao suaLoaiVanBanVao
-	if !docThan(w, r, &vao) {
+// UpdateDocumentType edits one row. PATCH /api/v1/document-types/{id}
+func (h *Handler) UpdateDocumentType(w http.ResponseWriter, r *http.Request) {
+	var in suaLoaiVanBanVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	if vao.Source != nil || vao.Tier != nil {
-		h.traLoiLoiGhi(w, r, "sửa", domain.ErrNguonDoTuClient)
+	if in.Source != nil || in.Tier != nil {
+		h.writeCatalogueError(w, r, "sửa", domain.ErrClientSuppliedSource)
 		return
 	}
-	if vao.Code != nil {
-		h.traLoiLoiGhi(w, r, "sửa", domain.ErrMaBatBien)
+	if in.Code != nil {
+		h.writeCatalogueError(w, r, "sửa", domain.ErrCodeImmutable)
 		return
 	}
 
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.d.Log.Error("tuyến ghi danh mục chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
 			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
@@ -299,31 +303,32 @@ func (h *Handler) SuaLoaiVanBan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sau, err := h.d.GhiLoaiVanBan.Sua(r.Context(), r.PathValue("id"), app.YeuCauSuaLoaiVanBan{
-		Nhan:      vao.Label,
-		ThuTu:     vao.Order,
-		DangDung:  vao.Active,
-		LaMacDinh: vao.IsDefault,
-	}, nguoi)
+	// Scoped: the use case opens uc.db.For(ctx).Tx — tenant_id is $1 of every statement.
+	after, err := h.d.DocumentTypeWriter.Update(r.Context(), r.PathValue("id"), app.UpdateDocumentTypeRequest{
+		Label:     in.Label,
+		SortOrder: in.Order,
+		IsActive:  in.Active,
+		IsDefault: in.IsDefault,
+	}, actor)
 	if err != nil {
-		h.traLoiLoiGhi(w, r, "sửa", err)
+		h.writeCatalogueError(w, r, "sửa", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, loaiVanBanRaNgoai(sau))
+	writeJSON(w, http.StatusOK, renderDocumentType(after))
 }
 
-// XoaLoaiVanBan soft deletes one row. DELETE /api/v1/document-types/{id}
+// DeleteDocumentType soft deletes one row. DELETE /api/v1/document-types/{id}
 //
 // 204 AND NO BODY. The row is still there — it carries `deleted_at`, `deleted_by` and
 // `delete_reason` and its code stays taken forever — but there is nothing the caller can do with it
 // and returning it would invite a client to display a row it has just removed from the screen.
-func (h *Handler) XoaLoaiVanBan(w http.ResponseWriter, r *http.Request) {
-	var vao xoaLoaiVanBanVao
-	if !docThan(w, r, &vao) {
+func (h *Handler) DeleteDocumentType(w http.ResponseWriter, r *http.Request) {
+	var in xoaLoaiVanBanVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
 
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.d.Log.Error("tuyến ghi danh mục chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
 			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
@@ -332,8 +337,8 @@ func (h *Handler) XoaLoaiVanBan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.d.GhiLoaiVanBan.Xoa(r.Context(), r.PathValue("id"), vao.Reason, nguoi); err != nil {
-		h.traLoiLoiGhi(w, r, "xoá", err)
+	if err := h.d.DocumentTypeWriter.SoftDelete(r.Context(), r.PathValue("id"), in.Reason, actor); err != nil {
+		h.writeCatalogueError(w, r, "xoá", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

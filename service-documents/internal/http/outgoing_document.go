@@ -13,9 +13,9 @@ package http
 // THE URL RESOURCE IS `outgoing-documents`, settled at kb/00-foundation/ubiquitous-language.md:143
 // and not translated on the spot (ADR 0011).
 //
-// THE ERROR MAPPING IS traLoiLoiVanBan, SHARED WITH THE INCOMING REGISTER. One mapping, because the
-// two books must answer the same question the same way; the sentences differ where the books differ,
-// which is what the two separate `ErrKhongThay…` sentinels are for.
+// THE ERROR MAPPING IS writeDocumentError, SHARED WITH THE INCOMING REGISTER. One mapping, because
+// the two books must answer the same question the same way; the sentences differ where the books
+// differ, which is what the two separate `Err…NotFound` sentinels are for.
 
 import (
 	"errors"
@@ -40,8 +40,10 @@ import (
 // is for; what is guaranteed is that it is never logged and never appears in an error message.
 //
 // THERE IS NO `status` AND NO `due_at`. An outgoing document has no lifecycle and no commitment in
-// any source — see domain.VanBanDi. Inventing either would invent a workflow a commune then has to
-// follow, or a promise nobody made.
+// any source — see domain.OutgoingDocument. Inventing either would invent a workflow a commune then
+// has to follow, or a promise nobody made.
+//
+// THE TYPE NAME STAYS VIETNAMESE: it is a component name of kb/20-contracts/openapi.json (routes.go).
 type vanBanDiRa struct {
 	ID string `json:"id"`
 
@@ -61,19 +63,19 @@ type vanBanDiRa struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-func vanBanDiRaNgoai(v domain.VanBanDi) vanBanDiRa {
+func renderOutgoing(d domain.OutgoingDocument) vanBanDiRa {
 	return vanBanDiRa{
-		ID:           v.ID,
-		Number:       v.SoDi,
-		Year:         v.Nam,
-		DocumentDate: ngayRa(v.NgayVanBan),
-		DocumentType: v.LoaiVanBan,
-		Summary:      v.TrichYeu,
-		Recipient:    v.NoiNhan,
-		Signer:       v.NguoiKy,
-		CreatedBy:    v.NguoiTaoMa,
-		CreatedAt:    lucRa(v.TaoLuc),
-		UpdatedAt:    lucRa(v.CapNhatLuc),
+		ID:           d.ID,
+		Number:       d.IssuedNo,
+		Year:         d.Year,
+		DocumentDate: formatDate(d.DocumentDate),
+		DocumentType: d.DocumentType,
+		Summary:      d.Summary,
+		Recipient:    d.Recipient,
+		Signer:       d.Signer,
+		CreatedBy:    d.CreatedBy,
+		CreatedAt:    formatInstant(d.CreatedAt),
+		UpdatedAt:    formatInstant(d.UpdatedAt),
 	}
 }
 
@@ -104,132 +106,134 @@ type suaVanBanDiVao struct {
 	Number *int `json:"number,omitempty"`
 }
 
-// CapSoVanBanDi issues one outgoing document number. POST /api/v1/outgoing-documents
-func (h *Handler) CapSoVanBanDi(w http.ResponseWriter, r *http.Request) {
-	var vao capSoVanBanDiVao
-	if !docThan(w, r, &vao) {
+// IssueOutgoingDocument issues one outgoing document number. POST /api/v1/outgoing-documents
+func (h *Handler) IssueOutgoingDocument(w http.ResponseWriter, r *http.Request) {
+	var in capSoVanBanDiVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	if err := khongDoTuClient(vao.Number, nil, nil); err != nil {
-		h.traLoiLoiVanBan(w, r, "cấp số", err)
+	if err := refuseClientSupplied(in.Number, nil, nil); err != nil {
+		h.writeDocumentError(w, r, "cấp số", err)
 		return
 	}
 
-	ngay, ok := ngayVao(vao.DocumentDate)
+	documentDate, ok := parseDate(in.DocumentDate)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 		return
 	}
 
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
-		h.thieuChuThe(w, r)
+		h.missingPrincipal(w, r)
 		return
 	}
 
-	moi, err := h.d.GhiVanBanDi.CapSo(r.Context(), app.YeuCauCapSoVanBanDi{
-		NgayVanBan: ngay,
-		LoaiVanBan: vao.DocumentType,
-		TrichYeu:   vao.Summary,
-		NoiNhan:    vao.Recipient,
-		NguoiKy:    vao.Signer,
-	}, nguoi)
+	created, err := h.d.OutgoingDocumentWriter.IssueNumber(r.Context(), app.IssueOutgoingDocumentRequest{
+		DocumentDate: documentDate,
+		DocumentType: in.DocumentType,
+		Summary:      in.Summary,
+		Recipient:    in.Recipient,
+		Signer:       in.Signer,
+	}, actor)
 	if err != nil {
-		h.traLoiLoiVanBan(w, r, "cấp số", err)
+		h.writeDocumentError(w, r, "cấp số", err)
 		return
 	}
 
-	idem.RecordCode(r.Context(), moi.ID)
-	vietJSON(w, http.StatusCreated, vanBanDiRaNgoai(moi))
+	idem.RecordCode(r.Context(), created.ID)
+	writeJSON(w, http.StatusCreated, renderOutgoing(created))
 }
 
-// SuaVanBanDi corrects one issued entry. PATCH /api/v1/outgoing-documents/{id}
-func (h *Handler) SuaVanBanDi(w http.ResponseWriter, r *http.Request) {
-	var vao suaVanBanDiVao
-	if !docThan(w, r, &vao) {
+// UpdateOutgoingDocument corrects one issued entry. PATCH /api/v1/outgoing-documents/{id}
+func (h *Handler) UpdateOutgoingDocument(w http.ResponseWriter, r *http.Request) {
+	var in suaVanBanDiVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	if err := khongDoTuClient(vao.Number, nil, nil); err != nil {
-		h.traLoiLoiVanBan(w, r, "sửa", err)
+	if err := refuseClientSupplied(in.Number, nil, nil); err != nil {
+		h.writeDocumentError(w, r, "sửa", err)
 		return
 	}
 
-	yc := app.YeuCauSuaVanBanDi{
-		LoaiVanBan: vao.DocumentType,
-		TrichYeu:   vao.Summary,
-		NoiNhan:    vao.Recipient,
-		NguoiKy:    vao.Signer,
+	req := app.UpdateOutgoingDocumentRequest{
+		DocumentType: in.DocumentType,
+		Summary:      in.Summary,
+		Recipient:    in.Recipient,
+		Signer:       in.Signer,
 	}
-	if vao.DocumentDate != nil {
-		t, ok := ngayVao(*vao.DocumentDate)
+	if in.DocumentDate != nil {
+		t, ok := parseDate(*in.DocumentDate)
 		if !ok || t.IsZero() {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 				"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 			return
 		}
-		yc.NgayVanBan = &t
+		req.DocumentDate = &t
 	}
 
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
-		h.thieuChuThe(w, r)
+		h.missingPrincipal(w, r)
 		return
 	}
 
-	sau, err := h.d.GhiVanBanDi.Sua(r.Context(), r.PathValue("id"), yc, nguoi)
+	// Scoped: the use case opens uc.db.For(ctx).Tx — tenant_id is $1 of every statement.
+	after, err := h.d.OutgoingDocumentWriter.Update(r.Context(), r.PathValue("id"), req, actor)
 	if err != nil {
-		h.traLoiLoiVanBan(w, r, "sửa", err)
+		h.writeDocumentError(w, r, "sửa", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, vanBanDiRaNgoai(sau))
+	writeJSON(w, http.StatusOK, renderOutgoing(after))
 }
 
-// GoVanBanDi soft deletes one entry. DELETE /api/v1/outgoing-documents/{id}
+// RemoveOutgoingDocument soft deletes one entry. DELETE /api/v1/outgoing-documents/{id}
 //
 // 204 AND NO BODY, and the row stays with its three removal columns. THE NUMBER STAYS TAKEN — the
 // document was issued under it and has left the commune; taking the row off the screen cannot take
 // the number off the paper.
-func (h *Handler) GoVanBanDi(w http.ResponseWriter, r *http.Request) {
-	var vao goVanBanVao
-	if !docThan(w, r, &vao) {
+func (h *Handler) RemoveOutgoingDocument(w http.ResponseWriter, r *http.Request) {
+	var in goVanBanVao
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	nguoi, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
-		h.thieuChuThe(w, r)
+		h.missingPrincipal(w, r)
 		return
 	}
-	if err := h.d.GhiVanBanDi.Go(r.Context(), r.PathValue("id"), vao.Reason, nguoi); err != nil {
-		h.traLoiLoiVanBan(w, r, "gỡ", err)
+	if err := h.d.OutgoingDocumentWriter.Remove(r.Context(), r.PathValue("id"), in.Reason, actor); err != nil {
+		h.writeDocumentError(w, r, "gỡ", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DanhSachVanBanDi serves one page of the outgoing register. GET /api/v1/outgoing-documents
-func (h *Handler) DanhSachVanBanDi(w http.ResponseWriter, r *http.Request) {
+// ListOutgoingDocuments serves one page of the outgoing register. GET /api/v1/outgoing-documents
+func (h *Handler) ListOutgoingDocuments(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// THE COMMUNE IS FIXED BY httpx.TenantMiddleware FROM Host, and the store binds `tenant_id` to
 	// $1 from the context on every statement (rule 1, invariant 5). NOTHING BELOW READS `tenant_id`
 	// from the query string — a client naming its own commune grants itself access (rule 1, #2).
-	thamSo := r.URL.Query()
+	params := r.URL.Query()
 
-	yc, err := page.Parse(thamSo, docstore.SapXepVanBanDi)
+	req, err := page.Parse(params, docstore.OutgoingDocumentSorts)
 	if err != nil {
-		status, ma, thongBao := page.HTTPError(err)
-		httpx.WriteError(w, status, ma, thongBao, "")
+		status, code, message := page.HTTPError(err)
+		httpx.WriteError(w, status, code, message, "")
 		return
 	}
 
-	loc, err := locVanBanDiTuQuery(thamSo)
+	filter, err := outgoingFilterFromQuery(params)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return
 	}
 
-	kq, err := h.d.VanBanDi.DanhSach(ctx, loc, yc)
+	// Scoped: the store reads through s.db.For(ctx) — tenant_id is $1 of the page query.
+	res, err := h.d.OutgoingDocuments.List(ctx, filter, req)
 	if err != nil {
 		// The wrapped error carries the store failure. It does NOT carry a summary or a recipient,
 		// and it never reaches the client (rule 3, forbidden #3).
@@ -240,39 +244,41 @@ func (h *Handler) DanhSachVanBanDi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ra := page.Result[vanBanDiRa]{
-		Items:      make([]vanBanDiRa, 0, len(kq.Items)),
-		NextCursor: kq.NextCursor,
-		HasMore:    kq.HasMore,
+	out := page.Result[vanBanDiRa]{
+		Items:      make([]vanBanDiRa, 0, len(res.Items)),
+		NextCursor: res.NextCursor,
+		HasMore:    res.HasMore,
 	}
-	for _, v := range kq.Items {
-		ra.Items = append(ra.Items, vanBanDiRaNgoai(v))
+	for _, d := range res.Items {
+		out.Items = append(out.Items, renderOutgoing(d))
 	}
-	vietJSON(w, http.StatusOK, ra)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // The two filter refusals, shared with the incoming register so that one mistake reads the same on
 // both screens. A second wording is a second answer to one question.
 var (
-	errNamKhongHopLe       = errors.New("`year` phải là một năm hợp lệ, ví dụ 2026")
-	errTimQuaDai           = errors.New("`q` quá dài")
-	errTrangThaiKhongHopLe = errors.New("`status` không phải một trạng thái của sổ văn bản đến")
+	errInvalidYear   = errors.New("`year` phải là một năm hợp lệ, ví dụ 2026")
+	errSearchTooLong = errors.New("`q` quá dài")
+	errInvalidStatus = errors.New("`status` không phải một trạng thái của sổ văn bản đến")
 )
 
-func locVanBanDiTuQuery(q url.Values) (docstore.LocVanBanDi, error) {
-	var loc docstore.LocVanBanDi
-	if s := q.Get("year"); s != "" {
+// outgoingFilterFromQuery validates the filters of the outgoing list. `params` is the handler's
+// r.URL.Query(), passed through under one name.
+func outgoingFilterFromQuery(params url.Values) (docstore.OutgoingDocumentFilter, error) {
+	var filter docstore.OutgoingDocumentFilter
+	if s := params.Get("year"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 2000 || n > 2200 {
-			return loc, errNamKhongHopLe
+			return filter, errInvalidYear
 		}
-		loc.Nam = n
+		filter.Year = n
 	}
-	loc.LoaiVanBan = q.Get("document_type")
-	loc.Tim = q.Get("q")
-	// Runes, not bytes — the same reason as locVanBanDenTuQuery.
-	if utf8.RuneCountInString(loc.Tim) > 200 {
-		return loc, errTimQuaDai
+	filter.DocumentType = params.Get("document_type")
+	filter.Search = params.Get("q")
+	// Runes, not bytes — the same reason as incomingFilterFromQuery.
+	if utf8.RuneCountInString(filter.Search) > 200 {
+		return filter, errSearchTooLong
 	}
-	return loc, nil
+	return filter, nil
 }

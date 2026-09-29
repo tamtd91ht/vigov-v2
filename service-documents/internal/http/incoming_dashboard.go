@@ -24,7 +24,7 @@ import (
 // incomingSummaryOut is GET /api/v1/incoming-document-summary.
 //
 // COUNTS ONLY. No on-time ratio: the register does not store when a document was settled
-// (domain.VanBanDen.QuaHan), so "đúng hạn" cannot be computed without inventing that instant. No
+// (domain.IncomingDocument.IsOverdue), so "đúng hạn" cannot be computed without inventing that instant. No
 // citizen letters: `don_thu` is not in this service yet.
 //
 // `as_of` IS THE INSTANT `open` AND `overdue` WERE MEASURED AT. Those two are stock figures — they
@@ -41,7 +41,7 @@ type incomingSummaryOut struct {
 
 // overdueQueueItemOut is one row of "CẦN XỬ LÝ NGAY".
 //
-// `code` IS THE REGISTER CODE (domain.MaVanBanDen, "VB-DEN-2026-0007"), CHOSEN OVER THE SUMMARY ON
+// `code` IS THE REGISTER CODE (domain.IncomingDocumentCode, "VB-DEN-2026-0007"), CHOSEN OVER THE SUMMARY ON
 // PURPOSE. §5 draws the row with a title, but `trich_yeu` is free text that may name a citizen
 // (rule 3), and this block sits on the first screen every leader opens — the most widely seen,
 // most often screenshotted surface in the product. The code carries the number and year and nothing
@@ -167,8 +167,8 @@ func (h *Handler) IncomingDocumentSummary(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	vietJSON(w, http.StatusOK, incomingSummaryOut{
-		From: lucRa(from), To: lucRa(to), AsOf: lucRa(now),
+	writeJSON(w, http.StatusOK, incomingSummaryOut{
+		From: formatInstant(from), To: formatInstant(to), AsOf: formatInstant(now),
 		Arrived: sum.Arrived, Open: sum.Open, Overdue: sum.Overdue,
 	})
 }
@@ -207,17 +207,17 @@ func (h *Handler) IncomingDocumentOverdueQueue(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	out := overdueQueueOut{Items: make([]overdueQueueItemOut, 0, len(items)), AsOf: lucRa(now)}
+	out := overdueQueueOut{Items: make([]overdueQueueItemOut, 0, len(items)), AsOf: formatInstant(now)}
 	for _, it := range items {
-		v := it.Document
+		d := it.Document
 		out.Items = append(out.Items, overdueQueueItemOut{
 			Kind:        overdueQueueKind,
-			ID:          v.ID,
-			Code:        domain.MaVanBanDen(v.Nam, v.SoVaoSo),
-			DueAt:       lucRa(v.HanXuLyXong),
+			ID:          d.ID,
+			Code:        domain.IncomingDocumentCode(d.Year, d.ArrivalNo),
+			DueAt:       formatInstant(d.DueAt),
 			Critical:    it.Critical,
-			HoldingUnit: v.BoPhanDangGiu,
+			HoldingUnit: d.HoldingOrgUnitID,
 		})
 	}
-	vietJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }

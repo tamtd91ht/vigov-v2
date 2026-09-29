@@ -20,11 +20,11 @@ func NewHandler(d Deps) *Handler {
 	return &Handler{d: d}
 }
 
-// vietJSON writes the one success shape. Failures go through httpx.WriteError, which is the single
+// writeJSON writes the one success shape. Failures go through httpx.WriteError, which is the single
 // error shape for the whole system — a handler inventing a second one is what makes a client carry
 // two branches for one outcome.
-func vietJSON(w http.ResponseWriter, status int, than any) {
+func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(than)
+	_ = json.NewEncoder(w).Encode(body)
 }

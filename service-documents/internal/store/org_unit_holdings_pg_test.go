@@ -12,7 +12,7 @@ import (
 // Against a real PostgreSQL: CountOpenHeldByOrgUnit counts the live, unfinished incoming documents
 // whose ĐANG GIỮ column is the unit — with every finished status, a soft-deleted row, another unit
 // and another commune present to be wrongly counted. SKIPS WITHOUT VIGOV_TEST_DSN; the harness is
-// in loai_van_ban_pg_test.go.
+// in document_type_pg_test.go.
 
 func insertHeldIncoming(t *testing.T, db *sql.DB, tenantID string, no int, id, status, unit string, deleted bool) {
 	t.Helper()
@@ -36,8 +36,8 @@ func insertHeldIncoming(t *testing.T, db *sql.DB, tenantID string, no int, id, s
 }
 
 func TestPgIncomingHeldOpenByOrgUnit(t *testing.T) {
-	db := moKetNoi(t)
-	tenantA, tenantB := xaRieng(t)
+	db := openDB(t)
+	tenantA, tenantB := uniqueTenants(t)
 	const unit, other = "bp-held-1", "bp-held-2"
 
 	no := 0
@@ -59,15 +59,15 @@ func TestPgIncomingHeldOpenByOrgUnit(t *testing.T) {
 	// Another commune, same unit id.
 	add(tenantB, "vb-b", "dang-xu-ly", unit, false)
 
-	s := NewVanBanDenStore(pkgstore.New(db))
-	n, err := s.CountOpenHeldByOrgUnit(ctxXa(tenantA), unit)
+	s := NewIncomingDocumentStore(pkgstore.New(db))
+	n, err := s.CountOpenHeldByOrgUnit(tenantCtx(tenantA), unit)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != 3 {
 		t.Errorf("commune A: %d, want 3", n)
 	}
-	if n, err := s.CountOpenHeldByOrgUnit(ctxXa(tenantB), unit); err != nil || n != 1 {
+	if n, err := s.CountOpenHeldByOrgUnit(tenantCtx(tenantB), unit); err != nil || n != 1 {
 		t.Errorf("commune B: n=%d err=%v, want 1", n, err)
 	}
 }

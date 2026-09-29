@@ -36,20 +36,21 @@ import (
 // internal/app/document_type_import_test.go over the fake driver); the fake runs the REAL planner.
 
 // The two import methods on the shared catalogue fake, so every other harness that passes
-// &ghiLoaiVanBanGia{} still satisfies GhiLoaiVanBan. Only importFake below is expected to be asked.
-func (g *ghiLoaiVanBanGia) PreviewDocumentTypeImport(context.Context, []domain.DocumentTypeImportRow) (
+// &fakeDocumentTypeWriter{} still satisfies DocumentTypeWriter. Only importFake below is expected to
+// be asked.
+func (g *fakeDocumentTypeWriter) PreviewDocumentTypeImport(context.Context, []domain.DocumentTypeImportRow) (
 	app.DocumentTypeImportResult, error) {
-	return app.DocumentTypeImportResult{}, errors.New("ghiLoaiVanBanGia: xem trước nhập không thuộc bộ kiểm này")
+	return app.DocumentTypeImportResult{}, errors.New("fakeDocumentTypeWriter: xem trước nhập không thuộc bộ kiểm này")
 }
 
-func (g *ghiLoaiVanBanGia) ImportDocumentTypes(context.Context, []domain.DocumentTypeImportRow, audit.Actor) (
+func (g *fakeDocumentTypeWriter) ImportDocumentTypes(context.Context, []domain.DocumentTypeImportRow, audit.Actor) (
 	app.DocumentTypeImportResult, error) {
-	return app.DocumentTypeImportResult{}, errors.New("ghiLoaiVanBanGia: nhập không thuộc bộ kiểm này")
+	return app.DocumentTypeImportResult{}, errors.New("fakeDocumentTypeWriter: nhập không thuộc bộ kiểm này")
 }
 
 // importFake overrides the two methods, KEYED BY COMMUNE, running the real planner.
 type importFake struct {
-	ghiLoaiVanBanGia
+	fakeDocumentTypeWriter
 	existing map[tenant.ID][]domain.ExistingDocumentType
 
 	previewCalls, importCalls int
@@ -82,21 +83,21 @@ func (f *importFake) ImportDocumentTypes(ctx context.Context, rows []domain.Docu
 }
 
 type importServer struct {
-	m    *mayChu
+	m    *testServer
 	fake *importFake
 }
 
 func newImportServer(t *testing.T) *importServer {
 	t.Helper()
 	fake := &importFake{existing: map[tenant.ID][]domain.ExistingDocumentType{
-		xaA: {
+		tenantA: {
 			{Code: "quyet-dinh", Label: "Quyết định"},
 			{Code: "cong-van", Label: "Công văn cũ", Deleted: true},
 		},
 	}}
 	// A REAL in-memory idempotency store: the import declares DongKhiHong, which answers 503 with none.
-	m := dungMayChuCoIdem(t)
-	m.dungLai(t, func(d *Deps) { d.GhiLoaiVanBan = fake })
+	m := newTestServerWithIdem(t)
+	m.rebuild(t, func(d *Deps) { d.DocumentTypeWriter = fake })
 	return &importServer{m: m, fake: fake}
 }
 
@@ -142,7 +143,7 @@ func (s *importServer) upload(t *testing.T, path, host string, p *authz.Principa
 	r.Header.Set("Content-Type", ct)
 	r.Header.Set(idem.Header, key)
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheThu{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.m.h.ServeHTTP(w, r)
@@ -151,7 +152,7 @@ func (s *importServer) upload(t *testing.T, path, host string, p *authz.Principa
 
 func (s *importServer) get(t *testing.T, path, host string, p *authz.Principal) *httptest.ResponseRecorder {
 	t.Helper()
-	return s.m.goi(t, http.MethodGet, host, path, p)
+	return s.m.call(t, http.MethodGet, host, path, p)
 }
 
 const (
@@ -187,8 +188,8 @@ func TestDocumentTypeImport_401WithoutSession(t *testing.T) {
 	for _, rt := range importRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newImportServer(t)
-			s.m.capQuyen(xaA, QuyenDanhMuc)
-			doiMa(t, rt.call(s, t, hostA, nil), http.StatusUnauthorized)
+			s.m.grant(tenantA, PermAdminLookup)
+			wantStatus(t, rt.call(s, t, hostA, nil), http.StatusUnauthorized)
 			if s.fake.previewCalls+s.fake.importCalls != 0 {
 				t.Error("chưa đăng nhập mà use case đã chạy")
 			}
@@ -200,8 +201,8 @@ func TestDocumentTypeImport_403WrongPermission(t *testing.T) {
 	for _, rt := range importRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newImportServer(t)
-			s.m.capQuyen(xaA, "document.read") // a real key of the same subsystem, not the one required
-			doiMa(t, rt.call(s, t, hostA, canBoCua(xaA)), http.StatusForbidden)
+			s.m.grant(tenantA, "document.read") // a real key of the same subsystem, not the one required
+			wantStatus(t, rt.call(s, t, hostA, staffOf(tenantA)), http.StatusForbidden)
 			if s.fake.previewCalls+s.fake.importCalls != 0 {
 				t.Error("sai quyền mà use case đã chạy")
 			}
@@ -214,8 +215,8 @@ func TestDocumentTypeImport_403RightPermissionWrongCommune(t *testing.T) {
 	for _, rt := range importRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newImportServer(t)
-			s.m.capQuyen(xaA, QuyenDanhMuc)
-			doiMa(t, rt.call(s, t, hostB, canBoCua(xaB)), http.StatusForbidden)
+			s.m.grant(tenantA, PermAdminLookup)
+			wantStatus(t, rt.call(s, t, hostB, staffOf(tenantB)), http.StatusForbidden)
 			if s.fake.previewCalls+s.fake.importCalls != 0 {
 				t.Error("quyền cấp ở xã khác mà vẫn chạy ở xã này")
 			}
@@ -227,10 +228,10 @@ func TestDocumentTypeImport_200WithPermissionInCommune(t *testing.T) {
 	for _, rt := range importRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newImportServer(t)
-			s.m.capQuyen(xaA, QuyenDanhMuc)
-			doiMa(t, rt.call(s, t, hostA, canBoCua(xaA)), rt.ok)
-			if got := s.m.checker.hoiKhoaCuoi(); got != QuyenDanhMuc {
-				t.Errorf("tuyến hỏi khoá %q, muốn %q", got, QuyenDanhMuc)
+			s.m.grant(tenantA, PermAdminLookup)
+			wantStatus(t, rt.call(s, t, hostA, staffOf(tenantA)), rt.ok)
+			if got := s.m.checker.lastAsked(); got != PermAdminLookup {
+				t.Errorf("tuyến hỏi khoá %q, muốn %q", got, PermAdminLookup)
 			}
 		})
 	}
@@ -240,14 +241,14 @@ func TestDocumentTypeImport_200WithPermissionInCommune(t *testing.T) {
 
 func TestDocumentTypeImport_TemplateRoundTrip(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
-	w := s.get(t, pathImportTemplate, hostA, canBoCua(xaA))
-	doiMa(t, w, http.StatusOK)
+	s.m.grant(tenantA, PermAdminLookup)
+	w := s.get(t, pathImportTemplate, hostA, staffOf(tenantA))
+	wantStatus(t, w, http.StatusOK)
 	if ct := w.Header().Get("Content-Type"); ct != xlsxMIME {
 		t.Fatalf("Content-Type = %q", ct)
 	}
-	pw := s.upload(t, pathImportPreview, hostA, canBoCua(xaA), w.Body.Bytes(), "01JROUNDTRIPKEY0000000000")
-	doiMa(t, pw, http.StatusOK)
+	pw := s.upload(t, pathImportPreview, hostA, staffOf(tenantA), w.Body.Bytes(), "01JROUNDTRIPKEY0000000000")
+	wantStatus(t, pw, http.StatusOK)
 	var out documentTypeImportPreviewOut
 	if err := json.Unmarshal(pw.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -261,15 +262,15 @@ func TestDocumentTypeImport_TemplateRoundTrip(t *testing.T) {
 
 func TestDocumentTypeImport_PreviewWithErrorsWritesNothing(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
+	s.m.grant(tenantA, PermAdminLookup)
 	data := workbook(t, goodHeader(),
 		[]string{"Tờ trình", "", "1"},
 		[]string{"", "", ""},           // blank row: skipped, numbering kept
 		[]string{"", "khong-ten", "2"}, // row 4: no label
 		[]string{"Báo cáo", "", "1.5"}, // row 5: order not an integer
 	)
-	w := s.upload(t, pathImportPreview, hostA, canBoCua(xaA), data, "01JPREVIEWERRKEY000000000")
-	doiMa(t, w, http.StatusOK)
+	w := s.upload(t, pathImportPreview, hostA, staffOf(tenantA), data, "01JPREVIEWERRKEY000000000")
+	wantStatus(t, w, http.StatusOK)
 	var out documentTypeImportPreviewOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -285,13 +286,13 @@ func TestDocumentTypeImport_PreviewWithErrorsWritesNothing(t *testing.T) {
 
 func TestDocumentTypeImport_CommitWritesAllAndPassesActor(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
+	s.m.grant(tenantA, PermAdminLookup)
 	data := workbook(t, goodHeader(),
 		[]string{"Tờ trình", "", "1"},
 		[]string{"Báo cáo", "bao-cao-tuan", ""},
 	)
-	w := s.upload(t, pathImport, hostA, canBoCua(xaA), data, "01JCOMMITKEY0000000000000")
-	doiMa(t, w, http.StatusCreated)
+	w := s.upload(t, pathImport, hostA, staffOf(tenantA), data, "01JCOMMITKEY0000000000000")
+	wantStatus(t, w, http.StatusCreated)
 	var out documentTypeImportCreatedOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -300,20 +301,20 @@ func TestDocumentTypeImport_CommitWritesAllAndPassesActor(t *testing.T) {
 		out.Created[0].ID == "" {
 		t.Fatalf("= %+v", out)
 	}
-	if a := s.fake.lastActor; a.ID != maCanBo || a.IP == "" || s.fake.lastTenant != xaA {
+	if a := s.fake.lastActor; a.ID != staffCode || a.IP == "" || s.fake.lastTenant != tenantA {
 		t.Errorf("chủ thể %+v / xã %q — muốn MÃ cán bộ và xã của Host", a, s.fake.lastTenant)
 	}
 }
 
 func TestDocumentTypeImport_OneBadRowRefusesTheWholeFile(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
+	s.m.grant(tenantA, PermAdminLookup)
 	data := workbook(t, goodHeader(),
 		[]string{"Tờ trình", "", "1"},
 		[]string{"Báo cáo", "Bao Cao", ""}, // upper case: refused, never lower-cased
 	)
-	w := s.upload(t, pathImport, hostA, canBoCua(xaA), data, "01JONEBADKEY0000000000000")
-	doiMa(t, w, http.StatusBadRequest)
+	w := s.upload(t, pathImport, hostA, staffOf(tenantA), data, "01JONEBADKEY0000000000000")
+	wantStatus(t, w, http.StatusBadRequest)
 	var out documentTypeImportRejectedOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -330,7 +331,7 @@ func TestDocumentTypeImport_OneBadRowRefusesTheWholeFile(t *testing.T) {
 
 func TestDocumentTypeImport_DuplicatesAreRowErrors(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
+	s.m.grant(tenantA, PermAdminLookup)
 	data := workbook(t, goodHeader(),
 		[]string{"Quyết định", "", ""},         // row 2: code and label of a live row
 		[]string{"Công văn", "cong-van", ""},   // row 3: code of a SOFT-DELETED row — still taken
@@ -338,8 +339,8 @@ func TestDocumentTypeImport_DuplicatesAreRowErrors(t *testing.T) {
 		[]string{"tờ trình", "to-trinh-2", ""}, // row 5: same label as row 4 (case-folded)
 		[]string{"Đề án", "to-trinh", ""},      // row 6: same code as row 4's generated one
 	)
-	w := s.upload(t, pathImport, hostA, canBoCua(xaA), data, "01JDUPKEY0000000000000000")
-	doiMa(t, w, http.StatusBadRequest)
+	w := s.upload(t, pathImport, hostA, staffOf(tenantA), data, "01JDUPKEY0000000000000000")
+	wantStatus(t, w, http.StatusBadRequest)
 	var out documentTypeImportRejectedOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -361,7 +362,7 @@ func TestDocumentTypeImport_DuplicatesAreRowErrors(t *testing.T) {
 func TestDocumentTypeImport_ErrorBodiesNeverEchoCells(t *testing.T) {
 	const marker = "DULIEUONLYINCELL"
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
+	s.m.grant(tenantA, PermAdminLookup)
 	cases := map[string][]byte{
 		"wrong header": workbook(t, []string{marker, "b", "c"}, []string{"x", "", ""}),
 		"bad code":     workbook(t, goodHeader(), []string{"Tên", marker + " !", ""}),
@@ -372,7 +373,7 @@ func TestDocumentTypeImport_ErrorBodiesNeverEchoCells(t *testing.T) {
 	}
 	for name, data := range cases {
 		for _, path := range []string{pathImportPreview, pathImport} {
-			w := s.upload(t, path, hostA, canBoCua(xaA), data, "01JNOECHO"+strings.ReplaceAll(name, " ", "")+path[len(path)-4:])
+			w := s.upload(t, path, hostA, staffOf(tenantA), data, "01JNOECHO"+strings.ReplaceAll(name, " ", "")+path[len(path)-4:])
 			if strings.Contains(w.Body.String(), marker) {
 				t.Errorf("%s %s: thân trả về chứa nội dung ô: %s", name, path, w.Body.String())
 			}
@@ -385,10 +386,10 @@ func TestDocumentTypeImport_ErrorBodiesNeverEchoCells(t *testing.T) {
 
 func TestDocumentTypeImport_NotAWorkbookIs415WithFixedSentence(t *testing.T) {
 	s := newImportServer(t)
-	s.m.capQuyen(xaA, QuyenDanhMuc)
-	w := s.upload(t, pathImportPreview, hostA, canBoCua(xaA), []byte("ma,nhan\nDULIEUONLYINCELL,x\n"),
+	s.m.grant(tenantA, PermAdminLookup)
+	w := s.upload(t, pathImportPreview, hostA, staffOf(tenantA), []byte("ma,nhan\nDULIEUONLYINCELL,x\n"),
 		"01JNOTXLSXKEY000000000000")
-	doiMa(t, w, http.StatusUnsupportedMediaType)
+	wantStatus(t, w, http.StatusUnsupportedMediaType)
 	if strings.Contains(w.Body.String(), "DULIEUONLYINCELL") {
 		t.Error("lỗi nhắc lại nội dung tệp")
 	}

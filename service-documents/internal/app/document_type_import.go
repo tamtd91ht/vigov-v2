@@ -30,7 +30,7 @@ import (
 )
 
 // ActionImportDocumentTypes is the trail's verb for one imported file — Vietnamese snake_case like the
-// catalogue's other verbs (HanhViThemLoaiVanBan), because an inspection reads it.
+// catalogue's other verbs (ActionCreateDocumentType), because an inspection reads it.
 const ActionImportDocumentTypes = "nhap_loai_van_ban"
 
 // ErrNoImportActor — an import with no staff code. The trail must name who imported (rule 6, inv. 8).
@@ -57,26 +57,26 @@ var errPreviewRollback = errors.New("loai_van_ban: xem trước — huỷ giao d
 
 // PreviewDocumentTypeImport plans the file and reports. The returned error is a system failure only; a
 // file with errors is a SUCCESSFUL preview whose Errors is non-empty.
-func (uc *DanhMucLoaiVanBan) PreviewDocumentTypeImport(ctx context.Context, rows []domain.DocumentTypeImportRow) (
+func (uc *DocumentTypeCatalogue) PreviewDocumentTypeImport(ctx context.Context, rows []domain.DocumentTypeImportRow) (
 	DocumentTypeImportResult, error) {
 
 	var res DocumentTypeImportResult
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		existing, err := uc.kho.ImportSnapshot(ctx, tx)
+		existing, err := uc.repo.ImportSnapshot(ctx, tx)
 		if err != nil {
 			return err
 		}
-		res.Types, res.Errors = domain.PlanDocumentTypeImport(rows, existing, docstore.TranDanhMucLoaiVanBan)
+		res.Types, res.Errors = domain.PlanDocumentTypeImport(rows, existing, docstore.MaxDocumentTypes)
 		return errPreviewRollback
 	})
 	if err != nil && !errors.Is(err, errPreviewRollback) {
-		return DocumentTypeImportResult{}, boc(ctx, "xem trước nhập Excel", err)
+		return DocumentTypeImportResult{}, wrapCatalogueErr(ctx, "xem trước nhập Excel", err)
 	}
 	return res, nil
 }
 
 // ImportDocumentTypes writes the file, or nothing.
-func (uc *DanhMucLoaiVanBan) ImportDocumentTypes(ctx context.Context, rows []domain.DocumentTypeImportRow,
+func (uc *DocumentTypeCatalogue) ImportDocumentTypes(ctx context.Context, rows []domain.DocumentTypeImportRow,
 	actor audit.Actor) (DocumentTypeImportResult, error) {
 
 	if actor.ID == "" {
@@ -85,11 +85,11 @@ func (uc *DanhMucLoaiVanBan) ImportDocumentTypes(ctx context.Context, rows []dom
 	var res DocumentTypeImportResult
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		res = DocumentTypeImportResult{}
-		existing, err := uc.kho.ImportSnapshot(ctx, tx)
+		existing, err := uc.repo.ImportSnapshot(ctx, tx)
 		if err != nil {
 			return err
 		}
-		plan, errs := domain.PlanDocumentTypeImport(rows, existing, docstore.TranDanhMucLoaiVanBan)
+		plan, errs := domain.PlanDocumentTypeImport(rows, existing, docstore.MaxDocumentTypes)
 		if len(errs) > 0 {
 			// Returned from INSIDE the closure so the transaction rolls back; nothing was written.
 			return &DocumentTypeImportRejected{Errors: errs}
@@ -98,13 +98,14 @@ func (uc *DanhMucLoaiVanBan) ImportDocumentTypes(ctx context.Context, rows []dom
 		created := make([]map[string]any, 0, len(plan))
 		for i := range plan {
 			p := &plan[i]
-			if p.ID, err = uc.sinhID(); err != nil {
+			if p.ID, err = uc.newID(); err != nil {
 				return fmt.Errorf("loai_van_ban: sinh id: %w", err)
 			}
-			// The form's INSERT: `nguon` and `ma_nguon_re_nhanh` are literals there. LaMacDinh false:
+			// The form's INSERT: `nguon` and `ma_nguon_re_nhanh` are literals there. IsDefault false:
 			// an import creates, it never moves the commune's default (domain/document_type_import.go).
-			if err := uc.kho.Chen(ctx, tx, domain.LoaiVanBan{
-				ID: p.ID, Ma: p.Code, Nhan: p.Label, ThuTu: p.Order, DangDung: true, LaMacDinh: false,
+			// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of the INSERT.
+			if err := uc.repo.Insert(ctx, tx, domain.DocumentType{
+				ID: p.ID, Code: p.Code, Label: p.Label, SortOrder: p.Order, IsActive: true, IsDefault: false,
 			}); err != nil {
 				return err
 			}
@@ -134,7 +135,7 @@ func (uc *DanhMucLoaiVanBan) ImportDocumentTypes(ctx context.Context, rows []dom
 		if errors.As(err, &rej) {
 			return DocumentTypeImportResult{}, rej
 		}
-		return DocumentTypeImportResult{}, boc(ctx, "nhập Excel", err)
+		return DocumentTypeImportResult{}, wrapCatalogueErr(ctx, "nhập Excel", err)
 	}
 	return res, nil
 }

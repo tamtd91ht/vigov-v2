@@ -44,9 +44,9 @@ type IncomingMetric string
 const (
 	// MetricArrived — "Đến trong kỳ": `ngay_den`, read as a date, falls in the period.
 	MetricArrived IncomingMetric = "arrived"
-	// MetricOpen — "Chưa xử lý xong" (the document half): NOT TrangThaiVanBanDen.DaKetThuc().
+	// MetricOpen — "Chưa xử lý xong" (the document half): NOT IncomingDocumentStatus.IsFinished().
 	MetricOpen IncomingMetric = "open"
-	// MetricOverdue — "Quá hạn xử lý": VanBanDen.QuaHan(now).
+	// MetricOverdue — "Quá hạn xử lý": IncomingDocument.IsOverdue(now).
 	MetricOverdue IncomingMetric = "overdue"
 )
 
@@ -64,20 +64,20 @@ func ParseIncomingMetric(s string) (IncomingMetric, bool) {
 
 // IncomingStatuses is every state the incoming register has — the six codes of
 // migrations/0004_so_van_ban.sql `van_ban_den_trang_thai_hop_le`.
-func IncomingStatuses() []TrangThaiVanBanDen {
-	return []TrangThaiVanBanDen{
-		VanBanMoiVaoSo, VanBanDaPhanCong, VanBanDangXuLy,
-		VanBanDaGiaiQuyet, VanBanChuyenCapTren, VanBanLuuKhongThuLy,
+func IncomingStatuses() []IncomingDocumentStatus {
+	return []IncomingDocumentStatus{
+		IncomingStatusRegistered, IncomingStatusAssigned, IncomingStatusInProgress,
+		IncomingStatusResolved, IncomingStatusReferred, IncomingStatusFiledNotAdmitted,
 	}
 }
 
-// FinishedIncomingStatuses is the set DaKetThuc answers true for, DERIVED FROM DaKetThuc and not
+// FinishedIncomingStatuses is the set IsFinished answers true for, DERIVED FROM IsFinished and not
 // written out a second time. The SQL `open` predicate is built from this list, so a fourth closing
-// state added to DaKetThuc reaches the figure, the drill-down and QuaHan in the same edit.
-func FinishedIncomingStatuses() []TrangThaiVanBanDen {
-	var out []TrangThaiVanBanDen
+// state added to IsFinished reaches the figure, the drill-down and IsOverdue in the same edit.
+func FinishedIncomingStatuses() []IncomingDocumentStatus {
+	var out []IncomingDocumentStatus
 	for _, s := range IncomingStatuses() {
-		if s.DaKetThuc() {
+		if s.IsFinished() {
 			out = append(out, s)
 		}
 	}
@@ -86,7 +86,7 @@ func FinishedIncomingStatuses() []TrangThaiVanBanDen {
 
 // ArrivalWindow is the inclusive range of calendar DATES a period covers, for comparison with
 // `ngay_den`. Both ends are midnight UTC carrying the date only — the shape `ngay_den` already has
-// when it is scanned (see KiemNgayDen), so nobody compares a date with an instant by accident.
+// when it is scanned (see ValidateReceivedDate), so nobody compares a date with an instant by accident.
 type ArrivalWindow struct {
 	FirstDate time.Time
 	LastDate  time.Time
@@ -135,7 +135,7 @@ func ArrivalWindowFor(from, to time.Time) (ArrivalWindow, error) {
 }
 
 // IncomingSummary is the three figures, as counts. Nothing else: there is no on-time ratio because
-// the register does not store the instant a document was settled (see QuaHan), and there are no
+// the register does not store the instant a document was settled (see IsOverdue), and there are no
 // citizen letters because `don_thu` does not exist in this service yet.
 type IncomingSummary struct {
 	Arrived int

@@ -31,36 +31,36 @@ import (
 	docstore "github.com/vihat/vigov/service-documents/internal/store"
 )
 
-// KhoLoaiVanBan is the store, declared at the point of use.
+// DocumentTypeStore is the store, declared at the point of use.
 //
 // EVERY METHOD TAKES THE TRANSACTION. That is what makes it impossible to write the row in one
 // transaction and the audit entry in another: there is no signature here that would let you. It is
 // also what makes the properties worth proving — that a refusal writes nothing, that the entry
 // shares the transaction, that `nguon` is never written from a request — provable without a
 // PostgreSQL. A test that needs infrastructure is a test that stops being run.
-type KhoLoaiVanBan interface {
-	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.LoaiVanBan, error)
-	MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error)
-	DemDangSong(ctx context.Context, tx *store.ScopedTx) (int, error)
-	Chen(ctx context.Context, tx *store.ScopedTx, lvb domain.LoaiVanBan) error
-	BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx, trongID string) error
-	CapNhat(ctx context.Context, tx *store.ScopedTx, lvb domain.LoaiVanBan) error
-	XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+type DocumentTypeStore interface {
+	ByIDForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.DocumentType, error)
+	CodeTaken(ctx context.Context, tx *store.ScopedTx, code string) (bool, error)
+	CountLive(ctx context.Context, tx *store.ScopedTx) (int, error)
+	Insert(ctx context.Context, tx *store.ScopedTx, dt domain.DocumentType) error
+	ClearOtherDefaults(ctx context.Context, tx *store.ScopedTx, exceptID string) error
+	Update(ctx context.Context, tx *store.ScopedTx, dt domain.DocumentType) error
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error
 	// ImportSnapshot is the Excel import's read — document_type_import.go.
 	ImportSnapshot(ctx context.Context, tx *store.ScopedTx) ([]domain.ExistingDocumentType, error)
 }
 
-// DanhMucLoaiVanBan owns adding, editing and retiring one commune's document types.
-type DanhMucLoaiVanBan struct {
-	db  *store.DB
-	kho KhoLoaiVanBan
+// DocumentTypeCatalogue owns adding, editing and retiring one commune's document types.
+type DocumentTypeCatalogue struct {
+	db   *store.DB
+	repo DocumentTypeStore
 
-	// sinhID is injected so a test can pin the id. In production it is ulid.Moi.
-	sinhID func() (string, error)
+	// newID is injected so a test can pin the id. In production it is ulid.Moi.
+	newID func() (string, error)
 }
 
-func NewDanhMucLoaiVanBan(db *store.DB, kho KhoLoaiVanBan) *DanhMucLoaiVanBan {
-	return &DanhMucLoaiVanBan{db: db, kho: kho, sinhID: ulid.Moi}
+func NewDocumentTypeCatalogue(db *store.DB, repo DocumentTypeStore) *DocumentTypeCatalogue {
+	return &DocumentTypeCatalogue{db: db, repo: repo, newID: ulid.Moi}
 }
 
 // The business verbs written into the trail. Vietnamese snake_case, like every other action this
@@ -70,110 +70,114 @@ func NewDanhMucLoaiVanBan(db *store.DB, kho KhoLoaiVanBan) *DanhMucLoaiVanBan {
 // THE VERB NAMES THE CATALOGUE, not just the operation. `sua_danh_muc` across five tables would
 // make the trail unable to answer which list changed without joining to a row that may since have
 // been edited again.
+//
+// THE VALUES ARE STORED in the append-only `audit_log.action`; ADR 0061 §Ánh xạ hành vi maps them to
+// their English successors, which only NEW entries will carry (X22, layer C).
 const (
-	HanhViThemLoaiVanBan = "them_loai_van_ban"
-	HanhViSuaLoaiVanBan  = "sua_loai_van_ban"
-	HanhViXoaLoaiVanBan  = "xoa_loai_van_ban"
+	ActionCreateDocumentType = "them_loai_van_ban"
+	ActionUpdateDocumentType = "sua_loai_van_ban"
+	ActionDeleteDocumentType = "xoa_loai_van_ban"
 )
 
-// YeuCauThemLoaiVanBan is one new row, as it arrives from the handler.
+// CreateDocumentTypeRequest is one new row, as it arrives from the handler.
 //
-// THERE IS NO `Nguon` FIELD AND THERE MUST NEVER BE ONE. Provenance decides the tier, so a field
+// THERE IS NO `Source` FIELD AND THERE MUST NEVER BE ONE. Provenance decides the tier, so a field
 // here is a field a handler can fill from a request body — and the migration says what follows:
 // "every guard below could be stepped around by setting nguon = 'don-vi' first". The store writes
 // the value as a LITERAL for the same reason.
 //
-// THERE IS NO `DangDung` FIELD EITHER, and that is a smaller decision said out loud: a row the
+// THERE IS NO `IsActive` FIELD EITHER, and that is a smaller decision said out loud: a row the
 // commune has just added is in use. Creating one already disabled is two requests — POST then
 // PATCH — and the second one is the one that leaves a trail saying somebody turned it off.
-type YeuCauThemLoaiVanBan struct {
-	Ma        string
-	Nhan      string
-	ThuTu     int
-	LaMacDinh bool
+type CreateDocumentTypeRequest struct {
+	Code      string
+	Label     string
+	SortOrder int
+	IsDefault bool
 }
 
-// YeuCauSuaLoaiVanBan is a PARTIAL edit: a nil pointer means "leave this alone".
+// UpdateDocumentTypeRequest is a PARTIAL edit: a nil pointer means "leave this alone".
 //
 // WHY POINTERS AND NOT A FULL REPLACEMENT. Three of the four fields have a meaningful zero —
 // `thu_tu` 0 is the first position, `dang_dung` false is "taken out of use", `la_mac_dinh` false is
 // "no longer the default". A struct of plain values cannot tell "the client did not mention this"
 // from "the client set it to zero", so a screen that edits only the label would silently move the
 // row to the top of the list and clear the commune's default.
-type YeuCauSuaLoaiVanBan struct {
-	Nhan      *string
-	ThuTu     *int
-	DangDung  *bool
-	LaMacDinh *bool
+type UpdateDocumentTypeRequest struct {
+	Label     *string
+	SortOrder *int
+	IsActive  *bool
+	IsDefault *bool
 }
 
-// Them adds one row the commune owns.
+// Create adds one row the commune owns.
 //
 // ORDER OF THE THREE REFUSALS, and it is not arbitrary: shape first (cheap, no lock), then the
 // ceiling, then the duplicate code. The ceiling before the duplicate because a full catalogue is a
 // condition of the whole list while a duplicate is a condition of one value — and the caller can
 // act on the first without knowing anything about the second.
-func (uc *DanhMucLoaiVanBan) Them(ctx context.Context, yc YeuCauThemLoaiVanBan,
-	nguoi audit.Actor) (domain.LoaiVanBan, error) {
+func (uc *DocumentTypeCatalogue) Create(ctx context.Context, req CreateDocumentTypeRequest,
+	actor audit.Actor) (domain.DocumentType, error) {
 
 	// Validated BEFORE the transaction opens. A request that fails its shape must never hold a row
 	// lock while doing so, and the caller needs the reason rather than a rollback.
-	ma, err := domain.ChuanHoaMa(yc.Ma)
+	code, err := domain.NormalizeCode(req.Code)
 	if err != nil {
-		return domain.LoaiVanBan{}, err
+		return domain.DocumentType{}, err
 	}
-	nhan, err := domain.ChuanHoaNhan(yc.Nhan)
+	label, err := domain.NormalizeLabel(req.Label)
 	if err != nil {
-		return domain.LoaiVanBan{}, err
+		return domain.DocumentType{}, err
 	}
-	if err := domain.KiemTraThuTu(yc.ThuTu); err != nil {
-		return domain.LoaiVanBan{}, err
+	if err := domain.ValidateSortOrder(req.SortOrder); err != nil {
+		return domain.DocumentType{}, err
 	}
 
-	id, err := uc.sinhID()
+	id, err := uc.newID()
 	if err != nil {
-		return domain.LoaiVanBan{}, fmt.Errorf("danh_muc_loai_van_ban: sinh mã: %w", err)
+		return domain.DocumentType{}, fmt.Errorf("danh_muc_loai_van_ban: sinh mã: %w", err)
 	}
 
-	moi := domain.LoaiVanBan{
-		ID: id, Ma: ma, Nhan: nhan, ThuTu: yc.ThuTu,
-		LaMacDinh: yc.LaMacDinh,
-		DangDung:  true,
+	created := domain.DocumentType{
+		ID: id, Code: code, Label: label, SortOrder: req.SortOrder,
+		IsDefault: req.IsDefault,
+		IsActive:  true,
 		// Set here only so the value this function RETURNS describes the row that was written. The
 		// store does not read them: it writes 'don-vi' and false as literals.
-		Nguon:          domain.NguonDonVi,
-		MaNguonReNhanh: false,
+		Source:           domain.SourceCommune,
+		BranchedInSource: false,
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		n, err := uc.kho.DemDangSong(ctx, tx)
+		n, err := uc.repo.CountLive(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if n >= docstore.TranDanhMucLoaiVanBan {
-			return docstore.ErrDanhMucDayTran
+		if n >= docstore.MaxDocumentTypes {
+			return docstore.ErrCatalogueFull
 		}
 
-		daDung, err := uc.kho.MaDaDung(ctx, tx, ma)
+		taken, err := uc.repo.CodeTaken(ctx, tx, code)
 		if err != nil {
 			return err
 		}
-		if daDung {
-			return docstore.ErrMaDaTonTai
+		if taken {
+			return docstore.ErrCodeTaken
 		}
 
-		if moi.LaMacDinh {
+		if created.IsDefault {
 			// BEFORE the insert, not after: `UNIQUE (tenant_id, moc_mac_dinh)` admits one live
 			// default, and inserting the second one first is the statement that fails.
-			if err := uc.kho.BoMacDinhKhac(ctx, tx, moi.ID); err != nil {
+			if err := uc.repo.ClearOtherDefaults(ctx, tx, created.ID); err != nil {
 				return err
 			}
 		}
-		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
+		// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of the INSERT.
+		if err := uc.repo.Insert(ctx, tx, created); err != nil {
 			return err
 		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatLoaiVanBan(moi)})
+		delta, err := json.Marshal(map[string]any{"sau": summarizeDocumentType(created)})
 		if err != nil {
 			return fmt.Errorf("danh_muc_loai_van_ban: mã hoá delta: %w", err)
 		}
@@ -185,85 +189,86 @@ func (uc *DanhMucLoaiVanBan) Them(ctx context.Context, yc YeuCauThemLoaiVanBan,
 		// NOTHING IN THE DELTA IS PERSONAL DATA (rule 3): a document type is how the authority
 		// classifies its paperwork, not anything about a person.
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViThemLoaiVanBan,
-			Subject: moi.Ma, // the business code, never the internal id
+			Actor:   actor,
+			Action:  ActionCreateDocumentType,
+			Subject: created.Code, // the business code, never the internal id
 			Delta:   delta,
 		})
 	})
 	if err != nil {
 		// Nothing was committed: no row, no trail. The two states agree.
-		return domain.LoaiVanBan{}, boc(ctx, "thêm", err)
+		return domain.DocumentType{}, wrapCatalogueErr(ctx, "thêm", err)
 	}
-	return moi, nil
+	return created, nil
 }
 
-// Sua applies a partial edit, refusing whatever this row's tier does not allow.
+// Update applies a partial edit, refusing whatever this row's tier does not allow.
 //
 // A NO-OP WRITES NOTHING AND AUDITS NOTHING. Sending the label a row already has is not an event;
 // recording it would fill a public authority's ledger with entries saying nothing changed, and
 // those are the entries that bury the ones carrying legal weight. It is also what makes this route
 // genuinely idempotent, which is what its `idem.KhongCan` declaration claims.
-func (uc *DanhMucLoaiVanBan) Sua(ctx context.Context, id string, yc YeuCauSuaLoaiVanBan,
-	nguoi audit.Actor) (domain.LoaiVanBan, error) {
+func (uc *DocumentTypeCatalogue) Update(ctx context.Context, id string, req UpdateDocumentTypeRequest,
+	actor audit.Actor) (domain.DocumentType, error) {
 
 	if id == "" {
-		return domain.LoaiVanBan{}, docstore.ErrDanhMucKhongTonTai
+		return domain.DocumentType{}, docstore.ErrCatalogueRowNotFound
 	}
-	// Shape first, outside the transaction, for the same reason as Them.
-	var nhan string
-	if yc.Nhan != nil {
+	// Shape first, outside the transaction, for the same reason as Create.
+	var label string
+	if req.Label != nil {
 		var err error
-		if nhan, err = domain.ChuanHoaNhan(*yc.Nhan); err != nil {
-			return domain.LoaiVanBan{}, err
+		if label, err = domain.NormalizeLabel(*req.Label); err != nil {
+			return domain.DocumentType{}, err
 		}
 	}
-	if yc.ThuTu != nil {
-		if err := domain.KiemTraThuTu(*yc.ThuTu); err != nil {
-			return domain.LoaiVanBan{}, err
+	if req.SortOrder != nil {
+		if err := domain.ValidateSortOrder(*req.SortOrder); err != nil {
+			return domain.DocumentType{}, err
 		}
 	}
 
-	var sau domain.LoaiVanBan
+	var after domain.DocumentType
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		truoc, err := uc.kho.TheoIDDeSua(ctx, tx, id)
+		before, err := uc.repo.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 
-		sau = truoc
-		if yc.Nhan != nil {
-			sau.Nhan = nhan
+		after = before
+		if req.Label != nil {
+			after.Label = label
 		}
-		if yc.ThuTu != nil {
-			sau.ThuTu = *yc.ThuTu
+		if req.SortOrder != nil {
+			after.SortOrder = *req.SortOrder
 		}
-		if yc.DangDung != nil {
-			sau.DangDung = *yc.DangDung
+		if req.IsActive != nil {
+			after.IsActive = *req.IsActive
 		}
-		if yc.LaMacDinh != nil {
-			sau.LaMacDinh = *yc.LaMacDinh
+		if req.IsDefault != nil {
+			after.IsDefault = *req.IsDefault
 		}
 
 		// THE TIER CHECK IS ON THE TRANSITION, not on the requested value. Asking a tier-3 row to
 		// stay enabled is not an attempt to disable it, and refusing that would make the ordinary
 		// "save the whole form" request fail on exactly the rows a commune may not touch.
-		if truoc.DangDung && !sau.DangDung {
-			if err := truoc.Tang().ChoTat(); err != nil {
+		if before.IsActive && !after.IsActive {
+			if err := before.Tier().CanDisable(); err != nil {
 				return err
 			}
 		}
 
-		if khongDoiLoaiVanBan(truoc, sau) {
+		if documentTypeUnchanged(before, after) {
 			return nil
 		}
 
-		if sau.LaMacDinh && !truoc.LaMacDinh {
-			if err := uc.kho.BoMacDinhKhac(ctx, tx, sau.ID); err != nil {
+		if after.IsDefault && !before.IsDefault {
+			if err := uc.repo.ClearOtherDefaults(ctx, tx, after.ID); err != nil {
 				return err
 			}
 		}
-		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
+		// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of the UPDATE.
+		if err := uc.repo.Update(ctx, tx, after); err != nil {
 			return err
 		}
 
@@ -271,39 +276,40 @@ func (uc *DanhMucLoaiVanBan) Sua(ctx context.Context, id string, yc YeuCauSuaLoa
 		// every column on every edit makes the one field somebody actually changed impossible to
 		// find in a ledger that is never deleted.
 		delta, err := json.Marshal(map[string]any{
-			"truoc": tomTatDoiLoaiVanBan(truoc, sau, true),
-			"sau":   tomTatDoiLoaiVanBan(truoc, sau, false),
+			"truoc": summarizeDocumentTypeChange(before, after, true),
+			"sau":   summarizeDocumentTypeChange(before, after, false),
 		})
 		if err != nil {
 			return fmt.Errorf("danh_muc_loai_van_ban: mã hoá delta: %w", err)
 		}
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViSuaLoaiVanBan,
-			Subject: sau.Ma,
+			Actor:   actor,
+			Action:  ActionUpdateDocumentType,
+			Subject: after.Code,
 			Delta:   delta,
 		})
 	})
 	if err != nil {
-		return domain.LoaiVanBan{}, boc(ctx, "sửa", err)
+		return domain.DocumentType{}, wrapCatalogueErr(ctx, "sửa", err)
 	}
-	return sau, nil
+	return after, nil
 }
 
-// Xoa soft deletes one row — tier 1 only.
+// SoftDelete soft deletes one row — tier 1 only.
 //
-// THIS IS NOT A DELETE AND THE NAME IS THE ONLY PLACE THAT COULD SUGGEST OTHERWISE. The row stays,
-// carrying `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), and its `ma` stays
-// taken forever: an issued code is never reissued, because business records hold it as a value.
-func (uc *DanhMucLoaiVanBan) Xoa(ctx context.Context, id, lyDoTho string, nguoi audit.Actor) error {
+// THIS IS NOT A DELETE, AND THE NAME SAYS SO: the route is DELETE and the trail's verb is `xoa_…`, but
+// the row stays, carrying `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), and
+// its `ma` stays taken forever: an issued code is never reissued, because business records hold it
+// as a value.
+func (uc *DocumentTypeCatalogue) SoftDelete(ctx context.Context, id, rawReason string, actor audit.Actor) error {
 	if id == "" {
-		return docstore.ErrDanhMucKhongTonTai
+		return docstore.ErrCatalogueRowNotFound
 	}
-	lyDo, err := domain.ChuanHoaLyDoXoa(lyDoTho)
+	reason, err := domain.NormalizeDeleteReason(rawReason)
 	if err != nil {
 		return err
 	}
-	if nguoi.ID == "" {
+	if actor.ID == "" {
 		// `deleted_by` with nothing in it is a deletion nobody can be asked about. core/audit
 		// refuses an entry with no actor for the same reason; refusing here keeps the column and
 		// the entry telling the same story.
@@ -311,14 +317,14 @@ func (uc *DanhMucLoaiVanBan) Xoa(ctx context.Context, id, lyDoTho string, nguoi 
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		truoc, err := uc.kho.TheoIDDeSua(ctx, tx, id)
+		before, err := uc.repo.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		if err := truoc.Tang().ChoXoaMem(); err != nil {
+		if err := before.Tier().CanSoftDelete(); err != nil {
 			return err
 		}
-		if err := uc.kho.XoaMem(ctx, tx, truoc.ID, nguoi.ID, lyDo); err != nil {
+		if err := uc.repo.SoftDelete(ctx, tx, before.ID, actor.ID, reason); err != nil {
 			return err
 		}
 
@@ -327,61 +333,65 @@ func (uc *DanhMucLoaiVanBan) Xoa(ctx context.Context, id, lyDoTho string, nguoi 
 		// FIRST deletion, while the entry is the append-only record of the act. They answer two
 		// different questions and neither can be derived from the other.
 		delta, err := json.Marshal(map[string]any{
-			"truoc":   tomTatLoaiVanBan(truoc),
-			"ly_do":   lyDo,
+			"truoc":   summarizeDocumentType(before),
+			"ly_do":   reason,
 			"xoa_mem": true,
 		})
 		if err != nil {
 			return fmt.Errorf("danh_muc_loai_van_ban: mã hoá delta: %w", err)
 		}
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViXoaLoaiVanBan,
-			Subject: truoc.Ma,
+			Actor:   actor,
+			Action:  ActionDeleteDocumentType,
+			Subject: before.Code,
 			Delta:   delta,
 		})
 	})
 	if err != nil {
-		return boc(ctx, "xoá", err)
+		return wrapCatalogueErr(ctx, "xoá", err)
 	}
 	return nil
 }
 
-// tomTat is the audit delta's view of one row. `nguon` is in it BECAUSE it is the fact that decides
-// what may later be done to this row, and an inspection reading the entry has no other way to know
-// which tier the row was in at the time.
-func tomTatLoaiVanBan(l domain.LoaiVanBan) map[string]any {
+// summarizeDocumentType is the audit delta's view of one row. `nguon` is in it BECAUSE it is the
+// fact that decides what may later be done to this row, and an inspection reading the entry has no
+// other way to know which tier the row was in at the time.
+//
+// THE DELTA KEYS ARE THE OLD COLUMN NAMES AND STAY SO: `audit_log.delta` is append-only, and ADR 0061
+// keeps them as JSON keys, read through the glossary's §Từ điển đổi tên.
+func summarizeDocumentType(dt domain.DocumentType) map[string]any {
 	return map[string]any{
-		"ma":          l.Ma,
-		"nhan":        l.Nhan,
-		"thu_tu":      l.ThuTu,
-		"dang_dung":   l.DangDung,
-		"la_mac_dinh": l.LaMacDinh,
-		"nguon":       l.Nguon,
+		"ma":          dt.Code,
+		"nhan":        dt.Label,
+		"thu_tu":      dt.SortOrder,
+		"dang_dung":   dt.IsActive,
+		"la_mac_dinh": dt.IsDefault,
+		"nguon":       dt.Source,
 	}
 }
 
-// tomTatDoi returns only the fields that actually moved, from whichever side is asked for.
-func tomTatDoiLoaiVanBan(truoc, sau domain.LoaiVanBan, ben bool) map[string]any {
-	ra := map[string]any{}
-	if truoc.Nhan != sau.Nhan {
-		ra["nhan"] = chon(ben, truoc.Nhan, sau.Nhan)
+// summarizeDocumentTypeChange returns only the fields that actually moved, from whichever side is
+// asked for.
+func summarizeDocumentTypeChange(before, after domain.DocumentType, beforeSide bool) map[string]any {
+	out := map[string]any{}
+	if before.Label != after.Label {
+		out["nhan"] = pick(beforeSide, before.Label, after.Label)
 	}
-	if truoc.ThuTu != sau.ThuTu {
-		ra["thu_tu"] = chon(ben, truoc.ThuTu, sau.ThuTu)
+	if before.SortOrder != after.SortOrder {
+		out["thu_tu"] = pick(beforeSide, before.SortOrder, after.SortOrder)
 	}
-	if truoc.DangDung != sau.DangDung {
-		ra["dang_dung"] = chon(ben, truoc.DangDung, sau.DangDung)
+	if before.IsActive != after.IsActive {
+		out["dang_dung"] = pick(beforeSide, before.IsActive, after.IsActive)
 	}
-	if truoc.LaMacDinh != sau.LaMacDinh {
-		ra["la_mac_dinh"] = chon(ben, truoc.LaMacDinh, sau.LaMacDinh)
+	if before.IsDefault != after.IsDefault {
+		out["la_mac_dinh"] = pick(beforeSide, before.IsDefault, after.IsDefault)
 	}
-	return ra
+	return out
 }
 
-// khongDoi reports whether the edit would change nothing. `ma`, `nguon` and `ma_nguon_re_nhanh` are
-// not compared because no path here can change them.
-func khongDoiLoaiVanBan(truoc, sau domain.LoaiVanBan) bool {
-	return truoc.Nhan == sau.Nhan && truoc.ThuTu == sau.ThuTu &&
-		truoc.DangDung == sau.DangDung && truoc.LaMacDinh == sau.LaMacDinh
+// documentTypeUnchanged reports whether the edit would change nothing. `ma`, `nguon` and
+// `ma_nguon_re_nhanh` are not compared because no path here can change them.
+func documentTypeUnchanged(before, after domain.DocumentType) bool {
+	return before.Label == after.Label && before.SortOrder == after.SortOrder &&
+		before.IsActive == after.IsActive && before.IsDefault == after.IsDefault
 }

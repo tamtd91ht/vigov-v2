@@ -139,7 +139,7 @@ func (f *fakeAutomationIdentity) RecordAutomationRunOutcome(ctx context.Context,
 	return nil
 }
 
-func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, k identityv1.WorkKind, linhVuc string, asOf time.Time) (time.Time, error) {
+func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, k identityv1.WorkKind, fieldCode string, asOf time.Time) (time.Time, error) {
 	f.kindsSeen[k] = true
 	if f.unavailable {
 		return time.Time{}, identityclient.ErrIdentityUnavailable
@@ -147,8 +147,8 @@ func (f *fakeAutomationIdentity) DueSoonCutoff(_ context.Context, k identityv1.W
 	if f.dueSoonMissing {
 		return time.Time{}, identityclient.ErrDueSoonNotConfigured
 	}
-	if !asOf.Equal(runAt) || linhVuc != "" {
-		return time.Time{}, fmt.Errorf("as_of %s / linh_vuc %q không phải claimed_at / hàng mặc định", asOf, linhVuc)
+	if !asOf.Equal(runAt) || fieldCode != "" {
+		return time.Time{}, fmt.Errorf("as_of %s / linh_vuc %q không phải claimed_at / hàng mặc định", asOf, fieldCode)
 	}
 	return soonCutoff, nil
 }
@@ -221,8 +221,8 @@ func (f *fakeComms) DeliverStaffNotifications(ctx context.Context, notices []com
 	for _, n := range notices {
 		f.delivered = append(f.delivered, deliveredNotice{commune: communeOf(ctx), n: n})
 		var d commsclient.Delivery
-		for _, ma := range n.RecipientMa {
-			k := string(communeOf(ctx)) + "|" + n.IdempotencyKey + "|" + ma
+		for _, code := range n.RecipientMa {
+			k := string(communeOf(ctx)) + "|" + n.IdempotencyKey + "|" + code
 			if f.seen[k] {
 				d.AlreadyDelivered++
 			} else {
@@ -309,7 +309,7 @@ const (
 )
 
 func doc(id string, no int, deadline time.Time) domain.AutomationRecord {
-	return domain.AutomationRecord{ID: id, Code: domain.MaVanBanDen(2026, no), Deadline: deadline}
+	return domain.AutomationRecord{ID: id, Code: domain.IncomingDocumentCode(2026, no), Deadline: deadline}
 }
 
 // --- tests -----------------------------------------------------------------------------------------
@@ -323,7 +323,7 @@ func TestNewAutomationRunnerRefusesMissingDependency(t *testing.T) {
 func TestClaimRunAndRecordOutcome(t *testing.T) {
 	h := newHarness(t, communeA)
 	late, soon, calm := doc("vb-late", 1, missed), doc("vb-soon", 2, soonDue), doc("vb-calm", 3, time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC))
-	late.AssigneeMa, soon.AssigneeMa, calm.AssigneeMa = "CB-001", "CB-001", "CB-001"
+	late.AssigneeCode, soon.AssigneeCode, calm.AssigneeCode = "CB-001", "CB-001", "CB-001"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{late, soon, calm}
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
@@ -359,7 +359,7 @@ func TestClaimRunAndRecordOutcome(t *testing.T) {
 func TestTwoCommunesNeverMix(t *testing.T) {
 	h := newHarness(t, communeA, communeB)
 	a, b := doc("vb-alpha", 1, missed), doc("vb-beta", 1, missed)
-	a.AssigneeMa, b.AssigneeMa = "CB-ALPHA", "CB-BETA"
+	a.AssigneeCode, b.AssigneeCode = "CB-ALPHA", "CB-BETA"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{a}
 	h.incoming.byCommune[communeB] = []domain.AutomationRecord{b}
 	h.claim(communeA, "run-a", jobSLA)
@@ -389,7 +389,7 @@ func TestTwoCommunesNeverMix(t *testing.T) {
 func TestKeysStableAcrossRetriedRuns(t *testing.T) {
 	h := newHarness(t, communeA)
 	d := doc("vb-1", 1, missed)
-	d.AssigneeMa = "CB-001"
+	d.AssigneeCode = "CB-001"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{d}
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
@@ -462,7 +462,7 @@ func TestEscalationLevels(t *testing.T) {
 	h.identity.holders[communeA] = map[string][]string{"bp-1": {"CB-HEAD"}}
 	h.identity.leaders[communeA] = []string{"CB-LD"}
 	late := doc("vb-1", 1, missed)
-	late.OrgUnitID, late.AssigneeMa = "bp-1", "CB-X"
+	late.OrgUnitID, late.AssigneeCode = "bp-1", "CB-X"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{late, doc("vb-early", 2, time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))}
 	h.claim(communeA, "run-1", jobEscalate)
 	h.runner.Tick(context.Background())
@@ -538,7 +538,7 @@ func TestConfigurationMissingIsRecordedAndNothingInvented(t *testing.T) {
 	h := newHarness(t, communeA)
 	h.identity.dueSoonMissing = true
 	late, soon := doc("vb-late", 1, missed), doc("vb-soon", 2, soonDue)
-	late.AssigneeMa, soon.AssigneeMa = "CB-001", "CB-001"
+	late.AssigneeCode, soon.AssigneeCode = "CB-001", "CB-001"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{late, soon}
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
@@ -556,7 +556,7 @@ func TestOutagesAreDependencyUnavailable(t *testing.T) {
 	h := newHarness(t, communeA)
 	h.comms.err = fmt.Errorf("wrap: %w", commsclient.ErrCommsUnavailable)
 	d := doc("vb", 1, missed)
-	d.AssigneeMa = "CB-1"
+	d.AssigneeCode = "CB-1"
 	h.incoming.byCommune[communeA] = []domain.AutomationRecord{d}
 	h.claim(communeA, "run-1", jobSLA)
 	h.runner.Tick(context.Background())
@@ -567,7 +567,7 @@ func TestOutagesAreDependencyUnavailable(t *testing.T) {
 	h2 := newHarness(t, communeA)
 	h2.identity.unavailable = true
 	s := doc("vb", 1, soonDue)
-	s.AssigneeMa = "CB-1"
+	s.AssigneeCode = "CB-1"
 	h2.incoming.byCommune[communeA] = []domain.AutomationRecord{s}
 	h2.claim(communeA, "run-2", jobSLA)
 	h2.runner.Tick(context.Background())
@@ -588,7 +588,7 @@ func TestOneCommuneFailingNeverStopsTheNext(t *testing.T) {
 	h := newHarness(t, communeA, communeB)
 	h.incoming.panicFor = communeA
 	b := doc("vb-b", 1, missed)
-	b.AssigneeMa = "CB-B"
+	b.AssigneeCode = "CB-B"
 	h.incoming.byCommune[communeB] = []domain.AutomationRecord{b}
 	h.claim(communeA, "run-a", jobSLA)
 	h.claim(communeB, "run-b", jobSLA)

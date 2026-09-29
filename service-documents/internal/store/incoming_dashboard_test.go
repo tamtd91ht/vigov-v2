@@ -86,8 +86,8 @@ func TestListFilterAppendsTheFigurePredicateAfterTheExistingFilters(t *testing.T
 	// The drill-down combines with the list's own filters; its placeholders must continue the
 	// numbering rather than restart it, or `year` would be compared with a status code.
 	now := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
-	sql, args, err := locThanhSQL(LocVanBanDen{
-		Nam:    2026,
+	sql, args, err := incomingFilterSQL(IncomingDocumentFilter{
+		Year:   2026,
 		Metric: IncomingMetricFilter{Metric: domain.MetricOverdue, Now: now},
 	})
 	if err != nil {
@@ -103,7 +103,7 @@ func TestListFilterAppendsTheFigurePredicateAfterTheExistingFilters(t *testing.T
 }
 
 func TestListFilterWithoutMetricIsUnchanged(t *testing.T) {
-	sql, args, err := locThanhSQL(LocVanBanDen{TrangThai: "dang-xu-ly"})
+	sql, args, err := incomingFilterSQL(IncomingDocumentFilter{Status: "dang-xu-ly"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,9 +116,9 @@ func TestListFilterWithoutMetricIsUnchanged(t *testing.T) {
 }
 
 func TestOverdueIncomingRefusesALimitOutsideTheBlock(t *testing.T) {
-	s := NewVanBanDenStore(nil)
+	s := NewIncomingDocumentStore(nil)
 	for _, n := range []int{0, -1, domain.OverdueQueueMax + 1} {
-		if _, err := s.OverdueIncoming(ctxXa("01JTESTLIMITXAXAXAXAXAXAXA"), time.Now(), n); err == nil {
+		if _, err := s.OverdueIncoming(tenantCtx("01JTESTLIMITXAXAXAXAXAXAXA"), time.Now(), n); err == nil {
 			t.Errorf("limit %d accepted", n)
 		}
 	}

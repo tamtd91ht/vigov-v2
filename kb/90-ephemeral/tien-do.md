@@ -4,7 +4,7 @@ tier: T5
 source: GENERATED
 owner: architecture
 derived_from_commit: 
-expires: 2026-12-28
+expires: 2026-12-29
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
 ---
@@ -21,7 +21,7 @@ Trục ở đây là **module kho mã**. Ai hỏi *"phân hệ nào dùng đư�
 câu khác, trục khác, người đọc khác → `kb/90-ephemeral/tien-do-san-pham.md` (`/tien-do-san-pham`).
 Hai tệp LIÊN KẾT chứ không chép của nhau (luật 9, bất biến 2).
 
-Cập nhật gần nhất **2026-09-29** · hết hạn **2026-12-28**. Hạn đo lần cuối có người cập nhật
+Cập nhật gần nhất **2026-09-30** · hết hạn **2026-12-29**. Hạn đo lần cuối có người cập nhật
 một module, không phải lần cuối sinh tệp — quá hạn nghĩa là 90 ngày không ai chạm tới,
 tức tin `git log` chứ đừng tin tệp này.
 
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 65 |
 | chưa làm | 30 |
 | treo | 14 |
-| xong | 240 |
+| xong | 241 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -109,6 +109,7 @@ Cùng các mục bên dưới, gom theo khoá `menu`. Luồng nghiệp vụ và 
 | `service-documents` | `apidoc-sinh-enum-cho-truong` — CÔNG CỤ DÙNG CHUNG: tools/apidoc chưa sinh `enum` cho trường struct và tham số truy vấn — mọi bảng nhãn trạng thái ở web là bản chép tay | chưa làm | — | Một card riêng cho tools/apidoc (ghi ở module này chỉ vì phát hiện ở đây; mục _chung đang có việc dở của phiên khác): thẻ trường (vd `apidoc:"enum=a|b|c"`) hoặc suy từ kiểu chuỗi có khối const — chọn một, đừng làm cả hai. Trường omitempty phải GIỮ tuỳ chọn. Sau đó áp cho vanBanDenRa.status/urgency, lichSuChuyenRa.status, tham số `status` của danh sách — KHÔNG đổi mã (C2 còn mở). |
 | `service-documents` | `loai-van-ban-tuyen-doc` — GET /api/v1/document-types — tuyến ĐỌC danh mục loại văn bản | xong | — | Tên tài nguyên URL ĐÃ chốt và ô trong ubiquitous-language.md ĐÃ điền (commit 9388eaf). Dòng này từng giao việc ấy cho knowledge-keeper, và việc đã xong trước khi ai đọc tới. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng. |
 | `service-documents` | `loai-van-ban-tuyen-ghi` — Tuyến GHI danh mục loại văn bản — POST + PATCH + DELETE /api/v1/document-types | xong | — | DÒNG "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ" ĐÃ BỊ XOÁ VÌ LẠC HẬU, không vì ai bỏ qua nó. Câu hỏi mở #21 hỏi về danh mục TRẠNG THÁI NHIỆM VỤ — nơi một máy trạng thái cố định đi qua từng mã — chứ không về danh mục này; lược đồ đã tự trả lời bằng TRIGGER (0003_danh_muc_loai_van_ban.sql:72-77 và :157-185, ADR 0024): xã VỪA thêm được mã mới, VỪA đổi được nhãn và thứ tự. CÒN LẠI, và không cái nào là mã: (1) bước GIEO dòng `nguon='he-thong'` — commune onboarding — CHƯA TỒN TẠI trong kho, nên mọi xã vẫn có danh mục RỖNG và tuyến POST là đường duy nhất có dòng nào; ai ghi những dòng đầu tiên và dưới principal nào trong vết kiểm toán (luật 6 bất biến 6) là quyết định của chủ dự án, ghi ở 0003_*.sql:47-52. (2) Trigger `danh_muc_ba_tang` mới chỉ được kiểm là CÓ MẶT: chưa ca nào bắn nó trên PostgreSQL thật, nên tầng ứng dụng đang là thứ DUY NHẤT đã chứng minh từ chối — sàn CSDL thì chưa. (3) Chưa có màn hình nào gọi: web-admin chưa dựng tab Danh mục. |
+| `service-documents` | `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | — | Lớp B: bảng van_ban_den/van_ban_di/lich_su_chuyen_van_ban/loai_van_ban/day_so_van_ban + trigger so_van_ban_bat_bien (TG_TABLE_NAME LIKE 'van_ban_den%'), day_so_khong_lui, danh_muc_ba_tang; sửa các test 'SQL không chứa X' (org_unit_holdings_test, document_type_test, document_test, automation_test). Lớp C: đổi 15 DTO HTTP khi openapi được phép đổi tên component. |
 | `service-identity` | `tuyen-danh-ba-can-bo-hep` — Tuyến đọc danh bạ cán bộ HẸP cho ô chọn cán bộ — id, họ tên, chức danh, bộ phận; không SĐT/email | xong | — | SỬA 25/09/2026: tuyến ĐÃ DỰNG. Web Phản ánh đã dùng (0c48552). CÒN: Nhiệm vụ (so-nhiem-vu.tsx:709,:2254; nhan-nhiem-vu.ts:1441), Văn bản (nhan-van-ban.ts:313; ngan-van-ban-den.tsx:345), Thông báo (so-thong-bao.tsx:398; nhan-thong-bao.ts:337), Biên bản (nhan-bien-ban.ts:248) vẫn dựng quanh GET /staff (admin.user) — chuyển sang staff-directory ở lượt của từng menu. Không có ca PG thật. || NGƯỜI DÙNG CHỌN 24/09/2026: tuyến mới, AnyAuthenticated có lý do (luật 5 đk dừng #1 — người dùng đã quyết), trong một xã, không trường dữ liệu cá nhân nhạy cảm. Chưa dựng — lượt sau (go-service-builder identity), rồi web thay ô chọn ở bốn menu. |
 
 ### `thu-chi-ngan-sach` — [docs/ui-ux/07-thu-chi-ngan-sach.md](../../docs/ui-ux/07-thu-chi-ngan-sach.md)
@@ -544,7 +545,7 @@ Cập nhật 2026-09-29 · 24 mục
 
 ## `service-documents`
 
-Cập nhật 2026-09-29 · 17 mục
+Cập nhật 2026-09-30 · 18 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -565,6 +566,7 @@ Cập nhật 2026-09-29 · 17 mục
 | `dem-ho-so-bo-phan-grpc` — Máy chủ gRPC CountOrgUnitHoldings — văn bản đến chưa kết thúc theo bộ phận (ADR 0056) | xong | 4dd6c33. | — | — |
 | `nhat-ky-he-thong-documents` — GET /api/v1/documents-audit-entries (ADR 0054) | xong | f1871ed; chỉ mục migration 0005. | — | — |
 | `bo-chay-tu-dong-hoa-van-ban` — Bộ chạy Tự động hoá cho văn bản đến + nhập Excel Loại văn bản | xong | 120df73 · go test ./... xanh | — | ĐƠN THƯ KHÔNG CHẠY: chưa có sổ đơn thư (không bảng, không cột hạn) — người dùng đã duyệt nhắc hạn đơn thư 29/09; bật bằng một dòng automationKinds khi có sổ. |
+| `doi-ten-tieng-anh-lop-a` — Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp | xong | 30/09/2026: 29 tệp git mv (van_ban* -> document/incoming_document/outgoing_document, loai_van_ban -> document_type, danh_muc_* -> catalogue_*/three_tier_catalogue, day_so_van_ban -> document_number_series); kiểu IncomingDocument/OutgoingDocument/DocumentRouting/DocumentType/NumberSeriesStore theo từ điển. Giữ: SQL, giá trị enum ('den'/'di', 'van-ban-den'), 15 DTO HTTP tên Việt (apidoc sinh tên component từ đó — openapi.json không đổi), proto, tên của core. Ghim: TestDocumentCodes_TheTwoRegistersNeverShareOne (VB-DEN-2026-0007, X26), TestAutomationKeysFollowTheRecipes (khoá sla_reminders/escalation/weekly_digest, X27). Worktree sạch: vet+test service-documents xanh, test_hooks 359/359, check_* PASS, openapi/ingress không đổi. | — | Lớp B: bảng van_ban_den/van_ban_di/lich_su_chuyen_van_ban/loai_van_ban/day_so_van_ban + trigger so_van_ban_bat_bien (TG_TABLE_NAME LIKE 'van_ban_den%'), day_so_khong_lui, danh_muc_ba_tang; sửa các test 'SQL không chứa X' (org_unit_holdings_test, document_type_test, document_test, automation_test). Lớp C: đổi 15 DTO HTTP khi openapi được phép đổi tên component. |
 
 ## `service-finance`
 
