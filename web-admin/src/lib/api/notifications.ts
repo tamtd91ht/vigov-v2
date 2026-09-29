@@ -16,8 +16,8 @@
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin`: the three rules of `goi.ts`.
  */
 
-import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./goi";
-import type { KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./request";
+import type { KetQua } from "./request";
 import type {
   comms_get_notifications,
   comms_get_notifications_unread_count,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AUDIT_SOURCES, auditQuery, getAuditEntries } from "./audit-entries";
-import { LOI_KHONG_RO } from "./goi";
+import { LOI_KHONG_RO } from "./request";
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

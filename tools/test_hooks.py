@@ -1011,10 +1011,10 @@ CASES = [
      w("service-petitions/internal/domain/meeting_note.go",
        "package domain\n\ntype MeetingNote struct {\n\tNoiDungChinh string\n}\n")),
     ("english_identifier_guard", "hằng TS mới tên tiếng Việt", BLOCK,
-     w("web-admin/src/features/nhiem-vu/task-list.ts",
+     w("web-admin/src/features/tasks/task-list.ts",
        "export const layDanhSach = async () => [];\n")),
     ("english_identifier_guard", "hằng TS tiếng Anh, nhãn giao diện tiếng Việt", PASS,
-     w("web-admin/src/features/nhiem-vu/task-list.ts",
+     w("web-admin/src/features/tasks/task-list.ts",
        'export const listTasks = async () => [];\nexport const TITLE = "Danh sách nhiệm vụ";\n')),
     ("english_identifier_guard", "migration CREATE TABLE tên tiếng Việt", BLOCK,
      w("service-petitions/migrations/0099_meeting_draft.sql",
@@ -1047,7 +1047,9 @@ CASES = [
     ("english_identifier_guard", "thư mục tính năng mới tên tiếng Việt", BLOCK,
      w("web-admin/src/features/bien-ban-moi/x.ts", "export const x = 1;\n")),
     ("english_identifier_guard", "tệp tiếng Anh trong thư mục tiếng Việt ĐANG CÓ", PASS,
-     w("web-admin/src/features/bien-ban/meeting-drafts.ts", "export const drafts = 1;\n")),
+     # The directory must exist on disk at HEAD; web-admin's features/* went English on
+     # 2026-09-30, so this points at one the campaign has not reached yet.
+     w("deploy/cau-hinh/common-config.yaml", "metadata:\n  name: common-config\n")),
     # k8s manifests (user decision 2026-09-29): object names, envFrom refs and labels — the
     # `cau-hinh-chung` / `bi-mat-platform` / `cho-phep-duong-ra` drift from the real cluster.
     ("english_identifier_guard", "manifest k8s: configMapRef tên tiếng Việt", BLOCK,

@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { CongQuyen } from "@/features/quyen/cong-quyen";
-import { usePhien } from "@/features/phien/phien-hien-tai";
+import { CongQuyen } from "@/features/permissions/permission-gate";
+import { usePhien } from "@/features/session/current-session";
 import {
   fetchCitizenReportSummary,
   fetchIncomingDocumentOverdueQueue,
@@ -13,10 +13,10 @@ import {
   fetchTaskSummary,
 } from "@/lib/api/dashboard";
 import type { SummaryPeriod } from "@/lib/api/dashboard";
-import { layLoaiNhiemVu } from "@/lib/api/danh-muc-nghiep-vu";
-import type { KetQua } from "@/lib/api/goi";
-import { layChiSoNganSach } from "@/lib/api/thu-chi";
-import { REPORT_READ_PERMISSION } from "@/lib/quyen";
+import { layLoaiNhiemVu } from "@/lib/api/business-catalogues";
+import type { KetQua } from "@/lib/api/request";
+import { layChiSoNganSach } from "@/lib/api/budget";
+import { REPORT_READ_PERMISSION } from "@/lib/permissions";
 
 import { mergeQueues } from "./figures";
 import type { QueueSource } from "./figures";

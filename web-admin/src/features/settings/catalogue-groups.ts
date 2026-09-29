@@ -1,0 +1,146 @@
+/**
+ * Bảy danh mục nghiệp vụ → thứ tự các nhóm trên màn hình, và trạng thái của từng nhóm.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * VÌ SAO TÁCH KHỎI `.tsx`, cùng lý do đã ghi ở `ma-tran-quyen.ts` và `tra-danh-muc.ts`: ca
+ * đáng lo nhất của màn hình này — ĐỌC ĐƯỢC VÀ KHÔNG CÓ MỤC NÀO — không nhìn thấy bằng mắt mà
+ * lại là ca xảy ra Ở MỌI ĐƠN VỊ hôm nay. Nằm lẫn trong một component thì không bài test nào
+ * chạm tới nó, và cách nó hỏng là hỏng thành một bảng trống không ai giải thích.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * BỐN TRẠNG THÁI CỦA MỘT NHÓM, BA Ở TỆP NÀY. Trạng thái thứ tư — `đang tải` — không nằm ở đây
+ * và đó là chủ ý, khác với `tra-danh-muc.ts` ngay bên cạnh:
+ *
+ *   · Ở `tra-danh-muc.ts` pha "chưa đọc xong" PHẢI đi xuống tới từng ô của từng dòng, vì mỗi ô
+ *     tra một id khác nhau và component không có chỗ nào rẽ nhánh một lần cho cả bảng.
+ *   · Ở đây cả bảy danh mục về trong MỘT lượt (`docDanhMucNghiepVu`), nên toàn màn hình có đúng
+ *     một khoảnh khắc "đang tải". Mang nó vào đây nữa là hai chỗ cùng mô tả một sự thật, và
+ *     ngày chúng lệch nhau thì màn hình vừa báo đang tải vừa báo chưa có mục (luật 9).
+ *
+ *   `khongDocDuoc`   401 · 403 · 500 · mạng hỏng. Hiện đúng câu của máy chủ, không diễn giải.
+ *   `chuaCoMuc`      đọc được, và danh mục không có mục nào. KHÔNG phải lỗi — xem dưới.
+ *   `coMuc`          dựng được bảng.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * `chuaCoMuc` LÀ ĐƯỜNG THÔNG THƯỜNG, KHÔNG PHẢI CA BIÊN — đọc kỹ trước khi sửa nhánh này.
+ *
+ * Hôm nay BẢY danh mục này rỗng ở MỌI đơn vị, và sẽ còn rỗng: các migration cố ý không gieo
+ * mục nào, và bước khởi tạo đơn vị — nơi những mục đầu tiên được lập — chưa tồn tại. Máy chủ
+ * nói rõ điều đó ngay tại chỗ dựng phản hồi (`service-petitions/internal/http/loai_nhiem_vu.go`
+ * và `muc_uu_tien_nhiem_vu.go`: "[] and never null; an empty scale is today's correct answer for
+ * every commune").
+ *
+ * Nên nhánh này phải NÓI RA THÀNH CÂU. Một vòng quay không bao giờ dừng, một bảng trống, hay
+ * một dòng báo lỗi đều mô tả sai một hệ thống đang chạy đúng — và một màn hình trông như hỏng
+ * ở một cơ quan nhà nước là một cuộc gọi hỗ trợ, không phải một chi tiết giao diện.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ */
+
+import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/catalogues";
+import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/business-catalogues";
+import type { KetQua } from "@/lib/api/request";
+
+export type TrangThaiNhom =
+  | { pha: "khongDocDuoc"; thongBao: string }
+  | { pha: "chuaCoMuc" }
+  | { pha: "coMuc"; muc: readonly MucDanhMuc[] };
+
+/** Khoá của một nhóm — lấy thẳng từ `BayDanhMuc` để không có bản kê thứ hai của bảy danh mục. */
+export type KhoaNhom = keyof BayDanhMuc;
+
+export type NhomDanhMuc = {
+  khoa: KhoaNhom;
+  /** Tên nhóm theo `docs/ui-ux/14-cau-hinh.md §5`, không tự đặt lại. */
+  nhan: string;
+  /**
+   * Thứ tự các mục trong nhóm này CÓ NGHĨA NGHIỆP VỤ hay chỉ là cách đơn vị sắp xếp.
+   *
+   * Đúng một nhóm trả lời `true`: mức ưu tiên nhiệm vụ. Xem chú thích trên `BANG_NHOM`.
+   */
+  thuTuLaThangBac: boolean;
+  /**
+   * Đường ghi của nhóm này, hoặc `null` nếu hợp đồng chưa có tuyến ghi nào cho nó.
+   *
+   * `null` KHÔNG PHẢI MỘT MẶC ĐỊNH, NÓ LÀ MỘT SỰ THẬT: "hợp đồng chưa có tuyến ghi cho nhóm này".
+   * Từ 7aa0127 cả bảy nhóm đều có tuyến ghi, nên hôm nay không nhóm nào mang `null` — nhánh này
+   * vẫn giữ cho nhóm thứ tám nào vào bảng trước tuyến ghi của nó. Nhóm mang `null` thì màn hình
+   * không vẽ nút ghi nào và nói ra lý do — chứ không vẽ một nút bấm vào không có gì xảy ra, thứ
+   * khiến cán bộ tin rằng mình thao tác sai.
+   */
+  ghi: MoTaDanhMucGhi | null;
+  trangThai: TrangThaiNhom;
+};
+
+/**
+ * Bảy nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 CỦA ĐẶC TẢ — không theo vần chữ cái, không theo tên dịch vụ.
+ *
+ * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY, và không vì ai bỏ sót. `Lĩnh vực phản ánh` và `Loại đơn thư`
+ * chưa có tuyến nào trong hợp đồng REST (`kb/20-contracts/openapi.json`). `Trạng thái nhiệm vụ`
+ * thì CÓ tuyến, nhưng không cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của
+ * một bộ mã cố định (`PATCH /api/v1/task-statuses/{code}`, không thêm, không xoá), nên nó không
+ * phải một nhóm thêm · sửa · xoá mềm của bảng này — tab vẽ nó bằng thành phần riêng
+ * `nhom-trang-thai-nhiem-vu.tsx`.
+ *
+ * VÌ SAO CÓ CỜ `thuTuLaThangBac` THAY VÌ MỘT NHÁNH `if (khoa === "mucUuTienNhiemVu")` rải trong
+ * component: thứ tự của `items` ở mức ưu tiên LÀ thang bậc của đơn vị, không phải sở thích trình
+ * bày (`service-petitions/internal/store/muc_uu_tien_nhiem_vu.go`: "THE ORDER IS THE MEANING OF
+ * THIS LIST"). Một chỗ nào đó sắp lại mảng ấy theo vần không đổi cách trình bày — nó đổi mức việc
+ * mà đơn vị coi là gấp nhất, và màn hình vẫn trông bình thường. Cờ ở đây chỉ bật một câu giải
+ * thích cho người đọc; không hàm nào trong tệp này sắp xếp lại mảng nào.
+ */
+const BANG_NHOM: readonly { khoa: KhoaNhom; nhan: string; thuTuLaThangBac: boolean }[] = [
+  { khoa: "loaiTaiNguyenBanDo", nhan: "Loại tài nguyên bản đồ", thuTuLaThangBac: false },
+  { khoa: "hangMucKeHoachVon", nhan: "Hạng mục kế hoạch vốn", thuTuLaThangBac: false },
+  { khoa: "loaiVanBan", nhan: "Loại văn bản", thuTuLaThangBac: false },
+  { khoa: "loaiDonViDanCu", nhan: "Loại đơn vị dân cư", thuTuLaThangBac: false },
+  { khoa: "khoiNhiemVu", nhan: "Khối nhiệm vụ", thuTuLaThangBac: false },
+  { khoa: "loaiNhiemVu", nhan: "Loại nhiệm vụ", thuTuLaThangBac: false },
+  { khoa: "mucUuTienNhiemVu", nhan: "Mức ưu tiên nhiệm vụ", thuTuLaThangBac: true },
+];
+
+/**
+ * Bảy kết quả đọc → bảy nhóm dựng được, giữ nguyên thứ tự `BANG_NHOM`.
+ *
+ * BẢY NHÓM LUÔN ĐỦ BẢY, kể cả khi một tuyến hỏng: năm dịch vụ khác nhau đứng sau bảy tuyến này,
+ * nên một dịch vụ đang khởi động lại là chuyện có thật. Bỏ nhóm ấy khỏi màn hình là để người dùng
+ * kết luận đơn vị không có danh mục đó — một câu sai. Nhóm vẫn hiện, kèm đúng câu máy chủ trả về.
+ */
+export function nhomDanhMuc(bay: BayDanhMuc): readonly NhomDanhMuc[] {
+  return BANG_NHOM.map((n) => ({
+    ...n,
+    ghi: duongGhiCua(n.khoa),
+    trangThai: trangThaiNhom(bay[n.khoa]),
+  }));
+}
+
+/**
+ * Nhóm này có tuyến ghi không, và nếu có thì ở đâu.
+ *
+ * GHÉP THEO KHOÁ, KHÔNG CHÉP LẠI ĐƯỜNG DẪN. Bảng bảy đường ghi có chủ ở `lib/api/danh-muc.ts` và
+ * mỗi đường dẫn ở đó mang một phép kiểm kiểu dựa trên hợp đồng. Một bảng thứ hai ở đây sẽ trôi,
+ * và khi nó trôi thì màn hình gửi PATCH tới một đường dẫn không còn tồn tại — hiện ra thành
+ * "không lưu được" chứ không thành một lỗi ai đọc được (luật 9, cấm #2).
+ *
+ * `?? null` Ở ĐÂY KHÔNG PHẢI MẶC ĐỊNH TRÊN ĐƯỜNG CÁCH LY: nó trả lời "nhóm này chưa có tuyến
+ * ghi", và hệ quả là màn hình vẽ ÍT nút đi, không phải nhiều hơn.
+ */
+function duongGhiCua(khoa: KhoaNhom): MoTaDanhMucGhi | null {
+  return BAY_DANH_MUC_GHI.find((m) => m.khoa === khoa) ?? null;
+}
+
+/**
+ * Một kết quả đọc → trạng thái của một nhóm.
+ *
+ * Tham số cố ý chỉ đòi `{ items }` với phần tử là `MucDanhMuc`: bảy tuyến do năm dịch vụ phục vụ
+ * và kiểu phản hồi của chúng là BẢY kiểu sinh ra khác nhau, nên một chữ ký nhắc tên bảy kiểu ấy
+ * sẽ phải sửa mỗi lần thêm một danh mục. `MucDanhMuc` là hợp của bảy kiểu SINH RA từ hợp đồng
+ * (`lib/api/danh-muc-nghiep-vu.ts`) — không dòng nào ở đây gõ lại một mục danh mục có trường gì.
+ *
+ * `items` RỖNG KHÔNG BAO GIỜ ĐƯỢC ĐỌC THÀNH LỖI, và cũng không bao giờ được đọc thành `null`:
+ * máy chủ trả `[]` chứ không trả `null` (mọi tuyến đều `make(..., 0, len(ds))`).
+ */
+export function trangThaiNhom(kq: KetQua<{ items: readonly MucDanhMuc[] }>): TrangThaiNhom {
+  if (!kq.ok) return { pha: "khongDocDuoc", thongBao: kq.thongBao };
+  if (kq.duLieu.items.length === 0) return { pha: "chuaCoMuc" };
+  return { pha: "coMuc", muc: kq.duLieu.items };
+}

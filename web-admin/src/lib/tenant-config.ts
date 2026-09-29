@@ -13,7 +13,7 @@
  * | logo, map centre, SLA, catalogues  | from the platform service     |
  */
 
-import { goiNoiBo } from "./may-chu/goi-noi-bo";
+import { goiNoiBo } from "./server/internal-call";
 
 import type { identity_get_communes_current, identity_thongTinXa } from "./api/schema.gen";
 

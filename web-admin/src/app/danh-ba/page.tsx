@@ -1,12 +1,12 @@
-import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
-import { DanhBaLienHe } from "@/features/danh-ba/danh-ba-lien-he";
-import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "@/features/danh-ba/nhan-danh-ba";
-import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { CongQuyen } from "@/features/quyen/cong-quyen";
-import { QUYEN_QUAN_LY_NGUOI_DUNG } from "@/lib/quyen";
+import { CauHinhXaProvider } from "@/components/commune-config";
+import { phanHienThi } from "@/lib/commune-display-config";
+import { DauTrang } from "@/components/page-header";
+import { ThanhBen } from "@/components/sidebar";
+import { DanhBaLienHe } from "@/features/staff-directory/contact-directory";
+import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "@/features/staff-directory/directory-labels";
+import { PhienProvider } from "@/features/session/current-session";
+import { CongQuyen } from "@/features/permissions/permission-gate";
+import { QUYEN_QUAN_LY_NGUOI_DUNG } from "@/lib/permissions";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**

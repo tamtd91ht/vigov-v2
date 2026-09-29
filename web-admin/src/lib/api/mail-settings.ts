@@ -11,8 +11,8 @@
  * Nothing here logs, caches or echoes the body (rule 3, rule 8).
  */
 
-import { CHUNG, docJSON, docThanLoiGoi, errorMessageOr, goiGhi, LOI_KHONG_RO } from "./goi";
-import type { KetQua } from "./goi";
+import { CHUNG, docJSON, docThanLoiGoi, errorMessageOr, goiGhi, LOI_KHONG_RO } from "./request";
+import type { KetQua } from "./request";
 import type {
   comms_get_mail_settings,
   comms_mailSettingsIn,

@@ -27,8 +27,8 @@
  * NO `tenant_id` ANYWHERE: the commune comes from `Host` at the edge (rule 1, forbidden #2).
  */
 
-import { docJSON, thamSoTheoHopDong } from "./goi";
-import type { KetQua } from "./goi";
+import { docJSON, thamSoTheoHopDong } from "./request";
+import type { KetQua } from "./request";
 import type {
   documents_get_incoming_document_overdue_queue,
   documents_get_incoming_document_summary,

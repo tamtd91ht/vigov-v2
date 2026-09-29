@@ -1,0 +1,512 @@
+/**
+ * Mười một tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
+ * `service-petitions/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
+ *
+ *   GET  /api/v1/citizen-reports                            feedback.read
+ *   GET  /api/v1/citizen-reports/{maTraCuu}                 feedback.read
+ *   POST /api/v1/citizen-reports/{maTraCuu}/classification  feedback.classify
+ *   POST /api/v1/citizen-reports/{maTraCuu}/assignment      feedback.assign
+ *   POST /api/v1/citizen-reports/{maTraCuu}/status          feedback.read + LUẬT NẮM GIỮ
+ *   POST /api/v1/citizen-reports/{maTraCuu}/closure         feedback.resolve
+ *   POST /api/v1/citizen-reports/{maTraCuu}/rejection       feedback.classify
+ *   POST /api/v1/citizen-reports/{maTraCuu}/referral        feedback.classify
+ *   PUT  /api/v1/citizen-reports/{maTraCuu}/publication     feedback.assign
+ *   GET  /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read
+ *   POST /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read + luật nghiệp vụ, Idempotency-Key
+ *
+ * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_phieuPhanAnhRa`, `petitions_phanLoaiVao`,
+ * `petitions_phanCongVao`, `petitions_dongPhieuVao` đều đến từ `schema.gen.ts`.
+ *
+ * ⚠ CÂU MỞ ĐẦU CŨ CỦA TỆP NÀY — *"KHÔNG CÓ TUYẾN DANH SÁCH"* — ĐÃ SAI TỪ 23/09/2026, và nó được
+ * ghi lại ở đây thay vì xoá lặng lẽ: một chú thích nói sai về việc "hợp đồng không có gì" là thứ
+ * người sau đọc rồi dựng một màn hình nghèo đi theo. Năm tuyến xử lý phía cán bộ nay đã có.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * PHẢN HỒI ĐÃ CHE SẴN DỮ LIỆU CÁ NHÂN, VÀ MÀN HÌNH KHÔNG "LÀM ĐẸP" LẠI.
+ *
+ * `reporter_name` về dạng `Nguyễn V. A.`, `reporter_phone` về dạng `09****5678`, và cả hai RỖNG
+ * khi người dân gửi ẩn danh. Ở TUYẾN DANH SÁCH thì che là TUYỆT ĐỐI — kể cả tài khoản có
+ * `feedback.unmask` cũng nhận bản đã che, vì một lời gọi mở hai mươi người gửi thì không viết
+ * nổi một dòng vết kiểm toán trung thực (luật 6 bất biến 7; `xu_ly_phan_anh.go`, khối trên
+ * `DanhSachPhieu`). Cán bộ cần số thật thì MỞ TỪNG PHIẾU. Không có chỗ nào trong ứng dụng này
+ * ghép lại, đoán lại, hay hiện thêm chữ số nào.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * THAM SỐ TRUY VẤN CỦA TUYẾN DANH SÁCH NAY ĐÃ ĐƯỢC HỢP ĐỒNG KHAI: `petitions_get_citizen_reports
+ * ["truyVan"]` có `status` · `channel` · `field` · `hamlet` · `unit` · `q` · `late` · `scope` cùng
+ * `limit` · `cursor` · `sort` · `order`. Khối này từng viết rằng đối tượng ấy RỖNG — đúng lúc viết,
+ * hết đúng khi tuyến có chú thích `@query`.
+ *
+ * ⚠ ĐIỀU VẪN CÒN ĐÚNG: `themLocVaoTruyVan` ghép tên tham số bằng CHUỖI TRẦN, nên gõ sai một tên thì
+ * `tsc` vẫn im lặng và máy chủ trả cả sổ. Tên được gom vào đúng một chỗ và có bài kiểm đọc lại từng
+ * tên (`phieu-phan-anh.test.ts`).
+ */
+
+import { isPeriodMetric, type CitizenReportMetric } from "@/lib/drill-down";
+
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./request";
+import type {
+  petitions_chuyenCapTrenVao,
+  petitions_dongPhieuVao,
+  petitions_get_citizen_reports,
+  petitions_get_citizen_reports_by_maTraCuu,
+  petitions_get_citizen_reports_by_maTraCuu_log_entries,
+  petitions_ghiChuPhieuVao,
+  petitions_khongTiepNhanVao,
+  petitions_nhatKyPhieuRa,
+  petitions_phanCongVao,
+  petitions_phanLoaiVao,
+  petitions_phieuPhanAnhRa,
+  petitions_post_citizen_reports_by_maTraCuu_assignment,
+  petitions_post_citizen_reports_by_maTraCuu_classification,
+  petitions_post_citizen_reports_by_maTraCuu_closure,
+  petitions_post_citizen_reports_by_maTraCuu_log_entries,
+  petitions_post_citizen_reports_by_maTraCuu_referral,
+  petitions_post_citizen_reports_by_maTraCuu_rejection,
+  petitions_post_citizen_reports_by_maTraCuu_status,
+  petitions_publicationIn,
+  petitions_put_citizen_reports_by_maTraCuu_publication,
+  page_Result_petitions_nhatKyPhieuRa,
+  page_Result_petitions_phieuPhanAnhRa,
+} from "./schema.gen";
+
+/**
+ * Điền mã tra cứu vào khuôn đường dẫn CỦA HỢP ĐỒNG.
+ *
+ * Nhận khuôn (`/api/v1/citizen-reports/{maTraCuu}/closure`) chứ không tự ghép chuỗi: khuôn ấy lấy
+ * từ kiểu sinh ra, nên đổi đường dẫn ở máy chủ là `tsc` đỏ tại chỗ gọi thay vì 404 lúc chạy.
+ *
+ * `encodeURIComponent` vì mã tra cứu là chuỗi người dân cầm trên tay và gõ lại — một dấu `/` hay
+ * một khoảng trắng lọt vào sẽ đổi hẳn tuyến được gọi.
+ */
+function duongDanPhieu(mau: string, maTraCuu: string): string {
+  return mau.replace("{maTraCuu}", encodeURIComponent(maTraCuu));
+}
+
+/**
+ * Ghi chú NỘI BỘ đi kèm sáu thao tác xử lý — trường `note` tuỳ chọn, máy chủ ghi nó vào nhật ký xử
+ * lý của phiếu (không gửi người dân, không vào `reason`/`result`).
+ *
+ * TRỐNG HAY TOÀN KHOẢNG TRẮNG THÌ TRƯỜNG VẮNG MẶT HẲN, không gửi `note: ""`: một dòng nhật ký với
+ * ghi chú rỗng trông như cán bộ đã định viết gì rồi bị mất. Cắt khoảng trắng ở đây vì cùng lý do với
+ * `reason` bên dưới — máy chủ đếm giới hạn 2000 ký tự trên chuỗi đã cắt.
+ *
+ * Chữ này là chữ cán bộ gõ về việc của một công dân: chỉ đi trong THÂN POST (luật 3, cấm #4).
+ */
+function thanGhiChu(ghiChu: string | undefined): { note?: string } {
+  const gon = ghiChu?.trim() ?? "";
+  return gon === "" ? {} : { note: gon };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * ĐỌC
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * GET /api/v1/citizen-reports/{maTraCuu}.
+ *
+ * MỘT MÃ 404 DUY NHẤT CHO BỐN TÌNH HUỐNG, và giao diện không được dựng lại sự phân biệt ấy: mã
+ * không tồn tại · mã của xã khác · phiếu đã xoá mềm · phiếu thuộc lĩnh vực hạn chế (phản ánh về
+ * tác phong cán bộ) mà tài khoản thiếu `feedback.restricted`. Máy chủ trả cùng một câu cho cả
+ * bốn, có chủ ý: phân biệt được chúng là nói cho người đang thử mã biết họ gần tới đâu, và ở ca
+ * thứ tư là nói cho một đồng nghiệp biết có người vừa phản ánh về họ (luật 4, cấm #2).
+ *
+ * Nên ở đây KHÔNG rẽ nhánh theo `code`, không đổi câu chữ, không thêm gợi ý nào — hiện đúng
+ * `message` của máy chủ (`lib/api/goi.ts`).
+ */
+export function layPhieuPhanAnh(maTraCuu: string): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_get_citizen_reports_by_maTraCuu["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}";
+  return docJSON<petitions_phieuPhanAnhRa>(duongDanPhieu(mau, maTraCuu));
+}
+
+/**
+ * Bộ lọc của sổ phản ánh — bảy bộ lọc `locPhieuTuQuery` đọc, phạm vi, cộng phân trang.
+ *
+ * `LIÊN QUAN ĐẾN TÔI` KHÔNG CÓ Ở ĐÂY VÀ KIỂU `phamVi` KHÔNG CHO GỬI NÓ: máy chủ trả **400** cho
+ * `scope=related` (thế nào là "liên quan" chưa được chốt — `xu_ly_phan_anh.go`, `errPhamVi…`), nên
+ * một tab gửi nó là một tab biến quyển sổ thành trang lỗi — ra tới màn hình qua `PHAN_CHUA_DUNG`.
+ * Lọc `Bị đánh giá thấp` thì NAY ĐÃ CÓ: `ratingMax` → `rating_max` (ADR 0050 điểm 2).
+ */
+export type LocPhanAnh = {
+  /**
+   * §4 tab Phạm vi. `mine` = "Giao cho tôi": phiếu mà người gọi đang là cán bộ được giao, và MÁY
+   * CHỦ tự lấy mã cán bộ từ PHIÊN — `?scope=mine` **không** mang danh tính nào. Một tab gửi
+   * `?assignee=CB-…` của chính mình là client tự khai mình là ai (luật 1, cấm #2).
+   */
+  phamVi?: "all" | "mine";
+  /** Một trong chín mã trạng thái. Sai mã là **400**, không phải bị bỏ qua. */
+  trangThai?: string;
+  /** Một trong bốn mã kênh tiếp nhận. Sai mã là **400**. */
+  kenh?: string;
+  /** Mã lĩnh vực tầng 1. KHÔNG được kiểm ở máy chủ: mã lạ trả về trang rỗng. */
+  linhVuc?: string;
+  /** ULID thôn/tổ dân phố. */
+  thonID?: string;
+  /** ULID bộ phận đang giữ phiếu. */
+  boPhanID?: string;
+  /** Tìm theo nội dung, mã phiếu, địa chỉ. Tối đa 200 ký tự, dài hơn là 400. */
+  tim?: string;
+  /** Chỉ phiếu đã quá hạn XỬ LÝ XONG. Máy chủ chỉ nhận đúng chuỗi `true`. */
+  chiTreHan?: boolean;
+  /**
+   * Only petitions the citizen rated AT MOST this many stars; unrated ones are excluded by the server.
+   * The server accepts exactly the digits 1–5 and answers 400 to anything else, so the type admits
+   * nothing else. The screen's `Bị đánh giá thấp` box sends 2 — spec §4 "phiếu 1–2 sao", the same
+   * threshold that reopens a petition (ADR 0050 point 2).
+   */
+  ratingMax?: 1 | 2 | 3 | 4 | 5;
+  limit?: number;
+  cursor?: string | null;
+  /**
+   * Lọc theo MỘT số liệu của trang Tổng quan (SRS M7.2.2). Máy chủ đọc `feedback.restricted` qua
+   * cùng một hàm cho số đếm và danh sách, nên con số và số dòng khớp nhau với mọi tài khoản.
+   */
+  metric?: CitizenReportMetric;
+  /** Kỳ nửa mở [from, to), RFC3339. CHỈ gửi với số liệu theo kỳ. */
+  from?: string;
+  to?: string;
+};
+
+/**
+ * Gom TÊN tham số truy vấn về đúng một chỗ.
+ *
+ * Bảy cái tên dưới đây là bảy chuỗi KHÔNG có kiểu nào của hợp đồng canh giúp (xem khối chú thích
+ * đầu tệp). Gõ sai một cái thì máy chủ bỏ qua nó và trả về cả quyển sổ, và màn hình trông hoàn
+ * toàn bình thường — nên chúng đứng một chỗ và có bài kiểm đọc lại từng tên.
+ */
+function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
+  // `scope=all` là mặc định của máy chủ, nên tab "Toàn xã" gửi tham số VẮNG MẶT HẲN — cùng cách
+  // sổ Nhiệm vụ làm (`lib/api/nhiem-vu.ts`).
+  if (loc.phamVi === "mine") truyVan.set("scope", "mine");
+
+  if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
+  if (loc.kenh !== undefined && loc.kenh !== "") truyVan.set("channel", loc.kenh);
+  if (loc.linhVuc !== undefined && loc.linhVuc !== "") truyVan.set("field", loc.linhVuc);
+  if (loc.thonID !== undefined && loc.thonID !== "") truyVan.set("hamlet", loc.thonID);
+  if (loc.boPhanID !== undefined && loc.boPhanID !== "") truyVan.set("unit", loc.boPhanID);
+  if (loc.tim !== undefined && loc.tim !== "") truyVan.set("q", loc.tim);
+  // `late` CHỈ NHẬN ĐÚNG CHUỖI `true`. Gửi `false` là **400**, không phải "không lọc" — nên ô
+  // chưa tích thì tham số vắng mặt hẳn (`locPhieuTuQuery`, `errLocTreHanKhongHopLe`).
+  if (loc.chiTreHan === true) truyVan.set("late", "true");
+
+  // SỐ LIỆU CỦA TỔNG QUAN — ba tên mới đi qua `thamSoTheoHopDong`, nên `tsc` đối chiếu chúng với
+  // kiểu `truyVan`. Kỳ chỉ đi lên với số liệu theo kỳ, cùng quy tắc sổ Nhiệm vụ.
+  const dat = thamSoTheoHopDong<petitions_get_citizen_reports["truyVan"]>(truyVan);
+  // Absent when the box is unticked — never `rating_max=` empty, which the server answers with 400.
+  dat("rating_max", loc.ratingMax === undefined ? undefined : String(loc.ratingMax));
+  dat("metric", loc.metric);
+  if (loc.metric !== undefined && isPeriodMetric("citizen-reports", loc.metric)) {
+    dat("from", loc.from);
+    dat("to", loc.to);
+  }
+
+  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
+  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
+  // lệ" — đúng vào lần mở màn hình đầu tiên.
+  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
+    truyVan.set("cursor", loc.cursor);
+  }
+}
+
+/** Dựng đường dẫn đọc sổ. Tách khỏi lời gọi mạng để kiểm được mà không cần thay `fetch`. */
+export function duongDanSoPhanAnh(loc: LocPhanAnh = {}): string {
+  const duongDan: petitions_get_citizen_reports["duongDan"] = "/api/v1/citizen-reports";
+  const truyVan = new URLSearchParams();
+  themLocVaoTruyVan(truyVan, loc);
+  const chuoi = truyVan.toString();
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/**
+ * GET /api/v1/citizen-reports — một trang của sổ phản ánh.
+ *
+ * PHIẾU THUỘC LĨNH VỰC `can-bo` KHÔNG NẰM TRONG TRANG khi tài khoản thiếu `feedback.restricted`,
+ * và chúng cũng không nằm trong con trỏ — máy chủ lọc trong câu truy vấn chứ không cắt sau khi
+ * đọc. Màn hình vì thế **không được** nói "có n phiếu bị ẩn": số đếm suy ra từ việc lật trang đã
+ * không có chúng, và nói ra là nói cho một đồng nghiệp biết có người vừa phản ánh về họ.
+ */
+export function laySoPhanAnh(
+  loc: LocPhanAnh = {},
+): Promise<KetQua<page_Result_petitions_phieuPhanAnhRa>> {
+  return docJSON<page_Result_petitions_phieuPhanAnhRa>(duongDanSoPhanAnh(loc));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BỐN THAO TÁC GHI CỦA LUỒNG CHÍNH (hai nhánh rẽ ở cuối tệp)
+ *
+ * CẢ SÁU TUYẾN GHI TRẢ VỀ 200 KÈM NGUYÊN PHIẾU SAU KHI GHI, và màn hình dùng đúng phiếu ấy thay vì vá tại
+ * chỗ: trạng thái vừa tới và hạn vừa được ấn định quyết định lần sau vẽ nút nào.
+ *
+ * 409 LÀ CÂU TRẢ LỜI BÌNH THƯỜNG CỦA BA TUYẾN, không phải sự cố — "phiếu đã chuyển trạng thái
+ * trong lúc bạn mở màn hình", hoặc "xã chưa cấu hình thời hạn cho lĩnh vực này". Câu của máy chủ
+ * đi thẳng ra màn hình; viết lại nó ở đây là dựng bản sao thứ hai của một quy tắc nghiệp vụ.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * POST …/classification — chốt lĩnh vực. **Hành vi ẤN ĐỊNH hạn xử lý xong** theo SLA của xã.
+ *
+ * ĐÚNG MỘT TRƯỜNG, VÀ HAI SỰ VẮNG MẶT LÀ TỪ CHỐI CHỨ KHÔNG PHẢI BỎ SÓT (`phanLoaiVao`): không có
+ * `due_at` — hạn là cam kết của xã tính theo giờ làm việc của chính xã, client đặt được hạn là
+ * client đặt được xã ấy chậm bao lâu; không có `status` — hành vi này đưa phiếu sang
+ * `dang-phan-loai` và không sang đâu khác.
+ */
+export function phanLoaiPhieu(
+  maTraCuu: string,
+  linhVuc: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_classification["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/classification";
+  const than: petitions_phanLoaiVao = { field: linhVuc, ...thanGhiChu(ghiChu) };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/**
+ * POST …/assignment — khối `Chuyển xử lý, không đổi trạng thái` của §8.5.
+ *
+ * `assignee` LÀ TUỲ CHỌN VÀ ĐÓ LÀ MỘT LỰA CHỌN CÓ THẬT trên màn hình: `— Để bộ phận phân công —`.
+ * Trường vắng mặt hẳn khi không chọn ai, chứ không gửi chuỗi rỗng.
+ *
+ * `assignee` LÀ **MÃ CÁN BỘ** (`code` của `GET /api/v1/staff-directory`, dạng `CB-00123`), KHÔNG
+ * PHẢI ULID NỘI BỘ. Máy chủ ghi nguyên chuỗi ấy vào `can_bo_xu_ly_id`, và luật nắm giữ so cột ấy với
+ * `Principal.Ma` (`service-petitions/internal/app/xu_ly_phan_anh.go:184-212`). Gửi một ULID thì phiếu
+ * vẫn "được giao" trên màn hình, còn người được giao thì không bao giờ tiến được nó.
+ */
+export function chuyenXuLyPhieu(
+  maTraCuu: string,
+  boPhanID: string,
+  maCanBo?: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_assignment["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/assignment";
+  const than: petitions_phanCongVao = {
+    ...(maCanBo !== undefined && maCanBo !== ""
+      ? { unit: boPhanID, assignee: maCanBo }
+      : { unit: boPhanID }),
+    ...thanGhiChu(ghiChu),
+  };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/**
+ * POST …/status — tiến phiếu MỘT bước trên luồng chính.
+ *
+ * KHÔNG CÓ THÂN, VÀ ĐÓ LÀ THIẾT KẾ CỦA MÁY CHỦ: một trạng thái đích đi trên dây là một client nhảy
+ * được bước — đẩy thẳng phiếu sang `da-xu-ly` mà không ai làm gì — và những bước ở giữa sẽ thành
+ * tuỳ chọn trên thực tế trong khi bản đồ vòng đời vẫn trông như bắt buộc. Máy chủ giữ bản đồ;
+ * người gọi chỉ nói "tiến".
+ *
+ * KHÔNG GỬI `Content-Type`: tuyên bố có một thân là mời người sau điền vào đó một trạng thái đích.
+ *
+ * ⚠ TUYẾN NÀY KHAI `feedback.read`, VÀ ĐIỀU KIỆN THẬT NẰM Ở TẦNG NGHIỆP VỤ: `feedback.resolve`
+ * **HOẶC** chính là cán bộ được phân công phiếu ấy (`app.duocTienTrangThai`). Trưởng thôn nhận một
+ * phiếu phải tiến được phiếu ấy. Giao diện KHÔNG dựng lại phép kiểm đó: `assignee` và `staff.code`
+ * của phiên đều là mã cán bộ nên so được, nhưng một phép so ở giao diện chỉ là một bản sao thứ hai
+ * của luật nắm giữ, và bản sao ấy sẽ lệch vào ngày luật đổi. Nút luôn hiện với người xem được sổ,
+ * và câu 403 của máy chủ ra thẳng màn hình.
+ *
+ * ⚠ NGOẠI LỆ DUY NHẤT CỦA "KHÔNG CÓ THÂN": ghi chú nội bộ `{note}`, từ 26/09/2026. Máy chủ nhận một
+ * thân JSON TUỲ CHỌN chỉ mang `note` (không trạng thái đích nào). Kiểu `{ note: string }` dưới đây
+ * GÕ TAY, và đó là lỗ hổng của công cụ chứ không phải lựa chọn: `tools/apidoc` không diễn tả được
+ * một thân tuỳ chọn, nên hợp đồng khai tuyến này `than: never`. Hệ quả: máy chủ đổi tên trường thì
+ * `tsc` KHÔNG đỏ ở đây. Ghi chú trống thì vẫn KHÔNG thân, KHÔNG `Content-Type` — đúng hình dạng cũ.
+ */
+export function tienTrangThaiPhieu(
+  maTraCuu: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_status["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/status";
+  const ghi = thanGhiChu(ghiChu);
+  const than: { note: string } | undefined = ghi.note === undefined ? undefined : { note: ghi.note };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/**
+ * POST …/closure — đóng phiếu kèm **kết quả người dân đọc được**.
+ *
+ * `result` BẮT BUỘC VÀ MÁY CHỦ CƯỠNG CHẾ (luật 10, bất biến 6). Nó là câu người dân đọc khi tra
+ * phiếu của mình, và là thứ duy nhất phân biệt một phiếu đã được xử lý với một phiếu bị xếp lại
+ * trong im lặng. "Đã xử lý" trống trơn không phải một kết quả.
+ *
+ * ⚠ TUYẾN NÀY ĐỨNG SAU `feedback.resolve` VÀ **KHÔNG** ĐƯỢC NỚI THEO LUẬT NẮM GIỮ Ở `…/status`.
+ * Hai dòng ấy khác nhau chính là điểm chính: câu hỏi mở #7 chốt ngày 16/09/2026 —
+ * *"`feedback.resolve` quyết định ai đóng được"*.
+ *
+ * HAI ĐIỂM ĐÓNG, MÁY CHỦ QUYẾT (`domain.DongDuoc`): `cho-dan-xac-nhan`, và `da-xu-ly` khi phiếu
+ * KHÔNG có tài khoản công dân nào đứng sau (không ai để xác nhận — quyết định ngày 24/09/2026).
+ */
+export function dongPhieu(
+  maTraCuu: string,
+  ketQua: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_closure["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/closure";
+  const than: petitions_dongPhieuVao = { result: ketQua, ...thanGhiChu(ghiChu) };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HAI NHÁNH RẼ — `khong-tiep-nhan` và `chuyen-cap-tren`
+ *
+ * CHỈ TỪ `dang-phan-loai`, và cả hai là TRẠNG THÁI CUỐI: không tuyến nào đưa phiếu ra khỏi chúng
+ * (`domain.chuyenDuocSang`). Nơi khác là **409** — câu của máy chủ ra thẳng màn hình.
+ *
+ * `reason` LÀ CÂU NGƯỜI DÂN ĐỌC khi tra phiếu của mình, cùng vai trò với `result` của …/closure.
+ * Nó chỉ đi trong THÂN POST — không lên URL, không vào bộ nhớ trình duyệt, không vào console: đó
+ * là chữ cán bộ gõ về việc của một công dân, và có thể nhắc tên hay địa chỉ người ấy (luật 3).
+ *
+ * CẮT KHOẢNG TRẮNG Ở ĐÂY chứ không để màn hình tự nhớ: máy chủ đếm trên chuỗi đã cắt, nên gửi đi
+ * đúng chuỗi được đếm là cách duy nhất để bộ đếm ký tự trên màn hình nói cùng một con số.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** POST …/rejection — `Không tiếp nhận`. Đúng một trường. */
+export function khongTiepNhanPhieu(
+  maTraCuu: string,
+  lyDo: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_rejection["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/rejection";
+  const than: petitions_khongTiepNhanVao = { reason: lyDo.trim(), ...thanGhiChu(ghiChu) };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/**
+ * POST …/referral — `Chuyển cấp trên`. `receiving_body` là TÊN cơ quan nhận, chữ tự do: không có
+ * danh mục cơ quan nào trong hợp đồng, và từ 7/2025 không còn cấp huyện để chọn sẵn.
+ */
+export function chuyenCapTrenPhieu(
+  maTraCuu: string,
+  lyDo: string,
+  coQuanTiepNhan: string,
+  ghiChu?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_referral["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/referral";
+  const than: petitions_chuyenCapTrenVao = {
+    reason: lyDo.trim(),
+    receiving_body: coQuanTiepNhan.trim(),
+    ...thanGhiChu(ghiChu),
+  };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * PUBLIC-PAGE MODERATION (§8.3, §14.4) — PUT …/publication, `feedback.assign`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The two acts a member of staff can record. `cho-duyet` is refused by the server (400): it means
+ * "nobody decided", and no act can record that. */
+export type PublicationTarget = "cong-khai" | "an";
+
+/**
+ * PUT …/publication — show the petition on the commune's public page, or hide it.
+ *
+ * IT MOVES NO LIFECYCLE STATUS and notifies nobody (server, `petition_publication.go`); the 200 body
+ * is the petition as it now stands, and the screen re-renders from it rather than patching locally.
+ *
+ * 409 `never_public` is the NORMAL answer for a staff-conduct (`can-bo`) petition: the server's
+ * sentence — the commune's `feedback.never_public`, rewordable on the Lời hệ thống tab — goes to the
+ * screen verbatim. Rewriting it here would be a second copy of the rule and of the commune's wording.
+ *
+ * NO Idempotency-Key: the route declares none — it sets an absolute value, and sending the same value
+ * again writes nothing.
+ */
+export function setPetitionPublication(
+  maTraCuu: string,
+  status: PublicationTarget,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_put_citizen_reports_by_maTraCuu_publication["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/publication";
+  const than: petitions_publicationIn = { status };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "PUT", than, 200),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHẬT KÝ XỬ LÝ (§8.7) — GET/POST …/log-entries
+ *
+ * BẢN GHI NGHIỆP VỤ CÁN BỘ ĐỌC, KHÁC `audit_log`: vết kiểm toán không hiện cho xã, còn nhật ký này là
+ * thứ người nhận phiếu đọc để biết ai đã làm gì. Hai tuyến cùng khai `feedback.read`.
+ *
+ * 404 CHO HAI TÌNH HUỐNG, MỘT CÂU: mã không có, hoặc phiếu thuộc lĩnh vực hạn chế mà tài khoản thiếu
+ * `feedback.restricted`. Cùng lý do với `layPhieuPhanAnh` — không rẽ nhánh theo `code`.
+ *
+ * `actor_code` LÀ MÃ CÁN BỘ (`CB-…`), không họ tên: máy chủ không trả tên, và màn hình hiện đúng mã
+ * (luật 6, bất biến 8 — mã là thứ còn đọc được nhiều năm sau).
+ *
+ * EXCEPTION: rows the CITIZEN caused (`danh-gia`, `mo-lai-theo-danh-gia`) carry the fixed marker
+ * `cong-dan`, not a staff code and never the citizen's id (`domain.CitizenLogActor`).
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Phân trang của nhật ký. `order` mặc định của máy chủ là `desc` — mới nhất trước. */
+export type TrangNhatKy = {
+  limit?: number;
+  cursor?: string | null;
+};
+
+/** Dựng đường dẫn đọc nhật ký. Tên tham số lấy từ hợp đồng — `tsc` đỏ khi máy chủ đổi tên. */
+export function duongDanNhatKyPhieu(maTraCuu: string, trang: TrangNhatKy = {}): string {
+  const mau: petitions_get_citizen_reports_by_maTraCuu_log_entries["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-entries";
+  const truyVan = new URLSearchParams();
+  const dat =
+    thamSoTheoHopDong<petitions_get_citizen_reports_by_maTraCuu_log_entries["truyVan"]>(truyVan);
+  dat("limit", trang.limit);
+  // Con trỏ rỗng/`null` = trang đầu, và KHÔNG gửi `cursor=` rỗng (máy chủ trả 400).
+  dat("cursor", trang.cursor);
+  const chuoi = truyVan.toString();
+  const duongDan = duongDanPhieu(mau, maTraCuu);
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/** GET …/log-entries — một trang nhật ký, mới nhất trước. */
+export function layNhatKyPhieu(
+  maTraCuu: string,
+  trang: TrangNhatKy = {},
+): Promise<KetQua<page_Result_petitions_nhatKyPhieuRa>> {
+  return docJSON<page_Result_petitions_nhatKyPhieuRa>(duongDanNhatKyPhieu(maTraCuu, trang));
+}
+
+/**
+ * POST …/log-entries — một dòng `ghi-chu` vào nhật ký, không đổi trạng thái. Được ở MỌI trạng thái.
+ *
+ * `khoaChongTrung` LÀ THAM SỐ, KHÔNG SINH TẠI CHỖ. Hợp đồng đòi `Idempotency-Key` bắt buộc (400 khi
+ * thiếu). Sinh khoá trong hàm này thì lần bấm lại sau lỗi mạng mang khoá MỚI — và nếu lần đầu thật ra
+ * đã tới máy chủ, nhật ký có hai dòng giống hệt nhau. Khoá do biểu mẫu giữ: giữ nguyên khi gửi lại,
+ * thay mới sau một lần thành công (`khoaSauLanGhi`).
+ *
+ * Quyền THẬT nằm ở tầng nghiệp vụ: người được phân công, hoặc người có `feedback.resolve` /
+ * `feedback.assign` / `feedback.classify`. Câu 403 của máy chủ ra nguyên văn.
+ */
+export function ghiNhatKyPhieu(
+  maTraCuu: string,
+  ghiChu: string,
+  khoaChongTrung: string,
+): Promise<KetQua<petitions_nhatKyPhieuRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_log_entries["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-entries";
+  const than: petitions_ghiChuPhieuVao = { note: ghiChu.trim() };
+  return docThanLoiGoi<petitions_nhatKyPhieuRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 201, {
+      "Idempotency-Key": khoaChongTrung,
+    }),
+  );
+}

@@ -1,10 +1,10 @@
-import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
-import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { SoVanBanDen } from "@/features/van-ban/so-van-ban-den";
-import { SoVanBanDi } from "@/features/van-ban/so-van-ban-di";
+import { CauHinhXaProvider } from "@/components/commune-config";
+import { phanHienThi } from "@/lib/commune-display-config";
+import { DauTrang } from "@/components/page-header";
+import { ThanhBen } from "@/components/sidebar";
+import { PhienProvider } from "@/features/session/current-session";
+import { SoVanBanDen } from "@/features/documents/incoming-document-register";
+import { SoVanBanDi } from "@/features/documents/outgoing-document-register";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 

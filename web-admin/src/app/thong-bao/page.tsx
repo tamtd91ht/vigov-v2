@@ -1,10 +1,10 @@
-import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { DauTrang } from "@/components/dau-trang";
-import { ThanhBen } from "@/components/thanh-ben";
-import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { MO_TA_MAN, TIEU_DE_MAN } from "@/features/thong-bao/nhan-thong-bao";
-import { SoThongBao } from "@/features/thong-bao/so-thong-bao";
+import { CauHinhXaProvider } from "@/components/commune-config";
+import { phanHienThi } from "@/lib/commune-display-config";
+import { DauTrang } from "@/components/page-header";
+import { ThanhBen } from "@/components/sidebar";
+import { PhienProvider } from "@/features/session/current-session";
+import { MO_TA_MAN, TIEU_DE_MAN } from "@/features/announcements/announcement-labels";
+import { SoThongBao } from "@/features/announcements/announcement-register";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**

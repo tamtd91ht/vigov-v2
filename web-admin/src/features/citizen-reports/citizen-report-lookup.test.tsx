@@ -1,0 +1,239 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
+
+import { ThongTinPhieu } from "./citizen-report-lookup";
+
+/**
+ * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không. Hai thứ quan trọng nhất trên màn này đều là
+ * thứ mà mọi ca test module thuần vẫn xanh nguyên nếu ai đó xoá khỏi JSX: số điện thoại đã che,
+ * và hai ô hạn xử lý.
+ */
+
+function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
+  return {
+    code: "PA-2026-0021",
+    channel: "zalo-mini-app",
+    status: "dang-phan-loai",
+    field: "rac-thai",
+    field_label: "Rác thải – Vệ sinh môi trường",
+    content: "Rác tồn đọng ở đầu ngõ ba ngày chưa ai dọn.",
+    address: "Tổ 6, thôn Hà Lam",
+    // Dạng ĐÃ CHE của máy chủ, dựng từ số giả đã thống nhất (luật 3, bất biến 5).
+    reporter_name: "Nguyễn V. A.",
+    reporter_phone: "09****0000",
+    anonymous: false,
+    clock_from: "2026-09-09T07:20:00Z",
+    booked_at: "2026-09-09T07:21:00Z",
+    acknowledge_due: "2026-09-09T09:20:00Z",
+    resolve_due: null,
+    // Hạn BẮT BUỘC PHÂN LOẠI — trần 1 ngày làm việc, ADR 0035 §C (câu mở #26,
+    // chốt 22/09/2026). `null` là trạng thái THẬT: phiếu đã phân loại rồi thì trần
+    // ấy không còn nghĩa gì. Nó là hạn THỨ BA của một phiếu, cạnh hạn tiếp nhận và
+    // hạn xử lý xong — cả ba đều LƯU một lần tại hành vi ấn định, không tính lại.
+    classify_due: null,
+    // BỐN TRƯỜNG CỦA ĐƯỜNG XỬ LÝ PHÍA CÁN BỘ (`service-petitions`, 23/09/2026). Chuỗi rỗng
+    // là trạng thái THẬT — "chưa phân công bộ phận nào", "chưa có kết quả" — chứ không
+    // phải thiếu dữ liệu, nên hợp đồng khai `string` chứ không `string | null`.
+    //
+    // `public` là cờ CÔNG KHAI phiếu ra kênh công dân, mặc định tắt: một phiếu mang họ tên
+    // và số điện thoại người gửi (luật 3), nên công khai phải là một hành vi có người bấm.
+    unit: "",
+    assignee: "",
+    result: "",
+    public: false,
+    ...sua,
+  };
+}
+
+const BAY_GIO = new Date("2026-09-09T10:00:00Z");
+
+describe("phiếu phản ánh kết xuất ra trang", () => {
+  it("số điện thoại ra trang ĐÚNG dạng đã che, và không có chữ số nào bị lộ thêm", () => {
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+
+    expect(html).toContain("09****0000");
+    // Không có chuỗi mười chữ số liền nào trên trang: nếu có ngày ai đó "ghép lại cho đẹp" thì
+    // ca này đỏ.
+    expect(html).not.toMatch(/\d{10}/);
+  });
+
+  it("ẩn danh: KHÔNG một mảnh tên hay số nào ra tới trang", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ anonymous: true, reporter_name: "", reporter_phone: "" })}
+        bayGio={BAY_GIO}
+      />,
+    );
+
+    expect(html).toContain("Người gửi ẩn danh");
+    expect(html).not.toContain("Nguyễn");
+    expect(html).not.toContain("09****");
+  });
+
+  it("hai ô hạn hiện HAI câu khác nhau cho hai loại `null`", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ acknowledge_due: null, resolve_due: null })}
+        bayGio={BAY_GIO}
+      />,
+    );
+
+    // `acknowledge_due` null = KHÔNG ÁP DỤNG (phiếu cán bộ nhập hộ).
+    expect(html).toContain("Không áp dụng");
+    // `resolve_due` null = CHƯA CÓ (phiếu chưa phân loại). Gộp hai cái là nói sai về một trong
+    // hai loại phiếu.
+    expect(html).toContain("Chưa ấn định");
+  });
+
+  it("quá hạn: chữ 'Quá hạn' ra tới trang, và KHÔNG kèm số ngày", () => {
+    // Đặc tả §8.3 vẽ "Quá hạn 3 ngày". Con số ấy đếm bằng GIỜ LÀM VIỆC và cần ba bảng lịch của
+    // chính xã ấy — `identity` sở hữu phép cộng (ADR 0007). Một con số đếm bằng giờ đồng hồ ở
+    // trình duyệt sẽ lệch số của máy chủ vào đúng dịp lễ.
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ resolve_due: "2026-09-01T09:20:00Z" })} bayGio={BAY_GIO} />,
+    );
+
+    expect(html).toContain("Quá hạn");
+    expect(html).not.toMatch(/Quá hạn\s*\d+\s*ngày/);
+  });
+
+  it("gốc đếm hạn và lúc vào sổ là HAI dòng riêng", () => {
+    // `clock_from` là mốc cả hai hạn được đếm từ đó — không có nó thì không giải thích được hai
+    // hạn ấy cho bất kỳ ai, kể cả một đoàn kiểm tra.
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+
+    expect(html).toContain("Người dân gửi lúc");
+    expect(html).toContain("Vào sổ lúc");
+  });
+
+  it("câu trấn an về tra cứu của người dân có mặt nguyên văn khi phiếu chưa công khai", () => {
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+    expect(html).toContain("Người gửi vẫn tra cứu được phiếu của mình");
+  });
+
+  it("nội dung phản ánh ra tới trang nguyên văn — nó là thứ cán bộ phải xử lý", () => {
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+    expect(html).toContain("Rác tồn đọng ở đầu ngõ ba ngày chưa ai dọn.");
+  });
+});
+
+describe("vị trí hiện trường — màn tra cứu (§8.4)", () => {
+  it("coordinates reach the page as text, six decimals, with the provenance note", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ lat: 21.028511, lng: 105.804817 })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Vị trí hiện trường");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("21.028511, 105.804817");
+    expect(html).toContain("Toạ độ do người dân gửi kèm từ ứng dụng");
+    expect(html).not.toContain("Người dân không gửi toạ độ");
+  });
+
+  it("absent coordinates are SAID; an empty address uses the requirement's sentence", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ address: "", lat: null, lng: null })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Người dân không gửi toạ độ");
+    expect(html).toContain("Không có địa chỉ ghi kèm");
+    expect(html).not.toContain("Toạ độ do người dân gửi kèm");
+  });
+
+  it("anonymous: the place stays, the reporter goes", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({
+          anonymous: true,
+          reporter_name: "",
+          reporter_phone: "",
+          lat: 21.028511,
+          lng: 105.804817,
+        })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("Người gửi ẩn danh");
+    expect(html).not.toContain("Nguyễn");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("21.028511, 105.804817");
+  });
+
+  it("no map: no iframe, no image, no outbound link carrying the coordinates", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ lat: 21.028511, lng: 105.804817 })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toMatch(/<(iframe|img|a)\b/);
+    expect(html).not.toMatch(/href="[^"]*21\.028511/);
+  });
+
+  it("the address is escaped text — no raw HTML runs (rule 13)", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ address: "<img src=x onerror=alert(1)>" })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+});
+
+describe("đánh giá, mở lại, công khai — màn tra cứu", () => {
+  it("chưa đánh giá: nói ra, không để khối trống", () => {
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+    expect(html).toContain("Đánh giá của người dân");
+    expect(html).toContain("Người dân chưa đánh giá");
+    expect(html).not.toContain("Đã mở lại");
+  });
+
+  it("2 sao, mở lại 1 lần: sao, nhận xét, câu đỏ của bản yêu cầu, dòng mở lại dưới hạn", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({
+          status: "dang-xu-ly",
+          rating: 2,
+          rating_comment: "Vẫn còn rác ở cuối ngõ.",
+          rated_at: "2026-09-28T03:05:00Z",
+          reopen_count: 1,
+        })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("★★☆☆☆");
+    expect(html).toContain("2/5");
+    expect(html).toContain("10:05 28/09/2026");
+    expect(html).toContain("Vẫn còn rác ở cuối ngõ.");
+    expect(html).toContain("Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.");
+    expect(html).toContain("Đã mở lại 1 lần do người dân chấm điểm thấp");
+  });
+
+  it("nhận xét của dân được THOÁT — không HTML nào chạy (luật 13)", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ rating: 1, rating_comment: "<img src=x onerror=alert(1)>" })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("màn tra cứu KHÔNG có nút công khai, kể cả phiếu đang chờ duyệt", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ publication_status: "cho-duyet" })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Chưa cho hiện công khai");
+    expect(html).not.toContain("Cho hiện công khai</button>");
+    expect(html).not.toContain("Ẩn khỏi trang công khai</button>");
+    // Nor the "no permission" sentence: read-only here is about the screen, not the account.
+    expect(html).not.toContain("feedback.assign");
+  });
+
+  it("đang công khai: nhãn trạng thái đúng", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ publication_status: "cong-khai", public: true })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("Đang hiện công khai");
+  });
+});

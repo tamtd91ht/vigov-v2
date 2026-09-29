@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { NHAN_CHENH_LECH } from "@/features/thu-chi/nhan-thu-chi";
-import { KhungQuyen } from "@/features/quyen/cong-quyen";
+import { NHAN_CHENH_LECH } from "@/features/budget/budget-labels";
+import { KhungQuyen } from "@/features/permissions/permission-gate";
 import type {
   documents_incomingSummaryOut,
   finance_chiSoNamRa,

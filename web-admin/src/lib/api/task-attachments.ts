@@ -21,7 +21,7 @@
  * the button.
  */
 
-import { CHUNG, LOI_KHONG_RO, thongBaoLoi } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
+import { CHUNG, LOI_KHONG_RO, thongBaoLoi } from "./request"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type {
   petitions_get_tasks_by_ma_attachments_by_id_download,
   petitions_post_tasks_by_ma_attachments,

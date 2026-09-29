@@ -1,0 +1,194 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+
+import { layPhieuPhanAnh } from "@/lib/api/citizen-reports";
+import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
+
+import {
+  CHUA_TRA_CUU,
+  HUONG_DAN_TRA_CUU,
+  linhVucPhanAnh,
+  lopHan,
+  nhanHan,
+  nhanKenh,
+  nhanLinhVuc,
+  nhanNguoiGui,
+  nhanThoiDiem,
+  nhanTrangThai,
+  reopenLine,
+  SCENE_LOCATION_LABEL,
+  trangThaiHan,
+} from "./citizen-report-labels";
+import { CitizenRatingBlock, PublicationBox, SceneLocation } from "./citizen-report-blocks";
+
+/**
+ * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ LÝ LẼ CŨ CỦA KHỐI NÀY ĐÃ HẾT HIỆU LỰC TỪ 23/09/2026, và nó được ghi lại chứ không xoá lặng
+ * lẽ: một chú thích nói "hợp đồng không có tuyến danh sách" là thứ người sau đọc rồi dựng một
+ * màn hình nghèo đi theo. Nay ĐÃ CÓ `GET /api/v1/citizen-reports`, và quyển sổ §2 kèm bộ lọc §4
+ * nằm ở `features/phan-anh/so-phan-anh.tsx`.
+ *
+ * MÀN NÀY KHÔNG BỊ THAY THẾ, nó đứng CẠNH quyển sổ: mã tra cứu mở thẳng đúng một phiếu, kể cả
+ * phiếu không khớp bộ lọc đang chọn — đúng việc cán bộ làm khi người dân gọi điện đọc mã.
+ *
+ * Bốn thẻ KPI, tab Bản đồ nhiệt và tab Báo cáo thì VẪN chưa dựng được (tuyến đếm của ADR 0053 chỉ
+ * phủ một phần); danh sách đầy đủ những phần ấy nằm ở `PHAN_CHUA_DUNG` và hiện trên màn, không giấu
+ * ở đây.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * MÃ TRA CỨU KHÔNG ĐOÁN ĐƯỢC, VÀ MÀN HÌNH NÀY KHÔNG LÀM NÓ ĐOÁN ĐƯỢC. Không gợi ý, không tự hoàn
+ * thành, không liệt kê mã gần đúng; sai mã thì nhận đúng một câu trả lời — cùng câu mà một phiếu
+ * của xã khác và một phiếu thuộc lĩnh vực hạn chế nhận được (luật 4, cấm #2 và #3).
+ *
+ * KHÔNG CÓ GHI CHÚ NỘI BỘ, KHÔNG CÓ LỊCH SỬ LUÂN CHUYỂN, KHÔNG CÓ NHẬT KÝ XỬ LÝ trên màn này —
+ * vì hợp đồng không trả về chúng. Đã đối chiếu từng trường của `petitions.phieuPhanAnhRa`.
+ *
+ * KHÔNG CÓ BỀ MẶT GHI NÀO **Ở MÀN NÀY**, và đó nay là một lựa chọn chứ không còn là một sự thiếu:
+ * bốn thao tác xử lý (phân loại · chuyển xử lý · tiến trạng thái · đóng phiếu) nằm ở khối chi tiết
+ * của quyển sổ, nơi có đủ danh mục bộ phận và đủ bộ quyền của phiên để vẽ đúng nút. Hai bề mặt ghi
+ * cho cùng bốn hành vi là hai bề mặt sẽ lệch nhau, và bản lệch là bản không ai mở ra xem lại.
+ */
+
+type TrangThaiTra =
+  | { pha: "chuaTra" }
+  | { pha: "dangTra" }
+  | { pha: "loi"; thongBao: string }
+  | { pha: "xong"; phieu: petitions_phieuPhanAnhRa };
+
+export function TraCuuPhieu() {
+  const [ma, datMa] = useState("");
+  const [trangThai, datTrangThai] = useState<TrangThaiTra>({ pha: "chuaTra" });
+
+  async function tra(e: FormEvent) {
+    e.preventDefault();
+    const canGon = ma.trim();
+    // Mã rỗng không gọi tuyến nào: một đoạn đường dẫn rỗng không khớp mã nào và không có việc gì
+    // chạm tới máy chủ (máy chủ cũng từ chối, `phieu_phan_anh.go:173`).
+    if (canGon === "") return;
+
+    datTrangThai({ pha: "dangTra" });
+    const kq = await layPhieuPhanAnh(canGon);
+    datTrangThai(kq.ok ? { pha: "xong", phieu: kq.duLieu } : { pha: "loi", thongBao: kq.thongBao });
+  }
+
+  return (
+    <section className="man-phan-anh" aria-labelledby="tieu-de-tra-cuu">
+      <h2 id="tieu-de-tra-cuu">Tra cứu phiếu phản ánh</h2>
+      <p className="ghi-chu">{HUONG_DAN_TRA_CUU}</p>
+
+      <form className="form-tra-cuu" onSubmit={tra}>
+        <div className="o-nhap">
+          <label htmlFor="ma-tra-cuu">Mã tra cứu</label>
+          <input
+            id="ma-tra-cuu"
+            name="ma-tra-cuu"
+            value={ma}
+            onChange={(e) => datMa(e.target.value)}
+            // Không `autoComplete`: mã tra cứu là chuỗi mở một phiếu của người dân, và trình
+            // duyệt lưu lại nó trên một máy dùng chung ở trụ sở xã là một bản sao không ai quản.
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <button className="nut-chinh" type="submit" disabled={trangThai.pha === "dangTra"}>
+          {trangThai.pha === "dangTra" ? "Đang tra…" : "Tra cứu"}
+        </button>
+      </form>
+
+      {trangThai.pha === "chuaTra" && <p className="trang-thai-rong">{CHUA_TRA_CUU}</p>}
+      {trangThai.pha === "dangTra" && <p role="status">Đang tra phiếu…</p>}
+
+      {/* Hiện ĐÚNG `message` của máy chủ. Không thêm "có thể bạn gõ nhầm", không thêm "phiếu này
+          thuộc xã khác" — cả hai đều là những câu nói ra điều máy chủ vừa cố ý không nói. */}
+      {trangThai.pha === "loi" && (
+        <p className="thong-bao-loi" role="alert">
+          {trangThai.thongBao}
+        </p>
+      )}
+
+      {trangThai.pha === "xong" && <ThongTinPhieu phieu={trangThai.phieu} bayGio={new Date()} />}
+    </section>
+  );
+}
+
+/**
+ * Phần thuần trình bày. `bayGio` truyền vào để kiểm được cả hai phía của mốc hạn — một component
+ * tự gọi `new Date()` bên trong chỉ kiểm được đúng khoảnh khắc chạy test.
+ */
+export function ThongTinPhieu({
+  phieu,
+  bayGio,
+}: {
+  phieu: petitions_phieuPhanAnhRa;
+  bayGio: Date;
+}) {
+  const linhVuc = linhVucPhanAnh(phieu.field, phieu.field_label);
+  const hanTiepNhan = trangThaiHan(phieu.acknowledge_due, "khongApDung", bayGio);
+  const hanXuLy = trangThaiHan(phieu.resolve_due, "chuaCo", bayGio);
+  const reopened = reopenLine(phieu.reopen_count);
+
+  return (
+    <div className="khoi-chi-tiet">
+      <div className="dau-khoi-chi-tiet">
+        <h3 className="ma-muc">{phieu.code}</h3>
+        <span className="chip chip-ngung">{nhanTrangThai(phieu.status)}</span>
+      </div>
+
+      <dl className="danh-sach-truong">
+        <dt>Lĩnh vực</dt>
+        <dd>{nhanLinhVuc(linhVuc)}</dd>
+
+        <dt>Kênh tiếp nhận</dt>
+        <dd>{nhanKenh(phieu.channel)}</dd>
+
+        {/* NGƯỜI GỬI ĐÃ CHE SẴN Ở MÁY CHỦ — không ghép lại, không hiện thêm chữ số nào. */}
+        <dt>Người gửi</dt>
+        <dd>{nhanNguoiGui(phieu)}</dd>
+
+        <dt>Nội dung</dt>
+        {/* Nội dung KHÔNG che, và đó không phải mâu thuẫn: cán bộ không đọc được phản ánh thì
+            không xử lý được nó, và một câu che một nửa thì không còn dùng được. Cái được che là
+            những gì buộc phiếu vào một người có tên. */}
+        <dd className="noi-dung-phan-anh">{phieu.content}</dd>
+
+        <dt>{SCENE_LOCATION_LABEL}</dt>
+        <dd>
+          <SceneLocation petition={phieu} />
+        </dd>
+
+        {/* BA MỐC THỜI GIAN, KHÔNG PHẢI HAI, và không mốc nào thay được mốc kia:
+            `clock_from` là lúc người dân bấm gửi — GỐC ĐẾM của cả hai hạn, và là thứ duy nhất
+            giải thích được hai hạn ấy cho một đoàn kiểm tra;
+            `booked_at` là lúc phiếu vào sổ. */}
+        <dt>Người dân gửi lúc</dt>
+        <dd>{nhanThoiDiem(phieu.clock_from)}</dd>
+
+        <dt>Vào sổ lúc</dt>
+        <dd>{nhanThoiDiem(phieu.booked_at)}</dd>
+
+        <dt>Hạn tiếp nhận</dt>
+        <dd>
+          <span className={lopHan(hanTiepNhan)}>{nhanHan(hanTiepNhan)}</span>
+        </dd>
+
+        <dt>Hạn xử lý xong</dt>
+        <dd>
+          <span className={lopHan(hanXuLy)}>{nhanHan(hanXuLy)}</span>
+          {reopened !== null && <p className="nhan-lech">{reopened}</p>}
+        </dd>
+
+        {/* READ-ONLY here: this screen has no write surface (see the header). The buttons live in
+            the register's drawer, next to the other processing acts. */}
+        <dt>Hiển thị với người dân</dt>
+        <dd>
+          <PublicationBox petition={phieu} mayModerate={false} />
+        </dd>
+      </dl>
+
+      <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-tra-cuu" />
+    </div>
+  );
+}

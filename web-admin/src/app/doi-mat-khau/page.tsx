@@ -1,9 +1,9 @@
-import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
-import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { DauTrang } from "@/components/dau-trang";
-import { FormDoiMatKhau } from "@/features/mat-khau/form-doi-mat-khau";
-import { NhacBatDoiMatKhau } from "@/features/mat-khau/nhac-bat-doi";
-import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { CauHinhXaProvider } from "@/components/commune-config";
+import { phanHienThi } from "@/lib/commune-display-config";
+import { DauTrang } from "@/components/page-header";
+import { FormDoiMatKhau } from "@/features/password/change-password-form";
+import { NhacBatDoiMatKhau } from "@/features/password/forced-change-reminder";
+import { PhienProvider } from "@/features/session/current-session";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**

@@ -13,8 +13,8 @@
  * state rather than creating one addressable resource (`service-identity/internal/http/role_template.go`).
  */
 
-import { docThanLoiGoi, goiGhi } from "./goi";
-import type { KetQua } from "./goi";
+import { docThanLoiGoi, goiGhi } from "./request";
+import type { KetQua } from "./request";
 import type { identity_post_roles_defaults, identity_seedRoleTemplatesOut } from "./schema.gen";
 
 const SEED_PATH = "/api/v1/roles/defaults" satisfies identity_post_roles_defaults["duongDan"];

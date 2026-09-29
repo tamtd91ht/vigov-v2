@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-09-30",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -277,6 +277,15 @@
       "bang_chung": "8dddda2 · 446df24 · d5a4625 · 90f3f25 · 7296da5 · typecheck/lint sạch, vitest 148 tệp/2735 ca, check:api khớp",
       "tiep_theo": "Còn một phần chưa dựng: Tính lại số liệu Tổng quan (bỏ, ADR 0053) và Gửi báo cáo định kỳ (chờ /bao-cao). Chưa mở trình duyệt ở 320px. Kiểu ghi của trường tuỳ chọn (identity_optionalHoursIn, optionalCountIn) sinh ra là Record<string,never> — web gõ tay từ phía đọc, cần sửa bộ sinh.",
       "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "doi-ten-tieng-anh-lop-a",
+      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A phần 1: tên tệp và thư mục",
+      "trang_thai": "dang_lam",
+      "bang_chung": "30/09/2026: 288 git mv + ~840 import; 15 thư mục (features/phan-anh -> citizen-reports, thu-chi -> budget, nhiem-vu -> tasks, van-ban -> documents, lib/may-chu -> lib/server...). Route src/app/**, schema.gen.ts, dinh-tuyen.gen.ts, khoá localStorage giữ nguyên. tsc sạch, vitest 2750/2750, eslint 0, next build 17 route không đổi, gen-api-types khớp.",
+      "no_confirm": [],
+      "tiep_theo": "Phần 2: ~2.134 định danh TS — làm sau lượt core/openapi (kiểu từ schema.gen.ts đổi theo DTO backend). ~128 chú thích còn nhắc đường dẫn cũ. Từ điển cần dòng: 'cấu hình' = settings (màn) / config (cấu hình xã lúc chạy); sơ đồ tổ chức = org-chart; sổ = register.",
       "menu": "cau-hinh"
     }
   ]

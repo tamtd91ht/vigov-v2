@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOI_KHONG_RO } from "./goi";
-import { addTaskLogEntry } from "./nhiem-vu";
+import { LOI_KHONG_RO } from "./request";
+import { addTaskLogEntry } from "./tasks";
 import {
   UPLOAD_FORM_MISSING,
   attachmentDownloadLink,

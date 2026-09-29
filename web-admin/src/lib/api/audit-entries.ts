@@ -13,8 +13,8 @@
  * Nothing here logs the body: `delta` carries masked before/after values and the IP of staff (rule 3).
  */
 
-import { docJSON, thamSoTheoHopDong } from "./goi";
-import type { KetQua } from "./goi";
+import { docJSON, thamSoTheoHopDong } from "./request";
+import type { KetQua } from "./request";
 import type {
   comms_get_comms_audit_entries,
   documents_get_documents_audit_entries,
