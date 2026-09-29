@@ -72,8 +72,10 @@ func (d *recordingDriver) shouldFail(q string) error {
 	return nil
 }
 
-func (d *recordingDriver) Connect(context.Context) (driver.Conn, error) { return &recordingConn{d: d}, nil }
-func (d *recordingDriver) Driver() driver.Driver                        { return recordingOpener{} }
+func (d *recordingDriver) Connect(context.Context) (driver.Conn, error) {
+	return &recordingConn{d: d}, nil
+}
+func (d *recordingDriver) Driver() driver.Driver { return recordingOpener{} }
 
 type recordingOpener struct{}
 
