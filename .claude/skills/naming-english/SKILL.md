@@ -17,7 +17,7 @@ Rule 12 states the invariant, ADR 0051 the decision (2026-09-28). This file says
 | New object-storage bucket, object-key segments | **English**, kebab-case | `meeting-attachments` |
 | Route directory a user sees — `web-admin/src/app/**`, `platform-admin/src/app/**` | **Vietnamese**, no diacritics | `app/nhiem-vu/moi/page.tsx` |
 | UI strings, messages to citizens, `kb/` prose | **Vietnamese** with diacritics | `"Danh sách nhiệm vụ"` |
-| Enum **values** (the string stored and sent) | **English** since 2026-09-29 (user decision; supersedes ADR 0011) — existing Vietnamese values are migrated by the rename campaign with a dual-accept transition | `"signed"`, `"assigned"` |
+| Enum **values** (the string stored and sent) | **English**, kebab-case (X14), since 2026-09-29 (user decision; supersedes ADR 0011) — existing Vietnamese values are migrated by the rename campaign with a dual-accept transition | `"signed"`, `"assigned"` |
 | k8s object names, ConfigMap/Secret names, NetworkPolicy names, labels in `deploy/**` | **English**, kebab-case; match the REAL cluster (`common-config`, `<service>-secrets`, `vigov-service-<service>`) | `allow-egress`, `vigov.vn/surface` |
 | REST path segments `/api/v1/...` | the ONLY place a Vietnamese segment may remain (user decision 2026-09-29); new ones English per `skills/rest-api-design` | `/api/v1/citizen-reports` |
 
@@ -51,12 +51,12 @@ state it as your assumption in the proposal rather than deciding silently.
 | Văn bản đến / đi | `IncomingDocument` / `OutgoingDocument` |
 | Nhiệm vụ | `Task` · `tasks` |
 | Biên bản họp | `Meeting` · `meetings` — not `Minutes` |
-| Kết luận họp | `Conclusion` · `conclusions` |
+| Kết luận họp | `MeetingConclusion` (X9) · `conclusions` |
 | Giải ngân | `Disbursement` · `disbursements` |
-| Dự án đầu tư | `Project` (entity) · `investment-projects` (URL) |
+| Dự án đầu tư | `InvestmentProject` (X6) · `investment-projects` |
 | Cán bộ | `Staff` — not `User` (a citizen is a user too; rule 4) |
 | Công dân | `Citizen` |
-| Xã (đơn vị đang phục vụ) | `Tenant` in code · `communes` on URLs |
+| Xã | `Tenant` = isolation boundary / ID · `Commune` = the administrative unit shown (`CommuneProfile`) (X5) · `communes` on URLs |
 | Thôn / Tổ dân phố | `ResidentialUnit` |
 | Loại văn bản | `DocumentType` |
 | Ngày nghỉ lễ / ngày làm bù | `PublicHoliday` / `SwapWorkingDay` |
@@ -67,17 +67,20 @@ Not in the table: read the mapping file first — it has more rows than this one
 **A business concept with no English name there → ask the user** (rule 12 stop condition). A
 technical helper (`parseCursor`, `retryCount`) needs no mapping entry.
 
-**OPEN — ask before naming:** legal terms with no safe English equivalent (`khieu_nai` / `to_cao` /
-`phan_anh`, `thu_ly` / `tiep_nhan`). ADR 0051 §"Chưa chốt" #1 leaves undecided whether new
-identifiers for these use an English name or `vi-name-ok`. What IS fixed: they must never collapse
-into one English word, because they run under different statutes and clocks (ADR 0011).
+**Legal terms** (`khieu_nai` / `to_cao` / `phan_anh`, `thu_ly` / `tiep_nhan`): DECIDED 29/09 (X19) —
+English per the glossary's translation table, legal meaning recorded in ADR 0061. They must never
+collapse into one English word: they run under different statutes and clocks (ADR 0011).
+
+**Every naming decision (X1–X25) and its reason** lives in the glossary §Từ điển đổi tên — the one
+place to read before renaming and to update when a new conflict is settled. Do not restate it here.
 
 ## 3. Database naming
 
 - `snake_case`, English, singular table names as the existing tables are: `meeting_attachment`.
 - `tenant_id` on every business table (rule 1), `deleted_at` · `deleted_by` · `delete_reason` (rule 7).
 - A foreign key names the **English** concept: `meeting_id`, even when it references the old table
-  `bien_ban_hop`. The old table keeps its name — renaming a populated table is a rule 7 migration.
+  `bien_ban_hop`. Renaming the old table is the campaign's layer B (reversible `RENAME` migration,
+  ADR 0061), never a side effect of a feature change.
 - A new column on an **old** Vietnamese table is still English: `ALTER TABLE bien_ban_hop ADD
   COLUMN signed_file_key TEXT`.
 - A migration file name is new: `0019_meeting_attachment.sql`.
