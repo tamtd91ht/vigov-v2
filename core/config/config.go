@@ -444,7 +444,7 @@ type Config struct {
 	// every commune has changed its admin password; requiring it would force a live credential for
 	// the highest-privileged account to stay in the cluster forever.
 	//
-	// k8s SECRET (`bi-mat-identity`), secret.Secret: it is a live credential that opens the
+	// k8s SECRET (`identity-secrets`), secret.Secret: it is a live credential that opens the
 	// highest-privileged account of every commune not yet seeded (rule 8, rule 11 invariant 7).
 	// Its strength is judged where it is USED — identity refuses to seed with one shorter than
 	// password.DaiToiThieu — for the same one-owner-per-rule reason CitizenSessionBridgeKeys gives.
@@ -639,9 +639,13 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	esKey := r.read("ELASTICSEARCH_API_KEY", os.Getenv("ELASTICSEARCH_API_KEY"), requiredInProd, Elasticsearch)
 	esPrefix := r.read("ELASTICSEARCH_INDEX_PREFIX", os.Getenv("ELASTICSEARCH_INDEX_PREFIX"), requiredInProd, Elasticsearch)
 
+	// The first line is the one log searches and alerts match on, so it keeps its shape; the lines
+	// after it tell the operator what each variable is and where it goes (hints.go) — a refusal
+	// that names a variable nobody can place is an outage that lasts as long as the search.
 	if len(r.missing) > 0 {
-		return Config{}, fmt.Errorf("%w: %s (service %s, ENV=%s)",
-			ErrThieuBienMoiTruong, strings.Join(r.missing, ", "), serviceName, env)
+		return Config{}, fmt.Errorf("%w: %s (service %s, ENV=%s)%s",
+			ErrThieuBienMoiTruong, strings.Join(r.missing, ", "), serviceName, env,
+			missingHints(serviceName, r.missing))
 	}
 
 	// ---- parse what was read; a MALFORMED value of a declared group is fatal ---------------

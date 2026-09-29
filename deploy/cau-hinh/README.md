@@ -6,8 +6,11 @@ ngang — manifest dùng `envFrom`, key sai dạng bị bỏ qua im lặng.
 
 Thêm hay sửa key xong: `kubectl -n vigov-prod rollout restart deploy/vigov-service-<dịch vụ>`.
 
-(`deploy/base/` gọi các đối tượng này là `bi-mat-<dịch vụ>` và `cau-hinh-chung` — chỉ dùng khi dựng
-cụm mới bằng `kubectl apply -k`.)
+(`deploy/base/` đọc đúng các tên này qua `envFrom` — `core/config/hints_test.go` kiểm.)
+
+**Pod dừng vì thiếu biến?** Chính dòng log đã in, cho từng biến thiếu: nó là gì, lấy giá trị thế nào,
+đặt vào đối tượng nào, dạng giá trị ra sao. Nguồn của đoạn chữ ấy là `core/config/hints.go`; cột
+"Là gì · lấy giá trị" dưới đây là bản tóm tắt của cùng bảng đó — lệch nhau thì `hints.go` đúng.
 
 **Cột "Bắt buộc":** `có` — thiếu thì pod của các dịch vụ ghi sau dấu — **không khởi động**, mọi môi
 trường. `có (prod)` — như vậy ở **staging và prod**; dev cho thiếu (tính năng tắt). `không` — có mặc
@@ -28,24 +31,24 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 
 **Key chung, cả 7 Secret:**
 
-| Key | Bắt buộc | Value |
-|---|---|---|
-| `DATABASE_DSN` | **có** — mọi dịch vụ | `postgres://<user>:<mật khẩu>@<host>:5432/vigov_<dịch vụ>?sslmode=require` — mỗi dịch vụ một CSDL riêng |
-| `GRPC_CALLER_KEY` | **có** — platform, identity, documents, finance, petitions, comms, reporting | `openssl rand -base64 48` — **cùng một giá trị** ở cả 7 |
-| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms | `redis://:<mật khẩu>@<host>:6379/0` — 5 Secret, **không** có ở `platform-secrets` và `reporting-secrets` |
+| Key | Bắt buộc | Là gì · lấy giá trị | Value |
+|---|---|---|---|
+| `DATABASE_DSN` | **có** — mọi dịch vụ | Kết nối PostgreSQL tới CSDL riêng của dịch vụ. Người quản trị PostgreSQL cấp user + mật khẩu | `postgres://<user>:<mật khẩu>@<host>:5432/vigov_<dịch vụ>?sslmode=require` — mỗi dịch vụ một CSDL riêng |
+| `GRPC_CALLER_KEY` | **có** — platform, identity, documents, finance, petitions, comms, reporting | Khoá xác thực lời gọi gRPC giữa các dịch vụ (ADR 0025). Sinh một lần, dùng lại ở cả 7 | `openssl rand -base64 48` — **cùng một giá trị** ở cả 7 |
+| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms | Redis chống gửi trùng + giới hạn tần suất. Người vận hành Redis cấp | `redis://:<mật khẩu>@<host>:6379/0` — 5 Secret, **không** có ở `platform-secrets` và `reporting-secrets` |
 
 **Key thêm, chỉ ở một Secret:**
 
-| Key | Bắt buộc | Secret | Value |
-|---|---|---|---|
-| `SESSION_SIGNING_KEYS` | **có (prod)** — identity | `identity-secrets` **chỉ nơi này** | `<khoá mới>,<khoá cũ>` (mỗi khoá `openssl rand -base64 48`) |
-| `CITIZEN_SESSION_BRIDGE_KEYS` | **có (prod)** — identity | `identity-secrets` | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte (`openssl rand -base64 48`). Cùng giá trị ở Secret của `vihat-miniapp`. Khác `GRPC_CALLER_KEY` |
-| `IDENTITY_ADMIN_SEED_PASSWORD` | không — kể cả prod | `identity-secrets` | mật khẩu ≥ 12 ký tự — tài khoản `admin` đầu tiên của xã mới. Gỡ key khi mọi xã đã đổi mật khẩu |
-| `OPERATOR_SESSION_SIGNING_KEYS` | không — chưa dịch vụ nào dùng (ADR 0048 chưa nối) | `identity-secrets` | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
-| `OPERATOR_TOTP_ENCRYPTION_KEY` | không — như trên | `identity-secrets` | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` |
-| `SECRET_ENCRYPTION_KEYS` | **có (prod)** — comms | `comms-secrets` | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32`. **Sao lưu riêng trước khi lưu mật khẩu thư đầu tiên** — mất là mất hết |
-| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions | `petitions-secrets` | access key MinIO riêng của dịch vụ |
-| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions | `petitions-secrets` | secret key đi cặp |
+| Key | Bắt buộc | Secret | Là gì · lấy giá trị | Value |
+|---|---|---|---|---|
+| `SESSION_SIGNING_KEYS` | **có (prod)** — identity | `identity-secrets` **chỉ nơi này** | Khoá ký phiên đăng nhập cán bộ. Tự sinh | `<khoá mới>,<khoá cũ>` (mỗi khoá `openssl rand -base64 48`) |
+| `CITIZEN_SESSION_BRIDGE_KEYS` | **có (prod)** — identity | `identity-secrets` | Khoá backend `vihat-miniapp` gửi khi đổi phiên công dân (ADR 0045). Tự sinh, đặt cùng giá trị ở hai bên | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte (`openssl rand -base64 48`). Cùng giá trị ở Secret của `vihat-miniapp`. Khác `GRPC_CALLER_KEY` |
+| `IDENTITY_ADMIN_SEED_PASSWORD` | không — kể cả prod | `identity-secrets` | Công tắc một lần tạo `admin` cho xã mới | mật khẩu ≥ 12 ký tự — tài khoản `admin` đầu tiên của xã mới. Gỡ key khi mọi xã đã đổi mật khẩu |
+| `OPERATOR_SESSION_SIGNING_KEYS` | không — chưa dịch vụ nào dùng (ADR 0048 chưa nối) | `identity-secrets` | Khoá ký phiên nhà vận hành. Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
+| `OPERATOR_TOTP_ENCRYPTION_KEY` | không — như trên | `identity-secrets` | Khoá mã hoá bí mật TOTP nhà vận hành. Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` |
+| `SECRET_ENCRYPTION_KEYS` | **có (prod)** — comms | `comms-secrets` | Khoá mã hoá bí mật riêng của từng xã trong CSDL (ADR 0009). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32`. **Sao lưu riêng trước khi lưu mật khẩu thư đầu tiên** — mất là mất hết |
+| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions | `petitions-secrets` | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ bucket của môi trường | access key MinIO riêng của dịch vụ |
+| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions | `petitions-secrets` | Nửa kia của cặp trên | secret key đi cặp |
 
 **Việc cần làm trên cụm đang chạy — `SESSION_SIGNING_KEYS`:** chỉ để ở `identity-secrets`. **Xoá key
 này khỏi** `platform-secrets`, `documents-secrets`, `finance-secrets`, `petitions-secrets`,
@@ -65,30 +68,42 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 
 ## 2. ConfigMap `common-config` — dùng chung cho 7 pod Go
 
-| Key | Bắt buộc | Value |
-|---|---|---|
-| `ENV` | **có** — mọi dịch vụ | `prod` (staging: `staging`) |
-| `TRUSTED_PROXY_CIDRS` | **có (prod)** — mọi dịch vụ | dải IP pod ingress-nginx và web-admin, vd `10.42.0.0/16` |
-| `CITIZEN_CORS_ALLOWED_ORIGINS` | **có (prod)** — identity, petitions, comms | `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me` |
-| `CITIZEN_SESSION_TTL` | không — mặc định `720h` | `720h` |
-| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions | `https://<minio nội bộ>:<cổng>` — đúng một host |
-| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions | `https://<minio trình duyệt thấy>` |
-| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | không — chưa dịch vụ nào dùng | `https://<host media>/vigov-prod-public` |
-| `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | `us-east-1` (phải trùng region của MinIO) |
-| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions | `vigov-prod` |
-| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions | `clamav:3310` |
+| Key | Bắt buộc | Là gì · lấy giá trị | Value |
+|---|---|---|---|
+| `ENV` | **có** — mọi dịch vụ | Môi trường chạy | `prod` (staging: `staging`) |
+| `TRUSTED_PROXY_CIDRS` | **có (prod)** — mọi dịch vụ | Dải IP Pod của ingress-nginx và web-admin — trạm được tin khi báo IP người dùng qua `X-Forwarded-For`; thiếu thì vết kiểm toán ghi IP pod thay vì IP người thao tác. Cách lấy: ngay dưới bảng | dải IP pod ingress-nginx và web-admin, vd `10.42.0.0/16` |
+| `CITIZEN_CORS_ALLOWED_ORIGINS` | **có (prod)** — identity, petitions, comms | Miền Zalo Mini App được gọi API công dân (CORS). Chép đúng giá trị bên phải | `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me` |
+| `CITIZEN_SESSION_TTL` | không — mặc định `720h` | Thời hạn phiên công dân | `720h` |
+| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions | MinIO nội bộ lưu tệp đính kèm (ADR 0052). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | không — chưa dịch vụ nào dùng | URL gốc bucket media công khai | `https://<host media>/vigov-prod-public` |
+| `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
+| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
+| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://` | `clamav:3310` |
+
+**Lấy `TRUSTED_PROXY_CIDRS`:**
+
+```sh
+# dải Pod của từng node — gộp lại, RKE2/k3s thường là 10.42.0.0/16
+kubectl get nodes -o jsonpath='{range .items[*]}{.spec.podCIDR}{"\n"}{end}'
+# IP pod ingress-nginx (RKE2: namespace kube-system) và web-admin — phải nằm trong dải trên
+kubectl get pods -A -o wide | grep -E 'ingress|web-admin'
+```
+
+ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes -o wide`). **Không bao giờ**
+`0.0.0.0/0` hay `::/0` — pod từ chối khởi động: tin mọi địa chỉ là tin `X-Forwarded-For` giả của bất kỳ ai.
 
 ## 3. Env viết thẳng trong Deployment (không qua ConfigMap)
 
-| Key | Bắt buộc | Deployment | Value |
-|---|---|---|---|
-| `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | `:8080` |
-| `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | `platform:9090` |
-| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | `identity:9090` |
-| `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `petitions:9090` |
-| `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `documents:9090` |
-| `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents | `vigov-service-petitions`, `vigov-service-documents` | `comms:9090` |
-| `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | `:<cổng>` — cổng riêng, khác `9090`, phải khớp quy tắc NetworkPolicy (chưa có trong `deploy/base/mang/netpol.yaml`). Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
+| Key | Bắt buộc | Deployment | Là gì · lấy giá trị | Value |
+|---|---|---|---|---|
+| `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | Cổng REST | `:8080` |
+| `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | gRPC của platform — phân giải tên miền ra xã. Tên Service + `9090` | `platform:9090` |
+| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090` | `identity:9090` |
+| `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
+| `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của documents — như trên | `documents:9090` |
+| `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents | `vigov-service-petitions`, `vigov-service-documents` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058). Tên Service + `9090` | `comms:9090` |
+| `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | Cổng cầu phiên công dân, chỉ `vihat-miniapp` gọi (ADR 0045). Tự chọn, khớp NetworkPolicy | `:<cổng>` — cổng riêng, khác `9090`, phải khớp quy tắc NetworkPolicy (chưa có trong `deploy/base/mang/netpol.yaml`). Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
 
 Tên host là tên Service trên cụm (`kubectl -n vigov-prod get svc`); Service petitions/documents/comms
 phải mở cổng `9090` (comms: đích `DeliverStaffNotifications` của bộ chạy tự động hoá, ADR 0058).
