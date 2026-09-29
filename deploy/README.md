@@ -244,7 +244,7 @@ Câu 1 không phải "có nhạy cảm không": một DSN có mật khẩu là *
 địa chỉ. Câu 3 là câu hay bị bỏ qua, và nó có giá: **mỗi dòng thừa trong ConfigMap/Secret là
 một dòng người vận hành phải đọc rồi tự hỏi mình có quên đặt không.**
 
-### Bảng map — 20 biến
+### Bảng map
 
 **Ở `deploy/cau-hinh/README.md` mục 4** — tệp ngắn để khai ConfigMap/Secret. Mục này chỉ giữ
 lý do.
@@ -265,10 +265,10 @@ bản trùng không rút lại được. Nhưng nó nghĩa là **deploy prod kh�
 `identity` · `documents` · `finance` · `petitions` · `comms`. **`platform` không đọc** — đưa
 `REDIS_DSN` vào `bi-mat-platform` là một khoá không ai dùng.
 
-⚠ **`LISTEN_ADDR` không phải dòng thừa ở `comms` · `documents` · `finance` · `petitions`.**
-Bốn dịch vụ ấy gọi `cfg.ListenAddrHoac(":8087")` chứ không đọc `cfg.ListenAddr`, nên **không
-khai là tiến trình nghe ở cổng khác 8080** — rồi probe `httpGet` cổng 8080 không ai trả lời và
-NetworkPolicy chỉ mở 8080/3000 từ ingress. Hai thứ gãy cùng lúc và cả hai đều im.
+`LISTEN_ADDR` trong `deployment.yaml` nay chỉ là ghi rõ: từ `66ad9ec` (25/09/2026) mọi dịch vụ Go
+mặc định nghe `:8080` và `ListenAddrHoac` đã bỏ (`core/config/config.go:99`). Đổi cổng thì phải
+đổi cùng lúc probe `httpGet` và NetworkPolicy (chỉ mở 8080/3000 từ ingress) — lệch một trong ba
+là pod xanh mà không ai gọi tới được.
 
 **Bắt buộc quyết theo TỪNG biến.** Đánh dấu bắt buộc cho mọi biến mới là sai lầm làm cả tám
 dịch vụ không khởi động được trên máy chưa đặt thêm bốn giá trị, để bảo vệ đoạn mã chưa tồn
@@ -280,15 +280,16 @@ Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
 
 | Nơi đọc | Số biến | Ghi chú |
 |---|---|---|
-| `core/config` — **7 dịch vụ Go** | **20** (16 ngày quét · `TRUSTED_PROXY_CIDRS` · 3 biến cầu phiên của `identity`, ADR 0045, 25/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
+| `core/config` — **7 dịch vụ Go** | Đúng số dòng của bảng `deploy/cau-hinh/README.md` mục 4 (`tools/check_env_map.py` in ra số này; 35 ngày 29/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
 | `web-admin` — **mã ứng dụng** | **0** | Không một `process.env` nào trong `web-admin/src`. Nó gọi API bằng đường dẫn **tương đối** `/api/v1/…` trên cùng tên miền, nên không cần địa chỉ backend — và đó là lý do nó **không có `envFrom`** |
 | `web-admin` — máy chủ Next standalone | 4, **đã nằm trong ảnh** | `NODE_ENV` · `NEXT_TELEMETRY_DISABLED` nung trong `Dockerfile`; `PORT=3000` · `HOSTNAME=0.0.0.0` đặt lại ở `deployment.yaml` |
 | `platform-admin` | 1 — `NEXT_PUBLIC_PLATFORM_API` | **chưa triển khai**: không có `Dockerfile`, nên chưa có ảnh. Ngày dựng nó thì đây là một `NEXT_PUBLIC_*`, tức **ship trong bundle trình duyệt** — không bao giờ chứa bí mật (luật 8, bất biến 4) |
 | `citizen-app` | 0 | Chạy trong Zalo Mini App, không thành pod |
 
-**Tổng cộng: 20 biến cho 6 pod Go — trong đó 3 biến TUỲ CHỌN chỉ cho `identity`, khi bật cầu
-phiên Mini App (ADR 0045).** `web-admin` không cần một
-khoá nào.
+**Chỉ bốn biến bắt buộc lúc khởi động** (`DATABASE_DSN`, `GRPC_CALLER_KEY`, `SESSION_SIGNING_KEYS`,
+`ENV`); mọi biến thêm từ 25/09/2026 đều TUỲ CHỌN và chỉ một vài dịch vụ đọc — biến nào cho dịch
+vụ nào, đặt vào đâu trên cụm đang chạy: `deploy/cau-hinh/README.md` mục 3b. `web-admin` không cần
+một khoá nào.
 
 ### Đối tượng k8s phải tạo — tên và key chính xác
 
@@ -402,7 +403,7 @@ env:
 | **Cắt danh sách địa chỉ hoặc DSN để giữ một host** | Đúng-trông-như-đúng suốt thời gian còn một node, sai im lặng vào đúng ngày lên HA. Đưa nguyên giá trị cho driver hiểu nhiều host (`pgx` hiểu) |
 | Giá trị **riêng của một xã** trong biến môi trường | Luật 1, bất biến 10: môi trường chỉ mang hằng số **toàn nền tảng**. Giá trị theo xã đọc tại runtime từ sổ đăng ký của `platform` |
 
-Bảng 20 biến ở `deploy/cau-hinh/README.md` được `tools/check_env_map.py` đối chiếu với `.env.example` và
+Bảng biến ở `deploy/cau-hinh/README.md` mục 4 được `tools/check_env_map.py` đối chiếu với `.env.example` và
 `core/config/config.go` trong `make check`: thêm một biến mà quên cập nhật bảng là **đỏ**.
 
 ## 4. Cài lần đầu lên cụm

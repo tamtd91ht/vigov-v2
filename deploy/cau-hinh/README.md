@@ -70,7 +70,35 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `REDIS_DSN` | pod xanh, nhưng 6 tuyến `POST` (cán bộ, văn bản đến/đi, chi, dự toán) trả 503 |
 | Secret TLS sai tên theo môi trường | Ingress lên, chỉ HTTPS đứt |
 
-## 4. Toàn bộ 33 biến — để đối chiếu
+## 3b. Cụm đang chạy — biến thêm từ 25/09/2026 phải đặt ở đâu
+
+Cụm thật dựng TAY trong Rancher (`deploy/README.md`, khung ⚠ đầu tệp): ConfigMap **`common-config`**,
+Secret **`<dịch vụ>-secrets`**, Deployment **`vigov-service-<dịch vụ>`** — không phải `cau-hinh-chung`
+/ `bi-mat-*` của mục 1–3. Mọi biến dưới đây **tuỳ chọn**: không đặt thì pod vẫn lên, chỉ chức năng
+ở cột cuối bị từ chối. Nghĩa và hình dạng giá trị: mục 4. Key viết **gạch dưới** (`envFrom`).
+
+| Đặt vào | Key | Dịch vụ đọc | Không đặt thì |
+|---|---|---|---|
+| `common-config` | `TRUSTED_PROXY_CIDRS` | mọi dịch vụ Go | vết kiểm toán ghi IP pod web-admin thay IP người dùng |
+| `common-config` | `CITIZEN_CORS_ALLOWED_ORIGINS` | `identity` · `petitions` · `comms` | trình duyệt chặn Mini App gọi tuyến công dân |
+| `common-config` | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` · `CITIZEN_SESSION_TTL` | `identity` | cầu phiên Mini App không mở (ADR 0045) · TTL 720h |
+| `common-config` | `OBJECT_STORAGE_ENDPOINT` · `OBJECT_STORAGE_PUBLIC_ENDPOINT` · `OBJECT_STORAGE_REGION` · `OBJECT_STORAGE_BUCKET_PREFIX` · `MALWARE_SCANNER_ADDRESS` | `petitions` | mọi lần tải ảnh/tệp bị từ chối (ADR 0052) |
+| `common-config` | `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | `petitions` (qua `core/storage`); `comms` chưa nối kho tệp dù mục 4 dự kiến nó đăng media Mini App | media công khai không có URL |
+| env của Deployment `vigov-service-identity` | `PETITIONS_GRPC_ADDR` (`petitions:9090`) · `DOCUMENTS_GRPC_ADDR` (`documents:9090`) — tên Service trên cụm thật có thể là `vigov-service-<dịch vụ>`, kiểm bằng `kubectl get svc` | `identity` | **Xoá bộ phận trả 503** (ADR 0056). Service petitions/documents phải mở cổng `9090` (`deploy/base/{petitions,documents}/service.yaml`) |
+| `identity-secrets` | `CITIZEN_SESSION_BRIDGE_KEYS` | `identity` | cầu phiên Mini App không mở; **cùng giá trị** ở Secret của `vihat-miniapp` |
+| `identity-secrets` | `IDENTITY_ADMIN_SEED_PASSWORD` | `identity` | không tự tạo `admin` cho xã mới. Gỡ key khi mọi xã đã đổi mật khẩu |
+| `identity-secrets` | `OPERATOR_SESSION_SIGNING_KEYS` · `OPERATOR_TOTP_ENCRYPTION_KEY` | `identity` | mọi lần đăng nhập vận hành bị từ chối (ADR 0048) |
+| `comms-secrets` | `SECRET_ENCRYPTION_KEYS` | `comms` | tab Máy chủ thư chỉ xem, không lưu được mật khẩu (ADR 0009). **Sao lưu khoá TÁCH khỏi bản sao lưu CSDL trước khi lưu mật khẩu đầu tiên** |
+| `petitions-secrets` | `OBJECT_STORAGE_ACCESS_KEY` · `OBJECT_STORAGE_SECRET_KEY` | `petitions` | như dòng kho tệp ở trên — mỗi dịch vụ một cặp khoá riêng |
+
+Đổi `common-config` hay `<dịch vụ>-secrets` **không** khởi động lại pod: `envFrom` chỉ đọc lúc pod
+tạo ra. Sau khi thêm key, `kubectl -n vigov-prod rollout restart deploy/vigov-service-<dịch vụ>` cho
+đúng các dịch vụ ở cột "Dịch vụ đọc".
+
+Ngoài biến: gửi thư thử của `comms` cần NetworkPolicy mở cổng 465/587 ra ngoài
+(`deploy/base/mang/netpol.yaml` hiện chỉ mở 5432/6379/9092) — không mở thì trả 502.
+
+## 4. Toàn bộ biến — để đối chiếu
 
 `tools/check_env_map.py` đối chiếu bảng này với `core/config/config.go` trong `make check`.
 
