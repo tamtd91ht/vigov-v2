@@ -43,6 +43,7 @@ describe("listSystemMessages", () => {
   it.each([
     ["petitions", "/api/v1/petitions-system-messages"],
     ["finance", "/api/v1/finance-system-messages"],
+    ["reporting", "/api/v1/reporting-system-messages"],
   ] as const)("%s: GET %s, returns the items", async (module, path) => {
     const fake = stubFetch(() => reply(200, { items: [MESSAGE] }));
     expect(await listSystemMessages(module)).toEqual({ ok: true, duLieu: [MESSAGE] });
@@ -74,6 +75,16 @@ describe("rewordSystemMessage — PUT …/{code}/override", () => {
     expect(c.headers.has("Idempotency-Key")).toBe(false);
   });
 
+  it("reporting: PUT to the reporting override route", async () => {
+    const fake = stubFetch(() => reply(200, { ...MESSAGE, code: "report.title" }));
+    const r = await rewordSystemMessage("reporting", "report.title", "Báo cáo điều hành của xã");
+    expect(r.ok).toBe(true);
+    const c = call(fake);
+    expect(c.path).toBe("/api/v1/reporting-system-messages/report.title/override");
+    expect(c.method).toBe("PUT");
+    expect(c.body).toEqual({ text: "Báo cáo điều hành của xã" });
+  });
+
   it("a code with a slash cannot escape its path segment", async () => {
     const fake = stubFetch(() => reply(404, { code: "not_found", message: "Không tìm thấy câu." }));
     await rewordSystemMessage("finance", "a/../b", "x");
@@ -99,6 +110,13 @@ describe("restoreSystemMessage — DELETE …/{code}/override", () => {
     expect(c.method).toBe("DELETE");
     expect(c.body).toBeUndefined();
     expect(c.headers.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("reporting: DELETE the reporting override route, 204", async () => {
+    const fake = stubFetch(() => reply(204));
+    expect(await restoreSystemMessage("reporting", "report.block.alerts")).toEqual({ ok: true, duLieu: null });
+    expect(call(fake).path).toBe("/api/v1/reporting-system-messages/report.block.alerts/override");
+    expect(call(fake).method).toBe("DELETE");
   });
 
   it("404 is the server's sentence", async () => {

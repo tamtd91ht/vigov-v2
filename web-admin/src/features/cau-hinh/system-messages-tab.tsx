@@ -18,7 +18,6 @@ import {
   MESSAGES_NOT_RAISED_YET,
   NOT_RAISED_NOTE,
   OVERRIDDEN_BADGE,
-  REPORT_MESSAGES_NOTE,
   RESTORE_BUTTON,
   RESTORE_CONFIRM,
   RESTORE_CONFIRM_BUTTON,
@@ -34,14 +33,14 @@ import {
 } from "./system-message-form";
 
 /**
- * "Cấu hình → Lời hệ thống" (§7). One key, `admin.lookup`, on all six routes — the tab hides as a
+ * "Cấu hình → Lời hệ thống" (§7). One key, `admin.lookup`, on all nine routes — the tab hides as a
  * whole without it (convenience; the server refuses).
  *
  * WHAT §7 DRAWS AND THIS DOES NOT: `+ Thêm câu mới` and `[Tắt]`. The catalogue is closed and lives
  * in each service's code — a new key is a release, not a row — and a refusal cannot be switched off
  * (an empty refusal is one nobody can act on). "Khôi phục câu mặc định" is the only way back.
  *
- * Each section loads and fails on its own: finance being down must not hide the petitions sentences.
+ * Each section loads and fails on its own: one service being down must not hide the other two.
  */
 export function SystemMessagesTab() {
   const phien = usePhien();
@@ -64,15 +63,22 @@ export function SystemMessagesTab() {
     <section className="tab-danh-muc" aria-labelledby="tieu-de-loi-he-thong">
       <h2 id="tieu-de-loi-he-thong">{SYSTEM_MESSAGES_TITLE}</h2>
       <p className="ghi-chu">{SYSTEM_MESSAGES_GUIDANCE}</p>
-      <p className="canh-bao-pham-vi">{REPORT_MESSAGES_NOTE}</p>
       {SYSTEM_MESSAGE_SECTIONS.map((s) => (
-        <SystemMessageSection key={s.module} module={s.module} title={s.title} />
+        <SystemMessageSection key={s.module} module={s.module} title={s.title} note={s.note} />
       ))}
     </section>
   );
 }
 
-function SystemMessageSection({ module, title }: { module: SystemMessageModule; title: string }) {
+function SystemMessageSection({
+  module,
+  title,
+  note,
+}: {
+  module: SystemMessageModule;
+  title: string;
+  note?: string;
+}) {
   // After a restore the list is RE-READ (DELETE answers 204, and the server is the state). Cards are
   // keyed by the read that produced them, so they remount on the new data; the restored card's
   // confirmation lives here, because the card that showed it is gone.
@@ -96,6 +102,7 @@ function SystemMessageSection({ module, title }: { module: SystemMessageModule; 
   return (
     <section aria-labelledby={headingId}>
       <h3 id={headingId}>{title}</h3>
+      {note !== undefined && <p className="canh-bao-pham-vi">{note}</p>}
       {loaded === null ? (
         <p role="status">Đang tải lời hệ thống…</p>
       ) : !loaded.r.ok ? (

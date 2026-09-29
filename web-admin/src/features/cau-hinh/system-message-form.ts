@@ -25,19 +25,32 @@ export const SYSTEM_MESSAGES_GUIDANCE =
   "lời nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói. Muốn dùng lại " +
   "câu gốc thì bấm Khôi phục câu mặc định.";
 
-/** The two sections, in the order of §7's groups that have an owner today. */
-export const SYSTEM_MESSAGE_SECTIONS: readonly { module: SystemMessageModule; title: string }[] = [
+/**
+ * The three sections, in the order of §7's groups. `note` is a section-wide sentence, drawn under the
+ * heading when the whole group shares one fact an administrator must know before rewording.
+ *
+ * WHY "Báo cáo" CARRIES A NOTE: its sentences are the captions of the exported report and the titles
+ * of the report notifications. `/bao-cao` is outside the first phase (ADR 0053 §6) and no other service
+ * reads these keys yet, so a reworded caption shows nowhere today. Said once for the group rather than
+ * on 38 cards (`MESSAGES_NOT_RAISED_YET` is per key, for the one-off case). Remove the note in the same
+ * change that makes a feature print these sentences.
+ */
+export const SYSTEM_MESSAGE_SECTIONS: readonly {
+  module: SystemMessageModule;
+  title: string;
+  note?: string;
+}[] = [
   { module: "petitions", title: "Phản ánh" },
   { module: "finance", title: "Thu – Chi" },
+  {
+    module: "reporting",
+    title: "Báo cáo",
+    note:
+      "Các câu nhóm này là tiêu đề, tên khối và tên chỉ số trên báo cáo xuất ra và trên thông báo " +
+      "báo cáo gửi lãnh đạo. Màn Báo cáo chưa dựng, nên câu sửa ở đây được lưu cho xã nhưng hôm nay " +
+      "chưa hiện ở đâu.",
+  },
 ];
-
-/**
- * The `report.*` group of §7 is NOT on this tab: which service owns those 32 sentences is undecided
- * (ADR 0024 leaves the owner blank), so no table and no route exist for them.
- */
-export const REPORT_MESSAGES_NOTE =
-  "32 câu nhóm Báo cáo (report.*) chưa sửa được ở đây: chưa chốt phân hệ nào giữ các câu ấy " +
-  "(ADR 0024), nên chưa có nơi lưu câu của xã.";
 
 /**
  * Keys in the catalogue that NO refusal branch raises yet (backend report, 29/09/2026): rewording one

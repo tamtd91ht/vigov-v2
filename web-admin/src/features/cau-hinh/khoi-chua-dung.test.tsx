@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { CATALOGUE_IMPORTS } from "./excel-import-targets";
 import { KhoiChuaDung } from "./khoi-chua-dung";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 
@@ -41,25 +42,30 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     }
   });
 
-  it("mục Nhập Excel nói Sơ đồ tổ chức nhập được rồi, và chỉ còn §2 · §3 · §5", () => {
+  it("mục Nhập Excel kể đúng những gì nhập được HÔM NAY: Sơ đồ tổ chức và Loại tài nguyên bản đồ", () => {
     const excel = PHAN_CHUA_DUNG.filter((p) => /Excel/.test(p.ten));
     expect(excel).toHaveLength(1);
     const muc = excel[0]!;
     expect(muc.ten).not.toMatch(/§1/);
     expect(muc.ten).toMatch(/§2.*§3.*§5/);
-    expect(muc.viSao).toMatch(/chỉ nhập được Sơ đồ tổ chức/);
+    expect(muc.viSao).toMatch(/chỉ nhập được từ Excel hai thứ: Sơ đồ tổ chức, và nhóm Loại tài nguyên bản đồ/);
+    // The sentence names every catalogue group wired today — and only those. A group wired in
+    // `CATALOGUE_IMPORTS` without this sentence moving is the stale "chưa có" this block exists to avoid.
+    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo"]);
   });
 
-  it("còn Tự động hoá; Lời hệ thống chỉ còn 32 câu `report.*`", () => {
-    expect(PHAN_CHUA_DUNG.some((p) => /Tự động hoá/.test(p.ten))).toBe(true);
-    const messageItems = PHAN_CHUA_DUNG.filter((p) => /Lời hệ thống/.test(p.ten));
-    expect(messageItems).toHaveLength(1);
-    // Tab Lời hệ thống đã dựng cho Phản ánh và Thu – Chi: mục còn lại chỉ nói về nhóm Báo cáo, và
-    // lý do là chủ sở hữu chưa chốt — không phải "chưa có tab".
-    expect(messageItems[0]!.ten).toMatch(/report\.\*/);
-    expect(messageItems[0]!.ten).toMatch(/32/);
-    expect(messageItems[0]!.viSao).toMatch(/ADR 0024/);
-    expect(messageItems[0]!.ten).not.toMatch(/^Tab Lời hệ thống/);
+  it("Tự động hoá đã dựng: chỉ còn mục hai việc không dựng (bỏ / hoãn), kèm lý do", () => {
+    const automation = PHAN_CHUA_DUNG.filter((p) => /Tự động hoá/.test(p.ten));
+    expect(automation).toHaveLength(1);
+    expect(automation[0]!.ten).not.toMatch(/^Tab Tự động hoá/);
+    expect(automation[0]!.ten).toMatch(/Tính lại số liệu Tổng quan/);
+    expect(automation[0]!.ten).toMatch(/Gửi báo cáo định kỳ/);
+    expect(automation[0]!.viSao).toMatch(/ADR 0053/);
+    expect(automation[0]!.viSao).toMatch(/ADR 0058/);
+  });
+
+  it("không còn mục Lời hệ thống — nhóm Báo cáo `report.*` đã có chủ và có tuyến (reporting)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => /Lời hệ thống|report\.\*/.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
   it("không còn mục Xem nhật ký hệ thống — tab đã dựng (ADR 0054)", () => {

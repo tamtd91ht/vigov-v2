@@ -1,28 +1,28 @@
 /**
- * The decision half of "⬆ Nhập từ Excel" on the org chart (`docs/ui-ux/14-cau-hinh.md §1`). Pure, so
- * the rows staff read when a file is refused — "dòng 4, cột Bộ phận cha: …" — have a test.
- *
- * THE FLOW IS TWO REQUESTS ON PURPOSE: preview (writes nothing) then import (all or nothing). The
- * import is only offered once a preview of THE SAME FILE came back `valid`, and its
- * `Idempotency-Key` is minted at that moment — one key per attempt at importing one previewed file,
- * kept across retries of that attempt, dropped when a new file is chosen or the attempt succeeds.
+ * The org chart's words for "⬆ Nhập từ Excel" (`docs/ui-ux/14-cau-hinh.md §1`) and its one
+ * org-specific rule, `parentText`. The flow itself — preview then import, one key per attempt — is
+ * shared by every import and lives in `excel-import-flow.ts`; the target that binds these words to
+ * it is `ORG_UNIT_IMPORT_TARGET` (`excel-import-targets.tsx`).
  */
 
-import type { identity_orgUnitImportErrorOut, identity_orgUnitImportUnitOut } from "@/lib/api/schema.gen";
+import type { identity_orgUnitImportUnitOut } from "@/lib/api/schema.gen";
 
-export type ErrorRow = { readonly row: string; readonly column: string; readonly message: string };
-
-/**
- * Server errors → table rows. `row: 0` is an error of the whole file and `column: ""` one of the
- * whole row (`org_unit_import.go`, `orgUnitImportErrorOut`): said in words, never shown as "0".
- */
-export function errorRows(errors: readonly identity_orgUnitImportErrorOut[]): readonly ErrorRow[] {
-  return errors.map((e) => ({
-    row: e.row === 0 ? "Cả tệp" : String(e.row),
-    column: e.column === "" ? "—" : e.column,
-    message: e.message,
-  }));
-}
+// The steps every import shares moved to `excel-import-flow.ts`; re-exported so this file's callers
+// and tests keep their imports.
+export {
+  CLOSE_BUTTON,
+  FILE_LABEL,
+  IMPORT_BUTTON,
+  IMPORT_SENDING,
+  NOTHING_TO_CREATE,
+  PREVIEW_BUTTON,
+  PREVIEW_SENDING,
+  TEMPLATE_BUTTON,
+  canImport,
+  errorRows,
+  keyForAttempt,
+} from "./excel-import-flow";
+export type { ErrorRow } from "./excel-import-flow";
 
 /**
  * Where a planned unit hangs: an existing unit (by code), a row of the same file, or the top level.
@@ -38,27 +38,7 @@ export function parentText(u: identity_orgUnitImportUnitOut): string {
   return "Cấp cao nhất";
 }
 
-/** Whether the import button may be offered: a valid preview with something to create. */
-export function canImport(preview: { valid: boolean; units: readonly unknown[] } | null): boolean {
-  return preview !== null && preview.valid && preview.units.length > 0;
-}
-
-/**
- * The key for the import attempt. Kept if one exists (a retry of the SAME attempt), minted
- * otherwise. `mint` is a parameter so the test counts calls; the panel passes `crypto.randomUUID`.
- */
-export function keyForAttempt(current: string | null, mint: () => string): string {
-  return current ?? mint();
-}
-
-export const IMPORT_BUTTON = "⬆ Nhập từ Excel";
-export const TEMPLATE_BUTTON = "Tải tệp mẫu";
-export const FILE_LABEL = "Chọn tệp Excel đã điền (.xlsx)";
-export const PREVIEW_BUTTON = "Kiểm tra tệp";
-export const PREVIEW_SENDING = "Đang kiểm tra tệp…";
 export const CONFIRM_IMPORT_BUTTON = "Nhập các bộ phận này";
-export const IMPORT_SENDING = "Đang nhập…";
-export const CLOSE_BUTTON = "Đóng";
 
 export const IMPORT_EXPLANATION =
   "Tải tệp mẫu, điền mỗi bộ phận một dòng rồi chọn tệp để kiểm tra. Hệ thống kiểm tra toàn bộ tệp " +
@@ -66,7 +46,6 @@ export const IMPORT_EXPLANATION =
   "nhập gì. Bộ phận đã có trên sơ đồ không bị sửa.";
 
 export const ERRORS_HEADING = "Tệp có lỗi — chưa bộ phận nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:";
-export const NOTHING_TO_CREATE = "Tệp không có dòng nào để nhập.";
 
 export function previewLead(count: number): string {
   return `Tệp hợp lệ. Sẽ tạo ${count} bộ phận:`;

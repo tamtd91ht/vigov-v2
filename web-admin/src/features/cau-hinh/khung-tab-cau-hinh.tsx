@@ -5,6 +5,7 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { AuditLogTab } from "./audit-log-tab";
+import { AutomationTab } from "./automation-tab";
 import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
 import { SystemMessagesTab } from "./system-messages-tab";
@@ -31,6 +32,7 @@ const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
   "truong-ban-do": () => <MapFieldTab />,
   "loi-he-thong": () => <SystemMessagesTab />,
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
+  "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
 };

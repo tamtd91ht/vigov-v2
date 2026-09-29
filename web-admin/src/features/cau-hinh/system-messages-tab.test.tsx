@@ -74,14 +74,27 @@ describe("tab Lời hệ thống — cổng quyền", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("có `admin.lookup` → hai phần Phản ánh và Thu – Chi, kèm ghi chú 32 câu report.*", () => {
+  it("có `admin.lookup` → ba phần Phản ánh, Thu – Chi, Báo cáo; không còn ghi chú 'chưa sửa được report.*'", () => {
     fakeSession = sessionWith(["admin.lookup"]);
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     expect(html).toContain(">Phản ánh</h3>");
     expect(html).toContain(">Thu – Chi</h3>");
-    expect(html).toContain(form.REPORT_MESSAGES_NOTE);
-    expect(form.REPORT_MESSAGES_NOTE).toMatch(/32 câu/);
-    expect(form.REPORT_MESSAGES_NOTE).toMatch(/ADR 0024/);
+    expect(html).toContain(">Báo cáo</h3>");
+    // The `report.*` group now has an owner (reporting) and routes: the old "not editable here" note is gone.
+    expect("REPORT_MESSAGES_NOTE" in form).toBe(false);
+    expect(html).not.toMatch(/chưa sửa được ở đây/);
+  });
+
+  it("phần Báo cáo nói thật: câu lưu được nhưng hôm nay chưa hiện ở đâu (màn Báo cáo chưa dựng)", () => {
+    fakeSession = sessionWith(["admin.lookup"]);
+    const reporting = form.SYSTEM_MESSAGE_SECTIONS.find((s) => s.module === "reporting");
+    expect(reporting?.note).toMatch(/chưa hiện ở đâu/);
+    const html = renderToStaticMarkup(<SystemMessagesTab />);
+    expect(html).toContain(reporting!.note!);
+    // The other two groups are in use and carry no such note.
+    expect(form.SYSTEM_MESSAGE_SECTIONS.filter((s) => s.note !== undefined).map((s) => s.module)).toEqual([
+      "reporting",
+    ]);
   });
 
   it("KHÔNG có nút `+ Thêm câu mới` và không có `Tắt` — danh mục đóng, câu không tắt được", () => {

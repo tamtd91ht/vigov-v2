@@ -24,23 +24,21 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Lời hệ thống — 32 câu nhóm Báo cáo `report.*` (§7)",
+    ten: "Tự động hoá — Tính lại số liệu Tổng quan và Gửi báo cáo định kỳ (§9)",
     viSao:
-      "Câu của Phản ánh và Thu – Chi đã sửa được ở tab Lời hệ thống. Riêng 32 khoá `report.*` thì " +
-      "chưa chốt dịch vụ nào sở hữu (ADR 0024, mục để trống), nên chưa có bảng và chưa có tuyến.",
+      "Tab Tự động hoá có ba việc: nhắc việc sắp đến hạn và quá hạn, leo thang việc trễ hạn, bản tin " +
+      "đầu tuần. Việc Tính lại số liệu Tổng quan được bỏ hẳn: màn Tổng quan đếm trực tiếp, không lưu " +
+      "số liệu dựng sẵn, nên không có gì để tính lại (ADR 0053, ADR 0058). Việc Gửi báo cáo định kỳ " +
+      "chờ màn Báo cáo: chưa có báo cáo thì chưa có gì để gửi (ADR 0058 mục 4).",
   },
   {
-    ten: "Tab Tự động hoá (§9)",
+    // CẬP NHẬT CÂU NÀY TRONG CÙNG LƯỢT với mỗi tuyến nhập mới được nối (`excel-import-targets.tsx`):
+    // nó kể tên từng nhóm nhập được hôm nay, và `khoi-chua-dung.test.tsx` đối chiếu với
+    // `CATALOGUE_IMPORTS`.
+    ten: "Nút Nhập từ Excel ở tab Thôn / Tổ dân phố, Người dùng và các nhóm còn lại của Danh mục (§2, §3, §5)",
     viSao:
-      "Hệ thống chưa có bộ lập lịch chạy việc nền theo nhịp cho từng đơn vị. Một công tắc bật/tắt " +
-      "mà không có gì chạy phía sau là một lời hứa suông.",
-  },
-  {
-    ten: "Nút Nhập từ Excel ở tab Thôn / Tổ dân phố, Người dùng và Danh mục (§2, §3, §5)",
-    viSao:
-      "Trên màn này hiện chỉ nhập được Sơ đồ tổ chức từ Excel. Nhập danh sách cán bộ phải đi đúng " +
-      "các quyết định về mật khẩu đầu tiên, mã cán bộ và số điện thoại (câu hỏi #9, #15, #16), và " +
-      "cách ánh xạ các cột của tệp vào những quyết định ấy chưa được thiết kế. Thôn / Tổ dân phố, " +
-      "Người dùng và Danh mục đều chưa có tuyến nhập nào trong hợp đồng.",
+      "Trên màn này hôm nay chỉ nhập được từ Excel hai thứ: Sơ đồ tổ chức, và nhóm Loại tài nguyên " +
+      "bản đồ ở tab Danh mục. Nhập danh sách cán bộ, Thôn / Tổ dân phố và các nhóm danh mục khác đã " +
+      "được quyết (ADR 0059) nhưng dịch vụ sở hữu từng loại chưa mở tuyến nhập, nên chưa có nút.",
   },
 ];

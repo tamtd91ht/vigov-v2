@@ -1,11 +1,13 @@
 /**
  * "Lời hệ thống" (`docs/ui-ux/14-cau-hinh.md §7`) — the sentences a service says when it refuses,
- * which a commune may reword. Two services own such sentences today, each its own three routes, all
+ * which a commune may reword. Three services own such sentences today, each its own three routes, all
  * `admin.lookup`:
  *
- *   GET    /api/v1/{petitions,finance}-system-messages
- *   PUT    /api/v1/{petitions,finance}-system-messages/{code}/override   { text } → 200 the message
- *   DELETE /api/v1/{petitions,finance}-system-messages/{code}/override   → 204, back to the default
+ *   GET    /api/v1/{petitions,finance,reporting}-system-messages
+ *   PUT    /api/v1/{petitions,finance,reporting}-system-messages/{code}/override   { text } → 200
+ *   DELETE /api/v1/{petitions,finance,reporting}-system-messages/{code}/override   → 204, the default
+ *
+ * `reporting` owns the `report.*` keys (ADR 0024 §Phụ, Bổ sung 29/09/2026).
  *
  * THERE IS NO "TẮT" AND NO "THÊM": the catalogue is closed and lives in each service's code (a key
  * outside it answers 404), and a sentence cannot be switched off — a refusal with nothing to say is
@@ -30,18 +32,30 @@ import type {
   petitions_rewordSystemMessageIn,
   petitions_systemMessageListOut,
   petitions_systemMessageOut,
+  reporting_delete_reporting_system_messages_by_code_override,
+  reporting_get_reporting_system_messages,
+  reporting_put_reporting_system_messages_by_code_override,
+  reporting_rewordSystemMessageIn,
+  reporting_systemMessageListOut,
+  reporting_systemMessageOut,
 } from "./schema.gen";
 
-export type SystemMessageModule = "petitions" | "finance";
+export type SystemMessageModule = "petitions" | "finance" | "reporting";
 
-/** Both services answer the same shape; the union keeps each generated type, copies neither. */
-export type SystemMessage = petitions_systemMessageOut | finance_systemMessageOut;
-type SystemMessageList = petitions_systemMessageListOut | finance_systemMessageListOut;
-type RewordBody = petitions_rewordSystemMessageIn & finance_rewordSystemMessageIn;
+/** The services answer the same shape; the union keeps each generated type, copies none. */
+export type SystemMessage = petitions_systemMessageOut | finance_systemMessageOut | reporting_systemMessageOut;
+type SystemMessageList =
+  | petitions_systemMessageListOut
+  | finance_systemMessageListOut
+  | reporting_systemMessageListOut;
+type RewordBody = petitions_rewordSystemMessageIn &
+  finance_rewordSystemMessageIn &
+  reporting_rewordSystemMessageIn;
 
 const LIST_PATH = {
   petitions: "/api/v1/petitions-system-messages" satisfies petitions_get_petitions_system_messages["duongDan"],
   finance: "/api/v1/finance-system-messages" satisfies finance_get_finance_system_messages["duongDan"],
+  reporting: "/api/v1/reporting-system-messages" satisfies reporting_get_reporting_system_messages["duongDan"],
 } as const;
 
 // The contract's templates, kept so a renamed route turns `tsc` red here.
@@ -52,6 +66,9 @@ const OVERRIDE_TEMPLATE = {
   finance: "/api/v1/finance-system-messages/{code}/override" satisfies
     finance_put_finance_system_messages_by_code_override["duongDan"] &
       finance_delete_finance_system_messages_by_code_override["duongDan"],
+  reporting: "/api/v1/reporting-system-messages/{code}/override" satisfies
+    reporting_put_reporting_system_messages_by_code_override["duongDan"] &
+      reporting_delete_reporting_system_messages_by_code_override["duongDan"],
 } as const;
 
 function overridePath(module: SystemMessageModule, code: string): string {

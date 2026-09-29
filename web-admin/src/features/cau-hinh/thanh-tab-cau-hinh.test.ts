@@ -40,9 +40,9 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ năm khoá cổng → mười tab, đúng thứ tự và nhãn của §0, Nhật ký hệ thống cuối", async () => {
+  it("đủ sáu khoá cổng → mười một tab, đúng thứ tự và nhãn của §0, Nhật ký hệ thống cuối", async () => {
     const phien = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]),
+      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
     );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
     expect(nhan(hien)).toEqual([
@@ -54,10 +54,19 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Trường bản đồ",
       "Lời hệ thống",
       "Thời hạn xử lý",
+      "Tự động hoá",
       "Máy chủ thư",
       "Nhật ký hệ thống",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
+  });
+
+  it("Tự động hoá đi theo `admin.sla` — khoá của cả ba tuyến automation-jobs; ca bị từ chối", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.sla"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Tự động hoá");
+    // `admin.lookup` / `admin.org` / a prefix look-alike do not open it (rule 5, invariant 3b).
+    const denied = await phienVoi(phanHoiPhien(["admin.lookup", "admin.org", "admin.audit", "admin.slas", "ADMIN.SLA"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Tự động hoá");
   });
 
   it("Trường bản đồ đi theo `asset.read` (khoá ĐỌC), không theo `admin.lookup`", async () => {
@@ -109,7 +118,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Người dùng");
   });
 
-  it("KHÔNG thêm cổng cho bốn tab đọc mở: `admin.org` / `admin.sla` không quyết định tab nào hiện", async () => {
+  it("KHÔNG thêm cổng cho bốn tab đọc mở: không khoá nào thì bốn tab ấy vẫn hiện", async () => {
     // Tuyến đọc của bốn tab này mở cho mọi tài khoản đã đăng nhập (GET /sla thì máy chủ tự 403).
     // Giao diện ẩn chúng là giao diện từ chối điều máy chủ không từ chối — luật 5, cấm #1.
     const khong = await phienVoi(phanHoiPhien([]));
@@ -135,6 +144,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Trường bản đồ");
     expect(hien).not.toContain("Máy chủ thư");
     expect(hien).not.toContain("Lời hệ thống");
+    expect(hien).not.toContain("Tự động hoá");
     expect(hien).not.toContain("Nhật ký hệ thống");
   });
 

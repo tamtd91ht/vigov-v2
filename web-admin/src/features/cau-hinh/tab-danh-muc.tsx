@@ -6,12 +6,16 @@ import {
   suaMuc,
   themMuc,
   xoaMuc,
+  type KhoaDanhMucGhi, // vi-name-ok: existing type of danh-muc.ts, imported not declared (rule 12 inv 3)
   type MoTaDanhMucGhi,
   type MucDanhMucGhi,
 } from "@/lib/api/danh-muc";
 import { docDanhMucNghiepVu, type BayDanhMuc, type MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+
+import { IMPORT_BUTTON } from "./excel-import-flow";
+import { catalogueImportFor } from "./excel-import-targets";
 
 import {
   CANH_BAO_XOA,
@@ -89,8 +93,11 @@ import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc
  * sửa · xoá mềm: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định, nên
  * nó là một thành phần riêng — `nhom-trang-thai-nhiem-vu.tsx`.
  *
- * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ CŨNG KHÔNG CÓ: không có tuyến nào phía sau nó. Một nút bấm
- * vào không có gì xảy ra còn tệ hơn không có nút — cán bộ sẽ tin là mình thao tác sai.
+ * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ CHỈ MỌC Ở NHÓM ĐÃ CÓ TUYẾN NHẬP (`CATALOGUE_IMPORTS`,
+ * `excel-import-targets.tsx`) — mỗi service sở hữu một tuyến nhập cho nhóm của mình, không có tuyến
+ * nhập chung (ADR 0059 §3). Nên nút nằm TRONG từng nhóm, cạnh `+ Thêm mục`, không ở đầu tab: một nút
+ * chung phải hỏi "nhập vào nhóm nào" rồi từ chối sáu trong bảy câu trả lời. Nhóm chưa có tuyến thì
+ * không có nút — một nút bấm vào không có gì xảy ra khiến cán bộ tin là mình thao tác sai.
  */
 export function TabDanhMuc() {
   /** `null` là chưa đọc xong. Bảy danh mục về trong MỘT lượt nên cả tab có đúng một pha tải. */
@@ -111,6 +118,11 @@ export function TabDanhMuc() {
    * `dangMo`, để luật "một biểu mẫu cho cả tab" phủ cả nhóm ấy: mở bên này thì đóng bên kia.
    */
   const [maTrangThaiDangSua, datMaTrangThaiDangSua] = useState<string | null>(null);
+  /**
+   * Nhóm đang mở khung nhập Excel, hoặc `null`. Cùng luật "một biểu mẫu cho cả tab": mở khung nhập
+   * thì đóng biểu mẫu thêm · sửa · xoá, và ngược lại.
+   */
+  const [importingGroup, setImportingGroup] = useState<KhoaDanhMucGhi | null>(null);
   const [ban, datBan] = useState<BanNhap>(BAN_TRONG);
   /** Lỗi do chính màn hình phát hiện trước khi gửi. Khác hẳn câu của máy chủ — xem `loiMayChu`. */
   const [loiTaiCho, datLoiTaiCho] = useState("");
@@ -144,6 +156,7 @@ export function TabDanhMuc() {
   /** Mở một biểu mẫu: dọn sạch mọi thông báo của lần trước, và nạp giá trị đang có vào bản nháp. */
   const mo = useCallback((m: DangMo, banDau: BanNhap) => {
     datMaTrangThaiDangSua(null);
+    setImportingGroup(null);
     datDangMo(m);
     datBan(banDau);
     datLoiTaiCho("");
@@ -161,7 +174,10 @@ export function TabDanhMuc() {
   /** Nhóm thứ tám mở biểu mẫu: đóng biểu mẫu của bảy nhóm kia trước (một biểu mẫu cho cả tab). */
   const moSuaTrangThai = useCallback(
     (ma: string | null) => {
-      if (ma !== null) dong();
+      if (ma !== null) {
+        dong();
+        setImportingGroup(null);
+      }
       datMaTrangThaiDangSua(ma);
     },
     [dong],
@@ -286,28 +302,52 @@ export function TabDanhMuc() {
 
       {coMucNao && <p className="ghi-chu">{GIAI_THICH_DA_TAT}</p>}
 
-      {nhom.map((n) => (
-        <NhomMuc
-          key={n.khoa}
-          nhom={n}
-          coQuyenGhi={coQuyenGhi}
-          thaoTac={thaoTac}
-          form={
-            dangMo !== null && dangMo.ghi.khoa === n.ghi?.khoa ? (
-              <BieuMauGhi
-                dangMo={dangMo}
-                ban={ban}
-                datBan={datBan}
-                loiTaiCho={loiTaiCho}
-                loiMayChu={loiMayChu}
-                dangGui={dangGui}
-                onGui={guiBieuMau}
-                onHuy={dong}
-              />
-            ) : null
-          }
-        />
-      ))}
+      {nhom.map((n) => {
+        const groupWrite = n.ghi;
+        // Cổng của khung nhập là KHOÁ CỦA TUYẾN NHẬP, không mặc nhiên là khoá ghi của tab: hôm nay hai
+        // khoá trùng nhau (`admin.lookup`), nhưng một nhóm sau này có thể khai khoá khác.
+        const catalogueImport = catalogueImportFor(groupWrite === null ? null : groupWrite.khoa, phien);
+        return (
+          <NhomMuc
+            key={n.khoa}
+            nhom={n}
+            coQuyenGhi={coQuyenGhi}
+            thaoTac={thaoTac}
+            importAllowed={catalogueImport !== null}
+            onOpenImport={() => {
+              if (groupWrite === null) return;
+              dong();
+              datMaTrangThaiDangSua(null);
+              datCauDaXong("");
+              setImportingGroup(groupWrite.khoa);
+            }}
+            importPanel={
+              catalogueImport !== null && groupWrite !== null && importingGroup === groupWrite.khoa
+                ? catalogueImport.panel({
+                    // Đọc lại cả bảy nhóm: mục vừa nhập chỉ có thật ở máy chủ. Khung giữ nguyên để
+                    // cán bộ đọc câu "Đã nhập N loại…" rồi tự đóng.
+                    onImported: () => datLanDoc((k) => k + 1),
+                    onClose: () => setImportingGroup(null),
+                  })
+                : null
+            }
+            form={
+              dangMo !== null && dangMo.ghi.khoa === n.ghi?.khoa ? (
+                <BieuMauGhi
+                  dangMo={dangMo}
+                  ban={ban}
+                  datBan={datBan}
+                  loiTaiCho={loiTaiCho}
+                  loiMayChu={loiMayChu}
+                  dangGui={dangGui}
+                  onGui={guiBieuMau}
+                  onHuy={dong}
+                />
+              ) : null
+            }
+          />
+        );
+      })}
 
       {/* NHÓM THỨ TÁM, KHUÔN RIÊNG (#21): chỉ đổi nhãn và thứ tự, không thêm · tắt · xoá. Nút ghi
           chỉ vẽ khi đã biết có quyền — `coQuyenGhi` là `false` khi phiên còn đang đọc. */}
@@ -397,12 +437,20 @@ export function NhomMuc({
   coQuyenGhi,
   thaoTac,
   form,
+  importAllowed = false,
+  onOpenImport,
+  importPanel = null,
 }: {
   nhom: NhomDanhMuc;
   coQuyenGhi: boolean;
   thaoTac: ThaoTacNhom;
   /** Biểu mẫu đang mở của CHÍNH nhóm này, hoặc `null`. Do tab dựng, xem `TabDanhMuc`. */
   form: ReactNode;
+  /** Nhóm có tuyến nhập Excel VÀ tài khoản có khoá của tuyến ấy. Tab quyết, xem `TabDanhMuc`. */
+  importAllowed?: boolean;
+  onOpenImport?: () => void;
+  /** Khung nhập Excel đang mở của CHÍNH nhóm này, hoặc `null`. */
+  importPanel?: ReactNode;
 }) {
   const maTieuDe = `nhom-danh-muc-${nhom.khoa}`;
   // Rút ra một `const` để phép thu hẹp kiểu còn sống bên trong các hàm xử lý sự kiện phía dưới.
@@ -424,11 +472,18 @@ export function NhomMuc({
           nút mờ để dành chỗ: một nút bấm vào không có gì xảy ra khiến cán bộ tin mình bấm sai. */}
       {ghi === null && <p className="ghi-chu">{GHI_CHU_NHOM_CHI_XEM}</p>}
 
-      {veDuocNutGhi && ghi !== null && (
-        <p>
-          <button type="button" className="nut-phu" onClick={() => thaoTac.them(ghi, nhom.nhan)}>
-            {NUT_THEM}
-          </button>
+      {((veDuocNutGhi && ghi !== null) || importAllowed) && (
+        <p className="cum-nut">
+          {veDuocNutGhi && ghi !== null && (
+            <button type="button" className="nut-phu" onClick={() => thaoTac.them(ghi, nhom.nhan)}>
+              {NUT_THEM}
+            </button>
+          )}
+          {importAllowed && (
+            <button type="button" className="nut-phu" onClick={onOpenImport}>
+              {IMPORT_BUTTON}
+            </button>
+          )}
         </p>
       )}
 
@@ -461,6 +516,7 @@ export function NhomMuc({
       )}
 
       {form}
+      {importPanel}
     </section>
   );
 }

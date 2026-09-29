@@ -87,12 +87,22 @@ export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Tab "Lời hệ thống" — `admin.lookup`. The server declares that key on all six routes (GET list ·
- * PUT override · DELETE override, for petitions and finance alike), read included, so the tab hides
+ * Tab "Lời hệ thống" — `admin.lookup`. The server declares that key on all nine routes (GET list ·
+ * PUT override · DELETE override, for petitions, finance and reporting alike), read included, so the tab hides
  * as a whole without it. Same key as Máy chủ thư, a separate function so each tab names its own gate.
  */
 export function systemMessagesTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+}
+
+/**
+ * Tab "Tự động hoá" — `admin.sla`, the key all three `automation-jobs` routes declare, the read
+ * included (ADR 0058 §2). Unlike Thời hạn xử lý, whose calendar reads are open, this tab has no read
+ * any other account can make, so it hides as a whole. Same key as `quyetDinhGhiThoiHan`; a separate
+ * function so the tab names its own gate.
+ */
+export function automationTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_CAU_HINH_THOI_HAN);
 }
 
 /**
