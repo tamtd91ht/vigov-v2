@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -315,6 +316,35 @@ CASES = [
        'log.Info("khoi dong", "service", "identity",\n'
        '\t// secret.DSN redacts the password on every rendering path.\n'
        '\t"ten", cb.HoTen)')),
+    # TÊN TIẾNG ANH CỦA CÙNG CÁC TRƯỜNG ẤY (ADR 0061, lớp 0b). Lớp A đổi `cb.HoTen` thành
+    # `s.FullName`; thiếu các ca này thì rào im vì hết khớp, không phải vì mã sạch. Mỗi ca một
+    # nhóm tên của `_common.PII_TOKEN`, lấy từ §Từ điển đổi tên.
+    ("pii_guard", "EN: staff.full_name — s.FullName", BLOCK,
+     w("service-identity/internal/app/log_in.go", 'slog.Info("log in", "name", s.FullName)')),
+    ("pii_guard", "EN: citizen_identity.phone_number", BLOCK,
+     w("service-identity/internal/app/otp.go", 'slog.Debug("otp", "p", ci.PhoneNumber)')),
+    ("pii_guard", "EN: staff.mobile — s.Mobile", BLOCK,
+     w("service-identity/internal/app/staff.go", 'slog.Info("staff", "m", s.Mobile)')),
+    ("pii_guard", "EN: citizen_report.reporter_phone", BLOCK,
+     w("service-petitions/internal/app/intake.go", 'slog.Info("intake", "r", r.ReporterPhone)')),
+    ("pii_guard", "EN: citizen_report.address — r.Address", BLOCK,
+     w("service-petitions/internal/app/intake.go", 'slog.Warn("intake", "a", r.Address)')),
+    ("pii_guard", "EN: căn cước — NationalID", BLOCK,
+     w("service-identity/internal/app/citizen.go", 'log.Printf("id %s", c.NationalID)')),
+    ("pii_guard", "EN: ngày sinh — DateOfBirth", BLOCK,
+     w("service-identity/internal/app/citizen.go", 'slog.Info("c", "dob", c.DateOfBirth)')),
+    ("pii_guard", "EN: mã OTP — otp_code", BLOCK,
+     w("service-identity/internal/app/otp.go", 'slog.Debug("otp", "c", otp_code)')),
+    # DƯƠNG TÍNH GIẢ đáng lo nhất của nhóm trên: `Phone` nằm trong TÊN hàm che, `Address` nằm
+    # trong một tên cấu hình, `Mobile` trong một cờ bool. Ba chỗ ấy không mang dữ liệu cá nhân.
+    ("pii_guard", "EN: giá trị tiếng Anh đã qua MaskPhone", PASS,
+     w("service-comms/internal/app/zns.go",
+       'slog.Info("sent", "p", privacy.MaskPhone(s.PhoneNumber))')),
+    ("pii_guard", "EN: ListenAddress / IsMobile không phải dữ liệu cá nhân", PASS,
+     w("service-identity/cmd/server/main.go",
+       'slog.Info("start", "addr", cfg.ListenAddress, "ua", ua.IsMobile)')),
+    ("bash_content_guard", "EN: log FullName ghi qua redirect", BLOCK,
+     b('echo \'slog.Info("x", s.FullName)\' >> a/x.go')),
 
     # ---- rule 4 · citizen isolation ----------------------------------------
     ("citizen_scope_guard", "identity from the query string", BLOCK,
@@ -332,6 +362,18 @@ CASES = [
     ("citizen_scope_guard", "header không phải trường danh tính", PASS,
      w("congdan/internal/http/citizen.go",
        'tok := r.Header.Get("Authorization")')),
+    # Tên tiếng Anh (ADR 0061: nguoi_gui -> reporter, so_dien_thoai -> phone_number).
+    ("citizen_scope_guard", "EN: reporter_phone từ query", BLOCK,
+     w("congdan/internal/http/citizen.go", 'p := r.URL.Query().Get("reporter_phone")')),
+    ("citizen_scope_guard", "EN: phone_number từ form", BLOCK,
+     w("congdan/internal/http/citizen.go", 'p := r.FormValue("phone_number")')),
+    ("citizen_scope_guard", "EN: X-Citizen-Id từ header", BLOCK,
+     w("congdan/internal/http/citizen.go", 'cid := r.Header.Get("X-Citizen-Id")')),
+    ("citizen_scope_guard", "EN: national_id từ query", BLOCK,
+     w("congdan/internal/http/citizen.go", 'n := r.URL.Query().Get("national_id")')),
+    # `reporter\w*` không được nuốt `reporting_*` — tham số kỳ báo cáo không phải danh tính.
+    ("citizen_scope_guard", "EN: reporting_period không phải danh tính", PASS,
+     w("congdan/internal/http/citizen.go", 'k := r.URL.Query().Get("reporting_period")')),
 
     # ---- rule 5 · authorisation ----------------------------------------------
     ("rbac_guard", "route with no permission", BLOCK,
@@ -400,6 +442,31 @@ CASES = [
        'mux.Handle("POST /api/v1/sessions",\n'
        '\tauthz.Public("màn hình đăng nhập")(\n'
        '\t\tidem.KhongCan("đăng nhập lần hai mở một phiên thứ hai")(h.DangNhap)))')),
+    # `idem.NotRequired` is the ASSUMED English name of `idem.KhongCan` (core/idem not renamed yet
+    # on 2026-09-29; rest_api_guard.IDEM_NOT_REQUIRED). Three cases: no reason warns, the Public
+    # pairing passes, and a complete route passes — the last one is what proves IDEM_DECL reads
+    # the new name, since a missing name would warn "NO duplicate-request declaration".
+    # Complete contract block on purpose: without it the "no @summary" warning keeps this red
+    # even if IDEM_NO_REASON forgot NotRequired — red for the wrong reason.
+    ("rest_api_guard", "EN: idem.NotRequired() states no reason", BLOCK,
+     wpost("identity/internal/http/routes.go",
+           '// @summary  Đăng xuất phiên hiện tại\n'
+           '// @reply    204 -\n'
+           'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
+           '\tauthz.AnyAuthenticated("ends its own session")(\n'
+           '\t\tidem.NotRequired()(http.HandlerFunc(h.Revoke))))')),
+    ("rest_api_guard", "EN: Public route with idem.NotRequired", PASS,
+     w("identity/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/sessions",\n'
+       '\tauthz.Public("sign-in screen")(\n'
+       '\t\tidem.NotRequired("a second sign-in opens a second session")(h.LogIn)))')),
+    ("rest_api_guard", "EN: complete route declared with idem.NotRequired", PASS,
+     wpost("identity/internal/http/routes.go",
+           '// @summary  Đăng xuất phiên hiện tại\n'
+           '// @reply    204 -\n'
+           'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
+           '\tauthz.AnyAuthenticated("ends its own session")(\n'
+           '\t\tidem.NotRequired("deleting a deleted session is a no-op")(http.HandlerFunc(h.Revoke))))')),
     # A route with no @summary/@reply block never reaches kb/20-contracts/openapi.json, and a
     # route absent from the contract is a screen the web side builds by guessing the response
     # shape — the v1 failure where the type source of truth moved into the frontend.
@@ -549,6 +616,18 @@ CASES = [
      b("git commit -F - <<'MSG'\nvi sao heredoc vao psql van bi chan: TRUNCATE la lenh that\nMSG")),
     ("data_safety_guard", "DELETE FROM on business data", BLOCK,
      w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
+    # English table names after layer B (ADR 0061). The path names no business word, so only
+    # the SQL can make this red — exactly the half BUSINESS lacked.
+    ("data_safety_guard", "EN: DELETE FROM disbursement_voucher", BLOCK,
+     w("service-x/internal/store/q.go",
+       'const q = "DELETE FROM disbursement_voucher WHERE tenant_id=$1 AND id=$2"')),
+    ("data_safety_guard", "EN: DELETE FROM budget_entry", BLOCK,
+     w("service-x/internal/store/q.go", 'const q = "DELETE FROM budget_entry WHERE id=$1"')),
+    ("data_safety_guard", "EN: DELETE FROM announcement_recipient", BLOCK,
+     w("service-x/internal/store/q.go",
+       'const q = "DELETE FROM announcement_recipient WHERE id=$1"')),
+    ("data_safety_guard", "EN: DELETE FROM một bảng kỹ thuật (idempotency_key)", PASS,
+     w("core/idem/pg.go", 'const q = "DELETE FROM idempotency_key WHERE expires_at < $1"')),
     ("data_safety_guard", "DELETE with no WHERE", BLOCK,
      w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu"')),
     ("data_safety_guard", "UPDATE with no WHERE", BLOCK,
@@ -631,6 +710,34 @@ CASES = [
      w("service-identity/internal/domain/tien_gio_lam_viec.go",
        "func tien(from time.Time, gio int) time.Time {\n"
        "\treturn from.Add(time.Duration(gio) * time.Hour) // sla\n}")),
+    # ENGLISH COLUMN NAMES (ADR 0061: han_tiep_nhan -> acknowledge_due, han_xu_ly_xong ->
+    # resolve_due, han_xu_ly -> due_at). No `sla`/`deadline` word anywhere in these payloads on
+    # purpose: that word would give the file its deadline context and the case would stay green
+    # through the OLD list — green for the wrong reason.
+    ("citizen_commitment_guard", "EN: acknowledgeDue built by adding a duration", BLOCK,
+     w("service-petitions/internal/app/intake.go",
+       "func acknowledgeDue(from time.Time, h int) time.Time {\n"
+       "\treturn from.Add(time.Duration(h) * time.Hour)\n}")),
+    ("citizen_commitment_guard", "EN: ResolveDue assigned from a duration", BLOCK,
+     w("service-petitions/internal/app/classify.go",
+       "func set(r *CitizenReport, from time.Time, h int) {\n"
+       "\tr.ResolveDue = from.Add(time.Duration(h) * time.Hour)\n}")),
+    ("citizen_commitment_guard", "EN: task DueAt in calendar days", BLOCK,
+     w("service-petitions/internal/app/task.go",
+       "func set(t *Task, from time.Time) {\n\tt.DueAt = from.AddDate(0, 0, 3)\n}")),
+    ("citizen_commitment_guard", "EN: overdue added as a column of citizen_report", BLOCK,
+     w("service-petitions/migrations/0099_x.sql",
+       "ALTER TABLE citizen_report ADD COLUMN overdue BOOLEAN DEFAULT false;")),
+    ("citizen_commitment_guard", "EN: overdue DERIVED from resolve_due", PASS,
+     w("service-petitions/internal/domain/citizen_report.go",
+       "func (r CitizenReport) IsOverdue(now time.Time) bool {\n"
+       "\treturn r.ClosedAt.IsZero() && now.After(r.ResolveDue)\n}")),
+    # A poll interval in a file that ALSO holds a DueAt field, but outside its window: the
+    # widened context must not make every duration in such a file a deadline.
+    ("citizen_commitment_guard", "EN: unrelated duration far from DueAt", PASS,
+     w("service-petitions/internal/app/task.go",
+       "type Task struct {\n\tDueAt time.Time\n}\n\n\n\n"
+       "func poll() time.Duration { return 5 * time.Minute }")),
     ("citizen_commitment_guard", "statutory calendar days, declared", PASS,
      w("petitions/internal/app/khieunai.go",
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
@@ -1176,6 +1283,43 @@ NEN_CANH_BAO_CASES = [
     ({}, {}, False, "không tín hiệu nào"),
 ]
 
+# Tín hiệu của open-questions.json đọc được TÊN TIẾNG ANH (ADR 0061, lớp 0b). Chấm trên tệp THẬT:
+# (câu #, tên tệp, đoạn mã, có khớp một tín hiệu của câu ấy không, nhãn). Đoạn mã đi qua
+# `bo_chu_thich` như drift_guard làm. drift_guard chỉ đọc câu OPEN / SILENTLY_DECIDED (#35–#39
+# hôm nay); tín hiệu của câu DECIDED vẫn được giữ đúng để ngày câu mở lại nó không chết sẵn.
+DRIFT_SIGNAL_CASES = [
+    (27, "x.sql", "INSERT INTO permission (key, group_name) VALUES ('x.read', 'X');", True,
+     "EN: gieo khoá vào bảng `permission`"),
+    (27, "x.sql", "INSERT INTO quyen (ma, nhom) VALUES", True, "VN: gieo khoá vào `quyen`"),
+    (27, "x.sql", "INSERT INTO role_permission (role_id, permission_key) VALUES ($1, $2);", False,
+     "`role_permission` là cấp quyền cho vai trò, không phải gieo khoá"),
+    (26, "x.sql", "    resolve_due TIMESTAMPTZ,", True, "EN: cột resolve_due"),
+    (26, "x.sql", "SELECT COALESCE(resolve_due, now()) FROM citizen_report", True,
+     "EN: COALESCE trên cột hạn"),
+    (29, "x.go", "func (s *Svc) UnlockVoucher(ctx context.Context) error {", True,
+     "EN: đường mở khoá chứng từ"),
+    (29, "x.sql", "    unlock_reason TEXT,", True, "EN: cột unlock_reason"),
+    (30, "x.sql", "CHECK (amount >= 0)", True, "EN: amount cho phép 0"),
+    (30, "x.go", "type Voucher struct { VoucherType string }", True, "EN: loại chứng từ"),
+    (31, "x.go", "DelayThreshold int64", True, "EN: delay_threshold"),
+    (32, "x.sql", "CREATE TABLE budget_line (\n  id TEXT\n);", True, "EN: bảng budget_line"),
+    (33, "x.go", 'const r = "estimate-assigned-by-province"', True, "EN: vai trò cột dự toán"),
+    (34, "x.sql", "ALTER TABLE capital_plan_category ADD COLUMN planned_amount BIGINT;", True,
+     "EN: hạng mục mang tiền"),
+    (34, "x.sql", "ALTER TABLE hang_muc_ke_hoach_von RENAME TO capital_plan_category;", False,
+     "lớp B tự đổi tên bảng — không phải chọn mô hình (b)"),
+    (35, "x.go", "LogRetention time.Duration", True, "EN: LogRetention"),
+    (36, "x.go", "const MinLength = 10", True, "EN: đổi độ dài tối thiểu"),
+    (36, "x.go", "const DaiToiThieu = 10", True, "VN: đổi độ dài tối thiểu"),
+    (36, "x.go", "const MinLength = 12", False, "EN: giữ 12 — không phải đổi"),
+    (36, "x.go", "const DaiMatKhauToiThieu = 12", False, "VN: bản sao 12 ở domain — không phải đổi"),
+    (38, "x.go", "SessionLock time.Duration", True, "EN: khoá phiên khi không dùng"),
+    (38, "x.go", "srv := &http.Server{IdleTimeout: 60 * time.Second}", False,
+     "keep-alive HTTP không phải khoá phiên"),
+    (39, "x.sql", "    locked_until TIMESTAMPTZ,", True, "EN: khoá tới lúc"),
+    (39, "x.go", "FailedLoginCount int", True, "EN: bộ đếm đăng nhập sai"),
+]
+
 
 # env_contract_guard.SO_CUM — a cluster ordinal, or a number that qualifies the value.
 #
@@ -1618,6 +1762,18 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(counts), nhan, mong, duoc))
 
+    tin_hieu: dict = {}
+    for q in dg.load_questions(ROOT):
+        tin_hieu[q.get("id")] = [re.compile(s["pattern"]) for s in q.get("code_signals", [])]
+    for qid, ten, noi_dung, mong, nhan in DRIFT_SIGNAL_CASES:
+        van = dg.bo_chu_thich(noi_dung, ten)
+        duoc = any(p.search(van) for p in tin_hieu.get(qid, []))
+        ok = duoc == mong
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'KHỚP' if mong else 'IM  '}] "
+              f"{'open-questions #' + str(qid):24s} {nhan}")
+        if not ok:
+            sai.append((noi_dung[:40], nhan, mong, duoc))
+
     sai += run_rename_fixtures()
     return sai
 
@@ -1693,7 +1849,8 @@ if __name__ == "__main__":
     tong = (len(CASES) + len(HOP_CAT_CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
             + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES) + 1 + len(CA_NHAN_XLSX_CASES)
             + len(DUOC_QUET_CASES)
-            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
+            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(DRIFT_SIGNAL_CASES)
+            + len(KHOA_QUYEN_CASES)
             + len(VET_ACTOR_CASES)
             + len(KEY_RENAME_CASES) + 1 + len(PERMISSION_HOOK_RENAME_CASES))
     hong = len(fails) + len(sai_thuan)

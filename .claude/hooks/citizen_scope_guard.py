@@ -33,7 +33,12 @@ HOOK = "citizen_scope_guard"
 # `(?:\(\s*\))?` rather than dropping the parentheses from the alternation: `Query` genuinely
 # is a method and `PostForm` is spelled both ways, so one optional group covers all three
 # without loosening WHICH FIELD NAMES count — that list stays exactly as narrow as it was.
-_ID_FIELD = r"(?:phone|so_dien_thoai|sdt|citizen_?id|cccd|cmnd|identity|nguoi_gui)"
+#
+# English names beside the Vietnamese ones (ADR 0061 dictionary: nguoi_gui -> reporter,
+# so_dien_thoai -> phone_number). Layer A renames the wire keys; a list that knew only the old
+# spelling would pass `Query().Get("reporter_phone")` in silence.
+_ID_FIELD = (r"(?:phone(?:_?number)?|so_dien_thoai|sdt|(?:x-)?citizen[_-]?id|cccd|cmnd|identity|"
+             r"nguoi_gui\w*|reporter\w*|national_?id|zalo_?user_?id)")
 FROM_REQUEST = re.compile(
     r"""(?:(?:Query|FormValue|PostForm|Param|URLParam)\s*\(\s*["'`]""" + _ID_FIELD + r"""["'`]"""
     r"""|(?:Query|Header|PostForm)\s*(?:\(\s*\))?\s*\.\s*Get\s*\(\s*["'`]""" + _ID_FIELD + r"""["'`])""",
