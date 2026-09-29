@@ -4,8 +4,9 @@ metadata:
   name: comms
 spec:
   selector: { app.kubernetes.io/name: comms }
-  # CHỈ cổng REST. Dịch vụ này không phục vụ gRPC (`cmd/server/main.go:133` chỉ mở một
-  # listener HTTP), nên khai thêm một cổng 9090 ở đây sẽ tạo một Endpoint không có ai nghe —
-  # và người sau sẽ đọc nó là "có đường gọi tới comms qua gRPC".
   ports:
     - { name: rest, port: 8080, targetPort: rest }
+    # Tên DNS trong cụm: comms.<namespace>.svc.cluster.local:9090
+    # Đích của bộ chạy tự động hoá ở `petitions` và `documents` (`DeliverStaffNotifications`,
+    # ADR 0058). Không có dòng này thì mọi lượt giao chuông cán bộ bị từ chối, pod vẫn xanh.
+    - { name: grpc, port: 9090, targetPort: grpc }

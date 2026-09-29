@@ -462,7 +462,7 @@ Thứ tự không phải thói quen — nó là thứ tự phụ thuộc lúc ch
 | 3 | `petitions` | 16 | độc lập với bốn cái dưới, thứ tự tuỳ |
 | 4 | `documents` | 13 | ″ |
 | 5 | `finance` | 12 | ″ |
-| 6 | `comms` | 4 | ″ |
+| 6 | `comms` | 4 | ″ — từ 29/09/2026 còn phục vụ gRPC 9090 (`DeliverStaffNotifications`; bên gọi: bộ chạy tự động hoá của `petitions` và `documents`, ADR 0058) |
 | 7 | `reporting` | 3 (29/09/2026) | ″ |
 | 8 | `web-admin` | — | **Sau cùng, có chủ ý.** Đưa bề mặt cán bộ lên trước khi API trả lời được nghĩa là một màn hình lỗi mang tên một cơ quan nhà nước |
 

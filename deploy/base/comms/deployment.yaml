@@ -5,12 +5,15 @@
 # `GET /api/v1/map-asset-types` (kb/20-contracts/openapi.json) — và chạy di trú lược đồ của
 # chính nó lúc khởi động. `reporting` theo cùng tiêu chí từ 29/09/2026, khi nó có tuyến đầu tiên.
 #
-# NÓ KHÔNG PHỤC VỤ gRPC. `service-comms/cmd/server/main.go:179` chỉ mở một listener HTTP.
-# Vì thế không có cổng 9090 và không có nhãn `vigov.vn/grpc` — khai một cổng không ai nghe là
-# mời người sau tin rằng có đường gọi tới nó.
+# NÓ PHỤC VỤ gRPC từ 29/09/2026 (4c220a9): `cmd/server/main.go:272-303` (`buildGRPCServer`) mở
+# listener thứ hai ở `GRPC_LISTEN_ADDR` (mặc định `:9090`; `configUses` khai `GRPCServer`) cho MỘT
+# RPC — `DeliverStaffNotifications`, hộp chuông cán bộ. Bên gọi là bộ chạy tự động hoá của
+# `petitions` và `documents` (ADR 0058). Thiếu cổng 9090 ở đây và ở `service.yaml`, hoặc thiếu
+# nhãn `vigov.vn/grpc`, thì không có gì đỏ: pod xanh, probe xanh (probe chỉ gõ 8080), chỉ có mọi
+# lượt giao thông báo của bộ chạy bị từ chối và cán bộ không nhận được chuông.
 #
 # NÓ GỌI RA hai dịch vụ qua gRPC: `platform` (Host → xã) và `identity` (cookie phiên →
-# principal cán bộ, `main.go:117`). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI
+# principal cán bộ, `main.go:144`). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI
 # khởi động — fail closed, có tên — chứ không phục vụ với một nửa chuỗi kiểm.
 #
 # ⚠ HÔM NAY CHƯA CÓ ĐƯỜNG VÀO TỪ INTERNET, có chủ ý. `deploy/overlays/*/ingress.yaml` vẫn
@@ -47,6 +50,7 @@ spec:
         # từ-chối-tất-cả, nên thiếu nhãn = pod không nhận được yêu cầu nào, và KHÔNG CÓ GÌ BÁO:
         # pod xanh, probe xanh, rollout xanh, chỉ có người dùng gặp timeout.
         vigov.vn/be-mat: rest
+        vigov.vn/grpc: "co"      # NetworkPolicy quy tắc 3: nhận 9090 từ pod cùng namespace
     spec:
       # Không có khối này, scheduler được phép xếp mọi replica lên cùng một node, và rút node
       # đó là mất trọn dịch vụ. Nó cũng là thứ ràng buộc pod dôi ra của `maxSurge: 1` phải
@@ -63,7 +67,8 @@ spec:
       # hết — chú thích ấy đã đúng, và nó tự đặt điều kiện gỡ: *"ngày dịch vụ này có đóng-êm, sửa
       # số ở đây"*. Ngày ấy là hôm nay.
       #
-      # `cmd/server/main.go` nay `signal.Notify` rồi `srv.Shutdown` với ngữ cảnh **20 giây**.
+      # `cmd/server/main.go` nay `signal.Notify` rồi `srv.Shutdown` và `grpcSrv.GracefulStop` song
+      # song, chung một ngữ cảnh **20 giây** (`main.go:327-342`).
       # 45 > 20 là điều kiện để đoạn ấy chạy tới cuối: đảo ngược thì k8s `SIGKILL` trước khi
       # `Shutdown` xong, và toàn bộ phần đóng êm thành thứ trông như đang canh mà không bao giờ
       # chạy hết. Sửa một trong hai số thì phải đọc lại số kia.
@@ -87,6 +92,9 @@ spec:
 
           ports:
             - { name: rest, containerPort: 8080 }
+            # 9090 KHÔNG ĐƯỢC PHƠI RA INTERNET: không TLS (ADR 0025). Thứ chặn thật là NetworkPolicy
+            # quy tắc 3 (`mang/netpol.yaml`) cộng với `GRPC_CALLER_KEY` trên mỗi RPC — cả hai.
+            - { name: grpc, containerPort: 9090 }
 
           env:
             # KHÔNG bắt buộc từ 2026-09-25: mọi dịch vụ Go đọc `cfg.ListenAddr`, mặc định `:8080`
@@ -100,7 +108,7 @@ spec:
             # (`core/platformclient/directory.go:77`). Thiếu nó thì mọi xã trả 404.
             - { name: PLATFORM_GRPC_ADDR, value: platform:9090 }
             # Bắt buộc, cùng lý do: đây là đường DUY NHẤT để cookie phiên thành principal cán
-            # bộ (`main.go:117`). Dịch vụ này không sở hữu sổ phiên và không được import của
+            # bộ (`main.go:144`). Dịch vụ này không sở hữu sổ phiên và không được import của
             # identity (luật 2, cấm #1). Giá trị này đòi `identity` phải thật sự phơi cổng
             # 9090 — xem `deploy/base/identity/service.yaml`.
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
@@ -120,14 +128,14 @@ spec:
             # khởi động. SAO LƯU KHOÁ TÁCH KHỎI BẢN SAO LƯU CSDL trước lần lưu đầu tiên.
             - secretRef: { name: bi-mat-comms }
 
-          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:269`): nó trả lời "tiến
+          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:420`): nó trả lời "tiến
           # trình này còn sống", đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe
           # không cần gửi Host. HỆ QUẢ PHẢI BIẾT: nó vẫn xanh khi CSDL hỏng.
           startupProbe:
             httpGet: { path: /healthz, port: rest }
             periodSeconds: 5
             failureThreshold: 60          # 5 phút — di trú CSDL chạy TRONG tiến trình lúc
-                                          # khởi động (`main.go:295`, core/migrate.Chay) và ôm
+                                          # khởi động (`main.go:475`, core/migrate.Chay) và ôm
                                           # `pg_advisory_lock` suốt lượt chạy, nên replica thứ
                                           # hai ĐỢI replica thứ nhất. Probe chặt ở đây là một
                                           # vòng lặp khởi động lại.
