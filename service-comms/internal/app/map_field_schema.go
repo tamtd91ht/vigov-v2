@@ -105,7 +105,7 @@ func wrapMapField(ctx context.Context, op string, err error) error {
 func (uc *MapFieldSchemas) Create(ctx context.Context, req CreateMapFieldRequest,
 	actor audit.Actor) (domain.MapFieldSchema, error) {
 
-	typeCode, err := domain.ChuanHoaMa(req.AssetTypeCode)
+	typeCode, err := domain.NormalizeCode(req.AssetTypeCode)
 	if err != nil {
 		return domain.MapFieldSchema{}, err
 	}
@@ -276,7 +276,7 @@ func (uc *MapFieldSchemas) Delete(ctx context.Context, id, rawReason string, act
 	if id == "" {
 		return commsstore.ErrMapFieldSchemaNotFound
 	}
-	reason, err := domain.ChuanHoaLyDoXoa(rawReason)
+	reason, err := domain.NormalizeDeleteReason(rawReason)
 	if err != nil {
 		return err
 	}
@@ -340,19 +340,19 @@ func summarizeMapField(m domain.MapFieldSchema) map[string]any {
 func diffMapField(before, after domain.MapFieldSchema, beforeSide bool) map[string]any {
 	out := map[string]any{}
 	if before.Label != after.Label {
-		out["label"] = chon(beforeSide, before.Label, after.Label)
+		out["label"] = pick(beforeSide, before.Label, after.Label)
 	}
 	if !domain.SameOptions(before.Options, after.Options) {
-		out["options"] = chon(beforeSide, optionsForAudit(before.Options), optionsForAudit(after.Options))
+		out["options"] = pick(beforeSide, optionsForAudit(before.Options), optionsForAudit(after.Options))
 	}
 	if before.IsRequired != after.IsRequired {
-		out["is_required"] = chon(beforeSide, before.IsRequired, after.IsRequired)
+		out["is_required"] = pick(beforeSide, before.IsRequired, after.IsRequired)
 	}
 	if before.SortOrder != after.SortOrder {
-		out["sort_order"] = chon(beforeSide, before.SortOrder, after.SortOrder)
+		out["sort_order"] = pick(beforeSide, before.SortOrder, after.SortOrder)
 	}
 	if before.IsActive != after.IsActive {
-		out["is_active"] = chon(beforeSide, before.IsActive, after.IsActive)
+		out["is_active"] = pick(beforeSide, before.IsActive, after.IsActive)
 	}
 	return out
 }

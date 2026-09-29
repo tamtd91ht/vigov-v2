@@ -233,7 +233,7 @@ func newMailUseCase(t *testing.T, d *mailDB, env *crypto.Envelope) (*MailSetting
 	handle := store.New(db)
 	sender := &fakeSender{db: d}
 	return NewMailSettingsAdmin(handle, commsstore.NewMailSettingsStore(handle), env, sender),
-		sender, tenant.Into(context.Background(), xaA)
+		sender, tenant.Into(context.Background(), tenantA)
 }
 
 func validMailInput() domain.MailSettingsInput {
@@ -246,7 +246,7 @@ func validMailInput() domain.MailSettingsInput {
 // storedRow is a row whose password was sealed by env for commune A.
 func storedRow(t *testing.T, env *crypto.Envelope) *mailRow {
 	t.Helper()
-	ctx := tenant.Into(context.Background(), xaA)
+	ctx := tenant.Into(context.Background(), tenantA)
 	sealed, err := env.Seal(ctx, secret.Secret(testMailPassword), passwordAAD(ctx))
 	if err != nil {
 		t.Fatalf("seal: %v", err)
@@ -289,7 +289,7 @@ func TestSaveMailSettingsFirstTimeSealsAndAuditsInOneTransaction(t *testing.T) {
 	if len(up) != 1 {
 		t.Fatalf("%d upserts, want 1", len(up))
 	}
-	if up[0].args[0] != string(xaA) {
+	if up[0].args[0] != string(tenantA) {
 		t.Errorf("$1 = %v, want the context commune", up[0].args[0])
 	}
 	sealed, _ := up[0].args[8].([]byte)
@@ -302,11 +302,11 @@ func TestSaveMailSettingsFirstTimeSealsAndAuditsInOneTransaction(t *testing.T) {
 		t.Fatalf("sealed password does not open back: %v", err)
 	}
 	// And it does NOT open as another commune's, or as another column.
-	ctxB := tenant.Into(context.Background(), xaB)
+	ctxB := tenant.Into(context.Background(), tenantB)
 	if _, err := env.Open(ctxB, sealed, passwordAAD(ctxB)); err == nil {
 		t.Error("commune A's sealed password opened for commune B")
 	}
-	if _, err := env.Open(ctx, sealed, []byte("other_table/other_column/"+string(xaA))); err == nil {
+	if _, err := env.Open(ctx, sealed, []byte("other_table/other_column/"+string(tenantA))); err == nil {
 		t.Error("the sealed password opened under another AAD")
 	}
 	if up[0].args[9] != "CB-00123" {

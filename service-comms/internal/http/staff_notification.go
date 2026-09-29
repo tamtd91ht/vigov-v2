@@ -13,7 +13,7 @@ package http
 // applied between staff).
 //
 // WHAT THE BELL DOES NOT SHOW YET: issued announcements (§8's first row). Those live in the
-// announcement book of migration 0005 and are not copied into this inbox by app.SoanThongBaoNoiBo —
+// announcement book of migration 0005 and are not copied into this inbox by app.Announcements —
 // a follow-up in the same service, not a contract question.
 
 import (
@@ -137,7 +137,7 @@ func (h *Handler) ListMyNotifications(w http.ResponseWriter, r *http.Request) {
 	for _, n := range res.Items {
 		out.Items = append(out.Items, notificationToOut(n))
 	}
-	vietJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // CountMyUnreadNotifications serves GET /api/v1/notifications/unread-count — the badge.
@@ -151,7 +151,7 @@ func (h *Handler) CountMyUnreadNotifications(w http.ResponseWriter, r *http.Requ
 		h.inboxFailure(w, r, "đếm thông báo chưa đọc", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, unreadCountOut{Unread: n})
+	writeJSON(w, http.StatusOK, unreadCountOut{Unread: n})
 }
 
 // MarkMyNotificationRead serves PATCH /api/v1/notifications/{id} with {"read": true}.
@@ -173,7 +173,7 @@ func (h *Handler) MarkMyNotificationRead(w http.ResponseWriter, r *http.Request)
 		h.inboxFailure(w, r, "đánh dấu đã đọc", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, notificationToOut(n))
+	writeJSON(w, http.StatusOK, notificationToOut(n))
 }
 
 // MarkAllMyNotificationsRead serves PATCH /api/v1/notifications with {"read": true} — `Đọc hết`.
@@ -190,13 +190,13 @@ func (h *Handler) MarkAllMyNotificationsRead(w http.ResponseWriter, r *http.Requ
 		h.inboxFailure(w, r, "đọc hết", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, markAllReadOut{Marked: n})
+	writeJSON(w, http.StatusOK, markAllReadOut{Marked: n})
 }
 
 // readMarkBody decodes {"read": true}, answering 400 itself otherwise.
 func readMarkBody(w http.ResponseWriter, r *http.Request) bool {
 	var in markReadIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return false
 	}
 	if in.Read == nil || !*in.Read {

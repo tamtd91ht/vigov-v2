@@ -21,7 +21,7 @@ import (
 )
 
 // THE BELL INBOX, the REAL use case over the REAL store over a recording fake driver — the same
-// argument driver_gia_danh_muc_test.go makes: the properties worth proving (one transaction, an entry
+// argument fake_driver_catalogue_test.go makes: the properties worth proving (one transaction, an entry
 // inside it, nothing written on a refusal, the recipient filter on every statement) are properties of
 // the SQL and of the transaction boundaries, which a fake store would erase.
 //
@@ -168,7 +168,7 @@ func newInboxUseCase(t *testing.T, f *sqlFake) (*StaffNotifications, *docstore.S
 	n := 0
 	uc.newID = func() (string, error) { n++; return fmt.Sprintf("01JNOTICE%017d", n), nil }
 	uc.now = func() time.Time { return inboxClock }
-	return uc, st, tenant.Into(context.Background(), xaA)
+	return uc, st, tenant.Into(context.Background(), tenantA)
 }
 
 var jobActor = audit.Actor{ID: audit.SystemActor, Kind: "system", IP: "10.1.2.3"}
@@ -222,7 +222,7 @@ func TestDeliver_WritesEveryNoticeAndOneAuditEntryInOneTransaction(t *testing.T)
 		if !strings.Contains(s.sql, "ON CONFLICT (tenant_id, idempotency_key, recipient_code) DO NOTHING") {
 			t.Error("câu chèn không bỏ qua cặp (khoá, người nhận) đã có — giao lại sẽ trùng")
 		}
-		if s.args[0] != string(xaA) {
+		if s.args[0] != string(tenantA) {
 			t.Errorf("$1 = %v, muốn xã của context", s.args[0])
 		}
 		if strings.Contains(s.sql, "read_at") || strings.Contains(s.sql, "deleted_at") {
@@ -235,7 +235,7 @@ func TestDeliver_WritesEveryNoticeAndOneAuditEntryInOneTransaction(t *testing.T)
 		t.Fatalf("%d dòng vết, muốn đúng 1 cho cả lời gọi", len(aud))
 	}
 	a := aud[0].args // tenant, actor_id, actor_kind, actor_ip, action, subject, at, delta
-	if a[0] != string(xaA) || a[1] != audit.SystemActor || a[2] != "system" || a[3] != "10.1.2.3" {
+	if a[0] != string(tenantA) || a[1] != audit.SystemActor || a[2] != "system" || a[3] != "10.1.2.3" {
 		t.Errorf("vết mang xã/chủ thể sai: %v", a[:4])
 	}
 	if a[4] != ActionDeliverStaffNotifications || a[5] != "hop-thu-thong-bao/2026-09-29" {
@@ -368,7 +368,7 @@ func TestMarkRead_UnreadOwnNoticeIsMarkedAndAudited(t *testing.T) {
 		t.Errorf("read_at = %v", n.ReadAt)
 	}
 	lock := f.with("FOR UPDATE")[0]
-	if !strings.Contains(lock.sql, "recipient_code = $3") || lock.args[2] != readerCode || lock.args[0] != string(xaA) {
+	if !strings.Contains(lock.sql, "recipient_code = $3") || lock.args[2] != readerCode || lock.args[0] != string(tenantA) {
 		t.Errorf("câu khoá không lọc theo mã cán bộ của phiên: %q %v", lock.sql, lock.args)
 	}
 	upd := f.with("UPDATE staff_notification")
@@ -485,7 +485,7 @@ func TestStoreReadsFilterByRecipientAndLiveRows(t *testing.T) {
 			!strings.Contains(s.sql, "deleted_at IS NULL") {
 			t.Errorf("câu đọc thiếu bộ lọc xã / người nhận / xoá mềm: %q", s.sql)
 		}
-		if s.args[0] != string(xaA) || s.args[1] != readerCode {
+		if s.args[0] != string(tenantA) || s.args[1] != readerCode {
 			t.Errorf("tham số = %v", s.args)
 		}
 	}

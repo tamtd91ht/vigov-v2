@@ -9,7 +9,7 @@ package domain
 // on archival records. The migration header lists the four rules; this file restates them only
 // where a refusal has to be made in a sentence staff can act on.
 //
-// THE SAME TWO-LAYER SPLIT AS danh_muc_ba_tang.go: the trigger `map_field_schema_guard` is the
+// THE SAME TWO-LAYER SPLIT AS three_tier_catalogue.go: the trigger `map_field_schema_guard` is the
 // floor; this file refuses first, in Vietnamese. A drift between the two costs a worse error
 // message, never a hole — the trigger runs last and the transaction rolls back with its audit
 // entry.
@@ -172,7 +172,7 @@ func ValidValueType(v string) bool {
 }
 
 // ValidateFieldSortOrder bounds the display order. Negative is refused, not clamped — same
-// argument as KiemTraThuTu.
+// argument as ValidateSortOrder.
 func ValidateFieldSortOrder(n int) error {
 	if n < 0 || n > FieldSortOrderMax {
 		return fmt.Errorf("%w (0..%d)", ErrSortOrderRange, FieldSortOrderMax)

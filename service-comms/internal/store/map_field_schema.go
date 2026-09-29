@@ -33,7 +33,7 @@ func NewMapFieldSchemaStore(db *store.DB) *MapFieldSchemaStore {
 }
 
 // MapFieldSchemaCeiling bounds one commune's live rows, for the same reason the type catalogue has
-// TranDanhMucLoaiTaiNguyen: the list is returned whole, so the bound cannot be a `limit`.
+// MapAssetTypeCeiling: the list is returned whole, so the bound cannot be a `limit`.
 //
 // 1000 is a few dozen fields for each of about a dozen groups, many times over — past it the
 // content is an import run twice or a loop, not a form.

@@ -39,22 +39,22 @@ import (
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
-// LoaiTaiNguyenDanhMuc is the commune's map-asset-type catalogue, for GET /api/v1/map-asset-types.
+// MapAssetTypeReader is the commune's map-asset-type catalogue, for GET /api/v1/map-asset-types.
 //
-// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *store.LoaiTaiNguyenBanDoStore. The
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *store.MapAssetTypeStore. The
 // route carries the isolation this service exists to enforce — the commune check before any read —
 // and that has to be testable without a PostgreSQL, or it gets tested once and then never again.
 // The concrete store satisfies this as written; nothing was changed to accommodate it.
 //
 // NO page.Request PARAMETER: this route returns the whole list on purpose. The reason is on
-// store.LoaiTaiNguyenBanDoStore.DanhSach, and the bound that replaces the missing `limit` is
-// store.TranDanhMucLoaiTaiNguyen.
-type LoaiTaiNguyenDanhMuc interface {
-	DanhSach(ctx context.Context) ([]domain.LoaiTaiNguyenBanDo, error)
+// store.MapAssetTypeStore.List, and the bound that replaces the missing `limit` is
+// store.MapAssetTypeCeiling.
+type MapAssetTypeReader interface {
+	List(ctx context.Context) ([]domain.MapAssetType, error)
 }
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
-// GhiLoaiTaiNguyen is the WRITE half of the map-asset-type catalogue, and it is a second interface
+// MapAssetTypeWriter is the WRITE half of the map-asset-type catalogue, and it is a second interface
 // rather than three more methods on the read one — on purpose.
 //
 // The read is a store call; each of these three opens a TRANSACTION and writes an audit entry
@@ -62,10 +62,10 @@ type LoaiTaiNguyenDanhMuc interface {
 // method was nearest and could end up writing the row outside a transaction, which is the exact
 // defect core/audit was shaped to make impossible. Two interfaces, two obligations, visible at the
 // point of use.
-type GhiLoaiTaiNguyen interface {
-	Them(ctx context.Context, yc app.YeuCauThemLoaiTaiNguyen, nguoi audit.Actor) (domain.LoaiTaiNguyenBanDo, error)
-	Sua(ctx context.Context, id string, yc app.YeuCauSuaLoaiTaiNguyen, nguoi audit.Actor) (domain.LoaiTaiNguyenBanDo, error)
-	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+type MapAssetTypeWriter interface {
+	Create(ctx context.Context, req app.CreateMapAssetTypeRequest, actor audit.Actor) (domain.MapAssetType, error)
+	Update(ctx context.Context, id string, req app.UpdateMapAssetTypeRequest, actor audit.Actor) (domain.MapAssetType, error)
+	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
 
 	// The Excel import (ADR 0059) — routes_map_asset_type_import.go. On THIS interface because it is
 	// the same use case writing the same table under the same transaction discipline; the preview
@@ -101,20 +101,20 @@ type GhiLoaiTaiNguyen interface {
 // argument accepted for GET /api/v1/org-units and for all eight catalogue reads). Changing the list
 // is administration of the commune's own configuration, which is precisely what this key is for.
 
-// ThongBaoDanhSach is the READ half of the internal announcement book, for
+// AnnouncementReader is the READ half of the internal announcement book, for
 // GET /api/v1/announcements. AN INTERFACE DECLARED AT THE POINT OF USE, for the same reason
-// LoaiTaiNguyenDanhMuc is: the route carries the isolation this service exists to enforce, and
+// MapAssetTypeReader is: the route carries the isolation this service exists to enforce, and
 // that has to be testable without a PostgreSQL or it gets tested once and then never again.
-type ThongBaoDanhSach interface {
-	DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.ThongBaoNoiBo], error)
+type AnnouncementReader interface {
+	List(ctx context.Context, req page.Request) (page.Result[domain.Announcement], error)
 }
 
-// GhiThongBao is the WRITE half, and it is a second interface rather than another method on the
-// read one — same argument as GhiLoaiTaiNguyen: the read is a store call, while this opens a
+// AnnouncementWriter is the WRITE half, and it is a second interface rather than another method on the
+// read one — same argument as MapAssetTypeWriter: the read is a store call, while this opens a
 // TRANSACTION and writes an audit entry inside it (rule 6, invariant 3). Two interfaces, two
 // obligations, visible at the point of use.
-type GhiThongBao interface {
-	PhatHanh(ctx context.Context, yc domain.YeuCauSoanThongBao, nguoi audit.Actor) (domain.ThongBaoNoiBo, error)
+type AnnouncementWriter interface {
+	Publish(ctx context.Context, req domain.CreateAnnouncementRequest, actor audit.Actor) (domain.Announcement, error)
 }
 
 // --- Mini App content (docs/ui-ux/11-noi-dung-mini-app.md) ----------------------------------------
@@ -126,34 +126,34 @@ type GhiThongBao interface {
 // defect core/audit was shaped to make impossible. Declared at the POINT OF USE so the routes stay
 // testable without a PostgreSQL — a test that needs infrastructure is a test that stops being run.
 
-// NoiDungMiniAppDoc is the READ half of the content register.
+// ContentItemReader is the READ half of the content register.
 //
 // TWO METHODS AND NOT ONE, because the list does NOT carry the article body and the detail does —
-// see store.cotNoiDungMiniApp for the figures. They answer two different questions.
-type NoiDungMiniAppDoc interface {
-	DanhSach(ctx context.Context, loc commsstore.LocNoiDung, yc page.Request) (
-		page.Result[domain.NoiDungMiniApp], error)
-	TheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error)
+// see store.contentItemColumns for the figures. They answer two different questions.
+type ContentItemReader interface {
+	List(ctx context.Context, filter commsstore.ContentItemFilter, req page.Request) (
+		page.Result[domain.ContentItem], error)
+	ByID(ctx context.Context, id string) (domain.ContentItem, error)
 }
 
-// GhiNoiDungMiniApp is the WRITE half of the content register.
-type GhiNoiDungMiniApp interface {
-	Them(ctx context.Context, yc domain.YeuCauThemNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
-	Sua(ctx context.Context, id string, yc domain.YeuCauSuaNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
+// ContentItemWriter is the WRITE half of the content register.
+type ContentItemWriter interface {
+	Create(ctx context.Context, req domain.CreateContentItemRequest, actor audit.Actor) (domain.ContentItem, error)
+	Update(ctx context.Context, id string, req domain.UpdateContentItemRequest, actor audit.Actor) (domain.ContentItem, error)
 }
 
-// DanhMucMiniAppDoc is the READ half of the commune's Mini App category tree. NO page.Request
+// ContentCategoryReader is the READ half of the commune's Mini App category tree. NO page.Request
 // PARAMETER: this route returns the whole tree on purpose, and the bound that replaces the missing
-// `limit` is store.TranDanhMucMiniApp.
-type DanhMucMiniAppDoc interface {
-	DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error)
+// `limit` is store.ContentCategoryCeiling.
+type ContentCategoryReader interface {
+	List(ctx context.Context) ([]domain.ContentCategory, error)
 }
 
-// GhiDanhMucMiniApp is the WRITE half of the category tree. ONE METHOD: §9 lists GET and POST, and
+// ContentCategoryWriter is the WRITE half of the category tree. ONE METHOD: §9 lists GET and POST, and
 // editing or removing a category is not shipped — internal/store says why, and the reason for the
 // edit route in particular is that RE-PARENTING can create a cycle no CHECK constraint can refuse.
-type GhiDanhMucMiniApp interface {
-	Them(ctx context.Context, yc domain.YeuCauThemDanhMuc, nguoi audit.Actor) (domain.DanhMucMiniApp, error)
+type ContentCategoryWriter interface {
+	Create(ctx context.Context, req domain.CreateContentCategoryRequest, actor audit.Actor) (domain.ContentCategory, error)
 }
 
 // --- the map field schema (docs/ui-ux/14-cau-hinh.md §6) -----------------------------------------
@@ -196,20 +196,20 @@ type Deps struct {
 	// request from an administrator — which is the worst possible moment to find out.
 	Checker authz.Checker
 
-	LoaiTaiNguyen    LoaiTaiNguyenDanhMuc
-	GhiLoaiTaiNguyen GhiLoaiTaiNguyen
+	MapAssetTypes      MapAssetTypeReader
+	WriteMapAssetTypes MapAssetTypeWriter
 
 	// The internal announcement book (docs/ui-ux/08-thong-bao.md) — see internal/http/
-	// thong_bao_noi_bo.go for what is shipped, what is not, and which question blocks the rest.
-	ThongBao    ThongBaoDanhSach
-	GhiThongBao GhiThongBao
+	// announcement.go for what is shipped, what is not, and which question blocks the rest.
+	Announcements      AnnouncementReader
+	WriteAnnouncements AnnouncementWriter
 
-	// Mini App content (docs/ui-ux/11-noi-dung-mini-app.md) — see internal/http/noi_dung_mini_app.go
+	// Mini App content (docs/ui-ux/11-noi-dung-mini-app.md) — see internal/http/content_item.go
 	// for what is shipped, what is not, and which question blocks the rest.
-	NoiDung           NoiDungMiniAppDoc
-	GhiNoiDung        GhiNoiDungMiniApp
-	DanhMucNoiDung    DanhMucMiniAppDoc
-	GhiDanhMucNoiDung GhiDanhMucMiniApp
+	ContentItems           ContentItemReader
+	WriteContentItems      ContentItemWriter
+	ContentCategories      ContentCategoryReader
+	WriteContentCategories ContentCategoryWriter
 
 	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
 	MapFieldSchemas      MapFieldSchemaReader
@@ -240,28 +240,28 @@ func Register(mux *http.ServeMux, d Deps) {
 	// without its store would answer every caller with a panic recovered into a 500, and the first
 	// person to find out would be a member of staff in front of a broken map. Same discipline as
 	// authz.Public("") and idem.KhongCan("").
-	if d.LoaiTaiNguyen == nil {
+	if d.MapAssetTypes == nil {
 		panic("comms/http: thiếu kho danh mục loại tài nguyên bản đồ — GET /api/v1/map-asset-types sẽ panic khi có người gọi")
 	}
-	if d.GhiLoaiTaiNguyen == nil {
+	if d.WriteMapAssetTypes == nil {
 		panic("comms/http: thiếu use case ghi danh mục loại tài nguyên bản đồ — POST/PATCH/DELETE /api/v1/map-asset-types sẽ panic khi có người gọi")
 	}
-	if d.ThongBao == nil {
+	if d.Announcements == nil {
 		panic("comms/http: thiếu kho sổ thông báo nội bộ — GET /api/v1/announcements sẽ panic khi có người gọi")
 	}
-	if d.GhiThongBao == nil {
+	if d.WriteAnnouncements == nil {
 		panic("comms/http: thiếu use case phát hành thông báo — POST /api/v1/announcements sẽ panic khi có người gọi")
 	}
-	if d.NoiDung == nil {
+	if d.ContentItems == nil {
 		panic("comms/http: thiếu kho nội dung Mini App — GET /api/v1/content-items sẽ panic khi có người gọi")
 	}
-	if d.GhiNoiDung == nil {
+	if d.WriteContentItems == nil {
 		panic("comms/http: thiếu use case ghi nội dung Mini App — POST/PATCH /api/v1/content-items sẽ panic khi có người gọi")
 	}
-	if d.DanhMucNoiDung == nil {
+	if d.ContentCategories == nil {
 		panic("comms/http: thiếu kho danh mục Mini App — GET /api/v1/content-categories sẽ panic khi có người gọi")
 	}
-	if d.GhiDanhMucNoiDung == nil {
+	if d.WriteContentCategories == nil {
 		panic("comms/http: thiếu use case ghi danh mục Mini App — POST /api/v1/content-categories sẽ panic khi có người gọi")
 	}
 	if d.MapFieldSchemas == nil {
@@ -350,7 +350,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @summary  Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu
 	// @screen   10-ban-do-kinh-te-so §2
 	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
-	// commune's catalogue exceeding store.TranDanhMucLoaiTaiNguyen — which this route REFUSES rather
+	// commune's catalogue exceeding store.MapAssetTypeCeiling — which this route REFUSES rather
 	// than truncating, because a silently short list is a group missing from the selector.
 	//
 	// 401 covers two causes as well, and both really are answered by authz.AnyAuthenticated: no
@@ -362,7 +362,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/map-asset-types",
 		authz.AnyAuthenticated("tên nhóm tài nguyên xuất hiện ở ô chọn nhóm trên bản đồ kinh tế số, bộ lọc bên cạnh và nhãn của mọi tài nguyên đã lưu — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
-			http.HandlerFunc(h.DanhSachLoaiTaiNguyen)))
+			http.HandlerFunc(h.ListMapAssetTypes)))
 
 	// --- the commune adds a map asset type of its own -------------------------------------------
 	//
@@ -399,7 +399,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/map-asset-types",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.ThemLoaiTaiNguyen))))
+				http.HandlerFunc(h.CreateMapAssetType))))
 
 	// --- the commune edits one row --------------------------------------------------------------
 	//
@@ -410,11 +410,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// reorder at every tier, disable at tiers 1 and 2, and `ma` nowhere. The refusal is a 409
 	// naming the tier, and the trigger refuses the same thing underneath (ADR 0024).
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
-	// compares the row it read against the row it would write and, when nothing moved, writes
-	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
-	// state and one entry in the ledger. Were that comparison removed, this declaration would
-	// become a lie and the second request would file a second entry saying nothing changed.
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE:
+	// app.MapAssetTypeCatalogue.Update compares the row it read against the row it would write and,
+	// when nothing moved, writes NOTHING — no UPDATE and no audit entry. So the same request sent twice
+	// leaves one row in one state and one entry in the ledger. Were that comparison removed, this
+	// declaration would become a lie and the second request would file a second entry saying nothing
+	// changed.
 	//
 	// @summary  Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại tài nguyên bản đồ
 	// @screen   14-cau-hinh §5
@@ -429,7 +430,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/map-asset-types/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.SuaLoaiTaiNguyen))))
+				http.HandlerFunc(h.UpdateMapAssetType))))
 
 	// --- the commune retires one of its own rows ------------------------------------------------
 	//
@@ -461,7 +462,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/map-asset-types/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
-				http.HandlerFunc(h.XoaLoaiTaiNguyen))))
+				http.HandlerFunc(h.DeleteMapAssetType))))
 
 	// --- the commune's internal announcement book -----------------------------------------------
 	//
@@ -471,7 +472,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// ship — ADR 0011 puts path segments in English, and `thong-bao` is a blocked segment.
 	//
 	// `announcement.create` ON THE READ ROUTE IS A KNOWN GAP AND IS ARGUED IN FULL at the top of
-	// internal/http/thong_bao_noi_bo.go. In one line: the `quyen` table has no read key for this
+	// internal/http/announcement.go. In one line: the `quyen` table has no read key for this
 	// group, §2's `Cả sổ thông báo` wants one, and rule 5 invariant 3c forbids inventing it — so
 	// the book is readable by whoever may compose announcements, which UNDER-grants rather than
 	// over-grants, and §2's `Gửi cho tôi` filter is not shipped at all.
@@ -489,7 +490,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/announcements",
 		authz.RequirePermission(d.Checker, "announcement.create")(
-			http.HandlerFunc(h.DanhSachThongBao)))
+			http.HandlerFunc(h.ListAnnouncements)))
 
 	// --- the commune issues an announcement to named staff ---------------------------------------
 	//
@@ -509,7 +510,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// 501 is on this list and is not a placeholder: an announcement addressed to DEPARTMENTS is
 	// refused, because expanding one into its staff needs a service-identity RPC that does not
-	// exist. See app.ErrGuiTheoBoPhanChuaCo — the alternative was delivering to nobody, silently.
+	// exist. See app.ErrOrgUnitDeliveryUnavailable — the alternative was delivering to nobody, silently.
 	//
 	// @summary  Phát hành một thông báo nội bộ tới các cán bộ được chọn đích danh
 	// @screen   08-thong-bao §5
@@ -523,7 +524,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/announcements",
 		authz.RequirePermission(d.Checker, "announcement.create")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.PhatHanhThongBao))))
+				http.HandlerFunc(h.PublishAnnouncement))))
 
 	// --- the commune's Mini App content register ------------------------------------------------
 	//
@@ -532,7 +533,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// decision. kb/00-foundation/ubiquitous-language.md §Tên tài nguyên trên URL has NO ROW for any
 	// concept in chapter 11, and its own instruction for that case is "dừng lại và hỏi" (:219-221).
 	// The full argument, the evidence (`../vigov-require/apps/api/app/modules/content/router.py:54,
-	// 66, 186`) and what is still owed are at the top of internal/http/noi_dung_mini_app.go. §9's own
+	// 66, 186`) and what is still owed are at the top of internal/http/content_item.go. §9's own
 	// `/api/mini-app/noi-dung` and `/api/cong/…` sketches cannot ship at all.
 	//
 	// `content.read` AND `content.update` ARE THE SPECIFICATION'S OWN KEYS (§10.5) AND BOTH EXIST —
@@ -542,8 +543,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// There is no `content.create` in the table and none was added — composing and editing are both
 	// `content.update`, which is how §10.5 itself divides the surface.
 	//
-	// THE KEYS ARE LITERALS AT EVERY CALL SITE AND NOT CONSTANTS, although QuyenDocNoiDung and
-	// QuyenSuaNoiDung exist for the prose to refer to: tools/apidoc resolves the key from the
+	// THE KEYS ARE LITERALS AT EVERY CALL SITE AND NOT CONSTANTS, although PermContentRead and
+	// PermContentUpdate exist for the prose to refer to: tools/apidoc resolves the key from the
 	// authz.RequirePermission call and refuses anything that is not a string literal there — "khóa
 	// quyền không phải hằng chuỗi — không ghi vào hợp đồng được". A route whose key it cannot read is
 	// a route absent from kb/20-contracts/openapi.json, which is the contract web-admin builds
@@ -561,12 +562,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/content-items",
 		authz.RequirePermission(d.Checker, "content.read")(
-			http.HandlerFunc(h.DanhSachNoiDung)))
+			http.HandlerFunc(h.ListContentItems)))
 
 	// --- one item, with its body ------------------------------------------------------------------
 	//
 	// IT EXISTS BECAUSE THE LIST DOES NOT CARRY THE BODY, not as a second way of asking one question:
-	// a hundred articles at domain.ThanNoiDungToiDa is twenty million runes in one response, and §6's
+	// a hundred articles at domain.ContentBodyMaxLen is twenty million runes in one response, and §6's
 	// table shows a title and one line of summary.
 	//
 	// 404 COVERS "NO SUCH ITEM" AND "ANOTHER COMMUNE'S ITEM", indistinguishably and on purpose. The
@@ -582,7 +583,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/content-items/{id}",
 		authz.RequirePermission(d.Checker, "content.read")(
-			http.HandlerFunc(h.MotNoiDung)))
+			http.HandlerFunc(h.GetContentItem)))
 
 	// --- the commune composes an item --------------------------------------------------------------
 	//
@@ -614,7 +615,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/content-items",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.ThemNoiDung))))
+				http.HandlerFunc(h.CreateContentItem))))
 
 	// --- the commune edits one item ----------------------------------------------------------------
 	//
@@ -626,11 +627,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `da_sua_tay`, which migration 0006 then refuses to clear: the commune is promised that the
 	// correction survives the next synchronisation.
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua compares
-	// the row it read against the row it would write and, when nothing moved, writes NOTHING — no
-	// UPDATE, no audit entry, and no `da_sua_tay`. So the same request sent twice leaves one row in
-	// one state and one entry in the ledger. Were that comparison removed, this declaration would
-	// become a lie and the second request would file an entry saying nothing changed.
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE:
+	// app.ContentItems.Update compares the row it read against the row it would write and, when
+	// nothing moved, writes NOTHING — no UPDATE, no audit entry, and no `da_sua_tay`. So the same
+	// request sent twice leaves one row in one state and one entry in the ledger. Were that comparison
+	// removed, this declaration would become a lie and the second request would file an entry saying
+	// nothing changed.
 	//
 	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
 	// @screen   11-noi-dung-mini-app §6, §7
@@ -645,7 +647,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/content-items/{id}",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng, đúng một vết, và không đặt cờ da_sua_tay")(
-				http.HandlerFunc(h.SuaNoiDung))))
+				http.HandlerFunc(h.UpdateContentItem))))
 
 	// --- the commune's Mini App category tree --------------------------------------------------------
 	//
@@ -656,8 +658,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// screen, the one §10.5 already gates with `content.read`. Using the key the specification names
 	// costs nothing here and keeps the routes of this module answering the same question the same way.
 	//
-	// NOT PAGINATED ON PURPOSE — store.DanhMucMiniAppStore.DanhSach gives the three reasons, and the
-	// bound that replaces the missing `limit` is store.TranDanhMucMiniApp. Past it the route REFUSES
+	// NOT PAGINATED ON PURPOSE — store.ContentCategoryStore.List gives the three reasons, and the
+	// bound that replaces the missing `limit` is store.ContentCategoryCeiling. Past it the route REFUSES
 	// with a 500 rather than truncating: a silently short tree is a category that has disappeared from
 	// §7's select, so articles get filed under the wrong one and the screen looks entirely normal.
 	//
@@ -669,7 +671,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/content-categories",
 		authz.RequirePermission(d.Checker, "content.read")(
-			http.HandlerFunc(h.DanhSachDanhMucNoiDung)))
+			http.HandlerFunc(h.ListContentCategories)))
 
 	// --- the commune adds a category ------------------------------------------------------------------
 	//
@@ -697,7 +699,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/content-categories",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.ThemDanhMucNoiDung))))
+				http.HandlerFunc(h.CreateContentCategory))))
 
 	// --- the map field schema (Cấu hình → Trường bản đồ) ----------------------------------------------
 	//

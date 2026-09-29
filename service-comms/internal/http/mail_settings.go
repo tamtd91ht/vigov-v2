@@ -95,20 +95,20 @@ func (h *Handler) GetMailSettings(w http.ResponseWriter, r *http.Request) {
 		h.writeMailSettingsError(w, r, "đọc", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, mailSettingsToOut(v))
+	writeJSON(w, http.StatusOK, mailSettingsToOut(v))
 }
 
 // PutMailSettings — PUT /api/v1/mail-settings
 func (h *Handler) PutMailSettings(w http.ResponseWriter, r *http.Request) {
 	var in mailSettingsIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return
 	}
 	// The one conversion: from here on the password is a secret.Secret, which refuses to render.
 	password := secret.Secret(in.Password)
 	in.Password = ""
 
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
@@ -126,16 +126,16 @@ func (h *Handler) PutMailSettings(w http.ResponseWriter, r *http.Request) {
 		h.writeMailSettingsError(w, r, "lưu", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, mailSettingsToOut(v))
+	writeJSON(w, http.StatusOK, mailSettingsToOut(v))
 }
 
 // SendTestMail — POST /api/v1/mail-settings/test-messages
 func (h *Handler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 	var in mailTestIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
@@ -145,7 +145,7 @@ func (h *Handler) SendTestMail(w http.ResponseWriter, r *http.Request) {
 		h.writeMailSettingsError(w, r, "gửi thử", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, mailTestOut{Sent: true})
+	writeJSON(w, http.StatusOK, mailTestOut{Sent: true})
 }
 
 // mailSendFailure is one SMTP failure category as the administrator reads it. The sentence says

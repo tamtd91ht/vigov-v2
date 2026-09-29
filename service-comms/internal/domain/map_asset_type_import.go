@@ -7,10 +7,10 @@ package domain
 // THIS FILE ONLY PLANS. It turns the rows of one sheet plus a snapshot of the commune's catalogue into
 // either the rows to create or EVERY error in the file — never both. Reading the workbook is
 // core/xlsx; writing the plan and its audit entry in one transaction is
-// app.DanhMucLoaiTaiNguyen.ImportMapAssetTypes. Standard library only.
+// app.MapAssetTypeCatalogue.ImportMapAssetTypes. Standard library only.
 //
-// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/map-asset-types — ChuanHoaNhan,
-// ChuanHoaMa, KiemTraThuTu — so a row that could not be typed into the form cannot be imported.
+// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/map-asset-types — NormalizeLabel,
+// NormalizeCode, ValidateSortOrder — so a row that could not be typed into the form cannot be imported.
 //
 // THE COLUMNS are ../vigov-require's `lookup-values` catalogue (apps/api/app/modules/admin/catalogues.py
 // :466-481) minus `Nhóm` — the route knows its group — and minus `Diễn giải`, because
@@ -44,7 +44,7 @@ func MapAssetTypeImportColumns() []string {
 	return []string{MapAssetTypeImportColLabel, MapAssetTypeImportColCode, MapAssetTypeImportColOrder}
 }
 
-// MaxMapAssetTypeImportRows bounds one file: the catalogue ceiling itself (store.TranDanhMucLoaiTaiNguyen
+// MaxMapAssetTypeImportRows bounds one file: the catalogue ceiling itself (store.MapAssetTypeCeiling
 // is 500). A file of more rows cannot be imported whatever it holds.
 const MaxMapAssetTypeImportRows = 500
 
@@ -137,7 +137,7 @@ func blankCells(cells []string) bool {
 
 // PlanMapAssetTypeImport validates the WHOLE file and returns either the plan or every error — the plan
 // is nil whenever there is at least one error, so a caller cannot write half a file by accident.
-// ceiling is store.TranDanhMucLoaiTaiNguyen, passed in because this package does not import the store.
+// ceiling is store.MapAssetTypeCeiling, passed in because this package does not import the store.
 func PlanMapAssetTypeImport(rows []MapAssetTypeImportRow, existing []ExistingMapAssetType, ceiling int) (
 	[]PlannedMapAssetType, []MapAssetTypeImportError) {
 
@@ -179,10 +179,10 @@ func PlanMapAssetTypeImport(rows []MapAssetTypeImportRow, existing []ExistingMap
 		p := PlannedMapAssetType{Row: r.Row}
 		labelOK, codeOK := false, false
 
-		if label, err := ChuanHoaNhan(r.Label); err != nil {
+		if label, err := NormalizeLabel(r.Label); err != nil {
 			switch {
-			case errors.Is(err, ErrNhanQuaDai):
-				rowErr(r, MapAssetTypeImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", NhanToiDa))
+			case errors.Is(err, ErrLabelTooLong):
+				rowErr(r, MapAssetTypeImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", LabelMaxLen))
 			default:
 				rowErr(r, MapAssetTypeImportColLabel, "Thiếu tên hiển thị (hoặc có ký tự điều khiển).")
 			}
@@ -192,9 +192,9 @@ func PlanMapAssetTypeImport(rows []MapAssetTypeImportRow, existing []ExistingMap
 
 		typed := strings.TrimSpace(r.Code) != ""
 		if typed {
-			if code, err := ChuanHoaMa(r.Code); err != nil {
-				if errors.Is(err, ErrMaQuaDai) {
-					rowErr(r, MapAssetTypeImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", MaToiDa))
+			if code, err := NormalizeCode(r.Code); err != nil {
+				if errors.Is(err, ErrCodeTooLong) {
+					rowErr(r, MapAssetTypeImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", CodeMaxLen))
 				} else {
 					rowErr(r, MapAssetTypeImportColCode, "Mã chỉ gồm chữ thường a-z, số và dấu gạch ngang, ví dụ doanh-nghiep.")
 				}
@@ -257,7 +257,7 @@ func parseImportRank(raw string) (int, string) {
 	if s == "" {
 		return 0, ""
 	}
-	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d.", ThuTuToiDa)
+	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d.", SortOrderMax)
 	if len(s) > 9 {
 		return 0, msg
 	}
@@ -267,7 +267,7 @@ func parseImportRank(raw string) (int, string) {
 		}
 	}
 	n, err := strconv.Atoi(s)
-	if err != nil || KiemTraThuTu(n) != nil {
+	if err != nil || ValidateSortOrder(n) != nil {
 		return 0, msg
 	}
 	return n, ""
@@ -302,7 +302,7 @@ var vietnameseBase = func() map[rune]rune {
 
 // SlugMapAssetTypeCode derives a code from a label: "Hộ kinh doanh cá thể" → "ho-kinh-doanh-ca-the".
 // Lower-case, Vietnamese diacritics stripped (đ → d), every run of anything else one '-', none at the
-// ends, cut at MaToiDa on a word boundary. "" when nothing usable remains. The result is NOT
+// ends, cut at CodeMaxLen on a word boundary. "" when nothing usable remains. The result is NOT
 // guaranteed free — that is the planner's check against the snapshot.
 func SlugMapAssetTypeCode(label string) string {
 	var b strings.Builder
@@ -323,8 +323,8 @@ func SlugMapAssetTypeCode(label string) string {
 		sep = true
 	}
 	code := b.String()
-	if len(code) > MaToiDa {
-		code = code[:MaToiDa]
+	if len(code) > CodeMaxLen {
+		code = code[:CodeMaxLen]
 		if i := strings.LastIndexByte(code, '-'); i > 0 {
 			code = code[:i]
 		}

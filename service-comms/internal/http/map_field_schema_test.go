@@ -23,9 +23,9 @@ import (
 )
 
 // The four routes of the map field schema. Harness pieces are the ones loai_tai_nguyen_ban_do_ghi_
-// test.go built for the catalogue writes — the commune-keyed checker (checkerDanhMucGia), the
+// test.go built for the catalogue writes — the commune-keyed checker (perCommuneChecker), the
 // principal injector (chuTheGhi) and the staff principal whose ID and business code differ
-// (canBoGhi) — because the "right permission, wrong commune" case needs exactly those properties.
+// (writerStaff) — because the "right permission, wrong commune" case needs exactly those properties.
 
 // fakeMapFieldSchemas stands in for both the read store and the write use case, RECORDING THE
 // COMMUNE it was called in (read from the context, as *store.Scoped reads it) and the actor.
@@ -78,7 +78,7 @@ func (f *fakeMapFieldSchemas) Delete(ctx context.Context, id, reason string, act
 type mapFieldServer struct {
 	h       http.Handler
 	fake    *fakeMapFieldSchemas
-	checker *checkerDanhMucGia
+	checker *perCommuneChecker
 }
 
 func newMapFieldServer(t *testing.T) *mapFieldServer {
@@ -91,20 +91,21 @@ func newMapFieldServer(t *testing.T) *mapFieldServer {
 			IsActive:  true,
 		},
 	}
-	checker := &checkerDanhMucGia{}
+	checker := &perCommuneChecker{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:              checker,
-		LoaiTaiNguyen:        danhMucMau(),
-		GhiLoaiTaiNguyen:     &ghiDanhMucGia{},
-		ThongBao:             &soThongBaoGia{},
-		GhiThongBao:          &ghiThongBaoGia{},
-		NoiDung:              &soNoiDungGia{},
-		GhiNoiDung:           &ghiNoiDungGia{},
-		DanhMucNoiDung:       &soDanhMucNDGia{},
-		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
+		Checker:                checker,
+		MapAssetTypes:          sampleMapAssetTypes(),
+		WriteMapAssetTypes:     &fakeMapAssetTypeWriter{},
+		Announcements:          &fakeAnnouncementReader{},
+		WriteAnnouncements:     &fakeAnnouncementWriter{},
+		ContentItems:           &fakeContentItemReader{},
+		WriteContentItems:      &fakeContentItemWriter{},
+		ContentCategories:      &fakeContentCategoryReader{},
+		WriteContentCategories: &fakeContentCategoryWriter{},
+
 		MapFieldSchemas:      fake,
 		WriteMapFieldSchemas: fake,
 		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
@@ -121,24 +122,16 @@ func newMapFieldServer(t *testing.T) *mapFieldServer {
 	// The real edge chain in the real order, idem with a nil store (a valid deployment) so each
 	// route's declared mode is what is under test.
 	var h http.Handler = mux
-	h = chuTheGhi(h)
+	h = injectPrincipal(h)
 	h = idem.Middleware(nil, log)(h)
-	h = httpx.TenantMiddleware(thuMucMau())(h)
+	h = httpx.TenantMiddleware(sampleDirectory())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &mapFieldServer{h: h, fake: fake, checker: checker}
 }
 
 func (s *mapFieldServer) grant(commune tenant.ID, perms ...authz.Perm) {
-	if s.checker.co == nil {
-		s.checker.co = map[tenant.ID]map[authz.Perm]struct{}{}
-	}
-	if s.checker.co[commune] == nil {
-		s.checker.co[commune] = map[authz.Perm]struct{}{}
-	}
-	for _, p := range perms {
-		s.checker.co[commune][p] = struct{}{}
-	}
+	s.checker.grantIn(commune, perms...)
 }
 
 func (s *mapFieldServer) call(t *testing.T, method, host, path string, p *authz.Principal, body string) *httptest.ResponseRecorder {
@@ -153,7 +146,7 @@ func (s *mapFieldServer) call(t *testing.T, method, host, path string, p *authz.
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set(idem.Header, "01JIDEMPOTENCYKEYMAPFIELD")
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.h.ServeHTTP(w, r)
@@ -193,8 +186,8 @@ func TestMapFieldRoutesAskForSeededKeys(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
-			if got := s.checker.hoiKhoaCuoi(); got != want[tc.name] {
+			s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body)
+			if got := s.checker.lastAsked(); got != want[tc.name] {
 				t.Fatalf("route asked for %q, want %q", got, want[tc.name])
 			}
 		})
@@ -205,8 +198,8 @@ func TestMapFieldRoutes_401NoSession(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, tc.perm)
-			doiMa(t, s.call(t, tc.method, hostA, tc.path, nil, tc.body), http.StatusUnauthorized)
+			s.grant(tenantA, tc.perm)
+			expectStatus(t, s.call(t, tc.method, hostA, tc.path, nil, tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("no session and the store/use case still ran")
 			}
@@ -218,8 +211,8 @@ func TestMapFieldRoutes_403WrongPermission(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, tc.wrongPerm)
-			doiMa(t, s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body), http.StatusForbidden)
+			s.grant(tenantA, tc.wrongPerm)
+			expectStatus(t, s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("wrong permission and the store/use case still ran")
 			}
@@ -233,8 +226,8 @@ func TestMapFieldRoutes_403RightPermissionWrongCommune(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, tc.perm)
-			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaB), tc.body), http.StatusForbidden)
+			s.grant(tenantA, tc.perm)
+			expectStatus(t, s.call(t, tc.method, hostB, tc.path, writerStaff(tenantB), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("a grant in another commune was enough")
 			}
@@ -246,9 +239,9 @@ func TestMapFieldRoutes_401SessionOfAnotherCommune(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, tc.perm)
-			s.grant(xaB, tc.perm)
-			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaA), tc.body), http.StatusUnauthorized)
+			s.grant(tenantA, tc.perm)
+			s.grant(tenantB, tc.perm)
+			expectStatus(t, s.call(t, tc.method, hostB, tc.path, writerStaff(tenantA), tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("a session of another commune still reached the store/use case")
 			}
@@ -260,20 +253,20 @@ func TestMapFieldRoutes_RightPermissionRightCommune(t *testing.T) {
 	for _, tc := range fourRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, tc.perm)
-			doiMa(t, s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body), tc.ok)
+			s.grant(tenantA, tc.perm)
+			expectStatus(t, s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body), tc.ok)
 			if s.fake.calls != 1 {
 				t.Fatalf("store/use case ran %d times, want 1", s.fake.calls)
 			}
-			if s.fake.lastCommune != xaA {
-				t.Errorf("ran in commune %q, want %q", s.fake.lastCommune, xaA)
+			if s.fake.lastCommune != tenantA {
+				t.Errorf("ran in commune %q, want %q", s.fake.lastCommune, tenantA)
 			}
 			if tc.method == http.MethodGet {
 				return
 			}
 			// Rule 6, invariant 8: the trail's "who" is the BUSINESS CODE, never the internal id.
-			if s.fake.lastActor.ID != maCanBoGhi || s.fake.lastActor.ID == idCanBoGhi {
-				t.Errorf("actor = %+v, want business code %q", s.fake.lastActor, maCanBoGhi)
+			if s.fake.lastActor.ID != writerStaffCode || s.fake.lastActor.ID == writerStaffID {
+				t.Errorf("actor = %+v, want business code %q", s.fake.lastActor, writerStaffCode)
 			}
 			if s.fake.lastActor.IP != "10.0.0.7" {
 				t.Errorf("actor IP = %q, want the socket address", s.fake.lastActor.IP)
@@ -294,13 +287,13 @@ func TestPatchMapFieldRefusesImmutableFields(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, "admin.lookup")
-			w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), tc.body)
-			doiMa(t, w, http.StatusBadRequest)
+			s.grant(tenantA, "admin.lookup")
+			w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", writerStaff(tenantA), tc.body)
+			expectStatus(t, w, http.StatusBadRequest)
 			if s.fake.calls != 0 {
 				t.Error("immutable field in the body and the use case still ran")
 			}
-			e := loiTra(t, w)
+			e := decodeError(t, w)
 			if !strings.Contains(e.Message, tc.label) {
 				t.Errorf("message does not name the refused field %q: %q", tc.label, e.Message)
 			}
@@ -328,11 +321,11 @@ func TestMapFieldErrorsMapToStatuses(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(tenantA, "admin.lookup")
 			s.fake.err = tc.err
-			w := s.call(t, http.MethodPost, hostA, mapFieldPath, canBoGhi(xaA), createMapFieldBody)
-			doiMa(t, w, tc.code)
-			e := loiTra(t, w)
+			w := s.call(t, http.MethodPost, hostA, mapFieldPath, writerStaff(tenantA), createMapFieldBody)
+			expectStatus(t, w, tc.code)
+			e := decodeError(t, w)
 			if e.Code != tc.key {
 				t.Errorf("code = %q, want %q", e.Code, tc.key)
 			}
@@ -350,11 +343,11 @@ func TestMapFieldRefusalsAnswerFixedSentences(t *testing.T) {
 	for _, row := range mapFieldSchemaRefusals {
 		t.Run(row.err.Error(), func(t *testing.T) {
 			s := newMapFieldServer(t)
-			s.grant(xaA, "admin.lookup")
-			s.fake.err = fmt.Errorf("truong_ban_do: thêm cho xã %s: %w", xaA, fmt.Errorf("%w (tối đa 64 ký tự)", row.err))
-			w := s.call(t, http.MethodPost, hostA, mapFieldPath, canBoGhi(xaA), createMapFieldBody)
-			doiMa(t, w, http.StatusBadRequest)
-			e := loiTra(t, w)
+			s.grant(tenantA, "admin.lookup")
+			s.fake.err = fmt.Errorf("truong_ban_do: thêm cho xã %s: %w", tenantA, fmt.Errorf("%w (tối đa 64 ký tự)", row.err))
+			w := s.call(t, http.MethodPost, hostA, mapFieldPath, writerStaff(tenantA), createMapFieldBody)
+			expectStatus(t, w, http.StatusBadRequest)
+			e := decodeError(t, w)
 			if e.Code != "invalid_request" || e.Message != row.message {
 				t.Fatalf("got %q / %q, want invalid_request / %q", e.Code, e.Message, row.message)
 			}
@@ -364,19 +357,19 @@ func TestMapFieldRefusalsAnswerFixedSentences(t *testing.T) {
 
 	t.Run("option removed is a 409 with a fixed sentence", func(t *testing.T) {
 		s := newMapFieldServer(t)
-		s.grant(xaA, "admin.lookup")
+		s.grant(tenantA, "admin.lookup")
 		s.fake.err = domain.ErrOptionRemoved
-		w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), `{"label":"X"}`)
-		doiMa(t, w, http.StatusConflict)
-		assertNoInternalWording(t, loiTra(t, w).Message)
+		w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", writerStaff(tenantA), `{"label":"X"}`)
+		expectStatus(t, w, http.StatusConflict)
+		assertNoInternalWording(t, decodeError(t, w).Message)
 	})
 
 	t.Run("malformed list filter", func(t *testing.T) {
 		s := newMapFieldServer(t)
-		s.grant(xaA, "asset.read")
-		w := s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=Sai", canBoGhi(xaA), "")
-		doiMa(t, w, http.StatusBadRequest)
-		assertNoInternalWording(t, loiTra(t, w).Message)
+		s.grant(tenantA, "asset.read")
+		w := s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=Sai", writerStaff(tenantA), "")
+		expectStatus(t, w, http.StatusBadRequest)
+		assertNoInternalWording(t, decodeError(t, w).Message)
 	})
 }
 
@@ -385,8 +378,8 @@ func TestListMapFieldsFilterIsOptional(t *testing.T) {
 	// separate function). This pins the handler half: absent and empty both list every group.
 	for _, q := range []string{"", "?asset_type_code="} {
 		s := newMapFieldServer(t)
-		s.grant(xaA, "asset.read")
-		doiMa(t, s.call(t, http.MethodGet, hostA, mapFieldPath+q, canBoGhi(xaA), ""), http.StatusOK)
+		s.grant(tenantA, "asset.read")
+		expectStatus(t, s.call(t, http.MethodGet, hostA, mapFieldPath+q, writerStaff(tenantA), ""), http.StatusOK)
 		if s.fake.calls != 1 || s.fake.lastTypeCode != "" {
 			t.Errorf("%q: calls=%d filter=%q, want one unfiltered read", q, s.fake.calls, s.fake.lastTypeCode)
 		}
@@ -395,9 +388,9 @@ func TestListMapFieldsFilterIsOptional(t *testing.T) {
 
 func TestCreateMapFieldPassesBodyAndRequiresIdempotencyKey(t *testing.T) {
 	s := newMapFieldServer(t)
-	s.grant(xaA, "admin.lookup")
-	w := s.call(t, http.MethodPost, hostA, mapFieldPath, canBoGhi(xaA), createMapFieldBody)
-	doiMa(t, w, http.StatusCreated)
+	s.grant(tenantA, "admin.lookup")
+	w := s.call(t, http.MethodPost, hostA, mapFieldPath, writerStaff(tenantA), createMapFieldBody)
+	expectStatus(t, w, http.StatusCreated)
 	c := s.fake.lastCreate
 	if c.AssetTypeCode != "nhom-mau" || c.FieldCode != "legal_form" || c.ValueType != "chon" ||
 		len(c.Options) != 1 || c.Options[0].Value != "tnhh" || c.SortOrder != 1 {
@@ -408,11 +401,11 @@ func TestCreateMapFieldPassesBodyAndRequiresIdempotencyKey(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "https://"+hostA+mapFieldPath, strings.NewReader(createMapFieldBody))
 	r.Host = hostA
 	r.RemoteAddr = "10.0.0.7:51000"
-	r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *canBoGhi(xaA)))
+	r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *writerStaff(tenantA)))
 	w = httptest.NewRecorder()
 	before := s.fake.calls
 	s.h.ServeHTTP(w, r)
-	doiMa(t, w, http.StatusBadRequest)
+	expectStatus(t, w, http.StatusBadRequest)
 	if s.fake.calls != before {
 		t.Error("missing Idempotency-Key and the use case still ran")
 	}
@@ -420,9 +413,9 @@ func TestCreateMapFieldPassesBodyAndRequiresIdempotencyKey(t *testing.T) {
 
 func TestPatchMapFieldPointerSemantics(t *testing.T) {
 	s := newMapFieldServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(tenantA, "admin.lookup")
 
-	doiMa(t, s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), `{"label":"Mới"}`), http.StatusOK)
+	expectStatus(t, s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", writerStaff(tenantA), `{"label":"Mới"}`), http.StatusOK)
 	u := s.fake.lastUpdate
 	if s.fake.lastID != "mf-001" || u.Label == nil || *u.Label != "Mới" {
 		t.Errorf("id/label = %q / %v", s.fake.lastID, u.Label)
@@ -432,7 +425,7 @@ func TestPatchMapFieldPointerSemantics(t *testing.T) {
 	}
 
 	// `Tắt`, a zero sort order and an appended option must all arrive as values, not as absent.
-	doiMa(t, s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA),
+	expectStatus(t, s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", writerStaff(tenantA),
 		`{"is_active":false,"sort_order":0,"is_required":true,`+
 			`"options":[{"value":"tnhh","label":"TNHH"},{"value":"cp","label":"Cổ phần"}]}`), http.StatusOK)
 	u = s.fake.lastUpdate
@@ -444,14 +437,14 @@ func TestPatchMapFieldPointerSemantics(t *testing.T) {
 
 func TestListMapFieldsFilterAndShape(t *testing.T) {
 	s := newMapFieldServer(t)
-	s.grant(xaA, "asset.read")
+	s.grant(tenantA, "asset.read")
 	s.fake.list = []domain.MapFieldSchema{{
 		ID: "mf-002", AssetTypeCode: "nhom-mau", FieldCode: "revenue_estimate", Label: "Doanh thu ước",
 		ValueType: domain.ValueTypeDecimal, Options: []domain.FieldOption{}, IsActive: false,
 	}}
 
-	w := s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=nhom-mau", canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusOK)
+	w := s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=nhom-mau", writerStaff(tenantA), "")
+	expectStatus(t, w, http.StatusOK)
 	if s.fake.lastTypeCode != "nhom-mau" {
 		t.Errorf("filter reaching the store = %q", s.fake.lastTypeCode)
 	}
@@ -466,15 +459,15 @@ func TestListMapFieldsFilterAndShape(t *testing.T) {
 
 	// An empty result is `{"items":[]}`, which is every commune today.
 	s.fake.list = nil
-	w = s.call(t, http.MethodGet, hostA, mapFieldPath, canBoGhi(xaA), "")
+	w = s.call(t, http.MethodGet, hostA, mapFieldPath, writerStaff(tenantA), "")
 	if !strings.Contains(w.Body.String(), `"items":[]`) {
 		t.Errorf("empty list body = %s", w.Body.String())
 	}
 
 	// A malformed filter is a 400 that does not echo the input.
 	calls := s.fake.calls
-	w = s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=Nhom%20XYZ", canBoGhi(xaA), "")
-	doiMa(t, w, http.StatusBadRequest)
+	w = s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=Nhom%20XYZ", writerStaff(tenantA), "")
+	expectStatus(t, w, http.StatusBadRequest)
 	if s.fake.calls != calls || strings.Contains(w.Body.String(), "XYZ") {
 		t.Errorf("bad filter reached the store or was echoed: %s", w.Body.String())
 	}
@@ -482,9 +475,9 @@ func TestListMapFieldsFilterAndShape(t *testing.T) {
 
 func TestDeleteMapFieldPassesReasonAndAnswers204(t *testing.T) {
 	s := newMapFieldServer(t)
-	s.grant(xaA, "admin.lookup")
-	w := s.call(t, http.MethodDelete, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), `{"reason":"không dùng nữa"}`)
-	doiMa(t, w, http.StatusNoContent)
+	s.grant(tenantA, "admin.lookup")
+	w := s.call(t, http.MethodDelete, hostA, mapFieldPath+"/mf-001", writerStaff(tenantA), `{"reason":"không dùng nữa"}`)
+	expectStatus(t, w, http.StatusNoContent)
 	if s.fake.lastID != "mf-001" || s.fake.lastReason != "không dùng nữa" || w.Body.Len() != 0 {
 		t.Errorf("id/reason/body = %q / %q / %q", s.fake.lastID, s.fake.lastReason, w.Body.String())
 	}

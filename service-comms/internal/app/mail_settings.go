@@ -288,25 +288,25 @@ func summarizeMailSettings(m domain.MailSettings) map[string]any {
 func diffMailSettings(before, after domain.MailSettings, beforeSide bool) map[string]any {
 	out := map[string]any{}
 	if before.Host != after.Host {
-		out["host"] = chon(beforeSide, before.Host, after.Host)
+		out["host"] = pick(beforeSide, before.Host, after.Host)
 	}
 	if before.Port != after.Port {
-		out["port"] = chon(beforeSide, before.Port, after.Port)
+		out["port"] = pick(beforeSide, before.Port, after.Port)
 	}
 	if before.Security != after.Security {
-		out["security"] = chon(beforeSide, before.Security, after.Security)
+		out["security"] = pick(beforeSide, before.Security, after.Security)
 	}
 	if before.Username != after.Username {
-		out["username"] = chon(beforeSide, privacy.MaskEmail(before.Username), privacy.MaskEmail(after.Username))
+		out["username"] = pick(beforeSide, privacy.MaskEmail(before.Username), privacy.MaskEmail(after.Username))
 	}
 	if before.FromAddress != after.FromAddress {
-		out["from_address"] = chon(beforeSide, privacy.MaskEmail(before.FromAddress), privacy.MaskEmail(after.FromAddress))
+		out["from_address"] = pick(beforeSide, privacy.MaskEmail(before.FromAddress), privacy.MaskEmail(after.FromAddress))
 	}
 	if before.FromName != after.FromName {
-		out["from_name"] = chon(beforeSide, before.FromName, after.FromName)
+		out["from_name"] = pick(beforeSide, before.FromName, after.FromName)
 	}
 	if before.IsEnabled != after.IsEnabled {
-		out["is_enabled"] = chon(beforeSide, before.IsEnabled, after.IsEnabled)
+		out["is_enabled"] = pick(beforeSide, before.IsEnabled, after.IsEnabled)
 	}
 	return out
 }

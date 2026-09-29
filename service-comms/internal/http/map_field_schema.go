@@ -158,7 +158,7 @@ func (h *Handler) ListMapFieldSchemas(w http.ResponseWriter, r *http.Request) {
 	for _, m := range list {
 		out.Items = append(out.Items, mapFieldSchemaToOut(m))
 	}
-	vietJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // assetTypeFilter reads the OPTIONAL `asset_type_code` filter: absent or empty means every group,
@@ -173,20 +173,20 @@ func (h *Handler) ListMapFieldSchemas(w http.ResponseWriter, r *http.Request) {
 // leans on a LIMIT of the generator, not on a rule it enforces: inline the check again and the
 // contract goes back to `required: true` with no test turning red.
 func assetTypeFilter(q url.Values) (string, error) {
-	raw := thamSoLoc(q, "asset_type_code")
+	raw := queryParam(q, "asset_type_code")
 	if raw == "" {
 		return "", nil
 	}
-	return domain.ChuanHoaMa(raw)
+	return domain.NormalizeCode(raw)
 }
 
 // CreateMapFieldSchema — POST /api/v1/map-field-schemas
 func (h *Handler) CreateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 	var in createMapFieldSchemaIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
@@ -207,13 +207,13 @@ func (h *Handler) CreateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 	}
 	// The business address, not the body: the body would go into Redis, a cache, not a record store.
 	idem.RecordCode(r.Context(), row.Subject())
-	vietJSON(w, http.StatusCreated, mapFieldSchemaToOut(row))
+	writeJSON(w, http.StatusCreated, mapFieldSchemaToOut(row))
 }
 
 // UpdateMapFieldSchema — PATCH /api/v1/map-field-schemas/{id}
 func (h *Handler) UpdateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 	var in updateMapFieldSchemaIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return
 	}
 	switch {
@@ -227,7 +227,7 @@ func (h *Handler) UpdateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 		h.writeMapFieldSchemaError(w, r, "sửa", domain.ErrValueTypeImmutable)
 		return
 	}
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
@@ -245,16 +245,16 @@ func (h *Handler) UpdateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 		h.writeMapFieldSchemaError(w, r, "sửa", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, mapFieldSchemaToOut(row))
+	writeJSON(w, http.StatusOK, mapFieldSchemaToOut(row))
 }
 
 // DeleteMapFieldSchema — DELETE /api/v1/map-field-schemas/{id}. Soft delete; 204, no body.
 func (h *Handler) DeleteMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 	var in deleteMapFieldSchemaIn
-	if !docThan(w, r, &in) {
+	if !decodeBody(w, r, &in) {
 		return
 	}
-	actor, ok := nguoiThucHien(r)
+	actor, ok := actorFrom(r)
 	if !ok {
 		h.missingPrincipal(w, r)
 		return
@@ -326,7 +326,7 @@ func (h *Handler) writeMapFieldSchemaError(w http.ResponseWriter, r *http.Reques
 // pinned by a test asserting no prefix and no backtick reaches the body.
 //
 // THE TABLE IS ALSO THE LIST OF 400s. A sentinel missing from it falls through to 500, never to a
-// default 400 — see laLoiDauVao for why "unknown means the client's fault" is wrong.
+// default 400 — see isInputError for why "unknown means the client's fault" is wrong.
 type refusal struct {
 	err     error
 	message string
@@ -357,9 +357,9 @@ func (h *Handler) logRefusal(r *http.Request, msg string, err error) {
 // ErrMa* HERE IS THE ASSET GROUP'S CODE: the only catalogue code these routes take is
 // `asset_type_code` (app.MapFieldSchemas.Create normalises it with domain.ChuanHoaMa).
 var mapFieldSchemaRefusals = []refusal{
-	{domain.ErrMaTrong, "Chưa chọn nhóm tài nguyên."},
-	{domain.ErrMaSaiDinhDang, "Mã nhóm tài nguyên không đúng dạng: chỉ gồm chữ thường a-z, số và dấu gạch ngang."},
-	{domain.ErrMaQuaDai, fmt.Sprintf("Mã nhóm tài nguyên quá dài (tối đa %d ký tự).", domain.MaToiDa)},
+	{domain.ErrCodeEmpty, "Chưa chọn nhóm tài nguyên."},
+	{domain.ErrCodeShape, "Mã nhóm tài nguyên không đúng dạng: chỉ gồm chữ thường a-z, số và dấu gạch ngang."},
+	{domain.ErrCodeTooLong, fmt.Sprintf("Mã nhóm tài nguyên quá dài (tối đa %d ký tự).", domain.CodeMaxLen)},
 
 	{domain.ErrFieldCodeEmpty, "Chưa nhập mã trường."},
 	{domain.ErrFieldCodeShape, "Mã trường không đúng dạng: bắt đầu bằng chữ thường a-z, chỉ gồm chữ thường a-z, " +
@@ -389,6 +389,6 @@ var mapFieldSchemaRefusals = []refusal{
 	{domain.ErrValueTypeImmutable, "Không đổi được kiểu dữ liệu: dữ liệu đã ghi theo kiểu cũ sẽ không đọc " +
 		"được. Hãy thêm trường mới."},
 
-	{domain.ErrThieuLyDoXoa, "Chưa nhập lý do xoá."},
-	{domain.ErrLyDoXoaQuaDai, fmt.Sprintf("Lý do xoá quá dài (tối đa %d ký tự).", domain.LyDoXoaToiDa)},
+	{domain.ErrDeleteReasonMissing, "Chưa nhập lý do xoá."},
+	{domain.ErrDeleteReasonTooLong, fmt.Sprintf("Lý do xoá quá dài (tối đa %d ký tự).", domain.DeleteReasonMaxLen)},
 }

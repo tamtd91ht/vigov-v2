@@ -14,7 +14,7 @@ package app
 // text another service composed can name a person, and the trail is never deleted. They carry kinds,
 // keys, recipient STAFF codes and counts — the codes are what an inspection asks ("who was told"),
 // and a staff business code acting in office is not what Decree 13 governs (same argument as
-// tomTatThongBaoNoiBo).
+// summarizeAnnouncement).
 
 import (
 	"context"
