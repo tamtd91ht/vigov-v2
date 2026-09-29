@@ -63,9 +63,11 @@ describe("app riêng: không một chữ ViHAT, không đăng nhập lúc mở (
     expect(html).toContain('role="status"');
   });
 
-  it("App.tsx của app riêng không dựng hàm mở phiên — mở app không bao giờ gọi cầu đăng nhập", async () => {
+  it("App.tsx của app riêng không dùng hàm mở phiên của đường QR — mở app không bao giờ gọi cầu đăng nhập", async () => {
     // Đọc mã nguồn: `AppRieng` không được nhắc `moPhienViGov` hay `XacNhanXa`. Mở phiên tự động lúc mở
-    // app là thứ ghi một lần "xác nhận xã" không ai bấm (ADR 0047 §6).
+    // app là thứ ghi một lần "xác nhận xã" không ai bấm (ADR 0047 §6). Từ 29/09/2026 `AppRieng` tiêm
+    // `openCommuneAppSession` (App ID + số điện thoại, không tên miền) — hàm ấy chỉ chạy sau cú bấm đồng ý
+    // ở việc cá nhân đầu tiên (`cong-dan/man/commune-session.ts`), không bao giờ lúc mở app.
     const ma = (await import("../App.tsx?raw")).default as string;
     const than = ma.slice(ma.indexOf("export function AppRieng("), ma.indexOf("function AppChung("));
     expect(than.length).toBeGreaterThan(0);

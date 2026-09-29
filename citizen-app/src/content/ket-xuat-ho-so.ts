@@ -20,6 +20,7 @@ import {
 } from "../api/hop-dong-yeu-cau";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
+  COMMUNE_APP_SESSION_FIELDS,
   DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   LOCATION_PATH,
@@ -262,7 +263,7 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
       ? `Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`
       : `${duong.length - tu_chay} đường chạy khi chính người dùng bấm; ${tu_chay} đường chạy mà không cần một cú bấm — xem mục "Chạy khi" của từng đường.`;
   const dong: string[] = [
-    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV` và `BRIDGE_FIELDS_WITH_PHONE`",
+    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV`, `BRIDGE_FIELDS_WITH_PHONE` và `COMMUNE_APP_SESSION_FIELDS`",
     "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
     "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
     `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
@@ -319,6 +320,13 @@ const HOST_CONG_KHAI: TruongGuiDi = {
 
 /** Ba màn phản ánh nơi xã có thể cần xác nhận số điện thoại — chép, khoá như `TEN_MAN_CONG_KHAI`. */
 export const PHONE_VERIFICATION_SCREENS = "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi";
+
+/**
+ * The four personal acts of a commune's own app that open a session (`cong-dan/man/commune-session.ts`) —
+ * copied from `cong-dan/man/noi-dung.ts` for the boundary reason above; the test pins each word.
+ */
+export const COMMUNE_APP_SESSION_SCREENS = 
+  "Ứng dụng của xã: Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý";
 
 /** The send screen, where "Lấy vị trí hiện tại" sits — copied like the line above; the test pins it. */
 export const SEND_SCREEN_NAME = "Gửi phản ánh";
@@ -431,6 +439,23 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: PHONE_VERIFICATION_SCREENS,
     truong: BRIDGE_FIELDS_WITH_PHONE,
+  },
+  {
+    // SAME ROUTE, FOURTH BODY (29/09/2026, `vihat-miniapp` 4114f00): login from a commune's OWN app —
+    // `appId` instead of a commune domain, and ALWAYS `phoneToken` (the server verifies the App ID by
+    // exchanging it). Runs only after the citizen reads why and taps "Đồng ý chia sẻ số điện thoại", at the
+    // first personal act — never when the app opens (ADR 0047:251).
+    //
+    // ⚠ THE PRIVACY-POLICY SENTENCE FOR `appId` IS STILL OWED — legal wording is the project owner's, same
+    //   stance as `bridgeBodyWithPhone`. `chinh-sach.test.ts` pins the gap.
+    tuyen: DUONG_DAN_PHIEN,
+    may_chu:
+      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu số điện thoại ở lượt này; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở phiên với xã của ứng dụng",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, người dùng làm việc cá nhân đầu tiên (gửi, xem, tra cứu hoặc đánh giá phản ánh), đọc lời giải thích, tự bấm “Đồng ý chia sẻ số điện thoại” và đồng ý trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
+    man: COMMUNE_APP_SESSION_SCREENS,
+    truong: COMMUNE_APP_SESSION_FIELDS,
   },
   {
     // 29/09/2026 — the location exchange (`vihat-miniapp` 0dada0f). A SECOND route to the same server,

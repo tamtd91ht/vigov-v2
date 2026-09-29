@@ -35,6 +35,8 @@ import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 import {
   type BridgeRequestWithPhone,
   bridgeBodyWithPhone,
+  type CommuneAppSessionRequest,
+  communeAppSessionBody,
   diaChiPhien,
   docTraLoi,
   docTraLoiCauViGov,
@@ -242,45 +244,118 @@ export async function exchangeLocation(
   }
 }
 
-/** Lời gọi cầu, dùng chung cho hai thân — một chỗ `fetch`, một bảng mã trạng thái. */
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ — cùng tuyến `/api/v1/sessions`, thân thứ tư (`hop-dong.ts`
+ * `communeAppSessionBody`), bảng mã trạng thái RIÊNG vì việc người dân làm tiếp khác app chung:
+ *
+ *   `xong`                 201 có `vigovSession` dùng được
+ *   `app-chua-san-sang`    422 — App ID lạ với máy chủ, hoặc app chưa gắn xã / xã ngừng: bấm lại vô ích
+ *   `cau-tat`              503 — cầu phiên ViGov tắt hoặc chưa lắp ráp; 201 không phiên dùng được
+ *   `yeu-cau-hong`         400 — thân máy chủ không nhận (thiếu mã, ViGov từ chối như lỗi nối dây)
+ *   `ma-het-han`           401 — mã Zalo quá hạn; lượt sau lấy mã mới
+ *   `zalo-khong-tra-loi`   502 — máy chủ không với tới Zalo; chờ một lát
+ *   `qua-nhieu-lan`        429 — chờ vài phút
+ *   `khong-goi-duoc`       mạng, quá hạn chờ, mã lạ, thân sai khuôn
+ *   `chua-khai-host`       bản dựng không có địa chỉ `vihat-miniapp` — không gọi
+ *
+ * App chung (`callBridge`) gộp 502/503/429 thành một `tam-ngung`; ở đây tách ra vì app riêng không có
+ * đường lùi nào khác, và "chờ một lát" (502) khác hẳn "hệ thống chưa bật" (503).
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type CommuneAppBridgeResult =
+  | { kieu: "xong"; phien: PhienViGovQuaCau }
+  | { kieu: "app-chua-san-sang" }
+  | { kieu: "cau-tat" }
+  | { kieu: "yeu-cau-hong" }
+  | { kieu: "ma-het-han" }
+  | { kieu: "zalo-khong-tra-loi" }
+  | { kieu: "qua-nhieu-lan" }
+  | { kieu: "khong-goi-duoc" }
+  | { kieu: "chua-khai-host" };
+
+/**
+ * Đổi hai mã Zalo + App ID lấy một phiên công dân ViGov. KHÔNG NÉM, KHÔNG LOG: thân mang mã đổi được
+ * thành số điện thoại (luật 3). `address` chỉ để phép kiểm đưa địa chỉ giả vào.
+ */
+export async function openCommuneAppSessionCall(
+  req: CommuneAppSessionRequest,
+  address: string = diaChiPhien(),
+): Promise<CommuneAppBridgeResult> {
+  if (address === "") return { kieu: "chua-khai-host" };
+  const answer = await postSession(communeAppSessionBody(req), address);
+  if (answer === null) return { kieu: "khong-goi-duoc" };
+  switch (answer.status) {
+    case 200:
+    case 201: {
+      const phien = docTraLoiCauViGov(answer.body);
+      if (phien === null) return { kieu: "khong-goi-duoc" };
+      if (phien === "khong-co-phien") return { kieu: "cau-tat" };
+      return { kieu: "xong", phien };
+    }
+    case 400:
+      return { kieu: "yeu-cau-hong" };
+    case 401:
+      return { kieu: "ma-het-han" };
+    case 422:
+      return { kieu: "app-chua-san-sang" };
+    case 429:
+      return { kieu: "qua-nhieu-lan" };
+    case 502:
+      return { kieu: "zalo-khong-tra-loi" };
+    case 503:
+      return { kieu: "cau-tat" };
+    default:
+      return { kieu: "khong-goi-duoc" };
+  }
+}
+
+/** Lời gọi cầu, dùng chung cho hai thân của app chung — một bảng mã trạng thái. */
 async function callBridge(body: string, dia_chi: string): Promise<KetQuaCauViGov> {
   if (dia_chi === "") return { kieu: "chua-khai-host" };
+  const answer = await postSession(body, dia_chi);
+  if (answer === null) return { kieu: "khong-goi-duoc" };
+  switch (answer.status) {
+    case 201:
+    case 200: {
+      const phien = docTraLoiCauViGov(answer.body);
+      if (phien === null) return { kieu: "khong-goi-duoc" };
+      if (phien === "khong-co-phien") return { kieu: "cau-tat" };
+      return { kieu: "xong", phien };
+    }
+    case 400:
+      return { kieu: "cau-tat" };
+    case 401:
+      return { kieu: "ma-het-han" };
+    case 422:
+      return { kieu: "chua-san-sang" };
+    case 429:
+    case 502:
+    case 503:
+      return { kieu: "tam-ngung" };
+    default:
+      return { kieu: "khong-goi-duoc" };
+  }
+}
 
-  const bo_dieu_khien = new AbortController();
-  const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
-
+/**
+ * MỘT `fetch` cho mọi thân đi cầu phiên. Thân trả lời chỉ đọc ở 200/201 — thân lỗi không được đọc (câu
+ * của máy chủ không ra màn hình). `null` = mất mạng, quá hạn chờ, hoặc thân 2xx không phải JSON.
+ */
+async function postSession(body: string, address: string): Promise<{ status: number; body: unknown } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HAN_CHO_MS);
   try {
-    const tra_loi = await fetch(dia_chi, {
+    const response = await fetch(address, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
-      signal: bo_dieu_khien.signal,
+      signal: controller.signal,
     });
-
-    switch (tra_loi.status) {
-      case 201:
-      case 200: {
-        const phien = docTraLoiCauViGov(await tra_loi.json());
-        if (phien === null) return { kieu: "khong-goi-duoc" };
-        if (phien === "khong-co-phien") return { kieu: "cau-tat" };
-        return { kieu: "xong", phien };
-      }
-      case 400:
-        return { kieu: "cau-tat" };
-      case 401:
-        return { kieu: "ma-het-han" };
-      case 422:
-        return { kieu: "chua-san-sang" };
-      case 429:
-      case 502:
-      case 503:
-        return { kieu: "tam-ngung" };
-      default:
-        return { kieu: "khong-goi-duoc" };
-    }
+    const status = response.status;
+    return { status, body: status === 200 || status === 201 ? await response.json() : null };
   } catch {
-    return { kieu: "khong-goi-duoc" };
+    return null;
   } finally {
-    clearTimeout(dong_ho);
+    clearTimeout(timer);
   }
 }

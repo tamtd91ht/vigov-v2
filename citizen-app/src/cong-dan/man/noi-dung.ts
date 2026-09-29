@@ -228,6 +228,27 @@ export const PHONE_VERIFICATION = {
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * APP RIÊNG CỦA XÃ — MỞ PHIÊN Ở VIỆC CÁ NHÂN ĐẦU TIÊN (`commune-session.ts`)
+ *
+ * Lời giải thích trước hộp thoại của Zalo DÙNG LẠI `PHONE_VERIFICATION` (title · why · zalo_asks · allow ·
+ * decline): cùng một việc — chia sẻ số để xã biết phản ánh là của ai — và hai bản câu chữ cho một việc là
+ * hai bản sẽ lệch. Ở đây chỉ có các câu kết quả RIÊNG của app xã; câu nào trùng nghĩa thì dùng lại câu cũ.
+ * Không câu nào nhắc mã lỗi; câu nào cũng nói việc làm tiếp.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const COMMUNE_APP_SESSION = {
+  working: "Đang kết nối với hệ thống của xã…",
+  not_connected: (task: string) =>
+    `Ứng dụng của xã chưa được kết nối với hệ thống tiếp nhận phản ánh, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  paused: (task: string) =>
+    `Hệ thống tiếp nhận phản ánh qua ứng dụng đang tạm ngưng, nên ${task}. Hãy thử lại sau ít phút, hoặc gọi điện thoại cho xã.`,
+  wait: (task: string) =>
+    `Zalo hoặc hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
+  other_commune: (task: string) =>
+    `Ứng dụng chưa xác nhận được bạn đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * MÀN "TRA CỨU PHIẾU"
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 

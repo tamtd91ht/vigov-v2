@@ -250,6 +250,62 @@ export function bridgeBodyWithPhone(yc: BridgeRequestWithPhone): string {
   });
 }
 
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * THÂN THỨ TƯ — ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ (`vihat-miniapp` 4114f00, 29/09/2026)
+ *
+ *   gửi : { "accessToken", "phoneToken", "appId": "<App ID của app đang chạy>" }
+ *         — KHÔNG `communeHostHint`, KHÔNG `communeConfirmed`: `vihat-miniapp` nhận ra app riêng từ
+ *         `appId`, và ViGov tra xã từ dòng `mini_app` của App ID ấy (chế độ riêng). App không tự đặt ra
+ *         một tên miền gợi ý nào (sự cố 27/09, ADR 0047:271-277).
+ *   nhận: 201 { "vigovSession": {...} } — cùng khuôn nhánh cầu, đọc bằng `docTraLoiCauViGov`
+ *   lỗi : 400 thiếu `phoneToken` / yêu cầu hỏng · 401 mã Zalo hết hạn · 422 `appId` lạ, hoặc app chưa gắn
+ *         xã / xã ngừng hoạt động (MỘT câu) · 429 · 502 không với tới Zalo · 503 cầu tắt / chưa lắp ráp
+ *         (`vihat-miniapp` `internal/httpapi/sessions.go` switch `chonApp`, `sessions_vigov.go:54-58`)
+ *
+ * ⚠ `phoneToken` BẮT BUỘC Ở MỌI LẦN, và đó là cách máy chủ XÁC MINH App ID: đổi `phoneToken` bằng secret
+ *   của đúng app ấy phải thành công (`vihat-miniapp` `internal/httpapi/app_zalo.go` điểm 2). Nên không có
+ *   thân "chỉ accessToken" cho app riêng — mọi lần mở phiên đều đi sau lời giải thích và hộp thoại xin số.
+ *
+ * ⚠ `appId` CHỈ CHỌN SECRET, KHÔNG CẤP GÌ. Nó đọc từ môi trường Zalo lúc chạy (`readRuntimeAppId`); một
+ *   `appId` sai thì lượt đổi số thất bại (401/502) hoặc máy chủ trả 422 — không bao giờ thành một phiên.
+ *
+ * ⚠ VẮNG `appId` LÀ APP CHUNG ở phía máy chủ — và thân này KHÔNG có `communeHostHint`, nên máy chủ sẽ
+ *   phát một PHIẾU THƯƠNG MẠI, tiêu luôn số điện thoại vào CSDL thương mại. Vì vậy `app_id` rỗng không
+ *   bao giờ tới hàm này: `cau-vigov.ts` dừng trước khi xin mã nào.
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Yêu cầu đăng nhập từ app riêng: hai mã Zalo + App ID của app đang chạy. */
+export type CommuneAppSessionRequest = MaDangNhap & {
+  /** App ID của Mini App đang chạy, như môi trường Zalo báo. Chỉ chọn secret ở máy chủ. */
+  readonly app_id: string;
+};
+
+/**
+ * Ba trường thân này đưa ra khỏi máy — và câu khai từng trường, cho hồ sơ nộp Zalo. Hai dòng mã là dòng
+ * của `TRUONG_GUI_DI_PHIEN` (tham chiếu, không chép); dòng `appId` là dòng mới của thân này.
+ *
+ * ⚠ CHÍNH SÁCH QUYỀN RIÊNG TƯ CHƯA CÓ CÂU CHO THÂN NÀY — lời văn pháp lý của chủ dự án, CÒN NỢ, cùng thế
+ *   đứng với `bridgeBodyWithPhone`. `content/chinh-sach.test.ts` ghim khoảng hở ấy.
+ */
+export const COMMUNE_APP_SESSION_FIELDS: readonly TruongGuiDi[] = [
+  TRUONG_GUI_DI_PHIEN.find((t) => t.khoa === "accessToken")!,
+  TRUONG_GUI_DI_PHIEN.find((t) => t.khoa === "phoneToken")!,
+  {
+    khoa: "appId",
+    trong_chinh_sach:
+      "mã số của ứng dụng xã bạn đang dùng, do Zalo cấp cho ứng dụng — cho máy chủ biết bạn đang làm việc với xã nào, và KHÔNG chứa gì về bạn",
+  },
+];
+
+/** Thân đăng nhập từ app riêng. CHỖ DUY NHẤT tên trường `appId` được viết ra. */
+export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
+  return JSON.stringify({
+    accessToken: req.ma_truy_cap,
+    phoneToken: req.ma_so_dien_thoai,
+    appId: req.app_id,
+  });
+}
+
 /**
  * Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã.
  *

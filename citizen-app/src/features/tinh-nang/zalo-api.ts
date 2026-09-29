@@ -379,6 +379,33 @@ export function xinMaTruyCap(): Promise<KetQuaXin<string>> {
 }
 
 /**
+ * THE APP ID OF THE MINI APP THAT IS RUNNING — `window.APP_ID`, or `null`.
+ *
+ * WHERE IT COMES FROM: the Zalo runtime sets `window.APP_ID` before our code runs, and `zmp-sdk` itself
+ * reads exactly that global for its own App ID (`node_modules/zmp-sdk/apis/constants.js`: `a=window.APP_ID`,
+ * exported as `APP_ID`). `getAppInfo` does NOT return the id (its `GetAppInfoReturns` has name, version,
+ * urls — no id), so this global is the only runtime source. Not a build constant on purpose: one bundle
+ * can be pushed to several App IDs, and a baked id would be right for exactly one of them.
+ *
+ * IT STEERS, IT GRANTS NOTHING: `vihat-miniapp` uses it only to choose which app secret exchanges the
+ * phone token, and that exchange succeeding is what verifies it (`internal/httpapi/app_zalo.go`).
+ *
+ * DIGITS ONLY, else `null`: `vihat-miniapp` refuses any commune App ID that is not all digits
+ * (README, `ZALO_MINIAPP_COMMUNE_APP_SECRETS`). Anything else — absent outside Zalo, a number, junk — is
+ * "unknown", and the caller then asks Zalo for nothing (a login body without `appId` would be read by the
+ * server as the SHARED app and issue a commercial ticket). Not logged: it is not personal, but there is
+ * nothing a log line of it would fix.
+ */
+export function readRuntimeAppId(): string | null {
+  try {
+    const value: unknown = (globalThis as { APP_ID?: unknown }).APP_ID;
+    return typeof value === "string" && /^[0-9]{1,32}$/.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Tên hiển thị Zalo. Chỉ đọc `name`: `id` là định danh người dùng theo App ID và ảnh đại diện là dữ liệu
  * cá nhân không màn nào cần.
  *

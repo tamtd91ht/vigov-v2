@@ -11,10 +11,16 @@
  *   thương mại và phiên ViGov là hai phiên do hai hệ thống ký (ADR 0032).
  */
 // vi-name-ok: importing two EXISTING names (`MaDangNhap`, `xinMaDangNhap`) from zalo-api.ts — no new name
-import { type KetQuaXin, type MaDangNhap, xinMaDangNhap, xinMaTruyCap } from "../tinh-nang/zalo-api";
+import { type KetQuaXin, type MaDangNhap, readRuntimeAppId, xinMaDangNhap, xinMaTruyCap } from "../tinh-nang/zalo-api";
 
-import { type KetQuaCauViGov, moPhienViGovQuaCau, reopenViGovSessionWithPhone } from "./goi-may-chu";
-import type { BridgeRequestWithPhone, YeuCauCauViGov } from "./hop-dong";
+import {
+  type CommuneAppBridgeResult,
+  type KetQuaCauViGov,
+  moPhienViGovQuaCau,
+  openCommuneAppSessionCall,
+  reopenViGovSessionWithPhone,
+} from "./goi-may-chu";
+import type { BridgeRequestWithPhone, CommuneAppSessionRequest, YeuCauCauViGov } from "./hop-dong";
 
 /** Thêm hai nhánh của bước lấy mã Zalo vào các nhánh của lời gọi cầu. */
 export type KetQuaMoPhienQuaCau = KetQuaCauViGov | { kieu: "ngoai-zalo" } | { kieu: "khong-lay-duoc-ma" };
@@ -67,5 +73,52 @@ export async function reopenCitizenSessionWithPhone(
     ma_truy_cap: ma.du_lieu.ma_truy_cap,
     ma_so_dien_thoai: ma.du_lieu.ma_so_dien_thoai,
     ten_mien_xa,
+  });
+}
+
+/** Thêm các nhánh của bước trước lời gọi: App ID không rõ, ngoài Zalo, từ chối, không lấy được mã. */
+export type CommuneAppLoginResult =
+  | CommuneAppBridgeResult
+  | { kieu: "khong-ro-app" }
+  | { kieu: "ngoai-zalo" }
+  | { kieu: "tu-choi" }
+  | { kieu: "khong-lay-duoc-ma" };
+
+/**
+ * MỞ PHIÊN CÔNG DÂN ViGov TỪ APP RIÊNG CỦA MỘT XÃ — App ID lúc chạy + `getAccessToken` + `getPhoneNumber`
+ * → `vihat-miniapp` (`hop-dong.ts` thân thứ tư). Dùng cho CẢ lần mở đầu (việc cá nhân đầu tiên) LẪN lần
+ * mở lại khi ViGov trả 403 `chua_xac_thuc_so`: thân app riêng luôn mang số, nên hai việc là một lời gọi.
+ *
+ * CHỈ CHẠY SAU CÚ BẤM ĐỒNG Ý trên lời giải thích của nửa nhà nước (chính sách 3.3.4): hàm này bật hộp
+ * thoại xin số của Zalo.
+ *
+ * THỨ TỰ LÀ THIẾT KẾ:
+ *   1. App ID trước — không rõ thì DỪNG, không hộp thoại nào hiện ra. Thân thiếu `appId` là app chung ở
+ *      máy chủ, và máy chủ sẽ tiêu số điện thoại vào một phiếu thương mại (ADR 0032).
+ *   2. `xinMaDangNhap`: `getAccessToken` (không hỏi ai) rồi `getPhoneNumber` (hỏi) — hỏng thì hỏng trước
+ *      khi người dân bị hỏi.
+ *   3. Mã rỗng (câu trả lời của nền tảng ở môi trường phát triển) không gửi.
+ *
+ * ⚠ HAI MÃ VÀ APP ID SỐNG ĐÚNG MỘT LỜI GỌI. Kết quả trả lên không mang chúng. Không log.
+ *
+ * `readAppId` / `requestCodes` / `call` chỉ để phép kiểm thay ba mảnh — mã sản phẩm không truyền chúng.
+ */
+export async function openCommuneAppSessionWithPhone(
+  readAppId: () => string | null = readRuntimeAppId,
+  requestCodes: () => Promise<KetQuaXin<MaDangNhap>> = xinMaDangNhap,
+  call: (req: CommuneAppSessionRequest) => Promise<CommuneAppBridgeResult> = openCommuneAppSessionCall,
+): Promise<CommuneAppLoginResult> {
+  const app_id = readAppId();
+  if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
+  const codes = await requestCodes();
+  if (codes.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
+  if (codes.kieu === "tu-choi") return { kieu: "tu-choi" };
+  if (codes.kieu !== "xong" || codes.du_lieu.ma_truy_cap === "" || codes.du_lieu.ma_so_dien_thoai === "") {
+    return { kieu: "khong-lay-duoc-ma" };
+  }
+  return call({
+    ma_truy_cap: codes.du_lieu.ma_truy_cap,
+    ma_so_dien_thoai: codes.du_lieu.ma_so_dien_thoai,
+    app_id,
   });
 }

@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { feedbackDraftStore } from "./commune-app/feedback-draft-store";
 import { TabBar } from "./components/TabBar";
 import {
+  type CommuneAppSessionResult,
   type GetSceneLocation,
   KenhCongDan,
   type KetQuaMoPhien,
@@ -10,6 +11,7 @@ import {
   type LayTenZalo,
   type MoPhienViGov,
   NutVaoKenhCongDan,
+  type OpenCommuneAppSession,
   type ReopenWithPhone,
   type ReopenWithPhoneResult,
   type SceneLocationResult,
@@ -19,8 +21,10 @@ import {
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
 import {
+  type CommuneAppLoginResult,
   type KetQuaMoPhienQuaCau,
   moPhienCongDanQuaCau,
+  openCommuneAppSessionWithPhone,
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
 } from "./features/dang-nhap/cau-vigov";
@@ -254,9 +258,55 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       lay_ten={layTenChoXa}
       getSceneLocation={getSceneLocation}
       draftStore={feedbackDraftStore}
+      openSession={openCommuneAppSession}
     />
   );
 }
+
+/**
+ * THE COMMUNE APP'S SESSION OPENER — the shell builds it, the state half only declares its type
+ * (`OpenCommuneAppSession`), exactly like the session opener of the shared app's QR path. No host hint: the commune comes
+ * from the App ID's `mini_app` row on the server (ADR 0047 §6), and the app never invents a domain to send
+ * (the 27/09 incident, ADR 0047:271-277). The App ID, the two Zalo codes and the phone stop in
+ * `features/dang-nhap/cau-vigov.ts`; only the ViGov session (or a branch) comes down.
+ *
+ * Table by WHAT THE CITIZEN DOES NEXT, not by status code:
+ *   xong                                            → the session
+ *   tu-choi · ngoai-zalo                            → the same branch
+ *   khong-ro-app · app-chua-san-sang (422)          → `chua-ket-noi`: this app is not connected; pressing
+ *                                                     again changes nothing
+ *   cau-tat (503 / no usable session) · yeu-cau-hong
+ *   (400) · chua-khai-host                          → `tam-ngung`: the channel is not serving now
+ *   zalo-khong-tra-loi (502) · qua-nhieu-lan (429)  → `cho-lat`: wait a moment, then press again
+ *   ma-het-han (401) · khong-goi-duoc ·
+ *   khong-lay-duoc-ma                               → `thu-lai`: a fresh tap gets fresh codes
+ */
+export function toCommuneAppSessionResult(result: CommuneAppLoginResult): CommuneAppSessionResult {
+  switch (result.kieu) {
+    case "xong": {
+      const { token, ten_xa, da_xac_thuc_so } = result.phien;
+      return { kieu: "xong", token, ten_xa, da_xac_thuc_so };
+    }
+    case "tu-choi":
+    case "ngoai-zalo":
+      return { kieu: result.kieu };
+    case "khong-ro-app":
+    case "app-chua-san-sang":
+      return { kieu: "chua-ket-noi" };
+    case "cau-tat":
+    case "yeu-cau-hong":
+    case "chua-khai-host":
+      return { kieu: "tam-ngung" };
+    case "zalo-khong-tra-loi":
+    case "qua-nhieu-lan":
+      return { kieu: "cho-lat" };
+    default:
+      return { kieu: "thu-lai" };
+  }
+}
+
+const openCommuneAppSession: OpenCommuneAppSession = async () =>
+  toCommuneAppSessionResult(await openCommuneAppSessionWithPhone());
 
 /**
  * THE LOCATION BRIDGE, for BOTH apps — the shell builds it, the state half only declares its type

@@ -28,6 +28,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
+import type { OpenCommuneAppSession } from "../api/mo-phien-vigov";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
@@ -335,6 +336,7 @@ function AppCuaXa(props: {
   onDeclineName: () => void;
   getSceneLocation?: GetSceneLocation;
   draftStore?: FeedbackDraftStore;
+  openSession?: OpenCommuneAppSession;
 }) {
   const { ten_mien, xa } = props;
   // HỌ TÊN VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy. Không đăng
@@ -522,8 +524,15 @@ export function TrangXa(props: {
    * có nháp (app chung, chạy thử, test): nửa này không tự chạm kho lưu trữ nào.
    */
   draftStore?: FeedbackDraftStore;
+  /**
+   * Mở phiên công dân ViGov (App ID + `getAccessToken` + `getPhoneNumber` → `vihat-miniapp`), do lớp vỏ
+   * tiêm — nửa này không nhập zmp-sdk. Gọi CHỈ ở việc cá nhân đầu tiên, sau lời giải thích và cú bấm đồng
+   * ý (`commune-session.ts`), không bao giờ lúc mở app (ADR 0047:251). Không truyền (chạy thử, test) thì
+   * mọi việc cá nhân nói "chưa kết nối" và không gọi mạng.
+   */
+  openSession?: OpenCommuneAppSession;
 }) {
-  const { ten_mien, lay_ten, getSceneLocation, draftStore } = props;
+  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -577,6 +586,7 @@ export function TrangXa(props: {
         onDeclineName={() => setName({ kind: "settled", name: null })}
         getSceneLocation={getSceneLocation}
         draftStore={draftStore}
+        openSession={openSession}
       />
     );
   }

@@ -32,7 +32,9 @@ export type { FeedbackDraftStore, KetQuaLayTen, LayTenZalo, NhapPhieu } from "./
 export type { GetSceneLocation, SceneLocationFailure, SceneLocationResult } from "./man/scene-location";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type {
+  CommuneAppSessionResult,
   KetQuaMoPhien,
+  OpenCommuneAppSession,
   MoPhienViGov,
   ReopenWithPhone,
   ReopenWithPhoneResult,

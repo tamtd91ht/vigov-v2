@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
 import {
   bridgeBodyWithPhone,
+  COMMUNE_APP_SESSION_FIELDS,
+  communeAppSessionBody,
   LOCATION_FIELDS,
   locationBody,
   thanYeuCauCauViGov,
@@ -207,6 +209,31 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
    *   a third key in that body is red, and the day the section is approved this case becomes a two-way
    *   lock like the ones above.
    */
+  /**
+   * ⚠ KHOẢNG HỞ CÒN NỢ — ĐĂNG NHẬP TỪ APP RIÊNG CỦA XÃ (29/09/2026, `vihat-miniapp` 4114f00).
+   *
+   *   The commune app's login sends `accessToken` + `phoneToken` + `appId`. The first two are the login
+   *   block's declared sentences; the `appId` sentence (`COMMUNE_APP_SESSION_FIELDS`) is declared in the
+   *   Zalo submission but not in the policy text yet — legal wording is the project owner's. Pinned at
+   *   EXACTLY those three keys, and at `appId`'s sentence being absent: the day the section is approved,
+   *   this case turns red and becomes a two-way lock.
+   */
+  it("đăng nhập từ app riêng: thân gửi đúng ba khoá đã khai — câu chính sách cho `appId` CÒN NỢ", () => {
+    const keys = Object.keys(
+      JSON.parse(communeAppSessionBody({ ma_truy_cap: "m", ma_so_dien_thoai: "p", app_id: "1" })) as Record<
+        string,
+        unknown
+      >,
+    ).sort();
+    expect(keys).toEqual(COMMUNE_APP_SESSION_FIELDS.map((t) => t.khoa).sort());
+    expect(keys).not.toContain("communeHostHint");
+    const policy = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
+    const appId = COMMUNE_APP_SESSION_FIELDS.find((t) => t.khoa === "appId")!;
+    expect(policy, "the policy now declares the commune-app login — turn this case into a two-way lock").not.toContain(
+      appId.trong_chinh_sach,
+    );
+  });
+
   it("đổi mã vị trí: thân gửi đúng hai khoá đã khai — mục chính sách cho tuyến này CÒN NỢ", () => {
     const keys = Object.keys(
       JSON.parse(locationBody({ access_token: "m", location_token: "v" })) as Record<string, unknown>,
