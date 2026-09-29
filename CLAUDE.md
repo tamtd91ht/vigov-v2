@@ -158,7 +158,7 @@ did not. Nothing worth recording? Say that sentence out loud — never write an 
 
 Prose in documentation (`kb/`) is written in **Vietnamese** — the people supervising this
 project read Vietnamese. Everything else — new identifiers and file names (rule 12), code
-comments, this brain — is in **English**.
+comments, this brain — is in **English**; only API URL paths stay Vietnamese (rule 12).
 
 ---
 

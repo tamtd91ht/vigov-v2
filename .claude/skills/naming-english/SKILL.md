@@ -17,22 +17,21 @@ Rule 12 states the invariant, ADR 0051 the decision (2026-09-28). This file says
 | New object-storage bucket, object-key segments | **English**, kebab-case | `meeting-attachments` |
 | Route directory a user sees — `web-admin/src/app/**`, `platform-admin/src/app/**` | **Vietnamese**, no diacritics | `app/nhiem-vu/moi/page.tsx` |
 | UI strings, messages to citizens, `kb/` prose | **Vietnamese** with diacritics | `"Danh sách nhiệm vụ"` |
-| Enum **values** (the string stored and sent) | **Vietnamese**, no diacritics — ADR 0011 | `"khieu-nai"`, `"da-ky"` |
-| REST path segments `/api/v1/...` | **English** — ADR 0011, `skills/rest-api-design` | `/api/v1/citizen-reports` |
+| Enum **values** (the string stored and sent) | **English** since 2026-09-29 (user decision; supersedes ADR 0011) — existing Vietnamese values are migrated by the rename campaign with a dual-accept transition | `"signed"`, `"assigned"` |
+| k8s object names, ConfigMap/Secret names, NetworkPolicy names, labels in `deploy/**` | **English**, kebab-case; match the REAL cluster (`common-config`, `<service>-secrets`, `vigov-service-<service>`) | `allow-egress`, `vigov.vn/surface` |
+| REST path segments `/api/v1/...` | the ONLY place a Vietnamese segment may remain (user decision 2026-09-29); new ones English per `skills/rest-api-design` | `/api/v1/citizen-reports` |
 
 ADR 0051 also keeps **Mini App screen routes** Vietnamese. Today `citizen-app/` has **no router**
 (`citizen-app/src/App.tsx`, "WHY NOT A ROUTER"), so there is no route directory to exempt and every
 new file there is English. The day a router arrives, add its route root to `ROUTE_ROOTS` in
 `.claude/hooks/english_identifier_guard.py` in the same change.
 
-An enum **value** stays Vietnamese; the **constant that names it** is new code and is English:
+Both the constant and its value are English for anything new. An EXISTING Vietnamese value that
+is still on the wire keeps working until the campaign migrates it (dual-accept, then removal):
 
 ```go
-const StatusSigned = "da-ky"        // name English, value per ADR 0011
+const StatusSigned = "signed"
 ```
-
-A proto enum value name is serialised as the JSON value — treat it as a VALUE and mark it
-`// vi-name-ok: enum value, ADR 0011` if it must spell the Vietnamese code.
 
 ## 2. The vocabulary — take it, do not invent it
 
@@ -92,9 +91,9 @@ Correct, and expected:
 func (u *UseCase) ListDrafts(ctx context.Context) ([]domain.Meeting, error) { ... }
 ```
 
-- Do **not** rename the neighbours to match. ADR 0051 rules out renaming existing code — a huge diff
-  with no business value that buries real changes in history. The one exception it allows: a change
-  that rewrites the **whole file** anyway. A file mixing both languages is accepted.
+- Renaming the neighbours is the **rename campaign's** job (user decision 2026-09-29: rename
+  everything, service by service, in dedicated commits following the VN→EN dictionary). Outside a
+  campaign commit, don't mix a mass rename into a feature change — it buries the real change.
 - Editing an existing Vietnamese name (its body, its signature) is allowed and never blocked.
 - A new test file named after an existing source file (`bien_ban_hop_test.go` beside
   `bien_ban_hop.go`, `can-bo.test.ts` beside `can-bo.ts`) follows its subject and is allowed; any

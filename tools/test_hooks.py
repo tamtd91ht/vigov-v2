@@ -923,6 +923,22 @@ CASES = [
      w("web-admin/src/features/bien-ban-moi/x.ts", "export const x = 1;\n")),
     ("english_identifier_guard", "tệp tiếng Anh trong thư mục tiếng Việt ĐANG CÓ", PASS,
      w("web-admin/src/features/bien-ban/meeting-drafts.ts", "export const drafts = 1;\n")),
+    # k8s manifests (user decision 2026-09-29): object names, envFrom refs and labels — the
+    # `cau-hinh-chung` / `bi-mat-platform` / `cho-phep-duong-ra` drift from the real cluster.
+    ("english_identifier_guard", "manifest k8s: configMapRef tên tiếng Việt", BLOCK,
+     w("deploy/base/platform/sidecar.yaml",
+       "spec:\n  containers:\n    - envFrom:\n        - configMapRef: { name: cau-hinh-chung }\n")),
+    ("english_identifier_guard", "manifest k8s: NetworkPolicy tên tiếng Việt", BLOCK,
+     w("deploy/base/network/extra.yaml",
+       "kind: NetworkPolicy\nmetadata:\n  name: cho-phep-duong-ra\n")),
+    ("english_identifier_guard", "manifest k8s: nhãn tiếng Việt", BLOCK,
+     w("deploy/base/platform/extra-labels.yaml",
+       "metadata:\n  labels:\n    vigov.vn/be-mat-chinh: rest\n")),
+    ("english_identifier_guard", "manifest k8s tên tiếng Anh, chú thích tiếng Việt", PASS,
+     w("deploy/base/platform/sidecar.yaml",
+       "# Cấu hình chung của mọi pod\nspec:\n  containers:\n    - envFrom:\n"
+       "        - configMapRef: { name: common-config }\n        - secretRef: { name: platform-secrets }\n"
+       "metadata:\n  labels:\n    vigov.vn/surface: rest\n")),
     ("english_identifier_guard", "thư mục route Next.js mới — đường dẫn người dùng thấy", PASS,
      w("web-admin/src/app/nhiem-vu/moi/page.tsx",
        "export default function NewTaskPage() { return null; }\n")),
