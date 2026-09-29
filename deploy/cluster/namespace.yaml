@@ -8,11 +8,11 @@ kind: Namespace
 metadata:
   name: vigov-prod
   labels:
-    vigov.vn/mt: prod
+    vigov.vn/env: prod
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: vigov-staging
   labels:
-    vigov.vn/mt: staging
+    vigov.vn/env: staging

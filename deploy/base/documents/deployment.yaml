@@ -44,12 +44,12 @@ spec:
       labels:
         app.kubernetes.io/name: documents
         app.kubernetes.io/part-of: vigov
-        # NetworkPolicy `cho-phep-rest-tu-ingress` (deploy/base/mang/netpol.yaml, quy tắc 2)
+        # NetworkPolicy `allow-rest-from-ingress` (deploy/base/mang/netpol.yaml, quy tắc 2)
         # chọn pod BẰNG NHÃN NÀY để mở cổng 8080 từ ingress controller. Chính sách nền là
         # từ-chối-tất-cả, nên thiếu nhãn = pod không nhận được yêu cầu nào, và KHÔNG CÓ GÌ BÁO:
         # pod xanh, probe xanh, rollout xanh, chỉ có người dùng gặp timeout.
-        vigov.vn/be-mat: rest
-        vigov.vn/grpc: "co"      # NetworkPolicy quy tắc 3: nhận 9090 từ pod cùng namespace
+        vigov.vn/surface: rest
+        vigov.vn/grpc: "true"      # NetworkPolicy quy tắc 3: nhận 9090 từ pod cùng namespace
     spec:
       # Không có khối này, scheduler được phép xếp mọi replica lên cùng một node, và rút node
       # đó là mất trọn dịch vụ. Nó cũng là thứ ràng buộc pod dôi ra của `maxSurge: 1` phải
@@ -118,7 +118,7 @@ spec:
             # `comms` phơi cổng 9090 — `deploy/base/comms/service.yaml`.
             - { name: COMMS_GRPC_ADDR, value: comms:9090 }
           envFrom:
-            - configMapRef: { name: cau-hinh-chung }
+            - configMapRef: { name: common-config }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.
             # Ba khoá này là điều kiện KHỞI ĐỘNG, không phải tuỳ chọn: `core/config.Load` gom
             # đủ tên còn thiếu rồi thoát (config.go:320-356). SESSION_SIGNING_KEYS nằm trong
@@ -127,7 +127,7 @@ spec:
             # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
             # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
             # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
-            - secretRef: { name: bi-mat-documents }
+            - secretRef: { name: documents-secrets }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:295`): nó trả lời "tiến
           # trình này còn sống", đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe

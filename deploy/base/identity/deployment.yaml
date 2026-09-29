@@ -34,8 +34,8 @@ spec:
       labels:
         app.kubernetes.io/name: identity
         app.kubernetes.io/part-of: vigov
-        vigov.vn/be-mat: rest    # NetworkPolicy: nhận 8080 từ ingress
-        vigov.vn/grpc: "co"      # NetworkPolicy: nhận 9090 từ pod cùng namespace
+        vigov.vn/surface: rest    # NetworkPolicy: nhận 8080 từ ingress
+        vigov.vn/grpc: "true"      # NetworkPolicy: nhận 9090 từ pod cùng namespace
     spec:
       topologySpreadConstraints:
         - maxSkew: 1
@@ -86,12 +86,12 @@ spec:
             - name: DOCUMENTS_GRPC_ADDR
               value: documents:9090
           envFrom:
-            - configMapRef: { name: cau-hinh-chung }
+            - configMapRef: { name: common-config }
             # ⚠ THÊM `REDIS_DSN` Ở STAGING/PROD. `config.Load` KHÔNG đòi nó, nên thiếu nó
             # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
             # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
             # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
-            - secretRef:    { name: bi-mat-identity }
+            - secretRef:    { name: identity-secrets }
 
           startupProbe:
             httpGet: { path: /healthz, port: rest }

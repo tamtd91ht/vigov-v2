@@ -10,7 +10,7 @@
 > Chủ dự án chọn **prod = nhân bản staging** (job `vigov-deploy`, việc `nhan-ban-staging` — đã chạy
 > 25/09/2026: 8 Deployment + 8 Service, chưa có Ingress; việc ấy đã gỡ khỏi job), nên
 > job dịch vụ đặt ảnh vào `vigov-service-<dịch vụ>`. Phần lớn sổ tay dưới đây (tên `platform`,
-> `bi-mat-*`, `apply -k`, Ingress `*.vigov.vn` + `<dịch vụ>.api.vigov.vn` + TLS) mô tả `base/` — **KHÔNG áp nó lên cụm**:
+> `<service>-secrets`, `apply -k`, Ingress `*.vigov.vn` + `<dịch vụ>.api.vigov.vn` + TLS) mô tả `base/` — **KHÔNG áp nó lên cụm**:
 > nó tạo bộ Deployment thứ hai và giành tên miền với Ingress đang chạy. Lệch này là nợ, theo dõi
 > ở sổ `deploy/bo-vigov-deploy-job-dich-vu-tu-dat-anh`.
 
@@ -263,7 +263,7 @@ POST /api/v1/budget-sheets      POST /api/v1/budget-lines
 bản trùng không rút lại được. Nhưng nó nghĩa là **deploy prod không có Redis = sáu đường dẫn
 ấy chết từ ngày đầu**, trong khi pod xanh và probe xanh. Năm dịch vụ đọc `REDIS_DSN`:
 `identity` · `documents` · `finance` · `petitions` · `comms`. **`platform` không đọc** — đưa
-`REDIS_DSN` vào `bi-mat-platform` là một khoá không ai dùng.
+`REDIS_DSN` vào `platform-secrets` là một khoá không ai dùng.
 
 `LISTEN_ADDR` trong `deployment.yaml` nay chỉ là ghi rõ: từ `66ad9ec` (25/09/2026) mọi dịch vụ Go
 mặc định nghe `:8080` và `ListenAddrHoac` đã bỏ (`core/config/config.go:99`). Đổi cổng thì phải
@@ -293,8 +293,8 @@ một khoá nào.
 
 ### Đối tượng k8s phải tạo — tên và key chính xác
 
-Bảng tên đối tượng + key: **`deploy/cau-hinh/README.md` mục 1**. ConfigMap `cau-hinh-chung` do
-kustomize sinh kèm hậu tố băm (`cau-hinh-chung-679b259276`) để đổi giá trị là đổi tên, ép pod
+Bảng tên đối tượng + key: **`deploy/cau-hinh/README.md` mục 1**. ConfigMap `common-config` do
+kustomize sinh kèm hậu tố băm (`common-config-679b259276`) để đổi giá trị là đổi tên, ép pod
 khởi động lại — vì thế không tạo tay.
 
 ⚠ **Hai môi trường dùng tên Secret TLS KHÁC NHAU, mỗi môi trường HAI cái** (web + API) — khối
@@ -421,7 +421,7 @@ kubectl apply -f deploy/cluster/rbac-jenkins.yaml
 kubectl apply -k deploy/overlays/prod
 ```
 
-**ConfigMap `cau-hinh-chung` KHÔNG có trong khối lệnh trên, có chủ ý:** kustomize sinh nó từ
+**ConfigMap `common-config` KHÔNG có trong khối lệnh trên, có chủ ý:** kustomize sinh nó từ
 `overlays/<mt>/kustomization.yaml` với một hậu tố băm. Tạo tay một ConfigMap trùng tên là tạo
 ra một đối tượng không Deployment nào trỏ tới.
 
@@ -687,8 +687,8 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
 | `bi-mat-<dịch vụ>` × 7 | **Opaque** | Mỗi dòng Key/Value là một biến. **Key viết GẠCH DƯỚI** (`DATABASE_DSN`), vì manifest dùng `envFrom`. Key gạch ngang bị k8s bỏ qua im lặng (mục 3) |
 | TLS | **TLS Certificate** | Dán `fullchain.pem` vào Certificate, `privkey.pem` vào Private Key. **Tên theo môi trường**: `vigov-staging-tls` hoặc `vigov-wildcard-tls` |
 
-- **KHÔNG tạo ConfigMap `cau-hinh-chung`.** Kustomize sinh nó kèm hậu tố băm
-  (`cau-hinh-chung-8t59tmkhc4` ở staging, `cau-hinh-chung-679b259276` ở prod, tính ngày
+- **KHÔNG tạo ConfigMap `common-config`.** Kustomize sinh nó kèm hậu tố băm
+  (`common-config-8t59tmkhc4` ở staging, `common-config-679b259276` ở prod, tính ngày
   24/09/2026). Một ConfigMap tạo tay trùng tên là một đối tượng không Deployment nào đọc.
 - Người có quyền xem Secret trong Rancher **đọc được giá trị** bằng nút hiện. Giới hạn ai có
   quyền ấy trên hai namespace này. Trong đó có DSN CSDL chứa dữ liệu công dân (Nghị định 13).
@@ -696,7 +696,7 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
   phải chạy lại job `vigov-deploy` cho dịch vụ ấy.
 
 **Xanh khi:** namespace có đủ `harbor-vigov`, Secret TLS đúng tên môi trường, và **bảy**
-`bi-mat-*`. `web-admin` không có Secret riêng (mục 4).
+`<service>-secrets`. `web-admin` không có Secret riêng (mục 4).
 
 ---
 
@@ -715,7 +715,7 @@ Deployment · 8 Service · 1 ConfigMap · 1 Ingress · 7 NetworkPolicy · 2 PodD
 khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
 
 - **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
-- **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL trong luật `cho-phep-duong-ra` của
+- **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL trong luật `allow-egress` của
   `base/mang/netpol.yaml`, NetworkPolicy của mục 11.0.1) thì sửa trong kho rồi render lại. Sửa
   trên tệp render là sửa một thứ không ai review và lần render sau sẽ mất.
 - **Đường ra tới CSDL đang TẠM MỞ `0.0.0.0/0`** (chỉ cổng 5432 / 6379 / 9092) từ 24/09/2026, theo

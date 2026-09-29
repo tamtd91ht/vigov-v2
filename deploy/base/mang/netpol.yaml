@@ -9,7 +9,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: tu-choi-tat-ca
+  name: deny-all
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]
@@ -18,10 +18,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-rest-tu-ingress
+  name: allow-rest-from-ingress
 spec:
   podSelector:
-    matchLabels: { vigov.vn/be-mat: rest }
+    matchLabels: { vigov.vn/surface: rest }
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -38,10 +38,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-grpc-noi-bo
+  name: allow-grpc-internal
 spec:
   podSelector:
-    matchLabels: { vigov.vn/grpc: "co" }
+    matchLabels: { vigov.vn/grpc: "true" }
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -64,7 +64,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-duong-ra
+  name: allow-egress
 spec:
   podSelector: {}
   policyTypes: [Egress]
@@ -94,16 +94,16 @@ spec:
 # mở 8080 từ namespace ingress-nginx, nên thiếu luật này thì mọi lời gọi API qua web-admin
 # là 502 dù mọi pod đều xanh.
 #
-# Chọn pod web-admin bằng NHÃN TÊN, không bằng `vigov.vn/be-mat: rest` — nhãn ấy cũng gắn
+# Chọn pod web-admin bằng NHÃN TÊN, không bằng `vigov.vn/surface: rest` — nhãn ấy cũng gắn
 # trên chính các pod Go, và mở theo nó là cho mọi dịch vụ gọi REST của nhau, một đường vòng
 # qua hợp đồng gRPC (luật 2).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-rest-tu-web-admin
+  name: allow-rest-from-web-admin
 spec:
   podSelector:
-    matchLabels: { vigov.vn/be-mat: rest }
+    matchLabels: { vigov.vn/surface: rest }
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -129,7 +129,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-petitions-ra-kho-tep
+  name: allow-petitions-egress-storage
 spec:
   podSelector:
     matchLabels: { app.kubernetes.io/name: petitions }
@@ -150,7 +150,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: cho-phep-web-admin-ra-rest
+  name: allow-web-admin-egress-rest
 spec:
   podSelector:
     matchLabels: { app.kubernetes.io/name: web-admin }
@@ -158,6 +158,6 @@ spec:
   egress:
     - to:
         - podSelector:
-            matchLabels: { vigov.vn/be-mat: rest }
+            matchLabels: { vigov.vn/surface: rest }
       ports:
         - { port: 8080, protocol: TCP }

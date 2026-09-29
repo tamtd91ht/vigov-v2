@@ -12,7 +12,7 @@
 //     ConfigMap           common-config (key ENV)
 //     Ingress             một cái mỗi dịch vụ, HTTP cổng 80, host thật (admin.vigov.vn …)
 //
-//   `deploy/base` + `overlays/` KHÔNG mô tả cụm này (tên `platform`, `bi-mat-*`, Ingress
+//   `deploy/base` + `overlays/` KHÔNG mô tả cụm này (tên `platform`, `<service>-secrets`, Ingress
 //   `*.vigov.vn` bắt TLS). Việc `ap-manifest` đã GỠ: áp nó lên prod sẽ tạo bộ Deployment thứ
 //   hai chạy song song, và giành `*.vigov.vn` với Ingress của staging.
 //

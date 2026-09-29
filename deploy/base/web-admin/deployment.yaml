@@ -26,7 +26,7 @@ spec:
       labels:
         app.kubernetes.io/name: web-admin
         app.kubernetes.io/part-of: vigov
-        vigov.vn/be-mat: rest
+        vigov.vn/surface: rest
     spec:
       topologySpreadConstraints:
         - maxSkew: 1
@@ -61,7 +61,7 @@ spec:
           # `http://<dịch vụ>:8080`, tức đúng tên Service trong cùng namespace.
           # KHÔNG có `secretRef`: web-admin không giữ bí mật nào.
           envFrom:
-            - configMapRef: { name: cau-hinh-chung }
+            - configMapRef: { name: common-config }
 
           # `/healthz` không hỏi xã, không gọi backend. Probe `/` từng bị chuyển hướng sang
           # `/dang-nhap`, trang ấy hỏi identity bằng Host là IP pod → 404 → pod không bao

@@ -17,7 +17,7 @@
 #
 # ĐƯỜNG VÀO: host `reporting.api.vigov.vn` do `tools/ingress` sinh (`deploy/base/mang/ingress.yaml`),
 # và `web-admin` chuyển tiếp `/api/v1/reporting-system-messages` theo `dinh-tuyen.gen.ts` (ADR 0043).
-# Cả hai tới pod qua nhãn `vigov.vn/be-mat: rest` bên dưới.
+# Cả hai tới pod qua nhãn `vigov.vn/surface: rest` bên dưới.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,11 +42,11 @@ spec:
       labels:
         app.kubernetes.io/name: reporting
         app.kubernetes.io/part-of: vigov
-        # NetworkPolicy `cho-phep-rest-tu-ingress` và `cho-phep-rest-tu-web-admin`
+        # NetworkPolicy `allow-rest-from-ingress` và `allow-rest-from-web-admin`
         # (deploy/base/mang/netpol.yaml, quy tắc 2 và 5) chọn pod BẰNG NHÃN NÀY để mở cổng 8080.
         # Chính sách nền là từ-chối-tất-cả, nên thiếu nhãn = pod không nhận được yêu cầu nào, và
         # KHÔNG CÓ GÌ BÁO: pod xanh, probe xanh, rollout xanh, chỉ có người dùng gặp timeout.
-        vigov.vn/be-mat: rest
+        vigov.vn/surface: rest
     spec:
       # Không có khối này, scheduler được phép xếp mọi replica lên cùng một node, và rút node
       # đó là mất trọn dịch vụ. Nó cũng là thứ ràng buộc pod dôi ra của `maxSurge: 1` phải
@@ -105,7 +105,7 @@ spec:
             # cổng 9090 — xem `deploy/base/identity/service.yaml`.
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
           envFrom:
-            - configMapRef: { name: cau-hinh-chung }
+            - configMapRef: { name: common-config }
             # Secret CHỈ CẦN HAI KHOÁ: DATABASE_DSN · GRPC_CALLER_KEY (`deploy/cau-hinh/README.md`
             # mục 1 — tên, hình dạng giá trị; không có giá trị nào trong kho, luật 8).
             #
@@ -113,7 +113,7 @@ spec:
             # sao ở đây là thêm một pod bị chiếm là giả được phiên cán bộ của mọi xã.
             # KHÔNG `REDIS_DSN`: `configUses` không khai Redis vì mọi tuyến ở đây khai `idem.KhongCan`
             # (main.go:37-40) — một khoá không ai đọc.
-            - secretRef: { name: bi-mat-reporting }
+            - secretRef: { name: reporting-secrets }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:150`): nó trả lời "tiến
           # trình này còn sống", đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe

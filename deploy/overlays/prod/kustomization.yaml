@@ -14,10 +14,10 @@ patches:
 commonLabels:
   # Nhãn để CHỌN, không phải để xoá. Job triển khai cố ý KHÔNG dùng `kubectl apply --prune`:
   # xoá một tài nguyên phải là hành động có người quyết, không phải hệ quả phụ của deploy.
-  vigov.vn/mt: prod
+  vigov.vn/env: prod
 
 configMapGenerator:
-  - name: cau-hinh-chung
+  - name: common-config
     literals:
       - ENV=prod
       # MỘT KHOÁ, và đó là con số đúng. `TENANT_CACHE_TTL` đã rời khỏi đây ngày 23/09/2026:

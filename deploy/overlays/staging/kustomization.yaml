@@ -6,10 +6,10 @@ resources:
   - ../../base
 
 commonLabels:
-  vigov.vn/mt: staging
+  vigov.vn/env: staging
 
 configMapGenerator:
-  - name: cau-hinh-chung
+  - name: common-config
     literals:
       - ENV=staging
       # `TENANT_CACHE_TTL=10s` đã gỡ ngày 23/09/2026. Lý do cũ — "onboard xã thử nghiệm phải
