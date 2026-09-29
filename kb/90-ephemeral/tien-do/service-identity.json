@@ -356,7 +356,7 @@
       "viec": "Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3)",
       "trang_thai": "xong",
       "bang_chung": "fbbae7b (migration 0019 email nullable) · go test ./... xanh",
-      "tiep_theo": "CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật.",
+      "tiep_theo": "SỬA 29/09/2026: nợ 'POST /api/v1/staff bắt buộc email' ĐÃ TRẢ ở 4cf87b6 (email trống → NULL; PATCH xoá email chỉ khi chưa có tài khoản, 409 staff_email_is_login) + web 29a36c5. || CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật.",
       "no_confirm": [],
       "menu": "cau-hinh"
     }

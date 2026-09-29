@@ -124,7 +124,7 @@ bảng thứ nhất.
 | Ô email trống → `NULL`. Migration 0019 bỏ `NOT NULL`, đổi `''` → `NULL`, thêm `CHECK` cấm chuỗi rỗng | `service-identity/migrations/0019_staff_email_optional.sql:40-59` |
 | `POST /api/v1/staff/{id}/account` từ chối cán bộ không email: **409 `staff_has_no_email`** | `service-identity/internal/http/tai_khoan_can_bo.go:183-186` |
 | Mật khẩu tạm trả **một lần** trong phản hồi ghi. Gửi lại cùng khoá chống trùng chỉ trả **mã lô** (`{"code":"<batch_id>","replayed":true}`), không bao giờ trả mật khẩu | `service-identity/internal/http/staff_import.go:31`, `:280` |
-| **Còn nợ:** tạo **một** cán bộ (`POST /api/v1/staff`) **vẫn bắt buộc email** — `ChuanHoaEmail` trả `ErrThieuEmail` khi trống. §Hệ quả nói *cả hai* tuyến lưu `NULL`; mới có tuyến nhập | `service-identity/internal/app/danh_ba_can_bo.go:305`, `service-identity/internal/domain/danh_ba_ghi.go:137-138` |
+| **Đã trả nợ (người dùng yêu cầu 29/09/2026):** tạo **một** cán bộ (`POST /api/v1/staff`) nay nhận email trống → `NULL`; `PATCH` gửi `""` xoá email chỉ khi cán bộ chưa có tài khoản, không thì **409 `staff_email_is_login`** (email là tên đăng nhập) | commit `4cf87b6` (máy chủ), `29a36c5` (web) |
 
 **Đơn vị dân cư** (commit `e687f07`): `POST` và `PATCH /api/v1/residential-units/{id}` dưới
 `admin.org`, **không có `DELETE`**. Ngưng dùng / dùng lại là `PATCH` với `active: false` / `true`
