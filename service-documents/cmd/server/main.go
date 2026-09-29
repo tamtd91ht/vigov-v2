@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/commsclient"
 	"github.com/vihat/vigov/core/config"
 	documentsv1 "github.com/vihat/vigov/core/gen/vigov/documents/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -38,6 +39,7 @@ import (
 	svcgrpc "github.com/vihat/vigov/service-documents/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-documents/internal/http"
 	docstore "github.com/vihat/vigov/service-documents/internal/store"
+	"github.com/vihat/vigov/service-documents/internal/store/crosstenant"
 	"github.com/vihat/vigov/service-documents/migrations"
 )
 
@@ -46,6 +48,7 @@ import (
 // not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
 //
 // documents: serves REST and CountOrgUnitHoldings; resolves communes and staff through platform and identity.
+// CommsClient: the automation runner delivers staff notices into comms' bell inbox (ADR 0058 §3).
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -53,6 +56,7 @@ var configUses = config.Uses(
 	config.IdentityClient,
 	config.TenantCache,
 	config.Redis,
+	config.CommsClient,
 )
 
 func main() {
@@ -268,6 +272,41 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	// THE AUTOMATION RUNNER (ADR 0058) — the Tự động hoá tab's jobs over the incoming register, in this
+	// process because this service owns it. It reads the SAME store the REST routes and /tong-quan read
+	// (so a reminder and the register agree), asks identity over the SAME client, reads commune status
+	// over the SAME platform connection, and writes nothing here: notices go to comms, the run's trail
+	// to identity.
+	//
+	// OFF WHEN COMMS_GRPC_ADDR IS EMPTY, which only dev allows (config.CommsClient is required in
+	// staging/prod). Off means NOTHING IS CLAIMED — a claimed slot is not given back, so a runner that
+	// could not deliver must not claim.
+	runnerCtx, stopRunner := context.WithCancel(context.Background())
+	defer stopRunner()
+	runnerDone := make(chan struct{})
+	if addr := cfg.CommsGRPCAddr(); addr != "" {
+		comms, err := commsclient.Dial(addr, cfg.GRPCCallerKey(), log)
+		if err != nil {
+			return err
+		}
+		defer comms.Close()
+		automation := crosstenant.NewAutomation(db)
+		runner, err := app.NewAutomationRunner(app.AutomationDeps{
+			Communes: automation, Locks: automation, Registry: nenTang, Identity: dinhDanh, Comms: comms,
+			Incoming: vanBanDen, Log: log,
+		})
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer close(runnerDone)
+			runner.Run(runnerCtx)
+		}()
+	} else {
+		log.Warn("CẢNH BÁO: bộ chạy tự động hoá TẮT — thiếu COMMS_GRPC_ADDR", "service", "documents")
+		close(runnerDone)
+	}
+
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
@@ -289,6 +328,7 @@ func run(log *slog.Logger) error {
 	select {
 	case err := <-loi:
 		// One surface failing takes the process down rather than leaving it half-serving.
+		stopRunner()
 		grpcSrv.Stop()
 		_ = srv.Close()
 		return err
@@ -296,6 +336,10 @@ func run(log *slog.Logger) error {
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "documents")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
+
+		// The runner stops at the next commune boundary; a run already executing still records its
+		// outcome (app.AutomationRunner.record). It drains inside the same 20 seconds.
+		stopRunner()
 
 		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
 		grpcDone := make(chan struct{})
@@ -309,6 +353,11 @@ func run(log *slog.Logger) error {
 		case <-ctx.Done():
 			log.Warn("gRPC không đóng kịp hạn, buộc dừng", "service", "documents")
 			grpcSrv.Stop()
+		}
+		select {
+		case <-runnerDone:
+		case <-ctx.Done():
+			log.Warn("bộ chạy tự động hoá không dừng kịp hạn", "service", "documents")
 		}
 		return errHTTP
 	}

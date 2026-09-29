@@ -46,6 +46,8 @@ type KhoLoaiVanBan interface {
 	BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx, trongID string) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, lvb domain.LoaiVanBan) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+	// ImportSnapshot is the Excel import's read — document_type_import.go.
+	ImportSnapshot(ctx context.Context, tx *store.ScopedTx) ([]domain.ExistingDocumentType, error)
 }
 
 // DanhMucLoaiVanBan owns adding, editing and retiring one commune's document types.

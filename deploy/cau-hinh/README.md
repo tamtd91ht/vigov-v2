@@ -87,7 +87,7 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | `identity:9090` |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `documents:9090` |
-| `COMMS_GRPC_ADDR` | **có (prod)** — petitions | `vigov-service-petitions` | `comms:9090` |
+| `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents | `vigov-service-petitions`, `vigov-service-documents` | `comms:9090` |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | `:<cổng>` — cổng riêng, khác `9090`, phải khớp quy tắc NetworkPolicy (chưa có trong `deploy/base/mang/netpol.yaml`). Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
 
 Tên host là tên Service trên cụm (`kubectl -n vigov-prod get svc`); Service petitions/documents/comms

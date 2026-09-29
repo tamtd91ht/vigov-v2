@@ -94,6 +94,12 @@ type GhiLoaiVanBan interface {
 	Them(ctx context.Context, yc app.YeuCauThemLoaiVanBan, nguoi audit.Actor) (domain.LoaiVanBan, error)
 	Sua(ctx context.Context, id string, yc app.YeuCauSuaLoaiVanBan, nguoi audit.Actor) (domain.LoaiVanBan, error)
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+
+	// The Excel import (ADR 0059 §3) — routes_document_type_import.go. On THIS interface because it is
+	// the same use case writing the same table under the same transaction discipline; the preview opens
+	// a transaction too (to read the snapshot) and always rolls it back.
+	PreviewDocumentTypeImport(ctx context.Context, rows []domain.DocumentTypeImportRow) (app.DocumentTypeImportResult, error)
+	ImportDocumentTypes(ctx context.Context, rows []domain.DocumentTypeImportRow, actor audit.Actor) (app.DocumentTypeImportResult, error)
 }
 
 // VanBanDenDanhSach is the READ half of the incoming register, declared at the point of use.
@@ -216,6 +222,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 
 	h := NewHandler(d)
+
+	// The document-type Excel import — three routes, all `admin.lookup` (routes_document_type_import.go).
+	registerDocumentTypeImportRoutes(mux, d, h)
 
 	// --- the commune's document-type catalogue -------------------------------------------------
 	//

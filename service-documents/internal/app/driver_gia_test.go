@@ -70,6 +70,9 @@ type khoGia struct {
 	hang *hangLVB
 	loi  error
 
+	// snapshot answers the Excel import's snapshot read: rows of (ma, nhan, da_xoa).
+	snapshot [][]driver.Value
+
 	// loiSau fails the FIRST statement containing this substring, and only that one.
 	//
 	// WHY NOT A BLANKET `loi`: failing everything cannot tell "rolled back" from "never started".
@@ -163,6 +166,8 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		return nil, err
 	}
 	switch {
+	case strings.Contains(q, "deleted_at IS NOT NULL FROM loai_van_ban"):
+		return &rowsGia{cot: []string{"ma", "nhan", "da_xoa"}, hang: c.k.snapshot}, nil
 	// ORDER MATTERS: the duplicate check is also a count(*), so it has to be recognised first.
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "ma = $2"):
 		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{int64(c.k.maTrung)}}}, nil
