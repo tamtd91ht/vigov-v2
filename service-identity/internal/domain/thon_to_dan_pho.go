@@ -49,5 +49,22 @@ type ThonToDanPho struct {
 	// DangDung is false for a unit the commune has taken out of use — a merged hamlet, a unit that
 	// no longer exists on the ground. The row stays (rule 7); this flag is how a picker stops
 	// offering it while the list screen still shows it.
+	//
+	// TAKING A UNIT OUT OF USE IS THIS FLAG AND NOTHING ELSE (user decision 2026-09-29, ADR 0059 §2):
+	// `deleted_at` stays NULL, so the unit keeps appearing on the list and every old record keeps
+	// printing its name — "lọc ở ô chọn, không lọc ở nhãn".
 	DangDung bool
+
+	// HeadStaffID is `head_staff_id` (migration 0018) — the staff row heading the unit, "" when none
+	// is recorded. HeadStaffCode and HeadStaffName are that person's staff code and name, read in the
+	// same query (a LEFT JOIN, like LoaiNhan); both "" when there is no head.
+	//
+	// THE CODE IS WHAT CROSSES THE API, the id stays inside: the staff picker every account can read
+	// returns codes, and the audit trail quotes codes (rule 6, invariant 8).
+	HeadStaffID   string
+	HeadStaffCode string
+	HeadStaffName string
+
+	// SortOrder is `sort_order` (migration 0018): the rank on the commune's own list, 0 by default.
+	SortOrder int
 }

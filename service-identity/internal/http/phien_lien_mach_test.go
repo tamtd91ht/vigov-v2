@@ -114,9 +114,11 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		// Deps at construction, so this harness cannot build the real route table without them.
 		// Nothing in this file calls those routes — it is about the session staying readable across
 		// two requests.
-		ThonToDanPho:   thonToDanPhoMau(),
-		LoaiDonViDanCu: loaiDonViDanCuMau(),
-		KhoiNhiemVu:    khoiNhiemVuMau(),
+		ThonToDanPho:           thonToDanPhoMau(),
+		ResidentialUnits:       residentialUnitsSample(),
+		ResidentialUnitImports: residentialUnitImportsSample(),
+		LoaiDonViDanCu:         loaiDonViDanCuMau(),
+		KhoiNhiemVu:            khoiNhiemVuMau(),
 		// The catalogue write routes are mounted by Register, so wired; nothing here calls them.
 		GhiLoaiDonViDanCu: ghiLoaiDonViDanCuMau(),
 		GhiKhoiNhiemVu:    ghiKhoiNhiemVuMau(),

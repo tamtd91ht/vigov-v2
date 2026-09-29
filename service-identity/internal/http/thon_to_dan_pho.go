@@ -12,10 +12,10 @@ import (
 
 // The read route behind the commune's residential units. GET /api/v1/residential-units
 //
-// THERE IS NO WRITE ROUTE, and no scaffolding for one is left here. Creating a hamlet, merging two,
-// or taking one out of use are administrative acts against a record the commune's business data
-// references; who may perform them, and what happens to the petitions and households already
-// pointing at a unit that disappears, is nobody's answered question yet.
+// THE WRITE ROUTES are in residential_unit_write.go and residential_unit_import.go (user decision
+// 2026-09-29, ADR 0059 §2): create, edit, take out of use (`active: false`), and the Excel import,
+// under `admin.org`. Taking a unit out of use changes no record pointing at it — which is why this
+// list keeps returning such units, with `active: false`. There is deliberately no merge and no split.
 
 // thonToDanPhoRa is one residential unit as it leaves the API.
 //
@@ -80,6 +80,19 @@ type thonToDanPhoRa struct {
 	// service already ships on a route web-admin consumes (can_bo.go:51). One concept with two
 	// spellings across one contract makes a client branch on which service answered.
 	Active bool `json:"active"`
+
+	// HeadStaffCode and HeadStaffName name the head of the unit (Trưởng thôn / Tổ trưởng dân phố,
+	// migration 0018) — both "" when none is recorded. THE CODE IS THE KEY a client writes back
+	// (`head_staff_code` on POST / PATCH) and matches against GET /api/v1/staff-directory; the name is
+	// display-only. Only these two fields of the person leave here — the same two the staff picker
+	// already shows every account of this commune, never a phone number or an email (rule 3). A head
+	// since locked is still shown: the record names the person it named.
+	HeadStaffCode string `json:"head_staff_code"`
+	HeadStaffName string `json:"head_staff_name"`
+
+	// Order is `sort_order`, the rank the commune arranged its list in (0 by default). The list is
+	// already sorted by it, then by name.
+	Order int `json:"order"`
 }
 
 // danhSachThonToDanPhoRa wraps the list in an OBJECT rather than a bare JSON array — same reasoning
@@ -99,6 +112,9 @@ func thonToDanPhoRaNgoai(t domain.ThonToDanPho) thonToDanPhoRa {
 		HouseholdCount:  t.SoHo,
 		PopulationCount: t.NhanKhau,
 		Active:          t.DangDung,
+		HeadStaffCode:   t.HeadStaffCode,
+		HeadStaffName:   t.HeadStaffName,
+		Order:           t.SortOrder,
 	}
 }
 

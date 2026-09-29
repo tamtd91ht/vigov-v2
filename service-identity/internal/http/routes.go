@@ -252,6 +252,22 @@ type (
 		Import(ctx context.Context, rows []domain.OrgUnitImportRow, actor app.NguoiThucHien) (app.OrgUnitImportResult, error)
 	}
 
+	// ResidentialUnitWriting is the write surface of the residential units: POST and PATCH
+	// /api/v1/residential-units, under `admin.org` (user decision 2026-09-29, ADR 0059 §2). A USE CASE:
+	// every write opens the transaction its audit entry shares (app.ResidentialUnits).
+	ResidentialUnitWriting interface {
+		Create(ctx context.Context, req app.CreateResidentialUnit, actor app.NguoiThucHien) (domain.ThonToDanPho, error)
+		Update(ctx context.Context, id string, req app.UpdateResidentialUnit, actor app.NguoiThucHien) (domain.ThonToDanPho, error)
+	}
+
+	// ResidentialUnitImporting is the Excel import of the same list — the template, the preview and the
+	// all-or-nothing import, under `admin.org` (app.ResidentialUnitImporter).
+	ResidentialUnitImporting interface {
+		TemplateChoices(ctx context.Context) ([]domain.ResidentialUnitTypeChoice, []domain.HeadStaffChoice, error)
+		Preview(ctx context.Context, rows []domain.ResidentialUnitImportRow) (app.ResidentialUnitImportResult, error)
+		Import(ctx context.Context, rows []domain.ResidentialUnitImportRow, actor app.NguoiThucHien) (app.ResidentialUnitImportResult, error)
+	}
+
 	// VaiTroDanhMuc is the commune's role catalogue, for GET /api/v1/roles.
 	//
 	// SEPARATE FROM VaiTroDoc ON PURPOSE, even though one store implements both. That one answers
@@ -473,9 +489,13 @@ type Deps struct {
 	RoleTemplates RoleTemplateSeeding
 	// The three reference reads of migration 0005. Three fields, three interfaces — see the note
 	// above them.
-	ThonToDanPho   ThonToDanPhoDanhSach
-	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
-	KhoiNhiemVu    KhoiNhiemVuDanhMuc
+	ThonToDanPho ThonToDanPhoDanhSach
+	// ResidentialUnits and ResidentialUnitImports — the write surface and the Excel import of the same
+	// list. Use cases: see ResidentialUnitWriting / ResidentialUnitImporting.
+	ResidentialUnits       ResidentialUnitWriting
+	ResidentialUnitImports ResidentialUnitImporting
+	LoaiDonViDanCu         LoaiDonViDanCuDanhMuc
+	KhoiNhiemVu            KhoiNhiemVuDanhMuc
 	// The write surfaces of the two catalogues. Use cases — see LoaiDonViDanCuGhi.
 	GhiLoaiDonViDanCu LoaiDonViDanCuGhi
 	GhiKhoiNhiemVu    KhoiNhiemVuGhi
@@ -580,6 +600,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case gieo vai trò mẫu — POST /api/v1/roles/defaults sẽ panic khi có người gọi")
 	case d.ThonToDanPho == nil:
 		panic("identity/http: thiếu kho thôn/tổ dân phố — GET /api/v1/residential-units sẽ panic khi có người gọi")
+	case d.ResidentialUnits == nil:
+		panic("identity/http: thiếu use case ghi thôn/tổ dân phố — POST và PATCH /api/v1/residential-units sẽ panic khi có người gọi")
+	case d.ResidentialUnitImports == nil:
+		panic("identity/http: thiếu use case nhập thôn/tổ dân phố từ Excel — ba tuyến /api/v1/residential-units/import* sẽ panic khi có người gọi")
 	case d.LoaiDonViDanCu == nil:
 		panic("identity/http: thiếu kho loại đơn vị dân cư — GET /api/v1/residential-unit-types sẽ panic khi có người gọi")
 	case d.KhoiNhiemVu == nil:
@@ -1405,7 +1429,8 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// --- the org chart, IMPORT FROM EXCEL. THREE ROUTES, ALL `admin.org` ------------------------
 	//
-	// User decision 2026-09-28: org units only (staff import deferred), all or nothing, `admin.org` —
+	// User decision 2026-09-28: org units, all or nothing, `admin.org` (the residential-unit import came
+	// on 2026-09-29, ADR 0059 §2, and is mounted beside the residential-unit read below) —
 	// the key the form's create route above already declares; no key invented (rule 5, invariant 3c).
 	// The URL nouns are VENDOR-CHOSEN (ADR 0011): `imports` is the house nominalisation of "import"
 	// (rest_api_guard NOMINALISED), `import-previews` the record of a check that writes nothing, and
@@ -1643,7 +1668,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// user's decision of 2026-09-24 — full catalogues, under `admin.lookup`, mounted below the reads.
 	// The sentence that stood here blamed open question #21; that was wrong twice over — #21 was
 	// DECIDED on 2026-09-22, and it concerns TASK STATUSES only (ADR 0035 §C), not these lists.
-	// `residential-units` (the hamlets themselves) still has no write route: nobody has asked for one.
+	// `residential-units` (the hamlets themselves) got its write routes and its Excel import on
+	// 2026-09-29 (ADR 0059 §2), under `admin.org` — mounted right after its read, below.
 	//
 	// ALL THREE READS ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units AND /roles ABOVE.
 	// These lists fill pickers and filters on nearly every screen in the system — the `Loại` column
@@ -1677,6 +1703,128 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/residential-units",
 		authz.AnyAuthenticated("tên thôn/tổ dân phố xuất hiện ở ô chọn địa bàn của phản ánh, hồ sơ hộ và mọi bộ lọc theo địa bàn — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh sách địa bàn lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachThonToDanPho)))
+
+	// --- the residential units, WRITE and IMPORT. FIVE ROUTES, ALL `admin.org` ---------------------
+	//
+	// USER DECISION 2026-09-29 (ADR 0059 §2): create, edit, take out of use (soft), and an Excel import,
+	// under `admin.org` — "Quản lý sơ đồ tổ chức", seeded at migration 0001:282 and already declared by
+	// the org chart's write routes; no key invented (rule 5, invariant 3c). The READ above stays
+	// AnyAuthenticated.
+	//
+	// NO DELETE, NO MERGE, NO SPLIT. Taking a unit out of use is PATCH `active: false`: the row stays on
+	// the list, pickers filter it, every record pointing at it is untouched and keeps printing its name,
+	// and its code is never reissued (rule 7, invariant 3). Merging or splitting rewrites archival
+	// records — rule 1 stop condition #3; ADR 0059 §2 declines both on purpose.
+
+	// Adding a unit. POST /api/v1/residential-units
+	//
+	// idem.Required(idem.DongKhiHong), THE SAME CALL AS POST /api/v1/org-units, for the same reason: a
+	// DERIVED code has no natural key under it — a double-submitted blank-code unit is refused by the
+	// name rule only once the first commits; two in flight are what the key stops.
+	//
+	// @summary  Thêm một thôn / tổ dân phố — mã tự sinh từ tên nếu không nhập
+	// @screen   14-cau-hinh §2
+	// 400 is a blank or over-long name, a malformed code, a count or order out of range, `active` in the
+	// body (`active_not_settable`), `residential_unit_type_not_found` (a type not in use in THIS commune)
+	// or `head_staff_not_found` (a staff code that is not a live, unlocked member of staff of THIS
+	// commune). 409 is `residential_unit_code_taken` (a typed code already issued, units out of use
+	// included), `residential_unit_name_taken` (a live unit — in use or not — has the same name) or
+	// `residential_unit_list_full`.
+	//
+	// @request  createResidentialUnitIn
+	// @reply    201 thonToDanPhoRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-units",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.CreateResidentialUnit))))
+
+	// Editing a unit, or taking it out of / back into use. PATCH /api/v1/residential-units/{id}
+	//
+	// THE CODE IS NOT EDITABLE — a body naming `code` is refused with 400 `code_not_editable`.
+	//
+	// @summary  Sửa tên, loại, trưởng thôn, số hộ, nhân khẩu, thứ tự — hoặc ngưng dùng / dùng lại một thôn / tổ dân phố
+	// @screen   14-cau-hinh §2
+	// 404 is an id matching no live unit OF THIS COMMUNE — one answer for an invented id and another
+	// commune's unit. 400 and 409 as on POST.
+	//
+	// @request  updateResidentialUnitIn
+	// @reply    200 thonToDanPhoRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/residential-units/{id}",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi mọi trường gửi lên đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.UpdateResidentialUnit))))
+
+	// The template. GET /api/v1/residential-units/import-template
+	//
+	// `admin.org` AND NOT AnyAuthenticated: the file exists only to feed the import, and its head
+	// dropdown lists the commune's staff (code + name, as the staff picker shows them).
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập thôn / tổ dân phố — kèm danh sách chọn Loại và Trưởng thôn
+	// @screen   14-cau-hinh §2
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/residential-units/import-template",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			http.HandlerFunc(h.ResidentialUnitImportTemplate)))
+
+	// Checking a filled file. POST /api/v1/residential-units/import-previews
+	//
+	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 500 data rows). 200 WHETHER OR NOT THE FILE
+	// IS VALID: `valid: false` with every {row, column, message} is the answer. 400 `malformed_file` is a
+	// truncated or corrupted workbook. 413 / 415 as on the org-chart import.
+	//
+	// @summary  Kiểm tra một tệp Excel thôn / tổ dân phố trước khi nhập — không ghi gì
+	// @screen   14-cau-hinh §2
+	// @reply    200 residentialUnitImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-units/import-previews",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh sách")(
+				http.HandlerFunc(h.PreviewResidentialUnitImport))))
+
+	// Importing a filled file. POST /api/v1/residential-units/imports
+	//
+	// ALL OR NOTHING (user decision 2026-09-29). idem.Required(idem.DongKhiHong): every unit created is
+	// a permanent code. 400 `import_invalid` carries EVERY error as {row, column, message}; nothing was
+	// written. 409 `residential_units_changed`: the list, the types or the staff changed between the
+	// check and the write; the whole file was rolled back.
+	//
+	// @summary  Nhập thôn / tổ dân phố từ tệp Excel — toàn bộ tệp hoặc không gì cả
+	// @screen   14-cau-hinh §2
+	// @reply    201 residentialUnitImportCreatedOut
+	// @reply    400 residentialUnitImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-units/imports",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportResidentialUnits))))
 
 	// @summary  Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc
 	// @screen   14-cau-hinh §5

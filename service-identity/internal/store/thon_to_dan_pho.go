@@ -16,8 +16,9 @@ import (
 // of its own (the two counts), has no `thu_tu`, none of the tier columns, and needs a join the
 // catalogues do not. Migration 0005:363 draws the same line.
 //
-// NO WRITE PATH: open question #21 is unanswered, and a half-written write path looks like a
-// decision somebody made.
+// THE WRITE PATHS ARE IN residential_unit_write.go (user decision 2026-09-29, ADR 0059 §2): create,
+// edit, take out of use, and the Excel import. There is no merge and no split, deliberately (rule 1,
+// stop condition #3).
 type ThonToDanPhoStore struct {
 	db *store.DB
 }
@@ -78,21 +79,32 @@ var ErrQuaNhieuThonToDanPho = errors.New("thon_to_dan_pho: vượt trần danh s
 // skills/load-data-once exists to prevent. The catalogue is two or three rows, so the join costs
 // nothing; a loop over units would cost one round trip each and would be invisible in every test.
 //
-// ORDER BY tt.ten, tt.ma — by name, because that is what the commune's own list screen shows and
-// what migration 0005:415 indexed (tenant_id, ten). `ma` breaks ties and is UNIQUE per commune
-// (migration 0005:401), which makes the order TOTAL: two hamlets sharing a name can never swap
-// places between two calls. There is no `thu_tu` on this table to sort by.
+// THE HEAD OF THE UNIT (migration 0018) is a second LEFT JOIN, onto `nguoi_dung`, CONSTRAINED TO THE
+// SAME COMMUNE for the reason given above, and with NO `deleted_at` / `dang_hoat_dong` filter: a head
+// who has since been locked (retired, transferred) is still the person the record names, and blanking
+// the name would rewrite history — same reading as BatchGetStaff resolving a departed person's name.
+// Only the code and the name are read: the two fields the staff picker already shows every account of
+// the commune (GET /api/v1/staff-directory), never a phone number or an email.
+//
+// ORDER BY tt.sort_order, tt.ten, tt.ma — the commune's own rank first (migration 0018, 0 by default),
+// then by name, which is what the list screen shows. `ma` breaks ties and is UNIQUE per commune
+// (migration 0005:401), which makes the order TOTAL: two hamlets sharing a rank and a name can never
+// swap places between two calls.
 const truyVanThonToDanPho = `
 SELECT tt.id, tt.ma, tt.ten, coalesce(tt.loai, ''), coalesce(l.nhan, ''),
-       tt.so_ho, tt.nhan_khau, tt.dang_dung
+       tt.so_ho, tt.nhan_khau, tt.dang_dung,
+       coalesce(tt.head_staff_id, ''), coalesce(nd.ma, ''), coalesce(nd.ho_ten, ''), tt.sort_order
 FROM thon_to_dan_pho tt
 LEFT JOIN loai_don_vi_dan_cu l
        ON l.tenant_id  = tt.tenant_id
       AND l.ma         = tt.loai
       AND l.deleted_at IS NULL
+LEFT JOIN nguoi_dung nd
+       ON nd.tenant_id = tt.tenant_id
+      AND nd.id        = tt.head_staff_id
 WHERE tt.tenant_id = $1
   AND tt.deleted_at IS NULL
-ORDER BY tt.ten, tt.ma
+ORDER BY tt.sort_order, tt.ten, tt.ma
 LIMIT $2`
 
 // DanhSach reads the commune's whole list of residential units, ordered, with each unit's type
@@ -126,7 +138,8 @@ func (s *ThonToDanPhoStore) DanhSach(ctx context.Context) ([]domain.ThonToDanPho
 		// are four adjacent TEXT columns: any swap among them produces no error at all and puts
 		// slugs where names belong on the commune's own screen.
 		if err := rows.Scan(&tt.ID, &tt.Ma, &tt.Ten, &tt.LoaiMa, &tt.LoaiNhan,
-			&soHo, &nhanKhau, &tt.DangDung); err != nil {
+			&soHo, &nhanKhau, &tt.DangDung,
+			&tt.HeadStaffID, &tt.HeadStaffCode, &tt.HeadStaffName, &tt.SortOrder); err != nil {
 			return nil, fmt.Errorf("thon_to_dan_pho: đọc dòng: %w", err)
 		}
 		if soHo.Valid {

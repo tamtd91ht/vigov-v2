@@ -286,6 +286,9 @@ func TestThonToDanPhoTraDungNhungTruongCuaHopDong(t *testing.T) {
 		// make a client read "not entered" and "field gone" the same way.
 		"household_count": true, "population_count": true,
 		"active": true,
+		// Migration 0018 (ADR 0059 §2): the head's staff CODE and name — never the internal id, never a
+		// phone number or email — and the commune's rank.
+		"head_staff_code": true, "head_staff_name": true, "order": true,
 	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {

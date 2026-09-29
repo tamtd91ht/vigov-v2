@@ -324,6 +324,11 @@ func run(log *slog.Logger) error {
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
 	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
+	// The residential units' write surface and Excel import (user decision 2026-09-29, ADR 0059 §2),
+	// under `admin.org`. Given the SAME store as the read field: the insert the import runs is the
+	// statement the create form runs.
+	residentialUnits := app.NewResidentialUnits(kho, thonToDanPho)
+	residentialUnitImports := app.NewResidentialUnitImporter(kho, thonToDanPho)
 	// The citizen-session bridge (ADR 0045, 0047): up to three synchronous platform reads, then ONE
 	// identity transaction. `nenTang` is the same platform client every Host resolution uses — the
 	// bridge's RPCs travel with the same caller key: ResolveMiniApp and ResolveHost (a confirmed
@@ -385,12 +390,14 @@ func run(log *slog.Logger) error {
 		RoleTemplates: roleTemplates,
 		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
 		// vụ) có thêm tuyến GHI dưới khoá `admin.lookup` — người dùng quyết 24/09/2026: danh mục đầy đủ.
-		// Danh sách thôn/tổ dân phố vẫn chỉ đọc.
-		ThonToDanPho:      thonToDanPho,
-		LoaiDonViDanCu:    loaiDonViDanCu,
-		KhoiNhiemVu:       khoiNhiemVu,
-		GhiLoaiDonViDanCu: ghiLoaiDonViDanCu,
-		GhiKhoiNhiemVu:    ghiKhoiNhiemVu,
+		ThonToDanPho: thonToDanPho,
+		// Thôn/tổ dân phố: tạo, sửa, ngưng dùng và nhập Excel dưới khoá `admin.org` (ADR 0059 §2).
+		ResidentialUnits:       residentialUnits,
+		ResidentialUnitImports: residentialUnitImports,
+		LoaiDonViDanCu:         loaiDonViDanCu,
+		KhoiNhiemVu:            khoiNhiemVu,
+		GhiLoaiDonViDanCu:      ghiLoaiDonViDanCu,
+		GhiKhoiNhiemVu:         ghiKhoiNhiemVu,
 		// Lịch làm việc của xã (migration 0006) — BA KHO ĐỌC và MỘT USE CASE GHI đứng sau ba trường
 		// ghi. Câu "ai sửa được lịch của xã" đã có lời đáp không bịa ra khoá nào: `admin.sla`, đúng
 		// khoá migration 0001:277 gieo cho "Cấu hình thời hạn xử lý" — vì lịch làm việc chính là nửa

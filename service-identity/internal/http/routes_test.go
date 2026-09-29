@@ -680,9 +680,12 @@ type mayChu struct {
 	// roleTemplates is the template-role seed — see roleTemplatesFake in role_template_test.go.
 	roleTemplates *roleTemplatesFake
 	// The three reference reads of migration 0005.
-	thonToDanPho   *thonToDanPhoGia
-	loaiDonViDanCu *loaiDonViDanCuGia
-	khoiNhiemVu    *khoiNhiemVuGia
+	thonToDanPho *thonToDanPhoGia
+	// The residential units' write surface and Excel import — residential_unit_test.go.
+	residentialUnits       *residentialUnitsFake
+	residentialUnitImports *residentialUnitImportsFake
+	loaiDonViDanCu         *loaiDonViDanCuGia
+	khoiNhiemVu            *khoiNhiemVuGia
 	// The write use cases of the two catalogues — danh_muc_ghi_test.go.
 	ghiLoaiDonViDanCu *ghiDanhMucGia[domain.LoaiDonViDanCu]
 	ghiKhoiNhiemVu    *ghiDanhMucGia[domain.KhoiNhiemVu]
@@ -744,6 +747,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiPhanQuyen := phanQuyenGhiMau()
 	roleTemplates := roleTemplatesSample()
 	thonToDanPho := thonToDanPhoMau()
+	residentialUnits := residentialUnitsSample()
+	residentialUnitImports := residentialUnitImportsSample()
 	loaiDonViDanCu := loaiDonViDanCuMau()
 	khoiNhiemVu := khoiNhiemVuMau()
 	ghiLoaiDonViDanCu := ghiLoaiDonViDanCuMau()
@@ -778,9 +783,12 @@ func dungMayChu(t *testing.T) *mayChu {
 		RoleTemplates: roleTemplates,
 		// Three fields, three fakes — Register panics if any of them is missing, which is how an
 		// unwired route is caught at construction rather than by the first person to call it.
-		ThonToDanPho:   thonToDanPho,
-		LoaiDonViDanCu: loaiDonViDanCu,
-		KhoiNhiemVu:    khoiNhiemVu,
+		ThonToDanPho: thonToDanPho,
+		// The five residential-unit write/import routes. Register panics without them.
+		ResidentialUnits:       residentialUnits,
+		ResidentialUnitImports: residentialUnitImports,
+		LoaiDonViDanCu:         loaiDonViDanCu,
+		KhoiNhiemVu:            khoiNhiemVu,
 		// The six catalogue write routes. Register panics without them.
 		GhiLoaiDonViDanCu: ghiLoaiDonViDanCu,
 		GhiKhoiNhiemVu:    ghiKhoiNhiemVu,
@@ -858,7 +866,10 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,
-		khoiNhiemVu:    khoiNhiemVu,
+
+		residentialUnits:       residentialUnits,
+		residentialUnitImports: residentialUnitImports,
+		khoiNhiemVu:            khoiNhiemVu,
 
 		ghiLoaiDonViDanCu: ghiLoaiDonViDanCu,
 		ghiKhoiNhiemVu:    ghiKhoiNhiemVu,
