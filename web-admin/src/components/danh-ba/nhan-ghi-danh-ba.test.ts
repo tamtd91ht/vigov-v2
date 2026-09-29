@@ -123,6 +123,39 @@ describe("thân yêu cầu dùng ĐÚNG tên trường của hợp đồng ghi",
   });
 });
 
+describe("email is optional — 4cf87b6", () => {
+  const NO_EMAIL: identity_canBoTomTat = { ...CAN_BO, email: "", has_account: false };
+
+  it("POST: a blank email is OMITTED from the body, not sent as ''", () => {
+    for (const blank of ["", "   "]) {
+      const than = thanThem({ ...banTuCanBo(CAN_BO), email: blank });
+      expect(than).not.toHaveProperty("email");
+      expect(JSON.parse(JSON.stringify(than))).not.toHaveProperty("email");
+    }
+    expect(thanThem(BAN_TRONG)).not.toHaveProperty("email");
+  });
+
+  it("POST: a typed email still goes up verbatim — the server validates it", () => {
+    expect(thanThem({ ...BAN_TRONG, email: "khong-hop-le" }).email).toBe("khong-hop-le");
+  });
+
+  it("PATCH: clearing a stored email sends '' (the server's 'remove')", () => {
+    expect(thanSua({ ...banTuCanBo(CAN_BO), email: "" }, CAN_BO).email).toBe("");
+    expect(thanSua({ ...banTuCanBo(CAN_BO), email: "  " }, CAN_BO).email).toBe("");
+  });
+
+  it("PATCH: blank that was already blank sends null ('unchanged'), never ''", () => {
+    expect(thanSua(banTuCanBo(NO_EMAIL), NO_EMAIL).email).toBeNull();
+  });
+
+  it("PATCH: an unchanged or new email is sent as typed", () => {
+    expect(thanSua(banTuCanBo(CAN_BO), CAN_BO).email).toBe("demo@thangbinh.test");
+    expect(thanSua({ ...banTuCanBo(NO_EMAIL), email: "moi@thangbinh.test" }, NO_EMAIL).email).toBe(
+      "moi@thangbinh.test",
+    );
+  });
+});
+
 describe("câu chữ của thao tác khoá", () => {
   it("cảnh báo khoá nói CẢ HAI nửa: mất đường đăng nhập, và vẫn còn trong danh bạ", () => {
     const cau = canhBaoKhoa(true);

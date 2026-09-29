@@ -10,6 +10,7 @@ import {
   CANH_BAO_DOI_DI_DONG_CONG_KHAI,
   CANH_BAO_KHOA_CONG_KHAI,
   coCanhBaoDoiDiDong,
+  EMAIL_HINT,
   type BanNhapCanBo,
 } from "./nhan-ghi-danh-ba";
 
@@ -260,6 +261,38 @@ describe("#13 và #14 — câu từ chối của máy chủ ra tới trang, nguy
 
     expect(html).not.toContain('role="alert"');
     expect(html).not.toContain("thong-bao-loi");
+  });
+});
+
+describe("email field is optional — 4cf87b6", () => {
+  function emailInput(html: string): string {
+    return /<input[^>]*id="o-email-can-bo"[^>]*>/.exec(html)?.[0] ?? "";
+  }
+
+  it("neither create nor edit marks the email field required, and both show the hint", () => {
+    for (const dm of [FORM_THEM, FORM_SUA]) {
+      const html = ve(dm, { ban: dm.kieu === "sua" ? banTuCanBo(CAN_BO) : BAN_TRONG });
+      const input = emailInput(html);
+
+      expect(input).not.toBe("");
+      expect(input).not.toContain("required");
+      expect(input).toContain('aria-describedby="o-email-can-bo-mo-ta"');
+      expect(html).toContain(EMAIL_HINT);
+    }
+  });
+
+  it("the full name stays required — only the email rule was lifted", () => {
+    expect(/<input[^>]*id="o-ho-ten-can-bo"[^>]*>/.exec(ve(FORM_THEM))?.[0]).toContain("required");
+  });
+
+  it("409 staff_email_is_login: the server sentence is shown verbatim, no code", () => {
+    const sentence =
+      "Không thể xoá thư điện tử của cán bộ đã có tài khoản — thư điện tử là tên đăng nhập.";
+    const html = ve(FORM_SUA, { ban: { ...banTuCanBo(CAN_BO), email: "" }, loiMayChu: sentence });
+
+    expect(html).toContain(sentence);
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("staff_email_is_login");
   });
 });
 

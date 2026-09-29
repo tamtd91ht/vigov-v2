@@ -7,6 +7,7 @@ import {
   CANH_BAO_KHOA_CONG_KHAI,
   CHON_KHONG_BO_PHAN,
   CHON_KHONG_VAI_TRO,
+  EMAIL_HINT,
   GIAI_THICH_THEM,
   MO_TA_CO_ZALO,
   NUT_HUY,
@@ -132,13 +133,14 @@ export function BieuMauGhiCanBo({
           />
           {/* `type="email"` KHÔNG dùng: bộ kiểm của trình duyệt chặt hơn bộ kiểm của máy chủ ở vài
               ca và lỏng hơn ở vài ca khác, nên nó sinh ra một lớp từ chối thứ hai mà không ai đọc
-              được lý do. Máy chủ hạ chữ thường và kiểm hình dạng, kèm câu nói rõ phải sửa gì. */}
+              được lý do. Máy chủ hạ chữ thường và kiểm hình dạng, kèm câu nói rõ phải sửa gì.
+              NOT `required` since 4cf87b6: the server accepts a staff row without an email. */}
           <ONhap
             id="o-email-can-bo"
             nhan={O_EMAIL}
             giaTri={ban.email}
             doi={(v) => datBan({ ...ban, email: v })}
-            batBuoc
+            moTa={EMAIL_HINT}
           />
 
           <OChon

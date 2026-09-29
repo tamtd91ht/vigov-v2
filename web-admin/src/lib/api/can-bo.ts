@@ -403,11 +403,13 @@ export function themCanBo(
   const thanGui: identity_themCanBoVao = {
     full_name: than.full_name,
     position: than.position,
-    email: than.email,
     org_unit_id: than.org_unit_id,
     office_phone: than.office_phone,
     mobile: than.mobile,
   };
+  // `email` is optional in the contract (4cf87b6): copied only when the caller set it, so a staff
+  // row created without an email carries no `email` key at all.
+  if (than.email !== undefined) thanGui.email = than.email;
 
   return goiGhiCanBo(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung });
 }

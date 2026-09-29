@@ -81,6 +81,27 @@ export function nhanTaiKhoan(coTaiKhoan: boolean): string {
   return coTaiKhoan ? "Có tài khoản" : "Chỉ trong danh bạ";
 }
 
+/** Marker for a staff row with no email (optional since 4cf87b6; the server returns `""`). */
+export const NO_EMAIL_MARKER = "—";
+
+/** The email as shown in the list and the detail panel. Blank never renders as an empty cell. */
+export function emailLabel(email: string): string {
+  return email.trim() === "" ? NO_EMAIL_MARKER : email;
+}
+
+/**
+ * Whether "Cấp tài khoản" can succeed for this row. The email IS the login name, so the server
+ * answers 409 `staff_has_no_email` without one. This is UX only — the server still decides.
+ */
+export function canIssueAccount(email: string): boolean {
+  return email.trim() !== "";
+}
+
+/** Shown next to the disabled "Cấp tài khoản" button, and read by screen readers via `aria-describedby`. */
+export const NO_EMAIL_ACCOUNT_REASON =
+  "Chưa cấp được tài khoản: cán bộ này chưa có thư điện tử (thư điện tử là tên đăng nhập). " +
+  "Hãy sửa hồ sơ và thêm thư điện tử trước.";
+
 /**
  * Nhãn cột "Bộ phận" — tra `department_id` trong danh mục bộ phận của xã.
  *

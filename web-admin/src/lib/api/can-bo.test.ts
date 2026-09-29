@@ -502,6 +502,42 @@ describe("PATCH /api/v1/staff/{id} — sửa hồ sơ", () => {
   });
 });
 
+describe("email optional — 4cf87b6", () => {
+  it("POST without `email` sends a body with no `email` key", async () => {
+    const gia = ghiGia(201, canBo(1, null));
+    const withoutEmail = {
+      full_name: THAN_THEM.full_name,
+      position: THAN_THEM.position,
+      org_unit_id: THAN_THEM.org_unit_id,
+      office_phone: THAN_THEM.office_phone,
+      mobile: THAN_THEM.mobile,
+    };
+    await themCanBo(withoutEmail, "k");
+
+    const body = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("email");
+    expect(body).toEqual(withoutEmail);
+  });
+
+  it("PATCH carries `email: \"\"` up unchanged, and 409 staff_email_is_login returns the server sentence", async () => {
+    const sentence =
+      "Không thể xoá thư điện tử của cán bộ đã có tài khoản — thư điện tử là tên đăng nhập.";
+    const gia = ghiGia(409, { code: "staff_email_is_login", message: sentence, trace_id: "01JTRACE" });
+    const kq = await suaCanBo("01JABC", {
+      full_name: null,
+      position: null,
+      email: "",
+      org_unit_id: null,
+      office_phone: null,
+      mobile: null,
+    });
+
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toHaveProperty("email", "");
+    expect(kq).toEqual({ ok: false, thongBao: sentence });
+    if (!kq.ok) expect(kq.thongBao).not.toMatch(/staff_email_is_login|01JTRACE|409/);
+  });
+});
+
 describe("PATCH /api/v1/staff/{id} — `has_zalo` tuỳ chọn", () => {
   const SAU_TRUONG = {
     full_name: "Huỳnh Văn B",

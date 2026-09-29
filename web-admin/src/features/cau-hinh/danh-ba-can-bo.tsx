@@ -68,6 +68,9 @@ import {
   type NganXepConTro,
 } from "./ngan-xep-con-tro";
 import {
+  NO_EMAIL_ACCOUNT_REASON,
+  canIssueAccount,
+  emailLabel,
   nhanBoPhan,
   nhanDangNhapGanNhat,
   nhanNgayTao,
@@ -1043,7 +1046,7 @@ function NutCuaDong({
         >
           {NUT_DAT_LAI_MAT_KHAU}
         </button>
-      ) : (
+      ) : canIssueAccount(cb.email) ? (
         <button
           type="button"
           className="nut-phu"
@@ -1052,6 +1055,25 @@ function NutCuaDong({
         >
           {NUT_CAP_TAI_KHOAN}
         </button>
+      ) : (
+        // NO EMAIL, NO ACCOUNT: disabled WITH the reason as visible text, tied by
+        // `aria-describedby`. Unlike the pair above, this is the SAME action blocked by a fixable
+        // gap, so the person must learn what to fix. The server still refuses (409
+        // `staff_has_no_email`); if that sentence ever arrives, `guiTaiKhoan` shows it verbatim.
+        <>
+          <button
+            type="button"
+            className="nut-phu"
+            aria-label={`${NUT_CAP_TAI_KHOAN}: ${cb.full_name}`}
+            aria-describedby={`no-email-reason-${cb.id}`}
+            disabled
+          >
+            {NUT_CAP_TAI_KHOAN}
+          </button>
+          <span className="ghi-chu" id={`no-email-reason-${cb.id}`}>
+            {NO_EMAIL_ACCOUNT_REASON}
+          </span>
+        </>
       )}
     </span>
   );
@@ -1142,7 +1164,7 @@ export function BangCanBo({
               <td>{cb.code}</td>
               <td>
                 <span className="ten-can-bo">{cb.full_name}</span>
-                <span className="dong-phu">{cb.email}</span>
+                <span className="dong-phu">{emailLabel(cb.email)}</span>
               </td>
               <td>{cb.position}</td>
               <td>
@@ -1308,7 +1330,7 @@ function KhoiChiTiet({
           <dt>Họ và tên</dt>
           <dd>{chiTiet.canBo.full_name}</dd>
           <dt>Thư điện tử</dt>
-          <dd>{chiTiet.canBo.email}</dd>
+          <dd>{emailLabel(chiTiet.canBo.email)}</dd>
           <dt>Chức danh</dt>
           <dd>{chiTiet.canBo.position}</dd>
           <dt>Bộ phận</dt>

@@ -14,6 +14,7 @@ import {
   XacNhanTaiKhoan,
   cauKhongRoKetQua,
 } from "./mat-khau-tam";
+import { NO_EMAIL_ACCOUNT_REASON, NO_EMAIL_MARKER } from "./nhan-can-bo";
 import type { BangTraDanhMuc } from "./tra-danh-muc";
 
 /**
@@ -331,5 +332,62 @@ describe("lỗi của máy chủ ra nguyên văn, và ca im lặng có câu riê
     const html = veXacNhan("Tài khoản của bạn không có quyền quản lý người dùng.");
 
     expect(html).not.toContain(cauKhongRoKetQua("datLai"));
+  });
+});
+
+describe("staff without an email — optional since 4cf87b6", () => {
+  const NO_EMAIL: identity_canBoTomTat = { ...CAN_BO, email: "", has_account: false };
+
+  /** The "Cấp tài khoản" button of the only row, as markup. */
+  function issueButton(html: string): string {
+    return (
+      new RegExp(`<button[^>]*aria-label="${NUT_CAP_TAI_KHOAN}: [^"]*"[^>]*>`).exec(html)?.[0] ?? ""
+    );
+  }
+
+  it("the list shows the empty marker, never an empty cell", () => {
+    const html = ve([NO_EMAIL]);
+    expect(html).toContain(`<span class="dong-phu">${NO_EMAIL_MARKER}</span>`);
+    expect(html).not.toContain('<span class="dong-phu"></span>');
+  });
+
+  it("DENIED: 'Cấp tài khoản' is disabled and the reason is readable next to it", () => {
+    const html = ve([NO_EMAIL]);
+    const button = issueButton(html);
+
+    expect(button).toContain('disabled=""');
+    expect(button).toContain(`aria-describedby="no-email-reason-${NO_EMAIL.id}"`);
+    expect(html).toContain(`id="no-email-reason-${NO_EMAIL.id}">${NO_EMAIL_ACCOUNT_REASON}<`);
+  });
+
+  it("whitespace-only email counts as no email", () => {
+    expect(issueButton(ve([{ ...NO_EMAIL, email: "   " }]))).toContain('disabled=""');
+  });
+
+  it("ALLOWED: with an email the button is enabled and no reason is shown", () => {
+    const html = ve([{ ...NO_EMAIL, email: "demo@thangbinh.test" }]);
+
+    expect(issueButton(html)).not.toBe("");
+    expect(issueButton(html)).not.toContain("disabled");
+    expect(html).not.toContain(NO_EMAIL_ACCOUNT_REASON);
+  });
+
+  it("the server's 409 staff_has_no_email sentence still reaches the page verbatim", () => {
+    // The disabled button is UX. If the call is made anyway (stale row, another tab), the server
+    // refuses and its sentence is what the administrator reads.
+    const sentence =
+      "Cán bộ này chưa có thư điện tử công vụ — đó là tên đăng nhập. Hãy thêm thư điện tử " +
+      "trong hồ sơ trước khi cấp tài khoản.";
+    const html = renderToStaticMarkup(
+      <XacNhanTaiKhoan
+        dangMo={{ kieu: "cap", canBo: NO_EMAIL }}
+        loiMayChu={sentence}
+        dangGui={false}
+        onGui={() => {}}
+        onHuy={() => {}}
+      />,
+    );
+    expect(html).toContain(sentence);
+    expect(html).not.toContain("staff_has_no_email");
   });
 });

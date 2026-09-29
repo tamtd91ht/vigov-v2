@@ -31,6 +31,15 @@ import type { DangMoGhi } from "./bieu-mau-ghi-can-bo";
 export const O_HO_TEN = "Họ và tên";
 export const O_CHUC_DANH = "Chức danh";
 export const O_EMAIL = "Thư điện tử công vụ";
+
+/**
+ * Hint under the email field. The field is OPTIONAL since 4cf87b6 (a commune often lists staff who
+ * have no official mailbox yet), and the one consequence the person typing must know is the account:
+ * the email IS the login name, so without it `POST .../account` answers 409 `staff_has_no_email`.
+ */
+export const EMAIL_HINT =
+  "Không bắt buộc. Cán bộ chưa có thư điện tử thì chưa cấp được tài khoản đăng nhập " +
+  "(thư điện tử là tên đăng nhập).";
 export const O_BO_PHAN = "Bộ phận";
 export const O_VAI_TRO = "Vai trò";
 
@@ -252,16 +261,37 @@ export function banTuCanBo(cb: identity_canBoTomTat): BanNhapCanBo {
   };
 }
 
-/** Thân `POST /api/v1/staff`. Sáu trường bắt buộc của hợp đồng, không thừa một trường nào. */
+/**
+ * Thân `POST /api/v1/staff`. Năm trường bắt buộc của hợp đồng cộng `email` tuỳ chọn.
+ *
+ * A BLANK EMAIL IS OMITTED, not sent as `""`. The server treats absent, `""` and whitespace alike
+ * (stored as no email), so either would work today — but omitting is the one shape the contract
+ * declares (`email?: string`), and it keeps the body free of a value nobody typed. This is not a
+ * format check: a non-blank value goes up verbatim and the server validates it.
+ */
 export function thanThem(ban: BanNhapCanBo): identity_themCanBoVao {
-  return {
+  const than: identity_themCanBoVao = {
     full_name: ban.hoTen,
     position: ban.chucDanh,
-    email: ban.email,
     org_unit_id: ban.boPhanID,
     office_phone: ban.mayBanCoQuan,
     mobile: ban.diDongCaNhan,
   };
+  if (ban.email.trim() !== "") than.email = ban.email;
+  return than;
+}
+
+/**
+ * The `email` of a PATCH body.
+ *
+ * `""` ONLY WHEN THE USER CLEARED AN EMAIL THAT WAS THERE. For the server `""` means "remove the
+ * email", which it refuses (409 `staff_email_is_login`) for anyone holding a login account. Sending
+ * `""` for a row that never had an email would be a no-op write the audit trail records as a
+ * change, so that case sends `null` — "unchanged". A whitespace-only field counts as blank.
+ */
+function patchEmail(typed: string, stored: string): string | null {
+  if (typed.trim() !== "") return typed;
+  return stored.trim() !== "" ? "" : null;
 }
 
 /**
@@ -277,6 +307,9 @@ export function thanThem(ban: BanNhapCanBo): identity_themCanBoVao {
  * không có trạng thái ấy: `""` là "ô này trống", một giá trị hợp lệ với chức danh, bộ phận và hai
  * số điện thoại.
  *
+ * EXCEPTION: `email`. Clearing it is refused for staff with a login account, so it follows
+ * `patchEmail` — `""` only when a stored email was cleared, `null` when it was and stays blank.
+ *
  * `has_zalo` THÌ NGƯỢC LẠI: CHỈ GỬI KHI ĐỔI so với dòng gốc `goc`. Nó là trường TUỲ CHỌN của hợp
  * đồng (vắng = không đổi), và một ô tick không có ca "xoá trắng" để lẫn với "không đổi" như ô chữ.
  * Gửi nó ở mọi lần Lưu thì một lần sửa chức danh ghi đè cờ Zalo mà người khác vừa đặt, và vết kiểm
@@ -286,7 +319,7 @@ export function thanSua(ban: BanNhapCanBo, goc: identity_canBoTomTat): identity_
   const than: identity_suaCanBoVao = {
     full_name: ban.hoTen,
     position: ban.chucDanh,
-    email: ban.email,
+    email: patchEmail(ban.email, goc.email),
     org_unit_id: ban.boPhanID,
     office_phone: ban.mayBanCoQuan,
     mobile: ban.diDongCaNhan,
