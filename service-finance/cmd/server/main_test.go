@@ -140,6 +140,9 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		AuditLog:       audit.NewLog(pkgstore.New(nil)),
 		SystemMessages: app.NewSystemMessages(nil, emptyOverrideStore{}),
 		Log:            log,
+
+		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
+		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(nil, nil),
 	})
 
 	danhBa := thuMucGia{

@@ -72,6 +72,9 @@ func newAuditHarness(t *testing.T) *auditHarness {
 		SystemMessages: &systemMessagesFake{},
 		Nay:            func() time.Time { return lucDaQua7096 },
 		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+
+		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
+		CapitalPlanCategoryImports: &catalogueImportFake{},
 	})
 	var h http.Handler = mux
 	h = chuTheGhi(h)

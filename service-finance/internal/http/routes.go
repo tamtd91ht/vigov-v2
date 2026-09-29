@@ -219,6 +219,10 @@ type Deps struct {
 	NganSach    NganSachDoc
 	GhiNganSach GhiNganSach
 
+	// CapitalPlanCategoryImports is the Excel import of the HangMuc catalogue (ADR 0059 §3), three
+	// routes in routes_catalogue_import.go. See CatalogueImporting.
+	CapitalPlanCategoryImports CatalogueImporting
+
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
@@ -259,6 +263,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.GhiHangMuc == nil {
 		panic("finance/http: thiếu use case ghi danh mục hạng mục kế hoạch vốn — POST/PATCH/DELETE /api/v1/capital-plan-categories sẽ panic khi có người gọi")
 	}
+	if d.CapitalPlanCategoryImports == nil {
+		panic("finance/http: thiếu use case nhập Excel hạng mục kế hoạch vốn — ba tuyến /api/v1/capital-plan-categories/import* sẽ panic khi có người gọi")
+	}
 	if d.DuAn == nil {
 		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
@@ -290,6 +297,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 
 	h := NewHandler(d)
+
+	// The catalogue's Excel import — three routes, all `admin.lookup` (routes_catalogue_import.go).
+	registerCatalogueImportRoutes(mux, d, h)
 
 	// --- the commune's capital plan category catalogue ----------------------------------------
 	//

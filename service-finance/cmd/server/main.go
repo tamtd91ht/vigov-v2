@@ -153,7 +153,10 @@ func main() {
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening
 		// one is precisely what it is for.
 		GhiHangMuc: app.NewDanhMucHangMuc(kho, hangMuc),
-		DuAn:       fistore.NewDuAnStore(kho),
+		// Its Excel import (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME store,
+		// so an imported row is inserted by the statement the create form runs.
+		CapitalPlanCategoryImports: app.NewCapitalPlanCategoryImporter(kho, hangMuc),
+		DuAn:                       fistore.NewDuAnStore(kho),
 		// The investment project write path. A SECOND STORE BESIDE THE READ ONE, not the same handle
 		// wearing two interfaces: every method of DuAnGhiStore takes the caller's transaction, and
 		// creating a project is two writes — the project and its funding allocation lines (§9) —

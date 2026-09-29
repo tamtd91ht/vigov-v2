@@ -269,6 +269,9 @@ func dungMayChuChungTuVoi(t *testing.T, khoIdem idem.Store) *mayChuChungTu {
 		SystemMessages: &systemMessagesFake{},
 		Nay:            func() time.Time { return lucDaQua7096 },
 		Log:            im,
+
+		// The catalogue's Excel import — never called here; own suite in internal/http/catalogue_import_test.go.
+		CapitalPlanCategoryImports: &catalogueImportFake{},
 	})
 
 	var h http.Handler = mux
