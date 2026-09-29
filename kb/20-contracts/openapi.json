@@ -13067,6 +13067,464 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Thêm một thôn / tổ dân phố — mã tự sinh từ tên nếu không nhập",
+        "operationId": "identity_post_residential_units",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "b5f8c6346d28",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.createResidentialUnitIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.thonToDanPhoRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-units/import-previews": {
+      "post": {
+        "summary": "Kiểm tra một tệp Excel thôn / tổ dân phố trước khi nhập — không ghi gì",
+        "operationId": "identity_post_residential_units_import_previews",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "a94a34e65bc0",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.residentialUnitImportPreviewOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-units/import-template": {
+      "get": {
+        "summary": "Tải tệp Excel mẫu để nhập thôn / tổ dân phố — kèm danh sách chọn Loại và Trưởng thôn",
+        "operationId": "identity_get_residential_units_import_template",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "af9d91c1814f",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-units/imports": {
+      "post": {
+        "summary": "Nhập thôn / tổ dân phố từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+        "operationId": "identity_post_residential_units_imports",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "d65153f6c319",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.residentialUnitImportCreatedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.residentialUnitImportRejectedOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/residential-units/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Sửa tên, loại, trưởng thôn, số hộ, nhân khẩu, thứ tự — hoặc ngưng dùng / dùng lại một thôn / tổ dân phố",
+        "operationId": "identity_patch_residential_units_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.org"
+        },
+        "x-vigov-task": "b2bf22bd6c40",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.updateResidentialUnitIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.thonToDanPhoRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/role-permissions": {
@@ -23173,6 +23631,51 @@
         ],
         "additionalProperties": false
       },
+      "identity.createResidentialUnitIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "type_code": {
+            "type": "string"
+          },
+          "head_staff_code": {
+            "type": "string"
+          },
+          "household_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "population_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhBaChonNguoiRa": {
         "type": "object",
         "properties": {
@@ -23707,6 +24210,11 @@
         ],
         "additionalProperties": false
       },
+      "identity.optionalCountIn": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
       "identity.optionalHoursIn": {
         "type": "object",
         "properties": {},
@@ -23988,6 +24496,154 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "identity.residentialUnitImportCreatedOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.residentialUnitImportUnitOut"
+            }
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "identity.residentialUnitImportErrorOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "description": "dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp"
+          },
+          "column": {
+            "type": "string",
+            "description": "tên cột như trên tiêu đề; \"\" = lỗi của cả dòng hoặc cả tệp"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "message",
+          "row"
+        ],
+        "additionalProperties": false
+      },
+      "identity.residentialUnitImportPreviewOut": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.residentialUnitImportUnitOut"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.residentialUnitImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "errors",
+          "units",
+          "valid"
+        ],
+        "additionalProperties": false
+      },
+      "identity.residentialUnitImportRejectedOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.residentialUnitImportErrorOut"
+            }
+          }
+        },
+        "required": [
+          "code",
+          "errors",
+          "message",
+          "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.residentialUnitImportUnitOut": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string",
+            "description": "only once created"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type_code": {
+            "type": "string"
+          },
+          "type_label": {
+            "type": "string"
+          },
+          "head_staff_code": {
+            "type": "string"
+          },
+          "head_staff_name": {
+            "type": "string"
+          },
+          "household_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "population_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "order": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "head_staff_code",
+          "head_staff_name",
+          "household_count",
+          "name",
+          "order",
+          "population_count",
+          "row",
+          "type_code",
+          "type_label"
         ],
         "additionalProperties": false
       },
@@ -24521,14 +25177,26 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "head_staff_code": {
+            "type": "string"
+          },
+          "head_staff_name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
           }
         },
         "required": [
           "active",
           "code",
+          "head_staff_code",
+          "head_staff_name",
           "household_count",
           "id",
           "name",
+          "order",
           "population_count",
           "type_code",
           "type_label"
@@ -24586,6 +25254,58 @@
           "published",
           "q",
           "unit"
+        ],
+        "additionalProperties": false
+      },
+      "identity.updateResidentialUnitIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head_staff_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "household_count": {
+            "$ref": "#/components/schemas/identity.optionalCountIn"
+          },
+          "population_count": {
+            "$ref": "#/components/schemas/identity.optionalCountIn"
+          },
+          "order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "household_count",
+          "population_count"
         ],
         "additionalProperties": false
       },

@@ -1062,6 +1062,17 @@ export type identity_cotPhanQuyenRa = {
   "permissions": Array<string>;
 };
 
+export type identity_createResidentialUnitIn = {
+  "name": string;
+  "code"?: string;
+  "type_code"?: string;
+  "head_staff_code"?: string;
+  "household_count"?: number | null;
+  "population_count"?: number | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+};
+
 export type identity_danhBaChonNguoiRa = {
   "items": Array<identity_canBoChonNguoiRa>;
 };
@@ -1208,6 +1219,8 @@ export type identity_nhomQuyenRa = {
   "permissions": Array<identity_quyenMucRa>;
 };
 
+export type identity_optionalCountIn = Record<string, never>;
+
 export type identity_optionalHoursIn = Record<string, never>;
 
 export type identity_orgUnitDeleteIn = {
@@ -1287,6 +1300,46 @@ export type identity_quyenMucRa = {
   "code": string;
   /** "Duyệt gia hạn" */
   "label": string;
+};
+
+export type identity_residentialUnitImportCreatedOut = {
+  "created": Array<identity_residentialUnitImportUnitOut>;
+};
+
+export type identity_residentialUnitImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type identity_residentialUnitImportPreviewOut = {
+  "valid": boolean;
+  "units": Array<identity_residentialUnitImportUnitOut>;
+  "errors": Array<identity_residentialUnitImportErrorOut>;
+};
+
+export type identity_residentialUnitImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<identity_residentialUnitImportErrorOut>;
+};
+
+export type identity_residentialUnitImportUnitOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "name": string;
+  "type_code": string;
+  "type_label": string;
+  "head_staff_code": string;
+  "head_staff_name": string;
+  "household_count": number | null;
+  "population_count": number | null;
+  "order": number;
 };
 
 export type identity_roleTemplateRefOut = {
@@ -1420,6 +1473,9 @@ export type identity_thonToDanPhoRa = {
   "household_count": number | null;
   "population_count": number | null;
   "active": boolean;
+  "head_staff_code": string;
+  "head_staff_name": string;
+  "order": number;
 };
 
 export type identity_thongTinXa = {
@@ -1434,6 +1490,17 @@ export type identity_timCanBoVao = {
   "published": boolean | null;
   "limit": number | null;
   "cursor": string;
+};
+
+export type identity_updateResidentialUnitIn = {
+  "name"?: string | null;
+  "code"?: string | null;
+  "type_code"?: string | null;
+  "head_staff_code"?: string | null;
+  "household_count": identity_optionalCountIn;
+  "population_count": identity_optionalCountIn;
+  "order"?: number | null;
+  "active"?: boolean | null;
 };
 
 export type identity_vaiTroCotRa = {
@@ -5062,6 +5129,104 @@ export type identity_get_residential_units = {
   phanHoi: {
     200: identity_danhSachThonToDanPhoRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/residential-units — Thêm một thôn / tổ dân phố — mã tự sinh từ tên nếu không nhập */
+export type identity_post_residential_units = {
+  duongDan: "/api/v1/residential-units";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_createResidentialUnitIn;
+  phanHoi: {
+    201: identity_thonToDanPhoRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/residential-units/import-previews — Kiểm tra một tệp Excel thôn / tổ dân phố trước khi nhập — không ghi gì */
+export type identity_post_residential_units_import_previews = {
+  duongDan: "/api/v1/residential-units/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_residentialUnitImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/residential-units/import-template — Tải tệp Excel mẫu để nhập thôn / tổ dân phố — kèm danh sách chọn Loại và Trưởng thôn */
+export type identity_get_residential_units_import_template = {
+  duongDan: "/api/v1/residential-units/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/residential-units/imports — Nhập thôn / tổ dân phố từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type identity_post_residential_units_imports = {
+  duongDan: "/api/v1/residential-units/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_residentialUnitImportCreatedOut;
+    400: identity_residentialUnitImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/residential-units/{id} — Sửa tên, loại, trưởng thôn, số hộ, nhân khẩu, thứ tự — hoặc ngưng dùng / dùng lại một thôn / tổ dân phố */
+export type identity_patch_residential_units_by_id = {
+  duongDan: "/api/v1/residential-units/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_updateResidentialUnitIn;
+  phanHoi: {
+    200: identity_thonToDanPhoRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
