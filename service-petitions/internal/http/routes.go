@@ -465,6 +465,9 @@ type Deps struct {
 	// make impossible.
 	GhiLoaiNhiemVu GhiLoaiNhiemVu
 	GhiMucUuTien   GhiMucUuTien
+	// The Excel imports of the same two catalogues (ADR 0059 §3). See CatalogueImporting.
+	TaskTypeImports     CatalogueImporting
+	TaskPriorityImports CatalogueImporting
 
 	// The task-status wording: a read of the overrides, and the one write that opens a transaction
 	// and audits inside it. Two fields for the reason the catalogue pairs above give.
@@ -575,6 +578,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case ghi danh mục loại nhiệm vụ — POST/PATCH/DELETE /api/v1/task-types sẽ panic khi có người gọi")
 	case d.GhiMucUuTien == nil:
 		panic("petitions/http: thiếu use case ghi danh mục mức ưu tiên — POST/PATCH/DELETE /api/v1/task-priorities sẽ panic khi có người gọi")
+	case d.TaskTypeImports == nil:
+		panic("petitions/http: thiếu use case nhập Excel loại nhiệm vụ — ba tuyến /api/v1/task-types/import* sẽ panic khi có người gọi")
+	case d.TaskPriorityImports == nil:
+		panic("petitions/http: thiếu use case nhập Excel mức ưu tiên — ba tuyến /api/v1/task-priorities/import* sẽ panic khi có người gọi")
 	case d.TrangThaiNhiemVu == nil:
 		panic("petitions/http: thiếu kho nhãn trạng thái nhiệm vụ — GET /api/v1/task-statuses sẽ panic khi có người gọi")
 	case d.GhiTrangThaiNhiemVu == nil:
@@ -648,6 +655,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 
 	h := NewHandler(d)
+
+	// The two task catalogues' Excel imports — six routes, all `admin.lookup` (routes_catalogue_import.go).
+	registerCatalogueImportRoutes(mux, d, h)
 
 	// --- the commune's task catalogues. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE --------
 	//

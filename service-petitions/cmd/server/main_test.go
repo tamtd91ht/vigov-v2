@@ -363,6 +363,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// present, and a use case that is never invoked cannot dereference the nil handle.
 		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(nil, nil),
 		GhiMucUuTien:   app.NewDanhMucMucUuTien(nil, nil),
+		// The two catalogue Excel imports, on a nil *store.DB for the same reason — never invoked here.
+		TaskTypeImports:     app.NewTaskTypeImporter(nil, nil),
+		TaskPriorityImports: app.NewTaskPriorityImporter(nil, nil),
 		// Task-status wording: never invoked here (Register refuses nil). Own suite:
 		// internal/http/trang_thai_nhiem_vu_test.go.
 		TrangThaiNhiemVu:    petstore.NewNhanTrangThaiNhiemVuStore(nil),

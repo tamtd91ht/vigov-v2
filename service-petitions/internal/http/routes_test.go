@@ -304,6 +304,9 @@ func dungMayChu(t *testing.T) *mayChu {
 			// anything wrongly.
 			GhiLoaiNhiemVu: &ghiDanhMucGia{},
 			GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
+			// The two catalogue Excel imports: own suite in catalogue_import_test.go.
+			TaskTypeImports:     taskTypeImportsFake(),
+			TaskPriorityImports: taskPriorityImportsFake(),
 			// Task-status wording: own suite in trang_thai_nhiem_vu_test.go; present because
 			// Register refuses a nil dependency.
 			TrangThaiNhiemVu:     docTrangThaiMau(),
@@ -438,6 +441,9 @@ func depsDay() Deps {
 		MucUuTien:      mucUuTienMau(),
 		GhiLoaiNhiemVu: &ghiDanhMucGia{},
 		GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
+		// The two catalogue Excel imports.
+		TaskTypeImports:     taskTypeImportsFake(),
+		TaskPriorityImports: taskPriorityImportsFake(),
 		// The task-status wording, read and write.
 		TrangThaiNhiemVu:    docTrangThaiMau(),
 		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
@@ -508,6 +514,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu đường hỏi identity cho bộ lọc nhiệm vụ": func(d *Deps) { d.TaskFilterIdentity = nil },
 		"thiếu use case xuất sổ theo dõi":              func(d *Deps) { d.TaskRegisterExport = nil },
 		"thiếu use case nhập nhiệm vụ":                 func(d *Deps) { d.TaskImport = nil },
+		"thiếu use case nhập Excel loại nhiệm vụ":      func(d *Deps) { d.TaskTypeImports = nil },
+		"thiếu use case nhập Excel mức ưu tiên":        func(d *Deps) { d.TaskPriorityImports = nil },
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },

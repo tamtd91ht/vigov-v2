@@ -284,6 +284,10 @@ func chay(log *slog.Logger) error {
 		// one is precisely what it is for.
 		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(kho, loaiNhiemVu),
 		GhiMucUuTien:   app.NewDanhMucMucUuTien(kho, mucUuTien),
+		// Their Excel imports (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME
+		// stores, so an imported row is inserted by the statement the create form runs.
+		TaskTypeImports:     app.NewTaskTypeImporter(kho, loaiNhiemVu),
+		TaskPriorityImports: app.NewTaskPriorityImporter(kho, mucUuTien),
 		// The task-status wording (migration 0010, #21). ONE store behind the read and the write, so
 		// the GET merges exactly the rows the PATCH wrote.
 		TrangThaiNhiemVu:    nhanTrangThai,

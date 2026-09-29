@@ -168,6 +168,8 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		MucUuTien:           mucUuTienMau(),
 		GhiLoaiNhiemVu:      ghi,
 		GhiMucUuTien:        &ghiDanhMucGiaUuTien{},
+		TaskTypeImports:     taskTypeImportsFake(),
+		TaskPriorityImports: taskPriorityImportsFake(),
 		TrangThaiNhiemVu:    docTT,
 		GhiTrangThaiNhiemVu: ghiTT,
 		Phieu:               phieuMau(),

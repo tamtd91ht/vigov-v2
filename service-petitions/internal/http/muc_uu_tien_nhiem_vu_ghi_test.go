@@ -162,6 +162,9 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		MucUuTien:      mucUuTienMau(),
 		GhiLoaiNhiemVu: &ghiDanhMucGia{},
 		GhiMucUuTien:   ghi,
+		// Never called here; Register refuses a nil. Own suite: catalogue_import_test.go.
+		TaskTypeImports:     taskTypeImportsFake(),
+		TaskPriorityImports: taskPriorityImportsFake(),
 		// Never called here; Register refuses a nil. Own suite: trang_thai_nhiem_vu_test.go.
 		TrangThaiNhiemVu:    docTrangThaiMau(),
 		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
