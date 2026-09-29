@@ -3,15 +3,18 @@ id: 0058-automation-jobs-in-owning-service
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 57d5101
+derived_from_commit: 1796286
 expires: null
 owns_facts:
   - "việc nền của tab Tự động hoá chạy trong tiến trình của service sở hữu dữ liệu, mỗi việc một ticker, một khoá advisory PostgreSQL mỗi việc — không dựng RabbitMQ"
-  - "cấu hình việc nền theo xã thuộc identity cạnh bảng sla, sửa dưới admin.sla, mặc định tắt, bên chạy đọc qua gRPC"
-  - "việc nào dựng, refresh_dashboards bị bỏ, send_scheduled_reports hoãn, và nhắc hạn gồm cả phiếu phản ánh"
+  - "cấu hình việc nền theo xã thuộc identity cạnh bảng sla, sửa dưới admin.sla, mặc định tắt; cài đặt theo việc, trạng thái chạy theo phạm vi (việc, loại việc)"
+  - "việc nào dựng (sla_reminders, escalation, weekly_digest), refresh_dashboards bị bỏ, send_scheduled_reports hoãn, và nhắc hạn gồm cả phiếu phản ánh lẫn đơn thư"
   - "mọi độ trễ trong việc nền đếm bằng giờ làm việc qua identity, không chép giờ đồng hồ của kho yêu cầu"
   - "tự đóng phiếu cho-dan-xac-nhan không thuộc việc nền tự động hoá"
-  - "tuyến chạy ngay có dù kho yêu cầu không có"
+  - "tuyến chạy ngay đặt ở identity, chỉ đánh dấu; việc chạy ở nhịp kế của bên chạy (≤ 1 phút)"
+  - "thông báo của việc nền vào hộp chuông hop_thu_thong_bao của comms, không vào sổ thông báo nội bộ"
+  - "bản tin đầu tuần giao hai phần theo service sở hữu, và phản ánh nóng nghĩa là quá hạn hoặc bị chấm 1–2 sao trong tuần — 29/09/2026"
+  - "bên chạy tìm xã phải quét từ kho của chính nó, bỏ xã không active qua platform GetTenant"
 ---
 
 # 0058. Việc nền của tab Tự động hoá: chạy trong service sở hữu dữ liệu, không qua RabbitMQ
@@ -78,24 +81,45 @@ khoá chống trùng (luật 2 bất biến 5) — cùng ý với `dedupe_key` c
 chỗ đặt này. Điều bù lại (nhận xét của người ghi): hai bảng được sửa bởi cùng một người, dưới cùng
 một khoá `admin.sla`.
 
-`last_run_at` và kết quả lần cuối do **bên chạy** sinh ra nhưng **`identity`** giữ. Tức cần một
-đường ghi ngược từ `petitions`/`documents` sang `identity`.
+Lượt chạy và kết quả lần cuối do **bên chạy** sinh ra nhưng **`identity`** giữ. Hợp đồng 1796286
+chốt hình dạng (`proto/vigov/identity/v1/identity.proto`):
+
+| Điều | Hợp đồng |
+|---|---|
+| Ba việc | `sla_reminders` · `escalation` · `weekly_digest` (`enum AutomationJob`). `sla_checker` của kho yêu cầu đổi tên thành `sla_reminders` |
+| Đơn vị trạng thái chạy | **(việc, loại việc)** — `AutomationRunScope`. `PHAN_ANH` và `NHIEM_VU` do `petitions` chạy, `VAN_BAN_DEN` do `documents` chạy. Cài đặt (bật/tắt, nhịp) vẫn **một dòng mỗi việc**; `last_run_at` theo việc thì bên nào chạy trước sẽ đánh dấu xong hộ bên kia |
+| Ai quyết "tới lượt" | `identity`, qua `ClaimDueAutomationRuns` — một lệnh ghi có điều kiện, một người thắng. `claimed_at` là "bây giờ" của cả lượt. Khoá advisory của §1 vẫn giữ để một pod của bên chạy làm một lượt |
+| Ghi kết quả | `RecordAutomationRunOutcome` — một vết mỗi lượt, chủ thể hệ thống, cùng giao dịch |
+
+Ranh giới giao dịch: `kb/30-indexes/transaction-boundaries.json`, `chay_tac_vu_tu_dong_theo_xa`.
+
+### 2b. Xã nào phải quét
+
+Không có RPC *"xã nào bật việc X"* — đó là một lần đọc xuyên xã không mang `x-tenant-id` (ADR 0012
+quyết định 1). Theo phương án (b) của hợp đồng 1796286: **mỗi bên chạy liệt kê các xã từ kho của
+chính nó**, khai `// @cross-tenant: <lý do>` (luật 1 cấm #6), **bỏ qua xã mà `platform` `GetTenant`
+báo không `active`** (xã đã sáp nhập giữ dữ liệu — luật 7 bất biến 6), rồi hỏi `identity` từng xã
+trong ngữ cảnh của xã ấy. Cái giá: xã chưa có bản ghi nào ở một service thì không nhận phần bản tin
+của service đó.
 
 ### 3. Thông báo cho cán bộ đi qua `service-comms`
 
 > **Người dùng, 29/09/2026:** thông báo cho cán bộ đi qua thông báo nội bộ của `service-comms`.
 
-`comms` sở hữu thông báo nội bộ (`service-comms/migrations/0005_thong_bao_noi_bo.sql`), nhưng hợp
-đồng của nó hôm nay chỉ có `Health` (`proto/vigov/comms/v1/comms.proto:28`). Chưa có đường nào để
-service khác gửi một thông báo — luật 2 điều kiện dừng #2.
+Thông báo vào **hộp chuông** `hop_thu_thong_bao` — hộp thư hợp nhất của `docs/ui-ux/08-thong-bao.md`
+§8 — qua `CommsService.DeliverStaffNotifications` (`proto/vigov/comms/v1/comms.proto:30-105`, hợp
+đồng 1796286). **Không** vào sổ thông báo nội bộ (`service-comms/migrations/0005_thong_bao_noi_bo.sql`):
+đó là thông báo do một người có `announcement.create` soạn, và ghi nhắc việc vào đó là chôn thông
+báo thật của xã dưới dòng máy sinh, với một tác giả giả. Chống trùng theo khoá của **việc nghiệp
+vụ**, không theo `run_id` — công thức khoá nằm ở chú thích rpc, không chép sang đây.
 
 ### 4. Việc nào dựng, việc nào không
 
 | Việc (khoá kho yêu cầu) | Quyết định | Vì sao |
 |---|---|---|
-| Nhắc sắp đến hạn và đã quá hạn (`sla_checker`) | **Dựng** — nhiệm vụ, văn bản **và phiếu phản ánh** | Đặc tả `14-cau-hinh.md:330` ghi cả ba. Kho yêu cầu quét nhiệm vụ, văn bản, đơn thư (`sla.py:108-208`), **không** quét phiếu phản ánh. Người dùng chọn theo đặc tả. "Sắp đến hạn" đọc `gio_sap_den_han` qua mốc cuối của ADR 0029 §Bổ sung 28/09 |
-| Leo thang việc trễ hạn (`escalation`) | **Dựng** | Hai ngưỡng, mốc đếm: ADR 0029 §Bổ sung 29/09 |
-| Bản tin đầu tuần (`weekly_digest`) | **Dựng** | — |
+| Nhắc sắp đến hạn và đã quá hạn (`sla_reminders`, kho yêu cầu gọi `sla_checker`) | **Dựng** — nhiệm vụ, văn bản, **phiếu phản ánh và đơn thư** | Đặc tả `14-cau-hinh.md:330` ghi ba loại đầu. Kho yêu cầu quét nhiệm vụ, văn bản, đơn thư (`sla.py:108-208`), **không** quét phiếu phản ánh. Người dùng chọn hợp của hai (**đơn thư: người dùng, 29/09/2026**, theo kho yêu cầu). "Sắp đến hạn" đọc `gio_sap_den_han` qua mốc cuối của ADR 0029 §Bổ sung 28/09. Ngưỡng "bộ phận giữ mà chưa phân công ai": một trường SLA mới — ADR 0029 §Bổ sung 29/09 |
+| Leo thang việc trễ hạn (`escalation`) | **Dựng** | Hai ngưỡng, mốc đếm, người nhận mức 2: ADR 0029 §Bổ sung 29/09 |
+| Bản tin đầu tuần (`weekly_digest`) | **Dựng** | Nội dung và nơi chạy: §8 dưới |
 | Tính lại số liệu Tổng quan (`refresh_dashboards`) | **BỎ** | Ngược ADR 0053 §1: `/tong-quan` đếm trực tiếp, không snapshot, nên không có gì để tính lại |
 | Gửi báo cáo định kỳ (`send_scheduled_reports`) | **HOÃN** tới khi có `/bao-cao` | `/bao-cao` ngoài đợt 1 (ADR 0053 §6). Chưa có báo cáo thì không có gì để gửi |
 
@@ -121,7 +145,24 @@ vào một công tắc bật/tắt của tab Tự động hoá là để một �
 > **Người dùng, 29/09/2026:** có tuyến **chạy ngay** theo đặc tả `14-cau-hinh.md:380`
 > (`POST /:ma/chay-ngay`), dù kho yêu cầu không có (`router.py:43-69` chỉ có danh sách và sửa).
 
-Chạy ngay phải đi qua **cùng khoá advisory** với nhịp thường, nếu không hai lượt chạy chồng nhau.
+> **Người dùng, 29/09/2026:** tuyến chạy ngay đặt ở **`identity`** và chỉ **đánh dấu** việc ấy; việc
+> chạy ở **nhịp kế** của bên chạy — **≤ 1 phút**.
+
+Không có lời gọi từ `identity` sang bên chạy: lượt chạy ngay đi qua **cùng** `ClaimDueAutomationRuns`
+và cùng khoá advisory với nhịp thường, nên hai lượt không chồng nhau. Một việc chạy ở hai service
+(`sla_reminders`) thì dấu chạy ngay phải được **mỗi phạm vi** (việc, loại việc) nhận một lần — cùng
+lý do §2 giữ trạng thái chạy theo phạm vi.
+
+### 8. Bản tin đầu tuần
+
+> **Người dùng, 29/09/2026:** bản tin giao **hai phần** — nhiệm vụ và phản ánh từ
+> `service-petitions`, văn bản từ `service-documents`. **"Phản ánh nóng"** (`14-cau-hinh.md:332`) =
+> phiếu phản ánh **quá hạn** hoặc bị **chấm 1–2 sao trong tuần**.
+
+Hai phần vì mỗi service chỉ đếm sổ của mình (§1, điều kiện dừng #2); một phần gộp cần một bên đọc
+sổ của bên kia. "Quá hạn" là **suy ra** từ hạn đã lưu (luật 10 bất biến 3), không phải một cột. Số
+sao là `diem_hai_long` của phiếu (`service-petitions/migrations/0017_petition_publication_and_rating_comment.sql`).
+Tiêu đề `report.notification.week` vẫn thuộc `reporting` (ADR 0024 §Phụ, *Bổ sung 29/09/2026*).
 
 ## Hệ quả
 
@@ -133,19 +174,25 @@ Chạy ngay phải đi qua **cùng khoá advisory** với nhịp thường, nế
   vẫn là chỗ đã chọn — nhưng mở lại là **ADR mới**, không lặng lẽ thêm.
 - **ADR 0010 vẫn đúng ở chỗ khác:** Kafka *"không dùng cho tác vụ có lịch"* (`0010:37`) vẫn giữ.
 
+## Câu từng mở — đã trả lời 29/09/2026
+
+| # | Câu | Trả lời |
+|---|---|---|
+| 1 | Bản tin đầu tuần chạy ở service nào | **Người dùng:** hai phần, mỗi service một phần — §8 |
+| 2 | "Phản ánh nóng" nghĩa là gì | **Người dùng:** quá hạn hoặc chấm 1–2 sao trong tuần — §8 |
+| 4 | Đơn thư có vào nhắc hạn không | **Người dùng:** có, theo kho yêu cầu — §4. Xem câu mở #10 |
+| 5 | Ngưỡng "bộ phận giữ mà chưa phân công ai" | **Người dùng:** trường SLA mới theo xã — ADR 0029 §Bổ sung 29/09 |
+| 6 | Tuyến chạy ngay đặt ở đâu | **Người dùng:** ở `identity`, chỉ đánh dấu — §7 |
+| 7 | Ba hợp đồng và mức nhất quán | **Hợp đồng 1796286** (`contract-designer`), không phải quyết định của người dùng — §2, §3 |
+| 8 | Danh sách xã phải quét | **Hợp đồng 1796286**, phương án (b) — §2b |
+
 ## Còn mở — chưa ai quyết
 
 | # | Câu | Ai |
 |---|---|---|
-| 1 | Bản tin đầu tuần chạy ở service nào — nó gộp nhiệm vụ, phản ánh (và văn bản?), còn tiêu đề `report.notification.week` thuộc `reporting` (ADR 0024 §Phụ, *Bổ sung 29/09/2026*) | Người dùng |
-| 2 | "Phản ánh nóng" trong bản tin (`14-cau-hinh.md:332`) nghĩa là gì — không nguồn nào định nghĩa | Khách |
-| 3 | Leo thang áp cho những loại việc nào. Bảng `sla` có hai cột leo thang cho cả ba `loai_viec`; kho yêu cầu chỉ leo thang nhiệm vụ (`sla.py:284-321`) | Người dùng |
-| 4 | Đơn thư (`documents`, ADR 0039) có vào nhắc hạn không. Kho yêu cầu có; đặc tả §9 không nêu | Người dùng |
-| 5 | Ngưỡng "bộ phận giữ mà chưa phân công ai" (`14-cau-hinh.md:330`). Kho yêu cầu cứng 24 giờ đồng hồ (`sla.py:42`) — cả con số lẫn đơn vị đều không chép được | Khách |
-| 6 | Tuyến chạy ngay đặt ở `identity` (nơi giữ cấu hình) hay ở service chạy việc | `contract-designer`, người dùng duyệt |
-| 7 | Ba hợp đồng: bên chạy đọc cấu hình và ghi kết quả lần cuối vào `identity`; bên chạy gửi thông báo sang `comms`. Mức nhất quán và bù trừ của từng luồng (luật 2 bất biến 6) | `contract-designer` |
-| 8 | Danh sách xã phải quét là một lần đọc **xuyên xã** — phải khai `// @cross-tenant: <lý do>` (luật 1 cấm #6); mỗi xã sau đó chạy trong ngữ cảnh của riêng nó | Lượt dựng |
-| 9 | Vết kiểm toán của việc nền cần một **chủ thể hệ thống** mang mã nghiệp vụ (luật 6 bất biến 6 và 8). `core/audit` và `core/authz` hôm nay chưa có | Người dùng — luật 6 điều kiện dừng #1 |
+| 3 | Leo thang áp cho những loại việc nào. Hợp đồng 1796286 cho phép cả ba `WorkKind` (`ResolveEscalationInstants`); kho yêu cầu chỉ leo thang nhiệm vụ (`sla.py:284-321`). Người dùng chưa xác nhận phạm vi | Người dùng |
+| 9 | `core/audit.SystemActor` (`"system"`, `core/audit/audit.go:35-37`) đã có và hợp đồng dùng nó. Câu còn lại: nó có thoả luật 6 bất biến 8 (mã nghiệp vụ, không fallback) không, và `core/authz` có cần một `Principal` hệ thống không | Lượt dựng, người dùng duyệt |
+| 10 | Đơn thư **không có `WorkKind`** (`identity.proto:2576-2578` có ba giá trị) và `sla.loai_viec` không nhận đơn thư (ADR 0039 `:100-102`, `service-identity/migrations/0008_sla.sql:223`). Nhắc hạn đơn thư lấy hạn và `gio_sap_den_han` từ đâu, chạy dưới phạm vi nào — thêm giá trị thứ tư là ADR 0029 điều kiện dừng #1 | Người dùng |
 
 ## ĐIỀU KIỆN DỪNG
 
@@ -156,7 +203,10 @@ Chạy ngay phải đi qua **cùng khoá advisory** với nhịp thường, nế
 5. Dựng lại `refresh_dashboards`, hoặc dựng `send_scheduled_reports` trước khi có `/bao-cao`
 6. Gắn tự đóng phiếu `cho-dan-xac-nhan` vào công tắc của tab này
 
-→ ADR 0007 (giờ làm việc) · 0010 (hạ tầng dữ liệu) · 0029 (bảng `sla`, mốc leo thang) · 0041
+→ Hợp đồng: `proto/vigov/identity/v1/identity.proto` (`ClaimDueAutomationRuns`,
+`RecordAutomationRunOutcome`, `ResolveEscalationInstants`, `ResolveOrgUnitPermissionHolders`,
+`ResolveLeadershipStaff`) · `proto/vigov/comms/v1/comms.proto` (`DeliverStaffNotifications`)
+→ ADR 0007 (giờ làm việc) · 0010 (hạ tầng dữ liệu) · 0012 (`x-tenant-id`) · 0029 (bảng `sla`, mốc leo thang) · 0041
 (bảng tin báo công dân) · 0053 (không snapshot) · 0057 (nạp cấu hình theo nhóm)
 → Luật 1 · 2 · 5 · 6 · 10
 → Đặc tả: `docs/ui-ux/14-cau-hinh.md` §9, §11

@@ -3,7 +3,7 @@ id: 0029-so-huu-bang-sla
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 0960b2a
+derived_from_commit: 1796286
 expires: null
 owns_facts:
   - "bảng sla thuộc service identity, đặt cạnh ba bảng lịch làm việc"
@@ -14,6 +14,10 @@ owns_facts:
   - "RPC đọc bảng sla trả MỐC HẠN đã cộng xong chứ không trả số giờ — chốt 22/09/2026"
   - "bộ lọc sắp đến hạn đọc gio_sap_den_han qua một MỐC CUỐI đi xuôi từ now, không qua số giờ — 28/09/2026"
   - "leo thang dùng hai ngưỡng gio_bao_lanh_dao và gio_bao_chu_tich tính bằng giờ làm việc, không nhân đôi một số — 29/09/2026"
+  - "hai ngưỡng leo thang đếm từ hạn đã lỡ, buộc Y ≥ X lúc ghi — người dùng 29/09/2026"
+  - "mức báo Chủ tịch gửi mọi vai trò la_lanh_dao, gồm Phó Chủ tịch; không đổi lược đồ — người dùng 29/09/2026"
+  - "ngưỡng bộ phận giữ mà chưa phân công là trường SLA mới theo xã, giờ làm việc, NULL = không báo, gieo 8 — người dùng 29/09/2026"
+  - "chú thích anchor UNDECIDED của migration 0008 đã cũ và được ghi đè bằng migration mới"
 ---
 
 # 0029. Bảng `sla` thuộc `identity` — đặt cạnh lịch làm việc
@@ -230,7 +234,7 @@ bỏ bộ lọc. Nhiệm vụ không mang lĩnh vực nên đọc **dòng mặc 
 
 ## BỔ SUNG 29/09/2026 — leo thang dùng **HAI NGƯỠNG** của §8, đếm bằng giờ làm việc
 
-> **Người dùng, 29/09/2026:** leo thang theo **hai ngưỡng** của `docs/ui-ux/14-cau-hinh.md` §8 —
+> **Người dùng, 29/09/2026 — hai ngưỡng:** leo thang theo **hai ngưỡng** của `docs/ui-ux/14-cau-hinh.md` §8 —
 > báo **lãnh đạo trực tiếp** sau X giờ làm việc, báo **Chủ tịch** sau Y giờ làm việc. X là
 > `gio_bao_lanh_dao`, Y là `gio_bao_chu_tich` (JSON `escalate_leader_hours` /
 > `escalate_president_hours`, `service-identity/internal/http/sla.go:131-132`). **Không** dùng một
@@ -247,26 +251,52 @@ gõ vào cột Chủ tịch không có tác dụng gì — một ô cấu hình 
 **Vì sao không giờ đồng hồ:** luật 10 cấm #2. Đêm, cuối tuần, `ngay_nghi_le`, `ngay_lam_bu` không
 phải giờ làm việc; phép cộng thuộc `identity` (ADR 0007).
 
-**Mốc đếm: hạn đã lỡ của việc.** Đây là cách đọc của người ghi, ghép hai câu người dùng nói cùng
-ngày: *"việc trễ"* của §9, và *"mọi độ trễ đếm bằng giờ làm việc qua identity"* (ADR 0058). Mức
-lãnh đạo khi `AdvanceWorkingHours(hạn đã lỡ, X) <= now`; mức Chủ tịch khi `AdvanceWorkingHours(hạn
-đã lỡ, Y) <= now` — cùng hình dạng phép kiểm "nghiêm trọng" của ADR 0053 §5. Người dùng muốn đếm
-từ mốc khác thì sửa **ở đây**, không ở ADR 0058.
+> **Người dùng, 29/09/2026 — mốc đếm:** hai ngưỡng đếm **từ HẠN ĐÃ LỠ** của việc. Mức lãnh đạo trực
+> tiếp khi đã trôi X giờ làm việc sau hạn lỡ; mức Chủ tịch khi đã trôi Y giờ. **Buộc Y ≥ X**, kiểm
+> lúc ghi.
 
-**Hình dạng RPC chưa chốt.** Theo §Bổ sung 22/09 ở trên, `identity` trả **mốc**, không trả số giờ
-cho bên gọi tự cộng. Tên và trường là việc của `contract-designer`.
+Không đếm từ lúc tiếp nhận: đếm từ đó thì leo thang cả việc **chưa trễ**. Hợp đồng 1796286 trả
+hai mốc cho mỗi hạn đã lỡ — `ResolveEscalationInstants` →
+`unit_head_due_at` / `chairman_due_at` (`proto/vigov/identity/v1/identity.proto:1268-1357`,
+`:2812-2842`); bên chạy so `mốc <= claimed_at`, **không bao giờ lưu mốc** (luật 10 bất biến 3).
+Người dùng muốn đếm từ mốc khác thì sửa **ở đây**, không ở ADR 0058.
+
+**Y ≥ X đảo một dòng của hợp đồng:** chú thích `chairman_due_at` (`identity.proto:2837-2840`) ghi
+*"NOT NECESSARILY LATER … deliberately"*, và `0008_sla.sql:245` chỉ kiểm `> 0`. Từ 29/09 phép kiểm
+thuộc **tuyến ghi** `PATCH /api/v1/sla/{id}` (và dòng gieo); chú thích proto phải sửa theo — việc
+của `contract-designer`, không phải tệp này.
+
+> **Người dùng, 29/09/2026 — người nhận mức 2:** "Báo Chủ tịch" gửi cho **MỌI** vai trò lãnh đạo
+> (`vai_tro.la_lanh_dao`), gồm cả Phó Chủ tịch — như `_leaders` của kho yêu cầu (`sla.py:305`).
+> **Không** đổi lược đồ.
+
+Tra qua `ResolveLeadershipStaff`. Mức 1 ("lãnh đạo trực tiếp") là người **trong bộ phận giữ việc**
+nắm khoá quyền giao việc của miền ấy — `ResolveOrgUnitPermissionHolders`; lý do chọn khoá quyền
+thay vì mã vai trò hay cột trưởng bộ phận nằm ở chú thích rpc ấy, không chép sang đây. Muốn chỉ
+riêng Chủ tịch thì là một cờ **mới** trên vai trò — câu mới, không so chuỗi mã vai trò (luật 5 cấm #3).
+
+> **Người dùng, 29/09/2026 — ngưỡng "bộ phận giữ mà chưa phân công ai"** (`14-cau-hinh.md:330`, việc
+> `sla_reminders` của ADR 0058): một **trường SLA mới theo xã**, tính bằng **giờ làm việc**;
+> **`NULL` = không báo**. `POST /api/v1/sla/defaults` gieo mặc định **8**.
+
+Không có con số cứng trong mã (luật 10 cấm #3); 24 giờ đồng hồ của kho yêu cầu (`sla.py:42`) không
+chép — sai cả số lẫn đơn vị. `NULL` là một lựa chọn của xã, không phải mặc định rơi về: bên chạy
+gặp `NULL` thì không gửi, và không thay bằng 8. Số 8 chỉ sống trong **dòng gieo** — một hành vi
+tường minh của quản trị xã, cùng tiền lệ với các dòng gieo khác của tuyến ấy.
 
 ### Còn mở — chưa ai quyết
 
 | # | Câu | Vì sao không đoán |
 |---|---|---|
-| 1 | Phiếu phản ánh có hai đồng hồ (ADR 0028): lỡ `han_tiep_nhan` có leo thang không, hay chỉ `han_xu_ly_xong` | Lỡ hạn tiếp nhận 2 giờ của lĩnh vực an ninh là chuyện lãnh đạo có thể muốn biết ngay; chọn thay là quyết hộ |
-| 2 | Có buộc Y ≥ X không | `service-identity/migrations/0008_sla.sql:245` chỉ kiểm `> 0`. Y < X thì Chủ tịch biết trước lãnh đạo trực tiếp |
-| 3 | "Lãnh đạo trực tiếp" và "Chủ tịch" của một việc là ai, tra từ đâu | Kho yêu cầu gửi cả hai mức cho **mọi** vai trò lãnh đạo (`sla.py:305`) — không phân biệt được hai mức |
+| 1 | Phiếu phản ánh có hai đồng hồ (ADR 0028): lỡ `han_tiep_nhan` có leo thang không, hay chỉ `han_xu_ly_xong`. Hợp đồng để bên chạy nêu hạn nào (`identity.proto:1288-1290`), không chọn thay | Lỡ hạn tiếp nhận 2 giờ của lĩnh vực an ninh là chuyện lãnh đạo có thể muốn biết ngay; chọn thay là quyết hộ |
+| 4 | Trường ngưỡng "chưa phân công" là một cột trên **mỗi dòng** `sla` (theo loại việc, lĩnh vực) hay **một** giá trị mỗi xã | Người dùng nói "trường SLA theo xã" và gieo qua `sla/defaults`, không nói hạt. Lượt dựng hỏi ở cổng, không tự chọn |
+
+Câu từng mở #2 (Y ≥ X) và #3 (ai là hai mức): đã trả lời ngay trên.
 
 **Chú thích trong mã đã cũ:** `service-identity/migrations/0008_sla.sql:107-124` và
-`COMMENT ON COLUMN` ở `:265-269` vẫn ghi *"anchor UNDECIDED"*. Sửa chú thích ấy là việc của lượt
-dựng leo thang, không phải của tệp này.
+`COMMENT ON COLUMN` ở `:265-269` vẫn ghi *"anchor UNDECIDED"* — **sai từ 29/09/2026**. Migration 0008
+đã chạy nên không sửa tại chỗ; lượt dựng leo thang ghi đè bằng `COMMENT ON COLUMN` trong **một
+migration mới**. Tới lúc ấy, đọc mốc đếm ở đây chứ không ở chú thích cột.
 
 → ADR 0007 (giờ làm việc, ba bảng lịch, SLA không hồi tố): `kb/10-decisions/0007-sla-working-hours.md`
 → ADR 0024 (quyền sở hữu đi theo nhịp đổi, phép thử `tenant_id`): `kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md`
