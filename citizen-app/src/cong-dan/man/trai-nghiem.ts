@@ -102,34 +102,12 @@ export const VONG_DOI: readonly string[] = [
   "da-dong",
 ];
 
-/**
- * DANH MỤC LĨNH VỰC TẠM — mười hai tên của SRS kho yêu cầu (`../vigov-require/docs/SRS.md:310`; mock của prototype chỉ có 8), cho bước
- * "chọn lĩnh vực gần đúng nhất". Theo ADR 0050, lĩnh vực dân chọn LÀ lĩnh vực của phiếu và máy chủ đặt hạn
- * từ nó lúc tạo phiếu. KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã, và chỉ `identity` đếm hạn (luật 10 cấm
- * #2, #3). Gỡ danh sách này khi có tuyến đọc danh mục lĩnh vực của xã.
+/*
+ * LĨNH VỰC — the temporary twelve-name list that stood here (`LINH_VUC_TAM`) was removed on 29/09/2026:
+ * step 1 now reads the commune's own catalogue (`GET /api/v1/my-citizen-report-fields`, `PhanAnhAppXa.tsx`
+ * `FieldStep`), and there is deliberately NO built-in list to fall back on (ADR 0060 §3). The staff-conduct
+ * field (`can-bo`) is never offered on the citizen form by the server, so its special note went with it.
  */
-/**
- * The staff-conduct field — SRS M4.3.8 + R-05: a separate route, by default only the Party Secretary and
- * the Chairman see it, NEVER public (spec 05-nghiep-vu.md:204), and each commune can switch it off. A
- * constant so the send screen can tell the citizen exactly that; once commune config exists, a commune that
- * switched it off must not show this field at all.
- */
-export const STAFF_CONDUCT_FIELD = "Thái độ / tác phong cán bộ";
-
-export const LINH_VUC_TAM: readonly string[] = [
-  "Rác thải – Vệ sinh môi trường",
-  "Hạ tầng giao thông",
-  "Cấp thoát nước",
-  "Điện",
-  "Trật tự đô thị – lấn chiếm vỉa hè",
-  "An ninh trật tự",
-  "Xây dựng không phép",
-  "Ô nhiễm (tiếng ồn, khí thải, nước thải)",
-  "Y tế – Giáo dục",
-  STAFF_CONDUCT_FIELD,
-  "An toàn thực phẩm",
-  "Khác",
-];
 
 /*
  * ĐÁNH GIÁ — the in-memory rating rules that stood here (a client-side reopen threshold, a reopen counter)
@@ -158,9 +136,10 @@ export const NHAN_NHOM = STATUS_GROUP_LABEL;
 export const NHAN_BUOC = STEP_LABEL;
 
 /**
- * Năm ô của hợp đồng thật (`TRUONG_DUOC_NHAN`) cộng lĩnh vực dân chọn (ADR 0050). `linh_vuc` hôm nay là
- * một tên của `LINH_VUC_TAM` và KHÔNG được gửi (`PhanAnhAppXa.tsx` `sendBody`) — danh mục thật của xã thay
- * nó ở bước sau. `an_danh` do công tắc "Gửi ẩn danh" của bà con đặt (SRS M4.2, ADR 0050 #3).
+ * Năm ô của hợp đồng thật (`TRUONG_DUOC_NHAN`) cộng lĩnh vực dân chọn (ADR 0050). `linh_vuc` là MÃ lĩnh
+ * vực trong danh mục của xã (`CitizenField.code`) và đi lên thành `field` (`PhanAnhAppXa.tsx` `sendBody`);
+ * nháp giữ đúng mã ấy và chỉ khôi phục khi xã còn mở nó. `an_danh` do công tắc "Gửi ẩn danh" của bà con
+ * đặt (SRS M4.2, ADR 0050 #3).
  */
 export type NhapPhieu = {
   readonly linh_vuc: string;

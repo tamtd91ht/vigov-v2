@@ -14,6 +14,7 @@ import {
   DUONG_DAN_TIN_XA,
   DUONG_DAN_XA,
 } from "../cong-dan/api/hop-dong-cong-khai";
+import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
 import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
@@ -437,8 +438,15 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // trí lấy toạ độ (`vihat-miniapp` `/api/v1/location`), chỉ sau cú bấm "Lấy vị trí hiện tại" + 1 cũng
     // của 29/09: đăng nhập từ app riêng của xã (cùng tuyến đăng nhập, thân thứ tư, `appId` + `phoneToken`).
     // + 1: the commune app's location exchange (same route, `appId` added). + 1: the commune's declared
-    // office, read when the commune app opens (`/commune-profiles`).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(12);
+    // office, read when the commune app opens (`/commune-profiles`). + 1: the commune's field list for
+    // step 1 of "Gửi phản ánh" (`/my-citizen-report-fields`) — no field sent, only the session header.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(13);
+    const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
+    expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
+    expect(fieldsRow!.truong).toEqual([]);
+    expect(fieldsRow!.nguoi_dung_bam).toBe(true);
+    // The client sends no query string and no body on that route: nothing more to declare.
+    expect(citizenFieldsAddress()).not.toContain("?");
     const communeLocationRow = DUONG_ROI_KHOI_MAY.find((d) => d.truong === COMMUNE_APP_LOCATION_FIELDS);
     expect(communeLocationRow, "hồ sơ không khai đổi mã vị trí của app riêng").toBeDefined();
     expect(communeLocationRow!.tuyen).toBe(LOCATION_PATH);
@@ -586,7 +594,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("10 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("11 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

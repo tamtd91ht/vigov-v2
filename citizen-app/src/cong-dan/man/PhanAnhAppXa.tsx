@@ -11,9 +11,9 @@
  *   · Gửi: Lĩnh vực → Mô tả (tên xã đọc lại ngay trên nút gửi — README §Non-negotiables #5) → Đã gửi, với
  *     MÃ TRA CỨU máy chủ cấp (luật 10 #1). Một lần bấm = một `Idempotency-Key` (`api/lan-gui.ts`): "Gửi
  *     lại" sau mạng rớt dùng lại cùng khoá, nên không bao giờ thành hai phiếu.
- *   · ⚠ LĨNH VỰC Ở BƯỚC 1 CHƯA ĐƯỢC GỬI (W6b): danh mục thật của xã (`/my-citizen-report-fields`) thay
- *     `LINH_VUC_TAM` ở bước sau, và chỉ khi ấy `field` mới vào thân. Tên trong danh mục tạm không phải mã của
- *     xã — gửi nó là 400 `field_not_offered`.
+ *   · Bước 1 là DANH MỤC LĨNH VỰC CỦA XÃ (`/my-citizen-report-fields`, tải khi màn mở — tức SAU cổng),
+ *     theo thứ tự của xã; mã chọn được đi lên thành `field`. Không có danh sách dự phòng (ADR 0060 §3): 503
+ *     là một câu kèm "Thử lại". 400 `field_not_offered` (xã vừa đổi danh mục) → tải lại, chọn lại.
  *   · Người dân thấy BỐN nhóm trạng thái (`status-groups.ts`); mã lạ hiện câu trung tính, không đoán nhóm,
  *     không in mã thô — ở chip, ở danh sách lọc, ở dòng thời gian.
  *   · 401 / 403 `chua_xac_thuc_so`: phiên bị quên (`dropCommuneAppSession`) và việc đang làm đi lại qua cổng
@@ -26,6 +26,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  citizenReportFields,
   guiPhanAnh, // vi-name-ok: existing export, not renamed (rule 12 #3)
   type KetQuaDanhSach, // vi-name-ok: existing export, not renamed (rule 12 #3)
   type KetQuaGoi, // vi-name-ok: existing export, not renamed (rule 12 #3)
@@ -33,6 +34,7 @@ import {
   traCuuPhieu, // vi-name-ok: existing export, not renamed (rule 12 #3)
 } from "../api/goi-vigov";
 import {
+  type CitizenField,
   DO_DAI_TOI_DA,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
@@ -43,7 +45,7 @@ import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
-import { BieuTuong } from "./BieuTuong";
+import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
 import { nhanLinhVuc } from "./khung";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import {
@@ -70,14 +72,12 @@ import {
 import {
   type FeedbackDraftStore,
   kiemNhapPhieu,
-  LINH_VUC_TAM,
   type LoiNhapPhieu,
   NHAN_BUOC,
   NHAN_NHOM,
   nhomCua,
   type NhomLoc,
   type NhapPhieu,
-  STAFF_CONDUCT_FIELD,
   VONG_DOI,
 } from "./trai-nghiem";
 
@@ -660,15 +660,132 @@ export const COMMUNE_LOCATION_WORDS: SceneLocationWords = {
   },
 };
 
+/* ───────────── THE COMMUNE'S FIELD CATALOGUE (step 1) — `GET /api/v1/my-citizen-report-fields` ───────────── */
+
+export type CatalogueFailure = "unavailable" | "network" | "server" | "closed";
+
+/**
+ * The fields this commune offers on the form, loaded when the send screen opens — which is always AFTER
+ * the gate, because the route needs a session. There is NO built-in list to fall back on (ADR 0060 §3):
+ * failed means "say so, offer Thử lại", never "show twelve names the commune may not use".
+ */
+export type Catalogue =
+  | { readonly kind: "loading" }
+  | { readonly kind: "failed"; readonly failure: CatalogueFailure }
+  | { readonly kind: "ready"; readonly fields: readonly CitizenField[] };
+
+/** One catalogue call's result → the next state, or `"session"` (gate again). PURE. */
+export function catalogueOutcome(kq: Awaited<ReturnType<typeof citizenReportFields>>): Catalogue | "session" {
+  switch (kq.kieu) {
+    case "xong":
+      return { kind: "ready", fields: kq.fields };
+    case "chua-co-phien":
+    case "het-phien":
+    case "can-xac-thuc-so":
+      return "session";
+    case "field-catalogue-unavailable":
+      return { kind: "failed", failure: "unavailable" };
+    case "chua-cau-hinh":
+      return { kind: "failed", failure: "closed" };
+    case "loi-mang":
+      return { kind: "failed", failure: "network" };
+    default:
+      return { kind: "failed", failure: "server" };
+  }
+}
+
+export function catalogueFailureText(f: CatalogueFailure): string {
+  switch (f) {
+    case "unavailable":
+      return XA_PA.fields_unavailable;
+    case "network":
+      return XA_PA.fields_network;
+    case "closed":
+      return KENH_CHUA_MO.cau;
+    case "server":
+      return XA_PA.fields_server;
+  }
+}
+
+/** The catalogue of this send screen. Loaded once on mount (ref guard: StrictMode runs effects twice). */
+function useFieldCatalogue(onSessionLost: OnSessionLost) {
+  const [catalogue, setCatalogue] = useState<Catalogue>({ kind: "loading" });
+  const busy = useRef(false);
+
+  async function load() {
+    if (busy.current) return;
+    busy.current = true;
+    setCatalogue({ kind: "loading" });
+    const next = catalogueOutcome(await citizenReportFields());
+    busy.current = false;
+    if (next === "session") {
+      onSessionLost(() => void load());
+      return;
+    }
+    setCatalogue(next);
+  }
+
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void load();
+  }, []);
+
+  return { catalogue, reload: () => void load() };
+}
+
+/** The codes the commune offers now, or `null` while not known (loading / failed). */
+export function offeredCodes(c: Catalogue): readonly string[] | null {
+  return c.kind === "ready" ? c.fields.map((f) => f.code) : null;
+}
+
+/**
+ * The platform's lucide icon names (`service-platform/migrations/0011_petition_field.sql:134-145`) drawn by
+ * this app's own icon set, where it has a matching drawing. Anything else — including a name added to the
+ * platform later — gets the NEUTRAL icon, never a guessed one.
+ */
+const FIELD_ICON: Readonly<Record<string, TenBieuTuong>> = {
+  ShieldAlert: "shield",
+  MessageSquare: "chat",
+  Construction: "build",
+  Hammer: "build",
+};
+
+/** The platform's six tones → this app's measured colour classes (`xa-mau--*`); unknown/absent → neutral. */
+const FIELD_TONE: Readonly<Record<string, string>> = {
+  blue: "xanh",
+  cyan: "xanh",
+  green: "luc",
+  orange: "cam",
+  purple: "tim",
+  red: "hong",
+};
+
+export function fieldIcon(icon: string | null): TenBieuTuong {
+  return icon !== null && Object.prototype.hasOwnProperty.call(FIELD_ICON, icon) ? FIELD_ICON[icon]! : "text";
+}
+
+export function fieldTone(tone: string | null): string {
+  return tone !== null && Object.prototype.hasOwnProperty.call(FIELD_TONE, tone) ? FIELD_TONE[tone]! : "navy";
+}
+
 /**
  * "Tiếp tục" on a found draft → the form to show and the step to open. PURE, exported for tests.
  *
- * A field no longer offered (the catalogue changed) is not restored: the citizen picks again on step 1.
- * Otherwise step 2, the writing step, as the prototype does (`NewFeedbackPage.tsx:222`). An empty name in
- * the draft (an anonymous one keeps none) falls back to the name taken from Zalo in this session.
+ * The draft keeps a field CODE. It is restored only while it is still OFFERED (`offered`): a code the
+ * commune has since switched off — or a name left by the old temporary list — is dropped and the citizen
+ * picks again on step 1. `offered` null (catalogue not loaded yet): the code is kept for now, and the send
+ * screen drops it the moment the catalogue arrives without it. Otherwise step 2, the writing step, as the
+ * prototype does (`NewFeedbackPage.tsx:222`). An empty name in the draft (an anonymous one keeps none)
+ * falls back to the name taken from Zalo in this session.
  */
-export function restoreDraft(draft: NhapPhieu, zaloName: string | null): { form: NhapPhieu; step: 1 | 2 } {
-  const field = LINH_VUC_TAM.includes(draft.linh_vuc) ? draft.linh_vuc : "";
+export function restoreDraft(
+  draft: NhapPhieu,
+  zaloName: string | null,
+  offered: readonly string[] | null,
+): { form: NhapPhieu; step: 1 | 2 } {
+  const field = offered === null || offered.includes(draft.linh_vuc) ? draft.linh_vuc : "";
   return {
     form: {
       linh_vuc: field,
@@ -701,8 +818,8 @@ export function blankForm(nameFromEntry: string | null): NhapPhieu {
 }
 
 /**
- * The request body for this form + location. PURE. `linh_vuc` is NOT sent (see the file header): the five
- * fields of the contract, plus `lat`/`lng` only when the citizen tapped for them.
+ * The request body for this form + location. PURE. The five fields of the contract, `field` = the CODE
+ * picked on step 1 (from the commune's catalogue), plus `lat`/`lng` only when the citizen tapped for them.
  */
 export function sendBody(form: NhapPhieu, location: SceneLocation | null): string {
   return thanGuiPhanAnh({
@@ -712,6 +829,7 @@ export function sendBody(form: NhapPhieu, location: SceneLocation | null): strin
     dien_thoai: form.dien_thoai,
     an_danh: form.an_danh,
     scene_location: location,
+    field: form.linh_vuc,
   });
 }
 
@@ -740,6 +858,61 @@ export function sendOutcome(kq: KetQuaGoi): SendOutcome {
     default:
       return { kind: "failed", failure: kq.kieu };
   }
+}
+
+/**
+ * Step 1 — the commune's own fields, in its order, with the platform's icon and tone where this app can
+ * draw them (neutral otherwise). Loading and failures are WORDS with a next step; an empty catalogue says
+ * the commune takes no petitions through the app — it never invents a list to pick from.
+ */
+export function FieldStep(props: {
+  catalogue: Catalogue;
+  picked: string;
+  /** The last send was refused with `field_not_offered`: explain before the list. */
+  fieldChanged: boolean;
+  onPick: (code: string) => void;
+  onRetry: () => void;
+}) {
+  const { catalogue } = props;
+  if (catalogue.kind === "loading") return <KhoiTrangThai bieu_tuong="text" cau={XA_PA.fields_loading} dang_tai />;
+  if (catalogue.kind === "failed") {
+    return (
+      <KhoiTrangThai
+        bieu_tuong="alert"
+        loi
+        cau={catalogueFailureText(catalogue.failure)}
+        nut={catalogue.failure === "closed" ? undefined : { nhan: CUA_TOI.nut_thu_lai, onBam: props.onRetry }}
+      />
+    );
+  }
+  if (catalogue.fields.length === 0) return <KhoiTrangThai bieu_tuong="info" cau={XA_PA.fields_empty} />;
+  return (
+    <div className="xa-the xa-the--dem xa-khoi">
+      {props.fieldChanged && (
+        <p className="xa-loi-o" role="alert">
+          {LOI_GUI["field-not-offered"].cau}
+        </p>
+      )}
+      <p>{XA_PA.chon_linh_vuc}</p>
+      <div className="xa-luoi-lv" role="radiogroup" aria-label={XA_TN.buoc_linh_vuc}>
+        {catalogue.fields.map((f) => (
+          <button
+            key={f.code}
+            type="button"
+            role="radio"
+            aria-checked={props.picked === f.code}
+            className={`xa-o-lv${props.picked === f.code ? " xa-o-lv--on" : ""}`}
+            onClick={() => props.onPick(f.code)}
+          >
+            <span className={`xa-o-bt xa-mau--${fieldTone(f.tone)}`} aria-hidden="true">
+              <BieuTuong ten={fieldIcon(f.icon)} co={22} />
+            </span>
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function CommuneSendScreen(props: {
@@ -773,10 +946,26 @@ export function CommuneSendScreen(props: {
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<SendFailure | null>(null);
   const [sent, setSent] = useState<PhieuCuaToi | null>(null);
+  /** The server said the picked field is no longer offered: say so on step 1 while the citizen re-picks. */
+  const [fieldChanged, setFieldChanged] = useState(false);
+  const { catalogue, reload } = useFieldCatalogue(props.onSessionLost);
   const sceneLocation = useSceneLocation(props.getSceneLocation, (l) => {
     setLocation(l);
     setAttempt(null);
   });
+
+  // A picked code the catalogue does not (or no longer) offer is dropped as soon as the catalogue is known —
+  // a restored draft's code, or one the commune switched off. Back to step 1; what was written stays.
+  useEffect(() => {
+    const offered = offeredCodes(catalogue);
+    if (offered === null || form.linh_vuc === "" || offered.includes(form.linh_vuc)) return;
+    setForm((t) => ({ ...t, linh_vuc: "" }));
+    setAttempt(null);
+    setStep((s) => (s === 2 ? 1 : s));
+  }, [catalogue, form.linh_vuc]);
+
+  const pickedLabel =
+    catalogue.kind === "ready" ? (catalogue.fields.find((f) => f.code === form.linh_vuc)?.label ?? "") : "";
 
   const edit = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => {
     setForm((t) => ({ ...t, [k]: v }));
@@ -794,7 +983,7 @@ export function CommuneSendScreen(props: {
 
   function resumeDraft() {
     if (draftOffer === null) return;
-    const restored = restoreDraft(draftOffer, props.ho_ten);
+    const restored = restoreDraft(draftOffer, props.ho_ten, offeredCodes(catalogue));
     setForm(restored.form);
     setDraftOffer(null);
     setStep(restored.step);
@@ -818,6 +1007,16 @@ export function CommuneSendScreen(props: {
     setSending(false);
     if (out.kind === "session") {
       props.onSessionLost(() => void send(a));
+      return;
+    }
+    if (out.kind === "failed" && out.failure === "field-not-offered") {
+      // The commune changed its list since it was loaded. Reload it and let the citizen pick again; the
+      // attempt is dropped — the next send has a different body, so it is a different act (`lan-gui.ts`).
+      setAttempt(null);
+      setForm((t) => ({ ...t, linh_vuc: "" }));
+      setFieldChanged(true);
+      setStep(1);
+      reload();
       return;
     }
     if (out.kind === "failed") {
@@ -896,26 +1095,18 @@ export function CommuneSendScreen(props: {
         )}
 
         {step === 1 && draftOffer === null && (
-          <div className="xa-the xa-the--dem xa-khoi">
-            <p>{XA_PA.chon_linh_vuc}</p>
-            <div className="xa-luoi-lv" role="radiogroup" aria-label={XA_TN.buoc_linh_vuc}>
-              {LINH_VUC_TAM.map((lv) => (
-                <button
-                  key={lv}
-                  type="button"
-                  role="radio"
-                  aria-checked={form.linh_vuc === lv}
-                  className={`xa-o-lv${form.linh_vuc === lv ? " xa-o-lv--on" : ""}`}
-                  onClick={() => {
-                    setForm((t) => ({ ...t, linh_vuc: lv }));
-                    setStep(2);
-                  }}
-                >
-                  {lv}
-                </button>
-              ))}
-            </div>
-          </div>
+          <FieldStep
+            catalogue={catalogue}
+            picked={form.linh_vuc}
+            fieldChanged={fieldChanged}
+            onRetry={reload}
+            onPick={(code) => {
+              setForm((t) => ({ ...t, linh_vuc: code }));
+              setAttempt(null);
+              setFieldChanged(false);
+              setStep(2);
+            }}
+          />
         )}
 
         {step === 2 && (
@@ -925,19 +1116,13 @@ export function CommuneSendScreen(props: {
             <div className="xa-hang xa-hang--tinh xa-hang--sat xa-lv-dang">
               <span className="xa-hang__chu">
                 <span>
-                  {XA_PA.linh_vuc}: <strong>{form.linh_vuc}</strong>
+                  {XA_PA.linh_vuc}: <strong>{pickedLabel}</strong>
                 </span>
               </span>
               <button type="button" className="xa-dau-khoi__them" onClick={() => setStep(1)}>
                 {XA_TN.doi}
               </button>
             </div>
-            {form.linh_vuc === STAFF_CONDUCT_FIELD && (
-              <div className="xa-ghi-chu">
-                <BieuTuong ten="shield" co={22} />
-                <p>{XA_PA.tac_phong_rieng}</p>
-              </div>
-            )}
             {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ảnh CHƯA có; vị trí hiện tại lấy được
                 nhưng chưa có bản đồ. Không chặn nút gửi vì hai ô ấy (xem `kiemNhapPhieu`). */}
             <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>

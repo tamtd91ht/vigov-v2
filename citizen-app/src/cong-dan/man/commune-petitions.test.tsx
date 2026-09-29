@@ -17,12 +17,17 @@ vi.mock("../api/dia-chi-vigov", () => ({
   diaChiViGov: (_service: "petitions", path: string) => `https://vigov.vidu.vn${path}`,
 }));
 
-import { guiPhanAnh, type KetQuaGoi } from "../api/goi-vigov"; // vi-name-ok: existing exports
+import { citizenReportFields, guiPhanAnh, type KetQuaGoi } from "../api/goi-vigov"; // vi-name-ok: existing exports
+import { readCitizenFields } from "../api/hop-dong-phan-anh";
 import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export
 
-import { CUA_TOI, KENH_CHUA_MO, TRA_CUU, XA_PA } from "./noi-dung";
+import { CUA_TOI, KENH_CHUA_MO, LOI_GUI, TRA_CUU, XA_PA } from "./noi-dung";
 import {
+  catalogueOutcome,
   countLabel,
+  fieldIcon,
+  FieldStep,
+  fieldTone,
   listFailureText,
   listOutcome,
   lookupOutcome,
@@ -34,7 +39,7 @@ import {
 import type { NhapPhieu } from "./trai-nghiem";
 
 const FORM: NhapPhieu = {
-  linh_vuc: "Điện",
+  linh_vuc: "dien",
   noi_dung: "  Đèn đường hỏng đầu ngõ ",
   dia_chi: " Ngõ 12 ",
   ho_ten: "Nguyễn Văn An",
@@ -54,8 +59,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("send body — the contract's fields, no `field` yet, lat/lng only when tapped", () => {
-  it("five fields, trimmed; the temporary field name is NOT sent (it is not a commune catalogue code)", () => {
+describe("send body — the contract's fields, `field` = the picked CODE, lat/lng only when tapped", () => {
+  it("five fields trimmed, plus the field code picked from the commune's catalogue", () => {
     const body = JSON.parse(sendBody(FORM, null)) as Record<string, unknown>;
     expect(body).toEqual({
       content: "Đèn đường hỏng đầu ngõ",
@@ -63,7 +68,12 @@ describe("send body — the contract's fields, no `field` yet, lat/lng only when
       reporter_name: "Nguyễn Văn An",
       reporter_phone: "0900000000",
       anonymous: false,
+      field: "dien",
     });
+  });
+
+  it("no field picked → no `field` key at all (never an empty string)", () => {
+    const body = JSON.parse(sendBody({ ...FORM, linh_vuc: "" }, null)) as Record<string, unknown>;
     expect(body).not.toHaveProperty("field");
   });
 
@@ -148,6 +158,107 @@ describe("reading every answer — one branch per next step", () => {
   it("counts over loaded pages are a floor when more pages exist", () => {
     expect(countLabel(3, false)).toBe("3");
     expect(countLabel(20, true)).toBe("20+");
+  });
+});
+
+describe("the commune's field catalogue (step 1) — no built-in list, ever", () => {
+  const ITEM = { code: "rac-thai", label: "Rác thải – Vệ sinh môi trường", icon: "Trash2", tone: "orange" };
+
+  function stub(status: number, body: unknown) {
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return Promise.resolve({ status, ok: status >= 200 && status < 300, json: async () => body });
+    });
+  }
+
+  it("reader: code/label required; icon/tone null when absent or empty; one bad row → malformed", () => {
+    expect(readCitizenFields({ items: [ITEM, { code: "khac", label: "Khác", icon: null, tone: "" }] })).toEqual([
+      ITEM,
+      { code: "khac", label: "Khác", icon: null, tone: null },
+    ]);
+    expect(readCitizenFields({ items: [] })).toEqual([]);
+    expect(readCitizenFields({ items: [{ ...ITEM, code: "" }] })).toBeNull();
+    expect(readCitizenFields({ items: [{ ...ITEM, label: " " }] })).toBeNull();
+    expect(readCitizenFields({ items: [{ ...ITEM, tone: 3 }] })).toBeNull();
+    expect(readCitizenFields({})).toBeNull();
+  });
+
+  it("GET with the session's bearer, no query, no body", async () => {
+    stub(200, { items: [ITEM] });
+    expect(await citizenReportFields()).toEqual({ kieu: "xong", fields: [ITEM] });
+    expect(calls[0]!.url).toBe("https://vigov.vidu.vn/api/v1/my-citizen-report-fields");
+    expect(calls[0]!.init.method).toBe("GET");
+    expect((calls[0]!.init.headers as Record<string, string>)["Authorization"]).toBe("Bearer tok-test");
+    expect(calls[0]!.init.body).toBeUndefined();
+  });
+
+  it("503 field_catalogue_unavailable is its own branch; another 503 is not", async () => {
+    stub(503, { code: "field_catalogue_unavailable", message: "never read" });
+    expect(await citizenReportFields()).toEqual({ kieu: "field-catalogue-unavailable" });
+    stub(503, { code: "intake_not_configured" });
+    expect(await citizenReportFields()).toEqual({ kieu: "kenh-chua-mo" });
+  });
+
+  it("no session → nothing leaves the phone", async () => {
+    state.session = null;
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    expect(await citizenReportFields()).toEqual({ kieu: "chua-co-phien" });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("outcome table: ready, gate again, unavailable, network, closed, anything else", () => {
+    expect(catalogueOutcome({ kieu: "xong", fields: [ITEM] })).toEqual({ kind: "ready", fields: [ITEM] });
+    expect(catalogueOutcome({ kieu: "het-phien" })).toBe("session");
+    expect(catalogueOutcome({ kieu: "field-catalogue-unavailable" })).toEqual({ kind: "failed", failure: "unavailable" });
+    expect(catalogueOutcome({ kieu: "loi-mang" })).toEqual({ kind: "failed", failure: "network" });
+    expect(catalogueOutcome({ kieu: "chua-cau-hinh" })).toEqual({ kind: "failed", failure: "closed" });
+    expect(catalogueOutcome({ kieu: "khong-hop-le" })).toEqual({ kind: "failed", failure: "server" });
+  });
+
+  const step = (catalogue: Parameters<typeof FieldStep>[0]["catalogue"], fieldChanged = false) =>
+    renderToStaticMarkup(
+      createElement(FieldStep, { catalogue, picked: "", fieldChanged, onPick: () => {}, onRetry: () => {} }),
+    );
+
+  it("step 1 shows the commune's labels, in its order, with its tone and a drawable icon (neutral otherwise)", () => {
+    const html = step({
+      kind: "ready",
+      fields: [ITEM, { code: "an-ninh", label: "An ninh trật tự", icon: "ShieldAlert", tone: null }],
+    });
+    expect(html.indexOf(ITEM.label)).toBeLessThan(html.indexOf("An ninh trật tự"));
+    expect(html).toContain("xa-mau--cam");
+    expect(html).toContain("xa-mau--navy");
+    expect(html).not.toContain("rac-thai"); // the code is sent, never shown
+    expect(fieldIcon("ShieldAlert")).toBe("shield");
+    expect(fieldIcon("Trash2")).toBe("text");
+    expect(fieldIcon(null)).toBe("text");
+    expect(fieldTone("red")).toBe("hong");
+    expect(fieldTone("magenta")).toBe("navy");
+  });
+
+  it("loading, unavailable (with Thử lại), empty — words, and no field to pick", () => {
+    expect(step({ kind: "loading" })).toContain(XA_PA.fields_loading);
+    const failed = step({ kind: "failed", failure: "unavailable" });
+    expect(failed).toContain(XA_PA.fields_unavailable);
+    expect(failed).toContain(CUA_TOI.nut_thu_lai);
+    expect(failed).not.toContain('role="radio"');
+    expect(step({ kind: "ready", fields: [] })).toContain(XA_PA.fields_empty);
+  });
+
+  it("after 400 field_not_offered the step says why before the list", async () => {
+    stub(400, { code: "field_not_offered" });
+    expect(await guiPhanAnh(taoLanGui(sendBody(FORM, null)))).toEqual({ kieu: "field-not-offered" });
+    stub(400, { code: "invalid_request" });
+    expect(await guiPhanAnh(taoLanGui(sendBody(FORM, null)))).toEqual({ kieu: "khong-hop-le" });
+    expect(sendOutcome({ kieu: "field-not-offered" })).toEqual({ kind: "failed", failure: "field-not-offered" });
+    expect(step({ kind: "ready", fields: [ITEM] }, true)).toContain(LOI_GUI["field-not-offered"].cau);
+  });
+
+  it("503 field_catalogue_unavailable on submit: nothing recorded, 'Gửi lại' with the same attempt", async () => {
+    stub(503, { code: "field_catalogue_unavailable" });
+    expect(await guiPhanAnh(taoLanGui(sendBody(FORM, null)))).toEqual({ kieu: "field-catalogue-unavailable" });
+    expect(LOI_GUI["field-catalogue-unavailable"].co_the_gui_lai).toBe(true);
   });
 });
 

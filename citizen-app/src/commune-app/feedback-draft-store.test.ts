@@ -22,7 +22,8 @@ function fakeStorage(initial: Record<string, string> = {}) {
 }
 
 const DRAFT: NhapPhieu = {
-  linh_vuc: "Rác thải – Vệ sinh môi trường",
+  // A field CODE from the commune's catalogue (29/09/2026); the send screen restores it only if still offered.
+  linh_vuc: "rac-thai",
   noi_dung: "Rác tồn đọng đầu ngõ 12",
   dia_chi: "Ngõ 12, thôn Đông",
   ho_ten: "Nguyễn Văn An",

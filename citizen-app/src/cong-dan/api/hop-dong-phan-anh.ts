@@ -41,12 +41,14 @@
  * Nguồn đối chiếu (đọc, không sửa): `service-petitions/internal/http/gui_phan_anh.go`,
  * `phieu_cua_toi.go`, `routes_cong_dan.go`.
  *
- * ⚠ NĂM TRƯỜNG, cộng HAI TUỲ CHỌN `lat`/`lng` (29/09/2026, `OPTIONAL_SCENE_FIELDS`, cả hai hoặc không).
- * `guiPhanAnhVao` khai thêm mười trường CHỈ ĐỂ TỪ CHỐI:
- * `citizen_id`/`cong_dan_id` (người gửi — lấy từ phiên, luật 4), `field`/`linh_vuc` (lĩnh vực — cán
- * bộ chốt, ADR 0028 / #23), `channel`, `code`, `status`, `clock_from`, `acknowledge_due`,
- * `resolve_due`. Nhắc tới BẤT KỲ trường nào trong đó là 400. Xã thì không có trường nào cả — xã lấy
- * từ phiên (ADR 0022). `goi-vigov.test.tsx` khẳng định thân gửi đi đúng bằng năm khoá dưới.
+ * ⚠ NĂM TRƯỜNG, cộng HAI TUỲ CHỌN `lat`/`lng` (29/09/2026, `OPTIONAL_SCENE_FIELDS`, cả hai hoặc không),
+ * cộng MỘT TUỲ CHỌN `field` (29/09/2026, service-petitions af3fff0, `OPTIONAL_FIELD_KEY`): MÃ lĩnh vực
+ * dân chọn từ `GET /api/v1/my-citizen-report-fields` (ADR 0050 điểm 1). Mã không được xã mở cho biểu mẫu
+ * — lạ, đã ngừng, xã tắt, `can-bo` — là MỘT câu trả lời: 400 `field_not_offered`; đọc được bộ mã thì mới
+ * ghi, không thì 503 `field_catalogue_unavailable` (ADR 0060 §3). `guiPhanAnhVao` khai thêm các trường
+ * CHỈ ĐỂ TỪ CHỐI: `citizen_id`/`cong_dan_id` (người gửi — lấy từ phiên, luật 4), `linh_vuc`, `channel`,
+ * `code`, `status`, `clock_from`, `acknowledge_due`, `resolve_due`. Xã thì không có trường nào cả — xã
+ * lấy từ phiên (ADR 0022). `goi-vigov.test.tsx` khẳng định thân gửi đi đúng bằng năm khoá dưới.
  */
 
 import { diaChiViGov } from "./dia-chi-vigov";
@@ -82,6 +84,75 @@ export const DO_DAI_TOI_DA = {
  * problem is and grant nothing — the commune still comes only from the session (ADR 0022).
  */
 export const OPTIONAL_SCENE_FIELDS = ["lat", "lng"] as const;
+
+/** The optional field-code key (af3fff0). Sent only when the citizen picked a field from the catalogue. */
+export const OPTIONAL_FIELD_KEY = "field";
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * DANH MỤC LĨNH VỰC CỦA XÃ CHO BIỂU MẪU — `GET /api/v1/my-citizen-report-fields`
+ * (`service-petitions/internal/http/petition_fields.go:124-165`, af3fff0)
+ *
+ *   Bearer (phiên công dân; KHÔNG cần số đã xác thực — `XaTuPhienChiXem`), không tham số
+ *   200 { items: [{ code, label, icon: string|null, tone: string|null }] }  — theo thứ tự của xã
+ *   401 phiên · 503 `field_catalogue_unavailable` (không đọc được bộ mã — KHÔNG có danh sách dự phòng)
+ *
+ * `icon` là TÊN biểu tượng lucide, `tone` một trong sáu tông của nền tảng (`blue`, `green`, `orange`,
+ * `purple`, `cyan`, `red`) — `null` khi nền tảng không khai: màn hình dùng biểu tượng và tông trung tính,
+ * không đoán (`service-platform/migrations/0011_petition_field.sql:50-53`).
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+export const CITIZEN_FIELDS_PATH = "/api/v1/my-citizen-report-fields";
+
+export function citizenFieldsAddress(): string {
+  return diaChiViGov("petitions", CITIZEN_FIELDS_PATH);
+}
+
+/** One field the commune offers on the new-submission form. `code` is what a petition stores. */
+export type CitizenField = {
+  readonly code: string;
+  readonly label: string;
+  readonly icon: string | null;
+  readonly tone: string | null;
+};
+
+/**
+ * 200 body → the offered fields, in the commune's order, or `null` if malformed. Field by field, never
+ * cast; one malformed row is a malformed page (a silently dropped field is a field the citizen cannot pick
+ * and cannot know about). An empty code or label is malformed: nothing to send, or nothing to show.
+ */
+export function readCitizenFields(body: unknown): readonly CitizenField[] | null {
+  if (typeof body !== "object" || body === null) return null;
+  const items = (body as Record<string, unknown>)["items"];
+  if (!Array.isArray(items)) return null;
+  const out: CitizenField[] = [];
+  const optional = (v: unknown): string | null | undefined =>
+    v === null || v === undefined ? null : typeof v === "string" ? (v === "" ? null : v) : undefined;
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    const icon = optional(r["icon"]);
+    const tone = optional(r["tone"]);
+    if (typeof r["code"] !== "string" || r["code"] === "" || typeof r["label"] !== "string" || r["label"].trim() === "") {
+      return null;
+    }
+    if (icon === undefined || tone === undefined) return null;
+    out.push({ code: r["code"], label: r["label"], icon, tone });
+  }
+  return out;
+}
+
+/** 400 code: the field sent is not one the commune's form offers (any reason — one answer). */
+export const FIELD_NOT_OFFERED_CODE = "field_not_offered";
+
+/** 503 code: the field catalogue could not be read — clears by itself; nothing was written. */
+export const FIELD_CATALOGUE_UNAVAILABLE_CODE = "field_catalogue_unavailable";
+
+/** The `code` of an error body (`{code, message, trace_id}`), or `null`. `message` is never read. */
+export function errorCode(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const c = (body as Record<string, unknown>)["code"];
+  return typeof c === "string" ? c : null;
+}
 
 /**
  * Where the problem is, as exchanged from the citizen's own `getLocation` tap (`vihat-miniapp`
@@ -121,6 +192,11 @@ export type PhanAnhMoi = {
    * Optional in the type so every existing literal of this type stays valid.
    */
   scene_location?: SceneLocation | null;
+  /**
+   * OPTIONAL: the field CODE the citizen picked from the commune's catalogue (`CitizenField.code`);
+   * absent, `null` or "" = no `field` key at all. Never a label.
+   */
+  field?: string | null;
 };
 
 /**
@@ -137,6 +213,7 @@ export type PhanAnhMoi = {
  */
 export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
   const location = isSceneLocation(pa.scene_location) ? pa.scene_location : null;
+  const field = typeof pa.field === "string" ? pa.field.trim() : "";
   return JSON.stringify({
     content: pa.noi_dung.trim(),
     address: pa.dia_chi.trim(),
@@ -144,6 +221,7 @@ export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
     reporter_phone: pa.an_danh ? "" : pa.dien_thoai.trim(),
     anonymous: pa.an_danh,
     ...(location === null ? {} : { lat: location.lat, lng: location.lng }),
+    ...(field === "" ? {} : { [OPTIONAL_FIELD_KEY]: field }),
   });
 }
 

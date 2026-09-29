@@ -505,6 +505,20 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
     truong: COMMUNE_APP_LOCATION_FIELDS,
   },
+  {
+    // 29/09/2026 (service-petitions af3fff0): the commune's field list for step 1 of "Gửi phản ánh" in the
+    // commune's own app. The FIRST `petitions` route declared here (the send/read routes, which carry the
+    // petition itself, are still owed — see the header of this table): it carries NO field at all — no
+    // query, no body — only the session header, from which the server takes the commune. Path copied from
+    // `cong-dan/api/hop-dong-phan-anh.ts` `CITIZEN_FIELDS_PATH` (boundary); the test pins it.
+    tuyen: "/api/v1/my-citizen-report-fields",
+    may_chu: "ViGov — dịch vụ `petitions`",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, người dùng mở “Gửi phản ánh” sau khi đã đồng ý chia sẻ số điện thoại (phiên làm việc với xã đã mở), hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được",
+    nguoi_dung_bam: true,
+    man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+    truong: [],
+  },
   ...DUONG_CONG_KHAI.slice(1),
 ];
 

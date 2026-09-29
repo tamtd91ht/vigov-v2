@@ -27,14 +27,20 @@
  * số điện thoại của người thật (luật 3, bất biến 1).
  */
 import {
+  type CitizenField,
+  citizenFieldsAddress,
   diaChiDanhSach,
   diaChiGuiPhanAnh,
   diaChiTraCuu,
   docPhieu,
   docTrangPhieuCuaToi,
+  errorCode,
+  FIELD_CATALOGUE_UNAVAILABLE_CODE,
+  FIELD_NOT_OFFERED_CODE,
   isPhoneNotVerified,
   type PhieuCuaToi,
   ratingAddress,
+  readCitizenFields,
   type TrangPhieuCuaToi,
 } from "./hop-dong-phan-anh";
 import {
@@ -70,8 +76,12 @@ import { laTenMien } from "../../lib/launch-params";
  *                                       thực; việc tiếp theo là HỎI công dân (`man/phone-verification.tsx`).
  *                                       403 với mã khác là `loi-may-chu`: xin số không sửa được nó
  *   `dang-xu-ly-truoc`                 409 — lần gửi trước (cùng khoá) còn đang chạy; chờ rồi gửi lại
- *   `khong-hop-le`                      400
- *   `kenh-chua-mo`                      503 — xã chưa cấu hình hạn; phiếu CHƯA được ghi nhận
+ *   `field-not-offered`                 400 `field_not_offered` — lĩnh vực đã gửi không còn trong danh mục
+ *                                       xã mở; việc tiếp theo: tải lại danh mục, chọn lại (af3fff0)
+ *   `khong-hop-le`                      400 với mã khác
+ *   `field-catalogue-unavailable`       503 `field_catalogue_unavailable` — chưa đọc được bộ mã lĩnh vực;
+ *                                       tự hết, thử lại sau ít phút; phiếu CHƯA được ghi nhận
+ *   `kenh-chua-mo`                      503 khác — xã chưa cấu hình hạn; phiếu CHƯA được ghi nhận
  *   `loi-may-chu`                       500, mã lạ, hoặc thân sai khuôn
  *   `loi-mang`                          mất mạng, quá hạn chờ
  *
@@ -86,7 +96,9 @@ export type KetQuaGoi =
   | { kieu: "het-phien" }
   | { kieu: "can-xac-thuc-so" }
   | { kieu: "dang-xu-ly-truoc" }
+  | { kieu: "field-not-offered" }
   | { kieu: "khong-hop-le" }
+  | { kieu: "field-catalogue-unavailable" }
   | { kieu: "kenh-chua-mo" }
   | { kieu: "loi-may-chu" }
   | { kieu: "loi-mang" };
@@ -145,7 +157,9 @@ async function goi<T>(
         return gia_tri === null ? { kieu: "loi-may-chu" } : { kieu: "xong", gia_tri };
       }
       case 400:
-        return { kieu: "khong-hop-le" };
+        return (await readErrorCode(tra_loi)) === FIELD_NOT_OFFERED_CODE
+          ? { kieu: "field-not-offered" }
+          : { kieu: "khong-hop-le" };
       case 401:
         return { kieu: "het-phien" };
       case 403: {
@@ -164,7 +178,9 @@ async function goi<T>(
       case 409:
         return { kieu: "dang-xu-ly-truoc" };
       case 503:
-        return { kieu: "kenh-chua-mo" };
+        return (await readErrorCode(tra_loi)) === FIELD_CATALOGUE_UNAVAILABLE_CODE
+          ? { kieu: "field-catalogue-unavailable" }
+          : { kieu: "kenh-chua-mo" };
       default:
         return { kieu: "loi-may-chu" };
     }
@@ -173,6 +189,34 @@ async function goi<T>(
   } finally {
     clearTimeout(dong_ho);
   }
+}
+
+/**
+ * The `code` of an error body, or `null` when the body is absent or not JSON. Never throws: a server
+ * that answered with a status HAS answered — a broken body must not become `loi-mang` ("check your
+ * network"), which would tell the citizen to fix the wrong thing. Only `code` is read (`errorCode`).
+ */
+async function readErrorCode(response: Response): Promise<string | null> {
+  try {
+    return errorCode(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * THE COMMUNE'S FIELD CATALOGUE for a new petition — `GET /api/v1/my-citizen-report-fields`. Session
+ * needed (the commune comes from it); a verified phone is not. No parameter: nothing about "which commune"
+ * leaves the phone (rule 1, forbidden #2). 503 `field_catalogue_unavailable` is its own branch — there is
+ * NO fallback list anywhere in this app (ADR 0060 §3).
+ */
+export async function citizenReportFields(): Promise<
+  { kieu: "xong"; fields: readonly CitizenField[] } | NhanhKhongThanh
+> {
+  const cong = moCong(citizenFieldsAddress());
+  if ("kieu" in cong) return cong;
+  const kq = await goi(cong.dia_chi, { method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" });
+  return kq.kieu === "xong" ? { kieu: "xong", fields: kq.gia_tri } : kq;
 }
 
 /**

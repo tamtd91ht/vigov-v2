@@ -147,7 +147,9 @@ export const LOI_GUI: Readonly<
   Record<
     | "het-phien"
     | "dang-xu-ly-truoc"
+    | "field-not-offered"
     | "khong-hop-le"
+    | "field-catalogue-unavailable"
     | "kenh-chua-mo"
     | "loi-may-chu"
     | "loi-mang"
@@ -166,6 +168,17 @@ export const LOI_GUI: Readonly<
   "khong-hop-le": {
     cau: "Phản ánh chưa được gửi vì có ô chưa đúng. Hãy bấm Sửa lại, viết gọn nội dung rồi gửi lại.",
     co_the_gui_lai: false,
+  },
+  // 400 `field_not_offered`: the commune changed its list since it was loaded. The screen reloads the list
+  // and returns to the field step; sending again unchanged would only meet the same answer.
+  "field-not-offered": {
+    cau: "Lĩnh vực đã chọn hiện không còn trong danh sách xã đang nhận, nên phản ánh chưa được gửi. Hãy chọn lại lĩnh vực. Nội dung đã viết vẫn còn nguyên.",
+    co_the_gui_lai: false,
+  },
+  // 503 `field_catalogue_unavailable`: nothing was written, and it clears by itself (ADR 0060 §3).
+  "field-catalogue-unavailable": {
+    cau: "Chưa kiểm tra được lĩnh vực nên phản ánh CHƯA được ghi nhận. Hãy chờ vài phút rồi bấm Gửi lại. Phản ánh sẽ không bị gửi hai lần.",
+    co_the_gui_lai: true,
   },
   "kenh-chua-mo": {
     cau: "Ủy ban nhân dân xã chưa mở kênh nhận phản ánh trực tuyến. Phản ánh của bạn CHƯA được ghi nhận. Hãy liên hệ trực tiếp Ủy ban nhân dân xã.",
@@ -722,6 +735,14 @@ export const XA_PA = {
   session_expired:
     "Phiên làm việc với xã đã hết hạn. Bà con bấm “Thử lại” để xác nhận lại số điện thoại rồi làm tiếp.",
   loading_ticket: "Đang tải phiếu…",
+  // Step 1 of the send screen — the commune's field catalogue (`my-citizen-report-fields`). No fallback list.
+  fields_loading: "Đang tải danh sách lĩnh vực của xã…",
+  fields_unavailable:
+    "Chưa tải được danh sách lĩnh vực của xã. Bà con chờ vài phút rồi bấm “Thử lại”. Nội dung bà con viết chưa bị mất.",
+  fields_network: "Không tải được danh sách lĩnh vực vì mạng yếu hoặc mất kết nối. Bà con kiểm tra mạng rồi bấm “Thử lại”.",
+  fields_server: "Hệ thống của xã đang gặp sự cố nên chưa tải được danh sách lĩnh vực. Bà con chờ vài phút rồi bấm “Thử lại”.",
+  fields_empty:
+    "Hiện xã chưa mở lĩnh vực nào để nhận phản ánh qua ứng dụng. Bà con hãy gọi điện cho xã hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
   dang_gui: "Đang gửi phản ánh tới xã…",
   acknowledge_by: (moc: string) => `Cán bộ xã sẽ xem phiếu trước ${moc} (giờ Việt Nam).`,
   tra_cuu_tieu_de: "Tra cứu phiếu",
@@ -769,8 +790,6 @@ export const XA_PA = {
   thieu_nguoi_gui: "Bà con nhập họ tên người gửi, hoặc bật “Gửi ẩn danh”.",
   an_danh: "Gửi ẩn danh",
   an_danh_giai_thich: "Bật lên thì cán bộ không thấy họ tên và số điện thoại của bà con.",
-  tac_phong_rieng:
-    "Phản ánh về thái độ, tác phong cán bộ chỉ lãnh đạo xã được xem và không bao giờ hiện công khai.",
   anh_bat_buoc: "Ảnh hoặc video (bắt buộc, tối đa 5 tệp)",
   anh_sap_co: "Ứng dụng chưa gửi được ảnh, video — tính năng sắp có. Trong lúc chờ, bà con mô tả thật rõ sự việc.",
   vi_tri_bat_buoc: "Vị trí trên bản đồ (bắt buộc)",

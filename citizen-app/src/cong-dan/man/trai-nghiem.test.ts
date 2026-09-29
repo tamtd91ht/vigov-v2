@@ -11,7 +11,6 @@ import { NEWS_CHIPS, tinLienQuan } from "./TinTucAppXa";
 import {
   chuCaiDau,
   kiemNhapPhieu,
-  LINH_VUC_TAM,
   loiChao,
   NHAN_BUOC,
   NHAN_NHOM,
@@ -22,7 +21,7 @@ import {
 
 const CAU = { thieu: "thiếu", thieu_nguoi_gui: "thiếu người gửi", qua_dai: (n: number) => `quá ${n}` };
 const NHAP: NhapPhieu = {
-  linh_vuc: "Rác thải – Vệ sinh môi trường",
+  linh_vuc: "rac-thai",
   noi_dung: "  Rác tồn đọng đầu ngõ 12 ",
   dia_chi: " Ngõ 12 ",
   ho_ten: "Nguyễn Văn An",
@@ -63,9 +62,13 @@ describe("biểu mẫu gửi phản ánh của app riêng", () => {
     expect(Object.keys(NHAP).filter((k) => k !== "linh_vuc")).toHaveLength(TRUONG_DUOC_NHAN.length);
   });
 
-  it("danh mục tạm: mười hai tên, không một con số giờ nào (luật 10 cấm #3)", () => {
-    expect(LINH_VUC_TAM).toHaveLength(12);
-    for (const lv of LINH_VUC_TAM) expect(lv).not.toMatch(/\d+\s*(giờ|ngày|h\b)/i);
+  it("no built-in field list is left anywhere in the commune app (ADR 0060 §3: no fallback)", () => {
+    const tep = import.meta.glob(["./*.ts", "./*.tsx"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    for (const [path, src] of Object.entries(tep)) {
+      if (path.includes(".test.")) continue;
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      expect(code, path).not.toMatch(/LINH_VUC_TAM|STAFF_CONDUCT_FIELD|"Rác thải – Vệ sinh môi trường"/);
+    }
   });
 
   it("vòng đời dùng đúng các trạng thái có nhãn trong TRANG_THAI", () => {
