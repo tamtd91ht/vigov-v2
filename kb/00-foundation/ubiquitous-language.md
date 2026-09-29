@@ -3,10 +3,11 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 0960b2a
+derived_from_commit: 4882826
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
+  - "từ điển đổi tên Việt → Anh cho bảng, cột và gốc định danh (ADR 0061), và danh sách xung đột tên chờ chủ dự án chọn"
   - "ánh xạ khái niệm nghiệp vụ sang danh từ tài nguyên trên URL"
   - "vì sao dự án đầu tư là investment-projects chứ không projects hay disbursements/projects"
   - "vì sao khoá quyền feedback.* lệch với tài nguyên citizen-reports"
@@ -38,6 +39,10 @@ mọi tầng trên đều sai theo, và sửa về sau là di trú dữ liệu.
 | **Tố cáo** | Báo hành vi vi phạm pháp luật | `to_cao` | Mất **bảo vệ người tố cáo** |
 
 Ba từ này là **giá trị enum**, và giá trị enum **không dịch sang tiếng Anh** — ADR 0011.
+
+> **29/09/2026 → ADR 0061:** chủ dự án chốt đổi cả giá trị enum sang tiếng Anh. Với **ba từ này**
+> thì chưa: chúng chưa nằm trong bảng nào, và từ tiếng Anh cho chúng là câu pháp lý chưa ai trả lời
+> — §Từ điển đổi tên, xung đột **X19**. Lý do phân biệt ba thủ tục ở bảng trên vẫn nguyên.
 
 ## Bảng thuật ngữ
 
@@ -87,6 +92,10 @@ trùng là cách một cột `trang_thai` bị viết thành nhật ký thao tá
 
 Mã viết **tiếng Việt không dấu**, kebab-case — ADR 0011, và giá trị enum không dịch sang tiếng
 Anh. Nhãn là chuỗi người đọc, lấy nguyên của khách.
+
+> **29/09/2026 → ADR 0061:** chín mã dưới đây nằm trong đợt đổi tên; mã tiếng Anh đề xuất ở ADR
+> 0061 §Ánh xạ giá trị enum. **Chưa đổi** cho tới khi chủ dự án chốt xung đột **X20** (khách đã
+> duyệt nguyên văn chín chuỗi này — đoạn cuối mục này). Nhãn tiếng Việt không đổi.
 
 | Mã | Nhãn | Nhóm |
 |---|---|---|
@@ -164,7 +173,7 @@ có thể.
 | **Tài khoản đăng nhập của một cán bộ** | `co_tai_khoan` · `mat_khau_hash` | `account` — `POST /api/v1/staff/{id}/account` | Một dòng danh bạ **KHÔNG tự động là một tài khoản**: xã nhập cả người chưa cần đăng nhập. `account` là thứ CẤP THÊM cho một dòng đã có, nên nó là tài nguyên con của `staff`. Bác `login-account` (dài mà không thêm nghĩa), `credentials` (số nhiều mơ hồ, lẫn với cặp tên/mật khẩu), `sign-in` (động từ — `rest_api_guard` chặn) |
 | **Mật khẩu** | `mat_khau_hash` (CSDL chỉ giữ chuỗi băm) | `password` — `PUT /api/v1/staff/{id}/password` · `PUT /api/v1/staff/current/password` | Giữ `password` chứ không `credential`/`passphrase`: đây là **đúng một chuỗi bí mật**, và `credential` trong hệ này còn gồm phiên và `sid`. `current` là của máy chủ lấy từ phiên — **không** có `id` nào trên tuyến tự đổi, vì một tham số định danh ở đó là đổi mật khẩu người khác (luật 4 cấm #1) |
 | **Biên bản họp** | `bien_ban_hop` · **`@entity: Meeting`** | `meetings` — `GET /api/v1/meetings`, quyền `task.read` (`petitions`) · `PATCH`/`DELETE /api/v1/meetings/{id}`, quyền `task.create`, chỉ bản nháp (người dùng chốt 25/09/2026) | **KHÔNG tự dịch — lấy theo BẰNG CHỨNG, đúng điều ADR 0011 đòi.** Đặc tả `docs/ui-ux/04-bien-ban-hop.md` §6 đề nghị `/api/bien-ban`, mà `hooks/rest_api_guard.py` **chặn** danh từ tiếng Việt trên URL, nên đường ấy không ship được. `meetings` là chữ **kho anh em đang chạy dùng thật** — `../vigov-require/apps/api/app/modules/tasks/router.py:45`. Không phải `minutes` (là *bản ghi chép*, một trường của biên bản, không phải chính cuộc họp) và không phải `sessions` (đã bị phiên đăng nhập chiếm) |
-| **Kết luận họp** | `ket_luan_hop` · **`@entity: Conclusion`** | `conclusions` — lồng dưới `meetings`: `POST /api/v1/meetings/{id}/conclusions`, `PATCH`/`DELETE /api/v1/meetings/{id}/conclusions/{stt}`, quyền `task.create` | Cùng nguồn bằng chứng: bên kia gọi `conclusions`. **Không có tuyến `/conclusions` độc lập** — kết luận luôn thuộc một biên bản và được gọi theo **số thứ tự `{stt}`** (①②③) chứ không theo id. Sửa/xoá chốt 25/09/2026 bởi **người dùng**: chỉ khi biên bản còn nháp và kết luận chưa có nhiệm vụ còn hiệu lực |
+| **Kết luận họp** | `ket_luan_hop` · **`@entity: MeetingConclusion`** (`service-petitions/migrations/0007_bien_ban.sql:270`; dòng này trước 29/09/2026 ghi `Conclusion` và đã sai) | `conclusions` — lồng dưới `meetings`: `POST /api/v1/meetings/{id}/conclusions`, `PATCH`/`DELETE /api/v1/meetings/{id}/conclusions/{stt}`, quyền `task.create` | Cùng nguồn bằng chứng: bên kia gọi `conclusions`. **Không có tuyến `/conclusions` độc lập** — kết luận luôn thuộc một biên bản và được gọi theo **số thứ tự `{stt}`** (①②③) chứ không theo id. Sửa/xoá chốt 25/09/2026 bởi **người dùng**: chỉ khi biên bản còn nháp và kết luận chưa có nhiệm vụ còn hiệu lực |
 | **Ký biên bản** (nháp → đã ký) | `trang_thai` `du-thao` → `da-ky` · `ky_luc` · `ky_boi_ma` | `signature` — `POST /api/v1/meetings/{id}/signature`, quyền `task.approve` | Danh từ do **người dùng** chốt 25/09/2026. Tài nguyên con danh từ hoá, không phải động từ `sign`. Ký hai lần → 409, không phải chữ ký thứ hai. Quyền `task.approve` chứ không `task.create`: người gõ biên bản không mặc nhiên là người được ký |
 | **Thông báo kết luận** | `tb_so_ky_hieu` · `tb_ngay` | `notice` — trường `{reference_no, issued_on}` của `meetings` (`PATCH /api/v1/meetings/{id}`, `POST …/signature`) | Chốt 25/09/2026 bởi **người dùng**. Là trường chép tay, không phải tài nguyên riêng. Sau khi ký chỉ ghi được **một lần** (trigger 0012); ở bản nháp thì sửa được |
 | **Dấu "không phát sinh nhiệm vụ"** | `khong_phat_sinh` · `_luc` · `_boi_ma` (`ket_luan_hop`) | `no-task-marker` — `PUT`/`DELETE /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker`, quyền `task.create` | Danh từ do **người dùng** chốt 25/09/2026. Một TRẠNG THÁI đặt/gỡ được nên là tài nguyên con (cùng khuôn `lockout`). Trên dây trả về dưới tên `no_task` của kết luận |
@@ -408,11 +417,195 @@ Sai lầm cần tránh là suy ra rằng `feedback` được phép dùng trở l
 một chuỗi định danh nội bộ mà chỉ cán bộ của chính hệ thống này thấy; đường dẫn URL là thứ bên
 tích hợp đọc. `feedback` chỉ được giữ ở đúng nơi nó đã có mặt, không lan sang chỗ mới.
 
+## Từ điển đổi tên Việt → Anh — ADR 0061
+
+**MỘT từ điển cho cả đợt đổi tên.** Người làm lớp A/B tra ở đây; người thanh tra đọc khoá
+`audit_log.delta` và chú thích migration cũ cũng tra ở đây. Vì thế **không bao giờ xoá dòng**: tên cũ
+còn nằm trong hồ sơ chỉ-thêm và trong migration đã áp mãi mãi. Giá trị **enum** và giá trị
+**hành vi nhật ký** không nằm ở đây — ADR 0061 §Ánh xạ giá trị enum sở hữu chúng.
+
+**Trạng thái: ĐỀ XUẤT.** Nguồn của mỗi tên, theo thứ tự ưu tiên: (1) tên tiếng Anh **đã chạy** trên
+dây — trường JSON, đoạn URL; (2) dấu `-- @entity:` trong migration; (3) kiểu Go tiếng Anh đã có; (4)
+dịch mới, chỉ khi ba nguồn trên im lặng. Dòng mang **[X…]** chờ §Xung đột chờ chọn; **không làm lớp
+B cho bảng mang [X…] trước khi mục ấy chốt.** `<P>` là từ X1 chọn cho phản ánh.
+
+### Quy tắc ghép — áp cho mọi bảng trừ khi bảng dưới ghi khác
+
+| Cũ | Mới | Ghi chú |
+|---|---|---|
+| `tao_luc` · `tao_boi` · `cap_nhat_luc` · `cap_nhat_boi` | `created_at` · `created_by` · `updated_at` · `updated_by` | Đã là tên ở mọi bảng tiếng Anh (`stored_file`, `upload_policy`) |
+| `<động từ>_luc` | `<quá khứ phân từ>_at` | `ky_luc`→`signed_at`, `dong_luc`→`closed_at` |
+| `<động từ>_boi`, `<động từ>_boi_ma` | `<quá khứ phân từ>_by` | Cột `_by` giữ **mã nghiệp vụ** cán bộ (luật 6 bất biến 8), không giữ id |
+| `nguoi_tao_ma` | `created_by` | |
+| `nguoi_<vai>_ma` | `<vai>_code` | `nguoi_nhan_ma`→`recipient_code` |
+| `<thực thể>_id` | `<thực thể mới>_id` | `bo_phan_id`→`org_unit_id` **[X3]** |
+| `ma` · `ten` · `nhan` · `mo_ta` · `ghi_chu` · `ly_do` | `code` · `name` · `label` · `description` · `note` · `reason` | `label` vs `name`: giữ đúng ranh giới §Danh mục tham chiếu (nhãn sửa được vs tên riêng) |
+| `thu_tu` | `sort_order` | Trên dây đã là `order`; cột lấy tên của `map_field_schema`, `petition_field` |
+| `trang_thai` · `loai` · `nhom` · `nguon` · `nam` · `ngay` | `status` · `type` · `group` · `source` · `year` · `date` | |
+| `noi_dung` · `tieu_de` · `trich_yeu` · `tom_tat` | `content` · `title` · `summary` · `summary` | `trich_yeu` (văn bản) và `tom_tat` (bài) cùng thành `summary` — hai bảng khác nhau, không đụng |
+| `dang_dung` · `dang_hoat_dong` · `la_*` · `co_*` · `phai_*` | `is_active` · `is_active` · `is_*` · `has_*` · `must_*` | **[X13]** |
+| `trang_thai_tai_thoi_diem` · `thoi_diem` | `status_at_time` · `occurred_at` | |
+| `dinh_kem` · `tep_dinh_kem` | `attachments` | |
+| Bộ cột danh mục ba tầng: `moc_mac_dinh` · `ma_nguon_re_nhanh` | `default_marker` · `branched_in_source` | Bảy bảng danh mục, cùng hình dạng (ADR 0024) |
+| `deleted_at` · `deleted_by` · `delete_reason` · `tenant_id` · `id` | không đổi | |
+
+### Gốc định danh Go/TS — lớp A
+
+| Cũ | Mới | Nguồn / ghi chú |
+|---|---|---|
+| `xa` | `commune` (nghiệp vụ) · `tenant` (khoá cô lập, bảng `tenant`) | **[X5]** |
+| `tinh_thanh` | `province` | `@entity: Province` |
+| `can_bo` · `nguoi_dung` | `staff` | `/api/v1/staff`, `Staff` (proto). Bốn tên của §"Một khái niệm, bốn cái tên" thu về một — **[X17]** |
+| `cong_dan` | `citizen` | |
+| `bo_phan` | `org_unit` | **[X3]** |
+| `vai_tro` · `quyen` · `phan_quyen` | `role` · `permission` · `role_permission` | `/api/v1/role-permissions` |
+| `tai_khoan` · `mat_khau` · `phien` · `dang_nhap` · `dang_xuat` | `account` · `password` · `session` · `log_in` · `log_out` | Phiên cán bộ: **[X16]** |
+| `dinh_danh` · `ghep_phien` · `tai_khoan_zalo` | `identity` · `session_pairing` · `zalo_account` | ADR 0023 |
+| `thon_to_dan_pho` · `don_vi_dan_cu` | `residential_unit` | |
+| `danh_muc` · `ba_tang` · `danh_ba` | `catalogue` · `three_tier` · `directory` | `CatalogueImporter`, `staff-directory` |
+| `nhiem_vu` · `khoi` · `muc_uu_tien` · `nhat_ky` · `lui_han` | `task` · `bloc` · `priority` · `log_entry` · `extension` | |
+| `bien_ban_hop` · `ket_luan_hop` | `meeting` · `meeting_conclusion` | `@entity` |
+| `phieu_phan_anh` · `phan_anh` | **[X1]** | |
+| `don_thu` | **[X2]** | |
+| `linh_vuc` · `ma_tra_cuu` · `nguoi_gui` · `kenh` | `field` · `lookup_code` · `reporter` · `channel` | `PetitionField`, `reporter_name` |
+| `tiep_nhan` · `thu_ly` · `phan_loai` · `phan_cong` · `nghiem_thu` · `dong_phieu` | **[X15]** · `admission` · `classification` · `assignment` · `verification` · `closure` | §Tên tài nguyên trên URL |
+| `khong_tiep_nhan` · `chuyen_cap_tren` · `mo_lai` · `danh_gia` · `cong_khai` · `xem_day_du` | `rejection` · `referral` · `reopen` · `rating` · `publication` · `unmask` | |
+| `han` · `han_xu_ly` · `han_tiep_nhan` · `han_xu_ly_xong` · `han_phan_loai` · `goc_dem_han` | `due` · `due_at` · `acknowledge_due` · `resolve_due` · `classify_due` · `clock_from` | Trường JSON đang chạy |
+| `lich_lam_viec` · `ca_lam_viec` · `ngay_nghi_le` · `ngay_lam_bu` · `gio_lam_viec` | `working_hours` · `working_shift` · `public_holiday` · `swap_working_day` · `working_hours` | Không `session` cho ca — §Lịch làm việc của xã |
+| `van_ban` · `van_ban_den` · `van_ban_di` · `so_sach` · `so_vao_so` · `cap_so` · `chuyen` (văn bản) | `document` · `incoming_document` · `outgoing_document` · `register` · `arrival_no` · `issue_number` · `route` | `arrival_no`: luật 3 bất biến 2 |
+| `giai_ngan` · `chung_tu` · `du_an` · `nguon_von` · `hang_muc` · `ke_hoach_von` | `disbursement` · `voucher` · **[X6]** · `funding_source` · `category` · `capital_plan` | **[X7]** |
+| `ngan_sach` · `bang` · `khoan_muc` · `cot` · `dot` · `thu` · `chi` | `budget` · `sheet` · `line` · `column` · `entry` · `revenue` · `expenditure` | **[X11] [X12]** |
+| `nguong` · `cham` | `threshold` · `delay` | `delay_threshold` trên dây |
+| `thong_bao` (nội bộ) · `thong_bao` (chuông) · `thong_bao_gui_cong_dan` | `announcement` · `staff_notification` · `citizen_notification` | Ba thứ, §Tên tài nguyên trên URL dòng `Thông báo` |
+| `noi_dung_mini_app` · `danh_muc_mini_app` · `ho_so_hien_thi` | `content_item` · `content_category` · `display_profile` | **[X5]** cho hồ sơ |
+| `ban_do` · `tai_nguyen` · `tu_dong_hoa` · `su_kien_di` | `map` · `asset` · `automation` · `outbox_event` | |
+| `tep` · `xoa_mem` · `go` · `khoa` · `mo_khoa` · `lich_su` | `file` · `soft_delete` · `remove` · `lock` · `unlock` · `history` | `go` ≠ `xoa` — ADR 0061 |
+| Tiền tố kiểu: `YeuCau*` · `Kho*` · `Loc*` · `KetQua*` · `Loi*` · `Doc*` · `Ghi*` | hậu tố `*Request` · `*Store` · `*Filter` · `*Result` · `*Error` · `*View` · `*Input` | Khuôn đã có: `TaskAssignmentRequest`, `StaffImportResult` |
+| Động từ: `them` · `tao` · `sua` · `xoa` · `gieo` · `nhap` · `xuat` | `create` · `create` · `update` · `delete` · `seed` · `import` · `export` | |
+
+### Bảng — lớp B
+
+Bảng đã tiếng Anh (`audit_log`, `tenant`, `tenant_domain`, `tenant_succession`, `mini_app`,
+`upload_policy`, `platform_audit_log`, `petition_field`, `stored_file`, `task_issued_code`,
+`task_log_attachment`, `system_message_override`, `staff_notification`, `map_field_schema`,
+`mail_settings`, `data_encryption_key`, `operator_*`, `automation_*`) **không đổi**. Cột: chỉ ghi cột
+**không** suy ra được từ §Quy tắc ghép.
+
+| Service | Bảng cũ | Bảng mới | Cột không theo quy tắc ghép |
+|---|---|---|---|
+| platform | `tinh_thanh` | `province` | — |
+| platform | `ho_so_hien_thi_xa` | **[X5]** (`tenant_display_profile` hoặc `commune_profile`) | `dia_chi_tru_so`→`office_address` · `duong_day_nong`→`hotline` · `gio_lam_viec_hien_thi`→`office_hours_text` · `gioi_thieu`→`introduction` |
+| platform | `tenant` (cột) | — | `tinh_thanh`→`province_code` |
+| platform | `tenant_domain` (cột) | — | `la_chinh`→`is_primary` |
+| platform | `tenant_succession` (cột) | — | `tu_id`→`from_tenant_id` · `den_id`→`to_tenant_id` · `can_cu`→`legal_basis` · `hieu_luc_tu`→`effective_from` |
+| platform | `mini_app` (cột) | — | `che_do`→`mode` |
+| finance | `hang_muc_ke_hoach_von` | `capital_plan_category` | bộ cột danh mục ba tầng |
+| finance | `du_an` | **[X6]** | `hang_muc_id`→`category_id` · `don_vi_thuc_hien_id`→`implementing_org_unit_id` · `can_bo_phu_trach_id`→`owner_staff_id` · `tong_muc_duoc_duyet`→`approved_amount` · `ke_hoach_von_nam`→`planned_amount` · `ngay_khoi_cong`→`start_date` · `ngay_hoan_thanh`→`completion_date` · `thoi_han_giai_ngan`→`disbursement_deadline` |
+| finance | `chung_tu_giai_ngan` | **[X7]** | `du_an_id`→`project_id` · `ngay_chi`→`payment_date` · `so_tien`→`amount` · `doi_tac`→`counterparty` · `so_chung_tu`→`voucher_no` · `nguon_von_id`→`funding_source_id` · `nguoi_nhap_id`→`entered_by_id` · `nguoi_xac_nhan_id`→`confirmed_by_id` · `nguoi_khoa_id`→`locked_by_id` · `nguoi_mo_khoa_id`→`unlocked_by_id` · `thoi_diem_khoa`→`locked_at` · `thoi_diem_mo_khoa`→`unlocked_at` · `ly_do_mo_khoa`→`unlock_reason` · `so_lan_mo_khoa`→`unlock_count` |
+| finance | `cau_hinh_giai_ngan` | `disbursement_settings` | `nguong_canh_bao_cham`→`delay_threshold` |
+| finance | `bang_ngan_sach` | `budget_sheet` | `loai`→`kind` · `lan`→`revision` · `don_vi_tinh`→`unit` · `luy_ke_den`→`cumulative_to` · `nguon_tep`→`source_file` · `nap_luc`→`imported_at` |
+| finance | `cot_ngan_sach` | `budget_column` | `bang_id`→`sheet_id` · `kieu`→`format` · `vai_tro`→`indicator` · `cong_thuc`→`formula` |
+| finance | `khoan_muc_ngan_sach` | `budget_line` | `bang_id`→`sheet_id` · `cha_id`→`parent_id` · `tt`→`ordinal_label` · `cap`→`level` · `cach_tinh`→`method` |
+| finance | `gia_tri_khoan_muc` | `budget_line_value` | `khoan_muc_id`→`line_id` · `cot_id`→`column_id` · `gia_tri`→`value` |
+| finance | `nguon_von` | `funding_source` | `tong_nguon`→`total_amount` |
+| finance | `phan_bo_nguon_von` | `funding_allocation` | `nguon_von_id`→`funding_source_id` · `du_an_id`→`project_id` · `so_tien_phan_bo`→`allocated_amount` |
+| finance | `dot_thu_chi` | `budget_entry` **[X11]** | `khoan_muc_id`→`line_id` · `so_chung_tu`→`voucher_no` · `don_vi_ca_nhan`→`counterparty` · `nguoi_ghi_ma`→`entered_by` |
+| finance | `gia_tri_dot` | `budget_entry_amount` | `dot_id`→`entry_id` · `cot_id`→`column_id` · `gia_tri`→`value` |
+| comms | `loai_tai_nguyen_ban_do` | `map_asset_type` | bộ cột danh mục ba tầng |
+| comms | `thong_bao_gui_cong_dan` | `citizen_notification` | `doi_tuong_loai`→`subject_type` · `doi_tuong_ma`→`subject_code` · `moc`→`milestone` · `mau_ma`→`template_code` · `tham_so`→`params` · `nguoi_nhan_che`→`masked_recipient` · `khoa_lan_gui`→`send_key` · `lan`→`round` · `so_lan_thu`→`attempt_count` · `loi_ma`→`error_code` |
+| comms | `thong_bao` | `announcement` | `noi_dung`→`body` · `nguoi_soan_ma`→`author_code` · `trang_thai_thu`→`email_status` · `bat_buoc_xac_nhan`→`ack_required` · `ghim`→`pinned` · `gui_thu_dien_tu`→`email_requested` |
+| comms | `thong_bao_bo_phan` | `announcement_org_unit` | `thong_bao_id`→`announcement_id` |
+| comms | `thong_bao_nguoi_nhan` | `announcement_recipient` | `thong_bao_id`→`announcement_id` · `dich_danh`→`is_named` · `da_mo_luc`→`read_at` · `da_xac_nhan_luc`→`acknowledged_at` · `thu_gui_luc`→`email_sent_at` · `thu_loi_ma`→`email_error_code` |
+| comms | `danh_muc_mini_app` | `content_category` | `cha_id`→`parent_id` |
+| comms | `noi_dung_mini_app` | `content_item` | `danh_muc_id`→`category_id` · `noi_dung`→`body` · `anh_dai_dien_url`→`image_url` · `ngay_dang`→`published_on` · `luot_xem`→`view_count` · `nguon_url`→`source_url` · `nguon_id_ngoai`→`source_ref` · `da_sua_tay`→`hand_edited` · `nguoi_tao_ma`→`author_code` |
+| documents | `loai_van_ban` | `document_type` | bộ cột danh mục ba tầng |
+| documents | `day_so_van_ban` | `document_number_series` | `so_sach`→`register` · `so_cuoi`→`last_number` |
+| documents | `van_ban_den` | `incoming_document` | `so_vao_so`→`arrival_no` · `ngay_den`→`received_date` · `so_ky_hieu`→`reference_no` · `ngay_van_ban`→`document_date` · `co_quan_ban_hanh`→`issuing_body` · `loai_van_ban`→`document_type` · `do_khan`→`urgency` · `bo_phan_dang_giu_id`→`holding_org_unit_id` · `can_bo_xu_ly_ma`→`assignee_code` · `han_xu_ly_xong`→`due_at` (tên trên dây của `documents`) |
+| documents | `van_ban_di` | `outgoing_document` | `so_di`→`issued_no` · `nguoi_ky`→`signer` · `noi_nhan`→`recipient` |
+| documents | `lich_su_chuyen_van_ban` | `document_routing` | `van_ban_den_id`→`incoming_document_id` · `tu_bo_phan_id`→`from_org_unit_id` · `den_bo_phan_id`→`to_org_unit_id` · `nguoi_ma`→`routed_by` · `noi_dung`→`instruction` · `thoi_diem`→`routed_at` |
+| identity | `quyen` | `permission` | `ma`→`key` — ⚠ `tools/quyen_keys.py` đọc `INSERT INTO quyen` (ADR 0061 Lớp 0) |
+| identity | `bo_phan` | `org_unit` **[X3]** | `cha_id`→`parent_id` |
+| identity | `vai_tro` | `role` | `la_lanh_dao`→`is_leader` |
+| identity | `vai_tro_quyen` | `role_permission` | `quyen_ma`→`permission_key` · `cap_boi`→`granted_by` · `cap_luc`→`granted_at` |
+| identity | `nguoi_dung` | `staff` **[X17]** | `ho_ten`→`full_name` · `chuc_vu`→`position` · `dien_thoai`→`phone` · `di_dong_ca_nhan`→`mobile` · `mat_khau_hash`→`password_hash` · `dang_nhap_gan_nhat`→`last_login_at` · `hien_tren_mini_app`→`shown_in_mini_app` · `thu_tu_danh_ba`→`directory_order` · `dong_y_cong_khai_luc`→`publication_consent_at` · `dong_y_cong_khai_ghi_boi`→`publication_consent_by` |
+| identity | `phien` | `staff_session` **[X16]** | `nguoi_dung_id`→`staff_id` · `thiet_bi`→`device` · `ip_tao`→`created_ip` · `dung_gan_nhat`→`last_used_at` · `het_han_luc`→`expires_at` · `thu_hoi_luc`→`revoked_at` · `thu_hoi_ly_do`→`revoked_reason` · `thay_the_boi`→`replaced_by` |
+| identity | `dinh_danh_cong_dan` | `citizen_identity` | `so_dien_thoai`→`phone_number` |
+| identity | `quan_he_cong_dan_xa` | `citizen_commune` | `cong_dan_id`→`citizen_id` · `khai_cu_tru`→`residence_claim` · `khai_luc`→`claimed_at` · `nguon_khai`→`claim_source` · `trang_thai_xac_thuc`→`verification_status` · `xet_duyet_boi`→`reviewed_by` · `xet_duyet_luc`→`reviewed_at` · `ly_do_tu_choi`→`rejection_reason` |
+| identity | `phien_cong_dan` | `citizen_session` | như `staff_session`, cộng `cong_dan_id`→`citizen_id` · `bam_token`→`token_hash` · `tai_khoan_zalo_id`→`zalo_account_id` |
+| identity | `ghep_phien` | `session_pairing` | `cong_dan_id`→`citizen_id` · `phien_id`→`session_id` · `bam_ma`→`code_hash` · `ky_tu_doi_chieu`→`check_characters` · `dung_luc`→`used_at` · `huy_luc`→`cancelled_at` · `huy_ly_do`→`cancel_reason` |
+| identity | `loai_don_vi_dan_cu` · `khoi_nhiem_vu` | `residential_unit_type` · `task_bloc` | bộ cột danh mục ba tầng |
+| identity | `thon_to_dan_pho` | `residential_unit` | `loai`→`type_code` · `so_ho`→`household_count` · `nhan_khau`→`population_count` |
+| identity | `lich_lam_viec` | `working_hours` | `thu`→`weekday` · `bat_dau`→`start_time` · `ket_thuc`→`end_time` |
+| identity | `ngay_nghi_le` · `ngay_lam_bu` | `public_holiday` · `swap_working_day` | `bat_dau`→`start_time` · `ket_thuc`→`end_time` |
+| identity | `sla` | `sla` **[X8]** | `loai_viec`→`work_kind` · `linh_vuc`→`field_code` · `linh_vuc_khoa`→`field_key` · `gio_tiep_nhan`→`acknowledge_hours` · `gio_xu_ly_xong`→`resolve_hours` · `gio_sap_den_han`→`due_soon_hours` · `gio_bao_lanh_dao`→`escalate_leader_hours` · `gio_bao_chu_tich`→`escalate_president_hours` **[X4]** |
+| identity | `tai_khoan_zalo` | `zalo_account` | `bam_zalo_user_id`→`zalo_user_id_hash` · `cong_dan_id`→`citizen_id` · `lien_ket_luc`→`linked_at` · `xa_da_nho`→`remembered_tenant_id` · `xa_da_nho_luc`→`remembered_at` **[X5]** |
+| petitions | `loai_nhiem_vu` · `muc_uu_tien_nhiem_vu` | `task_type` · `task_priority` | bộ cột danh mục ba tầng |
+| petitions | `nhan_linh_vuc` | **[X1]** `<P>_field_label` | `ma`→`field_code` |
+| petitions | `phieu_phan_anh` | **[X1]** `<P>` (`petition` hoặc `citizen_report`) | `ma_tra_cuu`→`lookup_code` · `cong_dan_id`→`citizen_id` · `kenh_tiep_nhan`→`channel` · `linh_vuc`→`field_code` · `dia_chi`→`address` · `thon_id`→`residential_unit_id` · `an_danh`→`anonymous` · `nguoi_gui_ho_ten`→`reporter_name` · `nguoi_gui_dien_thoai`→`reporter_phone` · `can_bo_xu_ly_id`→`assignee_id` · `han_tiep_nhan`→`acknowledge_due` · `han_phan_loai`→`classify_due` · `han_xu_ly_xong`→`resolve_due` · `goc_dem_han`→`clock_from` · `vao_so_luc`→`booked_at` · `phan_loai_luc`→`classified_at` · `xu_ly_xong_luc`→`resolved_at` · `ket_qua_xu_ly`→`result` · `ket_thuc_nhanh_luc`→`branch_ended_at` · `ly_do_ket_thuc_nhanh`→`branch_end_reason` · `co_quan_nhan`→`receiving_body` · `hien_cong_khai`→`is_public` · `diem_hai_long`→`rating` · `danh_gia_luc`→`rated_at` · `so_lan_mo_lai`→`reopen_count` |
+| petitions | `su_kien_di` | `outbox_event` | `doi_tuong`→`subject` · `than`→`payload` · `xay_ra_luc`→`occurred_at` · `gui_luc`→`sent_at` |
+| petitions | `nhiem_vu` | `task` | `loai`→`type_code` · `khoi`→`bloc_code` · `muc_uu_tien`→`priority_code` · `nguon_giao`→`source` · `nhiem_vu_cha_id`→`parent_task_id` · `co_quan_chu_tri_id`→`lead_org_unit_id` · `lanh_dao_giao_viec_ma`→`assigner_code` · `nguoi_thuc_hien_ma`→`assignee_code` · `chuyen_vien_theo_doi_ma`→`monitor_code` · `han_xu_ly`→`due_at` · `han_ban_dau`→`original_due_at` · `tien_do`→`progress` · `ngay_hoan_thanh`→`completed_at` · `tom_tat_ket_qua`→`result_summary` · `lanh_dao_phe_duyet_hoan_thanh`→`leader_approved` · `cap_tren_cong_nhan_hoan_thanh`→`superior_acknowledged` |
+| petitions | `nhat_ky_nhiem_vu` | `task_log_entry` | `nhiem_vu_id`→`task_id` · `nguoi_ma`→`actor_code` · `nguoi_phu_trach_ma`→`responsible_code` |
+| petitions | `de_nghi_lui_han` | `task_extension_request` **[X10]** | `nhiem_vu_id`→`task_id` · `nguoi_de_nghi_ma`→`requested_by` · `nguoi_duyet_ma`→`decided_by` · `han_moi`→`new_due_at` · `thoi_diem`→`requested_at` · `duyet_luc`→`decided_at` · `moc_cho_duyet`→`pending_marker` |
+| petitions | `bien_ban_hop` | `meeting` | `ten_cuoc_hop`→`title` · `ngay_hop`→`held_on` · `dia_diem`→`location` · `chu_tri_ma`→`chaired_by` · `thu_ky_ma`→`minutes_taker_code` · `thanh_phan`→`attendees` · `so_hieu`→`number` · `tb_so_ky_hieu`→`notice_reference_no` · `tb_ngay`→`notice_issued_on` · `bo_sung_cho_id`→`supplements_id` |
+| petitions | `ket_luan_hop` | `meeting_conclusion` **[X9]** | `bien_ban_id`→`meeting_id` · `thu_tu`→`ordinal` · `khong_phat_sinh`→`no_task` · `khong_phat_sinh_luc`→`no_task_at` · `khong_phat_sinh_boi_ma`→`no_task_by` |
+| petitions | `nhiem_vu_van_ban` | `task_document` | `nhiem_vu_id`→`task_id` · `so_ky_hieu`→`reference_no` · `ngay_van_ban`→`document_date` |
+| petitions | `nhan_trang_thai_nhiem_vu` | `task_status_label` | `ma`→`status` |
+| petitions | `nhat_ky_phan_anh` | **[X1]** `<P>_log_entry` | `phieu_phan_anh_id`→`<P>_id` · `hanh_vi`→`action` · `nguoi_ma`→`actor_code` · `can_bo_xu_ly_ma`→`assignee_code` |
+
+Cột thêm bằng `ALTER TABLE … ADD COLUMN` ở migration sau (tài khoản tạm `0009`, ảnh nghiệm thu…) đi
+theo §Quy tắc ghép; cột nào quy tắc không cho một tên **hiển nhiên** thì dừng và thêm dòng vào bảng
+trên trước, không tự đặt trong migration.
+
+**Tên trường JSON tiếng Việt còn trên dây** — thuộc lớp C (nhận cả hai trong cửa sổ chuyển tiếp),
+không thuộc lớp A: `petitions` — `cong_dan_id`, `linh_vuc` (`service-petitions/internal/http/gui_phan_anh.go:87-91`,
+thân yêu cầu Mini App gửi), `an_danh`, `kenh_tiep_nhan`, `han_tiep_nhan`, `trang_thai`, `do_dai_noi_dung`,
+`quyen`, `truong_da_dien`, `truong_da_mo`; `identity` — `da_co`, `da_gieo`, `dong`, `truoc`, `sau`;
+`comms` — `ma_tra_cuu`, `moc_nhan`, `viec_tiep_theo`. Danh sách dựng bằng quét thẻ `json:"…"` ngày
+29/09/2026; một số có thể chỉ là khoá của `audit_log.delta` — kiểm lúc làm lớp C của từng service.
+
+### Xung đột chờ chọn
+
+Mỗi mục: **một khái niệm, hai tên tiếng Anh trở lên đang chạy thật**. Chọn một thì các tên còn lại
+phải đổi — và tên nào đã trên dây thì đổi theo cửa sổ lớp C. Cột "Đề xuất" là ý kiến có lý do,
+**không phải quyết định**.
+
+| # | Khái niệm | Các tên đang dùng, và ở đâu | Đề xuất |
+|---|---|---|---|
+| **X1** | Phản ánh (`phieu_phan_anh`) | **`Petition`**: `@entity` (`service-petitions/migrations/0004_phieu_phan_anh.sql:214`), proto `PetitionStatusChanged`, `PetitionField` (platform), `petition_publication.go`, `PurposePetitionPhoto` = `petition-photo`, hành vi `update_petition_field`, `citizen-app` `PetitionCard`/`PetitionRating`, tên service `petitions` · **`CitizenReport`**: URL `citizen-reports` · `my-citizen-reports` · `citizen-report-fields` · `overdue-citizen-reports`, `CitizenReportMetric` (`summary_metrics.go`), `AutomationCitizenReport`, `web-admin` `citizen-report-blocks.tsx` · **`feedback`**: khoá quyền `feedback.*`, khoá lời hệ thống `feedback.*` (petitions 0020), `report.block.feedback`, `web-admin` `FeedbackDetailDrawer`/`FeedbackDraftStore` | `citizen_report` cho định danh và bảng — khớp **bề mặt duy nhất không đổi được** (URL), và nhường `petition` (xem X2). Giá: đổi `@entity`, proto message, `petition-photo`, và **không** đổi tên service/sự kiện `petitions.*` (tên miền, ADR 0011). `feedback.*` giữ ở khoá quyền (X25) |
+| **X2** | Đơn thư (`don_thu`) | **`petition`**: khoá quyền `petition.create` · `petition.read` nhóm "ĐƠN THƯ" (`service-identity/migrations/0001_init.sql:302-303`), `report.metric.register.petition_arrived` (reporting 0003) · **`citizen_letter`**: URL `citizen-letters` (§Tên tài nguyên trên URL), tên migration `0016_sla_citizen_letter_kind…` | `citizen_letter` — khớp URL. Nhưng chữ `petition` ở khoá quyền thì **đúng nghĩa đơn thư**, nên X1 chọn `petition` là để một chữ mang hai khái niệm |
+| **X3** | Bộ phận (`bo_phan`) | **`org_unit`**: URL `org-units`, `OrgUnit*` (identity, proto), JSON `org_unit_id`/`org_unit_name` · **`department`**: JSON `department_id` (`service-identity/internal/http/can_bo.go:44`, `danh_ba_chon_nguoi.go:29`), `department_name` · **`unit`**: JSON `from_unit`/`to_unit`/`holding_unit` (documents), `lead_unit`/`unit` (petitions) | `org_unit`. §Tên tài nguyên trên URL đã bác `departments` có lý do (cây gồm Đảng uỷ, HĐND). `department_*` trên dây đổi theo lớp C |
+| **X4** | Chủ tịch xã | **`president`**: JSON `escalate_president_hours` (`service-identity/internal/http/sla.go:132`) · **`chairman`**: giá trị `EscalationChairman = "chairman"` (`service-documents/internal/domain/automation.go:86`, `service-petitions/internal/domain/automation.go:102`). Kèm: `leader` (`is_leader`, `escalate_leader_hours`) cạnh `unit_head` (`EscalationUnitHead`) — **chưa rõ là một hay hai khái niệm** | `chairperson`? — cần chủ dự án; và cần xác nhận `leader` ≠ `unit_head` |
+| **X5** | Xã | **`tenant`**: bảng `tenant`, `tenant_id`, `TenantProfile`/`GetTenantProfile` (`proto/vigov/platform/v1/platform.proto:153-167`), `@entity: TenantDisplayProfile` · **`commune`**: URL `communes` · `commune-profiles` · `commune-staff` · `commune-news`, `CitizenCommune` | `tenant` **chỉ** cho khoá cô lập và sổ đăng ký của `platform` (luật 1); `commune` cho mọi nghĩa nghiệp vụ. Hồ sơ hiển thị đang mang **ba** tên (`TenantDisplayProfile` · `TenantProfile` · `commune-profiles`) — chọn một |
+| **X6** | Dự án đầu tư (`du_an`) | **`Project`**: `@entity` (`service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:171`), JSON `project_id` · **`investment_project`**: URL `investment-projects` | Bảng `investment_project`. §Tên tài nguyên trên URL giữ `@entity: Project` **chỉ vì** sửa migration đã áp là lệch checksum — lý do ấy hết khi đổi bằng migration mới |
+| **X7** | Chứng từ giải ngân | **`DisbursementVoucher`**: `@entity` (`0004…:258`) · **`disbursement`**: URL `disbursements`, `…/{id}/confirmation`, `…/lockout` | `disbursement_voucher` cho bảng (một dòng là một **chứng từ**), `disbursement` giữ trên URL |
+| **X8** | Thời hạn xử lý | **`sla`**: bảng `sla`, kiểu Go `SLA`, URL `sla` · **`ProcessingDeadline`**: `@entity` (`service-identity/migrations/0008_sla.sql:146`) | Giữ `sla`; bỏ `ProcessingDeadline` |
+| **X9** | Kết luận họp | **`MeetingConclusion`** (`@entity`, `0007_bien_ban.sql:270`) · **`conclusions`** (URL) | `meeting_conclusion`; URL giữ |
+| **X10** | Đề nghị lùi hạn | **`TaskExtensionRequest`** (`@entity`, `0006_nhiem_vu.sql:555`) · **`extension`** (URL `extensions`, `task-extensions`) | `task_extension_request` |
+| **X11** | Đợt thu chi | **`BudgetEntry`** (`@entity`, URL `budget-entries`) · "batch" (`service-finance/internal/http/dot_thu_chi.go:169`: *"soft deletes one batch"*) | `budget_entry` |
+| **X12** | Chi (ngân sách) | **`expenditure`**: JSON `expenditure_achievement` (`service-finance/internal/http/thu_chi_ngan_sach.go:200`) · **`expense`**: khoá `report.metric.fiscal.expense_percent` · `expense_amount` (reporting 0003:84) | `expenditure` — thuật ngữ ngân sách nhà nước; đổi hai khoá lời hệ thống |
+| **X13** | Cờ bool | `is_active` (`map_field_schema`) · `active` (`petition_field`, JSON `active` ở identity) · `is_enabled` (`mail_settings`) · `enabled` (`automation_job_setting`, `nhan_linh_vuc`) | Cột: `is_…`; JSON giữ như đang chạy. Bảng tiếng Anh đã có **không** đổi |
+| **X14** | Dạng giá trị enum tiếng Anh | snake: `sla_reminders`, `configuration_missing`, `in_progress`, `on_time` · kebab: `citizen-media`, `task-attachment`, `petition-photo` | **kebab-case** — số đông giá trị cũ, và bộ kiểm mã danh mục (`ChuanHoaMaDanhMuc`) chỉ nhận `a-z0-9-`. Tập snake đã có giữ nguyên |
+| **X15** | Tiếp nhận | **`receipt`** (§Tên tài nguyên trên URL) · **`acknowledge`** (JSON `acknowledge_due`, `acknowledge_hours`) · **`received`** (sự kiện `petitions.received.v1`, chỉ số `received`) | Hai khái niệm, giữ hai từ: `received` = phần mềm ghi nhận phiếu; `acknowledge` = cán bộ đọc phiếu (`han_tiep_nhan`). Cần chủ dự án xác nhận `receipt` bỏ đi |
+| **X16** | Phiên cán bộ (`phien`) | `session` (URL `sessions`) · cạnh `citizen_session`, `operator_session` | Bảng `staff_session` — ba lớp tin cậy, ba bảng cùng khuôn |
+| **X17** | Cán bộ (`nguoi_dung`) | `staff` (URL, proto `Staff`) · `user` (khoá quyền `admin.user`, `admin.user.delete`) | Bảng `staff`; khoá quyền giữ (X25) |
+| **X18** | Mã danh mục (`ma` của bảy danh mục, mã lĩnh vực tầng 1 `rac-thai`…) | — | **Ngoài phạm vi.** Mã đã cấp không đổi (luật 7 bất biến 3); ADR 0060 ghi mã tầng 1 không bao giờ đổi; mã tầng 1 của danh mục ba tầng do **xã tự gõ** — dịch nó là dịch dữ liệu của xã |
+| **X19** | Thuật ngữ pháp lý | `khieu-nai` · `to-cao` · `kien-nghi` (loại đơn thư, chưa có bảng), `thu_ly`, độ khẩn `hoa-toc`, `thuong_tru`/`tam_tru`, các vai trò cột `du-toan-*` | ADR 0011 dặn không dịch vì dịch sai là **sai thủ tục**. Đề xuất: chỉ đổi sau khi người nắm thủ tục duyệt từng từ; ADR 0061 đã để đề xuất tạm |
+| **X20** | Chín mã trạng thái phiếu | Khách **duyệt nguyên văn** ngày 20/09/2026 (mục §Chín trạng thái) | Câu quản trị: ai báo khách, và khách có cần duyệt lại chín chuỗi mới |
+| **X21** | `UPDATE` giá trị trên hồ sơ đã đóng / đã khoá | Trigger chặn sửa chứng từ đã khoá (`chung_tu_da_khoa`), văn bản đã vào sổ (`so_van_ban_bat_bien`); luật 7 cấm #5 | (a) `UPDATE` bằng migration có vết hệ thống cho từng dòng (luật 6 bất biến 6), hàm trigger nhận cả hai giá trị trong migration ấy; hoặc (b) **không** `UPDATE`, giữ giá trị cũ trong dòng cũ và ánh xạ lúc đọc, như bảng chỉ-thêm. Cần chủ dự án chọn |
+| **X22** | Giá trị `audit_log.action` | Hằng `HanhVi*` tiếng Việt cạnh `Action*` tiếng Anh | Đổi cho mục **mới** (ADR 0061 bảng hành vi); bộ lọc `?action=` nhận cả hai |
+| **X23** | Bảng sổ `schema_migration` (`ten`, `ap_dung_luc`, `thoi_luong_ms` — `core/migrate/migrate.go:224-229`) | — | **Giữ.** `core/migrate` tạo và đọc nó trước migration đầu tiên; đổi tên cần mã khởi động tự nhận hai hình dạng — rủi ro trên đường mọi service khởi động, không có giá trị nghiệp vụ |
+| **X24** | Route màn hình Mini App (`citizen-app`) | — | Giữ như route `web-admin` (ADR 0051); người dùng chỉ nói route `web-admin` |
+| **X25** | Khoá quyền `feedback.*`, `petition.*`, `admin.user` | Đã tiếng Anh nhưng lệch X1, X2, X17 | **Ngoài phạm vi** trừ khi chủ dự án chọn khác: đổi là migration trên `quyen`/`vai_tro_quyen` đang cấp cho vai trò thật, và luật 5 bất biến 3c cấm khoá không có trong bảng |
+
 ## Quy ước đặt tên
 
 > **28/09/2026 → ADR 0051:** hai dòng "Bảng, cột" và "Kiểu Go" dưới đây, cùng câu *"tên bảng dùng
 > tiếng Việt"*, chỉ còn đúng cho mã và bảng **đã có**. Định danh, tệp, bảng và cột **mới** viết tiếng
 > Anh — `kb/10-decisions/0051-english-code-identifiers.md`. Giá trị enum vẫn tiếng Việt không dấu.
+>
+> **29/09/2026 → ADR 0061:** cả bảng này đang được đổi — tên cũ sang tiếng Anh theo §Từ điển đổi
+> tên ngay trên, giá trị enum theo ADR 0061 §Ánh xạ giá trị enum. Bảng dưới còn đúng cho service
+> **chưa** qua lớp tương ứng của đợt đổi tên.
 
 | Loại | Quy ước | Ví dụ |
 |---|---|---|
