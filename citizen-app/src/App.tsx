@@ -291,11 +291,12 @@ export function toSceneLocationResult(result: CurrentLocationResult): SceneLocat
 const getSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCurrentLocation());
 
 /**
- * CẦU HỌ TÊN — `getUserInfo` kèm hộp xin quyền của Zalo. Chỉ tên đi xuống nửa nhà nước; tên rỗng là
- * "không lấy được", không bao giờ một chuỗi rỗng giả làm tên.
+ * CẦU HỌ TÊN — `getUserInfo`, gọi CHỈ từ bước mở app của `TrangXa` (29/09/2026): "check" không bật hộp
+ * của Zalo, "ask" bật. Chỉ tên đi xuống nửa nhà nước; tên rỗng là "không lấy được", không bao giờ một
+ * chuỗi rỗng giả làm tên.
  */
-const layTenChoXa: LayTenZalo = async () => {
-  const kq = await layTenZalo();
+const layTenChoXa: LayTenZalo = async (mode) => {
+  const kq = await layTenZalo(mode === "ask");
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   const ho_ten = kq.du_lieu.trim();
   return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };

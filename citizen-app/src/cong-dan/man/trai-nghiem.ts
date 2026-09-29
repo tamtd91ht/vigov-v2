@@ -1,6 +1,6 @@
 /**
- * BẢN TRẢI NGHIỆM CỦA APP RIÊNG MỘT XÃ — phiếu phản ánh CHỈ SỐNG TRONG BỘ NHỚ; họ tên lấy từ Zalo bằng
- * một hành động xin quyền (`LayTenZalo`), không đăng nhập, không người dùng giả lập (bỏ 28/09/2026).
+ * BẢN TRẢI NGHIỆM CỦA APP RIÊNG MỘT XÃ — phiếu phản ánh CHỈ SỐNG TRONG BỘ NHỚ; họ tên lấy từ Zalo MỘT LẦN
+ * lúc mở app (`LayTenZalo`, `NameAtEntry`), không đăng nhập, không người dùng giả lập (bỏ 28/09/2026).
  *
  * PHIẾU TRẢI NGHIỆM MANG ĐÚNG KIỂU `PhieuCuaToi` CỦA HỢP ĐỒNG THẬT (`api/hop-dong-phan-anh.ts`): năm ô
  * gửi đi (nội dung · nơi xảy ra · họ tên · điện thoại · ẩn danh), trạng thái trong bảng `TRANG_THAI`,
@@ -20,8 +20,16 @@ import { DO_DAI_TOI_DA, type PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import { groupOf, STATUS_GROUP_LABEL, type StatusFilter, type StatusGroup, STEP_LABEL } from "./status-groups";
 
 /**
- * HỌ TÊN TỪ ZALO — HÀNH ĐỘNG XIN QUYỀN DUY NHẤT (chủ dự án, 28/09/2026: "không còn đăng nhập nữa, chỉ cần
- * xin quyền để lấy được name, phone number"). Lớp vỏ tiêm hàm thật (`getUserInfo`); nửa này chỉ khai kiểu.
+ * HỌ TÊN TỪ ZALO — LẤY MỘT LẦN, LÚC MỞ APP CỦA XÃ (quyết định của người dùng 29/09/2026, thay "xin quyền
+ * tại chỗ cần" của ea76c9d). Lớp vỏ tiêm hàm thật (`getUserInfo`); nửa này chỉ khai kiểu.
+ *
+ * WHY AT ENTRY AND NOWHERE ELSE: the name is display and pre-fill only — it grants nothing (rule 4: a
+ * Zalo display name is not an identity). A "Lấy từ Zalo" button on two screens was two places asking for
+ * the same thing, and a citizen who had already answered at one met the question again at the other.
+ * Now `TrangXa` asks once; every screen below it only SHOWS what came back, or "Chưa xác định".
+ *
+ * `mode`: "check" never opens Zalo's dialog (already allowed → the name; otherwise a failure branch);
+ * "ask" opens it, and is only sent after the entry card has said why the name is wanted (policy 3.3.4).
  *
  * SỐ ĐIỆN THOẠI KHÔNG CÓ Ở ĐÂY, và đó là ranh giới của nền tảng chứ không phải sơ suất: `getPhoneNumber`
  * chỉ trả MÃ, đổi ra số cần máy chủ có app secret của app xã (tài liệu zmp-sdk, bước 2–3). Xin quyền số
@@ -33,7 +41,39 @@ export type KetQuaLayTen =
   | { readonly kieu: "tu-choi" }
   | { readonly kieu: "ngoai-zalo" }
   | { readonly kieu: "khong-lay-duoc" };
-export type LayTenZalo = () => Promise<KetQuaLayTen>;
+export type NameRequestMode = "check" | "ask";
+export type LayTenZalo = (mode: NameRequestMode) => Promise<KetQuaLayTen>;
+
+/**
+ * Where the entry name request stands. `settled` is final for this open: `name` is the Zalo name, or
+ * `null` (refused, failed, outside Zalo) — the screens then show "Chưa xác định" and an empty name field.
+ */
+export type NameAtEntry =
+  | { readonly kind: "checking" }
+  | { readonly kind: "needs-consent" }
+  | { readonly kind: "asking" }
+  | { readonly kind: "settled"; readonly name: string | null };
+
+/**
+ * After the silent check. PURE. Outside Zalo there is nothing to ask, so it settles on `null` instead of
+ * showing a card whose button can only fail. Any other failure (not allowed yet, platform error) offers
+ * the entry card: asking is the only way the name can still arrive.
+ */
+export function afterNameCheck(kq: KetQuaLayTen): NameAtEntry {
+  if (kq.kieu === "xong") return { kind: "settled", name: kq.ho_ten };
+  if (kq.kieu === "ngoai-zalo") return { kind: "settled", name: null };
+  return { kind: "needs-consent" };
+}
+
+/** After Zalo's dialog. PURE. Whatever the answer, it is not asked again in this open. */
+export function afterNameAsk(kq: KetQuaLayTen): NameAtEntry {
+  return { kind: "settled", name: kq.kieu === "xong" ? kq.ho_ten : null };
+}
+
+/** The name the screens may show, or `null` while the request is unfinished or came back empty. */
+export function nameShown(state: NameAtEntry): string | null {
+  return state.kind === "settled" ? state.name : null;
+}
 
 /*
  * VỊ TRÍ HIỆN TẠI — the token-only `LayMaViTri` that stood here was replaced on 29/09/2026 by

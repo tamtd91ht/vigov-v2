@@ -556,14 +556,17 @@ export const XA_TN = {
   o_tin_tuc: "Tin tức",
   o_su_kien: "Sự kiện",
   xin_chao_ten: (ten: string) => `Xin chào, ${ten}`,
-  ten_nut: "Lấy họ tên từ Zalo",
-  ten_dang: "Đang chờ bà con đồng ý…",
-  ten_vi_sao: "Zalo sẽ hỏi bà con có đồng ý cho ứng dụng biết tên hiển thị Zalo của bà con không.",
-  ten_da_lay: "Đã lấy họ tên từ Zalo. Bà con vẫn sửa được.",
-  ten_tu_choi: "Bà con chưa đồng ý chia sẻ tên. Bà con vẫn tự gõ họ tên được.",
-  ten_ngoai_zalo: "Chỉ lấy được họ tên khi mở ứng dụng trong Zalo.",
-  ten_khong_lay_duoc: "Chưa lấy được họ tên. Bà con hãy tự gõ họ tên.",
-  chua_co_ten: "Chưa có họ tên",
+  // The entry card (`TrangXa`, 29/09/2026): the ONLY place the app asks Zalo for the name. It must say
+  // what the name is for before Zalo's own dialog appears — policy 3.3.4 (`features/tinh-nang/khung.tsx`).
+  name_card_title: "Điền sẵn họ tên khi gửi phản ánh",
+  name_card_why:
+    "Để bà con không phải gõ lại họ tên mỗi lần gửi phản ánh tới xã, ứng dụng xin phép dùng tên Zalo của bà con. Tên chỉ nằm trên điện thoại này và chỉ đi tới xã khi bà con tự bấm gửi phản ánh.",
+  name_card_zalo_asks:
+    "Bấm “Đồng ý” thì Zalo sẽ hỏi bà con thêm một lần. Không đồng ý thì bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.",
+  name_card_agree: "Đồng ý",
+  name_card_decline: "Không, tôi sẽ tự gõ tên",
+  name_card_asking: "Đang chờ bà con trả lời Zalo…",
+  chua_co_ten: "Chưa xác định",
   so_tu_go: "Ứng dụng không lấy số điện thoại từ Zalo. Nếu muốn xã gọi lại, bà con hãy tự nhập số.",
   loc_chuyen_muc: "Lọc tin theo chuyên mục",
   tin_lien_quan: "Tin liên quan",

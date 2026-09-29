@@ -264,6 +264,14 @@
       "tiep_theo": "NỢ CHỦ DỰ ÁN — CÂU PHÁP LÝ: chinh-sach-rieng-tu.ts:465 ('ứng dụng không hề có vị trí của bạn') và features/tinh-nang/noi-dung.ts:488 ('chỉ nhận một mã, không nhận toạ độ') nay SAI một phần; chưa viết câu thay (chinh-sach.test.ts ghim khoảng hở). App riêng của xã (App ID khác) sẽ nhận 502 cho tới khi vihat-miniapp hỗ trợ nhiều App ID (README nợ #14). Chưa gọi Zalo thật (vihat-miniapp README nợ #16).",
       "menu": "phan-anh-nguoi-dan",
       "no_confirm": []
+    },
+    {
+      "id": "ho-ten-lay-luc-mo-app-xa",
+      "viec": "App xã: họ tên lấy MỘT LẦN lúc mở app (getUserInfo), trong app chỉ hiện; bỏ nút Lấy từ Zalo; sửa vỡ khối Tiện ích của tôi ở màn Cá nhân",
+      "trang_thai": "xong",
+      "bang_chung": "NGƯỜI DÙNG CHỐT 29/09/2026 (đảo ea76c9d 'xin quyền tại chỗ cần'): lúc mở app xã TrangXa gọi getUserInfo im lặng (autoRequestPermission:false) một lần; chưa cho phép thì hiện thẻ giải thích trên trang chủ (điền sẵn họ tên phiếu, chỉ gửi khi bấm gửi) với Đồng ý (mới mở hộp quyền Zalo) / Không, tôi sẽ tự gõ tên — đúng chính sách 3.3.4 (khung.tsx:6-10: xin quyền lúc khởi động phải có màn giải thích). NutLayTen xoá khỏi Cá nhân và form Gửi phản ánh; form điền sẵn hoặc để trống cho gõ (vẫn bắt buộc); Cá nhân hiện 'Chưa xác định'. CSS: hai quy tắc .xa-the trùng tên hoà vào nhau (của thẻ xác nhận xã ~1061 có display:flex) làm hai hàng Tiện ích nằm ngang và mất đường kẻ — thu hẹp về .goi-y .xa-the, thêm margin cho .xa-the của app xã và cho h2.xa-dau-khoi. Kiểm: tsc sạch · vitest 38 tệp / 1033 ca (name-at-entry.test.tsx 14 ca, gồm ca canh CSS). CHƯA xem trên máy thật.",
+      "no_confirm": [],
+      "tiep_theo": "Mã từ chối của getUserInfo là -1401 nhưng laTuChoi (zalo-api.ts) chỉ biết -201 — từ chối rơi vào nhánh 'không lấy được' (người dân thấy như nhau). Bấm Không thì lần mở sau thẻ hiện lại (tên chỉ sống trong bộ nhớ). Muốn hộp quyền mở NGAY lúc khởi động, không thẻ: sửa nhỏ ở TrangXa, nhưng trái hướng dẫn 3.3.4."
     }
   ]
 }

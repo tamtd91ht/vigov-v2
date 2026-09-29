@@ -255,12 +255,14 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // cần xin quyền để lấy được name, phone number". Tên thì `getUserInfo` trả thẳng sau khi người dân
     // đồng ý (NĐ 13/2023 — `autoRequestPermission`). Số điện thoại KHÔNG: `getPhoneNumber` chỉ trả mã,
     // máy chủ mới đổi được — nên app riêng không gọi nó, người dân tự gõ số nếu muốn xã gọi lại.
+    // 29/09/2026 (user decision): asked ONCE, when the commune app opens — no longer from a button on
+    // "Gửi phản ánh" / "Cá nhân". Those two screens now only SHOW the name taken at entry.
     api: "getUserInfo",
     nua: "nha-nuoc",
-    man: "Gửi phản ánh · Cá nhân (ứng dụng của xã)",
-    tinh_nang: "Điền họ tên từ Zalo",
+    man: "Mở ứng dụng của xã (tên hiện ở Trang chủ, Cá nhân và ô họ tên của Gửi phản ánh)",
+    tinh_nang: "Điền sẵn họ tên khi gửi phản ánh",
     de_lam_gi:
-      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+      "Lấy tên hiển thị Zalo của bạn một lần, khi bạn mở ứng dụng của xã và đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may: "",
   },
@@ -377,11 +379,16 @@ export function xinMaTruyCap(): Promise<KetQuaXin<string>> {
 }
 
 /**
- * Tên hiển thị Zalo — kèm hộp xin quyền của chính Zalo (`autoRequestPermission`). Chỉ đọc `name`: `id`
- * là định danh người dùng theo App ID và ảnh đại diện là dữ liệu cá nhân không màn nào cần.
+ * Tên hiển thị Zalo. Chỉ đọc `name`: `id` là định danh người dùng theo App ID và ảnh đại diện là dữ liệu
+ * cá nhân không màn nào cần.
+ *
+ * `ask` false = CHECK ONLY: `autoRequestPermission: false` never opens Zalo's dialog — it returns the name
+ * when the citizen already allowed it, and fails otherwise. That is what lets the commune app read the
+ * name at entry without prompting a returning citizen on every open. `ask` true opens Zalo's own dialog,
+ * and is only called after the entry card has said why the name is wanted (policy 3.3.4, `khung.tsx`).
  */
-export function layTenZalo(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: true })).userInfo.name ?? "");
+export function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
+  return xin(async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "");
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */

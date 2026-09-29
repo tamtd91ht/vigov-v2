@@ -1057,8 +1057,14 @@ body {
  * Đây là thứ công dân đọc rồi mới bấm xác nhận. Nó không phải một hàng trong bảng: một cái tên
  * xếp cạnh nhãn "Mã xã" và "Nguồn" là một cái tên người ta lướt qua, và lướt qua ở bước này
  * nghĩa là gửi hồ sơ sang một cơ quan khác.
+ *
+ * SCOPED TO `.goi-y` (29/09/2026) because the commune app (`.xa-app`, further down) uses the same class
+ * name for every card of its own. Unscoped, the two rules merged: every commune card became a flex ROW
+ * with 16px padding, so the Cá nhân "Tiện ích của tôi" card laid its two rows side by side and squeezed
+ * the 1px divider to zero width; and in the other direction the commune rule's `border` shorthand wiped
+ * this card's blue left stripe. One class name, two components — the scope keeps them apart.
  */
-.xa-the {
+.goi-y .xa-the {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2782,7 +2788,12 @@ body {
 }
 
 /* ---------- thẻ ---------- */
+/* A plain BLOCK: children stack (a card of `.xa-hang` rows with a `.xa-ke--sat` between them is a
+   vertical list). Cards that lay out their children say so themselves (`.xa-khoi` grid, `.xa-hang-tin`
+   flex, …). The 18px bottom margin is the spacing these screens have always had between stacked cards —
+   it used to arrive by accident from the discovery card's rule (see `.goi-y .xa-the`), now it is stated. */
 .xa-the {
+  margin: 0 0 18px;
   background: var(--surface);
   border: 1px solid var(--xa-vien);
   border-radius: 14px;
@@ -2865,6 +2876,11 @@ button.xa-o-nhanh {
   flex: 1;
   font-size: 1.1rem;
   margin: 0;
+}
+/* A section heading that IS the `.xa-dau-khoi` row (Cá nhân: "Tiện ích của tôi", "Hiển thị", …). The
+   rule above zeroes its margin at higher specificity, which glued each heading to the card below it. */
+.xa-app h2.xa-dau-khoi {
+  margin: 22px 0 10px;
 }
 .xa-dau-khoi__them {
   min-height: calc(var(--tap-min) + 4px);

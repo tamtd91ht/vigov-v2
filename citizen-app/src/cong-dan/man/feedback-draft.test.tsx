@@ -40,7 +40,6 @@ const render = (draftStore?: FeedbackDraftStore) =>
     createElement(GuiPhanAnhTN, {
       ten_xa: "Xã Thăng Bình",
       ho_ten: null,
-      onTen: () => {},
       onQuayLai: () => {},
       onDaGui: () => {},
       onXemPhieu: () => {},

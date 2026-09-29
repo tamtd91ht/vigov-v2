@@ -1,7 +1,9 @@
 /**
  * CÁC MÀN CÒN LẠI CỦA APP RIÊNG — theo bản mẫu `vi-gov/zalo-miniapp` (chủ dự án, 28/09/2026: "làm đủ
  * các màn như bản mẫu"): tra cứu hồ sơ, truyền thanh, video, bản đồ, thông báo, cá nhân. Không màn định
- * danh, không đăng nhập (bỏ 28/09/2026): họ tên xin quyền Zalo tại chỗ cần (`NutLayTen`).
+ * danh, không đăng nhập (bỏ 28/09/2026). Họ tên ở Cá nhân CHỈ ĐỂ HIỂN THỊ (29/09/2026): nó được lấy từ
+ * Zalo một lần lúc mở app (`TrangXa`), và không có thì hiện "Chưa xác định" — màn này không gọi Zalo,
+ * vì hỏi lại ở đây là hỏi lần hai một câu bà con đã trả lời lúc mở app.
  *
  * MÀN NÀO CHƯA CÓ DỮ LIỆU THẬT thì hiện trạng thái trống bằng lời ("xã chưa cập nhật…"), KHÔNG dữ liệu
  * giả: một bản tin bịa trong app mang tên cơ quan nhà nước là một thông tin sai do xã phát hành.
@@ -16,8 +18,7 @@ import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, OBieuTuong, TrangCon } from "./khung-xa";
 import { CUA_TOI, XA_TN } from "./noi-dung";
 import { ONhapDong } from "./o-nhap";
-import { NutLayTen } from "./PhanAnhAppXa";
-import { chuCaiDau, type LayTenZalo } from "./trai-nghiem";
+import { chuCaiDau } from "./trai-nghiem";
 
 /* ═══════════════════════════════ TRA CỨU HỒ SƠ ═══════════════════════════════ */
 
@@ -71,9 +72,8 @@ export function ManChuaCoDuLieu(props: { tieu_de: string; bieu_tuong: TenBieuTuo
 export type CoChu = "vua" | "lon" | "rat-lon";
 
 export function CaNhanXa(props: {
+  /** Tên Zalo lấy lúc mở app, hoặc `null` → "Chưa xác định". */
   ho_ten: string | null;
-  lay_ten?: LayTenZalo;
-  onTen: (ho_ten: string) => void;
   ten_xa: string;
   tinh: string;
   so_phieu: number;
@@ -99,7 +99,6 @@ export function CaNhanXa(props: {
             <strong className="xa-can-bo__ten">{props.ho_ten ?? XA_TN.chua_co_ten}</strong>
           </span>
         </div>
-        {props.lay_ten && props.ho_ten === null && <NutLayTen lay={props.lay_ten} onTen={props.onTen} />}
       </div>
 
       <h2 className="xa-dau-khoi xa-dau-khoi__tieu-de">{XA_TN.tien_ich}</h2>

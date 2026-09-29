@@ -9,8 +9,10 @@
  * DỮ LIỆU:
  *   · thật — tên xã (`/communes`), tin tức (`/commune-news`), danh bạ (`/commune-staff`), đều công khai
  *     theo tên miền, không đăng nhập, không qua `vihat-miniapp`;
- *   · họ tên — xin quyền Zalo tại chỗ cần (`getUserInfo`, tiêm từ lớp vỏ); không đăng nhập, không màn
- *     định danh (chủ dự án, 28/09/2026). Số điện thoại người dân tự gõ: Zalo chỉ trả mã, máy chủ mới đổi;
+ *   · họ tên — lấy từ Zalo MỘT LẦN, lúc mở app, ở đây (`getUserInfo`, tiêm từ lớp vỏ; quyết định của người
+ *     dùng 29/09/2026, thay "xin quyền tại chỗ cần" của ea76c9d). Các màn bên dưới chỉ HIỂN THỊ tên ấy hoặc
+ *     "Chưa xác định" — không màn nào gọi Zalo lại. Không đăng nhập, không màn định danh (chủ dự án,
+ *     28/09/2026). Số điện thoại người dân tự gõ: Zalo chỉ trả mã, máy chủ mới đổi;
  *   · trải nghiệm — phiếu phản ánh CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`), gắn nhãn, KHÔNG gửi vào hệ thống;
  *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
@@ -22,7 +24,7 @@
  *
  * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
  */
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
@@ -35,7 +37,16 @@ import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieu
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
-import { apDanhGia, type FeedbackDraftStore, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
+import {
+  afterNameAsk,
+  afterNameCheck,
+  apDanhGia,
+  type FeedbackDraftStore,
+  type LayTenZalo,
+  type NameAtEntry,
+  nameShown,
+  type PhieuTN,
+} from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -157,9 +168,44 @@ const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: "navy" | "cam"; the
   },
 ];
 
+/**
+ * THE ENTRY CARD — the only place the app asks Zalo for the name, shown on the home screen right after
+ * opening, and only when the silent check found no permission yet (`afterNameCheck`).
+ *
+ * WHY A CARD BEFORE ZALO'S DIALOG, NOT THE DIALOG STRAIGHT AWAY: Zalo's dialog says WHAT is shared, not
+ * WHY. Policy 3.3.4 (quoted in `features/tinh-nang/khung.tsx`) refuses apps whose permission flow does not
+ * state its purpose, and an elderly citizen who meets a system dialog the instant the app opens cannot
+ * tell what they are agreeing to. So the card says why first, and the dialog opens only on "Đồng ý".
+ * "Không" is an ordinary answer: the card goes away, the form's name field is simply empty.
+ */
+function NameCard(props: { asking: boolean; onAgree: () => void; onDecline: () => void }) {
+  return (
+    <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-ten-tieu-de">
+      <h2 className="xa-dau-khoi__tieu-de" id="xa-ten-tieu-de">
+        {XA_TN.name_card_title}
+      </h2>
+      <p>{XA_TN.name_card_why}</p>
+      <p className="xa-phu">{XA_TN.name_card_zalo_asks}</p>
+      {props.asking && (
+        <p className="xa-phu" role="status">
+          {XA_TN.name_card_asking}
+        </p>
+      )}
+      <button type="button" className="xa-nut" onClick={props.onAgree} disabled={props.asking}>
+        {XA_TN.name_card_agree}
+      </button>
+      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onDecline} disabled={props.asking}>
+        {XA_TN.name_card_decline}
+      </button>
+    </section>
+  );
+}
+
 function TrangChuXa(props: {
   xa: XaCuaApp;
   ho_ten: string | null;
+  /** The entry card, when the name still needs the citizen's consent; otherwise `null`. */
+  name_card: ReactNode;
   tin: ReturnType<typeof useTinXa>;
   phieu: readonly PhieuTN[];
   di: (m: ManXa) => void;
@@ -185,6 +231,7 @@ function TrangChuXa(props: {
       </header>
 
       <div className="xa-trang__than">
+        {props.name_card}
         {NHOM_CHUC_NANG.map((nhom) => (
           <section key={nhom.tieu_de} className="xa-the xa-the--dem xa-nhom-cn">
             <div className={`xa-dau-nhom xa-dau-nhom--${nhom.vach}`}>
@@ -282,15 +329,18 @@ function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () =>
 function AppCuaXa(props: {
   ten_mien: string;
   xa: XaCuaApp;
-  lay_ten?: LayTenZalo;
+  /** The name request of this open, owned by `TrangXa` (the entry). Screens below only READ it. */
+  name: NameAtEntry;
+  onAgreeName: () => void;
+  onDeclineName: () => void;
   getSceneLocation?: GetSceneLocation;
   draftStore?: FeedbackDraftStore;
 }) {
   const { ten_mien, xa } = props;
   // HỌ TÊN VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy. Không đăng
-  // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên xin quyền Zalo ở chỗ cần. Thứ DUY NHẤT sống
-  // qua lần đóng app là NHÁP đang soạn, qua `draftStore` lớp vỏ tiêm (ADR 0050 #7).
-  const [ho_ten, datHoTen] = useState<string | null>(null);
+  // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Thứ
+  // DUY NHẤT sống qua lần đóng app là NHÁP đang soạn, qua `draftStore` lớp vỏ tiêm (ADR 0050 #7).
+  const shownName = nameShown(props.name);
   const [phieu, datPhieu] = useState<readonly PhieuTN[]>([]);
   const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
@@ -317,9 +367,7 @@ function AppCuaXa(props: {
       man_con = (
         <GuiPhanAnhTN
           ten_xa={xa.ten}
-          ho_ten={ho_ten}
-          lay_ten={props.lay_ten}
-          onTen={datHoTen}
+          ho_ten={shownName}
           getSceneLocation={props.getSceneLocation}
           draftStore={props.draftStore}
           onQuayLai={ve}
@@ -392,7 +440,11 @@ function AppCuaXa(props: {
   const tab = man.kieu === "tab" ? man.tab : "trang-chu";
   let than;
   if (tab === "trang-chu") {
-    than = <TrangChuXa xa={xa} ho_ten={ho_ten} tin={tin} phieu={phieu} di={datMan} />;
+    const name_card =
+      props.name.kind === "needs-consent" || props.name.kind === "asking" ? (
+        <NameCard asking={props.name.kind === "asking"} onAgree={props.onAgreeName} onDecline={props.onDeclineName} />
+      ) : null;
+    than = <TrangChuXa xa={xa} ho_ten={shownName} name_card={name_card} tin={tin} phieu={phieu} di={datMan} />;
   } else if (tab === "tin-tuc") {
     than = (
       <>
@@ -424,9 +476,7 @@ function AppCuaXa(props: {
       <>
         <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} />
         <CaNhanXa
-          ho_ten={ho_ten}
-          lay_ten={props.lay_ten}
-          onTen={datHoTen}
+          ho_ten={shownName}
           ten_xa={xa.ten}
           tinh={xa.tinh}
           so_phieu={phieu.length}
@@ -456,8 +506,10 @@ export function TrangXa(props: {
   /** Tên miền xã nung vào bản dựng (`lib/xa-co-dinh.ts`). */
   ten_mien: string;
   /**
-   * Hành động xin quyền DUY NHẤT: lấy họ tên từ Zalo (`getUserInfo`), do lớp vỏ tiêm — nửa này không nhập
-   * zmp-sdk (`ranh-gioi-hai-nua.test.ts` §3a). Không truyền thì không có nút ấy (chạy thử, test).
+   * Lấy họ tên từ Zalo (`getUserInfo`), do lớp vỏ tiêm — nửa này không nhập zmp-sdk (`ranh-gioi-hai-nua.test.ts`
+   * §3a). Gọi CHỈ ở đây, lúc mở app (29/09/2026): một lần "check" không bật hộp của Zalo; nếu chưa được phép
+   * thì thẻ giải thích mục đích hiện trên trang chủ, và "ask" chỉ gửi khi bà con bấm "Đồng ý" trên thẻ ấy.
+   * Không truyền (chạy thử ngoài Zalo, test) thì không hỏi gì và tên là "Chưa xác định".
    */
   lay_ten?: LayTenZalo;
   /**
@@ -475,6 +527,32 @@ export function TrangXa(props: {
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
+  const [name, setName] = useState<NameAtEntry>(() =>
+    lay_ten === undefined ? { kind: "settled", name: null } : { kind: "checking" },
+  );
+  /**
+   * The ref, not the effect's dependency list, is what makes the check run ONCE: StrictMode mounts, unmounts
+   * and remounts in development, and each mount re-runs the effect. A second `getUserInfo` would be a second
+   * platform call for the same answer — the same guard `useTinXa` uses for the same reason.
+   */
+  const nameChecked = useRef(false);
+
+  // Started with the commune lookup, not after it: the check never opens a dialog, so running it while
+  // the commune name loads costs the citizen nothing, and the name is usually ready by the first screen.
+  useEffect(() => {
+    if (lay_ten === undefined || nameChecked.current) return;
+    nameChecked.current = true;
+    void lay_ten("check")
+      .catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }))
+      .then((kq) => setName(afterNameCheck(kq)));
+  }, [lay_ten]);
+
+  async function askName() {
+    if (lay_ten === undefined || name.kind !== "needs-consent") return;
+    setName({ kind: "asking" });
+    const kq = await lay_ten("ask").catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }));
+    setName(afterNameAsk(kq));
+  }
 
   useEffect(() => {
     let con_song = true;
@@ -494,7 +572,9 @@ export function TrangXa(props: {
       <AppCuaXa
         ten_mien={ten_mien}
         xa={trang.xa}
-        lay_ten={lay_ten}
+        name={name}
+        onAgreeName={() => void askName()}
+        onDeclineName={() => setName({ kind: "settled", name: null })}
         getSceneLocation={getSceneLocation}
         draftStore={draftStore}
       />

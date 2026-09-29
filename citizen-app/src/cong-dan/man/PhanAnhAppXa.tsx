@@ -5,7 +5,9 @@
  *   · Gửi: Lĩnh vực → Mô tả (gửi ngay ở đây) → Đã gửi. Lĩnh vực dân chọn LÀ lĩnh vực của phiếu (ADR 0050
  *     #1); máy chủ đặt hạn từ nó — Mini App không tự tính hạn (luật 10 cấm #2).
  *   · Công tắc "Gửi ẩn danh" (#3, SRS M4.2): bật thì ẩn ô tên và số, phiếu không giữ hai ô ấy; tắt thì họ
- *     tên bắt buộc (`kiemNhapPhieu`). Tên xin quyền Zalo (`NutLayTen`).
+ *     tên bắt buộc (`kiemNhapPhieu`). Ô họ tên điền sẵn tên Zalo lấy MỘT LẦN lúc mở app (`TrangXa`,
+ *     29/09/2026); không có tên thì ô trống và bà con tự gõ. Màn này KHÔNG gọi Zalo — không nút "Lấy từ
+ *     Zalo": một câu hỏi đã trả lời lúc mở app không được hỏi lại giữa lúc đang soạn phản ánh.
  *   · Người dân thấy BỐN nhóm trạng thái; dòng thời gian chỉ các bước ĐÃ QUA, nhãn của prototype (#5).
  *   · Chấm 1–5 sao khi phiếu đã xử lý xong; 1–2 sao mở lại phiếu (#2).
  *   · Xưng "bà con" (#6).
@@ -37,10 +39,8 @@ import { StarPicker } from "./star-picker";
 import {
   duocDanhGia,
   type FeedbackDraftStore,
-  type KetQuaLayTen,
   kiemNhapPhieu,
   LINH_VUC_TAM,
-  type LayTenZalo,
   type LoiNhapPhieu,
   maPhieuTraiNghiem,
   NHAN_BUOC,
@@ -362,47 +362,6 @@ function ThanhBuoc({ buoc }: { buoc: 1 | 2 | 3 }) {
   );
 }
 
-const CAU_TEN: Readonly<Record<Exclude<KetQuaLayTen["kieu"], "xong">, string>> = {
-  "tu-choi": XA_TN.ten_tu_choi,
-  "ngoai-zalo": XA_TN.ten_ngoai_zalo,
-  "khong-lay-duoc": XA_TN.ten_khong_lay_duoc,
-};
-
-/**
- * Nút "Lấy họ tên từ Zalo" — HÀNH ĐỘNG XIN QUYỀN DUY NHẤT (`LayTenZalo`). Zalo tự bật hộp hỏi; bà con từ
- * chối thì vẫn tự gõ được, và câu hiện ra nói đúng điều ấy.
- */
-export function NutLayTen({ lay, onTen }: { lay: LayTenZalo; onTen: (ho_ten: string) => void }) {
-  const [dang, datDang] = useState(false);
-  const [cau, datCau] = useState<{ loi: boolean; chu: string } | null>(null);
-  async function bam() {
-    if (dang) return;
-    datDang(true);
-    const kq = await lay().catch((): KetQuaLayTen => ({ kieu: "khong-lay-duoc" }));
-    datDang(false);
-    if (kq.kieu === "xong") {
-      onTen(kq.ho_ten);
-      datCau({ loi: false, chu: XA_TN.ten_da_lay });
-    } else {
-      datCau({ loi: true, chu: CAU_TEN[kq.kieu] });
-    }
-  }
-  return (
-    <div className="xa-vi-tri">
-      <button type="button" className="xa-nut xa-nut--phu" onClick={() => void bam()} disabled={dang}>
-        <BieuTuong ten="user" co={20} />
-        {dang ? XA_TN.ten_dang : XA_TN.ten_nut}
-      </button>
-      <p className="xa-phu">{XA_TN.ten_vi_sao}</p>
-      {cau !== null && (
-        <p className={cau.loi ? "xa-loi-o" : "xa-phu"} role="status">
-          {cau.chu}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /** "Bà con" words for the shared location control (`scene-location.tsx`), from `XA_TN` / `XA_PA`. */
 export const COMMUNE_LOCATION_WORDS: SceneLocationWords = {
   button: XA_TN.vi_tri_nut,
@@ -464,12 +423,27 @@ export function restoreDraft(draft: NhapPhieu, zaloName: string | null): { form:
   };
 }
 
+/**
+ * The form a fresh send screen opens with. PURE, exported for tests. The name field starts with the Zalo
+ * name taken at entry, or EMPTY — never a placeholder name: the field is required when not anonymous
+ * (`kiemNhapPhieu`), so an empty field makes the citizen type it, while a guessed one would be sent.
+ */
+export function blankForm(nameFromEntry: string | null): NhapPhieu {
+  return {
+    linh_vuc: "",
+    noi_dung: "",
+    dia_chi: "",
+    ho_ten: nameFromEntry ?? "",
+    dien_thoai: "",
+    // Gửi ẩn danh là tuỳ chọn của bà con (SRS M4.2, ADR 0050 #3): bật thì không gửi họ tên, số điện thoại.
+    an_danh: false,
+  };
+}
+
 export function GuiPhanAnhTN(props: {
   ten_xa: string;
-  /** Họ tên đã lấy từ Zalo ở lần mở này, hoặc `null`. */
+  /** Họ tên lấy từ Zalo lúc mở app, hoặc `null`. CHỈ để điền sẵn — màn này không gọi Zalo. */
   ho_ten: string | null;
-  lay_ten?: LayTenZalo;
-  onTen: (ho_ten: string) => void;
   /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
   getSceneLocation?: GetSceneLocation;
   /**
@@ -489,15 +463,7 @@ export function GuiPhanAnhTN(props: {
    * before the citizen has answered (the prototype asks first, `NewFeedbackPage.tsx:79`).
    */
   const [draftOffer, setDraftOffer] = useState<NhapPhieu | null>(() => draftStore?.load() ?? null);
-  const [nhap, datNhap] = useState<NhapPhieu>({
-    linh_vuc: "",
-    noi_dung: "",
-    dia_chi: "",
-    ho_ten: props.ho_ten ?? "",
-    dien_thoai: "",
-    // Gửi ẩn danh là tuỳ chọn của bà con (SRS M4.2, ADR 0050 #3): bật thì không gửi họ tên, số điện thoại.
-    an_danh: false,
-  });
+  const [nhap, datNhap] = useState<NhapPhieu>(() => blankForm(props.ho_ten));
   const [loi, datLoi] = useState<LoiNhapPhieu>({});
   const [xong, datXong] = useState<PhieuTN | null>(null);
   const [hoi_huy, datHoiHuy] = useState(false);
@@ -657,15 +623,6 @@ export function GuiPhanAnhTN(props: {
             </div>
             {!nhap.an_danh && (
               <>
-                {props.lay_ten && (
-                  <NutLayTen
-                    lay={props.lay_ten}
-                    onTen={(t) => {
-                      datNhap((x) => ({ ...x, ho_ten: t }));
-                      props.onTen(t);
-                    }}
-                  />
-                )}
                 <ONhapDong id="xa-ho-ten" nhan={XA_PA.ten_nguoi_pa} goi_y={XA_PA.goi_y_ten} gia_tri={nhap.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={doi("ho_ten")} />
                 {loi.ho_ten && <p className="xa-loi-o" role="alert">{loi.ho_ten}</p>}
                 <ONhapDong id="xa-dien-thoai" nhan={XA_PA.so_dien_thoai} goi_y={XA_PA.goi_y_so} gia_tri={nhap.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={doi("dien_thoai")} />

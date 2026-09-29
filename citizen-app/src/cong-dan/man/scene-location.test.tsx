@@ -192,7 +192,6 @@ describe("what the citizen sees — experience form (commune's own app)", () => 
       createElement(GuiPhanAnhTN, {
         ten_xa: "Xã Thử Nghiệm",
         ho_ten: null,
-        onTen: () => {},
         onQuayLai: () => {},
         onDaGui: () => {},
         onXemPhieu: () => {},
