@@ -98,23 +98,42 @@ export function nhanSoDem(so: number | null): string {
 }
 
 /**
- * Trạng thái rỗng của tab §2 — cùng hai điều phải nói như `nhanNhomRong` của tab Danh mục, và
- * cùng một lý do: hôm nay bảng này rỗng ở mọi đơn vị. Migration 0005 tạo bảng và CỐ Ý không gieo
- * bản ghi nào (`service-identity/internal/http/thon_to_dan_pho.go`: "That is every commune today").
+ * Trạng thái rỗng của tab §2 — nói đúng một điều: đơn vị chưa có địa bàn nào. Không phải lỗi. Việc
+ * thêm được hay không là câu của NÚT (có `admin.org` thì có nút, không thì câu `NO_WRITE_PERMISSION`
+ * ở `residential-unit-form.ts`), nên câu này không nói thay.
  *
  * "Địa bàn" chứ không phải "bản ghi": người đọc màn hình này là cán bộ, không phải người lập trình.
  */
-export const THON_RONG =
-  "Đơn vị chưa có thôn hoặc tổ dân phố nào. Màn hình này chỉ xem, không thêm được địa bàn mới.";
+export const THON_RONG = "Đơn vị chưa có thôn hoặc tổ dân phố nào.";
 
 /**
- * Ghi chú đầu tab §2 — vì sao không có nút thêm, sửa, xoá hay nhập Excel nào.
- *
- * LÝ DO KHÁC HẲN TAB DANH MỤC, nên câu chữ cũng khác: ở đây không phải câu hỏi mở #21 mà là câu
- * máy chủ ghi ngay trên tuyến — lập một thôn, nhập hai thôn làm một, hay cho một thôn ngừng hoạt
- * động là những hành vi hành chính tác động lên một bản ghi mà phản ánh và hồ sơ hộ đang trỏ tới;
- * ai được làm, và hồ sơ đang trỏ vào một địa bàn biến mất thì ra sao, chưa ai trả lời.
+ * Ghi chú đầu tab §2 (người dùng chốt 29/09/2026, ADR 0059 §2). Nói điều cán bộ cần biết TRƯỚC khi
+ * bấm: không có xoá, và vì sao. Một địa bàn là thứ phản ánh và hồ sơ hộ đang trỏ tới; xoá nó là làm
+ * những hồ sơ ấy mất tên địa bàn — nên chỉ có "Ngừng dùng", và địa bàn ngừng dùng vẫn ở lại.
  */
-export const GHI_CHU_CHI_XEM_THON =
-  "Màn hình hiện chỉ xem. Thêm, sửa, xoá địa bàn và nhập từ tệp Excel chưa mở vì chưa có quy " +
-  "định cho việc nhập, tách hay ngừng dùng một địa bàn mà hồ sơ của đơn vị đang trỏ tới.";
+// The name predates the write routes; the TEXT changed, the name did not (rule 12 inv 3).
+export const GHI_CHU_CHI_XEM_THON = // vi-name-ok: existing export restored, rule 12 inv 3 forbids renaming it
+  "Danh sách thôn, tổ dân phố của đơn vị. Không có thao tác xoá: địa bàn không còn dùng thì bấm " +
+  "Ngừng dùng. Địa bàn ngừng dùng vẫn nằm trong danh sách và vẫn hiện tên trên mọi hồ sơ, phản ánh " +
+  "đã lập; chỉ không còn trong ô chọn địa bàn khi lập hồ sơ mới.";
+
+/**
+ * Ô chọn địa bàn cho một hồ sơ MỚI: chỉ địa bàn đang dùng (`active: true`). Máy chủ nói thẳng
+ * "pickers filter it out" (`residential_unit_write.go:22`).
+ *
+ * CHỈ DÀNH CHO Ô CHỌN GHI. Bảng, chỗ hiện tên và BỘ LỌC danh sách giữ nguyên địa bàn đã ngừng dùng —
+ * lọc bỏ nó ở bộ lọc là làm phản ánh đã lập ở đó không tìm ra được (xem `residentialUnitFilterLabel`).
+ */
+export function pickableResidentialUnits<T extends { readonly active: boolean }>(
+  units: readonly T[],
+): readonly T[] {
+  return units.filter((u) => u.active);
+}
+
+/**
+ * Nhãn của một địa bàn trong BỘ LỌC danh sách: địa bàn đã ngừng dùng vẫn có (hồ sơ cũ vẫn trỏ vào
+ * nó) nhưng được nói rõ, để cán bộ không tưởng đó là địa bàn còn nhận hồ sơ.
+ */
+export function residentialUnitFilterLabel(u: { readonly name: string; readonly active: boolean }): string {
+  return u.active ? u.name : `${u.name} (ngừng dùng)`;
+}

@@ -1,14 +1,21 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { commitImport, previewImport } from "@/lib/api/excel-import";
 import type { ImportPreview, ImportResult } from "@/lib/api/excel-import";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing type of goi.ts, imported not declared (rule 12 inv 3)
 import type { MapAssetTypeImportRow } from "@/lib/api/map-asset-type-import";
+import type { ResidentialUnitImportRow } from "@/lib/api/residential-unit-import";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract type, imported not declared
 
 import { keyAfterAttempt, keyForAttempt } from "./excel-import-flow";
 import { ExcelImportView } from "./excel-import-panel";
-import { CATALOGUE_IMPORTS, MAP_ASSET_TYPE_IMPORT_TARGET, catalogueImportFor } from "./excel-import-targets";
+import {
+  CATALOGUE_IMPORTS,
+  MAP_ASSET_TYPE_IMPORT_TARGET,
+  RESIDENTIAL_UNIT_IMPORT_TARGET,
+  catalogueImportFor,
+} from "./excel-import-targets";
 import { NhomMuc } from "./tab-danh-muc"; // vi-name-ok: existing export of tab-danh-muc.tsx, imported not declared (rule 12 inv 3)
 
 /**
@@ -172,5 +179,106 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect(shown).toContain("<p>PANEL</p>");
     const denied = renderToStaticMarkup(<NhomMuc nhom={group} coQuyenGhi={false} thaoTac={noActions} form={null} />);
     expect(denied).not.toContain("Nhập từ Excel");
+  });
+});
+
+describe("Thôn / Tổ dân phố — its own import target (not a catalogue group)", () => {
+  const R = RESIDENTIAL_UNIT_IMPORT_TARGET;
+  const row = {
+    row: 2,
+    code: "thon-binh-an",
+    name: "Thôn Bình An",
+    type_code: "thon",
+    type_label: "Thôn",
+    head_staff_code: "",
+    head_staff_name: "",
+    household_count: null,
+    population_count: 1132,
+    order: 1,
+  };
+
+  function residentialView(
+    preview: KetQua<ImportPreview<ResidentialUnitImportRow>> | null,
+    result: ImportResult<ResidentialUnitImportRow> | null = null,
+  ) {
+    return renderToStaticMarkup(
+      <ExcelImportView
+        target={R}
+        fileChosen
+        preview={preview}
+        result={result}
+        busy=""
+        templateError=""
+        onDownloadTemplate={() => {}}
+        onChooseFile={() => {}}
+        onPreview={() => {}}
+        onImport={() => {}}
+        onClose={() => {}}
+      />,
+    );
+  }
+
+  it("is NOT in CATALOGUE_IMPORTS, and reads its three identity routes", () => {
+    expect(Object.keys(CATALOGUE_IMPORTS)).not.toContain("thonToDanPho");
+    expect(R.routes).toEqual({
+      template: "/api/v1/residential-units/import-template",
+      previews: "/api/v1/residential-units/import-previews",
+      imports: "/api/v1/residential-units/imports",
+    });
+    expect(R.rowsField).toBe("units");
+  });
+
+  it("round: preview reads `units`, shows a blank count as 'Chưa nhập' (never 0), then imports with ONE key", async () => {
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init: RequestInit) => {
+        calls.push([path, init]);
+        if (path.endsWith("/import-previews")) {
+          return new Response(JSON.stringify({ valid: true, units: [row], errors: [] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ created: [{ ...row, id: "01JNEW" }] }), { status: 201 });
+      }),
+    );
+    try {
+      const file = new Blob(["x"]);
+      const p = await previewImport<ResidentialUnitImportRow>(R.routes, R.rowsField, file, "thon.xlsx");
+      expect(p.ok && p.duLieu.rows).toEqual([row]);
+      const html = residentialView(p);
+      expect(html).toContain("Sẽ tạo 1 thôn / tổ dân phố");
+      expect(html).toContain(
+        '<td>2</td><td>Thôn Bình An</td><td class="ma-muc">thon-binh-an</td><td>Thôn</td><td>Chưa có</td><td>Chưa nhập</td><td>1.132</td><td>1</td>',
+      );
+      expect(html).toContain(">Nhập các địa bàn này</button>");
+
+      const r = await commitImport<ResidentialUnitImportRow>(R.routes, file, "thon.xlsx", "k-1");
+      expect(r).toEqual({ ok: true, created: [{ ...row, id: "01JNEW" }] });
+      expect(calls[1]![0]).toBe("/api/v1/residential-units/imports");
+      expect(new Headers(calls[1]![1].headers).get("Idempotency-Key")).toBe("k-1");
+      expect(residentialView(null, r)).toContain("Đã nhập 1 thôn / tổ dân phố. Danh sách đã được tải lại.");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("409 residential_units_changed: the server's sentence, nothing written", async () => {
+    const msg = "Danh sách thôn / tổ dân phố đã thay đổi từ lúc kiểm tra tệp. Hãy kiểm tra lại tệp rồi nhập.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ code: "residential_units_changed", message: msg, trace_id: "t" }), { status: 409 })),
+    );
+    try {
+      const r = await commitImport<ResidentialUnitImportRow>(R.routes, new Blob(["x"]), "thon.xlsx", "k-1");
+      expect(r).toEqual({ ok: false, message: msg, errors: [] });
+      expect(residentialView({ ok: true, duLieu: { valid: true, rows: [row], errors: [] } }, r)).toContain(msg);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("invalid preview: the heading names what was NOT created", () => {
+    const html = residentialView({ ok: true, duLieu: { valid: false, rows: [], errors: ERRORS } });
+    expect(html).toContain("chưa thôn / tổ dân phố nào được tạo");
+    expect(html).not.toContain("Nhập các địa bàn này");
   });
 });

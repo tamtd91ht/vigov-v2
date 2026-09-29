@@ -33,12 +33,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   },
   {
     // CẬP NHẬT CÂU NÀY TRONG CÙNG LƯỢT với mỗi tuyến nhập mới được nối (`excel-import-targets.tsx`):
-    // nó kể tên từng nhóm nhập được hôm nay, và `khoi-chua-dung.test.tsx` đối chiếu với
-    // `CATALOGUE_IMPORTS`.
-    ten: "Nút Nhập từ Excel ở tab Thôn / Tổ dân phố, Người dùng và các nhóm còn lại của Danh mục (§2, §3, §5)",
+    // nó kể tên từng thứ nhập được hôm nay, và `khoi-chua-dung.test.tsx` đối chiếu với
+    // `CATALOGUE_IMPORTS` và các đích nhập riêng (Sơ đồ tổ chức, Thôn / Tổ dân phố).
+    ten: "Nút Nhập từ Excel ở tab Người dùng và các nhóm còn lại của Danh mục (§3, §5)",
     viSao:
-      "Trên màn này hôm nay chỉ nhập được từ Excel hai thứ: Sơ đồ tổ chức, và nhóm Loại tài nguyên " +
-      "bản đồ ở tab Danh mục. Nhập danh sách cán bộ, Thôn / Tổ dân phố và các nhóm danh mục khác đã " +
-      "được quyết (ADR 0059) nhưng dịch vụ sở hữu từng loại chưa mở tuyến nhập, nên chưa có nút.",
+      "Trên màn này hôm nay nhập được từ Excel ba thứ: Sơ đồ tổ chức, Thôn / Tổ dân phố, và nhóm Loại " +
+      "tài nguyên bản đồ ở tab Danh mục. Nhập danh sách cán bộ và các nhóm danh mục khác đã được quyết " +
+      "(ADR 0059) nhưng dịch vụ sở hữu từng loại chưa mở tuyến nhập, nên chưa có nút.",
   },
 ];

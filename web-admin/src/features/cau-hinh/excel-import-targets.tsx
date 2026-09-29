@@ -6,6 +6,8 @@ import type { KhoaDanhMucGhi } from "@/lib/api/danh-muc";
 import { MAP_ASSET_TYPE_IMPORT_ROUTES, MAP_ASSET_TYPE_ROWS_FIELD } from "@/lib/api/map-asset-type-import";
 import type { MapAssetTypeImportRow } from "@/lib/api/map-asset-type-import";
 import { ORG_UNIT_IMPORT_ROUTES } from "@/lib/api/org-unit-import";
+import { RESIDENTIAL_UNIT_IMPORT_ROUTES, RESIDENTIAL_UNIT_ROWS_FIELD } from "@/lib/api/residential-unit-import";
+import type { ResidentialUnitImportRow } from "@/lib/api/residential-unit-import";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_orgUnitImportPreviewOut,
@@ -16,6 +18,7 @@ import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 import type { ImportTarget } from "./excel-import-flow";
 import { ExcelImportPanel } from "./excel-import-panel";
+import { loaiDonVi, nhanLoaiDonVi, nhanSoDem } from "./nhan-thon";
 import {
   CONFIRM_IMPORT_BUTTON,
   ERRORS_HEADING,
@@ -29,7 +32,7 @@ import {
 /**
  * Every "⬆ Nhập từ Excel" of the configuration screen, one `ImportTarget` each (ADR 0059).
  *
- * TO WIRE ANOTHER IMPORT (staff, residential units, another catalogue group): write its routes file
+ * TO WIRE ANOTHER IMPORT (staff, another catalogue group): write its routes file
  * beside `lib/api/map-asset-type-import.ts`, add ONE target here, and — for a catalogue group — one
  * entry in `CATALOGUE_IMPORTS`. The panel, the flow and the key-per-attempt rule need no change. Then
  * update the `Excel` item of `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`) in the same change: it names every
@@ -57,6 +60,48 @@ export const ORG_UNIT_IMPORT_TARGET: ImportTarget<identity_orgUnitImportUnitOut>
   rowKey: (u) => u.row,
   routes: ORG_UNIT_IMPORT_ROUTES,
   rowsField: "units" satisfies keyof identity_orgUnitImportPreviewOut,
+};
+
+/**
+ * Thôn / Tổ dân phố (§2) — `admin.org`, gated by `tab-thon-to-dan-pho.tsx`. NOT a catalogue group (a
+ * unit has a name, households, a head), so it is its own target like the org chart and has no entry in
+ * `CATALOGUE_IMPORTS`.
+ *
+ * The preview shows counts through `nhanSoDem`, the same function as the tab's table: a blank cell of
+ * the spreadsheet is "Chưa nhập", never "0" — the one thing a staff member checking the preview must
+ * be able to see before the file is written.
+ */
+export const RESIDENTIAL_UNIT_IMPORT_TARGET: ImportTarget<ResidentialUnitImportRow> = {
+  id: "thon-to-dan-pho",
+  title: "Nhập thôn / tổ dân phố từ Excel",
+  explanation:
+    "Tải tệp mẫu, điền mỗi thôn hoặc tổ dân phố một dòng rồi chọn tệp để kiểm tra. Tệp mẫu có sẵn danh " +
+    "sách chọn Loại và Trưởng thôn của xã. Hệ thống kiểm tra toàn bộ tệp trước, chưa ghi gì; chỉ khi " +
+    "tệp không có lỗi mới nhập được, và nhập thì nhập cả tệp hoặc không nhập gì. Nhập chỉ thêm địa bàn " +
+    "mới; địa bàn đang có không bị sửa. Ô Số hộ, Nhân khẩu để trống là chưa nhập, không phải 0.",
+  templateFileName: "mau-nhap-thon-to-dan-pho.xlsx",
+  confirmButton: "Nhập các địa bàn này",
+  errorsHeading:
+    "Tệp có lỗi — chưa thôn / tổ dân phố nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:",
+  rowsLabel: "Các thôn / tổ dân phố sẽ tạo",
+  previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} thôn / tổ dân phố:`,
+  importedSentence: (n) =>
+    n === null
+      ? "Tệp đã được nhập ở lần gửi trước. Danh sách đã được tải lại."
+      : `Đã nhập ${n} thôn / tổ dân phố. Danh sách đã được tải lại.`,
+  columns: [
+    { header: "Dòng", cell: (u) => String(u.row) },
+    { header: "Tên", cell: (u) => u.name },
+    { header: "Mã", cell: (u) => u.code, mono: true },
+    { header: "Loại", cell: (u) => nhanLoaiDonVi(loaiDonVi(u.type_code, u.type_label)) },
+    { header: "Trưởng thôn / Tổ trưởng", cell: (u) => (u.head_staff_code === "" ? "Chưa có" : u.head_staff_name) },
+    { header: "Số hộ", cell: (u) => nhanSoDem(u.household_count) },
+    { header: "Nhân khẩu", cell: (u) => nhanSoDem(u.population_count) },
+    { header: "Thứ tự", cell: (u) => String(u.order) },
+  ],
+  rowKey: (u) => u.row,
+  routes: RESIDENTIAL_UNIT_IMPORT_ROUTES,
+  rowsField: RESIDENTIAL_UNIT_ROWS_FIELD,
 };
 
 /** Danh mục → Loại tài nguyên bản đồ (§5) — `admin.lookup`, owner `service-comms`. */

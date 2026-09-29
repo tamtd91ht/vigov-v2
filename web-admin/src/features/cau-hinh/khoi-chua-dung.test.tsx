@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CATALOGUE_IMPORTS } from "./excel-import-targets";
+import { CATALOGUE_IMPORTS, ORG_UNIT_IMPORT_TARGET, RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
 import { KhoiChuaDung } from "./khoi-chua-dung";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 
@@ -42,13 +42,19 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     }
   });
 
-  it("mục Nhập Excel kể đúng những gì nhập được HÔM NAY: Sơ đồ tổ chức và Loại tài nguyên bản đồ", () => {
+  it("mục Nhập Excel kể đúng những gì nhập được HÔM NAY: Sơ đồ tổ chức, Thôn / Tổ dân phố, Loại tài nguyên bản đồ", () => {
     const excel = PHAN_CHUA_DUNG.filter((p) => /Excel/.test(p.ten));
     expect(excel).toHaveLength(1);
     const muc = excel[0]!;
-    expect(muc.ten).not.toMatch(/§1/);
-    expect(muc.ten).toMatch(/§2.*§3.*§5/);
-    expect(muc.viSao).toMatch(/chỉ nhập được từ Excel hai thứ: Sơ đồ tổ chức, và nhóm Loại tài nguyên bản đồ/);
+    // §1 (Sơ đồ tổ chức) and §2 (Thôn / Tổ dân phố) have their own import targets — neither may still be
+    // named as missing.
+    expect(muc.ten).not.toMatch(/§1|§2|Thôn/);
+    expect(muc.ten).toMatch(/§3.*§5/);
+    expect(muc.viSao).toMatch(
+      /nhập được từ Excel ba thứ: Sơ đồ tổ chức, Thôn \/ Tổ dân phố, và nhóm Loại tài nguyên bản đồ/,
+    );
+    expect(RESIDENTIAL_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/residential-units/imports");
+    expect(ORG_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/org-units/imports");
     // The sentence names every catalogue group wired today — and only those. A group wired in
     // `CATALOGUE_IMPORTS` without this sentence moving is the stale "chưa có" this block exists to avoid.
     expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo"]);

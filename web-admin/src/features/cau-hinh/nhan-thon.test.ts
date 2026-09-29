@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  GHI_CHU_CHI_XEM_THON,
   loaiDonVi,
   lopLoaiDonVi,
   lopTrangThaiDiaBan,
   nhanLoaiDonVi,
   nhanSoDem,
   nhanTrangThaiDiaBan,
+  pickableResidentialUnits,
+  GHI_CHU_CHI_XEM_THON,
+  residentialUnitFilterLabel,
   THON_RONG,
 } from "./nhan-thon";
 
@@ -86,19 +88,37 @@ describe("trạng thái địa bàn dùng chung một hàm với tab Danh mục"
   });
 });
 
-describe("TRẠNG THÁI RỖNG của tab Thôn / Tổ dân phố", () => {
-  it("nói đủ hai điều, và không nói là lỗi", () => {
-    expect(THON_RONG).toBe(
-      "Đơn vị chưa có thôn hoặc tổ dân phố nào. " +
-        "Màn hình này chỉ xem, không thêm được địa bàn mới.",
-    );
-    for (const tu of ["lỗi", "thất bại", "thử lại", "đang phát triển"]) {
+describe("TRẠNG THÁI RỖNG và ghi chú đầu tab Thôn / Tổ dân phố", () => {
+  it("rỗng: nói đúng một điều, không nói là lỗi, không còn nói 'chỉ xem'", () => {
+    expect(THON_RONG).toBe("Đơn vị chưa có thôn hoặc tổ dân phố nào.");
+    for (const tu of ["lỗi", "thất bại", "thử lại", "đang phát triển", "chỉ xem"]) {
       expect(THON_RONG.toLowerCase()).not.toContain(tu);
     }
   });
 
-  it("ghi chú đầu tab nói lý do thật, không hứa hẹn", () => {
-    expect(GHI_CHU_CHI_XEM_THON).toContain("chỉ xem");
-    expect(GHI_CHU_CHI_XEM_THON.toLowerCase()).not.toContain("đang phát triển");
+  it("ghi chú đầu tab: không có xoá, và địa bàn ngừng dùng vẫn giữ tên trên hồ sơ cũ", () => {
+    // Người dùng chốt 29/09/2026 (ADR 0059 §2): thêm, sửa, ngừng dùng — không xoá.
+    expect(GHI_CHU_CHI_XEM_THON).toMatch(/Không có thao tác xoá/);
+    expect(GHI_CHU_CHI_XEM_THON).toMatch(/Ngừng dùng/);
+    expect(GHI_CHU_CHI_XEM_THON).toMatch(/vẫn hiện tên trên mọi hồ sơ/);
+    for (const cu of ["chỉ xem", "chưa mở", "chưa có quy định"]) {
+      expect(GHI_CHU_CHI_XEM_THON.toLowerCase()).not.toContain(cu);
+    }
+  });
+});
+
+describe("ô chọn và bộ lọc địa bàn", () => {
+  const units = [
+    { id: "a", name: "Thôn Bình An", active: true },
+    { id: "b", name: "Thôn Cũ", active: false },
+  ];
+
+  it("ô chọn cho hồ sơ mới: bỏ địa bàn ngừng dùng", () => {
+    expect(pickableResidentialUnits(units).map((u) => u.id)).toEqual(["a"]);
+  });
+
+  it("bộ lọc danh sách: GIỮ địa bàn ngừng dùng, nói rõ nó đã ngừng dùng", () => {
+    expect(residentialUnitFilterLabel(units[0]!)).toBe("Thôn Bình An");
+    expect(residentialUnitFilterLabel(units[1]!)).toBe("Thôn Cũ (ngừng dùng)");
   });
 });

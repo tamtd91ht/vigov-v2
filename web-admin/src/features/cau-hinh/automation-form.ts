@@ -38,7 +38,12 @@ type JobWords = { readonly title: string; readonly description: string };
  * The three jobs, in §9's order. Descriptions follow §9 with two corrections the decisions force:
  * reminders sweep petitions (đơn thư) too (ADR 0058 §4), and escalation thresholds are WORKING HOURS
  * from the SLA tab (ADR 0029, ADR 0058 §5) — §9's "số ngày" would tell the administrator a unit the
- * software does not count in. Which kinds of work escalation covers is open (#3), so it is not named.
+ * software does not count in.
+ *
+ * WHAT EACH JOB COVERS WAS DECIDED BY THE USER ON 29/09/2026 (ADR 0058, ADR 0029 §Bổ sung 29/09), and
+ * both sentences name it so an administrator switching a job on knows what it touches: reminders cover
+ * tasks, incoming documents, citizens' petitions and đơn thư; escalation covers tasks, petitions
+ * (against their RESOLVE deadline, not the acknowledge one) and incoming documents — NOT đơn thư.
  */
 const JOBS: Readonly<Record<string, JobWords>> = {
   sla_reminders: {
@@ -51,6 +56,7 @@ const JOBS: Readonly<Record<string, JobWords>> = {
   escalation: {
     title: "Leo thang việc trễ hạn",
     description:
+      "Áp cho nhiệm vụ, văn bản đến và phản ánh của người dân (tính theo hạn xử lý xong). " +
       "Việc trễ quá ngưỡng thứ nhất thì báo lên lãnh đạo trực tiếp, trễ quá ngưỡng thứ hai thì báo " +
       "lên Chủ tịch. Hai ngưỡng tính bằng giờ làm việc, lấy từ cột Báo lãnh đạo trực tiếp và Báo Chủ " +
       "tịch của tab Thời hạn xử lý.",

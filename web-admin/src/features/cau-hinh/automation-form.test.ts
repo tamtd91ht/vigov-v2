@@ -107,6 +107,16 @@ describe("state and cadence sentences", () => {
     expect(jobWords("escalation").description).not.toMatch(/số ngày/);
     expect(jobWords("refresh_dashboards")).toEqual({ title: "refresh_dashboards", description: "" });
   });
+
+  it("scope DECIDED 29/09/2026 (ADR 0058, 0029 §Bổ sung): each job names the kinds of work it covers", () => {
+    const reminders = jobWords("sla_reminders").description;
+    for (const kind of ["nhiệm vụ", "văn bản đến", "phản ánh", "đơn thư"]) expect(reminders).toContain(kind);
+    const escalation = jobWords("escalation").description;
+    for (const kind of ["nhiệm vụ", "văn bản đến", "phản ánh"]) expect(escalation).toContain(kind);
+    // Petitions escalate against their RESOLVE deadline; đơn thư are reminded, not escalated.
+    expect(escalation).toMatch(/hạn xử lý xong/);
+    expect(escalation).not.toContain("đơn thư");
+  });
 });
 
 describe("runs — said from data only", () => {

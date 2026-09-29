@@ -36,6 +36,7 @@ import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
+import { residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
 
 import {
   buocLuongChinh,
@@ -540,9 +541,11 @@ export function HangLoc({
           onChange={(e) => datLoc({ ...loc, thonID: e.target.value || undefined })}
         >
           <option value="">{MOI_DIA_BAN_NHAN}</option>
+          {/* A FILTER, not a picker: out-of-use units STAY (petitions recorded there must still be
+              findable), marked as such (`residentialUnitFilterLabel`). */}
           {thon.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name}
+              {residentialUnitFilterLabel(t)}
             </option>
           ))}
         </select>
