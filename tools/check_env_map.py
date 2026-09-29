@@ -122,7 +122,7 @@ def main() -> int:
         for v in vi_pham:
             print(f"        {v}")
         print()
-        print("        Sửa ở deploy/cau-hinh/README.md mục 4 — và nhớ cột 'k8s cấp bằng': phép thử là")
+        print("        Sửa ở deploy/cau-hinh/README.md mục 1–4 — và nhớ cột 'k8s cấp bằng': phép thử là")
         print("        'in ra một dòng log thì có đau không', không phải 'có nhạy cảm không'.")
         print("        Một DSN có mật khẩu là Secret dù nó trông như một địa chỉ.")
         print("        Dependency HOÀN TOÀN MỚI (Kafka chẳng hạn) là STOP CONDITION của luật")

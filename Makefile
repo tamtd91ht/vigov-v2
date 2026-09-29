@@ -80,7 +80,7 @@ khoaduynhat:                    ## Khoá duy nhất hợp thành với `tenant_i
 	$(PYTHON) tools/check_khoa_duy_nhat.py
 
 envmap:                         ## Bảng map biến môi trường ở deploy/cau-hinh/README.md còn khớp mã không
-	@# `deploy/cau-hinh/README.md` mục 4 là nơi DUY NHẤT trả lời "biến này do ConfigMap hay Secret cấp".
+	@# `deploy/cau-hinh/README.md` mục 1–4 là nơi DUY NHẤT trả lời "biến này do ConfigMap hay Secret cấp".
 	@# `core/config` chỉ biết đọc, `.env.example` chỉ giữ chỗ, và `env_contract_guard` nói thẳng
 	@# rằng nó KHÔNG kiểm chỗ ràng buộc. Một fact viết tay cạnh một danh sách mọc từ mã là đúng
 	@# hình dạng sẽ trôi — và lúc trôi, người vận hành đọc bảng rồi tin là đã khai đủ.

@@ -246,7 +246,7 @@ một dòng người vận hành phải đọc rồi tự hỏi mình có quên 
 
 ### Bảng map
 
-**Ở `deploy/cau-hinh/README.md` mục 4** — tệp ngắn để khai ConfigMap/Secret. Mục này chỉ giữ
+**Ở `deploy/cau-hinh/README.md` mục 1–4** — tệp ngắn để khai ConfigMap/Secret. Mục này chỉ giữ
 lý do.
 
 ⚠ **`REDIS_DSN` KHÔNG BẮT BUỘC Ở `config.Load` NHƯNG BẮT BUỘC Ở PROD.** Nó là kho chống trùng
@@ -280,7 +280,7 @@ Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
 
 | Nơi đọc | Số biến | Ghi chú |
 |---|---|---|
-| `core/config` — **7 dịch vụ Go** | Đúng số dòng của bảng `deploy/cau-hinh/README.md` mục 4 (`tools/check_env_map.py` in ra số này; 35 ngày 29/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
+| `core/config` — **7 dịch vụ Go** | Đúng số biến trong các bảng `deploy/cau-hinh/README.md` mục 1–4 (`tools/check_env_map.py` in ra số này; 35 ngày 29/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
 | `web-admin` — **mã ứng dụng** | **0** | Không một `process.env` nào trong `web-admin/src`. Nó gọi API bằng đường dẫn **tương đối** `/api/v1/…` trên cùng tên miền, nên không cần địa chỉ backend — và đó là lý do nó **không có `envFrom`** |
 | `web-admin` — máy chủ Next standalone | 4, **đã nằm trong ảnh** | `NODE_ENV` · `NEXT_TELEMETRY_DISABLED` nung trong `Dockerfile`; `PORT=3000` · `HOSTNAME=0.0.0.0` đặt lại ở `deployment.yaml` |
 | `platform-admin` | 1 — `NEXT_PUBLIC_PLATFORM_API` | **chưa triển khai**: không có `Dockerfile`, nên chưa có ảnh. Ngày dựng nó thì đây là một `NEXT_PUBLIC_*`, tức **ship trong bundle trình duyệt** — không bao giờ chứa bí mật (luật 8, bất biến 4) |
@@ -288,7 +288,7 @@ Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
 
 **Chỉ bốn biến bắt buộc lúc khởi động** (`DATABASE_DSN`, `GRPC_CALLER_KEY`, `SESSION_SIGNING_KEYS`,
 `ENV`); mọi biến thêm từ 25/09/2026 đều TUỲ CHỌN và chỉ một vài dịch vụ đọc — biến nào cho dịch
-vụ nào, đặt vào đâu trên cụm đang chạy: `deploy/cau-hinh/README.md` mục 3b. `web-admin` không cần
+vụ nào, đặt vào đâu trên cụm đang chạy: `deploy/cau-hinh/README.md` mục 1–3. `web-admin` không cần
 một khoá nào.
 
 ### Đối tượng k8s phải tạo — tên và key chính xác
@@ -403,7 +403,7 @@ env:
 | **Cắt danh sách địa chỉ hoặc DSN để giữ một host** | Đúng-trông-như-đúng suốt thời gian còn một node, sai im lặng vào đúng ngày lên HA. Đưa nguyên giá trị cho driver hiểu nhiều host (`pgx` hiểu) |
 | Giá trị **riêng của một xã** trong biến môi trường | Luật 1, bất biến 10: môi trường chỉ mang hằng số **toàn nền tảng**. Giá trị theo xã đọc tại runtime từ sổ đăng ký của `platform` |
 
-Bảng biến ở `deploy/cau-hinh/README.md` mục 4 được `tools/check_env_map.py` đối chiếu với `.env.example` và
+Các bảng biến ở `deploy/cau-hinh/README.md` mục 1–4 được `tools/check_env_map.py` đối chiếu với `.env.example` và
 `core/config/config.go` trong `make check`: thêm một biến mà quên cập nhật bảng là **đỏ**.
 
 ## 4. Cài lần đầu lên cụm
@@ -415,7 +415,7 @@ kubectl apply -f deploy/cluster/namespace.yaml
 kubectl apply -f deploy/cluster/rbac-jenkins.yaml
 
 # Bí mật — TẠO NGOÀI KHO NÀY, không bao giờ commit (luật 8, bất biến 1).
-# Lệnh tạo 8 Secret: deploy/cau-hinh/README.md mục 3.
+# Secret cần tạo (tên, type, key, value): deploy/cau-hinh/README.md mục 1.
 
 kubectl apply -k deploy/overlays/prod
 ```
@@ -674,7 +674,7 @@ trong Events của ReplicaSet. Nếu Project có quota CPU, báo đội phát tr
 
 ### 11.2 Secret — tạo trong giao diện
 
-**Danh sách Secret, tên, key, hình dạng giá trị: `deploy/cau-hinh/README.md` mục 1–2.** Tệp
+**Danh sách Secret và ConfigMap, tên, type, key, hình dạng giá trị: `deploy/cau-hinh/README.md` mục 1–3.** Tệp
 này không chép lại danh sách.
 
 Rancher → cụm → **Storage → Secrets → Create**. Chọn **đúng namespace** ở ô Namespace của form,
