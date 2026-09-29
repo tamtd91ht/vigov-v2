@@ -162,6 +162,33 @@ func TestHanLoaiViecChuaCauHinhKhongMuonSoCuaLoaiViecKhac(t *testing.T) {
 	}
 }
 
+// WORK_KIND_DON_THU (contract value 4, migration 0016) reads the `don-thu` row — and ONLY that row.
+// Both rows below belong to service-documents, which is exactly why a mapping slip between them
+// would pass unnoticed: `van-ban-den` is given 8 hours and `don-thu` 2, so reading the wrong one
+// moves the answer from Monday 10:00 to Tuesday 08:30 — still plausible, never an error.
+//
+// MUTATION THAT MUST TURN THIS RED: map WORK_KIND_DON_THU to domain.LoaiViecVanBanDen in loaiViecTu,
+// or drop its case (then it is InvalidArgument).
+func TestDeadlineCitizenLetterKindReadsItsOwnRow(t *testing.T) {
+	s, _ := may(t, func(d *Deps) {
+		d.SLA = &slaGia{ds: []domain.DongSLA{
+			dongSLA("sla-vbd", domain.LoaiViecVanBanDen, "", 8, 40),
+			dongSLA("sla-dt", domain.LoaiViecDonThu, "", 2, 16),
+		}}
+	})
+	req := yeuCauHan(t, "2026-09-21 08:00", "", identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN)
+	req.WorkKind = identityv1.WorkKind_WORK_KIND_DON_THU
+
+	ra, err := s.ResolveDeadlines(ctxXa(xaA), req)
+	if err != nil {
+		t.Fatalf("ResolveDeadlines(don-thu): %v", err)
+	}
+	if got, want := mocRa(t, ra, identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN), mocVN(t, "2026-09-21 10:00"); !got.Equal(want) {
+		t.Errorf("han_tiep_nhan = %s, muốn %s — phải đọc dòng don-thu (2 giờ), không phải van-ban-den",
+			got.In(muiDoiChungVN), want)
+	}
+}
+
 // Số giờ trong dòng SLA không dương là lỗi CẤU HÌNH CỦA XÃ, không phải lỗi bên gọi — nên
 // FAILED_PRECONDITION chứ không phải INVALID_ARGUMENT như AdvanceWorkingHours trả cho cùng hình
 // dạng. Chỗ khác nhau là NGUỒN của con số.

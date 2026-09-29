@@ -21,7 +21,7 @@ import "google/protobuf/timestamp.proto";
 //
 //   THE COMMUNE'S PROCESSING DEADLINES in working hours, the `sla` table
 //   (service-identity/migrations/0008_sla.sql, ADR 0029, decided 2026-09-20). It answers HOW
-//   LONG. It is read by `documents` (`van-ban-den`) and by `petitions` (`phan-anh`,
+//   LONG. It is read by `documents` (`van-ban-den`, `don-thu`) and by `petitions` (`phan-anh`,
 //   `nhiem-vu`), belongs to neither, and changes with the same administrative policy the
 //   calendar does.
 //
@@ -39,6 +39,10 @@ import "google/protobuf/timestamp.proto";
 // in the service owning the data, their per-commune settings live here next to `sla`). It too
 // answers INSTANTS and walks the same forward count; the reason it is not a field on any of the
 // three is on its own comment.
+//
+// AND ResolveUnassignedHoldInstants IS THE FIFTH, same date, same shape: `unassigned_hold_hours`
+// (migration 0016) counted forward from the instant a unit began holding work with nobody assigned,
+// for the `sla_reminders` job. Why it is its own RPC and not a field on the fourth: its comment.
 //
 // AND IT OWNS ONE MORE THING SINCE THE SAME DATE: the per-commune SETTINGS OF THE AUTOMATION JOBS
 // (docs/ui-ux/14-cau-hinh.md §9, "Tự động hoá") and their run state. ClaimDueAutomationRuns and
@@ -1272,7 +1276,7 @@ service IdentityService {
   //
   // WHY IT EXISTS (user decision 2026-09-29): the `escalation` job of docs/ui-ux/14-cau-hinh.md §9
   // runs in the service owning the late records — service-petitions (tasks, petitions) and
-  // service-documents (incoming documents) — and needs to know, per late record, whether the
+  // service-documents (incoming documents, citizen letters) — and needs to know, per late record, whether the
   // lateness has crossed each threshold. Both thresholds are the commune's own numbers in the `sla`
   // table, counted in WORKING HOURS (ADR 0007).
   //
@@ -1355,6 +1359,83 @@ service IdentityService {
   //                       fails with AUTOMATION_RUN_OUTCOME_DEPENDENCY_UNAVAILABLE and notifies
   //                       nobody; the next scheduled run tries again.
   rpc ResolveEscalationInstants(ResolveEscalationInstantsRequest) returns (ResolveEscalationInstantsResponse);
+
+  // ResolveUnassignedHoldInstants answers, for ONE commune, ONE kind of work and ONE field, and for
+  // each instant at which a unit BEGAN HOLDING work with NOBODY assigned, the instant at which that
+  // hold reaches the commune's `sla.unassigned_hold_hours` threshold — "work held by a department
+  // with nobody assigned" is then reported (docs/ui-ux/14-cau-hinh.md:330, "Cả việc bộ phận giữ mà
+  // chưa phân công ai").
+  //
+  // WHY IT EXISTS (user decision 2026-09-29, ADR 0058 open question #5, identity migration 0016):
+  // the `sla_reminders` job runs in the service owning the records, and the threshold is a
+  // per-commune, per-row number of WORKING hours. Handing the runner the number would invite
+  // `start + N*time.Hour`, which rule 10, forbidden #2 names; this answers the instant instead
+  // (ADR 0029 §Bổ sung 22/09), counted by the same forward walk as every deadline here
+  // (domain.TienGioLamViec — ADR 0007: one implementation of the count).
+  //
+  // # WHY A SIBLING RPC AND NOT A THIRD FIELD ON EscalationInstants
+  //
+  //   A DIFFERENT ANCHOR. Escalation counts from a deadline the record MISSED; this counts from when
+  //   a unit started holding the work unassigned — a record that is nowhere near its deadline can be
+  //   held unassigned too long. One request field carrying both would label a hold start a "missed
+  //   deadline", and a caller would soon send the wrong one of the two, with nothing to tell.
+  //   A DIFFERENT JOB. Escalation is the daily `escalation` job; this is the `sla_reminders` job's
+  //   input, on a different cadence and a different claimed scope.
+  //   A DIFFERENT "NOT CONFIGURED". The escalation thresholds are NOT NULL; this one is nullable, and
+  //   NULL is a real answer ("do not report"), not a fault. It is a property of the ROW, so it is
+  //   answered once per call (`reporting_disabled`), not guessed per item.
+  //   Additive either way; a new RPC changes no existing caller's decoding at all.
+  //
+  // # THE ANCHOR IS THE CALLER'S, and nothing here can check it
+  //
+  // The caller passes, per held record, the instant the unit's unassigned hold BEGAN — the instant
+  // the record reached the unit with no assignee, or the instant its last assignee was removed. The
+  // runner's own store owns that fact; identity sees only instants. A caller sending the record's
+  // receipt time instead would report work that was assigned for most of that time.
+  //
+  // # NULL MEANS "DO NOT REPORT", AND NOTHING SUBSTITUTES A NUMBER
+  //
+  // The row is chosen exactly as for ResolveDeadlines (the field's own row, else the default row),
+  // and THAT ROW'S value is read. A field row holding NULL is NULL even when the default row holds a
+  // number: the fallback is by row, never by column. NULL answers OK with `reporting_disabled =
+  // true` and NO items — the runner reports nothing for this field and records nothing as a fault.
+  // There is no default 8 or 24 anywhere on this path (migration 0016: POST /api/v1/sla/defaults
+  // writes 8 as a starting point the commune owns; it is never read here as a fallback).
+  //
+  // # THE COMPARISON THE CALLER MAKES, and nothing else
+  //
+  //   report is due   ⟺   unassigned_report_due_at <= as_of      (as_of = the run's `claimed_at`)
+  //
+  // NEVER STORE THE INSTANT — the same reason as ResolveEscalationInstants: a stored "reportable at"
+  // is a state built from a comparison (rule 10, invariant 3) and goes stale when the commune edits
+  // its calendar or its threshold. What the runner stores is that it SENT a report — an act — and
+  // the notice's idempotency key makes that act happen once.
+  //
+  // # One field per call; the commune travels in metadata; not audited; retry is safe
+  //
+  // Group held records by field and ask once per group; tasks carry no field: send "".
+  // "x-tenant-id" names whose threshold and whose calendar (ADR 0012, decision 1: not exempt). A
+  // read of configuration: writes nothing, publishes nothing, leaves no audit entry.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  EITHER `reporting_disabled = false` and one item per DISTINCT
+  //                       `hold_started_at` entry — all of them, or the call fails — OR
+  //                       `reporting_disabled = true` and zero items. Never a mix, never a partial
+  //                       answer. `reporting_disabled = false` with fewer items than distinct entries
+  //                       is a contract fault; the caller fails the run rather than reporting nothing.
+  //   INVALID_ARGUMENT    the CALLER is wrong: `work_kind` unspecified or unknown, `hold_started_at`
+  //                       empty or over 500, an unset or invalid entry. Checked BEFORE anything is
+  //                       read, so a malformed call is refused even for a field whose value is NULL.
+  //   FAILED_PRECONDITION the COMMUNE'S CONFIGURATION is missing or wrong: the three `sla` cases of
+  //                       ResolveDeadlines, a set value outside 1–2000, or (only when the value is set)
+  //                       the four calendar faults of AdvanceWorkingHours. The runner records
+  //                       AUTOMATION_RUN_OUTCOME_CONFIGURATION_MISSING and reports nothing.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "nothing to report" and NOT "disabled":
+  //                       the run fails with AUTOMATION_RUN_OUTCOME_DEPENDENCY_UNAVAILABLE.
+  rpc ResolveUnassignedHoldInstants(ResolveUnassignedHoldInstantsRequest) returns (ResolveUnassignedHoldInstantsResponse);
 
   // ResolveOrgUnitPermissionHolders answers, for org units of the commune named by "x-tenant-id",
   // which staff sitting IN each unit hold ONE named permission key there — the recipients of a
@@ -1494,8 +1575,8 @@ service IdentityService {
   //
   // # A SCOPE IS (job, kind of work), BECAUSE ONE JOB RUNS IN TWO SERVICES
   //
-  // `sla_reminders` sweeps tasks and petitions (service-petitions) AND incoming documents
-  // (service-documents). One `last_run_at` per job would let whichever service ran first mark the
+  // `sla_reminders` sweeps tasks and petitions (service-petitions) AND incoming documents and
+  // citizen letters (service-documents). One `last_run_at` per job would let whichever service ran first mark the
   // job done for the other. So run state is kept per AutomationRunScope; the SETTING (enabled,
   // cadence) stays per job, one row a commune edits once. Each scope has EXACTLY ONE owning runner —
   // the service owning that WorkKind's data (WorkKind's own comment names it). Identity cannot see
@@ -2554,14 +2635,19 @@ message WorkingHoursReached {
   google.protobuf.Timestamp reached_at = 2;
 }
 
-// WorkKind is the kind of work one `sla` row applies to — THREE BUSINESS DOMAINS, not three
-// labels. `van-ban-den` is `documents`' work; `phan-anh` and `nhiem-vu` are `petitions`'. That
-// split is the whole reason the table belongs to neither of those services and lives in identity
-// (ADR 0029).
+// WorkKind is the kind of work one `sla` row applies to — FOUR BUSINESS DOMAINS, not four
+// labels. `van-ban-den` and `don-thu` are `documents`' work; `phan-anh` and `nhiem-vu` are
+// `petitions`'. That split is the whole reason the table belongs to neither of those services and
+// lives in identity (ADR 0029).
 //
-// A FOURTH VALUE IS A DECISION, NOT A DEPLOYMENT — ADR 0029, stop condition #1. Adding one here
+// A NEW VALUE IS A DECISION, NOT A DEPLOYMENT — ADR 0029, stop condition #1. Adding one here
 // adds a business domain to a commune's commitment table, and whoever needs it asks the user
-// first.
+// first. `don-thu` WAS SUCH A DECISION: the user lifted ADR 0039's exclusion on 2026-09-29, and
+// identity migration 0016 admits the value into `sla.loai_viec`.
+//
+// APPEND-ONLY. Values are never renumbered or reused; the wire number is the contract, the
+// position in this list is not. A server older than a value answers it INVALID_ARGUMENT (its
+// exhaustive switch refuses unknowns) — never as one of the values it knows.
 //
 // THE VALUES STAY IN VIETNAMESE, following `CitizenCommune.Capacity` above and ADR 0011's rule
 // for enum VALUES. They are the exact strings `sla.loai_viec` stores, spelled as the CHECK
@@ -2576,6 +2662,8 @@ enum WorkKind {
   WORK_KIND_VAN_BAN_DEN = 1; // sổ văn bản đến — service-documents
   WORK_KIND_PHAN_ANH = 2;    // phản ánh của công dân — service-petitions
   WORK_KIND_NHIEM_VU = 3;    // nhiệm vụ — service-petitions
+  // sổ đơn thư (ADR 0039) — service-documents, like VAN_BAN_DEN. Stored as `don-thu`.
+  WORK_KIND_DON_THU = 4; // vi-name-ok: enum VALUE mirroring sla.loai_viec 'don-thu' (ADR 0011), fourth member of the existing WORK_KIND_* family
 }
 
 // DeadlineKind names WHICH of a record's two clocks is being asked for.
@@ -2834,11 +2922,61 @@ message EscalationInstants {
   // `missed_deadline`. Level two: tell the leadership (ResolveLeadershipStaff). NEVER UNSET in an OK
   // response. NEVER STORED.
   //
-  // NOT NECESSARILY LATER THAN `unit_head_due_at`: the schema has no ordering check between the
-  // columns (0008, `sla_gio_phai_duong` — deliberately), so a commune may configure the chairman's
-  // threshold below the unit head's. The caller evaluates the two levels independently and never
-  // infers one from the other.
+  // ORDERING — A RULE ON THE WRITE PATH, NOT A GUARANTEE ON THIS ANSWER. The user decided on
+  // 2026-09-29 that the chairman's threshold is never below the unit head's (Y >= X), and identity
+  // enforces it whenever an `sla` row is saved (service-identity domain.KiemTraDongSLA). It is NOT a
+  // schema CHECK (migration 0016 says why), and this read does not re-check it — so a row written
+  // before the rule, and not edited since, may still hold Y < X and answer a `chairman_due_at`
+  // EARLIER than `unit_head_due_at`. The caller therefore evaluates the two levels independently and
+  // never infers one from the other ("chairman is due" does not imply "unit head was told").
   google.protobuf.Timestamp chairman_due_at = 3;
+}
+
+message ResolveUnassignedHoldInstantsRequest {
+  // Which kind of work the held records are. UNSPECIFIED is INVALID_ARGUMENT — no default kind.
+  WorkKind work_kind = 1;
+
+  // The field code, "" FOR THE DEFAULT ROW — same meaning, same fallback and same caveat as
+  // ResolveDeadlinesRequest.linh_vuc. One field per call: group held records by field.
+  string linh_vuc = 2;
+
+  // For each held record, the instant its unit BEGAN holding it with nobody assigned — see the RPC
+  // comment for what that instant is and whose fact it is. The count starts here; an instant
+  // outside working hours starts at the next working session (ADR 0007, decision 8).
+  //
+  // NOT COMPARED WITH `now` here. DUPLICATES ARE COLLAPSED; order carries no meaning. Map the
+  // response by `hold_started_at`, compared as an instant (seconds and nanos), never by position.
+  //
+  // 1 TO 500 ENTRIES — the ResolveEscalationInstants bound, for the same reason. Empty or more is
+  // INVALID_ARGUMENT, never a silent truncation.
+  repeated google.protobuf.Timestamp hold_started_at = 3;
+}
+
+// Wrapped, not a bare repeated item: adding a field later must not change the RPC signature.
+message ResolveUnassignedHoldInstantsResponse {
+  // TRUE ⟺ the applicable `sla` row's `unassigned_hold_hours` is NULL: the commune chose NOT to
+  // report unassigned holds for this kind of work and field. `items` is then EMPTY.
+  //
+  // AN EXPLICIT FLAG, NOT "AN ITEM WITH NO INSTANT": an unset Timestamp reaches a Go caller as the
+  // Unix epoch through AsTime(), which is `<= as_of` — "report everything now", the opposite of what
+  // NULL means. The default `false` is the ordinary case and is always paired with a full `items`.
+  bool reporting_disabled = 1;
+
+  // When `reporting_disabled` is false: ONE ITEM PER DISTINCT `hold_started_at` ENTRY — ALL OF
+  // THEM, OR THE CALL FAILS. Map by `hold_started_at`.
+  repeated UnassignedHoldInstant items = 2;
+}
+
+// The reporting instant of one unassigned hold.
+message UnassignedHoldInstant {
+  // Echoed from the request — the KEY the caller maps by.
+  google.protobuf.Timestamp hold_started_at = 1;
+
+  // The EARLIEST instant at which `sla.unassigned_hold_hours` working hours have elapsed since
+  // `hold_started_at` in this commune's calendar. Report the hold to the unit
+  // (ResolveOrgUnitPermissionHolders) once this is <= the run's `claimed_at`. NEVER UNSET in an
+  // item. NEVER STORED.
+  google.protobuf.Timestamp unassigned_report_due_at = 2;
 }
 
 message ResolveOrgUnitPermissionHoldersRequest {
@@ -2898,6 +3036,7 @@ enum AutomationJob {
   AUTOMATION_JOB_UNSPECIFIED = 0;
 
   // "Nhắc việc sắp đến hạn và đã quá hạn" — every N minutes. Runs per WorkKind in its owning service.
+  // Reads ResolveDueSoonCutoff and, for work a unit holds unassigned, ResolveUnassignedHoldInstants.
   AUTOMATION_JOB_SLA_REMINDERS = 1;
 
   // "Leo thang việc trễ hạn" — daily. Reads ResolveEscalationInstants.
@@ -2913,14 +3052,17 @@ message AutomationRunScope {
   // UNSPECIFIED is INVALID_ARGUMENT.
   AutomationJob job = 1;
 
-  // UNSPECIFIED is INVALID_ARGUMENT. VAN_BAN_DEN belongs to service-documents; PHAN_ANH and
-  // NHIEM_VU to service-petitions.
+  // UNSPECIFIED is INVALID_ARGUMENT. VAN_BAN_DEN and DON_THU belong to service-documents; PHAN_ANH
+  // and NHIEM_VU to service-petitions. Exactly one runner per kind — see ClaimDueAutomationRuns.
   WorkKind work_kind = 2;
 }
 
 message ClaimDueAutomationRunsRequest {
   // The scopes THIS runner owns and is ready to run now. 1 TO 10 entries; duplicates collapsed.
-  // Ten is the whole cross product today (three jobs × three kinds = nine) plus one.
+  // The whole cross product is now three jobs × four kinds = twelve, but no runner owns it: each
+  // runner owns two kinds (service-documents VAN_BAN_DEN + DON_THU, service-petitions PHAN_ANH +
+  // NHIEM_VU), so one runner's full claim is three jobs × two kinds = six. Ten bounds that with
+  // headroom; a request over it is INVALID_ARGUMENT, and a runner that ever owns more asks twice.
   repeated AutomationRunScope scopes = 1;
 }
 

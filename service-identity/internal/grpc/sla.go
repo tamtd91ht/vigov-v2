@@ -226,9 +226,10 @@ func (s *Server) loiThieuCauHinhSLA(ctx context.Context, ds []domain.DongSLA,
 // domain's numbers — `documents`' hours promised on a citizen's petition, or the reverse — and
 // nothing downstream could see that it happened.
 //
-// THE SWITCH IS EXHAUSTIVE AND THE FALLTHROUGH REFUSES. A fourth value added to the contract
+// THE SWITCH IS EXHAUSTIVE AND THE FALLTHROUGH REFUSES. A new value added to the contract
 // without ADR 0029's stop condition #1 being answered arrives here as an unknown, and it is
-// refused rather than silently treated as one of the three.
+// refused rather than silently treated as one of the four. (`don-thu` was answered by the user on
+// 2026-09-29 and admitted by migration 0016.)
 func loaiViecTu(k identityv1.WorkKind) (domain.LoaiViec, error) {
 	switch k {
 	case identityv1.WorkKind_WORK_KIND_VAN_BAN_DEN:
@@ -237,12 +238,14 @@ func loaiViecTu(k identityv1.WorkKind) (domain.LoaiViec, error) {
 		return domain.LoaiViecPhanAnh, nil
 	case identityv1.WorkKind_WORK_KIND_NHIEM_VU:
 		return domain.LoaiViecNhiemVu, nil
+	case identityv1.WorkKind_WORK_KIND_DON_THU:
+		return domain.LoaiViecDonThu, nil
 	case identityv1.WorkKind_WORK_KIND_UNSPECIFIED:
 		return "", status.Error(codes.InvalidArgument,
 			"thiếu work_kind — không có loại việc mặc định, đoán một loại là đọc số giờ của nghiệp vụ khác")
 	}
 	return "", status.Errorf(codes.InvalidArgument,
-		"work_kind %d không nằm trong ba loại việc được phép", int32(k))
+		"work_kind %d không nằm trong bốn loại việc được phép", int32(k))
 }
 
 // mocHanTu validates the requested clocks and collapses duplicates, KEEPING THE ORDER THE CALLER

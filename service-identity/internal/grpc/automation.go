@@ -24,8 +24,8 @@ type AutomationRuns interface {
 	RecordOutcome(ctx context.Context, runID string, rep domain.RunReport) error
 }
 
-// MaxClaimScopes — 1 to 10 scopes per claim, checked on what was sent (the contract: three jobs × three
-// kinds = nine, plus one).
+// MaxClaimScopes — 1 to 10 scopes per claim, checked on what was sent. The contract's reasoning: one
+// runner owns two of the four kinds, so its full claim is three jobs × two kinds = six.
 const MaxClaimScopes = 10
 
 func (s *Server) ClaimDueAutomationRuns(ctx context.Context, req *identityv1.ClaimDueAutomationRunsRequest) (
@@ -145,9 +145,8 @@ func automationJobTo(j domain.AutomationJob) (identityv1.AutomationJob, bool) {
 	return identityv1.AutomationJob_AUTOMATION_JOB_UNSPECIFIED, false
 }
 
-// workKindTo is loaiViecTu's inverse. `don-thu` has no wire value yet (contract-designer adds it); a
-// domain kind with no wire value is answered false, which the caller treats as unreachable because the
-// kind came from the request's own loaiViecTu.
+// workKindTo is loaiViecTu's inverse. A domain kind with no wire value is answered false, which the
+// caller treats as unreachable because the kind came from the request's own loaiViecTu.
 func workKindTo(k domain.LoaiViec) (identityv1.WorkKind, bool) {
 	switch k {
 	case domain.LoaiViecVanBanDen:
@@ -156,6 +155,8 @@ func workKindTo(k domain.LoaiViec) (identityv1.WorkKind, bool) {
 		return identityv1.WorkKind_WORK_KIND_PHAN_ANH, true
 	case domain.LoaiViecNhiemVu:
 		return identityv1.WorkKind_WORK_KIND_NHIEM_VU, true
+	case domain.LoaiViecDonThu:
+		return identityv1.WorkKind_WORK_KIND_DON_THU, true
 	}
 	return identityv1.WorkKind_WORK_KIND_UNSPECIFIED, false
 }

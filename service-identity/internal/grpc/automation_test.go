@@ -279,6 +279,29 @@ func TestClaimMapsScopesAndRuns(t *testing.T) {
 	}
 }
 
+// DON_THU is claimable and round-trips: the request's wire value reaches the use case as `don-thu`, and
+// the won run's domain kind is answered as DON_THU. Without workKindTo's case the handler would find a
+// won run it cannot encode — the claim is committed and the runner is told Internal, so that slot is
+// lost for the citizen-letter register every time.
+func TestClaimCitizenLetterKindRoundTrips(t *testing.T) {
+	at := time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)
+	fake := &automationFake{runs: []domain.AutomationRun{{ID: "01JRUN0000000000000000000B",
+		Scope: domain.AutomationScope{Job: domain.JobSLAReminders, WorkKind: domain.LoaiViecDonThu}, ClaimedAt: at}}}
+	s, _ := may(t, func(d *Deps) { d.Automation = fake })
+	ra, err := s.ClaimDueAutomationRuns(ctxXa(xaA), &identityv1.ClaimDueAutomationRunsRequest{Scopes: []*identityv1.AutomationRunScope{
+		scope(identityv1.AutomationJob_AUTOMATION_JOB_SLA_REMINDERS, identityv1.WorkKind_WORK_KIND_DON_THU),
+	}})
+	if err != nil {
+		t.Fatalf("claim don-thu: %v", err)
+	}
+	if len(fake.gotScopes) != 1 || fake.gotScopes[0].WorkKind != domain.LoaiViecDonThu {
+		t.Errorf("use case got %v, want one scope of kind don-thu", fake.gotScopes)
+	}
+	if len(ra.GetRuns()) != 1 || ra.GetRuns()[0].GetScope().GetWorkKind() != identityv1.WorkKind_WORK_KIND_DON_THU {
+		t.Errorf("runs = %v, want one run of kind DON_THU", ra.GetRuns())
+	}
+}
+
 func TestClaimStatusCodes(t *testing.T) {
 	ok := scope(identityv1.AutomationJob_AUTOMATION_JOB_ESCALATION, identityv1.WorkKind_WORK_KIND_NHIEM_VU)
 	var eleven []*identityv1.AutomationRunScope
