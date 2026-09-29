@@ -104,10 +104,11 @@ func (s *CapitalPlanCategoryStore) ListCategories(ctx context.Context) ([]domain
 
 	result := make([]domain.CapitalPlanCategory, 0, 16)
 	for rows.Next() {
-		var category domain.CapitalPlanCategory
-		// POSITIONAL — in lockstep with categoryColumns. See the note there on the two adjacent pairs.
-		if err := rows.Scan(&category.ID, &category.Code, &category.Label, &category.IsDefault, &category.IsActive,
-			&category.SortOrder, &category.Source, &category.BranchedInSource); err != nil {
+		// ONE Scan for both paths. The write path (ByIDForUpdate) used to carry its own copy, and
+		// that copy had la_mac_dinh/dang_dung swapped while this one was right — the list test saw
+		// nothing, because it never reached the other copy.
+		category, err := scanCategory(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("hang_muc_ke_hoach_von: đọc dòng: %w", err)
 		}
 		result = append(result, category)
@@ -142,7 +143,7 @@ func (s *CapitalPlanCategoryStore) ListCategories(ctx context.Context) ([]domain
 // note there on the adjacent same-typed columns.
 func scanCategory(scan func(...any) error) (domain.CapitalPlanCategory, error) {
 	var category domain.CapitalPlanCategory
-	err := scan(&category.ID, &category.Code, &category.Label, &category.IsActive, &category.IsDefault,
+	err := scan(&category.ID, &category.Code, &category.Label, &category.IsDefault, &category.IsActive,
 		&category.SortOrder, &category.Source, &category.BranchedInSource)
 	return category, err
 }

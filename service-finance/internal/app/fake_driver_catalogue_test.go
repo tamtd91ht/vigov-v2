@@ -174,17 +174,19 @@ func (c *fakeConn) QueryContext(_ context.Context, q string, args []driver.Named
 		}
 		h := *c.k.row
 		return &fakeRows{columns: categoryColumns(), rows: [][]driver.Value{{
-			h.id, h.code, h.label, h.isActive, h.isDefault, int64(h.sortOrder), h.source, h.branched,
+			h.id, h.code, h.label, h.isDefault, h.isActive, int64(h.sortOrder), h.source, h.branched,
 		}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
 }
 
-// categoryColumns mirrors docstore's column list ORDER. Written out here rather than imported so that
-// reordering the store's list without reordering its Scan turns this red too — the store's own
-// suite makes the same argument for the same reason.
+// categoryColumns mirrors docstore's column list ORDER (store/capital_plan_category.go
+// categoryColumns). Written out here rather than imported so that reordering the store's list
+// without reordering its Scan turns this red too. Until 2026-09-30 this copy had
+// dang_dung/la_mac_dinh swapped — it mirrored the store's buggy Scan instead of its column list,
+// so every write-path test agreed with the bug. Copy from the COLUMN LIST, never from a Scan.
 func categoryColumns() []string {
-	return []string{"id", "ma", "nhan", "dang_dung", "la_mac_dinh", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
+	return []string{"id", "ma", "nhan", "la_mac_dinh", "dang_dung", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
 }
 
 type fakeTx struct{ k *fakeStore }

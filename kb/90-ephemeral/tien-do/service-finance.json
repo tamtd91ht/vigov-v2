@@ -185,6 +185,17 @@
       "no_confirm": [],
       "tiep_theo": "Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26).",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "sua-trao-co-hang-muc-ke-hoach-von",
+      "viec": "Sửa lỗi đọc tráo la_mac_dinh / dang_dung trên đường GHI của danh mục hạng mục kế hoạch vốn",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: scanCategory (dùng bởi ByIDForUpdate — Update/SoftDelete) quét dang_dung vào IsDefault và ngược lại, có từ 14e4819 (22/09). ListCategories quét đúng nên test đọc danh sách không thấy; driver giả tầng app chép thứ tự SAI nên test đường ghi xanh theo lỗi. Sửa: List dùng chung scanCategory; driver giả chép từ danh sách cột. Đột biến đưa lỗi trở lại -> đỏ 3 ca (store TestListReadsEveryColumnCorrectly; app TestDisableIsRefusedOnlyOnTier3, TestUpdateSetDefaultClearsOldDefaultFirstInSameTransaction). go test -p 1 service-finance xanh.",
+      "no_confirm": [
+        "Dữ liệu thật: mỗi lần SỬA một hạng mục qua API từ 22/09 tới bản vá này đã ghi lại hai cờ bị tráo (after = before đọc tráo), và vết ghi KHÔNG thấy vì before/after cùng tráo. Cần người dùng quyết có rà dữ liệu đã triển khai không."
+      ],
+      "tiep_theo": "Rà các dòng hang_muc_ke_hoach_von có audit_log hành vi sửa danh mục từ 22/09 trên môi trường có dữ liệu thật; cùng lỗi ở petitions task_type.go:136 / task_priority.go:116 — sửa sau khi lớp A petitions commit.",
+      "menu": "cau-hinh"
     }
   ]
 }
