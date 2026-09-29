@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { CATALOGUE_IMPORTS, ORG_UNIT_IMPORT_TARGET, RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
+import {
+  CATALOGUE_IMPORTS,
+  ORG_UNIT_IMPORT_TARGET,
+  RESIDENTIAL_UNIT_IMPORT_TARGET,
+  STAFF_IMPORT_TARGET,
+} from "./excel-import-targets";
 import { KhoiChuaDung } from "./khoi-chua-dung";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 
@@ -42,22 +47,26 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     }
   });
 
-  it("mục Nhập Excel kể đúng những gì nhập được HÔM NAY: Sơ đồ tổ chức, Thôn / Tổ dân phố, Loại tài nguyên bản đồ", () => {
+  it("mục Nhập Excel kể đúng những gì nhập được HÔM NAY, và chỉ còn ba nhóm đang dựng", () => {
     const excel = PHAN_CHUA_DUNG.filter((p) => /Excel/.test(p.ten));
     expect(excel).toHaveLength(1);
     const muc = excel[0]!;
-    // §1 (Sơ đồ tổ chức) and §2 (Thôn / Tổ dân phố) have their own import targets — neither may still be
-    // named as missing.
-    expect(muc.ten).not.toMatch(/§1|§2|Thôn/);
-    expect(muc.ten).toMatch(/§3.*§5/);
+    // §1, §2 and §3 (Người dùng) have their own import targets — none may still be named as missing.
+    expect(muc.ten).not.toMatch(/§1|§2|§3|Thôn|Người dùng/);
+    expect(muc.ten).toMatch(/ba nhóm còn lại của Danh mục \(§5\)/);
     expect(muc.viSao).toMatch(
-      /nhập được từ Excel ba thứ: Sơ đồ tổ chức, Thôn \/ Tổ dân phố, và nhóm Loại tài nguyên bản đồ/,
+      /nhập được từ Excel: Sơ đồ tổ chức, Thôn \/ Tổ dân phố, danh sách cán bộ ở tab Người dùng, và bốn nhóm ở tab Danh mục — Loại tài nguyên bản đồ, Loại văn bản, Loại đơn vị dân cư, Khối nhiệm vụ\./,
     );
+    expect(muc.viSao).toMatch(/Ba nhóm Loại nhiệm vụ, Mức ưu tiên nhiệm vụ và Hạng mục kế hoạch vốn/);
     expect(RESIDENTIAL_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/residential-units/imports");
     expect(ORG_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/org-units/imports");
+    expect(STAFF_IMPORT_TARGET.routes.imports).toBe("/api/v1/staff/imports");
     // The sentence names every catalogue group wired today — and only those. A group wired in
     // `CATALOGUE_IMPORTS` without this sentence moving is the stale "chưa có" this block exists to avoid.
-    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo"]);
+    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo", "loaiVanBan", "loaiDonViDanCu", "khoiNhiemVu"]);
+    for (const missing of ["loaiNhiemVu", "mucUuTienNhiemVu", "hangMucKeHoachVon"]) {
+      expect(Object.keys(CATALOGUE_IMPORTS)).not.toContain(missing);
+    }
   });
 
   it("Tự động hoá đã dựng: chỉ còn mục hai việc không dựng (bỏ / hoãn), kèm lý do", () => {
@@ -79,9 +88,17 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
   });
 
   it("Danh mục: không còn mục nói Loại đơn vị dân cư / Khối nhiệm vụ chưa ghi được — đã dựng", () => {
-    expect(
-      PHAN_CHUA_DUNG.some((p) => /Loại đơn vị dân cư|Khối nhiệm vụ/i.test(`${p.ten} ${p.viSao}`)),
-    ).toBe(false);
+    // The Excel item names both groups as ones that IMPORT today; it must not name them in its gap
+    // (the part from "Ba nhóm" on). Every other item must not name them at all.
+    const re = /Loại đơn vị dân cư|Khối nhiệm vụ/i;
+    for (const p of PHAN_CHUA_DUNG) {
+      if (/Excel/.test(p.ten)) {
+        expect(re.test(p.ten)).toBe(false);
+        expect(re.test(p.viSao.slice(p.viSao.indexOf("Ba nhóm")))).toBe(false);
+      } else {
+        expect(re.test(`${p.ten} ${p.viSao}`)).toBe(false);
+      }
+    }
   });
 
   it("không còn mục nói đơn vị mới chưa có người quản trị đầu tiên — đã quyết và đã dựng", () => {

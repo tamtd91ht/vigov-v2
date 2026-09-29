@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useReducer, useState } from "react";
 
 import { commitImport, downloadImportTemplate, previewImport } from "@/lib/api/excel-import";
 import type { ImportPreview, ImportResult } from "@/lib/api/excel-import";
@@ -14,14 +14,13 @@ import {
   PREVIEW_BUTTON,
   PREVIEW_SENDING,
   TEMPLATE_BUTTON,
+  EMPTY_ATTEMPT,
   canImport,
   errorRows,
-  keyAfterAttempt,
   keyForAttempt,
+  nextAttempt,
 } from "./excel-import-flow";
-import type { ErrorRow, ImportTarget } from "./excel-import-flow";
-
-type ChosenFile = { readonly blob: Blob; readonly name: string };
+import type { AttemptEvent, ErrorRow, ImportAttempt, ImportTarget } from "./excel-import-flow";
 
 export type ImportBusy = "" | "template" | "preview" | "import";
 
@@ -33,28 +32,27 @@ export type ImportBusy = "" | "template" | "preview" | "import";
  * key on all three routes. `onImported` makes the caller read its rows again: what was created, and
  * anything derived from it, exists only on the server.
  */
-export function ExcelImportPanel<R>({
+export function ExcelImportPanel<R, C = R>({
   target,
   onImported,
   onClose,
 }: {
-  target: ImportTarget<R>;
+  target: ImportTarget<R, C>;
   onImported: () => void;
   onClose: () => void;
 }) {
-  const [file, setFile] = useState<ChosenFile | null>(null);
-  const [preview, setPreview] = useState<KetQua<ImportPreview<R>> | null>(null);
-  const [importKey, setImportKey] = useState<string | null>(null);
-  const [result, setResult] = useState<ImportResult<R> | null>(null);
+  // ONE reducer for everything the server answered (`nextAttempt`): the 201 of the staff import carries
+  // temporary passwords, and "which event clears them" must be one tested function, not four setters.
+  const [attempt, dispatch] = useReducer(
+    (s: ImportAttempt<R, C>, e: AttemptEvent<R, C>) => nextAttempt(s, e),
+    EMPTY_ATTEMPT as ImportAttempt<R, C>,
+  );
   const [busy, setBusy] = useState<ImportBusy>("");
   const [templateError, setTemplateError] = useState("");
+  const { file, preview, key: importKey, result } = attempt;
 
   function choose(f: File | null) {
-    // A NEW FILE IS A NEW ATTEMPT: its preview, its key and its result all start over.
-    setFile(f === null ? null : { blob: f, name: f.name });
-    setPreview(null);
-    setImportKey(null);
-    setResult(null);
+    dispatch({ type: "chosen", file: f === null ? null : { blob: f, name: f.name } });
   }
 
   async function downloadTemplate() {
@@ -77,24 +75,26 @@ export function ExcelImportPanel<R>({
   async function check() {
     if (file === null) return;
     setBusy("preview");
-    setResult(null);
+    dispatch({ type: "previewStarted" });
     const p = await previewImport<R>(target.routes, target.rowsField, file.blob, file.name);
     setBusy("");
-    setPreview(p);
-    // A new preview is a new attempt: the file may have been re-saved under the same name.
-    setImportKey(null);
+    dispatch({ type: "previewed", preview: p });
   }
 
   async function commit() {
     if (file === null || preview === null || !preview.ok || !canImport(preview.duLieu)) return;
     const key = keyForAttempt(importKey, () => crypto.randomUUID());
-    setImportKey(key);
+    dispatch({ type: "importStarted", key });
     setBusy("import");
-    const r = await commitImport<R>(target.routes, file.blob, file.name, key);
+    const r = await commitImport<C>(target.routes, file.blob, file.name, key);
     setBusy("");
-    setResult(r);
-    setImportKey(keyAfterAttempt(key, r.ok));
+    dispatch({ type: "imported", key, result: r });
     if (r.ok) onImported();
+  }
+
+  function close() {
+    dispatch({ type: "closed" });
+    onClose();
   }
 
   return (
@@ -109,13 +109,13 @@ export function ExcelImportPanel<R>({
       onChooseFile={choose}
       onPreview={() => void check()}
       onImport={() => void commit()}
-      onClose={onClose}
+      onClose={close}
     />
   );
 }
 
 /** Pure rendering — exported so the errors table and the preview list have tests without a DOM. */
-export function ExcelImportView<R>({
+export function ExcelImportView<R, C = R>({
   target,
   fileChosen,
   preview,
@@ -128,10 +128,10 @@ export function ExcelImportView<R>({
   onImport,
   onClose,
 }: {
-  target: ImportTarget<R>;
+  target: ImportTarget<R, C>;
   fileChosen: boolean;
   preview: KetQua<ImportPreview<R>> | null;
-  result: ImportResult<R> | null;
+  result: ImportResult<C> | null;
   busy: ImportBusy;
   templateError: string;
   onDownloadTemplate: () => void;
@@ -208,23 +208,28 @@ export function ExcelImportView<R>({
         <p role="status">{target.importedSentence(result.created === null ? null : result.created.length)}</p>
       )}
 
-      <p>
-        <button type="button" className="nut-phu" onClick={onClose} disabled={busy === "import"}>
-          {CLOSE_BUTTON}
-        </button>
-      </p>
+      {/* A target with its own result view owns closing once the import is in (`resultView`). */}
+      {result !== null && result.ok && target.resultView !== undefined ? (
+        target.resultView(result.created, onClose)
+      ) : (
+        <p>
+          <button type="button" className="nut-phu" onClick={onClose} disabled={busy === "import"}>
+            {CLOSE_BUTTON}
+          </button>
+        </p>
+      )}
     </section>
   );
 }
 
-function PreviewBody<R>({
+function PreviewBody<R, C>({
   target,
   preview,
   importing,
   disabled,
   onImport,
 }: {
-  target: ImportTarget<R>;
+  target: ImportTarget<R, C>;
   preview: ImportPreview<R>;
   importing: boolean;
   disabled: boolean;

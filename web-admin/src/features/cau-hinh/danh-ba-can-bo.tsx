@@ -48,6 +48,9 @@ import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { capTaiKhoan, datLaiMatKhau } from "@/lib/api/tai-khoan";
 
+import { IMPORT_BUTTON } from "./excel-import-flow";
+import { ExcelImportPanel } from "./excel-import-panel";
+import { STAFF_IMPORT_TARGET } from "./excel-import-targets";
 import {
   CAU_PHAT_LAI_KHONG_CO_MAT_KHAU,
   NUT_CAP_TAI_KHOAN,
@@ -170,6 +173,16 @@ export function DanhBaCanBo() {
    * kỳ nhánh nào chạm tới nó (luật 3, cấm #1 và #4 — xem đầu tệp `mat-khau-tam.tsx`).
    */
   const [matKhauTam, datMatKhauTam] = useState<MatKhauTamHienRa | null>(null);
+
+  /**
+   * Whether the Excel import panel is open (ADR 0059 §1). The panel holds its own attempt — including,
+   * after a 201, the N temporary passwords — and they die when this goes `false` and the panel unmounts.
+   *
+   * NOTHING BUT THE PANEL'S OWN CLOSE SETS THIS TO `false`: opening another form, a list re-read, a
+   * failed re-read — none of them may take the passwords off the screen before they are saved. Same rule
+   * as `matKhauTam` above.
+   */
+  const [importOpen, setImportOpen] = useState(false);
 
   /**
    * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng
@@ -542,9 +555,11 @@ export function DanhBaCanBo() {
             điều ấy thay vì hiện mũi tên không có tác dụng (`ThanhSapXep`).
           · Bộ lọc theo trạng thái (đang hoạt động / đã khoá): `LocCanBo` chỉ có bộ phận và công
             khai — hợp đồng chưa có tham số trạng thái.
-          · `⬆ Nhập từ Excel` và `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn
-            kéo theo một quyết định chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng
-            VẪN CHE ở bản xuất, nên tuyến xuất phải có luật che riêng chứ không tái dùng tuyến đọc.
+          · `⬆ Nhập từ Excel`: ĐÃ DỰNG (29/09/2026, ADR 0059 §1) — `STAFF_IMPORT_TARGET`, cùng
+            khung nhập dùng chung; mật khẩu tạm của lượt nhập hiện một lần ở `staff-import-result.tsx`.
+          · `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn kéo theo một quyết định
+            chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng VẪN CHE ở bản xuất, nên tuyến
+            xuất phải có luật che riêng chứ không tái dùng tuyến đọc.
           · `🖼 Ảnh đại diện`: không có cột nào trong lược đồ.
           · Ô `Hiện trên Mini App` (#12, `PUT /staff/{id}/publication` kèm sự đồng ý) và
             `🗑 Xoá khỏi danh bạ` (quyền `admin.user.delete`): CỐ Ý đặt ở màn `/danh-ba`, không ở
@@ -560,10 +575,42 @@ export function DanhBaCanBo() {
         >
           {NUT_THEM_CAN_BO}
         </button>
+        {/* Same key as every write of this tab (`admin.user`, `routes.go:974`), so no second gate —
+            see the header. The Vai trò column's extra `admin.role` is the server's to check. */}
+        <button
+          type="button"
+          className="nut-phu"
+          onClick={() => {
+            datDangMo(null);
+            datMoTaiKhoan(null);
+            datLoiTaiKhoan("");
+            datCauDaXong("");
+            setImportOpen(true);
+          }}
+          disabled={importOpen}
+        >
+          {IMPORT_BUTTON}
+        </button>
       </div>
 
       {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
       {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+
+      {/*
+        OUTSIDE EVERY BRANCH OF `trangThai`, for the reason `OMatKhauTam` is: a successful import
+        re-reads the list, and a re-read that fails must not replace the panel holding N passwords.
+      */}
+      {importOpen && (
+        <ExcelImportPanel
+          target={STAFF_IMPORT_TARGET}
+          onImported={() => {
+            idDangDoi.current = null;
+            datChiTiet(null);
+            datLanDoc((n) => n + 1);
+          }}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
 
       {/*
         Ô MẬT KHẨU TẠM ĐỨNG NGOÀI MỌI NHÁNH CỦA `trangThai`, và chỗ đứng ấy là một điều kiện chứ

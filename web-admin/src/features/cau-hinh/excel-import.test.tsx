@@ -12,8 +12,11 @@ import { keyAfterAttempt, keyForAttempt } from "./excel-import-flow";
 import { ExcelImportView } from "./excel-import-panel";
 import {
   CATALOGUE_IMPORTS,
+  DOCUMENT_TYPE_IMPORT_TARGET,
   MAP_ASSET_TYPE_IMPORT_TARGET,
   RESIDENTIAL_UNIT_IMPORT_TARGET,
+  RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET,
+  TASK_BLOC_IMPORT_TARGET,
   catalogueImportFor,
 } from "./excel-import-targets";
 import { NhomMuc } from "./tab-danh-muc"; // vi-name-ok: existing export of tab-danh-muc.tsx, imported not declared (rule 12 inv 3)
@@ -139,9 +142,12 @@ function session(permissions: readonly string[]): KetQua<identity_phienHienTaiRa
 }
 
 describe("Danh mục — which group offers the import, to whom", () => {
-  it("today: only Loại tài nguyên bản đồ has an import (one route per owning service, ADR 0059 §3)", () => {
-    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo"]);
-    expect(catalogueImportFor("loaiVanBan", session(["admin.lookup"]))).toBeNull();
+  it("today: four groups have an import (one route per owning service, ADR 0059 §3); the rest do not", () => {
+    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo", "loaiVanBan", "loaiDonViDanCu", "khoiNhiemVu"]);
+    // Being built by their owners (petitions, finance) — no button until their routes are in the contract.
+    for (const g of ["loaiNhiemVu", "mucUuTienNhiemVu", "hangMucKeHoachVon"] as const) {
+      expect(catalogueImportFor(g, session(["admin.lookup"]))).toBeNull();
+    }
   });
 
   it("allowed: `admin.lookup` on the group that has an import", () => {
@@ -280,5 +286,98 @@ describe("Thôn / Tổ dân phố — its own import target (not a catalogue gro
     const html = residentialView({ ok: true, duLieu: { valid: false, rows: [], errors: ERRORS } });
     expect(html).toContain("chưa thôn / tổ dân phố nào được tạo");
     expect(html).not.toContain("Nhập các địa bàn này");
+  });
+});
+
+describe("Loại văn bản · Loại đơn vị dân cư · Khối nhiệm vụ — registered in CATALOGUE_IMPORTS", () => {
+  const cases = [
+    {
+      group: "loaiVanBan" as const,
+      target: DOCUMENT_TYPE_IMPORT_TARGET,
+      base: "/api/v1/document-types",
+      field: "types",
+      noun: "loại văn bản",
+    },
+    {
+      group: "loaiDonViDanCu" as const,
+      target: RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET,
+      base: "/api/v1/residential-unit-types",
+      field: "entries",
+      noun: "loại đơn vị dân cư",
+    },
+    {
+      group: "khoiNhiemVu" as const,
+      target: TASK_BLOC_IMPORT_TARGET,
+      base: "/api/v1/task-blocs",
+      field: "entries",
+      noun: "khối nhiệm vụ",
+    },
+  ];
+
+  for (const c of cases) {
+    it(`${c.noun}: its owner's three routes, rows in \`${c.field}\`, gated on admin.lookup (allowed and DENIED)`, () => {
+      expect(c.target.routes).toEqual({
+        template: `${c.base}/import-template`,
+        previews: `${c.base}/import-previews`,
+        imports: `${c.base}/imports`,
+      });
+      expect(c.target.rowsField).toBe(c.field);
+      expect(CATALOGUE_IMPORTS[c.group]?.permission).toBe("admin.lookup");
+      expect(catalogueImportFor(c.group, session(["admin.lookup"]))).not.toBeNull();
+      expect(catalogueImportFor(c.group, session(["admin.org", "admin.user"]))).toBeNull();
+      expect(catalogueImportFor(c.group, null)).toBeNull();
+    });
+
+    it(`${c.noun}: preview reads \`${c.field}\` and draws the four columns; success says the catalogue was re-read`, async () => {
+      const row = { row: 2, code: "ma-thu", label: "Mục thử", order: 1 };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (path: string) =>
+          path.endsWith("/import-previews")
+            ? new Response(JSON.stringify({ valid: true, [c.field]: [row], errors: [] }), { status: 200 })
+            : new Response(JSON.stringify({ created: [{ ...row, id: "01JNEW" }] }), { status: 201 }),
+        ),
+      );
+      try {
+        const p = await previewImport<MapAssetTypeImportRow>(c.target.routes, c.target.rowsField, new Blob(["x"]), "f.xlsx");
+        expect(p.ok && p.duLieu.rows).toEqual([row]);
+        const html = renderToStaticMarkup(
+          <ExcelImportView
+            target={c.target}
+            fileChosen
+            preview={p}
+            result={null}
+            busy=""
+            templateError=""
+            onDownloadTemplate={() => {}}
+            onChooseFile={() => {}}
+            onPreview={() => {}}
+            onImport={() => {}}
+            onClose={() => {}}
+          />,
+        );
+        expect(html).toContain(`Sẽ tạo 1 ${c.noun}`);
+        expect(html).toContain('<td>2</td><td>Mục thử</td><td class="ma-muc">ma-thu</td><td>1</td>');
+        const r = await commitImport<MapAssetTypeImportRow>(c.target.routes, new Blob(["x"]), "f.xlsx", "k-1");
+        expect(r.ok && r.created).toHaveLength(1);
+        expect(c.target.importedSentence(1)).toBe(`Đã nhập 1 ${c.noun}. Danh mục đã được tải lại.`);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  }
+
+  it("409 catalogue_changed: the server's sentence, nothing written", async () => {
+    const msg = "Danh mục đã thay đổi từ lúc kiểm tra tệp. Hãy kiểm tra lại tệp rồi nhập.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ code: "catalogue_changed", message: msg, trace_id: "t" }), { status: 409 })),
+    );
+    try {
+      const r = await commitImport(TASK_BLOC_IMPORT_TARGET.routes, new Blob(["x"]), "f.xlsx", "k-1");
+      expect(r).toEqual({ ok: false, message: msg, errors: [] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

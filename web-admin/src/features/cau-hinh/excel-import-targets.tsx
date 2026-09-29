@@ -3,11 +3,22 @@
 import type { ReactNode } from "react";
 
 import type { KhoaDanhMucGhi } from "@/lib/api/danh-muc";
+import type { ImportRoutes } from "@/lib/api/excel-import";
+import {
+  DOCUMENT_TYPE_IMPORT_ROUTES,
+  DOCUMENT_TYPE_ROWS_FIELD,
+  IDENTITY_CATALOGUE_ROWS_FIELD,
+  RESIDENTIAL_UNIT_TYPE_IMPORT_ROUTES,
+  TASK_BLOC_IMPORT_ROUTES,
+} from "@/lib/api/lookup-catalogue-import";
+import type { DocumentTypeImportRow, IdentityCatalogueImportRow } from "@/lib/api/lookup-catalogue-import";
 import { MAP_ASSET_TYPE_IMPORT_ROUTES, MAP_ASSET_TYPE_ROWS_FIELD } from "@/lib/api/map-asset-type-import";
 import type { MapAssetTypeImportRow } from "@/lib/api/map-asset-type-import";
 import { ORG_UNIT_IMPORT_ROUTES } from "@/lib/api/org-unit-import";
 import { RESIDENTIAL_UNIT_IMPORT_ROUTES, RESIDENTIAL_UNIT_ROWS_FIELD } from "@/lib/api/residential-unit-import";
 import type { ResidentialUnitImportRow } from "@/lib/api/residential-unit-import";
+import { STAFF_IMPORT_ROUTES, STAFF_ROWS_FIELD } from "@/lib/api/staff-import";
+import type { StaffImportCreatedRow, StaffImportPlannedRow } from "@/lib/api/staff-import";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_orgUnitImportPreviewOut,
@@ -19,6 +30,7 @@ import { QUYEN_QUAN_LY_DANH_MUC, quyetDinhTheoKhoa } from "@/lib/quyen";
 import type { ImportTarget } from "./excel-import-flow";
 import { ExcelImportPanel } from "./excel-import-panel";
 import { loaiDonVi, nhanLoaiDonVi, nhanSoDem } from "./nhan-thon";
+import { NO_EMAIL_REASON, StaffImportResult } from "./staff-import-result";
 import {
   CONFIRM_IMPORT_BUTTON,
   ERRORS_HEADING,
@@ -32,7 +44,7 @@ import {
 /**
  * Every "⬆ Nhập từ Excel" of the configuration screen, one `ImportTarget` each (ADR 0059).
  *
- * TO WIRE ANOTHER IMPORT (staff, another catalogue group): write its routes file
+ * TO WIRE ANOTHER IMPORT (another catalogue group): write its routes file
  * beside `lib/api/map-asset-type-import.ts`, add ONE target here, and — for a catalogue group — one
  * entry in `CATALOGUE_IMPORTS`. The panel, the flow and the key-per-attempt rule need no change. Then
  * update the `Excel` item of `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`) in the same change: it names every
@@ -133,6 +145,131 @@ export const MAP_ASSET_TYPE_IMPORT_TARGET: ImportTarget<MapAssetTypeImportRow> =
   rowsField: MAP_ASSET_TYPE_ROWS_FIELD,
 };
 
+/** "" is a blank cell of the spreadsheet — said in words, never drawn as an empty cell. */
+function orBlank(v: string, blank: string): string {
+  return v === "" ? blank : v;
+}
+
+/**
+ * Người dùng (§3) — `admin.user`, drawn by `danh-ba-can-bo.tsx` (the tab is already gated on that key).
+ * A file with any non-empty Vai trò cell ALSO needs `admin.role`: the server answers 403
+ * `role_permission_required` with its own sentence, shown as it came. The explanation says it BEFORE the
+ * file is filled in, so nobody fills 200 rows of roles to be refused.
+ *
+ * `mobile` is drawn exactly as the server sent it — MASKED (rule 3, #16).
+ *
+ * The 201 is the one result that is more than a sentence: `resultView` draws the temporary passwords,
+ * once (`staff-import-result.tsx`).
+ */
+export const STAFF_IMPORT_TARGET: ImportTarget<StaffImportPlannedRow, StaffImportCreatedRow> = {
+  id: "can-bo",
+  title: "Nhập danh sách cán bộ từ Excel",
+  explanation:
+    "Tải tệp mẫu, điền mỗi cán bộ một dòng rồi chọn tệp để kiểm tra. Tệp mẫu có sẵn danh sách chọn Bộ " +
+    "phận và Vai trò của xã; mã cán bộ do hệ thống tự sinh. Hệ thống kiểm tra toàn bộ tệp trước, chưa " +
+    "ghi gì; chỉ khi tệp không có lỗi mới nhập được, và nhập thì nhập cả tệp hoặc không nhập gì. Dòng có " +
+    "thư điện tử công vụ được cấp tài khoản đăng nhập kèm mật khẩu tạm, hiện ĐÚNG MỘT LẦN ngay sau khi " +
+    "nhập — hãy chuẩn bị sẵn trước khi bấm nhập. Tệp có cột Vai trò không trống thì tài khoản của bạn " +
+    "cần thêm quyền Phân quyền.",
+  templateFileName: "mau-nhap-can-bo.xlsx",
+  confirmButton: "Nhập các cán bộ này",
+  errorsHeading: "Tệp có lỗi — chưa cán bộ nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:",
+  rowsLabel: "Các cán bộ sẽ tạo",
+  previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} cán bộ:`,
+  importedSentence: (n) =>
+    n === null
+      ? "Tệp đã được nhập ở lần gửi trước. Danh sách đã được tải lại."
+      : `Đã nhập ${n} cán bộ. Danh sách đã được tải lại.`,
+  columns: [
+    { header: "Dòng", cell: (p) => String(p.row) },
+    { header: "Họ và tên", cell: (p) => p.full_name },
+    { header: "Thư điện tử công vụ", cell: (p) => orBlank(p.email, "Chưa có") },
+    { header: "Chức vụ", cell: (p) => orBlank(p.position, "Chưa có") },
+    { header: "Bộ phận", cell: (p) => (p.org_unit_code === "" ? "Chưa phân bộ phận" : p.org_unit_name) },
+    { header: "Vai trò", cell: (p) => (p.role_code === "" ? "Chưa gán vai trò" : p.role_name) },
+    { header: "Điện thoại cơ quan", cell: (p) => orBlank(p.office_phone, "Chưa có") },
+    { header: "Di động cá nhân", cell: (p) => orBlank(p.mobile, "Chưa có") },
+    {
+      header: "Tài khoản",
+      cell: (p) => (p.issues_account ? "Sẽ cấp tài khoản" : `Không cấp — ${NO_EMAIL_REASON}`),
+    },
+  ],
+  rowKey: (p) => p.row,
+  routes: STAFF_IMPORT_ROUTES,
+  rowsField: STAFF_ROWS_FIELD,
+  resultView: (created, onClose) => <StaffImportResult created={created} onClose={onClose} />,
+};
+
+/** The four fields every lookup-catalogue import row has (`row`, `code`, `label`, `order`). */
+type LookupImportRow = { readonly row: number; readonly code: string; readonly label: string; readonly order: number };
+
+/**
+ * One Danh mục group whose rows are the plain four fields. The map-asset-type target above predates this
+ * and keeps its own words; the three below differ only in the noun, the file name and the routes.
+ */
+function lookupImportTarget<R extends LookupImportRow>(spec: {
+  id: string;
+  noun: string;
+  templateFileName: string;
+  routes: ImportRoutes;
+  rowsField: string;
+}): ImportTarget<R> {
+  const { noun } = spec;
+  return {
+    id: spec.id,
+    title: `Nhập ${noun} từ Excel`,
+    explanation:
+      `Tải tệp mẫu, điền mỗi ${noun} một dòng rồi chọn tệp để kiểm tra. Hệ thống kiểm tra toàn bộ tệp ` +
+      "trước, chưa ghi gì; chỉ khi tệp không có lỗi mới nhập được, và nhập thì nhập cả tệp hoặc không " +
+      "nhập gì. Nhập chỉ thêm mục mới; mục đang có không bị sửa.",
+    templateFileName: spec.templateFileName,
+    confirmButton: "Nhập các mục này",
+    errorsHeading: `Tệp có lỗi — chưa ${noun} nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:`,
+    rowsLabel: `Các ${noun} sẽ tạo`,
+    previewLead: (n) => `Tệp hợp lệ. Sẽ tạo ${n} ${noun}:`,
+    importedSentence: (n) =>
+      n === null
+        ? "Tệp đã được nhập ở lần gửi trước. Danh mục đã được tải lại."
+        : `Đã nhập ${n} ${noun}. Danh mục đã được tải lại.`,
+    columns: [
+      { header: "Dòng", cell: (t) => String(t.row) },
+      { header: "Tên hiển thị", cell: (t) => t.label },
+      { header: "Mã", cell: (t) => t.code, mono: true },
+      { header: "Thứ tự", cell: (t) => String(t.order) },
+    ],
+    rowKey: (t) => t.row,
+    routes: spec.routes,
+    rowsField: spec.rowsField,
+  };
+}
+
+/** Danh mục → Loại đơn vị dân cư (§5) — `admin.lookup`, owner `service-identity`. */
+export const RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET = lookupImportTarget<IdentityCatalogueImportRow>({
+  id: "loai-don-vi-dan-cu",
+  noun: "loại đơn vị dân cư",
+  templateFileName: "mau-nhap-loai-don-vi-dan-cu.xlsx",
+  routes: RESIDENTIAL_UNIT_TYPE_IMPORT_ROUTES,
+  rowsField: IDENTITY_CATALOGUE_ROWS_FIELD,
+});
+
+/** Danh mục → Khối nhiệm vụ (§5) — `admin.lookup`, owner `service-identity`. */
+export const TASK_BLOC_IMPORT_TARGET = lookupImportTarget<IdentityCatalogueImportRow>({
+  id: "khoi-nhiem-vu",
+  noun: "khối nhiệm vụ",
+  templateFileName: "mau-nhap-khoi-nhiem-vu.xlsx",
+  routes: TASK_BLOC_IMPORT_ROUTES,
+  rowsField: IDENTITY_CATALOGUE_ROWS_FIELD,
+});
+
+/** Danh mục → Loại văn bản (§5) — `admin.lookup`, owner `service-documents`. */
+export const DOCUMENT_TYPE_IMPORT_TARGET = lookupImportTarget<DocumentTypeImportRow>({
+  id: "loai-van-ban",
+  noun: "loại văn bản",
+  templateFileName: "mau-nhap-loai-van-ban.xlsx",
+  routes: DOCUMENT_TYPE_IMPORT_ROUTES,
+  rowsField: DOCUMENT_TYPE_ROWS_FIELD,
+});
+
 /** What the Danh mục tab needs to offer an import for one group. */
 export type CatalogueImport = {
   /** The key the three routes declare — gated in the UI, checked by the server. */
@@ -148,6 +285,18 @@ export const CATALOGUE_IMPORTS: Partial<Record<KhoaDanhMucGhi, CatalogueImport>>
   loaiTaiNguyenBanDo: {
     permission: QUYEN_QUAN_LY_DANH_MUC,
     panel: (p) => <ExcelImportPanel target={MAP_ASSET_TYPE_IMPORT_TARGET} {...p} />,
+  },
+  loaiVanBan: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={DOCUMENT_TYPE_IMPORT_TARGET} {...p} />,
+  },
+  loaiDonViDanCu: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET} {...p} />,
+  },
+  khoiNhiemVu: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={TASK_BLOC_IMPORT_TARGET} {...p} />,
   },
 };
 

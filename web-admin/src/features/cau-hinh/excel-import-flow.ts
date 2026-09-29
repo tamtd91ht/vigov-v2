@@ -14,7 +14,10 @@
  * rows it is importing.
  */
 
-import type { ImportError, ImportRoutes } from "@/lib/api/excel-import";
+import type { ReactNode } from "react";
+
+import type { ImportError, ImportPreview, ImportResult, ImportRoutes } from "@/lib/api/excel-import";
+import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing type of goi.ts, imported not declared (rule 12 inv 3)
 
 /** One column of the preview table. `cell` returns TEXT: React escapes it, no markup is ever built. */
 export type ImportColumn<R> = {
@@ -24,8 +27,14 @@ export type ImportColumn<R> = {
   readonly mono?: boolean;
 };
 
-/** Everything one import needs. See the header. */
-export type ImportTarget<R> = {
+/**
+ * Everything one import needs. See the header.
+ *
+ * `R` is a row of the preview, `C` a row of the 201. They are the same type for every catalogue; the
+ * staff import is the one where they differ — the preview plans a person, the 201 carries the minted
+ * code, the login and, once, the temporary password.
+ */
+export type ImportTarget<R, C = R> = {
   /** DOM id fragment, unique per target (`tieu-de-nhap-${id}`, `o-tep-nhap-${id}`). */
   readonly id: string;
   readonly title: string;
@@ -44,7 +53,68 @@ export type ImportTarget<R> = {
   readonly routes: ImportRoutes;
   /** Name of the row list in the preview body (`units`, `types`, …). */
   readonly rowsField: string;
+  /**
+   * What a successful import shows BESIDES `importedSentence`, or absent for "the sentence is enough".
+   * `created` is `null` on a replay. When present it owns closing: the panel's own "Đóng" is not drawn,
+   * because the staff import's result holds values that must be closed by an explicit act, never by the
+   * reflex button (`staff-import-result.tsx`).
+   */
+  readonly resultView?: (created: readonly C[] | null, onClose: () => void) => ReactNode;
 };
+
+/** The file the staff member chose, with the name it had on their machine. */
+export type ChosenFile = { readonly blob: Blob; readonly name: string };
+
+/**
+ * One attempt at one file, as the panel holds it. EVERYTHING THE SERVER SENT BACK LIVES HERE AND ONLY
+ * HERE — for the staff import that includes the temporary passwords of the 201 — so the transitions
+ * below are the whole answer to "when does that value stop existing on this screen".
+ */
+export type ImportAttempt<R, C = R> = {
+  readonly file: ChosenFile | null;
+  readonly preview: KetQua<ImportPreview<R>> | null;
+  readonly key: string | null;
+  readonly result: ImportResult<C> | null;
+};
+
+export type AttemptEvent<R, C = R> =
+  | { readonly type: "chosen"; readonly file: ChosenFile | null }
+  | { readonly type: "previewStarted" }
+  | { readonly type: "previewed"; readonly preview: KetQua<ImportPreview<R>> }
+  | { readonly type: "importStarted"; readonly key: string }
+  | { readonly type: "imported"; readonly key: string; readonly result: ImportResult<C> }
+  | { readonly type: "closed" };
+
+export const EMPTY_ATTEMPT: ImportAttempt<never, never> = { file: null, preview: null, key: null, result: null };
+
+/**
+ * The attempt after one event. Pure, so the rules have tests:
+ *
+ *   chosen          a NEW FILE IS A NEW ATTEMPT — preview, key and result all start over
+ *   previewStarted  the previous result goes (it answered another check)
+ *   previewed       a new preview is a new attempt: the file may have been re-saved under the same name
+ *   importStarted   the key of this attempt is recorded before the send, so a retry reuses it
+ *   imported        key kept on failure, dropped on success (`keyAfterAttempt`)
+ *   closed          EVERYTHING goes — the file, the preview, the key and the 201 with its passwords.
+ *                   The caller also unmounts the panel; clearing here as well means no path that keeps
+ *                   the panel mounted (a parent that forgets to) keeps the values
+ */
+export function nextAttempt<R, C>(state: ImportAttempt<R, C>, event: AttemptEvent<R, C>): ImportAttempt<R, C> {
+  switch (event.type) {
+    case "chosen":
+      return { file: event.file, preview: null, key: null, result: null };
+    case "previewStarted":
+      return { ...state, result: null };
+    case "previewed":
+      return { ...state, preview: event.preview, key: null };
+    case "importStarted":
+      return { ...state, key: event.key };
+    case "imported":
+      return { ...state, result: event.result, key: keyAfterAttempt(event.key, event.result.ok) };
+    case "closed":
+      return EMPTY_ATTEMPT;
+  }
+}
 
 export type ErrorRow = { readonly row: string; readonly column: string; readonly message: string };
 
