@@ -16,14 +16,20 @@ package http
 //	                forbidden #2), and no commune ULID is ever returned
 //
 // WHAT IS DELIBERATELY ABSENT (owner decision 2026-09-27): no view counting (`luot_xem` stays as it is —
-// a GET that writes is not a GET, and a public counter is a number anybody can inflate), no images, no
-// categories endpoint, no `type` filter.
+// a GET that writes is not a GET, and a public counter is a number anybody can inflate), no categories
+// endpoint.
+//
+// ADDED 2026-09-29 for SRS M6.1.4 (the Mini App's news screen, P0), all OPTIONAL on the wire so the
+// contract only grows (rule 2, forbidden #4): `type` on each item, an optional `type` filter on the list,
+// and the provenance pair `source` / `source_url`. STILL ABSENT, each for a reason on tinXaRa: the image
+// and the view count.
 
 import (
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
@@ -45,7 +51,7 @@ type TraXaTheoHost interface {
 // NoiDungCongKhaiDoc is the two PUBLISHED-only reads. *commsstore.NoiDungMiniAppStore satisfies it. There
 // is deliberately no way to reach the staff register's all-states reads from this surface.
 type NoiDungCongKhaiDoc interface {
-	DanhSachCongKhai(ctx context.Context, yc page.Request) (page.Result[domain.NoiDungMiniApp], error)
+	DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, yc page.Request) (page.Result[domain.NoiDungMiniApp], error)
 	CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error)
 }
 
@@ -80,12 +86,24 @@ func newHandlerCongKhai(d DepsCongKhai) *HandlerCongKhai {
 // the staff screen accepts markup in any of them, and "no HTML reaches the citizen" is a property of the
 // response, not of one field.
 //
-// WHAT IS ABSENT IS THE CONTRACT: no `status` (it is always `dang-hien`), no author code, no provenance,
-// no view count, no image, no category id, no commune id or host.
+// WHAT IS ABSENT IS THE CONTRACT: no `status` (it is always `dang-hien`), no author code, no portal id
+// (`source_ref`), no category id, no commune id or host, and:
+//
+//   - NO IMAGE. `anh_dai_dien_url` is a link a member of staff typed to a file SOME OTHER SYSTEM serves
+//     (migrations/0006_noi_dung_mini_app.sql:277-280) — not an approved derivative in the public bucket
+//     (ADR 0052 §2). Handing it to every resident would make the Mini App fetch whatever host was typed.
+//     It arrives when the image is stored as a public-bucket derivative.
+//   - NO VIEW COUNT. Nothing increments `luot_xem` (0006:93-97), so it is 0 on every row; a public 0 reads
+//     as "nobody read this", which is false.
 type tinXaRa struct {
 	// ID is the item's own ULID — what the detail route takes. Random, so it enumerates nothing (rule 4,
 	// invariant 4). NEVER the commune's id.
 	ID string `json:"id"`
+
+	// Type is one of the six closed codes (domain.LoaiNoiDungHopLe) — the same values the staff register
+	// sends and the list's `type` filter takes. Optional on the wire only so the contract grows additively;
+	// every row carries one (NOT NULL + CHECK, 0006:264,367-368).
+	Type string `json:"type,omitempty"`
 
 	Title   string `json:"title"`
 	Summary string `json:"summary"`
@@ -96,6 +114,14 @@ type tinXaRa struct {
 	// CategoryName is "" when the item is filed nowhere, or under a category since soft-deleted.
 	CategoryName string `json:"category_name"`
 
+	// Source is `thu-cong` (composed in ViGov) or `dong-bo-cong` (taken from the commune's own portal).
+	Source string `json:"source,omitempty"`
+
+	// SourceURL is the original article on the commune's portal. ABSENT unless it is an http(s) link:
+	// the only writer is the portal sync, which is not built, so nothing has validated this column at
+	// write time — a `javascript:` value must never reach a link in the Mini App.
+	SourceURL string `json:"source_url,omitempty"`
+
 	// Body is PLAIN TEXT, paragraphs separated by one blank line ("\n\n"), line breaks by "\n". Absent
 	// from the list (the page does not read it — store.cotNoiDungMiniApp), present on the detail.
 	Body *string `json:"body,omitempty"`
@@ -104,10 +130,17 @@ type tinXaRa struct {
 func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, coThan bool) tinXaRa {
 	ra := tinXaRa{
 		ID:           n.ID,
+		Type:         string(n.Loai),
 		Title:        domain.VanBanThuanChoDan(n.TieuDe),
 		Summary:      domain.VanBanThuanChoDan(n.TomTat),
 		PublishedOn:  n.NgayDang.Format("2006-01-02"),
 		CategoryName: tenDanhMuc[n.DanhMucID],
+		Source:       string(n.Nguon),
+	}
+	if u, err := domain.ChuanHoaURL(n.NguonURL); err == nil {
+		// An invalid stored link is dropped, not an error: the article is still worth showing, and the
+		// refusal is the point. err is deliberately not returned — there is nothing a resident can do.
+		ra.SourceURL = u
 	}
 	if coThan {
 		than := domain.VanBanThuanChoDan(n.NoiDung)
@@ -190,6 +223,10 @@ func (h *HandlerCongKhai) loi500(ctx context.Context, w http.ResponseWriter, vie
 // that has published nothing. The page parameters are still validated first, so a bad cursor is a 400
 // whatever the domain — otherwise the 400/200 split would tell which domains are communes.
 //
+// OPTIONAL `type` FILTER: one of the six codes, the same values and the same 400 as the staff register's
+// filter. Validated BEFORE the platform is asked, like the cursor, so the 400/200 split says nothing about
+// which domains are communes. Absent or empty = every type.
+//
 // NO AUDIT ENTRY: nothing is written; this is what the commune chose to publish, read inside the one
 // commune the host resolved to (rule 6, invariant 7 asks for neither case).
 func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +234,14 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 	gia := q["host"]
 	if len(gia) != 1 || !domain.HopLeTenMienXa(gia[0]) {
 		viet400Host(w)
+		return
+	}
+	itemType, typeOK := publicTypeFilter(q)
+	if !typeOK {
+		// The refusal names the closed list and never echoes what was sent.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Tham số `type` phải là một trong sáu loại nội dung: tin-tuc, su-kien, thong-bao, "+
+				"truyen-thanh, video, banner.", "")
 		return
 	}
 	yc, err := page.Parse(q, commsstore.SapXepNoiDungMiniApp)
@@ -217,7 +262,7 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := tenant.Into(r.Context(), xa.ID)
-	kq, err := h.d.NoiDung.DanhSachCongKhai(ctx, yc)
+	kq, err := h.d.NoiDung.DanhSachCongKhai(ctx, itemType, yc)
 	if err != nil {
 		h.loi500(ctx, w, "tin của xã", err)
 		return
@@ -240,6 +285,25 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, false))
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// publicTypeFilter reads the list's OPTIONAL `type`: ("", true) when absent or empty, (code, true) for
+// one of the six, ("", false) for anything else — the caller answers 400.
+//
+// A HELPER AND NOT AN INLINE `if`, FOR THE GENERATED CONTRACT: tools/apidoc marks a query parameter
+// `required: true` whenever a variable read from it appears in the condition of a 400 branch
+// (truyvan.go:158-174, docThanHam). Inline, `type` would be published as REQUIRED — a breaking change
+// on paper to a route the Mini App already calls, and every generated client would have to send it.
+// Here the handler's condition reads only the bool, and the read inside this function has no 400.
+func publicTypeFilter(q url.Values) (domain.LoaiNoiDung, bool) {
+	v := thamSoLoc(q, "type")
+	if v == "" {
+		return "", true
+	}
+	if !domain.LoaiNoiDungHopLe(v) {
+		return "", false
+	}
+	return domain.LoaiNoiDung(v), true
 }
 
 // maTinToiDa bounds `{id}` before it reaches the store. Item ids are 26-character ULIDs; anything

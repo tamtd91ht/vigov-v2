@@ -36,7 +36,7 @@ func (xaTheoHostThu) XaTheoHost(context.Context, string) (tenant.Tenant, bool, e
 
 type noiDungCongKhaiThu struct{}
 
-func (noiDungCongKhaiThu) DanhSachCongKhai(ctx context.Context, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
+func (noiDungCongKhaiThu) DanhSachCongKhai(ctx context.Context, _ domain.LoaiNoiDung, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
 	tenant.MustFrom(ctx)
 	return page.NewResult[domain.NoiDungMiniApp](), nil
 }

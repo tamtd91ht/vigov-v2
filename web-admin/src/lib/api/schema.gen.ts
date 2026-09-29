@@ -276,10 +276,13 @@ export type comms_thongBaoRa = {
 
 export type comms_tinXaRa = {
   "id": string;
+  "type"?: string;
   "title": string;
   "summary": string;
   "published_on": string;
   "category_name": string;
+  "source"?: string;
+  "source_url"?: string;
   "body"?: string | null;
 };
 
@@ -3147,6 +3150,7 @@ export type comms_get_commune_news = {
     "sort"?: "created_at";
     "order"?: "asc" | "desc";
     "host"?: string;
+    "type"?: string;
   };
   than: never;
   phanHoi: {

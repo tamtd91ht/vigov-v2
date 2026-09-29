@@ -3515,6 +3515,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -21848,6 +21856,9 @@
           "id": {
             "type": "string"
           },
+          "type": {
+            "type": "string"
+          },
           "title": {
             "type": "string"
           },
@@ -21858,6 +21869,12 @@
             "type": "string"
           },
           "category_name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_url": {
             "type": "string"
           },
           "body": {

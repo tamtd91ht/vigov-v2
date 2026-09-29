@@ -69,18 +69,29 @@ type ckNoiDung struct {
 	theoXa map[tenant.ID][]domain.NoiDungMiniApp
 	loi    error
 	goi    int
+
+	// lastType is the `type` the handler passed on the last list read. The fake applies it (like the
+	// store's `loai = $3`) but NOT the state predicate — the second wall stays the handler's to prove.
+	lastType domain.LoaiNoiDung
 }
 
-func (k *ckNoiDung) DanhSachCongKhai(ctx context.Context, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
+func (k *ckNoiDung) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
 	k.goi++
+	k.lastType = itemType
 	xa := tenant.MustFrom(ctx)
 	if k.loi != nil {
 		return page.Result[domain.NoiDungMiniApp]{}, k.loi
 	}
-	if len(k.theoXa[xa]) == 0 {
+	var items []domain.NoiDungMiniApp
+	for _, n := range k.theoXa[xa] {
+		if itemType == "" || n.Loai == itemType {
+			items = append(items, n)
+		}
+	}
+	if len(items) == 0 {
 		return page.NewResult[domain.NoiDungMiniApp](), nil
 	}
-	return page.Result[domain.NoiDungMiniApp]{Items: k.theoXa[xa], NextCursor: "con-tro-tiep", HasMore: true}, nil
+	return page.Result[domain.NoiDungMiniApp]{Items: items, NextCursor: "con-tro-tiep", HasMore: true}, nil
 }
 
 func (k *ckNoiDung) CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error) {
@@ -111,9 +122,9 @@ const ckScript = `<p>Lịch tiêm chủng</p><script>alert("xã")</script><p>Bà
 func ckDuLieu() (*ckNoiDung, *ckDanhMuc) {
 	nd := &ckNoiDung{theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
 		xaA: {
-			{ID: "nd-a-1", TieuDe: "<b>Tiêm chủng</b> tháng 10", TomTat: "Tóm <i>tắt</i>", NoiDung: ckScript,
-				DanhMucID: "dm-a", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien,
-				NguoiTaoMa: "CB-2026-7K3M9Q", LuotXem: 9, AnhDaiDienURL: "https://x/a.png"},
+			{ID: "nd-a-1", Loai: domain.LoaiTinTuc, TieuDe: "<b>Tiêm chủng</b> tháng 10", TomTat: "Tóm <i>tắt</i>",
+				NoiDung: ckScript, DanhMucID: "dm-a", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien,
+				Nguon: domain.NguonThuCong, NguoiTaoMa: "CB-2026-7K3M9Q", LuotXem: 9, AnhDaiDienURL: "https://x/a.png"},
 			{ID: "nd-a-nhap", TieuDe: "Bản nháp của xã A", TrangThai: domain.TrangThaiAn, NgayDang: ckNgay},
 			{ID: "nd-a-cho", TieuDe: "Chờ duyệt của xã A", TrangThai: domain.TrangThaiChoDuyet, NgayDang: ckNgay},
 		},
@@ -232,12 +243,13 @@ func TestTinXaChiTraDungCacTruongVaVanBanThuan(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	// No body on the list; no status, author, provenance, view count, image or ids of anything else.
-	if got := strings.Join(khoa, ","); got != "category_name,id,published_on,summary,title" {
+	// No body on the list; no status, author, portal id, view count, image or ids of anything else.
+	// `source_url` is absent because the row has none.
+	if got := strings.Join(khoa, ","); got != "category_name,id,published_on,source,summary,title,type" {
 		t.Fatalf("trường của trang = %s", got)
 	}
-	if it["title"] != "Tiêm chủng tháng 10" || it["summary"] != "Tóm tắt" ||
-		it["category_name"] != "Y tế" || it["published_on"] != "2026-09-27" {
+	if it["title"] != "Tiêm chủng tháng 10" || it["summary"] != "Tóm tắt" || it["type"] != "tin-tuc" ||
+		it["source"] != "thu-cong" || it["category_name"] != "Y tế" || it["published_on"] != "2026-09-27" {
 		t.Fatalf("dòng = %v", it)
 	}
 }
@@ -263,8 +275,111 @@ func TestMotTinXaToanVanLaVanBanThuan(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	if got := strings.Join(khoa, ","); got != "body,category_name,id,published_on,summary,title" {
+	if got := strings.Join(khoa, ","); got != "body,category_name,id,published_on,source,summary,title,type" {
 		t.Fatalf("trường của chi tiết = %s", got)
+	}
+}
+
+// --- the `type` filter and the provenance link (added 2026-09-29, SRS M6.1.4) ----------------------
+
+// newsByType is commune A holding every case the filter must separate, and commune B holding the same
+// type, so a filter that crossed communes shows up.
+func newsByType() *ckNoiDung {
+	return &ckNoiDung{theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
+		xaA: {
+			{ID: "a-news", Loai: domain.LoaiTinTuc, TieuDe: "Tin tức A", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien},
+			{ID: "a-event", Loai: domain.LoaiSuKien, TieuDe: "Sự kiện A", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien},
+			{ID: "a-event-draft", Loai: domain.LoaiSuKien, TieuDe: "Sự kiện nháp A", NgayDang: ckNgay, TrangThai: domain.TrangThaiAn},
+			{ID: "a-event-pending", Loai: domain.LoaiSuKien, TieuDe: "Sự kiện chờ A", NgayDang: ckNgay, TrangThai: domain.TrangThaiChoDuyet},
+		},
+		xaB: {
+			{ID: "b-event", Loai: domain.LoaiSuKien, TieuDe: "Sự kiện B", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien},
+		},
+	}}
+}
+
+func TestPublicNewsTypeFilterReturnsOnlyPublishedOfThatTypeInThatCommune(t *testing.T) {
+	nd := newsByType()
+	h := ckMayChu(t, &ckNenTang{}, nd, &ckDanhMuc{}, nil)
+
+	w := ckGoi(h, MauTinXa, ckHostA, "&type=su-kien")
+	doiMa(t, w, http.StatusOK)
+	if nd.lastType != domain.LoaiSuKien {
+		t.Fatalf("kho nhận type = %q, muốn su-kien", nd.lastType)
+	}
+	items := ckDocTrang(t, w).Items
+	if len(items) != 1 || items[0]["id"] != "a-event" || items[0]["type"] != "su-kien" {
+		t.Fatalf("xã A type=su-kien nhận %v, muốn đúng [a-event]", items)
+	}
+	body := w.Body.String()
+	for _, banned := range []string{"Tin tức A", "nháp", "chờ", "Sự kiện B", string(xaB)} {
+		if strings.Contains(body, banned) {
+			t.Fatalf("phản hồi lọc loại chứa %q: %s", banned, body)
+		}
+	}
+
+	// No filter, or an empty one, is every type — and the store is told so with "".
+	for _, extra := range []string{"", "&type="} {
+		w := ckGoi(h, MauTinXa, ckHostA, extra)
+		doiMa(t, w, http.StatusOK)
+		if nd.lastType != "" || len(ckDocTrang(t, w).Items) != 2 {
+			t.Fatalf("%q: type = %q, %d mục — muốn không lọc, hai mục đã đăng", extra, nd.lastType,
+				len(ckDocTrang(t, w).Items))
+		}
+	}
+}
+
+func TestPublicNewsUnknownTypeIs400BeforeAnyLookup(t *testing.T) {
+	nt := &ckNenTang{}
+	nd := newsByType()
+	h := ckMayChu(t, nt, nd, &ckDanhMuc{}, nil)
+
+	var first *httptest.ResponseRecorder
+	for _, host := range []string{ckHostA, ckHostKhongCo} {
+		for _, v := range []string{"abc", "Tin-Tuc", "tin_tuc", "tin-tuc%27--"} {
+			w := ckGoi(h, MauTinXa, host, "&type="+v)
+			doiMa(t, w, http.StatusBadRequest)
+			if strings.Contains(w.Body.String(), "abc") || strings.Contains(w.Body.String(), "tin_tuc") {
+				t.Fatalf("400 lặp lại giá trị đã gửi: %s", w.Body.String())
+			}
+			// One body whatever the domain — the 400/200 split must not say which domains are communes.
+			if first == nil {
+				first = w
+			} else if w.Body.String() != first.Body.String() {
+				t.Fatalf("%s type=%s: thân 400 khác: %s / %s", host, v, w.Body.String(), first.Body.String())
+			}
+		}
+	}
+	if nt.goi != 0 || nd.goi != 0 {
+		t.Fatalf("type lạ: nền tảng bị hỏi %d lần, kho bị đọc %d lần", nt.goi, nd.goi)
+	}
+}
+
+func TestPublicNewsSourceURLOnlyWhenHTTPLink(t *testing.T) {
+	nd := &ckNoiDung{theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
+		xaA: {
+			{ID: "synced", Loai: domain.LoaiTinTuc, TieuDe: "Từ Cổng", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien,
+				Nguon: domain.NguonDongBoCong, NguonIDNgoai: "cong-1", NguonURL: "https://cong.xa-a.gov.vn/tin/1"},
+			{ID: "bad-link", Loai: domain.LoaiTinTuc, TieuDe: "Liên kết xấu", NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien,
+				Nguon: domain.NguonDongBoCong, NguonIDNgoai: "cong-2", NguonURL: "javascript:alert(1)"},
+		},
+	}}
+	h := ckMayChu(t, &ckNenTang{}, nd, &ckDanhMuc{}, nil)
+
+	for id, want := range map[string]any{"synced": "https://cong.xa-a.gov.vn/tin/1", "bad-link": nil} {
+		w := ckGoi(h, MauTinXa+"/"+id, ckHostA)
+		doiMa(t, w, http.StatusOK)
+		var got map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("thân không phải JSON: %q", w.Body.String())
+		}
+		if got["source_url"] != want || got["source"] != "dong-bo-cong" {
+			t.Fatalf("%s: source_url = %v, source = %v; muốn %v, dong-bo-cong", id, got["source_url"], got["source"], want)
+		}
+		// The portal's own id is internal and never leaves.
+		if _, ok := got["source_ref"]; ok || strings.Contains(w.Body.String(), "cong-1") {
+			t.Fatalf("%s: lộ mã bài trên Cổng: %s", id, w.Body.String())
+		}
 	}
 }
 

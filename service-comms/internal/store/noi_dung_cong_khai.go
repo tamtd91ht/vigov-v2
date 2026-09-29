@@ -36,14 +36,23 @@ import (
 //
 // THE COMMUNE IS $1 FROM THE CONTEXT. On the public route the handler put it there after the PLATFORM
 // resolved the `host` the caller named; this method cannot tell and does not need to.
-func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, yc page.Request) (
+//
+// itemType "" = every type. Any other value is bound as $3; the handler has already refused a code
+// outside the six, and an unknown one here would only match nothing.
+func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, yc page.Request) (
 	page.Result[domain.NoiDungMiniApp], error) {
 
+	filter := ` AND deleted_at IS NULL AND trang_thai = $2`
+	args := []any{string(domain.TrangThaiDangHien)}
+	if itemType != "" {
+		filter += ` AND loai = $3`
+		args = append(args, string(itemType))
+	}
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotNoiDungMiniApp,
 		Table:   "noi_dung_mini_app",
-		Filter:  ` AND deleted_at IS NULL AND trang_thai = $2`,
-		Args:    []any{string(domain.TrangThaiDangHien)},
+		Filter:  filter,
+		Args:    args,
 	}, yc, mocNoiDungMiniApp, func(rows *sql.Rows) (domain.NoiDungMiniApp, string, error) {
 		n, err := quetNoiDungMiniApp(rows, false)
 		if err != nil {

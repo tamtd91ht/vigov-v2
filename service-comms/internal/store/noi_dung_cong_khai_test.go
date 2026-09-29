@@ -15,7 +15,7 @@ func TestDanhSachCongKhaiChiDangHienBuocXa(t *testing.T) {
 	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
 	kho, ctx := khoNoiDung(t, k)
 
-	kq, err := kho.DanhSachCongKhai(ctx, trangDauND(t))
+	kq, err := kho.DanhSachCongKhai(ctx, "", trangDauND(t))
 	if err != nil {
 		t.Fatalf("đọc trang công khai lỗi: %v", err)
 	}
@@ -36,6 +36,29 @@ func TestDanhSachCongKhaiChiDangHienBuocXa(t *testing.T) {
 	}
 	if cot := l.sql[:strings.Index(l.sql, " FROM ")]; strings.Contains(cot, "noi_dung") {
 		t.Errorf("trang công khai chọn cả `noi_dung`: %s", cot)
+	}
+	if strings.Contains(l.sql, "loai =") {
+		t.Errorf("không lọc loại mà câu vẫn có `loai =`: %s", l.sql)
+	}
+}
+
+func TestPublicContentListTypeFilterKeepsStateAndCommune(t *testing.T) {
+	fake := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
+	repo, ctx := khoNoiDung(t, fake)
+
+	if _, err := repo.DanhSachCongKhai(ctx, "su-kien", trangDauND(t)); err != nil {
+		t.Fatalf("đọc trang công khai lọc loại lỗi: %v", err)
+	}
+	stmt := fake.lenh[0]
+	// MUTATIONS THAT MUST TURN THIS RED: the type clause replaces the state clause, or binds the type
+	// to the state's placeholder.
+	for _, want := range []string{"tenant_id = $1", "deleted_at IS NULL", "trang_thai = $2", "loai = $3"} {
+		if !strings.Contains(stmt.sql, want) {
+			t.Errorf("câu đọc trang công khai lọc loại thiếu %q: %s", want, stmt.sql)
+		}
+	}
+	if stmt.args[0] != string(xaMotND) || stmt.args[1] != "dang-hien" || stmt.args[2] != "su-kien" {
+		t.Fatalf("tham số = %v, muốn [xã, dang-hien, su-kien, …]", stmt.args)
 	}
 }
 
