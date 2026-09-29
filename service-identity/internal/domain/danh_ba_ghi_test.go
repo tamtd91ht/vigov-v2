@@ -51,8 +51,22 @@ func TestChuanHoaEmailHaThapVaKiemHinhDang(t *testing.T) {
 			t.Errorf("%q: lỗi = %v, muốn ErrEmailSaiDinhDang", xau, err)
 		}
 	}
-	if _, err := ChuanHoaEmail("   "); !errors.Is(err, ErrThieuEmail) {
-		t.Errorf("thư điện tử rỗng: lỗi = %v, muốn ErrThieuEmail", err)
+}
+
+// A BLANK ADDRESS IS "NO ADDRESS", NOT A REFUSAL (ADR 0059 §1, user decision 2026-09-29): "" comes
+// back and the store writes NULL. Whitespace-only is blank too — a spreadsheet cell holding one space
+// must not become an address nobody can receive mail at, nor a refusal the person cannot see.
+//
+// MUTATION THAT MUST TURN THIS RED: restore the `return "", ErrThieuEmail` branch.
+func TestStaffEmailBlankMeansNoneNotError(t *testing.T) {
+	for _, blank := range []string{"", "   ", "\t  "} {
+		got, err := ChuanHoaEmail(blank)
+		if err != nil {
+			t.Errorf("%q: lỗi = %v, muốn không lỗi", blank, err)
+		}
+		if got != "" {
+			t.Errorf("%q: = %q, muốn chuỗi rỗng (lưu NULL)", blank, got)
+		}
 	}
 }
 

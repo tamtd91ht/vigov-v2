@@ -141,6 +141,14 @@ var (
 	// is the lock. Deleting the row here would leave a credential attached to a record every screen
 	// has stopped showing.
 	ErrCanBoCoTaiKhoan = errors.New("danh_ba_can_bo: dòng danh bạ này đang có tài khoản đăng nhập, không xoá được")
+
+	// ErrStaffEmailIsLogin — a profile edit that would CLEAR the work address of somebody who has a
+	// sign-in account. The address is optional on the directory row (ADR 0059 §1), but on an account
+	// it IS the login: sign-in matches `email = $n`, and NULL matches nothing, so clearing it locks
+	// the person out with no lock recorded, no trail saying so and no screen showing why. Checked
+	// inside the transaction on the row read FOR UPDATE, so an account issued a moment earlier
+	// cannot slip past it. CHANGING the address of an account holder is not this error — see Sua.
+	ErrStaffEmailIsLogin = errors.New("danh_ba_can_bo: không xoá được thư điện tử của cán bộ đã có tài khoản — thư điện tử là tên đăng nhập")
 )
 
 // LoiTraoQuyenKhongCam names the keys that were refused.
@@ -302,6 +310,9 @@ func (uc *DanhBaCanBo) chuanHoa(yc YeuCauThemCanBo) (domain.CanBoTomTat, error) 
 	if cb.ChucVu, err = domain.ChuanHoaChucVu(yc.ChucVu); err != nil {
 		return cb, err
 	}
+	// OPTIONAL (ADR 0059 §1): blank comes back "" and the store writes NULL, so any number of people
+	// in one commune may have no address. A non-blank one is shape-checked here and unique per
+	// commune at the key (idstore.ErrEmailDaDung).
 	if cb.Email, err = domain.ChuanHoaEmail(yc.Email); err != nil {
 		return cb, err
 	}
@@ -377,6 +388,14 @@ func (uc *DanhBaCanBo) Sua(ctx context.Context, id string, yc YeuCauSuaCanBo,
 
 		sau = truoc
 		dat(&sau)
+
+		// A BLANK ADDRESS IS ALLOWED ONLY ON A ROW WITHOUT AN ACCOUNT (user decision 2026-09-29).
+		// Refused before any write, so nothing is written and nothing is audited. What is NOT refused,
+		// deliberately unchanged: REPLACING an account holder's address with another valid one — that
+		// changes their login name, and has done since this route was written.
+		if truoc.CoTaiKhoan && truoc.Email != "" && sau.Email == "" {
+			return ErrStaffEmailIsLogin
+		}
 
 		if !doiHoSo(truoc, sau) {
 			return nil

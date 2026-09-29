@@ -66,9 +66,12 @@ const thanCanBoToiDa = 16 << 10
 //	active       a row that has just been created is not locked. Locking is its own route, and it
 //	             is the route that leaves the entry saying who shut the account.
 type themCanBoVao struct {
-	FullName    string `json:"full_name"`
-	Position    string `json:"position"`
-	Email       string `json:"email"`
+	FullName string `json:"full_name"`
+	Position string `json:"position"`
+	// Email is OPTIONAL (ADR 0059 §1): absent, "" or whitespace = no address, stored NULL.
+	// `omitempty` is for the CONTRACT — tools/apidoc marks a field optional only when it carries
+	// omitempty — the decoder is unaffected.
+	Email       string `json:"email,omitempty"`
 	OrgUnitID   string `json:"org_unit_id"`
 	OfficePhone string `json:"office_phone"`
 	Mobile      string `json:"mobile"`
@@ -79,6 +82,11 @@ type themCanBoVao struct {
 // department or either telephone number is a legitimate edit — so a struct of plain strings could
 // not tell "not mentioned" from "cleared", and a screen editing only the position would wipe both
 // telephone numbers off a government directory with nothing reporting it.
+//
+// `email: ""` CLEARS the address (stored NULL), allowed only while the person has no account —
+// 409 staff_email_is_login otherwise. `email: null` stays "unchanged", like every field here: null
+// and absent decode identically, and a null that cleared would wipe the login name of every client
+// that sends null for a field it did not touch.
 type suaCanBoVao struct {
 	FullName    *string `json:"full_name"`
 	Position    *string `json:"position"`
@@ -445,6 +453,12 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 				"tài khoản thay vì xoá. Nếu đây đúng là dòng nhập trùng, cần thu hồi tài khoản trước; "+
 				"chức năng thu hồi tài khoản chưa có trên hệ thống.", "")
 
+	case errors.Is(err, app.ErrStaffEmailIsLogin):
+		// 409 AND NOT 400: the value is a legitimate one — a blank address is allowed on a row
+		// without an account. What is refused is clearing it against the STATE of this row.
+		httpx.WriteError(w, http.StatusConflict, "staff_email_is_login",
+			"Không thể xoá thư điện tử của cán bộ đã có tài khoản — thư điện tử là tên đăng nhập.", "")
+
 	case errors.Is(err, idstore.ErrEmailDaDung):
 		httpx.WriteError(w, http.StatusConflict, "email_taken",
 			"Thư điện tử này đã được dùng cho một cán bộ khác trong xã.", "")
@@ -474,7 +488,7 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 func laLoiDauVaoCanBo(err error) bool {
 	for _, mot := range []error{
 		domain.ErrThieuHoTen, domain.ErrHoTenQuaDai, domain.ErrChucVuQuaDai,
-		domain.ErrThieuEmail, domain.ErrEmailSaiDinhDang, domain.ErrEmailQuaDai,
+		domain.ErrEmailSaiDinhDang, domain.ErrEmailQuaDai,
 		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai,
 		domain.ErrIDThamChieuQuaDai,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,

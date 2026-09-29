@@ -32,7 +32,6 @@ var (
 	ErrThieuHoTen        = errors.New("can_bo: thiếu họ và tên")
 	ErrHoTenQuaDai       = errors.New("can_bo: họ và tên quá dài")
 	ErrChucVuQuaDai      = errors.New("can_bo: chức vụ quá dài")
-	ErrThieuEmail        = errors.New("can_bo: thiếu thư điện tử")
 	ErrEmailSaiDinhDang  = errors.New("can_bo: thư điện tử không đúng định dạng")
 	ErrEmailQuaDai       = errors.New("can_bo: thư điện tử quá dài")
 	ErrSoDienThoaiSai    = errors.New("can_bo: số điện thoại chứa ký tự không dùng được")
@@ -117,17 +116,22 @@ func ChuanHoaChucVu(tho string) (string, error) {
 // depends on how somebody typed it. Normalising on the WRITE path is the only place this can be
 // fixed once; doing it on the read path would leave the duplicate rows in the table.
 //
-// IT IS REQUIRED, AND THAT IS A DEVIATION FROM THE SPECIFICATION WORTH READING BEFORE CHANGING.
-// docs/ui-ux/12-danh-ba-can-bo.md §5 does not mark Email required. The schema does, in effect:
-// `email TEXT NOT NULL` carries `UNIQUE (tenant_id, email)`, so the empty string is a VALUE and a
-// commune may hold it exactly ONCE. The second person with no address would be refused by the
-// server with a message about a unique key — a failure that reads as a bug, arrives at whoever is
-// typing the twenty-sixth row, and has no fix from the screen. Refusing the FIRST one with a
-// sentence is the honest version of the same limit.
+// IT IS OPTIONAL: BLANK (EMPTY OR WHITESPACE ONLY) RETURNS "" AND NO ERROR, and the store writes
+// that "" as NULL (`nullif($n,'')`). User decision 2026-09-29, ADR 0059 §1 — the same rule for the
+// single create form and the Excel import, as docs/ui-ux/12-danh-ba-can-bo.md §5 always drew it.
+// This used to REFUSE a blank address, because `email TEXT NOT NULL` under `UNIQUE (tenant_id,
+// email)` let a commune hold the empty string exactly once; migration 0019 made the column
+// nullable, and two NULLs never collide under that key, so any number of people may have none.
 //
-// → It is also a FINDING, not a decision this file is entitled to make permanent: the schema fix
-// is a partial unique index (`WHERE email <> ”`), which is a migration on a table whose key is
-// already deployed. Reported to the user rather than written here.
+// WHAT A MISSING ADDRESS STILL COSTS, and where it is enforced — not here, because "may this row
+// have no address" depends on whether it carries an account, which a shape check cannot see:
+//
+//	issuing an account       refused without an address — the address IS the login
+//	                         (app.ErrStaffHasNoEmail, 409 staff_has_no_email)
+//	clearing it on an edit   refused while the row has an account (app.ErrStaffEmailIsLogin,
+//	                         409 staff_email_is_login)
+//
+// A NON-BLANK VALUE IS STILL CHECKED IN FULL below, and still unique per commune.
 //
 // THE CHECK IS DELIBERATELY WEAK: one `@`, something either side, no whitespace, a dot in the
 // domain. Every stricter rule anybody writes refuses somebody's real address, and the address is
@@ -135,7 +139,7 @@ func ChuanHoaChucVu(tho string) (string, error) {
 func ChuanHoaEmail(tho string) (string, error) {
 	em := strings.ToLower(strings.TrimSpace(tho))
 	if em == "" {
-		return "", ErrThieuEmail
+		return "", nil
 	}
 	if utf8.RuneCountInString(em) > tranEmail {
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrEmailQuaDai, tranEmail)

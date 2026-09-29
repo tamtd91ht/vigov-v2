@@ -100,6 +100,9 @@ type khoGia struct {
 	// xoa is what XoaMem was handed; nil = never called.
 	xoa *xoaDaGhi
 
+	// insertedRow / updatedRow are what Chen / CapNhatHoSo were handed; nil = never called.
+	insertedRow, updatedRow *domain.CanBoTomTat
+
 	loi error
 }
 
@@ -128,11 +131,13 @@ func (k *khoGia) Chen(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTo
 	if k.maDaDung && k.soLanChen == 1 {
 		return idstore.ErrMaCanBoDaDung
 	}
+	k.insertedRow = &cb
 	_, err := tx.Exec(ctx, "INSERT INTO nguoi_dung (dau-hieu-chen)", cb.ID, cb.Ma, cb.HoTen)
 	return err
 }
 
 func (k *khoGia) CapNhatHoSo(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error {
+	k.updatedRow = &cb
 	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET ho-so", cb.ID, cb.HoTen, cb.DiDongCaNhan)
 	return err
 }
