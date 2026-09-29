@@ -2102,6 +2102,25 @@ export type petitions_xoaNhiemVuVao = {
   "reason": string;
 };
 
+export type reporting_rewordSystemMessageIn = {
+  "text": string;
+};
+
+export type reporting_systemMessageListOut = {
+  "items": Array<reporting_systemMessageOut>;
+};
+
+export type reporting_systemMessageOut = {
+  "code": string;
+  "description": string;
+  "default_text": string;
+  "current_text": string;
+  "overridden": boolean;
+  "updated_at"?: string | null;
+  /** staff business code (rule 6, inv 8) */
+  "updated_by"?: string;
+};
+
 /** GET /api/v1/announcements — Sổ thông báo nội bộ của xã — một trang thẻ, mới nhất ở trên, kèm bộ đếm xác nhận */
 export type comms_get_announcements = {
   duongDan: "/api/v1/announcements";
@@ -4584,6 +4603,62 @@ export type identity_delete_public_holidays_by_id = {
   phanHoi: {
     204: void;
     400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/reporting-system-messages — Lời hệ thống của phân hệ Báo cáo: câu mặc định, câu xã đang dùng và ai sửa lần cuối */
+export type reporting_get_reporting_system_messages = {
+  duongDan: "/api/v1/reporting-system-messages";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: reporting_systemMessageListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/reporting-system-messages/{code}/override — Xã sửa lời một câu hệ thống của phân hệ Báo cáo */
+export type reporting_put_reporting_system_messages_by_code_override = {
+  duongDan: "/api/v1/reporting-system-messages/{code}/override";
+  phuongThuc: "PUT";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: reporting_rewordSystemMessageIn;
+  phanHoi: {
+    200: reporting_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/reporting-system-messages/{code}/override — Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Báo cáo */
+export type reporting_delete_reporting_system_messages_by_code_override = {
+  duongDan: "/api/v1/reporting-system-messages/{code}/override";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;

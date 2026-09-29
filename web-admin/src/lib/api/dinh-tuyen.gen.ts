@@ -4,11 +4,12 @@
 // longest-first order. `tienTo` has no trailing slash; match it by PATH SEGMENT, not by
 // character: "/api/v1/roles" covers "/api/v1/roles/7" but NOT "/api/v1/role-permissions".
 // A path no entry covers must be refused, never sent to a default service (rule 1).
-export type DichVuAPI = "comms" | "documents" | "finance" | "identity" | "petitions";
+export type DichVuAPI = "comms" | "documents" | "finance" | "identity" | "petitions" | "reporting";
 export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly dichVu: DichVuAPI }> = [
   { tienTo: "/api/v1/incoming-document-overdue-queue", dichVu: "documents" },
   { tienTo: "/api/v1/incoming-document-summary", dichVu: "documents" },
   { tienTo: "/api/v1/petitions-system-messages", dichVu: "petitions" },
+  { tienTo: "/api/v1/reporting-system-messages", dichVu: "reporting" },
   { tienTo: "/api/v1/capital-plan-categories", dichVu: "finance" },
   { tienTo: "/api/v1/documents-audit-entries", dichVu: "documents" },
   { tienTo: "/api/v1/finance-system-messages", dichVu: "finance" },

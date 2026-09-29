@@ -47,6 +47,12 @@
 - op: replace
   path: /spec/rules/5/host
   value: "petitions.api.vigov.vn"
+- op: test
+  path: /spec/rules/6/host
+  value: "reporting.api.vigov.vn"
+- op: replace
+  path: /spec/rules/6/host
+  value: "reporting.api.vigov.vn"
 
 # `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.
 # Hai Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.

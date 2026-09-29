@@ -2695,6 +2695,69 @@
       "declared_in": "service-identity/internal/http/routes.go"
     },
     {
+      "service": "reporting",
+      "method": "GET",
+      "path": "/api/v1/reporting-system-messages",
+      "operation_id": "reporting_get_reporting_system_messages",
+      "task_id": "6080b8a538c3",
+      "summary": "Lời hệ thống của phân hệ Báo cáo: câu mặc định, câu xã đang dùng và ai sửa lần cuối",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "reporting.systemMessageListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-reporting/internal/http/routes.go"
+    },
+    {
+      "service": "reporting",
+      "method": "DELETE",
+      "path": "/api/v1/reporting-system-messages/{code}/override",
+      "operation_id": "reporting_delete_reporting_system_messages_by_code_override",
+      "task_id": "23358df9df9d",
+      "summary": "Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Báo cáo",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì",
+      "reply_schemas": {
+        "204": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-reporting/internal/http/routes.go"
+    },
+    {
+      "service": "reporting",
+      "method": "PUT",
+      "path": "/api/v1/reporting-system-messages/{code}/override",
+      "operation_id": "reporting_put_reporting_system_messages_by_code_override",
+      "task_id": "a6ee0a6d43f8",
+      "summary": "Xã sửa lời một câu hệ thống của phân hệ Báo cáo",
+      "screen": "14-cau-hinh §7",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "reporting.rewordSystemMessageIn",
+      "reply_schemas": {
+        "200": "reporting.systemMessageOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-reporting/internal/http/routes.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/residential-unit-types",

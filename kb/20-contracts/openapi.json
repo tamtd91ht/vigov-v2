@@ -11631,6 +11631,218 @@
         }
       }
     },
+    "/api/v1/reporting-system-messages": {
+      "get": {
+        "summary": "Lời hệ thống của phân hệ Báo cáo: câu mặc định, câu xã đang dùng và ai sửa lần cuối",
+        "operationId": "reporting_get_reporting_system_messages",
+        "tags": [
+          "reporting"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "6080b8a538c3",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reporting.systemMessageListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reporting-system-messages/{code}/override": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Báo cáo",
+        "operationId": "reporting_delete_reporting_system_messages_by_code_override",
+        "tags": [
+          "reporting"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "23358df9df9d",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Xã sửa lời một câu hệ thống của phân hệ Báo cáo",
+        "operationId": "reporting_put_reporting_system_messages_by_code_override",
+        "tags": [
+          "reporting"
+        ],
+        "x-vigov-screen": "14-cau-hinh §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "a6ee0a6d43f8",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/reporting.rewordSystemMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/reporting.systemMessageOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/residential-unit-types": {
       "get": {
         "summary": "Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc",
@@ -26056,6 +26268,72 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "reporting.rewordSystemMessageIn": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "reporting.systemMessageListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/reporting.systemMessageOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "reporting.systemMessageOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "default_text": {
+            "type": "string"
+          },
+          "current_text": {
+            "type": "string"
+          },
+          "overridden": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string",
+            "description": "staff business code (rule 6, inv 8)"
+          }
+        },
+        "required": [
+          "code",
+          "current_text",
+          "default_text",
+          "description",
+          "overridden"
         ],
         "additionalProperties": false
       }
