@@ -27,80 +27,80 @@ import (
 )
 
 const (
-	appChinh       = "1000000000000000001"
-	appRiengTanPhu = "1000000000000000002"
-	appRiengXaCu   = "1000000000000000003"
+	appMain          = "1000000000000000001"
+	appCommuneActive = "1000000000000000002"
+	appCommuneMerged = "1000000000000000003"
 )
 
-type soMiniAppGia struct {
-	apps map[string]domain.MiniApp
-	hong bool
+type fakeMiniApps struct {
+	apps   map[string]domain.MiniApp
+	broken bool
 }
 
-func (s soMiniAppGia) MiniApp(_ context.Context, appID string) (domain.MiniApp, error) {
-	if s.hong {
-		return domain.MiniApp{}, loiHaTang
+func (s fakeMiniApps) MiniApp(_ context.Context, appID string) (domain.MiniApp, error) {
+	if s.broken {
+		return domain.MiniApp{}, errInfra
 	}
 	a, ok := s.apps[appID]
 	if !ok {
 		// The store answers unknown, switched-off and soft-deleted alike; so does this fake.
-		return domain.MiniApp{}, store.ErrKhongCoMiniApp
+		return domain.MiniApp{}, store.ErrMiniAppNotFound
 	}
 	return a, nil
 }
 
-func soMiniAppMau() soMiniAppGia {
-	return soMiniAppGia{apps: map[string]domain.MiniApp{
-		appChinh: {AppID: appChinh, CheDo: domain.CheDoChinh},
-		appRiengTanPhu: {AppID: appRiengTanPhu, CheDo: domain.CheDoRieng, Xa: &domain.Tenant{
-			ID: xaTanPhu.String(), Ten: "Phường Tân Phú", TinhThanh: "Thành phố Đà Nẵng", DangHoatDong: true,
+func sampleMiniApps() fakeMiniApps {
+	return fakeMiniApps{apps: map[string]domain.MiniApp{
+		appMain: {AppID: appMain, Mode: domain.MiniAppModeMain},
+		appCommuneActive: {AppID: appCommuneActive, Mode: domain.MiniAppModeCommune, Tenant: &domain.Tenant{
+			ID: tenantActive.String(), Name: "Phường Tân Phú", Province: "Thành phố Đà Nẵng", IsActive: true,
 		}},
-		appRiengXaCu: {AppID: appRiengXaCu, CheDo: domain.CheDoRieng, Xa: &domain.Tenant{
-			ID: xaDaSapNhap.String(), Ten: "Xã Cũ", DangHoatDong: false,
+		appCommuneMerged: {AppID: appCommuneMerged, Mode: domain.MiniAppModeCommune, Tenant: &domain.Tenant{
+			ID: tenantMerged.String(), Name: "Xã Cũ", IsActive: false,
 		}},
 	}}
 }
 
-// hoSoGia keys on the commune IN CONTEXT — the only input the real store has.
-type hoSoGia struct {
-	theoXa map[tenant.ID]domain.HoSoHienThi
-	hong   bool
+// fakeProfiles keys on the commune IN CONTEXT — the only input the real store has.
+type fakeProfiles struct {
+	byTenant map[tenant.ID]domain.CommuneProfile
+	broken   bool
 }
 
-func (h hoSoGia) Doc(ctx context.Context) (domain.HoSoHienThi, error) {
-	if h.hong {
-		return domain.HoSoHienThi{}, loiHaTang
+func (h fakeProfiles) Read(ctx context.Context) (domain.CommuneProfile, error) {
+	if h.broken {
+		return domain.CommuneProfile{}, errInfra
 	}
-	hs, ok := h.theoXa[tenant.MustFrom(ctx)]
+	profile, ok := h.byTenant[tenant.MustFrom(ctx)]
 	if !ok {
-		return domain.HoSoHienThi{}, store.ErrChuaCoHoSoHienThi
+		return domain.CommuneProfile{}, store.ErrCommuneProfileNotDeclared
 	}
-	return hs, nil
+	return profile, nil
 }
 
-func hoSoMau() hoSoGia {
-	return hoSoGia{theoXa: map[tenant.ID]domain.HoSoHienThi{
-		xaTanPhu: {
-			DiaChiTruSo:       "Số 1 đường Thử, Phường Tân Phú",
-			LogoURL:           "https://example.gov.vn/logo-tan-phu.png",
-			DuongDayNong:      "0900000000",
-			GioLamViecHienThi: "Thứ 2 – Thứ 6",
-			GioiThieu:         "Giới thiệu thử",
+func sampleProfiles() fakeProfiles {
+	return fakeProfiles{byTenant: map[tenant.ID]domain.CommuneProfile{
+		tenantActive: {
+			OfficeAddress:   "Số 1 đường Thử, Phường Tân Phú",
+			LogoURL:         "https://example.gov.vn/logo-tan-phu.png",
+			Hotline:         "0900000000",
+			OfficeHoursText: "Thứ 2 – Thứ 6",
+			Introduction:    "Giới thiệu thử",
 		},
 	}}
 }
 
-func mayTrucTiep(apps svcgrpc.SoMiniApp) *svcgrpc.Server {
-	return svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: apps, HoSo: hoSoMau(), Policies: samplePolicies(),
+func directServer(apps svcgrpc.MiniAppRegistry) *svcgrpc.Server {
+	return svcgrpc.NewServer(svcgrpc.Deps{Dir: sampleDirectory(), Apps: apps, Profiles: sampleProfiles(), Policies: samplePolicies(),
 		Fields: sampleFields()},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // ---- ResolveMiniApp -------------------------------------------------------------------
 
-func TestResolveMiniAppKhongDangKyTraOKKhongCoApp(t *testing.T) {
+func TestResolveMiniAppUnregisteredReturnsOKWithoutApp(t *testing.T) {
 	t.Parallel()
-	res, err := mayTrucTiep(soMiniAppMau()).ResolveMiniApp(ctxTest(t),
+	res, err := directServer(sampleMiniApps()).ResolveMiniApp(testCtx(t),
 		&platformv1.ResolveMiniAppRequest{AppId: "9999999999"})
 	if err != nil {
 		t.Fatalf("app lạ phải là OK không có app, nhận lỗi: %v", err)
@@ -110,10 +110,10 @@ func TestResolveMiniAppKhongDangKyTraOKKhongCoApp(t *testing.T) {
 	}
 }
 
-func TestResolveMiniAppAppChinhKhongBaoGioCoXa(t *testing.T) {
+func TestResolveMiniAppMainAppNeverHasTenant(t *testing.T) {
 	t.Parallel()
-	res, err := mayTrucTiep(soMiniAppMau()).ResolveMiniApp(ctxTest(t),
-		&platformv1.ResolveMiniAppRequest{AppId: appChinh})
+	res, err := directServer(sampleMiniApps()).ResolveMiniApp(testCtx(t),
+		&platformv1.ResolveMiniAppRequest{AppId: appMain})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,18 +125,18 @@ func TestResolveMiniAppAppChinhKhongBaoGioCoXa(t *testing.T) {
 	}
 }
 
-func TestResolveMiniAppAppRiengXaHoatDongTraXa(t *testing.T) {
+func TestResolveMiniAppCommuneAppActiveTenantReturned(t *testing.T) {
 	t.Parallel()
-	res, err := mayTrucTiep(soMiniAppMau()).ResolveMiniApp(ctxTest(t),
-		&platformv1.ResolveMiniAppRequest{AppId: appRiengTanPhu})
+	res, err := directServer(sampleMiniApps()).ResolveMiniApp(testCtx(t),
+		&platformv1.ResolveMiniAppRequest{AppId: appCommuneActive})
 	if err != nil {
 		t.Fatal(err)
 	}
 	a := res.GetApp()
-	if a.GetMode() != platformv1.MiniApp_MODE_COMMUNE || a.GetAppId() != appRiengTanPhu {
+	if a.GetMode() != platformv1.MiniApp_MODE_COMMUNE || a.GetAppId() != appCommuneActive {
 		t.Fatalf("app = %+v", a)
 	}
-	if a.GetTenant().GetId() != xaTanPhu.String() ||
+	if a.GetTenant().GetId() != tenantActive.String() ||
 		a.GetTenant().GetDisplayName() != "Phường Tân Phú" ||
 		a.GetTenant().GetProvince() != "Thành phố Đà Nẵng" {
 		t.Errorf("xã = %+v", a.GetTenant())
@@ -145,10 +145,10 @@ func TestResolveMiniAppAppRiengXaHoatDongTraXa(t *testing.T) {
 
 // The contract's signal for "bound commune inactive" is MODE_COMMUNE with no tenant — the app is
 // still returned so the caller can tell this apart from an unknown app, and no successor is named.
-func TestResolveMiniAppAppRiengXaNgungHoatDongKhongCoXa(t *testing.T) {
+func TestResolveMiniAppCommuneAppInactiveTenantOmitted(t *testing.T) {
 	t.Parallel()
-	res, err := mayTrucTiep(soMiniAppMau()).ResolveMiniApp(ctxTest(t),
-		&platformv1.ResolveMiniAppRequest{AppId: appRiengXaCu})
+	res, err := directServer(sampleMiniApps()).ResolveMiniApp(testCtx(t),
+		&platformv1.ResolveMiniAppRequest{AppId: appCommuneMerged})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,10 +160,10 @@ func TestResolveMiniAppAppRiengXaNgungHoatDongKhongCoXa(t *testing.T) {
 	}
 }
 
-func TestResolveMiniAppAppIDRongHoacCoKhoangTrang(t *testing.T) {
+func TestResolveMiniAppAppIDEmptyOrPadded(t *testing.T) {
 	t.Parallel()
-	for _, id := range []string{"", " ", " " + appChinh} {
-		_, err := mayTrucTiep(soMiniAppMau()).ResolveMiniApp(ctxTest(t),
+	for _, id := range []string{"", " ", " " + appMain} {
+		_, err := directServer(sampleMiniApps()).ResolveMiniApp(testCtx(t),
 			&platformv1.ResolveMiniAppRequest{AppId: id})
 		if status.Code(err) != codes.InvalidArgument {
 			t.Errorf("app_id %q: mã = %v, muốn InvalidArgument", id, status.Code(err))
@@ -173,26 +173,26 @@ func TestResolveMiniAppAppIDRongHoacCoKhoangTrang(t *testing.T) {
 
 // An outage is never "not registered": the caller would refuse the citizen for the wrong reason
 // and nobody would page.
-func TestResolveMiniAppCSDLHongTraInternal(t *testing.T) {
+func TestResolveMiniAppDatabaseDownReturnsInternal(t *testing.T) {
 	t.Parallel()
-	_, err := mayTrucTiep(soMiniAppGia{hong: true}).ResolveMiniApp(ctxTest(t),
-		&platformv1.ResolveMiniAppRequest{AppId: appChinh})
+	_, err := directServer(fakeMiniApps{broken: true}).ResolveMiniApp(testCtx(t),
+		&platformv1.ResolveMiniAppRequest{AppId: appMain})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal", status.Code(err))
 	}
-	if st, _ := status.FromError(err); st.Message() == loiHaTang.Error() {
+	if st, _ := status.FromError(err); st.Message() == errInfra.Error() {
 		t.Error("lỗi hạ tầng lọt ra bên gọi")
 	}
 }
 
 // A dedicated app without its commune must not read as "commune inactive".
-func TestResolveMiniAppAppRiengThieuXaLaLoiNoiBo(t *testing.T) {
+func TestResolveMiniAppCommuneAppWithoutTenantIsInternal(t *testing.T) {
 	t.Parallel()
-	hong := soMiniAppGia{apps: map[string]domain.MiniApp{
-		appRiengTanPhu: {AppID: appRiengTanPhu, CheDo: domain.CheDoRieng},
+	broken := fakeMiniApps{apps: map[string]domain.MiniApp{
+		appCommuneActive: {AppID: appCommuneActive, Mode: domain.MiniAppModeCommune},
 	}}
-	_, err := mayTrucTiep(hong).ResolveMiniApp(ctxTest(t),
-		&platformv1.ResolveMiniAppRequest{AppId: appRiengTanPhu})
+	_, err := directServer(broken).ResolveMiniApp(testCtx(t),
+		&platformv1.ResolveMiniAppRequest{AppId: appCommuneActive})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal", status.Code(err))
 	}
@@ -200,19 +200,19 @@ func TestResolveMiniAppAppRiengThieuXaLaLoiNoiBo(t *testing.T) {
 
 // ---- GetTenantProfile -----------------------------------------------------------------
 
-func TestGetTenantProfileKhongMangXaBiTuChoi(t *testing.T) {
+func TestGetTenantProfileWithoutTenantRefused(t *testing.T) {
 	t.Parallel()
-	_, tho := dung(t, danhBaMau())
-	_, err := tho.GetTenantProfile(ctxTest(t), &platformv1.GetTenantProfileRequest{})
+	_, raw := start(t, sampleDirectory())
+	_, err := raw.GetTenantProfile(testCtx(t), &platformv1.GetTenantProfileRequest{})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument", status.Code(err))
 	}
 }
 
-func TestGetTenantProfileTraHoSoCuaDungXaTrongMetadata(t *testing.T) {
+func TestGetTenantProfileReturnsMetadataTenantsProfile(t *testing.T) {
 	t.Parallel()
-	cli, _ := dung(t, danhBaMau())
-	res, err := cli.GetTenantProfile(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.GetTenantProfileRequest{})
+	cli, _ := start(t, sampleDirectory())
+	res, err := cli.GetTenantProfile(tenant.Into(testCtx(t), tenantActive), &platformv1.GetTenantProfileRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,10 +228,10 @@ func TestGetTenantProfileTraHoSoCuaDungXaTrongMetadata(t *testing.T) {
 
 // Commune B, whose profile does not exist, must NOT receive commune A's — the only answer is
 // "not declared".
-func TestGetTenantProfileXaKhacKhongDocDuocHoSoXaNay(t *testing.T) {
+func TestGetTenantProfileOtherTenantCannotReadThisProfile(t *testing.T) {
 	t.Parallel()
-	cli, _ := dung(t, danhBaMau())
-	res, err := cli.GetTenantProfile(tenant.Into(ctxTest(t), xaDaSapNhap), &platformv1.GetTenantProfileRequest{})
+	cli, _ := start(t, sampleDirectory())
+	res, err := cli.GetTenantProfile(tenant.Into(testCtx(t), tenantMerged), &platformv1.GetTenantProfileRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,23 +240,23 @@ func TestGetTenantProfileXaKhacKhongDocDuocHoSoXaNay(t *testing.T) {
 	}
 }
 
-func TestGetTenantProfileCSDLHongTraInternal(t *testing.T) {
+func TestGetTenantProfileDatabaseDownReturnsInternal(t *testing.T) {
 	t.Parallel()
-	cli, _ := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoGia{hong: true},
+	cli, _ := startWith(t, svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Profiles: fakeProfiles{broken: true},
 		Policies: samplePolicies(), Fields: sampleFields()})
-	_, err := cli.GetTenantProfile(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.GetTenantProfileRequest{})
+	_, err := cli.GetTenantProfile(tenant.Into(testCtx(t), tenantActive), &platformv1.GetTenantProfileRequest{})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal", status.Code(err))
 	}
 }
 
-func TestNewServerThieuPhuThuocThiPanic(t *testing.T) {
+func TestNewServerMissingDependencyPanics(t *testing.T) {
 	defer func() {
 		if recover() == nil {
-			t.Fatal("dựng được máy chủ thiếu HoSo")
+			t.Fatal("dựng được máy chủ thiếu Profiles")
 		}
 	}()
-	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), Policies: samplePolicies(),
+	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Policies: samplePolicies(),
 		Fields: sampleFields()},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

@@ -22,7 +22,7 @@ import (
 func (s *Server) ListPetitionFields(ctx context.Context, _ *platformv1.ListPetitionFieldsRequest) (
 	*platformv1.ListPetitionFieldsResponse, error) {
 
-	rows, err := s.fields.ListPetitionFields(ctx)
+	rows, err := s.fields.ListCitizenReportFields(ctx)
 	if err != nil {
 		s.log.ErrorContext(ctx, "đọc bộ mã lĩnh vực phản ánh thất bại", "rpc", "ListPetitionFields", "err", err)
 		// Internal, never an empty OK: an empty set means "no code is valid", and an outage that
@@ -30,17 +30,17 @@ func (s *Server) ListPetitionFields(ctx context.Context, _ *platformv1.ListPetit
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
 
-	out := &platformv1.ListPetitionFieldsResponse{Fields: make([]*platformv1.PetitionField, 0, len(rows))}
+	out := &platformv1.ListPetitionFieldsResponse{Fields: make([]*platformv1.CitizenReportField, 0, len(rows))}
 	for _, r := range rows {
-		// Field by field, like sangProto — ADR 0003's boundary: nothing leaves this service because it
+		// Field by field, like toProto — ADR 0003's boundary: nothing leaves this service because it
 		// happened to be on the struct.
-		out.Fields = append(out.Fields, &platformv1.PetitionField{
+		out.Fields = append(out.Fields, &platformv1.CitizenReportField{
 			Code:         r.Code,
 			DefaultLabel: r.DefaultLabel,
 			SortOrder:    r.SortOrder,
 			Icon:         r.Icon,
 			Tone:         r.Tone,
-			Active:       r.Active,
+			Active:       r.IsActive,
 		})
 	}
 	return out, nil

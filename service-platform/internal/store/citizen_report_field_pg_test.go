@@ -9,18 +9,18 @@ import (
 // like every *_pg_test.go here. The CHECKs, the guard trigger and the seed are behaviour the database
 // owns.
 
-func TestPgPetitionFieldSeedAndRead(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+func TestPgCitizenReportFieldSeedAndRead(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
-	fs, err := NewPetitionFieldStore(db).ListPetitionFields(context.Background())
+	fs, err := NewCitizenReportFieldStore(db).ListCitizenReportFields(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if len(fs) != 12 {
 		t.Fatalf("fields = %d, want the 12 seeded", len(fs))
 	}
-	if fs[0].Code != "rac-thai" || fs[11].Code != "khac" || !fs[0].Active || fs[0].Icon != "Trash2" {
+	if fs[0].Code != "rac-thai" || fs[11].Code != "khac" || !fs[0].IsActive || fs[0].Icon != "Trash2" {
 		t.Errorf("order or content wrong: first=%+v last=%+v", fs[0], fs[11])
 	}
 
@@ -35,14 +35,14 @@ func TestPgPetitionFieldSeedAndRead(t *testing.T) {
 }
 
 // A retired code is still read — old petitions keep their label.
-func TestPgPetitionFieldRetiredIsStillRead(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+func TestPgCitizenReportFieldRetiredIsStillRead(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 	if _, err := db.Exec(`UPDATE petition_field SET active = false, updated_by = 'system'
 		WHERE code = 'dien'`); err != nil {
 		t.Fatalf("retire: %v", err)
 	}
-	fs, err := NewPetitionFieldStore(db).ListPetitionFields(context.Background())
+	fs, err := NewCitizenReportFieldStore(db).ListCitizenReportFields(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestPgPetitionFieldRetiredIsStillRead(t *testing.T) {
 	for _, f := range fs {
 		if f.Code == "dien" {
 			found = true
-			if f.Active {
+			if f.IsActive {
 				t.Error("dien still active after retirement")
 			}
 		}
@@ -60,9 +60,9 @@ func TestPgPetitionFieldRetiredIsStillRead(t *testing.T) {
 	}
 }
 
-func TestPgPetitionFieldConstraints(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+func TestPgCitizenReportFieldConstraints(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 	// Each statement breaks exactly one rule. An UPDATE that matched no row would return no error and
 	// be reported as accepted — a false red, never a false green.
 	for name, stmt := range map[string]string{

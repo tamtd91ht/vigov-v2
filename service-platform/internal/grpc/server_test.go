@@ -30,77 +30,77 @@ import (
 )
 
 const (
-	xaTanPhu    = tenant.ID("01J8Z4K2R7QG5TMN9WXYB3CDEF")
-	xaDaSapNhap = tenant.ID("01J8Z4K2R7QG5TMN9WXYB3CDEG")
+	tenantActive = tenant.ID("01J8Z4K2R7QG5TMN9WXYB3CDEF")
+	tenantMerged = tenant.ID("01J8Z4K2R7QG5TMN9WXYB3CDEG")
 )
 
-// loiHaTang stands in for "the database is unreachable". It is deliberately NOT one of the
+// errInfra stands in for "the database is unreachable". It is deliberately NOT one of the
 // store's sentinel errors: the mapping under test is precisely that an unknown failure becomes
 // Internal instead of being mistaken for a missing commune.
-var loiHaTang = errors.New("pgx: connection refused on 10.0.0.7:5432")
+var errInfra = errors.New("pgx: connection refused on 10.0.0.7:5432")
 
-type danhBaGia struct {
-	theoHost map[string]tenant.Tenant
-	theoID   map[tenant.ID]tenant.Tenant
-	hong     bool // every lookup fails as infrastructure
+type fakeDirectory struct {
+	byHost map[string]tenant.Tenant
+	byID   map[tenant.ID]tenant.Tenant
+	broken bool // every lookup fails as infrastructure
 }
 
-func (d *danhBaGia) ByHostErr(_ context.Context, host string) (tenant.Tenant, error) {
-	if d.hong {
-		return tenant.Tenant{}, loiHaTang
+func (d *fakeDirectory) ByHostErr(_ context.Context, host string) (tenant.Tenant, error) {
+	if d.broken {
+		return tenant.Tenant{}, errInfra
 	}
 	h, err := domain.NormaliseHost(host)
 	if err != nil {
 		return tenant.Tenant{}, err
 	}
-	t, ok := d.theoHost[h]
+	t, ok := d.byHost[h]
 	if !ok {
-		return tenant.Tenant{}, store.ErrKhongCoXa
+		return tenant.Tenant{}, store.ErrTenantNotFound
 	}
 	if !t.Active {
-		return tenant.Tenant{}, store.ErrXaNgungHoatDong
+		return tenant.Tenant{}, store.ErrTenantInactive
 	}
 	return t, nil
 }
 
-func (d *danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
-	if d.hong {
-		return tenant.Tenant{}, loiHaTang
+func (d *fakeDirectory) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
+	if d.broken {
+		return tenant.Tenant{}, errInfra
 	}
-	t, ok := d.theoID[id]
+	t, ok := d.byID[id]
 	if !ok {
-		return tenant.Tenant{}, store.ErrKhongCoXa
+		return tenant.Tenant{}, store.ErrTenantNotFound
 	}
 	return t, nil // a deactivated commune is still describable — rule 7
 }
 
-func danhBaMau() *danhBaGia {
-	// tanPhu HAS a province and cu HAS NONE, deliberately. A fixture where every commune declares
+func sampleDirectory() *fakeDirectory {
+	// active HAS a province and merged HAS NONE, deliberately. A fixture where every commune declares
 	// one cannot tell "the field is carried" from "the field happens to be filled in everywhere",
 	// and "" is the answer the contract says every consumer must handle.
-	tanPhu := tenant.Tenant{
-		ID: xaTanPhu, Host: "tanphu.vigov.vn", Name: "Phường Tân Phú",
+	active := tenant.Tenant{
+		ID: tenantActive, Host: "tanphu.vigov.vn", Name: "Phường Tân Phú",
 		Province: "Thành phố Đà Nẵng", Active: true,
 	}
-	cu := tenant.Tenant{ID: xaDaSapNhap, Host: "xacu.vigov.vn", Name: "Xã Cũ", Active: false}
-	return &danhBaGia{
-		theoHost: map[string]tenant.Tenant{tanPhu.Host: tanPhu, cu.Host: cu},
-		theoID:   map[tenant.ID]tenant.Tenant{xaTanPhu: tanPhu, xaDaSapNhap: cu},
+	merged := tenant.Tenant{ID: tenantMerged, Host: "xacu.vigov.vn", Name: "Xã Cũ", Active: false}
+	return &fakeDirectory{
+		byHost: map[string]tenant.Tenant{active.Host: active, merged.Host: merged},
+		byID:   map[tenant.ID]tenant.Tenant{tenantActive: active, tenantMerged: merged},
 	}
 }
 
-// dung starts the real server behind bufconn and returns two clients: one that goes through
+// start starts the real server behind bufconn and returns two clients: one that goes through
 // the grpcx client interceptor (the production path) and one raw, used to send calls the
 // interceptor would never allow — that is the only way to test what the SERVER does with bad
 // or missing metadata.
-func dung(t *testing.T, dir svcgrpc.Directory) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
+func start(t *testing.T, dir svcgrpc.Directory) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
-	return dungVoi(t, svcgrpc.Deps{Dir: dir, Apps: soMiniAppMau(), HoSo: hoSoMau(), Policies: samplePolicies(),
+	return startWith(t, svcgrpc.Deps{Dir: dir, Apps: sampleMiniApps(), Profiles: sampleProfiles(), Policies: samplePolicies(),
 		Fields: sampleFields()})
 }
 
-// dungVoi is dung with every dependency chosen by the test.
-func dungVoi(t *testing.T, d svcgrpc.Deps) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
+// startWith is start with every dependency chosen by the test.
+func startWith(t *testing.T, d svcgrpc.Deps) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
@@ -111,7 +111,7 @@ func dungVoi(t *testing.T, d svcgrpc.Deps) (platformv1.PlatformServiceClient, pl
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 
-	quay := func(opts ...grpc.DialOption) platformv1.PlatformServiceClient {
+	dial := func(opts ...grpc.DialOption) platformv1.PlatformServiceClient {
 		opts = append(opts,
 			grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 				return lis.DialContext(ctx)
@@ -125,10 +125,10 @@ func dungVoi(t *testing.T, d svcgrpc.Deps) (platformv1.PlatformServiceClient, pl
 		return platformv1.NewPlatformServiceClient(cc)
 	}
 
-	return quay(grpc.WithUnaryInterceptor(grpcx.UnaryClientInterceptor())), quay()
+	return dial(grpc.WithUnaryInterceptor(grpcx.UnaryClientInterceptor())), dial()
 }
 
-func ctxTest(t *testing.T) context.Context {
+func testCtx(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -139,34 +139,34 @@ func ctxTest(t *testing.T) context.Context {
 
 // The exemption has to hold end to end: ResolveHost is what ESTABLISHES the commune, so a
 // server interceptor demanding one here would make every edge unable to resolve its Host.
-func TestResolveHostChayDuocKhiKhongCoXaTrongContext(t *testing.T) {
+func TestResolveHostWorksWithoutTenantInContext(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	res, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: "TanPhu.ViGov.vn:443"})
+	cli, _ := start(t, sampleDirectory())
+	res, err := cli.ResolveHost(testCtx(t), &platformv1.ResolveHostRequest{Host: "TanPhu.ViGov.vn:443"})
 	if err != nil {
 		t.Fatalf("ResolveHost lỗi: %v", err)
 	}
-	if got := res.GetTenant().GetId(); got != xaTanPhu.String() {
-		t.Fatalf("id = %q, muốn %q", got, xaTanPhu)
+	if got := res.GetTenant().GetId(); got != tenantActive.String() {
+		t.Fatalf("id = %q, muốn %q", got, tenantActive)
 	}
 	if res.GetTenant().GetDisplayName() != "Phường Tân Phú" || !res.GetTenant().GetActive() {
 		t.Fatalf("siêu dữ liệu sai: %+v", res.GetTenant())
 	}
-	// sangProto maps FIELD BY FIELD on purpose (ADR 0003) — no reflection, no generic mapper — so
+	// toProto maps FIELD BY FIELD on purpose (ADR 0003) — no reflection, no generic mapper — so
 	// every field is one hand-written line and a forgotten line is silent: the commune resolves,
 	// nothing errors, and the province is simply "" for every commune in the country.
 	if got := res.GetTenant().GetProvince(); got != "Thành phố Đà Nẵng" {
-		t.Fatalf("province = %q, muốn %q — sangProto đánh rơi một trường",
+		t.Fatalf("province = %q, muốn %q — toProto đánh rơi một trường",
 			got, "Thành phố Đà Nẵng")
 	}
 }
 
-func TestResolveHostKhongKhopTraNotFound(t *testing.T) {
+func TestResolveHostNoMatchReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: "khonghe.vigov.vn"})
+	cli, _ := start(t, sampleDirectory())
+	_, err := cli.ResolveHost(testCtx(t), &platformv1.ResolveHostRequest{Host: "khonghe.vigov.vn"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("mã = %v, muốn NotFound (lỗi: %v)", status.Code(err), err)
 	}
@@ -175,11 +175,11 @@ func TestResolveHostKhongKhopTraNotFound(t *testing.T) {
 // A deactivated commune keeps its data and its address (rule 7) but stops serving, and the
 // caller must not be able to tell it apart from a Host nobody has claimed — that difference
 // discloses which communes exist on the platform.
-func TestResolveHostXaNgungHoatDongTraNotFound(t *testing.T) {
+func TestResolveHostInactiveTenantReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: "xacu.vigov.vn"})
+	cli, _ := start(t, sampleDirectory())
+	_, err := cli.ResolveHost(testCtx(t), &platformv1.ResolveHostRequest{Host: "xacu.vigov.vn"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("mã = %v, muốn NotFound (lỗi: %v)", status.Code(err), err)
 	}
@@ -187,14 +187,14 @@ func TestResolveHostXaNgungHoatDongTraNotFound(t *testing.T) {
 
 // THE ONE THIS FILE EXISTS FOR. A database outage reported as NotFound tells every service
 // edge that no commune exists, and sends the operator hunting a DNS problem that is not there.
-func TestResolveHostCSDLHongTraInternalChuKhongPhaiNotFound(t *testing.T) {
+func TestResolveHostDatabaseDownReturnsInternalNotNotFound(t *testing.T) {
 	t.Parallel()
 
-	dir := danhBaMau()
-	dir.hong = true
-	cli, _ := dung(t, dir)
+	dir := sampleDirectory()
+	dir.broken = true
+	cli, _ := start(t, dir)
 
-	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: "tanphu.vigov.vn"})
+	_, err := cli.ResolveHost(testCtx(t), &platformv1.ResolveHostRequest{Host: "tanphu.vigov.vn"})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal (lỗi: %v)", status.Code(err), err)
 	}
@@ -205,11 +205,11 @@ func TestResolveHostCSDLHongTraInternalChuKhongPhaiNotFound(t *testing.T) {
 	}
 }
 
-func TestResolveHostRong(t *testing.T) {
+func TestResolveHostEmpty(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: ""})
+	cli, _ := start(t, sampleDirectory())
+	_, err := cli.ResolveHost(testCtx(t), &platformv1.ResolveHostRequest{Host: ""})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument (lỗi: %v)", status.Code(err), err)
 	}
@@ -219,46 +219,46 @@ func TestResolveHostRong(t *testing.T) {
 
 // GetTenant is NOT on the exemption list. A call reaching it without a commune in metadata is
 // refused by the interceptor before the handler sees it — no default, no guess.
-func TestGetTenantKhongCoMetadataXaBiTuChoi(t *testing.T) {
+func TestGetTenantWithoutTenantMetadataRefused(t *testing.T) {
 	t.Parallel()
 
-	_, tho := dung(t, danhBaMau())
-	_, err := tho.GetTenant(ctxTest(t), &platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+	_, raw := start(t, sampleDirectory())
+	_, err := raw.GetTenant(testCtx(t), &platformv1.GetTenantRequest{Id: tenantActive.String()})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument (lỗi: %v)", status.Code(err), err)
 	}
 }
 
-func TestGetTenantNhieuGiaTriMetadataBiTuChoi(t *testing.T) {
+func TestGetTenantMultipleMetadataValuesRefused(t *testing.T) {
 	t.Parallel()
 
-	_, tho := dung(t, danhBaMau())
-	ctx := metadata.AppendToOutgoingContext(ctxTest(t),
-		grpcx.MetadataTenantKey, xaTanPhu.String(),
-		grpcx.MetadataTenantKey, xaDaSapNhap.String())
+	_, raw := start(t, sampleDirectory())
+	ctx := metadata.AppendToOutgoingContext(testCtx(t),
+		grpcx.MetadataTenantKey, tenantActive.String(),
+		grpcx.MetadataTenantKey, tenantMerged.String())
 
-	_, err := tho.GetTenant(ctx, &platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+	_, err := raw.GetTenant(ctx, &platformv1.GetTenantRequest{Id: tenantActive.String()})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument (lỗi: %v)", status.Code(err), err)
 	}
 }
 
-func TestGetTenantTraSieuDuLieu(t *testing.T) {
+func TestGetTenantReturnsMetadata(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	ctx := tenant.Into(ctxTest(t), xaTanPhu)
+	cli, _ := start(t, sampleDirectory())
+	ctx := tenant.Into(testCtx(t), tenantActive)
 
-	res, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+	res, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: tenantActive.String()})
 	if err != nil {
 		t.Fatalf("GetTenant lỗi: %v", err)
 	}
 	got := res.GetTenant()
-	if got.GetId() != xaTanPhu.String() || got.GetHost() != "tanphu.vigov.vn" ||
+	if got.GetId() != tenantActive.String() || got.GetHost() != "tanphu.vigov.vn" ||
 		got.GetDisplayName() != "Phường Tân Phú" || !got.GetActive() {
 		t.Fatalf("siêu dữ liệu sai: %+v", got)
 	}
-	// BOTH RPCs go through sangProto, and both are asserted: they are two call sites of one
+	// BOTH RPCs go through toProto, and both are asserted: they are two call sites of one
 	// mapper, and a mapper that maps field by field (ADR 0003) has one line per field to forget.
 	if got.GetProvince() != "Thành phố Đà Nẵng" {
 		t.Fatalf("province = %q, muốn %q", got.GetProvince(), "Thành phố Đà Nẵng")
@@ -268,18 +268,18 @@ func TestGetTenantTraSieuDuLieu(t *testing.T) {
 // THE admin.vigov.vn ROW: a real commune whose la_chinh domain is a platform address. GetTenant
 // still describes the commune, but its host is "" — never the reserved address, and never another
 // of the commune's hosts picked in its place.
-func TestGetTenantHostChinhDanhRiengTraRong(t *testing.T) {
+func TestGetTenantReservedPrimaryHostBlanked(t *testing.T) {
 	t.Parallel()
 
 	for _, h := range []string{"admin.vigov.vn", "admin-stg.vigov.vn", "identity.api.vigov.vn", "vigov.vn"} {
-		dir := danhBaMau()
-		tp := dir.theoID[xaTanPhu]
+		dir := sampleDirectory()
+		tp := dir.byID[tenantActive]
 		tp.Host = h
-		dir.theoID[xaTanPhu] = tp
-		cli, _ := dung(t, dir)
+		dir.byID[tenantActive] = tp
+		cli, _ := start(t, dir)
 
-		res, err := cli.GetTenant(tenant.Into(ctxTest(t), xaTanPhu),
-			&platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+		res, err := cli.GetTenant(tenant.Into(testCtx(t), tenantActive),
+			&platformv1.GetTenantRequest{Id: tenantActive.String()})
 		if err != nil {
 			t.Fatalf("%q: GetTenant lỗi: %v", h, err)
 		}
@@ -287,7 +287,7 @@ func TestGetTenantHostChinhDanhRiengTraRong(t *testing.T) {
 		if got.GetHost() != "" {
 			t.Errorf("host = %q, muốn rỗng — tên miền của nền tảng không bao giờ là tên miền của xã", got.GetHost())
 		}
-		if got.GetId() != xaTanPhu.String() || got.GetDisplayName() != "Phường Tân Phú" || !got.GetActive() {
+		if got.GetId() != tenantActive.String() || got.GetDisplayName() != "Phường Tân Phú" || !got.GetActive() {
 			t.Errorf("%q: xã vẫn phải được mô tả đủ, nhận %+v", h, got)
 		}
 	}
@@ -296,13 +296,13 @@ func TestGetTenantHostChinhDanhRiengTraRong(t *testing.T) {
 // A merged commune must stay describable: rule 7 keeps its data and its codes, and an archival
 // record referring to it still has to be able to render a name. Active=false is the answer,
 // NotFound is not.
-func TestGetTenantXaNgungHoatDongVanTraVeVoiActiveFalse(t *testing.T) {
+func TestGetTenantInactiveTenantReturnedWithActiveFalse(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	ctx := tenant.Into(ctxTest(t), xaTanPhu)
+	cli, _ := start(t, sampleDirectory())
+	ctx := tenant.Into(testCtx(t), tenantActive)
 
-	res, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: xaDaSapNhap.String()})
+	res, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: tenantMerged.String()})
 	if err != nil {
 		t.Fatalf("GetTenant lỗi: %v", err)
 	}
@@ -317,11 +317,11 @@ func TestGetTenantXaNgungHoatDongVanTraVeVoiActiveFalse(t *testing.T) {
 	}
 }
 
-func TestGetTenantIdKhongPhaiULID(t *testing.T) {
+func TestGetTenantIDNotULID(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	ctx := tenant.Into(ctxTest(t), xaTanPhu)
+	cli, _ := start(t, sampleDirectory())
+	ctx := tenant.Into(testCtx(t), tenantActive)
 
 	// An administrative code instead of a ULID: rule 1, invariant 2 forbids a meaningful
 	// identifier, and saying so beats a NotFound the caller reads as "commune gone".
@@ -331,11 +331,11 @@ func TestGetTenantIdKhongPhaiULID(t *testing.T) {
 	}
 }
 
-func TestGetTenantKhongTonTaiTraNotFound(t *testing.T) {
+func TestGetTenantUnknownReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
-	ctx := tenant.Into(ctxTest(t), xaTanPhu)
+	cli, _ := start(t, sampleDirectory())
+	ctx := tenant.Into(testCtx(t), tenantActive)
 
 	_, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: "01J8Z4K2R7QG5TMN9WXYB3CDEH"})
 	if status.Code(err) != codes.NotFound {
@@ -343,15 +343,15 @@ func TestGetTenantKhongTonTaiTraNotFound(t *testing.T) {
 	}
 }
 
-func TestGetTenantCSDLHongTraInternal(t *testing.T) {
+func TestGetTenantDatabaseDownReturnsInternal(t *testing.T) {
 	t.Parallel()
 
-	dir := danhBaMau()
-	dir.hong = true
-	cli, _ := dung(t, dir)
-	ctx := tenant.Into(ctxTest(t), xaTanPhu)
+	dir := sampleDirectory()
+	dir.broken = true
+	cli, _ := start(t, dir)
+	ctx := tenant.Into(testCtx(t), tenantActive)
 
-	_, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+	_, err := cli.GetTenant(ctx, &platformv1.GetTenantRequest{Id: tenantActive.String()})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("mã = %v, muốn Internal (lỗi: %v)", status.Code(err), err)
 	}
@@ -359,20 +359,20 @@ func TestGetTenantCSDLHongTraInternal(t *testing.T) {
 
 // The production client path end to end: the commune goes out as metadata and arrives as
 // context on the other side, without any business argument naming it.
-func TestClientInterceptorMangXaQuaDuongDayThat(t *testing.T) {
+func TestClientInterceptorCarriesTenantOverRealWire(t *testing.T) {
 	t.Parallel()
 
-	cli, _ := dung(t, danhBaMau())
+	cli, _ := start(t, sampleDirectory())
 
 	// No commune in context: the client interceptor refuses before anything is sent.
-	if _, err := cli.GetTenant(ctxTest(t),
-		&platformv1.GetTenantRequest{Id: xaTanPhu.String()}); status.Code(err) != codes.InvalidArgument {
+	if _, err := cli.GetTenant(testCtx(t),
+		&platformv1.GetTenantRequest{Id: tenantActive.String()}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument (lỗi: %v)", status.Code(err), err)
 	}
 
 	// With one, the same call succeeds.
-	if _, err := cli.GetTenant(tenant.Into(ctxTest(t), xaTanPhu),
-		&platformv1.GetTenantRequest{Id: xaTanPhu.String()}); err != nil {
+	if _, err := cli.GetTenant(tenant.Into(testCtx(t), tenantActive),
+		&platformv1.GetTenantRequest{Id: tenantActive.String()}); err != nil {
 		t.Fatalf("GetTenant lỗi: %v", err)
 	}
 }

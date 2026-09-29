@@ -62,10 +62,10 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	for _, canhBao := range cfg.CanhBao() {
+	for _, warning := range cfg.CanhBao() {
 		// Reported at EVERY startup, never once at deploy time: a flag switched on for a local
 		// afternoon is forgotten by the next morning (rule 8, invariant 7).
-		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", warning)
 	}
 
 	// 2. store — one schema per service; never another service's schema (rule 2).
@@ -102,23 +102,23 @@ func run(log *slog.Logger) error {
 	//
 	// The files are EMBEDDED in this binary (platform/migrations), so what is applied is
 	// what was compiled — not whatever happens to be on the container's disk.
-	ctxMig, huyMig := context.WithTimeout(context.Background(), 5*time.Minute)
-	kqMig, err := migrate.Chay(ctxMig, db, migrations.FS, "platform")
-	huyMig()
+	migCtx, migCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	migResult, err := migrate.Chay(migCtx, db, migrations.FS, "platform")
+	migCancel()
 	if err != nil {
 		return fmt.Errorf("platform: migration không chạy được: %w", err)
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator finds
 	// out the replica is already at the schema they expected, without opening a psql prompt.
-	log.Info("migration xong", "service", "platform", "da_ap", kqMig.DaAp, "bo_qua", len(kqMig.BoQua))
+	log.Info("migration xong", "service", "platform", "da_ap", migResult.DaAp, "bo_qua", len(migResult.BoQua))
 
 	// 3. directory — resolves Host -> commune, cached with a short TTL because this sits on the
 	//    path of EVERY request at 200+ communes (ADR 0004, decision 5).
 	// The cache is pkg/tenant.CachedDirectory, not a platform-local type: it is a decorator over
 	// tenant.Directory with no platform logic in it, and the other seven services wrap their
 	// gRPC-backed directory with the same one. Two copies would be two invalidation rules.
-	danhBa := svcstore.NewDirectory(db)
-	directory := tenant.NewCachedDirectory(danhBa, cfg.TenantCacheTTL())
+	uncachedDirectory := svcstore.NewDirectory(db)
+	directory := tenant.NewCachedDirectory(uncachedDirectory, cfg.TenantCacheTTL())
 
 	// 4. checker — authz.Checker backed by the identity service.
 	// TODO(next): identity does not expose the permission contract yet. Until it does, no
@@ -150,8 +150,8 @@ func run(log *slog.Logger) error {
 	// the shape this whole service exists to prevent: an orchestrator probes by IP, the Host
 	// matches no commune, TenantMiddleware answers 404 — and a healthy process is restarted
 	// during a database blip, which is exactly when restarting it is worst.
-	ngoai := http.NewServeMux()
-	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	outer := http.NewServeMux()
+	outer.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -168,13 +168,13 @@ func run(log *slog.Logger) error {
 	// LẠI ViGov, tại `service-comms` (ADR 0018 giữ nguyên) — đừng suy rộng thành "mọi thứ
 	// dính chữ Zalo đều rời đi".
 
-	ngoai.Handle("/", h)
+	outer.Handle("/", h)
 
 	srv := &http.Server{
 		Addr: cfg.ListenAddr(),
 		// OUTERMOST, around everything above, so every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names.
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(ngoai),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(outer),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -229,12 +229,12 @@ func run(log *slog.Logger) error {
 	// they get their own raw-handle reader — not the directory, which reads only the registry. The
 	// tier-1 petition field codes (migration 0011, ADR 0060) are the same kind of table and get the
 	// same kind of reader.
-	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
-		Dir:      danhBa,
-		Apps:     danhBa,
-		HoSo:     svcstore.NewHoSoHienThiStore(store.New(db)),
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
+		Dir:      uncachedDirectory,
+		Apps:     uncachedDirectory,
+		Profiles: svcstore.NewCommuneProfileStore(store.New(db)),
 		Policies: svcstore.NewUploadPolicyStore(db),
-		Fields:   svcstore.NewPetitionFieldStore(db),
+		Fields:   svcstore.NewCitizenReportFieldStore(db),
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
@@ -244,29 +244,29 @@ func run(log *slog.Logger) error {
 
 	// Graceful shutdown. An administrative write cut in half by a deploy is a record in a state
 	// the retention rules do not allow (rule 2, invariant 6).
-	dungLai := make(chan os.Signal, 1)
-	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	// Buffered for two: either server may fail, and an unbuffered send from a goroutine
 	// nobody is reading any more would leak it.
-	loi := make(chan error, 2)
+	errs := make(chan error, 2)
 	go func() {
 		log.Info("khởi động", "service", "platform", "addr", cfg.ListenAddr(),
 			"env", cfg.Env, "dsn", cfg.Redacted().DatabaseDSN)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			loi <- err
+			errs <- err
 		}
 	}()
 	go func() {
 		log.Info("khởi động gRPC", "service", "platform", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so no ErrServerClosed equivalent to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
-			loi <- err
+			errs <- err
 		}
 	}()
 
 	select {
-	case err := <-loi:
+	case err := <-errs:
 		// One surface failing takes the process down rather than leaving it half-serving: a
 		// platform answering HTTP but not ResolveHost looks healthy while every other
 		// service's edge is failing to resolve its Host.
@@ -274,7 +274,7 @@ func run(log *slog.Logger) error {
 		_ = srv.Close()
 		return err
 
-	case <-dungLai:
+	case <-stop:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối")
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -282,16 +282,16 @@ func run(log *slog.Logger) error {
 		// Both surfaces drain, and neither waits for the other: an administrative write cut in
 		// half by a deploy is a record in a state the retention rules do not allow (rule 2,
 		// invariant 6).
-		xongGRPC := make(chan struct{})
+		grpcDone := make(chan struct{})
 		go func() {
 			grpcSrv.GracefulStop()
-			close(xongGRPC)
+			close(grpcDone)
 		}()
 
 		errHTTP := srv.Shutdown(ctx)
 
 		select {
-		case <-xongGRPC:
+		case <-grpcDone:
 		case <-ctx.Done():
 			// A call that will not finish must not hold a deploy open indefinitely. Forcing
 			// the stop here is visible in the logs; hanging is not.
@@ -302,7 +302,7 @@ func run(log *slog.Logger) error {
 	}
 }
 
-// dungGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
+// buildGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
 //
 // IT IS A NAMED FUNCTION AND NOT AN EXPRESSION INSIDE run() FOR ONE REASON: so a test can start
 // it. core/grpcx proves the interceptors refuse what they should, but nothing in core/grpcx can
@@ -318,20 +318,20 @@ func run(log *slog.Logger) error {
 // applies to every RPC with no exemption at all; "which commune" is exempt for ResolveHost,
 // because that call is what ESTABLISHES a commune. Folding either into the other is how the
 // tenant exemption list quietly becomes a list of RPCs that skip authentication.
-func dungGRPCServer(khoaGoi secret.Secret, dv svcgrpc.Deps, log *slog.Logger) *grpc.Server {
+func buildGRPCServer(callerKey secret.Secret, deps svcgrpc.Deps, log *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
 			// without the key accepts every call it is supposed to refuse, and nothing looks
 			// wrong — no error, no failed request, no metric moving.
-			grpcx.UnaryServerCallerAuth(khoaGoi, log),
+			grpcx.UnaryServerCallerAuth(callerKey, log),
 			// The commune is lifted out of metadata into context here, once, before any handler.
 			// A call to a non-exempt RPC with no commune is refused with InvalidArgument — never
 			// defaulted (rule 1, forbidden #1).
 			grpcx.UnaryServerInterceptor(),
 		),
 	)
-	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(dv, log))
+	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(deps, log))
 	return srv
 }
 

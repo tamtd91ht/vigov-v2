@@ -29,7 +29,7 @@ import (
 // Each run builds its own schema and drops it at the end, so runs do not collide and nothing
 // outside the test schema is touched.
 
-func moKetNoi(t *testing.T) (*sql.DB, string) {
+func openTestDB(t *testing.T) (*sql.DB, string) {
 	t.Helper()
 
 	dsn := os.Getenv("VIGOV_TEST_DSN")
@@ -80,7 +80,7 @@ func moKetNoi(t *testing.T) (*sql.DB, string) {
 	return db, schema
 }
 
-// chayMigration applies the service's real migrations THROUGH THE REAL RUNNER. Testing against a
+// runMigrations applies the service's real migrations THROUGH THE REAL RUNNER. Testing against a
 // hand-written copy of the schema would test the copy, not what ships.
 //
 // It used to read `0001_init.sql` by name. That is why `0002_audit_log_append_only.sql` had never
@@ -88,7 +88,7 @@ func moKetNoi(t *testing.T) (*sql.DB, string) {
 // file, so a file added afterwards was applied by nothing. Going through pkg/migrate means every
 // migration this service ships is exercised here, including the ones added after this line was
 // written.
-func chayMigration(t *testing.T, db *sql.DB) {
+func runMigrations(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -103,31 +103,31 @@ const (
 	ulidB = "01JD8ZQK9M3NPXR7TVWYB2C4EG"
 )
 
-func themXa(t *testing.T, db *sql.DB, id, ten string, hoatDong bool) {
+func insertTenant(t *testing.T, db *sql.DB, id, name string, active bool) {
 	t.Helper()
 	_, err := db.Exec(
 		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong) VALUES ($1,$2,$3,$4)`,
-		id, ten, "Thành phố Đà Nẵng", hoatDong)
+		id, name, "Thành phố Đà Nẵng", active)
 	if err != nil {
-		t.Fatalf("thêm xã %s: %v", ten, err)
+		t.Fatalf("thêm xã %s: %v", name, err)
 	}
 }
 
-func themHost(t *testing.T, db *sql.DB, host, tenantID string, laChinh bool) {
+func insertHost(t *testing.T, db *sql.DB, host, tenantID string, primary bool) {
 	t.Helper()
 	_, err := db.Exec(
 		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
-		host, tenantID, laChinh)
+		host, tenantID, primary)
 	if err != nil {
 		t.Fatalf("thêm host %s: %v", host, err)
 	}
 }
 
-func TestPgPhanGiaiHost(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+func TestPgResolveHost(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	d := NewDirectory(db)
 	got, ok := d.ByHost(context.Background(), "thangbinh.vigov.vn")
@@ -148,17 +148,17 @@ func TestPgPhanGiaiHost(t *testing.T) {
 	}
 }
 
-func TestPgXaChuaKhaiTinhThanhTraChuoiRong(t *testing.T) {
+func TestPgTenantWithoutProvinceReturnsEmpty(t *testing.T) {
 	// "" IS A VALID ANSWER, NOT AN ERROR. The column is NOT NULL with an empty default, so a
 	// commune onboarded without a province resolves normally and yields "". The consumer renders
 	// nothing; what it must never do is fail, or substitute a default province.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
 	if _, err := db.Exec(`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, ulidA, "Xã Chưa Khai"); err != nil {
 		t.Fatalf("thêm xã: %v", err)
 	}
-	themHost(t, db, "chuakhai.vigov.vn", ulidA, true)
+	insertHost(t, db, "chuakhai.vigov.vn", ulidA, true)
 
 	got, ok := NewDirectory(db).ByHost(context.Background(), "chuakhai.vigov.vn")
 	if !ok {
@@ -170,34 +170,34 @@ func TestPgXaChuaKhaiTinhThanhTraChuoiRong(t *testing.T) {
 	}
 }
 
-func TestPgHostChuanHoa(t *testing.T) {
+func TestPgHostNormalised(t *testing.T) {
 	// Host arrives from the client. Every spelling must land on the same commune, or a whole
 	// commune goes dark for a reason invisible in the logs.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	d := NewDirectory(db)
-	for _, vao := range []string{
+	for _, in := range []string{
 		"thangbinh.vigov.vn",
 		"ThangBinh.ViGov.VN",
 		"thangbinh.vigov.vn:443",
 		"  ThangBinh.vigov.vn:8080  ",
 	} {
-		if _, ok := d.ByHost(context.Background(), vao); !ok {
-			t.Errorf("ByHost(%q) không phân giải được", vao)
+		if _, ok := d.ByHost(context.Background(), in); !ok {
+			t.Errorf("ByHost(%q) không phân giải được", in)
 		}
 	}
 }
 
-func TestPgHostLaTraVeKhong(t *testing.T) {
+func TestPgUnknownHostNotResolved(t *testing.T) {
 	// Fail closed: an unknown Host must never fall back to some commune. The edge turns this
 	// into 404 — rule 1, invariant 3.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	d := NewDirectory(db)
 	if _, ok := d.ByHost(context.Background(), "khong-ton-tai.vigov.vn"); ok {
@@ -205,12 +205,12 @@ func TestPgHostLaTraVeKhong(t *testing.T) {
 	}
 }
 
-func TestPgXaNgungHoatDongKhongPhucVu(t *testing.T) {
+func TestPgInactiveTenantNotServed(t *testing.T) {
 	// A merged commune keeps its data and its address (rule 7) but stops serving requests.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidB, "Xã đã sáp nhập", false)
-	themHost(t, db, "xacu.vigov.vn", ulidB, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidB, "Xã đã sáp nhập", false)
+	insertHost(t, db, "xacu.vigov.vn", ulidB, true)
 
 	d := NewDirectory(db)
 	if _, ok := d.ByHost(context.Background(), "xacu.vigov.vn"); ok {
@@ -227,14 +227,14 @@ func TestPgXaNgungHoatDongKhongPhucVu(t *testing.T) {
 	}
 }
 
-func TestPgMotHostChiThuocMotXa(t *testing.T) {
+func TestPgHostBelongsToOneTenant(t *testing.T) {
 	// A host resolving to two communes makes isolation undecidable at the edge. The primary
 	// key on host is what prevents it, and this checks the database really enforces that.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã A", true)
-	themXa(t, db, ulidB, "Xã B", true)
-	themHost(t, db, "chung.vigov.vn", ulidA, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã A", true)
+	insertTenant(t, db, ulidB, "Xã B", true)
+	insertHost(t, db, "chung.vigov.vn", ulidA, true)
 
 	_, err := db.Exec(
 		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
@@ -244,16 +244,16 @@ func TestPgMotHostChiThuocMotXa(t *testing.T) {
 	}
 }
 
-func TestPgMoiXaChiMotHostChinh(t *testing.T) {
+func TestPgOnePrimaryHostPerTenant(t *testing.T) {
 	// Without this, link building picks whichever row comes back first and one commune shows
 	// up under different addresses in notifications sent to citizens.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	// A second non-canonical host is fine: after a merger the old address must keep working.
-	themHost(t, db, "cu.vigov.vn", ulidA, false)
+	insertHost(t, db, "cu.vigov.vn", ulidA, false)
 
 	_, err := db.Exec(
 		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
@@ -263,12 +263,12 @@ func TestPgMoiXaChiMotHostChinh(t *testing.T) {
 	}
 }
 
-func TestPgHostPhaiChuThuong(t *testing.T) {
+func TestPgHostMustBeLowerCase(t *testing.T) {
 	// Normalisation lower-cases on the way in; the CHECK constraint stops a row that bypassed
 	// it from ever being stored, which would make that host unresolvable forever.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
 
 	_, err := db.Exec(
 		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
@@ -278,11 +278,11 @@ func TestPgHostPhaiChuThuong(t *testing.T) {
 	}
 }
 
-func TestPgTenantIdPhaiLaUlid(t *testing.T) {
+func TestPgTenantIDMustBeULID(t *testing.T) {
 	// Rule 1, invariant 2: an identifier carrying meaning forces rewriting foreign keys across
 	// archival records at the first merger.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
 	_, err := db.Exec(
 		`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, "thang-binh", "Xã Thăng Bình")
@@ -291,11 +291,11 @@ func TestPgTenantIdPhaiLaUlid(t *testing.T) {
 	}
 }
 
-func TestPgAuditLogNhanDuocDuLieu(t *testing.T) {
+func TestPgAuditLogAcceptsRows(t *testing.T) {
 	// The skeleton declared PARTITION BY HASH but created no partitions, so every insert
 	// failed with "no partition of relation found". This is the test that would have caught it.
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
 	_, err := db.Exec(
 		`INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at)
@@ -314,11 +314,11 @@ func TestPgAuditLogNhanDuocDuLieu(t *testing.T) {
 	}
 }
 
-func TestPgCacheDungVoiDatabaseThat(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+func TestPgCacheWithRealDatabase(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	c := tenant.NewCachedDirectory(NewDirectory(db), time.Minute)
 	for range 3 {

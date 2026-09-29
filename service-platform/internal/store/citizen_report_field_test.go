@@ -1,7 +1,7 @@
 package store
 
 // Checks on migration 0011 (petition_field, tier 1 of ADR 0026) and on its read statement, WITHOUT a
-// database. petition_field_pg_test.go proves the behaviour; these pin what a fixture cannot: the
+// database. citizen_report_field_pg_test.go proves the behaviour; these pin what a fixture cannot: the
 // exact code set, and the clauses whose loss would turn nothing red.
 
 import (
@@ -14,7 +14,7 @@ import (
 	"github.com/vihat/vigov/service-platform/migrations"
 )
 
-const petitionFieldMigration = "0011_petition_field.sql"
+const citizenReportFieldMigration = "0011_petition_field.sql"
 
 type fieldSeed struct {
 	code, label string
@@ -67,7 +67,7 @@ func allFieldSeeds(t *testing.T) []fieldSeed {
 // silently gets the default deadline (identity.proto, ResolveDeadlines).
 //
 // Labels and order: docs/ui-ux/09-phan-anh-nguoi-dan.md §5. Icons, tones: ADR 0060 §5.
-func TestPetitionFieldSeedIsTheTwelveCodes(t *testing.T) {
+func TestCitizenReportFieldSeedIsTheTwelveCodes(t *testing.T) {
 	want := []fieldSeed{
 		{code: "rac-thai", label: "Rác thải – Vệ sinh môi trường", order: 1, icon: "Trash2", tone: "orange"},
 		{code: "giao-thong", label: "Hạ tầng giao thông", order: 2, icon: "TrafficCone", tone: "blue"},
@@ -88,7 +88,7 @@ func TestPetitionFieldSeedIsTheTwelveCodes(t *testing.T) {
 	}
 	for i, w := range want {
 		g := got[i]
-		w.active, w.file = "true", petitionFieldMigration
+		w.active, w.file = "true", citizenReportFieldMigration
 		if g != w {
 			t.Errorf("row %d = %+v, want %+v", i, g, w)
 		}
@@ -96,7 +96,7 @@ func TestPetitionFieldSeedIsTheTwelveCodes(t *testing.T) {
 }
 
 // The spec's dead code must never come back as a thirteenth field (ADR 0026 §2; sla_gieo.go:155).
-func TestPetitionFieldSeedHasNoRetiredSpecCode(t *testing.T) {
+func TestCitizenReportFieldSeedHasNoRetiredSpecCode(t *testing.T) {
 	for _, r := range allFieldSeeds(t) {
 		if r.code == "ve-sinh-moi-truong" {
 			t.Errorf("%s seeds ve-sinh-moi-truong — the old code of rac-thai", r.file)
@@ -104,8 +104,8 @@ func TestPetitionFieldSeedHasNoRetiredSpecCode(t *testing.T) {
 	}
 }
 
-func TestPetitionFieldMigrationClauses(t *testing.T) {
-	b, err := fs.ReadFile(migrations.FS, petitionFieldMigration)
+func TestCitizenReportFieldMigrationClauses(t *testing.T) {
+	b, err := fs.ReadFile(migrations.FS, citizenReportFieldMigration)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestPetitionFieldMigrationClauses(t *testing.T) {
 		"RETURNING code, default_label, sort_order, icon, tone, active",
 		"INSERT INTO platform_audit_log (actor, action, subject, before, after, reason)",
 		"'system', 'petition_field.seeded'",
-		"'migration " + petitionFieldMigration + ":",
+		"'migration " + citizenReportFieldMigration + ":",
 	} {
 		if !strings.Contains(sql, clause) {
 			t.Errorf("migration 0011 lacks %q", clause)
@@ -145,12 +145,12 @@ func TestPetitionFieldMigrationClauses(t *testing.T) {
 }
 
 // The read returns RETIRED codes too, in a total order.
-func TestListPetitionFieldsReadsEveryCode(t *testing.T) {
-	q := strings.ToLower(listPetitionFields)
+func TestListCitizenReportFieldsReadsEveryCode(t *testing.T) {
+	q := strings.ToLower(listCitizenReportFields)
 	if strings.Contains(q, "where") {
-		t.Errorf("read filters rows — retired codes must still be returned:\n%s", listPetitionFields)
+		t.Errorf("read filters rows — retired codes must still be returned:\n%s", listCitizenReportFields)
 	}
 	if !strings.Contains(q, "order by sort_order, code") {
-		t.Errorf("read order is not total:\n%s", listPetitionFields)
+		t.Errorf("read order is not total:\n%s", listCitizenReportFields)
 	}
 }

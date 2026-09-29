@@ -21,11 +21,11 @@ import "strings"
 //
 // KEPT IN LOCK-STEP with the CHECK `tenant_domain_khong_danh_rieng` in
 // migrations/0007_tenant_domain_khong_danh_rieng.sql. Changing one without the other is caught by
-// domain.TestLuatTenMienDanhRiengGoVaSQLKhop, which runs both over the same table of hosts.
+// domain.TestReservedHostRuleGoAndSQLAgree, which runs both over the same table of hosts.
 
-// nhanDanhRieng are the first labels, directly under vigov.vn or stg.vigov.vn, that name a
+// reservedLabels are the first labels, directly under vigov.vn or stg.vigov.vn, that name a
 // platform surface rather than a commune.
-var nhanDanhRieng = map[string]bool{
+var reservedLabels = map[string]bool{
 	"admin":     true,
 	"admin-stg": true,
 	"api":       true,
@@ -35,11 +35,11 @@ var nhanDanhRieng = map[string]bool{
 }
 
 const (
-	mienGoc    = "vigov.vn"
-	mienGocStg = "stg.vigov.vn"
+	rootDomain        = "vigov.vn"
+	stagingRootDomain = "stg.vigov.vn"
 )
 
-// LaTenMienDanhRieng reports whether host is a platform address that must never resolve to a
+// IsReservedHost reports whether host is a platform address that must never resolve to a
 // commune. host may arrive raw: it is lower-cased, trimmed, stripped of its port and of any
 // trailing dot here, so that "ADMIN.vigov.vn.:443" cannot slip past as a spelling nobody listed.
 //
@@ -48,24 +48,24 @@ const (
 // vigov.vn is not this function's business and answers false.
 //
 // An input NormaliseHost refuses answers false: the lookup refuses it anyway, with its own code.
-func LaTenMienDanhRieng(host string) bool {
+func IsReservedHost(host string) bool {
 	h, err := NormaliseHost(host)
 	if err != nil {
 		return false
 	}
 	h = strings.TrimRight(h, ".")
 
-	if h == mienGoc || h == mienGocStg {
+	if h == rootDomain || h == stagingRootDomain {
 		return true
 	}
-	if strings.HasSuffix(h, ".api."+mienGoc) || strings.HasSuffix(h, ".api-stg."+mienGoc) {
+	if strings.HasSuffix(h, ".api."+rootDomain) || strings.HasSuffix(h, ".api-stg."+rootDomain) {
 		return true
 	}
 	// The stg suffix is tried first: "admin.stg.vigov.vn" also ends in ".vigov.vn", and its
 	// label under vigov.vn ("admin.stg") would miss the table.
-	for _, goc := range []string{mienGocStg, mienGoc} {
-		if nhan, ok := strings.CutSuffix(h, "."+goc); ok {
-			return nhanDanhRieng[nhan]
+	for _, root := range []string{stagingRootDomain, rootDomain} {
+		if label, ok := strings.CutSuffix(h, "."+root); ok {
+			return reservedLabels[label]
 		}
 	}
 	return false

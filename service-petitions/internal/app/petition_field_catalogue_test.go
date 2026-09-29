@@ -365,7 +365,7 @@ func TestFieldEditRefusesToReviveASoftDeletedRow(t *testing.T) {
 
 type platformFieldsFake struct {
 	err    error
-	fields []*platformv1.PetitionField
+	fields []*platformv1.CitizenReportField
 }
 
 func (p *platformFieldsFake) ListPetitionFields(context.Context, *platformv1.ListPetitionFieldsRequest,
@@ -385,7 +385,7 @@ func TestTier1AdapterMapsUnavailableTo503Sentinel(t *testing.T) {
 }
 
 func TestTier1AdapterCarriesEveryField(t *testing.T) {
-	a := NewTier1Fields(platformclient.NewPetitionFields(&platformFieldsFake{fields: []*platformv1.PetitionField{
+	a := NewTier1Fields(platformclient.NewPetitionFields(&platformFieldsFake{fields: []*platformv1.CitizenReportField{
 		{Code: "rac-thai", DefaultLabel: "Rác thải", SortOrder: 2, Icon: "Trash2", Tone: "green", Active: true},
 		{Code: "ma-cu", DefaultLabel: "Mã cũ", SortOrder: 13, Active: false},
 	}}, nil))

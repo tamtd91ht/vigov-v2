@@ -27,7 +27,7 @@ func (f *profileFake) GetTenantProfile(context.Context, *platformv1.GetTenantPro
 }
 
 func TestTenantProfileMapsEveryField(t *testing.T) {
-	d := NewDirectory(&profileFake{res: &platformv1.GetTenantProfileResponse{Profile: &platformv1.TenantProfile{
+	d := NewDirectory(&profileFake{res: &platformv1.GetTenantProfileResponse{Profile: &platformv1.CommuneProfile{
 		OfficeAddress: "Số 1", LogoUrl: "https://x/logo.png", Hotline: "0900000000",
 		OfficeHoursText: "Sáng 7h30", Introduction: "Giới thiệu"}}}, nil)
 	p, ok, err := d.TenantProfile(tenant.Into(context.Background(), ulidThu))

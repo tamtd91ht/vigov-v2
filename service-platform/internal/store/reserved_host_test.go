@@ -9,7 +9,7 @@ import (
 // Runs WITHOUT a database, on purpose: the Directory here holds a nil handle, so a reserved host
 // that reached the query would panic. Passing proves the refusal happens BEFORE the table is read
 // — which is the property that keeps the two kept admin rows unreachable (migration 0007).
-func TestTenMienDanhRiengKhongChamCSDL(t *testing.T) {
+func TestReservedHostNeverTouchesDatabase(t *testing.T) {
 	t.Parallel()
 
 	d := NewDirectory(nil)
@@ -21,8 +21,8 @@ func TestTenMienDanhRiengKhongChamCSDL(t *testing.T) {
 			t.Errorf("ByHost(%q) = true, muốn false", h)
 		}
 		// The SAME sentinel as an unknown host — never a distinct one.
-		if _, err := d.ByHostErr(context.Background(), h); !errors.Is(err, ErrKhongCoXa) {
-			t.Errorf("ByHostErr(%q) = %v, muốn ErrKhongCoXa", h, err)
+		if _, err := d.ByHostErr(context.Background(), h); !errors.Is(err, ErrTenantNotFound) {
+			t.Errorf("ByHostErr(%q) = %v, muốn ErrTenantNotFound", h, err)
 		}
 	}
 }

@@ -4,7 +4,7 @@
 // "which mode and commune does this Mini App have" — plus ONE commune-scoped read, that commune's
 // own display profile (ADR 0045, decision 5) — plus platform-wide operating configuration, today
 // the upload limits (ADR 0052 §10, upload_policy.go) — plus tier 1 of the petition field catalogue
-// (ADR 0026, ADR 0060, petition_field.go). It is deliberately incapable of answering a
+// (ADR 0026, ADR 0060, citizen_report_field.go). It is deliberately incapable of answering a
 // question about a commune's business content. ADR 0003: the
 // vendor operating the platform cannot read a commune's petitions or documents because THERE
 // IS NO PATH, not because a flag is switched off. A flag can be flipped; a path has to be
@@ -44,15 +44,15 @@ type Directory interface {
 	ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error)
 }
 
-// SoMiniApp is the Mini App registry (ADR 0044). Unscoped for the reason store.Directory is: it
+// MiniAppRegistry is the Mini App registry (ADR 0044). Unscoped for the reason store.Directory is: it
 // is what answers "which commune" for a dedicated app.
-type SoMiniApp interface {
+type MiniAppRegistry interface {
 	MiniApp(ctx context.Context, appID string) (domain.MiniApp, error)
 }
 
-// HoSoHienThi reads the display profile of THE COMMUNE IN ctx. Scoped: no commune argument.
-type HoSoHienThi interface {
-	Doc(ctx context.Context) (domain.HoSoHienThi, error)
+// CommuneProfiles reads the display profile of THE COMMUNE IN ctx. Scoped: no commune argument.
+type CommuneProfiles interface {
+	Read(ctx context.Context) (domain.CommuneProfile, error)
 }
 
 // UploadPolicies reads the live platform-wide upload limits (migration 0008). No commune argument
@@ -61,19 +61,19 @@ type UploadPolicies interface {
 	ListUploadPolicies(ctx context.Context) ([]domain.UploadPolicy, error)
 }
 
-// PetitionFields reads tier 1 of the petition field catalogue (migration 0011), retired codes
-// included. No commune argument: one code set for every commune (ADR 0026).
-type PetitionFields interface {
-	ListPetitionFields(ctx context.Context) ([]domain.PetitionField, error)
+// CitizenReportFields reads tier 1 of the citizen report field catalogue (migration 0011), retired
+// codes included. No commune argument: one code set for every commune (ADR 0026).
+type CitizenReportFields interface {
+	ListCitizenReportFields(ctx context.Context) ([]domain.CitizenReportField, error)
 }
 
 // Deps are what the server reads. Every field is required.
 type Deps struct {
 	Dir      Directory
-	Apps     SoMiniApp
-	HoSo     HoSoHienThi
+	Apps     MiniAppRegistry
+	Profiles CommuneProfiles
 	Policies UploadPolicies
-	Fields   PetitionFields
+	Fields   CitizenReportFields
 }
 
 // Server implements platformv1.PlatformServiceServer.
@@ -81,20 +81,20 @@ type Server struct {
 	platformv1.UnimplementedPlatformServiceServer
 
 	dir      Directory
-	apps     SoMiniApp
-	hoSo     HoSoHienThi
+	apps     MiniAppRegistry
+	profiles CommuneProfiles
 	policies UploadPolicies
-	fields   PetitionFields
+	fields   CitizenReportFields
 	log      *slog.Logger
 }
 
 // NewServer panics on a missing dependency, at construction: a nil one would otherwise surface as
 // a panic on the first call of that RPC, in production, as a 500 nobody can explain.
 func NewServer(d Deps, log *slog.Logger) *Server {
-	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || d.Fields == nil || log == nil {
+	if d.Dir == nil || d.Apps == nil || d.Profiles == nil || d.Policies == nil || d.Fields == nil || log == nil {
 		panic("platform grpc: NewServer thiếu phụ thuộc")
 	}
-	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, fields: d.Fields, log: log}
+	return &Server{dir: d.Dir, apps: d.Apps, profiles: d.Profiles, policies: d.Policies, fields: d.Fields, log: log}
 }
 
 // ResolveHost maps an incoming Host to a commune.
@@ -107,19 +107,19 @@ func (s *Server) ResolveHost(ctx context.Context, req *platformv1.ResolveHostReq
 
 	// A platform address (admin.vigov.vn, *.api.vigov.vn, the apex …) never resolves to a commune,
 	// whatever tenant_domain holds — two such rows are kept by rule 7 (migration 0007). Refused
-	// BEFORE the directory is asked, and through loi with the unknown-Host sentinel so the answer
+	// BEFORE the directory is asked, and through mapError with the unknown-Host sentinel so the answer
 	// is byte-for-byte the one an unclaimed Host gets: a distinct code would let an outside caller
 	// learn which addresses are the platform's. Nothing is logged here; the host is the caller's
 	// own input and the caller's client already records its negatives.
-	if domain.LaTenMienDanhRieng(req.GetHost()) {
-		return nil, s.loi(ctx, store.ErrKhongCoXa, "ResolveHost")
+	if domain.IsReservedHost(req.GetHost()) {
+		return nil, s.mapError(ctx, store.ErrTenantNotFound, "ResolveHost")
 	}
 
 	t, err := s.dir.ByHostErr(ctx, req.GetHost())
 	if err != nil {
-		return nil, s.loi(ctx, err, "ResolveHost")
+		return nil, s.mapError(ctx, err, "ResolveHost")
 	}
-	return &platformv1.ResolveHostResponse{Tenant: sangProto(t)}, nil
+	return &platformv1.ResolveHostResponse{Tenant: toProto(t)}, nil
 }
 
 // GetTenant returns registry metadata for one commune: name, host, whether it still operates.
@@ -145,7 +145,7 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 
 	t, err := s.dir.ByID(ctx, id)
 	if err != nil {
-		return nil, s.loi(ctx, err, "GetTenant")
+		return nil, s.mapError(ctx, err, "GetTenant")
 	}
 	// A deactivated commune IS returned, with Active=false. Rule 7 keeps a merged commune's
 	// data and address; hiding it here would leave archival records referring to a commune
@@ -160,10 +160,10 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 	// contract's "no primary domain", and picking a substitute is a choice the operator makes by
 	// marking a different row primary. Filtered HERE, where the reserved list lives, rather than in
 	// each consumer — the only caller today is core/platformclient XaTrongNguCanh.
-	if domain.LaTenMienDanhRieng(t.Host) {
+	if domain.IsReservedHost(t.Host) {
 		t.Host = ""
 	}
-	return &platformv1.GetTenantResponse{Tenant: sangProto(t)}, nil
+	return &platformv1.GetTenantResponse{Tenant: toProto(t)}, nil
 }
 
 // ResolveMiniApp answers, for ONE App ID, the mode and — for an active dedicated app whose commune
@@ -178,13 +178,13 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMiniAppRequest) (
 	*platformv1.ResolveMiniAppResponse, error) {
 
-	if err := domain.KiemAppID(req.GetAppId()); err != nil {
+	if err := domain.ValidateAppID(req.GetAppId()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "app_id không hợp lệ")
 	}
 
 	app, err := s.apps.MiniApp(ctx, req.GetAppId())
 	switch {
-	case errors.Is(err, store.ErrKhongCoMiniApp):
+	case errors.Is(err, store.ErrMiniAppNotFound):
 		// OK with no app, per the contract — the caller refuses. Unknown, switched off and
 		// soft-deleted are one answer on purpose.
 		return &platformv1.ResolveMiniAppResponse{}, nil
@@ -194,12 +194,12 @@ func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMini
 	}
 
 	out := &platformv1.MiniApp{AppId: app.AppID}
-	switch app.CheDo {
-	case domain.CheDoChinh:
+	switch app.Mode {
+	case domain.MiniAppModeMain:
 		out.Mode = platformv1.MiniApp_MODE_MAIN
-	case domain.CheDoRieng:
+	case domain.MiniAppModeCommune:
 		out.Mode = platformv1.MiniApp_MODE_COMMUNE
-		if app.Xa == nil {
+		if app.Tenant == nil {
 			// store.Directory refuses this shape; reaching it means the two layers disagree, and
 			// answering without a commune would read to the caller as "commune inactive".
 			s.log.ErrorContext(ctx, "mini app riêng không mang xã", "rpc", "ResolveMiniApp")
@@ -207,15 +207,15 @@ func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMini
 		}
 		// ABSENT when the bound commune is inactive — TenantSummary is active by construction, and
 		// its absence under MODE_COMMUNE is the contract's signal to refuse. Never the successor.
-		if app.Xa.DangHoatDong {
+		if app.Tenant.IsActive {
 			out.Tenant = &platformv1.TenantSummary{
-				Id:          app.Xa.ID,
-				DisplayName: app.Xa.Ten,
-				Province:    app.Xa.TinhThanh,
+				Id:          app.Tenant.ID,
+				DisplayName: app.Tenant.Name,
+				Province:    app.Tenant.Province,
 			}
 		}
 	default:
-		s.log.ErrorContext(ctx, "mini app có chế độ lạ", "rpc", "ResolveMiniApp", "che_do", string(app.CheDo))
+		s.log.ErrorContext(ctx, "mini app có chế độ lạ", "rpc", "ResolveMiniApp", "che_do", string(app.Mode))
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
 	return &platformv1.ResolveMiniAppResponse{App: out}, nil
@@ -228,25 +228,25 @@ func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMini
 func (s *Server) GetTenantProfile(ctx context.Context, _ *platformv1.GetTenantProfileRequest) (
 	*platformv1.GetTenantProfileResponse, error) {
 
-	hs, err := s.hoSo.Doc(ctx)
+	profile, err := s.profiles.Read(ctx)
 	switch {
-	case errors.Is(err, store.ErrChuaCoHoSoHienThi):
+	case errors.Is(err, store.ErrCommuneProfileNotDeclared):
 		return &platformv1.GetTenantProfileResponse{}, nil
 	case err != nil:
 		s.log.ErrorContext(ctx, "đọc hồ sơ hiển thị xã thất bại", "rpc", "GetTenantProfile", "err", err)
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
-	// Field by field, like sangProto — ADR 0003's boundary.
-	return &platformv1.GetTenantProfileResponse{Profile: &platformv1.TenantProfile{
-		OfficeAddress:   hs.DiaChiTruSo,
-		LogoUrl:         hs.LogoURL,
-		Hotline:         hs.DuongDayNong,
-		OfficeHoursText: hs.GioLamViecHienThi,
-		Introduction:    hs.GioiThieu,
+	// Field by field, like toProto — ADR 0003's boundary.
+	return &platformv1.GetTenantProfileResponse{Profile: &platformv1.CommuneProfile{
+		OfficeAddress:   profile.OfficeAddress,
+		LogoUrl:         profile.LogoURL,
+		Hotline:         profile.Hotline,
+		OfficeHoursText: profile.OfficeHoursText,
+		Introduction:    profile.Introduction,
 	}}, nil
 }
 
-// loi maps a directory failure to a gRPC code.
+// mapError maps a directory failure to a gRPC code.
 //
 // THE DISTINCTION THIS FUNCTION EXISTS FOR: "no commune matches" and "the database is
 // unreachable" must never arrive at the caller as the same answer. The first is a routine
@@ -255,21 +255,21 @@ func (s *Server) GetTenantProfile(ctx context.Context, _ *platformv1.GetTenantPr
 // The message returned to the caller never carries the cause. An internal failure text can
 // hold a DSN fragment or a query, and this response crosses a service boundary — the cause
 // goes to this service's log, where the operator is.
-func (s *Server) loi(ctx context.Context, err error, rpc string) error {
+func (s *Server) mapError(ctx context.Context, err error, rpc string) error {
 	switch {
-	case errors.Is(err, store.ErrKhongCoXa):
+	case errors.Is(err, store.ErrTenantNotFound):
 		return status.Error(codes.NotFound, "không có xã nào ứng với yêu cầu này")
 
-	case errors.Is(err, store.ErrXaNgungHoatDong):
+	case errors.Is(err, store.ErrTenantInactive):
 		// Deactivated is NOT "database is fine but commune missing" and not an error either;
 		// for a Host lookup it is simply not servable, and the edge must produce the same 404
 		// it produces for an unknown Host. Distinguishing the two to an outside caller would
 		// disclose which communes exist on the platform.
 		return status.Error(codes.NotFound, "không có xã nào ứng với yêu cầu này")
 
-	case errors.Is(err, domain.ErrHostTrong),
-		errors.Is(err, domain.ErrHostCoGiaoThuc),
-		errors.Is(err, domain.ErrIDKhongHopLe):
+	case errors.Is(err, domain.ErrHostEmpty),
+		errors.Is(err, domain.ErrHostHasScheme),
+		errors.Is(err, domain.ErrInvalidID):
 		return status.Error(codes.InvalidArgument, "tham số tra cứu không hợp lệ")
 
 	default:
@@ -278,12 +278,12 @@ func (s *Server) loi(ctx context.Context, err error, rpc string) error {
 	}
 }
 
-// sangProto copies the registry view onto the wire type.
+// toProto copies the registry view onto the wire type.
 //
 // Field by field, never by reflection or a generic mapper: this is the boundary ADR 0003
 // draws, and a mapper that copies "whatever is on the struct" is how a business field
 // eventually leaves this service without anybody deciding that it should.
-func sangProto(t tenant.Tenant) *platformv1.Tenant {
+func toProto(t tenant.Tenant) *platformv1.Tenant {
 	return &platformv1.Tenant{
 		Id:          t.ID.String(),
 		Host:        t.Host,

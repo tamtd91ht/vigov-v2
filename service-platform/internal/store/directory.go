@@ -24,7 +24,7 @@ import (
 // and mini_app (mini_app.go) — none of which holds business data, and every method returns
 // exactly one row or none. It never returns a list, so there is no query here that could span
 // communes. A commune's own content (ho_so_hien_thi_xa) is NOT read here: that goes through the
-// scoped HoSoHienThiStore.
+// scoped CommuneProfileStore.
 type Directory struct {
 	db *sql.DB
 }
@@ -32,10 +32,10 @@ type Directory struct {
 // NewDirectory is one of exactly TWO constructors in this package that take a raw *sql.DB. The
 // other is NewUploadPolicyStore (upload_policy.go), which reads platform-wide configuration with
 // no tenant_id column. Any third one appearing here is a bug unless its table, too, has no commune
-// column — a commune's own content goes through core/store.Scoped, as HoSoHienThiStore does.
+// column — a commune's own content goes through core/store.Scoped, as CommuneProfileStore does.
 func NewDirectory(db *sql.DB) *Directory { return &Directory{db: db} }
 
-// cotXa is the SELECT list every query in this file shares, in the ONE order quetXa scans.
+// tenantColumns is the SELECT list every query in this file shares, in the ONE order scanTenant scans.
 //
 // IT IS BUILT IN ONE PLACE, AND THAT IS THE POINT. There are three resolution paths here and
 // they used to spell their column list out three times. A column added to two of them and
@@ -47,7 +47,7 @@ func NewDirectory(db *sql.DB) *Directory { return &Directory{db: db} }
 // A FUNCTION BECAUSE EXACTLY ONE COLUMN DIFFERS between the paths: the two Host lookups join a
 // tenant_domain row that must exist, ByID left-joins one that need not. That single expression is
 // the only parameter; everything else is fixed here.
-func cotXa(host string) string {
+func tenantColumns(host string) string {
 	return `t.id, ` + host + `, t.ten, t.tinh_thanh, t.dang_hoat_dong`
 }
 
@@ -55,8 +55,8 @@ func cotXa(host string) string {
 // answer the same question and differ only in what they do with a failure, so a WHERE clause that
 // drifted between them would make the operator-facing variant disagree with the hot path.
 var (
-	truyVanTheoHost = `
-		SELECT ` + cotXa("d.host") + `
+	queryByHost = `
+		SELECT ` + tenantColumns("d.host") + `
 		FROM tenant_domain d
 		JOIN tenant t ON t.id = d.tenant_id
 		WHERE d.host = $1`
@@ -65,26 +65,26 @@ var (
 	// commune may hold several hosts after a merger. LEFT JOIN because a commune that exists
 	// with no domain yet is a configuration state, not a missing commune — reporting "no such
 	// commune" for it would send the operator hunting the wrong table.
-	truyVanTheoID = `
-		SELECT ` + cotXa("COALESCE(d.host, '')") + `
+	queryByID = `
+		SELECT ` + tenantColumns("COALESCE(d.host, '')") + `
 		FROM tenant t
 		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
 		WHERE t.id = $1`
 )
 
-// hangDoc is what both *sql.Row and *sql.Rows satisfy, so quetXa has one caller shape.
-type hangDoc interface{ Scan(dest ...any) error }
+// rowScanner is what both *sql.Row and *sql.Rows satisfy, so scanTenant has one caller shape.
+type rowScanner interface{ Scan(dest ...any) error }
 
-// quetXa reads one row in the order cotXa names. POSITIONAL — this list and cotXa move together,
+// scanTenant reads one row in the order tenantColumns names. POSITIONAL — this list and tenantColumns move together,
 // and they are next to each other for that reason.
 //
 // It returns the driver's error unchanged: each caller below tells sql.ErrNoRows apart from a
 // real failure differently, and collapsing the two here is precisely the mistake ByHostErr exists
 // to undo.
-func quetXa(hang hangDoc) (tenant.Tenant, error) {
+func scanTenant(row rowScanner) (tenant.Tenant, error) {
 	var out tenant.Tenant
 	var id string
-	if err := hang.Scan(&id, &out.Host, &out.Name, &out.Province, &out.Active); err != nil {
+	if err := row.Scan(&id, &out.Host, &out.Name, &out.Province, &out.Active); err != nil {
 		return tenant.Tenant{}, err
 	}
 	out.ID = tenant.ID(id)
@@ -104,11 +104,11 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 	// A platform address never names a commune, whatever tenant_domain holds for it — two such
 	// rows exist and are kept (rule 7; migration 0007). Refused BEFORE the query, with the same
 	// answer as an unknown Host, so the row is unreachable rather than merely unlikely.
-	if domain.LaTenMienDanhRieng(h) {
+	if domain.IsReservedHost(h) {
 		return tenant.Tenant{}, false
 	}
 
-	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoHost, h))
+	out, err := scanTenant(d.db.QueryRowContext(ctx, queryByHost, h))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return tenant.Tenant{}, false
@@ -142,19 +142,19 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 	}
 	// Same refusal as ByHost, and the SAME sentinel as an unknown Host: a distinct error would let
 	// a caller tell "reserved" from "unclaimed", and nothing needs that distinction.
-	if domain.LaTenMienDanhRieng(h) {
-		return tenant.Tenant{}, ErrKhongCoXa
+	if domain.IsReservedHost(h) {
+		return tenant.Tenant{}, ErrTenantNotFound
 	}
 
-	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoHost, h))
+	out, err := scanTenant(d.db.QueryRowContext(ctx, queryByHost, h))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return tenant.Tenant{}, ErrKhongCoXa
+		return tenant.Tenant{}, ErrTenantNotFound
 	case err != nil:
 		return tenant.Tenant{}, fmt.Errorf("directory: truy vấn host %q: %w", h, err)
 	}
 	if !out.Active {
-		return tenant.Tenant{}, ErrXaNgungHoatDong
+		return tenant.Tenant{}, ErrTenantInactive
 	}
 	return out, nil
 }
@@ -172,13 +172,13 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 // list, so there is no query here that could span communes.
 func (d *Directory) ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error) {
 	if !id.Valid() {
-		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrIDKhongHopLe)
+		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrInvalidID)
 	}
 
-	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoID, id.String()))
+	out, err := scanTenant(d.db.QueryRowContext(ctx, queryByID, id.String()))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return tenant.Tenant{}, ErrKhongCoXa
+		return tenant.Tenant{}, ErrTenantNotFound
 	case err != nil:
 		return tenant.Tenant{}, fmt.Errorf("directory: truy vấn xã %q: %w", id, err)
 	}
@@ -186,6 +186,6 @@ func (d *Directory) ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, erro
 }
 
 var (
-	ErrKhongCoXa       = errors.New("directory: không có xã nào ứng với host này")
-	ErrXaNgungHoatDong = errors.New("directory: xã đã ngừng hoạt động")
+	ErrTenantNotFound = errors.New("directory: không có xã nào ứng với host này")
+	ErrTenantInactive = errors.New("directory: xã đã ngừng hoạt động")
 )

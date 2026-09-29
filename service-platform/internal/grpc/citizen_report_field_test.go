@@ -19,28 +19,28 @@ import (
 
 // fieldsFake returns rows as the store would: every code, retired ones included, in read order.
 type fieldsFake struct {
-	rows   []domain.PetitionField
+	rows   []domain.CitizenReportField
 	broken bool
 }
 
-func (f fieldsFake) ListPetitionFields(context.Context) ([]domain.PetitionField, error) {
+func (f fieldsFake) ListCitizenReportFields(context.Context) ([]domain.CitizenReportField, error) {
 	if f.broken {
-		return nil, loiHaTang
+		return nil, errInfra
 	}
 	return f.rows, nil
 }
 
 func sampleFields() fieldsFake {
-	return fieldsFake{rows: []domain.PetitionField{
+	return fieldsFake{rows: []domain.CitizenReportField{
 		{Code: "rac-thai", DefaultLabel: "Rác thải – Vệ sinh môi trường", SortOrder: 1, Icon: "Trash2",
-			Tone: "orange", Active: true},
-		{Code: "ma-da-ngung", DefaultLabel: "Mã đã ngừng", SortOrder: 13, Active: false},
+			Tone: "orange", IsActive: true},
+		{Code: "ma-da-ngung", DefaultLabel: "Mã đã ngừng", SortOrder: 13, IsActive: false},
 	}}
 }
 
-func fieldsClient(t *testing.T, f svcgrpc.PetitionFields) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
+func fieldsClient(t *testing.T, f svcgrpc.CitizenReportFields) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
-	return dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
+	return startWith(t, svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Profiles: sampleProfiles(),
 		Policies: samplePolicies(), Fields: f})
 }
 
@@ -49,7 +49,7 @@ func fieldsClient(t *testing.T, f svcgrpc.PetitionFields) (platformv1.PlatformSe
 func TestListPetitionFieldsMapsFieldByFieldIncludingRetired(t *testing.T) {
 	t.Parallel()
 	cli, _ := fieldsClient(t, sampleFields())
-	res, err := cli.ListPetitionFields(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.ListPetitionFieldsRequest{})
+	res, err := cli.ListPetitionFields(tenant.Into(testCtx(t), tenantActive), &platformv1.ListPetitionFieldsRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestListPetitionFieldsMapsFieldByFieldIncludingRetired(t *testing.T) {
 func TestListPetitionFieldsEmptyIsOK(t *testing.T) {
 	t.Parallel()
 	cli, _ := fieldsClient(t, fieldsFake{})
-	res, err := cli.ListPetitionFields(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.ListPetitionFieldsRequest{})
+	res, err := cli.ListPetitionFields(tenant.Into(testCtx(t), tenantActive), &platformv1.ListPetitionFieldsRequest{})
 	if err != nil || len(res.GetFields()) != 0 {
 		t.Fatalf("res=%+v err=%v; want OK and empty", res, err)
 	}
@@ -81,8 +81,8 @@ func TestListPetitionFieldsEmptyIsOK(t *testing.T) {
 func TestListPetitionFieldsSameForEveryCommune(t *testing.T) {
 	t.Parallel()
 	cli, _ := fieldsClient(t, sampleFields())
-	a, errA := cli.ListPetitionFields(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.ListPetitionFieldsRequest{})
-	b, errB := cli.ListPetitionFields(tenant.Into(ctxTest(t), xaDaSapNhap), &platformv1.ListPetitionFieldsRequest{})
+	a, errA := cli.ListPetitionFields(tenant.Into(testCtx(t), tenantActive), &platformv1.ListPetitionFieldsRequest{})
+	b, errB := cli.ListPetitionFields(tenant.Into(testCtx(t), tenantMerged), &platformv1.ListPetitionFieldsRequest{})
 	if errA != nil || errB != nil || len(a.GetFields()) != len(b.GetFields()) {
 		t.Fatalf("a=%v/%v b=%v/%v", a, errA, b, errB)
 	}
@@ -92,7 +92,7 @@ func TestListPetitionFieldsSameForEveryCommune(t *testing.T) {
 func TestListPetitionFieldsWithoutCommuneRefused(t *testing.T) {
 	t.Parallel()
 	_, raw := fieldsClient(t, sampleFields())
-	_, err := raw.ListPetitionFields(ctxTest(t), &platformv1.ListPetitionFieldsRequest{})
+	_, err := raw.ListPetitionFields(testCtx(t), &platformv1.ListPetitionFieldsRequest{})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("code = %v, want InvalidArgument", status.Code(err))
 	}
@@ -103,23 +103,23 @@ func TestListPetitionFieldsWithoutCommuneRefused(t *testing.T) {
 func TestListPetitionFieldsStoreFailureIsInternal(t *testing.T) {
 	t.Parallel()
 	cli, _ := fieldsClient(t, fieldsFake{broken: true})
-	_, err := cli.ListPetitionFields(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.ListPetitionFieldsRequest{})
+	_, err := cli.ListPetitionFields(tenant.Into(testCtx(t), tenantActive), &platformv1.ListPetitionFieldsRequest{})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("code = %v, want Internal", status.Code(err))
 	}
-	if st, _ := status.FromError(err); st.Message() == loiHaTang.Error() {
+	if st, _ := status.FromError(err); st.Message() == errInfra.Error() {
 		t.Error("infrastructure error leaked to the caller")
 	}
 }
 
 // A server built without the field store is refused at construction, not at the first call.
-func TestNewServerWithoutPetitionFieldsPanics(t *testing.T) {
+func TestNewServerWithoutCitizenReportFieldsPanics(t *testing.T) {
 	t.Parallel()
 	defer func() {
 		if recover() == nil {
 			t.Fatal("built a server without Fields")
 		}
 	}()
-	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
+	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Profiles: sampleProfiles(),
 		Policies: samplePolicies()}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

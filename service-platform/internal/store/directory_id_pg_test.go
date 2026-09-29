@@ -2,8 +2,8 @@ package store
 
 // Integration tests for Directory.ByID against a real PostgreSQL.
 //
-// A separate file from directory_pg_test.go, reusing its harness (moKetNoi, chayMigration,
-// themXa, themHost). What is checked here is behaviour the database owns and a mock would only
+// A separate file from directory_pg_test.go, reusing its harness (openTestDB, runMigrations,
+// insertTenant, insertHost). What is checked here is behaviour the database owns and a mock would only
 // agree with: the LEFT JOIN that picks the ONE canonical host, and the fact that a deactivated
 // commune still comes back.
 //
@@ -17,14 +17,14 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 )
 
-func TestPgByIDTraVeHostChinh(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
+func TestPgByIDReturnsPrimaryHost(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
 	// Two hosts, as after a merger: the old address must keep resolving while people learn the
 	// new one (rule 7). Exactly one of them is canonical, and that is the one a link uses.
-	themHost(t, db, "cu.vigov.vn", ulidA, false)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	insertHost(t, db, "cu.vigov.vn", ulidA, false)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
 	got, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidA))
 	if err != nil {
@@ -50,10 +50,10 @@ func TestPgByIDTraVeHostChinh(t *testing.T) {
 // A merged commune keeps its data and its codes (rule 7), so it must stay describable — an
 // archival record referring to it still has to be able to render a name. Active=false is the
 // answer; "không có xã" is not.
-func TestPgByIDXaNgungHoatDongVanTraVe(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidB, "Xã Đã Sáp Nhập", false)
+func TestPgByIDInactiveTenantStillReturned(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidB, "Xã Đã Sáp Nhập", false)
 
 	got, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidB))
 	if err != nil {
@@ -69,27 +69,27 @@ func TestPgByIDXaNgungHoatDongVanTraVe(t *testing.T) {
 	}
 }
 
-func TestPgByIDKhongTonTai(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+func TestPgByIDNotFound(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
 	_, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidA))
-	if !errors.Is(err, ErrKhongCoXa) {
-		t.Fatalf("err = %v, muốn ErrKhongCoXa", err)
+	if !errors.Is(err, ErrTenantNotFound) {
+		t.Fatalf("err = %v, muốn ErrTenantNotFound", err)
 	}
 }
 
 // Checked before the query runs: an identifier that is not a ULID means the caller is using an
 // administrative code or a name, which rule 1 invariant 2 forbids.
-func TestPgByIDIdKhongPhaiUlid(t *testing.T) {
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
+func TestPgByIDRejectsNonULID(t *testing.T) {
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
 
 	_, err := NewDirectory(db).ByID(context.Background(), tenant.ID("26734"))
 	if err == nil {
 		t.Fatal("id không phải ULID lại được chấp nhận")
 	}
-	if errors.Is(err, ErrKhongCoXa) {
+	if errors.Is(err, ErrTenantNotFound) {
 		t.Fatalf("err = %v — id sai định dạng không phải là 'không có xã'", err)
 	}
 }

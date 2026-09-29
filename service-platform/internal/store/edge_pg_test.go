@@ -18,36 +18,36 @@ import (
 // can diverge: a directory that resolves correctly behind middleware wired in the wrong order
 // still leaks, and no unit test of either half would show it.
 
-func dungEdge(t *testing.T, ttl time.Duration) (http.Handler, *tenant.ID) {
+func buildEdge(t *testing.T, ttl time.Duration) (http.Handler, *tenant.ID) {
 	t.Helper()
 
-	db, _ := moKetNoi(t)
-	chayMigration(t, db)
-	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
-	themXa(t, db, ulidB, "Xã đã sáp nhập", false)
-	themHost(t, db, "xacu.vigov.vn", ulidB, true)
+	db, _ := openTestDB(t)
+	runMigrations(t, db)
+	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
+	insertHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	insertTenant(t, db, ulidB, "Xã đã sáp nhập", false)
+	insertHost(t, db, "xacu.vigov.vn", ulidB, true)
 
 	// The handler records which commune the edge decided on, so the test asserts on what
 	// business code would actually see rather than on a status code alone.
-	var thay tenant.ID
-	cuoi := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		thay = tenant.MustFrom(r.Context())
+	var seen tenant.ID
+	final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = tenant.MustFrom(r.Context())
 		w.WriteHeader(http.StatusOK)
 	})
 
 	dir := tenant.NewCachedDirectory(NewDirectory(db), ttl)
 
-	var h http.Handler = cuoi
+	var h http.Handler = final
 	h = httpx.TenantMiddleware(dir)(h)
 	h = httpx.Recover(func(context.Context) string { return "test" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return h, &thay
+	return h, &seen
 }
 
-func TestEdgeHostHopLeThiVaoDuocVaMangTheoXa(t *testing.T) {
-	h, thay := dungEdge(t, 0)
+func TestEdgeValidHostEntersWithTenant(t *testing.T) {
+	h, seen := buildEdge(t, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "http://thangbinh.vigov.vn/bat-ky", nil)
 	req.Host = "thangbinh.vigov.vn"
@@ -57,15 +57,15 @@ func TestEdgeHostHopLeThiVaoDuocVaMangTheoXa(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("mã trạng thái = %d, muốn 200", w.Code)
 	}
-	if *thay != tenant.ID(ulidA) {
-		t.Errorf("handler thấy xã %q, muốn %q", *thay, ulidA)
+	if *seen != tenant.ID(ulidA) {
+		t.Errorf("handler thấy xã %q, muốn %q", *seen, ulidA)
 	}
 }
 
-func TestEdgeHostLaTraVe404(t *testing.T) {
+func TestEdgeUnknownHostReturns404(t *testing.T) {
 	// Rule 1, invariant 3: cannot resolve = 404. Not 400, not a fallback commune, and 404 also
 	// reveals nothing about which communes exist on the platform.
-	h, thay := dungEdge(t, 0)
+	h, seen := buildEdge(t, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "http://khong-ton-tai.vigov.vn/bat-ky", nil)
 	req.Host = "khong-ton-tai.vigov.vn"
@@ -75,13 +75,13 @@ func TestEdgeHostLaTraVe404(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("mã trạng thái = %d, muốn 404", w.Code)
 	}
-	if *thay != "" {
-		t.Errorf("handler chạy với xã %q — request lẽ ra phải bị chặn ở biên", *thay)
+	if *seen != "" {
+		t.Errorf("handler chạy với xã %q — request lẽ ra phải bị chặn ở biên", *seen)
 	}
 }
 
-func TestEdgeXaNgungHoatDongTraVe404(t *testing.T) {
-	h, _ := dungEdge(t, 0)
+func TestEdgeInactiveTenantReturns404(t *testing.T) {
+	h, _ := buildEdge(t, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "http://xacu.vigov.vn/bat-ky", nil)
 	req.Host = "xacu.vigov.vn"
@@ -93,12 +93,12 @@ func TestEdgeXaNgungHoatDongTraVe404(t *testing.T) {
 	}
 }
 
-func TestEdgeXoaHeaderTenantTuClient(t *testing.T) {
+func TestEdgeStripsClientTenantHeader(t *testing.T) {
 	// THE ONE THAT MATTERS MOST. A client naming its own commune is a client granting itself
 	// access to another commune's data (rule 1, forbidden #2). The header must be stripped
 	// BEFORE anything reads it, and the commune must come from Host regardless of what the
 	// client claimed.
-	h, thay := dungEdge(t, 0)
+	h, seen := buildEdge(t, 0)
 
 	req := httptest.NewRequest(http.MethodGet, "http://thangbinh.vigov.vn/bat-ky", nil)
 	req.Host = "thangbinh.vigov.vn"
@@ -110,25 +110,25 @@ func TestEdgeXoaHeaderTenantTuClient(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("mã = %d, muốn 200", w.Code)
 	}
-	if *thay != tenant.ID(ulidA) {
-		t.Errorf("client tự đặt header và giành được xã %q — đây là lỗ hổng cách ly", *thay)
+	if *seen != tenant.ID(ulidA) {
+		t.Errorf("client tự đặt header và giành được xã %q — đây là lỗ hổng cách ly", *seen)
 	}
 	if req.Header.Get("X-Tenant-ID") != "" {
 		t.Error("header tenant từ client chưa bị xoá")
 	}
 }
 
-func TestEdgeHostCoCongVaChuHoa(t *testing.T) {
+func TestEdgeHostWithPortAndUpperCase(t *testing.T) {
 	// Host arrives from the client. Two spellings of one host that do not compare equal mean a
 	// whole commune returns 404 for a reason invisible in the logs.
-	h, thay := dungEdge(t, 0)
+	h, seen := buildEdge(t, 0)
 
 	for _, host := range []string{
 		"ThangBinh.ViGov.VN",
 		"thangbinh.vigov.vn:443",
 		"ThangBinh.vigov.vn:8080",
 	} {
-		*thay = ""
+		*seen = ""
 		req := httptest.NewRequest(http.MethodGet, "http://thangbinh.vigov.vn/bat-ky", nil)
 		req.Host = host
 		w := httptest.NewRecorder()
@@ -138,28 +138,28 @@ func TestEdgeHostCoCongVaChuHoa(t *testing.T) {
 			t.Errorf("Host %q: mã = %d, muốn 200", host, w.Code)
 			continue
 		}
-		if *thay != tenant.ID(ulidA) {
-			t.Errorf("Host %q: thấy xã %q, muốn %q", host, *thay, ulidA)
+		if *seen != tenant.ID(ulidA) {
+			t.Errorf("Host %q: thấy xã %q, muốn %q", host, *seen, ulidA)
 		}
 	}
 }
 
-func TestEdgeCacheKhongLamLoDuLieuGiuaCacXa(t *testing.T) {
+func TestEdgeCacheDoesNotLeakAcrossTenants(t *testing.T) {
 	// The cache is keyed by Host, so it cannot serve one commune's rows under another
 	// commune's address. This asserts that directly, because a cache keyed on the wrong thing
 	// is the classic way multi-tenant isolation dies silently.
-	h, thay := dungEdge(t, time.Minute)
+	h, seen := buildEdge(t, time.Minute)
 
 	// Warm the cache with commune A.
 	req := httptest.NewRequest(http.MethodGet, "http://thangbinh.vigov.vn/x", nil)
 	req.Host = "thangbinh.vigov.vn"
 	h.ServeHTTP(httptest.NewRecorder(), req)
-	if *thay != tenant.ID(ulidA) {
-		t.Fatalf("khởi động cache: thấy %q", *thay)
+	if *seen != tenant.ID(ulidA) {
+		t.Fatalf("khởi động cache: thấy %q", *seen)
 	}
 
 	// A different Host must not be answered from A's entry.
-	*thay = ""
+	*seen = ""
 	req2 := httptest.NewRequest(http.MethodGet, "http://khong-ton-tai.vigov.vn/x", nil)
 	req2.Host = "khong-ton-tai.vigov.vn"
 	w2 := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestEdgeCacheKhongLamLoDuLieuGiuaCacXa(t *testing.T) {
 	if w2.Code != http.StatusNotFound {
 		t.Errorf("host lạ sau khi cache nóng: mã = %d, muốn 404", w2.Code)
 	}
-	if *thay != "" {
-		t.Errorf("host lạ nhận được xã %q từ cache — cache đang khoá sai thứ", *thay)
+	if *seen != "" {
+		t.Errorf("host lạ nhận được xã %q từ cache — cache đang khoá sai thứ", *seen)
 	}
 }

@@ -2,15 +2,15 @@ package domain
 
 import "testing"
 
-// bangTenMienDanhRieng is the ONE table of hosts both halves of the rule are judged against: the Go
-// function (TestLaTenMienDanhRieng) and the CHECK patterns parsed out of migration 0007
-// (TestLuatTenMienDanhRiengGoVaSQLKhop). One table, because two would be two that drift.
+// reservedHostCases is the ONE table of hosts both halves of the rule are judged against: the Go
+// function (TestIsReservedHost) and the CHECK patterns parsed out of migration 0007
+// (TestReservedHostRuleGoAndSQLAgree). One table, because two would be two that drift.
 //
 // Every entry is in the stored shape the CHECK sees (no port, no surrounding space); the Go-only
-// spellings live in TestLaTenMienDanhRiengChuanHoa below.
-var bangTenMienDanhRieng = []struct {
-	Host      string
-	DanhRieng bool
+// spellings live in TestIsReservedHostNormalises below.
+var reservedHostCases = []struct {
+	Host     string
+	Reserved bool
 }{
 	// Reserved: the vendor console and its staging twin — the two rows that exist today.
 	{"admin.vigov.vn", true},
@@ -55,11 +55,11 @@ var bangTenMienDanhRieng = []struct {
 	{"localhost", false},
 }
 
-func TestLaTenMienDanhRieng(t *testing.T) {
+func TestIsReservedHost(t *testing.T) {
 	t.Parallel()
-	for _, c := range bangTenMienDanhRieng {
-		if got := LaTenMienDanhRieng(c.Host); got != c.DanhRieng {
-			t.Errorf("LaTenMienDanhRieng(%q) = %v, muốn %v", c.Host, got, c.DanhRieng)
+	for _, c := range reservedHostCases {
+		if got := IsReservedHost(c.Host); got != c.Reserved {
+			t.Errorf("IsReservedHost(%q) = %v, muốn %v", c.Host, got, c.Reserved)
 		}
 	}
 }
@@ -67,11 +67,11 @@ func TestLaTenMienDanhRieng(t *testing.T) {
 // The spellings a client can send that the stored shape never has: port, surrounding space, mixed
 // case, several trailing dots. Each must be judged like its plain form, or "ADMIN.vigov.vn.:443"
 // is the spelling that reaches the table.
-func TestLaTenMienDanhRiengChuanHoa(t *testing.T) {
+func TestIsReservedHostNormalises(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
 		host string
-		muon bool
+		want bool
 	}{
 		{"admin.vigov.vn:443", true},
 		{"  Admin.ViGov.VN  ", true},
@@ -84,8 +84,8 @@ func TestLaTenMienDanhRiengChuanHoa(t *testing.T) {
 		{"", false},
 		{"https://admin.vigov.vn", false},
 	} {
-		if got := LaTenMienDanhRieng(c.host); got != c.muon {
-			t.Errorf("LaTenMienDanhRieng(%q) = %v, muốn %v", c.host, got, c.muon)
+		if got := IsReservedHost(c.host); got != c.want {
+			t.Errorf("IsReservedHost(%q) = %v, muốn %v", c.host, got, c.want)
 		}
 	}
 }

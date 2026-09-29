@@ -6,16 +6,16 @@ import (
 	"testing"
 )
 
-// tepMigrationDanhRieng is the migration that carries the SQL half of the rule. Read from disk by a
+// reservedHostMigrationFile is the migration that carries the SQL half of the rule. Read from disk by a
 // relative path rather than through the embedded migrations package: domain/ imports nothing but
 // the standard library, tests included, and the file on disk IS what gets embedded.
-const tepMigrationDanhRieng = "../../migrations/0007_tenant_domain_khong_danh_rieng.sql"
+const reservedHostMigrationFile = "../../migrations/0007_tenant_domain_khong_danh_rieng.sql"
 
-// khoiRangBuoc captures the body of the CHECK, and mauKhongKhop every `host !~* '<pattern>'` in it.
+// checkBlockPattern captures the body of the CHECK, and notMatchPattern every `host !~* '<pattern>'` in it.
 var (
-	khoiRangBuoc = regexp.MustCompile(
+	checkBlockPattern = regexp.MustCompile(
 		`(?s)ADD CONSTRAINT tenant_domain_khong_danh_rieng CHECK \((.*?)\)\s*NOT VALID;`)
-	mauKhongKhop = regexp.MustCompile(`host !~\* '([^']*)'`)
+	notMatchPattern = regexp.MustCompile(`host !~\* '([^']*)'`)
 )
 
 // THE LOCK-STEP TEST. The Go refusal (what stops resolution) and the CHECK (what stops insertion)
@@ -27,31 +27,31 @@ var (
 // pattern matches. The patterns are evaluated with Go regexp, case-insensitively as `~*` does; they
 // use only anchors, alternation, groups, `?`, `*` and escaped dots, which PostgreSQL's ARE and RE2
 // read identically.
-func TestLuatTenMienDanhRiengGoVaSQLKhop(t *testing.T) {
+func TestReservedHostRuleGoAndSQLAgree(t *testing.T) {
 	t.Parallel()
 
-	noiDung, err := os.ReadFile(tepMigrationDanhRieng)
+	content, err := os.ReadFile(reservedHostMigrationFile)
 	if err != nil {
 		t.Fatalf("đọc migration: %v", err)
 	}
-	khoi := khoiRangBuoc.FindSubmatch(noiDung)
-	if khoi == nil {
+	block := checkBlockPattern.FindSubmatch(content)
+	if block == nil {
 		t.Fatalf("không tìm thấy CHECK tenant_domain_khong_danh_rieng ... NOT VALID trong %s — "+
-			"đổi hình dạng câu lệnh thì đổi cả test này", tepMigrationDanhRieng)
+			"đổi hình dạng câu lệnh thì đổi cả test này", reservedHostMigrationFile)
 	}
-	cacMau := mauKhongKhop.FindAllSubmatch(khoi[1], -1)
+	matches := notMatchPattern.FindAllSubmatch(block[1], -1)
 	// Pinned: a third clause in some other shape (`<>`, `LIKE`) would be enforced by PostgreSQL and
 	// invisible here, so the count is part of the contract.
-	if len(cacMau) != 2 {
+	if len(matches) != 2 {
 		t.Fatalf("CHECK có %d mẫu `host !~* '...'`, muốn 2 — test này chỉ hiểu hình dạng đó:\n%s",
-			len(cacMau), khoi[1])
+			len(matches), block[1])
 	}
-	var mau []*regexp.Regexp
-	for _, m := range cacMau {
-		mau = append(mau, regexp.MustCompile(`(?i)`+string(m[1])))
+	var patterns []*regexp.Regexp
+	for _, m := range matches {
+		patterns = append(patterns, regexp.MustCompile(`(?i)`+string(m[1])))
 	}
-	sqlTuChoi := func(host string) bool {
-		for _, r := range mau {
+	sqlRefuses := func(host string) bool {
+		for _, r := range patterns {
 			if r.MatchString(host) {
 				return true
 			}
@@ -59,14 +59,14 @@ func TestLuatTenMienDanhRiengGoVaSQLKhop(t *testing.T) {
 		return false
 	}
 
-	for _, c := range bangTenMienDanhRieng {
-		goNoi, sqlNoi := LaTenMienDanhRieng(c.Host), sqlTuChoi(c.Host)
-		if goNoi != sqlNoi {
+	for _, c := range reservedHostCases {
+		goSays, sqlSays := IsReservedHost(c.Host), sqlRefuses(c.Host)
+		if goSays != sqlSays {
 			t.Errorf("%q: Go nói danh riêng=%v, CHECK nói %v — hai nửa của một luật đã lệch nhau",
-				c.Host, goNoi, sqlNoi)
+				c.Host, goSays, sqlSays)
 		}
-		if sqlNoi != c.DanhRieng {
-			t.Errorf("%q: CHECK nói danh riêng=%v, bảng muốn %v", c.Host, sqlNoi, c.DanhRieng)
+		if sqlSays != c.Reserved {
+			t.Errorf("%q: CHECK nói danh riêng=%v, bảng muốn %v", c.Host, sqlSays, c.Reserved)
 		}
 	}
 }

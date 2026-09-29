@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -93,6 +93,15 @@
       "no_confirm": [],
       "tiep_theo": "Petitions (W4): tầng 2 enabled/nhãn/thứ tự trên nhan_linh_vuc, tuyến ghi cán bộ, tuyến danh mục công dân (XaTuPhienChiXem), POST nhận field + CheckForIntake + hai hạn lúc tạo. Chú thích lỗi thời: sla_gieo.go:69-71, nhan-phieu.ts:410-423 (bản chép tay web xoá khi có tuyến danh mục).",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "doi-ten-tieng-anh-lop-a",
+      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp, message proto",
+      "trang_thai": "xong",
+      "bang_chung": "29/09/2026: đổi toàn bộ định danh domain/store/grpc/cmd + ~70 tên Test* sang tiếng Anh theo từ điển (X1 CitizenReportField, X5 CommuneProfile, X13 IsActive/IsPrimary); 13 tệp git mv (ten_mien_danh_rieng* -> reserved_host*, petition_field* -> citizen_report_field*, ho_so_hien_thi -> commune_profile). Proto: message PetitionField -> CitizenReportField, TenantProfile -> CommuneProfile; RPC, Request/Response, số trường, tên trường, enum giữ nguyên — so hai descriptor set (buf build HEAD vs cây làm việc) giống hệt về số/kiểu/jsonName nên mã hoá nhị phân và JSON không đổi. Kiểm trên worktree sạch: gofmt sạch; go build+vet core, 7 service, tools; go test -p 1 service-platform, core/platformclient, service-petitions/internal/app xanh; check_quyen/audit_actor/security/khoa_duy_nhat/env_map/brain PASS; test_hooks 294/294. _pg_test SKIP (không VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "Lớp 0 (công cụ hiểu RENAME) rồi lớp B: bảng/cột platform (tenant, domain, mini_app, ho_so_hien_thi_xa -> commune_profile, petition_field -> citizen_report_field + is_active). Lớp C: giá trị 'chinh'/'rieng'. buf breaking FILE báo đỏ 2 message đổi tên cho tới khi commit này thành mốc so sánh. Các trích dẫn cũ (ADR 0046/0048 LaTenMienDanhRieng, bằng chứng mục cũ ở tệp này) là lịch sử, không sửa.",
+      "menu": "cau-hinh"
     }
   ]
 }

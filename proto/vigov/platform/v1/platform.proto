@@ -336,13 +336,17 @@ message ListPetitionFieldsRequest {}
 message ListPetitionFieldsResponse {
   // Ordered by sort_order, then code. At most one entry per code. A code not listed is NOT a tier-1
   // code — see the RPC.
-  repeated PetitionField fields = 1;
+  repeated CitizenReportField fields = 1;
 }
 
-// PetitionField is one tier-1 field code with its platform defaults. Presentation shared by every
+// CitizenReportField is one tier-1 field code with its platform defaults. Presentation shared by every
 // commune — no counts, no petitions, no person, no commune's content (ADR 0026 §3 condition 1 as
 // widened by ADR 0060 §4). A field carrying any of those is the moment to reopen ADR 0003.
-message PetitionField {
+//
+// Renamed from PetitionField on 2026-09-29 (ADR 0061, X1). A message name is not on the gRPC wire —
+// same field numbers, same encoding. The RPC keeps its name ListPetitionFields because a method name
+// IS on the wire (the HTTP/2 :path), and renaming it would break every caller not redeployed with it.
+message CitizenReportField {
   // The code petitions and SLA rows store: Vietnamese without diacritics, kebab-case ("rac-thai"),
   // at most 64 characters. Never renamed, never removed.
   string code = 1;
@@ -437,16 +441,20 @@ message GetTenantProfileRequest {}
 
 message GetTenantProfileResponse {
   // ABSENT MEANS NOT DECLARED. See the status table on the RPC.
-  TenantProfile profile = 1;
+  CommuneProfile profile = 1;
 }
 
-// TenantProfile is what a citizen reads about one commune. Display only: nothing routes on, or
+// CommuneProfile is what a citizen reads about one commune. Display only: nothing routes on, or
 // computes from, any field here.
+//
+// Renamed from TenantProfile on 2026-09-29 (ADR 0061, X5: `tenant` is the isolation boundary,
+// `commune` the administrative unit as displayed). Same field numbers; the RPC keeps its name
+// GetTenantProfile for the reason given on CitizenReportField.
 //
 // Every field is plain `string`, "" meaning "not declared" — not proto3 `optional`, for the reason
 // given on Tenant.province: the store has one spelling of "not declared", so presence would offer
 // a distinction nobody can make.
-message TenantProfile {
+message CommuneProfile {
   string office_address = 1;
 
   // A URL to an image served elsewhere — not bytes and not a storage key; there is no file storage
