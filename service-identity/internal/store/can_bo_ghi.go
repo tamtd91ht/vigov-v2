@@ -127,11 +127,15 @@ func quetMotDong(quet func(...any) error) (domain.CanBoTomTat, error) {
 // empty string) and the schema has another (NULL). Writing ” into `bo_phan_id` would not be
 // "no department", it would be a reference to a department whose id is the empty string — which
 // the foreign key refuses, with a message about a constraint rather than about a choice.
+//
+// `nullif($5,”)` ON `email` TOO, since migration 0019 (ADR 0059 §1): no address is NULL, never ” —
+// two NULLs do not collide on `UNIQUE (tenant_id, email)`, two empty strings do, and the CHECK
+// `nguoi_dung_email_not_blank` refuses ” outright.
 const chenCanBo = `INSERT INTO nguoi_dung
 	(tenant_id, id, ma, ho_ten, email, chuc_vu, bo_phan_id,
 	 dien_thoai_co_quan, di_dong_ca_nhan,
 	 vai_tro_id, co_tai_khoan, mat_khau_hash)
-	VALUES ($1, $2, $3, $4, $5, $6, nullif($7,''), $8, $9, NULL, false, '')`
+	VALUES ($1, $2, $3, $4, nullif($5,''), $6, nullif($7,''), $8, $9, NULL, false, '')`
 
 // Chen adds one directory entry. The caller has already minted the code with domain.SinhMaCanBo
 // and will mint another if this comes back ErrMaCanBoDaDung.
@@ -155,7 +159,7 @@ func (s *CanBoStore) Chen(ctx context.Context, tx *store.ScopedTx, cb domain.Can
 // profile form (`admin.user`). `co_zalo` IS here: it is contact information about the mobile, a
 // correction of the profile, and publishes nothing by itself.
 const capNhatHoSoCanBo = `UPDATE nguoi_dung
-	SET ho_ten = $3, email = $4, chuc_vu = $5, bo_phan_id = nullif($6,''),
+	SET ho_ten = $3, email = nullif($4,''), chuc_vu = $5, bo_phan_id = nullif($6,''),
 	    dien_thoai_co_quan = $7, di_dong_ca_nhan = $8, co_zalo = $9, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 

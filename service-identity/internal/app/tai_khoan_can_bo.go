@@ -106,6 +106,13 @@ var (
 	// checked at the one act that gives it meaning.
 	ErrTaiKhoanDangKhoa = errors.New("tai_khoan_can_bo: tài khoản đang bị khoá")
 
+	// ErrStaffHasNoEmail — the person has no work address, and the address IS the login: sign-in matches
+	// `email = $2` (store.CanBoStore.TheoEmail). Since migration 0019 (ADR 0059 §1) a directory row may
+	// carry no address — the Excel import stores NULL for a blank cell — and an account issued to it
+	// would be a credential nobody can ever type a login for. Refused rather than issued; the
+	// administrator adds the address on the profile first.
+	ErrStaffHasNoEmail = errors.New("tai_khoan_can_bo: cán bộ này chưa có thư điện tử công vụ để làm tên đăng nhập")
+
 	// ErrMatKhauHienTaiSai — the person did not prove they know the password they are replacing.
 	//
 	// THE PROOF IS NOT A FORMALITY IN THIS ENVIRONMENT. Open question #18's own reasoning: a
@@ -266,6 +273,8 @@ func (uc *TaiKhoanCanBo) mint(ctx context.Context, id string, nguoi NguoiThucHie
 		switch {
 		case capMoi && truoc.CoTaiKhoan:
 			return ErrDaCoTaiKhoan
+		case capMoi && truoc.Email == "":
+			return ErrStaffHasNoEmail
 		case !capMoi && !truoc.CoTaiKhoan:
 			return ErrChuaCoTaiKhoan
 		case !truoc.DangHoatDong:

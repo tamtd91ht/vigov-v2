@@ -37,7 +37,8 @@ var ErrCanBoKhongTonTai = errors.New("can_bo: không tồn tại")
 // positional slip involving it is a bool scanned into a *string — which the driver refuses, out
 // loud, on the first read. A type mismatch is the only guard here that does not depend on
 // somebody having written a test.
-const cotCanBo = `id, ma, ho_ten, email, chuc_vu,
+// `coalesce(email,”)` since migration 0019 (NULL = no address); see cotTomTat.
+const cotCanBo = `id, ma, ho_ten, coalesce(email,''), chuc_vu,
                   coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
                   dien_thoai_co_quan, phai_doi_mat_khau, mat_khau_hash,
                   co_tai_khoan, dang_hoat_dong`

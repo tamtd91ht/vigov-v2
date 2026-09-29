@@ -268,6 +268,24 @@ type (
 		Import(ctx context.Context, rows []domain.ResidentialUnitImportRow, actor app.NguoiThucHien) (app.ResidentialUnitImportResult, error)
 	}
 
+	// StaffImporting is the Excel import of the staff register — the template, the preview and the
+	// all-or-nothing import that creates people, assigns roles and issues accounts, under `admin.user`
+	// (+ `admin.role` for a role column), ADR 0059 §1 (app.StaffImporter). The preview takes the actor
+	// too: whether the file may assign roles depends on who sends it.
+	StaffImporting interface {
+		TemplateChoices(ctx context.Context) ([]domain.StaffImportOrgUnitChoice, []domain.StaffImportRoleChoice, error)
+		Preview(ctx context.Context, rows []domain.StaffImportRow, actor app.NguoiThucHien) (app.StaffImportResult, error)
+		Import(ctx context.Context, rows []domain.StaffImportRow, actor app.NguoiThucHien) (app.StaffImportResult, error)
+	}
+
+	// CatalogueImporting is the Excel import of ONE of the two catalogues — the preview and the
+	// all-or-nothing import, under `admin.lookup` (app.CatalogueImporter, ADR 0059 §3). Two Deps fields,
+	// one per catalogue: the route decides the table, never the file.
+	CatalogueImporting interface {
+		Preview(ctx context.Context, rows []domain.CatalogueImportRow) (app.CatalogueImportResult, error)
+		Import(ctx context.Context, rows []domain.CatalogueImportRow, actor app.NguoiThucHien) (app.CatalogueImportResult, error)
+	}
+
 	// VaiTroDanhMuc is the commune's role catalogue, for GET /api/v1/roles.
 	//
 	// SEPARATE FROM VaiTroDoc ON PURPOSE, even though one store implements both. That one answers
@@ -499,6 +517,9 @@ type Deps struct {
 	// The write surfaces of the two catalogues. Use cases — see LoaiDonViDanCuGhi.
 	GhiLoaiDonViDanCu LoaiDonViDanCuGhi
 	GhiKhoiNhiemVu    KhoiNhiemVuGhi
+	// The Excel imports of the same two catalogues (ADR 0059 §3). See CatalogueImporting.
+	ResidentialUnitTypeImports CatalogueImporting
+	TaskBlocImports            CatalogueImporting
 	// The commune's working calendar (migration 0006) — GET /api/v1/working-hours,
 	// /api/v1/public-holidays, /api/v1/swap-working-days.
 	LichLamViec LichLamViecDoc
@@ -540,8 +561,10 @@ type Deps struct {
 	// PUT /api/v1/staff/{id}/password and PUT /api/v1/staff/current/password. A use case, not a
 	// store — every method opens the transaction the write and its audit entry share.
 	TaiKhoan TaiKhoanCanBoUC
-	DangNhap DangNhapUC
-	DangXuat DangXuatUC
+	// StaffImports is the Excel import of the register (ADR 0059 §1). See StaffImporting.
+	StaffImports StaffImporting
+	DangNhap     DangNhapUC
+	DangXuat     DangXuatUC
 
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
 	// *audit.Log in production. Refused at construction when missing.
@@ -612,6 +635,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case ghi danh mục loại đơn vị dân cư — POST/PATCH/DELETE /api/v1/residential-unit-types sẽ panic khi có người gọi")
 	case d.GhiKhoiNhiemVu == nil:
 		panic("identity/http: thiếu use case ghi danh mục khối nhiệm vụ — POST/PATCH/DELETE /api/v1/task-blocs sẽ panic khi có người gọi")
+	case d.StaffImports == nil:
+		panic("identity/http: thiếu use case nhập cán bộ từ Excel — ba tuyến /api/v1/staff/import* sẽ panic khi có người gọi")
+	case d.ResidentialUnitTypeImports == nil:
+		panic("identity/http: thiếu use case nhập Excel loại đơn vị dân cư — ba tuyến /api/v1/residential-unit-types/import* sẽ panic khi có người gọi")
+	case d.TaskBlocImports == nil:
+		panic("identity/http: thiếu use case nhập Excel khối nhiệm vụ — ba tuyến /api/v1/task-blocs/import* sẽ panic khi có người gọi")
 	case d.LichLamViec == nil:
 		panic("identity/http: thiếu kho lịch làm việc — GET /api/v1/working-hours sẽ panic khi có người gọi")
 	case d.NgayNghiLe == nil:
@@ -914,6 +943,76 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.user")(
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.ThemCanBo))))
+
+	// --- the staff register, IMPORT FROM EXCEL. THREE ROUTES, ALL `admin.user` --------------------
+	//
+	// USER DECISION 2026-09-29 (ADR 0059 §1): each row creates a directory entry (code minted, #15 — no
+	// code column), assigns a role if the Vai trò cell is filled, and issues a sign-in account with a
+	// temporary password (#9) when the row has a work address — the address IS the login; a row without
+	// one is a directory entry only, stored with email NULL (migration 0019). ALL OR NOTHING.
+	//
+	// `admin.user`, the key POST /api/v1/staff declares (migration 0001:278) — no key invented (rule 5,
+	// invariant 3c). A file with ANY non-empty Vai trò cell ALSO needs `admin.role` (migration 0001,
+	// "Phân quyền"): checked by the use case on the actor's keys inside the transaction, answered 403
+	// `role_permission_required` with nothing written, on the preview as on the import. #14's second
+	// constraint applies per row: a role carrying a key the actor does not hold is a row error.
+	//
+	// The template: NO idem.* (a GET changes nothing). The preview: idem.KhongCan (writes and mints
+	// nothing). The import: idem.Required(idem.DongKhiHong) — POST /api/v1/staff's choice and reason
+	// (no natural key under an address-less person, a duplicate is permanent). core/idem NEVER STORES A
+	// BODY: a retry with the same key is answered `{"code":"<batch_id>","replayed":true}` — the batch
+	// code the handler records, and no password. The N passwords exist in exactly one response.
+
+	// @summary  Tải tệp Excel mẫu để nhập cán bộ — kèm danh sách chọn Bộ phận và Vai trò; không có cột Mã
+	// @screen   14-cau-hinh §3
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff/import-template",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			http.HandlerFunc(h.StaffImportTemplate)))
+
+	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 200 data rows). 200 WHETHER OR NOT THE FILE
+	// IS VALID: `valid: false` with every {row, column, message} is the answer. `mobile` is MASKED.
+	// Cache-Control: no-store.
+	//
+	// @summary  Kiểm tra một tệp Excel cán bộ trước khi nhập — không ghi gì, không sinh mật khẩu
+	// @screen   14-cau-hinh §3
+	// @reply    200 staffImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/import-previews",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("xem trước không ghi gì, không kiểm toán gì và không sinh mật khẩu — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh bạ")(
+				http.HandlerFunc(h.PreviewStaffImport))))
+
+	// ALL OR NOTHING. 201 carries `batch_id` and, per person, the minted code and — when an account was
+	// issued — the temporary password, ONCE (Cache-Control: no-store). 400 `import_invalid` carries EVERY
+	// error; nothing was written. 403 `role_permission_required`: a Vai trò cell without `admin.role`.
+	// 409 `staff_changed`: the directory, the units or the roles changed between the check and the write;
+	// the whole file rolled back.
+	//
+	// @summary  Nhập cán bộ từ tệp Excel — tạo cán bộ, gán vai trò, cấp tài khoản; toàn bộ tệp hoặc không gì cả
+	// @screen   14-cau-hinh §3
+	// @reply    201 staffImportCreatedOut
+	// @reply    400 staffImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/imports",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportStaff))))
 
 	// Correcting a profile. PATCH /api/v1/staff/{id}
 	//
@@ -1964,6 +2063,110 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaKhoiNhiemVu))))
+
+	// --- the two catalogues, IMPORT FROM EXCEL. SIX ROUTES, ALL `admin.lookup` ---------------------
+	//
+	// USER DECISION 2026-09-29 (ADR 0059 §3): one import route PER OWNING SERVICE AND PER CATALOGUE —
+	// never a shared "lookup-values" import carrying a `Nhóm` column (ADR 0024 stop condition #4). The
+	// key is the one the create routes above declare; none invented (rule 5, invariant 3c). Create only,
+	// ALL OR NOTHING, the residential-unit import's shape: columns Tên hiển thị · Mã (blank = derived) ·
+	// Thứ tự. An imported row is the commune's own (tier 1), in use, never the default.
+	//
+	// The template: NO idem.* (a GET changes nothing). The preview: idem.KhongCan (writes nothing). The
+	// import: idem.Required(idem.DongKhiHong) — the org-chart and residential-unit imports' choice: every
+	// row created is a permanent code, and a file retried by a flaky network must not race itself.
+
+	// @summary  Tải tệp Excel mẫu để nhập loại đơn vị dân cư
+	// @screen   14-cau-hinh §5
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/residential-unit-types/import-template",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(h.ResidentialUnitTypeImportTemplate)))
+
+	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 100 data rows). 200 WHETHER OR NOT THE FILE
+	// IS VALID: `valid: false` with every {row, column, message} is the answer.
+	//
+	// @summary  Kiểm tra một tệp Excel loại đơn vị dân cư trước khi nhập — không ghi gì
+	// @screen   14-cau-hinh §5
+	// @reply    200 catalogueImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-unit-types/import-previews",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục")(
+				http.HandlerFunc(h.PreviewResidentialUnitTypeImport))))
+
+	// 400 `import_invalid` carries EVERY error as {row, column, message}; nothing was written. 409
+	// `catalogue_changed`: a code was taken between the check and the write; the whole file rolled back.
+	//
+	// @summary  Nhập loại đơn vị dân cư từ tệp Excel — toàn bộ tệp hoặc không gì cả
+	// @screen   14-cau-hinh §5
+	// @reply    201 catalogueImportCreatedOut
+	// @reply    400 catalogueImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-unit-types/imports",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportResidentialUnitTypes))))
+
+	// @summary  Tải tệp Excel mẫu để nhập khối nhiệm vụ
+	// @screen   14-cau-hinh §5
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-blocs/import-template",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(h.TaskBlocImportTemplate)))
+
+	// Same contract as the residential-unit-type preview above.
+	//
+	// @summary  Kiểm tra một tệp Excel khối nhiệm vụ trước khi nhập — không ghi gì
+	// @screen   14-cau-hinh §5
+	// @reply    200 catalogueImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/task-blocs/import-previews",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục")(
+				http.HandlerFunc(h.PreviewTaskBlocImport))))
+
+	// Same contract as the residential-unit-type import above.
+	//
+	// @summary  Nhập khối nhiệm vụ từ tệp Excel — toàn bộ tệp hoặc không gì cả
+	// @screen   14-cau-hinh §5
+	// @reply    201 catalogueImportCreatedOut
+	// @reply    400 catalogueImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/task-blocs/imports",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportTaskBlocs))))
 
 	// --- the commune's working calendar. THREE READ ROUTES, DELIBERATELY NO WRITE ROUTE --------
 	//

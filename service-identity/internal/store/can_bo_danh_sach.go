@@ -82,7 +82,10 @@ var SapXepCanBo = page.NewAllowlist(page.Asc,
 // publication open question #12 forbids — so the list is laid out to make that swap a visible
 // edit rather than a neighbour transposition, and the test gives the fixture rows opposite pairs
 // (true,false) / (false,true) so it cannot survive either way.
-const cotTomTat = `id, ma, ho_ten, email, chuc_vu,
+//
+// `coalesce(email,”)`: since migration 0019 no address is NULL; the Go side keeps its one spelling of
+// "none", the empty string, so no response shape moves.
+const cotTomTat = `id, ma, ho_ten, coalesce(email,''), chuc_vu,
                    coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
                    dien_thoai_co_quan, di_dong_ca_nhan, co_tai_khoan, dang_hoat_dong,
                    dang_nhap_gan_nhat, tao_luc,

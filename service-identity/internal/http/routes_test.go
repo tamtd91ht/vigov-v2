@@ -689,6 +689,11 @@ type mayChu struct {
 	// The write use cases of the two catalogues — danh_muc_ghi_test.go.
 	ghiLoaiDonViDanCu *ghiDanhMucGia[domain.LoaiDonViDanCu]
 	ghiKhoiNhiemVu    *ghiDanhMucGia[domain.KhoiNhiemVu]
+	// The Excel imports of the same two catalogues — catalogue_import_test.go.
+	residentialUnitTypeImports *catalogueImportsFake
+	taskBlocImports            *catalogueImportsFake
+	// The staff Excel import — staff_import_test.go.
+	staffImports *staffImportsFake
 	// The commune's working calendar (migration 0006). FOUR FAKES FOR THREE TABLES: three read
 	// stores and ONE write use case sitting behind all three write fields, exactly as cmd/server
 	// wires it. See ghiLichGia in lich_ghi_test.go.
@@ -753,6 +758,9 @@ func dungMayChu(t *testing.T) *mayChu {
 	khoiNhiemVu := khoiNhiemVuMau()
 	ghiLoaiDonViDanCu := ghiLoaiDonViDanCuMau()
 	ghiKhoiNhiemVu := ghiKhoiNhiemVuMau()
+	residentialUnitTypeImports := catalogueImportsSample()
+	taskBlocImports := catalogueImportsSample()
+	staffImports := staffImportsSample()
 	lichLamViec := lichLamViecMau()
 	ngayNghiLe := ngayNghiLeMau()
 	ngayLamBu := ngayLamBuMau()
@@ -792,6 +800,10 @@ func dungMayChu(t *testing.T) *mayChu {
 		// The six catalogue write routes. Register panics without them.
 		GhiLoaiDonViDanCu: ghiLoaiDonViDanCu,
 		GhiKhoiNhiemVu:    ghiKhoiNhiemVu,
+		// The six catalogue import routes and the three staff import routes. Register panics without them.
+		ResidentialUnitTypeImports: residentialUnitTypeImports,
+		TaskBlocImports:            taskBlocImports,
+		StaffImports:               staffImports,
 		// Wired although no route is mounted: Register refuses an incomplete Deps whatever it
 		// mounts, so the turn that adds the three paths has nothing left to remember.
 		LichLamViec: lichLamViec,
@@ -873,6 +885,10 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		ghiLoaiDonViDanCu: ghiLoaiDonViDanCu,
 		ghiKhoiNhiemVu:    ghiKhoiNhiemVu,
+
+		residentialUnitTypeImports: residentialUnitTypeImports,
+		taskBlocImports:            taskBlocImports,
+		staffImports:               staffImports,
 
 		lichLamViec: lichLamViec,
 		ngayNghiLe:  ngayNghiLe,

@@ -259,6 +259,9 @@ func run(log *slog.Logger) error {
 	// write (rule 6, invariant 3). Wired without it, a reset would leave the sessions opened with
 	// the old password working — which is the one thing a reset exists to stop.
 	taiKhoan := app.NewTaiKhoanCanBo(kho, canBo, phien)
+	// The staff Excel import (user decision 2026-09-29, ADR 0059 §1): the SAME *idstore.CanBoStore, so an
+	// imported person is inserted, assigned and given an account by the statements the three forms run.
+	staffImports := app.NewStaffImporter(kho, canBo)
 	// The WRITE surface of the deadline table: PATCH /api/v1/sla/{id} and POST /api/v1/sla/defaults.
 	//
 	// IT IS GIVEN THE SAME *idstore.SLAStore the read field and the gRPC server carry. One store,
@@ -324,6 +327,10 @@ func run(log *slog.Logger) error {
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
 	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
+	// Their Excel imports (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME
+	// stores, so an imported row is inserted by the statement the create form runs.
+	residentialUnitTypeImports := app.NewResidentialUnitTypeImporter(kho, loaiDonViDanCu)
+	taskBlocImports := app.NewTaskBlocImporter(kho, khoiNhiemVu)
 	// The residential units' write surface and Excel import (user decision 2026-09-29, ADR 0059 §2),
 	// under `admin.org`. Given the SAME store as the read field: the insert the import runs is the
 	// statement the create form runs.
@@ -398,6 +405,9 @@ func run(log *slog.Logger) error {
 		KhoiNhiemVu:            khoiNhiemVu,
 		GhiLoaiDonViDanCu:      ghiLoaiDonViDanCu,
 		GhiKhoiNhiemVu:         ghiKhoiNhiemVu,
+		// Nhập Excel hai danh mục trên, mỗi danh mục một tuyến, khoá `admin.lookup` (ADR 0059 §3).
+		ResidentialUnitTypeImports: residentialUnitTypeImports,
+		TaskBlocImports:            taskBlocImports,
 		// Lịch làm việc của xã (migration 0006) — BA KHO ĐỌC và MỘT USE CASE GHI đứng sau ba trường
 		// ghi. Câu "ai sửa được lịch của xã" đã có lời đáp không bịa ra khoá nào: `admin.sla`, đúng
 		// khoá migration 0001:277 gieo cho "Cấu hình thời hạn xử lý" — vì lịch làm việc chính là nửa
@@ -449,9 +459,11 @@ func run(log *slog.Logger) error {
 		// account carrying a temporary password would have no route by which to clear the flag, so
 		// the forced-change gate in XacThuc would refuse that person everything, permanently.
 		TaiKhoan: taiKhoan,
-		DangNhap: dangNhap,
-		DangXuat: dangXuat,
-		Log:      log,
+		// Nhập cán bộ từ Excel: tạo cán bộ, gán vai trò, cấp tài khoản — toàn bộ tệp hoặc không (ADR 0059 §1).
+		StaffImports: staffImports,
+		DangNhap:     dangNhap,
+		DangXuat:     dangXuat,
+		Log:          log,
 	}
 
 	mux := http.NewServeMux()

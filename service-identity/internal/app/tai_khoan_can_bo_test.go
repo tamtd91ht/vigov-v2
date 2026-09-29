@@ -338,6 +338,20 @@ func TestCapTaiKhoanChoNguoiDangKhoaBiTuChoi(t *testing.T) {
 	khongCoGhi(t, b.ghi)
 }
 
+// Since migration 0019 a directory row may carry no address (the Excel import stores NULL), and the
+// address IS the login: an account for it would be a credential with nothing to type before it.
+//
+// MUTATION THAT MUST TURN THIS RED: drop the `truoc.Email == ""` case from mint.
+func TestIssueAccountRefusedWithoutEmail(t *testing.T) {
+	b := dungBanThuTaiKhoan(t)
+	b.kho.cb.Email = ""
+
+	if _, err := b.uc.Cap(ctxXa(xaThu), idNguoiKhac, nguoiThucHienGia()); !errors.Is(err, ErrStaffHasNoEmail) {
+		t.Fatalf("lỗi = %v, muốn ErrStaffHasNoEmail", err)
+	}
+	khongCoGhi(t, b.ghi)
+}
+
 // --- DatLai: the administrator resetting somebody else's password (#17) -------------------------
 
 // #14 ON THE ROUTE WHERE IT STOPS SOMETHING REAL. This route does not ask for the current password,

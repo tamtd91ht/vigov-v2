@@ -180,6 +180,11 @@ func (h *Handler) traLoiLoiTaiKhoan(w http.ResponseWriter, r *http.Request, viec
 		httpx.WriteError(w, http.StatusConflict, "account_exists",
 			"Cán bộ này đã có tài khoản. Nếu cần cấp lại mật khẩu, hãy dùng chức năng đặt lại mật khẩu.", "")
 
+	case errors.Is(err, app.ErrStaffHasNoEmail):
+		// 409: the row's STATE refuses the operation — the fix is on the profile, not in this request.
+		httpx.WriteError(w, http.StatusConflict, "staff_has_no_email",
+			"Cán bộ này chưa có thư điện tử công vụ — đó là tên đăng nhập. Hãy thêm thư điện tử trong hồ sơ trước khi cấp tài khoản.", "")
+
 	case errors.Is(err, app.ErrChuaCoTaiKhoan):
 		httpx.WriteError(w, http.StatusConflict, "account_missing",
 			"Cán bộ này chưa có tài khoản đăng nhập. Hãy cấp tài khoản trước.", "")
