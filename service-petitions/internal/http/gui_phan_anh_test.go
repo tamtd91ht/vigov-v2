@@ -225,8 +225,8 @@ func dungMayChuGui(t *testing.T) *mayChuGui {
 		Phieu:       so,
 		GuiPhieu:    so,
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(),
-		Log:         log,
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		Log: log,
 	})
 
 	// THE REAL CHAIN, in the order cmd/server builds it — including idem.Middleware innermost, where
@@ -323,7 +323,7 @@ func TestGuiPhienChuaChonXaLa401(t *testing.T) {
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), Log: log,
+		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(m.kho, log)(h)
@@ -696,6 +696,6 @@ func TestRegisterCongDanThieuUseCaseGuiThiPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
+		Phieu: phieuCuaToiMau(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
 	})
 }

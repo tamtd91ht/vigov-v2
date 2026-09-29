@@ -264,8 +264,8 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 		// surface. The write surface has its own suite, gui_phan_anh_test.go.
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(),
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
 	// THE REAL CHAIN, in the order cmd/server builds it. No TenantMiddleware and no staffauth:
@@ -360,8 +360,8 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 		Phieu:       m.phieu,
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(),
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux
 	h = authz.CitizenPrincipal()(h)
@@ -589,10 +589,11 @@ func TestCuaToiLoiKhoLa500VaKhongLoDuLieu(t *testing.T) {
 
 func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 	for ten, bo := range map[string]func(d *DepsCongDan){
-		"thiếu kho phiếu theo danh tính": func(d *DepsCongDan) { d.Phieu = nil },
-		"thiếu use case tiếp nhận":       func(d *DepsCongDan) { d.GuiPhieu = nil },
-		"thiếu kho nhãn lĩnh vực":        func(d *DepsCongDan) { d.NhanLinhVuc = nil },
-		"thiếu use case đánh giá":        func(d *DepsCongDan) { d.Rating = nil },
+		"thiếu kho phiếu theo danh tính":  func(d *DepsCongDan) { d.Phieu = nil },
+		"thiếu use case tiếp nhận":        func(d *DepsCongDan) { d.GuiPhieu = nil },
+		"thiếu kho nhãn lĩnh vực":         func(d *DepsCongDan) { d.NhanLinhVuc = nil },
+		"thiếu use case đánh giá":         func(d *DepsCongDan) { d.Rating = nil },
+		"missing citizen field catalogue": func(d *DepsCongDan) { d.CitizenFields = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {
@@ -601,7 +602,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 				}
 			}()
 			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
-				NhanLinhVuc: nhanLinhVucMau()}
+				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -617,7 +618,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
 	})
 }
 

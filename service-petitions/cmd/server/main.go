@@ -269,6 +269,15 @@ func chay(log *slog.Logger) error {
 
 	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
 
+	// THE PETITION FIELD CATALOGUE (ADR 0026 + 0060): tier 1 over the SAME platform connection the
+	// directory uses — its interceptors put "x-tenant-id" on the call, which ListPetitionFields
+	// requires — cached ≤ 60 s for every commune at once; tier 2 from this service's own table. ONE
+	// use case behind the staff configuration routes and the citizen catalogue, so the two never
+	// disagree about which fields a commune offers.
+	fieldCatalogue := app.NewPetitionFieldCatalogue(kho,
+		app.NewTier1Fields(platformclient.NewPetitionFields(nenTang.Client(), log)),
+		petstore.NewNhanLinhVucStore(kho))
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -294,6 +303,7 @@ func chay(log *slog.Logger) error {
 		GhiTrangThaiNhiemVu: app.NewNhanTrangThaiNhiemVu(kho, nhanTrangThai),
 		Phieu:               phieu,
 		NhanLinhVuc:         petstore.NewNhanLinhVucStore(kho),
+		PetitionFields:      fieldCatalogue,
 		// The register list, and the four staff acts that finally make a petition processable. Each
 		// act opens a transaction and writes the change, the audit entry and the notification
 		// obligation inside it, which is why the use case takes *store.DB rather than a transaction.
@@ -398,7 +408,9 @@ func chay(log *slog.Logger) error {
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.
 		NhanLinhVuc: petstore.NewNhanLinhVucStore(kho),
-		Log:         log,
+		// What the new-submission form offers — the SAME use case the staff configuration routes use.
+		CitizenFields: fieldCatalogue,
+		Log:           log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
@@ -688,6 +700,10 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	// subtree root followed by a bare `404 page not found` — measured, not assumed. See the note on
 	// dungBien.
 	ngoai.Handle(tapCongDan, c)
+	// THE CITIZEN FIELD CATALOGUE — a resource of its own (not under tienToCongDan), so it needs its
+	// own line here. Without it the path falls to the staff chain and TenantMiddleware answers 404 to
+	// every citizen opening step 1 of the form.
+	ngoai.Handle(svchttp.CitizenFieldsPath, c)
 	ngoai.Handle("/", h)
 	return ngoai
 }

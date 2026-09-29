@@ -233,6 +233,9 @@ type mayChu struct {
 	// The task attachments — task_attachment_test.go.
 	taskAttachments *taskAttachmentsFake
 	logAttachments  *logAttachmentsFake
+
+	// fields is the petition field catalogue — petition_fields_test.go.
+	fields *fieldCatalogueFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -278,6 +281,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	taskImport := &taskImportFake{}
 	taskAttachments := &taskAttachmentsFake{}
 	logAttachments := &logAttachmentsFake{}
+	// The field catalogue — petition_fields_test.go.
+	fields := newFieldCatalogueFake()
 
 	m := &mayChu{
 		d: Deps{
@@ -313,6 +318,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			GhiTrangThaiNhiemVu:  &ghiTrangThaiGia{},
 			Phieu:                phieu,
 			NhanLinhVuc:          nhan,
+			PetitionFields:       fields,
 			Vet:                  vet,
 			DanhSachPhieu:        danhSach,
 			XuLyPhieu:            xuLy,
@@ -365,6 +371,8 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		taskAttachments: taskAttachments,
 		logAttachments:  logAttachments,
+
+		fields: fields,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -449,6 +457,7 @@ func depsDay() Deps {
 		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
 		Phieu:               phieuMau(),
 		NhanLinhVuc:         nhanLinhVucMau(),
+		PetitionFields:      newFieldCatalogueFake(),
 		Vet:                 &vetXemGia{},
 		DanhSachPhieu:       danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:           &xuLyPhieuGia{},
@@ -490,10 +499,11 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// configuration screen's only save button panicking on a staff member's screen.
 		"thiếu kho nhãn trạng thái nhiệm vụ": func(d *Deps) { d.TrangThaiNhiemVu = nil },
 		"thiếu use case ghi nhãn trạng thái": func(d *Deps) { d.GhiTrangThaiNhiemVu = nil },
-		"thiếu Checker":                   func(d *Deps) { d.Checker = nil },
-		"thiếu kho phiếu":                 func(d *Deps) { d.Phieu = nil },
-		"thiếu kho nhãn lĩnh vực":         func(d *Deps) { d.NhanLinhVuc = nil },
-		"thiếu đường đọc danh sách phiếu": func(d *Deps) { d.DanhSachPhieu = nil },
+		"thiếu Checker":                    func(d *Deps) { d.Checker = nil },
+		"thiếu kho phiếu":                  func(d *Deps) { d.Phieu = nil },
+		"thiếu kho nhãn lĩnh vực":          func(d *Deps) { d.NhanLinhVuc = nil },
+		"missing petition field catalogue": func(d *Deps) { d.PetitionFields = nil },
+		"thiếu đường đọc danh sách phiếu":  func(d *Deps) { d.DanhSachPhieu = nil },
 		// THE ONE THAT TAKES THE WHOLE PROCESSING PATH WITH IT. A nil here does not break one screen:
 		// it breaks classify, assign, advance and close at once, which puts the service back in the
 		// state it was in before these routes existed — petitions arriving and nothing able to move

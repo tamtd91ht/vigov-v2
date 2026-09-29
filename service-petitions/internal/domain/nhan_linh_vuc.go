@@ -28,5 +28,16 @@ type NhanLinhVuc struct {
 	// Nhan is what a person reads. It is the ONE field a commune may change, so nothing may key
 	// on it — and it is why the contract answers `label` rather than `name`
 	// (kb/00-foundation/ubiquitous-language.md owns that rule).
+	//
+	// "" = NO LABEL OVERRIDE (the column is NULL, migration 0022): show the tier-1 default.
 	Nhan string
+
+	// SortOrder is the commune's display position (`thu_tu`). 0 = inherit the tier-1 sort_order;
+	// 1.. is compared in the same numeric space as tier-1 order (migration 0022).
+	SortOrder int
+
+	// Enabled false hides the code from the citizen's NEW-SUBMISSION form only. It never filters a
+	// read path: a petition already carrying the code keeps its label and stays in every list and
+	// report (ADR 0026 §Bổ sung cuối ngày).
+	Enabled bool
 }

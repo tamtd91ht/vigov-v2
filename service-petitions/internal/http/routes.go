@@ -477,6 +477,10 @@ type Deps struct {
 	Phieu       PhieuPhanAnhDoc
 	NhanLinhVuc NhanLinhVucDanhMuc
 
+	// PetitionFields is the field catalogue's configuration: tier 1 from platform merged with the
+	// commune's tier-2 overrides, and the one edit that opens a transaction and audits inside it.
+	PetitionFields PetitionFieldCatalogue
+
 	// The register list and the four staff acts. THE LIST IS SEPARATE FROM `Phieu` on purpose — see
 	// PhieuPhanAnhDanhSach — and `XuLyPhieu` is given *store.DB rather than a transaction because
 	// opening one is precisely what it is for (rule 6, invariant 3).
@@ -593,6 +597,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho phiếu phản ánh — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
 	case d.NhanLinhVuc == nil:
 		panic("petitions/http: thiếu kho nhãn lĩnh vực — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
+	case d.PetitionFields == nil:
+		panic("petitions/http: thiếu use case danh mục lĩnh vực — GET/PATCH /api/v1/citizen-report-fields sẽ panic khi có người gọi")
 	case d.DanhSachPhieu == nil:
 		panic("petitions/http: thiếu đường đọc danh sách phiếu — GET /api/v1/citizen-reports sẽ panic khi có người gọi")
 	case d.XuLyPhieu == nil:
@@ -773,6 +779,53 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaTrangThaiNhiemVu))))
+
+	// --- the commune's petition field catalogue (ADR 0026 tier 2 over ADR 0060 tier 1) ------------
+	//
+	// `admin.lookup` ON BOTH, including the read. It is the `Danh mục` configuration key the task
+	// catalogues and task-status wording already use (see the block above Register). The read is NOT
+	// AnyAuthenticated: it lists disabled and retired codes, which is the configuration screen's
+	// business and no other screen's. Opening it to every account is rule 5 stop condition #1 and has
+	// not been asked — the classification drop-down needs its own answer.
+	//
+	// 503 `field_catalogue_unavailable` when platform cannot be read and the cached answer is older
+	// than 60 s — refused, never a built-in list and never raw codes (ADR 0060 §3).
+	//
+	// @summary  Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình)
+	// @screen   14-cau-hinh
+	// @reply    200 petitionFieldListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-report-fields",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(h.ListPetitionFields)))
+
+	// Re-word, re-order, or switch on/off ONE code for this commune. Sending the default label or
+	// order goes back to inheriting it (stored as NULL / 0, migration 0022). Switching off hides the
+	// code from the citizen's NEW-SUBMISSION form only; every read path keeps it (ADR 0026).
+	//
+	// 404 for a code tier 1 does not know. 400 for an empty body, a blank or over-100-character label,
+	// an order outside 1..9999, or a body naming `code` (a code is never renamed).
+	//
+	// idem.KhongCan: the upsert stores absolute values and a no-op writes and audits nothing, so the
+	// same request twice leaves one row and one entry.
+	//
+	// @summary  Sửa nhãn, thứ tự hiển thị hoặc bật/tắt một lĩnh vực phản ánh trong xã (không thêm, không xoá mã)
+	// @screen   14-cau-hinh
+	// @request  updatePetitionFieldIn
+	// @reply    200 petitionFieldOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-report-fields/{code}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.UpdatePetitionField))))
 
 	// --- the petition register. ONE READ ROUTE, AND THREE WRITE ROUTES THAT ARE NOT HERE ------
 	//

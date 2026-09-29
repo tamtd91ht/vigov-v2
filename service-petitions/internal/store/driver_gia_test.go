@@ -82,6 +82,10 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.nguon
 	case "ma_nguon_re_nhanh":
 		return h.reNhanh
+	case "enabled":
+		// `nhan_linh_vuc.enabled` (migration 0022) — the same "in use" switch as `dang_dung`, and the
+		// fixtures already set that boolean opposite to `la_mac_dinh`, so a mis-wired Scan still shows.
+		return h.dangDung
 	default:
 		// A column was added to one of the cot… constants and not here. Failing loudly beats
 		// scanning a nil that "passes" while proving nothing.

@@ -143,6 +143,9 @@ type mayChuGhi struct {
 	// harness because it needs the same commune-keyed checker.
 	docTT *docTrangThaiGia
 	ghiTT *ghiTrangThaiGia
+
+	// The petition field catalogue fake — asserted in petition_fields_test.go, same checker reason.
+	fields *fieldCatalogueFake
 }
 
 // dungMayChuGhi mounts the REAL routes through Register, behind the REAL edge chain in the real
@@ -160,6 +163,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 	checker := &checkerDanhMucGia{}
 	im := slog.New(slog.NewTextHandler(io.Discard, nil))
 	docTT, ghiTT := docTrangThaiMau(), &ghiTrangThaiGia{}
+	fields := newFieldCatalogueFake()
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
@@ -174,6 +178,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		GhiTrangThaiNhiemVu: ghiTT,
 		Phieu:               phieuMau(),
 		NhanLinhVuc:         nhanLinhVucMau(),
+		PetitionFields:      fields,
 		Vet:                 &vetXemGia{},
 		// Present because Register refuses incomplete Deps at construction. NOTHING IN THIS FILE
 		// CALLS THEM — it is about the catalogue write routes, and the five petition processing
@@ -210,7 +215,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuGhi{h: h, ghi: ghi, checker: checker, docTT: docTT, ghiTT: ghiTT}
+	return &mayChuGhi{h: h, ghi: ghi, checker: checker, docTT: docTT, ghiTT: ghiTT, fields: fields}
 }
 
 // capQuyen grants permissions INSIDE ONE COMMUNE. It rebuilds nothing: the checker reads the map

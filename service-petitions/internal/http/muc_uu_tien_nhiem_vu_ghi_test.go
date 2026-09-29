@@ -170,6 +170,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
 		Phieu:               phieuMau(),
 		NhanLinhVuc:         nhanLinhVucMau(),
+		PetitionFields:      newFieldCatalogueFake(),
 		Vet:                 &vetXemGia{},
 		// Present because Register refuses incomplete Deps at construction, and never called here —
 		// see the same note in loai_nhiem_vu_ghi_test.go.

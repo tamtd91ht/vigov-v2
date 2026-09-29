@@ -429,6 +429,15 @@
       "tiep_theo": "Mức ưu tiên nhập nối sau mức cuối.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "linh-vuc-cho-dan-tang-2",
+      "viec": "Lĩnh vực cho dân: tầng 2 của xã (bật/tắt, nhãn, thứ tự) + danh mục công dân + gửi phiếu kèm lĩnh vực (ADR 0026, 0050 điểm 1, 0060)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "W4a (commit card W4a, 29/09/2026): migration 0022 — nhan_linh_vuc thêm enabled (mặc định bật, không dòng = bật), nhan cho phép NULL (= nhãn mặc định tầng 1), CHECK nhãn ≤100 và thu_tu 0..9999 (0 = theo thứ tự tầng 1); staff GET/PATCH /api/v1/citizen-report-fields (admin.lookup, kiểm mã với tầng 1 qua platformclient trước giao dịch, khoá dòng + upsert + vết update_petition_field cùng giao dịch, dòng đã xoá mềm -> từ chối, không hồi sinh); citizen GET /api/v1/my-citizen-report-fields (CitizenOnly + XaTuPhienChiXem, chỉ khi có phiên — người dùng chốt): mã tầng 1 còn dùng trừ mã xã tắt, nhãn xã hoặc mặc định, {code,label,icon,tone}; can-bo KHÔNG bao giờ hiện cho dân (luồng lãnh đạo chưa có — ADR 0050 điểm 10, #27); platform sập -> 503. Kiểm worktree sạch: gofmt · vet · test -p 1; check_quyen · khoa_duy_nhat PASS; tools. Ca pg SKIP.",
+      "no_confirm": [],
+      "tiep_theo": "W4b: POST /my-citizen-reports nhận field (CheckForIntake + tầng 2 bật, một câu 4xx cho lạ/nghỉ/tắt) -> ResolveDeadlines hai đồng hồ -> một giao dịch; đường đọc nhãn = nhãn xã hoặc mặc định tầng 1. Phát hiện: tên URL citizen-report-fields / my-citizen-report-fields chưa có dòng ở ubiquitous-language.md.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

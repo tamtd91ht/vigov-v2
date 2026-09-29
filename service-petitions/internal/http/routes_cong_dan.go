@@ -61,6 +61,9 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	case d.Rating == nil:
 		panic("petitions/http: thiếu use case đánh giá phản ánh của công dân — " +
 			"POST /api/v1/my-citizen-reports/{maTraCuu}/rating sẽ panic khi có người dân chấm sao")
+	case d.CitizenFields == nil:
+		panic("petitions/http: thiếu danh mục lĩnh vực cho công dân — " +
+			"GET /api/v1/my-citizen-report-fields sẽ panic khi có người dân mở bước chọn lĩnh vực")
 	}
 
 	h := NewHandlerCongDan(d)
@@ -269,4 +272,50 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 			httpx.XaTuPhien()(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.RatePetition)))))
+
+	// --- the fields the commune offers on the new-submission form (ADR 0050 point 1) --------------
+	//
+	// `my-citizen-report-fields`: the citizen-surface counterpart of the staff resource
+	// `citizen-report-fields`, per kb/00-foundation/ubiquitous-language.md §Tiền tố `my-` — a resource
+	// of its own, so tools/ingress routes it separately and the two surfaces never share a handler.
+	// cmd/server mounts this exact path on the CITIZEN chain; the staff chain would answer 404.
+	//
+	// SESSION-ONLY (user decision 2026-09-29): no public `?host=` variant. The commune comes from the
+	// session, never from a client-supplied value (rule 1, forbidden #2).
+	//
+	// XaTuPhienChiXem AND NOT XaTuPhien: the list is the commune's configuration, the same for every
+	// resident, and reads nobody's records — so a session without a verified phone may see it, and
+	// the Mini App can show step 1 before asking for the phone. The handler takes no identity from
+	// the principal and filters by none (ADR 0045 stop condition #6 is about exactly that).
+	//
+	// Active on the platform, enabled by the commune, commune order; `can-bo` is never listed until its
+	// leaders-only flow exists (ADR 0050 point 10, open question #27).
+	//
+	// 200 WITH `items: []` is a commune that switched every field off — the form has nothing to offer.
+	//
+	// 401 is the three situations the other citizen routes fold together (ADR 0022). No 403: there is
+	// no permission, and the phone is not required here.
+	//
+	// 503 `field_catalogue_unavailable`: platform unreachable past the 60-second cache (ADR 0060 §3).
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh sách lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh, theo thứ tự của xã
+	// @screen   09-phan-anh-nguoi-dan §13
+	// @reply    200 citizenFieldListOut
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/my-citizen-report-fields",
+		authz.CitizenOnly()(
+			httpx.XaTuPhienChiXem("danh mục lĩnh vực là cấu hình của xã, như nhau với mọi người dân và không chứa hồ sơ của ai — dân chưa xác nhận số vẫn cần thấy bước chọn lĩnh vực")(
+				http.HandlerFunc(h.ListCitizenReportFields))))
 }
+
+// CitizenFieldsPath is the citizen catalogue's path, for cmd/server to mount on the citizen chain.
+//
+// THE ROUTE ABOVE SPELLS IT AS A LITERAL, because tools/apidoc reads route patterns at build time and
+// accepts only a literal or a same-file constant used whole. The two spellings are held together by
+// cmd/server's TestCitizenFieldCatalogueRidesTheCitizenChain, which requests THIS constant through the
+// real chain: if they ever differ, the request finds no route and the test turns red.
+const CitizenFieldsPath = "/api/v1/my-citizen-report-fields"

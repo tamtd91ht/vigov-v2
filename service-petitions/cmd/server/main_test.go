@@ -205,6 +205,31 @@ func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error
 	return nil, nil
 }
 
+// fieldCatalogueStub stands in for the petition field catalogue on BOTH surfaces. It asserts the one
+// thing this file can: the commune reached it — on the citizen chain only httpx.XaTuPhienChiXem can
+// have put it there, so a catalogue route mounted on the staff chain (TenantMiddleware 404 for the
+// Mini App host) or with no commune layer would fail here.
+type fieldCatalogueStub struct{}
+
+func (fieldCatalogueStub) Catalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
+	_ = tenant.MustFrom(ctx)
+	return nil, nil
+}
+
+func (fieldCatalogueStub) Edit(ctx context.Context, _ string, _ domain.PetitionFieldEdit, _ audit.Actor) (
+	domain.PetitionFieldView, error) {
+
+	_ = tenant.MustFrom(ctx)
+	return domain.PetitionFieldView{}, errors.New("danh mục giả: phép kiểm này không đi qua tuyến sửa")
+}
+
+func (fieldCatalogueStub) CitizenCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
+	if tenant.MustFrom(ctx) != xaA {
+		return nil, errors.New("danh mục giả: xã không phải của phiên công dân")
+	}
+	return []domain.PetitionFieldView{{Code: "rac-thai", Label: "Rác thải", Active: true, Enabled: true}}, nil
+}
+
 // vetGia stands in for the full-view audit trail, present for the same reason as the two above.
 //
 // IT RETURNS AN ERROR RATHER THAN nil, and that is the safe stand-in rather than a lazy one: no
@@ -372,6 +397,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		GhiTrangThaiNhiemVu: app.NewNhanTrangThaiNhiemVu(nil, nil),
 		Phieu:               khoPhieu{},
 		NhanLinhVuc:         khoNhanLinhVuc{},
+		PetitionFields:      fieldCatalogueStub{},
 		Vet:                 vetGia{},
 		// The register list and the four staff acts, built on a nil *store.DB for the same reason as
 		// the two catalogue writers above: this file is about the EDGE CHAIN, it asserts on a read
@@ -430,11 +456,12 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 	gui := &guiPhieuGia{}
 	muxCongDan := http.NewServeMux()
 	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
-		Phieu:       khoPhieuCongDan{},
-		GuiPhieu:    gui,
-		Rating:      app.NewRatePetition(nil, nil, nil),
-		NhanLinhVuc: khoNhanLinhVuc{},
-		Log:         log,
+		Phieu:         khoPhieuCongDan{},
+		GuiPhieu:      gui,
+		Rating:        app.NewRatePetition(nil, nil, nil),
+		NhanLinhVuc:   khoNhanLinhVuc{},
+		CitizenFields: fieldCatalogueStub{},
+		Log:           log,
 	})
 
 	danhBa := thuMucGia{
@@ -847,4 +874,25 @@ func TestTuyenCanBoKhongDocDuocDanhSachCuaToi(t *testing.T) {
 	if strings.Contains(w.Body.String(), maPhieuCuaToi) {
 		t.Errorf("phiếu của công dân lọt ra cho một yêu cầu của CÁN BỘ: %s", w.Body.String())
 	}
+}
+
+// TestCitizenFieldCatalogueRidesTheCitizenChain — `my-citizen-report-fields` is a resource of its own,
+// NOT under tienToCongDan, so it needs its own line in dungBien. Without it the path falls to the
+// staff chain, where the Mini App host resolves to no commune and every citizen gets 404 at step 1.
+//
+// MUTATION: delete `ngoai.Handle(svchttp.CitizenFieldsPath, c)` and this goes red (404, not 200).
+func TestCitizenFieldCatalogueRidesTheCitizenChain(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	w := m.goiCongDan(t, svchttp.CitizenFieldsPath, tokenCongDan)
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"code":"rac-thai"`) {
+		t.Errorf("danh mục không mang lĩnh vực của xã phiên: %s", w.Body.String())
+	}
+	if m.pg.goi != 0 {
+		t.Errorf("danh mục của công dân gọi phân giải cán bộ %d lần — nó đang chạy trên chuỗi cán bộ", m.pg.goi)
+	}
+
+	// No session -> 401 at the chain, not 404: the route exists on the citizen surface.
+	doiMa(t, m.goiCongDan(t, svchttp.CitizenFieldsPath, ""), http.StatusUnauthorized)
 }

@@ -55,8 +55,8 @@ func TestCitizenRoutesRefuseSessionWithoutVerifiedPhone(t *testing.T) {
 				Phieu:       petitions,
 				GuiPhieu:    intake,
 				Rating:      rating,
-				NhanLinhVuc: nhanLinhVucMau(),
-				Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+				Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 			})
 			// The chain in the order cmd/server builds it (same as dungMayChuCongDan).
 			var h http.Handler = mux

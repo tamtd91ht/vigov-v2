@@ -2220,6 +2220,180 @@
         }
       }
     },
+    "/api/v1/citizen-report-fields": {
+      "get": {
+        "summary": "Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình)",
+        "operationId": "petitions_get_citizen_report_fields",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "10c5b3fcca74",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.petitionFieldListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-report-fields/{code}": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Sửa nhãn, thứ tự hiển thị hoặc bật/tắt một lĩnh vực phản ánh trong xã (không thêm, không xoá mã)",
+        "operationId": "petitions_patch_citizen_report_fields_by_code",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "14-cau-hinh",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "f748a964da5f",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.updatePetitionFieldIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.petitionFieldOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-report-summary": {
       "get": {
         "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)",
@@ -10296,6 +10470,69 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/my-citizen-report-fields": {
+      "get": {
+        "summary": "Danh sách lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh, theo thứ tự của xã",
+        "operationId": "petitions_get_my_citizen_report_fields",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §13",
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien-chi-xem",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "reason": "danh mục lĩnh vực là cấu hình của xã, như nhau với mọi người dân và không chứa hồ sơ của ai — dân chưa xác nhận số vẫn cần thấy bước chọn lĩnh vực",
+          "note": "Chỉ xem: nhận cả phiên CHƯA xác thực số điện thoại, nên không được đọc hay ghi hồ sơ của chính công dân (ADR 0045)."
+        },
+        "x-vigov-task": "e17b9d5beb95",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenFieldListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -28607,6 +28844,51 @@
         ],
         "additionalProperties": false
       },
+      "petitions.citizenFieldListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.citizenFieldOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.citizenFieldOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "icon",
+          "label",
+          "tone"
+        ],
+        "additionalProperties": false
+      },
       "petitions.citizenReportSummaryOut": {
         "type": "object",
         "properties": {
@@ -29430,6 +29712,69 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.petitionFieldListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.petitionFieldOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.petitionFieldOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "default_label": {
+            "type": "string"
+          },
+          "default_order": {
+            "type": "integer"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "tone": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "customised": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "active",
+          "code",
+          "customised",
+          "default_label",
+          "default_order",
+          "enabled",
+          "icon",
+          "label",
+          "order",
+          "tone"
         ],
         "additionalProperties": false
       },
@@ -30795,6 +31140,36 @@
           "order",
           "role"
         ],
+        "additionalProperties": false
+      },
+      "petitions.updatePetitionFieldIn": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "petitions.vanBanNhiemVuVao": {

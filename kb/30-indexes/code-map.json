@@ -74,21 +74,29 @@
       "kind": "func",
       "at": "service-documents/internal/app/van_ban_di.go:108"
     },
+    "app.CapitalPlanCategoryImporter": {
+      "kind": "type",
+      "at": "service-finance/internal/app/catalogue_import.go:67"
+    },
+    "app.Catalogue": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:99"
+    },
     "app.CatalogueImportRejected": {
       "kind": "type",
-      "at": "service-identity/internal/app/catalogue_import.go:47"
+      "at": "service-petitions/internal/app/catalogue_import.go:49"
     },
     "app.CatalogueImportRepo": {
       "kind": "type",
-      "at": "service-identity/internal/app/catalogue_import.go:40"
+      "at": "service-petitions/internal/app/catalogue_import.go:42"
     },
     "app.CatalogueImportResult": {
       "kind": "type",
-      "at": "service-identity/internal/app/catalogue_import.go:56"
+      "at": "service-petitions/internal/app/catalogue_import.go:58"
     },
     "app.CatalogueImporter": {
       "kind": "type",
-      "at": "service-identity/internal/app/catalogue_import.go:67"
+      "at": "service-petitions/internal/app/catalogue_import.go:74"
     },
     "app.CauPhienCongDan": {
       "kind": "type",
@@ -121,6 +129,10 @@
     "app.ChuyenCapTren": {
       "kind": "func",
       "at": "service-petitions/internal/app/xu_ly_phan_anh.go:1050"
+    },
+    "app.CitizenCatalogue": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:113"
     },
     "app.CitizenReportAutomationReader": {
       "kind": "type",
@@ -290,6 +302,10 @@
       "kind": "type",
       "at": "service-finance/internal/app/du_an.go:84"
     },
+    "app.Edit": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:128"
+    },
     "app.Enable": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_admin.go:252"
@@ -301,6 +317,14 @@
     "app.Export": {
       "kind": "func",
       "at": "service-petitions/internal/app/task_register_export.go:111"
+    },
+    "app.FieldOverrideStore": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:75"
+    },
+    "app.Fields": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:55"
     },
     "app.Format": {
       "kind": "func",
@@ -638,6 +662,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/lich_lam_viec.go:1064"
     },
+    "app.Layout": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/catalogue_import.go:117"
+    },
     "app.Lich": {
       "kind": "type",
       "at": "service-identity/internal/app/lich_lam_viec.go:126"
@@ -758,6 +786,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/automation_runner.go:113"
     },
+    "app.NewCapitalPlanCategoryImporter": {
+      "kind": "func",
+      "at": "service-finance/internal/app/catalogue_import.go:76"
+    },
     "app.NewCauPhienCongDan": {
       "kind": "func",
       "at": "service-identity/internal/app/cau_phien_cong_dan.go:107"
@@ -870,6 +902,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/overdue_queue.go:60"
     },
+    "app.NewPetitionFieldCatalogue": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:89"
+    },
     "app.NewPhanQuyenVaiTro": {
       "kind": "func",
       "at": "service-identity/internal/app/phan_quyen_vai_tro.go:87"
@@ -942,9 +978,21 @@
       "kind": "func",
       "at": "service-petitions/internal/app/task_import.go:88"
     },
+    "app.NewTaskPriorityImporter": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/catalogue_import.go:104"
+    },
     "app.NewTaskRegisterExport": {
       "kind": "func",
       "at": "service-petitions/internal/app/task_register_export.go:98"
+    },
+    "app.NewTaskTypeImporter": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/catalogue_import.go:90"
+    },
+    "app.NewTier1Fields": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:48"
     },
     "app.NewVanBanDen": {
       "kind": "func",
@@ -1082,6 +1130,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:129"
     },
+    "app.PetitionFieldCatalogue": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:83"
+    },
     "app.PetitionHoldingsSource": {
       "kind": "type",
       "at": "service-identity/internal/app/org_unit_delete.go:49"
@@ -1108,7 +1160,7 @@
     },
     "app.Preview": {
       "kind": "func",
-      "at": "service-identity/internal/app/staff_import.go:193"
+      "at": "service-petitions/internal/app/catalogue_import.go:121"
     },
     "app.PreviewDocumentTypeImport": {
       "kind": "func",
@@ -1493,6 +1545,10 @@
     "app.TienTrangThai": {
       "kind": "func",
       "at": "service-petitions/internal/app/xu_ly_phan_anh.go:777"
+    },
+    "app.Tier1Fields": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_field_catalogue.go:36"
     },
     "app.UnassignedHoldChange": {
       "kind": "type",
@@ -2322,6 +2378,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/task_assignment.go:131"
     },
+    "domain.ApplyFieldEdit": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:148"
+    },
     "domain.ArrivalWindow": {
       "kind": "type",
       "at": "service-documents/internal/domain/incoming_dashboard.go:90"
@@ -2472,15 +2532,19 @@
     },
     "domain.CatalogueImportError": {
       "kind": "type",
-      "at": "service-identity/internal/domain/catalogue_import.go:69"
+      "at": "service-petitions/internal/domain/catalogue_import.go:94"
+    },
+    "domain.CatalogueImportLayout": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/catalogue_import.go:60"
     },
     "domain.CatalogueImportRow": {
       "kind": "type",
-      "at": "service-identity/internal/domain/catalogue_import.go:61"
+      "at": "service-petitions/internal/domain/catalogue_import.go:86"
     },
     "domain.CatalogueRowsFromSheet": {
       "kind": "func",
-      "at": "service-identity/internal/domain/catalogue_import.go:96"
+      "at": "service-petitions/internal/domain/catalogue_import.go:123"
     },
     "domain.CheDoApp": {
       "kind": "type",
@@ -2850,6 +2914,10 @@
       "kind": "type",
       "at": "service-documents/internal/domain/van_ban.go:144"
     },
+    "domain.CitizenCatalogue": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:107"
+    },
     "domain.CitizenReportDigestCounts": {
       "kind": "type",
       "at": "service-petitions/internal/domain/automation.go:86"
@@ -2889,6 +2957,10 @@
     "domain.CoLinhVucLucVaoSo": {
       "kind": "func",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:158"
+    },
+    "domain.Columns": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/catalogue_import.go:72"
     },
     "domain.ConChuaPhanBo": {
       "kind": "func",
@@ -2976,7 +3048,7 @@
     },
     "domain.DeriveCatalogueCode": {
       "kind": "func",
-      "at": "service-identity/internal/domain/catalogue_import.go:262"
+      "at": "service-petitions/internal/domain/catalogue_import.go:360"
     },
     "domain.DeriveResidentialUnitCode": {
       "kind": "func",
@@ -3124,7 +3196,7 @@
     },
     "domain.ExistingCatalogueEntry": {
       "kind": "type",
-      "at": "service-identity/internal/domain/catalogue_import.go:78"
+      "at": "service-petitions/internal/domain/catalogue_import.go:104"
     },
     "domain.ExistingDocumentType": {
       "kind": "type",
@@ -3142,9 +3214,17 @@
       "kind": "type",
       "at": "service-identity/internal/domain/residential_unit_import.go:92"
     },
+    "domain.FieldDefault": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/petition_field.go:16"
+    },
     "domain.FieldOption": {
       "kind": "type",
       "at": "service-comms/internal/domain/map_field_schema.go:39"
+    },
+    "domain.FindFieldDefault": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:118"
     },
     "domain.FinishedIncomingStatuses": {
       "kind": "func",
@@ -3870,6 +3950,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/stored_file.go:224"
     },
+    "domain.MergePetitionFields": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:60"
+    },
     "domain.MessageOverride": {
       "kind": "type",
       "at": "service-reporting/internal/domain/system_message.go:118"
@@ -4042,6 +4126,10 @@
       "kind": "type",
       "at": "service-comms/internal/domain/staff_notification.go:68"
     },
+    "domain.OfferedToCitizens": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:49"
+    },
     "domain.OperatorAccount": {
       "kind": "type",
       "at": "service-identity/internal/domain/operator.go:179"
@@ -4134,6 +4222,14 @@
       "kind": "type",
       "at": "service-platform/internal/domain/petition_field.go:9"
     },
+    "domain.PetitionFieldEdit": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/petition_field.go:132"
+    },
+    "domain.PetitionFieldView": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/petition_field.go:28"
+    },
     "domain.PhanBoNguonVon": {
       "kind": "type",
       "at": "service-finance/internal/domain/nguon_von.go:39"
@@ -4152,7 +4248,7 @@
     },
     "domain.PlanCatalogueImport": {
       "kind": "func",
-      "at": "service-identity/internal/domain/catalogue_import.go:147"
+      "at": "service-petitions/internal/domain/catalogue_import.go:183"
     },
     "domain.PlanDocumentTypeImport": {
       "kind": "func",
@@ -4176,7 +4272,7 @@
     },
     "domain.PlannedCatalogueEntry": {
       "kind": "type",
-      "at": "service-identity/internal/domain/catalogue_import.go:85"
+      "at": "service-petitions/internal/domain/catalogue_import.go:112"
     },
     "domain.PlannedDocumentType": {
       "kind": "type",
@@ -4870,6 +4966,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/xu_ly_phan_anh.go:234"
     },
+    "domain.ViewOfOverride": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_field.go:181"
+    },
     "domain.WeeklyDigestKey": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:212"
@@ -5230,9 +5330,13 @@
       "kind": "func",
       "at": "service-identity/internal/http/tai_khoan_can_bo.go:82"
     },
+    "http.CapitalPlanCategoryImportTemplate": {
+      "kind": "func",
+      "at": "service-finance/internal/http/catalogue_import.go:133"
+    },
     "http.CatalogueImporting": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:284"
+      "at": "service-petitions/internal/http/catalogue_import.go:45"
     },
     "http.ChiTietCanBo": {
       "kind": "func",
@@ -5254,6 +5358,10 @@
       "kind": "func",
       "at": "service-documents/internal/http/van_ban_den.go:368"
     },
+    "http.CitizenFieldCatalogue": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/petition_fields.go:36"
+    },
     "http.CitizenRating": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_rating.go:33"
@@ -5265,6 +5373,10 @@
     "http.CitizenReportSummaryReader": {
       "kind": "type",
       "at": "service-petitions/internal/http/summary.go:45"
+    },
+    "http.CommuneProfiles": {
+      "kind": "func",
+      "at": "service-identity/internal/http/commune_profile.go:72"
     },
     "http.CompleteTaskAttachment": {
       "kind": "func",
@@ -5304,7 +5416,7 @@
     },
     "http.DanhBaCongKhai": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_ba_cong_khai.go:70"
+      "at": "service-identity/internal/http/danh_ba_cong_khai.go:82"
     },
     "http.DanhDauKhongPhatSinh": {
       "kind": "func",
@@ -5660,7 +5772,7 @@
     },
     "http.HandlerCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:95"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:99"
     },
     "http.HandlerCongKhai": {
       "kind": "type",
@@ -5669,6 +5781,10 @@
     "http.HangMucKeHoachVonDanhMuc": {
       "kind": "type",
       "at": "service-finance/internal/http/routes.go:82"
+    },
+    "http.ImportCapitalPlanCategories": {
+      "kind": "func",
+      "at": "service-finance/internal/http/catalogue_import.go:302"
     },
     "http.ImportDocumentTypes": {
       "kind": "func",
@@ -5697,6 +5813,14 @@
     "http.ImportTaskBlocs": {
       "kind": "func",
       "at": "service-identity/internal/http/catalogue_import.go:239"
+    },
+    "http.ImportTaskPriorities": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:407"
+    },
+    "http.ImportTaskTypes": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:392"
     },
     "http.ImportTasks": {
       "kind": "func",
@@ -5762,6 +5886,10 @@
       "kind": "func",
       "at": "service-identity/internal/http/automation.go:159"
     },
+    "http.ListCitizenReportFields": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_fields.go:153"
+    },
     "http.ListMapFieldSchemas": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:133"
@@ -5769,6 +5897,10 @@
     "http.ListMyNotifications": {
       "kind": "func",
       "at": "service-comms/internal/http/staff_notification.go:116"
+    },
+    "http.ListPetitionFields": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_fields.go:74"
     },
     "http.ListSystemMessages": {
       "kind": "func",
@@ -5860,7 +5992,7 @@
     },
     "http.NewHandlerCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:99"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:103"
     },
     "http.NganSachDoc": {
       "kind": "type",
@@ -5934,6 +6066,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/summary.go:284"
     },
+    "http.PetitionFieldCatalogue": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/petition_fields.go:29"
+    },
     "http.PhanCongPhieu": {
       "kind": "func",
       "at": "service-petitions/internal/http/xu_ly_phan_anh.go:460"
@@ -5968,7 +6104,7 @@
     },
     "http.PhieuCuaToi": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:318"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:322"
     },
     "http.PhieuPhanAnhDanhSach": {
       "kind": "type",
@@ -5977,6 +6113,10 @@
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:90"
+    },
+    "http.PreviewCapitalPlanCategoryImport": {
+      "kind": "func",
+      "at": "service-finance/internal/http/catalogue_import.go:277"
     },
     "http.PreviewDocumentTypeImport": {
       "kind": "func",
@@ -6005,6 +6145,14 @@
     "http.PreviewTaskBlocImport": {
       "kind": "func",
       "at": "service-identity/internal/http/catalogue_import.go:234"
+    },
+    "http.PreviewTaskPriorityImport": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:402"
+    },
+    "http.PreviewTaskTypeImport": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:387"
     },
     "http.PutMailSettings": {
       "kind": "func",
@@ -6036,7 +6184,7 @@
     },
     "http.RegisterCongKhai": {
       "kind": "func",
-      "at": "service-identity/internal/http/routes_cong_dan.go:54"
+      "at": "service-identity/internal/http/routes_cong_dan.go:59"
     },
     "http.RequestAutomationRun": {
       "kind": "func",
@@ -6262,6 +6410,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:273"
     },
+    "http.TaskPriorityImportTemplate": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:397"
+    },
     "http.TaskRegisterExporter": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:192"
@@ -6273,6 +6425,14 @@
     "http.TaskSummaryReader": {
       "kind": "type",
       "at": "service-petitions/internal/http/summary.go:39"
+    },
+    "http.TaskTypeImportTemplate": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/catalogue_import.go:382"
+    },
+    "http.TenantProfileReader": {
+      "kind": "type",
+      "at": "service-identity/internal/http/commune_profile.go:27"
     },
     "http.ThemBoPhan": {
       "kind": "func",
@@ -6385,6 +6545,10 @@
     "http.UpdateMapFieldSchema": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:214"
+    },
+    "http.UpdatePetitionField": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_fields.go:98"
     },
     "http.UpdateResidentialUnit": {
       "kind": "func",
@@ -7302,6 +7466,10 @@
       "kind": "func",
       "at": "core/platformclient/petition_fields.go:137"
     },
+    "platformclient.TenantProfile": {
+      "kind": "func",
+      "at": "core/platformclient/tenant_profile.go:32"
+    },
     "platformclient.XaTheoHost": {
       "kind": "func",
       "at": "core/platformclient/host.go:34"
@@ -7888,7 +8056,7 @@
     },
     "store.DanhBaCongKhai": {
       "kind": "func",
-      "at": "service-identity/internal/store/danh_ba_cong_khai.go:89"
+      "at": "service-identity/internal/store/danh_ba_cong_khai.go:109"
     },
     "store.DanhMucCoThat": {
       "kind": "func",
@@ -8120,7 +8288,7 @@
     },
     "store.ImportSnapshot": {
       "kind": "func",
-      "at": "service-identity/internal/store/residential_unit_write.go:177"
+      "at": "service-petitions/internal/store/catalogue_import.go:108"
     },
     "store.IncomingMetricFilter": {
       "kind": "type",
@@ -8129,6 +8297,10 @@
     "store.Insert": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:221"
+    },
+    "store.InsertImported": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/catalogue_import.go:113"
     },
     "store.InsertPending": {
       "kind": "func",
@@ -8320,7 +8492,7 @@
     },
     "store.LockImport": {
       "kind": "func",
-      "at": "service-identity/internal/store/catalogue_import.go:75"
+      "at": "service-petitions/internal/store/catalogue_import.go:103"
     },
     "store.LockOwn": {
       "kind": "func",
@@ -9152,7 +9324,7 @@
     },
     "store.Upsert": {
       "kind": "func",
-      "at": "service-comms/internal/store/mail_settings.go:135"
+      "at": "service-petitions/internal/store/nhan_linh_vuc.go:151"
     },
     "store.UsableType": {
       "kind": "func",

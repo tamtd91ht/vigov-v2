@@ -543,6 +543,50 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-report-fields",
+      "operation_id": "petitions_get_citizen_report_fields",
+      "task_id": "10c5b3fcca74",
+      "summary": "Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình)",
+      "screen": "14-cau-hinh",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.petitionFieldListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "PATCH",
+      "path": "/api/v1/citizen-report-fields/{code}",
+      "operation_id": "petitions_patch_citizen_report_fields_by_code",
+      "task_id": "f748a964da5f",
+      "summary": "Sửa nhãn, thứ tự hiển thị hoặc bật/tắt một lĩnh vực phản ánh trong xã (không thêm, không xoá mã)",
+      "screen": "14-cau-hinh",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "petitions.updatePetitionFieldIn",
+      "reply_schemas": {
+        "200": "petitions.petitionFieldOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-report-summary",
       "operation_id": "petitions_get_citizen_report_summary",
       "task_id": "7faa1955f707",
@@ -2406,6 +2450,26 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/my-citizen-report-fields",
+      "operation_id": "petitions_get_my_citizen_report_fields",
+      "task_id": "e17b9d5beb95",
+      "summary": "Danh sách lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh, theo thứ tự của xã",
+      "screen": "09-phan-anh-nguoi-dan §13",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien-chi-xem",
+      "tenant_class_reason": "danh mục lĩnh vực là cấu hình của xã, như nhau với mọi người dân và không chứa hồ sơ của ai — dân chưa xác nhận số vẫn cần thấy bước chọn lĩnh vực",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenFieldListOut",
+        "401": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },
     {
       "service": "petitions",

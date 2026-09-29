@@ -82,6 +82,10 @@ type DepsCongDan struct {
 	// MOVE a petition (1–2 stars reopens it, ADR 0050 point 2). Required, for GuiPhieu's reason.
 	Rating CitizenRating
 
+	// CitizenFields is what the new-submission form offers — the commune's configuration, filtered
+	// (app.PetitionFieldCatalogue.CitizenCatalogue). Required.
+	CitizenFields CitizenFieldCatalogue
+
 	// NhanLinhVuc is the commune's own wording for the field code, so the citizen reads
 	// "Rác thải – Vệ sinh môi trường" rather than `rac-thai`. The SAME interface the staff route
 	// uses, and sharing it is right here: it is a commune's public vocabulary, not a staff-only

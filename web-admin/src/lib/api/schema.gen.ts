@@ -1912,6 +1912,17 @@ export type petitions_chuyenCapTrenVao = {
   "note"?: string;
 };
 
+export type petitions_citizenFieldListOut = {
+  "items": Array<petitions_citizenFieldOut>;
+};
+
+export type petitions_citizenFieldOut = {
+  "code": string;
+  "label": string;
+  "icon": string | null;
+  "tone": string | null;
+};
+
 export type petitions_citizenReportSummaryOut = {
   "received": number;
   "in_progress": number;
@@ -2120,6 +2131,23 @@ export type petitions_overdueItemOut = {
 
 export type petitions_overdueQueueOut = {
   "items": Array<petitions_overdueItemOut>;
+};
+
+export type petitions_petitionFieldListOut = {
+  "items": Array<petitions_petitionFieldOut>;
+};
+
+export type petitions_petitionFieldOut = {
+  "code": string;
+  "label": string;
+  "order": number;
+  "default_label": string;
+  "default_order": number;
+  "icon": string;
+  "tone": string;
+  "active": boolean;
+  "enabled": boolean;
+  "customised": boolean;
 };
 
 export type petitions_phanCongVao = {
@@ -2465,6 +2493,13 @@ export type petitions_trangThaiNhiemVuRa = {
   "default_label": string;
   "default_order": number;
   "customised": boolean;
+};
+
+export type petitions_updatePetitionFieldIn = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "enabled"?: boolean | null;
+  "code"?: string | null;
 };
 
 export type petitions_vanBanNhiemVuVao = {
@@ -2985,6 +3020,45 @@ export type finance_delete_capital_plan_categories_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-report-fields — Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình) */
+export type petitions_get_citizen_report_fields = {
+  duongDan: "/api/v1/citizen-report-fields";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_petitionFieldListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/citizen-report-fields/{code} — Sửa nhãn, thứ tự hiển thị hoặc bật/tắt một lĩnh vực phản ánh trong xã (không thêm, không xoá mã) */
+export type petitions_patch_citizen_report_fields_by_code = {
+  duongDan: "/api/v1/citizen-report-fields/{code}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_updatePetitionFieldIn;
+  phanHoi: {
+    200: petitions_petitionFieldOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -4727,6 +4801,23 @@ export type petitions_post_meetings_by_id_signature = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/my-citizen-report-fields — Danh sách lĩnh vực xã đang mở cho người dân chọn khi gửi phản ánh, theo thứ tự của xã */
+export type petitions_get_my_citizen_report_fields = {
+  duongDan: "/api/v1/my-citizen-report-fields";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenFieldListOut;
+    401: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
