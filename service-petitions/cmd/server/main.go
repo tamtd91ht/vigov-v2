@@ -23,6 +23,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/commsclient"
 	"github.com/vihat/vigov/core/config"
 	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -42,6 +43,7 @@ import (
 	svcgrpc "github.com/vihat/vigov/service-petitions/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-petitions/internal/http"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
+	"github.com/vihat/vigov/service-petitions/internal/store/crosstenant"
 	"github.com/vihat/vigov/service-petitions/migrations"
 )
 
@@ -50,6 +52,7 @@ import (
 // not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
 //
 // petitions: the one service storing uploads (scene photographs), so the only one declaring ObjectStore and MalwareScan.
+// CommsClient: the automation runner delivers staff notices into comms' bell inbox (ADR 0058 §3).
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -60,6 +63,7 @@ var configUses = config.Uses(
 	config.CitizenCORS,
 	config.ObjectStore,
 	config.MalwareScan,
+	config.CommsClient,
 )
 
 func main() {
@@ -432,6 +436,41 @@ func chay(log *slog.Logger) error {
 		return err
 	}
 
+	// THE AUTOMATION RUNNER (ADR 0058) — the Tự động hoá tab's jobs over tasks and petitions, in this
+	// process because this service owns both registers. It reads its OWN stores (the same objects the
+	// REST routes read, so a reminder and the register agree), asks identity over the SAME client every
+	// other identity question uses, reads commune status over the SAME platform connection, and writes
+	// nothing here: the notices go to comms, the run's trail to identity.
+	//
+	// OFF WHEN COMMS_GRPC_ADDR IS EMPTY, which only dev allows (config.CommsClient is required in
+	// staging/prod). Off means NOTHING IS CLAIMED — a claimed slot is not given back, so a runner that
+	// could not deliver must not claim.
+	runnerCtx, stopRunner := context.WithCancel(context.Background())
+	defer stopRunner()
+	runnerDone := make(chan struct{})
+	if addr := cfg.CommsGRPCAddr(); addr != "" {
+		comms, err := commsclient.Dial(addr, cfg.GRPCCallerKey(), log)
+		if err != nil {
+			return err
+		}
+		defer comms.Close()
+		automation := crosstenant.NewAutomation(db)
+		runner, err := app.NewAutomationRunner(app.AutomationDeps{
+			Communes: automation, Locks: automation, Registry: nenTang, Identity: dinhDanh, Comms: comms,
+			Tasks: nhiemVu, CitizenReports: phieu, Log: log,
+		})
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer close(runnerDone)
+			runner.Run(runnerCtx)
+		}()
+	} else {
+		log.Warn("CẢNH BÁO: bộ chạy tự động hoá TẮT — thiếu COMMS_GRPC_ADDR", "service", "petitions")
+		close(runnerDone)
+	}
+
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
@@ -454,6 +493,7 @@ func chay(log *slog.Logger) error {
 	case err := <-loi:
 		// One surface failing takes the process down rather than leaving it half-serving: REST up
 		// with gRPC down looks healthy while every org-unit delete in identity is refused.
+		stopRunner()
 		grpcSrv.Stop()
 		_ = srv.Close()
 		return err
@@ -461,6 +501,10 @@ func chay(log *slog.Logger) error {
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "petitions")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
+
+		// The runner stops at the next commune boundary; a run already executing still records its
+		// outcome (app.AutomationRunner.record). It drains inside the same 20 seconds.
+		stopRunner()
 
 		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
 		grpcDone := make(chan struct{})
@@ -474,6 +518,11 @@ func chay(log *slog.Logger) error {
 		case <-ctx.Done():
 			log.Warn("gRPC không đóng kịp hạn, buộc dừng", "service", "petitions")
 			grpcSrv.Stop()
+		}
+		select {
+		case <-runnerDone:
+		case <-ctx.Done():
+			log.Warn("bộ chạy tự động hoá không dừng kịp hạn", "service", "petitions")
 		}
 		return errHTTP
 	}

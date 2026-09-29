@@ -40,6 +40,7 @@
 //	IDENTITY_GRPC_ADDR                    ConfigMap  IdentityClient         refused in staging/prod; dev: refused at Dial
 //	PETITIONS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    refused in staging/prod; dev: delete answers 503
 //	DOCUMENTS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    as above
+//	COMMS_GRPC_ADDR                       ConfigMap  CommsClient            refused in staging/prod; dev: automation runner off
 //	TENANT_CACHE_TTL                      —          TenantCache            default 30s, not set in the cluster
 //	REDIS_DSN                             Secret     Redis                  refused in staging/prod; dev: no cache
 //	SESSION_SIGNING_KEYS                  Secret     StaffSessionSigning    refused in staging/prod; dev: no sessions
@@ -270,6 +271,19 @@ type Config struct {
 	// caller key does, and an address that leaves the cluster puts that key on the wire.
 	petitionsGRPCAddr string
 	documentsGRPCAddr string
+
+	// CommsGRPCAddr is where comms answers DeliverStaffNotifications — the bell inbox the
+	// automation jobs write into (ADR 0058 §3; proto/vigov/comms/v1).
+	//
+	// Group CommsClient, declared by the services that RUN automation jobs. THE SHAPE OF
+	// PetitionsGRPCAddr: no default, refused at Load in staging/prod; in dev, empty turns the runner
+	// off with a warning. A guessed address would not fail open — a run whose delivery fails records
+	// DEPENDENCY_UNAVAILABLE and the next run retries under the same idempotency keys — but every
+	// commune's reminders would stop while comms is healthy.
+	//
+	// CLUSTER-INTERNAL ADDRESS ONLY. Plaintext hop (ADR 0025); what travels is staff codes and
+	// Vietnamese sentences that by contract carry no citizen personal data — and the caller key.
+	commsGRPCAddr string
 
 	// GRPCCallerKey authenticates the CALLER on the inter-service gRPC port. ONE key, shared by
 	// every service on the deployment, read from GRPC_CALLER_KEY and sourced from a k8s secret.
@@ -547,13 +561,16 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// 3): a missing key would produce a port that answers ANYTHING that reaches it, silently and on
 	// every RPC. A service with no gRPC server and no gRPC client (reporting) never reads it.
 	callerKey := r.read("GRPC_CALLER_KEY", os.Getenv("GRPC_CALLER_KEY"), requiredEverywhere,
-		GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients)
+		GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient)
 	// Required in prod; in dev empty is allowed here and refused by name at Dial.
 	platformAddr := r.read("PLATFORM_GRPC_ADDR", os.Getenv("PLATFORM_GRPC_ADDR"), requiredInProd, PlatformClient)
 	identityAddr := r.read("IDENTITY_GRPC_ADDR", os.Getenv("IDENTITY_GRPC_ADDR"), requiredInProd, IdentityClient)
 	// Required in prod; in dev empty means org-unit delete answers 503 (fail closed).
 	petitionsAddr := r.read("PETITIONS_GRPC_ADDR", os.Getenv("PETITIONS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
 	documentsAddr := r.read("DOCUMENTS_GRPC_ADDR", os.Getenv("DOCUMENTS_GRPC_ADDR"), requiredInProd, OrgUnitOwnerClients)
+	// Required in prod: a runner that cannot deliver sends no commune any reminder. In dev empty
+	// means the automation runner does not start (fail closed: nothing claimed, nothing sent).
+	commsAddr := r.read("COMMS_GRPC_ADDR", os.Getenv("COMMS_GRPC_ADDR"), requiredInProd, CommsClient)
 
 	// ---- TenantCache ----------------------------------------------------------------------
 	// Optional: the default 30s is the decided value (ADR 0004 decision 5), deliberately not in
@@ -708,6 +725,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		identityGRPCAddr:  identityAddr,
 		petitionsGRPCAddr: petitionsAddr,
 		documentsGRPCAddr: documentsAddr,
+		commsGRPCAddr:     commsAddr,
 		tenantCacheTTL:    duration(tenantTTL, 30*time.Second),
 
 		redisDSN:           secret.DSN(redis),

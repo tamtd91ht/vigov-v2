@@ -69,6 +69,10 @@ const (
 	RabbitMQ
 	// Elasticsearch: ELASTICSEARCH_ADDRS, ELASTICSEARCH_API_KEY, ELASTICSEARCH_INDEX_PREFIX.
 	Elasticsearch
+	// CommsClient: COMMS_GRPC_ADDR, GRPC_CALLER_KEY — an automation runner delivering staff
+	// notices into comms' bell inbox (ADR 0058 §3). APPENDED, never inserted: a Group is a bit
+	// position, and renumbering the ones above changes nothing on disk but reads badly in a diff.
+	CommsClient
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -92,6 +96,7 @@ var groupNames = map[Group]string{
 	OperatorRealm:       "OperatorRealm",
 	RabbitMQ:            "RabbitMQ",
 	Elasticsearch:       "Elasticsearch",
+	CommsClient:         "CommsClient",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

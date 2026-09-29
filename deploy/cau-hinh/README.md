@@ -16,7 +16,7 @@ trường. `có (prod)` — như vậy ở **staging và prod**; dev cho thiếu
 
 **Trước khi rollout bản có `config.Uses` (29/09/2026)**: đặt đủ mọi key `có (prod)` bên dưới, nếu không
 pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CIDRS`, `CITIZEN_SESSION_BRIDGE_*`,
-`PETITIONS_GRPC_ADDR`/`DOCUMENTS_GRPC_ADDR`, `OBJECT_STORAGE_*`, `MALWARE_SCANNER_ADDRESS`,
+`PETITIONS_GRPC_ADDR`/`DOCUMENTS_GRPC_ADDR`, `COMMS_GRPC_ADDR`, `OBJECT_STORAGE_*`, `MALWARE_SCANNER_ADDRESS`,
 `SECRET_ENCRYPTION_KEYS`.
 
 ## 1. Secret
@@ -87,6 +87,7 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | `identity:9090` |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `documents:9090` |
+| `COMMS_GRPC_ADDR` | **có (prod)** — petitions | `vigov-service-petitions` | `comms:9090` |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | `:<cổng>` — cổng riêng, khác `9090`, phải khớp quy tắc NetworkPolicy (chưa có trong `deploy/base/mang/netpol.yaml`). Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
 
 Tên host là tên Service trên cụm (`kubectl -n vigov-prod get svc`); Service petitions/documents/comms

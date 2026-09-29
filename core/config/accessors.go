@@ -37,7 +37,7 @@ func (c Config) GRPCListenAddr() string {
 
 // GRPCCallerKey is GRPC_CALLER_KEY — read by a gRPC server and by every gRPC client.
 func (c Config) GRPCCallerKey() secret.Secret {
-	c.require("GRPCCallerKey", GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients)
+	c.require("GRPCCallerKey", GRPCServer, PlatformClient, IdentityClient, OrgUnitOwnerClients, CommsClient)
 	return c.grpcCallerKey
 }
 
@@ -63,6 +63,12 @@ func (c Config) PetitionsGRPCAddr() string {
 func (c Config) DocumentsGRPCAddr() string {
 	c.require("DocumentsGRPCAddr", OrgUnitOwnerClients)
 	return c.documentsGRPCAddr
+}
+
+// CommsGRPCAddr is COMMS_GRPC_ADDR.
+func (c Config) CommsGRPCAddr() string {
+	c.require("CommsGRPCAddr", CommsClient)
+	return c.commsGRPCAddr
 }
 
 // TenantCacheTTL is TENANT_CACHE_TTL, default 30s.
@@ -197,6 +203,7 @@ type configView struct {
 	IdentityGRPCAddr               string
 	PetitionsGRPCAddr              string
 	DocumentsGRPCAddr              string
+	CommsGRPCAddr                  string
 	TenantCacheTTL                 time.Duration
 	RedisDSN                       secret.DSN
 	SessionSigningKeys             []secret.Secret
@@ -236,6 +243,7 @@ func (c Config) view() configView {
 		IdentityGRPCAddr:               c.identityGRPCAddr,
 		PetitionsGRPCAddr:              c.petitionsGRPCAddr,
 		DocumentsGRPCAddr:              c.documentsGRPCAddr,
+		CommsGRPCAddr:                  c.commsGRPCAddr,
 		TenantCacheTTL:                 c.tenantCacheTTL,
 		RedisDSN:                       c.redisDSN,
 		SessionSigningKeys:             c.sessionSigningKeys,
