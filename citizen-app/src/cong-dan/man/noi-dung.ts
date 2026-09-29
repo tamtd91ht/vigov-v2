@@ -278,7 +278,7 @@ export const TRA_CUU = {
  * theo điều họ thấy, không theo hệ quả họ được báo trước. Khi máy chủ đã mở lại, câu `reopened` chỉ nói
  * SỰ VIỆC đã xảy ra — tình trạng mới đã hiện trên thẻ phiếu.
  *
- * Nhãn năm mức sao và câu "chạm vào sao" dùng chung với bản trải nghiệm (`star-picker.tsx`), không chép.
+ * Nhãn năm mức sao và câu "chạm vào sao" nằm ở `star-picker.tsx`, dùng chung cho cả hai app, không chép.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export const RATING = {
@@ -535,14 +535,11 @@ export const XA_GIAO_DIEN = {
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * APP RIÊNG — BẢN TRẢI NGHIỆM ĐỦ MÀN theo bản mẫu `vi-gov/zalo-miniapp` (chủ dự án, 28/09/2026)
- *
- * Người dùng giả lập và phiếu chỉ trong máy (`trai-nghiem.ts`). Mọi chỗ ấy nói thẳng "bản trải
- * nghiệm": người dân không được tưởng một phiếu chưa gửi đã tới xã.
+ * APP RIÊNG — ĐỦ MÀN theo bản mẫu `vi-gov/zalo-miniapp` (chủ dự án, 28/09/2026). Từ 29/09/2026 phiếu
+ * phản ánh đi vào sổ thật của xã; các câu "phiếu chỉ trong máy" đã bị gỡ cùng phần ấy.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export const XA_TN = {
-  nhan_trai_nghiem: "BẢN TRẢI NGHIỆM",
   // Định danh
   dinh_danh_tieu_de: "Xác nhận tài khoản",
   dinh_danh_mo_ta: "Liên kết tài khoản Zalo để dùng đầy đủ dịch vụ của xã:",
@@ -552,8 +549,6 @@ export const XA_TN = {
   nut_lien_ket: "Tiếp tục với tài khoản Zalo",
   dang_lien_ket: "Đang liên kết…",
   lien_ket_loi: "Chưa liên kết được. Hãy kiểm tra mạng rồi bấm lại.",
-  ghi_chu_dinh_danh:
-    "Bản trải nghiệm: ứng dụng dùng một tên và số điện thoại mẫu, chưa lấy từ Zalo. Không có thông tin nào của bà con được gửi đi.",
   cam_ket_so: "Số điện thoại chỉ dùng để tiếp nhận và phản hồi phản ánh của bà con.",
   // Trang chủ
   thong_bao: "Thông báo",
@@ -588,12 +583,9 @@ export const XA_TN = {
   name_card_decline: "Không, tôi sẽ tự gõ tên",
   name_card_asking: "Đang chờ bà con trả lời Zalo…",
   chua_co_ten: "Chưa xác định",
-  so_tu_go: "Ứng dụng không lấy số điện thoại từ Zalo. Nếu muốn xã gọi lại, bà con hãy tự nhập số.",
   loc_chuyen_muc: "Lọc tin theo chuyên mục",
   tin_lien_quan: "Tin liên quan",
   nhom_khac: "Cán bộ khác",
-  chua_tinh_han: "Bản trải nghiệm chưa tính hạn. Khi gửi thật, hạn được tính theo giờ làm việc của xã.",
-  ghi_chu_tra_cuu_tn: "Bản trải nghiệm: chỉ tra được các phiếu bà con đã gửi trên điện thoại này trong lần mở ứng dụng này.",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",
   location_again: "Lấy lại vị trí hiện tại",
@@ -618,8 +610,6 @@ export const XA_TN = {
   tien_trinh: "Tiến trình xử lý",
   buoc_da_gui: "Đã gửi phản ánh",
   buoc_cho_tiep_nhan: "Chờ Ủy ban nhân dân xã tiếp nhận",
-  ghi_chu_phieu_tn:
-    "Đây là phiếu của bản trải nghiệm: phiếu chỉ lưu trên điện thoại này, CHƯA được gửi tới Ủy ban nhân dân xã, và sẽ mất khi đóng ứng dụng.",
   chi_tiet_tieu_de: "Chi tiết phản ánh",
   // Gửi phản ánh
   buoc: (so: number, tong: number) => `Bước ${so}/${tong}`,
@@ -665,6 +655,10 @@ export const XA_TN = {
   nhan_tai_khoan_mau: "Tài khoản mẫu",
   tien_ich: "Tiện ích của tôi",
   so_phieu: (n: number) => `${n} phiếu đã gửi`,
+  /** The list has more pages than loaded: the count is a floor, said as one. */
+  so_phieu_more: (n: number) => `Hơn ${n} phiếu đã gửi`,
+  /** Not loaded (no session in this open): no number is invented. */
+  so_phieu_unknown: "Bấm để xem phản ánh đã gửi",
   lich_su_tra_cuu: "Tra cứu hồ sơ một cửa",
   lich_su_tra_cuu_phu: "Tra cứu tiến độ hồ sơ của bà con",
   hien_thi: "Cài đặt hiển thị",
@@ -677,7 +671,6 @@ export const XA_TN = {
   ve_ung_dung: "Về ứng dụng",
   don_vi: "Đơn vị",
   dang_xuat: "Đăng xuất",
-  hoi_dang_xuat: "Đăng xuất khỏi ứng dụng? Phiếu của bản trải nghiệm sẽ mất.",
   dong_y_dang_xuat: "Đăng xuất",
   huy: "Không",
 } as const;
@@ -687,8 +680,17 @@ export const XA_TN = {
  * hạn nào ở đây: hạn là việc của máy chủ (luật 10).
  */
 export const XA_PA = {
-  ghi_chu_phieu: "Phiếu của bản trải nghiệm chỉ nằm trên máy này, chưa gửi tới cán bộ. Đóng ứng dụng là mất.",
-  ghi_chu_gui: "Bản trải nghiệm: phiếu chỉ lưu trong máy, chưa gửi tới cán bộ.",
+  // Phản ánh của tôi khi CHƯA có phiên (29/09/2026): xem phiếu là việc cá nhân, nên chỉ mở sau lời giải
+  // thích và cú bấm của bà con (`commune-session.ts`) — không bao giờ tự mở lúc vào app (ADR 0047:251).
+  need_session_title: "Phản ánh bà con đã gửi",
+  need_session_body:
+    "Để xem các phản ánh đã gửi, xã cần xác nhận số điện thoại Zalo của bà con. Bấm nút dưới đây, ứng dụng sẽ nói rõ trước khi Zalo hỏi.",
+  need_session_button: "Xem phản ánh của tôi",
+  session_expired:
+    "Phiên làm việc với xã đã hết hạn. Bà con bấm “Thử lại” để xác nhận lại số điện thoại rồi làm tiếp.",
+  loading_ticket: "Đang tải phiếu…",
+  dang_gui: "Đang gửi phản ánh tới xã…",
+  acknowledge_by: (moc: string) => `Cán bộ xã sẽ xem phiếu trước ${moc} (giờ Việt Nam).`,
   tra_cuu_tieu_de: "Tra cứu phiếu",
   tra_cuu_goi_y: "Nhập mã phiếu bà con đã nhận",
   chua_co_phieu: "Bà con chưa gửi phản ánh nào.",
@@ -713,7 +715,10 @@ export const XA_PA = {
   du_kien_xong: "Dự kiến xử lý xong",
   tien_trinh: "Tiến trình xử lý",
   chi_tiet_tieu_de: "Chi tiết phản ánh",
-  khong_thay_phieu: "Không tìm thấy phiếu với mã này trên máy.",
+  // ONE sentence for "no such code", "someone else's", "another commune's" — the server answers the same
+  // 404 for all three, and the screen must not tell them apart (rule 4, forbidden #2).
+  khong_thay_phieu:
+    "Không tìm thấy phiếu với mã này. Bà con kiểm tra lại từng ký tự của mã. Nếu vẫn không thấy, hãy liên hệ Ủy ban nhân dân xã.",
   thieu_ma: "Bà con nhập mã phiếu để tra cứu.",
   buoc_mo_ta: "Mô tả",
   buoc_xong: "Xong",
@@ -744,9 +749,9 @@ export const XA_PA = {
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí, họ tên người gửi.",
   bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí.",
   gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
-  // Bản trải nghiệm KHÔNG gửi gì: câu này không được nói "đã gửi" hay hứa cán bộ phản hồi.
-  xong_tieu_de: "Đã lưu phản ánh (bản trải nghiệm)",
-  xong_mo_ta: "Phản ánh chỉ nằm trên máy này, cán bộ chưa nhận được. Khi ứng dụng kết nối xong, phản ánh sẽ gửi thẳng tới cán bộ.",
+  // Said only after a 201: the petition is in the commune's register and has its lookup code (rule 10 #1).
+  xong_tieu_de: "Đã gửi phản ánh",
+  xong_mo_ta: "Ủy ban nhân dân xã đã nhận phản ánh của bà con. Bà con giữ mã phiếu dưới đây để theo dõi.",
   ma_phieu_cua_ba_con: "Mã phiếu của bà con",
   theo_doi: "Theo dõi phiếu này",
   // Nháp đang soạn (ADR 0050 #7, prototype `NewFeedbackPage.tsx:426-453`) — chỉ app riêng của xã có nháp.

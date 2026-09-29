@@ -28,7 +28,11 @@ import {
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
 } from "./features/dang-nhap/cau-vigov";
-import { type CurrentLocationResult, getCurrentLocation } from "./features/dang-nhap/current-location";
+import {
+  type CurrentLocationResult,
+  getCommuneAppLocation,
+  getCurrentLocation,
+} from "./features/dang-nhap/current-location";
 import { layTenZalo } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
@@ -256,7 +260,7 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
     <TrangXa
       ten_mien={ten_mien}
       lay_ten={layTenChoXa}
-      getSceneLocation={getSceneLocation}
+      getSceneLocation={getCommuneSceneLocation}
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
     />
@@ -339,6 +343,12 @@ export function toSceneLocationResult(result: CurrentLocationResult): SceneLocat
 }
 
 const getSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCurrentLocation());
+
+/**
+ * The commune app's location: same table, but the exchange carries this app's App ID so `vihat-miniapp`
+ * uses its own secret (`getCommuneAppLocation`). The shared app above keeps the two-key body.
+ */
+const getCommuneSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCommuneAppLocation());
 
 /**
  * CẦU HỌ TÊN — `getUserInfo`, gọi CHỈ từ bước mở app của `TrangXa` (29/09/2026): "check" không bật hộp

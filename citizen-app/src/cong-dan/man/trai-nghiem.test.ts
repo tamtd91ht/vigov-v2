@@ -9,21 +9,14 @@ import { buocDaQua } from "./PhanAnhAppXa";
 import { groupOf, STATUS_GROUP_LABEL, STEP_LABEL } from "./status-groups";
 import { chuyenMucCua, tinLienQuan } from "./TinTucAppXa";
 import {
-  apDanhGia,
-  cheHoTen,
-  cheSoDienThoai,
   chuCaiDau,
-  duocDanhGia,
   kiemNhapPhieu,
   LINH_VUC_TAM,
   loiChao,
-  maPhieuTraiNghiem,
   NHAN_BUOC,
   NHAN_NHOM,
   nhomCua,
   type NhapPhieu,
-  taoPhieuTraiNghiem,
-  traPhieuTraiNghiem,
   VONG_DOI,
 } from "./trai-nghiem";
 
@@ -46,20 +39,14 @@ describe("họ tên: xin quyền Zalo, không đăng nhập, không người dù
     }
   });
 
-  it("app riêng không xin quyền số điện thoại — Zalo chỉ trả mã, không có máy chủ đổi", () => {
+  it("app riêng không gọi Zalo xin số trực tiếp — số chỉ đi qua hàm mở phiên (App ID + mã số), sau cú bấm", () => {
     const app = import.meta.glob("../../App.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
     const ma = Object.values(app)[0]!;
     const than = ma.slice(ma.indexOf("export function AppRieng("), ma.indexOf("function AppChung("));
     expect(than.length).toBeGreaterThan(0);
     expect(than).not.toMatch(/xinTokenSoDienThoai|xinHaiMaDangNhap/);
     expect(than).toMatch(/layTenZalo/);
-  });
-
-  it("che số điện thoại và họ tên cùng khuôn máy chủ che cho người gửi", () => {
-    expect(cheSoDienThoai("0900000000")).toBe("09****0000");
-    expect(cheSoDienThoai("12")).toBe("••••");
-    expect(cheHoTen("Nguyễn Văn An")).toBe("Nguyễn V. A.");
-    expect(cheHoTen("  ")).toBe("");
+    expect(than).toMatch(/openSession=\{openCommuneAppSession\}/);
   });
 
   it("chữ cái đầu lấy theo tên gọi; lời chào theo giờ", () => {
@@ -70,20 +57,10 @@ describe("họ tên: xin quyền Zalo, không đăng nhập, không người dù
   });
 });
 
-describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () => {
+describe("biểu mẫu gửi phản ánh của app riêng", () => {
   it("năm ô người dân gõ ứng đúng năm trường máy chủ nhận, cộng lĩnh vực dân chọn (ADR 0050)", () => {
     // noi_dung · dia_chi · ho_ten · dien_thoai · an_danh ↔ content · address · reporter_name · reporter_phone · anonymous
     expect(Object.keys(NHAP).filter((k) => k !== "linh_vuc")).toHaveLength(TRUONG_DUOC_NHAN.length);
-  });
-
-  it("lĩnh vực dân chọn LÀ lĩnh vực của phiếu, nhưng Mini App không tự tính hạn (ADR 0050 #1, luật 10)", () => {
-    const p = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
-    expect(p.linh_vuc).toBe("Rác thải – Vệ sinh môi trường");
-    expect(p.nhan_linh_vuc).toBe("Rác thải – Vệ sinh môi trường");
-    expect(p.han_tiep_nhan).toBeNull();
-    expect(p.han_xu_ly_xong).toBeNull();
-    expect(p.danh_gia).toBeNull();
-    expect(p.so_lan_mo_lai).toBe(0);
   });
 
   it("danh mục tạm: mười hai tên, không một con số giờ nào (luật 10 cấm #3)", () => {
@@ -105,35 +82,6 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     expect(kiemNhapPhieu({ ...NHAP, noi_dung: "a".repeat(4001) }, CAU).noi_dung).toBe("quá 4000");
     // Ẩn danh thì họ tên dài không còn là lỗi: ô ấy không được gửi.
     expect(kiemNhapPhieu({ ...NHAP, an_danh: true, ho_ten: "a".repeat(300) }, CAU)).toEqual({});
-  });
-
-  it("phiếu mới: đã tiếp nhận, chưa phân loại, không bịa hạn, người gửi đã che", () => {
-    const p = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
-    expect(p).toMatchObject({
-      ma_tra_cuu: "TN-AAAAAAAA",
-      trang_thai: "da-tiep-nhan",
-      nhan_linh_vuc: "Rác thải – Vệ sinh môi trường",
-      noi_dung: "Rác tồn đọng đầu ngõ 12",
-      dia_chi: "Ngõ 12",
-      ho_ten_da_che: "Nguyễn V. A.",
-      dien_thoai_da_che: "09****0000",
-      han_tiep_nhan: null,
-      han_xu_ly_xong: null,
-    });
-  });
-
-  it("ẩn danh: không giữ họ tên, không giữ số điện thoại — cùng lời hứa của thanGuiPhanAnh", () => {
-    const p = taoPhieuTraiNghiem({ ...NHAP, an_danh: true }, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
-    expect(p.ho_ten_da_che).toBe("");
-    expect(p.dien_thoai_da_che).toBe("");
-    expect(p.an_danh).toBe(true);
-  });
-
-  it("mã tra cứu có tiền tố TN- và 8 ký tự không đoán được; tra cứu không phân biệt hoa thường", () => {
-    expect(maPhieuTraiNghiem()).toMatch(/^TN-[A-HJ-NP-Z2-9]{8}$/);
-    const p = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-ABCDEFGH");
-    expect(traPhieuTraiNghiem([p], " tn-abcdefgh ")).toBe(p);
-    expect(traPhieuTraiNghiem([p], "TN-ZZZZZZZZ")).toBeNull();
   });
 
   it("chín trạng thái gộp về đúng bốn nhóm người dân thấy (ADR 0050 #5)", () => {
@@ -170,32 +118,9 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     expect(buocDaQua("khong-tiep-nhan")).toEqual(["da-tiep-nhan", "dang-phan-loai", "khong-tiep-nhan"]);
   });
 
-  it("đánh giá: chỉ khi đã xử lý xong và chưa chấm; 1–2 sao mở lại phiếu (ADR 0050 #2)", () => {
-    const moi = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
-    expect(duocDanhGia(moi)).toBe(false);
-    const xong = { ...moi, trang_thai: "da-xu-ly" };
-    expect(duocDanhGia(xong)).toBe(true);
-
-    const thap = apDanhGia(xong, 2, "  chưa dọn hết ");
-    expect(thap).toMatchObject({ trang_thai: "dang-xu-ly", so_lan_mo_lai: 1, danh_gia: { sao: 2, nhan_xet: "chưa dọn hết" } });
-
-    const cao = apDanhGia(xong, 3, "");
-    expect(cao.trang_thai).toBe("da-xu-ly");
-    expect(cao.so_lan_mo_lai).toBe(0);
-    expect(duocDanhGia(cao)).toBe(false);
-    // Mở lại rồi xử lý xong lần nữa: được chấm lại, lần mới thay lần cũ (`service.py:813`).
-    expect(duocDanhGia(thap)).toBe(false);
-    const xong_lai = { ...thap, trang_thai: "da-xu-ly" };
-    expect(duocDanhGia(xong_lai)).toBe(true);
-    const cham_lai = apDanhGia(xong_lai, 4, "");
-    expect(cham_lai.danh_gia?.sao).toBe(4);
-    expect(duocDanhGia(cham_lai)).toBe(false);
-    // Số sao ngoài khoảng bị kẹp về 1..5, không bao giờ ghi 0 hay 9.
-    expect(apDanhGia(xong, 9, "").danh_gia?.sao).toBe(5);
-    expect(apDanhGia(xong, 0, "").danh_gia?.sao).toBe(1);
-  });
-
-  it("không tệp nào của bản trải nghiệm gọi mạng hay ghi xuống máy", () => {
+  it("no screen file of the commune app calls the network itself or writes to the phone", () => {
+    // `PhanAnhAppXa.tsx` now USES the ViGov client (`goi-vigov.ts`, the one file allowed to `fetch`), but
+    // calls no `fetch` of its own and touches no storage; the other two stay offline entirely.
     const tep = import.meta.glob(["./trai-nghiem.ts", "./PhanAnhAppXa.tsx", "./TienIchAppXa.tsx"], {
       query: "?raw",
       import: "default",
@@ -205,7 +130,20 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     for (const [duong, nguon] of Object.entries(tep)) {
       // Bỏ chú thích: các tệp GIẢI THÍCH bằng lời rằng chúng không dùng localStorage.
       const ma = nguon.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-      expect(ma, duong).not.toMatch(/\bfetch\(|goi-vigov|localStorage|sessionStorage|indexedDB/);
+      expect(ma, duong).not.toMatch(/\bfetch\(|localStorage|sessionStorage|indexedDB/);
+      if (!duong.endsWith("PhanAnhAppXa.tsx")) expect(ma, duong).not.toMatch(/goi-vigov/);
+    }
+  });
+
+  it("the in-memory experience is gone: no TN- code, no 'bản trải nghiệm' in any commune-app source", () => {
+    const tep = import.meta.glob(["./*.ts", "./*.tsx"], { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >;
+    for (const [duong, nguon] of Object.entries(tep)) {
+      if (duong.includes(".test.")) continue;
+      const code = nguon.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      expect(code, duong).not.toMatch(/`TN-|"TN-|trải nghiệm|TRẢI NGHIỆM|taoPhieuTraiNghiem|maPhieuTraiNghiem/);
     }
   });
 });

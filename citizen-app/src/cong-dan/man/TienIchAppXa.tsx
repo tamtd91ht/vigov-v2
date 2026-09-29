@@ -76,7 +76,11 @@ export function CaNhanXa(props: {
   ho_ten: string | null;
   ten_xa: string;
   tinh: string;
-  so_phieu: number;
+  /**
+   * Petitions loaded in this open: the count, and whether more pages exist; `null` when not loaded (no
+   * session yet) — then no number is shown, never an invented 0.
+   */
+  so_phieu: { readonly count: number; readonly more: boolean } | null;
   co_chu: CoChu;
   onDoiCoChu: (c: CoChu) => void;
   onMoPhanAnh: () => void;
@@ -107,7 +111,13 @@ export function CaNhanXa(props: {
           <OBieuTuong ten="chat" mau="hong" />
           <span className="xa-hang__chu">
             <strong>{CUA_TOI.tieu_de}</strong>
-            <span className="xa-phu">{XA_TN.so_phieu(props.so_phieu)}</span>
+            <span className="xa-phu">
+              {props.so_phieu === null
+                ? XA_TN.so_phieu_unknown
+                : props.so_phieu.more
+                  ? XA_TN.so_phieu_more(props.so_phieu.count)
+                  : XA_TN.so_phieu(props.so_phieu.count)}
+            </span>
           </span>
           <BieuTuong ten="right" co={20} />
         </button>

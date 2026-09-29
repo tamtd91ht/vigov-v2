@@ -8,8 +8,7 @@ import { isSceneLocation, OPTIONAL_SCENE_FIELDS, type PhanAnhMoi, thanGuiPhanAnh
 // vi-name-ok: importing EXISTING names (`BuocNhap`, `BuocXacNhan`, `PHAN_ANH_TRONG`) — no new name
 import { BuocNhap, BuocXacNhan, PHAN_ANH_TRONG } from "./GuiPhanAnhScreen";
 import { GUI, SEND_LOCATION_WORDS } from "./noi-dung";
-// vi-name-ok: importing the EXISTING screen `GuiPhanAnhTN` — no new name
-import { COMMUNE_LOCATION_WORDS, GuiPhanAnhTN } from "./PhanAnhAppXa";
+import { COMMUNE_LOCATION_WORDS, CommuneSendScreen } from "./PhanAnhAppXa";
 import {
   formatCoordinates,
   type GetSceneLocation,
@@ -161,7 +160,7 @@ describe("what the citizen sees — live form (shared app)", () => {
   });
 });
 
-describe("what the citizen sees — experience form (commune's own app)", () => {
+describe("what the citizen sees — send form of the commune's own app", () => {
   it("the control speaks 'bà con' and shows the real coordinates", () => {
     const html = renderToStaticMarkup(
       createElement(SceneLocationControl, {
@@ -189,12 +188,13 @@ describe("what the citizen sees — experience form (commune's own app)", () => 
   it("rendering the send screen never taps: no exchange runs on its own", () => {
     const get = vi.fn<GetSceneLocation>();
     const html = renderToStaticMarkup(
-      createElement(GuiPhanAnhTN, {
+      createElement(CommuneSendScreen, {
         ten_xa: "Xã Thử Nghiệm",
         ho_ten: null,
-        onQuayLai: () => {},
-        onDaGui: () => {},
-        onXemPhieu: () => {},
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
         getSceneLocation: get,
       }),
     );

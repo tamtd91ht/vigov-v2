@@ -237,6 +237,15 @@ export async function openCommuneAppSession(
 }
 
 /**
+ * Quên phiên của app riêng — khi một tuyến phản ánh trả 401 (phiên hết hạn / bị thu hồi) hoặc 403
+ * `chua_xac_thuc_so`. Việc cá nhân kế tiếp lại đi qua cổng (`commune-session.ts`): lời giải thích, cú bấm
+ * đồng ý, rồi một phiên MỚI kèm số. Giữ một bearer máy chủ đã từ chối là để mọi lần bấm sau hỏng y hệt.
+ */
+export function dropCommuneAppSession(): void {
+  datPhienViGov(null);
+}
+
+/**
  * Hàm mở phiên của app riêng, nhìn như một `ReopenWithPhone` — cho lần 403 `chua_xac_thuc_so` (và cho
  * `usePhoneVerification` của các màn dùng chung). Thân app riêng luôn mang số, nên "mở lại kèm số" chính là
  * mở phiên lần nữa; `reopenSessionWithPhone` vẫn là bên so tên xã với phiên đang dùng và quyết định ghi.

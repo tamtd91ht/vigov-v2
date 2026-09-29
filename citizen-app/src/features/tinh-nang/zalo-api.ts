@@ -254,7 +254,9 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // THÊM 28/09/2026 — lời gọi ĐẦU TIÊN của riêng nửa nhà nước. Chủ dự án: "không còn đăng nhập nữa, chỉ
     // cần xin quyền để lấy được name, phone number". Tên thì `getUserInfo` trả thẳng sau khi người dân
     // đồng ý (NĐ 13/2023 — `autoRequestPermission`). Số điện thoại KHÔNG: `getPhoneNumber` chỉ trả mã,
-    // máy chủ mới đổi được — nên app riêng không gọi nó, người dân tự gõ số nếu muốn xã gọi lại.
+    // máy chủ mới đổi được. Từ 29/09/2026 app riêng gọi nó CHỈ để mở phiên ở việc cá nhân đầu tiên (dòng
+    // `getPhoneNumber` dưới, `cau-vigov.ts` `openCommuneAppSessionWithPhone`); số không về máy, nên ô số
+    // điện thoại của biểu mẫu vẫn do người dân tự gõ.
     // 29/09/2026 (user decision): asked ONCE, when the commune app opens — no longer from a button on
     // "Gửi phản ánh" / "Cá nhân". Those two screens now only SHOW the name taken at entry.
     api: "getUserInfo",

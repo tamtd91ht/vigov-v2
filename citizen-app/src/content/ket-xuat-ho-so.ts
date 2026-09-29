@@ -20,6 +20,7 @@ import {
 } from "../api/hop-dong-yeu-cau";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
+  COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
   DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
@@ -472,6 +473,18 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: SEND_SCREEN_NAME,
     truong: LOCATION_FIELDS,
+  },
+  {
+    // SAME ROUTE, the commune's OWN app (29/09/2026, `vihat-miniapp` 4114f00): the body adds `appId` so
+    // the server exchanges the token with that app's secret. Same tap, same screen, one more key.
+    // ⚠ Policy sentence still owed (same stance as the row above); `chinh-sach.test.ts` pins it.
+    tuyen: LOCATION_PATH,
+    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, người dùng tự bấm “Lấy vị trí hiện tại” khi gửi phản ánh và đồng ý chia sẻ vị trí trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
+    man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+    truong: COMMUNE_APP_LOCATION_FIELDS,
   },
   ...DUONG_CONG_KHAI.slice(1),
 ];

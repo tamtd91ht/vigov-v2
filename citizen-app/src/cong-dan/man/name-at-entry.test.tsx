@@ -30,9 +30,9 @@ vi.mock("../api/goi-vigov", async (importOriginal) => {
   };
 });
 
-import { XA_TN } from "./noi-dung";
+import { XA_PA, XA_TN } from "./noi-dung";
 import * as sendScreens from "./PhanAnhAppXa";
-import { blankForm, GuiPhanAnhTN } from "./PhanAnhAppXa";
+import { blankForm, CommuneSendScreen } from "./PhanAnhAppXa";
 import { CaNhanXa } from "./TienIchAppXa";
 // vi-name-ok: importing the EXISTING type `LayTenZalo` — no new name
 import { afterNameAsk, afterNameCheck, type LayTenZalo, type NameRequestMode, nameShown } from "./trai-nghiem";
@@ -275,6 +275,14 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
     await unmount();
   });
 
+  it("opening the app opens NO session: the opener is not called, 'Phản ánh của tôi' only offers to ask", async () => {
+    const openSession = vi.fn(async () => ({ kieu: "tu-choi" as const }));
+    const { host, unmount } = await mount(createElement(TrangXa, { ten_mien: "thu.vigov.vn", openSession }));
+    expect(openSession).not.toHaveBeenCalled();
+    expect(host.textContent).toContain(XA_PA.need_session_button);
+    await unmount();
+  });
+
   it("no bridge injected (dev, tests): nothing is asked, nothing is offered", async () => {
     const { host, unmount } = await mount(entry());
     expect(host.textContent).not.toContain(XA_TN.name_card_title);
@@ -312,7 +320,7 @@ const personal = (name: string | null) =>
       ho_ten: name,
       ten_xa: commune.ten,
       tinh: commune.tinh,
-      so_phieu: 0,
+      so_phieu: null,
       co_chu: "vua",
       onDoiCoChu: () => {},
       onMoPhanAnh: () => {},
@@ -346,12 +354,13 @@ describe("Gửi phản ánh: the name field is pre-filled from entry, or empty a
 
   it("the screen offers no Zalo button and takes no Zalo function", () => {
     const html = renderToStaticMarkup(
-      createElement(GuiPhanAnhTN, {
+      createElement(CommuneSendScreen, {
         ten_xa: commune.ten,
         ho_ten: null,
-        onQuayLai: () => {},
-        onDaGui: () => {},
-        onXemPhieu: () => {},
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
       }),
     );
     expect(html).not.toContain(OLD_BUTTON);

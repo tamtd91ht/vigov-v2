@@ -7,13 +7,15 @@
  * sơ, danh bạ, truyền thanh, video, bản đồ, thông báo.
  *
  * DỮ LIỆU:
- *   · thật — tên xã (`/communes`), tin tức (`/commune-news`), danh bạ (`/commune-staff`), đều công khai
- *     theo tên miền, không đăng nhập, không qua `vihat-miniapp`;
+ *   · công khai — tên xã (`/communes`), tin tức (`/commune-news`), danh bạ (`/commune-staff`), theo tên
+ *     miền, không phiên, không qua `vihat-miniapp`;
  *   · họ tên — lấy từ Zalo MỘT LẦN, lúc mở app, ở đây (`getUserInfo`, tiêm từ lớp vỏ; quyết định của người
- *     dùng 29/09/2026, thay "xin quyền tại chỗ cần" của ea76c9d). Các màn bên dưới chỉ HIỂN THỊ tên ấy hoặc
- *     "Chưa xác định" — không màn nào gọi Zalo lại. Không đăng nhập, không màn định danh (chủ dự án,
- *     28/09/2026). Số điện thoại người dân tự gõ: Zalo chỉ trả mã, máy chủ mới đổi;
- *   · trải nghiệm — phiếu phản ánh CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`), gắn nhãn, KHÔNG gửi vào hệ thống;
+ *     dùng 29/09/2026). Các màn bên dưới chỉ HIỂN THỊ tên ấy hoặc "Chưa xác định" — không màn nào gọi Zalo
+ *     lại. Tên chỉ điền sẵn, không cấp gì (luật 4);
+ *   · phản ánh — sổ phản ánh THẬT của xã (29/09/2026), qua phiên công dân ViGov mở ở VIỆC CÁ NHÂN ĐẦU TIÊN
+ *     (gửi, xem phản ánh của tôi, tra cứu phiếu, chấm sao): lời giải thích trước, rồi mới tới hộp thoại xin
+ *     số của Zalo (`commune-session.ts`, chính sách 3.3.4). Danh tính người gửi lấy từ phiên ở máy chủ, xã
+ *     lấy từ App ID của app — và phiên chỉ được giữ khi tên xã của nó TRÙNG tên xã trên đầu màn hình;
  *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
  * NHÁP PHẢN ÁNH (ADR 0050 #7, chủ dự án 28/09/2026): có, như bản mẫu — nhưng nửa này KHÔNG chạm kho lưu
@@ -24,29 +26,55 @@
  *
  * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
  */
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
-import type { OpenCommuneAppSession } from "../api/mo-phien-vigov";
+import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
+import {
+  createSessionGate,
+  type SessionGate,
+  sessionGateMessage,
+  sessionGateOffersRetry,
+  type SessionGateState,
+} from "./commune-session";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
-import { DauKhoi, DauManCon, KhoiTrangThai, OBieuTuong, TrangCon } from "./khung-xa";
-import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
-import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
+import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
+import {
+  APP_RIENG,
+  COMMUNE_APP_SESSION,
+  CUA_TOI,
+  DANH_BA,
+  PHONE_VERIFICATION,
+  type PhoneVerificationTask,
+  TIN_XA,
+  XA_GIAO_DIEN,
+  XA_PA,
+  XA_TN,
+} from "./noi-dung";
+import {
+  CommuneSendScreen,
+  ListStatus,
+  type MyPetitions,
+  type OnSessionLost,
+  PetitionCard,
+  PetitionDetail,
+  PetitionList,
+  PetitionLookup,
+  useMyPetitions,
+} from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
 import {
   afterNameAsk,
   afterNameCheck,
-  apDanhGia,
   type FeedbackDraftStore,
   type LayTenZalo,
   type NameAtEntry,
   nameShown,
-  type PhieuTN,
 } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
@@ -208,13 +236,16 @@ function TrangChuXa(props: {
   /** The entry card, when the name still needs the citizen's consent; otherwise `null`. */
   name_card: ReactNode;
   tin: ReturnType<typeof useTinXa>;
-  phieu: readonly PhieuTN[];
+  /** "Phản ánh của tôi" as loaded in this open — `idle` until the citizen asks (the gate). */
+  petitions: MyPetitions;
+  onOpenPetitions: () => void;
+  onRetryPetitions: () => void;
   di: (m: ManXa) => void;
 }) {
-  const { xa, tin, di, ho_ten } = props;
+  const { xa, tin, di, ho_ten, petitions } = props;
   // Hai phiếu, hai tin — đúng bố cục trang chủ của prototype (`HomePage.tsx`).
   const tin_moi = tin.ds.muc.slice(0, 2);
-  const phieu_moi = props.phieu.slice(0, 2);
+  const phieu_moi = petitions.kind === "ready" ? petitions.items.slice(0, 2) : [];
 
   return (
     <div className="xa-trang">
@@ -261,11 +292,14 @@ function TrangChuXa(props: {
               {XA_GIAO_DIEN.xem_tat_ca}
             </button>
           </div>
-          {phieu_moi.length > 0 ? (
+          {petitions.kind !== "ready" ? (
+            // Not loaded: the card that asks — nothing personal is fetched at app open (ADR 0047:251).
+            <ListStatus state={petitions} onOpen={props.onOpenPetitions} onRetry={props.onRetryPetitions} />
+          ) : phieu_moi.length > 0 ? (
             <ul className="xa-ds">
               {phieu_moi.map((p) => (
                 <li key={p.ma_tra_cuu}>
-                  <ThePhieuTN phieu={p} onMo={() => di({ kieu: "phieu", ma: p.ma_tra_cuu, tu: "trang-chu" })} />
+                  <PetitionCard petition={p} onOpen={() => di({ kieu: "phieu", ma: p.ma_tra_cuu, tu: "trang-chu" })} />
                 </li>
               ))}
             </ul>
@@ -304,13 +338,77 @@ function TrangChuXa(props: {
 
 /* ═════════════════════════════════ CÁC TAB KHÁC ═════════════════════════════════ */
 
-function DauTab({ tieu_de, nhan_tn }: { tieu_de: string; nhan_tn?: boolean }) {
+function DauTab({ tieu_de }: { tieu_de: string }) {
   return (
     <div className="xa-dau-tab">
       <h1 className="xa-dau-con__tieu-de">{tieu_de}</h1>
-      {nhan_tn && <NhanTraiNghiem />}
     </div>
   );
+}
+
+/**
+ * The gate, as a screen of its own — one task per screen (`skills/accessibility-elderly` #4). The screen it
+ * covers stays MOUNTED underneath (hidden), so a half-written petition survives the detour.
+ *
+ *   `hoi`       WHY first, then what Zalo will ask, then the button — Zalo's dialog opens only on "Đồng ý"
+ *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's)
+ *   `dang-mo`   words, not a spinner
+ *   `ket-qua`   one sentence saying what to do next; "Đồng ý…" again only where a new tap can help
+ */
+function SessionGateScreen(props: {
+  state: SessionGateState;
+  task: PhoneVerificationTask;
+  onAllow: () => void;
+  onDecline: () => void;
+  onClose: () => void;
+}) {
+  const { state } = props;
+  return (
+    <>
+      <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
+      <TrangCon>
+        {state.kieu === "dang-mo" && <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai />}
+        {state.kieu === "hoi" && (
+          <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-tieu-de">
+            <h2 className="xa-dau-khoi__tieu-de" id="xa-cong-tieu-de">
+              {PHONE_VERIFICATION.title}
+            </h2>
+            <p>{PHONE_VERIFICATION.why}</p>
+            <p className="xa-phu">{PHONE_VERIFICATION.zalo_asks}</p>
+            <button type="button" className="xa-nut" onClick={props.onAllow}>
+              {PHONE_VERIFICATION.allow}
+            </button>
+            <button type="button" className="xa-nut xa-nut--phu" onClick={props.onDecline}>
+              {PHONE_VERIFICATION.decline}
+            </button>
+          </section>
+        )}
+        {state.kieu === "ket-qua" && (
+          <>
+            <KhoiTrangThai
+              bieu_tuong="alert"
+              loi
+              cau={sessionGateMessage(state.outcome, props.task)}
+              nut={sessionGateOffersRetry(state.outcome) ? { nhan: PHONE_VERIFICATION.allow, onBam: props.onAllow } : undefined}
+            />
+            <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
+              {XA_TN.nut_ve_trang_chu}
+            </button>
+          </>
+        )}
+      </TrangCon>
+    </>
+  );
+}
+
+/** `createSessionGate` held once per open. The commune name is read at call time, from the header's source. */
+function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: string) {
+  const [state, setState] = useState<SessionGateState | null>(null);
+  const name = useRef(communeName);
+  name.current = communeName;
+  const gate = useRef<SessionGate | null>(null);
+  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState);
+  return { gate: gate.current, state };
 }
 
 function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
@@ -338,17 +436,50 @@ function AppCuaXa(props: {
   draftStore?: FeedbackDraftStore;
   openSession?: OpenCommuneAppSession;
 }) {
-  const { ten_mien, xa } = props;
-  // HỌ TÊN VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy. Không đăng
-  // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Thứ
-  // DUY NHẤT sống qua lần đóng app là NHÁP đang soạn, qua `draftStore` lớp vỏ tiêm (ADR 0050 #7).
+  const { ten_mien, xa, openSession } = props;
+  // Họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Phiên ViGov chỉ trong bộ nhớ (`api/phien-vigov.ts`), mở ở
+  // việc cá nhân đầu tiên qua cổng dưới đây. Thứ DUY NHẤT sống qua lần đóng app là NHÁP đang soạn, qua
+  // `draftStore` lớp vỏ tiêm (ADR 0050 #7).
   const shownName = nameShown(props.name);
-  const [phieu, datPhieu] = useState<readonly PhieuTN[]>([]);
   const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
   const tin = useTinXa(ten_mien);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
   const lop = `xa-app xa-co-chu--${co_chu}`;
+
+  /* ── THE GATE: every personal act asks here first (`commune-session.ts`) ── */
+  const { gate, state: gateState } = useSessionGate(openSession, xa.ten);
+  const [gateTask, setGateTask] = useState<PhoneVerificationTask>("submit");
+  // The 403 path of the rating block (`usePhoneVerification`): the same opener, the same commune check.
+  const reopenWithPhone = useMemo(() => (openSession ? communeAppReopen(openSession) : undefined), [openSession]);
+
+  /** Run `act` with a session — at once if one exists, otherwise after the explanation and the tap. */
+  function requireSession(task: PhoneVerificationTask, act: () => void) {
+    setGateTask(task);
+    gate.require(() => {
+      act();
+      // A session now exists: the home block and Cá nhân fill in without a second question.
+      petitions.loadIfIdle();
+    });
+  }
+
+  /** 401 / 403 `chua_xac_thuc_so`: forget the session, and run the act again through the gate. */
+  const sessionLost =
+    (task: PhoneVerificationTask): OnSessionLost =>
+    (retry) => {
+      dropCommuneAppSession();
+      requireSession(task, retry);
+    };
+
+  const petitions = useMyPetitions(sessionLost("mine"));
+  const openPetitions = () => requireSession("mine", () => void petitions.load());
+
+  /** Navigation from a tap. The two personal screens pass the gate; everything else is public. */
+  function go(m: ManXa) {
+    if (m.kieu === "gui") requireSession("submit", () => datMan(m));
+    else if (m.kieu === "tra-cuu-phieu") requireSession("lookup", () => datMan(m));
+    else datMan(m);
+  }
 
   const ve = () => veTab("trang-chu");
   let man_con = null;
@@ -367,23 +498,27 @@ function AppCuaXa(props: {
       break;
     case "gui":
       man_con = (
-        <GuiPhanAnhTN
+        <CommuneSendScreen
           ten_xa={xa.ten}
           ho_ten={shownName}
           getSceneLocation={props.getSceneLocation}
           draftStore={props.draftStore}
-          onQuayLai={ve}
-          onDaGui={(p) => datPhieu((ds) => [p, ...ds])}
-          onXemPhieu={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
+          onBack={ve}
+          onSessionLost={sessionLost("submit")}
+          onSent={() => void petitions.load()}
+          onOpenPetition={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
         />
       );
       break;
     case "phieu":
       man_con = (
-        <ChiTietPhieuTN
-          phieu={phieu.find((p) => p.ma_tra_cuu === man.ma) ?? null}
-          onQuayLai={() => veTab(man.tu)}
-          onDanhGia={(ma, sao, nx) => datPhieu((ds) => ds.map((p) => (p.ma_tra_cuu === ma ? apDanhGia(p, sao, nx) : p)))}
+        <PetitionDetail
+          key={man.ma}
+          code={man.ma}
+          onBack={() => veTab(man.tu)}
+          onSessionLost={sessionLost("mine")}
+          onChanged={() => void petitions.load()}
+          reopenWithPhone={reopenWithPhone}
         />
       );
       break;
@@ -394,7 +529,14 @@ function AppCuaXa(props: {
       man_con = <TraCuuHoSoXa onQuayLai={ve} />;
       break;
     case "tra-cuu-phieu":
-      man_con = <TraCuuPhieuTN phieu={phieu} onQuayLai={() => veTab("phan-anh")} />;
+      man_con = (
+        <PetitionLookup
+          onBack={() => veTab("phan-anh")}
+          onSessionLost={sessionLost("lookup")}
+          onChanged={() => void petitions.load()}
+          reopenWithPhone={reopenWithPhone}
+        />
+      );
       break;
     case "truyen-thanh":
       man_con = (
@@ -437,7 +579,25 @@ function AppCuaXa(props: {
     default:
       break;
   }
-  if (man_con !== null) return <div className={lop}>{man_con}</div>;
+  // The gate covers the current screen; that screen stays mounted (`hidden`), so what was typed survives.
+  const gateScreen =
+    gateState === null ? null : (
+      <SessionGateScreen
+        state={gateState}
+        task={gateTask}
+        onAllow={() => void gate.allow()}
+        onDecline={gate.decline}
+        onClose={gate.reset}
+      />
+    );
+  const withGate = (content: ReactNode) => (
+    <div className={lop}>
+      {gateScreen}
+      <div hidden={gateScreen !== null}>{content}</div>
+    </div>
+  );
+
+  if (man_con !== null) return withGate(man_con);
 
   const tab = man.kieu === "tab" ? man.tab : "trang-chu";
   let than;
@@ -446,7 +606,18 @@ function AppCuaXa(props: {
       props.name.kind === "needs-consent" || props.name.kind === "asking" ? (
         <NameCard asking={props.name.kind === "asking"} onAgree={props.onAgreeName} onDecline={props.onDeclineName} />
       ) : null;
-    than = <TrangChuXa xa={xa} ho_ten={shownName} name_card={name_card} tin={tin} phieu={phieu} di={datMan} />;
+    than = (
+      <TrangChuXa
+        xa={xa}
+        ho_ten={shownName}
+        name_card={name_card}
+        tin={tin}
+        petitions={petitions.state}
+        onOpenPetitions={openPetitions}
+        onRetryPetitions={() => void petitions.load()}
+        di={go}
+      />
+    );
   } else if (tab === "tin-tuc") {
     than = (
       <>
@@ -459,16 +630,19 @@ function AppCuaXa(props: {
   } else if (tab === "phan-anh") {
     than = (
       <>
-        <DauTab tieu_de={CUA_TOI.tieu_de} nhan_tn />
+        <DauTab tieu_de={CUA_TOI.tieu_de} />
         <div className="xa-trang xa-trang--tab">
-          <button type="button" className="xa-nut xa-nut--hong xa-nut--dau" onClick={() => datMan({ kieu: "gui" })}>
+          <button type="button" className="xa-nut xa-nut--hong xa-nut--dau" onClick={() => go({ kieu: "gui" })}>
             <BieuTuong ten="megaphone" co={22} />
             {XA_GIAO_DIEN.o_gui}
           </button>
-          <DanhSachPhieuTN
-            phieu={phieu}
-            onMo={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
-            onTraCuu={() => datMan({ kieu: "tra-cuu-phieu" })}
+          <PetitionList
+            state={petitions.state}
+            onOpenPetition={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
+            onLookup={() => go({ kieu: "tra-cuu-phieu" })}
+            onOpen={openPetitions}
+            onRetry={() => void petitions.load()}
+            onLoadMore={() => void petitions.loadMore()}
           />
         </div>
       </>
@@ -481,7 +655,11 @@ function AppCuaXa(props: {
           ho_ten={shownName}
           ten_xa={xa.ten}
           tinh={xa.tinh}
-          so_phieu={phieu.length}
+          so_phieu={
+            petitions.state.kind === "ready"
+              ? { count: petitions.state.items.length, more: petitions.state.hasMore }
+              : null
+          }
           co_chu={co_chu}
           onDoiCoChu={datCoChu}
           onMoPhanAnh={() => veTab("phan-anh")}
@@ -491,11 +669,11 @@ function AppCuaXa(props: {
     );
   }
 
-  return (
-    <div className={lop}>
+  return withGate(
+    <>
       <main id="main">{than}</main>
       <ThanhTabXa tab={tab} onChon={veTab} />
-    </div>
+    </>,
   );
 }
 

@@ -411,9 +411,27 @@ export const LOCATION_FIELDS: readonly TruongGuiDi[] = [
   },
 ];
 
-/** The two Zalo codes → the request body. THE ONLY PLACE the two wire names are written. */
-export function locationBody(codes: LocationCodes): string {
-  return JSON.stringify({ accessToken: codes.access_token, locationToken: codes.location_token });
+/**
+ * The commune app's location body carries a THIRD key, `appId` (`vihat-miniapp` 4114f00, `vi_tri.go`): it
+ * selects which app secret exchanges the token — the commune app's own. Without it the server uses the
+ * shared app's secret and Zalo answers 502 for a commune app's token. Same sentence as the login body's
+ * `appId` row — one declaration, referenced, not copied.
+ */
+export const COMMUNE_APP_LOCATION_FIELDS: readonly TruongGuiDi[] = [
+  ...LOCATION_FIELDS,
+  COMMUNE_APP_SESSION_FIELDS.find((t) => t.khoa === "appId")!,
+];
+
+/**
+ * The two Zalo codes (+ the commune app's App ID) → the request body. THE ONLY PLACE the wire names are
+ * written. `app_id` null = the shared app: the body stays the two keys it always was.
+ */
+export function locationBody(codes: LocationCodes, app_id: string | null = null): string {
+  return JSON.stringify({
+    accessToken: codes.access_token,
+    locationToken: codes.location_token,
+    ...(app_id === null ? {} : { appId: app_id }),
+  });
 }
 
 /** Coordinates as read from the server, in our names. */

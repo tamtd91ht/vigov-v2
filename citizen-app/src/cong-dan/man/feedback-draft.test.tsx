@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { XA_PA } from "./noi-dung";
-import { GuiPhanAnhTN, restoreDraft } from "./PhanAnhAppXa";
+import { CommuneSendScreen, restoreDraft } from "./PhanAnhAppXa";
 import type { FeedbackDraftStore, NhapPhieu } from "./trai-nghiem";
 import { LINH_VUC_TAM } from "./trai-nghiem";
 
@@ -37,12 +37,13 @@ function storeWith(draft: NhapPhieu | null) {
 
 const render = (draftStore?: FeedbackDraftStore) =>
   renderToStaticMarkup(
-    createElement(GuiPhanAnhTN, {
+    createElement(CommuneSendScreen, {
       ten_xa: "Xã Thăng Bình",
       ho_ten: null,
-      onQuayLai: () => {},
-      onDaGui: () => {},
-      onXemPhieu: () => {},
+      onBack: () => {},
+      onSessionLost: () => {},
+      onSent: () => {},
+      onOpenPetition: () => {},
       ...(draftStore ? { draftStore } : {}),
     }),
   );

@@ -12,7 +12,7 @@
  *   upward. What goes up is only the coordinates, or the branch that says why there are none.
  */
 // vi-name-ok: importing the EXISTING result type `KetQuaXin` from zalo-api.ts — no new name
-import { type KetQuaXin, type LocationCodes, requestLocationCodes } from "../tinh-nang/zalo-api";
+import { type KetQuaXin, type LocationCodes, readRuntimeAppId, requestLocationCodes } from "../tinh-nang/zalo-api";
 
 import { exchangeLocation, type LocationExchangeResult } from "./goi-may-chu";
 
@@ -41,4 +41,23 @@ export async function getCurrentLocation(
     return { kieu: "khong-lay-duoc-ma" };
   }
   return exchange(codes.du_lieu);
+}
+
+/**
+ * THE COMMUNE APP'S LOCATION — the same two steps, with the App ID of the running app in the exchange body,
+ * so `vihat-miniapp` uses THIS app's secret (without it Zalo answers 502 for a commune app's token).
+ *
+ * App ID unknown → `tam-ngung` BEFORE Zalo is asked: sending without it is exactly the 502 above, after the
+ * citizen had already agreed to share where they stand. `readAppId` / `getCodes` / `exchange` exist only so
+ * a test can replace the three pieces.
+ */
+export async function getCommuneAppLocation(
+  readAppId: () => string | null = readRuntimeAppId,
+  getCodes: () => Promise<KetQuaXin<LocationCodes>> = requestLocationCodes,
+  exchange: (codes: LocationCodes, appId: string) => Promise<LocationExchangeResult> = (codes, appId) =>
+    exchangeLocation(codes, undefined, appId),
+): Promise<CurrentLocationResult> {
+  const appId = readAppId();
+  if (appId === null || appId === "") return { kieu: "tam-ngung" };
+  return getCurrentLocation(getCodes, (codes) => exchange(codes, appId));
 }

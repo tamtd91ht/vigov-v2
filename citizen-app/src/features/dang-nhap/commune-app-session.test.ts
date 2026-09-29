@@ -4,8 +4,16 @@ import { toCommuneAppSessionResult } from "../../App";
 import { readRuntimeAppId } from "../tinh-nang/zalo-api";
 
 import { type CommuneAppLoginResult, openCommuneAppSessionWithPhone } from "./cau-vigov";
-import { type CommuneAppBridgeResult, openCommuneAppSessionCall } from "./goi-may-chu";
-import { COMMUNE_APP_SESSION_FIELDS, communeAppSessionBody, type CommuneAppSessionRequest } from "./hop-dong";
+import { getCommuneAppLocation } from "./current-location";
+import { type CommuneAppBridgeResult, exchangeLocation, openCommuneAppSessionCall } from "./goi-may-chu";
+import {
+  COMMUNE_APP_LOCATION_FIELDS,
+  COMMUNE_APP_SESSION_FIELDS,
+  communeAppSessionBody,
+  type CommuneAppSessionRequest,
+  LOCATION_FIELDS,
+  locationBody,
+} from "./hop-dong";
 
 /**
  * LOGIN FROM A COMMUNE'S OWN APP — `POST /api/v1/sessions` with `appId` (`vihat-miniapp` 4114f00).
@@ -187,6 +195,39 @@ describe("shell table — App.tsx `toCommuneAppSessionResult`", () => {
         phien: { token: "t", het_han: "", ten_xa: "Xã Thử Nghiệm", da_xac_thuc_so: true, ten_mien_xa: "xa.vigov.example" },
       }),
     ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Thử Nghiệm", da_xac_thuc_so: true });
+  });
+});
+
+describe("location in the commune app — `appId` in the exchange, so the server uses THIS app's secret", () => {
+  const CODES = { access_token: "access-test", location_token: "location-test" };
+
+  it("shared app body unchanged (two keys); commune body adds `appId`; both locked to their declarations", () => {
+    const shared = JSON.parse(locationBody(CODES)) as Record<string, unknown>;
+    expect(Object.keys(shared).sort()).toEqual(LOCATION_FIELDS.map((t) => t.khoa).sort());
+    const commune = JSON.parse(locationBody(CODES, APP_ID)) as Record<string, unknown>;
+    expect(commune).toEqual({ accessToken: "access-test", locationToken: "location-test", appId: APP_ID });
+    expect(Object.keys(commune).sort()).toEqual(COMMUNE_APP_LOCATION_FIELDS.map((t) => t.khoa).sort());
+  });
+
+  it("422 app_not_configured → tam-ngung (pressing again changes nothing)", async () => {
+    stubFetch(answer(422, { code: "app_not_configured" }));
+    expect(await exchangeLocation(CODES, "https://mini.vidu.vn/api/v1/location", APP_ID)).toEqual({ kieu: "tam-ngung" });
+    expect(JSON.parse(calls[0]!.init.body as string)).toHaveProperty("appId", APP_ID);
+  });
+
+  it("unknown App ID → tam-ngung BEFORE Zalo is asked for the location", async () => {
+    const getCodes = vi.fn(async () => ({ kieu: "xong" as const, du_lieu: CODES }));
+    const exchange = vi.fn();
+    expect(await getCommuneAppLocation(() => null, getCodes, exchange)).toEqual({ kieu: "tam-ngung" });
+    expect(getCodes).not.toHaveBeenCalled();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  it("known App ID → codes, then one exchange carrying it", async () => {
+    const exchange = vi.fn(async () => ({ kieu: "xong" as const, location: { latitude: 15.5, longitude: 108.4 } }));
+    const result = await getCommuneAppLocation(() => APP_ID, async () => ({ kieu: "xong", du_lieu: CODES }), exchange);
+    expect(result).toEqual({ kieu: "xong", location: { latitude: 15.5, longitude: 108.4 } });
+    expect(exchange).toHaveBeenCalledWith(CODES, APP_ID);
   });
 });
 

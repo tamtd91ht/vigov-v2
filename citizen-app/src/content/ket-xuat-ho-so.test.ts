@@ -16,6 +16,7 @@ import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU } from "../cong-dan/man/
 import {
   BRIDGE_FIELDS_WITH_PHONE,
   bridgeBodyWithPhone,
+  COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
   communeAppSessionBody,
   LOCATION_FIELDS,
@@ -433,7 +434,12 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // mở lại phiên với xã KÈM `phoneToken` (cùng tuyến đăng nhập, thân thứ ba) + 1 của 29/09: đổi mã vị
     // trí lấy toạ độ (`vihat-miniapp` `/api/v1/location`), chỉ sau cú bấm "Lấy vị trí hiện tại" + 1 cũng
     // của 29/09: đăng nhập từ app riêng của xã (cùng tuyến đăng nhập, thân thứ tư, `appId` + `phoneToken`).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(10);
+    // + 1: the commune app's location exchange (same route, `appId` added).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(11);
+    const communeLocationRow = DUONG_ROI_KHOI_MAY.find((d) => d.truong === COMMUNE_APP_LOCATION_FIELDS);
+    expect(communeLocationRow, "hồ sơ không khai đổi mã vị trí của app riêng").toBeDefined();
+    expect(communeLocationRow!.tuyen).toBe(LOCATION_PATH);
+    expect(communeLocationRow!.nguoi_dung_bam).toBe(true);
     const locationRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === LOCATION_PATH);
     expect(locationRow, "hồ sơ không khai tuyến đổi mã vị trí").toBeDefined();
     expect(locationRow!.nguoi_dung_bam).toBe(true);
@@ -486,6 +492,11 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
         BRIDGE_FIELDS_WITH_PHONE,
       ],
       ["đổi mã vị trí", locationBody({ access_token: "m", location_token: "v" }), LOCATION_FIELDS],
+      [
+        "đổi mã vị trí của app riêng",
+        locationBody({ access_token: "m", location_token: "v" }, "1234567890"),
+        COMMUNE_APP_LOCATION_FIELDS,
+      ],
       [
         "đăng nhập từ app riêng của xã",
         communeAppSessionBody({ ma_truy_cap: "m", ma_so_dien_thoai: "p", app_id: "1234567890" }),
@@ -568,7 +579,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("9 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("10 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

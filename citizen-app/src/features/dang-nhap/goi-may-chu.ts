@@ -206,6 +206,8 @@ export type LocationExchangeResult =
 export async function exchangeLocation(
   codes: LocationCodes,
   address: string = locationAddress(),
+  /** The commune app's App ID (selects its secret), or `null` for the shared app. */
+  appId: string | null = null,
 ): Promise<LocationExchangeResult> {
   if (address === "") return { kieu: "chua-khai-host" };
 
@@ -216,7 +218,7 @@ export async function exchangeLocation(
     const response = await fetch(address, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: locationBody(codes),
+      body: locationBody(codes, appId),
       signal: controller.signal,
     });
 
@@ -232,6 +234,9 @@ export async function exchangeLocation(
         return { kieu: "qua-nhieu-lan" };
       case 502:
         return { kieu: "zalo-khong-tra-loi" };
+      // 422 `app_not_configured`: the App ID is not one the server knows. Like 503, pressing again changes
+      // nothing — only the shared app's body (no `appId`) can never meet it.
+      case 422:
       case 503:
         return { kieu: "tam-ngung" };
       default:

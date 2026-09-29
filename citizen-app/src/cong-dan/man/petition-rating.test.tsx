@@ -35,13 +35,12 @@ import {
 } from "../api/hop-dong-phan-anh";
 import { taoLanGui } from "../api/lan-gui";
 
-import { KhoiDanhGia } from "./PhanAnhAppXa";
 import * as TEXTS from "./noi-dung";
 import { PHONE_VERIFICATION_TASK, RATING, RATING_ERROR, TRANG_THAI, XA_PA } from "./noi-dung";
+import { PetitionBody } from "./PhanAnhAppXa";
 import { attemptFor, type RatingErrorBranch, ratingOutcome, RatingPanel, showsRating } from "./PetitionRating";
 import { STAR_LABELS, StarPicker } from "./star-picker";
 import { KetQuaTraCuu } from "./TraCuuPhieuScreen";
-import { taoPhieuTraiNghiem } from "./trai-nghiem";
 
 type Call = { url: string; init: RequestInit };
 let calls: Call[] = [];
@@ -415,7 +414,7 @@ describe("rating — never states the reopen threshold (ADR 0050)", () => {
   });
 });
 
-describe("the shared star row — the experience app keeps working", () => {
+describe("the shared star row — and the commune app rates through the same block", () => {
   it("StarPicker: interactive is a radiogroup, read-only is one image with the level in words", () => {
     const live = renderToStaticMarkup(createElement(StarPicker, { stars: 3, onPick: () => {} }));
     expect(live).toContain(`aria-label="${XA_PA.cham_diem}"`);
@@ -427,26 +426,22 @@ describe("the shared star row — the experience app keeps working", () => {
     expect(ro).toContain(STAR_LABELS[3]);
   });
 
-  it("the experience block renders its rating through the same row (in memory, no network)", () => {
+  it("the commune app's petition detail renders the REAL rating block (`PetitionRating`), not a local copy", () => {
     const spy = vi.fn();
     vi.stubGlobal("fetch", spy);
-    const base = taoPhieuTraiNghiem(
-      { linh_vuc: "Điện", noi_dung: "Đèn hỏng", dia_chi: "", ho_ten: "", dien_thoai: "", an_danh: true },
-      "2026-09-28T01:00:00Z",
-      "TN-AAAAAAAA",
-    );
-    const rated = { ...base, trang_thai: "da-xu-ly", danh_gia: { sao: 5, nhan_xet: "tốt", sau_lan_mo_lai: 0 } };
-    const ro = renderToStaticMarkup(createElement(KhoiDanhGia, { phieu: rated }));
-    expect(ro).toContain(XA_PA.da_danh_gia);
-    expect(ro).toContain(`role="img" aria-label="${XA_PA.da_cham(5)}"`);
-    expect(ro).toContain("“tốt”");
+    const petition = docPhieu(RESOLVED)!;
     const open = renderToStaticMarkup(
-      createElement(KhoiDanhGia, { phieu: { ...base, trang_thai: "da-xu-ly" }, onGui: () => {} }),
+      createElement(PetitionBody, { petition, onRated: () => {}, onReload: () => {} }),
     );
+    expect(open).toContain(RATING.title);
     expect(open).toContain('role="radiogroup"');
-    expect(open).toContain(XA_PA.gui_danh_gia);
-    expect(open).toContain('maxLength="1000"');
+    expect(open).toContain(RATING.submit);
+    expect(open).toContain(`maxLength="${RATING_COMMENT_MAX_LEN}"`);
+    // Rendering sends nothing: a rating leaves the phone only on "Gửi đánh giá".
     expect(spy).not.toHaveBeenCalled();
+    const rated = docPhieu({ ...RESOLVED, rating: 5, rated_at: RATED_AT })!;
+    const ro = renderToStaticMarkup(createElement(PetitionBody, { petition: rated, onRated: () => {}, onReload: () => {} }));
+    expect(ro).toContain(RATING.rated(5));
   });
 
   it("the lookup of the real channel still reads a rated petition", async () => {

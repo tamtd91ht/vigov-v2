@@ -2,10 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import type { PhieuCuaToiTomTat } from "../api/hop-dong-phan-anh"; // vi-name-ok: existing contract type
+
 import { TRANG_THAI_CHUA_CO_NHAN, XA_TN } from "./noi-dung";
-import { ChipTrangThai, DanhSachPhieuTN, ThePhieuTN } from "./PhanAnhAppXa";
+import { ChipTrangThai, PetitionCard, PetitionList, stepLabel } from "./PhanAnhAppXa";
 import { STATUS_GROUP_LABEL } from "./status-groups";
-import { duocDanhGia, type PhieuTN, taoPhieuTraiNghiem } from "./trai-nghiem";
 
 /**
  * An unknown status code in the commune's own app gets the SAME neutral treatment as the shared app
@@ -15,14 +16,23 @@ import { duocDanhGia, type PhieuTN, taoPhieuTraiNghiem } from "./trai-nghiem";
 
 const UNKNOWN = "trang-thai-moi";
 
-function ticket(trang_thai: string, ma: string): PhieuTN {
-  const p = taoPhieuTraiNghiem(
-    { linh_vuc: "Điện", noi_dung: "Đèn đường hỏng", dia_chi: "", ho_ten: "", dien_thoai: "", an_danh: true },
-    "2026-09-28T01:00:00Z",
-    ma,
-  );
-  return { ...p, trang_thai };
+function row(trang_thai: string, code: string): PhieuCuaToiTomTat {
+  return {
+    ma_tra_cuu: code,
+    trang_thai,
+    linh_vuc: "",
+    nhan_linh_vuc: "",
+    trich_noi_dung: "Đèn đường hỏng",
+    goc_dem_han: "2026-09-28T01:00:00Z",
+    han_tiep_nhan: null,
+    han_xu_ly_xong: null,
+    rating: null,
+    rated_at: null,
+  };
 }
+
+const ready = (items: PhieuCuaToiTomTat[], hasMore = false) =>
+  ({ kind: "ready", items, cursor: hasMore ? "c" : "", hasMore, loadingMore: false, moreFailure: null }) as const;
 
 describe("commune app: unknown status code", () => {
   it("the chip shows the neutral sentence and a neutral style — not a group label, not the raw code", () => {
@@ -38,18 +48,21 @@ describe("commune app: unknown status code", () => {
     expect(html).toBe(`<span class="xa-chip-tt xa-chip-tt--da-dong">${STATUS_GROUP_LABEL["da-dong"]}</span>`);
   });
 
-  it("the ticket card carries the neutral chip", () => {
-    const html = renderToStaticMarkup(createElement(ThePhieuTN, { phieu: ticket(UNKNOWN, "TN-AAAAAAAA"), onMo: () => {} }));
+  it("the petition card carries the neutral chip", () => {
+    const html = renderToStaticMarkup(createElement(PetitionCard, { petition: row(UNKNOWN, "PA-1"), onOpen: () => {} }));
     expect(html).toContain(TRANG_THAI_CHUA_CO_NHAN);
     expect(html).not.toContain(STATUS_GROUP_LABEL["da-dong"]);
   });
 
   it("the list counts it under 'Tất cả' only — no group, 'Đã đóng' included, claims it", () => {
     const html = renderToStaticMarkup(
-      createElement(DanhSachPhieuTN, {
-        phieu: [ticket(UNKNOWN, "TN-AAAAAAAA"), ticket("da-dong", "TN-BBBBBBBB")],
-        onMo: () => {},
-        onTraCuu: () => {},
+      createElement(PetitionList, {
+        state: ready([row(UNKNOWN, "PA-AAAAAAAAAAAA"), row("da-dong", "PA-BBBBBBBBBBBB")]),
+        onOpenPetition: () => {},
+        onLookup: () => {},
+        onOpen: () => {},
+        onRetry: () => {},
+        onLoadMore: () => {},
       }),
     );
     expect(html).toContain(`${XA_TN.loc_tat_ca} (2)`);
@@ -58,11 +71,13 @@ describe("commune app: unknown status code", () => {
     expect(html).toContain(`${STATUS_GROUP_LABEL["dang-xu-ly"]} (0)`);
     expect(html).toContain(`${STATUS_GROUP_LABEL["da-xu-ly-xong"]} (0)`);
     // Shown in "Tất cả" (the default filter), with the neutral sentence.
-    expect(html).toContain("TN-AAAAAAAA");
+    expect(html).toContain("PA-AAAAAAAAAAAA");
     expect(html).toContain(TRANG_THAI_CHUA_CO_NHAN);
   });
 
-  it("an unknown code is not ratable — rating needs the 'Đã xử lý xong' group", () => {
-    expect(duocDanhGia(ticket(UNKNOWN, "TN-AAAAAAAA"))).toBe(false);
+  it("the timeline never prints a raw unknown code", () => {
+    expect(stepLabel(UNKNOWN)).toBe(TRANG_THAI_CHUA_CO_NHAN);
+    expect(stepLabel("toString")).toBe(TRANG_THAI_CHUA_CO_NHAN);
+    expect(stepLabel("dang-xu-ly")).toBe("Đang xử lý");
   });
 });
