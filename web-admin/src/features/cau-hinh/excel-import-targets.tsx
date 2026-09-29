@@ -5,13 +5,23 @@ import type { ReactNode } from "react";
 import type { KhoaDanhMucGhi } from "@/lib/api/danh-muc";
 import type { ImportRoutes } from "@/lib/api/excel-import";
 import {
+  CAPITAL_PLAN_CATEGORY_IMPORT_ROUTES,
   DOCUMENT_TYPE_IMPORT_ROUTES,
   DOCUMENT_TYPE_ROWS_FIELD,
+  FINANCE_CATALOGUE_ROWS_FIELD,
   IDENTITY_CATALOGUE_ROWS_FIELD,
+  PETITIONS_CATALOGUE_ROWS_FIELD,
   RESIDENTIAL_UNIT_TYPE_IMPORT_ROUTES,
   TASK_BLOC_IMPORT_ROUTES,
+  TASK_PRIORITY_IMPORT_ROUTES,
+  TASK_TYPE_IMPORT_ROUTES,
 } from "@/lib/api/lookup-catalogue-import";
-import type { DocumentTypeImportRow, IdentityCatalogueImportRow } from "@/lib/api/lookup-catalogue-import";
+import type {
+  DocumentTypeImportRow,
+  FinanceCatalogueImportRow,
+  IdentityCatalogueImportRow,
+  PetitionsCatalogueImportRow,
+} from "@/lib/api/lookup-catalogue-import";
 import { MAP_ASSET_TYPE_IMPORT_ROUTES, MAP_ASSET_TYPE_ROWS_FIELD } from "@/lib/api/map-asset-type-import";
 import type { MapAssetTypeImportRow } from "@/lib/api/map-asset-type-import";
 import { ORG_UNIT_IMPORT_ROUTES } from "@/lib/api/org-unit-import";
@@ -46,9 +56,9 @@ import {
  *
  * TO WIRE ANOTHER IMPORT (another catalogue group): write its routes file
  * beside `lib/api/map-asset-type-import.ts`, add ONE target here, and — for a catalogue group — one
- * entry in `CATALOGUE_IMPORTS`. The panel, the flow and the key-per-attempt rule need no change. Then
- * update the `Excel` item of `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`) in the same change: it names every
- * group that can import today, and `khoi-chua-dung.test.tsx` checks it against `CATALOGUE_IMPORTS`.
+ * entry in `CATALOGUE_IMPORTS`. The panel, the flow and the key-per-attempt rule need no change. Every
+ * Danh mục group imports today, so `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`) no longer carries an Excel
+ * item; `khoi-chua-dung.test.tsx` fails if one comes back while `CATALOGUE_IMPORTS` covers every group.
  */
 
 /** Sơ đồ tổ chức (§1) — `admin.org`, gated by `tab-so-do-to-chuc.tsx`. */
@@ -205,7 +215,8 @@ type LookupImportRow = { readonly row: number; readonly code: string; readonly l
 
 /**
  * One Danh mục group whose rows are the plain four fields. The map-asset-type target above predates this
- * and keeps its own words; the three below differ only in the noun, the file name and the routes.
+ * and keeps its own words; the six below differ only in the noun, the file name, the routes and — for
+ * Mức ưu tiên alone — one extra sentence of explanation.
  */
 function lookupImportTarget<R extends LookupImportRow>(spec: {
   id: string;
@@ -213,6 +224,8 @@ function lookupImportTarget<R extends LookupImportRow>(spec: {
   templateFileName: string;
   routes: ImportRoutes;
   rowsField: string;
+  /** One more sentence for a group whose template differs from the four plain columns. */
+  explanationNote?: string;
 }): ImportTarget<R> {
   const { noun } = spec;
   return {
@@ -221,7 +234,8 @@ function lookupImportTarget<R extends LookupImportRow>(spec: {
     explanation:
       `Tải tệp mẫu, điền mỗi ${noun} một dòng rồi chọn tệp để kiểm tra. Hệ thống kiểm tra toàn bộ tệp ` +
       "trước, chưa ghi gì; chỉ khi tệp không có lỗi mới nhập được, và nhập thì nhập cả tệp hoặc không " +
-      "nhập gì. Nhập chỉ thêm mục mới; mục đang có không bị sửa.",
+      "nhập gì. Nhập chỉ thêm mục mới; mục đang có không bị sửa." +
+      (spec.explanationNote === undefined ? "" : ` ${spec.explanationNote}`),
     templateFileName: spec.templateFileName,
     confirmButton: "Nhập các mục này",
     errorsHeading: `Tệp có lỗi — chưa ${noun} nào được tạo. Hãy sửa các dòng dưới đây rồi kiểm tra lại:`,
@@ -270,6 +284,41 @@ export const DOCUMENT_TYPE_IMPORT_TARGET = lookupImportTarget<DocumentTypeImport
   rowsField: DOCUMENT_TYPE_ROWS_FIELD,
 });
 
+/** Danh mục → Loại nhiệm vụ (§5) — `admin.lookup`, owner `service-petitions`. */
+export const TASK_TYPE_IMPORT_TARGET = lookupImportTarget<PetitionsCatalogueImportRow>({
+  id: "loai-nhiem-vu",
+  noun: "loại nhiệm vụ",
+  templateFileName: "mau-nhap-loai-nhiem-vu.xlsx",
+  routes: TASK_TYPE_IMPORT_ROUTES,
+  rowsField: PETITIONS_CATALOGUE_ROWS_FIELD,
+});
+
+/**
+ * Danh mục → Mức ưu tiên nhiệm vụ (§5) — `admin.lookup`, owner `service-petitions`. Its order IS the
+ * rank, so the template has NO Thứ tự column: the server appends imported levels after the commune's
+ * last level, in file order. The preview's Thứ tự column is that server-computed rank; the explanation
+ * says so before the file is filled in, so nobody expects to set the rank from the spreadsheet.
+ */
+export const TASK_PRIORITY_IMPORT_TARGET = lookupImportTarget<PetitionsCatalogueImportRow>({
+  id: "muc-uu-tien-nhiem-vu",
+  noun: "mức ưu tiên nhiệm vụ",
+  templateFileName: "mau-nhap-muc-uu-tien-nhiem-vu.xlsx",
+  routes: TASK_PRIORITY_IMPORT_ROUTES,
+  rowsField: PETITIONS_CATALOGUE_ROWS_FIELD,
+  explanationNote:
+    "Tệp mẫu không có cột Thứ tự: các mức nhập vào được xếp sau mức cuối cùng đang có của xã, theo " +
+    "đúng thứ tự các dòng trong tệp.",
+});
+
+/** Danh mục → Hạng mục kế hoạch vốn (§5) — `admin.lookup`, owner `service-finance`. */
+export const CAPITAL_PLAN_CATEGORY_IMPORT_TARGET = lookupImportTarget<FinanceCatalogueImportRow>({
+  id: "hang-muc-ke-hoach-von",
+  noun: "hạng mục kế hoạch vốn",
+  templateFileName: "mau-nhap-hang-muc-ke-hoach-von.xlsx",
+  routes: CAPITAL_PLAN_CATEGORY_IMPORT_ROUTES,
+  rowsField: FINANCE_CATALOGUE_ROWS_FIELD,
+});
+
 /** What the Danh mục tab needs to offer an import for one group. */
 export type CatalogueImport = {
   /** The key the three routes declare — gated in the UI, checked by the server. */
@@ -278,8 +327,9 @@ export type CatalogueImport = {
 };
 
 /**
- * The catalogue groups that can import from Excel TODAY — one entry per group whose owning service
- * has published its three import routes (ADR 0059 §3). A group absent here draws no import button.
+ * The catalogue groups that can import from Excel — one entry per group whose owning service has
+ * published its three import routes (ADR 0059 §3); since 5a576de that is all seven. A group absent
+ * here draws no import button.
  */
 export const CATALOGUE_IMPORTS: Partial<Record<KhoaDanhMucGhi, CatalogueImport>> = {
   loaiTaiNguyenBanDo: {
@@ -297,6 +347,18 @@ export const CATALOGUE_IMPORTS: Partial<Record<KhoaDanhMucGhi, CatalogueImport>>
   khoiNhiemVu: {
     permission: QUYEN_QUAN_LY_DANH_MUC,
     panel: (p) => <ExcelImportPanel target={TASK_BLOC_IMPORT_TARGET} {...p} />,
+  },
+  loaiNhiemVu: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={TASK_TYPE_IMPORT_TARGET} {...p} />,
+  },
+  mucUuTienNhiemVu: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={TASK_PRIORITY_IMPORT_TARGET} {...p} />,
+  },
+  hangMucKeHoachVon: {
+    permission: QUYEN_QUAN_LY_DANH_MUC,
+    panel: (p) => <ExcelImportPanel target={CAPITAL_PLAN_CATEGORY_IMPORT_TARGET} {...p} />,
   },
 };
 

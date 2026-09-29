@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { BAY_DANH_MUC_GHI } from "@/lib/api/danh-muc";
 import { commitImport, previewImport } from "@/lib/api/excel-import";
 import type { ImportPreview, ImportResult } from "@/lib/api/excel-import";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing type of goi.ts, imported not declared (rule 12 inv 3)
@@ -11,12 +12,15 @@ import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen"; // vi-name-
 import { keyAfterAttempt, keyForAttempt } from "./excel-import-flow";
 import { ExcelImportView } from "./excel-import-panel";
 import {
+  CAPITAL_PLAN_CATEGORY_IMPORT_TARGET,
   CATALOGUE_IMPORTS,
   DOCUMENT_TYPE_IMPORT_TARGET,
   MAP_ASSET_TYPE_IMPORT_TARGET,
   RESIDENTIAL_UNIT_IMPORT_TARGET,
   RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET,
   TASK_BLOC_IMPORT_TARGET,
+  TASK_PRIORITY_IMPORT_TARGET,
+  TASK_TYPE_IMPORT_TARGET,
   catalogueImportFor,
 } from "./excel-import-targets";
 import { NhomMuc } from "./tab-danh-muc"; // vi-name-ok: existing export of tab-danh-muc.tsx, imported not declared (rule 12 inv 3)
@@ -142,11 +146,21 @@ function session(permissions: readonly string[]): KetQua<identity_phienHienTaiRa
 }
 
 describe("Danh mục — which group offers the import, to whom", () => {
-  it("today: four groups have an import (one route per owning service, ADR 0059 §3); the rest do not", () => {
-    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual(["loaiTaiNguyenBanDo", "loaiVanBan", "loaiDonViDanCu", "khoiNhiemVu"]);
-    // Being built by their owners (petitions, finance) — no button until their routes are in the contract.
-    for (const g of ["loaiNhiemVu", "mucUuTienNhiemVu", "hangMucKeHoachVon"] as const) {
-      expect(catalogueImportFor(g, session(["admin.lookup"]))).toBeNull();
+  it("all seven groups have an import (one route per owning service, ADR 0059 §3), each on admin.lookup", () => {
+    expect(Object.keys(CATALOGUE_IMPORTS)).toEqual([
+      "loaiTaiNguyenBanDo",
+      "loaiVanBan",
+      "loaiDonViDanCu",
+      "khoiNhiemVu",
+      "loaiNhiemVu",
+      "mucUuTienNhiemVu",
+      "hangMucKeHoachVon",
+    ]);
+    expect([...Object.keys(CATALOGUE_IMPORTS)].sort()).toEqual(BAY_DANH_MUC_GHI.map((m) => m.khoa).sort());
+    for (const g of BAY_DANH_MUC_GHI.map((m) => m.khoa)) {
+      expect(CATALOGUE_IMPORTS[g]?.permission).toBe("admin.lookup");
+      expect(catalogueImportFor(g, session(["admin.lookup"]))).not.toBeNull();
+      expect(catalogueImportFor(g, session(["admin.org", "admin.lookups"]))).toBeNull();
     }
   });
 
@@ -289,7 +303,7 @@ describe("Thôn / Tổ dân phố — its own import target (not a catalogue gro
   });
 });
 
-describe("Loại văn bản · Loại đơn vị dân cư · Khối nhiệm vụ — registered in CATALOGUE_IMPORTS", () => {
+describe("the six lookupImportTarget groups — registered in CATALOGUE_IMPORTS", () => {
   const cases = [
     {
       group: "loaiVanBan" as const,
@@ -311,6 +325,27 @@ describe("Loại văn bản · Loại đơn vị dân cư · Khối nhiệm vụ
       base: "/api/v1/task-blocs",
       field: "entries",
       noun: "khối nhiệm vụ",
+    },
+    {
+      group: "loaiNhiemVu" as const,
+      target: TASK_TYPE_IMPORT_TARGET,
+      base: "/api/v1/task-types",
+      field: "entries",
+      noun: "loại nhiệm vụ",
+    },
+    {
+      group: "mucUuTienNhiemVu" as const,
+      target: TASK_PRIORITY_IMPORT_TARGET,
+      base: "/api/v1/task-priorities",
+      field: "entries",
+      noun: "mức ưu tiên nhiệm vụ",
+    },
+    {
+      group: "hangMucKeHoachVon" as const,
+      target: CAPITAL_PLAN_CATEGORY_IMPORT_TARGET,
+      base: "/api/v1/capital-plan-categories",
+      field: "entries",
+      noun: "hạng mục kế hoạch vốn",
     },
   ];
 
@@ -374,10 +409,35 @@ describe("Loại văn bản · Loại đơn vị dân cư · Khối nhiệm vụ
       vi.fn(async () => new Response(JSON.stringify({ code: "catalogue_changed", message: msg, trace_id: "t" }), { status: 409 })),
     );
     try {
-      const r = await commitImport(TASK_BLOC_IMPORT_TARGET.routes, new Blob(["x"]), "f.xlsx", "k-1");
-      expect(r).toEqual({ ok: false, message: msg, errors: [] });
+      for (const t of [TASK_BLOC_IMPORT_TARGET, TASK_TYPE_IMPORT_TARGET, TASK_PRIORITY_IMPORT_TARGET, CAPITAL_PLAN_CATEGORY_IMPORT_TARGET]) {
+        const r = await commitImport(t.routes, new Blob(["x"]), "f.xlsx", "k-1");
+        expect(r).toEqual({ ok: false, message: msg, errors: [] });
+      }
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it("400 import_invalid on a petitions / finance import: its message and the row errors", async () => {
+    const body = { code: "import_invalid", message: "Tệp có lỗi nên chưa mục nào được tạo.", trace_id: "t", errors: ERRORS };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: 400 })));
+    try {
+      for (const t of [TASK_TYPE_IMPORT_TARGET, TASK_PRIORITY_IMPORT_TARGET, CAPITAL_PLAN_CATEGORY_IMPORT_TARGET]) {
+        const r = await commitImport(t.routes, new Blob(["x"]), "f.xlsx", "k-1");
+        expect(r).toEqual({ ok: false, message: body.message, errors: ERRORS });
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("Mức ưu tiên: the explanation says the template has no Thứ tự column and levels are appended in file order", () => {
+    expect(TASK_PRIORITY_IMPORT_TARGET.explanation).toContain(
+      "Tệp mẫu không có cột Thứ tự: các mức nhập vào được xếp sau mức cuối cùng đang có của xã, theo đúng thứ tự các dòng trong tệp.",
+    );
+    // Only that group — the others' templates DO carry Thứ tự.
+    for (const t of [TASK_TYPE_IMPORT_TARGET, CAPITAL_PLAN_CATEGORY_IMPORT_TARGET, TASK_BLOC_IMPORT_TARGET]) {
+      expect(t.explanation).not.toContain("không có cột Thứ tự");
     }
   });
 });

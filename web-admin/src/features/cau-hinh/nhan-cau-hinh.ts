@@ -31,15 +31,4 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "số liệu dựng sẵn, nên không có gì để tính lại (ADR 0053, ADR 0058). Việc Gửi báo cáo định kỳ " +
       "chờ màn Báo cáo: chưa có báo cáo thì chưa có gì để gửi (ADR 0058 mục 4).",
   },
-  {
-    // CẬP NHẬT CÂU NÀY TRONG CÙNG LƯỢT với mỗi tuyến nhập mới được nối (`excel-import-targets.tsx`):
-    // nó kể tên từng thứ nhập được hôm nay, và `khoi-chua-dung.test.tsx` đối chiếu với
-    // `CATALOGUE_IMPORTS` và các đích nhập riêng (Sơ đồ tổ chức, Thôn / Tổ dân phố, Cán bộ).
-    ten: "Nút Nhập từ Excel ở ba nhóm còn lại của Danh mục (§5)",
-    viSao:
-      "Trên màn này hôm nay nhập được từ Excel: Sơ đồ tổ chức, Thôn / Tổ dân phố, danh sách cán bộ ở tab " +
-      "Người dùng, và bốn nhóm ở tab Danh mục — Loại tài nguyên bản đồ, Loại văn bản, Loại đơn vị dân " +
-      "cư, Khối nhiệm vụ. Ba nhóm Loại nhiệm vụ, Mức ưu tiên nhiệm vụ và Hạng mục kế hoạch vốn đã được " +
-      "quyết (ADR 0059) và đang được dựng tuyến nhập ở dịch vụ sở hữu, nên chưa có nút.",
-  },
 ];
