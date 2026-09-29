@@ -4406,6 +4406,7 @@ export type petitions_get_my_citizen_reports = {
     200: page_Result_petitions_phieuCuaToiTomTatRa;
     400: httpx_Error;
     401: httpx_Error;
+    403: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -4423,6 +4424,7 @@ export type petitions_post_my_citizen_reports = {
     201: petitions_phieuCuaToiRa;
     400: httpx_Error;
     401: httpx_Error;
+    403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -4442,6 +4444,7 @@ export type petitions_get_my_citizen_reports_by_maTraCuu = {
   phanHoi: {
     200: petitions_phieuCuaToiRa;
     401: httpx_Error;
+    403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
   };
@@ -4461,6 +4464,7 @@ export type petitions_post_my_citizen_reports_by_maTraCuu_rating = {
     200: petitions_phieuCuaToiRa;
     400: httpx_Error;
     401: httpx_Error;
+    403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;

@@ -90,9 +90,11 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// no such code · a code belonging to ANOTHER CITIZEN · a code of another commune · a
 	// soft-deleted petition. The body is identical in all four.
 	//
-	// THERE IS NO 403 ON THIS ROUTE AND THERE CANNOT BE. Citizens hold no permissions (rule 5,
-	// invariant 6), so there is no permission that could fail; every refusal is either "not a
-	// usable session" (401) or "no such petition of yours" (404).
+	// 403 IS NEVER A PERMISSION REFUSAL — citizens hold no permissions (rule 5, invariant 6). It has
+	// exactly ONE cause: `chua_xac_thuc_so`, a usable session with no verified phone, answered by
+	// httpx.XaTuPhien before this handler runs (ADR 0045). It says nothing about any record — the
+	// session has no citizen identity to filter by yet — and the Mini App needs the distinct code to
+	// ask for the phone; folded into 401 it would reopen a session and loop.
 	//
 	// 200 CARRIES MASKED CONTACT DETAILS EVEN THOUGH THE READER TYPED THEM — the two reasons are
 	// on phieuCuaToiRa.ReporterPhone. No audit entry is written on any branch; the reasoning, and
@@ -100,6 +102,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	//
 	// @reply    200 phieuCuaToiRa
 	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}",
@@ -120,18 +123,23 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @summary  Danh sách phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI trong xã của phiên, mới nhất trước — phân trang theo con trỏ, lọc tuỳ chọn theo trạng thái
 	// @screen   09-phan-anh-nguoi-dan §8
 	// 200 WITH `items: []` IS THE ANSWER FOR "NOTHING TO SHOW", whatever the cause — no petition filed,
-	// petitions only in another commune, petitions only soft-deleted. There is no 404 and no 403: a
-	// list that answered differently for those would say something about records that are not the
-	// caller's (rule 4, forbidden #2). Petitions booked by staff with no citizen account never appear.
+	// petitions only in another commune, petitions only soft-deleted. None of those is a 404 or a
+	// 403: a list that answered differently for them would say something about records that are not
+	// the caller's (rule 4, forbidden #2). Petitions booked by staff with no citizen account never
+	// appear.
 	//
 	// 400 is a bad cursor, limit, sort or order (only `desc` is accepted), or a `status` outside the
 	// nine. The body never echoes what was sent.
 	//
 	// 401 is the same three situations the other citizen routes fold together (ADR 0022).
 	//
+	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045),
+	// the same single cause as on the read route. Never a permission refusal.
+	//
 	// @reply    200 page.Result[phieuCuaToiTomTatRa]
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports",
 		authz.CitizenOnly()(
@@ -195,11 +203,14 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// COMMUNE. No row is written and NO LOOKUP CODE IS ISSUED: an issued code is never reissued
 	// (rule 7, invariant 3), so handing one out for a petition that does not exist cannot be undone.
 	//
-	// THERE IS NO 403 AND THERE CANNOT BE: citizens hold no permissions (rule 5, invariant 6).
+	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
+	// No row is written and no lookup code is issued. Never a permission refusal: citizens hold no
+	// permissions (rule 5, invariant 6).
 	//
 	// @reply    201 phieuCuaToiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
@@ -243,11 +254,13 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// reopened, closed, or a terminal branch), or it moved while the request ran — and idem's answer to
 	// a duplicate still in flight.
 	//
-	// NO 403: citizens hold no permissions (rule 5, invariant 6).
+	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
+	// Never a permission refusal: citizens hold no permissions (rule 5, invariant 6).
 	//
 	// @reply    200 phieuCuaToiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error

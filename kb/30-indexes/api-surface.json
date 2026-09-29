@@ -2271,6 +2271,7 @@
         "200": "page.Result_petitions.phieuCuaToiTomTatRa",
         "400": "httpx.Error",
         "401": "httpx.Error",
+        "403": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
@@ -2292,6 +2293,7 @@
         "201": "petitions.phieuCuaToiRa",
         "400": "httpx.Error",
         "401": "httpx.Error",
+        "403": "httpx.Error",
         "409": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
@@ -2312,6 +2314,7 @@
       "reply_schemas": {
         "200": "petitions.phieuCuaToiRa",
         "401": "httpx.Error",
+        "403": "httpx.Error",
         "404": "httpx.Error",
         "500": "httpx.Error"
       },
@@ -2334,6 +2337,7 @@
         "200": "petitions.phieuCuaToiRa",
         "400": "httpx.Error",
         "401": "httpx.Error",
+        "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
         "500": "httpx.Error"
