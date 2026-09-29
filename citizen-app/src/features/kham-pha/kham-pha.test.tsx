@@ -2,9 +2,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { App, KhungApp, khoaTraCongKhai } from "../../App";
-import { NHAN_KENH_CONG_DAN } from "../../cong-dan/man/KenhCongDan";
-import { XAC_NHAN_XA } from "../../cong-dan/man/noi-dung";
+import { App, AppFrame, publicLookupKey } from "../../App";
+import { CITIZEN_CHANNEL_LABEL } from "../../citizen/screens/CitizenChannel";
+import { COMMUNE_CONFIRMATION } from "../../citizen/screens/copy";
 import { COMPANY } from "../../content/company-profile";
 import { SCREENS } from "../company-intro/screens";
 import { GoiYXaScreen } from "./GoiYXaScreen";
@@ -217,9 +217,9 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
     // thì gửi nhầm, xã nhận việc ngoài địa bàn, phải chuyển hoặc từ chối, và người dân chờ vô ích.
     for (const man of SCREENS) {
       const markup = render(
-        <KhungApp man={man.id} onChonMan={() => {}} xaDaChon={XA_THU}>
+        <AppFrame screen={man.id} onSelectScreen={() => {}} selectedCommune={XA_THU}>
           <p>nội dung</p>
-        </KhungApp>,
+        </AppFrame>,
       );
       expect(dauTrang(markup), `màn ${man.id} không hiện tên xã ở header`).toContain(XA_THU.ten);
       expect(dauTrang(markup)).toContain(man.headerTitle);
@@ -231,9 +231,9 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
     // `/communes` trả — cùng tên công dân vừa đọc trên màn xác nhận — kèm tỉnh, như chính màn ấy nói.
     for (const man of SCREENS) {
       const markup = render(
-        <KhungApp man={man.id} onChonMan={() => {}} xaDaChon={{ ten: XA_THU.ten, tinh: XA_THU.tinh }}>
+        <AppFrame screen={man.id} onSelectScreen={() => {}} selectedCommune={{ ten: XA_THU.ten, tinh: XA_THU.tinh }}>
           <p>nội dung</p>
-        </KhungApp>,
+        </AppFrame>,
       );
       expect(dauTrang(markup), `màn ${man.id}`).toContain(`${XA_THU.ten}, ${XA_THU.tinh}`);
     }
@@ -241,9 +241,9 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
 
   it("CÓ phiên → header chỉ mang tên xã của phiên, không ghép tỉnh của một nguồn khác", () => {
     const markup = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={{ ten: "Tên Của Phiên", tinh: null }}>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={{ ten: "Tên Của Phiên", tinh: null }}>
         <p>nội dung</p>
-      </KhungApp>,
+      </AppFrame>,
     );
     expect(dauTrang(markup)).toContain("Tên Của Phiên");
     expect(dauTrang(markup)).not.toContain("Tên Của Phiên,");
@@ -251,9 +251,9 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
 
   it("header KHÔNG có nút đổi xã — một phiên, một xã", () => {
     const markup = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={XA_THU}>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={XA_THU}>
         <p>nội dung</p>
-      </KhungApp>,
+      </AppFrame>,
     );
     const header = markup.slice(0, markup.indexOf("</header>"));
     expect(header).not.toMatch(/<button\b/);
@@ -262,9 +262,9 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
 
   it("chưa xác nhận xã thì ô ấy giữ tên đơn vị phát hành", () => {
     const markup = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={null}>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={null}>
         <p>nội dung</p>
-      </KhungApp>,
+      </AppFrame>,
     );
     expect(dauTrang(markup)).toContain(COMPANY.name);
   });
@@ -273,26 +273,26 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
     // `skills/accessibility-elderly` #4. Một thanh tab còn đó trong lúc chưa có xã là bốn nút
     // bấm vào không có gì xảy ra, và đó là lúc người lớn tuổi kết luận app hỏng.
     const dangXacNhan = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={null} khamPha>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={null} discovery>
         <p>nội dung</p>
-      </KhungApp>,
+      </AppFrame>,
     );
     expect(dangXacNhan).not.toContain("tabbar");
     expect(dauTrang(dangXacNhan)).toContain(TIEU_DE_XAC_NHAN_XA);
 
     const binhThuong = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={XA_THU}>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={XA_THU}>
         <p>nội dung</p>
-      </KhungApp>,
+      </AppFrame>,
     );
     expect(binhThuong).toContain("tabbar");
   });
 
   it("đang gợi ý thì header VẪN CHƯA mang tên xã — tham số không chọn thay công dân", () => {
     const markup = render(
-      <KhungApp man="home" onChonMan={() => {}} xaDaChon={null} khamPha>
+      <AppFrame screen="home" onSelectScreen={() => {}} selectedCommune={null} discovery>
         <GoiYXaScreen xa={XA_THU} nguon="qr" onXacNhan={() => {}} onKhongPhai={() => {}} />
-      </KhungApp>,
+      </AppFrame>,
     );
     expect(dauTrang(markup)).toContain(COMPANY.name);
     expect(dauTrang(markup)).not.toContain(XA_THU.ten);
@@ -311,19 +311,19 @@ describe("khoá tra `?host=` của tin tức và danh bạ", () => {
   const CUA_PHIEN = "xa-cua-phien.vigov.example";
 
   it("phiên mang `communePrimaryHost` → dùng nó, kể cả khi `d` nói một xã khác (phiên nói thật)", () => {
-    expect(khoaTraCongKhai(CUA_PHIEN, D)).toBe(CUA_PHIEN);
+    expect(publicLookupKey(CUA_PHIEN, D)).toBe(CUA_PHIEN);
   });
 
   it("app riêng của một xã (không `d`) → chỉ tên miền của phiên mở được hai màn", () => {
-    expect(khoaTraCongKhai(CUA_PHIEN, null)).toBe(CUA_PHIEN);
+    expect(publicLookupKey(CUA_PHIEN, null)).toBe(CUA_PHIEN);
   });
 
   it("phiên không mang tên miền (vắng · rỗng · sai khuôn đều thành `null` ở bộ đọc) → `d` đã xác nhận", () => {
-    expect(khoaTraCongKhai(null, D)).toBe(D);
+    expect(publicLookupKey(null, D)).toBe(D);
   });
 
   it("không có cả hai → `null`: hai màn ẩn, không đoán một xã", () => {
-    expect(khoaTraCongKhai(null, null)).toBeNull();
+    expect(publicLookupKey(null, null)).toBeNull();
   });
 });
 
@@ -355,7 +355,7 @@ describe("app mở bằng một liên kết không đủ tin — fail closed, kh
       const chu = textOf(markup);
       expect(chu, `mở bằng "${chuoi}"`).not.toContain("Bạn cần liên hệ với xã này?");
       expect(chu, `mở bằng "${chuoi}"`).not.toContain(TIEU_DE_XAC_NHAN_XA);
-      expect(chu, `mở bằng "${chuoi}"`).not.toContain(NHAN_KENH_CONG_DAN);
+      expect(chu, `mở bằng "${chuoi}"`).not.toContain(CITIZEN_CHANNEL_LABEL);
       // Tên miền trên QR không bao giờ được vẽ ra như thể nó là tên xã.
       expect(chu, `mở bằng "${chuoi}"`).not.toContain("xa-vi-du");
       expect(dauTrang(markup), `mở bằng "${chuoi}"`).toContain(COMPANY.name);
@@ -382,13 +382,13 @@ describe("app mở bằng QR có `d` — hỏi máy chủ, không tự dựng t�
     it(`mở bằng "${chuoi}": câu chờ, header 'Xác nhận xã', không tab, không tên xã, không tên miền`, () => {
       const markup = moVoi(chuoi, () => render(<App />));
       const chu = textOf(markup);
-      expect(chu).toContain(XAC_NHAN_XA.dang_tra);
+      expect(chu).toContain(COMMUNE_CONFIRMATION.looking_up);
       expect(dauTrang(markup)).toContain(TIEU_DE_XAC_NHAN_XA);
       expect(dauTrang(markup)).toContain(COMPANY.name);
       expect(markup).not.toContain("tabbar");
       expect(chu).not.toContain("xa-vi-du");
       expect(chu).not.toContain("Bạn cần liên hệ với xã này?");
-      expect(chu).not.toContain(NHAN_KENH_CONG_DAN);
+      expect(chu).not.toContain(CITIZEN_CHANNEL_LABEL);
     });
   }
 });

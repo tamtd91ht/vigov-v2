@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { NhapPhieu } from "../cong-dan";
+import type { ReportDraft } from "../citizen";
 
 import { createFeedbackDraftStore, FEEDBACK_DRAFT_KEY, feedbackDraftStore, type KeyValueStorage } from "./feedback-draft-store";
 
@@ -21,7 +21,7 @@ function fakeStorage(initial: Record<string, string> = {}) {
   return { storage, data, writes };
 }
 
-const DRAFT: NhapPhieu = {
+const DRAFT: ReportDraft = {
   // A field CODE from the commune's catalogue (29/09/2026); the send screen restores it only if still offered.
   linh_vuc: "rac-thai",
   noi_dung: "Rác tồn đọng đầu ngõ 12",
@@ -45,7 +45,7 @@ describe("feedback draft store — commune's own app only (ADR 0050 #7)", () => 
     const { storage, writes } = fakeStorage();
     const store = createFeedbackDraftStore(() => storage);
     // A caller object carrying more than the form fields (a token, a session id) must not reach storage.
-    const polluted = { ...DRAFT, token: "phien-bi-mat", ma_phien: "x" } as unknown as NhapPhieu;
+    const polluted = { ...DRAFT, token: "phien-bi-mat", session_code: "x" } as unknown as ReportDraft;
     store.save(polluted);
     expect(writes).toHaveLength(1);
     expect(writes[0]!.key).toBe(FEEDBACK_DRAFT_KEY);
@@ -58,7 +58,7 @@ describe("feedback draft store — commune's own app only (ADR 0050 #7)", () => 
     const { storage, writes } = fakeStorage();
     const store = createFeedbackDraftStore(() => storage);
     store.save({ ...DRAFT, an_danh: true });
-    const stored = JSON.parse(writes[0]!.value) as NhapPhieu;
+    const stored = JSON.parse(writes[0]!.value) as ReportDraft;
     expect(stored.ho_ten).toBe(DRAFT.ho_ten);
     expect(stored.dien_thoai).toBe(DRAFT.dien_thoai);
     expect(stored.an_danh).toBe(true);
@@ -89,7 +89,7 @@ describe("feedback draft store — commune's own app only (ADR 0050 #7)", () => 
   });
 
   it("an empty draft is no draft: nothing is asked, and saving one removes the old one", () => {
-    const empty: NhapPhieu = { ...DRAFT, noi_dung: "  ", dia_chi: "" };
+    const empty: ReportDraft = { ...DRAFT, noi_dung: "  ", dia_chi: "" };
     const { storage, data } = fakeStorage({ [FEEDBACK_DRAFT_KEY]: JSON.stringify(empty) });
     const store = createFeedbackDraftStore(() => storage);
     expect(store.load()).toBeNull();

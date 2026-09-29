@@ -1,4 +1,4 @@
-import { NGUON_CHON_SAN } from "../../lib/launch-params";
+import { PRESET_SOURCES } from "../../lib/launch-params";
 
 /**
  * LỚP KHÁM PHÁ (ADR 0005 · 0044 · 0047) — quy tắc đọc một đường liên kết, tách hẳn khỏi màn hình.
@@ -61,7 +61,7 @@ export type GoiY =
 export function phanGiaiGoiY(nguon: string, xa_tra_duoc: XaGoiY | null): GoiY {
   if (xa_tra_duoc === null) return { kieu: "khong-co" };
   if (xa_tra_duoc.ten.trim() === "") return { kieu: "khong-co" };
-  if (!NGUON_CHON_SAN.has(nguon)) return { kieu: "khong-co" };
+  if (!PRESET_SOURCES.has(nguon)) return { kieu: "khong-co" };
   return { kieu: "chon-san", xa: xa_tra_duoc, nguon };
 }
 

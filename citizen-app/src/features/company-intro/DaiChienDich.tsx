@@ -1,5 +1,5 @@
 import { chienDichCua, KHOA_CHIEN_DICH } from "../../content/chien-dich";
-import { thamSo, thamSoMoApp } from "../../lib/launch-params";
+import { paramsOf, readLaunchParams } from "../../lib/launch-params";
 
 /**
  * DẢI CHIẾN DỊCH — một lời chào hợp cảnh cho người vừa tới từ một mã QR đã biết.
@@ -23,7 +23,7 @@ import { thamSo, thamSoMoApp } from "../../lib/launch-params";
  * nên ngoài trình duyệt (vitest, lúc dựng tĩnh) nó trả về "không có tham số" và dải không hiện.
  */
 export function DaiChienDich() {
-  const chien_dich = chienDichCua(thamSo(thamSoMoApp())[KHOA_CHIEN_DICH] ?? "");
+  const chien_dich = chienDichCua(paramsOf(readLaunchParams())[KHOA_CHIEN_DICH] ?? "");
   if (chien_dich === null) return null;
 
   return (

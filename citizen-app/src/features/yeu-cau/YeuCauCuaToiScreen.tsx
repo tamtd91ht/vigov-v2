@@ -17,7 +17,7 @@ import { docYeuCauCuaToi, type KetQuaDoc } from "../../api/goi-may-chu";
 import type { YeuCauDaGui } from "../../api/hop-dong-yeu-cau";
 import { MOC_DANG_NHAP, type ThamSoMan } from "../company-intro/dieu-huong";
 import { GridGlyph } from "../company-intro/icons";
-import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
+import { bearerOf, useSession } from "../log-in/session-store";
 
 import { MoiDangNhap } from "./MoiDangNhap";
 import { PHIEN_KHONG_LUU, YEU_CAU_CUA_TOI } from "./noi-dung";
@@ -107,8 +107,8 @@ export function ThanDanhSach({
 
 export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
   const di = onDi ?? (() => {});
-  const { phien } = dungPhien();
-  const bearer = bearerCua(phien);
+  const { session: phien } = useSession();
+  const bearer = bearerOf(phien);
 
   const [ket_qua, datKetQua] = useState<KetQuaDoc | null>(null);
   /** Đếm số lần bấm "đọc lại" — không có nó thì bấm hai lần liên tiếp chỉ đọc một lần. */

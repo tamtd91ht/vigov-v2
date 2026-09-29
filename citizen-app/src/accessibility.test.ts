@@ -130,9 +130,9 @@ describe("text and targets stay usable for an ageing eye", () => {
     // Người dùng hai màn này thường lớn tuổi, đứng ngoài trời, một tay cầm máy; bấm trượt ở bước
     // xác nhận là gửi nhầm việc. Đọc cả con số từ CSS: hạ `--tap-min` thì ca này đỏ theo.
     // `.cd-goi` (27/09/2026): liên kết gọi của danh bạ cán bộ — một đích chạm như nút.
-    for (const lop of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap", ".cd-the-cua-toi", ".cd-goi"]) {
-      expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
-        new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
+    for (const selector of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap", ".cd-the-cua-toi", ".cd-goi"]) {
+      expect(styles, `${selector} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
+        new RegExp(`\\${selector}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
       );
     }
     expect(pixels("tap-min") + 4).toBeGreaterThanOrEqual(48);
@@ -525,7 +525,7 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
  *   im lặng, và nó chết đúng vào lúc ai đó đang làm cho app "hiện đại hơn".
  */
 describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo", () => {
-  const CHO_PHEP = ["--surface", "--surface-tint", "--surface-tint-green"];
+  const ALLOWED = ["--surface", "--surface-tint", "--surface-tint-green"];
 
   /**
    * ⚠ DẢI HERO — CÙNG MỘT LUẬT, VÀ Ở ĐÂY NÓ ĐẮT HƠN HẲN.
@@ -536,43 +536,43 @@ describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo",
    *   đo token, không đo dải), và tiêu đề của app rơi xuống 2,5:1.
    */
   it("--nen-hero chỉ dừng ở những màu đã đo, và không có điểm dừng viết thẳng", () => {
-    const gia_tri = token("nen-hero");
-    expect(gia_tri, "--nen-hero không còn là một linear-gradient").toContain("linear-gradient");
-    expect(gia_tri, "--nen-hero chứa một mã màu viết thẳng, không phải một token đã đo").not.toMatch(
+    const value = token("nen-hero");
+    expect(value, "--nen-hero không còn là một linear-gradient").toContain("linear-gradient");
+    expect(value, "--nen-hero chứa một mã màu viết thẳng, không phải một token đã đo").not.toMatch(
       /#[0-9a-fA-F]{3,8}|\brgba?\(|\bhsla?\(/,
     );
-    expect(gia_tri, "--nen-hero hoà qua transparent").not.toContain("transparent");
-    const bien = [...gia_tri.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
-    expect(bien.length, "--nen-hero không tham chiếu token nào").toBeGreaterThan(1);
-    for (const b of bien) {
+    expect(value, "--nen-hero hoà qua transparent").not.toContain("transparent");
+    const vars = [...value.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
+    expect(vars.length, "--nen-hero không tham chiếu token nào").toBeGreaterThan(1);
+    for (const b of vars) {
       expect(
         ["--hero-sang", "--navy", "--navy-deep", "--panel-glow-blue"],
         `--nen-hero dừng ở ${b}, một màu không có trong bảng cặp màu của hero`,
       ).toContain(b);
     }
     // Và hero PHẢI dùng chính token ấy, không tự dựng một dải riêng trong luật `.hero`.
-    const luat = /\.hero\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    expect(luat, ".hero không còn đọc --nen-hero").toContain("var(--nen-hero)");
-    expect(luat, ".hero tự dựng một dải chuyển sắc thay vì dùng --nen-hero").not.toMatch(
+    const rule = /\.hero\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(rule, ".hero không còn đọc --nen-hero").toContain("var(--nen-hero)");
+    expect(rule, ".hero tự dựng một dải chuyển sắc thay vì dùng --nen-hero").not.toMatch(
       /background(-image)?:\s*(linear|radial)-gradient/,
     );
   });
 
-  for (const ten of ["nen-the", "nen-the-luc"]) {
-    it(`--${ten} không mang một màu nào ngoài bảng đã đo`, () => {
-      const gia_tri = token(ten);
-      expect(gia_tri, `--${ten} không còn là một linear-gradient`).toContain("linear-gradient");
-      expect(gia_tri, `--${ten} chứa một mã màu viết thẳng, không phải một token đã đo`).not.toMatch(
+  for (const name of ["nen-the", "nen-the-luc"]) {
+    it(`--${name} không mang một màu nào ngoài bảng đã đo`, () => {
+      const value = token(name);
+      expect(value, `--${name} không còn là một linear-gradient`).toContain("linear-gradient");
+      expect(value, `--${name} chứa một mã màu viết thẳng, không phải một token đã đo`).not.toMatch(
         /#[0-9a-fA-F]{3,8}|\brgba?\(|\bhsla?\(/,
       );
-      const bien = [...gia_tri.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
-      expect(bien.length, `--${ten} không tham chiếu token nào`).toBeGreaterThan(1);
-      for (const b of bien) {
-        expect(CHO_PHEP, `--${ten} dừng ở ${b}, một màu không có trong bảng cặp màu`).toContain(b);
+      const vars = [...value.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
+      expect(vars.length, `--${name} không tham chiếu token nào`).toBeGreaterThan(1);
+      for (const b of vars) {
+        expect(ALLOWED, `--${name} dừng ở ${b}, một màu không có trong bảng cặp màu`).toContain(b);
       }
       // `transparent` là cách một dải đi qua những màu không ai đo được: nó hoà với bất cứ thứ gì
       // nằm dưới, và thứ nằm dưới là nền trang — vốn cũng là một dải.
-      expect(gia_tri, `--${ten} hoà qua transparent`).not.toContain("transparent");
+      expect(value, `--${name} hoà qua transparent`).not.toContain("transparent");
     });
   }
 
@@ -581,7 +581,7 @@ describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo",
     // Ca này buộc mọi bề mặt thẻ đi qua đúng một cái tên.
     // BA LỚP THÊM VÀO 21/09/2026 (tối) — ô menu nhanh, thẻ giải pháp nổi bật, thẻ tin. Cả ba là
     // bề mặt thẻ SÁNG có chữ đứng trên, nên cả ba phải đi qua cùng một cái tên như sáu lớp kia.
-    for (const lop of [
+    for (const selector of [
       ".card",
       ".solution",
       ".unit",
@@ -596,9 +596,9 @@ describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo",
       // Thẻ trắng đè lên đáy hero (21/09/2026, khuya) — bề mặt sáng có sáu ô chữ đứng trên.
       ".menu-the",
     ]) {
-      const luat = new RegExp(`\\${lop}\\s*\\{([^}]*)\\}`).exec(styles)?.[1] ?? "";
-      expect(luat, `${lop} không còn khai nền`).toMatch(/background:/);
-      expect(luat, `${lop} tự dựng một dải chuyển sắc thay vì dùng --nen-the`).not.toMatch(
+      const rule = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(styles)?.[1] ?? "";
+      expect(rule, `${selector} không còn khai nền`).toMatch(/background:/);
+      expect(rule, `${selector} tự dựng một dải chuyển sắc thay vì dùng --nen-the`).not.toMatch(
         /background:\s*linear-gradient/,
       );
     }
@@ -606,14 +606,14 @@ describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo",
 });
 
 describe("thanh tab không tràn trên máy 320px", () => {
-  const BE_RONG_MAY = 320;
-  const RONG_MOI_EM = 0.62;
+  const PHONE_WIDTH = 320;
+  const WIDTH_PER_EM = 0.62;
 
   /** Đệm ngang của một tab, đọc thẳng từ `.tabbar__item { padding: 10px 4px; }`. */
-  const demNgang = (): number => {
-    const luat = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles);
-    expect(luat, "stylesheet no longer declares .tabbar__item").not.toBeNull();
-    const padding = /padding:\s*([^;]+);/.exec(luat![1]!)?.[1]?.trim().split(/\s+/) ?? [];
+  const horizontalPadding = (): number => {
+    const rule = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles);
+    expect(rule, "stylesheet no longer declares .tabbar__item").not.toBeNull();
+    const padding = /padding:\s*([^;]+);/.exec(rule![1]!)?.[1]?.trim().split(/\s+/) ?? [];
     expect(padding.length, ".tabbar__item no longer declares a two-value padding").toBe(2);
     return Number.parseFloat(padding[1]!) * 2;
   };
@@ -623,18 +623,18 @@ describe("thanh tab không tràn trên máy 320px", () => {
     // không viết cứng số 16: đổi token mà phép kiểm này vẫn dùng số cũ là một phép kiểm nói dối.
     expect(styles).toMatch(/\.tabbar__item\s*\{[^}]*font-size:\s*var\(--text-small\)/);
 
-    const co_chu = pixels("text-small");
-    const cho_chu = BE_RONG_MAY / TABS.length - demNgang();
+    const font_size = pixels("text-small");
+    const text_room = PHONE_WIDTH / TABS.length - horizontalPadding();
     expect(TABS.length, "thanh tab rỗng — phép đo này sẽ xanh vì lý do sai").toBeGreaterThan(0);
 
-    for (const man of TABS) {
-      for (const tu of man.cho.nhan.split(/\s+/)) {
-        const rong = tu.length * co_chu * RONG_MOI_EM;
+    for (const screen of TABS) {
+      for (const word of screen.cho.nhan.split(/\s+/)) {
+        const width = word.length * font_size * WIDTH_PER_EM;
         expect(
-          rong,
-          `nhãn tab "${man.cho.nhan}": từ "${tu}" cần ~${rong.toFixed(0)}px, tab chỉ còn ` +
-            `${cho_chu.toFixed(0)}px trên máy ${BE_RONG_MAY}px. Rút ngắn nhãn, đừng thu nhỏ chữ.`,
-        ).toBeLessThanOrEqual(cho_chu);
+          width,
+          `nhãn tab "${screen.cho.nhan}": từ "${word}" cần ~${width.toFixed(0)}px, tab chỉ còn ` +
+            `${text_room.toFixed(0)}px trên máy ${PHONE_WIDTH}px. Rút ngắn nhãn, đừng thu nhỏ chữ.`,
+        ).toBeLessThanOrEqual(text_room);
       }
     }
   });
@@ -648,15 +648,15 @@ describe("thanh tab không tràn trên máy 320px", () => {
    *   riêng, thay vì một giả định nằm im trong phép kiểm kia.
    */
   it("mỗi ô tab xếp DỌC — hình trên chữ, nên cả bề rộng ô là bề rộng chữ", () => {
-    const luat = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    expect(luat, ".tabbar__item không còn xếp dọc — hình đang chiếm mất bề rộng của nhãn").toMatch(
+    const rule = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(rule, ".tabbar__item không còn xếp dọc — hình đang chiếm mất bề rộng của nhãn").toMatch(
       /flex-direction\s*:\s*column/,
     );
   });
 
   it("không ai đặt `white-space: nowrap` lên tab — đó là thứ biến xuống dòng thành tràn", () => {
-    const luat = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    expect(luat).not.toMatch(/white-space\s*:\s*nowrap/);
+    const rule = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(rule).not.toMatch(/white-space\s*:\s*nowrap/);
   });
 });
 
@@ -673,88 +673,88 @@ describe("thanh tab không tràn trên máy 320px", () => {
  *   Ba con số ấy nằm ở ba chỗ cách xa nhau trong styles.css. Chú thích thì không đếm được gì.
  */
 describe("chồng lớp của màn chủ, đo ở 320px", () => {
-  const BE_RONG_MAY = 320;
-  const RONG_MOI_EM = 0.62;
+  const PHONE_WIDTH = 320;
+  const WIDTH_PER_EM = 0.62;
 
-  /** Giá trị `px` thứ `chi_so` (0-based) của một thuộc tính trong một luật CSS. */
-  function px(lop: string, thuoc_tinh: string, chi_so: number): number {
-    const luat = new RegExp(`\\${lop}\\s*\\{([^}]*)\\}`).exec(styles);
-    expect(luat, `stylesheet không còn khai ${lop}`).not.toBeNull();
-    const gia_tri = new RegExp(`(?:^|;)\\s*${thuoc_tinh}:\\s*([^;]+);`).exec(luat![1]!)?.[1]?.trim();
-    expect(gia_tri, `${lop} không còn khai ${thuoc_tinh}`).toBeDefined();
-    const phan = gia_tri!.split(/\s+/);
-    const mot = phan[chi_so];
-    expect(mot, `${lop} { ${thuoc_tinh} } không có giá trị thứ ${chi_so}`).toBeDefined();
-    return Number.parseFloat(mot!);
+  /** Giá trị `px` thứ `index` (0-based) của một thuộc tính trong một luật CSS. */
+  function px(selector: string, property: string, index: number): number {
+    const rule = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(styles);
+    expect(rule, `stylesheet không còn khai ${selector}`).not.toBeNull();
+    const value = new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+);`).exec(rule![1]!)?.[1]?.trim();
+    expect(value, `${selector} không còn khai ${property}`).toBeDefined();
+    const parts = value!.split(/\s+/);
+    const item = parts[index];
+    expect(item, `${selector} { ${property} } không có giá trị thứ ${index}`).toBeDefined();
+    return Number.parseFloat(item!);
   }
 
   it("hero tràn đúng bằng đệm trang — không hụt một vệt, không đẻ ra thanh cuộn ngang", () => {
     // `.app-main { padding: 16px 16px calc(...) }` — giá trị thứ hai là đệm NGANG.
-    const dem_trang = px(".app-main", "padding", 1);
+    const page_padding = px(".app-main", "padding", 1);
     // `.hero { margin: 0 -16px }` — giá trị thứ hai là lề ngang, âm.
-    const le_hero = px(".hero", "margin", 1);
+    const hero_margin = px(".hero", "margin", 1);
     expect(
-      -le_hero,
-      `hero tràn ${-le_hero}px mỗi bên nhưng trang đệm ${dem_trang}px: lớn hơn thì trang có thanh ` +
+      -hero_margin,
+      `hero tràn ${-hero_margin}px mỗi bên nhưng trang đệm ${page_padding}px: lớn hơn thì trang có thanh ` +
         `cuộn ngang, nhỏ hơn thì còn một vệt nền lộ ra hai bên hero.`,
-    ).toBe(dem_trang);
+    ).toBe(page_padding);
   });
 
   it("đệm đáy hero lớn hơn phần thẻ menu trèo lên — không trùm mất hàng chỉ số", () => {
     // `.hero { padding: 22px 20px 76px }` — giá trị thứ ba là đệm đáy.
-    const dem_day = px(".hero", "padding", 2);
+    const hero_bottom_padding = px(".hero", "padding", 2);
     // `.menu-the { margin: -56px 0 18px }` — giá trị đầu là phần trèo lên, âm.
     const treo_len = -px(".menu-the", "margin", 0);
     expect(treo_len, "thẻ menu không còn đè lên hero — bản mẫu vẽ nó đè lên").toBeGreaterThan(0);
     expect(
       treo_len,
-      `thẻ menu trèo lên ${treo_len}px trong khi hero chỉ chừa ${dem_day}px ở đáy: hàng chỉ số ` +
+      `thẻ menu trèo lên ${treo_len}px trong khi hero chỉ chừa ${hero_bottom_padding}px ở đáy: hàng chỉ số ` +
         `cuối cùng của hero nằm dưới thẻ trắng.`,
-    ).toBeLessThan(dem_day);
+    ).toBeLessThan(hero_bottom_padding);
   });
 
   /** Số cột của một lưới, ĐỌC TỪ CSS. Viết cứng "4" ở đây là để phép đo xanh khi lưới đổi cột. */
-  function soCot(lop: string): number {
-    const luat = new RegExp(`\\${lop}\\s*\\{([^}]*)\\}`).exec(styles);
-    expect(luat, `stylesheet không còn khai ${lop}`).not.toBeNull();
-    const co = /grid-template-columns:\s*repeat\(\s*(\d+)\s*,/.exec(luat![1]!)?.[1];
-    expect(co, `${lop} không còn là một lưới repeat(N, …)`).toBeDefined();
-    return Number.parseInt(co!, 10);
+  function columnCount(selector: string): number {
+    const rule = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(styles);
+    expect(rule, `stylesheet không còn khai ${selector}`).not.toBeNull();
+    const found = /grid-template-columns:\s*repeat\(\s*(\d+)\s*,/.exec(rule![1]!)?.[1];
+    expect(found, `${selector} không còn là một lưới repeat(N, …)`).toBeDefined();
+    return Number.parseInt(found!, 10);
   }
 
   it("bốn cột chỉ số và ba cột menu đều đủ chỗ cho từ dài nhất ở 320px", () => {
-    const co_chu = pixels("text-small");
+    const font_size = pixels("text-small");
 
     // CHỈ SỐ: hero rộng cả màn (nhờ lề âm), trừ hai đệm ngang của chính nó.
-    const dem_hero = px(".hero", "padding", 1);
-    const cot_chi_so = (BE_RONG_MAY - 2 * dem_hero) / soCot(".stat-grid");
-    for (const nhan of ["Khách hàng", "Đối tác", "Nhân sự", "Quốc gia kết nối"]) {
-      for (const tu of nhan.split(/\s+/)) {
-        const rong = tu.length * co_chu * RONG_MOI_EM;
+    const hero_side_padding = px(".hero", "padding", 1);
+    const stat_column = (PHONE_WIDTH - 2 * hero_side_padding) / columnCount(".stat-grid");
+    for (const label of ["Khách hàng", "Đối tác", "Nhân sự", "Quốc gia kết nối"]) {
+      for (const word of label.split(/\s+/)) {
+        const width = word.length * font_size * WIDTH_PER_EM;
         expect(
-          rong,
-          `nhãn chỉ số "${nhan}": từ "${tu}" cần ~${rong.toFixed(0)}px, mỗi cột chỉ còn ` +
-            `${cot_chi_so.toFixed(0)}px ở ${BE_RONG_MAY}px.`,
-        ).toBeLessThanOrEqual(cot_chi_so);
+          width,
+          `nhãn chỉ số "${label}": từ "${word}" cần ~${width.toFixed(0)}px, mỗi cột chỉ còn ` +
+            `${stat_column.toFixed(0)}px ở ${PHONE_WIDTH}px.`,
+        ).toBeLessThanOrEqual(stat_column);
       }
     }
 
     // MENU NHANH: bề rộng màn − đệm trang hai bên − đệm thẻ hai bên − hai khe, chia ba.
-    const dem_trang = px(".app-main", "padding", 1);
-    const dem_the = px(".menu-the", "padding", 0);
-    const khe = px(".menu-nhanh", "gap", 0);
-    const dem_o = px(".menu-nhanh__nut", "padding", 1);
-    const cot = soCot(".menu-nhanh");
-    const cot_menu = (BE_RONG_MAY - 2 * dem_trang - 2 * dem_the - (cot - 1) * khe) / cot - 2 * dem_o;
+    const page_padding = px(".app-main", "padding", 1);
+    const card_padding = px(".menu-the", "padding", 0);
+    const gap = px(".menu-nhanh", "gap", 0);
+    const tile_padding = px(".menu-nhanh__nut", "padding", 1);
+    const columns = columnCount(".menu-nhanh");
+    const menu_column = (PHONE_WIDTH - 2 * page_padding - 2 * card_padding - (columns - 1) * gap) / columns - 2 * tile_padding;
     expect(MUC_MENU_NHANH.length, "menu rỗng — phép đo này sẽ xanh vì lý do sai").toBeGreaterThan(0);
-    for (const muc of MUC_MENU_NHANH) {
-      for (const tu of `${muc.nhan} ${muc.phu}`.split(/\s+/)) {
-        const rong = tu.length * co_chu * RONG_MOI_EM;
+    for (const item of MUC_MENU_NHANH) {
+      for (const word of `${item.nhan} ${item.phu}`.split(/\s+/)) {
+        const width = word.length * font_size * WIDTH_PER_EM;
         expect(
-          rong,
-          `ô menu "${muc.nhan}": từ "${tu}" cần ~${rong.toFixed(0)}px, mỗi ô chỉ còn ` +
-            `${cot_menu.toFixed(0)}px ở ${BE_RONG_MAY}px. Rút ngắn nhãn, đừng thu nhỏ chữ.`,
-        ).toBeLessThanOrEqual(cot_menu);
+          width,
+          `ô menu "${item.nhan}": từ "${word}" cần ~${width.toFixed(0)}px, mỗi ô chỉ còn ` +
+            `${menu_column.toFixed(0)}px ở ${PHONE_WIDTH}px. Rút ngắn nhãn, đừng thu nhỏ chữ.`,
+        ).toBeLessThanOrEqual(menu_column);
       }
     }
   });
@@ -767,7 +767,7 @@ describe("chồng lớp của màn chủ, đo ở 320px", () => {
  */
 describe("app riêng của xã: cùng thước với phần còn lại", () => {
   it("mọi đích chạm của app riêng cao ít nhất calc(var(--tap-min) + 4px)", () => {
-    for (const lop of [
+    for (const selector of [
       ".xa-dau-con__lui",
       ".xa-o-nhanh",
       ".xa-dau-khoi__them",
@@ -785,20 +785,20 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-o-lv",
       ".xa-sao__nut",
     ]) {
-      expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
-        new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
+      expect(styles, `${selector} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
+        new RegExp(`\\${selector}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
       );
     }
   });
 
   it("không lớp .xa-* nào đặt cỡ chữ bằng số px dưới --text-small", () => {
-    for (const khop of styles.matchAll(/\.xa-[^{]*\{([^}]*)\}/g)) {
-      const co = /font-size:\s*(\d+(?:\.\d+)?)px/.exec(khop[1]!);
-      if (co) expect(Number(co[1]), khop[0].slice(0, 60)).toBeGreaterThanOrEqual(pixels("text-small"));
+    for (const match of styles.matchAll(/\.xa-[^{]*\{([^}]*)\}/g)) {
+      const found = /font-size:\s*(\d+(?:\.\d+)?)px/.exec(match[1]!);
+      if (found) expect(Number(found[1]), match[0].slice(0, 60)).toBeGreaterThanOrEqual(pixels("text-small"));
     }
   });
 
-  const cap: ReadonlyArray<[string, string, string]> = [
+  const pairs: ReadonlyArray<[string, string, string]> = [
     ["chữ trắng trên header và nút navy", "#ffffff", token("xa-navy")],
     ["chữ phụ trên header", token("xa-hero-phu"), token("xa-navy")],
     ["tiêu đề navy trên thẻ", token("xa-navy"), token("surface")],
@@ -819,9 +819,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["bước đang làm", token("xa-hong-dam"), token("surface")],
   ];
-  for (const [gi, chu, nen] of cap) {
-    it(`${gi} đạt 4,5:1`, () => {
-      expect(contrast(chu, nen)).toBeGreaterThanOrEqual(4.5);
+  for (const [what, text, background] of pairs) {
+    it(`${what} đạt 4,5:1`, () => {
+      expect(contrast(text, background)).toBeGreaterThanOrEqual(4.5);
     });
   }
 });

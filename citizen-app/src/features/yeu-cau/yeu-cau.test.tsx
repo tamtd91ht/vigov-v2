@@ -19,8 +19,8 @@ import {
 } from "../../api/hop-dong-yeu-cau";
 import { CHIEN_DICH } from "../../content/chien-dich";
 import { SOLUTIONS } from "../../content/company-profile";
-import { NhaCungCapPhien } from "../dang-nhap/kho-phien";
-import { QUY_MO } from "../goi-y-giai-phap/anh-xa";
+import { SessionProvider } from "../log-in/session-store";
+import { SCALES } from "../solution-suggestion/mapping";
 
 import { MAN_TU_VAN, MAN_YEU_CAU } from "./index";
 import { GIAI_THICH_TRANG_THAI, ngayDoc, NHAN_LOAI, NHAN_TRANG_THAI } from "./trang-thai";
@@ -163,7 +163,7 @@ describe("mọi mã ứng dụng có thể gửi đều khớp khuôn máy chủ
   });
 
   it("mọi mã quy mô và mọi mã chiến dịch cũng vậy", () => {
-    for (const q of QUY_MO) {
+    for (const q of SCALES) {
       expect(MA_HOP_LE.test(q.ma), `mã quy mô "${q.ma}" máy chủ sẽ trả 400`).toBe(true);
     }
     const ma_chien_dich = Object.keys(CHIEN_DICH);
@@ -426,9 +426,9 @@ describe("đã đăng nhập: biểu mẫu hiện ra, và nó có ĐÚNG MỘT �
    */
   const daDangNhap = () =>
     ve(
-      <NhaCungCapPhien phien_ban_dau={{ token: "phieu-thu", het_han: "2026-09-29T03:00:00Z" }}>
+      <SessionProvider initial_session={{ token: "phieu-thu", expires_at: "2026-09-29T03:00:00Z" }}>
         <TuVanBaoGiaScreen />
-      </NhaCungCapPhien>,
+      </SessionProvider>,
     );
 
   it("vẽ ĐÚNG MỘT `<textarea>`, và KHÔNG một `<form>`/`<input>`/`<select>` nào", () => {
@@ -464,7 +464,7 @@ describe("đã đăng nhập: biểu mẫu hiện ra, và nó có ĐÚNG MỘT �
       );
       expect(chu, `mã sản phẩm "${gp.id}" lọt lên màn hình`).not.toContain(gp.id);
     }
-    for (const q of QUY_MO) {
+    for (const q of SCALES) {
       expect(chu, `thiếu mức quy mô: ${q.nhan}`).toContain(q.nhan);
     }
   });

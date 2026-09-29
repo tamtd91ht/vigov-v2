@@ -7,15 +7,15 @@
  * commonest reason a citizen gives up on reporting.
  *
  * WHY ONLY THE COMMUNE'S OWN APP: that app is a SEPARATE Zalo App ID (built with `--vao-thang`, so
- * `XA_CO_DINH !== null`), i.e. a separate origin, and it has no published privacy policy yet (ADR 0047).
+ * `FIXED_COMMUNE_DOMAIN !== null`), i.e. a separate origin, and it has no published privacy policy yet (ADR 0047).
  * The shared ViHAT app promises "không lưu gì xuống máy" (`content/chinh-sach-rieng-tu.ts`) and its two
  * halves share one origin — so it must stay storage-free. Three layers keep it so:
- *   1. only `AppRieng` in `App.tsx` passes this store down (a test reads `AppChung`'s body for it);
- *   2. the default store below opens NO storage when `XA_CO_DINH === null`, i.e. in the shared app build;
- *   3. `phase1-collects-nothing.test.ts` and `ranh-gioi-hai-nua.test.ts` §3b allow `localStorage` in THIS
+ *   1. only `CommuneApp` in `App.tsx` passes this store down (a test reads `SharedApp`'s body for it);
+ *   2. the default store below opens NO storage when `FIXED_COMMUNE_DOMAIN === null`, i.e. in the shared app build;
+ *   3. `phase1-collects-nothing.test.ts` and `two-halves-boundary.test.ts` §3b allow `localStorage` in THIS
  *      FILE ONLY; `sessionStorage`, cookies and IndexedDB stay banned here too.
  *
- * WHAT IS WRITTEN: exactly the six fields of `NhapPhieu`, rebuilt one by one (never a spread of the
+ * WHAT IS WRITTEN: exactly the six fields of `ReportDraft`, rebuilt one by one (never a spread of the
  * caller's object, so a field added to the form later is not written silently). The name and phone typed
  * for the feedback are kept as the prototype keeps them, anonymous or not (see `toStored`). Cleared on a
  * successful send and on "Bỏ nháp" / "Huỷ bỏ". Never sent anywhere.
@@ -23,8 +23,8 @@
  * Every call is wrapped: storage may be full, disabled, or throw on access. A draft is a convenience — it
  * must never block writing or sending a feedback.
  */
-import type { FeedbackDraftStore, NhapPhieu } from "../cong-dan";
-import { XA_CO_DINH } from "../lib/xa-co-dinh";
+import type { FeedbackDraftStore, ReportDraft } from "../citizen";
+import { FIXED_COMMUNE_DOMAIN } from "../lib/fixed-commune";
 
 /** The single key. Versioned, like the prototype's, so a future shape change can ignore old drafts. */
 export const FEEDBACK_DRAFT_KEY = "vigov.feedback.draft.v1";
@@ -36,7 +36,7 @@ export type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem"
  * (the prototype's rule: `loadDraft` drops a draft with no content). A field picked with one tap, or a name
  * that came from Zalo, alone is not a draft.
  */
-function isEmptyDraft(draft: NhapPhieu): boolean {
+function isEmptyDraft(draft: ReportDraft): boolean {
   return draft.noi_dung.trim() === "" && draft.dia_chi.trim() === "";
 }
 
@@ -46,7 +46,7 @@ function isEmptyDraft(draft: NhapPhieu): boolean {
  * them unconditionally): anonymity is about what the STAFF see once sent, and switching it off again must
  * not make the citizen retype. What leaves the phone is still decided at send time (`taoPhieuTraiNghiem`).
  */
-function toStored(draft: NhapPhieu): NhapPhieu {
+function toStored(draft: ReportDraft): ReportDraft {
   return {
     linh_vuc: draft.linh_vuc,
     noi_dung: draft.noi_dung,
@@ -58,7 +58,7 @@ function toStored(draft: NhapPhieu): NhapPhieu {
 }
 
 /** Read side: anything that is not exactly the stored shape is "no draft". */
-function parseDraft(raw: string | null): NhapPhieu | null {
+function parseDraft(raw: string | null): ReportDraft | null {
   if (raw === null || raw === "") return null;
   let value: unknown;
   try {
@@ -68,18 +68,18 @@ function parseDraft(raw: string | null): NhapPhieu | null {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  const { linh_vuc, noi_dung, dia_chi, ho_ten, dien_thoai, an_danh } = record;
+  const { linh_vuc: field, noi_dung: content, dia_chi: address, ho_ten: full_name, dien_thoai: phone, an_danh: anonymous } = record;
   if (
-    typeof linh_vuc !== "string" ||
-    typeof noi_dung !== "string" ||
-    typeof dia_chi !== "string" ||
-    typeof ho_ten !== "string" ||
-    typeof dien_thoai !== "string" ||
-    typeof an_danh !== "boolean"
+    typeof field !== "string" ||
+    typeof content !== "string" ||
+    typeof address !== "string" ||
+    typeof full_name !== "string" ||
+    typeof phone !== "string" ||
+    typeof anonymous !== "boolean"
   ) {
     return null;
   }
-  const draft = toStored({ linh_vuc, noi_dung, dia_chi, ho_ten, dien_thoai, an_danh });
+  const draft = toStored({ linh_vuc: field, noi_dung: content, dia_chi: address, ho_ten: full_name, dien_thoai: phone, an_danh: anonymous });
   return isEmptyDraft(draft) ? null : draft;
 }
 
@@ -125,9 +125,9 @@ export function createFeedbackDraftStore(openStorage: () => KeyValueStorage | nu
 }
 
 /**
- * The store `AppRieng` injects. FAILS CLOSED: in a build without a fixed commune (the shared ViHAT app,
+ * The store `CommuneApp` injects. FAILS CLOSED: in a build without a fixed commune (the shared ViHAT app,
  * every test run) it opens no storage at all, so even a wrong wiring cannot make the shared app write.
  */
 export const feedbackDraftStore: FeedbackDraftStore = createFeedbackDraftStore(() =>
-  XA_CO_DINH === null ? null : (globalThis.localStorage ?? null),
+  FIXED_COMMUNE_DOMAIN === null ? null : (globalThis.localStorage ?? null),
 );

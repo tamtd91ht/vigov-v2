@@ -5,7 +5,7 @@ import { build } from "vite";
 
 import appConfigRaw from "../app-config.json?raw";
 import indexHtml from "../index.html?raw";
-import tenMienRaw from "../scripts/ung-dung-theo-ten-mien.mjs?raw";
+import domainMapRaw from "../scripts/ung-dung-theo-ten-mien.mjs?raw";
 import {
   CAU_DAU,
   MUC_CHINH_SACH,
@@ -39,16 +39,15 @@ import {
   TOKEN_KHONG_CHUA_GI,
   VAN_PHONG,
 } from "./features/tinh-nang/noi-dung";
-// HAI HỢP ĐỒNG, HAI HÀM CÙNG TÊN `thanYeuCau` — và chúng được ĐẶT BÍ DANH ở đây thay vì đổi tên
-// một trong hai: mỗi hàm là "thân yêu cầu" của đúng tuyến nó phục vụ, và đổi tên để tiện cho một
-// tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
+// HAI HỢP ĐỒNG, HAI HÀM "THÂN YÊU CẦU": `thanYeuCau` của tuyến yêu cầu (nửa thương mại, giữ tên) và
+// `sessionRequestBody` của tuyến đăng nhập. Mỗi hàm là thân của đúng tuyến nó phục vụ.
 import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
-import { DUONG_DAN_PHIEN, LOCATION_PATH, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
+import { SESSION_PATH, LOCATION_PATH, sessionRequestBody } from "./features/log-in/contract";
 import { nhanNguon, TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha/goi-y";
-import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
-import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
-import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
-import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
+import { vigovAddress } from "./citizen/api/vigov-address";
+import { MY_REPORTS_PATH } from "./citizen/api/citizen-report-contract";
+import { CITIZEN_CHANNEL_LABEL } from "./citizen/screens/CitizenChannel";
+import { MY_REPORTS, CHANNEL_NOT_OPEN, EMERGENCY, LOOKUP } from "./citizen/screens/copy";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -83,8 +82,8 @@ declare const process: { env: Record<string, string | undefined> };
  * đo trên một bundle dựng ra khi hai thứ ấy CÓ MẶT, đúng tình huống của máy chạy `zmp deploy`.
  * Không có chúng trong môi trường thì ca ấy xanh vì không có gì để lọt.
  */
-const APP_ID_GIA = "1111111111111111111";
-const ZMP_TOKEN_GIA = "gia-lap-zmp-token-khong-duoc-lot-vao-bundle";
+const FAKE_APP_ID = "1111111111111111111";
+const FAKE_ZMP_TOKEN = "gia-lap-zmp-token-khong-duoc-lot-vao-bundle";
 
 /**
  * Dựng bản đẩy lên Zalo, trong bộ nhớ, qua đúng `vite.config.ts` mà `npm run build` dùng.
@@ -93,12 +92,12 @@ const ZMP_TOKEN_GIA = "gia-lap-zmp-token-khong-duoc-lot-vao-bundle";
  * Trước ngày này tệp này dựng hai biến thể (`goc` · `day-du`) rồi so hai bundle; nay app chung và
  * app riêng của xã chạy CÙNG MỘT bundle, nên chỉ có một thứ để đo. Ngoại lệ `--vao-thang` (ADR 0047
  * §6) chỉ thêm một tên miền qua `VIGOV_XA_CO_DINH` — biến ấy KHÔNG có trong môi trường test, nên
- * đây là bản không cờ; `scripts/cau-hinh.test.mjs` và `lib/xa-co-dinh.test.ts` canh phần có cờ.
+ * đây là bản không cờ; `scripts/cau-hinh.test.mjs` và `lib/fixed-commune.test.ts` canh phần có cờ.
  */
-async function dungBan(): Promise<EmittedFile[]> {
-  const truoc = { APP_ID: process.env["APP_ID"], ZMP_TOKEN: process.env["ZMP_TOKEN"] };
-  process.env["APP_ID"] = APP_ID_GIA;
-  process.env["ZMP_TOKEN"] = ZMP_TOKEN_GIA;
+async function buildBundle(): Promise<EmittedFile[]> {
+  const previous = { APP_ID: process.env["APP_ID"], ZMP_TOKEN: process.env["ZMP_TOKEN"] };
+  process.env["APP_ID"] = FAKE_APP_ID;
+  process.env["ZMP_TOKEN"] = FAKE_ZMP_TOKEN;
   try {
     const result = await build({ logLevel: "silent", build: { write: false } });
     const outputs = (Array.isArray(result) ? result : [result]) as unknown as Array<{
@@ -106,7 +105,7 @@ async function dungBan(): Promise<EmittedFile[]> {
     }>;
     return outputs.flatMap((output) => output.output);
   } finally {
-    for (const [k, v] of Object.entries(truoc)) {
+    for (const [k, v] of Object.entries(previous)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
@@ -120,19 +119,19 @@ async function dungBan(): Promise<EmittedFile[]> {
  * giải mã thì phép tìm "cơ quan" trong bundle **không khớp gì cả** và ca kiểm xanh vì lý do sai —
  * đúng cái chế độ hỏng mà ca kiểm ấy sinh ra để chặn.
  */
-const toanVan = (tep: EmittedFile[]) =>
-  tep
+const fullText = (files: EmittedFile[]) =>
+  files
     .map((f) => String(f.code ?? f.source ?? ""))
     .join("\n")
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_, ma) => String.fromCharCode(Number.parseInt(ma, 16)));
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code) => String.fromCharCode(Number.parseInt(code, 16)));
 
 let emitted: EmittedFile[] = [];
 /** Toàn văn bundle, đã giải mã. Dựng MỘT lần cho cả tệp. */
-let ban = "";
+let bundle = "";
 
 beforeAll(async () => {
-  emitted = await dungBan();
-  ban = toanVan(emitted);
+  emitted = await buildBundle();
+  bundle = fullText(emitted);
 }, 120_000);
 
 const builtHtml = () => {
@@ -185,9 +184,9 @@ describe("the bundle that gets uploaded to Zalo", () => {
     // app-config.json được COMMIT và liệt kê đường dẫn bundle. Nếu tên tệp mang mã băm thì tệp
     // ấy sai ngay lần dựng kế tiếp, và sai theo kiểu không có gì báo — app vẫn dựng xanh, chỉ là
     // Zalo đi nạp một tệp không còn tồn tại.
-    const ten = emitted.map((f) => f.fileName).filter((n) => n.endsWith(".js"));
-    expect(ten).toContain("assets/app.js");
-    for (const n of ten) expect(n).not.toMatch(/-[A-Za-z0-9_-]{8}\.js$/);
+    const names = emitted.map((f) => f.fileName).filter((n) => n.endsWith(".js"));
+    expect(names).toContain("assets/app.js");
+    for (const n of names) expect(n).not.toMatch(/-[A-Za-z0-9_-]{8}\.js$/);
   });
 });
 
@@ -213,7 +212,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì ca
    * "CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bundle đúng.
    */
-  const CHUOI_SAU_TINH_NANG = () => [
+  const FEATURE_STRINGS = () => [
     MAN_DANH_THIEP.headerTitle,
     CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
@@ -228,44 +227,44 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     ...Object.values(DUONG_TRUYEN),
     ...Object.values(THIEP_CUA_CHUNG_TOI),
     ...Object.values(SO_HOA_THIEP),
-    ...Object.values(KIEU_KET_NOI).flatMap((mot) => [mot.nhan, mot.y_nghia]),
-    ...NOI_DUNG_TINH_NANG.flatMap((nd) => [
-      nd.nhan_ngan,
-      nd.tieu_de,
-      nd.vi_sao,
-      nd.nut,
-      nd.dang_cho,
-      nd.tu_choi,
-      nd.ngoai_zalo,
-      nd.khong_lay_duoc,
+    ...Object.values(KIEU_KET_NOI).flatMap((item) => [item.nhan, item.y_nghia]),
+    ...NOI_DUNG_TINH_NANG.flatMap((feature) => [
+      feature.nhan_ngan,
+      feature.tieu_de,
+      feature.vi_sao,
+      feature.nut,
+      feature.dang_cho,
+      feature.tu_choi,
+      feature.ngoai_zalo,
+      feature.khong_lay_duoc,
     ]),
   ];
 
-  const dem = (chuoi: string) => ban.split(chuoi).length - 1;
+  const count = (str: string) => bundle.split(str).length - 1;
 
   it("mang đủ chữ của sáu tính năng", () => {
-    const chuoi = CHUOI_SAU_TINH_NANG();
-    expect(chuoi.length).toBeGreaterThan(20);
-    for (const mot of chuoi) {
-      expect(ban, `bundle thiếu: ${mot}`).toContain(mot);
+    const strings = FEATURE_STRINGS();
+    expect(strings.length).toBeGreaterThan(20);
+    for (const item of strings) {
+      expect(bundle, `bundle thiếu: ${item}`).toContain(item);
     }
   });
 
   it("mang màn xác nhận xã — vỏ để card sau nối vào nguồn xã phía máy chủ", () => {
     // Vế "CÓ" của ca "không còn bộ chọn xã" ngay dưới: màn xác nhận vẫn phải có mặt.
-    for (const chuoi of [
+    for (const str of [
       TIEU_DE_XAC_NHAN_XA,
       nhanNguon("qr"),
       nhanNguon("zns"),
       "Bạn cần liên hệ với xã này?",
       "Không phải xã này",
     ]) {
-      expect(ban, `bundle thiếu: ${chuoi}`).toContain(chuoi);
+      expect(bundle, `bundle thiếu: ${str}`).toContain(str);
     }
   });
 
   it("KHÔNG mang bộ chọn xã, nút đổi xã, trang xã mẫu hay danh mục xã mẫu (ADR 0044 câu 4 · 0047)", () => {
-    for (const chuoi of [
+    for (const str of [
       "Chọn xã khác",
       "Đổi xã",
       "Chọn xã để tiếp tục",
@@ -274,7 +273,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
       // Tiền tố mã xã của danh mục mẫu cũ. Nó lọt lại là danh mục ấy lọt lại.
       "01JDEMXA",
     ]) {
-      expect(ban, `bundle vẫn chứa: ${chuoi}`).not.toContain(chuoi);
+      expect(bundle, `bundle vẫn chứa: ${str}`).not.toContain(str);
     }
   });
 
@@ -282,15 +281,15 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     // Chủ sản phẩm, 27/09/2026: "demo ở đây là ngôn ngữ nói hiểu về cách làm, không phải là khái
     // niệm kỹ thuật, về kỹ thuật nó là app dùng thật". Chỉ cấm những cụm tiếng Việt: chữ Latin
     // "demo" trần có thể nằm trong mã của `zmp-sdk`, và một ca đỏ vì SDK là một ca sắp bị xoá.
-    for (const chuoi of ["trình diễn", "dữ liệu mẫu", "Dữ liệu mẫu", "danh mục mẫu", "Danh mục mẫu", "bản demo", "Bản demo"]) {
-      expect(ban, `bundle vẫn chứa: ${chuoi}`).not.toContain(chuoi);
+    for (const str of ["trình diễn", "dữ liệu mẫu", "Dữ liệu mẫu", "danh mục mẫu", "Danh mục mẫu", "bản demo", "Bản demo"]) {
+      expect(bundle, `bundle vẫn chứa: ${str}`).not.toContain(str);
     }
   });
 
   it("KHÔNG mang bảng chẩn đoán", () => {
     // Bảng in tham số nội bộ đã bị xoá khỏi mã. Nó lọt lại là một câu hỏi ở vòng duyệt.
-    expect(ban).not.toContain("Chẩn đoán tham số mở app");
-    expect(ban).not.toContain("URL Zalo dùng để mở app");
+    expect(bundle).not.toContain("Chẩn đoán tham số mở app");
+    expect(bundle).not.toContain("URL Zalo dùng để mở app");
   });
 
   /**
@@ -299,20 +298,20 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * Tên miền chỉ chọn App ID ĐÍCH lúc đẩy (`scripts/dich-den.mjs`); nó không vào nội dung — trừ bản
    * dựng `--vao-thang` của đúng xã ấy (ADR 0047 §6), thứ ca này không dựng. Một App ID hay tên miền xã trong bundle là một giá trị theo xã nung vào một bundle dùng
    * chung — đúng thứ luật 1 bất biến 10 cấm. Bundle ở đây được dựng khi `APP_ID` và `ZMP_TOKEN`
-   * CÓ trong môi trường (`dungBan`), nên ca này đo đúng tình huống của máy chạy `zmp deploy`.
+   * CÓ trong môi trường (`buildBundle`), nên ca này đo đúng tình huống của máy chạy `zmp deploy`.
    */
   it("không mang App ID, token, hay tên miền / App ID nào của tệp ánh xạ", () => {
-    expect(ban, "APP_ID của môi trường dựng lọt vào bundle").not.toContain(APP_ID_GIA);
-    expect(ban, "ZMP_TOKEN của môi trường dựng lọt vào bundle").not.toContain(ZMP_TOKEN_GIA);
+    expect(bundle, "APP_ID của môi trường dựng lọt vào bundle").not.toContain(FAKE_APP_ID);
+    expect(bundle, "ZMP_TOKEN của môi trường dựng lọt vào bundle").not.toContain(FAKE_ZMP_TOKEN);
 
     // Khoá và giá trị của tệp ánh xạ, đọc từ chính tệp (`?raw`), không gõ lại.
-    const trong_tep = [...tenMienRaw.matchAll(/^\s*"([^"]+)"\s*:\s*"([^"]+)"/gm)].flatMap((m) => [
+    const in_file = [...domainMapRaw.matchAll(/^\s*"([^"]+)"\s*:\s*"([^"]+)"/gm)].flatMap((m) => [
       m[1]!,
       m[2]!,
     ]);
-    expect(trong_tep.length, "không đọc được dòng nào của tệp ánh xạ — ca này sẽ xanh vì rỗng").toBeGreaterThan(0);
-    for (const chuoi of trong_tep) {
-      expect(ban, `bundle mang "${chuoi}" của tệp ánh xạ tên miền → App ID`).not.toContain(chuoi);
+    expect(in_file.length, "không đọc được dòng nào của tệp ánh xạ — ca này sẽ xanh vì rỗng").toBeGreaterThan(0);
+    for (const str of in_file) {
+      expect(bundle, `bundle mang "${str}" của tệp ánh xạ tên miền → App ID`).not.toContain(str);
     }
   });
 
@@ -325,70 +324,70 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * một bản SDK khác — một lý do ta không sửa được.
    */
   it("mang đúng MỘT đường gọi tuyến đăng nhập", () => {
-    const ten_truong = Object.keys(
-      JSON.parse(thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<
+    const field_names = Object.keys(
+      JSON.parse(sessionRequestBody({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<
         string,
         unknown
       >,
     );
-    expect(ten_truong.length, "hợp đồng không còn trường nào để đo").toBe(2);
+    expect(field_names.length, "hợp đồng không còn trường nào để đo").toBe(2);
     expect(
-      dem(DUONG_DAN_PHIEN),
+      count(SESSION_PATH),
       "bundle phải nhắc tuyến đăng nhập ĐÚNG MỘT lần. 0 lần = khối đăng nhập không gọi được máy " +
         "chủ; 2 lần trở lên = có chỗ gọi thứ hai.",
     ).toBe(1);
-    for (const truong of ten_truong) {
-      expect(dem(truong), `bundle không mang tên trường "${truong}" của hợp đồng đăng nhập`).toBeGreaterThan(0);
+    for (const field_name of field_names) {
+      expect(count(field_name), `bundle không mang tên trường "${field_name}" của hợp đồng đăng nhập`).toBeGreaterThan(0);
     }
-    expect((ban.match(/fetch\s*\(/g) ?? []).length, "bundle không có một lời gọi mạng nào").toBeGreaterThan(0);
+    expect((bundle.match(/fetch\s*\(/g) ?? []).length, "bundle không có một lời gọi mạng nào").toBeGreaterThan(0);
   });
 
   it("mang đúng MỘT đường gọi tuyến đổi mã vị trí, và hai tên trường của nó", () => {
     // 29/09/2026 — `vihat-miniapp` `POST /api/v1/location`. 0 = the location button cannot reach the
     // server; 2+ = a second caller appeared somewhere.
-    expect(dem(LOCATION_PATH), "bundle phải nhắc tuyến đổi mã vị trí ĐÚNG MỘT lần").toBe(1);
-    expect(dem("locationToken"), "bundle không mang tên trường locationToken").toBeGreaterThan(0);
+    expect(count(LOCATION_PATH), "bundle phải nhắc tuyến đổi mã vị trí ĐÚNG MỘT lần").toBe(1);
+    expect(count("locationToken"), "bundle không mang tên trường locationToken").toBeGreaterThan(0);
   });
 
   it("mang đúng MỘT đường gọi tuyến yêu cầu", () => {
-    const ten_truong = Object.keys(
+    const field_names = Object.keys(
       JSON.parse(
         thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "", ghi_chu: "", nguon: "" }),
       ) as Record<string, unknown>,
     );
-    expect(ten_truong.length, "hợp đồng yêu cầu không còn trường nào để đo").toBe(5);
-    expect(dem(DUONG_DAN_YEU_CAU), "bundle phải nhắc tuyến yêu cầu ĐÚNG MỘT lần").toBe(1);
+    expect(field_names.length, "hợp đồng yêu cầu không còn trường nào để đo").toBe(5);
+    expect(count(DUONG_DAN_YEU_CAU), "bundle phải nhắc tuyến yêu cầu ĐÚNG MỘT lần").toBe(1);
     // TÌM `ten:` CHỨ KHÔNG TÌM TÊN TRẦN: `note`, `source`, `scale` là những từ tiếng Anh thường,
     // gần như chắc chắn có mặt trong `zmp-sdk`. Bộ rút gọn KHÔNG đổi được tên khoá của một object
     // literal đi lên dây, nên `note:` là cái neo đúng.
-    for (const truong of ten_truong) {
-      expect(dem(`${truong}:`), `bundle không mang tên trường "${truong}" của hợp đồng yêu cầu`).toBeGreaterThan(0);
+    for (const field_name of field_names) {
+      expect(count(`${field_name}:`), `bundle không mang tên trường "${field_name}" của hợp đồng yêu cầu`).toBeGreaterThan(0);
     }
   });
 
   /**
    * KÊNH CÔNG DÂN — CÓ MẶT trong bundle từ 27/09/2026 (trước đó chỉ ở bản `day-du`). Vẫn ĐÓNG: cầu
-   * phiên ViGov chưa có, nên không lời gọi nào đi ra (`cong-dan.test.tsx` đo điều đó). Đường dẫn
+   * phiên ViGov chưa có, nên không lời gọi nào đi ra (`citizen.test.tsx` đo điều đó). Đường dẫn
    * tuyến và tiêu đề chống trùng là hai neo chắc nhất: `zmp-sdk` không thể tình cờ chứa chúng.
    */
   it("mang kênh công dân: đúng MỘT đường gọi tuyến ViGov, và đủ chữ của các màn", () => {
-    expect(dem(DUONG_DAN_PHAN_ANH_CUA_TOI), "bundle phải nhắc tuyến ViGov đúng một lần").toBe(1);
-    expect(ban).toContain("Idempotency-Key");
+    expect(count(MY_REPORTS_PATH), "bundle phải nhắc tuyến ViGov đúng một lần").toBe(1);
+    expect(bundle).toContain("Idempotency-Key");
 
-    // HOST CỦA `service-petitions` (ADR 0046). Đọc từ chính `diaChiViGov`, không gõ lại.
-    const host_petitions = new URL(diaChiViGov("petitions", "/")).host;
+    // HOST CỦA `service-petitions` (ADR 0046). Đọc từ chính `vigovAddress`, không gõ lại.
+    const host_petitions = new URL(vigovAddress("petitions", "/")).host;
     expect(host_petitions, "bảng host của kênh công dân mất dòng `petitions`").toBe("petitions.api.vigov.vn");
-    expect(ban, "bundle không mang host của petitions").toContain(host_petitions);
+    expect(bundle, "bundle không mang host của petitions").toContain(host_petitions);
 
-    for (const chuoi of [
-      KENH_CHUA_MO.tieu_de,
-      KHAN_CAP,
-      TRA_CUU.khong_thay,
-      NHAN_KENH_CONG_DAN,
-      CUA_TOI.tieu_de,
-      CUA_TOI.trong,
+    for (const str of [
+      CHANNEL_NOT_OPEN.title,
+      EMERGENCY,
+      LOOKUP.not_found,
+      CITIZEN_CHANNEL_LABEL,
+      MY_REPORTS.title,
+      MY_REPORTS.empty,
     ]) {
-      expect(ban, `bundle thiếu: ${chuoi}`).toContain(chuoi);
+      expect(bundle, `bundle thiếu: ${str}`).toContain(str);
     }
   });
 
@@ -399,7 +398,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * nên bundle chỉ chứa hai mảnh rời. Một `toContain` trên chuỗi ghép xanh vì KHÔNG BẢN NÀO chứa nó.
    */
   it("mang đủ chữ của bốn khối trên màn chủ", () => {
-    const chuoi = [
+    const strings = [
       SLOGAN_HERO.cau,
       CAU_SAN_PHAM.cau,
       NHAN_LOAI_HINH,
@@ -407,12 +406,12 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
       DUONG_DAN_CHAT_OA,
       NGAY_CHUP_TIN,
       "không tự tải tin mới",
-      ...TIN_VIHAT.flatMap((bai) => [bai.tieu_de, bai.trich, bai.duong_dan]),
-      ...MUC_MENU_NHANH.flatMap((muc) => [muc.nhan, muc.phu]),
+      ...TIN_VIHAT.flatMap((article) => [article.tieu_de, article.trich, article.duong_dan]),
+      ...MUC_MENU_NHANH.flatMap((entry) => [entry.nhan, entry.phu]),
     ];
-    expect(chuoi.length).toBeGreaterThan(15);
-    for (const mot of chuoi) {
-      expect(ban, `bundle thiếu: ${mot}`).toContain(mot);
+    expect(strings.length).toBeGreaterThan(15);
+    for (const item of strings) {
+      expect(bundle, `bundle thiếu: ${item}`).toContain(item);
     }
   });
 
@@ -421,17 +420,17 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * lúc chạy từ `DICH_MO_RA_NGOAI`, nên chuỗi đầy đủ không có trong bundle.
    */
   it("khai từng đích mở ra ngoài", () => {
-    expect(ban, "bundle không còn câu khai số chỗ mở trang ngoài").toContain(
+    expect(bundle, "bundle không còn câu khai số chỗ mở trang ngoài").toContain(
       "chỗ ứng dụng mở một trang bên ngoài",
     );
-    for (const dich of DICH_MO_RA_NGOAI) {
-      expect(ban, `bundle không khai đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
+    for (const destination of DICH_MO_RA_NGOAI) {
+      expect(bundle, `bundle không khai đích "${destination.ma}"`).toContain(destination.trong_chinh_sach);
     }
   });
 
   it("MANG `zmp-sdk` và đủ mười lời gọi nền tảng — nếu không thì các tính năng không gọi được", () => {
-    expect(ban, "bundle không mang zmp-sdk").toContain("zmp-sdk");
-    for (const ten of [
+    expect(bundle, "bundle không mang zmp-sdk").toContain("zmp-sdk");
+    for (const name of [
       "getPhoneNumber",
       "getAccessToken",
       "getLocation",
@@ -443,7 +442,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
       "openMediaPicker",
       "downloadFile",
     ]) {
-      expect(ban, `bundle không gọi ${ten}`).toContain(ten);
+      expect(bundle, `bundle không gọi ${name}`).toContain(name);
     }
   });
 
@@ -456,15 +455,15 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    */
   it("không tệp nào GÁN một địa chỉ cho `serverUploadUrl` — ảnh không có đường rời khỏi máy", () => {
     expect(
-      ban.match(/serverUploadUrl\s*:\s*["'`]/g) ?? [],
+      bundle.match(/serverUploadUrl\s*:\s*["'`]/g) ?? [],
       "bundle gán một chuỗi cho serverUploadUrl — đường DUY NHẤT openMediaPicker tải ảnh lên máy chủ",
     ).toEqual([]);
   });
 
   it("mang câu mở đầu chính sách hiện hành, không mang câu cũ đã thành sai", () => {
-    expect(ban, "bundle thiếu câu mở đầu chính sách").toContain(CAU_DAU);
+    expect(bundle, "bundle thiếu câu mở đầu chính sách").toContain(CAU_DAU);
     expect(
-      ban,
+      bundle,
       "bundle vẫn mang câu mở đầu CŨ — câu ấy thành sai từ ngày khối đăng nhập gọi máy chủ",
     ).not.toContain("không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn");
   });
@@ -472,18 +471,18 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
   it("mang ĐỦ mục Đăng nhập của chính sách", () => {
     // Đây là mục khai việc gửi hai mã đi và việc máy chủ lưu số điện thoại. Thiếu nó là giấu một
     // hành vi mà mã CÓ — đúng thứ Nghị định 13 nhắm tới.
-    const muc = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap");
-    expect(muc, "chính sách không còn mục nào về đăng nhập").toBeDefined();
-    for (const doan of muc!.doan) {
-      expect(ban, `bundle thiếu đoạn chính sách: ${doan.slice(0, 40)}…`).toContain(doan);
+    const section = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap");
+    expect(section, "chính sách không còn mục nào về đăng nhập").toBeDefined();
+    for (const paragraph of section!.doan) {
+      expect(bundle, `bundle thiếu đoạn chính sách: ${paragraph.slice(0, 40)}…`).toContain(paragraph);
     }
   });
 
   it("mang chính sách quyền riêng tư, đủ mọi mục, đúng phiên bản", () => {
-    expect(ban, "bundle thiếu tiêu đề chính sách").toContain(TIEU_DE_CHINH_SACH);
-    expect(ban, "bundle ghi sai phiên bản chính sách").toContain(PHIEN_BAN_CHINH_SACH);
+    expect(bundle, "bundle thiếu tiêu đề chính sách").toContain(TIEU_DE_CHINH_SACH);
+    expect(bundle, "bundle ghi sai phiên bản chính sách").toContain(PHIEN_BAN_CHINH_SACH);
     for (const m of MUC_CHINH_SACH) {
-      expect(ban, `bundle thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
+      expect(bundle, `bundle thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
     }
   });
 
@@ -492,41 +491,41 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    * (`${nhan_ngan} — ${vi_sao}`), nên kiểm theo mảnh, không theo chuỗi ghép.
    */
   it("chính sách nói ĐỦ mục đích của các quyền", () => {
-    const muc = MUC_CHINH_SACH.find((m) => m.ma === "cac-quyen");
-    expect(muc, "chính sách không còn mục nào về các quyền").toBeDefined();
-    const manh = muc!.doan.flatMap((doan) => doan.split(" — ")).filter((m) => m.length >= 30);
-    expect(manh.length).toBeGreaterThan(3);
-    for (const m of manh) {
-      expect(ban, `chính sách thiếu: ${m.slice(0, 50)}…`).toContain(m);
+    const section = MUC_CHINH_SACH.find((m) => m.ma === "cac-quyen");
+    expect(section, "chính sách không còn mục nào về các quyền").toBeDefined();
+    const fragments = section!.doan.flatMap((paragraph) => paragraph.split(" — ")).filter((m) => m.length >= 30);
+    expect(fragments.length).toBeGreaterThan(3);
+    for (const m of fragments) {
+      expect(bundle, `chính sách thiếu: ${m.slice(0, 50)}…`).toContain(m);
     }
   });
 
   it("vẫn ĐÚNG BẰNG một ứng dụng có nội dung — không phải một bản rỗng", () => {
     // Gỡ nhầm tay thì bundle cũng "không chứa bộ chọn xã nào", và mọi ca trên vẫn xanh. Ca này là
     // thứ phân biệt "đã gỡ đúng phần thừa" với "đã gỡ mất app".
-    expect(ban).toContain(COMPANY.name);
-    for (const man of MAN_GIOI_THIEU) {
-      expect(ban, `bundle thiếu màn ${man.id}`).toContain(man.headerTitle);
+    expect(bundle).toContain(COMPANY.name);
+    for (const screen of MAN_GIOI_THIEU) {
+      expect(bundle, `bundle thiếu màn ${screen.id}`).toContain(screen.headerTitle);
     }
     expect(TABS, "thanh tab rỗng — ca này sẽ xanh vì không tìm thấy gì").toHaveLength(4);
-    for (const man of TABS) {
-      expect(ban, `bundle thiếu nhãn tab ${man.id}`).toContain(man.cho.nhan);
+    for (const screen of TABS) {
+      expect(bundle, `bundle thiếu nhãn tab ${screen.id}`).toContain(screen.cho.nhan);
     }
-    expect(ban, "bundle thiếu màn Danh thiếp").toContain(MAN_DANH_THIEP.headerTitle);
+    expect(bundle, "bundle thiếu màn Danh thiếp").toContain(MAN_DANH_THIEP.headerTitle);
   });
 
   it("một `VIGOV_BIEN_THE` còn sót trong môi trường không đổi được gì — không còn biến thể để chọn", async () => {
     // Trước 27/09 tên sai thì bước dựng DỪNG. Nay biến ấy không còn được đọc ở đâu: một máy CI còn
     // đặt `VIGOV_BIEN_THE=goc` phải dựng ra ĐÚNG bundle này, không phải một bản khác.
-    const truoc = process.env["VIGOV_BIEN_THE"];
+    const previous = process.env["VIGOV_BIEN_THE"];
     process.env["VIGOV_BIEN_THE"] = "goc";
     try {
-      const lai = toanVan(await dungBan());
-      expect(lai.length).toBe(ban.length);
-      expect(lai).toContain(NHAN_KENH_CONG_DAN);
+      const again = fullText(await buildBundle());
+      expect(again.length).toBe(bundle.length);
+      expect(again).toContain(CITIZEN_CHANNEL_LABEL);
     } finally {
-      if (truoc === undefined) delete process.env["VIGOV_BIEN_THE"];
-      else process.env["VIGOV_BIEN_THE"] = truoc;
+      if (previous === undefined) delete process.env["VIGOV_BIEN_THE"];
+      else process.env["VIGOV_BIEN_THE"] = previous;
     }
   }, 120_000);
 });
@@ -560,8 +559,8 @@ describe("what the submission says the app is called", () => {
     // nào cả. Ghim vào đuôi tệp thì test đỏ mỗi lần đổi hình dạng bundle vì một lý do chẳng liên
     // quan gì tới màu — và một test đỏ sai lý do là một test sắp bị ai đó xoá.
     // Rollup để nội dung của một chunk JS ở `code`; chỉ asset mới dùng `source`.
-    const noi_dung = emitted.map((file) => String(file.code ?? file.source ?? "")).join("\n");
-    const navy = /--navy:\s*([^;}]+)/.exec(noi_dung)?.[1]?.trim().toLowerCase();
+    const content = emitted.map((file) => String(file.code ?? file.source ?? "")).join("\n");
+    const navy = /--navy:\s*([^;}]+)/.exec(content)?.[1]?.trim().toLowerCase();
     expect(navy, "bản dựng không chứa biến --navy ở đâu cả").toBe(BRAND_NAVY);
   });
 });

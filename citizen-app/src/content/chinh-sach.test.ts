@@ -7,9 +7,9 @@ import {
   communeAppSessionBody,
   LOCATION_FIELDS,
   locationBody,
-  thanYeuCauCauViGov,
-  TRUONG_GUI_DI_CAU_VIGOV,
-} from "../features/dang-nhap/hop-dong";
+  vigovBridgeRequestBody,
+  VIGOV_BRIDGE_SENT_FIELDS,
+} from "../features/log-in/contract";
 import {
   DOAN_CHINH_SACH_TINH_NANG,
   TOKEN_KHONG_CHUA_GI,
@@ -129,12 +129,12 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
    *
    *   Thân ấy rời khỏi máy mang tên miền của xã và cú xác nhận. Câu khai nằm trong mục Đăng nhập dưới
    *   dạng CHUỖI VIẾT SẴN (bundle phải mang nguyên văn từng đoạn của mục ấy), nên cái khoá ở đây là:
-   *   khoá của thân ⇄ bảng `TRUONG_GUI_DI_CAU_VIGOV` ⇄ từng câu khai có mặt nguyên văn trong mục ấy.
+   *   khoá của thân ⇄ bảng `VIGOV_BRIDGE_SENT_FIELDS` ⇄ từng câu khai có mặt nguyên văn trong mục ấy.
    */
   describe("bước xác nhận xã — thân gửi đi, bảng khai và văn bản khoá nhau", () => {
     const khoaThan = () =>
       Object.keys(
-        JSON.parse(thanYeuCauCauViGov({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example" })) as Record<
+        JSON.parse(vigovBridgeRequestBody({ ma_truy_cap: "m", commune_domain: "xa-vi-du.vigov.example" })) as Record<
           string,
           unknown
         >,
@@ -144,7 +144,7 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     it("MỌI khoá thân gửi đi có một dòng khai, và mọi dòng khai là một khoá thân gửi đi", () => {
       const khoa = khoaThan();
       expect(khoa.length, "thân bước xác nhận xã không còn trường nào để đo").toBeGreaterThan(0);
-      const da_khai = TRUONG_GUI_DI_CAU_VIGOV.map((t) => t.khoa);
+      const da_khai = VIGOV_BRIDGE_SENT_FIELDS.map((t) => t.khoa);
       for (const k of khoa) {
         expect(da_khai, `bước xác nhận xã gửi "${k}" mà chính sách KHÔNG khai`).toContain(k);
       }
@@ -154,8 +154,8 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     });
 
     it("MỌI dòng khai có mặt NGUYÊN VĂN trong mục Đăng nhập — gỡ câu ấy khỏi văn bản là ĐỎ", () => {
-      expect(TRUONG_GUI_DI_CAU_VIGOV.length).toBeGreaterThan(0);
-      for (const t of TRUONG_GUI_DI_CAU_VIGOV) {
+      expect(VIGOV_BRIDGE_SENT_FIELDS.length).toBeGreaterThan(0);
+      for (const t of VIGOV_BRIDGE_SENT_FIELDS) {
         expect(mucDangNhap(), `mục Đăng nhập không còn nói tới: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
           t.trong_chinh_sach,
         );
@@ -186,10 +186,10 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     it("thân mở lại kèm số: ngoài ba khoá đã khai, CHỈ `phoneToken` — khoảng hở chính sách còn nợ", () => {
       const withPhone = Object.keys(
         JSON.parse(
-          bridgeBodyWithPhone({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
+          bridgeBodyWithPhone({ ma_truy_cap: "m", commune_domain: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
         ) as Record<string, unknown>,
       );
-      const declared = TRUONG_GUI_DI_CAU_VIGOV.map((t) => t.khoa);
+      const declared = VIGOV_BRIDGE_SENT_FIELDS.map((t) => t.khoa);
       expect(withPhone.filter((k) => !declared.includes(k))).toEqual(["phoneToken"]);
       for (const k of declared) expect(withPhone).toContain(k);
       // Câu chính sách của bước xác nhận xã VẪN ĐÚNG: thân của bước ấy vẫn không mang mã số.

@@ -26,7 +26,7 @@ import { docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
 /**
  * ĐỊA CHỈ MÁY CHỦ — BIẾN LÚC DỰNG DUY NHẤT.
  *
- * `VIGOV_API_HOST` đi vào mã dưới cái tên `__VIGOV_API_HOST__`, và chỉ `features/dang-nhap/`
+ * `VIGOV_API_HOST` đi vào mã dưới cái tên `__VIGOV_API_HOST__`, và chỉ `features/log-in/`
  * đọc nó. ⚠ Bản đẩy lên Zalo CẦN NÓ: quên khai là nộp một nút đăng nhập nói
  * "người dựng bản cần đặt biến…". `scripts/deploy.mjs` chặn đường đẩy khi biến còn rỗng —
  * chặn ở đó chứ không ném lỗi lúc dựng, vì `npm test` và `npm run dev` phải chạy được trên một
@@ -34,7 +34,7 @@ import { docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
  *
  * ⚠ KHÔNG CÓ GIÁ TRỊ MẶC ĐỊNH, VÀ KHÔNG BAO GIỜ ĐƯỢC CÓ. Một `?? "https://…"` ở đây là gửi hai
  * mã đăng nhập của một người thật tới một máy chủ không ai chọn, trên mọi bản dựng của mọi máy
- * quên đặt biến. Chưa khai thì `hop-dong.ts` trả về chuỗi rỗng và màn hình nói ra điều đó —
+ * quên đặt biến. Chưa khai thì `api/dia-chi.ts` trả về chuỗi rỗng và màn hình nói ra điều đó —
  * fail closed.
  *
  * ⚠ ĐÂY KHÔNG PHẢI CHỖ ĐỂ MỘT BÍ MẬT NÀO. `define` chèn giá trị THẲNG vào bundle, tức là vào
@@ -103,7 +103,7 @@ export default defineConfig(() => ({
   base: "./",
   plugins: [thePlainScript],
   // `__VIGOV_XA_CO_DINH__`: rỗng trừ khi `deploy.mjs --vao-thang` dựng app riêng của một xã — xem
-  // `xaCoDinh` trong scripts/cau-hinh.mjs và src/lib/xa-co-dinh.ts.
+  // `xaCoDinh` trong scripts/cau-hinh.mjs và src/lib/fixed-commune.ts.
   define: {
     __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()),
     __VIGOV_XA_CO_DINH__: JSON.stringify(xaCoDinh()),

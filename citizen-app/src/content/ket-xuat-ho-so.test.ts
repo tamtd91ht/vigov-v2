@@ -6,16 +6,16 @@ import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
 import {
   COMMUNE_PROFILES_PATH,
   communeProfilesAddress,
-  diaChiBaiTin,
-  diaChiDanhBa,
-  diaChiTinXa,
-  diaChiTraXa,
-  DUONG_DAN_DANH_BA,
-  DUONG_DAN_TIN_XA,
-  DUONG_DAN_XA,
-} from "../cong-dan/api/hop-dong-cong-khai";
-import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
-import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
+  newsArticleAddress,
+  directoryAddress,
+  communeNewsAddress,
+  communeLookupAddress,
+  DIRECTORY_PATH,
+  COMMUNE_NEWS_PATH,
+  COMMUNES_PATH,
+} from "../citizen/api/public-contract";
+import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../citizen/api/citizen-report-contract";
+import { MY_REPORTS, DIRECTORY, SEND, RATING, COMMUNE_NEWS, LOOKUP, COMMUNE_APP_UI } from "../citizen/screens/copy";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
   bridgeBodyWithPhone,
@@ -25,11 +25,11 @@ import {
   LOCATION_FIELDS,
   LOCATION_PATH,
   locationBody,
-  thanYeuCau as thanYeuCauPhien,
-  thanYeuCauCauViGov,
-  TRUONG_GUI_DI_CAU_VIGOV,
-  TRUONG_GUI_DI_PHIEN,
-} from "../features/dang-nhap/hop-dong";
+  sessionRequestBody as thanYeuCauPhien,
+  vigovBridgeRequestBody,
+  VIGOV_BRIDGE_SENT_FIELDS,
+  SESSION_SENT_FIELDS,
+} from "../features/log-in/contract";
 import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
 
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
@@ -472,21 +472,21 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     expect(reopenRow!.man).toBe(PHONE_VERIFICATION_SCREENS);
     for (const t of [
       "/api/v1/requests",
-      DUONG_DAN_XA,
-      DUONG_DAN_DANH_BA,
-      DUONG_DAN_TIN_XA,
-      `${DUONG_DAN_TIN_XA}/{id}`,
+      COMMUNES_PATH,
+      DIRECTORY_PATH,
+      COMMUNE_NEWS_PATH,
+      `${COMMUNE_NEWS_PATH}/{id}`,
     ]) {
       expect(tuyen, `hồ sơ không khai tuyến ${t}`).toContain(t);
     }
     // Bước xác nhận xã in ĐÚNG bảng của nó, không mượn bảng của khối đăng nhập.
-    expect(DUONG_ROI_KHOI_MAY.map((d) => d.truong)).toContain(TRUONG_GUI_DI_CAU_VIGOV);
+    expect(DUONG_ROI_KHOI_MAY.map((d) => d.truong)).toContain(VIGOV_BRIDGE_SENT_FIELDS);
   });
 
   it("MỌI khoá ba thân yêu cầu gửi đi đều có một dòng khai", () => {
     // Chiều "mã đi trước": thêm một trường vào `thanYeuCau` mà quên khai là ĐỎ ở đây.
     for (const [ten, than, bang] of [
-      ["phiên đăng nhập", thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" }), TRUONG_GUI_DI_PHIEN],
+      ["phiên đăng nhập", thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" }), SESSION_SENT_FIELDS],
       [
         "yêu cầu tư vấn",
         thanYeuCau({ loai: "consult", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "" }),
@@ -494,12 +494,12 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       ],
       [
         "xác nhận xã",
-        thanYeuCauCauViGov({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example" }),
-        TRUONG_GUI_DI_CAU_VIGOV,
+        vigovBridgeRequestBody({ ma_truy_cap: "m", commune_domain: "xa-vi-du.vigov.example" }),
+        VIGOV_BRIDGE_SENT_FIELDS,
       ],
       [
         "mở lại phiên kèm số",
-        bridgeBodyWithPhone({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
+        bridgeBodyWithPhone({ ma_truy_cap: "m", commune_domain: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
         BRIDGE_FIELDS_WITH_PHONE,
       ],
       ["đổi mã vị trí", locationBody({ access_token: "m", location_token: "v" }), LOCATION_FIELDS],
@@ -557,12 +557,12 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     const tim = (t: string) => DUONG_CONG_KHAI.find((d) => d.tuyen === t);
     const CA: ReadonlyArray<readonly [string, string, readonly string[]]> = [
       // [tuyến khai, địa chỉ client dựng, tham số đường dẫn]
-      [DUONG_DAN_XA, diaChiTraXa(TEN_MIEN), []],
+      [COMMUNES_PATH, communeLookupAddress(TEN_MIEN), []],
       [COMMUNE_PROFILES_PATH, communeProfilesAddress(TEN_MIEN), []],
-      [DUONG_DAN_DANH_BA, diaChiDanhBa(TEN_MIEN), []],
+      [DIRECTORY_PATH, directoryAddress(TEN_MIEN), []],
       // Every parameter the client can send: cursor AND type.
-      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien"), []],
-      [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu"), ["id"]],
+      [COMMUNE_NEWS_PATH, communeNewsAddress(TEN_MIEN, "con-tro-thu", "su-kien"), []],
+      [`${COMMUNE_NEWS_PATH}/{id}`, newsArticleAddress(TEN_MIEN, "tin-thu"), ["id"]],
     ];
     expect(DUONG_CONG_KHAI).toHaveLength(CA.length);
     for (const [tuyen, dia_chi, tham_so_duong_dan] of CA) {
@@ -576,18 +576,18 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       expect(duong!.truong.map((t) => t.khoa).sort(), `tuyến ${tuyen}: khai ⇄ gửi đi lệch nhau`).toEqual(gui_di);
       // Không tuyến công khai nào tự nhận là "do người dùng bấm" khi nó chạy lúc mở app, và ngược lại.
       // Two run at open: the commune lookup (QR path) and the commune app's office profile.
-      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA && tuyen !== COMMUNE_PROFILES_PATH);
+      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== COMMUNES_PATH && tuyen !== COMMUNE_PROFILES_PATH);
     }
   });
 
   it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
-    expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
-    expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
-    expect(TEN_MAN_CONG_KHAI.trang_chu_xa).toBe(`Ứng dụng của xã: ${XA_GIAO_DIEN.tab_trang_chu}`);
-    expect(PHONE_VERIFICATION_SCREENS).toBe([GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de].join(" · "));
-    expect(SEND_SCREEN_NAME).toBe(GUI.tieu_de);
+    expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DIRECTORY.title);
+    expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(COMMUNE_NEWS.title);
+    expect(TEN_MAN_CONG_KHAI.trang_chu_xa).toBe(`Ứng dụng của xã: ${COMMUNE_APP_UI.tab_home}`);
+    expect(PHONE_VERIFICATION_SCREENS).toBe([SEND.title, MY_REPORTS.title, LOOKUP.title].join(" · "));
+    expect(SEND_SCREEN_NAME).toBe(SEND.title);
     expect(COMMUNE_APP_SESSION_SCREENS).toBe(
-      `Ứng dụng của xã: ${[GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de, RATING.title].join(" · ")}`,
+      `Ứng dụng của xã: ${[SEND.title, MY_REPORTS.title, LOOKUP.title, RATING.title].join(" · ")}`,
     );
   });
 
