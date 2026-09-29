@@ -41,10 +41,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _common import (GOC_DU_AN, block, input_of, ngoai_du_an, noi_dung_sau_sua,  # noqa: E402
+from _common import (block, input_of, ngoai_du_an, noi_dung_sau_sua,  # noqa: E402
                      path_of, read_input, tool_of, utf8_streams)
 
 HOOK = "quyen_key_guard"
+
+# The repository root WITH ITS CASE. `GOC_DU_AN` is lower-cased for path comparison, and using it
+# to OPEN files works only on a case-insensitive filesystem: on a Linux runner whose path has a
+# capital, `tools/quyen_keys.py` is not found, the import fails, and this hook fails open — in
+# silence. Found 2026-09-29 while building a sandbox for the rename cases (ADR 0061, layer 0).
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def main() -> int:
@@ -70,12 +76,12 @@ def main() -> int:
     # `tools/test_hooks.py` giữ một ca BLOCK cho chính hook này, nên một lần nạp hỏng làm
     # `make check` ĐỎ thay vì trôi qua im lặng.
     try:
-        sys.path.insert(0, os.path.join(GOC_DU_AN, "tools"))
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
         import quyen_keys as qk
     except Exception:
         return 0
 
-    goc = GOC_DU_AN
+    goc = ROOT
     bang, _ = qk.doc_bang_quyen(goc)
     if not bang:
         return 0

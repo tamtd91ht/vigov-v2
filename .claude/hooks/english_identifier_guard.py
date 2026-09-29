@@ -255,7 +255,12 @@ SQL_OTHER = re.compile(
     rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?(?:TYPE|VIEW|DOMAIN)\s+"
     rf"(?:IF\s+NOT\s+EXISTS\s+)?(?:{ID}\.)?({ID})", re.I)
 SQL_ADD_COL = re.compile(rf"\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?({ID})", re.I)
-SQL_RENAME = re.compile(rf"\bRENAME\s+(?:COLUMN\s+{ID}\s+)?TO\s+({ID})", re.I)
+# Every spelling PostgreSQL accepts for a rename; the NEW name is the declaration, the old one is
+# what layer B (ADR 0061) removes. `RENAME CONSTRAINT a TO b` and `RENAME a TO b` (COLUMN is
+# optional) were not read until 2026-09-29 — the campaign that exists to remove Vietnamese names
+# could have written new ones through exactly those two forms.
+SQL_RENAME = re.compile(
+    rf"\bRENAME\s+(?:(?:COLUMN|CONSTRAINT)\s+{ID}\s+|(?!TO\b){ID}\s+)?TO\s+({ID})", re.I)
 SQL_NOT_COLUMN = {"constraint", "primary", "unique", "foreign", "check", "exclude", "like"}
 
 PROTO_DECL = re.compile(rf"^\s*(?:message|service|enum|rpc|oneof)\s+({ID})", re.M)

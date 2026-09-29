@@ -919,6 +919,24 @@ CASES = [
     ("english_identifier_guard", "ADD COLUMN mới tiếng Việt vào bảng cũ", BLOCK,
      w("service-petitions/migrations/0099_meeting_signed.sql",
        "ALTER TABLE bien_ban_hop ADD COLUMN ngay_ky_ket DATE;\n")),
+    # Layer B shapes (ADR 0061): the OLD name in a rename is not a declaration — it is what is
+    # being removed — while EVERY new name is, whichever of PostgreSQL's spellings carries it.
+    # Until 2026-09-29 `RENAME CONSTRAINT a TO b` and `RENAME a TO b` (COLUMN omitted) were not
+    # read at all, so a Vietnamese constraint or column name walked in through layer B itself.
+    ("english_identifier_guard", "lớp B: đổi tên bảng Việt -> Anh (tên cũ không phải khai báo)", PASS,
+     w("service-platform/migrations/0099_rename_schema_to_english.sql",
+       "ALTER TABLE ho_so_hien_thi_xa RENAME TO commune_profile;\n"
+       "ALTER TABLE commune_profile RENAME COLUMN dia_chi_tru_so TO office_address;\n"
+       "ALTER TABLE commune_profile RENAME CONSTRAINT ho_so_hien_thi_xa_logo_khong_rong\n"
+       "    TO commune_profile_logo_not_blank;\n"
+       "ALTER TRIGGER ho_so_hien_thi_xa_cam_xoa_cung ON commune_profile\n"
+       "    RENAME TO commune_profile_no_hard_delete;\n")),
+    ("english_identifier_guard", "lớp B: RENAME CONSTRAINT sang tên tiếng Việt", BLOCK,
+     w("service-platform/migrations/0099_rename_schema_to_english.sql",
+       "ALTER TABLE commune_profile RENAME CONSTRAINT a_check TO logo_khong_duoc_rong;\n")),
+    ("english_identifier_guard", "lớp B: RENAME cột bỏ chữ COLUMN, tên mới tiếng Việt", BLOCK,
+     w("service-platform/migrations/0099_rename_schema_to_english.sql",
+       "ALTER TABLE commune_profile RENAME office_address TO dia_chi_tru_so_moi;\n")),
     ("english_identifier_guard", "thư mục tính năng mới tên tiếng Việt", BLOCK,
      w("web-admin/src/features/bien-ban-moi/x.ts", "export const x = 1;\n")),
     ("english_identifier_guard", "tệp tiếng Anh trong thư mục tiếng Việt ĐANG CÓ", PASS,
@@ -1299,6 +1317,150 @@ KHOA_QUYEN_CASES = [
 ]
 
 
+# ---- migration RENAME folding (ADR 0061, layer 0) -----------------------------------------
+#
+# Layer B renames tables, columns and indexes with `ALTER … RENAME` in a NEW migration. Every
+# tool that derives the schema by reading the migrations in order must fold those statements, or
+# after the first layer B it checks a table that no longer exists — and stays green doing it.
+#
+# FIXTURES, NOT THE REAL TREE: on the day these were written no migration carried a rename, so
+# the real tree cannot show the fold. Each fixture is a {file name: SQL} map laid out under a
+# throwaway root, in the order core/migrate applies it (sorted file name).
+
+# check_khoa_duy_nhat: (label, files, violation count, substrings every one of which must appear)
+KEY_RENAME_CASES = [
+    ("index on a RENAMED platform table, later file — the scope follows the table",
+     {"0001_init.sql": "-- @entity: Province\n-- @scope:  platform\n"
+                       "CREATE TABLE tinh_thanh (\n    code TEXT NOT NULL,\n"
+                       "    name TEXT NOT NULL,\n    PRIMARY KEY (code)\n);\n",
+      "0002_rename.sql": "ALTER TABLE tinh_thanh RENAME TO province;\n",
+      "0003_index.sql": "CREATE UNIQUE INDEX province_name_key ON province (name);\n"},
+     0, []),
+    # Same shape, commune-owned table: must still be refused, or the case above only proves the
+    # gate went quiet.
+    ("index on a RENAMED commune table, later file — still refused",
+     {"0001_init.sql": "-- @entity: Thing\n-- @scope:  tenant\n"
+                       "CREATE TABLE vat_the (\n    tenant_id TEXT NOT NULL,\n"
+                       "    name TEXT NOT NULL,\n    PRIMARY KEY (tenant_id, name)\n);\n",
+      "0002_rename.sql": "ALTER TABLE vat_the RENAME TO thing;\n",
+      "0003_index.sql": "CREATE UNIQUE INDEX thing_name_key ON thing (name);\n"},
+     1, ["thing_name_key"]),
+    ("RENAME COLUMN tenant_id away takes it out of every key on the table",
+     {"0001_init.sql": "CREATE TABLE thing (\n    tenant_id TEXT NOT NULL,\n"
+                       "    code TEXT NOT NULL,\n    slug TEXT NOT NULL,\n"
+                       "    PRIMARY KEY (tenant_id, code),\n    UNIQUE (tenant_id, slug)\n);\n",
+      "0002_rename.sql": "ALTER TABLE thing RENAME COLUMN tenant_id TO commune_id;\n"},
+     2, ["PRIMARY KEY (commune_id, code)", "UNIQUE (commune_id, slug)"]),
+    ("a violation is reported under the table's and the index's CURRENT names",
+     {"0001_init.sql": "CREATE TABLE ho_so_hien_thi_xa (\n    tenant_id TEXT NOT NULL,\n"
+                       "    slug TEXT NOT NULL,\n    UNIQUE (slug)\n);\n"
+                       "CREATE UNIQUE INDEX ho_so_slug ON ho_so_hien_thi_xa (slug);\n",
+      "0002_rename.sql": "ALTER TABLE IF EXISTS ho_so_hien_thi_xa\n    RENAME TO commune_profile;\n"
+                         "ALTER INDEX ho_so_slug RENAME TO commune_profile_slug_key;\n"},
+     2, ["bảng `commune_profile`", "ho_so_hien_thi_xa", "commune_profile_slug_key"]),
+    ("a reversal written in a COMMENT is not folded",
+     {"0001_init.sql": "-- @scope:  platform\nCREATE TABLE tinh_thanh (\n    code TEXT NOT NULL,\n"
+                       "    name TEXT NOT NULL,\n    PRIMARY KEY (code)\n);\n",
+      "0002_rename.sql": "ALTER TABLE tinh_thanh RENAME TO province;\n"
+                         "-- REVERSAL: ALTER TABLE province RENAME TO tinh_thanh;\n",
+      "0003_index.sql": "CREATE UNIQUE INDEX province_name_key ON province (name);\n"},
+     0, []),
+]
+
+# The `quyen` seed read through a table rename AND a rename of its key column (glossary:
+# `quyen` -> `permission`, `ma` -> `key`). `stale.key` goes into the OLD name after the rename —
+# PostgreSQL would refuse that statement, so it seeds nothing and must not count.
+PERMISSION_RENAME_FILES = {
+    "0001_init.sql": "CREATE TABLE IF NOT EXISTS quyen (\n    ma TEXT PRIMARY KEY,\n"
+                     "    nhom TEXT NOT NULL\n);\n"
+                     "INSERT INTO quyen (ma, nhom) VALUES\n    ('a.read', 'A')\nON CONFLICT (ma) DO NOTHING;\n",
+    "0002_rename_schema_to_english.sql":
+        "-- REVERSAL: ALTER TABLE permission RENAME TO quyen;\n"
+        "ALTER TABLE quyen RENAME TO permission;\n"
+        "ALTER TABLE permission RENAME COLUMN ma TO key;\n",
+    "0003_seed.sql": "INSERT INTO permission (group_name, key) VALUES\n"
+                     "    ('B', 'b.write'),\n    ('B', 'b.approve');\n"
+                     "INSERT INTO quyen (ma, nhom) VALUES ('stale.key', 'X');\n",
+}
+PERMISSION_RENAME_WANT = {"a.read", "b.write", "b.approve"}
+
+# The same fixture through the HOOK, in a sandbox repository: the hook reads the table from the
+# tree it sits in, so only a sandbox can show it reads the renamed table.
+PERMISSION_HOOK_RENAME_CASES = [
+    ("khoá gieo vào bảng ĐÃ ĐỔI TÊN — phải qua", PASS, "b.write"),
+    ("khoá gieo trước lần đổi tên — vẫn qua", PASS, "a.read"),
+    ("khoá gieo vào TÊN CŨ sau lần đổi tên — chặn", BLOCK, "stale.key"),
+    ("khoá không gieo ở đâu — chặn", BLOCK, "c.none"),
+]
+
+
+def _lay_out(root: str, service_dir: str, files: dict[str, str]) -> None:
+    d = os.path.join(root, service_dir, "migrations")
+    os.makedirs(d, exist_ok=True)
+    for name, body in files.items():
+        with open(os.path.join(d, name), "w", encoding="utf-8", newline="\n") as f:
+            f.write(body)
+
+
+def run_rename_fixtures() -> list[tuple[str, str, object, object]]:
+    import shutil
+    import tempfile
+    import check_khoa_duy_nhat as ckdn  # noqa: E402
+    import quyen_keys as qk  # noqa: E402
+
+    sai: list[tuple[str, str, object, object]] = []
+    for label, files, want_n, want_sub in KEY_RENAME_CASES:
+        with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
+            _lay_out(tmp, "service-platform", files)
+            saved = ckdn.GOC
+            ckdn.GOC = tmp
+            try:
+                loi, _ = ckdn.kiem()
+            finally:
+                ckdn.GOC = saved
+        ok = len(loi) == want_n and all(any(s in l for l in loi) for s in want_sub)
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'ĐỎ  ' if want_n else 'XANH'}] "
+              f"{'check_khoa_duy_nhat.kiem':24s} {label}")
+        if not ok:
+            sai.append(("check_khoa_duy_nhat", label, f"{want_n} {want_sub}", loi))
+
+    with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
+        _lay_out(tmp, "service-identity", PERMISSION_RENAME_FILES)
+        got, _ = qk.doc_bang_quyen(tmp)
+    ok = got == PERMISSION_RENAME_WANT
+    print(f"{'  OK   ' if ok else '  FAIL '} [BẢNG ] {'quyen_keys.doc_bang_quyen':24s} "
+          "đọc qua RENAME bảng `quyen` và cột `ma`")
+    if not ok:
+        sai.append(("doc_bang_quyen", "RENAME bảng/cột", PERMISSION_RENAME_WANT, got))
+
+    # Sandbox repository for the hook. Lower-case directory names: `_common.GOC_DU_AN` is
+    # lower-cased, and on a case-sensitive filesystem a sandbox with capitals would make every
+    # case here pass for the wrong reason (the hook cannot find its analyser and fails open).
+    for label, want, key in PERMISSION_HOOK_RENAME_CASES:
+        with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
+            root = os.path.join(tmp, "vigov-v2")
+            hooks = os.path.join(root, ".claude", "hooks")
+            tools = os.path.join(root, "tools")
+            os.makedirs(hooks)
+            os.makedirs(tools)
+            for name in ("quyen_key_guard.py", "_common.py"):
+                shutil.copy(os.path.join(HOOKS, name), hooks)
+            for name in ("quyen_keys.py", "schema_renames.py"):
+                if os.path.exists(os.path.join(ROOT, "tools", name)):
+                    shutil.copy(os.path.join(ROOT, "tools", name), tools)
+            _lay_out(root, "service-identity", PERMISSION_RENAME_FILES)
+            src = ("package http\n\nfunc routes() {\n"
+                   f'\tmux.Handle("GET /x", authz.RequirePermission(c, "{key}")(h))\n}}\n')
+            got = run("quyen_key_guard", w("service-x/internal/http/routes.go", src),
+                      hooks=hooks, cwd=root)
+        ok = got == want
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'BLOCK' if want == BLOCK else 'PASS '}] "
+              f"{'quyen_key_guard':24s} {label} (hộp cát)")
+        if not ok:
+            sai.append(("quyen_key_guard", label, want, got))
+    return sai
+
+
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     """Trả về các ca SAI của phần THUẦN. Import tại chỗ: hook tự thêm thư mục của nó vào sys.path."""
     sys.path.insert(0, HOOKS)
@@ -1456,6 +1618,7 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(counts), nhan, mong, duoc))
 
+    sai += run_rename_fixtures()
     return sai
 
 
@@ -1531,7 +1694,8 @@ if __name__ == "__main__":
             + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES) + 1 + len(CA_NHAN_XLSX_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
-            + len(VET_ACTOR_CASES))
+            + len(VET_ACTOR_CASES)
+            + len(KEY_RENAME_CASES) + 1 + len(PERMISSION_HOOK_RENAME_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

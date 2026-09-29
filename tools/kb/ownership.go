@@ -36,6 +36,68 @@ type soHuu struct {
 	Scope   string `json:"scope"`
 	Table   string `json:"table"`
 	Source  string `json:"source"`
+	// FormerTables are the names this table had before an `ALTER TABLE … RENAME TO`, oldest
+	// first. Kept because every applied migration, ADR and audit delta still says the old
+	// name (ADR 0061 §Lớp B) — a reader holding `ho_so_hien_thi_xa` must land on this row.
+	FormerTables []string `json:"former_tables,omitempty"`
+
+	removed bool // re-declared by a later rename mark; not emitted
+}
+
+// alterTableLine finds the line a table rename STARTS on; renameTableStmt then reads the whole
+// statement from there, so `ALTER TABLE x\n    RENAME TO y;` is one statement, as it is to
+// PostgreSQL. Both run on comment-stripped text: 0009 of identity already carries a reversal
+// written as a `-- ALTER TABLE … RENAME …` comment, and folding prose would undo the rename.
+var alterTableLine = regexp.MustCompile(`(?i)^\s*ALTER\s+TABLE\b`)
+
+var renameTableStmt = regexp.MustCompile(`(?is)^\s*ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?` +
+	`(?:[a-z0-9_]+\.)?([a-z0-9_]+)\s+RENAME\s+TO\s+([a-z0-9_]+)`)
+
+type tableRename struct{ from, to string }
+
+// stripSQLComments blanks `--` and `/* */` comments byte for byte, keeping every newline, so a
+// line index in the result is the same line in the file. A `--` inside a '…' literal is not a
+// comment. Dollar-quoted bodies are left as code: a DO block's statements are statements.
+func stripSQLComments(s string) string {
+	b := []byte(s)
+	for i := 0; i < len(b); i++ {
+		switch {
+		case b[i] == '\'':
+			for i++; i < len(b) && b[i] != '\''; i++ {
+			}
+		case b[i] == '-' && i+1 < len(b) && b[i+1] == '-':
+			for ; i < len(b) && b[i] != '\n'; i++ {
+				b[i] = ' '
+			}
+		case b[i] == '/' && i+1 < len(b) && b[i+1] == '*':
+			for ; i < len(b) && !(b[i] == '*' && i+1 < len(b) && b[i+1] == '/'); i++ {
+				if b[i] != '\n' {
+					b[i] = ' '
+				}
+			}
+			if i+1 < len(b) {
+				b[i], b[i+1] = ' ', ' '
+				i++
+			}
+		}
+	}
+	return string(b)
+}
+
+// tableRenames maps a line index to the table rename that starts on it.
+func tableRenames(src string) map[int]tableRename {
+	code := stripSQLComments(src)
+	out := map[int]tableRename{}
+	off := 0
+	for i, l := range strings.Split(code, "\n") {
+		if alterTableLine.MatchString(l) {
+			if m := renameTableStmt.FindStringSubmatch(code[off:]); m != nil {
+				out[i] = tableRename{from: strings.ToLower(m[1]), to: strings.ToLower(m[2])}
+			}
+		}
+		off += len(l) + 1
+	}
+	return out
 }
 
 // quetSoHuu reads every service's migrations and returns one row per `@entity` mark.
@@ -44,6 +106,17 @@ type soHuu struct {
 // intent that a schema cannot carry — and reading the statement is the whole point. Inferring
 // ownership from CREATE TABLE instead would produce a row for every join table and every
 // partition, and would silently claim ownership nobody declared.
+//
+// THE ONE STATEMENT IT DOES FOLLOW IS `ALTER TABLE … RENAME TO` (ADR 0061, layer 0), read in
+// migration order per service:
+//
+//	rename with an @entity mark above it   the mark RE-DECLARES the table: the earlier row goes,
+//	                                       the new one carries the old names in former_tables
+//	rename with no mark                    the earlier row stays and its table follows the name
+//	rename of a table no mark declared     ignored — a join table stays undeclared
+//
+// Without this the index kept the old name after layer B, or listed both names as two entities
+// — and the index is what CLAUDE.md step 4 sends a session to INSTEAD of the schema.
 func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) {
 	var rows []soHuu
 	var canhBao []string
@@ -56,6 +129,11 @@ func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) 
 		}
 		sort.Strings(tep)
 
+		// Per service, across files: table names are only unique inside one service's schema
+		// (every service has its own `audit_log`).
+		var own []*soHuu
+		byTable := map[string]*soHuu{}
+
 		for _, t := range tep {
 			b, err := os.ReadFile(t)
 			if err != nil {
@@ -63,8 +141,18 @@ func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) 
 			}
 			rel := filepath.ToSlash(strings.TrimPrefix(t, root+string(filepath.Separator)))
 			dong := strings.Split(string(b), "\n")
+			renames := tableRenames(string(b))
+			claimed := map[int]bool{}
 
 			for i, d := range dong {
+				if rn, ok := renames[i]; ok && !claimed[i] {
+					if r := byTable[rn.from]; r != nil {
+						r.FormerTables = append(r.FormerTables, rn.from)
+						r.Table = rn.to
+						delete(byTable, rn.from)
+						byTable[rn.to] = r
+					}
+				}
 				m := dauEntity.FindStringSubmatch(d)
 				if m == nil {
 					continue
@@ -83,8 +171,10 @@ func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) 
 				// guess gave an index that looked populated and was missing more than half —
 				// worse than the empty placeholder it replaced, because it invites trust.
 				//
-				// A mark owns the FIRST CREATE TABLE after it; another @entity mark in between
-				// means this one declares nothing, and that is reported rather than absorbed.
+				// A mark owns the FIRST CREATE TABLE — or ALTER TABLE … RENAME TO — after it;
+				// another @entity mark in between means this one declares nothing, and that is
+				// reported rather than absorbed.
+				var anchor *tableRename
 				for j := i + 1; j < len(dong); j++ {
 					if dauEntity.MatchString(dong[j]) {
 						break
@@ -99,12 +189,36 @@ func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) 
 						r.Table = bm[1]
 						break
 					}
+					if rn, ok := renames[j]; ok {
+						claimed[j] = true
+						anchor = &rn
+						r.Table = rn.to
+						break
+					}
 				}
 
 				if r.Table == "" {
 					canhBao = append(canhBao, fmt.Sprintf(
-						"%s: dấu @entity %q không có CREATE TABLE nào bên dưới", r.Source, r.Entity))
+						"%s: dấu @entity %q không có CREATE TABLE hay ALTER TABLE … RENAME TO nào bên dưới",
+						r.Source, r.Entity))
 					continue
+				}
+				if anchor != nil {
+					r.FormerTables = []string{anchor.from}
+					if prev := byTable[anchor.from]; prev != nil {
+						r.FormerTables = append(append([]string{}, prev.FormerTables...), anchor.from)
+						prev.removed = true
+						// A rename moves no rows, so it cannot move a table between a commune
+						// and the platform. A mark saying otherwise is reported, never obeyed
+						// in silence — rule 1's whole subject is which side of that line a
+						// table sits on.
+						if prev.Scope != "" && r.Scope != "" && prev.Scope != r.Scope {
+							canhBao = append(canhBao, fmt.Sprintf(
+								"%s: thực thể %q đổi @scope từ %q (%s) sang %q qua một lần đổi tên bảng",
+								r.Source, r.Entity, prev.Scope, prev.Source, r.Scope))
+						}
+					}
+					delete(byTable, anchor.from)
 				}
 				if r.Scope == "" {
 					// SCOPE MISSING IS REPORTED, NEVER DEFAULTED. Guessing "tenant" here would put
@@ -115,7 +229,14 @@ func quetSoHuu(root string, services []serviceEntry) ([]soHuu, []string, error) 
 					canhBao = append(canhBao, fmt.Sprintf(
 						"%s: thực thể %q không khai @scope", r.Source, r.Entity))
 				}
-				rows = append(rows, r)
+				rp := &r
+				own = append(own, rp)
+				byTable[r.Table] = rp
+			}
+		}
+		for _, r := range own {
+			if !r.removed {
+				rows = append(rows, *r)
 			}
 		}
 	}

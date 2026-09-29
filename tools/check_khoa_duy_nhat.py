@@ -64,6 +64,9 @@ import re
 import sys
 import glob
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import schema_renames  # noqa: E402
+
 GOC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # `CREATE TABLE … (` tới dấu `;` cân bằng ngoặc — đủ để lấy thân bảng mà không cần trình phân
@@ -201,79 +204,181 @@ def khai_ngoai_xa(s: str, het: int) -> bool:
     return any('@scope:' in d and any(k in d for k in KHAI_NGOAI_XA) for d in truoc)
 
 
+class Table:
+    """One table as the migrations have made it SO FAR: its identity survives a rename.
+
+    WHY AN OBJECT AND NOT A NAME (ADR 0061, layer 0). Layer B renames tables, columns and
+    indexes in a NEW migration. A check keyed on the name written in `CREATE TABLE` would, after
+    it, report on a table that no longer exists, lose the `@scope` of a platform table the
+    moment a later file indexes it by its new name, and never notice `RENAME COLUMN tenant_id`
+    taking the commune out of a key that was composite when it was written.
+    """
+
+    def __init__(self, name: str, outside_commune: bool):
+        self.name = name
+        self.former: list[str] = []
+        self.outside_commune = outside_commune
+
+    def label(self) -> str:
+        was = f" (tạo với tên `{'`, `'.join(self.former)}`)" if self.former else ''
+        return f"`{self.name}`{was}"
+
+
+# `CREATE UNIQUE INDEX … ON [ONLY] <bảng>` — which table an index belongs to, so that a table's
+# own `@scope` covers an index written in a LATER file. Before 2026-09-29 only the 40 lines above
+# the index were read, and a later file has none of the table's marks.
+INDEX_TABLE = re.compile(r'\bON\s+(?:ONLY\s+)?(?:\w+\.)?(\w+)', re.I)
+
+
+def _apply_rename(r: schema_renames.Rename, tables: dict[str, Table],
+                  keys: list[dict], indexes: dict[str, dict]) -> None:
+    """Fold one rename into the service's schema as it stands at that statement."""
+    if r.kind == 'table':
+        t = tables.pop(r.old, None)
+        if t is not None:
+            t.former.append(t.name)
+            t.name = r.new
+            tables[r.new] = t
+    elif r.kind == 'column':
+        t = tables.get(r.table)
+        for k in keys:
+            if t is not None and k['table'] is t:
+                k['cols'] = [r.new if c == r.old else c for c in k['cols']]
+    elif r.kind == 'index':
+        k = indexes.pop(r.old, None)
+        if k is not None:
+            k['name'] = r.new
+            indexes[r.new] = k
+    # 'constraint': a table-level UNIQUE / PRIMARY KEY is reported by its table and columns,
+    # never by its constraint name, so a constraint rename changes nothing this gate says.
+
+
 def kiem() -> tuple[list[str], int]:
+    """Every key, read in migration order per service, then judged on the schema as FOLDED.
+
+    The judgement is deferred to the end so that a later `RENAME COLUMN` / `RENAME TO` is
+    applied to keys declared before it. Without a rename, folding is the identity and every
+    message, line number and count is what the per-statement version printed.
+    """
     loi: list[str] = []
     dem = 0
+    keys: list[dict] = []
+    # Per service: `audit_log` exists in every service, and one service's rename must not move
+    # another service's table.
+    tables_by_service: dict[str, dict[str, Table]] = {}
+    indexes_by_service: dict[str, dict[str, dict]] = {}
 
     for f in sorted(glob.glob(os.path.join(GOC, 'service-*', 'migrations', '*.sql'))):
         ngan = os.path.relpath(f, GOC).replace('\\', '/')
         s = io.open(f, encoding='utf-8').read()
+        service = ngan.split('/', 1)[0]
+        tables = tables_by_service.setdefault(service, {})
+        indexes = indexes_by_service.setdefault(service, {})
 
-        # 1. UNIQUE bên trong CREATE TABLE
-        for m in MAU_BANG.finditer(s):
-            ten_bang = m.group(1)
-            than = bo_chu_thich(than_bang(s, m.end() - 1))
-            cross = khai_ngoai_xa(s, m.start())
-            for u in MAU_UNIQUE_TRONG_BANG.finditer(than):
-                dem += 1
-                cot = [c.strip().lower() for c in u.group(1).split(',')]
-                dong = s[:m.end()].count('\n') + than[:u.start()].count('\n') + 1
-                if 'tenant_id' not in cot and not cross:
-                    loi.append(
-                        f"{ngan}:{dong} bảng `{ten_bang}` — UNIQUE ({', '.join(cot)}) "
-                        f"KHÔNG hợp thành với `tenant_id`\n"
-                        f"        → Xã thứ hai không onboard được: mã của họ đụng mã xã thứ "
-                        f"nhất. Với một xã thì không gì đỏ; nó đỏ vào đúng ngày có xã thứ hai, "
-                        f"và lúc ấy sửa là migration trên dữ liệu đang chạy (luật 1 bất biến 6).\n"
-                        f"        → Nếu bảng này THẬT SỰ thuộc tầng nền tảng, khai "
-                        f"`-- @scope:  cross-tenant` trong chú thích ngay trên CREATE TABLE."
-                    )
+        # Statements in file order: which table a key belongs to, and what it is called, depend
+        # on every rename that came before it. The three kinds of key are still LISTED in the
+        # order the per-statement version reported them (UNIQUE, then PRIMARY KEY, then index),
+        # so an unchanged tree prints an unchanged report.
+        events = ([(m.start(), 'table', m) for m in MAU_BANG.finditer(s)]
+                  + [(m.start(), 'index', m) for m in MAU_CHI_MUC.finditer(s)]
+                  + [(r.pos, 'rename', r) for r in schema_renames.renames(s)])
+        events.sort(key=lambda x: x[0])
+        unique_keys: list[dict] = []
+        pk_keys: list[dict] = []
+        index_keys: list[dict] = []
 
-        # 1b. PRIMARY KEY bên trong CREATE TABLE — xem khối lý do ở `MAU_PK_BANG`
-        for m in MAU_BANG.finditer(s):
-            ten_bang = m.group(1)
-            than = bo_chu_thich(than_bang(s, m.end() - 1))
-            cross = khai_ngoai_xa(s, m.start())
-            dau_than = s[:m.end()].count('\n')
+        for _, kind, m in events:
+            if kind == 'rename':
+                _apply_rename(m, tables, unique_keys + pk_keys + index_keys + keys, indexes)
+                continue
 
-            for u in MAU_PK_BANG.finditer(than):
-                dem += 1
-                cot = [c.strip().lower() for c in u.group(1).split(',')]
-                dong = dau_than + than[:u.start()].count('\n') + 1
-                if 'tenant_id' not in cot and not cross:
-                    loi.append(
-                        f"{ngan}:{dong} bảng `{ten_bang}` — PRIMARY KEY "
-                        f"({', '.join(cot)}) KHÔNG hợp thành với `tenant_id`\n"
-                        f"        → Khoá chính LÀ một khoá duy nhất: Postgres cài nó bằng đúng "
-                        f"một chỉ mục duy nhất. Xã thứ hai không onboard được (luật 1 bất biến 6).\n"
-                        f"        → Bảng thật sự thuộc tầng nền tảng thì khai "
-                        f"`-- @scope:  platform` trong chú thích ngay trên CREATE TABLE."
-                    )
+            if kind == 'table':
+                t = Table(m.group(1).lower(), khai_ngoai_xa(s, m.start()))
+                tables[t.name] = t
+                than = bo_chu_thich(than_bang(s, m.end() - 1))
+                dau_than = s[:m.end()].count('\n')
 
-            for u in MAU_PK_COT.finditer(than):
-                dem += 1
-                dong = dau_than + than[:u.start()].count('\n') + 1
-                if not cross:
-                    loi.append(
-                        f"{ngan}:{dong} bảng `{ten_bang}` — cột `{u.group(1)}` khai "
-                        f"PRIMARY KEY MỘT CỘT\n"
-                        f"        → Khoá duy nhất một cột trên dữ liệu nghiệp vụ là luật 1 cấm #4: "
-                        f"xã thứ hai đụng mã xã thứ nhất ngay ở dòng đầu tiên họ ghi.\n"
-                        f"        → Dạng đúng là `PRIMARY KEY (tenant_id, {u.group(1)})`. Bảng "
-                        f"thuộc tầng nền tảng thì khai `-- @scope:  platform`."
-                    )
+                def at(u) -> str:
+                    return f"{ngan}:{dau_than + than[:u.start()].count(chr(10)) + 1}"
 
-        # 2. CREATE UNIQUE INDEX — chỗ duy nhất `WHERE` xuất hiện được
-        for m in MAU_CHI_MUC.finditer(s):
+                # 1. UNIQUE bên trong CREATE TABLE
+                for u in MAU_UNIQUE_TRONG_BANG.finditer(than):
+                    dem += 1
+                    unique_keys.append({'kind': 'unique', 'at': at(u), 'table': t,
+                                        'cols': [c.strip().lower() for c in u.group(1).split(',')],
+                                        'exempt': t.outside_commune})
+
+                # 1b. PRIMARY KEY bên trong CREATE TABLE — xem khối lý do ở `MAU_PK_BANG`
+                for u in MAU_PK_BANG.finditer(than):
+                    dem += 1
+                    pk_keys.append({'kind': 'pk', 'at': at(u), 'table': t,
+                                    'cols': [c.strip().lower() for c in u.group(1).split(',')],
+                                    'exempt': t.outside_commune})
+                for u in MAU_PK_COT.finditer(than):
+                    dem += 1
+                    pk_keys.append({'kind': 'pk_column', 'at': at(u), 'table': t,
+                                    'cols': [u.group(1).lower()], 'exempt': t.outside_commune})
+                continue
+
+            # 2. CREATE UNIQUE INDEX — chỗ duy nhất `WHERE` xuất hiện được
             dem += 1
             doan = m.group(0)
-            dong = s[:m.start()].count('\n') + 1
             ten = re.search(r'INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)', doan, re.I)
             ten = ten.group(1) if ten else '?'
+            cot = re.search(r'\(([^)]*)\)', doan)
+            cot = [c.strip().lower() for c in cot.group(1).split(',')] if cot else []
+            on = INDEX_TABLE.search(doan)
+            t = tables.get(on.group(1).lower()) if on else None
+            k = {'kind': 'index', 'at': f"{ngan}:{s[:m.start()].count(chr(10)) + 1}",
+                 'table': t, 'cols': cot, 'name': ten,
+                 'partial': bool(re.search(r'WHERE[^;]*deleted_at\s+IS\s+NULL', doan, re.I)),
+                 # The 40 lines above the index, as before — OR the scope its table declared,
+                 # wherever and under whatever name that table was created.
+                 'exempt': khai_ngoai_xa(s, m.start()) or (t is not None and t.outside_commune)}
+            index_keys.append(k)
+            if ten != '?':
+                indexes[ten.lower()] = k
 
-            if re.search(r'WHERE[^;]*deleted_at\s+IS\s+NULL', doan, re.I):
+        keys += unique_keys + pk_keys + index_keys
+
+    for k in keys:
+        noi, cot = k['at'], k['cols']
+        if k['kind'] == 'unique':
+            if 'tenant_id' not in cot and not k['exempt']:
                 loi.append(
-                    f"{ngan}:{dong} chỉ mục `{ten}` — UNIQUE kèm `WHERE deleted_at IS NULL`\n"
+                    f"{noi} bảng {k['table'].label()} — UNIQUE ({', '.join(cot)}) "
+                    f"KHÔNG hợp thành với `tenant_id`\n"
+                    f"        → Xã thứ hai không onboard được: mã của họ đụng mã xã thứ "
+                    f"nhất. Với một xã thì không gì đỏ; nó đỏ vào đúng ngày có xã thứ hai, "
+                    f"và lúc ấy sửa là migration trên dữ liệu đang chạy (luật 1 bất biến 6).\n"
+                    f"        → Nếu bảng này THẬT SỰ thuộc tầng nền tảng, khai "
+                    f"`-- @scope:  cross-tenant` trong chú thích ngay trên CREATE TABLE."
+                )
+        elif k['kind'] == 'pk':
+            if 'tenant_id' not in cot and not k['exempt']:
+                loi.append(
+                    f"{noi} bảng {k['table'].label()} — PRIMARY KEY "
+                    f"({', '.join(cot)}) KHÔNG hợp thành với `tenant_id`\n"
+                    f"        → Khoá chính LÀ một khoá duy nhất: Postgres cài nó bằng đúng "
+                    f"một chỉ mục duy nhất. Xã thứ hai không onboard được (luật 1 bất biến 6).\n"
+                    f"        → Bảng thật sự thuộc tầng nền tảng thì khai "
+                    f"`-- @scope:  platform` trong chú thích ngay trên CREATE TABLE."
+                )
+        elif k['kind'] == 'pk_column':
+            if not k['exempt']:
+                loi.append(
+                    f"{noi} bảng {k['table'].label()} — cột `{cot[0]}` khai "
+                    f"PRIMARY KEY MỘT CỘT\n"
+                    f"        → Khoá duy nhất một cột trên dữ liệu nghiệp vụ là luật 1 cấm #4: "
+                    f"xã thứ hai đụng mã xã thứ nhất ngay ở dòng đầu tiên họ ghi.\n"
+                    f"        → Dạng đúng là `PRIMARY KEY (tenant_id, {cot[0]})`. Bảng "
+                    f"thuộc tầng nền tảng thì khai `-- @scope:  platform`."
+                )
+        else:
+            on_table = f" trên bảng {k['table'].label()}" if k['table'] is not None else ''
+            if k['partial']:
+                loi.append(
+                    f"{noi} chỉ mục `{k['name']}`{on_table} — UNIQUE kèm `WHERE deleted_at IS NULL`\n"
                     f"        → Chỉ mục duy nhất TỪNG PHẦN chỉ tính dòng chưa xoá mềm, nên xoá "
                     f"mềm rồi thêm lại CÙNG MỘT MÃ là được: MỘT MÃ ĐÃ CẤP ĐƯỢC CẤP LẠI "
                     f"(luật 7 bất biến 3).\n"
@@ -283,12 +388,9 @@ def kiem() -> tuple[list[str], int]:
                     f"        → Bỏ mệnh đề `WHERE`. Muốn cho phép thêm lại thì đó là một quyết "
                     f"định của khách, không phải một dòng trong migration."
                 )
-
-            cot = re.search(r'\(([^)]*)\)', doan)
-            cot = [c.strip().lower() for c in cot.group(1).split(',')] if cot else []
-            if 'tenant_id' not in cot and not khai_ngoai_xa(s, m.start()):
+            if 'tenant_id' not in cot and not k['exempt']:
                 loi.append(
-                    f"{ngan}:{dong} chỉ mục `{ten}` — KHÔNG hợp thành với `tenant_id`, và bảng "
+                    f"{noi} chỉ mục `{k['name']}`{on_table} — KHÔNG hợp thành với `tenant_id`, và bảng "
                     f"không khai `@scope:` ngoài xã (luật 1 bất biến 6)"
                 )
 
