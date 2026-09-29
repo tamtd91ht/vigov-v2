@@ -32,13 +32,13 @@ func laBoGieoTheoKhoa(t *testing.T) map[string]GieoSLA {
 	return ra
 }
 
-// FIFTEEN ROWS AND NOT SIXTEEN. The specification's table has sixteen; :308 is `ve-sinh-moi-truong`,
-// which it labels itself as a dead code.
+// SIXTEEN ROWS: fifteen of the specification's sixteen (:308 is `ve-sinh-moi-truong`, which it labels
+// itself as a dead code) plus the `don-thu` default row the user admitted on 2026-09-29 (migration 0016).
 //
-// MUTATION THAT MUST TURN THIS RED: add the `ve-sinh-moi-truong` row back to BoGieoSLA.
+// MUTATION THAT MUST TURN THIS RED: add the `ve-sinh-moi-truong` row back, or drop the `don-thu` row.
 func TestBoGieoSLACoDungMuoiLamDong(t *testing.T) {
-	if n := len(BoGieoSLA()); n != 15 {
-		t.Fatalf("bộ gieo có %d dòng, muốn 15 (bảng 14-cau-hinh.md §8 có 16 dòng, trừ dòng mã cũ :308)", n)
+	if n := len(BoGieoSLA()); n != 16 {
+		t.Fatalf("bộ gieo có %d dòng, muốn 16 (15 dòng của 14-cau-hinh.md §8 trừ mã cũ :308, cộng dòng don-thu)", n)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestBoGieoSLAPhuDuMuoiHaiLinhVuc(t *testing.T) {
 // MUTATION THAT MUST TURN THIS RED: drop the `{LoaiViecPhanAnh, "", ...}` row.
 func TestBoGieoSLACoDongMacDinhChoCaBaLoaiViec(t *testing.T) {
 	theo := laBoGieoTheoKhoa(t)
-	for _, lv := range []LoaiViec{LoaiViecVanBanDen, LoaiViecPhanAnh, LoaiViecNhiemVu} {
+	for _, lv := range []LoaiViec{LoaiViecVanBanDen, LoaiViecPhanAnh, LoaiViecNhiemVu, LoaiViecDonThu} {
 		if _, co := theo[string(lv)+"/"]; !co {
 			t.Errorf("bộ gieo thiếu dòng mặc định của loại việc %q — lĩnh vực nào không có dòng "+
 				"riêng sẽ không tính được hạn, và kênh công dân thì KHÔNG BAO GIỜ tính được (ADR 0028 quyết định E)", lv)
@@ -113,7 +113,7 @@ func TestBoGieoSLAMoiDongHopLe(t *testing.T) {
 		d := DongSLA{
 			GioTiepNhan: g.GioTiepNhan, GioXuLyXong: g.GioXuLyXong,
 			GioSapDenHan: g.GioSapDenHan, GioBaoLanhDao: g.GioBaoLanhDao,
-			GioBaoChuTich: g.GioBaoChuTich,
+			GioBaoChuTich: g.GioBaoChuTich, UnassignedHoldHours: g.UnassignedHoldHours,
 		}
 		if err := KiemTraDongSLA(d); err != nil {
 			t.Errorf("dòng %q/%q: %v", g.LoaiViec, g.LinhVuc, err)
@@ -149,6 +149,9 @@ func TestBoGieoSLAKhopBangDacTa(t *testing.T) {
 		"phan-anh/":                  {8, 56, 24, 24, 48},  // :311 Mặc định cho mọi lĩnh vực
 
 		"nhiem-vu/": {8, 40, 72, 24, 48}, // :312 — sắp đến hạn (72) LỚN HƠN xử lý xong (40), đúng đặc tả
+
+		// Not in §8: the user's 2026-09-29 decision, same figures as `van-ban-den/` (see sla_gieo.go).
+		"don-thu/": {8, 40, 24, 24, 48},
 	}
 
 	theo := laBoGieoTheoKhoa(t)
@@ -234,5 +237,46 @@ func TestKiemTraDongSLAKhongApRangBuocThuTu(t *testing.T) {
 	if err := KiemTraDongSLA(d); err != nil {
 		t.Fatalf("dòng `nhiem-vu` của chính đặc tả (14-cau-hinh.md:312) bị từ chối: %v — "+
 			"một ràng buộc từ chối cấu hình khách đang dùng thì tệ hơn là không có", err)
+	}
+}
+
+// THE SIXTH FIGURE IS 8 ON EVERY SEEDED ROW — the user's suggested starting value (2026-09-29). A 0
+// here would seed NULL ("do not report") without anybody having chosen it.
+func TestSeedUnassignedHoldIsEight(t *testing.T) {
+	for _, g := range BoGieoSLA() {
+		if g.UnassignedHoldHours != 8 {
+			t.Errorf("dòng %q/%q: unassigned_hold_hours = %d, muốn 8", g.LoaiViec, g.LinhVuc, g.UnassignedHoldHours)
+		}
+	}
+}
+
+// Y >= X, the user's 2026-09-29 decision: the chairman threshold below the unit head's is refused,
+// equal is accepted. MUTATION THAT MUST TURN THIS RED: delete the ordering check in KiemTraDongSLA.
+func TestValidateRowChairmanNotBeforeUnitHead(t *testing.T) {
+	d := DongSLA{GioTiepNhan: 8, GioXuLyXong: 40, GioSapDenHan: 24, GioBaoLanhDao: 24, GioBaoChuTich: 23}
+	if err := KiemTraDongSLA(d); err != ErrChairmanBeforeUnitHead {
+		t.Fatalf("Y < X: lỗi = %v, muốn ErrChairmanBeforeUnitHead", err)
+	}
+	d.GioBaoChuTich = 24
+	if err := KiemTraDongSLA(d); err != nil {
+		t.Fatalf("Y = X phải được chấp nhận: %v", err)
+	}
+}
+
+// THE OPTIONAL SIXTH FIGURE: 0 is "not set" and passes; a set value obeys the same bounds.
+func TestValidateRowUnassignedHold(t *testing.T) {
+	d := DongSLA{GioTiepNhan: 8, GioXuLyXong: 40, GioSapDenHan: 24, GioBaoLanhDao: 24, GioBaoChuTich: 48}
+	if err := KiemTraDongSLA(d); err != nil {
+		t.Fatalf("không đặt (NULL) phải hợp lệ: %v", err)
+	}
+	for _, v := range []int{-1, GioToiDa + 1} {
+		d.UnassignedHoldHours = v
+		if err := KiemTraDongSLA(d); err == nil {
+			t.Errorf("unassigned_hold_hours = %d mà không bị từ chối", v)
+		}
+	}
+	d.UnassignedHoldHours = 8
+	if err := KiemTraDongSLA(d); err != nil {
+		t.Errorf("unassigned_hold_hours = 8 bị từ chối: %v", err)
 	}
 }

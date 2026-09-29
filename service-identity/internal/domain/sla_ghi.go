@@ -30,6 +30,11 @@ var (
 	// slipped digit here is a commitment to a citizen that is ten times too long with nothing on the
 	// screen to say so.
 	ErrGioQuaLon = errors.New("sla: số giờ vượt mức hợp lý")
+
+	// ErrChairmanBeforeUnitHead — the chairman threshold is below the unit head's (user decision
+	// 2026-09-29: Y >= X). With Y < X the commune's leadership would hear of late work BEFORE the head
+	// of the unit holding it, which inverts the two levels of the escalation.
+	ErrChairmanBeforeUnitHead = errors.New("sla: số giờ báo Chủ tịch không được nhỏ hơn số giờ báo lãnh đạo trực tiếp")
 )
 
 // GioToiDa is the typed-input ceiling. See ErrGioQuaLon for why it is here and not in SQL.
@@ -50,12 +55,12 @@ func KiemTraGio(gio int) error {
 	return nil
 }
 
-// KiemTraDongSLA refuses a whole row: all five figures, together.
+// KiemTraDongSLA refuses a whole row: all five figures and the optional sixth, together.
 //
-// ALL FIVE ARE CHECKED EVEN WHEN ONLY ONE WAS EDITED, and that is deliberate. The edit path applies
-// the change to the row it read and validates the RESULT, so a row that was already bad — restored
-// from elsewhere, written before this check existed — cannot be committed again untouched by a
-// screen that only meant to change one number.
+// ALL ARE CHECKED EVEN WHEN ONLY ONE WAS EDITED, and that is deliberate. The edit path applies the
+// change to the row it read and validates the RESULT, so a row that was already bad — restored from
+// elsewhere, written before this check existed — cannot be committed again untouched by a screen
+// that only meant to change one number.
 func KiemTraDongSLA(d DongSLA) error {
 	for _, gio := range []int{
 		d.GioTiepNhan, d.GioXuLyXong, d.GioSapDenHan, d.GioBaoLanhDao, d.GioBaoChuTich,
@@ -64,8 +69,20 @@ func KiemTraDongSLA(d DongSLA) error {
 			return err
 		}
 	}
-	// THERE IS NO ORDERING RULE BETWEEN THE FIVE, and that absence is measured rather than lazy: the
-	// specification's own `nhiem-vu` row (14-cau-hinh.md:312) has gio_sap_den_han = 72 against
+	// ZERO IS "NOT SET" (NULL, do not report) for this one column only — see DongSLA. Any value that
+	// IS set obeys the same bounds as the other five.
+	if d.UnassignedHoldHours != 0 {
+		if err := KiemTraGio(d.UnassignedHoldHours); err != nil {
+			return err
+		}
+	}
+	// ONE ORDERING RULE, AND ONLY ONE: the chairman threshold is never below the unit head's (user
+	// decision 2026-09-29). Every seeded row satisfies it (14-cau-hinh.md §8 has Y = 2X throughout).
+	if d.GioBaoChuTich < d.GioBaoLanhDao {
+		return ErrChairmanBeforeUnitHead
+	}
+	// THERE IS NO ORDERING RULE AMONG THE OTHER FIGURES, and that absence is measured rather than lazy:
+	// the specification's own `nhiem-vu` row (14-cau-hinh.md:312) has gio_sap_den_han = 72 against
 	// gio_xu_ly_xong = 40, so the intuitive "the warning window fits inside the deadline" would
 	// refuse configuration the customer already uses. Same conclusion migration 0008 reached for the
 	// CHECK constraint, reached again here rather than assumed.

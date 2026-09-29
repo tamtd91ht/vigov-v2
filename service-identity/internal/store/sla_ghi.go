@@ -157,12 +157,15 @@ func quetMotDongSLA(quet func(...any) error) (domain.DongSLA, error) {
 	var d domain.DongSLA
 	var loaiViec string
 	var linhVuc sql.NullString
+	// NULL = "do not report"; folded to 0, which the schema's CHECK makes unambiguous (migration 0016).
+	var unassigned sql.NullInt64
 	err := quet(&d.ID, &loaiViec, &linhVuc,
 		&d.GioTiepNhan, &d.GioXuLyXong, &d.GioSapDenHan,
-		&d.GioBaoLanhDao, &d.GioBaoChuTich)
+		&d.GioBaoLanhDao, &d.GioBaoChuTich, &unassigned)
 	if err != nil {
 		return domain.DongSLA{}, err
 	}
+	d.UnassignedHoldHours = int(unassigned.Int64)
 	d.LoaiViec = domain.LoaiViec(loaiViec)
 	if !d.LoaiViec.HopLe() {
 		// Same refusal as the list read, for the same reason: a row whose kind of work the software
@@ -198,12 +201,13 @@ func (s *SLAStore) CapNhatGio(ctx context.Context, tx *store.ScopedTx, d domain.
 
 	const stmt = `UPDATE sla SET
 			gio_tiep_nhan = $3, gio_xu_ly_xong = $4, gio_sap_den_han = $5,
-			gio_bao_lanh_dao = $6, gio_bao_chu_tich = $7,
+			gio_bao_lanh_dao = $6, gio_bao_chu_tich = $7, unassigned_hold_hours = $8,
 			cap_nhat_luc = now()
 		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), d.ID,
-		d.GioTiepNhan, d.GioXuLyXong, d.GioSapDenHan, d.GioBaoLanhDao, d.GioBaoChuTich)
+		d.GioTiepNhan, d.GioXuLyXong, d.GioSapDenHan, d.GioBaoLanhDao, d.GioBaoChuTich,
+		optionalHoursArg(d.UnassignedHoldHours))
 	if err != nil {
 		return fmt.Errorf("sla: cập nhật số giờ: %w", dichLoiGhiSLA(err))
 	}
@@ -230,8 +234,8 @@ func (s *SLAStore) Chen(ctx context.Context, tx *store.ScopedTx, d domain.DongSL
 	const stmt = `INSERT INTO sla
 			(tenant_id, id, loai_viec, linh_vuc,
 			 gio_tiep_nhan, gio_xu_ly_xong, gio_sap_den_han,
-			 gio_bao_lanh_dao, gio_bao_chu_tich)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+			 gio_bao_lanh_dao, gio_bao_chu_tich, unassigned_hold_hours)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`
 
 	var linhVuc any
 	if d.LinhVuc != "" {
@@ -239,11 +243,21 @@ func (s *SLAStore) Chen(ctx context.Context, tx *store.ScopedTx, d domain.DongSL
 	}
 
 	_, err := tx.Exec(ctx, stmt, string(tx.TenantID()), d.ID, string(d.LoaiViec), linhVuc,
-		d.GioTiepNhan, d.GioXuLyXong, d.GioSapDenHan, d.GioBaoLanhDao, d.GioBaoChuTich)
+		d.GioTiepNhan, d.GioXuLyXong, d.GioSapDenHan, d.GioBaoLanhDao, d.GioBaoChuTich,
+		optionalHoursArg(d.UnassignedHoldHours))
 	if err != nil {
 		return fmt.Errorf("sla: chèn dòng thời hạn: %w", dichLoiGhiSLA(err))
 	}
 	return nil
+}
+
+// optionalHoursArg writes the optional threshold: 0 in Go is NULL in the column ("do not report"),
+// never a stored 0 — the schema refuses one (sla_unassigned_hold_hours_positive, migration 0016).
+func optionalHoursArg(hours int) any {
+	if hours == 0 {
+		return nil
+	}
+	return hours
 }
 
 // doiMotDongSLA turns "the UPDATE matched nothing" into ErrDongSLAKhongTonTai.

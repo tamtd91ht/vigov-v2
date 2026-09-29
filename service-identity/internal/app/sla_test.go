@@ -31,13 +31,13 @@ func TestGieoLanDauChenDuMuoiLamDong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GieoMacDinh lỗi: %v", err)
 	}
-	if kq.DaGieo != 15 || kq.DaCo != 0 {
-		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {15, 0}", kq.DaGieo, kq.DaCo)
+	if kq.DaGieo != 16 || kq.DaCo != 0 {
+		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {16, 0}", kq.DaGieo, kq.DaCo)
 	}
 
 	chen := k.cau("INSERT INTO sla")
-	if len(chen) != 15 {
-		t.Fatalf("có %d câu INSERT, muốn 15", len(chen))
+	if len(chen) != 16 {
+		t.Fatalf("có %d câu INSERT, muốn 16", len(chen))
 	}
 
 	// Every seed pair reached the database, exactly once.
@@ -91,9 +91,9 @@ func TestGieoChenDongMacDinhVoiLinhVucNULL(t *testing.T) {
 				"CHECK sla_linh_vuc_khong_rong sẽ từ chối và hỏng cả lượt gieo (câu: %s)", l.sql)
 		}
 	}
-	// Three kinds of work, three default rows.
-	if soMacDinh != 3 {
-		t.Errorf("có %d dòng chèn với linh_vuc NULL, muốn 3 (van-ban-den, phan-anh, nhiem-vu)", soMacDinh)
+	// Four kinds of work (don-thu since migration 0016), four default rows.
+	if soMacDinh != 4 {
+		t.Errorf("có %d dòng chèn với linh_vuc NULL, muốn 4 (van-ban-den, don-thu, phan-anh, nhiem-vu)", soMacDinh)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestGieoLanHaiKhongTaoBanTrung(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GieoMacDinh lần hai lỗi: %v", err)
 	}
-	if kq.DaGieo != 0 || kq.DaCo != 15 {
-		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {0, 15}", kq.DaGieo, kq.DaCo)
+	if kq.DaGieo != 0 || kq.DaCo != 16 {
+		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {0, 16}", kq.DaGieo, kq.DaCo)
 	}
 	if n := k.soCau("INSERT INTO sla"); n != 0 {
 		t.Errorf("lượt gieo thứ hai chèn %d dòng — phải chèn 0", n)
@@ -210,8 +210,8 @@ func TestGieoChiBuNhungDongConThieu(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GieoMacDinh lỗi: %v", err)
 	}
-	if kq.DaGieo != 2 || kq.DaCo != 13 {
-		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {2, 13}", kq.DaGieo, kq.DaCo)
+	if kq.DaGieo != 2 || kq.DaCo != 14 {
+		t.Fatalf("kết quả = {gieo:%d, đã có:%d}, muốn {2, 14}", kq.DaGieo, kq.DaCo)
 	}
 
 	chen := k.cau("INSERT INTO sla")
@@ -315,8 +315,8 @@ func TestGieoGhiVetCungGiaoDichVaChuTheLaMaCanBo(t *testing.T) {
 	if err := json.Unmarshal(b, &delta); err != nil {
 		t.Fatalf("delta không đọc được: %v (%s)", err, string(b))
 	}
-	if delta.DaGieo != 15 || len(delta.Dong) != 15 {
-		t.Errorf("delta = {da_gieo:%d, dong:%d}, muốn {15, 15}", delta.DaGieo, len(delta.Dong))
+	if delta.DaGieo != 16 || len(delta.Dong) != 16 {
+		t.Errorf("delta = {da_gieo:%d, dong:%d}, muốn {16, 16}", delta.DaGieo, len(delta.Dong))
 	}
 }
 
@@ -338,8 +338,8 @@ func TestGieoHongVetThiKhongDongNaoDuocGhi(t *testing.T) {
 		t.Errorf("rollback %d lần, muốn 1", k.daRollback)
 	}
 	// The INSERTs really ran — otherwise this case would prove nothing about the rollback.
-	if n := k.soCau("INSERT INTO sla"); n != 15 {
-		t.Errorf("có %d câu INSERT trước khi vết hỏng, muốn 15 — nếu 0 thì ca này không chứng minh gì", n)
+	if n := k.soCau("INSERT INTO sla"); n != 16 {
+		t.Errorf("có %d câu INSERT trước khi vết hỏng, muốn 16 — nếu 0 thì ca này không chứng minh gì", n)
 	}
 }
 
@@ -395,8 +395,8 @@ func TestSuaChiDoiConSoDuocGui(t *testing.T) {
 	if len(up) != 1 {
 		t.Fatalf("có %d câu UPDATE, muốn 1", len(up))
 	}
-	// $1 xã · $2 id · $3..$7 năm con số, in the order of cotSLA.
-	muonArgs := []any{string(xaSLA), idDongSLA, 2, 12, 4, 8, 16}
+	// $1 xã · $2 id · $3..$7 năm con số, in the order of cotSLA · $8 the optional sixth, NULL here.
+	muonArgs := []any{string(xaSLA), idDongSLA, 2, 12, 4, 8, 16, nil}
 	if len(up[0].args) != len(muonArgs) {
 		t.Fatalf("UPDATE có %d tham số, muốn %d: %s", len(up[0].args), len(muonArgs), up[0].sql)
 	}
@@ -419,7 +419,7 @@ func TestSuaChiDoiConSoDuocGui(t *testing.T) {
 // at another field — and it is the parameter that would need the write-time code check ADR 0026
 // stop condition #2 governs. A soft-delete column there would resurrect a removed row.
 //
-// MUTATION THAT MUST TURN THIS RED: add `linh_vuc = $8` to store.CapNhatGio.
+// MUTATION THAT MUST TURN THIS RED: add `linh_vuc = $9` to store.CapNhatGio.
 func TestSuaKhongDongToiLoaiViecLinhVucHayCotXoaMem(t *testing.T) {
 	k := &khoSLAGia{hang: dongDeSua()}
 	uc, ctx := dungUseCaseSLA(t, k)
@@ -607,5 +607,67 @@ func TestSuaKhongChamToiHanDaLuuTrenBatKyHoSoNao(t *testing.T) {
 		if !strings.Contains(l.sql, "sla") && !strings.Contains(l.sql, "audit_log") {
 			t.Errorf("câu lệnh đụng tới bảng ngoài `sla` và `audit_log`: %s", l.sql)
 		}
+	}
+}
+
+// THE OPTIONAL SIXTH FIGURE HAS THREE EDIT STATES (migration 0016): not mentioned leaves it, null
+// clears it (the column goes NULL — "do not report"), a number sets it. A typed 0 is refused rather
+// than read as "clear".
+func TestEditUnassignedHoldThreeStates(t *testing.T) {
+	withValue := []hangSLA{{
+		id: idDongSLA, loaiViec: "phan-anh", linhVuc: "an-ninh", gio: [5]int{2, 16, 4, 8, 16},
+		unassignedHold: int64(8),
+	}}
+
+	// Not mentioned: the stored 8 is written back unchanged alongside the edited figure.
+	k := &khoSLAGia{hang: withValue}
+	uc, ctx := dungUseCaseSLA(t, k)
+	sau, err := uc.Sua(ctx, idDongSLA, YeuCauSuaSLA{GioXuLyXong: gio(12)}, nguoiSLA())
+	if err != nil || sau.UnassignedHoldHours != 8 {
+		t.Fatalf("không gửi mà giá trị đổi: %d (lỗi %v)", sau.UnassignedHoldHours, err)
+	}
+
+	// Null: cleared, and the UPDATE binds NULL, never 0.
+	k = &khoSLAGia{hang: withValue}
+	uc, ctx = dungUseCaseSLA(t, k)
+	sau, err = uc.Sua(ctx, idDongSLA, YeuCauSuaSLA{UnassignedHoldHours: &UnassignedHoldChange{}}, nguoiSLA())
+	if err != nil || sau.UnassignedHoldHours != 0 {
+		t.Fatalf("null không xoá: %d (lỗi %v)", sau.UnassignedHoldHours, err)
+	}
+	if up := k.cau("UPDATE sla"); len(up) != 1 || up[0].args[7] != nil {
+		t.Fatalf("UPDATE $8 = %v, muốn NULL", up)
+	}
+
+	// A number: set.
+	k = &khoSLAGia{hang: dongDeSua()}
+	uc, ctx = dungUseCaseSLA(t, k)
+	sau, err = uc.Sua(ctx, idDongSLA, YeuCauSuaSLA{UnassignedHoldHours: &UnassignedHoldChange{Hours: gio(16)}}, nguoiSLA())
+	if err != nil || sau.UnassignedHoldHours != 16 {
+		t.Fatalf("đặt 16 = %d (lỗi %v)", sau.UnassignedHoldHours, err)
+	}
+
+	// A typed 0: refused as an input fault, nothing written.
+	k = &khoSLAGia{hang: withValue}
+	uc, ctx = dungUseCaseSLA(t, k)
+	_, err = uc.Sua(ctx, idDongSLA, YeuCauSuaSLA{UnassignedHoldHours: &UnassignedHoldChange{Hours: gio(0)}}, nguoiSLA())
+	if !LaLoiDauVaoSLA(err) {
+		t.Fatalf("0 giờ: lỗi = %v, muốn lỗi đầu vào", err)
+	}
+	if k.coCau("UPDATE sla") {
+		t.Error("0 giờ bị từ chối mà vẫn có UPDATE")
+	}
+}
+
+// Y >= X (user decision 2026-09-29): an edit that would put the chairman threshold below the unit
+// head's is an input fault and writes nothing.
+func TestEditRefusesChairmanBeforeUnitHead(t *testing.T) {
+	k := &khoSLAGia{hang: dongDeSua()} // bld 8, bct 16
+	uc, ctx := dungUseCaseSLA(t, k)
+	_, err := uc.Sua(ctx, idDongSLA, YeuCauSuaSLA{GioBaoChuTich: gio(7)}, nguoiSLA())
+	if !errors.Is(err, domain.ErrChairmanBeforeUnitHead) || !LaLoiDauVaoSLA(err) {
+		t.Fatalf("lỗi = %v, muốn ErrChairmanBeforeUnitHead (lỗi đầu vào)", err)
+	}
+	if k.coCau("UPDATE sla") || k.coCau("audit_log") {
+		t.Error("Y < X bị từ chối mà vẫn ghi")
 	}
 }

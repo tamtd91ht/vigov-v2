@@ -54,6 +54,9 @@ func dongSLAMau(id, loaiViec, linhVuc string, tn, xl, sdh, bld, bct int) map[str
 		"gio_sap_den_han":  int64(sdh),
 		"gio_bao_lanh_dao": int64(bld),
 		"gio_bao_chu_tich": int64(bct),
+		// NULL by default: the state of every row migration 0016 found. A test that needs a value
+		// sets it on the map.
+		"unassigned_hold_hours": nil,
 	}
 }
 
@@ -174,7 +177,7 @@ func TestSLADanhSachCotKhopTungDichCuaScan(t *testing.T) {
 	muon := []string{
 		"id", "loai_viec", "linh_vuc",
 		"gio_tiep_nhan", "gio_xu_ly_xong", "gio_sap_den_han",
-		"gio_bao_lanh_dao", "gio_bao_chu_tich",
+		"gio_bao_lanh_dao", "gio_bao_chu_tich", "unassigned_hold_hours",
 	}
 	if len(cot) != len(muon) {
 		t.Fatalf("danh sách cột = %v, muốn %v", cot, muon)
@@ -384,4 +387,36 @@ func TestSLAKhongCoXaTrongContextThiPanic(t *testing.T) {
 	k := khoMoi()
 	k.hang = motBangSLAMau()
 	_, _ = NewSLAStore(dbGia(k)).DanhSach(context.Background())
+}
+
+// THE SIXTH FIGURE (migration 0016): a value reads as itself, NULL reads as 0 — "do not report" —
+// and never as a number somebody would act on.
+func TestSLAUnassignedHoldReadsValueAndNullAsZero(t *testing.T) {
+	k := khoMoi()
+	k.hang = motBangSLAMau()
+	k.hang[1]["unassigned_hold_hours"] = int64(12)
+
+	ra, err := NewSLAStore(dbGia(k)).DanhSach(ctxXa(xaMau))
+	if err != nil {
+		t.Fatalf("DanhSach lỗi: %v", err)
+	}
+	if ra[0].UnassignedHoldHours != 0 {
+		t.Errorf("NULL đọc ra %d, muốn 0 (không báo)", ra[0].UnassignedHoldHours)
+	}
+	if ra[1].UnassignedHoldHours != 12 {
+		t.Errorf("unassigned_hold_hours = %d, muốn 12", ra[1].UnassignedHoldHours)
+	}
+}
+
+// `don-thu` (migration 0016) is an admitted kind of work, not a refused unknown.
+func TestSLAReadsCitizenLetterRow(t *testing.T) {
+	k := khoMoi()
+	k.hang = []map[string]driver.Value{dongSLAMau("sla-dt", "don-thu", "", 8, 40, 24, 25, 49)}
+	ra, err := NewSLAStore(dbGia(k)).DanhSach(ctxXa(xaMau))
+	if err != nil {
+		t.Fatalf("dòng don-thu bị từ chối: %v", err)
+	}
+	if len(ra) != 1 || ra[0].LoaiViec != domain.LoaiViecDonThu {
+		t.Fatalf("đọc = %+v", ra)
+	}
 }

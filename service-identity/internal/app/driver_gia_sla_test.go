@@ -48,6 +48,9 @@ type hangSLA struct {
 	loaiViec string
 	linhVuc  any // nil = the default row, as PostgreSQL hands back a NULL
 	gio      [5]int
+
+	// unassignedHold is `unassigned_hold_hours` (migration 0016): nil = NULL, as PostgreSQL hands it.
+	unassignedHold any
 }
 
 // khoSLAGia is the fake table plus the recording tape.
@@ -182,6 +185,7 @@ func hangRaSLA(h hangSLA) []driver.Value {
 	return []driver.Value{
 		h.id, h.loaiViec, h.linhVuc,
 		int64(h.gio[0]), int64(h.gio[1]), int64(h.gio[2]), int64(h.gio[3]), int64(h.gio[4]),
+		h.unassignedHold,
 	}
 }
 
@@ -193,7 +197,7 @@ func cotSLAGia() []string {
 	return []string{
 		"id", "loai_viec", "linh_vuc",
 		"gio_tiep_nhan", "gio_xu_ly_xong", "gio_sap_den_han",
-		"gio_bao_lanh_dao", "gio_bao_chu_tich",
+		"gio_bao_lanh_dao", "gio_bao_chu_tich", "unassigned_hold_hours",
 	}
 }
 

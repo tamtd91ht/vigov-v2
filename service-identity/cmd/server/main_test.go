@@ -179,8 +179,30 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		NghiLe:       nghiLeGia{},
 		LamBu:        lamBuGia{},
 		SLA:          slaGia{},
-		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The automation collaborators answer nothing — these wiring tests only need NewServer to build.
+		Recipients:     automationWiringFake{},
+		PermissionKeys: automationWiringFake{},
+		Automation:     automationWiringFake{},
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// automationWiringFake stands in for the three automation collaborators of svcgrpc.Deps. Behaviour is
+// defended in internal/grpc and internal/app; here the server only has to be buildable.
+type automationWiringFake struct{}
+
+func (automationWiringFake) OrgUnitPermissionHolders(context.Context, []string, string) (map[string][]string, error) {
+	return nil, nil
+}
+func (automationWiringFake) LeadershipCodes(context.Context, int) ([]string, error) { return nil, nil }
+func (automationWiringFake) PermissionKeyExists(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (automationWiringFake) ClaimDue(context.Context, []domain.AutomationScope) ([]domain.AutomationRun, error) {
+	return nil, nil
+}
+func (automationWiringFake) RecordOutcome(context.Context, string, domain.RunReport) error {
+	return nil
 }
 
 // moMay starts the REAL server on an in-memory connection and returns a client dialled with the

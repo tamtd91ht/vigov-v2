@@ -37,6 +37,12 @@
 // add rows at the rate of page loads — recording nothing anybody would ever look for, and
 // burying the entries that carry legal weight.
 //
+// THE FIRST WRITES ARRIVED ON 2026-09-29, AND THE CONTRACT ANSWERED #1 BELOW FOR THEM: ClaimDue-
+// AutomationRuns writes a lease and is deliberately NOT audited, RecordAutomationRunOutcome writes one
+// entry per run with the SYSTEM principal (core/audit.SystemActor) — a background job's act, not a
+// calling service's, so #3's missing caller identity does not bite (automation.go, app/automation.go).
+// Any OTHER write here is still the stop condition.
+//
 // THREE THINGS WOULD CHANGE THAT ANSWER, and each is a stop condition rather than a judgement
 // call for whoever hits it:
 //
@@ -206,6 +212,17 @@ type Deps struct {
 	// ResolveDeadlines refuses rather than producing something from whichever half it holds.
 	SLA SLADoc
 
+	// The recipient reads of the automation jobs (ADR 0058), for ResolveOrgUnitPermissionHolders and
+	// ResolveLeadershipStaff. Declared in notice_recipients.go. Recipients is *idstore.CanBoStore,
+	// PermissionKeys is *idstore.QuyenStore (the `quyen` catalogue, rule 5 invariant 3c).
+	Recipients     NoticeRecipientReader
+	PermissionKeys PermissionKeyChecker
+
+	// The job settings and run state (migration 0017), for ClaimDueAutomationRuns and
+	// RecordAutomationRunOutcome — a USE CASE, not a store: both write, and the outcome writes its audit
+	// entry in the same transaction. Declared in automation.go. *app.Automation in production.
+	Automation AutomationRuns
+
 	Log *slog.Logger
 }
 
@@ -260,6 +277,10 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho ngày làm bù — AdvanceWorkingHours sẽ tính hạn như thể xã nghỉ đúng những ngày nó có làm")
 	case d.SLA == nil:
 		panic("identity/grpc: thiếu kho thời hạn xử lý — ResolveDeadlines sẽ panic, và mọi tuyến ghi của petitions lẫn documents không đặt được hạn")
+	case d.Recipients == nil || d.PermissionKeys == nil:
+		panic("identity/grpc: thiếu kho người nhận thông báo — ResolveOrgUnitPermissionHolders và ResolveLeadershipStaff sẽ panic, và việc nền leo thang không báo được ai")
+	case d.Automation == nil:
+		panic("identity/grpc: thiếu use case tự động hoá — ClaimDueAutomationRuns và RecordAutomationRunOutcome sẽ panic, và không việc nền nào chạy được")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()

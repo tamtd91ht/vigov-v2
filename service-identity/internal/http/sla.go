@@ -130,6 +130,11 @@ type dongSLARa struct {
 	// answers "after what" (migration 0008; ADR 0029).
 	EscalateLeaderHours    int `json:"escalate_leader_hours"`
 	EscalatePresidentHours int `json:"escalate_president_hours"`
+
+	// UnassignedHoldHours is the sixth figure (migration 0016): working hours a unit may hold work with
+	// nobody assigned before the `sla_reminders` job reports it. NULL MEANS "DO NOT REPORT" — a client
+	// must render it as off, never substitute a number for it (rule 10, forbidden #3).
+	UnassignedHoldHours *int `json:"unassigned_hold_hours"`
 }
 
 // vanDeSLARa is one problem found in the table THIS RESPONSE CARRIES.
@@ -171,7 +176,17 @@ func dongSLARaNgoai(d domain.DongSLA) dongSLARa {
 		DueSoonHours:           d.GioSapDenHan,
 		EscalateLeaderHours:    d.GioBaoLanhDao,
 		EscalatePresidentHours: d.GioBaoChuTich,
+		UnassignedHoldHours:    optionalHoursOut(d.UnassignedHoldHours),
 	}
+}
+
+// optionalHoursOut renders the optional threshold: the domain's 0 is the column's NULL, and leaves as
+// null.
+func optionalHoursOut(hours int) *int {
+	if hours == 0 {
+		return nil
+	}
+	return &hours
 }
 
 func vanDeSLARaNgoai(v domain.VanDeSLA) vanDeSLARa {
@@ -267,9 +282,46 @@ type suaSLAVao struct {
 	DueSoonHours           *int `json:"due_soon_hours"`
 	EscalateLeaderHours    *int `json:"escalate_leader_hours"`
 	EscalatePresidentHours *int `json:"escalate_president_hours"`
+
+	// UnassignedHoldHours has THREE states on the wire: absent = leave it; null = clear it ("do not
+	// report"); a number = set it. A *int cannot tell absent from null, so it is its own type.
+	UnassignedHoldHours optionalHoursIn `json:"unassigned_hold_hours"`
+}
+
+// optionalHoursIn records whether the field was present at all, and its value when it was a number.
+//
+// encoding/json calls UnmarshalJSON for a present field INCLUDING an explicit null, and never for an
+// absent one — which is exactly the distinction needed.
+type optionalHoursIn struct {
+	present bool
+	hours   *int
+}
+
+func (o *optionalHoursIn) UnmarshalJSON(b []byte) error {
+	o.present = true
+	if string(b) == "null" {
+		o.hours = nil
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	o.hours = &n
+	return nil
+}
+
+// change turns the wire state into the use case's: nil when absent.
+func (o optionalHoursIn) change() *app.UnassignedHoldChange {
+	if !o.present {
+		return nil
+	}
+	return &app.UnassignedHoldChange{Hours: o.hours}
 }
 
 // SuaSLA changes the figures of one row. PATCH /api/v1/sla/{id}
+//
+// Rows of all four kinds of work are editable, `don-thu` included (migration 0016).
 //
 // IT CHANGES NO DEADLINE ALREADY ISSUED, and that is the specification's own sentence at
 // 14-cau-hinh.md:289 — *"Thay đổi chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu"* — as well as
@@ -296,7 +348,8 @@ func (h *Handler) SuaSLA(w http.ResponseWriter, r *http.Request) {
 	// EVERY FIGURE ABSENT IS REFUSED RATHER THAN TREATED AS A NO-OP. `{}` means the client sent a
 	// form it failed to read, and answering 200 would tell the person their edit was saved.
 	if than.AcknowledgeHours == nil && than.ResolveHours == nil && than.DueSoonHours == nil &&
-		than.EscalateLeaderHours == nil && than.EscalatePresidentHours == nil {
+		than.EscalateLeaderHours == nil && than.EscalatePresidentHours == nil &&
+		!than.UnassignedHoldHours.present {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Không có số giờ nào được gửi lên để sửa.", "")
 		return
@@ -308,6 +361,8 @@ func (h *Handler) SuaSLA(w http.ResponseWriter, r *http.Request) {
 		GioSapDenHan:  than.DueSoonHours,
 		GioBaoLanhDao: than.EscalateLeaderHours,
 		GioBaoChuTich: than.EscalatePresidentHours,
+
+		UnassignedHoldHours: than.UnassignedHoldHours.change(),
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiSLA(w, r, "sửa thời hạn xử lý", err)

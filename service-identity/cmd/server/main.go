@@ -265,6 +265,9 @@ func run(log *slog.Logger) error {
 	// because the seeding decision READS the very rows it then writes, inside one transaction — a
 	// second store would be a second connection and the read would not see the transaction.
 	ghiSLA := app.NewSLA(kho, sla)
+	// Cấu hình → Tự động hoá (migration 0017, ADR 0058): the REST routes and the two runner RPCs share
+	// ONE use case, so the screen and the claim read the same settings through the same store.
+	automation := app.NewAutomation(kho, idstore.NewAutomationStore(kho))
 	// The WRITE surface of the working calendar — eleven routes over three tables.
 	//
 	// IT IS GIVEN THE SAME THREE STORES the read fields and the gRPC server carry, for the same
@@ -415,8 +418,9 @@ func run(log *slog.Logger) error {
 		// MỘT KHO CHO ĐỌC, MỘT USE CASE CHO GHI. `sla` là cùng một *idstore.SLAStore mà máy chủ
 		// gRPC dưới kia dùng, nên màn hình cấu hình và phép tính hạn đọc đúng một chỗ; `ghiSLA` mở
 		// giao dịch mà vết kiểm toán dùng chung (luật 6 bất biến 3).
-		SLA:    sla,
-		GhiSLA: ghiSLA,
+		SLA:        sla,
+		GhiSLA:     ghiSLA,
+		Automation: automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
 		Signer:   signer, // the SAME pointer app.NewDangNhap was given above
@@ -580,7 +584,12 @@ func run(log *slog.Logger) error {
 		// read-only store, and there is no second reader: a deadline must come from ONE place, and
 		// this field plus the three above are that place.
 		SLA: sla,
-		Log: log,
+		// The automation jobs (ADR 0058): recipients from the staff register and the `quyen` catalogue,
+		// claims and outcomes through the same use case the REST routes use.
+		Recipients:     canBo,
+		PermissionKeys: maTranQuyen,
+		Automation:     automation,
+		Log:            log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())

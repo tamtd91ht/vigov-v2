@@ -40,7 +40,8 @@ package domain
 // never days: the security field really is 2 working hours to acknowledge, and no count in days can
 // say that.
 //
-// THE SPECIFICATION'S TABLE HAS 16 ROWS AND THIS ONE HAS 15. The row dropped is :308,
+// THE SPECIFICATION'S TABLE HAS 16 ROWS; THIS ONE HAS 15 OF THEM PLUS THE `don-thu` ROW (16 in all,
+// see below). The specification row dropped is :308,
 // `ve-sinh-moi-truong`, and the specification itself labels it *"mã cũ, không còn trong danh mục"*
 // and notes at :314 that the screen renders the raw code. It is the SAME FIELD as `rac-thai` —
 // identical label ("Rác thải – Vệ sinh môi trường") and identical five numbers (4/24/8/16/32) — so
@@ -70,14 +71,21 @@ package domain
 // answered. A commune may edit the fifteen rows below and may not yet add a sixteenth.
 //
 // =================================================================================================
-// THE TWO ESCALATION COLUMNS ARE SEEDED BUT MEAN NOTHING YET.
+// THE TWO ESCALATION COLUMNS count from the MISSED DEADLINE (ADR 0029 §Bổ sung 29/09), and every row
+// below has the chairman figure at twice the unit head's, so Y >= X holds for the whole seed set.
 //
-// `gio_bao_lanh_dao` and `gio_bao_chu_tich` have NO AGREED ANCHOR — §8 heads them "sau 24 giờ"
-// without saying after what, while §9's job counts from the deadline being missed and DOUBLES the
-// figure for the president instead of reading a second column (migration 0008; ADR 0029). The
-// numbers are carried because they are columns of the row a commune edits on one screen and the
-// table would otherwise be unfillable. NOTHING MAY COMPUTE AN ESCALATION FROM THEM until somebody
-// answers "after what"; seeding a number is not deciding what it counts from.
+// THE SIXTH FIGURE, `unassigned_hold_hours`, IS 8 ON EVERY ROW — the user's suggested starting value
+// (2026-09-29) for "working hours a unit may hold work unassigned before it is reported". The
+// specification's table has no such column, so 8 is the user's number, not §8's. Like every figure
+// here it is written into the commune's own rows and edited there; a NULL (a row the commune cleared)
+// reports nothing, and nothing substitutes 8 for it.
+//
+// =================================================================================================
+// `don-thu` (migration 0016, user decision 2026-09-29) GETS THE SHAPE OF `van-ban-den`, 8/40/24/24/48.
+// The specification's §8 table predates the kind and the reference system seeds no rule for đơn thư
+// (../vigov-require/apps/api/app/modules/org/data/default_config.json:674-755 — feedback, document and
+// task only), so the nearest documented row — the same register's incoming documents — is the
+// starting point, and the commune edits it.
 
 // GieoSLA is one row of the seed set. It is a DongSLA without an ID, because the ID is minted per
 // commune at the moment the row is written and a fixed one here would be the same ULID in every
@@ -94,6 +102,9 @@ type GieoSLA struct {
 	GioSapDenHan  int
 	GioBaoLanhDao int
 	GioBaoChuTich int
+
+	// UnassignedHoldHours — see the file comment. 0 would seed NULL; every row below carries 8.
+	UnassignedHoldHours int
 }
 
 // BoGieoSLA returns the seed set, in the order it is written.
@@ -112,7 +123,12 @@ func BoGieoSLA() []GieoSLA {
 		// document has no `linh_vuc`, so the default row is the only row this kind of work can have.
 		// It is the row `service-documents` reads for `han_tiep_nhan` on every entry into the
 		// register — the read that answers 409 `sla_chua_cau_hinh` today.
-		{LoaiViecVanBanDen, "", 8, 40, 24, 24, 48},
+		{LoaiViecVanBanDen, "", 8, 40, 24, 24, 48, 8},
+
+		// ---- don-thu ----------------------------------------------------------------------------
+		// ONE ROW, the default: a citizen letter carries no `linh_vuc` on this table. Figures copied from
+		// the `van-ban-den` row above — see the file comment for why that is the starting point.
+		{LoaiViecDonThu, "", 8, 40, 24, 24, 48, 8},
 
 		// ---- phan-anh ---------------------------------------------------------------------------
 		// The twelve tier-1 field codes (09-phan-anh-nguoi-dan.md §5) plus the default row, in the
@@ -122,19 +138,19 @@ func BoGieoSLA() []GieoSLA {
 		// omitted: ADR 0028 decision E reads `gio_tiep_nhan` from it for EVERY petition a citizen
 		// sends, because at that instant nobody knows the field yet. A seed set without it would
 		// leave the citizen channel with no deadline while looking configured.
-		{LoaiViecPhanAnh, "an-ninh", 2, 16, 4, 8, 16},            // An ninh trật tự
-		{LoaiViecPhanAnh, "an-toan-thuc-pham", 2, 24, 6, 12, 24}, // An toàn thực phẩm
-		{LoaiViecPhanAnh, "can-bo", 8, 120, 24, 24, 48},          // Thái độ / tác phong cán bộ
-		{LoaiViecPhanAnh, "cap-thoat-nuoc", 4, 48, 8, 16, 32},    // Cấp thoát nước
-		{LoaiViecPhanAnh, "dien", 2, 24, 6, 12, 24},              // Điện
-		{LoaiViecPhanAnh, "giao-thong", 8, 168, 24, 24, 48},      // Hạ tầng giao thông
-		{LoaiViecPhanAnh, "khac", 8, 72, 24, 24, 48},             // Khác
-		{LoaiViecPhanAnh, "o-nhiem", 8, 72, 24, 24, 48},          // Ô nhiễm (tiếng ồn, khí thải, nước thải)
-		{LoaiViecPhanAnh, "rac-thai", 4, 24, 8, 16, 32},          // Rác thải – Vệ sinh môi trường
-		{LoaiViecPhanAnh, "trat-tu-do-thi", 6, 40, 12, 24, 48},   // Trật tự đô thị – lấn chiếm vỉa hè
-		{LoaiViecPhanAnh, "xay-dung", 4, 72, 12, 12, 24},         // Xây dựng không phép
-		{LoaiViecPhanAnh, "y-te-giao-duc", 8, 72, 24, 24, 48},    // Y tế – Giáo dục
-		{LoaiViecPhanAnh, "", 8, 56, 24, 24, 48},                 // Mặc định cho mọi lĩnh vực
+		{LoaiViecPhanAnh, "an-ninh", 2, 16, 4, 8, 16, 8},            // An ninh trật tự
+		{LoaiViecPhanAnh, "an-toan-thuc-pham", 2, 24, 6, 12, 24, 8}, // An toàn thực phẩm
+		{LoaiViecPhanAnh, "can-bo", 8, 120, 24, 24, 48, 8},          // Thái độ / tác phong cán bộ
+		{LoaiViecPhanAnh, "cap-thoat-nuoc", 4, 48, 8, 16, 32, 8},    // Cấp thoát nước
+		{LoaiViecPhanAnh, "dien", 2, 24, 6, 12, 24, 8},              // Điện
+		{LoaiViecPhanAnh, "giao-thong", 8, 168, 24, 24, 48, 8},      // Hạ tầng giao thông
+		{LoaiViecPhanAnh, "khac", 8, 72, 24, 24, 48, 8},             // Khác
+		{LoaiViecPhanAnh, "o-nhiem", 8, 72, 24, 24, 48, 8},          // Ô nhiễm (tiếng ồn, khí thải, nước thải)
+		{LoaiViecPhanAnh, "rac-thai", 4, 24, 8, 16, 32, 8},          // Rác thải – Vệ sinh môi trường
+		{LoaiViecPhanAnh, "trat-tu-do-thi", 6, 40, 12, 24, 48, 8},   // Trật tự đô thị – lấn chiếm vỉa hè
+		{LoaiViecPhanAnh, "xay-dung", 4, 72, 12, 12, 24, 8},         // Xây dựng không phép
+		{LoaiViecPhanAnh, "y-te-giao-duc", 8, 72, 24, 24, 48, 8},    // Y tế – Giáo dục
+		{LoaiViecPhanAnh, "", 8, 56, 24, 24, 48, 8},                 // Mặc định cho mọi lĩnh vực
 		//
 		// 14-cau-hinh.md:308 — `ve-sinh-moi-truong`, 4/24/8/16/32 — IS DELIBERATELY ABSENT. It is the
 		// old code of `rac-thai` above (same label, same five numbers) and the specification marks it
@@ -146,6 +162,6 @@ func BoGieoSLA() []GieoSLA {
 		// is the customer's own configuration, not a typo to fix here, and migration 0008 cites this
 		// very row as the reason there is no ordering CHECK between the columns: a constraint that
 		// refuses real configuration is discovered on the day a commune is being set up.
-		{LoaiViecNhiemVu, "", 8, 40, 72, 24, 48},
+		{LoaiViecNhiemVu, "", 8, 40, 72, 24, 48, 8},
 	}
 }

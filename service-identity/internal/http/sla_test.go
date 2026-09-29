@@ -527,3 +527,74 @@ func TestGieoSLATrungKhoaTraLoi409(t *testing.T) {
 		t.Fatalf("mã = %d, muốn 409 — thân: %s", w.Code, w.Body.String())
 	}
 }
+
+// --- the sixth figure (migration 0016) ----------------------------------------------------------------
+
+// GET RENDERS THE OPTIONAL THRESHOLD AS null WHEN NOT SET AND AS THE NUMBER WHEN SET — never as 0, which
+// a client would read as "report at once".
+func TestReadSLAUnassignedHoldNullOrNumber(t *testing.T) {
+	m := dungMayChuSLA(t)
+	m.sla.ds[1].UnassignedHoldHours = 8
+
+	w := m.goi(t, "GET", hostA, "/api/v1/sla", "", m.tokenCho(t, xaA, sidA))
+	if w.Code != http.StatusOK {
+		t.Fatalf("mã = %d — thân: %s", w.Code, w.Body.String())
+	}
+	var ra struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không đọc được: %v", err)
+	}
+	if got := string(ra.Items[0]["unassigned_hold_hours"]); got != "null" {
+		t.Errorf("không đặt: unassigned_hold_hours = %s, muốn null", got)
+	}
+	if got := string(ra.Items[1]["unassigned_hold_hours"]); got != "8" {
+		t.Errorf("đã đặt: unassigned_hold_hours = %s, muốn 8", got)
+	}
+}
+
+// PATCH HAS THREE STATES FOR IT: absent leaves it (nil change), null clears it (change with no hours),
+// a number sets it. A body mentioning ONLY this field is a real edit, not an empty body.
+func TestEditSLAUnassignedHoldThreeStates(t *testing.T) {
+	m := dungMayChuSLA(t)
+	tok := m.tokenCho(t, xaA, sidA)
+	path := "/api/v1/sla/" + idDongSLAThu
+
+	if w := m.goi(t, "PATCH", hostA, path, `{"resolve_hours":12}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("mã = %d", w.Code)
+	}
+	if m.ghiSLA.suaCuoi.UnassignedHoldHours != nil {
+		t.Error("không gửi mà use case nhận một thay đổi — màn sửa một ô sẽ xoá ngưỡng này")
+	}
+
+	if w := m.goi(t, "PATCH", hostA, path, `{"unassigned_hold_hours":null}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("null: mã = %d — thân: %s", w.Code, w.Body.String())
+	}
+	if c := m.ghiSLA.suaCuoi.UnassignedHoldHours; c == nil || c.Hours != nil {
+		t.Errorf("null phải là 'xoá' (thay đổi, không giờ), nhận %+v", c)
+	}
+
+	if w := m.goi(t, "PATCH", hostA, path, `{"unassigned_hold_hours":16}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("16: mã = %d", w.Code)
+	}
+	if c := m.ghiSLA.suaCuoi.UnassignedHoldHours; c == nil || c.Hours == nil || *c.Hours != 16 {
+		t.Errorf("16 không tới use case: %+v", c)
+	}
+
+	if w := m.goi(t, "PATCH", hostA, path, `{"unassigned_hold_hours":"8"}`, tok); w.Code != http.StatusBadRequest {
+		t.Errorf("chuỗi thay vì số: mã = %d, muốn 400", w.Code)
+	}
+}
+
+// Y < X IS 400 WITH THE DOMAIN'S SENTENCE — a rule doing its job, not a broken server.
+func TestEditSLAChairmanBeforeUnitHeadIs400(t *testing.T) {
+	m := dungMayChuSLA(t)
+	m.ghiSLA.loi = domain.ErrChairmanBeforeUnitHead
+
+	w := m.goi(t, "PATCH", hostA, "/api/v1/sla/"+idDongSLAThu,
+		`{"escalate_president_hours":4}`, m.tokenCho(t, xaA, sidA))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("mã = %d, muốn 400 — thân: %s", w.Code, w.Body.String())
+	}
+}

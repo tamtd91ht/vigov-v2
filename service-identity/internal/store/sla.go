@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
@@ -86,8 +85,11 @@ var ErrLoaiViecLa = errors.New("sla: loại việc không nằm trong ba giá tr
 // first, so an output column named `linh_vuc` that was really `coalesce(linh_vuc, ”)` would
 // silently make the NULLS FIRST clause decorative. The NULL is folded into "" once, in Go,
 // where it can be read.
+//
+// `unassigned_hold_hours` (migration 0016) IS LAST AND NULLABLE: it is folded to 0 in Go, which the
+// schema's CHECK guarantees can only mean NULL ("do not report").
 const cotSLA = `id, loai_viec, linh_vuc, gio_tiep_nhan, gio_xu_ly_xong, ` +
-	`gio_sap_den_han, gio_bao_lanh_dao, gio_bao_chu_tich`
+	`gio_sap_den_han, gio_bao_lanh_dao, gio_bao_chu_tich, unassigned_hold_hours`
 
 // DanhSach reads the commune's whole deadline table, ordered.
 //
@@ -130,27 +132,12 @@ func (s *SLAStore) DanhSach(ctx context.Context) ([]domain.DongSLA, error) {
 
 	ra := make([]domain.DongSLA, 0, 16)
 	for rows.Next() {
-		var d domain.DongSLA
-		var loaiViec string
-		// NULL IS THE DEFAULT ROW, and it is folded into "" exactly here — the one place that
-		// conversion happens. The schema refuses the empty string outright
-		// (sla_linh_vuc_khong_rong), so "" arriving in Go can only have come from a NULL.
-		var linhVuc sql.NullString
-		// POSITIONAL — in lockstep with cotSLA. See the note there on the five adjacent integer
-		// columns; this Scan is the other half of that pair.
-		if err := rows.Scan(&d.ID, &loaiViec, &linhVuc,
-			&d.GioTiepNhan, &d.GioXuLyXong, &d.GioSapDenHan,
-			&d.GioBaoLanhDao, &d.GioBaoChuTich); err != nil {
+		// ONE SCAN FOR BOTH READ PATHS (quetMotDongSLA, sla_ghi.go): the positional list has six
+		// adjacent integer columns, and two Scans are two places for a transposition to hide.
+		d, err := quetMotDongSLA(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("sla: đọc dòng: %w", err)
 		}
-		d.LoaiViec = domain.LoaiViec(loaiViec)
-		if !d.LoaiViec.HopLe() {
-			// The value is NOT put in the error: it came from the database and an error message
-			// travels into logs and back to clients (rule 3, forbidden #3). The row's ULID is
-			// what an operator needs to find it, and it is not personal data.
-			return nil, fmt.Errorf("sla: dòng %s: %w", d.ID, ErrLoaiViecLa)
-		}
-		d.LinhVuc = linhVuc.String
 		ra = append(ra, d)
 	}
 	if err := rows.Err(); err != nil {

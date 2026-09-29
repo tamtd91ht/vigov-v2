@@ -40,5 +40,9 @@ type VaiTro struct {
 	// What to write instead: a permission key in `quyen`, granted to the role in `vai_tro_quyen`,
 	// checked with authz.RequirePermission. `task.approve` is deliberately not `task.extend`, and
 	// neither of them is "is a leader".
+	//
+	// ONE SECOND READING, DECIDED BY THE CONTRACT (ResolveLeadershipStaff, user decision 2026-09-29):
+	// WHO IS TOLD. The escalation and weekly-digest jobs address the accounts whose role carries this
+	// flag. That grants nothing — a notice recipient is not a permission — and it must stay that way.
 	LaLanhDao bool
 }

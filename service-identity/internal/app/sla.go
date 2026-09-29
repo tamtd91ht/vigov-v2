@@ -119,6 +119,17 @@ type YeuCauSuaSLA struct {
 	GioSapDenHan  *int
 	GioBaoLanhDao *int
 	GioBaoChuTich *int
+
+	// UnassignedHoldHours is the optional sixth figure (migration 0016). THREE STATES, not two, because
+	// the column is nullable: nil = leave it alone; a change with Hours nil = CLEAR it ("do not
+	// report"); a change with Hours set = set it. A plain *int could not tell "clear" from "not
+	// mentioned", and a screen editing one other figure would then wipe this one.
+	UnassignedHoldHours *UnassignedHoldChange
+}
+
+// UnassignedHoldChange is one edit of the optional threshold. Hours nil clears it.
+type UnassignedHoldChange struct {
+	Hours *int
 }
 
 // Sua applies a partial edit to one deadline row.
@@ -135,6 +146,12 @@ func (uc *SLA) Sua(ctx context.Context, id string, yc YeuCauSuaSLA,
 	}
 	if id == "" {
 		return domain.DongSLA{}, idstore.ErrDongSLAKhongTonTai
+	}
+	// A TYPED ZERO FOR THE OPTIONAL THRESHOLD IS REFUSED, NOT READ AS "CLEAR". The domain's 0 means
+	// NULL, so letting a sent 0 through would silently switch reporting off for a client that meant a
+	// number; clearing is said with null (UnassignedHoldChange.Hours == nil).
+	if c := yc.UnassignedHoldHours; c != nil && c.Hours != nil && *c.Hours <= 0 {
+		return domain.DongSLA{}, domain.ErrGioPhaiDuong
 	}
 
 	var sau domain.DongSLA
@@ -200,6 +217,13 @@ func apDungSuaSLA(d *domain.DongSLA, yc YeuCauSuaSLA) {
 	}
 	if yc.GioBaoChuTich != nil {
 		d.GioBaoChuTich = *yc.GioBaoChuTich
+	}
+	if c := yc.UnassignedHoldHours; c != nil {
+		if c.Hours == nil {
+			d.UnassignedHoldHours = 0 // NULL — see domain.DongSLA
+		} else {
+			d.UnassignedHoldHours = *c.Hours
+		}
 	}
 }
 
@@ -272,6 +296,8 @@ func (uc *SLA) GieoMacDinh(ctx context.Context, nguoi NguoiThucHien) (KetQuaGieo
 				GioSapDenHan:  g.GioSapDenHan,
 				GioBaoLanhDao: g.GioBaoLanhDao,
 				GioBaoChuTich: g.GioBaoChuTich,
+
+				UnassignedHoldHours: g.UnassignedHoldHours,
 			}
 			// THE SEED SET IS VALIDATED ON THE WAY IN, exactly like a typed figure. It is a fixed
 			// list in source, so this can only fire if somebody edits that list badly — which is
@@ -361,7 +387,8 @@ func nhanLinhVuc(linhVuc string) string {
 	return linhVuc
 }
 
-// soGioCuaDong is the before/after payload of an edit: THE FIVE FIGURES AND NOTHING ELSE.
+// soGioCuaDong is the before/after payload of an edit: THE FIGURES AND NOTHING ELSE — the five, and
+// the optional sixth as null when it is not set, so "cleared" reads as null rather than as 0.
 //
 // Rule 6, invariant 5 asks for before and after of the significant fields. The significant fields
 // here are exactly the five that can change; `loai_viec` and `linh_vuc` cannot (the UPDATE does not
@@ -376,7 +403,17 @@ func soGioCuaDong(d domain.DongSLA) map[string]any {
 		"gio_sap_den_han":  d.GioSapDenHan,
 		"gio_bao_lanh_dao": d.GioBaoLanhDao,
 		"gio_bao_chu_tich": d.GioBaoChuTich,
+
+		"unassigned_hold_hours": optionalHoursDelta(d.UnassignedHoldHours),
 	}
+}
+
+// optionalHoursDelta renders the optional threshold for the trail: nil when not set.
+func optionalHoursDelta(hours int) any {
+	if hours == 0 {
+		return nil
+	}
+	return hours
 }
 
 // moTaDaGieo names the rows a seeding run wrote — the seed set minus what was already there.
@@ -417,5 +454,6 @@ func deltaSLA(v map[string]any) json.RawMessage {
 // client that believes its input is wrong retries with different input forever while nobody is told
 // the server is broken.
 func LaLoiDauVaoSLA(err error) bool {
-	return errors.Is(err, domain.ErrGioPhaiDuong) || errors.Is(err, domain.ErrGioQuaLon)
+	return errors.Is(err, domain.ErrGioPhaiDuong) || errors.Is(err, domain.ErrGioQuaLon) ||
+		errors.Is(err, domain.ErrChairmanBeforeUnitHead)
 }

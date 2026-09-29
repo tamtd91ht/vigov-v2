@@ -5,10 +5,11 @@ import "sort"
 // LoaiViec is the kind of work an SLA row applies to (@entity ProcessingDeadline, migration
 // 0008).
 //
-// THREE VALUES, AND THEY ARE THREE BUSINESS DOMAINS RATHER THAN THREE LABELS: `van-ban-den` is
-// documents' work, `phan-anh` and `nhiem-vu` are petitions'. That is the whole reason the table
-// belongs to neither of those services and lives here (ADR 0029). A FOURTH VALUE IS A DECISION,
-// not a deployment — ADR 0029, stop condition #1.
+// FOUR VALUES, AND THEY ARE BUSINESS DOMAINS RATHER THAN LABELS: `van-ban-den` and `don-thu` are
+// documents' work (ADR 0039), `phan-anh` and `nhiem-vu` are petitions'. That is the whole reason the
+// table belongs to neither of those services and lives here (ADR 0029). A FURTHER VALUE IS A
+// DECISION, not a deployment — ADR 0029, stop condition #1; `don-thu` was that decision, taken by
+// the user on 2026-09-29 (migration 0016).
 //
 // THE VALUES ARE THE STRINGS THE DATABASE STORES, spelled exactly as the CHECK constraint
 // admits them (migration 0008). A second spelling in Go would be a second name for one thing.
@@ -18,9 +19,14 @@ const (
 	LoaiViecVanBanDen LoaiViec = "van-ban-den"
 	LoaiViecPhanAnh   LoaiViec = "phan-anh"
 	LoaiViecNhiemVu   LoaiViec = "nhiem-vu"
+
+	// LoaiViecDonThu is the citizen-letter register (`đơn thư`, ADR 0039), admitted by migration 0016.
+	// The contract's WorkKind does not carry it yet (contract-designer's change); until it does, no
+	// gRPC request can name it and the grpc mapping refuses an unknown kind with INVALID_ARGUMENT.
+	LoaiViecDonThu LoaiViec = "don-thu" // vi-name-ok: fourth member of the existing LoaiViec family; an English name beside LoaiViecVanBanDen would be a second vocabulary for one enum
 )
 
-// HopLe reports whether v is one of the three admitted values.
+// HopLe reports whether v is one of the four admitted values.
 //
 // IT EXISTS FOR THE WRITE PATH THAT DOES NOT YET EXIST, and for a read that finds a value the
 // CHECK constraint should have refused — a database restored from elsewhere, a column altered by
@@ -28,7 +34,7 @@ const (
 // number nobody can say what it promises.
 func (v LoaiViec) HopLe() bool {
 	switch v {
-	case LoaiViecVanBanDen, LoaiViecPhanAnh, LoaiViecNhiemVu:
+	case LoaiViecVanBanDen, LoaiViecPhanAnh, LoaiViecNhiemVu, LoaiViecDonThu:
 		return true
 	}
 	return false
@@ -79,16 +85,21 @@ type DongSLA struct {
 	// (docs/ui-ux/14-cau-hinh.md §8, the second sentence that section requires be kept).
 	GioSapDenHan int
 
-	// GioBaoLanhDao and GioBaoChuTich carry the escalation figures — AND THEIR ANCHOR IS NOT
-	// DECIDED. The specification says it two ways: §8 heads the columns "sau 24 giờ" without
-	// saying after what, while §9's escalation job counts from the deadline being missed and
-	// DOUBLES the figure for the president instead of reading a second column.
-	//
-	// NOTHING MAY COMPUTE AN ESCALATION FROM THESE TWO UNTIL SOMEBODY ANSWERS "after what". A
-	// reader that guesses notifies a commune's leadership on a basis nobody chose, and the
-	// commune cannot tell from the message which basis was used.
+	// GioBaoLanhDao and GioBaoChuTich are the two escalation thresholds, counted in working hours
+	// FROM THE DEADLINE THE RECORD MISSED (ADR 0029 §Bổ sung 29/09): tell the head of the unit holding
+	// the work after the first, the commune's leadership after the second. Two columns, never one
+	// doubled. The chairman threshold is never below the unit head's (user decision 2026-09-29,
+	// KiemTraDongSLA). The instants are computed only by grpc.ResolveEscalationInstants, over the one
+	// working-hours walk.
 	GioBaoLanhDao int
 	GioBaoChuTich int
+
+	// UnassignedHoldHours is how many working hours a unit may hold work with NOBODY assigned before
+	// the `sla_reminders` job reports it (migration 0016). ZERO MEANS THE COLUMN IS NULL — "do not
+	// report" — and nothing may substitute a number for it (rule 10, forbidden #3). The schema refuses
+	// a stored 0, so 0 in Go can only have come from a NULL, and the type stays comparable with ==,
+	// which is what app.SLA.Sua's no-op check relies on.
+	UnassignedHoldHours int
 }
 
 // LaDongMacDinh reports whether this is the row that applies to every field without one of its

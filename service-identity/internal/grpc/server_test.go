@@ -142,7 +142,12 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// would make "the commune has configured nothing" the one state no test ever entered —
 		// which is the state that is live in production right now. Its fakes live in sla_test.go.
 		SLA: &slaGia{},
-		Log: slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The automation collaborators — fakes in automation_test.go. They answer NOTHING by default,
+		// so a test says which holders, leaders and runs exist.
+		Recipients:     &recipientsFake{},
+		PermissionKeys: &keysFake{known: map[string]bool{"task.assign": true}},
+		Automation:     &automationFake{},
+		Log:            slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -587,6 +592,9 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			NghiLe:         &nghiLeGia{},
 			LamBu:          &lamBuGia{},
 			SLA:            &slaGia{},
+			Recipients:     &recipientsFake{},
+			PermissionKeys: &keysFake{},
+			Automation:     &automationFake{},
 			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
@@ -622,6 +630,11 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		// tables above, and without it every write route of `petitions` and the deadline path of
 		// `documents` has nothing to compute a commitment from (ADR 0029 §Hệ quả ngay).
 		"thiếu kho thời hạn xử lý": func(d *Deps) { d.SLA = nil },
+		// The automation jobs (ADR 0058): without these the escalation job notifies nobody and no
+		// job can claim a run.
+		"missing recipients":      func(d *Deps) { d.Recipients = nil },
+		"missing permission keys": func(d *Deps) { d.PermissionKeys = nil },
+		"missing automation":      func(d *Deps) { d.Automation = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {

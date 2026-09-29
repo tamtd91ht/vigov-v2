@@ -503,13 +503,17 @@ type Deps struct {
 	// this one DOES have a write surface: `admin.sla` already names who may configure deadlines
 	// (migration 0001:277), and an empty table here is what refuses every entry into the document
 	// register and every petition (ADR 0029 §"Xã chưa cấu hình").
-	SLA       SLADoc
-	GhiSLA    SLAGhi
-	Signer    *token.Signer
-	Phien     PhienDoc
-	CanBo     CanBoDoc
-	DanhBa    CanBoDanhBa
-	GhiDanhBa CanBoGhiDanhBa
+	SLA    SLADoc
+	GhiSLA SLAGhi
+	// Automation — Cấu hình → Tự động hoá (migration 0017, ADR 0058): the three job cards, their
+	// settings, and "run now". A use case (every write shares its audit entry's transaction). See
+	// AutomationJobs in automation.go. *app.Automation in production.
+	Automation AutomationJobs
+	Signer     *token.Signer
+	Phien      PhienDoc
+	CanBo      CanBoDoc
+	DanhBa     CanBoDanhBa
+	GhiDanhBa  CanBoGhiDanhBa
 	// ChonNguoi — the narrow picker behind GET /api/v1/staff-directory. See DanhBaChonNguoi.
 	ChonNguoi DanhBaChonNguoi
 	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
@@ -608,6 +612,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case ghi thời hạn xử lý — xã sẽ không có cách nào cấu hình SLA, và mọi tuyến vào sổ vẫn bị từ chối")
 	case d.AuditLog == nil:
 		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
+	case d.Automation == nil:
+		panic("identity/http: thiếu use case tự động hoá — ba tuyến /api/v1/automation-jobs sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -2223,8 +2229,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Sửa năm con số của một dòng thời hạn — KHÔNG hồi tố lên hồ sơ đã tiếp nhận
 	// @screen   14-cau-hinh §8
-	// 400 is a body that is not JSON, a body mentioning no figure at all, or a figure outside
-	// 0 < giờ <= domain.GioToiDa.
+	// 400 is a body that is not JSON, a body mentioning no figure at all, a figure outside
+	// 0 < giờ <= domain.GioToiDa, or escalate_president_hours below escalate_leader_hours (user
+	// decision 2026-09-29). `unassigned_hold_hours` (migration 0016) has three states: absent leaves
+	// it, null clears it ("do not report"), a number sets it.
 	// 404 is an id matching no live row OF THIS COMMUNE — the same answer for an invented id, a
 	// soft-deleted row and another authority's row, so none can be told apart by trying.
 	//
@@ -2263,6 +2271,68 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.sla")(
 			idem.KhongCan("bộ gieo chỉ CHÈN những dòng xã chưa có, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, loai_viec, linh_vuc_khoa) chặn dòng thứ hai — nên lần bấm thứ hai không ghi gì, không ghi đè con số xã đã sửa, và trả seeded: 0")(
 				http.HandlerFunc(h.GieoSLAMacDinh))))
+
+	// ---- Cấu hình → Tự động hoá (14-cau-hinh.md §9, migration 0017, ADR 0058) -------------------
+	//
+	// ALL THREE DECLARE `admin.sla` — ADR 0058 §2 and the reference system's own routes
+	// (../vigov-require …/admin/router.py:43-69); the key is seeded in `quyen` (0001). No key invented.
+	// The noun `automation-jobs` is argued in automation.go and is NOT a user-approved noun — stated.
+
+	// @summary  Ba việc tự động hoá của xã — công tắc, nhịp chạy, lượt chạy gần nhất theo từng loại việc
+	// @screen   14-cau-hinh §9
+	// 200 always lists the three jobs; a job the commune never saved is `configured: false`, OFF, with
+	// the suggested cadence as prefill.
+	//
+	// @reply    200 automationJobsOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/automation-jobs",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			http.HandlerFunc(h.ListAutomationJobs)))
+
+	// idem.KhongCan, AND THE STATE IS THE PROTECTION: the use case compares the saved choice with the
+	// body under FOR UPDATE and writes nothing — no row, no audit entry — when they are equal, so a
+	// second identical PUT leaves one row and one entry.
+	//
+	// @summary  Lưu công tắc và nhịp chạy của một việc tự động hoá — bật có hiệu lực từ nhịp kế tiếp
+	// @screen   14-cau-hinh §9
+	// 400 is a body that is not JSON, no `enabled`, a cadence field of the job missing, a field of
+	// another schedule present, or a value out of range (interval 5–10080, hour 0–23, minute 0–59,
+	// weekday 1–7). 404 is a job key that is not one of the three. 409 is two first saves racing.
+	//
+	// @request  automationSettingIn
+	// @reply    200 automationJobOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/automation-jobs/{job}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("PUT ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi lựa chọn không đổi, nên lần gửi thứ hai để lại đúng một dòng và một vết")(
+				http.HandlerFunc(h.SaveAutomationJob))))
+
+	// idem.KhongCan: ONE MARK PER JOB, compared with each scope's last claim — two presses before the
+	// next tick still produce one run per kind of work. Each press is audited, because each is an act
+	// a person performed; no run is created twice.
+	//
+	// @summary  Yêu cầu chạy ngay một việc tự động hoá — các bên chạy nhận ở nhịp gõ kế tiếp (≤ 1 phút)
+	// @screen   14-cau-hinh §9
+	// 202: the request is recorded, nothing has run yet. 404 is an unknown job key. 409
+	// `automation_job_disabled` is a job that is off or never saved — no row means off.
+	//
+	// @reply    202 automationJobOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/automation-jobs/{job}/runs",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("một dấu yêu cầu cho mỗi việc, mỗi phạm vi nhận đúng một lần bằng lượt nhận của chính nó; bấm hai lần trước nhịp gõ kế tiếp vẫn chỉ một lượt chạy mỗi loại việc")(
+				http.HandlerFunc(h.RequestAutomationRun))))
 
 	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
 	//

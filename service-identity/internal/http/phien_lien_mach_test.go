@@ -134,8 +134,10 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		SLA:      slaMau(),
 		GhiSLA:   ghiSLAMau(),
 		AuditLog: &auditLogFake{},
-		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa:   danhBaMau(),
+		// Register refuses a Deps without the automation use case.
+		Automation: automationSample(),
+		CanBo:      &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:     danhBaMau(),
 		// Same reason again: the five write routes of the register are mounted by Register, so the
 		// use case behind them has to be wired even though nothing in this file calls them.
 		GhiDanhBa: ghiDanhBaMau(),

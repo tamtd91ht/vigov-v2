@@ -176,7 +176,7 @@ func TestPgSLARefuseLoaiViecThuTu(t *testing.T) {
 	xa, _ := xaRieng(t)
 
 	if err := themSLA(t, db, xa, "sla-loai-la", "giai-ngan", "", 8, 40, 24, 25, 49); err == nil {
-		t.Fatal("loại việc thứ tư được nhận — sla_loai_viec_hop_le không chặn")
+		t.Fatal("loại việc ngoài bốn giá trị được nhận — sla_loai_viec_hop_le không chặn")
 	}
 }
 
