@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 
+derived_from_commit: d3fb188
 expires: 2026-12-28
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -246,7 +246,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `service-identity` | `nhat-ky-he-thong-identity` — GET /api/v1/identity-audit-entries (ADR 0054) | xong | — | Ca pg chưa chạy. |
 | `service-identity` | `tu-dong-hoa-theo-xa` — Tự động hoá theo xã — /api/v1/automation-jobs + 6 RPC cho bộ chạy; SLA thêm don-thu và unassigned_hold_hours (ADR 0058, 0029) | xong | — | CHƯA chạy PostgreSQL thật cho câu nhận lượt (automation_pg_test SKIP). Tên tài nguyên automation-jobs chưa được người dùng duyệt (ubiquitous-language). |
 | `service-identity` | `thon-to-dan-pho-ghi-va-nhap` — Thôn / Tổ dân phố — thêm, sửa, ngừng/dùng lại, nhập Excel (ADR 0059 §2) | xong | — | Không có xoá, không gộp/tách (luật 1 đk dừng #3). |
-| `service-identity` | `nhap-excel-can-bo-cap-tai-khoan` — Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3) | xong | — | CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật. |
+| `service-identity` | `nhap-excel-can-bo-cap-tai-khoan` — Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3) | xong | — | SỬA 29/09/2026: nợ 'POST /api/v1/staff bắt buộc email' ĐÃ TRẢ ở 4cf87b6 (email trống → NULL; PATCH xoá email chỉ khi chưa có tài khoản, 409 staff_email_is_login) + web 29a36c5. || CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật. |
 | `service-petitions` | `lich-lam-viec-theo-xa` — Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã | xong | — | Phần CÒN LẠI của petitions là HÀM ĐẾM HẠN, không phải bảng: đọc ba bảng ấy qua gRPC của identity, và luật 10 cấm #2 cấm đếm bằng giờ treo tường. Một điều hàm ấy PHẢI làm mà lược đồ không cưỡng chế được: gặp một ngày có mặt ở CẢ ngay_nghi_le lẫn ngay_lam_bu thì TỪ CHỐI, đừng chọn bên thắng — một quy tắc ưu tiên lặng lẽ làm một trong hai dòng cấu hình đang hiện trên màn hình trở thành vô nghĩa mà không ai thấy |
 | `service-petitions` | `nhan-trang-thai-nhiem-vu-theo-xa` — Nhãn + thứ tự trạng thái nhiệm vụ theo xã (#21) — bảng, GET/PATCH /api/v1/task-statuses; màn Nhiệm vụ đọc nhãn từ đây | xong | — | Web (D4): nhóm thứ tám ở tab Danh mục + màn Nhiệm vụ ĐỌC nhãn/thứ tự từ GET /task-statuses, nhãn gõ cứng ở nhan-nhiem-vu.ts:92 chỉ còn là dự phòng khi đọc hỏng — người dùng chốt làm trọn vẹn. JSON dùng `order` (khớp năm tuyến danh mục anh em), không `position`. Không có tuyến reset: PATCH lại default_label/default_order. Chú thích đầu migration 0010 nói mặc định nằm 'ở web' — nay nằm ở domain; không sửa được tại chỗ (checksum). Chưa có dòng TaskStatusLabel trong ubiquitous-language.md. Đua hai lần ghi ĐẦU TIÊN cùng mã: bảng đúng nhưng vết thứ hai ghi 'trước' là mặc định (store.TheoMaDeSua). |
 | `service-petitions` | `dem-ho-so-bo-phan-grpc` — Máy chủ gRPC CountOrgUnitHoldings — phiếu chưa kết thúc + nhiệm vụ chưa hoàn thành theo bộ phận (ADR 0056) | xong | — | — |
@@ -636,7 +636,7 @@ Cập nhật 2026-09-29 · 41 mục
 | `nhat-ky-he-thong-identity` — GET /api/v1/identity-audit-entries (ADR 0054) | xong | f1871ed; chỉ mục migration 0015. | — | Ca pg chưa chạy. |
 | `tu-dong-hoa-theo-xa` — Tự động hoá theo xã — /api/v1/automation-jobs + 6 RPC cho bộ chạy; SLA thêm don-thu và unassigned_hold_hours (ADR 0058, 0029) | xong | 1796286 + b994f35 (hợp đồng) · d3b60a2 (migrations 0016, 0017; nhận lượt bằng ghi có điều kiện) · go test ./... xanh | — | CHƯA chạy PostgreSQL thật cho câu nhận lượt (automation_pg_test SKIP). Tên tài nguyên automation-jobs chưa được người dùng duyệt (ubiquitous-language). |
 | `thon-to-dan-pho-ghi-va-nhap` — Thôn / Tổ dân phố — thêm, sửa, ngừng/dùng lại, nhập Excel (ADR 0059 §2) | xong | e687f07 (migration 0018) · go test ./... xanh | — | Không có xoá, không gộp/tách (luật 1 đk dừng #3). |
-| `nhap-excel-can-bo-cap-tai-khoan` — Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3) | xong | fbbae7b (migration 0019 email nullable) · go test ./... xanh | — | CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật. |
+| `nhap-excel-can-bo-cap-tai-khoan` — Nhập Excel cán bộ kèm cấp tài khoản + nhập Loại đơn vị dân cư, Khối nhiệm vụ (ADR 0059 §1, §3) | xong | fbbae7b (migration 0019 email nullable) · go test ./... xanh | — | SỬA 29/09/2026: nợ 'POST /api/v1/staff bắt buộc email' ĐÃ TRẢ ở 4cf87b6 (email trống → NULL; PATCH xoá email chỉ khi chưa có tài khoản, 409 staff_email_is_login) + web 29a36c5. || CÒN NỢ: tạo MỘT cán bộ (POST /api/v1/staff) vẫn bắt buộc email — ADR 0059 §Hệ quả nói cả hai tuyến lưu NULL. Migration 0019 chưa chạy PG thật. |
 
 ## `service-petitions`
 
