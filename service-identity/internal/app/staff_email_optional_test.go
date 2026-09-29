@@ -13,7 +13,7 @@ import (
 // no lock recorded and no screen able to say why.
 
 // A BLANK ADDRESS ON CREATE IS NO ADDRESS: the row reaches the store with "" (which the INSERT
-// writes as NULL — nullif($5,''), store/can_bo_ghi.go), the trail is written in the same
+// writes as NULL — nullif($5,”), store/can_bo_ghi.go), the trail is written in the same
 // transaction, and it commits.
 func TestStaffCreateBlankEmailIsStoredAsNone(t *testing.T) {
 	for _, blank := range []string{"", "   "} {

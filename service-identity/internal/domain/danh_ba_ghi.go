@@ -117,7 +117,7 @@ func ChuanHoaChucVu(tho string) (string, error) {
 // fixed once; doing it on the read path would leave the duplicate rows in the table.
 //
 // IT IS OPTIONAL: BLANK (EMPTY OR WHITESPACE ONLY) RETURNS "" AND NO ERROR, and the store writes
-// that "" as NULL (`nullif($n,'')`). User decision 2026-09-29, ADR 0059 §1 — the same rule for the
+// that "" as NULL (`nullif($n,”)`). User decision 2026-09-29, ADR 0059 §1 — the same rule for the
 // single create form and the Excel import, as docs/ui-ux/12-danh-ba-can-bo.md §5 always drew it.
 // This used to REFUSE a blank address, because `email TEXT NOT NULL` under `UNIQUE (tenant_id,
 // email)` let a commune hold the empty string exactly once; migration 0019 made the column
