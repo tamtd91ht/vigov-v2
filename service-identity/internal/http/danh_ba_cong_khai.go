@@ -34,8 +34,12 @@ type danhBaCongKhaiRa struct {
 // and a public reader has no org chart to resolve it against.
 //
 // WHAT IS ABSENT IS THE CONTRACT (owner decision 2026-09-27): no `id`, no `code`, no `email`, no
-// `has_account` / `active`, no `published` / `consent_recorded_at` / `display_order`. The test asserts
-// the exact key set.
+// `has_account` / `active`, no `published` / `consent_recorded_at`. The test asserts the exact key set.
+//
+// ADDED 2026-09-29 (user decision, SRS M6.1.9), both OPTIONAL so the contract only grows (rule 2,
+// forbidden #4): `display_order` and `residential_units_headed`. NO LEADER FLAG: the only such data is
+// `vai_tro.la_lanh_dao`, an RBAC role attribute that "chooses the default screen and nothing else"
+// (domain.VaiTro.LaLanhDao); publishing it as "leader" would be a new meaning, i.e. a decision.
 type canBoCongKhaiRa struct {
 	FullName       string `json:"full_name"`
 	Position       string `json:"position"`
@@ -46,6 +50,14 @@ type canBoCongKhaiRa struct {
 	// HasZalo describes Mobile (migration 0010 §1) and is sent only WITH a mobile: "Có Zalo" under an
 	// empty number is a statement about a number nobody published.
 	HasZalo bool `json:"has_zalo"`
+
+	// DisplayOrder is the commune's explicit position; absent when none was set. The list is already in
+	// this order — the field lets a client group without re-deriving it.
+	DisplayOrder *int `json:"display_order,omitempty"`
+
+	// ResidentialUnitsHeaded names the thôn / tổ dân phố this person heads (Trưởng thôn / Tổ trưởng).
+	// Absent for everybody else. Names only; only for a person this directory already publishes.
+	ResidentialUnitsHeaded []string `json:"residential_units_headed,omitempty"`
 }
 
 // DanhBaCongKhai serves the published directory of the commune a domain belongs to.
@@ -107,6 +119,9 @@ func (h *HandlerCongKhai) DanhBaCongKhai(w http.ResponseWriter, r *http.Request)
 			Phone:          cb.DienThoaiCoQuan,
 			Mobile:         cb.DiDongCaNhan,
 			HasZalo:        cb.CoZalo && cb.DiDongCaNhan != "",
+
+			DisplayOrder:           cb.DisplayOrder,
+			ResidentialUnitsHeaded: cb.ResidentialUnitsHeaded,
 		})
 	}
 	vietJSON(w, http.StatusOK, ra)

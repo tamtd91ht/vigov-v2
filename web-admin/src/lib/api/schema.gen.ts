@@ -1083,6 +1083,8 @@ export type identity_canBoCongKhaiRa = {
   /** personal mobile — published under #12 consent */
   "mobile": string;
   "has_zalo": boolean;
+  "display_order"?: number | null;
+  "residential_units_headed"?: Array<string>;
 };
 
 export type identity_canBoGon = {

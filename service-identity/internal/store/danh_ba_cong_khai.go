@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -32,8 +34,9 @@ var ErrQuaNhieuCanBoCongKhai = errors.New("can_bo: danh bạ công khai vượt 
 // truyVanDanhBaCongKhai reads one commune's published directory, unit name included, in ONE statement.
 //
 // WHAT IS SELECTED IS THE CONTRACT: name, position, unit name, office line, personal mobile, has-Zalo.
-// No `id`, no `ma`, no `email`, no account or lock flag, no consent mark. `nd.ma` appears ONLY in the
-// ORDER BY, as the tie-break that keeps two people of the same name from swapping places between two
+// Plus directory order and the names of units headed (below). No `id`, no `ma`, no `email`, no account
+// or lock flag, no consent mark. `nd.id` appears ONLY as the LATERAL correlation. `nd.ma` appears ONLY in
+// the ORDER BY, as the tie-break that keeps two people of the same name from swapping places between two
 // loads; it is never read into Go. POSITIONAL — in lockstep with the Scan in danhBaCongKhai; `ho_ten`
 // and `chuc_vu` are adjacent TEXT columns, and so are the two numbers: a swap errors nowhere.
 //
@@ -60,14 +63,31 @@ var ErrQuaNhieuCanBoCongKhai = errors.New("can_bo: danh bạ công khai vượt 
 // ORDER — the specification's: `thu_tu_danh_ba`, then unit name. NULLS LAST on both, because NULL
 // order means "no explicit position" (0010 §1) and must not jump ahead of everybody who has one; then
 // name and code as tie-breaks, so the order is total.
+//
+// ADDED 2026-09-29 (user decision, SRS M6.1.9): `thu_tu_danh_ba` itself (NULL stays NULL — "no explicit
+// position"), and the NAMES of the residential units this person heads (migration 0018,
+// `thon_to_dan_pho.head_staff_id`). The unit list is a LATERAL subquery rather than a join so one person
+// heading two hamlets stays ONE row. It only ever describes a person who ALREADY passed the publication
+// predicate below — a head who is not published is simply not in this result, so no name leaves that
+// the directory did not already publish. Units: this commune only (`tt.tenant_id = $1`), live, in use —
+// a hamlet taken out of use is not somewhere a citizen can be pointed to. Names only: no unit id or code.
 const truyVanDanhBaCongKhai = `
 SELECT nd.ho_ten, nd.chuc_vu, coalesce(bp.ten, ''),
-       nd.dien_thoai_co_quan, nd.di_dong_ca_nhan, nd.co_zalo
+       nd.dien_thoai_co_quan, nd.di_dong_ca_nhan, nd.co_zalo,
+       nd.thu_tu_danh_ba, coalesce(hd.units_headed, '[]'::json)
 FROM nguoi_dung nd
 LEFT JOIN bo_phan bp
        ON bp.tenant_id = nd.tenant_id
       AND bp.id        = nd.bo_phan_id
       AND bp.deleted_at IS NULL
+LEFT JOIN LATERAL (
+       SELECT json_agg(tt.ten ORDER BY tt.sort_order, tt.ten, tt.ma) AS units_headed
+         FROM thon_to_dan_pho tt
+        WHERE tt.tenant_id     = $1
+          AND tt.head_staff_id = nd.id
+          AND tt.deleted_at IS NULL
+          AND tt.dang_dung
+       ) hd ON true
 WHERE nd.tenant_id = $1
 ` + locDanhBaCongKhai + `
 ORDER BY nd.thu_tu_danh_ba ASC NULLS LAST, bp.ten ASC NULLS LAST, nd.ho_ten ASC, nd.ma ASC
@@ -104,10 +124,19 @@ func (s *CanBoStore) danhBaCongKhai(ctx context.Context, tran int) ([]domain.Can
 	ra := make([]domain.CanBoCongKhai, 0, 32)
 	for rows.Next() {
 		var cb domain.CanBoCongKhai
+		var order sql.NullInt64
+		var unitsHeaded []byte
 		// NEVER LOG A SCANNED ROW: a name and a personal mobile (rule 3, forbidden #1).
 		if err := rows.Scan(&cb.HoTen, &cb.ChucVu, &cb.TenBoPhan,
-			&cb.DienThoaiCoQuan, &cb.DiDongCaNhan, &cb.CoZalo); err != nil {
+			&cb.DienThoaiCoQuan, &cb.DiDongCaNhan, &cb.CoZalo, &order, &unitsHeaded); err != nil {
 			return nil, fmt.Errorf("can_bo: đọc dòng danh bạ công khai: %w", err)
+		}
+		if order.Valid {
+			v := int(order.Int64)
+			cb.DisplayOrder = &v
+		}
+		if err := json.Unmarshal(unitsHeaded, &cb.ResidentialUnitsHeaded); err != nil {
+			return nil, fmt.Errorf("can_bo: đọc thôn do cán bộ phụ trách: %w", err)
 		}
 		ra = append(ra, cb)
 	}

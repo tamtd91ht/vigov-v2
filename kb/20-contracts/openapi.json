@@ -25496,6 +25496,18 @@
           },
           "has_zalo": {
             "type": "boolean"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "residential_units_headed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

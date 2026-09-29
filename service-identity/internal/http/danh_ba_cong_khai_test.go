@@ -112,10 +112,50 @@ func TestDanhBaCongKhaiChiTraDungCacTruongDuocPhep(t *testing.T) {
 		}
 	}
 	for _, cam := range []string{`"id"`, `"code"`, `"email"`, `"published"`, `"consent`, `"active"`,
-		`"has_account"`, `"department_id"`, `"display_order"`} {
+		`"has_account"`, `"department_id"`, `"is_leader"`} {
 		if strings.Contains(than, cam) {
 			t.Errorf("phản hồi mang trường cấm %s: %s", cam, than)
 		}
+	}
+}
+
+// Added 2026-09-29: the two OPTIONAL keys appear only on a row that has them, and nothing else joins.
+func TestPublicDirectoryOrderAndUnitsHeadedAreOptional(t *testing.T) {
+	four := 4
+	db := &danhBaCongKhaiGia{theoXa: map[tenant.ID][]domain.CanBoCongKhai{
+		xaQR: {
+			{HoTen: "Nguyễn Văn A", ChucVu: "Trưởng thôn", DienThoaiCoQuan: "0900000000",
+				DisplayOrder: &four, ResidentialUnitsHeaded: []string{"Thôn Một", "Thôn Hai"}},
+			{HoTen: "Trần Thị B", ChucVu: "Văn thư", DienThoaiCoQuan: "0900000000"},
+		},
+		xaB: {
+			{HoTen: "Người Của Xã B", ChucVu: "Trưởng thôn", ResidentialUnitsHeaded: []string{"Thôn Của Xã B"}},
+		},
+	}}
+	h := dungChuoiCongKhai(t, &nenTangXaGia{}, db)
+	w := goiDanhBa(h, qHost(hostQR))
+	doiMa(t, w, http.StatusOK)
+	items := docDanhBa(t, w).Items
+
+	keys := func(it map[string]any) string {
+		var k []string
+		for x := range it {
+			k = append(k, x)
+		}
+		sort.Strings(k)
+		return strings.Join(k, ",")
+	}
+	if got := keys(items[0]); got != "department_name,display_order,full_name,has_zalo,mobile,phone,position,residential_units_headed" {
+		t.Fatalf("dòng có thứ tự + thôn: các trường %s", got)
+	}
+	if items[0]["display_order"] != float64(4) || fmt.Sprint(items[0]["residential_units_headed"]) != "[Thôn Một Thôn Hai]" {
+		t.Fatalf("dòng 0 = %v", items[0])
+	}
+	if got := keys(items[1]); got != "department_name,full_name,has_zalo,mobile,phone,position" {
+		t.Fatalf("dòng không thứ tự, không thôn: các trường %s", got)
+	}
+	if strings.Contains(w.Body.String(), "Thôn Của Xã B") {
+		t.Fatalf("RÒ RỈ GIỮA HAI XÃ: thôn của xã B trên tên miền xã QR: %s", w.Body.String())
 	}
 }
 

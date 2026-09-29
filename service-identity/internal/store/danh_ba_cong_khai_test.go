@@ -62,7 +62,8 @@ type ckRows struct {
 }
 
 func (r *ckRows) Columns() []string {
-	return []string{"ho_ten", "chuc_vu", "ten", "dien_thoai_co_quan", "di_dong_ca_nhan", "co_zalo"}
+	return []string{"ho_ten", "chuc_vu", "ten", "dien_thoai_co_quan", "di_dong_ca_nhan", "co_zalo",
+		"thu_tu_danh_ba", "units_headed"}
 }
 func (r *ckRows) Close() error { return nil }
 func (r *ckRows) Next(dest []driver.Value) error {
@@ -87,7 +88,51 @@ func moKhoCongKhai(t *testing.T, hang [][]driver.Value) (*CanBoStore, *ckGhi) {
 const ckXa = "01JCK00000000000000000000A"
 
 func dongCongKhai(ten string) []driver.Value {
-	return []driver.Value{ten, "Chủ tịch UBND xã", "LÃNH ĐẠO UBND XÃ", "0900000000", "0900000000", true}
+	return []driver.Value{ten, "Chủ tịch UBND xã", "LÃNH ĐẠO UBND XÃ", "0900000000", "0900000000", true,
+		nil, []byte(`[]`)}
+}
+
+func TestPublicDirectoryReadsOrderAndUnitsHeaded(t *testing.T) {
+	row := dongCongKhai("Nguyễn Văn A")
+	row[6], row[7] = int64(3), []byte(`["Thôn 1","Thôn 2"]`)
+	repo, rec := moKhoCongKhai(t, [][]driver.Value{row, dongCongKhai("Trần Thị B")})
+
+	got, err := repo.DanhBaCongKhai(tenant.Into(context.Background(), ckXa))
+	if err != nil {
+		t.Fatalf("DanhBaCongKhai: %v", err)
+	}
+	if got[0].DisplayOrder == nil || *got[0].DisplayOrder != 3 ||
+		strings.Join(got[0].ResidentialUnitsHeaded, "|") != "Thôn 1|Thôn 2" {
+		t.Fatalf("dòng có thứ tự + thôn: %+v", got[0])
+	}
+	if got[1].DisplayOrder != nil || len(got[1].ResidentialUnitsHeaded) != 0 {
+		t.Fatalf("dòng không thứ tự, không thôn: %+v", got[1])
+	}
+
+	// MUTATIONS THAT MUST TURN THIS RED: the unit subquery loses the commune, the soft-delete or the
+	// in-use clause, or correlates on anything but the staff row; or it aggregates more than the name.
+	stmt := rec.lenh[0].sql
+	for _, want := range []string{
+		"LEFT JOIN LATERAL",
+		"json_agg(tt.ten ORDER BY tt.sort_order, tt.ten, tt.ma)",
+		"WHERE tt.tenant_id     = $1",
+		"AND tt.head_staff_id = nd.id",
+		"AND tt.deleted_at IS NULL",
+		"AND tt.dang_dung\n",
+	} {
+		if !strings.Contains(stmt, want) {
+			t.Errorf("câu lệnh thiếu %q:\n%s", want, stmt)
+		}
+	}
+}
+
+func TestPublicDirectoryMalformedUnitsHeadedIsAnError(t *testing.T) {
+	row := dongCongKhai("A")
+	row[7] = []byte(`not json`)
+	repo, _ := moKhoCongKhai(t, [][]driver.Value{row})
+	if got, err := repo.DanhBaCongKhai(tenant.Into(context.Background(), ckXa)); err == nil || got != nil {
+		t.Fatalf("JSON hỏng: %v / %v — muốn lỗi, không dòng nào", got, err)
+	}
 }
 
 func TestDanhBaCongKhaiBuocXaTuNguCanhVaDuMenhDe(t *testing.T) {

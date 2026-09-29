@@ -107,3 +107,64 @@ func TestDanhBaCongKhaiPg(t *testing.T) {
 		t.Fatalf("xã B = %q / %q, muốn cua-xa-b / VĂN PHÒNG CỦA XÃ B", ten, bp)
 	}
 }
+
+// addUnitPg inserts one residential unit headed by `head` ("" = nobody).
+func addUnitPg(t *testing.T, db *sql.DB, commune, id, name, head string, inUse bool, order int) {
+	t.Helper()
+	var h any
+	if head != "" {
+		h = head
+	}
+	if _, err := db.Exec(
+		`INSERT INTO thon_to_dan_pho (tenant_id, id, ma, ten, dang_dung, head_staff_id, sort_order)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`, commune, id, "ma-"+id, name, inUse, h, order); err != nil {
+		t.Fatalf("thêm thôn %s: %v", id, err)
+	}
+}
+
+// Order and units headed against a real PostgreSQL. EACH UNIT MAKES ONE DEFECT VISIBLE:
+//
+//	t1 / t2     A, in use, head p1, ranks 1 / 2   must appear, in rank order
+//	t-off       A, taken out of use, head p1      drop `tt.dang_dung` → appears
+//	t-del       A, soft-deleted, head p1          drop `tt.deleted_at IS NULL` → appears
+//	t-hidden    A, head = an UNPUBLISHED person   the person must stay absent, and so must the unit
+//	b-unit      B, head = B's row with p1's id    drop the commune from the subquery → appears on A's p1
+func TestPgPublicDirectoryOrderAndUnitsHeaded(t *testing.T) {
+	db := moKetNoi(t)
+	a, b := xaRieng(t)
+
+	themCongKhaiPg(t, db, a, "p1", "", true, false, false, 4)
+	themCongKhaiPg(t, db, a, "p2", "", true, false, false, nil)
+	themCongKhaiPg(t, db, a, "hidden", "", false, false, false, 0)
+	themCongKhaiPg(t, db, b, "p1", "", false, false, false, 0) // same id as A's p1, unpublished
+	themCongKhaiPg(t, db, b, "cua-xa-b", "", true, false, false, 0)
+
+	addUnitPg(t, db, a, "t2", "Thôn Hai", "p1", true, 2)
+	addUnitPg(t, db, a, "t1", "Thôn Một", "p1", true, 1)
+	addUnitPg(t, db, a, "t-off", "Thôn Đã Ngừng", "p1", false, 0)
+	addUnitPg(t, db, a, "t-del", "Thôn Đã Xoá", "p1", true, 0)
+	addUnitPg(t, db, a, "t-hidden", "Thôn Của Người Ẩn", "hidden", true, 0)
+	addUnitPg(t, db, b, "b-unit", "Thôn Của Xã B", "p1", true, 0)
+	if _, err := db.Exec(
+		`UPDATE thon_to_dan_pho SET deleted_at = now(), deleted_by = 'CB-TEST', delete_reason = 'nhập trùng'
+		  WHERE tenant_id = $1 AND id = 't-del'`, a); err != nil {
+		t.Fatalf("xoá mềm thôn: %v", err)
+	}
+
+	got, err := NewCanBoStore(pkgstore.New(db)).DanhBaCongKhai(ctxXa(a))
+	if err != nil {
+		t.Fatalf("DanhBaCongKhai: %v", err)
+	}
+	if len(got) != 2 || got[0].HoTen != "p1" || got[1].HoTen != "p2" {
+		t.Fatalf("xã A = %+v, muốn đúng [p1, p2]", got)
+	}
+	if got[0].DisplayOrder == nil || *got[0].DisplayOrder != 4 || got[1].DisplayOrder != nil {
+		t.Fatalf("thứ tự = %v / %v, muốn 4 / nil", got[0].DisplayOrder, got[1].DisplayOrder)
+	}
+	if units := strings.Join(got[0].ResidentialUnitsHeaded, "|"); units != "Thôn Một|Thôn Hai" {
+		t.Fatalf("thôn của p1 = %q, muốn \"Thôn Một|Thôn Hai\" — RÒ RỈ GIỮA HAI XÃ nếu thấy Thôn Của Xã B", units)
+	}
+	if len(got[1].ResidentialUnitsHeaded) != 0 {
+		t.Fatalf("p2 không phụ trách thôn nào mà nhận %v", got[1].ResidentialUnitsHeaded)
+	}
+}

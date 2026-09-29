@@ -5,7 +5,7 @@ package domain
 //
 // A SIXTH STAFF TYPE, AND THE NARROWEST ONE THAT CARRIES A PHONE NUMBER. The route is PUBLIC: anyone
 // who knows a commune's domain can read it. So the type holds exactly the six fields the owner
-// allowed out and nothing else — no internal id, no staff code, no email, no account or lock flag, no
+// allowed out on 2026-09-27, plus the two added 2026-09-29 (order, units headed), and nothing else — no internal id, no staff code, no email, no account or lock flag, no
 // consent marks. A field that does not exist cannot be sent by a later edit to a handler, which is a
 // stronger guarantee than remembering not to send it.
 //
@@ -29,4 +29,12 @@ type CanBoCongKhai struct {
 
 	// CoZalo describes DiDongCaNhan (migration 0010 §1) and travels with it under the same consent.
 	CoZalo bool
+
+	// DisplayOrder is `thu_tu_danh_ba`; nil = no explicit position (0010 §1). Added 2026-09-29 (user
+	// decision, SRS M6.1.9). The list already arrives in this order; the value lets a client group.
+	DisplayOrder *int
+
+	// ResidentialUnitsHeaded names the live, in-use residential units (thôn / tổ dân phố) this person
+	// heads (migration 0018). Names only — never a unit id. Empty for most people.
+	ResidentialUnitsHeaded []string
 }
