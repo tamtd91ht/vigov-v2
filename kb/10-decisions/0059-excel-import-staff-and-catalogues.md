@@ -12,6 +12,8 @@ owns_facts:
   - "đơn vị dân cư có tuyến tạo, sửa, ngưng dùng (mềm) dưới admin.org; gộp và tách cố ý không hỗ trợ"
   - "đơn vị dân cư có tuyến nhập Excel; ngưng dùng không bị chặn khi còn hồ sơ trỏ tới — người dùng 29/09/2026"
   - "nhập danh mục từ Excel: mỗi service sở hữu một tuyến nhập cho nhóm của mình, không có tuyến nhập danh mục chung"
+  - "nhập cán bộ chỉ cấp tài khoản cho dòng có email; tạo một cán bộ vẫn bắt buộc email — nợ so với §Hệ quả"
+  - "đơn vị dân cư không có tuyến DELETE; ngưng dùng / dùng lại là PATCH active"
 ---
 
 # 0059. Nhập từ Excel: cán bộ kèm tài khoản, đơn vị dân cư ghi được, danh mục nhập theo service sở hữu
@@ -86,7 +88,7 @@ Khác ADR 0056 (chặn xoá bộ phận còn người/việc) có chủ ý: ngư
 đang trỏ tới nó, nên không có hồ sơ nào bị đổi — chỉ không ai chọn được thôn ấy cho hồ sơ **mới**.
 Hệ quả cho người dựng (nhận xét của người ghi): ô chọn loại thôn đã ngưng, nhưng hồ sơ cũ vẫn phải
 hiện được **tên** thôn ấy — lọc ở ô chọn, không lọc ở nhãn. Tuyến nhập thôn là tất cả hay từng
-phần thì người dùng chưa nói — câu mở #5.
+phần: tất cả hoặc không — câu #5.
 
 ### 3. Nhập danh mục: một tuyến nhập mỗi service sở hữu
 
@@ -109,6 +111,27 @@ nhập.
   (`kb/90-ephemeral/tien-do/service-identity.json:70`, mục (4)). Lưu email trống thành `NULL` là
   việc của lượt dựng, cả ở tuyến tạo một người lẫn tuyến nhập; tới lúc ấy chướng ngại còn nguyên.
 
+## Bổ sung 29/09/2026 — hình dạng đã dựng
+
+Ghi lại điều mã đang làm, không phải quyết định mới. Chỗ lệch với §1 và §Hệ quả nằm ở dòng cuối
+bảng thứ nhất.
+
+**Nhập cán bộ** (commit `fbbae7b`):
+
+| Điều | Mã |
+|---|---|
+| Email là **tên đăng nhập**, nên chỉ dòng **có email** được cấp tài khoản; dòng không email có hồ sơ cán bộ, **không** có tài khoản | `service-identity/internal/domain/staff_import.go:16-19` |
+| Ô email trống → `NULL`. Migration 0019 bỏ `NOT NULL`, đổi `''` → `NULL`, thêm `CHECK` cấm chuỗi rỗng | `service-identity/migrations/0019_staff_email_optional.sql:40-59` |
+| `POST /api/v1/staff/{id}/account` từ chối cán bộ không email: **409 `staff_has_no_email`** | `service-identity/internal/http/tai_khoan_can_bo.go:183-186` |
+| Mật khẩu tạm trả **một lần** trong phản hồi ghi. Gửi lại cùng khoá chống trùng chỉ trả **mã lô** (`{"code":"<batch_id>","replayed":true}`), không bao giờ trả mật khẩu | `service-identity/internal/http/staff_import.go:31`, `:280` |
+| **Còn nợ:** tạo **một** cán bộ (`POST /api/v1/staff`) **vẫn bắt buộc email** — `ChuanHoaEmail` trả `ErrThieuEmail` khi trống. §Hệ quả nói *cả hai* tuyến lưu `NULL`; mới có tuyến nhập | `service-identity/internal/app/danh_ba_can_bo.go:305`, `service-identity/internal/domain/danh_ba_ghi.go:137-138` |
+
+**Đơn vị dân cư** (commit `e687f07`): `POST` và `PATCH /api/v1/residential-units/{id}` dưới
+`admin.org`, **không có `DELETE`**. Ngưng dùng / dùng lại là `PATCH` với `active: false` / `true`
+(`service-identity/internal/http/residential_unit_write.go:50`, `:68`;
+`service-identity/internal/http/routes.go:1845-1863`). Tuyến nhập dựng theo lối **tất cả hoặc
+không** (thông điệp commit `e687f07`), đúng câu trả lời của người dùng cho câu #5 dưới.
+
 ## Câu từng mở — người dùng trả lời 29/09/2026
 
 | # | Câu | Trả lời |
@@ -117,12 +140,7 @@ nhập.
 | 2 | Gán vai trò cần `admin.user` hay cả `admin.role` | Cột Vai trò không trống thì cần thêm `admin.role` — §1 |
 | 3 | Thôn / tổ dân phố có tuyến nhập Excel không | Có — §2 |
 | 4 | Ngưng dùng một thôn còn hồ sơ trỏ tới có chặn không | Không chặn; hồ sơ giữ nguyên, thôn ẩn khỏi ô chọn — §2 |
-
-## Còn mở — chưa ai quyết
-
-| # | Câu | Ai |
-|---|---|---|
-| 5 | Nhập thôn / tổ dân phố là tất cả hoặc không (như cán bộ và sơ đồ tổ chức), hay từng phần | Người dùng |
+| 5 | Nhập thôn / tổ dân phố là tất cả hoặc không, hay từng phần | **Tất cả hoặc không**, như cán bộ và sơ đồ tổ chức (người dùng chọn đề xuất, 29/09/2026) |
 
 ## ĐIỀU KIỆN DỪNG
 

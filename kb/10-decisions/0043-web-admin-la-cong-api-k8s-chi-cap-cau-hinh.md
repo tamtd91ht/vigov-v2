@@ -64,8 +64,8 @@ phương án A/B/C, chưa ai chọn.
 - Cổng **không** xác thực, không kiểm quyền: mỗi dịch vụ Go tự kiểm (luật 5) — kiểm ở đây là một
   bản sao sẽ lệch (`chuyen-tiep.ts:20-28`).
 - Địa chỉ dịch vụ: `IDENTITY_HTTP_ADDR` · `DOCUMENTS_HTTP_ADDR` · `PETITIONS_HTTP_ADDR` ·
-  `FINANCE_HTTP_ADDR` · `COMMS_HTTP_ADDR`, mặc định `http://<dịch vụ>:8080`
-  (`web-admin/src/lib/may-chu/goc-dich-vu.ts:25-31`). Mặc định này được phép dù luật 1 cấm mặc
+  `FINANCE_HTTP_ADDR` · `COMMS_HTTP_ADDR` · `REPORTING_HTTP_ADDR` (thêm ở commit `8dddda2`), mặc
+  định `http://<dịch vụ>:8080` (`web-admin/src/lib/may-chu/goc-dich-vu.ts:25-32`). Mặc định này được phép dù luật 1 cấm mặc
   định: nó chỉ tên **dịch vụ**, không bao giờ tên **xã** (`goc-dich-vu.ts:14-18`).
 - `resolveTenant` gọi thẳng identity nội bộ với Host của xã (`web-admin/src/lib/tenant-config.ts:113`).
 - `proxy.ts` loại `/api/` và `/healthz` khỏi `matcher` (`web-admin/src/proxy.ts:62`).

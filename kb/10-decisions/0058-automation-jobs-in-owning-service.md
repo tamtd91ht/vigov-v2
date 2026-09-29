@@ -15,6 +15,8 @@ owns_facts:
   - "thông báo của việc nền vào hộp chuông hop_thu_thong_bao của comms, không vào sổ thông báo nội bộ"
   - "bản tin đầu tuần giao hai phần theo service sở hữu, và phản ánh nóng nghĩa là quá hạn hoặc bị chấm 1–2 sao trong tuần — 29/09/2026"
   - "bên chạy tìm xã phải quét từ kho của chính nó, bỏ xã không active qua platform GetTenant"
+  - "leo thang áp cho nhiệm vụ, phiếu phản ánh (chỉ han_xu_ly_xong) và văn bản đến — người dùng 29/09/2026"
+  - "nhắc hạn đơn thư chưa chạy vì service-documents chưa có sổ đơn thư; phạm vi DON_THU cố ý không được nhận"
 ---
 
 # 0058. Việc nền của tab Tự động hoá: chạy trong service sở hữu dữ liệu, không qua RabbitMQ
@@ -185,14 +187,39 @@ Tiêu đề `report.notification.week` vẫn thuộc `reporting` (ADR 0024 §Ph�
 | 6 | Tuyến chạy ngay đặt ở đâu | **Người dùng:** ở `identity`, chỉ đánh dấu — §7 |
 | 7 | Ba hợp đồng và mức nhất quán | **Hợp đồng 1796286** (`contract-designer`), không phải quyết định của người dùng — §2, §3 |
 | 8 | Danh sách xã phải quét | **Hợp đồng 1796286**, phương án (b) — §2b |
+| 3 | Leo thang áp cho những loại việc nào | **Người dùng, 29/09/2026:** nhiệm vụ · phiếu phản ánh (**chỉ** mốc `han_xu_ly_xong`) · văn bản đến. Nhắc hạn phủ nhiệm vụ, phiếu phản ánh, văn bản đến **và** đơn thư (khớp §4). Mã hiện chạy: §Bổ sung 29/09 dưới |
+| 9 | Chủ thể hệ thống của việc nền | **Lượt dựng** (câu cũ ghi "người dùng duyệt" — chưa thấy lời duyệt riêng): `core/audit.SystemActor` (`"system"`, `core/audit/audit.go:35-37`), `Actor{ID: SystemActor, Kind: "system"}` — một vết mỗi lượt ở `service-identity/internal/app/automation.go:420-423`; `audit.go:53-54` từ chối chủ thể rỗng, nên không có fallback. Không thêm `Principal` hệ thống ở `core/authz` |
+
+## Bổ sung 29/09/2026 — mã đang chạy gì
+
+Ghi điều mã làm sau commit `765f32b` (bên chạy `petitions`) và `120df73` (bên chạy `documents`),
+không phải quyết định mới.
+
+| Bên chạy | Phạm vi nhận (`automationKinds`) | Căn cứ |
+|---|---|---|
+| `service-petitions` | `NHIEM_VU` · `PHAN_ANH`. Phiếu phản ánh leo thang theo `han_xu_ly_xong` duy nhất | `service-petitions/internal/app/automation_runner.go:138-141`, `automation_jobs.go:216-218` |
+| `service-documents` | **Chỉ** `VAN_BAN_DEN` | `service-documents/internal/app/automation_runner.go:133-135` |
+
+**Nhắc hạn đơn thư CHƯA chạy.** `service-documents` **không có sổ đơn thư**: không bảng `don_thu`,
+không cột hạn — các migration chỉ có hai sổ văn bản (`service-documents/migrations/0004_so_van_ban.sql`;
+`service-documents/internal/domain/automation.go:17-21`). Phạm vi `DON_THU` **có trong hợp đồng**
+nhưng bên chạy **cố ý không nhận**: nhận một lượt thì phải ghi kết quả, và mọi kết quả đều sai
+(`SUCCEEDED` nói "không có gì tới hạn" về thư chưa ai xem; `FAILED` mỗi 5 phút là lỗi giả) —
+`automation_runner.go:127-132`. Bật lên bằng **một dòng** thêm `WORK_KIND_DON_THU` vào
+`automationKinds`, trong cùng thay đổi dựng sổ đơn thư và cột `han_xu_ly_xong` của nó (luật 10 bất
+biến 2).
+
+Hộp chuông của §3 dựng dưới tên **`staff_notification`**, không phải `hop_thu_thong_bao` của đặc tả
+(`service-comms/migrations/0010_staff_notification.sql:10-12`, luật 12) — cùng một thứ.
+
+⚠ Chú thích tại `service-documents/internal/app/automation_jobs.go:214` còn ghi *"open question #3 …
+is still the user's"* — đã cũ sau câu trả lời trên; sửa là việc của lượt dựng, không phải của `kb/`.
 
 ## Còn mở — chưa ai quyết
 
 | # | Câu | Ai |
 |---|---|---|
-| 3 | Leo thang áp cho những loại việc nào. Hợp đồng 1796286 cho phép cả ba `WorkKind` (`ResolveEscalationInstants`); kho yêu cầu chỉ leo thang nhiệm vụ (`sla.py:284-321`). Người dùng chưa xác nhận phạm vi | Người dùng |
-| 9 | `core/audit.SystemActor` (`"system"`, `core/audit/audit.go:35-37`) đã có và hợp đồng dùng nó. Câu còn lại: nó có thoả luật 6 bất biến 8 (mã nghiệp vụ, không fallback) không, và `core/authz` có cần một `Principal` hệ thống không | Lượt dựng, người dùng duyệt |
-| 10 | Đơn thư **không có `WorkKind`** (`identity.proto:2576-2578` có ba giá trị) và `sla.loai_viec` không nhận đơn thư (ADR 0039 `:100-102`, `service-identity/migrations/0008_sla.sql:223`). Nhắc hạn đơn thư lấy hạn và `gio_sap_den_han` từ đâu, chạy dưới phạm vi nào — thêm giá trị thứ tư là ADR 0029 điều kiện dừng #1 | Người dùng |
+| 10 | **Phần đã trả lời (người dùng, 29/09/2026):** đơn thư là loại việc thứ tư — `WORK_KIND_DON_THU = 4` (`proto/vigov/identity/v1/identity.proto:2666`), `sla.loai_viec` nhận `don-thu` (`service-identity/migrations/0016_sla_citizen_letter_kind_and_unassigned_hold.sql:8-15`, `:62`). **Phần còn mở:** sổ đơn thư chưa có ở `service-documents` (ADR 0039), nên chưa có hạn đã lưu để nhắc — §Bổ sung 29/09 | Lượt dựng sổ đơn thư |
 
 ## ĐIỀU KIỆN DỪNG
 
