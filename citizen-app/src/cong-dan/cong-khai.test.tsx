@@ -351,7 +351,8 @@ describe("tin của xã — lời gọi và đọc trang", () => {
 
   it("parser: `has_more` mà không có con trỏ là sai khuôn; một dòng hỏng làm hỏng cả trang", () => {
     expect(docTrangTinXa({ items: [TIN_RA], next_cursor: "", has_more: false })).toEqual({
-      muc: [{ id: "tin-01", tieu_de: TIN_RA.title, tom_tat: TIN_RA.summary, ngay_dang: "2026-09-27", chuyen_muc: "Y tế" }],
+      // `type: null` — this fixture has no `type` (an older server): absent is not malformed.
+      muc: [{ id: "tin-01", tieu_de: TIN_RA.title, tom_tat: TIN_RA.summary, ngay_dang: "2026-09-27", chuyen_muc: "Y tế", type: null }],
       con_tro: "",
       con_nua: false,
     });
@@ -362,7 +363,7 @@ describe("tin của xã — lời gọi và đọc trang", () => {
   });
 
   it("'Xem thêm' NỐI trang sau vào cuối và bỏ tin trùng", () => {
-    const t1 = { id: "1", tieu_de: "a", tom_tat: "", ngay_dang: "2026-09-27", chuyen_muc: "" };
+    const t1 = { id: "1", tieu_de: "a", tom_tat: "", ngay_dang: "2026-09-27", chuyen_muc: "", type: null };
     const t2 = { ...t1, id: "2" };
     const sau1 = sauKhiTaiTin(TIN_DAU, { kieu: "xong", gia_tri: { muc: [t1], con_tro: "c1", con_nua: true } });
     const sau2 = sauKhiTaiTin(batDauTaiTin(sau1), {
@@ -379,7 +380,7 @@ describe("tin của xã — lời gọi và đọc trang", () => {
   it("lỗi giữ danh sách đã có; tên miền bị từ chối thì không mời Thử lại", () => {
     const co = sauKhiTaiTin(TIN_DAU, {
       kieu: "xong",
-      gia_tri: { muc: [{ id: "1", tieu_de: "a", tom_tat: "", ngay_dang: "", chuyen_muc: "" }], con_tro: "c", con_nua: true },
+      gia_tri: { muc: [{ id: "1", tieu_de: "a", tom_tat: "", ngay_dang: "", chuyen_muc: "", type: null }], con_tro: "c", con_nua: true },
     });
     const loi = sauKhiTaiTin(batDauTaiTin(co), { kieu: "loi-mang" });
     expect(loi.muc).toHaveLength(1);
@@ -400,6 +401,7 @@ describe("tin của xã — thân tin là VĂN BẢN, không bao giờ là HTML"
     tom_tat: "",
     ngay_dang: "2026-09-27",
     chuyen_muc: "Y tế",
+    type: null,
     noi_dung: 'Đoạn một, dòng một.\nDòng hai.\n\n<script>alert("x")</script>\n\n\n\n<img src=x onerror=alert(1)>',
   };
 

@@ -336,6 +336,8 @@ export const SEND_SCREEN_NAME = "Gửi phản ánh";
 export const TEN_MAN_CONG_KHAI = {
   danh_ba: "Danh bạ cán bộ xã",
   tin_xa: "Tin tức của xã",
+  /** The commune app's home tab label (`XA_GIAO_DIEN.tab_trang_chu`), prefixed like the other commune rows. */
+  trang_chu_xa: "Ứng dụng của xã: Trang chủ",
 } as const;
 
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
@@ -346,6 +348,18 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
       "ứng dụng được mở bằng mã QR hoặc đường liên kết của một xã — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để lấy tên và tỉnh của xã cho người dùng xác nhận",
     nguoi_dung_bam: false,
     man: TIEU_DE_XAC_NHAN_XA,
+    truong: [HOST_CONG_KHAI],
+  },
+  {
+    // 29/09/2026 (identity cdbf276): the commune's declared office — address, hotline, office hours — shown
+    // on the home screen of the commune's own app. Runs at open, like the lookup above, and carries only
+    // the domain: no session, no Zalo code, nothing of the citizen.
+    tuyen: "/api/v1/commune-profiles",
+    may_chu: "ViGov — dịch vụ `identity`",
+    khi_nao:
+      "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để hiện trụ sở, đường dây nóng và giờ làm việc mà xã đã công bố",
+    nguoi_dung_bam: false,
+    man: TEN_MAN_CONG_KHAI.trang_chu_xa,
     truong: [HOST_CONG_KHAI],
   },
   {
@@ -368,6 +382,11 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
         khoa: "cursor",
         trong_chinh_sach:
           "con trỏ trang tin do chính máy chủ trả ở trang trước, chỉ khi người dùng bấm “Xem thêm tin”",
+      },
+      {
+        khoa: "type",
+        trong_chinh_sach:
+          "loại tin người dùng chọn xem (tin tức, sự kiện, thông báo), chỉ khi người dùng bấm một nút lọc hoặc ô “Sự kiện”",
       },
     ],
   },

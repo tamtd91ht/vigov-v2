@@ -4,6 +4,8 @@ import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
 // ⚠ Tệp TEST nhập client ViGov — được, vì lượt quét ranh giới (`ranh-gioi-hai-nua.test.ts`) bỏ mọi
 // tệp `.test.`. Tệp SẢN XUẤT `ket-xuat-ho-so.ts` thì không được, nên nó chép, và ca §5 khoá bản chép.
 import {
+  COMMUNE_PROFILES_PATH,
+  communeProfilesAddress,
   diaChiBaiTin,
   diaChiDanhBa,
   diaChiTinXa,
@@ -12,7 +14,7 @@ import {
   DUONG_DAN_TIN_XA,
   DUONG_DAN_XA,
 } from "../cong-dan/api/hop-dong-cong-khai";
-import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU } from "../cong-dan/man/noi-dung";
+import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
   bridgeBodyWithPhone,
@@ -434,8 +436,9 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // mở lại phiên với xã KÈM `phoneToken` (cùng tuyến đăng nhập, thân thứ ba) + 1 của 29/09: đổi mã vị
     // trí lấy toạ độ (`vihat-miniapp` `/api/v1/location`), chỉ sau cú bấm "Lấy vị trí hiện tại" + 1 cũng
     // của 29/09: đăng nhập từ app riêng của xã (cùng tuyến đăng nhập, thân thứ tư, `appId` + `phoneToken`).
-    // + 1: the commune app's location exchange (same route, `appId` added).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(11);
+    // + 1: the commune app's location exchange (same route, `appId` added). + 1: the commune's declared
+    // office, read when the commune app opens (`/commune-profiles`).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(12);
     const communeLocationRow = DUONG_ROI_KHOI_MAY.find((d) => d.truong === COMMUNE_APP_LOCATION_FIELDS);
     expect(communeLocationRow, "hồ sơ không khai đổi mã vị trí của app riêng").toBeDefined();
     expect(communeLocationRow!.tuyen).toBe(LOCATION_PATH);
@@ -547,8 +550,10 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     const CA: ReadonlyArray<readonly [string, string, readonly string[]]> = [
       // [tuyến khai, địa chỉ client dựng, tham số đường dẫn]
       [DUONG_DAN_XA, diaChiTraXa(TEN_MIEN), []],
+      [COMMUNE_PROFILES_PATH, communeProfilesAddress(TEN_MIEN), []],
       [DUONG_DAN_DANH_BA, diaChiDanhBa(TEN_MIEN), []],
-      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu"), []],
+      // Every parameter the client can send: cursor AND type.
+      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien"), []],
       [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu"), ["id"]],
     ];
     expect(DUONG_CONG_KHAI).toHaveLength(CA.length);
@@ -562,13 +567,15 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       const gui_di = [...url.searchParams.keys(), ...tham_so_duong_dan].sort();
       expect(duong!.truong.map((t) => t.khoa).sort(), `tuyến ${tuyen}: khai ⇄ gửi đi lệch nhau`).toEqual(gui_di);
       // Không tuyến công khai nào tự nhận là "do người dùng bấm" khi nó chạy lúc mở app, và ngược lại.
-      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA);
+      // Two run at open: the commune lookup (QR path) and the commune app's office profile.
+      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA && tuyen !== COMMUNE_PROFILES_PATH);
     }
   });
 
   it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
     expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
     expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
+    expect(TEN_MAN_CONG_KHAI.trang_chu_xa).toBe(`Ứng dụng của xã: ${XA_GIAO_DIEN.tab_trang_chu}`);
     expect(PHONE_VERIFICATION_SCREENS).toBe([GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de].join(" · "));
     expect(SEND_SCREEN_NAME).toBe(GUI.tieu_de);
     expect(COMMUNE_APP_SESSION_SCREENS).toBe(
@@ -579,7 +586,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("10 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("10 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

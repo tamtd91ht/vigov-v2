@@ -40,6 +40,8 @@ import {
 import {
   type BaiTinXa,
   type CanBoCongKhai,
+  type CommuneProfile,
+  communeProfilesAddress,
   diaChiBaiTin,
   diaChiDanhBa,
   diaChiTinXa,
@@ -48,6 +50,8 @@ import {
   docDanhBa,
   docTrangTinXa,
   docXa,
+  type NewsType,
+  readCommuneProfiles,
   type TrangTinXa,
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
@@ -322,9 +326,24 @@ export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly
   return goiCongKhai(ten_mien, diaChiDanhBa, docDanhBa);
 }
 
-/** Một trang tin của xã, mới nhất trước. `con_tro` rỗng = trang đầu. */
-export function tinCuaXa(ten_mien: string, con_tro: string): Promise<KetQuaCongKhai<TrangTinXa>> {
-  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro), docTrangTinXa);
+/**
+ * Trụ sở, đường dây nóng, giờ làm việc mà xã đã khai (`CommuneProfile`). Công khai theo tên miền, không
+ * phiên. Không có logo — xem `hop-dong-cong-khai.ts`.
+ */
+export function communeProfiles(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneProfile[]>> {
+  return goiCongKhai(ten_mien, communeProfilesAddress, readCommuneProfiles);
+}
+
+/**
+ * Một trang tin của xã, mới nhất trước. `con_tro` rỗng = trang đầu. `type` lọc ở máy chủ theo loại tin
+ * (`NewsType`); không truyền = mọi loại, như trước.
+ */
+export function tinCuaXa(
+  ten_mien: string,
+  con_tro: string,
+  type: NewsType | null = null,
+): Promise<KetQuaCongKhai<TrangTinXa>> {
+  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro, type), docTrangTinXa);
 }
 
 /** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */

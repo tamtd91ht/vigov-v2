@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { danhBaCanBoXa } from "../api/goi-vigov";
 import type { CanBoCongKhai } from "../api/hop-dong-cong-khai";
 import { dichGoi, sauKhiTaiDanhBa, type TrangDanhBa } from "./DanhBaCanBoScreen";
-import { DANH_BA, XA_GIAO_DIEN, XA_PA, XA_TN } from "./noi-dung";
+import { DANH_BA, DIRECTORY_UNIT_HEAD, XA_GIAO_DIEN, XA_PA, XA_TN } from "./noi-dung";
 
 import { BieuTuong } from "./BieuTuong";
 import { KhoiTrangThai } from "./khung-xa";
@@ -42,9 +42,43 @@ export function locCanBo(ds: readonly CanBoCongKhai[], tu_khoa: string): readonl
   const theo_so = so.length >= 3 && /^[\d\s.\-+]+$/.test(q);
   return ds.filter(
     (cb) =>
-      [cb.ho_ten, cb.chuc_vu, cb.bo_phan].some((o) => boDau(o).includes(q)) ||
+      // The units a person heads are searchable too: "ha lam" finds the Trưởng thôn Hà Lam.
+      [cb.ho_ten, cb.chuc_vu, cb.bo_phan, ...cb.residential_units_headed].some((o) => boDau(o).includes(q)) ||
       (theo_so && [cb.so_co_quan, cb.di_dong].some((o) => o.replace(/\D/g, "").includes(so))),
   );
+}
+
+/**
+ * The commune's own order first: people with a `display_order` ascending, then everybody without one in
+ * the order the server sent. STABLE — equal positions keep the server's order. The server already sends
+ * this order (`danh_ba_cong_khai.go:54-56`); sorting here is the guard for the day it does not, so the
+ * commune's chosen order is what the citizen sees either way. PURE.
+ */
+export function byDisplayOrder(ds: readonly CanBoCongKhai[]): CanBoCongKhai[] {
+  return ds
+    .map((cb, i) => ({ cb, i }))
+    .sort((a, b) => {
+      const x = a.cb.display_order;
+      const y = b.cb.display_order;
+      if (x !== null && y !== null && x !== y) return x - y;
+      if (x !== null && y === null) return -1;
+      if (x === null && y !== null) return 1;
+      return a.i - b.i;
+    })
+    .map((e) => e.cb);
+}
+
+/**
+ * "Trưởng thôn Hà Lam" for a unit this person heads. The unit name is the commune's own, and may already
+ * begin with its kind ("Thôn Hà Lam", "Tổ dân phố 3") — then the line is "Trưởng thôn Hà Lam" / "Trưởng tổ
+ * dân phố 3", not "Trưởng thôn Thôn Hà Lam". Otherwise it reads "Trưởng thôn <tên>". PURE.
+ */
+export function unitHeadLine(unit: string): string {
+  const u = unit.trim();
+  if (/^(thôn|tổ dân phố|tổ|khu phố|ấp|bản|xóm)(?=\s|$)/i.test(u)) {
+    return `${DIRECTORY_UNIT_HEAD.head_of} ${u.charAt(0).toLocaleLowerCase("vi")}${u.slice(1)}`;
+  }
+  return `${DIRECTORY_UNIT_HEAD.head_of_village} ${u}`;
 }
 
 /**
@@ -84,6 +118,9 @@ function TheCanBoXa({ cb }: { cb: CanBoCongKhai }) {
       <span className="xa-can-bo__chu">
         <strong className="xa-can-bo__ten">{cb.ho_ten}</strong>
         {cb.chuc_vu !== "" && <span>{cb.chuc_vu}</span>}
+        {cb.residential_units_headed.map((unit) => (
+          <span key={unit}>{unitHeadLine(unit)}</span>
+        ))}
         {cb.so_co_quan.trim() !== "" && (
           <span className="xa-phu">
             {DANH_BA.so_co_quan}: {cb.so_co_quan.trim()}
@@ -116,7 +153,7 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
   const [tu_khoa, datTuKhoa] = useState("");
   const { trang } = props;
   const loc = useMemo(
-    () => (trang.kieu === "xong" ? locCanBo(trang.can_bo, tu_khoa) : []),
+    () => (trang.kieu === "xong" ? locCanBo(byDisplayOrder(trang.can_bo), tu_khoa) : []),
     [trang, tu_khoa],
   );
 

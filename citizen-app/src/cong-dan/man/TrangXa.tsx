@@ -28,8 +28,8 @@
  */
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
-import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
+import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
+import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
@@ -40,11 +40,13 @@ import {
   sessionGateOffersRetry,
   type SessionGateState,
 } from "./commune-session";
+import { dichGoi } from "./DanhBaCanBoScreen";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import {
   APP_RIENG,
   COMMUNE_APP_SESSION,
+  COMMUNE_OFFICE,
   CUA_TOI,
   DANH_BA,
   PHONE_VERIFICATION,
@@ -66,7 +68,7 @@ import {
   useMyPetitions,
 } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
-import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
+import { BaiTinXa, DanhSachTinXa, HangTin, NewsOfType, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
 import {
   afterNameAsk,
@@ -230,6 +232,66 @@ function NameCard(props: { asking: boolean; onAgree: () => void; onDecline: () =
   );
 }
 
+/**
+ * The commune's profile from `/commune-profiles` (public, by domain, no session) — or `null` while loading,
+ * when the call failed, or when the answer is not exactly one profile. `null` shows NOTHING: the office
+ * block is information, the app works without it, and a guessed hotline is a wrong number published by a
+ * public authority. Loaded once per open, with the ref guard `useTinXa` uses against StrictMode's double run.
+ */
+function useCommuneProfile(ten_mien: string): CommuneProfile | null {
+  const [profile, setProfile] = useState<CommuneProfile | null>(null);
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    void communeProfiles(ten_mien).then((kq) => {
+      if (kq.kieu === "xong" && kq.gia_tri.length === 1) setProfile(kq.gia_tri[0]!);
+    });
+  }, [ten_mien]);
+  return profile;
+}
+
+/** The rows the commune actually declared, in reading order. PURE, exported for tests. */
+export function officeRows(p: CommuneProfile): Array<{ label: string; value: string }> {
+  return [
+    { label: COMMUNE_OFFICE.address, value: p.office_address.trim() },
+    { label: COMMUNE_OFFICE.hours, value: p.office_hours_text.trim() },
+    { label: COMMUNE_OFFICE.hotline, value: p.hotline.trim() },
+  ].filter((r) => r.value !== "");
+}
+
+/**
+ * Trụ sở · giờ làm việc · đường dây nóng, as the commune declared them — nothing when it declared nothing.
+ * The hours are display text, never parsed (ADR 0007). The hotline becomes a `tel:` button (the dialler
+ * opens; nothing goes over the network), a full tap target in words, not an icon alone.
+ */
+export function CommuneOffice({ profile }: { profile: CommuneProfile | null }) {
+  if (profile === null) return null;
+  const rows = officeRows(profile);
+  if (rows.length === 0) return null;
+  const hotline = profile.hotline.trim();
+  const dial = hotline === "" ? null : dichGoi(hotline);
+  return (
+    <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-tru-so">
+      <h2 className="xa-dau-khoi__tieu-de" id="xa-tru-so">
+        {COMMUNE_OFFICE.title}
+      </h2>
+      {rows.map((r) => (
+        <div key={r.label}>
+          <p className="xa-nhan-o">{r.label}</p>
+          <p className="xa-giu-dong">{r.value}</p>
+        </div>
+      ))}
+      {dial !== null && (
+        <a className="xa-nut" href={dial}>
+          <BieuTuong ten="phone" co={20} />
+          {COMMUNE_OFFICE.call_hotline(hotline)}
+        </a>
+      )}
+    </section>
+  );
+}
+
 function TrangChuXa(props: {
   xa: XaCuaApp;
   ho_ten: string | null;
@@ -240,6 +302,8 @@ function TrangChuXa(props: {
   petitions: MyPetitions;
   onOpenPetitions: () => void;
   onRetryPetitions: () => void;
+  /** The commune's declared office (`/commune-profiles`), or `null` — then no office block. */
+  profile: CommuneProfile | null;
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, ho_ten, petitions } = props;
@@ -331,6 +395,8 @@ function TrangChuXa(props: {
             </ul>
           )}
         </section>
+
+        <CommuneOffice profile={props.profile} />
       </div>
     </div>
   );
@@ -444,6 +510,7 @@ function AppCuaXa(props: {
   const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
   const tin = useTinXa(ten_mien);
+  const profile = useCommuneProfile(ten_mien);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
   const lop = `xa-app xa-co-chu--${co_chu}`;
 
@@ -549,30 +616,23 @@ function AppCuaXa(props: {
     case "ban-do":
       man_con = <ManChuaCoDuLieu tieu_de={XA_TN.ban_do_tieu_de} bieu_tuong="map" cau={XA_TN.ban_do_trong} onQuayLai={ve} />;
       break;
-    case "su-kien": {
-      // ViGov chưa có trường "loại tin"; prototype mở tin loại sự kiện. Ở đây: tin mà chuyên mục có chữ
-      // "sự kiện" — đúng thứ xã đã đăng, không đoán.
-      const su_kien = tin.ds.muc.filter((t) => /sự kiện/i.test(t.chuyen_muc));
+    case "su-kien":
+      // The items the commune published AS EVENTS — the server's `?type=su-kien` (comms b22bf76), no longer
+      // a guess from the free-text category.
       man_con = (
         <>
           <DauManCon tieu_de={XA_TN.su_kien_tieu_de} onQuayLai={ve} />
           <TrangCon>
-            {su_kien.length === 0 ? (
-              <KhoiTrangThai bieu_tuong="clock" cau={XA_TN.su_kien_trong} />
-            ) : (
-              <ul className="xa-ds">
-                {su_kien.map((t) => (
-                  <li key={t.id}>
-                    <HangTin tin={t} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />
-                  </li>
-                ))}
-              </ul>
-            )}
+            <NewsOfType
+              ten_mien={ten_mien}
+              type="su-kien"
+              onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
+              empty={XA_TN.su_kien_trong}
+            />
           </TrangCon>
         </>
       );
       break;
-    }
     case "thong-bao":
       man_con = <ManChuaCoDuLieu tieu_de={XA_TN.thong_bao} bieu_tuong="bell" cau={XA_TN.thong_bao_trong} onQuayLai={ve} />;
       break;
@@ -615,6 +675,7 @@ function AppCuaXa(props: {
         petitions={petitions.state}
         onOpenPetitions={openPetitions}
         onRetryPetitions={() => void petitions.load()}
+        profile={profile}
         di={go}
       />
     );
@@ -623,7 +684,12 @@ function AppCuaXa(props: {
       <>
         <DauTab tieu_de={TIN_XA.tieu_de} />
         <div className="xa-trang xa-trang--tab">
-          <DanhSachTinXa ds={tin.ds} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} onTai={tin.taiTiep} />
+          <DanhSachTinXa
+            ten_mien={ten_mien}
+            ds={tin.ds}
+            onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })}
+            onTai={tin.taiTiep}
+          />
         </div>
       </>
     );

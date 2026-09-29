@@ -2,14 +2,21 @@
  * HỢP ĐỒNG CỦA BA TUYẾN CÔNG KHAI THEO TÊN MIỀN XÃ — đường dẫn, tham số, và cách đọc thân trả lời.
  *
  *   GET identity  /api/v1/communes?host=<tên miền>        → { items: [{ name, province }] }
+ *   GET identity  /api/v1/commune-profiles?host=…         → { items: [{ name, office_address, hotline,
+ *                                                             office_hours_text }] }   (cdbf276)
  *   GET identity  /api/v1/commune-staff?host=<tên miền>   → { items: [{ full_name, position,
- *                                                             department_name, phone, mobile, has_zalo }] }
- *   GET comms     /api/v1/commune-news?host=…[&cursor=…]  → { items: [{ id, title, summary,
- *                                                             published_on, category_name }],
- *                                                             next_cursor, has_more }
+ *                                                             department_name, phone, mobile, has_zalo,
+ *                                                             display_order?, residential_units_headed? }] }
+ *   GET comms     /api/v1/commune-news?host=…[&cursor=…][&type=…]
+ *                                                         → { items: [{ id, title, summary, published_on,
+ *                                                             category_name, type?, source? }],
+ *                                                             next_cursor, has_more }   (type: b22bf76)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
  *
- *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe).
+ *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
+ *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
+ *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là
+ *   máy chủ cũ, không phải sai khuôn.
  *
  * ⚠ CÔNG KHAI, KHÔNG BEARER. Ba tuyến này chỉ trả thứ xã đã công bố cho người dân. Tệp gọi mạng
  * (`goi-vigov.ts`) không gắn `Authorization` cho chúng — gắn vào là gửi phiên công dân tới một tuyến
@@ -25,8 +32,20 @@
 import { diaChiViGov } from "./dia-chi-vigov";
 
 export const DUONG_DAN_XA = "/api/v1/communes";
+export const COMMUNE_PROFILES_PATH = "/api/v1/commune-profiles";
 export const DUONG_DAN_DANH_BA = "/api/v1/commune-staff";
 export const DUONG_DAN_TIN_XA = "/api/v1/commune-news";
+
+/**
+ * The news types the public list may be filtered by — `service-comms` `domain.LoaiNoiDung` (six closed
+ * codes; an unknown one is a 400 there). `banner` is left out on purpose: it is a picture strip, not an
+ * article, and no screen here lists it. Labels are the staff register's own words
+ * (`web-admin/src/features/noi-dung/nhan-noi-dung.ts`), so the two apps call a type the same thing.
+ */
+export const NEWS_TYPES = ["tin-tuc", "su-kien", "thong-bao", "truyen-thanh", "video"] as const;
+export type NewsType = (typeof NEWS_TYPES)[number];
+
+const isNewsType = (v: unknown): v is NewsType => typeof v === "string" && (NEWS_TYPES as readonly string[]).includes(v);
 
 /** Tên miền trong `?host=` — `URLSearchParams` mã hoá, không ghép chuỗi tay. */
 function voiHost(goc: string, ten_mien: string, them: Record<string, string> = {}): string {
@@ -38,17 +57,23 @@ export function diaChiTraXa(ten_mien: string): string {
   return voiHost(diaChiViGov("identity", DUONG_DAN_XA), ten_mien);
 }
 
+export function communeProfilesAddress(ten_mien: string): string {
+  return voiHost(diaChiViGov("identity", COMMUNE_PROFILES_PATH), ten_mien);
+}
+
 export function diaChiDanhBa(ten_mien: string): string {
   return voiHost(diaChiViGov("identity", DUONG_DAN_DANH_BA), ten_mien);
 }
 
-/** `con_tro` rỗng = trang đầu. Con trỏ đi NGUYÊN VĂN — nó mờ đục, không phải số trang. */
-export function diaChiTinXa(ten_mien: string, con_tro: string): string {
-  return voiHost(
-    diaChiViGov("comms", DUONG_DAN_TIN_XA),
-    ten_mien,
-    con_tro === "" ? {} : { cursor: con_tro },
-  );
+/**
+ * `con_tro` rỗng = trang đầu. Con trỏ đi NGUYÊN VĂN — nó mờ đục, không phải số trang. `type` (tuỳ chọn):
+ * máy chủ lọc theo loại; `null` = mọi loại, đúng như trước.
+ */
+export function diaChiTinXa(ten_mien: string, con_tro: string, type: NewsType | null = null): string {
+  return voiHost(diaChiViGov("comms", DUONG_DAN_TIN_XA), ten_mien, {
+    ...(con_tro === "" ? {} : { cursor: con_tro }),
+    ...(type === null ? {} : { type }),
+  });
 }
 
 /** `encodeURIComponent` cho `id`: một ký tự lạ không được đổi đường dẫn. */
@@ -93,6 +118,45 @@ export function docXa(than: unknown): readonly XaTraDuoc[] | null {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
+ * HỒ SƠ HIỂN THỊ CỦA XÃ — trụ sở, đường dây nóng, giờ làm việc (identity cdbf276)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * What the commune declared about its office. Every field may be `""` (not declared) — the screen then
+ * shows nothing for it, never a default. NO LOGO: the route deliberately has none (a typed URL is not an
+ * approved public-bucket object, ADR 0052 §2), so the header keeps the logo file shipped with the build.
+ *
+ * `hotline` is the commune's OFFICIAL line — public-service information, not personal data (#16).
+ * `office_hours_text` is DISPLAY TEXT: never parsed — the calendar deadlines count against is identity's
+ * own (ADR 0007).
+ */
+export type CommuneProfile = {
+  readonly name: string;
+  readonly office_address: string;
+  readonly hotline: string;
+  readonly office_hours_text: string;
+};
+
+/**
+ * `null` = malformed. `[]` = no commune for that domain (same answer `/communes` gives). More than one item
+ * is not a profile this app can show — the caller treats it like none.
+ */
+export function readCommuneProfiles(body: unknown): readonly CommuneProfile[] | null {
+  const items = docMang(body);
+  if (items === null) return null;
+  const out: CommuneProfile[] = [];
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    if (!laChuoi(r.name) || !laChuoi(r.office_address) || !laChuoi(r.hotline) || !laChuoi(r.office_hours_text)) {
+      return null;
+    }
+    out.push({ name: r.name, office_address: r.office_address, hotline: r.hotline, office_hours_text: r.office_hours_text });
+  }
+  return out;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
  * DANH BẠ CÁN BỘ
  * ════════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -108,7 +172,27 @@ export type CanBoCongKhai = {
   readonly so_co_quan: string;
   readonly di_dong: string;
   readonly co_zalo: boolean;
+  /** The commune's explicit position in the directory, or `null` when none was set (optional on the wire). */
+  readonly display_order: number | null;
+  /**
+   * Names of the thôn / tổ dân phố this person heads — `[]` for everybody else (optional on the wire).
+   * Names only, and only for a person this directory already publishes.
+   */
+  readonly residential_units_headed: readonly string[];
 };
+
+/** Optional `display_order`: absent → `null`; present → an integer, else malformed (`undefined`). */
+function readDisplayOrder(v: unknown): number | null | undefined {
+  if (v === undefined) return null;
+  return typeof v === "number" && Number.isInteger(v) ? v : undefined;
+}
+
+/** Optional `residential_units_headed`: absent → `[]`; present → an array of strings, else malformed. */
+function readUnitsHeaded(v: unknown): readonly string[] | undefined {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || !v.every(laChuoi)) return undefined;
+  return v.map((s) => s.trim()).filter((s) => s !== "");
+}
 
 export function docDanhBa(than: unknown): readonly CanBoCongKhai[] | null {
   const items = docMang(than);
@@ -127,6 +211,9 @@ export function docDanhBa(than: unknown): readonly CanBoCongKhai[] | null {
     ) {
       return null;
     }
+    const display_order = readDisplayOrder(r.display_order);
+    const residential_units_headed = readUnitsHeaded(r.residential_units_headed);
+    if (display_order === undefined || residential_units_headed === undefined) return null;
     ra.push({
       ho_ten: r.full_name,
       chuc_vu: r.position,
@@ -134,6 +221,8 @@ export function docDanhBa(than: unknown): readonly CanBoCongKhai[] | null {
       so_co_quan: r.phone,
       di_dong: r.mobile,
       co_zalo: r.has_zalo,
+      display_order,
+      residential_units_headed,
     });
   }
   return ra;
@@ -150,6 +239,11 @@ export type TinXaTomTat = {
   /** NGÀY đăng, `YYYY-MM-DD` — một ngày, không phải một thời điểm (`lib/thoi-diem.ts` `ngayVN`). */
   readonly ngay_dang: string;
   readonly chuyen_muc: string;
+  /**
+   * The item's type (`tin-tuc`, `su-kien`…), or `null` when the server sent none (an older server) or a
+   * type this app does not list (`banner`, or a seventh code added later) — never guessed from the category.
+   */
+  readonly type: NewsType | null;
 };
 
 export type BaiTinXa = TinXaTomTat & {
@@ -176,12 +270,15 @@ function docTin(m: unknown): TinXaTomTat | null {
   ) {
     return null;
   }
+  // `type` is optional (additive): absent is an older server. Present, it must be a string.
+  if (r.type !== undefined && !laChuoi(r.type)) return null;
   return {
     id: r.id,
     tieu_de: r.title,
     tom_tat: r.summary,
     ngay_dang: r.published_on,
     chuyen_muc: r.category_name,
+    type: isNewsType(r.type) ? r.type : null,
   };
 }
 

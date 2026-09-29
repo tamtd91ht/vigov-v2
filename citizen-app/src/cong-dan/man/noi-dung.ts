@@ -528,10 +528,41 @@ export const XA_GIAO_DIEN = {
   chua_dang_nhap_ngan: "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện.",
   chua_dang_nhap_day_du:
     "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện. Trong lúc chờ, bạn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện cho cán bộ trong mục Danh bạ.",
-  tim_danh_ba: "Tìm theo tên, chức vụ, bộ phận",
+  tim_danh_ba: "Tìm theo tên, chức vụ, bộ phận, thôn",
   khong_thay_can_bo: "Không tìm thấy cán bộ phù hợp.",
   goi: "Gọi",
   goi_ai: (ten: string) => `Gọi ${ten}`,
+} as const;
+
+/** Directory lines of the commune app for the units a person heads (`DanhBaXa.tsx` `unitHeadLine`). */
+export const DIRECTORY_UNIT_HEAD = {
+  head_of_village: "Trưởng thôn",
+  /** Used when the unit name already says its kind: "Trưởng" + "thôn Hà Lam" / "tổ dân phố 3". */
+  head_of: "Trưởng",
+} as const;
+
+/**
+ * THE COMMUNE'S OFFICE — what the commune declared (`/commune-profiles`). A row appears only when the
+ * commune filled it; nothing is shown in its place ("" is "not declared", never a default).
+ */
+export const COMMUNE_OFFICE = {
+  title: "Ủy ban nhân dân xã",
+  address: "Trụ sở",
+  hours: "Giờ làm việc",
+  hotline: "Đường dây nóng",
+  call_hotline: (so: string) => `Gọi đường dây nóng ${so}`,
+} as const;
+
+/**
+ * News type chips and the Sự kiện screen — the staff register's words for the same codes
+ * (`web-admin/src/features/noi-dung/nhan-noi-dung.ts`), so a commune and its citizens name a type alike.
+ */
+export const NEWS_TYPE_LABEL = {
+  "tin-tuc": "Tin tức",
+  "su-kien": "Sự kiện",
+  "thong-bao": "Thông báo",
+  "truyen-thanh": "Truyền thanh",
+  video: "Video",
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -583,7 +614,9 @@ export const XA_TN = {
   name_card_decline: "Không, tôi sẽ tự gõ tên",
   name_card_asking: "Đang chờ bà con trả lời Zalo…",
   chua_co_ten: "Chưa xác định",
-  loc_chuyen_muc: "Lọc tin theo chuyên mục",
+  loc_loai_tin: "Lọc tin theo loại",
+  /** A type chip, or the Sự kiện tile, with nothing published of that type. */
+  news_type_empty: (type: string) => `Xã chưa đăng tin nào thuộc loại “${type}”.`,
   tin_lien_quan: "Tin liên quan",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",

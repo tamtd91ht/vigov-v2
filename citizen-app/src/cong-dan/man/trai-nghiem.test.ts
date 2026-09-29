@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { CanBoCongKhai, TinXaTomTat } from "../api/hop-dong-cong-khai";
 import { TRUONG_DUOC_NHAN } from "../api/hop-dong-phan-anh";
 
-import { locCanBo, nhomTheoBoPhan } from "./DanhBaXa";
+import { byDisplayOrder, locCanBo, nhomTheoBoPhan, unitHeadLine } from "./DanhBaXa";
 import { TRANG_THAI } from "./noi-dung";
 import { buocDaQua } from "./PhanAnhAppXa";
 import { groupOf, STATUS_GROUP_LABEL, STEP_LABEL } from "./status-groups";
-import { chuyenMucCua, tinLienQuan } from "./TinTucAppXa";
+import { NEWS_CHIPS, tinLienQuan } from "./TinTucAppXa";
 import {
   chuCaiDau,
   kiemNhapPhieu,
@@ -155,13 +155,17 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     tom_tat: "",
     chuyen_muc,
     ngay_dang: "2026-09-28",
-  }) as TinXaTomTat;
+    type: null,
+  });
 
-  it("chip chuyên mục lấy đúng những chuyên mục xã đã đăng, theo thứ tự gặp", () => {
-    expect(chuyenMucCua([tin("1", "Thông báo"), tin("2", ""), tin("3", "Sự kiện"), tin("4", "Thông báo")])).toEqual([
-      "Thông báo",
-      "Sự kiện",
-    ]);
+  it("news chips are the server's TYPES (?type=), not the free-text categories", () => {
+    expect(NEWS_CHIPS).toEqual(["tin-tuc", "su-kien", "thong-bao"]);
+    // The old guess is gone: no screen file matches "sự kiện" in a category any more.
+    const src = import.meta.glob(["./TrangXa.tsx", "./TinTucAppXa.tsx"], { query: "?raw", import: "default", eager: true }) as Record<
+      string,
+      string
+    >;
+    for (const [path, code] of Object.entries(src)) expect(code, path).not.toMatch(/\/sự kiện\/i|chuyenMucCua/);
   });
 
   it("tin liên quan: cùng chuyên mục, bỏ tin đang đọc, tối đa 3", () => {
@@ -170,9 +174,40 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     expect(tinLienQuan(ds, tin("x", ""))).toEqual([]);
   });
 
+  const person = (ho_ten: string, display_order: number | null, units: string[] = []): CanBoCongKhai => ({
+    ho_ten,
+    bo_phan: "",
+    chuc_vu: "",
+    so_co_quan: "",
+    di_dong: "",
+    co_zalo: false,
+    display_order,
+    residential_units_headed: units,
+  });
+
+  it("directory: the commune's display_order first (ascending, stable), then the rest in server order", () => {
+    const ds = [person("A", null), person("B", 2), person("C", null), person("D", 1), person("E", 2)];
+    expect(byDisplayOrder(ds).map((c) => c.ho_ten)).toEqual(["D", "B", "E", "A", "C"]);
+    // Nothing ordered: the server's order, untouched.
+    expect(byDisplayOrder([person("X", null), person("Y", null)]).map((c) => c.ho_ten)).toEqual(["X", "Y"]);
+  });
+
+  it("village heads: 'Trưởng thôn <X>', without doubling the unit's own kind", () => {
+    expect(unitHeadLine("Hà Lam")).toBe("Trưởng thôn Hà Lam");
+    expect(unitHeadLine("Thôn Hà Lam")).toBe("Trưởng thôn Hà Lam");
+    expect(unitHeadLine("Tổ dân phố 3")).toBe("Trưởng tổ dân phố 3");
+    // A name that merely starts with the letters is not a kind.
+    expect(unitHeadLine("Thônxyz")).toBe("Trưởng thôn Thônxyz");
+  });
+
+  it("the search finds a village head by the village's name", () => {
+    const ds = [person("Lê Văn Bình", null, ["Thôn Hà Lam"]), person("Trần Thị Đào", null)];
+    expect(locCanBo(ds, "ha lam").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
+  });
+
   it("tìm danh bạ không phân biệt dấu, và theo số điện thoại khi từ khoá toàn là số", () => {
     const cb = (ho_ten: string, chuc_vu: string, di_dong: string) =>
-      ({ ho_ten, bo_phan: "", chuc_vu, so_co_quan: "", di_dong, co_zalo: false }) as CanBoCongKhai;
+      ({ ho_ten, bo_phan: "", chuc_vu, so_co_quan: "", di_dong, co_zalo: false, display_order: null, residential_units_headed: [] }) as CanBoCongKhai;
     const ds = [cb("Trần Thị Đào", "Chủ tịch", "0900 000 000"), cb("Lê Văn Bình", "Công an xã", "")];
     expect(locCanBo(ds, "chu tich").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
     expect(locCanBo(ds, "dao").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
@@ -182,7 +217,8 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
   });
 
   it("danh bạ nhóm theo bộ phận, giữ thứ tự máy chủ, người không ghi bộ phận ở cuối", () => {
-    const cb = (ho_ten: string, bo_phan: string) => ({ ho_ten, bo_phan, chuc_vu: "", so_co_quan: "", di_dong: "", co_zalo: false }) as CanBoCongKhai;
+    const cb = (ho_ten: string, bo_phan: string) =>
+      ({ ho_ten, bo_phan, chuc_vu: "", so_co_quan: "", di_dong: "", co_zalo: false, display_order: null, residential_units_headed: [] }) as CanBoCongKhai;
     const n = nhomTheoBoPhan([cb("A", "Địa chính"), cb("B", ""), cb("C", "Văn phòng"), cb("D", "Địa chính")], "Khác");
     expect(n.map((x) => [x.bo_phan, x.can_bo.map((c) => c.ho_ten)])).toEqual([
       ["Địa chính", ["A", "D"]],

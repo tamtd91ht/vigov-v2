@@ -3136,7 +3136,7 @@ button.xa-o-nhanh {
   cursor: pointer;
 }
 
-/* ---------- app riêng: bản trải nghiệm đủ màn (28/09/2026) ---------- */
+/* ---------- app riêng: đủ màn theo bản mẫu (28/09/2026) ---------- */
 :root {
   --xa-cam-nhat: #fcefe2;
   --xa-cam-dam: #8a4a0f;
@@ -3194,23 +3194,6 @@ button.xa-o-nhanh {
   justify-items: start;
 }
 
-/* nhãn "BẢN TRẢI NGHIỆM" — chữ navy trên vàng của nhãn DEMO bản mẫu */
-.xa-nhan-tn {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--xa-vang);
-  color: var(--xa-navy);
-  font-size: var(--text-small);
-  font-weight: 800;
-  letter-spacing: 0.5px;
-}
-
-.xa-ghi-chu--cam {
-  background: var(--xa-cam-nhat);
-  border-color: #f3d3b0;
-  margin-bottom: 14px;
-}
 
 /* chip trạng thái phiếu */
 .xa-chip-tt {

@@ -9,9 +9,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baiTinCuaXa, tinCuaXa } from "../api/goi-vigov";
-import { chiaDoan, type TinXaTomTat } from "../api/hop-dong-cong-khai";
+import { chiaDoan, type NewsType, type TinXaTomTat } from "../api/hop-dong-cong-khai";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
-import { TIN_XA, XA_TN } from "./noi-dung";
+import { NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
 import {
   batDauTaiTin,
   type DanhSachTin,
@@ -68,15 +68,11 @@ const CAU_LOI = {
 } as const;
 
 /**
- * Chuyên mục có trong các tin ĐÃ TẢI, theo thứ tự gặp — nguồn chip lọc. Bản mẫu có ba loại viết cứng
- * (Tin tức · Sự kiện · Thông báo); ViGov không có trường "loại", chỉ có `chuyen_muc` cán bộ gõ, nên chip
- * lấy đúng những gì xã đã đăng. THUẦN.
+ * The type chips of the news tab — the prototype's three (Tin tức · Sự kiện · Thông báo), now real: each
+ * chip is a SERVER filter (`?type=`, comms b22bf76), not a guess from the free-text category the old chips
+ * used. Truyền thanh and Video have their own tiles; banners are not articles.
  */
-export function chuyenMucCua(ds: readonly TinXaTomTat[]): string[] {
-  const thay: string[] = [];
-  for (const t of ds) if (t.chuyen_muc !== "" && !thay.includes(t.chuyen_muc)) thay.push(t.chuyen_muc);
-  return thay;
-}
+export const NEWS_CHIPS: readonly NewsType[] = ["tin-tuc", "su-kien", "thong-bao"];
 
 /** Tin liên quan: cùng chuyên mục, bỏ tin đang đọc, tối đa 3. THUẦN. */
 export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | null, toi_da = 3): TinXaTomTat[] {
@@ -84,12 +80,50 @@ export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | 
   return ds.filter((t) => t.id !== dang_doc.id && t.chuyen_muc === dang_doc.chuyen_muc).slice(0, toi_da);
 }
 
-/** Danh sách tin — thân của tab "Tin tức". */
-export function DanhSachTinXa(props: { ds: DanhSachTin; onMo: (id: string) => void; onTai: () => void }) {
-  const [chuyen_muc, datChuyenMuc] = useState<string | null>(null);
-  const cac_muc = useMemo(() => chuyenMucCua(props.ds.muc), [props.ds.muc]);
-  const ds: DanhSachTin =
-    chuyen_muc === null ? props.ds : { ...props.ds, muc: props.ds.muc.filter((t) => t.chuyen_muc === chuyen_muc) };
+/**
+ * Danh sách tin — thân của tab "Tin tức". "Tất cả" is the list the home screen shares (`ds`); a type chip
+ * mounts its own server-filtered list (`NewsOfType`), with its own pages and its own "Xem thêm".
+ */
+export function DanhSachTinXa(props: {
+  ten_mien: string;
+  ds: DanhSachTin;
+  onMo: (id: string) => void;
+  onTai: () => void;
+}) {
+  const [type, setType] = useState<NewsType | null>(null);
+  const chips = (
+    <div className="xa-chips" role="group" aria-label={XA_TN.loc_loai_tin}>
+      <button type="button" className={`xa-chip${type === null ? " xa-chip--on" : ""}`} aria-pressed={type === null} onClick={() => setType(null)}>
+        {XA_TN.loc_tat_ca}
+      </button>
+      {NEWS_CHIPS.map((t) => (
+        <button key={t} type="button" className={`xa-chip${type === t ? " xa-chip--on" : ""}`} aria-pressed={type === t} onClick={() => setType(t)}>
+          {NEWS_TYPE_LABEL[t]}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <>
+      {chips}
+      {type === null ? (
+        <NewsListBody ds={props.ds} onMo={props.onMo} onTai={props.onTai} empty={TIN_XA.trong} />
+      ) : (
+        <NewsOfType key={type} ten_mien={props.ten_mien} type={type} onMo={props.onMo} empty={XA_TN.news_type_empty(NEWS_TYPE_LABEL[type])} />
+      )}
+    </>
+  );
+}
+
+/** One type's list, loaded from the server with `?type=` when mounted. Used by the chips and the Sự kiện tile. */
+export function NewsOfType(props: { ten_mien: string; type: NewsType; onMo: (id: string) => void; empty: string }) {
+  const news = useTinXa(props.ten_mien, props.type);
+  return <NewsListBody ds={news.ds} onMo={props.onMo} onTai={news.taiTiep} empty={props.empty} />;
+}
+
+/** Loading · failed · empty · the list with "Xem thêm". PURE apart from the callbacks. */
+export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => void; onTai: () => void; empty: string }) {
+  const { ds } = props;
   if (!ds.da_co_trang_dau && ds.dang_tai) {
     return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />;
   }
@@ -103,23 +137,9 @@ export function DanhSachTinXa(props: { ds: DanhSachTin; onMo: (id: string) => vo
       />
     );
   }
-  const chips =
-    cac_muc.length > 1 ? (
-      <div className="xa-chips" role="group" aria-label={XA_TN.loc_chuyen_muc}>
-        <button type="button" className={`xa-chip${chuyen_muc === null ? " xa-chip--on" : ""}`} aria-pressed={chuyen_muc === null} onClick={() => datChuyenMuc(null)}>
-          {XA_TN.loc_tat_ca}
-        </button>
-        {cac_muc.map((m) => (
-          <button key={m} type="button" className={`xa-chip${chuyen_muc === m ? " xa-chip--on" : ""}`} aria-pressed={chuyen_muc === m} onClick={() => datChuyenMuc(m)}>
-            {m}
-          </button>
-        ))}
-      </div>
-    ) : null;
-  if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.trong} />;
+  if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={props.empty} />;
   return (
     <>
-      {chips}
       <ul className="xa-ds">
         {ds.muc.map((t, i) => (
           <li key={t.id}>{i === 0 ? <TheNoiBat tin={t} onMo={props.onMo} /> : <HangTin tin={t} onMo={props.onMo} />}</li>
@@ -143,14 +163,17 @@ export function DanhSachTinXa(props: { ds: DanhSachTin; onMo: (id: string) => vo
   );
 }
 
-/** Tải danh sách tin của xã; trạng thái sống ở đây để tab và trang chủ dùng chung một lần tải. */
-export function useTinXa(ten_mien: string) {
+/**
+ * Tải danh sách tin của xã; trạng thái sống ở đây để tab và trang chủ dùng chung một lần tải. `type`
+ * (tuỳ chọn): danh sách lọc theo loại ở máy chủ — một lần tải riêng, cho chip và ô Sự kiện.
+ */
+export function useTinXa(ten_mien: string, type: NewsType | null = null) {
   const [ds, datDs] = useState<DanhSachTin>(TIN_DAU);
   const da_tai = useRef(false);
 
   async function tai(con_tro: string) {
     datDs(batDauTaiTin);
-    const kq = await tinCuaXa(ten_mien, con_tro);
+    const kq = await tinCuaXa(ten_mien, con_tro, type);
     datDs((truoc) => sauKhiTaiTin(truoc, kq));
   }
 

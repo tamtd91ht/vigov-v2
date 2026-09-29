@@ -809,7 +809,6 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["câu lỗi trên nền trang", token("xa-loi"), token("xa-nen")],
     ["nhãn 'Gọi' trên nền xanh lá nhạt", token("xa-luc-dam"), token("xa-luc-nhat")],
     ["nhãn tab chưa chọn", token("ink-muted"), token("surface")],
-    ["nhãn BẢN TRẢI NGHIỆM", token("xa-navy"), token("xa-vang")],
     ["chữ trắng trên nút hồng", "#ffffff", token("xa-hong-dam")],
     ["chữ trắng trên nút đỏ", "#ffffff", token("xa-loi")],
     ["chip 'Đang xử lý'", token("xa-cam-dam"), token("xa-cam-nhat")],
