@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,19 +19,24 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/crypto"
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
+	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
+	svcgrpc "github.com/vihat/vigov/service-comms/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 	"github.com/vihat/vigov/service-comms/internal/mail"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
@@ -41,9 +47,12 @@ import (
 // group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
 // not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
 //
-// comms: REST only — no gRPC server; the one service storing per-commune secrets (SecretEncryption).
+// comms: REST, plus since 2026-09-29 a gRPC server (GRPCServer) for DeliverStaffNotifications — the
+// automation jobs' notices into the header bell (ADR 0058 §3); the one service storing per-commune
+// secrets (SecretEncryption).
 var configUses = config.Uses(
 	config.HTTPServer,
+	config.GRPCServer,
 	config.PlatformClient,
 	config.IdentityClient,
 	config.TenantCache,
@@ -197,6 +206,12 @@ func main() {
 	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
 		mail.NewSender(nil, mail.DefaultTimeout))
 
+	// The header-bell inbox (migration 0010). ONE store behind the staff reads and the use case; the
+	// use case owns every write's transaction and audit entry — the REST mark-read routes AND the gRPC
+	// delivery below share it.
+	staffInbox := commsstore.NewStaffNotificationStore(kho)
+	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -217,8 +232,10 @@ func main() {
 		MailSettings:         mailSettings,
 		WriteMailSettings:    mailSettings,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog: audit.NewLog(kho),
-		Log:      log,
+		AuditLog:        audit.NewLog(kho),
+		StaffInbox:      staffInbox,
+		WriteStaffInbox: staffNotifications,
+		Log:             log,
 	})
 
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
@@ -246,6 +263,19 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// THE gRPC SURFACE — its own port (GRPC_LISTEN_ADDR, default :9090), the same shape as petitions.
+	// One business RPC, DeliverStaffNotifications (ADR 0058 §3), writing through the SAME use case the
+	// bell's REST routes use.
+	//
+	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
+	// the NetworkPolicy confining the port to the cluster — both, not either.
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Notifications: staffNotifications, Log: log})
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
+	if err != nil {
+		log.Error("không mở được cổng gRPC", "service", "comms", "addr", cfg.GRPCListenAddr(), "err", err)
+		os.Exit(1)
+	}
+
 	// ĐÓNG ÊM. Trước 2026-09-22 bốn dịch vụ này gọi thẳng `http.ListenAndServe`, nên `SIGTERM`
 	// giết tiến trình NGAY — giữa một yêu cầu đang chạy, giữa một giao dịch chưa commit.
 	//
@@ -262,10 +292,17 @@ func main() {
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	// Có đệm: `ListenAndServe` hỏng sau khi đã có ai đọc kênh là một goroutine rò lại mãi mãi.
-	loi := make(chan error, 1)
+	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
+	loi := make(chan error, 2)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			loi <- err
+		}
+	}()
+	go func() {
+		log.Info("starting gRPC", "service", "comms", "addr", cfg.GRPCListenAddr())
+		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
+		if err := grpcSrv.Serve(grpcLis); err != nil {
 			loi <- err
 		}
 	}()
@@ -279,17 +316,56 @@ func main() {
 	// gọi ấy, không nằm trong một `defer` phía trên.
 	select {
 	case err := <-loi:
+		// One surface failing takes the process down rather than leaving it half-serving: REST up with
+		// gRPC down looks healthy while every automation job's delivery is refused.
 		log.Error("server stopped", "err", err)
+		grpcSrv.Stop()
+		_ = srv.Close()
 		os.Exit(1)
 	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "comms")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Error("đóng không sạch", "err", err)
+
+		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
+		grpcDone := make(chan struct{})
+		go func() {
+			grpcSrv.GracefulStop()
+			close(grpcDone)
+		}()
+		errHTTP := srv.Shutdown(ctx)
+		select {
+		case <-grpcDone:
+		case <-ctx.Done():
+			log.Warn("gRPC không đóng kịp hạn, buộc dừng", "service", "comms")
+			grpcSrv.Stop()
+		}
+		if errHTTP != nil {
+			log.Error("đóng không sạch", "err", errHTTP)
 			os.Exit(1)
 		}
 	}
+}
+
+// buildGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
+//
+// A NAMED FUNCTION SO A TEST CAN START IT (grpc_server_test.go): core/grpcx proves the interceptors
+// refuse what they should, but only a test of THIS function sees whether this binary installs them.
+//
+// ORDER IS NOT NEGOTIABLE: caller key first, so an unauthenticated caller never reaches the commune
+// logic; then the commune from metadata into context. DeliverStaffNotifications is NOT tenant-exempt,
+// so a call without "x-tenant-id" is refused with InvalidArgument before the handler (rule 1).
+func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics at construction when GRPC_CALLER_KEY is empty: a server without the key accepts
+			// every call it should refuse, and nothing looks wrong.
+			grpcx.UnaryServerCallerAuth(callerKey, d.Log),
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
+	commsv1.RegisterCommsServiceServer(srv, svcgrpc.NewServer(d))
+	return srv
 }
 
 // dungBien builds the edge chain this binary serves.

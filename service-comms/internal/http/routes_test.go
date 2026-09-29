@@ -173,7 +173,10 @@ func dungMayChu(t *testing.T) *mayChu {
 			WriteMailSettings: &fakeMailSettings{},
 			// The audit-log reader: present because Register refuses a nil one; its suite is audit_entries_test.go.
 			AuditLog: &auditLogFake{},
-			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The header bell: present because Register refuses a nil one; its suite is staff_notification_test.go.
+			StaffInbox:      &fakeInbox{},
+			WriteStaffInbox: &fakeInbox{},
+			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

@@ -1,0 +1,174 @@
+package grpc
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net"
+	"strings"
+	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
+
+	"github.com/vihat/vigov/core/audit"
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
+	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-comms/internal/domain"
+)
+
+const testTenant = tenant.ID("01JD8ZQK9M3NPXR7TVWYB2C4EF")
+
+// fakeDeliverer runs the REAL domain validation — so the status table below is the contract's, not
+// a fake's — and then answers what the test asks for.
+type fakeDeliverer struct {
+	calls     int
+	lastIn    []domain.NotificationDelivery
+	lastActor audit.Actor
+	already   bool
+	fail      error
+}
+
+func (f *fakeDeliverer) Deliver(ctx context.Context, in []domain.NotificationDelivery, actor audit.Actor) (
+	[]domain.DeliveryOutcome, error) {
+	f.calls++
+	f.lastIn, f.lastActor = in, actor
+	_ = tenant.MustFrom(ctx)
+	clean, err := domain.ValidateDeliveries(in)
+	if err != nil {
+		return nil, err
+	}
+	if f.fail != nil {
+		return nil, f.fail
+	}
+	out := make([]domain.DeliveryOutcome, 0, len(clean))
+	for _, n := range clean {
+		o := domain.DeliveryOutcome{IdempotencyKey: n.IdempotencyKey, Created: len(n.RecipientCodes)}
+		if f.already {
+			o = domain.DeliveryOutcome{IdempotencyKey: n.IdempotencyKey, AlreadyDelivered: len(n.RecipientCodes)}
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
+func newTestServer(f *fakeDeliverer) *Server {
+	return NewServer(Deps{Notifications: f, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+}
+
+func goodRequest() *commsv1.DeliverStaffNotificationsRequest {
+	return &commsv1.DeliverStaffNotificationsRequest{Notifications: []*commsv1.StaffNotification{
+		{IdempotencyKey: "sla_reminders:due_soon:NHIEM_VU:2026-09-29",
+			Kind:        commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_DUE_SOON,
+			RecipientMa: []string{"CB-001", "CB-002"}, Title: "Bạn có 2 việc sắp đến hạn", Link: "/nhiem-vu?soon=true"},
+		{IdempotencyKey: "weekly_digest:NHIEM_VU:2026-W40",
+			Kind:        commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_WEEKLY_DIGEST,
+			RecipientMa: []string{"CB-100"}, Title: "Bản tin đầu tuần"},
+	}}
+}
+
+func ctxWithPeer() context.Context {
+	ctx := tenant.Into(context.Background(), testTenant)
+	return peer.NewContext(ctx, &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("10.4.5.6"), Port: 50123}})
+}
+
+func TestDeliverStatusTable(t *testing.T) {
+	mut := func(f func(*commsv1.DeliverStaffNotificationsRequest)) *commsv1.DeliverStaffNotificationsRequest {
+		r := goodRequest()
+		f(r)
+		return r
+	}
+	cases := []struct {
+		name string
+		req  *commsv1.DeliverStaffNotificationsRequest
+		fail error
+		want codes.Code
+	}{
+		{"ok", goodRequest(), nil, codes.OK},
+		{"empty", &commsv1.DeliverStaffNotificationsRequest{}, nil, codes.InvalidArgument},
+		{"kind unspecified", mut(func(r *commsv1.DeliverStaffNotificationsRequest) {
+			r.Notifications[1].Kind = commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED
+		}), nil, codes.InvalidArgument},
+		{"kind from a newer build", mut(func(r *commsv1.DeliverStaffNotificationsRequest) {
+			r.Notifications[0].Kind = commsv1.StaffNotificationKind(99)
+		}), nil, codes.InvalidArgument},
+		{"absolute link", mut(func(r *commsv1.DeliverStaffNotificationsRequest) {
+			r.Notifications[0].Link = "https://evil.example"
+		}), nil, codes.InvalidArgument},
+		{"no recipient", mut(func(r *commsv1.DeliverStaffNotificationsRequest) {
+			r.Notifications[1].RecipientMa = nil
+		}), nil, codes.InvalidArgument},
+		{"key twice", mut(func(r *commsv1.DeliverStaffNotificationsRequest) {
+			r.Notifications[1].IdempotencyKey = r.Notifications[0].IdempotencyKey
+		}), nil, codes.InvalidArgument},
+		{"store down", goodRequest(), errors.New("fake: pool exhausted"), codes.Internal},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeDeliverer{fail: tc.fail}
+			_, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), tc.req)
+			if got := status.Code(err); got != tc.want {
+				t.Fatalf("mã = %v, muốn %v (lỗi: %v)", got, tc.want, err)
+			}
+			if tc.fail != nil && strings.Contains(err.Error(), "pool exhausted") {
+				t.Error("nguyên nhân nội bộ lọt qua ranh giới dịch vụ")
+			}
+		})
+	}
+}
+
+func TestDeliverInvalidMessageNeverEchoesTitle(t *testing.T) {
+	r := goodRequest()
+	r.Notifications[0].Title = strings.Repeat("NOI-DUNG-BEN-GOI ", 20)
+	_, err := newTestServer(&fakeDeliverer{}).DeliverStaffNotifications(ctxWithPeer(), r)
+	if status.Code(err) != codes.InvalidArgument || strings.Contains(err.Error(), "NOI-DUNG-BEN-GOI") {
+		t.Fatalf("lỗi = %v", err)
+	}
+}
+
+func TestDeliverMapsOutcomesAndKindsAndUsesSystemActor(t *testing.T) {
+	f := &fakeDeliverer{}
+	res, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), goodRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.GetItems()) != 2 || res.GetItems()[0].GetCreated() != 2 || res.GetItems()[1].GetCreated() != 1 ||
+		res.GetItems()[0].GetIdempotencyKey() != "sla_reminders:due_soon:NHIEM_VU:2026-09-29" {
+		t.Fatalf("= %+v", res.GetItems())
+	}
+	if f.lastIn[0].Kind != domain.StaffNotificationDueSoon || f.lastIn[1].Kind != domain.StaffNotificationWeeklyDigest {
+		t.Errorf("ánh xạ loại sai: %q, %q", f.lastIn[0].Kind, f.lastIn[1].Kind)
+	}
+	if a := f.lastActor; a.ID != audit.SystemActor || a.Kind != "system" || a.IP != "10.4.5.6" {
+		t.Errorf("chủ thể = %+v, muốn chủ thể hệ thống kèm IP của bên gọi", a)
+	}
+}
+
+func TestDeliverRetryReportsAlreadyDelivered(t *testing.T) {
+	res, err := newTestServer(&fakeDeliverer{already: true}).DeliverStaffNotifications(ctxWithPeer(), goodRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it := res.GetItems()[0]; it.GetCreated() != 0 || it.GetAlreadyDelivered() != 2 {
+		t.Fatalf("= %+v", it)
+	}
+}
+
+func TestDeliverWithoutCommuneIsInternalAndCallsNothing(t *testing.T) {
+	f := &fakeDeliverer{}
+	_, err := newTestServer(f).DeliverStaffNotifications(context.Background(), goodRequest())
+	if status.Code(err) != codes.Internal || f.calls != 0 {
+		t.Fatalf("mã = %v, gọi = %d", status.Code(err), f.calls)
+	}
+}
+
+func TestNewServerRefusesMissingDeps(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("dựng được máy chủ thiếu phụ thuộc")
+		}
+	}()
+	NewServer(Deps{})
+}

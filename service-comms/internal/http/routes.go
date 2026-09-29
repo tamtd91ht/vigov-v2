@@ -66,6 +66,12 @@ type GhiLoaiTaiNguyen interface {
 	Them(ctx context.Context, yc app.YeuCauThemLoaiTaiNguyen, nguoi audit.Actor) (domain.LoaiTaiNguyenBanDo, error)
 	Sua(ctx context.Context, id string, yc app.YeuCauSuaLoaiTaiNguyen, nguoi audit.Actor) (domain.LoaiTaiNguyenBanDo, error)
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+
+	// The Excel import (ADR 0059) — routes_map_asset_type_import.go. On THIS interface because it is
+	// the same use case writing the same table under the same transaction discipline; the preview
+	// opens a transaction too (to read the snapshot) and always rolls it back.
+	PreviewMapAssetTypeImport(ctx context.Context, rows []domain.MapAssetTypeImportRow) (app.MapAssetTypeImportResult, error)
+	ImportMapAssetTypes(ctx context.Context, rows []domain.MapAssetTypeImportRow, actor audit.Actor) (app.MapAssetTypeImportResult, error)
 }
 
 // THE PERMISSION ON THE THREE WRITE ROUTES BELOW IS `admin.lookup`, WRITTEN OUT AT EVERY CALL SITE.
@@ -217,6 +223,11 @@ type Deps struct {
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
 
+	// The header bell — the signed-in staff member's own inbox (migration 0010) — see
+	// internal/http/routes_staff_notification.go.
+	StaffInbox      StaffInboxReader
+	WriteStaffInbox StaffInboxWriter
+
 	Log *slog.Logger
 }
 
@@ -268,11 +279,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.AuditLog == nil {
 		panic("comms/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/comms-audit-entries sẽ panic khi có người gọi")
 	}
+	if d.StaffInbox == nil || d.WriteStaffInbox == nil {
+		panic("comms/http: thiếu kho hoặc use case hộp chuông — GET/PATCH /api/v1/notifications sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
 		panic("comms/http: thiếu authz.Checker — mười chín tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
+
+	// The header bell — four routes, the caller's own inbox only (routes_staff_notification.go).
+	registerStaffNotificationRoutes(mux, h)
+
+	// The map-asset-type Excel import — three routes, all `admin.lookup` (routes_map_asset_type_import.go).
+	registerMapAssetTypeImportRoutes(mux, d, h)
 
 	// --- the commune's map-asset-type catalogue -----------------------------------------------
 	//

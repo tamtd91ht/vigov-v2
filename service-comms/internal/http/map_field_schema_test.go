@@ -112,7 +112,10 @@ func newMapFieldServer(t *testing.T) *mapFieldServer {
 		WriteMailSettings: &fakeMailSettings{},
 		// The audit-log reader: present because Register refuses a nil one; its suite is audit_entries_test.go.
 		AuditLog: &auditLogFake{},
-		Log:      log,
+		// The header bell: present because Register refuses a nil one; its suite is staff_notification_test.go.
+		StaffInbox:      &fakeInbox{},
+		WriteStaffInbox: &fakeInbox{},
+		Log:             log,
 	})
 
 	// The real edge chain in the real order, idem with a nil store (a valid deployment) so each

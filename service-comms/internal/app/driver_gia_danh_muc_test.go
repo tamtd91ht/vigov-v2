@@ -70,6 +70,9 @@ type khoGia struct {
 	hang *hangLVB
 	loi  error
 
+	// snapshot answers the import's snapshot read: rows of (ma, nhan, da_xoa).
+	snapshot [][]driver.Value
+
 	// loiSau fails the FIRST statement containing this substring, and only that one.
 	//
 	// WHY NOT A BLANKET `loi`: failing everything cannot tell "rolled back" from "never started".
@@ -174,17 +177,21 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		}
 		h := *c.k.hang
 		return &rowsGia{cot: cotLVB(), hang: [][]driver.Value{{
-			h.id, h.ma, h.nhan, h.dangDung, h.macDinh, int64(h.thuTu), h.nguon, h.reNhanh,
+			h.id, h.ma, h.nhan, int64(h.thuTu), h.macDinh, h.dangDung, h.nguon, h.reNhanh,
 		}}}, nil
+	case strings.Contains(q, "deleted_at IS NOT NULL FROM loai_tai_nguyen_ban_do"):
+		return &rowsGia{cot: []string{"ma", "nhan", "da_xoa"}, hang: c.k.snapshot}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
 }
 
-// cotLVB mirrors docstore's column list ORDER. Written out here rather than imported so that
-// reordering the store's list without reordering its Scan turns this red too — the store's own
-// suite makes the same argument for the same reason.
+// cotLVB mirrors docstore's column list ORDER (cotLoaiTaiNguyen). Written out here rather than
+// imported, AND CHECKED AGAINST THE STATEMENT: TestFakeDriverMirrorsTheSelectedColumns reads the
+// SELECT list of the FOR UPDATE statement the store actually sent. Until 2026-09-29 this list
+// mirrored the store's (wrong) Scan order instead of its SELECT, so a Scan that could never succeed
+// on PostgreSQL passed here.
 func cotLVB() []string {
-	return []string{"id", "ma", "nhan", "dang_dung", "la_mac_dinh", "thu_tu", "nguon", "ma_nguon_re_nhanh"}
+	return []string{"id", "ma", "nhan", "thu_tu", "la_mac_dinh", "dang_dung", "nguon", "ma_nguon_re_nhanh"}
 }
 
 type txGia struct{ k *khoGia }

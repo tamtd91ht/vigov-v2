@@ -46,6 +46,8 @@ type KhoLoaiTaiNguyen interface {
 	BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx, trongID string) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, ltn domain.LoaiTaiNguyenBanDo) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+	// ImportSnapshot is every row, soft-deleted included — the Excel import's plan (ADR 0059).
+	ImportSnapshot(ctx context.Context, tx *store.ScopedTx) ([]domain.ExistingMapAssetType, error)
 }
 
 // DanhMucLoaiTaiNguyen owns adding, editing and retiring one commune's document types.

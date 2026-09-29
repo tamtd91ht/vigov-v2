@@ -168,7 +168,10 @@ func dungMayChuThongBao(t *testing.T) *mayChuThongBao {
 		WriteMailSettings: &fakeMailSettings{},
 		// The audit-log reader: present because Register refuses a nil one; its suite is audit_entries_test.go.
 		AuditLog: &auditLogFake{},
-		Log:      im,
+		// The header bell: present because Register refuses a nil one; its suite is staff_notification_test.go.
+		StaffInbox:      &fakeInbox{},
+		WriteStaffInbox: &fakeInbox{},
+		Log:             im,
 	})
 
 	// The real edge chain in the real order. idem.Middleware sits INSIDE TenantMiddleware because

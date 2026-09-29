@@ -144,7 +144,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		MailSettings:      commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
 		WriteMailSettings: commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
 		AuditLog:          audit.NewLog(pkgstore.New(nil)),
-		Log:               log,
+		// The header bell, on a nil *store.DB for the same reason: nothing here calls it; its suite is
+		// internal/http/staff_notification_test.go.
+		StaffInbox:      commsstore.NewStaffNotificationStore(nil),
+		WriteStaffInbox: commsapp.NewStaffNotifications(nil, nil),
+		Log:             log,
 	})
 
 	danhBa := thuMucGia{

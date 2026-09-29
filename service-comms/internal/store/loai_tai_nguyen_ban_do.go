@@ -137,10 +137,15 @@ func (s *LoaiTaiNguyenBanDoStore) DanhSach(ctx context.Context) ([]domain.LoaiTa
 
 // docMotDong is the shared Scan of one row. Positional, in lockstep with cotLoaiTaiNguyen — see the
 // note there on the adjacent same-typed columns.
+//
+// FIXED 2026-09-29: this scanned `dang_dung, la_mac_dinh, thu_tu` where cotLoaiTaiNguyen selects
+// `thu_tu, la_mac_dinh, dang_dung`. On PostgreSQL an INT into a bool and a bool into an int fail the
+// Scan, so every PATCH and DELETE of /api/v1/map-asset-types answered 500. The app suite's fake
+// driver mirrored the SAME wrong order, so it stayed green; it now mirrors cotLoaiTaiNguyen.
 func docMotDongLoaiTaiNguyen(quet func(...any) error) (domain.LoaiTaiNguyenBanDo, error) {
 	var ltn domain.LoaiTaiNguyenBanDo
-	err := quet(&ltn.ID, &ltn.Ma, &ltn.Nhan, &ltn.DangDung, &ltn.LaMacDinh,
-		&ltn.ThuTu, &ltn.Nguon, &ltn.MaNguonReNhanh)
+	err := quet(&ltn.ID, &ltn.Ma, &ltn.Nhan, &ltn.ThuTu, &ltn.LaMacDinh,
+		&ltn.DangDung, &ltn.Nguon, &ltn.MaNguonReNhanh)
 	return ltn, err
 }
 
@@ -267,6 +272,45 @@ func (s *LoaiTaiNguyenBanDoStore) CapNhat(ctx context.Context, tx *store.ScopedT
 const xoaMemLoaiTaiNguyen = `UPDATE loai_tai_nguyen_ban_do ` +
 	`SET deleted_at = now(), deleted_by = $3, delete_reason = $4, cap_nhat_luc = now() ` +
 	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// MaxImportSnapshotRows bounds the import snapshot: live rows are capped at TranDanhMucLoaiTaiNguyen,
+// and ten times that leaves room for a long history of soft-deleted rows. Past it the import REFUSES
+// — a snapshot missing rows would miss a taken code, and the plan would promise a row the unique key
+// then refuses.
+const MaxImportSnapshotRows = 10 * TranDanhMucLoaiTaiNguyen
+
+// ErrImportSnapshotTooLarge — the commune's catalogue history exceeds MaxImportSnapshotRows.
+var ErrImportSnapshotTooLarge = errors.New("loai_tai_nguyen_ban_do: ảnh chụp danh mục vượt trần")
+
+// ImportSnapshot reads EVERY row of this commune's catalogue — soft-deleted ones INCLUDED and flagged —
+// inside the import's transaction. Deleted rows are there because their codes are still taken (rule
+// 7, invariant 3); the planner never treats them as live for the label check.
+func (s *LoaiTaiNguyenBanDoStore) ImportSnapshot(ctx context.Context, tx *store.ScopedTx) (
+	[]domain.ExistingMapAssetType, error) {
+
+	const stmt = `SELECT ma, nhan, deleted_at IS NOT NULL FROM loai_tai_nguyen_ban_do ` +
+		`WHERE tenant_id = $1 ORDER BY ma LIMIT $2`
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), MaxImportSnapshotRows+1)
+	if err != nil {
+		return nil, fmt.Errorf("loai_tai_nguyen_ban_do: đọc ảnh chụp để nhập: %w", err)
+	}
+	defer rows.Close()
+	out := make([]domain.ExistingMapAssetType, 0, 16)
+	for rows.Next() {
+		var e domain.ExistingMapAssetType
+		if err := rows.Scan(&e.Code, &e.Label, &e.Deleted); err != nil {
+			return nil, fmt.Errorf("loai_tai_nguyen_ban_do: đọc dòng ảnh chụp: %w", err)
+		}
+		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("loai_tai_nguyen_ban_do: duyệt ảnh chụp: %w", err)
+	}
+	if len(out) > MaxImportSnapshotRows {
+		return nil, ErrImportSnapshotTooLarge
+	}
+	return out, nil
+}
 
 // XoaMem soft deletes one row. THERE IS NO HARD DELETE ANYWHERE IN THIS PACKAGE, and the trigger
 // refuses one even if somebody writes it (rule 7, forbidden #1).

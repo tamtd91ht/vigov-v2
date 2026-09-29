@@ -69,6 +69,8 @@ func auditDeps(checker authz.Checker, fake AuditLogReader, log *slog.Logger) Dep
 		MailSettings:         &fakeMailSettings{},
 		WriteMailSettings:    &fakeMailSettings{},
 		AuditLog:             fake,
+		StaffInbox:           &fakeInbox{},
+		WriteStaffInbox:      &fakeInbox{},
 		Log:                  log,
 	}
 }
