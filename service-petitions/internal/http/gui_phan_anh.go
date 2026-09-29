@@ -37,6 +37,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -72,6 +73,12 @@ type guiPhanAnhVao struct {
 	Lat *float64 `json:"lat"`
 	Lng *float64 `json:"lng"`
 
+	// Field is the code the citizen picked from GET /api/v1/my-citizen-report-fields (ADR 0050 point 1).
+	// OPTIONAL FOR NOW: ADR 0050 point 9 makes it required, but the shared citizen screen does not send
+	// it yet. A field the commune does not offer — unknown, retired, switched off, `can-bo` — is refused
+	// with ONE answer (400 `field_not_offered`); the use case checks it before identity is asked.
+	Field *string `json:"field,omitempty"`
+
 	// --- refused, every one of them ----------------------------------------------------------
 
 	// WHOSE PETITION IT IS. Rule 4, forbidden #1 — the top entry of that rule's list, because a
@@ -79,10 +86,8 @@ type guiPhanAnhVao struct {
 	CitizenID *string `json:"citizen_id"`
 	CongDanID *string `json:"cong_dan_id"`
 
-	// WHICH FIELD, i.e. WHICH SLA. Open question #23, closed in the other direction (ADR 0028):
-	// letting the citizen pick would let every pothole be filed as `An ninh trật tự` and take that
-	// field's 2-hour commitment.
-	Field   *string `json:"field"`
+	// THE VIETNAMESE SPELLING OF THE FIELD stays refused: the contract name is `field`, and a client
+	// sending `linh_vuc` believes it set something that would otherwise be dropped silently.
 	LinhVuc *string `json:"linh_vuc"`
 
 	// THE CHANNEL, THE CODE, THE STATUS AND THE THREE INSTANTS. Each is either immutable in the
@@ -98,7 +103,7 @@ type guiPhanAnhVao struct {
 // truongKhongPhaiCuaClient reports whether the body claimed a fact the client does not decide.
 func (v guiPhanAnhVao) truongKhongPhaiCuaClient() bool {
 	return v.CitizenID != nil || v.CongDanID != nil ||
-		v.Field != nil || v.LinhVuc != nil ||
+		v.LinhVuc != nil ||
 		v.Channel != nil || v.Code != nil || v.Status != nil ||
 		v.ClockFrom != nil || v.AcknowledgeDue != nil || v.ResolveDue != nil
 }
@@ -149,8 +154,9 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 	// BEFORE ANYTHING ELSE, and before any work is done on the request.
 	if vao.truongKhongPhaiCuaClient() {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Yêu cầu chứa thông tin do hệ thống tự xác định (người gửi, lĩnh vực, kênh, mã tra cứu, "+
-				"trạng thái hoặc thời hạn). Hãy gửi lại chỉ với nội dung phản ánh.", "")
+			"Yêu cầu chứa thông tin do hệ thống tự xác định (người gửi, kênh, mã tra cứu, "+
+				"trạng thái hoặc thời hạn), hoặc ghi lĩnh vực bằng `linh_vuc` thay vì `field`. "+
+				"Hãy gửi lại chỉ với nội dung phản ánh.", "")
 		return
 	}
 
@@ -167,12 +173,23 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	field := ""
+	if vao.Field != nil {
+		field = strings.TrimSpace(*vao.Field)
+		if field == "" {
+			// `"field": ""` is a client that meant to pick and did not — the same answer as any other
+			// field not on the form, rather than silently filing the petition without one.
+			writeFieldNotOffered(w)
+			return
+		}
+	}
 	p, err := h.d.GuiPhieu.Gui(ctx, app.YeuCauGuiPhanAnh{
 		NoiDung:   vao.Content,
 		DiaChi:    vao.Address,
 		HoTen:     vao.Reporter,
 		DienThoai: vao.Phone,
 		AnDanh:    vao.Anonymous,
+		Field:     field,
 		Lat:       vao.Lat,
 		Lng:       vao.Lng,
 	}, congDan)
@@ -200,9 +217,29 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 	// Location would put it into every proxy access log on the way back — for a client that already
 	// has it in the body and already knows the path.
 	//
-	// The label is "" because the field code is empty until an officer classifies it. There is no
-	// catalogue read on this path, and there must not be: a field that is not set has no label.
-	vietJSON(w, http.StatusCreated, phieuCuaToiRaNgoai(p, ""))
+	// THE LABEL: the commune's wording, else the platform default — read AFTER the commit, so a failure
+	// here must NOT turn into an error: the petition exists and the citizen must receive its lookup code
+	// (rule 10, invariant 1). The label is cosmetic; it goes out empty and the failure is logged, the
+	// same call the rating route makes. No field picked -> no label, and no catalogue read.
+	label := ""
+	if p.LinhVuc != "" {
+		var err error
+		if label, err = h.nhanCuaLinhVuc(ctx, p.LinhVuc); err != nil {
+			h.d.Log.Error("đọc nhãn lĩnh vực sau khi tiếp nhận: lỗi hệ thống — trả phiếu không nhãn",
+				"xa", string(tenant.MustFrom(ctx)), "ma_tra_cuu", p.MaTraCuu, "err", err)
+			label = ""
+		}
+	}
+	vietJSON(w, http.StatusCreated, phieuCuaToiRaNgoai(p, label))
+}
+
+// writeFieldNotOffered is the ONE answer for a picked field the commune's form does not offer —
+// unknown, retired, switched off, `can-bo`, or blank. One status, one key, one sentence, so the answer
+// reveals nothing about which codes exist or which the commune turned off; the Mini App's move is the
+// same for all of them: reload the catalogue and let the citizen pick again.
+func writeFieldNotOffered(w http.ResponseWriter) {
+	httpx.WriteError(w, http.StatusBadRequest, "field_not_offered",
+		"Lĩnh vực đã chọn hiện không có trong danh sách xã đang nhận. Vui lòng chọn lại lĩnh vực.", "")
 }
 
 // congDanThucHien builds the audit actor from the SESSION, and from nothing else.
@@ -248,6 +285,17 @@ func (h *HandlerCongDan) congDanThucHien(r *http.Request) (audit.Actor, bool) {
 func (h *HandlerCongDan) traLoiLoiGui(w http.ResponseWriter, r *http.Request, err error) {
 	ctx := r.Context()
 	switch {
+	case errors.Is(err, app.ErrFieldNotOffered):
+		writeFieldNotOffered(w)
+
+	case errors.Is(err, app.ErrFieldCatalogueUnavailable):
+		// Platform unreachable past the 60-second cache (ADR 0060 §3): nothing was written, no code was
+		// issued. A different 503 from `intake_not_configured` — this one clears by itself.
+		h.d.Log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa đọc được bộ mã lĩnh vực",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "field_catalogue_unavailable",
+			"Chưa kiểm tra được lĩnh vực nên phản ánh của bạn CHƯA được ghi nhận. Vui lòng thử lại sau ít phút.", "")
+
 	case domain.LaLoiGuiPhanAnh(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data (proved in domain/gui_phan_anh_test.go) and a second sentence written here would

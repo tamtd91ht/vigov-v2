@@ -100,6 +100,15 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
+	// THE FIELD, per commune, as the real use case's catalogue check answers: one sentinel for every
+	// field the commune does not offer — which is what makes "another commune's field" refusable here.
+	var resolveDue time.Time
+	if yc.Field != "" {
+		if !offeredFieldsByCommune[xa][yc.Field] {
+			return domain.PhieuPhanAnh{}, app.ErrFieldNotOffered
+		}
+		resolveDue = intakeResolveDue
+	}
 
 	s.dem++
 	// A DIFFERENT CODE EVERY TIME. Were it constant, the duplicate-request test would pass even if
@@ -120,6 +129,8 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan a
 		GocDemHan:         mocGuiThuGui,
 		VaoSoLuc:          mocGuiThuGui,
 		HanTiepNhan:       mocHanThuGui,
+		LinhVuc:           yc.Field,
+		HanXuLyXong:       resolveDue,
 	}
 	if s.theo[xa] == nil {
 		s.theo[xa] = map[string]domain.PhieuPhanAnh{}
@@ -162,7 +173,16 @@ func (s *soPhieuGia) DanhSachCuaCongDan(ctx context.Context, congDanID, trangTha
 var (
 	mocGuiThuGui = time.Date(2026, 9, 22, 7, 14, 3, 0, time.UTC)
 	mocHanThuGui = time.Date(2026, 9, 23, 2, 30, 0, 0, time.UTC)
+	// intakeResolveDue is identity's resolve deadline for a picked field — not a round offset.
+	intakeResolveDue = time.Date(2026, 9, 25, 3, 17, 0, 0, time.UTC)
 )
+
+// offeredFieldsByCommune: commune A offers `rac-thai`, commune B offers `giao-thong`. A code one
+// commune offers is refused for the other (rule 1).
+var offeredFieldsByCommune = map[tenant.ID]map[string]bool{
+	xaA: {"rac-thai": true},
+	xaB: {"giao-thong": true},
+}
 
 // --- an in-memory idempotency store -----------------------------------------------------------
 //
@@ -208,9 +228,10 @@ func (k *khoIdemGia) Release(_ context.Context, key string) error {
 // --- harness -----------------------------------------------------------------------------------
 
 type mayChuGui struct {
-	h   http.Handler
-	so  *soPhieuGia
-	kho *khoIdemGia
+	h    http.Handler
+	so   *soPhieuGia
+	kho  *khoIdemGia
+	nhan *nhanLinhVucGia // the label read the 201 makes after commit — intake_field_test.go
 }
 
 func dungMayChuGui(t *testing.T) *mayChuGui {
@@ -219,14 +240,16 @@ func dungMayChuGui(t *testing.T) *mayChuGui {
 	so := soPhieuMoi()
 	kho := khoIdemMoi()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	nhan := nhanLinhVucMau()
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu:       so,
-		GuiPhieu:    so,
-		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
-		Log: log,
+		Phieu:         so,
+		GuiPhieu:      so,
+		Rating:        newRatingFake(),
+		NhanLinhVuc:   nhan,
+		CitizenFields: newFieldCatalogueFake(),
+		Log:           log,
 	})
 
 	// THE REAL CHAIN, in the order cmd/server builds it — including idem.Middleware innermost, where
@@ -239,7 +262,7 @@ func dungMayChuGui(t *testing.T) *mayChuGui {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuGui{h: h, so: so, kho: kho}
+	return &mayChuGui{h: h, so: so, kho: kho, nhan: nhan}
 }
 
 const duongTapCongDan = "/api/v1/my-citizen-reports"
@@ -353,9 +376,10 @@ func TestGuiPhienChuaChonXaLa401(t *testing.T) {
 // TestGuiDinhDanhTuPHIENChuKhongPhaiTuThan bên dưới.
 func TestGuiThanMangDinhDanhCongDanLa400(t *testing.T) {
 	than := map[string]string{
-		"cong_dan_id":    `{"content":"x","cong_dan_id":"cd-01JNGUOIKHAC"}`,
-		"citizen_id":     `{"content":"x","citizen_id":"cd-01JNGUOIKHAC"}`,
-		"lĩnh vực":       `{"content":"x","field":"an-ninh-trat-tu"}`,
+		"cong_dan_id": `{"content":"x","cong_dan_id":"cd-01JNGUOIKHAC"}`,
+		"citizen_id":  `{"content":"x","citizen_id":"cd-01JNGUOIKHAC"}`,
+		// `field` IS NO LONGER HERE: since ADR 0050 point 1 it is the citizen's pick, checked against
+		// the commune's catalogue (intake_field_test.go). The Vietnamese spelling stays refused.
 		"linh_vuc":       `{"content":"x","linh_vuc":"an-ninh-trat-tu"}`,
 		"kênh":           `{"content":"x","channel":"can-bo-nhap-ho"}`,
 		"mã tra cứu":     `{"content":"x","code":"PA-0000-0000-0000"}`,

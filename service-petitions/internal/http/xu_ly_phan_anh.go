@@ -284,10 +284,8 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 	// second read path to keep in step with the detail route's.
 	nhan, err := h.d.NhanLinhVuc.DanhSach(ctx)
 	if err != nil {
-		h.d.Log.Error("đọc nhãn lĩnh vực cho danh sách: lỗi hệ thống",
-			"xa", string(tenant.MustFrom(ctx)), "err", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "internal",
-			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		// 503 when platform is unreachable — never a raw code in place of a label (ADR 0060 §3).
+		writeFieldCatalogueError(w, r, h.d.Log.Error, "đọc nhãn lĩnh vực cho danh sách", err)
 		return
 	}
 	theoMa := make(map[string]string, len(nhan))

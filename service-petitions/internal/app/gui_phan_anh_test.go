@@ -162,7 +162,9 @@ func dungGui(k *khoGia, kho *khoPhieuGia, han HanTiepNhanDoc) *GuiPhanAnh {
 func dungGuiVoiSuKien(db *pkgstore.DB, kho *khoPhieuGia, suKien KhoSuKien,
 	han HanTiepNhanDoc) *GuiPhanAnh {
 
-	uc := NewGuiPhanAnh(db, kho, suKien, han)
+	// The field checker is nil here: these cases send no field, and a nil checker reached by a field
+	// is refused as a wiring fault (the field-path cases in intake_field_test.go inject one).
+	uc := NewGuiPhanAnh(db, kho, suKien, han, nil)
 	uc.sinhID = func() (string, error) { return idCoDinh, nil }
 	uc.sinhMa = func() (string, error) { return maCoDinh, nil }
 	uc.luc = func() time.Time { return mocGuiThu }

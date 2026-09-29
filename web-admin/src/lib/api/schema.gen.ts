@@ -1993,9 +1993,9 @@ export type petitions_guiPhanAnhVao = {
   "anonymous": boolean;
   "lat": number | null;
   "lng": number | null;
+  "field"?: string | null;
   "citizen_id": string | null;
   "cong_dan_id": string | null;
-  "field": string | null;
   "linh_vuc": string | null;
   "channel": string | null;
   "code": string | null;
@@ -3113,6 +3113,7 @@ export type petitions_get_citizen_reports = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -3132,6 +3133,7 @@ export type petitions_get_citizen_reports_by_maTraCuu = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -4841,6 +4843,7 @@ export type petitions_get_my_citizen_reports = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -4880,6 +4883,7 @@ export type petitions_get_my_citizen_reports_by_maTraCuu = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

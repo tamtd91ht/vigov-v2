@@ -368,10 +368,8 @@ func (h *HandlerCongDan) PhieuCuaToi(w http.ResponseWriter, r *http.Request) {
 	if p.LinhVuc != "" {
 		nhan, err = h.nhanCuaLinhVuc(ctx, p.LinhVuc)
 		if err != nil {
-			h.d.Log.Error("đọc nhãn lĩnh vực cho tuyến công dân: lỗi hệ thống",
-				"xa", string(tenant.MustFrom(ctx)), "err", err)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal",
-				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+			// 503 when platform is unreachable — never a raw code in place of a label (ADR 0060 §3).
+			writeFieldCatalogueError(w, r, h.d.Log.Error, "đọc nhãn lĩnh vực cho tuyến công dân", err)
 			return
 		}
 	}

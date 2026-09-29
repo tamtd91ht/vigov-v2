@@ -103,11 +103,15 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// on phieuCuaToiRa.ReporterPhone. No audit entry is written on any branch; the reasoning, and
 	// the condition under which it would stop holding, is on HandlerCongDan.PhieuCuaToi.
 	//
+	// 503 `field_catalogue_unavailable`: the petition carries a field and its label (commune wording,
+	// else platform default) cannot be read — refused rather than showing a raw code (ADR 0060 §3).
+	//
 	// @reply    200 phieuCuaToiRa
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}",
 		authz.CitizenOnly()(
 			httpx.XaTuPhien()(
@@ -139,11 +143,15 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045),
 	// the same single cause as on the read route. Never a permission refusal.
 	//
+	// 503 `field_catalogue_unavailable`: a petition on the page carries a field and the labels cannot
+	// be read (ADR 0060 §3).
+	//
 	// @reply    200 page.Result[phieuCuaToiTomTatRa]
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports",
 		authz.CitizenOnly()(
 			httpx.XaTuPhien()(
@@ -192,9 +200,19 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// 201 carries the lookup code (rule 10, invariant 1) in the SAME shape the GET answers, with the
 	// contact details masked — see HandlerCongDan.GuiPhieu.
 	//
-	// 400 is a body that is not JSON, a body over 64 KiB, an empty or over-long field, a scene
-	// location that is not two numbers in range sent together (`lat`/`lng`, both optional), and a body
-	// naming something the client does not decide (người gửi, lĩnh vực, kênh, mã, trạng thái, hạn).
+	// `field` (ADR 0050 point 1) is the code the citizen picked from GET /api/v1/my-citizen-report-fields.
+	// OPTIONAL FOR NOW — ADR 0050 point 9 makes it required, but the shared citizen screen does not send
+	// it yet. With a field, the petition carries it and BOTH deadlines (`acknowledge_due`,
+	// `resolve_due`) are fixed at intake by ONE identity call for that field; without one,
+	// `resolve_due` stays null until staff classify, as before. `field_label` in the 201 is the
+	// commune's wording, else the platform default.
+	//
+	// 400 is a body that is not JSON, a body over 64 KiB, an empty or over-long box, a scene location
+	// that is not two numbers in range sent together (`lat`/`lng`, both optional), a body naming
+	// something the client does not decide (người gửi, kênh, mã, trạng thái, hạn — or the field spelled
+	// `linh_vuc`), and `field_not_offered`: ONE identical answer for any field the commune's form does
+	// not offer — unknown, retired, switched off, `can-bo`, another commune's, or blank. Nothing is
+	// written and identity is not asked.
 	//
 	// 401 is the answer to THREE situations, folded together exactly as on the read route (ADR 0022):
 	// no bearer token · a token that is not usable · a session that has not chosen a commune yet.
@@ -202,9 +220,14 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// 409 is idem's answer to a second request arriving while the first is still running. A second
 	// request after the first FINISHED replays the original 201 and its lookup code instead.
 	//
-	// 503 is the commune having no processing-deadline configuration — TODAY'S ANSWER FOR EVERY
-	// COMMUNE. No row is written and NO LOOKUP CODE IS ISSUED: an issued code is never reissued
-	// (rule 7, invariant 3), so handing one out for a petition that does not exist cannot be undone.
+	// 503 is one of two things, and neither writes a row or ISSUES A LOOKUP CODE (an issued code is
+	// never reissued, rule 7 invariant 3, so handing one out for a petition that does not exist cannot
+	// be undone):
+	//
+	//	intake_not_configured        the commune has no processing-deadline configuration (for the
+	//	                             picked field, or the default row) — TODAY'S ANSWER FOR EVERY COMMUNE
+	//	field_catalogue_unavailable  a field was sent and platform could not be read past the 60-second
+	//	                             cache (ADR 0060 §3) — clears by itself
 	//
 	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
 	// No row is written and no lookup code is issued. Never a permission refusal: citizens hold no

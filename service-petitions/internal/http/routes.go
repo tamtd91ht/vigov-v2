@@ -106,9 +106,11 @@ type (
 		GhiVet(ctx context.Context, maTraCuu string, nguoi audit.Actor) error
 	}
 
-	// NhanLinhVucDanhMuc is the commune's OVERRIDES for the petition field labels — tier 2 of
-	// ADR 0026. A code with no row here is valid and simply carries the platform's default
-	// label; absence is never "unknown field".
+	// NhanLinhVucDanhMuc answers the LABEL each field code shows. In production it is
+	// app.EffectiveFieldLabels: every tier-1 code with the commune's wording, else the platform
+	// default (ADR 0026 + 0060), never filtered by on/off or retired. A code absent from the answer
+	// is one tier 1 does not know — the screen then has no label for it. The error may be
+	// app.ErrFieldCatalogueUnavailable, which read routes answer 503 (writeFieldCatalogueError).
 	NhanLinhVucDanhMuc interface {
 		DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error)
 	}
@@ -913,11 +915,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 500 therefore covers one more cause than it did: the audit entry for a full-view read
 	// failing to commit. Rule 6 gives no other answer — no trail, no disclosure.
 	//
+	// 503 `field_catalogue_unavailable`: the petition carries a field and its label (commune wording,
+	// else platform default) cannot be read — refused rather than showing a raw code (ADR 0060 §3).
+	//
 	// @reply    200 phieuPhanAnhRa
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.DocPhieuPhanAnh)))
@@ -952,11 +958,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
+	// 503 `field_catalogue_unavailable`: the field labels (commune wording, else platform default)
+	// cannot be read — refused rather than showing raw codes (ADR 0060 §3).
+	//
 	// @reply    200 page.Result[phieuPhanAnhRa]
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/citizen-reports",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.DanhSachPhieu)))

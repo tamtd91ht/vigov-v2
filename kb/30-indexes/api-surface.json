@@ -620,7 +620,8 @@
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },
@@ -640,7 +641,8 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },
@@ -2487,7 +2489,8 @@
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },
@@ -2531,7 +2534,8 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },

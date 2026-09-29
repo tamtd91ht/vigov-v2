@@ -176,10 +176,9 @@ func (h *HandlerCongDan) DanhSachPhieuCuaToi(w http.ResponseWriter, r *http.Requ
 		}
 		nhan, err := h.d.NhanLinhVuc.DanhSach(ctx)
 		if err != nil {
-			h.d.Log.Error("đọc nhãn lĩnh vực cho danh sách của công dân: lỗi hệ thống",
-				"xa", string(tenant.MustFrom(ctx)), "err", err)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal",
-				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+			// 503 when platform is unreachable (labels are commune wording else the platform default,
+			// and a raw code is never shown instead — ADR 0060 §3); 500 otherwise.
+			writeFieldCatalogueError(w, r, h.d.Log.Error, "đọc nhãn lĩnh vực cho danh sách của công dân", err)
 			return
 		}
 		for _, n := range nhan {

@@ -302,8 +302,10 @@ func chay(log *slog.Logger) error {
 		TrangThaiNhiemVu:    nhanTrangThai,
 		GhiTrangThaiNhiemVu: app.NewNhanTrangThaiNhiemVu(kho, nhanTrangThai),
 		Phieu:               phieu,
-		NhanLinhVuc:         petstore.NewNhanLinhVucStore(kho),
-		PetitionFields:      fieldCatalogue,
+		// LABELS: the commune's wording, else the platform default (ADR 0026 + 0060) — the SAME use case
+		// the configuration routes edit through, so a label saved there is the label every screen shows.
+		NhanLinhVuc:    app.NewEffectiveFieldLabels(fieldCatalogue),
+		PetitionFields: fieldCatalogue,
 		// The register list, and the four staff acts that finally make a petition processable. Each
 		// act opens a transaction and writes the change, the audit entry and the notification
 		// obligation inside it, which is why the use case takes *store.DB rather than a transaction.
@@ -400,14 +402,17 @@ func chay(log *slog.Logger) error {
 		//
 		// `suKien` is the SAME outbox store the staff acts write through: the intake records its
 		// `da-tiep-nhan` notification in the transaction that creates the row (rule 10, invariant 5).
-		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh),
+		//
+		// `fieldCatalogue` checks the field a citizen picked (ADR 0050 point 1) by the same rule the
+		// citizen catalogue lists by, BEFORE identity is asked for that field's deadlines.
+		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue),
 		// The citizen's star rating (ADR 0050 point 2). The SAME outbox store as the intake: a 1–2 star
 		// rating reopens the petition, and that transition's notification is written in its transaction.
 		Rating: app.NewRatePetition(kho, phieu, suKien),
 		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.
-		NhanLinhVuc: petstore.NewNhanLinhVucStore(kho),
+		NhanLinhVuc: app.NewEffectiveFieldLabels(fieldCatalogue),
 		// What the new-submission form offers — the SAME use case the staff configuration routes use.
 		CitizenFields: fieldCatalogue,
 		Log:           log,

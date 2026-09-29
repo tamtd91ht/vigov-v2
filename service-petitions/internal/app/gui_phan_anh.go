@@ -6,7 +6,9 @@ package app
 // creates and then watches, and the surface the commune is judged on. Three things happen here and
 // they are ordered rather than grouped, because the order is what makes each promise keepable:
 //
-//	1. ASK identity for the acknowledge deadline     — may refuse, and a refusal ends the intake
+//	0. CHECK the picked field, if any, against the commune's offered catalogue (ADR 0050, 0060)
+//	1. ASK identity for the deadline(s) — acknowledge, plus resolve when a field was picked; may
+//	   refuse, and a refusal ends the intake
 //	2. MINT the lookup code                          — only once step 1 has succeeded
 //	3. ONE TRANSACTION: the row, its audit entry     — rule 6, invariant 3
 //	   and the `petitions.status_changed.v1` outbox row  — rule 10, invariant 5; rule 2, invariant 6
@@ -86,6 +88,13 @@ type HanTiepNhanDoc interface {
 	TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error)
 }
 
+// CitizenIntakeFields checks the field a citizen picked against what the commune offers.
+// *PetitionFieldCatalogue satisfies it. Answers ErrFieldNotOffered (one sentinel for every reason the
+// field is not on the form) or ErrFieldCatalogueUnavailable (platform unreachable — 503).
+type CitizenIntakeFields interface {
+	CheckCitizenIntakeField(ctx context.Context, code string) (string, error)
+}
+
 // kenhCongDan is the channel EVERY petition filed through this use case carries.
 //
 // A CONSTANT, NEVER A REQUEST FIELD. `kenh_tiep_nhan` decides which deadline rules apply (ADR 0028
@@ -130,12 +139,16 @@ var ErrChuaAnDinhDuocHan = errors.New("gui_phan_anh: chưa ấn định được
 // the record is taken from the `congDan` actor argument of Gui, which the handler builds from
 // authz.Principal and from nothing else.
 //
-// # THERE IS NO LinhVuc FIELD EITHER, AND THAT IS A CLOSED QUESTION RATHER THAN AN OMISSION
+// # Field IS THE CITIZEN'S PICK, AND IT IS THE PETITION'S FIELD (ADR 0050 point 1, 28/09/2026)
 //
-// Letting the citizen pick the field would let every pothole be filed as `An ninh trật tự` and take
-// that field's 2-hour acknowledge commitment. That is open question #23, closed in the other
-// direction (ADR 0028), and it is why `han_xu_ly_xong` stays NULL until an officer settles the
-// field — see domain.KenhTiepNhan.CoLinhVucLucVaoSo.
+// This reverses ADR 0028's closing of open question #23 for the Mini App channel, with its cost stated
+// there: a citizen can pick the most urgent field to get the shortest commitment, and since a deadline
+// may only be shortened, staff cannot lengthen it. The owner accepted that; the tracking figure is the
+// share of petitions whose field staff change at classification.
+//
+// OPTIONAL FOR NOW, and "" keeps the pre-ADR-0050 shape (han_xu_ly_xong NULL until classification).
+// ADR 0050 point 9 makes it required, but the shared citizen screen does not send it yet; requiring it
+// today would refuse every petition from that screen.
 //
 // # THERE IS NO GocDemHan FIELD
 //
@@ -155,6 +168,9 @@ type YeuCauGuiPhanAnh struct {
 	// (ADR 0008), because without them there is no anti-spam, the citizen cannot find their own
 	// petition, and a defamatory report becomes untraceable.
 	AnDanh bool
+
+	// Field is the field code the citizen picked from GET /api/v1/my-citizen-report-fields. "" = none.
+	Field string
 
 	// Lat and Lng are the OPTIONAL scene location (ADR 0050). The citizen app obtains them from the
 	// vihat-miniapp backend, which holds the Zalo app secret that exchanges the getLocation token
@@ -178,6 +194,10 @@ type GuiPhanAnh struct {
 	// see ghiSuKienDoiTrangThai.
 	suKien KhoSuKien
 
+	// fields checks the citizen's picked field against the commune's offered catalogue (ADR 0050 pt 1,
+	// ADR 0060). Consulted only when a field is sent.
+	fields CitizenIntakeFields
+
 	// sinhID and sinhMa are injected so a test can pin both values. In production they are
 	// ulid.Moi and domain.SinhMaTraCuu. sinhID mints BOTH the petition id and the outbox row id.
 	sinhID func() (string, error)
@@ -188,9 +208,10 @@ type GuiPhanAnh struct {
 	luc func() time.Time
 }
 
-func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, suKien KhoSuKien, han HanTiepNhanDoc) *GuiPhanAnh {
+func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, suKien KhoSuKien, han HanTiepNhanDoc,
+	fields CitizenIntakeFields) *GuiPhanAnh {
 	return &GuiPhanAnh{
-		db: db, kho: kho, suKien: suKien, han: han,
+		db: db, kho: kho, suKien: suKien, han: han, fields: fields,
 		sinhID: ulid.Moi,
 		sinhMa: domain.SinhMaTraCuu,
 		luc:    func() time.Time { return time.Now().UTC() },
@@ -250,6 +271,20 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		return domain.PhieuPhanAnh{}, err
 	}
 
+	// THE FIELD, CHECKED BEFORE IDENTITY IS ASKED. identity answers a code it has no row for with the
+	// DEFAULT row, silently (identity.proto, ResolveDeadlines) — so an unchecked code would fix a wrong
+	// commitment onto an archival record. The check is the catalogue's own rule, so a field the form
+	// did not offer is refused here exactly as the form would not have shown it.
+	field := ""
+	if yc.Field != "" {
+		if uc.fields == nil {
+			return domain.PhieuPhanAnh{}, errors.New("gui_phan_anh: thiếu bộ kiểm lĩnh vực — sai nối dây")
+		}
+		if field, err = uc.fields.CheckCitizenIntakeField(ctx, yc.Field); err != nil {
+			return domain.PhieuPhanAnh{}, err
+		}
+	}
+
 	// ONE INSTANT FOR BOTH COLUMNS, read once. `goc_dem_han` is when the citizen pressed send and
 	// `vao_so_luc` is when the row was created; on this channel they are the same act, and the
 	// schema's `goc_dem_han <= vao_so_luc` holds by equality. Two calls to the clock would put a
@@ -261,17 +296,20 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 	// service that owns the calendar (ADR 0007). It is asked for ONCE, here, at the act that fixes
 	// it, and stored (rule 10, invariant 2). Nothing recomputes it on read.
 	//
-	// `linh_vuc` IS "" AND THAT IS A REAL REQUEST, not a missing value: at this instant nobody knows
-	// the field, so the DEFAULT row applies (ADR 0028 decision E). The contract says so in its own
-	// words and the schema refuses an empty string in the column, so "" can only ever mean the
-	// default row.
+	// TWO SHAPES, DECIDED BY WHETHER THE CITIZEN PICKED A FIELD:
 	//
-	// ONLY THE ACKNOWLEDGE CLOCK IS ASKED FOR. Asking for both would fix `han_xu_ly_xong` from the
-	// default row at intake — which is exactly the 56-hour ceiling ADR 0028 removed, rebuilt by
-	// accident.
-	han, err := uc.han.HanXuLy(ctx,
-		identityv1.WorkKind_WORK_KIND_PHAN_ANH, "", bayGio,
-		[]identityv1.DeadlineKind{identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN})
+	//	field ""   `linh_vuc` "" = the DEFAULT row, and ONLY the acknowledge clock. Asking for both here
+	//	           would fix `han_xu_ly_xong` from the default row — the 56-hour ceiling ADR 0028
+	//	           removed, rebuilt by accident. It is fixed later, when staff settle the field.
+	//	field set  that field's row, and BOTH clocks in ONE call (ADR 0050 point 1): the field is the
+	//	           petition's field, so both commitments are fixed now, by the act that fixes them
+	//	           (rule 10, invariant 2). One call is one calendar read — two could read two calendars
+	//	           (identity.proto, "ONE CALL CAN STILL NAME BOTH").
+	clocks := []identityv1.DeadlineKind{identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN}
+	if field != "" {
+		clocks = append(clocks, identityv1.DeadlineKind_DEADLINE_KIND_XU_LY_XONG)
+	}
+	han, err := uc.han.HanXuLy(ctx, identityv1.WorkKind_WORK_KIND_PHAN_ANH, field, bayGio, clocks)
 	if err != nil {
 		// THE INTAKE FAILS HERE, AND NOTHING HAS BEEN PRODUCED YET: no code, no row, no commitment.
 		// Falling back to a number instead would be this software making a promise on behalf of a
@@ -287,6 +325,15 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// recorded as one nobody owes an acknowledgement for.
 		return domain.PhieuPhanAnh{}, fmt.Errorf("%w cho xã %s: hợp đồng trả về hạn tiếp nhận rỗng",
 			ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx))
+	}
+	var resolveDue time.Time
+	if field != "" {
+		// Same reasoning as the acknowledge clock: a zero here would reach `han_xu_ly_xong` as NULL —
+		// "CHƯA CÓ" on a petition whose field is settled, i.e. a commitment nobody counts.
+		if resolveDue = han[identityv1.DeadlineKind_DEADLINE_KIND_XU_LY_XONG]; resolveDue.IsZero() {
+			return domain.PhieuPhanAnh{}, fmt.Errorf("%w cho xã %s: hợp đồng trả về hạn xử lý xong rỗng",
+				ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx))
+		}
 	}
 
 	// STEP 1b — THE CLASSIFICATION CEILING (ADR 0035 §C, open question #26 closed 2026-09-22).
@@ -362,15 +409,18 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// to petitions received from that moment on.
 		HanPhanLoai: hanPhanLoai,
 
-		// HanXuLyXong IS LEFT ZERO ON PURPOSE -> SQL NULL -> "CHƯA CÓ". It is fixed by the act that
-		// settles the field (ADR 0028 decision E), and the opposite NULL — `han_tiep_nhan` NULL,
-		// "KHÔNG ÁP DỤNG" — belongs to the staff-booked channel alone.
+		// THE CITIZEN'S FIELD AND ITS RESOLVE COMMITMENT, or neither. With no field, HanXuLyXong stays
+		// zero -> SQL NULL -> "CHƯA CÓ" until staff settle it (ADR 0028 decision E); the opposite NULL —
+		// `han_tiep_nhan` NULL, "KHÔNG ÁP DỤNG" — belongs to the staff-booked channel alone. Staff may
+		// still change the field at classification; the deadline then only ever moves EARLIER (ADR 0027
+		// decision C, XuLyPhanAnh.ChotLinhVuc).
+		LinhVuc:     field,
+		HanXuLyXong: resolveDue,
 	}
 	// THE PUBLIC PAGE (ADR 0050 point 8): nobody has decided yet (`cho-duyet`), or `an` for a petition
 	// born in the staff-conduct field. Computed FROM THE FIELD THE ROW CARRIES rather than written as a
-	// literal: this channel leaves the field unset today, and the day it does not, a staff-conduct
-	// petition must still be born hidden. The citizen who filed it can always find their own, which is
-	// a different path.
+	// literal. `can-bo` cannot arrive here from a citizen today (CheckCitizenIntakeField refuses it),
+	// but the rule stays tied to the field so the day it can, the petition is still born hidden.
 	moi.PublicationStatus = domain.InitialPublicationStatus(moi.LinhVuc)
 
 	// STEP 3 — the row and its trail, in ONE transaction (rule 6, invariant 3). There is no ordering
@@ -398,12 +448,17 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// append-only ledger are rule 6, forbidden #4 in its plainest form. `has_scene_location` is
 		// English because it is a new key (rule 12) — the `publication_status` precedent beside it.
 		delta, err := json.Marshal(map[string]any{
-			"kenh_tiep_nhan":     string(kenhCongDan),
-			"trang_thai":         string(moi.TrangThai),
-			"an_danh":            moi.AnDanh,
-			"goc_dem_han":        moi.GocDemHan,
-			"han_tiep_nhan":      moi.HanTiepNhan,
-			"han_phan_loai":      moi.HanPhanLoai,
+			"kenh_tiep_nhan": string(kenhCongDan),
+			"trang_thai":     string(moi.TrangThai),
+			"an_danh":        moi.AnDanh,
+			"goc_dem_han":    moi.GocDemHan,
+			"han_tiep_nhan":  moi.HanTiepNhan,
+			"han_phan_loai":  moi.HanPhanLoai,
+			// The field and the resolve commitment it fixed — a field code is not personal data, and
+			// "which field did the citizen pick, and what did that promise" is the first question of a
+			// dispute about the deadline. Absent (not null) when no field was picked.
+			"linh_vuc":           nilIfEmpty(moi.LinhVuc),
+			"han_xu_ly_xong":     nilIfZero(moi.HanXuLyXong),
 			"truong_da_dien":     truongDaDien(moi),
 			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
 			"publication_status": string(moi.PublicationStatus),
@@ -451,6 +506,22 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 			tenant.MustFrom(ctx), err)
 	}
 	return moi, nil
+}
+
+// nilIfEmpty and nilIfZero put JSON null in the trail for "not set", so a reader cannot mistake an
+// empty string or 0001-01-01 for a real value.
+func nilIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func nilIfZero(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 // truongDaDien names the optional COLUMNS the citizen filled, never their values.

@@ -2688,6 +2688,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           }
         }
       }
@@ -2758,6 +2768,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -10669,6 +10689,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           }
         }
       },
@@ -10860,6 +10890,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -29145,6 +29185,12 @@
               "null"
             ]
           },
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "citizen_id": {
             "type": [
               "string",
@@ -29152,12 +29198,6 @@
             ]
           },
           "cong_dan_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "field": {
             "type": [
               "string",
               "null"
@@ -29216,7 +29256,6 @@
           "code",
           "cong_dan_id",
           "content",
-          "field",
           "lat",
           "linh_vuc",
           "lng",

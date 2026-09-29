@@ -118,6 +118,59 @@ func (c *PetitionFieldCatalogue) CitizenCatalogue(ctx context.Context) ([]domain
 	return domain.CitizenCatalogue(merged), nil
 }
 
+// ErrFieldNotOffered — the citizen named a field the commune's form does not offer. ONE sentinel, and
+// so one identical answer, for every cause: not a tier-1 code, retired on the platform, switched off by
+// the commune, `can-bo` (not yet open to citizens), or not even code-shaped. Telling them apart would
+// tell a prober which codes exist and which ones this commune turned off — none of which the citizen
+// needs; what they need is to pick again from the catalogue.
+var ErrFieldNotOffered = errors.New("linh_vuc: lĩnh vực không có trong danh sách xã đang nhận")
+
+// CheckCitizenIntakeField returns the code to store if the commune's new-submission form offers it —
+// the SAME rule the citizen catalogue lists by (domain.PetitionFieldView.OfferedToCitizens: active on
+// the platform, enabled by the commune, not `can-bo`), so the form and the check cannot disagree.
+//
+// THE RETURNED CODE IS THE CATALOGUE'S, not the input: it is what reaches identity and the row, so a
+// value that merely compared equal after trimming never travels further than this function.
+func (c *PetitionFieldCatalogue) CheckCitizenIntakeField(ctx context.Context, code string) (string, error) {
+	merged, err := c.Catalogue(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, v := range merged {
+		if v.Code == code && v.OfferedToCitizens() {
+			return v.Code, nil
+		}
+	}
+	return "", ErrFieldNotOffered
+}
+
+// EffectiveFieldLabels answers every tier-1 code, retired ones included, with the label a screen shows:
+// the commune's wording, else the platform default (ADR 0026 §Quyết định). It satisfies the label
+// catalogue interface every petition read path already calls, so the list, the detail and the staff
+// screens all switch from "commune override or nothing" to "override, else default" in one place.
+//
+// NEVER FILTERED by `enabled` or `active`: a petition carrying a switched-off or retired code keeps its
+// label (ADR 0026 §Bổ sung cuối ngày). Platform unreachable -> ErrFieldCatalogueUnavailable; the read
+// routes answer 503 rather than show raw codes (ADR 0060 §3).
+type EffectiveFieldLabels struct{ c *PetitionFieldCatalogue }
+
+func NewEffectiveFieldLabels(c *PetitionFieldCatalogue) EffectiveFieldLabels {
+	return EffectiveFieldLabels{c: c}
+}
+
+// vi-name-ok: implements the existing http.NhanLinhVucDanhMuc interface every label reader calls.
+func (l EffectiveFieldLabels) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error) {
+	merged, err := l.c.Catalogue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.NhanLinhVuc, 0, len(merged))
+	for _, v := range merged {
+		out = append(out, domain.NhanLinhVuc{Ma: v.Code, Nhan: v.Label, SortOrder: v.Order, Enabled: v.Enabled})
+	}
+	return out, nil
+}
+
 // Edit applies a partial edit to one code and returns the code as the commune now sees it.
 //
 // UNKNOWN CODE -> docstore.ErrDanhMucKhongTonTai (404), checked against tier 1 BEFORE the transaction.
