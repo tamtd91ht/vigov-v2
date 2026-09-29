@@ -1,0 +1,157 @@
+# Dịch vụ `reporting` — mô hình đọc cho báo cáo, và "Lời hệ thống" `report.*` của từng xã.
+#
+# VÌ SAO NÓ CÓ MANIFEST TỪ 29/09/2026, trong khi tới hôm ấy nó là đơn vị DUY NHẤT cố ý không có:
+# tiêu chí của `deploy/base/kustomization.yaml` là "có tuyến REST thật", và commit 35314b7 cho nó
+# ba tuyến đầu tiên — `GET/PUT/DELETE /api/v1/reporting-system-messages` (kb/20-contracts/openapi.json,
+# ADR 0024 bổ sung 29/09). Cùng lượt ấy nó mở CSDL của chính nó và chạy di trú lúc khởi động.
+# `tools/ingress` từ chối sinh Ingress cho một dịch vụ có tuyến mà không có `service.yaml` ở đây
+# (`tools/ingress/dinhtuyen.go:282-287`), nên thiếu tệp này là `make kb` đỏ.
+#
+# NÓ KHÔNG PHỤC VỤ gRPC. `service-reporting/cmd/server/main.go:118` chỉ mở một listener HTTP,
+# và `configUses` (main.go:41) không khai `GRPCServer`. Vì thế không có cổng 9090 và không có nhãn
+# `vigov.vn/grpc` — khai một cổng không ai nghe là mời người sau tin rằng có đường gọi tới nó.
+#
+# NÓ GỌI RA hai dịch vụ qua gRPC: `platform` (Host → xã, main.go:85) và `identity` (cookie phiên →
+# principal cán bộ, main.go:96). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI khởi động —
+# fail closed, có tên — chứ không phục vụ với một nửa chuỗi kiểm.
+#
+# ĐƯỜNG VÀO: host `reporting.api.vigov.vn` do `tools/ingress` sinh (`deploy/base/mang/ingress.yaml`),
+# và `web-admin` chuyển tiếp `/api/v1/reporting-system-messages` theo `dinh-tuyen.gen.ts` (ADR 0043).
+# Cả hai tới pod qua nhãn `vigov.vn/be-mat: rest` bên dưới.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting
+  labels:
+    app.kubernetes.io/name: reporting
+    app.kubernetes.io/part-of: vigov
+spec:
+  # MỘT replica, cùng lập luận và cùng hạn dùng với `finance`: ba tuyến quản trị (quyền
+  # `admin.lookup`), lưu lượng thấp, trên một cụm 3 node. Ngày tuyến của dịch vụ này có người dùng
+  # thật hằng ngày, nâng lên 2 cùng lượt thêm `pdb.yaml`: với 1 replica mọi lượt khởi động lại là
+  # một khoảng đứt, và `maxUnavailable: 0` bên dưới không cứu được điều đó.
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app.kubernetes.io/name: reporting }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reporting
+        app.kubernetes.io/part-of: vigov
+        # NetworkPolicy `cho-phep-rest-tu-ingress` và `cho-phep-rest-tu-web-admin`
+        # (deploy/base/mang/netpol.yaml, quy tắc 2 và 5) chọn pod BẰNG NHÃN NÀY để mở cổng 8080.
+        # Chính sách nền là từ-chối-tất-cả, nên thiếu nhãn = pod không nhận được yêu cầu nào, và
+        # KHÔNG CÓ GÌ BÁO: pod xanh, probe xanh, rollout xanh, chỉ có người dùng gặp timeout.
+        vigov.vn/be-mat: rest
+    spec:
+      # Không có khối này, scheduler được phép xếp mọi replica lên cùng một node, và rút node
+      # đó là mất trọn dịch vụ. Nó cũng là thứ ràng buộc pod dôi ra của `maxSurge: 1` phải
+      # rơi sang node khác trong lúc rolling update.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: reporting }
+
+      # 45 GIÂY, CÙNG SỐ VỚI SÁU DỊCH VỤ GO KIA — NHƯNG HÔM NAY KHÔNG CÓ GÌ ĐỂ CHỜ. Khác `finance`,
+      # `cmd/server/main.go` của dịch vụ này CHƯA `signal.Notify` + `srv.Shutdown` (main.go:118 gọi
+      # thẳng `http.ListenAndServe`), nên SIGTERM kết thúc tiến trình ngay và hạn này không bao giờ
+      # trôi hết. `tools/check_build.py` (`kiem_dong_em`) vì thế BỎ QUA dịch vụ này — nó chỉ đối
+      # chiếu khi mã có `signal.Notify`.
+      #
+      # Giữ 45 để ngày có đóng êm với ngữ cảnh 20 giây như `finance`, con số ở đây đã đúng thứ tự
+      # (45 > 20) và `kiem_dong_em` bắt đầu đối chiếu mà không phải sửa tệp này. Cái giá của lúc
+      # chưa có: một lượt deploy cắt ngang lần `PUT`/`DELETE` đang dở — giao dịch CSDL quay lui cả
+      # dòng ghi đè lẫn dòng vết (luật 6 bất biến 3), nên không có bản ghi dở dang, chỉ có một yêu
+      # cầu người dùng phải bấm lại.
+      terminationGracePeriodSeconds: 45
+
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532          # distroless:nonroot — khai lại để đọc được từ đây
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+
+      containers:
+        - name: server
+          # Thẻ CỐ Ý không dùng được: áp thẳng base là một nhầm lẫn, và nó phải đổ chứ không
+          # được kéo nhầm ảnh. Thẻ thật do job của chính dịch vụ (`vigov-svc-<tên>`, bấm tay) đặt bằng `kubectl set image`
+          # — overlay chỉ ghim thẻ cho LẦN CÀI ĐẦU.
+          image: harbor.omicrm.services/ci/vigov-service-reporting:CHUA-GHIM-THE
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - { name: rest, containerPort: 8080 }
+
+          env:
+            # KHÔNG bắt buộc: mọi dịch vụ Go đọc `cfg.ListenAddr`, mặc định `:8080` khi biến rỗng
+            # (`core/config/config.go`). Vẫn ghim tường minh để probe httpGet 8080, `containerPort`
+            # và NetworkPolicy quy tắc 2 (chỉ mở 8080/3000 từ ingress) cùng khớp với tiến trình ngay
+            # cả khi mặc định trong mã có lúc đổi. Đổi giá trị này thì phải đổi cả ba thứ ấy cùng lúc.
+            - { name: LISTEN_ADDR, value: ":8080" }
+            # Bắt buộc ở staging/prod: `configUses` khai `config.PlatformClient` (ADR 0057 — dùng thì
+            # bắt buộc), và `platformclient.Dial` từ chối khởi động khi rỗng. Thiếu nó thì mọi xã trả 404.
+            - { name: PLATFORM_GRPC_ADDR, value: platform:9090 }
+            # Bắt buộc, cùng lý do (`config.IdentityClient`): đây là đường DUY NHẤT để cookie phiên
+            # thành principal cán bộ (main.go:96). Dịch vụ này không sở hữu sổ phiên và không được
+            # import của identity (luật 2, cấm #1). Giá trị này đòi `identity` phải thật sự phơi
+            # cổng 9090 — xem `deploy/base/identity/service.yaml`.
+            - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
+          envFrom:
+            - configMapRef: { name: cau-hinh-chung }
+            # Secret CHỈ CẦN HAI KHOÁ: DATABASE_DSN · GRPC_CALLER_KEY (`deploy/cau-hinh/README.md`
+            # mục 1 — tên, hình dạng giá trị; không có giá trị nào trong kho, luật 8).
+            #
+            # KHÔNG `SESSION_SIGNING_KEYS`: từ ADR 0057 chỉ identity ký và đọc phiên cán bộ; một bản
+            # sao ở đây là thêm một pod bị chiếm là giả được phiên cán bộ của mọi xã.
+            # KHÔNG `REDIS_DSN`: `configUses` không khai Redis vì mọi tuyến ở đây khai `idem.KhongCan`
+            # (main.go:37-40) — một khoá không ai đọc.
+            - secretRef: { name: bi-mat-reporting }
+
+          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:150`): nó trả lời "tiến
+          # trình này còn sống", đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe
+          # không cần gửi Host. HỆ QUẢ PHẢI BIẾT: nó vẫn xanh khi CSDL hỏng.
+          startupProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 5
+            failureThreshold: 60          # 5 phút — di trú CSDL chạy TRONG tiến trình lúc
+                                          # khởi động (`main.go:74`, core/migrate.Chay, hạn 5
+                                          # phút ở main.go:197) và ôm `pg_advisory_lock` suốt
+                                          # lượt chạy, nên replica thứ hai ĐỢI replica thứ nhất.
+                                          # Probe chặt ở đây là một vòng lặp khởi động lại.
+          readinessProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 20
+            failureThreshold: 5
+
+          resources:
+            requests: { cpu: 100m, memory: 96Mi }
+            # CHỈ giới hạn bộ nhớ, không giới hạn CPU: nhị phân Go tĩnh, và một CPU limit trên
+            # cụm 3 node chỉ tạo throttling đúng lúc tải cao nhất.
+            limits:   { memory: 384Mi }
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+
+      imagePullSecrets:
+        - name: harbor-vigov

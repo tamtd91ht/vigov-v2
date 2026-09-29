@@ -58,3 +58,5 @@ images:
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
   - name: harbor.omicrm.services/ci/vigov-service-petitions
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-reporting
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO

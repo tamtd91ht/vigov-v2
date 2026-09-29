@@ -24,15 +24,15 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 ### `<dịch vụ>-secrets` — type `Opaque`, mỗi dịch vụ một cái
 
 `platform-secrets` · `identity-secrets` · `documents-secrets` · `finance-secrets` ·
-`petitions-secrets` · `comms-secrets`
+`petitions-secrets` · `comms-secrets` · `reporting-secrets`
 
-**Key chung, cả 6 Secret:**
+**Key chung, cả 7 Secret:**
 
 | Key | Bắt buộc | Value |
 |---|---|---|
 | `DATABASE_DSN` | **có** — mọi dịch vụ | `postgres://<user>:<mật khẩu>@<host>:5432/vigov_<dịch vụ>?sslmode=require` — mỗi dịch vụ một CSDL riêng |
-| `GRPC_CALLER_KEY` | **có** — platform, identity, documents, finance, petitions, comms | `openssl rand -base64 48` — **cùng một giá trị** ở cả 6 |
-| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms | `redis://:<mật khẩu>@<host>:6379/0` — 5 Secret, **không** có ở `platform-secrets` |
+| `GRPC_CALLER_KEY` | **có** — platform, identity, documents, finance, petitions, comms, reporting | `openssl rand -base64 48` — **cùng một giá trị** ở cả 7 |
+| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms | `redis://:<mật khẩu>@<host>:6379/0` — 5 Secret, **không** có ở `platform-secrets` và `reporting-secrets` |
 
 **Key thêm, chỉ ở một Secret:**
 
@@ -49,12 +49,12 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 
 **Việc cần làm trên cụm đang chạy — `SESSION_SIGNING_KEYS`:** chỉ để ở `identity-secrets`. **Xoá key
 này khỏi** `platform-secrets`, `documents-secrets`, `finance-secrets`, `petitions-secrets`,
-`comms-secrets`, rồi `rollout restart` 5 dịch vụ đó. Chỉ identity ký và đọc phiên cán bộ; ai cầm khoá
+`comms-secrets`, `reporting-secrets` (nếu có), rồi `rollout restart` các dịch vụ đó. Chỉ identity ký và đọc phiên cán bộ; ai cầm khoá
 này **giả được phiên cán bộ của mọi xã**, nên mỗi bản sao thừa là thêm một chỗ để lộ.
 
 ### `harbor-vigov` — type `kubernetes.io/dockerconfigjson`
 
-Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 7 pod kéo ảnh bằng nó.
+Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod kéo ảnh bằng nó.
 
 ### TLS — type `kubernetes.io/tls`, key `tls.crt` · `tls.key`
 
@@ -63,7 +63,7 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 7 pod 
 | staging | `vigov-staging-tls` (`*.stg.vigov.vn`) | `vigov-api-staging-tls` (`*.api-stg.vigov.vn`) |
 | prod | `vigov-wildcard-tls` (`*.vigov.vn`) | `vigov-api-wildcard-tls` (`*.api.vigov.vn`) |
 
-## 2. ConfigMap `common-config` — dùng chung cho 6 pod Go
+## 2. ConfigMap `common-config` — dùng chung cho 7 pod Go
 
 | Key | Bắt buộc | Value |
 |---|---|---|
@@ -82,9 +82,9 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 7 pod 
 
 | Key | Bắt buộc | Deployment | Value |
 |---|---|---|---|
-| `LISTEN_ADDR` | không — mặc định `:8080` | cả 6 | `:8080` |
-| `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms | 5 dịch vụ trừ `platform` | `platform:9090` |
-| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms | 4 dịch vụ trừ `identity` và `platform` | `identity:9090` |
+| `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | `:8080` |
+| `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | `platform:9090` |
+| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | `identity:9090` |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | `documents:9090` |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | `:<cổng>` — cổng riêng, khác `9090`, phải khớp quy tắc NetworkPolicy (chưa có trong `deploy/base/mang/netpol.yaml`). Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |

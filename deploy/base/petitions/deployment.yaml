@@ -4,8 +4,7 @@
 # phải mười": nó đã hết là khung sinh sẵn. Nó phục vụ ba tuyến REST THẬT —
 # `GET /api/v1/citizen-reports/{maTraCuu}`, `/task-priorities`, `/task-types`
 # (kb/20-contracts/openapi.json) — và chạy di trú lược đồ của chính nó lúc khởi động.
-# `reporting` thì chưa: 0 tuyến, nên nó KHÔNG có manifest, và đó là một lựa chọn đã cân nhắc
-# chứ không phải chỗ sót — xem `deploy/README.md`.
+# `reporting` theo cùng tiêu chí từ 29/09/2026, khi nó có tuyến đầu tiên.
 #
 # NÓ PHỤC VỤ gRPC từ 28/09/2026: `cmd/server/main.go` (`buildGRPCServer`) mở listener thứ hai ở
 # `GRPC_LISTEN_ADDR` (mặc định `:9090`) cho MỘT RPC — `CountOrgUnitHoldings`, identity hỏi trước

@@ -34,7 +34,7 @@ configMapGenerator:
 # triển khai nằm ở lịch sử build của job — xem khối đầu `service-platform/Jenkinsfile`.
 #
 # Vì thế khối này KHÔNG phản ánh thẻ đang chạy trên cụm. Chạy `kubectl apply -k` lên một
-# namespace đã có dịch vụ sẽ đẩy CẢ BẢY về `CHUA-TRIEN-KHAI-LAN-NAO`, tức ImagePullBackOff
+# namespace đã có dịch vụ sẽ đẩy CẢ TÁM về `CHUA-TRIEN-KHAI-LAN-NAO`, tức ImagePullBackOff
 # đồng loạt. Cách sửa manifest mà không đạp phải bẫy ấy: `deploy/README.md`, mục *Sửa
 # manifest sau khi đã chạy*.
 # ════════════════════════════════════════════════════════════════════════════════════════
@@ -55,4 +55,6 @@ images:
   - name: harbor.omicrm.services/ci/vigov-service-finance
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
   - name: harbor.omicrm.services/ci/vigov-service-petitions
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-reporting
     newTag: CHUA-TRIEN-KHAI-LAN-NAO

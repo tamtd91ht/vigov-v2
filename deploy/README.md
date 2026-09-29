@@ -75,7 +75,7 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. T�
 | `vigov-svc-identity` | `service-identity/Jenkinsfile` | ″ |
 | `vigov-svc-petitions` | `service-petitions/Jenkinsfile` | ″ |
 | `vigov-svc-platform` | `service-platform/Jenkinsfile` | ″ |
-| `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | **bấm tay** — chỉ đóng ảnh: chưa có manifest (0 tuyến REST) |
+| `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | ″ |
 | `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
 
 | `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `ap-manifest` (giữ thẻ đang chạy) · `xem-log` · `sao-chep-tu-staging` (một lần) |
@@ -84,7 +84,7 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. T�
 manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy trình tay ở mục 7), xem log. Nó
 **không** đặt ảnh (việc của job dịch vụ) và **không** tạo Secret (tạo trong Rancher).
 
-Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → bốn dịch vụ còn lại →
+Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
 `web-admin`. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không
 đặt ảnh.
 
@@ -326,7 +326,7 @@ có** (luật 8, bất biến 1): một mẫu trông như cấu hình chạy đ�
 | tên CSDL | **RIÊNG của từng dịch vụ** — xem cảnh báo ngay dưới |
 | `sslmode` | `require` trở lên. `disable` là mật khẩu và dữ liệu công dân đi trần trên dây |
 
-⚠ **SÁU DỊCH VỤ PHẢI CÓ SÁU CSDL KHÁC NHAU, và dùng chung thì KHÔNG CÓ GÌ BÁO.** Cả bảy dịch
+⚠ **BẢY DỊCH VỤ PHẢI CÓ BẢY CSDL KHÁC NHAU, và dùng chung thì KHÔNG CÓ GÌ BÁO.** Cả bảy dịch
 vụ đều chạy `CREATE TABLE IF NOT EXISTS audit_log` trong `migrations/0001_init.sql` của chính
 nó, và không chỗ nào đặt `search_path` — tức không có lớp schema ngăn cách. Trỏ hai dịch vụ
 vào cùng một CSDL thì `IF NOT EXISTS` làm dịch vụ thứ hai **lặng lẽ bỏ qua** và hai dịch vụ
@@ -334,7 +334,7 @@ vào cùng một CSDL thì `IF NOT EXISTS` làm dịch vụ thứ hai **lặng l
 cấm #2 (một đường đọc vòng qua hợp đồng), vừa là một sổ vết pháp lý trộn hai nguồn mà về sau
 không tách lại được.
 
-Phần duy nhất bắt buộc khác nhau giữa sáu DSN là **tên tài khoản và tên CSDL**:
+Phần duy nhất bắt buộc khác nhau giữa bảy DSN là **tên tài khoản và tên CSDL**:
 
 ```
 …@<host>:5432/vigov_platform?sslmode=require
@@ -343,15 +343,16 @@ Phần duy nhất bắt buộc khác nhau giữa sáu DSN là **tên tài khoả
 …@<host>:5432/vigov_finance?sslmode=require
 …@<host>:5432/vigov_petitions?sslmode=require
 …@<host>:5432/vigov_comms?sslmode=require
+…@<host>:5432/vigov_reporting?sslmode=require
 ```
 
-Đặt tên thế nào là tuỳ anh — điều bắt buộc là **sáu cái khác nhau**.
+Đặt tên thế nào là tuỳ anh — điều bắt buộc là **bảy cái khác nhau**.
 
 **`REDIS_DSN`** — dạng `redis://…`, có mật khẩu thì đặt ở phần thông tin đăng nhập, số DB ở
 cuối đường dẫn (`/0`). Năm dịch vụ **dùng chung một Redis được**: khoá chống trùng đã mang
 tiền tố riêng, nên tách bằng số DB hay để chung đều đúng.
 
-**`GRPC_CALLER_KEY`** — một chuỗi ngẫu nhiên, **giống nhau ở cả sáu dịch vụ**: nó là khoá
+**`GRPC_CALLER_KEY`** — một chuỗi ngẫu nhiên, **giống nhau ở cả bảy dịch vụ**: nó là khoá
 chung để bên gọi chứng minh mình thuộc hệ thống (ADR 0025). Sinh một lần rồi dùng lại:
 
 ```sh
@@ -429,11 +430,11 @@ cổng gRPC không có khoá gọi là một cổng trả lời **bất kỳ ai*
 **`SESSION_SIGNING_KEYS` cần ít nhất hai khoá ở prod** — một khoá thì không xoay được mà không
 đăng xuất toàn bộ cán bộ của mọi xã cùng lúc (`core/config.CanhBao`).
 
-`apply -k` dựng Deployment với thẻ `CHUA-TRIEN-KHAI-LAN-NAO`, tức **bảy pod ngồi
+`apply -k` dựng Deployment với thẻ `CHUA-TRIEN-KHAI-LAN-NAO`, tức **tám pod ngồi
 `ImagePullBackOff`** — đúng như thiết kế, không phải lỗi. Mục 5 đặt thẻ thật.
 
 **Xanh khi:** `kubectl -n vigov-prod get secret` liệt kê đủ `harbor-vigov`, `vigov-wildcard-tls`
-(staging: `vigov-staging-tls`), và `bi-mat-{platform,identity,comms,documents,finance,petitions}` — **sáu**, không phải bảy: `web-admin`
+(staging: `vigov-staging-tls`), và `bi-mat-{platform,identity,comms,documents,finance,petitions,reporting}` — **bảy**, không phải tám: `web-admin`
 không đọc biến nào nên không có Secret của riêng nó.
 
 Ba thứ dễ sót, cả ba đều hỏng ở chỗ cách xa nguyên nhân:
@@ -447,7 +448,7 @@ Ba thứ dễ sót, cả ba đều hỏng ở chỗ cách xa nguyên nhân:
 Bí mật vào cụm hôm nay bằng `kubectl create secret` tay. Bước kế tiếp khi thấy phiền:
 **External Secrets Operator**. Manifest trong kho này khi ấy vẫn chỉ chứa **tên** khoá.
 
-## 5. Bảy lượt deploy, theo đúng thứ tự này
+## 5. Tám lượt deploy, theo đúng thứ tự này
 
 Mỗi lượt là một lần bấm `vigov-deploy` với `DICH_VU` + `THE` + `MT`. Job kiểm ảnh có thật
 trong Harbor, `kubectl set image`, đợi `rollout status`, `rollout undo` nếu đỏ.
@@ -456,25 +457,25 @@ Thứ tự không phải thói quen — nó là thứ tự phụ thuộc lúc ch
 
 | # | Đơn vị | Tuyến REST | Đi trước vì |
 |---|---|---|---|
-| 1 | `platform` | 0 (nhưng **là** gRPC phân giải xã) | Sáu đơn vị kia quay số cổng 9090 của nó. Chưa có nó thì **mọi xã trả 404** |
-| 2 | `identity` | 37 | Bốn dịch vụ dưới đổi cookie lấy principal qua gRPC 9090 của nó. Chưa có nó thì **mọi tuyến có kiểm quyền trả 401 cho một phiên hợp lệ** — pod xanh, probe xanh, không gì báo |
-| 3 | `petitions` | 16 | độc lập với ba cái dưới, thứ tự tuỳ |
+| 1 | `platform` | 0 (nhưng **là** gRPC phân giải xã) | Bảy đơn vị kia quay số cổng 9090 của nó. Chưa có nó thì **mọi xã trả 404** |
+| 2 | `identity` | 37 | Năm dịch vụ dưới đổi cookie lấy principal qua gRPC 9090 của nó. Chưa có nó thì **mọi tuyến có kiểm quyền trả 401 cho một phiên hợp lệ** — pod xanh, probe xanh, không gì báo |
+| 3 | `petitions` | 16 | độc lập với bốn cái dưới, thứ tự tuỳ |
 | 4 | `documents` | 13 | ″ |
 | 5 | `finance` | 12 | ″ |
 | 6 | `comms` | 4 | ″ |
-| 7 | `web-admin` | — | **Sau cùng, có chủ ý.** Đưa bề mặt cán bộ lên trước khi API trả lời được nghĩa là một màn hình lỗi mang tên một cơ quan nhà nước |
+| 7 | `reporting` | 3 (29/09/2026) | ″ |
+| 8 | `web-admin` | — | **Sau cùng, có chủ ý.** Đưa bề mặt cán bộ lên trước khi API trả lời được nghĩa là một màn hình lỗi mang tên một cơ quan nhà nước |
 
 Tổng **82 tuyến REST**, đếm từ `kb/20-contracts/openapi.json` ngày 23/09/2026 — không từ cảm giác.
 
-Không có manifest, **có cân nhắc**: `reporting` (0 tuyến — `internal/http/routes.go` chưa mount
-cái nào) · `platform-admin` (là app Next.js nhưng **chưa có `Dockerfile`**, nên chưa có ảnh) ·
+Không có manifest, **có cân nhắc**: `platform-admin` (là app Next.js nhưng **chưa có `Dockerfile`**, nên chưa có ảnh) ·
 `citizen-app` (chạy trong Zalo Mini App, không thành pod).
 
 ## 6. Kiểm sau khi lên
 
 | Phép kiểm | Xanh nghĩa là |
 |---|---|
-| `kubectl -n vigov-<mt> get deploy` | 7 Deployment `READY` |
+| `kubectl -n vigov-<mt> get deploy` | 8 Deployment `READY` |
 | Gọi một tuyến qua Ingress bằng `Host` của một xã thật | chuỗi Ingress → pod → phân giải xã chạy hết. Xã ấy phải có bản ghi DNS **và** một hàng trong sổ đăng ký của `platform` |
 | **Hai `Host` khác nhau, cùng một tuyến** | dữ liệu trả về **không giao nhau** — phép kiểm cách ly hai xã, luật 1. **Chạy ở staging, trước khi đụng prod** |
 
@@ -487,7 +488,7 @@ vẫn xanh khi CSDL hoặc `platform` hỏng — mục 8.
 ## 7. Sửa manifest sau khi đã chạy — **cái bẫy của mô hình này**
 
 `overlays/<mt>/kustomization.yaml` **không** ghi thẻ đang chạy. Chạy `apply -k` lên một
-namespace đã có dịch vụ sẽ **đẩy cả bảy về `CHUA-TRIEN-KHAI-LAN-NAO`**, tức
+namespace đã có dịch vụ sẽ **đẩy cả tám về `CHUA-TRIEN-KHAI-LAN-NAO`**, tức
 `ImagePullBackOff` đồng loạt trên prod. Đó là cái giá của việc đặt ảnh bằng `kubectl set image`.
 
 ```sh
@@ -502,7 +503,7 @@ kubectl apply -k deploy/overlays/prod
 kubectl -n vigov-prod set image deploy/<tên> server=<ảnh>:<thẻ>
 ```
 
-Tên thùng là `server` với sáu dịch vụ Go, `web` với `web-admin`.
+Tên thùng là `server` với bảy dịch vụ Go, `web` với `web-admin`.
 
 ## 8. Bốn điều dễ hiểu sai
 
@@ -569,7 +570,7 @@ nào ở đây, có chủ ý. Cổng nằm trong `base/<đơn vị>/service.yaml
 | `deploy/Jenkinsfile` | **chưa máy nào phân tích cú pháp.** Không có Jenkins ở máy trạm, và `tools/check_build.py` chỉ soi 8 Jenkinsfile của dịch vụ |
 | Manifest qua API server thật | **chưa.** `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Mục 4 là lần đầu biết |
 | Redis ở prod | **chưa có DSN thật.** Thiếu nó thì sáu đường dẫn `POST` ở mục 3 trả 503 trong khi pod xanh |
-| Đóng êm khi `SIGTERM` | **xong 22/09/2026** — cả sáu dịch vụ Go `signal.Notify` + `srv.Shutdown`, `terminationGracePeriodSeconds: 45` > ngữ cảnh 20 giây |
+| Đóng êm khi `SIGTERM` | **xong 22/09/2026** cho sáu dịch vụ Go — `signal.Notify` + `srv.Shutdown`, `terminationGracePeriodSeconds: 45` > ngữ cảnh 20 giây. **`reporting` CHƯA** (`cmd/server/main.go` gọi thẳng `http.ListenAndServe`): manifest vẫn khai 45 để đúng thứ tự ngày nó có đóng êm |
 
 ## 11. Cài bằng giao diện Rancher
 
@@ -682,8 +683,8 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
 
 | Secret | Kiểu chọn trong Rancher | Lưu ý riêng của giao diện |
 |---|---|---|
-| `harbor-vigov` | **Registry** → Custom → `harbor.omicrm.services` | Tên phải đúng từng ký tự: cả 7 Deployment tham chiếu nó trong `imagePullSecrets` |
-| `bi-mat-<dịch vụ>` × 6 | **Opaque** | Mỗi dòng Key/Value là một biến. **Key viết GẠCH DƯỚI** (`DATABASE_DSN`), vì manifest dùng `envFrom`. Key gạch ngang bị k8s bỏ qua im lặng (mục 3) |
+| `harbor-vigov` | **Registry** → Custom → `harbor.omicrm.services` | Tên phải đúng từng ký tự: cả 8 Deployment tham chiếu nó trong `imagePullSecrets` |
+| `bi-mat-<dịch vụ>` × 7 | **Opaque** | Mỗi dòng Key/Value là một biến. **Key viết GẠCH DƯỚI** (`DATABASE_DSN`), vì manifest dùng `envFrom`. Key gạch ngang bị k8s bỏ qua im lặng (mục 3) |
 | TLS | **TLS Certificate** | Dán `fullchain.pem` vào Certificate, `privkey.pem` vào Private Key. **Tên theo môi trường**: `vigov-staging-tls` hoặc `vigov-wildcard-tls` |
 
 - **KHÔNG tạo ConfigMap `cau-hinh-chung`.** Kustomize sinh nó kèm hậu tố băm
@@ -694,7 +695,7 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
 - Thay giá trị một Secret **không** khởi động lại pod. Pod chỉ đọc `envFrom` lúc khởi động, nên
   phải chạy lại job `vigov-deploy` cho dịch vụ ấy.
 
-**Xanh khi:** namespace có đủ `harbor-vigov`, Secret TLS đúng tên môi trường, và **sáu**
+**Xanh khi:** namespace có đủ `harbor-vigov`, Secret TLS đúng tên môi trường, và **bảy**
 `bi-mat-*`. `web-admin` không có Secret riêng (mục 4).
 
 ---
@@ -709,8 +710,8 @@ kubectl kustomize deploy/overlays/staging > vigov-staging.yaml
 kubectl kustomize deploy/overlays/prod    > vigov-prod.yaml
 ```
 
-Đã chạy thử ngày 24/09/2026 với kubectl v1.29.1: mỗi overlay ra **22 đối tượng**, gồm 7
-Deployment · 7 Service · 1 ConfigMap · 1 Ingress · 4 NetworkPolicy · 2 PodDisruptionBudget. Số
+Đã chạy thử ngày 29/09/2026 với kubectl v1.29.1: mỗi overlay ra **27 đối tượng**, gồm 8
+Deployment · 8 Service · 1 ConfigMap · 1 Ingress · 7 NetworkPolicy · 2 PodDisruptionBudget. Số
 khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
 
 - **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
@@ -724,7 +725,7 @@ khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập
 
 Rancher → **Import YAML** → chọn namespace `vigov-staging` → dán `vigov-staging.yaml` → **Import**.
 
-**Kết quả đúng:** bảy pod ở trạng thái **`ImagePullBackOff`**, vì thẻ ảnh là
+**Kết quả đúng:** tám pod ở trạng thái **`ImagePullBackOff`**, vì thẻ ảnh là
 `CHUA-TRIEN-KHAI-LAN-NAO`. **Đó là thiết kế, không phải lỗi** (mục 4). Thẻ thật
 do bước sau đặt.
 
@@ -732,7 +733,7 @@ do bước sau đặt.
 
 ### 11.4 Đặt ảnh thật — CHỈ bằng job của từng dịch vụ
 
-Bảy lượt bấm, đúng thứ tự ở mục 5: `platform` → `identity` → bốn dịch vụ còn lại →
+Tám lượt bấm, đúng thứ tự ở mục 5: `platform` → `identity` → năm dịch vụ còn lại →
 `web-admin`. Không điền gì: thẻ là commit mà lượt bấm đang dựng.
 
 **Không đổi ảnh bằng giao diện Rancher** (Edit Config → ô Container Image, hay Redeploy). Job làm
@@ -749,7 +750,7 @@ những việc mà giao diện không làm:
 ### 11.5 Sau khi đã chạy — hai cái bẫy riêng của Rancher
 
 **1. Không "Import YAML" lại để cập nhật.** Tệp render luôn mang thẻ
-`CHUA-TRIEN-KHAI-LAN-NAO`. Nhập lại lên namespace đang chạy là **kéo cả bảy dịch vụ về
+`CHUA-TRIEN-KHAI-LAN-NAO`. Nhập lại lên namespace đang chạy là **kéo cả tám dịch vụ về
 `ImagePullBackOff` cùng lúc**. Quy trình sửa manifest an toàn ở mục 7: ghi thẻ
 đang chạy, áp, đặt lại thẻ.
 
@@ -770,7 +771,7 @@ dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở
 | Ingress trả 502/504, pod xanh | NetworkPolicy không nhận controller (RKE2 → `kube-system`) | mục 11.0.1 |
 | Ingress có trong Rancher nhưng không địa chỉ nào trả lời | `ingressClassName: nginx` không khớp controller nào | mục 11.0.1 |
 | `ImagePullBackOff` sau khi đã chạy `vigov-deploy` | Thiếu `harbor-vigov`, hoặc tạo ở sai namespace | mục 11.2 |
-| `ImagePullBackOff` đồng loạt cả bảy | Ai đó vừa Import YAML lại | mục 11.5 |
+| `ImagePullBackOff` đồng loạt cả tám | Ai đó vừa Import YAML lại | mục 11.5 |
 | `CrashLoopBackOff`, log ghi `thiếu biến môi trường bắt buộc: DATABASE_DSN` dù Secret có key ấy | Key viết gạch ngang, hoặc có khoảng trắng thừa trong ô Key của form | mục 11.2 |
 | Pod không được tạo, Events ghi `must specify limits.cpu` | Resource Quota của Project | mục 11.1 |
 | HTTPS lỗi chứng thư, HTTP vẫn chạy | Secret TLS sai tên môi trường | mục 11.2 |

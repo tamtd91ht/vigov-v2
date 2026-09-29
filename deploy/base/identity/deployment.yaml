@@ -2,8 +2,8 @@
 #
 # Nó giữ phần lớn bề mặt REST: `/api/v1/{staff,roles,role-permissions,sessions,org-units,
 # communes,...}` — 15 trong 23 tuyến của `kb/20-contracts/openapi.json`. Bốn dịch vụ khác nay
-# cũng có tuyến thật và đã có manifest riêng (comms · documents · finance · petitions);
-# `reporting` vẫn 0 tuyến nên vẫn chưa, xem deploy/README.md.
+# cũng có tuyến thật và đã có manifest riêng (comms · documents · finance · petitions ·
+# reporting — cái sau cùng từ 29/09/2026).
 #
 # NÓ PHỤC VỤ gRPC, VÀ HAI DÒNG NGAY ĐÂY TỪNG NÓI NGƯỢC LẠI. `cmd/server/main.go:351` mở một
 # listener thứ hai ở `GRPC_LISTEN_ADDR` (mặc định `:9090`) và đăng ký `IdentityService`

@@ -168,17 +168,18 @@ func TestLuatNuotNhauLaDung(t *testing.T) {
 
 // TestDichVuThieuManifestLaDung — a service that owns routes but has no Service object. The
 // Ingress would be accepted and every request would answer 503, with nothing in deploy/ to
-// explain it. `reporting` is the live candidate: zero routes today, so no manifest.
+// explain it. A service name that has no manifest BY CONSTRUCTION: the test used to lean on
+// `reporting` having none, and went red the day reporting got its first routes and manifests.
 func TestDichVuThieuManifestLaDung(t *testing.T) {
 	root := goc(t)
 	_, err := gomTheoTaiNguyen(
-		[]tuyenHopDong{{Duong: "/api/v1/bao-cao", DichVu: "reporting"}},
+		[]tuyenHopDong{{Duong: "/api/v1/no-manifest-probe", DichVu: "no-manifest-probe"}},
 		congCuaDichVu(root),
 	)
 	if err == nil {
 		t.Fatal("dịch vụ không có manifest Service phải DỪNG bộ sinh")
 	}
-	if !strings.Contains(err.Error(), "deploy/base/reporting/service.yaml") {
+	if !strings.Contains(err.Error(), "deploy/base/no-manifest-probe/service.yaml") {
 		t.Errorf("thông báo lỗi không chỉ ra tệp còn thiếu: %v", err)
 	}
 }
