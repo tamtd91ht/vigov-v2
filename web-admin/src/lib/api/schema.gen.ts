@@ -1607,7 +1607,7 @@ export type identity_themCaLamViecVao = {
 export type identity_themCanBoVao = {
   "full_name": string;
   "position": string;
-  "email": string;
+  "email"?: string;
   "org_unit_id": string;
   "office_phone": string;
   "mobile": string;

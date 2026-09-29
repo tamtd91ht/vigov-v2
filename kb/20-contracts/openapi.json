@@ -27767,7 +27767,6 @@
           }
         },
         "required": [
-          "email",
           "full_name",
           "mobile",
           "office_phone",
