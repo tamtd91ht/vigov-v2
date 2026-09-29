@@ -21,7 +21,7 @@ const testActor = "CB-00001"
 func insertMiniApp(t *testing.T, db *sql.DB, appID, mode string, tenantID any, active bool) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO mini_app (app_id, che_do, tenant_id, dang_hoat_dong, tao_boi, cap_nhat_boi)
+		`INSERT INTO mini_app (app_id, mode, tenant_id, is_active, created_by, updated_by)
 		 VALUES ($1,$2,$3,$4,$5,$5)`, appID, mode, tenantID, active, testActor)
 	if err != nil {
 		t.Fatalf("thêm mini app %s: %v", appID, err)
@@ -107,7 +107,7 @@ func TestPgMiniAppModeAndTenantConstraint(t *testing.T) {
 		{"chế độ lạ", "3003", "demo", nil},
 		{"app_id có khoảng trắng", " 3004", "chinh", nil},
 	} {
-		_, err := db.Exec(`INSERT INTO mini_app (app_id, che_do, tenant_id, tao_boi, cap_nhat_boi)
+		_, err := db.Exec(`INSERT INTO mini_app (app_id, mode, tenant_id, created_by, updated_by)
 			VALUES ($1, $2, $3, $4, $4)`, c.appID, c.mode, c.tenantID, testActor)
 		if err == nil {
 			t.Errorf("%s: CSDL nhận dòng lẽ ra phải từ chối", c.name)
@@ -127,8 +127,8 @@ func TestPgMiniAppHardDeleteRefused(t *testing.T) {
 
 func insertCommuneProfile(t *testing.T, db *sql.DB, tenantID, address string) {
 	t.Helper()
-	_, err := db.Exec(`INSERT INTO ho_so_hien_thi_xa
-		(tenant_id, dia_chi_tru_so, duong_day_nong, gio_lam_viec_hien_thi, gioi_thieu, tao_boi, cap_nhat_boi)
+	_, err := db.Exec(`INSERT INTO commune_profile
+		(tenant_id, office_address, hotline, office_hours_text, introduction, created_by, updated_by)
 		VALUES ($1,$2,'0900000000','Thứ 2 – Thứ 6','Giới thiệu',$3,$3)`, tenantID, address, testActor)
 	if err != nil {
 		t.Fatalf("thêm hồ sơ %s: %v", tenantID, err)
@@ -165,7 +165,7 @@ func TestPgCommuneProfileSoftDeletedNotRead(t *testing.T) {
 	runMigrations(t, db)
 	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
 	insertCommuneProfile(t, db, ulidA, "Trụ sở A")
-	if _, err := db.Exec(`UPDATE ho_so_hien_thi_xa SET deleted_at = now(), deleted_by = $1,
+	if _, err := db.Exec(`UPDATE commune_profile SET deleted_at = now(), deleted_by = $1,
 		delete_reason = 'thử' WHERE tenant_id = $2`, testActor, ulidA); err != nil {
 		t.Fatalf("xoá mềm: %v", err)
 	}
@@ -181,14 +181,14 @@ func TestPgCommuneProfileOneRowPerTenantAndEmptyLogoRefused(t *testing.T) {
 	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
 	insertCommuneProfile(t, db, ulidA, "Trụ sở A")
 
-	if _, err := db.Exec(`INSERT INTO ho_so_hien_thi_xa (tenant_id, tao_boi, cap_nhat_boi)
+	if _, err := db.Exec(`INSERT INTO commune_profile (tenant_id, created_by, updated_by)
 		VALUES ($1,$2,$2)`, ulidA, testActor); err == nil {
 		t.Error("xã có hai hồ sơ hiển thị")
 	}
-	if _, err := db.Exec(`UPDATE ho_so_hien_thi_xa SET logo_url = '' WHERE tenant_id = $1`, ulidA); err == nil {
+	if _, err := db.Exec(`UPDATE commune_profile SET logo_url = '' WHERE tenant_id = $1`, ulidA); err == nil {
 		t.Error("logo_url = '' được nhận — hai cách viết cho 'không có logo'")
 	}
-	if _, err := db.Exec(`DELETE FROM ho_so_hien_thi_xa WHERE tenant_id = $1`, ulidA); err == nil {
+	if _, err := db.Exec(`DELETE FROM commune_profile WHERE tenant_id = $1`, ulidA); err == nil {
 		t.Error("xoá cứng hồ sơ hiển thị không bị từ chối")
 	}
 }

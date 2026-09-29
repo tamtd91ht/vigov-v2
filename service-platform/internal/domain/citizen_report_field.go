@@ -1,6 +1,6 @@
 package domain
 
-// CitizenReportField is one row of `petition_field` (migration 0011): a tier-1 citizen report field
+// CitizenReportField is one row of `citizen_report_field` (migrations 0011, 0012): a tier-1 citizen report field
 // code and its platform defaults (ADR 0026, ADR 0060). Configuration shared by every commune — no
 // commune, no counts, no personal data.
 //

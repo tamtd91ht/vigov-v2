@@ -117,11 +117,31 @@
       "source": "service-comms/migrations/0004_thong_bao_gui_cong_dan.sql:130"
     },
     {
+      "entity": "CitizenReportField",
+      "service": "platform",
+      "scope": "platform",
+      "table": "citizen_report_field",
+      "source": "service-platform/migrations/0012_rename_schema_to_english.sql:229",
+      "former_tables": [
+        "petition_field"
+      ]
+    },
+    {
       "entity": "CitizenSession",
       "service": "identity",
       "scope": "tenant",
       "table": "phien_cong_dan",
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:348"
+    },
+    {
+      "entity": "CommuneProfile",
+      "service": "platform",
+      "scope": "tenant",
+      "table": "commune_profile",
+      "source": "service-platform/migrations/0012_rename_schema_to_english.sql:202",
+      "former_tables": [
+        "ho_so_hien_thi_xa"
+      ]
     },
     {
       "entity": "ContentCategory",
@@ -299,13 +319,6 @@
       "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:214"
     },
     {
-      "entity": "PetitionField",
-      "service": "platform",
-      "scope": "platform",
-      "table": "petition_field",
-      "source": "service-platform/migrations/0011_petition_field.sql:60"
-    },
-    {
       "entity": "PetitionFieldLabel",
       "service": "petitions",
       "scope": "tenant",
@@ -358,8 +371,11 @@
       "entity": "Province",
       "service": "platform",
       "scope": "platform",
-      "table": "tinh_thanh",
-      "source": "service-platform/migrations/0004_tinh_thanh.sql:74"
+      "table": "province",
+      "source": "service-platform/migrations/0012_rename_schema_to_english.sql:156",
+      "former_tables": [
+        "tinh_thanh"
+      ]
     },
     {
       "entity": "PublicHoliday",
@@ -486,13 +502,6 @@
       "scope": "tenant",
       "table": "loai_nhiem_vu",
       "source": "service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:198"
-    },
-    {
-      "entity": "TenantDisplayProfile",
-      "service": "platform",
-      "scope": "tenant",
-      "table": "ho_so_hien_thi_xa",
-      "source": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:127"
     },
     {
       "entity": "TenantSuccession",

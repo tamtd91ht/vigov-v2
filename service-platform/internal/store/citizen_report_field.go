@@ -8,7 +8,7 @@ import (
 	"github.com/vihat/vigov/service-platform/internal/domain"
 )
 
-// CitizenReportFieldStore is the only path to `petition_field` (migration 0011), tier 1 of the
+// CitizenReportFieldStore is the only path to `citizen_report_field` (migrations 0011, 0012), tier 1 of the
 // citizen report field catalogue (ADR 0026, ADR 0060).
 //
 // A RAW *sql.DB, LIKE UploadPolicyStore: the table has no tenant_id, so core/store.Scoped — which
@@ -26,15 +26,15 @@ func NewCitizenReportFieldStore(db *sql.DB) *CitizenReportFieldStore {
 
 // listCitizenReportFields reads EVERY code, retired ones included.
 //
-// THERE IS DELIBERATELY NO `WHERE active`: a retired code is still the code on every petition filed
+// THERE IS DELIBERATELY NO `WHERE is_active`: a retired code is still the code on every petition filed
 // under it before retirement, and those petitions need its label for as long as they exist. Hiding
 // retired codes is the caller's decision on its WRITE paths only (ADR 0060 §4; platform.proto).
 //
 // The order is total (sort_order, then the primary key) so two rows sharing a sort_order cannot swap
 // places between two reads.
 const listCitizenReportFields = `
-	SELECT code, default_label, sort_order, icon, tone, active
-	FROM petition_field
+	SELECT code, default_label, sort_order, icon, tone, is_active
+	FROM citizen_report_field
 	ORDER BY sort_order, code`
 
 // ListCitizenReportFields returns every tier-1 code. An empty slice is an ordinary answer (no code is
@@ -43,7 +43,7 @@ func (s *CitizenReportFieldStore) ListCitizenReportFields(ctx context.Context) (
 	// No tenant filter: one code set for every commune (see the type comment).
 	rows, err := s.db.QueryContext(ctx, listCitizenReportFields)
 	if err != nil {
-		return nil, fmt.Errorf("petition_field: query: %w", err)
+		return nil, fmt.Errorf("citizen_report_field: query: %w", err)
 	}
 	defer rows.Close()
 
@@ -51,12 +51,12 @@ func (s *CitizenReportFieldStore) ListCitizenReportFields(ctx context.Context) (
 	for rows.Next() {
 		var f domain.CitizenReportField
 		if err := rows.Scan(&f.Code, &f.DefaultLabel, &f.SortOrder, &f.Icon, &f.Tone, &f.IsActive); err != nil {
-			return nil, fmt.Errorf("petition_field: scan: %w", err)
+			return nil, fmt.Errorf("citizen_report_field: scan: %w", err)
 		}
 		out = append(out, f)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("petition_field: read: %w", err)
+		return nil, fmt.Errorf("citizen_report_field: read: %w", err)
 	}
 	return out, nil
 }

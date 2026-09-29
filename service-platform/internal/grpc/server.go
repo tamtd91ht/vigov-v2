@@ -151,7 +151,7 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 	// data and address; hiding it here would leave archival records referring to a commune
 	// nothing can name.
 	//
-	// A PLATFORM ADDRESS IS NEVER A COMMUNE'S HOST, even when it is the row marked la_chinh — the
+	// A PLATFORM ADDRESS IS NEVER A COMMUNE'S HOST, even when it is the row marked is_primary — the
 	// deploy pipeline wrote admin.vigov.vn / admin-stg.vigov.vn as a real commune's domain, and
 	// those rows are kept (rule 7; migration 0007). ResolveHost refuses them, so returning one here
 	// would hand a caller a "commune domain" that resolves to no commune: the Mini App would send
@@ -215,7 +215,7 @@ func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMini
 			}
 		}
 	default:
-		s.log.ErrorContext(ctx, "mini app có chế độ lạ", "rpc", "ResolveMiniApp", "che_do", string(app.Mode))
+		s.log.ErrorContext(ctx, "mini app có chế độ lạ", "rpc", "ResolveMiniApp", "mode", string(app.Mode))
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
 	return &platformv1.ResolveMiniAppResponse{App: out}, nil

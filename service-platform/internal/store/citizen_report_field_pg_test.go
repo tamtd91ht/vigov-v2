@@ -38,7 +38,7 @@ func TestPgCitizenReportFieldSeedAndRead(t *testing.T) {
 func TestPgCitizenReportFieldRetiredIsStillRead(t *testing.T) {
 	db, _ := openTestDB(t)
 	runMigrations(t, db)
-	if _, err := db.Exec(`UPDATE petition_field SET active = false, updated_by = 'system'
+	if _, err := db.Exec(`UPDATE citizen_report_field SET is_active = false, updated_by = 'system'
 		WHERE code = 'dien'`); err != nil {
 		t.Fatalf("retire: %v", err)
 	}
@@ -66,22 +66,22 @@ func TestPgCitizenReportFieldConstraints(t *testing.T) {
 	// Each statement breaks exactly one rule. An UPDATE that matched no row would return no error and
 	// be reported as accepted — a false red, never a false green.
 	for name, stmt := range map[string]string{
-		"hard delete refused": `DELETE FROM petition_field WHERE code = 'khac'`,
-		"rename refused":      `UPDATE petition_field SET code = 'khac-2' WHERE code = 'khac'`,
-		"blank label":         `UPDATE petition_field SET default_label = ' ' WHERE code = 'khac'`,
-		"sort order zero":     `UPDATE petition_field SET sort_order = 0 WHERE code = 'khac'`,
-		"unknown tone":        `UPDATE petition_field SET tone = 'pink' WHERE code = 'khac'`,
-		"blank signer":        `UPDATE petition_field SET updated_by = ' ' WHERE code = 'khac'`,
-		"code with diacritic": `INSERT INTO petition_field (code, default_label, sort_order, active, created_by, updated_by) VALUES ('điện', 'x', 1, true, 'system', 'system')`,
-		"code upper case":     `INSERT INTO petition_field (code, default_label, sort_order, active, created_by, updated_by) VALUES ('Moi', 'x', 1, true, 'system', 'system')`,
-		"active unstated":     `INSERT INTO petition_field (code, default_label, sort_order, created_by, updated_by) VALUES ('moi', 'x', 1, 'system', 'system')`,
+		"hard delete refused": `DELETE FROM citizen_report_field WHERE code = 'khac'`,
+		"rename refused":      `UPDATE citizen_report_field SET code = 'khac-2' WHERE code = 'khac'`,
+		"blank label":         `UPDATE citizen_report_field SET default_label = ' ' WHERE code = 'khac'`,
+		"sort order zero":     `UPDATE citizen_report_field SET sort_order = 0 WHERE code = 'khac'`,
+		"unknown tone":        `UPDATE citizen_report_field SET tone = 'pink' WHERE code = 'khac'`,
+		"blank signer":        `UPDATE citizen_report_field SET updated_by = ' ' WHERE code = 'khac'`,
+		"code with diacritic": `INSERT INTO citizen_report_field (code, default_label, sort_order, is_active, created_by, updated_by) VALUES ('điện', 'x', 1, true, 'system', 'system')`,
+		"code upper case":     `INSERT INTO citizen_report_field (code, default_label, sort_order, is_active, created_by, updated_by) VALUES ('Moi', 'x', 1, true, 'system', 'system')`,
+		"active unstated":     `INSERT INTO citizen_report_field (code, default_label, sort_order, created_by, updated_by) VALUES ('moi', 'x', 1, 'system', 'system')`,
 	} {
 		if _, err := db.Exec(stmt); err == nil {
 			t.Errorf("%s: the database accepted it", name)
 		}
 	}
 	// Editing a default label IS allowed — only the code is frozen.
-	if _, err := db.Exec(`UPDATE petition_field SET default_label = 'Khác (khác)', updated_by = 'system'
+	if _, err := db.Exec(`UPDATE citizen_report_field SET default_label = 'Khác (khác)', updated_by = 'system'
 		WHERE code = 'khac'`); err != nil {
 		t.Errorf("label edit refused: %v", err)
 	}

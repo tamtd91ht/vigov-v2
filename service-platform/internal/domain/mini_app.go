@@ -6,7 +6,7 @@ import (
 )
 
 // MiniAppMode is the mode a registered Zalo Mini App runs in (ADR 0044). The two values are the
-// database's own (`mini_app.che_do`), and a third one is a decision, not an edit.
+// database's own (`mini_app.mode`), and a third one is a decision, not an edit.
 type MiniAppMode string
 
 const (

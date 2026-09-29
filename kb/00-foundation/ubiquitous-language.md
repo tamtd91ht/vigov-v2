@@ -512,7 +512,7 @@ Bảng đã tiếng Anh (`audit_log`, `tenant`, `tenant_domain`, `tenant_success
 | platform | `tinh_thanh` | `province` | — |
 | platform | `petition_field` (đã tiếng Anh) | `citizen_report_field` (X1) | `active`→`is_active` (X13); `@entity: PetitionField` → `CitizenReportField` |
 | platform | `ho_so_hien_thi_xa` | `commune_profile` (X5) | `dia_chi_tru_so`→`office_address` · `duong_day_nong`→`hotline` · `gio_lam_viec_hien_thi`→`office_hours_text` · `gioi_thieu`→`introduction` |
-| platform | `tenant` (cột) | — | `tinh_thanh`→`province_code` |
+| platform | `tenant` (cột) | — | `tinh_thanh`→`province_name` (sửa 29/09: cột giữ tên tỉnh dạng chữ tự do, không phải mã) |
 | platform | `tenant_domain` (cột) | — | `la_chinh`→`is_primary` |
 | platform | `tenant_succession` (cột) | — | `tu_id`→`from_tenant_id` · `den_id`→`to_tenant_id` · `can_cu`→`legal_basis` · `hieu_luc_tu`→`effective_from` |
 | platform | `mini_app` (cột) | — | `che_do`→`mode` |

@@ -18,18 +18,18 @@ var ErrMiniAppNotFound = errors.New("directory: không có mini app đang hoạt
 // queryMiniApp reads one app and, for a dedicated app, the commune it is bound to.
 //
 // LEFT JOIN because a main app has no commune. The commune is returned WITH its state and is not
-// filtered on `dang_hoat_dong`: an inactive bound commune is an ordinary answer the caller refuses,
+// filtered on `is_active`: an inactive bound commune is an ordinary answer the caller refuses,
 // not "no such app" — collapsing the two would send an operator looking for a missing row when
 // the real cause is a merger (ADR 0045 §Chế độ).
 //
 // No join to tenant_succession, on purpose: a dedicated app never follows a successor on its own.
 const queryMiniApp = `
-	SELECT m.app_id, m.che_do,
-	       COALESCE(t.id, ''), COALESCE(t.ten, ''), COALESCE(t.tinh_thanh, ''),
-	       COALESCE(t.dang_hoat_dong, false)
+	SELECT m.app_id, m.mode,
+	       COALESCE(t.id, ''), COALESCE(t.name, ''), COALESCE(t.province_name, ''),
+	       COALESCE(t.is_active, false)
 	FROM mini_app m
 	LEFT JOIN tenant t ON t.id = m.tenant_id
-	WHERE m.app_id = $1 AND m.dang_hoat_dong AND m.deleted_at IS NULL`
+	WHERE m.app_id = $1 AND m.is_active AND m.deleted_at IS NULL`
 
 // MiniApp resolves one App ID. It belongs on Directory — the sanctioned unscoped reader — for the
 // same reason ByHostErr does: this lookup is what ESTABLISHES the commune of a dedicated app's

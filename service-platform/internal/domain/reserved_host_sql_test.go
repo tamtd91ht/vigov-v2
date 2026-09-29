@@ -6,7 +6,10 @@ import (
 	"testing"
 )
 
-// reservedHostMigrationFile is the migration that carries the SQL half of the rule. Read from disk by a
+// reservedHostMigrationFile is the migration that carries the SQL half of the rule — the CHECK's BODY.
+// 0012 renamed the constraint to tenant_domain_not_reserved and left the body alone (a rename does
+// not touch it), so 0007 is still where the body the database enforces is written. A migration that
+// ever REDEFINES the CHECK must move this constant to itself. Read from disk by a
 // relative path rather than through the embedded migrations package: domain/ imports nothing but
 // the standard library, tests included, and the file on disk IS what gets embedded.
 const reservedHostMigrationFile = "../../migrations/0007_tenant_domain_khong_danh_rieng.sql"

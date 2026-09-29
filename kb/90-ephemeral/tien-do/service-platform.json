@@ -102,6 +102,15 @@
       "no_confirm": [],
       "tiep_theo": "Lớp 0 (công cụ hiểu RENAME) rồi lớp B: bảng/cột platform (tenant, domain, mini_app, ho_so_hien_thi_xa -> commune_profile, petition_field -> citizen_report_field + is_active). Lớp C: giá trị 'chinh'/'rieng'. buf breaking FILE báo đỏ 2 message đổi tên cho tới khi commit này thành mốc so sánh. Các trích dẫn cũ (ADR 0046/0048 LaTenMienDanhRieng, bằng chứng mục cũ ở tệp này) là lịch sử, không sửa.",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "doi-ten-tieng-anh-lop-b",
+      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp B: bảng, cột, ràng buộc, chỉ mục, trigger, hàm",
+      "trang_thai": "xong",
+      "bang_chung": "29/09/2026: migration 0012_rename_schema_to_english.sql (chỉ ALTER ... RENAME + thân hàm viết lại) + kịch bản đảo migrations/reverse/0012_*.sql (không nhúng, TestRenameReverseIsNotEmbedded). tinh_thanh->province, ho_so_hien_thi_xa->commune_profile, petition_field->citizen_report_field (active->is_active), tenant.tinh_thanh->province_name, 5 tên kỹ thuật người dùng duyệt. Cuối 0012: bí danh chỉ-đọc (cột sinh + view tên cũ) cho pod ảnh trước trong lúc cuốn 3 bản sao. SQL store + stage vận hành deploy/Jenkinsfile theo tên mới. ĐÃ CHẠY THẬT PostgreSQL 16.15 và 18.6 (container tạm): 37 ca pg store/edge xanh gồm TestPgRenameForwardReverseForward (xuôi->ngược khôi phục catalogue y hệt->xuôi lại), TestPg0007KeepsOldRowsAndRefusesNew; schema-smoke áp 0001-0012 xanh; make check exit 0.",
+      "no_confirm": [],
+      "tiep_theo": "Migration gỡ bí danh (2 DROP VIEW + 6 DROP COLUMN cột sinh) ở bản phát hành SAU khi mọi môi trường cuốn xong — cần người dùng đồng ý (luật 7). Lớp C: giá trị 'chinh'/'rieng'. Chạy trên prod: sao lưu đã kiểm khôi phục trước.",
+      "menu": "cau-hinh"
     }
   ]
 }

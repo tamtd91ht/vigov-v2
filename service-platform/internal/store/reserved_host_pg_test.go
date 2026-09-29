@@ -42,9 +42,10 @@ func before0007(t *testing.T) fs.FS {
 	return out
 }
 
+// The CHECK 0007 added, under the name 0012 gave it (ADR 0061 layer B). Its body is still 0007's.
 func isReservedHostViolation(err error) bool {
 	var pg *pgconn.PgError
-	return errors.As(err, &pg) && pg.Code == "23514" && pg.ConstraintName == "tenant_domain_khong_danh_rieng"
+	return errors.As(err, &pg) && pg.Code == "23514" && pg.ConstraintName == "tenant_domain_not_reserved"
 }
 
 func TestPg0007KeepsOldRowsAndRefusesNew(t *testing.T) {
@@ -52,17 +53,25 @@ func TestPg0007KeepsOldRowsAndRefusesNew(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// 1. The state before 0007: the pipeline's two admin rows, mapped to an active commune.
+	// 1. The state before 0007: the pipeline's two admin rows, mapped to an active commune. Written
+	// with the column names that schema HAD — insertTenant/insertHost speak the post-0012 names.
 	if _, err := migrate.Chay(ctx, db, before0007(t), "platform"); err != nil {
 		t.Fatalf("chạy migration tới trước 0007: %v", err)
 	}
-	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
-	insertHost(t, db, "admin.vigov.vn", ulidA, true)
-	insertHost(t, db, "admin-stg.vigov.vn", ulidA, false)
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong) VALUES ($1, 'Xã Thăng Bình', 'Thành phố Đà Nẵng', true)`,
+		ulidA); err != nil {
+		t.Fatalf("thêm xã trước 0007: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ('admin.vigov.vn', $1, true), ('admin-stg.vigov.vn', $1, false)`,
+		ulidA); err != nil {
+		t.Fatalf("thêm host admin trước 0007: %v", err)
+	}
 
-	// 2. Apply 0007 through the real runner. NOT VALID is what lets this succeed with the two
-	// violating rows present; a plain CHECK would fail here, and that failure is the one this test
-	// pins the absence of.
+	// 2. Apply 0007 — and everything after it, 0012's rename and table rewrite included — through
+	// the real runner. NOT VALID is what lets this succeed with the two violating rows present; a
+	// plain CHECK would fail here, and that failure is the one this test pins the absence of.
 	if _, err := migrate.Chay(ctx, db, migrations.FS, "platform"); err != nil {
 		t.Fatalf("0007 không áp được lên bảng đang có dòng admin: %v", err)
 	}
@@ -96,17 +105,17 @@ func TestPg0007KeepsOldRowsAndRefusesNew(t *testing.T) {
 		"identity.api.vigov.vn", "petitions.api-stg.vigov.vn", "admin.vigov.vn.",
 	} {
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,false)`, h, ulidA)
+			`INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES ($1,$2,false)`, h, ulidA)
 		if !isReservedHostViolation(err) {
-			t.Errorf("chèn %q: lỗi = %v, muốn vi phạm tenant_domain_khong_danh_rieng", h, err)
+			t.Errorf("chèn %q: lỗi = %v, muốn vi phạm tenant_domain_not_reserved", h, err)
 		}
 	}
 
 	// 6. An UPDATE of a kept row is refused too — the header of 0007 says so, and a header claim
 	// nothing checks is a claim that drifts.
-	_, err := db.ExecContext(ctx, `UPDATE tenant_domain SET la_chinh = false WHERE host = 'admin.vigov.vn'`)
+	_, err := db.ExecContext(ctx, `UPDATE tenant_domain SET is_primary = false WHERE host = 'admin.vigov.vn'`)
 	if !isReservedHostViolation(err) {
-		t.Errorf("sửa dòng admin cũ: lỗi = %v, muốn vi phạm tenant_domain_khong_danh_rieng", err)
+		t.Errorf("sửa dòng admin cũ: lỗi = %v, muốn vi phạm tenant_domain_not_reserved", err)
 	}
 
 	// 7. Commune hosts, including ones merely containing a reserved word, are still accepted.

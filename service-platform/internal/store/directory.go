@@ -23,7 +23,7 @@ import (
 // What keeps the exemption safe is that it reads only registry tables — tenant, tenant_domain
 // and mini_app (mini_app.go) — none of which holds business data, and every method returns
 // exactly one row or none. It never returns a list, so there is no query here that could span
-// communes. A commune's own content (ho_so_hien_thi_xa) is NOT read here: that goes through the
+// communes. A commune's own content (commune_profile) is NOT read here: that goes through the
 // scoped CommuneProfileStore.
 type Directory struct {
 	db *sql.DB
@@ -42,13 +42,13 @@ func NewDirectory(db *sql.DB) *Directory { return &Directory{db: db} }
 // forgotten in the third produces NO ERROR ANYWHERE: two paths return the value and one returns
 // the zero value, so the province appears in the header on some requests and not on others
 // depending on which path answered — and which path answers is invisible from the screen.
-// `tinh_thanh` was exactly that column.
+// `province_name` (then `tinh_thanh`) was exactly that column.
 //
 // A FUNCTION BECAUSE EXACTLY ONE COLUMN DIFFERS between the paths: the two Host lookups join a
 // tenant_domain row that must exist, ByID left-joins one that need not. That single expression is
 // the only parameter; everything else is fixed here.
 func tenantColumns(host string) string {
-	return `t.id, ` + host + `, t.ten, t.tinh_thanh, t.dang_hoat_dong`
+	return `t.id, ` + host + `, t.name, t.province_name, t.is_active`
 }
 
 // The two statements. ByHost and ByHostErr share ONE string rather than two identical ones: they
@@ -68,7 +68,7 @@ var (
 	queryByID = `
 		SELECT ` + tenantColumns("COALESCE(d.host, '')") + `
 		FROM tenant t
-		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
+		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.is_primary
 		WHERE t.id = $1`
 )
 

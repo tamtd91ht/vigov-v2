@@ -105,8 +105,20 @@ cũ vẫn gọi tên cũ — đó là lịch sử, và §Từ điển đổi tê
 theo chiều ngược, cùng thân hàm cũ nguyên văn, và xoá dòng của tệp khỏi `schema_migration` trong
 cùng giao dịch (khuôn đã có ở `service-finance/migrations/0007_nguon_von.sql:358-367`). Kịch bản đảo
 **không** được đặt trong thư mục `migrations/` — `embed.FS` nhúng mọi tệp `.sql` ở đó và
-`core/migrate` sẽ áp nó. Chỗ đặt chốt lúc viết lớp B của `platform`. Và **có bản sao lưu đã kiểm
-khôi phục** trước khi chạy trên CSDL có dữ liệu thật — hai điều kiện, không phải chọn một.
+`core/migrate` sẽ áp nó. **Chỗ đặt (chốt 29/09/2026, lớp B của `platform`):**
+`service-<svc>/migrations/reverse/<cùng tên tệp>.sql` — `embed.go` chỉ nhúng `*.sql` ở gốc và
+`core/migrate` bỏ qua thư mục con; một phép thử (`TestRenameReverseIsNotEmbedded`) ghim điều đó. Và
+**có bản sao lưu đã kiểm khôi phục** trước khi chạy trên CSDL có dữ liệu thật — hai điều kiện, không
+phải chọn một.
+
+**Cuốn bản an toàn (chốt 29/09/2026):** Deployment cuốn dần (`maxUnavailable: 0`), nên pod ảnh cũ còn
+chạy câu SQL tên cũ sau khi pod mới đã áp migration. Tệp lớp B vì vậy **kết thúc bằng bí danh chỉ-đọc**
+đúng những gì ảnh trước đọc lúc chạy — cột sinh (`GENERATED ALWAYS AS (…) STORED`) mang tên cột cũ, view
+mang tên bảng cũ. Bí danh được gỡ bằng một migration **ở bản phát hành sau**, khi mọi môi trường đã cuốn
+xong (gỡ cột sinh = gỡ một bản sao tính được, vẫn là luật 7 nên cần người dùng đồng ý). Không dùng
+`Recreate` hay một bản sao: cả hai là mất toàn hệ thống trong lúc cuốn. Lùi ảnh: `rollout undo` →
+chạy kịch bản đảo → pod cũ khởi động; ghi ở đầu kịch bản đảo của từng service. SQL thủ công ngoài
+service (vd các stage vận hành trong `deploy/Jenkinsfile`) đổi tên **cùng commit** với migration.
 
 **`@entity`:** dấu đứng trên câu `ALTER TABLE … RENAME TO` trong tệp mới, và `tools/kb/ownership.go`
 phải học đọc nó (Lớp 0).

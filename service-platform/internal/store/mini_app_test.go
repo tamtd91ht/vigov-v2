@@ -13,7 +13,7 @@ import (
 // behaviour; these pin the three clauses whose loss would turn nothing red on a one-row fixture.
 
 func TestMiniAppQueryExcludesInactiveAndSoftDeleted(t *testing.T) {
-	for _, clause := range []string{"m.dang_hoat_dong", "m.deleted_at IS NULL", "m.app_id = $1"} {
+	for _, clause := range []string{"m.is_active", "m.deleted_at IS NULL", "m.app_id = $1"} {
 		if !strings.Contains(queryMiniApp, clause) {
 			t.Errorf("truy vấn mini app thiếu %q — app tắt hoặc đã xoá mềm sẽ vẫn cấp xã:\n%s",
 				clause, queryMiniApp)
@@ -30,7 +30,7 @@ func TestCommuneProfileExcludesSoftDeletedAndScansInOrder(t *testing.T) {
 		t.Errorf("đọc hồ sơ hiển thị không loại dòng xoá mềm: %q", communeProfileFilter)
 	}
 	// The column list is positional — see Read.
-	const want = `dia_chi_tru_so, COALESCE(logo_url, ''), duong_day_nong, gio_lam_viec_hien_thi, gioi_thieu`
+	const want = `office_address, COALESCE(logo_url, ''), hotline, office_hours_text, introduction`
 	if communeProfileColumns != want {
 		t.Fatalf("thứ tự cột = %q, muốn %q — Read quét theo VỊ TRÍ", communeProfileColumns, want)
 	}

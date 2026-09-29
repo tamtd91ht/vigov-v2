@@ -19,8 +19,8 @@ import "strings"
 // boundary ADR 0003 draws. The rows are kept (rule 7; the owner decides their removal); what
 // changes is that the lookup refuses them before it reads the table.
 //
-// KEPT IN LOCK-STEP with the CHECK `tenant_domain_khong_danh_rieng` in
-// migrations/0007_tenant_domain_khong_danh_rieng.sql. Changing one without the other is caught by
+// KEPT IN LOCK-STEP with the CHECK `tenant_domain_not_reserved`, whose body is the one
+// migrations/0007_tenant_domain_khong_danh_rieng.sql wrote (0012 only renamed it). Changing one without the other is caught by
 // domain.TestReservedHostRuleGoAndSQLAgree, which runs both over the same table of hosts.
 
 // reservedLabels are the first labels, directly under vigov.vn or stg.vigov.vn, that name a

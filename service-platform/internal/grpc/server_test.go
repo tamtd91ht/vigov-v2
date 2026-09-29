@@ -265,7 +265,7 @@ func TestGetTenantReturnsMetadata(t *testing.T) {
 	}
 }
 
-// THE admin.vigov.vn ROW: a real commune whose la_chinh domain is a platform address. GetTenant
+// THE admin.vigov.vn ROW: a real commune whose is_primary domain is a platform address. GetTenant
 // still describes the commune, but its host is "" — never the reserved address, and never another
 // of the commune's hosts picked in its place.
 func TestGetTenantReservedPrimaryHostBlanked(t *testing.T) {

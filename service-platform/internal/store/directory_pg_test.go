@@ -106,7 +106,7 @@ const (
 func insertTenant(t *testing.T, db *sql.DB, id, name string, active bool) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong) VALUES ($1,$2,$3,$4)`,
+		`INSERT INTO tenant (id, name, province_name, is_active) VALUES ($1,$2,$3,$4)`,
 		id, name, "Thành phố Đà Nẵng", active)
 	if err != nil {
 		t.Fatalf("thêm xã %s: %v", name, err)
@@ -116,7 +116,7 @@ func insertTenant(t *testing.T, db *sql.DB, id, name string, active bool) {
 func insertHost(t *testing.T, db *sql.DB, host, tenantID string, primary bool) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
+		`INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES ($1,$2,$3)`,
 		host, tenantID, primary)
 	if err != nil {
 		t.Fatalf("thêm host %s: %v", host, err)
@@ -143,7 +143,7 @@ func TestPgResolveHost(t *testing.T) {
 	// The province travels on the HOT path too, not only on the admin ones. This is the lookup
 	// every request of every commune goes through, so it is the one that feeds the header.
 	if got.Province != "Thành phố Đà Nẵng" {
-		t.Errorf("Province = %q, muốn %q — cột tinh_thanh không tới được biên",
+		t.Errorf("Province = %q, muốn %q — cột province_name không tới được biên",
 			got.Province, "Thành phố Đà Nẵng")
 	}
 }
@@ -155,7 +155,7 @@ func TestPgTenantWithoutProvinceReturnsEmpty(t *testing.T) {
 	db, _ := openTestDB(t)
 	runMigrations(t, db)
 
-	if _, err := db.Exec(`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, ulidA, "Xã Chưa Khai"); err != nil {
+	if _, err := db.Exec(`INSERT INTO tenant (id, name) VALUES ($1,$2)`, ulidA, "Xã Chưa Khai"); err != nil {
 		t.Fatalf("thêm xã: %v", err)
 	}
 	insertHost(t, db, "chuakhai.vigov.vn", ulidA, true)
@@ -237,7 +237,7 @@ func TestPgHostBelongsToOneTenant(t *testing.T) {
 	insertHost(t, db, "chung.vigov.vn", ulidA, true)
 
 	_, err := db.Exec(
-		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
+		`INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES ($1,$2,$3)`,
 		"chung.vigov.vn", ulidB, false)
 	if err == nil {
 		t.Fatal("cùng một host gán được cho hai xã — cách ly ở biên trở thành bất khả quyết")
@@ -256,7 +256,7 @@ func TestPgOnePrimaryHostPerTenant(t *testing.T) {
 	insertHost(t, db, "cu.vigov.vn", ulidA, false)
 
 	_, err := db.Exec(
-		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
+		`INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES ($1,$2,$3)`,
 		"moi.vigov.vn", ulidA, true)
 	if err == nil {
 		t.Fatal("một xã có hai host chính — khâu dựng liên kết sẽ không xác định")
@@ -271,7 +271,7 @@ func TestPgHostMustBeLowerCase(t *testing.T) {
 	insertTenant(t, db, ulidA, "Xã Thăng Bình", true)
 
 	_, err := db.Exec(
-		`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,$3)`,
+		`INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES ($1,$2,$3)`,
 		"ThangBinh.ViGov.VN", ulidA, true)
 	if err == nil {
 		t.Fatal("host chữ hoa lọt vào bảng — host đó sẽ không bao giờ phân giải được")
@@ -285,7 +285,7 @@ func TestPgTenantIDMustBeULID(t *testing.T) {
 	runMigrations(t, db)
 
 	_, err := db.Exec(
-		`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, "thang-binh", "Xã Thăng Bình")
+		`INSERT INTO tenant (id, name) VALUES ($1,$2)`, "thang-binh", "Xã Thăng Bình")
 	if err == nil {
 		t.Fatal("mã hành chính dùng làm tenant_id — sáp nhập đầu tiên sẽ phải sửa hồ sơ lưu trữ")
 	}

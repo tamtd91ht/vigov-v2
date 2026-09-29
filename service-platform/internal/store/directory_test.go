@@ -22,7 +22,7 @@ import (
 
 // requiredColumns is every column the three paths must agree on. Adding a field to tenant.Tenant means
 // adding its column here — that is the whole mechanism.
-var requiredColumns = []string{"t.id", "t.ten", "t.tinh_thanh", "t.dang_hoat_dong"}
+var requiredColumns = []string{"t.id", "t.name", "t.province_name", "t.is_active"}
 
 func TestEveryDirectoryQuerySelectsEveryColumn(t *testing.T) {
 	for name, stmt := range map[string]string{
@@ -55,12 +55,12 @@ func TestHostPathsShareOneStatement(t *testing.T) {
 
 func TestColumnOrderMatchesScanOrder(t *testing.T) {
 	// scanTenant scans BY POSITION. A column inserted in the middle of tenantColumns without moving the
-	// matching Scan target makes `ten` land in `Province` and vice versa — two TEXT columns, so
+	// matching Scan target makes `name` land in `Province` and vice versa — two TEXT columns, so
 	// the driver reports nothing at all and a commune is displayed under the wrong heading.
 	//
 	// The order is asserted as a whole string, not column by column, because the defect IS the
 	// order: every column can be present and the result still be wrong.
-	const want = `t.id, d.host, t.ten, t.tinh_thanh, t.dang_hoat_dong`
+	const want = `t.id, d.host, t.name, t.province_name, t.is_active`
 	if got := tenantColumns("d.host"); got != want {
 		t.Fatalf("thứ tự cột = %q, muốn %q — scanTenant quét theo VỊ TRÍ, đổi thứ tự là đổi giá trị "+
 			"giữa hai cột TEXT mà driver không báo gì", got, want)
