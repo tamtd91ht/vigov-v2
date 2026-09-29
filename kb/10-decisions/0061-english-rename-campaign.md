@@ -16,7 +16,7 @@ owns_facts:
 
 # 0061. Đợt đổi tên toàn kho sang tiếng Anh
 
-**Trạng thái:** **đã chốt** (chủ dự án, 29/09/2026 — hướng; **mọi mục X1–X25** cùng ngày, "theo đề
+**Trạng thái:** **đã chốt** (chủ dự án, 29/09/2026 — hướng; **mọi mục X1–X40** cùng ngày, trừ **X32 tạm, chờ BA**, "theo đề
 xuất hết") · Bảng ánh xạ còn sửa được cho tới khi lớp C của service đầu tiên chạy trên CSDL thật;
 sau đó tệp **bất biến** như mọi ADR · **Thay một phần** ADR 0051 (dòng "Mã
 ĐÃ CÓ" và dòng "Giá trị enum" của §Không thay đổi) và ADR 0011 (dòng "Giá trị enum" của bảng
@@ -58,6 +58,9 @@ chỗ — luật 12 cấm #2 vẫn nguyên hiệu lực, và đợt đổi tên 
 | **A — định danh** | Định danh Go/TS, tệp và thư mục nguồn, dấu `vi-name-ok` hết lý do | Chuỗi SQL (vẫn gọi bảng/cột cũ), thẻ `json:"…"`, giá trị enum, chuỗi giao diện | `make check` xanh; không tệp `.sql` nào trong diff; `kb/20-contracts/openapi.json` sinh lại **không đổi một byte** |
 | **B — lược đồ CSDL** | Bảng, cột, phân vùng, chỉ mục, ràng buộc, trigger, hàm, sequence; chuỗi SQL trong `store/` | Giá trị lưu trong cột, hợp đồng REST/gRPC | Migration mới áp được, **kịch bản đảo áp được**, áp lại lần nữa được — trên `tools/schema-smoke`; mọi phép thử "trigger từ chối" vẫn đỏ đúng chỗ (§Cạm bẫy) |
 | **C — giá trị trên dây** | Giá trị enum lưu trữ + `CHECK`; tên trường JSON tiếng Việt còn sót; giá trị gửi qua gRPC/sự kiện | Đường dẫn URL | Cửa sổ chuyển tiếp chạy đúng bốn bước ở §Lớp C |
+
+**Lớp A của `core` (X34):** MỘT commit xuyên mọi module, không bí danh Go tạm; `openapi.json` được đổi ở
+chuỗi mô tả mà `tools/apidoc` lấy từ tên của `core` — ngoại lệ duy nhất của tiêu chí "không đổi một byte".
 
 Lớp A đi trước vì nó **không đổi hành vi** — nếu nó đổi hành vi thì đó là lỗi, và phép thử thấy.
 Lớp B tách khỏi A vì B là thay đổi trên CSDL thật, cần sao lưu và đường lui; trộn vào một commit
@@ -120,6 +123,16 @@ xong (gỡ cột sinh = gỡ một bản sao tính được, vẫn là luật 7 
 chạy kịch bản đảo → pod cũ khởi động; ghi ở đầu kịch bản đảo của từng service. SQL thủ công ngoài
 service (vd các stage vận hành trong `deploy/Jenkinsfile`) đổi tên **cùng commit** với migration.
 
+**Ngoại lệ `Recreate` (X35, 29/09/2026):** `identity` và `petitions` có pod cũ **GHI** qua cột bị đổi tên —
+cột sinh chỉ-đọc không đỡ được lượt ghi ấy. Hai service này cuốn lớp B trong **cửa sổ bảo trì ban đêm**
+bằng `Recreate` (~1 phút ngừng **riêng service ấy**, báo trước). Service chỉ đổi tên **bảng** dùng **view tự
+cập nhật được** làm bí danh, nên vẫn cuốn dần.
+
+**PostgreSQL 16 ở production (X36):** `ALTER COLUMN … SET EXPRESSION` chỉ có từ PG 17. Cột sinh có biểu
+thức nhắc giá trị enum — `moc_cho_duyet` (`service-petitions/migrations/0006_nhiem_vu.sql:632-637`) — được
+`DROP` rồi `ADD` lại với biểu thức mới trong migration lớp B/C, **cùng giao dịch** với `UNIQUE` dựa trên nó.
+Không mất dữ liệu (giá trị tính lại từ cột khác) nhưng **viết lại cả bảng** — tính vào cửa sổ bảo trì.
+
 **`@entity`:** dấu đứng trên câu `ALTER TABLE … RENAME TO` trong tệp mới, và `tools/kb/ownership.go`
 phải học đọc nó (Lớp 0).
 
@@ -131,10 +144,24 @@ phải học đọc nó (Lớp 0).
 |---|---|---|
 | `so_van_ban_bat_bien` | `service-documents/migrations/0004_so_van_ban.sql:173` — `IF TG_TABLE_NAME LIKE 'van_ban_den%'` | Bảng tên `incoming_document` **không bao giờ khớp** → trigger thôi chặn đánh số lại `so_vao_so`. Không lỗi nào, không phép thử "chạy được" nào đỏ |
 | `chung_tu_da_khoa` | `service-finance/migrations/0007_nguon_von.sql:316` — `IF OLD.trang_thai <> 'da-khoa' THEN RETURN NEW` | Sau lớp C, chứng từ đã khoá mang `locked` ≠ `'da-khoa'` → **mọi** chứng từ đã khoá thành sửa được |
+| `nhiem_vu_bat_bien` | `service-petitions/migrations/0016_task_deadline_correction.sql:93-95` — `d.trang_thai = 'da-duyet'` | Sau lớp C đề nghị lùi hạn mang `approved` → `EXISTS` luôn sai → `han_ban_dau` sửa được **cả sau** khi đã duyệt lùi hạn |
+| `bien_ban_hop_da_ky_bat_bien` · `ket_luan_hop_da_ky_bat_bien` | `service-petitions/migrations/0012_bien_ban_vong_doi.sql:265,329,340` — `= 'da-ky'` | Sau lớp C biên bản đã ký mang `signed` → biên bản và kết luận đã ký **thành sửa/xoá được** |
+| Cùng hai hàm — tên cột **viết thành chuỗi** | `0012_bien_ban_vong_doi.sql:266-268,341` — `to_jsonb(NEW) - 'tb_so_ky_hieu' - 'tb_ngay' - 'cap_nhat_luc'` | Sau lớp B khoá JSON là `notice_reference_no`/`updated_at`; trừ chuỗi cũ không trừ gì → **mọi** lượt ghi được phép trên bản đã ký (kể cả cập nhật `updated_at`) bị từ chối. Đổi tên cột **không** đổi chuỗi |
+| `danh_muc_ba_tang` (5 service) | `service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:176,190` · `service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:146,165,179` · `service-finance/migrations/0003_danh_muc_hang_muc_ke_hoach_von.sql:156,170` · `service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql:172,186` · `service-documents/migrations/0003_danh_muc_loai_van_ban.sql:157,171` — `OLD.nguon = 'he-thong'`, và `nguon` bị đóng băng | `UPDATE nguon 'he-thong'→'system'` của C2 **bị từ chối**; nếu hàm được nới cho C2 mà quên `'he-thong'` thì dòng hệ thống **thành xoá được** |
+| Cột sinh `moc_cho_duyet` | `service-petitions/migrations/0006_nhiem_vu.sql:632-637` — `trang_thai = 'cho-duyet'`, nuôi `UNIQUE (tenant_id, nhiem_vu_id, moc_cho_duyet)` | Sau lớp C luôn `NULL` → khoá duy nhất **thôi chặn** hai đề nghị lùi hạn cùng chờ duyệt cho một nhiệm vụ. Sửa bằng X36 |
+| Chỉ mục riêng phần `phieu_phan_anh_cho_phan_loai` | `service-petitions/migrations/0004_phieu_phan_anh.sql:406-408` — `WHERE trang_thai = 'da-tiep-nhan'` | Sau lớp C chỉ mục rỗng; hàng chờ phân loại đọc tuần tự cả bảng. Đúng kết quả, sai tốc độ — không phép thử chức năng nào đỏ |
+| `thong_bao_gui_cong_dan_bat_bien` | `service-comms/migrations/0004_thong_bao_gui_cong_dan.sql:369` — `OLD.trang_thai = 'da-gui'` | Dòng mới mang `sent` → ZNS đã gửi **thành "chưa gửi" được**. Bảng chỉ-thêm (X28): hàm phải biết **cả hai** giá trị mãi mãi |
+| `thong_bao_bat_bien` | `service-comms/migrations/0005_thong_bao_noi_bo.sql:320,338,343` — `'nhap'`, `'da-go'` | Sau lớp C `OLD.trang_thai <> 'nhap'` đúng với **cả bản nháp** (`draft`) → nháp không sửa được; thông báo đã gỡ (`withdrawn`) **phát hành lại được** |
+| `noi_dung_mini_app_bat_bien` | `service-comms/migrations/0006_noi_dung_mini_app.sql:471` — `nguon` đóng băng | `UPDATE nguon` của C2 (`thu-cong`→`manual`) **bị từ chối** |
+| `staff_notification_guard` | `service-comms/migrations/0010_staff_notification.sql:72,77` — `kind` đóng băng | `UPDATE kind` của C2 (`qua-han`→`overdue`) **bị từ chối** |
+| `dot_thu_chi_bat_bien` | `service-finance/migrations/0008_dot_thu_chi.sql:196-198` — `to_jsonb(NEW) - 'deleted_at' - 'deleted_by' - 'delete_reason'` so với `OLD` | Đóng băng **cả dòng** trừ ba cột xoá mềm: migration X21 nào chạm bảng **bị từ chối**. Ba cột ấy không đổi tên nên lớp B không làm nó hở |
+| `day_so_khong_lui` | `service-documents/migrations/0004_so_van_ban.sql:231,274-279` — `so_sach` (`den`/`di`) nằm trong **khoá chính** và bị đóng băng | `UPDATE so_sach` của C2 **bị từ chối**; và nếu được nới, đổi giá trị trong khoá chính phải đổi cùng lúc mọi chỗ tham chiếu |
+| `nhan_trang_thai_nhiem_vu_bat_bien` | `service-petitions/migrations/0010_nhan_trang_thai_nhiem_vu.sql:142,158` — `ma` đóng băng | `UPDATE ma` (mã trạng thái nhiệm vụ) của C2 **bị từ chối** |
 | Mọi hàm đọc `NEW.<cột>` / `OLD.<cột>` | 57 câu `CREATE FUNCTION` trong `service-*/migrations` | Lỗi lúc chạy ở lượt `UPDATE` đầu tiên sau đổi tên — tức ở máy thật, không ở CI nếu CI không `UPDATE` bảng ấy |
 
-Ba loại tham chiếu phải quét trong **mọi** thân hàm, ở cả lớp B lẫn lớp C: **tên cột**, **tên bảng**
-(kể cả qua `TG_TABLE_NAME`), **giá trị enum** dạng chữ. Mỗi trigger chặn phải có một phép thử chứng
+Bốn loại tham chiếu phải quét trong **mọi** thân hàm, cột sinh và chỉ mục riêng phần, ở cả lớp B lẫn lớp C:
+**tên cột** (kể cả viết thành chuỗi trong `to_jsonb(…) - '<cột>'`), **tên bảng** (kể cả qua `TG_TABLE_NAME`),
+**giá trị enum** dạng chữ, và **cột bị đóng băng** mà C2 cần `UPDATE`. Mỗi trigger chặn phải có một phép thử chứng
 minh nó **vẫn chặn** sau lớp B và sau lớp C.
 
 ### Lớp C — giá trị trên dây: bốn bước, không gộp
@@ -153,28 +180,36 @@ mới lại phải qua Zalo duyệt, mất ngày. Nên thứ tự là:
 
 **`CHECK` trên bảng chỉ-thêm KHÔNG BAO GIỜ tới C4** — xem mục ngay dưới.
 
-**Nếu chưa bản `citizen-app` nào đọc các giá trị này đang phát hành**, C1 và C3 rẻ gần bằng không. Đó
-là điều phải **kiểm** lúc làm, không phải giả định.
+**Ngày 29/09/2026 Mini App CHƯA lên Zalo (X39)** — không máy khách nào đã cài. Nên với `citizen-app`, C1 và
+C3 đi **cùng một bản**, không vòng duyệt Zalo nào. Chấp nhận-cả-hai phía máy chủ (C2 → C4) **vẫn cần**: pod cũ
+và pod mới chồng nhau lúc cuốn. **Câu này hết đúng ngày một bản được phát hành** — từ đó bốn bước áp nguyên.
 
 ### Bên nhận trước bên gửi — giá trị đi xuyên service
 
-Thứ tự service ở trên **không** tự bảo đảm thứ tự đúng cho giá trị đi qua ranh giới. Ví dụ có thật:
-`documents` và `petitions` gửi `work_kind` (`van-ban-den`, `phan-anh`, …) sang `identity` qua gRPC
-(`proto/vigov/identity/v1/identity.proto:24-25`), và `comms` nhận giá trị trạng thái phiếu qua sự kiện
-`PetitionStatusChanged` (`proto/vigov/petitions/v1/events.proto:99`). `documents` đứng **trước**
-`identity` trong thứ tự — nên C3 của `documents` (gửi `incoming-document`) **phải chờ** C2 của
-`identity`. Hàng đợi `su_kien_di` cũng giữ sự kiện mang giá trị cũ qua lần triển khai: bên nhận phải
-đọc được cả hai **trước** khi bên gửi đổi.
+Thứ tự service ở trên **không** tự bảo đảm thứ tự đúng cho giá trị đi qua ranh giới.
+
+**Sửa 29/09/2026 — bản trước nói quá một rủi ro:** `work_kind` giữa `documents`/`petitions` và `identity`
+đi qua gRPC dưới dạng **SỐ enum** (`WorkKind work_kind = 1`, `proto/vigov/identity/v1/identity.proto:2717`;
+hằng `WORK_KIND_*` ở `:2660-2664`), không phải chuỗi. Hằng enum proto **giữ nguyên** (X33), nên chặng gRPC
+**không** nhạy với lớp C — mỗi service tự ánh xạ chuỗi của mình sang số. `documents` **không** phải chờ
+`identity` vì giá trị này.
+
+Rủi ro còn thật ở chỗ giá trị đi dưới dạng **chuỗi**: trạng thái phiếu trong sự kiện
+`PetitionStatusChanged` (`proto/vigov/petitions/v1/events.proto:98-99`, một trong chín mã ADR 0027) mà `comms`
+đọc, và hàng đợi `su_kien_di` giữ sự kiện mang giá trị cũ qua lần triển khai. Với những giá trị ấy bên nhận
+phải đọc được cả hai **trước** khi bên gửi đổi. Quét mọi trường `string` mang giá trị enum trong `proto/`
+trước lớp C của từng service.
 
 ### Dòng chỉ-thêm giữ giá trị cũ — mãi mãi
 
 `audit_log`, `platform_audit_log`, `operator_audit_log`, `nhat_ky_phan_anh`, `nhat_ky_nhiem_vu`,
-`lich_su_chuyen_van_ban` là hồ sơ chỉ-thêm; trigger của chúng từ chối `UPDATE` (luật 6 bất biến 4,
+`lich_su_chuyen_van_ban` và sổ ZNS đã gửi `thong_bao_gui_cong_dan` (X28) là hồ sơ chỉ-thêm; trigger của chúng từ chối `UPDATE` (luật 6 bất biến 4,
 luật 7 cấm #5). Đợt đổi tên **không** viết lại chúng, và không tắt trigger để viết lại:
 
 - Cột `trang_thai_tai_thoi_diem`, `hanh_vi`, `action` giữ nguyên giá trị đã ghi. `CHECK` trên các cột ấy
   nhận **hợp của hai tập** vĩnh viễn.
-- `audit_log.delta` giữ **tên cột cũ** làm khoá JSON. Đọc bằng §Từ điển đổi tên của
+- `audit_log.delta` của mục **cũ** giữ **tên cột cũ** làm khoá JSON; mục **mới** ghi khoá tiếng Anh
+  (`truoc`/`sau` → `before`/`after`, tên cột theo §Bảng — X29). Đọc mục cũ bằng §Từ điển đổi tên của
   `ubiquitous-language.md`.
 - Mọi đường đọc (màn nhật ký, báo cáo, bộ lọc `?action=` của `*-audit-entries`) phải hiểu **cả hai**
   tập giá trị. Một bộ lọc chỉ biết giá trị mới là bộ lọc giấu mọi mục trước đợt đổi tên.
@@ -217,7 +252,7 @@ có giá trị ấy. Dấu `Xn` chỉ tới dòng quyết định trong sổ quy
 | Tập | Cũ → mới | Nơi |
 |---|---|---|
 | Trạng thái chứng từ | `ke-toan-nhap`→`entered` · `da-xac-nhan`→`confirmed` · `da-khoa`→`locked` | 0004; `chung_tu_giai_ngan.go:50-57`; **hàm `chung_tu_da_khoa`** (§Cạm bẫy) |
-| Loại bảng ngân sách | `thu`→`revenue` · `chi`→`expenditure` (X12) | 0006; `thu_chi_ngan_sach.go:58-59` |
+| Loại bảng ngân sách | `thu`→`revenue` · `chi`→`expenditure` (X12). Mã `NS-<năm>-THU/CHI-<nn>` **giữ** token `THU`/`CHI` (X26) | 0006; `thu_chi_ngan_sach.go:58-59` |
 | Kiểu cột | `so`→`number` · `phan_tram`→`percent` | 0006; `:65-66` |
 | Vai trò cột (**thuật ngữ ngân sách**, X19) | `du-toan-tp-giao`→`estimate-assigned-by-province` · `du-toan-xa-giao`→`estimate-assigned-by-commune` · `thu-nsnn`→`state-budget-revenue` · `thu-xa-huong`→`commune-retained-revenue` · `du-toan-nam`→`annual-estimate` · `chi-ngan-sach`→`budget-expenditure` | 0006; `:83-100` |
 | Đơn vị tính | `dong`→`dong` · `nghin-dong`→`thousand-dong` · `trieu-dong`→`million-dong` | `:490-492` |
@@ -252,6 +287,15 @@ có giá trị ấy. Dấu `Xn` chỉ tới dòng quyết định trong sổ quy
 | Chuông cán bộ | `sap-den-han`→`due-soon` · `qua-han`→`overdue` · `leo-thang`→`escalation` · `ban-tin-tuan`→`weekly-digest` | comms 0010 |
 | Chế độ Mini App | `chinh`→`main` · `rieng`→`dedicated` | platform 0006; `mini_app.go:13-14` |
 
+### Khoá lời hệ thống (`message_key`) — lớp C bằng migration có vết (X12, X40)
+
+| Service | Cũ → mới |
+|---|---|
+| `reporting` | `report.block.feedback`→`report.block.citizen_report` · `report.metric.feedback.*`→`report.metric.citizen_report.*` · `report.metric.register.petition_arrived`→`report.metric.register.citizen_letter_arrived` · `report.metric.fiscal.expense_percent`/`expense_amount`→`…expenditure_percent`/`expenditure_amount` |
+
+Ba tên đích đầu là *mặc định của agent, 29/09/2026 — người dùng có thể đổi*. Khoá `feedback.*` của
+`petitions` (0020) đi theo X25 cùng khoá quyền.
+
 **Tập đã tiếng Anh, không đổi:** `stored_file.status`, `retention_class`, `bucket`, `purpose`,
 `automation_*`, `outcome`, `run_trigger`, `security`, `cach_tinh` (`manual`/`entries`/`children`),
 `tone`, khoá `message_key` (trừ hai khoá `expense_*` của X12), khoá quyền `ops.*`, `EscalationLevel`
@@ -266,7 +310,8 @@ tiếng Anh dạng snake (`sla_reminders`, `configuration_missing`) **giữ**; `
 
 **Loại đơn thư** (chưa có bảng lưu; đặt tên sẵn để bảng đầu tiên sinh ra đã đúng — *mặc định của
 agent, 29/09/2026, người dùng có thể đổi: năm từ này chưa có trong đề xuất người dùng đã duyệt*): `phan-anh`→`citizen-report`
-· `kien-nghi`→`recommendation` · `khieu-nai`→`complaint` · `to-cao`→`denunciation` · `de-nghi`→`proposal`.
+· `kien-nghi`→`recommendation` · `khieu-nai`→`complaint` · `to-cao`→`denunciation` · `de-nghi`→`proposal`. **`kien-nghi` và `de-nghi` còn TẠM, chờ BA (X32)**; lớp C của
+cả tập loại đơn thư chạy **sau cùng**.
 Nghĩa pháp lý: mục ngay dưới.
 
 ## Nghĩa pháp lý của các thuật ngữ được dịch — X19
@@ -278,8 +323,8 @@ giờ gộp hai dòng vào một từ**: mỗi dòng là một thủ tục, mộ
 | Tiếng Việt | Mã mới | Nghĩa pháp lý — không lẫn với |
 |---|---|---|
 | Phản ánh | `citizen-report` | Người dân báo một vấn đề thực tế để cơ quan biết và xử lý; **không** phản đối một quyết định. Không phải `complaint` |
-| Kiến nghị | `recommendation` | Đề xuất cơ quan sửa, bổ sung chính sách hay cách làm; không kèm yêu cầu huỷ một quyết định |
-| Đề nghị | `proposal` | Đề nghị cơ quan làm một việc cụ thể trong thẩm quyền |
+| Kiến nghị | `recommendation` — **TẠM, X32** | Đề xuất cơ quan sửa, bổ sung chính sách hay cách làm; không kèm yêu cầu huỷ một quyết định |
+| Đề nghị | `proposal` — **TẠM, X32** | Đề nghị cơ quan làm một việc cụ thể trong thẩm quyền |
 | Khiếu nại | `complaint` | Không đồng ý với **quyết định hành chính / hành vi hành chính cụ thể** xâm phạm quyền của chính người khiếu nại (Luật Khiếu nại 2011) — có **thời hạn thụ lý và giải quyết luật định**. Gọi nhầm là sai thời hạn |
 | Tố cáo | `denunciation` | Báo **hành vi vi phạm pháp luật** của bất kỳ ai (Luật Tố cáo 2018) — người tố cáo được **bảo vệ, giữ bí mật danh tính**. Gọi nhầm là mất bảo vệ ấy |
 | Tiếp nhận (hành vi) | `acknowledge` | Cán bộ nhận và đọc hồ sơ; **không** bắt đầu đồng hồ luật định (X15) |
@@ -326,6 +371,11 @@ Bảng này dựng từ các hằng `HanhVi*` / `Action*` và giá trị chữ t
 | ADR đã chốt | ADR không sửa; người đọc tra tên mới ở §Từ điển đổi tên |
 | Tên service, proto package, tên sự kiện — kể cả `petitions`, `vigov.petitions.v1`, `petitions.*` | Tên hợp đồng giữa service, đã tiếng Anh (ADR 0001, 0011; luật 2 bất biến 4). *(Mặc định của agent, 29/09/2026 — người dùng có thể đổi.)* Chỉ kiểu và bảng thành `CitizenReport` |
 | Bảng sổ `schema_migration` | X23 |
+| Mã nghiệp vụ đã cấp: `VB-DEN-…`, `VB-DI-…`, `NS-<năm>-THU/CHI-<nn>`; mã danh mục do xã gõ; mã vai trò mẫu `chu-tich-ubnd`… | Mã là chủ thể của vết; đổi dạng là chẻ lịch sử một hồ sơ (luật 7 bất biến 3). Bộ sinh mã ánh xạ giá trị mới → token cũ (X18, X26, X30) |
+| Công thức khoá chống trùng: `KhoaLanGui`, `sla_reminders:*`, `escalation:*`, `…unassigned:*` | Khoá mới cho cùng sự việc = ZNS gửi lần hai, leo thang lại lên Chủ tịch. Hàm dựng khoá ánh xạ giá trị mới → token cũ (X27) |
+| Khoá `tham_so` của sổ ZNS (`ma_tra_cuu`, `moc_nhan`, `viec_tiep_theo`) | Khớp tham số mẫu Zalo đã duyệt (X28) |
+| Hằng enum proto (`WORK_KIND_*`, `CAPACITY_*`, `DEADLINE_KIND_*`), tên trường proto tiếng Việt, trọn `citizen_session_bridge.proto` | Số và tên trường là dây; `vihat-miniapp` ghim tệp cầu bằng sha256. Chỉ message đổi, và chỉ khi dây không đổi (X33) |
+| Nửa thương mại của `citizen-app`, giá trị trạng thái yêu cầu của `vihat-miniapp` | Thuộc kho `vihat-miniapp` (X38) |
 | Khoá quyền (`feedback.*`, `petition.*`, `admin.user`, …) | **Không đổi trong đợt theo service.** Đổi **sau cùng**, cùng câu hỏi mở #27, khi mọi service xong lớp C (X25) |
 
 ## Sổ quyết định đặt tên
