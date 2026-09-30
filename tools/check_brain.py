@@ -314,8 +314,10 @@ for dp, dn, fn in os.walk(ROOT):
     # `tmp` nằm trong .gitignore, tức kho đã tuyên bố nó không phải một phần của kho. Phép kiểm
     # này đi bằng hệ tệp chứ không đi bằng git, nên một tệp nháp cục bộ từng làm đỏ cả cổng — và
     # một cổng đỏ vì lý do không ai sửa được là cổng người ta học cách bỏ qua.
+    # `ui-design` cùng lý do: citizen-app/.gitignore bỏ nó (30/09/2026) — ảnh và PROTOTYPE.md khách
+    # gửi để tham khảo trên máy, nguồn thật ở vigov-require.
     dn[:] = [d for d in dn
-             if d not in ("node_modules", ".git", "vendor", "dist", "__pycache__", "tmp")]
+             if d not in ("node_modules", ".git", "vendor", "dist", "__pycache__", "tmp", "ui-design")]
     for f in fn:
         if not f.endswith(".md"):
             continue

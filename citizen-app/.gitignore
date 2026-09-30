@@ -7,3 +7,7 @@ dist/
 public/logo-xa.png
 # Banner xã, cùng cách với logo: chép cho đúng một lần đẩy `--vao-thang` rồi xoá.
 public/banner-xa.png
+
+# Tài liệu thiết kế khách gửi (ảnh chụp, PROTOTYPE.md) — tham khảo trên máy, không vào kho:
+# nguồn của nó là prototype bên vigov-require, và một bản sao ở đây sẽ lệch bản gốc (luật 9).
+ui-design/
