@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1521cd85
+derived_from_commit: f2941af7
 expires: 2026-12-29
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -82,13 +82,13 @@ một lời trấn an không có gì đứng sau.
 | | |
 |---|---|
 | Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 9 |
-| Trong đó `citizen-app` đang gọi | 6 |
+| Trong đó `citizen-app` đang gọi | 7 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
 | GET | `/api/v1/commune-news` | ✓ |
-| GET | `/api/v1/commune-news/categories` | ✗ |
+| GET | `/api/v1/commune-news/categories` | ✓ |
 | GET | `/api/v1/commune-news/{id}` | ✓ |
 | GET | `/api/v1/commune-staff` | ✓ |
 | GET | `/api/v1/my-citizen-report-fields` | ✓ |
@@ -98,7 +98,7 @@ một lời trấn an không có gì đứng sau.
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/rating` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-profiles`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/commune-news`, `/api/v1/commune-news/categories`, `/api/v1/commune-news/{id}`, `/api/v1/commune-profiles`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
