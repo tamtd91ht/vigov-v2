@@ -8,8 +8,8 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-30T09:16:23Z   # `make kb` điền
-from_commit: 80e1354c   # `make kb` điền
+generated_at: 2026-09-30T09:25:23Z   # `make kb` điền
+from_commit: 417e9564   # `make kb` điền
 
 budget:
   always_load_max: 28000  # token — trần do người dùng chốt (20000 -> 25000 -> 27000 ngày 21/09 -> 28000 ngày 28/09/2026, cho luật 13)
@@ -67,9 +67,9 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     file: kb/90-ephemeral/ban-giao-phien.md
     tier: T5
     source: CURATED
-    expires: 2026-12-26
+    expires: 2026-12-29
     load_when: "mở phiên mới hoặc sang máy khác — quyết định đã chốt, ai đang chặn, cạm bẫy đã gặp"
-    warning: "hết hạn 26/12/2026. Sau đó tin `git log`, không tin tệp này"
+    warning: "hết hạn 29/12/2026. Sau đó tin `git log`, không tin tệp này"
 
   # MỘT tệp ĐỌC, NHIỀU tệp GHI — vì sao: docstring `tools/tien_do.py`. Đừng chép lại vào đây.
   - id: tien-do
