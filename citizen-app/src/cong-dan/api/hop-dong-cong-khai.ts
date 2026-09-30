@@ -12,6 +12,9 @@
  *                                                             category_name, type?, source? }],
  *                                                             next_cursor, has_more }   (type: b22bf76)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
+ *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
+ *                                                         → { items: [{ id, name, parent_id?, order }] }
+ *                                                             (58abea4c; list route gained `&category=`)
  *
  *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
  *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
@@ -35,6 +38,7 @@ export const DUONG_DAN_XA = "/api/v1/communes";
 export const COMMUNE_PROFILES_PATH = "/api/v1/commune-profiles";
 export const DUONG_DAN_DANH_BA = "/api/v1/commune-staff";
 export const DUONG_DAN_TIN_XA = "/api/v1/commune-news";
+export const NEWS_CATEGORIES_PATH = "/api/v1/commune-news/categories";
 
 /**
  * The news types the public list may be filtered by — `service-comms` `domain.LoaiNoiDung` (six closed
@@ -69,11 +73,30 @@ export function diaChiDanhBa(ten_mien: string): string {
  * `con_tro` rỗng = trang đầu. Con trỏ đi NGUYÊN VĂN — nó mờ đục, không phải số trang. `type` (tuỳ chọn):
  * máy chủ lọc theo loại; `null` = mọi loại, đúng như trước.
  */
-export function diaChiTinXa(ten_mien: string, con_tro: string, type: NewsType | null = null): string {
+export function diaChiTinXa(
+  ten_mien: string,
+  con_tro: string,
+  type: NewsType | null = null,
+  /**
+   * A category `id` the server itself returned from `/commune-news/categories` — never typed by the citizen.
+   * `null` or `""` = no category filter, and the key is not sent at all (the privacy declaration in
+   * `content/ket-xuat-ho-so.ts` lists it as sent only when a chip is tapped).
+   */
+  category: string | null = null,
+): string {
   return voiHost(diaChiViGov("comms", DUONG_DAN_TIN_XA), ten_mien, {
     ...(con_tro === "" ? {} : { cursor: con_tro }),
     ...(type === null ? {} : { type }),
+    ...(category === null || category === "" ? {} : { category }),
   });
+}
+
+/**
+ * The commune's news categories that hold at least one published item of `type` (themselves or a
+ * descendant), plus their ancestors — `service-comms` 58abea4c. `type` `null` = not sent.
+ */
+export function newsCategoriesAddress(ten_mien: string, type: NewsType | null = null): string {
+  return voiHost(diaChiViGov("comms", NEWS_CATEGORIES_PATH), ten_mien, type === null ? {} : { type });
 }
 
 /** `encodeURIComponent` cho `id`: một ký tự lạ không được đổi đường dẫn. */
@@ -306,6 +329,43 @@ export function docBaiTin(than: unknown): BaiTinXa | null {
   const { body } = than as Record<string, unknown>;
   if (!laChuoi(body)) return null;
   return { ...t, noi_dung: body };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * DANH MỤC TIN — hàng chip lọc hai tầng của tab Tin tức (58abea4c)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** One category as the server sent it. `parent_id` `null` = a root (the key is absent on the wire). */
+export type NewsCategory = {
+  readonly id: string;
+  readonly name: string;
+  readonly parent_id: string | null;
+  readonly order: number;
+};
+
+/**
+ * `null` = malformed, the whole list — same stance as `docTrangTinXa`. Beyond the field types, three
+ * shapes are refused because each would put something wrong on screen: an empty `id` (a chip that filters
+ * by nothing), a blank `name` (a button with no words — a screen reader reads nothing), and a repeated
+ * `id` (two chips that are the same filter, and a duplicate React key).
+ */
+export function readNewsCategories(body: unknown): readonly NewsCategory[] | null {
+  const items = docMang(body);
+  if (items === null) return null;
+  const out: NewsCategory[] = [];
+  const seen = new Set<string>();
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    if (!laChuoi(r.id) || r.id === "" || seen.has(r.id)) return null;
+    if (!laChuoi(r.name) || r.name.trim() === "") return null;
+    if (typeof r.order !== "number" || !Number.isInteger(r.order)) return null;
+    // Optional: absent on a root. Present, it must name a category — an empty string is not "no parent".
+    if (r.parent_id !== undefined && (!laChuoi(r.parent_id) || r.parent_id === "")) return null;
+    seen.add(r.id);
+    out.push({ id: r.id, name: r.name.trim(), parent_id: laChuoi(r.parent_id) ? r.parent_id : null, order: r.order });
+  }
+  return out;
 }
 
 /**

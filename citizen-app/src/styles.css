@@ -3258,6 +3258,25 @@ button.xa-o-nhanh {
   border-color: var(--xa-brand);
   color: #ffffff;
 }
+/* Second row of the news category chips (card D2): indented under a rule and on the page tint, so it
+   reads as belonging to the row above. Subordinate in weight only — same tap height, same text size. */
+.xa-chips--phu {
+  margin-top: -6px;
+  padding-left: 10px;
+  border-left: 3px solid var(--xa-vien);
+}
+.xa-chip--phu {
+  min-height: calc(var(--tap-min) + 4px);
+  background: var(--xa-nen);
+  font-weight: 500;
+}
+/* Chosen in row 2: brand text on the soft brand fill, a brand border and bold — plus `aria-pressed`. */
+.xa-chip--phu.xa-chip--on {
+  background: var(--xa-brand-soft);
+  border-color: var(--xa-brand);
+  color: var(--xa-brand);
+  font-weight: 700;
+}
 
 .xa-khoi {
   display: grid;

@@ -31,7 +31,9 @@ describe("tab Tin tức – Sự kiện: ba tab loại tin, không có 'Tất c�
     ]);
   });
 
-  it("has no 'Tất cả' tab or chip, and no chip row at all (categories are card D2)", () => {
+  // The category chips (card D2) appear only once their route answers; a first render — before any load —
+  // has none, so no empty row flashes up. Their markup is pinned in `news-category-chips.test.tsx`.
+  it("has no 'Tất cả' tab, and no chip row before the categories have loaded", () => {
     expect(html).not.toContain(`>${XA_TN.loc_tat_ca}<`);
     expect(html).not.toContain("xa-chip");
     expect(html).not.toContain("aria-pressed");

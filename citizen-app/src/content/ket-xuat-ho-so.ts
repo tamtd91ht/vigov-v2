@@ -388,6 +388,30 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
         trong_chinh_sach:
           "loại tin người dùng chọn xem (tin tức, sự kiện, thông báo), chỉ khi người dùng bấm một nút lọc hoặc ô “Sự kiện”",
       },
+      {
+        // 30/09/2026 (comms 58abea4c, card D2): the chip the citizen tapped. The id is the server's own,
+        // from the categories route below — nothing typed, nothing about the citizen.
+        khoa: "category",
+        trong_chinh_sach:
+          "mã chuyên mục tin người dùng chọn xem, do chính máy chủ trả trong danh sách chuyên mục, chỉ khi người dùng bấm một chuyên mục",
+      },
+    ],
+  },
+  {
+    // 30/09/2026 (comms 58abea4c, card D2): the category chip rows above the news list. Runs when the
+    // citizen opens the news tab or taps a type tab — a tap, like the list itself; carries only the domain
+    // and the chosen type.
+    tuyen: "/api/v1/commune-news/categories",
+    may_chu: "ViGov — dịch vụ `comms`",
+    khi_nao: `người dùng tự bấm “${TEN_MAN_CONG_KHAI.tin_xa}” hoặc chọn một loại tin, sau khi đã xác nhận xã — để hiện các chuyên mục có tin`,
+    nguoi_dung_bam: true,
+    man: TEN_MAN_CONG_KHAI.tin_xa,
+    truong: [
+      HOST_CONG_KHAI,
+      {
+        khoa: "type",
+        trong_chinh_sach: "loại tin người dùng đang xem (tin tức, sự kiện, thông báo), để chỉ hiện chuyên mục có tin thuộc loại ấy",
+      },
     ],
   },
   {

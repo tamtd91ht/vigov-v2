@@ -58,8 +58,11 @@ import {
   docDanhBa,
   docTrangTinXa,
   docXa,
+  type NewsCategory,
+  newsCategoriesAddress,
   type NewsType,
   readCommuneProfiles,
+  readNewsCategories,
   type TrangTinXa,
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
@@ -388,8 +391,21 @@ export function tinCuaXa(
   ten_mien: string,
   con_tro: string,
   type: NewsType | null = null,
+  /** A category id from `newsCategories`; `null` = every category. The server includes its descendants. */
+  category: string | null = null,
 ): Promise<KetQuaCongKhai<TrangTinXa>> {
-  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro, type), docTrangTinXa);
+  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
+}
+
+/**
+ * The categories of the commune's news that hold at least one published item of `type` — the chip rows
+ * of the news tab. Public by domain, like the list; the domain gate in `goiCongKhai` runs first.
+ */
+export function newsCategories(
+  ten_mien: string,
+  type: NewsType | null = null,
+): Promise<KetQuaCongKhai<readonly NewsCategory[]>> {
+  return goiCongKhai(ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
 }
 
 /** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */

@@ -13,6 +13,8 @@ import {
   DUONG_DAN_DANH_BA,
   DUONG_DAN_TIN_XA,
   DUONG_DAN_XA,
+  NEWS_CATEGORIES_PATH,
+  newsCategoriesAddress,
 } from "../cong-dan/api/hop-dong-cong-khai";
 import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
 import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
@@ -440,7 +442,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // + 1: the commune app's location exchange (same route, `appId` added). + 1: the commune's declared
     // office, read when the commune app opens (`/commune-profiles`). + 1: the commune's field list for
     // step 1 of "Gửi phản ánh" (`/my-citizen-report-fields`) — no field sent, only the session header.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(13);
+    // + 1 (30/09, card D2): the news category chips (`/commune-news/categories`), on the citizen's tap.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(14);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -476,6 +479,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       DUONG_DAN_DANH_BA,
       DUONG_DAN_TIN_XA,
       `${DUONG_DAN_TIN_XA}/{id}`,
+      NEWS_CATEGORIES_PATH,
     ]) {
       expect(tuyen, `hồ sơ không khai tuyến ${t}`).toContain(t);
     }
@@ -560,8 +564,10 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       [DUONG_DAN_XA, diaChiTraXa(TEN_MIEN), []],
       [COMMUNE_PROFILES_PATH, communeProfilesAddress(TEN_MIEN), []],
       [DUONG_DAN_DANH_BA, diaChiDanhBa(TEN_MIEN), []],
-      // Every parameter the client can send: cursor AND type.
-      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien"), []],
+      // Every parameter the client can send: cursor, type AND category.
+      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien", "dm-thu"), []],
+      // Card D2: the category chips' route — host and type.
+      [NEWS_CATEGORIES_PATH, newsCategoriesAddress(TEN_MIEN, "su-kien"), []],
       [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu"), ["id"]],
     ];
     expect(DUONG_CONG_KHAI).toHaveLength(CA.length);
@@ -594,7 +600,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("11 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("12 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

@@ -708,6 +708,14 @@ export const XA_TN = {
   send_new_petition: "Gửi phản ánh mới",
   /** A news type tab, or the Sự kiện tile, with nothing published of that type. */
   news_type_empty: (type: string) => `Xã chưa đăng tin nào thuộc loại “${type}”.`,
+  /** Accessible name of the first category chip row (card D2): "Tất cả" + the root categories. */
+  news_category_filter: "Chuyên mục tin",
+  /** Accessible name of the second row: the chosen root's direct children. */
+  news_subcategory_filter: (root: string) => `Mục nhỏ trong “${root}”`,
+  /** First chip of the second row — the whole chosen root, children included (prototype `NewsPage.tsx`). */
+  news_category_all_in_root: "Tất cả mục này",
+  /** A chosen category with nothing of the tab's type in it (published items can be withdrawn meanwhile). */
+  news_category_empty: (category: string) => `Chưa có tin nào trong mục “${category}”.`,
   tin_lien_quan: "Tin liên quan",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",

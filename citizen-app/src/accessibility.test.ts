@@ -787,6 +787,8 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       // 30/09/2026 (prototype v30): the Phản ánh tab's footer button and the news type tabs.
       ".xa-nut--chan",
       ".xa-tabs-tin__muc",
+      // Card D2: the second row of news category chips.
+      ".xa-chip--phu",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -827,6 +829,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["chip 'Mới tiếp nhận'", token("xa-navy"), token("xa-xanh-nhat")],
     ["chip 'Đã xử lý xong'", token("xa-luc-dam"), token("xa-luc-nhat")],
     ["chip 'Đã đóng'", token("ink-muted"), token("xa-nen")],
+    // Card D2: the news category chips. Row 1 chosen is white on brand (measured above as the primary button).
+    ["chip danh mục hàng 2 chưa chọn", token("ink"), token("xa-nen")],
+    ["chip danh mục hàng 2 đang chọn", token("xa-brand"), token("xa-brand-soft")],
     ["sao đã chấm (viền) trên thẻ", token("xa-cam-dam"), token("surface")],
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["bước đang làm", token("xa-hong-dam"), token("surface")],
