@@ -233,7 +233,10 @@ describe("the commune's field catalogue (step 1) — no built-in list, ever", ()
     expect(fieldIcon("ShieldAlert")).toBe("shield");
     expect(fieldIcon("Trash2")).toBe("text");
     expect(fieldIcon(null)).toBe("text");
-    expect(fieldTone("red")).toBe("hong");
+    // One class per platform tone since 30/09/2026: red is the prototype's red tone (pink is gone), cyan its own.
+    expect(fieldTone("red")).toBe("red");
+    expect(fieldTone("cyan")).toBe("cyan");
+    expect(fieldTone("blue")).toBe("xanh");
     expect(fieldTone("magenta")).toBe("navy");
   });
 

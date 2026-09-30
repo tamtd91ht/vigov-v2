@@ -108,7 +108,7 @@ export function CaNhanXa(props: {
       <h2 className="xa-dau-khoi xa-dau-khoi__tieu-de">{XA_TN.tien_ich}</h2>
       <div className="xa-the">
         <button type="button" className="xa-hang" onClick={props.onMoPhanAnh}>
-          <OBieuTuong ten="chat" mau="hong" />
+          <OBieuTuong ten="chat" mau="red" />
           <span className="xa-hang__chu">
             <strong>{CUA_TOI.tieu_de}</strong>
             <span className="xa-phu">

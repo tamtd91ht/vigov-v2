@@ -824,10 +824,22 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["nhãn 'Gọi' trên nền xanh lá nhạt", token("xa-luc-dam"), token("xa-luc-nhat")],
     ["nhãn tab chưa chọn", token("ink-muted"), token("surface")],
     ["chữ trắng trên nút đỏ", "#ffffff", token("xa-loi")],
-    ["chip 'Đang xử lý'", token("xa-cam-dam"), token("xa-cam-nhat")],
-    ["chip 'Mới tiếp nhận'", token("xa-navy"), token("xa-xanh-nhat")],
-    ["chip 'Đã xử lý xong'", token("xa-luc-dam"), token("xa-luc-nhat")],
+    // Status chips on the prototype's tones since 30/09/2026 (`PROTOTYPE.md` §6.3).
+    ["chip 'Đang xử lý'", token("xa-orange-ink"), token("xa-orange-50")],
+    ["chip 'Đã tiếp nhận'", token("xa-blue-ink"), token("xa-blue-50")],
+    ["chip 'Đã xử lý xong'", token("xa-green-ink"), token("xa-green-50")],
     ["chip 'Đã đóng'", token("ink-muted"), token("xa-nen")],
+    ["chip trạng thái chưa có tên (viền đứt) trên thẻ", token("ink"), token("surface")],
+    // The six tones (`xa-mau--*`, §4.4): ink on its own fill — tiles, field icons, the state circles.
+    ["tông xanh dương: chữ/biểu tượng trên nền nhạt", token("xa-blue-ink"), token("xa-blue-50")],
+    ["tông xanh lá", token("xa-green-ink"), token("xa-green-50")],
+    ["tông cam", token("xa-orange-ink"), token("xa-orange-50")],
+    ["tông tím", token("xa-purple-ink"), token("xa-purple-50")],
+    ["tông xanh ngọc (cyan)", token("xa-cyan-ink"), token("xa-cyan-50")],
+    ["tông đỏ (thay tông hồng)", token("xa-red-ink"), token("xa-red-50")],
+    // Buttons (§7): quiet = ink on the page tint; danger = white on the error red (measured above).
+    ["nút 'quiet': chữ trên nền trang", token("ink"), token("xa-nen")],
+    ["'Xem tất cả ›' (chữ phụ đậm) trên thẻ", token("ink-muted"), token("surface")],
     // Card D2: the news category chips. Row 1 chosen is white on brand (measured above as the primary button).
     ["chip danh mục hàng 2 chưa chọn", token("ink"), token("xa-nen")],
     ["chip danh mục hàng 2 đang chọn", token("xa-brand"), token("xa-brand-soft")],
@@ -839,6 +851,22 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["dải 'Chế độ demo': chữ trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["dải 'Chế độ demo': viền cam sẫm trên nền cam nhạt", token("xa-cam-dam"), token("xa-cam-nhat")],
   ];
+  it("không còn màu hồng nào trong app riêng (chủ dự án, 30/09/2026)", () => {
+    // Rules only: the comment that records WHY pink went names the old value.
+    expect(styles.replace(/\/\*[\s\S]*?\*\//g, " ")).not.toMatch(/--xa-hong|xa-mau--hong|#e91e8c/i);
+  });
+
+  it("chỉ vùng giữa cuộn: khung là một cột cao bằng màn hình, thanh tab và nút chân trang không còn `fixed`", () => {
+    expect(styles).toMatch(/\.xa-app\s*\{[^}]*height:\s*100dvh/);
+    expect(styles).toMatch(/\.xa-trang\s*\{[^}]*overflow-y:\s*auto/);
+    expect(styles).toMatch(/\.xa-frame\[hidden\]\s*\{[^}]*display:\s*none/);
+    for (const lop of [".xa-tab", ".xa-chan-gui", ".xa-header"]) {
+      const rule = new RegExp(`\\${lop}\\s*\\{([^}]*)\\}`).exec(styles);
+      expect(rule, `${lop} không còn một quy tắc`).not.toBeNull();
+      expect(rule![1], `${lop} lại nổi (fixed/sticky) — nội dung sẽ trượt dưới nó`).not.toMatch(/position:\s*(fixed|sticky)/);
+    }
+  });
+
   it("dải 'Chế độ demo' (chỉ bản demo) dùng chữ --text-small trở lên, không phải số px", () => {
     expect(styles).toMatch(/\.xa-demo\s*\{[^}]*font-size:\s*var\(--text-(small|body)\)/);
   });

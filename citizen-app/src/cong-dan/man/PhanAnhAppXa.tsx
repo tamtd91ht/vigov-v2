@@ -50,7 +50,7 @@ import { thoiDiemVN } from "../../lib/thoi-diem";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
 import { DEMO_WORDS, demoPhonePrefill } from "./demo-mode";
 import { nhanLinhVuc } from "./khung";
-import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
+import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
   CUA_TOI,
   GUI,
@@ -107,7 +107,7 @@ const at = (iso: string) => thoiDiemVN(iso) ?? "";
 export function PetitionCard({ petition, onOpen }: { petition: PhieuCuaToiTomTat; onOpen: () => void }) {
   return (
     <button type="button" className="xa-the xa-hang-tin" onClick={onOpen}>
-      <span className="xa-o-bt xa-mau--hong" aria-hidden="true">
+      <span className="xa-o-bt xa-mau--red" aria-hidden="true">
         <BieuTuong ten="chat" co={24} />
       </span>
       <span className="xa-hang-tin__chu">
@@ -765,21 +765,24 @@ const FIELD_ICON: Readonly<Record<string, TenBieuTuong>> = {
   Hammer: "build",
 };
 
-/** The platform's six tones → this app's measured colour classes (`xa-mau--*`); unknown/absent → neutral. */
-const FIELD_TONE: Readonly<Record<string, string>> = {
+/**
+ * The platform's six tones → this app's measured colour classes (`xa-mau--*`, one per tone since 30/09/2026 —
+ * cyan and red were blue and pink); unknown/absent → neutral.
+ */
+const FIELD_TONE: Readonly<Record<string, Tone>> = {
   blue: "xanh",
-  cyan: "xanh",
+  cyan: "cyan",
   green: "luc",
   orange: "cam",
   purple: "tim",
-  red: "hong",
+  red: "red",
 };
 
 export function fieldIcon(icon: string | null): TenBieuTuong {
   return icon !== null && Object.prototype.hasOwnProperty.call(FIELD_ICON, icon) ? FIELD_ICON[icon]! : "text";
 }
 
-export function fieldTone(tone: string | null): string {
+export function fieldTone(tone: string | null): Tone {
   return tone !== null && Object.prototype.hasOwnProperty.call(FIELD_TONE, tone) ? FIELD_TONE[tone]! : "navy";
 }
 

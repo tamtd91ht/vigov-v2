@@ -2668,8 +2668,26 @@ body {
   --xa-brand-soft: #fdeaeb;
   --xa-nen: #f5f7f9;
   --xa-vien: #e5e8eb;
-  --xa-hong: #e91e8c;
-  --xa-hong-nhat: #fde8f3;
+  /*
+   * THE PROTOTYPE'S SIX TONES (`PROTOTYPE.md` §4.1, §4.4) — a light fill and its "ink", the dark shade
+   * that carries text and icons on that fill. The bare tone colours of the prototype (`--blue` #2fb1f9 …)
+   * reach only ~2:1 and are never used for text here. Every ink/fill pair is measured in
+   * `accessibility.test.ts`. Pink (#e91e8c) is gone (owner, 30/09/2026): red took its place.
+   */
+  --xa-blue-50: #e5f4fe;
+  --xa-blue-ink: #0a6ca8;
+  --xa-green-50: #f1f7e7;
+  --xa-green-ink: #4c6b1f;
+  --xa-orange-50: #fff3e8;
+  --xa-orange-ink: #a34400;
+  --xa-purple-50: #efecfd;
+  --xa-purple-ink: #4b38c4;
+  --xa-cyan-50: #e6f7fa;
+  --xa-cyan-ink: #0a6c78;
+  --xa-red-50: #fdeded;
+  --xa-red-ink: #c0272c;
+  /* Section accent bar of "Thông tin – Truyền thông" (§6.1). A 4px decoration beside words, never text. */
+  --xa-orange: #ff7a1a;
   --xa-xanh-nhat: #e7f0f9;
   --xa-luc-nhat: #e6f4ec;
   /* Secondary text on the red header (greeting, province). Was #c9d6e6 for navy: 4.2:1 on --xa-brand, a
@@ -2681,8 +2699,18 @@ body {
   --xa-tab-h: 76px;
 }
 
+/*
+ * THE SCROLL MODEL (`PROTOTYPE.md` §5.2, §4.5): the app is ONE viewport-tall column and only the middle
+ * scrolls. Header, step bar, footer button and tab bar are ordinary blocks in that column — not `fixed`, not
+ * `sticky` — so nothing needs a padding guessed from another element's height, and nothing can slide under
+ * anything. `100vh` first for WebViews without `dvh`; `dvh` then follows the collapsing browser bar.
+ */
 .xa-app {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--xa-nen);
   color: var(--ink);
   font-size: var(--text-body);
@@ -2697,6 +2725,7 @@ body {
    screenshot is never taken for the real app. Words first ("Chế độ demo"), colour second: ink on light orange
    (measured in accessibility.test.ts), a dark orange edge. Right padding keeps it clear of Zalo's corner buttons. */
 .xa-demo {
+  flex: none;
   margin: 0;
   padding: 8px 104px 8px 12px;
   padding-top: calc(8px + env(safe-area-inset-top, 0px));
@@ -2720,16 +2749,35 @@ body {
   margin: 12px 0;
 }
 
-/* ---------- trang ---------- */
+/* ---------- khung · trang ---------- */
+/* One screen: the rest of the `.xa-app` column. Screens are fragments (header + body + footer), so the frame
+   is what lays them out. `[hidden]` is restated because `display: flex` beats the attribute's UA rule — and the
+   gate relies on it to keep the covered screen mounted but out of sight. */
+.xa-frame,
+.xa-frame > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.xa-frame[hidden] {
+  display: none;
+}
+/* THE scrolling part of every screen. The bottom padding is breathing room only: the tab bar and footers sit
+   below this box in the column, never over it. */
 .xa-trang {
-  padding-bottom: calc(var(--xa-tab-h) + 32px);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 24px;
 }
 .xa-trang--con {
   padding: 16px;
 }
 .xa-trang--tab {
-  padding: 16px;
-  padding-bottom: calc(var(--xa-tab-h) + 32px);
+  padding: 16px 16px 24px;
 }
 .xa-trang__than {
   padding: 16px;
@@ -2750,8 +2798,8 @@ body {
 /* Logo fallback on the RED header (owner, 30/09/2026: no pink left): a red disc would vanish into the
    header, so the red goes to the icon on a white disc — the same white the commune logo sits on. */
 .xa-hero__dai-dien {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #ffffff;
   color: var(--xa-brand);
@@ -2759,9 +2807,10 @@ body {
   place-items: center;
   flex: none;
 }
+/* 40px inside the header's 48px left slot (`RootTabHeader`), as the prototype's emblem sits in its slot. */
 .xa-hero__logo {
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #ffffff;
   object-fit: contain;
@@ -2783,44 +2832,89 @@ body {
   font-weight: 700;
 }
 
-/* ---------- header màn con / tab ---------- */
-.xa-dau-con,
-.xa-dau-tab {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
+/* ---------- header (mọi màn: trang chủ, tab gốc, màn con) ---------- */
+/*
+ * One shape (`PROTOTYPE.md` §5.3, `khung-xa.tsx` `HeaderShell`): left slot · title · right slot. A root tab's
+ * left slot holds the 40px commune logo; a child screen's holds the back button, whose words "Quay lại" stay
+ * (owner decision), so it is ~94px. The right slot is Zalo's corner: empty, except the home bell.
+ *
+ * THE COLUMNS: the two sides are `minmax(max-content, 1fr)` and the title `minmax(0, max-content)`. While the
+ * title fits, both sides get the same share and the title is centred ON THE SCREEN; when it does not, the
+ * empty right side gives way first and the title takes the room — one line where it can, wrapping (never
+ * truncated) where it cannot. Fixed equal sides centred always, but pushed "Cần xác nhận số điện thoại của
+ * bạn" onto three lines. Red on every screen: the frame of the app is one colour.
+ */
+.xa-header {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(max-content, 1fr);
   align-items: center;
-  gap: 8px;
-  /* Red on every screen, as the prototype's `AppHeader`: the frame of the app is one colour. */
+  gap: 4px;
+  min-height: calc(var(--tap-min) + 20px);
+  padding: 8px;
   background: linear-gradient(160deg, var(--xa-brand-dark) 0%, var(--xa-brand) 55%, var(--xa-brand-dark) 100%);
   color: #ffffff;
-  padding: 8px 16px;
-  min-height: calc(var(--tap-min) + 16px);
+}
+/* Above the drum pattern: positioned boxes paint in DOM order, and the pattern comes first. */
+.xa-header__side,
+.xa-header__title {
+  position: relative;
+  min-width: 0;
+}
+/* 48px floor on both sides, so the logo (left) and the bell (right) sit in slots of one size. */
+.xa-header__side {
+  min-width: calc(var(--tap-min) + 4px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.xa-header__side--end {
+  justify-content: flex-end;
+}
+.xa-header__title {
+  text-align: center;
+}
+/* Bronze-drum rings, top-right, as the prototype: white at .14 — decoration, `aria-hidden`, under the words. */
+.xa-drum {
+  position: absolute;
+  top: -32px;
+  right: -40px;
+  width: 144px;
+  height: 144px;
+  opacity: 0.14;
+  pointer-events: none;
 }
 .xa-dau-con__lui {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   min-height: calc(var(--tap-min) + 4px);
-  padding: 0 10px 0 4px;
+  padding: 0 6px 0 0;
   border: 0;
+  border-radius: 12px;
   background: none;
   color: #ffffff;
   font: inherit;
   font-size: var(--text-small);
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 .xa-app .xa-dau-con__tieu-de {
-  flex: 1;
-  font-size: 1.15rem;
+  font-size: 1.125rem;
+  line-height: 1.3;
   margin: 0;
   color: #ffffff;
+  overflow-wrap: anywhere;
 }
-/* A tab header has no back button: its title sits centred, as in the prototype. */
-.xa-dau-tab .xa-dau-con__tieu-de {
-  text-align: center;
+.xa-header__subtitle {
+  margin: 2px 0 0;
+  font-size: var(--text-small);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--xa-hero-phu);
 }
 
 /* ---------- thẻ ---------- */
@@ -2884,17 +2978,24 @@ button.xa-o-nhanh {
   place-items: center;
   flex: none;
 }
-.xa-mau--hong {
-  background: var(--xa-hong-nhat);
-  color: var(--xa-hong);
+/* Tone = fill + ink of `PROTOTYPE.md` §4.4, one class per tone (`khung-xa.tsx` `Tone`). The Vietnamese
+   suffixes are the old class names (rule 12 #3); cyan and red are new. `navy` is the neutral, for a tone
+   this app does not know. */
+.xa-mau--red {
+  background: var(--xa-red-50);
+  color: var(--xa-red-ink);
 }
 .xa-mau--xanh {
-  background: var(--xa-xanh-nhat);
-  color: var(--xa-lien-ket);
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
 }
 .xa-mau--luc {
-  background: var(--xa-luc-nhat);
-  color: var(--xa-luc-dam);
+  background: var(--xa-green-50);
+  color: var(--xa-green-ink);
+}
+.xa-mau--cyan {
+  background: var(--xa-cyan-50);
+  color: var(--xa-cyan-ink);
 }
 .xa-mau--navy {
   background: var(--xa-xanh-nhat);
@@ -3059,19 +3160,49 @@ button.xa-o-nhanh {
 }
 
 /* ---------- trạng thái · ghi chú · nút ---------- */
+/* `KhoiTrangThai` (`PROTOTYPE.md` §7 ErrorState / EmptyState). The circle is the prototype's; the MEANING is
+   the sentence (`role="alert"` on an error), so the error sentence itself is plain ink, not red. */
 .xa-trang-thai {
   display: grid;
   justify-items: center;
-  gap: 10px;
-  padding: 36px 20px;
+  gap: 8px;
+  padding: 32px 20px;
   text-align: center;
-  color: var(--ink-muted);
+  color: var(--ink);
 }
 .xa-trang-thai p {
   margin: 0;
 }
-.xa-trang-thai--loi {
-  color: var(--xa-loi);
+.xa-status-circle {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
+}
+.xa-trang-thai--loi .xa-status-circle {
+  background: var(--xa-red-50);
+  color: var(--xa-red-ink);
+}
+.xa-status-title {
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.xa-status-hint {
+  max-width: 19rem;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+.xa-trang-thai .xa-nut--phu {
+  margin-top: 12px;
+}
+/* Loading is WORDS (owner decision): no circle, no pulse, no spinner. */
+.xa-trang-thai--tai {
+  color: var(--ink-muted);
 }
 .xa-ghi-chu {
   display: flex;
@@ -3086,6 +3217,12 @@ button.xa-o-nhanh {
   color: var(--xa-navy);
   font-weight: 700;
 }
+/*
+ * BUTTONS (`PROTOTYPE.md` §7, `khung-xa.tsx` `BUTTON_CLASS`): primary = brand red (owner, 30/09/2026 — the
+ * prototype's is blue) · secondary = white with a 2px brand border · quiet = page tint, thin border ·
+ * danger = the error red. 52px as the prototype asks, reached through padding (12 + 25.5 line + 12 + 2×2
+ * border); the 48px floor below stays literal because `accessibility.test.ts` reads it.
+ */
 .xa-nut {
   display: inline-flex;
   align-items: center;
@@ -3093,14 +3230,16 @@ button.xa-o-nhanh {
   gap: 8px;
   width: 100%;
   min-height: calc(var(--tap-min) + 4px);
-  padding: 12px 16px;
+  padding: 12px 20px;
   border-radius: 12px;
-  border: 1px solid var(--xa-brand);
+  border: 2px solid var(--xa-brand);
   background: var(--xa-brand);
   color: #ffffff;
   font: inherit;
   font-size: var(--text-body);
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.5;
+  text-decoration: none;
   cursor: pointer;
 }
 .xa-nut--phu {
@@ -3108,17 +3247,35 @@ button.xa-o-nhanh {
   background: var(--surface);
   color: var(--xa-brand);
 }
+.xa-nut--quiet {
+  background: var(--xa-nen);
+  border: 1px solid var(--xa-vien);
+  color: var(--ink);
+}
+.xa-nut--danger {
+  background: var(--xa-loi);
+  border-color: var(--xa-loi);
+  color: #ffffff;
+}
+/* Disabled says so by shape AND by the `disabled` attribute: the prototype's grey, at reduced opacity. */
 .xa-nut:disabled {
+  background: var(--ink-muted);
+  border-color: var(--ink-muted);
+  color: #ffffff;
   opacity: 0.6;
+  cursor: default;
+}
+.xa-nut--phu:disabled,
+.xa-nut--quiet:disabled {
+  background: var(--surface);
+  border-color: var(--xa-vien);
+  color: var(--ink-muted);
 }
 
 /* ---------- thanh tab dưới + nút nổi ---------- */
+/* The last block of the `.xa-frame` column — it stays on screen because only `.xa-trang` scrolls. */
 .xa-tab {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
+  flex: none;
   display: flex;
   align-items: stretch;
   min-height: var(--xa-tab-h);
@@ -3166,11 +3323,11 @@ button.xa-o-nhanh {
   min-height: calc(var(--tap-min) + 4px);
   border-radius: 50%;
   border: 3px solid #ffffff;
-  background: var(--xa-hong);
+  background: var(--xa-brand);
   color: #ffffff;
   display: grid;
   place-items: center;
-  box-shadow: 0 5px 16px rgba(233, 30, 140, 0.4);
+  box-shadow: 0 5px 16px rgba(193, 18, 28, 0.35);
   cursor: pointer;
 }
 
@@ -3195,12 +3352,12 @@ button.xa-o-nhanh {
 }
 
 .xa-mau--cam {
-  background: var(--xa-cam-nhat);
-  color: var(--xa-cam-dam);
+  background: var(--xa-orange-50);
+  color: var(--xa-orange-ink);
 }
 .xa-mau--tim {
-  background: var(--xa-tim-nhat);
-  color: var(--xa-tim-dam);
+  background: var(--xa-purple-50);
+  color: var(--xa-purple-ink);
 }
 
 /* header trang chủ: lời chào + tên người dùng + chuông, rồi khối đơn vị */
@@ -3232,18 +3389,21 @@ button.xa-o-nhanh {
 }
 
 
-/* chip trạng thái phiếu */
+/* chip trạng thái phiếu — `PROTOTYPE.md` §6.3 / §7 StatusChip: a rounded-SQUARE label (8px), bold, one tone per
+   group. The four groups are below with the other statuses; the WORDS carry the meaning, colour follows. */
 .xa-chip-tt {
   display: inline-block;
   justify-self: start;
-  padding: 2px 10px;
-  border-radius: 20px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   font-size: var(--text-small);
   font-weight: 700;
+  line-height: 1.4;
 }
 .xa-chip-tt--dang-xu-ly {
-  background: var(--xa-cam-nhat);
-  color: var(--xa-cam-dam);
+  background: var(--xa-orange-50);
+  color: var(--xa-orange-ink);
 }
 
 /* chip lọc — cuộn ngang */
@@ -3353,8 +3513,9 @@ button.xa-o-nhanh {
   border-color: var(--xa-cam-dam);
 }
 
-/* thanh bước của luồng gửi */
+/* thanh bước của luồng gửi — a block of the frame column between header and body, so it stays on screen */
 .xa-thanh-buoc {
+  flex: none;
   list-style: none;
   margin: 0;
   display: flex;
@@ -3559,21 +3720,25 @@ button.xa-o-nhanh {
 /* ---------- phản ánh theo hợp đồng thật (28/09/2026) ---------- */
 /* Bốn nhóm người dân thấy (ADR 0050 #5). Nhãn là chữ, màu chỉ đi kèm. */
 .xa-chip-tt--da-tiep-nhan {
-  background: var(--xa-xanh-nhat);
-  color: var(--xa-navy);
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
 }
 .xa-chip-tt--da-xu-ly-xong {
-  background: var(--xa-luc-nhat);
-  color: var(--xa-luc-dam);
+  background: var(--xa-green-50);
+  color: var(--xa-green-ink);
 }
+/* Closed: grey with a border, as the prototype. */
 .xa-chip-tt--da-dong {
   background: var(--xa-nen);
+  border-color: var(--xa-vien);
   color: var(--ink-muted);
 }
-/* A status this app has no name for yet: a bordered, uncoloured chip, so it cannot be read as any of the
-   four groups by colour — the sentence inside says what to do. */
+/* A status this app has no name for yet: no fill, a DASHED border, normal weight — so it cannot be read as
+   any of the four groups by colour, "Đã đóng"'s grey border included. The sentence inside says what to do. */
 .xa-chip-tt--unknown {
-  border: 1px solid currentColor;
+  background: transparent;
+  border: 1px dashed currentColor;
+  color: var(--ink);
   font-weight: 400;
 }
 
@@ -3662,56 +3827,54 @@ button.xa-o-nhanh {
 }
 
 /* ---------- bố cục trang chủ theo prototype khách (28/09/2026) ---------- */
-.xa-dau-xa {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 12px 16px;
-  background: linear-gradient(160deg, var(--xa-brand-dark) 0%, var(--xa-brand) 55%, var(--xa-brand-dark) 100%);
-  color: #ffffff;
-}
-.xa-dau-xa__chu {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-}
-.xa-app .xa-dau-xa__ten {
-  margin: 0;
-  color: #ffffff;
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-.xa-dau-xa__chao {
-  margin: 2px 0 0;
-  font-size: var(--text-small);
-  color: var(--xa-hero-phu);
-}
 .xa-nhom-cn {
   margin-bottom: 12px;
   display: grid;
   gap: 12px;
 }
+/* SECTION HEADER (`khung-xa.tsx` `SectionHeader`, `PROTOTYPE.md` §6.1): a 4×20 rounded accent bar, the title,
+   and "Xem tất cả ›". The bar is decoration — the heading beside it is the words. Accent per group: brand for
+   "Chính quyền số" (the default), orange, green-ink, blue-ink. */
 .xa-dau-nhom {
+  --xa-accent: var(--xa-brand);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-left: 10px;
-  border-left: 4px solid var(--xa-brand);
+  gap: 8px;
 }
-/* Group bars as the prototype's section headers: brand for "Chính quyền số" (the default above), then
-   orange, green, blue. Decoration only — the heading beside the bar is the words. */
+.xa-dau-nhom::before {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--xa-accent);
+}
 .xa-dau-nhom--xanh {
-  border-left-color: var(--xa-lien-ket);
+  --xa-accent: var(--xa-blue-ink);
 }
 .xa-dau-nhom--cam {
-  border-left-color: #c26a1a;
+  --xa-accent: var(--xa-orange);
 }
 .xa-dau-nhom--luc {
-  border-left-color: var(--xa-luc-dam);
+  --xa-accent: var(--xa-green-ink);
 }
+/* The prototype's 0.95rem is below this repo's 16px floor: the title stays at body size. Bold, not the
+   prototype's 800 — this font stack has no 800 face, and the synthesised one spaced Vietnamese marks apart. */
 .xa-app .xa-dau-nhom .xa-dau-khoi__tieu-de {
   flex: 1;
+  min-width: 0;
   margin: 0;
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+/* "Xem tất cả ›" in muted bold (7.4:1 on the card), a full 48px target — not the prototype's 40px exemption. */
+.xa-dau-nhom .xa-dau-khoi__them {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  color: var(--ink-muted);
+  font-weight: 700;
 }
 .xa-luoi-4 {
   display: grid;
@@ -3737,14 +3900,11 @@ button.xa-o-nhanh {
   line-height: 1.2;
   color: var(--ink);
 }
-/* "Gửi phản ánh mới" at the foot of the Phản ánh tab, as the prototype's `FeedbackListPage` footer: fixed
-   just above the tab bar, full width, where the thumb is — the list scrolls under it, never over it. */
+/* "Gửi phản ánh mới" at the foot of the Phản ánh tab, as the prototype's `FeedbackListPage` footer: a block of
+   the frame column just above the tab bar, full width, where the thumb is — the list scrolls ABOVE it, never
+   under it, so no padding has to guess its height any more. */
 .xa-chan-gui {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--xa-tab-h) + env(safe-area-inset-bottom));
-  z-index: 39;
+  flex: none;
   padding: 12px 16px;
   background: var(--surface);
   border-top: 1px solid var(--xa-vien);
@@ -3753,9 +3913,9 @@ button.xa-o-nhanh {
   min-height: calc(var(--tap-min) + 4px);
   font-weight: 700;
 }
-/* The tab's content keeps clear of that footer as well as the tab bar. */
+/* Kept as a hook for the Phản ánh tab's body; the footer no longer overlaps it (see `.xa-chan-gui`). */
 .xa-trang--co-chan {
-  padding-bottom: calc(var(--xa-tab-h) + var(--tap-min) + 4px + 24px + 32px);
+  padding-bottom: 24px;
 }
 
 /* ---------- banner trang chủ (tạm theo tên miền, xem TrangXa `CommuneBanner`) ---------- */
@@ -3773,11 +3933,14 @@ button.xa-o-nhanh {
 }
 
 /* ---------- tab loại tin (Tin tức · Sự kiện · Thông báo) ---------- */
-/* Full width under the header: the negative margin undoes `.xa-trang--tab`'s 16px, and `top` is the tab
-   header's own height, so the row stays visible under it while the list scrolls. */
+/* Full width under the header: the negative margin undoes `.xa-trang--tab`'s 16px, and `sticky` keeps the row
+   visible at the top of the scrolling area while the list scrolls. */
 .xa-tabs-tin {
   position: sticky;
-  top: calc(var(--tap-min) + 16px);
+  /* The scroll container is now `.xa-trang--tab` itself (the header sits above it, outside). The sticky
+     area is inset by that container's 16px padding, so `top: 0` would leave a 16px strip of scrolling
+     text visible above the row; -16px puts it flush under the header (checked at 390×844). */
+  top: -16px;
   z-index: 15;
   margin: -16px -16px 16px;
   display: flex;
