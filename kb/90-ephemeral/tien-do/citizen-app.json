@@ -313,10 +313,10 @@
     },
     {
       "id": "co-demo-app-rieng",
-      "viec": "Cờ dựng --demo cho app riêng xã khi chưa nộp Zalo: tên 'Nguyễn Văn Hùng', số 0900000000 khi Zalo không trả; chỉ phía citizen-app (ADR 0047 §6)",
-      "trang_thai": "xong",
-      "bang_chung": "4d2c49e4 — lib/demo-build.ts (__VIGOV_DEMO__ để trần cho bundler gập), cong-dan/man/demo-mode.tsx, commune-session.ts DEMO_PROCEEDS (tu-choi, thu-lai, cho-lat, ngoai-zalo, chua-xac-thuc-so) → chạy việc không phiên, không vòng; deploy.mjs từ chối --demo thiếu --vao-thang, in cảnh báo. bundle-for-zalo.test.ts: bản thường 0 chuỗi demo, bản demo đủ. tsc sạch, vitest 48 tệp 1278/1278, build xanh.",
-      "tiep_theo": "BỎ --demo trước khi nộp duyệt Zalo (người dùng tự bỏ). Chưa có test đi trọn TrangXa sessionLost → màn thông báo (DOM test không mô phỏng chạm). Đường dẫn từ chối hộp Zalo (tu-choi) cũng cho đi tiếp — bỏ khỏi DEMO_PROCEEDS nếu muốn chặt hơn. Chưa xem trên máy thật.",
+      "viec": "Cờ dựng --demo cho app riêng xã: KHÔNG chữ demo trong app; chỉ thay danh tính (Nguyễn Văn Hùng / 0900000000), không xin quyền Zalo, chạy thật tới máy chủ (ADR 0047 §6, làm lại 01/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "4d2c49e4 — lib/demo-build.ts (__VIGOV_DEMO__ để trần cho bundler gập), cong-dan/man/demo-mode.tsx, commune-session.ts DEMO_PROCEEDS (tu-choi, thu-lai, cho-lat, ngoai-zalo, chua-xac-thuc-so) → chạy việc không phiên, không vòng; deploy.mjs từ chối --demo thiếu --vao-thang, in cảnh báo. bundle-for-zalo.test.ts: bản thường 0 chuỗi demo, bản demo đủ. tsc sạch, vitest 48 tệp 1278/1278, build xanh. || 2e670a92 — làm lại theo người dùng 01/10: gỡ dải và mọi câu demo, bỏ đường chạy không phiên; --demo mở phiên ngay bằng {appId, accessToken, demoIdentity:true} không phoneToken; bundle-for-zalo.test.ts khẳng định cả hai bản dựng không có chữ demo/trình diễn/trải nghiệm trong giao diện. vitest 1334/1334, build xanh.",
+      "tiep_theo": "CHẶN: vihat-miniapp chưa nhận thân demoIdentity (việc sửa máy chủ — DEMO_APP_IDS — bị bộ phân loại an toàn của Claude Code chặn 01/10/2026; chờ chủ dự án tự làm hoặc cấp quyền). Tới lúc đó bản --demo mở phiên bị từ chối như lỗi đăng nhập thường. Câu 'trải nghiệm khách hàng' trong trích dẫn eSMS của ViHAT (content/company-profile.ts:320) vẫn nằm trong bundle — nghĩa 'customer experience', chờ chủ dự án quyết. BỎ --demo và xoá DEMO_APP_IDS trước khi nộp Zalo.",
       "menu": "phan-anh-nguoi-dan"
     },
     {
