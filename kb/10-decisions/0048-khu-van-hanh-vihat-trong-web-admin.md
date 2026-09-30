@@ -15,14 +15,19 @@ owns_facts:
   - "vì sao on-premise cho một xã không cần sửa mã khu vận hành: không triển khai platform-admin, hoặc triển khai cho người vận hành tại chỗ"
   - "backend khu vận hành thuộc service-platform; người vận hành chỉ chạm siêu dữ liệu, mọi thao tác ghi ghi vết theo xã ĐÍCH"
   - "tài khoản vận hành ViHAT là một miền tài khoản tách khỏi tài khoản cán bộ xã, không mang tenant_id, không phải vai trò trong một xã"
+  - "lần người vận hành liệt kê mọi xã không ghi vết — ngoại lệ của luật 6 bất biến 7, chỉ cho siêu dữ liệu xã (người dùng chốt 30/09/2026)"
+  - "ho_so_hien_thi_xa: người ghi sau thắng giữa người vận hành và cán bộ xã; mã VH-/CB- trong vết nói miền"
+  - "phát hành QR không ghi vết (người dùng chốt 30/09/2026)"
+  - "on-premise do ViHAT vận hành từ xa"
 ---
 
 # 0048. Khu vực vận hành ViHAT trong `web-admin`
 
 **Trạng thái:** **đã chốt hướng** (chủ dự án, 27/09/2026 — ba điều kiện ở §*Quyết định*; điều kiện
 #1 sửa ở §*Sửa của chủ dự án — 27/09/2026*) · **§Thiết kế #1–#4, #10 đã chốt** 28/09/2026 (§*Chốt
-của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · **#5, #6 (định dạng mã), #7, #9, #11, #12
-vẫn chưa chốt** — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
+của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · #6 chốt 28/09 (§*Chốt bước 1*) · **#5, #7,
+#9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · #12 là bước vận hành, chưa
+làm — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
 
@@ -161,11 +166,11 @@ do chính tả ở đó). Đề xuất `t:<tenant_id>` ở dòng #8 đọc theo 
 
 | # | Câu | Ghi chú |
 |---|---|---|
-| 5 | Ghi vết lần **liệt kê xã liên xã** của người vận hành | Đề xuất ở §Thiết kế #5 chưa được xác nhận |
+| 5 | ~~Ghi vết lần **liệt kê xã liên xã** của người vận hành~~ | **Đóng 30/09/2026** — không ghi vết, ngoại lệ có giới hạn, §*Trả lời của người dùng — 30/09/2026* |
 | 6 | ~~**Định dạng mã nghiệp vụ** của người vận hành~~ | **Đóng 28/09/2026** — `VH-00001`, §*Chốt bước 1* |
-| 7 | Ai thắng khi người vận hành và cán bộ xã cùng sửa `ho_so_hien_thi_xa` | Chưa có đề xuất — cần chủ dự án |
-| 9 | **Hình dạng vết** của lần phát hành QR | Đề xuất ở §Thiết kế #9 chưa được xác nhận |
-| 11 | On-premise: ai vận hành | Tuỳ hợp đồng; mã không đổi |
+| 7 | ~~Ai thắng khi người vận hành và cán bộ xã cùng sửa `ho_so_hien_thi_xa`~~ | **Đóng 30/09/2026** — người ghi sau thắng, §*Trả lời của người dùng — 30/09/2026* |
+| 9 | ~~**Hình dạng vết** của lần phát hành QR~~ | **Đóng 30/09/2026** — không ghi vết, §*Trả lời của người dùng — 30/09/2026* |
+| 11 | ~~On-premise: ai vận hành~~ | **Đóng 30/09/2026** — ViHAT từ xa, §*Trả lời của người dùng — 30/09/2026* |
 | 12 | Gỡ hai dòng cũ `admin*.vigov.vn` → Xã Thăng Bình | Phải xong **trước khi** host vận hành lên sống |
 
 ### Chốt bước 1 — 28/09/2026 (cổng ROUTING §0.3)
@@ -205,6 +210,21 @@ thay cho cổng của từng thẻ.
 3. `platform-admin`: màn đăng nhập (mật khẩu + TOTP)
 4. Tuyến vận hành đầu tiên: giới hạn tải lên (ADR 0052 §10), quyền `ops.upload_policy.manage`, vết ở
    `platform_audit_log`
+
+## Trả lời của người dùng — 30/09/2026 (§Thiết kế #5, #7, #9, #11)
+
+Mục này ghi thêm, không sửa phần trên. Người dùng trả lời từng câu trong phiên chính 30/09/2026.
+**Chưa dựng gì**: mỗi dòng là điều phải đúng khi dựng.
+
+| # | Đã chốt | Giới hạn · hệ quả người dùng chấp nhận | Luật |
+|---|---|---|---|
+| 5 | Người vận hành liệt kê mọi xã: **KHÔNG ghi vết** từng lần liệt kê. Lý do người dùng nêu: danh sách chỉ mang **tên xã và tên miền**, không mang dữ liệu công dân | **Ngoại lệ tường minh** của luật 6 bất biến 7 (*đọc liên xã cũng phải ghi vết*). Ngoại lệ **chỉ** phủ lần liệt kê **siêu dữ liệu xã** (tên, tên miền, trạng thái) của sổ xã ở platform. **Không bao giờ** phủ một lần đọc dữ liệu nghiệp vụ của xã — việc đó vẫn là ĐIỀU KIỆN DỪNG #2 và #3 ở dưới. Thêm một cột ngoài siêu dữ liệu vào danh sách này là ra khỏi ngoại lệ, phải hỏi lại. Truy vấn **vẫn mang** `// @cross-tenant: <lý do>` (luật 1 cấm #6) — ngoại lệ là về vết, không phải về việc khai | Luật 6 bất biến 7; luật 1 cấm #6 |
+| 7 | Người vận hành và cán bộ xã cùng sửa `ho_so_hien_thi_xa`: **người ghi sau thắng**. Mọi lần sửa đều ghi vết, "ai" là mã nghiệp vụ mà **tiền tố nói miền**: người vận hành `VH-…`, cán bộ xã `CB-…` | Không khoá lạc quan: một lần sửa ghi đè lặng lẽ lần sửa kia, giá trị bị đè chỉ còn ở giá trị *trước* của mục vết (luật 6 bất biến 5). Chú thích *"staff business code"* của `tao_boi` / `cap_nhat_boi` (`service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:155`) phải sửa lúc dựng — cột nay nhận mã của cả hai miền | Luật 6 bất biến 5, 8 |
+| 9 | Phát hành QR: **KHÔNG ghi vết** như một lần ghi (người dùng: *"không cần"*). Khoá `ops.qr.issue` vẫn là cổng | Một QR in sai trỏ nhầm xã **không truy được ai đã phát hành**. QR in ra sống nhiều năm (ADR 0019) — đó là cái giá người dùng chấp nhận | Luật 6 bất biến 1 |
+| 11 | On-premise: **ViHAT vận hành từ xa**. Mã không đổi (điều kiện #1) | Người của ViHAT chạm dữ liệu nghiệp vụ của xã là **luật 1 điều kiện dừng #5** — cần quyết định riêng, câu này không cấp | Luật 1 điều kiện dừng #5 |
+
+**§Thiết kế #12** (gỡ hai dòng `admin*.vigov.vn`) là **bước vận hành**, không phải quyết định — giữ
+nguyên ở bảng *Còn mở*, phải xong trước khi host vận hành lên sống.
 
 ## ĐIỀU KIỆN DỪNG
 

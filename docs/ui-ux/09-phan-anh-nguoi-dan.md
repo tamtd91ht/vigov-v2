@@ -188,6 +188,10 @@ Tiêu đề khối: `Chuyển xử lý, không đổi trạng thái`
 Chú thích: *"Dùng khi người dân đánh giá qua điện thoại hoặc tại quầy. Một đến hai sao sẽ tự mở lại phiếu."*
 Năm nút `1 ★` … `5 ★`.
 
+> ⚠ **MỤC NÀY ĐÃ BỊ THAY — ADR 0062 (người dùng chốt 30/09/2026).** Cán bộ **không** ghi đánh giá
+> thay người dân; chỉ người dân chấm sao qua tuyến công dân. Khối này không dựng. Nguyên văn trên giữ
+> lại vì là chữ của khách → `kb/10-decisions/0062-can-bo-khong-ghi-danh-gia-thay-dan.md`
+
 ### 8.7 Nhật ký xử lý (cột phải)
 - Ô nhập `Đã làm gì, ai làm, còn vướng gì…`
 - Nút `📎 Đính kèm` · `➤ Ghi nhật ký`
@@ -239,18 +243,10 @@ Chú thích: *"Điểm đen là nơi vừa nhiều phản ánh vừa xử lý kh
 ## 11. Modal "Nhập hộ phản ánh"
 
 Tiêu đề: `Nhập hộ phản ánh của người dân`
-Mô tả: *"Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi cùng quy trình và cùng thời hạn với phiếu gửi từ Zalo."*
+Mô tả: *"Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn — hãy ghi đúng thời điểm người dân phản ánh."*
 
-> ⚠ **CÂU MÔ TẢ TRÊN NAY KHÔNG CÒN ĐÚNG, và nó là chữ hiện trên màn hình cán bộ.** ADR 0028
-> quyết định E và F: phiếu nhập hộ **không** đi cùng thời hạn với phiếu gửi từ Zalo — nó có
-> lĩnh vực ngay lúc vào sổ nên đặt được **cả hai** hạn, còn phiếu dân tự gửi chỉ có hạn tiếp
-> nhận cho tới khi cán bộ phân loại. Và đồng hồ `Tiếp nhận` của phiếu nhập hộ là `NULL`,
-> không áp dụng.
->
-> **Đề xuất câu thay thế, chờ duyệt — tôi không tự sửa chữ hiện ra cho người dùng:**
-> *"Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập
-> ở đây đi cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được
-> ấn định luôn — hãy ghi đúng thời điểm người dân phản ánh."*
+> Câu mô tả trên do **người dùng duyệt 30/09/2026**, thay câu cũ *"…đi cùng quy trình và cùng thời
+> hạn với phiếu gửi từ Zalo"* — lý do: ADR 0028 quyết định E và F.
 
 | Trường | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
@@ -341,8 +337,15 @@ Nút: `Huỷ` · `Vào sổ phản ánh`
 
 1. **Hạn xử lý** tính từ bảng SLA theo **lĩnh vực** (xem `14-cau-hinh.md`). Ví dụ `An ninh trật tự`: tiếp nhận 2 giờ, xử lý xong 16 giờ; `Hạ tầng giao thông`: 8 giờ / 168 giờ. Nếu lĩnh vực không có dòng riêng thì dùng dòng `Mặc định cho mọi lĩnh vực` (8 giờ / 56 giờ). Giờ ở đây là **giờ làm việc** của xã, không phải giờ treo tường — ADR 0007. Mốc khởi động cả hai đồng hồ và **thời điểm ấn định** từng hạn: **ADR 0028**. Quy tắc khi cán bộ đổi lĩnh vực — chỉ **RÚT NGẮN**, không bao giờ kéo dài: **ADR 0027** quyết định C. Không chép lại ở đây.
 2. **Không đóng phiếu được khi thiếu ảnh sau xử lý.** Chặn ở cả client và server.
+   > **Ghi chú 30/09/2026:** đây là **công tắc theo xã**, mặc định **BẬT** — cờ `bat_buoc_anh_nghiem_thu`
+   > của ADR 0008 (người dùng chốt 24/09, giữ lại 30/09/2026). **Lệch có chủ ý** khỏi kho yêu cầu,
+   > nơi công tắc ấy mặc định **tắt** (`../vigov-require` `docs/spec/05-nghiep-vu.md:195-197`). Phép
+   > chặn **chưa dựng**.
 3. Đánh giá **1–2 sao tự mở lại phiếu** về `Đang xử lý` và ghi nhật ký tự động.
 4. Phiếu mặc định **không công khai**; phải kiểm duyệt (`Cho hiện công khai`) mới lên trang công khai/Mini App. Người gửi luôn tra cứu được phiếu của mình.
+   > **Ghi chú 30/09/2026:** phía người dân **không có trang phiếu công khai** — ADR 0050 điểm 8
+   > (người dùng xác nhận lại 30/09/2026). Trạng thái kiểm duyệt vẫn giữ ở máy chủ cho về sau; nó
+   > không đưa phiếu lên màn nào của Mini App.
 5. Lĩnh vực `Thái độ / tác phong cán bộ` chỉ hiện với quyền `feedback.restricted`.
 6. Quyền: `feedback.create` (tiếp nhận), `feedback.read`, `feedback.assign` (phân công), `feedback.resolve` (kết thúc xử lý).
 7. Ẩn danh: ẩn tên và SĐT khỏi mọi giao diện, chỉ để `Gửi ẩn danh`.

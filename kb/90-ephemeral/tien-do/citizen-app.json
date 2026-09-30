@@ -288,7 +288,16 @@
       "trang_thai": "xong",
       "bang_chung": "30/09/2026: zalo-api.ts xin(capability) mang SdkFailure {capability, code, transient}; -201 giữ 'từ chối'; chỉ -2000/-1408/-1409/-1410 là tạm thời (node_modules/zmp-sdk/apis/constants.js); lỗi không có mã không bịa mã; message SDK không đi ra màn hình. Câu mới ở noi-dung.ts (ZALO_FAILURE, PHONE_VERIFICATION.zalo_failed, confirmCommuneZaloFailed, vị trí, tên). tsc sạch; vitest 44 tệp / 1181 ca xanh (3 tệp test mới, 50 ca); check:api exit 0.",
       "no_confirm": [],
-      "tiep_theo": "ĐO TRÊN MÁY THẬT: (1) -201 có thật là mã từ chối của getPhoneNumber/getLocation không — SDK còn USER_DENIED -2002 và UNAUTHORIZED -1401 (index.d.ts:3213 ghi -1401 là từ chối tên); nếu từ chối thật về -2002/-1401 thì người bấm 'Từ chối' sẽ thấy câu 'Zalo chưa cho phép'. (2) XUNG ĐỘT cần người dùng chốt: skills/accessibility-elderly REQUIRED #5 'không bao giờ hiện mã lỗi' ↔ người dùng 30/09 'chỗ nào cần quyền thì báo lỗi' — bản dựng hiện mã lỗi cho mọi người dân vì bản test là bản phát hành. (3) Màn thương mại khung.tsx:135 chưa dùng failure.",
+      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (lượt /handover → xác nhận từng việc): XUNG ĐỘT (2) ĐÃ GIẢI — người dân đọc CÂU tiếng Việt rõ quyền nào thiếu, MÃ LỖI chuyển xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>' cho người test/tổng đài; ghi ngoại lệ vào skills/accessibility-elderly. Việc sửa mã: mục doi-ma-loi-zalo-xuong-dong-phu. || ĐO TRÊN MÁY THẬT: (1) -201 có thật là mã từ chối của getPhoneNumber/getLocation không — SDK còn USER_DENIED -2002 và UNAUTHORIZED -1401 (index.d.ts:3213 ghi -1401 là từ chối tên); nếu từ chối thật về -2002/-1401 thì người bấm 'Từ chối' sẽ thấy câu 'Zalo chưa cho phép'. (2) XUNG ĐỘT cần người dùng chốt: skills/accessibility-elderly REQUIRED #5 'không bao giờ hiện mã lỗi' ↔ người dùng 30/09 'chỗ nào cần quyền thì báo lỗi' — bản dựng hiện mã lỗi cho mọi người dân vì bản test là bản phát hành. (3) Màn thương mại khung.tsx:135 chưa dùng failure.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "doi-ma-loi-zalo-xuong-dong-phu",
+      "viec": "Câu lỗi quyền Zalo: mã lỗi rời khỏi câu chính, xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>'; ghi ngoại lệ vào skills/accessibility-elderly",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Hiện mã nằm TRONG câu chính (noi-dung.ts ZALO_FAILURE / zaloFailureSentence, 80e1354c).",
+      "no_confirm": [],
+      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (lượt /handover → xác nhận từng việc): câu chính không mang mã; dòng phụ nhỏ mang mã cho mọi người (bản test là bản thật — không cờ lúc dựng). Cập nhật skills/accessibility-elderly REQUIRED #5 thành ngoại lệ có tên. Sửa ca zalo-failure.test.ts theo.",
       "menu": "phan-anh-nguoi-dan"
     }
   ]

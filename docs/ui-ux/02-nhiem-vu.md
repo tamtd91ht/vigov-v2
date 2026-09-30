@@ -78,6 +78,8 @@ Tất cả bộ lọc **kết hợp AND** và nên đồng bộ vào query strin
 
 > Hai trạng thái rẽ nhánh (`Tạm dừng`, `Chuyển tiếp`) **không có cột riêng** trên Kanban.
 
+> ⚑ 30/09/2026 — cột đầu mặc định tên **"Mới giao"**, xã đổi được: `kb/10-decisions/0065-vong-doi-nhiem-vu-theo-kho-yeu-cau.md` NV8.
+
 **Thẻ nhiệm vụ**
 ```
 ☐ Chọn                          ← checkbox chọn hàng loạt
@@ -178,6 +180,8 @@ Có nút `✎ Sửa` ở góc. Các trường:
 
 > Chú thích bắt buộc hiển thị: *"Hai ô này đánh dấu bằng tay và không làm đổi trạng thái nhiệm vụ."*
 
+> ⚑ 30/09/2026 — ADR 0065: `Mã nhiệm vụ` **không sửa được** sau khi cấp (NV3); `Hạn xử lý` sửa thẳng được (NV4); chuyên viên theo dõi ≡ người thực hiện, cơ quan chủ trì ≡ bộ phận thực hiện (NV5).
+
 ### 5.5 Mô tả nhiệm vụ
 Khối văn bản tự do.
 
@@ -231,6 +235,8 @@ moi-giao ──tiếp nhận──> da-tiep-nhan ──bắt đầu──> dang-
                                         └──> chuyen-tiep (chuyển bộ phận khác, sinh bản ghi liên kết)
 ```
 
+> ⚑ 30/09/2026 — sơ đồ chuỗi chặt trên **không còn**: cho nhảy bước, `cho-duyet` không bắt buộc, mở lại `hoan-thanh` cần `task.approve` + lý do — `kb/10-decisions/0065-vong-doi-nhiem-vu-theo-kho-yeu-cau.md` NV1, NV2.
+
 Nhãn phụ khi hoàn thành sau hạn: chip `Hoàn thành trễ hạn`.
 Quyền tương ứng: `task.create`, `task.assign`, `task.update`, `task.approve` (duyệt hoàn thành), `task.extend` (duyệt gia hạn), `task.delete`, `task.read`.
 
@@ -250,7 +256,7 @@ Modal, tiêu đề `Giao việc mới`, mô tả:
 | Mã nhiệm vụ | text + checkbox `Tự sinh mã` (mặc định bật) | | Chú thích: *"Tự sinh sẽ cấp số tiếp theo trong dãy NV01, NV02… Nhập từ Excel cũng được đánh số tự động theo dãy này."* |
 | Mô tả | textarea | | |
 | Lãnh đạo giao việc | combobox tìm kiếm (`Gõ tên để tìm…`) | | Chú thích: *"Đề nghị lùi hạn sẽ gửi tới người này, qua chuông và qua thư."* |
-| Hạn hoàn thành | date `dd/mm/yyyy` | | |
+| Hạn hoàn thành | date `dd/mm/yyyy` | | ⚑ 30/09/2026: có giờ, điền sẵn +7 ngày lúc 17:00 — ADR 0065 NV6 |
 | Mức ưu tiên | select | | `Thường` (mặc định) \| `Cao` \| `Khẩn` |
 
 ### 7.2 Riêng loại `Theo văn bản` — thêm

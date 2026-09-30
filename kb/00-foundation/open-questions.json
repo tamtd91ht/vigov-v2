@@ -879,7 +879,7 @@
   {
     "id": 35,
     "question": "ViGov được chủ quản đề xuất CẤP ĐỘ mấy theo TCVN 14423:2026 — cấp 3 hay cấp 4?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Cấp độ do CHỦ QUẢN hệ thống đề xuất và được thẩm định, bên phát triển không tự chọn. Nó quyết định những con số mã phải tuân: lưu nhật ký an ninh tối thiểu 3 tháng (cấp 3, §5.8.2.1) hay 6 tháng (cấp 4, §6.8.2.1); có phải ghi NHẬT KÝ TRUY CẬP DỮ LIỆU (đọc/thêm/sửa/xoá/sao chép) cho mọi dữ liệu nhạy cảm không (cấp 4, §6.4.2.9); có phải giữ danh sách thành phần bên thứ ba kèm rủi ro, rà hằng quý (cấp 4, §6.16.2.4); có phải kiểm thử xâm nhập từ ngoài và từ trong mỗi năm (cấp 4, §6.18). Đánh giá hiện trạng ngày 28/09/2026 (kb/90-ephemeral/tcvn-14423-danh-gia.md) GIẢ ĐỊNH cấp 3 — một giả định chưa ai xác nhận.",
     "code_signals": [
       {
@@ -893,12 +893,15 @@
       "đặt thời gian lưu nhật ký an ninh hoặc nhật ký truy cập",
       "dựng nhật ký truy cập dữ liệu cho mọi lần đọc dữ liệu cá nhân",
       "viết kế hoạch kiểm thử xâm nhập"
-    ]
+    ],
+    "decided_on": "2026-09-30",
+    "decision": "TẠM CẤP 3 theo TCVN 14423, nhưng nhật ký an ninh LƯU 6 THÁNG (mức cấp 4) để nếu thẩm định ra cấp 4 thì không mất nhật ký đã có. Chữ quyết cuối về cấp độ vẫn thuộc CHỦ QUẢN hệ thống khi thẩm định; đổi sang cấp 4 thì phải thêm nhật ký truy cập dữ liệu (§6.4.2.9), rà thành phần bên thứ ba hằng quý, kiểm thử xâm nhập hằng năm.",
+    "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu — chốt TẠM, chủ quản thẩm định"
   },
   {
     "id": 36,
     "question": "Mật khẩu cán bộ: giữ quy tắc hiện tại (tối thiểu 12 ký tự, KHÔNG đòi loại ký tự) và THÊM MFA, hay chuyển sang tối thiểu 14 ký tự đủ 4 loại (thường, hoa, số, đặc biệt)? Có bắt đổi định kỳ và chặn dùng lại 10 mật khẩu cũ cho tài khoản quản trị không?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "TCVN 14423 §5.6.2.2: hệ thống CÓ MFA thì mật khẩu tối thiểu 8 ký tự; KHÔNG MFA thì tối thiểu 14 ký tự đủ 4 loại; tài khoản quản trị phải có MFA, đổi mật khẩu 2 tháng một lần, không trùng 10 mật khẩu gần nhất. Quy tắc hiện tại là một lựa chọn CÓ CHỦ Ý ('độ dài hơn thành phần', core/password/password.go:42-44) và KHÔNG ĐẠT tiêu chuẩn nếu không có MFA. Hai đường ra khác nhau hoàn toàn về trải nghiệm ở cấp xã: thêm MFA (cán bộ cần điện thoại cài ứng dụng xác thực) hoặc đổi quy tắc mật khẩu (cán bộ phải nhớ chuỗi 14 ký tự phức tạp, dễ bị ghi ra giấy dán cạnh máy dùng chung ở bộ phận một cửa).",
     "code_signals": [
       {
@@ -911,12 +914,15 @@
     "ask_before": [
       "đổi độ dài hoặc quy tắc mật khẩu",
       "thêm bảng lịch sử mật khẩu hoặc cột thời hạn mật khẩu"
-    ]
+    ],
+    "decided_on": "2026-09-30",
+    "decision": "Tài khoản QUẢN TRỊ (cầm admin.user): bắt buộc MFA, đổi mật khẩu 2 tháng/lần, không trùng 10 mật khẩu gần nhất. Cán bộ THƯỜNG (chưa có MFA): mật khẩu tối thiểu 14 ký tự đủ 4 loại (thường, hoa, số, đặc biệt) — đạt §5.6.2.2 khi không MFA. Quy tắc 12 ký tự hiện tại (core/password/password.go:42-44) phải đổi; áp từ lần đổi mật khẩu kế tiếp. Mở rộng MFA cho mọi cán bộ để sau.",
+    "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu"
   },
   {
     "id": 37,
     "question": "MFA áp cho AI: mọi cán bộ xã (vì họ vào <xã>.vigov.vn qua Internet), hay chỉ tài khoản có quyền quản trị (`admin.user`) kèm giới hạn mạng (VPN / dải IP của trụ sở) cho số còn lại?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "TCVN 14423 §5.6.2.4 đòi MFA cho truy cập TỪ INTERNET, từ bên thứ ba, và cho tài khoản quản trị. Cán bộ xã hôm nay đăng nhập web quản trị qua Internet bằng email + mật khẩu (service-identity/internal/app/dang_nhap.go:102-136), nên đọc sát chữ thì MFA áp cho MỌI cán bộ. §5.12.2.5 cho một đường khác: VPN hoặc giới hạn dải địa chỉ, khi ấy truy cập không còn là 'từ Internet'. MFA cho khu VẬN HÀNH ViHAT đã chốt ở ADR 0048 — câu này chỉ hỏi về cán bộ XÃ.",
     "code_signals": [
       {
@@ -929,12 +935,15 @@
     "ask_before": [
       "dựng đăng ký hoặc xác minh MFA cho tài khoản cán bộ xã",
       "đổi luồng đăng nhập của web quản trị"
-    ]
+    ],
+    "decided_on": "2026-09-30",
+    "decision": "MFA áp TRƯỚC cho tài khoản quản trị xã (cầm admin.user); cán bộ thường chưa MFA ở giai đoạn này, bù bằng quy tắc mật khẩu 14 ký tự đủ 4 loại (#36). Không giới hạn mạng theo IP/VPN. MFA khu vận hành ViHAT giữ như ADR 0048.",
+    "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu"
   },
   {
     "id": 38,
     "question": "Phiên làm việc tự khoá sau bao lâu KHÔNG DÙNG: 15 phút cho cán bộ và 5 phút cho phiên quản trị như TCVN 14423 §5.5.2.2 gợi ý? Và phiên công dân trên Mini App (mặc định 30 ngày) có thuộc phạm vi yêu cầu này không?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Hôm nay phiên cán bộ chỉ có hạn TUYỆT ĐỐI 12 giờ, quản trị và cán bộ như nhau (service-identity/internal/store/phien.go:85; câu #18 đã chốt 'một ngày làm việc'). Cột `dung_gan_nhat` đã được ghi ở mỗi request nhưng không ai kiểm. Tiêu chuẩn gợi ý khoá sau 15 phút không dùng với phần mềm nghiệp vụ xử lý dữ liệu quan trọng và 5 phút với phiên quản trị, 'dựa trên đánh giá rủi ro' — tức chủ quản được chọn. 5 phút ở bộ phận một cửa, nơi cán bộ vừa tiếp dân vừa thao tác, là đăng nhập lại hàng chục lần mỗi ngày. Phiên công dân (`CITIZEN_SESSION_TTL`, .env.example:172-174) là 'tài khoản dịch vụ' theo §5.6.1 — tiêu chuẩn không nói rõ nó có chịu §5.5.2.2 không.",
     "code_signals": [
       {
@@ -947,12 +956,15 @@
     "ask_before": [
       "cài khoá phiên khi không dùng",
       "đổi thời hạn phiên công dân"
-    ]
+    ],
+    "decided_on": "2026-09-30",
+    "decision": "Khoá phiên khi KHÔNG DÙNG: cán bộ 30 phút, phiên có quyền quản trị 15 phút — lệch mức gợi ý 15/5 của §5.5.2.2 có chủ ý, lý do: bộ phận một cửa vừa tiếp dân vừa thao tác, 15/5 là đăng nhập lại hàng chục lần mỗi ngày. So với cột dung_gan_nhat. Phiên công dân Mini App KHÔNG áp (giữ CITIZEN_SESSION_TTL). Hạn tuyệt đối 12 giờ giữ nguyên.",
+    "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu"
   },
   {
     "id": 39,
     "question": "Khoá tài khoản sau mấy lần đăng nhập sai liên tiếp (TCVN 14423 §5.5.2.2: tối đa 5 với phần mềm nghiệp vụ), khoá trong bao lâu (tiêu chuẩn: tối thiểu 12 giờ, tối đa 30 ngày) hay tới khi quản trị viên xã mở, và ai được mở khoá khẩn cấp?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Hôm nay đăng nhập sai chỉ ghi một dòng log (service-identity/internal/app/dang_nhap.go:206-209): không đếm, không khoá, không giới hạn tần suất — nên mật khẩu cán bộ dò được không giới hạn. Nhưng khoá tự động cũng là một đường TỪ CHỐI DỊCH VỤ: ai biết email của chủ tịch xã là khoá được tài khoản ấy bằng 5 lần gõ sai. Ngưỡng, thời gian khoá, và việc khoá theo TÀI KHOẢN hay theo ĐỊA CHỈ nguồn là đánh đổi an toàn ↔ sẵn sàng mà chủ quản phải chọn. Khoá thủ công (`lockout`) đã có và KHÁC việc này: nó là trạng thái nghiệp vụ (nghỉ hưu, chuyển công tác).",
     "code_signals": [
       {
@@ -965,6 +977,9 @@
     "ask_before": [
       "dựng bộ đếm đăng nhập sai hoặc khoá tài khoản tự động",
       "dựng giới hạn tần suất cho tuyến đăng nhập"
-    ]
+    ],
+    "decided_on": "2026-09-30",
+    "decision": "5 lần đăng nhập sai LIÊN TIẾP → khoá tự động 12 giờ (mức tối thiểu §5.5.2.2); quản trị viên xã mở khoá sớm được; kèm giới hạn tần suất theo địa chỉ nguồn để giảm dò hàng loạt và giảm việc khoá hộ người khác; mọi lần khoá/mở có vết. Khác và không thay khoá thủ công (lockout) đang có.",
+    "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu"
   }
 ]

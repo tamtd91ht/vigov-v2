@@ -138,7 +138,7 @@ quyết (ADR 0044). Toàn bộ cầu phiên, khoá cầu, cổng riêng (ADR 004
 | 2 | UNKNOWN #1 của ADR 0045 | Vẫn phải đo; câu 8 chỉ bỏ chốt chặn |
 | 3 | Phép kiểm đối chiếu tệp dựng với bảng `MiniApp` của platform | Chưa có; lệch hôm nay chỉ lộ khi công dân mở app |
 | 4 | Nội dung hai biến thể: `dung.mjs:6-7` hiện ghi `day-du` = thêm lớp khám phá, **danh mục xã mẫu, bảng chẩn đoán**, *"thử nghiệm, demo"*; còn `goc` = *"bản nộp, không lớp khám phá"*. Câu 5 đặt `day-du` cho app riêng **phát hành** và `goc` cho app chung **cần** nhận tham số tên miền | Chủ dự án chốt tên biến thể, chưa chốt nội dung. Phát hành `day-du` như hiện trạng là đưa danh mục xã mẫu và bảng chẩn đoán vào app thật của một xã |
-| 5 | Tên tham số tên miền và số phận `v` | Chi tiết cài đặt; không có QR nào đã in nên chưa có nợ |
+| 5 | Tên tham số tên miền và số phận `v` | Chi tiết cài đặt; không có QR nào đã in nên chưa có nợ. **Đóng 30/09/2026** — §*Trả lời của người dùng — 30/09/2026* |
 
 ### Trả lời của chủ dự án — 27/09/2026, sau khi ADR được viết
 
@@ -281,6 +281,23 @@ bao gồm cả appId đều lưu database hết, platform-admin sẽ làm việc
 `citizen-app/scripts/ung-dung-theo-ten-mien.mjs` (câu 2) là **tạm** — nguồn cặp tên miền ↔ App ID sẽ là
 bảng `mini_app` của `service-platform`, ghi qua platform-admin; việc một lần `gan-mini-app-thang-binh`
 trong `deploy/Jenkinsfile` gỡ khi màn ấy có.
+
+### Trả lời của người dùng — 30/09/2026: CÒN MỞ #5 đóng
+
+Người dùng duyệt tên phiên làm việc đã chọn (hỏi trong phiên chính, chọn phương án đề xuất):
+
+| Câu | Trả lời | Mã hôm nay |
+|---|---|---|
+| Tên tham số tên miền | **`d`**, đi cùng **`src`** ∈ {`qr`, `zns`} | `citizen-app/src/lib/launch-params.ts:96-103` (`thamSoXa`) đọc `d` và `src`; thiếu `src` hay `src` lạ thì bỏ qua |
+| Số phận `v` | **Bỏ.** Có mặt thì bị lờ đi — không đọc, không báo | `launch-params.ts:85`; ca kiểm `launch-params.test.ts:66-67` ghim điều ấy |
+
+Tên chuẩn của tham số và của tuyến tra xã theo tên miền (`GET /api/v1/communes?host=`, cùng lượt
+duyệt) nằm ở `kb/00-foundation/ubiquitous-language.md` §Tên tài nguyên trên URL.
+
+**Đính chính mục 5 ở trên:** dòng `GET /api/v1/communes?host=` ghi `CitizenOnly` + `KhongThuocXa`;
+mã hôm nay khai `authz.Public(...)` (`service-identity/internal/http/routes_cong_dan.go:100-102`,
+`danh_muc_xa_test.go:18` ghi *"PUBLIC since 2026-09-27"*). Mục này không quyết lại điều ấy, chỉ ghi
+thứ mã đang làm.
 
 ## ĐIỀU KIỆN DỪNG
 
