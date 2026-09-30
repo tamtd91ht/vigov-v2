@@ -58,6 +58,17 @@ nào đọc `stored_file` của service khác.
 
 **Đối tượng bất biến:** phiên bản mới là `object_id` mới. Không ghi đè khoá đã có.
 
+**Bổ sung 30/09/2026:** thêm hai việc thứ sáu, thứ bảy — **đăng / gỡ đăng** bản dẫn xuất (§11)
+thành thao tác có tên riêng (`PublishDerivative`, `UnpublishDerivative` trong
+`core/storage/storage.go`), vì đó là **đường duy nhất** vào/ra bucket public: nguồn phải ở private,
+đích là bản sinh đôi lớp `public-media` cùng xã/service/mục đích/`object_id`/biến thể; từ chối
+bản `original`, mọi thứ lớp `citizen-media` (ĐIỀU KIỆN DỪNG #2) và mọi thứ lớp `records` (hồ sơ
+nghiệp vụ không dành cho người đọc ẩn danh) — nguồn đăng được chỉ còn lớp `content-source`. Hệ quả:
+ảnh bìa tin phải có **bản dẫn xuất** (ví dụ `thumb-1280`, mã hoá lại — cũng bỏ luôn EXIF) trước khi
+đăng, không đăng thẳng bản gốc. Cache `immutable` một năm nghĩa là gỡ đăng không thu hồi được bản
+CDN/trình duyệt đã tải — cần xoá cache CDN, chưa có. Câu "chỉ năm việc" ở trên giữ
+nguyên làm lịch sử.
+
 ### 2. Bucket — ít, theo chức năng chính
 
 | Bucket | Chứa | Truy cập | Versioning |

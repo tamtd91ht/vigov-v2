@@ -225,3 +225,61 @@ func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 		t.Errorf("version left after purge: %q %q (err %v)", obj.Key, obj.VersionID, obj.Err)
 	}
 }
+
+// Publish / unpublish against a real MinIO. The private derivative is written directly with the
+// raw client — the upload flow is proved above; this test is about the private → public copy.
+func TestIntegrationPublishUnpublish(t *testing.T) {
+	c, cleanup := integrationClient(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	objectID, err := NewObjectID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := Key{
+		Class: ClassContentSource, TenantID: testTenant, CreatedAt: time.Now(),
+		Service: ServiceComms, Purpose: PurposeContentImage, ObjectID: objectID,
+		Variant: "thumb-320", Ext: "png",
+	}
+	dst := src
+	dst.Class = ClassPublicMedia
+	srcKey, _ := src.Path()
+	dstKey, _ := dst.Path()
+	png := append([]byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{7}, 100)...)
+	priv, _ := c.BucketName(BucketPrivate)
+	pub, _ := c.BucketName(BucketPublic)
+	if _, err := c.api.PutObject(ctx, priv, srcKey, bytes.NewReader(png), int64(len(png)),
+		minio.PutObjectOptions{ContentType: MIMEPNG}); err != nil {
+		t.Fatalf("put private derivative: %v", err)
+	}
+
+	for i := 0; i < 2; i++ { // twice: idempotent
+		if err := c.PublishDerivative(ctx, src, dst); err != nil {
+			t.Fatalf("PublishDerivative #%d: %v", i+1, err)
+		}
+	}
+	st, err := c.api.StatObject(ctx, pub, dstKey, minio.StatObjectOptions{})
+	if err != nil {
+		t.Fatalf("stat public: %v", err)
+	}
+	if st.Size != int64(len(png)) || st.ContentType != MIMEPNG {
+		t.Errorf("public object = size %d type %q", st.Size, st.ContentType)
+	}
+	if cc := st.Metadata.Get("Cache-Control"); cc != PublicCacheControl {
+		t.Errorf("Cache-Control = %q", cc)
+	}
+
+	for i := 0; i < 2; i++ { // twice: idempotent
+		if err := c.UnpublishDerivative(ctx, dst); err != nil {
+			t.Fatalf("UnpublishDerivative #%d: %v", i+1, err)
+		}
+	}
+	if _, err := c.Stat(ctx, BucketPublic, dstKey); !errors.Is(err, ErrNotFound) {
+		t.Errorf("public object still there: %v", err)
+	}
+	if _, err := c.Stat(ctx, BucketPrivate, srcKey); err != nil {
+		t.Errorf("unpublish touched the private source: %v", err)
+	}
+}

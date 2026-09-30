@@ -2,6 +2,13 @@
 // does five things — presigned POST, stat, server-side copy, presigned GET, delete every
 // version — plus the key scheme and the type sniffing those need.
 //
+// PLUS PUBLISH / UNPUBLISH (added 2026-09-30, recorded in ADR 0052 §1). ADR 0052 §11 says
+// "publishing copies the derivative to the public bucket; unpublishing deletes the public copy".
+// Both are compositions of the copy and delete above, but they are the ONLY way into and out of
+// the public bucket, so they are named operations with their own refusals (PublishDerivative)
+// rather than a bucket argument on Promote — a bucket argument is how an original reaches the
+// public bucket, which is ADR 0052 §ĐIỀU KIỆN DỪNG #2.
+//
 // IT IS A LIBRARY, NOT A SERVICE (ADR 0001:96). Metadata lives in each owning service's own
 // `stored_file` table (rule 2 invariant 1); this package knows nothing about it, nothing about
 // permissions and nothing about the audit trail. The caller checks permission / citizen session
@@ -76,6 +83,10 @@ var (
 	// ErrRecordsNotPurgeable: purging a `records` object outside the temp bucket. Deleting an
 	// administrative record is a STOP CONDITION (ADR 0052 §ĐIỀU KIỆN DỪNG #1, rule 7).
 	ErrRecordsNotPurgeable = errors.New("storage: records are never purged by this library")
+	// ErrNotPublishable: PublishDerivative was asked to make public something that must never be
+	// public — an original, or anything of class citizen-media (ADR 0052 §ĐIỀU KIỆN DỪNG #2).
+	// Not a retryable error and not a caller bug to route around: it is a STOP CONDITION.
+	ErrNotPublishable = errors.New("storage: object may not be published")
 )
 
 // Bucket is one of the three functional buckets of ADR 0052 §2.
@@ -429,8 +440,8 @@ type Promoted struct {
 //     the sniffed type, never the client's. No user metadata is copied (ADR 0052 §3: the original
 //     name lives in stored_file, not on the object).
 //   - Only BucketPrivate is accepted. Putting an original into the public bucket is a STOP
-//     CONDITION (ADR 0052 §ĐIỀU KIỆN DỪNG #2); publishing an approved derivative is a separate
-//     operation this library does not have yet.
+//     CONDITION (ADR 0052 §ĐIỀU KIỆN DỪNG #2); publishing an approved derivative is the separate
+//     operation PublishDerivative, which copies private → public and never from temp.
 //   - An existing destination is refused (ErrExists): objects are immutable.
 //
 // Single-request server-side copy, so objects up to 5 GiB — above the 2 GB video ceiling of
@@ -557,6 +568,121 @@ func (c *Client) PublicURL(key string) (string, error) {
 		return "", fmt.Errorf("%w: only %s objects are public", ErrInvalidArgument, ClassPublicMedia)
 	}
 	return c.mediaBase + "/" + key, nil
+}
+
+// PublicCacheControl is set on every published object. ADR 0052 §4 names `Cache-Control:
+// immutable` for the public media base URL; `immutable` only means something within a freshness
+// lifetime, so it comes with the conventional one-year max-age. Sound because a public key never
+// changes content: dst is derived 1:1 from an immutable private object (ADR 0052 §1).
+//
+// THE COST, for UnpublishDerivative: a CDN or browser that already fetched the object may keep
+// serving it for up to that year after the origin copy is gone. Taking content down from caches
+// is a CDN purge — outside this library and not yet provisioned.
+const PublicCacheControl = "public, max-age=31536000, immutable"
+
+// PublishDerivative copies an approved derivative from the private bucket to the public bucket,
+// server-side. ADR 0052 §11: publishing copies the derivative; the original stays private.
+//
+// src is a key in the PRIVATE bucket; dst is its public twin and must be src with exactly one
+// change — Class becomes public-media. Same commune (rule 1), service, purpose, month, object id,
+// variant and extension. Requiring the twin instead of accepting any public-media key means a
+// public key always names the private object it came from, and one service cannot publish into
+// another commune's or another service's public tree.
+//
+// Refused before any network call:
+//   - src of class citizen-media → ErrNotPublishable. Citizen media never becomes public,
+//     derivative or not (ADR 0052 §ĐIỀU KIỆN DỪNG #2, rule 4).
+//   - src variant `original` → ErrNotPublishable. Only derivatives are published (same stop).
+//   - src of class public-media (that class lives only in the public bucket), dst of any class but
+//     public-media, or dst not src's twin → ErrInvalidArgument.
+//
+// WHETHER THE DERIVATIVE IS APPROVED is the caller's decision, as are permission, commune and the
+// audit entry (package doc). This function only refuses what can never be public.
+//
+// IDEMPOTENT: a dst that already exists returns nil without copying. Safe because only this
+// function writes the public bucket and dst is fully derived from an immutable src — so an
+// existing dst IS this derivative. A caller whose business transaction failed after the copy can
+// therefore just retry.
+//
+// The public object gets the Content-Type its extension stands for (the extension came from the
+// sniffed type), `inline`/`attachment` per ADR 0052 §4 with no file name (anonymous GETs carry no
+// response overrides, so the disposition has to live on the object), PublicCacheControl, and no
+// user metadata.
+func (c *Client) PublishDerivative(ctx context.Context, src, dst Key) error {
+	if src.Class == ClassCitizenMedia {
+		return fmt.Errorf("%w: %s is never public", ErrNotPublishable, ClassCitizenMedia)
+	}
+	// Only what the commune itself publishes may go public. `records` are administrative records
+	// (documents, attachments to tasks) — nothing in them is meant for an anonymous reader, so a
+	// derivative of one reaching the public bucket would be a leak with a legal record behind it.
+	if src.Class == ClassRecords {
+		return fmt.Errorf("%w: %s is never public", ErrNotPublishable, ClassRecords)
+	}
+	if src.Variant == VariantOriginal {
+		return fmt.Errorf("%w: an original is never public, only an approved derivative", ErrNotPublishable)
+	}
+	if src.Class == ClassPublicMedia {
+		return fmt.Errorf("%w: source must be a private object, not %s", ErrInvalidArgument, ClassPublicMedia)
+	}
+	if dst.Class != ClassPublicMedia {
+		return fmt.Errorf("%w: destination class must be %s", ErrInvalidArgument, ClassPublicMedia)
+	}
+	twin := src
+	twin.Class = ClassPublicMedia
+	if !sameObject(twin, dst) || twin.Ext != dst.Ext {
+		return fmt.Errorf("%w: destination is not the source's public twin", ErrInvalidArgument)
+	}
+	srcKey, err := src.Path()
+	if err != nil {
+		return err
+	}
+	dstKey, err := dst.Path()
+	if err != nil {
+		return err
+	}
+	privName, err := c.BucketName(BucketPrivate)
+	if err != nil {
+		return err
+	}
+	pubName, err := c.BucketName(BucketPublic)
+	if err != nil {
+		return err
+	}
+	if _, err := c.api.StatObject(ctx, pubName, dstKey, minio.StatObjectOptions{}); err == nil {
+		return nil
+	} else if !errors.Is(mapErr("stat", err), ErrNotFound) {
+		return mapErr("stat public", err)
+	}
+	mime := mimeByExt[dst.Ext]
+	if _, err := c.api.CopyObject(ctx,
+		minio.CopyDestOptions{
+			Bucket: pubName, Object: dstKey, ReplaceMetadata: true,
+			ContentType:        mime,
+			ContentDisposition: ContentDisposition("", mime),
+			CacheControl:       PublicCacheControl,
+		},
+		minio.CopySrcOptions{Bucket: privName, Object: srcKey},
+	); err != nil {
+		return mapErr("publish", err)
+	}
+	return nil
+}
+
+// UnpublishDerivative removes a published object from the public bucket — every version, so a
+// bucket whose versioning was switched on against ADR 0052 §2 still loses the bytes. The private
+// source is untouched (ADR 0052 §11: the original always stays private).
+//
+// IDEMPOTENT: an object already gone returns nil. Only public-media keys are accepted. Caches
+// that already hold the object keep it until PublicCacheControl expires — see that constant.
+func (c *Client) UnpublishDerivative(ctx context.Context, dst Key) error {
+	if dst.Class != ClassPublicMedia {
+		return fmt.Errorf("%w: only %s objects are unpublished", ErrInvalidArgument, ClassPublicMedia)
+	}
+	dstKey, err := dst.Path()
+	if err != nil {
+		return err
+	}
+	return c.PurgeAllVersions(ctx, BucketPublic, dstKey)
 }
 
 // PurgeAllVersions deletes every version and delete marker of one key. In the versioned private
