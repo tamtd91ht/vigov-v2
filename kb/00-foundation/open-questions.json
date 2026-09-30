@@ -809,7 +809,11 @@
     "decided_on": "2026-09-22",
     "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
     "decision": "`Cân đối thu - chi` lấy Tổng thu từ `Thu xã hưởng`, KHÔNG từ `Thu ngân sách NSNN`. Ngân sách xã cân đối trên nguồn thu xã được hưởng theo phân cấp; phần lớn khoản phát sinh trên địa bàn điều tiết lên trên và xã không được chi. Màn hình hiện CẢ HAI số, gọi đúng tên từng số.",
-    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "revised_on": "2026-09-30",
+    "revised_by": "người dùng (chốt 30/09/2026, màn Thu - Chi ngân sách, đặc tả docs/ui-ux/07-thu-chi-ngan-sach.md)",
+    "revision_adr": "kb/10-decisions/0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa.md",
+    "revision": "THAY ĐỀ XUẤT NHÀ CUNG CẤP: KPI `Cân đối thu – chi ngân sách xã` = TỔNG THU NGÂN SÁCH XÃ (dòng B — gồm bổ sung từ cấp trên, chuyển nguồn, kết dư) − tổng chi. Tổng thu NS xã = DÒNG ĐƯỢC ĐÁNH SAO của bảng Thu × CỘT mang vai trò `thu-nsnn` (cột Thực hiện); xã đánh sao dòng `B. Tổng thu ngân sách xã`. Dùng lại cơ chế ngôi sao + vai trò cột đang có, KHÔNG thêm dấu mới. Cột `thu-xa-huong` KHÔNG còn là tử số của ô Cân đối. CHƯA DỰNG: mã còn theo `decision` cũ — `service-finance/internal/domain/thu_chi_ngan_sach.go` `CanDoiThuChi` (:1016-1051, đọc `VaiTroThuXaHuong` ở :1036) và chú thích `VaiTroThuXaHuong` (:90-96). Khi dựng, con số ô Cân đối trên Tổng quan (`web-admin/src/features/dashboard/overview.tsx:133`) ĐỔI. Trường `decision` ở trên giữ nguyên chữ vì là lịch sử; trường này thắng khi nói khác."
   },
   {
     "id": 33,

@@ -8,7 +8,8 @@ expires: null
 owns_facts:
   - "15 câu mở còn lại được quyết ngày 22/09/2026 bằng ĐỀ XUẤT CỦA NHÀ CUNG CẤP, không phải trả lời của khách — và điều đó nghĩa là gì"
   - "quy tắc chọn hướng khi tự quyết: hướng NỚI ĐƯỢC VỀ SAU, không phải hướng đúng nhất"
-  - "vì sao `Cân đối thu - chi` lấy `Thu xã hưởng` chứ không lấy `Thu ngân sách NSNN`"
+  - "vì sao `Cân đối thu - chi` lấy `Thu xã hưởng` chứ không lấy `Thu ngân sách NSNN` (đề xuất 22/09/2026, đã bị người dùng thay 30/09/2026)"
+  - "`Cân đối thu – chi ngân sách xã` từ 30/09/2026: dòng B đánh sao × cột vai trò `thu-nsnn`, trừ tổng chi"
   - "vì sao `Thu đạt dự toán` chia cho `Dự toán TP giao` chứ không chia cho `Dự toán Xã giao`"
   - "vì sao khoản hoàn là CHỨNG TỪ RIÊNG chứ không phải một số âm"
   - "trần bắt buộc phân loại phiếu phản ánh, và mẫu số của chỉ số xử lý đúng hạn"
@@ -77,6 +78,23 @@ Chênh lệch trong chính số liệu mẫu của đặc tả: `4.316.764,3` (`
 > **Hệ quả bắt buộc cho giao diện:** màn hình phải hiện **CẢ HAI** số và gọi đúng tên từng số.
 > Xã cần cả hai — một để báo cáo thu ngân sách, một để biết mình còn bao nhiêu. Thứ chỉ có MỘT
 > là ô Cân đối, và nó lấy `Thu xã hưởng`.
+
+#### Bổ sung 30/09/2026 — #32 do NGƯỜI DÙNG chốt, thay đề xuất trên
+
+Ba đoạn trên là **lịch sử** của đề xuất nhà cung cấp; giữ nguyên chữ. Từ 30/09/2026:
+
+- **KPI `Cân đối thu – chi ngân sách xã` = Tổng thu ngân sách xã − tổng chi.**
+- **Tổng thu ngân sách xã** = **dòng được đánh sao** của bảng Thu × **cột mang vai trò `thu-nsnn`**
+  (cột Thực hiện). Xã đánh sao dòng `B. Tổng thu ngân sách xã` — dòng gồm cả **bổ sung từ cấp
+  trên, chuyển nguồn, kết dư**, là những khoản `Thu xã hưởng` không chứa.
+- Dùng lại **cơ chế ngôi sao + vai trò cột** đang có. **Không** thêm dấu mới.
+
+**Chưa dựng.** Mã còn theo đề xuất cũ: `CanDoiThuChi` đọc `VaiTroThuXaHuong`
+(`service-finance/internal/domain/thu_chi_ngan_sach.go:1036`), chú thích ở `:90-96` còn lập luận
+cũ. **Hệ quả khi dựng:** con số ô Cân đối trên Tổng quan
+(`web-admin/src/features/dashboard/overview.tsx:133`) **đổi**. Chưa có kỳ nào báo cáo, nên đây
+vẫn là lúc rẻ nhất (bảng Hệ quả dưới). Bản ghi quyết định: `open-questions.json` #32, trường
+`revision`.
 
 ### #33 — `Thu đạt dự toán` chia cho **`Dự toán TP giao`**
 
