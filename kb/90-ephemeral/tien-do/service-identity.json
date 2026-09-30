@@ -363,10 +363,10 @@
     {
       "id": "cong-khai-tu-choi-nguoi-bi-khoa",
       "viec": "PUT /publication của danh bạ từ chối bật công khai cho cán bộ đang bị khoá",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Hiện cho bật (mục rut-cong-khai-khi-doi-so-hoac-khoa F3); trang công khai tự ẩn người bị khoá nên chưa lộ.",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: PUT /api/v1/staff/{id}/publication với published:true trên dòng đang khoá → 409 staff_locked kèm câu giải thích; kiểm trong giao dịch trên dòng đọc TheoIDDeGhi (app.DatCongKhai), từ chối không ghi dòng và không ghi vết; tắt công khai người bị khoá vẫn được. Đột biến gỡ phép kiểm → 2 ca đỏ. gofmt/vet sạch; go test -p 1 service-identity xanh.",
       "no_confirm": [],
-      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (xác nhận từng việc): từ chối kèm mã lỗi có tên + câu tiếng Việt; test 4 ca của luật 5 bất biến 7 + ca người khoá.",
+      "tiep_theo": "Nhà cung cấp chọn: MỌI published:true trên dòng khoá đều từ chối, kể cả dòng khoá từ trước 734e080 mà còn công khai — dọn bằng published:false.",
       "menu": "danh-ba-can-bo"
     },
     {
@@ -393,7 +393,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "Hiện bật từng người (PUT /publication).",
       "no_confirm": [],
-      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (xác nhận từng việc): người chưa có dấu 'đã hỏi ý' bị bỏ qua và trả về danh sách; người đang bị khoá bị từ chối (mục cong-khai-tu-choi-nguoi-bi-khoa); mỗi người một dòng vết, cùng giao dịch.",
+      "tiep_theo": "CHẶN 30/09/2026 — quyết định như đã ghi KHÔNG làm được: CHECK nguoi_dung_rut_cong_khai_xoa_dong_y (migrations 0010:220-229) buộc dòng chưa công khai KHÔNG mang dấu đồng ý (rút công khai xoá dấu, #12 24/09), nên 'chỉ bật người đã có dấu đồng ý' luôn ra rỗng. Phương án chờ người dùng: A xác nhận đồng ý TỪNG NGƯỜI ngay trong lượt bật hàng loạt; B tách ghi đồng ý khỏi bật công khai (nới CHECK 0010 + ADR); C dấu đồng ý sống qua lần rút. Danh từ đề xuất POST /api/v1/staff/publications. || NGƯỜI DÙNG CHỐT 30/09/2026 (xác nhận từng việc): người chưa có dấu 'đã hỏi ý' bị bỏ qua và trả về danh sách; người đang bị khoá bị từ chối (mục cong-khai-tu-choi-nguoi-bi-khoa); mỗi người một dòng vết, cùng giao dịch.",
       "menu": "danh-ba-can-bo"
     }
   ]

@@ -142,6 +142,7 @@ func TestCongKhaiAnhXaLoi(t *testing.T) {
 		{"thiếu xác nhận đồng ý", app.ErrChuaXacNhanDongY, http.StatusBadRequest, "consent_required"},
 		{"thứ tự âm", domain.ErrThuTuDanhBaAm, http.StatusBadRequest, "invalid_request"},
 		{"người khác xã / đã xoá mềm", idstore.ErrCanBoKhongTonTai, http.StatusNotFound, "staff_not_found"},
+		{"người đang bị khoá", app.ErrStaffLocked, http.StatusConflict, "staff_locked"},
 	} {
 		m := dungMayChu(t)
 		coContentUpdate(t, m)

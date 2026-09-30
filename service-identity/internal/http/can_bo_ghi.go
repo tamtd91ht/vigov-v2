@@ -440,6 +440,15 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 				"Zalo Mini App là công khai dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP), cần có sự "+
 				"đồng ý của người đó cho từng lần công khai.", "")
 
+	case errors.Is(err, app.ErrStaffLocked):
+		// 409 AND NOT 403, like staff_has_account: the caller holds `content.update`; what is refused
+		// is publishing against the STATE of this row. The sentence names the way forward, and says
+		// that unlocking does not republish (DatKhoa clears the publication), so consent is asked again.
+		httpx.WriteError(w, http.StatusConflict, "staff_locked",
+			"Tài khoản của cán bộ này đang bị khoá nên không công khai lên Zalo Mini App được. "+
+				"Người bị khoá là người đã nghỉ hưu hoặc chuyển công tác; nếu người này vẫn đang công tác, "+
+				"hãy mở khoá tài khoản trước, rồi hỏi ý người đó và công khai lại.", "")
+
 	case errors.Is(err, app.ErrCanBoCoTaiKhoan):
 		// 409 AND NOT 403, for the same reason as last_admin: the caller holds the key. What is
 		// refused is the operation against the STATE of this row. The sentence names BOTH ways

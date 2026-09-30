@@ -149,6 +149,14 @@ var (
 	// inside the transaction on the row read FOR UPDATE, so an account issued a moment earlier
 	// cannot slip past it. CHANGING the address of an account holder is not this error — see Sua.
 	ErrStaffEmailIsLogin = errors.New("danh_ba_can_bo: không xoá được thư điện tử của cán bộ đã có tài khoản — thư điện tử là tên đăng nhập")
+
+	// ErrStaffLocked — publishing a LOCKED person to the Mini App (user decision 2026-09-30, ledger
+	// cong-khai-tu-choi-nguoi-bi-khoa). A lock is #10's answer to "retired or transferred", so the
+	// number belongs to somebody who no longer holds the post. The public read already hides locked
+	// rows, but accepting the publish would record a consent for a job the person has left and
+	// leave it on the row — and DatKhoa's unlock would then have to clean it up. Unpublishing a
+	// locked person is still allowed: taking a number OFF a public channel is never the risk.
+	ErrStaffLocked = errors.New("danh_ba_can_bo: cán bộ đang bị khoá tài khoản, không công khai được")
 )
 
 // LoiTraoQuyenKhongCam names the keys that were refused.
@@ -588,7 +596,7 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 		//
 		// UNLOCK NEVER REPUBLISHES, and it also CLEARS a publication that is still on the row. That
 		// second half exists only for rows locked BEFORE this rule (or published while locked, which
-		// PUT /publication does not refuse): without it, unlocking them is exactly the republish the
+		// PUT /publication refuses only since 2026-09-30, ErrStaffLocked): without it, unlocking them is exactly the republish the
 		// owner ruled out. On every row locked after this change the branch finds nothing to do.
 		if truoc.HienTrenMiniApp {
 			lyDo := lyDoRutKhoaTaiKhoan
@@ -768,6 +776,14 @@ func (uc *DanhBaCanBo) DatCongKhai(ctx context.Context, id string, yc YeuCauCong
 		truoc, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
 		if err != nil {
 			return err
+		}
+		// A LOCKED PERSON IS NOT PUBLISHED (2026-09-30). Checked on the row read FOR UPDATE, so a lock
+		// landing a moment earlier cannot slip between the check and the write. EVERY published:true
+		// request is refused, including a repeat on a row that is somehow still published while
+		// locked (a row locked before 734e080): answering "OK" there would confirm a publication the
+		// owner ruled out. published:false is the way such a row is cleared.
+		if yc.CongKhai && !truoc.DangHoatDong {
+			return ErrStaffLocked
 		}
 
 		sau = truoc

@@ -235,6 +235,62 @@ func TestCongKhaiNguoiKhongTonTaiThiKhongGhi(t *testing.T) {
 	khongCoGhi(t, b.ghi)
 }
 
+// A LOCKED PERSON IS NOT PUBLISHED (user decision 2026-09-30) — refused with ErrStaffLocked, and no
+// UPDATE and no audit entry reach the store.
+//
+// MUTATION THAT MUST TURN THIS RED: delete the `yc.CongKhai && !truoc.DangHoatDong` check.
+func TestPublishLockedStaffIsRefusedAndWritesNothing(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.cb.DangHoatDong = false
+
+	_, err := b.uc.DatCongKhai(ctxXa(xaThu), idNguoiKhac,
+		YeuCauCongKhai{CongKhai: true, DaXacNhanDongY: true}, nguoiThucHienGia())
+	if !errors.Is(err, ErrStaffLocked) {
+		t.Fatalf("lỗi = %v, muốn ErrStaffLocked", err)
+	}
+	if b.kho.congKhaiCuoi != nil {
+		t.Error("người bị khoá mà kho vẫn được yêu cầu ghi trạng thái công khai")
+	}
+	khongCoGhi(t, b.ghi)
+}
+
+// A row still published while locked (locked before 734e080) is refused on a repeat publish too —
+// "OK" there would confirm a publication the owner ruled out — and NOTHING is rewritten, so the
+// original consent marks stay as evidence until somebody unpublishes.
+func TestRepublishLockedStaffStillPublishedIsRefused(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	daCongKhai(b, so(1))
+	b.kho.cb.DangHoatDong = false
+
+	_, err := b.uc.DatCongKhai(ctxXa(xaThu), idNguoiKhac,
+		YeuCauCongKhai{CongKhai: true, DaXacNhanDongY: true, ThuTu: so(1)}, nguoiThucHienGia())
+	if !errors.Is(err, ErrStaffLocked) {
+		t.Fatalf("lỗi = %v, muốn ErrStaffLocked", err)
+	}
+	khongCoGhi(t, b.ghi)
+}
+
+// UNPUBLISHING A LOCKED PERSON STAYS ALLOWED: taking a number off the public channel is never the
+// risk, and it is how a row left published before 734e080 is cleared.
+func TestUnpublishLockedStaffIsAllowed(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	daCongKhai(b, nil)
+	b.kho.cb.DangHoatDong = false
+
+	cb, err := b.uc.DatCongKhai(ctxXa(xaThu), idNguoiKhac,
+		YeuCauCongKhai{CongKhai: false}, nguoiThucHienGia())
+	if err != nil {
+		t.Fatalf("DatCongKhai: %v", err)
+	}
+	if cb.HienTrenMiniApp || cb.DongYCongKhaiLuc != nil || cb.DongYCongKhaiGhiBoi != "" {
+		t.Errorf("rút công khai người bị khoá mà còn cờ/dấu: %+v", cb)
+	}
+	vet := motVet(t, b.ghi)
+	if got := chuoiArg(t, vet, viTriHanhVi); got != HanhViRutCongKhaiMiniApp {
+		t.Errorf("action = %q, muốn %q", got, HanhViRutCongKhaiMiniApp)
+	}
+}
+
 // --- PATCH has_zalo ----------------------------------------------------------------------------
 
 func TestSuaCoZaloGhiDongVaVet(t *testing.T) {
