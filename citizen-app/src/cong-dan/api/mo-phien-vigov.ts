@@ -32,7 +32,7 @@ import { laTenMien } from "../../lib/launch-params";
  * this half never meets the SDK, and never guesses a code's meaning.
  *
  *   `capability`  which thing was being asked for — the step that failed, not the screen
- *   `code`        the SDK's code, verbatim; shown to the citizen as "mã lỗi <code>"
+ *   `code`        the SDK's code, verbatim; shown on a secondary line "Mã hỗ trợ: <code>", never in the sentence
  *   `transient`   the SDK itself calls it "try again later" (timeout, limit, unknown) — only then does the
  *                 sentence invite waiting and pressing again as the likely fix
  *

@@ -24,13 +24,14 @@ import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type KetQuaXacNhan, type MoPhienViGov, moPhienSauXacNhan } from "../api/mo-phien-vigov";
 
-import { confirmCommuneZaloFailed, XAC_NHAN_XA, zaloFailureSentence } from "./noi-dung";
+import { confirmCommuneZaloFailed, XAC_NHAN_XA, ZALO_FAILURE, zaloFailureSentence } from "./noi-dung";
 import { GoiYXaScreen, phanGiaiGoiY, type XaGoiY } from "../../features/kham-pha";
 
 /** Trạng thái của màn, THUẦN — test dựng thẳng từng bước mà không cần DOM. */
 export type TrangXacNhan =
   | { readonly kieu: "dang-tra" }
-  | { readonly kieu: "hoi"; readonly xa: XaGoiY; readonly cau_loi?: string }
+  /** `support_code`: only with a `cau_loi` built from Zalo's refusal — the "Mã hỗ trợ" line under it. */
+  | { readonly kieu: "hoi"; readonly xa: XaGoiY; readonly cau_loi?: string; readonly support_code?: string }
   | { readonly kieu: "dang-mo"; readonly xa: XaGoiY };
 
 /**
@@ -82,17 +83,18 @@ export function buocSauMoPhien(xa: XaGoiY, kq: KetQuaXacNhan): Buoc {
     case "da-mo":
       return { ket_thuc: { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: kq.ten_mien } };
     case "thu-lai":
-      // Zalo refused the session code with a code: say which, and whether pressing again can help.
-      return {
-        trang: {
-          kieu: "hoi",
-          xa,
-          cau_loi:
-            kq.zalo === undefined
-              ? XAC_NHAN_XA.thu_lai
-              : confirmCommuneZaloFailed(zaloFailureSentence(kq.zalo), kq.zalo.transient),
-        },
-      };
+      // Zalo refused the session code with a code: say which, and whether pressing again can help; the
+      // code itself goes on its own secondary line.
+      return kq.zalo === undefined
+        ? { trang: { kieu: "hoi", xa, cau_loi: XAC_NHAN_XA.thu_lai } }
+        : {
+            trang: {
+              kieu: "hoi",
+              xa,
+              cau_loi: confirmCommuneZaloFailed(zaloFailureSentence(kq.zalo), kq.zalo.transient),
+              support_code: ZALO_FAILURE.support_code(kq.zalo.code),
+            },
+          };
     case "ngoai-zalo":
     case "chua-mo":
       return { ket_thuc: { kieu: "xac-nhan-khong-phien", xa } };
@@ -124,6 +126,7 @@ export function ManXacNhanXa(props: {
       onKhongPhai={props.onKhongPhai}
       cau_dang_mo={trang.kieu === "dang-mo" ? XAC_NHAN_XA.dang_mo : undefined}
       cau_loi={trang.kieu === "hoi" ? trang.cau_loi : undefined}
+      support_code={trang.kieu === "hoi" ? trang.support_code : undefined}
     />
   );
 }

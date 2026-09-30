@@ -23,7 +23,7 @@ import { isSceneLocation, type SceneLocation } from "../api/hop-dong-phan-anh";
 import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
-import { zaloFailureSentence } from "./noi-dung";
+import { zaloFailureSentence, zaloSupportCode } from "./noi-dung";
 
 /**
  * Why there is no location — one branch per thing the citizen does next:
@@ -169,6 +169,9 @@ export function SceneLocationControl(props: {
         <p className={shared ? "cd-loi" : "xa-loi-o"} role="status">
           {sceneLocationFailureText(words, failure, props.zalo ?? null)}
         </p>
+      )}
+      {failure !== null && zaloSupportCode(props.zalo) !== null && (
+        <p className={shared ? "cd-ghi-chu" : "xa-phu"}>{zaloSupportCode(props.zalo)}</p>
       )}
     </div>
   );

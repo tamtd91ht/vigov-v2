@@ -54,11 +54,14 @@ export function KhoiTrangThai(props: {
   loi?: boolean;
   dang_tai?: boolean;
   nut?: { nhan: string; onBam: () => void };
+  /** A secondary line under `cau` ("Mã hỗ trợ: <mã>"), muted rather than error-coloured. `null`/absent = none. */
+  support_code?: string | null;
 }) {
   return (
     <div className={`xa-trang-thai${props.loi ? " xa-trang-thai--loi" : ""}`}>
       <BieuTuong ten={props.bieu_tuong} co={36} />
       <p role={props.loi ? "alert" : props.dang_tai ? "status" : undefined}>{props.cau}</p>
+      {props.support_code != null && <p className="xa-phu">{props.support_code}</p>}
       {props.nut && (
         <button type="button" className="xa-nut" onClick={props.nut.onBam}>
           {props.nut.nhan}

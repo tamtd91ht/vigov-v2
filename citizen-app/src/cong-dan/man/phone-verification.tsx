@@ -30,7 +30,13 @@ import {
   type ZaloFailure,
 } from "../api/mo-phien-vigov";
 
-import { PHONE_VERIFICATION, PHONE_VERIFICATION_TASK, type PhoneVerificationTask, zaloFailureSentence } from "./noi-dung";
+import {
+  PHONE_VERIFICATION,
+  PHONE_VERIFICATION_TASK,
+  type PhoneVerificationTask,
+  zaloFailureSentence,
+  zaloSupportCode,
+} from "./noi-dung";
 
 /** Kết cục KHÔNG gọi lại được — mỗi cái một câu. */
 export type PhoneVerificationStop = Exclude<PhoneVerificationOutcome["kieu"], "da-xac-thuc">;
@@ -193,11 +199,14 @@ export function PhoneVerificationPanel(props: {
   }
 
   if (state.kieu === "ket-qua") {
+    // Same condition as the sentence's Zalo branch: the code line never stands under a sentence not built from it.
+    const supportCode = state.outcome === "thu-lai" ? zaloSupportCode(state.zalo) : null;
     return (
       <div className="cd-buoc">
         <p className="cd-loi" role="alert" id={props.focusId} tabIndex={-1}>
           {phoneVerificationMessage(state.outcome, props.task, state.zalo)}
         </p>
+        {supportCode !== null && <p className="cd-ghi-chu">{supportCode}</p>}
         {draft}
         {state.outcome === "thu-lai" && (
           <button type="button" className="cd-nut" onClick={props.onAllow}>

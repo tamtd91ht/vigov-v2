@@ -252,13 +252,15 @@ export const PHONE_VERIFICATION = {
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * ZALO TỪ CHỐI MỘT LỜI GỌI MÀ NGƯỜI DÂN KHÔNG TỪ CHỐI — câu có MÃ LỖI (quyết định của người dùng
- * 30/09/2026: bản thử là bản thật; quyền Zalo nào chưa được cấp cho ứng dụng thì phải hiện ra đúng như
- * vậy, kèm mã Zalo trả về, để người thử thấy thiếu gì thay vì một vòng "thử lại").
+ * ZALO TỪ CHỐI MỘT LỜI GỌI MÀ NGƯỜI DÂN KHÔNG TỪ CHỐI — một câu thường nói QUYỀN NÀO thiếu, và mã của
+ * Zalo trên MỘT DÒNG PHỤ RIÊNG "Mã hỗ trợ: <mã>" (quyết định của người dùng 30/09/2026: bản thử là bản
+ * thật; quyền Zalo nào chưa được cấp cho ứng dụng thì phải hiện ra đúng như vậy, để người thử và tổng đài
+ * thấy thiếu gì thay vì một vòng "thử lại").
  *
- * ĐÂY LÀ NGOẠI LỆ CÓ CHỦ ĐÍCH của "không câu nào nhắc mã lỗi" ở các khối trên: mã là thứ DUY NHẤT nói
- * được quyền nào đang thiếu, và nó là số Zalo trả, không phải mã của ứng dụng. Câu vẫn nói việc làm tiếp
- * (phần sau của mỗi câu ghép do màn hình thêm vào).
+ * Câu chính KHÔNG mang mã: người dân đọc câu, không đọc số. Mã đứng dòng dưới, chữ phụ — ngoại lệ có tên
+ * của `skills/accessibility-elderly` REQUIRED #5, vì mã là thứ DUY NHẤT nói được App ID thiếu quyền nào,
+ * và nó là số Zalo trả, không phải mã của ứng dụng. Câu vẫn nói việc làm tiếp (phần sau của mỗi câu ghép
+ * do màn hình thêm vào). Màn nào hiện câu thì hiện luôn dòng `zaloSupportCode` ngay dưới nó.
  *
  * KHÔNG CÓ BẢNG NGHĨA MÃ. Chỉ hai loại: mã mà chính SDK gọi là "thử lại sau" (`transient`, xem
  * `features/tinh-nang/zalo-api.ts` `TRANSIENT_CODES`) và mọi mã còn lại. Một ngoại lệ dẫn được nguồn:
@@ -273,21 +275,30 @@ export const ZALO_FAILURE = {
     location: "lấy vị trí",
     name: "lấy tên Zalo",
   },
-  transient: (what: string, code: number) => `Zalo chưa trả lời khi ứng dụng ${what} (mã lỗi ${code}).`,
-  not_allowed: (what: string, code: number) =>
-    `Zalo chưa cho phép ứng dụng ${what} (mã lỗi ${code}). Đây không phải lỗi mạng: bấm lại ngay cũng không khác.`,
-  name_declined_or_not_allowed: (code: number) =>
-    `Bà con chưa đồng ý cho ứng dụng dùng tên Zalo, hoặc Zalo chưa cho phép ứng dụng lấy tên (mã lỗi ${code}).`,
+  transient: (what: string) => `Zalo chưa trả lời khi ứng dụng ${what}.`,
+  not_allowed: (what: string) =>
+    `Zalo chưa cho phép ứng dụng ${what}. Đây không phải lỗi mạng: bấm lại ngay cũng không khác.`,
+  name_declined_or_not_allowed:
+    "Bà con chưa đồng ý cho ứng dụng dùng tên Zalo, hoặc Zalo chưa cho phép ứng dụng lấy tên.",
+  support_code: (code: number) => `Mã hỗ trợ: ${code}`,
 } as const;
 
 /** Mã `-1401` của lời gọi lấy tên — `zmp-sdk/index.d.ts:3213`: người dùng từ chối cung cấp tên. */
 const NAME_DECLINED_CODE = -1401;
 
-/** The first sentence(s) for a Zalo refusal: which capability, and Zalo's own code. The screen adds what to do. */
+/** The first sentence(s) for a Zalo refusal: which capability, never the code. The screen adds what to do. */
 export function zaloFailureSentence(f: ZaloFailure): string {
-  if (f.capability === "name" && f.code === NAME_DECLINED_CODE) return ZALO_FAILURE.name_declined_or_not_allowed(f.code);
+  if (f.capability === "name" && f.code === NAME_DECLINED_CODE) return ZALO_FAILURE.name_declined_or_not_allowed;
   const what = ZALO_FAILURE.what[f.capability];
-  return f.transient ? ZALO_FAILURE.transient(what, f.code) : ZALO_FAILURE.not_allowed(what, f.code);
+  return f.transient ? ZALO_FAILURE.transient(what) : ZALO_FAILURE.not_allowed(what);
+}
+
+/**
+ * The secondary line under that sentence — Zalo's code, for a tester or the hotline to read out. `null`
+ * when Zalo gave no code: then there is no line at all, never an empty or placeholder one.
+ */
+export function zaloSupportCode(f: ZaloFailure | null | undefined): string | null {
+  return f === null || f === undefined ? null : ZALO_FAILURE.support_code(f.code);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -494,8 +505,8 @@ export const XAC_NHAN_XA = {
 
 /**
  * Zalo refused the session code with a code (`zaloFailureSentence`) — the ONE sentence of the confirmation
- * step that carries a code, so it stands outside `XAC_NHAN_XA`, whose sentences are checked to carry none
- * (`cong-khai.test.tsx`). The code is Zalo's, and it is what says which permission is missing.
+ * step built from a Zalo refusal, so it stands outside `XAC_NHAN_XA`, whose sentences are checked to carry
+ * no code (`cong-khai.test.tsx`). The code itself goes on the `zaloSupportCode` line under it.
  */
 export const confirmCommuneZaloFailed = (zalo: string, transient: boolean): string =>
   transient

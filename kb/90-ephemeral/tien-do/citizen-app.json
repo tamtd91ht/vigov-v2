@@ -294,10 +294,10 @@
     {
       "id": "doi-ma-loi-zalo-xuong-dong-phu",
       "viec": "Câu lỗi quyền Zalo: mã lỗi rời khỏi câu chính, xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>'; ghi ngoại lệ vào skills/accessibility-elderly",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Hiện mã nằm TRONG câu chính (noi-dung.ts ZALO_FAILURE / zaloFailureSentence, 80e1354c).",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: câu chính không mang mã (ZALO_FAILURE, noi-dung.ts); dòng phụ 'Mã hỗ trợ: <mã>' (zaloSupportCode, lớp cd-ghi-chu / xa-phu, 16px, --ink-muted 7.4:1 trên nền trắng) ở năm chỗ: xác thực số, cổng phiên app xã, vị trí, tên Zalo, xác nhận xã. Ngoại lệ có tên ở skills/accessibility-elderly REQUIRED #5. tsc sạch; vitest 44 tệp / 1185 ca xanh (zalo-failure.test.ts 19 ca: câu chính không chữ số, dòng phụ đúng mã, không lỗi thì không dòng).",
       "no_confirm": [],
-      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (lượt /handover → xác nhận từng việc): câu chính không mang mã; dòng phụ nhỏ mang mã cho mọi người (bản test là bản thật — không cờ lúc dựng). Cập nhật skills/accessibility-elderly REQUIRED #5 thành ngoại lệ có tên. Sửa ca zalo-failure.test.ts theo.",
+      "tiep_theo": "Chưa đo độ tương phản dòng phụ trên nền riêng của app xã. Chỗ tên Zalo ở TrangXa.tsx render inline, không có ca render riêng.",
       "menu": "phan-anh-nguoi-dan"
     }
   ]

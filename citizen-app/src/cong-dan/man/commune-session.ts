@@ -142,9 +142,9 @@ export function sessionGateOffersRetry(outcome: SessionGateStop): boolean {
 }
 
 /**
- * The sentence for an outcome, naming what did not happen on this screen. Never a code of ours — the one
- * code ever shown is ZALO's, when `zalo` is given (with `thu-lai`), because it is what says which Zalo
- * permission is missing.
+ * The sentence for an outcome, naming what did not happen on this screen. Never a code, in the sentence:
+ * when `zalo` is given (with `thu-lai`) the sentence names the missing Zalo permission, and ZALO's code goes
+ * on the separate `zaloSupportCode` line the screen renders under it.
  */
 export function sessionGateMessage(outcome: SessionGateStop, task: PhoneVerificationTask, zalo?: ZaloFailure): string {
   const t = PHONE_VERIFICATION_TASK[task];

@@ -29,6 +29,8 @@ type Props = {
   cau_dang_mo?: string;
   /** Lần mở trước chưa được và bấm lại có thể được: câu nói việc cần làm. */
   cau_loi?: string;
+  /** "Mã hỗ trợ: <mã>" — Zalo's code, on its own secondary line under `cau_loi`, never inside it. */
+  support_code?: string;
 };
 
 /** Trụ sở uỷ ban. Trang trí — câu chữ bên cạnh mới là nội dung, nên `aria-hidden`. */
@@ -49,7 +51,7 @@ function GlyphTruSo({ className }: { className?: string }) {
   );
 }
 
-export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai, cau_dang_mo, cau_loi }: Props) {
+export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai, cau_dang_mo, cau_loi, support_code }: Props) {
   const dang_mo = cau_dang_mo !== undefined;
   return (
     <section className="goi-y" aria-labelledby="goi-y-tieu-de">
@@ -81,6 +83,7 @@ export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai, cau_dang_mo, c
           {cau_loi}
         </p>
       )}
+      {cau_loi !== undefined && support_code !== undefined && <p className="cd-ghi-chu">{support_code}</p>}
       {dang_mo && (
         <p className="goi-y__tiep" role="status">
           {cau_dang_mo}

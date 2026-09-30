@@ -21,6 +21,16 @@ a rights issue, not a user-experience issue.
 | 6 | Status | Text plus icon, **never colour alone** |
 | 7 | Significant actions | Confirm, stating the consequence |
 
+**Named exception to #5 — Zalo platform permission failures.** When the Zalo SDK refuses a
+capability the citizen did not refuse (the App ID lacks the permission), the plain sentence
+names *which* permission and says what to do next, with **no code in it**; Zalo's code may
+then appear on a **separate, visually secondary line** under that sentence, worded
+`Mã hỗ trợ: <code>` — `--text-small` (16px), `--ink-muted`, never colour alone. Shown in every
+build. Reason: user decision 30/09/2026 — the code is the only way a tester or the hotline can
+see which permission the App ID lacks. Nowhere else: an app's own codes, HTTP statuses and
+other SDK failures stay out of the screen. → `citizen-app/src/cong-dan/man/noi-dung.ts`
+`zaloSupportCode`.
+
 ## Error messages — the shape
 
 | Wrong | Right |
