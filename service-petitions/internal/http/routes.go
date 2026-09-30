@@ -838,58 +838,23 @@ func Register(mux *http.ServeMux, d Deps) {
 	// say `feedback.*` because they were fixed earlier, and that mismatch is a known, recorded
 	// cost rather than a licence to spell the resource the same way.
 	//
-	// WHY THE THREE WRITE ROUTES OF docs/ui-ux/09 §13 ARE ABSENT. Each is blocked on something
-	// nobody has decided, and each would look entirely reasonable if written anyway — which is
-	// what makes writing them expensive rather than merely premature:
+	// WHY STAFF INTAKE (`POST /api/v1/citizen-reports`, nhập hộ, docs/ui-ux/09 §11) IS STILL ABSENT.
+	// Rewritten 2026-09-30: the list that stood here named three missing writes, and two of them
+	// have since shipped — classification (below, `…/classification`) and the citizen's own
+	// submission (`POST /api/v1/my-citizen-reports`, routes_cong_dan.go). The plumbing that list
+	// was waiting for exists too: identity `ResolveDeadlines` (identity.proto:1183, ADR 0029) fixes
+	// both deadlines, and the tier-1 field check is `PetitionFieldSet.CheckForIntake`
+	// (core/platformclient/petition_fields.go:81, ADR 0060) — the citizen route uses both.
 	//
-	// TWO OF THE BLOCKERS LISTED BELOW HAVE BEEN CLEARED SINCE THIS LIST WAS WRITTEN, and they are
-	// marked CLEARED rather than deleted: a reader who finds this comment through ADR 0029 §115 or
-	// through the ledger needs to see that the reason moved, not that it vanished.
+	// What is left is DECISIONS, not plumbing, and writing the route anyway would decide them:
+	//   - the §11 modal wording is awaiting the customer (spec 09:244-253): the spec says a staff
+	//     booking carries the same deadlines as a Zalo submission, ADR 0028 E/F says it does not;
+	//   - the hamlet (`thon_id`) the form offers has no identity RPC to validate it, so it would be
+	//     written straight from the client (rule 1, forbidden #2 in spirit) — ship without it, or a
+	//     new contract first (contract-designer).
 	//
-	//   POST /api/v1/citizen-reports  (nhập hộ)
-	//       Booking a petition FIXES BOTH DEADLINES at once, because the staff form carries the
-	//       field (ADR 0028, decision E). Both numbers come from the `sla` table of
-	//       docs/ui-ux/14-cau-hinh.md §8.
-	//       CLEARED — "a table that exists in no service" was true until 2026-09-20. ADR 0029 put
-	//       `sla` in identity, beside the three calendar tables, and
-	//       service-identity/migrations/0008_sla.sql creates it.
-	//       STILL BLOCKED, one step further along: there is NO RPC that reads the hours. identity's
-	//       .proto has AdvanceWorkingHours, which answers "lúc nào" and not "bao lâu", and ADR 0029
-	//       §118 says in its own words that the shape of the reading contract is undecided —
-	//       whether it returns the HOURS for the caller to add, or the DEADLINE already computed.
-	//       Those put the working-hours arithmetic in two different services, and ADR 0007 forbids
-	//       two implementations of it. Writing the read path before that contract exists is ADR
-	//       0029's stop condition #3.
-	//
-	//   POST …/{maTraCuu}/<classification>  (phân loại)
-	//       Blocked three ways; one of the three is now clear.
-	//       (1) The same `sla` question, for `gio_xu_ly_xong` of the settled field — see above.
-	//       (2) ADR 0026 requires the field code to be CHECKED ON WRITE against the tier-1 set in
-	//       service `platform`, and how petitions reads that set — live gRPC or an event-fed
-	//       replica — still has NO ADR. kb/10-decisions/ ends at 0032 and none of 0029..0032
-	//       answers it. Writing the read path without one is ADR 0026's stop condition #2.
-	//       (3) CLEARED — `feedback.classify` was seeded on 2026-09-20 by
-	//       service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql, decided by ADR
-	//       0030. The key that names this act now exists and must not be replaced by a guess.
-	//       The URL noun is STILL missing: `ubiquitous-language.md` maps tiếp nhận, thụ lý, nghiệm
-	//       thu and đóng phiếu, and deliberately does not map phân loại — and that file says to
-	//       stop and ask rather than translate on the spot, because a path a commune is already
-	//       running cannot be taken back.
-	//
-	//   POST /api/cong/citizen-reports  (công dân gửi)
-	//       PARTLY CLEARED. identity's .proto now has ResolveCitizenSession and
-	//       core/identityclient returns an httpx.CitizenSessions this service can use without
-	//       importing service-identity/internal/ (rule 2, forbidden #1). One thing still blocks it
-	//       and it is not programming: that RPC cannot carry `x-tenant-id` — it is the call that
-	//       RESOLVES the commune (ADR 0022) — so its name has to be in core/grpcx.methodsWithoutTenant,
-	//       and adding a name to that list is ADR 0012 decision 1's stop condition. Until then the
-	//       caller-side interceptor refuses every call with InvalidArgument, so mounting a citizen
-	//       edge here would produce an edge that builds, runs, and answers 401 to every citizen.
-	//
-	// The store already carries the mechanical half of the two staff writes — Tao and
-	// ChotLinhVuc, each taking a *store.ScopedTx so the audit entry cannot be written anywhere
-	// but inside the same transaction (rule 6, invariant 3). What is missing above is the
-	// DECISIONS, not the plumbing.
+	// The store already carries the mechanical half — Tao takes a *store.ScopedTx, so the audit
+	// entry cannot be written anywhere but inside the same transaction (rule 6, invariant 3).
 
 	// @summary  Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân
 	// @screen   09-phan-anh-nguoi-dan §8
