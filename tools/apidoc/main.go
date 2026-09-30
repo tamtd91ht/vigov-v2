@@ -36,6 +36,10 @@
 //	@screen   optional. Points into docs/ui-ux/. NOT derivable: it is design intent.
 //	@request  optional. A Go type name. Absent means the route takes no body.
 //	@reply    required, repeatable. "<status> <type>", or "<status> -" for an empty body.
+//	          An error status may add the NAMED `code` values its body carries, space-separated
+//	          lowercase snake_case: "409 httpx.Error petition_state task_tree". They are emitted as
+//	          the response's `x-vigov-error-codes` (sorted); two lines for one status merge them.
+//	          Take them from the handler's own mapping — never from memory.
 //
 // Type names are resolved through the AST of the package the route lives in — unqualified
 // against that package, qualified (`httpx.Error`) through its imports. Nothing is looked up by

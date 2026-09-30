@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,6 +59,58 @@ type tuyen struct {
 type traLoi struct {
 	Status int
 	Kieu   string // Go type name, "" for an empty body
+	// Codes are the NAMED `code` values the handler writes into the error body for this status —
+	// `@reply 409 httpx.Error petition_state task_tree`. Sorted and de-duplicated; nil when the
+	// annotation names none, which means "not published yet", NOT "this status has no code".
+	//
+	// WHY THEY ARE ANNOTATED AND NOT READ OUT OF THE HANDLER, unlike `authz.*`: the codes are string
+	// literals scattered across a mapping function shared by several routes (traLoiLoiNhiemVu serves
+	// six), and which of its branches a given route can REACH is a question about the use case, not
+	// about the call. A reader that published every literal of the shared function would hand a client
+	// a union with codes the route never answers; one that guessed reachability would be deciding a
+	// business rule. The author of the route states it, next to the status it belongs to.
+	Codes []string
+}
+
+// errorCodePattern is the shape of an httpx.Error `code`: lowercase snake_case, starting with a
+// letter. It is checked because the codes become a TypeScript union in web-admin — a typo here is a
+// branch on a value the server never sends, and it would compile.
+var errorCodePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+
+// parseErrorCodes validates the codes after `@reply <status> <Type>`.
+func parseErrorCodes(status int, kieu string, codes []string) ([]string, error) {
+	if len(codes) == 0 {
+		return nil, nil
+	}
+	if status < 400 {
+		return nil, fmt.Errorf("@reply %d: mã lỗi có tên (%s) chỉ khai trên trạng thái lỗi 4xx/5xx",
+			status, strings.Join(codes, " "))
+	}
+	if kieu == "" {
+		return nil, fmt.Errorf("@reply %d -: thân rỗng không mang được mã lỗi %s — khai kiểu thân, thường là httpx.Error",
+			status, strings.Join(codes, " "))
+	}
+	for _, c := range codes {
+		if !errorCodePattern.MatchString(c) {
+			return nil, fmt.Errorf("@reply %d: mã lỗi %q sai dạng — phải là snake_case chữ thường "+
+				"(ví dụ petition_state), đúng chuỗi handler ghi vào httpx.WriteError", status, c)
+		}
+	}
+	return mergeErrorCodes(nil, codes), nil
+}
+
+// mergeErrorCodes returns the sorted union of two code lists.
+func mergeErrorCodes(a, b []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range append(append([]string{}, a...), b...) {
+		if !seen[c] {
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // quyenDecl mirrors the four declarations rule 5 allows, and there is no fifth. Kind is empty
@@ -336,8 +389,8 @@ func phanTichChuThich(text string, t *tuyen) error {
 			}
 			t.Request = phanCon
 		case "@reply":
-			if len(truong) != 3 {
-				return fmt.Errorf("@reply cần đúng dạng `@reply <mã> <Kiểu|->`, gặp %q", ln)
+			if len(truong) < 3 {
+				return fmt.Errorf("@reply cần đúng dạng `@reply <mã> <Kiểu|-> [mã_lỗi ...]`, gặp %q", ln)
 			}
 			ma, err := strconv.Atoi(truong[1])
 			if err != nil || ma < 100 || ma > 599 {
@@ -347,12 +400,32 @@ func phanTichChuThich(text string, t *tuyen) error {
 			if kieu == "-" {
 				kieu = ""
 			}
-			for _, r := range t.Replies {
-				if r.Status == ma {
-					return fmt.Errorf("@reply %d khai hai lần", ma)
-				}
+			codes, err := parseErrorCodes(ma, kieu, truong[3:])
+			if err != nil {
+				return fmt.Errorf("%w (dòng %q)", err, ln)
 			}
-			t.Replies = append(t.Replies, traLoi{Status: ma, Kieu: kieu})
+			// TWO LINES FOR ONE STATUS MERGE THEIR CODES — so a long list may be split — but only when
+			// both name the same body type and the second one adds codes. A bare repeat is still the
+			// typo it always was, and two TYPES for one status is a contract that cannot be written.
+			gop := false
+			for i, r := range t.Replies {
+				if r.Status != ma {
+					continue
+				}
+				if r.Kieu != kieu {
+					return fmt.Errorf("@reply %d khai hai lần với hai kiểu thân khác nhau (%q, %q)",
+						ma, r.Kieu, kieu)
+				}
+				if len(codes) == 0 || len(r.Codes) == 0 {
+					return fmt.Errorf("@reply %d khai hai lần — chỉ được lặp để gộp thêm mã lỗi, "+
+						"và mọi dòng lặp đều phải mang mã", ma)
+				}
+				t.Replies[i].Codes = mergeErrorCodes(r.Codes, codes)
+				gop = true
+			}
+			if !gop {
+				t.Replies = append(t.Replies, traLoi{Status: ma, Kieu: kieu, Codes: codes})
+			}
 		default:
 			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @reply, @consumer", the)
 		}

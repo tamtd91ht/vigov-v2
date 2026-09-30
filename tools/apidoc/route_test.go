@@ -324,3 +324,98 @@ func TestConsumerChiTrenTuyenCongKhai(t *testing.T) {
 		}
 	}
 }
+
+// --- named error codes on @reply ------------------------------------------------------------
+
+func TestReplyWithoutCodesStillValid(t *testing.T) {
+	ts, errs := trich(t, dauFile+`
+	// @summary  Có
+	// @reply    200 -
+	// @reply    409 httpx.Error
+	mux.Handle("GET /api/v1/things", authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	for _, r := range ts[0].Replies {
+		if r.Codes != nil {
+			t.Errorf("@reply %d không khai mã mà vẫn có mã: %v", r.Status, r.Codes)
+		}
+	}
+}
+
+func TestReplyCodesParsedSortedMerged(t *testing.T) {
+	ts, errs := trich(t, dauFile+`
+	// @summary  Có
+	// @reply    200 -
+	// @reply    409 httpx.Error task_tree petition_state
+	// @reply    409 httpx.Error code_taken task_tree
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	mux.Handle("GET /api/v1/things", authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	got := map[int]string{}
+	for _, r := range ts[0].Replies {
+		got[r.Status] = r.Kieu + ":" + strings.Join(r.Codes, ",")
+	}
+	if len(ts[0].Replies) != 3 {
+		t.Fatalf("hai dòng 409 phải gộp làm một: %+v", ts[0].Replies)
+	}
+	if got[409] != "httpx.Error:code_taken,petition_state,task_tree" {
+		t.Errorf("409 gộp sai: %q", got[409])
+	}
+	if got[403] != "httpx.Error:chua_xac_thuc_so" {
+		t.Errorf("403 sai: %q", got[403])
+	}
+}
+
+func TestReplyMalformedCodeRefused(t *testing.T) {
+	for _, ca := range []struct{ dong, muon string }{
+		{"409 httpx.Error PetitionState", "sai dạng"},
+		{"409 httpx.Error petition-state", "sai dạng"},
+		{"409 httpx.Error _state", "sai dạng"},
+		{"409 httpx.Error state_", "sai dạng"},
+		{"409 httpx.Error 9state", "sai dạng"},
+		{"409 - petition_state", "thân rỗng"},
+		{"200 httpx.Error petition_state", "4xx/5xx"},
+	} {
+		_, errs := trich(t, dauFile+`
+	// @summary  Có
+	// @reply    `+ca.dong+`
+	mux.Handle("GET /api/v1/things", authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+		if len(errs) != 1 || !strings.Contains(errs[0].Error(), ca.muon) {
+			t.Errorf("@reply %s: mong lỗi chứa %q, được %v", ca.dong, ca.muon, errs)
+			continue
+		}
+		// The error names the file and the route line, so the author finds it without searching.
+		if !strings.Contains(errs[0].Error(), "routes.go:") {
+			t.Errorf("@reply %s: lỗi không nêu tệp:dòng: %v", ca.dong, errs[0])
+		}
+	}
+}
+
+func TestReplyInvalidRepeatRefused(t *testing.T) {
+	for _, ca := range []struct{ a, b, muon string }{
+		{"409 httpx.Error", "409 httpx.Error", "khai hai lần"},
+		{"409 httpx.Error task_tree", "409 httpx.Error", "khai hai lần"},
+		{"409 httpx.Error", "409 httpx.Error task_tree", "khai hai lần"},
+		{"409 httpx.Error task_tree", "409 loiKhac code_taken", "hai kiểu thân"},
+	} {
+		_, errs := trich(t, dauFile+`
+	// @summary  Có
+	// @reply    `+ca.a+`
+	// @reply    `+ca.b+`
+	mux.Handle("GET /api/v1/things", authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+		if len(errs) != 1 || !strings.Contains(errs[0].Error(), ca.muon) {
+			t.Errorf("%q + %q: mong lỗi chứa %q, được %v", ca.a, ca.b, ca.muon, errs)
+		}
+	}
+}

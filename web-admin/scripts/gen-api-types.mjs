@@ -269,9 +269,21 @@ function sinh(hopDong) {
       const kieuThan = noiDung ? dichKieu(noiDung, `${duongDan}.requestBody`) : "never";
 
       const dongPhanHoi = [];
+      // NAMED ERROR CODES (`x-vigov-error-codes`, tools/apidoc) → a string union per status, so a
+      // screen branches on `err.code` against what the server declares instead of a hand-typed literal
+      // that compiles whether or not the server ever sends it. Emitted ONLY on operations that declare
+      // codes: every other operation type stays byte-identical to before this branch existed.
+      const errorCodeLines = [];
       for (const [ma, phanHoi] of Object.entries(op.responses ?? {})) {
         const s = phanHoi.content?.["application/json"]?.schema;
         dongPhanHoi.push(`    ${ma}: ${s ? dichKieu(s, `${duongDan}.${ma}`) : "void"};`);
+        const codes = phanHoi["x-vigov-error-codes"];
+        if (codes !== undefined) {
+          if (!Array.isArray(codes) || codes.length === 0 || !codes.every((c) => typeof c === "string")) {
+            tuChoi(`${duongDan}.${ma}`, "x-vigov-error-codes không phải mảng chuỗi khác rỗng");
+          }
+          errorCodeLines.push(`    ${ma}: ${codes.map((c) => JSON.stringify(c)).join(" | ")};`);
+        }
       }
 
       ra.push(`/** ${phuongThuc.toUpperCase()} ${duongDan} — ${op.summary ?? ""} */`);
@@ -282,6 +294,7 @@ function sinh(hopDong) {
       ra.push(`  truyVan: {\n${dongTruyVan.join("\n")}${dongTruyVan.length ? "\n" : ""}  };`);
       ra.push(`  than: ${kieuThan};`);
       ra.push(`  phanHoi: {\n${dongPhanHoi.join("\n")}\n  };`);
+      if (errorCodeLines.length > 0) ra.push(`  errorCodes: {\n${errorCodeLines.join("\n")}\n  };`);
       ra.push("};");
       ra.push("");
     }

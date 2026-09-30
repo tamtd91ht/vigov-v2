@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-09-25",
+  "cap_nhat": "2026-09-30",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -146,6 +146,18 @@
       "bang_chung": "tools/apidoc/route.go: Kind tu-phien-chi-xem, lý do bắt buộc dạng hằng chuỗi; openapi.go xaJSON ghi reason + note cho lớp chỉ xem, phone_verified_required=true cho tu-phien. lop_xa_test.go thêm hai ca. go test xanh — kiểm 2026-09-25",
       "no_confirm": [],
       "tiep_theo": "kb/20-contracts/openapi.json đổi theo (thêm phone_verified_required vào mọi tuyến công dân tu-phien) sau make kb."
+    },
+    {
+      "id": "apidoc-ma-loi-co-ten",
+      "viec": "tools/apidoc công bố mã lỗi có tên: @reply <status> <Type> [mã…] → x-vigov-error-codes; gen:api sinh errorCodes",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026 (người dùng cho làm): route.go parseErrorCodes/mergeErrorCodes (mã snake_case, cấm trên status <400 và thân rỗng, trùng status chỉ gộp khi cùng kiểu), openapi.go phát x-vigov-error-codes sắp xếp + khử trùng; web-admin/scripts/gen-api-types.mjs thêm errorCodes: {status: union}. Gắn mã cho: POST …/citizen-reports/{maTraCuu}/tasks, POST /tasks/{ma}/status, PUT /staff/{id}/publication (thêm dòng 409 staff_locked còn thiếu), 4 tuyến my-citizen-reports (403 chua_xac_thuc_so). go test -p 1 tools/apidoc xanh (TestDauRaTatDinh chạy bộ sinh trên kho thật); petitions, identity xanh; sinh thử trên scratch: openapi chỉ thêm mã.",
+      "no_confirm": [],
+      "tiep_theo": "Còn tuyến chưa gắn mã: POST /tasks và các tuyến ghi nhiệm vụ khác, ghi cán bộ identity, POST /staff/publications, vòng đời phiếu (xu_ly_phan_anh.go), rating 409, cả documents/comms/finance/reporting; mã của middleware (401/403/400 idem/503) chưa suy tự động.",
+      "menu": [
+        "phan-anh-nguoi-dan",
+        "nhiem-vu"
+      ]
     }
   ]
 }

@@ -108,7 +108,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	//
 	// @reply    200 phieuCuaToiRa
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
@@ -149,7 +149,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    200 page.Result[phieuCuaToiTomTatRa]
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/my-citizen-reports",
@@ -236,8 +236,8 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    201 phieuCuaToiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	// @reply    409 httpx.Error request_in_progress
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/my-citizen-reports",
@@ -286,7 +286,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// @reply    200 phieuCuaToiRa
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error

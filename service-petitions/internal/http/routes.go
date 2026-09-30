@@ -1207,8 +1207,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 30/09/2026, domain.PetitionAcceptsTask): `restricted_field_no_task` — a `can-bo` petition, to a
 	// `feedback.restricted` holder; `petition_not_classified` — `da-tiep-nhan` / `dang-phan-loai`, not yet
 	// classified and accepted; `petition_state` — closed (`da-dong`, `khong-tiep-nhan`,
-	// `chuyen-cap-tren`). Plus `code_taken` / `task_tree` as on POST /tasks. The codes live here in prose
-	// because tools/apidoc's `@reply` carries a status and a type only (tools/apidoc/route.go:339).
+	// `chuyen-cap-tren`). Plus, from the task register's own mapping (traLoiLoiNhiemVu), what the create
+	// path can reach: `code_taken`, `task_tree` (parent gone, cycle, tree too deep) and `task_document` (a
+	// document item naming a line id — there is no stored line on a task being created,
+	// domain.SoSanhVanBan); and idem's `request_in_progress`. The 409 line below publishes exactly these.
 	// 400 also answers a body that sends `source` or `source_id`.
 	//
 	// idem.Required(idem.MoKhiHong), POST /api/v1/tasks' declaration and for its reason: nothing here
@@ -1223,7 +1225,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error petition_state petition_not_classified restricted_field_no_task
+	// @reply    409 httpx.Error code_taken task_tree task_document request_in_progress
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/tasks",
@@ -1680,7 +1683,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    409 httpx.Error parent_completed task_state task_tree
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/tasks/{ma}/status",
 		authz.RequirePermission(d.Checker, "task.read")(

@@ -274,6 +274,22 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			} else {
 				tra[ma] = ""
 			}
+			// NAMED ERROR CODES AS A RESPONSE-LEVEL EXTENSION, AND THE SCHEMA LEFT AS THE BARE $ref.
+			//
+			// The obvious alternative — `allOf: [$ref httpx.Error, {properties: {code: {enum}}}]` — is a
+			// shape web-admin/scripts/gen-api-types.mjs refuses by design (it throws on allOf/oneOf
+			// rather than emit `unknown`), so it would break `npm run gen:api` for the whole contract;
+			// and an inline copy of httpx.Error per response would be a second source for its shape.
+			// An `x-` key is valid OpenAPI 3.1 on a Response Object, every other reader ignores it, and
+			// the one reader that wants it builds its union from it. Emitted only when declared: an
+			// absent key keeps every other response byte-identical.
+			if len(r.Codes) > 0 {
+				codes := make([]any, len(r.Codes))
+				for i, c := range r.Codes {
+					codes[i] = c
+				}
+				one.set("x-vigov-error-codes", codes)
+			}
 			resp.set(ma, one)
 		}
 		op.set("responses", resp)

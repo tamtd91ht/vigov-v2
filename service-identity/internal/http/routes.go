@@ -1194,11 +1194,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @summary  Công khai / thôi công khai một cán bộ lên danh bạ Zalo Mini App — bắt buộc xác nhận đã được người đó đồng ý (#12)
 	// @screen   12-danh-ba-can-bo §9.4
 	// @request  datCongKhaiVao
+	// 409 `staff_locked`: publishing a locked person (ErrStaffLocked, checked on the row read FOR UPDATE).
+	// It was answered but missing from this block until 30/09/2026.
+	//
 	// @reply    200 canBoTomTat
-	// @reply    400 httpx.Error
+	// @reply    400 httpx.Error consent_required invalid_request
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
+	// @reply    404 httpx.Error staff_not_found
+	// @reply    409 httpx.Error staff_locked
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/staff/{id}/publication",
 		authz.RequirePermission(d.Checker, "content.update")(
