@@ -106,6 +106,7 @@ describe("cây khoản mục", () => {
       <table>
         <tbody>
           <DongKhoanMuc
+            sheetLock={null}
             hien={{ dong: d, cap: 1, coCon: false, moRong: false }}
             cot={COT}
             donVi={donViCuaBang(bang([d]).sheet)}
@@ -152,6 +153,7 @@ describe("cây khoản mục", () => {
     const d = dongHaiTrangThai();
     const html = renderToStaticMarkup(
       <BangDayDu
+        sheetLock={null}
         duLieu={bang([d])}
         thuGon={new Set()}
         datThuGon={() => {}}
@@ -179,6 +181,7 @@ describe("cây khoản mục", () => {
     const d = dongHaiTrangThai({ unavailable_reasons: undefined });
     const html = renderToStaticMarkup(
       <BangDayDu
+        sheetLock={null}
         duLieu={bang([d])}
         thuGon={new Set()}
         datThuGon={() => {}}
@@ -257,6 +260,8 @@ describe("danh sách đợt", () => {
   it("số tiền vượt trần của một đợt hiện dấu; ô trống cạnh bên vẫn '—'; danh sách dưới bảng nói ngày và cột", () => {
     const html = renderToStaticMarkup(
       <NoiDungHopDot
+        closes={[]}
+        sheetYear={2026}
         method="entries"
         cot={COT}
         donVi={donViCuaBang(bang([]).sheet)}

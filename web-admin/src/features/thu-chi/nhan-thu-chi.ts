@@ -409,7 +409,12 @@ export function cauDieuKienDot(method: string): string {
 }
 
 /** Giới hạn độ dài máy chủ đặt cho ba trường chữ của một đợt. */
-export const DO_DAI_TOI_DA_DOT = { content: 1000, counterparty: 300, document_no: 100 } as const;
+export const DO_DAI_TOI_DA_DOT = {
+  content: 1000,
+  counterparty: 300,
+  document_no: 100,
+  adjustment_reason: 500,
+} as const;
 
 /** Thứ biểu mẫu ghi đợt đọc được, còn là chữ thô. */
 export type NhapDot = {
@@ -417,6 +422,12 @@ export type NhapDot = {
   noiDung: string;
   doiTac: string;
   soChungTu: string;
+  /**
+   * "Lý do điều chỉnh". Filled = an ADJUSTMENT ENTRY (`đợt điều chỉnh`) correcting a closed period;
+   * blank or absent = an ordinary entry. There is no separate flag, on purpose: a reason IS the
+   * mark, so the two cannot disagree (kb/00-foundation/ubiquitous-language.md, "Đợt điều chỉnh").
+   */
+  adjustmentReason?: string;
   /** mã cột → chữ gõ trong ô, theo đơn vị của bảng */
   gia: Readonly<Record<string, string>>;
 };
@@ -464,6 +475,13 @@ export function dungThanDot(
       thongBao: `Số chứng từ dài quá ${DO_DAI_TOI_DA_DOT.document_no} ký tự.`,
     };
   }
+  const adjustmentReason = (nhap.adjustmentReason ?? "").trim();
+  if (doDai(adjustmentReason) > DO_DAI_TOI_DA_DOT.adjustment_reason) {
+    return {
+      ok: false,
+      thongBao: `Lý do điều chỉnh dài quá ${DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.`,
+    };
+  }
 
   const values: Record<string, number | null> = {};
   let coSo = false;
@@ -483,6 +501,8 @@ export function dungThanDot(
   const than: finance_ghiDotVao = { date: ngay, content: noiDung, values };
   if (doiTac !== "") than.counterparty = doiTac;
   if (soChungTu !== "") than.document_no = soChungTu;
+  // Blank is NOT sent: the server refuses a blank reason instead of reading it as "ordinary entry".
+  if (adjustmentReason !== "") than.adjustment_reason = adjustmentReason;
   return { ok: true, than };
 }
 

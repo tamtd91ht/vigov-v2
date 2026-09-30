@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import { ChonNam } from "@/components/chon-nam";
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { listBudgetPeriodCloses } from "@/lib/api/budget-period-close";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   finance_bangDayDuRa,
+  finance_budgetPeriodClosesOut,
   finance_bangRa,
   finance_chiSoNamRa,
   finance_chiSoRa,
@@ -75,6 +77,8 @@ import {
   type DonViHien,
 } from "./nhan-thu-chi";
 import { DanhSachKhongTinh, OTien } from "./o-tien";
+import { sheetLockReason } from "./period-close";
+import { BudgetPeriodClosePanel, type ClosesView } from "./period-close-panel";
 import { FormSuaBang } from "./sua-bang";
 
 // Giữ đường nhập cũ cho phía gọi và bài kiểm: hộp gỡ nay nằm ở tệp riêng vì hộp `⇄` cũng dùng nó.
@@ -147,6 +151,13 @@ export function BangThuChi() {
     kq: KetQua<finance_chiSoNamRa>;
   } | null>(null);
 
+  // Close history of the selected year. Read on the same reload counter as the sheet: a close or a
+  // reopen changes which buttons are live, and a write refused with 409 may mean the list is stale.
+  const [loadedCloses, setLoadedCloses] = useState<{
+    key: string;
+    result: KetQua<finance_budgetPeriodClosesOut>;
+  } | null>(null);
+
   const [thuGon, datThuGon] = useState<ReadonlySet<string>>(new Set());
   const [dangMo, datDangMo] = useState<DangMo | null>(null);
   const [dangSuaDong, datDangSuaDong] = useState<string | null>(null);
@@ -155,6 +166,7 @@ export function BangThuChi() {
 
   const khoaBang = `${nam}|${loai}|${lanTai}`;
   const khoaChiSo = `${nam}|${lanTai}`;
+  const closesKey = `${nam}|${lanTai}`;
 
   useEffect(() => {
     let bo = false;
@@ -176,6 +188,16 @@ export function BangThuChi() {
     };
   }, [nam, khoaChiSo]);
 
+  useEffect(() => {
+    let dropped = false;
+    listBudgetPeriodCloses(nam).then((result) => {
+      if (!dropped) setLoadedCloses({ key: closesKey, result });
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [nam, closesKey]);
+
   const phien = usePhien();
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có quyền nào — "chưa rõ" không
   // được hành xử như "có" (luật 1, cấm #1).
@@ -185,6 +207,15 @@ export function BangThuChi() {
 
   const bang = trangThaiTu(daTaiBang, khoaBang);
   const chiSo = trangThaiTu(daTaiChiSo, khoaChiSo);
+  const closesView: ClosesView =
+    loadedCloses === null || loadedCloses.key !== closesKey
+      ? { phase: "loading" }
+      : loadedCloses.result.ok
+        ? { phase: "ready", closes: loadedCloses.result.duLieu.closes }
+        : { phase: "error", message: loadedCloses.result.thongBao };
+  // DISPLAY ONLY. Not loaded yet, or not readable: nothing is drawn as locked, and the server still
+  // refuses a write into a closed period with a 409 shown verbatim.
+  const closes = closesView.phase === "ready" ? closesView.closes : [];
 
   /** Một lần ghi xong: đóng hộp thoại đang mở, xoá thông báo cũ, và đọc lại từ máy chủ. */
   function xong(kq: KetQua<unknown>): void {
@@ -222,6 +253,17 @@ export function BangThuChi() {
           }}
         />
       </div>
+
+      {/* THE CLOSE BLOCK SITS OUTSIDE THE TABS: a close covers a period of the commune's budget,
+          both the revenue and the expenditure sheet of that year. */}
+      <BudgetPeriodClosePanel
+        // A new year is a new set of forms: a key kept from 2025 must not close 2026.
+        key={nam}
+        year={nam}
+        view={closesView}
+        canConfirm={coXacNhan}
+        onChanged={() => datLanTai((n) => n + 1)}
+      />
 
       {/* Hai tab của §2. `role="tablist"` đúng chuẩn như `15-phu-luc §8` đòi. */}
       <div role="tablist" aria-label="Chọn bảng thu hoặc bảng chi">
@@ -289,6 +331,7 @@ export function BangThuChi() {
             datThuGon={datThuGon}
             coGhi={coGhi}
             coXacNhan={coXacNhan}
+            sheetLock={sheetLockReason(closes, bang.duLieu.sheet.year)}
             dangGui={dangGui}
             dangSuaDong={dangSuaDong}
             moSua={(id) => {
@@ -370,6 +413,8 @@ export function BangThuChi() {
             donVi={dangMo.donVi}
             coGhi={coGhi}
             coXacNhan={coXacNhan}
+            closes={closes}
+            sheetYear={nam}
             dong={() => datDangMo(null)}
             daDoiSoLieu={() => datLanTai((n) => n + 1)}
           />
@@ -543,6 +588,7 @@ export function BangDayDu({
   datThuGon,
   coGhi,
   coXacNhan,
+  sheetLock,
   dangGui,
   dangSuaDong,
   moSua,
@@ -561,6 +607,12 @@ export function BangDayDu({
   datThuGon: (t: ReadonlySet<string>) => void;
   coGhi: boolean;
   coXacNhan: boolean;
+  /**
+   * Why this sheet cannot be edited (an active YEAR close), or `null`. Edit controls stay VISIBLE
+   * and are disabled, with the reason printed once above the table: a control that vanishes reads
+   * as "you lack the right", which is a different and wrong message.
+   */
+  sheetLock: string | null;
   dangGui: boolean;
   dangSuaDong: string | null;
   moSua: (id: string) => void;
@@ -578,9 +630,16 @@ export function BangDayDu({
   const dongHien = phangCay(cay, thuGon);
   const cot = cotSo(duLieu.columns);
   const donVi = donViCuaBang(duLieu.sheet);
+  const locked = sheetLock !== null;
+  const lockTitle = sheetLock ?? undefined;
 
   return (
     <>
+      {locked && (
+        <p className="canh-bao-pham-vi" role="note">
+          🔒 {sheetLock}
+        </p>
+      )}
       <TheTomTat
         bang={duLieu.sheet}
         tomTat={duLieu.summary}
@@ -604,19 +663,32 @@ export function BangDayDu({
           <button
             type="button"
             className="nut-phu"
-            disabled={dangGui}
+            disabled={dangGui || locked}
+            title={lockTitle}
             onClick={() => moThem("", "cấp cao nhất", thuTuKeTiep(duLieu.lines, ""))}
           >
             ⊞ Thêm khoản mục cấp cao nhất
           </button>
         )}
         {coGhi && (
-          <button type="button" className="nut-phu" disabled={dangGui} onClick={moSuaBang}>
+          <button
+            type="button"
+            className="nut-phu"
+            disabled={dangGui || locked}
+            title={lockTitle}
+            onClick={moSuaBang}
+          >
             ✎ Sửa thông tin bảng
           </button>
         )}
         {coXacNhan && (
-          <button type="button" className="nut-phu" disabled={dangGui} onClick={moGoBang}>
+          <button
+            type="button"
+            className="nut-phu"
+            disabled={dangGui || locked}
+            title={lockTitle}
+            onClick={moGoBang}
+          >
             🗑 Gỡ bảng
           </button>
         )}
@@ -669,6 +741,7 @@ export function BangDayDu({
                   dongTongId={duLieu.summary.headline_line_id ?? ""}
                   coGhi={coGhi}
                   coXacNhan={coXacNhan}
+                  sheetLock={sheetLock}
                   dangGui={dangGui}
                   moRongDoi={() => {
                     const moi = new Set(thuGon);
@@ -826,6 +899,7 @@ export function DongKhoanMuc({
   dongTongId,
   coGhi,
   coXacNhan,
+  sheetLock,
   dangGui,
   moRongDoi,
   moSua,
@@ -841,6 +915,8 @@ export function DongKhoanMuc({
   dongTongId: string;
   coGhi: boolean;
   coXacNhan: boolean;
+  /** See `BangDayDu`: disables every EDIT control of the row; `⇄` stays open to read entries. */
+  sheetLock: string | null;
   dangGui: boolean;
   moRongDoi: () => void;
   moSua: () => void;
@@ -855,6 +931,8 @@ export function DongKhoanMuc({
   // Dòng LÁ: không có con trên cây đang vẽ và máy chủ không nói nó cộng con. Chỉ dòng lá có ô
   // chọn cách tính và có hộp đợt — dòng có con thì cả hai là 409 (`routes.go:1081`, `:1204`).
   const laLa = !hien.coCon && d.method !== "children";
+  const editDisabled = dangGui || sheetLock !== null;
+  const lockTitle = sheetLock ?? undefined;
 
   return (
     <tr>
@@ -883,7 +961,8 @@ export function DongKhoanMuc({
               className="nut-phu"
               aria-label={nhanDatDongTong(d.name)}
               aria-pressed={laDongTong}
-              disabled={dangGui}
+              disabled={editDisabled}
+              title={lockTitle}
               onClick={datTong}
             >
               {laDongTong ? "★" : "☆"}
@@ -898,7 +977,8 @@ export function DongKhoanMuc({
               type="button"
               className="nut-phu"
               aria-label={NHAN_SUA_TEN}
-              disabled={dangGui}
+              disabled={editDisabled}
+              title={lockTitle}
               onClick={moSua}
             >
               {d.name}
@@ -938,7 +1018,8 @@ export function DongKhoanMuc({
           <select
             aria-label={`Cách tính của ${d.name}`}
             value={d.method}
-            disabled={dangGui}
+            disabled={editDisabled}
+            title={lockTitle}
             onChange={(e) => {
               const den = e.target.value;
               if ((den === "manual" || den === "entries") && den !== d.method) doiCachTinh(den);
@@ -972,7 +1053,8 @@ export function DongKhoanMuc({
             type="button"
             className="nut-phu"
             aria-label={nhanThemCon(d.name)}
-            disabled={dangGui}
+            disabled={editDisabled}
+            title={lockTitle}
             onClick={them}
           >
             ＋
@@ -983,7 +1065,8 @@ export function DongKhoanMuc({
             type="button"
             className="nut-phu"
             aria-label={nhanGoKhoanMuc(d.name)}
-            disabled={dangGui}
+            disabled={editDisabled}
+            title={lockTitle}
             onClick={go}
           >
             🗑

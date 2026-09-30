@@ -4,7 +4,12 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import type { KetQua } from "@/lib/api/goi";
-import type { finance_cotRa, finance_danhSachDotRa, finance_dotRa } from "@/lib/api/schema.gen";
+import type {
+  finance_budgetPeriodCloseOut,
+  finance_cotRa,
+  finance_danhSachDotRa,
+  finance_dotRa,
+} from "@/lib/api/schema.gen";
 import { ghiDot, goDot, layDot } from "@/lib/api/thu-chi";
 
 import { FormGoKemLyDo } from "./form-go-ly-do";
@@ -24,6 +29,7 @@ import {
   type NhapDot,
 } from "./nhan-thu-chi";
 import { DanhSachKhongTinh, OTien } from "./o-tien";
+import { closedMonthsHint, entryLockReason, sheetLockReason } from "./period-close";
 
 /**
  * Hộp "Các đợt thu, chi" (§5) của MỘT khoản mục lá.
@@ -50,6 +56,8 @@ export function HopDotThuChi({
   donVi,
   coGhi,
   coXacNhan,
+  closes,
+  sheetYear,
   dong,
   daDoiSoLieu,
 }: {
@@ -61,6 +69,9 @@ export function HopDotThuChi({
   donVi: DonViHien;
   coGhi: boolean;
   coXacNhan: boolean;
+  /** ACTIVE and reopened closes of the sheet year — display only, the server decides (409). */
+  closes: readonly finance_budgetPeriodCloseOut[];
+  sheetYear: number;
   dong: () => void;
   /** Một đợt vừa được ghi hoặc gỡ: bảng và chỉ số phải đọc lại. */
   daDoiSoLieu: () => void;
@@ -112,6 +123,12 @@ export function HopDotThuChi({
     return true;
   }
 
+  // A YEAR close refuses every entry on this sheet, so the form is replaced by the reason instead
+  // of offering a submit that can only answer 409. A MONTH close only names its months: entries
+  // dated elsewhere are still accepted, and an adjustment entry is how a closed month is corrected.
+  const sheetLock = sheetLockReason(closes, sheetYear);
+  const monthsHint = closedMonthsHint(closes, sheetYear);
+
   return (
     <section className="khoi-chi-tiet" role="dialog" aria-labelledby="tieu-de-hop-dot">
       <div className="dau-khoi-chi-tiet">
@@ -127,6 +144,8 @@ export function HopDotThuChi({
         donVi={donVi}
         danhSach={danhSach}
         coXacNhan={coXacNhan}
+        closes={closes}
+        sheetYear={sheetYear}
         dangGui={dangGui}
         moGo={(d) => {
           datDangGo(d);
@@ -160,7 +179,12 @@ export function HopDotThuChi({
           />
         )}
 
-        {coGhi && (
+        {coGhi && sheetLock !== null && <p className="canh-bao-pham-vi">{sheetLock}</p>}
+        {coGhi && sheetLock === null && monthsHint !== null && (
+          <p className="ghi-chu">{monthsHint}</p>
+        )}
+
+        {coGhi && sheetLock === null && (
           <FormGhiDot
             cot={cot}
             donVi={donVi}
@@ -203,6 +227,8 @@ export function NoiDungHopDot({
   donVi,
   danhSach,
   coXacNhan,
+  closes,
+  sheetYear,
   dangGui,
   moGo,
   children,
@@ -212,6 +238,8 @@ export function NoiDungHopDot({
   donVi: DonViHien;
   danhSach: TrangThaiDot;
   coXacNhan: boolean;
+  closes: readonly finance_budgetPeriodCloseOut[];
+  sheetYear: number;
   dangGui: boolean;
   moGo: (d: finance_dotRa) => void;
   children?: ReactNode;
@@ -255,10 +283,26 @@ export function NoiDungHopDot({
               </tr>
             </thead>
             <tbody>
-              {danhSach.duLieu.entries.map((d) => (
+              {danhSach.duLieu.entries.map((d) => {
+                const lock = entryLockReason(closes, d.date, sheetYear);
+                const adjustment = d.adjustment_reason ?? "";
+                return (
                 <tr key={d.id}>
                   <td>{nhanNgayLuyKe(d.date)}</td>
-                  <td>{d.content}</td>
+                  <td>
+                    {adjustment !== "" && (
+                      <>
+                        <span className="chip">Điều chỉnh</span>{" "}
+                      </>
+                    )}
+                    {d.content}
+                    {adjustment !== "" && (
+                      <>
+                        <br />
+                        <span className="ghi-chu">Lý do điều chỉnh: {adjustment}</span>
+                      </>
+                    )}
+                  </td>
                   {/* ĐÃ CHE Ở MÁY CHỦ — in nguyên, không khôi phục (luật 3). */}
                   <td>{d.counterparty !== undefined && d.counterparty !== "" ? d.counterparty : O_TRONG}</td>
                   <td>{d.document_no !== undefined && d.document_no !== "" ? d.document_no : O_TRONG}</td>
@@ -272,19 +316,26 @@ export function NoiDungHopDot({
                   ))}
                   {coXacNhan && (
                     <td className="o-thao-tac">
-                      <button
-                        type="button"
-                        className="nut-phu"
-                        disabled={dangGui}
-                        aria-label={`Gỡ đợt ngày ${nhanNgayLuyKe(d.date)}`}
-                        onClick={() => moGo(d)}
-                      >
-                        🗑 Gỡ đợt
-                      </button>
+                      {lock === null ? (
+                        <button
+                          type="button"
+                          className="nut-phu"
+                          disabled={dangGui}
+                          aria-label={`Gỡ đợt ngày ${nhanNgayLuyKe(d.date)}`}
+                          onClick={() => moGo(d)}
+                        >
+                          🗑 Gỡ đợt
+                        </button>
+                      ) : (
+                        // No remove button on a closed period: it could only answer 409. The
+                        // reason is printed, not hidden in a tooltip — touch screens cannot hover.
+                        <span className="ghi-chu">🔒 {lock}</span>
+                      )}
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -350,6 +401,7 @@ export function FormGhiDot({
             noiDung: String(fd.get("content") ?? ""),
             doiTac: String(fd.get("counterparty") ?? ""),
             soChungTu: String(fd.get("document_no") ?? ""),
+            adjustmentReason: String(fd.get("adjustment_reason") ?? ""),
             gia,
           },
           bieuMau,
@@ -400,6 +452,23 @@ export function FormGhiDot({
           type="text"
           maxLength={DO_DAI_TOI_DA_DOT.document_no}
         />
+      </p>
+      <p>
+        <label htmlFor="dot-adjustment-reason">Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)</label>
+        <br />
+        <textarea
+          id="dot-adjustment-reason"
+          name="adjustment_reason"
+          className="o-nhap"
+          rows={2}
+          maxLength={DO_DAI_TOI_DA_DOT.adjustment_reason}
+          aria-describedby="dot-adjustment-reason-hint"
+        />
+        <br />
+        <span id="dot-adjustment-reason-hint" className="ghi-chu">
+          Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là đợt
+          thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
+        </span>
       </p>
       {cot.map((c) => (
         <p key={c.id}>

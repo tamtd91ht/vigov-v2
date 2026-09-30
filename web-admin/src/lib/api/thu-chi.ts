@@ -387,6 +387,11 @@ export function ghiDot(
   };
   if (than.counterparty !== undefined) thanGui.counterparty = than.counterparty;
   if (than.document_no !== undefined) thanGui.document_no = than.document_no;
+  // Present only when it carries text: a reason marks the entry as an ADJUSTMENT ENTRY (`đợt điều
+  // chỉnh`), and the server refuses a blank one rather than reading it as "ordinary entry".
+  if (typeof than.adjustment_reason === "string" && than.adjustment_reason !== "") {
+    thanGui.adjustment_reason = than.adjustment_reason;
+  }
 
   return docThanLoiGoi<finance_dotRa>(
     goiGhi(duongDanMot(mau, khoanMucId), "POST", thanGui, 201, {

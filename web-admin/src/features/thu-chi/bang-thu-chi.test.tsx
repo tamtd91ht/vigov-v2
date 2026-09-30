@@ -141,6 +141,7 @@ function nhuTrongHTML(s: string): string {
 function veBang(coGhi: boolean, coXacNhan: boolean, duLieu = bang()): string {
   return renderToStaticMarkup(
     <BangDayDu
+      sheetLock={null}
       duLieu={duLieu}
       thuGon={new Set()}
       datThuGon={() => {}}
@@ -168,6 +169,7 @@ function renderLine(line: finance_dongRa): string {
     <table>
       <tbody>
         <DongKhoanMuc
+          sheetLock={null}
           hien={{ dong: line, cap: 0, coCon: false, moRong: false }}
           cot={COT}
           donVi={donViCuaBang(bang().sheet)}
@@ -348,6 +350,7 @@ describe("con số ra tới trang", () => {
       <table>
         <tbody>
           <DongKhoanMuc
+            sheetLock={null}
             hien={{ dong: dong({ method: "manual" }), cap: 0, coCon: false, moRong: false }}
             cot={COT}
             donVi={donViCuaBang(bang().sheet)}
@@ -439,6 +442,7 @@ describe("cây khoản mục và thanh công cụ", () => {
   it("thu gọn một dòng thì con của nó KHÔNG ra trang, và bộ đếm nói đúng", () => {
     const html = renderToStaticMarkup(
       <BangDayDu
+        sheetLock={null}
         duLieu={bang()}
         thuGon={new Set(["A"])}
         datThuGon={() => {}}
@@ -728,6 +732,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
   function veNoiDung(coXacNhan: boolean, danhSach: finance_danhSachDotRa = DOT): string {
     return renderToStaticMarkup(
       <NoiDungHopDot
+        closes={[]}
+        sheetYear={2026}
         method="entries"
         cot={COT_SO}
         donVi={DON_VI}
@@ -749,6 +755,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
   it("tiêu đề VIẾT HOA, câu mô tả nguyên văn §5, và câu điều kiện 'Cộng theo đợt'", () => {
     const html = renderToStaticMarkup(
       <HopDotThuChi
+        closes={[]}
+        sheetYear={2026}
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
         method="manual"
@@ -771,6 +779,8 @@ describe("hộp các đợt thu, chi (§5)", () => {
   it("thiếu `budget.update`: không có biểu mẫu ghi đợt", () => {
     const html = renderToStaticMarkup(
       <HopDotThuChi
+        closes={[]}
+        sheetYear={2026}
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
         method="entries"
@@ -1037,6 +1047,7 @@ describe("lập bảng — cột `%` chọn tử số và mẫu số", () => {
 function veBangJSX() {
   return (
     <BangDayDu
+      sheetLock={null}
       duLieu={bang()}
       thuGon={new Set()}
       datThuGon={() => {}}
