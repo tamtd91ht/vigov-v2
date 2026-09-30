@@ -62,6 +62,10 @@ type ghiDanhBaGia struct {
 	congKhai   app.YeuCauCongKhai
 	lyDoXoa    string
 
+	// bulkItems is what PublishMany was handed; bulkOutcomes is what it returns.
+	bulkItems    []app.BulkPublishItem
+	bulkOutcomes []app.BulkPublishOutcome
+
 	kq  domain.CanBoTomTat
 	loi error
 }
@@ -118,6 +122,15 @@ func (g *ghiDanhBaGia) DatCongKhai(ctx context.Context, id string, yc app.YeuCau
 	g.ghiNhan(ctx, nguoi)
 	g.idCuoi, g.congKhai = id, yc
 	return g.kq, g.loi
+}
+
+func (g *ghiDanhBaGia) PublishMany(ctx context.Context, items []app.BulkPublishItem, nguoi app.NguoiThucHien) ([]app.BulkPublishOutcome, error) {
+	g.ghiNhan(ctx, nguoi)
+	g.bulkItems = items
+	if g.loi != nil {
+		return nil, g.loi
+	}
+	return g.bulkOutcomes, nil
 }
 
 func (g *ghiDanhBaGia) Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error {

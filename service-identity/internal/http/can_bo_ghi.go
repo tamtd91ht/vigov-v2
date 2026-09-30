@@ -13,6 +13,7 @@ package http
 //	DELETE /api/v1/staff/{id}/lockout      they are back
 //	PUT    /api/v1/staff/{id}/role         move them to a role (#13, #14)
 //	PUT    /api/v1/staff/{id}/publication  the Mini App directory (#12), `content.update`
+//	POST   /api/v1/staff/publications      the same, for many people at once — staff_bulk_publication.go
 //	DELETE /api/v1/staff/{id}              soft-delete a DUPLICATED row (#10), `admin.user.delete`
 //
 // WHY THE SPLIT COSTS THE WEB A SECOND REQUEST AND IS STILL RIGHT. The customer settled on
@@ -502,6 +503,8 @@ func laLoiDauVaoCanBo(err error) bool {
 		domain.ErrIDThamChieuQuaDai,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
 		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+		domain.ErrBulkPublicationEmpty, domain.ErrBulkPublicationTooLarge,
+		domain.ErrBulkPublicationMissingID, domain.ErrBulkPublicationDuplicateID,
 	} {
 		if errors.Is(err, mot) {
 			return true

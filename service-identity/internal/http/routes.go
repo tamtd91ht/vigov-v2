@@ -169,6 +169,10 @@ type (
 		// is a use case over the same row with the same transaction-plus-audit shape; guarded by a
 		// DIFFERENT permission (`content.update`) at the route.
 		DatCongKhai(ctx context.Context, id string, yc app.YeuCauCongKhai, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		// PublishMany — the bulk form (user decision 2026-09-30, option A): each item carries its
+		// own consent confirmation and runs through DatCongKhai's own per-person body, all in one
+		// transaction. Same key, `content.update`.
+		PublishMany(ctx context.Context, items []app.BulkPublishItem, nguoi app.NguoiThucHien) ([]app.BulkPublishOutcome, error)
 		Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
 	}
 
@@ -1161,8 +1165,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// OPEN QUESTION #12 (decided 2026-09-22; lean consent form and this route's shape decided by the
 	// user on 2026-09-24): putting a personal mobile on a public channel is publication of personal
-	// data under Decree 13/2023/NĐ-CP. PER PERSON, never bulk — one {id} per request, and there is no
-	// list form. Publishing REQUIRES `consent_confirmed: true` in the body; the server records WHEN
+	// data under Decree 13/2023/NĐ-CP. PER PERSON — one {id} per request; the bulk form below
+	// (POST /api/v1/staff/publications) is still per person, one confirmation per row. Publishing REQUIRES `consent_confirmed: true` in the body; the server records WHEN
 	// and WHO (the recorder's staff code, never an internal id). Unpublishing clears both marks in
 	// the same UPDATE, so publishing again later asks again. Every change is one audit entry in the
 	// same transaction.
@@ -1200,6 +1204,48 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("PUT mang trạng thái tuyệt đối: công khai người đã công khai (giữ nguyên dấu đồng ý gốc) hay thôi công khai người chưa công khai thì use case không ghi gì, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết")(
 				http.HandlerFunc(h.DatCongKhaiCanBo))))
+
+	// Publishing MANY people to the Zalo Mini App directory. POST /api/v1/staff/publications
+	//
+	// USER DECISION 2026-09-30, OPTION A: the administrator selects several people and ticks, PER
+	// ROW, "đã hỏi ý và người này đồng ý". Only rows ticked IN THIS REQUEST are turned on; #12's
+	// CHECK (migration 0010:220-229 — an unpublished row carries no consent marks) is untouched,
+	// because no consent is taken from the row: it arrives with the request, like the single route.
+	//
+	// PARTIAL, WITH A RESULT PER ROW (the user asked for "skip and list"): 200 whenever the request
+	// is well-formed, each item answered `published` or `skipped` + reason_code —
+	// consent_required · staff_locked · staff_not_found, the same codes the single route answers.
+	// The APPLIED SET is atomic: one transaction, one audit entry per person whose state changed; a
+	// store or audit failure rolls back every row and answers 500.
+	//
+	// 400 FOR THE REQUEST AS A WHOLE: no items, more than domain.MaxBulkPublication (200 — the staff
+	// import's ceiling, the whole register of the largest commune), an empty or duplicated id, or a
+	// negative display_order. Nothing is written.
+	//
+	// `content.update`, THE SINGLE ROUTE'S KEY (migration 0001:293) — the bulk form is the same
+	// authority exercised several times, not a new one.
+	//
+	// display_order ABSENT LEAVES the current position — unlike the PUT, which carries the whole
+	// state. Bulk "turn these on" must not silently wipe the order of people already published.
+	//
+	// idem.Required(idem.MoKhiHong). A retry with the same key within the TTL is answered
+	// `{"replayed":true}` with NO per-row list (core/idem never stores a body): the screen reloads
+	// the register. MoKhiHong AND NOT DongKhiHong because a duplicate is HARMLESS here — re-publishing
+	// somebody already published writes nothing and audits nothing (applyPublicationInTx) — so
+	// refusing the administrator while a cache is down would buy nothing.
+	//
+	// @summary  Công khai nhiều cán bộ lên danh bạ Zalo Mini App trong một lần — mỗi dòng phải xác nhận đã được người đó đồng ý; dòng không đủ điều kiện được bỏ qua và nêu lý do
+	// @screen   12-danh-ba-can-bo §9.4
+	// @request  bulkPublicationIn
+	// @reply    200 bulkPublicationOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/publications",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.PublishStaffBulk))))
 
 	// Removing a DUPLICATED directory row. DELETE /api/v1/staff/{id}
 	//

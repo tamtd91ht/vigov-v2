@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -728,6 +729,12 @@ type YeuCauCongKhai struct {
 	CongKhai       bool
 	DaXacNhanDongY bool
 	ThuTu          *int
+
+	// keepOrderWhenNil turns "nil ThuTu" from "clear the position" (PUT, the whole state) into
+	// "leave the position alone". Set ONLY by PublishMany: a bulk "turn these people on" that
+	// silently wiped the hand-set order of everyone already published would be a second act
+	// nobody asked for. Unexported, so no handler can set it.
+	keepOrderWhenNil bool
 }
 
 // DatCongKhai publishes one person to the public Zalo Mini App directory, or takes them off it,
@@ -735,8 +742,10 @@ type YeuCauCongKhai struct {
 //
 // WHAT #12 DECIDED, AND WHERE EACH PART IS ENFORCED:
 //
-//	PER PERSON, NEVER BULK       the signature takes one id. There is no list form.
-//	RECORDED CONSENT             publishing without DaXacNhanDongY is refused BEFORE the
+//	PER PERSON                   the signature takes one id. The bulk form (PublishMany, user
+//	                             decision 2026-09-30) is still per person: each item carries its
+//	                             own confirmation and runs through applyPublicationInTx below.
+//	RECORDED CONSENT            publishing without DaXacNhanDongY is refused BEFORE the
 //	                             transaction opens. The marks written are WHEN (this service's
 //	                             clock) and WHO (nguoi.Vet.ID — the STAFF CODE, rule 6 invariant 8;
 //	                             an empty one is refused by hopLe, never replaced by the internal id).
@@ -773,54 +782,185 @@ func (uc *DanhBaCanBo) DatCongKhai(ctx context.Context, id string, yc YeuCauCong
 
 	var sau domain.CanBoTomTat
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		truoc, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		// A LOCKED PERSON IS NOT PUBLISHED (2026-09-30). Checked on the row read FOR UPDATE, so a lock
-		// landing a moment earlier cannot slip between the check and the write. EVERY published:true
-		// request is refused, including a repeat on a row that is somehow still published while
-		// locked (a row locked before 734e080): answering "OK" there would confirm a publication the
-		// owner ruled out. published:false is the way such a row is cleared.
-		if yc.CongKhai && !truoc.DangHoatDong {
-			return ErrStaffLocked
-		}
-
-		sau = truoc
-		sau.ThuTuDanhBa = saoChepSo(yc.ThuTu)
-		switch {
-		case yc.CongKhai && !truoc.HienTrenMiniApp:
-			luc := uc.bayGio()
-			sau.HienTrenMiniApp = true
-			sau.DongYCongKhaiLuc = &luc
-			sau.DongYCongKhaiGhiBoi = nguoi.Vet.ID
-		case !yc.CongKhai:
-			sau.HienTrenMiniApp = false
-			sau.DongYCongKhaiLuc = nil
-			sau.DongYCongKhaiGhiBoi = ""
-		}
-
-		hanhVi := hanhViCongKhai(truoc, sau)
-		if hanhVi == "" {
-			return nil // nothing moved: no UPDATE, no entry
-		}
-		if err := uc.kho.DatCongKhai(ctx, tx, sau); err != nil {
-			return err
-		}
-		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi.Vet,
-			Action:  hanhVi,
-			Subject: truoc.Ma,
-			Delta: deltaCanBo(map[string]any{
-				"truoc": tomTatCongKhai(truoc),
-				"sau":   tomTatCongKhai(sau),
-			}),
-		})
+		var err error
+		sau, err = uc.applyPublicationInTx(ctx, tx, id, yc, nguoi)
+		return err
 	})
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
 	return sau, nil
+}
+
+// applyPublicationInTx is the per-person half of DatCongKhai, run INSIDE a transaction the caller
+// opened: read the row FOR UPDATE, refuse a locked person, compute the new state, write it and its
+// audit entry — or write nothing when nothing moved. The consent gate is NOT here: both callers
+// apply it before the transaction opens, so a refusal holds no row lock.
+//
+// ONE BODY FOR THE SINGLE ROUTE AND THE BULK ROUTE, so the two cannot drift: a rule added to one
+// and forgotten on the other would be a way around it.
+func (uc *DanhBaCanBo) applyPublicationInTx(ctx context.Context, tx *store.ScopedTx, id string,
+	yc YeuCauCongKhai, nguoi NguoiThucHien) (domain.CanBoTomTat, error) {
+
+	truoc, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	// A LOCKED PERSON IS NOT PUBLISHED (2026-09-30). Checked on the row read FOR UPDATE, so a lock
+	// landing a moment earlier cannot slip between the check and the write. EVERY published:true
+	// request is refused, including a repeat on a row that is somehow still published while
+	// locked (a row locked before 734e080): answering "OK" there would confirm a publication the
+	// owner ruled out. published:false is the way such a row is cleared.
+	if yc.CongKhai && !truoc.DangHoatDong {
+		return domain.CanBoTomTat{}, ErrStaffLocked
+	}
+
+	thuTu := yc.ThuTu
+	if thuTu == nil && yc.keepOrderWhenNil {
+		thuTu = truoc.ThuTuDanhBa
+	}
+	sau := truoc
+	sau.ThuTuDanhBa = saoChepSo(thuTu)
+	switch {
+	case yc.CongKhai && !truoc.HienTrenMiniApp:
+		luc := uc.bayGio()
+		sau.HienTrenMiniApp = true
+		sau.DongYCongKhaiLuc = &luc
+		sau.DongYCongKhaiGhiBoi = nguoi.Vet.ID
+	case !yc.CongKhai:
+		sau.HienTrenMiniApp = false
+		sau.DongYCongKhaiLuc = nil
+		sau.DongYCongKhaiGhiBoi = ""
+	}
+
+	hanhVi := hanhViCongKhai(truoc, sau)
+	if hanhVi == "" {
+		return sau, nil // nothing moved: no UPDATE, no entry
+	}
+	if err := uc.kho.DatCongKhai(ctx, tx, sau); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	if err := audit.Write(ctx, tx, audit.Entry{
+		Actor:   nguoi.Vet,
+		Action:  hanhVi,
+		Subject: truoc.Ma,
+		Delta: deltaCanBo(map[string]any{
+			"truoc": tomTatCongKhai(truoc),
+			"sau":   tomTatCongKhai(sau),
+		}),
+	}); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	return sau, nil
+}
+
+// BulkPublishItem is one row of POST /api/v1/staff/publications.
+//
+//	ID                the person, as the single route's {id}.
+//	ConsentConfirmed  the administrator confirms, FOR THIS ROW IN THIS REQUEST, "đã hỏi ý và
+//	                  người này đồng ý". false = the row is skipped, never published.
+//	DisplayOrder      explicit position; nil = LEAVE the current position (see keepOrderWhenNil).
+type BulkPublishItem struct {
+	ID               string
+	ConsentConfirmed bool
+	DisplayOrder     *int
+}
+
+// BulkPublishOutcome is what happened to one item, in the order the request listed them.
+//
+// Published true: the person is on the Mini App after this request — freshly, or already was.
+// Published false: Refusal says why, and is ALWAYS one of three sentinels — ErrChuaXacNhanDongY,
+// ErrStaffLocked, idstore.ErrCanBoKhongTonTai. Any other failure aborts the whole request instead
+// of landing here.
+type BulkPublishOutcome struct {
+	ID        string
+	Published bool
+	Refusal   error
+}
+
+// PublishMany turns many people ON in the Mini App directory in ONE transaction — user decision
+// 2026-09-30, option A.
+//
+// PARTIAL, NOT ALL-OR-NOTHING — the user asked for "skip and list": an unconfirmed row, a locked
+// person or an unknown id is SKIPPED and reported, and the rest are applied. What is atomic is the
+// APPLIED SET: every write and every audit entry share one transaction, so a failure of the store
+// or of one audit write rolls back every person in the request and the caller gets an error, not a
+// list claiming some of them were published (rule 6 invariant 3, rule 2's "never half-processed").
+//
+// EVERY ITEM GOES THROUGH applyPublicationInTx, the single route's own body — same lock refusal,
+// same consent marks, same "already published keeps the original marks", one audit entry per
+// person whose state changed and none for a person whose state did not.
+//
+// A MALFORMED REQUEST AS A WHOLE (empty, over the cap, a duplicate or empty id, a bad
+// display_order) is refused before anything opens — that is a client bug, not a row to skip.
+//
+// ROWS ARE LOCKED IN ID ORDER, not request order. Two administrators publishing overlapping sets
+// in different orders would otherwise each hold a row the other is waiting for, and PostgreSQL
+// would kill one of them as a deadlock. The outcomes are still returned in request order.
+//
+// NOT AN UNPUBLISH: taking people off stays per person (PUT .../publication), which is all the
+// user decided.
+func (uc *DanhBaCanBo) PublishMany(ctx context.Context, items []BulkPublishItem,
+	nguoi NguoiThucHien) ([]BulkPublishOutcome, error) {
+
+	if err := nguoi.hopLe(); err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	if err := domain.CheckBulkPublication(ids); err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		if err := domain.KiemTraThuTuDanhBa(it.DisplayOrder); err != nil {
+			return nil, err
+		}
+	}
+
+	outcomes := make([]BulkPublishOutcome, len(items))
+	var toApply []int
+	for i, it := range items {
+		outcomes[i].ID = it.ID
+		// #12 — THE CONSENT GATE, per row, before the transaction: exactly the single route's.
+		if !it.ConsentConfirmed {
+			outcomes[i].Refusal = ErrChuaXacNhanDongY
+			continue
+		}
+		toApply = append(toApply, i)
+	}
+	if len(toApply) == 0 {
+		return outcomes, nil // nothing confirmed: no transaction, no lock, no write
+	}
+	sort.Slice(toApply, func(a, b int) bool { return items[toApply[a]].ID < items[toApply[b]].ID })
+
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		for _, i := range toApply {
+			_, err := uc.applyPublicationInTx(ctx, tx, items[i].ID, YeuCauCongKhai{
+				CongKhai:         true,
+				DaXacNhanDongY:   true,
+				ThuTu:            items[i].DisplayOrder,
+				keepOrderWhenNil: true,
+			}, nguoi)
+			switch {
+			case err == nil:
+				outcomes[i].Published = true
+			case errors.Is(err, ErrStaffLocked), errors.Is(err, idstore.ErrCanBoKhongTonTai):
+				// A refusal about THIS ROW. Nothing was written for it (both are raised before any
+				// write), and a no-rows read does not abort a PostgreSQL transaction, so the rest
+				// of the batch continues on the same transaction.
+				outcomes[i].Refusal = err
+			default:
+				return fmt.Errorf("danh_ba_can_bo: công khai hàng loạt: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return outcomes, nil
 }
 
 // Why an AUTOMATIC unpublish happened, written into its audit delta as `ly_do_tu_dong`. Codes, not
