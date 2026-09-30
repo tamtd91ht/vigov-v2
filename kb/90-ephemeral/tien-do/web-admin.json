@@ -314,6 +314,14 @@
       "no_confirm": [],
       "tiep_theo": "Đặc tả docs/ui-ux/02-nhiem-vu.md §4.3/§5.4/§7 còn tả hai vai và sổ 13 cột — cần ghi chú trỏ ADR 0065 (knowledge-keeper). SCOPE_RELATED_NOTE 'tôi theo dõi' giữ nguyên (nay nghĩa là người thực hiện).",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "noi-dung-su-kien-video",
+      "viec": "Nội dung Mini App: ô sự kiện (bắt đầu, kết thúc, địa điểm), liên kết video, hiện 'Đăng lần đầu lúc' (ADR 0047 §6, hợp đồng comms 2ed818bd)",
+      "trang_thai": "xong",
+      "bang_chung": "9ebb928b — nhan-noi-dung.ts (localInputToInstant +07:00 cố định, validateTypeFields, thanSua chỉ trường đổi), so-noi-dung.tsx (ô theo loại, khoá Lưu), noi-dung.ts (POST theo loại, PATCH '' để xoá). vitest 150 tệp 2868/2868, check:api khớp.",
+      "tiep_theo": "Tải ảnh bìa (thay ô 'Ảnh đại diện (liên kết)') sau card comms ảnh bìa. Truyền thanh (tệp âm thanh) và Banner chưa có cột máy chủ.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

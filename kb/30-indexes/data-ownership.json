@@ -82,6 +82,13 @@
       "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:370"
     },
     {
+      "entity": "BudgetPeriodClose",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "budget_period_closes",
+      "source": "service-finance/migrations/0012_budget_period_close.sql:209"
+    },
+    {
       "entity": "BudgetSheet",
       "service": "finance",
       "scope": "tenant",
@@ -122,6 +129,13 @@
       "scope": "tenant",
       "table": "phien_cong_dan",
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:348"
+    },
+    {
+      "entity": "CommsStoredFile",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "stored_file",
+      "source": "service-comms/migrations/0011_content_item_media_and_event.sql:52"
     },
     {
       "entity": "ContentCategory",

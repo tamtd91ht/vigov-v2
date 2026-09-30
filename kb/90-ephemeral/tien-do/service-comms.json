@@ -215,8 +215,8 @@
       "id": "tin-mini-app-anh-su-kien-video",
       "viec": "Tin Mini App đầy đủ: ảnh bìa tải lên kho tệp (bản dẫn xuất public khi đăng), giờ đăng lần đầu, thời gian/địa điểm sự kiện, link video (ADR 0047 §6, G1)",
       "trang_thai": "dang_lam",
-      "bang_chung": "ac884434 — migration 0011: stored_file của comms (CommsStoredFile) + cột cover_image_file_id, published_at (khoá sau lần đăng đầu), event_starts_at/ends_at/place (chỉ su-kien), video_url (chỉ video, http(s)). go test migrations, core/migrate, tools/kb, check_khoa_duy_nhat xanh.",
-      "tiep_theo": "Card dịch vụ: tải ảnh bìa + bản dẫn xuất thumb-1280, đăng/gỡ bản public, trường mới ở tuyến cán bộ và công khai. Test PostgreSQL chưa chạy (FK giữa hai bảng phân vùng, UPDATE OF trên bảng phân vùng). Hạ tầng: cấp MinIO + ClamAV + khoá cho comms. Phiếu cũ đã đăng (published_at NULL) nếu gỡ rồi đăng lại sẽ nhận giờ đăng mới.",
+      "bang_chung": "ac884434 — migration 0011: stored_file của comms (CommsStoredFile) + cột cover_image_file_id, published_at (khoá sau lần đăng đầu), event_starts_at/ends_at/place (chỉ su-kien), video_url (chỉ video, http(s)). go test migrations, core/migrate, tools/kb, check_khoa_duy_nhat xanh. || 2ed818bd — published_at lần đầu (COALESCE), sự kiện/video theo loại, công khai tinXaRa thêm published_at, event_*, video_url. go test xanh. core/storage PutServerProduced 4081b756 sẵn cho phần ảnh bìa.",
+      "tiep_theo": "Còn phần ảnh bìa: tải lên 3 bước (khai ObjectStore + MalwareScan, netpol, comms-secrets), bản dẫn xuất thumb-1280 qua PutServerProduced (cần golang.org/x/image cho WebP + make vuln), PublishDerivative khi đăng, image_url công khai. Test PostgreSQL chưa chạy. Hạ tầng: MinIO (quyền GHI private content-source/…/comms/*) + ClamAV cho comms.",
       "menu": "noi-dung-mini-app"
     }
   ]
