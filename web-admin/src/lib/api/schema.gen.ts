@@ -653,6 +653,8 @@ export type finance_cotRa = {
   "type": string;
   "formula"?: string;
   "role"?: string;
+  "numerator_column_id": string | null;
+  "denominator_column_id": string | null;
 };
 
 export type finance_cotVao = {
@@ -660,10 +662,11 @@ export type finance_cotVao = {
   "order": number;
   /** `so` | `phan_tram` */
   "type": string;
-  /** required for `phan_tram`, refused on `so` */
   "formula"?: string;
   /** one of the six; empty for an ordinary column */
   "role"?: string;
+  "numerator_index"?: number | null;
+  "denominator_index"?: number | null;
 };
 
 export type finance_danhSachDotRa = {
@@ -697,6 +700,7 @@ export type finance_dongRa = {
   /** columnID -> đồng, or null for an empty cell */
   "values": Record<string, number | null>;
   "unavailable_reasons"?: Record<string, string>;
+  "percent_basis_points"?: Record<string, number | null>;
 };
 
 export type finance_dotRa = {

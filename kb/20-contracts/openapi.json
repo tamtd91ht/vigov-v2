@@ -24601,11 +24601,25 @@
           },
           "role": {
             "type": "string"
+          },
+          "numerator_column_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "denominator_column_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
+          "denominator_column_id",
           "id",
           "name",
+          "numerator_column_id",
           "order",
           "type"
         ],
@@ -24625,12 +24639,23 @@
             "description": "`so` | `phan_tram`"
           },
           "formula": {
-            "type": "string",
-            "description": "required for `phan_tram`, refused on `so`"
+            "type": "string"
           },
           "role": {
             "type": "string",
             "description": "one of the six; empty for an ordinary column"
+          },
+          "numerator_index": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "denominator_index": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -24752,6 +24777,16 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
+            }
+          },
+          "percent_basis_points": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
             }
           }
         },
