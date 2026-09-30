@@ -3860,6 +3860,28 @@
     {
       "service": "identity",
       "method": "POST",
+      "path": "/api/v1/staff/publications",
+      "operation_id": "identity_post_staff_publications",
+      "task_id": "b1e4e0acb2a2",
+      "summary": "Công khai nhiều cán bộ lên danh bạ Zalo Mini App trong một lần — mỗi dòng phải xác nhận đã được người đó đồng ý; dòng không đủ điều kiện được bỏ qua và nêu lý do",
+      "screen": "12-danh-ba-can-bo §9.4",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "identity.bulkPublicationIn",
+      "reply_schemas": {
+        "200": "identity.bulkPublicationOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
       "path": "/api/v1/staff/searches",
       "operation_id": "identity_post_staff_searches",
       "task_id": "828593561dd1",
@@ -5112,7 +5134,7 @@
       "path": "/api/v1/tasks/{ma}/status",
       "operation_id": "petitions_post_tasks_by_ma_status",
       "task_id": "bf5719ad43c6",
-      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt và lý do",
+      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành",
       "screen": "02-nhiem-vu §6",
       "permission_kind": "permission",
       "permission": "task.read",

@@ -1047,6 +1047,26 @@ export type identity_boPhanRa = {
   "staff_count": number;
 };
 
+export type identity_bulkPublicationIn = {
+  "items": Array<identity_bulkPublicationItemIn>;
+};
+
+export type identity_bulkPublicationItemIn = {
+  "id": string;
+  "consent_confirmed": boolean;
+  "display_order"?: number | null;
+};
+
+export type identity_bulkPublicationItemOut = {
+  "id": string;
+  "result": string;
+  "reason_code"?: string;
+};
+
+export type identity_bulkPublicationOut = {
+  "items": Array<identity_bulkPublicationItemOut>;
+};
+
 export type identity_caLamBuRa = {
   /** ULID — what a later edit would reference */
   "id": string;
@@ -6086,6 +6106,24 @@ export type identity_post_staff_imports = {
   };
 };
 
+/** POST /api/v1/staff/publications — Công khai nhiều cán bộ lên danh bạ Zalo Mini App trong một lần — mỗi dòng phải xác nhận đã được người đó đồng ý; dòng không đủ điều kiện được bỏ qua và nêu lý do */
+export type identity_post_staff_publications = {
+  duongDan: "/api/v1/staff/publications";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_bulkPublicationIn;
+  phanHoi: {
+    200: identity_bulkPublicationOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/staff/searches — Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL */
 export type identity_post_staff_searches = {
   duongDan: "/api/v1/staff/searches";
@@ -7257,7 +7295,7 @@ export type petitions_post_tasks_by_ma_log_entries = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt và lý do */
+/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành */
 export type petitions_post_tasks_by_ma_status = {
   duongDan: "/api/v1/tasks/{ma}/status";
   phuongThuc: "POST";
