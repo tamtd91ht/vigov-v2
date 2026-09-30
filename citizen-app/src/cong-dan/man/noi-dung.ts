@@ -4,6 +4,8 @@
  * Người đọc là công dân, thường lớn tuổi, thường đang bực vì chính việc họ báo (`skills/
  * accessibility-elderly`): câu ngắn, một ý, không viết tắt, không mã lỗi, luôn nói việc cần làm tiếp.
  */
+import type { ZaloFailure } from "../api/mo-phien-vigov";
+
 import type { SceneLocationWords } from "./scene-location";
 import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
 
@@ -130,6 +132,10 @@ export const SEND_LOCATION_WORDS: SceneLocationWords = {
   locating: "Đang lấy vị trí…",
   why: "Để cán bộ xã tìm đúng nơi xảy ra sự việc. Zalo sẽ hỏi bạn có đồng ý chia sẻ vị trí không. Vị trí chỉ tới xã khi bạn gửi phản ánh.",
   found: (coordinates) => `Đã lấy vị trí hiện tại (${coordinates}). Bạn vẫn nên ghi rõ nơi xảy ra ở ô trên.`,
+  zalo_failed: (zalo, transient) =>
+    transient
+      ? `${zalo} Hãy chờ một lát rồi bấm lại nút, hoặc ghi rõ nơi xảy ra ở ô trên.`
+      : `${zalo} Bạn vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.`,
   failures: {
     "tu-choi": "Bạn chưa đồng ý chia sẻ vị trí. Bạn vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.",
     "ngoai-zalo": "Chỉ lấy được vị trí khi mở ứng dụng trong Zalo. Hãy ghi rõ nơi xảy ra ở ô trên.",
@@ -238,7 +244,51 @@ export const PHONE_VERIFICATION = {
   other_commune: (task: string) =>
     `Ứng dụng chưa mở lại được phiên làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đóng ứng dụng rồi quét lại mã QR của xã.`,
   draft_kept: "Nội dung bạn đã viết vẫn còn nguyên.",
+  /** Zalo refused a step with a code (`zaloFailureSentence`). Only a "try again later" code invites a retry. */
+  zalo_failed: (zalo: string, task: string, transient: boolean) =>
+    transient
+      ? `${zalo} Vì vậy ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`
+      : `${zalo} Vì vậy ${task}. Bạn vẫn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * ZALO TỪ CHỐI MỘT LỜI GỌI MÀ NGƯỜI DÂN KHÔNG TỪ CHỐI — câu có MÃ LỖI (quyết định của người dùng
+ * 30/09/2026: bản thử là bản thật; quyền Zalo nào chưa được cấp cho ứng dụng thì phải hiện ra đúng như
+ * vậy, kèm mã Zalo trả về, để người thử thấy thiếu gì thay vì một vòng "thử lại").
+ *
+ * ĐÂY LÀ NGOẠI LỆ CÓ CHỦ ĐÍCH của "không câu nào nhắc mã lỗi" ở các khối trên: mã là thứ DUY NHẤT nói
+ * được quyền nào đang thiếu, và nó là số Zalo trả, không phải mã của ứng dụng. Câu vẫn nói việc làm tiếp
+ * (phần sau của mỗi câu ghép do màn hình thêm vào).
+ *
+ * KHÔNG CÓ BẢNG NGHĨA MÃ. Chỉ hai loại: mã mà chính SDK gọi là "thử lại sau" (`transient`, xem
+ * `features/tinh-nang/zalo-api.ts` `TRANSIENT_CODES`) và mọi mã còn lại. Một ngoại lệ dẫn được nguồn:
+ * `node_modules/zmp-sdk/index.d.ts:3213` ghi `-1401` của lời gọi lấy tên là "người dùng từ chối cung cấp
+ * tên" — nên câu của đúng ca ấy nói CẢ HAI khả năng, không mắng người vừa bấm từ chối.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const ZALO_FAILURE = {
+  what: {
+    "access-token": "lấy mã phiên đăng nhập Zalo",
+    phone: "lấy số điện thoại",
+    location: "lấy vị trí",
+    name: "lấy tên Zalo",
+  },
+  transient: (what: string, code: number) => `Zalo chưa trả lời khi ứng dụng ${what} (mã lỗi ${code}).`,
+  not_allowed: (what: string, code: number) =>
+    `Zalo chưa cho phép ứng dụng ${what} (mã lỗi ${code}). Đây không phải lỗi mạng: bấm lại ngay cũng không khác.`,
+  name_declined_or_not_allowed: (code: number) =>
+    `Bà con chưa đồng ý cho ứng dụng dùng tên Zalo, hoặc Zalo chưa cho phép ứng dụng lấy tên (mã lỗi ${code}).`,
+} as const;
+
+/** Mã `-1401` của lời gọi lấy tên — `zmp-sdk/index.d.ts:3213`: người dùng từ chối cung cấp tên. */
+const NAME_DECLINED_CODE = -1401;
+
+/** The first sentence(s) for a Zalo refusal: which capability, and Zalo's own code. The screen adds what to do. */
+export function zaloFailureSentence(f: ZaloFailure): string {
+  if (f.capability === "name" && f.code === NAME_DECLINED_CODE) return ZALO_FAILURE.name_declined_or_not_allowed(f.code);
+  const what = ZALO_FAILURE.what[f.capability];
+  return f.transient ? ZALO_FAILURE.transient(what, f.code) : ZALO_FAILURE.not_allowed(what, f.code);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * APP RIÊNG CỦA XÃ — MỞ PHIÊN Ở VIỆC CÁ NHÂN ĐẦU TIÊN (`commune-session.ts`)
@@ -442,6 +492,16 @@ export const XAC_NHAN_XA = {
     "Chưa mở được kênh làm việc với xã vì mạng yếu hoặc hệ thống đang bận. Hãy kiểm tra mạng rồi bấm “Đúng, tiếp tục” lần nữa.",
 } as const;
 
+/**
+ * Zalo refused the session code with a code (`zaloFailureSentence`) — the ONE sentence of the confirmation
+ * step that carries a code, so it stands outside `XAC_NHAN_XA`, whose sentences are checked to carry none
+ * (`cong-khai.test.tsx`). The code is Zalo's, and it is what says which permission is missing.
+ */
+export const confirmCommuneZaloFailed = (zalo: string, transient: boolean): string =>
+  transient
+    ? `${zalo} Vì vậy chưa mở được kênh làm việc với xã. Hãy chờ một lát rồi bấm “Đúng, tiếp tục” lần nữa.`
+    : `${zalo} Vì vậy chưa mở được kênh làm việc với xã. Bạn vẫn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`;
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * APP RIÊNG CỦA XÃ (`--vao-thang`, ADR 0047 §6) — không màn giới thiệu, không QR, không nút xác nhận
  *
@@ -626,6 +686,8 @@ export const XA_TN = {
   name_card_agree: "Đồng ý",
   name_card_decline: "Không, tôi sẽ tự gõ tên",
   name_card_asking: "Đang chờ bà con trả lời Zalo…",
+  /** Zalo refused the name with a code (`zaloFailureSentence`). Not asked again in this open — no retry. */
+  name_zalo_failed: (zalo: string) => `${zalo} Bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.`,
   chua_co_ten: "Chưa xác định",
   loc_loai_tin: "Lọc tin theo loại",
   /** A type chip, or the Sự kiện tile, with nothing published of that type. */
@@ -645,6 +707,10 @@ export const XA_TN = {
   location_rate_limited:
     "Bà con đã thử lấy vị trí nhiều lần. Bà con chờ vài phút rồi bấm lại, hoặc ghi rõ nơi xảy ra ở ô trên.",
   vi_tri_khong_lay_duoc: "Chưa lấy được vị trí. Bà con bấm lại nút, hoặc ghi rõ nơi xảy ra ở ô trên.",
+  location_zalo_failed: (zalo: string, transient: boolean) =>
+    transient
+      ? `${zalo} Bà con chờ một lát rồi bấm lại nút, hoặc ghi rõ nơi xảy ra ở ô trên.`
+      : `${zalo} Bà con vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.`,
   location_unavailable: "Ứng dụng tạm thời chưa lấy được vị trí. Bà con hãy ghi rõ nơi xảy ra ở ô trên.",
   hoi_huy_tieu_de: "Huỷ gửi phản ánh?",
   hoi_huy_cau: "Nội dung bà con đã nhập sẽ không được lưu lại.",

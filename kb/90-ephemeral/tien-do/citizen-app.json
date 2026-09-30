@@ -281,6 +281,15 @@
       "no_confirm": [],
       "tiep_theo": "W6 XONG phần mã. Còn: (1) thử trên máy thật — mở phiên, gửi phiếu có field, thấy trong web-admin; cùng số thấy phiếu từ app chính; /location hết 502; tắt lĩnh vực giữa chừng; bố cục màn cổng và ô lĩnh vực; (2) icon lĩnh vực: platform gửi tên lucide, app chỉ có 4 hình khớp — cần thêm lucide hoặc chép SVG; (3) giả định ghép 'Trưởng thôn …' cần đối chiếu tên thôn thật; (4) câu chính sách riêng tư cho appId (pháp lý); (5) bắt buộc field ở máy chủ khi app chung cũng gửi.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "bao-dung-loi-quyen-zalo",
+      "viec": "Quyền Zalo chưa cấp hiện đúng tên quyền và mã lỗi thật của SDK, thay vòng 'thử lại' chung chung (bản test là bản thật)",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: zalo-api.ts xin(capability) mang SdkFailure {capability, code, transient}; -201 giữ 'từ chối'; chỉ -2000/-1408/-1409/-1410 là tạm thời (node_modules/zmp-sdk/apis/constants.js); lỗi không có mã không bịa mã; message SDK không đi ra màn hình. Câu mới ở noi-dung.ts (ZALO_FAILURE, PHONE_VERIFICATION.zalo_failed, confirmCommuneZaloFailed, vị trí, tên). tsc sạch; vitest 44 tệp / 1181 ca xanh (3 tệp test mới, 50 ca); check:api exit 0.",
+      "no_confirm": [],
+      "tiep_theo": "ĐO TRÊN MÁY THẬT: (1) -201 có thật là mã từ chối của getPhoneNumber/getLocation không — SDK còn USER_DENIED -2002 và UNAUTHORIZED -1401 (index.d.ts:3213 ghi -1401 là từ chối tên); nếu từ chối thật về -2002/-1401 thì người bấm 'Từ chối' sẽ thấy câu 'Zalo chưa cho phép'. (2) XUNG ĐỘT cần người dùng chốt: skills/accessibility-elderly REQUIRED #5 'không bao giờ hiện mã lỗi' ↔ người dùng 30/09 'chỗ nào cần quyền thì báo lỗi' — bản dựng hiện mã lỗi cho mọi người dân vì bản test là bản phát hành. (3) Màn thương mại khung.tsx:135 chưa dùng failure.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

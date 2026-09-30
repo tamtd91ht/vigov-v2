@@ -11,7 +11,14 @@
  *   thương mại và phiên ViGov là hai phiên do hai hệ thống ký (ADR 0032).
  */
 // vi-name-ok: importing two EXISTING names (`MaDangNhap`, `xinMaDangNhap`) from zalo-api.ts — no new name
-import { type KetQuaXin, type MaDangNhap, readRuntimeAppId, xinMaDangNhap, xinMaTruyCap } from "../tinh-nang/zalo-api";
+import {
+  type KetQuaXin,
+  type MaDangNhap,
+  readRuntimeAppId,
+  type SdkFailure,
+  xinMaDangNhap,
+  xinMaTruyCap,
+} from "../tinh-nang/zalo-api";
 
 import {
   type CommuneAppBridgeResult,
@@ -22,8 +29,22 @@ import {
 } from "./goi-may-chu";
 import type { BridgeRequestWithPhone, CommuneAppSessionRequest, YeuCauCauViGov } from "./hop-dong";
 
+/**
+ * No code from Zalo. `failure` is what the SDK answered (capability + code) when it threw one; absent
+ * when there was nothing to measure — an empty code (the platform's answer in a development environment)
+ * or a throw without a code. Never a code of our own invention.
+ */
+export type NoCodeResult = { kieu: "khong-lay-duoc-ma"; failure?: SdkFailure };
+
+/** The measured failure of a Zalo step, or nothing — so a caller cannot copy a field that is not there. */
+export function noCode(result: KetQuaXin<unknown>): NoCodeResult {
+  return result.kieu === "khong-lay-duoc" && result.failure !== undefined
+    ? { kieu: "khong-lay-duoc-ma", failure: result.failure }
+    : { kieu: "khong-lay-duoc-ma" };
+}
+
 /** Thêm hai nhánh của bước lấy mã Zalo vào các nhánh của lời gọi cầu. */
-export type KetQuaMoPhienQuaCau = KetQuaCauViGov | { kieu: "ngoai-zalo" } | { kieu: "khong-lay-duoc-ma" };
+export type KetQuaMoPhienQuaCau = KetQuaCauViGov | { kieu: "ngoai-zalo" } | NoCodeResult;
 
 /**
  * Lấy access token rồi gọi cầu. `lay_ma` / `goi_cau` chỉ để phép kiểm thay hai mảnh — mã sản phẩm
@@ -36,7 +57,7 @@ export async function moPhienCongDanQuaCau(
 ): Promise<KetQuaMoPhienQuaCau> {
   const ma = await lay_ma();
   if (ma.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
-  if (ma.kieu !== "xong" || ma.du_lieu === "") return { kieu: "khong-lay-duoc-ma" };
+  if (ma.kieu !== "xong" || ma.du_lieu === "") return noCode(ma);
   return goi_cau({ ma_truy_cap: ma.du_lieu, ten_mien_xa });
 }
 
@@ -67,7 +88,7 @@ export async function reopenCitizenSessionWithPhone(
   if (ma.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
   if (ma.kieu === "tu-choi") return { kieu: "tu-choi" };
   if (ma.kieu !== "xong" || ma.du_lieu.ma_truy_cap === "" || ma.du_lieu.ma_so_dien_thoai === "") {
-    return { kieu: "khong-lay-duoc-ma" };
+    return noCode(ma);
   }
   return goi_cau({
     ma_truy_cap: ma.du_lieu.ma_truy_cap,
@@ -82,7 +103,7 @@ export type CommuneAppLoginResult =
   | { kieu: "khong-ro-app" }
   | { kieu: "ngoai-zalo" }
   | { kieu: "tu-choi" }
-  | { kieu: "khong-lay-duoc-ma" };
+  | NoCodeResult;
 
 /**
  * MỞ PHIÊN CÔNG DÂN ViGov TỪ APP RIÊNG CỦA MỘT XÃ — App ID lúc chạy + `getAccessToken` + `getPhoneNumber`
@@ -114,7 +135,7 @@ export async function openCommuneAppSessionWithPhone(
   if (codes.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
   if (codes.kieu === "tu-choi") return { kieu: "tu-choi" };
   if (codes.kieu !== "xong" || codes.du_lieu.ma_truy_cap === "" || codes.du_lieu.ma_so_dien_thoai === "") {
-    return { kieu: "khong-lay-duoc-ma" };
+    return noCode(codes);
   }
   return call({
     ma_truy_cap: codes.du_lieu.ma_truy_cap,

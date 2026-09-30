@@ -24,7 +24,7 @@ import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type KetQuaXacNhan, type MoPhienViGov, moPhienSauXacNhan } from "../api/mo-phien-vigov";
 
-import { XAC_NHAN_XA } from "./noi-dung";
+import { confirmCommuneZaloFailed, XAC_NHAN_XA, zaloFailureSentence } from "./noi-dung";
 import { GoiYXaScreen, phanGiaiGoiY, type XaGoiY } from "../../features/kham-pha";
 
 /** Trạng thái của màn, THUẦN — test dựng thẳng từng bước mà không cần DOM. */
@@ -82,7 +82,17 @@ export function buocSauMoPhien(xa: XaGoiY, kq: KetQuaXacNhan): Buoc {
     case "da-mo":
       return { ket_thuc: { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: kq.ten_mien } };
     case "thu-lai":
-      return { trang: { kieu: "hoi", xa, cau_loi: XAC_NHAN_XA.thu_lai } };
+      // Zalo refused the session code with a code: say which, and whether pressing again can help.
+      return {
+        trang: {
+          kieu: "hoi",
+          xa,
+          cau_loi:
+            kq.zalo === undefined
+              ? XAC_NHAN_XA.thu_lai
+              : confirmCommuneZaloFailed(zaloFailureSentence(kq.zalo), kq.zalo.transient),
+        },
+      };
     case "ngoai-zalo":
     case "chua-mo":
       return { ket_thuc: { kieu: "xac-nhan-khong-phien", xa } };

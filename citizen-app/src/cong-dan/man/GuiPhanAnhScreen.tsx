@@ -14,9 +14,10 @@
  *
  * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ BIỂU MẪU và KHÔNG GỌI MẠNG (`api/phien-vigov.ts`). The session
  * bridge exists end to end — `vihat-miniapp` opens a ViGov citizen session for a login carrying
- * `communeHostHint` and forwards `vigovSession`, which `api/mo-phien-vigov.ts` records — but in practice
- * the session is still empty: its Zalo account-id step always refuses (`vihat-miniapp`
- * `internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) and the bridge answers 503.
+ * `communeHostHint` and forwards `vigovSession`, which `api/mo-phien-vigov.ts` records. Its Zalo
+ * account-id step is, since `vihat-miniapp` 4114f00, a real call (`LayMaTaiKhoan`, `GET
+ * graph.zalo.me/v2.0/me?fields=id`, `internal/zalo/ma_tai_khoan.go`) — not yet measured against real
+ * Zalo, so whether a session is issued on a real phone is still unknown.
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
@@ -43,6 +44,7 @@ import {
   type SceneLocationFailure,
   useSceneLocation,
 } from "./scene-location";
+import type { ZaloFailure } from "../api/mo-phien-vigov";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const PHAN_ANH_TRONG: PhanAnhMoi = {
@@ -96,6 +98,8 @@ export const ID_DAU_BUOC = {
 export type InputStepLocation = {
   locating: boolean;
   failure: SceneLocationFailure | null;
+  /** Zalo's refusal of the last tap, with its code (`scene-location.tsx`). */
+  zalo?: ZaloFailure | null;
   onLocate: () => void;
 } | null;
 
@@ -140,6 +144,7 @@ export function BuocNhap(props: {
           locating={location.locating}
           location={pa.scene_location ?? null}
           failure={location.failure}
+          zalo={location.zalo ?? null}
           onLocate={location.onLocate}
         />
       )}
@@ -328,7 +333,7 @@ export function GuiPhanAnhScreen({
    */
   getSceneLocation?: GetSceneLocation;
 }) {
-  // Đọc một lần lúc dựng. `null` until the bridge issues a session (in practice still, see the header). Mở lại phiên kèm số không đổi
+  // Đọc một lần lúc dựng. `null` until the bridge issues a session (see the header). Mở lại phiên kèm số không đổi
   // TÊN XÃ (`reopenSessionWithPhone` từ chối phiên khác xã), nên bản đọc một lần này vẫn đúng.
   const [phien] = useState(layPhienViGov);
   const phone = usePhoneVerification(reopenWithPhone);
@@ -432,6 +437,7 @@ export function GuiPhanAnhScreen({
               : {
                   locating: sceneLocation.locating,
                   failure: sceneLocation.failure,
+                  zalo: sceneLocation.zalo,
                   onLocate: () => void sceneLocation.locate(),
                 }
           }

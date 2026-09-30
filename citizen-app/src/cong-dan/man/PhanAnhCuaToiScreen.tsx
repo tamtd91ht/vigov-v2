@@ -5,9 +5,9 @@
  * hay "xã nào" (`api/goi-vigov.ts` `phanAnhCuaToi`). Công dân và xã lấy từ phiên (luật 4, bất biến 2).
  *
  * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG GỌI MẠNG (`api/phien-vigov.ts`). Màn nói "kênh chưa mở" như hai màn
- * kia. In practice the session is still empty: the bridge is wired (`api/mo-phien-vigov.ts` records
- * `vigovSession`) but `vihat-miniapp`'s Zalo account-id step always refuses
- * (`internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) → 503.
+ * kia. The bridge is wired (`api/mo-phien-vigov.ts` records `vigovSession`), and since vihat-miniapp
+ * 4114f00 its Zalo account-id step is a real call (`internal/zalo/ma_tai_khoan.go:55`, GET
+ * graph.zalo.me/v2.0/me) — not yet measured against real Zalo (ADR 0045 UNKNOWN #1).
  *
  * ⚠ NÚT "XEM THÊM", KHÔNG CUỘN VÔ HẠN (`skills/accessibility-elderly`): danh sách tự dài ra khi
  * ngón tay chỉ định kéo xuống là danh sách người lớn tuổi không tìm lại được chỗ mình đang đọc.

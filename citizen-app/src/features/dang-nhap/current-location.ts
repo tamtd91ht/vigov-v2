@@ -14,6 +14,7 @@
 // vi-name-ok: importing the EXISTING result type `KetQuaXin` from zalo-api.ts — no new name
 import { type KetQuaXin, type LocationCodes, readRuntimeAppId, requestLocationCodes } from "../tinh-nang/zalo-api";
 
+import { noCode, type NoCodeResult } from "./cau-vigov";
 import { exchangeLocation, type LocationExchangeResult } from "./goi-may-chu";
 
 /** The exchange's branches plus the three of the Zalo step. */
@@ -21,7 +22,7 @@ export type CurrentLocationResult =
   | LocationExchangeResult
   | { kieu: "tu-choi" }
   | { kieu: "ngoai-zalo" }
-  | { kieu: "khong-lay-duoc-ma" };
+  | NoCodeResult;
 
 /**
  * Codes, then the exchange — right away, because the location token is single-use and lives about two
@@ -38,7 +39,7 @@ export async function getCurrentLocation(
   if (codes.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
   if (codes.kieu === "tu-choi") return { kieu: "tu-choi" };
   if (codes.kieu !== "xong" || codes.du_lieu.access_token === "" || codes.du_lieu.location_token === "") {
-    return { kieu: "khong-lay-duoc-ma" };
+    return noCode(codes);
   }
   return exchange(codes.du_lieu);
 }

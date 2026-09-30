@@ -20,10 +20,21 @@
  *
  * PURE — no React, so tests step it without a DOM (the same reason as `createPhoneVerification`).
  */
-import { type CommuneAppSessionOutcome, type OpenCommuneAppSession, openCommuneAppSession } from "../api/mo-phien-vigov";
+import {
+  type CommuneAppSessionOutcome,
+  type OpenCommuneAppSession,
+  openCommuneAppSession,
+  type ZaloFailure,
+} from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
-import { COMMUNE_APP_SESSION, PHONE_VERIFICATION, PHONE_VERIFICATION_TASK, type PhoneVerificationTask } from "./noi-dung";
+import {
+  COMMUNE_APP_SESSION,
+  PHONE_VERIFICATION,
+  PHONE_VERIFICATION_TASK,
+  type PhoneVerificationTask,
+  zaloFailureSentence,
+} from "./noi-dung";
 
 /** Outcomes that stop the act — each one sentence. */
 export type SessionGateStop = Exclude<CommuneAppSessionOutcome["kieu"], "da-mo">;
@@ -32,7 +43,8 @@ export type SessionGateStop = Exclude<CommuneAppSessionOutcome["kieu"], "da-mo">
 export type SessionGateState =
   | { readonly kieu: "hoi" }
   | { readonly kieu: "dang-mo" }
-  | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop };
+  /** `zalo` (with `thu-lai` only): Zalo refused a step with a code — the sentence names it. */
+  | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop; readonly zalo?: ZaloFailure };
 
 export type SessionGate = {
   /** A personal act wants to run. Runs it at once when a session exists; otherwise explains and waits. */
@@ -104,7 +116,11 @@ export function createSessionGate(
       } else if (outcome.kieu === "tu-choi") {
         pending = null;
       }
-      setState({ kieu: "ket-qua", outcome: outcome.kieu });
+      setState(
+        outcome.kieu === "thu-lai" && outcome.zalo !== undefined
+          ? { kieu: "ket-qua", outcome: outcome.kieu, zalo: outcome.zalo }
+          : { kieu: "ket-qua", outcome: outcome.kieu },
+      );
     },
 
     decline() {
@@ -125,9 +141,16 @@ export function sessionGateOffersRetry(outcome: SessionGateStop): boolean {
   return outcome === "thu-lai" || outcome === "cho-lat" || outcome === "tam-ngung";
 }
 
-/** The sentence for an outcome, naming what did not happen on this screen. Never a code. */
-export function sessionGateMessage(outcome: SessionGateStop, task: PhoneVerificationTask): string {
+/**
+ * The sentence for an outcome, naming what did not happen on this screen. Never a code of ours — the one
+ * code ever shown is ZALO's, when `zalo` is given (with `thu-lai`), because it is what says which Zalo
+ * permission is missing.
+ */
+export function sessionGateMessage(outcome: SessionGateStop, task: PhoneVerificationTask, zalo?: ZaloFailure): string {
   const t = PHONE_VERIFICATION_TASK[task];
+  if (outcome === "thu-lai" && zalo !== undefined) {
+    return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
+  }
   switch (outcome) {
     case "tu-choi":
       return PHONE_VERIFICATION.refused(t);

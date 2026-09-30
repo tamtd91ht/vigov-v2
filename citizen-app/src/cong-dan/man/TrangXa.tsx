@@ -55,6 +55,7 @@ import {
   XA_GIAO_DIEN,
   XA_PA,
   XA_TN,
+  zaloFailureSentence,
 } from "./noi-dung";
 import {
   CommuneSendScreen,
@@ -454,7 +455,7 @@ function SessionGateScreen(props: {
             <KhoiTrangThai
               bieu_tuong="alert"
               loi
-              cau={sessionGateMessage(state.outcome, props.task)}
+              cau={sessionGateMessage(state.outcome, props.task, state.zalo)}
               nut={sessionGateOffersRetry(state.outcome) ? { nhan: PHONE_VERIFICATION.allow, onBam: props.onAllow } : undefined}
             />
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
@@ -662,9 +663,16 @@ function AppCuaXa(props: {
   const tab = man.kieu === "tab" ? man.tab : "trang-chu";
   let than;
   if (tab === "trang-chu") {
+    // After the citizen agreed and Zalo still refused with a code, the slot says so — which capability, and
+    // Zalo's code — instead of going quiet on "Chưa xác định" (user rule 30/09/2026: a permission the App
+    // ID lacks must be SEEN). Words and not colour alone: `role="status"`, the same line as the other errors.
     const name_card =
       props.name.kind === "needs-consent" || props.name.kind === "asking" ? (
         <NameCard asking={props.name.kind === "asking"} onAgree={props.onAgreeName} onDecline={props.onDeclineName} />
+      ) : props.name.kind === "settled" && props.name.zalo !== undefined ? (
+        <p className="xa-loi-o" role="status">
+          {XA_TN.name_zalo_failed(zaloFailureSentence(props.name.zalo))}
+        </p>
       ) : null;
     than = (
       <TrangChuXa

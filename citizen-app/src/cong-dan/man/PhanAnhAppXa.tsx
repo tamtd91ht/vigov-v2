@@ -651,6 +651,7 @@ export const COMMUNE_LOCATION_WORDS: SceneLocationWords = {
   locating: XA_TN.vi_tri_dang_lay,
   why: XA_PA.vi_tri_vi_sao,
   found: XA_TN.location_found,
+  zalo_failed: XA_TN.location_zalo_failed,
   failures: {
     "tu-choi": XA_TN.vi_tri_tu_choi,
     "ngoai-zalo": XA_TN.vi_tri_ngoai_zalo,
@@ -1138,6 +1139,7 @@ export function CommuneSendScreen(props: {
                 locating={sceneLocation.locating}
                 location={location}
                 failure={sceneLocation.failure}
+                zalo={sceneLocation.zalo}
                 onLocate={() => void sceneLocation.locate()}
               />
             )}

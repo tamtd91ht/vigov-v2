@@ -152,13 +152,14 @@ export function docTraLoi(than: unknown): Phien | null {
  *   phiếu thương mại rồi gửi tới ViGov là đúng thứ ADR 0032 cấm. Và `docTraLoi` không đọc `vigovSession`:
  *   hành vi của khối đăng nhập (Tư vấn · Yêu cầu của tôi) giữ nguyên.
  *
- * ⚠ TWO WAYS THIS BODY FAILS TODAY, neither a wiring fault:
- *   · bridge NOT configured on that deployment — the old branch demands `phoneToken` and answers 400;
- *     `goi-may-chu.ts` reads it as "cầu tắt".
+ * ⚠ WHAT THIS BODY MEETS ON A DEPLOYMENT, neither case a wiring fault:
+ *   · bridge NOT configured — the old branch demands `phoneToken` and answers 400; `goi-may-chu.ts`
+ *     reads it as "cầu tắt".
  *   · bridge configured — `vihat-miniapp` routes any login carrying `communeHostHint` to ViGov's
- *     OpenCitizenSession (`internal/httpapi/sessions.go:81`), but its Zalo account-id step always
- *     refuses (`internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) → 503 "cầu tạm ngưng".
- *   Either way no `vigovSession` arrives, so the citizen session stays empty in practice.
+ *     OpenCitizenSession (`internal/httpapi/sessions.go`). Its Zalo account-id step is, since 4114f00, a
+ *     REAL call (`LayMaTaiKhoan`, `GET graph.zalo.me/v2.0/me?fields=id`, `internal/zalo/ma_tai_khoan.go`),
+ *     no longer a step that always refused with 503. Not yet measured against real Zalo: whether a
+ *     `vigovSession` arrives on a real phone is still unknown.
  *
  * ⚠ TÊN MIỀN XÃ LÀ GỢI Ý, KHÔNG PHẢI THAM CHIẾU XÃ: máy chủ ViGov phân giải nó lúc xác nhận (ADR 0047
  *   câu 3). Nó rời khỏi máy trong thân này — nói ra ở `TRUONG_GUI_DI_CAU_VIGOV` ngay dưới.

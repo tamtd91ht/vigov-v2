@@ -22,6 +22,29 @@
 import { datPhienViGov, layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
+/**
+ * WHAT ZALO ANSWERED WHEN IT REFUSED A CALL THE CITIZEN DID NOT REFUSE — carried down by every injected
+ * function of this half (session, phone, location, name), on the branch that used to say only "thử lại".
+ *
+ * WHY (user rule, 30/09/2026): the test build IS the build that ships; a Zalo permission the App ID has not
+ * been granted must show as exactly that, with the code Zalo gave, so a tester sees what is missing instead
+ * of a retry loop. The shell fills it from the SDK error (`features/tinh-nang/zalo-api.ts` `SdkFailure`);
+ * this half never meets the SDK, and never guesses a code's meaning.
+ *
+ *   `capability`  which thing was being asked for — the step that failed, not the screen
+ *   `code`        the SDK's code, verbatim; shown to the citizen as "mã lỗi <code>"
+ *   `transient`   the SDK itself calls it "try again later" (timeout, limit, unknown) — only then does the
+ *                 sentence invite waiting and pressing again as the likely fix
+ *
+ * Never carries a message from the platform, a token or anything personal: a code is a number.
+ */
+export type ZaloCapability = "access-token" | "phone" | "location" | "name";
+export type ZaloFailure = {
+  readonly capability: ZaloCapability;
+  readonly code: number;
+  readonly transient: boolean;
+};
+
 /** Thứ nửa nhà nước gửi cho hàm mở phiên. Tên trường là tên trên dây của `vihat-miniapp`. */
 export type YeuCauMoPhien = {
   readonly communeHostHint: string;
@@ -49,7 +72,8 @@ export type KetQuaMoPhien =
       readonly ten_mien: string | null;
     }
   | { readonly kieu: "chua-mo" }
-  | { readonly kieu: "thu-lai" }
+  /** `zalo`: Zalo refused a step, with its code (`ZaloFailure`). Absent = network, server, or nothing measured. */
+  | { readonly kieu: "thu-lai"; readonly zalo?: ZaloFailure }
   | { readonly kieu: "ngoai-zalo" };
 
 export type MoPhienViGov = (yc: YeuCauMoPhien) => Promise<KetQuaMoPhien>;
@@ -58,7 +82,7 @@ export type MoPhienViGov = (yc: YeuCauMoPhien) => Promise<KetQuaMoPhien>;
 export type KetQuaXacNhan =
   | { kieu: "da-mo"; ten_xa: string; ten_mien: string | null }
   | { kieu: "chua-mo" }
-  | { kieu: "thu-lai" }
+  | { kieu: "thu-lai"; zalo?: ZaloFailure }
   | { kieu: "ngoai-zalo" };
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -89,7 +113,7 @@ export type ReopenWithPhoneResult =
   /** Công dân bấm "Từ chối" trên hộp thoại của Zalo — không lời gọi cầu nào đi ra. */
   | { readonly kieu: "tu-choi" }
   | { readonly kieu: "chua-mo" }
-  | { readonly kieu: "thu-lai" }
+  | { readonly kieu: "thu-lai"; readonly zalo?: ZaloFailure }
   | { readonly kieu: "ngoai-zalo" };
 
 export type ReopenWithPhone = () => Promise<ReopenWithPhoneResult>;
@@ -108,8 +132,13 @@ export type PhoneVerificationOutcome =
   | { kieu: "khac-xa" }
   | { kieu: "tu-choi" }
   | { kieu: "chua-mo" }
-  | { kieu: "thu-lai" }
+  | { kieu: "thu-lai"; zalo?: ZaloFailure }
   | { kieu: "ngoai-zalo" };
+
+/** `thu-lai`, keeping Zalo's answer when there is one — and adding no field when there is not. */
+function withZalo(zalo: ZaloFailure | undefined): { kieu: "thu-lai"; zalo?: ZaloFailure } {
+  return zalo === undefined ? { kieu: "thu-lai" } : { kieu: "thu-lai", zalo };
+}
 
 /**
  * Gọi hàm mở lại đã tiêm, và chỉ ghi phiên mới khi nó SỬA ĐƯỢC việc: có bearer, cùng xã, đã xác thực số.
@@ -125,6 +154,7 @@ export async function reopenSessionWithPhone(reopen: ReopenWithPhone): Promise<P
   } catch {
     return { kieu: "thu-lai" };
   }
+  if (result.kieu === "thu-lai") return withZalo(result.zalo);
   if (result.kieu !== "xong") return { kieu: result.kieu };
   if (result.token === "" || result.ten_xa.trim() === "") return { kieu: "chua-mo" };
   if (result.ten_xa !== current.ten_xa) return { kieu: "khac-xa" };
@@ -146,6 +176,7 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
   } catch {
     return { kieu: "thu-lai" };
   }
+  if (kq.kieu === "thu-lai") return withZalo(kq.zalo);
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   if (kq.token === "" || kq.ten_xa.trim() === "") return { kieu: "chua-mo" };
   datPhienViGov({ token: kq.token, ten_xa: kq.ten_xa });
@@ -189,8 +220,8 @@ export type CommuneAppSessionResult =
   | { readonly kieu: "tam-ngung" }
   /** Zalo chưa trả lời, hoặc thử quá nhiều lần — chờ một lát rồi bấm lại (bấm ngay cũng hỏng y vậy). */
   | { readonly kieu: "cho-lat" }
-  /** Mạng, mã Zalo quá hạn — bấm lại ngay có thể được. */
-  | { readonly kieu: "thu-lai" }
+  /** Mạng, mã Zalo quá hạn — bấm lại ngay có thể được. `zalo`: Zalo refused a step, with its code. */
+  | { readonly kieu: "thu-lai"; readonly zalo?: ZaloFailure }
   | { readonly kieu: "ngoai-zalo" };
 
 export type OpenCommuneAppSession = () => Promise<CommuneAppSessionResult>;

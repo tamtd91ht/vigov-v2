@@ -39,4 +39,5 @@ export type {
   ReopenWithPhone,
   ReopenWithPhoneResult,
   YeuCauMoPhien,
+  ZaloFailure,
 } from "./api/mo-phien-vigov";

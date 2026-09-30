@@ -23,9 +23,14 @@
  */
 import { useRef, useState } from "react";
 
-import { type PhoneVerificationOutcome, type ReopenWithPhone, reopenSessionWithPhone } from "../api/mo-phien-vigov";
+import {
+  type PhoneVerificationOutcome,
+  type ReopenWithPhone,
+  reopenSessionWithPhone,
+  type ZaloFailure,
+} from "../api/mo-phien-vigov";
 
-import { PHONE_VERIFICATION, PHONE_VERIFICATION_TASK, type PhoneVerificationTask } from "./noi-dung";
+import { PHONE_VERIFICATION, PHONE_VERIFICATION_TASK, type PhoneVerificationTask, zaloFailureSentence } from "./noi-dung";
 
 /** Kết cục KHÔNG gọi lại được — mỗi cái một câu. */
 export type PhoneVerificationStop = Exclude<PhoneVerificationOutcome["kieu"], "da-xac-thuc">;
@@ -34,7 +39,8 @@ export type PhoneVerificationStop = Exclude<PhoneVerificationOutcome["kieu"], "d
 export type PhoneVerificationState =
   | { readonly kieu: "hoi" }
   | { readonly kieu: "dang-xac-nhan" }
-  | { readonly kieu: "ket-qua"; readonly outcome: PhoneVerificationStop };
+  /** `zalo` (with `thu-lai` only): Zalo refused a step with a code — the sentence names it. */
+  | { readonly kieu: "ket-qua"; readonly outcome: PhoneVerificationStop; readonly zalo?: ZaloFailure };
 
 export type PhoneVerification = {
   /** Một lời gọi vừa trả `can-xac-thuc-so`. `rerun` lặp lại ĐÚNG lời gọi ấy. */
@@ -101,7 +107,11 @@ export function createPhoneVerification(
       if (!CAN_ASK_AGAIN.has(outcome.kieu)) finalOutcome = outcome.kieu;
       // Chỉ `thu-lai` giữ việc chờ: câu của nó mời bấm lại ngay trên khung này.
       if (outcome.kieu !== "thu-lai") pending = null;
-      setState({ kieu: "ket-qua", outcome: outcome.kieu });
+      setState(
+        outcome.kieu === "thu-lai" && outcome.zalo !== undefined
+          ? { kieu: "ket-qua", outcome: outcome.kieu, zalo: outcome.zalo }
+          : { kieu: "ket-qua", outcome: outcome.kieu },
+      );
     },
 
     decline() {
@@ -127,9 +137,19 @@ export function usePhoneVerification(
   return { ...machine.current, state };
 }
 
-/** Câu cho một kết cục, nói đúng việc của màn ấy. */
-export function phoneVerificationMessage(outcome: PhoneVerificationStop, task: PhoneVerificationTask): string {
+/**
+ * Câu cho một kết cục, nói đúng việc của màn ấy. `zalo` (only meaningful with `thu-lai`): Zalo refused a
+ * step with a code, and the sentence says which and whether pressing again can help.
+ */
+export function phoneVerificationMessage(
+  outcome: PhoneVerificationStop,
+  task: PhoneVerificationTask,
+  zalo?: ZaloFailure,
+): string {
   const t = PHONE_VERIFICATION_TASK[task];
+  if (outcome === "thu-lai" && zalo !== undefined) {
+    return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
+  }
   switch (outcome) {
     case "tu-choi":
       return PHONE_VERIFICATION.refused(t);
@@ -176,7 +196,7 @@ export function PhoneVerificationPanel(props: {
     return (
       <div className="cd-buoc">
         <p className="cd-loi" role="alert" id={props.focusId} tabIndex={-1}>
-          {phoneVerificationMessage(state.outcome, props.task)}
+          {phoneVerificationMessage(state.outcome, props.task, state.zalo)}
         </p>
         {draft}
         {state.outcome === "thu-lai" && (

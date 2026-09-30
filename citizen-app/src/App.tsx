@@ -17,6 +17,7 @@ import {
   type SceneLocationResult,
   TrangXa,
   XacNhanXa,
+  type ZaloFailure,
 } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
@@ -33,7 +34,7 @@ import {
   getCommuneAppLocation,
   getCurrentLocation,
 } from "./features/dang-nhap/current-location";
-import { layTenZalo } from "./features/tinh-nang/zalo-api";
+import { layTenZalo, type SdkFailure } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
@@ -65,6 +66,23 @@ import { XA_CO_DINH } from "./lib/xa-co-dinh";
  */
 
 /**
+ * ZALO'S REFUSAL, CROSSING THE TWO HALVES — the commercial half's `SdkFailure` (the SDK's own code) becomes
+ * the state half's `ZaloFailure`, unchanged. `other` is a capability the state half never asks for, so
+ * nothing crosses for it. Absent in → absent out: this never invents a code (user rule 30/09/2026 — the
+ * displayed code is the measurement, and the one a tester reads to know which permission is missing).
+ */
+export function toZaloFailure(failure: SdkFailure | undefined): ZaloFailure | undefined {
+  if (failure === undefined || failure.capability === "other") return undefined;
+  return { capability: failure.capability, code: failure.code, transient: failure.transient };
+}
+
+/** `thu-lai`, with Zalo's refusal attached only when there is one (no `zalo: undefined` field). */
+function retryWith(failure: SdkFailure | undefined): { kieu: "thu-lai"; zalo?: ZaloFailure } {
+  const zalo = toZaloFailure(failure);
+  return zalo === undefined ? { kieu: "thu-lai" } : { kieu: "thu-lai", zalo };
+}
+
+/**
  * CẦU NỐI HAI NỬA — CHỖ DUY NHẤT KẾT QUẢ CỦA CLIENT ĐĂNG NHẬP THƯƠNG MẠI ĐỔI SANG KIỂU CỦA NỬA NHÀ NƯỚC.
  *
  * Nửa nhà nước cần mở phiên ViGov sau khi công dân xác nhận xã, nhưng không được nhập `zmp-sdk` hay
@@ -75,7 +93,7 @@ import { XA_CO_DINH } from "./lib/xa-co-dinh";
  *   xong                                        → có phiên
  *   cau-tat · chua-san-sang · chua-khai-host    → `chua-mo`: bấm lại không đổi được gì
  *   ma-het-han · tam-ngung · khong-goi-duoc ·
- *   khong-lay-duoc-ma                           → `thu-lai`
+ *   khong-lay-duoc-ma                           → `thu-lai` (with Zalo's code when Zalo refused)
  *   ngoai-zalo                                  → `ngoai-zalo`
  */
 export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
@@ -93,6 +111,8 @@ export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
       return { kieu: "chua-mo" };
     case "ngoai-zalo":
       return { kieu: "ngoai-zalo" };
+    case "khong-lay-duoc-ma":
+      return retryWith(kq.failure);
     default:
       return { kieu: "thu-lai" };
   }
@@ -283,7 +303,8 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
  *   (400) · chua-khai-host                          → `tam-ngung`: the channel is not serving now
  *   zalo-khong-tra-loi (502) · qua-nhieu-lan (429)  → `cho-lat`: wait a moment, then press again
  *   ma-het-han (401) · khong-goi-duoc ·
- *   khong-lay-duoc-ma                               → `thu-lai`: a fresh tap gets fresh codes
+ *   khong-lay-duoc-ma                               → `thu-lai`: a fresh tap gets fresh codes — carrying
+ *                                                     Zalo's code when Zalo refused (`toZaloFailure`)
  */
 export function toCommuneAppSessionResult(result: CommuneAppLoginResult): CommuneAppSessionResult {
   switch (result.kieu) {
@@ -304,6 +325,8 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
     case "zalo-khong-tra-loi":
     case "qua-nhieu-lan":
       return { kieu: "cho-lat" };
+    case "khong-lay-duoc-ma":
+      return retryWith(result.failure);
     default:
       return { kieu: "thu-lai" };
   }
@@ -323,7 +346,8 @@ const openCommuneAppSession: OpenCommuneAppSession = async () =>
  *   xong                                                        → the location
  *   tu-choi · ngoai-zalo · qua-nhieu-lan                        → the same branch
  *   zalo-khong-tra-loi · khong-goi-duoc · yeu-cau-hong ·
- *   khong-lay-duoc-ma                                           → `thu-lai` (a fresh tap gets fresh codes)
+ *   khong-lay-duoc-ma                                           → `thu-lai` (a fresh tap gets fresh codes),
+ *                                                                 with Zalo's code when Zalo refused
  *   tam-ngung · chua-khai-host                                  → `tam-ngung` (pressing again changes nothing)
  */
 export function toSceneLocationResult(result: CurrentLocationResult): SceneLocationResult {
@@ -337,6 +361,10 @@ export function toSceneLocationResult(result: CurrentLocationResult): SceneLocat
     case "tam-ngung":
     case "chua-khai-host":
       return { kind: "tam-ngung" };
+    case "khong-lay-duoc-ma": {
+      const zalo = toZaloFailure(result.failure);
+      return zalo === undefined ? { kind: "thu-lai" } : { kind: "thu-lai", zalo };
+    }
     default:
       return { kind: "thu-lai" };
   }
@@ -353,10 +381,14 @@ const getCommuneSceneLocation: GetSceneLocation = async () => toSceneLocationRes
 /**
  * CẦU HỌ TÊN — `getUserInfo`, gọi CHỈ từ bước mở app của `TrangXa` (29/09/2026): "check" không bật hộp
  * của Zalo, "ask" bật. Chỉ tên đi xuống nửa nhà nước; tên rỗng là "không lấy được", không bao giờ một
- * chuỗi rỗng giả làm tên.
+ * chuỗi rỗng giả làm tên. Zalo refused with a code → that code goes down too (`toZaloFailure`).
  */
 const layTenChoXa: LayTenZalo = async (mode) => {
   const kq = await layTenZalo(mode === "ask");
+  if (kq.kieu === "khong-lay-duoc") {
+    const zalo = toZaloFailure(kq.failure);
+    return zalo === undefined ? { kieu: "khong-lay-duoc" } : { kieu: "khong-lay-duoc", zalo };
+  }
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   const ho_ten = kq.du_lieu.trim();
   return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };

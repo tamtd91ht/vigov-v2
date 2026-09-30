@@ -7,9 +7,9 @@
  * ⚠ MÃ TRA CỨU KHÔNG ĐI VÀO NHẬT KÝ, không ghi xuống máy. Nó chỉ đi trên đường dẫn của đúng một
  * lời gọi, kèm bearer của phiên — hợp đồng đặt nó ở đó.
  *
- * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ Ô NHẬP và KHÔNG GỌI MẠNG. In practice the session is still empty:
- * the bridge is wired (`api/mo-phien-vigov.ts` records `vigovSession`) but `vihat-miniapp`'s Zalo account-id
- * step always refuses (`internal/zalo/ma_tai_khoan.go:45-47`, ADR 0045 UNKNOWN #2) → 503.
+ * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ Ô NHẬP và KHÔNG GỌI MẠNG. The bridge is wired
+ * (`api/mo-phien-vigov.ts` records `vigovSession`), and since vihat-miniapp 4114f00 its Zalo account-id
+ * step is a real call (`internal/zalo/ma_tai_khoan.go:55`) — not yet measured against real Zalo.
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
 

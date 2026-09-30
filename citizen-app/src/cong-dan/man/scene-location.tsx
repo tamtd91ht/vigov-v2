@@ -20,8 +20,10 @@
 import { useState } from "react";
 
 import { isSceneLocation, type SceneLocation } from "../api/hop-dong-phan-anh";
+import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
+import { zaloFailureSentence } from "./noi-dung";
 
 /**
  * Why there is no location — one branch per thing the citizen does next:
@@ -36,7 +38,8 @@ export type SceneLocationFailure = "tu-choi" | "ngoai-zalo" | "qua-nhieu-lan" | 
 
 export type SceneLocationResult =
   | { readonly kind: "xong"; readonly location: SceneLocation }
-  | { readonly kind: SceneLocationFailure };
+  /** `zalo` (on `thu-lai` only): Zalo refused a step, with its code — the sentence then names it. */
+  | { readonly kind: SceneLocationFailure; readonly zalo?: ZaloFailure };
 
 /** Injected by the shell. Resolves to one of the branches above; the caller also guards a rejection. */
 export type GetSceneLocation = () => Promise<SceneLocationResult>;
@@ -48,6 +51,8 @@ export type SceneLocationWords = {
   readonly locating: string;
   readonly why: string;
   readonly found: (coordinates: string) => string;
+  /** Zalo refused with a code: its sentence (`zaloFailureSentence`) plus what to do next. */
+  readonly zalo_failed: (zalo: string, transient: boolean) => string;
   readonly failures: Readonly<Record<SceneLocationFailure, string>>;
 };
 
@@ -64,7 +69,7 @@ export function formatCoordinates(location: SceneLocation): string {
  */
 export async function locateOnce(
   get: GetSceneLocation,
-): Promise<{ location: SceneLocation | null; failure: SceneLocationFailure | null }> {
+): Promise<{ location: SceneLocation | null; failure: SceneLocationFailure | null; zalo?: ZaloFailure }> {
   let result: SceneLocationResult;
   try {
     result = await get();
@@ -76,7 +81,9 @@ export async function locateOnce(
       ? { location: { lat: result.location.lat, lng: result.location.lng }, failure: null }
       : { location: null, failure: "thu-lai" };
   }
-  return { location: null, failure: result.kind };
+  return result.zalo === undefined
+    ? { location: null, failure: result.kind }
+    : { location: null, failure: result.kind, zalo: result.zalo };
 }
 
 /**
@@ -90,24 +97,37 @@ export async function locateOnce(
 export function useSceneLocation(get: GetSceneLocation | undefined, onLocation: (l: SceneLocation | null) => void) {
   const [locating, setLocating] = useState(false);
   const [failure, setFailure] = useState<SceneLocationFailure | null>(null);
+  const [zalo, setZalo] = useState<ZaloFailure | null>(null);
 
   async function locate() {
     if (get === undefined || locating) return;
     setLocating(true);
     setFailure(null);
+    setZalo(null);
     onLocation(null);
     const next = await locateOnce(get);
     onLocation(next.location);
     setFailure(next.failure);
+    setZalo(next.zalo ?? null);
     setLocating(false);
   }
 
   /** A new, empty form: forget the last sentence too, or it would speak about a petition already sent. */
   function reset() {
     setFailure(null);
+    setZalo(null);
   }
 
-  return { locating, failure, locate, reset };
+  return { locating, failure, zalo, locate, reset };
+}
+
+/** The failure sentence: Zalo's own refusal (capability + code) when it gave one, else the branch's sentence. */
+export function sceneLocationFailureText(
+  words: SceneLocationWords,
+  failure: SceneLocationFailure,
+  zalo: ZaloFailure | null,
+): string {
+  return zalo === null ? words.failures[failure] : words.zalo_failed(zaloFailureSentence(zalo), zalo.transient);
 }
 
 /**
@@ -121,6 +141,8 @@ export function SceneLocationControl(props: {
   locating: boolean;
   location: SceneLocation | null;
   failure: SceneLocationFailure | null;
+  /** Zalo's refusal of this tap, if it gave a code. Absent/null = the plain sentence of `failure`. */
+  zalo?: ZaloFailure | null;
   onLocate: () => void;
 }) {
   const { words, look, locating, location, failure } = props;
@@ -145,7 +167,7 @@ export function SceneLocationControl(props: {
       )}
       {failure !== null && (
         <p className={shared ? "cd-loi" : "xa-loi-o"} role="status">
-          {words.failures[failure]}
+          {sceneLocationFailureText(words, failure, props.zalo ?? null)}
         </p>
       )}
     </div>

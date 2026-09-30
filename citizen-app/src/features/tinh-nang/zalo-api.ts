@@ -295,7 +295,35 @@ export type KetQuaXin<T> =
   | { kieu: "xong"; du_lieu: T }
   | { kieu: "tu-choi" }
   | { kieu: "ngoai-zalo" }
-  | { kieu: "khong-lay-duoc" };
+  | {
+      kieu: "khong-lay-duoc";
+      /**
+       * What the platform actually answered — present whenever the SDK threw an error carrying a
+       * numeric `code`; absent when nothing was measured (a throw without a code, or a result built
+       * by hand in a test). See `SdkFailure`.
+       */
+      failure?: SdkFailure;
+    };
+
+/**
+ * WHICH CAPABILITY a failed call was asking for — named by what it gives the app, not by the SDK
+ * function (the SDK names may appear in THIS file only: `phase1-collects-nothing.test.ts`).
+ *
+ * WHY IT IS CARRIED AT ALL: a Zalo permission not yet granted to the App ID (Developer Console) fails
+ * the call like any other error. Without the capability and the code, every such failure reached the
+ * screen as the same "thử lại" sentence, and a tester could not see WHICH permission was missing. One
+ * sign-in asks for two things (session code, then phone), so the capability is the step that failed,
+ * not the function that was called.
+ */
+export type ZaloCapability = "access-token" | "phone" | "location" | "name" | "other";
+
+export type SdkFailure = {
+  readonly capability: ZaloCapability;
+  /** The SDK's `code`, verbatim. The code IS the measurement — no table here guesses what it means. */
+  readonly code: number;
+  /** `true` only for the codes the SDK itself answers with "Please try again later" (`TRANSIENT_CODES`). */
+  readonly transient: boolean;
+};
 
 /**
  * Mã lỗi người dùng từ chối. Lấy từ chính ví dụ trong `zmp-sdk/index.d.ts` (`if (code === -201)`
@@ -307,10 +335,21 @@ export type KetQuaXin<T> =
  */
 const MA_TU_CHOI = -201;
 
-/** Lỗi SDK ném ra: `{ code: number; message?: string }`. Chỉ đọc `code` — `message` là chữ kỹ
- *  thuật, và README §Error message shape cấm đưa nó ra cho người dùng. */
-function laTuChoi(loi: unknown): boolean {
-  return typeof loi === "object" && loi !== null && (loi as { code?: unknown }).code === MA_TU_CHOI;
+/**
+ * THE ONLY CODES CALLED "TRY AGAIN" — read from `node_modules/zmp-sdk/apis/constants.js` (2.53.0), where
+ * `RESPONSE_CODE` is `UNKNOWN_ERROR:-2e3 · TIME_OUT:-1408 · FAIL_LIMIT:-1409 · DUPLICATE_REQUEST:-1410`
+ * and `MESSAGES` gives exactly those four the text "... Please try again later." Every other code is
+ * shown as NOT a passing glitch: pressing again will meet the same answer (a permission the App ID lacks
+ * does not appear by retrying). A code outside this set is never mapped to a meaning here.
+ */
+const TRANSIENT_CODES: ReadonlySet<number> = new Set([-2000, -1408, -1409, -1410]);
+
+/** The numeric `code` of what the SDK threw (`{ code: number; message?: string }`), or `null`. Only
+ *  `code` is read — `message` is technical text, and README §Error message shape keeps it off screens. */
+function sdkErrorCode(loi: unknown): number | null {
+  if (typeof loi !== "object" || loi === null) return null;
+  const code = (loi as { code?: unknown }).code;
+  return typeof code === "number" && Number.isFinite(code) ? code : null;
 }
 
 /**
@@ -319,8 +358,14 @@ function laTuChoi(loi: unknown): boolean {
  * `nap` tách khỏi `goi` vì hai lời hứa khác nhau: nhập mô-đun hỏng nghĩa là KHÔNG Ở TRONG ZALO
  * (nói ra được, sửa được bằng cách mở trong Zalo), còn lời gọi hỏng nghĩa là người dùng từ chối
  * hoặc nền tảng không trả lời. Gộp hai thứ vào một `catch` thì màn hình nói sai một trong hai.
+ *
+ * `capability` is the step the call starts with; a call made of two steps moves it with `step(...)`
+ * right before the second, so a failure names the step that failed.
  */
-async function xin<T>(goi: (sdk: typeof import("zmp-sdk")) => Promise<T>): Promise<KetQuaXin<T>> {
+async function xin<T>(
+  capability: ZaloCapability,
+  goi: (sdk: typeof import("zmp-sdk"), step: (next: ZaloCapability) => void) => Promise<T>,
+): Promise<KetQuaXin<T>> {
   let sdk: typeof import("zmp-sdk");
   try {
     sdk = await import("zmp-sdk");
@@ -328,16 +373,25 @@ async function xin<T>(goi: (sdk: typeof import("zmp-sdk")) => Promise<T>): Promi
     return { kieu: "ngoai-zalo" };
   }
 
+  let current = capability;
   try {
-    return { kieu: "xong", du_lieu: await goi(sdk) };
+    return {
+      kieu: "xong",
+      du_lieu: await goi(sdk, (next) => {
+        current = next;
+      }),
+    };
   } catch (loi) {
-    return laTuChoi(loi) ? { kieu: "tu-choi" } : { kieu: "khong-lay-duoc" };
+    const code = sdkErrorCode(loi);
+    if (code === MA_TU_CHOI) return { kieu: "tu-choi" };
+    if (code === null) return { kieu: "khong-lay-duoc" };
+    return { kieu: "khong-lay-duoc", failure: { capability: current, code, transient: TRANSIENT_CODES.has(code) } };
   }
 }
 
 /** Token số điện thoại. Chuỗi rỗng là câu trả lời thật của nền tảng ở môi trường phát triển. */
 export function xinTokenSoDienThoai(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => (await sdk.getPhoneNumber()).token ?? "");
+  return xin("phone", async (sdk) => (await sdk.getPhoneNumber()).token ?? "");
 }
 
 /**
@@ -362,8 +416,9 @@ export type MaDangNhap = {
 };
 
 export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
-  return xin(async (sdk) => {
+  return xin("access-token", async (sdk, step) => {
     const ma_truy_cap = await sdk.getAccessToken();
+    step("phone");
     const { token } = await sdk.getPhoneNumber();
     return { ma_so_dien_thoai: token ?? "", ma_truy_cap };
   });
@@ -377,7 +432,7 @@ export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
  * ra ngay sau cú bấm "Đúng, tiếp tục" là hỏi một thứ người dân chưa cần đưa.
  */
 export function xinMaTruyCap(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => sdk.getAccessToken());
+  return xin("access-token", async (sdk) => sdk.getAccessToken());
 }
 
 /**
@@ -417,12 +472,12 @@ export function readRuntimeAppId(): string | null {
  * and is only called after the entry card has said why the name is wanted (policy 3.3.4, `khung.tsx`).
  */
 export function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "");
+  return xin("name", async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "");
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
 export function xinTokenViTri(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => (await sdk.getLocation()).token ?? "");
+  return xin("location", async (sdk) => (await sdk.getLocation()).token ?? "");
 }
 
 /**
@@ -442,8 +497,9 @@ export type LocationCodes = {
  * single-use, so the caller exchanges it immediately; nothing here keeps either code.
  */
 export function requestLocationCodes(): Promise<KetQuaXin<LocationCodes>> {
-  return xin(async (sdk) => {
+  return xin("access-token", async (sdk, step) => {
     const access_token = await sdk.getAccessToken();
+    step("location");
     const { token } = await sdk.getLocation();
     return { access_token, location_token: token ?? "" };
   });
@@ -451,7 +507,7 @@ export function requestLocationCodes(): Promise<KetQuaXin<LocationCodes>> {
 
 /** Nội dung mã QR — API DUY NHẤT ở đây trả về dữ liệu thật, không phải token. */
 export function quetMaQR(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => (await sdk.scanQRCode()).content);
+  return xin("other", async (sdk) => (await sdk.scanQRCode()).content);
 }
 
 /**
@@ -462,7 +518,7 @@ export function quetMaQR(): Promise<KetQuaXin<string>> {
  * quay số của hệ điều hành và không đi đâu khác: không log, không lưu, không gửi.
  */
 export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
-  return xin(async (sdk) => sdk.openPhone({ phoneNumber: so }));
+  return xin("other", async (sdk) => sdk.openPhone({ phoneNumber: so }));
 }
 
 /**
@@ -474,7 +530,7 @@ export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
  * ra đúng cho việc này, và nó trả người dùng về đúng chỗ họ đang đứng.
  */
 export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
-  return xin(async (sdk) => {
+  return xin("other", async (sdk) => {
     await sdk.openWebview({ url: duong_dan, config: { style: "normal" } });
   });
 }
@@ -505,7 +561,7 @@ export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
  * không ai viết ra.
  */
 export function docKieuKetNoi(): Promise<KetQuaXin<string>> {
-  return xin(async (sdk) => String((await sdk.getNetworkType()).networkType));
+  return xin("other", async (sdk) => String((await sdk.getNetworkType()).networkType));
 }
 
 /**
@@ -519,7 +575,7 @@ export function docKieuKetNoi(): Promise<KetQuaXin<string>> {
  * định là 500ms. Đặt một con số chỉ chạy trên một nửa số máy là một khác biệt không ai kiểm.
  */
 export async function rungMotNhip(): Promise<void> {
-  await xin(async (sdk) => {
+  await xin("other", async (sdk) => {
     await sdk.vibrate({ type: "oneShot" });
   });
 }
@@ -537,7 +593,7 @@ export async function rungMotNhip(): Promise<void> {
  * trạng thái giả trên màn hình.
  */
 export function giuManHinhSang(bat: boolean): Promise<KetQuaXin<boolean>> {
-  return xin(async (sdk) => {
+  return xin("other", async (sdk) => {
     await sdk.keepScreen({ keepScreenOn: bat });
     return bat;
   });
@@ -555,7 +611,7 @@ export function giuManHinhSang(bat: boolean): Promise<KetQuaXin<boolean>> {
  * nó ra cho người dùng.
  */
 export function xinQuyenMayAnh(): Promise<KetQuaXin<boolean>> {
-  return xin(async (sdk) => (await sdk.requestCameraPermission()).userAllow);
+  return xin("other", async (sdk) => (await sdk.requestCameraPermission()).userAllow);
 }
 
 /**
@@ -577,7 +633,7 @@ export function xinQuyenMayAnh(): Promise<KetQuaXin<boolean>> {
  * hơn một `.map` chạy trên một chuỗi rồi hiện ra từng ký tự một.
  */
 export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
-  return xin(async (sdk) => {
+  return xin("other", async (sdk) => {
     const { data } = await sdk.openMediaPicker({ type: "photo" });
     return typeof data === "string" ? [data] : data;
   });
@@ -596,7 +652,7 @@ export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
  * người dùng — xem `vcard.ts`.
  */
 export function taiTepVeMay(du_lieu_base64: string): Promise<KetQuaXin<void>> {
-  return xin(async (sdk) => {
+  return xin("other", async (sdk) => {
     await sdk.downloadFile({ fileBase64Data: du_lieu_base64 });
   });
 }

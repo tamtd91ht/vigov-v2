@@ -8,6 +8,7 @@
  * hạn, trạng thái, đánh giá đều là của máy chủ. Tên tệp giữ nguyên (luật 12 #3: không đổi tên cũ).
  */
 import { DO_DAI_TOI_DA } from "../api/hop-dong-phan-anh";
+import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { groupOf, STATUS_GROUP_LABEL, type StatusFilter, type StatusGroup, STEP_LABEL } from "./status-groups";
 
@@ -31,7 +32,8 @@ export type KetQuaLayTen =
   | { readonly kieu: "xong"; readonly ho_ten: string }
   | { readonly kieu: "tu-choi" }
   | { readonly kieu: "ngoai-zalo" }
-  | { readonly kieu: "khong-lay-duoc" };
+  /** `zalo`: Zalo refused with a code (`ZaloFailure`). Absent = nothing measured (empty name, a throw). */
+  | { readonly kieu: "khong-lay-duoc"; readonly zalo?: ZaloFailure };
 export type NameRequestMode = "check" | "ask";
 export type LayTenZalo = (mode: NameRequestMode) => Promise<KetQuaLayTen>;
 
@@ -43,7 +45,8 @@ export type NameAtEntry =
   | { readonly kind: "checking" }
   | { readonly kind: "needs-consent" }
   | { readonly kind: "asking" }
-  | { readonly kind: "settled"; readonly name: string | null };
+  /** `zalo`: the ask was refused by Zalo with a code — the home screen says so (`TrangXa`). */
+  | { readonly kind: "settled"; readonly name: string | null; readonly zalo?: ZaloFailure };
 
 /**
  * After the silent check. PURE. Outside Zalo there is nothing to ask, so it settles on `null` instead of
@@ -56,9 +59,14 @@ export function afterNameCheck(kq: KetQuaLayTen): NameAtEntry {
   return { kind: "needs-consent" };
 }
 
-/** After Zalo's dialog. PURE. Whatever the answer, it is not asked again in this open. */
+/**
+ * After Zalo's dialog. PURE. Whatever the answer, it is not asked again in this open. A refusal by ZALO
+ * (a code, not the citizen's "Từ chối") is kept, so the screen can name it instead of going quiet.
+ */
 export function afterNameAsk(kq: KetQuaLayTen): NameAtEntry {
-  return { kind: "settled", name: kq.kieu === "xong" ? kq.ho_ten : null };
+  if (kq.kieu === "xong") return { kind: "settled", name: kq.ho_ten };
+  if (kq.kieu === "khong-lay-duoc" && kq.zalo !== undefined) return { kind: "settled", name: null, zalo: kq.zalo };
+  return { kind: "settled", name: null };
 }
 
 /** The name the screens may show, or `null` while the request is unfinished or came back empty. */
