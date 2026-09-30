@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: deb902d1
+derived_from_commit: 1521cd85
 expires: 2026-12-29
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -39,13 +39,13 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 17 | 11/12 +5 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 8 | 6/6 +2 ngoài web | ✓ |
+| **11** Quản trị nội dung Mini App | 9 | 6/6 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 7 | 5/6 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **239 tuyến** trong hợp đồng. **7** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **240 tuyến** trong hợp đồng. **7** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -81,13 +81,14 @@ một lời trấn an không có gì đứng sau.
 
 | | |
 |---|---|
-| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 8 |
+| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 9 |
 | Trong đó `citizen-app` đang gọi | 6 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
 | GET | `/api/v1/commune-news` | ✓ |
+| GET | `/api/v1/commune-news/categories` | ✗ |
 | GET | `/api/v1/commune-news/{id}` | ✓ |
 | GET | `/api/v1/commune-staff` | ✓ |
 | GET | `/api/v1/my-citizen-report-fields` | ✓ |
@@ -108,12 +109,12 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 2 | 9 | 6 |
-| `citizen-app` | 22 | 10 | 3 | 0 |
+| `citizen-app` | 22 | 11 | 3 | 0 |
 | `core` | 20 | 1 | 1 | 1 |
 | `deploy` | 14 | 4 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 14 | 0 | 0 | 0 |
-| `service-comms` | 15 | 3 | 2 | 4 |
+| `service-comms` | 16 | 3 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 19 | 3 | 1 | 0 |
 | `service-identity` | 33 | 10 | 2 | 1 |
@@ -121,5 +122,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 7 | 3 | 0 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 19 | 0 | 0 | 0 |
-| `web-admin` | 16 | 15 | 3 | 1 |
+| `web-admin` | 17 | 15 | 3 | 1 |
 

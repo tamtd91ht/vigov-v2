@@ -299,6 +299,17 @@
       "no_confirm": [],
       "tiep_theo": "Chưa đo độ tương phản dòng phụ trên nền riêng của app xã. Chỗ tên Zalo ở TrangXa.tsx render inline, không có ca render riêng.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "giao-dien-theo-prototype-v30",
+      "viec": "App riêng của xã theo prototype khách bản Zalo v30: màu đỏ, ảnh bìa theo tên miền, 3 tab tin, chip danh mục hai tầng, nút 'Gửi phản ánh mới' ở chân (ADR 0047 §6, dòng 30/09/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "cde96b0b — --xa-brand #c1121c/#96060f/#fdeaeb thay navy ở header, tab, chip, nút chính; accessibility.test.ts cặp mới (trắng/brand 6.23, trắng/brand-dark 9.01, brand/nền 5.80, brand/brand-soft 5.38), --xa-hero-phu đo lại #fde8ea 5.31:1. deploy.mjs --vao-thang chép scripts/banner-xa/<tên-miền>.png → public/banner-xa.png, xoá trong finally, pin ở dich-den.test.mjs; CommuneBanner onError → không vẽ gì. TinTucAppXa: tablist 3 tab ?type=, không 'Tất cả'. PetitionSendFooter ở chân tab Phản ánh. tsc sạch, vitest 45 tệp 1201/1201, npm run build xanh.",
+      "tiep_theo": "Card D2: hàng chip danh mục hai tầng dưới tab, sau khi service-comms có GET /api/v1/commune-news/categories và ?category=. Chưa có ảnh bìa nào trong scripts/banner-xa/ — cần tệp của từng xã. Chưa xem trên máy thật. Còn để lại: nút gửi/bước hiện tại màu hồng (--xa-hong) cạnh header đỏ; .xa-nut--do trông gần như nút chính; tab con không hiện tên xã; nút chuông nằm góc Zalo để trống.",
+      "menu": [
+        "noi-dung-mini-app",
+        "phan-anh-nguoi-dan"
+      ]
     }
   ]
 }

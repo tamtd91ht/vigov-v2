@@ -925,6 +925,26 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/commune-news/categories",
+      "operation_id": "comms_get_commune_news_categories",
+      "task_id": "1c417145306b",
+      "summary": "Danh mục tin của xã có ít nhất một tin đã đăng (tự nó hoặc danh mục con), theo tên miền của xã — cho hàng chip lọc hai tầng trên Zalo Mini App",
+      "screen": "11-noi-dung-mini-app §9",
+      "permission_kind": "public",
+      "permission_reason": "hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.publicCategoriesOut",
+        "400": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_cong_khai.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/commune-news/{id}",
       "operation_id": "comms_get_commune_news_by_id",
       "task_id": "990d3853914d",
