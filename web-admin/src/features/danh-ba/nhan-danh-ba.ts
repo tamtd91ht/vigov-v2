@@ -25,9 +25,8 @@ export const TIEU_DE_TRANG = "Danh bạ cán bộ";
  *
  * NỬA ĐẦU LÀ NGUYÊN VĂN ĐẶC TẢ, NỬA SAU THÌ KHÔNG — VÀ ĐÓ LÀ CHỦ Ý. Đặc tả (§1, §2) viết:
  * *"Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App' để bà con
- * gọi được."* "Chọn người" là thao tác HÀNG LOẠT, và câu mở #12 do khách chốt đã bỏ hẳn nó: công
- * khai số di động cá nhân làm cho TỪNG người, sau khi hỏi ý và được đồng ý. Câu dưới nói đúng cách
- * làm ấy thay vì hứa một ô chọn không tồn tại.
+ * gọi được."* Câu dưới nhấn vào điều #12 giữ nguyên kể cả ở khung "Công khai nhiều người" (chốt
+ * 30/09/2026): sự đồng ý là của TỪNG người, sau khi hỏi ý — chọn nhiều người không thay được việc ấy.
  */
 export const MO_TA_TRANG =
   "Toàn bộ cán bộ của xã: chức vụ, khối/đơn vị và số liên hệ. Công khai số lên Zalo Mini App làm " +

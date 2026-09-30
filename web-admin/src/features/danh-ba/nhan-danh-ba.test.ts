@@ -47,7 +47,7 @@ describe("thẻ KPI số khối / đơn vị", () => {
 describe("câu mô tả trang không hứa thứ màn hình không có", () => {
   it("KHÔNG hứa thao tác chọn nhiều người — nói công khai làm cho TỪNG người", () => {
     // Đặc tả §2 viết nguyên văn "Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App'".
-    // "Chọn người" là thao tác hàng loạt mà #12 đã bỏ.
+    // Kể cả khi đã có khung công khai nhiều người, câu đầu trang nói về sự đồng ý của TỪNG người.
     expect(MO_TA_TRANG).not.toContain("Chọn người");
     expect(MO_TA_TRANG).toContain("từng người");
     expect(MO_TA_TRANG).toContain("đồng ý");

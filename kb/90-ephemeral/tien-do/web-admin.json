@@ -287,6 +287,15 @@
       "no_confirm": [],
       "tiep_theo": "Hai nguồn giờ khác nhau: form SỬA vẫn điền giờ theo lịch làm việc xã (defaultDueTime). Ô 'Hạn mới' của đề nghị lùi hạn vẫn gửi 23:59:59 (mocCuoiNgay) — hỏi người dùng có về 17:00 không.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "danh-ba-cong-khai-nhieu-nguoi",
+      "viec": "Danh bạ — chế độ 'Công khai nhiều người': chọn nhiều cán bộ, tick 'Đã hỏi ý người này' từng dòng, gọi POST /api/v1/staff/publications",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: features/danh-ba/bulk-publication.ts + bulk-publication-panel.tsx + danh-ba-lien-he.tsx; lib/api/can-bo.ts publishStaffBulk (kiểu từ schema.gen.ts). Nút chỉ khi cầm content.update; chỉ offer người chưa công khai và không khoá; ô tick từng dòng bắt đầu trống, không có 'tick hết'; dòng chưa tick gửi consent_confirmed:false; khoá idempotency mới khi đổi chọn/tick, giữ khi gửi lại sau lỗi; kết quả từng người bằng tiếng Việt, không số điện thoại; replayed → tải lại sổ. tsc/eslint sạch; vitest 150 tệp / 2801 ca xanh; check:api khớp.",
+      "no_confirm": [],
+      "tiep_theo": "Bố cục 320px chưa xem trên trình duyệt thật. Thân {replayed:true} không có kiểu trong hợp đồng (đọc JSON thô như task-import.ts).",
+      "menu": "danh-ba-can-bo"
     }
   ]
 }

@@ -18,7 +18,13 @@ import {
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { usePhien } from "@/features/phien/phien-hien-tai";
-import { datCongKhaiCanBo, docTrangDanhBa, suaCanBo, xoaCanBo } from "@/lib/api/can-bo";
+import {
+  datCongKhaiCanBo,
+  docTrangDanhBa,
+  publishStaffBulk,
+  suaCanBo,
+  xoaCanBo,
+} from "@/lib/api/can-bo";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
   identity_canBoTomTat,
@@ -28,6 +34,16 @@ import type {
 import type { KetQua } from "@/lib/api/goi";
 
 import { BangLienHe } from "./bang-lien-he";
+import {
+  BULK_OPEN_BUTTON,
+  addSelected,
+  bulkRequest,
+  bulkResultLines,
+  removeSelected,
+  setConsent,
+  type BulkSelection,
+} from "./bulk-publication";
+import { BulkPublicationPanel, type BulkOutcome } from "./bulk-publication-panel";
 import {
   banCongKhaiTu,
   daCongKhai,
@@ -80,9 +96,11 @@ import {
  * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và danh sách nói
  * rõ phần nào chưa mở.
  *
- * BA THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
- * liên hệ, Có Zalo), `PUT .../publication` (công khai MỘT người lên Mini App, #12, `content.update`)
- * và `DELETE /api/v1/staff/{id}` (xoá một dòng NHẬP TRÙNG, #10, `admin.user.delete`). Bốn tuyến còn
+ * BỐN THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
+ * liên hệ, Có Zalo), `PUT .../publication` (công khai / rút MỘT người trên Mini App, #12,
+ * `content.update`), `POST /api/v1/staff/publications` (công khai NHIỀU người, xác nhận đồng ý TỪNG
+ * dòng — người dùng chốt 30/09/2026, `bulk-publication.ts`, cùng khoá `content.update`) và
+ * `DELETE /api/v1/staff/{id}` (xoá một dòng NHẬP TRÙNG, #10, `admin.user.delete`). Bốn tuyến còn
  * lại đổi THẨM QUYỀN hoặc đường đăng nhập của một người — thêm, đổi vai trò, khoá, mở khoá — và
  * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài
  * khoản ở hai màn hình là hai chỗ để một thao tác có hậu quả nặng bị bấm nhầm.
@@ -130,6 +148,21 @@ export function DanhBaLienHe() {
   const [lyDoXoa, datLyDoXoa] = useState("");
   /** Phiên có `admin.user.delete` — quyết định có vẽ nút 🗑. Chưa đọc xong / hỏng → không. */
   const duocXoa = duocXoaTheoPhien(phien);
+
+  /**
+   * "Công khai nhiều người". The selection SURVIVES a page or filter change — that is how people on
+   * several pages are gathered into one request — and is emptied only after a completed send.
+   *
+   * THE IDEMPOTENCY KEY BELONGS TO ONE BODY. It is re-minted whenever the selection or a tick
+   * changes, and after every completed send; a retry after a network failure keeps it, because
+   * that first send may already have published people. Reusing a key for a DIFFERENT body would
+   * get the first body's replay back and hide what the second one asked for.
+   */
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkSelection, setBulkSelection] = useState<BulkSelection>([]);
+  const [bulkKey, setBulkKey] = useState(() => crypto.randomUUID());
+  const [bulkOutcome, setBulkOutcome] = useState<BulkOutcome | null>(null);
+  const [bulkError, setBulkError] = useState("");
 
   /**
    * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất
@@ -219,6 +252,7 @@ export function DanhBaLienHe() {
 
   /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
   const moSua = useCallback((cb: identity_canBoTomTat) => {
+    setBulkOpen(false);
     datDangMoCK(null);
     datDangXoa(null);
     datDangSua(cb);
@@ -229,6 +263,7 @@ export function DanhBaLienHe() {
 
   /** Mở hộp công khai hoặc rút cho MỘT người. Đóng biểu mẫu sửa nếu đang mở. */
   const moCongKhai = useCallback((dm: DangMoCongKhai) => {
+    setBulkOpen(false);
     datDangSua(null);
     datBan(BAN_TRONG);
     datDangXoa(null);
@@ -245,6 +280,7 @@ export function DanhBaLienHe() {
 
   /** Mở hộp xoá cho MỘT dòng. Lý do luôn bắt đầu trống — mỗi lần xoá một lý do của riêng nó. */
   const moXoa = useCallback((cb: identity_canBoTomTat) => {
+    setBulkOpen(false);
     datDangSua(null);
     datBan(BAN_TRONG);
     datDangMoCK(null);
@@ -358,6 +394,68 @@ export function DanhBaLienHe() {
       .finally(() => datDangGui(false));
   }, [dangGui, dangXoa, ghiXong, lyDoXoa]);
 
+  /** Changing WHAT would be sent: new body, new key, and the previous result no longer applies. */
+  const changeBulk = useCallback((next: (cu: BulkSelection) => BulkSelection) => {
+    setBulkSelection(next);
+    setBulkKey(crypto.randomUUID());
+    setBulkOutcome(null);
+    setBulkError("");
+  }, []);
+
+  const openBulk = useCallback(() => {
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datDangMoCK(null);
+    datDangXoa(null);
+    datLoiMayChu("");
+    datCauDaXong("");
+    setBulkOutcome(null);
+    setBulkError("");
+    setBulkOpen(true);
+  }, []);
+
+  const closeBulk = useCallback(() => {
+    setBulkOpen(false);
+    setBulkOutcome(null);
+    setBulkError("");
+  }, []);
+
+  /**
+   * Send the bulk request. Refusals that need no server (nobody selected, nobody ticked, over the
+   * cap) stop HERE. On a 200 — per-row results or a replay — the selection is emptied, the key is
+   * re-minted and the register is re-read: the table, not this panel, says who is now on.
+   */
+  const sendBulk = useCallback(() => {
+    if (dangGui) return;
+    const req = bulkRequest(bulkSelection);
+    if ("error" in req) {
+      setBulkError(req.error);
+      return;
+    }
+    setBulkError("");
+    setBulkOutcome(null);
+    datCauDaXong("");
+    datDangGui(true);
+    const sentSelection = bulkSelection;
+    void publishStaffBulk(req.rows, bulkKey)
+      .then((kq) => {
+        if (!kq.ok) {
+          // Same key kept: a retry of this very body must be recognised as one.
+          setBulkError(kq.thongBao);
+          return;
+        }
+        setBulkOutcome(
+          kq.duLieu.kind === "replayed"
+            ? { kind: "replayed" }
+            : { kind: "lines", lines: bulkResultLines(kq.duLieu.items, sentSelection) },
+        );
+        setBulkSelection([]);
+        setBulkKey(crypto.randomUUID());
+        datLanDoc((n) => n + 1);
+      })
+      .finally(() => datDangGui(false));
+  }, [bulkKey, bulkSelection, dangGui]);
+
   const hanhDongCongKhai = useMemo(
     () =>
       duocCongKhai
@@ -404,6 +502,31 @@ export function DanhBaLienHe() {
         thấy nó đã mở. Tiêu đề biểu mẫu luôn gọi tên người đang được sửa (`tieuDeSua`), nên không
         có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
       */}
+      {duocCongKhai && !bulkOpen && (
+        <p className="cum-nut">
+          <button type="button" className="nut-phu" onClick={openBulk}>
+            {BULK_OPEN_BUTTON}
+          </button>
+        </p>
+      )}
+
+      {/* Gated by `content.update` like the single-person buttons — convenience only: the server
+          checks the key on the request itself (rule 5, forbidden #1). */}
+      {duocCongKhai && bulkOpen && (
+        <BulkPublicationPanel
+          selection={bulkSelection}
+          pageRows={trangThai.pha === "xong" ? trangThai.trang.items : []}
+          onSelect={(cb) => changeBulk((cu) => addSelected(cu, cb))}
+          onUnselect={(id) => changeBulk((cu) => removeSelected(cu, id))}
+          onSetConsent={(id, v) => changeBulk((cu) => setConsent(cu, id, v))}
+          error={bulkError}
+          sending={dangGui}
+          outcome={bulkOutcome}
+          onSubmit={sendBulk}
+          onClose={closeBulk}
+        />
+      )}
+
       {dangSua !== null && (
         <BieuMauGhiCanBo
           dangMo={{ kieu: "sua", canBo: dangSua }}

@@ -5,9 +5,9 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * #12 DO KHÁCH CHỐT, VÀ HAI ĐIỀU CỦA NÓ ĐỊNH HÌNH TỆP NÀY:
  *
- *   1. MỘT NGƯỜI MỘT LẦN. Không có thao tác hàng loạt ở bất kỳ đâu — không cột ô tick, không thanh
- *      hành động. Công khai số di động cá nhân là công khai dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP),
- *      và phải hỏi ý TỪNG người.
+ *   1. HỎI Ý TỪNG NGƯỜI. Công khai số di động cá nhân là công khai dữ liệu cá nhân (Nghị định
+ *      13/2023/NĐ-CP). Tệp này là hộp MỘT người; công khai nhiều người một lần (người dùng chốt
+ *      30/09/2026) ở `bulk-publication.ts` và vẫn đòi một ô xác nhận cho TỪNG dòng.
  *   2. ĐỒNG Ý DẠNG GỌN: người quản trị tick "đã hỏi ý và người này đồng ý" cho lần công khai ấy; máy
  *      chủ ghi thời điểm và người ghi. Không tick thì không có lời gọi nào đi ra — nút mờ đi, và
  *      `yeuCauCongKhai` từ chối trước khi dựng thân.

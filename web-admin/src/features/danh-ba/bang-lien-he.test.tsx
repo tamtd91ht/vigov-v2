@@ -107,8 +107,8 @@ describe("bảng danh bạ — cái ra tới trang", () => {
   });
 
   it("KHÔNG có ô chọn dòng, KHÔNG có thanh hàng loạt; nút xoá ẩn khi không truyền `onXoa`", () => {
-    // #12 do khách chốt: công khai từng người một, không thao tác hàng loạt ở bất kỳ đâu. Ô chọn
-    // dòng chỉ phục vụ đúng thao tác ấy. Nút xoá đứng sau khoá riêng — xem khối dưới.
+    // Công khai nhiều người (chốt 30/09/2026) chọn người trong khung riêng, cạnh ô "đã hỏi ý" của
+    // từng người — không trong bảng này. Nút xoá đứng sau khoá riêng — xem khối dưới.
     const html = dungCK([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
 
     expect(html).not.toContain('type="checkbox"');

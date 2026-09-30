@@ -11,6 +11,8 @@ import {
 import {
   LY_DO_XOA_TOI_DA,
   TU_KHOA_TIM_TOI_DA,
+  bulkPublicationBody,
+  publishStaffBulk,
   chuanHoaLyDoXoa,
   chuanHoaTuKhoaTim,
   datCongKhaiCanBo,
@@ -612,6 +614,55 @@ describe("PUT /api/v1/staff/{id}/publication — công khai một người (#12)
       const kq = await datCongKhaiCanBo("01JABC", { congKhai: true, daXacNhanDongY: true, thuTu: null });
       expect(kq).toEqual({ ok: false, thongBao: cau });
     }
+  });
+});
+
+describe("POST /api/v1/staff/publications — công khai nhiều người (chốt 30/09/2026)", () => {
+  const ROWS = [
+    { id: "01JA", consentAsked: true },
+    { id: "01JB", consentAsked: false },
+  ];
+
+  it("POST, Idempotency-Key của bên gọi, thân `{items:[{id, consent_confirmed}]}` theo thứ tự chọn, không `display_order`", async () => {
+    const gia = ghiGia(200, { items: [] });
+    await publishStaffBulk(ROWS, "k-bulk-1");
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff/publications");
+    expect(tuyChon.method).toBe("POST");
+    expect(header.get("Idempotency-Key")).toBe("k-bulk-1");
+    expect(header.get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(tuyChon.body))).toEqual({
+      items: [
+        { id: "01JA", consent_confirmed: true },
+        { id: "01JB", consent_confirmed: false },
+      ],
+    });
+  });
+
+  it("dòng CHƯA tick vẫn được gửi, với `consent_confirmed: false` — không bao giờ tự thành true", () => {
+    expect(bulkPublicationBody([{ id: "01JB", consentAsked: false }])).toEqual({
+      items: [{ id: "01JB", consent_confirmed: false }],
+    });
+  });
+
+  it("200 kèm danh sách → `results`, giữ nguyên thứ tự và reason_code", async () => {
+    const items = [
+      { id: "01JA", result: "published" },
+      { id: "01JB", result: "skipped", reason_code: "consent_required" },
+    ];
+    ghiGia(200, { items });
+    expect(await publishStaffBulk(ROWS, "k")).toEqual({ ok: true, duLieu: { kind: "results", items } });
+  });
+
+  it("200 `{replayed:true}` (gửi lại cùng khoá) → `replayed`, không bịa danh sách", async () => {
+    ghiGia(200, { replayed: true });
+    expect(await publishStaffBulk(ROWS, "k")).toEqual({ ok: true, duLieu: { kind: "replayed" } });
+  });
+
+  it("400 invalid_request → câu máy chủ NGUYÊN VĂN", async () => {
+    ghiGia(400, { code: "invalid_request", message: "Mỗi lần tối đa 200 người.", trace_id: "01JTRACE" });
+    expect(await publishStaffBulk(ROWS, "k")).toEqual({ ok: false, thongBao: "Mỗi lần tối đa 200 người." });
   });
 });
 

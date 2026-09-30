@@ -11,6 +11,8 @@ import { BieuMauGhiCanBo } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
 import { banTuCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
 
 import { BangLienHe } from "./bang-lien-he";
+import { BULK_NONE_CONSENTED, BULK_OPEN_BUTTON } from "./bulk-publication";
+import { BulkPublicationPanel } from "./bulk-publication-panel";
 import { CAU_CHUA_XAC_NHAN } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
 import { HopCongKhai } from "./hop-cong-khai";
@@ -103,6 +105,7 @@ vi.mock("@/lib/api/can-bo", async (goc) => ({
   ...(await goc<typeof import("@/lib/api/can-bo")>()),
   docTrangDanhBa: vi.fn(),
   datCongKhaiCanBo: vi.fn(),
+  publishStaffBulk: vi.fn(),
   xoaCanBo: vi.fn(),
   suaCanBo: vi.fn(),
 }));
@@ -114,6 +117,7 @@ vi.mock("@/lib/api/danh-muc", async (goc) => ({
 
 const docTrang = vi.mocked(apiCanBo.docTrangDanhBa);
 const congKhai = vi.mocked(apiCanBo.datCongKhaiCanBo);
+const bulk = vi.mocked(apiCanBo.publishStaffBulk);
 const xoa = vi.mocked(apiCanBo.xoaCanBo);
 const sua = vi.mocked(apiCanBo.suaCanBo);
 
@@ -526,5 +530,132 @@ describe("ô tìm — chữ tìm chỉ đi tới `doiLoc`, không tới log", ()
     await xongMang(m);
     for (const n of nghe) expect(n).not.toHaveBeenCalled();
     expect(docTrang.mock.calls.at(-1)?.[1]).toEqual({ boPhan: "", congKhai: null, cursor: null });
+  });
+});
+
+/* ---- công khai nhiều người ------------------------------------------------------------------- */
+
+describe("công khai nhiều người qua màn thật (chốt 30/09/2026)", () => {
+  /** The "Công khai nhiều người" button the screen renders, or `null`. */
+  function openButton(cay: unknown): PhanTu | null {
+    return tatCa(cay, (p) => p.type === "button" && p.props.children === BULK_OPEN_BUTTON)[0] ?? null;
+  }
+
+  async function openPanel() {
+    const m = await moMan();
+    const btn = openButton(m.cay());
+    if (btn === null) throw new Error("no bulk button");
+    (btn.props.onClick as () => void)();
+    m.ve();
+    return m;
+  }
+
+  const panel = (m: { cay: () => unknown }) => phaiCo(m.cay(), BulkPublicationPanel);
+
+  it("KHÔNG có `content.update` → không nút, không khung (ca bị từ chối); phiên chưa đọc / hỏng cũng vậy", async () => {
+    for (const p of [phien(["admin.user", "admin.user.delete"]), null, { ok: false, thongBao: "x" } as PhienDaDoc]) {
+      H.phien = p;
+      const m = await moMan();
+      expect(openButton(m.cay())).toBeNull();
+      expect(propsCua(m.cay(), BulkPublicationPanel)).toBeNull();
+    }
+  });
+
+  it("có `content.update` → nút mở khung; khung nhận các dòng của trang đang xem", async () => {
+    const m = await openPanel();
+    expect(openButton(m.cay())).toBeNull();
+    expect(panel(m).pageRows).toEqual([A, B, C]);
+    expect(panel(m).selection).toEqual([]);
+  });
+
+  it("chưa tick ai → không gọi mạng, nói lý do", async () => {
+    const m = await openPanel();
+    panel(m).onSelect(A);
+    m.ve();
+    panel(m).onSubmit();
+    m.ve();
+    expect(bulk).not.toHaveBeenCalled();
+    expect(panel(m).error).toBe(BULK_NONE_CONSENTED);
+  });
+
+  it("gửi: dòng tick → true, dòng chưa tick → false, kèm khoá chống trùng; kết quả từng dòng; đọc lại danh bạ", async () => {
+    bulk.mockResolvedValue({
+      ok: true,
+      duLieu: {
+        kind: "results",
+        items: [
+          { id: A.id, result: "published" },
+          { id: C.id, result: "skipped", reason_code: "consent_required" },
+        ],
+      },
+    });
+    const m = await openPanel();
+    panel(m).onSelect(A);
+    m.ve();
+    panel(m).onSelect(C);
+    m.ve();
+    panel(m).onSetConsent(A.id, true);
+    m.ve();
+    panel(m).onSubmit();
+    await xongMang(m);
+
+    expect(bulk).toHaveBeenCalledTimes(1);
+    const [rows, key] = bulk.mock.calls[0] ?? [];
+    expect(rows).toEqual([
+      { id: A.id, consentAsked: true },
+      { id: C.id, consentAsked: false },
+    ]);
+    expect(typeof key === "string" && key.length > 0).toBe(true);
+    expect(apiCanBo.bulkPublicationBody(rows ?? [])).toEqual({
+      items: [
+        { id: A.id, consent_confirmed: true },
+        { id: C.id, consent_confirmed: false },
+      ],
+    });
+
+    const out = panel(m).outcome;
+    expect(out?.kind === "lines" && out.lines.map((l) => [l.who, l.text])).toEqual([
+      ["Nguyễn Văn A (CB-00123)", "Đã công khai"],
+      ["Lê Văn C (CB-00125)", "Bỏ qua — chưa hỏi ý"],
+    ]);
+    expect(panel(m).selection).toEqual([]);
+    expect(docTrang).toHaveBeenCalledTimes(2);
+  });
+
+  it("máy chủ trả `replayed` → câu phát lại, đọc lại danh bạ", async () => {
+    bulk.mockResolvedValue({ ok: true, duLieu: { kind: "replayed" } });
+    const m = await openPanel();
+    panel(m).onSelect(A);
+    m.ve();
+    panel(m).onSetConsent(A.id, true);
+    m.ve();
+    panel(m).onSubmit();
+    await xongMang(m);
+
+    expect(panel(m).outcome).toEqual({ kind: "replayed" });
+    expect(docTrang).toHaveBeenCalledTimes(2);
+  });
+
+  it("lỗi mạng → GIỮ khoá cho lần gửi lại cùng thân; đổi lựa chọn → khoá MỚI", async () => {
+    bulk.mockResolvedValue({ ok: false, thongBao: "Không kết nối được máy chủ. Vui lòng thử lại." });
+    const m = await openPanel();
+    panel(m).onSelect(A);
+    m.ve();
+    panel(m).onSetConsent(A.id, true);
+    m.ve();
+    panel(m).onSubmit();
+    await xongMang(m);
+    expect(panel(m).error).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
+    panel(m).onSubmit();
+    await xongMang(m);
+    panel(m).onSelect(C);
+    m.ve();
+    panel(m).onSubmit();
+    await xongMang(m);
+
+    const keys = bulk.mock.calls.map((c) => c[1]);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(docTrang).toHaveBeenCalledTimes(1);
   });
 });

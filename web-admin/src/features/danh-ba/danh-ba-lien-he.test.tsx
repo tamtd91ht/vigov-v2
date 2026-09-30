@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 
+import { BULK_OPEN_BUTTON } from "./bulk-publication";
 import { NUT_RUT_MINI_APP, NUT_THEM_MINI_APP } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
 import { NUT_XOA_DONG } from "./xoa-dong";
@@ -52,14 +53,15 @@ describe("khối phần chưa mở — cái ra tới trang", () => {
   });
 });
 
-describe("màn danh bạ — không thao tác hàng loạt nào, và nút Mini App fail closed", () => {
-  it("không ô tick chọn dòng, không thanh hàng loạt, không nút Mini App khi phiên chưa đọc xong", () => {
+describe("màn danh bạ — nút Mini App (một người lẫn nhiều người) fail closed", () => {
+  it("không ô tick, không nút Mini App, không nút 'Công khai nhiều người' khi phiên chưa đọc xong", () => {
     const html = veMan();
     expect(html).not.toContain('type="checkbox"');
     expect(html).not.toMatch(/đã chọn|Chọn tất cả/);
     expect(html).not.toContain(NUT_THEM_MINI_APP);
     expect(html).not.toContain(NUT_RUT_MINI_APP);
     expect(html).not.toContain(NUT_XOA_DONG);
+    expect(html).not.toContain(BULK_OPEN_BUTTON);
   });
 });
 

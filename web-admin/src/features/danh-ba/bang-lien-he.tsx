@@ -44,10 +44,11 @@ import {
  * bản sẽ trôi (luật 9, cấm #2) — và bản trôi sẽ là bản nói sai về một bộ phận đã bị xoá mềm.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ CỘT CHECKBOX VÀ KHÔNG CÓ THANH HÀNH ĐỘNG HÀNG LOẠT, và sự vắng mặt ấy không phải quên.
- * Ô chọn của đặc tả (§2, §4) chỉ phục vụ ĐÚNG MỘT việc: bật/tắt Mini App cho nhiều người một lúc.
- * Câu mở #12 do khách chốt: công khai số di động cá nhân phải hỏi ý TỪNG người — nên hai nút
- * `Thêm vào / Rút khỏi danh bạ Mini App` nằm trên TỪNG DÒNG, mỗi lần một người.
+ * KHÔNG CÓ CỘT CHECKBOX TRONG BẢNG, và sự vắng mặt ấy không phải quên. Công khai nhiều người một lần
+ * (người dùng chốt 30/09/2026) sống trong khung riêng `bulk-publication-panel.tsx`, nơi MỖI người
+ * được chọn mang ô "Đã hỏi ý người này" của riêng mình — #12 vẫn hỏi ý TỪNG người. Một ô chọn
+ * trong bảng này, cách xa ô xác nhận đồng ý, là chỗ để chọn mà không hỏi. Hai nút
+ * `Thêm vào / Rút khỏi danh bạ Mini App` vẫn nằm trên TỪNG DÒNG cho thao tác một người.
  *
  * THUẦN TRÌNH BÀY: không đọc mạng, không giữ state. Nhờ vậy kết xuất được bằng `react-dom/server`
  * trong Node và bài kiểm hỏi thẳng được "dòng này có RA TỚI TRANG không".

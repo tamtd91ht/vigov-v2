@@ -1,5 +1,5 @@
 /**
- * Gọi mười tuyến của danh bạ cán bộ — ba tuyến đọc và **bảy tuyến ghi**.
+ * Gọi mười một tuyến của danh bạ cán bộ — ba tuyến đọc và **tám tuyến ghi**.
  *
  * BA TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
  * `GET /api/v1/staff/{id}`, và `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
@@ -10,7 +10,7 @@
  * mười ba trường của một cán bộ — có bản thứ hai là có hai bản sẽ trôi (luật 9).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * BẢY TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
+ * TÁM TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
  * (`service-identity/internal/http/can_bo_ghi.go`, chú thích đầu tệp):
  *
  *   POST   /api/v1/staff                   thêm một dòng danh bạ
@@ -19,6 +19,7 @@
  *   DELETE /api/v1/staff/{id}/lockout      quay lại làm việc
  *   PUT    /api/v1/staff/{id}/role         chuyển vai trò (#13, #14)
  *   PUT    /api/v1/staff/{id}/publication  công khai / rút khỏi danh bạ Mini App (#12), `content.update`
+ *   POST   /api/v1/staff/publications      công khai NHIỀU người, xác nhận đồng ý từng dòng, `content.update`
  *   DELETE /api/v1/staff/{id}              xoá mềm một dòng NHẬP TRÙNG (#10), `admin.user.delete`
  *
  * Gộp lại thành một hàm `luuCanBo(...)` ở đây là dựng lại đúng thứ máy chủ vừa tách ra: một
@@ -33,6 +34,9 @@
 
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
+  identity_bulkPublicationIn,
+  identity_bulkPublicationItemOut,
+  identity_bulkPublicationOut,
   identity_canBoTomTat,
   identity_datCongKhaiVao,
   identity_datVaiTroVao,
@@ -43,6 +47,7 @@ import type {
   identity_patch_staff_by_id,
   identity_post_staff,
   identity_post_staff_by_id_lockout,
+  identity_post_staff_publications,
   identity_post_staff_searches,
   identity_put_staff_by_id_publication,
   identity_put_staff_by_id_role,
@@ -486,8 +491,9 @@ export function thanCongKhai(yc: YeuCauCongKhai): identity_datCongKhaiVao {
  * PUT /api/v1/staff/{id}/publication — công khai hoặc rút một cán bộ khỏi danh bạ Zalo Mini App.
  * 200, trả về dòng danh bạ sau khi đổi (kèm `consent_recorded_at`). Quyền `content.update`.
  *
- * MỘT NGƯỜI MỘT LẦN, KHÔNG CÓ BIẾN THỂ HÀNG LOẠT — câu mở #12 do khách chốt: công khai số di động
- * cá nhân phải hỏi ý TỪNG người. Một hàm nhận danh sách id ở đây là đường vòng qua quyết định ấy.
+ * TUYẾN NÀY LÀ MỘT NGƯỜI MỘT LẦN, và là tuyến DUY NHẤT để RÚT. Công khai nhiều người một lần là
+ * `publishStaffBulk` ngay dưới (người dùng chốt 30/09/2026): vẫn một xác nhận đồng ý cho TỪNG dòng,
+ * nên #12 — hỏi ý từng người — không bị đi vòng.
  *
  * Ba lần từ chối về tới giao diện NGUYÊN VĂN câu máy chủ: 400 `consent_required` (chưa xác nhận
  * đồng ý), 400 `invalid_request` (thứ tự âm, thân hỏng), 404 `staff_not_found`.
@@ -498,6 +504,68 @@ export function datCongKhaiCanBo(
 ): Promise<KetQua<identity_canBoTomTat>> {
   const mau: identity_put_staff_by_id_publication["duongDan"] = "/api/v1/staff/{id}/publication";
   return goiGhiCanBo(duongDanMotCanBo(mau, id), "PUT", thanCongKhai(yc), 200);
+}
+
+/* ---- công khai nhiều người một lần ---------------------------------------------------------- */
+
+/** One selected person in the bulk form: who, and whether THIS row's consent box is ticked. */
+export type BulkPublicationRow = { readonly id: string; readonly consentAsked: boolean };
+
+/**
+ * Body of `POST /api/v1/staff/publications`, built field by field from the generated type.
+ *
+ * EVERY SELECTED ROW IS SENT, ticked or not: an unticked row goes up with `consent_confirmed: false`
+ * and the server answers it `skipped · consent_required`, so the result list names every person
+ * the administrator selected — none silently vanishes from it.
+ *
+ * NO `display_order`: on this route an absent order LEAVES the current position
+ * (`staff_bulk_publication.go`), and the bulk form turns people on, it does not reorder them.
+ */
+export function bulkPublicationBody(rows: readonly BulkPublicationRow[]): identity_bulkPublicationIn {
+  return { items: rows.map((r) => ({ id: r.id, consent_confirmed: r.consentAsked })) };
+}
+
+/**
+ * What a 200 of the bulk route means. A REPLAY (`core/idem` answers a retried key with
+ * `{"replayed":true}` and no list — it never stores a body) is a success whose per-row result is
+ * lost: the screen says so and re-reads the register instead of inventing a list.
+ */
+export type BulkPublicationAnswer =
+  | { readonly kind: "results"; readonly items: readonly identity_bulkPublicationItemOut[] }
+  | { readonly kind: "replayed" };
+
+/**
+ * POST /api/v1/staff/publications — publish MANY people to the Zalo Mini App directory
+ * (user decision 30/09/2026). `content.update`, the single route's key. 200 per-row results in
+ * request order; 400 for a malformed request as a whole, whose sentence is shown verbatim.
+ *
+ * `idempotencyKey` IS THE CALLER'S, for the same reason as `themCanBo`: a retry after a network
+ * failure must reuse it, because the first send may already have published people.
+ */
+export async function publishStaffBulk(
+  rows: readonly BulkPublicationRow[],
+  idempotencyKey: string,
+): Promise<KetQua<BulkPublicationAnswer>> {
+  const path: identity_post_staff_publications["duongDan"] = "/api/v1/staff/publications";
+  const sent = await goiGhi(path, "POST", bulkPublicationBody(rows), 200, {
+    "Idempotency-Key": idempotencyKey,
+  });
+  if (!sent.ok) return sent;
+
+  const res = sent.duLieu;
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    // A 200 is the fact even with an unreadable body: people may be published. Treat it like a
+    // replay — the register is re-read — rather than telling the administrator nothing happened.
+    return { ok: true, duLieu: { kind: "replayed" } };
+  }
+  const shape = (body ?? {}) as Partial<identity_bulkPublicationOut> & { replayed?: unknown };
+  if (res.headers.get("Idempotent-Replay") === "true" || shape.replayed === true || !Array.isArray(shape.items)) {
+    return { ok: true, duLieu: { kind: "replayed" } };
+  }
+  return { ok: true, duLieu: { kind: "results", items: shape.items } };
 }
 
 /* ---- xoá một dòng nhập trùng --------------------------------------------------------------- */
