@@ -25,6 +25,7 @@ import {
   type CommuneAppLoginResult,
   type KetQuaMoPhienQuaCau,
   moPhienCongDanQuaCau,
+  openCommuneAppSessionWithDemoIdentity,
   openCommuneAppSessionWithPhone,
   reopenCitizenSessionWithPhone,
   type ReopenWithPhoneBridgeResult,
@@ -44,6 +45,7 @@ import {
   type ScreenId,
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
+import { DEMO_BUILD } from "./lib/demo-build";
 import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
 import { XA_CO_DINH } from "./lib/xa-co-dinh";
 
@@ -332,8 +334,14 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
   }
 }
 
+/**
+ * `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the identity comes from `vihat-miniapp`'s fixed demo identity — no
+ * `getPhoneNumber`, the `demoIdentity` body. Same result table: everything after the session is real.
+ */
 const openCommuneAppSession: OpenCommuneAppSession = async () =>
-  toCommuneAppSessionResult(await openCommuneAppSessionWithPhone());
+  toCommuneAppSessionResult(
+    await (DEMO_BUILD ? openCommuneAppSessionWithDemoIdentity() : openCommuneAppSessionWithPhone()),
+  );
 
 /**
  * THE LOCATION BRIDGE, for BOTH apps — the shell builds it, the state half only declares its type

@@ -850,9 +850,6 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["bước đang làm (đỏ thương hiệu, 30/09/2026)", token("xa-brand"), token("surface")],
     ["số bước đang làm: chữ trắng trên chấm đỏ", "#ffffff", token("xa-brand")],
-    // Demo build only (30/09/2026): the "Chế độ demo" band on every screen, and its edge against the band.
-    ["dải 'Chế độ demo': chữ trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
-    ["dải 'Chế độ demo': viền cam sẫm trên nền cam nhạt", token("xa-cam-dam"), token("xa-cam-nhat")],
     // Wave 1 (30/09/2026) — every new pair a screen now renders, by name.
     ["mã phiếu (#code) xanh đậm trên thẻ, và mã lớn sau khi gửi", token("xa-blue-ink"), token("surface")],
     ["tên lĩnh vực trên ô tông xanh dương", token("ink"), token("xa-blue-50")],
@@ -890,10 +887,6 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       expect(rule, `${lop} không còn một quy tắc`).not.toBeNull();
       expect(rule![1], `${lop} lại nổi (fixed/sticky) — nội dung sẽ trượt dưới nó`).not.toMatch(/position:\s*(fixed|sticky)/);
     }
-  });
-
-  it("dải 'Chế độ demo' (chỉ bản demo) dùng chữ --text-small trở lên, không phải số px", () => {
-    expect(styles).toMatch(/\.xa-demo\s*\{[^}]*font-size:\s*var\(--text-(small|body)\)/);
   });
 
   for (const [gi, chu, nen] of cap) {

@@ -428,7 +428,7 @@ describe("banner xã tạm thời chỉ đi vào đúng bản dựng --vao-thang
   });
 });
 
-describe("`--demo`: the plan says so before anything happens (owner 30/09/2026, dropped at submission)", () => {
+describe("`--demo`: the plan says so before anything happens (owner 01/10/2026, dropped at submission)", () => {
   const deploy = fileURLToPath(new URL("./deploy.mjs", import.meta.url));
   // `--thu` builds nothing and pushes nothing. ZMP_TOKEN emptied: the dry run must not depend on this machine.
   const dryRun = (...flags) =>
@@ -437,9 +437,10 @@ describe("`--demo`: the plan says so before anything happens (owner 30/09/2026, 
       env: { ...process.env, ZMP_TOKEN: "", VIGOV_DEMO: "", VIGOV_XA_CO_DINH: "" },
     });
 
-  it("the plan line is loud and says what to do before submission", () => {
-    expect(DEMO_PLAN_LINE).toMatch(/CHẾ ĐỘ DEMO/);
-    expect(DEMO_PLAN_LINE).toMatch(/BỎ cờ --demo trước khi nộp duyệt/);
+  it("the plan line names the fixed identity and says what to do before submission", () => {
+    expect(DEMO_PLAN_LINE).toBe(
+      "  ⚠ --demo: danh tính cố định Nguyễn Văn Hùng / 0900000000, không xin quyền Zalo; BỎ cờ trước khi nộp duyệt",
+    );
   });
 
   it("with `--demo`: the plan line, the DEMO label, and VIGOV_DEMO=1 on the build line", () => {
@@ -453,7 +454,8 @@ describe("`--demo`: the plan says so before anything happens (owner 30/09/2026, 
   it("without `--demo`: no demo line, no DEMO label, no VIGOV_DEMO", () => {
     const r = dryRun("--domain=thangbinh-danang.vigov.vn", "--vao-thang", "--thu");
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).not.toContain("CHẾ ĐỘ DEMO");
+    expect(r.stdout).not.toContain(DEMO_PLAN_LINE);
+    expect(r.stdout).not.toContain("--demo");
     expect(r.stdout).not.toContain("DEMO");
     expect(r.stdout).not.toContain("VIGOV_DEMO");
   });

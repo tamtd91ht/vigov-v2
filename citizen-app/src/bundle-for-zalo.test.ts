@@ -18,6 +18,7 @@ import {
   COMPANY,
   NHAN_LOAI_HINH,
   SLOGAN_HERO,
+  SOLUTIONS,
 } from "./content/company-profile";
 import { DICH_MO_RA_NGOAI, DUONG_DAN_CHAT_OA } from "./content/dich-ra-ngoai";
 import { NGAY_CHUP_TIN, TIN_VIHAT } from "./content/tin-tuc";
@@ -49,7 +50,7 @@ import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
-import { DEMO_CITIZEN_NAME, DEMO_WORDS } from "./cong-dan/man/demo-mode";
+import { DEMO_CITIZEN_NAME, DEMO_CITIZEN_PHONE } from "./lib/demo-build";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -568,19 +569,30 @@ describe("what the submission says the app is called", () => {
 });
 
 /**
- * DEMO BUILD (`deploy.mjs --vao-thang --demo`, owner 30/09/2026 — dropped at submission). The words and the
- * sample name exist ONLY in that build: `DEMO_BUILD` is a literal the bundler inlines, so every other build
- * folds the branches away (`lib/demo-build.ts`). Both halves are measured on a REAL build — without the "has"
- * half, a changed sentence would keep the "has not" half green for the wrong reason.
+ * THE `--demo` BUILD (`deploy.mjs --vao-thang --demo`, owner 01/10/2026, ADR 0047 §6 — dropped at submission).
+ *
+ * The owner, verbatim: "bỏ khái niệm demo ra khỏi app đi dù deploy với môi trường hay tham số nào. Không có 1
+ * dòng thông báo demo hay trải nghiệm nào trong ứng dụng cả". So BOTH builds are measured for the words, on a
+ * REAL build each — and the `--demo` one must still carry its fixed identity, or "no demo word" would be green
+ * because the flag had silently stopped doing anything.
+ *
+ * WHAT COUNTS: "demo" as a WORD, anywhere in the bundle (`\bdemo\b`, any case). Measured 01/10/2026: the
+ * normal bundle has no "demo" at all, and the `--demo` one only `demoIdentity` — the login body's wire key,
+ * which no citizen reads and which is not a word on its own. Vietnamese phrases are searched in the whole
+ * text: nothing but UI text is written in Vietnamese.
+ *
+ * ONE EXEMPTION, NAMED: ViHAT's published eSMS line "…nâng cao trải nghiệm khách hàng đa kênh" (`SOLUTIONS`,
+ * pinned verbatim by `company-profile.test.ts` as a quote of a real company). It is "customer experience" in
+ * the commercial half, not a demo or trial notice; rewording a published quote is not this card's call.
  */
-describe("demo build: its words only in the build that asked for them", () => {
-  const DEMO_STRINGS = () => [
-    DEMO_WORDS.band_title,
-    DEMO_WORDS.band_body,
-    ...Object.values(DEMO_WORDS.task),
-    DEMO_WORDS.fields,
-    DEMO_CITIZEN_NAME,
-  ];
+const PUBLISHED_QUOTES = SOLUTIONS.flatMap((s) => [s.headline, s.note ?? ""]).filter((s) => s !== "");
+
+function demoWordsIn(bundle: string): string[] {
+  const text = PUBLISHED_QUOTES.reduce((t, q) => t.split(q).join(" "), bundle);
+  return [...text.matchAll(/.{0,40}(?:\bdemo\b|trình diễn|trải nghiệm|chế độ demo).{0,40}/gi)].map((m) => m[0]);
+}
+
+describe("the `--demo` build: a fixed identity, and not one demo word in either build", () => {
   let demo = "";
 
   beforeAll(async () => {
@@ -598,11 +610,31 @@ describe("demo build: its words only in the build that asked for them", () => {
     }
   }, 120_000);
 
-  it("the normal build carries NONE of them — unreachable is not enough, they are not there", () => {
-    for (const s of DEMO_STRINGS()) expect(ban, `normal bundle still carries: ${s}`).not.toContain(s);
+  it("the measure measures: it finds a demo word when there is one, and the exemption is real", () => {
+    // Without this, a broken pattern would find nothing and both "none" cases below would be green.
+    expect(demoWordsIn("x=`Chế độ demo · Bản trình diễn`")).toHaveLength(1);
+    expect(demoWordsIn("a={demoIdentity:!0}")).toEqual([]);
+    expect(PUBLISHED_QUOTES.some((q) => q.includes("trải nghiệm"))).toBe(true);
+    expect(ban.length).toBeGreaterThan(100_000);
+    expect(demo).toContain(NHAN_KENH_CONG_DAN);
   });
 
-  it("the demo build carries every one of them", () => {
-    for (const s of DEMO_STRINGS()) expect(demo, `demo bundle is missing: ${s}`).toContain(s);
+  it.each([
+    ["normal", () => ban],
+    ["--demo", () => demo],
+  ])("%s build: no 'demo', 'trình diễn' or 'trải nghiệm' anywhere", (_, bundle) => {
+    const hits = demoWordsIn(bundle());
+    expect(hits, `the bundle still carries a demo word: ${hits.slice(0, 3).join(" | ")}`).toEqual([]);
+  });
+
+  it("the --demo build carries the fixed identity and the login body without a phone token", () => {
+    expect(demo, "the fixed name is gone — the flag no longer does anything").toContain(DEMO_CITIZEN_NAME);
+    expect(demo, "the fixed number is gone").toContain(DEMO_CITIZEN_PHONE);
+    expect(demo, "the demo login body is gone").toContain("demoIdentity");
+  });
+
+  it("the normal build carries none of it — unreachable is not enough, it is not there", () => {
+    expect(ban).not.toContain(DEMO_CITIZEN_NAME);
+    expect(ban).not.toContain("demoIdentity");
   });
 });

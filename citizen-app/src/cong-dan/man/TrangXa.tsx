@@ -31,8 +31,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
-import { layPhienViGov } from "../api/phien-vigov";
-import { DEMO_BUILD } from "../../lib/demo-build";
+import { DEMO_BUILD, DEMO_CITIZEN_NAME } from "../../lib/demo-build";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import {
@@ -43,7 +42,6 @@ import {
   type SessionGateState,
 } from "./commune-session";
 import { dichGoi } from "./DanhBaCanBoScreen";
-import { DemoBand, DEMO_WORDS, withDemoName } from "./demo-mode";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
 import {
@@ -443,11 +441,8 @@ function DauTab({ tieu_de }: { tieu_de: string }) {
  *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's)
  *   `dang-mo`   words, not a spinner
  *   `ket-qua`   one sentence saying what to do next; "Đồng ý…" again only where a new tap can help
- *   `demo`      demo build only: the act ran without a session and the server was not reached — one sentence
- *
- * Exported for `demo-mode.test.tsx` (rendered statically); `AppCuaXa` is its only caller.
  */
-export function SessionGateScreen(props: {
+function SessionGateScreen(props: {
   state: SessionGateState;
   task: PhoneVerificationTask;
   onAllow: () => void;
@@ -457,17 +452,8 @@ export function SessionGateScreen(props: {
   const { state } = props;
   return (
     <>
-      <DauManCon tieu_de={DEMO_BUILD && state.kieu === "demo" ? DEMO_WORDS.notice_title : PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
+      <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
       <TrangCon>
-        {/* Demo build only: ONE sentence and the way back — no "Đồng ý…" again, so no loop (`showDemoNotice`). */}
-        {DEMO_BUILD && state.kieu === "demo" && (
-          <>
-            <KhoiTrangThai bieu_tuong="info" cau={DEMO_WORDS.task[props.task]} />
-            <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
-              {DEMO_WORDS.back}
-            </button>
-          </>
-        )}
         {state.kieu === "dang-mo" && <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai />}
         {state.kieu === "hoi" && (
           <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-tieu-de">
@@ -506,20 +492,12 @@ export function SessionGateScreen(props: {
 /** `createSessionGate` held once per open. The commune name is read at call time, from the header's source. */
 function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: string) {
   const [state, setState] = useState<SessionGateState | null>(null);
-  /** Demo build only: a phone-step failure let this open's acts run without a session (`commune-session.ts`). */
-  const [demoWithoutSession, setDemoWithoutSession] = useState(false);
   const name = useRef(communeName);
   name.current = communeName;
   const gate = useRef<SessionGate | null>(null);
-  if (gate.current === null) {
-    gate.current = createSessionGate(
-      open,
-      () => name.current,
-      setState,
-      DEMO_BUILD ? { onProceed: () => setDemoWithoutSession(true) } : undefined,
-    );
-  }
-  return { gate: gate.current, state, demoWithoutSession: DEMO_BUILD && demoWithoutSession };
+  // `DEMO_BUILD`: that build's opener shows no Zalo dialog, so there is nothing to explain first (ADR 0047 §6).
+  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState, DEMO_BUILD);
+  return { gate: gate.current, state };
 }
 
 function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
@@ -560,7 +538,7 @@ function AppCuaXa(props: {
   const lop = `xa-app xa-co-chu--${co_chu}`;
 
   /* ── THE GATE: every personal act asks here first (`commune-session.ts`) ── */
-  const { gate, state: gateState, demoWithoutSession } = useSessionGate(openSession, xa.ten);
+  const { gate, state: gateState } = useSessionGate(openSession, xa.ten);
   const [gateTask, setGateTask] = useState<PhoneVerificationTask>("submit");
   // The 403 path of the rating block (`usePhoneVerification`): the same opener, the same commune check.
   const reopenWithPhone = useMemo(() => (openSession ? communeAppReopen(openSession) : undefined), [openSession]);
@@ -570,9 +548,8 @@ function AppCuaXa(props: {
     setGateTask(task);
     gate.require(() => {
       act();
-      // A session now exists: the home block and Cá nhân fill in without a second question. (Demo build
-      // without a session: nothing to load, and loading would cover the screen just asked for with a notice.)
-      if (!DEMO_BUILD || layPhienViGov() !== null) petitions.loadIfIdle();
+      // A session now exists: the home block and Cá nhân fill in without a second question.
+      petitions.loadIfIdle();
     });
   }
 
@@ -580,13 +557,6 @@ function AppCuaXa(props: {
   const sessionLost =
     (task: PhoneVerificationTask): OnSessionLost =>
     (retry) => {
-      // Demo build, no session because Zalo refused the phone: one sentence, and NOT the gate again — the
-      // gate would run the act, the act would come back here, and that is the loop the demo must not have.
-      if (DEMO_BUILD && gate.demoWithoutSession() && layPhienViGov() === null) {
-        setGateTask(task);
-        gate.showDemoNotice();
-        return;
-      }
       dropCommuneAppSession();
       requireSession(task, retry);
     };
@@ -621,7 +591,6 @@ function AppCuaXa(props: {
         <CommuneSendScreen
           ten_xa={xa.ten}
           ho_ten={shownName}
-          demoWithoutSession={demoWithoutSession}
           getSceneLocation={props.getSceneLocation}
           draftStore={props.draftStore}
           onBack={ve}
@@ -716,11 +685,10 @@ function AppCuaXa(props: {
     );
   // THE SCROLL MODEL (`PROTOTYPE.md` §5.2): `.xa-app` is one viewport-tall column; each `.xa-frame` is the
   // rest of it, holding a header, ONE scrolling `.xa-trang`, and any footer / tab bar — so only the middle
-  // moves, and the demo band, header and bottom bar stay on screen. `hidden` on a frame must still hide it:
+  // moves, and the header and bottom bar stay on screen. `hidden` on a frame must still hide it:
   // `.xa-frame[hidden]` in styles.css, since `display: flex` would otherwise win over the attribute.
   const withGate = (content: ReactNode) => (
     <div className={lop}>
-      <DemoBand />
       {gateScreen !== null && <div className="xa-frame">{gateScreen}</div>}
       <div className="xa-frame" hidden={gateScreen !== null}>
         {content}
@@ -854,9 +822,14 @@ export function TrangXa(props: {
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
-  // `withDemoName`: the demo build's sample name where Zalo gave none — identity in every other build.
+  // `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the fixed identity's name, and `getUserInfo` is never called —
+  // no check, no card, no question. Every other build: the Zalo name, asked for as below.
   const [name, setName] = useState<NameAtEntry>(() =>
-    withDemoName(lay_ten === undefined ? { kind: "settled", name: null } : { kind: "checking" }),
+    DEMO_BUILD
+      ? { kind: "settled", name: DEMO_CITIZEN_NAME }
+      : lay_ten === undefined
+        ? { kind: "settled", name: null }
+        : { kind: "checking" },
   );
   /**
    * The ref, not the effect's dependency list, is what makes the check run ONCE: StrictMode mounts, unmounts
@@ -868,18 +841,18 @@ export function TrangXa(props: {
   // Started with the commune lookup, not after it: the check never opens a dialog, so running it while
   // the commune name loads costs the citizen nothing, and the name is usually ready by the first screen.
   useEffect(() => {
-    if (lay_ten === undefined || nameChecked.current) return;
+    if (DEMO_BUILD || lay_ten === undefined || nameChecked.current) return;
     nameChecked.current = true;
     void lay_ten("check")
       .catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }))
-      .then((kq) => setName(withDemoName(afterNameCheck(kq))));
+      .then((kq) => setName(afterNameCheck(kq)));
   }, [lay_ten]);
 
   async function askName() {
-    if (lay_ten === undefined || name.kind !== "needs-consent") return;
+    if (DEMO_BUILD || lay_ten === undefined || name.kind !== "needs-consent") return;
     setName({ kind: "asking" });
     const kq = await lay_ten("ask").catch((): Awaited<ReturnType<LayTenZalo>> => ({ kieu: "khong-lay-duoc" }));
-    setName(withDemoName(afterNameAsk(kq)));
+    setName(afterNameAsk(kq));
   }
 
   useEffect(() => {
@@ -902,7 +875,7 @@ export function TrangXa(props: {
         xa={trang.xa}
         name={name}
         onAgreeName={() => void askName()}
-        onDeclineName={() => setName(withDemoName({ kind: "settled", name: null }))}
+        onDeclineName={() => setName({ kind: "settled", name: null })}
         getSceneLocation={getSceneLocation}
         draftStore={draftStore}
         openSession={openSession}
@@ -912,7 +885,6 @@ export function TrangXa(props: {
 
   return (
     <div className="xa-app">
-      <DemoBand />
       <div className="xa-trang xa-trang--con">
         {trang.kieu === "dang-tra" ? (
           <KhoiTrangThai bieu_tuong="build" cau={APP_RIENG.dang_mo} dang_tai />

@@ -307,6 +307,38 @@ export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
   });
 }
 
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * FIFTH BODY — THE `--demo` BUILD'S LOGIN FROM A COMMUNE'S OWN APP (owner 01/10/2026, ADR 0047 §6)
+ *
+ *   send   : { "appId", "accessToken", "demoIdentity": true }  — NO `phoneToken`: `getPhoneNumber` is never
+ *            called in that build
+ *   receive: the fourth body's 201, errors and status table, unchanged (`openCommuneAppSessionCall`)
+ *
+ * The server side is `vihat-miniapp`'s: it accepts this body ONLY for an App ID in its `DEMO_APP_IDS` (empty
+ * by default) and then hands ViGov the fixed number; any other App ID is refused, so this body never turns a
+ * real app into one without phone verification. Built only under `DEMO_BUILD` (`App.tsx`), so a normal
+ * bundle does not carry it at all.
+ *
+ * NOT declared in `content/ket-xuat-ho-so.ts`: that is the Zalo submission file, and a `--demo` build is
+ * never submitted — the owner drops the flag first.
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** The `--demo` login request: the access token (no dialog) and the running app's App ID. */
+export type CommuneAppDemoSessionRequest = {
+  readonly access_token: string;
+  /** App ID of the running Mini App, as Zalo reports it. Selects the secret, grants nothing. */
+  readonly app_id: string;
+};
+
+/** The `--demo` login body. THE ONLY PLACE the key `demoIdentity` is written. */
+export function communeAppDemoSessionBody(req: CommuneAppDemoSessionRequest): string {
+  return JSON.stringify({
+    appId: req.app_id,
+    accessToken: req.access_token,
+    demoIdentity: true,
+  });
+}
+
 /**
  * Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã.
  *

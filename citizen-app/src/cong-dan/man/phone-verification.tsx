@@ -18,17 +18,10 @@
  * ⚠ KHÔNG GIỮ GÌ CỦA SỐ ĐIỆN THOẠI. Mã số điện thoại không bao giờ tới tệp này (`api/mo-phien-vigov.ts`
  *   khối "mở lại"). Không lưu xuống máy (`ranh-gioi-hai-nua.test.ts` §3b), không log.
  *
- * DEMO BUILD ONLY (`deploy.mjs --vao-thang --demo`, owner 30/09/2026 — dropped at submission): when the
- *   PHONE STEP fails (`DEMO_PHONE_FAILURES`), the panel shows ONE demo sentence instead of the error, and that is
- *   final for this screen — the next 403 shows the same sentence, never the question again. Nothing is re-run,
- *   nothing pretends to be sent. Every other build: unchanged.
- *
  * ⚠ NHÁP KHÔNG MẤT. Việc gọi lại là CHÍNH hàm của màn, với CHÍNH lần gửi / mã / con trỏ đã dùng — nội
  *   dung phản ánh đang nằm trong `useState` của màn và không đi qua đây.
  */
 import { useRef, useState } from "react";
-
-import { DEMO_BUILD } from "../../lib/demo-build";
 
 import {
   type PhoneVerificationOutcome,
@@ -37,7 +30,6 @@ import {
   type ZaloFailure,
 } from "../api/mo-phien-vigov";
 
-import { DEMO_WORDS } from "./demo-mode";
 import {
   PHONE_VERIFICATION,
   PHONE_VERIFICATION_TASK,
@@ -54,9 +46,7 @@ export type PhoneVerificationState =
   | { readonly kieu: "hoi" }
   | { readonly kieu: "dang-xac-nhan" }
   /** `zalo` (with `thu-lai` only): Zalo refused a step with a code — the sentence names it. */
-  | { readonly kieu: "ket-qua"; readonly outcome: PhoneVerificationStop; readonly zalo?: ZaloFailure }
-  /** Demo build only: the phone step failed — one sentence, no button, final for this screen. */
-  | { readonly kieu: "demo" };
+  | { readonly kieu: "ket-qua"; readonly outcome: PhoneVerificationStop; readonly zalo?: ZaloFailure };
 
 export type PhoneVerification = {
   /** Một lời gọi vừa trả `can-xac-thuc-so`. `rerun` lặp lại ĐÚNG lời gọi ấy. */
@@ -73,18 +63,6 @@ export type PhoneVerification = {
 const CAN_ASK_AGAIN: ReadonlySet<PhoneVerificationStop> = new Set(["tu-choi", "thu-lai"]);
 
 /**
- * Demo build only — the outcomes that are a failure OF THE PHONE STEP (Zalo's dialog refused, Zalo errored or
- * lacks the permission, no Zalo, the server could not verify the number). `khac-xa` and `chua-mo` are not about
- * the phone and keep their own sentence in every build.
- */
-export const DEMO_PHONE_FAILURES: ReadonlySet<PhoneVerificationStop> = new Set([
-  "tu-choi",
-  "thu-lai",
-  "ngoai-zalo",
-  "van-chua-xac-thuc",
-]);
-
-/**
  * Máy trạng thái, THUẦN — không React, để test chạy từng bước mà không cần DOM (khung gắn tự dựng của
  * `hieu-ung-khong-phien.test.tsx` không mô phỏng cú bấm).
  */
@@ -97,16 +75,9 @@ export function createPhoneVerification(
   /** Kết cục cuối — có rồi thì 403 sau chỉ còn câu này. */
   let finalOutcome: PhoneVerificationStop | null = null;
   let busy = false;
-  /** Demo build only: the phone step failed once — from then on only the demo sentence. */
-  let demoFinal = false;
 
   return {
     onPhoneRequired(rerun) {
-      if (DEMO_BUILD && demoFinal) {
-        pending = null;
-        setState({ kieu: "demo" });
-        return;
-      }
       if (finalOutcome !== null) {
         pending = null;
         setState({ kieu: "ket-qua", outcome: finalOutcome });
@@ -137,12 +108,6 @@ export function createPhoneVerification(
         pending = null;
         setState(null);
         rerun();
-        return;
-      }
-      if (DEMO_BUILD && DEMO_PHONE_FAILURES.has(outcome.kieu)) {
-        demoFinal = true;
-        pending = null;
-        setState({ kieu: "demo" });
         return;
       }
       if (!CAN_ASK_AGAIN.has(outcome.kieu)) finalOutcome = outcome.kieu;
@@ -230,17 +195,6 @@ export function PhoneVerificationPanel(props: {
       <p className="cd-cau" role="status" id={props.focusId} tabIndex={-1}>
         {PHONE_VERIFICATION.working}
       </p>
-    );
-  }
-
-  if (DEMO_BUILD && state.kieu === "demo") {
-    return (
-      <div className="cd-buoc">
-        <p className="cd-cau" role="status" id={props.focusId} tabIndex={-1}>
-          {DEMO_WORDS.task[props.task]}
-        </p>
-        {draft}
-      </div>
     );
   }
 

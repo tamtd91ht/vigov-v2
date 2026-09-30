@@ -20,12 +20,9 @@
  *
  * PURE — no React, so tests step it without a DOM (the same reason as `createPhoneVerification`).
  *
- * DEMO BUILD ONLY (`deploy.mjs --vao-thang --demo`, owner 30/09/2026 — dropped at submission): passed a
- * `demo` argument, a PHONE-STEP failure (`DEMO_PROCEEDS`) runs the act anyway, WITHOUT a session, and every
- * later act of this open runs at once — never the explanation again, never Zalo again, so no loop. Any
- * server call such an act makes answers "no session" without touching the network (`goi-vigov.ts` #1), and
- * the screen shows ONE demo sentence (`showDemoNotice`). Nothing here pretends a session exists: the commune
- * check, "not connected" and "paused" stay exactly as they are. Without `demo` nothing below changes.
+ * `openAtOnce` (the `--demo` build only, ADR 0047 §6 row of 01/10/2026): that build's opener asks Zalo for
+ * nothing — there is no phone dialog — so the explanation written for that dialog has nothing to explain,
+ * and `require` opens the session at once. Every outcome after that is handled exactly as in every build.
  */
 import {
   type CommuneAppSessionOutcome,
@@ -51,9 +48,7 @@ export type SessionGateState =
   | { readonly kieu: "hoi" }
   | { readonly kieu: "dang-mo" }
   /** `zalo` (with `thu-lai` only): Zalo refused a step with a code — the sentence names it. */
-  | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop; readonly zalo?: ZaloFailure }
-  /** Demo build only: an act that needs the server ran without a session — one sentence, no retry. */
-  | { readonly kieu: "demo" };
+  | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop; readonly zalo?: ZaloFailure };
 
 export type SessionGate = {
   /** A personal act wants to run. Runs it at once when a session exists; otherwise explains and waits. */
@@ -64,28 +59,7 @@ export type SessionGate = {
   decline(): void;
   /** The citizen started something else — clear the sentence. Never clears a final outcome. */
   reset(): void;
-  /** Demo build only: a phone-step failure let this open's acts run without a session. */
-  demoWithoutSession(): boolean;
-  /** Demo build only: say, in one sentence, that the server could not be reached without a session. */
-  showDemoNotice(): void;
 };
-
-/** Demo build only — what the gate tells the screen when an act runs without a session. */
-export type SessionGateDemo = { readonly onProceed: () => void };
-
-/**
- * The outcomes that are a failure OF THE PHONE STEP itself — Zalo refused, lacks the permission, errored,
- * was busy, or there is no Zalo; or the server could not verify the number. Only these let a demo build
- * go on. `khac-xa` (another commune), `chua-ket-noi`, `tam-ngung` and `chua-mo` are not about the phone
- * and stop the act as in every build: a demo must never show a form addressed to a commune it cannot name.
- */
-export const DEMO_PROCEEDS: ReadonlySet<SessionGateStop> = new Set([
-  "tu-choi",
-  "thu-lai",
-  "cho-lat",
-  "ngoai-zalo",
-  "chua-xac-thuc-so",
-]);
 
 /** The outcomes a fresh tap can change. */
 const CAN_ASK_AGAIN: ReadonlySet<SessionGateStop> = new Set(["tu-choi", "thu-lai", "cho-lat", "tam-ngung"]);
@@ -99,23 +73,15 @@ export function createSessionGate(
   open: OpenCommuneAppSession | undefined,
   communeName: () => string,
   setState: (s: SessionGateState | null) => void,
-  demo?: SessionGateDemo,
+  openAtOnce = false,
 ): SessionGate {
   let pending: (() => void) | null = null;
   let finalOutcome: SessionGateStop | null = null;
   let busy = false;
-  /** Demo only: set once, by a phone-step failure; from then on acts run at once, without a session. */
-  let demoProceeded = false;
 
-  return {
+  const gate: SessionGate = {
     require(run) {
       if (layPhienViGov() !== null) {
-        pending = null;
-        setState(null);
-        run();
-        return;
-      }
-      if (demoProceeded) {
         pending = null;
         setState(null);
         run();
@@ -133,6 +99,10 @@ export function createSessionGate(
         return;
       }
       pending = run;
+      if (openAtOnce) {
+        void gate.allow();
+        return;
+      }
       setState({ kieu: "hoi" });
     },
 
@@ -146,15 +116,6 @@ export function createSessionGate(
         const run = pending;
         pending = null;
         setState(null);
-        run();
-        return;
-      }
-      if (demo !== undefined && DEMO_PROCEEDS.has(outcome.kieu)) {
-        demoProceeded = true;
-        const run = pending;
-        pending = null;
-        setState(null);
-        demo.onProceed();
         run();
         return;
       }
@@ -181,17 +142,8 @@ export function createSessionGate(
       pending = null;
       setState(null);
     },
-
-    demoWithoutSession() {
-      return demoProceeded;
-    },
-
-    showDemoNotice() {
-      if (!demoProceeded) return;
-      pending = null;
-      setState({ kieu: "demo" });
-    },
   };
+  return gate;
 }
 
 /** Whether the result sentence of this outcome offers the "Đồng ý…" button again. */

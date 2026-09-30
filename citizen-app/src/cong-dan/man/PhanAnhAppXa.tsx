@@ -43,12 +43,10 @@ import {
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
-import { layPhienViGov } from "../api/phien-vigov";
-import { DEMO_BUILD } from "../../lib/demo-build";
+import { DEMO_BUILD, DEMO_CITIZEN_PHONE } from "../../lib/demo-build";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
-import { DEMO_WORDS, demoPhonePrefill } from "./demo-mode";
 import { nhanLinhVuc } from "./khung";
 import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
@@ -673,13 +671,7 @@ export function PetitionLookup(props: {
         </div>
         {state?.kind === "missing" && <KhoiTrangThai bieu_tuong="info" loi cau={XA_PA.thieu_ma} />}
         {state?.kind === "loading" && <KhoiTrangThai bieu_tuong="search" cau={TRA_CUU.dang_tra} dang_tai />}
-        {state?.kind === "session" &&
-          (DEMO_BUILD && layPhienViGov() === null ? (
-            // Demo build, Zalo refused the phone: the same one sentence the notice gave, not "session expired".
-            <KhoiTrangThai bieu_tuong="info" cau={DEMO_WORDS.task.lookup} />
-          ) : (
-            <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} />
-          ))}
+        {state?.kind === "session" && <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} />}
         {state?.kind === "failed" && <KhoiTrangThai bieu_tuong="search" loi cau={state.text} />}
         {state?.kind === "found" && (
           <PetitionBody
@@ -787,11 +779,8 @@ export function catalogueFailureText(f: CatalogueFailure): string {
   }
 }
 
-/**
- * The catalogue of this send screen. Loaded once on mount (ref guard: StrictMode runs effects twice).
- * `skip` (demo build without a session only): not loaded at all — it could only answer "no session".
- */
-function useFieldCatalogue(onSessionLost: OnSessionLost, skip = false) {
+/** The catalogue of this send screen. Loaded once on mount (ref guard: StrictMode runs effects twice). */
+function useFieldCatalogue(onSessionLost: OnSessionLost) {
   const [catalogue, setCatalogue] = useState<Catalogue>({ kind: "loading" });
   const busy = useRef(false);
 
@@ -810,7 +799,7 @@ function useFieldCatalogue(onSessionLost: OnSessionLost, skip = false) {
 
   const started = useRef(false);
   useEffect(() => {
-    if (started.current || skip) return;
+    if (started.current) return;
     started.current = true;
     void load();
   }, []);
@@ -904,14 +893,14 @@ export function restoreDraft(
  * (`kiemNhapPhieu`), so an empty field makes the citizen type it, while a guessed one would be sent.
  * The name PRE-FILLS; it grants nothing — who sent it is the session's citizen, on the server (rule 4).
  */
-export function blankForm(nameFromEntry: string | null, phone = ""): NhapPhieu {
+export function blankForm(nameFromEntry: string | null): NhapPhieu {
   return {
     linh_vuc: "",
     noi_dung: "",
     dia_chi: "",
     ho_ten: nameFromEntry ?? "",
-    // `phone`: only the demo build's fake number (`demoPhonePrefill`); empty in every other build.
-    dien_thoai: phone,
+    // Empty in every build but `--demo`, whose fixed identity pre-fills its number (ADR 0047 §6, 01/10/2026).
+    dien_thoai: DEMO_BUILD ? DEMO_CITIZEN_PHONE : "",
     // Gửi ẩn danh là tuỳ chọn của bà con (SRS M4.2, ADR 0050 #3): bật thì không gửi họ tên, số điện thoại.
     an_danh: false,
   };
@@ -1019,12 +1008,6 @@ export function CommuneSendScreen(props: {
   ten_xa: string;
   /** Họ tên lấy từ Zalo lúc mở app, hoặc `null`. CHỈ để điền sẵn — màn này không gọi Zalo. */
   ho_ten: string | null;
-  /**
-   * Demo build only: Zalo refused the phone, so this screen opened WITHOUT a session (`commune-session.ts`).
-   * Step 1 then says so instead of loading the field list, the phone field starts with the fake number, and
-   * "Gửi" ends in the demo sentence (through `onSessionLost`). Always `false` outside a demo build.
-   */
-  demoWithoutSession?: boolean;
   /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
   getSceneLocation?: GetSceneLocation;
   /** Draft kept on the phone (ADR 0050 #7) — commune app only. Absent: no draft at all. */
@@ -1043,8 +1026,7 @@ export function CommuneSendScreen(props: {
    * before the citizen has answered (the prototype asks first, `NewFeedbackPage.tsx:79`).
    */
   const [draftOffer, setDraftOffer] = useState<NhapPhieu | null>(() => draftStore?.load() ?? null);
-  const demoWithoutSession = DEMO_BUILD && props.demoWithoutSession === true;
-  const [form, setForm] = useState<NhapPhieu>(() => blankForm(props.ho_ten, demoPhonePrefill(demoWithoutSession)));
+  const [form, setForm] = useState<NhapPhieu>(() => blankForm(props.ho_ten));
   const [location, setLocation] = useState<SceneLocation | null>(null);
   const [errors, setErrors] = useState<LoiNhapPhieu>({});
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -1057,11 +1039,11 @@ export function CommuneSendScreen(props: {
   const [fieldChanged, setFieldChanged] = useState(false);
   /**
    * Step 2 was reached by TAPPING a field (§6.2: the tap goes straight on to writing), so the description box
-   * takes the focus. Not after resuming a draft or the demo's "continue": the keyboard would then cover a
+   * takes the focus. Not after resuming a draft: the keyboard would then cover a
    * form the citizen has not looked at yet.
    */
   const [focusDescribe, setFocusDescribe] = useState(false);
-  const { catalogue, reload } = useFieldCatalogue(props.onSessionLost, demoWithoutSession);
+  const { catalogue, reload } = useFieldCatalogue(props.onSessionLost);
   const sceneLocation = useSceneLocation(props.getSceneLocation, (l) => {
     setLocation(l);
     setAttempt(null);
@@ -1207,16 +1189,7 @@ export function CommuneSendScreen(props: {
           </section>
         )}
 
-        {DEMO_BUILD && demoWithoutSession && step === 1 && draftOffer === null && (
-          <div className="xa-the xa-the--dem xa-khoi">
-            <p role="status">{DEMO_WORDS.fields}</p>
-            <button type="button" className="xa-nut" onClick={() => setStep(2)}>
-              {DEMO_WORDS.fields_continue}
-            </button>
-          </div>
-        )}
-
-        {step === 1 && draftOffer === null && !demoWithoutSession && (
+        {step === 1 && draftOffer === null && (
           <FieldStep
             catalogue={catalogue}
             picked={form.linh_vuc}
@@ -1246,8 +1219,7 @@ export function CommuneSendScreen(props: {
             />
             {errors.noi_dung && <p className="xa-loi-o" role="alert">{errors.noi_dung}</p>}
             {/* The picked field, and the way back to change it (§6.2): a real 48px button, not a link. Only when
-                a field IS picked — the demo build without a session reaches this step without one, and a blank
-                "Lĩnh vực:" would read as a field that failed to load. */}
+                a field IS picked — a blank "Lĩnh vực:" would read as a field that failed to load. */}
             {form.linh_vuc !== "" && (
               <div className="xa-field-picked">
                 <span className="xa-field-picked__text">

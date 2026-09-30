@@ -35,6 +35,8 @@ import type { LocationCodes, MaDangNhap } from "../tinh-nang/zalo-api";
 import {
   type BridgeRequestWithPhone,
   bridgeBodyWithPhone,
+  type CommuneAppDemoSessionRequest,
+  communeAppDemoSessionBody,
   type CommuneAppSessionRequest,
   communeAppSessionBody,
   diaChiPhien,
@@ -286,8 +288,25 @@ export async function openCommuneAppSessionCall(
   req: CommuneAppSessionRequest,
   address: string = diaChiPhien(),
 ): Promise<CommuneAppBridgeResult> {
+  return postCommuneAppSession(communeAppSessionBody(req), address);
+}
+
+/**
+ * The `--demo` build's login (`hop-dong.ts` fifth body): App ID + access token, no phone token. Same route,
+ * same status table as the fourth body — only the body differs. NO THROW, NO LOG: the access token is a
+ * credential. `address` only lets a test inject a fake address.
+ */
+export async function openCommuneAppDemoSessionCall(
+  req: CommuneAppDemoSessionRequest,
+  address: string = diaChiPhien(),
+): Promise<CommuneAppBridgeResult> {
+  return postCommuneAppSession(communeAppDemoSessionBody(req), address);
+}
+
+/** The commune app's status table, shared by both of its login bodies. */
+async function postCommuneAppSession(body: string, address: string): Promise<CommuneAppBridgeResult> {
   if (address === "") return { kieu: "chua-khai-host" };
-  const answer = await postSession(communeAppSessionBody(req), address);
+  const answer = await postSession(body, address);
   if (answer === null) return { kieu: "khong-goi-duoc" };
   switch (answer.status) {
     case 200:

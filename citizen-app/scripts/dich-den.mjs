@@ -122,10 +122,11 @@ export function docCo(argv) {
 
 /**
  * The plan line of a `--demo` run — printed by `deploy.mjs` before anything happens, `--thu` included, so
- * nobody pushes a demo build for review believing it is the real one. Exported so the test pins the words.
+ * nobody pushes a `--demo` build for review believing it is the real one. The TERMINAL is the only place that
+ * says so: the app itself shows no word of it (owner, 01/10/2026). Exported so the test pins the words.
  */
 export const DEMO_PLAN_LINE =
-  "  ⚠ CHẾ ĐỘ DEMO — tên/số giả khi Zalo không trả; BỎ cờ --demo trước khi nộp duyệt";
+  "  ⚠ --demo: danh tính cố định Nguyễn Văn Hùng / 0900000000, không xin quyền Zalo; BỎ cờ trước khi nộp duyệt";
 
 /**
  * Chọn đích. Tên miền không có trong bảng thì DỪNG — không bao giờ rơi về app chung. Thông báo
