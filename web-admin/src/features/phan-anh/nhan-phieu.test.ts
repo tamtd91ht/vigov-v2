@@ -580,7 +580,7 @@ describe("`has_citizen` QUYẾT ĐỊNH khi có mặt; vắng thì quay về lu�
   });
 });
 
-describe("nhật ký xử lý — nhãn chín mã thao tác", () => {
+describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
   /** Danh sách đóng của máy chủ, gõ lại từ hợp đồng — KHÔNG sinh từ bảng nhãn đang kiểm. */
   const LOG_ACTIONS = [
     "phan-loai",
@@ -593,6 +593,8 @@ describe("nhật ký xử lý — nhãn chín mã thao tác", () => {
     // `domain.LogActionCitizenRating` / `LogActionReopenByRating` (ADR 0050 point 2).
     "danh-gia",
     "mo-lai-theo-danh-gia",
+    // `domain.LogActionTaskCreated` — a task booked from the petition (POST …/tasks).
+    "tao-nhiem-vu",
   ] as const satisfies readonly MaThaoTacNhatKy[];
 
   // Mức KIỂU: hợp mọc thêm một mã mà danh sách trên không có → `tsc` đỏ tại đây.
@@ -600,7 +602,7 @@ describe("nhật ký xử lý — nhãn chín mã thao tác", () => {
   const _duMa: DuMa = true;
   void _duMa;
 
-  it("bảng nhãn có ĐÚNG chín khoá, không hơn", () => {
+  it("bảng nhãn có ĐÚNG mười khoá, không hơn", () => {
     expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...LOG_ACTIONS].sort());
   });
 
@@ -615,6 +617,7 @@ describe("nhật ký xử lý — nhãn chín mã thao tác", () => {
       "Ghi chú",
       "Người dân đánh giá",
       "Mở lại do đánh giá thấp",
+      "Tạo nhiệm vụ",
     ]);
   });
 

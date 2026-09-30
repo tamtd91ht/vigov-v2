@@ -1,5 +1,5 @@
 /**
- * Mười một tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
+ * Mười hai tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
  * `service-petitions/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
  *
  *   GET  /api/v1/citizen-reports                            feedback.read
@@ -13,6 +13,7 @@
  *   PUT  /api/v1/citizen-reports/{maTraCuu}/publication     feedback.assign
  *   GET  /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read
  *   POST /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read + luật nghiệp vụ, Idempotency-Key
+ *   POST /api/v1/citizen-reports/{maTraCuu}/tasks           task.create + feedback.read, Idempotency-Key
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_phieuPhanAnhRa`, `petitions_phanLoaiVao`,
  * `petitions_phanCongVao`, `petitions_dongPhieuVao` đều đến từ `schema.gen.ts`.
@@ -54,6 +55,8 @@ import type {
   petitions_ghiChuPhieuVao,
   petitions_khongTiepNhanVao,
   petitions_nhatKyPhieuRa,
+  petitions_nhiemVuRa,
+  petitions_petitionTaskIn,
   petitions_phanCongVao,
   petitions_phanLoaiVao,
   petitions_phieuPhanAnhRa,
@@ -64,6 +67,7 @@ import type {
   petitions_post_citizen_reports_by_maTraCuu_referral,
   petitions_post_citizen_reports_by_maTraCuu_rejection,
   petitions_post_citizen_reports_by_maTraCuu_status,
+  petitions_post_citizen_reports_by_maTraCuu_tasks,
   petitions_publicationIn,
   petitions_put_citizen_reports_by_maTraCuu_publication,
   page_Result_petitions_nhatKyPhieuRa,
@@ -508,5 +512,56 @@ export function ghiNhatKyPhieu(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 201, {
       "Idempotency-Key": khoaChongTrung,
     }),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * TASK FROM A PETITION (§13) — POST …/tasks, `task.create` AND `feedback.read`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * POST …/tasks — book one task whose source is THIS petition. 201 with the task, including the register
+ * number the server just issued (`NV12`), which the caller cannot know in advance.
+ *
+ * BUILT FIELD BY FIELD, NEVER `...than`: the shared `FormGiaoViec` produces `petitions_taoNhiemVuVao`,
+ * which HAS `source` / `source_id`, and TypeScript lets it be passed as `petitions_petitionTaskIn`
+ * because it only has more. A spread here would put that pair on the wire — and the server answers 400
+ * to either key (`service-petitions/internal/http/petition_task.go`, `sourceKeysRefused`): the source is
+ * the petition in the PATH, never one the client names.
+ *
+ * `idempotencyKey` IS A PARAMETER: the form holds it for one opening, so a retry after a network error
+ * reuses it — the first send may already have booked a register number.
+ *
+ * EVERY 409 IS SHOWN VERBATIM (`petition_state`, `petition_not_classified`, `restricted_field_no_task`,
+ * `code_taken`, `task_tree`, …): the list of refusals is the server's and grows; this function does not
+ * branch on `code`.
+ */
+export function createTaskFromPetition(
+  maTraCuu: string,
+  than: petitions_petitionTaskIn,
+  idempotencyKey: string,
+): Promise<KetQua<petitions_nhiemVuRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_tasks["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/tasks";
+  const sent: petitions_petitionTaskIn = {
+    code: than.code,
+    auto_code: than.auto_code,
+    type: than.type,
+    bloc: than.bloc,
+    title: than.title,
+    description: than.description,
+    priority: than.priority,
+    note: than.note,
+    unit: than.unit,
+    assignee: than.assignee,
+    assigner: than.assigner,
+    lead_unit: than.lead_unit,
+    monitor: than.monitor,
+    due_at: than.due_at,
+    parent: than.parent,
+    documents: than.documents,
+  };
+  return docThanLoiGoi<petitions_nhiemVuRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", sent, 201, { "Idempotency-Key": idempotencyKey }),
   );
 }

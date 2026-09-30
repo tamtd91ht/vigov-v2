@@ -9,6 +9,7 @@ import type {
   identity_canBoChonNguoiRa,
   petitions_phieuPhanAnhRa,
 } from "@/lib/api/schema.gen";
+import { coQuyen, QUYEN_TAO_NHIEM_VU, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
 
 /**
  * Giờ Việt Nam, GHIM chứ không theo cài đặt của máy cán bộ.
@@ -791,7 +792,7 @@ export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Chín mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
+ * Mười mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
  *
  * Hợp đồng khai `action` là `string` trơn (không `enum`), cùng lỗ hổng với `NHAN_TRANG_THAI` ở trên.
  * `Record<MaThaoTacNhatKy, string>` bên dưới vì thế là chỗ canh ở mức KIỂU: thêm một mã vào hợp này
@@ -808,7 +809,10 @@ export type MaThaoTacNhatKy =
   // The citizen's rating (ADR 0050 point 2, `domain.LogActionCitizenRating` /
   // `LogActionReopenByRating`): rated with nothing moved, and rated 1–2 stars so the petition came back.
   | "danh-gia"
-  | "mo-lai-theo-danh-gia";
+  | "mo-lai-theo-danh-gia"
+  // A task booked from this petition (`domain.LogActionTaskCreated`); the row's note holds the task's
+  // register number only.
+  | "tao-nhiem-vu";
 
 /** Nhãn nguyên văn do chuyên gia nghiệp vụ chốt. `phan-cong` hiện là "Chuyển xử lý", như nút §8.5. */
 export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = {
@@ -823,6 +827,7 @@ export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = 
   // phiếu được mở lại]"); these labels only name the act, so the row does not repeat the number.
   "danh-gia": "Người dân đánh giá",
   "mo-lai-theo-danh-gia": "Mở lại do đánh giá thấp",
+  "tao-nhiem-vu": "Tạo nhiệm vụ",
 };
 
 export function nhanThaoTacNhatKy(ma: string): string {
@@ -886,6 +891,79 @@ export const NHAN_BO_PHAN_PHU_TRACH = "Bộ phận / Phụ trách";
 export const NHAN_NGUOI_THUC_HIEN = "Người thực hiện";
 
 export const NHAN_O_GHI_CHU_NOI_BO = "Ghi chú nội bộ (không gửi người dân)";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * "TẠO NHIỆM VỤ" FROM A PETITION (§13) — POST …/tasks
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The statuses the button is OFFERED on — the four where the petition has been classified and handed
+ * to a unit, the server's rule (`domain.PetitionAcceptsTask`). An ALLOW list, so a status code the
+ * screen does not know hides the button (fail closed, as the server does).
+ *
+ * The server refuses the rest by name: `da-tiep-nhan` / `dang-phan-loai` → 409 `petition_not_classified`,
+ * the three terminal statuses → 409 `petition_state`. Its sentence reaches the screen verbatim should
+ * the two lists ever disagree.
+ */
+const PETITION_TASK_STATUSES: readonly string[] = [
+  "da-chuyen-xu-ly",
+  "dang-xu-ly",
+  "da-xu-ly",
+  "cho-dan-xac-nhan",
+];
+
+/**
+ * Whether the drawer OFFERS `Tạo nhiệm vụ`. UX ONLY — the route checks `task.create` AND
+ * `feedback.read` and the petition's state on every call (rule 5, forbidden #1).
+ *
+ * TWO KEYS, BOTH REQUIRED, neither implied by the other (rule 5, invariant 3b): reading petitions is
+ * not booking tasks, and booking tasks is not reading petitions.
+ *
+ * `can-bo` IS HIDDEN: a staff-conduct report is handled by the leadership on the petition itself, and
+ * the server refuses it with 409 `restricted_field_no_task`. A holder of `feedback.restricted` is the
+ * only one who ever sees such a petition here, so hiding the button reveals nothing.
+ */
+export function petitionTaskOffered(
+  permissions: readonly string[],
+  petition: Pick<petitions_phieuPhanAnhRa, "status" | "field">,
+): boolean {
+  return (
+    coQuyen(permissions, QUYEN_TAO_NHIEM_VU) &&
+    coQuyen(permissions, QUYEN_XEM_PHAN_ANH) &&
+    PETITION_TASK_STATUSES.includes(petition.status) &&
+    // No settled field is refused by the server too (`petition_not_classified`).
+    petition.field !== "" &&
+    petition.field !== STAFF_CONDUCT_FIELD
+  );
+}
+
+export const PETITION_TASK_BUTTON = "Tạo nhiệm vụ";
+
+/**
+ * The title the form opens with. ONLY the lookup code — never the petition's content or the reporter:
+ * a task title is read by every officer who can read tasks, and petition content is personal data
+ * (rule 3). The clerk rewrites it into a sentence of work.
+ */
+export function petitionTaskTitle(lookupCode: string): string {
+  return `Xử lý phản ánh ${lookupCode}`;
+}
+
+/** A sentence, not a disabled select: nothing is sent — the server takes the petition in the path. */
+export function petitionTaskSourceNote(lookupCode: string): string {
+  return `Nguồn giao: Từ phản ánh ${lookupCode} — máy chủ gắn theo phiếu, không sửa được.`;
+}
+
+/** Carries the register number the server just issued — something the clerk cannot know beforehand. */
+export function petitionTaskCreated(taskCode: string): string {
+  return `Đã tạo nhiệm vụ ${taskCode}.`;
+}
+
+/**
+ * The task register. There is no deep link to one task by code (`/nhiem-vu` reads no such parameter),
+ * so the link opens the register and the sentence beside it names the code.
+ */
+export const TASK_REGISTER_HREF = "/nhiem-vu";
+export const TASK_REGISTER_LINK_LABEL = "Mở sổ Nhiệm vụ";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH

@@ -95,6 +95,7 @@ import {
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
+  petitionTaskOffered,
   phanLoaiDuoc,
   RE_NHANH,
   reNhanhDuoc,
@@ -113,6 +114,7 @@ import {
   starsLabel,
 } from "./citizen-report-blocks";
 import { NhatKyPhieu } from "./nhat-ky-phieu";
+import { PetitionTaskBlock } from "./petition-task";
 import {
   QUYEN_DONG_PHAN_ANH,
   QUYEN_PHAN_CONG_PHAN_ANH,
@@ -381,6 +383,10 @@ export function SoPhanAnh({
           coGhiNhatKy={coQuyen(dsQuyen, QUYEN_XEM_PHAN_ANH)}
           // Mỗi thao tác thành công là một dòng máy chủ vừa ghi vào nhật ký: đọc lại.
           lanLamMoiNhatKy={lanTai}
+          permissions={dsQuyen}
+          // A task booked from the petition wrote a `tao-nhiem-vu` row: bump the same counter so the
+          // log re-reads it. The petition itself is unchanged by the act, so `dangMo` stays.
+          onTaskCreated={() => datLanTai((n) => n + 1)}
           dong={() => {
             datDangMo(null);
             datLoiGhi(null);
@@ -743,6 +749,8 @@ export function ChiTietPhieu({
   loiGhi,
   coGhiNhatKy = false,
   lanLamMoiNhatKy = 0,
+  permissions = [],
+  onTaskCreated,
   dong,
   phanLoai,
   chuyenXuLy,
@@ -765,6 +773,13 @@ export function ChiTietPhieu({
   coGhiNhatKy?: boolean;
   /** Tăng sau mỗi thao tác thành công, để nhật ký đọc lại dòng máy chủ vừa ghi. */
   lanLamMoiNhatKy?: number;
+  /**
+   * The session's permission keys — ONLY to decide whether `Tạo nhiệm vụ` is drawn
+   * (`petitionTaskOffered`). Empty by default: an unknown session holds no key (rule 1, forbidden #1).
+   */
+  permissions?: readonly string[];
+  /** Called after POST …/tasks answered 201. Absent = the block is not drawn (no write path). */
+  onTaskCreated?: () => void;
   dong: () => void;
   /*
    * `ghiChu` ở cả sáu thao tác là GHI CHÚ NỘI BỘ tuỳ chọn, vào nhật ký, không gửi người dân. Trả
@@ -1161,6 +1176,11 @@ export function ChiTietPhieu({
         )
       ) : (
         <p className="trang-thai-rong">{CAU_THIEU_QUYEN_DONG}</p>
+      )}
+
+      {/* ── 4b. TẠO NHIỆM VỤ (§13) — `task.create` AND `feedback.read`; UX only, the server decides ── */}
+      {onTaskCreated !== undefined && petitionTaskOffered(permissions, phieu) && (
+        <PetitionTaskBlock lookupCode={phieu.code} danhBa={danhBa} onCreated={onTaskCreated} />
       )}
 
       {/* ── 5. NHẬT KÝ XỬ LÝ (§8.7) ─────────────────────────────────────────────────────── */}
