@@ -23,6 +23,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
+import { CONTENT_TYPE_EVENT, CONTENT_TYPE_VIDEO } from "@/lib/api/noi-dung";
 import type {
   comms_danhMucRa,
   comms_noiDungRa,
@@ -50,6 +51,12 @@ export const URL_TOI_DA = 2000;
 export const TEN_DANH_MUC_TOI_DA = 200;
 export const SLUG_DANH_MUC_TOI_DA = 64;
 export const THU_TU_DANH_MUC_TOI_DA = 9999;
+/**
+ * `domain.EventPlaceMaxRunes`: in CHARACTERS (Go counts runes, the CHECK uses `char_length`), so it
+ * is counted in code points below, not in UTF-16 units — `.length` would disagree with the server on
+ * any character outside the BMP.
+ */
+export const EVENT_PLACE_MAX_CHARS = 500;
 
 /* ── Chữ trên màn ──────────────────────────────────────────────────────────────────────────── */
 
@@ -274,6 +281,89 @@ export function nhanMoc(mocISO: string | null): string {
   );
 }
 
+/* ── Event instants: the datetime-local input ↔ RFC 3339 with Vietnam's offset ────────────────
+ *
+ * ⚠ THE BROWSER'S TIME ZONE IS NEVER CONSULTED. A `datetime-local` input yields a wall-clock string
+ * with no zone ("2026-10-05T08:00"). Feeding it to `new Date(...)` reads it in the MACHINE's zone, so
+ * the same form typed on a laptop set to UTC would publish an event seven hours late on every
+ * resident's phone — and look right on the author's screen. The commune's clock is Vietnam's.
+ *
+ * Asia/Ho_Chi_Minh is a fixed +07:00 with no daylight saving, so the offset is a constant and the
+ * conversion is string work, not a zone lookup. Like `MUI_GIO` this is a platform constant, not a
+ * per-commune value: every commune is in the same zone.
+ */
+const VIETNAM_OFFSET = "+07:00";
+
+const LOCAL_INPUT_PATTERN = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(:\d{2})?$/;
+
+/**
+ * Formatter for reading an instant back in Vietnam's wall-clock time. `hourCycle: "h23"` rather than
+ * `hour12: false`: the latter prints midnight as `24` on some ICU builds.
+ */
+const VIETNAM_PARTS = new Intl.DateTimeFormat("en-GB", {
+  timeZone: MUI_GIO,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * `datetime-local` value → RFC 3339 with `+07:00`. `""` stays `""` (none / clear).
+ *
+ * A value not in the input's shape is returned unchanged: `validateTypeFields` refuses it before a
+ * save, and if one ever got through the server answers with its own sentence rather than this code
+ * guessing a time.
+ */
+export function localInputToInstant(value: string): string {
+  if (value === "") return "";
+  const m = LOCAL_INPUT_PATTERN.exec(value);
+  if (m === null) return value;
+  return `${m[1]}${m[2] ?? ":00"}${VIETNAM_OFFSET}`;
+}
+
+/** An instant from the server (UTC) → the `datetime-local` value it is in Vietnam. `""` if none. */
+export function instantToLocalInput(instant: string | null | undefined): string {
+  if (instant === null || instant === undefined || instant === "") return "";
+  const t = Date.parse(instant);
+  if (Number.isNaN(t)) return "";
+  const p = VIETNAM_PARTS.formatToParts(new Date(t));
+  return (
+    `${phanCua(p, "year")}-${phanCua(p, "month")}-${phanCua(p, "day")}` +
+    `T${phanCua(p, "hour")}:${phanCua(p, "minute")}`
+  );
+}
+
+/**
+ * An instant → `dd/MM/yyyy HH:mm` in Vietnam. Unreadable strings are shown as they are, for the same
+ * reason as `nhanMoc`.
+ */
+export function formatVietnamDateTime(instant: string): string {
+  const t = Date.parse(instant);
+  if (Number.isNaN(t)) return instant;
+  const p = VIETNAM_PARTS.formatToParts(new Date(t));
+  return (
+    `${phanCua(p, "day")}/${phanCua(p, "month")}/${phanCua(p, "year")} ` +
+    `${phanCua(p, "hour")}:${phanCua(p, "minute")}`
+  );
+}
+
+/**
+ * "Đăng lần đầu lúc …", or `null` when the item has never been published.
+ *
+ * `published_at` is fixed by the FIRST publication and never moves (ADR 0047 §6, G1): unpublishing and
+ * republishing keeps it. That is why the label says "lần đầu" — it is not "the time it went live
+ * again", and a reader of §6 must not take it for that.
+ */
+export function publishedAtLabel(nd: comms_noiDungRa): string | null {
+  if (nd.published_at === undefined || nd.published_at === null || nd.published_at === "") {
+    return null;
+  }
+  return `Đăng lần đầu lúc ${formatVietnamDateTime(nd.published_at)}`;
+}
+
 /**
  * `published_on` → `14/9/2026`, khuôn `d/M/yyyy` của §6 (KHÔNG đệm số 0).
  *
@@ -425,7 +515,17 @@ export function tenDanhMuc(id: string, ds: readonly comms_danhMucRa[]): string {
 
 /* ── Biểu mẫu §7: giá trị, thân THÊM, thân SỬA ────────────────────────────────────────────── */
 
-/** Bảy ô của §7, đúng bảy trường hợp đồng nhận. */
+/**
+ * Bảy ô của §7, cộng bốn ô theo loại của :131 (ADR 0047 §6): ba ô cho `Sự kiện`, một cho `Video`.
+ *
+ * THE TWO EVENT INSTANTS ARE HELD AS THE INPUT'S OWN STRING ("2026-10-05T08:00", Vietnam wall-clock
+ * time), not as the wire instant: the box shows exactly what was typed, and the conversion to
+ * `+07:00` happens once, in `thanThem` / `thanSua`.
+ *
+ * A HIDDEN BOX KEEPS ITS VALUE. Switching `Sự kiện` → `Tin tức` → `Sự kiện` before saving gives the
+ * dates back; the builders never send a field the chosen type cannot carry, so a hidden value cannot
+ * leave the form.
+ */
 export type GiaTriFormNoiDung = {
   readonly type: string;
   readonly category_id: string;
@@ -435,6 +535,14 @@ export type GiaTriFormNoiDung = {
   readonly image_url: string;
   /** §7 `☐ Đăng lên Mini App`. */
   readonly publish: boolean;
+  /** `Sự kiện` — `Bắt đầu`, a `datetime-local` value. `""` = none. */
+  readonly event_starts_local: string;
+  /** `Sự kiện` — `Kết thúc`, a `datetime-local` value. `""` = none. */
+  readonly event_ends_local: string;
+  /** `Sự kiện` — `Địa điểm`. */
+  readonly event_place: string;
+  /** `Video` — `Liên kết video`. */
+  readonly video_url: string;
 };
 
 /** Biểu mẫu trống của §7 — loại mặc định `Tin tức`, ô tích TẮT. */
@@ -446,7 +554,78 @@ export const FORM_TRONG: GiaTriFormNoiDung = {
   body: "",
   image_url: "",
   publish: false,
+  event_starts_local: "",
+  event_ends_local: "",
+  event_place: "",
+  video_url: "",
 };
+
+/* ── Client-side check of the per-type fields ─────────────────────────────────────────────────
+ *
+ * MIRRORS the server (`service-comms/internal/domain/noi_dung_mini_app.go`: CheckEventWindow,
+ * NormalizeEventPlace, ChuanHoaURL) so the author sees the problem next to the box instead of after
+ * Lưu. The server is still where the refusal is real, and its 400 sentence is shown as it comes.
+ */
+export const ERR_EVENT_END_WITHOUT_START = "Có thời gian kết thúc thì phải có thời gian bắt đầu.";
+export const ERR_EVENT_END_BEFORE_START =
+  "Thời gian kết thúc không được sớm hơn thời gian bắt đầu.";
+export const ERR_EVENT_TIME_INVALID = "Thời gian bắt đầu hoặc kết thúc không hợp lệ.";
+export const ERR_EVENT_PLACE_TOO_LONG = `Địa điểm tối đa ${EVENT_PLACE_MAX_CHARS} ký tự.`;
+export const ERR_EVENT_PLACE_CONTROL_CHAR = "Địa điểm không được chứa ký tự điều khiển.";
+export const ERR_VIDEO_URL_INVALID =
+  "Liên kết video phải bắt đầu bằng http:// hoặc https:// và không chứa dấu cách.";
+export const ERR_VIDEO_URL_TOO_LONG = `Liên kết video tối đa ${URL_TOI_DA} ký tự.`;
+
+/** The hint under the two event boxes — says which clock they are read in. */
+export const EVENT_TIME_HINT =
+  "Giờ Việt Nam (GMT+7), không phụ thuộc múi giờ đặt trên máy tính này.";
+/** The hint under the video box. */
+export const VIDEO_URL_HINT =
+  "Chỉ nhận địa chỉ bắt đầu bằng http:// hoặc https://. Bà con bấm vào sẽ mở video ở ngoài ứng dụng.";
+
+const CONTROL_CHAR = /[\u0000-\u001f\u007f-\u009f]/;
+const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
+
+/**
+ * The first problem with the per-type fields of the CHOSEN type, or `null`.
+ *
+ * Only the chosen type is checked: the other type's boxes are hidden and never sent, so an error on
+ * them would block a save for a value that cannot leave the form.
+ */
+export function validateTypeFields(gt: GiaTriFormNoiDung): string | null {
+  if (gt.type === CONTENT_TYPE_EVENT) {
+    const start = gt.event_starts_local;
+    const end = gt.event_ends_local;
+    if (
+      (start !== "" && !LOCAL_INPUT_PATTERN.test(start)) ||
+      (end !== "" && !LOCAL_INPUT_PATTERN.test(end))
+    ) {
+      return ERR_EVENT_TIME_INVALID;
+    }
+    if (end !== "" && start === "") return ERR_EVENT_END_WITHOUT_START;
+    // Both normalised to the same shape and the same offset, so the strings order exactly as the
+    // instants do.
+    if (end !== "" && localInputToInstant(end) < localInputToInstant(start)) {
+      return ERR_EVENT_END_BEFORE_START;
+    }
+    const place = gt.event_place.trim();
+    if ([...place].length > EVENT_PLACE_MAX_CHARS) return ERR_EVENT_PLACE_TOO_LONG;
+    if (CONTROL_CHAR.test(place)) return ERR_EVENT_PLACE_CONTROL_CHAR;
+  }
+  if (gt.type === CONTENT_TYPE_VIDEO) {
+    const url = gt.video_url.trim();
+    if (url !== "") {
+      // Bytes, as the server counts (`len(u)` in Go).
+      if (new TextEncoder().encode(url).length > URL_TOI_DA) return ERR_VIDEO_URL_TOO_LONG;
+      const lower = url.toLowerCase();
+      if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+        return ERR_VIDEO_URL_INVALID;
+      }
+      if (CONTROL_OR_SPACE.test(url)) return ERR_VIDEO_URL_INVALID;
+    }
+  }
+  return null;
+}
 
 /**
  * Giá trị ban đầu của biểu mẫu SỬA, lấy từ một hàng đã đọc TOÀN VĂN.
@@ -469,12 +648,19 @@ export function giaTriTuHang(nd: comms_noiDungRa): GiaTriFormNoiDung {
     body: thanBaiNeuCo(nd) ?? "",
     image_url: nd.image_url,
     publish: nd.status === "dang-hien",
+    event_starts_local: instantToLocalInput(nd.event_starts_at),
+    event_ends_local: instantToLocalInput(nd.event_ends_at),
+    event_place: nd.event_place ?? "",
+    video_url: nd.video_url ?? "",
   };
 }
 
-/** Thân `POST` từ biểu mẫu. Bảy trường, đúng bộ hợp đồng nhận — `noi-dung.ts` không thêm gì. */
+/**
+ * Thân `POST` từ biểu mẫu. Bảy trường của §7, cộng các trường theo loại CHỈ KHI loại đã chọn mang
+ * được chúng VÀ chúng có giá trị — gửi một trường sự kiện cho `Tin tức` là 400 ở máy chủ.
+ */
 export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
-  return {
+  const ra: comms_themNoiDungVao = {
     type: gt.type,
     title: gt.title.trim(),
     category_id: gt.category_id,
@@ -483,6 +669,19 @@ export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
     image_url: gt.image_url.trim(),
     publish: gt.publish,
   };
+  if (gt.type === CONTENT_TYPE_EVENT) {
+    const start = localInputToInstant(gt.event_starts_local);
+    const end = localInputToInstant(gt.event_ends_local);
+    const place = gt.event_place.trim();
+    if (start !== "") ra.event_starts_at = start;
+    if (end !== "") ra.event_ends_at = end;
+    if (place !== "") ra.event_place = place;
+  }
+  if (gt.type === CONTENT_TYPE_VIDEO) {
+    const url = gt.video_url.trim();
+    if (url !== "") ra.video_url = url;
+  }
+  return ra;
 }
 
 /**
@@ -515,6 +714,23 @@ export function thanSua(
   if (moi.body !== dau.body) ra.body = moi.body;
   if (moi.image_url.trim() !== dau.image_url) ra.image_url = moi.image_url.trim();
   if (moi.publish !== dau.publish) ra.publish = moi.publish;
+
+  // THE PER-TYPE FIELDS: only for the type AFTER the edit, only when changed, and an emptied box is
+  // sent as `""` — the server's one spelling of "clear". A type moved away from `su-kien` / `video`
+  // sends none of them: the server clears that type's columns itself, and a hidden box's leftover
+  // value must not ride along (it would be a 400).
+  if (moi.type === CONTENT_TYPE_EVENT) {
+    if (moi.event_starts_local !== dau.event_starts_local) {
+      ra.event_starts_at = localInputToInstant(moi.event_starts_local);
+    }
+    if (moi.event_ends_local !== dau.event_ends_local) {
+      ra.event_ends_at = localInputToInstant(moi.event_ends_local);
+    }
+    if (moi.event_place.trim() !== dau.event_place) ra.event_place = moi.event_place.trim();
+  }
+  if (moi.type === CONTENT_TYPE_VIDEO && moi.video_url.trim() !== dau.video_url) {
+    ra.video_url = moi.video_url.trim();
+  }
 
   return ra;
 }
@@ -583,14 +799,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "chủ trả 409 kèm nguyên câu giải thích, và câu ấy ra thẳng màn hình.",
   },
   {
-    ten: "Bốn nhóm trường theo loại nội dung (§7, dòng cuối)",
+    ten: "Hai trong bốn nhóm trường theo loại nội dung (§7, dòng cuối): `Truyền thanh` và `Banner`",
     viSao:
-      "§7 kết bằng một câu “NÊN BỔ SUNG”: `Video` thêm URL video, `Truyền thanh` thêm tệp audio và " +
-      "thời lượng, `Sự kiện` thêm thời gian và địa điểm, `Banner` thêm link đích và thứ tự hiển " +
-      "thị. §8 KHÔNG có cột nào cho bốn nhóm ấy — đặc tả đang đề xuất với chính nó, nên đây là một " +
-      "CÂU CHỜ KHÁCH chứ không phải một phần bị bỏ sót. Đoán một hình dạng rồi dựng ô nhập là tự " +
-      "quyết một câu của khách, và bốn nhóm trường đoán sai là bốn cột phải di trú lại trên dữ " +
-      "liệu thật.",
+      "§7 kết bằng một câu “NÊN BỔ SUNG” cho bốn loại. Hai nhóm ĐÃ DỰNG theo ADR 0047 §6: `Sự " +
+      "kiện` có Bắt đầu · Kết thúc · Địa điểm, `Video` có Liên kết video. Còn lại: `Truyền thanh` " +
+      "(tệp âm thanh mp3/m4a và thời lượng, G7) cần lối tải tệp lên, chưa nối ở màn này — cùng " +
+      "chỗ với ô chọn ảnh ở trên; `Banner` (link đích và thứ tự hiển thị) chưa có cột nào ở máy chủ và chưa có câu chốt " +
+      "hình dạng. Dựng ô nhập trước khi có cột là tự quyết một câu của khách.",
   },
   {
     ten: "Tuyến công khai cho Mini App đọc (§9: `/api/cong/mini-app/noi-dung`, `/api/cong/mini-app/danh-ba`)",

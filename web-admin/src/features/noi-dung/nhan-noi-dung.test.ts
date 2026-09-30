@@ -7,8 +7,18 @@ import {
   coThayDoi,
   DAU_GACH,
   dungCayDanhMuc,
+  ERR_EVENT_END_BEFORE_START,
+  ERR_EVENT_END_WITHOUT_START,
+  ERR_EVENT_PLACE_TOO_LONG,
+  ERR_VIDEO_URL_INVALID,
+  EVENT_PLACE_MAX_CHARS,
   FORM_TRONG,
+  formatVietnamDateTime,
   giaTriTuHang,
+  instantToLocalInput,
+  localInputToInstant,
+  publishedAtLabel,
+  validateTypeFields,
   LOAI_MAC_DINH,
   lopChipTrangThai,
   MOI_LOAI,
@@ -262,6 +272,7 @@ describe("biểu mẫu §7 — giá trị ban đầu", () => {
 describe("thân POST", () => {
   it("cắt hai đầu tiêu đề, tóm tắt và liên kết ảnh — KHÔNG cắt thân bài", () => {
     const than = thanThem({
+      ...FORM_TRONG,
       type: "su-kien",
       category_id: "01JDM1",
       title: "  Hội nghị  ",
@@ -294,6 +305,7 @@ describe("thân POST", () => {
 
 describe("thân PATCH — CHỈ những ô thật sự đổi", () => {
   const dau: GiaTriFormNoiDung = {
+    ...FORM_TRONG,
     type: "tin-tuc",
     category_id: "01JDM1",
     title: "Tiêu đề cũ",
@@ -351,6 +363,7 @@ describe("thân PATCH — CHỈ những ô thật sự đổi", () => {
 
   it("đổi hết bảy ô thì gửi đủ bảy trường", () => {
     const than = thanSua(dau, {
+      ...FORM_TRONG,
       type: "video",
       category_id: "",
       title: "T",
@@ -377,6 +390,211 @@ describe("thân PATCH — CHỈ những ô thật sự đổi", () => {
     for (const cam of ["status", "source", "author_code", "view_count", "hand_edited"]) {
       expect(than).not.toHaveProperty(cam);
     }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * PER-TYPE FIELDS (ADR 0047 §6) — `vitest.config.mts` pins TZ=UTC, so a conversion that consulted
+ * the machine's zone would be off by seven hours here and turn red.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("event instants — Vietnam wall-clock, sent with +07:00", () => {
+  it("a datetime-local value is sent as the same wall-clock time with +07:00, not the machine's zone", () => {
+    expect(localInputToInstant("2026-10-05T08:00")).toBe("2026-10-05T08:00:00+07:00");
+    expect(localInputToInstant("2026-10-05T08:00:30")).toBe("2026-10-05T08:00:30+07:00");
+    expect(localInputToInstant("")).toBe("");
+  });
+
+  it("the sent instant is the right moment: 08:00 in Vietnam is 01:00 UTC", () => {
+    expect(new Date(localInputToInstant("2026-10-05T08:00")).toISOString()).toBe(
+      "2026-10-05T01:00:00.000Z",
+    );
+  });
+
+  it("an instant from the server (UTC) comes back into the box in Vietnam time", () => {
+    expect(instantToLocalInput("2026-10-05T01:00:00Z")).toBe("2026-10-05T08:00");
+    // Crossing midnight: 17:30 UTC is 00:30 the next day in Vietnam, and midnight is `00`, not `24`.
+    expect(instantToLocalInput("2026-10-04T17:30:00Z")).toBe("2026-10-05T00:30");
+    expect(instantToLocalInput("2026-10-04T17:00:00Z")).toBe("2026-10-05T00:00");
+    expect(instantToLocalInput(undefined)).toBe("");
+    expect(instantToLocalInput(null)).toBe("");
+  });
+
+  it("round trip is the identity", () => {
+    const typed = "2026-12-31T23:45";
+    const iso = new Date(localInputToInstant(typed)).toISOString();
+    expect(instantToLocalInput(iso)).toBe(typed);
+  });
+});
+
+describe("`Đăng lần đầu lúc` — published_at in dd/MM/yyyy HH:mm, Vietnam time", () => {
+  it("formats the first-publication instant", () => {
+    expect(formatVietnamDateTime("2026-10-01T02:05:00Z")).toBe("01/10/2026 09:05");
+    expect(publishedAtLabel(hang({ published_at: "2026-10-01T02:05:00Z" }))).toBe(
+      "Đăng lần đầu lúc 01/10/2026 09:05",
+    );
+  });
+
+  it("never published → no label, not a dash pretending it was", () => {
+    expect(publishedAtLabel(hang())).toBeNull();
+    expect(publishedAtLabel(hang({ published_at: null }))).toBeNull();
+  });
+});
+
+describe("giá trị ban đầu — per-type fields from the detail row", () => {
+  it("event instants become Vietnam wall-clock input values; place and video copied", () => {
+    const gt = giaTriTuHang(
+      hang({
+        type: "su-kien",
+        body: "",
+        event_starts_at: "2026-10-05T01:00:00Z",
+        event_ends_at: "2026-10-05T04:30:00Z",
+        event_place: "Hội trường",
+      }),
+    );
+    expect(gt.event_starts_local).toBe("2026-10-05T08:00");
+    expect(gt.event_ends_local).toBe("2026-10-05T11:30");
+    expect(gt.event_place).toBe("Hội trường");
+    expect(gt.video_url).toBe("");
+  });
+});
+
+describe("thân POST — per-type fields only for their type", () => {
+  const event: GiaTriFormNoiDung = {
+    ...FORM_TRONG,
+    type: "su-kien",
+    title: "Hội nghị",
+    event_starts_local: "2026-10-05T08:00",
+    event_ends_local: "2026-10-05T11:30",
+    event_place: "  Hội trường UBND xã  ",
+    video_url: "https://video.example.vn/x",
+  };
+
+  it("`Sự kiện` sends the two instants with +07:00 and the trimmed place, and no video link", () => {
+    const than = thanThem(event);
+    expect(than.event_starts_at).toBe("2026-10-05T08:00:00+07:00");
+    expect(than.event_ends_at).toBe("2026-10-05T11:30:00+07:00");
+    expect(than.event_place).toBe("Hội trường UBND xã");
+    expect(than).not.toHaveProperty("video_url");
+  });
+
+  it("switching to `Tin tức` leaves the hidden event boxes behind — none is sent", () => {
+    const than = thanThem({ ...event, type: "tin-tuc" });
+    for (const k of ["event_starts_at", "event_ends_at", "event_place", "video_url"]) {
+      expect(than).not.toHaveProperty(k);
+    }
+  });
+
+  it("`Video` sends only the trimmed link", () => {
+    const than = thanThem({ ...event, type: "video", video_url: " https://video.example.vn/x " });
+    expect(than.video_url).toBe("https://video.example.vn/x");
+    expect(than).not.toHaveProperty("event_starts_at");
+    expect(than).not.toHaveProperty("event_place");
+  });
+});
+
+describe("thân PATCH — per-type fields", () => {
+  const dau: GiaTriFormNoiDung = {
+    ...FORM_TRONG,
+    type: "su-kien",
+    title: "Hội nghị",
+    event_starts_local: "2026-10-05T08:00",
+    event_ends_local: "2026-10-05T11:30",
+    event_place: "Hội trường",
+  };
+
+  it("untouched event boxes are not sent", () => {
+    expect(thanSua(dau, { ...dau, title: "Hội nghị mới" })).toEqual({ title: "Hội nghị mới" });
+  });
+
+  it("a changed start is sent with +07:00", () => {
+    expect(thanSua(dau, { ...dau, event_starts_local: "2026-10-05T07:30" })).toEqual({
+      event_starts_at: "2026-10-05T07:30:00+07:00",
+    });
+  });
+
+  it("⚠ emptying a box that had a value sends `\"\"` — absent would mean `leave it`", () => {
+    expect(thanSua(dau, { ...dau, event_ends_local: "", event_place: "" })).toEqual({
+      event_ends_at: "",
+      event_place: "",
+    });
+  });
+
+  it("emptying the video link sends `\"\"`", () => {
+    const video: GiaTriFormNoiDung = { ...FORM_TRONG, type: "video", video_url: "https://v.vn/a" };
+    expect(thanSua(video, { ...video, video_url: "" })).toEqual({ video_url: "" });
+  });
+
+  it("moving the type away sends only `type` — the server clears the old type's fields", () => {
+    // Sending the leftover values would be a 400; sending `""` for them is redundant.
+    expect(thanSua(dau, { ...dau, type: "tin-tuc" })).toEqual({ type: "tin-tuc" });
+  });
+
+  it("moving the type TO `Sự kiện` sends the boxes the author filled", () => {
+    const news: GiaTriFormNoiDung = { ...FORM_TRONG, type: "tin-tuc", title: "T" };
+    expect(
+      thanSua(news, { ...news, type: "su-kien", event_starts_local: "2026-10-05T08:00" }),
+    ).toEqual({ type: "su-kien", event_starts_at: "2026-10-05T08:00:00+07:00" });
+  });
+});
+
+describe("client-side check of the per-type fields — mirrors the server", () => {
+  const event: GiaTriFormNoiDung = { ...FORM_TRONG, type: "su-kien", title: "T" };
+
+  it("an empty event is valid — every per-type field is optional", () => {
+    expect(validateTypeFields(event)).toBeNull();
+  });
+
+  it("an end needs a start", () => {
+    expect(validateTypeFields({ ...event, event_ends_local: "2026-10-05T11:30" })).toBe(
+      ERR_EVENT_END_WITHOUT_START,
+    );
+  });
+
+  it("an end before the start is refused; an end equal to the start is not", () => {
+    expect(
+      validateTypeFields({
+        ...event,
+        event_starts_local: "2026-10-05T08:00",
+        event_ends_local: "2026-10-05T07:59",
+      }),
+    ).toBe(ERR_EVENT_END_BEFORE_START);
+    expect(
+      validateTypeFields({
+        ...event,
+        event_starts_local: "2026-10-05T08:00",
+        event_ends_local: "2026-10-05T08:00",
+      }),
+    ).toBeNull();
+  });
+
+  it("the place is bounded in characters, as the server counts them", () => {
+    expect(validateTypeFields({ ...event, event_place: "ạ".repeat(EVENT_PLACE_MAX_CHARS) })).toBeNull();
+    expect(
+      validateTypeFields({ ...event, event_place: "ạ".repeat(EVENT_PLACE_MAX_CHARS + 1) }),
+    ).toBe(ERR_EVENT_PLACE_TOO_LONG);
+  });
+
+  it("the video link must be http(s), any case", () => {
+    const video: GiaTriFormNoiDung = { ...FORM_TRONG, type: "video", title: "T" };
+    expect(validateTypeFields({ ...video, video_url: "javascript:alert(1)" })).toBe(
+      ERR_VIDEO_URL_INVALID,
+    );
+    expect(validateTypeFields({ ...video, video_url: "www.youtube.com/x" })).toBe(
+      ERR_VIDEO_URL_INVALID,
+    );
+    expect(validateTypeFields({ ...video, video_url: "https://a.vn/x y" })).toBe(
+      ERR_VIDEO_URL_INVALID,
+    );
+    expect(validateTypeFields({ ...video, video_url: "HTTPS://a.vn/x" })).toBeNull();
+    expect(validateTypeFields({ ...video, video_url: "" })).toBeNull();
+  });
+
+  it("hidden boxes of another type never block a save", () => {
+    expect(
+      validateTypeFields({ ...FORM_TRONG, type: "tin-tuc", event_ends_local: "2026-10-05T11:30" }),
+    ).toBeNull();
+    expect(validateTypeFields({ ...event, video_url: "javascript:x" })).toBeNull();
   });
 });
 

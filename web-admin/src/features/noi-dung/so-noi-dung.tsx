@@ -16,6 +16,8 @@ import {
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
+  CONTENT_TYPE_EVENT,
+  CONTENT_TYPE_VIDEO,
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
@@ -40,6 +42,8 @@ import {
   DANH_MUC_RONG,
   DAU_GACH,
   dungCayDanhMuc,
+  EVENT_PLACE_MAX_CHARS,
+  EVENT_TIME_HINT,
   FORM_TRONG,
   GHI_CHU_KHONG_CO_XOA,
   GHI_CHU_LUOT_XEM,
@@ -68,6 +72,7 @@ import {
   nhanTepDinhKem,
   nhanTrangThai,
   PHAN_CHUA_DUNG,
+  publishedAtLabel,
   SLUG_DANH_MUC_TOI_DA,
   SO_RONG,
   TEN_DANH_MUC_TOI_DA,
@@ -84,6 +89,8 @@ import {
   thanThem,
   trichTomTat,
   URL_TOI_DA,
+  validateTypeFields,
+  VIDEO_URL_HINT,
   type GiaTriFormNoiDung,
 } from "./nhan-noi-dung";
 
@@ -623,6 +630,7 @@ export function BangNoiDung({
           <tbody>
             {ds.map((nd) => {
               const trich = trichTomTat(nd.summary);
+              const firstPublished = publishedAtLabel(nd);
               return (
                 <tr key={nd.id}>
                   <td>
@@ -633,7 +641,10 @@ export function BangNoiDung({
                   <td>{nhanLoai(nd.type)}</td>
                   <td>{tenDanhMuc(nd.category_id, danhMuc)}</td>
                   <td>{nhanTepDinhKem(nd.has_image)}</td>
-                  <td>{nhanNgayDang(nd.published_on)}</td>
+                  <td>
+                    {nhanNgayDang(nd.published_on)}
+                    {firstPublished !== null && <span className="dong-phu">{firstPublished}</span>}
+                  </td>
                   <td>{nhanLuotXem(nd.view_count)}</td>
                   <td>
                     <span className={lopChipTrangThai(nd.status)}>{nhanTrangThai(nd.status)}</span>
@@ -710,7 +721,12 @@ export function FormNoiDung({
   // MỘT ĐIỀU KIỆN, KHÔNG BA. Hợp đồng đánh dấu `title` và `type` bắt buộc; `type` luôn có giá trị
   // vì ô chọn mặc định `Tin tức` và danh sách đóng. Máy chủ vẫn là nơi từ chối thật; nút tắt chỉ
   // để không phải gõ lại.
-  const duDieuKien = tieuDeGon !== "";
+  //
+  // The per-type check is shown LIVE next to the boxes and holds Lưu off: the author sees "end before
+  // start" while fixing it, not after a round trip. It mirrors the server; the server's own 400 still
+  // reaches `loi` word for word.
+  const typeFieldError = validateTypeFields(gt);
+  const duDieuKien = tieuDeGon !== "" && typeFieldError === null;
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -814,6 +830,68 @@ export function FormNoiDung({
         <p className="ghi-chu">{CANH_BAO_LIEN_KET_ANH}</p>
       </div>
 
+      {/* :131 of the spec, ADR 0047 §6. Rendered only for the type that can carry them — the server
+          refuses an event field on any other type, and a box that is shown is a box somebody fills. */}
+      {gt.type === CONTENT_TYPE_EVENT && (
+        <>
+          <div className="o-nhap">
+            <label htmlFor="bat-dau-su-kien">Bắt đầu</label>
+            <input
+              id="bat-dau-su-kien"
+              name="bat-dau-su-kien"
+              type="datetime-local"
+              value={gt.event_starts_local}
+              onChange={(e) => datGT({ ...gt, event_starts_local: e.target.value })}
+            />
+          </div>
+          <div className="o-nhap">
+            <label htmlFor="ket-thuc-su-kien">Kết thúc</label>
+            <input
+              id="ket-thuc-su-kien"
+              name="ket-thuc-su-kien"
+              type="datetime-local"
+              value={gt.event_ends_local}
+              onChange={(e) => datGT({ ...gt, event_ends_local: e.target.value })}
+            />
+            <p className="ghi-chu">{EVENT_TIME_HINT}</p>
+          </div>
+          <div className="o-nhap">
+            <label htmlFor="dia-diem-su-kien">Địa điểm</label>
+            <input
+              id="dia-diem-su-kien"
+              name="dia-diem-su-kien"
+              value={gt.event_place}
+              maxLength={EVENT_PLACE_MAX_CHARS}
+              autoComplete="off"
+              onChange={(e) => datGT({ ...gt, event_place: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+
+      {gt.type === CONTENT_TYPE_VIDEO && (
+        <div className="o-nhap">
+          <label htmlFor="lien-ket-video">Liên kết video</label>
+          <input
+            id="lien-ket-video"
+            name="lien-ket-video"
+            type="url"
+            value={gt.video_url}
+            maxLength={URL_TOI_DA}
+            placeholder="https://"
+            autoComplete="off"
+            onChange={(e) => datGT({ ...gt, video_url: e.target.value })}
+          />
+          <p className="ghi-chu">{VIDEO_URL_HINT}</p>
+        </div>
+      )}
+
+      {typeFieldError !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {typeFieldError}
+        </p>
+      )}
+
       <div className="o-nhap">
         <label htmlFor="dang-len-mini-app">
           <input
@@ -855,6 +933,7 @@ export function FormNoiDung({
  * từ dữ liệu chưa kiểm là đúng lỗ hổng danh sách trắng lược đồ sinh ra để chặn.
  */
 export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
+  const firstPublished = publishedAtLabel(hang);
   return (
     <dl className="danh-sach-truong">
       <div>
@@ -865,7 +944,10 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
       </div>
       <div>
         <dt>Ngày đăng</dt>
-        <dd>{nhanNgayDang(hang.published_on)}</dd>
+        <dd>
+          {nhanNgayDang(hang.published_on)}
+          {firstPublished !== null && <> · {firstPublished}</>}
+        </dd>
       </div>
       <div>
         <dt>Lượt xem</dt>

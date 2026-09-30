@@ -8,6 +8,10 @@ import {
   CANH_BAO_LIEN_KET_ANH,
   CANH_BAO_XEM_MA_NGUON,
   CHUA_XEP_DANH_MUC,
+  ERR_EVENT_END_BEFORE_START,
+  ERR_EVENT_END_WITHOUT_START,
+  ERR_VIDEO_URL_INVALID,
+  EVENT_TIME_HINT,
   FORM_TRONG,
   GHI_CHU_KHONG_CO_XOA,
   GHI_CHU_LUOT_XEM,
@@ -20,6 +24,7 @@ import {
   NHAN_O_DANG,
   PHAN_CHUA_DUNG,
   SO_RONG,
+  VIDEO_URL_HINT,
 } from "./nhan-noi-dung";
 import {
   BangNoiDung,
@@ -289,6 +294,118 @@ describe("biểu mẫu nội dung §7", () => {
   it("khối chỉ đọc chỉ xuất hiện khi đang SỬA", () => {
     expect(veForm()).not.toContain("Cập nhật lúc");
     expect(veForm(FORM_TRONG, hang())).toContain("Cập nhật lúc");
+  });
+});
+
+describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
+  const EVENT_BOXES = ['id="bat-dau-su-kien"', 'id="ket-thuc-su-kien"', 'id="dia-diem-su-kien"'];
+  const VIDEO_BOX = 'id="lien-ket-video"';
+
+  it("`Sự kiện` shows Bắt đầu · Kết thúc · Địa điểm and no video box", () => {
+    const html = veForm({ ...FORM_TRONG, type: "su-kien" });
+    for (const box of EVENT_BOXES) expect(html).toContain(box);
+    expect(html).toContain(">Bắt đầu<");
+    expect(html).toContain(">Kết thúc<");
+    expect(html).toContain(">Địa điểm<");
+    expect(html.match(/type="datetime-local"/g)?.length).toBe(2);
+    expect(html).toContain(nhuTrongHTML(EVENT_TIME_HINT));
+    expect(html).not.toContain(VIDEO_BOX);
+  });
+
+  it("`Video` shows Liên kết video and no event box", () => {
+    const html = veForm({ ...FORM_TRONG, type: "video" });
+    expect(html).toContain(VIDEO_BOX);
+    expect(html).toContain(">Liên kết video<");
+    expect(html).toContain(nhuTrongHTML(VIDEO_URL_HINT));
+    for (const box of EVENT_BOXES) expect(html).not.toContain(box);
+  });
+
+  it("the other four types show neither", () => {
+    for (const type of ["tin-tuc", "thong-bao", "truyen-thanh", "banner"]) {
+      const html = veForm({ ...FORM_TRONG, type });
+      for (const box of [...EVENT_BOXES, VIDEO_BOX]) expect(html, type).not.toContain(box);
+    }
+  });
+
+  it("the image-link box is untouched by the type — still there for `Sự kiện` and `Video`", () => {
+    expect(veForm({ ...FORM_TRONG, type: "su-kien" })).toContain('id="anh-noi-dung"');
+    expect(veForm({ ...FORM_TRONG, type: "video" })).toContain('id="anh-noi-dung"');
+  });
+
+  it("an edit form opens with the stored instants in Vietnam time", () => {
+    const html = veForm(
+      giaTriTuHang(hang({ type: "su-kien", body: "", event_starts_at: "2026-10-05T01:00:00Z" })),
+    );
+    expect(html).toContain('value="2026-10-05T08:00"');
+  });
+
+  it("a validation problem is shown next to the boxes, in Vietnamese, and Lưu is off", () => {
+    const html = veForm({
+      ...FORM_TRONG,
+      type: "su-kien",
+      title: "Có tiêu đề",
+      event_starts_local: "2026-10-05T08:00",
+      event_ends_local: "2026-10-05T07:00",
+    });
+    expect(html).toContain(ERR_EVENT_END_BEFORE_START);
+    // The submit button itself carries `disabled` (a `>Lưu</button>` match would pass either way).
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
+    // And with the window fixed, the same form lets Lưu through.
+    const ok = veForm({
+      ...FORM_TRONG,
+      type: "su-kien",
+      title: "Có tiêu đề",
+      event_starts_local: "2026-10-05T08:00",
+      event_ends_local: "2026-10-05T09:00",
+    });
+    expect(ok).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
+  it("an end without a start is named", () => {
+    const html = veForm({
+      ...FORM_TRONG,
+      type: "su-kien",
+      title: "T",
+      event_ends_local: "2026-10-05T07:00",
+    });
+    expect(html).toContain(ERR_EVENT_END_WITHOUT_START);
+  });
+
+  it("a non-http(s) video link is named", () => {
+    const html = veForm({ ...FORM_TRONG, type: "video", title: "T", video_url: "ftp://a.vn/x" });
+    expect(html).toContain(ERR_VIDEO_URL_INVALID);
+  });
+
+  it("the server's 400 sentence is shown as it came", () => {
+    const loi = "noi_dung_mini_app: `video_url` chỉ dùng cho loại video";
+    const html = renderToStaticMarkup(
+      <FormNoiDung
+        tieuDeForm="x"
+        moTa="x"
+        giaTriDau={{ ...FORM_TRONG, title: "T" }}
+        danhMuc={[]}
+        dangGui={false}
+        loi={loi}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    expect(html).toContain(nhuTrongHTML(loi));
+  });
+});
+
+describe("`Đăng lần đầu lúc` — published_at", () => {
+  it("shows in the table row and in the read-only block when present", () => {
+    const h = hang({ published_at: "2026-10-01T02:05:00Z" });
+    expect(veBang([h])).toContain("Đăng lần đầu lúc 01/10/2026 09:05");
+    expect(renderToStaticMarkup(<ThongTinChiDoc hang={h} />)).toContain(
+      "Đăng lần đầu lúc 01/10/2026 09:05",
+    );
+  });
+
+  it("absent for an item never published", () => {
+    expect(veBang([hang()])).not.toContain("Đăng lần đầu");
+    expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />)).not.toContain("Đăng lần đầu");
   });
 });
 

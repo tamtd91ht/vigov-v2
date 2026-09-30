@@ -161,6 +161,31 @@ export function layMotNoiDung(id: string): Promise<KetQua<comms_noiDungRa>> {
 /* ── Ghi ───────────────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * The two §5 type codes that carry per-type fields (ADR 0047 §6, migration 0011 of service-comms).
+ *
+ * WHY THEY ARE NAMED HERE: the server refuses an event field on any type but `su-kien` and a video
+ * link on any type but `video` with a 400. The request builders below read these, so the rule
+ * "which field goes with which type" is written once on the client side.
+ */
+export const CONTENT_TYPE_EVENT = "su-kien";
+export const CONTENT_TYPE_VIDEO = "video";
+
+/**
+ * Copies the per-type fields that the chosen type can carry, and only when they hold a value.
+ *
+ * On a POST an empty string means "none" at the server, so omitting it is the same request with
+ * one less key. A field the type cannot carry is left out instead of sent: sending it is a 400.
+ */
+function addTypeFieldsForCreate(out: ThemNoiDungVao, than: ThemNoiDungVao): void {
+  if (than.type === CONTENT_TYPE_EVENT) {
+    if (than.event_starts_at) out.event_starts_at = than.event_starts_at;
+    if (than.event_ends_at) out.event_ends_at = than.event_ends_at;
+    if (than.event_place) out.event_place = than.event_place;
+  }
+  if (than.type === CONTENT_TYPE_VIDEO && than.video_url) out.video_url = than.video_url;
+}
+
+/**
  * Thân của `POST /api/v1/content-items` — §7, trường theo trường. Bí danh của kiểu SINH RA.
  *
  * KHÔNG CÓ `status`, `source`, `source_ref` HAY `author_code`, và cả bốn là TỪ CHỐI CỦA MÁY CHỦ
@@ -199,6 +224,10 @@ export function themNoiDung(
     image_url: than.image_url,
     publish: than.publish,
   };
+  // Event instants travel as RFC 3339 WITH an offset (`2026-10-05T08:00:00+07:00`); building them
+  // from a datetime-local input is the form's job (`nhan-noi-dung.ts`). There is no `published_at`
+  // in a request: ticking `publish` fixes it at the first publication and it never moves after.
+  addTypeFieldsForCreate(thanGui, than);
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
     docThanKetQua<comms_noiDungRa>,
@@ -235,6 +264,16 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     body: than.body,
     image_url: than.image_url,
     publish: than.publish,
+    // The per-type fields keep the PATCH meaning of every other field: absent = leave alone, "" =
+    // CLEAR (the two instants included — the server has no other spelling of "clear"), value = set.
+    //
+    // NOT FILTERED BY TYPE HERE, unlike the POST: a PATCH often carries no `type`, so this function
+    // cannot know the type after the edit. `thanSua` does, and only puts a field in when the
+    // resulting type can carry it. Moving the type away clears the old type's fields server-side.
+    event_starts_at: than.event_starts_at,
+    event_ends_at: than.event_ends_at,
+    event_place: than.event_place,
+    video_url: than.video_url,
   };
 
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(

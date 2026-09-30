@@ -70,7 +70,28 @@ const THEM_DAY_DU: ThemNoiDungVao = {
   publish: true,
 };
 
-/** Thân SỬA đầy đủ — cùng lý do. */
+/**
+ * The two per-type full bodies. No single POST can carry every contract key — an event field and a
+ * video link never go on one type — so the contract check below compares the UNION of these two.
+ */
+const EVENT_FULL: ThemNoiDungVao = {
+  ...THEM_DAY_DU,
+  type: "su-kien",
+  event_starts_at: "2026-10-05T08:00:00+07:00",
+  event_ends_at: "2026-10-05T11:30:00+07:00",
+  event_place: "Hội trường UBND xã",
+};
+
+const VIDEO_FULL: ThemNoiDungVao = {
+  ...THEM_DAY_DU,
+  type: "video",
+  video_url: "https://video.example.vn/hoi-nghi",
+};
+
+/**
+ * Thân SỬA đầy đủ — cùng lý do. `suaNoiDung` does not filter by type (a PATCH often carries none),
+ * so one body can hold every key; which ones the form puts in is `thanSua`'s test.
+ */
 const SUA_DAY_DU: SuaNoiDungVao = {
   type: "su-kien",
   category_id: "",
@@ -79,6 +100,10 @@ const SUA_DAY_DU: SuaNoiDungVao = {
   body: "<p>Nội dung đã sửa.</p>",
   image_url: "",
   publish: false,
+  event_starts_at: "2026-10-05T08:00:00+07:00",
+  event_ends_at: "",
+  event_place: "Hội trường UBND xã",
+  video_url: "",
 };
 
 const THEM_DANH_MUC_DAY_DU: ThemDanhMucVao = {
@@ -218,6 +243,51 @@ describe("POST /api/v1/content-items — soạn", () => {
       expect(than).not.toHaveProperty(cam);
     }
   });
+
+  it("KHÔNG gửi `published_at` — ô tích `publish` ghim nó ở lần đăng đầu, không thân nào đặt được", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    const withPublishedAt = {
+      ...THEM_DAY_DU,
+      published_at: "2026-01-01T00:00:00Z",
+    } as unknown as ThemNoiDungVao;
+    await themNoiDung(withPublishedAt, "k");
+    expect(thanDaGui(gia, 0)).not.toHaveProperty("published_at");
+  });
+
+  it("event fields go only with `su-kien`, the video link only with `video` — otherwise a 400", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    // A news item handed every per-type field: none of them may leave, the server refuses each.
+    await themNoiDung(
+      { ...EVENT_FULL, video_url: "https://video.example.vn/x", type: "tin-tuc" },
+      "k",
+    );
+    await themNoiDung({ ...EVENT_FULL, video_url: "https://video.example.vn/x" }, "k");
+    await themNoiDung({ ...VIDEO_FULL, event_place: "Hội trường" }, "k");
+
+    const news = thanDaGui(gia, 0);
+    for (const k of ["event_starts_at", "event_ends_at", "event_place", "video_url"]) {
+      expect(news).not.toHaveProperty(k);
+    }
+
+    const event = thanDaGui(gia, 1);
+    expect(event.event_starts_at).toBe("2026-10-05T08:00:00+07:00");
+    expect(event.event_ends_at).toBe("2026-10-05T11:30:00+07:00");
+    expect(event.event_place).toBe("Hội trường UBND xã");
+    expect(event).not.toHaveProperty("video_url");
+
+    const video = thanDaGui(gia, 2);
+    expect(video.video_url).toBe("https://video.example.vn/hoi-nghi");
+    expect(video).not.toHaveProperty("event_place");
+  });
+
+  it("an empty per-type field is left out of the POST, not sent as `\"\"`", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await themNoiDung({ ...EVENT_FULL, event_ends_at: "", event_place: "" }, "k");
+    const than = thanDaGui(gia, 0);
+    expect(than).toHaveProperty("event_starts_at");
+    expect(than).not.toHaveProperty("event_ends_at");
+    expect(than).not.toHaveProperty("event_place");
+  });
 });
 
 describe("PATCH /api/v1/content-items/{id} — sửa", () => {
@@ -258,6 +328,12 @@ describe("PATCH /api/v1/content-items/{id} — sửa", () => {
     const gia = batFetch(traJSON(200, {}));
     await suaNoiDung("01JND1", { summary: "" });
     expect(thanDaGui(gia, 0)).toEqual({ summary: "" });
+  });
+
+  it("`\"\"` on a per-type field IS sent — it is the server's one spelling of `clear`", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await suaNoiDung("01JND1", { event_ends_at: "", event_place: "", video_url: "" });
+    expect(thanDaGui(gia, 0)).toEqual({ event_ends_at: "", event_place: "", video_url: "" });
   });
 
   it("KHÔNG gửi `status` kể cả khi người gọi nhét vào", async () => {
@@ -339,12 +415,14 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     const cuaHopDong = khoaCuaLuocDo("comms.themNoiDungVao");
 
     const gia = batFetch(traJSON(201, {}));
-    await themNoiDung(THEM_DAY_DU, "k");
+    await themNoiDung(EVENT_FULL, "k");
+    await themNoiDung(VIDEO_FULL, "k");
 
     // Thân đầy đủ: mọi trường tuỳ chọn đều có giá trị, nên bộ khoá gửi đi phải trùng KHÍT bộ khoá
     // hợp đồng. Thừa một trường là gửi thứ máy chủ không nhận; thiếu một trường là một ô biểu mẫu
-    // không bao giờ tới nơi.
-    expect(Object.keys(thanDaGui(gia, 0)).sort()).toEqual(cuaHopDong.slice().sort());
+    // không bao giờ tới nơi. UNION of the event body and the video body: no one type carries both.
+    const sent = new Set([...Object.keys(thanDaGui(gia, 0)), ...Object.keys(thanDaGui(gia, 1))]);
+    expect([...sent].sort()).toEqual(cuaHopDong.slice().sort());
   });
 
   it("`suaNoiDung` gửi ĐÚNG bộ trường của `comms.suaNoiDungVao`", async () => {
