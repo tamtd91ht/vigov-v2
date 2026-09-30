@@ -66,8 +66,6 @@ const TASK: petitions_nhiemVuRa = {
   unit: "",
   assignee: ASSIGNEE,
   assigner: "",
-  lead_unit: "",
-  monitor: "",
   due_at: null,
   original_due_at: null,
   completed_at: null,

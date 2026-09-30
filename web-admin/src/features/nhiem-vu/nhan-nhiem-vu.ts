@@ -624,20 +624,22 @@ export const LOG_ENTRY_DONE = "Đã ghi vào nhật ký.";
 /**
  * May this account see the entry form on this task — the server's `TaskWorkRightFor`
  * (`service-petitions/internal/domain/task_participant.go:60-76`), read the same way: `task.update`;
- * else, with a non-empty session code, the assignee, the monitor, the assigner or the creator.
+ * else, with a non-empty session code, the assignee, the assigner or the creator. There is no
+ * separate monitor since ADR 0065 NV5 (user decision 30/09/2026): "chuyên viên theo dõi" IS the
+ * assignee, and the response no longer carries a `monitor` field.
  *
  * CONVENIENCE, NOT PROTECTION (rule 5, forbidden #1): the server decides again on the row read FOR
  * UPDATE, and its 403 shows verbatim. The empty-code check is the one that matters: without it
- * `"" === ""` would offer the form on every task with an unset monitor to every unread session.
+ * `"" === ""` would offer the form on every task with an unset assigner to every unread session.
  */
 export function canWriteLogEntry(
   quyen: QuyenNhiemVu,
-  task: Pick<petitions_nhiemVuRa, "assignee" | "monitor" | "assigner" | "created_by">,
+  task: Pick<petitions_nhiemVuRa, "assignee" | "assigner" | "created_by">,
   staffCode: string,
 ): boolean {
   if (quyen.capNhat) return true;
   if (staffCode === "") return false;
-  return [task.assignee, task.monitor, task.assigner, task.created_by].includes(staffCode);
+  return [task.assignee, task.assigner, task.created_by].includes(staffCode);
 }
 
 /** The text to send, or `null` (button disabled): trimmed, as the server trims before it checks. */
@@ -1487,12 +1489,12 @@ export const CHUA_GIAO_BO_PHAN = "Chưa giao bộ phận nào";
 export const CHUA_XAC_DINH = "— Chưa xác định —";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BA Ô CHỌN CÁN BỘ (§3 `Người thực hiện`; §7 `Người thực hiện` · `Lãnh đạo giao việc` ·
- * `Chuyên viên theo dõi`) — đổ từ DANH BẠ CHỌN NGƯỜI
+ * CÁC Ô CHỌN CÁN BỘ (§3 `Người thực hiện`; §7 `Người thực hiện` · `Lãnh đạo giao việc`) — đổ từ
+ * DANH BẠ CHỌN NGƯỜI. `Chuyên viên theo dõi` đã gộp vào `Người thực hiện` (ADR 0065 NV5)
  *
  * Nguồn là `GET /api/v1/staff-directory` (`AnyAuthenticated`, chỉ mã · họ tên · chức vụ · bộ phận),
  * KHÔNG phải `GET /api/v1/staff` (đứng sau `admin.user`). Giá trị gửi đi vẫn là MÃ NGHIỆP VỤ
- * `CB-…` (`code`) — đúng loại ba trường `assignee` · `assigner` · `monitor` của hợp đồng giữ
+ * `CB-…` (`code`) — đúng loại hai trường `assignee` · `assigner` của hợp đồng giữ
  * (luật 6, bất biến 8). Một ULID ở đó được máy chủ nhận nhưng không khớp cán bộ nào, lặng lẽ. Ô chọn dùng chung: `components/o-chon-can-bo.tsx`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -1858,8 +1860,6 @@ export type FormGiaoViecNhap = {
   readonly boPhan: string;
   readonly nguoiThucHien: string;
   readonly lanhDaoGiaoViec: string;
-  readonly coQuanChuTri: string;
-  readonly chuyenVien: string;
   /** `YYYY-MM-DD` hoặc rỗng. */
   readonly han: string;
   /** `HH:MM` of the deadline, commune time zone. Read only when `han` is set. */
@@ -1907,7 +1907,7 @@ export function canhBaoVanBan(
 /**
  * Dựng thân `POST /api/v1/tasks` (và thân Tách kết luận của màn Biên bản) từ các ô của form.
  *
- * TRƯỜNG ĐANG ẨN KHÔNG ĐƯỢC GỬI — CẮT LÚC GỬI, KHÔNG XOÁ LÚC ĐỔI LOẠI. Cán bộ gõ `Cơ quan chủ trì`
+ * TRƯỜNG ĐANG ẨN KHÔNG ĐƯỢC GỬI — CẮT LÚC GỬI, KHÔNG XOÁ LÚC ĐỔI LOẠI. Cán bộ gõ `Ghi chú`
  * rồi đổi sang `Nhiệm vụ cơ bản`: ô ấy biến khỏi màn, và một giá trị không còn nhìn thấy mà vẫn lên
  * dây là một bản ghi mang thứ người giao việc tin là đã bỏ. Cắt ở ĐÂY — một chỗ, có bài kiểm — thay
  * vì dọn state trong trình xử lý đổi loại, nơi mỗi ô thêm sau này là một lần phải nhớ dọn. Đổi lại
@@ -1939,10 +1939,8 @@ export function thanGiaoViec(
   if (f.boPhan !== "") than.unit = f.boPhan;
   if (f.nguoiThucHien.trim() !== "") than.assignee = f.nguoiThucHien.trim();
   if (f.lanhDaoGiaoViec.trim() !== "") than.assigner = f.lanhDaoGiaoViec.trim();
-  if (theoVanBan) {
-    if (f.coQuanChuTri !== "") than.lead_unit = f.coQuanChuTri;
-    if (f.chuyenVien.trim() !== "") than.monitor = f.chuyenVien.trim();
-  }
+  // NO `lead_unit` / `monitor`, whatever the type (ADR 0065 NV5, user decision 30/09/2026): "cơ quan
+  // chủ trì" IS `unit` and "chuyên viên theo dõi" IS `assignee`. The server answers 400 to either.
   // HẠN: ô ngày + ô giờ → một mốc `+07:00`. Bỏ trống ngày thì trường VẮNG MẶT HẲN, không gửi
   // chuỗi rỗng — `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật (§4.1 vẽ
   // nó thành `Hạn —`). Ngày có mà giờ sai khuôn thì form đã khoá nút gửi (`newTaskDueProblem`).
@@ -1950,7 +1948,7 @@ export function thanGiaoViec(
   if (tuyChon.maCha !== undefined && tuyChon.maCha !== "") than.parent = tuyChon.maCha;
 
   // GHI CHÚ: cùng cổng với ba danh sách văn bản, cùng hai lý do. §7.3 bỏ ô này ở loại khác `Theo
-  // văn bản` (cắt lúc gửi, như `lead_unit`); và `petitions.tachKetLuanVao` của màn Biên bản KHÔNG
+  // văn bản` (cắt lúc gửi); và `petitions.tachKetLuanVao` của màn Biên bản KHÔNG
   // có `note` — gửi nó ở đó là chữ cán bộ gõ vào mất lặng lẽ. Cắt khoảng trắng như thân `PATCH`;
   // rỗng thì VẮNG MẶT, không gửi `""`. Độ dài do máy chủ quyết (`GhiChuNhiemVuToiDa`), ô nhập chỉ
   // dừng sớm ở cùng `GHI_CHU_NHIEM_VU_TOI_DA` của form `✎ Sửa`.
@@ -1975,12 +1973,12 @@ export function thanGiaoViec(
  * NÚT `✎ SỬA` CỦA KHỐI §5.4 — THÂN `PATCH /api/v1/tasks/{ma}`
  *
  * NHỮNG Ô SỬA ĐƯỢC LÀ GIAO CỦA HAI TẬP: các trường §5.4 vẽ, và các trường
- * `petitions_suaNhiemVuVao` nhận: `code` · `due_at` · `title` · `result_summary` · `note` ·
- * `leader_approved` · `superior_acknowledged` · `documents`. Hai trường §5.4 còn lại HIỆN mà KHÔNG
- * SỬA ĐƯỢC Ở ĐÂY — `Cơ quan chủ trì` và `Chuyên viên`, sửa ở khối §5.7 (`LY_DO_KHONG_SUA_CHU_TRI`).
+ * `petitions_suaNhiemVuVao` nhận: `due_at` · `title` · `result_summary` · `note` ·
+ * `leader_approved` · `superior_acknowledged` · `documents`.
  *
- * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `Mã nhiệm vụ` (3c3525f — đổi mã, mã cũ giữ lại không cấp lại)
- * và `Hạn xử lý` (f27fd6e — SỬA hạn, không phải lùi hạn) nay sửa được. Mỗi lần lưu từ form này mang
+ * `Mã nhiệm vụ` KHÔNG SỬA ĐƯỢC (ADR 0065 NV3, người dùng chốt 30/09/2026): mã đã cấp không đổi —
+ * luật 7 bất biến 3; máy chủ trả 400 nếu thân mang `code`. Đường đổi mã 3c3525f đã gỡ.
+ * `Hạn xử lý` (f27fd6e — SỬA hạn, không phải lùi hạn) sửa được. Mỗi lần lưu từ form này mang
  * `expected_updated_at` (d2ed15e): ai đó đã ghi nhiệm vụ kể từ lúc mở form thì máy chủ từ chối 409.
  *
  * `description`, `priority`, `bloc`, `progress`, `parent` hợp đồng CÓ nhận nhưng §5.4 KHÔNG vẽ, nên
@@ -1995,19 +1993,6 @@ export const GHI_CHU_NHIEM_VU_TOI_DA = 5000;
 export const NHAN_NUT_SUA = "✎ Sửa";
 export const NHAN_NUT_LUU = "Lưu";
 export const NHAN_NUT_HUY = "Huỷ";
-
-/** Server bound of a register code (`MaNhiemVuToiDa`, `nhiem_vu_ghi.go:36`). */
-export const TASK_CODE_MAX = 32;
-
-/**
- * Under the `Mã nhiệm vụ` field. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this was `LY_DO_KHONG_SUA_MA` ("không
- * sửa và không cấp lại"). Renaming now exists (3c3525f); what survives of the old rule is the half
- * that matters for records: the old code is reserved for ever and never reissued (rule 7, inv 3).
- * The second sentence is the server's own warning (`nhiem_vu_ghi.go:215-217`): the old code 404s.
- */
-export const CODE_EDIT_NOTE =
-  "Đổi mã thì mã cũ vẫn được giữ lại và không bao giờ cấp cho việc khác. Đường dẫn hay tin nhắn " +
-  "đã gửi mang mã cũ sẽ không mở được nhiệm vụ này nữa.";
 
 /**
  * Under the deadline fields. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this replaces `LY_DO_KHONG_SUA_HAN`
@@ -2078,16 +2063,6 @@ export function changedSince(
   return fresh.ok && fresh.duLieu.updated_at !== snapshotUpdatedAt;
 }
 
-/**
- * Why `Cơ quan chủ trì` and `Chuyên viên` are read-only in the §5.4 `✎ Sửa` form — and WHERE they
- * are edited instead (user decision 28/09/2026): the §5.7 block, in the same single
- * `POST …/assignment` call as unit and assignee, behind `task.assign`. `PATCH` still does not take
- * them, and must not: it stands behind `task.update`, a different key.
- */
-export const LY_DO_KHONG_SUA_CHU_TRI =
-  "Cơ quan chủ trì tham mưu và chuyên viên theo dõi được sửa ở khối “Giao việc, chuyển việc” " +
-  "ngay trong phần chi tiết này, cùng lúc với bộ phận và người thực hiện — cần quyền Giao nhiệm vụ.";
-
 /** `✎ Sửa` khoá khi khối văn bản còn đang tải. */
 export const KHOA_SUA_DANG_TAI =
   "Chưa sửa được: các văn bản chỉ đạo còn đang tải. Sửa khi chưa thấy đủ văn bản sẽ gỡ mất những " +
@@ -2134,8 +2109,6 @@ export type DongVanBanSua = DongVanBanNhap & { readonly id: string };
 
 /** Mọi ô sửa được của form `✎ Sửa`. */
 export type FormSuaNhiemVu = {
-  /** Register code, as typed (trimmed at send). */
-  readonly code: string;
   /** Deadline date `YYYY-MM-DD` and time `HH:MM`, both in the commune's time zone; `""` = empty. */
   readonly dueDate: string;
   readonly dueTime: string;
@@ -2158,7 +2131,6 @@ export function formSuaTuChiTiet(
   ds: readonly petitions_nhiemVuVanBanRa[],
 ): FormSuaNhiemVu {
   return {
-    code: n.code,
     dueDate: ngayChoONhap(n.due_at),
     dueTime: timeForInput(n.due_at),
     tieuDe: n.title,
@@ -2299,9 +2271,9 @@ function vanBanDaDoi(
  * mặt là "không đụng tới". Gửi lại nguyên giá trị cũ của một trường không ai sửa là ghi đè lên bất
  * cứ thay đổi nào người khác vừa lưu vào trường ấy.
  *
- * DỰNG TỪNG TRƯỜNG, KHÔNG TRẢI FORM HAY BẢN GHI. Không bao giờ có `code`, `due_at`, `assigner`,
- * `position` — trường thứ nhất là mã đã cấp, hai trường sau hợp đồng cố ý không nhận, trường cuối
- * do sổ cấp.
+ * DỰNG TỪNG TRƯỜNG, KHÔNG TRẢI FORM HAY BẢN GHI. Không bao giờ có `code`, `assigner`,
+ * `position` — trường thứ nhất là mã đã cấp (ADR 0065 NV3: gửi thì 400), trường thứ hai hợp đồng cố
+ * ý không nhận, trường cuối do sổ cấp.
  *
  * `documents` — THAY CẢ TẬP, ba trường hợp:
  *   không đổi   VẮNG MẶT, để máy chủ giữ nguyên khối
@@ -2317,8 +2289,6 @@ export function thanSuaNhiemVu(
   gocVanBan: readonly petitions_nhiemVuVanBanRa[],
 ): petitions_suaNhiemVuVao | null {
   const than: petitions_suaNhiemVuVao = {};
-  const code = f.code.trim();
-  if (code !== goc.code) than.code = code;
   // THE DEADLINE IS COMPARED FIELD BY FIELD WITH WHAT THE FORM OPENED WITH, not instant by instant:
   // a stored `23:59:59` shows as `23:59`, and re-composing it would send `23:59:00` — a one-second
   // "correction" nobody made, written to the timeline and, on a never-extended task, to the original
@@ -2361,7 +2331,6 @@ export function thanSuaNhiemVu(
  * cộng hai điều chỉ form sửa gặp: tiêu đề bị xoá trắng, và một ngày văn bản sai khuôn đọc từ máy chủ.
  */
 export function canhBaoSua(f: FormSuaNhiemVu, goc?: Pick<petitions_nhiemVuRa, "due_at">): string | null {
-  if (f.code.trim() === "") return "Ô Mã nhiệm vụ không được để trống.";
   if (f.dueDate === "" && f.dueTime === "") {
     // A deadline cannot be cleared (`due_at` null = "leave it"), so emptying both fields would look
     // saved while nothing changed. Refuse and say so.

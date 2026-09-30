@@ -45,8 +45,6 @@ const ROW: petitions_nhiemVuRa = {
   unit: "01JUNIT",
   assignee: "CB-2026-THUCHIEN",
   assigner: "",
-  lead_unit: "01JLEAD",
-  monitor: "CB-2026-THEODOI",
   due_at: "2026-12-20T23:59:59+07:00",
   original_due_at: "2026-12-20T23:59:59+07:00",
   completed_at: null,
@@ -72,11 +70,9 @@ const CATALOGUES: DanhMucNhiemVu = {
 };
 const UNITS = new Map([
   ["01JUNIT", "BỘ PHẬN GIẢ THỰC HIỆN"],
-  ["01JLEAD", "VĂN PHÒNG GIẢ CHỦ TRÌ"],
 ]);
 const DIRECTORY = danhBaTheoMa([
   { code: "CB-2026-THUCHIEN", full_name: "Nguyễn Văn Giả", position: "", department_id: "" },
-  { code: "CB-2026-THEODOI", full_name: "Trần Thị Giả", position: "", department_id: "" },
 ]);
 
 function table(rows: readonly petitions_nhiemVuRa[], withSelection = false): string {
@@ -110,6 +106,14 @@ describe("§4.3 columns — exactly the spec's order", () => {
     expect([...pos].sort((a, b) => a - b)).toEqual(pos);
   });
 
+  it("ELEVEN columns — no `Cơ quan chủ trì` / `Chuyên viên … theo dõi` (ADR 0065 NV5, same as the export)", () => {
+    expect(REGISTER_COLUMNS).toHaveLength(11);
+    expect(REGISTER_COLUMNS.some((c) => c.includes("chủ trì") || c.includes("theo dõi"))).toBe(false);
+    // Every cell of a row is one column: 11 `<td>` per row without the `☐` column.
+    const row = table([ROW]).split("<tbody>")[1] ?? "";
+    expect(row.match(/<td[ >]/g)?.length).toBe(11);
+  });
+
   it("the table draws those headers in that order; `☐` only with `task.delete`", () => {
     const html = table([ROW]);
     const heads = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
@@ -120,13 +124,11 @@ describe("§4.3 columns — exactly the spec's order", () => {
 });
 
 describe("a row — names resolved, documents split, nothing blank that is not empty", () => {
-  it("title + description + bloc label; lead unit, monitor, unit + assignee NAMES", () => {
+  it("title + description + bloc label; unit + assignee NAMES", () => {
     const html = table([ROW]);
     expect(html).toContain("Triển khai thông báo kết luận của Thành uỷ");
     expect(html).toContain('<span class="dong-phu">Mô tả giả</span>');
     expect(html).toContain('<span class="chip chip-ngung">Khối Uỷ ban</span>');
-    expect(html).toContain("<td>VĂN PHÒNG GIẢ CHỦ TRÌ</td>");
-    expect(html).toContain("Trần Thị Giả");
     expect(html).toContain("BỘ PHẬN GIẢ THỰC HIỆN");
     expect(html).toContain("Nguyễn Văn Giả");
   });

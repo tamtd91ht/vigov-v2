@@ -56,8 +56,6 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     unit: "01JBOPHAN",
     assignee: "CB-2026-3H8N2W",
     assigner: "CB-2026-7K3M9Q",
-    lead_unit: "",
-    monitor: "",
     due_at: "2026-06-20T23:59:59+07:00",
     original_due_at: "2026-06-20T23:59:59+07:00",
     completed_at: null,

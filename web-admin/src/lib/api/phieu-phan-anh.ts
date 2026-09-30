@@ -555,8 +555,6 @@ export function createTaskFromPetition(
     unit: than.unit,
     assignee: than.assignee,
     assigner: than.assigner,
-    lead_unit: than.lead_unit,
-    monitor: than.monitor,
     due_at: than.due_at,
     parent: than.parent,
     documents: than.documents,

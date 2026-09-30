@@ -210,6 +210,27 @@ describe("thân của sáu tuyến ghi", () => {
     expect(dau["Idempotency-Key"]).toBe("khoa-gia-cua-bai-kiem");
   });
 
+  it("tạo nhiệm vụ: `lead_unit` / `monitor` đã gỡ KHÔNG BAO GIỜ lên dây (ADR 0065 NV5 — máy chủ trả 400)", async () => {
+    const gia = batFetch(
+      new Response("{}", { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+    await taoNhiemVu(
+      {
+        auto_code: true,
+        type: "theo-van-ban",
+        title: "Việc giả",
+        unit: "01JBOPHAN",
+        assignee: "CB-2026-7K3M9Q",
+        lead_unit: "01JBOPHAN2",
+        monitor: "CB-2026-9Z8Y7X",
+      } as never,
+      "k",
+    );
+    expect(than(gia)).not.toHaveProperty("lead_unit");
+    expect(than(gia)).not.toHaveProperty("monitor");
+    expect(than(gia)).toMatchObject({ unit: "01JBOPHAN", assignee: "CB-2026-7K3M9Q" });
+  });
+
   it("tạo nhiệm vụ: DỰNG TỪNG TRƯỜNG — `status` và `created_by` KHÔNG lọt lên máy chủ", async () => {
     // Ba trường ấy là những thứ hợp đồng CỐ Ý không nhận: trạng thái đầu đời là `moi-giao` và
     // không đâu khác; tác giả là chủ thể của phiên, và một yêu cầu tự khai được tác giả là một
@@ -278,9 +299,10 @@ describe("thân của sáu tuyến ghi", () => {
     expect(than(gia)).not.toHaveProperty("documents");
   });
 
-  it("sửa nhiệm vụ: PATCH đúng đường dẫn, DỰNG TỪNG TRƯỜNG — `assigner`/`status` không lọt", async () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim `due_at` và `code` KHÔNG lên dây. Máy chủ nay
-    // nhận cả hai (f27fd6e, 3c3525f) cùng `expected_updated_at` (d2ed15e); `assigner` vẫn bị chặn.
+  it("sửa nhiệm vụ: PATCH đúng đường dẫn, DỰNG TỪNG TRƯỜNG — `code`/`assigner`/`status` không lọt", async () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim `due_at` và `code` KHÔNG lên dây; khi ấy máy chủ
+    // nhận cả hai. ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV3): `code` lại KHÔNG lên dây — mã đã cấp
+    // không sửa, máy chủ trả 400. `due_at` và `expected_updated_at` (d2ed15e) vẫn đi.
     const gia = batFetch(OK_JSON());
     await suaNhiemVu("NV19", {
       note: "Ghi chú giả",
@@ -298,7 +320,6 @@ describe("thân của sáu tuyến ghi", () => {
       note: "Ghi chú giả",
       leader_approved: false,
       due_at: "2030-01-01T17:00:00+07:00",
-      code: "NV99",
       // Sent back UNCHANGED — the server compares it with the stored instant.
       expected_updated_at: "2026-06-01T02:00:00.123456Z",
     });
@@ -306,7 +327,7 @@ describe("thân của sáu tuyến ghi", () => {
 
   it("sửa nhiệm vụ: `due_at: null` KHÔNG xoá hạn — bị bỏ như mọi `null`", async () => {
     const gia = batFetch(OK_JSON());
-    await suaNhiemVu("NV19", { due_at: null, code: null, expected_updated_at: null, note: "x" });
+    await suaNhiemVu("NV19", { due_at: null, expected_updated_at: null, note: "x" });
     expect(than(gia)).toEqual({ note: "x" });
   });
 

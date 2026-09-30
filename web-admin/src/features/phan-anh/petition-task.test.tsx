@@ -281,6 +281,16 @@ describe("createTaskFromPetition — the wire", () => {
     expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("k-open-1");
   });
 
+  it("retired `lead_unit` / `monitor` NEVER go, even from a stale caller (ADR 0065 NV5 — the server answers 400)", async () => {
+    const fake = stubFetch(201, { code: "NV12" });
+    const stale = { ...FROM_FORM, assignee: "CB-2026-7K3M9Q", lead_unit: "01JBOPHAN2", monitor: "CB-2026-9Z8Y7X" };
+    await createTaskFromPetition("PA-2026-0021", stale as petitions_taoNhiemVuVao, "k");
+    const sent = JSON.parse(String(fake.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(sent).not.toHaveProperty("lead_unit");
+    expect(sent).not.toHaveProperty("monitor");
+    expect(sent.assignee).toBe("CB-2026-7K3M9Q");
+  });
+
   it("a retry reuses the SAME key — the function never mints one", async () => {
     const fake = stubFetch(503, { code: "unavailable", message: "Máy chủ bận.", trace_id: "x" });
     await createTaskFromPetition("PA-2026-0021", FROM_FORM, "k-fixed");

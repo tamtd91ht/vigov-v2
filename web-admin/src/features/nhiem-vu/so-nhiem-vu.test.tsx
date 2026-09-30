@@ -46,8 +46,6 @@ import {
   KHOA_SUA_NHOM_LA,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
-  LY_DO_KHONG_SUA_CHU_TRI,
-  CODE_EDIT_NOTE,
   DUE_EDIT_NOTE,
   NHAN_NUT_SUA,
   NHAT_KY_RONG,
@@ -134,8 +132,6 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     unit: "01JBOPHAN",
     assignee: "CB-2026-3H8N2W",
     assigner: LANH_DAO,
-    lead_unit: "",
-    monitor: "",
     due_at: "2026-06-20T23:59:59+07:00",
     original_due_at: "2026-06-20T23:59:59+07:00",
     completed_at: null,
@@ -838,8 +834,13 @@ describe("form Giao việc mới §7", () => {
     expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
     expect(html).toContain('id="giao-them-van-ban-cap-tren-giao"');
     expect(html).toContain("Nội dung nhiệm vụ / Trích yếu văn bản");
-    expect(html).toContain('id="giao-co-quan-chu-tri"');
-    expect(html).toContain('id="giao-chuyen-vien"');
+    // ADR 0065 NV5: no separate lead unit / monitor — they ARE `Đơn vị thực hiện` / `Người thực hiện`.
+    expect(html).not.toContain('id="giao-co-quan-chu-tri"');
+    expect(html).not.toContain('id="giao-chuyen-vien"');
+    expect(html).not.toContain("Cơ quan chủ trì");
+    expect(html).not.toContain("theo dõi");
+    expect(html).toContain('<label for="giao-bo-phan">Đơn vị thực hiện</label>');
+    expect(html).toContain("Người thực hiện");
     // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-04): `POST /api/v1/tasks` nay nhận `note`, nên ô
     // `Ghi chú` §7.2 có mặt — có nhãn, sau ba danh sách, dừng ở cùng giới hạn với form `✎ Sửa`.
     expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
@@ -850,7 +851,7 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain("không nhận ghi chú");
   });
 
-  it("loại `co-ban`: ô tiêu đề thành `Tên nhiệm vụ`; cơ quan chủ trì, chuyên viên, ba danh sách BIẾN MẤT", () => {
+  it("loại `co-ban`: ô tiêu đề thành `Tên nhiệm vụ`; ba danh sách BIẾN MẤT", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC_CO_BAN}
@@ -875,7 +876,7 @@ describe("form Giao việc mới §7", () => {
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
     // Đúng cách `features/bien-ban/so-bien-ban.tsx` gọi form: không có `coDanhSachVanBan`.
     // `petitions.tachKetLuanVao` không có `documents` — vẽ ba danh sách ở đó là để cán bộ gõ văn
-    // bản rồi thấy chúng mất. Hai ô `lead_unit`/`monitor` thì tuyến ấy có, nên vẫn hiện.
+    // bản rồi thấy chúng mất. Hai ô `lead_unit`/`monitor` đã gỡ ở mọi màn (ADR 0065 NV5).
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -892,8 +893,8 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain("Văn bản cấp trên giao");
     // `petitions.tachKetLuanVao` không có `note`: ô ấy ở đây là chữ gõ vào rồi mất.
     expect(html).not.toContain('id="giao-ghi-chu"');
-    expect(html).toContain('id="giao-co-quan-chu-tri"');
-    expect(html).toContain('id="giao-chuyen-vien"');
+    expect(html).not.toContain('id="giao-co-quan-chu-tri"');
+    expect(html).not.toContain('id="giao-chuyen-vien"');
   });
 });
 
@@ -973,7 +974,7 @@ function veForm(danhBa: KetQua<identity_danhBaChonNguoiRa> | null): string {
 describe("form Giao việc — ô chọn cán bộ", () => {
   it("giá trị mỗi lựa chọn là MÃ NGHIỆP VỤ `CB-…`, chữ hiện là họ tên · chức vụ", () => {
     const html = veForm(DANH_BA);
-    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao", "giao-chuyen-vien"]) {
+    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
       const o = oChon(html, id);
       expect(o).toContain(`value="${LANH_DAO}"`);
       expect(o).toContain(`value="${NGUOI_KHAC}"`);
@@ -1345,9 +1346,8 @@ describe("§5.4 — form `✎ Sửa`", () => {
   function veForm(sua: Partial<petitions_nhiemVuRa> = {}): string {
     return renderToStaticMarkup(
       <FormSuaKhoiVanBan
-        nhiemVu={nhiemVu({ lead_unit: "01JBOPHAN", monitor: "CB-00001", ...sua })}
+        nhiemVu={nhiemVu(sua)}
         vanBan={BA_VAN_BAN}
-        tenBoPhan={TEN_BO_PHAN}
         luu={KHONG_SUA}
         docLai={KHONG_SUA}
         xong={() => {}}
@@ -1355,21 +1355,20 @@ describe("§5.4 — form `✎ Sửa`", () => {
     );
   }
 
-  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim "Mã, Hạn HIỆN mà KHÔNG có ô nhập". Chủ đầu tư nay
-  // cho sửa cả hai (3c3525f, f27fd6e); Cơ quan chủ trì và Chuyên viên vẫn chỉ đọc ở đây.
-  it("Mã và Hạn (ngày + giờ) là Ô NHẬP có nhãn và câu giải thích; Cơ quan chủ trì, Chuyên viên vẫn chỉ đọc", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim "Mã, Hạn HIỆN mà KHÔNG có ô nhập". Chủ đầu tư
+  // khi ấy cho sửa cả hai (3c3525f, f27fd6e). ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV3, NV5): mã đã
+  // cấp KHÔNG sửa nữa (máy chủ trả 400), và Cơ quan chủ trì / Chuyên viên không còn là trường riêng.
+  it("Hạn (ngày + giờ) là Ô NHẬP có nhãn và câu giải thích; KHÔNG có ô Mã, KHÔNG có Cơ quan chủ trì / Chuyên viên", () => {
     const html = veForm();
-    expect(html).toContain('<label for="sua-ma-nhiem-vu">Mã nhiệm vụ</label>');
-    expect(html).toMatch(/<input id="sua-ma-nhiem-vu"[^>]*maxLength="32"[^>]*value="NV19"/);
-    expect(html).toContain(nhuTrongHTML(CODE_EDIT_NOTE));
+    expect(html).not.toContain('id="sua-ma-nhiem-vu"');
+    expect(html).not.toContain(">Mã nhiệm vụ</label>");
+    expect(html).not.toContain("Cơ quan chủ trì");
+    expect(html).not.toContain("Chuyên viên");
     expect(html).toContain("<legend>Hạn xử lý</legend>");
     expect(html).toMatch(/<input id="sua-han-ngay"[^>]*type="date"[^>]*value="2026-06-20"/);
     // The time is REQUIRED once a date is there — the server defaults no hour.
     expect(html).toMatch(/<input id="sua-han-gio"[^>]*type="time"[^>]*required=""[^>]*value="23:59"/);
     expect(html).toContain(nhuTrongHTML(DUE_EDIT_NOTE));
-    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY");
-    expect(html).toContain("CB-00001");
-    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_CHU_TRI));
     expect(html).not.toContain("<select");
     // One date field for the deadline, plus one per document.
     expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length + 1);
@@ -1471,19 +1470,18 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(khoi.indexOf("ghi-nhat-ky-NV19")).toBeLessThan(khoi.indexOf("Đang tải nhật ký"));
   });
 
-  it("CÓ ô cho người liên quan KHÔNG có khoá: người thực hiện, theo dõi, giao việc, tạo", () => {
-    const task = { monitor: "CB-2026-THEODOI" };
-    for (const ma of ["CB-2026-3H8N2W", "CB-2026-THEODOI", LANH_DAO, "CB-2026-VANTHU"]) {
-      const html = veChiTiet(task, ma, { pha: "dangTai" }, quyenNhiemVu([]));
+  it("CÓ ô cho người liên quan KHÔNG có khoá: người thực hiện, giao việc, tạo", () => {
+    for (const ma of ["CB-2026-3H8N2W", LANH_DAO, "CB-2026-VANTHU"]) {
+      const html = veChiTiet({}, ma, { pha: "dangTai" }, quyenNhiemVu([]));
       expect(html).toContain('id="ghi-nhat-ky-NV19"');
     }
   });
 
-  it("KHÔNG có ô — người ngoài không khoá; phiên chưa đọc trên việc chưa có người theo dõi", () => {
+  it("KHÔNG có ô — người ngoài không khoá; phiên chưa đọc trên việc chưa có người giao việc", () => {
     expect(veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu([]))).not.toContain(
       "Ghi nhật ký</button>",
     );
-    const html = veChiTiet({ monitor: "" }, "", { pha: "dangTai" }, quyenNhiemVu([]));
+    const html = veChiTiet({ assigner: "" }, "", { pha: "dangTai" }, quyenNhiemVu([]));
     expect(html).not.toContain('id="ghi-nhat-ky-NV19"');
     // The timeline itself still reads.
     expect(html).toContain("Nhật ký &amp; Trao đổi");
@@ -1631,17 +1629,25 @@ describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ
     expect(veBang("", DANH_BA_MA)).toContain(nhuTrongHTML(CHUA_PHAN_CONG));
   });
 
-  it("drawer: người thực hiện, lãnh đạo giao việc, chuyên viên — `Họ tên (CB-…)`, mã lạ là mã", () => {
+  it("drawer: người thực hiện, lãnh đạo giao việc — `Họ tên (CB-…)`, mã lạ là mã", () => {
     const html = veChiTiet(
-      { assignee: NGUOI_KHAC, assigner: LANH_DAO, monitor: NGUOI_DA_NGHI },
+      { assignee: NGUOI_KHAC, assigner: NGUOI_DA_NGHI },
       LANH_DAO,
       { pha: "dangTai" },
       DU_QUYEN,
       DANH_BA,
     );
     expect(html).toContain(`Nguyễn Thị Thực (${NGUOI_KHAC})`);
-    expect(html).toContain(`<dd>Trần Văn Lãnh (${LANH_DAO})</dd>`);
     expect(html).toContain(`<dd>${NGUOI_DA_NGHI}</dd>`);
+    const khac = veChiTiet({ assigner: LANH_DAO }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
+    expect(khac).toContain(`<dd>Trần Văn Lãnh (${LANH_DAO})</dd>`);
+  });
+
+  it("drawer KHÔNG còn `Cơ quan chủ trì tham mưu` / `Chuyên viên theo dõi` (ADR 0065 NV5)", () => {
+    const html = veChiTiet({ assignee: NGUOI_KHAC }, LANH_DAO, { pha: "dangTai" }, DU_QUYEN, DANH_BA);
+    expect(html).not.toContain("Cơ quan chủ trì");
+    expect(html).not.toContain("Chuyên viên theo dõi");
+    expect(html).not.toContain("Chuyên viên Văn phòng");
   });
 });
 
@@ -1803,14 +1809,12 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
     );
   }
 
-  it("ô lãnh đạo đổ từ danh bạ ĐÃ LỌC; hai ô kia vẫn đổ từ danh bạ cả xã", () => {
+  it("ô lãnh đạo đổ từ danh bạ ĐÃ LỌC; ô người thực hiện vẫn đổ từ danh bạ cả xã", () => {
     const html = veHaiDanhBa(DANH_BA, CHI_LANH_DAO);
     const lanhDao = oChon(html, "giao-lanh-dao");
     expect(lanhDao).toContain(`value="${LANH_DAO}"`);
     expect(lanhDao).not.toContain(`value="${NGUOI_KHAC}"`);
-    for (const id of ["giao-nguoi-thuc-hien", "giao-chuyen-vien"]) {
-      expect(oChon(html, id)).toContain(`value="${NGUOI_KHAC}"`);
-    }
+    expect(oChon(html, "giao-nguoi-thuc-hien")).toContain(`value="${NGUOI_KHAC}"`);
   });
 
   it("danh bạ đã lọc RỖNG: một câu nói không ai có quyền — KHÔNG vẽ ô chọn rỗng", () => {
@@ -1854,11 +1858,9 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
     const approvers = comboboxListbox(html, "giao-lanh-dao");
     expect(approvers).toContain(`data-value="${LANH_DAO}"`);
     expect(approvers).not.toContain(`data-value="${NGUOI_KHAC}"`);
-    for (const id of ["giao-nguoi-thuc-hien", "giao-chuyen-vien"]) {
-      expect(comboboxListbox(html, id)).toContain(`data-value="${NGUOI_KHAC}"`);
-    }
-    // Không còn `<select>` nào cho ba ô cán bộ trên màn Nhiệm vụ.
-    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao", "giao-chuyen-vien"]) {
+    expect(comboboxListbox(html, "giao-nguoi-thuc-hien")).toContain(`data-value="${NGUOI_KHAC}"`);
+    // Không còn `<select>` nào cho hai ô cán bộ trên màn Nhiệm vụ.
+    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao"]) {
       expect(html).not.toContain(`<select id="${id}"`);
     }
   });

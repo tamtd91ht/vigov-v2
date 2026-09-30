@@ -195,8 +195,6 @@ function task(code: string, patch: Partial<petitions_nhiemVuRa> = {}): petitions
     unit: "",
     assignee: "",
     assigner: "",
-    lead_unit: "",
-    monitor: "",
     due_at: null,
     original_due_at: null,
     completed_at: null,

@@ -389,8 +389,6 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
       unit: "01JBOPHAN",
       assignee: "CB-2026-7K3M9Q",
       assigner: "CB-2026-1A2B3C",
-      lead_unit: "01JBOPHAN2",
-      monitor: "CB-2026-9Z8Y7X",
       due_at: "2026-08-20T16:59:59Z",
       parent: "01JNV-CHA",
     };
@@ -414,6 +412,28 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
     );
 
     expect(keys).toEqual(Object.keys(luocDo?.properties ?? {}).sort());
+    // ADR 0065 NV5: the contract dropped both; a stale caller passing them must not reach the wire.
+    expect(keys).not.toContain("lead_unit");
+    expect(keys).not.toContain("monitor");
+    const keysStale = await keyDaGui(() =>
+      tachKetLuanThanhNhiemVu(
+        "01JBB",
+        {
+          id: "01JKL3",
+          ordinal: 3,
+          content: "x",
+          task_count: 0,
+          task_done_count: 0,
+          status: "chua-giao",
+          no_task: false,
+          created_at: "2026-08-05T02:00:00Z",
+        },
+        { ...thanDayDu, lead_unit: "01JBOPHAN2", monitor: "CB-2026-9Z8Y7X" } as TachKetLuanVao,
+        "k",
+      ),
+    );
+    expect(keysStale).not.toContain("lead_unit");
+    expect(keysStale).not.toContain("monitor");
   });
 
   it("mọi tuyến vẫn đứng sau đúng khoá màn đang giả định — và KÝ đứng sau `task.approve`", () => {

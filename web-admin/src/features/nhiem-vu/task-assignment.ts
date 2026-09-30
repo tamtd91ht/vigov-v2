@@ -1,13 +1,15 @@
 /**
  * §5.7 "Giao việc, chuyển việc" — the pure half of the drawer block (`task-assignment-block.tsx`).
  *
- * ONE ACT, ONE CALL (owner decision 28/09/2026 + user decisions of this session): "Chuyển tiếp" is
- * the SAME task handed to another unit or person, and the two `theo-van-ban` fields of §5.4 — lead
- * unit and monitor — are edited in the SAME `POST /api/v1/tasks/{ma}/assignment`, behind
- * `task.assign`. What the server does with it (`service-petitions/internal/domain/task_assignment.go`):
+ * ONE ACT, ONE CALL (owner decision 28/09/2026): "Chuyển tiếp" is the SAME task handed to another
+ * unit or person, `POST /api/v1/tasks/{ma}/assignment`, behind `task.assign`.
+ *
+ * ONE ROLE, NOT THREE (ADR 0065 NV5, user decision 30/09/2026): "cơ quan chủ trì" IS `unit` and
+ * "chuyên viên theo dõi" IS `assignee`. `lead_unit` / `monitor` are gone from the contract and the
+ * server answers 400 to either — so changing the officer who follows a task is changing `assignee`
+ * here. What the server does (`service-petitions/internal/domain/task_assignment.go`):
  *
  *   unit or assignee changed      status back to `moi-giao` — the new holder acknowledges again
- *   only lead unit / monitor      status unchanged
  *   the deadline                  NEVER changes (ADR 0038: only an approved extension moves it)
  *   terminal task                 409 `task_state` — hence no block on a terminal task
  *
@@ -21,20 +23,16 @@ import type {
   petitions_taskAssignmentIn,
 } from "@/lib/api/schema.gen";
 
-import { coKhoiVanBanChiDao, ketThuc, nhanTrangThai } from "./nhan-nhiem-vu";
+import { ketThuc, nhanTrangThai } from "./nhan-nhiem-vu";
 import type { BangNhanTrangThai } from "./nhan-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 import type { QuyenNhiemVu } from "./nhan-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 
-/** What the block's four fields and the note hold. Codes and ids, exactly as the task carries them. */
+/** What the block's two fields and the note hold. Codes and ids, exactly as the task carries them. */
 export type AssignmentForm = {
   /** `bo_phan` id; `""` = `— Chưa xác định —`. */
   readonly unit: string;
   /** Staff BUSINESS code `CB-…`; `""` = `— Để bộ phận tự phân công —`. */
   readonly assignee: string;
-  /** `bo_phan` id; `theo-van-ban` only. */
-  readonly leadUnit: string;
-  /** Staff business code; `theo-van-ban` only. */
-  readonly monitor: string;
   readonly note: string;
 };
 
@@ -43,8 +41,6 @@ export function assignmentFormFromTask(task: petitions_nhiemVuRa): AssignmentFor
   return {
     unit: task.unit,
     assignee: task.assignee,
-    leadUnit: task.lead_unit,
-    monitor: task.monitor,
     note: "",
   };
 }
@@ -62,18 +58,16 @@ export function unitWouldBeCleared(form: AssignmentForm, task: petitions_nhiemVu
  * The body of `POST …/assignment`, or `null` (button disabled).
  *
  * ONLY THE FIELDS THAT DIFFER from the task as read. Not a convenience: every staff code SENT is
- * checked with identity (`TaskAssignmentChange.StaffCodes`), so resending an unchanged monitor who
+ * checked with identity (`TaskAssignmentChange.StaffCodes`), so resending an unchanged assignee who
  * has since left the commune would refuse an unrelated change of unit — with a sentence about a
  * person the officer did not touch.
  *
  *   unit        sent when it differs; never sent as "" (`null` instead — see `unitWouldBeCleared`)
  *   assignee    sent when it differs, "" included: `— Để bộ phận tự phân công —` is a real choice
- *   lead unit   `theo-van-ban` only; "" clears it
- *   monitor     `theo-van-ban` only; "" clears it
- *   note        trimmed, only with at least one of the four — a note alone changes nothing (400)
+ *   note        trimmed, only with at least one of the two — a note alone changes nothing (400)
  *
- * On another type the two §5.4 fields are never sent, whatever the form holds: §7.3 drops them for
- * `co-ban`, and a stale value there must not ride along.
+ * NEVER `lead_unit` / `monitor` (400 since ADR 0065 NV5): the body is built field by field from the
+ * two above, never by spreading the form or the task.
  */
 export function assignmentBody(
   form: AssignmentForm,
@@ -86,12 +80,6 @@ export function assignmentBody(
   if (unit !== task.unit) body.unit = unit;
   const assignee = form.assignee.trim();
   if (assignee !== task.assignee) body.assignee = assignee;
-  if (coKhoiVanBanChiDao(task.type)) {
-    const leadUnit = form.leadUnit.trim();
-    if (leadUnit !== task.lead_unit) body.lead_unit = leadUnit;
-    const monitor = form.monitor.trim();
-    if (monitor !== task.monitor) body.monitor = monitor;
-  }
   if (Object.keys(body).length === 0) return null;
 
   const note = form.note.trim();
@@ -124,8 +112,6 @@ export const ASSIGNMENT_UNIT_FIELD_ID = "giao-lai-bo-phan";
 export const ASSIGNMENT_TITLE = "Giao việc, chuyển việc";
 export const ASSIGNMENT_UNIT_LABEL = "Bộ phận";
 export const ASSIGNMENT_ASSIGNEE_LABEL = "Người thực hiện";
-export const ASSIGNMENT_LEAD_UNIT_LABEL = "Cơ quan chủ trì tham mưu";
-export const ASSIGNMENT_MONITOR_LABEL = "Chuyên viên Văn phòng tham mưu / theo dõi";
 /** §5.7, verbatim. */
 export const ASSIGNMENT_NOTE_LABEL = "Lý do chuyển (bỏ trống nếu chỉ giao lần đầu)";
 export const ASSIGNMENT_BUTTON = "Giao việc";
@@ -140,14 +126,14 @@ export const ASSIGNMENT_NO_CHANGE =
 export const ASSIGNMENT_STEPPER_HINT = "đến khối Giao việc, chuyển việc";
 
 /**
- * The staff directory could not be read. SAYS THE CONSEQUENCE: the two staff boxes keep only the
+ * The staff directory could not be read. SAYS THE CONSEQUENCE: the staff box keeps only the
  * person already recorded (and "nobody"), while handing the task to a unit still works — the same
  * direction the create form takes when `identity` is down. The directory is read once per page,
  * so the way to retry is reloading the page.
  */
 export function assignmentDirectoryError(message: string): string {
   return (
-    `Không tải được danh bạ cán bộ: ${message} Ô người thực hiện và chuyên viên theo dõi chỉ còn ` +
+    `Không tải được danh bạ cán bộ: ${message} Ô người thực hiện chỉ còn ` +
     "người đang được ghi và lựa chọn trống; vẫn giao được cho bộ phận. Tải lại trang để thử đọc " +
     "lại danh bạ."
   );
@@ -163,14 +149,12 @@ export function assignmentDoneText(code: string): string {
  * BEFORE the officer presses it. The status name comes from the COMMUNE'S label table (decision
  * #21) — a commune that renamed `moi-giao` must read its own word here, not "Mới giao".
  */
-export function assignmentEffectNote(labels: BangNhanTrangThai, withLeadFields: boolean): string {
-  const reset =
+export function assignmentEffectNote(labels: BangNhanTrangThai): string {
+  return (
     "Đổi bộ phận hoặc người thực hiện thì nhiệm vụ trở về trạng thái " +
     `“${nhanTrangThai(labels, "moi-giao")}” để bên nhận tiếp nhận lại. Hạn xử lý giữ nguyên — ` +
-    "hạn chỉ dịch qua đề nghị lùi hạn có người duyệt.";
-  return withLeadFields
-    ? `${reset} Chỉ đổi cơ quan chủ trì hoặc chuyên viên theo dõi thì trạng thái không đổi.`
-    : reset;
+    "hạn chỉ dịch qua đề nghị lùi hạn có người duyệt."
+  );
 }
 
 /**

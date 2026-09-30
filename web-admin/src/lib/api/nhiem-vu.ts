@@ -497,7 +497,8 @@ export function layHangChoLuiHan(
  *
  * DỰNG TỪNG TRƯỜNG, KHÔNG `...than`. Một phép trải ở đây là đường để một trường lạ — `status`,
  * `original_due_at`, `created_by` — đi lên máy chủ vào ngày ai đó truyền vào một dòng vừa đọc
- * được. Cả ba đều là những thứ hợp đồng CỐ Ý không nhận.
+ * được. Cả ba đều là những thứ hợp đồng CỐ Ý không nhận. Cũng vậy với `lead_unit` / `monitor` đã gỡ
+ * (ADR 0065 NV5): máy chủ trả 400 nếu thân mang một trong hai.
  */
 export function taoNhiemVu(
   than: petitions_taoNhiemVuVao,
@@ -523,8 +524,6 @@ export function taoNhiemVu(
   if (than.unit !== undefined && than.unit !== "") thanGui.unit = than.unit;
   if (than.assignee !== undefined && than.assignee !== "") thanGui.assignee = than.assignee;
   if (than.assigner !== undefined && than.assigner !== "") thanGui.assigner = than.assigner;
-  if (than.lead_unit !== undefined && than.lead_unit !== "") thanGui.lead_unit = than.lead_unit;
-  if (than.monitor !== undefined && than.monitor !== "") thanGui.monitor = than.monitor;
   // `due_at` LÀ MỘT LẦN DUY NHẤT TRONG ĐỜI NHIỆM VỤ: `han_ban_dau` lấy cùng mốc và trigger
   // `nhiem_vu_bat_bien` từ chối mọi lần ghi sau. Việc tạo mà bỏ trống hạn thì KHÔNG bao giờ đặt
   // được hạn nữa — hệ quả có thật, và nó ra tới màn hình chứ không nằm ở đây.
@@ -560,9 +559,9 @@ export function taoNhiemVu(
  * duyệt theo ADR 0038, nên một tài khoản `task.update` sửa được cột ấy là một tài khoản tự đặt mình
  * làm người duyệt đề nghị của chính mình.
  *
- * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `code` (đổi mã, 3c3525f — 409 `code_taken`), `due_at` (SỬA hạn,
- * f27fd6e — một mốc RFC 3339, không phải lùi hạn) và `expected_updated_at` (khoá lạc quan, d2ed15e —
- * 409 `task_changed`) nay ĐI trên dây. Trước đó cả ba bị bỏ ở đây vì máy chủ chưa nhận.
+ * KHÔNG CÓ `code`: mã đã cấp không sửa (ADR 0065 NV3, người dùng chốt 30/09/2026 — luật 7 bất biến
+ * 3); máy chủ trả 400 nếu thân mang nó. `due_at` (SỬA hạn, f27fd6e — một mốc RFC 3339, không phải lùi
+ * hạn) và `expected_updated_at` (khoá lạc quan, d2ed15e — 409 `task_changed`) đi trên dây.
  *
  * DỰNG TỪNG TRƯỜNG, KHÔNG GỬI THẲNG `than` — cùng lý do `taoNhiemVu`: một đối tượng mang thêm
  * `assigner` hay `status` vẫn qua được `tsc` (kiểu cấu trúc), và đi thẳng lên dây. Chỉ trường có giá
@@ -580,7 +579,6 @@ export function suaNhiemVu(
   const mau: petitions_patch_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
 
   const thanGui: petitions_suaNhiemVuVao = {};
-  if (than.code !== undefined && than.code !== null) thanGui.code = than.code;
   if (than.due_at !== undefined && than.due_at !== null) thanGui.due_at = than.due_at;
   if (than.bloc !== undefined && than.bloc !== null) thanGui.bloc = than.bloc;
   if (than.title !== undefined && than.title !== null) thanGui.title = than.title;
@@ -653,7 +651,7 @@ export function doiTrangThaiNhiemVu(
  * POST /api/v1/tasks/{ma}/log-entries — §5.9 manual timeline entry (60011e8). 201, the new row.
  *
  * THE ROUTE'S GATE IS `task.read`; who may write is decided on the row (`TaskWorkRightFor`: assignee or
- * `task.update` fully, monitor / assigner / creator log-only; anybody else 403). The refusal comes back
+ * `task.update` fully, assigner / creator log-only; anybody else 403). The refusal comes back
  * verbatim.
  *
  * `idempotencyKey` IS A PARAMETER, NOT MADE HERE — same reason as `taoNhiemVu`: the route requires it,
@@ -684,8 +682,8 @@ export function addTaskLogEntry(
  *
  * ABSENT MEANS "LEAVE IT", "" MEANS "CLEAR IT" — the server reads every field as a pointer. The
  * caller (`assignmentBody`) sends ONLY what differs from the task as read: every staff code sent is
- * checked with identity, so resending an unchanged monitor who has since left would refuse an
- * unrelated change.
+ * checked with identity, so resending an unchanged assignee who has since left would refuse an
+ * unrelated change. NEVER `lead_unit` / `monitor` — retired by ADR 0065 NV5, 400 if sent.
  *
  * FIELD BY FIELD, NOT `body` AS IS — same reason as `taoNhiemVu`: a structurally typed object
  * carrying `status` or `due_at` would pass `tsc` and reach the wire. `note` goes only when it has
@@ -704,8 +702,6 @@ export function reassignTask(
   const sent: petitions_taskAssignmentIn = {};
   if (body.unit !== undefined && body.unit !== null) sent.unit = body.unit;
   if (body.assignee !== undefined && body.assignee !== null) sent.assignee = body.assignee;
-  if (body.lead_unit !== undefined && body.lead_unit !== null) sent.lead_unit = body.lead_unit;
-  if (body.monitor !== undefined && body.monitor !== null) sent.monitor = body.monitor;
   if (body.note !== undefined && body.note !== "") sent.note = body.note;
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(template, code), "POST", sent, 200),

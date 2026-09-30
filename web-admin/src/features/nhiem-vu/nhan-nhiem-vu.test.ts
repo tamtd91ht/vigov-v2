@@ -48,8 +48,6 @@ import {
   KHOA_SUA_DANG_TAI,
   KHOA_SUA_LOI,
   KHOA_SUA_NHOM_LA,
-  LY_DO_KHONG_SUA_CHU_TRI,
-  CODE_EDIT_NOTE,
   DUE_EDIT_NOTE,
   DUE_TIME_LOADING,
   DUE_TIME_NO_CALENDAR,
@@ -557,7 +555,7 @@ function dongVB(sua: Partial<DongVanBanNhap> & Pick<DongVanBanNhap, "khoa" | "nh
   return { trichYeu: "", soKyHieu: "", ngay: "", ...sua };
 }
 
-/** Form ĐÃ GÕ ĐỦ mọi ô, kể cả ba ô chỉ `Theo văn bản` mới có. */
+/** Form ĐÃ GÕ ĐỦ mọi ô, kể cả các ô chỉ `Theo văn bản` mới có. */
 function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
   return {
     tuSinhMa: true,
@@ -570,8 +568,6 @@ function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
     boPhan: "",
     nguoiThucHien: "",
     lanhDaoGiaoViec: "",
-    coQuanChuTri: "01JBOPHANGIA",
-    chuyenVien: "CB-2026-GIA001",
     han: "",
     dueTime: "",
     ghiChu: "",
@@ -614,8 +610,8 @@ describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
       { group: "chi-dao-dang-uy", summary: "Công văn giả", date: "2026-06-15" },
       { group: "san-pham-dau-ra", summary: "Báo cáo giả số một" },
     ]);
-    expect(than.lead_unit).toBe("01JBOPHANGIA");
-    expect(than.monitor).toBe("CB-2026-GIA001");
+    expect(than).not.toHaveProperty("lead_unit");
+    expect(than).not.toHaveProperty("monitor");
     expect(than.title).toBe("Báo cáo sơ kết công tác tháng 9");
   });
 
@@ -680,27 +676,25 @@ describe("thân `Giao việc mới` — ô `Ghi chú` §7.2", () => {
   });
 });
 
-describe("thân `Giao việc mới` — ba ô cán bộ lên ĐÚNG trường, bằng MÃ `CB-…`", () => {
+describe("thân `Giao việc mới` — hai ô cán bộ lên ĐÚNG trường, bằng MÃ `CB-…`", () => {
   // ĐẮT NẾU SAI, VÀ IM LẶNG: `assigner` là lãnh đạo giao việc — theo ADR 0038 là NGƯỜI DUY NHẤT duyệt
   // được đề nghị lùi hạn, và `PATCH` cố ý không sửa được nó. Tráo `assignee` ↔ `assigner` là người
   // thực hiện tự duyệt lùi hạn cho chính mình, còn lãnh đạo mất quyền — máy chủ lưu bất kỳ mã nào nó
-  // nhận, nên không bài kiểm nào khác đỏ. Ba mã KHÁC NHAU để một phép tráo không thể trùng hợp đúng.
+  // nhận, nên không bài kiểm nào khác đỏ. Hai mã KHÁC NHAU để một phép tráo không thể trùng hợp đúng.
   const THUC_HIEN = "CB-2026-GIATH1";
   const LANH_DAO = "CB-2026-GIALD2";
-  const CHUYEN_VIEN = "CB-2026-GIACV3";
 
-  it("`Người thực hiện` ⇒ `assignee`, `Lãnh đạo giao việc` ⇒ `assigner`, `Chuyên viên` ⇒ `monitor`", () => {
+  it("`Người thực hiện` ⇒ `assignee`, `Lãnh đạo giao việc` ⇒ `assigner`; không có `monitor` (ADR 0065 NV5)", () => {
     const than = thanGiaoViec(
       formDay({
         nguoiThucHien: ` ${THUC_HIEN} `,
         lanhDaoGiaoViec: ` ${LANH_DAO} `,
-        chuyenVien: CHUYEN_VIEN,
       }),
       { coDanhSachVanBan: true },
     );
     expect(than.assignee).toBe(THUC_HIEN);
     expect(than.assigner).toBe(LANH_DAO);
-    expect(than.monitor).toBe(CHUYEN_VIEN);
+    expect(than).not.toHaveProperty("monitor");
   });
 
   it("bỏ trống hoặc toàn khoảng trắng ⇒ trường VẮNG MẶT, không gửi `\"\"`", () => {
@@ -718,7 +712,7 @@ describe("thân `Giao việc mới` — ba ô cán bộ lên ĐÚNG trường, b
 });
 
 describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", () => {
-  it("`co-ban` SAU KHI đã gõ cơ quan chủ trì, chuyên viên và ba văn bản: không `documents`/`lead_unit`/`monitor`", () => {
+  it("`co-ban` SAU KHI đã gõ ba văn bản: không `documents`", () => {
     // Đúng thao tác thật: gõ đủ ở `Theo văn bản` rồi mới đổi loại. State vẫn giữ chữ đã gõ (đổi
     // lại thì hiện lại) — nên chỗ cắt PHẢI là hàm dựng thân này.
     const than = thanGiaoViec(formDay({ loai: "co-ban" }), { coDanhSachVanBan: true }) as Record<
@@ -726,18 +720,27 @@ describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", 
       unknown
     >;
     expect(than).not.toHaveProperty("documents");
-    expect(than).not.toHaveProperty("lead_unit");
-    expect(than).not.toHaveProperty("monitor");
     expect(than.type).toBe("co-ban");
   });
 
   it("màn Biên bản (`coDanhSachVanBan: false`) KHÔNG gửi `documents` kể cả với loại `theo-van-ban`", () => {
-    // `petitions.tachKetLuanVao` không có `documents`. Cơ quan chủ trì và chuyên viên thì CÓ, nên
-    // hai ô ấy vẫn đi — hành vi màn Biên bản không đổi.
+    // `petitions.tachKetLuanVao` không có `documents`.
     const than = thanGiaoViec(formDay(), { coDanhSachVanBan: false });
     expect(than).not.toHaveProperty("documents");
-    expect(than.lead_unit).toBe("01JBOPHANGIA");
-    expect(than.monitor).toBe("CB-2026-GIA001");
+  });
+
+  it("KHÔNG BAO GIỜ `lead_unit` / `monitor` — mọi loại, mọi màn (ADR 0065 NV5: máy chủ trả 400)", () => {
+    const f = formDay({ boPhan: "01JBOPHANGIA", nguoiThucHien: "CB-2026-GIA001" });
+    for (const loai of ["theo-van-ban", "co-ban"]) {
+      for (const coDanhSachVanBan of [true, false]) {
+        const than = thanGiaoViec({ ...f, loai }, { coDanhSachVanBan, maCha: "NV01" });
+        expect(than).not.toHaveProperty("lead_unit");
+        expect(than).not.toHaveProperty("monitor");
+        // "Cơ quan chủ trì" IS `unit`, "chuyên viên theo dõi" IS `assignee`.
+        expect(than.unit).toBe("01JBOPHANGIA");
+        expect(than.assignee).toBe("CB-2026-GIA001");
+      }
+    }
   });
 });
 
@@ -793,8 +796,6 @@ function chiTiet(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     unit: "",
     assignee: "",
     assigner: "CB-00001",
-    lead_unit: "01JBOPHANGIA",
-    monitor: "CB-00001",
     due_at: "2026-06-20T23:59:59+07:00",
     original_due_at: "2026-06-20T23:59:59+07:00",
     completed_at: null,
@@ -961,9 +962,9 @@ describe("✎ Sửa — thân PATCH chỉ mang thứ đã đổi", () => {
     });
   });
 
-  it("KHÔNG đổi mã, KHÔNG đổi hạn ⇒ không có `code`, `due_at`; không bao giờ `assigner`, `lead_unit`, `monitor`, `position`", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): `code` và `due_at` từng "không bao giờ" có. Nay chúng đi
-    // khi cán bộ ĐỔI chúng (ca riêng bên dưới); ca này ghim rằng không đổi thì chúng vắng mặt.
+  it("KHÔNG đổi hạn ⇒ không có `due_at`; không bao giờ `code`, `assigner`, `lead_unit`, `monitor`, `position`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV3): `code` không bao giờ đi nữa — mã đã cấp không
+    // sửa, máy chủ trả 400. `due_at` đi khi cán bộ ĐỔI hạn (ca riêng bên dưới).
     const f: FormSuaNhiemVu = {
       ...formGoc(),
       tieuDe: "Tiêu đề giả khác",
@@ -1031,15 +1032,11 @@ describe("✎ Sửa — khi nào nút mở, khi nào Lưu khoá", () => {
     expect(cau).toContain("không đúng khuôn ngày");
   });
 
-  it("Hạn nay sửa được (không còn mục chưa dựng); Cơ quan chủ trì nay CHỈ đường sang §5.7", () => {
+  it("Hạn nay sửa được (không còn mục chưa dựng)", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): ca này ghim câu `LY_DO_KHONG_SUA_HAN` trong phần chưa dựng.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV5): câu `LY_DO_KHONG_SUA_CHU_TRI` đã gỡ cùng hai
+    // trường nó nói tới — cơ quan chủ trì LÀ bộ phận, chuyên viên theo dõi LÀ người thực hiện.
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Hạn hoàn thành"))).toBe(false);
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (quyết định của người dùng): câu này từng nói "`PATCH` không
-    // nhận `lead_unit` và `monitor`" và đứng trong phần chưa dựng. Hai trường ấy nay sửa ở khối
-    // Giao việc, chuyển việc (`task.assign`), nên câu chỉ đường sang đó và rời phần chưa dựng.
-    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_CHU_TRI)).toBe(false);
-    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("“Giao việc, chuyển việc”");
-    expect(LY_DO_KHONG_SUA_CHU_TRI).not.toContain("không nhận");
   });
 });
 
@@ -1521,24 +1518,28 @@ describe("§4.2 — sắp xếp bảng Danh sách", () => {
 describe("ô ghi tay §5.9 — ai thấy, và thân gửi đi", () => {
   const TASK = {
     assignee: "CB-2026-THUCHIEN",
-    monitor: "CB-2026-THEODOI",
     assigner: "CB-2026-LANHDAO",
     created_by: "CB-2026-NGUOITAO",
   };
   const KHONG = quyenNhiemVu([]);
 
-  it("ĐƯỢC — `task.update`, hoặc người thực hiện / theo dõi / giao việc / tạo (máy chủ `TaskWorkRightFor`)", () => {
+  it("ĐƯỢC — `task.update`, hoặc người thực hiện / giao việc / tạo (máy chủ `TaskWorkRightFor`)", () => {
     expect(canWriteLogEntry(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]), TASK, "CB-2026-NGUOIKHAC")).toBe(true);
     for (const ma of Object.values(TASK)) expect(canWriteLogEntry(KHONG, TASK, ma)).toBe(true);
   });
 
-  it("BỊ TỪ CHỐI — người ngoài, kể cả cầm `task.approve`; phiên rỗng trên việc thiếu người theo dõi", () => {
+  it("BỊ TỪ CHỐI — người ngoài, kể cả cầm `task.approve`; phiên rỗng trên việc thiếu người giao việc", () => {
     expect(canWriteLogEntry(KHONG, TASK, "CB-2026-NGUOIKHAC")).toBe(false);
     expect(canWriteLogEntry(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]), TASK, "CB-2026-NGUOIKHAC")).toBe(
       false,
     );
     // `"" === ""` would open the form on every task with an empty field to every unread session.
-    expect(canWriteLogEntry(KHONG, { ...TASK, monitor: "" }, "")).toBe(false);
+    expect(canWriteLogEntry(KHONG, { ...TASK, assigner: "" }, "")).toBe(false);
+  });
+
+  it("một dòng CŨ còn mang `monitor` (trước ADR 0065 NV5) KHÔNG mở form cho người ấy — máy chủ không còn đọc nó", () => {
+    const stale = { ...TASK, monitor: "CB-2026-THEODOI" } as typeof TASK;
+    expect(canWriteLogEntry(KHONG, stale, "CB-2026-THEODOI")).toBe(false);
   });
 
   it("nội dung: cắt khoảng trắng như máy chủ; rỗng ⇒ `null` (nút khoá)", () => {
@@ -1548,12 +1549,12 @@ describe("ô ghi tay §5.9 — ai thấy, và thân gửi đi", () => {
   });
 });
 
-describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6e, d2ed15e)", () => {
+describe("✎ Sửa — Hạn xử lý (W3: f27fd6e, d2ed15e); Mã nhiệm vụ KHÔNG sửa (ADR 0065 NV3)", () => {
   const TOKEN = "2026-06-01T02:00:00Z";
 
-  it("form mở với mã và hạn của nhiệm vụ — ngày VÀ giờ theo múi giờ Việt Nam", () => {
+  it("form mở với hạn của nhiệm vụ — ngày VÀ giờ theo múi giờ Việt Nam; form KHÔNG có ô mã", () => {
     const f = formGoc();
-    expect(f.code).toBe("NV19");
+    expect(f).not.toHaveProperty("code");
     expect(f.dueDate).toBe("2026-06-20");
     expect(f.dueTime).toBe("23:59");
     // 00:30 ở +07 là 17:30 UTC hôm trước: đọc theo UTC sẽ ra sai cả ngày lẫn giờ.
@@ -1562,12 +1563,13 @@ describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6
     expect(timeForInput("không phải ngày")).toBe("");
   });
 
-  it("đổi mã ⇒ `code` đã cắt khoảng trắng; gõ lại đúng mã cũ ⇒ không có gì để lưu", () => {
-    expect(thanSuaNhiemVu({ ...formGoc(), code: "  NV19A " }, chiTiet(), VB_GOC)).toEqual({
-      code: "NV19A",
-      expected_updated_at: TOKEN,
-    });
-    expect(thanSuaNhiemVu({ ...formGoc(), code: " NV19 " }, chiTiet(), VB_GOC)).toBeNull();
+  it("KHÔNG BAO GIỜ `code` — kể cả khi một form cũ còn mang ô mã đã gõ khác (máy chủ trả 400)", () => {
+    // A stale object shape (an old draft, a spread of the task) must not put `code` on the wire.
+    const stale = { ...formGoc(), code: "NV19A" } as FormSuaNhiemVu;
+    expect(thanSuaNhiemVu(stale, chiTiet(), VB_GOC)).toBeNull();
+    const withEdit = thanSuaNhiemVu({ ...stale, ghiChu: "x" }, chiTiet(), VB_GOC);
+    expect(withEdit).not.toHaveProperty("code");
+    expect(withEdit).toEqual({ note: "x", expected_updated_at: TOKEN });
   });
 
   it("đổi hạn ⇒ `due_at` là MỘT MỐC `+07:00` ghép từ ngày và giờ", () => {
@@ -1599,8 +1601,7 @@ describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6
     );
   });
 
-  it("chặn Lưu: mã trống; ngày mà thiếu giờ; giờ mà thiếu ngày; xoá hạn đang có", () => {
-    expect(canhBaoSua({ ...formGoc(), code: "  " }, chiTiet())).toContain("Mã nhiệm vụ");
+  it("chặn Lưu: ngày mà thiếu giờ; giờ mà thiếu ngày; xoá hạn đang có", () => {
     expect(canhBaoSua({ ...formGoc(), dueTime: "" }, chiTiet())).toBe("Nhập giờ của hạn xử lý.");
     expect(canhBaoSua({ ...formGoc(), dueDate: "" }, chiTiet())).toBe("Chọn ngày của hạn xử lý.");
     // `due_at: null` means "leave it" on the server: an emptied deadline would look saved and not be.
@@ -1612,7 +1613,6 @@ describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6
     expect(DUE_EDIT_NOTE).toContain("không phải lùi hạn");
     expect(DUE_EDIT_NOTE).toContain("chưa từng được duyệt lùi hạn thì hạn ban đầu đổi theo");
     expect(DUE_EDIT_NOTE).toContain("chỉ hạn xử lý đổi");
-    expect(CODE_EDIT_NOTE).toContain("không bao giờ cấp cho việc khác");
   });
 });
 

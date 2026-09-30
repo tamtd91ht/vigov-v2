@@ -78,6 +78,17 @@ describe("POST /api/v1/tasks/imports", () => {
     });
   }
 
+  it("400 `import_retired_columns` (a file on the pre-ADR 0065 NV5 template): the server's sentence VERBATIM, for a check too", async () => {
+    // The server's own sentence (`service-petitions/internal/app/task_import.go`) — the screen adds nothing.
+    const cau =
+      "nhiem_vu: tệp theo mẫu cũ — còn cột cơ quan chủ trì hoặc chuyên viên theo dõi, hai vai đã gộp vào đơn vị và người thực hiện";
+    for (const dryRun of [false, true]) {
+      vi.unstubAllGlobals();
+      stub(json({ code: "import_retired_columns", message: cau, trace_id: "t" }, 400));
+      expect(await submitTaskImport(FILE, "mau-cu.xlsx", "k", dryRun)).toEqual({ ok: false, thongBao: cau });
+    }
+  });
+
   it("413 from the INGRESS (HTML, no sentence): the size sentence, not \"cannot connect\"", async () => {
     stub(new Response("<html>413</html>", { status: 413, headers: { "Content-Type": "text/html" } }));
     expect(await submitTaskImport(FILE, "a.xlsx", "k", false)).toEqual({ ok: false, thongBao: TASK_IMPORT_TOO_LARGE });

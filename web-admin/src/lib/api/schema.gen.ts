@@ -212,6 +212,17 @@ export type comms_phatHanhThongBaoVao = {
   "email_requested"?: boolean;
 };
 
+export type comms_publicCategoriesOut = {
+  "items": Array<comms_publicCategoryOut>;
+};
+
+export type comms_publicCategoryOut = {
+  "id": string;
+  "name": string;
+  "parent_id"?: string;
+  "order": number;
+};
+
 export type comms_suaLoaiTaiNguyenVao = {
   "label"?: string | null;
   "order"?: number | null;
@@ -2111,8 +2122,6 @@ export type petitions_nhiemVuRa = {
   "unit": string;
   "assignee": string;
   "assigner": string;
-  "lead_unit": string;
-  "monitor": string;
   "due_at": string | null;
   "original_due_at": string | null;
   "completed_at": string | null;
@@ -2182,8 +2191,6 @@ export type petitions_petitionTaskIn = {
   "unit"?: string;
   "assignee"?: string;
   "assigner"?: string;
-  "lead_unit"?: string;
-  "monitor"?: string;
   "due_at"?: string | null;
   "parent"?: string;
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
@@ -2334,7 +2341,6 @@ export type petitions_suaMucUuTienVao = {
 };
 
 export type petitions_suaNhiemVuVao = {
-  "code"?: string | null;
   "due_at"?: string | null;
   "bloc"?: string | null;
   "title"?: string | null;
@@ -2383,8 +2389,6 @@ export type petitions_tachKetLuanVao = {
   "unit"?: string;
   "assignee"?: string;
   "assigner"?: string;
-  "lead_unit"?: string;
-  "monitor"?: string;
   "due_at"?: string | null;
   "parent"?: string;
 };
@@ -2416,8 +2420,6 @@ export type petitions_taoNhiemVuVao = {
   "unit"?: string;
   "assignee"?: string;
   "assigner"?: string;
-  "lead_unit"?: string;
-  "monitor"?: string;
   "due_at"?: string | null;
   "parent"?: string;
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
@@ -2426,8 +2428,6 @@ export type petitions_taoNhiemVuVao = {
 export type petitions_taskAssignmentIn = {
   "unit"?: string | null;
   "assignee"?: string | null;
-  "lead_unit"?: string | null;
-  "monitor"?: string | null;
   "note"?: string;
 };
 
@@ -3428,12 +3428,32 @@ export type comms_get_commune_news = {
     "cursor"?: string;
     "sort"?: "created_at";
     "order"?: "asc" | "desc";
+    "category"?: string;
     "host"?: string;
     "type"?: string;
   };
   than: never;
   phanHoi: {
     200: page_Result_comms_tinXaRa;
+    400: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/commune-news/categories — Danh mục tin của xã có ít nhất một tin đã đăng (tự nó hoặc danh mục con), theo tên miền của xã — cho hàng chip lọc hai tầng trên Zalo Mini App */
+export type comms_get_commune_news_categories = {
+  duongDan: "/api/v1/commune-news/categories";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+    "type"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_publicCategoriesOut;
     400: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -7100,7 +7120,7 @@ export type petitions_get_tasks_by_ma = {
   };
 };
 
-/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả, mã hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công; sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa) */
+/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công, không sửa được mã đã cấp (gửi `code` thì 400); sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa) */
 export type petitions_patch_tasks_by_ma = {
   duongDan: "/api/v1/tasks/{ma}";
   phuongThuc: "PATCH";
@@ -7142,7 +7162,7 @@ export type petitions_delete_tasks_by_ma = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/assignment — Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên */
+/** POST /api/v1/tasks/{ma}/assignment — Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện */
 export type petitions_post_tasks_by_ma_assignment = {
   duongDan: "/api/v1/tasks/{ma}/assignment";
   phuongThuc: "POST";

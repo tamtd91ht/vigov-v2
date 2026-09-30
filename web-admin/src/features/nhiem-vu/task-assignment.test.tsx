@@ -52,7 +52,6 @@ const UNIT_A = "01JBOPHANA";
 const UNIT_B = "01JBOPHANB";
 const STAFF_A = "CB-2026-AAAAAA";
 const STAFF_B = "CB-2026-BBBBBB";
-const MONITOR = "CB-2026-MMMMMM";
 
 function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
@@ -71,8 +70,6 @@ function task(patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     unit: UNIT_A,
     assignee: STAFF_A,
     assigner: "",
-    lead_unit: UNIT_A,
-    monitor: MONITOR,
     due_at: "2026-06-20T23:59:59+07:00",
     original_due_at: "2026-06-20T23:59:59+07:00",
     completed_at: null,
@@ -123,8 +120,8 @@ describe("assignmentBody — ONLY what differs from the task as read", () => {
     expect(assignmentBody(form(t, { note: "Chuyển cho đúng bộ phận" }), t)).toBeNull();
   });
 
-  it("unit changed: ONLY `unit` goes — an unchanged monitor is NOT resent", () => {
-    // The load-bearing case: every staff code sent is checked with identity, so resending MONITOR
+  it("unit changed: ONLY `unit` goes — an unchanged assignee is NOT resent", () => {
+    // The load-bearing case: every staff code sent is checked with identity, so resending STAFF_A
     // (who may have left) would refuse a change of unit the officer actually asked for.
     const t = task();
     expect(assignmentBody(form(t, { unit: UNIT_B }), t)).toEqual({ unit: UNIT_B });
@@ -157,23 +154,23 @@ describe("assignmentBody — ONLY what differs from the task as read", () => {
     expect(assignmentBody(form(t, { assignee: STAFF_B, note: "   " }), t)).toEqual({ assignee: STAFF_B });
   });
 
-  it("`theo-van-ban`: lead unit and monitor go when they differ, \"\" clears them", () => {
-    const t = task();
-    expect(assignmentBody(form(t, { leadUnit: UNIT_B }), t)).toEqual({ lead_unit: UNIT_B });
-    expect(assignmentBody(form(t, { monitor: "" }), t)).toEqual({ monitor: "" });
-    expect(assignmentBody(form(t, { unit: UNIT_B, leadUnit: "", monitor: STAFF_B }), t)).toEqual({
-      unit: UNIT_B,
-      lead_unit: "",
-      monitor: STAFF_B,
-    });
+  it("\"đổi chuyên viên theo dõi\" IS changing the assignee (ADR 0065 NV5) — `assignee`, never `monitor`", () => {
+    for (const type of ["theo-van-ban", "co-ban"]) {
+      const t = task({ type });
+      const body = assignmentBody(form(t, { assignee: STAFF_B }), t);
+      expect(body).toEqual({ assignee: STAFF_B });
+    }
   });
 
-  it("another type: lead unit and monitor are NEVER sent, whatever the form holds", () => {
-    const t = task({ type: "co-ban", lead_unit: "", monitor: "" });
-    expect(assignmentBody(form(t, { leadUnit: UNIT_B, monitor: STAFF_B }), t)).toBeNull();
-    expect(assignmentBody(form(t, { unit: UNIT_B, leadUnit: UNIT_B, monitor: STAFF_B }), t)).toEqual({
-      unit: UNIT_B,
-    });
+  it("NEVER `lead_unit` / `monitor`, whatever a stale form object holds — the server answers 400", () => {
+    const t = task();
+    // A form shaped before ADR 0065 NV5 (an old draft, a spread of a task read from a cache).
+    const stale = { ...form(t), leadUnit: UNIT_B, monitor: STAFF_B, lead_unit: UNIT_B } as AssignmentForm;
+    expect(assignmentBody(stale, t)).toBeNull();
+    const withChange = assignmentBody({ ...stale, unit: UNIT_B, assignee: STAFF_B }, t);
+    expect(withChange).toEqual({ unit: UNIT_B, assignee: STAFF_B });
+    expect(withChange).not.toHaveProperty("lead_unit");
+    expect(withChange).not.toHaveProperty("monitor");
   });
 });
 
@@ -360,13 +357,16 @@ describe("the block — what each state says", () => {
     );
   });
 
-  it("`theo-van-ban` draws lead unit and monitor; `co-ban` does not", () => {
-    const withFields = renderForm(task());
-    expect(withFields).toContain('id="giao-lai-co-quan-chu-tri"');
-    expect(withFields).toContain('id="giao-lai-chuyen-vien"');
-    const plain = renderForm(task({ type: "co-ban", lead_unit: "", monitor: "" }));
-    expect(plain).not.toContain('id="giao-lai-co-quan-chu-tri"');
-    expect(plain).not.toContain('id="giao-lai-chuyen-vien"');
+  it("no lead unit / monitor field on ANY type — only `Bộ phận` and `Người thực hiện` (ADR 0065 NV5)", () => {
+    for (const type of ["theo-van-ban", "co-ban"]) {
+      const html = renderForm(task({ type }));
+      expect(html).not.toContain('id="giao-lai-co-quan-chu-tri"');
+      expect(html).not.toContain('id="giao-lai-chuyen-vien"');
+      expect(html).not.toContain("Cơ quan chủ trì");
+      expect(html).not.toContain("Chuyên viên");
+      expect(html).toContain(`id="${ASSIGNMENT_UNIT_FIELD_ID}"`);
+      expect(html).toContain(">Người thực hiện</label>");
+    }
   });
 
   it("the effect sentence is always there and uses the COMMUNE's label of `moi-giao`", () => {
@@ -381,12 +381,13 @@ describe("the block — what each state says", () => {
     }));
     const { bang, canhBao } = docBangNhanTrangThai({ ok: true, duLieu: { items } });
     expect(canhBao).toBeNull();
-    const note = assignmentEffectNote(bang, true);
+    const note = assignmentEffectNote(bang);
     expect(note).toContain("“Việc mới về xã”");
     expect(note).not.toContain("Mới giao");
     expect(note).toContain("Hạn xử lý giữ nguyên");
-    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH, false)).not.toContain("cơ quan chủ trì");
-    expect(renderForm(task())).toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH, true)));
+    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("cơ quan chủ trì");
+    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("theo dõi");
+    expect(renderForm(task())).toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH)));
   });
 
   it("a unit no longer in the catalogue still shows as the current value, not as `Chưa xác định`", () => {
@@ -429,13 +430,23 @@ describe("the call — POST `/api/v1/tasks/{ma}/assignment`, the body as built",
     const fake = stubFetch(
       new Response(JSON.stringify(task()), { status: 200, headers: { "Content-Type": "application/json" } }),
     );
-    await reassignTask("NV19", { assignee: "", monitor: "", note: "" });
-    expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toEqual({ assignee: "", monitor: "" });
+    await reassignTask("NV19", { assignee: "", note: "" });
+    expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toEqual({ assignee: "" });
+  });
+
+  it("retired `lead_unit` / `monitor` NEVER reach the wire, even when a stale caller passes them (400 since ADR 0065 NV5)", async () => {
+    const fake = stubFetch(
+      new Response(JSON.stringify(task()), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const stale = { assignee: STAFF_B, lead_unit: UNIT_B, monitor: STAFF_A } as petitions_taskAssignmentIn;
+    await reassignTask("NV19", stale);
+    const sent = JSON.parse(String(fake.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(sent).toEqual({ assignee: STAFF_B });
   });
 
   it("409 `no_change`: the server's sentence comes back unchanged", async () => {
     const sentence =
-      "nhiệm vụ: bộ phận, người thực hiện, cơ quan chủ trì và chuyên viên theo dõi đã đúng như yêu cầu — không có gì để đổi";
+      "nhiệm vụ: bộ phận và người thực hiện đã đúng như yêu cầu — không có gì để đổi";
     stubFetch(
       new Response(JSON.stringify({ code: "no_change", message: sentence, trace_id: "01JTRACE" }), {
         status: 409,

@@ -24,12 +24,14 @@ export const REGISTER_VIEW_LABEL = "▤ Sổ theo dõi";
  * §4.3's columns IN ORDER (`02-nhiem-vu.md:117-126`), after the `☐` column (drawn only with
  * `task.delete`, like the list). The three document columns take their labels from the ONE source of
  * group labels, `nhanNhomVanBan`, so a header cannot disagree with the drawer's §5.4 block.
+ *
+ * ELEVEN COLUMNS, not thirteen (ADR 0065 NV5, user decision 30/09/2026): "Cơ quan chủ trì tham mưu"
+ * and "Chuyên viên VP tham mưu / theo dõi" ARE the unit and the assignee, both printed in "Đơn vị
+ * thực hiện" — the same order the server's export writes (`task_register_export.go`).
  */
 export const REGISTER_COLUMNS: readonly string[] = [
   "Mã",
   "Nội dung nhiệm vụ / Trích yếu văn bản",
-  "Cơ quan chủ trì tham mưu",
-  "Chuyên viên VP tham mưu / theo dõi",
   "Đơn vị thực hiện",
   ...MOI_NHOM_VAN_BAN.map(nhanNhomVanBan),
   "Hạn xử lý",

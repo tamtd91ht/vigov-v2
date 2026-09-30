@@ -96,7 +96,6 @@ import {
   KANBAN_COUNTS_ERROR,
   kanbanSharedError,
   KHONG_DOC_DUOC_VAN_BAN,
-  LY_DO_KHONG_SUA_CHU_TRI,
   LY_DO_TRA_LAI_TOI_DA,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
@@ -158,7 +157,6 @@ import {
   chiaNhomVanBan,
   canMoveTask,
   changedSince,
-  CODE_EDIT_NOTE,
   defaultDueTime,
   defaultNewTaskDue,
   NEW_TASK_DUE_PREFILLED_NOTE,
@@ -166,7 +164,6 @@ import {
   DUE_EDIT_NOTE,
   dueTimeHint,
   TASK_CHANGED_NOTE,
-  TASK_CODE_MAX,
   type CalendarLoad,
   canWriteLogEntry,
   clickableTransitions,
@@ -1974,8 +1971,6 @@ export function BangSoTheoDoi({
                     <span className="chip chip-ngung">{nhanDanhMuc(danhMuc.khoi, n.bloc)}</span>
                   )}
                 </td>
-                <td>{unit(n.lead_unit)}</td>
-                <td>{nhanCanBoNgan(n.monitor, danhBa, O_TRONG)}</td>
                 <td>
                   {unit(n.unit)}
                   <span className="dong-phu">{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</span>
@@ -2604,16 +2599,6 @@ export function ChiTietNhiemVu({
         <dt>Lãnh đạo giao việc</dt>
         <dd>{nhanCanBoDrawer(nhiemVu.assigner, danhBaMa, O_TRONG)}</dd>
 
-        <dt>Cơ quan chủ trì tham mưu</dt>
-        <dd>
-          {nhiemVu.lead_unit === ""
-            ? O_TRONG
-            : (tenBoPhan.get(nhiemVu.lead_unit) ?? nhiemVu.lead_unit)}
-        </dd>
-
-        <dt>Chuyên viên theo dõi</dt>
-        <dd>{nhanCanBoDrawer(nhiemVu.monitor, danhBaMa, O_TRONG)}</dd>
-
         <dt>Mô tả nhiệm vụ</dt>
         <dd>{nhiemVu.description === "" ? O_TRONG : nhiemVu.description}</dd>
 
@@ -2640,8 +2625,6 @@ export function ChiTietNhiemVu({
           key={nhiemVu.code}
           tai={vanBan}
           nhiemVu={nhiemVu}
-          tenBoPhan={tenBoPhan}
-          danhBa={danhBaMa}
           coQuyenSua={quyen.capNhat}
           luu={suaKhoiVanBan}
           docLai={docLaiChiTiet}
@@ -2693,7 +2676,7 @@ export function ChiTietNhiemVu({
         danhBa={danhBaMa}
         tenBoPhan={tenBoPhan}
         lanLamMoi={lanLamMoiNhatKy}
-        // Assignee / `task.update` / monitor / assigner / creator — convenience; the row decides.
+        // Assignee / `task.update` / assigner / creator — convenience; the row decides.
         canWrite={canWriteLogEntry(quyen, nhiemVu, maNguoiDangNhap)}
       />
 
@@ -2766,8 +2749,8 @@ export function ChiTietNhiemVu({
         />
       )}
 
-      {/* §5.7 — hand the SAME task to another unit or person ("Chuyển tiếp"), and for
-          `theo-van-ban` the lead unit and monitor, in ONE call. `key` by code: another task's
+      {/* §5.7 — hand the SAME task to another unit or person ("Chuyển tiếp"); changing the officer
+          who follows it is changing the assignee (ADR 0065 NV5). `key` by code: another task's
           half-made choice must not follow into this one. */}
       {showAssignment && (
         <TaskAssignmentBlock
@@ -2917,17 +2900,12 @@ export function KhoiTraLai({
 export function KhoiVanBanChiDao({
   tai,
   nhiemVu,
-  tenBoPhan,
-  danhBa = null,
   coQuyenSua,
   luu,
   docLai,
 }: {
   tai: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
   nhiemVu: petitions_nhiemVuRa;
-  tenBoPhan: ReadonlyMap<string, string>;
-  /** Danh bạ tra theo mã — họ tên chuyên viên theo dõi trong form sửa. */
-  danhBa?: DanhBaTheoMa | null;
   /** `task.update` — khoá của `PATCH /api/v1/tasks/{ma}`. Thiếu thì KHÔNG vẽ nút `✎ Sửa`. */
   coQuyenSua: boolean;
   luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
@@ -2981,8 +2959,6 @@ export function KhoiVanBanChiDao({
         <FormSuaKhoiVanBan
           nhiemVu={nhiemVu}
           vanBan={tai.duLieu}
-          tenBoPhan={tenBoPhan}
-          danhBa={danhBa}
           luu={luu}
           docLai={docLai}
           xong={thoatSua}
@@ -3057,17 +3033,12 @@ const CHUA_CO_GI_DOI = "Chưa có gì thay đổi để lưu.";
 export function FormSuaKhoiVanBan({
   nhiemVu,
   vanBan,
-  tenBoPhan,
-  danhBa = null,
   luu,
   docLai,
   xong,
 }: {
   nhiemVu: petitions_nhiemVuRa;
   vanBan: readonly petitions_nhiemVuVanBanRa[];
-  tenBoPhan: ReadonlyMap<string, string>;
-  /** Danh bạ tra theo mã — ô chỉ đọc `Chuyên viên…`. `null` = chưa có, hiện mã. */
-  danhBa?: DanhBaTheoMa | null;
   luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
   /**
    * Đọc lại chi tiết NGAY TRƯỚC một lần lưu có `documents` — xem `vanBanDaDoiOMayChu`. Thu hẹp khe
@@ -3176,7 +3147,7 @@ export function FormSuaKhoiVanBan({
     luu(than).then(async (kq) => {
       if (!kq.ok) {
         // Ở LẠI chế độ sửa, giữ nguyên chữ đã gõ, in NGUYÊN VĂN câu máy chủ — kể cả câu 409 "gỡ dòng
-        // ấy rồi thêm lại ở nhóm mới", "mã đã được cấp" hay "nhiệm vụ vừa được người khác sửa".
+        // ấy rồi thêm lại ở nhóm mới" hay "nhiệm vụ vừa được người khác sửa".
         datLoi(kq.thongBao);
         setStaleNote(changedSince(await docLai(), goc.nhiemVu.updated_at));
         datDangLuu(false);
@@ -3189,31 +3160,12 @@ export function FormSuaKhoiVanBan({
     });
   }
 
-  const tenCoQuanChuTri =
-    nhiemVu.lead_unit === "" ? O_TRONG : (tenBoPhan.get(nhiemVu.lead_unit) ?? nhiemVu.lead_unit);
-
   return (
     <form onSubmit={gui} aria-labelledby="tieu-de-sua-khoi-van-ban">
       <h5 id="tieu-de-sua-khoi-van-ban">Sửa {TIEU_DE_KHOI_VAN_BAN.toLowerCase()}</h5>
 
-      {/* Đúng thứ tự bảng §5.4: Mã, Nội dung, Hạn, rồi hai ô chỉ đọc. */}
-      <div className="o-nhap">
-        <label htmlFor="sua-ma-nhiem-vu">Mã nhiệm vụ</label>
-        <input
-          id="sua-ma-nhiem-vu"
-          name="sua-ma-nhiem-vu"
-          value={f.code}
-          required
-          maxLength={TASK_CODE_MAX}
-          autoComplete="off"
-          aria-describedby="sua-ma-nhiem-vu-ghi-chu"
-          onChange={(e) => doi({ code: e.target.value })}
-        />
-        <p id="sua-ma-nhiem-vu-ghi-chu" className="ghi-chu">
-          {CODE_EDIT_NOTE}
-        </p>
-      </div>
-
+      {/* NO `Mã nhiệm vụ` FIELD (ADR 0065 NV3, user decision 30/09/2026): an issued code is never
+          edited — rule 7, invariant 3; the server answers 400 to `code` on PATCH. */}
       <div className="o-nhap">
         <label htmlFor="sua-tieu-de">{NHAN_TIEU_DE_THEO_VAN_BAN}</label>
         <input
@@ -3258,16 +3210,6 @@ export function FormSuaKhoiVanBan({
           {DUE_EDIT_NOTE}
         </p>
       </fieldset>
-
-      <dl className="danh-sach-truong">
-        <dt>Cơ quan chủ trì tham mưu</dt>
-        <dd>{tenCoQuanChuTri}</dd>
-        <dt>Chuyên viên Văn phòng tham mưu / theo dõi</dt>
-        <dd>{nhanCanBoDrawer(nhiemVu.monitor, danhBa, O_TRONG)}</dd>
-      </dl>
-      {/* Read-only here ON PURPOSE (user decision 28/09/2026): edited in the §5.7 block, behind
-          `task.assign` — this form stands behind `task.update`, a different key. */}
-      <p className="ghi-chu">{LY_DO_KHONG_SUA_CHU_TRI}</p>
 
       {MOI_NHOM_VAN_BAN.map((nhom) => (
         <NhomVanBanNhap
@@ -3484,10 +3426,13 @@ export function KhoiLuiHan({
  * Form `Giao việc mới` §7.
  *
  * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3), rẽ nhánh trên MÃ `theo-van-ban` (mã tầng 3, xem
- * `LOAI_THEO_VAN_BAN`). Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và cơ quan chủ trì /
- * chuyên viên / ba nhóm văn bản BIẾN KHỎI MÀN và KHÔNG LÊN DÂY — phần "không lên dây" ở
+ * `LOAI_THEO_VAN_BAN`). Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và ba nhóm văn bản BIẾN
+ * KHỎI MÀN và KHÔNG LÊN DÂY — phần "không lên dây" ở
  * `thanGiaoViec`, nơi có bài kiểm. Ô `Ghi chú` của §7.2 đi cùng cổng với ba danh sách văn bản
  * (`hienVanBan`): tuyến tách kết luận của màn Biên bản không nhận `note`.
+ *
+ * KHÔNG CÓ Ô `Cơ quan chủ trì tham mưu` / `Chuyên viên theo dõi` (ADR 0065 NV5, người dùng chốt
+ * 30/09/2026): hai vai ấy LÀ `Đơn vị thực hiện` và `Người thực hiện`.
  *
  * `Tự sinh mã` MẶC ĐỊNH BẬT, đúng §7.1: mã do máy chủ cấp theo dãy `NV01, NV02…`, và một mã đã
  * cấp thì không bao giờ cấp lại kể cả sau xoá mềm (luật 7, bất biến 3).
@@ -3576,8 +3521,6 @@ export function FormGiaoViec({
   const [boPhan, datBoPhan] = useState("");
   const [nguoiThucHien, datNguoiThucHien] = useState("");
   const [lanhDaoGiaoViec, datLanhDaoGiaoViec] = useState("");
-  const [coQuanChuTri, datCoQuanChuTri] = useState("");
-  const [chuyenVien, datChuyenVien] = useState("");
   // ADR 0065 NV6: pre-filled +7 calendar days at 17:00, computed ONCE when the form opens (lazy
   // initialiser) — the clerk may change or clear it.
   const [dueDefault] = useState(defaultNewTaskDue);
@@ -3654,8 +3597,6 @@ export function FormGiaoViec({
         boPhan,
         nguoiThucHien,
         lanhDaoGiaoViec,
-        coQuanChuTri,
-        chuyenVien,
         han,
         dueTime,
         vanBan,
@@ -3776,28 +3717,8 @@ export function FormGiaoViec({
         </select>
       </div>
 
-      {/* §7.3 BỎ TOÀN BỘ ô này ở loại khác `Theo văn bản`. Ẩn ở đây là phần nhìn; phần không gửi
-          nằm ở `thanGiaoViec`. */}
-      {theoVanBan && (
-        <div className="o-chon">
-          <label htmlFor="giao-co-quan-chu-tri">Cơ quan chủ trì tham mưu</label>
-          <select
-            id="giao-co-quan-chu-tri"
-            value={coQuanChuTri}
-            onChange={(e) => datCoQuanChuTri(e.target.value)}
-          >
-            <option value="">{CHUA_XAC_DINH}</option>
-            {danhMuc.boPhan.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* BA Ô CHỌN TỪ DANH BẠ CHỌN NGƯỜI (`GET /api/v1/staff-directory`). Giá trị là MÃ NGHIỆP VỤ
-          `CB-…` (`code`), đúng loại định danh ba trường kia giữ: một ULID ở đây được máy chủ nhận
+      {/* HAI Ô CHỌN TỪ DANH BẠ CHỌN NGƯỜI (`GET /api/v1/staff-directory`). Giá trị là MÃ NGHIỆP VỤ
+          `CB-…` (`code`), đúng loại định danh hai trường kia giữ: một ULID ở đây được máy chủ nhận
           nhưng không khớp cán bộ nào, và không có gì đỏ ở đâu (luật 6, bất biến 8). Danh bạ đọc
           hỏng thì các ô chỉ còn lựa chọn trống và câu lỗi nói hệ quả — không đoán ai. */}
       {db.loi !== null && (
@@ -3854,19 +3775,6 @@ export function FormGiaoViec({
           {GHI_CHU_LANH_DAO_GIAO_VIEC} Bỏ trống thì không ai duyệt được đề nghị lùi hạn của nhiệm vụ
           này, và ô này không sửa lại được sau khi tạo.
         </p>
-      )}
-
-      {theoVanBan && (
-        <StaffPicker
-          search={staffSearch}
-          id="giao-chuyen-vien"
-          label="Chuyên viên Văn phòng tham mưu / theo dõi"
-          emptyLabel={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
-          value={chuyenVien}
-          directory={db.ds}
-          disabled={db.dangTai}
-          onChange={datChuyenVien}
-        />
       )}
 
       {hienVanBan && (

@@ -14,7 +14,6 @@ import type {
 import {
   CHUA_XAC_DINH,
   DE_BO_PHAN_TU_PHAN_CONG,
-  coKhoiVanBanChiDao,
   docDanhBaChonNguoi,
   nhanTrongOChonCanBo,
 } from "./nhan-nhiem-vu";
@@ -23,8 +22,6 @@ import {
   ASSIGNMENT_ASSIGNEE_LABEL,
   ASSIGNMENT_BLOCK_ID,
   ASSIGNMENT_BUTTON,
-  ASSIGNMENT_LEAD_UNIT_LABEL,
-  ASSIGNMENT_MONITOR_LABEL,
   ASSIGNMENT_NO_CHANGE,
   ASSIGNMENT_NOTE_LABEL,
   ASSIGNMENT_NOTE_MAX,
@@ -134,7 +131,6 @@ export function TaskAssignmentForm({
   submit: (body: petitions_taskAssignmentIn) => void;
 }) {
   const staff = docDanhBaChonNguoi(directory);
-  const withLeadFields = coKhoiVanBanChiDao(task.type);
   const body = assignmentBody(form, task);
   const blocked = unitWouldBeCleared(form, task)
     ? ASSIGNMENT_UNIT_REQUIRED
@@ -155,7 +151,7 @@ export function TaskAssignmentForm({
       onSubmit={onSubmit}
     >
       <h4 id="tieu-de-giao-viec-chuyen-viec">{ASSIGNMENT_TITLE}</h4>
-      <p className="ghi-chu">{assignmentEffectNote(labels, withLeadFields)}</p>
+      <p className="ghi-chu">{assignmentEffectNote(labels)}</p>
 
       <div className="o-chon">
         <label htmlFor={ASSIGNMENT_UNIT_FIELD_ID}>{ASSIGNMENT_UNIT_LABEL}</label>
@@ -187,37 +183,6 @@ export function TaskAssignmentForm({
         disabled={staff.dangTai}
         onChange={(code) => change({ assignee: code })}
       />
-
-      {/* §5.4's two `theo-van-ban` fields, edited HERE and in the same call (user decision 1). On
-          another type they are neither drawn nor sent (`assignmentBody`). */}
-      {withLeadFields && (
-        <>
-          <div className="o-chon">
-            <label htmlFor="giao-lai-co-quan-chu-tri">{ASSIGNMENT_LEAD_UNIT_LABEL}</label>
-            <select
-              id="giao-lai-co-quan-chu-tri"
-              value={form.leadUnit}
-              onChange={(e) => change({ leadUnit: e.target.value })}
-            >
-              <option value="">{CHUA_XAC_DINH}</option>
-              {unitOptions(units, task.lead_unit).map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <StaffCombobox
-            id="giao-lai-chuyen-vien"
-            label={ASSIGNMENT_MONITOR_LABEL}
-            emptyLabel={nhanTrongOChonCanBo(staff, CHUA_XAC_DINH)}
-            value={form.monitor}
-            directory={staff.ds}
-            disabled={staff.dangTai}
-            onChange={(code) => change({ monitor: code })}
-          />
-        </>
-      )}
 
       <div className="o-nhap">
         <label htmlFor="giao-lai-ly-do">{ASSIGNMENT_NOTE_LABEL}</label>
