@@ -2734,12 +2734,14 @@ body {
   align-items: center;
   gap: 14px;
 }
+/* Logo fallback on the RED header (owner, 30/09/2026: no pink left): a red disc would vanish into the
+   header, so the red goes to the icon on a white disc — the same white the commune logo sits on. */
 .xa-hero__dai-dien {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--xa-hong);
-  color: #ffffff;
+  background: #ffffff;
+  color: var(--xa-brand);
   display: grid;
   place-items: center;
   flex: none;
@@ -3165,7 +3167,6 @@ button.xa-o-nhanh {
   --xa-cam-dam: #8a4a0f;
   --xa-tim-nhat: #f1e8f6;
   --xa-tim-dam: #6a2f86;
-  --xa-hong-dam: #b0126a;
   --xa-vang: #ffb020;
 }
 
@@ -3464,7 +3465,7 @@ button.xa-o-nhanh {
   color: var(--ink);
 }
 .xa-loi-ich .xa-bt {
-  color: var(--xa-hong-dam);
+  color: var(--xa-brand);
 }
 
 /* cá nhân */
