@@ -73,6 +73,14 @@ hạn, và đề nghị lùi hạn vẫn là đường riêng khi cam kết th�
 | 3 | Dòng cũ mà **cả hai nửa** của một cặp đã có giá trị và **khác nhau** (chuyên viên A, người thực hiện B) | `e1d0204` chỉ điền chỗ trống, để nguyên những dòng này — tức hai người vẫn rời. Chọn một người là **giao lại** việc, không phải dọn dữ liệu |
 | 4 | Người trở thành người thực hiện nhờ lần gộp (NV5) **có được báo** không | Một người nhận việc mà không biết mình đã nhận là việc không ai làm, trong khi hạn vẫn chạy |
 
+### Trả lời của người dùng — 30/09/2026 (cùng ngày, sau khi ADR này ghi bốn câu trên)
+
+| # | Trả lời |
+|---|---|
+| 1 | **Giữ quy tắc 28/09**: sửa hạn thẳng thì hạn gốc đi theo, **trừ khi** việc đã từng được duyệt lùi hạn — khi ấy hạn gốc khoá. Không phải dựng gì thêm (`0016`) |
+| 2 | **Giữ `task.approve`** cho `cho-duyet → hoan-thanh` và cho *trả lại để làm tiếp* `cho-duyet → dang-thuc-hien` (kèm lý do, 27/09). Bước duyệt thành **tuỳ chọn**: người thực hiện tự đi thẳng tới `hoan-thanh` được, nhưng việc **đã** gửi lên chờ duyệt thì chỉ người cầm `task.approve` duyệt hoặc trả lại |
+| 3, 4 | **Không phải hỏi**: người dùng xác nhận 30/09 chưa có dữ liệu thật trên môi trường nào, nên không có dòng cũ mang hai người khác nhau và không có ai "được gộp" thành người thực hiện. Migration gộp vẫn phải đảo ngược được (luật 7 bất biến 4) |
+
 ## Việc phải làm — liệt kê, chưa làm
 
 Mỗi dòng là một thẻ việc, qua cổng riêng (ROUTING §0.3).

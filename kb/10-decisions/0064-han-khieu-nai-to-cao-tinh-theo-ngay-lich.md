@@ -72,6 +72,22 @@ Không dòng nào dưới đây được dựng trước cổng của thẻ vi�
 | 4 | Ngày bắt đầu (ngày thụ lý / ngày nhận) **có tính** là ngày thứ nhất không, và hạn kết thúc **lúc mấy giờ** của ngày cuối | Lệch một ngày ở đầu hoặc ở cuối là lệch một ngày trên mọi đơn. C16/C17 (24/09) chốt *"Số ngày xử lý tính CẢ ngày nhận"* cho **cột báo cáo**, không phải cho **hạn**; C9 chốt 17:00 cho nhiệm vụ sinh từ đơn, không phải cho hạn của chính đơn |
 | 5 | Gia hạn giải quyết (trường `gia_han` mà domain-expert 24/09 nêu) đếm theo đơn vị nào | Cùng câu hỏi #1 cho hạn gia hạn |
 
+### Trả lời của người dùng — 30/09/2026 (câu #1, #2): dựng theo bảng này, CỜ "CẦN PHÁP CHẾ ĐỐI CHIẾU"
+
+Bảng dưới là **trí nhớ của agent, chưa đối chiếu văn bản gốc**. Người dùng chọn dựng theo nó ngay, số
+nằm trong cấu hình SLA nên sửa không cần phát hành lại, và **trước khi phát hành cho xã thật một người
+đối chiếu văn bản gốc** — cờ này chỉ gỡ khi có người ghi tên và ngày đã đối chiếu vào đây.
+
+| Loại | Hạn của C8 | Mốc tính | Số | Chữ của luật | Điều (chưa đối chiếu) |
+|---|---|---|---|---|---|
+| `khieu-nai` (lần đầu) | xử lý đơn — lúc vào sổ | từ ngày nhận | thụ lý trong 10 | "ngày" → ngày lịch | Luật Khiếu nại 2011, Đ.27 |
+| `khieu-nai` (lần đầu) | giải quyết — lúc thụ lý | từ ngày thụ lý | 30; vụ phức tạp 45 | "ngày" → ngày lịch | Luật Khiếu nại 2011, Đ.28 |
+| `to-cao` | xử lý đơn — lúc vào sổ | từ ngày nhận | kiểm tra, thụ lý trong 07 | **"ngày làm việc"** → lịch làm việc xã | Luật Tố cáo 2018, Đ.24 |
+| `to-cao` | giải quyết — lúc thụ lý | từ ngày thụ lý | 30; gia hạn 1 lần ≤ 30 (đặc biệt phức tạp: 2 lần) | "ngày" → ngày lịch | Luật Tố cáo 2018, Đ.30 |
+
+Câu #3 (ngày cuối rơi vào ngày nghỉ), #4 (ngày đầu có tính, giờ kết thúc ngày cuối), #5 (đơn vị của gia
+hạn — bảng trên ghi theo trí nhớ là "ngày") **vẫn mở** và thuộc cùng lượt đối chiếu của pháp chế.
+
 ## Hệ quả
 
 - **Dễ hơn:** hạn trên màn hình khớp hạn luật định; thanh tra đối chiếu được mà không quy đổi.
