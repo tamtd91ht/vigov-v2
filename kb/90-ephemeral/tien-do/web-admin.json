@@ -278,6 +278,15 @@
       "tiep_theo": "Còn một phần chưa dựng: Tính lại số liệu Tổng quan (bỏ, ADR 0053) và Gửi báo cáo định kỳ (chờ /bao-cao). Chưa mở trình duyệt ở 320px. Kiểu ghi của trường tuỳ chọn (identity_optionalHoursIn, optionalCountIn) sinh ra là Record<string,never> — web gõ tay từ phía đọc, cần sửa bộ sinh.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "han-nhiem-vu-mac-dinh-17h",
+      "viec": "Hạn nhiệm vụ mới mặc định 17:00, điền sẵn +7 ngày lịch (ADR 0065 NV6)",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: nhan-nhiem-vu.ts defaultNewTaskDue (hôm nay theo Asia/Ho_Chi_Minh + 7 ngày lịch, 17:00), dueAtFromInputs thay mocCuoiNgay cho form giao việc; FormGiaoViec (dùng chung cho tạo, giao từ kết luận họp, thêm việc con) có ô giờ bắt buộc khi có ngày. tsc sạch; vitest 148 tệp / 2755 ca xanh; check:api exit 0.",
+      "no_confirm": [],
+      "tiep_theo": "Hai nguồn giờ khác nhau: form SỬA vẫn điền giờ theo lịch làm việc xã (defaultDueTime). Ô 'Hạn mới' của đề nghị lùi hạn vẫn gửi 23:59:59 (mocCuoiNgay) — hỏi người dùng có về 17:00 không.",
+      "menu": "nhiem-vu"
     }
   ]
 }

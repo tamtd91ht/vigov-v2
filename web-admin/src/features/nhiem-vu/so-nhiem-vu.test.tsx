@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
 import {
@@ -26,6 +26,7 @@ import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
+  NEW_TASK_DUE_PREFILLED_NOTE,
   CAU_THIEU_QUYEN_DUYET_GIA_HAN,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
   DECISION_NOTE_LABEL,
@@ -744,6 +745,30 @@ describe("form Giao việc mới §7", () => {
     );
     expect(html).toContain('id="giao-han"');
     expect(html).toContain(nhuTrongHTML(CANH_BAO_HAN_MOT_LAN));
+  });
+
+  it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6), ô giờ bắt buộc khi có ngày, câu nói sửa được", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-30T03:00:00Z")); // Wed 30/09/2026 10:00 ICT
+    try {
+      const html = renderToStaticMarkup(
+        <FormGiaoViec
+          danhMuc={DANH_MUC}
+          danhBa={DANH_BA}
+          danhBaLanhDao={DANH_BA}
+          dangGui={false}
+          loi={null}
+          huy={() => {}}
+          giaoViec={() => {}}
+        />,
+      );
+      expect(html).toMatch(/<input id="giao-han"[^>]*type="date"[^>]*value="2026-10-07"/);
+      expect(html).toMatch(/<input id="giao-han-gio"[^>]*type="time"[^>]*required=""[^>]*value="17:00"/);
+      expect(html).toContain(nhuTrongHTML(NEW_TASK_DUE_PREFILLED_NOTE));
+      expect(html).not.toContain("23:59");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ô `Lãnh đạo giao việc` nói ra hệ quả ADR 0038 của việc bỏ trống", () => {

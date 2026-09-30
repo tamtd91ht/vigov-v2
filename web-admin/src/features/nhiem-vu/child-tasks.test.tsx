@@ -261,6 +261,7 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         coQuanChuTri: "",
         chuyenVien: "",
         han: "",
+        dueTime: "",
         vanBan: [],
         ghiChu: "",
       },

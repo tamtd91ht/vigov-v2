@@ -160,6 +160,9 @@ import {
   changedSince,
   CODE_EDIT_NOTE,
   defaultDueTime,
+  defaultNewTaskDue,
+  NEW_TASK_DUE_PREFILLED_NOTE,
+  newTaskDueProblem,
   DUE_EDIT_NOTE,
   dueTimeHint,
   TASK_CHANGED_NOTE,
@@ -3574,7 +3577,11 @@ export function FormGiaoViec({
   const [lanhDaoGiaoViec, datLanhDaoGiaoViec] = useState("");
   const [coQuanChuTri, datCoQuanChuTri] = useState("");
   const [chuyenVien, datChuyenVien] = useState("");
-  const [han, datHan] = useState("");
+  // ADR 0065 NV6: pre-filled +7 calendar days at 17:00, computed ONCE when the form opens (lazy
+  // initialiser) — the clerk may change or clear it.
+  const [dueDefault] = useState(defaultNewTaskDue);
+  const [han, datHan] = useState(dueDefault.date);
+  const [dueTime, setDueTime] = useState(dueDefault.time);
   const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
   const [ghiChu, datGhiChu] = useState("");
   const demKhoaVanBan = useRef(0);
@@ -3597,6 +3604,7 @@ export function FormGiaoViec({
   const theoVanBan = coKhoiVanBanChiDao(loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
+  const chanHan = newTaskDueProblem(han, dueTime);
   const db = docDanhBaChonNguoi(danhBa);
   const dbLanhDao = docDanhBaChonNguoi(danhBaLanhDao);
   // Đọc được mà rỗng: không ai trong xã cầm `task.extend`. Một câu thay cho một ô chọn rỗng.
@@ -3623,7 +3631,15 @@ export function FormGiaoViec({
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null || dangTaiDanhBa) return;
+    if (
+      tieuDe.trim() === "" ||
+      loaiChon === "" ||
+      chanVanBan !== null ||
+      chanHan !== null ||
+      dangTaiDanhBa
+    ) {
+      return;
+    }
 
     const than: petitions_taoNhiemVuVao = thanGiaoViec(
       {
@@ -3640,6 +3656,7 @@ export function FormGiaoViec({
         coQuanChuTri,
         chuyenVien,
         han,
+        dueTime,
         vanBan,
         ghiChu,
       },
@@ -3889,6 +3906,18 @@ export function FormGiaoViec({
           onChange={(e) => datHan(e.target.value)}
         />
       </div>
+      <div className="o-nhap">
+        <label htmlFor="giao-han-gio">Giờ</label>
+        <input
+          id="giao-han-gio"
+          name="giao-han-gio"
+          type="time"
+          value={dueTime}
+          required={han !== ""}
+          onChange={(e) => setDueTime(e.target.value)}
+        />
+      </div>
+      <p className="ghi-chu">{NEW_TASK_DUE_PREFILLED_NOTE}</p>
       <p className="ghi-chu">{CANH_BAO_HAN_MOT_LAN}</p>
       {maChaCoSan !== undefined && maChaCoSan !== "" && (
         <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>
@@ -3898,6 +3927,7 @@ export function FormGiaoViec({
           một vùng thông báo khẩn sẽ cắt ngang đúng lúc tiêu điểm vừa sang ô trích yếu. Nó là lý do
           nút `Giao việc` đang khoá, nên đứng ngay trên nút ấy. */}
       {chanVanBan !== null && <p className="thong-bao-loi">{chanVanBan}</p>}
+      {chanHan !== null && <p className="thong-bao-loi">{chanHan}</p>}
 
       {loi !== null && (
         <p className="thong-bao-loi" role="alert">
@@ -3921,6 +3951,7 @@ export function FormGiaoViec({
             tieuDe.trim() === "" ||
             loaiChon === "" ||
             chanVanBan !== null ||
+            chanHan !== null ||
             dangTaiDanhBa
           }
         >

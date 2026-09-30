@@ -1614,19 +1614,13 @@ export const GHI_CHU_HAN_VIEC_CON =
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * `<input type="date">` phát ra `YYYY-MM-DD`; hợp đồng đòi một **mốc `date-time`** (`due_at`,
- * `new_due_at` là `time.Time` ở máy chủ, nên `"2026-12-20"` trần là **400**).
+ * `<input type="date">` phát ra `YYYY-MM-DD`; hợp đồng đòi một **mốc `date-time`** (`new_due_at`
+ * là `time.Time` ở máy chủ, nên `"2026-12-20"` trần là **400**).
  *
- * ⚠ GIỜ TRONG NGÀY LÀ MỘT GIẢ ĐỊNH ĐƯỢC NÓI RA, KHÔNG PHẢI MỘT CHI TIẾT KỸ THUẬT. Đặc tả chỉ cho
- * một ô NGÀY (§7.1, §5.6), nên phải chọn một mốc trong ngày ấy, và hai lựa chọn không tương đương:
- *
- *   00:00  ⇒ nhiệm vụ "hạn 20/6" ĐÃ QUÁ HẠN suốt cả ngày 20/6. Đọc lên là sai.
- *   23:59  ⇒ đúng nghĩa thông thường của "hạn ngày 20/6", và là mốc dùng ở đây.
- *
- * KHÔNG DÙNG GIỜ TAN LÀM VIỆC (17:00 hay bất kỳ số nào): đó là `ca_lam_viec` của TỪNG XÃ, và một
- * con số như thế nung vào bundle là đúng thứ luật 1 bất biến 10 cấm. Nếu khách muốn hạn rơi vào
- * cuối giờ làm việc thì đó là một phép tính của `identity` (nơi giữ lịch làm việc, `ngay_nghi_le`
- * và `ngay_lam_bu`), không phải một hằng ở trình duyệt. Đã báo về như một giả định chờ khách chốt.
+ * CHỈ CÒN Ô `Hạn mới` CỦA ĐỀ NGHỊ LÙI HẠN (§5.6) dùng hàm này — ô ấy chỉ có NGÀY, nên phải chọn
+ * một mốc trong ngày: 00:00 làm việc "hạn 20/6" quá hạn suốt ngày 20/6, còn 23:59 đúng nghĩa
+ * thông thường. Form TẠO nhiệm vụ không còn qua đây: nó có ô giờ, điền sẵn 17:00 theo ADR 0065 NV6
+ * (`defaultNewTaskDue`), và ghép bằng `dueAtFromInputs`.
  *
  * MÚI GIỜ GHIM `+07:00`, không lấy múi giờ máy: một cán bộ mở màn hình trên máy đặt sai múi giờ
  * sẽ gửi lên một hạn lệch một ngày, và đó là một cam kết bị đọc sai.
@@ -1860,6 +1854,8 @@ export type FormGiaoViecNhap = {
   readonly chuyenVien: string;
   /** `YYYY-MM-DD` hoặc rỗng. */
   readonly han: string;
+  /** `HH:MM` of the deadline, commune time zone. Read only when `han` is set. */
+  readonly dueTime: string;
   readonly vanBan: readonly DongVanBanNhap[];
   /** Ô `Ghi chú` §7.2 — chỉ `Theo văn bản`, chỉ màn Nhiệm vụ (xem `thanGiaoViec`). */
   readonly ghiChu: string;
@@ -1939,10 +1935,10 @@ export function thanGiaoViec(
     if (f.coQuanChuTri !== "") than.lead_unit = f.coQuanChuTri;
     if (f.chuyenVien.trim() !== "") than.monitor = f.chuyenVien.trim();
   }
-  // HẠN: ô ngày → mốc cuối ngày theo giờ Việt Nam. Bỏ trống thì trường VẮNG MẶT HẲN, không gửi
+  // HẠN: ô ngày + ô giờ → một mốc `+07:00`. Bỏ trống ngày thì trường VẮNG MẶT HẲN, không gửi
   // chuỗi rỗng — `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật (§4.1 vẽ
-  // nó thành `Hạn —`).
-  if (f.han !== "") than.due_at = mocCuoiNgay(f.han);
+  // nó thành `Hạn —`). Ngày có mà giờ sai khuôn thì form đã khoá nút gửi (`newTaskDueProblem`).
+  if (f.han !== "") than.due_at = dueAtFromInputs(f.han, f.dueTime);
   if (tuyChon.maCha !== undefined && tuyChon.maCha !== "") than.parent = tuyChon.maCha;
 
   // GHI CHÚ: cùng cổng với ba danh sách văn bản, cùng hai lý do. §7.3 bỏ ô này ở loại khác `Theo
@@ -2231,6 +2227,43 @@ export function defaultDueTime(
     .filter((e) => TIME_PATTERN.test(e))
     .sort();
   return ends.length === 0 ? "" : (ends[ends.length - 1] as string);
+}
+
+/** ADR 0065 NV6 (user decision 30/09/2026): a new task's deadline is pre-filled 7 days ahead… */
+export const DEFAULT_DUE_DAYS = 7;
+/** …at 17:00 — the same hour as tasks generated from đơn thư (decision C9). */
+export const DEFAULT_DUE_TIME = "17:00";
+
+/** Under the create form's deadline fields: says the value was pre-filled and can be changed. */
+export const NEW_TASK_DUE_PREFILLED_NOTE = `Điền sẵn ${DEFAULT_DUE_DAYS} ngày nữa, lúc ${DEFAULT_DUE_TIME}. Sửa được.`;
+
+/** Blocks `Giao việc` when a date is chosen but the time field is empty or malformed. */
+export const NEW_TASK_DUE_TIME_MISSING = "Nhập giờ của hạn hoàn thành.";
+
+/**
+ * The pre-filled deadline of the `Giao việc mới` form (and every screen reusing it): today in the
+ * commune's time zone + `DEFAULT_DUE_DAYS` CALENDAR days, at `DEFAULT_DUE_TIME`.
+ *
+ * CALENDAR DAYS, NOT WORKING DAYS, on purpose: the user said "+7 ngày", and counting working time
+ * (weekends, `ngay_nghi_le`, `ngay_lam_bu`) belongs to `identity` (ADR 0007) — a browser copy of that
+ * arithmetic would drift from the server's. This is a value the clerk sees and can change, never a
+ * deadline the software fixes on its own. The fixed 17:00 is the user's decision, not read from the
+ * commune's calendar (unlike `defaultDueTime` of the edit form).
+ *
+ * "Today" is read in `MUI_GIO`, not the machine's zone: at 23:30 on a machine set to UTC the local
+ * date is still yesterday's, and the pre-fill would land a day early.
+ */
+export function defaultNewTaskDue(now: Date = new Date()): { readonly date: string; readonly time: string } {
+  const today = ngayChoONhap(now.toISOString());
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + DEFAULT_DUE_DAYS);
+  return { date: d.toISOString().slice(0, 10), time: DEFAULT_DUE_TIME };
+}
+
+/** Why the create form's deadline cannot be sent, or `null`. No date = no deadline, a real state. */
+export function newTaskDueProblem(date: string, time: string): string | null {
+  if (date === "") return null;
+  return TIME_PATTERN.test(time) ? null : NEW_TASK_DUE_TIME_MISSING;
 }
 
 /** Ba danh sách có khác tập đã đọc hay không — so theo `id`, sau khi cắt khoảng trắng. */

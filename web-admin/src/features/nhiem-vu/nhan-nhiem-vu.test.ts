@@ -55,7 +55,12 @@ import {
   DUE_TIME_NO_CALENDAR,
   DUE_TIME_NO_SHIFT,
   changedSince,
+  DEFAULT_DUE_DAYS,
+  DEFAULT_DUE_TIME,
   defaultDueTime,
+  defaultNewTaskDue,
+  NEW_TASK_DUE_TIME_MISSING,
+  newTaskDueProblem,
   dueAtFromInputs,
   dueTimeFilledNote,
   dueTimeHint,
@@ -566,6 +571,7 @@ function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
     coQuanChuTri: "01JBOPHANGIA",
     chuyenVien: "CB-2026-GIA001",
     han: "",
+    dueTime: "",
     ghiChu: "",
     vanBan: [
       // CỐ Ý XEN KẼ NHÓM theo thứ tự bấm: thân phải gom theo nhóm §5.4 mà giữ thứ tự trong nhóm.
@@ -1605,6 +1611,47 @@ describe("✎ Sửa — Mã nhiệm vụ và Hạn xử lý (W3: 3c3525f, f27fd6
     expect(DUE_EDIT_NOTE).toContain("chưa từng được duyệt lùi hạn thì hạn ban đầu đổi theo");
     expect(DUE_EDIT_NOTE).toContain("chỉ hạn xử lý đổi");
     expect(CODE_EDIT_NOTE).toContain("không bao giờ cấp cho việc khác");
+  });
+});
+
+describe("hạn điền sẵn của form tạo — +7 ngày lịch, 17:00 (ADR 0065 NV6)", () => {
+  it("+7 NGÀY LỊCH, không phải ngày làm việc, lúc 17:00", () => {
+    // Wed 30/09/2026 10:00 ICT → Wed 07/10. A Friday start lands on a Friday, weekend included.
+    expect(defaultNewTaskDue(new Date("2026-09-30T03:00:00Z"))).toEqual({
+      date: "2026-10-07",
+      time: "17:00",
+    });
+    expect(defaultNewTaskDue(new Date("2026-10-02T03:00:00Z")).date).toBe("2026-10-09");
+    expect(DEFAULT_DUE_DAYS).toBe(7);
+    expect(DEFAULT_DUE_TIME).toBe("17:00");
+  });
+
+  it("\"hôm nay\" đọc theo giờ Việt Nam, không theo múi giờ máy — sang tháng, sang năm đúng", () => {
+    // 23:30 ICT on 31/12 is still 31/12 16:30 UTC; 00:30 ICT on 01/01 is 31/12 17:30 UTC.
+    expect(defaultNewTaskDue(new Date("2026-12-31T16:30:00Z")).date).toBe("2027-01-07");
+    expect(defaultNewTaskDue(new Date("2026-12-31T17:30:00Z")).date).toBe("2027-01-08");
+    expect(defaultNewTaskDue(new Date("2026-02-25T03:00:00Z")).date).toBe("2026-03-04");
+  });
+
+  it("thân gửi đi: ngày + giờ ⇒ một mốc `+07:00`; không có ngày ⇒ không có `due_at`", () => {
+    const { date, time } = defaultNewTaskDue(new Date("2026-09-30T03:00:00Z"));
+    expect(thanGiaoViec(formDay({ han: date, dueTime: time }), { coDanhSachVanBan: false }).due_at).toBe(
+      "2026-10-07T17:00:00+07:00",
+    );
+    // The clerk changed the hour: what they typed goes, not the default.
+    expect(thanGiaoViec(formDay({ han: date, dueTime: "09:30" }), { coDanhSachVanBan: false }).due_at).toBe(
+      "2026-10-07T09:30:00+07:00",
+    );
+    expect(thanGiaoViec(formDay({ han: "", dueTime: time }), { coDanhSachVanBan: false })).not.toHaveProperty(
+      "due_at",
+    );
+  });
+
+  it("có ngày mà giờ trống / sai khuôn ⇒ khoá gửi; không ngày ⇒ không khoá", () => {
+    expect(newTaskDueProblem("2026-10-07", "")).toBe(NEW_TASK_DUE_TIME_MISSING);
+    expect(newTaskDueProblem("2026-10-07", "5pm")).toBe(NEW_TASK_DUE_TIME_MISSING);
+    expect(newTaskDueProblem("2026-10-07", "17:00")).toBeNull();
+    expect(newTaskDueProblem("", "")).toBeNull();
   });
 });
 
