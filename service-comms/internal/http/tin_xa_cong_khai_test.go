@@ -73,18 +73,52 @@ type ckNoiDung struct {
 	// lastType is the `type` the handler passed on the last list read. The fake applies it (like the
 	// store's `loai = $3`) but NOT the state predicate — the second wall stays the handler's to prove.
 	lastType domain.LoaiNoiDung
+
+	// lastCategory is the `category` passed on the last list read. The fake applies it the way the
+	// store's recursive CTE does — the category and its live descendants IN THE CONTEXT'S COMMUNE, read
+	// from `tree` — so "parent includes children" and "another commune's id is empty" are visible here.
+	lastCategory string
+	tree         *ckDanhMuc
 }
 
-func (k *ckNoiDung) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
+// subtree is the fake's publicCategorySubtree: ids reachable from root through the commune's live tree.
+func (k *ckNoiDung) subtree(xa tenant.ID, root string) map[string]bool {
+	in := map[string]bool{}
+	if k.tree == nil {
+		return in
+	}
+	live := k.tree.theoXa[xa]
+	for _, c := range live {
+		if c.ID == root {
+			in[root] = true
+		}
+	}
+	for grew := true; grew; {
+		grew = false
+		for _, c := range live {
+			if in[c.ChaID] && !in[c.ID] {
+				in[c.ID], grew = true, true
+			}
+		}
+	}
+	return in
+}
+
+func (k *ckNoiDung) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, categoryID string, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
 	k.goi++
 	k.lastType = itemType
+	k.lastCategory = categoryID
 	xa := tenant.MustFrom(ctx)
 	if k.loi != nil {
 		return page.Result[domain.NoiDungMiniApp]{}, k.loi
 	}
+	var in map[string]bool
+	if categoryID != "" {
+		in = k.subtree(xa, categoryID)
+	}
 	var items []domain.NoiDungMiniApp
 	for _, n := range k.theoXa[xa] {
-		if itemType == "" || n.Loai == itemType {
+		if (itemType == "" || n.Loai == itemType) && (in == nil || in[n.DanhMucID]) {
 			items = append(items, n)
 		}
 	}
@@ -108,11 +142,44 @@ func (k *ckNoiDung) CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDu
 	return domain.NoiDungMiniApp{}, commsstore.ErrNoiDungKhongTonTai
 }
 
+// PublishedCategoryIDs applies the STORE's predicate (dang-hien, filed under a live category of this
+// commune, type when given): unlike the list there is no second wall for it in the handler.
+func (k *ckNoiDung) PublishedCategoryIDs(ctx context.Context, itemType domain.LoaiNoiDung) ([]string, error) {
+	k.goi++
+	k.lastType = itemType
+	xa := tenant.MustFrom(ctx)
+	if k.loi != nil {
+		return nil, k.loi
+	}
+	live := map[string]bool{}
+	if k.tree != nil {
+		for _, c := range k.tree.theoXa[xa] {
+			live[c.ID] = true
+		}
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, n := range k.theoXa[xa] {
+		if n.TrangThai == domain.TrangThaiDangHien && live[n.DanhMucID] && !seen[n.DanhMucID] &&
+			(itemType == "" || n.Loai == itemType) {
+			seen[n.DanhMucID] = true
+			ids = append(ids, n.DanhMucID)
+		}
+	}
+	return ids, nil
+}
+
 type ckDanhMuc struct {
 	theoXa map[tenant.ID][]domain.DanhMucMiniApp
+	loi    error
+	goi    int
 }
 
 func (d *ckDanhMuc) DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error) {
+	d.goi++
+	if d.loi != nil {
+		return nil, d.loi
+	}
 	return d.theoXa[tenant.MustFrom(ctx)], nil
 }
 
@@ -533,8 +600,9 @@ func TestMauTinXaKhopTuyenDaDangKy(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm})
 	for p, muon := range map[string]string{
-		MauTinXa:          "GET " + MauTinXa,
-		MauTinXa + "/abc": "GET " + MauTinXa + "/{id}",
+		MauTinXa:                 "GET " + MauTinXa,
+		MauTinXa + "/abc":        "GET " + MauTinXa + "/{id}",
+		MauTinXa + "/categories": "GET " + MauTinXa + "/categories",
 	} {
 		if _, mau := mux.Handler(httptest.NewRequest(http.MethodGet, p, nil)); mau != muon {
 			t.Errorf("%s khớp %q, muốn %q", p, mau, muon)
@@ -558,4 +626,258 @@ func TestRegisterCongKhaiThieuKhoThiPanic(t *testing.T) {
 			RegisterCongKhai(http.NewServeMux(), d)
 		}()
 	}
+}
+
+// --- the category chips (user decision 2026-09-30) -------------------------------------------------
+
+// chipData is commune A holding every case the chip row must separate, and commune B holding the SAME
+// category id under another name, so anything that crossed communes shows up.
+//
+//	A: r-health (no item of its own) ─ c-vacc (a-vacc, tin-tuc) ─ g-kids (a-kids, su-kien)
+//	   r-econ   (only a DRAFT)                                    → hidden
+//	   r-html   ("<b>Văn hoá</b>", a-culture)                     → name as plain text
+//	   items filed under r-gone (soft-deleted: absent from the live tree) → never a chip, empty list
+//	B: r-health ("CỦA XÃ B", b-health)
+func chipData() (*ckNoiDung, *ckDanhMuc) {
+	dm := &ckDanhMuc{theoXa: map[tenant.ID][]domain.DanhMucMiniApp{
+		xaA: {
+			{ID: "r-health", Ten: "Y tế", Slug: "y-te", ThuTu: 1},
+			{ID: "c-vacc", Ten: "Tiêm chủng", Slug: "tiem-chung", ChaID: "r-health", ThuTu: 1},
+			{ID: "g-kids", Ten: "Trẻ em", Slug: "tre-em", ChaID: "c-vacc", ThuTu: 2},
+			{ID: "r-econ", Ten: "Kinh tế", Slug: "kinh-te", ThuTu: 2},
+			{ID: "r-html", Ten: "<b>Văn hoá</b>", Slug: "van-hoa", ThuTu: 3},
+		},
+		xaB: {{ID: "r-health", Ten: "CỦA XÃ B", Slug: "y-te"}},
+	}}
+	pub := func(id, cat string, typ domain.LoaiNoiDung) domain.NoiDungMiniApp {
+		return domain.NoiDungMiniApp{ID: id, Loai: typ, DanhMucID: cat, TieuDe: "Tiêu đề " + id,
+			NgayDang: ckNgay, TrangThai: domain.TrangThaiDangHien}
+	}
+	draft := pub("a-econ-draft", "r-econ", domain.LoaiTinTuc)
+	draft.TrangThai = domain.TrangThaiAn
+	nd := &ckNoiDung{tree: dm, theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
+		xaA: {
+			pub("a-vacc", "c-vacc", domain.LoaiTinTuc),
+			pub("a-kids", "g-kids", domain.LoaiSuKien),
+			draft,
+			pub("a-culture", "r-html", domain.LoaiTinTuc),
+			pub("a-gone", "r-gone", domain.LoaiTinTuc),
+			pub("a-nowhere", "", domain.LoaiTinTuc),
+		},
+		xaB: {pub("b-health", "r-health", domain.LoaiTinTuc)},
+	}}
+	return nd, dm
+}
+
+const chipPath = MauTinXa + "/categories"
+
+func TestPublicNewsCategoriesShowsOnlyCategoriesWithPublishedItems(t *testing.T) {
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+
+	w := ckGoi(h, chipPath, ckHostA)
+	doiMa(t, w, http.StatusOK)
+	ckKhongCoHTML(t, w)
+	// MUTATIONS THAT MUST TURN THIS RED: a parent with no item of its own dropped (r-health); an empty
+	// category kept (r-econ, draft only); a soft-deleted category resurrected (r-gone); the name sent
+	// with markup; `parent_id` sent on a root; the slug or the commune leaking.
+	want := `{"items":[` +
+		`{"id":"r-health","name":"Y tế","order":1},` +
+		`{"id":"c-vacc","name":"Tiêm chủng","parent_id":"r-health","order":1},` +
+		`{"id":"g-kids","name":"Trẻ em","parent_id":"c-vacc","order":2},` +
+		`{"id":"r-html","name":"Văn hoá","order":3}]}`
+	if got := strings.TrimSpace(w.Body.String()); got != want {
+		t.Fatalf("chip xã A =\n%s\nmuốn\n%s", got, want)
+	}
+	for _, banned := range []string{"CỦA XÃ B", "y-te", "r-econ", "r-gone", string(xaA), string(xaB)} {
+		if strings.Contains(w.Body.String(), banned) {
+			t.Fatalf("chip xã A chứa %q: %s", banned, w.Body.String())
+		}
+	}
+
+	// Commune B's host sees only B's tree.
+	wb := ckGoi(h, chipPath, ckHostB)
+	doiMa(t, wb, http.StatusOK)
+	if got := strings.TrimSpace(wb.Body.String()); got != `{"items":[{"id":"r-health","name":"CỦA XÃ B","order":0}]}` {
+		t.Fatalf("chip xã B = %s", got)
+	}
+}
+
+func TestPublicNewsCategoriesTypeFilter(t *testing.T) {
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+
+	w := ckGoi(h, chipPath, ckHostA, "&type=su-kien")
+	doiMa(t, w, http.StatusOK)
+	if nd.lastType != domain.LoaiSuKien {
+		t.Fatalf("kho nhận type = %q", nd.lastType)
+	}
+	var ra struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	var ids []string
+	for _, it := range ra.Items {
+		ids = append(ids, it["id"].(string))
+	}
+	// Only g-kids holds a su-kien; its ancestors come with it. r-html (tin-tuc only) is hidden.
+	if got := strings.Join(ids, ","); got != "r-health,c-vacc,g-kids" {
+		t.Fatalf("chip su-kien = %s", got)
+	}
+
+	// A type nothing is published under: an empty row, and the tree is not even read.
+	goiTruoc := dm.goi
+	w = ckGoi(h, chipPath, ckHostA, "&type=video")
+	doiMa(t, w, http.StatusOK)
+	if strings.TrimSpace(w.Body.String()) != `{"items":[]}` || dm.goi != goiTruoc {
+		t.Fatalf("type=video: %s, cây bị đọc %d lần", w.Body.String(), dm.goi-goiTruoc)
+	}
+}
+
+func TestPublicNewsCategoryFilterIncludesDescendantsAndAndsWithType(t *testing.T) {
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+
+	ids := func(extra string) string {
+		t.Helper()
+		w := ckGoi(h, MauTinXa, ckHostA, extra)
+		doiMa(t, w, http.StatusOK)
+		var out []string
+		for _, it := range ckDocTrang(t, w).Items {
+			out = append(out, it["id"].(string))
+		}
+		sort.Strings(out)
+		return strings.Join(out, ",")
+	}
+	for extra, want := range map[string]string{
+		"&category=r-health":              "a-kids,a-vacc", // the parent includes child and grandchild
+		"&category=c-vacc":                "a-kids,a-vacc",
+		"&category=g-kids":                "a-kids",
+		"&category=r-health&type=tin-tuc": "a-vacc", // AND, not OR
+		"&category=r-health&type=su-kien": "a-kids",
+		"&category=g-kids&type=tin-tuc":   "",
+		"&category=":                      "a-culture,a-gone,a-kids,a-nowhere,a-vacc", // empty = no filter
+	} {
+		if got := ids(extra); got != want {
+			t.Errorf("%s: %q, muốn %q", extra, got, want)
+		}
+	}
+	if ids("&category=g-kids"); nd.lastCategory != "g-kids" {
+		t.Fatalf("kho nhận category = %q", nd.lastCategory)
+	}
+}
+
+func TestPublicNewsCategoryUnknownDeletedOrOtherCommuneIsTheEmptyPage(t *testing.T) {
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+
+	const empty = `{"items":[],"next_cursor":"","has_more":false}`
+	// A live category holding only a DRAFT: no item (the raw fake returns the draft with a cursor, so only
+	// the items are compared here — the store's own predicate is the pg suite's).
+	if items := ckDocTrang(t, ckGoi(h, MauTinXa, ckHostA, "&category=r-econ")).Items; len(items) != 0 {
+		t.Fatalf("danh mục chỉ có bản nháp: %v", items)
+	}
+	for _, c := range []struct{ host, extra string }{
+		{ckHostA, "&category=r-gone"},       // soft-deleted
+		{ckHostA, "&category=khong-co"},     // no such id
+		{ckHostB, "&category=c-vacc"},       // A's category under B's host
+		{ckHostKhongCo, "&category=c-vacc"}, // no commune at all
+	} {
+		w := ckGoi(h, MauTinXa, c.host, c.extra)
+		if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != empty {
+			t.Errorf("%s %s: %d %s — muốn 200 %s", c.host, c.extra, w.Code, w.Body.String(), empty)
+		}
+	}
+}
+
+func TestPublicNewsCategoryParamsAre400BeforeAnyLookup(t *testing.T) {
+	nt := &ckNenTang{}
+	nd, dm := chipData()
+	h := ckMayChu(t, nt, nd, dm, nil)
+
+	for _, host := range []string{ckHostA, ckHostKhongCo} {
+		for _, v := range []string{"a%20b", "x%3B--", "a%2Fb", "%C4%91m", strings.Repeat("x", 65)} {
+			w := ckGoi(h, MauTinXa, host, "&category="+v)
+			doiMa(t, w, http.StatusBadRequest)
+			if strings.Contains(w.Body.String(), "--") || strings.Contains(w.Body.String(), "xxxx") {
+				t.Fatalf("400 lặp lại giá trị đã gửi: %s", w.Body.String())
+			}
+		}
+		// The categories route: a bad `type` is a 400 before the platform too.
+		doiMa(t, ckGoi(h, chipPath, host, "&type=abc"), http.StatusBadRequest)
+	}
+	for _, q := range []string{"", "Xa-A.vigov.vn", "xa-a.vigov.vn:443", "10.0.0.1"} {
+		doiMa(t, ckGoi(h, chipPath, q), http.StatusBadRequest)
+	}
+	doiMa(t, ckGoi(h, chipPath, ckHostA, "&host="+ckHostB), http.StatusBadRequest)
+	if nt.goi != 0 || nd.goi != 0 || dm.goi != 0 {
+		t.Fatalf("tham số sai: nền tảng %d, kho nội dung %d, kho danh mục %d lần", nt.goi, nd.goi, dm.goi)
+	}
+}
+
+func TestPublicNewsCategoriesUnknownDomainIsByteIdenticalToEmptyCommune(t *testing.T) {
+	// A is active with nothing filed: the reference.
+	nd := &ckNoiDung{theoXa: map[tenant.ID][]domain.NoiDungMiniApp{}, tree: &ckDanhMuc{}}
+	dm := &ckDanhMuc{}
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+
+	ref := ckGoi(h, chipPath, ckHostA)
+	doiMa(t, ref, http.StatusOK)
+	if strings.TrimSpace(ref.Body.String()) != `{"items":[]}` {
+		t.Fatalf("hàng chip rỗng = %s", ref.Body.String())
+	}
+	before := nd.goi
+	for _, host := range []string{ckHostKhongCo, ckHostRieng, ckHostNgung} {
+		w := ckGoi(h, chipPath, host)
+		if w.Code != ref.Code || w.Body.String() != ref.Body.String() {
+			t.Fatalf("%s: %d %s, khác %d %s", host, w.Code, w.Body.String(), ref.Code, ref.Body.String())
+		}
+	}
+	if nd.goi != before || dm.goi != 0 {
+		t.Fatalf("tên miền không thuộc xã nào mà kho vẫn bị đọc (nội dung %d, danh mục %d)", nd.goi-before, dm.goi)
+	}
+}
+
+func TestPublicNewsCategoriesPlatformDownIs503(t *testing.T) {
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{chet: true}, nd, dm, nil)
+	w := ckGoi(h, chipPath, ckHostA)
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if strings.Contains(w.Body.String(), "items") || nd.goi != 0 || dm.goi != 0 {
+		t.Fatalf("503: %s, kho đọc %d/%d", w.Body.String(), nd.goi, dm.goi)
+	}
+}
+
+func TestPublicNewsCategoriesStoreFailuresAre500(t *testing.T) {
+	for name, set := range map[string]func(*ckNoiDung, *ckDanhMuc){
+		"content store":  func(nd *ckNoiDung, _ *ckDanhMuc) { nd.loi = errors.New("pq: connection reset") },
+		"category store": func(_ *ckNoiDung, dm *ckDanhMuc) { dm.loi = errors.New("pq: connection reset") },
+		"over the cap":   func(_ *ckNoiDung, dm *ckDanhMuc) { dm.loi = commsstore.ErrQuaNhieuDanhMucMiniApp },
+	} {
+		nd, dm := chipData()
+		set(nd, dm)
+		h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+		w := ckGoi(h, chipPath, ckHostA)
+		if w.Code != http.StatusInternalServerError || strings.Contains(w.Body.String(), "pq:") ||
+			strings.Contains(w.Body.String(), "items") {
+			t.Errorf("%s: %d %s — muốn 500 không lộ chi tiết, không phải danh sách cụt", name, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestPublicNewsCategoriesNotSwallowedByID(t *testing.T) {
+	// Go 1.22 ServeMux: the literal `categories` segment is more specific than `{id}`. Were it swallowed,
+	// the detail handler would look up an item named "categories" and answer the one 404.
+	nd, dm := chipData()
+	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
+	w := ckGoi(h, chipPath, ckHostA)
+	doiMa(t, w, http.StatusOK)
+	if !strings.HasPrefix(w.Body.String(), `{"items":[`) {
+		t.Fatalf("/categories không tới trình xử lý danh mục: %s", w.Body.String())
+	}
+	// And `{id}` still serves an id — the new literal took nothing else from it.
+	doiMa(t, ckGoi(h, MauTinXa+"/a-vacc", ckHostA), http.StatusOK)
+	doiMa(t, ckGoi(h, MauTinXa+"/categoriesx", ckHostA), http.StatusNotFound)
 }

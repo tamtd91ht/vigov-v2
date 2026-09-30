@@ -2,7 +2,8 @@ package store
 
 // THE PUBLIC READS OF THE MINI APP CONTENT REGISTER — what GET /api/v1/commune-news and
 // GET /api/v1/commune-news/{id} serve to anybody who knows a commune's domain (owner decision
-// 2026-09-27; docs/ui-ux/11-noi-dung-mini-app.md:189-190).
+// 2026-09-27; docs/ui-ux/11-noi-dung-mini-app.md:189-190), and — since the user's decision of
+// 2026-09-30 — which categories GET /api/v1/commune-news/categories may offer as chips.
 //
 // TWO METHODS NEXT TO DanhSach / TheoID, NOT A FLAG ON THEM, and the difference is the predicate: the
 // staff register lists every state (§6's three chips), the public read lists ONE — `dang-hien`. A
@@ -37,16 +38,25 @@ import (
 // THE COMMUNE IS $1 FROM THE CONTEXT. On the public route the handler put it there after the PLATFORM
 // resolved the `host` the caller named; this method cannot tell and does not need to.
 //
-// itemType "" = every type. Any other value is bound as $3; the handler has already refused a code
-// outside the six, and an unknown one here would only match nothing.
-func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, yc page.Request) (
-	page.Result[domain.NoiDungMiniApp], error) {
+// itemType "" = every type. Any other value is bound as the next placeholder; the handler has already
+// refused a code outside the six, and an unknown one here would only match nothing.
+//
+// categoryID "" = every category (and items filed nowhere). Otherwise only items filed under that
+// category OR ANY LIVE DESCENDANT (user decision 2026-09-30: choosing a parent chip includes its
+// children's items) — see publicCategorySubtree. Combined with itemType by AND. An id of another commune,
+// a soft-deleted category or no category at all matches nothing: an empty page, the same answer.
+func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung,
+	categoryID string, yc page.Request) (page.Result[domain.NoiDungMiniApp], error) {
 
 	filter := ` AND deleted_at IS NULL AND trang_thai = $2`
 	args := []any{string(domain.TrangThaiDangHien)}
 	if itemType != "" {
-		filter += ` AND loai = $3`
 		args = append(args, string(itemType))
+		filter += fmt.Sprintf(` AND loai = $%d`, len(args)+1) // +1: $1 is the commune
+	}
+	if categoryID != "" {
+		args = append(args, categoryID)
+		filter += fmt.Sprintf(publicCategorySubtree, len(args)+1)
 	}
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotNoiDungMiniApp,
@@ -60,6 +70,73 @@ func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, itemType dom
 		}
 		return n, n.ID, nil
 	})
+}
+
+// publicCategorySubtree is the `category=` filter: `danh_muc_id` in the chosen category's LIVE subtree.
+// `%[1]d` is the placeholder holding the category id.
+//
+// BOTH HALVES OF THE RECURSION BIND `tenant_id = $1` AND `deleted_at IS NULL`. The self-referencing key
+// is composite with `tenant_id` (0006:190), so a child is provably in its parent's commune — but the
+// seed row is chosen by an id THE CLIENT SENT, and without `$1` on it an id of another commune would
+// seed the walk. A soft-deleted category cuts its subtree (rule 7, invariant 2), the same edges
+// domain.CategoriesWithPublishedItems walks, so a chip never selects items its row did not count.
+//
+// UNION AND NOT UNION ALL: it de-duplicates, so a cycle — impossible today (0006:223-228), possible the
+// day a re-parenting route forgets its ancestor walk — terminates instead of hanging the request.
+// Served by `danh_muc_mini_app_cay` (tenant_id, cha_id, thu_tu) WHERE deleted_at IS NULL.
+const publicCategorySubtree = ` AND danh_muc_id IN (WITH RECURSIVE subtree(id) AS (` +
+	`SELECT c.id FROM danh_muc_mini_app c WHERE c.tenant_id = $1 AND c.id = $%[1]d AND c.deleted_at IS NULL ` +
+	`UNION SELECT c.id FROM danh_muc_mini_app c JOIN subtree s ON c.cha_id = s.id ` +
+	`WHERE c.tenant_id = $1 AND c.deleted_at IS NULL) SELECT id FROM subtree)`
+
+// publishedCategoryIDs is the read behind GET /api/v1/commune-news/categories: the LIVE categories of
+// this commune that hold at least one published, not-deleted item (optionally of one type).
+//
+// THE JOIN TO THE LIVE CATEGORY TABLE IS WHAT BOUNDS THE RESULT. Without it the distinct ids could name
+// soft-deleted categories too, and nothing caps those. With it the answer is a subset of the live tree,
+// which TranDanhMucMiniApp caps — and the LIMIT below is that cap plus one, so exceeding it is a refusal
+// (ErrQuaNhieuDanhMucMiniApp), never a silently short chip row.
+//
+// Every joined table is constrained to $1 in its ON clause (store.Scoped.QueryJoin's contract).
+const publishedCategoryIDs = `SELECT DISTINCT nd.danh_muc_id FROM noi_dung_mini_app nd ` +
+	`JOIN danh_muc_mini_app dm ON dm.tenant_id = $1 AND dm.id = nd.danh_muc_id AND dm.deleted_at IS NULL ` +
+	`WHERE nd.tenant_id = $1 AND nd.deleted_at IS NULL AND nd.trang_thai = $2%s LIMIT $%d`
+
+// PublishedCategoryIDs returns the ids of the commune's live categories that hold ≥1 published item
+// DIRECTLY (not through a descendant — domain.CategoriesWithPublishedItems adds the ancestors).
+// itemType "" = every type.
+func (s *NoiDungMiniAppStore) PublishedCategoryIDs(ctx context.Context, itemType domain.LoaiNoiDung) ([]string, error) {
+	args := []any{string(domain.TrangThaiDangHien)}
+	typeClause := ""
+	if itemType != "" {
+		args = append(args, string(itemType))
+		typeClause = fmt.Sprintf(` AND nd.loai = $%d`, len(args)+1)
+	}
+	args = append(args, TranDanhMucMiniApp+1)
+	stmt := fmt.Sprintf(publishedCategoryIDs, typeClause, len(args)+1)
+
+	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, args...)
+	if err != nil {
+		return nil, fmt.Errorf("noi_dung_mini_app: đọc danh mục có tin công khai: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, 16)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("noi_dung_mini_app: đọc dòng danh mục có tin: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("noi_dung_mini_app: duyệt danh mục có tin: %w", err)
+	}
+	if len(ids) > TranDanhMucMiniApp {
+		// Dropped, not trimmed — the same refusal DanhMucMiniAppStore.DanhSach makes.
+		return nil, ErrQuaNhieuDanhMucMiniApp
+	}
+	return ids, nil
 }
 
 // CongKhaiTheoID reads ONE PUBLISHED item of this commune, body included.

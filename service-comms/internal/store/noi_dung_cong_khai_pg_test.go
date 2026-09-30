@@ -2,10 +2,13 @@ package store
 
 import (
 	"errors"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-comms/internal/domain"
 )
 
 // The public reads against a REAL PostgreSQL. Skipped without VIGOV_TEST_DSN (shared harness:
@@ -31,7 +34,7 @@ func TestPgNoiDungCongKhaiChiDangHienCuaMotXa(t *testing.T) {
 	}
 
 	kho := khoNoiDungThat(t)
-	kq, err := kho.DanhSachCongKhai(ctxXa(tenant.ID(xa1)), "", trangDauNDThat(t))
+	kq, err := kho.DanhSachCongKhai(ctxXa(tenant.ID(xa1)), "", "", trangDauNDThat(t))
 	if err != nil {
 		t.Fatalf("đọc trang công khai: %v", err)
 	}
@@ -53,6 +56,120 @@ func TestPgNoiDungCongKhaiChiDangHienCuaMotXa(t *testing.T) {
 	}
 }
 
+// fileUnder files an item under a category, directly (themNoiDungThat leaves danh_muc_id NULL).
+func fileUnder(t *testing.T, tenantID, itemID, categoryID string) {
+	t.Helper()
+	if _, err := moKetNoi(t).Exec(
+		`UPDATE noi_dung_mini_app SET danh_muc_id = $3 WHERE tenant_id = $1 AND id = $2`,
+		tenantID, itemID, categoryID); err != nil {
+		t.Fatalf("xếp %s vào %s: %v", itemID, categoryID, err)
+	}
+}
+
+func softDeleteCategory(t *testing.T, tenantID, id string) {
+	t.Helper()
+	if _, err := moKetNoi(t).Exec(
+		`UPDATE danh_muc_mini_app SET deleted_at = now(), deleted_by = 'CB-TEST', delete_reason = 'thử'
+		  WHERE tenant_id = $1 AND id = $2`, tenantID, id); err != nil {
+		t.Fatalf("xoá mềm danh mục %s: %v", id, err)
+	}
+}
+
+// The `category` filter and the chip read against a real database — the recursive CTE, the join and
+// every predicate only PostgreSQL can evaluate. TREE (xã 1):
+//
+//	cha ─ con ─ chau        con-xoa (deleted, child of cha) ─ duoi-xoa (live, under the deleted one)
+//	rieng (no item)         cha exists in xã 2 too, under the SAME id
+//
+// ITEMS: at-cha (cha), at-con (con, su-kien), at-chau (chau), at-duoi-xoa (duoi-xoa), nhap-con (con, an),
+// at-rieng-khong (none filed), xa2-cha (xã 2's cha). EACH MAKES ONE DEFECT VISIBLE:
+//
+//	parent does not include descendants   → at-con / at-chau missing under cha
+//	deleted category walked               → at-duoi-xoa appears under cha
+//	seed row unscoped                     → xa2-cha appears in xã 1, or xã 1's items under xã 2's id
+//	state dropped                         → nhap-con appears
+func TestPgPublicCategoryFilterAndChips(t *testing.T) {
+	c1, c2 := xaRieng(t)
+	at := time.Now().UTC()
+	for _, c := range []struct{ id, parent string }{
+		{"cha", ""}, {"con", "cha"}, {"chau", "con"}, {"con-xoa", "cha"}, {"duoi-xoa", "con-xoa"}, {"rieng", ""},
+	} {
+		themDanhMucThat(t, c1, c.id, "Tên "+c.id, "slug-"+c.id, c.parent, 0)
+	}
+	themDanhMucThat(t, c2, "cha", "Cha xã 2", "slug-cha", "", 0)
+	softDeleteCategory(t, c1, "con-xoa")
+
+	for i, it := range []struct{ id, typ, state, cat string }{
+		{"at-cha", "tin-tuc", "dang-hien", "cha"},
+		{"at-con", "su-kien", "dang-hien", "con"},
+		{"at-chau", "tin-tuc", "dang-hien", "chau"},
+		{"at-duoi-xoa", "tin-tuc", "dang-hien", "duoi-xoa"},
+		{"nhap-con", "tin-tuc", "an", "con"},
+		{"at-rieng-khong", "tin-tuc", "dang-hien", ""},
+	} {
+		themNoiDungThat(t, c1, it.id, it.typ, "Tiêu đề "+it.id, it.state, "thu-cong", "", at.Add(time.Duration(i)*time.Second))
+		if it.cat != "" {
+			fileUnder(t, c1, it.id, it.cat)
+		}
+	}
+	themNoiDungThat(t, c2, "xa2-cha", "tin-tuc", "Tin xã 2", "dang-hien", "thu-cong", "", at)
+	fileUnder(t, c2, "xa2-cha", "cha")
+
+	repo := khoNoiDungThat(t)
+	list := func(ctxTenant, typ, cat string) string {
+		t.Helper()
+		res, err := repo.DanhSachCongKhai(ctxXa(tenant.ID(ctxTenant)), domain.LoaiNoiDung(typ), cat, trangDauNDThat(t))
+		if err != nil {
+			t.Fatalf("lọc danh mục %s/%s: %v", typ, cat, err)
+		}
+		var ids []string
+		for _, n := range res.Items {
+			ids = append(ids, n.ID)
+		}
+		sort.Strings(ids)
+		return strings.Join(ids, ",")
+	}
+	for _, c := range []struct{ tenant, typ, cat, want string }{
+		{c1, "", "cha", "at-cha,at-chau,at-con"},
+		{c1, "", "con", "at-chau,at-con"},
+		{c1, "su-kien", "cha", "at-con"},
+		{c1, "", "con-xoa", ""},
+		{c1, "", "rieng", ""},
+		{c1, "", "khong-co", ""},
+		{c2, "", "cha", "xa2-cha"},
+	} {
+		if got := list(c.tenant, c.typ, c.cat); got != c.want {
+			t.Errorf("xã %s type=%q category=%s: %q, muốn %q", c.tenant, c.typ, c.cat, got, c.want)
+		}
+	}
+
+	chips := func(typ string) string {
+		t.Helper()
+		ctx := ctxXa(tenant.ID(c1))
+		ids, err := repo.PublishedCategoryIDs(ctx, domain.LoaiNoiDung(typ))
+		if err != nil {
+			t.Fatalf("danh mục có tin: %v", err)
+		}
+		live, err := khoDanhMucNDThat(t).DanhSach(ctx)
+		if err != nil {
+			t.Fatalf("cây danh mục: %v", err)
+		}
+		var out []string
+		for _, c := range domain.CategoriesWithPublishedItems(live, ids) {
+			out = append(out, c.ID)
+		}
+		sort.Strings(out)
+		return strings.Join(out, ",")
+	}
+	// `duoi-xoa` holds an item but sits under a deleted category: cut. `rieng` holds nothing: hidden.
+	if got := chips(""); got != "cha,chau,con" {
+		t.Errorf("chip mọi loại = %q, muốn cha,chau,con", got)
+	}
+	if got := chips("su-kien"); got != "cha,con" {
+		t.Errorf("chip su-kien = %q, muốn cha,con", got)
+	}
+}
+
 // The `type` filter against a real database. EACH ROW MAKES ONE DEFECT VISIBLE:
 //
 //	su-kien       xã 1, su-kien, dang-hien  must appear
@@ -67,7 +184,7 @@ func TestPgPublicContentFiltersByType(t *testing.T) {
 	themNoiDungThat(t, c1, "su-kien-an", "su-kien", "Sự kiện nháp", "an", "thu-cong", "", at.Add(2*time.Second))
 	themNoiDungThat(t, c2, "su-kien-xa-2", "su-kien", "Sự kiện xã 2", "dang-hien", "thu-cong", "", at)
 
-	res, err := khoNoiDungThat(t).DanhSachCongKhai(ctxXa(tenant.ID(c1)), "su-kien", trangDauNDThat(t))
+	res, err := khoNoiDungThat(t).DanhSachCongKhai(ctxXa(tenant.ID(c1)), "su-kien", "", trangDauNDThat(t))
 	if err != nil {
 		t.Fatalf("đọc trang công khai lọc loại: %v", err)
 	}

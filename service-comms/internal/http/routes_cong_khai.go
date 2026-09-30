@@ -15,9 +15,9 @@ import (
 )
 
 // MauTinXa is the collection the public chain serves. Exported because cmd/server must route the SAME
-// path — and its subtree, for `{id}` — to the public chain on the outer mux; two spellings of one path
-// is a route that silently falls to the staff chain and 404s on the reserved API host. The routes below
-// spell it as a LITERAL because tools/apidoc reads the pattern from the source;
+// path — and its subtree, for `{id}` and `categories` — to the public chain on the outer mux; two
+// spellings of one path is a route that silently falls to the staff chain and 404s on the reserved API
+// host. The routes below spell it as a LITERAL because tools/apidoc reads the pattern from the source;
 // tin_xa_cong_khai_test.go asserts the two agree.
 const MauTinXa = "/api/v1/commune-news"
 
@@ -47,9 +47,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// @consumer citizen-app
 	//
 	// 200 is one page. An EMPTY page for a commune that published nothing AND for a domain no active
-	// commune holds — identical bytes.
+	// commune holds — identical bytes. Also empty for a well-formed `category` naming nothing here.
 	//
-	// 400 is `host` missing, repeated or malformed (the platform is not asked), or a bad `limit`/`cursor`.
+	// 400 is `host` missing, repeated or malformed (the platform is not asked), a `type` outside the six,
+	// a malformed `category`, or a bad `limit`/`cursor`.
 	//
 	// 500 is a store failure. 503 is the platform registry unreachable.
 	//
@@ -60,6 +61,38 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	mux.Handle("GET /api/v1/commune-news",
 		authz.Public("bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần")(
 			http.HandlerFunc(h.DanhSachTinXa)))
+
+	// The chip row of the Mini App news tab (user decision 2026-09-30, reversing the 2026-09-27 "no
+	// categories endpoint" — tin_xa_cong_khai.go says why). The commune's own categories that hold a
+	// published item, themselves or through a descendant; flat, `parent_id` absent on a root.
+	//
+	// INSIDE THE /api/v1/commune-news SUBTREE ON PURPOSE: cmd/server routes MauTinXa+"/" to the public
+	// chain, so this path needs no second outer-mux entry. It does NOT collide with `{id}` below: Go
+	// 1.22's ServeMux prefers the more specific pattern, and a literal segment is more specific than a
+	// wildcard, so `categories` is never read as an item id (TestPublicNewsCategoriesNotSwallowedByID).
+	// No item id is `categories` either — ids are 26-character ULIDs.
+	//
+	// PUBLIC for the reason the list is: the commune published these items to its residents, and the
+	// names it files them under are part of that publication.
+	//
+	// @summary  Danh mục tin của xã có ít nhất một tin đã đăng (tự nó hoặc danh mục con), theo tên miền của xã — cho hàng chip lọc hai tầng trên Zalo Mini App
+	// @screen   11-noi-dung-mini-app §9
+	// @consumer citizen-app
+	//
+	// 200 is the whole list, never paginated. `{"items":[]}` for a commune with nothing filed AND for a
+	// domain no active commune holds — identical bytes.
+	//
+	// 400 is `host` missing, repeated or malformed, or a `type` outside the six (the platform is not asked).
+	//
+	// 500 is a store failure or the category cap exceeded. 503 is the platform registry unreachable.
+	//
+	// @reply    200 publicCategoriesOut
+	// @reply    400 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/commune-news/categories",
+		authz.Public("hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần")(
+			http.HandlerFunc(h.PublicNewsCategories)))
 
 	// ONE published item, body included, as plain text.
 	//

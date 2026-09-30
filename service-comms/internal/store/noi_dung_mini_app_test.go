@@ -127,6 +127,9 @@ type khoNDGia struct {
 	demTraVe int64 // what a `SELECT count(*)` answers
 	coDong   bool  // what a `SELECT 1 …` existence probe answers
 
+	// categoriesWithItems is what the `SELECT DISTINCT nd.danh_muc_id` join answers.
+	categoriesWithItems []string
+
 	soDongDoi int64 // what Exec reports as RowsAffected; 1 unless a test says otherwise
 	loi       error
 }
@@ -187,11 +190,21 @@ func (c *connND) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		return &rowsGhiGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 	}
 
+	if strings.Contains(q, "SELECT DISTINCT nd.danh_muc_id") {
+		hang := make([][]driver.Value, 0, len(c.k.categoriesWithItems))
+		for _, id := range c.k.categoriesWithItems {
+			hang = append(hang, []driver.Value{id})
+		}
+		return &rowsGhiGia{cot: []string{"danh_muc_id"}, hang: hang}, nil
+	}
+
 	cot, err := cotTrongCauLenhGhi(q)
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(q, "FROM danh_muc_mini_app") {
+	// The table is the one right after the FIRST ` FROM ` — the public list's `category=` filter carries
+	// a subquery on danh_muc_mini_app, and that must not turn a content read into a category read.
+	if strings.HasPrefix(q[strings.Index(q, " FROM ")+len(" FROM "):], "danh_muc_mini_app") {
 		hang := make([][]driver.Value, 0, len(c.k.danhMuc))
 		for _, d := range c.k.danhMuc {
 			mot := make([]driver.Value, len(cot))

@@ -15,7 +15,7 @@ func TestDanhSachCongKhaiChiDangHienBuocXa(t *testing.T) {
 	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
 	kho, ctx := khoNoiDung(t, k)
 
-	kq, err := kho.DanhSachCongKhai(ctx, "", trangDauND(t))
+	kq, err := kho.DanhSachCongKhai(ctx, "", "", trangDauND(t))
 	if err != nil {
 		t.Fatalf("đọc trang công khai lỗi: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestPublicContentListTypeFilterKeepsStateAndCommune(t *testing.T) {
 	fake := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
 	repo, ctx := khoNoiDung(t, fake)
 
-	if _, err := repo.DanhSachCongKhai(ctx, "su-kien", trangDauND(t)); err != nil {
+	if _, err := repo.DanhSachCongKhai(ctx, "su-kien", "", trangDauND(t)); err != nil {
 		t.Fatalf("đọc trang công khai lọc loại lỗi: %v", err)
 	}
 	stmt := fake.lenh[0]
@@ -59,6 +59,97 @@ func TestPublicContentListTypeFilterKeepsStateAndCommune(t *testing.T) {
 	}
 	if stmt.args[0] != string(xaMotND) || stmt.args[1] != "dang-hien" || stmt.args[2] != "su-kien" {
 		t.Fatalf("tham số = %v, muốn [xã, dang-hien, su-kien, …]", stmt.args)
+	}
+}
+
+func TestPublicContentListCategoryFilterWalksLiveSubtreeOfThisCommune(t *testing.T) {
+	fake := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
+	repo, ctx := khoNoiDung(t, fake)
+
+	kq, err := repo.DanhSachCongKhai(ctx, "su-kien", "dm-cha", trangDauND(t))
+	if err != nil {
+		t.Fatalf("đọc trang công khai lọc danh mục lỗi: %v", err)
+	}
+	// The fake read the CONTENT row — the subquery on danh_muc_mini_app did not make it a category read.
+	if len(kq.Items) != 1 || kq.Items[0].ID != "nd-001" {
+		t.Fatalf("trang = %+v", kq.Items)
+	}
+	stmt := fake.lenh[0]
+	// MUTATIONS THAT MUST TURN THIS RED: the seed row unscoped (another commune's id seeds the walk), the
+	// recursive step unscoped, deleted categories walked, UNION ALL (a cycle hangs), the category bound
+	// to the type's placeholder, or the state clause lost.
+	for _, want := range []string{
+		"tenant_id = $1", "deleted_at IS NULL", "trang_thai = $2", "loai = $3",
+		"danh_muc_id IN (WITH RECURSIVE subtree(id) AS (",
+		"WHERE c.tenant_id = $1 AND c.id = $4 AND c.deleted_at IS NULL UNION SELECT",
+		"JOIN subtree s ON c.cha_id = s.id WHERE c.tenant_id = $1 AND c.deleted_at IS NULL",
+	} {
+		if !strings.Contains(stmt.sql, want) {
+			t.Errorf("câu lọc danh mục thiếu %q: %s", want, stmt.sql)
+		}
+	}
+	if strings.Contains(stmt.sql, "UNION ALL") {
+		t.Errorf("UNION ALL: một chu trình sẽ lặp mãi: %s", stmt.sql)
+	}
+	if stmt.args[0] != string(xaMotND) || stmt.args[1] != "dang-hien" || stmt.args[2] != "su-kien" || stmt.args[3] != "dm-cha" {
+		t.Fatalf("tham số = %v, muốn [xã, dang-hien, su-kien, dm-cha, …]", stmt.args)
+	}
+
+	// Category alone: its placeholder is $3.
+	fake.lenh = nil
+	if _, err := repo.DanhSachCongKhai(ctx, "", "dm-cha", trangDauND(t)); err != nil {
+		t.Fatalf("lọc chỉ danh mục lỗi: %v", err)
+	}
+	if s := fake.lenh[0].sql; !strings.Contains(s, "c.id = $3") || strings.Contains(s, "loai =") {
+		t.Errorf("chỉ lọc danh mục: %s", s)
+	}
+}
+
+func TestPublishedCategoryIDsJoinsLiveCategoriesOfThisCommune(t *testing.T) {
+	fake := &khoNDGia{categoriesWithItems: []string{"dm-a", "dm-b"}}
+	repo, ctx := khoNoiDung(t, fake)
+
+	ids, err := repo.PublishedCategoryIDs(ctx, "su-kien")
+	if err != nil {
+		t.Fatalf("đọc danh mục có tin lỗi: %v", err)
+	}
+	if strings.Join(ids, ",") != "dm-a,dm-b" {
+		t.Fatalf("ids = %v", ids)
+	}
+	stmt := fake.lenh[0]
+	// MUTATIONS THAT MUST TURN THIS RED: the joined table not constrained to $1 (ids of another commune
+	// match), deleted categories or items counted, drafts counted, the type dropped, no bound.
+	for _, want := range []string{
+		"JOIN danh_muc_mini_app dm ON dm.tenant_id = $1 AND dm.id = nd.danh_muc_id AND dm.deleted_at IS NULL",
+		"WHERE nd.tenant_id = $1 AND nd.deleted_at IS NULL AND nd.trang_thai = $2",
+		"AND nd.loai = $3", "LIMIT $4",
+	} {
+		if !strings.Contains(stmt.sql, want) {
+			t.Errorf("câu danh mục có tin thiếu %q: %s", want, stmt.sql)
+		}
+	}
+	if stmt.args[0] != string(xaMotND) || stmt.args[1] != "dang-hien" || stmt.args[2] != "su-kien" ||
+		stmt.args[3] != int64(TranDanhMucMiniApp+1) {
+		t.Fatalf("tham số = %v", stmt.args)
+	}
+
+	fake.lenh = nil
+	if _, err := repo.PublishedCategoryIDs(ctx, ""); err != nil {
+		t.Fatalf("không lọc loại lỗi: %v", err)
+	}
+	if s := fake.lenh[0].sql; strings.Contains(s, "loai") || !strings.Contains(s, "LIMIT $3") {
+		t.Errorf("không lọc loại: %s", s)
+	}
+}
+
+func TestPublishedCategoryIDsOverCapRefusesRatherThanTruncates(t *testing.T) {
+	many := make([]string, TranDanhMucMiniApp+1)
+	for i := range many {
+		many[i] = "dm"
+	}
+	repo, ctx := khoNoiDung(t, &khoNDGia{categoriesWithItems: many})
+	if ids, err := repo.PublishedCategoryIDs(ctx, ""); !errors.Is(err, ErrQuaNhieuDanhMucMiniApp) || ids != nil {
+		t.Fatalf("vượt trần: ids = %d, lỗi = %v — muốn nil, ErrQuaNhieuDanhMucMiniApp", len(ids), err)
 	}
 }
 

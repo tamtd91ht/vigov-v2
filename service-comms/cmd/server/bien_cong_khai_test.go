@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
@@ -36,9 +37,14 @@ func (xaTheoHostThu) XaTheoHost(context.Context, string) (tenant.Tenant, bool, e
 
 type noiDungCongKhaiThu struct{}
 
-func (noiDungCongKhaiThu) DanhSachCongKhai(ctx context.Context, _ domain.LoaiNoiDung, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
+func (noiDungCongKhaiThu) DanhSachCongKhai(ctx context.Context, _ domain.LoaiNoiDung, _ string, _ page.Request) (page.Result[domain.NoiDungMiniApp], error) {
 	tenant.MustFrom(ctx)
 	return page.NewResult[domain.NoiDungMiniApp](), nil
+}
+
+func (noiDungCongKhaiThu) PublishedCategoryIDs(ctx context.Context, _ domain.LoaiNoiDung) ([]string, error) {
+	tenant.MustFrom(ctx)
+	return []string{"dm-a"}, nil
 }
 
 func (noiDungCongKhaiThu) CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error) {
@@ -48,7 +54,9 @@ func (noiDungCongKhaiThu) CongKhaiTheoID(ctx context.Context, id string) (domain
 
 type danhMucThu struct{}
 
-func (danhMucThu) DanhSach(context.Context) ([]domain.DanhMucMiniApp, error) { return nil, nil }
+func (danhMucThu) DanhSach(context.Context) ([]domain.DanhMucMiniApp, error) {
+	return []domain.DanhMucMiniApp{{ID: "dm-a", Ten: "Y tế"}}, nil
+}
 
 // dungCongKhaiThu is the real public chain around the real public routes, with fake reads.
 func dungCongKhaiThu(t *testing.T) http.Handler {
@@ -106,6 +114,25 @@ func TestTinXaDiChuoiCongKhaiKhongCanPhien(t *testing.T) {
 		if cb.goi != 0 {
 			t.Fatalf("%s: chuỗi cán bộ bị gọi", p)
 		}
+	}
+}
+
+// The chip route rides MauTinXa+"/" onto the public chain — no second outer-mux entry — and reaches
+// the categories handler, not the `{id}` detail (whose body would carry `title`, not `items`).
+func TestPublicNewsCategoriesOnPublicChain(t *testing.T) {
+	h, cb := ngoaiThu(t)
+	w := goiApi(h, http.MethodGet, svchttp.MauTinXa+"/categories?host=xa-a.vigov.vn", nguonMiniAppThu)
+	if w.Code != http.StatusOK {
+		t.Fatalf("categories trên host API dành riêng: mã = %d, muốn 200 — thân: %s", w.Code, w.Body.String())
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != `{"items":[{"id":"dm-a","name":"Y tế","order":0}]}` {
+		t.Fatalf("thân = %s", got)
+	}
+	if cb.goi != 0 {
+		t.Fatal("categories: chuỗi cán bộ bị gọi")
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != nguonMiniAppThu {
+		t.Fatalf("categories thiếu ACAO: %v", w.Header())
 	}
 }
 
