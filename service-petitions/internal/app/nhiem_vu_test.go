@@ -913,29 +913,132 @@ func TestReopen_OnlyToInProgress(t *testing.T) {
 	}
 }
 
-// TestDirectCompletion_NeedsApprovalAndTree: the new `dang-thuc-hien` → `hoan-thanh` edge skips review
-// but NOT the key and NOT ADR 0037 decision 4 (user decision: every move into `hoan-thanh`).
-func TestDirectCompletion_NeedsApprovalAndTree(t *testing.T) {
-	k := khoNVMau() // dang-thuc-hien
+// --- ADR 0065 NV2: no reopening a sub-task under a finished parent (user decision 30/09/2026) --------
+
+// finishedChildFixture is a finished child NV20 under the root NV19, the root in `parentStatus`.
+func finishedChildFixture(parentStatus domain.TrangThaiNhiemVu) *khoNhiemVuGia {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(parentStatus)
+	if parentStatus == domain.HoanThanh {
+		k.nhiemVu[idNVGoc]["ngay_hoan_thanh"] = mocHoanThanhCu
+	}
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.HoanThanh)
+	k.nhiemVu[idNVCon]["ngay_hoan_thanh"] = mocHoanThanhCu
+	return k
+}
+
+// TestReopenChild_ParentCompletedRefused: the refusal names the parent, LOCKS it to decide, and
+// writes nothing.
+func TestReopenChild_ParentCompletedRefused(t *testing.T) {
+	k := finishedChildFixture(domain.HoanThanh)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	_, err := uc.DoiTrangThai(ctx, maNVCon,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: reopenReasonSample},
+		canBoThu(), true, true)
+	if !errors.Is(err, domain.ErrReopenParentCompleted) {
+		t.Fatalf("lỗi = %v, muốn ErrReopenParentCompleted", err)
+	}
+	if !strings.Contains(err.Error(), maNVGoc) {
+		t.Errorf("câu từ chối không nêu việc cha %s: %v", maNVGoc, err)
+	}
+	locked := false
+	for _, l := range k.cau("SELECT ma, trang_thai FROM nhiem_vu") {
+		if strings.Contains(l.sql, "FOR UPDATE") && l.args[1] == idNVGoc && l.trongGiaoDich {
+			locked = true
+		}
+	}
+	if !locked {
+		t.Error("không khoá dòng việc cha trong giao dịch — hoàn thành việc cha cùng lúc sẽ lọt kiểm cây")
+	}
+	khongGhiGi(t, k)
+}
+
+// TestReopenChild_ParentOpenAllowed: a parent still owing work does not block the child's reopen.
+func TestReopenChild_ParentOpenAllowed(t *testing.T) {
+	for _, st := range []domain.TrangThaiNhiemVu{domain.DangThucHien, domain.ChoDuyet, domain.TamDung} {
+		t.Run(string(st), func(t *testing.T) {
+			k := finishedChildFixture(st)
+			uc, ctx := dungGhiNhiemVu(t, k)
+			after, err := uc.DoiTrangThai(ctx, maNVCon,
+				YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: reopenReasonSample},
+				canBoThu(), true, true)
+			if err != nil {
+				t.Fatalf("mở lại việc con khi việc cha %s: %v", st, err)
+			}
+			if after.TrangThai != domain.DangThucHien || !after.NgayHoanThanh.IsZero() {
+				t.Errorf("sau = %s / %v", after.TrangThai, after.NgayHoanThanh)
+			}
+			delta, _ := vetKiemToan(t, k).args[7].([]byte)
+			if !strings.Contains(string(delta), `"mo_lai":true`) {
+				t.Errorf("delta thiếu mo_lai: %s", delta)
+			}
+			chiGhiTrongGiaoDich(t, k)
+		})
+	}
+}
+
+// TestReopenChild_OrderOfRefusals: the key first (a caller who may not reopen learns nothing about the
+// parent), then the parent (before asking for a reason for an act that cannot happen).
+func TestReopenChild_OrderOfRefusals(t *testing.T) {
+	k := finishedChildFixture(domain.HoanThanh)
+	uc, ctx := dungGhiNhiemVu(t, k)
+	_, err := uc.DoiTrangThai(ctx, maNVCon, YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)},
+		canBoThu(), false, true)
+	if !errors.Is(err, ErrReopenNeedsApproval) {
+		t.Fatalf("lỗi = %v, muốn ErrReopenNeedsApproval trước kiểm việc cha", err)
+	}
+	if k.coCau("SELECT ma, trang_thai FROM nhiem_vu") {
+		t.Error("đọc việc cha dù người gọi không có quyền mở lại")
+	}
+
+	k = finishedChildFixture(domain.HoanThanh)
+	uc, ctx = dungGhiNhiemVu(t, k)
+	_, err = uc.DoiTrangThai(ctx, maNVCon, YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)},
+		canBoThu(), true, true)
+	if !errors.Is(err, domain.ErrReopenParentCompleted) {
+		t.Fatalf("lỗi = %v, muốn ErrReopenParentCompleted trước lỗi thiếu lý do", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestReopenChild_ParentGoneFailsClosed: a parent pointer to no live row is refused, never read as
+// "the parent is not finished".
+func TestReopenChild_ParentGoneFailsClosed(t *testing.T) {
+	k := finishedChildFixture(domain.DangThucHien)
+	k.nhiemVu[idNVCon]["nhiem_vu_cha_id"] = "01JZZZZZZZZZZZZZZZZZZZZZZZ"
+	uc, ctx := dungGhiNhiemVu(t, k)
+	_, err := uc.DoiTrangThai(ctx, maNVCon,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: reopenReasonSample},
+		canBoThu(), true, true)
+	if !errors.Is(err, domain.ErrChaKhongTonTai) {
+		t.Fatalf("lỗi = %v, muốn ErrChaKhongTonTai", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestDirectCompletion_NoKeyButTree: the `dang-thuc-hien` → `hoan-thanh` edge skips review AND, since
+// ADR 0065 NV1 (30/09/2026), the key — but NOT ADR 0037 decision 4.
+//
+// ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026: this test pinned ErrKhongDuocDuyetHoanThanh on the direct path until
+// the user made review optional. The refusal without the key now lives only at `cho-duyet`
+// (TestHoanThanh_ThieuQuyenDuyetThiTuChoi).
+func TestDirectCompletion_NoKeyButTree(t *testing.T) {
+	// Without task.approve, a child still open: refused on the TREE, not on the key.
+	k := khoNVMau()
+	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
 	uc, ctx := dungGhiNhiemVu(t, k)
 	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false, true); !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
-		t.Fatalf("thiếu quyền duyệt: lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false, true); !errors.Is(err, domain.ErrConChuaXong) {
+		t.Fatalf("con chưa xong: lỗi = %v, muốn ErrConChuaXong", err)
 	}
 	khongGhiGi(t, k)
 
-	k = khoNVMau()
-	k.themCon(idNVCon, maNVCon, idNVGoc, domain.DangThucHien)
-	uc, ctx = dungGhiNhiemVu(t, k)
-	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true); !errors.Is(err, domain.ErrConChuaXong) {
-		t.Fatalf("con chưa xong: lỗi = %v, muốn ErrConChuaXong", err)
-	}
-
+	// Without task.approve, nothing in the way: completed, audited, in one transaction.
 	k = khoNVMau()
 	uc, ctx = dungGhiNhiemVu(t, k)
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), true, true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)}, canBoThu(), false, true)
 	if err != nil {
 		t.Fatalf("hoàn thành thẳng từ dang-thuc-hien: %v", err)
 	}

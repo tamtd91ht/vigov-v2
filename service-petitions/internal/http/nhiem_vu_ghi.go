@@ -682,9 +682,11 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 
 	// --- 403: about the person ------------------------------------------------------------------
 	case errors.Is(err, app.ErrKhongDuocDuyetHoanThanh):
+		// Since ADR 0065 NV1 this fires only from `cho-duyet` — the sentence says so, because the same
+		// officer may complete a task straight from `dang-thuc-hien`.
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
-			"Hoàn thành nhiệm vụ cần quyền duyệt hoàn thành. Tài khoản của bạn mới có quyền "+
-				"cập nhật tiến độ.", "")
+			"Nhiệm vụ đã gửi chờ duyệt chỉ người có quyền duyệt hoàn thành mới duyệt được. Tài khoản "+
+				"của bạn chưa có quyền này.", "")
 	case errors.Is(err, app.ErrKhongDuocTraLai):
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Trả lại nhiệm vụ đang chờ duyệt để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của "+
@@ -720,6 +722,11 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		// because "you may not" without "what is in the way" sends an officer hunting.
 		httpx.WriteError(w, http.StatusConflict, "task_tree",
 			cauTuChoi(err, domain.ErrConChuaXoa, domain.ErrConChuaXong), "")
+	case errors.Is(err, domain.ErrReopenParentCompleted):
+		// ADR 0065 NV2. ITS OWN CODE, not `task_tree`: the client can offer the one act that unblocks
+		// it — open the parent named in the sentence and reopen that first.
+		httpx.WriteError(w, http.StatusConflict, "parent_completed",
+			cauTuChoi(err, domain.ErrReopenParentCompleted), "")
 	case errors.Is(err, domain.ErrChuTrinhCayNhiemVu), errors.Is(err, domain.ErrChaKhongTonTai),
 		errors.Is(err, domain.ErrCayNhiemVuQuaLon):
 		httpx.WriteError(w, http.StatusConflict, "task_tree", cauTuChoi(err,

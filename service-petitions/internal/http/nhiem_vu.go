@@ -102,10 +102,12 @@ type nhiemVuRa struct {
 	// the order a picker shows them. vigov-require 56cfc3b's `allowed_transitions`: the screen draws
 	// these and keeps no second copy of the lifecycle. ADDED 28/09/2026, additive to a published reply.
 	//
-	// ⚠ IT IS THE LIFECYCLE'S SHAPE, THE SAME FOR EVERY CALLER. Moving INTO `hoan-thanh`, reopening
-	// it, and returning `cho-duyet` → `dang-thuc-hien` are listed for everybody and answer 403 without
-	// `task.approve`; completing a parent with unfinished sub-tasks is listed and answers 409. Both are
-	// decided on the row under the lock, never from this list. `chuyen-tiep` is never listed —
+	// ⚠ IT IS THE LIFECYCLE'S SHAPE, THE SAME FOR EVERY CALLER. Signing off `cho-duyet` →
+	// `hoan-thanh`, reopening, and returning `cho-duyet` → `dang-thuc-hien` are listed for everybody and
+	// answer 403 without `task.approve`; the direct `dang-thuc-hien` → `hoan-thanh` needs no key since
+	// ADR 0065 NV1, so the assignee's `hoan-thanh` choice is a real one. Completing a parent with
+	// unfinished sub-tasks, or reopening a child under a finished parent, is listed and answers 409.
+	// All are decided on the row under the lock, never from this list. `chuyen-tiep` is never listed —
 	// forwarding is POST …/assignment.
 	//
 	// ALWAYS AN ARRAY, never null: `[]` is "no move from here" (a status no map knows).

@@ -101,6 +101,10 @@ type KhoNhiemVuGhi interface {
 	// The two tree reads. ONE LEVEL EACH, and the recursion is this layer's — see duyetCaCay.
 	ConTrucTiep(ctx context.Context, tx *store.ScopedTx, chaID string) ([]domain.NhiemVuTomTat, error)
 	ChaCua(ctx context.Context, tx *store.ScopedTx, id string) (string, error)
+	// ParentForUpdate locks the parent row and answers its number and status — the reopen check of
+	// ADR 0065 NV2. ErrNhiemVuKhongTonTai when the parent is not live.
+	ParentForUpdate(ctx context.Context, tx *store.ScopedTx, parentID string) (
+		string, domain.TrangThaiNhiemVu, error)
 
 	SoLonNhatDaCap(ctx context.Context, tx *store.ScopedTx) (int, error)
 	MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error)
@@ -210,8 +214,10 @@ const (
 // bypass by adding a second caller.
 type QuyenDuyetHoanThanh bool
 
-// ErrKhongDuocDuyetHoanThanh refuses the final step to somebody who may update a task but may not
-// declare it finished.
+// ErrKhongDuocDuyetHoanThanh refuses the sign-off `cho-duyet` → `hoan-thanh` to somebody without
+// `task.approve`. SINCE 30/09/2026 (ADR 0065 NV1) ONLY FROM REVIEW: the direct `dang-thuc-hien` →
+// `hoan-thanh` needs no key (domain.NeedsApproval), but work already sent up for review waits for a
+// reviewer.
 var ErrKhongDuocDuyetHoanThanh = errors.New(
 	"nhiem_vu: hoàn thành nhiệm vụ cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
 
@@ -479,10 +485,13 @@ func (uc *GhiNhiemVu) attachReplyTreeFacts(ctx context.Context, tx *store.Scoped
 // answers 403; the unfinished children are about the RECORD and answer 409. Both are checked before
 // anything is written, so a refused completion leaves no row, no timeline entry and no audit
 // entry — the transaction rolls back with nothing in it.
+//
+// THE PERMISSION IS ASKED ONLY WHEN domain.NeedsApproval SAYS SO — i.e. from `cho-duyet` (ADR 0065
+// NV1). The tree is asked on EVERY completion: the direct path skips review, never decision 4.
 func (uc *GhiNhiemVu) duocHoanThanh(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu,
 	duyet QuyenDuyetHoanThanh) error {
 
-	if !duyet {
+	if domain.NeedsApproval(n.TrangThai, domain.HoanThanh) && !bool(duyet) {
 		return ErrKhongDuocDuyetHoanThanh
 	}
 	con, err := uc.duyetCaCay(ctx, tx, n.ID)
@@ -1336,13 +1345,13 @@ type YeuCauDoiTrangThai struct {
 	GhiChu string
 }
 
-// DoiTrangThai moves the task. Route permission: `task.update`; every step INTO `hoan-thanh`
-// additionally needs `task.approve` and an entirely finished sub-tree; the return from `cho-duyet`
-// to `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason; the REOPEN
-// `hoan-thanh` → `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason (P12),
-// clears `ngay_hoan_thanh`, and
-// keeps the cleared instant in the timeline row and the audit entry. domain.NeedsApproval names the
-// three.
+// DoiTrangThai moves the task. Every step INTO `hoan-thanh` needs an entirely finished sub-tree; the
+// sign-off FROM `cho-duyet` additionally needs `task.approve`, the direct step from `dang-thuc-hien`
+// does not (ADR 0065 NV1, 30/09/2026); the return from `cho-duyet` to `dang-thuc-hien` additionally
+// needs `task.approve` and a non-empty reason; the REOPEN `hoan-thanh` → `dang-thuc-hien`
+// additionally needs `task.approve`, a parent that is not `hoan-thanh` (ADR 0065 NV2) and a non-empty
+// reason (P12), clears `ngay_hoan_thanh`, and keeps the cleared instant in the timeline row and the
+// audit entry. domain.NeedsApproval names the three moves that need the key.
 //
 // # WHO MAY MOVE AT ALL — vigov-require a37ec96 (user decision 28/09/2026)
 //
@@ -1356,8 +1365,9 @@ type YeuCauDoiTrangThai struct {
 // # THEN THE THREE CHECKS, IN THIS ORDER, INSIDE THE TRANSACTION
 //
 //  1. THE SHAPE — is this move in the lifecycle map (require 52ec9b5's table, domain/nhiem_vu.go).
-//  2. THE PERMISSION for the final step (`task.approve`) — ON TOP of the holder rule: the assignee
-//     without `task.approve` still cannot complete, reopen or return.
+//  2. THE PERMISSION (`task.approve`) where domain.NeedsApproval asks for it — ON TOP of the holder
+//     rule: the assignee without `task.approve` may complete straight from `dang-thuc-hien`, but
+//     cannot sign off work at `cho-duyet`, return it, or reopen.
 //  3. ADR 0037 DECISION 4 — the whole sub-tree, recursively.
 //
 // The return to `dang-thuc-hien` runs its own pair after the shape check: `task.approve`, then the
@@ -1425,6 +1435,25 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			// reopen is told so, not asked for a better sentence (P12, user decision 28/09/2026).
 			if !bool(duyet) {
 				return ErrReopenNeedsApproval
+			}
+			// ADR 0065 NV2: NO REOPENING A SUB-TASK UNDER A FINISHED PARENT — see
+			// domain.ErrReopenParentCompleted for why refuse rather than reopen both. The parent row is
+			// LOCKED (store ParentForUpdate), which is what keeps a completion of the parent running at
+			// the same instant from passing its own tree check against this child's old status.
+			// Before the reason: a caller told "reopen the parent first" should not first be asked for
+			// a better sentence for an act that cannot happen.
+			if truoc.NhiemVuChaID != "" {
+				parentCode, parentStatus, err := uc.kho.ParentForUpdate(ctx, tx, truoc.NhiemVuChaID)
+				if errors.Is(err, petstore.ErrNhiemVuKhongTonTai) {
+					// FAIL CLOSED: a parent pointer to no live task cannot be read as "not finished".
+					return domain.ErrChaKhongTonTai
+				}
+				if err != nil {
+					return err
+				}
+				if parentStatus == domain.HoanThanh {
+					return domain.ReopenParentCompletedError(parentCode)
+				}
 			}
 			// THE REASON IS MANDATORY, like the return's. Decided on the locked row, because whether
 			// this is a reopen depends on the CURRENT status: `dang-thuc-hien` is also an ordinary

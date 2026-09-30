@@ -112,7 +112,7 @@ func TestLifecycleIsRequireTable(t *testing.T) {
 func TestNewEdgesOfRequire(t *testing.T) {
 	for _, c := range []struct{ from, to TrangThaiNhiemVu }{
 		{MoiGiao, DangThucHien},    // skip acknowledgement
-		{DangThucHien, HoanThanh},  // skip review (still needs task.approve)
+		{DangThucHien, HoanThanh},  // skip review (no key since ADR 0065 NV1)
 		{HoanThanh, DangThucHien},  // reopen (needs task.approve)
 		{ChuyenTiep, DaTiepNhanNV}, // legacy forwarded row moves on
 		{ChuyenTiep, DangThucHien}, // legacy forwarded row moves on
@@ -183,14 +183,16 @@ func TestAllowedTransitionsIsTheMap(t *testing.T) {
 }
 
 // TestNeedsApproval names the three moves that need `task.approve` and pins that the ordinary steps
-// do not (user decision 28/09/2026, plus the owner's return decision of 27/09).
+// do not (user decision 28/09/2026, the owner's return decision of 27/09, and ADR 0065 NV1 of 30/09).
 func TestNeedsApproval(t *testing.T) {
 	for _, c := range []struct {
 		from, to TrangThaiNhiemVu
 		want     bool
 	}{
 		{ChoDuyet, HoanThanh, true},
-		{DangThucHien, HoanThanh, true}, // the new direct completion is NOT an unguarded shortcut
+		// ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1): review is optional, the direct completion needs
+		// no key. Work already AT cho-duyet still waits for a holder of task.approve (row above).
+		{DangThucHien, HoanThanh, false},
 		{HoanThanh, DangThucHien, true}, // reopen
 		{ChoDuyet, DangThucHien, true},  // return
 		{MoiGiao, DangThucHien, false},

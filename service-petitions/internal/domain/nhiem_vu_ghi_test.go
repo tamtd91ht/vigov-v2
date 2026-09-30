@@ -80,6 +80,21 @@ func TestLoiConChuaXongNoiRoConNao(t *testing.T) {
 	}
 }
 
+// TestReopenParentCompletedErrorNamesParent (ADR 0065 NV2): the refusal names the parent to reopen
+// first, and is not an input error (it must answer 409, never 400).
+func TestReopenParentCompletedErrorNamesParent(t *testing.T) {
+	err := ReopenParentCompletedError("NV19")
+	if !errors.Is(err, ErrReopenParentCompleted) {
+		t.Fatalf("lỗi không bọc ErrReopenParentCompleted: %v", err)
+	}
+	if !strings.Contains(err.Error(), "NV19") || !strings.Contains(err.Error(), "mở lại việc cha trước") {
+		t.Errorf("câu từ chối không nêu việc cha phải mở trước: %q", err.Error())
+	}
+	if LaLoiDauVaoNhiemVu(err) {
+		t.Error("ErrReopenParentCompleted nằm trong lỗi đầu vào — sẽ trả 400 thay vì 409")
+	}
+}
+
 // TestLoiConChuaXongChanDoDaiCau keeps one refusal from becoming a page of register numbers while
 // still stating the exact count.
 func TestLoiConChuaXongChanDoDaiCau(t *testing.T) {

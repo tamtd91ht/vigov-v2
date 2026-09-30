@@ -455,9 +455,9 @@
       "id": "vong-doi-nhiem-vu-theo-adr-0065",
       "viec": "Dựng các thay đổi vòng đời Nhiệm vụ người dùng chốt 30/09 (ADR 0065)",
       "trang_thai": "chua_lam",
-      "bang_chung": "Chưa dựng. Hiện: chuỗi cứng domain/nhiem_vu.go:76-84; trigger khoá han_ban_dau và ma (migrations 0006_nhiem_vu.sql:155-168); hai cặp chủ trì/thực hiện rời.",
+      "bang_chung": "30/09/2026 NV1 + NV2 ĐÃ DỰNG (máy chủ): NeedsApproval nay chỉ đúng khi rời cho-duyet (domain/nhiem_vu.go:189) — người được giao hoàn thành thẳng từ dang-thuc-hien không cần task.approve, vẫn kiểm cây việc con (409 task_tree); ở cho-duyet vẫn cần task.approve cho duyệt và trả lại (lý do). Mở lại việc con khi việc cha hoan-thanh → 409 parent_completed (khoá dòng cha FOR UPDATE, NhiemVuStore.ParentForUpdate); cha không còn → 409 task_tree. Đếm Tổng quan không đổi (task_summary.go:45-47,77). go test -p 1 service-petitions xanh. || Chưa dựng. Hiện: chuỗi cứng domain/nhiem_vu.go:76-84; trigger khoá han_ban_dau và ma (migrations 0006_nhiem_vu.sql:155-168); hai cặp chủ trì/thực hiện rời.",
       "no_confirm": [],
-      "tiep_theo": "Cần: bảng chuyển cho nhảy bước (máy chủ trả allowed_transitions), lý do bắt buộc khi mở lại, sửa hạn thẳng (đổi trigger — chờ người dùng chốt giữ hạn gốc cho tỷ lệ đúng hạn), gộp chủ trì/thực hiện (migration — data-migration-builder), luật người đang giữ + POST nhật ký tay, hạn mặc định 17:00 +7 ngày ở web. Thứ tự: contract-designer → data-migration-builder → go-service-builder → admin-web-builder.",
+      "tiep_theo": "CÒN: NV3 khoá lại mã (migration), NV5 gộp chủ trì/thực hiện (migration) — data-migration-builder trước. Web: hiện nút Hoàn thành ở dang-thuc-hien cho người được giao, hiện câu 409 parent_completed. || Cần: bảng chuyển cho nhảy bước (máy chủ trả allowed_transitions), lý do bắt buộc khi mở lại, sửa hạn thẳng (đổi trigger — chờ người dùng chốt giữ hạn gốc cho tỷ lệ đúng hạn), gộp chủ trì/thực hiện (migration — data-migration-builder), luật người đang giữ + POST nhật ký tay, hạn mặc định 17:00 +7 ngày ở web. Thứ tự: contract-designer → data-migration-builder → go-service-builder → admin-web-builder.",
       "menu": "nhiem-vu"
     }
   ]

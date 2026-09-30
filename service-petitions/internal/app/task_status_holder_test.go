@@ -60,15 +60,55 @@ func TestStatus_TaskUpdateHolderMayMoveAnyTask(t *testing.T) {
 	}
 }
 
-// TestStatus_AssigneeWithoutApproveCannotComplete: the holder rule does not replace `task.approve` —
-// completing (even straight from dang-thuc-hien), reopening and returning still need it.
-func TestStatus_AssigneeWithoutApproveCannotComplete(t *testing.T) {
+// TestStatus_AssigneeWithoutApproveCompletesDirectly (ADR 0065 NV1, 30/09/2026): the assignee — no
+// `task.update`, no `task.approve` — finishes the work straight from dang-thuc-hien. The act writes
+// the status with `ngay_hoan_thanh`, one timeline row and one audit entry, all in the transaction.
+//
+// ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026: until the user made review optional this case was refused with
+// ErrKhongDuocDuyetHoanThanh.
+func TestStatus_AssigneeWithoutApproveCompletesDirectly(t *testing.T) {
+	k := khoNVMau() // dang-thuc-hien
+	uc, ctx := dungGhiNhiemVu(t, k)
+	sau, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)},
+		staffActor(maNguoiThucHien), false, false)
+	if err != nil {
+		t.Fatalf("người thực hiện hoàn thành thẳng: %v", err)
+	}
+	if sau.TrangThai != domain.HoanThanh || sau.NgayHoanThanh != mocThaoTacNV {
+		t.Errorf("sau = %s / %v", sau.TrangThai, sau.NgayHoanThanh)
+	}
+	if n := len(k.cau("INSERT INTO nhat_ky_nhiem_vu")); n != 1 {
+		t.Errorf("ghi %d dòng nhật ký, muốn 1", n)
+	}
+	vet := vetKiemToan(t, k)
+	if vet.args[1] != maNguoiThucHien || vet.args[4] != HanhViChuyenTrangNhiemVu {
+		t.Errorf("vết = %v / %v", vet.args[1], vet.args[4])
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestStatus_AssigneeWithoutApproveCannotLeaveReview: work already AT cho-duyet waits for a holder of
+// `task.approve` — neither sign-off nor return is the assignee's (ADR 0065, answer #2 of 30/09) — and
+// the reopen still needs the key too.
+func TestStatus_AssigneeWithoutApproveCannotLeaveReview(t *testing.T) {
 	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
 	uc, ctx := dungGhiNhiemVu(t, k)
 	_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)},
 		staffActor(maNguoiThucHien), false, false)
 	if !errors.Is(err, ErrKhongDuocDuyetHoanThanh) {
-		t.Fatalf("hoàn thành: lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
+		t.Fatalf("duyệt từ cho-duyet: lỗi = %v, muốn ErrKhongDuocDuyetHoanThanh", err)
+	}
+	khongGhiGi(t, k)
+
+	k = khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+	uc, ctx = dungGhiNhiemVu(t, k)
+	_, err = uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDoTraLaiThu},
+		staffActor(maNguoiThucHien), false, false)
+	if !errors.Is(err, ErrKhongDuocTraLai) {
+		t.Fatalf("trả lại: lỗi = %v, muốn ErrKhongDuocTraLai", err)
 	}
 	khongGhiGi(t, k)
 
@@ -80,6 +120,23 @@ func TestStatus_AssigneeWithoutApproveCannotComplete(t *testing.T) {
 		t.Fatalf("mở lại: lỗi = %v, muốn ErrReopenNeedsApproval", err)
 	}
 	khongGhiGi(t, k)
+}
+
+// TestStatus_ApproverSignsOffReview: a holder of `task.approve` (here without being the assignee, via
+// task.update) signs off work at cho-duyet.
+func TestStatus_ApproverSignsOffReview(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+	uc, ctx := dungGhiNhiemVu(t, k)
+	sau, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.HoanThanh)},
+		staffActor(outsiderCode), true, true)
+	if err != nil {
+		t.Fatalf("người duyệt duyệt hoàn thành: %v", err)
+	}
+	if sau.TrangThai != domain.HoanThanh {
+		t.Errorf("trạng thái sau = %s", sau.TrangThai)
+	}
+	chiGhiTrongGiaoDich(t, k)
 }
 
 // TestStatus_HolderCheckedBeforeShape: a caller who may not move the task is told so, not told which

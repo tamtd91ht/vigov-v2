@@ -1647,9 +1647,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// domain.CheckMayChangeStatus); refused with 403 `ErrStatusNeedsHolder`. This WIDENS the route to
 	// the assignee — deliberately; before, a specialist handed a task could not report on it at all.
 	//
-	// `task.approve` IS STILL ON TOP: every move into `hoan-thanh`, the reopen and the return from
-	// review need it (domain.NeedsApproval), consulted in the handler and decided in the use case —
-	// so the assignee without it can move the work along but cannot sign it off. NO KEY IS INVENTED:
+	// `task.approve` IS STILL ON TOP for three moves: the sign-off `cho-duyet` → `hoan-thanh`, the reopen
+	// and the return from review (domain.NeedsApproval), consulted in the handler and decided in the use
+	// case. SINCE 30/09/2026 (ADR 0065 NV1) review is optional: the assignee without the key may complete
+	// straight from `dang-thuc-hien`, but work already at `cho-duyet` waits for a reviewer. Every
+	// completion still needs the whole sub-tree finished (ADR 0037 decision 4), and a reopen of a
+	// sub-task under a finished parent answers 409 `parent_completed` (NV2). NO KEY IS INVENTED:
 	// `task.read`, `task.update` and `task.approve` are all seeded (0001_init.sql).
 	//
 	// THE SAME NARROWER KEY GUARDS ONE MORE MOVE: `cho-duyet` → `dang-thuc-hien`, "Trả lại để làm tiếp"
@@ -1669,7 +1672,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
 	// one step and the second request answers 409.
 	//
-	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt và lý do
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành
 	// @screen   02-nhiem-vu §6
 	// @request  doiTrangThaiVao
 	// @reply    200 nhiemVuRa

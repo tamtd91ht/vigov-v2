@@ -170,6 +170,37 @@ func (s *NhiemVuStore) ChaCua(ctx context.Context, tx *store.ScopedTx, id string
 	return cha.String, nil
 }
 
+// ParentForUpdate reads the register number and status of a task's PARENT, and LOCKS that row — the
+// reopen check of ADR 0065 NV2 (no reopening a sub-task under a finished parent).
+//
+// THE LOCK IS WHAT MAKES THE CHECK TRUE. Completing the parent locks the parent row first and then
+// reads the tree (app.duocHoanThanh); reopening the child takes the parent's lock too, so the two
+// acts serialise on one row: either the parent is completed first and the reopen sees `hoan-thanh`,
+// or the reopen commits first and the completion sees an unfinished child. Without the lock both
+// could pass their checks in the same instant and leave a finished parent over unfinished work.
+// LOCK ORDER child → parent, the same as a re-parent, and the completion locks no child — so this
+// adds no deadlock cycle.
+//
+// A PARENT THAT IS NOT LIVE answers ErrNhiemVuKhongTonTai. It cannot happen through the write path
+// (ADR 0037 decision 3 refuses deleting a parent with live children); the caller refuses on it
+// rather than reading "no parent" as "parent not finished" (fail closed).
+func (s *NhiemVuStore) ParentForUpdate(ctx context.Context, tx *store.ScopedTx, parentID string) (
+	string, domain.TrangThaiNhiemVu, error) {
+
+	const stmt = `SELECT ma, trang_thai FROM nhiem_vu
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`
+
+	var ma, tt string
+	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), parentID).Scan(&ma, &tt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrNhiemVuKhongTonTai
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("nhiem_vu: khoá nhiệm vụ cha: %w", err)
+	}
+	return ma, domain.TrangThaiNhiemVu(tt), nil
+}
+
 // --- minting the register number -------------------------------------------------------------------
 
 // SoLonNhatDaCap reads the highest number already issued in this commune's `NV…` series.

@@ -782,6 +782,7 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 		{"còn việc con chưa xong", domain.LoiConChuaXong([]string{"NV20"}), http.StatusConflict},
 		{"chu trình cây", domain.ErrChuTrinhCayNhiemVu, http.StatusConflict},
 		{"không có nhiệm vụ cha", domain.ErrChaKhongTonTai, http.StatusConflict},
+		{"mở lại việc con khi việc cha đã xong", domain.ReopenParentCompletedError("NV19"), http.StatusConflict},
 
 		{"mã đã dùng", petstore.ErrMaNhiemVuDaTonTai, http.StatusConflict},
 		{"đã chuyển trạng thái", petstore.ErrNhiemVuDaChuyenTrang, http.StatusConflict},
@@ -993,6 +994,9 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 			domain.ErrDeNghiDaQuyetDinh.Error()},
 		{"nhiệm vụ chưa có hạn", domain.ErrNhiemVuChuaCoHan, http.StatusConflict, "task_state",
 			domain.ErrNhiemVuChuaCoHan.Error()},
+		// ADR 0065 NV2: its own code, and the sentence names the parent to reopen first.
+		{"mở lại việc con khi việc cha đã xong", domain.ReopenParentCompletedError("NV19"),
+			http.StatusConflict, "parent_completed", "việc cha NV19 đã hoàn thành — mở lại việc cha trước"},
 		{"văn bản không thuộc nhiệm vụ", domain.ErrVanBanKhongThuocNhiemVu, http.StatusConflict,
 			"task_document", domain.ErrVanBanKhongThuocNhiemVu.Error()},
 		{"đổi nhóm văn bản", domain.ErrDoiNhomVanBan, http.StatusConflict, "task_document",

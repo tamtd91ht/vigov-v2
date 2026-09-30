@@ -70,10 +70,11 @@ const (
 //	                          moi-giao, da-tiep-nhan and dang-thuc-hien.
 //	chuyen-tiep AS A SOURCE   kept as require has it: legacy rows already there move on to
 //	                          da-tiep-nhan / dang-thuc-hien, so they are no longer dead ends.
-//	approval                  the map says only which moves EXIST. Every move INTO `hoan-thanh`, the
-//	                          reopen OUT of it, and the return cho-duyet → dang-thuc-hien (owner decision
-//	                          27/09/2026) additionally need `task.approve` — NeedsApproval, enforced in
-//	                          the write use case. Require's table has no such key.
+//	approval                  the map says only which moves EXIST. Both moves OUT of `cho-duyet`
+//	                          (sign-off and the return, owner decisions 27/09 and 30/09/2026) and the
+//	                          reopen OUT of `hoan-thanh` additionally need `task.approve` — NeedsApproval,
+//	                          enforced in the write use case. Require's table has no such key. The direct
+//	                          dang-thuc-hien → hoan-thanh does NOT (ADR 0065 NV1).
 //
 // # NO STATUS IS TERMINAL ANY MORE
 //
@@ -135,7 +136,8 @@ func (t TrangThaiNhiemVu) ChuyenSangDuoc(m TrangThaiNhiemVu) bool {
 //
 // ⚠ IT IS THE SHAPE, NOT THE CALLER'S RIGHTS AND NOT THE TREE. A move for which NeedsApproval is true
 // is listed for everybody and answers 403 to a caller without `task.approve`; completing a parent
-// with unfinished sub-tasks is listed and answers 409. Both are decided on the row under the lock.
+// with unfinished sub-tasks, or reopening a child whose parent is finished, is listed and answers 409.
+// All are decided on the row under the lock.
 //
 // A FRESH SLICE, never the map's own: a caller that appended to it would otherwise edit the
 // lifecycle for every later request. Never nil — an unknown status (a legacy value no map knows)
@@ -169,11 +171,23 @@ func IsReopen(tu, sang TrangThaiNhiemVu) bool {
 	return tu == HoanThanh && sang == DangThucHien
 }
 
-// NeedsApproval reports whether the move needs `task.approve` on top of `task.update`: every move
-// INTO `hoan-thanh`, the reopen out of it, and the return from review. ONE PREDICATE so the write
-// path and anything that later wants to reflect the caller's rights cannot disagree.
+// NeedsApproval reports whether the move needs `task.approve` on top of the holder rule: the two
+// moves OUT OF REVIEW (`cho-duyet` → `hoan-thanh` and the return `cho-duyet` → `dang-thuc-hien`) and
+// the reopen out of `hoan-thanh`. ONE PREDICATE so the write path and anything that later wants to
+// reflect the caller's rights cannot disagree.
+//
+// # THE DIRECT `dang-thuc-hien` → `hoan-thanh` NEEDS NO KEY (ADR 0065 NV1, user decision 30/09/2026)
+//
+// Review is OPTIONAL: the assignee may finish the work straight away. But work that WAS sent up for
+// review waits for a reviewer — whoever sent it asked for a verdict, and letting the same officer
+// sign it off would make the queue a leader reads a queue nobody has to wait in. So the key follows
+// the SOURCE `cho-duyet`, not the target `hoan-thanh`. The cost the user accepted: `ngay_hoan_thanh`,
+// the numerator of §11.3's on-time ratio, is now set by the person doing the work (ADR 0065 §Cái giá).
+//
+// ADR 0037 DECISION 4 IS UNTOUCHED: every move into `hoan-thanh`, with or without the key, still
+// needs the whole sub-tree finished.
 func NeedsApproval(tu, sang TrangThaiNhiemVu) bool {
-	return sang == HoanThanh || IsReopen(tu, sang) || LaTraLaiLamTiep(tu, sang)
+	return (tu == ChoDuyet && sang == HoanThanh) || IsReopen(tu, sang) || LaTraLaiLamTiep(tu, sang)
 }
 
 // LaTrangThaiChinh reports whether this is one of the five columns the Kanban board draws.

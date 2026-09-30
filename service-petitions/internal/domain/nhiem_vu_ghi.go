@@ -362,7 +362,24 @@ var (
 	// ErrChaKhongTonTai means the parent named on the request is not a live task of this commune.
 	ErrChaKhongTonTai = errors.New(
 		"nhiệm vụ: không tìm thấy nhiệm vụ cha trong sổ nhiệm vụ của xã")
+
+	// ErrReopenParentCompleted refuses reopening a sub-task whose parent is `hoan-thanh` (ADR 0065
+	// NV2, user decision 30/09/2026). ReopenParentCompletedError wraps it with the parent's number.
+	//
+	// WHY REFUSE RATHER THAN REOPEN THE PARENT TOO: ADR 0037 decision 4 lets a parent be finished only
+	// when its whole tree is. Reopening the child alone would leave a finished parent over unfinished
+	// work — §11.3 would count it as done while part of it is not — and reopening the parent silently
+	// would undo a sign-off nobody asked to undo, with no reason on its timeline. The officer reopens
+	// the parent first, as its own act, with its own reason and its own audit entry.
+	ErrReopenParentCompleted = errors.New(
+		"nhiệm vụ: không mở lại được việc con khi việc cha đã hoàn thành")
 )
+
+// ReopenParentCompletedError is NV2's refusal, and it names the parent the officer must reopen first.
+func ReopenParentCompletedError(parentCode string) error {
+	return kemChiTiet(ErrReopenParentCompleted,
+		"việc cha %s đã hoàn thành — mở lại việc cha trước rồi mới mở lại việc con", parentCode)
+}
 
 // LoiConChuaXoa is decision 3's refusal, and it says HOW MANY.
 //
