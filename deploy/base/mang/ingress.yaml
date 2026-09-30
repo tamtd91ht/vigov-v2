@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     176 tuyến của 6 dịch vụ — identity 60 · petitions 59 · finance 22 · comms 20 · documents 13 · reporting 2
+#     178 tuyến của 6 dịch vụ — identity 60 · petitions 59 · finance 24 · comms 20 · documents 13 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -82,10 +82,10 @@ spec:
                 name: documents
                 port: { name: rest }
     #
-    # finance — 9 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
-    #   /api/v1/budget-lines · /api/v1/budget-sheets · /api/v1/capital-plan-categories
-    #   /api/v1/disbursements · /api/v1/finance-audit-entries · /api/v1/finance-system-messages
-    #   /api/v1/investment-projects
+    # finance — 10 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
+    #   /api/v1/budget-lines · /api/v1/budget-period-closes · /api/v1/budget-sheets
+    #   /api/v1/capital-plan-categories · /api/v1/disbursements · /api/v1/finance-audit-entries
+    #   /api/v1/finance-system-messages · /api/v1/investment-projects
     - host: "finance.api.vigov.vn"
       http:
         paths:

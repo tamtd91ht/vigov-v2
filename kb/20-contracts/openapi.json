@@ -1246,6 +1246,327 @@
         }
       }
     },
+    "/api/v1/budget-period-closes": {
+      "get": {
+        "summary": "Lịch sử chốt kỳ ngân sách của một năm: các lần chốt tháng, chốt cả năm, đang hiệu lực hay đã mở chốt",
+        "operationId": "finance_get_budget_period_closes",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "9604db83ba23",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetPeriodClosesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Chốt kỳ ngân sách theo tháng hoặc cả năm — sau khi chốt không thêm, gỡ đợt thu chi của kỳ",
+        "operationId": "finance_post_budget_period_closes",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "df8ab1449c0b",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.budgetPeriodCloseIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetPeriodCloseOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-period-closes/{code}/reopening": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Mở chốt một lần chốt kỳ ngân sách, kèm lý do bắt buộc — ghi một lần, không xoá lần chốt",
+        "operationId": "finance_post_budget_period_closes_by_code_reopening",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "dc972835a13f",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.budgetPeriodReopeningIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.budgetPeriodCloseOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/budget-sheets": {
       "get": {
         "summary": "Bảng thu hoặc chi của một năm ngân sách: cột, cây khoản mục, số liệu và ô tóm tắt",
@@ -22950,6 +23271,33 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_starts_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_ends_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_place": {
+            "type": "string"
+          },
+          "video_url": {
+            "type": "string"
           }
         },
         "required": [
@@ -23185,6 +23533,30 @@
               "boolean",
               "null"
             ]
+          },
+          "event_starts_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_ends_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_place": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "video_url": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "additionalProperties": false
@@ -23264,6 +23636,18 @@
             "type": "string"
           },
           "image_url": {
+            "type": "string"
+          },
+          "event_starts_at": {
+            "type": "string"
+          },
+          "event_ends_at": {
+            "type": "string"
+          },
+          "event_place": {
+            "type": "string"
+          },
+          "video_url": {
             "type": "string"
           },
           "publish": {
@@ -23373,6 +23757,33 @@
               "string",
               "null"
             ]
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_starts_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_ends_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "event_place": {
+            "type": "string"
+          },
+          "video_url": {
+            "type": "string"
           }
         },
         "required": [
@@ -24332,6 +24743,115 @@
         ],
         "additionalProperties": false
       },
+      "finance.budgetPeriodCloseIn": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetPeriodCloseOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "month": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "closed_at": {
+            "type": "string",
+            "description": "RFC 3339; absent on the 201 of a create"
+          },
+          "closed_by": {
+            "type": "string",
+            "description": "staff business code"
+          },
+          "reopened_at": {
+            "type": "string",
+            "description": "RFC 3339"
+          },
+          "reopened_by": {
+            "type": "string",
+            "description": "staff business code"
+          },
+          "reopen_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "active",
+          "closed_by",
+          "code",
+          "id",
+          "month",
+          "revision",
+          "scope",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetPeriodClosesOut": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "closes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.budgetPeriodCloseOut"
+            }
+          }
+        },
+        "required": [
+          "closes",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.budgetPeriodReopeningIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "required, trimmed, ≤500 characters"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "finance.catalogueImportCreatedOut": {
         "type": "object",
         "properties": {
@@ -24828,6 +25348,9 @@
             "type": "string",
             "description": "RFC 3339; absent on the 201 of a create"
           },
+          "adjustment_reason": {
+            "type": "string"
+          },
           "values": {
             "type": "object",
             "additionalProperties": {
@@ -25056,6 +25579,12 @@
               ],
               "format": "int64"
             }
+          },
+          "adjustment_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

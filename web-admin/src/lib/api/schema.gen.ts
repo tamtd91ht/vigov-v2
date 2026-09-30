@@ -189,6 +189,11 @@ export type comms_noiDungRa = {
   "author_code": string;
   "created_at": string;
   "updated_at": string;
+  "published_at"?: string | null;
+  "event_starts_at"?: string | null;
+  "event_ends_at"?: string | null;
+  "event_place"?: string;
+  "video_url"?: string;
 };
 
 export type comms_notificationOut = {
@@ -241,6 +246,10 @@ export type comms_suaNoiDungVao = {
   "body"?: string | null;
   "image_url"?: string | null;
   "publish"?: boolean | null;
+  "event_starts_at"?: string | null;
+  "event_ends_at"?: string | null;
+  "event_place"?: string | null;
+  "video_url"?: string | null;
 };
 
 export type comms_themDanhMucVao = {
@@ -266,6 +275,10 @@ export type comms_themNoiDungVao = {
   "summary"?: string;
   "body"?: string;
   "image_url"?: string;
+  "event_starts_at"?: string;
+  "event_ends_at"?: string;
+  "event_place"?: string;
+  "video_url"?: string;
   "publish"?: boolean;
 };
 
@@ -295,6 +308,11 @@ export type comms_tinXaRa = {
   "source"?: string;
   "source_url"?: string;
   "body"?: string | null;
+  "published_at"?: string | null;
+  "event_starts_at"?: string | null;
+  "event_ends_at"?: string | null;
+  "event_place"?: string;
+  "video_url"?: string;
 };
 
 export type comms_unreadCountOut = {
@@ -568,6 +586,40 @@ export type finance_bangRa = {
   "loaded_at"?: string;
 };
 
+export type finance_budgetPeriodCloseIn = {
+  "year": number;
+  "month"?: number | null;
+};
+
+export type finance_budgetPeriodCloseOut = {
+  "id": string;
+  "code": string;
+  "year": number;
+  "month": number | null;
+  "scope": string;
+  "revision": number;
+  "active": boolean;
+  /** RFC 3339; absent on the 201 of a create */
+  "closed_at"?: string;
+  /** staff business code */
+  "closed_by": string;
+  /** RFC 3339 */
+  "reopened_at"?: string;
+  /** staff business code */
+  "reopened_by"?: string;
+  "reopen_reason"?: string;
+};
+
+export type finance_budgetPeriodClosesOut = {
+  "year": number;
+  "closes": Array<finance_budgetPeriodCloseOut>;
+};
+
+export type finance_budgetPeriodReopeningIn = {
+  /** required, trimmed, ≤500 characters */
+  "reason": string;
+};
+
 export type finance_catalogueImportCreatedOut = {
   "created": Array<finance_catalogueImportEntryOut>;
 };
@@ -713,6 +765,7 @@ export type finance_dotRa = {
   "document_no"?: string;
   /** RFC 3339; absent on the 201 of a create */
   "recorded_at"?: string;
+  "adjustment_reason"?: string;
   "values": Record<string, number | null>;
   "unavailable_reasons"?: Record<string, string>;
 };
@@ -773,6 +826,7 @@ export type finance_ghiDotVao = {
   "counterparty"?: string;
   "document_no"?: string;
   "values": Record<string, number | null>;
+  "adjustment_reason"?: string | null;
 };
 
 export type finance_goChungTuVao = {
@@ -2847,6 +2901,67 @@ export type finance_post_budget_lines_by_id_headline = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/budget-period-closes — Lịch sử chốt kỳ ngân sách của một năm: các lần chốt tháng, chốt cả năm, đang hiệu lực hay đã mở chốt */
+export type finance_get_budget_period_closes = {
+  duongDan: "/api/v1/budget-period-closes";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_budgetPeriodClosesOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-period-closes — Chốt kỳ ngân sách theo tháng hoặc cả năm — sau khi chốt không thêm, gỡ đợt thu chi của kỳ */
+export type finance_post_budget_period_closes = {
+  duongDan: "/api/v1/budget-period-closes";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_budgetPeriodCloseIn;
+  phanHoi: {
+    201: finance_budgetPeriodCloseOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-period-closes/{code}/reopening — Mở chốt một lần chốt kỳ ngân sách, kèm lý do bắt buộc — ghi một lần, không xoá lần chốt */
+export type finance_post_budget_period_closes_by_code_reopening = {
+  duongDan: "/api/v1/budget-period-closes/{code}/reopening";
+  phuongThuc: "POST";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: finance_budgetPeriodReopeningIn;
+  phanHoi: {
+    200: finance_budgetPeriodCloseOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
