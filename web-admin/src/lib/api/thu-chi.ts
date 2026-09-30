@@ -163,6 +163,10 @@ export function taoBang(
       type: c.type,
       formula: c.formula,
       role: c.role,
+      // Hai toán hạng của cột `%`, bằng VỊ TRÍ trong chính mảng này. Quên chép chúng ở đây thì mọi
+      // bảng có cột `%` bị 400 "phải chỉ rõ cả cột tử số và cột mẫu số" — dù biểu mẫu đã chọn đủ.
+      numerator_index: c.numerator_index,
+      denominator_index: c.denominator_index,
     })),
   };
 

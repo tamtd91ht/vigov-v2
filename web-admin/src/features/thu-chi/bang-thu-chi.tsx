@@ -49,6 +49,7 @@ import {
   dungCay,
   dungGiaSuaDong,
   GHI_CHU_CHENH_LECH,
+  isUnresolvedPercentColumn,
   lyDoKhongTinh,
   moiDongCoCon,
   NHAN_CHENH_LECH,
@@ -66,6 +67,7 @@ import {
   NHAN_SUA_TEN,
   O_KHONG_TINH_DUOC,
   O_TRONG,
+  percentCell,
   phangCay,
   PHAN_CHUA_DUNG,
   suaDuocOSo,
@@ -630,6 +632,15 @@ export function BangDayDu({
               {duLieu.columns.map((c) => (
                 <th key={c.id} scope="col">
                   {c.name}
+                  {/* Chú thích công thức của cột `%` — chữ HIỆN RÕ chứ không chỉ `title`, vì màn
+                      cảm ứng không rê chuột được. Chỉ là chữ: tỷ lệ tính từ hai toán hạng, không
+                      từ chuỗi này. */}
+                  {c.type === "phan_tram" && (c.formula ?? "").trim() !== "" && (
+                    <>
+                      <br />
+                      <span className="ghi-chu">{c.formula}</span>
+                    </>
+                  )}
                 </th>
               ))}
               <th scope="col">Cách tính</th>
@@ -680,7 +691,34 @@ export function BangDayDu({
         </table>
       </div>
       <DanhSachKhongTinh tieuDe="Ô không tính được con số" o={oKhongTinhCuaCay(duLieu)} />
+      <UnresolvedPercentColumns columns={duLieu.columns} />
     </>
+  );
+}
+
+/**
+ * Cột `%` cũ mà máy chủ chưa rõ tử số / mẫu số — nói MỘT LẦN ở mức cột, hiện rõ dưới bảng.
+ *
+ * Mỗi ô của cột ấy đã mang câu của máy chủ, nhưng hàng chục ô cùng một câu không nói ra điều duy
+ * nhất cán bộ cần biết: lỗi nằm ở CỘT, không ở số liệu của dòng nào, và gõ lại số không sửa được.
+ */
+function UnresolvedPercentColumns({ columns }: { columns: readonly finance_cotRa[] }) {
+  const unresolved = columns.filter(isUnresolvedPercentColumn);
+  if (unresolved.length === 0) return null;
+  return (
+    <div className="thong-bao-loi">
+      <p>Cột phần trăm chưa tính được tỷ lệ ({unresolved.length})</p>
+      <ul>
+        {unresolved.map((c) => (
+          <li key={c.id}>
+            <strong>{c.name}</strong>: cột lập trước khi hệ thống lưu rõ cột tử số và cột mẫu số, và
+            công thức cũ{(c.formula ?? "").trim() === "" ? "" : ` “${c.formula}”`} không xác định
+            chắc chắn được hai cột ấy — tỷ lệ trên từng dòng không tính được. Hệ thống không đoán
+            từ công thức.
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -693,6 +731,10 @@ function oKhongTinhCuaCay(duLieu: finance_bangDayDuRa): { khoa: string; noi: str
   const ra: { khoa: string; noi: string; lyDo: string }[] = [];
   for (const d of duLieu.lines) {
     for (const c of duLieu.columns) {
+      // CHỈ Ô TIỀN. Ô `%` không tính được là chuyện thường (mẫu số trống ở một dòng chưa khai) và
+      // mang câu ngay trong ô; đưa chúng vào đây là chôn một tổng tràn số — thứ phải sửa — dưới hàng
+      // chục dòng "ô mẫu số đang trống". Cột `%` hỏng ở mức cột có khối riêng bên dưới.
+      if (c.type !== "so") continue;
       const lyDo = lyDoKhongTinh(d.unavailable_reasons?.[c.id]);
       if (lyDo === null) continue;
       const ten = d.no === "" ? d.name : `${d.no}. ${d.name}`;
@@ -867,22 +909,26 @@ export function DongKhoanMuc({
         </span>
       </td>
 
-      {cot.map((c) =>
-        c.type === "so" ? (
+      {cot.map((c) => {
+        if (c.type === "so") {
+          return (
+            <td key={c.id}>
+              <OTien
+                chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
+                lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
+              />
+            </td>
+          );
+        }
+        // Cột phần trăm: tỷ lệ MÁY CHỦ tính cho dòng này (`percent_basis_points`), không chia lại ở
+        // đây. Không có tỷ lệ thì máy chủ gửi câu lý do, và ô vẽ đúng dấu "Không tính được".
+        const cell = percentCell(d, c.id);
+        return (
           <td key={c.id}>
-            <OTien
-              chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
-              lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
-            />
+            <OTien chu={cell.text} lyDo={cell.reason} />
           </td>
-        ) : (
-          // Cột phần trăm: xem `PHAN_CHUA_DUNG`. Công thức là chuỗi máy chủ không diễn giải, và
-          // đoán ánh xạ `col_N` sang mã cột là in một tỷ lệ sai trông y hệt một tỷ lệ đúng.
-          <td key={c.id} className="nhan-trong" title={`Công thức của bảng: ${c.formula ?? ""}`}>
-            {O_TRONG}
-          </td>
-        ),
-      )}
+        );
+      })}
 
       <td className="nhan-trong">
         {coGhi && chonDuocCachTinh(d.method, hien.coCon) ? (

@@ -150,82 +150,7 @@ export function LapBang({
         `Thu đạt dự toán` và `Chi đạt dự toán` trống suốt năm.
       </p>
 
-      {cot.map((c, i) => (
-        <fieldset key={i}>
-          <legend>Cột {i + 1}</legend>
-          <p>
-            <label htmlFor={`cot-ten-${i}`}>Tên cột</label>{" "}
-            <input
-              id={`cot-ten-${i}`}
-              className="o-nhap"
-              type="text"
-              required
-              maxLength={200}
-              value={c.name}
-              onChange={(e) => datCot(doiCot(cot, i, { name: e.target.value }))}
-            />
-          </p>
-          <p>
-            <label htmlFor={`cot-kieu-${i}`}>Kiểu cột</label>{" "}
-            <select
-              id={`cot-kieu-${i}`}
-              value={c.type}
-              onChange={(e) =>
-                datCot(
-                  doiCot(cot, i, {
-                    type: e.target.value,
-                    // Đổi kiểu thì bỏ trường của kiểu cũ: một cột `so` còn `formula` sót lại là 400.
-                    formula: e.target.value === "phan_tram" ? (c.formula ?? "") : undefined,
-                    role: e.target.value === "so" ? c.role : undefined,
-                  }),
-                )
-              }
-            >
-              <option value="so">Cột số</option>
-              <option value="phan_tram">Cột phần trăm</option>
-            </select>
-          </p>
-
-          {c.type === "so" ? (
-            <p>
-              <label htmlFor={`cot-vaitro-${i}`}>Vai trò trong chỉ số</label>{" "}
-              <select
-                id={`cot-vaitro-${i}`}
-                value={c.role ?? ""}
-                onChange={(e) => datCot(doiCot(cot, i, { role: e.target.value }))}
-              >
-                <option value="">Cột thường</option>
-                {vaiTroChoLoai(loai).map((v) => (
-                  <option key={v.ma} value={v.ma}>
-                    {v.nhan}
-                  </option>
-                ))}
-              </select>
-            </p>
-          ) : (
-            <p>
-              <label htmlFor={`cot-congthuc-${i}`}>Công thức (bắt buộc với cột phần trăm)</label>{" "}
-              <input
-                id={`cot-congthuc-${i}`}
-                className="o-nhap"
-                type="text"
-                required
-                maxLength={200}
-                value={c.formula ?? ""}
-                onChange={(e) => datCot(doiCot(cot, i, { formula: e.target.value }))}
-              />
-            </p>
-          )}
-
-          <button
-            type="button"
-            className="nut-phu"
-            onClick={() => datCot(cot.filter((_, j) => j !== i))}
-          >
-            Bỏ cột {i + 1}
-          </button>
-        </fieldset>
-      ))}
+      <ColumnFieldsets kind={loai} columns={cot} onChange={datCot} />
 
       <p>
         <button
@@ -261,6 +186,100 @@ export function LapBang({
   );
 }
 
+/**
+ * Các ô khai báo từng cột của biểu mẫu lập bảng. Tách khỏi `LapBang` để kiểm được bằng một lần dựng
+ * tĩnh: `LapBang` chỉ hiện biểu mẫu sau một lần bấm, và bộ kiểm không có DOM để bấm.
+ */
+export function ColumnFieldsets({
+  kind,
+  columns,
+  onChange,
+}: {
+  kind: LoaiBang;
+  columns: readonly finance_cotVao[];
+  onChange: (next: readonly finance_cotVao[]) => void;
+}) {
+  return (
+    <>
+      {columns.map((c, i) => (
+        <fieldset key={i}>
+          <legend>Cột {i + 1}</legend>
+          <p>
+            <label htmlFor={`cot-ten-${i}`}>Tên cột</label>{" "}
+            <input
+              id={`cot-ten-${i}`}
+              className="o-nhap"
+              type="text"
+              required
+              maxLength={200}
+              value={c.name}
+              onChange={(e) => onChange(doiCot(columns, i, { name: e.target.value }))}
+            />
+          </p>
+          <p>
+            <label htmlFor={`cot-kieu-${i}`}>Kiểu cột</label>{" "}
+            <select
+              id={`cot-kieu-${i}`}
+              value={c.type}
+              onChange={(e) => onChange(changeColumnType(columns, i, e.target.value))}
+            >
+              <option value="so">Cột số</option>
+              <option value="phan_tram">Cột phần trăm</option>
+            </select>
+          </p>
+
+          {c.type === "so" ? (
+            <p>
+              <label htmlFor={`cot-vaitro-${i}`}>Vai trò trong chỉ số</label>{" "}
+              <select
+                id={`cot-vaitro-${i}`}
+                value={c.role ?? ""}
+                onChange={(e) => onChange(doiCot(columns, i, { role: e.target.value }))}
+              >
+                <option value="">Cột thường</option>
+                {vaiTroChoLoai(kind).map((v) => (
+                  <option key={v.ma} value={v.ma}>
+                    {v.nhan}
+                  </option>
+                ))}
+              </select>
+            </p>
+          ) : (
+            <>
+              <OperandSelect
+                id={`cot-tuso-${i}`}
+                label="Tử số"
+                columns={columns}
+                value={c.numerator_index}
+                onChange={(v) => onChange(doiCot(columns, i, { numerator_index: v }))}
+              />
+              <OperandSelect
+                id={`cot-mauso-${i}`}
+                label="Mẫu số"
+                columns={columns}
+                value={c.denominator_index}
+                onChange={(v) => onChange(doiCot(columns, i, { denominator_index: v }))}
+              />
+              <p className="ghi-chu">
+                Tỷ lệ của từng dòng = Tử số / Mẫu số × 100, do hệ thống tính từ số liệu của chính
+                dòng đó. Mẫu số bằng 0 hoặc để trống thì ô hiện “Không tính được”.
+              </p>
+            </>
+          )}
+
+          <button
+            type="button"
+            className="nut-phu"
+            onClick={() => onChange(removeColumnAt(columns, i))}
+          >
+            Bỏ cột {i + 1}
+          </button>
+        </fieldset>
+      ))}
+    </>
+  );
+}
+
 /** Sửa một cột, trả về MẢNG MỚI. Sửa tại chỗ thì React không thấy gì đổi và bảng đứng yên. */
 function doiCot(
   cot: readonly finance_cotVao[],
@@ -268,6 +287,123 @@ function doiCot(
   sua: Partial<finance_cotVao>,
 ): readonly finance_cotVao[] {
   return cot.map((c, i) => (i === chiSo ? { ...c, ...sua } : c));
+}
+
+/**
+ * Ô chọn MỘT toán hạng của cột `%` — chỉ liệt kê cột SỐ của biểu mẫu, theo tên.
+ *
+ * GIÁ TRỊ LÀ VỊ TRÍ của cột trong mảng biểu mẫu đang giữ, và mảng ấy được gửi đi NGUYÊN THỨ TỰ
+ * (`dungThanTaoBang` không lọc, không sắp lại), nên vị trí ở đây là đúng `numerator_index` /
+ * `denominator_index` máy chủ đọc.
+ */
+function OperandSelect({
+  id,
+  label,
+  columns,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  columns: readonly finance_cotVao[];
+  value: number | null | undefined;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <p>
+      <label htmlFor={id}>{label}</label>{" "}
+      <select
+        id={id}
+        required
+        value={value === null || value === undefined ? "" : String(value)}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        <option value="">— Chọn cột số —</option>
+        {columns.map((c, j) =>
+          c.type === "so" ? (
+            <option key={j} value={String(j)}>
+              {c.name.trim() === "" ? `Cột ${j + 1}` : c.name}
+            </option>
+          ) : null,
+        )}
+      </select>
+    </p>
+  );
+}
+
+/**
+ * Bỏ cột thứ `index`, và DỜI mọi toán hạng trỏ ra sau nó.
+ *
+ * Toán hạng là VỊ TRÍ, nên bỏ một cột đứng trước làm mọi vị trí phía sau lùi một: không dời thì cột
+ * `%` lặng lẽ chia hai cột KHÁC hai cột cán bộ đã chọn — một tỷ lệ sai trông y hệt tỷ lệ đúng. Toán
+ * hạng trỏ ĐÚNG vào cột bị bỏ thì bị xoá trắng, để cán bộ phải chọn lại chứ không bị chọn thay.
+ */
+export function removeColumnAt(
+  columns: readonly finance_cotVao[],
+  index: number,
+): readonly finance_cotVao[] {
+  const shift = (v: number | null | undefined): number | null | undefined => {
+    if (v === null || v === undefined) return v;
+    if (v === index) return null;
+    return v > index ? v - 1 : v;
+  };
+  return columns
+    .filter((_, j) => j !== index)
+    .map((c) =>
+      c.type === "phan_tram"
+        ? { ...c, numerator_index: shift(c.numerator_index), denominator_index: shift(c.denominator_index) }
+        : c,
+    );
+}
+
+/**
+ * Đổi kiểu cột thứ `index`, bỏ trường của kiểu cũ: một cột `so` mang toán hạng, hay một cột `%` mang
+ * vai trò, là 400. Cột vừa thôi là cột số thì mọi cột `%` đang lấy nó làm toán hạng được xoá trắng
+ * toán hạng ấy — máy chủ từ chối lấy cột phần trăm làm tử số hay mẫu số.
+ */
+export function changeColumnType(
+  columns: readonly finance_cotVao[],
+  index: number,
+  type: string,
+): readonly finance_cotVao[] {
+  return columns.map((c, j) => {
+    if (j === index) {
+      return type === "phan_tram"
+        ? { name: c.name, order: c.order, type, numerator_index: null, denominator_index: null }
+        : { name: c.name, order: c.order, type, role: c.role };
+    }
+    if (type !== "so" && c.type === "phan_tram") {
+      return {
+        ...c,
+        numerator_index: c.numerator_index === index ? null : c.numerator_index,
+        denominator_index: c.denominator_index === index ? null : c.denominator_index,
+      };
+    }
+    return c;
+  });
+}
+
+/**
+ * Câu lỗi cho toán hạng của cột `%` thứ `index`, hoặc `null` khi đủ. CHỈ ĐỂ TIỆN cho cán bộ — máy
+ * chủ kiểm lại đúng ba điều này và trả 400 (`domain.AssignOperandsByIndex`, `checkOperandSet`).
+ */
+export function percentOperandError(
+  columns: readonly finance_cotVao[],
+  index: number,
+): string | null {
+  const c = columns[index];
+  if (c === undefined || c.type !== "phan_tram") return null;
+  const label = `Cột ${index + 1}${c.name.trim() === "" ? "" : ` (${c.name.trim()})`}`;
+  const n = c.numerator_index;
+  const d = c.denominator_index;
+  if (n === null || n === undefined || d === null || d === undefined) {
+    return `${label}: chọn cả cột tử số và cột mẫu số.`;
+  }
+  if (n === d) return `${label}: cột tử số và cột mẫu số phải là hai cột khác nhau.`;
+  if (columns[n]?.type !== "so" || columns[d]?.type !== "so") {
+    return `${label}: tử số và mẫu số phải là cột số, không lấy cột phần trăm.`;
+  }
+  return null;
 }
 
 /**
@@ -285,6 +421,10 @@ export function dungThanTaoBang(nhap: {
   cot: readonly finance_cotVao[];
 }): KetQuaDung<TaoBangVao> {
   if (!laMaDonVi(nhap.donVi)) return { ok: false, thongBao: "Chọn đơn vị tính của bảng." };
+  for (let i = 0; i < nhap.cot.length; i++) {
+    const error = percentOperandError(nhap.cot, i);
+    if (error !== null) return { ok: false, thongBao: error };
+  }
   const luyKe = nhap.luyKe.trim();
   return {
     ok: true,
@@ -296,14 +436,22 @@ export function dungThanTaoBang(nhap: {
       // Chuỗi rỗng KHÔNG được gửi: máy chủ phân giải `cumulative_to` theo khuôn YYYY-MM-DD và
       // một chuỗi rỗng đi vào đó là 400, ngay ở lần lập bảng đầu tiên của xã.
       cumulative_to: luyKe === "" ? undefined : luyKe,
+      // MẢNG GỬI ĐI CÙNG THỨ TỰ, CÙNG ĐỘ DÀI với mảng biểu mẫu — không lọc, không sắp lại. Toán hạng
+      // của cột `%` là VỊ TRÍ trong chính mảng này; một phép lọc chen vào đây làm mọi vị trí sau nó
+      // trỏ lệch một cột, và máy chủ không có cách nào biết cán bộ đã định chọn cột nào.
       columns: nhap.cot.map((c, i) => ({
         name: c.name,
         order: i + 1,
         type: c.type,
-        // Máy chủ đòi `formula` trên cột `phan_tram` và TỪ CHỐI nó trên cột `so`; `role` thì
-        // ngược lại (`KiemTraCot`, `ErrVaiTroTrenCotPhanTram`). Dựng đúng hình dạng ấy ở đây
-        // để cán bộ không phải học hai quy tắc của máy chủ qua hai lần 400.
-        formula: c.type === "phan_tram" ? c.formula : undefined,
+        // Máy chủ đòi hai toán hạng trên cột `phan_tram` và TỪ CHỐI chúng trên cột `so`; `role` thì
+        // ngược lại (`KiemTraCot`, `ErrVaiTroTrenCotPhanTram`). Dựng đúng hình dạng ấy ở đây để cán
+        // bộ không phải học các quy tắc của máy chủ qua từng lần 400.
+        //
+        // `formula` KHÔNG GỬI: máy chủ tự viết chú thích "<tên tử số> / <tên mẫu số> × 100" từ tên
+        // hai cột (`domain.PercentFormula`). Đặc tả không đòi xã gõ công thức (§4, §9), và một ô gõ
+        // tự do cạnh hai ô chọn là hai lời nói về cùng một phép chia — lệch nhau ngay lần gõ nhầm.
+        numerator_index: c.type === "phan_tram" ? c.numerator_index : undefined,
+        denominator_index: c.type === "phan_tram" ? c.denominator_index : undefined,
         role: c.type === "so" && c.role !== "" ? c.role : undefined,
       })),
     },

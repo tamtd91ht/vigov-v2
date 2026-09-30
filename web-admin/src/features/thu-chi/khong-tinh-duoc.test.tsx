@@ -35,8 +35,8 @@ const CAU_DA_LUU =
   "ngan_sach: số đang lưu vượt mức một con số ngân sách hiển thị chính xác được — gõ lại số đúng hoặc gỡ đợt ghi nhầm";
 
 const COT: finance_cotRa[] = [
-  { id: "C1", name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam" },
-  { id: "C2", name: "Chi ngân sách", order: 2, type: "so", role: "chi-ngan-sach" },
+  { id: "C1", name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam", numerator_column_id: null, denominator_column_id: null },
+  { id: "C2", name: "Chi ngân sách", order: 2, type: "so", role: "chi-ngan-sach", numerator_column_id: null, denominator_column_id: null },
 ];
 
 /** Ô C1 KHÔNG TÍNH ĐƯỢC, ô C2 TRỐNG. */

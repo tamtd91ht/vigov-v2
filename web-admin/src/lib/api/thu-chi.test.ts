@@ -171,6 +171,31 @@ describe("lập bảng", () => {
     expect(than(goi)["unit"]).toBe("trieu-dong");
   });
 
+  it("cột `%` mang `numerator_index` / `denominator_index` lên máy chủ — hàm dựng từng trường không được nuốt chúng", async () => {
+    const goi = batFetch(traJSON({ id: "01JBANG", code: "NS-2026-CHI-01" }, 201));
+
+    await taoBang(
+      {
+        year: 2026,
+        kind: "chi",
+        title: "T",
+        unit: "trieu-dong",
+        columns: [
+          { name: "Dự toán năm", order: 1, type: "so" },
+          { name: "Chi ngân sách", order: 2, type: "so" },
+          { name: "So sánh", order: 3, type: "phan_tram", numerator_index: 1, denominator_index: 0 },
+        ],
+      },
+      "k",
+    );
+
+    const columns = than(goi)["columns"] as Record<string, unknown>[];
+    expect(columns[2]?.["numerator_index"]).toBe(1);
+    expect(columns[2]?.["denominator_index"]).toBe(0);
+    // Cột số không mang toán hạng nào (JSON bỏ trường `undefined`).
+    expect(columns[0]).not.toHaveProperty("numerator_index");
+  });
+
   it("409 'bảng đã tồn tại': câu máy chủ ra thẳng màn hình", async () => {
     batFetch(loi(409, "ngan_sach: xã đã có bảng ngân sách đang dùng cho năm và loại này"));
 

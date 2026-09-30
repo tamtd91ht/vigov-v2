@@ -16,9 +16,17 @@ import { docSoNhap, dongSangChuoi, dungThanDot, nhanSoTien } from "./nhan-thu-ch
  */
 
 const COT: finance_cotRa[] = [
-  { id: "C1", name: "Thu ngân sách", order: 1, type: "so" },
-  { id: "C2", name: "Dự toán năm", order: 2, type: "so" },
-  { id: "C3", name: "So sánh (%)", order: 3, type: "phan_tram", formula: "col_1 / col_2 * 100" },
+  { id: "C1", name: "Thu ngân sách", order: 1, type: "so", numerator_column_id: null, denominator_column_id: null },
+  { id: "C2", name: "Dự toán năm", order: 2, type: "so", numerator_column_id: null, denominator_column_id: null },
+  {
+    id: "C3",
+    name: "So sánh (%)",
+    order: 3,
+    type: "phan_tram",
+    formula: "Thu ngân sách / Dự toán năm × 100",
+    numerator_column_id: "C1",
+    denominator_column_id: "C2",
+  },
 ];
 
 afterEach(() => {

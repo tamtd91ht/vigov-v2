@@ -202,6 +202,41 @@ export function nhanChiSo(c: finance_chiSoRa): string {
     : O_TRONG;
 }
 
+/**
+ * Ô `%` của MỘT dòng: chữ để in, và câu lý do khi máy chủ nói ô ấy không tính được.
+ *
+ * TỶ LỆ DO MÁY CHỦ TÍNH (quyết định của người dùng 30/09/2026, §9 quy tắc 3): `percent_basis_points`
+ * là phần vạn, tính từ chính `values` của dòng ở hai cột tử số / mẫu số. Màn hình KHÔNG chia lại —
+ * xem khối chú thích đầu tệp: một phép chia thứ hai ở trình duyệt là câu trả lời thứ hai cho cùng
+ * một câu hỏi, và hai bên làm tròn khác nhau thì lệch nhau ở chữ số cuối.
+ *
+ * Câu lý do THẮNG con số, như `lyDoKhongTinh` nói: máy chủ gửi `null` kèm câu cho mọi trường hợp
+ * không có tỷ lệ (mẫu số bằng 0, ô trống, cột cũ chưa rõ tử số / mẫu số, vượt mức). Vắng cả số lẫn
+ * câu (bản đồ vắng mặt) thì in `—`, không in `0,00%`.
+ */
+export function percentCell(
+  line: finance_dongRa,
+  columnId: string,
+): { text: string; reason: string | null } {
+  const reason = lyDoKhongTinh(line.unavailable_reasons?.[columnId]);
+  if (reason !== null) return { text: O_KHONG_TINH_DUOC, reason };
+  const basisPoints = line.percent_basis_points?.[columnId];
+  if (basisPoints === undefined || basisPoints === null) return { text: O_TRONG, reason: null };
+  if (!Number.isSafeInteger(basisPoints)) return { text: "Không đọc được", reason: null };
+  return { text: nhanPhanVan(basisPoints), reason: null };
+}
+
+/**
+ * Cột `%` lập TRƯỚC migration 0011 mà công thức cũ không đọc chắc chắn được: máy chủ gửi cả hai mã
+ * toán hạng là `null`. Mọi ô của cột ấy không tính được — màn hình nói ra một lần ở mức CỘT thay vì
+ * để cán bộ tự suy từ hàng chục ô giống nhau.
+ */
+export function isUnresolvedPercentColumn(c: finance_cotRa): boolean {
+  return (
+    c.type === "phan_tram" && (c.numerator_column_id === null || c.denominator_column_id === null)
+  );
+}
+
 /** Một số tiền của thẻ chỉ số: hoặc con số, hoặc NGUYÊN câu máy chủ nói vì sao không có. */
 export function nhanSoTienChiSo(s: finance_soTienRa, donVi: MaDonVi): string {
   if (s.amount !== null) return nhanSoTien(s.amount, donVi);
@@ -731,14 +766,10 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "không có tuyến multipart nào trong `service-finance`. Bảng lập bằng biểu mẫu bên dưới, " +
       "khoản mục nhập từng dòng.",
   },
-  {
-    ten: "Cột phần trăm trên từng dòng (§3, §9 quy tắc 3)",
-    viSao:
-      "Cột `phan_tram` mang một chuỗi `formula` mà máy chủ CỐ Ý không diễn giải, và chuỗi ấy trỏ " +
-      "tới cột bằng `col_4`, `col_2` — không ánh xạ được sang mã cột hợp đồng trả về. Tự đoán ánh " +
-      "xạ là in một tỷ lệ sai trông y hệt một tỷ lệ đúng, nên các ô ấy hiện dấu gạch. Tỷ lệ của " +
-      "DÒNG TỔNG vẫn có thật: máy chủ tính và gửi trong `summary.indicator`.",
-  },
+  // Cột phần trăm trên từng dòng ĐÃ DỰNG (quyết định 30/09/2026): máy chủ lưu rõ cột tử số và cột
+  // mẫu số của mỗi cột `%` (migration 0011) và tự tính tỷ lệ của từng dòng (`percent_basis_points`).
+  // `formula` từ đó chỉ còn là chữ chú thích, không máy nào đọc — màn hình in tỷ lệ máy chủ gửi, và
+  // cột cũ chưa rõ tử số / mẫu số hiện "Không tính được" kèm câu của máy chủ, không đoán từ chuỗi.
 ];
 
 /**
@@ -806,9 +837,20 @@ export function boCotKhoiDiem(loai: LoaiBang, nam: number): finance_cotVao[] {
     return [
       { name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam" },
       { name: "Chi ngân sách", order: 2, type: "so", role: "chi-ngan-sach" },
-      // Cột `phan_tram` BẮT BUỘC có `formula`, và cột `so` bắt buộc KHÔNG có (`KiemTraCot`).
-      // Chuỗi này được LƯU chứ không được diễn giải ở bất kỳ đâu — xem `PHAN_CHUA_DUNG`.
-      { name: "So sánh TH/DT (%)", order: 3, type: "phan_tram", formula: "col_2 / col_1 * 100" },
+      // Cột `phan_tram` BẮT BUỘC chỉ rõ tử số và mẫu số bằng VỊ TRÍ (đếm từ 0) trong chính mảng
+      // `columns` gửi lên; cột `so` bắt buộc KHÔNG có. `formula` bỏ trống: máy chủ tự viết chú
+      // thích "<tử số> / <mẫu số> × 100" từ tên hai cột.
+      //
+      // ĐÚNG NGHĨA CỦA BỘ CỘT CŨ, KHÔNG CHỌN LẠI: bộ khởi điểm trước đây ghi `col_2 / col_1 * 100`,
+      // và migration 0011 đọc `col_N` là cột SỐ thứ N đếm từ 1 — tức là Chi ngân sách / Dự toán năm.
+      // Bảng lập từ bộ cột này hôm nay phải ra ĐÚNG tỷ lệ mà bảng lập hôm qua được điền ngược.
+      {
+        name: "So sánh TH/DT (%)",
+        order: 3,
+        type: "phan_tram",
+        numerator_index: 1,
+        denominator_index: 0,
+      },
     ];
   }
   return [
@@ -816,7 +858,17 @@ export function boCotKhoiDiem(loai: LoaiBang, nam: number): finance_cotVao[] {
     { name: `Dự toán ${nam} Xã giao`, order: 2, type: "so", role: "du-toan-xa-giao" },
     { name: "Thu ngân sách NSNN", order: 3, type: "so", role: "thu-nsnn" },
     { name: "Thu ngân sách Thu xã hưởng", order: 4, type: "so", role: "thu-xa-huong" },
-    { name: "Tỷ lệ % thu", order: 5, type: "phan_tram", formula: "col_3 / col_1 * 100" },
+    // `col_3 / col_1 * 100` của bộ cũ = Thu ngân sách NSNN / Dự toán TP giao (cột số thứ 3 và thứ
+    // 1, như 0011 đọc). GIỮ NGUYÊN nghĩa ấy dù chỉ số `Thu đạt dự toán` của §9 quy tắc 6 lấy mẫu số
+    // là Dự toán Xã giao: đổi mẫu số của một cột đã có là quyết định nghiệp vụ của xã, không phải
+    // của bộ cột điền sẵn — và biểu mẫu cho sửa ngay trước khi lập.
+    {
+      name: "Tỷ lệ % thu",
+      order: 5,
+      type: "phan_tram",
+      numerator_index: 2,
+      denominator_index: 0,
+    },
   ];
 }
 

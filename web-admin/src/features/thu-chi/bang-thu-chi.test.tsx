@@ -6,6 +6,7 @@ import type {
   finance_bangDayDuRa,
   finance_chiSoNamRa,
   finance_cotRa,
+  finance_cotVao,
   finance_danhSachDotRa,
   finance_dongRa,
   finance_tomTatRa,
@@ -22,8 +23,16 @@ import {
   TheTomTat,
 } from "./bang-thu-chi";
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi";
-import { dungThanTaoBang, LapBang } from "./lap-bang";
 import {
+  changeColumnType,
+  ColumnFieldsets,
+  dungThanTaoBang,
+  LapBang,
+  percentOperandError,
+  removeColumnAt,
+} from "./lap-bang";
+import {
+  boCotKhoiDiem,
   CANH_BAO_GO_BANG,
   cauQuyDoi,
   CAU_THIEU_QUYEN_XEM,
@@ -55,9 +64,17 @@ import { FormSuaBang } from "./sua-bang";
  */
 
 const COT: finance_cotRa[] = [
-  { id: "C1", name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam" },
-  { id: "C2", name: "Chi ngân sách", order: 2, type: "so", role: "chi-ngan-sach" },
-  { id: "C3", name: "So sánh TH/DT (%)", order: 3, type: "phan_tram", formula: "col_2 / col_1 * 100" },
+  { id: "C1", name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam", numerator_column_id: null, denominator_column_id: null },
+  { id: "C2", name: "Chi ngân sách", order: 2, type: "so", role: "chi-ngan-sach", numerator_column_id: null, denominator_column_id: null },
+  {
+    id: "C3",
+    name: "So sánh TH/DT (%)",
+    order: 3,
+    type: "phan_tram",
+    formula: "Chi ngân sách / Dự toán năm × 100",
+    numerator_column_id: "C2",
+    denominator_column_id: "C1",
+  },
 ];
 
 function dong(sua: Partial<finance_dongRa> = {}): finance_dongRa {
@@ -142,6 +159,32 @@ function veBang(coGhi: boolean, coXacNhan: boolean, duLieu = bang()): string {
       moCachTinh={() => {}}
       moDot={() => {}}
     />,
+  );
+}
+
+/** Một dòng lá vẽ riêng, chỉ đọc, trên bộ cột `COT`. */
+function renderLine(line: finance_dongRa): string {
+  return renderToStaticMarkup(
+    <table>
+      <tbody>
+        <DongKhoanMuc
+          hien={{ dong: line, cap: 0, coCon: false, moRong: false }}
+          cot={COT}
+          donVi={donViCuaBang(bang().sheet)}
+          dongTongId=""
+          coGhi={false}
+          coXacNhan={false}
+          dangGui={false}
+          moRongDoi={() => {}}
+          moSua={() => {}}
+          them={() => {}}
+          go={() => {}}
+          datTong={() => {}}
+          doiCachTinh={() => {}}
+          moDot={() => {}}
+        />
+      </tbody>
+    </table>,
   );
 }
 
@@ -252,9 +295,55 @@ describe("con số ra tới trang", () => {
     expect(html).not.toContain("3.401.673,3");
   });
 
-  it("ô phần trăm trên từng dòng hiện DẤU GẠCH, không phải một tỷ lệ đoán từ `formula`", () => {
-    // `formula` trỏ tới cột bằng `col_4`, `col_2` — không ánh xạ được sang mã cột hợp đồng trả về,
-    // và máy chủ cố ý không diễn giải chuỗi ấy. Một tỷ lệ đoán sai trông y hệt một tỷ lệ đúng.
+  it("ô phần trăm in ĐÚNG phần vạn máy chủ gửi — không tự chia `values`", () => {
+    // `values` của dòng cho 3.401.673,3 / 5.502.660 = 61,82%. Máy chủ gửi 9127 CÓ CHỦ Ý khác đi: nếu
+    // trang tự chia thì nó ra 61,82% và ca này đỏ.
+    const html = renderLine(dong({ method: "manual", percent_basis_points: { C3: 9127 } }));
+
+    expect(html).toContain("91,27%");
+    expect(html).not.toContain("61,82%");
+    expect(html).not.toContain("Không tính được");
+  });
+
+  it("ô phần trăm null kèm câu: dấu 'Không tính được' và NGUYÊN câu máy chủ, không phải 0%", () => {
+    const cau = "ngan_sach: mẫu số bằng 0 — không tính tỷ lệ";
+    const html = renderLine(
+      dong({ method: "manual", percent_basis_points: { C3: null }, unavailable_reasons: { C3: cau } }),
+    );
+
+    expect(html).toContain("Không tính được");
+    expect(html).toContain(cau);
+    expect(html).not.toContain("0,00%");
+  });
+
+  it("cột `%` cũ chưa rõ tử số / mẫu số: ô nói câu của máy chủ, và dưới bảng có MỘT khối ở mức cột", () => {
+    const cau =
+      "ngan_sach: cột phần trăm này tạo trước khi hệ thống lưu rõ cột tử số và mẫu số, và công thức cũ không đọc được chắc chắn — không tính được; không đoán từ công thức";
+    const legacyColumn: finance_cotRa = {
+      ...COT[2]!,
+      formula: "col_4 / col_2 * 100",
+      numerator_column_id: null,
+      denominator_column_id: null,
+    };
+    const lines = bang().lines.map((l) => ({
+      ...l,
+      percent_basis_points: { C3: null },
+      unavailable_reasons: { C3: cau },
+    }));
+    const html = veBang(false, false, bang({ columns: [COT[0]!, COT[1]!, legacyColumn], lines }));
+
+    expect(html).toContain(cau);
+    expect(html).toContain("Cột phần trăm chưa tính được tỷ lệ (1)");
+    expect(html).toContain("col_4 / col_2 * 100");
+    // Ô `%` không tính được KHÔNG chen vào danh sách ô TIỀN không tính được.
+    expect(html).not.toContain("Ô không tính được con số");
+  });
+
+  it("tiêu đề cột `%` hiện chú thích công thức máy chủ gửi", () => {
+    expect(veBang(false, false)).toContain("Chi ngân sách / Dự toán năm × 100");
+  });
+
+  it("dòng không mang `percent_basis_points` (bản đồ vắng): ô `%` là DẤU GẠCH, không phải 0%", () => {
     const html = renderToStaticMarkup(
       <table>
         <tbody>
@@ -279,7 +368,8 @@ describe("con số ra tới trang", () => {
     );
 
     expect(html).toContain("—");
-    expect(html).not.toContain("61,8%");
+    expect(html).not.toContain("61,8");
+    expect(html).not.toContain("0,00%");
   });
 
   it("thẻ tóm tắt KHÔNG đoán dòng tổng: chưa ai đánh dấu thì hiện CÂU của máy chủ, không hiện 0", () => {
@@ -512,7 +602,9 @@ describe("những phần đặc tả vẽ mà chưa dựng được", () => {
   it("mọi phần còn lại ra TỚI MÀN HÌNH kèm lý do — và ba phần đã dựng thì KHÔNG còn trong đó", () => {
     const html = renderToStaticMarkup(<KhoiChuaDung />);
 
-    expect(PHAN_CHUA_DUNG).toHaveLength(2);
+    // Chỉ còn Nạp từ Excel: cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026).
+    expect(PHAN_CHUA_DUNG).toHaveLength(1);
+    expect(html).not.toContain("Cột phần trăm trên từng dòng");
     for (const p of PHAN_CHUA_DUNG) {
       expect(html).toContain(p.ten);
     }
@@ -812,6 +904,132 @@ describe("lập bảng — đơn vị là một MÃ", () => {
     });
 
     expect(kq.ok).toBe(false);
+  });
+});
+
+describe("lập bảng — cột `%` chọn tử số và mẫu số", () => {
+  function build(columns: readonly finance_cotVao[]) {
+    return dungThanTaoBang({
+      nam: 2026,
+      loai: "chi",
+      tieuDe: "BÁO CÁO CHI",
+      donVi: "trieu-dong",
+      luyKe: "",
+      cot: columns,
+    });
+  }
+
+  /** Các `<option>` của một ô chọn, theo `id`. */
+  function selectOptions(html: string, id: string): string {
+    return new RegExp(`id="${id}"[^>]*>(.*?)</select>`).exec(html)?.[1] ?? "";
+  }
+
+  it("hai ô chọn Tử số / Mẫu số liệt kê CỘT SỐ theo tên, chọn sẵn theo bộ khởi điểm; KHÔNG ô gõ công thức", () => {
+    const html = renderToStaticMarkup(
+      <ColumnFieldsets kind="chi" columns={boCotKhoiDiem("chi", 2026)} onChange={() => {}} />,
+    );
+
+    expect(html).toContain("Tử số");
+    expect(html).toContain("Mẫu số");
+    expect(html).not.toContain("cot-congthuc");
+    expect(html).not.toContain("Công thức");
+
+    const numerator = selectOptions(html, "cot-tuso-2");
+    const denominator = selectOptions(html, "cot-mauso-2");
+    // Chỉ hai cột số — cột `%` không phải lựa chọn.
+    expect(numerator).toContain(">Dự toán năm<");
+    expect(numerator).toContain(">Chi ngân sách<");
+    expect(numerator).not.toContain("So sánh TH/DT");
+    expect(numerator).toContain('<option value="1" selected="">Chi ngân sách</option>');
+    expect(denominator).toContain('<option value="0" selected="">Dự toán năm</option>');
+  });
+
+  it("bộ cột khởi điểm gửi ĐÚNG vị trí toán hạng và không gửi `formula`", () => {
+    for (const kind of ["chi", "thu"] as const) {
+      const kq = dungThanTaoBang({
+        nam: 2026,
+        loai: kind,
+        tieuDe: "T",
+        donVi: "trieu-dong",
+        luyKe: "",
+        cot: boCotKhoiDiem(kind, 2026),
+      });
+      expect(kq.ok).toBe(true);
+      if (!kq.ok) return;
+      const percent = kq.than.columns.find((c) => c.type === "phan_tram");
+      expect(percent?.formula).toBeUndefined();
+      expect(percent?.numerator_index).toBe(kind === "chi" ? 1 : 2);
+      expect(percent?.denominator_index).toBe(0);
+      for (const c of kq.than.columns.filter((x) => x.type === "so")) {
+        expect(c.numerator_index).toBeUndefined();
+        expect(c.denominator_index).toBeUndefined();
+      }
+    }
+  });
+
+  it("thiếu một toán hạng: TỪ CHỐI ở client, gọi đúng tên cột", () => {
+    const columns = boCotKhoiDiem("chi", 2026).map((c) =>
+      c.type === "phan_tram" ? { ...c, denominator_index: null } : c,
+    );
+    const kq = build(columns);
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toContain("So sánh TH/DT (%)");
+  });
+
+  it("tử số trùng mẫu số: TỪ CHỐI ở client", () => {
+    const columns = boCotKhoiDiem("chi", 2026).map((c) =>
+      c.type === "phan_tram" ? { ...c, numerator_index: 0, denominator_index: 0 } : c,
+    );
+    const kq = build(columns);
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toContain("hai cột khác nhau");
+  });
+
+  it("toán hạng là một cột phần trăm: TỪ CHỐI ở client", () => {
+    const columns: finance_cotVao[] = [
+      ...boCotKhoiDiem("chi", 2026),
+      { name: "Tỷ lệ 2", order: 4, type: "phan_tram", numerator_index: 2, denominator_index: 0 },
+    ];
+    const kq = build(columns);
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toContain("cột số");
+  });
+
+  it("bỏ một cột đứng TRƯỚC: toán hạng dời theo, và vị trí gửi đi vẫn trỏ đúng hai cột đã chọn", () => {
+    const columns: finance_cotVao[] = [
+      { name: "Cột thừa", order: 1, type: "so" },
+      { name: "Dự toán năm", order: 2, type: "so" },
+      { name: "Chi ngân sách", order: 3, type: "so" },
+      { name: "Tỷ lệ", order: 4, type: "phan_tram", numerator_index: 2, denominator_index: 1 },
+    ];
+    const kq = build(removeColumnAt(columns, 0));
+    expect(kq.ok).toBe(true);
+    if (!kq.ok) return;
+    const sent = kq.than.columns;
+    const percent = sent[2];
+    expect(sent[percent?.numerator_index ?? -1]?.name).toBe("Chi ngân sách");
+    expect(sent[percent?.denominator_index ?? -1]?.name).toBe("Dự toán năm");
+  });
+
+  it("bỏ ĐÚNG cột đang là toán hạng: toán hạng ấy xoá trắng, lần gửi bị chặn cho tới khi chọn lại", () => {
+    const after = removeColumnAt(boCotKhoiDiem("chi", 2026), 0);
+    const percent = after.find((c) => c.type === "phan_tram");
+    expect(percent?.denominator_index).toBeNull();
+    expect(percent?.numerator_index).toBe(0);
+    expect(build(after).ok).toBe(false);
+  });
+
+  it("đổi cột toán hạng sang `%`: cột `%` dùng nó mất toán hạng ấy; đổi `%` sang số thì bỏ toán hạng", () => {
+    const start = boCotKhoiDiem("chi", 2026);
+    const changed = changeColumnType(start, 1, "phan_tram");
+    expect(changed[2]?.numerator_index).toBeNull();
+    expect(changed[2]?.denominator_index).toBe(0);
+    expect(changed[1]?.role).toBeUndefined();
+
+    const back = changeColumnType(start, 2, "so");
+    expect(back[2]?.numerator_index).toBeUndefined();
+    expect(back[2]?.denominator_index).toBeUndefined();
+    expect(percentOperandError(back, 2)).toBeNull();
   });
 });
 

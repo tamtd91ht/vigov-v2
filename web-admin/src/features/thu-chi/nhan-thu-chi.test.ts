@@ -14,8 +14,10 @@ import {
   dongSangChuoi,
   dungThanDot,
   dungThanSuaBang,
+  isUnresolvedPercentColumn,
   khoaSauLanGhi,
   NHAN_CHENH_LECH,
+  percentCell,
   PHAN_CHUA_DUNG,
   tieuDeHopDot,
   dungCay,
@@ -241,9 +243,17 @@ describe("cách tính — ba chế độ, CHỈ HAI là lựa chọn", () => {
 
 describe("hộp các đợt — dựng thân POST", () => {
   const COT: finance_cotRa[] = [
-    { id: "C1", name: "Dự toán năm", order: 1, type: "so" },
-    { id: "C2", name: "Chi ngân sách", order: 2, type: "so" },
-    { id: "C3", name: "So sánh (%)", order: 3, type: "phan_tram", formula: "col_2 / col_1 * 100" },
+    { id: "C1", name: "Dự toán năm", order: 1, type: "so", numerator_column_id: null, denominator_column_id: null },
+    { id: "C2", name: "Chi ngân sách", order: 2, type: "so", numerator_column_id: null, denominator_column_id: null },
+    {
+      id: "C3",
+      name: "So sánh (%)",
+      order: 3,
+      type: "phan_tram",
+      formula: "Chi ngân sách / Dự toán năm × 100",
+      numerator_column_id: "C2",
+      denominator_column_id: "C1",
+    },
   ];
 
   function nhap(sua: Partial<Parameters<typeof dungThanDot>[0]> = {}) {
@@ -384,6 +394,40 @@ describe("thẻ chỉ số và danh sách phần chưa dựng", () => {
     expect(ten).not.toMatch(/Cách tính/);
     expect(ten).not.toMatch(/Luỹ kế/);
     expect(ten).toMatch(/Excel/);
+    // Cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026) — không còn nằm trong danh sách.
+    expect(ten).not.toMatch(/phần trăm/i);
+    expect(PHAN_CHUA_DUNG).toHaveLength(1);
+  });
+
+  it("ô `%` in đúng phần vạn máy chủ gửi, không chia lại", () => {
+    const d = dong({ values: { C1: 100, C2: 0 }, percent_basis_points: { P: 9127 } });
+    expect(percentCell(d, "P")).toEqual({ text: "91,27%", reason: null });
+  });
+
+  it("ô `%` null KÈM câu: 'Không tính được' và NGUYÊN câu máy chủ, không phải 0%", () => {
+    const cau = "ngan_sach: ô mẫu số của dòng này đang trống — không tính tỷ lệ; ô trống không phải số 0";
+    const d = dong({ percent_basis_points: { P: null }, unavailable_reasons: { P: cau } });
+    expect(percentCell(d, "P")).toEqual({ text: "Không tính được", reason: cau });
+  });
+
+  it("ô `%` vắng cả số lẫn câu thì là `—`, không phải 0,00%", () => {
+    expect(percentCell(dong(), "P")).toEqual({ text: O_TRONG, reason: null });
+    expect(percentCell(dong({ percent_basis_points: { P: null } }), "P").text).toBe(O_TRONG);
+  });
+
+  it("cột `%` cũ chưa rõ tử số / mẫu số được nhận ra từ hai mã `null`", () => {
+    const cu: finance_cotRa = {
+      id: "P",
+      name: "Tỷ lệ",
+      order: 3,
+      type: "phan_tram",
+      formula: "(col_1+col_2)/col_3*100",
+      numerator_column_id: null,
+      denominator_column_id: null,
+    };
+    expect(isUnresolvedPercentColumn(cu)).toBe(true);
+    expect(isUnresolvedPercentColumn({ ...cu, numerator_column_id: "A", denominator_column_id: "B" })).toBe(false);
+    expect(isUnresolvedPercentColumn({ ...cu, type: "so" })).toBe(false);
   });
 });
 
@@ -487,17 +531,38 @@ describe("nhãn tab và bộ cột khởi điểm", () => {
     expect(boCotKhoiDiem("thu", 2027)[0]?.name).toBe("Dự toán 2027 TP giao");
   });
 
-  it("cột `so` mang vai trò và KHÔNG mang công thức; cột `phan_tram` thì ngược lại", () => {
-    // `KiemTraCot` từ chối cả hai chiều: `ErrThuaCongThuc` trên cột số, `ErrVaiTroTrenCotPhanTram`
-    // trên cột phần trăm.
-    for (const c of boCotKhoiDiem("chi", 2026)) {
-      if (c.type === "so") {
+  it("cột `so` KHÔNG mang toán hạng; cột `phan_tram` mang đủ hai toán hạng và không mang vai trò", () => {
+    // Máy chủ từ chối cả hai chiều: `ErrOperandsOnNumberColumn` trên cột số,
+    // `ErrVaiTroTrenCotPhanTram` / `ErrPercentOperandsMissing` trên cột phần trăm.
+    for (const kind of ["chi", "thu"] as const) {
+      const columns = boCotKhoiDiem(kind, 2026);
+      for (const c of columns) {
         expect(c.formula).toBeUndefined();
-      } else {
-        expect(c.role).toBeUndefined();
-        expect(c.formula).not.toBe("");
+        if (c.type === "so") {
+          expect(c.numerator_index).toBeUndefined();
+          expect(c.denominator_index).toBeUndefined();
+        } else {
+          expect(c.role).toBeUndefined();
+          expect(columns[c.numerator_index ?? -1]?.type).toBe("so");
+          expect(columns[c.denominator_index ?? -1]?.type).toBe("so");
+        }
       }
     }
+  });
+
+  it("toán hạng của bộ khởi điểm GIỮ ĐÚNG nghĩa `col_2 / col_1` và `col_3 / col_1` của bộ cũ", () => {
+    // Migration 0011 điền ngược bảng cũ bằng cách đọc `col_N` là cột SỐ thứ N đếm từ 1. Bảng lập
+    // từ bộ cột mới phải chia ĐÚNG hai cột ấy — lệch đi là hai bảng cùng năm, cùng bộ cột, mà một
+    // bảng ra tỷ lệ khác bảng kia.
+    const expense = boCotKhoiDiem("chi", 2026);
+    const expensePercent = expense.find((c) => c.type === "phan_tram");
+    expect(expense[expensePercent?.numerator_index ?? -1]?.name).toBe("Chi ngân sách");
+    expect(expense[expensePercent?.denominator_index ?? -1]?.name).toBe("Dự toán năm");
+
+    const revenue = boCotKhoiDiem("thu", 2026);
+    const revenuePercent = revenue.find((c) => c.type === "phan_tram");
+    expect(revenue[revenuePercent?.numerator_index ?? -1]?.name).toBe("Thu ngân sách NSNN");
+    expect(revenue[revenuePercent?.denominator_index ?? -1]?.name).toBe("Dự toán 2026 TP giao");
   });
 
   it("bảng chi có đủ HAI vai trò của chỉ số `Chi đạt dự toán`", () => {
