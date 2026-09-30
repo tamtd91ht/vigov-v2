@@ -3387,6 +3387,9 @@ export type petitions_post_citizen_reports_by_maTraCuu_tasks = {
     500: httpx_Error;
     503: httpx_Error;
   };
+  errorCodes: {
+    409: "code_taken" | "petition_not_classified" | "petition_state" | "request_in_progress" | "restricted_field_no_task" | "task_document" | "task_tree";
+  };
 };
 
 /** GET /api/v1/comms-audit-entries — Nhật ký hệ thống của phân hệ Thông tin – truyền thông — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
@@ -4906,6 +4909,9 @@ export type petitions_get_my_citizen_reports = {
     500: httpx_Error;
     503: httpx_Error;
   };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
 };
 
 /** POST /api/v1/my-citizen-reports — Công dân gửi một phiếu phản ánh — trả MÃ TRA CỨU ngay khi tiếp nhận */
@@ -4925,6 +4931,10 @@ export type petitions_post_my_citizen_reports = {
     409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+    409: "request_in_progress";
   };
 };
 
@@ -4946,6 +4956,9 @@ export type petitions_get_my_citizen_reports_by_maTraCuu = {
     500: httpx_Error;
     503: httpx_Error;
   };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
 };
 
 /** POST /api/v1/my-citizen-reports/{maTraCuu}/rating — Công dân chấm 1–5 sao cho phiếu phản ánh CỦA CHÍNH MÌNH khi phiếu đã xử lý / chờ xác nhận — 1–2 sao tự mở lại phiếu (không tính lại hạn) */
@@ -4966,6 +4979,9 @@ export type petitions_post_my_citizen_reports_by_maTraCuu_rating = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
   };
 };
 
@@ -6298,7 +6314,13 @@ export type identity_put_staff_by_id_publication = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    400: "consent_required" | "invalid_request";
+    404: "staff_not_found";
+    409: "staff_locked";
   };
 };
 
@@ -7313,6 +7335,9 @@ export type petitions_post_tasks_by_ma_status = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    409: "parent_completed" | "task_state" | "task_tree";
   };
 };
 

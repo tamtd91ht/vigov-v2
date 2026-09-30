@@ -4075,6 +4075,7 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"

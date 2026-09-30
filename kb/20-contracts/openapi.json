@@ -3873,7 +3873,16 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "code_taken",
+              "petition_not_classified",
+              "petition_state",
+              "request_in_progress",
+              "restricted_field_no_task",
+              "task_document",
+              "task_tree"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -10811,7 +10820,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -10917,7 +10929,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
           },
           "409": {
             "description": "Conflict",
@@ -10927,7 +10942,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "request_in_progress"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -11009,7 +11027,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
           },
           "404": {
             "description": "Not Found",
@@ -11137,7 +11158,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
           },
           "404": {
             "description": "Not Found",
@@ -16917,7 +16941,11 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "consent_required",
+              "invalid_request"
+            ]
           },
           "401": {
             "description": "Unauthorized",
@@ -16947,7 +16975,23 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "staff_not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "staff_locked"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -21814,7 +21858,12 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "parent_completed",
+              "task_state",
+              "task_tree"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
