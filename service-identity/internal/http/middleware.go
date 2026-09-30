@@ -11,6 +11,8 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/domain"
+	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
 // PhienHienTai is what the middleware learned about the current session, for the handlers that
@@ -156,6 +158,39 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 				return
 			}
 
+			// 5b. THE IDLE LOCK — open question #38, decided 2026-09-30: 30 minutes without a request
+			// for a staff session, 15 for a session holding `admin.user` (domain.SessionIdleExpired).
+			// Under the absolute 12 hours of step 4, never instead of it.
+			//
+			// AN IDLE SESSION IS REVOKED, NOT MERELY REFUSED, so it cannot come back to life on a
+			// request that arrives a second later, and the revocation is audited as an expiry with the
+			// system as actor. The CLIENT SEES EXACTLY WHAT AN EXPIRED SESSION PRODUCES — cookie
+			// cleared, no principal, and the guarded route's own 401 — so nothing in the response tells
+			// "idle" from "expired" from "revoked".
+			//
+			// FAIL CLOSED: the refusal is decided from dung_gan_nhat, not from the revocation. A failed
+			// revocation is logged and the request is STILL refused; the next request finds the same
+			// stale timestamp and tries again.
+			//
+			// "HOLDING admin.user" IS READ LIVE through the same Checker every guarded route uses, and
+			// only for a session idle between 15 and 30 minutes — the one window where the answer
+			// matters — so an ordinary request pays no extra query. A permission read that fails answers
+			// false there, i.e. the 30-minute limit; the route's own guard then refuses on the same
+			// failure, so nothing is served on it.
+			//
+			// BEFORE step 7 AND ON PURPOSE: GhiNhanDung moves dung_gan_nhat forward, and a session that
+			// is already idle must not be refreshed by the very request that found it idle.
+			if expired, admin := sessionIdle(ctx, d.Checker, ph, cb, xa); expired {
+				if err := d.IdleSessions.RevokeIdle(ctx, claims.Sid, cb.Ma, ipTu(r), ph.LastActivity(), admin); err != nil {
+					d.Log.Error("không thu hồi được phiên hết hạn do không dùng",
+						"event", "session.idle_expired", "outcome", "error",
+						"subject", cb.Ma, "xa", string(xa), "err", err)
+				}
+				xoaCookiePhien(w)
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// 6. Build the principal.
 			//
 			// ID IS THE INTERNAL id, NOT cb.Ma. store.Checker queries `nd.id = $2` with
@@ -237,6 +272,20 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// sessionIdle applies the idle lock (#38) to one staff session and reports whether it has expired,
+// and whether it was judged as an administrator's session. The admin permission is asked only when
+// the answer depends on it (domain.SessionIdleExpired).
+func sessionIdle(ctx context.Context, checker authz.Checker, ph idstore.Phien, cb domain.CanBo,
+	xa tenant.ID) (expired, admin bool) {
+
+	principal := authz.Principal{ID: cb.ID, Ma: cb.Ma, Kind: "staff", TenantID: xa}
+	expired = domain.SessionIdleExpired(ph.LastActivity(), time.Now().UTC(), func() bool {
+		admin = checker.Allows(ctx, principal, authz.Perm(domain.AdminSessionPermission))
+		return admin
+	})
+	return expired, admin
 }
 
 // duocPhepKhiPhaiDoiMatKhau reports whether this request is one of the three a session under the

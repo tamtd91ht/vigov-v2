@@ -242,6 +242,10 @@ func run(log *slog.Logger) error {
 		log.Info("gieo quản trị mặc định BẬT — gỡ IDENTITY_ADMIN_SEED_PASSWORD khi mọi xã đã đổi mật khẩu admin")
 	}
 	dangXuat := app.NewDangXuat(kho, phien)
+	// The idle lock of open question #38. ONE value, given to BOTH edges below (HTTP XacThuc and gRPC
+	// ResolveStaffPrincipal), so an idle session is ended and audited the same way whichever edge
+	// the next request happens to reach.
+	idleSessions := app.NewSessionIdleExpiry(kho, phien, log)
 	// The WRITE surface of the staff register (open questions #10, #13, #14, #15, #16, all decided
 	// 2026-09-22). It is given the SAME *idstore.CanBoStore the two read fields below carry — one
 	// store, because the guards read the very rows they then write, inside one transaction.
@@ -439,10 +443,11 @@ func run(log *slog.Logger) error {
 		GhiSLA:     ghiSLA,
 		Automation: automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog: audit.NewLog(kho),
-		Signer:   signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:    phien,
-		CanBo:    canBo,
+		AuditLog:     audit.NewLog(kho),
+		Signer:       signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:        phien,
+		CanBo:        canBo,
+		IdleSessions: idleSessions,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.
@@ -547,8 +552,9 @@ func run(log *slog.Logger) error {
 		// here would verify tokens with a key that did not sign them, and every staff request in
 		// the four calling services would come back with no principal while identity's own routes
 		// kept working. That failure names nothing in any log.
-		Signer: signer,
-		Phien:  phien,
+		Signer:       signer,
+		Phien:        phien,
+		IdleSessions: idleSessions, // the SAME use case the HTTP edge was given above
 		// CanBo is the THREE-condition read (not deleted, has an account, not locked); Lo is the
 		// register read, which filters only `deleted_at IS NULL`. The same *CanBoStore behind two
 		// fields, two fields on purpose — identical to the CanBo/DanhBa split above, and for the

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/password"
 	"github.com/vihat/vigov/core/store"
@@ -88,6 +89,12 @@ type ghiChep struct {
 	// soHangCanBo counts the staff rows actually handed to Go. Zero is the assertion that a row
 	// never crossed the boundary at all — see dang_nhap_danh_ba_test.go.
 	soHangCanBo int
+
+	// The automatic lockout's two columns (#39, migration 0020), kept as STATE: the SELECT … FOR
+	// UPDATE reads them and the UPDATE writes them, so a test can walk five failures and a lock
+	// through the real store SQL.
+	failedCount int64
+	lockedUntil *time.Time
 }
 
 func moDB(t *testing.T) (*store.DB, *ghiChep) {
@@ -215,12 +222,33 @@ func (c *connGia) ExecContext(_ context.Context, q string, args []driver.NamedVa
 	if err := c.g.ghi(lenhGhi{sql: q, args: giaTri(args), tx: c.tx}); err != nil {
 		return nil, err
 	}
+	if strings.Contains(q, "SET failed_sign_in_count") {
+		// ($1 tenant, $2 id, $3 count, $4 locked_until|nil) — store.SetSignInLock.
+		c.g.mu.Lock()
+		c.g.failedCount = args[2].Value.(int64)
+		c.g.lockedUntil = nil
+		if u, ok := args[3].Value.(time.Time); ok {
+			c.g.lockedUntil = &u
+		}
+		c.g.mu.Unlock()
+	}
 	return driver.RowsAffected(1), nil
 }
 
 func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	if err := c.g.ghi(lenhGhi{sql: q, args: giaTri(args), tx: c.tx}); err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(q, "SELECT failed_sign_in_count") {
+		// store.SignInLockForUpdate. Not a staff row: it does not count toward soHangCanBo.
+		c.g.mu.Lock()
+		var until driver.Value
+		if c.g.lockedUntil != nil {
+			until = *c.g.lockedUntil
+		}
+		hang := []driver.Value{c.g.failedCount, until}
+		c.g.mu.Unlock()
+		return &rowsGia{cot: []string{"failed_sign_in_count", "sign_in_locked_until"}, hang: [][]driver.Value{hang}}, nil
 	}
 	if !strings.Contains(q, "nguoi_dung") {
 		return &rowsGia{}, nil
@@ -539,28 +567,42 @@ func TestDangNhapThatBaiThiKhongMoGiaoDichNaoCa(t *testing.T) {
 	// A wrong password must leave no session, no stamp and no entry. It must also answer the same
 	// way as an unknown email: telling them apart hands over a directory of which addresses exist
 	// on this commune's domain.
-	cases := map[string]func(*banThu) YeuCauDangNhap{
-		"sai mật khẩu": func(*banThu) YeuCauDangNhap {
+	//
+	// SINCE OPEN QUESTION #39 (decided 2026-09-30) A WRONG PASSWORD ON A REAL ACCOUNT OPENS EXACTLY ONE
+	// TRANSACTION: the one that counts the failure and COMMITS it (a rolled-back count is a lockout
+	// that never locks). It still writes no session and — below the threshold — no audit entry. An
+	// unknown email still opens none: there is no account to count against.
+	cases := map[string]struct {
+		build  func(*banThu) YeuCauDangNhap
+		wantTx int
+	}{
+		"sai mật khẩu": {func(*banThu) YeuCauDangNhap {
 			yc := yeuCauDung()
 			yc.MatKhau = "mat-khau-sai-hoan-toan"
 			return yc
-		},
-		"email không tồn tại": func(b *banThu) YeuCauDangNhap {
+		}, 1},
+		"email không tồn tại": {func(b *banThu) YeuCauDangNhap {
 			b.ghi.khongCoNguoiDung = true
 			return yeuCauDung()
-		},
+		}, 0},
 	}
-	for ten, dung := range cases {
+	for ten, c := range cases {
 		t.Run(ten, func(t *testing.T) {
 			b := dungBanThu(t)
-			yc := dung(b)
+			yc := c.build(b)
 
 			_, err := b.dangNhap.Chay(ctxXa(xaThu), yc)
 			if !errors.Is(err, ErrDangNhapThatBai) {
 				t.Fatalf("muốn ErrDangNhapThatBai, nhận %v", err)
 			}
-			if n := b.ghi.soGiaoDich(); n != 0 {
-				t.Errorf("mở %d giao dịch cho một lần đăng nhập thất bại", n)
+			if n := b.ghi.soGiaoDich(); n != c.wantTx {
+				t.Errorf("mở %d giao dịch cho một lần đăng nhập thất bại, muốn %d", n, c.wantTx)
+			}
+			if c.wantTx == 1 {
+				counted := b.ghi.tim("SET failed_sign_in_count")
+				if counted == nil || b.ghi.ketThucCua(counted.tx) != "commit" {
+					t.Error("lần sai không được đếm, hoặc đếm rồi bị rollback — khoá tự động sẽ không bao giờ khoá")
+				}
 			}
 			if b.ghi.tim("INSERT INTO phien") != nil {
 				t.Error("đăng nhập thất bại mà vẫn mở phiên")

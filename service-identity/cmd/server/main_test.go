@@ -74,7 +74,7 @@ type (
 
 func (phienGia) KiemTra(context.Context, string) (idstore.Phien, error) {
 	return idstore.Phien{ID: "sid-gia", NguoiDungID: idThu,
-		HetHanLuc: time.Now().Add(time.Hour)}, nil
+		HetHanLuc: time.Now().Add(time.Hour), TaoLuc: time.Now().UTC()}, nil
 }
 func (phienGia) GhiNhanDung(context.Context, string) {}
 
@@ -160,9 +160,11 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 	return svcgrpc.Deps{
 		Signer: ky,
 		Phien:  phienGia{},
-		CanBo:  canBoGia{},
-		Lo:     loGia{},
-		Ten:    tenGia{},
+		// The idle lock (#38): never reached here — the fake session is always fresh.
+		IdleSessions: idleWiringFake{},
+		CanBo:        canBoGia{},
+		Lo:           loGia{},
+		Ten:          tenGia{},
 		// Answers every code asked as assignable — the predicate is defended in internal/store; this
 		// only needs the RPC reachable through the real interceptor chain.
 		GiaoViec: giaoViecGia{},
@@ -185,6 +187,13 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		Automation:     automationWiringFake{},
 		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// idleWiringFake stands in for app.SessionIdleExpiry; its behaviour is defended in internal/app.
+type idleWiringFake struct{}
+
+func (idleWiringFake) RevokeIdle(context.Context, string, string, string, time.Time, bool) error {
+	return nil
 }
 
 // automationWiringFake stands in for the three automation collaborators of svcgrpc.Deps. Behaviour is

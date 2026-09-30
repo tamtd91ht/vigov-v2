@@ -103,6 +103,9 @@ type khoGia struct {
 	// insertedRow / updatedRow are what Chen / CapNhatHoSo were handed; nil = never called.
 	insertedRow, updatedRow *domain.CanBoTomTat
 
+	// signInLock is the automatic lockout state of the row (#39). Zero = clean.
+	signInLock domain.SignInLock
+
 	loi error
 }
 
@@ -144,6 +147,21 @@ func (k *khoGia) CapNhatHoSo(ctx context.Context, tx *store.ScopedTx, cb domain.
 
 func (k *khoGia) DatKhoa(ctx context.Context, tx *store.ScopedTx, id string, dangHoatDong bool) error {
 	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET dang_hoat_dong", id, dangHoatDong)
+	return err
+}
+
+// SignInLockForUpdate / SetSignInLock stand in for the automatic lockout's two columns (#39).
+// A real statement each, so the driver shows they ran INSIDE the unlock's transaction.
+func (k *khoGia) SignInLockForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.SignInLock, error) {
+	if _, err := tx.Exec(ctx, "SELECT sign-in-lock FROM nguoi_dung FOR UPDATE", string(tx.TenantID()), id); err != nil {
+		return domain.SignInLock{}, err
+	}
+	return k.signInLock, nil
+}
+
+func (k *khoGia) SetSignInLock(ctx context.Context, tx *store.ScopedTx, id string, l domain.SignInLock) error {
+	k.signInLock = l
+	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET sign-in-lock", id, l.FailedCount)
 	return err
 }
 

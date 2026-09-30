@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -39,11 +40,74 @@ type DangNhap struct {
 	// gieo is the default-administrator seed (gieo_quan_tri.go). nil = off, which is the state
 	// NewDangNhap leaves it in; only BatGieoQuanTri switches it on.
 	gieo *gieoQuanTri
+
+	// now is the clock the automatic lockout (#39) is decided on. time.Now in production; a test pins
+	// it to walk twelve hours without waiting for them.
+	now func() time.Time
 }
 
 func NewDangNhap(db *store.DB, canBo *idstore.CanBoStore, phien *idstore.PhienStore,
 	ky KyToken, log *slog.Logger) *DangNhap {
-	return &DangNhap{db: db, canBo: canBo, phien: phien, ky: ky, log: log}
+	return &DangNhap{db: db, canBo: canBo, phien: phien, ky: ky, log: log, now: time.Now}
+}
+
+func (uc *DangNhap) clock() time.Time { return uc.now().UTC() }
+
+// ActionSignInAutoLocked is the audit verb written when the fifth consecutive failed sign-in locks a
+// staff account (open question #39). A DIFFERENT verb from `khoa_tai_khoan_can_bo`, the manual lock
+// of #10: that one says an administrator retired somebody, this one says the system stopped a run of
+// guesses. An inspection reading the trail must never have to open the delta to tell them apart.
+const ActionSignInAutoLocked = "khoa_tu_dong_do_dang_nhap_sai"
+
+// signInAutoLockReason travels in the delta of that entry. The actor is the SYSTEM (rule 6, invariant
+// 6): the person guessing did not choose to lock anything, and naming the account's owner as the
+// actor would record them locking themselves.
+const signInAutoLockReason = "tự động: đăng nhập sai liên tiếp đạt ngưỡng"
+
+// countFailure records one failed sign-in on a live, unlocked account and, when it is the one that
+// locks, writes the lock's audit entry IN THE SAME TRANSACTION.
+//
+// THE LOCK DOES NOT REVOKE THE ACCOUNT'S OPEN SESSIONS, and that is a choice with a reason: anybody
+// who knows a staff member's work address can cause this lock from the sign-in screen. Revoking would
+// hand them a button that signs the chairman out at will. The lock stops NEW sign-ins, which is what
+// counting guesses is for — the same answer the owner gave for the operator realm (operator_auth.go,
+// registerFailure, decision 28/09/2026).
+func (uc *DangNhap) countFailure(ctx context.Context, tx *store.ScopedTx, xa tenant.ID, cb domain.CanBo,
+	lock domain.SignInLock, ip string, now time.Time) error {
+
+	next, lockedNow := lock.AfterFailure(now)
+	if err := uc.canBo.SetSignInLock(ctx, tx, cb.ID, next); err != nil {
+		return err
+	}
+	if !lockedNow {
+		return nil
+	}
+	until := next.LockedUntil.UTC().Format(time.RFC3339)
+	delta, err := json.Marshal(map[string]any{
+		"truoc": signInLockDelta(lock),
+		"sau":   signInLockDelta(next),
+		"ly_do": signInAutoLockReason,
+	})
+	if err != nil {
+		return fmt.Errorf("dang_nhap: delta khoá tự động: %w", err)
+	}
+	if err := audit.Write(ctx, tx, audit.Entry{
+		Actor:   audit.Actor{ID: audit.SystemActor, Kind: "system", IP: ip},
+		Action:  ActionSignInAutoLocked,
+		Subject: cb.Ma,
+		Delta:   delta,
+	}); err != nil {
+		return err
+	}
+	// The security log. The BUSINESS CODE, not the email fingerprint: the account is known here and
+	// the trail already names it; an alert on this line is what tells somebody an account is under
+	// attack. Written before the commit — a commit failure then leaves a line for a lock that did not
+	// land, which says "somebody tried five times" and is still true.
+	uc.log.Warn("tài khoản cán bộ bị khoá tự động do đăng nhập sai",
+		"event", "staff.sign_in_locked", "outcome", "locked",
+		"actor", audit.SystemActor, "subject", cb.Ma, "xa", string(xa), "ip", ip,
+		"locked_until", until)
+	return nil
 }
 
 // YeuCauDangNhap is what the handler passes in. IP and device are recorded on the session.
@@ -130,13 +194,48 @@ func (uc *DangNhap) Chay(ctx context.Context, yc YeuCauDangNhap) (KetQuaDangNhap
 		return KetQuaDangNhap{}, fmt.Errorf("dang_nhap: tra cứu cán bộ: %w", err)
 	}
 
-	if err := password.KiemTra(yc.MatKhau, cb.MatKhauHash); err != nil {
-		uc.thatBai(xa, yc)
-		return KetQuaDangNhap{}, ErrDangNhapThatBai
-	}
+	// THE PASSWORD IS VERIFIED BEFORE THE LOCK IS LOOKED AT, AND ALWAYS. A locked account that skipped
+	// argon2 would answer in a microsecond instead of tens of milliseconds, and the response time would
+	// then say "locked" — i.e. "this address has an account and somebody has been guessing it". The
+	// answer to a locked account is the same error and the same log line as a wrong password, whether
+	// or not the password typed was right (open question #39; TestLockedAccountRefusedEvenWithRightPassword).
+	passwordOK := password.KiemTra(yc.MatKhau, cb.MatKhauHash) == nil
+	now := uc.clock()
 
-	var kq KetQuaDangNhap
+	var (
+		kq      KetQuaDangNhap
+		refused bool
+	)
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		kq, refused = KetQuaDangNhap{}, true
+
+		// The automatic lockout (#39), read and HELD for this transaction, so parallel attempts on one
+		// account queue here and each sees the count the previous one committed.
+		//
+		// A REFUSAL RETURNS nil, NOT AN ERROR, AND THAT IS THE POINT: the failure count must COMMIT
+		// although the sign-in fails. Returning the refusal as the closure's error would roll the
+		// counter back and make the lockout a decoration (the operator realm's shape, operator_auth.go).
+		lock, err := uc.canBo.SignInLockForUpdate(ctx, tx, cb.ID)
+		if err != nil {
+			return err
+		}
+		if lock.LockedAt(now) {
+			// Refused and NOT counted: a lock must not be extended by the guesses it stops, or whoever
+			// guesses keeps the real owner out for as long as they like. Nothing is written.
+			return nil
+		}
+		if !passwordOK {
+			return uc.countFailure(ctx, tx, xa, cb, lock, yc.IP, now)
+		}
+		// A success restarts the count (#39: "LIÊN TIẾP" — five in a row, not five in total). Written
+		// only when there is something to clear, so an ordinary sign-in costs no extra statement.
+		if !lock.IsClear() {
+			if err := uc.canBo.SetSignInLock(ctx, tx, cb.ID, lock.Clear()); err != nil {
+				return err
+			}
+		}
+		refused = false
+
 		sid, refresh, err := uc.phien.Tao(ctx, tx, cb.ID, yc.IP, yc.ThietBi)
 		if err != nil {
 			return err
@@ -187,6 +286,11 @@ func (uc *DangNhap) Chay(ctx context.Context, yc YeuCauDangNhap) (KetQuaDangNhap
 		// Nothing was committed: no session, no trail, no token. The three states agree.
 		return KetQuaDangNhap{}, fmt.Errorf("dang_nhap: mở phiên: %w", err)
 	}
+	if refused {
+		// Wrong password, or an account under the automatic lock: ONE error, ONE log line, whichever.
+		uc.thatBai(xa, yc)
+		return KetQuaDangNhap{}, ErrDangNhapThatBai
+	}
 
 	// Raising the argon2 cost later must not lock anyone out: a successful sign-in is the only
 	// moment the plaintext is available to rehash with.
@@ -195,6 +299,16 @@ func (uc *DangNhap) Chay(ctx context.Context, yc YeuCauDangNhap) (KetQuaDangNhap
 	}
 
 	return kq, nil
+}
+
+// signInLockDelta is one side of the before/after of a lock or an unlock. Two numbers — no personal
+// data (rule 6, invariant 5; rule 3).
+func signInLockDelta(l domain.SignInLock) map[string]any {
+	var until any
+	if l.LockedUntil != nil {
+		until = l.LockedUntil.UTC().Format(time.RFC3339)
+	}
+	return map[string]any{"failed_sign_in_count": l.FailedCount, "sign_in_locked_until": until}
 }
 
 // thatBai writes THE ONE LINE a failed sign-in produces, whatever the reason.

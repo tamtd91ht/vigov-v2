@@ -69,6 +69,10 @@ type KhoDanhBaCanBo interface {
 	Chen(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	CapNhatHoSo(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	DatKhoa(ctx context.Context, tx *store.ScopedTx, id string, dangHoatDong bool) error
+	// The automatic sign-in lockout of #39 (migration 0020) — read and cleared by the unlock
+	// direction of DatKhoa only. See the note there.
+	SignInLockForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.SignInLock, error)
+	SetSignInLock(ctx context.Context, tx *store.ScopedTx, id string, l domain.SignInLock) error
 	DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error
 	DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi, lyDo string, luc time.Time) error
@@ -190,6 +194,11 @@ const (
 	HanhViKhoaCanBo   = "khoa_tai_khoan_can_bo"
 	HanhViMoKhoaCanBo = "mo_khoa_tai_khoan_can_bo"
 	HanhViDoiVaiTro   = "doi_vai_tro_can_bo"
+
+	// ActionSignInLockLifted — an administrator lifted the AUTOMATIC lock of #39 before its twelve
+	// hours were up. Its own verb, never `mo_khoa_tai_khoan_can_bo`: that one says a retired person
+	// was brought back (#10), this one says a run of failed sign-ins was forgiven.
+	ActionSignInLockLifted = "mo_khoa_dang_nhap_sai"
 
 	// THREE MORE FOR THE MINI APP PUBLICATION (#12), for the same reason: "this person's mobile was
 	// put on a public channel", "it was taken off" and "their position in the list moved" are three
@@ -553,6 +562,17 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 			return err
 		}
 
+		// THE ADMINISTRATOR'S EARLY UNLOCK OF #39 RIDES ON THIS ROUTE'S UNLOCK DIRECTION — "quản trị
+		// viên xã mở khoá sớm được" — under the same key (`admin.user`) and the same #14 self-check,
+		// so there is no second "unlock" button with a second permission to keep in step. The TWO
+		// LOCKS STAY TWO FACTS: each is lifted only if it is actually set, each under its own verb,
+		// and locking (khoa = true) never touches the automatic one.
+		if !khoa {
+			if err := uc.liftSignInLock(ctx, tx, truoc, nguoi); err != nil {
+				return err
+			}
+		}
+
 		if truoc.DangHoatDong == !khoa {
 			// Already in the requested state. Nothing written, nothing audited — see Sua.
 			sau = truoc
@@ -615,6 +635,35 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 		return domain.CanBoTomTat{}, err
 	}
 	return sau, nil
+}
+
+// liftSignInLock clears the automatic lockout of #39 — a lock in force, or a run of failures that has
+// not reached the threshold yet — and writes its own audit entry in the caller's transaction. A clean
+// account (or one whose lock has already run out with no failures since) writes nothing: an entry
+// saying "unlocked" for an account that was not locked would be a false record.
+func (uc *DanhBaCanBo) liftSignInLock(ctx context.Context, tx *store.ScopedTx,
+	cb domain.CanBoTomTat, nguoi NguoiThucHien) error {
+
+	lock, err := uc.kho.SignInLockForUpdate(ctx, tx, cb.ID)
+	if err != nil {
+		return err
+	}
+	if !lock.LockedAt(uc.bayGio()) && lock.FailedCount == 0 {
+		return nil
+	}
+	cleared := lock.Clear()
+	if err := uc.kho.SetSignInLock(ctx, tx, cb.ID, cleared); err != nil {
+		return err
+	}
+	return audit.Write(ctx, tx, audit.Entry{
+		Actor:   nguoi.Vet,
+		Action:  ActionSignInLockLifted,
+		Subject: cb.Ma,
+		Delta: deltaCanBo(map[string]any{
+			"truoc": signInLockDelta(lock),
+			"sau":   signInLockDelta(cleared),
+		}),
+	})
 }
 
 // DoiVaiTro moves one person to a role, or to no role at all.

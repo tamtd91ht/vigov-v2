@@ -211,8 +211,8 @@ func TestNhieuYeuCauDongThoiKhongLanXaSangNhau(t *testing.T) {
 	// sequential test can produce it. Run with -race.
 	hetHan := time.Now().UTC().Add(idstore.ThoiHanPhien)
 	phien := &phienAnToan{phien: map[string]idstore.Phien{
-		sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan},
-		sidB: {ID: sidB, NguoiDungID: idNoiBo, HetHanLuc: hetHan},
+		sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan, TaoLuc: time.Now().UTC()},
+		sidB: {ID: sidB, NguoiDungID: idNoiBo, HetHanLuc: hetHan, TaoLuc: time.Now().UTC()},
 	}}
 	canBo := &canBoAnToan{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 
@@ -221,12 +221,13 @@ func TestNhieuYeuCauDongThoiKhongLanXaSangNhau(t *testing.T) {
 			xaA: {idNoiBo: {quyenThu: true}},
 			xaB: {}, // the same person, no grant in commune B
 		}},
-		Signer:   dungMayChu(t).signer,
-		Phien:    phien,
-		CanBo:    canBo,
-		DangNhap: &dangNhapGia{sid: sidA, hetHan: hetHan},
-		DangXuat: &dangXuatGia{},
-		Log:      slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+		Signer:       dungMayChu(t).signer,
+		Phien:        phien,
+		CanBo:        canBo,
+		IdleSessions: &idleRevokerFake{},
+		DangNhap:     &dangNhapGia{sid: sidA, hetHan: hetHan},
+		DangXuat:     &dangXuatGia{},
+		Log:          slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 	}
 
 	mux := http.NewServeMux()

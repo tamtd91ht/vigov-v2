@@ -49,6 +49,16 @@ type Phien struct {
 	DungGanNhat *time.Time
 }
 
+// LastActivity is what the idle lock (open question #38) measures from: the last request the
+// session served, or its creation when it has served none yet. A session opened and never used is
+// idle from the moment it was opened — NULL must not read as "never idle".
+func (p Phien) LastActivity() time.Time {
+	if p.DungGanNhat != nil {
+		return *p.DungGanNhat
+	}
+	return p.TaoLuc
+}
+
 var (
 	ErrPhienKhongTonTai = errors.New("phien: không tồn tại hoặc đã bị thu hồi")
 	ErrPhienHetHan      = errors.New("phien: đã hết hạn")
@@ -175,6 +185,31 @@ func (s *PhienStore) ThuHoiCuaCanBo(ctx context.Context, tx *store.ScopedTx, ngu
 		return fmt.Errorf("phien: thu hồi theo cán bộ: %w", err)
 	}
 	return nil
+}
+
+// IdleRevokeReason is `phien.thu_hoi_ly_do` for a session ended by the idle lock (#38).
+const IdleRevokeReason = "het_han_do_khong_dung"
+
+// RevokeIdle ends one session that has gone idle, and reports whether THIS call ended it.
+//
+// CONDITIONAL ON THE LAST ACTIVITY THE CALLER JUDGED, not on "now minus the limit" recomputed here:
+// the caller decided "idle" from lastActivity, and the UPDATE must land only if that is still the
+// row's state. A request that touched the session in between (dung_gan_nhat moved on) leaves it
+// alone; two requests that both found it idle race harmlessly — one revokes, the other reports false
+// and writes no second audit entry.
+//
+// The caller writes the audit entry in the same transaction (see the type's comment).
+func (s *PhienStore) RevokeIdle(ctx context.Context, tx *store.ScopedTx, sid string, lastActivity time.Time) (bool, error) {
+	kq, err := tx.Exec(ctx, dongThuHoi+`id = $2 AND coalesce(dung_gan_nhat, tao_luc) <= $4`,
+		string(tx.TenantID()), sid, IdleRevokeReason, lastActivity)
+	if err != nil {
+		return false, fmt.Errorf("phien: revoke idle: %w", err)
+	}
+	n, err := kq.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("phien: revoke idle: rows affected: %w", err)
+	}
+	return n == 1, nil
 }
 
 // GhiNhanDung records that a session was used, for the "last active" column.

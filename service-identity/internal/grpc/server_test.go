@@ -110,9 +110,12 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		Phien: &phienGia{p: idstore.Phien{
 			ID: "sid-gia", NguoiDungID: idCanBo,
 			HetHanLuc: time.Now().Add(time.Hour),
+			TaoLuc:    time.Now().UTC(),
 		}},
-		CanBo: canBoGia{cb: domain.CanBo{ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true}},
-		Lo:    &loGia{},
+		// The idle lock (#38) — session_idle_test.go.
+		IdleSessions: &idleRevokerFake{},
+		CanBo:        canBoGia{cb: domain.CanBo{ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true}},
+		Lo:           &loGia{},
 		// The name read behind ResolveStaffNames. Its fake lives in ten_can_bo_test.go, beside the
 		// handler it exercises — and it answers NOTHING by default, so a test about that RPC has to
 		// say out loud which records it put in the directory and which it removed from it.
@@ -263,7 +266,7 @@ func TestResolveMoiCredentialKhongDungDuocChoCungMotCauTraLoi(t *testing.T) {
 // so this counter is what turns red.
 func TestResolveLechXaThiKhongDocKhoLanNao(t *testing.T) {
 	ph := &phienGia{p: idstore.Phien{ID: "sid-gia", NguoiDungID: idCanBo,
-		HetHanLuc: time.Now().Add(time.Hour)}}
+		HetHanLuc: time.Now().Add(time.Hour), TaoLuc: time.Now().UTC()}}
 	s, nhatKy := may(t, func(d *Deps) { d.Phien = ph })
 
 	// The token says commune A; the call names commune B.
@@ -394,7 +397,7 @@ func TestResolveKhongCoQuyenNaoVanLaMotPrincipal(t *testing.T) {
 
 func TestResolveThanhCong(t *testing.T) {
 	ph := &phienGia{p: idstore.Phien{ID: "sid-gia", NguoiDungID: idCanBo,
-		HetHanLuc: time.Now().Add(time.Hour)}}
+		HetHanLuc: time.Now().Add(time.Hour), TaoLuc: time.Now().UTC()}}
 	s, _ := may(t, func(d *Deps) { d.Phien = ph })
 
 	ra, err := s.ResolveStaffPrincipal(ctxXa(xaA),
@@ -579,6 +582,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		return Deps{
 			Signer:         ky,
 			Phien:          &phienGia{},
+			IdleSessions:   &idleRevokerFake{},
 			CanBo:          canBoGia{},
 			Lo:             &loGia{},
 			Ten:            &tenGia{},
@@ -604,6 +608,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"thiếu phiên":  func(d *Deps) { d.Phien = nil },
 		"thiếu cán bộ": func(d *Deps) { d.CanBo = nil },
 		"thiếu lô":     func(d *Deps) { d.Lo = nil },
+		// Missing it is an idle session refused but never revoked or audited (#38).
+		"missing idle-session revoker": func(d *Deps) { d.IdleSessions = nil },
 		// Missing it is not "one RPC unavailable": ResolveStaffNames is the ONE path by which a
 		// staff member's name leaves this service, so every archival record in the system renders a
 		// bare code where the handler's name belongs (ADR 0034).

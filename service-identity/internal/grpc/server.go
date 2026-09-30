@@ -82,6 +82,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -140,6 +141,11 @@ type (
 	QuyenDoc interface {
 		QuyenCua(ctx context.Context, p authz.Principal) ([]authz.Perm, error)
 	}
+
+	// IdleSessionRevoker — see Deps.IdleSessions.
+	IdleSessionRevoker interface {
+		RevokeIdle(ctx context.Context, sid, staffCode, ip string, lastActivity time.Time, admin bool) error
+	}
 )
 
 // Deps is what the server cannot work without. Every field is required; Server refuses to be
@@ -155,6 +161,10 @@ type Deps struct {
 	CanBo CanBoDoc
 	Lo    CanBoLo
 	Quyen QuyenDoc
+
+	// IdleSessions ends a staff session the idle lock (#38) has caught, with its audit entry. THE SAME
+	// *app.SessionIdleExpiry the HTTP edge is given — one rule, one way of ending the session.
+	IdleSessions IdleSessionRevoker
 
 	// The name read behind ResolveStaffNames — the ONE path by which a staff member's name leaves
 	// this service (ADR 0034). A THIRD staff field beside CanBo and Lo, and the third predicate:
@@ -253,6 +263,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho phiên — ResolveStaffPrincipal không kiểm được phiên đã thu hồi chưa")
 	case d.CanBo == nil:
 		panic("identity/grpc: thiếu kho cán bộ — ResolveStaffPrincipal không dựng được principal")
+	case d.IdleSessions == nil:
+		panic("identity/grpc: thiếu use case khoá phiên không dùng — ResolveStaffPrincipal không thu hồi và ghi vết được phiên hết hạn do không dùng")
 	case d.Lo == nil:
 		panic("identity/grpc: thiếu kho đọc cán bộ theo lô — BatchGetStaff sẽ panic khi có người gọi")
 	case d.Ten == nil:
@@ -457,6 +469,26 @@ func (s *Server) ResolveStaffPrincipal(ctx context.Context, req *identityv1.Reso
 		return nil, s.loi(ctx, err, "ResolveStaffPrincipal/quyen")
 	}
 
+	// 5b. THE IDLE LOCK (#38) — THE SAME RULE AS XacThuc's STEP 5b, AND IT MUST BE HERE TOO. Every
+	// staff request to documents, petitions, finance or comms authenticates through this RPC; an idle
+	// lock applied only at identity's own HTTP edge would be one those four services walk straight
+	// past. "Holding admin.user" is read from the grant set just read — the same live predicate, no
+	// second query. An idle session is revoked and audited by the same use case, and answers the
+	// contract's ordinary "not usable", exactly as an expired one does.
+	//
+	// ip "" ON PURPOSE: this edge only has the calling service's CLAIM of the browser address
+	// (req.client_ip), and a claim must never become the audit trail's "from which IP" (see step 2).
+	admin := holdsPermission(quyen, domain.AdminSessionPermission)
+	if domain.SessionIdleExpired(ph.LastActivity(), time.Now().UTC(), func() bool { return admin }) {
+		if err := s.d.IdleSessions.RevokeIdle(ctx, claims.Sid, cb.Ma, "", ph.LastActivity(), admin); err != nil {
+			// Fail closed: refused whatever the revocation did; the next call tries again.
+			s.d.Log.ErrorContext(ctx, "không thu hồi được phiên hết hạn do không dùng",
+				"rpc", "ResolveStaffPrincipal", "event", "session.idle_expired", "outcome", "error",
+				"subject", cb.Ma, "xa", string(xa), "err", err)
+		}
+		return khongCoPrincipal(), nil
+	}
+
 	// 6. Last-seen stamp. Outside any transaction and its failure ignored, exactly as XacThuc
 	// does it: it is a diagnostic column, and failing a real authentication because a timestamp
 	// could not be written trades an operation for a nicety.
@@ -473,6 +505,16 @@ func (s *Server) ResolveStaffPrincipal(ctx context.Context, req *identityv1.Reso
 			PermissionKeys: sangKhoaQuyen(quyen),
 		},
 	}, nil
+}
+
+// holdsPermission reports whether key is in the grant set just read for this request.
+func holdsPermission(grants []authz.Perm, key string) bool {
+	for _, g := range grants {
+		if string(g) == key {
+			return true
+		}
+	}
+	return false
 }
 
 // BatchGetStaff resolves staff by id, within the commune the metadata names.

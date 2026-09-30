@@ -95,7 +95,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		}},
 		Signer: giaiSigner,
 		Phien: &phienGia{
-			phien:  map[string]idstore.Phien{sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan}},
+			phien:  map[string]idstore.Phien{sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan, TaoLuc: time.Now().UTC()}},
 			thuHoi: map[string]bool{},
 		},
 		Quyen:     quyenMau(),
@@ -143,7 +143,9 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		// Register refuses a Deps without the automation use case.
 		Automation: automationSample(),
 		CanBo:      &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa:     danhBaMau(),
+		// Register refuses a Deps without the idle-lock use case (#38).
+		IdleSessions: &idleRevokerFake{},
+		DanhBa:       danhBaMau(),
 		// Same reason again: the five write routes of the register are mounted by Register, so the
 		// use case behind them has to be wired even though nothing in this file calls them.
 		GhiDanhBa: ghiDanhBaMau(),

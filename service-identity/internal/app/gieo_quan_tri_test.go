@@ -204,6 +204,11 @@ func (c *connGq) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		}
 		return &rowsGq{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 
+	case strings.HasPrefix(q, "SELECT failed_sign_in_count"):
+		// store.SignInLockForUpdate (#39): a clean account — the seed is not about the lockout.
+		return &rowsGq{cot: []string{"failed_sign_in_count", "sign_in_locked_until"},
+			hang: [][]driver.Value{{int64(0), nil}}}, nil
+
 	case strings.Contains(q, "FROM vai_tro WHERE"):
 		return &rowsGq{cot: []string{"id", "?column?"},
 			hang: [][]driver.Value{{"vt-quan-tri", c.k.vaiTroDaXoa}}}, nil

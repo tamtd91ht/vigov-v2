@@ -709,6 +709,8 @@ type mayChu struct {
 	auditLog *auditLogFake
 	// The automation use case — see automationFake in automation_test.go.
 	automation *automationFake
+	// idleSessions is the idle-lock use case (#38) — session_idle_test.go.
+	idleSessions *idleRevokerFake
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -732,8 +734,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	hetHan := time.Now().UTC().Add(idstore.ThoiHanPhien)
 	phien := &phienGia{
 		phien: map[string]idstore.Phien{
-			sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan},
-			sidB: {ID: sidB, NguoiDungID: idNoiBo, HetHanLuc: hetHan},
+			sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan, TaoLuc: time.Now().UTC()},
+			sidB: {ID: sidB, NguoiDungID: idNoiBo, HetHanLuc: hetHan, TaoLuc: time.Now().UTC()},
 		},
 		thuHoi: map[string]bool{},
 	}
@@ -769,6 +771,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiSLA := ghiSLAMau()
 	auditLog := &auditLogFake{}
 	automation := automationSample()
+	idleSessions := &idleRevokerFake{}
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -827,7 +830,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		Signer:     signer,
 		Phien:      phien,
 		CanBo:      canBo,
-		DanhBa:     danhBa,
+		// The idle lock (#38) — session_idle_test.go. Register panics without it.
+		IdleSessions: idleSessions,
+		DanhBa:       danhBa,
 		// The five write routes. Register panics without it, which is how an unwired write surface
 		// is caught at construction rather than by the first administrator who tries to use it.
 		GhiDanhBa: ghiDanhBa,
@@ -900,6 +905,8 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		auditLog:   auditLog,
 		automation: automation,
+
+		idleSessions: idleSessions,
 
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),

@@ -30,6 +30,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
@@ -91,6 +92,13 @@ type (
 	// CanBoDoc rebuilds the staff account behind a session.
 	CanBoDoc interface {
 		TheoID(ctx context.Context, id string) (domain.CanBo, error)
+	}
+
+	// IdleSessionRevoker ends a staff session the idle lock (open question #38) has caught, with its
+	// audit entry. A use case, not a store method: it writes. *app.SessionIdleExpiry in production —
+	// the SAME value internal/grpc is given, so the two edges end an idle session the same way.
+	IdleSessionRevoker interface {
+		RevokeIdle(ctx context.Context, sid, staffCode, ip string, lastActivity time.Time, admin bool) error
 	}
 
 	// CanBoDanhBa reads the commune's staff register for the two routes below.
@@ -557,8 +565,10 @@ type Deps struct {
 	Signer     *token.Signer
 	Phien      PhienDoc
 	CanBo      CanBoDoc
-	DanhBa     CanBoDanhBa
-	GhiDanhBa  CanBoGhiDanhBa
+	// IdleSessions ends sessions caught by the idle lock (#38) inside XacThuc. See IdleSessionRevoker.
+	IdleSessions IdleSessionRevoker
+	DanhBa       CanBoDanhBa
+	GhiDanhBa    CanBoGhiDanhBa
 	// ChonNguoi — the narrow picker behind GET /api/v1/staff-directory. See DanhBaChonNguoi.
 	ChonNguoi DanhBaChonNguoi
 	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
@@ -591,6 +601,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu token.Signer — không ký được phiên")
 	case d.Phien == nil || d.CanBo == nil:
 		panic("identity/http: thiếu kho phiên hoặc kho cán bộ — không dựng được Principal")
+	case d.IdleSessions == nil:
+		// Refused at construction: without it an idle session would still be REFUSED (the decision
+		// is derived from dung_gan_nhat) but never revoked or audited — a lock nobody can account for.
+		panic("identity/http: thiếu use case khoá phiên không dùng — phiên hết hạn do không dùng không được thu hồi và ghi vết")
 	case d.DanhBa == nil:
 		panic("identity/http: thiếu kho danh bạ cán bộ — hai tuyến đọc cán bộ sẽ panic khi có người gọi")
 	case d.GhiDanhBa == nil:
