@@ -318,6 +318,17 @@
       "bang_chung": "4d2c49e4 — lib/demo-build.ts (__VIGOV_DEMO__ để trần cho bundler gập), cong-dan/man/demo-mode.tsx, commune-session.ts DEMO_PROCEEDS (tu-choi, thu-lai, cho-lat, ngoai-zalo, chua-xac-thuc-so) → chạy việc không phiên, không vòng; deploy.mjs từ chối --demo thiếu --vao-thang, in cảnh báo. bundle-for-zalo.test.ts: bản thường 0 chuỗi demo, bản demo đủ. tsc sạch, vitest 48 tệp 1278/1278, build xanh.",
       "tiep_theo": "BỎ --demo trước khi nộp duyệt Zalo (người dùng tự bỏ). Chưa có test đi trọn TrangXa sessionLost → màn thông báo (DOM test không mô phỏng chạm). Đường dẫn từ chối hộp Zalo (tu-choi) cũng cho đi tiếp — bỏ khỏi DEMO_PROCEEDS nếu muốn chặt hơn. Chưa xem trên máy thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "giao-dien-theo-prototype-spec",
+      "viec": "App riêng của xã theo citizen-app/ui-design/prototpye-spec/PROTOTYPE.md §4–§7, từng màn theo §12, nối API (ADR 0047 §6, dòng 30/09/2026 '12 quyết định')",
+      "trang_thai": "dang_lam",
+      "bang_chung": "4d7006bb — wave 0 khung + bộ giao diện: một cột 100dvh, chỉ .xa-trang cuộn; header trống đồng + logo 4 tab gốc; CommuneButton, khối lỗi/rỗng/tải, chip 4 tông; tông cyan/red, hết hồng; 37 biểu tượng; SectionHeader. tsc sạch, vitest 1297/1297, build xanh, chụp 390×844.",
+      "tiep_theo": "Wave 1 giao diện từng màn (trang chủ, gửi phản ánh 3 bước, danh sách/chi tiết phiếu, cá nhân, tin tức, danh bạ). Nối API theo 4 đợt (tin tức đầy đủ → cảnh báo thiên tai → ảnh hiện trường → giờ từng bước, SĐT che, truyền thanh), chờ người dùng chốt G1–G9. Tên xã chưa có trên màn con (chỉ tiêu đề màn) — cần quyết. Chuông trang chủ còn ở góc Zalo (quyết định 10: chuyển vào Cá nhân).",
+      "menu": [
+        "noi-dung-mini-app",
+        "phan-anh-nguoi-dan"
+      ]
     }
   ]
 }
