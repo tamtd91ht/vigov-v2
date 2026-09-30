@@ -32,10 +32,10 @@ import {
 } from "../../content/company-profile";
 import { NGAY_CHUP_TIN, ngayDoc, TIN_VIHAT } from "../../content/tin-tuc";
 import {
-  SolutionSuggestionScreen,
-  SuggestionResult,
-  WORDS,
-} from "../solution-suggestion/SolutionSuggestionScreen";
+  GoiYGiaiPhapScreen,
+  KetQuaGoiY,
+  LOI,
+} from "../goi-y-giai-phap/GoiYGiaiPhapScreen";
 import { ManDanhThiep } from "../tinh-nang/ManDanhThiep";
 import { KHAI_BAO_LOI_GOI } from "../tinh-nang/zalo-api";
 import { TuVanBaoGiaScreen } from "../yeu-cau/TuVanBaoGiaScreen";
@@ -135,7 +135,7 @@ const SCREEN_MARKUP = [
    *   Ba bước chọn thì được kiểm ở `goi-y-giai-phap.test.tsx`: chúng là KHỐI, không phải màn, nên
    *   chúng không nợ người đọc một `<h1>` của riêng mình.
    */
-  { id: "goi-y", markup: render(<SolutionSuggestionScreen />) },
+  { id: "goi-y", markup: render(<GoiYGiaiPhapScreen />) },
   {
     id: "goi-y-ket-qua",
     markup: render(
@@ -145,13 +145,13 @@ const SCREEN_MARKUP = [
             <span className="tile tile--lon" aria-hidden="true">
               <CompassGlyph className="tile__glyph" />
             </span>
-            <h1 className="banner__title">{WORDS.title}</h1>
+            <h1 className="banner__title">{LOI.tieu_de}</h1>
           </div>
         </section>
-        <SuggestionResult
-          answers={{ industry: "ban-le", scale: "10-50", task: "da-kenh" }}
-          task="da-kenh"
-          onViewSolution={() => {}}
+        <KetQuaGoiY
+          tra_loi={{ nganh: "ban-le", quy_mo: "10-50", viec: "da-kenh" }}
+          viec="da-kenh"
+          onXemGiaiPhap={() => {}}
         />
       </>,
     ),

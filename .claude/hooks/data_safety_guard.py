@@ -80,13 +80,9 @@ EMPTY_FILTER = re.compile(
     r"|\bUPDATE\s+\w+\s+SET\b(?![^;]*?\bWHERE\b)"
     r"|\.\s*(Updates?|Delete)\s*\(\s*\)")
 
-# English names from the ADR 0061 dictionary sit beside the Vietnamese ones: after layer B,
-# `DELETE FROM disbursement_voucher` named no word here and walked past rule 7 in silence.
 BUSINESS = re.compile(
     r"(don_?thu|van_?ban|phan_?anh|nhiem_?vu|giai_?ngan|ho_?so|cong_?dan|can_?bo|"
-    r"audit|nhat_?ky|document|dossier|petition|feedback|task|citizen|staff|"
-    r"disbursement|voucher|budget|investment_?project|funding|meeting|announcement|log_?entry)",
-    re.I)
+    r"audit|nhat_?ky|document|dossier|petition|feedback|task|citizen|staff)", re.I)
 
 
 # Commands that EXECUTE what a heredoc feeds them. For anything else — `git commit -F -`,

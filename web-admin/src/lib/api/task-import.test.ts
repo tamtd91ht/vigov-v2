@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOI_KHONG_RO } from "./request";
+import { LOI_KHONG_RO } from "./goi";
 import {
   TASK_IMPORT_FILE_FIELD,
   TASK_IMPORT_TOO_LARGE,

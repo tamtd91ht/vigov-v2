@@ -108,7 +108,7 @@ func (s *SystemMessageOverrideStore) UpdateText(ctx context.Context, tx *store.S
 	if err != nil {
 		return fmt.Errorf("system_message_override: cập nhật: %w", err)
 	}
-	return expectOneRow(res, "cập nhật câu hệ thống")
+	return doiMotDong(res, "cập nhật câu hệ thống")
 }
 
 // SoftDelete retires the live wording — "Khôi phục câu mặc định". All three of rule 7 invariant
@@ -121,5 +121,5 @@ func (s *SystemMessageOverrideStore) SoftDelete(ctx context.Context, tx *store.S
 	if err != nil {
 		return fmt.Errorf("system_message_override: xoá mềm: %w", err)
 	}
-	return expectOneRow(res, "khôi phục câu mặc định")
+	return doiMotDong(res, "khôi phục câu mặc định")
 }

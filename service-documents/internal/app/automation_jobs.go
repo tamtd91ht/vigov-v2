@@ -9,7 +9,7 @@ package app
 // `van-ban-den`) drops the notices that depended on it — nothing is ever sent from a default — and the
 // run is recorded CONFIGURATION_MISSING, so the commune sees it on the configuration screen.
 //
-// ONE FIELD, "": the register has no `lĩnh vực` (app.IncomingDocuments.resolveDueAt), so every identity
+// ONE FIELD, "": the register has no `lĩnh vực` (app.VanBanDen.hanXuLyXong), so every identity
 // question reads the commune's DEFAULT `van-ban-den` row — the same row the deadline was fixed from.
 //
 // WHO IS TOLD, in one chain for every job, fail closed at each step:
@@ -160,7 +160,7 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 	var unnamed []domain.AutomationRecord
 	for _, l := range [][]domain.AutomationRecord{soon, late, unassigned} {
 		for _, x := range l {
-			if len(domain.CleanRecipients([]string{x.AssigneeCode})) == 0 {
+			if len(domain.CleanRecipients([]string{x.AssigneeMa})) == 0 {
 				unnamed = append(unnamed, x)
 			}
 		}
@@ -180,12 +180,12 @@ func (r *AutomationRunner) slaReminders(ctx context.Context, asOf time.Time) (au
 			p.nobody(x.ID)
 			continue
 		}
-		for _, code := range to {
-			perPerson[code] = append(perPerson[code], x.Code)
+		for _, ma := range to {
+			perPerson[ma] = append(perPerson[ma], x.Code)
 		}
 	}
-	for _, code := range sortedKeys(perPerson) {
-		p.notices = append(p.notices, domain.DueSoonNotice(day, code, perPerson[code]))
+	for _, ma := range sortedKeys(perPerson) {
+		p.notices = append(p.notices, domain.DueSoonNotice(day, ma, perPerson[ma]))
 	}
 	for _, x := range late {
 		to := book.chain(x)
@@ -365,7 +365,7 @@ func (b *recipientBook) unitHolders(x domain.AutomationRecord) []string {
 
 // chain is the file header's order: named holder → unit holders → leadership.
 func (b *recipientBook) chain(x domain.AutomationRecord) []string {
-	if to := domain.CleanRecipients([]string{x.AssigneeCode}); len(to) > 0 {
+	if to := domain.CleanRecipients([]string{x.AssigneeMa}); len(to) > 0 {
 		return to
 	}
 	if to := b.unitHolders(x); len(to) > 0 {

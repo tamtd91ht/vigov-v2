@@ -8,15 +8,15 @@ import (
 
 func TestFinishedIncomingStatusesAgreesWithTheDomainRule(t *testing.T) {
 	// The SQL `open` predicate is built from FinishedIncomingStatuses. If it ever disagreed with
-	// IsFinished, the dashboard figure and IsOverdue would count different documents while each looked
+	// DaKetThuc, the dashboard figure and QuaHan would count different documents while each looked
 	// correct alone.
-	finished := map[IncomingDocumentStatus]bool{}
+	finished := map[TrangThaiVanBanDen]bool{}
 	for _, s := range FinishedIncomingStatuses() {
 		finished[s] = true
 	}
 	for _, s := range IncomingStatuses() {
-		if s.IsFinished() != finished[s] {
-			t.Errorf("%s: IsFinished=%v but FinishedIncomingStatuses says %v", s, s.IsFinished(), finished[s])
+		if s.DaKetThuc() != finished[s] {
+			t.Errorf("%s: DaKetThuc=%v but FinishedIncomingStatuses says %v", s, s.DaKetThuc(), finished[s])
 		}
 	}
 	if len(FinishedIncomingStatuses()) != 3 {

@@ -13,7 +13,7 @@
 
 import { commitImport, downloadImportTemplate, previewImport } from "./excel-import";
 import type { ImportResult, ImportRoutes } from "./excel-import";
-import type { KetQua } from "./request";
+import type { KetQua } from "./goi";
 import type {
   identity_get_org_units_import_template,
   identity_orgUnitImportPreviewOut,

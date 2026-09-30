@@ -33,11 +33,11 @@ import {
 import { guiYeuCau, type KetQuaGui } from "../../api/goi-may-chu";
 import { KHOA_CHIEN_DICH, maChienDichHopLe } from "../../content/chien-dich";
 import { SOLUTIONS } from "../../content/company-profile";
-import { paramsOf, readLaunchParams } from "../../lib/launch-params";
+import { thamSo, thamSoMoApp } from "../../lib/launch-params";
 import { MOC_DANG_NHAP, type ThamSoMan } from "../company-intro/dieu-huong";
 import { HandshakeGlyph } from "../company-intro/icons";
-import { bearerOf, useSession } from "../log-in/session-store";
-import { SCALES } from "../solution-suggestion/mapping";
+import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
+import { QUY_MO } from "../goi-y-giai-phap/anh-xa";
 
 import { MoiDangNhap } from "./MoiDangNhap";
 import { PHIEN_KHONG_LUU, TU_VAN } from "./noi-dung";
@@ -124,7 +124,7 @@ export function DaGuiXong({
 
 export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
   const di = onDi ?? (() => {});
-  const { session: phien } = useSession();
+  const { phien } = dungPhien();
 
   const [quan_tam, datQuanTam] = useState<readonly string[]>([]);
   const [quy_mo, datQuyMo] = useState("");
@@ -139,7 +139,7 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
    * của máy chủ — và một chuỗi lệch khuôn làm máy chủ trả 400, tức làm NÚT GỬI của người dùng
    * hỏng vì một thứ không liên quan gì tới họ. Xem `maChienDichHopLe`.
    */
-  const nguon = maChienDichHopLe(paramsOf(readLaunchParams())[KHOA_CHIEN_DICH] ?? "");
+  const nguon = maChienDichHopLe(thamSo(thamSoMoApp())[KHOA_CHIEN_DICH] ?? "");
 
   if (phien === null) {
     return (
@@ -187,7 +187,7 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
     // `bearerCua` chứ không `phien.token`: một chỗ quyết định "phiếu nào gửi được", xem
     // `kho-phien.tsx`. `phien` không thể là `null` ở đây — nhánh trên đã trả về — nhưng hàm vẫn
     // nhận `null` để không có một `!` nào trong mã sản phẩm.
-    datKetQua(await guiYeuCau(bearerOf(phien), yc));
+    datKetQua(await guiYeuCau(bearerCua(phien), yc));
     datDangGui(false);
   }
 
@@ -213,7 +213,7 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
 
       <HangChon
         cau_hoi={TU_VAN.cau_hoi_quy_mo}
-        lua_chon={SCALES}
+        lua_chon={QUY_MO}
         dang_chon={quy_mo === "" ? [] : [quy_mo]}
         // MỘT LỰA CHỌN: bấm lại chính mục đang chọn là bỏ chọn. Không có nút "xoá lựa chọn"
         // riêng — một nút chỉ để huỷ một lựa chọn là một nút nữa phải đọc.

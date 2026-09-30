@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOI_KHONG_RO } from "./request";
+import { LOI_KHONG_RO } from "./goi";
 import { TEST_UNREACHABLE_FALLBACK, getMailSettings, saveMailSettings, sendTestMail } from "./mail-settings";
 
 function reply(status: number, body: unknown) {

@@ -1,9 +1,9 @@
-import { CauHinhXaProvider } from "@/components/commune-config";
-import { phanHienThi } from "@/lib/commune-display-config";
-import { FormDangNhap } from "@/features/auth/log-in-form";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { FormDangNhap } from "@/features/auth/form-dang-nhap";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
-import { KhoiThuongHieu } from "./brand-block";
+import { KhoiThuongHieu } from "./khoi-thuong-hieu";
 
 /**
  * `/dang-nhap` — `15-phu-luc-giao-dien-chung` §1.

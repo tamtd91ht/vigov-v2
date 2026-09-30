@@ -97,11 +97,11 @@ const colleagueCode = "CB-00999"
 func inboxFixture() *fakeInbox {
 	at := time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC)
 	return &fakeInbox{rows: map[tenant.ID]map[string][]domain.StaffNotification{
-		tenantA: {
-			writerStaffCode: {
-				{ID: "tb-mine-1", RecipientCode: writerStaffCode, Kind: domain.StaffNotificationDueSoon,
+		xaA: {
+			maCanBoGhi: {
+				{ID: "tb-mine-1", RecipientCode: maCanBoGhi, Kind: domain.StaffNotificationDueSoon,
 					Title: "Bạn có 3 việc sắp đến hạn", Link: "/nhiem-vu?soon=true", CreatedAt: at},
-				{ID: "tb-mine-2", RecipientCode: writerStaffCode, Kind: domain.StaffNotificationOverdue,
+				{ID: "tb-mine-2", RecipientCode: maCanBoGhi, Kind: domain.StaffNotificationOverdue,
 					Title: "Việc quá hạn", CreatedAt: at, ReadAt: at},
 			},
 			colleagueCode: {
@@ -109,9 +109,9 @@ func inboxFixture() *fakeInbox {
 					Title: "THONG-BAO-CUA-DONG-NGHIEP", CreatedAt: at},
 			},
 		},
-		tenantB: {
-			writerStaffCode: {
-				{ID: "tb-other-commune", RecipientCode: writerStaffCode, Kind: domain.StaffNotificationDueSoon,
+		xaB: {
+			maCanBoGhi: {
+				{ID: "tb-other-commune", RecipientCode: maCanBoGhi, Kind: domain.StaffNotificationDueSoon,
 					Title: "THONG-BAO-XA-KHAC", CreatedAt: at},
 			},
 		},
@@ -129,16 +129,15 @@ func newInboxServer(t *testing.T) *inboxServer {
 	im := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:                &perCommuneChecker{},
-		MapAssetTypes:          sampleMapAssetTypes(),
-		WriteMapAssetTypes:     &fakeMapAssetTypeWriter{},
-		Announcements:          &fakeAnnouncementReader{},
-		WriteAnnouncements:     &fakeAnnouncementWriter{},
-		ContentItems:           &fakeContentItemReader{},
-		WriteContentItems:      &fakeContentItemWriter{},
-		ContentCategories:      &fakeContentCategoryReader{},
-		WriteContentCategories: &fakeContentCategoryWriter{},
-
+		Checker:              &checkerDanhMucGia{},
+		LoaiTaiNguyen:        danhMucMau(),
+		GhiLoaiTaiNguyen:     &ghiDanhMucGia{},
+		ThongBao:             &soThongBaoGia{},
+		GhiThongBao:          &ghiThongBaoGia{},
+		NoiDung:              &soNoiDungGia{},
+		GhiNoiDung:           &ghiNoiDungGia{},
+		DanhMucNoiDung:       &soDanhMucNDGia{},
+		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         &fakeMailSettings{},
@@ -149,9 +148,9 @@ func newInboxServer(t *testing.T) *inboxServer {
 		Log:                  im,
 	})
 	var h http.Handler = mux
-	h = injectPrincipal(h)
+	h = chuTheGhi(h)
 	h = idem.Middleware(nil, im)(h)
-	h = httpx.TenantMiddleware(sampleDirectory())(h)
+	h = httpx.TenantMiddleware(thuMucMau())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &inboxServer{h: h, inbox: inbox}
@@ -168,7 +167,7 @@ func (s *inboxServer) call(t *testing.T, method, host, path string, p *authz.Pri
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.Header.Set("Content-Type", "application/json")
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.h.ServeHTTP(w, r)
@@ -196,7 +195,7 @@ func TestInbox_401WithoutSession(t *testing.T) {
 	for _, rt := range inboxRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newInboxServer(t)
-			expectStatus(t, s.call(t, rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
+			doiMa(t, s.call(t, rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
 			if s.inbox.total() != 0 {
 				t.Error("chưa đăng nhập mà đã chạm hộp thư")
 			}
@@ -210,7 +209,7 @@ func TestInbox_401SessionOfAnotherCommune(t *testing.T) {
 	for _, rt := range inboxRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newInboxServer(t)
-			expectStatus(t, s.call(t, rt.method, hostA, rt.path, writerStaff(tenantB), rt.body), http.StatusUnauthorized)
+			doiMa(t, s.call(t, rt.method, hostA, rt.path, canBoGhi(xaB), rt.body), http.StatusUnauthorized)
 			if s.inbox.total() != 0 {
 				t.Error("phiên của xã khác mà đã chạm hộp thư của xã này")
 			}
@@ -222,8 +221,8 @@ func TestInbox_403NonStaffPrincipal(t *testing.T) {
 	for _, rt := range inboxRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newInboxServer(t)
-			citizen := &authz.Principal{ID: "cd-opaque", Kind: "citizen", TenantID: tenantA}
-			expectStatus(t, s.call(t, rt.method, hostA, rt.path, citizen, rt.body), http.StatusForbidden)
+			citizen := &authz.Principal{ID: "cd-opaque", Kind: "citizen", TenantID: xaA}
+			doiMa(t, s.call(t, rt.method, hostA, rt.path, citizen, rt.body), http.StatusForbidden)
 			if s.inbox.total() != 0 {
 				t.Error("chủ thể không phải cán bộ mà đã chạm hộp thư")
 			}
@@ -235,9 +234,9 @@ func TestInbox_500StaffWithoutCodeNoFallbackToID(t *testing.T) {
 	for _, rt := range inboxRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newInboxServer(t)
-			p := writerStaff(tenantA)
+			p := canBoGhi(xaA)
 			p.Ma = ""
-			expectStatus(t, s.call(t, rt.method, hostA, rt.path, p, rt.body), http.StatusInternalServerError)
+			doiMa(t, s.call(t, rt.method, hostA, rt.path, p, rt.body), http.StatusInternalServerError)
 			if s.inbox.total() != 0 {
 				t.Error("không có mã cán bộ mà vẫn chạm hộp thư — có lẽ đã dùng id nội bộ thay mã")
 			}
@@ -249,9 +248,9 @@ func TestInbox_200StaffOfTheCommune(t *testing.T) {
 	for _, rt := range inboxRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newInboxServer(t)
-			expectStatus(t, s.call(t, rt.method, hostA, rt.path, writerStaff(tenantA), rt.body), http.StatusOK)
-			if s.inbox.lastTenant != tenantA {
-				t.Errorf("chạy trong xã %q, muốn %q", s.inbox.lastTenant, tenantA)
+			doiMa(t, s.call(t, rt.method, hostA, rt.path, canBoGhi(xaA), rt.body), http.StatusOK)
+			if s.inbox.lastTenant != xaA {
+				t.Errorf("chạy trong xã %q, muốn %q", s.inbox.lastTenant, xaA)
 			}
 		})
 	}
@@ -263,10 +262,10 @@ func TestInbox_ListShowsOnlyOwnNotices(t *testing.T) {
 	s := newInboxServer(t)
 	// A `recipient` parameter is IGNORED: nothing on this route reads one.
 	w := s.call(t, http.MethodGet, hostA, "/api/v1/notifications?recipient="+colleagueCode+"&recipient_code="+colleagueCode,
-		writerStaff(tenantA), "")
-	expectStatus(t, w, http.StatusOK)
-	if s.inbox.lastRecipient != writerStaffCode {
-		t.Fatalf("đọc hộp thư của %q, muốn của chính phiên %q", s.inbox.lastRecipient, writerStaffCode)
+		canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if s.inbox.lastRecipient != maCanBoGhi {
+		t.Fatalf("đọc hộp thư của %q, muốn của chính phiên %q", s.inbox.lastRecipient, maCanBoGhi)
 	}
 	var out page.Result[notificationOut]
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
@@ -290,18 +289,18 @@ func TestInbox_ListShowsOnlyOwnNotices(t *testing.T) {
 
 func TestInbox_MarkColleagueNoticeIs404AndChangesNothing(t *testing.T) {
 	s := newInboxServer(t)
-	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/tb-colleague", writerStaff(tenantA), `{"read":true}`)
-	expectStatus(t, w, http.StatusNotFound)
-	if s.inbox.rows[tenantA][colleagueCode][0].Read() {
+	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/tb-colleague", canBoGhi(xaA), `{"read":true}`)
+	doiMa(t, w, http.StatusNotFound)
+	if s.inbox.rows[xaA][colleagueCode][0].Read() {
 		t.Error("đánh dấu được thông báo của đồng nghiệp")
 	}
-	if s.inbox.lastActor.ID != writerStaffCode {
+	if s.inbox.lastActor.ID != maCanBoGhi {
 		t.Errorf("use case nhận chủ thể %q, muốn mã của phiên", s.inbox.lastActor.ID)
 	}
 	// The same answer as an id that exists nowhere — the existence of the colleague's notice is not
 	// confirmed.
-	w2 := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/khong-co", writerStaff(tenantA), `{"read":true}`)
-	if w.Code != w2.Code || decodeError(t, w).Code != decodeError(t, w2).Code || decodeError(t, w).Message != decodeError(t, w2).Message {
+	w2 := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/khong-co", canBoGhi(xaA), `{"read":true}`)
+	if w.Code != w2.Code || loiTra(t, w).Code != loiTra(t, w2).Code || loiTra(t, w).Message != loiTra(t, w2).Message {
 		t.Error("thông báo của người khác và thông báo không tồn tại trả lời khác nhau")
 	}
 }
@@ -310,8 +309,8 @@ func TestInbox_MarkColleagueNoticeIs404AndChangesNothing(t *testing.T) {
 
 func TestInbox_UnreadCountIsOwnUnreadOnly(t *testing.T) {
 	s := newInboxServer(t)
-	w := s.call(t, http.MethodGet, hostA, "/api/v1/notifications/unread-count", writerStaff(tenantA), "")
-	expectStatus(t, w, http.StatusOK)
+	w := s.call(t, http.MethodGet, hostA, "/api/v1/notifications/unread-count", canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
 	var out unreadCountOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -323,8 +322,8 @@ func TestInbox_UnreadCountIsOwnUnreadOnly(t *testing.T) {
 
 func TestInbox_MarkOneReadReturnsItAndPassesSessionActor(t *testing.T) {
 	s := newInboxServer(t)
-	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/tb-mine-1", writerStaff(tenantA), `{"read":true}`)
-	expectStatus(t, w, http.StatusOK)
+	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications/tb-mine-1", canBoGhi(xaA), `{"read":true}`)
+	doiMa(t, w, http.StatusOK)
 	var out notificationOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -332,12 +331,12 @@ func TestInbox_MarkOneReadReturnsItAndPassesSessionActor(t *testing.T) {
 	if !out.Read || out.ReadAt == nil || out.ID != "tb-mine-1" {
 		t.Errorf("= %+v", out)
 	}
-	if a := s.inbox.lastActor; a.ID != writerStaffCode || a.Kind != "staff" || a.IP == "" {
+	if a := s.inbox.lastActor; a.ID != maCanBoGhi || a.Kind != "staff" || a.IP == "" {
 		t.Errorf("chủ thể = %+v, muốn mã cán bộ của phiên, kind staff, có IP", a)
 	}
 	// And the badge drops.
 	var cnt unreadCountOut
-	_ = json.Unmarshal(s.call(t, http.MethodGet, hostA, "/api/v1/notifications/unread-count", writerStaff(tenantA), "").Body.Bytes(), &cnt)
+	_ = json.Unmarshal(s.call(t, http.MethodGet, hostA, "/api/v1/notifications/unread-count", canBoGhi(xaA), "").Body.Bytes(), &cnt)
 	if cnt.Unread != 0 {
 		t.Errorf("sau khi đọc, unread = %d, muốn 0", cnt.Unread)
 	}
@@ -345,8 +344,8 @@ func TestInbox_MarkOneReadReturnsItAndPassesSessionActor(t *testing.T) {
 
 func TestInbox_MarkAllReadTouchesOnlyOwn(t *testing.T) {
 	s := newInboxServer(t)
-	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications", writerStaff(tenantA), `{"read":true}`)
-	expectStatus(t, w, http.StatusOK)
+	w := s.call(t, http.MethodPatch, hostA, "/api/v1/notifications", canBoGhi(xaA), `{"read":true}`)
+	doiMa(t, w, http.StatusOK)
 	var out markAllReadOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
@@ -354,7 +353,7 @@ func TestInbox_MarkAllReadTouchesOnlyOwn(t *testing.T) {
 	if out.Marked != 1 {
 		t.Errorf("marked = %d, muốn 1", out.Marked)
 	}
-	if s.inbox.rows[tenantA][colleagueCode][0].Read() || s.inbox.rows[tenantB][writerStaffCode][0].Read() {
+	if s.inbox.rows[xaA][colleagueCode][0].Read() || s.inbox.rows[xaB][maCanBoGhi][0].Read() {
 		t.Error("Đọc hết đánh dấu cả thông báo của đồng nghiệp hoặc của xã khác")
 	}
 }
@@ -363,7 +362,7 @@ func TestInbox_MarkReadRefusesFalseOrMissing(t *testing.T) {
 	for _, body := range []string{`{"read":false}`, `{}`, `nope`} {
 		for _, path := range []string{"/api/v1/notifications/tb-mine-1", "/api/v1/notifications"} {
 			s := newInboxServer(t)
-			expectStatus(t, s.call(t, http.MethodPatch, hostA, path, writerStaff(tenantA), body), http.StatusBadRequest)
+			doiMa(t, s.call(t, http.MethodPatch, hostA, path, canBoGhi(xaA), body), http.StatusBadRequest)
 			if s.inbox.markCalls+s.inbox.markAllCalls != 0 {
 				t.Errorf("%s %s: thân sai mà use case vẫn chạy", path, body)
 			}

@@ -80,10 +80,10 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	for _, warning := range cfg.CanhBao() {
+	for _, canhBao := range cfg.CanhBao() {
 		// Reported at EVERY startup, never once at deploy time: a flag switched on for a local
 		// afternoon is forgotten by the next morning (rule 8, invariant 7).
-		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", warning)
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
 	}
 
 	// 2. store — one schema per service; never another service's schema (rule 2).
@@ -102,8 +102,8 @@ func run(log *slog.Logger) error {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(time.Hour)
 
-	ctxPing, cancelPing := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancelPing()
+	ctxPing, huyPing := context.WithTimeout(context.Background(), 15*time.Second)
+	defer huyPing()
 	if err := db.PingContext(ctxPing); err != nil {
 		return fmt.Errorf("documents: không nối được cơ sở dữ liệu: %w", err)
 	}
@@ -115,31 +115,31 @@ func run(log *slog.Logger) error {
 	//
 	// The files are EMBEDDED in this binary, so what is applied is what was compiled — not
 	// whatever happens to be on the container's disk.
-	ctxMig, cancelMig := context.WithTimeout(context.Background(), 5*time.Minute)
-	migResult, err := migrate.Chay(ctxMig, db, migrations.FS, "documents")
-	cancelMig()
+	ctxMig, huyMig := context.WithTimeout(context.Background(), 5*time.Minute)
+	kqMig, err := migrate.Chay(ctxMig, db, migrations.FS, "documents")
+	huyMig()
 	if err != nil {
 		return fmt.Errorf("documents: migration không chạy được: %w", err)
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator finds
 	// out the replica is already at the schema they expected, without opening a psql prompt.
-	log.Info("migration xong", "service", "documents", "da_ap", migResult.DaAp, "bo_qua", len(migResult.BoQua))
+	log.Info("migration xong", "service", "documents", "da_ap", kqMig.DaAp, "bo_qua", len(kqMig.BoQua))
 
 	// 3. stores. Built on *store.DB, which only hands out commune-scoped access — there is no path
 	//    here to an unscoped query (rule 1, invariant 5).
-	storeDB := store.New(db)
-	documentTypes := docstore.NewDocumentTypeStore(storeDB)
-	incoming := docstore.NewIncomingDocumentStore(storeDB)
-	outgoing := docstore.NewOutgoingDocumentStore(storeDB)
-	// ONE NumberSeriesStore SHARED BY BOTH REGISTERS, and that is correct rather than convenient: the
-	// two series are told apart by the `so_sach` value inside each statement, not by which Go object
+	kho := store.New(db)
+	loaiVanBan := docstore.NewLoaiVanBanStore(kho)
+	vanBanDen := docstore.NewVanBanDenStore(kho)
+	vanBanDi := docstore.NewVanBanDiStore(kho)
+	// ONE DaySoStore SHARED BY BOTH REGISTERS, and that is correct rather than convenient: the two
+	// series are told apart by the `so_sach` value inside each statement, not by which Go object
 	// issued them. Two stores would be two objects over one table, which is one object too many.
-	numberSeries := docstore.NewNumberSeriesStore(storeDB)
+	daySo := docstore.NewDaySoStore(kho)
 
 	// 3b. use cases — the business write and its audit entry share ONE transaction inside these
 	//     (rule 6, invariant 3). The handlers only translate HTTP. It is given *store.DB rather
 	//     than a transaction because opening one is precisely what it is for.
-	documentTypeCatalogue := app.NewDocumentTypeCatalogue(storeDB, documentTypes)
+	ghiLoaiVanBan := app.NewDanhMucLoaiVanBan(kho, loaiVanBan)
 
 	// 4. directory — Host -> commune, over gRPC to the platform service.
 	//
@@ -148,12 +148,12 @@ func run(log *slog.Logger) error {
 	// forbidden #2. The cache is what makes a network call per request affordable at 200+ communes
 	// (ADR 0004, decision 5). The caller key goes with the address: the port answers nothing
 	// without it (ADR 0025).
-	platform, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
-	defer platform.Close()
-	directory := tenant.NewCachedDirectory(platform, cfg.TenantCacheTTL())
+	defer nenTang.Close()
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 5. identity — session cookie -> staff principal, over gRPC.
 	//
@@ -165,11 +165,11 @@ func run(log *slog.Logger) error {
 	//
 	// DIALLED, AND THEN REFUSED AT CONSTRUCTION IF THE ADDRESS IS MISSING. Starting without it
 	// would produce a service that answers 503 to every member of staff while identity is healthy.
-	identity, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		return err
 	}
-	defer identity.Close()
+	defer dinhDanh.Close()
 
 	// 5b. the two registers' use cases. THEY ARE BUILT HERE AND NOT BESIDE THE OTHER USE CASES
 	// because the incoming register needs the identity client: the processing deadline is computed
@@ -186,8 +186,8 @@ func run(log *slog.Logger) error {
 	// THE OUTGOING REGISTER TAKES NO IDENTITY CLIENT. An outgoing document carries no commitment to
 	// meet — issuing it IS the act — so there is no deadline to fetch and no reason for that
 	// register to stop working when identity is slow.
-	incomingDocs := app.NewIncomingDocuments(storeDB, incoming, numberSeries, identity)
-	outgoingDocs := app.NewOutgoingDocuments(storeDB, outgoing, numberSeries)
+	ghiVanBanDen := app.NewVanBanDen(kho, vanBanDen, daySo, dinhDanh)
+	ghiVanBanDi := app.NewVanBanDi(kho, vanBanDi, daySo)
 
 	// 6. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
 	//    cache — and each route then behaves per the CheDoHong it declared. Staging and prod refuse
@@ -214,21 +214,21 @@ func run(log *slog.Logger) error {
 	// one of them — Register panics on a nil Checker rather than letting them 403 or panic later.
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
-		Checker:                staffauth.Checker{},
-		DocumentTypes:          documentTypes,
-		DocumentTypeWriter:     documentTypeCatalogue,
-		IncomingDocuments:      incoming,
-		IncomingDocumentWriter: incomingDocs,
+		Checker:       staffauth.Checker{},
+		LoaiVanBan:    loaiVanBan,
+		GhiLoaiVanBan: ghiLoaiVanBan,
+		VanBanDen:     vanBanDen,
+		GhiVanBanDen:  ghiVanBanDen,
 		// The same use case: it owns the transaction the drawer's two reads share.
-		IncomingDocumentReader: incomingDocs,
-		OutgoingDocuments:      outgoing,
-		OutgoingDocumentWriter: outgoingDocs,
+		ChiTietVanBanDen: ghiVanBanDen,
+		VanBanDi:         vanBanDi,
+		GhiVanBanDi:      ghiVanBanDi,
 		// /tong-quan. The queue takes the SAME identity client the register books deadlines with:
 		// `critical` is 48 working hours of this commune's calendar, counted by identity (ADR 0007).
-		IncomingSummary: incoming,
-		OverdueQueue:    app.NewIncomingDashboard(incoming, identity),
+		IncomingSummary: vanBanDen,
+		OverdueQueue:    app.NewIncomingDashboard(vanBanDen, dinhDanh),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog: audit.NewLog(storeDB),
+		AuditLog: audit.NewLog(kho),
 		Log:      log,
 	})
 
@@ -243,7 +243,7 @@ func run(log *slog.Logger) error {
 		Addr: addr,
 		// OUTERMOST, around the whole edge chain: every layer reads one client address per
 		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(buildEdge(mux, directory, identity, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	// ĐÓNG ÊM. Trước 2026-09-22 bốn dịch vụ này gọi thẳng `http.ListenAndServe`, nên `SIGTERM`
@@ -266,7 +266,7 @@ func run(log *slog.Logger) error {
 	//
 	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
 	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
-	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Incoming: incoming, Log: log})
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{Incoming: vanBanDen, Log: log})
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return err
@@ -292,8 +292,8 @@ func run(log *slog.Logger) error {
 		defer comms.Close()
 		automation := crosstenant.NewAutomation(db)
 		runner, err := app.NewAutomationRunner(app.AutomationDeps{
-			Communes: automation, Locks: automation, Registry: platform, Identity: identity, Comms: comms,
-			Incoming: incoming, Log: log,
+			Communes: automation, Locks: automation, Registry: nenTang, Identity: dinhDanh, Comms: comms,
+			Incoming: vanBanDen, Log: log,
 		})
 		if err != nil {
 			return err
@@ -307,35 +307,35 @@ func run(log *slog.Logger) error {
 		close(runnerDone)
 	}
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	dungLai := make(chan os.Signal, 1)
+	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
-	errs := make(chan error, 2)
+	loi := make(chan error, 2)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errs <- err
+			loi <- err
 		}
 	}()
 	go func() {
 		log.Info("starting gRPC", "service", "documents", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
-			errs <- err
+			loi <- err
 		}
 	}()
 
 	select {
-	case err := <-errs:
+	case err := <-loi:
 		// One surface failing takes the process down rather than leaving it half-serving.
 		stopRunner()
 		grpcSrv.Stop()
 		_ = srv.Close()
 		return err
-	case <-stop:
+	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "documents")
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
+		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
+		defer huy()
 
 		// The runner stops at the next commune boundary; a run already executing still records its
 		// outcome (app.AutomationRunner.record). It drains inside the same 20 seconds.
@@ -380,7 +380,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 	return srv
 }
 
-// buildEdge builds the edge chain this binary serves.
+// dungBien builds the edge chain this binary serves.
 //
 // IT IS A FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN. core/staffauth proves what the middleware
 // does and core/httpx proves what TenantMiddleware does; neither can see whether THIS binary
@@ -413,23 +413,23 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 // process is alive, which is true or false regardless of which commune is asking. Behind Host
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
-func buildEdge(mux http.Handler, directory tenant.Directory, identity staffauth.Resolver,
+func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
-	h = staffauth.Middleware(identity, log)(h)
+	h = staffauth.Middleware(dinhDanh, log)(h)
 	h = idem.Middleware(idemStore, log)(h)
-	h = httpx.TenantMiddleware(directory)(h)
+	h = httpx.TenantMiddleware(danhBa)(h)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
-	outer := http.NewServeMux()
-	outer.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	ngoai := http.NewServeMux()
+	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	outer.Handle("/", h)
-	return outer
+	ngoai.Handle("/", h)
+	return ngoai
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

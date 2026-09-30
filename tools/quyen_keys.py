@@ -55,51 +55,10 @@ HINH_DANG_KHOA = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 # câu INSERT lạc ở dịch vụ khác vừa là vi phạm luật 2, vừa sẽ âm thầm hợp thức hoá thêm khoá.
 THU_MUC_BANG = os.path.join("service-identity", "migrations")
 
-# The table and its key column AS CREATED (identity 0001). Layer B of the rename campaign
-# (ADR 0061; glossary: `quyen` -> `permission`, `ma` -> `key`) renames both in a new migration,
-# so the name an INSERT must carry is FOLDED through every `ALTER … RENAME` before it, in
-# migration order — see `doc_bang_quyen`. Reading only `INSERT INTO quyen` after that rename
-# would read the seeds up to the rename and silently miss every key seeded after it.
-ORIGIN_TABLE = "quyen"
-ORIGIN_KEY_COLUMN = "ma"
-
-# Nơi câu INSERT nằm, KÈM danh sách cột nếu có: vị trí của cột khoá trong danh sách ấy là vị trí
-# của khoá trong mỗi dòng VALUES. Bản trước neo cứng vào cột ĐẦU TIÊN (`\(\s*'`), đúng cho mọi
-# câu INSERT hôm nay (`(ma, nhom, nhan, thu_tu)`) nhưng không đúng cho một câu viết cột khoá ở
-# chỗ khác — nhãn tiếng Việt cũng là chuỗi, và đọc nhầm nó thành khoá là mất khoá thật.
-RE_INSERT_ANY = re.compile(r"INSERT\s+INTO\s+(?:\w+\.)?(\w+)\b\s*(?:\(([^)]*)\))?", re.IGNORECASE)
-RE_QUOTED = re.compile(r"^\s*'((?:[^']|'')*)'\s*$")
-
-
-def _value_rows(block: str):
-    """(offset of the row's `(`, [element text]) for each row after `VALUES` in `block`."""
-    v = re.search(r"\bVALUES\b", block, re.IGNORECASE)
-    if not v:
-        return
-    i, n = v.end(), len(block)
-    depth, start, cut, elems = 0, -1, -1, []
-    while i < n:
-        c = block[i]
-        if c == "'":
-            i += 1
-            while i < n and block[i] != "'":
-                i += 1
-        elif c == "(":
-            depth += 1
-            if depth == 1:
-                start, cut, elems = i, i + 1, []
-        elif c == ")":
-            depth -= 1
-            if depth == 0 and start >= 0:
-                elems.append(block[cut:i])
-                yield start, elems
-                start = -1
-        elif c == "," and depth == 1:
-            elems.append(block[cut:i])
-            cut = i + 1
-        elif depth == 0 and c not in " \t\r\n,":
-            return                      # past the VALUES list (`RETURNING`, `SELECT`, …)
-        i += 1
+# Nơi câu INSERT nằm. Hai vế `ma` là cột ĐẦU TIÊN của mỗi dòng VALUES, nên neo vào dấu `(` mở
+# dòng chứ không quét mọi chuỗi trong khối — nhãn tiếng Việt cũng là chuỗi.
+RE_INSERT = re.compile(r"INSERT\s+INTO\s+quyen\b", re.IGNORECASE)
+RE_DONG_VALUES = re.compile(r"\(\s*'([^']*)'")
 
 BO_QUA_THU_MUC = {
     ".git", "node_modules", "vendor", "dist", "build", "__pycache__", "tmp",
@@ -120,21 +79,12 @@ def doc_bang_quyen(goc: str) -> tuple[set[str], list[str]]:
     HỎNG THÌ ĐÓNG: người gọi phải tự kiểm tập rỗng. Một bảng đọc ra rỗng khiến MỌI khoá trong
     mã thành "không có trong bảng" — rào sẽ hét lên chứ không im, và hét là điều đúng: nó có
     nghĩa nguồn chuẩn không đọc được nữa.
-
-    THE TABLE IS FOLLOWED THROUGH RENAMES, in the order core/migrate applies the files: an
-    INSERT counts only when it names the table's name AT THAT STATEMENT, and the key is read
-    from the column the key column is called at that statement. An INSERT into the old name
-    after the rename seeds nothing (PostgreSQL refuses it), so it is not counted — counting it
-    would make a key look grantable that no database holds.
     """
-    import schema_renames  # tools/ is on sys.path for both entry points (gate and hook)
-
     khoa: set[str] = set()
     nguon: list[str] = []
     thu_muc = os.path.join(goc, THU_MUC_BANG)
     if not os.path.isdir(thu_muc):
         return khoa, nguon
-    table, key_column = ORIGIN_TABLE, ORIGIN_KEY_COLUMN
     for ten in sorted(os.listdir(thu_muc)):
         if not ten.endswith(".sql"):
             continue
@@ -144,25 +94,7 @@ def doc_bang_quyen(goc: str) -> tuple[set[str], list[str]]:
                 src = f.read()
         except Exception:
             continue
-        events = ([(r.pos, r) for r in schema_renames.renames(src)]
-                  + [(m.start(), m) for m in RE_INSERT_ANY.finditer(src)])
-        events.sort(key=lambda x: x[0])
-        for _, m in events:
-            if isinstance(m, schema_renames.Rename):
-                if m.kind == "table" and m.old == table:
-                    table = m.new
-                elif m.kind == "column" and m.table == table and m.old == key_column:
-                    key_column = m.new
-                continue
-            if m.group(1).lower() != table:
-                continue
-            if m.group(2) is None:
-                pos = 0                 # no column list: table order, and the key column is first
-            else:
-                cols = [c.strip().lower() for c in m.group(2).split(",")]
-                if key_column not in cols:
-                    continue            # a row without the primary key seeds no key
-                pos = cols.index(key_column)
+        for m in RE_INSERT.finditer(src):
             # Khối VALUES kết thúc ở `ON CONFLICT` hoặc ở dấu `;` — lấy cái nào tới trước.
             het = len(src)
             for dau in (r"\bON\s+CONFLICT\b", r";"):
@@ -170,15 +102,10 @@ def doc_bang_quyen(goc: str) -> tuple[set[str], list[str]]:
                 if mm:
                     het = min(het, m.end() + mm.start())
             khoi = src[m.end():het]
-            for off, elems in _value_rows(khoi):
-                if pos >= len(elems):
-                    continue
-                q = RE_QUOTED.match(elems[pos])
-                if not q:
-                    continue
-                ma = q.group(1).replace("''", "'")
+            for mk in RE_DONG_VALUES.finditer(khoi):
+                ma = mk.group(1)
                 khoa.add(ma)
-                dong = src.count("\n", 0, m.end() + off) + 1
+                dong = src.count("\n", 0, m.end() + mk.start()) + 1
                 nguon.append(f"{THU_MUC_BANG}/{ten}:{dong} {ma}")
     return khoa, nguon
 

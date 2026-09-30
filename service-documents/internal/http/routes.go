@@ -24,11 +24,6 @@ package http
 //
 // The permission and the idempotency mode are NOT annotated: apidoc reads them from the authz.* /
 // idem.* calls below, so there is no second copy to drift (rule 9).
-//
-// THE @request / @reply TYPE NAMES (`vanBanDenRa`, `themLoaiVanBanVao`, …) ARE KEPT VIETNAMESE ON
-// PURPOSE in the English rename campaign's layer A. tools/apidoc publishes each one as a component
-// name of kb/20-contracts/openapi.json, and layer A must regenerate that file byte for byte (ADR
-// 0061 §Ba lớp). Renaming them is a contract change for web-admin's generated client, not a rename.
 
 import (
 	"context"
@@ -72,33 +67,33 @@ import (
 // argument accepted for GET /api/v1/org-units and for all eight catalogue reads). Changing the list
 // is administration of the commune's own configuration, which is precisely what this key is for.
 
-// DocumentTypeLister is the commune's document-type catalogue, for GET /api/v1/document-types.
+// LoaiVanBanDanhMuc is the commune's document-type catalogue, for GET /api/v1/document-types.
 //
-// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *docstore.DocumentTypeStore. The route
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *docstore.LoaiVanBanStore. The route
 // carries the isolation rules this service exists to enforce — the commune check before any read,
 // the refusal to truncate — and those have to be testable without a PostgreSQL, or they get tested
-// once and then never again. *docstore.DocumentTypeStore satisfies this as it is; nothing was
+// once and then never again. *docstore.LoaiVanBanStore satisfies this as it is; nothing was
 // changed to accommodate it.
 //
 // NO page.Request PARAMETER: this route returns the whole list on purpose. The reason is on
-// docstore.DocumentTypeStore.List, and the bound that replaces the missing `limit` is
-// docstore.MaxDocumentTypes.
-type DocumentTypeLister interface {
-	List(ctx context.Context) ([]domain.DocumentType, error)
+// docstore.LoaiVanBanStore.DanhSach, and the bound that replaces the missing `limit` is
+// docstore.TranDanhMucLoaiVanBan.
+type LoaiVanBanDanhMuc interface {
+	DanhSach(ctx context.Context) ([]domain.LoaiVanBan, error)
 }
 
-// DocumentTypeWriter is the WRITE half, and it is a second interface rather than three more methods
-// on the one above — on purpose.
+// GhiLoaiVanBan is the WRITE half, and it is a second interface rather than three more methods on
+// the one above — on purpose.
 //
 // The read is a store call; each of these three opens a TRANSACTION and writes an audit entry
 // inside it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever
 // method was nearest and could end up writing the row outside a transaction, which is the exact
 // defect core/audit was shaped to make impossible. Two interfaces, two obligations, visible at the
 // point of use.
-type DocumentTypeWriter interface {
-	Create(ctx context.Context, req app.CreateDocumentTypeRequest, actor audit.Actor) (domain.DocumentType, error)
-	Update(ctx context.Context, id string, req app.UpdateDocumentTypeRequest, actor audit.Actor) (domain.DocumentType, error)
-	SoftDelete(ctx context.Context, id, reason string, actor audit.Actor) error
+type GhiLoaiVanBan interface {
+	Them(ctx context.Context, yc app.YeuCauThemLoaiVanBan, nguoi audit.Actor) (domain.LoaiVanBan, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaLoaiVanBan, nguoi audit.Actor) (domain.LoaiVanBan, error)
+	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 
 	// The Excel import (ADR 0059 §3) — routes_document_type_import.go. On THIS interface because it is
 	// the same use case writing the same table under the same transaction discipline; the preview opens
@@ -107,49 +102,49 @@ type DocumentTypeWriter interface {
 	ImportDocumentTypes(ctx context.Context, rows []domain.DocumentTypeImportRow, actor audit.Actor) (app.DocumentTypeImportResult, error)
 }
 
-// IncomingDocumentLister is the READ half of the incoming register, declared at the point of use.
+// VanBanDenDanhSach is the READ half of the incoming register, declared at the point of use.
 //
 // IT TAKES page.Request AND A FILTER STRUCT, NOT A URL — the handler parses and validates; the store
 // binds. Nothing between them assembles SQL, which is what keeps a government register free of an
 // injection point.
-type IncomingDocumentLister interface {
-	List(ctx context.Context, filter docstore.IncomingDocumentFilter, req page.Request) (page.Result[domain.IncomingDocument], error)
+type VanBanDenDanhSach interface {
+	DanhSach(ctx context.Context, loc docstore.LocVanBanDen, yc page.Request) (page.Result[domain.VanBanDen], error)
 }
 
-// IncomingDocumentWriter is the WRITE half, and it is a second interface rather than four more
-// methods on the one above — on purpose, and for the reason DocumentTypeWriter states: each of these
-// opens a TRANSACTION and writes an audit entry inside it (rule 6, invariant 3), and one of them
-// allocates an issued number under a row lock. Behind one interface a future caller would reach for
-// whichever method was nearest and could end up writing the row outside a transaction — which for
-// this register means a number issued with no document behind it.
-type IncomingDocumentWriter interface {
-	Register(ctx context.Context, req app.RegisterIncomingDocumentRequest, actor audit.Actor) (domain.IncomingDocument, error)
-	Update(ctx context.Context, id string, req app.UpdateIncomingDocumentRequest, actor audit.Actor) (domain.IncomingDocument, error)
-	Remove(ctx context.Context, id, reason string, actor audit.Actor) error
-	Route(ctx context.Context, id string, req app.RouteDocumentRequest, actor audit.Actor) (domain.IncomingDocument, error)
+// GhiVanBanDen is the WRITE half, and it is a second interface rather than four more methods on the
+// one above — on purpose, and for the reason GhiLoaiVanBan states: each of these opens a TRANSACTION
+// and writes an audit entry inside it (rule 6, invariant 3), and one of them allocates an issued
+// number under a row lock. Behind one interface a future caller would reach for whichever method was
+// nearest and could end up writing the row outside a transaction — which for this register means a
+// number issued with no document behind it.
+type GhiVanBanDen interface {
+	Them(ctx context.Context, yc app.YeuCauVaoSoVanBanDen, nguoi audit.Actor) (domain.VanBanDen, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaVanBanDen, nguoi audit.Actor) (domain.VanBanDen, error)
+	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	Chuyen(ctx context.Context, id string, yc app.YeuCauChuyenVanBan, nguoi audit.Actor) (domain.VanBanDen, error)
 }
 
-// IncomingDocumentReader is the detail drawer's two reads (§3.5). A THIRD interface rather than two
-// more methods on IncomingDocumentWriter, because that one's contract is "each method writes an
-// audit entry in its transaction" and these write nothing. *app.IncomingDocuments satisfies it.
-type IncomingDocumentReader interface {
-	Detail(ctx context.Context, id string) (domain.IncomingDocument, error)
-	RoutingHistory(ctx context.Context, id string) ([]domain.DocumentRouting, error)
+// ChiTietVanBanDen is the detail drawer's two reads (§3.5). A THIRD interface rather than two more
+// methods on GhiVanBanDen, because that one's contract is "each method writes an audit entry in its
+// transaction" and these write nothing. *app.VanBanDen satisfies it.
+type ChiTietVanBanDen interface {
+	ChiTiet(ctx context.Context, id string) (domain.VanBanDen, error)
+	LichSuChuyen(ctx context.Context, id string) ([]domain.ChuyenVanBan, error)
 }
 
-// OutgoingDocumentLister and OutgoingDocumentWriter are the same split for the outgoing register.
-type OutgoingDocumentLister interface {
-	List(ctx context.Context, filter docstore.OutgoingDocumentFilter, req page.Request) (page.Result[domain.OutgoingDocument], error)
+// VanBanDiDanhSach and GhiVanBanDi are the same split for the outgoing register.
+type VanBanDiDanhSach interface {
+	DanhSach(ctx context.Context, loc docstore.LocVanBanDi, yc page.Request) (page.Result[domain.VanBanDi], error)
 }
 
-type OutgoingDocumentWriter interface {
-	IssueNumber(ctx context.Context, req app.IssueOutgoingDocumentRequest, actor audit.Actor) (domain.OutgoingDocument, error)
-	Update(ctx context.Context, id string, req app.UpdateOutgoingDocumentRequest, actor audit.Actor) (domain.OutgoingDocument, error)
-	Remove(ctx context.Context, id, reason string, actor audit.Actor) error
+type GhiVanBanDi interface {
+	CapSo(ctx context.Context, yc app.YeuCauCapSoVanBanDi, nguoi audit.Actor) (domain.VanBanDi, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaVanBanDi, nguoi audit.Actor) (domain.VanBanDi, error)
+	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
 // IncomingSummaryReader counts the dashboard figures of the incoming register.
-// *docstore.IncomingDocumentStore satisfies it.
+// *docstore.VanBanDenStore satisfies it.
 type IncomingSummaryReader interface {
 	CountIncomingSummary(ctx context.Context, window domain.ArrivalWindow, now time.Time) (domain.IncomingSummary, error)
 }
@@ -165,17 +160,17 @@ type Deps struct {
 	// so a nil Checker is refused at construction — the comment here used to say the opposite and
 	// pointed at exactly this moment. Without the refusal, a nil interface would panic on the
 	// first write a member of staff attempted, long after the deployment that caused it.
-	Checker            authz.Checker
-	DocumentTypes      DocumentTypeLister
-	DocumentTypeWriter DocumentTypeWriter
+	Checker       authz.Checker
+	LoaiVanBan    LoaiVanBanDanhMuc
+	GhiLoaiVanBan GhiLoaiVanBan
 
 	// The two registers this service exists for. Each is refused at construction when missing, for
 	// the reason the switch in Register states.
-	IncomingDocuments      IncomingDocumentLister
-	IncomingDocumentWriter IncomingDocumentWriter
-	IncomingDocumentReader IncomingDocumentReader
-	OutgoingDocuments      OutgoingDocumentLister
-	OutgoingDocumentWriter OutgoingDocumentWriter
+	VanBanDen        VanBanDenDanhSach
+	GhiVanBanDen     GhiVanBanDen
+	ChiTietVanBanDen ChiTietVanBanDen
+	VanBanDi         VanBanDiDanhSach
+	GhiVanBanDi      GhiVanBanDi
 
 	// The leadership dashboard's incoming-register block (/tong-quan §4.2, §5). Both refused at
 	// construction when missing.
@@ -202,19 +197,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// without the store behind it would accept requests it cannot honour, and the first person to
 	// find out would be a member of staff registering a document in a government system.
 	switch {
-	case d.DocumentTypes == nil:
+	case d.LoaiVanBan == nil:
 		panic("documents/http: thiếu kho loại văn bản — GET /api/v1/document-types sẽ panic khi có người gọi")
-	case d.DocumentTypeWriter == nil:
+	case d.GhiLoaiVanBan == nil:
 		panic("documents/http: thiếu use case ghi danh mục loại văn bản — POST/PATCH/DELETE /api/v1/document-types sẽ panic khi có người gọi")
-	case d.IncomingDocuments == nil:
+	case d.VanBanDen == nil:
 		panic("documents/http: thiếu kho sổ văn bản đến — GET /api/v1/incoming-documents sẽ panic khi có người gọi")
-	case d.IncomingDocumentWriter == nil:
+	case d.GhiVanBanDen == nil:
 		panic("documents/http: thiếu use case ghi sổ văn bản đến — các tuyến vào sổ / sửa / gỡ / chuyển sẽ panic")
-	case d.IncomingDocumentReader == nil:
+	case d.ChiTietVanBanDen == nil:
 		panic("documents/http: thiếu use case đọc chi tiết văn bản đến — GET /api/v1/incoming-documents/{id} và /routings sẽ panic")
-	case d.OutgoingDocuments == nil:
+	case d.VanBanDi == nil:
 		panic("documents/http: thiếu kho sổ văn bản đi — GET /api/v1/outgoing-documents sẽ panic khi có người gọi")
-	case d.OutgoingDocumentWriter == nil:
+	case d.GhiVanBanDi == nil:
 		panic("documents/http: thiếu use case ghi sổ văn bản đi — các tuyến cấp số / sửa / gỡ sẽ panic")
 	case d.IncomingSummary == nil:
 		panic("documents/http: thiếu kho đếm tổng quan văn bản đến — GET /api/v1/incoming-document-summary sẽ panic khi có người gọi")
@@ -276,7 +271,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @summary  Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản
 	// @screen   14-cau-hinh §5
 	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
-	// commune's catalogue exceeding docstore.MaxDocumentTypes — which this route REFUSES
+	// commune's catalogue exceeding docstore.TranDanhMucLoaiVanBan — which this route REFUSES
 	// rather than truncating, because a silently short list files a document under the wrong type
 	// and numbering follows the type.
 	//
@@ -289,7 +284,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/document-types",
 		authz.AnyAuthenticated("tên loại văn bản xuất hiện ở ô chọn loại khi vào sổ, bộ lọc của mọi danh sách văn bản và nhãn trên từng văn bản đã vào sổ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
-			http.HandlerFunc(h.ListDocumentTypes)))
+			http.HandlerFunc(h.DanhSachLoaiVanBan)))
 
 	// --- the commune adds a document type of its own -------------------------------------------
 	//
@@ -326,7 +321,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/document-types",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.CreateDocumentType))))
+				http.HandlerFunc(h.ThemLoaiVanBan))))
 
 	// --- the commune edits one row --------------------------------------------------------------
 	//
@@ -337,7 +332,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// reorder at every tier, disable at tiers 1 and 2, and `ma` nowhere. The refusal is a 409
 	// naming the tier, and the trigger refuses the same thing underneath (ADR 0024).
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Update
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
 	// compares the row it read against the row it would write and, when nothing moved, writes
 	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
 	// state and one entry in the ledger. Were that comparison removed, this declaration would
@@ -356,7 +351,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/document-types/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.UpdateDocumentType))))
+				http.HandlerFunc(h.SuaLoaiVanBan))))
 
 	// --- the commune retires one of its own rows ------------------------------------------------
 	//
@@ -388,7 +383,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/document-types/{id}",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
-				http.HandlerFunc(h.DeleteDocumentType))))
+				http.HandlerFunc(h.XoaLoaiVanBan))))
 
 	// --- SỔ VĂN BẢN ĐẾN -------------------------------------------------------------------------
 	//
@@ -400,8 +395,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// ⚠ `document.create` GUARDS THREE ROUTES, NOT ONE, AND THAT IS A FINDING RATHER THAN A CHOICE.
 	// The table has no `document.update` and no `document.delete`, so correcting an entry and
 	// removing one are guarded by the key for booking. A commune may well want those separated —
-	// see the block at the top of incoming_document.go. Inventing a key here would produce routes
-	// that answer 403 to EVERY account forever while every test stayed green.
+	// see the block at the top of van_ban_den.go. Inventing a key here would produce routes that
+	// answer 403 to EVERY account forever while every test stayed green.
 
 	// VÀO SỔ — the act that ISSUES A NUMBER, which is why this is the one route in the service with
 	// idem.Required(DongKhiHong).
@@ -426,12 +421,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/incoming-documents",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.RegisterIncomingDocument))))
+				http.HandlerFunc(h.ThemVanBanDen))))
 
 	// PATCH AND NOT PUT: three of the seven editable fields have a meaningful empty value, so a full
 	// replacement cannot tell "not mentioned" from "cleared" — see suaVanBanDenVao.
 	//
-	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Update
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
 	// compares the row it read against the row it would write and, when nothing moved, writes
 	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
 	// state and one entry in the ledger.
@@ -449,7 +444,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/incoming-documents/{id}",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.UpdateIncomingDocument))))
+				http.HandlerFunc(h.SuaVanBanDen))))
 
 	// THIS IS A SOFT DELETE AND THE METHOD IS THE ONLY THING THAT SAYS OTHERWISE. The row stays,
 	// carrying `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), and ITS NUMBER
@@ -471,7 +466,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/incoming-documents/{id}",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.KhongCan("gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.RemoveIncomingDocument))))
+				http.HandlerFunc(h.GoVanBanDen))))
 
 	// CHUYỂN XỬ LÝ — the chairman's instruction and the office's handover, in one transaction with
 	// the timeline entry and the audit entry.
@@ -499,7 +494,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/incoming-documents/{id}/routings",
 		authz.RequirePermission(d.Checker, "document.route")(
 			idem.KhongCan("mỗi lần chuyển là một hành vi có thật và để lại một dòng lịch sử riêng — bảng lịch sử chỉ thêm, không sửa (luật 7 cấm #5), nên gửi lại là một lần chuyển nữa chứ không phải một bản sao")(
-				http.HandlerFunc(h.RouteIncomingDocument))))
+				http.HandlerFunc(h.ChuyenVanBanDen))))
 
 	// THE REGISTER ITSELF. `document.read` and not AnyAuthenticated: unlike the type catalogue, this
 	// is the commune's correspondence — issuing bodies, summaries, and free text that may name a
@@ -516,7 +511,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/incoming-documents",
 		authz.RequirePermission(d.Checker, "document.read")(
-			http.HandlerFunc(h.ListIncomingDocuments)))
+			http.HandlerFunc(h.DanhSachVanBanDen)))
 
 	// ONE DOCUMENT, for the detail drawer. `document.read` for the reason the list gives. The item
 	// is the SAME shape as one list item (vanBanDenRa) — a second shape would be a second contract
@@ -538,13 +533,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/incoming-documents/{id}",
 		authz.RequirePermission(d.Checker, "document.read")(
-			http.HandlerFunc(h.GetIncomingDocument)))
+			http.HandlerFunc(h.ChiTietVanBanDen)))
 
 	// THE ROUTING TIMELINE of one document, oldest first — "Dòng thời gian chuyển tiếp". Read-only;
 	// the table is append-only (rule 7, forbidden #5). `document.read` and not `document.route`:
 	// seeing who holds a document is reading the register, not routing it.
 	//
-	// NOT PAGINATED, BOUNDED: the whole timeline or a refusal (500) past docstore.MaxRoutingHistory —
+	// NOT PAGINATED, BOUNDED: the whole timeline or a refusal (500) past docstore.TranLichSuChuyen —
 	// a history missing its first page reads as complete.
 	//
 	// 404 identical to the route above when the document is not visible: the use case reads the
@@ -559,7 +554,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/incoming-documents/{id}/routings",
 		authz.RequirePermission(d.Checker, "document.read")(
-			http.HandlerFunc(h.ListIncomingDocumentRoutings)))
+			http.HandlerFunc(h.LichSuChuyenVanBanDen)))
 
 	// --- TỔNG QUAN ĐIỀU HÀNH — the incoming register's block ------------------------------------------
 	//
@@ -614,7 +609,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// ⚠ NO SPECIFICATION EXISTS FOR THIS REGISTER. The routes mirror the incoming ones minus routing
 	// and minus the deadline; the permission keys are the same two, because the `quyen` table has no
-	// others for this subsystem. See outgoing_document.go.
+	// others for this subsystem. See van_ban_di.go.
 
 	// CẤP SỐ VĂN BẢN ĐI — the heaviest write in the service. The number it issues goes onto paper,
 	// under a seal, to a district office or a citizen.
@@ -635,7 +630,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("POST /api/v1/outgoing-documents",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.Required(idem.DongKhiHong)(
-				http.HandlerFunc(h.IssueOutgoingDocument))))
+				http.HandlerFunc(h.CapSoVanBanDi))))
 
 	// @summary  Sửa thông tin một văn bản đi đã cấp số (số đi và năm không sửa được)
 	// @screen   *(chưa có đặc tả — xem migration 0004)*
@@ -650,7 +645,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("PATCH /api/v1/outgoing-documents/{id}",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
-				http.HandlerFunc(h.UpdateOutgoingDocument))))
+				http.HandlerFunc(h.SuaVanBanDi))))
 
 	// @summary  Gỡ một văn bản đi khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đi không được cấp lại)
 	// @screen   *(chưa có đặc tả — xem migration 0004)*
@@ -664,7 +659,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("DELETE /api/v1/outgoing-documents/{id}",
 		authz.RequirePermission(d.Checker, "document.create")(
 			idem.KhongCan("gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
-				http.HandlerFunc(h.RemoveOutgoingDocument))))
+				http.HandlerFunc(h.GoVanBanDi))))
 
 	// @summary  Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản
 	// @screen   *(chưa có đặc tả — xem migration 0004)*
@@ -675,7 +670,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/outgoing-documents",
 		authz.RequirePermission(d.Checker, "document.read")(
-			http.HandlerFunc(h.ListOutgoingDocuments)))
+			http.HandlerFunc(h.DanhSachVanBanDi)))
 
 	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
 	//

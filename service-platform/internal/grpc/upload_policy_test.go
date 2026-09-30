@@ -24,7 +24,7 @@ type policiesFake struct {
 
 func (p policiesFake) ListUploadPolicies(context.Context) ([]domain.UploadPolicy, error) {
 	if p.broken {
-		return nil, errInfra
+		return nil, loiHaTang
 	}
 	return p.rows, nil
 }
@@ -43,14 +43,14 @@ func samplePolicies() policiesFake {
 
 func policyClient(t *testing.T, p svcgrpc.UploadPolicies) platformv1.PlatformServiceClient {
 	t.Helper()
-	cli, _ := startWith(t, svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Profiles: sampleProfiles(), Policies: p,
+	cli, _ := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(), Policies: p,
 		Fields: sampleFields()})
 	return cli
 }
 
 func TestListUploadPoliciesMapsFieldByField(t *testing.T) {
 	t.Parallel()
-	res, err := policyClient(t, samplePolicies()).ListUploadPolicies(tenant.Into(testCtx(t), tenantActive),
+	res, err := policyClient(t, samplePolicies()).ListUploadPolicies(tenant.Into(ctxTest(t), xaTanPhu),
 		&platformv1.ListUploadPoliciesRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestListUploadPoliciesSkipsUnknownPurpose(t *testing.T) {
 	p.rows = append(p.rows,
 		domain.UploadPolicy{Purpose: "retired-purpose", MaxBytes: 1, AllowedMIMETypes: []string{"image/png"}},
 		domain.UploadPolicy{Purpose: "Content-Image", MaxBytes: 1, AllowedMIMETypes: []string{"image/png"}})
-	res, err := policyClient(t, p).ListUploadPolicies(tenant.Into(testCtx(t), tenantActive),
+	res, err := policyClient(t, p).ListUploadPolicies(tenant.Into(ctxTest(t), xaTanPhu),
 		&platformv1.ListUploadPoliciesRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestListUploadPoliciesSkipsUnknownPurpose(t *testing.T) {
 // Empty is an ordinary answer: OK with no entries, never NOT_FOUND.
 func TestListUploadPoliciesEmptyIsOK(t *testing.T) {
 	t.Parallel()
-	res, err := policyClient(t, policiesFake{}).ListUploadPolicies(tenant.Into(testCtx(t), tenantActive),
+	res, err := policyClient(t, policiesFake{}).ListUploadPolicies(tenant.Into(ctxTest(t), xaTanPhu),
 		&platformv1.ListUploadPoliciesRequest{})
 	if err != nil || len(res.GetPolicies()) != 0 {
 		t.Fatalf("res=%+v err=%v; want OK and empty", res, err)
@@ -110,8 +110,8 @@ func TestListUploadPoliciesEmptyIsOK(t *testing.T) {
 func TestListUploadPoliciesSameForEveryCommune(t *testing.T) {
 	t.Parallel()
 	cli := policyClient(t, samplePolicies())
-	a, errA := cli.ListUploadPolicies(tenant.Into(testCtx(t), tenantActive), &platformv1.ListUploadPoliciesRequest{})
-	b, errB := cli.ListUploadPolicies(tenant.Into(testCtx(t), tenantMerged), &platformv1.ListUploadPoliciesRequest{})
+	a, errA := cli.ListUploadPolicies(tenant.Into(ctxTest(t), xaTanPhu), &platformv1.ListUploadPoliciesRequest{})
+	b, errB := cli.ListUploadPolicies(tenant.Into(ctxTest(t), xaDaSapNhap), &platformv1.ListUploadPoliciesRequest{})
 	if errA != nil || errB != nil || len(a.GetPolicies()) != len(b.GetPolicies()) {
 		t.Fatalf("a=%v/%v b=%v/%v", a, errA, b, errB)
 	}
@@ -121,9 +121,9 @@ func TestListUploadPoliciesSameForEveryCommune(t *testing.T) {
 // refuses.
 func TestListUploadPoliciesWithoutCommuneRefused(t *testing.T) {
 	t.Parallel()
-	_, raw := startWith(t, svcgrpc.Deps{Dir: sampleDirectory(), Apps: sampleMiniApps(), Profiles: sampleProfiles(),
+	_, raw := dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
 		Policies: samplePolicies(), Fields: sampleFields()})
-	_, err := raw.ListUploadPolicies(testCtx(t), &platformv1.ListUploadPoliciesRequest{})
+	_, err := raw.ListUploadPolicies(ctxTest(t), &platformv1.ListUploadPoliciesRequest{})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("code = %v, want InvalidArgument", status.Code(err))
 	}
@@ -133,12 +133,12 @@ func TestListUploadPoliciesWithoutCommuneRefused(t *testing.T) {
 // nobody would page for — and its cause does not cross the boundary.
 func TestListUploadPoliciesStoreFailureIsInternal(t *testing.T) {
 	t.Parallel()
-	_, err := policyClient(t, policiesFake{broken: true}).ListUploadPolicies(tenant.Into(testCtx(t), tenantActive),
+	_, err := policyClient(t, policiesFake{broken: true}).ListUploadPolicies(tenant.Into(ctxTest(t), xaTanPhu),
 		&platformv1.ListUploadPoliciesRequest{})
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("code = %v, want Internal", status.Code(err))
 	}
-	if st, _ := status.FromError(err); st.Message() == errInfra.Error() {
+	if st, _ := status.FromError(err); st.Message() == loiHaTang.Error() {
 		t.Error("infrastructure error leaked to the caller")
 	}
 }

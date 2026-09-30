@@ -16,15 +16,15 @@ import (
 // org_unit_holdings_pg_test.go, which SKIPS without VIGOV_TEST_DSN.
 
 // countFake answers one row of `row` (nil = no row at all) whatever the SELECT list says — the
-// shared fake in document_type_test.go builds rows by column NAME and cannot answer `count(*)`.
+// shared fake in loai_van_ban_test.go builds rows by column NAME and cannot answer `count(*)`.
 type countFake struct {
-	stmts []fakeStmt
+	stmts []lenhGia
 	row   []driver.Value
 	err   error
 }
 
 func (f *countFake) Connect(context.Context) (driver.Conn, error) { return &countFakeConn{f: f}, nil }
-func (f *countFake) Driver() driver.Driver                        { return fakeDriver{} }
+func (f *countFake) Driver() driver.Driver                        { return trinhGia{} }
 
 type countFakeConn struct{ f *countFake }
 
@@ -36,7 +36,7 @@ func (c *countFakeConn) QueryContext(_ context.Context, q string, args []driver.
 	for _, a := range args {
 		vals = append(vals, a.Value)
 	}
-	c.f.stmts = append(c.f.stmts, fakeStmt{sql: q, args: vals})
+	c.f.stmts = append(c.f.stmts, lenhGia{sql: q, args: vals})
 	if c.f.err != nil {
 		return nil, c.f.err
 	}
@@ -66,7 +66,7 @@ const (
 
 func TestIncomingHeldOpenStatement(t *testing.T) {
 	f := &countFake{row: []driver.Value{int64(4)}}
-	n, err := NewIncomingDocumentStore(pkgstore.New(sql.OpenDB(f))).CountOpenHeldByOrgUnit(tenantCtx(testTenantID), testUnitID)
+	n, err := NewVanBanDenStore(pkgstore.New(sql.OpenDB(f))).CountOpenHeldByOrgUnit(ctxXa(testTenantID), testUnitID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestIncomingHeldOpenStatement(t *testing.T) {
 
 func TestIncomingHeldOpenRefusesBlankIDBeforeQuery(t *testing.T) {
 	f := &countFake{row: []driver.Value{int64(0)}}
-	if _, err := NewIncomingDocumentStore(pkgstore.New(sql.OpenDB(f))).CountOpenHeldByOrgUnit(tenantCtx(testTenantID), ""); !errors.Is(err, ErrOrgUnitIDBlank) {
+	if _, err := NewVanBanDenStore(pkgstore.New(sql.OpenDB(f))).CountOpenHeldByOrgUnit(ctxXa(testTenantID), ""); !errors.Is(err, ErrOrgUnitIDBlank) {
 		t.Errorf("err = %v, want ErrOrgUnitIDBlank", err)
 	}
 	if len(f.stmts) != 0 {
@@ -111,12 +111,12 @@ func TestIncomingHeldOpenRefusesBlankIDBeforeQuery(t *testing.T) {
 // An error is never a zero: a zero lets the delete through.
 func TestIncomingHeldOpenErrorIsNotZero(t *testing.T) {
 	cause := errors.New("connection lost")
-	if _, err := NewIncomingDocumentStore(pkgstore.New(sql.OpenDB(&countFake{err: cause}))).
-		CountOpenHeldByOrgUnit(tenantCtx(testTenantID), testUnitID); !errors.Is(err, cause) {
+	if _, err := NewVanBanDenStore(pkgstore.New(sql.OpenDB(&countFake{err: cause}))).
+		CountOpenHeldByOrgUnit(ctxXa(testTenantID), testUnitID); !errors.Is(err, cause) {
 		t.Errorf("not wrapped with %%w: %v", err)
 	}
-	if _, err := NewIncomingDocumentStore(pkgstore.New(sql.OpenDB(&countFake{}))).
-		CountOpenHeldByOrgUnit(tenantCtx(testTenantID), testUnitID); err == nil {
+	if _, err := NewVanBanDenStore(pkgstore.New(sql.OpenDB(&countFake{}))).
+		CountOpenHeldByOrgUnit(ctxXa(testTenantID), testUnitID); err == nil {
 		t.Error("no row read as zero")
 	}
 }
@@ -127,6 +127,6 @@ func TestIncomingHeldOpenWithoutCommunePanics(t *testing.T) {
 			t.Fatal("counted with no commune in the context")
 		}
 	}()
-	_, _ = NewIncomingDocumentStore(pkgstore.New(sql.OpenDB(&countFake{row: []driver.Value{int64(0)}}))).
+	_, _ = NewVanBanDenStore(pkgstore.New(sql.OpenDB(&countFake{row: []driver.Value{int64(0)}}))).
 		CountOpenHeldByOrgUnit(context.Background(), testUnitID)
 }

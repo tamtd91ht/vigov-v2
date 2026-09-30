@@ -20,7 +20,7 @@ import { type ScreenId, TABS, tabDangSang } from "../features/company-intro/scre
  * thẳng thì đứng ở đó thanh tab không sáng ô nào. Xem `screens.ts`.
  */
 export function TabBar(props: { current: ScreenId; onSelect: (id: ScreenId) => void }) {
-  const active_tab = tabDangSang(props.current);
+  const dang_sang = tabDangSang(props.current);
 
   return (
     <nav className="tabbar" aria-label="Chuyển màn hình">
@@ -31,7 +31,7 @@ export function TabBar(props: { current: ScreenId; onSelect: (id: ScreenId) => v
             key={screen.id}
             type="button"
             className="tabbar__item"
-            aria-current={screen.id === active_tab ? "page" : undefined}
+            aria-current={screen.id === dang_sang ? "page" : undefined}
             onClick={() => props.onSelect(screen.id)}
           >
             <Glyph className="tabbar__glyph" />

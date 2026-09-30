@@ -1,4 +1,4 @@
-import { chuyenTiep } from "@/lib/server/forward";
+import { chuyenTiep } from "@/lib/may-chu/chuyen-tiep";
 
 /**
  * Every `/api/v1/*` call on a commune's host is forwarded to the Go service that owns it.

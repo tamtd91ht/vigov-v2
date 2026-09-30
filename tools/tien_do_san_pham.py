@@ -20,7 +20,7 @@ không?"* — với mọi cột dưới đây câu trả lời là CÓ, nên vi�
     chương đặc tả      docs/ui-ux/NN-*.md                     (tên tệp + tiêu đề `# `)
     tuyến hợp đồng     kb/20-contracts/openapi.json           (`x-vigov-screen` của từng thao tác)
     đã có màn gọi      tasks/web/done/ vs open/               (`x-vigov-task` là id việc)
-    mục menu           web-admin/src/components/menu-items.ts
+    mục menu           web-admin/src/components/muc-menu.ts
     màn hình có thật   web-admin/src/app/**/page.tsx
     phần chưa dựng     PHAN_CHUA_DUNG trong features/*/nhan-*.ts
     trạng thái sổ      kb/90-ephemeral/tien-do/<module>.json
@@ -60,7 +60,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RA = os.path.join(ROOT, "kb", "90-ephemeral", "tien-do-san-pham.md")
 
 HOP_DONG = os.path.join(ROOT, "kb", "20-contracts", "openapi.json")
-MUC_MENU = os.path.join(ROOT, "web-admin", "src", "components", "menu-items.ts")
+MUC_MENU = os.path.join(ROOT, "web-admin", "src", "components", "muc-menu.ts")
 DAC_TA = os.path.join(ROOT, "docs", "ui-ux")
 
 # Hạn đo LẦN CUỐI CÓ NGƯỜI CẬP NHẬT một module, không đo ngày sinh tệp — cùng lý do `tien_do.py`
@@ -509,7 +509,7 @@ def main() -> int:
     L = p2
     L.append("## 2 · web-admin, theo từng mục menu")
     L.append("")
-    L.append("`duong: null` nghĩa là mục **cố ý hiện mà không bấm được** — `menu-items.ts` giải "
+    L.append("`duong: null` nghĩa là mục **cố ý hiện mà không bấm được** — `muc-menu.ts` giải "
              "thích vì sao giữ")
     L.append("chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`, tức số câu "
              "cán bộ THẬT SỰ")

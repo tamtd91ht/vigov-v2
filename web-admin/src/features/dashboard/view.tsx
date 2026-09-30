@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { OTien } from "@/features/budget/money-cell";
+import { OTien } from "@/features/thu-chi/o-tien";
 import {
   GHI_CHU_CHENH_LECH,
   lyDoKhongTinh,
@@ -8,8 +8,8 @@ import {
   nhanChiSo,
   nhanSoTien,
   nhanSoTienChiSo,
-} from "@/features/budget/budget-labels";
-import type { KetQua } from "@/lib/api/request";
+} from "@/features/thu-chi/nhan-thu-chi";
+import type { KetQua } from "@/lib/api/goi";
 import type {
   documents_incomingSummaryOut,
   finance_chiSoNamRa,
@@ -22,7 +22,7 @@ import {
   QUYEN_XEM_NHIEM_VU,
   QUYEN_XEM_PHAN_ANH,
   QUYEN_XEM_VAN_BAN,
-} from "@/lib/permissions";
+} from "@/lib/quyen";
 
 import styles from "./dashboard.module.css";
 import {

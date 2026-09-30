@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-import { SOLUTION_SUGGESTION_SCREEN } from "../solution-suggestion/index";
+import { MAN_GOI_Y_GIAI_PHAP } from "../goi-y-giai-phap/index";
 import { MAN_DANH_THIEP } from "../tinh-nang/index";
 import { MAN_TU_VAN, MAN_YEU_CAU } from "../yeu-cau/index";
 
@@ -84,7 +84,7 @@ export const SCREENS: readonly ScreenDefinition[] = [
     component: SolutionsScreen,
   },
   MAN_DANH_THIEP,
-  SOLUTION_SUGGESTION_SCREEN,
+  MAN_GOI_Y_GIAI_PHAP,
   // BỀ MẶT YÊU CẦU (giai đoạn B, 22/09/2026) — hai màn NGOÀI TAB. Thanh tab vẫn bốn ô; xem
   // `features/yeu-cau/index.ts` về vì sao ô thứ năm là một phép đo chứ không một khẩu vị.
   MAN_TU_VAN,

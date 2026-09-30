@@ -31,11 +31,11 @@ import (
 )
 
 // CatalogueImportRepo is the store, declared at the point of use. EVERY METHOD TAKES THE TRANSACTION.
-// *fistore.CapitalPlanCategoryStore satisfies it; InsertImported is the statement the create form runs.
+// *fistore.HangMucKeHoachVonStore satisfies it; InsertImported is the statement the create form runs.
 type CatalogueImportRepo interface {
 	LockImport(ctx context.Context, tx *store.ScopedTx) error
 	ImportSnapshot(ctx context.Context, tx *store.ScopedTx) ([]domain.ExistingCatalogueEntry, error)
-	InsertImported(ctx context.Context, tx *store.ScopedTx, category domain.CapitalPlanCategory) error
+	InsertImported(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error
 }
 
 // CatalogueImportRejected carries every error of a file that was refused. Nothing was written.
@@ -86,11 +86,11 @@ func (uc *CapitalPlanCategoryImporter) Preview(ctx context.Context, rows []domai
 		if err != nil {
 			return err
 		}
-		res.Entries, res.Errors = domain.PlanCatalogueImport(rows, existing, fistore.MaxCapitalPlanCategories)
+		res.Entries, res.Errors = domain.PlanCatalogueImport(rows, existing, fistore.TranDanhMucHangMuc)
 		return errCataloguePreviewRollback
 	})
 	if err != nil && !errors.Is(err, errCataloguePreviewRollback) {
-		return CatalogueImportResult{}, wrap(ctx, "xem trước nhập Excel", err)
+		return CatalogueImportResult{}, boc(ctx, "xem trước nhập Excel", err)
 	}
 	return res, nil
 }
@@ -115,7 +115,7 @@ func (uc *CapitalPlanCategoryImporter) Import(ctx context.Context, rows []domain
 		if err != nil {
 			return err
 		}
-		plan, errs := domain.PlanCatalogueImport(rows, existing, fistore.MaxCapitalPlanCategories)
+		plan, errs := domain.PlanCatalogueImport(rows, existing, fistore.TranDanhMucHangMuc)
 		if len(errs) > 0 {
 			// Returned from INSIDE the closure so the transaction rolls back; nothing was written.
 			return &CatalogueImportRejected{Errors: errs}
@@ -125,12 +125,12 @@ func (uc *CapitalPlanCategoryImporter) Import(ctx context.Context, rows []domain
 			if p.ID, err = uc.newID(); err != nil {
 				return fmt.Errorf("hang_muc_ke_hoach_von: sinh id: %w", err)
 			}
-			category := domain.CapitalPlanCategory{ID: p.ID, Code: p.Code, Label: p.Label, SortOrder: p.Order, IsActive: true, Source: domain.SourceCommune}
-			if err := uc.repo.InsertImported(ctx, tx, category); err != nil {
+			hm := domain.HangMucKeHoachVon{ID: p.ID, Ma: p.Code, Nhan: p.Label, ThuTu: p.Order, DangDung: true, Nguon: domain.NguonDonVi}
+			if err := uc.repo.InsertImported(ctx, tx, hm); err != nil {
 				return err
 			}
 			delta, err := json.Marshal(map[string]any{
-				"sau": categorySummary(category),
+				"sau": tomTatHangMuc(hm),
 				// Top-level `nguon` is the PROVENANCE of the act; `sau.nguon` is the row's tier. Two
 				// levels, two meanings — identity's convention.
 				"nguon":   catalogueImportSource,
@@ -144,7 +144,7 @@ func (uc *CapitalPlanCategoryImporter) Import(ctx context.Context, rows []domain
 			// SAME TRANSACTION AS THE INSERT (rule 6, invariant 3); TenantID filled from the transaction.
 			if err := audit.Write(ctx, tx, audit.Entry{
 				Actor:   actor,
-				Action:  ActionCreateCapitalPlanCategory,
+				Action:  HanhViThemHangMuc,
 				Subject: p.Code, // the business code, never the internal id
 				Delta:   delta,
 			}); err != nil {
@@ -159,7 +159,7 @@ func (uc *CapitalPlanCategoryImporter) Import(ctx context.Context, rows []domain
 		if errors.As(err, &rej) {
 			return CatalogueImportResult{}, rej
 		}
-		return CatalogueImportResult{}, wrap(ctx, "nhập Excel", err)
+		return CatalogueImportResult{}, boc(ctx, "nhập Excel", err)
 	}
 	return res, nil
 }

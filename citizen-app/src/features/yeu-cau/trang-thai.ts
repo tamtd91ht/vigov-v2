@@ -15,7 +15,7 @@
  * không ai cam kết con số ấy, và người phát hiện ra là người đang chờ.
  */
 import type { LoaiYeuCau, MaTrangThai } from "../../api/hop-dong-yeu-cau";
-import { vnDateTime } from "../../lib/date-time";
+import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const NHAN_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
   moi: "Đã tiếp nhận",
@@ -54,5 +54,5 @@ export const NHAN_LOAI: Readonly<Record<LoaiYeuCau, string>> = {
  * Nam hiện thành buổi tối NGÀY HÔM TRƯỚC trên một máy đặt múi châu Âu hay châu Mỹ.
  */
 export function ngayDoc(rfc3339: string): string {
-  return vnDateTime(rfc3339) ?? "";
+  return thoiDiemVN(rfc3339) ?? "";
 }

@@ -10,25 +10,25 @@ import (
 // it is still operating. Business data belonging to the commune lives in the other services
 // and is never visible from here (ADR 0003).
 type Tenant struct {
-	ID       string // ULID, 26 chars, opaque and immutable
-	Name     string // display name AT THIS MOMENT — never used as an identifier
-	Province string
-	IsActive bool
+	ID           string // ULID, 26 chars, opaque and immutable
+	Ten          string // display name AT THIS MOMENT — never used as an identifier
+	TinhThanh    string
+	DangHoatDong bool
 }
 
 // Domain is one host that resolves to a commune. A commune may hold several: after a merger
 // the old commune's address must keep working while people learn the new one.
 type Domain struct {
-	Host      string
-	TenantID  string
-	IsPrimary bool
+	Host     string
+	TenantID string
+	LaChinh  bool
 }
 
 var (
-	ErrInvalidID     = errors.New("tenant: id phải là ULID 26 ký tự")
-	ErrNameEmpty     = errors.New("tenant: tên không được để trống")
-	ErrHostEmpty     = errors.New("tenant: host không được để trống")
-	ErrHostHasScheme = errors.New("tenant: host chỉ là tên miền, không kèm giao thức hay đường dẫn")
+	ErrIDKhongHopLe   = errors.New("tenant: id phải là ULID 26 ký tự")
+	ErrTenTrong       = errors.New("tenant: tên không được để trống")
+	ErrHostTrong      = errors.New("tenant: host không được để trống")
+	ErrHostCoGiaoThuc = errors.New("tenant: host chỉ là tên miền, không kèm giao thức hay đường dẫn")
 )
 
 // ULIDLength is fixed by the format. tenant.ID.Valid() checks the same thing on the way in
@@ -37,10 +37,10 @@ const ULIDLength = 26
 
 func (t Tenant) Validate() error {
 	if len(t.ID) != ULIDLength {
-		return fmt.Errorf("%w: %q dài %d", ErrInvalidID, t.ID, len(t.ID))
+		return fmt.Errorf("%w: %q dài %d", ErrIDKhongHopLe, t.ID, len(t.ID))
 	}
-	if strings.TrimSpace(t.Name) == "" {
-		return ErrNameEmpty
+	if strings.TrimSpace(t.Ten) == "" {
+		return ErrTenTrong
 	}
 	return nil
 }
@@ -54,10 +54,10 @@ func (t Tenant) Validate() error {
 func NormaliseHost(host string) (string, error) {
 	h := strings.ToLower(strings.TrimSpace(host))
 	if h == "" {
-		return "", ErrHostEmpty
+		return "", ErrHostTrong
 	}
 	if strings.Contains(h, "://") || strings.Contains(h, "/") {
-		return "", fmt.Errorf("%w: %q", ErrHostHasScheme, host)
+		return "", fmt.Errorf("%w: %q", ErrHostCoGiaoThuc, host)
 	}
 	// Strip the port. IPv6 literals ("[::1]:8080") keep their brackets.
 	if i := strings.LastIndex(h, ":"); i > 0 && !strings.Contains(h[i:], "]") {

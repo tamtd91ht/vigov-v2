@@ -42,13 +42,7 @@ CHI = re.compile(
 CHANGES_STATE = {"POST", "PUT", "PATCH", "DELETE"}
 
 # Declared in the SAME statement as the route, exactly like the permission declaration.
-#
-# `NotRequired` is the ASSUMED English name of `KhongCan` (ADR 0061 layer A of core/idem; not
-# chosen yet on 2026-09-29). Both are accepted: without the new one, renaming core/idem makes
-# every route warn "no declaration" and the reason check below goes silent. If core/idem picks
-# another name, change it here and in IDEM_NO_REASON together.
-IDEM_NOT_REQUIRED = r"(?:KhongCan|NotRequired)"
-IDEM_DECL = re.compile(r"idem\.(?:Required|" + IDEM_NOT_REQUIRED + r")\s*\(")
+IDEM_DECL = re.compile(r"idem\.(?:Required|KhongCan)\s*\(")
 
 # `idem.Required` keys on the principal. On a route declared Public there is no principal, so
 # every anonymous caller in one commune would share one key space — citizen B replaying
@@ -72,7 +66,7 @@ TAG_SUMMARY = re.compile(r"^\s*//\s*@summary\s+\S", re.M)
 TAG_REPLY = re.compile(r"^\s*//\s*@reply\s+\d{3}\s+\S", re.M)
 TAG_ANY = re.compile(r"^\s*//\s*@(\w+)", re.M)
 TAG_KNOWN = {"summary", "screen", "request", "reply"}
-IDEM_NO_REASON = re.compile(r"idem\." + IDEM_NOT_REQUIRED + r"\s*\(\s*\)")
+IDEM_NO_REASON = re.compile(r"idem\.KhongCan\s*\(\s*\)")
 IDEM_NO_MODE = re.compile(r"idem\.Required\s*\(\s*\)")
 
 # Infrastructure paths that are deliberately outside /api/v1 and outside the tenant edge.
@@ -298,7 +292,7 @@ def main() -> None:
                 other.append(
                     f"line {lineno}: {method} {route} — NO duplicate-request declaration")
             if IDEM_NO_REASON.search(stmt):
-                other.append(f"line {lineno}: idem.KhongCan()/NotRequired() states NO reason")
+                other.append(f"line {lineno}: idem.KhongCan() states NO reason")
             if IDEM_NO_MODE.search(stmt):
                 other.append(f"line {lineno}: idem.Required() picks NO failure mode")
 

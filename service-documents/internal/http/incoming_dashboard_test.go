@@ -55,8 +55,8 @@ func (f *fakeSummaryReader) CountIncomingSummary(ctx context.Context, w domain.A
 
 func sampleSummaryReader() *fakeSummaryReader {
 	return &fakeSummaryReader{byTenant: map[tenant.ID]domain.IncomingSummary{
-		tenantA: {Arrived: 7, Open: 5, Overdue: 2},
-		tenantB: {Arrived: 99, Open: 98, Overdue: 97},
+		xaA: {Arrived: 7, Open: 5, Overdue: 2},
+		xaB: {Arrived: 99, Open: 98, Overdue: 97},
 	}}
 }
 
@@ -79,36 +79,36 @@ func (f *fakeQueueReader) OverdueQueue(ctx context.Context, now time.Time, limit
 
 func sampleQueueReader() *fakeQueueReader {
 	return &fakeQueueReader{byTenant: map[tenant.ID][]app.OverdueQueueItem{
-		tenantA: {
-			{Document: domain.IncomingDocument{ID: "vbd-a-004", ArrivalNo: 4, Year: 2026, HoldingOrgUnitID: "bp-dia-chinh",
-				Summary: "Đơn của ông Nguyễn Văn A về tranh chấp đất", DueAt: time.Date(2026, 9, 20, 2, 0, 0, 0, time.UTC),
-				Status: domain.IncomingStatusInProgress}, Critical: true},
-			{Document: domain.IncomingDocument{ID: "vbd-a-009", ArrivalNo: 9, Year: 2026,
-				Summary: "Về việc rà soát hộ nghèo", DueAt: time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC),
-				Status: domain.IncomingStatusRegistered}},
+		xaA: {
+			{Document: domain.VanBanDen{ID: "vbd-a-004", SoVaoSo: 4, Nam: 2026, BoPhanDangGiu: "bp-dia-chinh",
+				TrichYeu: "Đơn của ông Nguyễn Văn A về tranh chấp đất", HanXuLyXong: time.Date(2026, 9, 20, 2, 0, 0, 0, time.UTC),
+				TrangThai: domain.VanBanDangXuLy}, Critical: true},
+			{Document: domain.VanBanDen{ID: "vbd-a-009", SoVaoSo: 9, Nam: 2026,
+				TrichYeu: "Về việc rà soát hộ nghèo", HanXuLyXong: time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC),
+				TrangThai: domain.VanBanMoiVaoSo}},
 		},
-		tenantB: {{Document: domain.IncomingDocument{ID: "vbd-b-001", ArrivalNo: 1, Year: 2026}, Critical: true}},
+		xaB: {{Document: domain.VanBanDen{ID: "vbd-b-001", SoVaoSo: 1, Nam: 2026}, Critical: true}},
 	}}
 }
 
 type dashboardRoute struct {
 	name, path string
-	calls      func(m *testServer) int
+	calls      func(m *mayChu) int
 }
 
 func dashboardRoutes() []dashboardRoute {
 	return []dashboardRoute{
-		{"summary", pathSummary + septemberQuery, func(m *testServer) int { return m.summary.calls }},
-		{"queue", pathQueue, func(m *testServer) int { return m.queue.calls }},
+		{"summary", pathSummary + septemberQuery, func(m *mayChu) int { return m.summary.calls }},
+		{"queue", pathQueue, func(m *mayChu) int { return m.queue.calls }},
 	}
 }
 
 func TestDashboard_401WithoutSession(t *testing.T) {
 	for _, rt := range dashboardRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, permReport, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostA, rt.path, nil), http.StatusUnauthorized)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, permReport, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, rt.path, nil), http.StatusUnauthorized)
 			if rt.calls(m) != 0 {
 				t.Error("register read with no session")
 			}
@@ -121,13 +121,13 @@ func TestDashboard_403WrongOrIncompletePermission(t *testing.T) {
 		for grantName, grant := range map[string][]authz.Perm{
 			"unrelated key":       {"admin.lookup"},
 			"report.read only":    {permReport},
-			"document.read only":  {PermDocumentRead},
+			"document.read only":  {QuyenDocVanBan},
 			"document.create etc": {"document.create", "document.route"},
 		} {
 			t.Run(rt.name+"/"+grantName, func(t *testing.T) {
-				m := newTestServer(t)
-				m.grant(tenantA, grant...)
-				wantStatus(t, m.call(t, http.MethodGet, hostA, rt.path, staffOf(tenantA)), http.StatusForbidden)
+				m := dungMayChu(t)
+				m.capQuyen(xaA, grant...)
+				doiMa(t, m.goi(t, http.MethodGet, hostA, rt.path, canBoCua(xaA)), http.StatusForbidden)
 				if rt.calls(m) != 0 {
 					t.Error("figures read without both keys")
 				}
@@ -141,9 +141,9 @@ func TestDashboard_403RightPermissionsWrongCommune(t *testing.T) {
 	// that ignored the commune would hand B's staff A's grant.
 	for _, rt := range dashboardRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, permReport, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostB, rt.path, staffOf(tenantB)), http.StatusForbidden)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, permReport, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostB, rt.path, canBoCua(xaB)), http.StatusForbidden)
 			if rt.calls(m) != 0 {
 				t.Error("commune B read with commune A's grant")
 			}
@@ -154,10 +154,10 @@ func TestDashboard_403RightPermissionsWrongCommune(t *testing.T) {
 func TestDashboard_401SessionOfAnotherCommune(t *testing.T) {
 	for _, rt := range dashboardRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, permReport, PermDocumentRead)
-			m.grant(tenantB, permReport, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostB, rt.path, staffOf(tenantA)), http.StatusUnauthorized)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, permReport, QuyenDocVanBan)
+			m.capQuyen(xaB, permReport, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostB, rt.path, canBoCua(xaA)), http.StatusUnauthorized)
 			if rt.calls(m) != 0 {
 				t.Error("a commune A session read commune B")
 			}
@@ -168,30 +168,30 @@ func TestDashboard_401SessionOfAnotherCommune(t *testing.T) {
 func TestDashboard_200BothKeysRightCommune(t *testing.T) {
 	for _, rt := range dashboardRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, permReport, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostA, rt.path, staffOf(tenantA)), http.StatusOK)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, permReport, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, rt.path, canBoCua(xaA)), http.StatusOK)
 			if rt.calls(m) != 1 {
 				t.Fatalf("reader called %d times, want 1", rt.calls(m))
 			}
 			// BOTH KEYS WERE ASKED, as literals — a fake checker grants any string, so this is the
 			// assertion that turns red if either guard is deleted or renamed.
 			asked := map[authz.Perm]bool{}
-			for _, p := range m.checker.asked {
+			for _, p := range m.checker.hoiGi {
 				asked[p] = true
 			}
 			if !asked["report.read"] || !asked["document.read"] {
-				t.Fatalf("keys asked = %v, want both report.read and document.read", m.checker.asked)
+				t.Fatalf("keys asked = %v, want both report.read and document.read", m.checker.hoiGi)
 			}
 		})
 	}
 }
 
 func TestSummary_ReturnsThisCommunesCountsForTheLocalDatesOfThePeriod(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, permReport, PermDocumentRead)
-	w := m.call(t, http.MethodGet, hostA, pathSummary+septemberQuery, staffOf(tenantA))
-	wantStatus(t, w, http.StatusOK)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, permReport, QuyenDocVanBan)
+	w := m.goi(t, http.MethodGet, hostA, pathSummary+septemberQuery, canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
 
 	var got incomingSummaryOut
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
@@ -222,9 +222,9 @@ func TestSummary_RefusesAMissingOrBackwardPeriod(t *testing.T) {
 		"not a instant": "?from=hom-qua&to=hom-nay",
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, permReport, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostA, pathSummary+q, staffOf(tenantA)), http.StatusBadRequest)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, permReport, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, pathSummary+q, canBoCua(xaA)), http.StatusBadRequest)
 			if m.summary.calls != 0 {
 				t.Error("counted with a period that was refused")
 			}
@@ -233,17 +233,17 @@ func TestSummary_RefusesAMissingOrBackwardPeriod(t *testing.T) {
 }
 
 func TestSummary_StoreFailureIs500(t *testing.T) {
-	m := newTestServer(t)
+	m := dungMayChu(t)
 	m.summary.err = errors.New("db down")
-	m.grant(tenantA, permReport, PermDocumentRead)
-	wantStatus(t, m.call(t, http.MethodGet, hostA, pathSummary+septemberQuery, staffOf(tenantA)), http.StatusInternalServerError)
+	m.capQuyen(xaA, permReport, QuyenDocVanBan)
+	doiMa(t, m.goi(t, http.MethodGet, hostA, pathSummary+septemberQuery, canBoCua(xaA)), http.StatusInternalServerError)
 }
 
 func TestQueue_ShowsTheRegisterCodeNotTheSummary(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, permReport, PermDocumentRead)
-	w := m.call(t, http.MethodGet, hostA, pathQueue, staffOf(tenantA))
-	wantStatus(t, w, http.StatusOK)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, permReport, QuyenDocVanBan)
+	w := m.goi(t, http.MethodGet, hostA, pathQueue, canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
 
 	if strings.Contains(w.Body.String(), "Nguyễn Văn A") || strings.Contains(w.Body.String(), "hộ nghèo") {
 		t.Fatalf("free-text summary reached the dashboard queue: %s", w.Body.String())
@@ -271,11 +271,11 @@ func TestQueue_ShowsTheRegisterCodeNotTheSummary(t *testing.T) {
 }
 
 func TestQueue_EmptyIsAnEmptyArray(t *testing.T) {
-	m := newTestServer(t)
+	m := dungMayChu(t)
 	m.queue.byTenant = nil
-	m.grant(tenantA, permReport, PermDocumentRead)
-	w := m.call(t, http.MethodGet, hostA, pathQueue, staffOf(tenantA))
-	wantStatus(t, w, http.StatusOK)
+	m.capQuyen(xaA, permReport, QuyenDocVanBan)
+	w := m.goi(t, http.MethodGet, hostA, pathQueue, canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
 	if !strings.Contains(w.Body.String(), `"items":[]`) {
 		t.Fatalf("body = %s, want items: []", w.Body.String())
 	}
@@ -283,17 +283,17 @@ func TestQueue_EmptyIsAnEmptyArray(t *testing.T) {
 
 func TestQueue_Limit(t *testing.T) {
 	for q, wantLimit := range map[string]int{"": 10, "?limit=3": 3, "?limit=10": 10, "?limit=500": 10} {
-		m := newTestServer(t)
-		m.grant(tenantA, permReport, PermDocumentRead)
-		wantStatus(t, m.call(t, http.MethodGet, hostA, pathQueue+q, staffOf(tenantA)), http.StatusOK)
+		m := dungMayChu(t)
+		m.capQuyen(xaA, permReport, QuyenDocVanBan)
+		doiMa(t, m.goi(t, http.MethodGet, hostA, pathQueue+q, canBoCua(xaA)), http.StatusOK)
 		if m.queue.gotLimit != wantLimit {
 			t.Errorf("%q: limit = %d, want %d", q, m.queue.gotLimit, wantLimit)
 		}
 	}
 	for _, q := range []string{"?limit=0", "?limit=-1", "?limit=muoi"} {
-		m := newTestServer(t)
-		m.grant(tenantA, permReport, PermDocumentRead)
-		wantStatus(t, m.call(t, http.MethodGet, hostA, pathQueue+q, staffOf(tenantA)), http.StatusBadRequest)
+		m := dungMayChu(t)
+		m.capQuyen(xaA, permReport, QuyenDocVanBan)
+		doiMa(t, m.goi(t, http.MethodGet, hostA, pathQueue+q, canBoCua(xaA)), http.StatusBadRequest)
 		if m.queue.calls != 0 {
 			t.Errorf("%q: queue read with a refused limit", q)
 		}
@@ -301,12 +301,12 @@ func TestQueue_Limit(t *testing.T) {
 }
 
 func TestQueue_IdentityUnreachableFailsTheRequest(t *testing.T) {
-	m := newTestServer(t)
+	m := dungMayChu(t)
 	m.queue.err = errors.Join(app.ErrWorkingCalendarUnavailable, errors.New("rpc error: code = Unavailable"))
-	m.grant(tenantA, permReport, PermDocumentRead)
-	w := m.call(t, http.MethodGet, hostA, pathQueue, staffOf(tenantA))
-	wantStatus(t, w, http.StatusServiceUnavailable)
-	if e := errorBody(t, w); e.Code != "working_calendar_unavailable" {
+	m.capQuyen(xaA, permReport, QuyenDocVanBan)
+	w := m.goi(t, http.MethodGet, hostA, pathQueue, canBoCua(xaA))
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if e := loiTra(t, w); e.Code != "working_calendar_unavailable" {
 		t.Errorf("code = %q", e.Code)
 	}
 }
@@ -314,34 +314,34 @@ func TestQueue_IdentityUnreachableFailsTheRequest(t *testing.T) {
 // --- the drill-down on GET /api/v1/incoming-documents ------------------------------------------
 
 func TestDrillDown_EachMetricReachesTheStoreAsItsFigure(t *testing.T) {
-	for q, check := range map[string]func(t *testing.T, m *testServer){
-		"?metric=arrived&from=2026-09-01T00:00:00%2B07:00&to=2026-10-01T00:00:00%2B07:00": func(t *testing.T, m *testServer) {
-			f := m.incoming.lastFilter.Metric
+	for q, check := range map[string]func(t *testing.T, m *mayChu){
+		"?metric=arrived&from=2026-09-01T00:00:00%2B07:00&to=2026-10-01T00:00:00%2B07:00": func(t *testing.T, m *mayChu) {
+			f := m.den.locCuo.Metric
 			if f.Metric != domain.MetricArrived || f.Window.FirstDate.Format(time.DateOnly) != "2026-09-01" ||
 				f.Window.LastDate.Format(time.DateOnly) != "2026-09-30" || !f.Now.IsZero() {
 				t.Fatalf("filter = %+v", f)
 			}
 		},
-		"?metric=open": func(t *testing.T, m *testServer) {
-			f := m.incoming.lastFilter.Metric
+		"?metric=open": func(t *testing.T, m *mayChu) {
+			f := m.den.locCuo.Metric
 			if f.Metric != domain.MetricOpen || !f.Window.FirstDate.IsZero() || !f.Now.IsZero() {
 				t.Fatalf("filter = %+v", f)
 			}
 		},
-		"?metric=overdue&year=2026": func(t *testing.T, m *testServer) {
-			f := m.incoming.lastFilter.Metric
+		"?metric=overdue&year=2026": func(t *testing.T, m *mayChu) {
+			f := m.den.locCuo.Metric
 			if f.Metric != domain.MetricOverdue || !f.Now.Equal(testNow) {
 				t.Fatalf("filter = %+v", f)
 			}
-			if m.incoming.lastFilter.Year != 2026 {
+			if m.den.locCuo.Nam != 2026 {
 				t.Fatal("the existing `year` filter was dropped beside the metric")
 			}
 		},
 	} {
 		t.Run(q, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostA, pathIncoming+q, staffOf(tenantA)), http.StatusOK)
+			m := dungMayChu(t)
+			m.capQuyen(xaA, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, duongVanBanDen+q, canBoCua(xaA)), http.StatusOK)
 			check(t, m)
 		})
 	}
@@ -357,10 +357,10 @@ func TestDrillDown_RefusesRatherThanIgnores(t *testing.T) {
 		"overdue with a period":        "?metric=overdue&from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z",
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, PermDocumentRead)
-			wantStatus(t, m.call(t, http.MethodGet, hostA, pathIncoming+q, staffOf(tenantA)), http.StatusBadRequest)
-			if m.incoming.calls != 0 {
+			m := dungMayChu(t)
+			m.capQuyen(xaA, QuyenDocVanBan)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, duongVanBanDen+q, canBoCua(xaA)), http.StatusBadRequest)
+			if m.den.goi != 0 {
 				t.Error("list read with a refused drill-down")
 			}
 		})

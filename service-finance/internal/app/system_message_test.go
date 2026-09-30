@@ -14,8 +14,8 @@ import (
 	"github.com/vihat/vigov/service-finance/internal/domain"
 )
 
-// The use case runs over a REAL core/store transaction on the recording driver (fakeStore, in
-// fake_driver_catalogue_test.go), so "the audit entry is in the same transaction" and "a failure
+// The use case runs over a REAL core/store transaction on the recording driver (khoGia, in
+// driver_gia_danh_muc_test.go), so "the audit entry is in the same transaction" and "a failure
 // rolls the write back" are properties of real Begin/Commit/Rollback calls. The override store is
 // an in-memory fake that records WHICH TRANSACTION each write arrived in and WHICH COMMUNE — the
 // store's own SQL is exercised by nothing here, and says so.
@@ -85,7 +85,7 @@ func (f *overrideFake) SoftDelete(_ context.Context, tx *store.ScopedTx, id, by,
 
 var fixedNow = time.Date(2026, 9, 29, 2, 30, 0, 0, time.UTC)
 
-func newMessagesUseCase(t *testing.T, k *fakeStore, f *overrideFake) *SystemMessages {
+func newMessagesUseCase(t *testing.T, k *khoGia, f *overrideFake) *SystemMessages {
 	t.Helper()
 	db := sql.OpenDB(k)
 	db.SetMaxOpenConns(1)
@@ -98,9 +98,9 @@ func newMessagesUseCase(t *testing.T, k *fakeStore, f *overrideFake) *SystemMess
 
 var staff = audit.Actor{ID: "CB-00123", Kind: "staff", IP: "10.0.0.7"}
 
-func auditDelta(t *testing.T, k *fakeStore) map[string]map[string]any {
+func auditDelta(t *testing.T, k *khoGia) map[string]map[string]any {
 	t.Helper()
-	ins := k.stmtsContaining("INSERT INTO audit_log")
+	ins := k.cau("INSERT INTO audit_log")
 	if len(ins) != 1 {
 		t.Fatalf("audit entries = %d, want 1", len(ins))
 	}
@@ -116,9 +116,9 @@ func auditDelta(t *testing.T, k *fakeStore) map[string]map[string]any {
 }
 
 func TestMessagesFallsBackToDefaultWithoutOverride(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
-	ctx := tenant.Into(context.Background(), tenantA)
+	ctx := tenant.Into(context.Background(), xaA)
 
 	got, err := uc.Messages(ctx)
 	if err != nil {
@@ -130,30 +130,30 @@ func TestMessagesFallsBackToDefaultWithoutOverride(t *testing.T) {
 	}
 
 	// Commune B's wording never reaches commune A.
-	f.live[tenantB] = &domain.MessageOverride{ID: "b", Key: m.Key, Text: "Câu xã B.", UpdatedAt: fixedNow, UpdatedBy: "CB-9"}
+	f.live[xaB] = &domain.MessageOverride{ID: "b", Key: m.Key, Text: "Câu xã B.", UpdatedAt: fixedNow, UpdatedBy: "CB-9"}
 	got, _ = uc.Messages(ctx)
 	if got[0].CurrentText != m.DefaultText {
 		t.Errorf("commune A reads %q — another commune's wording", got[0].CurrentText)
 	}
-	got, _ = uc.Messages(tenant.Into(context.Background(), tenantB))
+	got, _ = uc.Messages(tenant.Into(context.Background(), xaB))
 	if got[0].CurrentText != "Câu xã B." || !got[0].Overridden || got[0].UpdatedBy != "CB-9" {
 		t.Errorf("commune B: %+v", got[0])
 	}
 }
 
 func TestMessagesStoreFailureIsAnErrorNotTheDefault(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	f.listErr = errors.New("db down")
 	uc := newMessagesUseCase(t, k, f)
-	if _, err := uc.Messages(tenant.Into(context.Background(), tenantA)); err == nil {
+	if _, err := uc.Messages(tenant.Into(context.Background(), xaA)); err == nil {
 		t.Fatal("a failed read returned the default — the commune would see words it replaced")
 	}
 }
 
 func TestRewordWritesRowAndAuditInOneTransaction(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
-	ctx := tenant.Into(context.Background(), tenantA)
+	ctx := tenant.Into(context.Background(), xaA)
 
 	got, err := uc.Reword(ctx, domain.KeyBudgetScopeNotice, "  Câu của xã A.  ", staff)
 	if err != nil {
@@ -166,11 +166,11 @@ func TestRewordWritesRowAndAuditInOneTransaction(t *testing.T) {
 	if f.adds != 1 || f.updates != 0 {
 		t.Errorf("adds=%d updates=%d, want one insert", f.adds, f.updates)
 	}
-	if k.begins != 1 || k.commits != 1 || k.rollbacks != 0 || len(f.txsSeen) != 1 {
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 || len(f.txsSeen) != 1 {
 		t.Errorf("begin=%d commit=%d rollback=%d txs=%d — want ONE committed transaction",
-			k.begins, k.commits, k.rollbacks, len(f.txsSeen))
+			k.batDau, k.daCommit, k.daRollback, len(f.txsSeen))
 	}
-	if f.lastTx.TenantID() != tenantA {
+	if f.lastTx.TenantID() != xaA {
 		t.Errorf("written in commune %q", f.lastTx.TenantID())
 	}
 	d := auditDelta(t, k)
@@ -179,12 +179,12 @@ func TestRewordWritesRowAndAuditInOneTransaction(t *testing.T) {
 		d["sau"]["text"] != "Câu của xã A." || d["sau"]["overridden"] != true {
 		t.Errorf("delta = %v, want before=default after=new text", d)
 	}
-	if subj := k.stmtsContaining("INSERT INTO audit_log")[0].args[5]; subj != domain.KeyBudgetScopeNotice {
+	if subj := k.cau("INSERT INTO audit_log")[0].args[5]; subj != domain.KeyBudgetScopeNotice {
 		t.Errorf("subject = %v, want the message key", subj)
 	}
 
 	// Second wording: UPDATE of the same row, before = first wording.
-	k2 := &fakeStore{}
+	k2 := &khoGia{}
 	uc2 := newMessagesUseCase(t, k2, f)
 	if _, err := uc2.Reword(ctx, domain.KeyBudgetScopeNotice, "Câu thứ hai.", staff); err != nil {
 		t.Fatal(err)
@@ -198,43 +198,43 @@ func TestRewordWritesRowAndAuditInOneTransaction(t *testing.T) {
 }
 
 func TestRewordAuditFailureRollsBackTheWrite(t *testing.T) {
-	k, f := &fakeStore{failOnSQL: "INSERT INTO audit_log"}, newOverrideFake()
+	k, f := &khoGia{loiSau: "INSERT INTO audit_log"}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
-	if _, err := uc.Reword(tenant.Into(context.Background(), tenantA), domain.KeyBudgetScopeNotice, "Câu.", staff); err == nil {
+	if _, err := uc.Reword(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice, "Câu.", staff); err == nil {
 		t.Fatal("audit failure reported success")
 	}
-	if k.commits != 0 || k.rollbacks != 1 {
-		t.Errorf("commit=%d rollback=%d — the wording must not commit without its entry", k.commits, k.rollbacks)
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Errorf("commit=%d rollback=%d — the wording must not commit without its entry", k.daCommit, k.daRollback)
 	}
 }
 
 func TestRewordNoOpWritesNothing(t *testing.T) {
 	m, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
-	ctx := tenant.Into(context.Background(), tenantA)
+	ctx := tenant.Into(context.Background(), xaA)
 
 	// Sending the default while on the default: no row pinned, no entry.
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	got, err := newMessagesUseCase(t, k, f).Reword(ctx, m.Key, m.DefaultText, staff)
 	if err != nil || got.Overridden {
 		t.Fatalf("got %+v, %v", got, err)
 	}
-	if f.adds+f.updates != 0 || k.hasStmt("audit_log") {
+	if f.adds+f.updates != 0 || k.coCau("audit_log") {
 		t.Error("the default was pinned into a row, or an entry saying nothing changed was filed")
 	}
 
 	// Sending the current override again.
-	f.live[tenantA] = &domain.MessageOverride{ID: "o", Key: m.Key, Text: "Câu.", UpdatedAt: fixedNow, UpdatedBy: "CB-1"}
-	k = &fakeStore{}
+	f.live[xaA] = &domain.MessageOverride{ID: "o", Key: m.Key, Text: "Câu.", UpdatedAt: fixedNow, UpdatedBy: "CB-1"}
+	k = &khoGia{}
 	if _, err := newMessagesUseCase(t, k, f).Reword(ctx, m.Key, "Câu.", staff); err != nil {
 		t.Fatal(err)
 	}
-	if f.adds+f.updates != 0 || k.hasStmt("audit_log") {
+	if f.adds+f.updates != 0 || k.coCau("audit_log") {
 		t.Error("same text re-sent wrote something")
 	}
 }
 
 func TestRewordRefusesBeforeAnyTransaction(t *testing.T) {
-	ctx := tenant.Into(context.Background(), tenantA)
+	ctx := tenant.Into(context.Background(), xaA)
 	for name, c := range map[string]struct {
 		key, text string
 		actor     audit.Actor
@@ -246,12 +246,12 @@ func TestRewordRefusesBeforeAnyTransaction(t *testing.T) {
 		"no actor":    {domain.KeyBudgetScopeNotice, "Câu.", audit.Actor{Kind: "staff"}, domain.ErrMessageActorMissing},
 	} {
 		t.Run(name, func(t *testing.T) {
-			k, f := &fakeStore{}, newOverrideFake()
+			k, f := &khoGia{}, newOverrideFake()
 			_, err := newMessagesUseCase(t, k, f).Reword(ctx, c.key, c.text, c.actor)
 			if !errors.Is(err, c.want) {
 				t.Errorf("err = %v, want %v", err, c.want)
 			}
-			if k.begins != 0 {
+			if k.batDau != 0 {
 				t.Error("a refusal opened a transaction")
 			}
 		})
@@ -260,9 +260,9 @@ func TestRewordRefusesBeforeAnyTransaction(t *testing.T) {
 
 func TestRestoreSoftDeletesAndAudits(t *testing.T) {
 	m, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
-	ctx := tenant.Into(context.Background(), tenantA)
-	k, f := &fakeStore{}, newOverrideFake()
-	f.live[tenantA] = &domain.MessageOverride{ID: "o", Key: m.Key, Text: "Câu của xã.", UpdatedAt: fixedNow, UpdatedBy: "CB-1"}
+	ctx := tenant.Into(context.Background(), xaA)
+	k, f := &khoGia{}, newOverrideFake()
+	f.live[xaA] = &domain.MessageOverride{ID: "o", Key: m.Key, Text: "Câu của xã.", UpdatedAt: fixedNow, UpdatedBy: "CB-1"}
 
 	got, err := newMessagesUseCase(t, k, f).Restore(ctx, m.Key, staff)
 	if err != nil {
@@ -274,62 +274,62 @@ func TestRestoreSoftDeletesAndAudits(t *testing.T) {
 	if f.deletes != 1 || f.lastBy != "CB-00123" || f.lastReason != RestoreReason || !f.lastAt.Equal(fixedNow) {
 		t.Errorf("soft delete by=%q reason=%q at=%v", f.lastBy, f.lastReason, f.lastAt)
 	}
-	if k.begins != 1 || k.commits != 1 || len(f.txsSeen) != 1 {
-		t.Errorf("begin=%d commit=%d txs=%d", k.begins, k.commits, len(f.txsSeen))
+	if k.batDau != 1 || k.daCommit != 1 || len(f.txsSeen) != 1 {
+		t.Errorf("begin=%d commit=%d txs=%d", k.batDau, k.daCommit, len(f.txsSeen))
 	}
 	d := auditDelta(t, k)
 	if d["truoc"]["text"] != "Câu của xã." || d["sau"]["text"] != m.DefaultText || d["sau"]["overridden"] != false {
 		t.Errorf("delta = %v", d)
 	}
-	if a := k.stmtsContaining("INSERT INTO audit_log")[0].args[4]; a != ActionRestoreSystemMessage {
+	if a := k.cau("INSERT INTO audit_log")[0].args[4]; a != ActionRestoreSystemMessage {
 		t.Errorf("action = %v", a)
 	}
 }
 
 func TestRestoreOnDefaultWritesNothing(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
-	got, err := newMessagesUseCase(t, k, f).Restore(tenant.Into(context.Background(), tenantA), domain.KeyBudgetScopeNotice, staff)
+	k, f := &khoGia{}, newOverrideFake()
+	got, err := newMessagesUseCase(t, k, f).Restore(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice, staff)
 	if err != nil || got.Overridden {
 		t.Fatalf("got %+v, %v", got, err)
 	}
-	if f.deletes != 0 || k.hasStmt("audit_log") {
+	if f.deletes != 0 || k.coCau("audit_log") {
 		t.Error("restoring a key already on the default wrote something")
 	}
 }
 
 func TestRestoreUnknownKey(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
-	_, err := newMessagesUseCase(t, k, f).Restore(tenant.Into(context.Background(), tenantA), "report.title", staff)
-	if !errors.Is(err, domain.ErrUnknownMessageKey) || k.begins != 0 {
-		t.Errorf("err = %v, begin = %d", err, k.begins)
+	k, f := &khoGia{}, newOverrideFake()
+	_, err := newMessagesUseCase(t, k, f).Restore(tenant.Into(context.Background(), xaA), "report.title", staff)
+	if !errors.Is(err, domain.ErrUnknownMessageKey) || k.batDau != 0 {
+		t.Errorf("err = %v, begin = %d", err, k.batDau)
 	}
 }
 
 func TestTextResolvesOneKeyForTheRequestsCommune(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
 	m, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
 
 	// A commune that reworded nothing reads the shipped sentence.
-	got, err := uc.Text(tenant.Into(context.Background(), tenantA), domain.KeyBudgetScopeNotice)
+	got, err := uc.Text(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice)
 	if err != nil || got != m.DefaultText {
 		t.Fatalf("no override: got %q, %v — want the default", got, err)
 	}
 
 	// Commune A's own wording reaches A; commune B, which reworded nothing, still reads the default.
-	f.live[tenantA] = &domain.MessageOverride{ID: "o1", Key: domain.KeyBudgetScopeNotice, Text: "Câu riêng của xã A."}
-	if got, _ := uc.Text(tenant.Into(context.Background(), tenantA), domain.KeyBudgetScopeNotice); got != "Câu riêng của xã A." {
+	f.live[xaA] = &domain.MessageOverride{ID: "o1", Key: domain.KeyBudgetScopeNotice, Text: "Câu riêng của xã A."}
+	if got, _ := uc.Text(tenant.Into(context.Background(), xaA), domain.KeyBudgetScopeNotice); got != "Câu riêng của xã A." {
 		t.Errorf("commune A reads %q, want its own wording", got)
 	}
-	if got, _ := uc.Text(tenant.Into(context.Background(), tenantB), domain.KeyBudgetScopeNotice); got != m.DefaultText {
+	if got, _ := uc.Text(tenant.Into(context.Background(), xaB), domain.KeyBudgetScopeNotice); got != m.DefaultText {
 		t.Errorf("commune B reads %q, want the default — another commune's wording leaked", got)
 	}
 }
 
 func TestTextRefusesUnknownKeyAndStoreFailure(t *testing.T) {
-	k, f := &fakeStore{}, newOverrideFake()
+	k, f := &khoGia{}, newOverrideFake()
 	uc := newMessagesUseCase(t, k, f)
-	ctx := tenant.Into(context.Background(), tenantA)
+	ctx := tenant.Into(context.Background(), xaA)
 
 	if _, err := uc.Text(ctx, "feedback.reason_required"); !errors.Is(err, domain.ErrUnknownMessageKey) {
 		t.Errorf("another service's key: err = %v, want ErrUnknownMessageKey", err)

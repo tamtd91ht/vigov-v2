@@ -53,26 +53,26 @@ var errPreviewRollback = errors.New("loai_tai_nguyen_ban_do: xem trước — hu
 
 // PreviewMapAssetTypeImport plans the file and reports. The returned error is a system failure only;
 // a file with errors is a SUCCESSFUL preview whose Errors is non-empty.
-func (uc *MapAssetTypeCatalogue) PreviewMapAssetTypeImport(ctx context.Context, rows []domain.MapAssetTypeImportRow) (
+func (uc *DanhMucLoaiTaiNguyen) PreviewMapAssetTypeImport(ctx context.Context, rows []domain.MapAssetTypeImportRow) (
 	MapAssetTypeImportResult, error) {
 
 	var res MapAssetTypeImportResult
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		existing, err := uc.repo.ImportSnapshot(ctx, tx)
+		existing, err := uc.kho.ImportSnapshot(ctx, tx)
 		if err != nil {
 			return err
 		}
-		res.Types, res.Errors = domain.PlanMapAssetTypeImport(rows, existing, docstore.MapAssetTypeCeiling)
+		res.Types, res.Errors = domain.PlanMapAssetTypeImport(rows, existing, docstore.TranDanhMucLoaiTaiNguyen)
 		return errPreviewRollback
 	})
 	if err != nil && !errors.Is(err, errPreviewRollback) {
-		return MapAssetTypeImportResult{}, wrapErr(ctx, "xem trước nhập Excel", err)
+		return MapAssetTypeImportResult{}, boc(ctx, "xem trước nhập Excel", err)
 	}
 	return res, nil
 }
 
 // ImportMapAssetTypes writes the file, or nothing.
-func (uc *MapAssetTypeCatalogue) ImportMapAssetTypes(ctx context.Context, rows []domain.MapAssetTypeImportRow,
+func (uc *DanhMucLoaiTaiNguyen) ImportMapAssetTypes(ctx context.Context, rows []domain.MapAssetTypeImportRow,
 	actor audit.Actor) (MapAssetTypeImportResult, error) {
 
 	if actor.ID == "" {
@@ -81,11 +81,11 @@ func (uc *MapAssetTypeCatalogue) ImportMapAssetTypes(ctx context.Context, rows [
 	var res MapAssetTypeImportResult
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		res = MapAssetTypeImportResult{}
-		existing, err := uc.repo.ImportSnapshot(ctx, tx)
+		existing, err := uc.kho.ImportSnapshot(ctx, tx)
 		if err != nil {
 			return err
 		}
-		plan, errs := domain.PlanMapAssetTypeImport(rows, existing, docstore.MapAssetTypeCeiling)
+		plan, errs := domain.PlanMapAssetTypeImport(rows, existing, docstore.TranDanhMucLoaiTaiNguyen)
 		if len(errs) > 0 {
 			// Returned from INSIDE the closure so the transaction rolls back; nothing was written.
 			return &MapAssetTypeImportRejected{Errors: errs}
@@ -94,14 +94,13 @@ func (uc *MapAssetTypeCatalogue) ImportMapAssetTypes(ctx context.Context, rows [
 		created := make([]map[string]any, 0, len(plan))
 		for i := range plan {
 			p := &plan[i]
-			if p.ID, err = uc.newID(); err != nil {
+			if p.ID, err = uc.sinhID(); err != nil {
 				return fmt.Errorf("loai_tai_nguyen_ban_do: sinh id: %w", err)
 			}
 			// The form's INSERT: `nguon` and `ma_nguon_re_nhanh` are literals there, so an imported row
 			// is a tier-1 row of the commune, exactly like a typed one.
-			// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of the INSERT.
-			if err := uc.repo.Insert(ctx, tx, domain.MapAssetType{
-				ID: p.ID, Code: p.Code, Label: p.Label, SortOrder: p.Order, IsActive: true,
+			if err := uc.kho.Chen(ctx, tx, domain.LoaiTaiNguyenBanDo{
+				ID: p.ID, Ma: p.Code, Nhan: p.Label, ThuTu: p.Order, DangDung: true,
 			}); err != nil {
 				return err
 			}
@@ -130,7 +129,7 @@ func (uc *MapAssetTypeCatalogue) ImportMapAssetTypes(ctx context.Context, rows [
 		if errors.As(err, &rej) {
 			return MapAssetTypeImportResult{}, rej
 		}
-		return MapAssetTypeImportResult{}, wrapErr(ctx, "nhập Excel", err)
+		return MapAssetTypeImportResult{}, boc(ctx, "nhập Excel", err)
 	}
 	return res, nil
 }

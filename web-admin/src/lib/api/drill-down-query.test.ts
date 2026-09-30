@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { laySoNhiemVu } from "./tasks";
-import { laySoPhanAnh } from "./citizen-reports";
-import { laySoVanBanDen } from "./documents";
+import { laySoNhiemVu } from "./nhiem-vu";
+import { laySoPhanAnh } from "./phieu-phan-anh";
+import { laySoVanBanDen } from "./van-ban";
 
 /**
  * Ba tuyến danh sách nhận lọc Tổng quan (SRS M7.2.2). Canh CHUỖI TRUY VẤN THẬT đi ra `fetch`, vì

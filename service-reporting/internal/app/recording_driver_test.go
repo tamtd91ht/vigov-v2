@@ -10,7 +10,7 @@ import (
 )
 
 // A fake database/sql driver that RECORDS EVERY STATEMENT AND EVERY TRANSACTION BOUNDARY — the
-// shape of service-finance's fake_driver_catalogue_test.go, copied (rule 2, forbidden #1).
+// shape of service-finance's driver_gia_danh_muc_test.go, copied (rule 2, forbidden #1).
 //
 // It exists so that "the audit entry is in the same transaction as the override" and "a failed
 // audit entry rolls the override back" are properties of real core/store Begin/Commit/Rollback

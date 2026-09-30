@@ -19,8 +19,8 @@
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin`: the three rules of `goi.ts`.
  */
 
-import { CHUNG, errorMessageOr, LOI_KHONG_RO } from "./request";
-import type { KetQua } from "./request";
+import { CHUNG, errorMessageOr, LOI_KHONG_RO } from "./goi";
+import type { KetQua } from "./goi";
 
 /** The three paths of one import. Each caller writes them with `satisfies <generated>["duongDan"]`. */
 export type ImportRoutes = {

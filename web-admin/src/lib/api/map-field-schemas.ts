@@ -16,8 +16,8 @@
  * (`features/cau-hinh/map-field-form.ts`); the server is the one that refuses.
  */
 
-import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./request";
-import type { KetQua } from "./request";
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./goi";
+import type { KetQua } from "./goi";
 import type {
   comms_createMapFieldSchemaIn,
   comms_delete_map_field_schemas_by_id,

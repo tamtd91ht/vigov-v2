@@ -17,8 +17,8 @@
  * an absolute value and DELETE restores one; repeating either lands in the same state.
  */
 
-import { docJSON, docThanLoiGoi, goiGhi } from "./request";
-import type { KetQua } from "./request";
+import { docJSON, docThanLoiGoi, goiGhi } from "./goi";
+import type { KetQua } from "./goi";
 import type {
   finance_delete_finance_system_messages_by_code_override,
   finance_get_finance_system_messages,

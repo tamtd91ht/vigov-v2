@@ -1,9 +1,9 @@
-import { CauHinhXaProvider } from "@/components/commune-config";
-import { phanHienThi } from "@/lib/commune-display-config";
-import { DauTrang } from "@/components/page-header";
-import { ThanhBen } from "@/components/sidebar";
-import { SoNhiemVu } from "@/features/tasks/tasks-screen";
-import { PhienProvider } from "@/features/session/current-session";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
+import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 

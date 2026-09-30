@@ -1,10 +1,10 @@
-import { CauHinhXaProvider } from "@/components/commune-config";
-import { phanHienThi } from "@/lib/commune-display-config";
-import { DauTrang } from "@/components/page-header";
-import { ChiTietDuAn } from "@/features/disbursements/investment-project-detail";
-import { PhienProvider } from "@/features/session/current-session";
-import { CongQuyen } from "@/features/permissions/permission-gate";
-import { QUYEN_XEM_GIAI_NGAN } from "@/lib/permissions";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { DauTrang } from "@/components/dau-trang";
+import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { CongQuyen } from "@/features/quyen/cong-quyen";
+import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**

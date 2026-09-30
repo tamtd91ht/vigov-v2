@@ -1,16 +1,16 @@
-# RULE 12 — Every name is English; only API URL paths stay Vietnamese
+# RULE 12 — New code is named in English
 
 | # | Invariant |
 |---|---|
-| 1 | Code names, files, directories, tables, columns, **enum values**, buckets, **k8s names and labels** (`deploy/**`) are English. Existing Vietnamese names are renamed service by service (campaign ADR) |
-| 2 | Vietnamese only in: API URL paths, web-admin `src/app/**` route dirs, UI strings, `kb/` prose |
-| 3 | One VN→EN dictionary: `kb/00-foundation/ubiquitous-language.md`. Infra names = real cluster (`common-config`, `<service>-secrets`) |
+| 1 | Every **new** function, method, type, variable, constant, struct field, export, file, directory, table, column and bucket is English |
+| 2 | Vietnamese stays where a user reads it: route segments (`web-admin/src/app/**`), UI strings, `kb/` prose. Enum **values**: ADR 0011 |
+| 3 | Existing names are **not renamed**; editing them is allowed |
 
 | # | Forbidden |
 |---|---|
 | 1 | A new Vietnamese name without `vi-name-ok: <reason>` |
-| 2 | A second English word for a concept the dictionary names |
+| 2 | A second English word for a concept `kb/00-foundation/ubiquitous-language.md` already names |
 
-**STOP:** a concept with no English name in the dictionary → ask the user.
+**STOP:** a business concept with no English name there → ask the user.
 
-→ Enforcement: `hooks/english_identifier_guard.py` (BLOCK) · Skill: `skills/naming-english`
+→ Enforcement: `hooks/english_identifier_guard.py` (BLOCK) · Skill: `skills/naming-english` · ADR 0051

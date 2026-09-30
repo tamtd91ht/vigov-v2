@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SoNhiemVu } from "@/features/tasks/tasks-screen";
-import { SoPhanAnh } from "@/features/citizen-reports/citizen-report-register";
-import { PhienProvider } from "@/features/session/current-session";
-import { SoVanBanDen } from "@/features/documents/incoming-document-register";
+import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
+import { SoPhanAnh } from "@/features/phan-anh/so-phan-anh";
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { SoVanBanDen } from "@/features/van-ban/so-van-ban-den";
 import { INVALID_DRILL_DOWN_LINE, parseDrillDown } from "@/lib/drill-down";
 
 import { CLEAR_DRILL_DOWN_LABEL, DrillDownBanner } from "./drill-down-banner";

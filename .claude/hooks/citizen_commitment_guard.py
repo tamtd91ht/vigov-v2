@@ -74,13 +74,8 @@ CHU_SO_HUU_LICH = "service-identity/internal/"
 
 # The calendar-day check only applies where a DEADLINE is being computed. Without this
 # gate every ordinary date arithmetic in the repo would fire.
-#
-# English beside Vietnamese (ADR 0061 dictionary: han_tiep_nhan -> acknowledge_due,
-# han_xu_ly_xong -> resolve_due, han_xu_ly -> due_at, sla -> processing_deadline). Without them a
-# renamed file loses its deadline context and the duration checks below never run on it.
 DEADLINE_CONTEXT = re.compile(
-    r"(?:sla|deadline|han_xu_ly|hanXuLy|han_tiep_nhan|hanTiepNhan|han_phan_loai|due_?date|"
-    r"dueDate|due_?at\b|acknowledge_?due|resolve_?due|classify_?due|thoi_han|qua_han)",
+    r"(?:sla|deadline|han_xu_ly|hanXuLy|due_?date|dueDate|thoi_han|qua_han)",
     re.IGNORECASE,
 )
 

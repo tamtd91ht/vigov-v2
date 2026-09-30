@@ -12,12 +12,12 @@
  * 0007). A row says the deadline it missed and whether the server judged it critical.
  */
 
-import { LINH_VUC_PHAN_ANH } from "@/features/citizen-reports/citizen-report-labels";
-import type { KetQua } from "@/lib/api/request";
+import { LINH_VUC_PHAN_ANH } from "@/features/phan-anh/nhan-phieu";
+import type { KetQua } from "@/lib/api/goi";
 import type { documents_overdueQueueOut, petitions_overdueQueueOut } from "@/lib/api/schema.gen";
 import { isPeriodMetric, parseDrillDown } from "@/lib/drill-down";
 import type { CitizenReportMetric, IncomingDocumentMetric, TaskMetric } from "@/lib/drill-down";
-import { coQuyen, REPORT_READ_PERMISSION } from "@/lib/permissions";
+import { coQuyen, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { formatDateTime } from "./period";
 

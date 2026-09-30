@@ -280,7 +280,7 @@ func (h *Handler) PreviewCapitalPlanCategoryImport(w http.ResponseWriter, r *htt
 		return
 	}
 	if len(sheetErrs) > 0 {
-		writeJSON(w, http.StatusOK, catalogueImportPreviewOut{
+		vietJSON(w, http.StatusOK, catalogueImportPreviewOut{
 			Entries: []catalogueImportEntryOut{}, Errors: catalogueErrorsOut(sheetErrs)})
 		return
 	}
@@ -291,7 +291,7 @@ func (h *Handler) PreviewCapitalPlanCategoryImport(w http.ResponseWriter, r *htt
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	writeJSON(w, http.StatusOK, catalogueImportPreviewOut{
+	vietJSON(w, http.StatusOK, catalogueImportPreviewOut{
 		Valid:   len(res.Errors) == 0,
 		Entries: catalogueEntriesOut(res.Entries),
 		Errors:  catalogueErrorsOut(res.Errors),
@@ -300,7 +300,7 @@ func (h *Handler) PreviewCapitalPlanCategoryImport(w http.ResponseWriter, r *htt
 
 // ImportCapitalPlanCategories serves POST /api/v1/capital-plan-categories/imports.
 func (h *Handler) ImportCapitalPlanCategories(w http.ResponseWriter, r *http.Request) {
-	actor, ok := actorFrom(r)
+	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.d.Log.Error("tuyến nhập hạng mục kế hoạch vốn chạy mà không có mã cán bộ — SAI CẤU HÌNH ROUTE hoặc định danh cũ",
 			"xa", string(tenant.MustFrom(r.Context())))
@@ -321,7 +321,7 @@ func (h *Handler) ImportCapitalPlanCategories(w http.ResponseWriter, r *http.Req
 		switch {
 		case errors.As(err, &rej):
 			writeCatalogueImportRejected(w, rej.Errors)
-		case errors.Is(err, fistore.ErrCodeTaken):
+		case errors.Is(err, fistore.ErrMaDaTonTai):
 			// A form took a code between the plan and the insert. The whole file was rolled back.
 			httpx.WriteError(w, http.StatusConflict, "catalogue_changed",
 				"Danh mục hạng mục kế hoạch vốn của xã vừa thay đổi. Chưa hạng mục nào được tạo. Hãy kiểm tra lại tệp rồi nhập lại.", "")
@@ -334,12 +334,12 @@ func (h *Handler) ImportCapitalPlanCategories(w http.ResponseWriter, r *http.Req
 	// What a retry carrying the same Idempotency-Key is told: THE BATCH, never the body (core/idem
 	// stores a code, not a response). Every entry of this file carries it as `lo_nhap`.
 	idem.RecordCode(r.Context(), res.Batch)
-	writeJSON(w, http.StatusCreated, catalogueImportCreatedOut{Created: catalogueEntriesOut(res.Entries)})
+	vietJSON(w, http.StatusCreated, catalogueImportCreatedOut{Created: catalogueEntriesOut(res.Entries)})
 }
 
 // writeCatalogueImportRejected is 400 with every error.
 func writeCatalogueImportRejected(w http.ResponseWriter, errs []domain.CatalogueImportError) {
-	writeJSON(w, http.StatusBadRequest, catalogueImportRejectedOut{
+	vietJSON(w, http.StatusBadRequest, catalogueImportRejectedOut{
 		Code:    "import_invalid",
 		Message: "Tệp có lỗi nên chưa hạng mục nào được tạo. Hãy sửa các dòng được liệt kê rồi nhập lại.",
 		Errors:  catalogueErrorsOut(errs),

@@ -23,8 +23,8 @@ import (
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
-// The three mail-settings routes. Harness pieces are the catalogue write suite's (perCommuneChecker,
-// chuTheGhi, writerStaff) because "right permission, wrong commune" needs a checker keyed by commune.
+// The three mail-settings routes. Harness pieces are the catalogue write suite's (checkerDanhMucGia,
+// chuTheGhi, canBoGhi) because "right permission, wrong commune" needs a checker keyed by commune.
 
 // testPassword is a fixture, not a credential: no server anywhere accepts it.
 const testPassword = "fixture-not-a-real-password-7Q"
@@ -70,7 +70,7 @@ func (f *fakeMailSettings) SendTestMessage(ctx context.Context, recipient string
 type mailServer struct {
 	h       http.Handler
 	fake    *fakeMailSettings
-	checker *perCommuneChecker
+	checker *checkerDanhMucGia
 }
 
 func newMailServer(t *testing.T) *mailServer {
@@ -83,21 +83,20 @@ func newMailServer(t *testing.T) *mailServer {
 		},
 		Configured: true, EncryptionConfigured: true,
 	}}
-	checker := &perCommuneChecker{}
+	checker := &checkerDanhMucGia{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:                checker,
-		MapAssetTypes:          sampleMapAssetTypes(),
-		WriteMapAssetTypes:     &fakeMapAssetTypeWriter{},
-		Announcements:          &fakeAnnouncementReader{},
-		WriteAnnouncements:     &fakeAnnouncementWriter{},
-		ContentItems:           &fakeContentItemReader{},
-		WriteContentItems:      &fakeContentItemWriter{},
-		ContentCategories:      &fakeContentCategoryReader{},
-		WriteContentCategories: &fakeContentCategoryWriter{},
-
+		Checker:              checker,
+		LoaiTaiNguyen:        danhMucMau(),
+		GhiLoaiTaiNguyen:     &ghiDanhMucGia{},
+		ThongBao:             &soThongBaoGia{},
+		GhiThongBao:          &ghiThongBaoGia{},
+		NoiDung:              &soNoiDungGia{},
+		GhiNoiDung:           &ghiNoiDungGia{},
+		DanhMucNoiDung:       &soDanhMucNDGia{},
+		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         fake,
@@ -109,16 +108,24 @@ func newMailServer(t *testing.T) *mailServer {
 	})
 
 	var h http.Handler = mux
-	h = injectPrincipal(h)
+	h = chuTheGhi(h)
 	h = idem.Middleware(nil, log)(h)
-	h = httpx.TenantMiddleware(sampleDirectory())(h)
+	h = httpx.TenantMiddleware(thuMucMau())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &mailServer{h: h, fake: fake, checker: checker}
 }
 
 func (s *mailServer) grant(commune tenant.ID, perms ...authz.Perm) {
-	s.checker.grantIn(commune, perms...)
+	if s.checker.co == nil {
+		s.checker.co = map[tenant.ID]map[authz.Perm]struct{}{}
+	}
+	if s.checker.co[commune] == nil {
+		s.checker.co[commune] = map[authz.Perm]struct{}{}
+	}
+	for _, p := range perms {
+		s.checker.co[commune][p] = struct{}{}
+	}
 }
 
 func (s *mailServer) call(t *testing.T, method, host, path string, p *authz.Principal, body string) *httptest.ResponseRecorder {
@@ -133,7 +140,7 @@ func (s *mailServer) call(t *testing.T, method, host, path string, p *authz.Prin
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set(idem.Header, "01JIDEMPOTENCYKEYMAILSET")
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.h.ServeHTTP(w, r)
@@ -169,8 +176,8 @@ func TestMailRoutesAskForSeededKey(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body)
-			if got := s.checker.lastAsked(); got != "admin.lookup" {
+			s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
+			if got := s.checker.hoiKhoaCuoi(); got != "admin.lookup" {
 				t.Fatalf("route asked for %q, want admin.lookup", got)
 			}
 		})
@@ -181,8 +188,8 @@ func TestMailRoutes_401NoSession(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
-			expectStatus(t, s.call(t, tc.method, hostA, tc.path, nil, tc.body), http.StatusUnauthorized)
+			s.grant(xaA, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, hostA, tc.path, nil, tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("no session and the use case still ran")
 			}
@@ -194,8 +201,8 @@ func TestMailRoutes_403WrongPermission(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, tc.wrongPerm)
-			expectStatus(t, s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body), http.StatusForbidden)
+			s.grant(xaA, tc.wrongPerm)
+			doiMa(t, s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("wrong permission and the use case still ran")
 			}
@@ -209,8 +216,8 @@ func TestMailRoutes_403RightPermissionWrongCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
-			expectStatus(t, s.call(t, tc.method, hostB, tc.path, writerStaff(tenantB), tc.body), http.StatusForbidden)
+			s.grant(xaA, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaB), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("a grant in another commune was enough")
 			}
@@ -222,9 +229,9 @@ func TestMailRoutes_401SessionOfAnotherCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
-			s.grant(tenantB, "admin.lookup")
-			expectStatus(t, s.call(t, tc.method, hostB, tc.path, writerStaff(tenantA), tc.body), http.StatusUnauthorized)
+			s.grant(xaA, "admin.lookup")
+			s.grant(xaB, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaA), tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("a session of another commune still reached the use case")
 			}
@@ -236,17 +243,17 @@ func TestMailRoutes_RightPermissionRightCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
-			expectStatus(t, s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body), tc.ok)
-			if s.fake.calls != 1 || s.fake.lastCommune != tenantA {
-				t.Fatalf("use case ran %d times in commune %q, want once in %q", s.fake.calls, s.fake.lastCommune, tenantA)
+			s.grant(xaA, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body), tc.ok)
+			if s.fake.calls != 1 || s.fake.lastCommune != xaA {
+				t.Fatalf("use case ran %d times in commune %q, want once in %q", s.fake.calls, s.fake.lastCommune, xaA)
 			}
 			if tc.method == http.MethodGet {
 				return
 			}
 			// Rule 6, invariant 8: the BUSINESS CODE, never the internal id.
-			if s.fake.lastActor.ID != writerStaffCode || s.fake.lastActor.IP != "10.0.0.7" {
-				t.Errorf("actor = %+v, want business code %q from the socket address", s.fake.lastActor, writerStaffCode)
+			if s.fake.lastActor.ID != maCanBoGhi || s.fake.lastActor.IP != "10.0.0.7" {
+				t.Errorf("actor = %+v, want business code %q from the socket address", s.fake.lastActor, maCanBoGhi)
 			}
 		})
 	}
@@ -254,9 +261,9 @@ func TestMailRoutes_RightPermissionRightCommune(t *testing.T) {
 
 func TestGetMailSettingsNeverCarriesThePassword(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(tenantA, "admin.lookup")
-	w := s.call(t, http.MethodGet, hostA, mailPath, writerStaff(tenantA), "")
-	expectStatus(t, w, http.StatusOK)
+	s.grant(xaA, "admin.lookup")
+	w := s.call(t, http.MethodGet, hostA, mailPath, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
 	body := w.Body.String()
 	// The field that exists is the boolean; no key named `password` alone may appear at all.
 	if !strings.Contains(body, `"password_set":true`) {
@@ -269,9 +276,9 @@ func TestGetMailSettingsNeverCarriesThePassword(t *testing.T) {
 
 func TestPutMailSettingsPassesPasswordAsSecretAndDoesNotEchoIt(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(tenantA, "admin.lookup")
-	w := s.call(t, http.MethodPut, hostA, mailPath, writerStaff(tenantA), putMailBody)
-	expectStatus(t, w, http.StatusOK)
+	s.grant(xaA, "admin.lookup")
+	w := s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), putMailBody)
+	doiMa(t, w, http.StatusOK)
 	if s.fake.lastPassword != testPassword {
 		t.Errorf("use case did not receive the typed password")
 	}
@@ -289,9 +296,9 @@ func TestPutMailSettingsPassesPasswordAsSecretAndDoesNotEchoIt(t *testing.T) {
 
 func TestPutMailSettingsBlankPasswordReachesUseCaseAsEmpty(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(tenantA, "admin.lookup")
+	s.grant(xaA, "admin.lookup")
 	body := strings.Replace(putMailBody, `,"password":"`+testPassword+`"`, "", 1)
-	expectStatus(t, s.call(t, http.MethodPut, hostA, mailPath, writerStaff(tenantA), body), http.StatusOK)
+	doiMa(t, s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), body), http.StatusOK)
 	if len(s.fake.lastSave.Password) != 0 {
 		t.Error("an omitted password did not arrive as empty (keep)")
 	}
@@ -322,11 +329,11 @@ func TestMailErrorsMapToStatuses(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
+			s.grant(xaA, "admin.lookup")
 			s.fake.err = tc.err
-			w := s.call(t, tc.method, hostA, tc.path, writerStaff(tenantA), tc.body)
-			expectStatus(t, w, tc.code)
-			e := decodeError(t, w)
+			w := s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
+			doiMa(t, w, tc.code)
+			e := loiTra(t, w)
 			if e.Code != tc.key {
 				t.Errorf("code = %q, want %q", e.Code, tc.key)
 			}
@@ -344,12 +351,12 @@ func TestMailRefusalsAnswerFixedSentences(t *testing.T) {
 	for _, row := range mailSettingsRefusals {
 		t.Run(row.err.Error(), func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(tenantA, "admin.lookup")
+			s.grant(xaA, "admin.lookup")
 			// Wrapped the way a use case wraps it: the detail after the sentinel must not travel either.
-			s.fake.err = fmt.Errorf("máy chủ thư: lưu cho xã %s: %w", tenantA, row.err)
-			w := s.call(t, http.MethodPut, hostA, mailPath, writerStaff(tenantA), putMailBody)
-			expectStatus(t, w, http.StatusBadRequest)
-			e := decodeError(t, w)
+			s.fake.err = fmt.Errorf("máy chủ thư: lưu cho xã %s: %w", xaA, row.err)
+			w := s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), putMailBody)
+			doiMa(t, w, http.StatusBadRequest)
+			e := loiTra(t, w)
 			if e.Code != "invalid_request" || e.Message != row.message {
 				t.Fatalf("got %q / %q, want invalid_request / %q", e.Code, e.Message, row.message)
 			}
@@ -362,7 +369,7 @@ func TestMailRefusalsAnswerFixedSentences(t *testing.T) {
 // backticked JSON field name, no wrapped chain, no commune id.
 func assertNoInternalWording(t *testing.T, msg string) {
 	t.Helper()
-	for _, bad := range []string{"`", "may_chu_thu", "truong_ban_do", "danh_muc", ": %", string(tenantA)} {
+	for _, bad := range []string{"`", "may_chu_thu", "truong_ban_do", "danh_muc", ": %", string(xaA)} {
 		if strings.Contains(msg, bad) {
 			t.Errorf("message carries internal wording %q: %q", bad, msg)
 		}

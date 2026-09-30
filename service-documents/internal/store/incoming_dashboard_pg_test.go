@@ -14,7 +14,7 @@ import (
 
 // Against a real PostgreSQL: THE ROW COUNT OF EACH DRILL-DOWN EQUALS ITS FIGURE, in one commune, with
 // the other commune's rows and a soft-deleted row present to be wrongly counted. SKIPPED WITHOUT
-// VIGOV_TEST_DSN — see document_type_pg_test.go on what a green run without it does and does not prove.
+// VIGOV_TEST_DSN — see loai_van_ban_pg_test.go on what a green run without it does and does not prove.
 
 type incomingFixture struct {
 	id, status string
@@ -41,9 +41,9 @@ func insertIncoming(t *testing.T, db *sql.DB, tenantID string, no int, f incomin
 }
 
 func TestPgEachDrillDownHasAsManyRowsAsItsFigure(t *testing.T) {
-	db := openDB(t)
-	a, b := uniqueTenants(t)
-	s := NewIncomingDocumentStore(pkgstore.New(db))
+	db := moKetNoi(t)
+	a, b := xaRieng(t)
+	s := NewVanBanDenStore(pkgstore.New(db))
 
 	now := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC) // 10:00 ICT
 	past := now.Add(-time.Minute)                       // a deadline one minute ago
@@ -54,13 +54,13 @@ func TestPgEachDrillDownHasAsManyRowsAsItsFigure(t *testing.T) {
 		{id: "vb-1", status: "moi-vao-so", arrived: "2026-09-01", due: past},
 		// in period (last day), open, not yet due
 		{id: "vb-2", status: "dang-xu-ly", arrived: "2026-09-30", due: later},
-		// in period, finished and past its deadline: NOT overdue (IsOverdue), NOT open
+		// in period, finished and past its deadline: NOT overdue (QuaHan), NOT open
 		{id: "vb-3", status: "da-giai-quyet", arrived: "2026-09-15", due: past},
 		// before the period, open, late
 		{id: "vb-4", status: "da-phan-cong", arrived: "2026-08-31", due: past.Add(-time.Hour)},
 		// after the period, finished
 		{id: "vb-5", status: "luu-khong-thu-ly", arrived: "2026-10-01", due: later},
-		// deadline EXACTLY now: IsOverdue is now.After(due), false at equality
+		// deadline EXACTLY now: QuaHan is now.After(due), false at equality
 		{id: "vb-6", status: "dang-xu-ly", arrived: "2026-08-01", due: now},
 		// soft-deleted, would otherwise count everywhere
 		{id: "vb-7", status: "moi-vao-so", arrived: "2026-09-10", due: past, deleted: true},
@@ -74,7 +74,7 @@ func TestPgEachDrillDownHasAsManyRowsAsItsFigure(t *testing.T) {
 		FirstDate: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 		LastDate:  time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC),
 	}
-	ctx := tenantCtx(a)
+	ctx := ctxXa(a)
 
 	sum, err := s.CountIncomingSummary(ctx, window, now)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestPgEachDrillDownHasAsManyRowsAsItsFigure(t *testing.T) {
 		t.Fatalf("summary = %+v, want %+v", sum, want)
 	}
 
-	req, err := page.Parse(url.Values{"limit": {"100"}}, IncomingDocumentSorts)
+	req, err := page.Parse(url.Values{"limit": {"100"}}, SapXepVanBanDen)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,16 +94,16 @@ func TestPgEachDrillDownHasAsManyRowsAsItsFigure(t *testing.T) {
 		domain.MetricOpen:    sum.Open,
 		domain.MetricOverdue: sum.Overdue,
 	} {
-		res, err := s.List(ctx, IncomingDocumentFilter{Metric: IncomingMetricFilter{Metric: metric, Window: window, Now: now}}, req)
+		res, err := s.DanhSach(ctx, LocVanBanDen{Metric: IncomingMetricFilter{Metric: metric, Window: window, Now: now}}, req)
 		if err != nil {
 			t.Fatalf("%s: %v", metric, err)
 		}
 		if len(res.Items) != figure {
 			t.Errorf("%s: list has %d rows, figure says %d", metric, len(res.Items), figure)
 		}
-		for _, d := range res.Items {
-			if metric == domain.MetricOverdue && !d.IsOverdue(now) {
-				t.Errorf("%s listed as overdue but IsOverdue(now) is false", d.ID)
+		for _, v := range res.Items {
+			if metric == domain.MetricOverdue && !v.QuaHan(now) {
+				t.Errorf("%s listed as overdue but QuaHan(now) is false", v.ID)
 			}
 		}
 	}

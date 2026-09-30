@@ -21,7 +21,7 @@ import {
   LOI_KHONG_RO, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   thongBaoLoi, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   type KetQua, // vi-name-ok: existing type of goi.ts, imported not declared (rule 12 inv 3)
-} from "./request";
+} from "./goi";
 import type {
   petitions_get_tasks_import_template,
   petitions_post_tasks_imports,

@@ -178,21 +178,12 @@
       "menu": "cau-hinh"
     },
     {
-      "id": "doi-ten-tieng-anh-lop-a",
-      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp",
-      "trang_thai": "xong",
-      "bang_chung": "30/09/2026: 60 tệp git mv + 17 tệp sửa tại chỗ. Kiểu theo từ điển: InvestmentProject (X6), DisbursementVoucher (X7), BudgetEntry (X11), CapitalPlanCategory, FundingSource, BasisPoints, Tier*/Source*. Giữ: SQL, giá trị enum, thẻ JSON, 36 DTO HTTP tên Việt (tên component openapi), proto (chỉ Health), tên của core. Worktree sạch: vet+test service-finance xanh, test_hooks, check_* PASS; openapi không đổi.",
-      "no_confirm": [],
-      "tiep_theo": "Lớp B: 12 bảng (du_an, chung_tu_giai_ngan, nguon_von, phan_bo_nguon_von, hang_muc_ke_hoach_von, bang_ngan_sach, khoan_muc_ngan_sach, cot_ngan_sach, gia_tri_khoan_muc, dot_thu_chi, gia_tri_dot, cấu hình giải ngân) + trigger chung_tu_da_khoa ('da-khoa'), dot_thu_chi_bat_bien (so to_jsonb), danh_muc_ba_tang ('he-thong'). Mã NS-<năm>-THU/CHI giữ dạng (X26).",
-      "menu": "cau-hinh"
-    },
-    {
       "id": "sua-trao-co-hang-muc-ke-hoach-von",
       "viec": "Sửa lỗi đọc tráo la_mac_dinh / dang_dung trên đường GHI của danh mục hạng mục kế hoạch vốn",
       "trang_thai": "xong",
-      "bang_chung": "30/09/2026: scanCategory (dùng bởi ByIDForUpdate — Update/SoftDelete) quét dang_dung vào IsDefault và ngược lại, có từ 14e4819 (22/09). ListCategories quét đúng nên test đọc danh sách không thấy; driver giả tầng app chép thứ tự SAI nên test đường ghi xanh theo lỗi. Sửa: List dùng chung scanCategory; driver giả chép từ danh sách cột. Đột biến đưa lỗi trở lại -> đỏ 3 ca (store TestListReadsEveryColumnCorrectly; app TestDisableIsRefusedOnlyOnTier3, TestUpdateSetDefaultClearsOldDefaultFirstInSameTransaction). go test -p 1 service-finance xanh.",
+      "bang_chung": "cd346c9 (30/09/2026), áp lại vào tên cũ khi gỡ chiến dịch đổi tên: docMotDongHangMuc (dùng bởi TheoIDDeSua — sửa/xoá mềm) quét dang_dung vào LaMacDinh và ngược lại, có từ 14e4819 (22/09). DanhSach quét đúng nên test đọc danh sách không thấy; driver giả tầng app (cotLVB) chép thứ tự SAI nên test đường ghi xanh theo lỗi. Sửa: DanhSach dùng chung docMotDongHangMuc; cotLVB chép từ danh sách cột cotHangMuc.",
       "no_confirm": [],
-      "tiep_theo": "Không cần rà dữ liệu: người dùng xác nhận 30/09/2026 chưa có dữ liệu thật trên môi trường nào. Cùng lỗi ở petitions task_type / task_priority — sửa ở commit riêng.",
+      "tiep_theo": "Không cần rà dữ liệu: người dùng xác nhận 30/09/2026 chưa có dữ liệu thật trên môi trường nào. Cùng lỗi ở petitions loại nhiệm vụ / mức ưu tiên nhiệm vụ — chưa sửa.",
       "menu": "cau-hinh"
     }
   ]

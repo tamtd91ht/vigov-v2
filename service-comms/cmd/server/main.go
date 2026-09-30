@@ -68,13 +68,13 @@ func main() {
 	// commune directory and the staff-authentication edge are all real.
 	//
 	// TODO(skeleton): still missing —
-	//   5. consumers   the HANDLER now exists — internal/event.CitizenReportStatusChanged, which consumes
+	//   5. consumers   the HANDLER now exists — internal/event.PhieuDoiTrangThai, which consumes
 	//                  `petitions.status_changed.v1` and writes the citizen notification ledger.
 	//                  TWO THINGS ARE MISSING BEFORE IT CAN BE WIRED HERE, and both are decisions
 	//                  rather than code: (a) a Kafka client — ADR 0010 puts inter-service events on
 	//                  Kafka, but `core/events.Publisher` is still a bare interface with no
 	//                  implementation, and a broker client nobody has decided does not belong in a
-	//                  wiring file; (b) an implementation of event.TemplateResolver — which APPROVED ZNS
+	//                  wiring file; (b) an implementation of event.MauTinXa — which APPROVED ZNS
 	//                  template this commune sends for a transition is per-commune configuration
 	//                  (ADR 0018, consequence 1) with no store, no adapter and no customer answer
 	//                  yet. A constant here would be one commune's template id serving 200+.
@@ -90,8 +90,8 @@ func main() {
 		log.Error("cấu hình không nạp được", "service", "comms", "err", err)
 		os.Exit(1)
 	}
-	for _, warning := range cfg.CanhBao() {
-		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", warning)
+	for _, canhBao := range cfg.CanhBao() {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
 	}
 
 	// 2. THE POOL, OPENED ONCE. It is not closed on a defer: the process exits through os.Exit
@@ -114,7 +114,7 @@ func main() {
 	// It is wired ahead of the rest on purpose. The schema is what every other step will be
 	// written against, and `0002_audit_log_append_only.sql` — which turns "append-only" from a
 	// comment into a database constraint — had been committed and never applied by anything.
-	if err := runMigrations(log, db); err != nil {
+	if err := chayMigration(log, db); err != nil {
 		log.Error("migration không chạy được", "service", "comms", "err", err)
 		os.Exit(1)
 	}
@@ -122,7 +122,7 @@ func main() {
 	// THE ONLY HANDLE THE BUSINESS CODE EVER SEES. *sql.DB stops here: core/store.New wraps it and
 	// exposes nothing but Scoped, which binds tenant_id from the context. A repository built from a
 	// raw pool is a repository that can read every commune at once (rule 1, invariant 5).
-	scoped := pkgstore.New(db)
+	kho := pkgstore.New(db)
 
 	// 3. directory — Host -> commune, over gRPC to the platform service. There is no second way to
 	// resolve a commune: the registry tables belong to the platform service, and a connection to
@@ -131,17 +131,17 @@ func main() {
 	//
 	// NEITHER CLIENT IS CLOSED ON A defer, for the reason already stated on the pool above: this
 	// process exits through os.Exit, which runs no defers.
-	platform, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ nền tảng", "service", "comms", "err", err)
 		os.Exit(1)
 	}
-	directory := tenant.NewCachedDirectory(platform, cfg.TenantCacheTTL())
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 
 	// 4. identity — session cookie -> staff principal, over gRPC. This service owns no session
 	// registry and may not import identity's (rule 2, forbidden #1), so the principal comes from
 	// the contract: ResolveStaffPrincipal, once per staff request, with no cache.
-	identity, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ định danh", "service", "comms", "err", err)
 		os.Exit(1)
@@ -168,22 +168,22 @@ func main() {
 		idemStore = r
 	}
 
-	mapAssetTypes := commsstore.NewMapAssetTypeStore(scoped)
+	loaiTaiNguyen := commsstore.NewLoaiTaiNguyenBanDoStore(kho)
 
 	// The internal announcement book (migration 0005). ONE store behind both routes: the read is a
 	// query, the write goes through the use case that owns the transaction its audit entry shares.
-	announcements := commsstore.NewAnnouncementStore(scoped)
+	thongBao := commsstore.NewThongBaoNoiBoStore(kho)
 
 	// Mini App content (migration 0006). TWO stores for two tables, and the content write use case
 	// takes BOTH: composing an item has to check that the category it is filed under is a live
 	// category of this commune, which is a read of the other table inside the SAME transaction
 	// (rule 6, invariant 3 — the audit entry shares it).
-	contentItems := commsstore.NewContentItemStore(scoped)
-	contentCategories := commsstore.NewContentCategoryStore(scoped)
+	noiDung := commsstore.NewNoiDungMiniAppStore(kho)
+	danhMucNoiDung := commsstore.NewDanhMucMiniAppStore(kho)
 
 	// The map field schema (migration 0007). One store behind the read route and the write use
 	// case; the use case owns the transaction its audit entry shares.
-	mapFieldSchemas := commsstore.NewMapFieldSchemaStore(scoped)
+	mapFieldSchemas := commsstore.NewMapFieldSchemaStore(kho)
 
 	// The commune's mail server (migration 0008) and the envelope that seals its password (ADR 0009).
 	//
@@ -194,7 +194,7 @@ func main() {
 	// value never reaches here — config.Load refuses it and the pod does not start.
 	var envelope *crypto.Envelope
 	if cfg.SecretEncryptionConfigured() {
-		envelope, err = crypto.New(cfg.SecretEncryptionKeys(), commsstore.NewDataEncryptionKeyStore(scoped))
+		envelope, err = crypto.New(cfg.SecretEncryptionKeys(), commsstore.NewDataEncryptionKeyStore(kho))
 		if err != nil {
 			log.Error("không dựng được bộ niêm bí mật theo xã", "service", "comms", "err", err)
 			os.Exit(1)
@@ -203,53 +203,53 @@ func main() {
 		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
 			"SECRET_ENCRYPTION_KEYS trống — lưu và gửi thử máy chủ thư của xã sẽ trả 503 (ADR 0009)")
 	}
-	mailSettings := commsapp.NewMailSettingsAdmin(scoped, commsstore.NewMailSettingsStore(scoped), envelope,
+	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
 		mail.NewSender(nil, mail.DefaultTimeout))
 
 	// The header-bell inbox (migration 0010). ONE store behind the staff reads and the use case; the
 	// use case owns every write's transaction and audit entry — the REST mark-read routes AND the gRPC
 	// delivery below share it.
-	staffInbox := commsstore.NewStaffNotificationStore(scoped)
-	staffNotifications := commsapp.NewStaffNotifications(scoped, staffInbox)
+	staffInbox := commsstore.NewStaffNotificationStore(kho)
+	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox)
 
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
-		Checker:            staffauth.Checker{},
-		MapAssetTypes:      mapAssetTypes,
-		Announcements:      announcements,
-		WriteAnnouncements: commsapp.NewAnnouncements(scoped, announcements),
+		Checker:       staffauth.Checker{},
+		LoaiTaiNguyen: loaiTaiNguyen,
+		ThongBao:      thongBao,
+		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
 
-		ContentItems:           contentItems,
-		WriteContentItems:      commsapp.NewContentItems(scoped, contentItems, contentCategories),
-		ContentCategories:      contentCategories,
-		WriteContentCategories: commsapp.NewContentCategories(scoped, contentCategories),
+		NoiDung:           noiDung,
+		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung),
+		DanhMucNoiDung:    danhMucNoiDung,
+		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(kho, danhMucNoiDung),
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.
-		WriteMapAssetTypes:   commsapp.NewMapAssetTypeCatalogue(scoped, mapAssetTypes),
+		GhiLoaiTaiNguyen:     commsapp.NewDanhMucLoaiTaiNguyen(kho, loaiTaiNguyen),
 		MapFieldSchemas:      mapFieldSchemas,
-		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(scoped, mapFieldSchemas),
+		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(kho, mapFieldSchemas),
 		MailSettings:         mailSettings,
 		WriteMailSettings:    mailSettings,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog:        audit.NewLog(scoped),
+		AuditLog:        audit.NewLog(kho),
 		StaffInbox:      staffInbox,
 		WriteStaffInbox: staffNotifications,
 		Log:             log,
 	})
 
-	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `platform`
+	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
 	// only through their published-only reads.
-	publicMux := http.NewServeMux()
-	svchttp.RegisterPublic(publicMux, svchttp.PublicDeps{
-		Tenants:      platform,
-		ContentItems: contentItems,
-		Categories:   contentCategories,
-		Log:          log,
+	muxCongKhai := http.NewServeMux()
+	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{
+		Xa:      nenTang,
+		NoiDung: noiDung,
+		DanhMuc: danhMucNoiDung,
+		Log:     log,
 	})
-	public := buildPublicChain(publicMux, cfg.CitizenCORSAllowedOrigins())
+	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
@@ -259,7 +259,7 @@ func main() {
 		Addr: addr,
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(buildEdge(mux, public, directory, identity, idemStore, log)),
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(dungBien(mux, congKhai, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -289,21 +289,21 @@ func main() {
 	// 20 GIÂY, và con số ấy phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest (45). Ngược
 	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
 	// trông như đang canh mà không bao giờ chạy tới cuối.
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	dungLai := make(chan os.Signal, 1)
+	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
-	serveErr := make(chan error, 2)
+	loi := make(chan error, 2)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- err
+			loi <- err
 		}
 	}()
 	go func() {
 		log.Info("starting gRPC", "service", "comms", "addr", cfg.GRPCListenAddr())
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
-			serveErr <- err
+			loi <- err
 		}
 	}()
 
@@ -315,17 +315,17 @@ func main() {
 	// ⚠ `os.Exit` KHÔNG CHẠY `defer`. Mọi thứ phải dọn khi tiến trình dừng phải nằm TRƯỚC lời
 	// gọi ấy, không nằm trong một `defer` phía trên.
 	select {
-	case err := <-serveErr:
+	case err := <-loi:
 		// One surface failing takes the process down rather than leaving it half-serving: REST up with
 		// gRPC down looks healthy while every automation job's delivery is refused.
 		log.Error("server stopped", "err", err)
 		grpcSrv.Stop()
 		_ = srv.Close()
 		os.Exit(1)
-	case <-stop:
+	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "comms")
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
+		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
+		defer huy()
 
 		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
 		grpcDone := make(chan struct{})
@@ -368,7 +368,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 	return srv
 }
 
-// buildEdge builds the edge chain this binary serves.
+// dungBien builds the edge chain this binary serves.
 //
 // IT IS A FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN. core/staffauth proves what the
 // authentication middleware does and core/httpx proves what TenantMiddleware does; neither can see
@@ -393,7 +393,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 //
 // # TWO CHAINS, ONE PORT, SPLIT ON THE OUTER MUX BY PATH (since 2026-09-27)
 //
-//	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (public, buildPublicChain)
+//	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (congKhai, dungBienCongKhai)
 //	everything else                                STAFF chain — commune from `Host`
 //
 // The split exists because the two disagree on the first question of every request — which commune.
@@ -401,23 +401,23 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 // route mounted on the staff mux would start, pass every internal/http test, and 404 every resident.
 // `commune-news` is its own path ELEMENT: Go's ServeMux matches whole elements, so neither pattern can
 // capture `/api/v1/content-items/…`, the staff register. main_test.go asserts both directions.
-func buildEdge(mux, public http.Handler, directory tenant.Directory, identity staffauth.Resolver,
+func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
-	h = staffauth.Middleware(identity, log)(h)
+	h = staffauth.Middleware(dinhDanh, log)(h)
 	// idem.Middleware sits AFTER TenantMiddleware because the idempotency key is prefixed with the
 	// commune (rule 1, invariant 7). Mounted the other way round it would build keys with no
 	// commune in them, so two communes whose clients generate the same key collide — one commune's
 	// request answered with another commune's result, which is a breach between two authorities
 	// through a cache key.
 	h = idem.Middleware(idemStore, log)(h)
-	h = httpx.TenantMiddleware(directory)(h)
+	h = httpx.TenantMiddleware(danhBa)(h)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
-	outer := http.NewServeMux()
-	outer.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	ngoai := http.NewServeMux()
+	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -425,13 +425,13 @@ func buildEdge(mux, public http.Handler, directory tenant.Directory, identity st
 	// collection itself — ServeMux answers `/api/v1/commune-news` with a redirect to the slash form
 	// (service-petitions/cmd/server/main.go §TWO PATTERNS measured it), and following it lands on
 	// `/api/v1/commune-news/` — a path no public route matches, so the list would 404.
-	outer.Handle(svchttp.CommuneNewsPath, public)
-	outer.Handle(svchttp.CommuneNewsPath+"/", public)
-	outer.Handle("/", h)
-	return outer
+	ngoai.Handle(svchttp.MauTinXa, congKhai)
+	ngoai.Handle(svchttp.MauTinXa+"/", congKhai)
+	ngoai.Handle("/", h)
+	return ngoai
 }
 
-// buildPublicChain builds the PUBLIC edge chain, outermost last:
+// dungBienCongKhai builds the PUBLIC edge chain, outermost last:
 //
 //	CORSCongDan         the Mini App webview is cross-origin; a preflight is answered before anything
 //	                    below sees it. The SAME middleware and the SAME CITIZEN_CORS_ALLOWED_ORIGINS the
@@ -446,11 +446,11 @@ func buildEdge(mux, public http.Handler, directory tenant.Directory, identity st
 // session, and nothing on this surface writes. The commune is resolved per request from `?host=`.
 //
 // A NAMED FUNCTION so main_test.go can drive the real chain.
-func buildPublicChain(publicMux http.Handler, corsOrigins httpx.NguonCORS) http.Handler {
-	c := publicMux
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
+	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
-	c = httpx.CORSCongDan(corsOrigins)(c)
+	c = httpx.CORSCongDan(nguonCORS)(c)
 	return c
 }
 
@@ -460,25 +460,25 @@ func buildPublicChain(publicMux http.Handler, corsOrigins httpx.NguonCORS) http.
 // single citizen complaint can be followed across services. Same shape and same TODO as identity's.
 func traceID(context.Context) string { return "" }
 
-// runMigrations applies this service's embedded migrations to this service's OWN database.
+// chayMigration applies this service's embedded migrations to this service's OWN database.
 //
 // IT TAKES THE POOL RATHER THAN OPENING ONE, which is the fold the previous version of this
 // comment predicted: the repositories need the same pool, and two pools against one database
 // would double the connection count for no reason. The migration call itself did not change.
-func runMigrations(log *slog.Logger, db *sql.DB) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+func chayMigration(log *slog.Logger, db *sql.DB) error {
+	ctx, huy := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer huy()
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("comms: không nối được cơ sở dữ liệu: %w", err)
 	}
 
-	res, err := migrate.Chay(ctx, db, migrations.FS, "comms")
+	kq, err := migrate.Chay(ctx, db, migrations.FS, "comms")
 	if err != nil {
 		return err
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator
 	// finds out the replica is already at the schema they expected, without opening a psql
 	// prompt.
-	log.Info("migration xong", "service", "comms", "da_ap", res.DaAp, "bo_qua", len(res.BoQua))
+	log.Info("migration xong", "service", "comms", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
 	return nil
 }

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-09-30",
+  "cap_nhat": "2026-09-29",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -281,15 +281,6 @@
       "no_confirm": [],
       "tiep_theo": "W6 XONG phần mã. Còn: (1) thử trên máy thật — mở phiên, gửi phiếu có field, thấy trong web-admin; cùng số thấy phiếu từ app chính; /location hết 502; tắt lĩnh vực giữa chừng; bố cục màn cổng và ô lĩnh vực; (2) icon lĩnh vực: platform gửi tên lucide, app chỉ có 4 hình khớp — cần thêm lucide hoặc chép SVG; (3) giả định ghép 'Trưởng thôn …' cần đối chiếu tên thôn thật; (4) câu chính sách riêng tư cho appId (pháp lý); (5) bắt buộc field ở máy chủ khi app chung cũng gửi.",
       "menu": "phan-anh-nguoi-dan"
-    },
-    {
-      "id": "doi-ten-tieng-anh-lop-a",
-      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: thư mục, tệp, định danh nửa ViGov",
-      "trang_thai": "xong",
-      "bang_chung": "30/09/2026: src/cong-dan -> src/citizen (man -> screens), features/dang-nhap -> log-in, features/goi-y-giai-phap -> solution-suggestion; 79 tệp git mv; Petition* -> CitizenReport*/CommuneReport* (X1). Giữ: 9 mã trạng thái, loại tin (tin-tuc...), khoá bản nháp vigov.feedback.draft.v1 và trường của nó (X37 là lớp C), nửa thương mại (X38). Rào hai nửa (two-halves-boundary, phase1-collects-nothing) chuyển tên mới; đột biến 5 chỗ vi phạm -> đỏ 4 ca, gỡ -> xanh. tsc sạch, vitest 1131/1131, build được, test_hooks 359/359.",
-      "no_confirm": [],
-      "tiep_theo": "Lớp C: bản nháp v2 đọc được v1 (X37); Mini App chưa lên Zalo nên C1+C3 cùng một bản (X39). Chú thích trong nửa thương mại còn nhắc đường dẫn cũ (cong-dan/, dang-nhap/).",
-      "menu": null
     }
   ]
 }

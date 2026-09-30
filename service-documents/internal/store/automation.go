@@ -23,8 +23,8 @@ import (
 // incomingHoldStartColumn derives WHEN THE UNIT BEGAN HOLDING a document with nobody named — the
 // anchor ResolveUnassignedHoldInstants counts from. THERE IS NO COLUMN FOR IT, and none is added: the
 // routing timeline already holds the fact. `bo_phan_dang_giu_id` and `can_bo_xu_ly_ma` are written ONLY
-// by the routing act (IncomingDocumentStore.RouteToOrgUnit), and that act appends a `lich_su_chuyen_van_ban`
-// row copying both, in the same transaction (app.IncomingDocuments.Route). So the hold began at the FIRST
+// by the routing act (VanBanDenStore.ChuyenBoPhan), and that act appends a `lich_su_chuyen_van_ban`
+// row copying both, in the same transaction (app.VanBanDen.Chuyen). So the hold began at the FIRST
 // entry naming (this unit, nobody) after the LAST entry naming anything else — a re-routing to the same
 // unit with nobody named does not restart the episode.
 //
@@ -63,7 +63,7 @@ func automationIncomingQuery() (string, []any) {
 // ONE READ PER RUN, NOT PER DOCUMENT: the job compares each row with the instants identity answered, in
 // memory. Unbounded on purpose — a limit would silently leave late documents unreported; the set is a
 // commune's OPEN documents, not its archive.
-func (s *IncomingDocumentStore) OpenIncomingForAutomation(ctx context.Context) ([]domain.AutomationRecord, error) {
+func (s *VanBanDenStore) OpenIncomingForAutomation(ctx context.Context) ([]domain.AutomationRecord, error) {
 	stmt, args := automationIncomingQuery()
 	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, args...)
 	if err != nil {
@@ -74,14 +74,14 @@ func (s *IncomingDocumentStore) OpenIncomingForAutomation(ctx context.Context) (
 	for rows.Next() {
 		var (
 			r        domain.AutomationRecord
-			year, no int
+			nam, so  int
 			deadline sql.NullTime
 			hold     sql.NullTime
 		)
-		if err := rows.Scan(&r.ID, &year, &no, &deadline, &r.OrgUnitID, &r.AssigneeCode, &hold); err != nil {
+		if err := rows.Scan(&r.ID, &nam, &so, &deadline, &r.OrgUnitID, &r.AssigneeMa, &hold); err != nil {
 			return nil, fmt.Errorf("van_ban_den: đọc cho việc nền: đọc dòng: %w", err)
 		}
-		r.Code = domain.IncomingDocumentCode(year, no)
+		r.Code = domain.MaVanBanDen(nam, so)
 		if deadline.Valid {
 			r.Deadline = deadline.Time.UTC()
 		}

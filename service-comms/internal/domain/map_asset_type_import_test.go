@@ -18,10 +18,10 @@ func TestSlugMapAssetTypeCode(t *testing.T) {
 		}
 	}
 	long := SlugMapAssetTypeCode(strings.Repeat("dài ", 40))
-	if len(long) > CodeMaxLen || strings.HasSuffix(long, "-") {
+	if len(long) > MaToiDa || strings.HasSuffix(long, "-") {
 		t.Errorf("cắt sai: %q", long)
 	}
-	if _, err := NormalizeCode(long); err != nil {
+	if _, err := ChuanHoaMa(long); err != nil {
 		t.Errorf("mã tự sinh không qua được luật của biểu mẫu: %v", err)
 	}
 }

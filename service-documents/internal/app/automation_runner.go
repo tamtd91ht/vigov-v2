@@ -60,10 +60,10 @@ type CommuneRegistry interface {
 type AutomationIdentity interface {
 	ClaimDueAutomationRuns(ctx context.Context, scopes []*identityv1.AutomationRunScope) ([]identityclient.AutomationRun, error)
 	RecordAutomationRunOutcome(ctx context.Context, runID string, o identityclient.AutomationOutcome) error
-	DueSoonCutoff(ctx context.Context, kind identityv1.WorkKind, fieldCode string, asOf time.Time) (time.Time, error)
-	EscalationInstants(ctx context.Context, kind identityv1.WorkKind, fieldCode string,
+	DueSoonCutoff(ctx context.Context, kind identityv1.WorkKind, linhVuc string, asOf time.Time) (time.Time, error)
+	EscalationInstants(ctx context.Context, kind identityv1.WorkKind, linhVuc string,
 		missed []time.Time) (map[time.Time]identityclient.EscalationInstants, error)
-	UnassignedHoldInstants(ctx context.Context, kind identityv1.WorkKind, fieldCode string,
+	UnassignedHoldInstants(ctx context.Context, kind identityv1.WorkKind, linhVuc string,
 		starts []time.Time) (bool, map[time.Time]time.Time, error)
 	OrgUnitPermissionHolders(ctx context.Context, orgUnitIDs []string, permissionKey string) (map[string][]string, error)
 	LeadershipStaff(ctx context.Context) ([]string, error)
@@ -74,7 +74,7 @@ type NoticeDeliverer interface {
 	DeliverStaffNotifications(ctx context.Context, notices []commsclient.Notice) (map[string]commsclient.Delivery, error)
 }
 
-// IncomingAutomationReader is the incoming register's read for the jobs. *store.IncomingDocumentStore.
+// IncomingAutomationReader is the incoming register's read for the jobs. *store.VanBanDenStore.
 type IncomingAutomationReader interface {
 	OpenIncomingForAutomation(ctx context.Context) ([]domain.AutomationRecord, error)
 }

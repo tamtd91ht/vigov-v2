@@ -895,7 +895,7 @@
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
-      "declared_in": "service-comms/internal/http/routes_public.go"
+      "declared_in": "service-comms/internal/http/routes_cong_khai.go"
     },
     {
       "service": "comms",
@@ -916,7 +916,7 @@
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
-      "declared_in": "service-comms/internal/http/routes_public.go"
+      "declared_in": "service-comms/internal/http/routes_cong_khai.go"
     },
     {
       "service": "identity",

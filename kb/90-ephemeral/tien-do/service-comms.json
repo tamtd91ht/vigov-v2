@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-09-30",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -202,15 +202,6 @@
       "tiep_theo": "Một dòng vết cho cả tệp (khác identity một dòng/hàng).",
       "no_confirm": [],
       "menu": "cau-hinh"
-    },
-    {
-      "id": "doi-ten-tieng-anh-lop-a",
-      "viec": "Chiến dịch đổi tên tiếng Anh (ADR 0061) — lớp A: định danh Go, tên tệp",
-      "trang_thai": "xong",
-      "bang_chung": "30/09/2026: ~40 tệp git mv (thong_bao_noi_bo -> announcement, noi_dung_mini_app -> content_item, thong_bao_gui_cong_dan -> citizen_notification, loai_tai_nguyen_ban_do -> map_asset_type, phieu_doi_trang_thai -> citizen_report_status_changed, routes_cong_khai -> routes_public...). Giữ: SQL, giá trị enum, tham_so, proto, tên của core, 14 DTO HTTP (vi-name-ok — tên component openapi). Ghim TestSendKeyRecipeIsPinned (X27). openapi.json byte-identical. Worktree sạch: vet+test comms xanh, test_hooks, check_* PASS.",
-      "no_confirm": [],
-      "tiep_theo": "Lớp B: 7 bảng x 32 phân vùng, 53 ràng buộc, 11 hàm; trigger 'da-gui', 'nhap'/'da-go', nguon đóng băng (ADR 0061 §Cạm bẫy). Lỗi có sẵn: ContentCategoryStore.CountLive gọi QueryRowContext thiếu đối số $1 — chưa sửa.",
-      "menu": null
     }
   ]
 }

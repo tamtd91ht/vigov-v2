@@ -21,10 +21,10 @@ import (
 	"github.com/vihat/vigov/service-documents/internal/domain"
 )
 
-// OverdueIncomingReader is the store half, declared at the point of use. *store.IncomingDocumentStore
+// OverdueIncomingReader is the store half, declared at the point of use. *store.VanBanDenStore
 // satisfies it.
 type OverdueIncomingReader interface {
-	OverdueIncoming(ctx context.Context, now time.Time, limit int) ([]domain.IncomingDocument, error)
+	OverdueIncoming(ctx context.Context, now time.Time, limit int) ([]domain.VanBanDen, error)
 }
 
 // WorkingHoursAdvancer asks identity when a number of WORKING hours has elapsed from an instant, in
@@ -32,12 +32,12 @@ type OverdueIncomingReader interface {
 // register already holds for booking deadlines.
 type WorkingHoursAdvancer interface {
 	// vi-name-ok: mirrors the existing exported method core/identityclient.Client.TienGioLamViec
-	TienGioLamViec(ctx context.Context, from time.Time, hours []uint32) (map[uint32]time.Time, error)
+	TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error)
 }
 
 // ErrWorkingCalendarUnavailable — identity could not answer, so no item can be classed critical or
 // not. ONE SENTINEL FOR EVERY CAUSE (calendar not configured, identity unreachable), the same choice
-// ErrDeadlineNotEstablished makes; the gRPC code rides in the wrapped chain and core/identityclient has
+// ErrChuaAnDinhDuocHan makes; the gRPC code rides in the wrapped chain and core/identityclient has
 // already logged it.
 //
 // THE REQUEST FAILS. A queue with `critical: false` on every row because the calendar was out of
@@ -47,7 +47,7 @@ var ErrWorkingCalendarUnavailable = errors.New(
 
 // OverdueQueueItem is one row of the queue: the document, and whether it is critical.
 type OverdueQueueItem struct {
-	Document domain.IncomingDocument
+	Document domain.VanBanDen
 	Critical bool
 }
 
@@ -86,7 +86,7 @@ func (d *IncomingDashboard) OverdueQueue(ctx context.Context, now time.Time,
 	reached := make(map[int64]time.Time, len(docs))
 	out := make([]OverdueQueueItem, 0, len(docs))
 	for _, v := range docs {
-		due := v.DueAt.UTC()
+		due := v.HanXuLyXong.UTC()
 		at, seen := reached[due.UnixNano()]
 		if !seen {
 			m, err := d.advancer.TienGioLamViec(ctx, due, []uint32{domain.CriticalOverdueWorkingHours})

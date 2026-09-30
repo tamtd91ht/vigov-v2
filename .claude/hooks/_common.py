@@ -381,16 +381,7 @@ PII_TOKEN = (
     r"accessToken|refreshToken|bearer|Bearer|sessionId|fullName|hoTen|diaChi|address|"
     # the spellings this codebase really uses — Go fields, JSON tags, SQL columns
     r"[Hh]oTen|ho_ten|[Mm]atKhau|mat_khau|[Dd]ienThoai|dien_thoai|so_dien_thoai|"
-    r"[Dd]iaChi|dia_chi|[Cc]anCuoc|can_cuoc|[Mm]aXacThuc|ma_xac_thuc|[Nn]gaySinh|ngay_sinh|"
-    # THE ENGLISH NAMES OF THE SAME FIELDS (ADR 0061; ubiquitous-language.md §Từ điển đổi tên:
-    # staff.full_name/phone/mobile, citizen_identity.phone_number, citizen_report.address/
-    # reporter_name/reporter_phone). Kept BESIDE the Vietnamese half, never instead of it: old
-    # code and closed records keep the old names. Without these, layer A renames `cb.HoTen` to
-    # `s.FullName` and this hook goes quiet because it stopped matching, not because the code is
-    # clean. Word-bounded where a bare word would hit `MaskPhone(` or `ListenAddress`.
-    r"[Ff]ullName|full_name|[Pp]honeNumber|phone_number|\b[Mm]obile\b|[Rr]eporter\w*|"
-    r"\bAddress\b|[Nn]ationalI[Dd]|national_id|\bid_number\b|otp_code|O[Tt][Pp]Code|"
-    r"[Dd]ateOfBirth|date_of_birth|[Bb]irthDate|birth_date)"
+    r"[Dd]iaChi|dia_chi|[Cc]anCuoc|can_cuoc|[Mm]aXacThuc|ma_xac_thuc|[Nn]gaySinh|ngay_sinh)"
 )
 
 # A value that has ALREADY been masked is what rule 3 invariant 3 asks for — pii_guard's own

@@ -8,10 +8,10 @@ package domain
 // THIS FILE ONLY PLANS. It turns the rows of one sheet plus a snapshot of the commune's catalogue into
 // either the rows to create or EVERY error in the file — never both. Reading the workbook is
 // core/xlsx; writing the plan and its audit entry in one transaction is
-// app.DocumentTypeCatalogue.ImportDocumentTypes. Standard library only.
+// app.DanhMucLoaiVanBan.ImportDocumentTypes. Standard library only.
 //
-// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/document-types — NormalizeLabel,
-// NormalizeCode, ValidateSortOrder — so a row that could not be typed into the form cannot be imported.
+// EVERY ROW GOES THROUGH THE SAME SHAPE RULES AS POST /api/v1/document-types — ChuanHoaNhan,
+// ChuanHoaMa, KiemTraThuTu — so a row that could not be typed into the form cannot be imported.
 //
 // THE COLUMNS are the comms import's three: `Tên hiển thị`, `Mã`, `Thứ tự`. The reference system's
 // `lookup-values` sheet (../vigov-require/apps/api/app/modules/admin/catalogues.py:466-481) adds `Nhóm`
@@ -47,7 +47,7 @@ func DocumentTypeImportColumns() []string {
 }
 
 // MaxDocumentTypeImportRows bounds one file: the catalogue ceiling itself
-// (store.MaxDocumentTypes is 200). A file of more rows cannot be imported whatever it holds.
+// (store.TranDanhMucLoaiVanBan is 200). A file of more rows cannot be imported whatever it holds.
 const MaxDocumentTypeImportRows = 200
 
 // DocumentTypeImportRow is one data row AS TYPED. Row is the spreadsheet's own number (header = 1).
@@ -139,7 +139,7 @@ func blankImportCells(cells []string) bool {
 
 // PlanDocumentTypeImport validates the WHOLE file and returns either the plan or every error — the plan
 // is nil whenever there is at least one error, so a caller cannot write half a file by accident.
-// ceiling is store.MaxDocumentTypes, passed in because this package does not import the store.
+// ceiling is store.TranDanhMucLoaiVanBan, passed in because this package does not import the store.
 func PlanDocumentTypeImport(rows []DocumentTypeImportRow, existing []ExistingDocumentType, ceiling int) (
 	[]PlannedDocumentType, []DocumentTypeImportError) {
 
@@ -181,9 +181,9 @@ func PlanDocumentTypeImport(rows []DocumentTypeImportRow, existing []ExistingDoc
 		p := PlannedDocumentType{Row: r.Row}
 		labelOK, codeOK := false, false
 
-		if label, err := NormalizeLabel(r.Label); err != nil {
-			if errors.Is(err, ErrLabelTooLong) {
-				rowErr(r, DocumentTypeImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", MaxLabelLen))
+		if label, err := ChuanHoaNhan(r.Label); err != nil {
+			if errors.Is(err, ErrNhanQuaDai) {
+				rowErr(r, DocumentTypeImportColLabel, fmt.Sprintf("Tên hiển thị dài quá %d ký tự.", NhanToiDa))
 			} else {
 				rowErr(r, DocumentTypeImportColLabel, "Thiếu tên hiển thị (hoặc có ký tự điều khiển).")
 			}
@@ -193,9 +193,9 @@ func PlanDocumentTypeImport(rows []DocumentTypeImportRow, existing []ExistingDoc
 
 		typed := strings.TrimSpace(r.Code) != ""
 		if typed {
-			if code, err := NormalizeCode(r.Code); err != nil {
-				if errors.Is(err, ErrCodeTooLong) {
-					rowErr(r, DocumentTypeImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", MaxCodeLen))
+			if code, err := ChuanHoaMa(r.Code); err != nil {
+				if errors.Is(err, ErrMaQuaDai) {
+					rowErr(r, DocumentTypeImportColCode, fmt.Sprintf("Mã dài quá %d ký tự.", MaToiDa))
 				} else {
 					rowErr(r, DocumentTypeImportColCode, "Mã chỉ gồm chữ thường a-z, số và dấu gạch ngang, ví dụ cong-van.")
 				}
@@ -258,7 +258,7 @@ func parseImportOrder(raw string) (int, string) {
 	if s == "" {
 		return 0, ""
 	}
-	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d.", MaxSortOrder)
+	msg := fmt.Sprintf("Thứ tự phải là số nguyên từ 0 đến %d.", ThuTuToiDa)
 	if len(s) > 9 {
 		return 0, msg
 	}
@@ -268,7 +268,7 @@ func parseImportOrder(raw string) (int, string) {
 		}
 	}
 	n, err := strconv.Atoi(s)
-	if err != nil || ValidateSortOrder(n) != nil {
+	if err != nil || KiemTraThuTu(n) != nil {
 		return 0, msg
 	}
 	return n, ""
@@ -301,7 +301,7 @@ var vietnameseBase = func() map[rune]rune {
 }()
 
 // SlugDocumentTypeCode derives a code from a label: "Quyết định" → "quyet-dinh". Lower-case, Vietnamese
-// diacritics stripped (đ → d), every run of anything else one '-', none at the ends, cut at MaxCodeLen on
+// diacritics stripped (đ → d), every run of anything else one '-', none at the ends, cut at MaToiDa on
 // a word boundary. "" when nothing usable remains. NOT guaranteed free — the planner checks that.
 func SlugDocumentTypeCode(label string) string {
 	var b strings.Builder
@@ -322,8 +322,8 @@ func SlugDocumentTypeCode(label string) string {
 		sep = true
 	}
 	code := b.String()
-	if len(code) > MaxCodeLen {
-		code = code[:MaxCodeLen]
+	if len(code) > MaToiDa {
+		code = code[:MaToiDa]
 		if i := strings.LastIndexByte(code, '-'); i > 0 {
 			code = code[:i]
 		}

@@ -57,17 +57,17 @@ func newFieldsReader(f *fakeFieldsClient) (*PetitionFields, *fieldsClock) {
 	return r, c
 }
 
-func fieldsAnswer(fs ...*platformv1.CitizenReportField) *platformv1.ListPetitionFieldsResponse {
+func fieldsAnswer(fs ...*platformv1.PetitionField) *platformv1.ListPetitionFieldsResponse {
 	return &platformv1.ListPetitionFieldsResponse{Fields: fs}
 }
 
-func racThai() *platformv1.CitizenReportField {
-	return &platformv1.CitizenReportField{Code: "rac-thai", DefaultLabel: "Rác thải – Vệ sinh môi trường",
+func racThai() *platformv1.PetitionField {
+	return &platformv1.PetitionField{Code: "rac-thai", DefaultLabel: "Rác thải – Vệ sinh môi trường",
 		SortOrder: 1, Icon: "Trash2", Tone: "orange", Active: true}
 }
 
-func khac() *platformv1.CitizenReportField {
-	return &platformv1.CitizenReportField{Code: "khac", DefaultLabel: "Khác", SortOrder: 12, Active: true}
+func khac() *platformv1.PetitionField {
+	return &platformv1.PetitionField{Code: "khac", DefaultLabel: "Khác", SortOrder: 12, Active: true}
 }
 
 func inCommune(id tenant.ID) context.Context { return tenant.Into(context.Background(), id) }
@@ -75,7 +75,7 @@ func inCommune(id tenant.ID) context.Context { return tenant.Into(context.Backgr
 // Active → accepted; retired → refused for intake but still looked up; absent → unknown.
 func TestPetitionFieldsCheckForIntake(t *testing.T) {
 	f := &fakeFieldsClient{}
-	retired := &platformv1.CitizenReportField{Code: "ma-cu", DefaultLabel: "Mã cũ", SortOrder: 13}
+	retired := &platformv1.PetitionField{Code: "ma-cu", DefaultLabel: "Mã cũ", SortOrder: 13}
 	f.answer(fieldsAnswer(racThai(), khac(), retired), nil)
 	r, _ := newFieldsReader(f)
 
@@ -187,12 +187,12 @@ func TestPetitionFieldsDropsUnusableEntries(t *testing.T) {
 	f := &fakeFieldsClient{}
 	f.answer(fieldsAnswer(
 		khac(),
-		&platformv1.CitizenReportField{Code: "", DefaultLabel: "x", SortOrder: 1, Active: true},
-		&platformv1.CitizenReportField{Code: "Điện", DefaultLabel: "x", SortOrder: 1, Active: true},
-		&platformv1.CitizenReportField{Code: "khong-nhan", SortOrder: 1, Active: true},
-		&platformv1.CitizenReportField{Code: "thu-tu-0", DefaultLabel: "x", Active: true},
-		&platformv1.CitizenReportField{Code: "trung", DefaultLabel: "A", SortOrder: 1, Active: true},
-		&platformv1.CitizenReportField{Code: "trung", DefaultLabel: "B", SortOrder: 2, Active: false},
+		&platformv1.PetitionField{Code: "", DefaultLabel: "x", SortOrder: 1, Active: true},
+		&platformv1.PetitionField{Code: "Điện", DefaultLabel: "x", SortOrder: 1, Active: true},
+		&platformv1.PetitionField{Code: "khong-nhan", SortOrder: 1, Active: true},
+		&platformv1.PetitionField{Code: "thu-tu-0", DefaultLabel: "x", Active: true},
+		&platformv1.PetitionField{Code: "trung", DefaultLabel: "A", SortOrder: 1, Active: true},
+		&platformv1.PetitionField{Code: "trung", DefaultLabel: "B", SortOrder: 2, Active: false},
 	), nil)
 	r, _ := newFieldsReader(f)
 	set, err := r.Set(inCommune(fieldsCommuneA))
@@ -212,7 +212,7 @@ func TestPetitionFieldsDropsUnusableEntries(t *testing.T) {
 // Order is SortOrder then Code whatever the wire order; an unknown tone becomes ""; All is a copy.
 func TestPetitionFieldsOrderToneAndCopy(t *testing.T) {
 	f := &fakeFieldsClient{}
-	odd := &platformv1.CitizenReportField{Code: "b-ma", DefaultLabel: "B", SortOrder: 1, Tone: "pink", Active: true}
+	odd := &platformv1.PetitionField{Code: "b-ma", DefaultLabel: "B", SortOrder: 1, Tone: "pink", Active: true}
 	f.answer(fieldsAnswer(khac(), odd, racThai()), nil)
 	r, _ := newFieldsReader(f)
 	set, err := r.Set(inCommune(fieldsCommuneA))

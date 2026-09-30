@@ -197,18 +197,12 @@ pipeline {
     // ─────────────────────────────────────────────────────────────────────────────────────
     // CHƯA TỪNG GHI ĐƯỢC — đo lượt #20 (26/09/2026): sổ xã của vigov_platform trống, không một
     // dòng vết `tao_xa`. Lượt trước "chạy" bằng `kubectl run -i`, cách đã treo ở #17/#18, nên
-    // không ghi gì. Nay chạy qua `chay_psql`. Logic câu SQL giữ nguyên: nó gắn admin.vigov.vn
+    // không ghi gì. Nay chạy qua `chay_psql`. Câu SQL giữ nguyên, KHÔNG sửa: nó gắn admin.vigov.vn
     // tạm thời, và việc `doi-ten-mien-thang-binh` chạy NGAY SAU gỡ đi và đặt tên miền của xã
     // (mô hình chốt cùng ngày: admin.vigov.vn là cổng liên xã của nhà cung cấp, không phải một
     // xã). Hai dòng vết `tao_xa` + `doi_ten_mien` kể lại đủ. Chạy lại khi xã đã có thì DỪNG ở phép
     // kiểm đầu; trên CSDL đã có platform 0007 thì INSERT admin.* bị CHECK
-    // `tenant_domain_not_reserved` (tên cũ `tenant_domain_khong_danh_rieng`) từ chối — cả hai đều là
-    // hỏng-đóng, đúng.
-    //
-    // TÊN BẢNG/CỘT: theo platform 0012 (ADR 0061 lớp B, 29/09/2026). Ba stage ghi ở dưới dùng tên
-    // MỚI, nên chỉ chạy được trên CSDL đã áp 0012; trước 0012 psql báo "column ... does not exist"
-    // và không ghi gì (một giao dịch). Khoá JSON trong `delta` nào là tên cột cũng theo tên mới;
-    // dòng vết đã ghi trước đó giữ khoá cũ (ADR 0061 §Dòng chỉ-thêm).
+    // `tenant_domain_khong_danh_rieng` từ chối — cả hai đều là hỏng-đóng, đúng.
     //
     // VIỆC MỘT LẦN — onboard Xã Thăng Bình (Thành phố Đà Nẵng) vào sổ xã của `platform`, gắn
     // admin.vigov.vn (chính) và admin-stg.vigov.vn. Chủ dự án chọn 26/09/2026.
@@ -253,29 +247,29 @@ BEGIN
   IF EXISTS (SELECT 1 FROM tenant_domain WHERE host IN ('admin.vigov.vn', 'admin-stg.vigov.vn')) THEN
     RAISE EXCEPTION 'DUNG: ten mien admin.vigov.vn / admin-stg.vigov.vn da gan cho mot xa — khong ghi gi';
   END IF;
-  IF EXISTS (SELECT 1 FROM tenant WHERE lower(name) LIKE '%thăng bình%') THEN
+  IF EXISTS (SELECT 1 FROM tenant WHERE lower(ten) LIKE '%thăng bình%') THEN
     RAISE EXCEPTION 'DUNG: da co mot xa ten Thang Binh — khong tao xa thu hai';
   END IF;
 END \$\$;
-INSERT INTO tenant (id, name, province_name, is_active)
+INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong)
   VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'Xã Thăng Bình', 'Thành phố Đà Nẵng', true);
-INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES
+INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
   ('admin.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
   ('admin-stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false);
 INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
   VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'tao_xa',
           'Xã Thăng Bình', now(),
-          jsonb_build_object('name', 'Xã Thăng Bình', 'province_name', 'Thành phố Đà Nẵng',
+          jsonb_build_object('ten', 'Xã Thăng Bình', 'tinh_thanh', 'Thành phố Đà Nẵng',
                              'ten_mien', jsonb_build_array('admin.vigov.vn', 'admin-stg.vigov.vn'),
                              'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
 COMMIT;
-SELECT t.id, t.name, t.province_name, t.is_active, d.host, d.is_primary
+SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
   FROM tenant t JOIN tenant_domain d ON d.tenant_id = t.id
  WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8';
 """
         sh(CHAY_PSQL + '''
           echo "── các xã đang có trong sổ (trước khi ghi)"
-          echo "SELECT id, name, province_name, is_active FROM tenant ORDER BY created_at; SELECT host, tenant_id, is_primary FROM tenant_domain ORDER BY host;" > doc-xa.sql
+          echo "SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc; SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;" > doc-xa.sql
           chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-xa.sql
           echo "── ghi"
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" tao-xa.sql
@@ -296,8 +290,7 @@ SELECT t.id, t.name, t.province_name, t.is_active, d.host, d.is_primary
     //      Đổi tên miền chính trước khi host mới tới được pod là mọi đường dẫn dựng từ tên miền
     //      chính (thông báo, liên kết) trỏ vào một địa chỉ chưa ai trả lời.
     //   2. VIỆC NÀY — chạy được cả TRƯỚC lẫn SAU platform 0007: nó chỉ DELETE và INSERT, không
-    //      UPDATE dòng admin.*, nên CHECK `tenant_domain_not_reserved` (tên trước 0012:
-    //      `tenant_domain_khong_danh_rieng`) không có gì để từ chối.
+    //      UPDATE dòng admin.*, nên CHECK `tenant_domain_khong_danh_rieng` không có gì để từ chối.
     //      Thực tế 26/09/2026: 0007 áp lúc 07:50Z, TRƯỚC việc này (lượt #21 đo) — bản cũ có câu
     //      UPDATE la_chinh và dừng ở phép kiểm 0007; chủ dự án chọn "xoá trước, chèn sau".
     //
@@ -330,7 +323,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8') THEN
     RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 chua co trong so xa — khong ghi gi';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND is_active) THEN
+  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND dang_hoat_dong) THEN
     RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 khong con hoat dong — khong ghi gi';
   END IF;
   IF EXISTS (SELECT 1 FROM tenant_domain
@@ -339,7 +332,7 @@ BEGIN
     RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn / .stg.vigov.vn da gan cho MOT XA KHAC — khong ghi gi';
   END IF;
   IF EXISTS (SELECT 1 FROM tenant_domain
-              WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND is_primary) THEN
+              WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh) THEN
     RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn da la ten mien chinh — viec nay da chay, khong ghi gi';
   END IF;
 END \$\$;
@@ -347,7 +340,7 @@ INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, del
   VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'doi_ten_mien',
           'Xã Thăng Bình', now(),
           jsonb_build_object(
-            'truoc', (SELECT jsonb_agg(jsonb_build_object('host', host, 'is_primary', is_primary) ORDER BY host)
+            'truoc', (SELECT jsonb_agg(jsonb_build_object('host', host, 'la_chinh', la_chinh) ORDER BY host)
                         FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'),
             'chinh_moi', 'thangbinh-danang.vigov.vn',
             'them', jsonb_build_array('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn'),
@@ -359,13 +352,13 @@ INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, del
 -- Lọc đúng hai host VÀ đúng xã này — không bao giờ gỡ tên miền của xã khác.
 --
 -- XOÁ TRƯỚC, CHÈN SAU — không UPDATE (chủ dự án chọn 26/09/2026, sau lượt #21). Platform 0007 đã
--- áp, và CHECK NOT VALID của nó kiểm MỌI phiên bản dòng mới: hạ cờ is_primary của admin.vigov.vn
+-- áp, và CHECK NOT VALID của nó kiểm MỌI phiên bản dòng mới: hạ cờ la_chinh của admin.vigov.vn
 -- bị từ chối (23514). DELETE không tạo phiên bản dòng mới nên CHECK không chạm; xoá xong thì xã
--- không còn dòng chính nào, và chỉ mục `tenant_domain_one_primary` nhận dòng chính mới.
+-- không còn dòng chính nào, và chỉ mục `tenant_domain_mot_chinh` nhận dòng chính mới.
 DELETE FROM tenant_domain
  WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'
    AND host IN ('admin.vigov.vn', 'admin-stg.vigov.vn');
-INSERT INTO tenant_domain (host, tenant_id, is_primary) VALUES
+INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
   ('thangbinh-danang.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
   ('thangbinh-danang.stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false)
   ON CONFLICT (host) DO NOTHING;
@@ -377,15 +370,15 @@ BEGIN
     RAISE EXCEPTION 'DUNG: sau khi ghi, hai ten mien moi khong cung thuoc xa 01M3CS7HHK72V71CGRRJHGR8E8 — quay lui, khong ghi gi';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM tenant_domain
-                  WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND is_primary) THEN
-    RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn khong thanh ten mien chinh (dong co san voi is_primary=false?) — quay lui, khong ghi gi';
+                  WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh) THEN
+    RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn khong thanh ten mien chinh (dong co san voi la_chinh=false?) — quay lui, khong ghi gi';
   END IF;
   IF EXISTS (SELECT 1 FROM tenant_domain WHERE host IN ('admin.vigov.vn', 'admin-stg.vigov.vn')) THEN
     RAISE EXCEPTION 'DUNG: admin.vigov.vn / admin-stg.vigov.vn van con (gan cho xa khac?) — quay lui, khong ghi gi';
   END IF;
 END \$\$;
 COMMIT;
-SELECT t.id, t.name, t.is_active, d.host, d.is_primary
+SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
   FROM tenant t JOIN tenant_domain d ON d.tenant_id = t.id
  WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8'
  ORDER BY d.host;
@@ -397,8 +390,8 @@ SELECT t.id, t.name, t.is_active, d.host, d.is_primary
           # trỏ nhầm CSDL — trước khi ai tạo lại một xã có thể đã tồn tại ở nơi khác.
           cat > doc-ten-mien.sql <<'SQL'
 SELECT current_database() AS csdl, inet_server_addr() AS may_chu, current_user AS vai;
-SELECT id, name, province_name, is_active FROM tenant ORDER BY created_at;
-SELECT host, tenant_id, is_primary FROM tenant_domain ORDER BY host;
+SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc;
+SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;
 SELECT tenant_id, actor_id, action, subject, at FROM audit_log WHERE action IN ('tao_xa', 'doi_ten_mien') ORDER BY at;
 SQL
           chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-ten-mien.sql
@@ -445,25 +438,25 @@ SQL
 BEGIN;
 DO \$\$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND is_active) THEN
+  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND dang_hoat_dong) THEN
     RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 chua co hoac khong con hoat dong — khong ghi gi';
   END IF;
   IF EXISTS (SELECT 1 FROM mini_app WHERE app_id = '3291993990104489440') THEN
     RAISE EXCEPTION 'DUNG: App ID 3291993990104489440 da co dong trong mini_app (xem bang doc o tren) — khong ghi gi';
   END IF;
 END \$\$;
-INSERT INTO mini_app (app_id, mode, tenant_id, note, created_by, updated_by)
+INSERT INTO mini_app (app_id, che_do, tenant_id, ghi_chu, tao_boi, cap_nhat_boi)
   VALUES ('3291993990104489440', 'rieng', '01M3CS7HHK72V71CGRRJHGR8E8',
           'App riêng Xã Thăng Bình — App ID chủ dự án giao 27/09/2026 (jenkins vigov-deploy #${env.BUILD_NUMBER})',
           'van-hanh:${env.NGUOI_BAM}', 'van-hanh:${env.NGUOI_BAM}');
 INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
   VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'gan_mini_app',
           'MiniApp 3291993990104489440', now(),
-          jsonb_build_object('app_id', '3291993990104489440', 'mode', 'rieng',
+          jsonb_build_object('app_id', '3291993990104489440', 'che_do', 'rieng',
                              'xa', 'Xã Thăng Bình',
                              'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
 COMMIT;
-SELECT m.app_id, m.mode, m.tenant_id, t.name, m.is_active, m.created_by, m.created_at
+SELECT m.app_id, m.che_do, m.tenant_id, t.ten, m.dang_hoat_dong, m.tao_boi, m.tao_luc
   FROM mini_app m JOIN tenant t ON t.id = m.tenant_id
  WHERE m.app_id = '3291993990104489440';
 """
@@ -471,11 +464,11 @@ SELECT m.app_id, m.mode, m.tenant_id, t.name, m.is_active, m.created_by, m.creat
           echo "── CSDL, xã, và sổ mini_app (trước khi ghi)"
           cat > doc-mini-app.sql <<'SQL'
 SELECT current_database() AS csdl, current_user AS vai;
-SELECT id, name, is_active FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8';
+SELECT id, ten, dang_hoat_dong FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8';
 SELECT to_regclass('mini_app') AS bang_mini_app;
 SQL
           chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-mini-app.sql
-          echo "SELECT app_id, mode, tenant_id, is_active, deleted_at FROM mini_app ORDER BY created_at;" > doc-mini-app-2.sql
+          echo "SELECT app_id, che_do, tenant_id, dang_hoat_dong, deleted_at FROM mini_app ORDER BY tao_luc;" > doc-mini-app-2.sql
           chay_psql "vigov-psql-doc2-$BUILD_NUMBER" doc-mini-app-2.sql || echo "   (không đọc được mini_app — migration 0006 chưa áp?)"
           echo "── ghi"
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" gan-mini-app.sql

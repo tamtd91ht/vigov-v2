@@ -9,7 +9,7 @@ package domain
 // is a comparison of two instants — rule 10, forbidden #2 and invariant 3.
 //
 // NO PERSONAL DATA AND NO FREE TEXT IN A NOTICE (rule 3; comms.proto "WHAT A NOTICE MAY SAY"). A notice
-// names the document by its register code (IncomingDocumentCode, "VB-DEN-2026-0007") — never `trich_yeu` or
+// names the document by its register code (MaVanBanDen, "VB-DEN-2026-0007") — never `trich_yeu` or
 // `co_quan_ban_hanh`: both are free text a clerk typed about a government matter, and a document
 // forwarding a citizen's letter carries that citizen's name in its summary. The recipient follows the
 // link to a screen that checks their permission.
@@ -45,29 +45,29 @@ var AutomationZone = time.FixedZone("ICT", 7*3600)
 type AutomationRecord struct {
 	// ID is the internal id: key material for the idempotency key, never shown.
 	ID string
-	// Code is what the notice shows: IncomingDocumentCode(nam, so_vao_so).
+	// Code is what the notice shows: MaVanBanDen(nam, so_vao_so).
 	Code string
 	// Deadline is the stored commitment `han_xu_ly_xong` (NOT NULL in migration 0004).
 	Deadline time.Time
 	// OrgUnitID is identity's `bo_phan.id` holding the document (`bo_phan_dang_giu_id`); "" when none.
 	OrgUnitID string
-	// AssigneeCode is `can_bo_xu_ly_ma`, a staff business code; "" when nobody is named.
-	AssigneeCode string
+	// AssigneeMa is `can_bo_xu_ly_ma`, a staff business code; "" when nobody is named.
+	AssigneeMa string
 	// HoldStartedAt is when the unit began holding the document with nobody named — zero unless
-	// OrgUnitID is set and AssigneeCode is empty. Derived by the store from the routing timeline.
+	// OrgUnitID is set and AssigneeMa is empty. Derived by the store from the routing timeline.
 	HoldStartedAt time.Time
 }
 
 // PastDeadlineAt is the DERIVED overdue test of THIS register: now strictly after the deadline — the
-// same comparison as IncomingDocument.IsOverdue and the dashboard's lateAgainstPredicate, so a reminder speaks
+// same comparison as VanBanDen.QuaHan and the dashboard's lateAgainstPredicate, so a reminder speaks
 // about exactly the documents /tong-quan and /van-ban?metric=overdue count. The store reads open
-// documents only, so the "finished is never overdue" half of IsOverdue is already applied. Never stored.
+// documents only, so the "finished is never overdue" half of QuaHan is already applied. Never stored.
 func (r AutomationRecord) PastDeadlineAt(asOf time.Time) bool {
 	return !r.Deadline.IsZero() && asOf.After(r.Deadline)
 }
 
 // DueSoonAt is identity's comparison: asOf < deadline <= cutoff (identity.proto,
-// ResolveDueSoonCutoffResponse). A deadline exactly at asOf is neither due soon nor (by IsOverdue)
+// ResolveDueSoonCutoffResponse). A deadline exactly at asOf is neither due soon nor (by QuaHan)
 // overdue for that one instant; the next run, at least five minutes later, reports it as overdue.
 func (r AutomationRecord) DueSoonAt(asOf, cutoff time.Time) bool {
 	return !r.Deadline.IsZero() && r.Deadline.After(asOf) && !r.Deadline.After(cutoff)
@@ -75,7 +75,7 @@ func (r AutomationRecord) DueSoonAt(asOf, cutoff time.Time) bool {
 
 // HeldUnassigned reports whether a unit holds the document with nobody named.
 func (r AutomationRecord) HeldUnassigned() bool {
-	return r.OrgUnitID != "" && r.AssigneeCode == "" && !r.HoldStartedAt.IsZero()
+	return r.OrgUnitID != "" && r.AssigneeMa == "" && !r.HoldStartedAt.IsZero()
 }
 
 // EscalationLevel names who is told, as the key recipe spells it.
@@ -137,12 +137,12 @@ func SameClockDaysLater(t time.Time, days int) time.Time {
 // ValidRecipientCode is the shape comms can take: a non-empty printable-ASCII staff code of at most
 // 64 bytes. A code failing it would make comms refuse the WHOLE page (all or nothing), so the runner
 // drops it and counts the document as without recipient if nobody else remains.
-func ValidRecipientCode(code string) bool {
-	if code == "" || len(code) > 64 {
+func ValidRecipientCode(ma string) bool {
+	if ma == "" || len(ma) > 64 {
 		return false
 	}
-	for i := 0; i < len(code); i++ {
-		if code[i] < 0x21 || code[i] > 0x7e {
+	for i := 0; i < len(ma); i++ {
+		if ma[i] < 0x21 || ma[i] > 0x7e {
 			return false
 		}
 	}

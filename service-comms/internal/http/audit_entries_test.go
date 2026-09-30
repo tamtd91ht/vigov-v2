@@ -22,7 +22,7 @@ import (
 // which query parameters reach core/audit, who the reader is, and how a failure is answered.
 // The reader's own behaviour (filters, order, the read's entry) is core/audit/read_test.go.
 //
-// Harness pieces are the catalogue write suite's (perCommuneChecker, injectPrincipal, writerStaff) because
+// Harness pieces are the catalogue write suite's (checkerDanhMucGia, chuTheGhi, canBoGhi) because
 // "right permission, wrong commune" needs a checker keyed by commune.
 
 const auditEntriesPath = "/api/v1/comms-audit-entries"
@@ -50,51 +50,59 @@ func (f *auditLogFake) Read(ctx context.Context, reader audit.Actor, q audit.Que
 type auditServer struct {
 	h       http.Handler
 	fake    *auditLogFake
-	checker *perCommuneChecker
+	checker *checkerDanhMucGia
 }
 
 func auditDeps(checker authz.Checker, fake AuditLogReader, log *slog.Logger) Deps {
 	return Deps{
-		Checker:                checker,
-		MapAssetTypes:          sampleMapAssetTypes(),
-		WriteMapAssetTypes:     &fakeMapAssetTypeWriter{},
-		Announcements:          &fakeAnnouncementReader{},
-		WriteAnnouncements:     &fakeAnnouncementWriter{},
-		ContentItems:           &fakeContentItemReader{},
-		WriteContentItems:      &fakeContentItemWriter{},
-		ContentCategories:      &fakeContentCategoryReader{},
-		WriteContentCategories: &fakeContentCategoryWriter{},
-		MapFieldSchemas:        &fakeMapFieldSchemas{},
-		WriteMapFieldSchemas:   &fakeMapFieldSchemas{},
-		MailSettings:           &fakeMailSettings{},
-		WriteMailSettings:      &fakeMailSettings{},
-		AuditLog:               fake,
-		StaffInbox:             &fakeInbox{},
-		WriteStaffInbox:        &fakeInbox{},
-		Log:                    log,
+		Checker:              checker,
+		LoaiTaiNguyen:        danhMucMau(),
+		GhiLoaiTaiNguyen:     &ghiDanhMucGia{},
+		ThongBao:             &soThongBaoGia{},
+		GhiThongBao:          &ghiThongBaoGia{},
+		NoiDung:              &soNoiDungGia{},
+		GhiNoiDung:           &ghiNoiDungGia{},
+		DanhMucNoiDung:       &soDanhMucNDGia{},
+		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
+		MapFieldSchemas:      &fakeMapFieldSchemas{},
+		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
+		MailSettings:         &fakeMailSettings{},
+		WriteMailSettings:    &fakeMailSettings{},
+		AuditLog:             fake,
+		StaffInbox:           &fakeInbox{},
+		WriteStaffInbox:      &fakeInbox{},
+		Log:                  log,
 	}
 }
 
 func newAuditServer(t *testing.T) *auditServer {
 	t.Helper()
 	fake := &auditLogFake{}
-	checker := &perCommuneChecker{}
+	checker := &checkerDanhMucGia{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mux := http.NewServeMux()
 	Register(mux, auditDeps(checker, fake, log))
 
-	// The real edge chain in the real order, minus authentication (injectPrincipal injects the principal).
+	// The real edge chain in the real order, minus authentication (chuTheGhi injects the principal).
 	var h http.Handler = mux
-	h = injectPrincipal(h)
-	h = httpx.TenantMiddleware(sampleDirectory())(h)
+	h = chuTheGhi(h)
+	h = httpx.TenantMiddleware(thuMucMau())(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 	return &auditServer{h: h, fake: fake, checker: checker}
 }
 
 func (s *auditServer) grant(commune tenant.ID, perms ...authz.Perm) {
-	s.checker.grantIn(commune, perms...)
+	if s.checker.co == nil {
+		s.checker.co = map[tenant.ID]map[authz.Perm]struct{}{}
+	}
+	if s.checker.co[commune] == nil {
+		s.checker.co[commune] = map[authz.Perm]struct{}{}
+	}
+	for _, p := range perms {
+		s.checker.co[commune][p] = struct{}{}
+	}
 }
 
 func (s *auditServer) call(t *testing.T, host, path string, p *authz.Principal) *httptest.ResponseRecorder {
@@ -103,7 +111,7 @@ func (s *auditServer) call(t *testing.T, host, path string, p *authz.Principal) 
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
 	if p != nil {
-		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, *p))
+		r = r.WithContext(context.WithValue(r.Context(), khoaChuTheGhi{}, *p))
 	}
 	w := httptest.NewRecorder()
 	s.h.ServeHTTP(w, r)
@@ -112,8 +120,8 @@ func (s *auditServer) call(t *testing.T, host, path string, p *authz.Principal) 
 
 func TestAuditEntries_401WithoutSession(t *testing.T) {
 	s := newAuditServer(t)
-	s.grant(tenantA, "admin.audit")
-	expectStatus(t, s.call(t, hostA, auditEntriesPath, nil), http.StatusUnauthorized)
+	s.grant(xaA, "admin.audit")
+	doiMa(t, s.call(t, hostA, auditEntriesPath, nil), http.StatusUnauthorized)
 	if s.fake.calls != 0 {
 		t.Error("audit log read with no session")
 	}
@@ -122,13 +130,13 @@ func TestAuditEntries_401WithoutSession(t *testing.T) {
 func TestAuditEntries_403WrongPermission(t *testing.T) {
 	// The wrong keys are real and adjacent: the same Cấu hình tab's catalogue and mail-server key.
 	s := newAuditServer(t)
-	s.grant(tenantA, "admin.lookup", "content.read")
-	expectStatus(t, s.call(t, hostA, auditEntriesPath, writerStaff(tenantA)), http.StatusForbidden)
+	s.grant(xaA, "admin.lookup", "content.read")
+	doiMa(t, s.call(t, hostA, auditEntriesPath, canBoGhi(xaA)), http.StatusForbidden)
 	if s.fake.calls != 0 {
 		t.Error("audit log read without admin.audit")
 	}
 	// Compared with a LITERAL: a fake checker grants any string (rule 5, invariant 3c).
-	if got := s.checker.lastAsked(); got != "admin.audit" {
+	if got := s.checker.hoiKhoaCuoi(); got != "admin.audit" {
 		t.Errorf("checker asked %q, want admin.audit", got)
 	}
 }
@@ -136,8 +144,8 @@ func TestAuditEntries_403WrongPermission(t *testing.T) {
 func TestAuditEntries_403RightPermissionWrongCommune(t *testing.T) {
 	// Granted in commune A; the account is commune B's, signed in at commune B.
 	s := newAuditServer(t)
-	s.grant(tenantA, "admin.audit")
-	expectStatus(t, s.call(t, hostB, auditEntriesPath, writerStaff(tenantB)), http.StatusForbidden)
+	s.grant(xaA, "admin.audit")
+	doiMa(t, s.call(t, hostB, auditEntriesPath, canBoGhi(xaB)), http.StatusForbidden)
 	if s.fake.calls != 0 {
 		t.Error("commune B read its audit log with commune A's grant")
 	}
@@ -145,7 +153,7 @@ func TestAuditEntries_403RightPermissionWrongCommune(t *testing.T) {
 
 func TestAuditEntries_200PassesFiltersReaderAndCommune(t *testing.T) {
 	s := newAuditServer(t)
-	s.grant(tenantA, "admin.audit")
+	s.grant(xaA, "admin.audit")
 	at := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
 	s.fake.res = page.Result[audit.EntryView]{
 		Items:   []audit.EntryView{{At: at, ActorKind: "staff", ActorCode: "CB-00777", Action: "phat_hanh_thong_bao", Subject: "TB-8"}},
@@ -153,18 +161,18 @@ func TestAuditEntries_200PassesFiltersReaderAndCommune(t *testing.T) {
 	}
 	w := s.call(t, hostA, auditEntriesPath+
 		"?from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z&actor=CB-00777&action=phat_hanh_thong_bao"+
-		"&subject=TB-8&limit=5&cursor=c1&tenant_id=01JOTHERCOMMUNE", writerStaff(tenantA))
-	expectStatus(t, w, http.StatusOK)
+		"&subject=TB-8&limit=5&cursor=c1&tenant_id=01JOTHERCOMMUNE", canBoGhi(xaA))
+	doiMa(t, w, http.StatusOK)
 
 	f := s.fake
 	if f.calls != 1 {
 		t.Fatalf("reader ran %d times, want once", f.calls)
 	}
-	if f.commune != tenantA {
-		t.Errorf("read in commune %q, want the Host's %q — never a query parameter", f.commune, tenantA)
+	if f.commune != xaA {
+		t.Errorf("read in commune %q, want the Host's %q — never a query parameter", f.commune, xaA)
 	}
-	if f.reader.ID != writerStaffCode || f.reader.Kind != "staff" || f.reader.IP != "10.0.0.7" {
-		t.Errorf("reader = %+v, want business code %s (rule 6 inv 8), kind and socket IP", f.reader, writerStaffCode)
+	if f.reader.ID != maCanBoGhi || f.reader.Kind != "staff" || f.reader.IP != "10.0.0.7" {
+		t.Errorf("reader = %+v, want business code %s (rule 6 inv 8), kind and socket IP", f.reader, maCanBoGhi)
 	}
 	want := audit.Query{From: "2026-09-01T00:00:00Z", To: "2026-10-01T00:00:00Z", Actor: "CB-00777",
 		Action: "phat_hanh_thong_bao", Subject: "TB-8", Limit: "5", Cursor: "c1"}
@@ -196,11 +204,11 @@ func TestAuditEntries_FailuresMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newAuditServer(t)
-			s.grant(tenantA, "admin.audit")
+			s.grant(xaA, "admin.audit")
 			s.fake.err = c.err
-			w := s.call(t, hostA, auditEntriesPath, writerStaff(tenantA))
-			expectStatus(t, w, c.want)
-			if e := decodeError(t, w); e.Message == "" || e.Message == c.err.Error() {
+			w := s.call(t, hostA, auditEntriesPath, canBoGhi(xaA))
+			doiMa(t, w, c.want)
+			if e := loiTra(t, w); e.Message == "" || e.Message == c.err.Error() {
 				t.Errorf("error body = %+v — a sentence for a person, never the raw error", e)
 			}
 		})
@@ -209,10 +217,10 @@ func TestAuditEntries_FailuresMapped(t *testing.T) {
 
 func TestAuditEntries_NoBusinessCodeIs500AndReadsNothing(t *testing.T) {
 	s := newAuditServer(t)
-	s.grant(tenantA, "admin.audit")
-	p := writerStaff(tenantA)
+	s.grant(xaA, "admin.audit")
+	p := canBoGhi(xaA)
 	p.Ma = ""
-	expectStatus(t, s.call(t, hostA, auditEntriesPath, p), http.StatusInternalServerError)
+	doiMa(t, s.call(t, hostA, auditEntriesPath, p), http.StatusInternalServerError)
 	if s.fake.calls != 0 {
 		t.Error("read ran for a reader with no business code — its entry could not name who read")
 	}
@@ -224,5 +232,5 @@ func TestAuditEntries_RegisterRefusesMissingReader(t *testing.T) {
 			t.Fatal("Register did not panic without an audit-log reader")
 		}
 	}()
-	Register(http.NewServeMux(), auditDeps(&perCommuneChecker{}, nil, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	Register(http.NewServeMux(), auditDeps(&checkerDanhMucGia{}, nil, slog.New(slog.NewTextHandler(io.Discard, nil))))
 }

@@ -3,7 +3,7 @@ package store
 // The dashboard figures of SỔ VĂN BẢN ĐẾN, and the SQL that selects each figure's rows.
 //
 // ONE PREDICATE PER FIGURE, USED BY EVERY READ THAT SHOWS IT. metricPredicate below is called by
-// CountIncomingSummary (the figure), by incomingFilterSQL (the drill-down list behind it) and by
+// CountIncomingSummary (the figure), by locThanhSQL (the drill-down list behind it) and by
 // OverdueIncoming (the "CẦN XỬ LÝ NGAY" queue). docs/ui-ux/13-bao-cao.md §10 forbids /tong-quan and
 // the lists behind it from disagreeing; three hand-written WHERE clauses would disagree the first time
 // one of them was edited, and every test of each alone would stay green.
@@ -56,7 +56,7 @@ func arrivedPredicate(w domain.ArrivalWindow, bind bindFunc) string {
 		bind(w.LastDate.Format(time.DateOnly)) + "::date"
 }
 
-// openPredicate is NOT IncomingDocumentStatus.IsFinished(), with the closing codes taken FROM the domain
+// openPredicate is NOT TrangThaiVanBanDen.DaKetThuc(), with the closing codes taken FROM the domain
 // (domain.FinishedIncomingStatuses) rather than typed here. `trang_thai` is NOT NULL (migration 0004),
 // so NOT IN has no NULL trap.
 func openPredicate(bind bindFunc) string {
@@ -68,7 +68,7 @@ func openPredicate(bind bindFunc) string {
 	return "trang_thai NOT IN (" + strings.Join(ph, ", ") + ")"
 }
 
-// lateAgainstPredicate is IncomingDocument.IsOverdue(now): not finished AND now is strictly after the deadline,
+// lateAgainstPredicate is VanBanDen.QuaHan(now): not finished AND now is strictly after the deadline,
 // i.e. `han_xu_ly_xong < now`. `han_xu_ly_xong` is NOT NULL (migration 0004), so every row has one.
 //
 // `now` IS BOUND FROM THE CALLER, not SQL now(): the queue compares the same instant against identity's
@@ -108,7 +108,7 @@ func metricPredicate(f IncomingMetricFilter, bind bindFunc) (string, error) {
 // commune and the register grows by a few thousand rows a year per commune, so it is affordable today;
 // docs/ui-ux/01-tong-quan-dieu-hanh.md §6 already says the dashboard should be materialised, and that is
 // the change to make when it stops being affordable — not a cache keyed without the commune.
-func (s *IncomingDocumentStore) CountIncomingSummary(ctx context.Context, window domain.ArrivalWindow,
+func (s *VanBanDenStore) CountIncomingSummary(ctx context.Context, window domain.ArrivalWindow,
 	now time.Time) (domain.IncomingSummary, error) {
 
 	var args []any
@@ -160,8 +160,8 @@ func (s *IncomingDocumentStore) CountIncomingSummary(ctx context.Context, window
 // han_xu_ly_xong); PostgreSQL scans the commune's partition and sorts the overdue rows, which is a
 // handful. An index on (tenant_id, han_xu_ly_xong) WHERE deleted_at IS NULL is the migration to add if
 // that stops being true — not added here, because this change carries no migration.
-func (s *IncomingDocumentStore) OverdueIncoming(ctx context.Context, now time.Time,
-	limit int) ([]domain.IncomingDocument, error) {
+func (s *VanBanDenStore) OverdueIncoming(ctx context.Context, now time.Time,
+	limit int) ([]domain.VanBanDen, error) {
 
 	if limit < 1 || limit > domain.OverdueQueueMax {
 		return nil, fmt.Errorf("van_ban_den: giới hạn hàng đợi quá hạn %d ngoài [1, %d]",
@@ -176,19 +176,19 @@ func (s *IncomingDocumentStore) OverdueIncoming(ctx context.Context, now time.Ti
 	tail := "AND deleted_at IS NULL AND " + pred +
 		" ORDER BY han_xu_ly_xong ASC, id ASC LIMIT " + bind(limit)
 
-	rows, err := s.db.For(ctx).Query(ctx, incomingDocumentColumns, "van_ban_den", tail, args...)
+	rows, err := s.db.For(ctx).Query(ctx, cotVanBanDen, "van_ban_den", tail, args...)
 	if err != nil {
 		return nil, fmt.Errorf("van_ban_den: đọc hàng đợi quá hạn: %w", err)
 	}
 	defer rows.Close()
 
-	out := make([]domain.IncomingDocument, 0, limit)
+	out := make([]domain.VanBanDen, 0, limit)
 	for rows.Next() {
-		d, err := scanIncomingDocument(rows.Scan)
+		v, err := docMotDongVanBanDen(rows.Scan)
 		if err != nil {
 			return nil, fmt.Errorf("van_ban_den: quét dòng hàng đợi quá hạn: %w", err)
 		}
-		out = append(out, d)
+		out = append(out, v)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("van_ban_den: duyệt hàng đợi quá hạn: %w", err)

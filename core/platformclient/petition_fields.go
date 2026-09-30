@@ -176,7 +176,7 @@ var knownTones = map[string]bool{"blue": true, "green": true, "orange": true, "p
 // usable keeps the entries a caller may rely on; anything else is dropped and so reads as "not a
 // tier-1 code" — refused on every write. Dropping is the safe direction: the alternative, keeping
 // an entry that breaks the contract, is letting a code nobody can vouch for into archival records.
-func (r *PetitionFields) usable(ctx context.Context, in []*platformv1.CitizenReportField) PetitionFieldSet {
+func (r *PetitionFields) usable(ctx context.Context, in []*platformv1.PetitionField) PetitionFieldSet {
 	count := make(map[string]int, len(in))
 	for _, f := range in {
 		count[f.GetCode()]++

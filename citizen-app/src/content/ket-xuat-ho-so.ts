@@ -22,12 +22,12 @@ import {
   BRIDGE_FIELDS_WITH_PHONE,
   COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
-  SESSION_PATH,
+  DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   LOCATION_PATH,
-  VIGOV_BRIDGE_SENT_FIELDS,
-  SESSION_SENT_FIELDS,
-} from "../features/log-in/contract";
+  TRUONG_GUI_DI_CAU_VIGOV,
+  TRUONG_GUI_DI_PHIEN,
+} from "../features/dang-nhap/hop-dong";
 import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import type { KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
 
@@ -264,7 +264,7 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
       ? `Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`
       : `${duong.length - tu_chay} đường chạy khi chính người dùng bấm; ${tu_chay} đường chạy mà không cần một cú bấm — xem mục "Chạy khi" của từng đường.`;
   const dong: string[] = [
-    "> Khối này là **bản sinh ra** từ `SESSION_SENT_FIELDS`, `VIGOV_BRIDGE_SENT_FIELDS`, `BRIDGE_FIELDS_WITH_PHONE` và `COMMUNE_APP_SESSION_FIELDS`",
+    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV`, `BRIDGE_FIELDS_WITH_PHONE` và `COMMUNE_APP_SESSION_FIELDS`",
     "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
     "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
     `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
@@ -421,12 +421,12 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
  */
 export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
-    tuyen: SESSION_PATH,
+    tuyen: DUONG_DAN_PHIEN,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group",
     khi_nao: "người dùng tự bấm nút đăng nhập và đồng ý chia sẻ số Zalo trên hộp thoại của Zalo",
     nguoi_dung_bam: true,
     man: "Liên hệ — khối “Đăng nhập bằng số Zalo”",
-    truong: SESSION_SENT_FIELDS,
+    truong: TRUONG_GUI_DI_PHIEN,
   },
   {
     tuyen: DUONG_DAN_YEU_CAU,
@@ -439,19 +439,19 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   DUONG_CONG_KHAI[0]!,
   {
     // CÙNG TUYẾN với dòng đăng nhập, thân KHÁC: không `phoneToken`, thêm tên miền xã và cú xác nhận.
-    tuyen: SESSION_PATH,
+    tuyen: DUONG_DAN_PHIEN,
     may_chu:
       "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở phiên với xã",
     khi_nao: "người dùng tự bấm “Đúng, tiếp tục” trên màn xác nhận xã",
     nguoi_dung_bam: true,
     man: TIEU_DE_XAC_NHAN_XA,
-    truong: VIGOV_BRIDGE_SENT_FIELDS,
+    truong: TRUONG_GUI_DI_CAU_VIGOV,
   },
   {
     // CÙNG TUYẾN, THÂN THỨ BA (28/09/2026): mở lại phiên với xã KÈM `phoneToken`, khi ViGov đòi số điện
     // thoại đã xác thực để gửi hoặc xem phản ánh. Tên ba màn chép từ `cong-dan/man/noi-dung.ts` (tệp này
     // không được nhập nửa nhà nước — cùng lý do `TEN_MAN_CONG_KHAI`); test khoá từng chữ.
-    tuyen: SESSION_PATH,
+    tuyen: DUONG_DAN_PHIEN,
     may_chu:
       "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu số điện thoại ở lượt này; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở lại phiên với xã kèm số điện thoại đã xác thực",
     khi_nao:
@@ -468,7 +468,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     //
     // ⚠ THE PRIVACY-POLICY SENTENCE FOR `appId` IS STILL OWED — legal wording is the project owner's, same
     //   stance as `bridgeBodyWithPhone`. `chinh-sach.test.ts` pins the gap.
-    tuyen: SESSION_PATH,
+    tuyen: DUONG_DAN_PHIEN,
     may_chu:
       "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu số điện thoại ở lượt này; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở phiên với xã của ứng dụng",
     khi_nao:

@@ -82,7 +82,7 @@ are one destination, and counting buttons would mean editing the policy every ti
 **Sign-in exists, it is one tap** (`getPhoneNumber` + `getAccessToken`, ADR 0020) — never a
 six-digit code to type — **and it calls a server, in both builds including the submitted one**.
 That call is the ONE outbound request this repository allows: one route, from ONE file
-(`src/features/log-in/server-calls.ts`), enforced by the tripwire in
+(`src/features/dang-nhap/goi-may-chu.ts`), enforced by the tripwire in
 `src/phase1-collects-nothing.test.ts`.
 
 What crosses the wire is **two single-use Zalo codes, never a phone number** — the number cannot
@@ -97,7 +97,7 @@ sentence was removed in the same commit that made it false.
 
 Sáu tính năng ở `src/features/tinh-nang/` **lấy dữ liệu rồi hiện lên màn hình, hết**: không
 `localStorage`, không `console.log`, không một lời gọi mạng nào — lời gọi duy nhất của cả kho
-nằm ở `features/log-in/server-calls.ts`. Lệnh cấm lưu trữ trong `phase1-collects-nothing.test.ts`
+nằm ở `features/dang-nhap/goi-may-chu.ts`. Lệnh cấm lưu trữ trong `phase1-collects-nothing.test.ts`
 **không được nới một dòng nào**; lệnh cấm `fetch` thì được **thu hẹp về đúng MỘT tệp**, và có
 một ca cho nó ăn một `fetch` đặt ở tệp NGAY CẠNH để chứng minh ngoại lệ ấy hẹp đúng bằng một
 tệp. §"Sáu tính năng thật" nói rõ vì sao hai trong các màn ấy **không có dữ liệu cá nhân ngay từ
@@ -127,18 +127,18 @@ hint the server resolves (ADR 0047); the rule is written as code in `src/feature
 
 ## Hai nửa nghiệp vụ trong MỘT bundle — ba ràng buộc, mỗi cái là một ca test
 
-Dựng ngày 21/09/2026, **trước khi `src/citizen/` có tệp nghiệp vụ đầu tiên**. Chi tiết và thủ tục:
-`src/citizen/index.ts` (chú thích đầu tệp). Dây bẫy: `src/two-halves-boundary.test.ts`.
+Dựng ngày 21/09/2026, **trước khi `src/cong-dan/` có tệp nghiệp vụ đầu tiên**. Chi tiết và thủ tục:
+`src/cong-dan/index.ts` (chú thích đầu tệp). Dây bẫy: `src/ranh-gioi-hai-nua.test.ts`.
 
 | Nửa | Ở đâu |
 |---|---|
-| Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/log-in/` · `src/features/solution-suggestion/` |
-| **Nhà nước (công dân)** | **`src/citizen/`** — xác nhận xã từ QR · "Gửi phản ánh" · "Phản ánh của tôi" · "Tra cứu phiếu" · "Tin tức của xã" · "Danh bạ cán bộ xã". **Có mặt trong bản dựng duy nhất** từ 27/09/2026. Ba màn phản ánh nói "kênh chưa mở" chừng nào cầu phiên chưa phát phiên ViGov (`src/citizen/api/vigov-session.ts`); hàm mở phiên được `App.tsx` **tiêm vào** (`src/citizen/api/open-vigov-session.ts`), không nhập |
+| Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/dang-nhap/` |
+| **Nhà nước (công dân)** | **`src/cong-dan/`** — xác nhận xã từ QR · "Gửi phản ánh" · "Phản ánh của tôi" · "Tra cứu phiếu" · "Tin tức của xã" · "Danh bạ cán bộ xã". **Có mặt trong bản dựng duy nhất** từ 27/09/2026. Ba màn phản ánh nói "kênh chưa mở" chừng nào cầu phiên chưa phát phiên ViGov (`src/cong-dan/api/phien-vigov.ts`); hàm mở phiên được `App.tsx` **tiêm vào** (`src/cong-dan/api/mo-phien-vigov.ts`), không nhập |
 | Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` |
 
 1. **Ranh giới hai chiều.** Nửa này không nhập tệp của nửa kia — cả hai chiều. Và **không tệp nào
-   ngoài `./citizen/` được nhập client API của ViGov** (`./citizen/api/`), kể cả lớp vỏ: `App.tsx`
-   chỉ mở màn qua cửa `./citizen` (`index.ts`). Một tệp không
+   ngoài `./cong-dan/` được nhập client API của ViGov** (`./cong-dan/api/`), kể cả lớp vỏ: `App.tsx`
+   chỉ mở màn qua cửa `./cong-dan` (`index.ts`). Một tệp không
    thuộc khu nào cũng đỏ — thư mục mới **buộc phải khai**, vì một thư mục ngoài mọi tiền tố là một
    thư mục ranh giới không cấm được gì.
 2. **Không lưu trữ định danh, ở cả hai nửa.** Một bundle là **một origin**: `localStorage` ·
@@ -219,7 +219,7 @@ mang thêm tên miền xã (ADR 0047 §6). Thứ bị gỡ theo:
 
 | Đã gỡ | Thay bằng |
 |---|---|
-| `VIGOV_BIEN_THE`, `resolve.alias`, `index.rong.ts`, `tsconfig` `paths` `bien-the/…` | Nhập thẳng `./features/kham-pha` và `./citizen` từ `App.tsx` |
+| `VIGOV_BIEN_THE`, `resolve.alias`, `index.rong.ts`, `tsconfig` `paths` `bien-the/…` | Nhập thẳng `./features/kham-pha` và `./cong-dan` từ `App.tsx` |
 | Danh mục xã mẫu, bộ chọn xã, trang xã mẫu, nút "Đổi xã" | Chỉ còn màn xác nhận xã, chờ nguồn tên xã từ máy chủ |
 | Bảng chẩn đoán (`?debug`) | Không có gì — nó là công cụ đo, không phải tính năng |
 | `--bien-the`, `build:goc`, `zmp:deploy:goc` / `:xa`, `zmp:phat-hanh:goc` / `:xa` | Một cặp `zmp:deploy` / `zmp:phat-hanh`, cả hai nhận `--domain=` |
@@ -235,7 +235,7 @@ dựng duy nhất và **chưa đo lại**.
 bị gỡ. Bài học giữ lại: giữ một cơ chế tách đôi khi hai nửa nói y hệt nhau là giữ một cái bẫy.
 
 **`VIGOV_API_HOST` — biến lúc dựng DUY NHẤT, và bản đẩy lên cần nó.** Địa chỉ máy chủ của khối
-đăng nhập, đọc trong `vite.config.ts` (`define`), chỉ `features/log-in/` đọc tới. Không khai
+đăng nhập, đọc trong `vite.config.ts` (`define`), chỉ `features/dang-nhap/` đọc tới. Không khai
 thì **fail closed**: không một lời gọi nào được phát đi, và màn hình nói ra rằng bản dựng chưa
 được khai địa chỉ. Không có địa chỉ mặc định — đoán một địa chỉ là gửi hai mã đăng nhập của một
 người thật tới một máy chủ không ai chọn.
@@ -328,7 +328,7 @@ localStorage: 1 · sessionStorage: 0 · indexedDB: 0
 ⚠ MỘT LẦN `localStorage` ẤY LÀ CỦA `zmp-sdk`, KHÔNG PHẢI CỦA TA — đã mở ra xem: nó nằm trong lớp
 Storage của SDK (`value: localStorage` bên trong một `WeakMap`). Mã của kho này không chạm kho lưu
 trữ nào, và hai dây bẫy độc lập giữ điều đó ở TẦNG MÃ NGUỒN (`phase1-collects-nothing.test.ts` và
-`two-halves-boundary.test.ts` §3b). Ghi lại con số này vì một lần đếm `1` mà không giải thích sẽ
+`ranh-gioi-hai-nua.test.ts` §3b). Ghi lại con số này vì một lần đếm `1` mà không giải thích sẽ
 làm phiên sau tưởng dây bẫy đã chết.
 
 fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta   (bản dựng duy nhất nay mang thêm 2: tuyến yêu
@@ -337,11 +337,11 @@ fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta   (bản dựng duy nhất n
 
 | Tệp | Việc nó làm |
 |---|---|
-| `src/features/log-in/SessionIssuer.tsx` | **Bước máy chủ** của khối đăng nhập |
-| `src/features/log-in/contract.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `log-in.test.tsx` nằm cạnh, không sửa gì khác |
-| `src/features/log-in/server-calls.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
+| `src/features/dang-nhap/PhatHanhPhien.tsx` | **Bước máy chủ** của khối đăng nhập |
+| `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
+| `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
 | `scripts/cau-hinh.mjs` · `cau-hinh.test.mjs` | Đọc `.env.local` cho CẢ bước dựng lẫn bước đẩy, và **danh sách trắng** chặn bí mật đặt nhầm chỗ — kể cả `VIGOV_BIEN_THE` đã bỏ. Ca kiểm: hai chiều của danh sách trắng · tên đã bỏ bị chặn kèm lời nhắn · shell thắng tệp · trả đúng các khoá đã khai · và ba ca ghim rằng cái rào **thật sự được nối vào** `vite.config.ts`, `deploy.mjs`, `.env.local.example` |
-| `src/features/log-in/log-in.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
+| `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
 | `src/content/chinh-sach.test.ts` | 22 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày là TRẦN (dọn theo lô tuần, 83–90), áp cả dòng của lượt thất bại**, kèm ca canh chiều ngược nếu ai viết lại thành "đúng 90 ngày" · **dòng bằng chứng của một lần xoá** khai đủ bốn vế · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
 | `src/bundle-for-zalo.test.ts` | Dựng thật **bản duy nhất** rồi đọc bundle — bằng chứng cuối cùng: có đủ chữ của mọi màn · không bộ chọn xã / đổi xã / danh mục mẫu / chữ "demo" / bảng chẩn đoán · không App ID, token hay tên miền nào của tệp ánh xạ (dựng khi `APP_ID` và `ZMP_TOKEN` CÓ trong môi trường) · đúng MỘT đường gọi cho mỗi tuyến |
 
@@ -408,7 +408,7 @@ dây bẫy còn lại đều không thấy gì**. Nên nó có một dây bẫy 
 |---|---|---|
 | **Không xếp được văn phòng theo khoảng cách** | `getLocation` chỉ trả token; đổi token cần một bước máy chủ có app secret. `navigator.geolocation` thì dây bẫy cấm, và là một quyền khác | Hiện đủ ba văn phòng thật kèm nút "Chỉ đường", và **một câu tiếng Việt nói rõ danh sách chưa sắp theo khoảng cách** |
 | **Không đổi được mã Zalo ngay trên máy** | Đổi mã cần **khoá bí mật của Mini App**, và khoá ấy chỉ nằm ở máy chủ (ADR 0020, bất biến 2 · luật 8 cấm #5). Đưa nó xuống thiết bị là điều kiện dừng #1 của chính ADR ấy | Gửi hai mã tới máy chủ `vihat-miniapp` và để nó đổi. Ứng dụng không bao giờ thấy số điện thoại — chỉ thấy mã, và một phiếu phiên trả về |
-| **Phiếu phiên là TẠM, không phải "đã đăng nhập vĩnh viễn"** | ADR 0005: sau khi công dân chọn xã thì máy chủ **phát hành lại** phiên | Phiên sống trong `useState` và mất khi đóng app. Không một dòng mã nào dựng trên giả định giữ mãi — xem khối chú thích đầu `SessionIssuer.tsx` |
+| **Phiếu phiên là TẠM, không phải "đã đăng nhập vĩnh viễn"** | ADR 0005: sau khi công dân chọn xã thì máy chủ **phát hành lại** phiên | Phiên sống trong `useState` và mất khi đóng app. Không một dòng mã nào dựng trên giả định giữ mãi — xem khối chú thích đầu `PhatHanhPhien.tsx` |
 | **`openPhone` / `openWebview` chỉ chạy trong Zalo** | `@zaloOnly` trong chính `index.d.ts` | Một câu tiếng Việt nói mở lại trong Zalo, không mã lỗi |
 | **Không đọc được chữ trên ảnh danh thiếp giấy** | Bóc tách cần OCR, OCR cần một bước máy chủ, và dây bẫy cấm mọi đường gửi ra | Hiện ảnh lên màn hình và **nói thẳng bằng một câu** rằng bản này chưa đọc được chữ. **Không một dòng mã nào giả vờ đang nhận dạng** |
 | **Không đo được tốc độ hay độ trễ đường truyền** | `getNetworkType` trả đúng MỘT chuỗi: kiểu kết nối. SDK không có phép đo nào khác | Nói kiểu kết nối và một câu đúng về bản chất của nó. **Cấm mọi con số ms / Mbps / điểm chất lượng** — có một ca test quét chính những câu ấy |
@@ -734,7 +734,7 @@ Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc tr
 
 | Lớp | Trả lời | Nguồn | Tin được? | Trạng thái |
 |---|---|---|---|---|
-| **Khám phá** | Công dân MUỐN làm việc với xã nào | `d` + `src` trên QR, **máy chủ** tra ra tên | **Không — chỉ là gợi ý** | Đã nối (`citizen/screens/CommuneConfirmation.tsx`) |
+| **Khám phá** | Công dân MUỐN làm việc với xã nào | `d` + `src` trên QR, **máy chủ** tra ra tên | **Không — chỉ là gợi ý** | Đã nối (`cong-dan/man/XacNhanXa.tsx`) |
 | **Phiên** | Phiên này ĐANG thao tác ở xã nào | Máy chủ ghi sau khi công dân xác nhận | Có | Phía app đã nối; cầu ở `vihat-miniapp` **tắt** (ADR 0045 UNKNOWN #2) nên hôm nay luôn về phần giới thiệu |
 | **Uỷ quyền** | Công dân này được đọc/ghi gì ở đó | Quan hệ công dân↔xã + luật 4 | Có | Chưa có cầu phiên |
 
@@ -744,7 +744,7 @@ Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc tr
 | `src/features/kham-pha/GoiYXaScreen.tsx` | Màn xác nhận: tên xã to · "Đúng, tiếp tục" · "Không phải xã này" (về phần giới thiệu). **Không có "Chọn xã khác"** |
 | `src/features/kham-pha/kham-pha.test.tsx` | Mức tin · fail closed ở cấp `App` · tên xã trên mọi màn hình · không tên xã nào viết thẳng trong mã · không còn lối chọn/đổi xã |
 | `src/lib/launch-params.ts` | Đọc `location.search` — không qua SDK. `d` (tên miền xã) chỉ được đọc khi `src` ∈ {`qr`, `zns`}; `t`, `v` bị lờ |
-| `src/citizen/screens/CommuneConfirmation.tsx` | Tra `GET identity /api/v1/communes?host=<d>`, hỏi công dân, mở phiên qua hàm tiêm vào. Rỗng / lỗi → phần giới thiệu kèm một câu |
+| `src/cong-dan/man/XacNhanXa.tsx` | Tra `GET identity /api/v1/communes?host=<d>`, hỏi công dân, mở phiên qua hàm tiêm vào. Rỗng / lỗi → phần giới thiệu kèm một câu |
 
 **Mức tin theo nguồn** — đây là quy tắc, không phải giao diện:
 

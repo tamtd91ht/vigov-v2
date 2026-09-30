@@ -10,13 +10,13 @@ import (
 )
 
 type fakeOverdueReader struct {
-	docs     []domain.IncomingDocument
+	docs     []domain.VanBanDen
 	err      error
 	gotNow   time.Time
 	gotLimit int
 }
 
-func (f *fakeOverdueReader) OverdueIncoming(_ context.Context, now time.Time, limit int) ([]domain.IncomingDocument, error) {
+func (f *fakeOverdueReader) OverdueIncoming(_ context.Context, now time.Time, limit int) ([]domain.VanBanDen, error) {
 	f.gotNow, f.gotLimit = now, limit
 	return f.docs, f.err
 }
@@ -51,11 +51,11 @@ func TestOverdueQueueClassesCriticalFromIdentitysAnswer(t *testing.T) {
 	// Fixture instants only; the verdict comes from the fake's table, never from arithmetic here.
 	missedLongAgo, missedAtEdge, missedRecently := sept(20, 3), sept(24, 3), sept(28, 1)
 
-	reader := &fakeOverdueReader{docs: []domain.IncomingDocument{
-		{ID: "a", DueAt: missedLongAgo},
-		{ID: "b", DueAt: missedAtEdge},
-		{ID: "c", DueAt: missedRecently},
-		{ID: "d", DueAt: missedRecently}, // same deadline as c: one RPC, not two
+	reader := &fakeOverdueReader{docs: []domain.VanBanDen{
+		{ID: "a", HanXuLyXong: missedLongAgo},
+		{ID: "b", HanXuLyXong: missedAtEdge},
+		{ID: "c", HanXuLyXong: missedRecently},
+		{ID: "d", HanXuLyXong: missedRecently}, // same deadline as c: one RPC, not two
 	}}
 	adv := &fakeAdvancer{reachedAt: map[int64]time.Time{
 		missedLongAgo.UnixNano():  sept(27, 3), // 48 working hours already elapsed
@@ -97,7 +97,7 @@ func TestOverdueQueueClassesCriticalFromIdentitysAnswer(t *testing.T) {
 
 func TestOverdueQueueFailsWhenIdentityCannotAnswer(t *testing.T) {
 	now := sept(28, 3)
-	reader := &fakeOverdueReader{docs: []domain.IncomingDocument{{ID: "a", DueAt: sept(27, 3)}}}
+	reader := &fakeOverdueReader{docs: []domain.VanBanDen{{ID: "a", HanXuLyXong: sept(27, 3)}}}
 
 	for name, adv := range map[string]*fakeAdvancer{
 		"unreachable":    {err: errors.New("rpc error: code = Unavailable")},

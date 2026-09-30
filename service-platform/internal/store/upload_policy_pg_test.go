@@ -9,8 +9,8 @@ import (
 // like every *_pg_test.go here. The CHECKs, triggers and seed are behaviour the database owns.
 
 func TestPgUploadPolicySeedAndRead(t *testing.T) {
-	db, _ := openTestDB(t)
-	runMigrations(t, db)
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
 
 	ps, err := NewUploadPolicyStore(db).ListUploadPolicies(context.Background())
 	if err != nil {
@@ -45,8 +45,8 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 }
 
 func TestPgUploadPolicySoftDeletedIsAbsent(t *testing.T) {
-	db, _ := openTestDB(t)
-	runMigrations(t, db)
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
 	if _, err := db.Exec(`UPDATE upload_policy SET deleted_at = now(), deleted_by = 'system',
 		delete_reason = 'test' WHERE purpose = 'tenant-logo'`); err != nil {
 		t.Fatalf("soft delete: %v", err)
@@ -66,8 +66,8 @@ func TestPgUploadPolicySoftDeletedIsAbsent(t *testing.T) {
 }
 
 func TestPgUploadPolicyConstraints(t *testing.T) {
-	db, _ := openTestDB(t)
-	runMigrations(t, db)
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
 	// Each statement breaks exactly one rule on an otherwise valid seeded row. An UPDATE that matched
 	// no row would return no error and be reported as accepted — a false red, never a false green.
 	for name, stmt := range map[string]string{

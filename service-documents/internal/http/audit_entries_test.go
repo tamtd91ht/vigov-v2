@@ -40,55 +40,55 @@ func (f *auditLogFake) Read(ctx context.Context, reader audit.Actor, q audit.Que
 }
 
 func TestAuditEntries_401WithoutSession(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, "admin.audit")
-	wantStatus(t, m.call(t, http.MethodGet, hostA, auditEntriesPath, nil), http.StatusUnauthorized)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "admin.audit")
+	doiMa(t, m.goi(t, http.MethodGet, hostA, auditEntriesPath, nil), http.StatusUnauthorized)
 	if m.auditLog.calls != 0 {
 		t.Error("audit log read with no session")
 	}
 }
 
 func TestAuditEntries_403WrongPermission(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, "document.read", "admin.lookup")
-	wantStatus(t, m.call(t, http.MethodGet, hostA, auditEntriesPath, staffOf(tenantA)), http.StatusForbidden)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "document.read", "admin.lookup")
+	doiMa(t, m.goi(t, http.MethodGet, hostA, auditEntriesPath, canBoCua(xaA)), http.StatusForbidden)
 	if m.auditLog.calls != 0 {
 		t.Error("audit log read without admin.audit")
 	}
-	if got := m.checker.lastAsked(); got != "admin.audit" {
+	if got := m.checker.hoiKhoaCuoi(); got != "admin.audit" {
 		t.Errorf("checker asked %q, want admin.audit", got)
 	}
 }
 
 func TestAuditEntries_403RightPermissionWrongCommune(t *testing.T) {
 	// Granted in commune A; the account is commune B's, signed in at commune B.
-	m := newTestServer(t)
-	m.grant(tenantA, "admin.audit")
-	wantStatus(t, m.call(t, http.MethodGet, hostB, auditEntriesPath, staffOf(tenantB)), http.StatusForbidden)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "admin.audit")
+	doiMa(t, m.goi(t, http.MethodGet, hostB, auditEntriesPath, canBoCua(xaB)), http.StatusForbidden)
 	if m.auditLog.calls != 0 {
 		t.Error("commune B read its audit log with commune A's grant")
 	}
 }
 
 func TestAuditEntries_200PassesFiltersReaderAndCommune(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, "admin.audit")
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "admin.audit")
 	at := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
 	m.auditLog.res = page.Result[audit.EntryView]{
 		Items:   []audit.EntryView{{At: at, ActorKind: "staff", ActorCode: "CB-00777", Action: "vao_so_van_ban_den", Subject: "VBD-8"}},
 		HasMore: true, NextCursor: "c2",
 	}
-	w := m.call(t, http.MethodGet, hostA, auditEntriesPath+
+	w := m.goi(t, http.MethodGet, hostA, auditEntriesPath+
 		"?from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z&actor=CB-00777&action=vao_so_van_ban_den"+
-		"&subject=VBD-8&limit=5&cursor=c1&tenant_id=01JOTHERCOMMUNE", staffOf(tenantA))
-	wantStatus(t, w, http.StatusOK)
+		"&subject=VBD-8&limit=5&cursor=c1&tenant_id=01JOTHERCOMMUNE", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
 
 	f := m.auditLog
-	if f.commune != tenantA {
-		t.Errorf("read in commune %q, want the Host's %q — never a query parameter", f.commune, tenantA)
+	if f.commune != xaA {
+		t.Errorf("read in commune %q, want the Host's %q — never a query parameter", f.commune, xaA)
 	}
-	if f.reader.ID != staffCode || f.reader.Kind != "staff" || f.reader.IP == "" {
-		t.Errorf("reader = %+v, want business code %s (rule 6 inv 8), kind and socket IP", f.reader, staffCode)
+	if f.reader.ID != maCanBo || f.reader.Kind != "staff" || f.reader.IP == "" {
+		t.Errorf("reader = %+v, want business code %s (rule 6 inv 8), kind and socket IP", f.reader, maCanBo)
 	}
 	want := audit.Query{From: "2026-09-01T00:00:00Z", To: "2026-10-01T00:00:00Z", Actor: "CB-00777",
 		Action: "vao_so_van_ban_den", Subject: "VBD-8", Limit: "5", Cursor: "c1"}
@@ -119,12 +119,12 @@ func TestAuditEntries_FailuresMapped(t *testing.T) {
 		"store down": {errors.New("connection reset"), http.StatusInternalServerError},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := newTestServer(t)
-			m.grant(tenantA, "admin.audit")
+			m := dungMayChu(t)
+			m.capQuyen(xaA, "admin.audit")
 			m.auditLog.err = c.err
-			w := m.call(t, http.MethodGet, hostA, auditEntriesPath, staffOf(tenantA))
-			wantStatus(t, w, c.want)
-			if e := errorBody(t, w); e.Message == "" || e.Message == c.err.Error() {
+			w := m.goi(t, http.MethodGet, hostA, auditEntriesPath, canBoCua(xaA))
+			doiMa(t, w, c.want)
+			if e := loiTra(t, w); e.Message == "" || e.Message == c.err.Error() {
 				t.Errorf("error body = %+v — a sentence for a person, never the raw error", e)
 			}
 		})
@@ -132,11 +132,11 @@ func TestAuditEntries_FailuresMapped(t *testing.T) {
 }
 
 func TestAuditEntries_NoBusinessCodeIs500AndReadsNothing(t *testing.T) {
-	m := newTestServer(t)
-	m.grant(tenantA, "admin.audit")
-	p := staffOf(tenantA)
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "admin.audit")
+	p := canBoCua(xaA)
 	p.Ma = ""
-	wantStatus(t, m.call(t, http.MethodGet, hostA, auditEntriesPath, p), http.StatusInternalServerError)
+	doiMa(t, m.goi(t, http.MethodGet, hostA, auditEntriesPath, p), http.StatusInternalServerError)
 	if m.auditLog.calls != 0 {
 		t.Error("read ran for a reader with no business code — its entry could not name who read")
 	}

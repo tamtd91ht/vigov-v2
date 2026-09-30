@@ -49,19 +49,12 @@ HOOK = "english_identifier_guard"
 # which would break os.path.exists on a case-sensitive CI filesystem).
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-EXTS = (".go", ".ts", ".tsx", ".sql", ".proto", ".yaml", ".yml")
+EXTS = (".go", ".ts", ".tsx", ".sql", ".proto")
 
 # Where new code is written. `platform-admin/src/` is the second Next.js app (vendor console);
 # the decision covers all new code, so it is in scope with the same route-directory exemption.
 SCOPE = ("service-", "core/", "tools/", "web-admin/src/", "citizen-app/src/",
-         "platform-admin/src/", "proto/", "deploy/")
-
-# k8s manifests (user decision 2026-09-29): object names, envFrom configMapRef/secretRef names,
-# configMapGenerator names and label keys/values are identifiers an operator types into Rancher —
-# `cau-hinh-chung`, `bi-mat-platform`, `cho-phep-duong-ra` drifted from the real cluster
-# (`common-config`, `platform-secrets`) exactly because nothing checked them.
-YAML_NAME = re.compile(r"(?:^|[{\s,-])name:\s*\"?([A-Za-z0-9][A-Za-z0-9._-]*)\"?\s*(?=[,}\s]|$)", re.M)
-YAML_LABEL = re.compile(r"^\s*([a-z0-9.-]+/[A-Za-z0-9._-]+):\s*\"?([A-Za-z0-9._-]*)\"?\s*$", re.M)
+         "platform-admin/src/", "proto/")
 
 # Next.js App Router: a directory under src/app/ IS a URL path segment a user sees, and ADR 0051
 # keeps those Vietnamese. The Mini App has no router (citizen-app/src/App.tsx, "WHY NOT A
@@ -255,12 +248,7 @@ SQL_OTHER = re.compile(
     rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?(?:TYPE|VIEW|DOMAIN)\s+"
     rf"(?:IF\s+NOT\s+EXISTS\s+)?(?:{ID}\.)?({ID})", re.I)
 SQL_ADD_COL = re.compile(rf"\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?({ID})", re.I)
-# Every spelling PostgreSQL accepts for a rename; the NEW name is the declaration, the old one is
-# what layer B (ADR 0061) removes. `RENAME CONSTRAINT a TO b` and `RENAME a TO b` (COLUMN is
-# optional) were not read until 2026-09-29 — the campaign that exists to remove Vietnamese names
-# could have written new ones through exactly those two forms.
-SQL_RENAME = re.compile(
-    rf"\bRENAME\s+(?:(?:COLUMN|CONSTRAINT)\s+{ID}\s+|(?!TO\b){ID}\s+)?TO\s+({ID})", re.I)
+SQL_RENAME = re.compile(rf"\bRENAME\s+(?:COLUMN\s+{ID}\s+)?TO\s+({ID})", re.I)
 SQL_NOT_COLUMN = {"constraint", "primary", "unique", "foreign", "check", "exclude", "like"}
 
 PROTO_DECL = re.compile(rf"^\s*(?:message|service|enum|rpc|oneof)\s+({ID})", re.M)
@@ -377,19 +365,8 @@ def _proto_decls(s: str) -> list[tuple[str, int]]:
     return out
 
 
-def _yaml_decls(s: str) -> list[tuple[str, int]]:
-    out = [(m.group(1), _line_of(s, m.start(1))) for m in YAML_NAME.finditer(s)]
-    for m in YAML_LABEL.finditer(s):
-        out.append((m.group(1).split("/", 1)[1], _line_of(s, m.start(1))))
-        if m.group(2):
-            out.append((m.group(2), _line_of(s, m.start(2))))
-    return out
-
-
 def lang_of(path: str) -> str:
     p = path.lower()
-    if p.endswith((".yaml", ".yml")):
-        return "yaml"
     if p.endswith(".go"):
         return "go"
     if p.endswith(".sql"):
@@ -403,13 +380,8 @@ def declarations(src: str, lang: str) -> list[tuple[str, int]]:
     """(name, 1-based line) for every declaration the language form defines."""
     if not src:
         return []
-    if lang == "yaml":
-        # Only `#` comments; YAML strings are values, and names are unquoted or double-quoted.
-        s = re.sub(r"(^|\s)#[^\n]*", r"\1", src)
-    else:
-        s = strip_code(src, "sql" if lang == "sql" else "c")
-    fn = {"go": _go_decls, "ts": _ts_decls, "sql": _sql_decls, "proto": _proto_decls,
-          "yaml": _yaml_decls}[lang]
+    s = strip_code(src, "sql" if lang == "sql" else "c")
+    fn = {"go": _go_decls, "ts": _ts_decls, "sql": _sql_decls, "proto": _proto_decls}[lang]
     try:
         return fn(s)
     except Exception:
@@ -421,7 +393,7 @@ def exempted(src: str, line: int, lang: str) -> bool:
     lines = src.split("\n")
     if 1 <= line <= len(lines) and EXEMPT.search(lines[line - 1]):
         return True
-    mark = {"sql": "--", "yaml": "#"}.get(lang, "//")
+    mark = "--" if lang == "sql" else "//"
     i = line - 2
     while i >= 0:
         s = lines[i].strip()
@@ -488,7 +460,7 @@ def vietnamese_new_segments(rel: str, exists=os.path.exists) -> list[str]:
                 continue
         stem = seg
         if i == len(segs) - 1:
-            stem = re.sub(r"(\.test|\.spec)?\.(tsx?|go|sql|proto|ya?ml)$", "", seg)
+            stem = re.sub(r"(\.test|\.spec)?\.(tsx?|go|sql|proto)$", "", seg)
             stem = re.sub(r"_test$", "", stem)
             subject = [seg.replace("_test.go", ".go"),
                        re.sub(r"\.(test|spec)\.(tsx?)$", r".\2", seg)]
@@ -546,11 +518,9 @@ def main() -> None:
                for n, ln in names]
     details += [f"new path segment `{s}` is Vietnamese" for s in segs]
     c.block(HOOK, f"New Vietnamese identifier — {os.path.basename(rel)}", details,
-            ["  Rule 12 (user decisions 2026-09-28/29): EVERY name is English — functions,",
+            ["  Rule 12 / ADR 0051 (2026-09-28): NEW code is named in English — functions,",
              "  types, variables, constants, struct fields, exports, files, directories,",
-             "  tables, columns, enum values, buckets, k8s objects/labels (deploy/**).",
-             "  The ONLY Vietnamese names left are API URL path segments. Existing Vietnamese",
-             "  names are being renamed service by service (rename campaign ADR) — never add one.",
+             "  tables, columns, buckets. Existing Vietnamese names stay; do not rename them.",
              "",
              "    func TaoBienBan()        ->  func CreateMeeting()",
              "    const layDanhSach = ...  ->  const listTasks = ...",
@@ -562,11 +532,9 @@ def main() -> None:
              "  for a concept that already has one. A business concept with no entry",
              "  there -> ask the user (legal terms khieu_nai/to_cao/phan_anh: ADR 0051 open #1).",
              "",
-             "    configMapRef: cau-hinh-chung  ->  common-config",
-             "    secretRef: bi-mat-platform    ->  platform-secrets",
-             "",
-             "  Vietnamese STAYS only in: API URL paths, route directories under",
-             "  web-admin/src/app/** (they are URL paths), UI strings, kb/ prose.",
+             "  Vietnamese STAYS in: route directories under web-admin/src/app/**, UI strings,",
+             "  enum VALUES (ADR 0011), kb/ prose. Adding an English declaration to an old",
+             "  Vietnamese file is correct; editing an existing Vietnamese name is allowed.",
              "",
              "  Genuinely needed (mirrors an existing wire field, a legal term with no",
              "  English equivalent)? Mark it:  // vi-name-ok: <reason>   (SQL: -- vi-name-ok:)",

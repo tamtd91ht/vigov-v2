@@ -20,7 +20,7 @@ import (
 )
 
 // A fake database/sql driver under the REAL MapFieldSchemaStore — same argument as
-// fake_driver_catalogue_test.go: the properties worth proving (one transaction for the write and its
+// driver_gia_danh_muc_test.go: the properties worth proving (one transaction for the write and its
 // entry, a refusal commits nothing, the commune is $1, deleted_by is the business code) live in the
 // SQL and the transaction boundaries, which a fake store would erase.
 //
@@ -210,7 +210,7 @@ func newFieldUseCase(t *testing.T, d *fieldDB) (*MapFieldSchemas, context.Contex
 	handle := store.New(db)
 	uc := NewMapFieldSchemas(handle, commsstore.NewMapFieldSchemaStore(handle))
 	uc.newID = func() (string, error) { return pinnedFieldID, nil }
-	return uc, tenant.Into(context.Background(), tenantA)
+	return uc, tenant.Into(context.Background(), xaA)
 }
 
 func validCreate() CreateMapFieldRequest {
@@ -249,8 +249,8 @@ func TestCreateMapFieldWritesRowAndEntryInOneTransaction(t *testing.T) {
 		t.Fatalf("%d INSERTs, want 1", len(ins))
 	}
 	// $1 is the commune from the context (rule 1, invariant 4).
-	if ins[0].args[0] != string(tenantA) {
-		t.Errorf("INSERT $1 = %v, want the context commune %q", ins[0].args[0], tenantA)
+	if ins[0].args[0] != string(xaA) {
+		t.Errorf("INSERT $1 = %v, want the context commune %q", ins[0].args[0], xaA)
 	}
 	if opts, _ := ins[0].args[6].(string); !strings.Contains(opts, `"value":"tnhh"`) {
 		t.Errorf("options written = %v", ins[0].args[6])
@@ -382,7 +382,7 @@ func TestUpdateMapFieldRelabelAndAppendIsWrittenAndAudited(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 	up := d.with("UPDATE map_field_schema")
-	if len(up) != 1 || up[0].args[0] != string(tenantA) {
+	if len(up) != 1 || up[0].args[0] != string(xaA) {
 		t.Fatalf("UPDATE statements = %+v", up)
 	}
 	if s, _ := up[0].args[3].(string); !strings.Contains(s, `"hkd"`) {
@@ -466,7 +466,7 @@ func TestDeleteMapFieldSoftDeletesWithBusinessCode(t *testing.T) {
 		t.Fatalf("%d soft deletes, want 1", len(del))
 	}
 	// deleted_by is the BUSINESS CODE (rule 6, invariant 8), the reason is trimmed.
-	if del[0].args[0] != string(tenantA) || del[0].args[2] != "CB-00123" || del[0].args[3] != "không dùng nữa" {
+	if del[0].args[0] != string(xaA) || del[0].args[2] != "CB-00123" || del[0].args[3] != "không dùng nữa" {
 		t.Errorf("soft delete args = %v", del[0].args)
 	}
 	if len(d.with("DELETE")) != 0 {
@@ -488,7 +488,7 @@ func TestDeleteMapFieldRefusals(t *testing.T) {
 		actor  audit.Actor
 		err    error
 	}{
-		"no reason": {choiceRow(), "  ", staffActor, domain.ErrDeleteReasonMissing},
+		"no reason": {choiceRow(), "  ", staffActor, domain.ErrThieuLyDoXoa},
 		"no actor":  {choiceRow(), "lý do", audit.Actor{}, ErrMissingDeleter},
 		"not found": {nil, "lý do", staffActor, commsstore.ErrMapFieldSchemaNotFound},
 	} {

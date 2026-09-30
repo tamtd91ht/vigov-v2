@@ -4,8 +4,8 @@ package store
 // incoming documents one org unit still holds in the commune of the context. SQL, and nothing else.
 //
 // "Held" is `bo_phan_dang_giu_id` — the ĐANG GIỮ column. "Open" is openPredicate, i.e. NOT
-// domain.IncomingDocumentStatus.IsFinished() via domain.FinishedIncomingStatuses — the SAME predicate
-// the dashboard's open figure uses, so a status added to IsFinished reaches this answer in the same
+// domain.TrangThaiVanBanDen.DaKetThuc() via domain.FinishedIncomingStatuses — the SAME predicate
+// the dashboard's open figure uses, so a status added to DaKetThuc reaches this answer in the same
 // edit. Routing history (`lich_su_chuyen_van_ban`) is NOT read: it says who held it WHEN.
 //
 // Commune $1 from the context (rule 1, invariant 5); live rows only (rule 7, invariant 2).
@@ -25,7 +25,7 @@ var ErrOrgUnitIDBlank = errors.New("van_ban_den: mã bộ phận rỗng")
 //
 // AN ERROR IS NEVER ZERO: an aggregate with no GROUP BY yields one row, and none is a driver fault —
 // a zero here lets a delete through.
-func (s *IncomingDocumentStore) CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error) {
+func (s *VanBanDenStore) CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error) {
 	if orgUnitID == "" {
 		return 0, ErrOrgUnitIDBlank
 	}

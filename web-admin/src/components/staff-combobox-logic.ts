@@ -1,4 +1,4 @@
-import { luaChonCanBo } from "@/features/meetings/meeting-labels";
+import { luaChonCanBo } from "@/features/bien-ban/nhan-bien-ban";
 import type { identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 
 /**

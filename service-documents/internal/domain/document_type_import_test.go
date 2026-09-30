@@ -23,10 +23,10 @@ func TestSlugDocumentTypeCode(t *testing.T) {
 		}
 	}
 	long := SlugDocumentTypeCode(strings.Repeat("dài ", 40))
-	if len(long) > MaxCodeLen || strings.HasSuffix(long, "-") {
+	if len(long) > MaToiDa || strings.HasSuffix(long, "-") {
 		t.Errorf("cắt sai: %q", long)
 	}
-	if _, err := NormalizeCode(long); err != nil {
+	if _, err := ChuanHoaMa(long); err != nil {
 		t.Errorf("mã tự sinh không qua được luật của biểu mẫu: %v", err)
 	}
 }

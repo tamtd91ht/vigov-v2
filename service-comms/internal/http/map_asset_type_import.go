@@ -270,17 +270,17 @@ func (h *Handler) PreviewMapAssetTypeImport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if len(rowErrs) > 0 {
-		writeJSON(w, http.StatusOK, mapAssetTypeImportPreviewOut{
+		vietJSON(w, http.StatusOK, mapAssetTypeImportPreviewOut{
 			Types: []mapAssetTypeImportRowOut{}, Errors: mapAssetTypeErrorsOut(rowErrs)})
 		return
 	}
-	res, err := h.d.WriteMapAssetTypes.PreviewMapAssetTypeImport(r.Context(), rows)
+	res, err := h.d.GhiLoaiTaiNguyen.PreviewMapAssetTypeImport(r.Context(), rows)
 	if err != nil {
 		h.d.Log.Error("nhập loại tài nguyên bản đồ: xem trước lỗi hệ thống", "xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	writeJSON(w, http.StatusOK, mapAssetTypeImportPreviewOut{
+	vietJSON(w, http.StatusOK, mapAssetTypeImportPreviewOut{
 		Valid:  len(res.Errors) == 0,
 		Types:  mapAssetTypeRowsOut(res.Types),
 		Errors: mapAssetTypeErrorsOut(res.Errors),
@@ -289,7 +289,7 @@ func (h *Handler) PreviewMapAssetTypeImport(w http.ResponseWriter, r *http.Reque
 
 // ImportMapAssetTypes serves POST /api/v1/map-asset-types/imports.
 func (h *Handler) ImportMapAssetTypes(w http.ResponseWriter, r *http.Request) {
-	actor, ok := actorFrom(r)
+	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.d.Log.Error("tuyến nhập loại tài nguyên bản đồ chạy mà không có mã cán bộ — SAI CẤU HÌNH ROUTE hoặc định danh cũ",
 			"xa", string(tenant.MustFrom(r.Context())))
@@ -308,7 +308,7 @@ func (h *Handler) ImportMapAssetTypes(w http.ResponseWriter, r *http.Request) {
 		writeMapAssetTypeImportRejected(w, rowErrs)
 		return
 	}
-	res, err := h.d.WriteMapAssetTypes.ImportMapAssetTypes(r.Context(), rows, actor)
+	res, err := h.d.GhiLoaiTaiNguyen.ImportMapAssetTypes(r.Context(), rows, actor)
 	if err != nil {
 		var rej *app.MapAssetTypeImportRejected
 		if errors.As(err, &rej) {
@@ -322,13 +322,13 @@ func (h *Handler) ImportMapAssetTypes(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Chưa loại nào được tạo. Vui lòng kiểm tra lại tệp rồi thử lại.", "")
 		return
 	}
-	writeJSON(w, http.StatusCreated, mapAssetTypeImportCreatedOut{Created: mapAssetTypeRowsOut(res.Types)})
+	vietJSON(w, http.StatusCreated, mapAssetTypeImportCreatedOut{Created: mapAssetTypeRowsOut(res.Types)})
 }
 
 // writeMapAssetTypeImportRejected is 400 with every error — like every other refusal of what a client
 // sent in this service.
 func writeMapAssetTypeImportRejected(w http.ResponseWriter, errs []domain.MapAssetTypeImportError) {
-	writeJSON(w, http.StatusBadRequest, mapAssetTypeImportRejectedOut{
+	vietJSON(w, http.StatusBadRequest, mapAssetTypeImportRejectedOut{
 		Code:    "import_invalid",
 		Message: "Tệp có lỗi nên chưa loại nào được tạo. Hãy sửa các dòng được liệt kê rồi nhập lại.",
 		Errors:  mapAssetTypeErrorsOut(errs),

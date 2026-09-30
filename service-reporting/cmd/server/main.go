@@ -71,14 +71,14 @@ func main() {
 	// It is wired ahead of the rest on purpose. The schema is what every other step will be
 	// written against, and `0002_audit_log_append_only.sql` — which turns "append-only" from a
 	// comment into a database constraint — had been committed and never applied by anything.
-	if err := runMigrations(db, log); err != nil {
+	if err := chayMigration(db, log); err != nil {
 		log.Error("migration không chạy được", "service", "reporting", "err", err)
 		os.Exit(1)
 	}
 
 	// pkgstore.New is the ONLY handle the stores get. There is deliberately no path from here that
 	// hands a raw *sql.DB to business code (rule 1, invariant 5).
-	scopedDB := pkgstore.New(db)
+	kho := pkgstore.New(db)
 
 	// 3. directory — Host -> commune, over gRPC to the platform service, cached (ADR 0004,
 	// decision 5). There is no second way to resolve a commune (rule 2, forbidden #2).
@@ -105,7 +105,7 @@ func main() {
 		Checker: staffauth.Checker{},
 		// "Lời hệ thống": a commune's wording of the `report.*` sentences. The use case owns the
 		// transaction the override row and its audit entry share (rule 6, invariant 3).
-		SystemMessages: app.NewSystemMessages(scopedDB, rpstore.NewSystemMessageOverrideStore(scopedDB)),
+		SystemMessages: app.NewSystemMessages(kho, rpstore.NewSystemMessageOverrideStore(kho)),
 		Log:            log,
 	})
 
@@ -121,7 +121,7 @@ func main() {
 	}
 }
 
-// edgeChain builds the edge chain this binary serves — the same chain finance's cmd/server builds,
+// edgeChain builds the edge chain this binary serves — the same chain finance's dungBien builds,
 // minus idem.Middleware (no route here declares Required; see configUses).
 //
 // IT IS A FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN (main_test.go): a middleware deleted from
@@ -172,8 +172,8 @@ func openDatabase(log *slog.Logger) (config.Config, *sql.DB, error) {
 	if err != nil {
 		return config.Config{}, nil, err
 	}
-	for _, warning := range cfg.CanhBao() {
-		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", warning)
+	for _, canhBao := range cfg.CanhBao() {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
 	}
 
 	// .Lo() is the ONE place the DSN leaves secret.DSN with its password intact: the driver
@@ -192,18 +192,18 @@ func openDatabase(log *slog.Logger) (config.Config, *sql.DB, error) {
 	return cfg, db, nil
 }
 
-// runMigrations applies this service's embedded migrations to the pool opened above.
-func runMigrations(db *sql.DB, log *slog.Logger) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+// chayMigration applies this service's embedded migrations to the pool opened above.
+func chayMigration(db *sql.DB, log *slog.Logger) error {
+	ctx, huy := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer huy()
 
-	result, err := migrate.Chay(ctx, db, migrations.FS, "reporting")
+	kq, err := migrate.Chay(ctx, db, migrations.FS, "reporting")
 	if err != nil {
 		return err
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator
 	// finds out the replica is already at the schema they expected, without opening a psql
 	// prompt.
-	log.Info("migration xong", "service", "reporting", "da_ap", result.DaAp, "bo_qua", len(result.BoQua))
+	log.Info("migration xong", "service", "reporting", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
 	return nil
 }

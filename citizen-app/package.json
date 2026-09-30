@@ -14,7 +14,7 @@
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",
     "zmp:deploy": "node scripts/deploy.mjs",
     "zmp:phat-hanh": "node scripts/deploy.mjs --phat-hanh",
-    "check:api": "node -e \"console.log('citizen-app: NOT CHECKED — the app does call ViGov (citizen/api/vigov-client.ts), but its REST types are hand-written (citizen/api/citizen-report-contract.ts, citizen/api/public-contract.ts), not generated from kb/20-contracts/openapi.json, so nothing here compares them with the contract.')\""
+    "check:api": "node -e \"console.log('citizen-app: NOT CHECKED — the app does call ViGov (cong-dan/api/goi-vigov.ts), but its REST types are hand-written (cong-dan/api/hop-dong-*.ts), not generated from kb/20-contracts/openapi.json, so nothing here compares them with the contract.')\""
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -8,8 +8,8 @@ import (
 
 // What these tests defend: the keys are the contract's recipes and depend only on the document and the
 // run's local date (never the run id); the sentences carry the register CODE and nothing else from the
-// document; the overdue comparison is this register's own (IncomingDocument.IsOverdue); windows are
-// calendar windows.
+// document; the overdue comparison is this register's own (VanBanDen.QuaHan); windows are calendar
+// windows.
 
 var claimedAt = time.Date(2026, 9, 28, 23, 30, 0, 0, time.UTC) // 06:30 on Tuesday 29/09 in Viet Nam
 
@@ -22,9 +22,6 @@ func TestAutomationLocalDayAndWeek(t *testing.T) {
 	}
 }
 
-// TestAutomationKeysFollowTheRecipes PINS THE STAFF-BELL IDEMPOTENCY AND ESCALATION KEY RECIPES. comms
-// deduplicates on these exact strings, so the English rename campaign renamed the functions and must
-// never move a byte of what they produce (ADR 0061) — `van-ban-den` included, a wire value (layer C).
 func TestAutomationKeysFollowTheRecipes(t *testing.T) {
 	hold := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
 	k := AutomationIncomingDocument
@@ -47,8 +44,8 @@ func TestAutomationKeysFollowTheRecipes(t *testing.T) {
 
 // THE SENTENCES CARRY THE CODE, NOT THE INTERNAL ID, and nothing else from the document.
 func TestAutomationNoticesCarryCodeOnly(t *testing.T) {
-	r := AutomationRecord{ID: "01JINTERNALIDXXXXXXXXXXXXX", Code: IncomingDocumentCode(2026, 7),
-		Deadline: claimedAt, OrgUnitID: "bp-internal-id", AssigneeCode: "CB-00123", HoldStartedAt: claimedAt}
+	r := AutomationRecord{ID: "01JINTERNALIDXXXXXXXXXXXXX", Code: MaVanBanDen(2026, 7),
+		Deadline: claimedAt, OrgUnitID: "bp-internal-id", AssigneeMa: "CB-00123", HoldStartedAt: claimedAt}
 	notices := []StaffNotice{
 		OverdueNotice(r, "2026-09-29", []string{"CB-1"}),
 		UnassignedNotice(r, []string{"CB-1"}),
@@ -57,7 +54,7 @@ func TestAutomationNoticesCarryCodeOnly(t *testing.T) {
 	}
 	for _, n := range notices {
 		text := n.Title + " " + n.Body + " " + n.Link
-		for _, leak := range []string{r.ID, r.OrgUnitID, r.AssigneeCode} {
+		for _, leak := range []string{r.ID, r.OrgUnitID, r.AssigneeMa} {
 			if strings.Contains(text, leak) {
 				t.Errorf("thông báo %q lộ %q", n.Title, leak)
 			}
@@ -80,7 +77,7 @@ func TestAutomationNoticesCarryCodeOnly(t *testing.T) {
 func TestAutomationDueSoonBodyStaysInBound(t *testing.T) {
 	codes := make([]string, 200)
 	for i := range codes {
-		codes[i] = IncomingDocumentCode(2026, i+1)
+		codes[i] = MaVanBanDen(2026, i+1)
 	}
 	n := DueSoonNotice("2026-09-29", "CB-1", codes)
 	if len([]rune(n.Body)) > noticeBodyMax || !strings.Contains(n.Body, "mục khác") {
@@ -110,9 +107,9 @@ func TestAutomationSameClockDaysLater(t *testing.T) {
 func TestAutomationOverdueMatchesRegister(t *testing.T) {
 	for _, asOf := range []time.Time{claimedAt.Add(-time.Second), claimedAt, claimedAt.Add(time.Second)} {
 		r := AutomationRecord{Deadline: claimedAt}
-		d := IncomingDocument{DueAt: claimedAt, Status: IncomingStatusInProgress}
-		if r.PastDeadlineAt(asOf) != d.IsOverdue(asOf) {
-			t.Errorf("tại %s: việc nền nói %v, sổ nói %v", asOf, r.PastDeadlineAt(asOf), d.IsOverdue(asOf))
+		v := VanBanDen{HanXuLyXong: claimedAt, TrangThai: VanBanDangXuLy}
+		if r.PastDeadlineAt(asOf) != v.QuaHan(asOf) {
+			t.Errorf("tại %s: việc nền nói %v, sổ nói %v", asOf, r.PastDeadlineAt(asOf), v.QuaHan(asOf))
 		}
 	}
 	r := AutomationRecord{Deadline: claimedAt}

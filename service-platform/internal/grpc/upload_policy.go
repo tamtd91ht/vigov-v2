@@ -44,7 +44,7 @@ func (s *Server) ListUploadPolicies(ctx context.Context, _ *platformv1.ListUploa
 				"rpc", "ListUploadPolicies", "purpose", r.Purpose)
 			continue
 		}
-		// Field by field, like toProto — ADR 0003's boundary.
+		// Field by field, like sangProto — ADR 0003's boundary.
 		p := &platformv1.UploadPolicy{
 			Purpose:          purpose,
 			MaxBytes:         r.MaxBytes,

@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: d3fb188
-expires: 2026-12-28
+derived_from_commit: 4603450
+expires: 2026-12-29
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-09-29** · hết hạn **2026-12-28**.
+Sinh ngày **2026-09-30** · hết hạn **2026-12-29**.
 
 ## 1 · Theo chương đặc tả
 
@@ -82,7 +82,7 @@ một lời trấn an không có gì đứng sau.
 | | |
 |---|---|
 | Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 8 |
-| Trong đó `citizen-app` đang gọi | 5 |
+| Trong đó `citizen-app` đang gọi | 6 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
@@ -90,14 +90,14 @@ một lời trấn an không có gì đứng sau.
 | GET | `/api/v1/commune-news` | ✓ |
 | GET | `/api/v1/commune-news/{id}` | ✓ |
 | GET | `/api/v1/commune-staff` | ✓ |
-| GET | `/api/v1/my-citizen-report-fields` | ✗ |
+| GET | `/api/v1/my-citizen-report-fields` | ✓ |
 | GET | `/api/v1/my-citizen-reports` | ✓ |
 | POST | `/api/v1/my-citizen-reports` | ✓ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/rating` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-profiles`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -108,14 +108,14 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 2 | 9 | 6 |
-| `citizen-app` | 20 | 9 | 3 | 0 |
+| `citizen-app` | 20 | 10 | 3 | 0 |
 | `core` | 20 | 1 | 1 | 1 |
 | `deploy` | 14 | 3 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 14 | 0 | 0 | 0 |
 | `service-comms` | 15 | 3 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
-| `service-finance` | 18 | 3 | 0 | 0 |
+| `service-finance` | 19 | 3 | 0 | 0 |
 | `service-identity` | 31 | 9 | 0 | 1 |
 | `service-petitions` | 31 | 13 | 5 | 0 |
 | `service-platform` | 7 | 3 | 0 | 1 |

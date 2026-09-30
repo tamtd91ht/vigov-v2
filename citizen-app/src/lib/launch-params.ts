@@ -29,7 +29,7 @@
  * tại. Một lỗi ở đây sẽ giết cây React trước khi màn hình đầu tiên kịp vẽ, tức app trắng trơn vì
  * một hàm đọc tham số. Không đáng.
  */
-export type ReadResult = {
+export type KetQuaDo = {
   /** Theo `location.search` của chính trang. Nguồn duy nhất — xem chú thích đầu tệp. */
   url: Record<string, string>;
 };
@@ -42,11 +42,11 @@ export type ReadResult = {
  * nhịp trước khi màn xác nhận xã hiện ra. `location.search` có sẵn ngay lúc dựng, nên nhịp nhấp
  * nháy ấy biến mất cùng với SDK.
  */
-export function readLaunchParams(): ReadResult {
-  return { url: fromUrl() };
+export function thamSoMoApp(): KetQuaDo {
+  return { url: theoUrl() };
 }
 
-function fromUrl(): Record<string, string> {
+function theoUrl(): Record<string, string> {
   try {
     return Object.fromEntries(new URLSearchParams(window.location.search));
   } catch {
@@ -55,8 +55,8 @@ function fromUrl(): Record<string, string> {
 }
 
 /** Bảng tham số để dùng. Một nguồn, nên không còn gì phải gộp — xem chú thích đầu tệp. */
-export function paramsOf(result: ReadResult): Record<string, string> {
-  return result.url;
+export function thamSo(ket_qua: KetQuaDo): Record<string, string> {
+  return ket_qua.url;
 }
 
 /**
@@ -64,7 +64,7 @@ export function paramsOf(result: ReadResult): Record<string, string> {
  * lớp khám phá, vì nó quyết định CÓ GỌI MẠNG hay không: một liên kết chuyển tay không được làm app
  * đi hỏi máy chủ về một xã. `features/kham-pha/goi-y.ts` đọc cùng bảng này — một nguồn, không hai.
  */
-export const PRESET_SOURCES: ReadonlySet<string> = new Set(["qr", "zns"]);
+export const NGUON_CHON_SAN: ReadonlySet<string> = new Set(["qr", "zns"]);
 
 /**
  * Khuôn tên miền, CHỈ ĐỂ CHẶN RÁC Ở GIAO DIỆN — máy chủ mới là bên quyết tên miền ấy có phải của một
@@ -72,19 +72,19 @@ export const PRESET_SOURCES: ReadonlySet<string> = new Set(["qr", "zns"]);
  * ít nhất hai nhãn, tổng ≤ 253. Không có cổng, không có đường dẫn, không có `@`: một chuỗi như thế
  * mà lọt vào `?host=` là để máy chủ phân tích một thứ không phải tên miền.
  */
-const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const NHAN_TEN_MIEN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
-export function isDomain(str: string): boolean {
-  if (str.length === 0 || str.length > 253) return false;
-  const label = str.split(".");
-  return label.length >= 2 && label.every((n) => DOMAIN_LABEL.test(n));
+export function laTenMien(chuoi: string): boolean {
+  if (chuoi.length === 0 || chuoi.length > 253) return false;
+  const nhan = chuoi.split(".");
+  return nhan.length >= 2 && nhan.every((n) => NHAN_TEN_MIEN.test(n));
 }
 
 /**
  * GỢI Ý XÃ TRÊN ĐƯỜNG LIÊN KẾT — `d` (tên miền xã) và `src`, theo quyết định 27/09/2026 (ADR 0047
  * §Trả lời). `t` và `v` đã bỏ: có mặt thì bị lờ đi, không đọc, không báo.
  *
- * `null` — mở như không có tham số — khi: không có `d`; `src` không nằm trong `PRESET_SOURCES`
+ * `null` — mở như không có tham số — khi: không có `d`; `src` không nằm trong `NGUON_CHON_SAN`
  * (kể cả thiếu `src`: không có mặc định "coi như qr", luật 1 cấm #1); `d` không đúng khuôn tên miền.
  *
  * ⚠ KẾT QUẢ LÀ DỮ LIỆU CLIENT CUNG CẤP. Nó chỉ quyết app có HỎI máy chủ hay không; nó không chọn xã,
@@ -93,11 +93,11 @@ export function isDomain(str: string): boolean {
  *
  * Chữ HOA trong `d` được hạ xuống: tên miền không phân biệt hoa thường, nên đây không phải đoán.
  */
-export function communeParams(result: ReadResult): { domain: string; source: string } | null {
-  const p = paramsOf(result);
-  const source = p["src"] ?? "";
-  if (!PRESET_SOURCES.has(source)) return null;
-  const domain = (p["d"] ?? "").toLowerCase();
-  if (!isDomain(domain)) return null;
-  return { domain, source };
+export function thamSoXa(ket_qua: KetQuaDo): { ten_mien: string; nguon: string } | null {
+  const p = thamSo(ket_qua);
+  const nguon = p["src"] ?? "";
+  if (!NGUON_CHON_SAN.has(nguon)) return null;
+  const ten_mien = (p["d"] ?? "").toLowerCase();
+  if (!laTenMien(ten_mien)) return null;
+  return { ten_mien, nguon };
 }

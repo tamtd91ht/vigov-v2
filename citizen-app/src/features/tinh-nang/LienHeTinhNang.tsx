@@ -34,7 +34,7 @@
  */
 import { CONTACT, OFFICES } from "../../content/company-profile";
 import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from "../company-intro/icons";
-import { SessionIssuer } from "../log-in/SessionIssuer";
+import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
 import { KetQuaToken, TinhNangCoTrangThai } from "./khung";
 import { moRaNgoai } from "./mo-ra-ngoai";
@@ -148,7 +148,7 @@ function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
   return (
     <>
       <KetQuaToken ma="dang-nhap" token={ma.ma_so_dien_thoai} da_nhan={DANG_NHAP.da_nhan_ma} />
-      {ma.ma_so_dien_thoai !== "" && <SessionIssuer code={ma} />}
+      {ma.ma_so_dien_thoai !== "" && <PhatHanhPhien ma={ma} />}
     </>
   );
 }

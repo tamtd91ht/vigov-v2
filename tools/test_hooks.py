@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 
@@ -316,35 +315,6 @@ CASES = [
        'log.Info("khoi dong", "service", "identity",\n'
        '\t// secret.DSN redacts the password on every rendering path.\n'
        '\t"ten", cb.HoTen)')),
-    # TÊN TIẾNG ANH CỦA CÙNG CÁC TRƯỜNG ẤY (ADR 0061, lớp 0b). Lớp A đổi `cb.HoTen` thành
-    # `s.FullName`; thiếu các ca này thì rào im vì hết khớp, không phải vì mã sạch. Mỗi ca một
-    # nhóm tên của `_common.PII_TOKEN`, lấy từ §Từ điển đổi tên.
-    ("pii_guard", "EN: staff.full_name — s.FullName", BLOCK,
-     w("service-identity/internal/app/log_in.go", 'slog.Info("log in", "name", s.FullName)')),
-    ("pii_guard", "EN: citizen_identity.phone_number", BLOCK,
-     w("service-identity/internal/app/otp.go", 'slog.Debug("otp", "p", ci.PhoneNumber)')),
-    ("pii_guard", "EN: staff.mobile — s.Mobile", BLOCK,
-     w("service-identity/internal/app/staff.go", 'slog.Info("staff", "m", s.Mobile)')),
-    ("pii_guard", "EN: citizen_report.reporter_phone", BLOCK,
-     w("service-petitions/internal/app/intake.go", 'slog.Info("intake", "r", r.ReporterPhone)')),
-    ("pii_guard", "EN: citizen_report.address — r.Address", BLOCK,
-     w("service-petitions/internal/app/intake.go", 'slog.Warn("intake", "a", r.Address)')),
-    ("pii_guard", "EN: căn cước — NationalID", BLOCK,
-     w("service-identity/internal/app/citizen.go", 'log.Printf("id %s", c.NationalID)')),
-    ("pii_guard", "EN: ngày sinh — DateOfBirth", BLOCK,
-     w("service-identity/internal/app/citizen.go", 'slog.Info("c", "dob", c.DateOfBirth)')),
-    ("pii_guard", "EN: mã OTP — otp_code", BLOCK,
-     w("service-identity/internal/app/otp.go", 'slog.Debug("otp", "c", otp_code)')),
-    # DƯƠNG TÍNH GIẢ đáng lo nhất của nhóm trên: `Phone` nằm trong TÊN hàm che, `Address` nằm
-    # trong một tên cấu hình, `Mobile` trong một cờ bool. Ba chỗ ấy không mang dữ liệu cá nhân.
-    ("pii_guard", "EN: giá trị tiếng Anh đã qua MaskPhone", PASS,
-     w("service-comms/internal/app/zns.go",
-       'slog.Info("sent", "p", privacy.MaskPhone(s.PhoneNumber))')),
-    ("pii_guard", "EN: ListenAddress / IsMobile không phải dữ liệu cá nhân", PASS,
-     w("service-identity/cmd/server/main.go",
-       'slog.Info("start", "addr", cfg.ListenAddress, "ua", ua.IsMobile)')),
-    ("bash_content_guard", "EN: log FullName ghi qua redirect", BLOCK,
-     b('echo \'slog.Info("x", s.FullName)\' >> a/x.go')),
 
     # ---- rule 4 · citizen isolation ----------------------------------------
     ("citizen_scope_guard", "identity from the query string", BLOCK,
@@ -362,18 +332,6 @@ CASES = [
     ("citizen_scope_guard", "header không phải trường danh tính", PASS,
      w("congdan/internal/http/citizen.go",
        'tok := r.Header.Get("Authorization")')),
-    # Tên tiếng Anh (ADR 0061: nguoi_gui -> reporter, so_dien_thoai -> phone_number).
-    ("citizen_scope_guard", "EN: reporter_phone từ query", BLOCK,
-     w("congdan/internal/http/citizen.go", 'p := r.URL.Query().Get("reporter_phone")')),
-    ("citizen_scope_guard", "EN: phone_number từ form", BLOCK,
-     w("congdan/internal/http/citizen.go", 'p := r.FormValue("phone_number")')),
-    ("citizen_scope_guard", "EN: X-Citizen-Id từ header", BLOCK,
-     w("congdan/internal/http/citizen.go", 'cid := r.Header.Get("X-Citizen-Id")')),
-    ("citizen_scope_guard", "EN: national_id từ query", BLOCK,
-     w("congdan/internal/http/citizen.go", 'n := r.URL.Query().Get("national_id")')),
-    # `reporter\w*` không được nuốt `reporting_*` — tham số kỳ báo cáo không phải danh tính.
-    ("citizen_scope_guard", "EN: reporting_period không phải danh tính", PASS,
-     w("congdan/internal/http/citizen.go", 'k := r.URL.Query().Get("reporting_period")')),
 
     # ---- rule 5 · authorisation ----------------------------------------------
     ("rbac_guard", "route with no permission", BLOCK,
@@ -442,31 +400,6 @@ CASES = [
        'mux.Handle("POST /api/v1/sessions",\n'
        '\tauthz.Public("màn hình đăng nhập")(\n'
        '\t\tidem.KhongCan("đăng nhập lần hai mở một phiên thứ hai")(h.DangNhap)))')),
-    # `idem.NotRequired` is the ASSUMED English name of `idem.KhongCan` (core/idem not renamed yet
-    # on 2026-09-29; rest_api_guard.IDEM_NOT_REQUIRED). Three cases: no reason warns, the Public
-    # pairing passes, and a complete route passes — the last one is what proves IDEM_DECL reads
-    # the new name, since a missing name would warn "NO duplicate-request declaration".
-    # Complete contract block on purpose: without it the "no @summary" warning keeps this red
-    # even if IDEM_NO_REASON forgot NotRequired — red for the wrong reason.
-    ("rest_api_guard", "EN: idem.NotRequired() states no reason", BLOCK,
-     wpost("identity/internal/http/routes.go",
-           '// @summary  Đăng xuất phiên hiện tại\n'
-           '// @reply    204 -\n'
-           'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
-           '\tauthz.AnyAuthenticated("ends its own session")(\n'
-           '\t\tidem.NotRequired()(http.HandlerFunc(h.Revoke))))')),
-    ("rest_api_guard", "EN: Public route with idem.NotRequired", PASS,
-     w("identity/internal/http/routes.go",
-       'mux.Handle("POST /api/v1/sessions",\n'
-       '\tauthz.Public("sign-in screen")(\n'
-       '\t\tidem.NotRequired("a second sign-in opens a second session")(h.LogIn)))')),
-    ("rest_api_guard", "EN: complete route declared with idem.NotRequired", PASS,
-     wpost("identity/internal/http/routes.go",
-           '// @summary  Đăng xuất phiên hiện tại\n'
-           '// @reply    204 -\n'
-           'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
-           '\tauthz.AnyAuthenticated("ends its own session")(\n'
-           '\t\tidem.NotRequired("deleting a deleted session is a no-op")(http.HandlerFunc(h.Revoke))))')),
     # A route with no @summary/@reply block never reaches kb/20-contracts/openapi.json, and a
     # route absent from the contract is a screen the web side builds by guessing the response
     # shape — the v1 failure where the type source of truth moved into the frontend.
@@ -616,18 +549,6 @@ CASES = [
      b("git commit -F - <<'MSG'\nvi sao heredoc vao psql van bi chan: TRUNCATE la lenh that\nMSG")),
     ("data_safety_guard", "DELETE FROM on business data", BLOCK,
      w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
-    # English table names after layer B (ADR 0061). The path names no business word, so only
-    # the SQL can make this red — exactly the half BUSINESS lacked.
-    ("data_safety_guard", "EN: DELETE FROM disbursement_voucher", BLOCK,
-     w("service-x/internal/store/q.go",
-       'const q = "DELETE FROM disbursement_voucher WHERE tenant_id=$1 AND id=$2"')),
-    ("data_safety_guard", "EN: DELETE FROM budget_entry", BLOCK,
-     w("service-x/internal/store/q.go", 'const q = "DELETE FROM budget_entry WHERE id=$1"')),
-    ("data_safety_guard", "EN: DELETE FROM announcement_recipient", BLOCK,
-     w("service-x/internal/store/q.go",
-       'const q = "DELETE FROM announcement_recipient WHERE id=$1"')),
-    ("data_safety_guard", "EN: DELETE FROM một bảng kỹ thuật (idempotency_key)", PASS,
-     w("core/idem/pg.go", 'const q = "DELETE FROM idempotency_key WHERE expires_at < $1"')),
     ("data_safety_guard", "DELETE with no WHERE", BLOCK,
      w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu"')),
     ("data_safety_guard", "UPDATE with no WHERE", BLOCK,
@@ -710,34 +631,6 @@ CASES = [
      w("service-identity/internal/domain/tien_gio_lam_viec.go",
        "func tien(from time.Time, gio int) time.Time {\n"
        "\treturn from.Add(time.Duration(gio) * time.Hour) // sla\n}")),
-    # ENGLISH COLUMN NAMES (ADR 0061: han_tiep_nhan -> acknowledge_due, han_xu_ly_xong ->
-    # resolve_due, han_xu_ly -> due_at). No `sla`/`deadline` word anywhere in these payloads on
-    # purpose: that word would give the file its deadline context and the case would stay green
-    # through the OLD list — green for the wrong reason.
-    ("citizen_commitment_guard", "EN: acknowledgeDue built by adding a duration", BLOCK,
-     w("service-petitions/internal/app/intake.go",
-       "func acknowledgeDue(from time.Time, h int) time.Time {\n"
-       "\treturn from.Add(time.Duration(h) * time.Hour)\n}")),
-    ("citizen_commitment_guard", "EN: ResolveDue assigned from a duration", BLOCK,
-     w("service-petitions/internal/app/classify.go",
-       "func set(r *CitizenReport, from time.Time, h int) {\n"
-       "\tr.ResolveDue = from.Add(time.Duration(h) * time.Hour)\n}")),
-    ("citizen_commitment_guard", "EN: task DueAt in calendar days", BLOCK,
-     w("service-petitions/internal/app/task.go",
-       "func set(t *Task, from time.Time) {\n\tt.DueAt = from.AddDate(0, 0, 3)\n}")),
-    ("citizen_commitment_guard", "EN: overdue added as a column of citizen_report", BLOCK,
-     w("service-petitions/migrations/0099_x.sql",
-       "ALTER TABLE citizen_report ADD COLUMN overdue BOOLEAN DEFAULT false;")),
-    ("citizen_commitment_guard", "EN: overdue DERIVED from resolve_due", PASS,
-     w("service-petitions/internal/domain/citizen_report.go",
-       "func (r CitizenReport) IsOverdue(now time.Time) bool {\n"
-       "\treturn r.ClosedAt.IsZero() && now.After(r.ResolveDue)\n}")),
-    # A poll interval in a file that ALSO holds a DueAt field, but outside its window: the
-    # widened context must not make every duration in such a file a deadline.
-    ("citizen_commitment_guard", "EN: unrelated duration far from DueAt", PASS,
-     w("service-petitions/internal/app/task.go",
-       "type Task struct {\n\tDueAt time.Time\n}\n\n\n\n"
-       "func poll() time.Duration { return 5 * time.Minute }")),
     ("citizen_commitment_guard", "statutory calendar days, declared", PASS,
      w("petitions/internal/app/khieunai.go",
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
@@ -1011,10 +904,10 @@ CASES = [
      w("service-petitions/internal/domain/meeting_note.go",
        "package domain\n\ntype MeetingNote struct {\n\tNoiDungChinh string\n}\n")),
     ("english_identifier_guard", "hằng TS mới tên tiếng Việt", BLOCK,
-     w("web-admin/src/features/tasks/task-list.ts",
+     w("web-admin/src/features/nhiem-vu/task-list.ts",
        "export const layDanhSach = async () => [];\n")),
     ("english_identifier_guard", "hằng TS tiếng Anh, nhãn giao diện tiếng Việt", PASS,
-     w("web-admin/src/features/tasks/task-list.ts",
+     w("web-admin/src/features/nhiem-vu/task-list.ts",
        'export const listTasks = async () => [];\nexport const TITLE = "Danh sách nhiệm vụ";\n')),
     ("english_identifier_guard", "migration CREATE TABLE tên tiếng Việt", BLOCK,
      w("service-petitions/migrations/0099_meeting_draft.sql",
@@ -1026,46 +919,10 @@ CASES = [
     ("english_identifier_guard", "ADD COLUMN mới tiếng Việt vào bảng cũ", BLOCK,
      w("service-petitions/migrations/0099_meeting_signed.sql",
        "ALTER TABLE bien_ban_hop ADD COLUMN ngay_ky_ket DATE;\n")),
-    # Layer B shapes (ADR 0061): the OLD name in a rename is not a declaration — it is what is
-    # being removed — while EVERY new name is, whichever of PostgreSQL's spellings carries it.
-    # Until 2026-09-29 `RENAME CONSTRAINT a TO b` and `RENAME a TO b` (COLUMN omitted) were not
-    # read at all, so a Vietnamese constraint or column name walked in through layer B itself.
-    ("english_identifier_guard", "lớp B: đổi tên bảng Việt -> Anh (tên cũ không phải khai báo)", PASS,
-     w("service-platform/migrations/0099_rename_schema_to_english.sql",
-       "ALTER TABLE ho_so_hien_thi_xa RENAME TO commune_profile;\n"
-       "ALTER TABLE commune_profile RENAME COLUMN dia_chi_tru_so TO office_address;\n"
-       "ALTER TABLE commune_profile RENAME CONSTRAINT ho_so_hien_thi_xa_logo_khong_rong\n"
-       "    TO commune_profile_logo_not_blank;\n"
-       "ALTER TRIGGER ho_so_hien_thi_xa_cam_xoa_cung ON commune_profile\n"
-       "    RENAME TO commune_profile_no_hard_delete;\n")),
-    ("english_identifier_guard", "lớp B: RENAME CONSTRAINT sang tên tiếng Việt", BLOCK,
-     w("service-platform/migrations/0099_rename_schema_to_english.sql",
-       "ALTER TABLE commune_profile RENAME CONSTRAINT a_check TO logo_khong_duoc_rong;\n")),
-    ("english_identifier_guard", "lớp B: RENAME cột bỏ chữ COLUMN, tên mới tiếng Việt", BLOCK,
-     w("service-platform/migrations/0099_rename_schema_to_english.sql",
-       "ALTER TABLE commune_profile RENAME office_address TO dia_chi_tru_so_moi;\n")),
     ("english_identifier_guard", "thư mục tính năng mới tên tiếng Việt", BLOCK,
      w("web-admin/src/features/bien-ban-moi/x.ts", "export const x = 1;\n")),
     ("english_identifier_guard", "tệp tiếng Anh trong thư mục tiếng Việt ĐANG CÓ", PASS,
-     # The directory must exist on disk at HEAD; web-admin's features/* went English on
-     # 2026-09-30, so this points at one the campaign has not reached yet.
-     w("deploy/cau-hinh/common-config.yaml", "metadata:\n  name: common-config\n")),
-    # k8s manifests (user decision 2026-09-29): object names, envFrom refs and labels — the
-    # `cau-hinh-chung` / `bi-mat-platform` / `cho-phep-duong-ra` drift from the real cluster.
-    ("english_identifier_guard", "manifest k8s: configMapRef tên tiếng Việt", BLOCK,
-     w("deploy/base/platform/sidecar.yaml",
-       "spec:\n  containers:\n    - envFrom:\n        - configMapRef: { name: cau-hinh-chung }\n")),
-    ("english_identifier_guard", "manifest k8s: NetworkPolicy tên tiếng Việt", BLOCK,
-     w("deploy/base/network/extra.yaml",
-       "kind: NetworkPolicy\nmetadata:\n  name: cho-phep-duong-ra\n")),
-    ("english_identifier_guard", "manifest k8s: nhãn tiếng Việt", BLOCK,
-     w("deploy/base/platform/extra-labels.yaml",
-       "metadata:\n  labels:\n    vigov.vn/be-mat-chinh: rest\n")),
-    ("english_identifier_guard", "manifest k8s tên tiếng Anh, chú thích tiếng Việt", PASS,
-     w("deploy/base/platform/sidecar.yaml",
-       "# Cấu hình chung của mọi pod\nspec:\n  containers:\n    - envFrom:\n"
-       "        - configMapRef: { name: common-config }\n        - secretRef: { name: platform-secrets }\n"
-       "metadata:\n  labels:\n    vigov.vn/surface: rest\n")),
+     w("web-admin/src/features/bien-ban/meeting-drafts.ts", "export const drafts = 1;\n")),
     ("english_identifier_guard", "thư mục route Next.js mới — đường dẫn người dùng thấy", PASS,
      w("web-admin/src/app/nhiem-vu/moi/page.tsx",
        "export default function NewTaskPage() { return null; }\n")),
@@ -1285,43 +1142,6 @@ NEN_CANH_BAO_CASES = [
     ({}, {}, False, "không tín hiệu nào"),
 ]
 
-# Tín hiệu của open-questions.json đọc được TÊN TIẾNG ANH (ADR 0061, lớp 0b). Chấm trên tệp THẬT:
-# (câu #, tên tệp, đoạn mã, có khớp một tín hiệu của câu ấy không, nhãn). Đoạn mã đi qua
-# `bo_chu_thich` như drift_guard làm. drift_guard chỉ đọc câu OPEN / SILENTLY_DECIDED (#35–#39
-# hôm nay); tín hiệu của câu DECIDED vẫn được giữ đúng để ngày câu mở lại nó không chết sẵn.
-DRIFT_SIGNAL_CASES = [
-    (27, "x.sql", "INSERT INTO permission (key, group_name) VALUES ('x.read', 'X');", True,
-     "EN: gieo khoá vào bảng `permission`"),
-    (27, "x.sql", "INSERT INTO quyen (ma, nhom) VALUES", True, "VN: gieo khoá vào `quyen`"),
-    (27, "x.sql", "INSERT INTO role_permission (role_id, permission_key) VALUES ($1, $2);", False,
-     "`role_permission` là cấp quyền cho vai trò, không phải gieo khoá"),
-    (26, "x.sql", "    resolve_due TIMESTAMPTZ,", True, "EN: cột resolve_due"),
-    (26, "x.sql", "SELECT COALESCE(resolve_due, now()) FROM citizen_report", True,
-     "EN: COALESCE trên cột hạn"),
-    (29, "x.go", "func (s *Svc) UnlockVoucher(ctx context.Context) error {", True,
-     "EN: đường mở khoá chứng từ"),
-    (29, "x.sql", "    unlock_reason TEXT,", True, "EN: cột unlock_reason"),
-    (30, "x.sql", "CHECK (amount >= 0)", True, "EN: amount cho phép 0"),
-    (30, "x.go", "type Voucher struct { VoucherType string }", True, "EN: loại chứng từ"),
-    (31, "x.go", "DelayThreshold int64", True, "EN: delay_threshold"),
-    (32, "x.sql", "CREATE TABLE budget_line (\n  id TEXT\n);", True, "EN: bảng budget_line"),
-    (33, "x.go", 'const r = "estimate-assigned-by-province"', True, "EN: vai trò cột dự toán"),
-    (34, "x.sql", "ALTER TABLE capital_plan_category ADD COLUMN planned_amount BIGINT;", True,
-     "EN: hạng mục mang tiền"),
-    (34, "x.sql", "ALTER TABLE hang_muc_ke_hoach_von RENAME TO capital_plan_category;", False,
-     "lớp B tự đổi tên bảng — không phải chọn mô hình (b)"),
-    (35, "x.go", "LogRetention time.Duration", True, "EN: LogRetention"),
-    (36, "x.go", "const MinLength = 10", True, "EN: đổi độ dài tối thiểu"),
-    (36, "x.go", "const DaiToiThieu = 10", True, "VN: đổi độ dài tối thiểu"),
-    (36, "x.go", "const MinLength = 12", False, "EN: giữ 12 — không phải đổi"),
-    (36, "x.go", "const DaiMatKhauToiThieu = 12", False, "VN: bản sao 12 ở domain — không phải đổi"),
-    (38, "x.go", "SessionLock time.Duration", True, "EN: khoá phiên khi không dùng"),
-    (38, "x.go", "srv := &http.Server{IdleTimeout: 60 * time.Second}", False,
-     "keep-alive HTTP không phải khoá phiên"),
-    (39, "x.sql", "    locked_until TIMESTAMPTZ,", True, "EN: khoá tới lúc"),
-    (39, "x.go", "FailedLoginCount int", True, "EN: bộ đếm đăng nhập sai"),
-]
-
 
 # env_contract_guard.SO_CUM — a cluster ordinal, or a number that qualifies the value.
 #
@@ -1461,150 +1281,6 @@ KHOA_QUYEN_CASES = [
     ('var khoaGan = []string{"admin.users", "admin.roles", "budget.reads"}',
      set(), "chuỗi gần giống KHÔNG gắn với tầng quyền — phải im"),
 ]
-
-
-# ---- migration RENAME folding (ADR 0061, layer 0) -----------------------------------------
-#
-# Layer B renames tables, columns and indexes with `ALTER … RENAME` in a NEW migration. Every
-# tool that derives the schema by reading the migrations in order must fold those statements, or
-# after the first layer B it checks a table that no longer exists — and stays green doing it.
-#
-# FIXTURES, NOT THE REAL TREE: on the day these were written no migration carried a rename, so
-# the real tree cannot show the fold. Each fixture is a {file name: SQL} map laid out under a
-# throwaway root, in the order core/migrate applies it (sorted file name).
-
-# check_khoa_duy_nhat: (label, files, violation count, substrings every one of which must appear)
-KEY_RENAME_CASES = [
-    ("index on a RENAMED platform table, later file — the scope follows the table",
-     {"0001_init.sql": "-- @entity: Province\n-- @scope:  platform\n"
-                       "CREATE TABLE tinh_thanh (\n    code TEXT NOT NULL,\n"
-                       "    name TEXT NOT NULL,\n    PRIMARY KEY (code)\n);\n",
-      "0002_rename.sql": "ALTER TABLE tinh_thanh RENAME TO province;\n",
-      "0003_index.sql": "CREATE UNIQUE INDEX province_name_key ON province (name);\n"},
-     0, []),
-    # Same shape, commune-owned table: must still be refused, or the case above only proves the
-    # gate went quiet.
-    ("index on a RENAMED commune table, later file — still refused",
-     {"0001_init.sql": "-- @entity: Thing\n-- @scope:  tenant\n"
-                       "CREATE TABLE vat_the (\n    tenant_id TEXT NOT NULL,\n"
-                       "    name TEXT NOT NULL,\n    PRIMARY KEY (tenant_id, name)\n);\n",
-      "0002_rename.sql": "ALTER TABLE vat_the RENAME TO thing;\n",
-      "0003_index.sql": "CREATE UNIQUE INDEX thing_name_key ON thing (name);\n"},
-     1, ["thing_name_key"]),
-    ("RENAME COLUMN tenant_id away takes it out of every key on the table",
-     {"0001_init.sql": "CREATE TABLE thing (\n    tenant_id TEXT NOT NULL,\n"
-                       "    code TEXT NOT NULL,\n    slug TEXT NOT NULL,\n"
-                       "    PRIMARY KEY (tenant_id, code),\n    UNIQUE (tenant_id, slug)\n);\n",
-      "0002_rename.sql": "ALTER TABLE thing RENAME COLUMN tenant_id TO commune_id;\n"},
-     2, ["PRIMARY KEY (commune_id, code)", "UNIQUE (commune_id, slug)"]),
-    ("a violation is reported under the table's and the index's CURRENT names",
-     {"0001_init.sql": "CREATE TABLE ho_so_hien_thi_xa (\n    tenant_id TEXT NOT NULL,\n"
-                       "    slug TEXT NOT NULL,\n    UNIQUE (slug)\n);\n"
-                       "CREATE UNIQUE INDEX ho_so_slug ON ho_so_hien_thi_xa (slug);\n",
-      "0002_rename.sql": "ALTER TABLE IF EXISTS ho_so_hien_thi_xa\n    RENAME TO commune_profile;\n"
-                         "ALTER INDEX ho_so_slug RENAME TO commune_profile_slug_key;\n"},
-     2, ["bảng `commune_profile`", "ho_so_hien_thi_xa", "commune_profile_slug_key"]),
-    ("a reversal written in a COMMENT is not folded",
-     {"0001_init.sql": "-- @scope:  platform\nCREATE TABLE tinh_thanh (\n    code TEXT NOT NULL,\n"
-                       "    name TEXT NOT NULL,\n    PRIMARY KEY (code)\n);\n",
-      "0002_rename.sql": "ALTER TABLE tinh_thanh RENAME TO province;\n"
-                         "-- REVERSAL: ALTER TABLE province RENAME TO tinh_thanh;\n",
-      "0003_index.sql": "CREATE UNIQUE INDEX province_name_key ON province (name);\n"},
-     0, []),
-]
-
-# The `quyen` seed read through a table rename AND a rename of its key column (glossary:
-# `quyen` -> `permission`, `ma` -> `key`). `stale.key` goes into the OLD name after the rename —
-# PostgreSQL would refuse that statement, so it seeds nothing and must not count.
-PERMISSION_RENAME_FILES = {
-    "0001_init.sql": "CREATE TABLE IF NOT EXISTS quyen (\n    ma TEXT PRIMARY KEY,\n"
-                     "    nhom TEXT NOT NULL\n);\n"
-                     "INSERT INTO quyen (ma, nhom) VALUES\n    ('a.read', 'A')\nON CONFLICT (ma) DO NOTHING;\n",
-    "0002_rename_schema_to_english.sql":
-        "-- REVERSAL: ALTER TABLE permission RENAME TO quyen;\n"
-        "ALTER TABLE quyen RENAME TO permission;\n"
-        "ALTER TABLE permission RENAME COLUMN ma TO key;\n",
-    "0003_seed.sql": "INSERT INTO permission (group_name, key) VALUES\n"
-                     "    ('B', 'b.write'),\n    ('B', 'b.approve');\n"
-                     "INSERT INTO quyen (ma, nhom) VALUES ('stale.key', 'X');\n",
-}
-PERMISSION_RENAME_WANT = {"a.read", "b.write", "b.approve"}
-
-# The same fixture through the HOOK, in a sandbox repository: the hook reads the table from the
-# tree it sits in, so only a sandbox can show it reads the renamed table.
-PERMISSION_HOOK_RENAME_CASES = [
-    ("khoá gieo vào bảng ĐÃ ĐỔI TÊN — phải qua", PASS, "b.write"),
-    ("khoá gieo trước lần đổi tên — vẫn qua", PASS, "a.read"),
-    ("khoá gieo vào TÊN CŨ sau lần đổi tên — chặn", BLOCK, "stale.key"),
-    ("khoá không gieo ở đâu — chặn", BLOCK, "c.none"),
-]
-
-
-def _lay_out(root: str, service_dir: str, files: dict[str, str]) -> None:
-    d = os.path.join(root, service_dir, "migrations")
-    os.makedirs(d, exist_ok=True)
-    for name, body in files.items():
-        with open(os.path.join(d, name), "w", encoding="utf-8", newline="\n") as f:
-            f.write(body)
-
-
-def run_rename_fixtures() -> list[tuple[str, str, object, object]]:
-    import shutil
-    import tempfile
-    import check_khoa_duy_nhat as ckdn  # noqa: E402
-    import quyen_keys as qk  # noqa: E402
-
-    sai: list[tuple[str, str, object, object]] = []
-    for label, files, want_n, want_sub in KEY_RENAME_CASES:
-        with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
-            _lay_out(tmp, "service-platform", files)
-            saved = ckdn.GOC
-            ckdn.GOC = tmp
-            try:
-                loi, _ = ckdn.kiem()
-            finally:
-                ckdn.GOC = saved
-        ok = len(loi) == want_n and all(any(s in l for l in loi) for s in want_sub)
-        print(f"{'  OK   ' if ok else '  FAIL '} [{'ĐỎ  ' if want_n else 'XANH'}] "
-              f"{'check_khoa_duy_nhat.kiem':24s} {label}")
-        if not ok:
-            sai.append(("check_khoa_duy_nhat", label, f"{want_n} {want_sub}", loi))
-
-    with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
-        _lay_out(tmp, "service-identity", PERMISSION_RENAME_FILES)
-        got, _ = qk.doc_bang_quyen(tmp)
-    ok = got == PERMISSION_RENAME_WANT
-    print(f"{'  OK   ' if ok else '  FAIL '} [BẢNG ] {'quyen_keys.doc_bang_quyen':24s} "
-          "đọc qua RENAME bảng `quyen` và cột `ma`")
-    if not ok:
-        sai.append(("doc_bang_quyen", "RENAME bảng/cột", PERMISSION_RENAME_WANT, got))
-
-    # Sandbox repository for the hook. Lower-case directory names: `_common.GOC_DU_AN` is
-    # lower-cased, and on a case-sensitive filesystem a sandbox with capitals would make every
-    # case here pass for the wrong reason (the hook cannot find its analyser and fails open).
-    for label, want, key in PERMISSION_HOOK_RENAME_CASES:
-        with tempfile.TemporaryDirectory(prefix="rename-") as tmp:
-            root = os.path.join(tmp, "vigov-v2")
-            hooks = os.path.join(root, ".claude", "hooks")
-            tools = os.path.join(root, "tools")
-            os.makedirs(hooks)
-            os.makedirs(tools)
-            for name in ("quyen_key_guard.py", "_common.py"):
-                shutil.copy(os.path.join(HOOKS, name), hooks)
-            for name in ("quyen_keys.py", "schema_renames.py"):
-                if os.path.exists(os.path.join(ROOT, "tools", name)):
-                    shutil.copy(os.path.join(ROOT, "tools", name), tools)
-            _lay_out(root, "service-identity", PERMISSION_RENAME_FILES)
-            src = ("package http\n\nfunc routes() {\n"
-                   f'\tmux.Handle("GET /x", authz.RequirePermission(c, "{key}")(h))\n}}\n')
-            got = run("quyen_key_guard", w("service-x/internal/http/routes.go", src),
-                      hooks=hooks, cwd=root)
-        ok = got == want
-        print(f"{'  OK   ' if ok else '  FAIL '} [{'BLOCK' if want == BLOCK else 'PASS '}] "
-              f"{'quyen_key_guard':24s} {label} (hộp cát)")
-        if not ok:
-            sai.append(("quyen_key_guard", label, want, got))
-    return sai
 
 
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
@@ -1764,19 +1440,6 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(counts), nhan, mong, duoc))
 
-    tin_hieu: dict = {}
-    for q in dg.load_questions(ROOT):
-        tin_hieu[q.get("id")] = [re.compile(s["pattern"]) for s in q.get("code_signals", [])]
-    for qid, ten, noi_dung, mong, nhan in DRIFT_SIGNAL_CASES:
-        van = dg.bo_chu_thich(noi_dung, ten)
-        duoc = any(p.search(van) for p in tin_hieu.get(qid, []))
-        ok = duoc == mong
-        print(f"{'  OK   ' if ok else '  FAIL '} [{'KHỚP' if mong else 'IM  '}] "
-              f"{'open-questions #' + str(qid):24s} {nhan}")
-        if not ok:
-            sai.append((noi_dung[:40], nhan, mong, duoc))
-
-    sai += run_rename_fixtures()
     return sai
 
 
@@ -1851,10 +1514,8 @@ if __name__ == "__main__":
     tong = (len(CASES) + len(HOP_CAT_CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
             + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES) + 1 + len(CA_NHAN_XLSX_CASES)
             + len(DUOC_QUET_CASES)
-            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(DRIFT_SIGNAL_CASES)
-            + len(KHOA_QUYEN_CASES)
-            + len(VET_ACTOR_CASES)
-            + len(KEY_RENAME_CASES) + 1 + len(PERMISSION_HOOK_RENAME_CASES))
+            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
+            + len(VET_ACTOR_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

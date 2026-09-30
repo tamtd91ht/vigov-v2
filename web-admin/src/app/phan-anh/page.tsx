@@ -1,12 +1,12 @@
-import { CauHinhXaProvider } from "@/components/commune-config";
-import { phanHienThi } from "@/lib/commune-display-config";
-import { DauTrang } from "@/components/page-header";
-import { ThanhBen } from "@/components/sidebar";
-import { SoPhanAnh } from "@/features/citizen-reports/citizen-report-register";
-import { TraCuuPhieu } from "@/features/citizen-reports/citizen-report-lookup";
-import { PhienProvider } from "@/features/session/current-session";
-import { CongQuyen } from "@/features/permissions/permission-gate";
-import { QUYEN_XEM_PHAN_ANH } from "@/lib/permissions";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
+import { SoPhanAnh } from "@/features/phan-anh/so-phan-anh";
+import { TraCuuPhieu } from "@/features/phan-anh/tra-cuu-phieu";
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { CongQuyen } from "@/features/quyen/cong-quyen";
+import { QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
