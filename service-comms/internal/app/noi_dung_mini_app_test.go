@@ -142,7 +142,8 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 func cotChiTietND() []string {
 	return []string{"id", "loai", "danh_muc_id", "tieu_de", "tom_tat", "anh_dai_dien_url",
 		"ngay_dang", "luot_xem", "trang_thai", "nguon", "nguon_url", "nguon_id_ngoai",
-		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc", "noi_dung"}
+		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
+		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url", "noi_dung"}
 }
 
 func hangTu(n domain.NoiDungMiniApp) []driver.Value {
@@ -152,11 +153,19 @@ func hangTu(n domain.NoiDungMiniApp) []driver.Value {
 		}
 		return s
 	}
+	instant := func(t time.Time) driver.Value {
+		if t.IsZero() {
+			return nil
+		}
+		return t
+	}
 	return []driver.Value{
 		n.ID, string(n.Loai), rong(n.DanhMucID), n.TieuDe, rong(n.TomTat), rong(n.AnhDaiDienURL),
 		n.NgayDang, int64(n.LuotXem), string(n.TrangThai), string(n.Nguon),
 		rong(n.NguonURL), rong(n.NguonIDNgoai), n.DaSuaTay, n.NguoiTaoMa,
-		n.TaoLuc, n.CapNhatLuc, rong(n.NoiDung),
+		n.TaoLuc, n.CapNhatLuc,
+		instant(n.PublishedAt), instant(n.EventStartsAt), instant(n.EventEndsAt),
+		rong(n.EventPlace), rong(n.VideoURL), rong(n.NoiDung),
 	}
 }
 
@@ -294,10 +303,11 @@ func TestThemNoiDungQuyetDinhTrangThaiNguonVaNguoiTaoTaiDay(t *testing.T) {
 		t.Fatalf("số câu chèn = %d, muốn 1", len(l))
 	}
 	// $1 xã, $2 id, $3 loại, $4 danh mục, $5 tiêu đề, $6 tóm tắt, $7 nội dung, $8 ảnh,
-	// $9 ngày đăng, $10 trạng thái, $11 người tạo. `nguon` là hằng trong câu lệnh.
+	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12–$16 cột của migration 0011. `nguon` là hằng
+	// trong câu lệnh.
 	args := l[0].args
-	if len(args) != 11 {
-		t.Fatalf("số tham số = %d, muốn 11", len(args))
+	if len(args) != 16 {
+		t.Fatalf("số tham số = %d, muốn 16", len(args))
 	}
 	if args[0] != string(xaA) {
 		t.Errorf("xã = %v, muốn %v — xã đến từ ngữ cảnh, không từ yêu cầu", args[0], xaA)
@@ -584,6 +594,279 @@ func TestSuaDocDongDuoiKhoaFORUPDATE(t *testing.T) {
 	}
 	if l[0].args[0] != string(xaA) {
 		t.Errorf("xã = %v, muốn %v", l[0].args[0], xaA)
+	}
+}
+
+// --- migration 0011: G1 first-publish instant, event and video fields ------------------------------
+
+// updateArgs returns the bound values of the one UPDATE of the edit. Positions after $10 (0-based
+// index): 10 event_starts_at, 11 event_ends_at, 12 event_place, 13 video_url, 14 published_at.
+func updateArgs(t *testing.T, k *khoNDGia) []driver.Value {
+	t.Helper()
+	stmts := k.cau("UPDATE noi_dung_mini_app")
+	if len(stmts) != 1 {
+		t.Fatalf("số câu cập nhật = %d, muốn 1", len(stmts))
+	}
+	if len(stmts[0].args) != 15 {
+		t.Fatalf("số tham số cập nhật = %d, muốn 15", len(stmts[0].args))
+	}
+	return stmts[0].args
+}
+
+func auditDelta(t *testing.T, k *khoNDGia) string {
+	t.Helper()
+	stmts := k.cau("INSERT INTO audit_log")
+	if len(stmts) != 1 {
+		t.Fatalf("số vết kiểm toán = %d, muốn 1", len(stmts))
+	}
+	delta, _ := stmts[0].args[7].([]byte)
+	return string(delta)
+}
+
+func draftRow() *domain.NoiDungMiniApp {
+	row := dongDongBo()
+	row.Nguon, row.NguonURL, row.NguonIDNgoai = domain.NguonThuCong, "", ""
+	row.TrangThai = domain.TrangThaiAn
+	return row
+}
+
+func TestCreatePublishedFixesFirstPublishInstantAtInsert(t *testing.T) {
+	// Migration 0011's trigger is UPDATE-only, so G1 at INSERT is owed by this write path.
+	for _, publish := range []bool{true, false} {
+		k := &khoNDGia{}
+		uc, _, ctx := dungUseCaseNoiDung(t, k)
+		req := ycThemMau()
+		req.DangLenMiniApp = publish
+
+		created, err := uc.Them(ctx, req, nguoiSoanND())
+		if err != nil {
+			t.Fatalf("publish=%v: thêm lỗi: %v", publish, err)
+		}
+		bound := k.cau("INSERT INTO noi_dung_mini_app")[0].args[11]
+		if publish {
+			if got, _ := bound.(time.Time); !got.Equal(lucNDPinned) || !created.PublishedAt.Equal(lucNDPinned) {
+				t.Errorf("đăng ngay: published_at = %v / %v, muốn %v", bound, created.PublishedAt, lucNDPinned)
+			}
+			if !strings.Contains(auditDelta(t, k), `"published_at":"2026-09-23T08:30:00Z"`) {
+				t.Errorf("vết thiếu published_at: %s", auditDelta(t, k))
+			}
+		} else if bound != nil || !created.PublishedAt.IsZero() {
+			t.Errorf("chưa đăng mà published_at = %v / %v, muốn NULL", bound, created.PublishedAt)
+		}
+	}
+}
+
+func TestEditThatFirstPublishesStampsTheInstant(t *testing.T) {
+	k := &khoNDGia{dongHienCo: draftRow()}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+	on := true
+	after, err := uc.Sua(ctx, "nd-001", domain.YeuCauSuaNoiDung{DangLenMiniApp: &on}, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("sửa lỗi: %v", err)
+	}
+	if got, _ := updateArgs(t, k)[14].(time.Time); !got.Equal(lucNDPinned) || !after.PublishedAt.Equal(lucNDPinned) {
+		t.Errorf("lần đăng đầu: published_at = %v / %v, muốn %v", updateArgs(t, k)[14], after.PublishedAt, lucNDPinned)
+	}
+	delta := auditDelta(t, k)
+	if !strings.Contains(delta, `"published_at":"2026-09-23T08:30:00Z"`) || !strings.Contains(delta, `"published_at":""`) {
+		t.Errorf("vết phải ghi published_at trước (rỗng) và sau: %s", delta)
+	}
+}
+
+func TestRepublishKeepsTheOriginalInstant(t *testing.T) {
+	// Unpublished once, published again: G1 says the FIRST instant stays. The bound value is the stored
+	// one (and COALESCE in the statement would keep it anyway).
+	first := time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC)
+	row := draftRow()
+	row.PublishedAt = first
+	k := &khoNDGia{dongHienCo: row}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+	on := true
+	after, err := uc.Sua(ctx, "nd-001", domain.YeuCauSuaNoiDung{DangLenMiniApp: &on}, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("sửa lỗi: %v", err)
+	}
+	if !after.PublishedAt.Equal(first) {
+		t.Errorf("đăng lại: published_at = %v, muốn giữ %v", after.PublishedAt, first)
+	}
+	if got, _ := updateArgs(t, k)[14].(time.Time); !got.Equal(first) {
+		t.Errorf("tham số published_at = %v, muốn %v", updateArgs(t, k)[14], first)
+	}
+	if strings.Contains(auditDelta(t, k), "published_at") {
+		t.Errorf("published_at không đổi mà vẫn vào vết: %s", auditDelta(t, k))
+	}
+}
+
+func TestEditOfLegacyPublishedRowStampsNothing(t *testing.T) {
+	// Published before 0011 (NULL, no backfill) and edited while staying `dang-hien`: the trigger would
+	// refuse a stamp here, and the use case must not try.
+	row := draftRow()
+	row.TrangThai = domain.TrangThaiDangHien
+	k := &khoNDGia{dongHienCo: row}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+	title := "Tiêu đề mới"
+	after, err := uc.Sua(ctx, "nd-001", domain.YeuCauSuaNoiDung{TieuDe: &title}, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("sửa lỗi: %v", err)
+	}
+	if updateArgs(t, k)[14] != nil || !after.PublishedAt.IsZero() {
+		t.Errorf("bài cũ đang hiện bị đóng giờ đăng: %v / %v", updateArgs(t, k)[14], after.PublishedAt)
+	}
+}
+
+func eventRow() *domain.NoiDungMiniApp {
+	row := draftRow()
+	row.Loai = domain.LoaiSuKien
+	row.EventStartsAt = time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+	row.EventEndsAt = time.Date(2026, 10, 5, 3, 0, 0, 0, time.UTC)
+	row.EventPlace = "Sân nhà ông Nguyễn Văn A"
+	return row
+}
+
+func TestTypeChangeAwayFromEventClearsItsColumnsInTheSameUpdate(t *testing.T) {
+	k := &khoNDGia{dongHienCo: eventRow()}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+	news := string(domain.LoaiTinTuc)
+	after, err := uc.Sua(ctx, "nd-001", domain.YeuCauSuaNoiDung{Loai: &news}, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("sửa lỗi: %v", err)
+	}
+	args := updateArgs(t, k)
+	for i := 10; i <= 13; i++ {
+		if args[i] != nil {
+			t.Errorf("đổi loại khỏi su-kien mà tham số $%d = %v, muốn NULL", i+1, args[i])
+		}
+	}
+	if !after.EventStartsAt.IsZero() || after.EventPlace != "" {
+		t.Errorf("dòng trả về còn trường sự kiện: %+v", after)
+	}
+	// The place can name a household: only THAT it changed enters the ledger.
+	delta := auditDelta(t, k)
+	if strings.Contains(delta, "Nguyễn Văn A") || !strings.Contains(delta, `"event_place_changed":true`) {
+		t.Errorf("vết về địa điểm sai: %s", delta)
+	}
+	if !strings.Contains(delta, `"event_starts_at":"2026-10-05T01:00:00Z"`) {
+		t.Errorf("vết thiếu event_starts_at trước khi xoá: %s", delta)
+	}
+}
+
+func TestTypeChangeAwayFromVideoClearsTheLink(t *testing.T) {
+	row := draftRow()
+	row.Loai, row.VideoURL = domain.LoaiVideo, "https://video.example/v/1"
+	k := &khoNDGia{dongHienCo: row}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+	news := string(domain.LoaiTinTuc)
+	if _, err := uc.Sua(ctx, "nd-001", domain.YeuCauSuaNoiDung{Loai: &news}, nguoiSoanND()); err != nil {
+		t.Fatalf("sửa lỗi: %v", err)
+	}
+	if updateArgs(t, k)[13] != nil {
+		t.Errorf("đổi loại khỏi video mà video_url = %v, muốn NULL", updateArgs(t, k)[13])
+	}
+}
+
+func TestEditRefusalsOnTheMergedRowWriteNothingAndNameNoCommune(t *testing.T) {
+	early := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	place := "Nhà văn hoá"
+	link := "https://video.example/v/1"
+	cases := []struct {
+		name string
+		row  *domain.NoiDungMiniApp
+		req  domain.YeuCauSuaNoiDung
+		want error
+	}{
+		{"event field on news", draftRow(), domain.YeuCauSuaNoiDung{EventPlace: &place},
+			domain.ErrEventFieldsOnlyForEvent},
+		{"video link on news", draftRow(), domain.YeuCauSuaNoiDung{VideoURL: &link},
+			domain.ErrVideoURLOnlyForVideo},
+		// Only the end is sent; it is judged against the STORED start.
+		{"end before stored start", eventRow(), domain.YeuCauSuaNoiDung{EventEndsAt: &early},
+			domain.ErrEventEndsBeforeStart},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			k := &khoNDGia{dongHienCo: tc.row}
+			uc, _, ctx := dungUseCaseNoiDung(t, k)
+
+			_, err := uc.Sua(ctx, "nd-001", tc.req, nguoiSoanND())
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("lỗi = %v, muốn %v", err, tc.want)
+			}
+			// The handler returns this sentence to the client: it must be the domain's own, not
+			// wrapped with the commune id.
+			if strings.Contains(err.Error(), string(xaA)) {
+				t.Errorf("thông điệp từ chối lộ mã xã: %q", err.Error())
+			}
+			if k.coCau("UPDATE noi_dung_mini_app") || k.coCau("INSERT INTO audit_log") {
+				t.Error("từ chối mà vẫn ghi")
+			}
+			if k.daCommit != 0 || k.daRollback != 1 {
+				t.Errorf("giao dịch: chốt=%d huỷ=%d, muốn 0/1", k.daCommit, k.daRollback)
+			}
+		})
+	}
+}
+
+func TestCreateTypeFieldRefusalsBeforeAnyTransaction(t *testing.T) {
+	starts := time.Date(2026, 10, 5, 3, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name  string
+		shape func(*domain.YeuCauThemNoiDung)
+		want  error
+	}{
+		{"event on news", func(r *domain.YeuCauThemNoiDung) { r.EventStartsAt = starts },
+			domain.ErrEventFieldsOnlyForEvent},
+		{"video on event", func(r *domain.YeuCauThemNoiDung) {
+			r.Loai, r.VideoURL = "su-kien", "https://video.example/v/1"
+		}, domain.ErrVideoURLOnlyForVideo},
+		{"end without start", func(r *domain.YeuCauThemNoiDung) {
+			r.Loai, r.EventEndsAt = "su-kien", starts
+		}, domain.ErrEventEndsWithoutStart},
+		{"non-http video", func(r *domain.YeuCauThemNoiDung) {
+			r.Loai, r.VideoURL = "video", "javascript:alert(1)"
+		}, domain.ErrURLKhongHopLe},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			k := &khoNDGia{}
+			uc, _, ctx := dungUseCaseNoiDung(t, k)
+			req := ycThemMau()
+			tc.shape(&req)
+			if _, err := uc.Them(ctx, req, nguoiSoanND()); !errors.Is(err, tc.want) {
+				t.Fatalf("lỗi = %v, muốn %v", err, tc.want)
+			}
+			if k.batDau != 0 {
+				t.Errorf("mở %d giao dịch cho một yêu cầu sai", k.batDau)
+			}
+		})
+	}
+}
+
+func TestCreateEventStoresItsFields(t *testing.T) {
+	k := &khoNDGia{}
+	uc, _, ctx := dungUseCaseNoiDung(t, k)
+	req := ycThemMau()
+	req.Loai = "su-kien"
+	req.EventStartsAt = time.Date(2026, 10, 5, 8, 0, 0, 0, time.FixedZone("ICT", 7*3600))
+	req.EventPlace = "  Nhà văn hoá thôn 3  "
+
+	created, err := uc.Them(ctx, req, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("thêm lỗi: %v", err)
+	}
+	args := k.cau("INSERT INTO noi_dung_mini_app")[0].args
+	if got, _ := args[12].(time.Time); !got.Equal(req.EventStartsAt) {
+		t.Errorf("event_starts_at = %v, muốn %v", args[12], req.EventStartsAt)
+	}
+	if args[14] != "Nhà văn hoá thôn 3" || created.EventPlace != "Nhà văn hoá thôn 3" {
+		t.Errorf("event_place = %v, muốn đã cắt khoảng trắng", args[14])
+	}
+	if strings.Contains(auditDelta(t, k), "Nhà văn hoá") {
+		t.Errorf("địa điểm lọt vào vết kiểm toán: %s", auditDelta(t, k))
 	}
 }
 

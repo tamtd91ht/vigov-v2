@@ -36,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -123,9 +124,15 @@ func NewNoiDungMiniAppStore(db *store.DB) *NoiDungMiniAppStore {
 // between any two of them in either this list or the scan produces no error at all: it produces an
 // article that claims to come from somewhere it did not, which is exactly the fact §10.4 protects.
 // TestPgCotNoiDungMiniAppKhopVoiLuocDoThat asserts this list against the real schema BY NAME.
+//
+// THE FIVE COLUMNS OF MIGRATION 0011 SIT AFTER `cap_nhat_luc` AND BEFORE THE BODY, all nullable.
+// `event_starts_at` / `event_ends_at` are adjacent timestamps — a swap compiles and prints an event
+// that ends before it starts. `cover_image_file_id` is deliberately NOT read: nothing writes it until
+// the upload card lands, and a column read with no writer is a field every layer carries for nothing.
 const cotNoiDungMiniApp = `id, loai, danh_muc_id, tieu_de, tom_tat, anh_dai_dien_url, ` +
 	`ngay_dang, luot_xem, trang_thai, nguon, nguon_url, nguon_id_ngoai, da_sua_tay, ` +
-	`nguoi_tao_ma, tao_luc, cap_nhat_luc`
+	`nguoi_tao_ma, tao_luc, cap_nhat_luc, ` +
+	`published_at, event_starts_at, event_ends_at, event_place, video_url`
 
 // cotNoiDungMiniAppChiTiet adds the body AT THE END. Nowhere else: the shared scan appends one
 // destination when it is asked for the body, and an insertion anywhere but the tail would shift every
@@ -303,11 +310,15 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 		danhMuc, tomTat, anh   sql.NullString
 		nguonURL, nguonIDNgoai sql.NullString
 		than                   sql.NullString
+
+		publishedAt, startsAt, endsAt sql.NullTime
+		place, videoURL               sql.NullString
 	)
 	dich := []any{
 		&n.ID, &loai, &danhMuc, &n.TieuDe, &tomTat, &anh,
 		&n.NgayDang, &n.LuotXem, &trang, &nguon, &nguonURL, &nguonIDNgoai, &n.DaSuaTay,
 		&n.NguoiTaoMa, &n.TaoLuc, &n.CapNhatLuc,
+		&publishedAt, &startsAt, &endsAt, &place, &videoURL,
 	}
 	if coThan {
 		dich = append(dich, &than)
@@ -325,7 +336,28 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 	n.NguonURL = nguonURL.String
 	n.NguonIDNgoai = nguonIDNgoai.String
 	n.NoiDung = than.String
+	// NULL → the zero time / "" (domain.NoiDungMiniApp documents both as "not set").
+	n.PublishedAt = nullTimeUTC(publishedAt)
+	n.EventStartsAt = nullTimeUTC(startsAt)
+	n.EventEndsAt = nullTimeUTC(endsAt)
+	n.EventPlace = place.String
+	n.VideoURL = videoURL.String
 	return n, nil
+}
+
+func nullTimeUTC(t sql.NullTime) time.Time {
+	if !t.Valid {
+		return time.Time{}
+	}
+	return t.Time.UTC()
+}
+
+// zeroTimeAsNull binds the zero time as NULL — the time counterpart of rongThanhNull.
+func zeroTimeAsNull(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC()
 }
 
 // --- the content write path ------------------------------------------------------------------------
@@ -398,10 +430,16 @@ func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.Scope
 //
 // The statement names `tenant_id` first, as every write in this system does: the commune is not an
 // argument the caller chooses, it is bound from the transaction (rule 1, invariants 4 and 5).
+//
+// `published_at` ($12) IS BOUND BY THE CALLER, and migration 0011 says why it must be: its trigger is
+// UPDATE-only, so "set at INSERT exactly when the row is born `dang-hien`" is owed by this write path.
+// app.SoanNoiDungMiniApp.Them passes the instant when §7's checkbox is ticked and the zero time
+// (→ NULL) otherwise. `cover_image_file_id` appears nowhere: no upload path exists yet.
 const chenNoiDungMiniApp = `INSERT INTO noi_dung_mini_app
 	(tenant_id, id, loai, danh_muc_id, tieu_de, tom_tat, noi_dung, anh_dai_dien_url,
-	 ngay_dang, trang_thai, nguon, nguoi_tao_ma)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11)`
+	 ngay_dang, trang_thai, nguon, nguoi_tao_ma,
+	 published_at, event_starts_at, event_ends_at, event_place, video_url)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16)`
 
 // Chen writes one item. The caller owns the transaction and the audit entry inside it.
 func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
@@ -410,11 +448,14 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 	// EMPTY STRINGS BECOME NULL, and that is not tidiness: `danh_muc_id` has a foreign key, and ''
 	// is not a category id — it is a value the constraint would refuse. The other three are nullable
 	// text where '' and NULL would be two spellings of "nothing", and a read path that had to handle
-	// both would handle one of them wrongly.
+	// both would handle one of them wrongly. For `event_place` it is also the CHECK: '' is refused,
+	// NULL is "no place".
 	if _, err := tx.Exec(ctx, chenNoiDungMiniApp, string(tx.TenantID()), n.ID,
 		string(n.Loai), rongThanhNull(n.DanhMucID), n.TieuDe, rongThanhNull(n.TomTat),
 		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), n.NgayDang.UTC(),
-		string(n.TrangThai), n.NguoiTaoMa); err != nil {
+		string(n.TrangThai), n.NguoiTaoMa,
+		zeroTimeAsNull(n.PublishedAt), zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
+		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL)); err != nil {
 		return fmt.Errorf("noi_dung_mini_app: chèn: %w", err)
 	}
 	return nil
@@ -431,9 +472,20 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 // caller computes it as `truoc.DaSuaTay OR nguon = 'dong-bo-cong'`, and the trigger refuses to clear
 // it. §10.4 is a promise to a member of staff that their correction survives the next sync, and this
 // is where the promise is recorded.
+//
+// THE FOUR PER-TYPE COLUMNS OF MIGRATION 0011 ARE WRITTEN IN FULL on every edit ($11–$14), from the
+// merged row. That is what lets a type change clear the old type's columns IN THE SAME UPDATE, which
+// 0011's CHECKs require (the caller clears them — domain.NoiDungMiniApp.WithoutOtherTypeFields).
+//
+// `published_at = COALESCE(published_at, $15)` — G1 IN THE STATEMENT'S SHAPE, under the trigger that
+// enforces it: an instant already there is kept whatever is bound, so this statement can neither
+// change nor clear it. $15 is non-NULL only on the edit that FIRST publishes the row (app.Sua decides),
+// which is the one case the trigger's second half admits. `cover_image_file_id` appears nowhere.
 const capNhatNoiDungMiniApp = `UPDATE noi_dung_mini_app
 	SET loai = $3, danh_muc_id = $4, tieu_de = $5, tom_tat = $6, noi_dung = $7,
-	    anh_dai_dien_url = $8, trang_thai = $9, da_sua_tay = $10, cap_nhat_luc = now()
+	    anh_dai_dien_url = $8, trang_thai = $9, da_sua_tay = $10,
+	    event_starts_at = $11, event_ends_at = $12, event_place = $13, video_url = $14,
+	    published_at = COALESCE(published_at, $15), cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the fields §7's modal may change. The caller has already read the row with
@@ -443,7 +495,9 @@ func (s *NoiDungMiniAppStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 
 	kq, err := tx.Exec(ctx, capNhatNoiDungMiniApp, string(tx.TenantID()), n.ID,
 		string(n.Loai), rongThanhNull(n.DanhMucID), n.TieuDe, rongThanhNull(n.TomTat),
-		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), string(n.TrangThai), n.DaSuaTay)
+		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), string(n.TrangThai), n.DaSuaTay,
+		zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
+		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL), zeroTimeAsNull(n.PublishedAt))
 	if err != nil {
 		return fmt.Errorf("noi_dung_mini_app: cập nhật: %w", err)
 	}

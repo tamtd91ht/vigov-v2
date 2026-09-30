@@ -47,6 +47,10 @@ type dongNDMiniApp struct {
 	luotXem                                        int64
 	daSuaTay                                       bool
 	taoLuc, capNhatLuc                             time.Time
+
+	// Migration 0011. nil where the column is NULL — the commonest row there is.
+	publishedAt, eventStartsAt, eventEndsAt any
+	eventPlace, videoURL                    any
 }
 
 func (d dongNDMiniApp) giaTri(cot string) driver.Value {
@@ -85,6 +89,16 @@ func (d dongNDMiniApp) giaTri(cot string) driver.Value {
 		return d.capNhatLuc
 	case "noi_dung":
 		return d.than
+	case "published_at":
+		return d.publishedAt
+	case "event_starts_at":
+		return d.eventStartsAt
+	case "event_ends_at":
+		return d.eventEndsAt
+	case "event_place":
+		return d.eventPlace
+	case "video_url":
+		return d.videoURL
 	default:
 		// LOUD, NOT ZERO. A silent zero here would let a column be added to cotNoiDungMiniApp and
 		// never actually be read by anything, while this suite "passed" and proved nothing about it.
@@ -534,12 +548,13 @@ func TestChenNoiDungBienChuoiRongThanhNull(t *testing.T) {
 		t.Fatalf("chèn lỗi: %v", err)
 	}
 	// $1 xã, $2 id, $3 loại, $4 danh mục, $5 tiêu đề, $6 tóm tắt, $7 nội dung, $8 ảnh,
-	// $9 ngày đăng, $10 trạng thái, $11 người tạo.
+	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12 published_at, $13 event_starts_at,
+	// $14 event_ends_at, $15 event_place, $16 video_url.
 	args := k.lenh[0].args
-	if len(args) != 11 {
-		t.Fatalf("số tham số = %d, muốn 11", len(args))
+	if len(args) != 16 {
+		t.Fatalf("số tham số = %d, muốn 16", len(args))
 	}
-	for _, i := range []int{3, 5, 6, 7} {
+	for _, i := range []int{3, 5, 6, 7, 11, 12, 13, 14, 15} {
 		if args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL cho chuỗi rỗng", i+1, args[i])
 		}
@@ -576,6 +591,129 @@ func TestCapNhatNoiDungKhongChamDuocXuatXuVaNguoiTao(t *testing.T) {
 	// `AND deleted_at IS NULL` IS WHAT MAKES EDITING A DELETED ITEM A 404 rather than a resurrection.
 	if !strings.Contains(cau, "deleted_at IS NULL") {
 		t.Errorf("câu cập nhật thiếu `deleted_at IS NULL`: %s", cau)
+	}
+}
+
+// --- migration 0011: first-publish instant, event, video ---------------------------------------
+
+func TestReadsMigration0011ColumnsByNameAndNullAsEmpty(t *testing.T) {
+	// The two event instants are adjacent timestamps: a swap compiles and prints an event that ends
+	// before it starts. Assembled BY NAME, so a swap in the scan lands here.
+	starts := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
+	ends := time.Date(2026, 10, 1, 3, 0, 0, 0, time.UTC)
+	published := time.Date(2026, 9, 30, 2, 0, 0, 0, time.UTC)
+
+	event := dongNDMau()
+	event.id, event.loai = "nd-event", "su-kien"
+	event.publishedAt, event.eventStartsAt, event.eventEndsAt = published, starts, ends
+	event.eventPlace = "Nhà văn hoá thôn 3"
+	video := dongNDMau()
+	video.id, video.loai, video.videoURL = "nd-video", "video", "https://video.example/v/1"
+	legacy := dongNDMau() // a row from before 0011: every new column NULL
+	legacy.id = "nd-legacy"
+
+	k := &khoNDGia{dong: []dongNDMiniApp{event, video, legacy}}
+	kho, ctx := khoNoiDung(t, k)
+	result, err := kho.DanhSach(ctx, LocNoiDung{}, trangDauND(t))
+	if err != nil {
+		t.Fatalf("đọc sổ lỗi: %v", err)
+	}
+	if len(result.Items) != 3 {
+		t.Fatalf("số dòng = %d, muốn 3", len(result.Items))
+	}
+	gotEvent, gotVideo, gotLegacy := result.Items[0], result.Items[1], result.Items[2]
+	if !gotEvent.EventStartsAt.Equal(starts) || !gotEvent.EventEndsAt.Equal(ends) ||
+		!gotEvent.PublishedAt.Equal(published) {
+		t.Errorf("ba thời điểm bị hoán vị: bắt đầu=%v kết thúc=%v đăng=%v",
+			gotEvent.EventStartsAt, gotEvent.EventEndsAt, gotEvent.PublishedAt)
+	}
+	if gotEvent.EventPlace != "Nhà văn hoá thôn 3" || gotVideo.VideoURL != "https://video.example/v/1" {
+		t.Errorf("địa điểm = %q, video = %q", gotEvent.EventPlace, gotVideo.VideoURL)
+	}
+	if !gotLegacy.PublishedAt.IsZero() || !gotLegacy.EventStartsAt.IsZero() ||
+		!gotLegacy.EventEndsAt.IsZero() || gotLegacy.EventPlace != "" || gotLegacy.VideoURL != "" {
+		t.Errorf("dòng trước 0011 phải đọc NULL thành rỗng: %+v", gotLegacy)
+	}
+	// cover_image_file_id is deliberately not read until the upload card lands.
+	if strings.Contains(k.lenh[0].sql, "cover_image_file_id") {
+		t.Errorf("câu đọc không được chọn cover_image_file_id: %s", k.lenh[0].sql)
+	}
+}
+
+func TestInsertBindsMigration0011ColumnsInPosition(t *testing.T) {
+	k := &khoNDGia{}
+	kho, ctx := khoNoiDung(t, k)
+	published := time.Date(2026, 9, 30, 2, 0, 0, 0, time.UTC)
+	starts := time.Date(2026, 10, 1, 8, 0, 0, 0, time.FixedZone("ICT", 7*3600))
+
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		return kho.Chen(ctx, tx, domain.NoiDungMiniApp{
+			ID: "nd-new", Loai: domain.LoaiSuKien, TieuDe: "Hội thi", NgayDang: ngayMau,
+			TrangThai: domain.TrangThaiDangHien, NguoiTaoMa: "CB-2026-7K3M9Q",
+			PublishedAt: published, EventStartsAt: starts, EventPlace: "Sân vận động xã",
+		})
+	})
+	if err != nil {
+		t.Fatalf("chèn lỗi: %v", err)
+	}
+	stmt := k.lenh[0]
+	if strings.Contains(stmt.sql, "cover_image_file_id") {
+		t.Errorf("câu chèn không được ghi cover_image_file_id: %s", stmt.sql)
+	}
+	args := stmt.args
+	if got, _ := args[11].(time.Time); !got.Equal(published) {
+		t.Errorf("$12 published_at = %v, muốn %v", args[11], published)
+	}
+	if got, _ := args[12].(time.Time); !got.Equal(starts) || got.Location() != time.UTC {
+		t.Errorf("$13 event_starts_at = %v, muốn %v ở UTC", args[12], starts)
+	}
+	if args[13] != nil {
+		t.Errorf("$14 event_ends_at = %v, muốn NULL khi không có", args[13])
+	}
+	if args[14] != "Sân vận động xã" || args[15] != nil {
+		t.Errorf("$15 event_place = %v, $16 video_url = %v", args[14], args[15])
+	}
+}
+
+func TestUpdateCannotChangeFirstPublishAndWritesEveryTypeColumn(t *testing.T) {
+	// G1 IN THE STATEMENT'S SHAPE: `published_at` is only ever COALESCE(published_at, $15) — an instant
+	// already recorded survives whatever is bound, so this statement can neither change nor clear it.
+	// The four per-type columns are written in full so a type change clears them in the same UPDATE.
+	k := &khoNDGia{soDongDoi: 1}
+	kho, ctx := khoNoiDung(t, k)
+
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		return kho.CapNhat(ctx, tx, domain.NoiDungMiniApp{
+			ID: "nd-001", Loai: domain.LoaiTinTuc, TieuDe: "Tiêu đề", TrangThai: domain.TrangThaiAn,
+		})
+	})
+	if err != nil {
+		t.Fatalf("cập nhật lỗi: %v", err)
+	}
+	stmt := k.lenh[0]
+	if !strings.Contains(stmt.sql, "published_at = COALESCE(published_at, $15)") {
+		t.Errorf("published_at phải là COALESCE(published_at, $15): %s", stmt.sql)
+	}
+	if strings.Count(stmt.sql, "published_at") != 2 {
+		t.Errorf("published_at chỉ được xuất hiện trong đúng một phép COALESCE: %s", stmt.sql)
+	}
+	for _, want := range []string{"event_starts_at = $11", "event_ends_at = $12", "event_place = $13",
+		"video_url = $14"} {
+		if !strings.Contains(stmt.sql, want) {
+			t.Errorf("câu cập nhật thiếu %q: %s", want, stmt.sql)
+		}
+	}
+	if strings.Contains(stmt.sql, "cover_image_file_id") {
+		t.Errorf("câu cập nhật không được chạm cover_image_file_id: %s", stmt.sql)
+	}
+	// A tin-tuc row: every per-type column and the unset instant bind as NULL.
+	if len(stmt.args) != 15 {
+		t.Fatalf("số tham số = %d, muốn 15", len(stmt.args))
+	}
+	for i := 10; i < 15; i++ {
+		if stmt.args[i] != nil {
+			t.Errorf("tham số $%d = %v, muốn NULL", i+1, stmt.args[i])
+		}
 	}
 }
 

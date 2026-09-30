@@ -177,6 +177,31 @@ type noiDungRa struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// PublishedAt is ADR 0047 §6 G1: the instant of the FIRST publish (RFC 3339), fixed by the server
+	// and never changed afterwards — unpublishing keeps it. RESPONSE ONLY: no request field sets it.
+	// ABSENT when the item was never published, or was published before migration 0011 recorded the
+	// instant (no backfill); the screen then shows `published_on`.
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+
+	// EventStartsAt, EventEndsAt (RFC 3339) and EventPlace — present only on `su-kien`, and only when
+	// set. EventEndsAt never comes without EventStartsAt and is never before it.
+	EventStartsAt *time.Time `json:"event_starts_at,omitempty"`
+	EventEndsAt   *time.Time `json:"event_ends_at,omitempty"`
+	EventPlace    string     `json:"event_place,omitempty"`
+
+	// VideoURL — present only on `video`, and only when set: an http(s) link opened outside the Mini
+	// App (ADR 0047 §6 (3)).
+	VideoURL string `json:"video_url,omitempty"`
+}
+
+// instantOut is a nullable instant on the wire: nil (the key is omitted) for the zero time.
+func instantOut(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }
 
 func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
@@ -198,6 +223,12 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 		AuthorCode:  n.NguoiTaoMa,
 		CreatedAt:   n.TaoLuc,
 		UpdatedAt:   n.CapNhatLuc,
+
+		PublishedAt:   instantOut(n.PublishedAt),
+		EventStartsAt: instantOut(n.EventStartsAt),
+		EventEndsAt:   instantOut(n.EventEndsAt),
+		EventPlace:    n.EventPlace,
+		VideoURL:      n.VideoURL,
 	}
 	if coThan {
 		than := n.NoiDung
@@ -454,8 +485,19 @@ type themNoiDungVao struct {
 	Body       string `json:"body,omitempty"`
 	ImageURL   string `json:"image_url,omitempty"`
 
+	// EventStartsAt / EventEndsAt are RFC 3339 WITH an offset (`2026-10-01T08:00:00+07:00`); EventPlace
+	// is free text, at most domain.EventPlaceMaxRunes characters. All three only for `type: su-kien` —
+	// sent with any other type they are a 400, never silently dropped.
+	EventStartsAt string `json:"event_starts_at,omitempty"`
+	EventEndsAt   string `json:"event_ends_at,omitempty"`
+	EventPlace    string `json:"event_place,omitempty"`
+
+	// VideoURL is an http(s) link, only for `type: video`.
+	VideoURL string `json:"video_url,omitempty"`
+
 	// Publish is §7's `☐ Đăng lên Mini App`. Absent means false, which is the checkbox's own default
-	// and the safe direction: an item nobody chose to publish stays invisible.
+	// and the safe direction: an item nobody chose to publish stays invisible. Ticking it also fixes
+	// `published_at` (G1) — there is no request field for that instant.
 	Publish bool `json:"publish,omitempty"`
 }
 
@@ -479,6 +521,17 @@ func (h *Handler) ThemNoiDung(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	startsAt, err := domain.ParseEventInstant("event_starts_at", vao.EventStartsAt)
+	if err != nil {
+		h.traLoiLoiNoiDung(w, r, "thêm", err)
+		return
+	}
+	endsAt, err := domain.ParseEventInstant("event_ends_at", vao.EventEndsAt)
+	if err != nil {
+		h.traLoiLoiNoiDung(w, r, "thêm", err)
+		return
+	}
+
 	moi, err := h.d.GhiNoiDung.Them(r.Context(), domain.YeuCauThemNoiDung{
 		Loai:           vao.Type,
 		DanhMucID:      vao.CategoryID,
@@ -486,6 +539,10 @@ func (h *Handler) ThemNoiDung(w http.ResponseWriter, r *http.Request) {
 		TomTat:         vao.Summary,
 		NoiDung:        vao.Body,
 		AnhDaiDienURL:  vao.ImageURL,
+		EventStartsAt:  startsAt,
+		EventEndsAt:    endsAt,
+		EventPlace:     vao.EventPlace,
+		VideoURL:       vao.VideoURL,
 		DangLenMiniApp: vao.Publish,
 	}, nguoi)
 	if err != nil {
@@ -514,6 +571,28 @@ type suaNoiDungVao struct {
 	Body       *string `json:"body,omitempty"`
 	ImageURL   *string `json:"image_url,omitempty"`
 	Publish    *bool   `json:"publish,omitempty"`
+
+	// The per-type fields, same meaning as on the create. ABSENT = leave alone; "" = CLEAR (for the
+	// two instants too — a JSON null cannot be told from an absent key through a pointer, so the empty
+	// string is the one spelling of "clear"). A type change away from `su-kien` / `video` clears that
+	// type's fields by itself; sending a value the resulting type cannot carry is a 400.
+	EventStartsAt *string `json:"event_starts_at,omitempty"`
+	EventEndsAt   *string `json:"event_ends_at,omitempty"`
+	EventPlace    *string `json:"event_place,omitempty"`
+	VideoURL      *string `json:"video_url,omitempty"`
+}
+
+// optionalInstant is ParseEventInstant for a PATCH field: nil stays nil (leave alone), "" becomes a
+// pointer to the zero time (clear).
+func optionalInstant(field string, s *string) (*time.Time, error) {
+	if s == nil {
+		return nil, nil
+	}
+	t, err := domain.ParseEventInstant(field, *s)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 // SuaNoiDung applies a partial edit. PATCH /api/v1/content-items/{id}
@@ -538,6 +617,17 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	startsAt, err := optionalInstant("event_starts_at", vao.EventStartsAt)
+	if err != nil {
+		h.traLoiLoiNoiDung(w, r, "sửa", err)
+		return
+	}
+	endsAt, err := optionalInstant("event_ends_at", vao.EventEndsAt)
+	if err != nil {
+		h.traLoiLoiNoiDung(w, r, "sửa", err)
+		return
+	}
+
 	sau, err := h.d.GhiNoiDung.Sua(r.Context(), id, domain.YeuCauSuaNoiDung{
 		Loai:           vao.Type,
 		DanhMucID:      vao.CategoryID,
@@ -546,6 +636,10 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		NoiDung:        vao.Body,
 		AnhDaiDienURL:  vao.ImageURL,
 		DangLenMiniApp: vao.Publish,
+		EventStartsAt:  startsAt,
+		EventEndsAt:    endsAt,
+		EventPlace:     vao.EventPlace,
+		VideoURL:       vao.VideoURL,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "sửa", err)
@@ -672,6 +766,11 @@ func laLoiDauVaoNoiDung(err error) bool {
 		domain.ErrThuTuDanhMucNgoaiKhoang,
 		domain.ErrDanhMucTuLamCha,
 		domain.ErrMaCanBoQuaDai,
+		// Migration 0011's per-type fields. Each sentence names its field and never echoes the value.
+		domain.ErrEventFieldsOnlyForEvent, domain.ErrVideoURLOnlyForVideo,
+		domain.ErrEventEndsWithoutStart, domain.ErrEventEndsBeforeStart,
+		domain.ErrEventPlaceTooLong, domain.ErrEventPlaceInvalid,
+		domain.ErrEventTimeInvalid,
 	} {
 		if errors.Is(err, mot) {
 			return true

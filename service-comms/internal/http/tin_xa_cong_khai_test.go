@@ -881,3 +881,83 @@ func TestPublicNewsCategoriesNotSwallowedByID(t *testing.T) {
 	doiMa(t, ckGoi(h, MauTinXa+"/a-vacc", ckHostA), http.StatusOK)
 	doiMa(t, ckGoi(h, MauTinXa+"/categoriesx", ckHostA), http.StatusNotFound)
 }
+
+// --- migration 0011: published_at, event and video fields (added 2026-09-30) ----------------------
+
+func newsWithMedia() *ckNoiDung {
+	published := time.Date(2026, 9, 30, 2, 15, 0, 0, time.UTC)
+	starts := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+	ends := time.Date(2026, 10, 5, 3, 0, 0, 0, time.UTC)
+	return &ckNoiDung{theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
+		xaA: {
+			{ID: "event", Loai: domain.LoaiSuKien, TieuDe: "Hội thi", NgayDang: ckNgay,
+				TrangThai: domain.TrangThaiDangHien, PublishedAt: published,
+				EventStartsAt: starts, EventEndsAt: ends, EventPlace: "<b>Nhà văn hoá</b> thôn 3"},
+			// The CHECKs make this row impossible; the handler must still not print it.
+			{ID: "news-stray", Loai: domain.LoaiTinTuc, TieuDe: "Tin", NgayDang: ckNgay,
+				TrangThai: domain.TrangThaiDangHien, EventStartsAt: starts, EventPlace: "Sân xã",
+				VideoURL: "https://v.example/stray"},
+			{ID: "video", Loai: domain.LoaiVideo, TieuDe: "Video", NgayDang: ckNgay,
+				TrangThai: domain.TrangThaiDangHien, VideoURL: "https://v.example/watch?v=1"},
+			{ID: "video-bad", Loai: domain.LoaiVideo, TieuDe: "Video xấu", NgayDang: ckNgay,
+				TrangThai: domain.TrangThaiDangHien, VideoURL: "javascript:alert(1)"},
+		},
+	}}
+}
+
+func TestPublicNewsNewFieldsAreTypeGatedAndAbsentWhenUnset(t *testing.T) {
+	h := ckMayChu(t, &ckNenTang{}, newsWithMedia(), &ckDanhMuc{}, nil)
+	want := map[string]map[string]any{
+		"event": {
+			"published_at":    "2026-09-30T02:15:00Z",
+			"event_starts_at": "2026-10-05T01:00:00Z",
+			"event_ends_at":   "2026-10-05T03:00:00Z",
+			"event_place":     "Nhà văn hoá thôn 3", // plain text, markup dropped
+		},
+		"news-stray": {},
+		"video":      {"video_url": "https://v.example/watch?v=1"},
+		"video-bad":  {}, // a non-http link is dropped, the article still shows
+	}
+	newKeys := []string{"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url"}
+
+	check := func(where string, item map[string]any) {
+		id, _ := item["id"].(string)
+		exp, ok := want[id]
+		if !ok {
+			t.Fatalf("%s: unexpected item %q", where, id)
+		}
+		for _, key := range newKeys {
+			got, present := item[key]
+			w, expected := exp[key]
+			if present != expected || (expected && got != w) {
+				t.Errorf("%s %s: %s = %v (present=%v), want %v (present=%v)", where, id, key, got, present, w, expected)
+			}
+		}
+	}
+
+	w := ckGoi(h, MauTinXa, ckHostA)
+	doiMa(t, w, http.StatusOK)
+	ckKhongCoHTML(t, w)
+	items := ckDocTrang(t, w).Items
+	if len(items) != len(want) {
+		t.Fatalf("list has %d items, want %d", len(items), len(want))
+	}
+	for _, it := range items {
+		check("list", it)
+	}
+	if strings.Contains(w.Body.String(), "javascript") || strings.Contains(w.Body.String(), "v.example/stray") ||
+		strings.Contains(w.Body.String(), "Sân xã") {
+		t.Fatalf("a dropped value reached the wire: %s", w.Body.String())
+	}
+
+	for id := range want {
+		w := ckGoi(h, MauTinXa+"/"+id, ckHostA)
+		doiMa(t, w, http.StatusOK)
+		ckKhongCoHTML(t, w)
+		var item map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &item); err != nil {
+			t.Fatalf("thân không phải JSON: %q", w.Body.String())
+		}
+		check("detail", item)
+	}
+}

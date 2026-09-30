@@ -712,3 +712,134 @@ func TestThemNoiDungThieuIdempotencyKeyBiTuChoi(t *testing.T) {
 		t.Error("thiếu Idempotency-Key mà vẫn chạm tới use case")
 	}
 }
+
+// --- migration 0011: published_at, event and video fields on the staff wire ----------------------
+//
+// No new route, so the four-case permission suite above (cacTuyenND) already covers POST and PATCH
+// with these fields: authorisation runs before the body is read. What follows is the contract.
+
+func TestCreateEventSendsInstantsAndPlaceToTheUseCase(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+
+	w := m.goi(t, http.MethodPost, hostA, duongNoiDung, `{"type":"su-kien","title":"Hội thi",`+
+		`"event_starts_at":"2026-10-05T08:00:00+07:00","event_ends_at":"2026-10-05T10:30:00+07:00",`+
+		`"event_place":"Nhà văn hoá thôn 3","video_url":""}`, canBo(xaA))
+	doiMa(t, w, http.StatusCreated)
+
+	got := m.ghi.themCuoi
+	if !got.EventStartsAt.Equal(time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)) ||
+		!got.EventEndsAt.Equal(time.Date(2026, 10, 5, 3, 30, 0, 0, time.UTC)) {
+		t.Errorf("thời điểm tới use case = %v → %v", got.EventStartsAt, got.EventEndsAt)
+	}
+	if got.EventPlace != "Nhà văn hoá thôn 3" || got.VideoURL != "" {
+		t.Errorf("địa điểm = %q, video = %q", got.EventPlace, got.VideoURL)
+	}
+}
+
+func TestEventInstantWithoutOffsetIs400BeforeTheUseCase(t *testing.T) {
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodPost, duongNoiDung, `{"type":"su-kien","title":"T","event_starts_at":"2026-10-05T08:00:00"}`},
+		{http.MethodPatch, duongNoiDung + "/nd-001", `{"event_ends_at":"05/10/2026"}`},
+	} {
+		m := dungMayChuND(t)
+		m.capQuyen(xaA, QuyenSuaNoiDung)
+		w := m.goi(t, tc.method, hostA, tc.path, tc.body, canBo(xaA))
+		doiMa(t, w, http.StatusBadRequest)
+		e := loiTra(t, w)
+		if e.Code != "invalid_request" || !strings.Contains(e.Message, "RFC 3339") {
+			t.Errorf("%s: lỗi = %+v", tc.method, e)
+		}
+		if strings.Contains(e.Message, "05/10/2026") || strings.Contains(e.Message, "2026-10-05T08") {
+			t.Errorf("%s: thông điệp lặp lại giá trị đã gửi: %q", tc.method, e.Message)
+		}
+		if m.ghi.tongGoi() != 0 {
+			t.Errorf("%s: thời điểm sai mà vẫn chạm tới use case", tc.method)
+		}
+	}
+}
+
+func TestPatchTellsAbsentFromClearedForTheNewFields(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	doiMa(t, m.goi(t, http.MethodPatch, hostA, duongNoiDung+"/nd-001", `{"title":"T"}`, canBo(xaA)),
+		http.StatusOK)
+	got := m.ghi.suaCuoi
+	if got.EventStartsAt != nil || got.EventEndsAt != nil || got.EventPlace != nil || got.VideoURL != nil {
+		t.Errorf("trường không được nhắc mà vẫn khác nil: %+v", got)
+	}
+
+	m2 := dungMayChuND(t)
+	m2.capQuyen(xaA, QuyenSuaNoiDung)
+	doiMa(t, m2.goi(t, http.MethodPatch, hostA, duongNoiDung+"/nd-001",
+		`{"event_starts_at":"","event_place":"","video_url":""}`, canBo(xaA)), http.StatusOK)
+	got = m2.ghi.suaCuoi
+	if got.EventStartsAt == nil || !got.EventStartsAt.IsZero() {
+		t.Errorf("`event_starts_at: \"\"` phải là XOÁ: %#v", got.EventStartsAt)
+	}
+	if got.EventPlace == nil || *got.EventPlace != "" || got.VideoURL == nil || *got.VideoURL != "" {
+		t.Errorf("chuỗi rỗng phải là XOÁ: place=%#v video=%#v", got.EventPlace, got.VideoURL)
+	}
+	if got.EventEndsAt != nil {
+		t.Error("`event_ends_at` không được nhắc mà vẫn khác nil")
+	}
+}
+
+func TestTypeFieldRefusalsAre400WithTheDomainSentence(t *testing.T) {
+	for _, refusal := range []error{
+		domain.ErrEventFieldsOnlyForEvent, domain.ErrVideoURLOnlyForVideo,
+		domain.ErrEventEndsWithoutStart, domain.ErrEventEndsBeforeStart,
+		domain.ErrEventPlaceTooLong, domain.ErrEventPlaceInvalid,
+	} {
+		m := dungMayChuND(t)
+		m.capQuyen(xaA, QuyenSuaNoiDung)
+		m.ghi.loi = refusal
+		w := m.goi(t, http.MethodPatch, hostA, duongNoiDung+"/nd-001", thanSuaNoiDungHopLe, canBo(xaA))
+		doiMa(t, w, http.StatusBadRequest)
+		if e := loiTra(t, w); e.Code != "invalid_request" || e.Message != refusal.Error() {
+			t.Errorf("%v: lỗi = %+v", refusal, e)
+		}
+	}
+}
+
+func TestStaffItemCarriesTheNewFieldsOnlyWhenSet(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenDocNoiDung)
+	event := noiDungMau()
+	event.Loai = domain.LoaiSuKien
+	event.PublishedAt = time.Date(2026, 9, 30, 2, 15, 0, 0, time.UTC)
+	event.EventStartsAt = time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+	event.EventEndsAt = time.Date(2026, 10, 5, 3, 0, 0, 0, time.UTC)
+	event.EventPlace = "Nhà văn hoá thôn 3"
+	m.so.mot = event
+	m.so.ra = page.Result[domain.NoiDungMiniApp]{Items: []domain.NoiDungMiniApp{noiDungMau()}}
+
+	w := m.goi(t, http.MethodGet, hostA, duongNoiDung+"/nd-001", "", canBo(xaA))
+	doiMa(t, w, http.StatusOK)
+	var detail map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("thân không phải JSON: %v", err)
+	}
+	for key, want := range map[string]any{
+		"published_at":    "2026-09-30T02:15:00Z",
+		"event_starts_at": "2026-10-05T01:00:00Z",
+		"event_ends_at":   "2026-10-05T03:00:00Z",
+		"event_place":     "Nhà văn hoá thôn 3",
+	} {
+		if detail[key] != want {
+			t.Errorf("%s = %v, muốn %v", key, detail[key], want)
+		}
+	}
+	if _, ok := detail["video_url"]; ok {
+		t.Errorf("video_url phải vắng khi không có: %s", w.Body.String())
+	}
+
+	// A row with none of them set (every row published before 0011) carries none of the keys.
+	w = m.goi(t, http.MethodGet, hostA, duongNoiDung, "", canBo(xaA))
+	doiMa(t, w, http.StatusOK)
+	for _, key := range []string{"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url"} {
+		if strings.Contains(w.Body.String(), `"`+key+`"`) {
+			t.Errorf("%s phải vắng trên dòng không đặt: %s", key, w.Body.String())
+		}
+	}
+}

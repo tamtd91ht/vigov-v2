@@ -128,10 +128,10 @@ var (
 //	                      bytes. `anh_dai_dien_url` holds a link to a file some other system serves,
 //	                      and §10.6's size and format rules belong to the uploader that does not
 //	                      exist yet — writing them here would be validating a request nobody sends.
-//	no per-type fields    §7's closing note wants a video URL, an audio file and a duration, an event
-//	                      time and place, a banner link and order. It says "nên bổ sung", §8's data
-//	                      model carries none of them, and migration 0006 argues why a suggestion does
-//	                      not become an applied migration.
+//	few per-type fields   the event window and place (`su-kien`) and the external video link (`video`)
+//	                      ARE handled — the user decided them on 30/09/2026 (ADR 0047 §6) and
+//	                      migration 0011 added the columns. The audio file and its duration (a later
+//	                      card) and the banner link and order (not decided) are still absent.
 //	no approval step      `cho-duyet` is reachable only from the sync (§10.2). A commune composing by
 //	                      hand publishes or does not, which is exactly the one checkbox §7 offers.
 //
@@ -172,6 +172,10 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		TomTat:        sach.TomTat,
 		NoiDung:       sach.NoiDung,
 		AnhDaiDienURL: sach.AnhDaiDienURL,
+		EventStartsAt: sach.EventStartsAt,
+		EventEndsAt:   sach.EventEndsAt,
+		EventPlace:    sach.EventPlace,
+		VideoURL:      sach.VideoURL,
 		NgayDang:      ngayDang,
 		LuotXem:       0,
 		// THE STATE IS DECIDED HERE FROM §7'S CHECKBOX, never taken from the request. See
@@ -187,6 +191,12 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		NguoiTaoMa: nguoi.ID,
 		TaoLuc:     luc,
 		CapNhatLuc: luc,
+	}
+	// G1 (ADR 0047 §6), THE HALF MIGRATION 0011'S TRIGGER CANNOT ENFORCE: its trigger is UPDATE-only,
+	// so a row born `dang-hien` gets its first-publish instant here — the same clock reading as the
+	// rest of the act — and a row born `an` gets none until the edit that publishes it (Sua).
+	if moi.TrangThai == domain.TrangThaiDangHien {
+		moi.PublishedAt = luc
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -262,6 +272,10 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 	}
 
 	var sau domain.NoiDungMiniApp
+	// refusal carries a refusal decided INSIDE the transaction (it needs the stored row) back out
+	// UNWRAPPED. bocNoiDung would prefix it with the commune id, and the handler returns a refusal's
+	// own sentence to the client — which must name the field, not the commune.
+	var refusal error
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		truoc, err := uc.kho.TheoIDDeSua(ctx, tx, id)
 		if err != nil {
@@ -293,6 +307,41 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			// `an` by a member of staff's explicit act, which is what approving or refusing it IS.
 			sau.TrangThai = trangThaiTu(*sach.DangLenMiniApp)
 		}
+		if sach.EventStartsAt != nil {
+			sau.EventStartsAt = *sach.EventStartsAt
+		}
+		if sach.EventEndsAt != nil {
+			sau.EventEndsAt = *sach.EventEndsAt
+		}
+		if sach.EventPlace != nil {
+			sau.EventPlace = *sach.EventPlace
+		}
+		if sach.VideoURL != nil {
+			sau.VideoURL = *sach.VideoURL
+		}
+
+		// THE PER-TYPE FIELDS OF MIGRATION 0011, decided on the MERGED row because the type after the
+		// edit may come from the request or from the stored row.
+		//
+		//   a VALUE sent for a field the resulting type cannot carry → refused, never dropped: the author
+		//     believes that date or link is published;
+		//   the type moved AWAY from su-kien / video → that type's columns are cleared in this same
+		//     UPDATE, which is what 0011's CHECKs require and what its comment asks for;
+		//   then the window rule on what remains (a PATCH of `event_ends_at` alone is judged against
+		//     the stored start).
+		if sau.Loai != domain.LoaiSuKien && sach.SetsEventField() {
+			refusal = domain.ErrEventFieldsOnlyForEvent
+			return refusal
+		}
+		if sau.Loai != domain.LoaiVideo && sach.SetsVideoURL() {
+			refusal = domain.ErrVideoURLOnlyForVideo
+			return refusal
+		}
+		sau = sau.WithoutOtherTypeFields()
+		if err := sau.CheckTypeFields(); err != nil {
+			refusal = err
+			return refusal
+		}
 
 		// THE CATEGORY IS CHECKED ONLY WHEN IT MOVED. Re-sending the category a row already has must
 		// not fail because that category was retired in the meantime — the article is already filed
@@ -314,6 +363,19 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		// §10.4 — see the note on this function. AFTER the no-op check, deliberately.
 		if truoc.Nguon == domain.NguonDongBoCong {
 			sau.DaSuaTay = true
+		}
+
+		// G1 (ADR 0047 §6): the first-publish instant is set by THIS edit only when it moves the row
+		// INTO `dang-hien` and none is recorded yet — the one case migration 0011's trigger admits. Once
+		// set it is never touched again: unpublishing leaves it, republishing keeps the original.
+		//
+		// ⚠ A LEGACY ROW (published before 0011, `published_at` NULL — no backfill, on purpose) that is
+		// unpublished and later republished gets THIS instant: its real first publish was never
+		// recorded, and the republish is the first one the system witnessed. An edit that leaves such a
+		// row `dang-hien` stamps nothing; readers fall back to `ngay_dang`.
+		if sau.TrangThai == domain.TrangThaiDangHien && truoc.TrangThai != domain.TrangThaiDangHien &&
+			truoc.PublishedAt.IsZero() {
+			sau.PublishedAt = uc.bayGio().UTC()
 		}
 
 		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
@@ -338,6 +400,10 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			Delta:   delta,
 		})
 	})
+	if refusal != nil {
+		// Rolled back (the closure returned it); nothing was written, no trail.
+		return domain.NoiDungMiniApp{}, refusal
+	}
 	if err != nil {
 		return domain.NoiDungMiniApp{}, bocNoiDung(ctx, "sửa nội dung Mini App", err)
 	}
@@ -481,7 +547,23 @@ func tomTatNoiDungMiniApp(n domain.NoiDungMiniApp) map[string]any {
 		"da_sua_tay":  n.DaSuaTay,
 		"ngay_dang":   n.NgayDang.Format("2006-01-02"),
 		"co_anh":      n.CoAnh(),
+		// Migration 0011 (keys in English, rule 12; the older keys above are not renamed). The two
+		// instants are the authority's own schedule, not personal data. The PLACE and the VIDEO LINK are
+		// free text that can name a household, so only their presence enters a ledger nothing deletes.
+		"published_at":    instantOrEmpty(n.PublishedAt),
+		"event_starts_at": instantOrEmpty(n.EventStartsAt),
+		"event_ends_at":   instantOrEmpty(n.EventEndsAt),
+		"has_event_place": n.EventPlace != "",
+		"has_video_url":   n.VideoURL != "",
 	}
+}
+
+// instantOrEmpty is an audit-delta value: RFC 3339 in UTC, or "" for NULL.
+func instantOrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // tomTatDoiNoiDungMiniApp returns only the fields that actually moved, from whichever side is asked
@@ -518,6 +600,23 @@ func tomTatDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp, ben bool) map[str
 	if truoc.NoiDung != sau.NoiDung {
 		ra["noi_dung_da_doi"] = true
 	}
+	// Migration 0011's fields, same split as tomTatNoiDungMiniApp: instants by value, place and link
+	// as "changed" only. `published_at` moves at most once (G1), so its before side is always "".
+	if !truoc.PublishedAt.Equal(sau.PublishedAt) {
+		ra["published_at"] = instantOrEmpty(chon(ben, truoc.PublishedAt, sau.PublishedAt))
+	}
+	if !truoc.EventStartsAt.Equal(sau.EventStartsAt) {
+		ra["event_starts_at"] = instantOrEmpty(chon(ben, truoc.EventStartsAt, sau.EventStartsAt))
+	}
+	if !truoc.EventEndsAt.Equal(sau.EventEndsAt) {
+		ra["event_ends_at"] = instantOrEmpty(chon(ben, truoc.EventEndsAt, sau.EventEndsAt))
+	}
+	if truoc.EventPlace != sau.EventPlace {
+		ra["event_place_changed"] = true
+	}
+	if truoc.VideoURL != sau.VideoURL {
+		ra["video_url_changed"] = true
+	}
 	return ra
 }
 
@@ -546,7 +645,13 @@ func khongDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp) bool {
 		truoc.TomTat == sau.TomTat &&
 		truoc.NoiDung == sau.NoiDung &&
 		truoc.AnhDaiDienURL == sau.AnhDaiDienURL &&
-		truoc.TrangThai == sau.TrangThai
+		truoc.TrangThai == sau.TrangThai &&
+		truoc.EventStartsAt.Equal(sau.EventStartsAt) &&
+		truoc.EventEndsAt.Equal(sau.EventEndsAt) &&
+		truoc.EventPlace == sau.EventPlace &&
+		truoc.VideoURL == sau.VideoURL
+	// `PublishedAt` is NOT compared, for the reason `DaSuaTay` is not: it is derived from the act of
+	// publishing, which a changed TrangThai already makes a change.
 }
 
 // bocNoiDung wraps a failure with the commune and the operation, and NOTHING ELSE.

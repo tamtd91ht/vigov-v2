@@ -120,6 +120,11 @@ const (
 
 	// ThuTuDanhMucToiDa bounds the display order of a category.
 	ThuTuDanhMucToiDa = 9999
+
+	// EventPlaceMaxRunes is migration 0011's `noi_dung_mini_app_event_place_valid` bound, in CHARACTERS
+	// (the CHECK uses char_length, so diacritics do not shorten it). A vendor bound against abuse, not
+	// a customer number: raising it is one migration, lowering it after staff wrote longer text is not.
+	EventPlaceMaxRunes = 500
 )
 
 var (
@@ -164,7 +169,113 @@ var (
 	// ErrDanhMucTuLamCha — §8's tree. Refused here so the caller gets a sentence rather than the
 	// CHECK constraint's exception.
 	ErrDanhMucTuLamCha = errors.New("danh_muc_mini_app: một danh mục không thể là cha của chính nó")
+
+	// The per-type fields of migration 0011 (ADR 0047 §6). Each refusal mirrors one CHECK there, so a
+	// member of staff reads a sentence naming the field instead of a PostgreSQL exception and a 500.
+	//
+	// ErrEventFieldsOnlyForEvent / ErrVideoURLOnlyForVideo — `..._event_only_for_su_kien` and
+	// `..._video_url_only_for_video`. REFUSED rather than silently dropped when the client SENT a
+	// value: a date typed on a news article and quietly thrown away is a date the author believes is
+	// published. (A type CHANGE clears the old type's fields — that is NoiDungMiniApp.WithoutOtherTypeFields.)
+	ErrEventFieldsOnlyForEvent = errors.New(
+		"noi_dung_mini_app: `event_starts_at`, `event_ends_at` và `event_place` chỉ dùng cho loại su-kien")
+	ErrVideoURLOnlyForVideo = errors.New("noi_dung_mini_app: `video_url` chỉ dùng cho loại video")
+
+	// ErrEventEndsWithoutStart / ErrEventEndsBeforeStart — `..._event_window_valid`. An end with no
+	// start is not a window, and an event that ends before it starts is a typo a resident would read.
+	ErrEventEndsWithoutStart = errors.New("noi_dung_mini_app: có `event_ends_at` thì phải có `event_starts_at`")
+	ErrEventEndsBeforeStart  = errors.New("noi_dung_mini_app: `event_ends_at` không được sớm hơn `event_starts_at`")
+
+	// ErrEventPlaceTooLong / ErrEventPlaceInvalid — `..._event_place_valid`.
+	ErrEventPlaceTooLong = errors.New("noi_dung_mini_app: `event_place` quá dài")
+	ErrEventPlaceInvalid = errors.New("noi_dung_mini_app: `event_place` không được chứa ký tự điều khiển")
+
+	// ErrEventTimeInvalid — an event instant that is not RFC 3339. An instant with no offset would make
+	// the server pick a time zone for the commune, which is exactly the guess this refuses.
+	ErrEventTimeInvalid = errors.New(
+		"noi_dung_mini_app: thời điểm phải theo RFC 3339 và có múi giờ, ví dụ 2026-10-01T08:00:00+07:00")
 )
+
+// ParseEventInstant reads one event instant off the wire. "" means "none" and returns the zero time.
+//
+// `field` is the contract name, put in the sentence so the author knows which of the two boxes is
+// wrong. The value itself is never echoed.
+func ParseEventInstant(field, s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w (`%s`)", ErrEventTimeInvalid, field)
+	}
+	return t.UTC(), nil
+}
+
+// NormalizeEventPlace trims and validates §7's event place. "" is valid and means "no place" — stored
+// as NULL, because the CHECK refuses a blank string.
+func NormalizeEventPlace(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if len([]rune(s)) > EventPlaceMaxRunes {
+		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrEventPlaceTooLong, EventPlaceMaxRunes)
+	}
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return "", ErrEventPlaceInvalid
+		}
+	}
+	return s, nil
+}
+
+// NormalizeVideoURL validates the external video link (ADR 0047 §6 (3)) with the same http(s)
+// allowlist as every other link here (ChuanHoaURL), then LOWER-CASES THE SCHEME ONLY.
+//
+// Why the scheme and nothing else: migration 0011 asks the write path to store it lower-cased, and a
+// scheme is case-insensitive by RFC 3986 — `HTTPS://x` and `https://x` are the same URL, so this is not
+// rewriting what staff typed. The host and path are left alone: their case can matter.
+//
+// ChuanHoaURL's bound (URLNoiDungToiDa, in bytes) is tighter than the CHECK's 2048 characters, so a
+// value that passes here always passes the database.
+func NormalizeVideoURL(s string) (string, error) {
+	u, err := ChuanHoaURL(s)
+	if err != nil {
+		return "", fmt.Errorf("%w (`video_url`)", err)
+	}
+	if u == "" {
+		return "", nil
+	}
+	i := strings.Index(u, "://")
+	return strings.ToLower(u[:i]) + u[i:], nil
+}
+
+// CheckEventWindow is `..._event_window_valid`: no end without a start, and no end before the start.
+// Zero times mean "not set".
+func CheckEventWindow(startsAt, endsAt time.Time) error {
+	if endsAt.IsZero() {
+		return nil
+	}
+	if startsAt.IsZero() {
+		return ErrEventEndsWithoutStart
+	}
+	if endsAt.Before(startsAt) {
+		return ErrEventEndsBeforeStart
+	}
+	return nil
+}
+
+// checkTypeFields is the three per-type CHECKs of migration 0011 on one set of values.
+func checkTypeFields(loai LoaiNoiDung, startsAt, endsAt time.Time, place, videoURL string) error {
+	if loai != LoaiSuKien && (!startsAt.IsZero() || !endsAt.IsZero() || place != "") {
+		return ErrEventFieldsOnlyForEvent
+	}
+	if loai != LoaiVideo && videoURL != "" {
+		return ErrVideoURLOnlyForVideo
+	}
+	return CheckEventWindow(startsAt, endsAt)
+}
 
 // ChuanHoaTieuDeNoiDung trims and validates an article title.
 //
@@ -334,6 +445,9 @@ type DanhMucMiniApp struct {
 
 // NoiDungMiniApp is ONE item of content — the `ContentItem` entity of migration 0006.
 //
+// `cover_image_file_id` (migration 0011) IS NOT A FIELD HERE EITHER, yet: no path reads or writes it
+// until core/storage can put an object, and the card that adds the upload adds the field.
+//
 // `TepDinhKem` IS NOT A FIELD HERE, although migration 0006 creates the column §8 declares. Nothing
 // in this pass writes it, and §6's `Tệp đính kèm` column is `🔗 Có ảnh` / `—`, which is derived from
 // `AnhDaiDienURL` — see CoAnh below. A field read from a column no path fills is a field every layer
@@ -362,6 +476,23 @@ type NoiDungMiniApp struct {
 	LuotXem int
 
 	TrangThai TrangThaiNoiDung
+
+	// PublishedAt is ADR 0047 §6 G1: the instant of the FIRST publish, never changed afterwards. The
+	// zero time means NULL — never published, OR published before migration 0011 recorded the instant
+	// (no backfill, on purpose: 0011 explains why `ngay_dang` cannot be copied into it). Readers fall
+	// back to NgayDang when it is zero. Migration 0011's trigger refuses every change once it is set.
+	PublishedAt time.Time
+
+	// EventStartsAt, EventEndsAt and EventPlace exist only on `su-kien` (migration 0011's CHECKs); zero
+	// / "" means NULL. EventPlace is free text that can name a household ("sân nhà ông …"): same
+	// standing as TieuDe — never logged, never in the audit delta.
+	EventStartsAt time.Time
+	EventEndsAt   time.Time
+	EventPlace    string
+
+	// VideoURL exists only on `video`: an EXTERNAL http(s) link opened outside the Mini App (ADR 0047
+	// §6 (3)). "" means NULL.
+	VideoURL string
 
 	// Nguon, NguonURL, NguonIDNgoai and DaSuaTay are the provenance half of §8. They describe the
 	// ROW rather than the sync job, which is why they are here while the job is not — migration 0006
@@ -393,6 +524,28 @@ func (n NoiDungMiniApp) CoAnh() bool { return n.AnhDaiDienURL != "" }
 // asked the narrow question by hand would eventually ask it wrongly — by testing for `an` alone and
 // publishing everything waiting for approval.
 func (n NoiDungMiniApp) HienChoDan() bool { return n.TrangThai == TrangThaiDangHien }
+
+// CheckTypeFields reports whether the record satisfies migration 0011's three per-type CHECKs. It is
+// asked of the MERGED row on an edit, because a PATCH naming only `event_ends_at` is valid or not
+// depending on the start already stored.
+func (n NoiDungMiniApp) CheckTypeFields() error {
+	return checkTypeFields(n.Loai, n.EventStartsAt, n.EventEndsAt, n.EventPlace, n.VideoURL)
+}
+
+// WithoutOtherTypeFields clears the columns the record's CURRENT type cannot carry.
+//
+// `loai` is editable (0006:454), and 0011's CHECKs refuse an UPDATE that moves an article away from
+// `su-kien` / `video` while leaving that type's columns set. Clearing them in the same UPDATE is the
+// intended behaviour: an event window left on a news article is a date a citizen reads.
+func (n NoiDungMiniApp) WithoutOtherTypeFields() NoiDungMiniApp {
+	if n.Loai != LoaiSuKien {
+		n.EventStartsAt, n.EventEndsAt, n.EventPlace = time.Time{}, time.Time{}, ""
+	}
+	if n.Loai != LoaiVideo {
+		n.VideoURL = ""
+	}
+	return n
+}
 
 // --- the requests ------------------------------------------------------------------------------
 
@@ -426,7 +579,19 @@ type YeuCauThemNoiDung struct {
 	NoiDung       string
 	AnhDaiDienURL string
 
+	// EventStartsAt, EventEndsAt, EventPlace — `su-kien` only. Zero / "" = not given.
+	EventStartsAt time.Time
+	EventEndsAt   time.Time
+	EventPlace    string
+
+	// VideoURL — `video` only. "" = not given.
+	VideoURL string
+
 	// DangLenMiniApp is §7's checkbox. true -> `dang-hien`, false -> `an`.
+	//
+	// THERE IS NO `PublishedAt` FIELD, for the reason there is no `TrangThai`: G1's instant is fixed by
+	// the ACT of publishing, which the use case performs. A request that could name it could backdate a
+	// public authority's first publication.
 	DangLenMiniApp bool
 }
 
@@ -460,6 +625,19 @@ func (y YeuCauThemNoiDung) KiemTra() (YeuCauThemNoiDung, error) {
 		return YeuCauThemNoiDung{}, fmt.Errorf("%w (tối đa %d ký tự)", ErrMaCanBoQuaDai, MaCanBoToiDa)
 	}
 
+	if ra.EventPlace, err = NormalizeEventPlace(y.EventPlace); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+	if ra.VideoURL, err = NormalizeVideoURL(y.VideoURL); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+	ra.EventStartsAt, ra.EventEndsAt = y.EventStartsAt.UTC(), y.EventEndsAt.UTC() // zero stays zero
+	// On a create the type is known here, so the per-type CHECKs are answered before any transaction.
+	if err := checkTypeFields(LoaiNoiDung(ra.Loai), ra.EventStartsAt, ra.EventEndsAt,
+		ra.EventPlace, ra.VideoURL); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+
 	ra.DangLenMiniApp = y.DangLenMiniApp
 	return ra, nil
 }
@@ -485,7 +663,26 @@ type YeuCauSuaNoiDung struct {
 	NoiDung        *string
 	AnhDaiDienURL  *string
 	DangLenMiniApp *bool
+
+	// The per-type fields of migration 0011. nil = leave alone; a pointer to the ZERO time / "" =
+	// clear. Whether a value may be set depends on the type AFTER the edit, which only the merged row
+	// knows — see SoanNoiDungMiniApp.Sua.
+	EventStartsAt *time.Time
+	EventEndsAt   *time.Time
+	EventPlace    *string
+	VideoURL      *string
 }
+
+// SetsEventField reports whether the request gives an event field a VALUE (clearing one does not
+// count): such a request on an article that will not be `su-kien` is refused, never silently dropped.
+func (y YeuCauSuaNoiDung) SetsEventField() bool {
+	return (y.EventStartsAt != nil && !y.EventStartsAt.IsZero()) ||
+		(y.EventEndsAt != nil && !y.EventEndsAt.IsZero()) ||
+		(y.EventPlace != nil && *y.EventPlace != "")
+}
+
+// SetsVideoURL is SetsEventField for `video_url`.
+func (y YeuCauSuaNoiDung) SetsVideoURL() bool { return y.VideoURL != nil && *y.VideoURL != "" }
 
 // KiemTra validates whatever the request actually mentioned, and returns the cleaned values in the
 // same shape.
@@ -533,6 +730,28 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 			return YeuCauSuaNoiDung{}, fmt.Errorf("%w (tối đa %d ký tự)", ErrMaCanBoQuaDai, MaCanBoToiDa)
 		}
 		ra.DanhMucID = &v
+	}
+	if y.EventPlace != nil {
+		v, err := NormalizeEventPlace(*y.EventPlace)
+		if err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		ra.EventPlace = &v
+	}
+	if y.VideoURL != nil {
+		v, err := NormalizeVideoURL(*y.VideoURL)
+		if err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		ra.VideoURL = &v
+	}
+	if y.EventStartsAt != nil {
+		v := y.EventStartsAt.UTC()
+		ra.EventStartsAt = &v
+	}
+	if y.EventEndsAt != nil {
+		v := y.EventEndsAt.UTC()
+		ra.EventEndsAt = &v
 	}
 	return ra, nil
 }

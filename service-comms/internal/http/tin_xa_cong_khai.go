@@ -32,6 +32,9 @@ package http
 // contract only grows (rule 2, forbidden #4): `type` on each item, an optional `type` filter on the list,
 // and the provenance pair `source` / `source_url`. STILL ABSENT, each for a reason on tinXaRa: the image
 // and the view count.
+//
+// ADDED 2026-09-30 (ADR 0047 §6, migration 0011), optional in the same way: `published_at` (G1),
+// `event_starts_at` / `event_ends_at` / `event_place` on `su-kien`, `video_url` on `video`.
 
 import (
 	"context"
@@ -39,6 +42,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
@@ -137,6 +141,24 @@ type tinXaRa struct {
 	// Body is PLAIN TEXT, paragraphs separated by one blank line ("\n\n"), line breaks by "\n". Absent
 	// from the list (the page does not read it — store.cotNoiDungMiniApp), present on the detail.
 	Body *string `json:"body,omitempty"`
+
+	// ADDED 2026-09-30 (ADR 0047 §6 (2), (3), G1; migration 0011). All OPTIONAL — the contract only
+	// grows (rule 2, forbidden #4) — and on the list AND the detail.
+
+	// PublishedAt is the instant of the FIRST publish (RFC 3339), never changed afterwards. ABSENT
+	// when not recorded (published before 0011 — no backfill): the client falls back to PublishedOn.
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+
+	// EventStartsAt, EventEndsAt (RFC 3339) and EventPlace (PLAIN TEXT, like every text field here) —
+	// only on `su-kien`, only when set.
+	EventStartsAt *time.Time `json:"event_starts_at,omitempty"`
+	EventEndsAt   *time.Time `json:"event_ends_at,omitempty"`
+	EventPlace    string     `json:"event_place,omitempty"`
+
+	// VideoURL — only on `video`, only when it is an http(s) link: re-checked on the way out like
+	// SourceURL. The write path already refuses anything else (and so does 0011's CHECK); the output
+	// check is the second wall on a surface anybody can read.
+	VideoURL string `json:"video_url,omitempty"`
 }
 
 func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, coThan bool) tinXaRa {
@@ -153,6 +175,20 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, coThan 
 		// An invalid stored link is dropped, not an error: the article is still worth showing, and the
 		// refusal is the point. err is deliberately not returned — there is nothing a resident can do.
 		ra.SourceURL = u
+	}
+	ra.PublishedAt = instantOut(n.PublishedAt)
+	// THE TYPE GATES EACH FIELD HERE TOO, not only the CHECK underneath: an event window printed on a
+	// news article is a date a resident acts on.
+	if n.Loai == domain.LoaiSuKien {
+		ra.EventStartsAt = instantOut(n.EventStartsAt)
+		ra.EventEndsAt = instantOut(n.EventEndsAt)
+		ra.EventPlace = domain.VanBanThuanChoDan(n.EventPlace)
+	}
+	if n.Loai == domain.LoaiVideo {
+		if u, err := domain.ChuanHoaURL(n.VideoURL); err == nil {
+			// Dropped, not an error — the same reasoning as SourceURL above.
+			ra.VideoURL = u
+		}
 	}
 	if coThan {
 		than := domain.VanBanThuanChoDan(n.NoiDung)

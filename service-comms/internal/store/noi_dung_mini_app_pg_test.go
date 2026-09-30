@@ -631,3 +631,98 @@ func TestPgCapNhatDongDaXoaMemLa404(t *testing.T) {
 // this file. ONE way to put a commune into a context, not two: the second copy is the one that ends
 // up subtly different from what the edge really does.
 var _ = context.Background
+
+// --- (9) migration 0011: G1 and the per-type CHECKs, through the real store ------------------------
+
+func TestPgFirstPublishInstantAndTypeFieldsThroughTheStore(t *testing.T) {
+	xa1, _ := xaRieng(t)
+	db := moKetNoi(t)
+	kho := khoNoiDungThat(t)
+	ctx := ctxXa(tenant.ID(xa1))
+	first := time.Date(2026, 9, 30, 2, 0, 0, 0, time.UTC)
+	starts := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+
+	inTx := func(fn func(tx *pkgstore.ScopedTx) error) error {
+		return pkgstore.New(db).For(ctx).Tx(ctx, fn)
+	}
+	if err := inTx(func(tx *pkgstore.ScopedTx) error {
+		return kho.Chen(ctx, tx, domain.NoiDungMiniApp{
+			ID: "nd-ev", Loai: domain.LoaiSuKien, TieuDe: "Hội thi", NgayDang: first,
+			TrangThai: domain.TrangThaiDangHien, NguoiTaoMa: "CB-2026-7K3M9Q",
+			PublishedAt: first, EventStartsAt: starts, EventPlace: "Nhà văn hoá",
+		})
+	}); err != nil {
+		t.Fatalf("chèn sự kiện đã đăng: %v", err)
+	}
+
+	// An edit that binds another instant cannot move it: COALESCE in the statement, trigger under it.
+	if err := inTx(func(tx *pkgstore.ScopedTx) error {
+		row, err := kho.TheoIDDeSua(ctx, tx, "nd-ev")
+		if err != nil {
+			return err
+		}
+		row.PublishedAt = first.Add(48 * time.Hour)
+		row.TieuDe = "Hội thi (sửa)"
+		return kho.CapNhat(ctx, tx, row)
+	}); err != nil {
+		t.Fatalf("sửa: %v", err)
+	}
+	got, err := kho.TheoID(ctx, "nd-ev")
+	if err != nil {
+		t.Fatalf("đọc lại: %v", err)
+	}
+	if !got.PublishedAt.Equal(first) || !got.EventStartsAt.Equal(starts) || got.EventPlace != "Nhà văn hoá" {
+		t.Errorf("sau khi sửa = published %v, starts %v, place %q", got.PublishedAt, got.EventStartsAt, got.EventPlace)
+	}
+
+	// Changing the type WITHOUT clearing the event columns is refused by the CHECK...
+	err = inTx(func(tx *pkgstore.ScopedTx) error {
+		row, err := kho.TheoIDDeSua(ctx, tx, "nd-ev")
+		if err != nil {
+			return err
+		}
+		row.Loai = domain.LoaiTinTuc
+		return kho.CapNhat(ctx, tx, row)
+	})
+	if err == nil {
+		t.Fatal("đổi loại mà giữ trường sự kiện vẫn được nhận — CHECK của 0011 không chạy")
+	}
+	// ...and accepted when they are cleared in the same UPDATE.
+	if err := inTx(func(tx *pkgstore.ScopedTx) error {
+		row, err := kho.TheoIDDeSua(ctx, tx, "nd-ev")
+		if err != nil {
+			return err
+		}
+		row.Loai = domain.LoaiTinTuc
+		return kho.CapNhat(ctx, tx, row.WithoutOtherTypeFields())
+	}); err != nil {
+		t.Fatalf("đổi loại có xoá trường sự kiện: %v", err)
+	}
+
+	// A draft gets its instant only on the edit that publishes it (the trigger's second half).
+	themNoiDungThat(t, xa1, "nd-draft", "tin-tuc", "Bản nháp", "an", "thu-cong", "", time.Now().UTC())
+	err = inTx(func(tx *pkgstore.ScopedTx) error {
+		row, err := kho.TheoIDDeSua(ctx, tx, "nd-draft")
+		if err != nil {
+			return err
+		}
+		row.PublishedAt = first // NOT publishing: the trigger must refuse this
+		return kho.CapNhat(ctx, tx, row)
+	})
+	if err == nil {
+		t.Fatal("đặt published_at mà không đăng vẫn được nhận — trigger G1 không chạy")
+	}
+	if err := inTx(func(tx *pkgstore.ScopedTx) error {
+		row, err := kho.TheoIDDeSua(ctx, tx, "nd-draft")
+		if err != nil {
+			return err
+		}
+		row.TrangThai, row.PublishedAt = domain.TrangThaiDangHien, first
+		return kho.CapNhat(ctx, tx, row)
+	}); err != nil {
+		t.Fatalf("lần đăng đầu: %v", err)
+	}
+	if got, err := kho.TheoID(ctx, "nd-draft"); err != nil || !got.PublishedAt.Equal(first) {
+		t.Errorf("lần đăng đầu: published_at = %v, err = %v", got.PublishedAt, err)
+	}
+}

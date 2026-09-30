@@ -11,6 +11,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSauLoaiNoiDungLaSauMaCuaDacTa(t *testing.T) {
@@ -235,5 +236,94 @@ func TestKiemTraThemDanhMucChanThuTuAmVaTenRong(t *testing.T) {
 	}
 	if sach.Ten != "Chuyển đổi số" || sach.Slug != "chuyen-doi-so" || sach.ThuTu != 3 {
 		t.Errorf("danh mục sau chuẩn hoá = %+v", sach)
+	}
+}
+
+// --- migration 0011: event and video fields ------------------------------------------------------
+
+func TestParseEventInstantNeedsRFC3339WithAnOffset(t *testing.T) {
+	got, err := ParseEventInstant("event_starts_at", "2026-10-01T08:00:00+07:00")
+	if err != nil || !got.Equal(time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)) || got.Location() != time.UTC {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	if got, err := ParseEventInstant("event_starts_at", "  "); err != nil || !got.IsZero() {
+		t.Fatalf("empty must mean none: %v, %v", got, err)
+	}
+	// No offset would make the server pick a time zone for the commune.
+	// Inputs deliberately unlike the message's own example, so "not echoed" is a real assertion.
+	for _, bad := range []string{"2026-11-02T09:15:00", "2026-11-02", "02/11/2026 09:15", "tomorrow"} {
+		_, err := ParseEventInstant("event_ends_at", bad)
+		if !errors.Is(err, ErrEventTimeInvalid) {
+			t.Errorf("%q: err = %v, want ErrEventTimeInvalid", bad, err)
+			continue
+		}
+		if !strings.Contains(err.Error(), "`event_ends_at`") || strings.Contains(err.Error(), bad) {
+			t.Errorf("%q: message must name the field and not echo the value: %q", bad, err.Error())
+		}
+	}
+}
+
+func TestNormalizeEventPlaceMatchesTheCheck(t *testing.T) {
+	if got, err := NormalizeEventPlace("  Nhà văn hoá thôn 3 "); err != nil || got != "Nhà văn hoá thôn 3" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if got, err := NormalizeEventPlace("   "); err != nil || got != "" {
+		t.Fatalf("blank must mean no place (NULL): %q, %v", got, err)
+	}
+	// 500 CHARACTERS, diacritics counted as one each (char_length in the CHECK).
+	if _, err := NormalizeEventPlace(strings.Repeat("ệ", EventPlaceMaxRunes)); err != nil {
+		t.Errorf("exactly %d characters refused: %v", EventPlaceMaxRunes, err)
+	}
+	if _, err := NormalizeEventPlace(strings.Repeat("ệ", EventPlaceMaxRunes+1)); !errors.Is(err, ErrEventPlaceTooLong) {
+		t.Errorf("over the bound: err = %v", err)
+	}
+	if _, err := NormalizeEventPlace("Sân\x07 xã"); !errors.Is(err, ErrEventPlaceInvalid) {
+		t.Errorf("control character: err = %v", err)
+	}
+}
+
+func TestNormalizeVideoURLAllowsHTTPOnlyAndLowersTheSchemeOnly(t *testing.T) {
+	got, err := NormalizeVideoURL(" HTTPS://Video.Example/Watch?v=AbC ")
+	if err != nil || got != "https://Video.Example/Watch?v=AbC" {
+		t.Fatalf("got %q, %v — scheme lower-cased, the rest untouched", got, err)
+	}
+	for _, bad := range []string{"javascript:alert(1)", "data:text/html,x", "ftp://x/y", "//x/y", "https://x/a b"} {
+		_, err := NormalizeVideoURL(bad)
+		if !errors.Is(err, ErrURLKhongHopLe) || !strings.Contains(err.Error(), "`video_url`") {
+			t.Errorf("%q: err = %v, want ErrURLKhongHopLe naming video_url", bad, err)
+		}
+	}
+}
+
+func TestTypeFieldsBelongToTheirTypeAndTheWindowIsAWindow(t *testing.T) {
+	start := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Hour)
+	cases := []struct {
+		n    NoiDungMiniApp
+		want error
+	}{
+		{NoiDungMiniApp{Loai: LoaiSuKien, EventStartsAt: start, EventEndsAt: end, EventPlace: "x"}, nil},
+		{NoiDungMiniApp{Loai: LoaiSuKien, EventStartsAt: start, EventEndsAt: start}, nil}, // ends >= starts
+		{NoiDungMiniApp{Loai: LoaiSuKien, EventEndsAt: end}, ErrEventEndsWithoutStart},
+		{NoiDungMiniApp{Loai: LoaiSuKien, EventStartsAt: end, EventEndsAt: start}, ErrEventEndsBeforeStart},
+		{NoiDungMiniApp{Loai: LoaiTinTuc, EventPlace: "x"}, ErrEventFieldsOnlyForEvent},
+		{NoiDungMiniApp{Loai: LoaiVideo, VideoURL: "https://x/v"}, nil},
+		{NoiDungMiniApp{Loai: LoaiThongBao, VideoURL: "https://x/v"}, ErrVideoURLOnlyForVideo},
+	}
+	for i, tc := range cases {
+		if err := tc.n.CheckTypeFields(); !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+			t.Errorf("case %d: err = %v, want %v", i, err, tc.want)
+		}
+	}
+
+	cleared := NoiDungMiniApp{Loai: LoaiTinTuc, EventStartsAt: start, EventEndsAt: end,
+		EventPlace: "x", VideoURL: "https://x/v"}.WithoutOtherTypeFields()
+	if !cleared.EventStartsAt.IsZero() || !cleared.EventEndsAt.IsZero() || cleared.EventPlace != "" ||
+		cleared.VideoURL != "" {
+		t.Errorf("a news item kept another type's fields: %+v", cleared)
+	}
+	kept := NoiDungMiniApp{Loai: LoaiSuKien, EventStartsAt: start, EventPlace: "x"}.WithoutOtherTypeFields()
+	if !kept.EventStartsAt.Equal(start) || kept.EventPlace != "x" {
+		t.Errorf("an event lost its own fields: %+v", kept)
 	}
 }

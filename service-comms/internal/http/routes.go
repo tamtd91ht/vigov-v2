@@ -602,6 +602,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the permission; what is refused is this value against the state of the data, usually a screen
 	// somebody left open while a colleague retired the category.
 	//
+	// 400 is `invalid_request` with the domain's own sentence naming the field — including migration
+	// 0011's per-type refusals: an event field on a type other than `su-kien`, `video_url` on a type
+	// other than `video`, an end with no start or before the start, a place past 500 characters or
+	// with a control character, an instant that is not RFC 3339 with an offset, a non-http(s) link.
+	// 409 is `category_missing`. `published_at` is never a request field: `publish: true` fixes it (G1).
+	//
 	// @summary  Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy
 	// @screen   11-noi-dung-mini-app §7
 	// @request  themNoiDungVao
@@ -631,6 +637,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// UPDATE, no audit entry, and no `da_sua_tay`. So the same request sent twice leaves one row in
 	// one state and one entry in the ledger. Were that comparison removed, this declaration would
 	// become a lie and the second request would file an entry saying nothing changed.
+	//
+	// 400 is `invalid_request` for the same refusals as the create, judged on the row AFTER the merge
+	// (a PATCH of `event_ends_at` alone is checked against the stored start); a `type` change away from
+	// `su-kien` / `video` clears that type's fields in the same UPDATE instead of refusing. 404 is
+	// `not_found`, 409 `category_missing`. The edit that first moves the item into `dang-hien` fixes
+	// `published_at` (G1); no edit changes it afterwards.
 	//
 	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
 	// @screen   11-noi-dung-mini-app §6, §7
