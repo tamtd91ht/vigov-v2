@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: f2941af7
-expires: 2026-12-29
+derived_from_commit: 33dc2f56
+expires: 2026-12-30
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-09-30** · hết hạn **2026-12-29**.
+Sinh ngày **2026-10-01** · hết hạn **2026-12-30**.
 
 ## 1 · Theo chương đặc tả
 
@@ -35,7 +35,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
-| **07** Thu – Chi ngân sách xã | 12 | 12/12 | ✓ |
+| **07** Thu – Chi ngân sách xã | 15 | 12/15 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 17 | 11/12 +5 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **240 tuyến** trong hợp đồng. **7** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **243 tuyến** trong hợp đồng. **7** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -61,7 +61,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 6 |
-| 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 2 |
+| 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 1 |
 | 8 | Thông báo | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 12 |
 | 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 9 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
@@ -70,7 +70,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 
-**11/14** mục menu có màn thật. **48** phần chưa dựng đang hiện trên các màn ấy.
+**11/14** mục menu có màn thật. **47** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -109,18 +109,18 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 2 | 9 | 6 |
-| `citizen-app` | 22 | 11 | 3 | 0 |
-| `core` | 20 | 1 | 1 | 1 |
+| `citizen-app` | 22 | 13 | 3 | 0 |
+| `core` | 21 | 1 | 1 | 1 |
 | `deploy` | 14 | 4 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 14 | 0 | 0 | 0 |
-| `service-comms` | 16 | 3 | 2 | 4 |
+| `service-comms` | 16 | 4 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
-| `service-finance` | 19 | 3 | 1 | 0 |
+| `service-finance` | 19 | 4 | 0 | 0 |
 | `service-identity` | 33 | 10 | 2 | 1 |
 | `service-petitions` | 33 | 14 | 4 | 0 |
 | `service-platform` | 7 | 3 | 0 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 19 | 0 | 0 | 0 |
-| `web-admin` | 17 | 15 | 3 | 1 |
+| `web-admin` | 18 | 15 | 3 | 1 |
 

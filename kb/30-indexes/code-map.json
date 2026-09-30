@@ -66,6 +66,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/bien_ban_hop_sua.go:530"
     },
+    "app.BudgetPeriodCloseRequest": {
+      "kind": "type",
+      "at": "service-finance/internal/app/budget_period_close.go:69"
+    },
     "app.BulkPublishItem": {
       "kind": "type",
       "at": "service-identity/internal/app/danh_ba_can_bo.go:912"
@@ -166,6 +170,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:348"
     },
+    "app.CloseBudgetPeriod": {
+      "kind": "func",
+      "at": "service-finance/internal/app/budget_period_close.go:83"
+    },
     "app.CommuneLister": {
       "kind": "type",
       "at": "service-petitions/internal/app/automation_runner.go:49"
@@ -260,7 +268,7 @@
     },
     "app.DatDongTong": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:1082"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:1116"
     },
     "app.DatKhoa": {
       "kind": "func",
@@ -376,7 +384,7 @@
     },
     "app.GhiDot": {
       "kind": "func",
-      "at": "service-finance/internal/app/dot_thu_chi.go:53"
+      "at": "service-finance/internal/app/dot_thu_chi.go:58"
     },
     "app.GhiKetQua": {
       "kind": "func",
@@ -412,15 +420,15 @@
     },
     "app.GoBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:324"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:342"
     },
     "app.GoDot": {
       "kind": "func",
-      "at": "service-finance/internal/app/dot_thu_chi.go:192"
+      "at": "service-finance/internal/app/dot_thu_chi.go:207"
     },
     "app.GoKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:960"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:991"
     },
     "app.GoString": {
       "kind": "func",
@@ -832,7 +840,7 @@
     },
     "app.NewColumn": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:160"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:173"
     },
     "app.NewDangNhap": {
       "kind": "func",
@@ -916,7 +924,7 @@
     },
     "app.NewNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:104"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:112"
     },
     "app.NewNhanTrangThaiNhiemVu": {
       "kind": "func",
@@ -1060,7 +1068,7 @@
     },
     "app.NganSach": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:96"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:104"
     },
     "app.NguoiThucHien": {
       "kind": "type",
@@ -1290,6 +1298,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/org_unit_delete.go:94"
     },
+    "app.ReopenBudgetPeriodClose": {
+      "kind": "func",
+      "at": "service-finance/internal/app/budget_period_close.go:139"
+    },
     "app.RequestRun": {
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:306"
@@ -1452,7 +1464,7 @@
     },
     "app.SuaBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:392"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:413"
     },
     "app.SuaBienBan": {
       "kind": "func",
@@ -1468,7 +1480,7 @@
     },
     "app.SuaKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:652"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:679"
     },
     "app.SuaLamBu": {
       "kind": "func",
@@ -1500,7 +1512,7 @@
     },
     "app.TaoBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:169"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:182"
     },
     "app.TaoBienBan": {
       "kind": "func",
@@ -1604,7 +1616,7 @@
     },
     "app.ThemKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:506"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:530"
     },
     "app.ThemLamBu": {
       "kind": "func",
@@ -1776,7 +1788,7 @@
     },
     "app.YeuCauSuaBang": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:371"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:392"
     },
     "app.YeuCauSuaBienBan": {
       "kind": "type",
@@ -1816,7 +1828,7 @@
     },
     "app.YeuCauSuaKhoanMuc": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:617"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:644"
     },
     "app.YeuCauSuaLamBu": {
       "kind": "type",
@@ -1860,7 +1872,7 @@
     },
     "app.YeuCauTaoBang": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:141"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:154"
     },
     "app.YeuCauTaoBienBan": {
       "kind": "type",
@@ -1904,7 +1916,7 @@
     },
     "app.YeuCauThemKhoanMuc": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:488"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:512"
     },
     "app.YeuCauThemLamBu": {
       "kind": "type",
@@ -2446,6 +2458,10 @@
       "kind": "func",
       "at": "core/documentsclient/documentsclient.go:95"
     },
+    "domain.Active": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:49"
+    },
     "domain.AfterFailure": {
       "kind": "func",
       "at": "service-identity/internal/domain/sign_in_lock.go:53"
@@ -2453,6 +2469,14 @@
     "domain.AllowedTransitions": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:145"
+    },
+    "domain.AlreadyClosedError": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:130"
+    },
+    "domain.AlreadyReopenedError": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:137"
     },
     "domain.Any": {
       "kind": "func",
@@ -2553,6 +2577,14 @@
     "domain.BoPhan": {
       "kind": "type",
       "at": "service-identity/internal/domain/bo_phan.go:10"
+    },
+    "domain.BudgetPeriodClose": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/budget_period_close.go:30"
+    },
+    "domain.BudgetPeriodCloseCode": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:180"
     },
     "domain.CaLamBu": {
       "kind": "type",
@@ -2808,7 +2840,7 @@
     },
     "domain.ChuanHoaDonViCaNhan": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:155"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:161"
     },
     "domain.ChuanHoaEmail": {
       "kind": "func",
@@ -2908,7 +2940,7 @@
     },
     "domain.ChuanHoaNoiDungDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:140"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:146"
     },
     "domain.ChuanHoaNoiDungThongBao": {
       "kind": "func",
@@ -2928,7 +2960,7 @@
     },
     "domain.ChuanHoaSoChungTuDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:160"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:166"
     },
     "domain.ChuanHoaSoDienThoai": {
       "kind": "func",
@@ -3244,7 +3276,7 @@
     },
     "domain.DotCuaKhoanMuc": {
       "kind": "type",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:53"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:59"
     },
     "domain.DotThuChi": {
       "kind": "type",
@@ -3285,6 +3317,14 @@
     "domain.DuocDuyetLuiHan": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:824"
+    },
+    "domain.EntryLockingClose": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:204"
+    },
+    "domain.EntryPeriodClosedError": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:113"
     },
     "domain.Error": {
       "kind": "func",
@@ -3329,6 +3369,10 @@
     "domain.FieldOption": {
       "kind": "type",
       "at": "service-comms/internal/domain/map_field_schema.go:39"
+    },
+    "domain.FindActiveClose": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:188"
     },
     "domain.FindFieldDefault": {
       "kind": "func",
@@ -3505,6 +3549,10 @@
     "domain.IsReopen": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:170"
+    },
+    "domain.IsYearClose": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:52"
     },
     "domain.JSON": {
       "kind": "func",
@@ -3692,7 +3740,7 @@
     },
     "domain.KiemTraCachTinhChon": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:118"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:124"
     },
     "domain.KiemTraCot": {
       "kind": "func",
@@ -3752,7 +3800,7 @@
     },
     "domain.KiemTraNgayDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:127"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:133"
     },
     "domain.KiemTraNgayDuAn": {
       "kind": "func",
@@ -3929,6 +3977,10 @@
     "domain.LocalDay": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:134"
+    },
+    "domain.LockYears": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:223"
     },
     "domain.LockedAt": {
       "kind": "func",
@@ -4182,9 +4234,17 @@
       "kind": "type",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:455"
     },
+    "domain.NormaliseAdjustmentReason": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:163"
+    },
     "domain.NormaliseHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/tenant.go:54"
+    },
+    "domain.NormaliseReopenReason": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:156"
     },
     "domain.NormaliseSceneLocation": {
       "kind": "func",
@@ -4357,6 +4417,14 @@
     "domain.PeriodBound": {
       "kind": "func",
       "at": "service-petitions/internal/domain/summary_metrics.go:134"
+    },
+    "domain.PeriodCloseConflict": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/budget_period_close.go:103"
+    },
+    "domain.PeriodLabel": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:58"
     },
     "domain.PetitionAcceptsTask": {
       "kind": "func",
@@ -4621,6 +4689,14 @@
     "domain.SetsVideoURL": {
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:685"
+    },
+    "domain.SheetLockingClose": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:217"
+    },
+    "domain.SheetYearClosedError": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:122"
     },
     "domain.ShippedMessage": {
       "kind": "type",
@@ -5042,6 +5118,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/cau_phien.go:73"
     },
+    "domain.Unwrap": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:110"
+    },
     "domain.UploadPolicy": {
       "kind": "type",
       "at": "service-platform/internal/domain/upload_policy.go:13"
@@ -5089,6 +5169,10 @@
     "domain.ValidateAutomationSetting": {
       "kind": "func",
       "at": "service-identity/internal/domain/automation.go:112"
+    },
+    "domain.ValidateClosePeriod": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/budget_period_close.go:145"
     },
     "domain.ValidateDeliveries": {
       "kind": "func",
@@ -5570,6 +5654,14 @@
       "kind": "func",
       "at": "service-comms/internal/http/staff_notification.go:144"
     },
+    "http.CreateBudgetPeriodClose": {
+      "kind": "func",
+      "at": "service-finance/internal/http/budget_period_close.go:101"
+    },
+    "http.CreateBudgetPeriodReopening": {
+      "kind": "func",
+      "at": "service-finance/internal/http/budget_period_close.go:133"
+    },
     "http.CreateMapFieldSchema": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:184"
@@ -5788,7 +5880,7 @@
     },
     "http.DocDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:111"
+      "at": "service-finance/internal/http/dot_thu_chi.go:121"
     },
     "http.DocNhatKyNhiemVu": {
       "kind": "func",
@@ -5856,7 +5948,7 @@
     },
     "http.GhiDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:128"
+      "at": "service-finance/internal/http/dot_thu_chi.go:138"
     },
     "http.GhiDuAn": {
       "kind": "type",
@@ -5884,7 +5976,7 @@
     },
     "http.GhiNganSach": {
       "kind": "type",
-      "at": "service-finance/internal/http/routes.go:199"
+      "at": "service-finance/internal/http/routes.go:202"
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
@@ -5932,7 +6024,7 @@
     },
     "http.GoDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:170"
+      "at": "service-finance/internal/http/dot_thu_chi.go:181"
     },
     "http.GoKhoanMucNganSach": {
       "kind": "func",
@@ -6077,6 +6169,10 @@
     "http.ListAutomationJobs": {
       "kind": "func",
       "at": "service-identity/internal/http/automation.go:159"
+    },
+    "http.ListBudgetPeriodCloses": {
+      "kind": "func",
+      "at": "service-finance/internal/http/budget_period_close.go:80"
     },
     "http.ListCitizenReportFields": {
       "kind": "func",
@@ -7942,6 +8038,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/mail_settings.go:92"
     },
+    "store.ActiveBudgetPeriodCloses": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:115"
+    },
     "store.AddDelivery": {
       "kind": "func",
       "at": "service-comms/internal/store/staff_notification.go:110"
@@ -8034,6 +8134,14 @@
       "kind": "type",
       "at": "service-identity/internal/store/bo_phan.go:13"
     },
+    "store.BudgetPeriodCloseByCode": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:130"
+    },
+    "store.BudgetPeriodClosesOfYear": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:89"
+    },
     "store.ByHost": {
       "kind": "func",
       "at": "service-platform/internal/store/directory.go:99"
@@ -8124,7 +8232,7 @@
     },
     "store.ChenDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:317"
+      "at": "service-finance/internal/store/dot_thu_chi.go:320"
     },
     "store.ChenKhoanMuc": {
       "kind": "func",
@@ -8148,7 +8256,7 @@
     },
     "store.ChenSoTienDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:331"
+      "at": "service-finance/internal/store/dot_thu_chi.go:335"
     },
     "store.ChiTiet": {
       "kind": "func",
@@ -8200,7 +8308,7 @@
     },
     "store.CoDotConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:281"
+      "at": "service-finance/internal/store/dot_thu_chi.go:282"
     },
     "store.CoEmailMoiTrangThai": {
       "kind": "func",
@@ -8352,7 +8460,7 @@
     },
     "store.DemDotSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:299"
+      "at": "service-finance/internal/store/dot_thu_chi.go:300"
     },
     "store.Directory": {
       "kind": "type",
@@ -8384,11 +8492,11 @@
     },
     "store.DotCuaKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:129"
+      "at": "service-finance/internal/store/dot_thu_chi.go:130"
     },
     "store.DotTheoIDTrongGiaoDich": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:251"
+      "at": "service-finance/internal/store/dot_thu_chi.go:252"
     },
     "store.DuAnGhiStore": {
       "kind": "type",
@@ -8513,6 +8621,10 @@
     "store.Insert": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:221"
+    },
+    "store.InsertBudgetPeriodClose": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:179"
     },
     "store.InsertImported": {
       "kind": "func",
@@ -8705,6 +8817,10 @@
     "store.LocalHoldings": {
       "kind": "func",
       "at": "service-identity/internal/store/org_unit_delete.go:83"
+    },
+    "store.LockBudgetYears": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:50"
     },
     "store.LockGrantorSets": {
       "kind": "func",
@@ -9022,6 +9138,10 @@
       "kind": "func",
       "at": "service-documents/internal/store/van_ban_di.go:36"
     },
+    "store.NextBudgetPeriodCloseRevision": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:155"
+    },
     "store.NganSachStore": {
       "kind": "type",
       "at": "service-finance/internal/store/thu_chi_ngan_sach.go:36"
@@ -9225,6 +9345,10 @@
     "store.RecordRun": {
       "kind": "func",
       "at": "service-identity/internal/store/automation.go:239"
+    },
+    "store.ReopenBudgetPeriodClose": {
+      "kind": "func",
+      "at": "service-finance/internal/store/budget_period_close.go:201"
     },
     "store.ReopenByRating": {
       "kind": "func",
@@ -9628,7 +9752,7 @@
     },
     "store.XoaMemDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:347"
+      "at": "service-finance/internal/store/dot_thu_chi.go:351"
     },
     "store.XoaMemKetLuan": {
       "kind": "func",
