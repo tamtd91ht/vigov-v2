@@ -39,9 +39,15 @@ type DotThuChi struct {
 	// entry records THAT it was stated and its length, never the text (rule 3; rule 6 forbidden #4).
 	DonViCaNhan string
 
-	SoChungTu  string    // "" when not stated
-	NguoiGhiMa string    // staff business code (`CB-00123`), never the internal id — rule 6 inv. 8
-	TaoLuc     time.Time // zero on a batch just built in memory, before the database stamped it
+	SoChungTu  string // "" when not stated
+	NguoiGhiMa string // staff business code (`CB-00123`), never the internal id — rule 6 inv. 8
+
+	// AdjustmentReason — "" = an ordinary entry; set = an ADJUSTMENT ENTRY (migration 0012), and the
+	// text says why: a correction of a closed period, recorded in a period that is still open. There
+	// is no separate flag, so the two cannot disagree.
+	AdjustmentReason string
+
+	TaoLuc time.Time // zero on a batch just built in memory, before the database stamped it
 
 	// GiaTri is cotID -> amount in đồng, and ONLY STATED AMOUNTS APPEAR. An absent key is an empty
 	// amount (§9 rule 4), exactly as in BangDayDu.Gia.

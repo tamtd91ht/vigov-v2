@@ -922,8 +922,20 @@ func (h *Handler) traLoiLoiNganSach(w http.ResponseWriter, r *http.Request, viec
 	case errors.Is(err, domain.ErrKhongThayDot):
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
 			"Không tìm thấy đợt thu, chi này.", "")
+	case errors.Is(err, domain.ErrBudgetPeriodCloseNotFound):
+		httpx.WriteError(w, http.StatusNotFound, "not_found",
+			"Không tìm thấy lần chốt kỳ này.", "")
 	case errors.Is(err, fistore.ErrBangDaTonTai):
 		httpx.WriteError(w, http.StatusConflict, "sheet_exists", err.Error(), "")
+	// BUDGET PERIOD CLOSE (migration 0012). 409, the reason the structural refusals give: the caller
+	// holds the permission; what is refused is this write in THIS period. The sentence names the
+	// period and the close code (domain.PeriodCloseConflict) — and never a figure or a batch text.
+	case errors.Is(err, domain.ErrPeriodClosed):
+		httpx.WriteError(w, http.StatusConflict, "budget_period_closed", conflictSentence(err), "")
+	case errors.Is(err, domain.ErrPeriodAlreadyClosed):
+		httpx.WriteError(w, http.StatusConflict, "budget_period_already_closed", conflictSentence(err), "")
+	case errors.Is(err, domain.ErrCloseAlreadyReopened):
+		httpx.WriteError(w, http.StatusConflict, "budget_period_close_reopened", conflictSentence(err), "")
 	case errors.Is(err, domain.ErrKhoanMucChaKhongGoThang),
 		errors.Is(err, domain.ErrConGiuKhoanMucCon),
 		errors.Is(err, domain.ErrNhieuDongTong),
@@ -960,6 +972,24 @@ func (h *Handler) traLoiLoiNganSach(w http.ResponseWriter, r *http.Request, viec
 	}
 }
 
+// conflictSentence is the client's sentence for a period-close refusal: the conflict's own text
+// (period + code), never the wrapping bocNganSach adds — that carries the commune id, which is for the
+// log, not for the screen.
+func conflictSentence(err error) string {
+	var c *domain.PeriodCloseConflict
+	if errors.As(err, &c) {
+		return c.Error()
+	}
+	for _, sentinel := range []error{
+		domain.ErrPeriodClosed, domain.ErrPeriodAlreadyClosed, domain.ErrCloseAlreadyReopened,
+	} {
+		if errors.Is(err, sentinel) {
+			return sentinel.Error()
+		}
+	}
+	return "Kỳ ngân sách đã chốt."
+}
+
 // laLoiDauVaoNganSach reports whether this is a refusal of what the client sent, as opposed to a
 // failure.
 //
@@ -988,6 +1018,8 @@ func laLoiDauVaoNganSach(err error) bool {
 		domain.ErrPercentOperandsMissing, domain.ErrOperandsOnNumberColumn,
 		domain.ErrOperandIndexOutOfRange, domain.ErrOperandsSameColumn,
 		domain.ErrOperandNotNumberColumn, domain.ErrOperandNotInSheet,
+		domain.ErrCloseMonthInvalid, domain.ErrReopenReasonMissing, domain.ErrReopenReasonTooLong,
+		domain.ErrAdjustmentReasonBlank, domain.ErrAdjustmentReasonTooLong,
 	} {
 		if errors.Is(err, mot) {
 			return true

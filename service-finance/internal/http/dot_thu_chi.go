@@ -43,6 +43,10 @@ type dotRa struct {
 	DocumentNo   string `json:"document_no,omitempty"`
 	RecordedAt   string `json:"recorded_at,omitempty"` // RFC 3339; absent on the 201 of a create
 
+	// AdjustmentReason — present only on an ADJUSTMENT ENTRY (migration 0012): why a closed period is
+	// being corrected by this entry. Omitted on an ordinary entry. Not personal data, emitted as is.
+	AdjustmentReason string `json:"adjustment_reason,omitempty"`
+
 	// Values is columnID -> đồng. ON THE LIST, EVERY LIVE NUMBER COLUMN OF THE SHEET IS A KEY, `null`
 	// when this batch left it empty — the same shape dongRa.Values has. On the 201 of a create only
 	// the stated amounts appear; the client refetches the list, as it refetches the sheet.
@@ -78,13 +82,19 @@ type ghiDotVao struct {
 	Counterparty string            `json:"counterparty,omitempty"`
 	DocumentNo   string            `json:"document_no,omitempty"`
 	Values       map[string]*int64 `json:"values"`
+
+	// AdjustmentReason — send it ONLY for an adjustment entry (≤500 characters, not blank); absent =
+	// an ordinary entry. The entry must still fall in an OPEN period — an adjustment is how a closed
+	// period is corrected from outside it, not a way into it.
+	AdjustmentReason *string `json:"adjustment_reason,omitempty"`
 }
 
 func dotRaNgoai(d domain.DotThuChi, cot []domain.CotNganSach) dotRa {
 	ra := dotRa{
 		ID: d.ID, LineID: d.KhoanMucID, Date: ngayRa(d.Ngay), Content: d.NoiDung,
 		Counterparty: privacy.MaskName(d.DonViCaNhan), DocumentNo: d.SoChungTu, RecordedAt: lucRa(d.TaoLuc),
-		Values: map[string]*int64{},
+		AdjustmentReason: d.AdjustmentReason,
+		Values:           map[string]*int64{},
 	}
 	for _, c := range cot {
 		if c.Kieu != domain.CotSo {
@@ -154,6 +164,7 @@ func (h *Handler) GhiDotThuChi(w http.ResponseWriter, r *http.Request) {
 	moi, err := h.d.GhiNganSach.GhiDot(r.Context(), app.YeuCauGhiDot{
 		KhoanMucID: r.PathValue("id"), Ngay: ngay, NoiDung: vao.Content,
 		DonViCaNhan: vao.Counterparty, SoChungTu: vao.DocumentNo, GiaTri: gia,
+		AdjustmentReason: vao.AdjustmentReason,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNganSach(w, r, "ghi đợt", err)

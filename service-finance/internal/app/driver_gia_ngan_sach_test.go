@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -81,6 +82,13 @@ type khoNSGia struct {
 	// soDotSong is what DemDotSong answers — the live batch count the write ceiling is checked against.
 	soDotSong int
 
+	// closes are the rows of `budget_period_closes` (migration 0012). The fake APPLIES the filters the
+	// statements bind — `year IN ($2, $3)` + `reopened_at IS NULL`, or `code = $2` — so a test can
+	// prove a reopened close no longer locks. nextRevision is what the MAX(revision) read answers (0 =
+	// 1). A reopen UPDATE marks the matching row reopened, so the re-read sees it.
+	closes       []domain.BudgetPeriodClose
+	nextRevision int
+
 	loi error
 
 	// loiSau fails the FIRST statement containing this substring, and only that one.
@@ -91,6 +99,9 @@ type khoNSGia struct {
 	// have already run.
 	loiSau string
 	daNo   bool
+	// loiSauLa is the error loiSau fails with; nil = the generic one. Lets a test hand back a
+	// *pgconn.PgError, the shape the store's unique-violation mapping reads.
+	loiSauLa error
 }
 
 func (k *khoNSGia) ghi(q string, args []driver.NamedValue) {
@@ -138,6 +149,9 @@ func (k *khoNSGia) kiemLoi(q string) error {
 	defer k.mu.Unlock()
 	if k.loiSau != "" && !k.daNo && strings.Contains(q, k.loiSau) {
 		k.daNo = true
+		if k.loiSauLa != nil {
+			return k.loiSauLa
+		}
 		return errors.New("driver giả: câu lệnh này được dựng để hỏng")
 	}
 	return nil
@@ -169,9 +183,51 @@ func (c *connNSGia) ExecContext(_ context.Context, q string, args []driver.Named
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
 	}
+	// THE REOPEN FILL applies `AND reopened_at IS NULL` like the real statement: zero rows when the
+	// close is already reopened, which is the 409 the store maps it to.
+	if strings.Contains(q, "UPDATE budget_period_closes") {
+		id, _ := args[1].Value.(string)
+		for i := range c.k.closes {
+			if c.k.closes[i].ID == id && c.k.closes[i].Active() {
+				c.k.closes[i].ReopenedAt = time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)
+				c.k.closes[i].ReopenedBy, _ = args[2].Value.(string)
+				c.k.closes[i].ReopenReason, _ = args[3].Value.(string)
+				return driver.RowsAffected(1), nil
+			}
+		}
+		return driver.RowsAffected(0), nil
+	}
 	// ONE ROW AFFECTED, ALWAYS. The store turns zero into "not found", and a fake returning zero
 	// would make every update look like a missing row — hiding the case this actually tests.
 	return driver.RowsAffected(1), nil
+}
+
+// closeRows answers the two `budget_period_closes` reads, applying their filters.
+func (c *connNSGia) closeRows(q string, args []driver.NamedValue) *rowsGia {
+	var hang [][]driver.Value
+	for _, x := range c.k.closes {
+		switch {
+		case strings.Contains(q, "code = $2"):
+			if code, _ := args[1].Value.(string); x.Code != code {
+				continue
+			}
+		case strings.Contains(q, "year IN ($2, $3)"):
+			a, _ := args[1].Value.(int64)
+			b, _ := args[2].Value.(int64)
+			if (int64(x.Year) != a && int64(x.Year) != b) || !x.Active() {
+				continue
+			}
+		}
+		var month any = int64(x.Month)
+		var reopenedAt any
+		if !x.ReopenedAt.IsZero() {
+			reopenedAt = x.ReopenedAt
+		}
+		hang = append(hang, []driver.Value{x.ID, x.Code, int64(x.Year), month, int64(x.Revision),
+			x.ClosedAt, x.ClosedBy, reopenedAt, x.ReopenedBy, x.ReopenReason})
+	}
+	return &rowsGia{cot: []string{"id", "code", "year", "month", "revision", "closed_at", "closed_by",
+		"reopened_at", "reopened_by", "reopen_reason"}, hang: hang}
 }
 
 // QueryContext dispatches on the statement, and THE ORDER OF THE CASES IS LOAD-BEARING: three of
@@ -184,6 +240,17 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return nil, err
 	}
 	switch {
+	// THE CLOSE STATEMENTS FIRST OF ALL: `MAX(revision)` would otherwise never be reached, and nothing
+	// else names this table.
+	case strings.Contains(q, "MAX(revision)"):
+		rev := c.k.nextRevision
+		if rev == 0 {
+			rev = 1
+		}
+		return &rowsGia{cot: []string{"revision"}, hang: [][]driver.Value{{int64(rev)}}}, nil
+	case strings.Contains(q, "FROM budget_period_closes"):
+		return c.closeRows(q, args), nil
+
 	// THE BATCH STATEMENTS COME FIRST: the sum names `khoan_muc_ngan_sach` and the EXISTS names
 	// `SELECT EXISTS`, both of which a later case would otherwise answer.
 	case strings.Contains(q, "SUM(g.gia_tri)"):
@@ -247,6 +314,7 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		d := c.k.dot
 		return &rowsGia{cot: cotDotNS(), hang: [][]driver.Value{{
 			d.ID, d.KhoanMucID, d.Ngay, d.NoiDung, d.DonViCaNhan, d.SoChungTu, d.NguoiGhiMa, d.TaoLuc,
+			d.AdjustmentReason,
 		}}}, nil
 
 	case strings.Contains(q, "FROM gia_tri_khoan_muc"):
@@ -324,7 +392,7 @@ func cotCotNS() []string {
 
 func cotDotNS() []string {
 	return []string{"id", "khoan_muc_id", "ngay", "noi_dung", "don_vi_ca_nhan",
-		"so_chung_tu", "nguoi_ghi_ma", "tao_luc"}
+		"so_chung_tu", "nguoi_ghi_ma", "tao_luc", "adjustment_reason"}
 }
 
 func cotKM() []string {

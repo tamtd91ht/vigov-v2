@@ -41,6 +41,11 @@ type YeuCauGhiDot struct {
 	// GiaTri is cotID -> amount. A nil value is "left empty" and writes no row — 0008: "a column with
 	// NO row is empty too". At least one amount must be non-nil (domain.ErrDotKhongCoSoTienNao).
 	GiaTri map[string]*domain.Dong
+
+	// AdjustmentReason — nil = an ordinary entry; set = an ADJUSTMENT ENTRY (migration 0012): the
+	// correction of a closed period, recorded in a period that is still open, with the reason why. It
+	// is an ordinary entry in every other respect — the period guard applies to it unchanged.
+	AdjustmentReason *string
 }
 
 // GhiDot records one batch and its amounts against one leaf line.
@@ -71,6 +76,10 @@ func (uc *NganSach) GhiDot(ctx context.Context, yc YeuCauGhiDot,
 	if err != nil {
 		return domain.DotThuChi{}, err
 	}
+	adjustmentReason, err := domain.NormaliseAdjustmentReason(yc.AdjustmentReason)
+	if err != nil {
+		return domain.DotThuChi{}, err
+	}
 	coSo := false
 	for _, g := range yc.GiaTri {
 		if g == nil {
@@ -97,8 +106,9 @@ func (uc *NganSach) GhiDot(ctx context.Context, yc YeuCauGhiDot,
 		DonViCaNhan: donVi, SoChungTu: soCT,
 		// THE STAFF BUSINESS CODE — audit.Actor.ID is Principal.Ma (http.nguoiThucHien). 0008 named the
 		// column `nguoi_ghi_ma` so it cannot be read as licence to store the internal id.
-		NguoiGhiMa: nguoi.ID,
-		GiaTri:     map[string]domain.Dong{},
+		NguoiGhiMa:       nguoi.ID,
+		AdjustmentReason: adjustmentReason,
+		GiaTri:           map[string]domain.Dong{},
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -113,6 +123,11 @@ func (uc *NganSach) GhiDot(ctx context.Context, yc YeuCauGhiDot,
 		k, thay := day.TheoID(yc.KhoanMucID)
 		if !thay {
 			return domain.ErrKhongThayKhoanMuc
+		}
+		// THE PERIOD GUARD, after the sheet lock and before any insert: the entry's date and the
+		// sheet's year must both be open (domain.EntryLockingClose).
+		if err := uc.guardEntryPeriod(ctx, tx, bang.Nam, yc.Ngay); err != nil {
+			return err
 		}
 		if day.CoCon(k.ID) {
 			return domain.ErrDotChiGhiVaoLa
@@ -221,6 +236,10 @@ func (uc *NganSach) GoDot(ctx context.Context, id, lyDoTho string, nguoi audit.A
 		if _, thay := day.TheoID(truoc.KhoanMucID); !thay {
 			return domain.ErrKhongThayDot
 		}
+		// Removing an entry of a closed period is as final as adding one: the same guard.
+		if err := uc.guardEntryPeriod(ctx, tx, bang.Nam, truoc.Ngay); err != nil {
+			return err
+		}
 
 		// `deleted_by` HOLDS THE STAFF BUSINESS CODE, the same value the entry's actor holds.
 		if err := uc.kho.XoaMemDot(ctx, tx, truoc.ID, nguoi.ID, lyDo); err != nil {
@@ -259,7 +278,15 @@ func (uc *NganSach) GoDot(ctx context.Context, id, lyDoTho string, nguoi audit.A
 // citizen's name (migration 0008), and an audit entry is append-only and kept for years: copying the
 // text would make the ledger a personal-data store nobody can erase (rule 6 forbidden #4, rule 3).
 // The batch row itself is immutable and carries the text; `dot_id` points at it.
+//
+// `adjustment_reason` IS HERE IN FULL (migration 0012): it is the commune's statement of why a closed
+// period is being corrected — the very thing an inspection asks — and it is not personal data. null
+// for an ordinary entry; `is_adjustment` says the same on sight.
 func tomTatDot(d domain.DotThuChi, soTien []map[string]any) map[string]any {
+	var adjustmentReason any
+	if d.AdjustmentReason != "" {
+		adjustmentReason = d.AdjustmentReason
+	}
 	return map[string]any{
 		"ngay":                  d.Ngay.Format(time.DateOnly),
 		"noi_dung":              d.NoiDung,
@@ -267,5 +294,7 @@ func tomTatDot(d domain.DotThuChi, soTien []map[string]any) map[string]any {
 		"co_don_vi_ca_nhan":     d.DonViCaNhan != "",
 		"do_dai_don_vi_ca_nhan": utf8.RuneCountInString(d.DonViCaNhan),
 		"so_tien":               soTien,
+		"is_adjustment":         d.AdjustmentReason != "",
+		"adjustment_reason":     adjustmentReason,
 	}
 }

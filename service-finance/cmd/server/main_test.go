@@ -377,6 +377,10 @@ func (khoNganSachTrong) DotCuaKhoanMuc(context.Context, string) (domain.DotCuaKh
 	return domain.DotCuaKhoanMuc{}, domain.ErrKhongThayKhoanMuc
 }
 
+func (khoNganSachTrong) BudgetPeriodClosesOfYear(context.Context, int) ([]domain.BudgetPeriodClose, error) {
+	return nil, nil
+}
+
 // emptyOverrideStore is the override table of a commune that reworded nothing — every commune until
 // somebody opens Cấu hình → Lời hệ thống. The project list READS it now (`scope_notice`, du_an.go),
 // so the real use case needs a store that answers; the write methods are never reached from here.

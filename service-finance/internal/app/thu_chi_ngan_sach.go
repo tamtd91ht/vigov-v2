@@ -90,6 +90,14 @@ type KhoNganSach interface {
 	ChenDot(ctx context.Context, tx *store.ScopedTx, d domain.DotThuChi) error
 	ChenSoTienDot(ctx context.Context, tx *store.ScopedTx, dotID, cotID string, gia domain.Dong) error
 	XoaMemDot(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+
+	// Budget period closes (migration 0012) — budget_period_close.go in both packages.
+	LockBudgetYears(ctx context.Context, tx *store.ScopedTx, years ...int) error
+	ActiveBudgetPeriodCloses(ctx context.Context, tx *store.ScopedTx, yearA, yearB int) ([]domain.BudgetPeriodClose, error)
+	BudgetPeriodCloseByCode(ctx context.Context, tx *store.ScopedTx, code string) (domain.BudgetPeriodClose, error)
+	NextBudgetPeriodCloseRevision(ctx context.Context, tx *store.ScopedTx, year, month int) (int, error)
+	InsertBudgetPeriodClose(ctx context.Context, tx *store.ScopedTx, c domain.BudgetPeriodClose) error
+	ReopenBudgetPeriodClose(ctx context.Context, tx *store.ScopedTx, id, by, reason string) error
 }
 
 // NganSach owns creating, removing, and editing one commune's budget board.
@@ -123,6 +131,11 @@ const (
 	HanhViDatDongTongNganSach = "dat_dong_tong_ngan_sach"
 	HanhViGhiDotThuChi        = "ghi_dot_thu_chi"
 	HanhViGoDotThuChi         = "go_dot_thu_chi"
+
+	// ActionBudgetPeriodClose / ActionBudgetPeriodReopen — migration 0012. The VALUES stay Vietnamese
+	// snake_case like every verb above (an inspection reads them); the identifiers are English (rule 12).
+	ActionBudgetPeriodClose  = "chot_ky_ngan_sach"
+	ActionBudgetPeriodReopen = "mo_chot_ky_ngan_sach"
 )
 
 // --- creating a sheet ------------------------------------------------------------------------------
@@ -254,6 +267,11 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// A NEW SHEET FOR A CLOSED YEAR IS A WRITE ON THAT YEAR'S FIGURES — refused like an edit of an
+		// existing one (budget_period_close.go).
+		if err := uc.guardSheetYear(ctx, tx, yc.Nam); err != nil {
+			return err
+		}
 		// REFUSED RATHER THAN STACKED. §6's `🗑 Gỡ` is how a year's sheet is replaced; a second live
 		// sheet for one year and kind would give that year two answers with nothing on either screen
 		// saying which the report was built from.
@@ -336,6 +354,9 @@ func (uc *NganSach) GoBang(ctx context.Context, id, lyDoTho string, nguoi audit.
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		truoc, err := uc.kho.BangTheoIDDeSua(ctx, tx, id)
 		if err != nil {
+			return err
+		}
+		if err := uc.guardSheetYear(ctx, tx, truoc.Nam); err != nil {
 			return err
 		}
 		// `deleted_by` HOLDS THE STAFF BUSINESS CODE, the same value the entry's actor holds. Two
@@ -421,6 +442,9 @@ func (uc *NganSach) SuaBang(ctx context.Context, id string, yc YeuCauSuaBang,
 		// both answer ErrKhongThayBangNganSach, which the handler turns into one 404 body.
 		truoc, err := uc.kho.BangTheoIDDeSua(ctx, tx, id)
 		if err != nil {
+			return err
+		}
+		if err := uc.guardSheetYear(ctx, tx, truoc.Nam); err != nil {
 			return err
 		}
 		sau = truoc
@@ -536,6 +560,9 @@ func (uc *NganSach) ThemKhoanMuc(ctx context.Context, yc YeuCauThemKhoanMuc,
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		bang, day, err := uc.khoaVaDocCay(ctx, tx, yc.BangID)
 		if err != nil {
+			return err
+		}
+		if err := uc.guardSheetYear(ctx, tx, bang.Nam); err != nil {
 			return err
 		}
 
@@ -703,6 +730,10 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 		truoc, thay := day.TheoID(id)
 		if !thay {
 			return domain.ErrKhongThayKhoanMuc
+		}
+		// The line's text, its mode AND its hand-entered values — all locked by a YEAR close.
+		if err := uc.guardSheetYear(ctx, tx, bang.Nam); err != nil {
+			return err
 		}
 
 		sau = truoc
@@ -982,6 +1013,9 @@ func (uc *NganSach) GoKhoanMuc(ctx context.Context, id, lyDoTho string, nguoi au
 		if !thay {
 			return domain.ErrKhongThayKhoanMuc
 		}
+		if err := uc.guardSheetYear(ctx, tx, bang.Nam); err != nil {
+			return err
+		}
 		if err := domain.ChoGo(day.CoCon(id)); err != nil {
 			return err
 		}
@@ -1102,6 +1136,9 @@ func (uc *NganSach) DatDongTong(ctx context.Context, id string,
 		truoc, thay := day.TheoID(id)
 		if !thay {
 			return domain.ErrKhongThayKhoanMuc
+		}
+		if err := uc.guardSheetYear(ctx, tx, bang.Nam); err != nil {
+			return err
 		}
 
 		// WHICH ROW HELD IT BEFORE, read BEFORE the write and recorded in the entry. "The commune's

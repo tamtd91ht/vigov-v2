@@ -110,8 +110,9 @@ const khoanMucSongTrongBangSong = `SELECT k.id, k.bang_id, COALESCE(k.cha_id, ''
 	  ON b.tenant_id = k.tenant_id AND b.id = k.bang_id
 	WHERE k.tenant_id = $1 AND k.id = $2 AND k.deleted_at IS NULL AND b.deleted_at IS NULL`
 
+// `adjustment_reason` (migration 0012) reads as "" for an ordinary entry.
 const cotDot = `id, khoan_muc_id, ngay, noi_dung, COALESCE(don_vi_ca_nhan, ''), ` +
-	`COALESCE(so_chung_tu, ''), nguoi_ghi_ma, tao_luc`
+	`COALESCE(so_chung_tu, ''), nguoi_ghi_ma, tao_luc, COALESCE(adjustment_reason, '')`
 
 // soTienDotCuaKhoanMuc — every stated amount of one line's LIVE batches.
 const soTienDotCuaKhoanMuc = `SELECT g.dot_id, g.cot_id, g.gia_tri
@@ -198,7 +199,7 @@ func quetDot(rows *sql.Rows) ([]domain.DotThuChi, error) {
 	for rows.Next() {
 		var d domain.DotThuChi
 		err := rows.Scan(&d.ID, &d.KhoanMucID, &d.Ngay, &d.NoiDung, &d.DonViCaNhan,
-			&d.SoChungTu, &d.NguoiGhiMa, &d.TaoLuc)
+			&d.SoChungTu, &d.NguoiGhiMa, &d.TaoLuc, &d.AdjustmentReason)
 		if err != nil {
 			return nil, fmt.Errorf("ngan_sach: đọc dòng đợt: %w", err)
 		}
@@ -309,15 +310,18 @@ func (s *NganSachStore) DemDotSong(ctx context.Context, tx *store.ScopedTx, khoa
 
 // chenDot — `tao_luc` takes its default and `deleted_*` are absent: a batch is born live. Empty
 // optional text goes in as NULL, never ” (0008 refuses ” so "not stated" has one spelling).
+// `adjustment_reason` likewise: NULL = an ordinary entry (0012 refuses a blank one).
 const chenDot = `INSERT INTO dot_thu_chi
-	(tenant_id, id, khoan_muc_id, ngay, noi_dung, don_vi_ca_nhan, so_chung_tu, nguoi_ghi_ma)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	(tenant_id, id, khoan_muc_id, ngay, noi_dung, don_vi_ca_nhan, so_chung_tu, nguoi_ghi_ma,
+	 adjustment_reason)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 // ChenDot records one batch row. Its amounts follow through ChenSoTienDot in the same transaction.
 func (s *NganSachStore) ChenDot(ctx context.Context, tx *store.ScopedTx, d domain.DotThuChi) error {
 	_, err := tx.Exec(ctx, chenDot, string(tx.TenantID()),
 		d.ID, d.KhoanMucID, d.Ngay, d.NoiDung,
-		rongThanhNil(d.DonViCaNhan), rongThanhNil(d.SoChungTu), d.NguoiGhiMa)
+		rongThanhNil(d.DonViCaNhan), rongThanhNil(d.SoChungTu), d.NguoiGhiMa,
+		rongThanhNil(d.AdjustmentReason))
 	if err != nil {
 		return fmt.Errorf("ngan_sach: chèn đợt: %w", err)
 	}

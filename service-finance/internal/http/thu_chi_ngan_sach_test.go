@@ -49,8 +49,18 @@ type nganSachGia struct {
 	theo map[tenant.ID]map[string]domain.BangDayDu
 	// dot is the `⇄` list, keyed by commune and line id — same discipline as `theo`.
 	dot map[tenant.ID]map[string]domain.DotCuaKhoanMuc
-	loi error
-	goi int
+	// closes is the close history, keyed by commune and year — same discipline as `theo`.
+	closes map[tenant.ID]map[int][]domain.BudgetPeriodClose
+	loi    error
+	goi    int
+}
+
+func (n *nganSachGia) BudgetPeriodClosesOfYear(ctx context.Context, year int) ([]domain.BudgetPeriodClose, error) {
+	n.goi++
+	if n.loi != nil {
+		return nil, n.loi
+	}
+	return n.closes[tenant.MustFrom(ctx)][year], nil
 }
 
 func (n *nganSachGia) DotCuaKhoanMuc(ctx context.Context, khoanMucID string) (domain.DotCuaKhoanMuc, error) {
@@ -94,6 +104,11 @@ type ghiNganSachGia struct {
 	ghiDotGoi, goDotGoi               int
 	raDot                             domain.DotThuChi
 	ghiDotCuoi                        app.YeuCauGhiDot
+
+	closeCalls, reopenCalls int
+	raClose                 domain.BudgetPeriodClose
+	lastClose               app.BudgetPeriodCloseRequest
+	lastReopenCode          string
 
 	xaCuoi      tenant.ID
 	nguoiCuoi   audit.Actor
@@ -197,9 +212,31 @@ func (g *ghiNganSachGia) GoDot(ctx context.Context, id, lyDo string, nguoi audit
 	return g.loi
 }
 
+func (g *ghiNganSachGia) CloseBudgetPeriod(ctx context.Context, req app.BudgetPeriodCloseRequest,
+	nguoi audit.Actor) (domain.BudgetPeriodClose, error) {
+	g.closeCalls++
+	g.lastClose = req
+	g.ghiNhan(ctx, nguoi)
+	if g.loi != nil {
+		return domain.BudgetPeriodClose{}, g.loi
+	}
+	return g.raClose, nil
+}
+
+func (g *ghiNganSachGia) ReopenBudgetPeriodClose(ctx context.Context, code, reason string,
+	nguoi audit.Actor) (domain.BudgetPeriodClose, error) {
+	g.reopenCalls++
+	g.lastReopenCode, g.lyDoCuoi = code, reason
+	g.ghiNhan(ctx, nguoi)
+	if g.loi != nil {
+		return domain.BudgetPeriodClose{}, g.loi
+	}
+	return g.raClose, nil
+}
+
 func (g *ghiNganSachGia) tongGoi() int {
 	return g.taoBangGoi + g.goBangGoi + g.suaBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN +
-		g.ghiDotGoi + g.goDotGoi
+		g.ghiDotGoi + g.goDotGoi + g.closeCalls + g.reopenCalls
 }
 
 // --- fixtures ------------------------------------------------------------------------------------
@@ -364,6 +401,10 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 			ID: idBangChi, Ma: "NS-2026-CHI-01", Nam: 2026, Loai: domain.BangChi, Lan: 1,
 			TieuDe: "BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM 2026", DonViTinh: "Triệu đồng",
 		},
+		raClose: domain.BudgetPeriodClose{
+			ID: "01JCHOTKY00000000000000000", Code: "CK-2026-09-01", Year: 2026, Month: 9, Revision: 1,
+			ClosedBy: maCanBoGhi,
+		},
 	}
 	checker := &checkerDanhMucGia{}
 	nhatKy := &bytes.Buffer{}
@@ -495,8 +536,18 @@ func tamTuyenNganSach() []motTuyenNganSach {
 			"budget.update", http.StatusCreated, func(m *mayChuNganSach) int { return m.ghi.ghiDotGoi }},
 		{"DELETE dot", http.MethodDelete, duongDot + "/01JDOTMOINHAT0000000000000", `{"reason":"ghi nhầm số chứng từ"}`,
 			"budget.confirm", http.StatusNoContent, func(m *mayChuNganSach) int { return m.ghi.goDotGoi }},
+		// Budget period close (migration 0012) — the three NEW routes, under the same four cases.
+		{"GET chot ky", http.MethodGet, pathPeriodCloses + "?year=2026", "",
+			"budget.read", http.StatusOK, func(m *mayChuNganSach) int { return m.doc.goi }},
+		{"POST chot ky", http.MethodPost, pathPeriodCloses, `{"year":2026,"month":9}`,
+			"budget.confirm", http.StatusCreated, func(m *mayChuNganSach) int { return m.ghi.closeCalls }},
+		{"POST mo chot", http.MethodPost, pathPeriodCloses + "/CK-2026-09-01/reopening",
+			`{"reason":"Ghi sót đợt thu phí chợ tháng 9"}`,
+			"budget.confirm", http.StatusOK, func(m *mayChuNganSach) int { return m.ghi.reopenCalls }},
 	}
 }
+
+const pathPeriodCloses = "/api/v1/budget-period-closes"
 
 func (m *mayChuNganSach) daChay() int { return m.doc.goi + m.ghi.tongGoi() }
 

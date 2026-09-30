@@ -183,6 +183,9 @@ type NganSachDoc interface {
 
 	// DotCuaKhoanMuc is the `⇄` dialog's list (GET /api/v1/budget-lines/{id}/entries).
 	DotCuaKhoanMuc(ctx context.Context, khoanMucID string) (domain.DotCuaKhoanMuc, error)
+
+	// BudgetPeriodClosesOfYear is the close history of one year (GET /api/v1/budget-period-closes).
+	BudgetPeriodClosesOfYear(ctx context.Context, year int) ([]domain.BudgetPeriodClose, error)
 }
 
 // GhiNganSach is the WRITE half of the budget board, and it is its own interface rather than more
@@ -206,6 +209,10 @@ type GhiNganSach interface {
 	DatDongTong(ctx context.Context, id string, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
 	GhiDot(ctx context.Context, yc app.YeuCauGhiDot, nguoi audit.Actor) (domain.DotThuChi, error)
 	GoDot(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+
+	// Budget period close (migration 0012) — app/budget_period_close.go.
+	CloseBudgetPeriod(ctx context.Context, req app.BudgetPeriodCloseRequest, nguoi audit.Actor) (domain.BudgetPeriodClose, error)
+	ReopenBudgetPeriodClose(ctx context.Context, code, reason string, nguoi audit.Actor) (domain.BudgetPeriodClose, error)
 }
 
 type Deps struct {
@@ -1266,6 +1273,86 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một đợt đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
 				http.HandlerFunc(h.GoDotThuChi))))
+
+	// --- budget period close (chốt kỳ), migration 0012 ------------------------------------------------
+	//
+	// `budget-period-closes` — the noun the user settled on 30/09/2026 (kb/00-foundation/
+	// ubiquitous-language.md): PLURAL because the resource is the CLOSE ACTS, one row each, not "the
+	// period". A re-close after a reopen is a new item with the next revision and a new `code`.
+	//
+	// `budget.confirm` FOR CLOSE AND REOPEN — the user's decision, and the key §9 rule 7's group already
+	// gives the weight of a confirmation. `budget.read` to read the history. Both seeded at
+	// service-identity/migrations/0001_init.sql:282-284; no key invented (rule 5, invariant 3c).
+	//
+	// WHAT A CLOSE LOCKS is enforced on the write routes above, inside their transactions (409
+	// `budget_period_closed`): adding/removing an entry dated in a closed month or year, or on a sheet
+	// of a closed year; and — for a YEAR close only — every sheet, line, headline and value write of
+	// that year's sheets.
+
+	// `budget.read` — the close history of one year: active AND reopened closes, who and when. NO
+	// idem.* DECLARATION: a GET changes no state. `year` is required and never defaults, for the reason
+	// namVaLoai gives.
+	//
+	// @summary  Lịch sử chốt kỳ ngân sách của một năm: các lần chốt tháng, chốt cả năm, đang hiệu lực hay đã mở chốt
+	// @screen   07-thu-chi-ngan-sach §6
+	// @reply    200 budgetPeriodClosesOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/budget-period-closes",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ListBudgetPeriodCloses)))
+
+	// `budget.confirm` — closing a month (`month` 1..12) or a whole year (`month` absent). 409 when
+	// the period already has an active close, naming it.
+	//
+	// idem.Required(DongKhiHong): a close is a declaration that a commune's figures are final — the
+	// class of act core/idem reserves DongKhiHong for. The unique index `budget_period_closes_one_active`
+	// is the floor under a duplicate, but a retry must be told the code the first attempt issued, not a
+	// 409 about its own close; that is what RecordCode below the handler gives it.
+	//
+	// @summary  Chốt kỳ ngân sách theo tháng hoặc cả năm — sau khi chốt không thêm, gỡ đợt thu chi của kỳ
+	// @screen   07-thu-chi-ngan-sach §6
+	// @request  budgetPeriodCloseIn
+	// @reply    201 budgetPeriodCloseOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/budget-period-closes",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.CreateBudgetPeriodClose))))
+
+	// `reopening` IS A NOMINALISED SUB-RESOURCE, NOT THE VERB `reopen` — the noun rest_api_guard itself
+	// proposes for it, and the shape `headline` uses. POST creates the reopening of ONE close, once:
+	// 409 when it is already reopened. The reason is mandatory (≤500), because a period whose figures
+	// were declared final and then unlocked with no reason is the question an inspection asks first.
+	//
+	// {code} IS THE CLOSE'S BUSINESS CODE (`CK-2026-09-01`), the identifier the list shows and the
+	// audit trail is filed under. Another commune's code answers the same 404 as a code never issued.
+	//
+	// idem.Required(DongKhiHong), for the reason the close gives: unlocking final figures is an act
+	// with legal consequence, and the retry is told the code instead of a 409 about its own reopen.
+	//
+	// @summary  Mở chốt một lần chốt kỳ ngân sách, kèm lý do bắt buộc — ghi một lần, không xoá lần chốt
+	// @screen   07-thu-chi-ngan-sach §6
+	// @request  budgetPeriodReopeningIn
+	// @reply    200 budgetPeriodCloseOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/budget-period-closes/{code}/reopening",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.CreateBudgetPeriodReopening))))
 
 	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
 	//
