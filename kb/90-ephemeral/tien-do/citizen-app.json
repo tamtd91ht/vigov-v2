@@ -310,6 +310,14 @@
         "noi-dung-mini-app",
         "phan-anh-nguoi-dan"
       ]
+    },
+    {
+      "id": "co-demo-app-rieng",
+      "viec": "Cờ dựng --demo cho app riêng xã khi chưa nộp Zalo: tên 'Nguyễn Văn Hùng', số 0900000000 khi Zalo không trả; chỉ phía citizen-app (ADR 0047 §6)",
+      "trang_thai": "xong",
+      "bang_chung": "4d2c49e4 — lib/demo-build.ts (__VIGOV_DEMO__ để trần cho bundler gập), cong-dan/man/demo-mode.tsx, commune-session.ts DEMO_PROCEEDS (tu-choi, thu-lai, cho-lat, ngoai-zalo, chua-xac-thuc-so) → chạy việc không phiên, không vòng; deploy.mjs từ chối --demo thiếu --vao-thang, in cảnh báo. bundle-for-zalo.test.ts: bản thường 0 chuỗi demo, bản demo đủ. tsc sạch, vitest 48 tệp 1278/1278, build xanh.",
+      "tiep_theo": "BỎ --demo trước khi nộp duyệt Zalo (người dùng tự bỏ). Chưa có test đi trọn TrangXa sessionLost → màn thông báo (DOM test không mô phỏng chạm). Đường dẫn từ chối hộp Zalo (tu-choi) cũng cho đi tiếp — bỏ khỏi DEMO_PROCEEDS nếu muốn chặt hơn. Chưa xem trên máy thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
