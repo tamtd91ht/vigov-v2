@@ -858,6 +858,31 @@
       "declared_in": "service-petitions/internal/http/routes.go"
     },
     {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/tasks",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_tasks",
+      "task_id": "ae174d9a3f26",
+      "summary": "Tạo nhiệm vụ từ một phiếu phản ánh — nguồn giao do máy chủ gắn theo phiếu, ghi cùng một dòng nhật ký phiếu",
+      "screen": "09-phan-anh-nguoi-dan §13",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.petitionTaskIn",
+      "reply_schemas": {
+        "201": "petitions.nhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
       "service": "comms",
       "method": "GET",
       "path": "/api/v1/comms-audit-entries",
