@@ -56,6 +56,8 @@ const HINH = {
   ),
   back: <path d="M19,12H5M11,6l-6,6,6,6" />,
   right: <path d="M9,5.5l6.5,6.5L9,18.5" />,
+  // "Gửi phản ánh mới" at the foot of the Phản ánh tab — the prototype's `Plus`.
+  plus: <path d="M12,5v14M5,12h14" />,
   alert: (
     <>
       <path d="M12,3.4l8.8,15.6H3.2z" />

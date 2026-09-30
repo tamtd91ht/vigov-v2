@@ -5,3 +5,5 @@ dist/
 
 # Logo xã chép vào đây cho ĐÚNG một lần đẩy `--vao-thang` rồi xoá (scripts/deploy.mjs).
 public/logo-xa.png
+# Banner xã, cùng cách với logo: chép cho đúng một lần đẩy `--vao-thang` rồi xoá.
+public/banner-xa.png

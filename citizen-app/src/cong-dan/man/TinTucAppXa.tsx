@@ -68,11 +68,12 @@ const CAU_LOI = {
 } as const;
 
 /**
- * The type chips of the news tab — the prototype's three (Tin tức · Sự kiện · Thông báo), now real: each
- * chip is a SERVER filter (`?type=`, comms b22bf76), not a guess from the free-text category the old chips
- * used. Truyền thanh and Video have their own tiles; banners are not articles.
+ * The type tabs of the news tab — exactly the prototype's three (`NewsPage.tsx` TABS: Tin tức · Sự kiện ·
+ * Thông báo), each a SERVER filter (`?type=`, comms b22bf76), not a guess from the free-text category.
+ * NO "Tất cả" (owner, 30/09/2026): the tab opens on Tin tức. The home screen's "Tin mới" still loads every
+ * type (`useTinXa` without a type). Truyền thanh and Video have their own tiles; banners are not articles.
  */
-export const NEWS_CHIPS: readonly NewsType[] = ["tin-tuc", "su-kien", "thong-bao"];
+export const NEWS_TABS: readonly NewsType[] = ["tin-tuc", "su-kien", "thong-bao"];
 
 /** Tin liên quan: cùng chuyên mục, bỏ tin đang đọc, tối đa 3. THUẦN. */
 export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | null, toi_da = 3): TinXaTomTat[] {
@@ -81,41 +82,42 @@ export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | 
 }
 
 /**
- * Danh sách tin — thân của tab "Tin tức". "Tất cả" is the list the home screen shares (`ds`); a type chip
- * mounts its own server-filtered list (`NewsOfType`), with its own pages and its own "Xem thêm".
+ * Danh sách tin — thân của tab "Tin tức – Sự kiện": a tablist of `NEWS_TABS`, and under it the chosen
+ * type's own server-filtered list (`NewsOfType`, keyed by type so each tab loads, pages and "Xem thêm"s on
+ * its own). The tabs are `role="tab"` + `aria-selected`, and the chosen one carries a bar as well as a
+ * colour — never colour alone.
  */
-export function DanhSachTinXa(props: {
-  ten_mien: string;
-  ds: DanhSachTin;
-  onMo: (id: string) => void;
-  onTai: () => void;
-}) {
-  const [type, setType] = useState<NewsType | null>(null);
-  const chips = (
-    <div className="xa-chips" role="group" aria-label={XA_TN.loc_loai_tin}>
-      <button type="button" className={`xa-chip${type === null ? " xa-chip--on" : ""}`} aria-pressed={type === null} onClick={() => setType(null)}>
-        {XA_TN.loc_tat_ca}
-      </button>
-      {NEWS_CHIPS.map((t) => (
-        <button key={t} type="button" className={`xa-chip${type === t ? " xa-chip--on" : ""}`} aria-pressed={type === t} onClick={() => setType(t)}>
-          {NEWS_TYPE_LABEL[t]}
-        </button>
-      ))}
-    </div>
-  );
+export function DanhSachTinXa(props: { ten_mien: string; onMo: (id: string) => void }) {
+  const [type, setType] = useState<NewsType>("tin-tuc");
   return (
     <>
-      {chips}
-      {type === null ? (
-        <NewsListBody ds={props.ds} onMo={props.onMo} onTai={props.onTai} empty={TIN_XA.trong} />
-      ) : (
+      <div className="xa-tabs-tin" role="tablist" aria-label={XA_TN.loc_loai_tin}>
+        {NEWS_TABS.map((t) => (
+          <button
+            key={t}
+            id={`xa-tab-tin-${t}`}
+            type="button"
+            role="tab"
+            aria-selected={type === t}
+            aria-controls="xa-tin-theo-loai"
+            className={`xa-tabs-tin__muc${type === t ? " xa-tabs-tin__muc--on" : ""}`}
+            onClick={() => setType(t)}
+          >
+            {NEWS_TYPE_LABEL[t]}
+          </button>
+        ))}
+      </div>
+      {/* SLOT for the category chip row (card D2): it goes HERE, between the tabs and the list, once the
+          backend serves categories per type. Nothing is built for it yet — a row of chips guessed from the
+          free-text `chuyen_muc` is the guess the type tabs just replaced. */}
+      <div id="xa-tin-theo-loai" role="tabpanel" aria-labelledby={`xa-tab-tin-${type}`}>
         <NewsOfType key={type} ten_mien={props.ten_mien} type={type} onMo={props.onMo} empty={XA_TN.news_type_empty(NEWS_TYPE_LABEL[type])} />
-      )}
+      </div>
     </>
   );
 }
 
-/** One type's list, loaded from the server with `?type=` when mounted. Used by the chips and the Sự kiện tile. */
+/** One type's list, loaded from the server with `?type=` when mounted. Used by the type tabs and the Sự kiện tile. */
 export function NewsOfType(props: { ten_mien: string; type: NewsType; onMo: (id: string) => void; empty: string }) {
   const news = useTinXa(props.ten_mien, props.type);
   return <NewsListBody ds={news.ds} onMo={props.onMo} onTai={news.taiTiep} empty={props.empty} />;
@@ -165,7 +167,7 @@ export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => voi
 
 /**
  * Tải danh sách tin của xã; trạng thái sống ở đây để tab và trang chủ dùng chung một lần tải. `type`
- * (tuỳ chọn): danh sách lọc theo loại ở máy chủ — một lần tải riêng, cho chip và ô Sự kiện.
+ * (tuỳ chọn): danh sách lọc theo loại ở máy chủ — một lần tải riêng, cho tab loại tin và ô Sự kiện.
  */
 export function useTinXa(ten_mien: string, type: NewsType | null = null) {
   const [ds, datDs] = useState<DanhSachTin>(TIN_DAU);

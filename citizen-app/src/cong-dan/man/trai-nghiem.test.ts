@@ -7,7 +7,7 @@ import { byDisplayOrder, locCanBo, nhomTheoBoPhan, unitHeadLine } from "./DanhBa
 import { TRANG_THAI } from "./noi-dung";
 import { buocDaQua } from "./PhanAnhAppXa";
 import { groupOf, STATUS_GROUP_LABEL, STEP_LABEL } from "./status-groups";
-import { NEWS_CHIPS, tinLienQuan } from "./TinTucAppXa";
+import { NEWS_TABS, tinLienQuan } from "./TinTucAppXa";
 import {
   chuCaiDau,
   kiemNhapPhieu,
@@ -161,8 +161,9 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     type: null,
   });
 
-  it("news chips are the server's TYPES (?type=), not the free-text categories", () => {
-    expect(NEWS_CHIPS).toEqual(["tin-tuc", "su-kien", "thong-bao"]);
+  it("news tabs are exactly the server's three TYPES (?type=), no 'Tất cả', not the free-text categories", () => {
+    // Owner decision 30/09/2026: three tabs, Tin tức first (the default), no "all" tab.
+    expect(NEWS_TABS).toEqual(["tin-tuc", "su-kien", "thong-bao"]);
     // The old guess is gone: no screen file matches "sự kiện" in a category any more.
     const src = import.meta.glob(["./TrangXa.tsx", "./TinTucAppXa.tsx"], { query: "?raw", import: "default", eager: true }) as Record<
       string,

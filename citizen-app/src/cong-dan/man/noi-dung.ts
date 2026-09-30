@@ -700,8 +700,13 @@ export const XA_TN = {
   /** Zalo refused the name with a code (`zaloFailureSentence`). Not asked again in this open — no retry. */
   name_zalo_failed: (zalo: string) => `${zalo} Bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.`,
   chua_co_ten: "Chưa xác định",
-  loc_loai_tin: "Lọc tin theo loại",
-  /** A type chip, or the Sự kiện tile, with nothing published of that type. */
+  /** Accessible name of the Tin tức · Sự kiện · Thông báo tablist on the news tab. */
+  loc_loai_tin: "Loại tin",
+  /** The news tab's header — the prototype's (`NewsPage.tsx`), since the tab now holds three types. */
+  news_tab_title: "Tin tức – Sự kiện",
+  /** The footer button of the Phản ánh tab (prototype `FeedbackListPage.tsx`). The home tile keeps `o_gui`. */
+  send_new_petition: "Gửi phản ánh mới",
+  /** A news type tab, or the Sự kiện tile, with nothing published of that type. */
   news_type_empty: (type: string) => `Xã chưa đăng tin nào thuộc loại “${type}”.`,
   tin_lien_quan: "Tin liên quan",
   nhom_khac: "Cán bộ khác",

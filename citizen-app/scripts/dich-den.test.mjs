@@ -389,3 +389,22 @@ describe("logo xã tạm thời chỉ đi vào đúng bản dựng --vao-thang",
     expect(readFileSync(new URL("../.gitignore", import.meta.url), "utf8")).toMatch(/^public\/logo-xa\.png$/m);
   });
 });
+
+describe("banner xã tạm thời chỉ đi vào đúng bản dựng --vao-thang", () => {
+  // Same exception, same shape as the logo: a banner left in `public/` would ship one commune's picture
+  // inside the next build — the shared app included.
+  const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+
+  it("chỉ chép khi có cờ, và xoá trong `finally` sau bước dựng", () => {
+    expect(ma).toMatch(/const BANNER_SOURCE = vao_thang \?/);
+    expect(ma).toMatch(/if \(has_banner\) copyFileSync\(BANNER_SOURCE, BANNER_TARGET\)/);
+    // The block is read whole: the logo's `{ force: true }` before it would stop a `[^}]*` match short.
+    const sau_dung = /ma = dung\(env_dung\);\s*\} finally \{([\s\S]*?)\n\}/.exec(ma);
+    expect(sau_dung, "khối finally sau bước dựng").not.toBeNull();
+    expect(sau_dung[1]).toMatch(/if \(has_banner\) rmSync\(BANNER_TARGET/);
+  });
+
+  it("bản chép vào public/ bị git bỏ qua", () => {
+    expect(readFileSync(new URL("../.gitignore", import.meta.url), "utf8")).toMatch(/^public\/banner-xa\.png$/m);
+  });
+});

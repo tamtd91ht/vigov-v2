@@ -123,7 +123,7 @@ const TAB: ReadonlyArray<{ tab: TabXa; nhan: string; bieu_tuong: TenBieuTuong }>
 
 /**
  * Thanh tab dưới — bốn mục, KHÔNG nút nổi, theo prototype khách (`BottomNav.tsx`). "Gửi phản ánh" có ở
- * nhóm "Chính quyền số" trên trang chủ và ở đầu tab Phản ánh.
+ * nhóm "Chính quyền số" trên trang chủ và ở chân tab Phản ánh (`PetitionSendFooter`).
  */
 function ThanhTabXa({ tab, onChon }: { tab: TabXa; onChon: (t: TabXa) => void }) {
   return (
@@ -164,6 +164,30 @@ function LogoXa() {
   return <img className="xa-hero__logo" src="./logo-xa.png" alt="" onError={() => datLoi(true)} />;
 }
 
+/**
+ * THE HOME BANNER — one rounded picture under the header, as the prototype's `BannerStrip` but with no
+ * carousel and no autoplay (a strip that moves on its own is the hardest thing on a touch screen for a slow
+ * reader, and there is one picture).
+ *
+ * TEMPORARY, the same per-domain bundle exception as the logo (ADR 0047 §6): `deploy.mjs --vao-thang` copies
+ * `scripts/banner-xa/<domain>.png` into THAT build only, as `./banner-xa.png`. The real source later is the
+ * commune-posted `banner` content / display profile in service-platform, read at runtime — then this file
+ * name goes away.
+ *
+ * No file (every other build, or a commune that supplied none) → `onError` → NOTHING at all, not a
+ * placeholder: a grey box where the commune posted nothing reads as a screen that failed to load.
+ * `alt=""`: the picture is decoration; the commune's name is the header's words.
+ */
+export function CommuneBanner() {
+  const [missing, setMissing] = useState(false);
+  if (missing) return null;
+  return (
+    <div className="xa-banner">
+      <img className="xa-banner__anh" src="./banner-xa.png" alt="" onError={() => setMissing(true)} />
+    </div>
+  );
+}
+
 type OMenu = {
   nhan: string;
   bieu_tuong: TenBieuTuong;
@@ -176,10 +200,11 @@ type OMenu = {
  * Truyền thông", lưới bốn cột, nền màu phủ cả ô (ô to thì vùng chạm to). Chia nhóm để người dân tìm theo
  * loại việc, và để xã thêm ô sau này không vỡ bố cục.
  */
-const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: "navy" | "cam"; them?: { nhan: string; man: ManXa }; o: readonly OMenu[] }> = [
+const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: "brand" | "cam"; them?: { nhan: string; man: ManXa }; o: readonly OMenu[] }> = [
   {
     tieu_de: XA_TN.nhom_chinh_quyen,
-    vach: "navy",
+    // `.xa-dau-nhom` without a modifier IS the brand bar; `--brand` names it for the reader, no rule needed.
+    vach: "brand",
     o: [
       { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "hong", man: { kieu: "gui" } },
       { nhan: XA_TN.o_tra_cuu_ngan, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
@@ -316,7 +341,7 @@ function TrangChuXa(props: {
   return (
     <div className="xa-trang">
       {/* Header theo prototype (`AppHeader.tsx`): biểu trưng trái, tên xã giữa, lời chào dưới; góc phải
-          để trống cho bộ nút của Zalo. Màu giữ theo bản `vi-gov` chủ dự án đã chọn. */}
+          để trống cho bộ nút của Zalo. Màu đỏ theo prototype v30 (chủ dự án, 30/09/2026) — `--xa-brand`. */}
       <header className="xa-dau-xa">
         <LogoXa />
         <div className="xa-dau-xa__chu">
@@ -327,6 +352,8 @@ function TrangChuXa(props: {
           <BieuTuong ten="bell" co={22} />
         </button>
       </header>
+
+      <CommuneBanner />
 
       <div className="xa-trang__than">
         {props.name_card}
@@ -375,7 +402,7 @@ function TrangChuXa(props: {
         </section>
 
         <section className="xa-the xa-the--dem xa-nhom-cn">
-          <div className="xa-dau-nhom xa-dau-nhom--navy">
+          <div className="xa-dau-nhom xa-dau-nhom--xanh">
             <h2 className="xa-dau-khoi__tieu-de">{XA_GIAO_DIEN.muc_tin_moi}</h2>
             <button type="button" className="xa-dau-khoi__them" onClick={() => di({ kieu: "tab", tab: "tin-tuc" })}>
               {XA_GIAO_DIEN.xem_tat_ca}
@@ -405,6 +432,23 @@ function TrangChuXa(props: {
 }
 
 /* ═════════════════════════════════ CÁC TAB KHÁC ═════════════════════════════════ */
+
+/**
+ * "Gửi phản ánh mới" at the FOOT of the Phản ánh tab, as the prototype's `FeedbackListPage` footer: fixed
+ * above the tab bar, full width — where the thumb already is, and where it stays while the list scrolls,
+ * instead of scrolling away at the top. Its own words (`send_new_petition`); the home tile keeps `o_gui`.
+ * The tap goes through the same gate as every personal act (`go` → `requireSession`).
+ */
+export function PetitionSendFooter({ onSend }: { onSend: () => void }) {
+  return (
+    <div className="xa-chan-gui">
+      <button type="button" className="xa-nut xa-nut--chan" onClick={onSend}>
+        <BieuTuong ten="plus" co={22} />
+        {XA_TN.send_new_petition}
+      </button>
+    </div>
+  );
+}
 
 function DauTab({ tieu_de }: { tieu_de: string }) {
   return (
@@ -695,14 +739,9 @@ function AppCuaXa(props: {
   } else if (tab === "tin-tuc") {
     than = (
       <>
-        <DauTab tieu_de={TIN_XA.tieu_de} />
+        <DauTab tieu_de={XA_TN.news_tab_title} />
         <div className="xa-trang xa-trang--tab">
-          <DanhSachTinXa
-            ten_mien={ten_mien}
-            ds={tin.ds}
-            onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })}
-            onTai={tin.taiTiep}
-          />
+          <DanhSachTinXa ten_mien={ten_mien} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} />
         </div>
       </>
     );
@@ -710,11 +749,7 @@ function AppCuaXa(props: {
     than = (
       <>
         <DauTab tieu_de={CUA_TOI.tieu_de} />
-        <div className="xa-trang xa-trang--tab">
-          <button type="button" className="xa-nut xa-nut--hong xa-nut--dau" onClick={() => go({ kieu: "gui" })}>
-            <BieuTuong ten="megaphone" co={22} />
-            {XA_GIAO_DIEN.o_gui}
-          </button>
+        <div className="xa-trang xa-trang--tab xa-trang--co-chan">
           <PetitionList
             state={petitions.state}
             onOpenPetition={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
@@ -724,6 +759,7 @@ function AppCuaXa(props: {
             onLoadMore={() => void petitions.loadMore()}
           />
         </div>
+        <PetitionSendFooter onSend={() => go({ kieu: "gui" })} />
       </>
     );
   } else {

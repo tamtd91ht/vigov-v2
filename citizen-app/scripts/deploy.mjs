@@ -160,6 +160,17 @@ const { phat_hanh, chi_thu, vao_thang } = co;
 const LOGO_NGUON = vao_thang ? new URL(`./logo-xa/${dich.ten_mien}.png`, import.meta.url) : null;
 const LOGO_DICH = new URL("../public/logo-xa.png", import.meta.url);
 const co_logo = LOGO_NGUON !== null && existsSync(LOGO_NGUON);
+/**
+ * BANNER XÃ — the same TEMPORARY per-domain bundle exception as the logo above (ADR 0047 §6), for the
+ * picture under the home header. `scripts/banner-xa/<domain>.png` is copied to `public/banner-xa.png`
+ * for EXACTLY the `--vao-thang` build and removed in the same `finally`, so no other build — the shared
+ * app above all — ever carries one commune's picture. No file for the domain = no banner: the home
+ * screen renders nothing in its place (`TrangXa.tsx` `CommuneBanner`). Real source later: the
+ * commune-posted `banner` content / display profile in service-platform, read at runtime.
+ */
+const BANNER_SOURCE = vao_thang ? new URL(`./banner-xa/${dich.ten_mien}.png`, import.meta.url) : null;
+const BANNER_TARGET = new URL("../public/banner-xa.png", import.meta.url);
+const has_banner = BANNER_SOURCE !== null && existsSync(BANNER_SOURCE);
 
 const env_dung = { ...process.env };
 delete env_dung[BIEN_XA_CO_DINH];
@@ -265,6 +276,7 @@ console.log(
 );
 if (vao_thang) {
   console.log(`  Logo xã  : ${co_logo ? `scripts/logo-xa/${dich.ten_mien}.png` : "(chưa có — header hiện biểu tượng)"}`);
+  console.log(`  Banner xã: ${has_banner ? `scripts/banner-xa/${dich.ten_mien}.png` : "(chưa có — trang chủ không có banner)"}`);
 }
 console.log(`  Nhãn     : ${mota}`);
 // IN RA ĐỊA CHỈ MÁY CHỦ SẼ ĐI VÀO BUNDLE. Đây là thứ quyết định nút đăng nhập nói chuyện với ai,
@@ -325,12 +337,14 @@ if (chi_thu) {
 }
 
 if (co_logo) copyFileSync(LOGO_NGUON, LOGO_DICH);
+if (has_banner) copyFileSync(BANNER_SOURCE, BANNER_TARGET);
 let ma;
 try {
   ma = dung(env_dung);
 } finally {
   // `dist/` đã có bản chép; tệp trong `public/` không được nằm lại cho lần dựng app chung kế tiếp.
   if (co_logo) rmSync(LOGO_DICH, { force: true });
+  if (has_banner) rmSync(BANNER_TARGET, { force: true });
 }
 if (ma !== 0) process.exit(ma);
 

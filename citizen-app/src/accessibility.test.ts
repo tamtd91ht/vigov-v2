@@ -784,6 +784,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-o-4",
       ".xa-o-lv",
       ".xa-sao__nut",
+      // 30/09/2026 (prototype v30): the Phản ánh tab's footer button and the news type tabs.
+      ".xa-nut--chan",
+      ".xa-tabs-tin__muc",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -799,8 +802,17 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
   });
 
   const cap: ReadonlyArray<[string, string, string]> = [
-    ["chữ trắng trên header và nút navy", "#ffffff", token("xa-navy")],
-    ["chữ phụ trên header", token("xa-hero-phu"), token("xa-navy")],
+    // Brand red (30/09/2026, prototype v30). The headers are a gradient brand-dark → brand → brand-dark, so
+    // text on them is measured at BOTH ends; --xa-brand is the lighter end, the one that can fail.
+    ["chữ trắng trên header đỏ (đầu sáng) và nút chính", "#ffffff", token("xa-brand")],
+    ["chữ trắng trên header đỏ (đầu sẫm)", "#ffffff", token("xa-brand-dark")],
+    ["chữ phụ trên header đỏ (đầu sáng)", token("xa-hero-phu"), token("xa-brand")],
+    ["chữ phụ trên header đỏ (đầu sẫm)", token("xa-hero-phu"), token("xa-brand-dark")],
+    ["nhãn nút phụ, tab đang xem, tab loại tin đang chọn trên nền trắng", token("xa-brand"), token("surface")],
+    ["chữ đỏ thương hiệu trên nền trang", token("xa-brand"), token("xa-nen")],
+    ["lĩnh vực đang chọn: chữ đỏ trên nền đỏ nhạt", token("xa-brand"), token("xa-brand-soft")],
+    // Navy stays as TEXT colour and on the initials avatar (white initials on navy).
+    ["chữ trắng trên ô chữ đầu tên cán bộ (navy)", "#ffffff", token("xa-navy")],
     ["tiêu đề navy trên thẻ", token("xa-navy"), token("surface")],
     ["tiêu đề navy trên nền trang", token("xa-navy"), token("xa-nen")],
     ["chữ phụ trên thẻ", token("ink-muted"), token("surface")],

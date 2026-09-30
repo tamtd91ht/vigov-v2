@@ -2651,15 +2651,30 @@ body {
  *   · không vòng quay động: "đang tải" là chữ.
  * ════════════════════════════════════════════════════════════════════════════════════════════ */
 :root {
+  /* Text navy: headings, card titles, names, codes, news covers. NOT the brand any more (below). */
   --xa-navy: #1b3a5c;
   --xa-navy-dam: #16314e;
+  /*
+   * THE COMMUNE APP'S BRAND — government red, from the customer prototype (`vigov-require` v30,
+   * `styles/tokens.css` --gov / --gov-dark / --gov-soft), chosen by the owner 30/09/2026. It is the frame
+   * of the app: headers, the current tab, the chosen chip or tab, primary buttons, the first group bar.
+   * Red here is NOT an error colour: errors keep `--xa-loi` AND always carry words plus an icon
+   * (`KhoiTrangThai`, `.xa-loi-o` with `role`), so a red header can never be read as "something failed".
+   * Measured in `accessibility.test.ts`: white on brand 6.2:1, on brand-dark 9.0:1; brand on white 6.2:1,
+   * on --xa-nen 5.8:1, on brand-soft 5.4:1.
+   */
+  --xa-brand: #c1121c;
+  --xa-brand-dark: #96060f;
+  --xa-brand-soft: #fdeaeb;
   --xa-nen: #f5f7f9;
   --xa-vien: #e5e8eb;
   --xa-hong: #e91e8c;
   --xa-hong-nhat: #fde8f3;
   --xa-xanh-nhat: #e7f0f9;
   --xa-luc-nhat: #e6f4ec;
-  --xa-hero-phu: #c9d6e6;
+  /* Secondary text on the red header (greeting, province). Was #c9d6e6 for navy: 4.2:1 on --xa-brand, a
+     fail. #fde8ea is 5.3:1 on --xa-brand, the lightest point of the header gradient. */
+  --xa-hero-phu: #fde8ea;
   --xa-lien-ket: #1f5f9e;
   --xa-luc-dam: #1b6e3f;
   --xa-loi: #b42318;
@@ -2707,9 +2722,9 @@ body {
   padding: 16px;
 }
 
-/* ---------- header trang chủ (navy bo đáy) ---------- */
+/* ---------- header trang chủ (đỏ bo đáy) ---------- */
 .xa-hero {
-  background: linear-gradient(135deg, var(--xa-navy-dam), var(--xa-navy));
+  background: linear-gradient(135deg, var(--xa-brand-dark), var(--xa-brand));
   color: #ffffff;
   padding: 24px 16px 28px;
   border-radius: 0 0 22px 22px;
@@ -2762,8 +2777,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--xa-vien);
+  /* Red on every screen, as the prototype's `AppHeader`: the frame of the app is one colour. */
+  background: linear-gradient(160deg, var(--xa-brand-dark) 0%, var(--xa-brand) 55%, var(--xa-brand-dark) 100%);
+  color: #ffffff;
   padding: 8px 16px;
   min-height: calc(var(--tap-min) + 16px);
 }
@@ -2775,7 +2791,7 @@ body {
   padding: 0 10px 0 4px;
   border: 0;
   background: none;
-  color: var(--xa-navy);
+  color: #ffffff;
   font: inherit;
   font-size: var(--text-small);
   font-weight: 600;
@@ -2785,6 +2801,11 @@ body {
   flex: 1;
   font-size: 1.15rem;
   margin: 0;
+  color: #ffffff;
+}
+/* A tab header has no back button: its title sits centred, as in the prototype. */
+.xa-dau-tab .xa-dau-con__tieu-de {
+  text-align: center;
 }
 
 /* ---------- thẻ ---------- */
@@ -3059,8 +3080,8 @@ button.xa-o-nhanh {
   min-height: calc(var(--tap-min) + 4px);
   padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid var(--xa-navy);
-  background: var(--xa-navy);
+  border: 1px solid var(--xa-brand);
+  background: var(--xa-brand);
   color: #ffffff;
   font: inherit;
   font-size: var(--text-body);
@@ -3070,7 +3091,7 @@ button.xa-o-nhanh {
 .xa-nut--phu {
   margin-top: 14px;
   background: var(--surface);
-  color: var(--xa-navy);
+  color: var(--xa-brand);
 }
 .xa-nut:disabled {
   opacity: 0.6;
@@ -3110,8 +3131,10 @@ button.xa-o-nhanh {
   text-align: center;
   cursor: pointer;
 }
+/* The current tab: brand colour AND bold, plus `aria-current` — not colour alone. */
 .xa-tab__muc--on {
-  color: var(--xa-navy);
+  color: var(--xa-brand);
+  font-weight: 700;
 }
 .xa-tab__cho-noi {
   width: 66px;
@@ -3231,8 +3254,8 @@ button.xa-o-nhanh {
   cursor: pointer;
 }
 .xa-chip--on {
-  background: var(--xa-navy);
-  border-color: var(--xa-navy);
+  background: var(--xa-brand);
+  border-color: var(--xa-brand);
   color: #ffffff;
 }
 
@@ -3385,7 +3408,7 @@ button.xa-o-nhanh {
 /* màn định danh */
 .xa-dinh-danh {
   padding: 32px 16px 24px;
-  background: linear-gradient(160deg, var(--xa-navy-dam), var(--xa-navy));
+  background: linear-gradient(160deg, var(--xa-brand-dark), var(--xa-brand));
 }
 .xa-dinh-danh__dau {
   display: grid;
@@ -3613,7 +3636,7 @@ button.xa-o-nhanh {
   align-items: center;
   gap: 10px;
   padding: 14px 12px 16px;
-  background: linear-gradient(160deg, var(--xa-navy-dam) 0%, var(--xa-navy) 55%, var(--xa-navy-dam) 100%);
+  background: linear-gradient(160deg, var(--xa-brand-dark) 0%, var(--xa-brand) 55%, var(--xa-brand-dark) 100%);
   color: #ffffff;
 }
 .xa-dau-xa__chu {
@@ -3642,7 +3665,12 @@ button.xa-o-nhanh {
   align-items: center;
   gap: 10px;
   padding-left: 10px;
-  border-left: 4px solid var(--xa-navy);
+  border-left: 4px solid var(--xa-brand);
+}
+/* Group bars as the prototype's section headers: brand for "Chính quyền số" (the default above), then
+   orange, green, blue. Decoration only — the heading beside the bar is the words. */
+.xa-dau-nhom--xanh {
+  border-left-color: var(--xa-lien-ket);
 }
 .xa-dau-nhom--cam {
   border-left-color: #c26a1a;
@@ -3678,8 +3706,71 @@ button.xa-o-nhanh {
   line-height: 1.2;
   color: var(--ink);
 }
-.xa-nut--dau {
-  margin-bottom: 14px;
+/* "Gửi phản ánh mới" at the foot of the Phản ánh tab, as the prototype's `FeedbackListPage` footer: fixed
+   just above the tab bar, full width, where the thumb is — the list scrolls under it, never over it. */
+.xa-chan-gui {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--xa-tab-h) + env(safe-area-inset-bottom));
+  z-index: 39;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--xa-vien);
+}
+.xa-nut--chan {
+  min-height: calc(var(--tap-min) + 4px);
+  font-weight: 700;
+}
+/* The tab's content keeps clear of that footer as well as the tab bar. */
+.xa-trang--co-chan {
+  padding-bottom: calc(var(--xa-tab-h) + var(--tap-min) + 4px + 24px + 32px);
+}
+
+/* ---------- banner trang chủ (tạm theo tên miền, xem TrangXa `CommuneBanner`) ---------- */
+.xa-banner {
+  padding: 12px 16px 0;
+}
+.xa-banner__anh {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 16px;
+  background: var(--xa-brand-soft);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+}
+
+/* ---------- tab loại tin (Tin tức · Sự kiện · Thông báo) ---------- */
+/* Full width under the header: the negative margin undoes `.xa-trang--tab`'s 16px, and `top` is the tab
+   header's own height, so the row stays visible under it while the list scrolls. */
+.xa-tabs-tin {
+  position: sticky;
+  top: calc(var(--tap-min) + 16px);
+  z-index: 15;
+  margin: -16px -16px 16px;
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--xa-vien);
+}
+.xa-tabs-tin__muc {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+/* The chosen tab: brand text AND a 3px bar under it, plus `aria-selected` — not colour alone. */
+.xa-tabs-tin__muc--on {
+  color: var(--xa-brand);
+  border-bottom-color: var(--xa-brand);
 }
 
 /* bước chọn lĩnh vực (ADR 0049) */
@@ -3702,7 +3793,7 @@ button.xa-o-nhanh {
   cursor: pointer;
 }
 .xa-o-lv--on {
-  border-color: var(--xa-navy);
-  background: var(--xa-xanh-nhat);
-  color: var(--xa-navy);
+  border-color: var(--xa-brand);
+  background: var(--xa-brand-soft);
+  color: var(--xa-brand);
 }
