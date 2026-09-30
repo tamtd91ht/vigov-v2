@@ -7,6 +7,7 @@
  * node scripts/deploy.mjs --domain=<tên-miền-xã>               APP RIÊNG, bản thử nghiệm (-t)
  * node scripts/deploy.mjs --domain=<tên-miền-xã> --phat-hanh   APP RIÊNG, BẢN PHÁT HÀNH
  * node scripts/deploy.mjs --domain=<tên-miền-xã> --vao-thang   APP RIÊNG mở THẲNG vào xã ấy
+ * node scripts/deploy.mjs --domain=<tên-miền-xã> --vao-thang --demo   … BẢN DEMO trước khi nộp duyệt
  * node scripts/deploy.mjs … --thu                              IN RA rồi DỪNG, không làm gì cả
  * ```
  *
@@ -61,9 +62,10 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BIEN_XA_CO_DINH, docCauHinh } from "./cau-hinh.mjs";
+import { BIEN_XA_CO_DINH, DEMO_BUILD_VAR, docCauHinh } from "./cau-hinh.mjs";
 import {
   chonDich,
+  DEMO_PLAN_LINE,
   docCo,
   kiemBangAnhXa,
   kiemToken,
@@ -146,7 +148,7 @@ try {
 } catch (loi) {
   dungLai(loi);
 }
-const { phat_hanh, chi_thu, vao_thang } = co;
+const { phat_hanh, chi_thu, vao_thang, demo } = co;
 
 // MÔI TRƯỜNG CỦA BƯỚC DỰNG. Tên miền xã chỉ vào bundle khi có `--vao-thang`, và luôn là đúng `--domain`
 // vừa chọn App ID đích. Không có cờ thì biến bị XOÁ khỏi môi trường dựng: một `VIGOV_XA_CO_DINH` còn
@@ -175,6 +177,11 @@ const has_banner = BANNER_SOURCE !== null && existsSync(BANNER_SOURCE);
 const env_dung = { ...process.env };
 delete env_dung[BIEN_XA_CO_DINH];
 if (vao_thang) env_dung[BIEN_XA_CO_DINH] = dich.ten_mien;
+// DEMO (owner, 30/09/2026 — dropped at submission): the same one-build rule. A `VIGOV_DEMO` left in the
+// shell must not turn the next build into a demo; only `--demo` (which `docCo` refuses without
+// `--vao-thang`) sets it.
+delete env_dung[DEMO_BUILD_VAR];
+if (demo) env_dung[DEMO_BUILD_VAR] = "1";
 
 
 /**
@@ -242,7 +249,7 @@ const sha = git("rev-parse", "--short", "HEAD") || "khong-ro";
 const dirty = git("status", "--porcelain") !== "";
 const luc = new Date().toISOString().slice(0, 16).replace("T", " ");
 // Nhãn mang cả ĐÍCH: cùng một commit đẩy lên hai app thì console Zalo phải phân biệt được.
-const mota = nhanPhienBan({ dich, sha, luc, dirty });
+const mota = nhanPhienBan({ dich, sha, luc, dirty, demo });
 
 // IN RA TRƯỚC KHI LÀM. Người chạy lệnh phải đọc được những điều quyết định hậu quả: đẩy lên app
 // nào, vào bản thử nghiệm hay bản phát hành, và nhãn nào sẽ hiện trong console Zalo.
@@ -279,6 +286,7 @@ if (vao_thang) {
   console.log(`  Banner xã: ${has_banner ? `scripts/banner-xa/${dich.ten_mien}.png` : "(chưa có — trang chủ không có banner)"}`);
 }
 console.log(`  Nhãn     : ${mota}`);
+if (demo) console.log(DEMO_PLAN_LINE);
 // IN RA ĐỊA CHỈ MÁY CHỦ SẼ ĐI VÀO BUNDLE. Đây là thứ quyết định nút đăng nhập nói chuyện với ai,
 // và nó được nung vào tệp gửi đi — người chạy lệnh phải đọc được nó trước khi để lệnh chạy tiếp.
 console.log(`  Máy chủ  : ${api_host === "" ? "(chưa khai — chỉ hợp lệ với --thu)" : api_host}`);
@@ -324,7 +332,7 @@ if (chi_thu) {
   console.log("--thu: dừng ở đây, không dựng và không đẩy gì cả. Dòng lệnh sẽ chạy:");
   // In biến LÚC DỰNG: địa chỉ máy chủ quyết định nút đăng nhập nói chuyện với ai. Một bản diễn
   // tập giấu mất nó là một bản diễn tập nói sai về lần chạy thật.
-  const xa_dung = vao_thang ? ` ${BIEN_XA_CO_DINH}=${dich.ten_mien}` : "";
+  const xa_dung = (vao_thang ? ` ${BIEN_XA_CO_DINH}=${dich.ten_mien}` : "") + (demo ? ` ${DEMO_BUILD_VAR}=1` : "");
   console.log(`  VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"}${xa_dung} vite build`);
   console.log(`  npx --yes ${ZMP} sync-config dist/index.html`);
   const tien_to = dich.loai === "app-rieng" ? `APP_ID=${dich.app_id} ZMP_TOKEN=<môi trường> ` : "";

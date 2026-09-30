@@ -79,10 +79,11 @@ export function kiemBangAnhXa(bang, app_chung) {
  * và một tham số để trống vì muốn app chung trông giống hệt nhau. Muốn app chung thì bỏ hẳn cờ.
  */
 export function docCo(argv) {
-  const co = { ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false };
+  const co = { ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false, demo: false };
   for (const c of argv) {
     if (c === "--phat-hanh") co.phat_hanh = true;
     else if (c === "--vao-thang") co.vao_thang = true;
+    else if (c === "--demo") co.demo = true;
     else if (c === "--thu") co.chi_thu = true;
     else if (c.startsWith("--domain=")) {
       const gia_tri = c.slice("--domain=".length);
@@ -98,15 +99,33 @@ export function docCo(argv) {
           "một bundle. Bỏ cờ này; muốn đẩy app riêng của xã thì dùng --domain=<tên-miền> " +
           "(thêm --vao-thang để app mở thẳng vào xã).",
       );
-    } else throw new Error(`Cờ "${c}" không có. Chỉ nhận: --domain=<tên-miền> · --vao-thang · --phat-hanh · --thu`);
+    } else {
+      throw new Error(`Cờ "${c}" không có. Chỉ nhận: --domain=<tên-miền> · --vao-thang · --demo · --phat-hanh · --thu`);
+    }
   }
   // `--vao-thang` nung TÊN MIỀN CỦA `--domain` vào bundle. Không có `--domain` thì không có tên miền
   // nào để nung — và app chung nung một xã là app chung mở vào xã ấy cho mọi người.
   if (co.vao_thang && co.ten_mien === null) {
     throw new Error("--vao-thang cần --domain=<tên-miền>: nó nung đúng tên miền ấy vào app riêng của xã.");
   }
+  // `--demo` only changes the COMMUNE screens, and only the `--vao-thang` build has them: the shared app
+  // opens on the ViHAT introduction. Accepting it there would print a loud demo line for a build in which
+  // nothing is a demo — and teach the reader that the flag is harmless anywhere.
+  if (co.demo && !co.vao_thang) {
+    throw new Error(
+      "--demo cần --vao-thang (và --domain=<tên-miền>): chế độ demo chỉ có trong app riêng mở thẳng vào xã — " +
+        "app chung không có màn nào của xã để chạy demo.",
+    );
+  }
   return co;
 }
+
+/**
+ * The plan line of a `--demo` run — printed by `deploy.mjs` before anything happens, `--thu` included, so
+ * nobody pushes a demo build for review believing it is the real one. Exported so the test pins the words.
+ */
+export const DEMO_PLAN_LINE =
+  "  ⚠ CHẾ ĐỘ DEMO — tên/số giả khi Zalo không trả; BỎ cờ --demo trước khi nộp duyệt";
 
 /**
  * Chọn đích. Tên miền không có trong bảng thì DỪNG — không bao giờ rơi về app chung. Thông báo
@@ -211,13 +230,16 @@ export function appConfigChoLanDay(noi_dung, vao_thang) {
 `;
 }
 
-/** Nhãn phiên bản trên console Zalo: đích · commit · lúc · dirty. */
-export function nhanPhienBan({ dich, sha, luc, dirty }) {
+/**
+ * Nhãn phiên bản trên console Zalo: đích · commit · lúc · dirty · DEMO. `demo`: the version a reviewer
+ * picks from the console must say it is a demo build — the same reason the label carries the target.
+ */
+export function nhanPhienBan({ dich, sha, luc, dirty, demo = false }) {
   const noi =
     dich.loai === "app-rieng"
       ? `${dich.ten_mien} · app ${dich.app_id}`
       : dich.app_id === null
         ? "app-chung"
         : `app-chung · app ${dich.app_id}`;
-  return `${noi} · ${sha} · ${luc}${dirty ? " · dirty" : ""}`;
+  return `${noi} · ${sha} · ${luc}${dirty ? " · dirty" : ""}${demo ? " · DEMO" : ""}`;
 }

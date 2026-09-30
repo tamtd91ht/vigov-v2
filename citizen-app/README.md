@@ -651,7 +651,14 @@ npm run zmp:phat-hanh                               # APP CHUNG, BẢN PHÁT HÀ
 npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, bản thử nghiệm
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã> --vao-thang   # APP RIÊNG mở THẲNG vào xã ấy
+npm run zmp:phat-hanh -- --domain=<tên-miền-xã> --vao-thang --demo   # … BẢN DEMO (chỉ trước khi nộp duyệt)
 ```
+
+`--demo` (chủ dự án chốt 30/09/2026, **bỏ cờ này trước khi nộp duyệt**): chỉ nhận cùng `--vao-thang`.
+Bản dựng ấy hiện dải "Chế độ demo" trên mọi màn; Zalo không trả họ tên thì dùng tên mẫu, Zalo từ chối
+số điện thoại thì vẫn mở màn người dân chọn với ô số điện thoại điền sẵn số giả `0900000000`, và mọi
+việc cần máy chủ (gửi, xem, tra cứu, đánh giá) dừng ở một câu "Chế độ demo: …". Chỉ phía app: máy chủ
+không đổi, phiên thật vẫn cần mã số điện thoại của Zalo (`src/cong-dan/man/demo-mode.tsx`).
 
 Tất cả đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. `--domain` chọn App ID ĐÍCH
 (tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng thì **DỪNG**, không
@@ -769,6 +776,6 @@ quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **
 | `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
 | `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
 | `npm run zmp:deploy [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → bản thử nghiệm |
-| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã> [--vao-thang]]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây. `--vao-thang`: app riêng mở thẳng vào xã |
+| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã> [--vao-thang [--demo]]]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây. `--vao-thang`: app riêng mở thẳng vào xã. `--demo`: bản demo trước khi nộp duyệt |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

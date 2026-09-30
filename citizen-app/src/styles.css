@@ -2693,6 +2693,19 @@ body {
   color: var(--xa-navy);
   line-height: 1.32;
 }
+/* DEMO BUILD ONLY (`deploy.mjs --vao-thang --demo`, `demo-mode.tsx` `DemoBand`) — the band on every screen, so a
+   screenshot is never taken for the real app. Words first ("Chế độ demo"), colour second: ink on light orange
+   (measured in accessibility.test.ts), a dark orange edge. Right padding keeps it clear of Zalo's corner buttons. */
+.xa-demo {
+  margin: 0;
+  padding: 8px 104px 8px 12px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  background: var(--xa-cam-nhat);
+  color: var(--ink);
+  border-bottom: 3px solid var(--xa-cam-dam);
+  font-size: var(--text-small);
+  line-height: 1.4;
+}
 .xa-bt {
   display: block;
   flex: none;

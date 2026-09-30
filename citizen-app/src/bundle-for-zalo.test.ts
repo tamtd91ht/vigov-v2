@@ -49,6 +49,7 @@ import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
+import { DEMO_CITIZEN_NAME, DEMO_WORDS } from "./cong-dan/man/demo-mode";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -563,5 +564,45 @@ describe("what the submission says the app is called", () => {
     const noi_dung = emitted.map((file) => String(file.code ?? file.source ?? "")).join("\n");
     const navy = /--navy:\s*([^;}]+)/.exec(noi_dung)?.[1]?.trim().toLowerCase();
     expect(navy, "bản dựng không chứa biến --navy ở đâu cả").toBe(BRAND_NAVY);
+  });
+});
+
+/**
+ * DEMO BUILD (`deploy.mjs --vao-thang --demo`, owner 30/09/2026 — dropped at submission). The words and the
+ * sample name exist ONLY in that build: `DEMO_BUILD` is a literal the bundler inlines, so every other build
+ * folds the branches away (`lib/demo-build.ts`). Both halves are measured on a REAL build — without the "has"
+ * half, a changed sentence would keep the "has not" half green for the wrong reason.
+ */
+describe("demo build: its words only in the build that asked for them", () => {
+  const DEMO_STRINGS = () => [
+    DEMO_WORDS.band_title,
+    DEMO_WORDS.band_body,
+    ...Object.values(DEMO_WORDS.task),
+    DEMO_WORDS.fields,
+    DEMO_CITIZEN_NAME,
+  ];
+  let demo = "";
+
+  beforeAll(async () => {
+    const before = { VIGOV_XA_CO_DINH: process.env["VIGOV_XA_CO_DINH"], VIGOV_DEMO: process.env["VIGOV_DEMO"] };
+    // A made-up domain: the build only needs one to bake in; no real commune is named in a test build.
+    process.env["VIGOV_XA_CO_DINH"] = "xa-thu.vigov.example";
+    process.env["VIGOV_DEMO"] = "1";
+    try {
+      demo = toanVan(await dungBan());
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }, 120_000);
+
+  it("the normal build carries NONE of them — unreachable is not enough, they are not there", () => {
+    for (const s of DEMO_STRINGS()) expect(ban, `normal bundle still carries: ${s}`).not.toContain(s);
+  });
+
+  it("the demo build carries every one of them", () => {
+    for (const s of DEMO_STRINGS()) expect(demo, `demo bundle is missing: ${s}`).toContain(s);
   });
 });

@@ -835,7 +835,14 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["bước đang làm (đỏ thương hiệu, 30/09/2026)", token("xa-brand"), token("surface")],
     ["số bước đang làm: chữ trắng trên chấm đỏ", "#ffffff", token("xa-brand")],
+    // Demo build only (30/09/2026): the "Chế độ demo" band on every screen, and its edge against the band.
+    ["dải 'Chế độ demo': chữ trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
+    ["dải 'Chế độ demo': viền cam sẫm trên nền cam nhạt", token("xa-cam-dam"), token("xa-cam-nhat")],
   ];
+  it("dải 'Chế độ demo' (chỉ bản demo) dùng chữ --text-small trở lên, không phải số px", () => {
+    expect(styles).toMatch(/\.xa-demo\s*\{[^}]*font-size:\s*var\(--text-(small|body)\)/);
+  });
+
   for (const [gi, chu, nen] of cap) {
     it(`${gi} đạt 4,5:1`, () => {
       expect(contrast(chu, nen)).toBeGreaterThanOrEqual(4.5);

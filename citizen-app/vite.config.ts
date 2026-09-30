@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 // MỘT NGUỒN SỰ THẬT cho cấu hình lúc dựng — `scripts/deploy.mjs` nhập đúng mô-đun này. Nó đọc
 // `.env.local` bằng `loadEnv` (Vite KHÔNG tự nạp tệp ấy vào `process.env`), để biến shell thắng
 // tệp, và CHẶN mọi tên biến ngoài danh sách trắng. Đọc khối chú thích ở đó trước khi sửa.
-import { docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
+import { demoBuild, docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
 
 /**
  * MỘT BẢN DỰNG, KHÔNG BIẾN THỂ — 27/09/2026, quyết định của chủ sản phẩm.
@@ -107,6 +107,9 @@ export default defineConfig(() => ({
   define: {
     __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()),
     __VIGOV_XA_CO_DINH__: JSON.stringify(xaCoDinh()),
+    // `__VIGOV_DEMO__`: `false` unless `deploy.mjs --vao-thang --demo` builds a commune's own app for a
+    // pre-submission demo (owner, 30/09/2026) — see `demoBuild` in scripts/cau-hinh.mjs and src/lib/demo-build.ts.
+    __VIGOV_DEMO__: JSON.stringify(demoBuild()),
   },
   build: {
     outDir: "dist",
