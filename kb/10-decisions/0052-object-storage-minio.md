@@ -69,6 +69,23 @@ nghiệp vụ không dành cho người đọc ẩn danh) — nguồn đăng đ�
 CDN/trình duyệt đã tải — cần xoá cache CDN, chưa có. Câu "chỉ năm việc" ở trên giữ
 nguyên làm lịch sử.
 
+**Bổ sung 30/09/2026 (lần hai):** thêm việc thứ tám — **ghi byte do server tạo ra**
+(`PutServerProduced` trong `core/storage/storage.go`), phục vụ đúng hai luồng người dùng đã duyệt
+(ADR 0047 §6): (a) **ảnh bìa tin** — server giải mã bản gốc đã promote, xoay theo Orientation, thu
+về ≤ 1280px, mã hoá lại JPEG, lưu thành biến thể `thumb-1280` lớp `content-source` để
+`PublishDerivative` đăng; (b) **ảnh hiện trường của công dân (G3)** — lúc hoàn tất, server giải mã
+tệp temp, xoay, mã hoá lại **bỏ toàn bộ EXIF** và chỉ lưu byte sạch vào private làm biến thể
+`original` lớp `citizen-media`; bản công dân tải **không bao giờ** vào private, tệp temp xoá bằng
+`PurgeAllVersions` trên bucket temp. Chỉ ghi bucket private; từ chối lớp `records` (server không tự
+tạo hồ sơ) và `public-media` (chỉ `PublishDerivative` ghi vào đó). **Bất đối xứng có chủ ý:** với
+`content-source`, `original` chỉ đến từ `Promote` (bản xã tải, đã quét) nên bị từ chối ở đây; với
+`citizen-media`, bản mã hoá lại **chính là** `original`, vì bản thô mang EXIF (toạ độ nhà, định danh
+thiết bị — luật 3) không được lưu. Dò magic bytes phải khớp đuôi khoá; `Content-Type` theo kết quả
+dò; không metadata người dùng; kích thước phải đúng bằng số khai (thừa/thiếu → từ chối trước khi
+thân yêu cầu đủ, nên không đối tượng nào bị cắt/độn được lưu), trần 32 MiB — chuyển mã video (§11)
+vượt trần này, **không** đi đường này; khoá đã có → từ chối (bất biến). Trả về `sha256` (tính khi
+truyền), kích thước, kiểu, ETag, phiên bản để service ghi `stored_file`.
+
 ### 2. Bucket — ít, theo chức năng chính
 
 | Bucket | Chứa | Truy cập | Versioning |

@@ -226,6 +226,96 @@ func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 	}
 }
 
+// PutServerProduced against a real MinIO, in the shape of both flows it serves:
+// (b) a citizen photo uploaded to temp, re-encoded (here: a stand-in byte slice), stored as the
+// private original, then the raw temp upload purged; (a) a content-source derivative that
+// PublishDerivative then accepts.
+func TestIntegrationPutServerProduced(t *testing.T) {
+	c, cleanup := integrationClient(t)
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	objectID, err := NewObjectID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := Key{
+		Class: ClassCitizenMedia, TenantID: testTenant, CreatedAt: time.Now(),
+		Service: ServicePetitions, Purpose: PurposePetitionPhoto, ObjectID: objectID,
+		Variant: VariantOriginal, Ext: "jpg",
+	}
+	up, err := photo.UploadPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := append([]byte{0xFF, 0xD8, 0xFF, 0xE1}, bytes.Repeat([]byte("exif"), 300)...)
+	post, err := c.PresignUpload(ctx, up, 10_000, MIMEJPEG, 0)
+	if err != nil {
+		t.Fatalf("PresignUpload: %v", err)
+	}
+	if code := postForm(t, post, MIMEJPEG, raw); code >= 300 {
+		t.Fatalf("upload status %d", code)
+	}
+
+	clean := append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, bytes.Repeat([]byte{9}, 700)...)
+	got, err := c.PutServerProduced(ctx, photo, bytes.NewReader(clean), int64(len(clean)))
+	if err != nil {
+		t.Fatalf("PutServerProduced: %v", err)
+	}
+	photoKey, _ := photo.Path()
+	sum, err := c.SHA256(ctx, BucketPrivate, photoKey, "")
+	if err != nil {
+		t.Fatalf("SHA256: %v", err)
+	}
+	want := sha256.Sum256(clean)
+	if got.Key != photoKey || got.Size != int64(len(clean)) || got.ContentType != MIMEJPEG ||
+		got.SHA256 != hex.EncodeToString(want[:]) || sum != got.SHA256 || got.VersionID == "" {
+		t.Fatalf("produced = %+v, stored sha256 %s", got, sum)
+	}
+	if st, err := c.Stat(ctx, BucketPrivate, photoKey); err != nil || st.ContentType != MIMEJPEG {
+		t.Fatalf("stat = %+v, %v", st, err)
+	}
+	if _, err := c.PutServerProduced(ctx, photo, bytes.NewReader(clean), int64(len(clean))); !errors.Is(err, ErrExists) {
+		t.Errorf("second write: %v, want ErrExists", err)
+	}
+	// The raw upload never reached private; the caller removes it from temp.
+	if err := c.PurgeAllVersions(ctx, BucketTemp, up); err != nil {
+		t.Fatalf("purge temp: %v", err)
+	}
+	if _, err := c.Stat(ctx, BucketTemp, up); !errors.Is(err, ErrNotFound) {
+		t.Errorf("temp upload still there: %v", err)
+	}
+
+	// Oversized body: refused, and nothing committed under the key.
+	other := photo
+	if other.ObjectID, err = NewObjectID(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutServerProduced(ctx, other, bytes.NewReader(clean), int64(len(clean))-1); !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("longer than declared: %v, want ErrInvalidArgument", err)
+	}
+	otherKey, _ := other.Path()
+	if _, err := c.Stat(ctx, BucketPrivate, otherKey); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a refused body was stored: %v", err)
+	}
+
+	// (a) a cover derivative, then published.
+	cover := Key{
+		Class: ClassContentSource, TenantID: testTenant, CreatedAt: time.Now(),
+		Service: ServiceComms, Purpose: PurposeContentImage, ObjectID: objectID,
+		Variant: "thumb-1280", Ext: "jpg",
+	}
+	if _, err := c.PutServerProduced(ctx, cover, bytes.NewReader(clean), int64(len(clean))); err != nil {
+		t.Fatalf("PutServerProduced cover: %v", err)
+	}
+	pub := cover
+	pub.Class = ClassPublicMedia
+	if err := c.PublishDerivative(ctx, cover, pub); err != nil {
+		t.Fatalf("PublishDerivative: %v", err)
+	}
+}
+
 // Publish / unpublish against a real MinIO. The private derivative is written directly with the
 // raw client — the upload flow is proved above; this test is about the private → public copy.
 func TestIntegrationPublishUnpublish(t *testing.T) {

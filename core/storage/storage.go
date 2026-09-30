@@ -9,6 +9,11 @@
 // rather than a bucket argument on Promote — a bucket argument is how an original reaches the
 // public bucket, which is ADR 0052 §ĐIỀU KIỆN DỪNG #2.
 //
+// PLUS PutServerProduced (added 2026-09-30, ADR 0052 §1 and §6 of ADR 0047): the one way to write
+// bytes the SERVER made — a re-encoded cover image derivative, a citizen photo re-encoded without
+// EXIF — into the private bucket. Every other write path copies bytes a client uploaded; this one
+// streams bytes the caller hands over, so it carries its own refusals rather than widening Promote.
+//
 // IT IS A LIBRARY, NOT A SERVICE (ADR 0001:96). Metadata lives in each owning service's own
 // `stored_file` table (rule 2 invariant 1); this package knows nothing about it, nothing about
 // permissions and nothing about the audit trail. The caller checks permission / citizen session
@@ -31,11 +36,13 @@
 package storage
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"log/slog"
 	"net/http"
@@ -513,6 +520,180 @@ func sameObject(a, b Key) bool {
 		a.CreatedAt.UTC().Month() == b.CreatedAt.UTC().Month() &&
 		a.Service == b.Service && a.Purpose == b.Purpose &&
 		strings.EqualFold(a.ObjectID, b.ObjectID) && a.Variant == b.Variant
+}
+
+// MaxServerProducedBytes caps PutServerProduced. The two flows it serves write re-encoded images,
+// and the image ceiling of ADR 0052 §10 is 10 MB for what a client may upload; a server re-encode
+// of such an image stays well below 32 MiB. The cap exists so a caller bug (a size taken from the
+// wrong variable) fails here instead of streaming an unbounded body. A video transcode (ADR 0052
+// §11) is larger than this and is NOT served by this operation — that needs its own decision.
+const MaxServerProducedBytes = 32 << 20
+
+// Produced describes the object PutServerProduced wrote: what the caller records in its
+// stored_file row. SHA256 is computed over the exact bytes sent, while they were streamed.
+type Produced struct {
+	Key         string
+	Size        int64
+	ETag        string
+	VersionID   string
+	ContentType string // the SNIFFED type
+	SHA256      string // lowercase hex
+}
+
+// PutServerProduced writes bytes the server itself produced to dst in the PRIVATE bucket. It is
+// the only write path in this package whose bytes do not come from a client upload, and it serves
+// exactly two flows (ADR 0047 §6, approved 2026-09-30):
+//
+//	a. news cover image: the promoted original is decoded, oriented, resized and re-encoded; the
+//	   result is stored as a derivative (`thumb-1280`, class content-source) so PublishDerivative
+//	   can publish it — the original itself is never published.
+//	b. citizen scene photo: the temp upload is decoded, oriented and re-encoded WITHOUT any EXIF,
+//	   and only these clean bytes are stored, as variant `original` of class citizen-media. The raw
+//	   upload never reaches the private bucket; the caller then removes it from temp with
+//	   PurgeAllVersions(ctx, BucketTemp, uploadKey) (allowed for every class in temp).
+//
+// Refused before any byte is read:
+//   - class records → ErrInvalidArgument. An administrative record is what a person filed; the
+//     server never manufactures one, and a re-encoded record would no longer be the record.
+//   - class public-media → ErrInvalidArgument. Only PublishDerivative writes the public bucket.
+//   - class content-source with variant `original` → ErrInvalidArgument. There the original is the
+//     scanned client upload and arrives only through Promote; letting the server write one would
+//     let a derivative silently replace what the commune actually uploaded. citizen-media is the
+//     opposite on purpose: in flow (b) the raw upload must NEVER be stored (it carries EXIF — GPS
+//     of the citizen's home, device ids; rule 3), so the clean re-encode IS the stored original.
+//   - size <= 0 or > MaxServerProducedBytes, a nil reader, an invalid key → ErrInvalidArgument /
+//     ErrInvalidKey.
+//
+// Then the first SniffBytes of r are sniffed: a type off the allow-list is ErrTypeNotAllowed, a
+// type whose extension is not dst.Ext is ErrInvalidArgument. The Content-Type stored is the sniffed
+// type; no user metadata is written (ADR 0052 §3).
+//
+// r must yield EXACTLY size bytes. More or fewer fails with ErrInvalidArgument, and the failure is
+// raised while the request body is still incomplete, so the store never commits a truncated or
+// padded object: the last bytes are only handed to the transport after checking nothing follows.
+//
+// IMMUTABLE: an existing dst is refused with ErrExists, as in Promote. The check is a stat before
+// the write — the same window as Promote's, closed in practice by dst's fresh server-side ObjectID.
+//
+// Permission, commune, the malware scan of the upload the bytes were derived from (ADR 0052 §9),
+// the stored_file row and the audit entry are the caller's (package doc).
+func (c *Client) PutServerProduced(ctx context.Context, dst Key, r io.Reader, size int64) (Produced, error) {
+	dstKey, err := dst.Path()
+	if err != nil {
+		return Produced{}, err
+	}
+	switch {
+	case dst.Class == ClassRecords:
+		return Produced{}, fmt.Errorf("%w: %s objects are never produced by the server", ErrInvalidArgument, ClassRecords)
+	case dst.Class == ClassPublicMedia:
+		return Produced{}, fmt.Errorf("%w: only PublishDerivative writes %s", ErrInvalidArgument, ClassPublicMedia)
+	case dst.Class == ClassContentSource && dst.Variant == VariantOriginal:
+		return Produced{}, fmt.Errorf("%w: a %s original comes only from Promote", ErrInvalidArgument, ClassContentSource)
+	}
+	if r == nil {
+		return Produced{}, fmt.Errorf("%w: reader is nil", ErrInvalidArgument)
+	}
+	if size <= 0 || size > MaxServerProducedBytes {
+		return Produced{}, fmt.Errorf("%w: size must be between 1 and %d bytes", ErrInvalidArgument, MaxServerProducedBytes)
+	}
+	br := bufio.NewReaderSize(r, exactBufSize)
+	head, err := br.Peek(SniffBytes)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return Produced{}, fmt.Errorf("storage: read head: %w", err)
+	}
+	mime, ext, ok := SniffMIME(head)
+	if !ok {
+		return Produced{}, ErrTypeNotAllowed
+	}
+	if ext != dst.Ext {
+		return Produced{}, fmt.Errorf("%w: destination extension %q, sniffed %q", ErrInvalidArgument, dst.Ext, ext)
+	}
+	name, err := c.BucketName(BucketPrivate)
+	if err != nil {
+		return Produced{}, err
+	}
+	if _, err := c.api.StatObject(ctx, name, dstKey, minio.StatObjectOptions{}); err == nil {
+		return Produced{}, ErrExists
+	} else if !errors.Is(mapErr("stat", err), ErrNotFound) {
+		return Produced{}, mapErr("stat destination", err)
+	}
+	er := &exactReader{br: br, remaining: size, h: sha256.New()}
+	info, err := c.api.PutObject(ctx, name, dstKey, er, size, minio.PutObjectOptions{
+		ContentType: mime,
+		// One request: a failed body can then never leave a completed object behind, and the
+		// stream is read exactly once, so the hash is the hash of what was sent.
+		DisableMultipart: true,
+	})
+	if er.err != nil {
+		return Produced{}, er.err
+	}
+	if err != nil {
+		return Produced{}, mapErr("put", err)
+	}
+	return Produced{
+		Key: dstKey, Size: size, ETag: info.ETag, VersionID: info.VersionID,
+		ContentType: mime, SHA256: hex.EncodeToString(er.h.Sum(nil)),
+	}, nil
+}
+
+// exactBufSize is the read-ahead buffer of PutServerProduced; exactWindow is how far before the end
+// exactReader starts peeking. exactWindow+1 must fit in exactBufSize (bufio.Reader.Peek).
+const (
+	exactBufSize = 64 << 10
+	exactWindow  = 4 << 10
+)
+
+// exactReader yields exactly `remaining` bytes of br, hashing them, and fails — with a sticky
+// ErrInvalidArgument — if br is shorter or longer. The length check happens BEFORE the final bytes
+// are returned: once the last byte is handed to the transport the store may commit, so "too long"
+// has to be known while the body is still one byte short.
+type exactReader struct {
+	br        *bufio.Reader
+	remaining int64
+	h         hash.Hash
+	err       error
+}
+
+func (e *exactReader) Read(p []byte) (int, error) {
+	if e.err != nil {
+		return 0, e.err
+	}
+	if e.remaining == 0 {
+		return 0, io.EOF
+	}
+	if int64(len(p)) > e.remaining {
+		p = p[:e.remaining]
+	}
+	if e.remaining <= exactWindow {
+		buf, err := e.br.Peek(int(e.remaining) + 1)
+		switch {
+		case int64(len(buf)) > e.remaining:
+			e.err = fmt.Errorf("%w: reader yields more than the declared size", ErrInvalidArgument)
+			return 0, e.err
+		case err != nil && !errors.Is(err, io.EOF):
+			e.err = fmt.Errorf("storage: read: %w", err)
+			return 0, e.err
+		case int64(len(buf)) < e.remaining:
+			e.err = fmt.Errorf("%w: reader yields less than the declared size", ErrInvalidArgument)
+			return 0, e.err
+		}
+	} else if limit := e.remaining - exactWindow; int64(len(p)) > limit {
+		p = p[:limit] // never step into the final window without the peek above
+	}
+	n, err := e.br.Read(p)
+	e.h.Write(p[:n])
+	e.remaining -= int64(n)
+	switch {
+	case err == nil:
+		return n, nil
+	case errors.Is(err, io.EOF) && e.remaining == 0:
+		return n, nil
+	case errors.Is(err, io.EOF):
+		e.err = fmt.Errorf("%w: reader yields less than the declared size", ErrInvalidArgument)
+	default:
+		e.err = fmt.Errorf("storage: read: %w", err)
+	}
+	return n, e.err
 }
 
 // PresignedURL is a presigned GET. A BEARER CREDENTIAL for its TTL: fmt and slog render "***";
