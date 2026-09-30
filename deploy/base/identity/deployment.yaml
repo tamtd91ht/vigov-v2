@@ -71,8 +71,18 @@ spec:
             # tắc 3 (`mang/netpol.yaml`) cộng với `GRPC_CALLER_KEY` trên mỗi RPC — cả hai, chứ
             # không phải một trong hai.
             - { name: grpc, containerPort: 9090 }
+            # Citizen session bridge (ADR 0045): the SECOND gRPC listener, which serves only
+            # `OpenCitizenSession` and only to `vihat-miniapp`. It is a separate port, not 9090,
+            # because 9090 trusts every pod in the namespace — sharing it would hand the Mini App
+            # backend the inter-service surface. Admitted only by netpol.yaml rule 8.
+            - { name: bridge, containerPort: 9091 }
 
           env:
+            # Must match the `bridge` port above and netpol.yaml rule 8. Prod refuses to start
+            # without it and without `CITIZEN_SESSION_BRIDGE_KEYS` in `identity-secrets`
+            # (ADR 0057; setting one without the other also refuses) — deploy/cau-hinh/README.md.
+            - name: CITIZEN_SESSION_BRIDGE_LISTEN_ADDR
+              value: ":9091"
             # Bắt buộc. `platformclient.Dial` từ chối khởi động khi rỗng — fail closed, có
             # tên (`core/platformclient/directory.go:66`). Thiếu nó thì mọi xã trả 404 và
             # người ta đi tìm DNS cả buổi chiều.

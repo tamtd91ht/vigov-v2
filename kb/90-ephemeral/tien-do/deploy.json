@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-30",
   "muc": [
     {
       "id": "bo-vigov-deploy-job-dich-vu-tu-dat-anh",
@@ -137,7 +137,6 @@
       "bang_chung": "26/09/2026: tools/ingress sinh base (*.vigov.vn → web-admin; comms/documents/finance/identity/petitions.api.vigov.vn → dịch vụ) và cả hai overlay (prod *.vigov.vn + *.api.vigov.vn; staging *.stg.vigov.vn + *.api-stg.vigov.vn), mỗi replace có JSON6902 test đứng trước; chạy hai lần ra một kết quả; dinh-tuyen.gen.ts không đổi; kubectl kustomize hai overlay exit 0; tools/ingress test xanh; check_build PASS. Jenkinsfile: stage 'Đổi tên miền Thăng Bình' (MT=prod, XAC_NHAN, dừng nếu platform 0007 đã có, không DELETE).",
       "no_confirm": [],
       "tiep_theo": "SỬA 26/09/2026 (chủ dự án: 'xóa đi, nó là dùng cho pod web admin tổng quản lý multi domain'): bước doi-ten-mien-thang-binh nay GỠ hai dòng admin.vigov.vn / admin-stg.vigov.vn của Xã Thăng Bình (DELETE lọc đúng hai host + đúng xã; vết doi_ten_mien ghi 'truoc' và 'go'; kiểm lại sau ghi, còn thì quay lui). Staging: chủ dự án chỉ dùng prod, staging để dự phòng — dùng chung CSDL/Redis/khoá phiên, CHẤP NHẬN tạm. Host <svc>.api.vigov.vn mở cả cổng rest: chủ dự án ĐỒNG Ý. || PHẦN CÒN LẠI LÀ VIỆC NGOÀI KHO, CHƯA CHẠY: (1) DNS 4 wildcard + chứng chỉ; tên Secret TLS mới vigov-api-wildcard-tls (prod) / vigov-api-staging-tls (staging) do builder TỰ ĐẶT — cụm dựng tay trong Rancher, chỉnh theo tên thật; (2) Ingress trên Rancher theo base; (3) bấm vigov-deploy HANH_DONG=doi-ten-mien-thang-binh; (4) SAU ĐÓ mới bấm job service-platform (0007 + chặn admin.*). Đảo (3)/(4) thì bước (3) tự dừng. Stage tao-xa-thang-binh cũ nay hỏng-đóng trên CSDL mới (0007 từ chối admin.*) — lịch sử, để nguyên. Host <svc>.api.vigov.vn mở cả cổng rest (/healthz và mọi handler); mọi tuyến theo xã trên đó trả 404 (tên miền dành riêng). platform/reporting chưa có host API (không có tuyến REST / không có manifest). Tách mạng tuyến my-* công dân khỏi tuyến cán bộ trên host web không còn (web-admin nhận hết).",
-      "menu": null,
       "id": "quy-hoach-4-ten-mien"
     },
     {
@@ -146,7 +145,17 @@
       "trang_thai": "dang_lam",
       "bang_chung": "deploy/Jenkinsfile stage 'Gắn Mini App Thăng Bình' (HANH_DONG=gan-mini-app-thang-binh, MT=prod, XAC_NHAN=vigov-prod): một giao dịch, RAISE khi xã thiếu/ngừng hoặc App ID đã có dòng (kể cả xoá mềm), INSERT mini_app + audit_log 'gan_mini_app' cùng giao dịch, chủ thể van-hanh:<người bấm>; chạy qua chay_psql như tao-xa-thang-binh. make check exit 0.",
       "no_confirm": [],
-      "tiep_theo": "CHƯA CHẠY TRÊN JENKINS, chưa qua trình phân tích Groovy. Lượt đầu sau khi đổi parameters sẽ dừng (Jenkins học tham số) — bấm lại. Cần migration platform 0006 đã áp. Gỡ stage khi platform-admin có màn ghi sổ mini_app."
+      "tiep_theo": "CHƯA CHẠY TRÊN JENKINS, chưa qua trình phân tích Groovy. Lượt đầu sau khi đổi parameters sẽ dừng (Jenkins học tham số) — bấm lại. Cần migration platform 0006 đã áp. Gỡ stage khi platform-admin có màn ghi sổ mini_app.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "mo-cong-cau-phien-cong-dan",
+      "viec": "Mở cổng cầu phiên công dân 9091 của identity cho vihat-miniapp, và luật mạng cho chính pod vihat-miniapp (cùng namespace)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "30/09/2026: identity Deployment thêm cổng bridge 9091 + CITIZEN_SESSION_BRIDGE_LISTEN_ADDR=:9091; Service thêm cổng bridge; netpol quy tắc 8 (identity nhận 9091 CHỈ từ app.kubernetes.io/name=vihat-miniapp) và 9 (vihat-miniapp: vào 8080 từ ingress-nginx; ra identity:9091 và 443 tới Zalo). Trước đó cổng cầu không có ở manifest nào và deny-all chặn cả pod vihat-miniapp. Người dùng chốt: cùng cụm cùng namespace, cổng 9091. kubectl kustomize deploy/overlays/staging OK; make envmap/buildfiles/security/brain PASS.",
+      "no_confirm": [],
+      "tiep_theo": "VẬN HÀNH (cụm dựng tay trên Rancher, không từ base/): chép ba thay đổi lên cụm thật; đặt CITIZEN_SESSION_BRIDGE_KEYS ở identity-secrets và cùng giá trị ở Secret vihat-miniapp; vihat-miniapp đặt VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=identity:9091, ZALO_MINIAPP_COMMUNE_APP_SECRETS, CORS có https://h5.zdn.vn; petitions/identity đặt CITIZEN_CORS_ALLOWED_ORIGINS. Chưa chạy trên cụm thật. Nợ: 443 tới 0.0.0.0/0 (Zalo không công bố dải) — cùng loại _chung/netpol-duong-ra-tam-mo.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

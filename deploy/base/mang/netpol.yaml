@@ -143,6 +143,61 @@ spec:
         - { port: 9000, protocol: TCP }
         - { port: 3310, protocol: TCP }
 ---
+# 8. Cầu phiên công dân 9091 của identity: CHỈ từ pod `vihat-miniapp` (ADR 0045).
+#
+# Tách khỏi quy tắc 3 có chủ đích: 9090 tin mọi pod trong namespace, còn cầu này đổi một mã
+# Zalo lấy phiên công dân của một xã. Cầu đi KHÔNG TLS vì hai bên cùng cụm, cùng namespace
+# (người dùng xác nhận 30/09/2026); tách cụm thì phải có TLS trước — điều kiện dừng #5 của 0045.
+# Ngoài biên mạng còn khoá `x-vigov-bridge-key` trên mỗi lời gọi — cả hai, không phải một.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-citizen-bridge-from-miniapp
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: identity }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: vihat-miniapp }
+      ports:
+        - { port: 9091, protocol: TCP }
+---
+# 9. `vihat-miniapp` (kho riêng, cùng namespace): quy tắc 1 từ chối nó cả vào lẫn ra, và nó
+# không mang nhãn `vigov.vn/surface: rest`, nên thiếu luật này thì pod xanh mà Mini App không
+# đăng nhập được — không lời gọi nào tới nó, và nó không gọi được Zalo lẫn cầu.
+#
+# VÀO: 8080 chỉ từ ingress controller. RA: cầu 9091 của identity, và 443 tới Zalo
+# (`graph.zalo.me` đọc mã tài khoản, `business.openapi.zalo.me` đổi số/vị trí/ZNS).
+# ⚠ 443 mở tới `0.0.0.0/0` vì Zalo không công bố dải địa chỉ; CHỈ pod này, CHỈ cổng 443 — cùng
+# loại nợ với quy tắc 4 (`_chung/netpol-duong-ra-tam-mo`). CSDL 5432 và DNS đã có ở quy tắc 4.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-miniapp
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: vihat-miniapp }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { port: 8080, protocol: TCP }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: identity }
+      ports:
+        - { port: 9091, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: Zalo không công bố dải; giữ giới hạn cổng 443
+      ports:
+        - { port: 443, protocol: TCP }
+---
 # 6. Đường RA của RIÊNG web-admin: tới REST 8080 của các pod trong namespace.
 #
 # Tách khỏi quy tắc 4 vì quy tắc 4 áp cho MỌI pod (`podSelector: {}`) — mở 8080 ở đó là cho

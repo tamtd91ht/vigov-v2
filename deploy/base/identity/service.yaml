@@ -11,3 +11,7 @@ spec:
     # `.env.example:114` đã ghi sẵn `identity:9090`. Không có dòng này thì bốn dịch vụ ấy nối
     # tới một cổng không tồn tại và mọi tuyến có kiểm quyền của chúng trả 401 cho phiên hợp lệ.
     - { name: grpc, port: 9090, targetPort: grpc }
+    # Citizen session bridge, called only by `vihat-miniapp`: its
+    # `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS` is `identity:9091`. Without this line the bridge
+    # listens but nothing can reach it, and every Mini App login ends in 503.
+    - { name: bridge, port: 9091, targetPort: bridge }
