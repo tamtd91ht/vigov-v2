@@ -2150,6 +2150,25 @@ export type petitions_petitionFieldOut = {
   "customised": boolean;
 };
 
+export type petitions_petitionTaskIn = {
+  "code"?: string;
+  "auto_code": boolean;
+  "type": string;
+  "bloc"?: string;
+  "title": string;
+  "description"?: string;
+  "priority"?: string;
+  "note"?: string;
+  "unit"?: string;
+  "assignee"?: string;
+  "assigner"?: string;
+  "lead_unit"?: string;
+  "monitor"?: string;
+  "due_at"?: string | null;
+  "parent"?: string;
+  "documents"?: Array<petitions_vanBanNhiemVuVao>;
+};
+
 export type petitions_phanCongVao = {
   "unit": string;
   "assignee"?: string;
@@ -3325,6 +3344,28 @@ export type petitions_post_citizen_reports_by_maTraCuu_status = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/tasks — Tạo nhiệm vụ từ một phiếu phản ánh — nguồn giao do máy chủ gắn theo phiếu, ghi cùng một dòng nhật ký phiếu */
+export type petitions_post_citizen_reports_by_maTraCuu_tasks = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/tasks";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_petitionTaskIn;
+  phanHoi: {
+    201: petitions_nhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
