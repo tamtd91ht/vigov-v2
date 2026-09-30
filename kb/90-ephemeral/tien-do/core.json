@@ -193,6 +193,14 @@
       "tiep_theo": "orgunitxlsx và bộ đọc nhập nhiệm vụ chưa chuyển sang core/xlsx (bộ đọc petitions chưa có kiểm độ sâu XML). GO-2026-6088 cần Go ≥ 1.26.6.",
       "no_confirm": [],
       "menu": "cau-hinh"
+    },
+    {
+      "id": "storage-publish-derivative",
+      "viec": "core/storage: PublishDerivative / UnpublishDerivative — đẩy bản dẫn xuất đã duyệt private → public, gỡ khi gỡ đăng (ADR 0052 §1 bổ sung 30/09/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "6915ea22 — từ chối original, citizen-media, records, đích không phải bản sinh đôi public-media (khác xã/service/mục đích/object/biến thể/đuôi/tháng); Cache-Control immutable; lặp lại an toàn; gỡ đăng xoá mọi phiên bản. publish_test.go (fake S3) xanh; go vet/test core xanh; service-petitions build xanh.",
+      "tiep_theo": "TestIntegrationPublishUnpublish CHƯA CHẠY với MinIO thật (thiếu VIGOV_TEST_MINIO_ENDPOINT). Gỡ đăng không thu hồi bản CDN/trình duyệt đã cache (immutable 1 năm) — cần xoá cache CDN khi có CDN.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
