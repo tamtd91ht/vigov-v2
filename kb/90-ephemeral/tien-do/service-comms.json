@@ -210,6 +210,14 @@
       "bang_chung": "58abea4c — tuyến mới authz.Public, tham số kiểm trước khi tra nền tảng, tên miền lạ = {items:[]} y hệt xã rỗng; danh mục trả khi chính nó hoặc con cháu có ≥1 tin dang-hien (domain.CategoriesWithPublishedItems thêm tổ tiên, bỏ nhánh mồ côi); ?category= gồm con cháu qua CTE đệ quy, hai nửa đều tenant_id=$1 và deleted_at IS NULL; id xã khác/đã xoá = trang rỗng. go build/vet/test ./... xanh; make check exit 0 (lượt của builder).",
       "tiep_theo": "Test PostgreSQL TestPgPublicCategoryFilterAndChips ĐÃ VIẾT nhưng CHƯA CHẠY (máy này không có VIGOV_TEST_DSN) — CTE đệ quy và phép nối chưa chạy trên cơ sở dữ liệu thật. Chưa giới hạn tần suất (core/ratelimit chưa có; luật 13 #7), như hai tuyến commune-news cũ. rest_api_guard coi @consumer là thẻ lạ (TAG_KNOWN ở .claude/hooks/rest_api_guard.py:68 thiếu) dù apidoc dùng nó.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "tin-mini-app-anh-su-kien-video",
+      "viec": "Tin Mini App đầy đủ: ảnh bìa tải lên kho tệp (bản dẫn xuất public khi đăng), giờ đăng lần đầu, thời gian/địa điểm sự kiện, link video (ADR 0047 §6, G1)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "ac884434 — migration 0011: stored_file của comms (CommsStoredFile) + cột cover_image_file_id, published_at (khoá sau lần đăng đầu), event_starts_at/ends_at/place (chỉ su-kien), video_url (chỉ video, http(s)). go test migrations, core/migrate, tools/kb, check_khoa_duy_nhat xanh.",
+      "tiep_theo": "Card dịch vụ: tải ảnh bìa + bản dẫn xuất thumb-1280, đăng/gỡ bản public, trường mới ở tuyến cán bộ và công khai. Test PostgreSQL chưa chạy (FK giữa hai bảng phân vùng, UPDATE OF trên bảng phân vùng). Hạ tầng: cấp MinIO + ClamAV + khoá cho comms. Phiếu cũ đã đăng (published_at NULL) nếu gỡ rồi đăng lại sẽ nhận giờ đăng mới.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
