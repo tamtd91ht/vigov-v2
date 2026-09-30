@@ -135,9 +135,19 @@ func (h *Handler) CreateTaskFromPetition(w http.ResponseWriter, r *http.Request)
 			// ONE 404 for unknown, another commune's, soft-deleted and `can-bo` without the key — the
 			// read route's answer (Handler.khongTimThay).
 			h.khongTimThay(w)
+		// THE THREE 409s: the caller holds both keys; what is refused is this act on THIS petition. Fixed
+		// sentences, never err.Error() — it arrives wrapped with the commune id (app.bocNhiemVu). Three
+		// NAMED codes, because each asks the officer for a different next step.
+		case errors.Is(err, domain.ErrRestrictedFieldNoTask):
+			// Reached only by a `feedback.restricted` holder; without the key it is the 404 above.
+			httpx.WriteError(w, http.StatusConflict, "restricted_field_no_task",
+				"Phiếu thuộc lĩnh vực phản ánh về cán bộ không tạo nhiệm vụ. "+
+					"Lãnh đạo xử lý trực tiếp trên phiếu phản ánh.", "")
+		case errors.Is(err, domain.ErrPetitionNotClassifiedForTask):
+			httpx.WriteError(w, http.StatusConflict, "petition_not_classified",
+				"Phiếu chưa được phân loại và chuyển xử lý nên chưa tạo nhiệm vụ được. "+
+					"Hãy phân loại và chuyển xử lý phiếu trước.", "")
 		case errors.Is(err, domain.ErrPetitionClosedForTask):
-			// 409: the caller holds both keys; what is refused is this act on THIS petition. A fixed
-			// sentence, never err.Error() — it arrives wrapped with the commune id (app.bocNhiemVu).
 			httpx.WriteError(w, http.StatusConflict, "petition_state",
 				"Phiếu đã đóng hoặc đã kết thúc nên không tạo nhiệm vụ mới từ phiếu này được.", "")
 		default:

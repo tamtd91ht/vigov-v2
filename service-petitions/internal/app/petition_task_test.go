@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -207,7 +208,7 @@ func TestPetitionTask_UnknownCodeWritesNothing(t *testing.T) {
 }
 
 func TestPetitionTask_RestrictedFieldWithoutKeyIsNotFound(t *testing.T) {
-	for _, status := range []domain.TrangThai{domain.DangXuLy, domain.DaDong} {
+	for _, status := range []domain.TrangThai{domain.DangPhanLoai, domain.DangXuLy, domain.DaDong} {
 		t.Run(string(status), func(t *testing.T) {
 			k := khoPhieuMau()
 			k.hang = dongPhieuMau(map[string]any{"linh_vuc": domain.LinhVucHanChe, "trang_thai": string(status)})
@@ -226,12 +227,49 @@ func TestPetitionTask_RestrictedFieldWithoutKeyIsNotFound(t *testing.T) {
 	}
 }
 
-func TestPetitionTask_RestrictedFieldWithKeyIsAllowed(t *testing.T) {
-	k := khoPhieuMau()
-	k.hang = dongPhieuMau(map[string]any{"linh_vuc": domain.LinhVucHanChe, "trang_thai": string(domain.DangXuLy)})
-	uc, _, ctx := buildPetitionTask(t, k)
-	if _, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), true); err != nil {
-		t.Fatalf("có feedback.restricted mà bị từ chối: %v", err)
+// User decision 30/09/2026: NO task from a `can-bo` petition at all — the key holder is told so by name
+// (409 restricted_field_no_task), whatever the status, and nothing is written.
+func TestPetitionTask_RestrictedFieldWithKeyIsRefusedByName(t *testing.T) {
+	for _, status := range []domain.TrangThai{domain.DangPhanLoai, domain.DaChuyenXuLy, domain.DangXuLy,
+		domain.DaXuLy, domain.ChoDanXacNhan, domain.DaDong} {
+		t.Run(string(status), func(t *testing.T) {
+			k := khoPhieuMau()
+			k.hang = dongPhieuMau(map[string]any{"linh_vuc": domain.LinhVucHanChe, "trang_thai": string(status)})
+			uc, tasks, ctx := buildPetitionTask(t, k)
+			_, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), true)
+			if !errors.Is(err, domain.ErrRestrictedFieldNoTask) {
+				t.Fatalf("lỗi = %v, muốn ErrRestrictedFieldNoTask", err)
+			}
+			if tasks.calls != 0 {
+				t.Error("đã đi tới đường tạo nhiệm vụ cho phiếu lĩnh vực can-bo")
+			}
+			noWrites(t, k)
+		})
+	}
+}
+
+// Received or being classified: the commune has not yet classified AND accepted it.
+func TestPetitionTask_NotClassifiedIsRefused(t *testing.T) {
+	for ten, row := range map[string]map[string]any{
+		"da-tiep-nhan, chưa có lĩnh vực":        {"trang_thai": string(domain.DaTiepNhan)},
+		"da-tiep-nhan, dân đã chọn lĩnh vực":    {"trang_thai": string(domain.DaTiepNhan), "linh_vuc": "rac-thai"},
+		"dang-phan-loai (chưa quyết tiếp nhận)": {"trang_thai": string(domain.DangPhanLoai), "linh_vuc": "rac-thai"},
+		"dang-xu-ly nhưng lĩnh vực trống (lạ)":  {"trang_thai": string(domain.DangXuLy)},
+		"da-chuyen-xu-ly nhưng lĩnh vực trống":  {"trang_thai": string(domain.DaChuyenXuLy)},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			k := khoPhieuMau()
+			k.hang = dongPhieuMau(row)
+			uc, tasks, ctx := buildPetitionTask(t, k)
+			_, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), false)
+			if !errors.Is(err, domain.ErrPetitionNotClassifiedForTask) {
+				t.Fatalf("lỗi = %v, muốn ErrPetitionNotClassifiedForTask", err)
+			}
+			if tasks.calls != 0 {
+				t.Error("đã đi tới đường tạo nhiệm vụ cho phiếu chưa phân loại")
+			}
+			noWrites(t, k)
+		})
 	}
 }
 
@@ -254,19 +292,24 @@ func TestPetitionTask_ClosedPetitionIsRefused(t *testing.T) {
 	}
 }
 
-// Every non-final status accepts a task — including the two before classification (assumption stated
-// on domain.ErrPetitionClosedForTask: only closed records are refused).
-func TestPetitionTask_OpenStatusesAccept(t *testing.T) {
-	for _, status := range []domain.TrangThai{domain.DaTiepNhan, domain.DangPhanLoai, domain.DaChuyenXuLy,
-		domain.DangXuLy, domain.DaXuLy, domain.ChoDanXacNhan} {
-		t.Run(string(status), func(t *testing.T) {
-			k := khoPhieuMau()
-			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(status)})
-			uc, _, ctx := buildPetitionTask(t, k)
-			if _, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), false); err != nil {
-				t.Errorf("trạng thái %s bị từ chối: %v", status, err)
-			}
-		})
+// The four statuses after classification AND acceptance (user decision 30/09/2026) accept a task, with
+// or without `feedback.restricted`.
+func TestPetitionTask_AcceptedAndClassifiedStatusesAccept(t *testing.T) {
+	for _, status := range []domain.TrangThai{domain.DaChuyenXuLy, domain.DangXuLy, domain.DaXuLy,
+		domain.ChoDanXacNhan} {
+		for _, restricted := range []QuyenXemHanChe{false, true} {
+			t.Run(fmt.Sprintf("%s/restricted=%v", status, restricted), func(t *testing.T) {
+				k := khoPhieuMau()
+				k.hang = dongPhieuMau(map[string]any{"trang_thai": string(status), "linh_vuc": "rac-thai"})
+				uc, tasks, ctx := buildPetitionTask(t, k)
+				if _, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), restricted); err != nil {
+					t.Fatalf("trạng thái %s bị từ chối: %v", status, err)
+				}
+				if tasks.calls != 1 || k.daCommit != 1 {
+					t.Errorf("gọi %d lần, commit %d — muốn 1/1", tasks.calls, k.daCommit)
+				}
+			})
+		}
 	}
 }
 
@@ -286,6 +329,41 @@ func TestPetitionTask_ClosedInTheWindowLosesTheRace(t *testing.T) {
 		t.Errorf("rollback %d lần, muốn 1", k.daRollback)
 	}
 	noWrites(t, k)
+}
+
+// The other changes that can land in the window, each decided by the LOCKED read and each rolling back
+// with nothing written: the row is no longer classified-and-accepted (a status or field the lifecycle
+// cannot produce today, but the check must not trust that), or it was classified INTO `can-bo`.
+func TestPetitionTask_RulesChangedInTheWindowLoseTheRace(t *testing.T) {
+	for ten, ca := range map[string]struct {
+		row        map[string]any
+		restricted QuyenXemHanChe
+		want       error
+	}{
+		"về dang-phan-loai": {map[string]any{"trang_thai": string(domain.DangPhanLoai), "linh_vuc": "rac-thai"},
+			false, domain.ErrPetitionNotClassifiedForTask},
+		"lĩnh vực bị xoá": {map[string]any{"trang_thai": string(domain.DangXuLy)},
+			false, domain.ErrPetitionNotClassifiedForTask},
+		"thành can-bo, có khoá": {map[string]any{"trang_thai": string(domain.DangXuLy), "linh_vuc": domain.LinhVucHanChe},
+			true, domain.ErrRestrictedFieldNoTask},
+		"thành can-bo, không khoá": {map[string]any{"trang_thai": string(domain.DangXuLy), "linh_vuc": domain.LinhVucHanChe},
+			false, ErrPhieuHanChe},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			k := openPetition()
+			uc, tasks, ctx := buildPetitionTask(t, k)
+			tasks.beforeTx = func() { k.hang = dongPhieuMau(ca.row) }
+
+			_, err := uc.CreateTask(ctx, maPhieuThu, petitionTaskRequest(), canBoThu(), ca.restricted)
+			if !errors.Is(err, ca.want) {
+				t.Fatalf("lỗi = %v, muốn %v từ lần đọc khoá", err, ca.want)
+			}
+			if k.daRollback != 1 {
+				t.Errorf("rollback %d lần, muốn 1", k.daRollback)
+			}
+			noWrites(t, k)
+		})
+	}
 }
 
 // The petition's audit entry failing takes the task and the timeline row down with it.

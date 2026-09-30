@@ -1203,8 +1203,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// 401 is RequirePermission's answer to no session AND to a session of another commune (the commune
 	// is compared before either key). 404: unknown, another commune's, soft-deleted, or restricted
-	// without the key — one answer (Handler.khongTimThay). 409 `petition_state`: the petition is closed
-	// (`da-dong`, `khong-tiep-nhan`, `chuyen-cap-tren`); `code_taken` / `task_tree` as on POST /tasks.
+	// without the key — one answer (Handler.khongTimThay). 409, three petition codes (user decision
+	// 30/09/2026, domain.PetitionAcceptsTask): `restricted_field_no_task` — a `can-bo` petition, to a
+	// `feedback.restricted` holder; `petition_not_classified` — `da-tiep-nhan` / `dang-phan-loai`, not yet
+	// classified and accepted; `petition_state` — closed (`da-dong`, `khong-tiep-nhan`,
+	// `chuyen-cap-tren`). Plus `code_taken` / `task_tree` as on POST /tasks. The codes live here in prose
+	// because tools/apidoc's `@reply` carries a status and a type only (tools/apidoc/route.go:339).
 	// 400 also answers a body that sends `source` or `source_id`.
 	//
 	// idem.Required(idem.MoKhiHong), POST /api/v1/tasks' declaration and for its reason: nothing here

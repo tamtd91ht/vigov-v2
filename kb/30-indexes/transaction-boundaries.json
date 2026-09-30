@@ -99,7 +99,7 @@
   },
   "tao_nhiem_vu_tu_phieu_phan_anh": {
     "consistency": "manh",
-    "scope": "MOT giao dich trong service-petitions: doc lai phieu FOR UPDATE (kiem linh vuc can-bo + trang thai chua dong), tao nhiem vu (nguon_giao=phan-anh, nguon_id do MAY CHU dat), dong dong thoi gian nhiem vu, vet tao_nhiem_vu, dong nhat ky phieu hanh_vi=tao-nhiem-vu, vet tao_nhiem_vu_tu_phan_anh (chu the = ma tra cuu). POST /api/v1/citizen-reports/{maTraCuu}/tasks.",
+    "scope": "MOT giao dich trong service-petitions: doc lai phieu FOR UPDATE (tu choi linh vuc can-bo; chi da-chuyen-xu-ly/dang-xu-ly/da-xu-ly/cho-dan-xac-nhan va da co linh vuc), tao nhiem vu (nguon_giao=phan-anh, nguon_id do MAY CHU dat), dong dong thoi gian nhiem vu, vet tao_nhiem_vu, dong nhat ky phieu hanh_vi=tao-nhiem-vu, vet tao_nhiem_vu_tu_phan_anh (chu the = ma tra cuu). POST /api/v1/citizen-reports/{maTraCuu}/tasks.",
     "compensation": "Khong co — mot giao dich: bat ky buoc nao hong thi quay lui ca nhiem vu lan dong nhat ky; phieu bi dong xen giua thi lan doc FOR UPDATE thua va tu choi 409 petition_state.",
     "why": "Nhiem vu va phieu cung service petitions nen mot giao dich la re nhat va dung nhat. Nguoi dung chot 30/09/2026 (ADR khong can): may chu tu gan nguon vi POST /tasks nhan source_id khong kiem da bi chan tu 2d34eba4 (co the tro phieu xa khac hoac phieu can-bo). Mot nhiem vu ma khong co dong nhat ky phieu la trang thai quy dinh luu tru khong cho phep (luat 2).",
     "adr": "kb/00-foundation/ubiquitous-language.md (danh tu tasks duoi citizen-reports, 30/09/2026)"

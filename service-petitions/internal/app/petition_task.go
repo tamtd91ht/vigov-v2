@@ -18,7 +18,8 @@ package app
 // only the petition knows:
 //
 //	Check   the petition re-read FOR UPDATE inside the task's transaction — live, this commune's,
-//	        visible to this caller, not closed — before anything is written
+//	        visible to this caller, not `can-bo`, accepted AND classified, not closed
+//	        (domain.PetitionAcceptsTask) — before anything is written
 //	Record  the petition's timeline row (`tao-nhiem-vu`) and its own audit entry, after the task row
 //
 // So the task, both timeline rows and both audit entries commit or roll back together (rule 2,
@@ -89,7 +90,8 @@ func NewPetitionTaskCreation(petitions PetitionTaskStore, tasks TaskFromSourceCr
 // THE FIRST READ IS UNLOCKED AND ONLY GIVES THE ID the source pair needs before the transaction opens
 // (and refuses early, readably). The DECISION is the second read, FOR UPDATE, inside the task's
 // transaction: between the two another officer can close, reclassify into `can-bo`, or remove the
-// petition, and the locked read is what makes the task lose that race rather than land on it.
+// petition, and the locked read is what makes the task lose that race rather than land on it. Both
+// rules of 30/09/2026 (accepted-and-classified, never `can-bo`) are decided again there.
 func (uc *PetitionTaskCreation) CreateTask(ctx context.Context, code string, yc YeuCauTaoNhiemVu,
 	actor audit.Actor, restricted QuyenXemHanChe) (domain.NhiemVu, error) {
 
@@ -100,8 +102,10 @@ func (uc *PetitionTaskCreation) CreateTask(ctx context.Context, code string, yc 
 	if err != nil {
 		return domain.NhiemVu{}, bocPhieu(ctx, "tạo nhiệm vụ từ phiếu", err)
 	}
-	// RESTRICTED FIELD BEFORE STATUS: a closed `can-bo` petition must answer the 404, not a 409 that
-	// confirms it exists.
+	// THE 404 BEFORE ANY 409: a `can-bo` petition read by somebody without `feedback.restricted` must
+	// answer the 404 of an unknown code — not `restricted_field_no_task`, not a status refusal — or the
+	// answer confirms that a report about a member of staff exists under this code. Only a key holder
+	// goes on to PetitionAcceptsTask, which refuses `can-bo` to them by name (user decision 30/09/2026).
 	if err := duocChamPhieuHanChe(first, restricted); err != nil {
 		return domain.NhiemVu{}, err
 	}

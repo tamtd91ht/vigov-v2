@@ -189,6 +189,8 @@ func TestPetitionTask_RefusalsMapToTheirAnswers(t *testing.T) {
 		"mã không có / xã khác / đã xoá": {wrapped(petstore.ErrPhieuKhongTonTai), http.StatusNotFound, "not_found"},
 		"can-bo không có restricted":     {app.ErrPhieuHanChe, http.StatusNotFound, "not_found"},
 		"phiếu đã đóng":                  {wrapped(domain.ErrPetitionClosedForTask), http.StatusConflict, "petition_state"},
+		"phiếu chưa phân loại":           {wrapped(domain.ErrPetitionNotClassifiedForTask), http.StatusConflict, "petition_not_classified"},
+		"can-bo, có restricted":          {wrapped(domain.ErrRestrictedFieldNoTask), http.StatusConflict, "restricted_field_no_task"},
 		"mã nhiệm vụ đã cấp (của sổ NV)": {wrapped(petstore.ErrMaNhiemVuDaTonTai), http.StatusConflict, "code_taken"},
 		"thiếu tiêu đề (của sổ NV)":      {domain.ErrThieuTieuDeNhiemVu, http.StatusBadRequest, "invalid_request"},
 		"lỗi hệ thống":                   {errors.New("kho hỏng"), http.StatusInternalServerError, "internal"},
@@ -209,6 +211,13 @@ func TestPetitionTask_RefusalsMapToTheirAnswers(t *testing.T) {
 			}
 			if ca.status == http.StatusNotFound && e.Message != "Không tìm thấy phiếu phản ánh." {
 				t.Errorf("404 không phải câu chung của sổ phiếu: %q", e.Message)
+			}
+			// Each 409 tells the officer the next step, in Vietnamese.
+			if ca.code == "petition_not_classified" && !strings.Contains(e.Message, "phân loại") {
+				t.Errorf("409 chưa phân loại không bảo cán bộ phân loại trước: %q", e.Message)
+			}
+			if ca.code == "restricted_field_no_task" && !strings.Contains(e.Message, "Lãnh đạo xử lý trực tiếp") {
+				t.Errorf("409 can-bo không nói lãnh đạo xử lý trực tiếp trên phiếu: %q", e.Message)
 			}
 		})
 	}
