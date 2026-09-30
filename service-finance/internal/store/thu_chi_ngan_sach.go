@@ -167,7 +167,10 @@ func (s *NganSachStore) bangDayDuTheoBang(ctx context.Context,
 		GiaDot: giaDot, GiaDotVuotMuc: vuot}, nil
 }
 
-const cotCot = `id, bang_id, ten, thu_tu, kieu, COALESCE(cong_thuc, ''), COALESCE(vai_tro, '')`
+// cotCot — the operand ids (migration 0011) are NULL on a `so` column and on a legacy `phan_tram`
+// column 0011 could not resolve; both read as "" and domain.BangDayDu.PercentCell says which.
+const cotCot = `id, bang_id, ten, thu_tu, kieu, COALESCE(cong_thuc, ''), COALESCE(vai_tro, ''),
+	COALESCE(numerator_column_id, ''), COALESCE(denominator_column_id, '')`
 
 // CotCuaBang reads one sheet's columns in display order.
 //
@@ -189,7 +192,8 @@ func (s *NganSachStore) CotCuaBang(ctx context.Context, bangID string) ([]domain
 			kieu string
 			vai  string
 		)
-		if err := rows.Scan(&c.ID, &c.BangID, &c.Ten, &c.ThuTu, &kieu, &c.CongThuc, &vai); err != nil {
+		if err := rows.Scan(&c.ID, &c.BangID, &c.Ten, &c.ThuTu, &kieu, &c.CongThuc, &vai,
+			&c.NumeratorColumnID, &c.DenominatorColumnID); err != nil {
 			return nil, fmt.Errorf("ngan_sach: đọc dòng cột: %w", err)
 		}
 		c.Kieu = domain.KieuCot(kieu)
@@ -386,7 +390,8 @@ func (s *NganSachStore) cotTrongGiaoDich(ctx context.Context, tx *store.ScopedTx
 			kieu string
 			vai  string
 		)
-		if err := rows.Scan(&c.ID, &c.BangID, &c.Ten, &c.ThuTu, &kieu, &c.CongThuc, &vai); err != nil {
+		if err := rows.Scan(&c.ID, &c.BangID, &c.Ten, &c.ThuTu, &kieu, &c.CongThuc, &vai,
+			&c.NumeratorColumnID, &c.DenominatorColumnID); err != nil {
 			return nil, fmt.Errorf("ngan_sach: đọc dòng cột: %w", err)
 		}
 		c.Kieu = domain.KieuCot(kieu)
@@ -534,16 +539,23 @@ func (s *NganSachStore) ChenBang(ctx context.Context, tx *store.ScopedTx,
 // per sheet is `UNIQUE (tenant_id, bang_id, vai_tro)`, and SQL lets any number of NULLs coexist
 // while two ordinary columns both storing ” would COLLIDE — every sheet would then be limited to
 // one column without a role, which is every sheet.
+//
+// THE OPERAND IDS GO IN AS NULL WHEN EMPTY for the same kind of reason: migration 0011's
+// `cot_ngan_sach_operands_not_blank` refuses an empty string (a blank id joins to no column yet reads
+// as "set"),
+// and both-or-neither is checked on NULL.
 const chenCot = `INSERT INTO cot_ngan_sach
-	(tenant_id, id, bang_id, ten, thu_tu, kieu, cong_thuc, vai_tro)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	(tenant_id, id, bang_id, ten, thu_tu, kieu, cong_thuc, vai_tro,
+	 numerator_column_id, denominator_column_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 func (s *NganSachStore) ChenCot(ctx context.Context, tx *store.ScopedTx,
 	c domain.CotNganSach) error {
 
 	_, err := tx.Exec(ctx, chenCot, string(tx.TenantID()),
 		c.ID, c.BangID, c.Ten, c.ThuTu, string(c.Kieu),
-		rongThanhNil(c.CongThuc), rongThanhNil(string(c.VaiTro)))
+		rongThanhNil(c.CongThuc), rongThanhNil(string(c.VaiTro)),
+		rongThanhNil(c.NumeratorColumnID), rongThanhNil(c.DenominatorColumnID))
 	if err != nil {
 		return fmt.Errorf("ngan_sach: chèn cột: %w", err)
 	}

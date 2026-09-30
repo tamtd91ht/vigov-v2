@@ -145,8 +145,21 @@ type YeuCauTaoBang struct {
 	DonViTinh string    // one of the three wire codes — domain.KiemTraDonViTinh
 	LuyKeDen  time.Time // zero when the commune has not stated it
 
-	// Cot carries Ten, ThuTu, Kieu, CongThuc and VaiTro. ID and BangID are filled here.
-	Cot []domain.CotNganSach
+	// Cot carries each column with its operand references. ID, BangID and the operand ids are the
+	// system's and are filled here.
+	Cot []NewColumn
+}
+
+// NewColumn is one column of a sheet being created: Ten, ThuTu, Kieu, CongThuc and VaiTro from the
+// embedded column, and — on a `phan_tram` column — its operands, named by index into YeuCauTaoBang.Cot
+// (domain.OperandIndexes says why an index and not `thu_tu` or an id). Any ID, BangID or operand id
+// set on the embedded column is IGNORED: they are issued here.
+//
+// CongThuc is optional on a `phan_tram` column: absent, the server writes domain.PercentFormula from
+// the operand names; present, it is kept as the commune's display text. Either way it is never parsed.
+type NewColumn struct {
+	domain.CotNganSach
+	Operands domain.OperandIndexes
 }
 
 // TaoBang creates one sheet and its columns.
@@ -172,6 +185,7 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 	}
 
 	cot := make([]domain.CotNganSach, 0, len(yc.Cot))
+	refs := make([]domain.OperandIndexes, 0, len(yc.Cot))
 	for _, c := range yc.Cot {
 		ten, err := domain.ChuanHoaTenCot(c.Ten)
 		if err != nil {
@@ -187,7 +201,43 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 		cot = append(cot, domain.CotNganSach{
 			Ten: ten, ThuTu: c.ThuTu, Kieu: c.Kieu, CongThuc: congThuc, VaiTro: c.VaiTro,
 		})
+		refs = append(refs, c.Operands)
 	}
+
+	// THE IDS ARE ISSUED BEFORE THE SHAPE CHECK, because the operand check is by id: an operand index
+	// becomes the id of the column it names, and domain.KiemTraBoCot then asks the one question that
+	// holds for every writer — "is each operand a `so` column of THIS set?". Issuing a ULID touches no
+	// row, so a refusal below still writes nothing.
+	//
+	// NO LOOKUP, SO NOTHING TO SCOPE: every operand is a column of this same request, of a sheet that
+	// does not exist yet. A client cannot name an existing column at all, so it cannot name one of
+	// another sheet or another commune.
+	id, err := uc.sinhID()
+	if err != nil {
+		return domain.BangNganSach{}, fmt.Errorf("ngan_sach: sinh mã bảng: %w", err)
+	}
+	for i := range cot {
+		cotID, err := uc.sinhID()
+		if err != nil {
+			return domain.BangNganSach{}, fmt.Errorf("ngan_sach: sinh mã cột: %w", err)
+		}
+		cot[i].ID = cotID
+		cot[i].BangID = id
+	}
+	if err := domain.AssignOperandsByIndex(cot, refs); err != nil {
+		return domain.BangNganSach{}, err
+	}
+	// `cong_thuc` STAYS NOT NULL on a `phan_tram` column (0006's CHECK), so a column the client sent
+	// without a caption gets one written from its operands' names. Only when both operands resolved:
+	// otherwise KiemTraBoCot refuses the column and the caption would describe nothing.
+	for i, r := range refs {
+		if cot[i].Kieu != domain.CotPhanTram || cot[i].CongThuc != "" ||
+			r.Numerator == nil || r.Denominator == nil {
+			continue
+		}
+		cot[i].CongThuc = domain.PercentFormula(cot[*r.Numerator].Ten, cot[*r.Denominator].Ten)
+	}
+
 	// THE WHOLE SET AT ONCE, because the duplicate-role check cannot be made per column: two columns
 	// both marked `Thu xã hưởng` is a sheet where the `Cân đối` cell has two candidate answers.
 	if err := domain.KiemTraBoCot(yc.Loai, cot); err != nil {
@@ -195,11 +245,6 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 	}
 	if err := coNguoiThucHien(nguoi); err != nil {
 		return domain.BangNganSach{}, err
-	}
-
-	id, err := uc.sinhID()
-	if err != nil {
-		return domain.BangNganSach{}, fmt.Errorf("ngan_sach: sinh mã bảng: %w", err)
 	}
 
 	moi := domain.BangNganSach{
@@ -231,12 +276,6 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 			return err
 		}
 		for i := range cot {
-			cotID, err := uc.sinhID()
-			if err != nil {
-				return fmt.Errorf("ngan_sach: sinh mã cột: %w", err)
-			}
-			cot[i].ID = cotID
-			cot[i].BangID = moi.ID
 			if err := uc.kho.ChenCot(ctx, tx, cot[i]); err != nil {
 				return err
 			}
@@ -1150,12 +1189,22 @@ func tomTatBang(b domain.BangNganSach, cot []domain.CotNganSach) map[string]any 
 	// `Thu xã hưởng` decides the `Cân đối` cell (ADR 0035 #32), so "which columns did this sheet have
 	// when it was created" is a question an inspection can genuinely need — and the columns are
 	// editable by nothing, so this entry is the only record of the answer.
+	//
+	// A PERCENTAGE COLUMN'S OPERANDS AND CAPTION ARE IN IT TOO, for the same reason: they decide which
+	// ratio every line prints, nothing edits them afterwards, and migration 0011's reversal note says
+	// that once staff choose operands this pair is the ONLY statement of which columns were meant.
 	var tom []map[string]any
 	for _, c := range cot {
-		tom = append(tom, map[string]any{
+		column := map[string]any{
 			"cot_id": c.ID, "ten": c.Ten, "thu_tu": c.ThuTu,
 			"kieu": string(c.Kieu), "vai_tro": string(c.VaiTro),
-		})
+		}
+		if c.Kieu == domain.CotPhanTram {
+			column["cong_thuc"] = c.CongThuc
+			column["numerator_column_id"] = c.NumeratorColumnID
+			column["denominator_column_id"] = c.DenominatorColumnID
+		}
+		tom = append(tom, column)
 	}
 	ra["cot"] = tom
 	return ra

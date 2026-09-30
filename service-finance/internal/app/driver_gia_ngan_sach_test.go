@@ -282,7 +282,7 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		for _, cot := range c.k.cot {
 			hang = append(hang, []driver.Value{
 				cot.ID, cot.BangID, cot.Ten, int64(cot.ThuTu), string(cot.Kieu),
-				cot.CongThuc, string(cot.VaiTro),
+				cot.CongThuc, string(cot.VaiTro), cot.NumeratorColumnID, cot.DenominatorColumnID,
 			})
 		}
 		return &rowsGia{cot: cotCotNS(), hang: hang}, nil
@@ -318,7 +318,8 @@ func cotBangNS() []string {
 }
 
 func cotCotNS() []string {
-	return []string{"id", "bang_id", "ten", "thu_tu", "kieu", "cong_thuc", "vai_tro"}
+	return []string{"id", "bang_id", "ten", "thu_tu", "kieu", "cong_thuc", "vai_tro",
+		"numerator_column_id", "denominator_column_id"}
 }
 
 func cotDotNS() []string {

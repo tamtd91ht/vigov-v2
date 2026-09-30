@@ -88,13 +88,20 @@ type cotRa struct {
 	Order int    `json:"order"`
 	Type  string `json:"type"` // `so` | `phan_tram`
 
-	// Formula is emitted and NOT evaluated on the server. §9 rule 3: a percentage column is computed
-	// at render, so the figure never becomes a second home for something derivable.
+	// Formula is DISPLAY TEXT and is never parsed. The per-line percentage is computed by the server
+	// from the two operand columns below and arrives in each line's `percent_basis_points` (§9 rule 3:
+	// computed on read, never stored).
 	Formula string `json:"formula,omitempty"`
 
 	// Role is empty for an ordinary column. The two indicators are read from the marked ones — see
 	// domain.VaiTroCot and ADR 0035 §A.
 	Role string `json:"role,omitempty"`
+
+	// NumeratorColumnID / DenominatorColumnID are the ids of the two `so` columns a `phan_tram` column
+	// divides (migration 0011). NULL on a `so` column, and NULL on a legacy `phan_tram` column whose
+	// formula could not be resolved — its lines then carry a reason instead of a figure.
+	NumeratorColumnID   *string `json:"numerator_column_id"`
+	DenominatorColumnID *string `json:"denominator_column_id"`
 }
 
 // dongRa is one line of the tree.
@@ -133,7 +140,18 @@ type dongRa struct {
 	// COMPUTED (a sum past the exact range, a stored value past the ceiling — domain.BangDayDu.GiaTri).
 	// Such a cell is `null` in Values AND has a key here; an EMPTY cell is `null` with no key here.
 	// Omitted when every cell of the line is a figure or empty — the ordinary case.
+	//
+	// A `phan_tram` column's id appears here too, whenever its entry in PercentBasisPoints is null:
+	// every null percentage has a sentence (legacy operands unresolved, an empty or zero denominator, an
+	// operand that cannot be computed, a ratio past the exact range).
 	UnavailableReasons map[string]string `json:"unavailable_reasons,omitempty"`
+
+	// PercentBasisPoints is `phan_tram` columnID -> the line's ratio in phần vạn (10811 reads as
+	// 108,11%), COMPUTED BY THE SERVER from this line's own `values` in the column's two operands and
+	// never stored (§9 rule 3; domain.BangDayDu.PercentCell). Rounded half away from zero, like the
+	// indicators. `null` = no figure, and then UnavailableReasons says why. Omitted on a sheet with no
+	// percentage column and on the single-line write responses (dongRaMot).
+	PercentBasisPoints map[string]*int64 `json:"percent_basis_points,omitempty"`
 }
 
 // oTongRa is one summary cell: the marked row's figure in one numeric column (§2's "Hàng ô tóm tắt
@@ -230,6 +248,7 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 		ra.Columns = append(ra.Columns, cotRa{
 			ID: c.ID, Name: c.Ten, Order: c.ThuTu, Type: string(c.Kieu),
 			Formula: c.CongThuc, Role: string(c.VaiTro),
+			NumeratorColumnID: optionalString(c.NumeratorColumnID), DenominatorColumnID: optionalString(c.DenominatorColumnID),
 		})
 	}
 
@@ -237,11 +256,26 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 	for _, k := range d.KhoanMuc {
 		gia := make(map[string]*int64, len(d.Cot))
 		var lyDo map[string]string
+		var percents map[string]*int64
 		for _, c := range d.Cot {
 			if c.Kieu != domain.CotSo {
-				// A percentage column carries no stored figure at all (§9 rule 3). Omitting it here
-				// rather than sending null keeps "this column has no value" and "this cell is empty"
-				// from looking the same on the wire.
+				// A percentage column carries no stored figure at all (§9 rule 3), so it is NOT in
+				// `values` — "this column has no value" and "this cell is empty" must not look the same
+				// on the wire. Its computed ratio goes in its own map.
+				if percents == nil {
+					percents = map[string]*int64{}
+				}
+				p := d.PercentCell(k.ID, c.ID)
+				if p.Co {
+					v := int64(p.Gia)
+					percents[c.ID] = &v
+					continue
+				}
+				percents[c.ID] = nil
+				if lyDo == nil {
+					lyDo = map[string]string{}
+				}
+				lyDo[c.ID] = p.LyDo
 				continue
 			}
 			s := d.GiaTri(k.ID, c.ID)
@@ -262,12 +296,20 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 		ra.Lines = append(ra.Lines, dongRa{
 			ID: k.ID, ParentID: k.ChaID, No: k.TT, Name: k.Ten, Order: k.ThuTu,
 			Method: string(k.CachTinh), Level: k.Cap, IsHeadline: k.LaDongTong, Values: gia,
-			UnavailableReasons: lyDo,
+			UnavailableReasons: lyDo, PercentBasisPoints: percents,
 		})
 	}
 
 	ra.Summary = tomTatRaNgoai(d)
 	return ra
+}
+
+// optionalString maps "" to null on the wire.
+func optionalString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // tomTatRaNgoai builds the report card.
@@ -328,11 +370,21 @@ func soTienRaNgoai(s domain.SoTien) soTienRa {
 // exactly that.
 
 type cotVao struct {
-	Name    string `json:"name"`
-	Order   int    `json:"order"`
-	Type    string `json:"type"`              // `so` | `phan_tram`
-	Formula string `json:"formula,omitempty"` // required for `phan_tram`, refused on `so`
-	Role    string `json:"role,omitempty"`    // one of the six; empty for an ordinary column
+	Name  string `json:"name"`
+	Order int    `json:"order"`
+	Type  string `json:"type"` // `so` | `phan_tram`
+
+	// Formula is DISPLAY TEXT, refused on `so`. Optional on `phan_tram`: absent, the server writes
+	// "<numerator name> / <denominator name> × 100". Never parsed — the operands below decide the ratio.
+	Formula string `json:"formula,omitempty"`
+	Role    string `json:"role,omitempty"` // one of the six; empty for an ordinary column
+
+	// NumeratorIndex / DenominatorIndex — REQUIRED on `phan_tram`, refused on `so`: the 0-based
+	// POSITION, in this same request's `columns` array, of the two distinct `so` columns the percentage
+	// divides. A position in the request and not `order` (not unique) and not an id (issued by the
+	// server in this very request) — domain.OperandIndexes.
+	NumeratorIndex   *int `json:"numerator_index,omitempty"`
+	DenominatorIndex *int `json:"denominator_index,omitempty"`
 }
 
 // taoBangVao is the body of POST /api/v1/budget-sheets.
@@ -590,11 +642,14 @@ func (h *Handler) TaoBangNganSach(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cot := make([]domain.CotNganSach, 0, len(vao.Columns))
+	cot := make([]app.NewColumn, 0, len(vao.Columns))
 	for _, c := range vao.Columns {
-		cot = append(cot, domain.CotNganSach{
-			Ten: c.Name, ThuTu: c.Order, Kieu: domain.KieuCot(c.Type),
-			CongThuc: c.Formula, VaiTro: domain.VaiTroCot(c.Role),
+		cot = append(cot, app.NewColumn{
+			CotNganSach: domain.CotNganSach{
+				Ten: c.Name, ThuTu: c.Order, Kieu: domain.KieuCot(c.Type),
+				CongThuc: c.Formula, VaiTro: domain.VaiTroCot(c.Role),
+			},
+			Operands: domain.OperandIndexes{Numerator: c.NumeratorIndex, Denominator: c.DenominatorIndex},
 		})
 	}
 
@@ -930,6 +985,9 @@ func laLoiDauVaoNganSach(err error) bool {
 		domain.ErrThieuNgayDot, domain.ErrNgayDotNgoaiLich,
 		domain.ErrThieuNoiDungDot, domain.ErrNoiDungDotQuaDai,
 		domain.ErrDonViCaNhanQuaDai, domain.ErrSoChungTuDotQuaDai, domain.ErrDotKhongCoSoTienNao,
+		domain.ErrPercentOperandsMissing, domain.ErrOperandsOnNumberColumn,
+		domain.ErrOperandIndexOutOfRange, domain.ErrOperandsSameColumn,
+		domain.ErrOperandNotNumberColumn, domain.ErrOperandNotInSheet,
 	} {
 		if errors.Is(err, mot) {
 			return true

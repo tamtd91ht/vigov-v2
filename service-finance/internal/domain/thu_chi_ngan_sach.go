@@ -177,14 +177,21 @@ type CotNganSach struct {
 	ThuTu  int
 	Kieu   KieuCot
 
-	// CongThuc is stored for a `phan_tram` column and IS NOT EVALUATED HERE. §9 rule 3: a percentage
-	// column is computed at render and never stored, so it never becomes a second home for something
-	// derivable. The two indicators that DO go into a report are computed from VaiTro, never from
-	// this string.
+	// CongThuc is the DISPLAY TEXT of a `phan_tram` column's formula and is NEVER PARSED. The per-line
+	// percentage is computed by the server from NumeratorColumnID / DenominatorColumnID
+	// (BangDayDu.PercentCell, budget_percent.go) and is never stored (§9 rule 3). The two indicators
+	// that go into a report are computed from VaiTro, never from this string.
 	CongThuc string
 
 	// VaiTro is empty for an ordinary column. See the block at the top of this file.
 	VaiTro VaiTroCot
+
+	// NumeratorColumnID / DenominatorColumnID name the two `so` columns of the same sheet a `phan_tram`
+	// column divides (migration 0011). Both "" on a `so` column. Both "" on a `phan_tram` column means
+	// a LEGACY formula 0011 could not resolve — read as "cannot be computed", never guessed from
+	// CongThuc. A column created since 0011 always carries both (checkOperandSet).
+	NumeratorColumnID   string
+	DenominatorColumnID string
 }
 
 // KhoanMucNganSach is one row of the tree (table `khoan_muc_ngan_sach`).
@@ -461,7 +468,9 @@ func KiemTraBoCot(loai LoaiBang, cot []CotNganSach) error {
 		}
 		daCo[c.VaiTro] = struct{}{}
 	}
-	return nil
+	// The operands are a set-level fact too: each one must be another column OF THIS SET. The ids
+	// must already be assigned (AssignOperandsByIndex).
+	return checkOperandSet(cot)
 }
 
 func ChuanHoaTieuDeBang(s string) (string, error) {
@@ -553,8 +562,9 @@ func ChuanHoaLyDoXoaNganSach(s string) (string, error) {
 }
 
 // ChuanHoaCongThuc — OPTIONAL and never evaluated. A `so` column must not carry one; a `phan_tram`
-// column must (KiemTraCot decides which), and the string is stored verbatim for the client to
-// render §9 rule 3 with.
+// column must (KiemTraCot decides which) — when the client sends none, the create use case writes
+// PercentFormula from the operand names. The string is display text only: the percentage is computed
+// from the operand ids (BangDayDu.PercentCell).
 func ChuanHoaCongThuc(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	switch {

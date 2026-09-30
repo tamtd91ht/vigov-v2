@@ -453,10 +453,14 @@ func TestTaoBangDatMaTheoLanVaChenDuCotTrongMotGiaoDich(t *testing.T) {
 	moi, err := uc.TaoBang(ctx, YeuCauTaoBang{
 		Nam: 2026, Loai: domain.BangChi,
 		TieuDe: "BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM 2026", DonViTinh: "trieu-dong",
-		Cot: []domain.CotNganSach{
-			{Ten: "Dự toán năm", ThuTu: 1, Kieu: domain.CotSo, VaiTro: domain.VaiTroDuToanNam},
-			{Ten: "Chi ngân sách", ThuTu: 2, Kieu: domain.CotSo, VaiTro: domain.VaiTroChiNganSach},
-			{Ten: "So sánh TH/DT (%)", ThuTu: 3, Kieu: domain.CotPhanTram, CongThuc: "col_2 / col_1 * 100"},
+		Cot: []NewColumn{
+			{CotNganSach: domain.CotNganSach{Ten: "Dự toán năm", ThuTu: 1, Kieu: domain.CotSo,
+				VaiTro: domain.VaiTroDuToanNam}},
+			{CotNganSach: domain.CotNganSach{Ten: "Chi ngân sách", ThuTu: 2, Kieu: domain.CotSo,
+				VaiTro: domain.VaiTroChiNganSach}},
+			{CotNganSach: domain.CotNganSach{Ten: "So sánh TH/DT (%)", ThuTu: 3, Kieu: domain.CotPhanTram,
+				CongThuc: "col_2 / col_1 * 100"},
+				Operands: domain.OperandIndexes{Numerator: intPtr(1), Denominator: intPtr(0)}},
 		},
 	}, nguoiGhi())
 	if err != nil {
@@ -498,7 +502,7 @@ func TestDaCoBangConSongThiTuChoiVaKhongChenGi(t *testing.T) {
 
 	_, err := uc.TaoBang(ctx, YeuCauTaoBang{
 		Nam: 2026, Loai: domain.BangChi, TieuDe: "X", DonViTinh: "trieu-dong",
-		Cot: []domain.CotNganSach{{Ten: "Chi ngân sách", ThuTu: 1, Kieu: domain.CotSo}},
+		Cot: []NewColumn{{CotNganSach: domain.CotNganSach{Ten: "Chi ngân sách", ThuTu: 1, Kieu: domain.CotSo}}},
 	}, nguoiGhi())
 	if !errors.Is(err, fistore.ErrBangDaTonTai) {
 		t.Fatalf("= %v, muốn ErrBangDaTonTai", err)
@@ -516,9 +520,11 @@ func TestHaiCotCungVaiTroBiTuChoiTruocKhiMoGiaoDich(t *testing.T) {
 
 	_, err := uc.TaoBang(ctx, YeuCauTaoBang{
 		Nam: 2026, Loai: domain.BangThu, TieuDe: "X", DonViTinh: "trieu-dong",
-		Cot: []domain.CotNganSach{
-			{Ten: "Thu xã hưởng", ThuTu: 1, Kieu: domain.CotSo, VaiTro: domain.VaiTroThuXaHuong},
-			{Ten: "Thu xã hưởng (điều chỉnh)", ThuTu: 2, Kieu: domain.CotSo, VaiTro: domain.VaiTroThuXaHuong},
+		Cot: []NewColumn{
+			{CotNganSach: domain.CotNganSach{Ten: "Thu xã hưởng", ThuTu: 1, Kieu: domain.CotSo,
+				VaiTro: domain.VaiTroThuXaHuong}},
+			{CotNganSach: domain.CotNganSach{Ten: "Thu xã hưởng (điều chỉnh)", ThuTu: 2, Kieu: domain.CotSo,
+				VaiTro: domain.VaiTroThuXaHuong}},
 		},
 	}, nguoiGhi())
 	if !errors.Is(err, domain.ErrVaiTroTrungTrongBang) {
