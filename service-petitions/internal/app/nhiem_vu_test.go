@@ -165,8 +165,8 @@ func TestTaoViecCon_KhongChepHanCuaCha(t *testing.T) {
 	}
 	// $22 is `nhiem_vu_cha_id`: the number was RESOLVED to the parent's internal id, and the column
 	// holds the id — the number is never stored in its place.
-	if chen[0].args[21] != idNVGoc {
-		t.Errorf("nhiem_vu_cha_id = %v, muốn id nội bộ của %s (%s)", chen[0].args[21], maNVGoc, idNVGoc)
+	if chen[0].args[19] != idNVGoc {
+		t.Errorf("nhiem_vu_cha_id = %v, muốn id nội bộ của %s (%s)", chen[0].args[19], maNVGoc, idNVGoc)
 	}
 	// The reply carries the parent's NUMBER and a zero child count, both known without a read.
 	if n.ParentCode != maNVGoc || n.ChildCount != 0 {
@@ -178,9 +178,9 @@ func TestTaoViecCon_KhongChepHanCuaCha(t *testing.T) {
 	}
 	// $17 and $18 are `han_xu_ly` and `han_ban_dau` — the two columns the schema requires to arrive
 	// together. Both must be NULL: the child was given no deadline of its own.
-	if chen[0].args[16] != nil || chen[0].args[17] != nil {
+	if chen[0].args[14] != nil || chen[0].args[15] != nil {
 		t.Fatalf("việc con nhận hạn %v / %v — ADR 0037 quyết định 2: con có hạn RIÊNG, không thừa kế",
-			chen[0].args[16], chen[0].args[17])
+			chen[0].args[14], chen[0].args[15])
 	}
 	// The parent WAS read and locked, which is what stops it being soft-deleted in the window.
 	if !k.coCau("FOR UPDATE") {
@@ -199,9 +199,9 @@ func TestTaoNhiemVu_HaiHanBangNhauKhiFormCoHan(t *testing.T) {
 	chen := k.cau("INSERT INTO nhiem_vu")[0]
 	// ONE VALUE, TWO COLUMNS. `han_ban_dau` is the denominator of §11.3 for ever after this
 	// statement — the trigger refuses every later change to it.
-	if chen.args[16] != mocHanNV || chen.args[17] != mocHanNV {
+	if chen.args[14] != mocHanNV || chen.args[15] != mocHanNV {
 		t.Fatalf("hạn xử lý / hạn ban đầu = %v / %v, muốn cả hai là %v",
-			chen.args[16], chen.args[17], mocHanNV)
+			chen.args[14], chen.args[15], mocHanNV)
 	}
 }
 
@@ -227,8 +227,8 @@ func TestTaoNhiemVu_GhiChuVaoCotGhiChu(t *testing.T) {
 	if len(chen) != 1 {
 		t.Fatalf("ghi %d dòng nhiệm vụ, muốn 1", len(chen))
 	}
-	if chen[0].args[20] != ghiChu {
-		t.Errorf("cột ghi_chu = %v, muốn %q", chen[0].args[20], ghiChu)
+	if chen[0].args[18] != ghiChu {
+		t.Errorf("cột ghi_chu = %v, muốn %q", chen[0].args[18], ghiChu)
 	}
 	for _, a := range vetKiemToan(t, k).args {
 		if b, ok := a.([]byte); ok && strings.Contains(string(b), ghiChu) {
@@ -248,7 +248,7 @@ func TestTaoNhiemVu_KhongCoGhiChuThiCotLaNull(t *testing.T) {
 	if _, err := uc.Tao(ctx, taoMau(), canBoThu()); err != nil {
 		t.Fatalf("giao việc mới: %v", err)
 	}
-	if v := k.cau("INSERT INTO nhiem_vu")[0].args[20]; v != nil {
+	if v := k.cau("INSERT INTO nhiem_vu")[0].args[18]; v != nil {
 		t.Errorf("cột ghi_chu = %v, muốn NULL khi biểu mẫu không có ghi chú", v)
 	}
 }

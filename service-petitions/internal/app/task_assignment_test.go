@@ -12,7 +12,8 @@ import (
 // Tests for the assignment act (owner decision 28/09/2026), over the REAL store on the fake driver.
 //
 //	PROVED HERE   the UPDATE, the timeline row and the audit entry share ONE transaction and commit
-//	              once · unit/assignee changed -> `moi-giao`, lead/monitor alone -> status kept · the
+//	              once · unit/assignee changed -> `moi-giao` · the retired lead-unit / monitor columns
+//	              are neither written nor put in the delta (ADR 0065 NV5) · the
 //	              UPDATE names no `han_*` column and the reply's deadlines are the row's · the timeline
 //	              row carries the NEW holder and a from→to sentence · the audit actor is the STAFF
 //	              BUSINESS CODE, the subject the register number, the delta both sides · terminal and
@@ -57,8 +58,8 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	if upd.args[2] != "bp-dia-chinh" || upd.args[3] != newAssignee {
 		t.Errorf("UPDATE ghi bộ phận/người = %v/%v", upd.args[2], upd.args[3])
 	}
-	if upd.args[6] != string(domain.MoiGiao) || upd.args[7] != string(domain.DangThucHien) {
-		t.Errorf("UPDATE trạng thái sau/đang chờ = %v/%v, muốn moi-giao/dang-thuc-hien", upd.args[6], upd.args[7])
+	if upd.args[4] != string(domain.MoiGiao) || upd.args[5] != string(domain.DangThucHien) {
+		t.Errorf("UPDATE trạng thái sau/đang chờ = %v/%v, muốn moi-giao/dang-thuc-hien", upd.args[4], upd.args[5])
 	}
 	if after.TrangThai != domain.MoiGiao {
 		t.Errorf("phản hồi trạng thái = %q, muốn moi-giao", after.TrangThai)
@@ -100,25 +101,26 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	}
 }
 
-func TestReassign_LeadAndMonitorOnlyKeepStatus(t *testing.T) {
+// TestReassign_RetiredRolesNeitherWrittenNorAudited — ADR 0065 NV5: changing the monitoring officer IS
+// changing the assignee. The hand-over's UPDATE and its audit delta name only the two survivors.
+func TestReassign_RetiredRolesNeitherWrittenNorAudited(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 	uc.giaoViec = &giaoViecGia{duocTatCa: true}
 
-	after, err := uc.Reassign(ctx, maNVGoc, reassignReq(domain.TaskAssignmentChange{
-		LeadUnit: unitPtr("bp-tu-phap"), Monitor: unitPtr("CB-00500")}), canBoThu())
-	if err != nil {
+	if _, err := uc.Reassign(ctx, maNVGoc,
+		reassignReq(domain.TaskAssignmentChange{Assignee: unitPtr("CB-00500")}), canBoThu()); err != nil {
 		t.Fatalf("giao lại: %v", err)
 	}
 	upd := k.cau("UPDATE nhiem_vu")[0]
-	if upd.args[6] != string(domain.DangThucHien) {
-		t.Errorf("trạng thái sau = %v, muốn giữ dang-thuc-hien (#7)", upd.args[6])
-	}
-	if after.TrangThai != domain.DangThucHien || after.BoPhanID != "bp-vpdu" {
-		t.Errorf("phản hồi: %q, bộ phận %q", after.TrangThai, after.BoPhanID)
-	}
-	if !strings.Contains(auditDeltaText(t, k), `"dat_lai_trang_thai":false`) {
-		t.Error("delta không nói trạng thái KHÔNG bị đặt lại")
+	delta := auditDeltaText(t, k)
+	for _, retired := range []string{"co_quan_chu_tri_id", "chuyen_vien_theo_doi_ma"} {
+		if strings.Contains(upd.sql, retired) {
+			t.Errorf("UPDATE còn ghi cột đã nghỉ %s: %s", retired, upd.sql)
+		}
+		if strings.Contains(delta, retired) {
+			t.Errorf("delta còn nêu cột đã nghỉ %s: %s", retired, delta)
+		}
 	}
 	chiGhiTrongGiaoDich(t, k)
 }
@@ -181,7 +183,7 @@ func TestReassign_LegacyForwardedRowCanBeHandedOver(t *testing.T) {
 		t.Errorf("trạng thái sau = %q, muốn moi-giao", after.TrangThai)
 	}
 	upd := k.cau("UPDATE nhiem_vu")
-	if len(upd) != 1 || upd[0].args[7] != string(domain.ChuyenTiep) {
+	if len(upd) != 1 || upd[0].args[5] != string(domain.ChuyenTiep) {
 		t.Errorf("UPDATE phải chờ đúng trạng thái chuyen-tiep: %v", upd)
 	}
 }
@@ -189,9 +191,10 @@ func TestReassign_LegacyForwardedRowCanBeHandedOver(t *testing.T) {
 func TestReassign_NoChangeWritesNothing(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
+	uc.giaoViec = &giaoViecGia{duocTatCa: true}
 
 	_, err := uc.Reassign(ctx, maNVGoc,
-		reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-vpdu"), LeadUnit: unitPtr("bp-vpdu")}), canBoThu())
+		reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-vpdu"), Assignee: unitPtr(maNguoiThucHien)}), canBoThu())
 	if !errors.Is(err, domain.ErrAssignmentNoChange) {
 		t.Fatalf("lỗi = %v, muốn ErrAssignmentNoChange", err)
 	}
@@ -215,16 +218,6 @@ func TestReassign_ForeignOrUnknownStaffRefusedIdentically(t *testing.T) {
 			khongMoGiaoDich(t, k)
 		})
 	}
-	// The MONITOR is checked the same way.
-	k := khoNVMau()
-	uc, ctx := dungGhiNhiemVu(t, k)
-	uc.giaoViec = &giaoViecGia{duoc: map[string]struct{}{}}
-	_, err := uc.Reassign(ctx, maNVGoc,
-		reassignReq(domain.TaskAssignmentChange{Monitor: unitPtr("CB-00500")}), canBoThu())
-	if !errors.Is(err, ErrAssignmentStaffInvalid) {
-		t.Fatalf("chuyên viên theo dõi không hợp lệ: lỗi = %v", err)
-	}
-	khongMoGiaoDich(t, k)
 }
 
 func TestReassign_IdentityDownOrUnwiredRefusesUnchecked(t *testing.T) {

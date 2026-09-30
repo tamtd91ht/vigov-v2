@@ -208,8 +208,7 @@ func nhiemVuMau() *nhiemVuGia {
 					BienBanID: "bb-001", TenCuocHop: "Giao ban UBND xã tháng 8", ThuTu: 2,
 				},
 				BoPhanID: "bp-vpdu", NguoiThucHienMa: "CB-00311",
-				LanhDaoGiaoViecMa: "CB-00007", ChuyenVienTheoDoiMa: "CB-00412",
-				HanXuLy: mocHanNVA, HanBanDau: mocHanGocNVA,
+				LanhDaoGiaoViecMa: "CB-00007", HanXuLy: mocHanNVA, HanBanDau: mocHanGocNVA,
 				TienDo: 40, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA, UpdatedAt: mocSuaNVA,
 				// The two tree facts the store attaches (store.attachTreeFacts): NV19 is a root
 				// with three live children.

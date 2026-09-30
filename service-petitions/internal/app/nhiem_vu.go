@@ -111,9 +111,6 @@ type KhoNhiemVuGhi interface {
 
 	Tao(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu) error
 	Sua(ctx context.Context, tx *store.ScopedTx, id string, n domain.NhiemVu) error
-	// ChangeCode is the ONE statement pair that moves `ma`: it issues the new code into
-	// `task_issued_code`, then renames the row (migration 0015). The old code stays issued.
-	ChangeCode(ctx context.Context, tx *store.ScopedTx, id, oldCode, newCode string) error
 	// CorrectDeadline writes a PATCH `due_at` correction; `withOriginal` carries `han_ban_dau` along
 	// (only when no extension was ever approved — migration 0016 refuses it otherwise).
 	CorrectDeadline(ctx context.Context, tx *store.ScopedTx, id string, old, due time.Time,
@@ -535,11 +532,10 @@ type YeuCauTaoNhiemVu struct {
 	NguonGiao string
 	NguonID   string
 
-	BoPhanID            string
-	NguoiThucHienMa     string
-	LanhDaoGiaoViecMa   string
-	CoQuanChuTriID      string
-	ChuyenVienTheoDoiMa string
+	// No lead unit and no monitor (ADR 0065 NV5): they ARE BoPhanID and NguoiThucHienMa.
+	BoPhanID          string
+	NguoiThucHienMa   string
+	LanhDaoGiaoViecMa string
 
 	// HanXuLy is "Hạn hoàn thành" as the form carried it. ZERO MEANS NO DEADLINE, which §4.1 renders
 	// as `Hạn —` and §7.1 permits by not marking the field required.
@@ -672,8 +668,8 @@ func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu,
 	if err := uc.kiemLanhDaoGiaoViec(ctx, moi.LanhDaoGiaoViecMa); err != nil {
 		return domain.NhiemVu{}, err
 	}
-	// The unit and the lead unit, likewise before the transaction (task_org_units.go).
-	if err := uc.checkLiveOrgUnits(ctx, moi.BoPhanID, moi.CoQuanChuTriID); err != nil {
+	// The unit, likewise before the transaction (task_org_units.go).
+	if err := uc.checkLiveOrgUnits(ctx, moi.BoPhanID); err != nil {
 		return domain.NhiemVu{}, err
 	}
 	moi.NguoiTaoMa = nguoi.ID
@@ -917,15 +913,13 @@ func chuanHoaTaoNhiemVu(yc YeuCauTaoNhiemVu) (domain.NhiemVu, error) {
 		GhiChu: ghiChu,
 		// A NEW TASK STARTS AT `moi-giao` AND NOWHERE ELSE. §6's Kanban calls that column "Chưa thực
 		// hiện", and it is the only state §6 draws arrows out of and none into.
-		TrangThai:           domain.MoiGiao,
-		MucUuTien:           yc.MucUuTien,
-		NguonGiao:           nguon,
-		NguonID:             nguonID,
-		BoPhanID:            yc.BoPhanID,
-		NguoiThucHienMa:     yc.NguoiThucHienMa,
-		LanhDaoGiaoViecMa:   yc.LanhDaoGiaoViecMa,
-		CoQuanChuTriID:      yc.CoQuanChuTriID,
-		ChuyenVienTheoDoiMa: yc.ChuyenVienTheoDoiMa,
+		TrangThai:         domain.MoiGiao,
+		MucUuTien:         yc.MucUuTien,
+		NguonGiao:         nguon,
+		NguonID:           nguonID,
+		BoPhanID:          yc.BoPhanID,
+		NguoiThucHienMa:   yc.NguoiThucHienMa,
+		LanhDaoGiaoViecMa: yc.LanhDaoGiaoViecMa,
 		// ONE VALUE FOR BOTH CLOCKS, and the store writes them from this single field. ADR 0037
 		// decision 2 lives in what is NOT here: nothing reads the parent's deadline.
 		HanXuLy:   yc.HanXuLy,
@@ -1099,19 +1093,6 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 
 		sau = sua.Apdung(truoc)
 
-		renamed := sau.Ma != truoc.Ma
-		if renamed {
-			// THE UNIQUE KEY OF THE LEDGER IS THE REAL GUARD; THIS IS THE READABLE MESSAGE. It asks the
-			// ledger, not the register: a code renamed away from is on no row of `nhiem_vu`.
-			taken, err := uc.kho.MaDaDung(ctx, tx, sau.Ma)
-			if err != nil {
-				return err
-			}
-			if taken {
-				return petstore.ErrMaNhiemVuDaTonTai
-			}
-		}
-
 		// THE DEADLINE CORRECTION'S ONE QUESTION, asked on the locked row: has an extension ever been
 		// approved? Asked inside the transaction, after the lock — an approval racing this act holds the
 		// same row lock, so the count cannot be taken against a state that is about to change.
@@ -1138,13 +1119,6 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			}
 		}
 
-		if renamed {
-			// BEFORE the descriptive UPDATE, so a refusal from the ledger's key or from a racing rename
-			// (the WHERE clause carries the old code) leaves nothing else half-written in this act.
-			if err := uc.kho.ChangeCode(ctx, tx, truoc.ID, truoc.Ma, sau.Ma); err != nil {
-				return err
-			}
-		}
 		if dueCorrected {
 			if err := uc.kho.CorrectDeadline(ctx, tx, truoc.ID, truoc.HanXuLy, sau.HanXuLy,
 				withOriginal); err != nil {
@@ -1166,15 +1140,6 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				text += " (hạn ban đầu giữ nguyên — đã có gia hạn được duyệt)"
 			}
 			if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID, text); err != nil {
-				return err
-			}
-		}
-		if renamed {
-			// THE TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer is where an officer who knew the
-			// task as NV12 finds out it is NV15 now; without it the register silently shows a number
-			// nobody gave out on paper. The instant is the act's own, like every other row of this Save.
-			if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID,
-				"Đổi mã: "+truoc.Ma+" → "+sau.Ma); err != nil {
 				return err
 			}
 		}
@@ -1203,8 +1168,9 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			// THE PARENT BY ITS REGISTER NUMBER AS WELL AS ITS id (rule 6's reader): an inspection
 			// years from now reads `NV19` without a lookup; the id stays for the row it points at.
 			"truoc": map[string]any{
-				// `ma` BEFORE AND AFTER, always — equal when the Save did not rename. An inspection that
-				// holds NV12 from the minutes finds, in this pair, the entry that turned it into NV15.
+				// `ma` BEFORE AND AFTER, always. Equal on every entry since ADR 0065 NV3 (a code is never
+				// edited); kept so the entries written while renaming was possible (28/09 → 30/09/2026)
+				// and those written after have one shape an inspection can query.
 				"ma": truoc.Ma,
 				// BOTH DEADLINES, BEFORE AND AFTER, always (rule 6, invariant 5): a correction moves one
 				// or both, and which one is exactly what an inspection of §11.3's ratio asks.
@@ -1252,10 +1218,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor:  nguoi,
 			Action: HanhViSuaNhiemVu,
-			// THE CODE THE TASK CARRIES AFTER THIS ACT — the same as before unless it was a rename. On a
-			// rename the reader arrives holding the CURRENT code (the one on the screen), and this entry
-			// is the one that names the old code in its delta: every later entry is filed under the new
-			// code, and this one links the two. `task_issued_code` answers the reverse question.
+			// The task's code — immutable (ADR 0065 NV3), so `truoc.Ma` and `sau.Ma` are the same.
 			Subject: sau.Ma,
 			Delta:   delta,
 		})
@@ -1277,15 +1240,6 @@ func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
 		// replied is the one the database will hold. Nothing is added to the instant.
 		due := sua.DueAt.UTC().Truncate(time.Microsecond)
 		sua.DueAt = &due
-	}
-	if sua.Code != nil {
-		// THE SAME CHECK A TYPED CODE PASSES ON CREATE — one value space for `ma`, whichever door it came
-		// through. An empty string is refused here, not read as "not mentioned": nil is that.
-		code, err := domain.KiemMaNhiemVu(*sua.Code)
-		if err != nil {
-			return err
-		}
-		sua.Code = &code
 	}
 	if sua.TieuDe != nil {
 		s, err := domain.KiemTieuDeNhiemVu(*sua.TieuDe)

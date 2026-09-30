@@ -123,7 +123,7 @@ func TestRequestUpload_RelatedPersonAndTaskUpdateHolderMayUpload(t *testing.T) {
 	for _, c := range []struct {
 		code   string
 		update TaskUpdateRight
-	}{{"CB-00412", false}, {maLanhDao, false}, {outsiderCode, true}} {
+	}{{"CB-00123", false}, {maLanhDao, false}, {outsiderCode, true}} {
 		k := khoNVMau()
 		uc, _, _, _, ctx := dungTaskAttachments(t, k)
 		if _, err := uc.RequestUpload(ctx, maNVGoc, uploadReq(), staffActor(c.code), c.update); err != nil {

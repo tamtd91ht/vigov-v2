@@ -1,7 +1,7 @@
 package app
 
-// Verifying the org-unit ids a task act is about to WRITE — `bo_phan_id` ("unit") and
-// `co_quan_chu_tri_id` ("lead_unit") — against identity's ResolveLiveOrgUnits (user decision
+// Verifying the org-unit id a task act is about to WRITE — `bo_phan_id` ("unit"; the lead unit IS it
+// since ADR 0065 NV5) — against identity's ResolveLiveOrgUnits (user decision
 // 28/09/2026; proto/vigov/identity/v1/identity.proto on that RPC).
 //
 // WHY: the ids arrive in the request BODY, so they are client-supplied. Written unchecked, a crafted body
@@ -36,8 +36,8 @@ var ErrOrgUnitNotLive = errors.New("nhiem_vu: bộ phận được chọn không
 // written. Never "live", never "not live": the check did not happen. Retryable — the handler answers 503.
 var ErrOrgUnitUnchecked = errors.New("nhiem_vu: chưa kiểm được bộ phận nhận việc")
 
-// checkLiveOrgUnits refuses unless every non-empty id is live. Empty ids ask nothing — "no lead unit" is
-// a real answer on a `co-ban` task, and an empty `unit` is refused elsewhere where it must be.
+// checkLiveOrgUnits refuses unless every non-empty id is live. Empty ids ask nothing — a task created
+// with an assignee and no unit is a real answer, and an empty `unit` is refused elsewhere where it must be.
 //
 // FAIL CLOSED: no checker wired, with an id to check, refuses; it never writes an id unchecked.
 func (uc *GhiNhiemVu) checkLiveOrgUnits(ctx context.Context, ids ...string) error {

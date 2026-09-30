@@ -11,7 +11,9 @@ import (
 
 // Against a real PostgreSQL: CountOpenHeldByOrgUnit counts exactly the rows the contract says HOLD
 // the unit and are OPEN — every excluded status present to be wrongly counted, a soft-deleted row,
-// a row of another commune naming the same unit, and a task naming the unit in both columns.
+// a row of another commune naming the same unit, and tasks naming the unit ONLY in the retired
+// `co_quan_chu_tri_id` (ADR 0065 NV5: not read, so not counted). The helper still WRITES that column
+// with raw SQL: it is how a pre-0025 row sits on disk, and the point is that the store ignores it.
 //
 // ⚠ SKIPS WITHOUT VIGOV_TEST_DSN, and the package still prints `ok`. The harness (TestMain,
 // moKetNoi, xaRieng) lives in danh_muc_nhiem_vu_pg_test.go.
@@ -34,7 +36,7 @@ func insertHeldPetition(t *testing.T, db *sql.DB, tenantID, id, status, unit str
 	}
 }
 
-func insertHeldTask(t *testing.T, db *sql.DB, tenantID, id, status, unit, leadUnit string, deleted bool) {
+func insertHeldTask(t *testing.T, db *sql.DB, tenantID, id, status, unit, retiredLeadUnit string, deleted bool) {
 	t.Helper()
 	var doneAt, delAt, delBy, delReason any
 	if status == "hoan-thanh" {
@@ -50,7 +52,7 @@ func insertHeldTask(t *testing.T, db *sql.DB, tenantID, id, status, unit, leadUn
 		  deleted_at, deleted_by, delete_reason)
 		 VALUES ($1,$2,$3,'theo-van-ban','Nhiệm vụ dùng cho phép kiểm.',$4,'truc-tiep',$5,$5,
 		  $6,0,'CB-00123',$7,$8,$9,$10,$11)`,
-		tenantID, id, "NV-HELD-"+id, status, mocHanGocPg, doneAt, nullHoac(unit), nullHoac(leadUnit),
+		tenantID, id, "NV-HELD-"+id, status, mocHanGocPg, doneAt, nullHoac(unit), nullHoac(retiredLeadUnit),
 		delAt, delBy, delReason); err != nil {
 		t.Fatalf("insert task %s: %v", id, err)
 	}
@@ -99,14 +101,15 @@ func TestPgTasksHeldOpenByOrgUnit(t *testing.T) {
 	danhMucChoXa(t, db, tenantB)
 	const unit, other = "bp-held-1", "bp-held-2"
 
-	// Counted: open, by either column — and ONE task naming the unit in both counts once.
+	// Counted: open, held through bo_phan_id — once, whatever the retired column says.
 	insertHeldTask(t, db, tenantA, "nv-unit", "dang-thuc-hien", unit, "", false)
-	insertHeldTask(t, db, tenantA, "nv-lead", "moi-giao", other, unit, false)
 	insertHeldTask(t, db, tenantA, "nv-both", "da-tiep-nhan", unit, unit, false)
 	insertHeldTask(t, db, tenantA, "nv-paused", "tam-dung", unit, "", false)
-	insertHeldTask(t, db, tenantA, "nv-forwarded", "chuyen-tiep", "", unit, false)
 	insertHeldTask(t, db, tenantA, "nv-review", "cho-duyet", unit, "", false)
-	// Not counted: finished (in either column), soft-deleted, another unit only.
+	// Not counted: the unit ONLY in the retired lead-unit column (ADR 0065 NV5), finished, soft-deleted,
+	// another unit only.
+	insertHeldTask(t, db, tenantA, "nv-lead", "moi-giao", other, unit, false)
+	insertHeldTask(t, db, tenantA, "nv-forwarded", "chuyen-tiep", "", unit, false)
 	insertHeldTask(t, db, tenantA, "nv-done", "hoan-thanh", unit, "", false)
 	insertHeldTask(t, db, tenantA, "nv-done-lead", "hoan-thanh", "", unit, false)
 	insertHeldTask(t, db, tenantA, "nv-deleted", "dang-thuc-hien", unit, unit, true)
@@ -119,8 +122,8 @@ func TestPgTasksHeldOpenByOrgUnit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 6 {
-		t.Errorf("xã A: %d nhiệm vụ, muốn 6 (nv-both đếm MỘT lần)", n)
+	if n != 4 {
+		t.Errorf("xã A: %d nhiệm vụ, muốn 4 (chỉ bo_phan_id; co_quan_chu_tri_id đã nghỉ, không đếm)", n)
 	}
 	if n, err := s.CountOpenHeldByOrgUnit(ctxXa(tenant.ID(tenantB)), unit); err != nil || n != 1 {
 		t.Errorf("xã B: n=%d err=%v, muốn 1", n, err)

@@ -8,8 +8,9 @@ import (
 )
 
 // The holder rule on the status route (vigov-require a37ec96, user decision 28/09/2026), over the
-// real store on the fake driver. The fixture task is `dang-thuc-hien`, assignee CB-00311, monitor
-// CB-00412, assigner CB-00007, author CB-00123.
+// real store on the fake driver. The fixture task is `dang-thuc-hien`, assignee CB-00311, assigner
+// CB-00007, author CB-00123 (no monitor since ADR 0065 NV5; the case below plants one in the retired
+// column to prove it is not read).
 
 // TestStatus_AssigneeWithoutTaskUpdateMayMove — the case a37ec96 was written for: the specialist
 // handed the task moves it without the commune-wide edit key.
@@ -32,13 +33,14 @@ func TestStatus_AssigneeWithoutTaskUpdateMayMove(t *testing.T) {
 // person, is refused with nothing written.
 func TestStatus_NonHolderRefused(t *testing.T) {
 	for name, code := range map[string]string{
-		"chỉ có task.read":     outsiderCode,
-		"chuyên viên theo dõi": "CB-00412",
-		"lãnh đạo giao việc":   maLanhDao,
-		"người tạo":            "CB-00123",
+		"chỉ có task.read":                   outsiderCode,
+		"chuyên viên theo dõi (cột đã nghỉ)": "CB-00412",
+		"lãnh đạo giao việc":                 maLanhDao,
+		"người tạo":                          "CB-00123",
 	} {
 		t.Run(name, func(t *testing.T) {
 			k := khoNVMau()
+			k.nhiemVu[idNVGoc]["chuyen_vien_theo_doi_ma"] = "CB-00412" // a pre-0025 row; never read
 			uc, ctx := dungGhiNhiemVu(t, k)
 			_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.ChoDuyet)},
 				staffActor(code), true, false)

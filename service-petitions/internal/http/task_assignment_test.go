@@ -32,20 +32,20 @@ func TestReassignTask_BodyReachesUseCaseKeepingAbsentApartFromEmpty(t *testing.T
 	m.capQuyen(t, authz.Perm("task.assign"))
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, taskAssignmentPath(maNVThu), canBoCuaXa(xaA),
-		taskAssignmentIn{Assignee: strPtr(""), Monitor: strPtr("CB-00500"), Note: "Theo giao ban."})
+		taskAssignmentIn{Assignee: strPtr(""), Note: "Theo giao ban."})
 
 	doiMa(t, w, http.StatusOK)
 	got := m.ghiNhiemVu.ycAssignment
 	if m.ghiNhiemVu.maDa != maNVThu {
 		t.Errorf("mã nhiệm vụ tới use case = %q", m.ghiNhiemVu.maDa)
 	}
-	if got.Change.Unit != nil || got.Change.LeadUnit != nil {
+	if got.Change.Unit != nil {
 		t.Error("trường không gửi lại tới use case như một giá trị — sẽ xoá bộ phận không ai yêu cầu")
 	}
 	if got.Change.Assignee == nil || *got.Change.Assignee != "" {
 		t.Error("`assignee: \"\"` (để bộ phận phân công) không tới use case như một lần XOÁ")
 	}
-	if got.Change.Monitor == nil || *got.Change.Monitor != "CB-00500" || got.Note != "Theo giao ban." {
+	if got.Note != "Theo giao ban." {
 		t.Errorf("use case nhận %+v", got)
 	}
 }

@@ -123,9 +123,12 @@ type nhiemVuRa struct {
 	Source   string `json:"source"`
 	SourceID string `json:"source_id"`
 
-	// Unit is `bo_phan_id` and LeadUnit is `co_quan_chu_tri_id` — identity's department ids.
-	// Assignee, Assigner and Monitor are STAFF BUSINESS CODES (`CB-2026-7K3M9Q`), never internal
-	// ids (rule 6, invariant 8).
+	// Unit is `bo_phan_id` — identity's department id. Assignee and Assigner are STAFF BUSINESS
+	// CODES (`CB-2026-7K3M9Q`), never internal ids (rule 6, invariant 8).
+	//
+	// NO `lead_unit` AND NO `monitor` SINCE ADR 0065 NV5 (user decision 30/09/2026) — dropped, not
+	// mirrored: the lead unit IS Unit and the monitoring officer IS Assignee, and a mirror would be a
+	// second copy of one fact on the wire.
 	//
 	// Assignee EMPTY is the `Chưa phân công` state §4.1 renders, and it is a different state from
 	// an empty Unit: §11.1 makes "handed to a department with nobody named, for too long" the case
@@ -133,8 +136,6 @@ type nhiemVuRa struct {
 	Unit     string `json:"unit"`
 	Assignee string `json:"assignee"`
 	Assigner string `json:"assigner"`
-	LeadUnit string `json:"lead_unit"`
-	Monitor  string `json:"monitor"`
 
 	// DueAt is the CURRENT commitment; OriginalDueAt is the commitment as FIRST made and never
 	// moves (migration 0006 refuses it with a trigger).
@@ -353,8 +354,6 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		Unit:                 n.BoPhanID,
 		Assignee:             n.NguoiThucHienMa,
 		Assigner:             n.LanhDaoGiaoViecMa,
-		LeadUnit:             n.CoQuanChuTriID,
-		Monitor:              n.ChuyenVienTheoDoiMa,
 		Progress:             n.TienDo,
 		ResultSummary:        n.TomTatKetQua,
 		Note:                 n.GhiChu,

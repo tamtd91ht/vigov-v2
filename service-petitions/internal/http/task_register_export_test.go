@@ -63,7 +63,6 @@ func registerSampleData() app.TaskRegisterData {
 		Tasks: []domain.NhiemVu{{
 			ID: "nv-001", Ma: "NV33", TieuDe: "Triển khai chỉ đạo về chuyển đổi số",
 			MoTa: "Tổng hợp báo cáo quý.", Khoi: "khoi-uy-ban",
-			CoQuanChuTriID: "bp-vp", ChuyenVienTheoDoiMa: "CB-00412",
 			BoPhanID: "bp-cu", NguoiThucHienMa: "CB-00311",
 			HanXuLy: registerDue, TomTatKetQua: "Đã họp triển khai.", GhiChu: "Theo dõi hằng tuần",
 			LanhDaoPheDuyetHoanThanh: true,
@@ -219,14 +218,25 @@ func TestRegisterExportErrorMapping(t *testing.T) {
 
 // --- the cells ------------------------------------------------------------------------------------
 
+// TestRegisterColumnsDropRetiredRoles — ADR 0065 NV5: "Cơ quan chủ trì tham mưu" and "Chuyên viên VP
+// tham mưu / theo dõi" are not columns of the file any more; both are "Đơn vị thực hiện".
+func TestRegisterColumnsDropRetiredRoles(t *testing.T) {
+	if len(registerColumns) != 11 || len(registerColumnWidths) != len(registerColumns) {
+		t.Fatalf("%d cột, %d độ rộng — muốn 11 và bằng nhau", len(registerColumns), len(registerColumnWidths))
+	}
+	for _, c := range registerColumns {
+		if strings.Contains(c, "chủ trì") || strings.Contains(c, "theo dõi") {
+			t.Errorf("sổ theo dõi còn cột đã gộp: %q", c)
+		}
+	}
+}
+
 func TestRegisterRowRendersSection43(t *testing.T) {
 	d := registerSampleData()
 	got := registerRow(d.Tasks[0], d)
 	want := []string{
 		"NV33",
 		"Triển khai chỉ đạo về chuyển đổi số\nTổng hợp báo cáo quý.\nKhối Uỷ ban",
-		"Văn phòng HĐND-UBND",
-		"Trần Văn Theo Dõi",
 		"Phòng Kinh tế cũ (đã gỡ)\nLê Thị Thực Hiện (đã gỡ khỏi danh bạ)",
 		"90-TB/TU · 30/11/2026\nThông báo kết luận",
 		"",
@@ -252,16 +262,13 @@ func TestRegisterRowRendersSection43(t *testing.T) {
 func TestRegisterRowUnknownsAreShownAsUnknown(t *testing.T) {
 	d := registerSampleData()
 	got := registerRow(d.Tasks[1], d)
-	if got[2] != "—" || got[3] != "—" {
-		t.Errorf("không có cơ quan/chuyên viên phải hiện —: %q, %q", got[2], got[3])
-	}
-	if got[4] != "Không rõ bộ phận\nCB-99999" {
-		t.Errorf("đơn vị thực hiện = %q, muốn bộ phận không rõ và MÃ cán bộ chưa tra được", got[4])
+	if got[2] != "Không rõ bộ phận\nCB-99999" {
+		t.Errorf("đơn vị thực hiện = %q, muốn bộ phận không rõ và MÃ cán bộ chưa tra được", got[2])
 	}
 	if strings.Contains(strings.Join(got, "|"), "bp-mat") {
 		t.Errorf("mã định danh nội bộ của bộ phận lọt vào sổ: %q", got)
 	}
-	if got[8] != "—" {
-		t.Errorf("không có hạn phải hiện —: %q", got[8])
+	if got[6] != "—" {
+		t.Errorf("không có hạn phải hiện —: %q", got[6])
 	}
 }

@@ -631,8 +631,6 @@ func TestSuaNhiemVu_TruongKhongGuiThiKhongDongToi(t *testing.T) {
 		"ghi_chu":     sua.GhiChu != nil,
 		"muc_uu_tien": sua.MucUuTien != nil,
 		"cha":         sua.ParentCode != nil,
-		// An absent `code` must never read as a rename (to "" or to anything).
-		"ma": sua.Code != nil,
 		// An absent `due_at` must never read as a correction.
 		"han": sua.DueAt != nil,
 		// The RESOLVED id is never filled from the wire — only app.Sua fills it, under the lock.
@@ -641,25 +639,6 @@ func TestSuaNhiemVu_TruongKhongGuiThiKhongDongToi(t *testing.T) {
 		if v {
 			t.Errorf("trường %q không gửi lên mà vẫn tới use case", ten)
 		}
-	}
-}
-
-// TestPatchTaskCodeReachesUseCase — PATCH's `code` (rename, user decision 28/09/2026) reaches the use
-// case as Code, untouched: trimming and the format rule are domain.KiemMaNhiemVu's, in app.Sua, so the
-// create and rename doors share one rule. The `{ma}` in the path is the OLD code.
-func TestPatchTaskCodeReachesUseCase(t *testing.T) {
-	m := dungMayChu(t)
-	m.capQuyen(t, authz.Perm("task.update"))
-
-	code := "NV45"
-	doiMa(t, m.goiGhiNV(t, http.MethodPatch, hostA, duongNV(maNVThu), canBoCuaXa(xaA),
-		suaNhiemVuVao{Code: &code}), http.StatusOK)
-
-	if m.ghiNhiemVu.maDa != maNVThu {
-		t.Errorf("mã trên đường dẫn = %q, muốn mã cũ %q", m.ghiNhiemVu.maDa, maNVThu)
-	}
-	if sua := m.ghiNhiemVu.ycSua; sua.Code == nil || *sua.Code != code {
-		t.Fatalf("Code = %v, muốn %q", sua.Code, code)
 	}
 }
 

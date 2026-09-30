@@ -101,6 +101,12 @@ func (h *Handler) ImportTasks(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.d.TaskImport.Import(ctx, sheet, dryRun, actor)
 	switch {
+	case errors.Is(err, app.ErrTaskImportRetiredColumns):
+		// ADR 0065 NV5: the file was filled on the template from before 30/09/2026. Refused whole — the
+		// retired columns are never skipped silently (app.ErrTaskImportRetiredColumns says why).
+		httpx.WriteError(w, http.StatusBadRequest, "import_retired_columns",
+			"Tệp theo mẫu cũ: còn cột \"Cơ quan chủ trì tham mưu\" hoặc \"Chuyên viên theo dõi\". Hai vai này đã gộp vào \"Đơn vị thực hiện\" và \"Người thực hiện\" — hãy tải mẫu mới, điền lại rồi gửi.", "")
+		return
 	case errors.Is(err, app.ErrTaskImportLayout):
 		httpx.WriteError(w, http.StatusBadRequest, "import_layout",
 			"Tệp không đúng mẫu nhập nhiệm vụ (hàng tiêu đề khác mẫu, hoặc không có dòng nhiệm vụ nào). Hãy tải mẫu và điền lại.", "")
@@ -309,8 +315,6 @@ var importTemplateExample = []string{
 	"30/09/2026 17:00",
 	"theo-van-ban",
 	"khoi-uy-ban",
-	"ma-co-quan-chu-tri",
-	"CB-00001",
 	"Công văn số 0000-CV/XX ngày 01/09/2026 của cơ quan cấp trên",
 	"Công văn số 0000-CV/ĐU ngày 05/09/2026 của Ban Thường vụ Đảng uỷ",
 	"Báo cáo kết quả rà soát",

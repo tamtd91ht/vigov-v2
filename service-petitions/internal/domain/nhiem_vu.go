@@ -261,13 +261,15 @@ type NhiemVu struct {
 	// petition. Empty for `truc-tiep`, which the schema enforces.
 	NguonID string
 
-	// BoPhanID is identity's `bo_phan` id. The four `…Ma` fields are STAFF BUSINESS CODES
+	// BoPhanID is identity's `bo_phan` id. The `…Ma` fields are STAFF BUSINESS CODES
 	// (`CB-2026-7K3M9Q`), never internal ids — rule 6, invariant 8, and the column names say so.
-	BoPhanID            string
-	NguoiThucHienMa     string
-	LanhDaoGiaoViecMa   string
-	CoQuanChuTriID      string
-	ChuyenVienTheoDoiMa string
+	//
+	// NO LEAD UNIT, NO MONITOR (ADR 0065 NV5, migration 0025): the lead unit IS BoPhanID and the
+	// monitoring officer IS NguoiThucHienMa. Their columns stay in the table (rule 7) but are neither
+	// read nor written, and there is deliberately no field here that could carry them.
+	BoPhanID          string
+	NguoiThucHienMa   string
+	LanhDaoGiaoViecMa string
 
 	// HanXuLy is the CURRENT commitment and HanBanDau is the commitment AS FIRST MADE. The second
 	// never moves — migration 0006's trigger refuses it — because §11.3's on-time ratio is measured

@@ -18,8 +18,8 @@ package store
 //     officers acting on one task at the same moment cannot both succeed. The second matches no row
 //     and the caller sees a refusal, never a silent overwrite.
 //  5. `nguoi_tao_ma`, `nguon_giao` AND `nguon_id` APPEAR IN NO UPDATE HERE — facts about how the row
-//     came into being. `ma` appears in exactly ONE — ChangeCode, which issues the new code into
-//     `task_issued_code` in the same call (migration 0015). `han_ban_dau` appears in exactly ONE —
+//     came into being. NEITHER DOES `ma`: an issued task code is never edited (ADR 0065 NV3,
+//     migration 0024), and the trigger refuses every change of it. `han_ban_dau` appears in exactly ONE —
 //     CorrectDeadline, written from the same value as `han_xu_ly`, and only when the task has had no
 //     approved extension (migration 0016). The `nhiem_vu_bat_bien` trigger refuses every other
 //     change of either (user decisions 28/09/2026).
@@ -249,12 +249,13 @@ func (s *NhiemVuStore) SoLonNhatDaCap(ctx context.Context, tx *store.ScopedTx) (
 }
 
 // MaDaDung reports whether this commune has already issued that register number — to any task, at
-// any time, whether the task still carries it, was soft-deleted, or was renamed away from it.
+// any time, whether the task still carries it, was soft-deleted, or was renamed away from it (a
+// rename was possible between 28/09/2026 and migration 0024; those former codes stay issued).
 //
 // THE PRIMARY KEY OF `task_issued_code` IS THE REAL GUARD; THIS IS THE READABLE MESSAGE — the same
 // split LoaiNhiemVuStore.MaDaDung makes. Two concurrent acts issuing one code can both pass this check
-// and the second hits the key (through the insert trigger on create, through ChangeCode on a rename)
-// and rolls the whole transaction back: no duplicate, an unhelpful 500. This turns the ordinary case
+// and the second hits the key (through the insert trigger on create) and rolls the whole transaction
+// back: no duplicate, an unhelpful 500. This turns the ordinary case
 // into a sentence somebody can act on.
 //
 // IT READS THE LEDGER (migration 0015) and not `nhiem_vu`: a code renamed away from is on no row of
@@ -295,18 +296,18 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 	const stmt = `INSERT INTO nhiem_vu (
 		tenant_id, id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 		nguon_giao, nguon_id, bo_phan_id, nguoi_thuc_hien_ma, lanh_dao_giao_viec_ma,
-		co_quan_chu_tri_id, chuyen_vien_theo_doi_ma,
 		han_xu_ly, han_ban_dau, tien_do, tom_tat_ket_qua, ghi_chu,
 		nhiem_vu_cha_id, nguoi_tao_ma, cap_nhat_luc,
 		lanh_dao_phe_duyet_hoan_thanh, cap_tren_cong_nhan_hoan_thanh)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), n.ID, n.Ma, n.Loai, rongThanhNull(n.Khoi), n.TieuDe,
 		rongThanhNull(n.MoTa), string(n.TrangThai), rongThanhNull(n.MucUuTien),
 		string(n.NguonGiao), rongThanhNull(n.NguonID), rongThanhNull(n.BoPhanID),
 		rongThanhNull(n.NguoiThucHienMa), rongThanhNull(n.LanhDaoGiaoViecMa),
-		rongThanhNull(n.CoQuanChuTriID), rongThanhNull(n.ChuyenVienTheoDoiMa),
+		// `co_quan_chu_tri_id` / `chuyen_vien_theo_doi_ma` are NOT WRITTEN (ADR 0065 NV5, migration
+		// 0025): the lead unit is `bo_phan_id` and the monitor is `nguoi_thuc_hien_ma`. NULL on every new row.
 		// ONE VALUE, TWO COLUMNS. See the note above before separating them.
 		khongThanhNull(n.HanXuLy), khongThanhNull(n.HanXuLy),
 		n.TienDo, rongThanhNull(n.TomTatKetQua), rongThanhNull(n.GhiChu),
@@ -332,9 +333,11 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 //	han_ban_dau            never set from the wire. It FOLLOWS a correction of `han_xu_ly` while the
 //	                       task has had no approved extension (app.Sua decides, CorrectDeadline writes,
 //	                       migration 0016's trigger enforces), and is frozen after one.
-//	                       (`ma` IS in the struct since 28/09/2026 — see Code — but is written by
-//	                       ChangeCode, never by Sua's UPDATE. `han_xu_ly` likewise — see DueAt — is
-//	                       written by CorrectDeadline.)
+//	                       (`han_xu_ly` IS in the struct — see DueAt — but is written by
+//	                       CorrectDeadline, never by Sua's UPDATE.)
+//	ma                     an issued task code is NEVER edited (ADR 0065 NV3, migration 0024). The
+//	                       PATCH body's `code` is refused at the edge (400), and the trigger refuses
+//	                       any change of `ma` underneath.
 //	trang_thai,            the lifecycle is §6's and moves through its own route, which writes a
 //	ngay_hoan_thanh        timeline row and checks the tree (ADR 0037 decision 4).
 //	lanh_dao_giao_viec_ma  ADR 0038 makes that column the APPROVER of extensions. A PATCH guarded by
@@ -342,9 +345,9 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 //	                       name themselves the approver of their own extension requests — the
 //	                       escalation the two-layer rule exists to prevent.
 //	bo_phan_id,            assignment is `task.assign`'s act (§6, §10), with a route of its own:
-//	nguoi_thuc_hien_ma,    POST /api/v1/tasks/{ma}/assignment (Reassign below, 28/09/2026). Folding
-//	co_quan_chu_tri_id,    it in here would grant assignment to every holder of `task.update` — and
-//	chuyen_vien_theo_doi_ma  the owner put lead unit and monitor under `task.assign` too (#7).
+//	nguoi_thuc_hien_ma     POST /api/v1/tasks/{ma}/assignment (Reassign below, 28/09/2026). Folding
+//	                       it in here would grant assignment to every holder of `task.update`. The
+//	                       lead unit and the monitor ARE these two since ADR 0065 NV5.
 //	nguon_giao, nguon_id   facts about how the row came into being.
 //
 // EVERY FIELD IS A POINTER, so "not mentioned" and "set to empty" are distinguishable. Three of
@@ -356,16 +359,6 @@ type SuaNhiemVu struct {
 	// lock, is that same instant — somebody else wrote the task in between. nil keeps the behaviour
 	// every existing client relies on (additive, 28/09/2026). NOT A COLUMN WRITE: nothing folds it.
 	ExpectedUpdatedAt *time.Time
-
-	// Code renames the task — the PATCH body's `code` (vigov-require 7764c8a, user decision
-	// 28/09/2026). The new code must never have been issued in this commune, and the old one stays
-	// issued for ever (migration 0015, `task_issued_code`).
-	//
-	// ⚠ Apdung folds it and CoGiDoi counts it, but store.Sua DOES NOT WRITE IT. The one statement that
-	// moves `ma` is ChangeCode, which issues the new code into the ledger in the same call — the
-	// trigger refuses a change of `ma` that skipped the ledger, so a Sua that wrote it would only ever
-	// fail, inside the business transaction.
-	Code *string
 
 	// DueAt CORRECTS the deadline — the PATCH body's `due_at` (vigov-require 93cff7f, user decision
 	// 28/09/2026). A correction, NOT an extension: it records that the commitment was typed wrong, and
@@ -436,8 +429,7 @@ type SuaNhiemVu struct {
 // declaration becomes a lie, and the second request files an entry saying nothing changed.
 func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 	switch {
-	case s.Code != nil && *s.Code != n.Ma,
-		s.DueAt != nil && !s.DueAt.Equal(n.HanXuLy),
+	case s.DueAt != nil && !s.DueAt.Equal(n.HanXuLy),
 		s.Khoi != nil && *s.Khoi != n.Khoi,
 		s.TieuDe != nil && *s.TieuDe != n.TieuDe,
 		s.MoTa != nil && *s.MoTa != n.MoTa,
@@ -460,9 +452,6 @@ func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 // answers to "what did this act change", and the one that drifts is whichever is edited second —
 // which is the one an inspection reads.
 func (s SuaNhiemVu) Apdung(n domain.NhiemVu) domain.NhiemVu {
-	if s.Code != nil {
-		n.Ma = *s.Code
-	}
 	if s.DueAt != nil {
 		// HanXuLy ONLY. HanBanDau depends on whether an extension was ever approved, which a fold over
 		// one row cannot know — app.Sua sets it after asking.
@@ -529,37 +518,6 @@ func (s *NhiemVuStore) Sua(ctx context.Context, tx *store.ScopedTx, id string, n
 		return fmt.Errorf("nhiem_vu: sửa nhiệm vụ: %w", err)
 	}
 	return doiMotDongNhiemVu(kq, "sửa nhiệm vụ")
-}
-
-// ChangeCode renames one task: it ISSUES the new code to the task in `task_issued_code`, then moves
-// `nhiem_vu.ma` — two statements, in this order, inside the caller's transaction (migration 0015).
-//
-// # THE ORDER IS WHAT THE TRIGGER CHECKS
-//
-// `nhiem_vu_bat_bien` lets `ma` change only when the NEW code is already in the ledger, issued to THIS
-// task. The INSERT is therefore not bookkeeping after the fact; it is the precondition the database
-// enforces. The OLD code needs no statement: it has been in the ledger since it was issued, and the
-// ledger is append-only — so it stays reserved for ever, which is the half of the decision that
-// vigov-require's version does not keep.
-//
-// A CODE ALREADY ISSUED FAILS THE LEDGER'S PRIMARY KEY, which rolls the whole act back. The caller
-// asks MaDaDung first so the ordinary case is a 409 sentence; this key is what holds under a race.
-//
-// THE UPDATE'S WHERE CLAUSE CARRIES THE OLD CODE, so a second rename racing this one matches no row
-// and is told to reload rather than renaming a task that already moved.
-func (s *NhiemVuStore) ChangeCode(ctx context.Context, tx *store.ScopedTx, id, oldCode, newCode string) error {
-	const issue = `INSERT INTO task_issued_code (tenant_id, code, task_id) VALUES ($1, $2, $3)`
-	if _, err := tx.Exec(ctx, issue, string(tx.TenantID()), newCode, id); err != nil {
-		return fmt.Errorf("task_issued_code: cấp mã mới: %w", err)
-	}
-
-	const stmt = `UPDATE nhiem_vu SET ma = $3, cap_nhat_luc = now()
-		WHERE tenant_id = $1 AND id = $2 AND ma = $4 AND deleted_at IS NULL`
-	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, newCode, oldCode)
-	if err != nil {
-		return fmt.Errorf("nhiem_vu: đổi mã nhiệm vụ: %w", err)
-	}
-	return doiMotDongNhiemVu(kq, "đổi mã")
 }
 
 // CorrectDeadline writes a CORRECTED deadline (PATCH `due_at`, user decision 28/09/2026).
@@ -639,7 +597,7 @@ func (s *NhiemVuStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id 
 	return doiMotDongNhiemVu(kq, "đổi trạng thái")
 }
 
-// Reassign writes the four holder columns and the status the assignment act lands the task in
+// Reassign writes the two holder columns and the status the assignment act lands the task in
 // (owner decision 28/09/2026; domain/task_assignment.go).
 //
 // ⚠ NO `han_*` COLUMN IS IN THE SET LIST, AND THAT ABSENCE IS THE DECISION. A deadline moves through
@@ -653,13 +611,14 @@ func (s *NhiemVuStore) Reassign(ctx context.Context, tx *store.ScopedTx, id stri
 	expected domain.TrangThaiNhiemVu, n domain.NhiemVu) error {
 
 	const stmt = `UPDATE nhiem_vu
-		SET bo_phan_id = $3, nguoi_thuc_hien_ma = $4, co_quan_chu_tri_id = $5,
-		    chuyen_vien_theo_doi_ma = $6, trang_thai = $7, cap_nhat_luc = now()
-		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $8 AND deleted_at IS NULL`
+		SET bo_phan_id = $3, nguoi_thuc_hien_ma = $4, trang_thai = $5, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $6 AND deleted_at IS NULL`
 
+	// The retired `co_quan_chu_tri_id` / `chuyen_vien_theo_doi_ma` are NOT in the SET list (ADR 0065
+	// NV5): a hand-over never writes them, so whatever migration 0025 left there stays untouched.
 	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id,
-		rongThanhNull(n.BoPhanID), rongThanhNull(n.NguoiThucHienMa), rongThanhNull(n.CoQuanChuTriID),
-		rongThanhNull(n.ChuyenVienTheoDoiMa), string(n.TrangThai), string(expected))
+		rongThanhNull(n.BoPhanID), rongThanhNull(n.NguoiThucHienMa),
+		string(n.TrangThai), string(expected))
 	if err != nil {
 		return fmt.Errorf("nhiem_vu: giao lại nhiệm vụ: %w", err)
 	}

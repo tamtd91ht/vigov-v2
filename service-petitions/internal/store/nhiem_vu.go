@@ -49,6 +49,10 @@ var ErrNhiemVuKhongTonTai = errors.New("nhiem_vu: không có nhiệm vụ")
 
 // cotNhiemVu IS READ BY POSITION in the Scan below.
 //
+// `co_quan_chu_tri_id` AND `chuyen_vien_theo_doi_ma` ARE NOT HERE, ON PURPOSE (ADR 0065 NV5, migration
+// 0025): the lead unit IS `bo_phan_id` and the monitoring officer IS `nguoi_thuc_hien_ma`. The two
+// retired columns stay in the table (rule 7) and no read in this package names them.
+//
 // `han_xu_ly`, `han_ban_dau` AND `ngay_hoan_thanh` ARE THREE ADJACENT TIMESTAMPTZ COLUMNS and a swap
 // between any two produces NO error at all — it produces a task that looks extended when it was
 // not, or an on-time ratio measured against the wrong number. They are listed together on purpose,
@@ -61,7 +65,6 @@ var ErrNhiemVuKhongTonTai = errors.New("nhiem_vu: không có nhiệm vụ")
 const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 	nguon_giao, nguon_id,
 	bo_phan_id, nguoi_thuc_hien_ma, lanh_dao_giao_viec_ma,
-	co_quan_chu_tri_id, chuyen_vien_theo_doi_ma,
 	han_xu_ly, han_ban_dau, ngay_hoan_thanh,
 	tien_do, tom_tat_ket_qua, ghi_chu,
 	lanh_dao_phe_duyet_hoan_thanh, cap_tren_cong_nhan_hoan_thanh,
@@ -480,19 +483,22 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 // THE CLAUSES, and where each comes from (vigov-require 0053854, tasks/repository.py `_mine_clause`,
 // read against this schema):
 //
-//	nguoi_thuc_hien_ma       I hold it. require includes the assignee in "involved" too, so the
-//	                         `related` tab is a SUPERSET of `mine`, never a different list.
+//	nguoi_thuc_hien_ma       I hold it — and "tôi theo dõi": since ADR 0065 NV5 the monitoring
+//	                         officer IS the assignee. require includes the assignee in "involved"
+//	                         too, so the `related` tab is a SUPERSET of `mine`, never a different list.
 //	lanh_dao_giao_viec_ma    "tôi giao" — the leader named as having handed it out
 //	nguoi_tao_ma             "tôi giao" as require spells it (`created_by`): the officer who
 //	                         entered the assignment. Both are kept; either is "I gave this out".
-//	chuyen_vien_theo_doi_ma  "tôi theo dõi"
 //	nhat_ky_nhiem_vu         "tôi đã xử lý" — I wrote an entry on its timeline (require: a progress
 //	                         report of mine). Every act on a task writes one there as its actor, so
 //	                         a status move or a manual log entry by me counts. The timeline is
 //	                         append-only (migration 0006) — no soft-delete column to filter.
-//	bo_phan_id,              "bộ phận tôi đang giữ" — held by, or led by, one of my live units
-//	co_quan_chu_tri_id       (require matches both org_unit_id and lead_org_unit_id). NO units →
-//	                         the clause is ABSENT, which matches nothing, never every unit.
+//	bo_phan_id               "bộ phận tôi đang giữ" — held by one of my live units (require matches
+//	                         org_unit_id and lead_org_unit_id; the lead unit IS bo_phan_id since
+//	                         ADR 0065 NV5). NO units → the clause is ABSENT, which matches nothing,
+//	                         never every unit.
+//
+// The retired `chuyen_vien_theo_doi_ma` / `co_quan_chu_tri_id` are NOT read (migration 0025).
 //
 // ALL COLUMNS ARE STAFF BUSINESS CODES OR UNIT ids — no personal data (rule 3). The timeline clause is
 // `id IN (…)` rather than a correlated EXISTS so the outer `id` binds to the task relation under both
@@ -507,7 +513,6 @@ func relatedCondition(r *TaskRelatedScope, args *[]any) string {
 		"nguoi_thuc_hien_ma = " + me,
 		"lanh_dao_giao_viec_ma = " + me,
 		"nguoi_tao_ma = " + me,
-		"chuyen_vien_theo_doi_ma = " + me,
 		"id IN (SELECT nk.nhiem_vu_id FROM nhat_ky_nhiem_vu nk WHERE nk.tenant_id = $1 AND nk.nguoi_ma = " + me + ")",
 	}
 	if len(r.OrgUnits) > 0 {
@@ -521,7 +526,7 @@ func relatedCondition(r *TaskRelatedScope, args *[]any) string {
 			b.WriteString("$" + strconv.Itoa(len(*args)+1))
 		}
 		b.WriteString(")")
-		clauses = append(clauses, "bo_phan_id IN "+b.String(), "co_quan_chu_tri_id IN "+b.String())
+		clauses = append(clauses, "bo_phan_id IN "+b.String())
 	}
 	return " AND (" + strings.Join(clauses, " OR ") + ")"
 }
@@ -911,7 +916,6 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 		// the second is how "no deadline was ever set" quietly becomes a deadline in year 1.
 		khoi, mucUuTien, moTa, nguonID    sql.NullString
 		boPhan, nguoiThucHien, lanhDao    sql.NullString
-		coQuanChuTri, chuyenVien          sql.NullString
 		tomTat, ghiChu                    sql.NullString
 		hanXuLy, hanBanDau, ngayHoanThanh sql.NullTime
 
@@ -924,7 +928,6 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 		&n.ID, &n.Ma, &loa, &khoi, &n.TieuDe, &moTa, &tt, &mucUuTien,
 		&ng, &nguonID,
 		&boPhan, &nguoiThucHien, &lanhDao,
-		&coQuanChuTri, &chuyenVien,
 		&hanXuLy, &hanBanDau, &ngayHoanThanh,
 		&n.TienDo, &tomTat, &ghiChu,
 		&n.LanhDaoPheDuyetHoanThanh, &n.CapTrenCongNhanHoanThanh,
@@ -951,8 +954,6 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 	n.BoPhanID = boPhan.String
 	n.NguoiThucHienMa = nguoiThucHien.String
 	n.LanhDaoGiaoViecMa = lanhDao.String
-	n.CoQuanChuTriID = coQuanChuTri.String
-	n.ChuyenVienTheoDoiMa = chuyenVien.String
 	n.TomTatKetQua = tomTat.String
 	n.GhiChu = ghiChu.String
 	n.NhiemVuChaID = nhiemVuCha.String

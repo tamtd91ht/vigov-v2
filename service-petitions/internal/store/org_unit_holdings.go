@@ -29,11 +29,12 @@ var ErrOrgUnitIDBlank = errors.New("org_unit_holdings: mã bộ phận rỗng")
 // citizen can still send the petition back to this unit.
 var petitionHeldOpenCondition = `bo_phan_id = $2 AND ` + citizenReportInProgressCondition
 
-// taskHeldOpenCondition is "held by $2 in either answerable column, and not finished". ONE ROW IS
-// ONE TASK, so a task naming the unit in both columns matches once — an OR on one row, never the
-// sum of two counts. `tam-dung` and `chuyen-tiep` stay open: both can return to active work.
-var taskHeldOpenCondition = `(bo_phan_id = $2 OR co_quan_chu_tri_id = $2) AND trang_thai <> '` +
-	string(domain.HoanThanh) + `'`
+// taskHeldOpenCondition is "held by $2 and not finished". `bo_phan_id` ONLY: since ADR 0065 NV5
+// (migration 0025) the lead unit IS the assigned unit, and the retired `co_quan_chu_tri_id` is never
+// read — migration 0025 filled `bo_phan_id` from it wherever `bo_phan_id` was empty, so a unit that
+// was only the lead unit of a task with a different assigned unit no longer holds that task.
+// `tam-dung` and `chuyen-tiep` stay open: both can return to active work.
+var taskHeldOpenCondition = `bo_phan_id = $2 AND trang_thai <> '` + string(domain.HoanThanh) + `'`
 
 // CountOpenHeldByOrgUnit counts the live, unfinished petitions whose `bo_phan_id` is orgUnitID, in
 // the commune of ctx. An id of another commune counts zero: $1 is the context's commune.
@@ -41,8 +42,8 @@ func (s *PhieuPhanAnhStore) CountOpenHeldByOrgUnit(ctx context.Context, orgUnitI
 	return countHeldOpen(ctx, s.db, "phieu_phan_anh", petitionHeldOpenCondition, orgUnitID)
 }
 
-// CountOpenHeldByOrgUnit counts the live, unfinished tasks whose `bo_phan_id` OR `co_quan_chu_tri_id`
-// is orgUnitID, each task once, in the commune of ctx.
+// CountOpenHeldByOrgUnit counts the live, unfinished tasks whose `bo_phan_id` is orgUnitID, in the
+// commune of ctx.
 func (s *NhiemVuStore) CountOpenHeldByOrgUnit(ctx context.Context, orgUnitID string) (int, error) {
 	return countHeldOpen(ctx, s.db, "nhiem_vu", taskHeldOpenCondition, orgUnitID)
 }

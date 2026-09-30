@@ -36,8 +36,6 @@ var TaskImportHeadings = []string{
 	"Hạn hoàn thành (ngày giờ)",
 	"Loại nhiệm vụ (mã)",
 	"Khối nhiệm vụ (mã)",
-	"Cơ quan chủ trì tham mưu (mã)",
-	"Chuyên viên theo dõi (mã cán bộ)",
 	"Văn bản cấp trên giao",
 	"Văn bản chỉ đạo của Đảng uỷ",
 	"Kết quả thực hiện / Sản phẩm đầu ra",
@@ -56,8 +54,6 @@ const (
 	importColDue
 	importColType
 	importColBloc
-	importColLeadUnit
-	importColMonitor
 	importColDocUpper
 	importColDocParty
 	importColDocOutput
@@ -113,9 +109,8 @@ type TaskImportRow struct {
 	Row int
 
 	Title, Description, Note string
-	UnitCode, LeadUnitCode   string
+	UnitCode                 string
 	AssigneeCode             string
-	MonitorCode              string
 	PriorityCode, TypeCode   string
 	BlocCode                 string
 
@@ -127,6 +122,31 @@ type TaskImportRow struct {
 	Documents []VanBanNhiemVuVao
 
 	LeaderApproved, SuperiorAcknowledged bool
+}
+
+// TaskImportRetiredHeadings are the two columns the template carried until ADR 0065 NV5 (user decision
+// 30/09/2026) made "cơ quan chủ trì" the unit and "chuyên viên theo dõi" the assignee. A file that
+// still carries either is a file filled on the OLD template: CheckTaskImportHeadings would refuse it
+// anyway, but as "wrong layout" — which tells the clerk nothing. TaskImportCarriesRetiredColumns lets
+// the refusal say exactly why. The file is refused WHOLE, never read with those columns skipped: the
+// clerk put a person there believing they would monitor the task, and silently dropping that name
+// would record an assignment nobody made.
+var TaskImportRetiredHeadings = []string{
+	"Cơ quan chủ trì tham mưu (mã)",
+	"Chuyên viên theo dõi (mã cán bộ)",
+}
+
+// TaskImportCarriesRetiredColumns reports whether a heading row names either retired column, at any
+// position.
+func TaskImportCarriesRetiredColumns(cells []string) bool {
+	for _, c := range cells {
+		for _, h := range TaskImportRetiredHeadings {
+			if strings.TrimSpace(c) == h {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // CheckTaskImportHeadings refuses a heading row that is not the template's.
@@ -202,8 +222,6 @@ func ParseTaskImportRow(row int, raw []string) (TaskImportRow, []TaskImportError
 	code(importColPriority, &out.PriorityCode)
 	code(importColType, &out.TypeCode)
 	code(importColBloc, &out.BlocCode)
-	code(importColLeadUnit, &out.LeadUnitCode)
-	code(importColMonitor, &out.MonitorCode)
 	if cells[importColUnit] == "" && cells[importColAssignee] == "" {
 		fail(importColUnit, errImportUnitOrAssignee)
 	}

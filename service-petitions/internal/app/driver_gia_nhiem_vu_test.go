@@ -81,13 +81,10 @@ type khoNhiemVuGia struct {
 	// soLonNhat is what the minting query answers.
 	soLonNhat int64
 
-	// maDaDung answers the duplicate-code check for a code not in issuedCodes.
+	// maDaDung answers the duplicate-code check (a read of `task_issued_code`, migration 0015). No
+	// statement of this service writes the ledger since ADR 0065 NV3 removed the rename path: the
+	// database's AFTER INSERT trigger fills it, which a fake cannot model — so it is a canned answer.
 	maDaDung int64
-
-	// issuedCodes is `task_issued_code` for this commune (migration 0015): every code ever issued,
-	// current or renamed away. The duplicate-code check answers 1 for any code in it, and an
-	// `INSERT INTO task_issued_code` adds to it — so a test can rename and then try to reuse.
-	issuedCodes map[string]bool
 
 	doiDong int64
 
@@ -155,8 +152,6 @@ func dongNhiemVuGia(id, ma string, sua map[string]driver.Value) map[string]drive
 		"bo_phan_id":                    "bp-vpdu",
 		"nguoi_thuc_hien_ma":            maNguoiThucHien,
 		"lanh_dao_giao_viec_ma":         maLanhDao,
-		"co_quan_chu_tri_id":            "bp-vpdu",
-		"chuyen_vien_theo_doi_ma":       "CB-00412",
 		"han_xu_ly":                     mocHanNV,
 		"han_ban_dau":                   mocHanGocNV,
 		"ngay_hoan_thanh":               nil,
@@ -332,20 +327,6 @@ func (c *connNVGia) ExecContext(_ context.Context, q string, args []driver.Named
 	if res, handled, err := c.k.execStoredFile(q, args); handled {
 		return res, err
 	}
-	if strings.Contains(q, "INSERT INTO task_issued_code") {
-		// $2 is the code. A code already issued is refused, as the ledger's primary key refuses it.
-		code := fmt.Sprint(args[1].Value)
-		c.k.mu.Lock()
-		defer c.k.mu.Unlock()
-		if c.k.issuedCodes == nil {
-			c.k.issuedCodes = map[string]bool{}
-		}
-		if c.k.issuedCodes[code] {
-			return nil, errors.New("driver giả: duplicate key value violates task_issued_code_pkey")
-		}
-		c.k.issuedCodes[code] = true
-		return driver.RowsAffected(1), nil
-	}
 	if strings.Contains(q, "UPDATE nhiem_vu") || strings.Contains(q, "UPDATE de_nghi_lui_han") {
 		// THE ONLY STATEMENTS WHOSE ROW COUNT MEANS ANYTHING. The store turns zero into a refusal —
 		// the race between two officers — so the count has to be settable; a fake that always
@@ -477,8 +458,7 @@ func (k *khoNhiemVuGia) doNhiemVu(q string, cot []string, args []driver.Value) (
 }
 
 // doIssuedCode answers the two reads of `task_issued_code`: the minting high-water mark (canned, from
-// soLonNhat — the fake does not parse the series) and the duplicate-code count (1 for a code in
-// issuedCodes, maDaDung otherwise).
+// soLonNhat — the fake does not parse the series) and the duplicate-code count (maDaDung).
 func (k *khoNhiemVuGia) doIssuedCode(q string, args []driver.Value) (driver.Rows, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -493,11 +473,7 @@ func (k *khoNhiemVuGia) doIssuedCode(q string, args []driver.Value) (driver.Rows
 		if len(args) < 2 {
 			return nil, fmt.Errorf("driver giả: câu đếm mã thiếu tham số: %q", q)
 		}
-		n := k.maDaDung
-		if k.issuedCodes[fmt.Sprint(args[1])] {
-			n = 1
-		}
-		return &rowsNVGia{cot: []string{"n"}, hang: [][]driver.Value{{n}}}, nil
+		return &rowsNVGia{cot: []string{"n"}, hang: [][]driver.Value{{k.maDaDung}}}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
 }

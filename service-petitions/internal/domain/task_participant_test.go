@@ -8,7 +8,7 @@ import (
 // TestTaskWorkRightFor pins vigov-require a37ec96's table as mapped onto this service's columns.
 func TestTaskWorkRightFor(t *testing.T) {
 	n := NhiemVu{
-		NguoiThucHienMa: "CB-00311", ChuyenVienTheoDoiMa: "CB-00412",
+		NguoiThucHienMa:   "CB-00311",
 		LanhDaoGiaoViecMa: "CB-00007", NguoiTaoMa: "CB-00123",
 	}
 	for _, c := range []struct {
@@ -19,7 +19,7 @@ func TestTaskWorkRightFor(t *testing.T) {
 	}{
 		{"assignee", "CB-00311", false, TaskWorkFull},
 		{"task.update holder", "CB-09999", true, TaskWorkFull},
-		{"monitor", "CB-00412", false, TaskWorkLog},
+		// No "monitor" row: since ADR 0065 NV5 the monitoring officer IS the assignee (row above).
 		{"assigner", "CB-00007", false, TaskWorkLog},
 		{"author", "CB-00123", false, TaskWorkLog},
 		{"outsider", "CB-09999", false, TaskWorkNone},

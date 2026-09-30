@@ -258,6 +258,8 @@ func TestTaskImportResultAndErrorMapping(t *testing.T) {
 		{app.TaskImportResult{TotalRows: 2, Errors: []domain.TaskImportError{{Row: 3, Column: "Tên nhiệm vụ", Message: "thiếu"}}},
 			nil, http.StatusOK, ""},
 		{app.TaskImportResult{}, app.ErrTaskImportLayout, http.StatusBadRequest, "import_layout"},
+		// ADR 0065 NV5: the old template (with "cơ quan chủ trì" / "chuyên viên theo dõi") has its own code.
+		{app.TaskImportResult{}, app.ErrTaskImportRetiredColumns, http.StatusBadRequest, "import_retired_columns"},
 		{app.TaskImportResult{}, app.ErrTaskImportTooManyRows, http.StatusUnprocessableEntity, "import_too_many_rows"},
 		{app.TaskImportResult{}, fmt.Errorf("%w: x", app.ErrTaskImportUnchecked), http.StatusServiceUnavailable, "import_unchecked"},
 		{app.TaskImportResult{}, errors.New("pg: db-07 down"), http.StatusInternalServerError, "internal"},

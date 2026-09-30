@@ -124,8 +124,8 @@ func TestTaskImportBooksEveryRowInOneTransaction(t *testing.T) {
 
 	res, err := ti.Import(ctx, importSheet(
 		importLine("Rà soát quỹ đất", "dia-chinh", "CB-00311", map[int]string{
-			7: "khoi-uy-ban", 8: "van-phong", 9: "CB-00412", 4: "cao", 10: "Công văn cấp trên", 13: "x"}),
-		make([]string, 16), // a blank row is skipped
+			7: "khoi-uy-ban", 4: "cao", 8: "Công văn cấp trên", 11: "x"}),
+		make([]string, len(domain.TaskImportHeadings)), // a blank row is skipped
 		importLine("Tổng hợp báo cáo", "", "CB-00311", map[int]string{6: "co-ban"}),
 	), false, canBoThu())
 	if err != nil {
@@ -146,9 +146,9 @@ func TestTaskImportBooksEveryRowInOneTransaction(t *testing.T) {
 	}
 	// The first row: unit resolved from its CODE to identity's id, marks written, the default type.
 	first := inserts[0].args
-	if first[3] != "theo-van-ban" || first[11] != "bp-dia-chinh" || first[14] != "bp-van-phong" ||
-		first[24] != true || first[25] != false {
-		t.Errorf("dòng 1 ghi: loại %v, bộ phận %v, chủ trì %v, duyệt %v/%v", first[3], first[11], first[14], first[24], first[25])
+	if first[3] != "theo-van-ban" || first[11] != "bp-dia-chinh" || first[12] != "CB-00311" ||
+		first[22] != true || first[23] != false {
+		t.Errorf("dòng 1 ghi: loại %v, bộ phận %v, người %v, duyệt %v/%v", first[3], first[11], first[12], first[22], first[23])
 	}
 	if len(k.cau("INSERT INTO nhiem_vu_van_ban")) != 1 {
 		t.Error("ô văn bản không thành một dòng văn bản")
@@ -251,6 +251,39 @@ func TestTaskImportStaffAskedInChunksOfFifty(t *testing.T) {
 	}
 	if len(lookups.staffChunks) != 2 || lookups.staffChunks[0] != identityclient.TranMaGiaoViecMotLo || lookups.staffChunks[1] != 10 {
 		t.Errorf("lô hỏi cán bộ = %v, muốn [50 10]", lookups.staffChunks)
+	}
+}
+
+// TestTaskImportOldTemplateWithRetiredColumnsRefused — ADR 0065 NV5: a file filled on the template from
+// before 30/09/2026 still carries "Cơ quan chủ trì tham mưu (mã)" / "Chuyên viên theo dõi (mã cán bộ)".
+// It is refused WHOLE with its own error — never read with those columns skipped, and never reported as
+// the generic "wrong layout" — and nothing is asked or written.
+func TestTaskImportOldTemplateWithRetiredColumnsRefused(t *testing.T) {
+	for name, extra := range map[string][]string{
+		"cả hai cột":          domain.TaskImportRetiredHeadings,
+		"chỉ chuyên viên":     {domain.TaskImportRetiredHeadings[1]},
+		"chỉ cơ quan chủ trì": {domain.TaskImportRetiredHeadings[0]},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k := khoNVMau()
+			lookups := importLookupsSample()
+			ti, ctx := newTaskImport(t, k, lookups, true)
+
+			head := append([]string(nil), domain.TaskImportHeadings[:8]...)
+			head = append(head, extra...)
+			head = append(head, domain.TaskImportHeadings[8:]...)
+			row := make([]string, len(head))
+			row[0], row[2], row[5] = "Việc", "dia-chinh", "30/09/2026 17:00"
+
+			_, err := ti.Import(ctx, [][]string{head, row}, false, canBoThu())
+			if !errors.Is(err, ErrTaskImportRetiredColumns) || errors.Is(err, ErrTaskImportLayout) {
+				t.Fatalf("lỗi = %v, muốn đúng ErrTaskImportRetiredColumns", err)
+			}
+			if len(lookups.staffChunks) != 0 {
+				t.Errorf("đã hỏi identity dù tệp bị từ chối cả tệp: %v", lookups.staffChunks)
+			}
+			khongGhiGi(t, k)
+		})
 	}
 }
 

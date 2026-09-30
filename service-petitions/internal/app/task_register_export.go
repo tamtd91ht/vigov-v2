@@ -176,8 +176,8 @@ func (uc *TaskRegisterExport) Export(ctx context.Context, req RegisterExportRequ
 	data := TaskRegisterData{Tasks: tasks}
 	var staff, units, blocs []string
 	for _, n := range tasks {
-		staff = append(staff, n.ChuyenVienTheoDoiMa, n.NguoiThucHienMa)
-		units = append(units, n.CoQuanChuTriID, n.BoPhanID)
+		staff = append(staff, n.NguoiThucHienMa)
+		units = append(units, n.BoPhanID)
 		blocs = append(blocs, n.Khoi)
 	}
 	if data.Staff, err = lookupChunked(ctx, staff, uc.names.TenCanBoTheoMa); err != nil {

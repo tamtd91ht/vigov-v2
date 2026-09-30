@@ -16,20 +16,20 @@ import (
 
 // taskAssignmentIn is the body.
 //
-// THE FIELD NAMES ARE THE ONES GET /api/v1/tasks/{ma} RETURNS (`unit`, `assignee`, `lead_unit`,
-// `monitor`), so a drawer sends back the shape it read.
+// THE FIELD NAMES ARE THE ONES GET /api/v1/tasks/{ma} RETURNS (`unit`, `assignee`), so a drawer sends
+// back the shape it read.
+//
+// NO `lead_unit`, NO `monitor` (ADR 0065 NV5): changing the monitoring officer IS changing `assignee`,
+// here. A body that still sends either key is refused 400 (retiredRoleKeys), never silently ignored.
 //
 // EVERY FIELD IS A POINTER: absent means "leave it", "" means "clear it". `unit` may not be cleared
-// (400); `assignee`, `lead_unit` and `monitor` may. SEND ONLY WHAT CHANGES — every staff code sent is
-// checked with identity, so resending a monitor who has since left refuses an unrelated change.
+// (400); `assignee` may. SEND ONLY WHAT CHANGES — every staff code sent is checked with identity.
 //
 // THERE IS NO `status` AND NO `due_at`: the status is the server's consequence of the act, and a
 // deadline moves only through an approved extension (ADR 0038).
 type taskAssignmentIn struct {
 	Unit     *string `json:"unit,omitempty"`
 	Assignee *string `json:"assignee,omitempty"`
-	LeadUnit *string `json:"lead_unit,omitempty"`
-	Monitor  *string `json:"monitor,omitempty"`
 	// Note is the officer's optional line; it goes on the timeline under the generated from→to
 	// sentence, and only its LENGTH reaches the audit entry (it may name a citizen's case).
 	Note string `json:"note,omitempty"`
@@ -38,7 +38,7 @@ type taskAssignmentIn struct {
 // ReassignTask hands the task over. POST /api/v1/tasks/{ma}/assignment
 func (h *Handler) ReassignTask(w http.ResponseWriter, r *http.Request) {
 	var in taskAssignmentIn
-	if !docThan(w, r, &in) {
+	if !decodeRefusingKeys(w, r, &in, retiredRoleKeys) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -49,7 +49,7 @@ func (h *Handler) ReassignTask(w http.ResponseWriter, r *http.Request) {
 
 	n, err := h.d.GhiNhiemVu.Reassign(r.Context(), r.PathValue("ma"), app.TaskAssignmentRequest{
 		Change: domain.TaskAssignmentChange{
-			Unit: in.Unit, Assignee: in.Assignee, LeadUnit: in.LeadUnit, Monitor: in.Monitor,
+			Unit: in.Unit, Assignee: in.Assignee,
 		},
 		Note: in.Note,
 	}, nguoi)

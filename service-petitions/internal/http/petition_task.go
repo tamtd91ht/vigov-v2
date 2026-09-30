@@ -36,6 +36,8 @@ type PetitionTaskCreator interface {
 // body; this route goes one step further and answers 400 when a client sends either key, the refusal
 // POST /api/v1/tasks gives for a client-owned source: a client that believes it chose the source must
 // be told it did not, rather than have its value silently dropped.
+//
+// `lead_unit` AND `monitor` ARE REFUSED THE SAME WAY (ADR 0065 NV5, retiredRoleKeys): one role now.
 type petitionTaskIn struct {
 	Code     string `json:"code,omitempty"`
 	AutoCode bool   `json:"auto_code"`
@@ -50,8 +52,6 @@ type petitionTaskIn struct {
 	Unit     string `json:"unit,omitempty"`
 	Assignee string `json:"assignee,omitempty"`
 	Assigner string `json:"assigner,omitempty"`
-	LeadUnit string `json:"lead_unit,omitempty"`
-	Monitor  string `json:"monitor,omitempty"`
 
 	// DueAt is "Hạn hoàn thành" — a pointer, so "no deadline" stays expressible, as on POST /api/v1/tasks.
 	// The petition's own deadlines are NOT copied into it: a task's deadline is what the leader typed.
@@ -91,6 +91,10 @@ func (h *Handler) CreateTaskFromPetition(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
+	if sentence := refusedKeySent(keys, retiredRoleKeys); sentence != "" {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", sentence, "")
+		return
+	}
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheNhiemVu(w, r)
@@ -104,21 +108,19 @@ func (h *Handler) CreateTaskFromPetition(w http.ResponseWriter, r *http.Request)
 	}
 
 	yc := app.YeuCauTaoNhiemVu{
-		Ma:                  in.Code,
-		TuSinhMa:            in.AutoCode,
-		Loai:                in.Type,
-		Khoi:                in.Bloc,
-		TieuDe:              in.Title,
-		MoTa:                in.Body,
-		MucUuTien:           in.Priority,
-		GhiChu:              in.Note,
-		BoPhanID:            in.Unit,
-		NguoiThucHienMa:     in.Assignee,
-		LanhDaoGiaoViecMa:   in.Assigner,
-		CoQuanChuTriID:      in.LeadUnit,
-		ChuyenVienTheoDoiMa: in.Monitor,
-		ParentCode:          in.Parent,
-		VanBan:              documents,
+		Ma:                in.Code,
+		TuSinhMa:          in.AutoCode,
+		Loai:              in.Type,
+		Khoi:              in.Bloc,
+		TieuDe:            in.Title,
+		MoTa:              in.Body,
+		MucUuTien:         in.Priority,
+		GhiChu:            in.Note,
+		BoPhanID:          in.Unit,
+		NguoiThucHienMa:   in.Assignee,
+		LanhDaoGiaoViecMa: in.Assigner,
+		ParentCode:        in.Parent,
+		VanBan:            documents,
 		// NguonGiao AND NguonID ARE NOT SET HERE — the use case sets both from the petition it reads.
 	}
 	if in.DueAt != nil {

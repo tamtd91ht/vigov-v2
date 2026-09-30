@@ -46,6 +46,36 @@ func TestCheckTaskImportHeadings(t *testing.T) {
 	}
 }
 
+// TestTaskImportRetiredColumns — ADR 0065 NV5: the template no longer carries "cơ quan chủ trì" /
+// "chuyên viên theo dõi", and a heading row that still names either, at any position, is recognised as
+// the old template so the refusal can say why.
+func TestTaskImportRetiredColumns(t *testing.T) {
+	for _, h := range TaskImportRetiredHeadings {
+		for _, current := range TaskImportHeadings {
+			if current == h {
+				t.Fatalf("mẫu hiện hành còn cột đã bỏ %q", h)
+			}
+		}
+	}
+	if TaskImportCarriesRetiredColumns(TaskImportHeadings) {
+		t.Fatal("mẫu hiện hành bị coi là mẫu cũ")
+	}
+	// The pre-NV5 layout: the two columns sat after "Khối nhiệm vụ (mã)".
+	old := append([]string(nil), TaskImportHeadings[:8]...)
+	old = append(old, " "+TaskImportRetiredHeadings[0]+" ", TaskImportRetiredHeadings[1])
+	old = append(old, TaskImportHeadings[8:]...)
+	if !TaskImportCarriesRetiredColumns(old) {
+		t.Error("mẫu cũ (còn hai cột đã bỏ) không được nhận ra")
+	}
+	if CheckTaskImportHeadings(old) {
+		t.Error("mẫu cũ lọt qua kiểm tra hàng tiêu đề")
+	}
+	onlyMonitor := append(append([]string(nil), TaskImportHeadings...), TaskImportRetiredHeadings[1])
+	if !TaskImportCarriesRetiredColumns(onlyMonitor) {
+		t.Error("còn riêng cột chuyên viên theo dõi ở cuối mà không được nhận ra")
+	}
+}
+
 func TestParseImportDeadline(t *testing.T) {
 	want := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC) // 17:00 in Vietnam
 	for _, s := range []string{"30/09/2026 17:00", "30/9/2026 17:00", "2026-09-30 17:00", " 30/09/2026   17:00:00 "} {

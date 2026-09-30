@@ -6,9 +6,12 @@ package app
 // themselves are in domain/task_assignment.go):
 //
 //	"Chuyển tiếp" = the SAME row handed to another unit or person — one act with "đổi bộ phận /
-//	người thực hiện" (PHAN_CHUA_DUNG #1). Lead unit and monitor are edited here too (#7).
-//	Unit or assignee changed -> `moi-giao`; only lead unit / monitor -> status unchanged.
-//	The deadline is never touched.
+//	người thực hiện" (PHAN_CHUA_DUNG #1).
+//	Unit or assignee changed -> `moi-giao`. The deadline is never touched.
+//
+// ONE ROLE SINCE ADR 0065 NV5 (user decision 30/09/2026): the lead unit IS the unit and the monitoring
+// officer IS the assignee. Changing "chuyên viên theo dõi" is changing the assignee, through this act;
+// the retired columns are neither read nor written.
 //
 // # ONE TRANSACTION, THREE WRITES (rule 6, invariant 3)
 //
@@ -18,15 +21,15 @@ package app
 //
 // # WHAT IS CHECKED WITH IDENTITY, AND WHAT CANNOT BE
 //
-//	staff codes (assignee, monitor)   identity.ResolveAssignableStaff, in the commune the context
+//	staff code (assignee)             identity.ResolveAssignableStaff, in the commune the context
 //	                                  carries — BEFORE the transaction, for the reason
 //	                                  kiemLanhDaoGiaoViec gives. A code of another commune, unknown,
 //	                                  locked or account-less is ONE refusal (rule 1: no existence leak).
-//	unit ids (unit, lead unit)        identity.ResolveLiveOrgUnits (since 28/09/2026), also BEFORE the
+//	unit id (unit)                    identity.ResolveLiveOrgUnits (since 28/09/2026), also BEFORE the
 //	                                  transaction — checkLiveOrgUnits (task_org_units.go). Unknown,
 //	                                  removed or another commune's id is ONE refusal (400); identity
 //	                                  down is 503 and nothing is written. Task creation checks the same
-//	                                  two columns. (The PETITION assignment, domain.KiemPhanCong, still
+//	                                  column. (The PETITION assignment, domain.KiemPhanCong, still
 //	                                  does not — outside this card.)
 //
 // # NOTIFYING THE NEW HOLDER — NOT DONE, ON PURPOSE
@@ -62,14 +65,14 @@ var ErrAssignmentStaffInvalid = errors.New(
 // task was NOT reassigned. Never "valid", never "invalid". Retryable — the handler answers 503.
 var ErrAssignmentStaffUnchecked = errors.New("nhiem_vu: chưa kiểm được cán bộ nhận việc")
 
-// TaskAssignmentRequest is the act as the handler hands it down. Change carries the four optional
+// TaskAssignmentRequest is the act as the handler hands it down. Change carries the two optional
 // fields (nil = not mentioned); Note is the officer's optional line for the timeline.
 type TaskAssignmentRequest struct {
 	Change domain.TaskAssignmentChange
 	Note   string
 }
 
-// Reassign hands the task to another holder and/or edits lead unit and monitor. Permission:
+// Reassign hands the task to another unit and/or assignee. Permission:
 // `task.assign`, declared on the route.
 func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmentRequest,
 	nguoi audit.Actor) (domain.NhiemVu, error) {
@@ -92,12 +95,10 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 	if err := uc.checkAssignableStaff(ctx, change.StaffCodes()); err != nil {
 		return domain.NhiemVu{}, err
 	}
-	// The unit ids SENT, for the same reason and at the same moment (task_org_units.go).
+	// The unit id SENT, for the same reason and at the same moment (task_org_units.go).
 	var units []string
-	for _, u := range []*string{change.Unit, change.LeadUnit} {
-		if u != nil {
-			units = append(units, *u)
-		}
+	if change.Unit != nil {
+		units = append(units, *change.Unit)
 	}
 	if err := uc.checkLiveOrgUnits(ctx, units...); err != nil {
 		return domain.NhiemVu{}, err
@@ -144,7 +145,7 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 			return err
 		}
 
-		// BEFORE AND AFTER OF ALL FOUR COLUMNS AND THE STATUS. Unit ids and STAFF business codes only —
+		// BEFORE AND AFTER OF BOTH HOLDER COLUMNS AND THE STATUS. Unit ids and STAFF business codes only —
 		// no citizen personal data, nothing to mask (rule 3 is about the people a commune serves; staff
 		// data inside one commune is not masked, open question #11). The deadline is recorded as
 		// UNCHANGED evidence, not as a field that moved: both values are the same by construction.
@@ -175,11 +176,9 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 // cannot name different keys.
 func assignmentAuditFields(n domain.NhiemVu) map[string]any {
 	return map[string]any{
-		"bo_phan_id":              n.BoPhanID,
-		"nguoi_thuc_hien_ma":      n.NguoiThucHienMa,
-		"co_quan_chu_tri_id":      n.CoQuanChuTriID,
-		"chuyen_vien_theo_doi_ma": n.ChuyenVienTheoDoiMa,
-		"trang_thai":              string(n.TrangThai),
+		"bo_phan_id":         n.BoPhanID,
+		"nguoi_thuc_hien_ma": n.NguoiThucHienMa,
+		"trang_thai":         string(n.TrangThai),
 	}
 }
 

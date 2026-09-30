@@ -61,12 +61,14 @@ func TestTaskHeldOpenStatement(t *testing.T) {
 	}
 	l := d.stmts[0]
 	want := "SELECT count(*) FROM nhiem_vu WHERE tenant_id = $1 AND deleted_at IS NULL AND " +
-		"(bo_phan_id = $2 OR co_quan_chu_tri_id = $2) AND trang_thai <> 'hoan-thanh'"
+		"bo_phan_id = $2 AND trang_thai <> 'hoan-thanh'"
 	if l.sql != want {
 		t.Errorf("câu lệnh\n  %q\nmuốn\n  %q", l.sql, want)
 	}
-	// ONE bound value for both columns: the same unit, and one row counts once however many columns
-	// name it. Two arguments would mean two predicates that could drift apart.
+	// ADR 0065 NV5: the lead unit IS bo_phan_id; the retired column is never read.
+	if strings.Contains(l.sql, "co_quan_chu_tri_id") {
+		t.Errorf("câu đếm còn đọc cột đã nghỉ co_quan_chu_tri_id: %s", l.sql)
+	}
 	if len(l.args) != 2 || l.args[0] != string(xaThu) || l.args[1] != testUnitID {
 		t.Errorf("tham số = %v", l.args)
 	}

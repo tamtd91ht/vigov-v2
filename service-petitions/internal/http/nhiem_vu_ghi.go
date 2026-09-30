@@ -45,8 +45,10 @@ package http
 //	             day a commune runs.
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
@@ -117,11 +119,12 @@ type taoNhiemVuVao struct {
 	Source   string `json:"source,omitempty"`
 	SourceID string `json:"source_id,omitempty"`
 
+	// Unit and Assignee are the task's ONE holder pair. There is no `lead_unit` and no `monitor`
+	// (ADR 0065 NV5): the lead unit IS `unit`, the monitoring officer IS `assignee`, and a body that
+	// still sends either key is refused (retiredRoleKeys).
 	Unit     string `json:"unit,omitempty"`
 	Assignee string `json:"assignee,omitempty"`
 	Assigner string `json:"assigner,omitempty"`
-	LeadUnit string `json:"lead_unit,omitempty"`
-	Monitor  string `json:"monitor,omitempty"`
 
 	// DueAt is "Hạn hoàn thành". A POINTER, so "no deadline" is expressible: §7.1 does not mark the
 	// field required, and §4.1 renders such a task as `Hạn —`.
@@ -203,20 +206,12 @@ type vanBanNhiemVuVao struct {
 // note, a progress of 0, an unticked box, a detached parent — so a full replacement could not tell
 // "not mentioned" from "set to zero".
 //
-// WHAT IS NOT HERE IS petstore.SuaNhiemVu's list and its reasoning (`code` IS here since 28/09/2026
-// and is written through the issued-code ledger, never by the plain UPDATE). The two that matter most:
+// WHAT IS NOT HERE IS petstore.SuaNhiemVu's list and its reasoning. `code` is NOT here since ADR 0065
+// NV3 (user decision 30/09/2026): an issued task code is never edited, and a body that still sends the
+// key is refused 400 rather than silently ignored (editRefusedKeys). The two that matter most:
 // `due_at` IS here since 28/09/2026 as a CORRECTION (see DueAt), and `assigner` is absent because that column IS the approver under ADR 0038 — a `task.update` holder
 // able to rewrite it could name themselves the approver of their own extension requests.
 type suaNhiemVuVao struct {
-	// Code RENAMES the task (vigov-require 7764c8a, user decision 28/09/2026). Same format a typed code
-	// has on create. 409 `code_taken` when the code was EVER issued in this commune — including a code
-	// some task was renamed away from; the old code of this task is kept reserved for ever.
-	//
-	// ⚠ THE `{ma}` OF EVERY TASK ROUTE CHANGES WITH IT. The reply carries the new `code`; a client
-	// holding the old one (an open drawer, a copied link) gets 404 from then on — the old code is not
-	// resolved to the task. OPTIONAL, like every field of this published body (rule 2, invariant 4).
-	Code *string `json:"code,omitempty"`
-
 	// DueAt CORRECTS "Hạn hoàn thành" (vigov-require 93cff7f, user decision 28/09/2026) — an RFC 3339
 	// instant, stored as sent; the server adds and defaults no hour. A correction, NOT an extension:
 	// no leader approves it. While the task has never had an approved extension, `original_due_at`
@@ -421,12 +416,75 @@ func vanBanVaoTrong(ds []vanBanNhiemVuVao) ([]domain.VanBanNhiemVuVao, error) {
 	return ra, nil
 }
 
+// --- keys a body may no longer carry --------------------------------------------------------------
+
+// refusedKey is one body key refused BY NAME, whatever its value — `null` and `""` included. The
+// struct no longer has the field, and encoding/json ignores unknown keys, so without this check a
+// client that still sends it would believe the server acted on it.
+type refusedKey struct {
+	key      string
+	sentence string
+}
+
+// retiredRoleSentence is ADR 0065 NV5's refusal, one sentence for every door that creates or hands
+// over a task.
+const retiredRoleSentence = "Vai chủ trì đã gộp vào người thực hiện: không gửi `lead_unit` hay `monitor` nữa. " +
+	"Cơ quan chủ trì là `unit`, chuyên viên theo dõi là `assignee`."
+
+// retiredRoleKeys are refused on POST /api/v1/tasks, POST /api/v1/tasks/{ma}/assignment,
+// POST /api/v1/citizen-reports/{maTraCuu}/tasks and POST /api/v1/meetings/{id}/conclusions/{stt}/task.
+var retiredRoleKeys = []refusedKey{
+	{"lead_unit", retiredRoleSentence},
+	{"monitor", retiredRoleSentence},
+}
+
+// editRefusedKeys are refused on PATCH /api/v1/tasks/{ma} (ADR 0065 NV3).
+var editRefusedKeys = []refusedKey{
+	{"code", "Mã nhiệm vụ đã cấp không sửa được — không gửi `code` khi sửa nhiệm vụ."},
+}
+
+// refusedKeySent answers the sentence of the first refused key the object carries, or "". Keys are
+// matched CASE-INSENSITIVELY, because that is how encoding/json matched them onto the field that used
+// to exist: `"Lead_Unit"` was accepted then and must be refused now.
+func refusedKeySent(keys map[string]json.RawMessage, refused []refusedKey) string {
+	for sent := range keys {
+		for _, k := range refused {
+			if strings.EqualFold(sent, k.key) {
+				return k.sentence
+			}
+		}
+	}
+	return ""
+}
+
+// decodeRefusingKeys is docThan plus the refusal of named keys: 400 `invalid_request` when the body
+// is not a JSON object this struct decodes, or when it carries a refused key. Answers the response
+// itself; false means "stop".
+func decodeRefusingKeys(w http.ResponseWriter, r *http.Request, vao any, refused []refusedKey) bool {
+	var raw json.RawMessage
+	if !docThan(w, r, &raw) {
+		return false
+	}
+	var keys map[string]json.RawMessage
+	if json.Unmarshal(raw, &keys) != nil || json.Unmarshal(raw, vao) != nil {
+		// The decoder's message quotes the input; it never reaches the client (docThan's reason).
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return false
+	}
+	if sentence := refusedKeySent(keys, refused); sentence != "" {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", sentence, "")
+		return false
+	}
+	return true
+}
+
 // --- the six handlers ----------------------------------------------------------------------------
 
 // TaoNhiemVu books one task. POST /api/v1/tasks
 func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 	var vao taoNhiemVuVao
-	if !docThan(w, r, &vao) {
+	if !decodeRefusingKeys(w, r, &vao, retiredRoleKeys) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -460,23 +518,21 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	yc := app.YeuCauTaoNhiemVu{
-		Ma:                  vao.Code,
-		TuSinhMa:            vao.AutoCode,
-		Loai:                vao.Type,
-		Khoi:                vao.Bloc,
-		TieuDe:              vao.Title,
-		MoTa:                vao.Body,
-		MucUuTien:           vao.Priority,
-		GhiChu:              vao.Note,
-		NguonGiao:           vao.Source,
-		NguonID:             vao.SourceID,
-		BoPhanID:            vao.Unit,
-		NguoiThucHienMa:     vao.Assignee,
-		LanhDaoGiaoViecMa:   vao.Assigner,
-		CoQuanChuTriID:      vao.LeadUnit,
-		ChuyenVienTheoDoiMa: vao.Monitor,
-		ParentCode:          vao.Parent,
-		VanBan:              vanBan,
+		Ma:                vao.Code,
+		TuSinhMa:          vao.AutoCode,
+		Loai:              vao.Type,
+		Khoi:              vao.Bloc,
+		TieuDe:            vao.Title,
+		MoTa:              vao.Body,
+		MucUuTien:         vao.Priority,
+		GhiChu:            vao.Note,
+		NguonGiao:         vao.Source,
+		NguonID:           vao.SourceID,
+		BoPhanID:          vao.Unit,
+		NguoiThucHienMa:   vao.Assignee,
+		LanhDaoGiaoViecMa: vao.Assigner,
+		ParentCode:        vao.Parent,
+		VanBan:            vanBan,
 	}
 	if vao.DueAt != nil {
 		yc.HanXuLy = *vao.DueAt
@@ -495,7 +551,7 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 // SuaNhiemVu edits the descriptive fields. PATCH /api/v1/tasks/{ma}
 func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 	var vao suaNhiemVuVao
-	if !docThan(w, r, &vao) {
+	if !decodeRefusingKeys(w, r, &vao, editRefusedKeys) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -519,7 +575,6 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n, err := h.d.GhiNhiemVu.Sua(r.Context(), r.PathValue("ma"), petstore.SuaNhiemVu{
-		Code:                     vao.Code,
 		DueAt:                    vao.DueAt,
 		Khoi:                     vao.Bloc,
 		TieuDe:                   vao.Title,
@@ -733,6 +788,8 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 			domain.ErrChuTrinhCayNhiemVu, domain.ErrChaKhongTonTai, domain.ErrCayNhiemVuQuaLon), "")
 	case errors.Is(err, petstore.ErrMaNhiemVuDaTonTai):
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
+			// Raised by CREATE only since ADR 0065 NV3 (a typed code already issued); "đã đổi sang mã khác"
+			// stays true of the tasks renamed while the edit path was live (28/09 → 30/09/2026).
 			"Mã nhiệm vụ này đã được dùng trong xã — kể cả khi nhiệm vụ mang mã đó đã bị xoá "+
 				"hoặc đã đổi sang mã khác. Mã đã cấp thì không cấp lại.", "")
 	case errors.Is(err, app.ErrTaskEditConflict):

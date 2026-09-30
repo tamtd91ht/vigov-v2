@@ -206,11 +206,10 @@ type tachKetLuanVao struct {
 	Body     string `json:"description,omitempty"`
 	Priority string `json:"priority,omitempty"`
 
+	// No `lead_unit` / `monitor` (ADR 0065 NV5): refused by name, as on POST /api/v1/tasks.
 	Unit     string `json:"unit,omitempty"`
 	Assignee string `json:"assignee,omitempty"`
 	Assigner string `json:"assigner,omitempty"`
-	LeadUnit string `json:"lead_unit,omitempty"`
-	Monitor  string `json:"monitor,omitempty"`
 
 	// DueAt is "Hạn hoàn thành". A POINTER, so "no deadline" stays expressible — §3 only SUGGESTS a
 	// date when the sentence contains one, and the person may clear it.
@@ -333,7 +332,7 @@ func (h *Handler) ThemKetLuan(w http.ResponseWriter, r *http.Request) {
 // thing the caller needs and could not have known.
 func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request) {
 	var vao tachKetLuanVao
-	if !docThan(w, r, &vao) {
+	if !decodeRefusingKeys(w, r, &vao, retiredRoleKeys) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)
@@ -353,19 +352,17 @@ func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request
 	}
 
 	yc := app.YeuCauTaoNhiemVu{
-		Ma:                  vao.Code,
-		TuSinhMa:            vao.AutoCode,
-		Loai:                vao.Type,
-		Khoi:                vao.Bloc,
-		TieuDe:              vao.Title,
-		MoTa:                vao.Body,
-		MucUuTien:           vao.Priority,
-		BoPhanID:            vao.Unit,
-		NguoiThucHienMa:     vao.Assignee,
-		LanhDaoGiaoViecMa:   vao.Assigner,
-		CoQuanChuTriID:      vao.LeadUnit,
-		ChuyenVienTheoDoiMa: vao.Monitor,
-		ParentCode:          vao.Parent,
+		Ma:                vao.Code,
+		TuSinhMa:          vao.AutoCode,
+		Loai:              vao.Type,
+		Khoi:              vao.Bloc,
+		TieuDe:            vao.Title,
+		MoTa:              vao.Body,
+		MucUuTien:         vao.Priority,
+		BoPhanID:          vao.Unit,
+		NguoiThucHienMa:   vao.Assignee,
+		LanhDaoGiaoViecMa: vao.Assigner,
+		ParentCode:        vao.Parent,
 		// NguonGiao AND NguonID ARE DELIBERATELY NOT SET HERE. The use case fills them from the
 		// conclusion it resolves out of the path — see app.TachKetLuanThanhNhiemVu.
 	}

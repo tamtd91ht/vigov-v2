@@ -43,7 +43,7 @@ func (f *orgUnitsFake) LiveOrgUnits(ctx context.Context, ids []string) (map[stri
 	return out, nil
 }
 
-func TestCreateTask_ChecksUnitAndLeadUnitBeforeTransaction(t *testing.T) {
+func TestCreateTask_ChecksUnitBeforeTransaction(t *testing.T) {
 	k := khoNVMau()
 	k.soLonNhat = 18
 	uc, ctx := dungGhiNhiemVu(t, k)
@@ -51,12 +51,12 @@ func TestCreateTask_ChecksUnitAndLeadUnitBeforeTransaction(t *testing.T) {
 	uc.orgUnits = f
 
 	yc := taoMau()
-	yc.BoPhanID, yc.CoQuanChuTriID = "bp-dia-chinh", "bp-vpdu"
+	yc.BoPhanID = "bp-dia-chinh"
 	if _, err := uc.Tao(ctx, yc, canBoThu()); err != nil {
 		t.Fatalf("giao việc: %v", err)
 	}
-	if f.calls != 1 || len(f.asked[0]) != 2 || f.asked[0][0] != "bp-dia-chinh" || f.asked[0][1] != "bp-vpdu" ||
-		f.xa[0] != xaThu {
+	// ONE id: the lead unit IS the unit since ADR 0065 NV5, so there is no second id to ask about.
+	if f.calls != 1 || len(f.asked[0]) != 1 || f.asked[0][0] != "bp-dia-chinh" || f.xa[0] != xaThu {
 		t.Errorf("identity được hỏi %v trong xã %v", f.asked, f.xa)
 	}
 }
@@ -67,7 +67,7 @@ func TestCreateTask_UnitNotLiveRefusedNothingOpened(t *testing.T) {
 	uc.orgUnits = &orgUnitsFake{live: map[string]struct{}{"bp-vpdu": {}}}
 
 	yc := taoMau()
-	yc.BoPhanID, yc.CoQuanChuTriID = "bp-cua-xa-khac", "bp-vpdu"
+	yc.BoPhanID = "bp-cua-xa-khac"
 	_, err := uc.Tao(ctx, yc, canBoThu())
 	if !errors.Is(err, ErrOrgUnitNotLive) {
 		t.Fatalf("lỗi = %v, muốn ErrOrgUnitNotLive", err)
@@ -113,7 +113,7 @@ func TestCreateTask_NoUnitAsksNothing(t *testing.T) {
 	f := &orgUnitsFake{}
 	uc.orgUnits = f
 	yc := taoMau()
-	yc.BoPhanID, yc.CoQuanChuTriID = "", ""
+	yc.BoPhanID = ""
 	if _, err := uc.Tao(ctx, yc, canBoThu()); err != nil {
 		t.Fatalf("giao việc không bộ phận: %v", err)
 	}
@@ -129,11 +129,11 @@ func TestReassign_UnitNotLiveRefusedWritesNothing(t *testing.T) {
 	uc.orgUnits = f
 
 	_, err := uc.Reassign(ctx, maNVGoc, reassignReq(domain.TaskAssignmentChange{
-		Unit: unitPtr("bp-cua-xa-khac"), LeadUnit: unitPtr("bp-khac")}), canBoThu())
+		Unit: unitPtr("bp-cua-xa-khac")}), canBoThu())
 	if !errors.Is(err, ErrOrgUnitNotLive) {
 		t.Fatalf("lỗi = %v, muốn ErrOrgUnitNotLive", err)
 	}
-	if f.calls != 1 || len(f.asked[0]) != 2 {
+	if f.calls != 1 || len(f.asked[0]) != 1 {
 		t.Errorf("identity được hỏi %v", f.asked)
 	}
 	if k.batDau != 0 {
@@ -155,17 +155,17 @@ func TestReassign_IdentityDownIsUnchecked(t *testing.T) {
 	khongGhiGi(t, k)
 }
 
-// TestReassign_MonitorOnlyAsksNoUnit: a change naming no unit column does not call identity for units.
-func TestReassign_MonitorOnlyAsksNoUnit(t *testing.T) {
+// TestReassign_AssigneeOnlyAsksNoUnit: a change naming no unit does not call identity for units.
+func TestReassign_AssigneeOnlyAsksNoUnit(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
 	uc.giaoViec = &giaoViecGia{duocTatCa: true}
 	f := &orgUnitsFake{}
 	uc.orgUnits = f
 
-	if _, err := uc.Reassign(ctx, maNVGoc, reassignReq(domain.TaskAssignmentChange{Monitor: unitPtr("CB-00500")}),
+	if _, err := uc.Reassign(ctx, maNVGoc, reassignReq(domain.TaskAssignmentChange{Assignee: unitPtr("CB-00500")}),
 		canBoThu()); err != nil {
-		t.Fatalf("đổi chuyên viên theo dõi: %v", err)
+		t.Fatalf("đổi người thực hiện: %v", err)
 	}
 	if f.calls != 0 {
 		t.Errorf("hỏi identity về bộ phận %d lần dù không đổi bộ phận", f.calls)

@@ -229,8 +229,8 @@ func chay(log *slog.Logger) error {
 	// the body, and a task is created only if identity answers that code as an active staff member of
 	// this commune (ResolveAssignableStaff). The SAME client the petition path's assignee check uses,
 	// so the two never disagree about identity's health.
-	// Passed a SECOND time as the UNIT check (ResolveLiveOrgUnits, 28/09/2026): `unit` / `lead_unit`
-	// on creation and on the assignment act are verified live in this commune before either writes.
+	// Passed a SECOND time as the UNIT check (ResolveLiveOrgUnits, 28/09/2026): `unit` on creation and
+	// on the assignment act is verified live in this commune before either writes.
 	//
 	// `storedFiles` (migration 0021) is passed as the LINKER of a log entry's attachments: the entry and
 	// its files are written in one transaction, by this use case.

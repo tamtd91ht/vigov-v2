@@ -21,8 +21,8 @@ import (
 //	NOT PROVED    a37ec96's "officer of the task's unit" case — not implemented (no unit on the
 //	              principal, no identity RPC); such an officer is refused, and that is asserted.
 
-// The fixture task (dongNhiemVuGia): assignee CB-00311, monitor CB-00412, assigner CB-00007, author
-// CB-00123. `outsiderCode` is none of them.
+// The fixture task (dongNhiemVuGia): assignee CB-00311, assigner CB-00007, author CB-00123. No monitor:
+// since ADR 0065 NV5 the monitoring officer IS the assignee. `outsiderCode` is none of them.
 const outsiderCode = "CB-09999"
 
 func staffActor(code string) audit.Actor { return audit.Actor{ID: code, Kind: "staff", IP: "10.0.0.7"} }
@@ -37,7 +37,6 @@ func TestAddLogEntry_WhoMayWrite(t *testing.T) {
 		wantCode string // quyen_ghi in the delta
 	}{
 		{"người thực hiện", maNguoiThucHien, false, "day-du"},
-		{"chuyên viên theo dõi", "CB-00412", false, "ghi-nhat-ky"},
 		{"lãnh đạo giao việc", maLanhDao, false, "ghi-nhat-ky"},
 		{"người tạo", "CB-00123", false, "ghi-nhat-ky"},
 		{"cán bộ có task.update", outsiderCode, true, "day-du"},
@@ -152,6 +151,22 @@ func TestAddLogEntry_UnknownTaskIsNotFound(t *testing.T) {
 	_, _, err := uc.AddLogEntry(ctx, "NV404", logText, nil, staffActor(maNguoiThucHien), true)
 	if !errors.Is(err, petstore.ErrNhiemVuKhongTonTai) {
 		t.Fatalf("lỗi = %v, muốn ErrNhiemVuKhongTonTai", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestAddLogEntry_RetiredMonitorColumnGrantsNothing — ADR 0065 NV5: `chuyen_vien_theo_doi_ma` is never
+// read. A pre-0025 row that still names somebody there gives that person NO right on the task; migration
+// 0025 moved them into `nguoi_thuc_hien_ma` wherever that was empty, and where it was not, the assignee
+// is the one holder. THE MUTATION THAT MUST TURN THIS RED: reading the retired column again.
+func TestAddLogEntry_RetiredMonitorColumnGrantsNothing(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["chuyen_vien_theo_doi_ma"] = "CB-00412"
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	_, _, err := uc.AddLogEntry(ctx, maNVGoc, logText, nil, staffActor("CB-00412"), false)
+	if !errors.Is(err, domain.ErrNotTaskParticipant) {
+		t.Fatalf("lỗi = %v, muốn ErrNotTaskParticipant — cột chuyên viên theo dõi đã nghỉ, không cấp quyền", err)
 	}
 	khongGhiGi(t, k)
 }

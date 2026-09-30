@@ -49,16 +49,22 @@ func TestTaskListRelatedSQL(t *testing.T) {
 
 	for _, want := range []string{
 		"nguoi_thuc_hien_ma = $3", "lanh_dao_giao_viec_ma = $3", "nguoi_tao_ma = $3",
-		"chuyen_vien_theo_doi_ma = $3",
 		"id IN (SELECT nk.nhiem_vu_id FROM nhat_ky_nhiem_vu nk WHERE nk.tenant_id = $1 AND nk.nguoi_ma = $3)",
-		"bo_phan_id IN ($4, $5)", "co_quan_chu_tri_id IN ($4, $5)",
+		"bo_phan_id IN ($4, $5)",
 	} {
 		if !strings.Contains(cond, want) {
 			t.Errorf("điều kiện thiếu %q: %s", want, cond)
 		}
 	}
-	if !strings.Contains(cond, " AND (nguoi_thuc_hien_ma = $3 OR ") || strings.Count(cond, " OR ") != 6 {
-		t.Errorf("các vế phải nằm trong MỘT nhóm OR (7 vế): %s", cond)
+	// ADR 0065 NV5: the retired columns are never read — "tôi theo dõi" IS nguoi_thuc_hien_ma and
+	// "bộ phận chủ trì" IS bo_phan_id.
+	for _, retired := range []string{"chuyen_vien_theo_doi_ma", "co_quan_chu_tri_id"} {
+		if strings.Contains(cond, retired) {
+			t.Errorf("điều kiện còn đọc cột đã nghỉ %s: %s", retired, cond)
+		}
+	}
+	if !strings.Contains(cond, " AND (nguoi_thuc_hien_ma = $3 OR ") || strings.Count(cond, " OR ") != 4 {
+		t.Errorf("các vế phải nằm trong MỘT nhóm OR (5 vế): %s", cond)
 	}
 	if strings.Contains(cond, "CB-00123") || strings.Contains(cond, "bp-1") {
 		t.Errorf("giá trị bị ghép thẳng vào câu lệnh: %s", cond)
@@ -73,7 +79,7 @@ func TestTaskListRelatedSQL(t *testing.T) {
 func TestTaskListRelatedWithoutUnitsHasNoUnitClause(t *testing.T) {
 	cond, args := locNhiemVuThanhSQL(LocNhiemVu{Related: &TaskRelatedScope{StaffCode: "CB-00123"}})
 
-	if strings.Contains(cond, "bo_phan_id") || strings.Contains(cond, "co_quan_chu_tri_id") {
+	if strings.Contains(cond, "bo_phan_id") {
 		t.Errorf("có vế bộ phận dù không có bộ phận nào: %s", cond)
 	}
 	if len(args) != 1 {

@@ -111,7 +111,7 @@ func TestCreate_WritesAndRepliesTheSameToken(t *testing.T) {
 	if len(ins) != 1 {
 		t.Fatalf("chạy %d câu INSERT nhiem_vu, muốn 1", len(ins))
 	}
-	if got, ok := ins[0].args[23].(time.Time); !ok || !got.Equal(want) {
-		t.Errorf("INSERT ghi cap_nhat_luc = %v, muốn %v", ins[0].args[23], want)
+	if got, ok := ins[0].args[21].(time.Time); !ok || !got.Equal(want) {
+		t.Errorf("INSERT ghi cap_nhat_luc = %v, muốn %v", ins[0].args[21], want)
 	}
 }

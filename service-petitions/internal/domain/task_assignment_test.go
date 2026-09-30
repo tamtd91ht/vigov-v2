@@ -9,10 +9,11 @@ import (
 
 // Tests for the assignment rules (owner decision 28/09/2026).
 //
-//	PROVED HERE   unit or assignee changed -> `moi-giao`; lead unit / monitor alone -> status kept ·
-//	              Apply touches the four holder columns and NEITHER deadline · terminal tasks refused ·
-//	              empty body, empty unit, over-long value refused · staff codes deduplicated and
-//	              trimmed · the timeline sentence names only what moved.
+//	PROVED HERE   unit or assignee changed -> `moi-giao` · Apply touches the two holder columns and
+//	              NEITHER deadline · terminal tasks refused · empty body, empty unit, over-long value
+//	              refused · staff codes trimmed · the timeline sentence names only what moved.
+//	              Since ADR 0065 NV5 there is no lead unit / monitor on the change at all — the type
+//	              cannot carry them, so no test is needed to prove they are not written.
 //
 //	NOT PROVED    the transaction and the identity check — internal/app/task_assignment_test.go.
 
@@ -23,7 +24,6 @@ func assignedTask() NhiemVu {
 	return NhiemVu{
 		Ma: "NV19", TrangThai: DangThucHien,
 		BoPhanID: "bp-a", NguoiThucHienMa: "CB-00311",
-		CoQuanChuTriID: "bp-lead", ChuyenVienTheoDoiMa: "CB-00412",
 		HanXuLy: due, HanBanDau: due,
 	}
 }
@@ -44,36 +44,20 @@ func TestAssignmentHolderChangeResetsStatus(t *testing.T) {
 	}
 }
 
-func TestAssignmentLeadAndMonitorKeepStatus(t *testing.T) {
-	before := assignedTask()
-	after := TaskAssignmentChange{LeadUnit: ptr("bp-other"), Monitor: ptr("CB-00500")}.Apply(before)
-	if !AssignmentChanged(before, after) {
-		t.Fatal("đổi cơ quan chủ trì + chuyên viên mà không nhận là có thay đổi")
-	}
-	if HolderChanged(before, after) {
-		t.Error("đổi cơ quan chủ trì / chuyên viên bị coi là đổi người giữ việc")
-	}
-	if got := ResetStatus(before, after); got != DangThucHien {
-		t.Errorf("trạng thái sau = %q, muốn giữ dang-thuc-hien (chủ quyết #7)", got)
-	}
-}
-
 func TestAssignmentApplyNeverTouchesDeadline(t *testing.T) {
 	before := assignedTask()
-	after := TaskAssignmentChange{Unit: ptr("bp-b"), Assignee: ptr("CB-00999"),
-		LeadUnit: ptr(""), Monitor: ptr("")}.Apply(before)
+	after := TaskAssignmentChange{Unit: ptr("bp-b"), Assignee: ptr("CB-00999")}.Apply(before)
 	if !after.HanXuLy.Equal(before.HanXuLy) || !after.HanBanDau.Equal(before.HanBanDau) {
 		t.Errorf("hạn đã đổi: %v/%v -> %v/%v", before.HanXuLy, before.HanBanDau, after.HanXuLy, after.HanBanDau)
 	}
-	if after.BoPhanID != "bp-b" || after.NguoiThucHienMa != "CB-00999" ||
-		after.CoQuanChuTriID != "" || after.ChuyenVienTheoDoiMa != "" {
-		t.Errorf("Apply không ghi đúng bốn cột: %+v", after)
+	if after.BoPhanID != "bp-b" || after.NguoiThucHienMa != "CB-00999" {
+		t.Errorf("Apply không ghi đúng hai cột: %+v", after)
 	}
 }
 
 func TestAssignmentSameValuesIsNoChange(t *testing.T) {
 	before := assignedTask()
-	after := TaskAssignmentChange{Unit: ptr("bp-a"), Monitor: ptr("CB-00412")}.Apply(before)
+	after := TaskAssignmentChange{Unit: ptr("bp-a"), Assignee: ptr("CB-00311")}.Apply(before)
 	if AssignmentChanged(before, after) {
 		t.Error("gửi đúng giá trị đang có mà bị coi là thay đổi — lần bấm thứ hai sẽ ghi thêm một vết")
 	}
@@ -105,7 +89,7 @@ func TestCheckTaskAssignmentRefusals(t *testing.T) {
 		t.Errorf("unit trống: lỗi = %v", err)
 	}
 	long := strings.Repeat("a", BoPhanToiDa+1)
-	if _, err := CheckTaskAssignment(TaskAssignmentChange{Monitor: &long}); !errors.Is(err, ErrAssignmentFieldTooLong) {
+	if _, err := CheckTaskAssignment(TaskAssignmentChange{Assignee: &long}); !errors.Is(err, ErrAssignmentFieldTooLong) {
 		t.Errorf("quá dài: lỗi = %v", err)
 	}
 	for _, e := range []error{ErrAssignmentEmpty, ErrAssignmentUnitEmpty, ErrAssignmentFieldTooLong} {
@@ -120,8 +104,8 @@ func TestCheckTaskAssignmentRefusals(t *testing.T) {
 	}
 }
 
-func TestCheckTaskAssignmentTrimsAndDedupesStaff(t *testing.T) {
-	c, err := CheckTaskAssignment(TaskAssignmentChange{Assignee: ptr(" CB-00999 "), Monitor: ptr("CB-00999")})
+func TestCheckTaskAssignmentTrimsStaff(t *testing.T) {
+	c, err := CheckTaskAssignment(TaskAssignmentChange{Assignee: ptr(" CB-00999 ")})
 	if err != nil {
 		t.Fatal(err)
 	}

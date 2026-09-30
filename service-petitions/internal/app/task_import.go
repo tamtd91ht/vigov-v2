@@ -17,9 +17,9 @@ package app
 //
 // # WHAT IS CHECKED, AND AGAINST WHAT
 //
-//	unit / lead unit codes   identity LiveOrgUnitIDsByCode — live units of THIS commune; the answer IS
+//	unit codes               identity LiveOrgUnitIDsByCode — live units of THIS commune; the answer IS
 //	                         the live predicate LiveOrgUnits applies, so the ids are not asked again
-//	assignee / monitor       identity ResolveAssignableStaff (CanBoGiaoViecDuoc), EVERY code in the
+//	assignee                 identity ResolveAssignableStaff (CanBoGiaoViecDuoc), EVERY code in the
 //	                         file — stricter than create, which checks only the assigner; typed codes
 //	                         are more error-prone than a picker (user decision)
 //	bloc codes               identity TaskBlocLabels, LIVE only — create does not check the bloc; a
@@ -28,6 +28,11 @@ package app
 //	                         commune's default type, and no default refuses the row
 //
 // An identity failure refuses the whole import as UNCHECKED (503), never rows as "unknown".
+//
+// NO LEAD UNIT, NO MONITOR (ADR 0065 NV5, user decision 30/09/2026): the template lost those two
+// columns, and a file that still carries them is refused WHOLE (ErrTaskImportRetiredColumns) — never
+// read with them skipped, because the clerk who typed a monitor there meant somebody to follow the
+// task, and dropping the name silently would record an assignment nobody made.
 
 import (
 	"context"
@@ -52,6 +57,12 @@ var ErrTaskImportUnchecked = errors.New("nhiem_vu: chưa kiểm được bộ ph
 
 // ErrTaskImportTooManyRows — more data rows than domain.TaskImportRowCap. Refused whole (422).
 var ErrTaskImportTooManyRows = fmt.Errorf("nhiem_vu: tệp nhập quá %d dòng nhiệm vụ", domain.TaskImportRowCap)
+
+// ErrTaskImportRetiredColumns — the heading row still names "Cơ quan chủ trì tham mưu" or "Chuyên viên
+// theo dõi": the file was filled on the template from before ADR 0065 NV5. Refused whole (400), checked
+// BEFORE ErrTaskImportLayout so the clerk is told the actual reason rather than "wrong layout".
+var ErrTaskImportRetiredColumns = errors.New(
+	"nhiem_vu: tệp theo mẫu cũ — còn cột cơ quan chủ trì hoặc chuyên viên theo dõi, hai vai đã gộp vào đơn vị và người thực hiện")
 
 // ErrTaskImportLayout — the heading row is not the template's, or the sheet holds no task. Refused
 // whole (400): reading another layout by position would put values into the wrong fields.
@@ -115,6 +126,9 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	if err := coCanBoThucHien(actor); err != nil {
 		return TaskImportResult{}, err
 	}
+	if len(sheet) > 0 && domain.TaskImportCarriesRetiredColumns(sheet[0]) {
+		return TaskImportResult{}, ErrTaskImportRetiredColumns
+	}
 	if len(sheet) == 0 || !domain.CheckTaskImportHeadings(sheet[0]) {
 		return TaskImportResult{}, ErrTaskImportLayout
 	}
@@ -143,8 +157,8 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	// 2. THE LOOKUPS, batched over the whole file.
 	var unitCodes, staffCodes, blocCodes []string
 	for _, r := range rows {
-		unitCodes = append(unitCodes, r.UnitCode, r.LeadUnitCode)
-		staffCodes = append(staffCodes, r.AssigneeCode, r.MonitorCode)
+		unitCodes = append(unitCodes, r.UnitCode)
+		staffCodes = append(staffCodes, r.AssigneeCode)
 		blocCodes = append(blocCodes, r.BlocCode)
 	}
 	units, err := lookupChunked(ctx, unitCodes, uc.lookups.LiveOrgUnitIDsByCode)
@@ -191,18 +205,12 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 		fail := func(col int, msg string) {
 			errs = append(errs, domain.TaskImportError{Row: r.Row, Column: domain.TaskImportHeadings[col], Message: msg})
 		}
-		unitID, leadID := units[r.UnitCode], units[r.LeadUnitCode]
+		unitID := units[r.UnitCode]
 		if r.UnitCode != "" && unitID == "" {
 			fail(2, "không có bộ phận đang hoạt động mang mã này trong xã")
 		}
-		if r.LeadUnitCode != "" && leadID == "" {
-			fail(8, "không có bộ phận đang hoạt động mang mã này trong xã")
-		}
 		if _, ok := staff[r.AssigneeCode]; r.AssigneeCode != "" && !ok {
 			fail(3, "cán bộ mang mã này không nhận được việc trong xã")
-		}
-		if _, ok := staff[r.MonitorCode]; r.MonitorCode != "" && !ok {
-			fail(9, "cán bộ mang mã này không nhận được việc trong xã")
 		}
 		if b, ok := blocs[r.BlocCode]; r.BlocCode != "" &&
 			(!ok || b.Standing != identityv1.RecordStanding_RECORD_STANDING_LIVE) {
@@ -228,7 +236,6 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 			TuSinhMa: true, Loai: typeCode, Khoi: r.BlocCode, TieuDe: r.Title, MoTa: r.Description,
 			MucUuTien: r.PriorityCode, GhiChu: r.Note, NguonGiao: string(domain.NguonTrucTiep),
 			BoPhanID: unitID, NguoiThucHienMa: r.AssigneeCode,
-			CoQuanChuTriID: leadID, ChuyenVienTheoDoiMa: r.MonitorCode,
 			HanXuLy: r.Due,
 		})
 		if err != nil {
@@ -249,7 +256,7 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 				continue
 			}
 		}
-		fail(10, "văn bản không hợp lệ")
+		fail(8, "văn bản không hợp lệ") // "Văn bản cấp trên giao" — column 8 since ADR 0065 NV5
 	}
 
 	res.Errors = errs

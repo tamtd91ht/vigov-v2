@@ -63,8 +63,6 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		"bo_phan_id":                    "bp-vpdu",
 		"nguoi_thuc_hien_ma":            "CB-00311",
 		"lanh_dao_giao_viec_ma":         "CB-00007",
-		"co_quan_chu_tri_id":            "bp-vpdu",
-		"chuyen_vien_theo_doi_ma":       "CB-00412",
 		"han_xu_ly":                     mocHanNVThu,
 		"han_ban_dau":                   mocHanGocNVThu,
 		"ngay_hoan_thanh":               nil,
@@ -186,12 +184,11 @@ func TestTheoMaScanKhopVoiCotNhiemVu(t *testing.T) {
 	doiBang(t, "NguonGiao", string(n.NguonGiao), "ket-luan-hop")
 	doiBang(t, "NguonID", n.NguonID, "klh-007")
 	doiBang(t, "BoPhanID", n.BoPhanID, "bp-vpdu")
-	// THE FOUR STAFF COLUMNS ARE FOUR DIFFERENT BUSINESS CODES, and three of them are adjacent
+	// THE THREE STAFF COLUMNS ARE THREE DIFFERENT BUSINESS CODES, and two of them are adjacent
 	// TEXT columns. A swap between `nguoi_thuc_hien_ma` and `lanh_dao_giao_viec_ma` would send every
 	// extension request to the person who has to ask for it.
 	doiBang(t, "NguoiThucHienMa", n.NguoiThucHienMa, "CB-00311")
 	doiBang(t, "LanhDaoGiaoViecMa", n.LanhDaoGiaoViecMa, "CB-00007")
-	doiBang(t, "ChuyenVienTheoDoiMa", n.ChuyenVienTheoDoiMa, "CB-00412")
 	doiBang(t, "NguoiTaoMa", n.NguoiTaoMa, "CB-00123")
 
 	if n.TienDo != 40 {

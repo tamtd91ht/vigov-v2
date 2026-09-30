@@ -15,7 +15,9 @@ package domain
 //	a37ec96                        here                                   right
 //	has `task.update`              the caller holds `task.update`         full
 //	task.assignee_id == user       nguoi_thuc_hien_ma == Principal.Ma     full
-//	monitor_id                     chuyen_vien_theo_doi_ma                log
+//	monitor_id                     nguoi_thuc_hien_ma — ONE role since    full
+//	                               ADR 0065 NV5; chuyen_vien_theo_doi_ma
+//	                               is retired and never read
 //	assigner_id                    lanh_dao_giao_viec_ma                  log
 //	created_by                     nguoi_tao_ma                           log
 //	collaborators                  — NO SUCH CONCEPT HERE (no table)      —
@@ -52,7 +54,7 @@ const (
 // ErrNotTaskParticipant refuses a log entry from somebody who holds `task.read` but is neither the
 // assignee, nor related to the task, nor a holder of the commune-wide `task.update`. 403.
 var ErrNotTaskParticipant = errors.New(
-	"nhiệm vụ: chỉ người thực hiện, chuyên viên theo dõi, lãnh đạo giao việc, người tạo nhiệm vụ " +
+	"nhiệm vụ: chỉ người thực hiện, lãnh đạo giao việc, người tạo nhiệm vụ " +
 		"hoặc cán bộ có quyền cập nhật nhiệm vụ mới ghi được nhật ký của nhiệm vụ này")
 
 // TaskWorkRightFor is a37ec96's `work_rights` over values already in hand. `communeWideUpdate` is the
@@ -67,7 +69,7 @@ func TaskWorkRightFor(n NhiemVu, staffCode string, communeWideUpdate bool) TaskW
 	if n.NguoiThucHienMa == staffCode {
 		return TaskWorkFull
 	}
-	for _, related := range []string{n.ChuyenVienTheoDoiMa, n.LanhDaoGiaoViecMa, n.NguoiTaoMa} {
+	for _, related := range []string{n.LanhDaoGiaoViecMa, n.NguoiTaoMa} {
 		if related == staffCode {
 			return TaskWorkLog
 		}

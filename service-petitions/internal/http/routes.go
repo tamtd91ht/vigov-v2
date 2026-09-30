@@ -246,7 +246,8 @@ type (
 		QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string, yc app.YeuCauQuyetDinhLuiHan,
 			nguoi audit.Actor) (domain.DeNghiLuiHan, error)
 		// Reassign is the seventh act, `task.assign` (owner decision 28/09/2026): the same row handed to
-		// another unit/person, plus lead unit and monitor. See internal/app/task_assignment.go.
+		// another unit/person (the lead unit and the monitor ARE unit and assignee since ADR 0065 NV5).
+		// See internal/app/task_assignment.go.
 		Reassign(ctx context.Context, ma string, req app.TaskAssignmentRequest, nguoi audit.Actor) (
 			domain.NhiemVu, error)
 		// AddLogEntry is the manual timeline entry (§5.9, vigov-require a37ec96). It takes the ONE fact
@@ -1211,7 +1212,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// path can reach: `code_taken`, `task_tree` (parent gone, cycle, tree too deep) and `task_document` (a
 	// document item naming a line id — there is no stored line on a task being created,
 	// domain.SoSanhVanBan); and idem's `request_in_progress`. The 409 line below publishes exactly these.
-	// 400 also answers a body that sends `source` or `source_id`.
+	// 400 also answers a body that sends `source` or `source_id`, or `lead_unit` / `monitor` (ADR 0065
+	// NV5: one role — the lead unit is `unit`, the monitor is `assignee`).
 	//
 	// idem.Required(idem.MoKhiHong), POST /api/v1/tasks' declaration and for its reason: nothing here
 	// makes a second task from one petition a conflict (several tasks from one petition is legitimate),
@@ -1338,8 +1340,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// written (200, `committed: false`, the row report: row, column, sentence — never the cell's value).
 	// All rows pass → ONE transaction books every task with an auto-issued number (201, `codes`).
 	//
-	// 400 not an .xlsx / not the template's heading row / no task row · 422 over 500 rows · 503 identity
-	// could not check the codes (nothing written).
+	// 400 not an .xlsx / not the template's heading row / no task row · 400 `import_retired_columns` a
+	// file on the pre-30/09/2026 template, still carrying "Cơ quan chủ trì tham mưu" or "Chuyên viên theo
+	// dõi" (ADR 0065 NV5 — refused whole, never read with those columns skipped) · 422 over 500 rows ·
+	// 503 identity could not check the codes (nothing written).
 	//
 	// idem.Required(idem.DongKhiHong): the act ISSUES REGISTER NUMBERS, and a number once issued is never
 	// issued again (rule 7, invariant 3) — a double submit would book the whole file twice, permanently.
@@ -1455,8 +1459,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// `task.read` AT THE GATE, AND THAT IS vigov-require a37ec96 RATHER THAN A RELAXATION (user decision
 	// 28/09/2026). The answer to "may this person write here" depends on THIS task: the assignee and a
-	// holder of the commune-wide `task.update` may; the monitor, the assigning leader and the author may
-	// write the log too (a37ec96's "related" people); anybody else gets 403 from the use case, on the
+	// holder of the commune-wide `task.update` may; the assigning leader and the author may write the
+	// log too (the monitor IS the assignee since ADR 0065 NV5) (a37ec96's "related" people); anybody else gets 403 from the use case, on the
 	// row read FOR UPDATE (domain/task_participant.go). Gating on `task.update` would lock out exactly
 	// the specialist a37ec96 was written for. `task.read` is seeded (service-identity/migrations/
 	// 0001_init.sql:304); NO KEY WAS INVENTED (rule 5, invariant 3c). A TASKS-ONLY rule: ADR 0038 forbids
@@ -1588,6 +1592,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// hand-typed number already issued, soft-deleted rows included) and `task_tree` (the named parent
 	// is gone, or the move would close a cycle).
 	//
+	// 400 also answers a body that still sends `lead_unit` or `monitor` (ADR 0065 NV5, user decision
+	// 30/09/2026): one role — the lead unit is `unit`, the monitoring officer is `assignee`.
+	//
 	// @summary  Giao việc mới — tạo một nhiệm vụ, tự sinh mã theo dãy NV của xã hoặc nhận mã tự nhập
 	// @screen   02-nhiem-vu §7
 	// @request  taoNhiemVuVao
@@ -1624,7 +1631,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// request header (see suaNhiemVuVao). With the token, a double click's second request finds its
 	// own first write and answers 409 `task_changed` — still no second write, so KhongCan holds.
 	//
-	// @summary  Sửa thông tin mô tả, mã hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công; sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)
+	// THE CODE IS NOT EDITABLE (ADR 0065 NV3, user decision 30/09/2026; migration 0024): a body that
+	// sends `code` — any value, `null` included — is refused 400 `invalid_request`, and the trigger
+	// refuses a change of `ma` underneath. The rename path of 28/09 is gone end to end.
+	//
+	// @summary  Sửa thông tin mô tả hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công, không sửa được mã đã cấp (gửi `code` thì 400); sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)
 	// @screen   02-nhiem-vu §5.4
 	// @request  suaNhiemVuVao
 	// @reply    200 nhiemVuRa
@@ -1645,8 +1656,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// THE GATE IS `task.read` SINCE 28/09/2026, AND THAT IS vigov-require a37ec96 (user decision: "base
 	// on require"). a37ec96 moved its progress/status route from `task.update` to `task.read` because
 	// the answer depends on THIS task: the ASSIGNEE may move their own task without the commune-wide
-	// key, a holder of `task.update` may move any task, and a related person (monitor, assigner,
-	// author) may only write the log. Decided on the row read FOR UPDATE (app.DoiTrangThai,
+	// key, a holder of `task.update` may move any task, and a related person (assigner, author) may
+	// only write the log. Decided on the row read FOR UPDATE (app.DoiTrangThai,
 	// domain.CheckMayChangeStatus); refused with 403 `ErrStatusNeedsHolder`. This WIDENS the route to
 	// the assignee — deliberately; before, a specialist handed a task could not report on it at all.
 	//
@@ -1693,16 +1704,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// GIAO LẠI / CHUYỂN TIẾP (§5.4, §10) — `task.assign`, seeded at service-identity/migrations/0001_init.sql:307 ("Giao nhiệm vụ").
 	//
 	// OWNER DECISION 28/09/2026: "Chuyển tiếp" is the SAME task handed to another unit or person, and
-	// it is one act with "đổi bộ phận / người thực hiện". The body also edits "Cơ quan chủ trì tham mưu"
-	// and "Chuyên viên theo dõi", under this same key (#7). A change of unit or assignee sends the task
-	// back to `moi-giao` so the new holder acknowledges it; lead unit / monitor alone change no status.
+	// it is one act with "đổi bộ phận / người thực hiện". A change of unit or assignee sends the task
+	// back to `moi-giao` so the new holder acknowledges it.
+	//
+	// ONE ROLE SINCE ADR 0065 NV5 (user decision 30/09/2026): "Cơ quan chủ trì tham mưu" IS `unit` and
+	// "Chuyên viên theo dõi" IS `assignee`, so changing the monitoring officer is changing `assignee`
+	// here. A body that still sends `lead_unit` or `monitor` is refused 400 `invalid_request`.
 	// THE DEADLINE NEVER MOVES HERE — only an approved extension moves it (ADR 0038).
 	//
 	// `assignment` IS THE PETITION PATH'S NOUN (POST /api/v1/citizen-reports/{maTraCuu}/assignment) and
 	// the one skills/rest-api-design §3 names for this very act. It has NO row in the URL table of
 	// kb/00-foundation/ubiquitous-language.md — raised as a finding, not added here.
 	//
-	// 400 covers a body naming no field, an empty `unit`, a staff code identity does not accept in
+	// 400 covers a body naming no field, an empty `unit`, `lead_unit` / `monitor`, a staff code identity does not accept in
 	// this commune (ONE answer for unknown / another commune / locked), and `note` too long. 409 covers
 	// a terminal task (`task_state`) and a request that changes nothing (`no_change`). 503: identity
 	// could not be asked, so nothing was written.
@@ -1711,7 +1725,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// every field already applied — the use case writes nothing and answers 409 `no_change`. One row,
 	// one timeline entry, one audit entry.
 	//
-	// @summary  Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên
+	// @summary  Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện
 	// @screen   02-nhiem-vu §5.4
 	// @request  taskAssignmentIn
 	// @reply    200 nhiemVuRa
@@ -2099,7 +2113,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// 409 COVERS TWO DIFFERENT THINGS, exactly as on POST /api/v1/tasks: `code_taken` and
 	// `task_tree`. They are mapped by the task register's own function, so one act answers one way
-	// whichever door it came through.
+	// whichever door it came through. 400 also answers `lead_unit` / `monitor` in the body, as there
+	// (ADR 0065 NV5).
 	//
 	// @summary  Tách một kết luận họp thành một nhiệm vụ — nhiệm vụ giữ liên kết ngược về kết luận gốc qua cặp nguồn giao
 	// @screen   04-bien-ban-hop §3

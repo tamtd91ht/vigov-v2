@@ -109,11 +109,13 @@ func registerSortFromQuery(q map[string][]string) (string, string) {
 // registerColumns are §4.3's columns IN §4.3'S ORDER (docs/ui-ux/02-nhiem-vu.md:117-126 — "Xuất
 // Excel của bảng này phải giữ đúng thứ tự cột", :128). The `☐` selection column is a screen control
 // and is not exported. The two approval marks are §4.3's "các ô tick phê duyệt".
+//
+// §4.3's "Cơ quan chủ trì tham mưu" and "Chuyên viên VP tham mưu / theo dõi" ARE NOT COLUMNS ANY MORE
+// (ADR 0065 NV5, user decision 30/09/2026): the lead unit IS the unit and the monitor IS the assignee,
+// both printed in "Đơn vị thực hiện". Two columns repeating that cell would be two copies of one fact.
 var registerColumns = []string{
 	"Mã",
 	"Nội dung nhiệm vụ / Trích yếu văn bản",
-	"Cơ quan chủ trì tham mưu",
-	"Chuyên viên VP tham mưu / theo dõi",
 	"Đơn vị thực hiện",
 	"Văn bản cấp trên giao",
 	"Văn bản chỉ đạo của Đảng uỷ",
@@ -125,7 +127,7 @@ var registerColumns = []string{
 	"Cấp trên công nhận",
 }
 
-var registerColumnWidths = []float64{10, 60, 28, 26, 30, 44, 44, 44, 18, 44, 34, 12, 12}
+var registerColumnWidths = []float64{10, 60, 30, 44, 44, 44, 18, 44, 34, 12, 12}
 
 // registerZone renders deadlines and document dates: a FIXED +07:00, for the reason domain's
 // muiGioChoDan gives (Vietnam has no DST, and a zone database the image may lack must not make a
@@ -193,7 +195,7 @@ func renderTaskRegister(d app.TaskRegisterData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// registerRow is one task's 13 cells, in registerColumns' order.
+// registerRow is one task's 11 cells, in registerColumns' order.
 func registerRow(n domain.NhiemVu, d app.TaskRegisterData) []string {
 	content := []string{n.TieuDe}
 	if n.MoTa != "" {
@@ -209,8 +211,6 @@ func registerRow(n domain.NhiemVu, d app.TaskRegisterData) []string {
 	return []string{
 		n.Ma,
 		strings.Join(content, "\n"),
-		unitName(n.CoQuanChuTriID, d),
-		staffName(n.ChuyenVienTheoDoiMa, d),
 		strings.Join(unitLine, "\n"),
 		documentsCell(n.VanBan, domain.VanBanCapTrenGiao),
 		documentsCell(n.VanBan, domain.VanBanChiDaoDangUy),
