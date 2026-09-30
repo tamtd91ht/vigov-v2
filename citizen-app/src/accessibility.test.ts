@@ -823,7 +823,6 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["câu lỗi trên nền trang", token("xa-loi"), token("xa-nen")],
     ["nhãn 'Gọi' trên nền xanh lá nhạt", token("xa-luc-dam"), token("xa-luc-nhat")],
     ["nhãn tab chưa chọn", token("ink-muted"), token("surface")],
-    ["chữ trắng trên nút hồng", "#ffffff", token("xa-hong-dam")],
     ["chữ trắng trên nút đỏ", "#ffffff", token("xa-loi")],
     ["chip 'Đang xử lý'", token("xa-cam-dam"), token("xa-cam-nhat")],
     ["chip 'Mới tiếp nhận'", token("xa-navy"), token("xa-xanh-nhat")],
@@ -834,7 +833,8 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["chip danh mục hàng 2 đang chọn", token("xa-brand"), token("xa-brand-soft")],
     ["sao đã chấm (viền) trên thẻ", token("xa-cam-dam"), token("surface")],
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
-    ["bước đang làm", token("xa-hong-dam"), token("surface")],
+    ["bước đang làm (đỏ thương hiệu, 30/09/2026)", token("xa-brand"), token("surface")],
+    ["số bước đang làm: chữ trắng trên chấm đỏ", "#ffffff", token("xa-brand")],
   ];
   for (const [gi, chu, nen] of cap) {
     it(`${gi} đạt 4,5:1`, () => {

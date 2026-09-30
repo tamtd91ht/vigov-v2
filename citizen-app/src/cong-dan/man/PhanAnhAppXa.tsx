@@ -1191,14 +1191,14 @@ export function CommuneSendScreen(props: {
             )}
             {failed !== null && failed.co_the_gui_lai && attempt !== null ? (
               // Same key, same body — never a second petition (`api/lan-gui.ts`).
-              <button type="button" className="xa-nut xa-nut--hong" disabled={sending} onClick={() => void send(attempt)}>
+              <button type="button" className="xa-nut" disabled={sending} onClick={() => void send(attempt)}>
                 <BieuTuong ten="send" co={20} />
                 {GUI.nut_gui_lai}
               </button>
             ) : (
               <button
                 type="button"
-                className="xa-nut xa-nut--hong"
+                className="xa-nut"
                 onClick={submit}
                 disabled={sending || form.noi_dung.trim() === ""}
               >
@@ -1223,7 +1223,7 @@ export function CommuneSendScreen(props: {
             {sent.han_tiep_nhan !== null && thoiDiemVN(sent.han_tiep_nhan) !== null && (
               <p className="xa-phu">{XA_PA.acknowledge_by(thoiDiemVN(sent.han_tiep_nhan)!)}</p>
             )}
-            <button type="button" className="xa-nut xa-nut--hong" onClick={() => props.onOpenPetition(sent.ma_tra_cuu)}>
+            <button type="button" className="xa-nut" onClick={() => props.onOpenPetition(sent.ma_tra_cuu)}>
               {XA_PA.theo_doi}
             </button>
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onBack}>

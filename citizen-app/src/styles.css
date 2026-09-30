@@ -3368,12 +3368,14 @@ button.xa-o-nhanh {
   background: var(--surface);
   font-weight: 700;
 }
+/* Current step in the brand red, like the send button under it (owner, 30/09/2026): pink beside a red
+   header read as a second, unrelated accent. */
 .xa-thanh-buoc__muc--dang {
-  color: var(--xa-hong-dam);
+  color: var(--xa-brand);
 }
 .xa-thanh-buoc__muc--dang .xa-thanh-buoc__cham {
-  background: var(--xa-hong-dam);
-  border-color: var(--xa-hong-dam);
+  background: var(--xa-brand);
+  border-color: var(--xa-brand);
   color: #ffffff;
 }
 .xa-thanh-buoc__muc--xong .xa-thanh-buoc__cham {
@@ -3409,11 +3411,7 @@ button.xa-o-nhanh {
   margin: 0;
 }
 
-/* biến thể nút */
-.xa-nut--hong {
-  background: var(--xa-hong-dam);
-  border-color: var(--xa-hong-dam);
-}
+/* biến thể nút — the send buttons use plain `.xa-nut` (brand red) since 30/09/2026; the pink variant is gone */
 .xa-nut--do {
   background: var(--xa-loi);
   border-color: var(--xa-loi);
