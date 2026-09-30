@@ -229,8 +229,10 @@ describe("bảy trạng thái — §6", () => {
     });
   });
 
-  it("cần `task.approve`: vào `hoan-thanh`, mở lại, trả lại — đúng `NeedsApproval` của máy chủ", () => {
-    expect(transitionNeedsApproval("dang-thuc-hien", "hoan-thanh")).toBe(true);
+  it("cần `task.approve`: duyệt từ `cho-duyet`, mở lại, trả lại — đúng `NeedsApproval` của máy chủ", () => {
+    // ADR 0065 NV1 (90a17153): hoàn thành THẲNG từ `dang-thuc-hien` không cần khoá — khoá theo
+    // trạng thái NGUỒN `cho-duyet`, không theo đích `hoan-thanh`.
+    expect(transitionNeedsApproval("dang-thuc-hien", "hoan-thanh")).toBe(false);
     expect(transitionNeedsApproval("cho-duyet", "hoan-thanh")).toBe(true);
     expect(transitionNeedsApproval("hoan-thanh", "dang-thuc-hien")).toBe(true);
     expect(transitionNeedsApproval("cho-duyet", "dang-thuc-hien")).toBe(true);

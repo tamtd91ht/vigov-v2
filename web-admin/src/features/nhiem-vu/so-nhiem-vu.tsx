@@ -2711,8 +2711,9 @@ export function ChiTietNhiemVu({
           của máy chủ LIỆT KÊ MÃ việc con còn lại — thông tin cán bộ cần, màn hình không tự dựng được.
 
           CẢ KHỐI ĐỨNG SAU `canMoveTask` — `task.update`, hoặc đúng người thực hiện của việc này.
-          Bước vào `hoan-thanh`, mở lại và trả lại đòi THÊM `task.approve` (`transitionNeedsApproval`);
-          thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán bộ không tưởng vòng đời thiếu bước. */}
+          Duyệt `cho-duyet` → `hoan-thanh`, mở lại và trả lại đòi THÊM `task.approve`
+          (`transitionNeedsApproval`); thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán bộ không
+          tưởng vòng đời thiếu bước. `dang-thuc-hien` → `hoan-thanh` thì không cần (ADR 0065 NV1). */}
       {showStatusBlock && (
         <div className="form-danh-muc">
           <h4>Chuyển trạng thái</h4>

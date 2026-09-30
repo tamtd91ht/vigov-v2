@@ -153,7 +153,12 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
   // server's list, gated by (row: `task.update` or assignee) and (move: `task.approve` if needed).
 
   it("`task.update`, not the assignee: the listed moves minus those needing approval", () => {
-    expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_ONLY, OTHER)).toEqual(["cho-duyet", "tam-dung"]);
+    // ADR 0065 NV1: the direct completion needs no `task.approve`.
+    expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_ONLY, OTHER)).toEqual([
+      "cho-duyet",
+      "hoan-thanh",
+      "tam-dung",
+    ]);
     expect(clickableTransitions(at("moi-giao"), UPDATE_ONLY, OTHER)).toEqual([
       "da-tiep-nhan",
       "dang-thuc-hien",
@@ -163,7 +168,7 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
     expect(clickableTransitions(at("cho-duyet"), UPDATE_ONLY, OTHER)).toEqual([]);
   });
 
-  it("`task.approve` adds `hoan-thanh` (straight from `dang-thuc-hien` too); reason moves stay out", () => {
+  it("`task.approve` adds the sign-off from `cho-duyet`; reason moves stay out", () => {
     expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_AND_APPROVE, OTHER)).toEqual([
       "cho-duyet",
       "hoan-thanh",
@@ -183,13 +188,16 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
   });
 
   it("THE ASSIGNEE without `task.update` moves their own task (ea55113)", () => {
-    expect(clickableTransitions(at("dang-thuc-hien"), NO_KEYS, ASSIGNEE)).toEqual(["cho-duyet", "tam-dung"]);
-    // ...and with `task.approve`, may approve their own task — the server's two layers, nothing more.
-    expect(clickableTransitions(at("dang-thuc-hien"), APPROVE_ONLY, ASSIGNEE)).toEqual([
+    // ADR 0065 NV1: completing straight from `dang-thuc-hien` needs no `task.approve`.
+    expect(clickableTransitions(at("dang-thuc-hien"), NO_KEYS, ASSIGNEE)).toEqual([
       "cho-duyet",
       "hoan-thanh",
       "tam-dung",
     ]);
+    // ...but work already sent up for review waits for a reviewer: no sign-off without the key.
+    expect(clickableTransitions(at("cho-duyet"), NO_KEYS, ASSIGNEE)).toEqual([]);
+    // With `task.approve`, the assignee may sign off their own reviewed task — the server's layers.
+    expect(clickableTransitions(at("cho-duyet"), APPROVE_ONLY, ASSIGNEE)).toEqual(["hoan-thanh"]);
   });
 
   it("DENIED — neither `task.update` nor the assignee: nothing, even with `task.approve`", () => {

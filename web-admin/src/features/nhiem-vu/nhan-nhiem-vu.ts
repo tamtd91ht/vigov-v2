@@ -761,8 +761,8 @@ export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
  * asking for the right.
  */
 export const CAU_THIEU_QUYEN_DUYET_HOAN_THANH =
-  "Bước hoàn thành, bước trả lại để làm tiếp và bước mở lại việc đã hoàn thành cần quyền duyệt hoàn " +
-  "thành. Tài khoản của bạn chưa được cấp quyền này.";
+  "Duyệt hoàn thành hoặc trả lại việc đang chờ duyệt, và mở lại việc đã hoàn thành, cần quyền duyệt " +
+  "hoàn thành. Tài khoản của bạn chưa được cấp quyền này.";
 
 /* ── WHO MAY MOVE A ROW, AND WHICH MOVES ───────────────────────────────────────────────────────
  *
@@ -771,8 +771,9 @@ export const CAU_THIEU_QUYEN_DUYET_HOAN_THANH =
  *
  * Two layers, both the server's (ea55113, 3b2330b):
  *   1. the ROW — the task's assignee, or a holder of `task.update` (`canMoveTask`);
- *   2. the MOVE — into `hoan-thanh`, the reopen out of it and the return from review also need
- *      `task.approve` (`transitionNeedsApproval`, the server's `NeedsApproval`, `nhiem_vu.go:175`).
+ *   2. the MOVE — the sign-off `cho-duyet` → `hoan-thanh`, the reopen out of `hoan-thanh` and the
+ *      return from review also need `task.approve` (`transitionNeedsApproval`, the server's
+ *      `NeedsApproval`). The direct `dang-thuc-hien` → `hoan-thanh` does not (ADR 0065 NV1).
  *
  * `transitionNeedsApproval` IS A COPY of a server predicate — the one the reply does NOT carry
  * (`allowed_transitions` is deliberately not filtered by the caller's keys). It decides only whether a
@@ -785,9 +786,16 @@ export function isReopen(from: string, to: string): boolean {
   return from === "hoan-thanh" && to === "dang-thuc-hien";
 }
 
-/** `domain.NeedsApproval` (`nhiem_vu.go:175-177`). */
+/**
+ * `domain.NeedsApproval` (`service-petitions/internal/domain/nhiem_vu.go:189-191`, 90a17153).
+ *
+ * THE KEY FOLLOWS THE SOURCE `cho-duyet`, NOT THE TARGET `hoan-thanh` (ADR 0065 NV1, 30/09/2026):
+ * review is optional, so the assignee completes straight from `dang-thuc-hien` without
+ * `task.approve`; work already sent up for review waits for a reviewer. Keying on the target again
+ * would hide a completion the server allows — the clerk would read it as "I cannot finish my task".
+ */
 export function transitionNeedsApproval(from: string, to: string): boolean {
-  return to === "hoan-thanh" || isReopen(from, to) || laBuocTraLai(from, to);
+  return (from === "cho-duyet" && to === "hoan-thanh") || isReopen(from, to) || laBuocTraLai(from, to);
 }
 
 /**

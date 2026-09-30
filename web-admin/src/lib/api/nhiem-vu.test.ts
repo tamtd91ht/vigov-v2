@@ -22,6 +22,7 @@ import {
   taoNhiemVu,
   xoaNhiemVu,
 } from "./nhiem-vu";
+import type { petitions_post_tasks_by_ma_status } from "./schema.gen";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -406,6 +407,24 @@ describe("câu từ chối của máy chủ đi NGUYÊN VĂN ra ngoài", () => {
     );
 
     expect(await doiTrangThaiNhiemVu("NV19", "hoan-thanh")).toEqual({
+      ok: false,
+      thongBao: cau,
+    });
+  });
+
+  it("409 `parent_completed` (ADR 0065 NV2): câu nêu MÃ VIỆC CHA đi nguyên văn", async () => {
+    // Kiểu sinh từ hợp đồng: máy chủ bỏ mã này khỏi `x-vigov-error-codes` thì `tsc` đỏ ở đây,
+    // thay vì bài này tiếp tục giả lập một lời từ chối không còn tồn tại.
+    const code: petitions_post_tasks_by_ma_status["errorCodes"][409] = "parent_completed";
+    const cau = "việc cha NV19 đã hoàn thành — mở lại việc cha trước rồi mới mở lại việc con";
+    batFetch(
+      new Response(JSON.stringify({ code, message: cau, trace_id: "01JTRACE" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    expect(await doiTrangThaiNhiemVu("NV25", "dang-thuc-hien", "Làm lại phần hồ sơ")).toEqual({
       ok: false,
       thongBao: cau,
     });

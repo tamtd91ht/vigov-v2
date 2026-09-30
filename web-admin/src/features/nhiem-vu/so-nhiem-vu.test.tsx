@@ -487,7 +487,7 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
 });
 
 describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
-  it("`dang-thuc-hien`: Chờ duyệt, Hoàn thành (thẳng, cần `task.approve`), Tạm dừng", () => {
+  it("`dang-thuc-hien`: Chờ duyệt, Hoàn thành (thẳng, không cần `task.approve` — ADR 0065 NV1), Tạm dừng", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (lần hai): bài này ghim "KHÔNG có lối nhảy cóc sang
     // `hoan-thanh`" theo chuỗi chặt §6. Chủ đầu tư chọn bảng require: `dang-thuc-hien` → `hoan-thanh`
     // có thật (`nhiem_vu.go:100`), và danh sách nay đến từ máy chủ trên chính dòng (3b2330b).
@@ -550,6 +550,37 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
     expect(html).toContain("NV21");
     expect(html).toContain("NV22");
     // Và KHÔNG có một câu chung chung nào thay thế nó.
+    expect(html).not.toContain("Có lỗi xảy ra");
+  });
+
+  it("409 `parent_completed` (ADR 0065 NV2): câu nêu mã việc cha ra nguyên văn, kèm nút mở đúng việc cha", () => {
+    const cau = "việc cha NV19 đã hoàn thành — mở lại việc cha trước rồi mới mở lại việc con";
+    const html = renderToStaticMarkup(
+      <ChiTietNhiemVu
+        nhiemVu={nhiemVu({ status: "hoan-thanh", parent: "NV19", completed_at: "2026-06-25T02:00:00Z" })}
+        vanBan={{ pha: "dangTai" }}
+        danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        bayGio={BAY_GIO}
+        maNguoiDangNhap={LANH_DAO}
+        quyen={DU_QUYEN}
+        dangGui={false}
+        loiGhi={cau}
+        dong={() => {}}
+        doiTrangThai={() => {}}
+        xoa={() => {}}
+        guiDeNghiLuiHan={KHONG_GOI}
+        quyetDinh={KHONG_GOI}
+        suaKhoiVanBan={KHONG_SUA}
+        docLaiChiTiet={KHONG_SUA}
+        {...PASS2_DRAWER_PROPS}
+      />,
+    );
+    expect(html).toMatch(new RegExp(`role="alert">${nhuTrongHTML(cau)}<`));
+    // The one act that unblocks the refusal sits in the same drawer: `ParentTaskField` opens the
+    // parent by its register code — no second copy of the parent's code parsed out of the sentence.
+    expect(html).toMatch(/Mở việc cha (<!-- -->)?NV19/);
     expect(html).not.toContain("Có lỗi xảy ra");
   });
 
@@ -1995,9 +2026,9 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
     expect(html).toContain("Nhật ký &amp; Trao đổi");
   });
 
-  it("có `task.update`, thiếu `task.approve`: các bước khác còn, bước Hoàn thành ẩn KÈM câu nói vì sao", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: ca này đứng ở `cho-duyet`, nơi máy chủ nay không còn liệt kê
-    // `tam-dung`. `dang-thuc-hien` liệt kê cả `tam-dung` lẫn `hoan-thanh` — đúng hình ca cần.
+  it("có `task.update`, thiếu `task.approve`: ở `dang-thuc-hien` Hoàn thành CÓ, không câu thiếu quyền", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1, 90a17153): ca này ghim bước Hoàn thành ẨN ở
+    // `dang-thuc-hien` khi thiếu `task.approve`. Bước duyệt nay tuỳ chọn: hoàn thành thẳng không cần khoá.
     const html = veChiTiet(
       { status: "dang-thuc-hien" },
       NGUOI_KHAC,
@@ -2005,7 +2036,19 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
       quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]),
     );
     expect(html).toContain("Chuyển sang Tạm dừng");
+    expect(html).toContain("Chuyển sang Hoàn thành");
+    expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("BỊ TỪ CHỐI — có `task.update`, thiếu `task.approve`, ở `cho-duyet`: không duyệt, không trả lại, kèm câu vì sao", () => {
+    const html = veChiTiet(
+      { status: "cho-duyet" },
+      NGUOI_KHAC,
+      { pha: "dangTai" },
+      quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]),
+    );
     expect(html).not.toContain("Chuyển sang Hoàn thành");
+    expect(html).not.toContain('id="ly-do-tra-lai"');
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
   });
 
@@ -2063,7 +2106,18 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
     expect(html).toContain("<h4>Chuyển trạng thái</h4>");
     expect(html).toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 30/09/2026 (ADR 0065 NV1): người thực hiện hoàn thành thẳng, không cần
+    // `task.approve` — máy chủ quyết lại trên dòng (và vẫn đòi mọi việc con đã xong).
+    expect(html).toContain("Chuyển sang Hoàn thành");
+    expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("BỊ TỪ CHỐI — người thực hiện ở `cho-duyet`, thiếu `task.approve`: không tự duyệt, không trả lại", () => {
+    const html = veChiTiet({ status: "cho-duyet" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
+    expect(html).toContain("<h4>Chuyển trạng thái</h4>");
     expect(html).not.toContain("Chuyển sang Hoàn thành");
+    expect(html).not.toContain('id="ly-do-tra-lai"');
+    expect(html).not.toContain("Chuyển sang Đang thực hiện");
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
   });
 

@@ -296,6 +296,15 @@
       "no_confirm": [],
       "tiep_theo": "Bố cục 320px chưa xem trên trình duyệt thật. Thân {replayed:true} không có kiểu trong hợp đồng (đọc JSON thô như task-import.ts).",
       "menu": "danh-ba-can-bo"
+    },
+    {
+      "id": "nhiem-vu-hoan-thanh-thang-adr-0065",
+      "viec": "Màn Nhiệm vụ theo ADR 0065 NV1/NV2 — người được giao thấy Hoàn thành ở dang-thuc-hien; câu 409 parent_completed",
+      "trang_thai": "xong",
+      "bang_chung": "30/09/2026: nhan-nhiem-vu.ts transitionNeedsApproval nay theo NeedsApproval của máy chủ (chỉ cho-duyet→hoan-thanh, mở lại, trả lại); màn vẽ allowed_transitions của máy chủ như trước; CAU_THIEU_QUYEN_DUYET_HOAN_THANH viết lại; 409 parent_completed hiện nguyên câu máy chủ (role=alert) cạnh nút 'Mở việc cha'. Kiểu mã lỗi lấy từ errorCodes của schema.gen.ts. tsc sạch; vitest 2805 ca xanh; check:api khớp.",
+      "no_confirm": [],
+      "tiep_theo": "lib/api/goi.ts cố ý không rẽ nhánh theo code — muốn lọc/nhảy theo parent_completed thì phải đổi quy ước ấy.",
+      "menu": "nhiem-vu"
     }
   ]
 }
