@@ -216,6 +216,9 @@ type mayChu struct {
 	bienBan    *bienBanGia
 	ghiBienBan *ghiBienBanGia
 
+	// petitionTasks is the task-from-petition act — petition_task_test.go.
+	petitionTasks *petitionTaskFake
+
 	// The leadership overview — summary_test.go.
 	taskSummary   *taskSummaryFake
 	reportSummary *citizenReportSummaryFake
@@ -261,6 +264,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	// a read is a store call and each of these opens a transaction, so one object answering both
 	// would let a test prove that a write route "worked" by reading.
 	ghiNhiemVu := &ghiNhiemVuGia{}
+	// A task FROM a petition — petition_task_test.go.
+	petitionTasks := &petitionTaskFake{}
 	// The approval queue of extension requests, keyed by commune — see deNghiChoDuyetGia.
 	deNghiCho := deNghiChoDuyetMau()
 	// The meeting register. Its fixtures are SEPARATE from the task register's on purpose: the
@@ -330,6 +335,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			TaskImport:           taskImport,
 			DeNghiChoDuyet:       deNghiCho,
 			GhiNhiemVu:           ghiNhiemVu,
+			PetitionTasks:        petitionTasks,
 			TaskAttachments:      taskAttachments,
 			TaskLogAttachments:   logAttachments,
 			DanhSachBienBan:      bienBan,
@@ -360,6 +366,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		deNghiCho:  deNghiCho,
 		bienBan:    bienBan,
 		ghiBienBan: ghiBienBan,
+
+		petitionTasks: petitionTasks,
 
 		taskSummary:   taskSummary,
 		reportSummary: reportSummary,
@@ -470,6 +478,7 @@ func depsDay() Deps {
 		TaskImport:         &taskImportFake{},
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
+		PetitionTasks:      &petitionTaskFake{},
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
 		DanhSachBienBan:    bienBanMau(),
@@ -535,6 +544,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu use case ghi biên bản": func(d *Deps) { d.GhiBienBan = nil },
 		// §5.9's attachments: a nil use case panics on the first `📎 Đính kèm`; a nil reader panics on
 		// EVERY timeline read, attachments or not.
+		"thiếu use case tạo nhiệm vụ từ phiếu":     func(d *Deps) { d.PetitionTasks = nil },
 		"thiếu use case tệp đính kèm nhiệm vụ":     func(d *Deps) { d.TaskAttachments = nil },
 		"thiếu đường đọc tệp đính kèm của nhật ký": func(d *Deps) { d.TaskLogAttachments = nil },
 		// The leadership overview: two tiles' worth of figures and the "Cần xử lý ngay" panel.

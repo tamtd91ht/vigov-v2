@@ -95,9 +95,9 @@ var (
 	// id today, so nothing leaks yet — but the day a back-link to the petition is drawn, a task naming
 	// another commune's petition id reads across the boundary (rule 1). A task from a petition belongs
 	// on the petition's own record, where the petition row can be read and locked in the task's
-	// transaction (§13 of chapter 09 proposes `…/tao-nhiem-vu`; NOT BUILT as of 28/09/2026, so today
-	// no path books a `phan-anh` task at all). The code stays valid in NguonGiao.HopLe: existing rows
-	// keep it, and that route will write it.
+	// transaction — POST /api/v1/citizen-reports/{maTraCuu}/tasks since 30/09/2026 (app.PetitionTaskCreation),
+	// the only path that books a `phan-anh` task. The code stays valid in NguonGiao.HopLe: that route
+	// writes it.
 	ErrPetitionSourceNotDirect = errors.New(
 		"nhiệm vụ: nhiệm vụ từ phản ánh chỉ tạo được từ chính phiếu phản ánh trên màn hình Phản ánh " +
 			"người dân — biểu mẫu giao việc trực tiếp không nhận nguồn này")

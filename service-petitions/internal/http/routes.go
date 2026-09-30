@@ -517,6 +517,11 @@ type Deps struct {
 	// writing the row outside a transaction — the exact defect core/audit was shaped to prevent.
 	GhiNhiemVu GhiNhiemVuUseCase
 
+	// PetitionTasks books a task FROM a petition (POST /api/v1/citizen-reports/{maTraCuu}/tasks,
+	// 30/09/2026) — through GhiNhiemVu's own create path, with the petition checked and its timeline
+	// written in the same transaction (app.PetitionTaskCreation).
+	PetitionTasks PetitionTaskCreator
+
 	// §5.9's attachments: the three acts (app.TaskAttachments — built even when object storage, the
 	// scanner or platform's limits are not configured; its routes then answer 503 and nothing else
 	// changes), and the batched read the timeline renders them from.
@@ -629,6 +634,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// in the state it was in before this pass, readable and unchangeable, while four other
 		// subsystems stand on it.
 		panic("petitions/http: thiếu use case ghi nhiệm vụ — sáu tuyến giao việc/sửa/chuyển trạng thái/xoá/lùi hạn sẽ panic khi có người gọi")
+	case d.PetitionTasks == nil:
+		panic("petitions/http: thiếu use case tạo nhiệm vụ từ phiếu — POST /api/v1/citizen-reports/{maTraCuu}/tasks sẽ panic khi có người gọi")
 	case d.TaskAttachments == nil:
 		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
 	case d.TaskLogAttachments == nil:
@@ -1183,6 +1190,43 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.GhiChuPhieu))))
+
+	// TẠO NHIỆM VỤ TỪ PHIẾU (user decision 30/09/2026) — the only door by which a `phan-anh` task is
+	// booked: POST /api/v1/tasks refuses that source (commit 2d34eba4) because nothing there can check
+	// the `source_id` it was sent.
+	//
+	// `task.create` AND `feedback.read`, BOTH seeded (service-identity/migrations/0001_init.sql:299 and
+	// :308). The act is the creation of a task, so the task key; it is done FROM a petition the caller
+	// must be able to read, so the read key — without it a task holder who cannot see the register could
+	// probe lookup codes through this route. `feedback.restricted` is not a gate but a fact: a `can-bo`
+	// petition without it is the 404 of an unknown code.
+	//
+	// 401 is RequirePermission's answer to no session AND to a session of another commune (the commune
+	// is compared before either key). 404: unknown, another commune's, soft-deleted, or restricted
+	// without the key — one answer (Handler.khongTimThay). 409 `petition_state`: the petition is closed
+	// (`da-dong`, `khong-tiep-nhan`, `chuyen-cap-tren`); `code_taken` / `task_tree` as on POST /tasks.
+	// 400 also answers a body that sends `source` or `source_id`.
+	//
+	// idem.Required(idem.MoKhiHong), POST /api/v1/tasks' declaration and for its reason: nothing here
+	// makes a second task from one petition a conflict (several tasks from one petition is legitimate),
+	// so a double submit is indistinguishable from an intended second task without the key.
+	//
+	// @summary  Tạo nhiệm vụ từ một phiếu phản ánh — nguồn giao do máy chủ gắn theo phiếu, ghi cùng một dòng nhật ký phiếu
+	// @screen   09-phan-anh-nguoi-dan §13
+	// @request  petitionTaskIn
+	// @reply    201 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/tasks",
+		authz.RequirePermission(d.Checker, "task.create")(
+			authz.RequirePermission(d.Checker, "feedback.read")(
+				idem.Required(idem.MoKhiHong)(
+					http.HandlerFunc(h.CreateTaskFromPetition)))))
 
 	// --- THE TASK REGISTER. TWO READ ROUTES AND SIX WRITE ROUTES ---------------------------------
 	//

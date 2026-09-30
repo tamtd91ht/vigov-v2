@@ -350,6 +350,9 @@ func chay(log *slog.Logger) error {
 		// has a leader TYPE the task's deadline, so nothing on this path derives one. See the header
 		// of internal/app/nhiem_vu.go. The identity client it does hold is the assigner check only.
 		GhiNhiemVu: ghiNhiemVu,
+		// A task FROM a petition: the petition store for the locked read and the timeline row, and
+		// `ghiNhiemVu` — the create path itself — so this door cannot book a task any other way.
+		PetitionTasks: app.NewPetitionTaskCreation(phieu, ghiNhiemVu),
 		// §5.9's attachments: the SAME task store (the holder rule reads the row the acts lock) and the
 		// SAME stored-file store the log entry links through, so a file the upload route issued is the
 		// row the entry attaches and the timeline reads back.

@@ -40,7 +40,21 @@ const (
 	// TestLogActionsAreAllowedByTheSchema is red for exactly that reason.
 	LogActionCitizenRating  HanhViNhatKy = "danh-gia"
 	LogActionReopenByRating HanhViNhatKy = "mo-lai-theo-danh-gia"
+
+	// LogActionTaskCreated is the row POST …/citizen-reports/{maTraCuu}/tasks writes: a task was booked
+	// from this petition (user decision 30/09/2026). It moves nothing — the row's status is the status
+	// the petition stood in — and its text names the task's register number (TaskCreatedLogText).
+	// Migration 0023 widens the CHECK for it; the Vietnamese value follows ADR 0011 (enum values are
+	// never translated).
+	LogActionTaskCreated HanhViNhatKy = "tao-nhiem-vu"
 )
+
+// TaskCreatedLogText is the timeline sentence for LogActionTaskCreated. It carries the task's REGISTER
+// NUMBER (`NV12`) and nothing typed on the form: the title and description may quote the reporter, and
+// they already live on the task row.
+func TaskCreatedLogText(taskCode string) string {
+	return "Tạo nhiệm vụ " + taskCode + " từ phiếu này"
+}
 
 // CitizenLogActor is what `nguoi_ma` holds on a row the CITIZEN caused.
 //

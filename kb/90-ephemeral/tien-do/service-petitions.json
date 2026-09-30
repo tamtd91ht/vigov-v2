@@ -442,10 +442,10 @@
     {
       "id": "tao-nhiem-vu-tu-phieu",
       "viec": "Tạo nhiệm vụ từ phiếu phản ánh — POST /api/v1/citizen-reports/{maTraCuu}/tasks (docs/ui-ux/09 §13, 02 §57 'Từ phản ánh')",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Hiện KHÔNG có lối nào: 2d34eba4 cho POST /tasks từ chối nguồn phan-anh (source_id không kiểm, mục nguon-phan-anh-source-id-khong-kiem).",
+      "trang_thai": "dang_lam",
+      "bang_chung": "30/09/2026 máy chủ ĐÃ DỰNG: POST /api/v1/citizen-reports/{maTraCuu}/tasks (task.create + feedback.read, idem MoKhiHong); nguồn do máy chủ đặt, thân mang source/source_id → 400; một giao dịch: đọc lại phiếu FOR UPDATE, nhiệm vụ + dòng thời gian + vết tao_nhiem_vu, dòng nhật ký phiếu 'tao-nhiem-vu' + vết tao_nhiem_vu_tu_phan_anh (chủ thể mã tra cứu); 404 cho mã lạ/xã khác/xoá mềm/can-bo thiếu feedback.restricted; 409 petition_state khi phiếu đã đóng (da-dong, khong-tiep-nhan, chuyen-cap-tren). TaoTuNguon dùng chung CreateFromSource (app/nhiem_vu.go). Migration 0023 nới CHECK hanh_vi thêm 'tao-nhiem-vu'. gofmt/vet sạch; go test -p 1 service-petitions xanh (builder chạy thêm make check exit 0). transaction-boundaries: tao_nhiem_vu_tu_phieu_phan_anh.",
       "no_confirm": [],
-      "tiep_theo": "NGƯỜI DÙNG CHỐT 30/09/2026 (lượt /handover → xác nhận từng việc): URL POST /api/v1/citizen-reports/{maTraCuu}/tasks, quyền task.create VÀ feedback.read (cả hai có trong quyen). Máy chủ tự gắn nguồn = đúng phiếu ấy (không nhận source_id từ client), tạo nhiệm vụ + dòng nhật ký phiếu trong MỘT giao dịch (luật 2 bất biến 6, luật 6). Danh từ ghi ở ubiquitous-language.md. Web: nút Tạo nhiệm vụ trên ngăn phiếu dùng lại FormGiaoViec.",
+      "tiep_theo": "CÒN: web — nút Tạo nhiệm vụ trên ngăn phiếu (dùng lại FormGiaoViec) + nhãn dòng thời gian 'tao-nhiem-vu'. GIẢ ĐỊNH NHÀ CUNG CẤP (đặc tả im lặng): tạo được ở MỌI trạng thái mở, kể cả da-tiep-nhan/dang-phan-loai (trước khi xã quyết tiếp nhận). RỦI RO chưa quyết: nhiệm vụ tạo từ phiếu can-bo hiện thấy được bởi mọi người cầm task.read — tiêu đề/mô tả do cán bộ gõ có thể lộ phản ánh về một cán bộ, trong khi chính phiếu vẫn 404 với họ.",
       "menu": [
         "phan-anh-nguoi-dan",
         "nhiem-vu"

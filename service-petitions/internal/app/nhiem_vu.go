@@ -591,18 +591,48 @@ type KiemNguonTrongGiaoDich func(ctx context.Context, tx *store.ScopedTx) error
 // timeline row and the audit entry have exactly one implementation.
 func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
 	kiemNguon KiemNguonTrongGiaoDich) (domain.NhiemVu, error) {
+	return uc.CreateFromSource(ctx, yc, nguoi, SourceSteps{Check: kiemNguon})
+}
+
+// RecordOnSourceInTx writes the SOURCE record's side of the act — for a petition, its timeline row and
+// its own audit entry — inside the task's transaction, AFTER the task row, its first timeline row and
+// its audit entry. `n` is the task as booked: its register number is minted by then.
+type RecordOnSourceInTx func(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu) error
+
+// SourceSteps is what a door other than POST /api/v1/tasks adds to the one create path.
+//
+//	Check   runs FIRST in the transaction, before any lock of the task register (TaoTuNguon's rule)
+//	Record  runs LAST, so the source's row can name the minted number
+//
+// Either may be nil. A nil Record means the source record is not written, which is right for a meeting
+// conclusion (the badge counts tasks by `nguon_id`) and WRONG for a petition — so a `phan-anh` source
+// is refused unless BOTH are set (user decision 30/09/2026: the task and the petition's log entry in
+// ONE transaction).
+type SourceSteps struct {
+	Check  KiemNguonTrongGiaoDich
+	Record RecordOnSourceInTx
+}
+
+// CreateFromSource is TaoTuNguon with the source's own write in the SAME transaction. It is the only
+// body of the create path: Tao and TaoTuNguon both arrive here.
+func (uc *GhiNhiemVu) CreateFromSource(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
+	steps SourceSteps) (domain.NhiemVu, error) {
 
 	// A CONCLUSION SOURCE WITH NO SOURCE CHECK IS REFUSED. The HTTP handler of POST /api/v1/tasks
 	// refuses it first; this is the same rule for any other caller of Tao, because the conclusion's
 	// existence, its removal and its "không phát sinh" mark are checked ONLY by the split's closure
 	// (kiemNguonKetLuan) — a `ket-luan-hop` task booked without it points at whatever id it was sent.
-	if kiemNguon == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonKetLuanHop {
+	if steps.Check == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonKetLuanHop {
 		return domain.NhiemVu{}, domain.ErrNguonKetLuanPhaiTach
 	}
 	// THE SAME FOR A PETITION SOURCE (ErrPetitionSourceNotDirect): without a check that reads the
 	// petition inside this transaction, `source_id` is whatever the caller sent — possibly another
 	// commune's petition id.
-	if kiemNguon == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonPhanAnh {
+	//
+	// SINCE 30/09/2026 THE PETITION'S DOOR EXISTS (app.PetitionTaskCreation), and it sets both steps:
+	// the check reads the petition FOR UPDATE, the record writes its timeline row. A petition-sourced
+	// task with either missing is one the petition's own record would never show.
+	if domain.NguonGiao(yc.NguonGiao) == domain.NguonPhanAnh && (steps.Check == nil || steps.Record == nil) {
 		return domain.NhiemVu{}, domain.ErrPetitionSourceNotDirect
 	}
 
@@ -652,17 +682,25 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 	moi.UpdatedAt = bayGio.Truncate(time.Microsecond)
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		if kiemNguon != nil {
+		if steps.Check != nil {
 			// FIRST, before any lock of this register is taken: the source check locks the SOURCE's
-			// row (a meeting), and taking it before the task tree's rows keeps one lock order.
-			if err := kiemNguon(ctx, tx); err != nil {
+			// row (a meeting, a petition), and taking it before the task tree's rows keeps one lock order.
+			if err := steps.Check(ctx, tx); err != nil {
 				return err
 			}
 		}
-		return uc.createInTx(ctx, tx, &moi, createInTxRequest{
+		if err := uc.createInTx(ctx, tx, &moi, createInTxRequest{
 			ParentCode: yc.ParentCode, TuSinhMa: yc.TuSinhMa, Documents: thayDoiVB,
 			LogPrefix: "Giao việc mới: ",
-		}, nguoi, bayGio)
+		}, nguoi, bayGio); err != nil {
+			return err
+		}
+		if steps.Record != nil {
+			// LAST, inside the same transaction: a failure here rolls the task back with it, so a task
+			// can never exist that its source record does not mention.
+			return steps.Record(ctx, tx, moi)
+		}
+		return nil
 	})
 	if err != nil {
 		return domain.NhiemVu{}, bocNhiemVu(ctx, "giao việc mới", err)

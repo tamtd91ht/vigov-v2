@@ -183,6 +183,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		DanhSachNhiemVu:    nhiemVuMau(),
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
+		PetitionTasks:      &petitionTaskFake{},
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
 		DanhSachBienBan:    bienBanMau(),
