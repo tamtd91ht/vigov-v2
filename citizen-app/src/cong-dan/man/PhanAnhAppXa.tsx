@@ -102,25 +102,28 @@ export function ChipTrangThai({ tt }: { tt: string }) {
 }
 
 const at = (iso: string) => thoiDiemVN(iso) ?? "";
+/** The day part of `thoiDiemVN` ("dd/MM/yyyy HH:mm" → "dd/MM/yyyy"); "" when unreadable. */
+const dayOf = (iso: string) => (thoiDiemVN(iso) ?? "").split(" ")[0] ?? "";
 
-/** One row of "Phản ánh của tôi" — on the home screen and in the list. */
+/**
+ * One row of "Phản ánh của tôi" — on the home screen and in the list (`PROTOTYPE.md` §6.3 FeedbackCard):
+ * `#code` and the day it was sent, the field, the content on one line, the status chip. NO photo box: the
+ * box appears only when a petition HAS photos (decision 12), and none do until the photo card — an empty
+ * "Không ảnh" frame on every card would be a placeholder standing for nothing.
+ */
 export function PetitionCard({ petition, onOpen }: { petition: PhieuCuaToiTomTat; onOpen: () => void }) {
   return (
-    <button type="button" className="xa-the xa-hang-tin" onClick={onOpen}>
-      <span className="xa-o-bt xa-mau--red" aria-hidden="true">
-        <BieuTuong ten="chat" co={24} />
-      </span>
-      <span className="xa-hang-tin__chu">
-        <span className="xa-phu">
-          #{petition.ma_tra_cuu} · {nhanLinhVuc(petition.linh_vuc, petition.nhan_linh_vuc)}
+    <button type="button" className="xa-the xa-petition-card" onClick={onOpen}>
+      <span className="xa-petition-card__body">
+        <span className="xa-petition-card__head">
+          <strong className="xa-petition-card__code">#{petition.ma_tra_cuu}</strong>
+          <span className="xa-phu">{dayOf(petition.goc_dem_han)}</span>
         </span>
-        <strong className="xa-hang-tin__tieu-de xa-cat-2">{petition.trich_noi_dung}</strong>
-        <span className="xa-phu">{at(petition.goc_dem_han)}</span>
-        <span>
-          <ChipTrangThai tt={petition.trang_thai} />
-        </span>
+        <span className="xa-petition-card__field">{nhanLinhVuc(petition.linh_vuc, petition.nhan_linh_vuc)}</span>
+        <span className="xa-petition-card__excerpt">{petition.trich_noi_dung}</span>
+        <ChipTrangThai tt={petition.trang_thai} />
       </span>
-      <BieuTuong ten="right" co={20} />
+      <BieuTuong ten="chevron-right" co={22} />
     </button>
   );
 }
@@ -332,7 +335,13 @@ export function PetitionList(props: {
             ))}
           </div>
           {shown.length === 0 ? (
-            <KhoiTrangThai bieu_tuong="chat" cau={items.length === 0 ? XA_PA.chua_co_phieu : XA_TN.loc_trong} />
+            // Nothing sent yet: the title and what to do next — the "Gửi phản ánh mới" button right below
+            // (§6.3, `04-phan-anh-cua-toi-rong.png`). A filter with nothing in it needs no such hint.
+            items.length === 0 ? (
+              <KhoiTrangThai bieu_tuong="message-square-plus" cau={XA_PA.chua_co_phieu} hint={XA_PA.empty_list_hint} />
+            ) : (
+              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.loc_trong} />
+            )
           ) : (
             <ul className="xa-ds">
               {shown.map((p) => (
@@ -374,6 +383,19 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** One fact of the summary card: an icon (decoration — the label says it), the label, the value. */
+function Fact({ icon, label, children }: { icon: TenBieuTuong; label: string; children: ReactNode }) {
+  return (
+    <div className="xa-facts__row">
+      <dt>
+        <BieuTuong ten={icon} co={20} />
+        <span>{label}</span>
+      </dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
 /**
  * Dòng thời gian — CHỈ các bước đã qua (prototype: sự kiện đã xảy ra, `feedback-adapter.ts:128-137`), nhãn
  * của prototype. Hai nhánh kết thúc dừng sau "Đang phân loại". THUẦN, xuất để test.
@@ -389,25 +411,55 @@ export function stepLabel(tt: string): string {
   return Object.prototype.hasOwnProperty.call(NHAN_BUOC, tt) ? NHAN_BUOC[tt]! : nhanTrangThai(tt);
 }
 
+/**
+ * The main-path steps still AHEAD of `tt`, in order — drawn greyed with "chưa tới bước này" (`PROTOTYPE.md`
+ * §6.4). PURE, exported for tests. `buocDaQua` is untouched: it still says only what has happened.
+ *
+ * Nothing ahead for the two terminal branches (they left the main path), for an unknown code (its place on
+ * the path is not known, and guessing it would promise steps that may never come), and after the last step.
+ */
+export function stepsAhead(tt: string): string[] {
+  const i = VONG_DOI.indexOf(tt);
+  return i < 0 ? [] : VONG_DOI.slice(i + 1);
+}
+
+/**
+ * The timeline (§6.4): a 32px dot per step. Reached steps — the current one included — are green-ink with a
+ * ✓; the current step also carries `aria-current` and its explanation. Steps ahead are greyed with the words
+ * "chưa tới bước này", so the state is said in words and not by the grey alone. The only time shown is the
+ * one the API has (sent at, on the first step); none is invented for the others.
+ */
 export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
   const steps = buocDaQua(petition.trang_thai);
+  const ahead = stepsAhead(petition.trang_thai);
   return (
     <ol className="xa-dong-tg">
       {steps.map((tt, i) => {
         const last = i === steps.length - 1;
         return (
-          <li
-            key={tt}
-            className={`xa-dong-tg__buoc ${last ? "xa-dong-tg__buoc--dang" : "xa-dong-tg__buoc--qua"}`}
-            aria-current={last ? "step" : undefined}
-          >
-            <strong>{stepLabel(tt)}</strong>
-            <span className="xa-phu">{XA_PA.don_vi_xu_ly}</span>
-            {i === 0 && <span className="xa-phu">{at(petition.goc_dem_han)}</span>}
-            {last && giaiThichTrangThai(tt) && <span className="xa-phu">{giaiThichTrangThai(tt)}</span>}
+          <li key={tt} className="xa-dong-tg__buoc xa-dong-tg__buoc--qua" aria-current={last ? "step" : undefined}>
+            <span className="xa-dong-tg__dot" aria-hidden="true">
+              <BieuTuong ten="check" co={18} stroke={2.6} />
+            </span>
+            <span className="xa-dong-tg__text">
+              <strong>{stepLabel(tt)}</strong>
+              <span className="xa-phu">{XA_PA.don_vi_xu_ly}</span>
+              {i === 0 && <span className="xa-phu">{at(petition.goc_dem_han)}</span>}
+              {last && giaiThichTrangThai(tt) && <span className="xa-dong-tg__note">{giaiThichTrangThai(tt)}</span>}
+            </span>
           </li>
         );
       })}
+      {ahead.map((tt) => (
+        <li key={tt} className="xa-dong-tg__buoc xa-dong-tg__buoc--cho">
+          <span className="xa-dong-tg__dot" aria-hidden="true" />
+          <span className="xa-dong-tg__text">
+            <span>
+              {stepLabel(tt)} — {XA_PA.step_not_reached}
+            </span>
+          </span>
+        </li>
+      ))}
     </ol>
   );
 }
@@ -429,28 +481,31 @@ export function PetitionBody(props: {
     : [p.ho_ten_da_che || THE_PHIEU.khong_ghi_ten, p.dien_thoai_da_che].filter(Boolean).join(" · ");
   return (
     <>
+      {/* The summary card (§6.4): field and status on top, the content, then the facts with their icons. */}
       <div className="xa-the xa-the--dem xa-khoi">
+        <div className="xa-summary-head">
+          <strong className="xa-summary-head__field">{nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc)}</strong>
+          <ChipTrangThai tt={p.trang_thai} />
+        </div>
         <p className="xa-phu">
           {XA_PA.ma_phieu}: <strong className="xa-ma">#{p.ma_tra_cuu}</strong>
         </p>
-        <Row label={THE_PHIEU.trang_thai}>
-          <ChipTrangThai tt={p.trang_thai} />
-        </Row>
-        <Row label={THE_PHIEU.linh_vuc}>{nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc)}</Row>
-        <Row label={THE_PHIEU.gui_luc}>{at(p.goc_dem_han)}</Row>
-        {/* The server's stored deadline, verbatim — never computed here (rule 10 #2, #4). */}
-        <Row label={XA_PA.du_kien_xong}>{p.han_xu_ly_xong ? at(p.han_xu_ly_xong) : THE_PHIEU.han_xu_ly_chua_co}</Row>
-        <div className="xa-ke" />
-        <Row label={THE_PHIEU.noi_dung}>
-          <p className="xa-giu-dong">{p.noi_dung}</p>
-        </Row>
-        <Row label={THE_PHIEU.dia_chi}>{p.dia_chi || THE_PHIEU.dia_chi_trong}</Row>
-        <Row label={THE_PHIEU.nguoi_gui}>{sender}</Row>
-        {p.ket_qua !== "" && (
-          <Row label={THE_PHIEU.ket_qua}>
-            <p className="xa-giu-dong">{p.ket_qua}</p>
-          </Row>
-        )}
+        <p className="xa-giu-dong">{p.noi_dung}</p>
+        <dl className="xa-facts">
+          <Fact icon="pin" label={THE_PHIEU.dia_chi}>
+            {p.dia_chi || THE_PHIEU.dia_chi_trong}
+          </Fact>
+          <Fact icon="clock" label={THE_PHIEU.gui_luc}>
+            {at(p.goc_dem_han)}
+          </Fact>
+          {/* The server's stored deadline, verbatim — never computed here (rule 10 #2, #4). */}
+          <Fact icon="calendar" label={XA_PA.du_kien_xong}>
+            {p.han_xu_ly_xong ? at(p.han_xu_ly_xong) : THE_PHIEU.han_xu_ly_chua_co}
+          </Fact>
+          <Fact icon="user" label={THE_PHIEU.nguoi_gui}>
+            {sender}
+          </Fact>
+        </dl>
         {p.trang_thai === "khong-tiep-nhan" && <Row label={THE_PHIEU.ly_do_khong_tiep_nhan}>{p.ly_do || XA_PA.chua_ghi}</Row>}
         {p.trang_thai === "chuyen-cap-tren" && (
           <>
@@ -459,6 +514,15 @@ export function PetitionBody(props: {
           </>
         )}
       </div>
+      {/* The commune's result, in its own green frame (§6.4) — only when the commune wrote one. */}
+      {p.ket_qua !== "" && (
+        <section className="xa-result-box" aria-labelledby="xa-ket-qua-tieu-de">
+          <h2 className="xa-dau-khoi__tieu-de" id="xa-ket-qua-tieu-de">
+            {THE_PHIEU.ket_qua}
+          </h2>
+          <p className="xa-giu-dong">{p.ket_qua}</p>
+        </section>
+      )}
       <div className="xa-the xa-the--dem xa-khoi">
         <h2 className="xa-dau-khoi__tieu-de">{XA_PA.tien_trinh}</h2>
         <DongThoiGian petition={p} />
@@ -539,7 +603,7 @@ export function PetitionDetail(props: {
 
   return (
     <>
-      <DauManCon tieu_de={XA_PA.chi_tiet_tieu_de} onQuayLai={props.onBack} />
+      <DauManCon tieu_de={XA_PA.ticket_title(code)} onQuayLai={props.onBack} />
       <TrangCon>
         {state.kind === "loading" && <KhoiTrangThai bieu_tuong="chat" cau={XA_PA.loading_ticket} dang_tai />}
         {state.kind === "session" && (
@@ -635,7 +699,13 @@ export function PetitionLookup(props: {
 
 /* ═══════════════════════════════ GỬI — Lĩnh vực → Mô tả → Đã gửi ═══════════════════════════════ */
 
-function StepBar({ step }: { step: 1 | 2 | 3 }) {
+/**
+ * The step bar (`PROTOTYPE.md` §6.2): three 32px circles joined by lines, each with its label BESIDE it.
+ * Done = green-ink with a ✓ (and the line after it green); current = brand red (owner's decision, not the
+ * prototype's blue) with a bold label and `aria-current`; ahead = page tint with a border. The step is said
+ * in words too — the list's name "Bước x/3" — never by colour alone. Exported for tests.
+ */
+export function StepBar({ step }: { step: 1 | 2 | 3 }) {
   const labels = [XA_TN.buoc_linh_vuc, XA_PA.buoc_mo_ta, XA_PA.buoc_xong];
   return (
     <ol className="xa-thanh-buoc" aria-label={XA_TN.buoc(step, 3)}>
@@ -644,8 +714,8 @@ function StepBar({ step }: { step: 1 | 2 | 3 }) {
         const tt = no < step ? "xong" : no === step ? "dang" : "cho";
         return (
           <li key={n} className={`xa-thanh-buoc__muc xa-thanh-buoc__muc--${tt}`} aria-current={tt === "dang" ? "step" : undefined}>
-            <span className="xa-thanh-buoc__cham">{tt === "xong" ? <BieuTuong ten="check" co={16} /> : no}</span>
-            <span>{n}</span>
+            <span className="xa-thanh-buoc__cham">{tt === "xong" ? <BieuTuong ten="check" co={18} stroke={2.6} /> : no}</span>
+            <span className="xa-thanh-buoc__label">{n}</span>
           </li>
         );
       })}
@@ -754,15 +824,28 @@ export function offeredCodes(c: Catalogue): readonly string[] | null {
 }
 
 /**
- * The platform's lucide icon names (`service-platform/migrations/0011_petition_field.sql:134-145`) drawn by
- * this app's own icon set, where it has a matching drawing. Anything else — including a name added to the
- * platform later — gets the NEUTRAL icon, never a guessed one.
+ * The platform's lucide icon names (`service-platform/migrations/0011_petition_field.sql:134-145`, and the
+ * sixteen `PROTOTYPE.md` §8 says the table must cover) → this app's drawing of the same lucide shape
+ * (`BieuTuong.tsx`). Anything else — including a name added to the platform later — gets the NEUTRAL
+ * `message-square-plus` (§8's fallback), never a guessed one.
  */
 const FIELD_ICON: Readonly<Record<string, TenBieuTuong>> = {
-  ShieldAlert: "shield",
-  MessageSquare: "chat",
-  Construction: "build",
-  Hammer: "build",
+  Trash2: "trash",
+  TrafficCone: "traffic-cone",
+  Leaf: "leaf",
+  Droplets: "droplets",
+  Lightbulb: "lightbulb",
+  Store: "store",
+  ShieldAlert: "shield-alert",
+  MessageSquarePlus: "message-square-plus",
+  Construction: "construction",
+  Factory: "factory",
+  Hammer: "hammer",
+  MessageSquare: "message-square",
+  Stethoscope: "stethoscope",
+  UserRoundX: "user-round-x",
+  Utensils: "utensils",
+  Zap: "zap",
 };
 
 /**
@@ -779,7 +862,7 @@ const FIELD_TONE: Readonly<Record<string, Tone>> = {
 };
 
 export function fieldIcon(icon: string | null): TenBieuTuong {
-  return icon !== null && Object.prototype.hasOwnProperty.call(FIELD_ICON, icon) ? FIELD_ICON[icon]! : "text";
+  return icon !== null && Object.prototype.hasOwnProperty.call(FIELD_ICON, icon) ? FIELD_ICON[icon]! : "message-square-plus";
 }
 
 export function fieldTone(tone: string | null): Tone {
@@ -903,14 +986,16 @@ export function FieldStep(props: {
     );
   }
   if (catalogue.fields.length === 0) return <KhoiTrangThai bieu_tuong="info" cau={XA_PA.fields_empty} />;
+  // `CategoryGrid` of §6.2: two columns, each tile filled with its tone, the 32px icon in the tone's ink, the
+  // name bold and centred in body ink. The picked tile (after "Đổi") adds a brand border and `aria-checked`.
   return (
-    <div className="xa-the xa-the--dem xa-khoi">
+    <div className="xa-khoi">
       {props.fieldChanged && (
-        <p className="xa-loi-o" role="alert">
+        <p className="xa-error-box" role="alert">
           {LOI_GUI["field-not-offered"].cau}
         </p>
       )}
-      <p>{XA_PA.chon_linh_vuc}</p>
+      <p className="xa-phu">{XA_PA.chon_linh_vuc}</p>
       <div className="xa-luoi-lv" role="radiogroup" aria-label={XA_TN.buoc_linh_vuc}>
         {catalogue.fields.map((f) => (
           <button
@@ -918,13 +1003,11 @@ export function FieldStep(props: {
             type="button"
             role="radio"
             aria-checked={props.picked === f.code}
-            className={`xa-o-lv${props.picked === f.code ? " xa-o-lv--on" : ""}`}
+            className={`xa-o-lv xa-mau--${fieldTone(f.tone)}${props.picked === f.code ? " xa-o-lv--on" : ""}`}
             onClick={() => props.onPick(f.code)}
           >
-            <span className={`xa-o-bt xa-mau--${fieldTone(f.tone)}`} aria-hidden="true">
-              <BieuTuong ten={fieldIcon(f.icon)} co={22} />
-            </span>
-            {f.label}
+            <BieuTuong ten={fieldIcon(f.icon)} co={32} />
+            <span className="xa-o-lv__label">{f.label}</span>
           </button>
         ))}
       </div>
@@ -972,6 +1055,12 @@ export function CommuneSendScreen(props: {
   const [sent, setSent] = useState<PhieuCuaToi | null>(null);
   /** The server said the picked field is no longer offered: say so on step 1 while the citizen re-picks. */
   const [fieldChanged, setFieldChanged] = useState(false);
+  /**
+   * Step 2 was reached by TAPPING a field (§6.2: the tap goes straight on to writing), so the description box
+   * takes the focus. Not after resuming a draft or the demo's "continue": the keyboard would then cover a
+   * form the citizen has not looked at yet.
+   */
+  const [focusDescribe, setFocusDescribe] = useState(false);
   const { catalogue, reload } = useFieldCatalogue(props.onSessionLost, demoWithoutSession);
   const sceneLocation = useSceneLocation(props.getSceneLocation, (l) => {
     setLocation(l);
@@ -1137,6 +1226,7 @@ export function CommuneSendScreen(props: {
               setForm((t) => ({ ...t, linh_vuc: code }));
               setAttempt(null);
               setFieldChanged(false);
+              setFocusDescribe(true);
               setStep(2);
             }}
           />
@@ -1144,20 +1234,33 @@ export function CommuneSendScreen(props: {
 
         {step === 2 && (
           <div className="xa-the xa-the--dem xa-khoi">
-            <ONhapDoan id="xa-noi-dung" nhan={XA_PA.su_viec} goi_y={XA_PA.goi_y_su_viec} gia_tri={form.noi_dung} toi_da={DO_DAI_TOI_DA.noi_dung} bat_buoc onDoi={edit("noi_dung")} />
+            <ONhapDoan
+              id="xa-noi-dung"
+              nhan={XA_PA.su_viec}
+              goi_y={XA_PA.goi_y_su_viec}
+              gia_tri={form.noi_dung}
+              toi_da={DO_DAI_TOI_DA.noi_dung}
+              bat_buoc
+              autoFocus={focusDescribe}
+              onDoi={edit("noi_dung")}
+            />
             {errors.noi_dung && <p className="xa-loi-o" role="alert">{errors.noi_dung}</p>}
-            <div className="xa-hang xa-hang--tinh xa-hang--sat xa-lv-dang">
-              <span className="xa-hang__chu">
-                <span>
+            {/* The picked field, and the way back to change it (§6.2): a real 48px button, not a link. Only when
+                a field IS picked — the demo build without a session reaches this step without one, and a blank
+                "Lĩnh vực:" would read as a field that failed to load. */}
+            {form.linh_vuc !== "" && (
+              <div className="xa-field-picked">
+                <span className="xa-field-picked__text">
                   {XA_PA.linh_vuc}: <strong>{pickedLabel}</strong>
                 </span>
-              </span>
-              <button type="button" className="xa-dau-khoi__them" onClick={() => setStep(1)}>
-                {XA_TN.doi}
-              </button>
-            </div>
+                <button type="button" className="xa-field-change" onClick={() => setStep(1)}>
+                  {XA_TN.doi}
+                </button>
+              </div>
+            )}
             {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ảnh CHƯA có; vị trí hiện tại lấy được
-                nhưng chưa có bản đồ. Không chặn nút gửi vì hai ô ấy (xem `kiemNhapPhieu`). */}
+                nhưng chưa có bản đồ. Không chặn nút gửi vì hai ô ấy (xem `kiemNhapPhieu`). The photo words stay
+                until the photo card: no picker frame is drawn for a feature that cannot send a photo yet. */}
             <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
             <p className="xa-phu">{XA_PA.anh_sap_co}</p>
             <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
@@ -1208,62 +1311,82 @@ export function CommuneSendScreen(props: {
               <BieuTuong ten="alert" co={22} />
               <p>{KHAN_CAP}</p>
             </div>
-            {/* THE COMMUNE, READ AGAIN AT THE LAST STEP (README §Non-negotiables #5): the name on the header,
-                which the session was checked against when it opened (`openCommuneAppSession`). */}
-            <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
-            {failed !== null && (
-              <p className="xa-loi-o" role="alert">
-                {failed.cau}
-              </p>
-            )}
-            {sending && (
-              <p className="xa-phu" role="status">
-                {XA_PA.dang_gui}
-              </p>
-            )}
-            {failed !== null && failed.co_the_gui_lai && attempt !== null ? (
-              // Same key, same body — never a second petition (`api/lan-gui.ts`).
-              <button type="button" className="xa-nut" disabled={sending} onClick={() => void send(attempt)}>
-                <BieuTuong ten="send" co={20} />
-                {GUI.nut_gui_lai}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="xa-nut"
-                onClick={submit}
-                disabled={sending || form.noi_dung.trim() === ""}
-              >
-                <BieuTuong ten="send" co={20} />
-                {GUI.tieu_de}
-              </button>
-            )}
           </div>
         )}
 
         {step === 3 && sent !== null && (
-          <div className="xa-ket-qua">
-            <span className="xa-ket-qua__dau" aria-hidden="true">
-              <BieuTuong ten="check" co={46} />
-            </span>
-            <h2 className="xa-bai__tieu-de">{XA_PA.xong_tieu_de}</h2>
-            <p className="xa-phu">{XA_PA.xong_mo_ta}</p>
-            <div className="xa-the xa-the--dem xa-ket-qua__ma" role="status">
-              <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
-              <strong>#{sent.ma_tra_cuu}</strong>
-            </div>
-            {sent.han_tiep_nhan !== null && thoiDiemVN(sent.han_tiep_nhan) !== null && (
-              <p className="xa-phu">{XA_PA.acknowledge_by(thoiDiemVN(sent.han_tiep_nhan)!)}</p>
-            )}
-            <button type="button" className="xa-nut" onClick={() => props.onOpenPetition(sent.ma_tra_cuu)}>
-              {XA_PA.theo_doi}
-            </button>
-            <button type="button" className="xa-nut xa-nut--phu" onClick={props.onBack}>
-              {XA_TN.nut_ve_trang_chu}
-            </button>
-          </div>
+          <SendDone petition={sent} onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)} onHome={props.onBack} />
         )}
       </TrangCon>
+
+      {/* THE SEND FOOTER (§6.2) — a block of the frame column under the scrolling form, so the button is always
+          where the thumb is. Above the button, in reading order: THE COMMUNE, READ AGAIN AT THE LAST STEP
+          (README §Non-negotiables #5 — the name on the header, which the session was checked against when it
+          opened, `openCommuneAppSession`), then the server's refusal in a red box, then "đang gửi". */}
+      {step === 2 && (
+        <div className="xa-chan-gui xa-send-footer">
+          <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
+          {failed !== null && (
+            <p className="xa-error-box" role="alert">
+              {failed.cau}
+            </p>
+          )}
+          {sending && (
+            <p className="xa-phu" role="status">
+              {XA_PA.dang_gui}
+            </p>
+          )}
+          {failed !== null && failed.co_the_gui_lai && attempt !== null ? (
+            // Same key, same body — never a second petition (`api/lan-gui.ts`).
+            <button type="button" className="xa-nut" disabled={sending} onClick={() => void send(attempt)}>
+              <BieuTuong ten="send" co={20} />
+              {GUI.nut_gui_lai}
+            </button>
+          ) : (
+            <button type="button" className="xa-nut" onClick={submit} disabled={sending || form.noi_dung.trim() === ""}>
+              <BieuTuong ten="send" co={20} />
+              {GUI.tieu_de}
+            </button>
+          )}
+        </div>
+      )}
     </>
+  );
+}
+
+/**
+ * Step 3 — "Đã gửi" (§6.2), shown only after a 201: the check in its green circle (a ≤300ms pop, only under
+ * `prefers-reduced-motion: no-preference`), the lookup code the server issued (rule 10 #1), and a blue band
+ * with the deadlines the SERVER returned — `han_tiep_nhan`, and `han_xu_ly_xong` when it already has one.
+ * Neither is ever computed here (rule 10 #2): an absent deadline is an absent line. Exported for tests.
+ */
+export function SendDone(props: { petition: PhieuCuaToi; onFollow: () => void; onHome: () => void }) {
+  const p = props.petition;
+  const acknowledge = p.han_tiep_nhan !== null ? thoiDiemVN(p.han_tiep_nhan) : null;
+  const resolve = p.han_xu_ly_xong !== null ? thoiDiemVN(p.han_xu_ly_xong) : null;
+  return (
+    <div className="xa-ket-qua">
+      <span className="xa-ket-qua__dau xa-pop" aria-hidden="true">
+        <BieuTuong ten="check-circle" co={64} />
+      </span>
+      <h2 className="xa-bai__tieu-de">{XA_PA.xong_tieu_de}</h2>
+      <p className="xa-phu">{XA_PA.xong_mo_ta}</p>
+      <div className="xa-the xa-the--dem xa-ket-qua__ma" role="status">
+        <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
+        <strong className="xa-ket-qua__code">#{p.ma_tra_cuu}</strong>
+      </div>
+      {(acknowledge !== null || resolve !== null) && (
+        <div className="xa-deadline-band">
+          {acknowledge !== null && <p>{XA_PA.acknowledge_by(acknowledge)}</p>}
+          {resolve !== null && <p>{XA_PA.resolve_by(resolve)}</p>}
+        </div>
+      )}
+      <button type="button" className="xa-nut" onClick={props.onFollow}>
+        {XA_PA.theo_doi}
+      </button>
+      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onHome}>
+        {XA_TN.nut_ve_trang_chu}
+      </button>
+    </div>
   );
 }

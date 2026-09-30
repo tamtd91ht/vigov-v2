@@ -562,6 +562,10 @@ export const TIN_XA = {
   loi_may_chu: "Hệ thống của xã đang bận nên chưa tải được tin. Hãy chờ vài phút rồi bấm Thử lại.",
   /** Tên miền trên mã bị từ chối giữa chừng — thử lại không đổi được gì. */
   khong_hop_le: "Chưa tải được tin của xã. Hãy đóng ứng dụng rồi quét lại mã QR của xã.",
+  // How long ago a news item was published, on the commune app's news cards (`TinTucAppXa.tsx` `relativeDay`).
+  today: "Hôm nay",
+  yesterday: "Hôm qua",
+  days_ago: (n: number) => `${n} ngày trước`,
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -616,6 +620,8 @@ export const XA_GIAO_DIEN = {
   khong_thay_can_bo: "Không tìm thấy cán bộ phù hợp.",
   goi: "Gọi",
   goi_ai: (ten: string) => `Gọi ${ten}`,
+  /** One call button per number on a directory card: the name AND which number, so two buttons never share a name. */
+  call_number: (ten: string, which: string) => `Gọi ${ten}, ${which}`,
 } as const;
 
 /** Directory lines of the commune app for the units a person heads (`DanhBaXa.tsx` `unitHeadLine`). */
@@ -809,6 +815,14 @@ export const XA_TN = {
   dang_xuat: "Đăng xuất",
   dong_y_dang_xuat: "Đăng xuất",
   huy: "Không",
+  // Cá nhân after wave 1 (`PROTOTYPE.md` §6.6).
+  of_mine: "Của tôi",
+  text_size_hint: "Phóng to chữ trong ứng dụng cho dễ đọc.",
+  language: "Ngôn ngữ",
+  /** The only language the app has — a statement, not a setting (there is nothing to switch to). */
+  language_value: "Tiếng Việt",
+  /** `label`: the build's short commit and date, injected at build time (`lib/build-label.ts`). */
+  app_version: (label: string) => `ViGov phiên bản ${label}`,
 } as const;
 
 /**
@@ -835,6 +849,14 @@ export const XA_PA = {
     "Hiện xã chưa mở lĩnh vực nào để nhận phản ánh qua ứng dụng. Bà con hãy gọi điện cho xã hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
   dang_gui: "Đang gửi phản ánh tới xã…",
   acknowledge_by: (moc: string) => `Cán bộ xã sẽ xem phiếu trước ${moc} (giờ Việt Nam).`,
+  /** Shown only when the server returned `han_xu_ly_xong` — a stored deadline, never computed here (rule 10). */
+  resolve_by: (moc: string) => `Dự kiến xử lý xong trước ${moc} (giờ Việt Nam).`,
+  /** Header of one petition's screen (`PROTOTYPE.md` §6: "Phiếu #{code}"). */
+  ticket_title: (code: string) => `Phiếu #${code}`,
+  /** A lifecycle step the petition has not reached yet, on the timeline. */
+  step_not_reached: "chưa tới bước này",
+  /** Under "Bà con chưa gửi phản ánh nào" on the Phản ánh tab — the footer button is below. */
+  empty_list_hint: "Chạm nút bên dưới để gửi phản ánh đầu tiên tới xã.",
   tra_cuu_tieu_de: "Tra cứu phiếu",
   tra_cuu_goi_y: "Nhập mã phiếu bà con đã nhận",
   chua_co_phieu: "Bà con chưa gửi phản ánh nào.",

@@ -63,8 +63,8 @@ export function LogoXa() {
 
 /**
  * The one header shape of the commune app (`PROTOTYPE.md` §5.3): a left slot, the title CENTRED between two
- * slots of equal width, a right slot. The right slot is Zalo's corner and stays empty — except the home bell,
- * which stays where it is while its decision is pending (owner, 30/09/2026).
+ * slots of equal width, a right slot. The right slot is Zalo's corner and stays empty on every screen: the
+ * home bell left it in wave 1 (owner's decision 10, 30/09/2026) — "Thông báo" is a row in Cá nhân › Của tôi.
  */
 function HeaderShell(props: { className: string; left: ReactNode; right?: ReactNode; children: ReactNode }) {
   return (
@@ -79,7 +79,8 @@ function HeaderShell(props: { className: string; left: ReactNode; right?: ReactN
 
 /**
  * Header of the four root tabs: the commune's logo on the left, the title (and an optional line under it —
- * the greeting on home) in the middle. `right`: the home bell only.
+ * the greeting on home) in the middle. `right`: no screen passes one any more (decision 10); the slot is
+ * kept so the title stays centred between two equal sides.
  */
 export function RootTabHeader(props: { title: string; subtitle?: string; right?: ReactNode }) {
   return (

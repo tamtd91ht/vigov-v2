@@ -999,6 +999,27 @@ body {
     background-size: 220% 220%;
     animation: troi-mau 18s ease-in-out infinite alternate;
   }
+
+  /* Commune app, "Đã gửi" (`PhanAnhAppXa.tsx` `SendDone`, `PROTOTYPE.md` §6.2): the check pops in ONCE,
+     280ms — under the 300ms ceiling of §4.5, transform and opacity only, and not at all under reduce. */
+  .xa-pop {
+    animation: xa-pop 280ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+}
+
+@keyframes xa-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes drift {
@@ -2946,6 +2967,12 @@ button.xa-the {
   display: grid;
   gap: 12px;
 }
+/* Inside a list the grid gap IS the spacing: the card's own 18px bottom margin on top of it made 30px between
+   two news cards or two directory cards (seen at 390×844, wave 1). */
+.xa-ds > li.xa-the,
+.xa-ds > li > .xa-the {
+  margin-bottom: 0;
+}
 
 /* ---------- lưới truy cập nhanh ---------- */
 .xa-luoi {
@@ -3031,20 +3058,23 @@ button.xa-o-nhanh {
   cursor: pointer;
 }
 
-/* ---------- hàng tin · thẻ nổi bật · bài ---------- */
+/* ---------- thẻ tin (NewsCard) · bài ---------- */
+/* `PROTOTYPE.md` §6.5 NewsCard: the picture slot, the title on two lines, how long ago. The slot is an ICON on
+   the blue tone until the API carries images; the featured card and the article's cover band are gone (wave
+   1) — a coloured block where a photo belongs reads as a picture that failed to load. */
 .xa-hang-tin {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
+  padding: 12px;
   min-height: calc(var(--tap-min) + 4px);
 }
 .xa-hang-tin__o {
-  width: 60px;
-  height: 60px;
-  border-radius: 10px;
-  background: var(--xa-navy);
-  color: #ffffff;
+  width: 88px;
+  height: 72px;
+  border-radius: 12px;
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
   display: grid;
   place-items: center;
   flex: none;
@@ -3057,50 +3087,17 @@ button.xa-o-nhanh {
 }
 .xa-hang-tin__tieu-de {
   color: var(--xa-navy);
-  font-weight: 600;
-  line-height: 1.4;
-}
-.xa-noi-bat {
-  display: block;
-  overflow: hidden;
-  padding: 0;
-  min-height: calc(var(--tap-min) + 4px);
-}
-.xa-noi-bat__bia,
-.xa-bai__bia {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-end;
-  height: 140px;
-  background: linear-gradient(135deg, var(--xa-navy), var(--xa-navy-dam));
-  color: rgba(255, 255, 255, 0.22);
-  overflow: hidden;
-}
-.xa-bai__bia {
-  height: 160px;
-  margin: -16px -16px 16px;
-}
-.xa-noi-bat__chu {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-}
-.xa-noi-bat__tieu-de {
-  color: var(--xa-navy);
-  font-size: 1.1rem;
   font-weight: 700;
-  line-height: 1.35;
-}
-.xa-noi-bat__tom-tat {
-  color: var(--ink-muted);
+  line-height: 1.4;
 }
 .xa-app .xa-bai__tieu-de {
   font-size: 1.3rem;
   margin: 0 0 8px;
 }
+/* Body paragraphs "leading-relaxed" (§6.5). */
 .xa-bai__doan {
   margin: 0 0 14px;
-  line-height: 1.75;
+  line-height: 1.625;
 }
 .xa-ke {
   height: 1px;
@@ -3111,52 +3108,42 @@ button.xa-o-nhanh {
 /* ---------- danh bạ ---------- */
 /* Ô tìm đi qua `ONhapDong` (`o-nhap.tsx`, tệp duy nhất của nửa nhà nước có ô nhập): nhãn ở trên ô,
    cao theo `.cd-o__nhap`. Ở đây chỉ còn khoảng cách. */
+/* Sticky at the top of the SCROLLING area (§6.9) — `.xa-trang--con` pads 16px, so the block pulls itself flush
+   with negative margins and `top: -16px`, the same arithmetic as `.xa-tabs-tin` (checked at 390×844). It
+   sits inside the scroller, never over the header. */
 .xa-tim {
-  margin-bottom: 14px;
+  position: sticky;
+  top: -16px;
+  z-index: 15;
+  margin: -16px -16px 14px;
+  padding: 12px 16px 4px;
+  background: var(--xa-nen);
+  border-bottom: 1px solid var(--xa-vien);
 }
-.xa-can-bo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* One directory card (`DanhBaXa.tsx` `TheCanBoXa`): name, title, units, then per number its kind, the digits
+   in tabular figures, and a full-width primary "Gọi" (brand red, like every primary action). */
+.xa-staff-card {
+  display: grid;
+  gap: 4px;
   padding: 14px;
 }
-.xa-can-bo__chu-dau {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--xa-navy);
-  color: #ffffff;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
-  flex: none;
-}
-.xa-can-bo__chu {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-.xa-can-bo__ten {
+.xa-staff-card__name {
   color: var(--xa-navy);
   font-weight: 700;
 }
-.xa-can-bo__goi {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.xa-staff-card__number {
+  display: grid;
   gap: 2px;
-  min-width: calc(var(--tap-min) + 4px);
-  min-height: calc(var(--tap-min) + 4px);
-  padding: 6px 8px;
-  border-radius: 12px;
-  background: var(--xa-luc-nhat);
-  color: var(--xa-luc-dam);
-  font-size: var(--text-small);
+  margin-top: 8px;
+}
+.xa-staff-card__digits {
+  color: var(--ink);
   font-weight: 700;
-  text-decoration: none;
-  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.xa-staff-card__call {
+  margin-top: 6px;
+  text-transform: uppercase;
 }
 
 /* ---------- trạng thái · ghi chú · nút ---------- */
@@ -3367,20 +3354,6 @@ button.xa-o-nhanh {
   font-size: 1.1rem;
   font-weight: 700;
 }
-.xa-hero__chuong {
-  margin-left: auto;
-  width: calc(var(--tap-min) + 4px);
-  height: calc(var(--tap-min) + 4px);
-  min-height: calc(var(--tap-min) + 4px);
-  border-radius: 50%;
-  border: 0;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  display: grid;
-  place-items: center;
-  flex: none;
-  cursor: pointer;
-}
 .xa-hero__don-vi {
   margin-top: 14px;
   display: grid;
@@ -3475,78 +3448,117 @@ button.xa-o-nhanh {
   font-size: var(--text-small);
 }
 
-/* dòng thời gian xử lý */
+/* dòng thời gian xử lý — `PROTOTYPE.md` §6.4 Timeline: a 32px dot per step on a vertical rule. Reached = green-ink
+   with a white ✓; ahead = card white, a border, a grey centre, and the words "— chưa tới bước này" (the state is
+   in the words; the grey only follows them). */
 .xa-dong-tg {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 26px;
+  padding: 0;
   position: relative;
 }
 .xa-dong-tg::before {
   content: "";
   position: absolute;
-  left: 6px;
-  top: 8px;
-  bottom: 8px;
+  left: 15px;
+  top: 16px;
+  bottom: 16px;
   width: 2px;
   background: var(--xa-vien);
 }
 .xa-dong-tg__buoc {
   position: relative;
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   padding-bottom: 14px;
   color: var(--xa-navy);
 }
-.xa-dong-tg__buoc::before {
-  content: "";
-  position: absolute;
-  left: -25px;
-  top: 5px;
-  width: 12px;
-  height: 12px;
+.xa-dong-tg__dot {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 3px solid var(--xa-luc-dam);
+  display: grid;
+  place-items: center;
+  background: var(--xa-green-ink);
+  color: #ffffff;
 }
-.xa-dong-tg__buoc--dang::before {
-  border-color: var(--xa-cam-dam);
+.xa-dong-tg__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-top: 4px;
+}
+/* The current step's explanation, on the page tint (§6.4 "ghi chú nền bg"). */
+.xa-dong-tg__note {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--xa-nen);
+  color: var(--ink);
 }
 
-/* thanh bước của luồng gửi — a block of the frame column between header and body, so it stays on screen */
+/* thanh bước của luồng gửi — a block of the frame column between header and body, so it stays on screen.
+   `PROTOTYPE.md` §6.2: circle + label side by side, a line joining each step to the one before it. */
 .xa-thanh-buoc {
   flex: none;
   list-style: none;
   margin: 0;
   display: flex;
-  justify-content: center;
-  gap: 32px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--xa-vien);
 }
 .xa-thanh-buoc__muc {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: var(--text-small);
   font-weight: 600;
   color: var(--ink-muted);
 }
+/* The joining line: before every step but the first, taking the free width. Green once the step before it is
+   done — the line says "passed", the ✓ and the words say it too. */
+.xa-thanh-buoc__muc + .xa-thanh-buoc__muc {
+  flex: 1 1 auto;
+}
+.xa-thanh-buoc__muc + .xa-thanh-buoc__muc::before {
+  content: "";
+  flex: 1 1 auto;
+  min-width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--xa-vien);
+}
+.xa-thanh-buoc__muc--xong + .xa-thanh-buoc__muc::before {
+  background: var(--xa-green-ink);
+}
+.xa-thanh-buoc__label {
+  white-space: nowrap;
+}
 .xa-thanh-buoc__cham {
+  flex: none;
   width: 32px;
   height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   border: 2px solid var(--xa-vien);
-  background: var(--surface);
+  background: var(--xa-nen);
+  color: var(--ink-muted);
   font-weight: 700;
 }
 /* Current step in the brand red, like the send button under it (owner, 30/09/2026): pink beside a red
-   header read as a second, unrelated accent. */
+   header read as a second, unrelated accent. Its label is bold body ink — the step is also `aria-current`. */
 .xa-thanh-buoc__muc--dang {
-  color: var(--xa-brand);
+  color: var(--ink);
+  font-weight: 700;
 }
 .xa-thanh-buoc__muc--dang .xa-thanh-buoc__cham {
   background: var(--xa-brand);
@@ -3554,12 +3566,12 @@ button.xa-o-nhanh {
   color: #ffffff;
 }
 .xa-thanh-buoc__muc--xong .xa-thanh-buoc__cham {
-  background: var(--xa-luc-dam);
-  border-color: var(--xa-luc-dam);
+  background: var(--xa-green-ink);
+  border-color: var(--xa-green-ink);
   color: #ffffff;
 }
 
-/* kết quả gửi */
+/* kết quả gửi — `PROTOTYPE.md` §6.2 step 3 (`PhanAnhAppXa.tsx` `SendDone`) */
 .xa-ket-qua {
   display: grid;
   justify-items: center;
@@ -3572,17 +3584,40 @@ button.xa-o-nhanh {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--xa-luc-nhat);
-  color: var(--xa-luc-dam);
+  background: var(--xa-green-50);
+  color: var(--xa-green-ink);
 }
 .xa-ket-qua__ma {
   width: 100%;
   display: grid;
   gap: 4px;
-  font-size: 1.4rem;
   color: var(--xa-navy);
 }
 .xa-ket-qua__ma p {
+  margin: 0;
+}
+/* The lookup code — the biggest thing on the screen (rule 10 #1), 30px bold blue-ink as §6.2. */
+.xa-ket-qua__code {
+  font-size: 1.875rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--xa-blue-ink);
+  overflow-wrap: anywhere;
+}
+/* The server's deadlines, on the blue tone. */
+.xa-deadline-band {
+  width: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--xa-blue-50);
+  color: var(--ink);
+  text-align: left;
+}
+.xa-deadline-band p {
   margin: 0;
 }
 
@@ -3642,16 +3677,59 @@ button.xa-o-nhanh {
   color: var(--xa-brand);
 }
 
-/* cá nhân */
-.xa-ho-so {
+/* cá nhân — `PROTOTYPE.md` §6.6 (`TienIchAppXa.tsx` `CaNhanXa`) */
+.xa-profile {
   display: flex;
   align-items: center;
   gap: 14px;
 }
-.xa-ho-so__chu {
-  width: 60px;
-  height: 60px;
-  font-size: 1.3rem;
+/* 64px initials on the green tone (the prototype's avatar), ink on its fill as measured for the tone. */
+.xa-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--xa-green-50);
+  color: var(--xa-green-ink);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.xa-app .xa-profile__name {
+  color: var(--xa-navy);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+/* A settings row's 40px round icon on blue-50 — decoration beside the words. */
+.xa-setting-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
+}
+.xa-setting-label {
+  font-weight: 600;
+}
+.xa-setting {
+  padding-bottom: 12px;
+}
+.xa-setting__chips {
+  margin: 0;
+  padding: 0 14px;
+}
+.xa-app-version {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
 }
 .xa-hang {
   width: 100%;
@@ -3742,11 +3820,51 @@ button.xa-o-nhanh {
   font-weight: 400;
 }
 
-/* Lĩnh vực đã chọn, ở đầu bước mô tả */
-.xa-lv-dang {
-  padding: 8px 12px;
+/* Lĩnh vực đã chọn, ở đầu bước mô tả — "Lĩnh vực: X" on the blue tone and a 48px "Đổi" (§6.2). */
+.xa-field-picked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
   border-radius: 12px;
-  background: var(--xa-xanh-nhat);
+  background: var(--xa-blue-50);
+  color: var(--ink);
+}
+.xa-field-picked__text {
+  flex: 1;
+  min-width: 0;
+}
+.xa-field-change {
+  flex: none;
+  min-width: calc(var(--tap-min) + 4px);
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--xa-blue-ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* A refusal the citizen must read before trying again (§6.2 "hộp đỏ"): the red tone's fill, a red edge, and
+   the sentence in body ink — with `role="alert"`, so the meaning never rides on the red alone. */
+.xa-error-box {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--xa-red-ink);
+  border-radius: 0 10px 10px 0;
+  background: var(--xa-red-50);
+  color: var(--ink);
+}
+/* The send footer (`CommuneSendScreen`): commune line, any refusal, the button — stacked, above the fold. */
+.xa-send-footer {
+  display: grid;
+  gap: 8px;
+}
+.xa-send-footer p {
+  margin: 0;
 }
 
 /* Đánh giá 1–5 sao — mỗi sao một vùng chạm riêng */
@@ -3777,8 +3895,16 @@ button.xa-o-nhanh {
 .xa-dong-tg__buoc--cho {
   color: var(--ink-muted);
 }
-.xa-dong-tg__buoc--cho::before {
-  border-color: var(--xa-vien);
+.xa-dong-tg__buoc--cho .xa-dong-tg__dot {
+  background: var(--surface);
+  border: 2px solid var(--xa-vien);
+}
+.xa-dong-tg__buoc--cho .xa-dong-tg__dot::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--xa-vien);
 }
 .xa-cat-2 {
   display: -webkit-box;
@@ -3822,8 +3948,11 @@ button.xa-o-nhanh {
   gap: 10px;
   margin-bottom: 18px;
 }
+/* Directory group titles "lg bold" (§6.9). */
 .xa-app .xa-nhom__tieu-de {
   margin: 4px 0 0;
+  font-size: 1.125rem;
+  font-weight: 700;
 }
 
 /* ---------- bố cục trang chủ theo prototype khách (28/09/2026) ---------- */
@@ -3973,21 +4102,167 @@ button.xa-o-nhanh {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
+/* `CategoryGrid` of §6.2: a 5.5rem tile filled with its tone (`xa-mau--*` on the same button supplies the fill
+   and the icon's ink), the name bold, centred, in body ink. No background here, so the tone class wins. */
 .xa-o-lv {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: calc(var(--tap-min) + 4px);
-  padding: 10px 12px;
-  border: 1px solid var(--xa-vien);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--ink);
+  padding: 14px 10px;
+  border: 2px solid transparent;
+  border-radius: 14px;
   font: inherit;
-  font-size: var(--text-small);
-  font-weight: 600;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
+.xa-luoi-lv .xa-o-lv {
+  min-height: 5.5rem;
+}
+.xa-o-lv__label {
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.3;
+}
+/* The tile already picked (seen after "Đổi"): a brand border on top of its tone, plus `aria-checked`. */
 .xa-o-lv--on {
   border-color: var(--xa-brand);
-  background: var(--xa-brand-soft);
+}
+
+/* ---------- đợt 1 (30/09/2026): thẻ phiếu, chi tiết phiếu, đánh giá, tra cứu hồ sơ ---------- */
+/* PetitionCard — `PROTOTYPE.md` §6.3 FeedbackCard minus the photo box (decision 12: only when photos exist). */
+.xa-petition-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  min-height: calc(var(--tap-min) + 4px);
+}
+.xa-petition-card__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.xa-petition-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.xa-petition-card__head .xa-phu {
+  display: inline;
+}
+.xa-petition-card__code {
+  color: var(--xa-blue-ink);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.xa-petition-card__field {
+  color: var(--xa-navy);
+  font-weight: 600;
+}
+/* The content on ONE line (§6.3); the detail screen has all of it. */
+.xa-petition-card__excerpt {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+/* The detail's summary card (§6.4): field + status, then the facts, each with its icon. */
+.xa-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.xa-app .xa-summary-head__field {
+  color: var(--xa-navy);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.xa-facts {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--xa-vien);
+}
+.xa-facts__row {
+  display: grid;
+  gap: 2px;
+}
+.xa-facts__row dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+.xa-facts__row dd {
+  margin: 0 0 0 26px;
+  color: var(--ink);
+}
+/* "Kết quả xử lý" (§6.4): a green frame on green-50. */
+.xa-result-box {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 2px solid var(--xa-green-ink);
+  border-radius: 14px;
+  background: var(--xa-green-50);
+  color: var(--ink);
+}
+.xa-result-box p {
+  margin: 0;
+}
+
+/*
+ * THE RATING BLOCK INSIDE THE COMMUNE APP ONLY (§6.4 RatingBlock). `PetitionRating` and the star row are SHARED
+ * with the shared app, whose look must not move a pixel — so nothing in their markup changed, and every rule
+ * here is scoped under `.xa-app`: the card of the other blocks, primary in the brand red, secondary with a
+ * brand border, the refusal on the red tone.
+ */
+.xa-app .cd-danh-gia {
+  margin: 0 0 18px;
+  border: 1px solid var(--xa-vien);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+}
+.xa-app .cd-danh-gia .cd-tieu-de-phu {
+  font-size: 1.1rem;
+  color: var(--xa-navy);
+}
+.xa-app .cd-danh-gia .cd-nut {
+  border: 2px solid var(--xa-brand);
+  background: var(--xa-brand);
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+.xa-app .cd-danh-gia .cd-nut:disabled {
+  background: var(--ink-muted);
+  border-color: var(--ink-muted);
+  opacity: 0.6;
+}
+.xa-app .cd-danh-gia .cd-nut-phu {
+  border: 2px solid var(--xa-brand);
   color: var(--xa-brand);
+  font-weight: 700;
+}
+.xa-app .cd-danh-gia .cd-loi {
+  border-left-color: var(--xa-red-ink);
+  background: var(--xa-red-50);
+}
+
+/* Tra cứu hồ sơ (§6.8): the 4-digit box is narrow and spaced, so each digit reads on its own. */
+.xa-lookup-code .cd-o__nhap {
+  max-width: 10rem;
+  letter-spacing: 0.25em;
+  font-variant-numeric: tabular-nums;
 }

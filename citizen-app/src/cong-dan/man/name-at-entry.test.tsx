@@ -325,6 +325,7 @@ const personal = (name: string | null) =>
       onDoiCoChu: () => {},
       onMoPhanAnh: () => {},
       onMoTraCuu: () => {},
+      onOpenNotifications: () => {},
     }),
   );
 

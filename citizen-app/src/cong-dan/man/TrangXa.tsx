@@ -187,16 +187,21 @@ type OMenu = {
  * Truyền thông", lưới bốn cột, nền màu phủ cả ô (ô to thì vùng chạm to). Chia nhóm để người dân tìm theo
  * loại việc, và để xã thêm ô sau này không vỡ bố cục.
  */
-const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccent; them?: { nhan: string; man: ManXa }; o: readonly OMenu[] }> = [
+// vi-name-ok: existing constant, now exported so `commune-screens.test.tsx` pins the tiles (rule 12 #3)
+export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccent; them?: { nhan: string; man: ManXa }; o: readonly OMenu[] }> = [
   {
     tieu_de: XA_TN.nhom_chinh_quyen,
     // `.xa-dau-nhom` without a modifier IS the brand bar; `--brand` names it for the reader, no rule needed.
     vach: "brand",
+    // `PROTOTYPE.md` §6.1: "Xem tất cả" of this group opens the directory.
+    them: { nhan: XA_GIAO_DIEN.xem_tat_ca, man: { kieu: "danh-ba" } },
+    // Marks and tones of §6.1 (wave 1, 30/09/2026).
     o: [
-      { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "red", man: { kieu: "gui" } },
-      { nhan: XA_TN.o_tra_cuu_ngan, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
-      { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "phone", mau: "luc", man: { kieu: "danh-ba" } },
-      // SRS M6.1.12 (P1). The screen had no way in, so it read as "done" to anyone reading the code.
+      { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "camera-pin", mau: "red", man: { kieu: "gui" } },
+      { nhan: XA_TN.o_tra_cuu_ngan, bieu_tuong: "file-search", mau: "xanh", man: { kieu: "tra-cuu" } },
+      { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "contact-book", mau: "luc", man: { kieu: "danh-ba" } },
+      // SRS M6.1.12 (P1). The screen had no way in, so it read as "done" to anyone reading the code. Not in
+      // the prototype's grid; kept (owner, wave 1).
       { nhan: XA_TN.o_ban_do, bieu_tuong: "map", mau: "cam", man: { kieu: "ban-do" } },
     ],
   },
@@ -205,10 +210,10 @@ const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccent; them
     vach: "cam",
     them: { nhan: XA_TN.xem_them, man: { kieu: "tab", tab: "tin-tuc" } },
     o: [
-      { nhan: XA_TN.o_tin_tuc, bieu_tuong: "news", mau: "xanh", man: { kieu: "tab", tab: "tin-tuc" } },
-      { nhan: XA_TN.o_truyen_thanh, bieu_tuong: "radio", mau: "luc", man: { kieu: "truyen-thanh" } },
-      { nhan: XA_TN.o_video, bieu_tuong: "play", mau: "cam", man: { kieu: "video" } },
-      { nhan: XA_TN.o_su_kien, bieu_tuong: "clock", mau: "tim", man: { kieu: "su-kien" } },
+      { nhan: XA_TN.o_tin_tuc, bieu_tuong: "newspaper", mau: "xanh", man: { kieu: "tab", tab: "tin-tuc" } },
+      { nhan: XA_TN.o_truyen_thanh, bieu_tuong: "speaker", mau: "cyan", man: { kieu: "truyen-thanh" } },
+      { nhan: XA_TN.o_video, bieu_tuong: "video", mau: "cam", man: { kieu: "video" } },
+      { nhan: XA_TN.o_su_kien, bieu_tuong: "calendar", mau: "tim", man: { kieu: "su-kien" } },
     ],
   },
 ];
@@ -328,16 +333,9 @@ function TrangChuXa(props: {
   return (
     <>
       {/* Header theo prototype (`AppHeader.tsx`): logo xã trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
-          cuộn — chỉ phần giữa cuộn (§5.2). Chuông giữ chỗ cũ tới khi có quyết định (chủ dự án, 30/09/2026). */}
-      <RootTabHeader
-        title={xa.ten}
-        subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh}
-        right={
-          <button type="button" className="xa-hero__chuong" onClick={() => di({ kieu: "thong-bao" })} aria-label={XA_TN.thong_bao}>
-            <BieuTuong ten="bell" co={22} />
-          </button>
-        }
-      />
+          cuộn — chỉ phần giữa cuộn (§5.2). Góc phải để trống cho Zalo: chuông đã bỏ (quyết định 10, 30/09/2026),
+          "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
+      <RootTabHeader title={xa.ten} subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh} />
       <div className="xa-trang">
         <CommuneBanner />
 
@@ -690,7 +688,17 @@ function AppCuaXa(props: {
       );
       break;
     case "thong-bao":
-      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.thong_bao} bieu_tuong="bell" cau={XA_TN.thong_bao_trong} onQuayLai={ve} />;
+      // Reached from Cá nhân › Của tôi (decision 10: no bell on the home header), so "Quay lại" goes back there.
+      // The hint is the sentence that stood in Cá nhân's old "Thông báo" section: where messages will come from.
+      man_con = (
+        <ManChuaCoDuLieu
+          tieu_de={XA_TN.thong_bao}
+          bieu_tuong="bell"
+          cau={XA_TN.thong_bao_trong}
+          hint={XA_TN.thong_bao_chua_co}
+          onQuayLai={() => veTab("ca-nhan")}
+        />
+      );
       break;
     default:
       break;
@@ -795,6 +803,7 @@ function AppCuaXa(props: {
           onDoiCoChu={datCoChu}
           onMoPhanAnh={() => veTab("phan-anh")}
           onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
+          onOpenNotifications={() => datMan({ kieu: "thong-bao" })}
         />
       </>
     );

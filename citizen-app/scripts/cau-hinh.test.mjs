@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { demoBuild, docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL, xaCoDinh } from "./cau-hinh.mjs";
+import { buildLabel, demoBuild, docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL, xaCoDinh } from "./cau-hinh.mjs";
 
 /**
  * CẤU HÌNH LÚC DỰNG — PHÉP KIỂM CỦA MỘT CÁI RÀO, KHÔNG PHẢI CỦA MỘT TIỆN ÍCH.
@@ -226,5 +226,22 @@ describe("demo build of the commune app (`--vao-thang --demo`, owner 30/09/2026)
   it("`vite.config.ts` bakes it through `define`, next to the commune domain", () => {
     const code = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
     expect(code).toMatch(/__VIGOV_DEMO__: JSON\.stringify\(demoBuild\(\)\)/);
+  });
+});
+
+describe("the build label on the Cá nhân footer (`buildLabel`)", () => {
+  it("in this checkout: `<short commit> · dd/MM/yyyy`, the date in Vietnam time", () => {
+    // 2026-09-30 18:30 UTC is already 1 October in Vietnam.
+    const label = buildLabel(undefined, new Date(Date.UTC(2026, 8, 30, 18, 30)));
+    expect(label).toMatch(/^[0-9a-f]{4,40} · 01\/10\/2026$/);
+  });
+
+  it("outside a git checkout: empty — the screen then shows no version line, never an invented one", () => {
+    expect(buildLabel(mkdtempSync(join(tmpdir(), "vigov-no-git-")))).toBe("");
+  });
+
+  it("`vite.config.ts` bakes it through `define`", () => {
+    const code = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+    expect(code).toMatch(/__VIGOV_BUILD_LABEL__: JSON\.stringify\(buildLabel\(\)\)/);
   });
 });

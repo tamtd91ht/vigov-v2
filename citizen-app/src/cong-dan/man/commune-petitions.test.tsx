@@ -230,9 +230,15 @@ describe("the commune's field catalogue (step 1) — no built-in list, ever", ()
     expect(html).toContain("xa-mau--cam");
     expect(html).toContain("xa-mau--navy");
     expect(html).not.toContain("rac-thai"); // the code is sent, never shown
-    expect(fieldIcon("ShieldAlert")).toBe("shield");
-    expect(fieldIcon("Trash2")).toBe("text");
-    expect(fieldIcon(null)).toBe("text");
+    // Wave 1: the table covers the sixteen lucide names of `PROTOTYPE.md` §8, each drawn as the SAME shape;
+    // anything else — absent, or a name added to the platform later — gets §8's neutral fallback, never a guess.
+    expect(fieldIcon("ShieldAlert")).toBe("shield-alert");
+    expect(fieldIcon("Trash2")).toBe("trash");
+    const platformIcons = ["Trash2", "TrafficCone", "Droplets", "Zap", "Construction", "ShieldAlert", "Hammer", "Factory", "Stethoscope", "UserRoundX", "Utensils", "MessageSquare"];
+    for (const icon of platformIcons) expect(fieldIcon(icon), icon).not.toBe("message-square-plus");
+    expect(fieldIcon(null)).toBe("message-square-plus");
+    expect(fieldIcon("NameAddedLater")).toBe("message-square-plus");
+    expect(fieldIcon("toString")).toBe("message-square-plus");
     // One class per platform tone since 30/09/2026: red is the prototype's red tone (pink is gone), cyan its own.
     expect(fieldTone("red")).toBe("red");
     expect(fieldTone("cyan")).toBe("cyan");

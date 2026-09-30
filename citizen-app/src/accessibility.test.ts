@@ -772,12 +772,12 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-o-nhanh",
       ".xa-dau-khoi__them",
       ".xa-hang-tin",
-      ".xa-noi-bat",
-      ".xa-can-bo__goi",
+      // Wave 1 (30/09/2026): `.xa-noi-bat` (the featured news card), `.xa-can-bo__goi` (the round call button)
+      // and `.xa-hero__chuong` (the home bell, decision 10) are gone with their markup. The directory's call
+      // buttons are `.xa-nut` now, measured just below.
       ".xa-nut",
       ".xa-tab__muc",
       ".xa-noi",
-      ".xa-hero__chuong",
       ".xa-chip",
       ".xa-hang",
       ".xa-cong-tac",
@@ -789,6 +789,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-tabs-tin__muc",
       // Card D2: the second row of news category chips.
       ".xa-chip--phu",
+      // Wave 1: the whole petition card is one tap; "Đổi" beside the picked field on the send form.
+      ".xa-petition-card",
+      ".xa-field-change",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -850,6 +853,28 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     // Demo build only (30/09/2026): the "Chế độ demo" band on every screen, and its edge against the band.
     ["dải 'Chế độ demo': chữ trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["dải 'Chế độ demo': viền cam sẫm trên nền cam nhạt", token("xa-cam-dam"), token("xa-cam-nhat")],
+    // Wave 1 (30/09/2026) — every new pair a screen now renders, by name.
+    ["mã phiếu (#code) xanh đậm trên thẻ, và mã lớn sau khi gửi", token("xa-blue-ink"), token("surface")],
+    ["tên lĩnh vực trên ô tông xanh dương", token("ink"), token("xa-blue-50")],
+    ["tên lĩnh vực trên ô tông xanh lá", token("ink"), token("xa-green-50")],
+    ["tên lĩnh vực trên ô tông cam", token("ink"), token("xa-orange-50")],
+    ["tên lĩnh vực trên ô tông tím", token("ink"), token("xa-purple-50")],
+    ["tên lĩnh vực trên ô tông xanh ngọc", token("ink"), token("xa-cyan-50")],
+    ["tên lĩnh vực trên ô tông đỏ", token("ink"), token("xa-red-50")],
+    ["tên lĩnh vực trên ô tông trung tính (tông lạ)", token("ink"), token("xa-xanh-nhat")],
+    ["biểu tượng trung tính trên ô tông lạ", token("xa-navy"), token("xa-xanh-nhat")],
+    ["dấu ✓ trắng trên bước đã xong (thanh bước, dòng thời gian)", "#ffffff", token("xa-green-ink")],
+    ["số của bước chưa tới trên nền trang", token("ink-muted"), token("xa-nen")],
+    ["bước chưa tới trên dòng thời gian ('— chưa tới bước này')", token("ink-muted"), token("surface")],
+    ["'Lĩnh vực: X' và 'Đổi' trên băng xanh nhạt", token("xa-blue-ink"), token("xa-blue-50")],
+    ["chữ trên băng xanh nhạt (lĩnh vực đã chọn, hạn máy chủ trả)", token("ink"), token("xa-blue-50")],
+    ["câu từ chối trong hộp đỏ nhạt", token("ink"), token("xa-red-50")],
+    ["kết quả xử lý trong khung xanh lá nhạt", token("ink"), token("xa-green-50")],
+    ["ghi chú của bước hiện tại trên nền trang", token("ink"), token("xa-nen")],
+    ["chữ cái đầu tên trên ảnh đại diện xanh lá nhạt", token("xa-green-ink"), token("xa-green-50")],
+    ["biểu tượng tròn 40px của hàng cài đặt, ô hình của thẻ tin", token("xa-blue-ink"), token("xa-blue-50")],
+    ["dòng 'ViGov phiên bản' trên nền trang", token("ink-muted"), token("xa-nen")],
+    ["nút 'Gọi' của danh bạ: chữ trắng trên nút đỏ thương hiệu", "#ffffff", token("xa-brand")],
   ];
   it("không còn màu hồng nào trong app riêng (chủ dự án, 30/09/2026)", () => {
     // Rules only: the comment that records WHY pink went names the old value.

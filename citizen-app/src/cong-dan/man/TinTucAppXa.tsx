@@ -1,6 +1,6 @@
 /**
- * TIN TỨC CỦA XÃ — giao diện theo bản mẫu `vi-gov/zalo-miniapp` (`features/news/*`): bài đầu là thẻ nổi
- * bật có dải màu, các bài sau là hàng có ô vuông; chạm để đọc toàn văn.
+ * TIN TỨC CỦA XÃ — giao diện theo prototype khách (`PROTOTYPE.md` §6.5, đợt 1 30/09/2026): mọi bài là cùng
+ * một thẻ (ô hình · tiêu đề hai dòng · "x ngày trước"), không còn thẻ nổi bật; chạm để đọc toàn văn.
  *
  * DỮ LIỆU VÀ QUY TẮC GIỮ NGUYÊN của `TinTucXaScreen.tsx` — cùng trạng thái thuần (`TIN_DAU`,
  * `sauKhiTaiTin`, `sauKhiTaiBai`), cùng tuyến công khai theo tên miền, cùng "Xem thêm" thay cho cuộn
@@ -30,32 +30,43 @@ function dongPhu(tin: TinXaTomTat): string {
   return tin.chuyen_muc !== "" ? `${tin.chuyen_muc} · ${ngay(tin.ngay_dang)}` : ngay(tin.ngay_dang);
 }
 
-/** Một hàng tin: ô vuông + tiêu đề + chuyên mục · ngày. Dùng cả ở trang chủ. */
-export function HangTin({ tin, onMo }: { tin: TinXaTomTat; onMo: (id: string) => void }) {
-  return (
-    <button type="button" className="xa-the xa-hang-tin" onClick={() => onMo(tin.id)}>
-      <span className="xa-hang-tin__o">
-        <BieuTuong ten="news" co={26} />
-      </span>
-      <span className="xa-hang-tin__chu">
-        <strong className="xa-hang-tin__tieu-de">{tin.tieu_de}</strong>
-        <span className="xa-phu">{dongPhu(tin)}</span>
-      </span>
-    </button>
-  );
+/** Today's date in Vietnam, `YYYY-MM-DD` — the one clock read of the news cards. */
+export function todayVN(now: number = Date.now()): string {
+  return new Date(now + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-/** Bài đầu danh sách: dải màu lớn + tiêu đề + tóm tắt. */
-function TheNoiBat({ tin, onMo }: { tin: TinXaTomTat; onMo: (id: string) => void }) {
+/**
+ * "Hôm nay" · "Hôm qua" · "N ngày trước" for a publication DAY (`YYYY-MM-DD`, no time of day — so no
+ * hours or minutes are ever claimed), against `today` in the same shape. PURE.
+ *
+ * Past 30 days, or a day after `today` (a clock set wrong on the phone), the plain date instead: "45 ngày
+ * trước" makes the reader count, and "-2 ngày trước" is nonsense. An unreadable day → `NGAY_KHONG_DOC_DUOC`.
+ */
+export function relativeDay(day: string, today: string): string {
+  if (ngayVN(day) === null) return NGAY_KHONG_DOC_DUOC;
+  const ms = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  if (ngayVN(today) === null) return ngay(day);
+  const days = Math.round((ms(today) - ms(day)) / 86_400_000);
+  if (days === 0) return TIN_XA.today;
+  if (days === 1) return TIN_XA.yesterday;
+  if (days > 1 && days <= 30) return TIN_XA.days_ago(days);
+  return ngay(day);
+}
+
+/**
+ * One news card (`PROTOTYPE.md` §6.5 NewsCard) — on the news tab, the home screen and "Tin liên quan": the
+ * picture slot, the title on two lines, how long ago. No view count (owner). The slot holds an ICON until the
+ * API carries images (a later card) — marked as decoration, never presented as the article's picture.
+ */
+export function HangTin({ tin, onMo, today = todayVN() }: { tin: TinXaTomTat; onMo: (id: string) => void; today?: string }) {
   return (
-    <button type="button" className="xa-the xa-noi-bat" onClick={() => onMo(tin.id)}>
-      <span className="xa-noi-bat__bia" aria-hidden="true">
-        <BieuTuong ten="news" co={96} />
+    <button type="button" className="xa-the xa-hang-tin" onClick={() => onMo(tin.id)}>
+      <span className="xa-hang-tin__o" aria-hidden="true">
+        <BieuTuong ten="newspaper" co={30} />
       </span>
-      <span className="xa-noi-bat__chu">
-        <strong className="xa-noi-bat__tieu-de">{tin.tieu_de}</strong>
-        {tin.tom_tat !== "" && <span className="xa-noi-bat__tom-tat">{tin.tom_tat}</span>}
-        <span className="xa-phu">{dongPhu(tin)}</span>
+      <span className="xa-hang-tin__chu">
+        <strong className="xa-hang-tin__tieu-de xa-cat-2">{tin.tieu_de}</strong>
+        <span className="xa-phu">{relativeDay(tin.ngay_dang, today)}</span>
       </span>
     </button>
   );
@@ -308,9 +319,13 @@ export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => voi
   if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={props.empty} />;
   return (
     <>
+      {/* Every item the same card — no featured first card (wave 1): a big coloured block with no picture in it
+          read as the most important news, when it was only the newest. */}
       <ul className="xa-ds">
-        {ds.muc.map((t, i) => (
-          <li key={t.id}>{i === 0 ? <TheNoiBat tin={t} onMo={props.onMo} /> : <HangTin tin={t} onMo={props.onMo} />}</li>
+        {ds.muc.map((t) => (
+          <li key={t.id}>
+            <HangTin tin={t} onMo={props.onMo} />
+          </li>
         ))}
       </ul>
       {ds.loi !== null && (
@@ -382,9 +397,15 @@ export function BaiTinXa(props: {
     void tai();
   }, []);
 
+  // The header names the item's TYPE (`PROTOTYPE.md` §6: "back, loại tin"): from the loaded item, or — while it
+  // loads — from the list row it was opened from, so the title does not change under the reader. No type
+  // known → the old general title.
+  const type = trang.kieu === "xong" ? trang.bai.type : (props.ds?.find((t) => t.id === props.id)?.type ?? null);
+  const title = type !== null ? NEWS_TYPE_LABEL[type] : TIN_XA.tieu_de;
+
   return (
     <>
-      <DauManCon tieu_de={TIN_XA.tieu_de} onQuayLai={props.onQuayLai} />
+      <DauManCon tieu_de={title} onQuayLai={props.onQuayLai} />
       <TrangCon>
         {trang.kieu === "dang-tai" && <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai_bai} dang_tai />}
         {trang.kieu === "khong-thay" && <KhoiTrangThai bieu_tuong="news" loi cau={TIN_XA.khong_thay} />}
@@ -397,10 +418,9 @@ export function BaiTinXa(props: {
           />
         )}
         {trang.kieu === "xong" && (
+          // No cover band: the prototype's cover is the article's PHOTO, which the API does not carry yet (a later
+          // card). A coloured block in its place would read as a picture that failed to load.
           <article className="xa-bai">
-            <div className="xa-bai__bia" aria-hidden="true">
-              <BieuTuong ten="news" co={110} />
-            </div>
             <h2 className="xa-bai__tieu-de">{trang.bai.tieu_de}</h2>
             <p className="xa-phu">{dongPhu(trang.bai)}</p>
             <div className="xa-ke" />

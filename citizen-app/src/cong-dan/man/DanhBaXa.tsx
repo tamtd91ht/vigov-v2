@@ -1,6 +1,6 @@
 /**
- * DANH BẠ CÁN BỘ XÃ — giao diện theo bản mẫu `vi-gov/zalo-miniapp` (`features/directory/DirectoryPage`):
- * ô tìm, mỗi cán bộ một thẻ có ô chữ cái đầu, nút gọi tròn bên phải.
+ * DANH BẠ CÁN BỘ XÃ — giao diện theo prototype khách (`PROTOTYPE.md` §6.9, đợt 1 30/09/2026): ô tìm đứng
+ * yên ở đầu vùng cuộn, nhóm theo bộ phận, mỗi cán bộ một thẻ, mỗi số một nút "Gọi" rộng hết thẻ.
  *
  * DỮ LIỆU VÀ QUY TẮC GIỮ NGUYÊN của `DanhBaCanBoScreen.tsx`: chỉ người đã đồng ý công khai (#12), số
  * gọi qua `tel:` (`dichGoi`) — mở màn quay số của máy, không đi qua mạng, không log, không lưu. Tìm
@@ -18,12 +18,6 @@ import { DANH_BA, DIRECTORY_UNIT_HEAD, XA_GIAO_DIEN, XA_PA, XA_TN } from "./noi-
 import { BieuTuong } from "./BieuTuong";
 import { KhoiTrangThai } from "./khung-xa";
 import { ONhapDong } from "./o-nhap";
-
-/** Chữ cái đầu của TÊN GỌI (từ cuối) — quy ước của bản mẫu. */
-function chuDau(ho_ten: string): string {
-  const cuoi = ho_ten.trim().split(/\s+/).pop() ?? "";
-  return (cuoi[0] ?? "?").toUpperCase();
-}
 
 /** Bỏ dấu tiếng Việt và hoa thường — người lớn tuổi hay gõ không dấu ("chu tich"). */
 export function boDau(s: string): string {
@@ -106,39 +100,43 @@ export function nhomTheoBoPhan(
   return nhom;
 }
 
+/**
+ * One person (`PROTOTYPE.md` §6.9): name, title, the units they head, then EACH published number with its own
+ * full-width "Gọi" under it — office number first (public by nature), mobile only when the person agreed
+ * (#12). One button per number, each named with the person AND the kind of number, so a screen reader never
+ * meets two identical "Gọi Nguyễn Văn A". No "Nhắn Zalo" button: that platform call does not exist in this
+ * half yet (decision G6 pending) — "Có dùng Zalo" stays a line of words.
+ */
 function TheCanBoXa({ cb }: { cb: CanBoCongKhai }) {
-  // Số cơ quan trước: công khai theo bản chất; di động chỉ khi người ấy đồng ý (#12).
-  const so = cb.so_co_quan.trim() !== "" ? cb.so_co_quan : cb.di_dong;
-  const dich = so.trim() === "" ? null : dichGoi(so);
+  const numbers = [
+    { kind: DANH_BA.so_co_quan, value: cb.so_co_quan.trim() },
+    { kind: DANH_BA.di_dong, value: cb.di_dong.trim() },
+  ]
+    .filter((n) => n.value !== "")
+    // `dichGoi` refuses a value with too few digits to dial: the words stay, the button does not.
+    .map((n) => ({ ...n, dial: dichGoi(n.value) }));
   return (
-    <li className="xa-the xa-can-bo">
-      <span className="xa-can-bo__chu-dau" aria-hidden="true">
-        {chuDau(cb.ho_ten)}
-      </span>
-      <span className="xa-can-bo__chu">
-        <strong className="xa-can-bo__ten">{cb.ho_ten}</strong>
-        {cb.chuc_vu !== "" && <span>{cb.chuc_vu}</span>}
-        {cb.residential_units_headed.map((unit) => (
-          <span key={unit}>{unitHeadLine(unit)}</span>
-        ))}
-        {cb.so_co_quan.trim() !== "" && (
-          <span className="xa-phu">
-            {DANH_BA.so_co_quan}: {cb.so_co_quan.trim()}
-          </span>
-        )}
-        {cb.di_dong.trim() !== "" && (
-          <span className="xa-phu">
-            {DANH_BA.di_dong}: {cb.di_dong.trim()}
-          </span>
-        )}
-        {cb.co_zalo && <span className="xa-phu">{DANH_BA.co_zalo}</span>}
-      </span>
-      {dich !== null && (
-        <a className="xa-can-bo__goi" href={dich} aria-label={XA_GIAO_DIEN.goi_ai(cb.ho_ten)}>
-          <BieuTuong ten="phone" co={22} />
-          <span>{XA_GIAO_DIEN.goi}</span>
-        </a>
-      )}
+    <li className="xa-the xa-staff-card">
+      <strong className="xa-staff-card__name">{cb.ho_ten}</strong>
+      {cb.chuc_vu !== "" && <span className="xa-phu">{cb.chuc_vu}</span>}
+      {cb.residential_units_headed.map((unit) => (
+        <span key={unit} className="xa-phu">
+          {unitHeadLine(unit)}
+        </span>
+      ))}
+      {cb.co_zalo && <span className="xa-phu">{DANH_BA.co_zalo}</span>}
+      {numbers.map((n) => (
+        <div key={n.kind} className="xa-staff-card__number">
+          <span className="xa-phu">{n.kind}</span>
+          <span className="xa-staff-card__digits">{n.value}</span>
+          {n.dial !== null && (
+            <a className="xa-nut xa-staff-card__call" href={n.dial} aria-label={XA_GIAO_DIEN.call_number(cb.ho_ten, n.kind)}>
+              <BieuTuong ten="phone" co={20} />
+              <span>{XA_GIAO_DIEN.goi}</span>
+            </a>
+          )}
+        </div>
+      ))}
     </li>
   );
 }
@@ -172,6 +170,8 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
 
   return (
     <>
+      {/* Sticky at the top of the scrolling area (§6.9): a long directory scrolls under it, and the search
+          stays one tap away. It sits INSIDE the scroller, so it never covers the header or the tab bar. */}
       <div className="xa-tim">
         <ONhapDong
           id="xa-tim-can-bo"

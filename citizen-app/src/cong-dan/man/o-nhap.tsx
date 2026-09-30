@@ -54,7 +54,11 @@ export function ONhapDong(
   );
 }
 
-export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean }) {
+/**
+ * `autoFocus`: OPTIONAL and off unless a caller asks — only the commune app's send screen does, right after the
+ * citizen tapped a field (`PROTOTYPE.md` §6.2). The shared app never passes it, so its screens are unchanged.
+ */
+export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean; autoFocus?: boolean }) {
   const id_goi_y = props.goi_y ? `${props.id}-goi-y` : undefined;
   return (
     <div className="cd-o">
@@ -74,6 +78,7 @@ export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean }) {
         rows={6}
         required={props.bat_buoc}
         aria-required={props.bat_buoc}
+        autoFocus={props.autoFocus === true}
         value={props.gia_tri}
         aria-describedby={id_goi_y}
         onChange={(e) => props.onDoi(e.target.value)}
