@@ -20752,7 +20752,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa thông tin mô tả, mã hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công; sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)",
+        "summary": "Sửa thông tin mô tả hoặc hạn của một nhiệm vụ — không đụng tới trạng thái hay phân công, không sửa được mã đã cấp (gửi `code` thì 400); sửa hạn là sửa cho đúng, không phải gia hạn: chưa có gia hạn được duyệt thì hạn ban đầu đi theo, đã có thì giữ nguyên; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)",
         "operationId": "petitions_patch_tasks_by_ma",
         "tags": [
           "petitions"
@@ -20859,7 +20859,7 @@
         }
       ],
       "post": {
-        "summary": "Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên",
+        "summary": "Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện",
         "operationId": "petitions_post_tasks_by_ma_assignment",
         "tags": [
           "petitions"
@@ -29913,12 +29913,6 @@
           "assigner": {
             "type": "string"
           },
-          "lead_unit": {
-            "type": "string"
-          },
-          "monitor": {
-            "type": "string"
-          },
           "due_at": {
             "type": [
               "string",
@@ -30003,9 +29997,7 @@
           "created_by",
           "description",
           "due_at",
-          "lead_unit",
           "leader_approved",
-          "monitor",
           "note",
           "original_due_at",
           "parent",
@@ -30196,12 +30188,6 @@
             "type": "string"
           },
           "assigner": {
-            "type": "string"
-          },
-          "lead_unit": {
-            "type": "string"
-          },
-          "monitor": {
             "type": "string"
           },
           "due_at": {
@@ -30841,12 +30827,6 @@
       "petitions.suaNhiemVuVao": {
         "type": "object",
         "properties": {
-          "code": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "due_at": {
             "type": [
               "string",
@@ -31050,12 +31030,6 @@
           "assigner": {
             "type": "string"
           },
-          "lead_unit": {
-            "type": "string"
-          },
-          "monitor": {
-            "type": "string"
-          },
           "due_at": {
             "type": [
               "string",
@@ -31163,12 +31137,6 @@
           "assigner": {
             "type": "string"
           },
-          "lead_unit": {
-            "type": "string"
-          },
-          "monitor": {
-            "type": "string"
-          },
           "due_at": {
             "type": [
               "string",
@@ -31203,18 +31171,6 @@
             ]
           },
           "assignee": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "lead_unit": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "monitor": {
             "type": [
               "string",
               "null"
