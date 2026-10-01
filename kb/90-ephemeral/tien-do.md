@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 2c158913
+derived_from_commit: e1a3ab63
 expires: 2026-12-30
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 80 |
 | chưa làm | 40 |
 | treo | 14 |
-| xong | 274 |
+| xong | 275 |
 
 ## Theo menu
 
@@ -165,6 +165,7 @@ PHẦN MẪU SỐ CỦA CHỈ SỐ CÒN LẠI CHO AI: lượt này chỉ LƯU `h
 | `citizen-app` | `bao-dung-loi-quyen-zalo` — Quyền Zalo chưa cấp hiện đúng tên quyền và mã lỗi thật của SDK, thay vòng 'thử lại' chung chung (bản test là bản thật) | xong | — | NGƯỜI DÙNG CHỐT 30/09/2026 (lượt /handover → xác nhận từng việc): XUNG ĐỘT (2) ĐÃ GIẢI — người dân đọc CÂU tiếng Việt rõ quyền nào thiếu, MÃ LỖI chuyển xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>' cho người test/tổng đài; ghi ngoại lệ vào skills/accessibility-elderly. Việc sửa mã: mục doi-ma-loi-zalo-xuong-dong-phu. || ĐO TRÊN MÁY THẬT: (1) -201 có thật là mã từ chối của getPhoneNumber/getLocation không — SDK còn USER_DENIED -2002 và UNAUTHORIZED -1401 (index.d.ts:3213 ghi -1401 là từ chối tên); nếu từ chối thật về -2002/-1401 thì người bấm 'Từ chối' sẽ thấy câu 'Zalo chưa cho phép'. (2) XUNG ĐỘT cần người dùng chốt: skills/accessibility-elderly REQUIRED #5 'không bao giờ hiện mã lỗi' ↔ người dùng 30/09 'chỗ nào cần quyền thì báo lỗi' — bản dựng hiện mã lỗi cho mọi người dân vì bản test là bản phát hành. (3) Màn thương mại khung.tsx:135 chưa dùng failure. |
 | `citizen-app` | `doi-ma-loi-zalo-xuong-dong-phu` — Câu lỗi quyền Zalo: mã lỗi rời khỏi câu chính, xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>'; ghi ngoại lệ vào skills/accessibility-elderly | xong | — | Chưa đo độ tương phản dòng phụ trên nền riêng của app xã. Chỗ tên Zalo ở TrangXa.tsx render inline, không có ca render riêng. |
 | `citizen-app` | `app-chung-buoc-chon-linh-vuc` — App chung (GuiPhanAnhScreen): bước chọn lĩnh vực đầu luồng gửi, bắt buộc phía client, nhắc lại ở bước xác nhận (ADR 0050 phạm vi điểm 1 và 9, chủ dự án 01/10/2026) | xong | — | Máy chủ: giờ hai app đều gửi field — có thể làm bước hoãn 'bắt buộc field ở máy chủ' (sổ service-petitions/linh-vuc-cho-dan-tang-2). Ô lĩnh vực app chung chỉ chữ, không biểu tượng/màu (thương hiệu app xã). Chưa thử trên máy thật. |
+| `citizen-app` | `app-xa-cau-chia-se-so-di-thang-vigov` — App xã — màn xác nhận số điện thoại (SessionGateScreen, trạng thái hỏi): câu trước hộp thoại Zalo nói số đi thẳng tới hệ thống của xã, không còn nói qua máy chủ ViHAT Group (ADR 0066) | xong | — | Hồ sơ xin quyền app xã (tmp/xin-quyen-zalo/README.md, Phần B) còn nợ: Chính sách quyền riêng tư riêng cho app xã (bên kiểm soát dữ liệu — câu của chủ dự án), khai các tuyến petitions vào khối 'Những gì rời khỏi máy', chụp ảnh b00–b08 trong Zalo trên bản không --demo. Câu tuyến vị trí vẫn nói máy chủ ViHAT — đúng tới khi lượt chuyển bước đổi mã vị trí (ADR 0066 quyết định 5) làm xong. |
 | `core` | `identityclient-can-bo-giao-viec` — core/identityclient.CanBoGiaoViecDuoc — client của ResolveAssignableStaff | xong | — | — |
 | `proto` | `resolve-assignable-staff` — identity.ResolveAssignableStaff + chú thích events.proto khớp ADR 0041 | xong | — | Còn mở: cờ 'có công dân' trên phieuPhanAnhRa (REST, không phải proto) — xem service-petitions/duong-xu-ly-phan-anh-phia-can-bo. |
 | `service-identity` | `hai-khoa-quyen-phan-anh` — Hai khoá quyền feedback.classify và feedback.unmask | xong | — | KHÔNG GÁN KHOÁ CHO VAI TRÒ NÀO — khoá tồn tại để quản trị xã tick trên màn Phân quyền; tự gán là tự quyết ai trong một cơ quan nhà nước được hứa thay cơ quan ấy. HAI ĐIỀU LƯỢC ĐỒ KHÔNG CƯỠNG CHẾ ĐƯỢC, thuộc tầng use case: (1) mỗi lần đọc ĐẦY ĐỦ dữ liệu cá nhân phải ghi vết (luật 6 bất biến 7) — thiếu nó thì feedback.unmask là một cửa hậu im lặng vào dữ liệu cá nhân của cả xã; (2) feedback.classify canh hành vi ẤN ĐỊNH HẠN, nên tuyến phân loại phải kiểm nó chứ không kiểm feedback.assign. CÒN THIẾU, ĐÃ ĐO: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền/11 nhóm, nay nạp 35 khoá/10 nhóm — TÁM KHOÁ VÀ TRỌN MỘT NHÓM vẫn thiếu, người dùng cố ý chỉ chốt hai khoá cần ngay. Đừng bịa tám khoá còn lại cho đủ số. CHƯA CHẠY trên PostgreSQL thật. |
@@ -374,7 +375,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-10-01 · 44 mục
+Cập nhật 2026-10-01 · 45 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -422,6 +423,7 @@ Cập nhật 2026-10-01 · 44 mục
 | `tin-xa-gio-dang-su-kien-video` — App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd) | xong | 3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch. || e2ca1415 — nút Xem video (videoUrl chỉ https:, chỉ loại video), mở qua moRaNgoai("video", url) tiêm từ AppRieng; đích thứ sáu ở dich-ra-ngoai.ts, câu chính sách tự sinh "Có sáu chỗ…" (người dùng đồng ý, e4ace97c); phiên bản giữ 1.0. vitest 52 tệp 1417/1417, tsc sạch. | — | Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm "trang video mà xã đăng kèm một tin trong ứng dụng của xã" lúc duyệt G9. Chưa thử trên máy thật. |
 | `o-truyen-thanh-video-goi-api` — App riêng của xã: ô Truyền thanh và Video ở trang chủ đọc tin xã đã đăng theo loại, như ô Sự kiện | xong | 9cbdff7f — TrangXa.tsx: hai nhánh 'truyen-thanh' / 'video' dùng NewsOfType(type) thay ManChuaCoDuLieu; câu rỗng đổi thành '…nào được đăng.'; ca kiểm ở commune-screens.test.tsx. vitest 53 tệp 1423/1423, tsc sạch, make check EXIT=0. | — | Bài truyền thanh mở ra chỉ có chữ + ảnh bìa: máy chủ KHÔNG có cột âm thanh (service-comms/migrations/0011_content_item_media_and_event.sql:11 'Audio is a LATER card'), dù ADR 0047 dòng 254-255 (G7, 30/09) đã chốt tệp mp3/m4a ≤30 MB + thời lượng cán bộ gõ — xem mục truyen-thanh-phat-am-thanh. Video: chip chủ đề + thời lượng của bản mẫu vigov-require (VideoPage.tsx) chưa có quyết định nhận hay bỏ. Chưa thử trên máy thật. |
 | `app-chung-buoc-chon-linh-vuc` — App chung (GuiPhanAnhScreen): bước chọn lĩnh vực đầu luồng gửi, bắt buộc phía client, nhắc lại ở bước xác nhận (ADR 0050 phạm vi điểm 1 và 9, chủ dự án 01/10/2026) | xong | 2c158913 — field-catalogue.ts (phần thuần dùng chung hai app: readCatalogueAnswer, offeredCodes, fieldLabelOf); GuiPhanAnhScreen: bước 'field' (nút role=radio, 'Đã chọn' bằng chữ), BuocNhap 'Lĩnh vực: … · Đổi', BuocXacNhan hiện lĩnh vực, kiemPhanAnh đòi lĩnh vực, field_not_offered → về bước lĩnh vực + tải lại + khoá Idempotency mới; danh mục chỉ tải khi có phiên (hieu-ung-khong-phien.test.tsx spy citizenReportFields). App xã giữ nguyên hành vi. vitest 54 tệp 1442/1442 (+17), tsc sạch, make check EXIT=0. | — | Máy chủ: giờ hai app đều gửi field — có thể làm bước hoãn 'bắt buộc field ở máy chủ' (sổ service-petitions/linh-vuc-cho-dan-tang-2). Ô lĩnh vực app chung chỉ chữ, không biểu tượng/màu (thương hiệu app xã). Chưa thử trên máy thật. |
+| `app-xa-cau-chia-se-so-di-thang-vigov` — App xã — màn xác nhận số điện thoại (SessionGateScreen, trạng thái hỏi): câu trước hộp thoại Zalo nói số đi thẳng tới hệ thống của xã, không còn nói qua máy chủ ViHAT Group (ADR 0066) | xong | noi-dung.ts COMMUNE_APP_SESSION.zalo_asks (câu mới); TrangXa.tsx SessionGateScreen dùng câu ấy thay PHONE_VERIFICATION.zalo_asks — câu chung giữ nguyên cho app chung (phone-verification.tsx), vì app chung vẫn đi qua vihat-miniapp. session-gate-exits.test.tsx: ca mới khoá câu app xã có mặt, câu app chung và chữ 'ViHAT' vắng. vitest 1443/1443, tsc sạch. | — | Hồ sơ xin quyền app xã (tmp/xin-quyen-zalo/README.md, Phần B) còn nợ: Chính sách quyền riêng tư riêng cho app xã (bên kiểm soát dữ liệu — câu của chủ dự án), khai các tuyến petitions vào khối 'Những gì rời khỏi máy', chụp ảnh b00–b08 trong Zalo trên bản không --demo. Câu tuyến vị trí vẫn nói máy chủ ViHAT — đúng tới khi lượt chuyển bước đổi mã vị trí (ADR 0066 quyết định 5) làm xong. |
 
 ## `core`
 

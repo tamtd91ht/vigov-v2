@@ -383,6 +383,15 @@
       "no_confirm": [],
       "tiep_theo": "Máy chủ: giờ hai app đều gửi field — có thể làm bước hoãn 'bắt buộc field ở máy chủ' (sổ service-petitions/linh-vuc-cho-dan-tang-2). Ô lĩnh vực app chung chỉ chữ, không biểu tượng/màu (thương hiệu app xã). Chưa thử trên máy thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "app-xa-cau-chia-se-so-di-thang-vigov",
+      "viec": "App xã — màn xác nhận số điện thoại (SessionGateScreen, trạng thái hỏi): câu trước hộp thoại Zalo nói số đi thẳng tới hệ thống của xã, không còn nói qua máy chủ ViHAT Group (ADR 0066)",
+      "trang_thai": "xong",
+      "bang_chung": "noi-dung.ts COMMUNE_APP_SESSION.zalo_asks (câu mới); TrangXa.tsx SessionGateScreen dùng câu ấy thay PHONE_VERIFICATION.zalo_asks — câu chung giữ nguyên cho app chung (phone-verification.tsx), vì app chung vẫn đi qua vihat-miniapp. session-gate-exits.test.tsx: ca mới khoá câu app xã có mặt, câu app chung và chữ 'ViHAT' vắng. vitest 1443/1443, tsc sạch.",
+      "no_confirm": [],
+      "tiep_theo": "Hồ sơ xin quyền app xã (tmp/xin-quyen-zalo/README.md, Phần B) còn nợ: Chính sách quyền riêng tư riêng cho app xã (bên kiểm soát dữ liệu — câu của chủ dự án), khai các tuyến petitions vào khối 'Những gì rời khỏi máy', chụp ảnh b00–b08 trong Zalo trên bản không --demo. Câu tuyến vị trí vẫn nói máy chủ ViHAT — đúng tới khi lượt chuyển bước đổi mã vị trí (ADR 0066 quyết định 5) làm xong.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

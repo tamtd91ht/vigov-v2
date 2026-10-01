@@ -329,13 +329,21 @@ export function zaloSupportCode(f: ZaloFailure | null | undefined): string | nul
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * APP RIÊNG CỦA XÃ — MỞ PHIÊN Ở VIỆC CÁ NHÂN ĐẦU TIÊN (`commune-session.ts`)
  *
- * Lời giải thích trước hộp thoại của Zalo DÙNG LẠI `PHONE_VERIFICATION` (title · why · zalo_asks · allow ·
- * decline): cùng một việc — chia sẻ số để xã biết phản ánh là của ai — và hai bản câu chữ cho một việc là
- * hai bản sẽ lệch. Ở đây chỉ có các câu kết quả RIÊNG của app xã; câu nào trùng nghĩa thì dùng lại câu cũ.
+ * Lời giải thích trước hộp thoại của Zalo DÙNG LẠI `PHONE_VERIFICATION` (title · why · allow · decline):
+ * cùng một việc — chia sẻ số để xã biết phản ánh là của ai — và hai bản câu chữ cho một việc là hai bản sẽ
+ * lệch. Ở đây chỉ có các câu RIÊNG của app xã; câu nào trùng nghĩa thì dùng lại câu cũ.
  * Không câu nào nhắc mã lỗi; câu nào cũng nói việc làm tiếp.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export const COMMUNE_APP_SESSION = {
+  /**
+   * NOT `PHONE_VERIFICATION.zalo_asks`, and that is a different FACT, not a second copy of one: since ADR 0066
+   * (01/10/2026) the commune app's login goes straight to ViGov `identity`, while the shared app's still goes
+   * through `vihat-miniapp`. Reusing the shared sentence told the citizen — and Zalo's reviewer, who checks the
+   * screen against the dossier — that the number passes through ViHAT Group's server when it does not.
+   */
+  zalo_asks:
+    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi thẳng tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
   working: "Đang kết nối với hệ thống của xã…",
   not_connected: (task: string) =>
     `Ứng dụng của xã chưa được kết nối với hệ thống tiếp nhận phản ánh, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,

@@ -439,7 +439,8 @@ function DauTab({ tieu_de }: { tieu_de: string }) {
  * covers stays MOUNTED underneath (hidden), so a half-written petition survives the detour.
  *
  *   `hoi`       WHY first, then what Zalo will ask, then the button — Zalo's dialog opens only on "Đồng ý"
- *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's)
+ *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's — except
+ *               where the number GOES: `COMMUNE_APP_SESSION.zalo_asks`, ADR 0066)
  *   `dang-mo`   words, not a spinner — and "Về trang chủ", which works while the open runs
  *   `ket-qua`   one sentence saying what to do next, "Về trang chủ" always, a retry only where a new tap can
  *               help ("Thử lại" in the `--demo` build, `atOnce`: no "Đồng ý chia sẻ" act exists there)
@@ -474,7 +475,7 @@ export function SessionGateScreen(props: {
               {PHONE_VERIFICATION.title}
             </h2>
             <p>{PHONE_VERIFICATION.why}</p>
-            <p className="xa-phu">{PHONE_VERIFICATION.zalo_asks}</p>
+            <p className="xa-phu">{COMMUNE_APP_SESSION.zalo_asks}</p>
             <button type="button" className="xa-nut" onClick={props.onAllow}>
               {PHONE_VERIFICATION.allow}
             </button>

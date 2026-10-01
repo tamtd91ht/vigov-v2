@@ -226,6 +226,17 @@ describe("SessionGateScreen in the `--demo` build — a sentence and an exit, ne
   });
 });
 
+describe("SessionGateScreen `hoi` — says where the number goes FOR THIS APP (ADR 0066)", () => {
+  // The commune app's login goes straight to ViGov identity. The shared app's sentence names ViHAT Group's
+  // server; showing it here told the citizen and Zalo's reviewer a route the number does not take.
+  it("shows the commune app's sentence, never the shared app's", () => {
+    const html = screen({ kieu: "hoi" }, false);
+    expect(html).toContain(COMMUNE_APP_SESSION.zalo_asks);
+    expect(html).not.toContain(PHONE_VERIFICATION.zalo_asks);
+    expect(html).not.toContain("ViHAT");
+  });
+});
+
 describe("SessionGateScreen in every other build — unchanged words, and no retry that cannot help", () => {
   it.each(ALL)("%s: 'Về trang chủ' always; the retry is the phone-sharing button", (outcome) => {
     const html = screen({ kieu: "ket-qua", outcome }, false);
