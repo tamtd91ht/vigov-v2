@@ -39,8 +39,10 @@ import (
 	"github.com/vihat/vigov/service-identity/internal/app"
 	svcgrpc "github.com/vihat/vigov/service-identity/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
+	"github.com/vihat/vigov/service-identity/internal/operatorauth"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 	"github.com/vihat/vigov/service-identity/internal/store/crosstenant"
+	"github.com/vihat/vigov/service-identity/internal/store/operatorstore"
 	"github.com/vihat/vigov/service-identity/internal/zalo"
 	"github.com/vihat/vigov/service-identity/migrations"
 )
@@ -65,6 +67,10 @@ var configUses = config.Uses(
 	// through core/crypto, one DEK per commune. Declared, so staging/prod refuse to start without
 	// it, ADR 0057. No parentheses in this list: tools/check_env_map.py reads it up to the first one.
 	config.SecretEncryption,
+	// ADR 0048 §01/10: identity ISSUES operator sessions over OperatorService, so it signs `op1.`
+	// tokens and seals TOTP secrets. Declared, so staging/prod refuse to start without both keys,
+	// ADR 0057. In dev, absent keys mean every OperatorService RPC answers FAILED_PRECONDITION.
+	config.OperatorRealm,
 )
 
 func main() {
@@ -380,6 +386,18 @@ func run(log *slog.Logger) error {
 	ownAppSignIn := app.NewOwnAppSignIn(nenTang, idstore.NewMiniAppSecretStore(kho), envelope,
 		zalo.New(""), cauPhien, log)
 
+	// The Vihat OPERATOR realm (ADR 0048 §01/10), served as OperatorService on the gRPC port below.
+	//
+	// ITS STORE IS ON THE RAW *sql.DB, NOT ON `kho`, and that is the realm's design rather than an
+	// escape from rule 1 invariant 5: an operator belongs to no commune, the five operator tables are
+	// @scope platform (migration 0012), and core/store.For would panic for want of a commune that
+	// does not exist. operatorctl opens the same store the same way.
+	operatorAuth, err := buildOperatorAuth(cfg.OperatorSessionSigningKeys(), cfg.OperatorTOTPEncryptionKeys(),
+		app.NewOperatorStore(operatorstore.New(db)), log)
+	if err != nil {
+		return fmt.Errorf("identity: khoá miền vận hành không dùng được: %w", err)
+	}
+
 	// 7. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. Staging and prod
 	//    refuse to start without it (config.Redis is declared in configUses).
@@ -646,7 +664,7 @@ func run(log *slog.Logger) error {
 		PermissionKeys: maTranQuyen,
 		Automation:     automation,
 		Log:            log,
-	}, log)
+	}, svcgrpc.NewOperatorServer(operatorAuth, log), log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
@@ -784,7 +802,11 @@ func run(log *slog.Logger) error {
 // SERVICE IS ON IT. An RPC excused from carrying a COMMUNE is never thereby excused from proving
 // the CALLER holds the key; folding either interceptor into the other is how the tenant exemption
 // list quietly becomes a list of RPCs that skip authentication.
-func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *grpc.Server {
+//
+// OperatorService IS ON THIS PORT, BEHIND THE SAME TWO INTERCEPTORS. Its seven RPCs are on the
+// commune exemption list (owner's decision 01/10/2026, ADR 0048) — and, exactly as argued above,
+// NOT on any caller-key exemption: a call without GRPC_CALLER_KEY reaches no operator handler.
+func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, op *svcgrpc.OperatorServer, log *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
@@ -804,7 +826,40 @@ func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *gr
 	// identity/http.Register does: incomplete wiring must fail where a human is watching a
 	// process fail to start, not at request time in four other services.
 	identityv1.RegisterIdentityServiceServer(srv, svcgrpc.NewServer(d))
+	// A nil operator server would register a service whose every call panics in a handler; refused
+	// here, where a process start is watched. svcgrpc.NewOperatorServer panics on a nil use case too.
+	if op == nil {
+		panic("identity: dungGRPCServer without an OperatorServer")
+	}
+	identityv1.RegisterOperatorServiceServer(srv, op)
 	return srv
+}
+
+// buildOperatorAuth builds the operator realm's use cases from its two key lists.
+//
+// ABSENT IS NOT BROKEN. No keys at all is the dev state of a machine that has not set them (staging
+// and prod refuse to start without them, config.OperatorRealm): the realm is OFF, and every
+// OperatorService RPC answers FAILED_PRECONDITION — the service still starts and serves staff.
+// A key that IS set but unusable (too short, wrong length, duplicated) is a misconfiguration and
+// stops the process: issuing operator sessions a short key makes forgeable is worse than not
+// starting (operatorauth.NewTokenSigner).
+func buildOperatorAuth(signingKeys, totpKeys []secret.Secret, store app.OperatorStore, log *slog.Logger) (*app.OperatorAuth, error) {
+	signer, err := operatorauth.NewTokenSigner(signingKeys)
+	if err != nil && !errors.Is(err, operatorauth.ErrNotConfigured) {
+		return nil, fmt.Errorf("OPERATOR_SESSION_SIGNING_KEYS: %w", err)
+	}
+	sealer, err := operatorauth.NewSealer(totpKeys)
+	if err != nil && !errors.Is(err, operatorauth.ErrNotConfigured) {
+		return nil, fmt.Errorf("OPERATOR_TOTP_ENCRYPTION_KEY: %w", err)
+	}
+	if signer == nil || sealer == nil {
+		// Named once, at startup, by variable — never the value (rule 8). Half-configured is warned
+		// by core/config as well; both absent is warned only here.
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"miền vận hành TẮT — thiếu OPERATOR_SESSION_SIGNING_KEYS hoặc OPERATOR_TOTP_ENCRYPTION_KEY; "+
+				"mọi RPC OperatorService trả FAILED_PRECONDITION (ADR 0048)")
+	}
+	return app.NewOperatorAuth(store, signer, sealer, time.Now, log), nil
 }
 
 // dungCongCau builds the citizen-session bridge listener's server with its COMPLETE chain. A named

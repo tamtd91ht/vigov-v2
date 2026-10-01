@@ -221,7 +221,7 @@ func moMay(t *testing.T, opts ...grpc.DialOption) identityv1.IdentityServiceClie
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
-	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("Serve: %v", err)
@@ -369,7 +369,7 @@ func TestKhongCoKhoaGoiThiKhongDungDuocMayChu(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với GRPC_CALLER_KEY rỗng")
 		}
 	}()
-	_ = dungGRPCServer(nil, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = dungGRPCServer(nil, noiDayGia(t), operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // Incomplete wiring fails at construction too — the same discipline identity/http.Register
@@ -381,5 +381,5 @@ func TestNoiDayThieuThiKhongDungDuocMayChu(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với Deps rỗng")
 		}
 	}()
-	_ = dungGRPCServer(khoaGoiGia, svcgrpc.Deps{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = dungGRPCServer(khoaGoiGia, svcgrpc.Deps{}, operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

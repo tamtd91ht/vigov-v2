@@ -1,0 +1,209 @@
+package main
+
+// OperatorService's WIRING, over a real connection with the real chain — for the reason the note at
+// the top of main_test.go gives. internal/grpc proves the status table; only this file can see that
+// dungGRPCServer registers the service behind the caller key, that the commune interceptor lets its
+// RPCs through with no commune (core/grpcx.methodsWithoutTenant), and that the bridge port does not
+// serve it.
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net"
+	"strings"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/token"
+	"github.com/vihat/vigov/service-identity/internal/app"
+	"github.com/vihat/vigov/service-identity/internal/domain"
+	svcgrpc "github.com/vihat/vigov/service-identity/internal/grpc"
+)
+
+// Fake operator key material (rule 8, forbidden #1).
+var (
+	operatorSigningKeyFake = secret.Secret("FAKE-OPERATOR-SIGNING-KEY-NOT-REAL-32-bytes")
+	operatorTOTPKeyFake    = secret.Secret("FAKE-AES-KEY-32-bytes-NOT-REAL!!")
+)
+
+// operatorStoreStub answers every transaction with an error. These tests send tokens the signature
+// check refuses, so a call reaching it means a refusal happened too late.
+type operatorStoreStub struct{ txs int }
+
+func (s *operatorStoreStub) InTx(context.Context, func(app.OperatorTx) error) error {
+	s.txs++
+	return errors.New("operator store stub")
+}
+func (s *operatorStoreStub) ListAccounts(context.Context) ([]domain.OperatorAccount, error) {
+	return nil, nil
+}
+func (s *operatorStoreStub) ActivePermissions(context.Context, string) ([]domain.OperatorPermission, error) {
+	return nil, nil
+}
+
+// operatorServerOff is the dev state with no operator keys, built by the SAME function run() uses.
+func operatorServerOff(t *testing.T) *svcgrpc.OperatorServer {
+	t.Helper()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	uc, err := buildOperatorAuth(nil, nil, &operatorStoreStub{}, log)
+	if err != nil {
+		t.Fatalf("buildOperatorAuth without keys: %v", err)
+	}
+	return svcgrpc.NewOperatorServer(uc, log)
+}
+
+func operatorServerOn(t *testing.T, store app.OperatorStore, log *slog.Logger) *svcgrpc.OperatorServer {
+	t.Helper()
+	uc, err := buildOperatorAuth([]secret.Secret{operatorSigningKeyFake}, []secret.Secret{operatorTOTPKeyFake}, store, log)
+	if err != nil {
+		t.Fatalf("buildOperatorAuth: %v", err)
+	}
+	return svcgrpc.NewOperatorServer(uc, log)
+}
+
+// dialOperatorService starts the REAL inter-service server (dungGRPCServer) and dials it with the
+// given client options.
+func dialOperatorService(t *testing.T, op *svcgrpc.OperatorServer, opts ...grpc.DialOption) identityv1.OperatorServiceClient {
+	t.Helper()
+	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), op, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	lis := bufconn.Listen(1 << 20)
+	go func() {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			t.Errorf("Serve: %v", err)
+		}
+	}()
+	t.Cleanup(srv.Stop)
+	opts = append(opts,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+	conn, err := grpc.NewClient("passthrough:///bufnet", opts...)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return identityv1.NewOperatorServiceClient(conn)
+}
+
+// No caller key → Unauthenticated, on the operator RPCs as on every other: the commune exemption is
+// never a caller-key exemption.
+func TestOperatorServiceRefusesCallerWithoutKey(t *testing.T) {
+	store := &operatorStoreStub{}
+	cl := dialOperatorService(t, operatorServerOn(t, store, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	if _, err := cl.ResolveOperatorSession(context.Background(),
+		&identityv1.ResolveOperatorSessionRequest{SessionToken: "op1.x.y"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("ResolveOperatorSession without key: %v, want Unauthenticated", status.Code(err))
+	}
+	if _, err := cl.OpenOperatorSession(context.Background(),
+		&identityv1.OpenOperatorSessionRequest{Email: "a@example.test", Password: "x", TotpCode: "000000"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("OpenOperatorSession without key: %v, want Unauthenticated", status.Code(err))
+	}
+	if store.txs != 0 {
+		t.Fatal("a caller without the key reached the operator store")
+	}
+}
+
+// Caller key, NO commune — not on the client, not in metadata: accepted, because every RPC of this
+// service is on methodsWithoutTenant. A staff `v1.` token (signed with the staff key this binary
+// holds) and garbage both resolve to OK + no principal, and neither reaches the store.
+func TestOperatorServiceAnswersWithoutCommune(t *testing.T) {
+	var logs bytes.Buffer
+	store := &operatorStoreStub{}
+	log := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cl := dialOperatorService(t, operatorServerOn(t, store, log),
+		grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+
+	staff, err := token.NewSigner([]secret.Secret{khoaKyGia})
+	if err != nil {
+		t.Fatal(err)
+	}
+	staffTok, err := staff.Ky(token.Claims{TenantID: ulidThu, Sid: "sid-gia", ExpiresAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tok := range []string{staffTok, "op1.garbage.garbage"} {
+		r, err := cl.ResolveOperatorSession(context.Background(), &identityv1.ResolveOperatorSessionRequest{SessionToken: tok})
+		if err != nil {
+			t.Fatalf("ResolveOperatorSession with no commune refused: %v", err)
+		}
+		if r.GetPrincipal() != nil {
+			t.Fatalf("token %.6q… resolved to an operator: %v", tok, r.GetPrincipal())
+		}
+		if strings.Contains(logs.String(), tok) {
+			t.Fatal("a bearer token reached the log")
+		}
+	}
+	rv, err := cl.RevokeOperatorSession(context.Background(), &identityv1.RevokeOperatorSessionRequest{SessionToken: staffTok})
+	if err != nil || rv.GetOutcome() != identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE {
+		t.Fatalf("revoke of a staff token: %v, %v — want SESSION_NOT_LIVE", rv, err)
+	}
+	if _, err := cl.ResolveOperatorSession(context.Background(), &identityv1.ResolveOperatorSessionRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("empty token through the chain: %v, want InvalidArgument", status.Code(err))
+	}
+	if store.txs != 0 {
+		t.Fatalf("store reached %d times for tokens the signature refuses", store.txs)
+	}
+}
+
+// No keys in dev: identity still starts and the RPCs answer FAILED_PRECONDITION — through the chain.
+func TestOperatorServiceUnconfiguredAnswersFailedPrecondition(t *testing.T) {
+	cl := dialOperatorService(t, operatorServerOff(t), grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+	if _, err := cl.ResolveOperatorSession(context.Background(),
+		&identityv1.ResolveOperatorSessionRequest{SessionToken: "op1.x.y"}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("unconfigured realm: %v, want FailedPrecondition", status.Code(err))
+	}
+	if _, err := cl.BeginOperatorEnrollment(context.Background(),
+		&identityv1.BeginOperatorEnrollmentRequest{Email: "a@example.test", TemporaryPassword: "x"}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("unconfigured realm: %v, want FailedPrecondition", status.Code(err))
+	}
+}
+
+// Absent keys are "off"; a key that is SET but unusable stops the process.
+func TestBuildOperatorAuthRefusesUnusableKeys(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cases := map[string]struct {
+		signing, totp []secret.Secret
+		wantErr       bool
+	}{
+		"both absent":        {nil, nil, false},
+		"signing only":       {[]secret.Secret{operatorSigningKeyFake}, nil, false},
+		"both usable":        {[]secret.Secret{operatorSigningKeyFake}, []secret.Secret{operatorTOTPKeyFake}, false},
+		"short signing key":  {[]secret.Secret{secret.Secret("too-short")}, []secret.Secret{operatorTOTPKeyFake}, true},
+		"wrong-size AES key": {[]secret.Secret{operatorSigningKeyFake}, []secret.Secret{secret.Secret("not-32-bytes")}, true},
+	}
+	for name, c := range cases {
+		_, err := buildOperatorAuth(c.signing, c.totp, &operatorStoreStub{}, log)
+		if (err != nil) != c.wantErr {
+			t.Errorf("%s: err = %v, wantErr %v", name, err, c.wantErr)
+		}
+	}
+}
+
+// The bridge key opens nothing of OperatorService: it is not registered on the bridge listener.
+func TestOperatorServiceAbsentFromBridgePort(t *testing.T) {
+	conn, _ := moCongCau(t, khoaCauGia)
+	if _, err := identityv1.NewOperatorServiceClient(conn).ResolveOperatorSession(voiKhoaCau(khoaCauGia),
+		&identityv1.ResolveOperatorSessionRequest{SessionToken: "op1.x.y"}); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("OperatorService on the bridge port: %v, want Unimplemented", status.Code(err))
+	}
+}
+
+func TestDungGRPCServerRefusesMissingOperatorServer(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("built the gRPC server with no OperatorServer")
+		}
+	}()
+	_ = dungGRPCServer(khoaGoiGia, noiDayGia(t), nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
