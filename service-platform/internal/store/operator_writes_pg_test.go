@@ -184,7 +184,7 @@ func TestPgDomainsNameActivationMiniApp(t *testing.T) {
 	if err := w.AddDomain(ctx, "late.vigov.vn", operatorFake); !errors.Is(err, ErrCommuneInactive) {
 		t.Errorf("domain added to an inactive commune: %v", err)
 	}
-	if _, ok := NewDirectory(db).ByHost(context.Background(), "thangbinh.vigov.vn"); ok {
+	if _, ok := NewDirectory(db, "").ByHost(context.Background(), "thangbinh.vigov.vn"); ok {
 		t.Error("an inactive commune's host still resolves")
 	}
 
@@ -233,5 +233,74 @@ func TestPgOperatorRegistryReads(t *testing.T) {
 	ps, err := r.Provinces(context.Background())
 	if err != nil || len(ps) != 34 {
 		t.Errorf("provinces = %d, %v", len(ps), err)
+	}
+}
+
+// A commune named as a predecessor in tenant_succession is never reactivated (rule 7 invariant 6,
+// rule 1 stop #3); deactivating, and reactivating a commune with no successor, are unaffected.
+func TestPgReactivationRefusedForSucceededCommune(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	themXa(t, db, ulidA, "Xã Cũ", false)
+	themXa(t, db, ulidB, "Xã Mới", true)
+	if _, err := db.Exec(`INSERT INTO tenant_succession (tu_id, den_id, can_cu, hieu_luc_tu)
+		VALUES ($1, $2, 'NQ-FAKE/2026', '2026-07-01')`, ulidA, ulidB); err != nil {
+		t.Fatal(err)
+	}
+	w := NewRegistryWriter(corestore.New(db))
+
+	if _, _, err := w.SetActivation(inCommune(ulidA), true, "Mở lại", operatorFake); !errors.Is(err, ErrCommuneSucceeded) {
+		t.Fatalf("reactivating a merged commune: %v, want ErrCommuneSucceeded", err)
+	}
+	if count(t, db, `SELECT count(*) FROM tenant WHERE id = $1 AND dang_hoat_dong`, ulidA) != 0 ||
+		count(t, db, `SELECT count(*) FROM audit_log WHERE tenant_id = $1`, ulidA) != 0 {
+		t.Fatal("a refused reactivation changed the row or left an audit entry")
+	}
+	// The successor itself may be switched off and on again.
+	if _, _, err := w.SetActivation(inCommune(ulidB), false, "Tạm dừng", operatorFake); err != nil {
+		t.Fatalf("deactivate successor: %v", err)
+	}
+	if _, _, err := w.SetActivation(inCommune(ulidB), true, "Mở lại", operatorFake); err != nil {
+		t.Fatalf("reactivate successor: %v", err)
+	}
+}
+
+// A primary-domain switch that would touch a frozen admin*.vigov.vn row hits 0007's CHECK: that is
+// reserved_domain, not a 500 — and the transaction leaves nothing behind.
+func TestPgPrimarySwitchOffFrozenRowIsReserved(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	themXa(t, db, ulidA, "Xã Thăng Bình", true)
+	// 0007 is NOT VALID: the frozen row predates it. Re-create that state the way it arose.
+	if _, err := db.Exec(`ALTER TABLE tenant_domain DROP CONSTRAINT tenant_domain_khong_danh_rieng`); err != nil {
+		t.Fatal(err)
+	}
+	themHost(t, db, "admin.vigov.vn", ulidA, true)
+	themHost(t, db, "thangbinh.vigov.vn", ulidA, false)
+	if _, err := db.Exec(`ALTER TABLE tenant_domain ADD CONSTRAINT tenant_domain_khong_danh_rieng CHECK (
+		host !~* '^((admin|admin-stg|api|api-stg|stg|www)\.)?(stg\.)?vigov\.vn\.*$'
+		AND host !~* '\.(api|api-stg)\.vigov\.vn\.*$') NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	w := NewRegistryWriter(corestore.New(db))
+	if _, err := w.SetPrimaryDomain(inCommune(ulidA), "thangbinh.vigov.vn", operatorFake); !errors.Is(err, domain.ErrCommuneHostReserved) {
+		t.Fatalf("err = %v, want ErrCommuneHostReserved", err)
+	}
+	if count(t, db, `SELECT count(*) FROM audit_log WHERE tenant_id = $1`, ulidA) != 0 {
+		t.Fatal("a refused switch left an audit entry")
+	}
+}
+
+// HostHeld sees active AND inactive communes' hosts, whatever their spelling.
+func TestPgHostHeld(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	themXa(t, db, ulidA, "Xã Cũ", false)
+	themHost(t, db, "console.example.org", ulidA, true)
+	d := NewDirectory(db, "")
+	for host, want := range map[string]bool{"console.example.org": true, "CONSOLE.example.org": true, "other.example.org": false} {
+		if got, err := d.HostHeld(context.Background(), host); err != nil || got != want {
+			t.Errorf("HostHeld(%q) = %v, %v; want %v", host, got, err, want)
+		}
 	}
 }

@@ -158,6 +158,46 @@
       "bang_chung": "",
       "no_confirm": [],
       "tiep_theo": "đọc ADR 0066 — secret thuộc identity, không thuộc platform; xác định service sở hữu trước khi dựng"
+    },
+    {
+      "id": "khu-van-hanh-ra-soat-01-10-da-sua",
+      "viec": "Khu vận hành: sửa các phát hiện của rà soát bảo mật + cô lập 01/10 (TASK-13)",
+      "trang_thai": "xong",
+      "bang_chung": "(1) CSRF: internal/http/operator_request_guard.go bọc TOÀN BỘ mux vận hành qua OperatorHandler (registerOperator không còn export) — mọi phương thức trừ GET/HEAD phải có Origin == https://OPERATOR_HOST, hoặc (vắng Origin) Sec-Fetch-Site: same-origin → sai = 403 origin_refused; kiểu nội dung phải đúng application/json → sai = 415 unsupported_media_type; ngoại lệ hẹp: yêu cầu KHÔNG thân + KHÔNG Content-Type (DELETE đăng xuất của platform-admin/src/lib/api.ts) vẫn phải qua kiểm Origin; sự kiện operator.request_refused (Warn, không PII). Đã đọc platform-admin/src/lib/server/gateway.ts: outgoingHeaders chuyển nguyên Origin/Sec-Fetch-Site/Content-Type. (2) core/ratelimit: 429 ghi operator.rate_limited (Warn, chinh_sach + ip, không ghi khoá); OperatorIPKey: IPv4 theo địa chỉ, IPv6 theo /64, IPv4-mapped = IPv4, không phân tích được = một bộ đếm chung. (3) cmd/server/operator_edge.go refuseOperatorHostCollision: OPERATOR_HOST nằm trong tenant_domain (xã đang/ngừng hoạt động) hoặc không kiểm được → từ chối khởi động, lỗi nêu tên biến không nêu xã; store.Directory nhận operatorHost bắt buộc ở NewDirectory và không bao giờ phân giải nó (ByHost/ByHostErr → cả ResolveHost); domain.IsReservedCommuneHost là vị từ duy nhất. (4) PUT /communes/{id}/primary-domain kiểm tên miền dành riêng + OPERATOR_HOST trước khi ghi → 422 reserved_domain; store.domainWriteError ánh xạ SQLSTATE 23514 của ràng buộc tenant_domain_khong_danh_rieng → reserved_domain ở cả 4 chỗ ghi tenant_domain. (5) SetActivation{active:true} bị từ chối khi tenant_succession.tu_id = xã này → 409 commune_succeeded; tắt không đổi. (6) Test: operator_hardening_test.go (CSRF × 12 tuyến ghi × 12 ca, token cán bộ 401 cho password/recovery-codes, POST /communes thiếu khoá thứ nhất, primary-domain dành riêng, 409 kế thừa), ratelimit_test.go (/64, sự kiện 429), operator_edge_test.go (va chạm khi khởi động, CSRF qua chuỗi thật), store operator_writes_test.go (ánh xạ 23514) + 3 test _pg (bỏ qua khi không có VIGOV_TEST_DSN — CHƯA chạy trên CSDL thật).",
+      "no_confirm": [],
+      "tiep_theo": "Chạy *_pg_test.go của service-platform trên PostgreSQL thật (VIGOV_TEST_DSN) để xác nhận ánh xạ 23514 và chặn mở lại xã đã kế thừa ở tầng CSDL."
+    },
+    {
+      "id": "dang-ky-thuc-the-bang-so-xa",
+      "viec": "Dấu @entity còn thiếu trên các bảng sổ xã của platform: tenant, tenant_domain, audit_log",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Đã mở tệp: 0001_init.sql:63 và :90 có @scope nhưng KHÔNG có @entity (tenant :69, tenant_domain :94); audit_log (0001_init.sql:21) không có dấu nào. tenant_succession KHÔNG thiếu: 0003_tenant_succession.sql:78 có @entity: TenantSuccession và kb/30-indexes/data-ownership.json:526 đã liệt kê — phát hiện của rà soát sai ở bảng này.",
+      "no_confirm": [],
+      "tiep_theo": "KHÔNG được sửa 0001 (đã áp dụng; core/migrate so checksum mọi tệp đã áp lúc khởi động). Cần hoặc một migration mới chỉ mang chú thích (COMMENT ON TABLE + dấu @entity mà tools/kb đọc được), hoặc một cơ chế đánh dấu ngoài migration — hỏi người sở hữu công cụ kb chọn cách nào trước khi làm."
+    },
+    {
+      "id": "van-tay-email-hmac",
+      "viec": "Dấu vân tay email trong nhật ký là SHA-256 không khoá — đổi sang HMAC có khoá (chủ: service-identity)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phát hiện rà soát 01/10: service-identity/internal/app/dang_nhap.go vanTay băm email bằng SHA-256 không khoá — tập email nhỏ, đoán được, nên dấu vân tay đảo ngược được bằng từ điển (luật 3).",
+      "no_confirm": [],
+      "tiep_theo": "Thuộc service-identity (TASK-14), không sửa ở platform. Khoá HMAC là bí mật mới → luật 8 điều kiện dừng #1: hỏi chủ dự án nơi cấp khoá."
+    },
+    {
+      "id": "ten-mien-xa-idn-dong-hinh",
+      "viec": "Kiểm IDN đồng hình (homograph) cho tên miền xã (mức thấp)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "domain.ParseCommuneHost (internal/domain/operator_commune.go) nhận nhãn punycode xn--… mà không kiểm chữ lẫn bộ (ví dụ chữ Kirin giống chữ Latinh).",
+      "no_confirm": [],
+      "tiep_theo": "Mức thấp: chỉ người vận hành gõ được tên miền. Nếu làm: giải mã punycode và từ chối nhãn trộn nhiều hệ chữ (UTS #39) — cần x/net/idna, một phụ thuộc mới phải được duyệt."
+    },
+    {
+      "id": "dang-nhap-van-hanh-chenh-thoi-gian",
+      "viec": "Chênh lệch thời gian giữa email không tồn tại và sai mật khẩu ở đăng nhập vận hành (mức thấp, chấp nhận)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phát hiện rà soát 01/10: đường email không có tài khoản trả về nhanh hơn đường so mật khẩu, cho phép dò email tồn tại qua thời gian đáp. Đã có giới hạn 20 lần / 15 phút / IP (IPv6 theo /64) ở platform, nên tốc độ dò bị chặn.",
+      "no_confirm": [],
+      "tiep_theo": "Chấp nhận với giới hạn tần suất. Nếu sửa: so mật khẩu với một băm giả ở service-identity cho email không tồn tại (TASK-14)."
     }
   ]
 }

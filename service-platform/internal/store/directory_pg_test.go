@@ -129,7 +129,7 @@ func TestPgPhanGiaiHost(t *testing.T) {
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	got, ok := d.ByHost(context.Background(), "thangbinh.vigov.vn")
 	if !ok {
 		t.Fatal("không phân giải được host đã đăng ký")
@@ -160,7 +160,7 @@ func TestPgXaChuaKhaiTinhThanhTraChuoiRong(t *testing.T) {
 	}
 	themHost(t, db, "chuakhai.vigov.vn", ulidA, true)
 
-	got, ok := NewDirectory(db).ByHost(context.Background(), "chuakhai.vigov.vn")
+	got, ok := NewDirectory(db, "").ByHost(context.Background(), "chuakhai.vigov.vn")
 	if !ok {
 		t.Fatal("xã chưa khai tỉnh/thành mà không phân giải được — thiếu một trường hiển thị " +
 			"không được phép làm hỏng phép phân giải")
@@ -178,7 +178,7 @@ func TestPgHostChuanHoa(t *testing.T) {
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	for _, vao := range []string{
 		"thangbinh.vigov.vn",
 		"ThangBinh.ViGov.VN",
@@ -199,7 +199,7 @@ func TestPgHostLaTraVeKhong(t *testing.T) {
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	if _, ok := d.ByHost(context.Background(), "khong-ton-tai.vigov.vn"); ok {
 		t.Error("host lạ mà vẫn phân giải ra xã — đây là lỗ hổng cách ly")
 	}
@@ -212,7 +212,7 @@ func TestPgXaNgungHoatDongKhongPhucVu(t *testing.T) {
 	themXa(t, db, ulidB, "Xã đã sáp nhập", false)
 	themHost(t, db, "xacu.vigov.vn", ulidB, true)
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	if _, ok := d.ByHost(context.Background(), "xacu.vigov.vn"); ok {
 		t.Error("xã đã ngừng hoạt động mà vẫn phục vụ request")
 	}
@@ -320,7 +320,7 @@ func TestPgCacheDungVoiDatabaseThat(t *testing.T) {
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	c := tenant.NewCachedDirectory(NewDirectory(db), time.Minute)
+	c := tenant.NewCachedDirectory(NewDirectory(db, ""), time.Minute)
 	for range 3 {
 		if _, ok := c.ByHost(context.Background(), "thangbinh.vigov.vn"); !ok {
 			t.Fatal("cache trả về không phân giải được")

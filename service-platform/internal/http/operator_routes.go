@@ -1,7 +1,8 @@
 package http
 
 // Routes of the OPERATOR edge — mounted ONLY on the handler chain service-platform serves for
-// Host == OPERATOR_HOST (cmd/server: dungBienVanHanh). Every other Host reaches the commune chain,
+// Host == OPERATOR_HOST (cmd/server: buildOperatorEdge), always behind operatorRequestGuard
+// (operator_request_guard.go: Origin + JSON on every non-GET, the CSRF defence). Every other Host reaches the commune chain,
 // where none of these exist; with OPERATOR_HOST unset this function is never called (ADR 0048
 // §28/09 #2 + #4).
 //
@@ -56,8 +57,20 @@ type OperatorDeps struct {
 // TRUSTED_PROXY_CIDRS), never a header the client wrote.
 func signInKey(r *http.Request) ratelimit.Key { return ratelimit.OperatorIPKey(httpx.ClientIP(r)) }
 
-// RegisterOperator mounts the operator routes on mux.
-func RegisterOperator(mux *http.ServeMux, d OperatorDeps) {
+// OperatorHandler is the operator routes behind operatorRequestGuard — the ONLY way to obtain
+// them. The routes are mounted by an unexported function so that no caller can take the mux
+// without the guard: a mux exported bare is a mux somebody will mount bare.
+func OperatorHandler(d OperatorDeps) http.Handler {
+	if d.Log == nil {
+		d.Log = slog.Default()
+	}
+	mux := http.NewServeMux()
+	registerOperator(mux, d)
+	return operatorRequestGuard(d.OperatorHost, d.Log)(mux)
+}
+
+// registerOperator mounts the operator routes on mux. Reached only through OperatorHandler.
+func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
@@ -224,7 +237,7 @@ func RegisterOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
 	// @reply    409 httpx.Error commune_inactive
-	// @reply    422 httpx.Error domain_not_in_commune
+	// @reply    422 httpx.Error domain_not_in_commune invalid_domain reserved_domain
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("PUT /api/v1/communes/{id}/primary-domain",
 		opauth.RequireKey(h.d.Auth, opauth.KeyDomainManage)(
@@ -253,6 +266,7 @@ func RegisterOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 httpx.Error commune_succeeded
 	// @reply    422 httpx.Error invalid_reason
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("PUT /api/v1/communes/{id}/activation",

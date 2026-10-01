@@ -1,8 +1,12 @@
 package ratelimit
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -225,5 +229,72 @@ func TestRetryAfterSeconds(t *testing.T) {
 		if got := retryAfterSeconds(d); got != want {
 			t.Errorf("%v → %q, want %q", d, got, want)
 		}
+	}
+}
+
+// IPv4 per address; IPv6 per /64 (owner's decision, 01/10/2026); IPv4-mapped IPv6 is the IPv4
+// address; anything unparseable shares ONE counter — never a fresh budget per spelling.
+func TestOperatorIPKeyNormalises(t *testing.T) {
+	for in, want := range map[string]string{
+		"203.0.113.7":                   "ip:203.0.113.7",
+		"::ffff:203.0.113.7":            "ip:203.0.113.7",
+		"2001:db8:1:2::1":               "ip:2001:db8:1:2::/64",
+		"2001:db8:1:2:ffff:ffff:ffff:1": "ip:2001:db8:1:2::/64",
+		"2001:DB8:1:2::abcd":            "ip:2001:db8:1:2::/64",
+		"fe80::1%eth0":                  "ip:fe80::/64",
+		"2001:db8:1:3::1":               "ip:2001:db8:1:3::/64",
+		"":                              "ip:",
+		"not-an-ip":                     "ip:",
+		"203.0.113.7:51000":             "ip:",
+	} {
+		if got := OperatorIPKey(in).subject; got != want {
+			t.Errorf("OperatorIPKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// One /64 is one budget: rotating the interface identifier does not buy a 21st attempt.
+func TestIPv6SlashSixtyFourSharesOneBudget(t *testing.T) {
+	l := mustNew(t, newFake())
+	ctx := context.Background()
+	for i := 0; i < OperatorSignInLimit; i++ {
+		if ok, _, _ := l.Allow(ctx, OperatorIPKey(fmt.Sprintf("2001:db8:1:2::%x", i+1))); !ok {
+			t.Fatalf("attempt %d refused", i+1)
+		}
+	}
+	if ok, _, _ := l.Allow(ctx, OperatorIPKey("2001:db8:1:2::ffff")); ok {
+		t.Fatal("a new address in the same /64 got a fresh budget")
+	}
+	if ok, _, _ := l.Allow(ctx, OperatorIPKey("2001:db8:1:3::1")); !ok {
+		t.Fatal("the neighbouring /64 was refused on the first one's budget")
+	}
+}
+
+// A 429 is a security event: Warn, the policy's event name, the policy and the client address —
+// and nothing else (not the counter key, not the body).
+func TestMiddleware429LogsSecurityEvent(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	f := newFake()
+	h := Middleware(mustNew(t, f), ipKey, log)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for i := 0; i < OperatorSignInLimit; i++ {
+		serve(h)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("allowed attempts logged: %s", buf.String())
+	}
+	if rec := serve(h); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("over the limit: %d", rec.Code)
+	}
+	var line map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
+		t.Fatalf("one JSON line expected: %v (%s)", err, buf.String())
+	}
+	if line["level"] != "WARN" || line["event"] != "operator.rate_limited" ||
+		line["chinh_sach"] != "op-signin" || line["ip"] != "203.0.113.7" || line["outcome"] != "refused" {
+		t.Fatalf("event shape: %v", line)
+	}
+	if strings.Contains(buf.String(), "rl:") {
+		t.Fatalf("the counter key was logged: %s", buf.String())
 	}
 }

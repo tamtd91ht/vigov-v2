@@ -27,6 +27,12 @@ import (
 // scoped HoSoHienThiStore.
 type Directory struct {
 	db *sql.DB
+	// operatorHost is OPERATOR_HOST ("" when the operator area is off). It is RESERVED here, beside
+	// the platform addresses: whatever tenant_domain might hold for it, it never resolves to a
+	// commune — on this process's commune edge or through ResolveHost for every other service's
+	// edge. Without this, "area off ⇒ that host 404s" would rest on nobody having typed it into
+	// tenant_domain (ADR 0048 stop condition #6).
+	operatorHost string
 }
 
 // NewDirectory is one of the constructors in this package that take a raw *sql.DB. The others are
@@ -36,7 +42,39 @@ type Directory struct {
 // unless it, too, reads only the registry or a table with no commune column — a commune's own
 // content goes through core/store.Scoped, as HoSoHienThiStore does, and so do the operator's
 // registry WRITES (RegistryWriter), because each is audited in the target commune's audit_log.
-func NewDirectory(db *sql.DB) *Directory { return &Directory{db: db} }
+//
+// operatorHost is a REQUIRED argument, not an option set afterwards: a constructor that can be
+// called without it is a lookup that can silently forget to reserve the vendor's host. Pass ""
+// only where the operator area is genuinely off (OPERATOR_HOST unset) or in a test about something
+// else.
+func NewDirectory(db *sql.DB, operatorHost string) *Directory {
+	return &Directory{db: db, operatorHost: operatorHost}
+}
+
+// HostHeld reports whether ANY commune — active or inactive — holds host in tenant_domain. It is the
+// startup check that refuses OPERATOR_HOST while a commune row names it (cmd/server).
+//
+// INACTIVE COUNTS: a merged commune keeps its rows (rule 7 invariant 6), and reactivating it would
+// put the vendor's host back on a commune. The comparison is lower-cased and ignores trailing dots,
+// so a row spelled differently from the variable cannot hide.
+func (d *Directory) HostHeld(ctx context.Context, host string) (bool, error) {
+	h, err := domain.NormaliseHost(host)
+	if err != nil {
+		return false, fmt.Errorf("directory: %w", err)
+	}
+	var one int
+	// @cross-tenant: "is this host held by ANY commune" — tenant_domain.host is globally unique by
+	// design (migration 0001); the answer is one bit, never a commune.
+	err = d.db.QueryRowContext(ctx,
+		`SELECT 1 FROM tenant_domain WHERE rtrim(lower(host), '.') = rtrim($1, '.') LIMIT 1`, h).Scan(&one)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("directory: host lookup: %w", err)
+	}
+	return true, nil
+}
 
 // cotXa is the SELECT list every query in this file shares, in the ONE order quetXa scans.
 //
@@ -106,8 +144,9 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 	}
 	// A platform address never names a commune, whatever tenant_domain holds for it — two such
 	// rows exist and are kept (rule 7; migration 0007). Refused BEFORE the query, with the same
-	// answer as an unknown Host, so the row is unreachable rather than merely unlikely.
-	if domain.LaTenMienDanhRieng(h) {
+	// answer as an unknown Host, so the row is unreachable rather than merely unlikely. OPERATOR_HOST
+	// is reserved the same way (domain.IsReservedCommuneHost).
+	if domain.IsReservedCommuneHost(h, d.operatorHost) {
 		return tenant.Tenant{}, false
 	}
 
@@ -145,7 +184,7 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 	}
 	// Same refusal as ByHost, and the SAME sentinel as an unknown Host: a distinct error would let
 	// a caller tell "reserved" from "unclaimed", and nothing needs that distinction.
-	if domain.LaTenMienDanhRieng(h) {
+	if domain.IsReservedCommuneHost(h, d.operatorHost) {
 		return tenant.Tenant{}, ErrKhongCoXa
 	}
 

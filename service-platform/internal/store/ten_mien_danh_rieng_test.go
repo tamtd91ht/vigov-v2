@@ -12,7 +12,7 @@ import (
 func TestTenMienDanhRiengKhongChamCSDL(t *testing.T) {
 	t.Parallel()
 
-	d := NewDirectory(nil)
+	d := NewDirectory(nil, "")
 	for _, h := range []string{
 		"admin.vigov.vn", "ADMIN.vigov.vn.", "admin-stg.vigov.vn:443", "vigov.vn",
 		"identity.api.vigov.vn", "petitions.api-stg.vigov.vn", "api.stg.vigov.vn",
@@ -23,6 +23,22 @@ func TestTenMienDanhRiengKhongChamCSDL(t *testing.T) {
 		// The SAME sentinel as an unknown host — never a distinct one.
 		if _, err := d.ByHostErr(context.Background(), h); !errors.Is(err, ErrKhongCoXa) {
 			t.Errorf("ByHostErr(%q) = %v, muốn ErrKhongCoXa", h, err)
+		}
+	}
+}
+
+// OPERATOR_HOST is reserved like a platform address — even outside vigov.vn, where only the
+// variable can say so — and refused before the (nil) handle is touched.
+func TestOperatorHostNeverResolves(t *testing.T) {
+	t.Parallel()
+
+	d := NewDirectory(nil, "console.example.org")
+	for _, h := range []string{"console.example.org", "CONSOLE.example.org:443", "console.example.org."} {
+		if _, ok := d.ByHost(context.Background(), h); ok {
+			t.Errorf("ByHost(%q) = true — the operator host resolved to a commune", h)
+		}
+		if _, err := d.ByHostErr(context.Background(), h); !errors.Is(err, ErrKhongCoXa) {
+			t.Errorf("ByHostErr(%q) = %v, want ErrKhongCoXa (same as an unknown host)", h, err)
 		}
 	}
 }

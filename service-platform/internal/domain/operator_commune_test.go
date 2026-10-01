@@ -84,3 +84,27 @@ func TestValidateMiniAppID(t *testing.T) {
 		}
 	}
 }
+
+// One predicate for writes and lookups: platform addresses always; OPERATOR_HOST whenever set,
+// however the host is spelled; nothing extra when the area is off.
+func TestIsReservedCommuneHost(t *testing.T) {
+	const op = "console.example.org" // an operator host OUTSIDE vigov.vn: only OPERATOR_HOST reserves it
+	for _, c := range []struct {
+		host, operatorHost string
+		want               bool
+	}{
+		{"admin.vigov.vn", "", true},
+		{"api.vigov.vn", op, true},
+		{op, op, true},
+		{"CONSOLE.example.org", op, true},
+		{"console.example.org:443", op, true},
+		{"console.example.org.", op, true},
+		{op, "", false},
+		{"thangbinh.vigov.vn", op, false},
+		{"xconsole.example.org", op, false},
+	} {
+		if got := IsReservedCommuneHost(c.host, c.operatorHost); got != c.want {
+			t.Errorf("IsReservedCommuneHost(%q, %q) = %v, want %v", c.host, c.operatorHost, got, c.want)
+		}
+	}
+}

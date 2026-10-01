@@ -40,6 +40,9 @@ var (
 	ErrCommuneInactive    = errors.New("operator registry: xã đã ngừng hoạt động")
 	ErrDomainNotInCommune = errors.New("operator registry: tên miền không thuộc xã này")
 	ErrMiniAppTaken       = errors.New("operator registry: App ID đã có trong sổ mini_app")
+	// ErrCommuneSucceeded — reactivation refused: tenant_succession names this commune as a
+	// predecessor (a merged or split unit). See SetActivation.
+	ErrCommuneSucceeded = errors.New("operator registry: xã đã được kế thừa bởi đơn vị khác — không mở lại")
 )
 
 // Audit actions written to audit_log.action. VALUES ARE VIETNAMESE snake_case, as every commune
@@ -82,6 +85,29 @@ func delta(v any) json.RawMessage {
 func isUniqueViolation(err error) bool {
 	var pg *pgconn.PgError
 	return errors.As(err, &pg) && pg.Code == "23505"
+}
+
+// reservedHostConstraint is migration 0007's CHECK on tenant_domain.
+const reservedHostConstraint = "tenant_domain_khong_danh_rieng"
+
+// domainWriteError maps a failed tenant_domain INSERT/UPDATE to the registry's sentinels.
+//
+// WHY 23514 IS MAPPED AND NOT LEFT AS A 500: the Go check (domain.IsReservedCommuneHost) runs first,
+// but the CHECK is the database's own copy of the rule, and it also fires on a path the Go check
+// cannot see — an UPDATE touching one of the two frozen admin*.vigov.vn rows kept by rule 7 (0007's
+// "CONSEQUENCE FOR THE TWO KEPT ROWS"), e.g. clearing la_chinh on one when the primary moves. That is
+// the operator naming a reserved host, not an outage: a 500 would send them to the platform team for
+// a refusal that is working as designed. Matched by CONSTRAINT NAME, so another CHECK violation
+// (a different rule) still surfaces as the unexpected error it is.
+func domainWriteError(err error, what string) error {
+	var pg *pgconn.PgError
+	switch {
+	case isUniqueViolation(err):
+		return ErrDomainTaken
+	case errors.As(err, &pg) && pg.Code == "23514" && pg.ConstraintName == reservedHostConstraint:
+		return domain.ErrCommuneHostReserved
+	}
+	return fmt.Errorf("operator registry: %s: %w", what, err)
 }
 
 // NewCommune is what a create needs. The id is NOT here: it is the commune in ctx.
@@ -132,10 +158,7 @@ func (w *RegistryWriter) CreateCommune(ctx context.Context, in NewCommune, by do
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1, $2, true)`,
 			in.Host, id); err != nil {
-			if isUniqueViolation(err) {
-				return ErrDomainTaken
-			}
-			return fmt.Errorf("operator registry: insert domain: %w", err)
+			return domainWriteError(err, "insert domain")
 		}
 		// The delta keeps the Jenkins stage's shape: {ten, tinh_thanh, ten_mien}.
 		return audit.Write(ctx, tx, audit.Entry{
@@ -234,10 +257,7 @@ func (w *RegistryWriter) AddDomain(ctx context.Context, host string, by domain.O
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1, $2, false)`,
 			host, tx.TenantID().String()); err != nil {
-			if isUniqueViolation(err) {
-				return ErrDomainTaken
-			}
-			return fmt.Errorf("operator registry: insert domain: %w", err)
+			return domainWriteError(err, "insert domain")
 		}
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor: act, Action: ActionAddDomain, Subject: host,
@@ -287,12 +307,12 @@ func (w *RegistryWriter) SetPrimaryDomain(ctx context.Context, host string, by d
 		if _, err := tx.Exec(ctx,
 			`UPDATE tenant_domain SET la_chinh = false WHERE tenant_id = $1 AND la_chinh`,
 			tx.TenantID().String()); err != nil {
-			return fmt.Errorf("operator registry: clear primary: %w", err)
+			return domainWriteError(err, "clear primary")
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE tenant_domain SET la_chinh = true WHERE tenant_id = $1 AND host = $2`,
 			tx.TenantID().String(), host); err != nil {
-			return fmt.Errorf("operator registry: set primary: %w", err)
+			return domainWriteError(err, "set primary")
 		}
 		changed = true
 		return audit.Write(ctx, tx, audit.Entry{
@@ -383,6 +403,26 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 		}
 		if err := rows.Close(); err != nil {
 			return fmt.Errorf("operator registry: hosts: %w", err)
+		}
+		if active {
+			// A MERGED OR SPLIT COMMUNE IS NEVER SWITCHED BACK ON HERE. tenant_succession naming this
+			// commune as a predecessor (tu_id) is the administrative record that another unit took
+			// over its territory and its work (migration 0003, on the authority in `can_cu`). Rule 7
+			// invariant 6 keeps such a commune INACTIVE with its data unchanged; reactivating it would
+			// make two communes answer for one territory and send citizens' new petitions to an
+			// authority that no longer exists. Undoing a reorganisation is a merger-class decision
+			// (rule 1 stop condition #3, skills/admin-unit-merge) — taken by the owner from a
+			// document, never by a toggle. Checked before the "already active" no-op so the answer
+			// does not depend on the row's current state. Deactivation is unaffected.
+			var one int
+			err := tx.Underlying().QueryRowContext(ctx,
+				`SELECT 1 FROM tenant_succession WHERE tu_id = $1 LIMIT 1`, tx.TenantID().String()).Scan(&one)
+			switch {
+			case err == nil:
+				return ErrCommuneSucceeded
+			case !errors.Is(err, sql.ErrNoRows):
+				return fmt.Errorf("operator registry: succession lookup: %w", err)
+			}
 		}
 		if c.active == active {
 			return nil

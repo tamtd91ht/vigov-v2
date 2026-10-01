@@ -79,7 +79,7 @@ func TestPg0007GiuDongCuVaChanDongMoi(t *testing.T) {
 	}
 
 	// 4. ...and they no longer resolve, on either path.
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	for _, h := range []string{"admin.vigov.vn", "admin-stg.vigov.vn", "ADMIN.vigov.vn:443"} {
 		if _, ok := d.ByHost(ctx, h); ok {
 			t.Errorf("ByHost(%q) vẫn phân giải ra xã", h)

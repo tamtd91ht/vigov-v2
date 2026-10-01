@@ -146,13 +146,15 @@ func (h *operatorHandlers) writeRegistryError(w http.ResponseWriter, r *http.Req
 		code, text string
 	}
 	for target, v := range map[error]m{
-		store.ErrCommuneNotFound:      {http.StatusNotFound, "commune_not_found", msgCommuneNotFound},
-		store.ErrProvinceNotFound:     {http.StatusUnprocessableEntity, "unknown_province", "Tỉnh không có trong danh mục."},
-		store.ErrDomainTaken:          {http.StatusConflict, "domain_taken", "Tên miền đã được gắn cho một xã."},
-		store.ErrDuplicateName:        {http.StatusConflict, "duplicate_name", "Đã có xã cùng tên trong tỉnh này."},
-		store.ErrCommuneInactive:      {http.StatusConflict, "commune_inactive", "Xã đã ngừng hoạt động."},
-		store.ErrDomainNotInCommune:   {http.StatusUnprocessableEntity, "domain_not_in_commune", "Tên miền không thuộc xã này."},
-		store.ErrMiniAppTaken:         {http.StatusConflict, "mini_app_taken", "App ID đã có trong sổ Mini App."},
+		store.ErrCommuneNotFound:    {http.StatusNotFound, "commune_not_found", msgCommuneNotFound},
+		store.ErrProvinceNotFound:   {http.StatusUnprocessableEntity, "unknown_province", "Tỉnh không có trong danh mục."},
+		store.ErrDomainTaken:        {http.StatusConflict, "domain_taken", "Tên miền đã được gắn cho một xã."},
+		store.ErrDuplicateName:      {http.StatusConflict, "duplicate_name", "Đã có xã cùng tên trong tỉnh này."},
+		store.ErrCommuneInactive:    {http.StatusConflict, "commune_inactive", "Xã đã ngừng hoạt động."},
+		store.ErrDomainNotInCommune: {http.StatusUnprocessableEntity, "domain_not_in_commune", "Tên miền không thuộc xã này."},
+		store.ErrMiniAppTaken:       {http.StatusConflict, "mini_app_taken", "App ID đã có trong sổ Mini App."},
+		store.ErrCommuneSucceeded: {http.StatusConflict, "commune_succeeded",
+			"Xã đã được sáp nhập hoặc chia tách vào đơn vị khác, không mở lại hoạt động được."},
 		domain.ErrCommuneHostInvalid:  {http.StatusUnprocessableEntity, "invalid_domain", "Tên miền không hợp lệ."},
 		domain.ErrCommuneHostReserved: {http.StatusUnprocessableEntity, "reserved_domain", "Tên miền dành riêng cho nền tảng, không gắn cho xã."},
 		domain.ErrNameInvalid:         {http.StatusUnprocessableEntity, "invalid_name", "Tên xã không hợp lệ."},
@@ -303,11 +305,18 @@ func (h *operatorHandlers) setPrimaryDomain(w http.ResponseWriter, r *http.Reque
 	if !decodeBody(w, r, &b) {
 		return
 	}
-	// Normalised like any host input, but NOT checked against the reserved list: the host must
-	// already be one of this commune's rows, and that lookup is the check.
+	// Normalised like any host input, AND checked against the reserved list BEFORE the write. "It
+	// must already be one of this commune's rows" is not that check: the two frozen admin*.vigov.vn
+	// rows ARE some commune's rows (rule 7 keeps them, migration 0007), and a commune row could name
+	// OPERATOR_HOST if it was written before the variable was set. Promoting either to primary would
+	// make GetTenant/ResolveHost hand out a platform host as the commune's address.
 	host, err := domain.NormaliseHost(b.Domain)
 	if err != nil {
 		h.writeRegistryError(w, r, domain.ErrCommuneHostInvalid)
+		return
+	}
+	if domain.IsReservedCommuneHost(host, h.d.OperatorHost) {
+		h.writeRegistryError(w, r, domain.ErrCommuneHostReserved)
 		return
 	}
 	if _, err := h.d.Writer.SetPrimaryDomain(ctx, host, actorOf(r)); err != nil {

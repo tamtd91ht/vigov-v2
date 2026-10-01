@@ -7,10 +7,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,5 +162,61 @@ func TestOperatorAreaOffIs404Everywhere(t *testing.T) {
 	}
 	if res.calls != 0 {
 		t.Error("identity asked while the operator area is off")
+	}
+}
+
+type holderFake struct {
+	held  bool
+	err   error
+	asked string
+}
+
+func (h *holderFake) HostHeld(_ context.Context, host string) (bool, error) {
+	h.asked = host
+	return h.held, h.err
+}
+
+// OPERATOR_HOST held by a commune row refuses startup, naming the variable and never the commune;
+// a lookup failure refuses too (fail closed); unset asks nothing.
+func TestOperatorHostCollisionRefusesStartup(t *testing.T) {
+	ctx := context.Background()
+
+	off := &holderFake{held: true}
+	if err := refuseOperatorHostCollision(ctx, off, ""); err != nil || off.asked != "" {
+		t.Fatalf("area off: err %v, asked %q — nothing to check", err, off.asked)
+	}
+
+	held := &holderFake{held: true}
+	err := refuseOperatorHostCollision(ctx, held, operatorHostTest)
+	if err == nil || !strings.Contains(err.Error(), "OPERATOR_HOST") {
+		t.Fatalf("held host: %v, want a refusal naming OPERATOR_HOST", err)
+	}
+	if held.asked != operatorHostTest {
+		t.Errorf("asked about %q", held.asked)
+	}
+
+	down := &holderFake{err: errors.New("db down (fake)")}
+	if err := refuseOperatorHostCollision(ctx, down, operatorHostTest); err == nil {
+		t.Fatal("a failed lookup let the service start — 'could not check' is not 'no collision'")
+	}
+
+	if err := refuseOperatorHostCollision(ctx, &holderFake{}, operatorHostTest); err != nil {
+		t.Fatalf("free host: %v", err)
+	}
+}
+
+// A write from a commune page reaches the operator edge with that commune's Origin: refused by the
+// chain main mounts, not just by the handler in isolation.
+func TestOperatorEdgeRefusesCrossOriginWrite(t *testing.T) {
+	outer := buildOuter(communeChain(), operatorChain(t, &resolverCounting{}), operatorHostTest)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/operator-sessions",
+		strings.NewReader(`{"email":"x@example.invalid","password":"p"}`))
+	req.Host = operatorHostTest
+	req.Header.Set("Origin", "https://"+hostThu)
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+	outer.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin write on the operator host: %d, want 403", rec.Code)
 	}
 }

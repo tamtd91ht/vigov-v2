@@ -44,6 +44,13 @@ func Middleware(l *Limiter, keyOf func(*http.Request) Key, log *slog.Logger) fun
 				return
 			}
 			if !allowed {
+				// A SECURITY EVENT, not a debug line (skills/security-logging, "rate limit hit"): a
+				// burst of these from one network is a password-guessing or lockout attempt. The
+				// fields are the policy and the address the edge observed — NEVER the counter key
+				// (it is a derived form of the address and adds nothing) and never anything from the
+				// body: a sign-in body holds an email and a password (rule 3, rule 8).
+				log.WarnContext(r.Context(), "CẢNH BÁO BẢO MẬT: vượt giới hạn tần suất — từ chối",
+					"event", l.p.event, "outcome", "refused", "chinh_sach", l.p.name, "ip", httpx.ClientIP(r))
 				w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))
 				httpx.WriteError(w, http.StatusTooManyRequests, "rate_limited",
 					"Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.", "")

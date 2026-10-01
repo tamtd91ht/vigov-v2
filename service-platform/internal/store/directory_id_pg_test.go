@@ -26,7 +26,7 @@ func TestPgByIDTraVeHostChinh(t *testing.T) {
 	themHost(t, db, "cu.vigov.vn", ulidA, false)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	got, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidA))
+	got, err := NewDirectory(db, "").ByID(context.Background(), tenant.ID(ulidA))
 	if err != nil {
 		t.Fatalf("ByID: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestPgByIDXaNgungHoatDongVanTraVe(t *testing.T) {
 	chayMigration(t, db)
 	themXa(t, db, ulidB, "Xã Đã Sáp Nhập", false)
 
-	got, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidB))
+	got, err := NewDirectory(db, "").ByID(context.Background(), tenant.ID(ulidB))
 	if err != nil {
 		t.Fatalf("ByID: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestPgByIDKhongTonTai(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 
-	_, err := NewDirectory(db).ByID(context.Background(), tenant.ID(ulidA))
+	_, err := NewDirectory(db, "").ByID(context.Background(), tenant.ID(ulidA))
 	if !errors.Is(err, ErrKhongCoXa) {
 		t.Fatalf("err = %v, muốn ErrKhongCoXa", err)
 	}
@@ -85,7 +85,7 @@ func TestPgByIDIdKhongPhaiUlid(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 
-	_, err := NewDirectory(db).ByID(context.Background(), tenant.ID("26734"))
+	_, err := NewDirectory(db, "").ByID(context.Background(), tenant.ID("26734"))
 	if err == nil {
 		t.Fatal("id không phải ULID lại được chấp nhận")
 	}

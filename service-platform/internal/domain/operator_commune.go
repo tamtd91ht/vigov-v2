@@ -66,10 +66,35 @@ func ParseCommuneHost(raw, operatorHost string) (string, error) {
 			return "", ErrCommuneHostInvalid
 		}
 	}
-	if LaTenMienDanhRieng(h) || (operatorHost != "" && h == strings.ToLower(operatorHost)) {
+	if IsReservedCommuneHost(h, operatorHost) {
 		return "", ErrCommuneHostReserved
 	}
 	return h, nil
+}
+
+// IsReservedCommuneHost reports whether host may NEVER be, or resolve to, a commune's host: a
+// platform address (LaTenMienDanhRieng) or the operator area's own host.
+//
+// ONE PREDICATE FOR EVERY PATH THAT ASKS — registry writes (ParseCommuneHost, the primary-domain
+// switch) and the lookups (store.Directory). Two copies of "is this host reserved" are two places
+// where OPERATOR_HOST can be remembered in one and forgotten in the other, and the forgotten one is
+// a commune answering on the vendor's cross-commune host (ADR 0048 stop condition #6).
+//
+// operatorHost is OPERATOR_HOST ("" when the area is off, which reserves nothing extra — an unset
+// host cannot be compared against). host may arrive raw; it is normalised as the edge normalises a
+// Host header, so case, a port or a trailing dot cannot slip past.
+func IsReservedCommuneHost(host, operatorHost string) bool {
+	if LaTenMienDanhRieng(host) {
+		return true
+	}
+	if operatorHost == "" {
+		return false
+	}
+	h, err := NormaliseHost(host)
+	if err != nil {
+		return false
+	}
+	return strings.TrimRight(h, ".") == strings.TrimRight(strings.ToLower(operatorHost), ".")
 }
 
 // validLabel accepts LDH labels only (letters a-z, digits, '-'). An internationalised name arrives

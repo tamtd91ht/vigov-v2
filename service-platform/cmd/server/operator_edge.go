@@ -28,6 +28,9 @@ import (
 //
 //	StripTenantHeaders  the operator realm has no commune; a client naming one is granting itself scope
 //	Recover             a panic becomes a traceable 500
+//	request guard       inside svchttp.OperatorHandler: Origin + JSON on every non-GET (CSRF —
+//	                    admin.vigov.vn and every <xa>.vigov.vn are the SAME site, so SameSite=Strict
+//	                    does not stop a commune page's script)
 //	(no TenantMiddleware) — OPERATOR_HOST is a reserved host that resolves to no commune, and must not:
 //	                      TenantMiddleware would 404 it, and resolving it to a commune would make the
 //	                      vendor surface and that commune's surface one surface (ADR 0046, 0048 #6)
@@ -36,9 +39,7 @@ import (
 // are the ones that create a session, so a mux-wide guard would have to exempt them by path — the
 // shape where an exemption list quietly grows.
 func buildOperatorEdge(d svchttp.OperatorDeps) http.Handler {
-	mux := http.NewServeMux()
-	svchttp.RegisterOperator(mux, d)
-	var h http.Handler = mux
+	h := svchttp.OperatorHandler(d)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 	return h
@@ -87,6 +88,43 @@ type failingCounter struct{}
 
 func (failingCounter) Incr(context.Context, string, time.Duration) (int64, time.Duration, error) {
 	return 0, 0, errors.New("REDIS_DSN chưa đặt")
+}
+
+// hostHolder is the one registry question the startup check asks (*store.Directory).
+type hostHolder interface {
+	HostHeld(ctx context.Context, host string) (bool, error)
+}
+
+// refuseOperatorHostCollision stops the service from starting when OPERATOR_HOST is a host some
+// commune row holds in tenant_domain — ACTIVE OR INACTIVE.
+//
+// WHY AT STARTUP AND NOT ONLY AT THE LOOKUP: the Directory already refuses to resolve
+// OPERATOR_HOST, so no request would reach that commune through it. But the row would still say the
+// vendor's cross-commune host is a commune's address: the operator console lists it, GetTenant can
+// hand it out as the commune's primary host, and switching OPERATOR_HOST off later would leave a row
+// nobody remembers is reserved. One host naming both surfaces is ADR 0048 stop condition #6, and
+// refusing to start is the only answer that cannot be missed. An inactive commune counts: rule 7
+// keeps its rows, and reactivating it would put the collision back.
+//
+// THE ERROR NAMES THE VARIABLE, NEVER THE COMMUNE: startup logs travel further than the registry,
+// and the operator fixing this needs to know which setting to change, not which commune to look at
+// — they can find the row with the host they set.
+//
+// A lookup failure also refuses to start (fail closed): "could not check" is not "no collision".
+func refuseOperatorHostCollision(ctx context.Context, dir hostHolder, operatorHost string) error {
+	if operatorHost == "" {
+		return nil
+	}
+	held, err := dir.HostHeld(ctx, operatorHost)
+	if err != nil {
+		return fmt.Errorf("platform: không kiểm được OPERATOR_HOST với tenant_domain — từ chối khởi động: %w", err)
+	}
+	if held {
+		return errors.New("platform: OPERATOR_HOST trùng một tên miền đang có trong tenant_domain (của một xã, " +
+			"đang hoạt động hoặc đã ngừng) — khu vận hành không bao giờ dùng chung host với một xã (ADR 0048 điều " +
+			"kiện dừng #6). Đặt OPERATOR_HOST khác, hoặc xin chủ dự án quyết dòng tenant_domain đó; không tự sửa dòng")
+	}
+	return nil
 }
 
 // operatorWiring is what run() needs to build and later close the operator edge.

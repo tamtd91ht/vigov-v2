@@ -31,7 +31,7 @@ func themMiniApp(t *testing.T, db *sql.DB, appID, cheDo string, tenantID any, ho
 func TestPgMiniAppKhongDangKy(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
-	_, err := NewDirectory(db).MiniApp(context.Background(), "9999999999")
+	_, err := NewDirectory(db, "").MiniApp(context.Background(), "9999999999")
 	if !errors.Is(err, ErrKhongCoMiniApp) {
 		t.Fatalf("err = %v, muốn ErrKhongCoMiniApp", err)
 	}
@@ -46,7 +46,7 @@ func TestPgMiniAppChinhVaRieng(t *testing.T) {
 	themMiniApp(t, db, "1002", "rieng", ulidA, true)
 	themMiniApp(t, db, "1003", "rieng", ulidB, true)
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	ctx := context.Background()
 
 	chinh, err := d.MiniApp(ctx, "1001")
@@ -81,7 +81,7 @@ func TestPgMiniAppTatHoacXoaMemCoiNhuKhongDangKy(t *testing.T) {
 		t.Fatalf("xoá mềm: %v", err)
 	}
 
-	d := NewDirectory(db)
+	d := NewDirectory(db, "")
 	for _, id := range []string{"2001", "2002"} {
 		if _, err := d.MiniApp(context.Background(), id); !errors.Is(err, ErrKhongCoMiniApp) {
 			t.Errorf("app %s: err = %v, muốn ErrKhongCoMiniApp", id, err)

@@ -125,8 +125,16 @@ func run(log *slog.Logger) error {
 	// The cache is pkg/tenant.CachedDirectory, not a platform-local type: it is a decorator over
 	// tenant.Directory with no platform logic in it, and the other seven services wrap their
 	// gRPC-backed directory with the same one. Two copies would be two invalidation rules.
-	danhBa := svcstore.NewDirectory(db)
+	danhBa := svcstore.NewDirectory(db, cfg.OperatorHost())
 	directory := tenant.NewCachedDirectory(danhBa, cfg.TenantCacheTTL())
+
+	// 3b. OPERATOR_HOST must be no commune's host — refused before anything is served (operator_edge.go).
+	ctxHost, huyHost := context.WithTimeout(context.Background(), 15*time.Second)
+	err = refuseOperatorHostCollision(ctxHost, danhBa, cfg.OperatorHost())
+	huyHost()
+	if err != nil {
+		return err
+	}
 
 	// 4. checker — authz.Checker backed by the identity service.
 	// TODO(next): identity does not expose the permission contract yet. Until it does, no

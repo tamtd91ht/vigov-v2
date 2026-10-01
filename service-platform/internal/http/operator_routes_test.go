@@ -1,7 +1,8 @@
 package http
 
-// What these tests defend: every operator route, through the REAL mux RegisterOperator builds, with
-// the REAL guards (internal/opauth), the REAL rate-limit middleware and the REAL `op1.` verifier —
+// What these tests defend: every operator route, through the REAL handler OperatorHandler builds
+// (request guard included), with the REAL guards (internal/opauth), the REAL rate-limit middleware
+// and the REAL `op1.` verifier —
 // only identity, Redis and the database are fakes.
 //
 // RULE 5 INVARIANT 7, READ FOR THE OPERATOR REALM. Its four cases are 401 · 403 wrong permission ·
@@ -14,7 +15,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -207,16 +207,17 @@ func (c *memCounter) Incr(_ context.Context, key string, window time.Duration) (
 // --- harness ------------------------------------------------------------------------------------
 
 type harness struct {
-	mux     *http.ServeMux
+	mux     http.Handler
 	id      *identityFake
 	w       *writerFake
 	counter *memCounter
 	forgot  []string
+	logs    *bytes.Buffer // JSON lines the handlers logged
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, counter: &memCounter{}}
+	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, counter: &memCounter{}, logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
 	if err != nil {
 		t.Fatal(err)
@@ -225,9 +226,8 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h.mux = http.NewServeMux()
-	RegisterOperator(h.mux, OperatorDeps{
+	log := slog.New(slog.NewJSONHandler(h.logs, nil))
+	h.mux = OperatorHandler(OperatorDeps{
 		Auth:         opauth.NewAuth(signer, h.id, log).WithClock(func() time.Time { return nowFake }),
 		Identity:     h.id,
 		Limiter:      lim,
@@ -262,9 +262,25 @@ func staffCookie(t *testing.T) string {
 	return tok
 }
 
+// do sends what the console sends: for a write, the console's own Origin and a JSON body type.
+// The request guard's refusals are tested with doRaw.
 func (h *harness) do(method, path, body, cookie string) *httptest.ResponseRecorder {
+	hdr := http.Header{}
+	if method != http.MethodGet && method != http.MethodHead {
+		hdr.Set("Origin", "https://"+operatorHostFake)
+		if body != "" {
+			hdr.Set("Content-Type", "application/json")
+		}
+	}
+	return h.doRaw(method, path, body, cookie, hdr)
+}
+
+func (h *harness) doRaw(method, path, body, cookie string, hdr http.Header) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Host = operatorHostFake
+	for k, v := range hdr {
+		req.Header[k] = v
+	}
 	if cookie != "" {
 		req.AddCookie(&http.Cookie{Name: opauth.CookieName, Value: cookie})
 	}

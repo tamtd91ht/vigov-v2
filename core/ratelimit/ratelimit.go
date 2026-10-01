@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"time"
 )
 
@@ -41,11 +42,17 @@ type Policy struct {
 	name   string
 	limit  int64
 	window time.Duration
+	// event is the security-log event a refusal emits (skills/security-logging: "rate limit hit",
+	// TCVN 14423 5.12.2.4e). Owned by the policy, not the middleware, because the realm a refusal
+	// belongs to is a property of the policy — a future commune-scoped policy must not log as
+	// `operator.*`.
+	event string
 }
 
 // OperatorSignIn is the policy for the operator area's sign-in steps (password, TOTP, recovery
 // code): ADR 0048 §01/10 #3.
-var OperatorSignIn = Policy{name: "op-signin", limit: OperatorSignInLimit, window: OperatorSignInWindow}
+var OperatorSignIn = Policy{name: "op-signin", limit: OperatorSignInLimit, window: OperatorSignInWindow,
+	event: "operator.rate_limited"}
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a
@@ -62,12 +69,33 @@ type Key struct {
 	subject string
 }
 
-// OperatorIPKey is the key of the operator sign-in limit: one counter per client address.
+// OperatorIPKey is the key of the operator sign-in limit: one counter per client NETWORK.
 //
-// ip is the address the edge observed (httpx.ClientIP — never a raw X-Forwarded-For). "" is
-// allowed and shares one counter: every request the edge could not place is held to one budget
-// together, the fail-closed direction.
-func OperatorIPKey(ip string) Key { return Key{subject: "ip:" + ip} }
+//	IPv4                one counter per address ("ip:203.0.113.7").
+//	IPv4-mapped IPv6    the same counter as the IPv4 address it maps (::ffff:203.0.113.7 is
+//	                    203.0.113.7). Otherwise one client gets two budgets by switching notation.
+//	IPv6                one counter per /64 ("ip:2001:db8:1:2::/64"), the owner's decision of
+//	                    01/10/2026. A /64 is what ONE subscriber line is handed (RFC 6177 / RIPE-690
+//	                    practice) and SLAAC lets every host on it pick any of 2^64 addresses — per
+//	                    address, the limit would be 20 × 2^64 attempts for anyone with a home line.
+//	                    The zone (`%eth0`) is dropped: it names a local interface, not a client.
+//	"" or unparseable   ONE shared counter ("ip:"): every request the edge could not place is held to
+//	                    one budget together — the fail-closed direction. Never a per-string counter,
+//	                    which would let a client mint a fresh budget per spelling.
+//
+// ip is the address the edge observed (httpx.ClientIP — never a raw X-Forwarded-For).
+func OperatorIPKey(ip string) Key {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return Key{subject: "ip:"}
+	}
+	a = a.WithZone("").Unmap()
+	if a.Is4() {
+		return Key{subject: "ip:" + a.String()}
+	}
+	// PrefixFrom cannot fail for 64 on a 128-bit address; Masked zeroes the interface identifier.
+	return Key{subject: "ip:" + netip.PrefixFrom(a, 64).Masked().String()}
+}
 
 // Counter is the store: one atomic increment that also starts the window on the first hit.
 //
@@ -94,7 +122,7 @@ func New(c Counter, p Policy) (*Limiter, error) {
 	if c == nil {
 		return nil, errors.New("ratelimit: nil counter")
 	}
-	if p.name == "" || p.limit <= 0 || p.window <= 0 {
+	if p.name == "" || p.event == "" || p.limit <= 0 || p.window <= 0 {
 		return nil, errors.New("ratelimit: empty policy — use a named policy such as ratelimit.OperatorSignIn")
 	}
 	return &Limiter{c: c, p: p}, nil
