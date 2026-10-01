@@ -209,6 +209,15 @@ type noiDungRa struct {
 	// after every ordered banner.
 	LinkTo       string `json:"link_to,omitempty"`
 	DisplayOrder *int   `json:"display_order,omitempty"`
+
+	// AudioFileID and AudioDurationSeconds — `truyen-thanh` only, only when a broadcast file is attached
+	// (migration 0012, ADR 0067 §4). On the list and the detail. The duration is what the officer typed.
+	AudioFileID          string `json:"audio_file_id,omitempty"`
+	AudioDurationSeconds int    `json:"audio_duration_seconds,omitempty"`
+
+	// Audio is the file's status, type, size and a short-lived listening link — DETAIL only, like
+	// CoverImage, and for the same reason.
+	Audio *audioOut `json:"audio,omitempty"`
 }
 
 // instantOut is a nullable instant on the wire: nil (the key is omitted) for the zero time.
@@ -250,6 +259,9 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 
 		LinkTo:       n.LinkTo,
 		DisplayOrder: n.DisplayOrder,
+
+		AudioFileID:          n.AudioFileID,
+		AudioDurationSeconds: n.AudioDurationSeconds,
 	}
 	if coThan {
 		than := n.NoiDung
@@ -441,6 +453,10 @@ func (h *Handler) MotNoiDung(w http.ResponseWriter, r *http.Request) {
 	if n.CoverImageFileID != "" {
 		ra.CoverImage = h.coverView(r, n.CoverImageFileID)
 		// A presigned preview is a bearer credential: no shared cache keeps this reply.
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if n.AudioFileID != "" {
+		ra.Audio = h.audioView(r, n)
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	vietJSON(w, http.StatusOK, ra)
@@ -640,6 +656,16 @@ type suaNoiDungVao struct {
 	// turning an item into a banner without one, is 422 `banner_cover_required`.
 	LinkTo       *string `json:"link_to,omitempty"`
 	DisplayOrder *int    `json:"display_order,omitempty"`
+
+	// AudioFileID: ABSENT = leave alone; "" = REMOVE the broadcast audio (both columns cleared, the
+	// file retired; a new file is then uploaded through POST …/audio-files). The id already attached is
+	// accepted as a no-op; any other id is 409 `audio_not_usable` — attaching is the upload's completion.
+	// AudioDurationSeconds: ABSENT = leave alone; 1 .. 21600 = correct the typed duration of the attached
+	// file (422 `audio_all_or_none` when none is attached, `invalid_audio_duration` out of range). Either
+	// field on a type other than `truyen-thanh` is 422 `audio_only_for_truyen_thanh`; a type change away
+	// from `truyen-thanh` removes the audio by itself.
+	AudioFileID          *string `json:"audio_file_id,omitempty"`
+	AudioDurationSeconds *int    `json:"audio_duration_seconds,omitempty"`
 }
 
 // optionalInstant is ParseEventInstant for a PATCH field: nil stays nil (leave alone), "" becomes a
@@ -704,6 +730,9 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		CoverImageFileID: vao.CoverImageFileID,
 		LinkTo:           vao.LinkTo,
 		DisplayOrder:     vao.DisplayOrder,
+
+		AudioFileID:          vao.AudioFileID,
+		AudioDurationSeconds: vao.AudioDurationSeconds,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "sửa", err)
@@ -905,6 +934,20 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "banner_fields_only_for_banner", err.Error(), "")
 	case errors.Is(err, domain.ErrBannerCoverRequired):
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "banner_cover_required", err.Error(), "")
+	// Migration 0012's audio pair (ADR 0067 §4): 422 like the banner fields, the domain's own sentence.
+	case errors.Is(err, domain.ErrAudioDurationInvalid):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_audio_duration", err.Error(), "")
+	case errors.Is(err, domain.ErrAudioOnlyForBroadcast):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "audio_only_for_truyen_thanh", err.Error(), "")
+	case errors.Is(err, domain.ErrAudioAllOrNone):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "audio_all_or_none", err.Error(), "")
+	case errors.Is(err, domain.ErrAudioNotUsable):
+		httpx.WriteError(w, http.StatusConflict, "audio_not_usable", err.Error(), "")
+	case errors.Is(err, app.ErrAudioUploadNotConfigured):
+		h.d.Log.Warn("CẢNH BÁO: từ chối thao tác âm thanh truyền thanh vì chưa cấu hình kho lưu tệp / máy quét / giới hạn",
+			"xa", string(tenant.MustFrom(r.Context())), "viec", viec, "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "storage_not_configured",
+			"Chưa cấu hình kho lưu tệp nên chưa dùng được tệp âm thanh truyền thanh. Hãy báo quản trị hệ thống.", "")
 	case laLoiDauVaoNoiDung(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data and no internal detail, and a second sentence written here would drift from it.
@@ -951,7 +994,7 @@ func laLoiDauVaoNoiDung(err error) bool {
 		domain.ErrEventEndsWithoutStart, domain.ErrEventEndsBeforeStart,
 		domain.ErrEventPlaceTooLong, domain.ErrEventPlaceInvalid,
 		domain.ErrEventTimeInvalid,
-		domain.ErrCoverFileIDInvalid,
+		domain.ErrCoverFileIDInvalid, domain.ErrAudioFileIDInvalid,
 		// ADR 0067 §3: the category edit and delete.
 		domain.ErrSlugImmutable, domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
 	} {

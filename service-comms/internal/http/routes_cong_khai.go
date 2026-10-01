@@ -32,6 +32,8 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 		panic("comms/http: thiếu kho danh mục nội dung — tuyến tin của xã sẽ panic khi có người gọi")
 	case d.CoverImages == nil:
 		panic("comms/http: thiếu đường đọc ảnh bìa công khai — tuyến tin của xã sẽ panic khi có người gọi")
+	case d.Audio == nil:
+		panic("comms/http: thiếu đường ký liên kết âm thanh truyền thanh — tuyến tin của xã sẽ panic khi có người gọi")
 	}
 	h := newHandlerCongKhai(d)
 
@@ -54,6 +56,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// strip instead — published banners with a published cover, `display_order` ascending (unordered
 	// last), whole (not paged), each with `image_url`, `title` (the alt text) and an optional `link_to`
 	// (ADR 0067 §5).
+	//
+	// A published `truyen-thanh` with its audio carries `audio_duration_seconds`, `audio_url` (a presigned
+	// GET of the PRIVATE original, ≤ 15 minutes — no public copy exists, ADR 0067 §4.2) and
+	// `audio_url_expires_at`; such a reply is `Cache-Control: no-store`, so no cache serves a dead link.
 	//
 	// 400 is `host` missing, repeated or malformed (the platform is not asked), a `type` outside the six,
 	// a malformed `category`, or a bad `limit`/`cursor`.
@@ -102,7 +108,8 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 
 	// ONE published item, body included: `body` as plain text (older app builds) and `body_blocks` as
 	// structure — paragraphs, headings, lists, bold/italic/https-link runs — built here from the body
-	// sanitised AGAIN on this read (ADR 0067 §1). No field is ever HTML.
+	// sanitised AGAIN on this read (ADR 0067 §1). No field is ever HTML. A broadcast carries its audio
+	// link as on the list.
 	//
 	// @summary  Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404
 	// @screen   11-noi-dung-mini-app §9

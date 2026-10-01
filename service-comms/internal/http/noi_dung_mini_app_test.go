@@ -193,6 +193,7 @@ type mayChuND struct {
 	ghiDM   *ghiDanhMucNDGia
 	checker *checkerDanhMucGia
 	covers  *fakeCovers
+	audio   *fakeAudio
 }
 
 func dungMayChuND(t *testing.T) *mayChuND {
@@ -206,6 +207,7 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	}}
 	checker := &checkerDanhMucGia{}
 	covers := &fakeCovers{}
+	audio := &fakeAudio{}
 	im := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	mux := http.NewServeMux()
@@ -220,6 +222,7 @@ func dungMayChuND(t *testing.T) *mayChuND {
 		DanhMucNoiDung:    soDM,
 		GhiDanhMucNoiDung: ghiDM,
 		ContentCovers:     covers,
+		ContentAudio:      audio,
 		// Present because Register refuses a nil one — see map_field_schema_test.go.
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
@@ -244,7 +247,7 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers}
+	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers, audio: audio}
 }
 
 func (m *mayChuND) capQuyen(xa tenant.ID, perm ...authz.Perm) {
@@ -349,6 +352,11 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.covers.requests > 0 }},
 		{"hoàn tất ảnh bìa", http.MethodPost, pathCoverCompletion, sua, doc, "", http.StatusOK,
 			func(m *mayChuND) bool { return m.covers.completions > 0 }},
+		// The broadcast audio (content_audio.go, ADR 0067 §4.3): `content.update` on both.
+		{"xin tải âm thanh truyền thanh", http.MethodPost, pathAudioFiles, sua, doc, bodyAudioUploadOK,
+			http.StatusCreated, func(m *mayChuND) bool { return m.audio.requests > 0 }},
+		{"hoàn tất âm thanh truyền thanh", http.MethodPost, pathAudioCompletion, sua, doc, bodyAudioCompletionOK,
+			http.StatusOK, func(m *mayChuND) bool { return m.audio.completions > 0 }},
 	}
 }
 
@@ -410,7 +418,7 @@ func TestNoiDungDuQuyenTra2xxVaDungXa(t *testing.T) {
 			// THE COMMUNE COMES FROM Host AND FROM NOWHERE ELSE (rule 1, invariant 3). The store binds
 			// it to $1 from the context, so what is provable here is that the context reaching the
 			// business layer carries the commune the request arrived at.
-			for _, xa := range []tenant.ID{m.so.xa, m.ghi.xa, m.soDM.xa, m.ghiDM.xa, m.covers.tenantID} {
+			for _, xa := range []tenant.ID{m.so.xa, m.ghi.xa, m.soDM.xa, m.ghiDM.xa, m.covers.tenantID, m.audio.tenantID} {
 				if xa != "" && xa != xaB {
 					t.Errorf("nghiệp vụ được gọi với xã %q, muốn %q", xa, xaB)
 				}

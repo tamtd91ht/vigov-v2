@@ -161,6 +161,7 @@ func dungMayChuThongBao(t *testing.T) *mayChuThongBao {
 		DanhMucNoiDung:    &soDanhMucNDGia{},
 		GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
 		ContentCovers:     &fakeCovers{},
+		ContentAudio:      &fakeAudio{},
 		// And the map field schema — see map_field_schema_test.go.
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},

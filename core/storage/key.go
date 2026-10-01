@@ -66,12 +66,16 @@ const (
 	// File attached to a task log entry (petitions; Nhiệm vụ §5.9 "Đính kèm"). Staff-uploaded work
 	// evidence on an administrative task, so its key class is ClassRecords — never auto-purged.
 	PurposeTaskAttachment Purpose = "task-attachment"
+	// The broadcast audio of a Mini App `truyen-thanh` item (comms; ADR 0067 §4). Class
+	// content-source, private bucket only: there is no public variant of audio (no transcoder yet,
+	// ADR 0067 Còn mở #2), so it is delivered by a short-lived presigned GET, never a public key.
+	PurposeContentAudio Purpose = "content-audio"
 )
 
 var knownPurposes = map[Purpose]bool{
 	PurposeContentVideo: true, PurposeContentImage: true, PurposeContentAttachment: true,
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
-	PurposeTaskAttachment: true,
+	PurposeTaskAttachment: true, PurposeContentAudio: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

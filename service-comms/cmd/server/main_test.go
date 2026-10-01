@@ -136,6 +136,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		DanhMucNoiDung:    commsstore.NewDanhMucMiniAppStore(nil),
 		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(nil, nil),
 		ContentCovers:     commsapp.NewContentCovers(nil, nil, nil, nil, nil, nil),
+		ContentAudio:      commsapp.NewContentAudio(nil, nil, nil, nil, nil, nil),
 		// The map field schema, on a nil *store.DB for the same reason: nothing here calls it; its
 		// four-case suite is internal/http/map_field_schema_test.go.
 		MapFieldSchemas:      commsstore.NewMapFieldSchemaStore(nil),

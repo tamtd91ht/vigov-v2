@@ -165,6 +165,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			DanhMucNoiDung:    &soDanhMucNDGia{},
 			GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
 			ContentCovers:     &fakeCovers{},
+			ContentAudio:      &fakeAudio{},
 			// The map field schema: present because Register refuses a nil one; its four-case
 			// suite is map_field_schema_test.go.
 			MapFieldSchemas:      &fakeMapFieldSchemas{},

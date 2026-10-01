@@ -88,7 +88,26 @@ type SoanNoiDungMiniApp struct {
 	// covers keeps the cover's public copy in step with the article (content_cover.go). nil = no file
 	// store wired: a request naming a cover is refused with ErrCoverUploadNotConfigured.
 	covers *coverPublisher
+
+	// audioFiles retires (soft-deletes) the file row of a broadcast audio the edit takes off its item
+	// (content_audio.go says why the slot must be freed). nil = not wired: an edit that would remove
+	// audio is refused with ErrAudioUploadNotConfigured rather than leaving the slot held for ever.
+	audioFiles AudioFileRetirer
 }
+
+// AudioFileRetirer is the one stored_file write the edit path needs for audio. *store.StoredFileStore.
+type AudioFileRetirer interface {
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
+}
+
+// WithAudioFiles wires the file store the edit path retires removed audio files through.
+func (uc *SoanNoiDungMiniApp) WithAudioFiles(files AudioFileRetirer) *SoanNoiDungMiniApp {
+	uc.audioFiles = files
+	return uc
+}
+
+// audioRetireReason is the `delete_reason` of a broadcast file the item stopped pointing at.
+const audioRetireReason = "gỡ tệp âm thanh khỏi mục truyền thanh (sửa mục nội dung)"
 
 func NewSoanNoiDungMiniApp(db *store.DB, kho KhoNoiDungMiniApp, khoDanh KhoDanhMucMiniApp) *SoanNoiDungMiniApp {
 	return &SoanNoiDungMiniApp{db: db, kho: kho, khoDanh: khoDanh, sinhID: ulid.Moi, bayGio: time.Now}
@@ -164,8 +183,8 @@ var (
 //	few per-type fields   the event window and place (`su-kien`) and the external video link (`video`)
 //	                      ARE handled — the user decided them on 30/09/2026 (ADR 0047 §6) and
 //	                      migration 0011 added the columns. The banner's link and order (migration
-//	                      0012, ADR 0067 §5) are handled too; the audio file and its duration are a
-//	                      later card.
+//	                      0012, ADR 0067 §5) are handled too. The audio file of a `truyen-thanh` is
+//	                      NOT set here: it is attached by its upload's completion (content_audio.go).
 //	no approval step      `cho-duyet` is reachable only from the sync (§10.2). A commune composing by
 //	                      hand publishes or does not, which is exactly the one checkbox §7 offers.
 //
@@ -444,6 +463,22 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		if sach.DisplayOrder != nil {
 			sau.DisplayOrder = sach.DisplayOrder
 		}
+		// THE AUDIO PAIR (migration 0012, ADR 0067 §4): "" removes both; the id already attached is a
+		// no-op; any OTHER id is refused — a file is attached by its upload's completion, which carries
+		// the duration (ContentAudio.Complete). A duration alone corrects the one already typed.
+		if sach.AudioFileID != nil {
+			switch *sach.AudioFileID {
+			case "":
+				sau.AudioFileID, sau.AudioDurationSeconds = "", 0
+			case truoc.AudioFileID:
+			default:
+				refusal = domain.ErrAudioNotUsable
+				return refusal
+			}
+		}
+		if sach.AudioDurationSeconds != nil {
+			sau.AudioDurationSeconds = *sach.AudioDurationSeconds
+		}
 
 		// THE PER-TYPE FIELDS OF MIGRATION 0011, decided on the MERGED row because the type after the
 		// edit may come from the request or from the stored row.
@@ -464,6 +499,10 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		}
 		if sau.Loai != domain.LoaiBanner && sach.SetsBannerField() {
 			refusal = domain.ErrBannerFieldsOnlyForBanner
+			return refusal
+		}
+		if sau.Loai != domain.LoaiTruyenThanh && sach.SetsAudioField() {
+			refusal = domain.ErrAudioOnlyForBroadcast
 			return refusal
 		}
 		sau = sau.WithoutOtherTypeFields()
@@ -507,6 +546,19 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			return nil
 		}
 
+		// THE BROADCAST FILE THE ITEM STOPS POINTING AT — removed, or cleared by a type change away from
+		// `truyen-thanh` — is soft-deleted in THIS transaction, so the one-file slot is free for its
+		// replacement and no live audio row is left with no item to play it (rule 7: soft, the object
+		// stays). Refused, not skipped, when the file store is not wired.
+		retiredAudio := ""
+		if truoc.AudioFileID != "" && sau.AudioFileID != truoc.AudioFileID {
+			if uc.audioFiles == nil {
+				refusal = ErrAudioUploadNotConfigured
+				return refusal
+			}
+			retiredAudio = truoc.AudioFileID
+		}
+
 		// §10.4 — see the note on this function. AFTER the no-op check, deliberately.
 		if truoc.Nguon == domain.NguonDongBoCong {
 			sau.DaSuaTay = true
@@ -528,11 +580,22 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
 			return err
 		}
+		if retiredAudio != "" {
+			// ErrStoredFileMoved: the row is already retired (or carries a public key, which an audio
+			// row never does) — the slot is free either way, so the edit stands.
+			err := uc.audioFiles.SoftDelete(ctx, tx, retiredAudio, nguoi.ID, audioRetireReason, uc.bayGio().UTC())
+			if err != nil && !errors.Is(err, commsstore.ErrStoredFileMoved) {
+				return err
+			}
+		}
 
 		// BEFORE AND AFTER, AND ONLY THE FIELDS THAT MOVED (rule 6, invariant 5). A delta carrying
 		// every column on every edit makes the one field somebody actually changed impossible to find
 		// in a ledger that is never deleted.
 		afterDelta := tomTatDoiNoiDungMiniApp(truoc, sau, false)
+		if retiredAudio != "" {
+			afterDelta["audio_file_retired"] = retiredAudio
+		}
 		if uc.covers != nil {
 			// THE COVER'S PUBLIC COPY FOLLOWS THE ROW JUST WRITTEN (coverPublisher): published with a
 			// cover → copied and recorded here; anything else still public → withdrawn after commit.
@@ -911,6 +974,9 @@ func tomTatNoiDungMiniApp(n domain.NoiDungMiniApp) map[string]any {
 		// Migration 0012's banner pair, split like the video link: position by value, link by presence.
 		"display_order": orderOrNil(n.DisplayOrder),
 		"has_link_to":   n.LinkTo != "",
+		// Migration 0012's audio pair: the file ID (an internal handle) and the typed duration.
+		"audio_file_id":          n.AudioFileID,
+		"audio_duration_seconds": n.AudioDurationSeconds,
 	}
 }
 
@@ -984,6 +1050,13 @@ func tomTatDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp, ben bool) map[str
 	if truoc.LinkTo != sau.LinkTo {
 		ra["link_to_changed"] = true
 	}
+	// Migration 0012's audio pair, both by value: an internal file id and a number of seconds.
+	if truoc.AudioFileID != sau.AudioFileID {
+		ra["audio_file_id"] = chon(ben, truoc.AudioFileID, sau.AudioFileID)
+	}
+	if truoc.AudioDurationSeconds != sau.AudioDurationSeconds {
+		ra["audio_duration_seconds"] = chon(ben, truoc.AudioDurationSeconds, sau.AudioDurationSeconds)
+	}
 	return ra
 }
 
@@ -1036,7 +1109,9 @@ func khongDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp) bool {
 		truoc.VideoURL == sau.VideoURL &&
 		truoc.CoverImageFileID == sau.CoverImageFileID &&
 		truoc.LinkTo == sau.LinkTo &&
-		sameOrder(truoc.DisplayOrder, sau.DisplayOrder)
+		sameOrder(truoc.DisplayOrder, sau.DisplayOrder) &&
+		truoc.AudioFileID == sau.AudioFileID &&
+		truoc.AudioDurationSeconds == sau.AudioDurationSeconds
 	// `PublishedAt` is NOT compared, for the reason `DaSuaTay` is not: it is derived from the act of
 	// publishing, which a changed TrangThai already makes a change.
 }

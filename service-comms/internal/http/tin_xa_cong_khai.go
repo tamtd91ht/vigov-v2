@@ -44,6 +44,8 @@ package http
 //	              plain text it always was, for app builds already on residents' phones.
 //	?type=banner  the home-screen banner strip, and ONLY there: the default list no longer carries banners.
 //	link_to       on a banner: an in-app path or an https URL, re-checked on the way out.
+//	audio_*       on a published `truyen-thanh` (ADR 0067 §4): the typed duration and a short-lived
+//	              presigned link to the PRIVATE original — no public copy of broadcast audio exists.
 
 import (
 	"context"
@@ -56,6 +58,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	"github.com/vihat/vigov/service-comms/internal/richtext"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
@@ -99,6 +102,10 @@ type DepsCongKhai struct {
 	// *app.ContentCovers satisfies it.
 	CoverImages PublicCoverImages
 
+	// Audio resolves `audio_url`: a short-lived presigned GET of a broadcast's PRIVATE original (ADR 0067
+	// §4.2). *app.ContentAudio satisfies it.
+	Audio PublicAudioLinks
+
 	Log *slog.Logger
 }
 
@@ -106,6 +113,12 @@ type DepsCongKhai struct {
 // with no recorded public copy is absent (ADR 0052 §2, §11).
 type PublicCoverImages interface {
 	PublicImageURLs(ctx context.Context, fileIDs []string) (map[string]string, error)
+}
+
+// PublicAudioLinks maps audio file ids to a presigned GET of the private original; a file that is not a
+// ready, live content-audio row is absent.
+type PublicAudioLinks interface {
+	PublicAudioURLs(ctx context.Context, fileIDs []string) (map[string]app.PublicAudio, error)
 }
 
 // HandlerCongKhai serves the public routes. A SEPARATE TYPE from Handler, with its own Deps, so a
@@ -197,6 +210,15 @@ type tinXaRa struct {
 	// second wall under migration 0012's CHECK — an invalid stored value is dropped, not sent.
 	LinkTo string `json:"link_to,omitempty"`
 
+	// AudioDurationSeconds, AudioURL and AudioURLExpiresAt are a broadcast's audio (ADR 0067 §4) — only
+	// on `truyen-thanh`, only when its file is attached and verified, on the list and the detail.
+	// AudioURL is a presigned GET of the PRIVATE original (there is no public copy, §4.2), valid until
+	// AudioURLExpiresAt (≤ 15 minutes): play it directly, and re-read the item for a fresh link once it
+	// has expired. It names no file and no person. The duration is what the commune's officer typed.
+	AudioDurationSeconds int        `json:"audio_duration_seconds,omitempty"`
+	AudioURL             string     `json:"audio_url,omitempty"`
+	AudioURLExpiresAt    *time.Time `json:"audio_url_expires_at,omitempty"`
+
 	// BodyBlocks is the body as structure, DETAIL ONLY (ADR 0067 §1 decision 3). ABSENT when the body has
 	// no text — the client then shows `body`. Never HTML: every `text` is plain text, every `href` https.
 	BodyBlocks []bodyBlockOut `json:"body_blocks,omitempty"`
@@ -261,6 +283,20 @@ func bodyBlocksOut(stored string) []bodyBlockOut {
 	return out
 }
 
+// audioIDs collects the audio file ids of the PUBLISHED broadcasts of a page — the only ones the public
+// surface may sign a link for.
+func audioIDs(ds []domain.NoiDungMiniApp) []string {
+	ids := make([]string, 0, len(ds))
+	seen := make(map[string]bool, len(ds))
+	for _, n := range ds {
+		if n.HienChoDan() && n.Loai == domain.LoaiTruyenThanh && n.AudioFileID != "" && !seen[n.AudioFileID] {
+			seen[n.AudioFileID] = true
+			ids = append(ids, n.AudioFileID)
+		}
+	}
+	return ids
+}
+
 // coverIDs collects the cover file ids of the PUBLISHED items of a page — the only ones the public
 // surface may resolve an image for.
 func coverIDs(ds []domain.NoiDungMiniApp) []string {
@@ -275,7 +311,8 @@ func coverIDs(ds []domain.NoiDungMiniApp) []string {
 	return ids
 }
 
-func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images map[string]string, coThan bool) tinXaRa {
+func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images map[string]string,
+	audio map[string]app.PublicAudio, coThan bool) tinXaRa {
 	ra := tinXaRa{
 		ID:           n.ID,
 		Type:         string(n.Loai),
@@ -307,6 +344,16 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 	if n.HienChoDan() && n.CoverImageFileID != "" {
 		// ONLY A PUBLISHED ITEM'S, a second wall under the store's predicate and coverIDs.
 		ra.ImageURL = images[n.CoverImageFileID]
+	}
+	if n.HienChoDan() && n.Loai == domain.LoaiTruyenThanh && n.AudioFileID != "" {
+		// ONLY A PUBLISHED BROADCAST'S, a second wall under the store's predicate and audioIDs. No
+		// link (storage not configured, file not ready) → no duration either: a player bar with
+		// nothing to play is the failure, not a missing number.
+		if a, ok := audio[n.AudioFileID]; ok && a.URL != "" {
+			exp := a.ExpiresAt.UTC()
+			ra.AudioURL, ra.AudioURLExpiresAt = a.URL.URL(), &exp
+			ra.AudioDurationSeconds = n.AudioDurationSeconds
+		}
 	}
 	if n.Loai == domain.LoaiBanner {
 		if u, err := domain.NormalizeLinkTo(n.LinkTo); err == nil {
@@ -466,6 +513,12 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 		h.loi500(ctx, w, "tin của xã: ảnh bìa", err)
 		return
 	}
+	audio, err := h.d.Audio.PublicAudioURLs(ctx, audioIDs(kq.Items))
+	if err != nil {
+		h.loi500(ctx, w, "tin của xã: âm thanh truyền thanh", err)
+		return
+	}
+	noStoreIfSigned(w, audio)
 
 	ra.NextCursor, ra.HasMore = kq.NextCursor, kq.HasMore
 	for _, n := range kq.Items {
@@ -476,7 +529,7 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 				"xa", string(xa.ID), "trang_thai", string(n.TrangThai))
 			continue
 		}
-		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, false))
+		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, audio, false))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -515,7 +568,7 @@ func (h *HandlerCongKhai) publicBannerStrip(ctx context.Context, w http.Response
 				"xa", string(tenant.MustFrom(ctx)), "trang_thai", string(n.TrangThai), "loai", string(n.Loai))
 			continue
 		}
-		item := tinXaRaNgoai(n, nil, images, false)
+		item := tinXaRaNgoai(n, nil, images, nil, false)
 		if item.ImageURL == "" {
 			continue
 		}
@@ -724,5 +777,19 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 		h.loi500(ctx, w, "chi tiết tin của xã: ảnh bìa", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, true))
+	audio, err := h.d.Audio.PublicAudioURLs(ctx, audioIDs([]domain.NoiDungMiniApp{n}))
+	if err != nil {
+		h.loi500(ctx, w, "chi tiết tin của xã: âm thanh truyền thanh", err)
+		return
+	}
+	noStoreIfSigned(w, audio)
+	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, audio, true))
+}
+
+// noStoreIfSigned marks a reply carrying a presigned audio link `no-store`: a cache that kept it would
+// hand residents a link that has already expired.
+func noStoreIfSigned(w http.ResponseWriter, audio map[string]app.PublicAudio) {
+	if len(audio) > 0 {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 }

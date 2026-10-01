@@ -76,6 +76,7 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 		Xa: xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
 		// The real use case with nothing configured: every image is absent, never an error.
 		CoverImages: commsapp.NewContentCovers(nil, nil, nil, nil, nil, nil),
+		Audio:       commsapp.NewContentAudio(nil, nil, nil, nil, nil, nil),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	return dungBienCongKhai(mux, nguon)

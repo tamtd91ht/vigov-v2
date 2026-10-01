@@ -53,8 +53,9 @@ type dongNDMiniApp struct {
 	eventPlace, videoURL                    any
 	coverImageFileID                        any
 
-	// Migration 0012's banner pair. nil where NULL.
-	linkTo, displayOrder any
+	// Migration 0012's banner pair and audio pair. nil where NULL.
+	linkTo, displayOrder       any
+	audioFileID, audioDuration any
 }
 
 func (d dongNDMiniApp) giaTri(cot string) driver.Value {
@@ -109,6 +110,10 @@ func (d dongNDMiniApp) giaTri(cot string) driver.Value {
 		return d.linkTo
 	case "display_order":
 		return d.displayOrder
+	case "audio_file_id":
+		return d.audioFileID
+	case "audio_duration_seconds":
+		return d.audioDuration
 	default:
 		// LOUD, NOT ZERO. A silent zero here would let a column be added to cotNoiDungMiniApp and
 		// never actually be read by anything, while this suite "passed" and proved nothing about it.
@@ -755,12 +760,12 @@ func TestUpdateCannotChangeFirstPublishAndWritesEveryTypeColumn(t *testing.T) {
 	if !strings.Contains(stmt.sql, "cover_image_file_id = $16") {
 		t.Errorf("câu cập nhật phải ghi cover_image_file_id = $16: %s", stmt.sql)
 	}
-	// A tin-tuc row: every per-type column, the unset instant, the absent cover and the banner pair bind
-	// as NULL.
-	if len(stmt.args) != 18 {
-		t.Fatalf("số tham số = %d, muốn 18", len(stmt.args))
+	// A tin-tuc row: every per-type column, the unset instant, the absent cover, the banner pair and the
+	// audio pair bind as NULL.
+	if len(stmt.args) != 20 {
+		t.Fatalf("số tham số = %d, muốn 20", len(stmt.args))
 	}
-	for i := 10; i < 18; i++ {
+	for i := 10; i < 20; i++ {
 		if stmt.args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL", i+1, stmt.args[i])
 		}

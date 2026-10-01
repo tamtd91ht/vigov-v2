@@ -255,6 +255,63 @@ func (s *StoredFileStore) PublicObjectKeys(ctx context.Context, ids []string) (m
 	return out, nil
 }
 
+// SoftDelete retires one live row (rule 7: `deleted_at` / `deleted_by` / `delete_reason`, never a
+// DELETE). The object stays in the bucket — the purge worker, not built, owns that (ADR 0052 §6). Used
+// when an item stops pointing at its broadcast audio, so platform's one-file-per-item count
+// (`max_files_per_subject` of content-audio) frees the slot for a replacement. `by` is a STAFF BUSINESS
+// CODE (rule 6, invariant 8); 0011's CHECK refuses an empty reason. A row with a public key is not
+// touched (zero rows → ErrStoredFileMoved): a published copy is withdrawn first, never orphaned.
+func (s *StoredFileStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string,
+	at time.Time) error {
+
+	const stmt = `UPDATE stored_file SET deleted_at = $3, deleted_by = $4, delete_reason = $5,
+		updated_at = $3
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND public_object_key IS NULL`
+	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, at, by, reason)
+	if err != nil {
+		return fmt.Errorf("stored_file: xoá mềm tệp: %w", err)
+	}
+	return oneStoredFileRow(res, "xoá mềm tệp")
+}
+
+// ReadyObjectKeys reads the PRIVATE object key of each `ready`, live file of ONE purpose among ids, in
+// one statement, keyed by file id; anything else is absent. For the public news routes' audio link
+// (ADR 0067 §4.2): the key is presigned, never published, and never leaves this service.
+func (s *StoredFileStore) ReadyObjectKeys(ctx context.Context, purpose string, ids []string) (map[string]string, error) {
+	out := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	if len(ids) > MaxStoredFileBatch || !distinctNonEmpty(ids) || purpose == "" {
+		return nil, ErrStoredFileList
+	}
+	marks := make([]string, 0, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, purpose) // $2; $1 is the commune (Scoped.Query)
+	for i, id := range ids {
+		marks = append(marks, "$"+strconv.Itoa(i+3))
+		args = append(args, id)
+	}
+	rows, err := s.db.For(ctx).Query(ctx, "id, object_key", "stored_file",
+		"AND deleted_at IS NULL AND status = 'ready' AND purpose = $2 AND id IN ("+
+			strings.Join(marks, ", ")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc khoá tệp sẵn sàng: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, key string
+		if err := rows.Scan(&id, &key); err != nil {
+			return nil, fmt.Errorf("stored_file: quét khoá tệp sẵn sàng: %w", err)
+		}
+		out[id] = key
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt khoá tệp sẵn sàng: %w", err)
+	}
+	return out, nil
+}
+
 // countForSubjectTail is platform's `max_files_per_subject` count: the files of one purpose on one
 // subject that are not deleted, failed, rejected or purged. A `pending` / `scanning` row counts only
 // while its form can still receive bytes — created at or after `pendingSince` — so an abandoned upload

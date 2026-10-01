@@ -217,6 +217,11 @@ type Deps struct {
 	// answer 503 and every other route keeps serving.
 	ContentCovers ContentCoverActs
 
+	// The broadcast audio of a `truyen-thanh` item (ADR 0067 §4) — internal/http/content_audio.go. Built
+	// even when object storage, the scanner or platform's limits are absent: its two routes then answer
+	// 503 and every other route keeps serving.
+	ContentAudio ContentAudioActs
+
 	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
 	MapFieldSchemas      MapFieldSchemaReader
 	WriteMapFieldSchemas MapFieldSchemaWriter
@@ -272,6 +277,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.ContentCovers == nil {
 		panic("comms/http: thiếu use case ảnh bìa — hai tuyến /api/v1/content-items/cover-images và chi tiết nội dung sẽ panic khi có người gọi")
+	}
+	if d.ContentAudio == nil {
+		panic("comms/http: thiếu use case âm thanh truyền thanh — hai tuyến /api/v1/content-items/audio-files và chi tiết nội dung sẽ panic khi có người gọi")
 	}
 	if d.MapFieldSchemas == nil {
 		panic("comms/http: thiếu kho trường bản đồ — GET /api/v1/map-field-schemas sẽ panic khi có người gọi")
@@ -749,6 +757,73 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
 				http.HandlerFunc(h.CompleteCoverUpload))))
+
+	// --- the broadcast audio of a `truyen-thanh` item: ADR 0052's three-step upload (ADR 0067 §4) -------
+	//
+	// internal/app/content_audio.go has the whole flow and says why it differs from the cover: the item
+	// must already be a saved `truyen-thanh`, the file is ATTACHED BY THE COMPLETION (with the duration
+	// the officer typed), and nothing of it is ever public — residents get a short-lived presigned GET.
+	//
+	// `content.update` ON BOTH: ADR 0067 §4.3 names it ("người tải cần content.update"); it is the key
+	// the cover routes use and is seeded (service-identity/migrations/0001_init.sql:293). NO KEY WAS
+	// INVENTED (rule 5, invariant 3c).
+	//
+	// THE LIMITS ARE PLATFORM'S (`content-audio`, platform 0013: 30 MiB, MP3/M4A, ONE file per item).
+	// Not configured → 503 `storage_not_configured`, as is a missing object store or scanner.
+	//
+	// idem.Required(idem.MoKhiHong): a double submit issues at most one pending row — the second meets the
+	// one-file count (409 `audio_limit`) — never a second stored file. A cache outage must not stop an
+	// officer mid-composition (the cover route makes the same call).
+	//
+	// 404 is a `content_item_id` that is no live item of this commune — the same answer as another
+	// commune's (rule 4, forbidden #2). 422 `audio_only_for_truyen_thanh` for an item of another type.
+	// 409 `audio_limit` when the item already has its file (remove it first: PATCH audio_file_id "").
+	//
+	// @summary  Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @screen   11-noi-dung-mini-app §7
+	// @request  audioUploadIn
+	// @reply    201 audioUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/audio-files",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestAudioUpload))))
+
+	// HOÀN TẤT TẢI ÂM THANH — `completion`, as for the cover. Only the officer the upload was issued to;
+	// anybody else's id answers 404. Body: `audio_duration_seconds`, 1 .. 21600 (422 otherwise).
+	//
+	// Stat · sniff (MP3: ID3 or MPEG frame sync; M4A: `ftyp` brand) · the CURRENT policy · ClamAV · the
+	// WHOLE-STREAM audio check (an M4A with a video track, or a renamed video, is refused) · sha256 · copy
+	// to the private bucket · in ONE transaction: `ready`, the item's `audio_file_id` and
+	// `audio_duration_seconds`, one trail entry. Infected, wrong type, too large, not audio → 422. Scanner
+	// or platform down → 503, nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
+	//
+	// idem.KhongCan: a second completion of a ready file answers that file and writes nothing (the
+	// duration it carries is NOT applied — PATCH corrects it); two in flight serialise on the row lock.
+	//
+	// @summary  Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập
+	// @screen   11-noi-dung-mini-app §7
+	// @request  audioCompletionIn
+	// @reply    200 audioFileOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/audio-files/{id}/completion",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("hoàn tất lần hai trên tệp đã sẵn sàng trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
+				http.HandlerFunc(h.CompleteAudioUpload))))
 
 	// --- the commune's Mini App category tree --------------------------------------------------------
 	//

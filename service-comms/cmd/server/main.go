@@ -222,6 +222,13 @@ func main() {
 	// "x-tenant-id" on every call, which ListUploadPolicies requires; the reader caches per commune.
 	policies := uploadpolicy.New(nenTang.Client(), log)
 	covers := commsapp.NewContentCovers(kho, noiDung, storedFiles, objects, scanner, policies)
+	// The broadcast audio (ADR 0067 §4): the same object store, scanner and limits reader, its own
+	// purpose (content-audio). A nil `objects` converts to a nil AudioObjectStore — still "not configured".
+	var audioObjects commsapp.AudioObjectStore
+	if objects != nil {
+		audioObjects = objects
+	}
+	broadcastAudio := commsapp.NewContentAudio(kho, noiDung, storedFiles, audioObjects, scanner, policies)
 
 	// The map field schema (migration 0007). One store behind the read route and the write use
 	// case; the use case owns the transaction its audit entry shares.
@@ -261,11 +268,13 @@ func main() {
 		ThongBao:      thongBao,
 		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
 
-		NoiDung:           noiDung,
-		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung).WithCovers(storedFiles, objects, log),
+		NoiDung: noiDung,
+		GhiNoiDung: commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung).
+			WithCovers(storedFiles, objects, log).WithAudioFiles(storedFiles),
 		DanhMucNoiDung:    danhMucNoiDung,
 		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(kho, danhMucNoiDung),
 		ContentCovers:     covers,
+		ContentAudio:      broadcastAudio,
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.
@@ -291,6 +300,7 @@ func main() {
 		NoiDung:     noiDung,
 		DanhMuc:     danhMucNoiDung,
 		CoverImages: covers,
+		Audio:       broadcastAudio,
 		Log:         log,
 	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())

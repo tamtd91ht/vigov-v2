@@ -614,6 +614,13 @@ type NoiDungMiniApp struct {
 	LinkTo       string
 	DisplayOrder *int
 
+	// AudioFileID and AudioDurationSeconds are migration 0012's audio pair (ADR 0067 §4), `truyen-thanh`
+	// only, set together or not at all. AudioFileID is this service's own `stored_file` row (purpose
+	// content-audio), PRIVATE bucket only. AudioDurationSeconds is TYPED BY THE OFFICER (ADR 0067 §4.1,
+	// ADR 0047 G7), never measured. "" / 0 = NULL.
+	AudioFileID          string
+	AudioDurationSeconds int
+
 	// Nguon, NguonURL, NguonIDNgoai and DaSuaTay are the provenance half of §8. They describe the
 	// ROW rather than the sync job, which is why they are here while the job is not — migration 0006
 	// argues it in full.
@@ -653,6 +660,9 @@ func (n NoiDungMiniApp) CheckTypeFields() error {
 	if err := checkBannerFields(n.Loai, n.LinkTo, n.DisplayOrder); err != nil {
 		return err
 	}
+	if err := checkAudioFields(n.Loai, n.AudioFileID, n.AudioDurationSeconds); err != nil {
+		return err
+	}
 	return checkTypeFields(n.Loai, n.EventStartsAt, n.EventEndsAt, n.EventPlace, n.VideoURL)
 }
 
@@ -671,6 +681,11 @@ func (n NoiDungMiniApp) WithoutOtherTypeFields() NoiDungMiniApp {
 	// Migration 0012: the banner's tap target and position go with the type (ADR 0067 §5).
 	if n.Loai != LoaiBanner {
 		n.LinkTo, n.DisplayOrder = "", nil
+	}
+	// Migration 0012: a broadcast file left on a news article is audio a resident can play under a
+	// headline it was never recorded for. The caller retires the file row in the same transaction.
+	if n.Loai != LoaiTruyenThanh {
+		n.AudioFileID, n.AudioDurationSeconds = "", 0
 	}
 	return n
 }
@@ -831,6 +846,22 @@ type YeuCauSuaNoiDung struct {
 	// expresses as well. A type change away from `banner` clears both.
 	LinkTo       *string
 	DisplayOrder *int
+
+	// AudioFileID — nil = leave alone; "" = REMOVE the broadcast audio (both columns go NULL and the file
+	// row is soft-deleted in the same transaction, rule 7). ANY OTHER VALUE is accepted only when it is
+	// the file already attached (a no-op): a file is attached by its upload's completion, which carries
+	// the duration (ContentAudio.Complete says why it is not attached here).
+	AudioFileID *string
+
+	// AudioDurationSeconds — nil = leave alone; a value = correct the typed duration of the audio already
+	// attached (1 .. AudioDurationMaxSeconds). There is no clear: the duration goes with the file.
+	AudioDurationSeconds *int
+}
+
+// SetsAudioField reports whether the request gives an audio field a VALUE (removing one does not
+// count): such a request on an item that will not be `truyen-thanh` is refused, never dropped.
+func (y YeuCauSuaNoiDung) SetsAudioField() bool {
+	return (y.AudioFileID != nil && *y.AudioFileID != "") || y.AudioDurationSeconds != nil
 }
 
 // SetsBannerField reports whether the request gives a banner field a VALUE: such a request on an item
@@ -946,6 +977,23 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 		return YeuCauSuaNoiDung{}, err
 	}
 	ra.DisplayOrder = copyInt(y.DisplayOrder)
+	if y.AudioFileID != nil {
+		v, err := cleanFileID(*y.AudioFileID)
+		if err != nil {
+			return YeuCauSuaNoiDung{}, ErrAudioFileIDInvalid
+		}
+		ra.AudioFileID = &v
+	}
+	if y.AudioDurationSeconds != nil {
+		if err := CheckAudioDuration(*y.AudioDurationSeconds); err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		if ra.AudioFileID != nil && *ra.AudioFileID == "" {
+			// Removing the audio and typing its duration in one request contradict each other.
+			return YeuCauSuaNoiDung{}, ErrAudioAllOrNone
+		}
+		ra.AudioDurationSeconds = copyInt(y.AudioDurationSeconds)
+	}
 	return ra, nil
 }
 

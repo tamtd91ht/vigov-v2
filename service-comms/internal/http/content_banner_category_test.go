@@ -204,7 +204,7 @@ func bannerServer(t *testing.T, nd *ckNoiDung, dm *ckDanhMuc) http.Handler {
 		dm = &ckDanhMuc{}
 	}
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: covers,
+	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: covers, Audio: &fakePublicAudio{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	return mux
 }

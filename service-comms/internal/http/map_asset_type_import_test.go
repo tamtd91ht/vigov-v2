@@ -113,6 +113,7 @@ func newImportServer(t *testing.T) *importServer {
 		DanhMucNoiDung:       &soDanhMucNDGia{},
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		ContentCovers:        &fakeCovers{},
+		ContentAudio:         &fakeAudio{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         &fakeMailSettings{},

@@ -106,6 +106,7 @@ func newMapFieldServer(t *testing.T) *mapFieldServer {
 		DanhMucNoiDung:       &soDanhMucNDGia{},
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		ContentCovers:        &fakeCovers{},
+		ContentAudio:         &fakeAudio{},
 		MapFieldSchemas:      fake,
 		WriteMapFieldSchemas: fake,
 		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.

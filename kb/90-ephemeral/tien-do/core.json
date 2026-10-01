@@ -227,6 +227,13 @@
       "viec": "core/httpx.CitizenSessions.TraCuu trả thêm error: CitizenEdge trả 503 service_unavailable khi sổ phiên không hỏi được, trên mọi lớp tuyến — hết gộp sự cố thành \"phiên đã kết thúc\"",
       "trang_thai": "xong",
       "bang_chung": "citizen.go; identityclient.SoPhienCongDan.TraCuu chuyển lỗi lên (vẫn ghi CẢNH BÁO HẠ TẦNG, không token/định danh). citizen_unavailable_test.go: 503 trên XaTuPhien / XaTuPhienChiXem / KhongThuocXa, handler không chạy; yêu cầu không Bearer không bị ảnh hưởng. identityclient: TestCitizenSessionOutageIsAnErrorAndWarned. go vet/test core xanh."
+    },
+    {
+      "id": "storage-content-audio",
+      "viec": "core/storage: mục đích tải lên content-audio (âm thanh tin Truyền thanh, ADR 0067 §4) + hai kiểu MIME audio/mpeg→mp3, audio/mp4→m4a, bộ dò đầu tệp và phép kiểm toàn luồng CheckAudioStream",
+      "trang_thai": "xong",
+      "bang_chung": "CHƯA COMMIT (đi cùng thẻ B5). key.go PurposeContentAudio trong knownPurposes; mime.go MIMEMP3/MIMEM4A, isMedia (inline), isID3v2 + isMP3Frame (chỉ Layer III), ftyp 'M4A '/'M4B ' → audio/mp4; major isom/mp42 chỉ thành audio/mp4 khi có brand M4A và KHÔNG có brand video (M4V/avc1/qt) — video thường vẫn là video/mp4. audio.go CheckAudioStream: M4A phải có track 'soun', không track nào ngoài soun/text (track 'vide' → từ chối), moov ≤ 16 MiB; MP3 bỏ qua thẻ ID3 rồi đòi HAI khung Layer III liên tiếp. audio_test.go + mime_test.go (TestSniffVideoNeverAudio, wav/ogg/flac/ADTS/M4P bị từ chối); TestClosedListsDoNotCollide, uploadpolicy TestEnumAndStoragePurposesMatchBothWays xanh. go vet + go test core xanh.",
+      "tiep_theo": "File isom-major KHÔNG có brand M4A (một số bộ mã hoá) bị từ chối như video/mp4 — từ chối nhầm, có chủ ý; nếu xã gặp nhiều thì cân nhắc đọc moov ngay ở bước dò."
     }
   ]
 }

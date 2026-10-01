@@ -245,6 +245,13 @@
       "no_confirm": [],
       "tiep_theo": "Commit. Thẻ web-admin: ô soạn Tiptap + màn sửa/ẩn/xoá danh mục + trường banner, gỡ các mục tương ứng khỏi PHAN_CHUA_DUNG (web-admin/src/features/noi-dung/nhan-noi-dung.ts). Thẻ citizen-app: dựng body_blocks (không bao giờ innerHTML), dải banner từ ?type=banner thay ảnh nung trong bundle (ADR 0047:251). make kb để sinh lại openapi. Giả định cần chủ dự án xem: PATCH không xoá được display_order (null đọc như vắng) — đổi loại khỏi banner mới xoá; dải banner không phân trang, trần 100 (page.MaxLimit), vượt thì cắt và ghi nhật ký; banner bỏ qua category/cursor/limit; con của danh mục ẩn cũng không có chip.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "noi-dung-mini-app-a-truyen-thanh-am-thanh",
+      "viec": "Nội dung Mini App phần A (B5): tệp âm thanh tin Truyền thanh — tải lên ba bước, gắn vào mục kèm thời lượng cán bộ nhập, link ký ngắn hạn cho người dân (ADR 0067 §4)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "CHƯA COMMIT. Tuyến mới POST /api/v1/content-items/audio-files và …/audio-files/{id}/completion, quyền content.update (internal/http/routes.go, content_audio.go). app/content_audio.go: mục phải là truyen-thanh đã lưu; giới hạn đọc từ chính sách content-audio của platform; hoàn tất = dò kiểu → ClamAV → storage.CheckAudioStream → sha256 → chép sang bucket private, rồi CÙNG một giao dịch: tệp ready + audio_file_id/audio_duration_seconds (1..21600) + một vết luu_am_thanh_truyen_thanh. Không bản dẫn xuất, không bản công khai. PATCH /content-items/{id}: audio_file_id \"\" gỡ cả hai cột và xoá mềm dòng stored_file trong cùng giao dịch (giải phóng suất 1 tệp/mục); audio_duration_seconds sửa thời lượng; đổi loại khỏi truyen-thanh tự gỡ. GET chi tiết cán bộ có khối audio (trạng thái, kiểu, dung lượng, thời lượng, link nghe thử ≤15 phút). GET /api/v1/commune-news (cả ?type=truyen-thanh) và /{id}: audio_duration_seconds, audio_url (presign bản gốc private, 15 phút, không tên tệp), audio_url_expires_at — chỉ mục đã đăng, Cache-Control no-store. store: cột audio đọc/ghi đủ, StoredFileStore.SoftDelete + ReadyObjectKeys. Kiểm thử app/http/domain/store; go vet + go test ./... service-comms xanh.",
+      "tiep_theo": "Chưa chạy với PostgreSQL/MinIO/clamd thật (trigger 0012 noi_dung_mini_app_audio_file_check, stored_file_guard). web-admin (ô tải âm thanh + ô thời lượng trong modal §7) và citizen-app (trình phát dùng audio_url, làm mới khi hết hạn) là thẻ khác. Tệp âm thanh không còn mục nào trỏ tới chỉ xoá mềm — việc dọn đối tượng thuộc worker purge (ADR 0052 §6, chưa dựng)."
     }
   ]
 }

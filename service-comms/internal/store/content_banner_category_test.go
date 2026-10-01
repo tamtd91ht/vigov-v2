@@ -62,12 +62,46 @@ func TestUpdateWritesBannerPairAndClearsAudioOffBroadcasts(t *testing.T) {
 		t.Fatalf("cập nhật lỗi: %v", err)
 	}
 	stmt := k.lenh[0].sql
+	// Since the audio card (ADR 0067 §4) the audio pair is written IN FULL from the merged row, like the
+	// banner pair: the app clears it off a non-broadcast (WithoutOtherTypeFields), so a tin-tuc row binds
+	// NULL / NULL here — which is what 0012's CHECK requires of it.
 	for _, want := range []string{"link_to = $17", "display_order = $18",
-		"audio_file_id = CASE WHEN $3 = 'truyen-thanh' THEN audio_file_id END",
-		"audio_duration_seconds = CASE WHEN $3 = 'truyen-thanh' THEN audio_duration_seconds END"} {
+		"audio_file_id = $19", "audio_duration_seconds = $20"} {
 		if !strings.Contains(stmt, want) {
 			t.Errorf("câu cập nhật thiếu %q: %s", want, stmt)
 		}
+	}
+	if args := k.lenh[0].args; len(args) != 20 || args[18] != nil || args[19] != nil {
+		t.Errorf("a tin-tuc row must bind the audio pair as NULL: %v", args)
+	}
+}
+
+func TestUpdateWritesTheAudioPairOfABroadcast(t *testing.T) {
+	k := &khoNDGia{soDongDoi: 1}
+	repo, ctx := khoNoiDung(t, k)
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		return repo.CapNhat(ctx, tx, domain.NoiDungMiniApp{ID: "nd-001", Loai: domain.LoaiTruyenThanh, TieuDe: "T",
+			AudioFileID: "01JAUDIO", AudioDurationSeconds: 754})
+	})
+	if err != nil {
+		t.Fatalf("cập nhật lỗi: %v", err)
+	}
+	if args := k.lenh[0].args; len(args) != 20 || args[18] != "01JAUDIO" || args[19] != int64(754) {
+		t.Errorf("audio pair bound as %v / %v", args[18], args[19])
+	}
+}
+
+func TestAudioPairReadsByName(t *testing.T) {
+	row := dongNDMau()
+	row.loai, row.audioFileID, row.audioDuration = "truyen-thanh", "01JAUDIO", int64(754)
+	k := &khoNDGia{dong: []dongNDMiniApp{row}}
+	repo, ctx := khoNoiDung(t, k)
+	got, err := repo.TheoID(ctx, row.id)
+	if err != nil {
+		t.Fatalf("đọc lỗi: %v", err)
+	}
+	if got.AudioFileID != "01JAUDIO" || got.AudioDurationSeconds != 754 {
+		t.Errorf("audio pair read as %q / %d", got.AudioFileID, got.AudioDurationSeconds)
 	}
 }
 

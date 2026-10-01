@@ -172,7 +172,8 @@ func cotChiTietND() []string {
 		"ngay_dang", "luot_xem", "trang_thai", "nguon", "nguon_url", "nguon_id_ngoai",
 		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
 		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url",
-		"cover_image_file_id", "link_to", "display_order", "noi_dung"}
+		"cover_image_file_id", "link_to", "display_order", "audio_file_id", "audio_duration_seconds",
+		"noi_dung"}
 }
 
 func hangTu(n domain.NoiDungMiniApp) []driver.Value {
@@ -195,8 +196,17 @@ func hangTu(n domain.NoiDungMiniApp) []driver.Value {
 		n.TaoLuc, n.CapNhatLuc,
 		instant(n.PublishedAt), instant(n.EventStartsAt), instant(n.EventEndsAt),
 		rong(n.EventPlace), rong(n.VideoURL), rong(n.CoverImageFileID),
-		rong(n.LinkTo), order(n.DisplayOrder), rong(n.NoiDung),
+		rong(n.LinkTo), order(n.DisplayOrder), rong(n.AudioFileID), seconds(n.AudioDurationSeconds),
+		rong(n.NoiDung),
 	}
+}
+
+// seconds is a nullable INT: 0 is NULL (audio_duration_seconds' CHECK refuses 0).
+func seconds(v int) driver.Value {
+	if v == 0 {
+		return nil
+	}
+	return int64(v)
 }
 
 func order(p *int) driver.Value {
@@ -647,8 +657,9 @@ func updateArgs(t *testing.T, k *khoNDGia) []driver.Value {
 	if len(stmts) != 1 {
 		t.Fatalf("số câu cập nhật = %d, muốn 1", len(stmts))
 	}
-	if len(stmts[0].args) != 18 { // $16 cover_image_file_id, $17 link_to, $18 display_order
-		t.Fatalf("số tham số cập nhật = %d, muốn 18", len(stmts[0].args))
+	// $16 cover_image_file_id, $17 link_to, $18 display_order, $19 audio_file_id, $20 audio_duration_seconds
+	if len(stmts[0].args) != 20 {
+		t.Fatalf("số tham số cập nhật = %d, muốn 20", len(stmts[0].args))
 	}
 	return stmts[0].args
 }

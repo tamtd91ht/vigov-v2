@@ -398,6 +398,7 @@ enum UploadPurpose {
   UPLOAD_PURPOSE_PETITION_PHOTO = 5;      // scene photo on a petition (petitions) — ADR 0052 §12
   UPLOAD_PURPOSE_DOCUMENT_SCAN = 6;       // scan of an administrative document (documents)
   UPLOAD_PURPOSE_TASK_ATTACHMENT = 7;     // file attached to a task log entry (petitions)
+  UPLOAD_PURPOSE_CONTENT_AUDIO = 8;       // Mini App content, type truyen-thanh: the broadcast audio (comms) — ADR 0067 §4
 }
 
 // UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no

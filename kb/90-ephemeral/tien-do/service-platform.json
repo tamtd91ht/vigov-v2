@@ -205,6 +205,13 @@
       "trang_thai": "xong",
       "bang_chung": "cmd/server/operator_edge.go wireOperatorEdge đọc cfg.IdentityOperatorGRPCAddr(); main.go configUses bỏ config.IdentityClient. TestOperatorEdgeDialsTheOperatorAddress: chỉ có IDENTITY_GRPC_ADDR thì từ chối khởi động, gọi tên IDENTITY_OPERATOR_GRPC_ADDR. go vet/test service-platform xanh.",
       "tiep_theo": "Staging/prod: platform nay BẮT BUỘC IDENTITY_OPERATOR_GRPC_ADDR (manifest base đặt sẵn identity:9093) và KHÔNG còn đòi IDENTITY_GRPC_ADDR — ADR 0048 §Chốt bổ sung 01/10 #2(d) còn ghi IDENTITY_GRPC_ADDR trong platform-secrets, cần một dòng ghi thêm ở ADR."
+    },
+    {
+      "id": "upload-policy-content-audio",
+      "viec": "Mục đích tải lên content-audio (âm thanh tin Truyền thanh Mini App): mở rộng CHECK purpose và gieo chính sách 30 MB, audio/mpeg + audio/mp4 (m4a), 1 tệp mỗi tin (chủ dự án chốt 01/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-platform/migrations/0013_upload_policy_content_audio.sql (chưa commit): CHECK 8 giá trị; seed ('content-audio', 31457280, ARRAY['audio/mpeg','audio/mp4'], 1) + một dòng platform_audit_log cùng câu lệnh. Phía Go đã vào cùng thẻ B5: core/storage PurposeContentAudio + MIMEMP3/MIMEM4A kèm bộ dò, platform.proto UPLOAD_PURPOSE_CONTENT_AUDIO = 8, internal/store/upload_policy_test.go thêm dòng want content-audio (maxFiles 1, tệp 0013) và chú thích ngày chốt 01/10/2026. go vet + go test ./... service-platform XANH.",
+      "tiep_theo": "Commit cùng thẻ B5 (proto + core/storage + service-comms), không commit riêng tệp này. Xong commit thì đổi trang_thai sang xong."
     }
   ]
 }

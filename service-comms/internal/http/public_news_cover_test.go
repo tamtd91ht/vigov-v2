@@ -20,7 +20,7 @@ const publicCoverURL = "https://media.example/vigov-prod-public/public-media/t_x
 func newPublicCoverServer(t *testing.T, nd *ckNoiDung, dm *ckDanhMuc, covers *fakePublicCovers) http.Handler {
 	t.Helper()
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: covers,
+	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: covers, Audio: &fakePublicAudio{},
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	return mux
 }

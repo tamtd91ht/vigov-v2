@@ -98,6 +98,7 @@ func newMailServer(t *testing.T) *mailServer {
 		DanhMucNoiDung:       &soDanhMucNDGia{},
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		ContentCovers:        &fakeCovers{},
+		ContentAudio:         &fakeAudio{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         fake,
