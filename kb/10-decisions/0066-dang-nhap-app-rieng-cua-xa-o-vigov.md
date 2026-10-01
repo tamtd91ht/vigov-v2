@@ -112,6 +112,19 @@ app); ADR 0032 đánh dấu bị thay một phần bởi ADR này. ADR 0045 và 
 | `--demo` của app riêng | Cột bật danh tính cố định theo App ID, **mặc định tắt**; bật thì identity nhận đăng nhập không `phoneToken`, gán số cố định; tắt trước khi Zalo duyệt |
 | Thứ tự | Phần không đụng `service-identity` làm trước; tuyến identity đợi phiên song song đang sửa `service-identity` commit xong |
 
+## Đã quyết 01/10/2026 — sáu câu dựng tuyến (người dùng: *"ok"*, rồi *"ok không dùng đường ẩn danh nữa mà focus vào --demo option đi"*)
+
+| # | Chốt |
+|---|---|
+| 1 | Tuyến công khai `POST /api/v1/citizen-sessions` trên `identity.api.vigov.vn`, `Public("app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066")`. Thân và bảng mã trạng thái **giữ y như `vihat-miniapp`** (201 `{vigovSession}` · 400 · 401 · 422 · 429 · 502 · 503) |
+| 2 | Giới hạn tần suất dựng ngay trong tuyến: **10 lượt / 5 phút / IP**, đếm trong bộ nhớ từng pod (ngưỡng an ninh — người dùng duyệt) |
+| 3 | Khi `platform-admin` chưa có: nhập/xoay secret và bật/tắt demo theo App ID bằng `operatorctl` — bắt `--ticket`, đọc secret từ stdin, vết kiểm toán ở xã đích, không ghi giá trị |
+| 4 | Về sau `platform-admin` gọi thẳng một tuyến vận hành ở identity, không vòng qua `service-platform` |
+| 5 | Đổi mã vị trí (`getLocation`) của app riêng **cũng chuyển vào identity**, để on-premise tự đứng được |
+| 6 | Mã hoá secret bằng `SECRET_ENCRYPTION_KEYS` + `core/crypto` (khoá theo xã, ADR 0009); identity bắt buộc biến này ở prod — thêm vào `identity-secrets` trước khi triển khai |
+
+**Bản `--demo` không gọi lệnh Zalo nào**, kể cả `getAccessToken` (app chưa duyệt bị Zalo từ chối cả lệnh ấy — người dùng báo 01/10/2026). Thân demo là `{appId, demoIdentity: true}`; identity nhận khi App ID bật demo, danh tính cố định, không mã tài khoản Zalo. **Không** làm đường "gửi ẩn danh không phiên" (người dùng bỏ, 01/10/2026).
+
 ## Chưa quyết
 
 1. Nơi giữ secret App A theo xã: bảng cấu hình mã hoá trong `service-identity`, hay Secret k8s theo xã
