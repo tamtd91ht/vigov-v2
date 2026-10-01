@@ -207,6 +207,15 @@ var envHints = map[string]envHint{
 		place: inSecret,
 		shape: newKeyList,
 	},
+	// NOT grpcAddrHint: that one says port 9090, and pointing platform at identity:9090 is exactly
+	// the port that no longer serves OperatorService.
+	"IDENTITY_OPERATOR_GRPC_ADDR": {
+		meaning: "Địa chỉ gRPC nội bộ của OperatorService ở identity — platform tra và mở phiên vận hành qua đây (ADR 0048); thiếu thì platform không khởi động ở staging/prod.",
+		source: "Tên Service của identity trên cụm cộng cổng 9093 (cổng grpc-operator), KHÔNG phải 9090: kubectl get svc -A | grep identity. " +
+			"Chỉ địa chỉ trong cụm — kênh này mang mật khẩu và mã TOTP, không mã hoá.",
+		place: inDeploymentEnv,
+		shape: "<tên Service của identity đúng như kubectl get svc in ra>:9093",
+	},
 	"OPERATOR_TOTP_ENCRYPTION_KEY": {
 		meaning: "Khoá AES-256 mã hoá bí mật TOTP của tài khoản nhà vận hành (ADR 0048).",
 		source:  "Mỗi khoá: openssl rand -base64 32 (đúng 32 byte).",

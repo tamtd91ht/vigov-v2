@@ -198,6 +198,13 @@
       "bang_chung": "Phát hiện rà soát 01/10: đường email không có tài khoản trả về nhanh hơn đường so mật khẩu, cho phép dò email tồn tại qua thời gian đáp. Đã có giới hạn 20 lần / 15 phút / IP (IPv6 theo /64) ở platform, nên tốc độ dò bị chặn.",
       "no_confirm": [],
       "tiep_theo": "Chấp nhận với giới hạn tần suất. Nếu sửa: so mật khẩu với một băm giả ở service-identity cho email không tồn tại (TASK-14)."
+    },
+    {
+      "id": "quay-so-cong-van-hanh-identity",
+      "viec": "Khu vận hành quay số OperatorService ở IDENTITY_OPERATOR_GRPC_ADDR (identity:9093), bỏ khai nhóm IdentityClient (IDENTITY_GRPC_ADDR là cổng cán bộ 9090, platform không gọi RPC cán bộ nào)",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/operator_edge.go wireOperatorEdge đọc cfg.IdentityOperatorGRPCAddr(); main.go configUses bỏ config.IdentityClient. TestOperatorEdgeDialsTheOperatorAddress: chỉ có IDENTITY_GRPC_ADDR thì từ chối khởi động, gọi tên IDENTITY_OPERATOR_GRPC_ADDR. go vet/test service-platform xanh.",
+      "tiep_theo": "Staging/prod: platform nay BẮT BUỘC IDENTITY_OPERATOR_GRPC_ADDR (manifest base đặt sẵn identity:9093) và KHÔNG còn đòi IDENTITY_GRPC_ADDR — ADR 0048 §Chốt bổ sung 01/10 #2(d) còn ghi IDENTITY_GRPC_ADDR trong platform-secrets, cần một dòng ghi thêm ở ADR."
     }
   ]
 }

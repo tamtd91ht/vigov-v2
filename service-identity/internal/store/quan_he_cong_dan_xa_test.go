@@ -80,8 +80,8 @@ func nhieuDongQuanHe(n int) []map[string]driver.Value {
 // phienGia stands in for the citizen session registry so the edge can resolve one.
 type phienGia struct{ p httpx.CitizenSession }
 
-func (s phienGia) TraCuu(context.Context, string) (httpx.CitizenSession, bool) {
-	return s.p, true
+func (s phienGia) TraCuu(context.Context, string) (httpx.CitizenSession, bool, error) {
+	return s.p, true, nil
 }
 
 // ctxKenhCongDan builds the context a citizen request really carries, BY RUNNING THE REAL EDGE.

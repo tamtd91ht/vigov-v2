@@ -156,3 +156,90 @@ func (c *CachedDirectory) ForgetAll() {
 	c.entries = make(map[string]cacheEntry)
 	c.mu.Unlock()
 }
+
+// CommuneLookup answers "what does the registry say about THE COMMUNE IN ctx" — the by-commune twin
+// of Directory. The commune is read from ctx, never passed as an argument (rule 1, invariant 4): the
+// caller puts the commune it is asking about into the context, exactly as the citizen-session bridge
+// does before platformclient.XaTrongNguCanh.
+//
+// THREE OUTCOMES, NOT TWO, AND THAT IS WHY IT IS NOT A METHOD ON Directory. ByHost collapses an
+// outage into "no such host" and the edge answers 404, which is fail-closed and fine for a host. The
+// caller of THIS lookup is the citizen-session check, where the same collapse would tell every
+// citizen of every commune "your session ended" during a registry blip. err != nil is "could not
+// ask"; ok=false is "the registry does not know this commune"; ok=true carries Active as stored.
+type CommuneLookup interface {
+	Current(ctx context.Context) (Tenant, bool, error)
+}
+
+// CachedCommune is CachedDirectory keyed by commune instead of host, with the SAME TTL
+// (TENANT_CACHE_TTL) — so "a deactivated commune stops being served within one TTL" holds for every
+// path that asks by commune, not only for Host resolution.
+//
+// ONLY ANSWERS ARE CACHED, NEVER ERRORS. A cached error would refuse a commune for a whole TTL after
+// the registry recovered; an uncached one costs a retry on the next request, which is what an outage
+// already costs. Negative answers ARE cached: the commune here comes from a server-issued session,
+// never from a client, so "unknown" is a dissolved commune and asking again cannot change the answer
+// sooner than the TTL.
+//
+// SAFE UNDER RULE 1 FOR THE SAME REASON CachedDirectory IS: the key is the commune and the value is
+// only the registry's metadata answer — no business data of any commune is held.
+type CachedCommune struct {
+	inner CommuneLookup
+	ttl   time.Duration
+	now   func() time.Time // injectable so tests do not sleep
+
+	mu      sync.RWMutex
+	entries map[ID]cacheEntry
+}
+
+// NewCachedCommune wraps inner. A ttl of zero disables caching.
+func NewCachedCommune(inner CommuneLookup, ttl time.Duration) *CachedCommune {
+	if inner == nil {
+		// A nil lookup would panic on the first citizen request, in another service's hot path.
+		panic("tenant: NewCachedCommune cần một CommuneLookup")
+	}
+	return &CachedCommune{inner: inner, ttl: ttl, now: time.Now, entries: make(map[ID]cacheEntry)}
+}
+
+// Current implements CommuneLookup. No commune in ctx is a wiring fault and an error — never a
+// lookup of "" and never a default (rule 1, forbidden #1).
+func (c *CachedCommune) Current(ctx context.Context) (Tenant, bool, error) {
+	id, ok := From(ctx)
+	if !ok {
+		return Tenant{}, false, ErrNoTenant
+	}
+	if c.ttl <= 0 {
+		return c.inner.Current(ctx)
+	}
+
+	c.mu.RLock()
+	e, found := c.entries[id]
+	c.mu.RUnlock()
+	if found && c.now().Before(e.hetHan) {
+		return e.t, e.ok, nil
+	}
+
+	t, ok, err := c.inner.Current(ctx)
+	if err != nil {
+		return Tenant{}, false, err
+	}
+
+	c.mu.Lock()
+	// The same ceiling as CachedDirectory, for a different reason: the keys come from server-issued
+	// sessions, so a flood is not expected — but an unbounded map on a hot path is one bug away from
+	// an out-of-memory that takes every commune down. Expired entries go first; when still full, the
+	// answer is served without being remembered — a live commune is never evicted.
+	if len(c.entries) >= TranMuc {
+		bayGio := c.now()
+		for k, v := range c.entries {
+			if !bayGio.Before(v.hetHan) {
+				delete(c.entries, k)
+			}
+		}
+	}
+	if len(c.entries) < TranMuc {
+		c.entries[id] = cacheEntry{t: t, ok: ok, hetHan: c.now().Add(c.ttl)}
+	}
+	c.mu.Unlock()
+	return t, ok, nil
+}

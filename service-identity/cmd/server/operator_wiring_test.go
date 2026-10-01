@@ -2,9 +2,9 @@ package main
 
 // OperatorService's WIRING, over a real connection with the real chain — for the reason the note at
 // the top of main_test.go gives. internal/grpc proves the status table; only this file can see that
-// dungGRPCServer registers the service behind the caller key, that the commune interceptor lets its
-// RPCs through with no commune (core/grpcx.methodsWithoutTenant), and that the bridge port does not
-// serve it.
+// buildOperatorGRPCServer registers the service behind the caller key, that the commune interceptor
+// lets its RPCs through with no commune (core/grpcx.methodsWithoutTenant), and that NEITHER the
+// inter-service port NOR the bridge port serves it (user decision 01/10/2026: a port of its own).
 
 import (
 	"bytes"
@@ -73,11 +73,11 @@ func operatorServerOn(t *testing.T, store app.OperatorStore, log *slog.Logger) *
 	return svcgrpc.NewOperatorServer(uc, log)
 }
 
-// dialOperatorService starts the REAL inter-service server (dungGRPCServer) and dials it with the
-// given client options.
+// dialOperatorService starts the REAL operator listener's server (buildOperatorGRPCServer) and dials
+// it with the given client options.
 func dialOperatorService(t *testing.T, op *svcgrpc.OperatorServer, opts ...grpc.DialOption) identityv1.OperatorServiceClient {
 	t.Helper()
-	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), op, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := buildOperatorGRPCServer(khoaGoiGia, op, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	lis := bufconn.Listen(1 << 20)
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
@@ -199,11 +199,67 @@ func TestOperatorServiceAbsentFromBridgePort(t *testing.T) {
 	}
 }
 
-func TestDungGRPCServerRefusesMissingOperatorServer(t *testing.T) {
+func TestBuildOperatorGRPCServerRefusesMissingOperatorServer(t *testing.T) {
 	defer func() {
 		if recover() == nil {
-			t.Fatal("built the gRPC server with no OperatorServer")
+			t.Fatal("built the operator gRPC server with no OperatorServer")
 		}
 	}()
-	_ = dungGRPCServer(khoaGoiGia, noiDayGia(t), nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = buildOperatorGRPCServer(khoaGoiGia, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// The operator listener refuses to be built without the caller key, like the inter-service port: a
+// server without it answers every call that reaches it.
+func TestBuildOperatorGRPCServerRefusesEmptyCallerKey(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("built the operator gRPC server with an empty GRPC_CALLER_KEY")
+		}
+	}()
+	_ = buildOperatorGRPCServer(nil, operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// THE TEST THE SEPARATE PORT EXISTS FOR (user decision 01/10/2026). The inter-service port — which
+// five staff services reach with the shared caller key — must NOT serve OperatorService: a call there
+// WITH the key answers Unimplemented. Re-registering the service on dungGRPCServer turns this red.
+func TestOperatorServiceAbsentFromInterServicePort(t *testing.T) {
+	lis := bufconn.Listen(1 << 20)
+	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	go func() {
+		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			t.Errorf("Serve: %v", err)
+		}
+	}()
+	t.Cleanup(srv.Stop)
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	cl := identityv1.NewOperatorServiceClient(conn)
+	if _, err := cl.OpenOperatorSession(context.Background(),
+		&identityv1.OpenOperatorSessionRequest{Email: "a@example.test", Password: "x", TotpCode: "000000"}); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("OpenOperatorSession on the inter-service port: %v, want Unimplemented", status.Code(err))
+	}
+	if _, err := cl.ResolveOperatorSession(context.Background(),
+		&identityv1.ResolveOperatorSessionRequest{SessionToken: "op1.x.y"}); status.Code(err) != codes.Unimplemented {
+		t.Fatalf("ResolveOperatorSession on the inter-service port: %v, want Unimplemented", status.Code(err))
+	}
+}
+
+// And the operator listener serves ONLY OperatorService: the staff RPCs are absent there, so the port
+// platform alone can reach does not double as a second door to ResolveStaffPrincipal.
+func TestOperatorPortServesNothingElse(t *testing.T) {
+	srv := buildOperatorGRPCServer(khoaGoiGia, operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	services := srv.GetServiceInfo()
+	if len(services) != 1 {
+		t.Fatalf("operator listener registers %d services, want exactly 1: %v", len(services), services)
+	}
+	if _, ok := services[identityv1.OperatorService_ServiceDesc.ServiceName]; !ok {
+		t.Fatalf("operator listener does not register OperatorService: %v", services)
+	}
 }

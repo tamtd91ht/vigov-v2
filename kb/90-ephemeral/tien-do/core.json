@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-10-01",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -201,6 +201,24 @@
       "bang_chung": "6915ea22 — từ chối original, citizen-media, records, đích không phải bản sinh đôi public-media (khác xã/service/mục đích/object/biến thể/đuôi/tháng); Cache-Control immutable; lặp lại an toàn; gỡ đăng xoá mọi phiên bản. publish_test.go (fake S3) xanh; go vet/test core xanh; service-petitions build xanh.",
       "tiep_theo": "TestIntegrationPublishUnpublish CHƯA CHẠY với MinIO thật (thiếu VIGOV_TEST_MINIO_ENDPOINT). Gỡ đăng không thu hồi bản CDN/trình duyệt đã cache (immutable 1 năm) — cần xoá cache CDN khi có CDN.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "bien-cau-hinh-cong-van-hanh",
+      "viec": "core/config: OPERATOR_GRPC_LISTEN_ADDR (nhóm OperatorRealm, mặc định :9093) và IDENTITY_OPERATOR_GRPC_ADDR (nhóm OperatorEdge, bắt buộc ở staging/prod); core/operatorclient.Dial gọi tên biến mới",
+      "trang_thai": "xong",
+      "bang_chung": "config.go (bảng + trường + r.read), accessors.go, uses.go, hints.go; .env.example; deploy/cau-hinh/README.md mục 3 + 4. Test: TestOperatorGRPCListenAddrDefaultsTo9093, TestIdentityOperatorGRPCAddrIsKeptWholeAndEdgeOnly, prodRequired của OperatorEdge; dial_test.go. tools/check_env_map.py PASS (39 biến)."
+    },
+    {
+      "id": "so-xa-theo-ngu-canh-co-dem",
+      "viec": "core/tenant.CommuneLookup + CachedCommune (đệm theo xã trong ngữ cảnh, cùng TENANT_CACHE_TTL, không đệm lỗi) và platformclient.Directory.Current — đường hỏi \"xã này còn hoạt động không\" cho kiểm phiên công dân",
+      "trang_thai": "xong",
+      "bang_chung": "cache.go; cache_commune_test.go (đồng hồ giả: tắt xã → còn trả hoạt động trong TTL, hết TTL thì từ chối; lỗi không đệm; xã không có trong ngữ cảnh → ErrNoTenant trước khi hỏi). Xã đọc từ ngữ cảnh, không phải tham số (luật 1 bất biến 4)."
+    },
+    {
+      "id": "ria-cong-dan-ba-ket-qua",
+      "viec": "core/httpx.CitizenSessions.TraCuu trả thêm error: CitizenEdge trả 503 service_unavailable khi sổ phiên không hỏi được, trên mọi lớp tuyến — hết gộp sự cố thành \"phiên đã kết thúc\"",
+      "trang_thai": "xong",
+      "bang_chung": "citizen.go; identityclient.SoPhienCongDan.TraCuu chuyển lỗi lên (vẫn ghi CẢNH BÁO HẠ TẦNG, không token/định danh). citizen_unavailable_test.go: 503 trên XaTuPhien / XaTuPhienChiXem / KhongThuocXa, handler không chạy; yêu cầu không Bearer không bị ảnh hưởng. identityclient: TestCitizenSessionOutageIsAnErrorAndWarned. go vet/test core xanh."
     }
   ]
 }

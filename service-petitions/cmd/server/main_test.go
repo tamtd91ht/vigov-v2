@@ -340,12 +340,12 @@ func (g *guiPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan 
 // so a probe cannot learn how close it got (core/httpx/citizen.go).
 type soPhienGia struct{ goi int }
 
-func (s *soPhienGia) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool) {
+func (s *soPhienGia) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool, error) {
 	s.goi++
 	if token != tokenCongDan {
-		return httpx.CitizenSession{}, false
+		return httpx.CitizenSession{}, false, nil
 	}
-	return httpx.CitizenSession{ID: "sid-cong-dan", CitizenID: idCongDan, TenantID: xaA}, true
+	return httpx.CitizenSession{ID: "sid-cong-dan", CitizenID: idCongDan, TenantID: xaA}, true, nil
 }
 
 type mayChu struct {

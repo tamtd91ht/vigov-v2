@@ -227,19 +227,19 @@ func phieuCuaToiMau() *phieuCuaToiGia {
 // negative outcome, so unknown, expired and revoked are indistinguishable (core/httpx/citizen.go).
 type soPhienCongDanGia struct{ goi int }
 
-func (s *soPhienCongDanGia) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool) {
+func (s *soPhienCongDanGia) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool, error) {
 	s.goi++
 	switch token {
 	case tokenCuaToi:
-		return httpx.CitizenSession{ID: "sid-1", CitizenID: idToi, TenantID: xaA}, true
+		return httpx.CitizenSession{ID: "sid-1", CitizenID: idToi, TenantID: xaA}, true, nil
 	case tokenNguoiKhac:
-		return httpx.CitizenSession{ID: "sid-2", CitizenID: idNguoiKhac, TenantID: xaA}, true
+		return httpx.CitizenSession{ID: "sid-2", CitizenID: idNguoiKhac, TenantID: xaA}, true, nil
 	case tokenXaB:
 		// THE SAME CITIZEN, IN COMMUNE B. One person may hold a session in more than one commune
 		// (ADR 0005), so the commune — not the person — has to be what refuses.
-		return httpx.CitizenSession{ID: "sid-3", CitizenID: idToi, TenantID: xaB}, true
+		return httpx.CitizenSession{ID: "sid-3", CitizenID: idToi, TenantID: xaB}, true, nil
 	}
-	return httpx.CitizenSession{}, false
+	return httpx.CitizenSession{}, false, nil
 }
 
 // --- harness --------------------------------------------------------------------------------
@@ -346,10 +346,10 @@ func TestCuaToiPhienChuaChonXaLa401(t *testing.T) {
 
 type phienKhongXa struct{}
 
-func (phienKhongXa) TraCuu(context.Context, string) (httpx.CitizenSession, bool) {
+func (phienKhongXa) TraCuu(context.Context, string) (httpx.CitizenSession, bool, error) {
 	// Usable session, NO commune. ok=true on purpose: this is not a bad token, it is a citizen who
 	// has not picked a commune yet, and the refusal has to come from the commune axis.
-	return httpx.CitizenSession{ID: "sid-x", CitizenID: idToi}, true
+	return httpx.CitizenSession{ID: "sid-x", CitizenID: idToi}, true, nil
 }
 
 // chuoiCongDanVoi rebuilds the chain around the same mux with a different session registry.

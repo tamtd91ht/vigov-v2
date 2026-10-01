@@ -42,12 +42,13 @@ import (
 // SoPhienCongDan resolves a citizen bearer token to a session, over gRPC, for a service that does
 // not own the registry. It implements core/httpx.CitizenSessions.
 //
-// A TYPE OF ITS OWN RATHER THAN A METHOD ON Client, AND THE SEPARATION IS LOAD-BEARING. Client's
-// staff method returns three outcomes and lets the middleware answer 503 on the third
-// (staffauth.Resolver). httpx.CitizenSessions has TWO outcomes by contract, so the third has to be
-// collapsed somewhere — and a collapse of that kind must happen in a named place a reviewer can
-// find, not inside a method that also serves the staff path. See TraCuu for what the collapse
-// costs and what it would take to stop paying it.
+// A TYPE OF ITS OWN RATHER THAN A METHOD ON Client: it is the one place the citizen edge's contract
+// (httpx.CitizenSessions) meets this transport, and it is where an outage is said out loud.
+//
+// SINCE 01/10/2026 httpx.CitizenSessions CARRIES THE THIRD OUTCOME, so nothing is collapsed here any
+// more: an outage reaches CitizenEdge as an error and the citizen gets 503, exactly as staff do
+// through staffauth.Resolver. That outage now includes "identity could not check the session's
+// commune with platform" — ResolveCitizenSession answers UNAVAILABLE for it.
 type SoPhienCongDan struct {
 	c   *Client
 	log *slog.Logger
@@ -70,49 +71,29 @@ func NewSoPhienCongDan(c *Client) *SoPhienCongDan {
 
 // TraCuu implements core/httpx.CitizenSessions.
 //
-// # THE COLLAPSE MADE HERE, NAMED BECAUSE IT COSTS SOMETHING
-//
-// This interface has ONE negative answer, and that is right where it was written: at the HTTP edge
-// INSIDE identity, unknown / expired / revoked must be indistinguishable, and an outage of the
-// session registry was an outage of the same process, self-evident on every other route at the same
-// moment. ACROSS THIS HOP THAT IS NO LONGER TRUE. identity can be down while service-petitions is
-// perfectly healthy, and this method then answers ok=false — so httpx.XaTuPhien replies 401 and the
-// Mini App tells the citizen "Phiên không hợp lệ hoặc đã kết thúc. Vui lòng mở lại ứng dụng." That
-// sentence is FALSE during an outage: the session row is untouched and the token works again the
-// moment identity returns.
-//
-// THE STAFF PATH DOES NOT PAY THIS, AND THE DIFFERENCE IS THE INTERFACE, NOT THE ARGUMENT.
-// staffauth.Resolver carries an error, and staffauth's middleware turns it into 503 with a comment
-// explaining that 401 would send everybody to sign in again through the service that is down. The
-// identical argument applies to citizens; the citizen interface simply predates the network hop.
-//
-// SO THE FIX IS KNOWN AND IS NOT TAKEN HERE: widen httpx.CitizenSessions.TraCuu to return an error,
-// carry it from CitizenEdge to XaTuPhien, and give XaTuPhien a 503 branch beside its 401. That
-// changes a core edge contract whose "one negative answer" discipline is argued at length in
-// core/httpx/citizen.go, and it belongs to whoever owns that decision — it is written down here
-// rather than done quietly, and rather than left for somebody to find during an outage.
-//
-// WHAT IS NOT GIVEN UP: the distinction survives everywhere it can be acted on. The gRPC contract
-// keeps it (ResolveCitizenSession: "UNAVAILABLE etc. — the call did not happen. IT IS NOT 'no
-// session'"), the store keeps it (PhienCongDanStore.TraCuuCoLoi), and the log line below says which
-// of the two happened. Only the return value cannot say it.
+// THE THREE OUTCOMES PASS THROUGH (01/10/2026). Until then this method collapsed an outage into
+// ok=false, so httpx.XaTuPhien replied 401 and the Mini App told the citizen "Phiên không hợp lệ hoặc
+// đã kết thúc" while the session row was untouched — the known fix recorded here was to widen the
+// interface, and it was taken when the deactivated-commune check made an outage of platform a
+// per-request dependency too: collapsed, "could not check the commune" would have read as "no
+// session" instead of as a refusal. CitizenEdge now answers the error with 503, as staffauth does.
 //
 // NOTHING IS LOGGED ON THE ORDINARY NEGATIVE. An expired citizen session is a daily event, and this
 // runs on every citizen request: a line per failure would be the highest-volume log in the system.
-func (s *SoPhienCongDan) TraCuu(ctx context.Context, token string) (httpx.CitizenSession, bool) {
+func (s *SoPhienCongDan) TraCuu(ctx context.Context, token string) (httpx.CitizenSession, bool, error) { // vi-name-ok: implements the existing httpx.CitizenSessions method
 	p, ok, err := s.c.TraCuuPhienCongDan(ctx, token)
 	if err != nil {
-		// WARN AND SAY WHICH FAILURE IT WAS. This is the only trace left of the collapse above, so
-		// it names the consequence rather than just the error: an operator seeing 401s across the
-		// whole citizen channel needs to reach this line and not a citizen's session.
+		// WARN AND SAY WHICH FAILURE IT WAS: the edge has no logger, so this is the line an operator
+		// seeing 503 across the citizen channel needs to reach. UNAVAILABLE here includes identity
+		// being unable to check the session's commune with platform.
 		//
 		// NO TOKEN, NO CITIZEN IDENTIFIER, NO COMMUNE (rule 3, rule 8).
 		s.log.WarnContext(ctx, "CẢNH BÁO HẠ TẦNG: không phân giải được phiên công dân — "+
-			"công dân sẽ nhận 401 như thể phiên đã hết hạn",
+			"công dân sẽ nhận 503 cho tới khi khôi phục",
 			"ma_loi", status.Code(err).String(), "err", err)
-		return httpx.CitizenSession{}, false
+		return httpx.CitizenSession{}, false, err
 	}
-	return p, ok
+	return p, ok, nil
 }
 
 var _ httpx.CitizenSessions = (*SoPhienCongDan)(nil)
@@ -130,9 +111,8 @@ var _ httpx.CitizenSessions = (*SoPhienCongDan)(nil)
 //	ok == true        a usable session. TenantID MAY BE EMPTY and that is an ordinary answer: a
 //	                  citizen who is signed in and has not chosen a commune yet (ADR 0005).
 //
-// EXPORTED SEPARATELY FROM SoPhienCongDan.TraCuu so a caller that CAN act on the third outcome is
-// able to. Nothing calls it that way today; it exists so that the day httpx.CitizenSessions is
-// widened, the transport does not have to be rewritten to supply what it already knows.
+// EXPORTED SEPARATELY FROM SoPhienCongDan.TraCuu so a caller can use the transport without the
+// edge's logging; SoPhienCongDan.TraCuu is the one caller today.
 //
 // NOTHING HERE LOGS THE TOKEN, AT ANY LEVEL (rule 3, rule 8), and nothing logs the request message:
 // the generated String() prints session_token in full, so one `"req", req` would put a working

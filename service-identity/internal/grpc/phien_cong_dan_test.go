@@ -10,11 +10,13 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/httpx"
@@ -45,6 +47,32 @@ func (f *phienCongDanGia) TraCuuCoLoi(_ context.Context, token string) (httpx.Ci
 	f.soLanGoi++
 	f.thayTok = token
 	return f.p, f.ok, f.err
+}
+
+// communesFake is the registry behind the session's commune check. Zero value: every commune
+// active. inactive / unknown / err override that; asked records which commune was looked up.
+type communesFake struct {
+	inactive bool
+	unknown  bool
+	err      error
+	calls    int
+	asked    tenant.ID
+}
+
+func (c *communesFake) Current(ctx context.Context) (tenant.Tenant, bool, error) {
+	c.calls++
+	id, ok := tenant.From(ctx)
+	if !ok {
+		return tenant.Tenant{}, false, tenant.ErrNoTenant
+	}
+	c.asked = id
+	if c.err != nil {
+		return tenant.Tenant{}, false, c.err
+	}
+	if c.unknown {
+		return tenant.Tenant{}, false, nil
+	}
+	return tenant.Tenant{ID: id, Active: !c.inactive}, true, nil
 }
 
 // phienCongDanTot is the default collaborator: one usable session, in a commune.
@@ -208,3 +236,106 @@ func TestPhienCongDanChuaCoSoDiQuaNguyenVen(t *testing.T) {
 // Wiring is refused AT CONSTRUCTION, where a human is watching a process fail to start. The case
 // lives in server_test.go's TestNewServerTuChoiNoiDayKhongDu beside the other seven, so the list
 // of required collaborators is read in one place rather than two.
+
+// ACTIVE ⇒ the session resolves, and the commune asked about is the SESSION's commune — read from
+// the registry row this service holds, never from anything the caller sent.
+func TestCitizenSessionActiveCommuneResolves(t *testing.T) {
+	communes := &communesFake{}
+	s, _ := may(t, func(d *Deps) { d.Communes = communes })
+
+	ra, err := s.ResolveCitizenSession(context.Background(),
+		&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+	if err != nil || ra.GetSession() == nil {
+		t.Fatalf("active commune: session=%v err=%v", ra.GetSession(), err)
+	}
+	if communes.asked != xaA {
+		t.Fatalf("asked the registry about %q, want the session's commune %q", communes.asked, xaA)
+	}
+}
+
+// DEACTIVATED (or no longer known) ⇒ the SAME answer as an expired session: OK, no session, nothing
+// logged — byte for byte, so the response never says which commune is inactive (rule 4, forbidden
+// #2). This is the finding of 01/10/2026: before it, a deactivated commune's open sessions kept
+// working for up to CITIZEN_SESSION_TTL.
+func TestCitizenSessionInactiveCommuneIsNoSession(t *testing.T) {
+	for name, c := range map[string]*communesFake{
+		"deactivated": {inactive: true},
+		"unknown":     {unknown: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, nhatKy := may(t, func(d *Deps) { d.Communes = c })
+			ra, err := s.ResolveCitizenSession(context.Background(),
+				&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+			if err != nil {
+				t.Fatalf("an inactive commune must answer like an expired session, not an error: %v", err)
+			}
+			if ra.GetSession() != nil {
+				t.Fatalf("a session of an inactive commune still resolved: %+v", ra.GetSession())
+			}
+			if !proto.Equal(ra, khongCoPhienCongDan()) {
+				t.Fatal("the answer differs from the one every unusable token gets")
+			}
+			if nhatKy.Len() != 0 {
+				t.Errorf("an ordinary negative logged: %q", nhatKy.String())
+			}
+		})
+	}
+}
+
+// THE DEACTIVATION TAKES EFFECT WITHIN ONE TTL, through the REAL cache main wires
+// (tenant.CachedCommune over the registry). The TTL here is zero — every call asks — which is the
+// upper bound's limit case; the TTL window itself is pinned in core/tenant (fake clock).
+func TestCitizenSessionDeactivatedMidSessionIsRefused(t *testing.T) {
+	registry := &communesFake{}
+	s, _ := may(t, func(d *Deps) { d.Communes = tenant.NewCachedCommune(registry, 0) })
+	req := &identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia}
+
+	if ra, err := s.ResolveCitizenSession(context.Background(), req); err != nil || ra.GetSession() == nil {
+		t.Fatalf("before deactivation: %v, %v", ra, err)
+	}
+	registry.inactive = true // the operator deactivates the commune; the session row is untouched
+	if ra, err := s.ResolveCitizenSession(context.Background(), req); err != nil || ra.GetSession() != nil {
+		t.Fatalf("after deactivation: session=%v err=%v — the open session still works", ra.GetSession(), err)
+	}
+}
+
+// PLATFORM UNREACHABLE ⇒ UNAVAILABLE, never "allow" and never "no session" (fail closed). The caller
+// (core/identityclient → core/httpx.CitizenEdge) turns it into 503 and leaves the session alone.
+func TestCitizenSessionRegistryDownIsUnavailable(t *testing.T) {
+	s, nhatKy := may(t, func(d *Deps) { d.Communes = &communesFake{err: errors.New("platform: connection refused")} })
+
+	ra, err := s.ResolveCitizenSession(context.Background(),
+		&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("code = %v, want Unavailable", status.Code(err))
+	}
+	if ra != nil {
+		t.Error("answered a response AND an error — the caller could read it as 'no session'")
+	}
+	if !strings.Contains(nhatKy.String(), "CẢNH BÁO HẠ TẦNG") {
+		t.Errorf("the outage is not said out loud: %q", nhatKy.String())
+	}
+	for _, leak := range []string{idCongDan, string(xaA), tokenGia} {
+		if strings.Contains(nhatKy.String(), leak) {
+			t.Errorf("the warning carries an identifier (%q) — rule 3", leak)
+		}
+	}
+}
+
+// The picker state (no commune yet, ADR 0005) is never checked: there is nothing to be inactive, and
+// asking the registry about "" would be a lookup with no commune.
+func TestCitizenSessionWithoutCommuneSkipsTheCheck(t *testing.T) {
+	communes := &communesFake{err: errors.New("must not be asked")}
+	s, _ := may(t, func(d *Deps) {
+		d.Communes = communes
+		d.PhienCongDan = &phienCongDanGia{p: httpx.CitizenSession{ID: sidCongDan, CitizenID: idCongDan}, ok: true}
+	})
+	ra, err := s.ResolveCitizenSession(context.Background(),
+		&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+	if err != nil || ra.GetSession() == nil {
+		t.Fatalf("picker-state session: %v, %v", ra, err)
+	}
+	if communes.calls != 0 {
+		t.Fatal("the registry was asked about a session that has no commune")
+	}
+}

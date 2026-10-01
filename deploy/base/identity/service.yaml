@@ -15,3 +15,6 @@ spec:
     # `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS` is `identity:9091`. Without this line the bridge
     # listens but nothing can reach it, and every Mini App login ends in 503.
     - { name: bridge, port: 9091, targetPort: bridge }
+    # OperatorService, called only by platform: its `IDENTITY_OPERATOR_GRPC_ADDR` is
+    # `identity:9093`. Without this line every operator sign-in and every operator request is 503.
+    - { name: grpc-operator, port: 9093, targetPort: grpc-operator }

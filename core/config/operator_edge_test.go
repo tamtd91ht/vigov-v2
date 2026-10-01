@@ -11,7 +11,10 @@ import (
 
 // Absent OPERATOR_HOST is the designed OFF state — in prod too. Only the keys are required there.
 func TestOperatorHostIsNeverRequired(t *testing.T) {
-	clean(t, EnvProd, map[string]string{"OPERATOR_SESSION_SIGNING_KEYS": operatorSigningKeyFake})
+	clean(t, EnvProd, map[string]string{
+		"OPERATOR_SESSION_SIGNING_KEYS": operatorSigningKeyFake,
+		"IDENTITY_OPERATOR_GRPC_ADDR":   "identity:9093",
+	})
 	cfg, err := Load("platform", Uses(OperatorEdge))
 	if err != nil {
 		t.Fatalf("prod refused without OPERATOR_HOST — it is the feature switch, never required: %v", err)
@@ -28,6 +31,7 @@ func TestOperatorEdgeDoesNotReadTheTOTPKey(t *testing.T) {
 		"OPERATOR_SESSION_SIGNING_KEYS": operatorSigningKeyFake,
 		"OPERATOR_TOTP_ENCRYPTION_KEY":  "not*base64", // fatal if it were read
 		"OPERATOR_HOST":                 "admin.vigov.vn",
+		"IDENTITY_OPERATOR_GRPC_ADDR":   "identity:9093",
 	})
 	cfg, err := Load("platform", Uses(OperatorEdge))
 	if err != nil {
@@ -49,9 +53,9 @@ func TestOperatorEdgeDoesNotReadTheTOTPKey(t *testing.T) {
 	}()
 }
 
-// The prod refusal names the signing keys, and only them.
+// The prod refusal names the signing keys, and nothing the edge does not require.
 func TestOperatorEdgeWithoutKeysRefusedInProd(t *testing.T) {
-	clean(t, EnvProd, map[string]string{"OPERATOR_HOST": "admin.vigov.vn"})
+	clean(t, EnvProd, map[string]string{"OPERATOR_HOST": "admin.vigov.vn", "IDENTITY_OPERATOR_GRPC_ADDR": "identity:9093"})
 	_, err := Load("platform", Uses(OperatorEdge))
 	if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), "OPERATOR_SESSION_SIGNING_KEYS") {
 		t.Fatalf("want a refusal naming OPERATOR_SESSION_SIGNING_KEYS, got %v", err)
@@ -152,4 +156,50 @@ func TestOperatorEdgeHalfConfiguredWarns(t *testing.T) {
 	if !found {
 		t.Errorf("OPERATOR_HOST without signing keys must warn, got %v", cfg.CanhBao())
 	}
+}
+
+// The operator listener has the GRPC_LISTEN_ADDR policy: a default the Service and NetworkPolicy
+// rule 11 already target, so a manifest without the line still listens where they point.
+func TestOperatorGRPCListenAddrDefaultsTo9093(t *testing.T) {
+	clean(t, EnvDev, nil)
+	cfg, err := Load("identity", Uses(OperatorRealm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.OperatorGRPCListenAddr(); got != ":9093" {
+		t.Fatalf("OperatorGRPCListenAddr = %q, want the default :9093", got)
+	}
+
+	clean(t, EnvDev, map[string]string{"OPERATOR_GRPC_LISTEN_ADDR": " 127.0.0.1:19093\n"})
+	if cfg, err = Load("identity", Uses(OperatorRealm)); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.OperatorGRPCListenAddr(); got != "127.0.0.1:19093" {
+		t.Fatalf("OperatorGRPCListenAddr = %q, want the set value, trimmed", got)
+	}
+}
+
+// The client address is cluster-shaped: a list is kept whole, never cut to its first host (rule 11
+// invariant 5). And it belongs to the edge only — identity, which serves the port, never reads it.
+func TestIdentityOperatorGRPCAddrIsKeptWholeAndEdgeOnly(t *testing.T) {
+	const list = "identity-a:9093,identity-b:9093"
+	clean(t, EnvDev, map[string]string{"IDENTITY_OPERATOR_GRPC_ADDR": list})
+	cfg, err := Load("platform", Uses(OperatorEdge))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.IdentityOperatorGRPCAddr(); got != list {
+		t.Fatalf("IdentityOperatorGRPCAddr = %q, want %q unsplit", got, list)
+	}
+
+	cfg, err = Load("identity", Uses(OperatorRealm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("identity read IDENTITY_OPERATOR_GRPC_ADDR without declaring OperatorEdge")
+		}
+	}()
+	_ = cfg.IdentityOperatorGRPCAddr()
 }

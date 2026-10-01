@@ -134,7 +134,7 @@ func TestCongCauChiPhucVuMotDichVu(t *testing.T) {
 func TestCongNoiBoKhongPhucVuCauPhien(t *testing.T) {
 	// The other half: holding GRPC_CALLER_KEY does not open the bridge RPC on the inter-service port.
 	lis := bufconn.Listen(1 << 20)
-	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	conn, err := grpc.NewClient("passthrough:///bufnet",

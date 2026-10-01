@@ -23,6 +23,7 @@ var allGroupVars = []string{
 	"OBJECT_STORAGE_ACCESS_KEY", "OBJECT_STORAGE_SECRET_KEY", "OBJECT_STORAGE_REGION",
 	"OBJECT_STORAGE_BUCKET_PREFIX", "MALWARE_SCANNER_ADDRESS", "SECRET_ENCRYPTION_KEYS",
 	"OPERATOR_SESSION_SIGNING_KEYS", "OPERATOR_TOTP_ENCRYPTION_KEY", "OPERATOR_HOST",
+	"OPERATOR_GRPC_LISTEN_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR",
 	"RABBITMQ_DSN", "RABBITMQ_EXCHANGE", "ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY",
 	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS",
 }
@@ -64,7 +65,7 @@ var prodRequired = map[Group][]string{
 	Elasticsearch:    {"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_INDEX_PREFIX"},
 	CommsClient:      {"GRPC_CALLER_KEY", "COMMS_GRPC_ADDR"},
 	// OPERATOR_HOST is deliberately absent: it is the feature switch (ADR 0048 #2 + #4).
-	OperatorEdge: {"OPERATOR_SESSION_SIGNING_KEYS"},
+	OperatorEdge: {"OPERATOR_SESSION_SIGNING_KEYS", "IDENTITY_OPERATOR_GRPC_ADDR"},
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {
@@ -108,7 +109,7 @@ func TestDeclaredMissingInProdIsRefusedByName(t *testing.T) {
 // Variables with a stated default, or off by design, are never named by the refusal.
 func TestDefaultsAreNotRequiredInProd(t *testing.T) {
 	clean(t, EnvProd, nil)
-	_, err := Load("svc-test", Uses(HTTPServer, GRPCServer, TenantCache, CitizenBridge, AdminSeed, ObjectStore))
+	_, err := Load("svc-test", Uses(HTTPServer, GRPCServer, TenantCache, CitizenBridge, AdminSeed, ObjectStore, OperatorRealm))
 	if err == nil {
 		t.Fatal("expected a refusal for the required variables")
 	}
@@ -119,7 +120,7 @@ func TestDefaultsAreNotRequiredInProd(t *testing.T) {
 		named[n] = true
 	}
 	for _, v := range []string{"LISTEN_ADDR", "GRPC_LISTEN_ADDR", "TENANT_CACHE_TTL", "CITIZEN_SESSION_TTL",
-		"IDENTITY_ADMIN_SEED_PASSWORD", "OBJECT_STORAGE_REGION"} {
+		"IDENTITY_ADMIN_SEED_PASSWORD", "OBJECT_STORAGE_REGION", "OPERATOR_GRPC_LISTEN_ADDR"} {
 		if named[v] {
 			t.Errorf("%s has a default / is off by design, yet the refusal names it: %v", v, err)
 		}

@@ -177,16 +177,26 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).
 		PhienCongDan: phienCongDanGia{},
-		Lich:         lichGia{},
-		NghiLe:       nghiLeGia{},
-		LamBu:        lamBuGia{},
-		SLA:          slaGia{},
+		// Required too: the citizen session's commune check (svcgrpc.Deps.Communes).
+		Communes: communesWiringFake{},
+		Lich:     lichGia{},
+		NghiLe:   nghiLeGia{},
+		LamBu:    lamBuGia{},
+		SLA:      slaGia{},
 		// The automation collaborators answer nothing — these wiring tests only need NewServer to build.
 		Recipients:     automationWiringFake{},
 		PermissionKeys: automationWiringFake{},
 		Automation:     automationWiringFake{},
 		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
+}
+
+// communesWiringFake answers every commune as unknown — these wiring tests never resolve a citizen
+// session; the check itself is defended in internal/grpc.
+type communesWiringFake struct{}
+
+func (communesWiringFake) Current(context.Context) (tenant.Tenant, bool, error) {
+	return tenant.Tenant{}, false, nil
 }
 
 // idleWiringFake stands in for app.SessionIdleExpiry; its behaviour is defended in internal/app.
@@ -221,7 +231,7 @@ func moMay(t *testing.T, opts ...grpc.DialOption) identityv1.IdentityServiceClie
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
-	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := dungGRPCServer(khoaGoiGia, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("Serve: %v", err)
@@ -369,7 +379,7 @@ func TestKhongCoKhoaGoiThiKhongDungDuocMayChu(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với GRPC_CALLER_KEY rỗng")
 		}
 	}()
-	_ = dungGRPCServer(nil, noiDayGia(t), operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = dungGRPCServer(nil, noiDayGia(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // Incomplete wiring fails at construction too — the same discipline identity/http.Register
@@ -381,5 +391,5 @@ func TestNoiDayThieuThiKhongDungDuocMayChu(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với Deps rỗng")
 		}
 	}()
-	_ = dungGRPCServer(khoaGoiGia, svcgrpc.Deps{}, operatorServerOff(t), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = dungGRPCServer(khoaGoiGia, svcgrpc.Deps{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

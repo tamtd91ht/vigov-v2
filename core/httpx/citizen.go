@@ -74,12 +74,20 @@ type CitizenSession struct {
 // đã thu hồi, phiên của một xã đã ngừng hoạt động. Một câu trả lời cho mọi trường hợp: phân
 // biệt chúng ra phía ngoài là nói cho người đang dò biết họ dò tới đâu.
 //
+// THE ERROR IS A THIRD OUTCOME, NOT A FOURTH REASON FOR "NO SESSION" (01/10/2026). err != nil means
+// the registry COULD NOT BE ASKED — identity or platform unreachable, a deadline, a broken contract.
+// It used to be collapsed into ok=false, so an outage told every citizen "your session ended" while
+// the session row was untouched; and since the deactivated-commune check needs platform on every
+// citizen request, that collapse would also have read "could not check the commune" as "no session"
+// rather than as a refusal. CitizenEdge answers it with 503 — fail closed, never allow, never 401.
+//
 // ĐÂY LÀ ĐƯỜNG NÓNG: nó chạy trên mọi yêu cầu của mọi công dân, giống hệt tenant.Directory ở
 // đường cán bộ. Cài đặt phải xử lý nó như đường nóng ngay từ đầu (đệm có TTL ngắn, vô hiệu khi
 // thu hồi), chứ không phải sau khi đã chậm.
 type CitizenSessions interface {
-	// TraCuu returns the session for a bearer token, or ok=false.
-	TraCuu(ctx context.Context, token string) (CitizenSession, bool)
+	// TraCuu returns the session for a bearer token, ok=false when the token is not usable, and a
+	// non-nil error ONLY when the registry could not be asked.
+	TraCuu(ctx context.Context, token string) (CitizenSession, bool, error) // vi-name-ok: existing interface method, only its result list widened (rule 12 invariant 3)
 }
 
 type phienCongDanKey struct{}
@@ -122,7 +130,19 @@ func CitizenEdge(so CitizenSessions) func(http.Handler) http.Handler {
 			if tok, ok := tokenBearer(r.Header.Get("Authorization")); ok {
 				// Token KHÔNG BAO GIỜ được ghi log, kể cả khi tra cứu hỏng: nó là thứ thay thế
 				// được cho cả phiên.
-				if p, ok := so.TraCuu(ctx, tok); ok {
+				p, ok, err := so.TraCuu(ctx, tok)
+				if err != nil {
+					// THE REGISTRY COULD NOT BE ASKED: 503, before any route class or guard runs, and
+					// whatever the route. Not 401 — the Mini App would discard a session that is still
+					// valid — and never "no session, carry on": a KhongThuocXa route would then serve a
+					// caller whose commune could not be checked. The cause is logged by the
+					// implementation (core/identityclient), never here: this edge has no logger and the
+					// error may name infrastructure (rule 3 — no token, no identifier, either way).
+					WriteError(w, http.StatusServiceUnavailable, "service_unavailable",
+						"Hệ thống đang tạm thời không kiểm tra được phiên. Vui lòng thử lại sau ít phút.", "")
+					return
+				}
+				if ok {
 					ctx = context.WithValue(ctx, phienCongDanKey{}, p)
 				}
 			}

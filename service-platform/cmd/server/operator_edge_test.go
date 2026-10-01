@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/operatorclient"
 	"github.com/vihat/vigov/core/operatortoken"
@@ -218,5 +219,55 @@ func TestOperatorEdgeRefusesCrossOriginWrite(t *testing.T) {
 	outer.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("cross-origin write on the operator host: %d, want 403", rec.Code)
+	}
+}
+
+// loadPlatformConfig loads this binary's real declaration from a dev environment the test controls.
+func loadPlatformConfig(t *testing.T, set map[string]string) config.Config {
+	t.Helper()
+	for _, k := range []string{"IDENTITY_GRPC_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR", "OPERATOR_HOST",
+		"OPERATOR_SESSION_SIGNING_KEYS", "SESSION_SIGNING_KEYS", "REDIS_DSN", "TRUSTED_PROXY_CIDRS"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("ENV", "dev")
+	t.Setenv("DATABASE_DSN", "postgres://fake@localhost:5432/vigov_platform?sslmode=require")
+	t.Setenv("GRPC_CALLER_KEY", "caller-key-FAKE-0123456789abcdef0123")
+	for k, v := range set {
+		t.Setenv(k, v)
+	}
+	cfg, err := config.Load("platform", configUses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// PLATFORM DIALS THE OPERATOR PORT, NEVER THE STAFF PORT (user decision 01/10/2026). With only the
+// old IDENTITY_GRPC_ADDR set, the edge must refuse to start by the NEW name — a fallback to the old
+// variable would dial identity:9090, where OperatorService is no longer registered, and every
+// operator request would answer 503 with a healthy identity.
+func TestOperatorEdgeDialsTheOperatorAddress(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	cfg := loadPlatformConfig(t, map[string]string{
+		"OPERATOR_HOST":      operatorHostTest,
+		"IDENTITY_GRPC_ADDR": "identity:9090",
+	})
+	_, err := wireOperatorEdge(cfg, readerEmpty{}, nil, func(string) {}, log)
+	if err == nil || !strings.Contains(err.Error(), "IDENTITY_OPERATOR_GRPC_ADDR") {
+		t.Fatalf("with only IDENTITY_GRPC_ADDR set, want a refusal naming IDENTITY_OPERATOR_GRPC_ADDR, got %v", err)
+	}
+
+	cfg = loadPlatformConfig(t, map[string]string{
+		"OPERATOR_HOST":               operatorHostTest,
+		"IDENTITY_OPERATOR_GRPC_ADDR": "identity:9093",
+	})
+	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, func(string) {}, log)
+	if err != nil {
+		t.Fatalf("wireOperatorEdge with IDENTITY_OPERATOR_GRPC_ADDR set: %v", err)
+	}
+	defer w.close()
+	if w.handler == nil {
+		t.Fatal("the operator edge was not built")
 	}
 }

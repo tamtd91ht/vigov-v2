@@ -58,7 +58,7 @@ func TestPgPhienCauChuaCoSoTraCuuDuocVoiCongDanRong(t *testing.T) {
 
 	sid, token := moPhienCauPg(t, db, xaA, PhienCauMoi{TaiKhoanZaloID: tk.ID, ThoiHan: time.Hour})
 
-	p, ok := soPhienCongDan(db).TraCuu(context.Background(), token)
+	p, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), token)
 	if !ok {
 		t.Fatal("phiên chưa có số không tra cứu được — NULL cong_dan_id làm hỏng quetPhien")
 	}
@@ -101,10 +101,10 @@ func TestPgThuHoiTheoTaiKhoanZaloVuotXaChiPhienCuaTaiKhoanAy(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("thu hồi %d phiên, muốn 1", n)
 	}
-	if _, ok := soPhienCongDan(db).TraCuu(context.Background(), tokCu); ok {
+	if _, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), tokCu); ok {
 		t.Fatal("phiên ở xã cũ vẫn dùng được sau khi đổi xã")
 	}
-	if _, ok := soPhienCongDan(db).TraCuu(context.Background(), tokKhac); !ok {
+	if _, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), tokKhac); !ok {
 		t.Fatal("thu hồi theo tài khoản Zalo chạm cả phiên của NGƯỜI KHÁC")
 	}
 }

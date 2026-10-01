@@ -29,8 +29,8 @@ import (
 type sessionWithoutPhone struct{}
 
 // vi-name-ok: implements the existing httpx.CitizenSessions interface method.
-func (sessionWithoutPhone) TraCuu(context.Context, string) (httpx.CitizenSession, bool) {
-	return httpx.CitizenSession{ID: "sid-no-phone", TenantID: xaA}, true
+func (sessionWithoutPhone) TraCuu(context.Context, string) (httpx.CitizenSession, bool, error) {
+	return httpx.CitizenSession{ID: "sid-no-phone", TenantID: xaA}, true, nil
 }
 
 func TestCitizenRoutesRefuseSessionWithoutVerifiedPhone(t *testing.T) {

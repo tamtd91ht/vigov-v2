@@ -201,6 +201,12 @@ type Deps struct {
 	// one would decide the shape of it. Declared in phien_cong_dan.go, at the point of use.
 	PhienCongDan PhienCongDanDoc
 
+	// The registry's answer for the commune a citizen session is bound to — read by
+	// ResolveCitizenSession on every call, so a commune deactivated in the registry stops its open
+	// citizen sessions within one TENANT_CACHE_TTL (user finding 01/10/2026). *tenant.CachedCommune
+	// over platformclient in production. Declared in core/tenant: the commune is read from ctx.
+	Communes tenant.CommuneLookup
+
 	// The commune's working calendar, read by AdvanceWorkingHours and by nothing else here. The
 	// three interfaces are declared in lich_lam_viec.go, at the point of use — three tables, three
 	// reads, three different windows.
@@ -281,6 +287,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:
 		panic("identity/grpc: thiếu sổ phiên công dân — ResolveCitizenSession sẽ panic, và kênh công dân của mọi service khác không dựng được rìa")
+	case d.Communes == nil:
+		panic("identity/grpc: thiếu sổ xã — ResolveCitizenSession không kiểm được xã của phiên còn hoạt động, phiên của xã đã ngừng sẽ vẫn dùng được")
 	case d.Lich == nil:
 		panic("identity/grpc: thiếu kho lịch làm việc — AdvanceWorkingHours sẽ panic khi có người gọi")
 	case d.NghiLe == nil:

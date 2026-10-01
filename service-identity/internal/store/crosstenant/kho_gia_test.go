@@ -163,7 +163,9 @@ func tenCotCT(bieu string) string {
 // phienGiaCT stands in for the citizen session registry so the real edge can resolve a session.
 type phienGiaCT struct{ p httpx.CitizenSession }
 
-func (s phienGiaCT) TraCuu(context.Context, string) (httpx.CitizenSession, bool) { return s.p, true }
+func (s phienGiaCT) TraCuu(context.Context, string) (httpx.CitizenSession, bool, error) {
+	return s.p, true, nil
+}
 
 // ctxKhamPha builds the context a citizen request carries AT THE DISCOVERY LAYER, by running
 // the real edge.

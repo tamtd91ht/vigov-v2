@@ -256,7 +256,7 @@ func TestThuHoiDoiDuLyDo(t *testing.T) {
 func TestTraCuuTuChoiTokenRongTruocKhiChamCSDL(t *testing.T) {
 	// A store with no connection would panic on any query. It does not, which is the assertion:
 	// an empty Authorization header never reaches the database.
-	if _, ok := (&PhienCongDanStore{}).TraCuu(context.Background(), ""); ok {
+	if _, ok := lookupNoError(t, (&PhienCongDanStore{}), context.Background(), ""); ok {
 		t.Error("token rỗng mà vẫn tra ra phiên")
 	}
 }
@@ -318,7 +318,7 @@ func TestCatNganKhongCatGiuaMotKyTu(t *testing.T) {
 // here as well as a failing build.
 func TestCaiDatDungInterfaceRiaCongDan(t *testing.T) {
 	var so httpx.CitizenSessions = &PhienCongDanStore{}
-	if _, ok := so.TraCuu(context.Background(), ""); ok {
+	if _, ok := lookupNoError(t, so, context.Background(), ""); ok {
 		t.Error("TraCuu với token rỗng phải trả ok=false")
 	}
 }
@@ -344,4 +344,16 @@ func TestTaoQuaCauKiemDauVaoTruocGiaoDich(t *testing.T) {
 	if _, err := s.ThuHoiCuaTaiKhoanZalo(ctx, nil, "TK", "đổi xã"); !errors.Is(err, ErrThieuGiaoDich) {
 		t.Errorf("thu hồi không giao dịch: err = %v", err)
 	}
+}
+
+// lookupNoError is TraCuu for the tests that are about the two ordinary outcomes: an error from the
+// registry fails the test by name instead of being read as "no session" — the very collapse
+// core/httpx.CitizenSessions stopped making on 01/10/2026.
+func lookupNoError(t *testing.T, so httpx.CitizenSessions, ctx context.Context, token string) (httpx.CitizenSession, bool) {
+	t.Helper()
+	p, ok, err := so.TraCuu(ctx, token)
+	if err != nil {
+		t.Fatalf("TraCuu: %v", err)
+	}
+	return p, ok
 }

@@ -16,9 +16,9 @@ import (
 
 type soPhienCongDanGia map[string]httpx.CitizenSession
 
-func (m soPhienCongDanGia) TraCuu(_ context.Context, tok string) (httpx.CitizenSession, bool) {
+func (m soPhienCongDanGia) TraCuu(_ context.Context, tok string) (httpx.CitizenSession, bool, error) {
 	p, ok := m[tok]
-	return p, ok
+	return p, ok, nil
 }
 
 const (

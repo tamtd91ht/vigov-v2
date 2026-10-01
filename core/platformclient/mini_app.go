@@ -130,3 +130,13 @@ func (d *Directory) XaTrongNguCanh(ctx context.Context) (tenant.Tenant, bool, er
 		Province: t.GetProvince(),
 	}, true, nil
 }
+
+// Current implements tenant.CommuneLookup: the registry's answer for the commune in ctx, with the
+// three outcomes XaTrongNguCanh keeps apart (error = could not ask; ok=false = unknown; Active as
+// stored). An English name over the same call, not a second implementation: identity's citizen-
+// session check wraps it in tenant.CachedCommune, and one GetTenant path means one answer.
+func (d *Directory) Current(ctx context.Context) (tenant.Tenant, bool, error) {
+	return d.XaTrongNguCanh(ctx)
+}
+
+var _ tenant.CommuneLookup = (*Directory)(nil)

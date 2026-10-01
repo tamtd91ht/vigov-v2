@@ -76,6 +76,13 @@ spec:
             # because 9090 trusts every pod in the namespace — sharing it would hand the Mini App
             # backend the inter-service surface. Admitted only by netpol.yaml rule 8.
             - { name: bridge, containerPort: 9091 }
+            # OperatorService (ADR 0048; user decision 01/10/2026 "Cổng riêng cho OperatorService"):
+            # the THIRD gRPC listener, serving only the operator RPCs, to one caller — platform. Not
+            # 9090: five staff services reach 9090 with the shared GRPC_CALLER_KEY, and a
+            # NetworkPolicy tells ports apart, never RPCs. Admitted only by netpol.yaml rule 11.
+            # `OPERATOR_GRPC_LISTEN_ADDR` defaults to `:9093`, so no env line is needed — the same
+            # policy as 9090. NOT 9092: netpol rule 4 uses that for Kafka egress.
+            - { name: grpc-operator, containerPort: 9093 }
 
           env:
             # Must match the `bridge` port above and netpol.yaml rule 8. Prod refuses to start

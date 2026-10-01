@@ -137,14 +137,16 @@ type operatorWiring struct {
 // in which case NOTHING operator-related is dialled or opened.
 //
 // IN DEV a missing dependency degrades to a refusal at use (no signing keys → 503 on every guarded
-// route; no Redis → 503 on every sign-in step). A missing IDENTITY_GRPC_ADDR with OPERATOR_HOST set
+// route; no Redis → 503 on every sign-in step). A missing IDENTITY_OPERATOR_GRPC_ADDR with OPERATOR_HOST set
 // refuses to START: an operator edge that can resolve no session is an area that is "on" and answers
 // 503 for a reason only the startup log could have named.
 func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.CommuneWriter,
 	forget func(string), log *slog.Logger) (operatorWiring, error) {
 	host := cfg.OperatorHost()
 	signingKeys := cfg.OperatorSessionSigningKeys()
-	identityAddr := cfg.IdentityGRPCAddr()
+	// identity's OPERATOR listener, not IDENTITY_GRPC_ADDR's staff port: OperatorService is
+	// registered on that listener only (user decision 01/10/2026).
+	identityAddr := cfg.IdentityOperatorGRPCAddr()
 	redisDSN := cfg.RedisDSN()
 	if host == "" {
 		log.Info("khu vận hành TẮT — OPERATOR_HOST trống, không gắn tuyến vận hành nào")

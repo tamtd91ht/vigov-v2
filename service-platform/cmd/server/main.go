@@ -41,15 +41,18 @@ import (
 //
 // platform: serves REST and the inter-service port, and caches its own registry. Since 2026-10-01 it
 // is also the operator area's only HTTP edge (ADR 0048 §01/10 #2): OperatorEdge (OPERATOR_HOST + the
-// `op1.` signing keys), IdentityClient (OperatorService, the per-request session check) and Redis
-// (the per-IP sign-in limit, §01/10 #3). Declared even where OPERATOR_HOST is unset: "used ⇒
-// required" is derived from the declaration (ADR 0057), so staging/prod need IDENTITY_GRPC_ADDR,
-// REDIS_DSN and OPERATOR_SESSION_SIGNING_KEYS for platform before this image rolls out.
+// `op1.` signing keys + IDENTITY_OPERATOR_GRPC_ADDR, where OperatorService answers the per-request
+// session check) and Redis (the per-IP sign-in limit, §01/10 #3). Declared even where OPERATOR_HOST
+// is unset: "used ⇒ required" is derived from the declaration (ADR 0057), so staging/prod need
+// IDENTITY_OPERATOR_GRPC_ADDR, REDIS_DSN and OPERATOR_SESSION_SIGNING_KEYS for platform before this
+// image rolls out.
+//
+// NOT IdentityClient any more (01/10/2026): its IDENTITY_GRPC_ADDR is identity's STAFF port 9090,
+// which no longer serves OperatorService, and platform makes no other call to identity.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
 	config.TenantCache,
-	config.IdentityClient,
 	config.Redis,
 	config.OperatorEdge,
 )

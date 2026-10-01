@@ -8,6 +8,7 @@ import (
 
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/tenant"
 )
 
 // The citizen half of this contract — ONE RPC, and it is the citizen channel's ResolveHost.
@@ -112,6 +113,42 @@ func (s *Server) ResolveCitizenSession(ctx context.Context, req *identityv1.Reso
 		// the edge a session nobody can end.
 		s.d.Log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: sổ phiên công dân trả về phiên thiếu sid")
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+	}
+
+	// THE COMMUNE MUST STILL BE ACTIVE — ON EVERY CALL, NOT ONLY AT SESSION OPEN (user finding
+	// 01/10/2026). The bridge checks Active when it opens a session, and a session lives
+	// CITIZEN_SESSION_TTL (720h): without this check, deactivating a commune left every citizen
+	// session already open in it working for up to a month. HERE AND NOT AT EACH CITIZEN EDGE because
+	// this RPC is the ONE place every citizen request of every service passes through (core/httpx's
+	// CitizenEdge reaches a session only via core/identityclient → this RPC; identity has no citizen
+	// HTTP edge), so one check covers every edge that exists and every edge mounted later.
+	//
+	// Cached by tenant.CachedCommune with TENANT_CACHE_TTL — the same window Host resolution gives a
+	// deactivated commune's staff, so "stops within ~30 s" is true for its citizens too.
+	//
+	// An empty commune is the picker state (ADR 0005), not checked: there is nothing to be inactive.
+	if p.TenantID != "" {
+		if !p.TenantID.Valid() {
+			// The registry cannot know a commune that is not a ULID, and core/httpx.XaTuPhien would
+			// refuse it anyway; answered as the one negative rather than as a lookup that cannot succeed.
+			return khongCoPhienCongDan(), nil
+		}
+		xa, known, err := s.d.Communes.Current(tenant.Into(ctx, p.TenantID))
+		if err != nil {
+			// FAIL CLOSED: "could not ask" is never "allow". UNAVAILABLE, not "no session": the caller
+			// answers 503 and the citizen's session is left alone for when the registry is back.
+			// No commune, no citizen id, no token in the line (rule 3).
+			s.d.Log.WarnContext(ctx, "CẢNH BÁO HẠ TẦNG: không kiểm được xã của phiên công dân ở dịch vụ nền tảng — từ chối (UNAVAILABLE)",
+				"err", err)
+			return nil, status.Error(codes.Unavailable, "chưa kiểm được trạng thái xã, vui lòng thử lại")
+		}
+		if !known || !xa.Active {
+			// Deactivated, merged or dissolved: the SAME answer as an expired or revoked session —
+			// byte for byte, through khongCoPhienCongDan — so the response never says which commune
+			// is inactive (rule 4, forbidden #2). The session row is untouched (rule 7): reactivating
+			// the commune makes it usable again within one TTL.
+			return khongCoPhienCongDan(), nil
+		}
 	}
 
 	return &identityv1.ResolveCitizenSessionResponse{

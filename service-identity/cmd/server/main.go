@@ -161,6 +161,11 @@ func run(log *slog.Logger) error {
 	}
 	defer nenTang.Close()
 	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
+	// The SAME registry and the SAME TENANT_CACHE_TTL, keyed by commune instead of host: what
+	// ResolveCitizenSession asks on every citizen request — "is the commune this session is bound to
+	// still active". Host resolution already stops a deactivated commune's STAFF within one TTL; this
+	// makes the same promise true for its CITIZENS, whose sessions live CITIZEN_SESSION_TTL (720h).
+	communes := tenant.NewCachedCommune(nenTang, cfg.TenantCacheTTL())
 
 	// 4. stores and the permission checker. Every one of them is built on *store.DB, which only
 	//    hands out scoped access — there is no path here to an unscoped query (rule 1,
@@ -386,7 +391,8 @@ func run(log *slog.Logger) error {
 	ownAppSignIn := app.NewOwnAppSignIn(nenTang, idstore.NewMiniAppSecretStore(kho), envelope,
 		zalo.New(""), cauPhien, log)
 
-	// The Vihat OPERATOR realm (ADR 0048 §01/10), served as OperatorService on the gRPC port below.
+	// The Vihat OPERATOR realm (ADR 0048 §01/10), served as OperatorService on ITS OWN listener (step
+	// 10c) — never on the inter-service port, never on the bridge.
 	//
 	// ITS STORE IS ON THE RAW *sql.DB, NOT ON `kho`, and that is the realm's design rather than an
 	// escape from rule 1 invariant 5: an operator belongs to no commune, the five operator tables are
@@ -644,6 +650,10 @@ func run(log *slog.Logger) error {
 		// wiring a binary. It is wired anyway so that the answer, when it comes, is one line in
 		// core/grpcx and nothing else — not a second day's work discovering this field is missing.
 		PhienCongDan: phienCongDan,
+		// The registry read behind the citizen session's commune check: a session bound to a commune
+		// that is deactivated (or no longer known) answers "no session"; a registry that cannot be
+		// asked answers UNAVAILABLE, never "allow" (fail closed). Cached for TENANT_CACHE_TTL.
+		Communes: communes,
 		// The commune's working calendar, for AdvanceWorkingHours — the only way that calendar
 		// leaves this service. The SAME three read-only stores the HTTP routes were given above:
 		// one read path per table, so a deadline is computed from exactly what the configuration
@@ -664,11 +674,29 @@ func run(log *slog.Logger) error {
 		PermissionKeys: maTranQuyen,
 		Automation:     automation,
 		Log:            log,
-	}, svcgrpc.NewOperatorServer(operatorAuth, log), log)
+	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
 	if err != nil {
 		return fmt.Errorf("identity: không mở được cổng gRPC %q: %w", cfg.GRPCListenAddr(), err)
+	}
+
+	// 10c. The OPERATOR listener (user decision 01/10/2026, "Cổng riêng cho OperatorService") — a
+	//      THIRD gRPC listener, serving OperatorService and nothing else, to one caller: platform.
+	//
+	// NOT THE PORT ABOVE. Five staff services reach 9090 holding the one shared GRPC_CALLER_KEY; with
+	// OperatorService there, any one of them, compromised, could call OpenOperatorSession directly —
+	// around platform's per-IP limit, with a forged client_ip, locking an operator out for 12 hours.
+	// A NetworkPolicy tells ports apart, never RPCs, so this port is what lets netpol rule 11 admit
+	// platform alone. The caller key and the commune interceptor are the SAME chain as on 9090: the
+	// port narrows who can reach the RPCs, it does not replace the key.
+	//
+	// ALWAYS STARTED, configured realm or not: with no operator keys every RPC answers
+	// FAILED_PRECONDITION (buildOperatorAuth), exactly as it did on 9090.
+	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(), svcgrpc.NewOperatorServer(operatorAuth, log), log)
+	opLis, err := net.Listen("tcp", cfg.OperatorGRPCListenAddr())
+	if err != nil {
+		return fmt.Errorf("identity: không mở được cổng gRPC vận hành %q: %w", cfg.OperatorGRPCListenAddr(), err)
 	}
 
 	// 10b. The citizen-session bridge — a SECOND gRPC listener (ADR 0045 §Tin cậy), serving
@@ -704,9 +732,9 @@ func run(log *slog.Logger) error {
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	// Buffered for THREE: any of the servers may fail, and an unbuffered send from a goroutine
+	// Buffered for FOUR: any of the servers may fail, and an unbuffered send from a goroutine
 	// nobody is reading any more would leak it.
-	loi := make(chan error, 3)
+	loi := make(chan error, 4)
 	go func() {
 		log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr(),
 			"env", cfg.Env,
@@ -723,6 +751,12 @@ func run(log *slog.Logger) error {
 		// Serve returns nil after GracefulStop, so there is no ErrServerClosed equivalent to
 		// filter out here.
 		if err := grpcSrv.Serve(grpcLis); err != nil {
+			loi <- err
+		}
+	}()
+	go func() {
+		log.Info("khởi động gRPC vận hành", "service", "identity", "addr", cfg.OperatorGRPCListenAddr())
+		if err := opSrv.Serve(opLis); err != nil {
 			loi <- err
 		}
 	}()
@@ -743,6 +777,7 @@ func run(log *slog.Logger) error {
 		// while every guarded route in four other services answers 401 to valid sessions — which
 		// is exactly the outage this server was built to end.
 		grpcSrv.Stop()
+		opSrv.Stop()
 		if cauSrv != nil {
 			cauSrv.Stop()
 		}
@@ -760,6 +795,7 @@ func run(log *slog.Logger) error {
 		xongGRPC := make(chan struct{})
 		go func() {
 			grpcSrv.GracefulStop()
+			opSrv.GracefulStop()
 			if cauSrv != nil {
 				cauSrv.GracefulStop()
 			}
@@ -775,6 +811,7 @@ func run(log *slog.Logger) error {
 			// stop here is visible in the logs; hanging is not.
 			log.Warn("gRPC không đóng kịp hạn, buộc dừng")
 			grpcSrv.Stop()
+			opSrv.Stop()
 			if cauSrv != nil {
 				cauSrv.Stop()
 			}
@@ -803,10 +840,10 @@ func run(log *slog.Logger) error {
 // the CALLER holds the key; folding either interceptor into the other is how the tenant exemption
 // list quietly becomes a list of RPCs that skip authentication.
 //
-// OperatorService IS ON THIS PORT, BEHIND THE SAME TWO INTERCEPTORS. Its seven RPCs are on the
-// commune exemption list (owner's decision 01/10/2026, ADR 0048) — and, exactly as argued above,
-// NOT on any caller-key exemption: a call without GRPC_CALLER_KEY reaches no operator handler.
-func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, op *svcgrpc.OperatorServer, log *slog.Logger) *grpc.Server {
+// OperatorService IS NOT ON THIS PORT (user decision 01/10/2026): it has a listener of its own,
+// buildOperatorGRPCServer, so the network can admit platform alone to it. A call to it here answers
+// Unimplemented — operator_wiring_test.go pins that, so re-registering it here turns something red.
+func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
@@ -826,11 +863,33 @@ func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, op *svcgrpc.OperatorS
 	// identity/http.Register does: incomplete wiring must fail where a human is watching a
 	// process fail to start, not at request time in four other services.
 	identityv1.RegisterIdentityServiceServer(srv, svcgrpc.NewServer(d))
+	return srv
+}
+
+// buildOperatorGRPCServer builds the OPERATOR listener's server: OperatorService and nothing else,
+// behind the SAME two interceptors as dungGRPCServer, in the same order.
+//
+// THE SAME CHAIN, ON PURPOSE. The seven operator RPCs are on the commune exemption list (owner's
+// decision 01/10/2026, ADR 0048) and on NO caller-key exemption: a call without GRPC_CALLER_KEY
+// reaches no operator handler. The commune interceptor stays so that anything registered here later
+// must carry a commune rather than inheriting a port that asks for none.
+//
+// ONE SERVICE, AND IT MUST STAY ONE: "this port carries only the operator RPCs" is what NetworkPolicy
+// rule 11 relies on, and it holds because of what is registered here — not because of a list
+// somebody keeps. A named function so operator_wiring_test.go can start it over a real connection.
+func buildOperatorGRPCServer(callerKey secret.Secret, op *svcgrpc.OperatorServer, log *slog.Logger) *grpc.Server {
 	// A nil operator server would register a service whose every call panics in a handler; refused
 	// here, where a process start is watched. svcgrpc.NewOperatorServer panics on a nil use case too.
 	if op == nil {
-		panic("identity: dungGRPCServer without an OperatorServer")
+		panic("identity: buildOperatorGRPCServer without an OperatorServer")
 	}
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics at construction on an empty key, exactly as on the inter-service port.
+			grpcx.UnaryServerCallerAuth(callerKey, log),
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
 	identityv1.RegisterOperatorServiceServer(srv, op)
 	return srv
 }

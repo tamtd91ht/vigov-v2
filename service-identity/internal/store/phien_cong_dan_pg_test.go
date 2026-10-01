@@ -86,7 +86,7 @@ func TestPhienCongDanTraCuuDuocBangToken(t *testing.T) {
 		t.Error("sid và token giống nhau — phải là hai giá trị độc lập")
 	}
 
-	p, ok := soPhienCongDan(db).TraCuu(context.Background(), token)
+	p, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), token)
 	if !ok {
 		t.Fatal("phiên vừa mở mà tra cứu không ra")
 	}
@@ -111,7 +111,7 @@ func TestTraCuuKhongCanXaTrongNguCanh(t *testing.T) {
 	congDan := themCongDan(t, db)
 	_, token := moPhienCongDan(t, db, xaA, congDan)
 
-	p, ok := soPhienCongDan(db).TraCuu(context.Background(), token)
+	p, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), token)
 	if !ok || string(p.TenantID) != xaA {
 		t.Errorf("tra cứu không có xã trong ngữ cảnh: ok=%v, xã=%q", ok, p.TenantID)
 	}
@@ -167,7 +167,7 @@ func TestPhienHetHanKhongTraCuuDuoc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := soPhienCongDan(db).TraCuu(context.Background(), token); ok {
+	if _, ok := lookupNoError(t, soPhienCongDan(db), context.Background(), token); ok {
 		t.Error("phiên đã hết hạn mà vẫn tra cứu ra")
 	}
 }
@@ -187,7 +187,7 @@ func TestPhienThuHoiKhongTraCuuDuoc(t *testing.T) {
 		t.Fatalf("ThuHoi lỗi: %v", err)
 	}
 
-	if _, ok := s.TraCuu(context.Background(), token); ok {
+	if _, ok := lookupNoError(t, s, context.Background(), token); ok {
 		t.Error("phiên đã thu hồi mà vẫn dùng được")
 	}
 }
@@ -214,11 +214,11 @@ func TestThuHoiCuaCongDanChiDongTrongXaCuaMinh(t *testing.T) {
 	}
 
 	for i, tok := range []string{tokenB1, tokenB2} {
-		if _, ok := s.TraCuu(context.Background(), tok); ok {
+		if _, ok := lookupNoError(t, s, context.Background(), tok); ok {
 			t.Errorf("phiên thứ %d ở xã B vẫn còn hiệu lực sau khi thu hồi", i+1)
 		}
 	}
-	if _, ok := s.TraCuu(context.Background(), tokenA); !ok {
+	if _, ok := lookupNoError(t, s, context.Background(), tokenA); !ok {
 		t.Error("RÒ RỈ NGƯỢC: xã B thu hồi phiên mà phiên của công dân ở xã A cũng tắt")
 	}
 }
@@ -246,7 +246,7 @@ func TestPhienChuaChonXaDungDuocNhungKhongMangXa(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, ok := s.TraCuu(context.Background(), token)
+	p, ok := lookupNoError(t, s, context.Background(), token)
 	if !ok {
 		t.Fatal("phiên chưa chọn xã tra cứu không ra")
 	}
@@ -269,7 +269,7 @@ func TestPhienChuaChonXaDungDuocNhungKhongMangXa(t *testing.T) {
 	if err := tx2.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := s.TraCuu(context.Background(), token); ok {
+	if _, ok := lookupNoError(t, s, context.Background(), token); ok {
 		t.Error("phiên chưa chọn xã đã thu hồi mà vẫn dùng được")
 	}
 }
@@ -297,7 +297,7 @@ func TestGiaoDichHuyThiKhongCoPhien(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := s.TraCuu(context.Background(), token); ok {
+	if _, ok := lookupNoError(t, s, context.Background(), token); ok {
 		t.Error("phiên vẫn dùng được sau khi giao dịch của lời gọi bị huỷ")
 	}
 }
@@ -330,7 +330,7 @@ func TestGhiNhanDungCapNhatDungGanNhat(t *testing.T) {
 	sid, token := moPhienCongDan(t, db, xaA, congDan)
 
 	s := soPhienCongDan(db)
-	p, ok := s.TraCuu(context.Background(), token)
+	p, ok := lookupNoError(t, s, context.Background(), token)
 	if !ok {
 		t.Fatal("tra cứu không ra")
 	}

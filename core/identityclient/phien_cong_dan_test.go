@@ -1,7 +1,8 @@
 package identityclient
 
-// What these tests defend: the MAPPING from a gRPC answer to the three outcomes, and the one place
-// the third is deliberately thrown away.
+// What these tests defend: the MAPPING from a gRPC answer to the three outcomes, and — since
+// 01/10/2026 — that the third (an outage) reaches the citizen edge as an error instead of being
+// thrown away.
 //
 // THE TEST THAT MATTERS MOST IS THE ONE THAT ASSERTS SOMETHING DOES NOT WORK.
 // TestPhienCongDanBiChanVIKhongCoMienXa pins the fact that this whole path is refused today,
@@ -11,6 +12,7 @@ package identityclient
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -245,19 +247,25 @@ func TestPhienCongDanTokenRongBiChanTaiCho(t *testing.T) {
 	}
 }
 
-// THE COLLAPSE, AND ITS COST, PINNED. httpx.CitizenSessions has two outcomes, so the adapter has to
-// throw the third away — and the only trace left is a log line. If that line ever disappears, an
-// identity outage becomes indistinguishable from every citizen's session expiring at once, with
-// nothing anywhere to say which happened.
-func TestSoPhienCongDanGopLoiThanhKhongCoPhienVaGhiCanhBao(t *testing.T) {
+// AN OUTAGE IS AN ERROR, NOT "NO SESSION" (01/10/2026). The adapter used to collapse it into
+// ok=false, so the edge answered 401 and the Mini App threw away a session that was still valid. Now
+// the error reaches core/httpx.CitizenEdge, which answers 503 — and the warning line is still the one
+// place that names the gRPC code, because the edge has no logger.
+func TestCitizenSessionOutageIsAnErrorAndWarned(t *testing.T) {
 	nhatKy := &strings.Builder{}
 	cl := moMay(t, &mayChuCongDanGia{loi: status.Error(codes.Unavailable, "giả lập: identity đang chết")})
 	cl.log = slog.New(slog.NewTextHandler(nhatKy, nil))
 	so := NewSoPhienCongDan(cl)
 
-	p, co := so.TraCuu(ngucCanhCongDan(), tokenCongDanGia)
+	p, co, err := so.TraCuu(ngucCanhCongDan(), tokenCongDanGia)
 	if co {
 		t.Fatal("lỗi hạ tầng lại thành phiên dùng được")
+	}
+	if err == nil {
+		t.Fatal("an identity outage came back as 'no session' — the edge would answer 401, not 503")
+	}
+	if status.Code(errors.Unwrap(err)) != codes.Unavailable {
+		t.Errorf("the gRPC code was lost on the way to the edge: %v", err)
 	}
 	if p != (httpx.CitizenSession{}) {
 		t.Errorf("phiên rỗng lại mang dữ liệu: %+v", p)
@@ -283,8 +291,8 @@ func TestSoPhienCongDanKhongGhiLogKhiPhienHetHan(t *testing.T) {
 	cl := moMay(t, &mayChuCongDanGia{})
 	cl.log = slog.New(slog.NewTextHandler(nhatKy, nil))
 
-	if _, co := NewSoPhienCongDan(cl).TraCuu(ngucCanhCongDan(), tokenCongDanGia); co {
-		t.Fatal("không có phiên mà lại bảo có")
+	if _, co, err := NewSoPhienCongDan(cl).TraCuu(ngucCanhCongDan(), tokenCongDanGia); co || err != nil {
+		t.Fatalf("không có phiên mà lại bảo có (co=%v) hoặc thành lỗi (%v)", co, err)
 	}
 	if nhatKy.Len() != 0 {
 		t.Errorf("phiên hết hạn thường ngày lại ghi log: %q", nhatKy.String())

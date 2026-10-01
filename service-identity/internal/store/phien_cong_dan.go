@@ -170,31 +170,20 @@ WHERE bam_token = $1
 // token. Two rows means the registry cannot say whose session this is, and the answer to that
 // is no.
 //
-// WHAT IT DOES NOT ANSWER, STATED BECAUSE THE INTERFACE'S DOC SAYS OTHERWISE: core/httpx lists
-// "phiên của một xã đã ngừng hoạt động" among the cases that must return ok=false. This
-// registry cannot tell that. Whether a commune is still operating lives in the `tenant` table,
-// which belongs to service-platform, and reading another service's database is rule 2,
-// forbidden #2. Answering it needs a platformclient call on this path, and that is a decision
-// with a cost (a second hop on every citizen request) that has not been made. Until it is, a
-// merged commune's citizen sessions keep working — written down here rather than left for
-// somebody to discover.
-func (s *PhienCongDanStore) TraCuu(ctx context.Context, token string) (httpx.CitizenSession, bool) {
+// WHAT IT DOES NOT ANSWER: whether the session's commune is still active. That lives in the
+// `tenant` table, which belongs to service-platform (rule 2, forbidden #2). It IS answered since
+// 01/10/2026 — by the gRPC handler ResolveCitizenSession, through platformclient and
+// tenant.CachedCommune, which is the one path every citizen edge reaches a session by. An HTTP edge
+// mounted directly on THIS store would skip that check; none exists (identity has no citizen edge).
+func (s *PhienCongDanStore) TraCuu(ctx context.Context, token string) (httpx.CitizenSession, bool, error) {
 	p, ok, err := s.TraCuuCoLoi(ctx, token)
 	if err != nil {
-		// A database failure is not "no such session", but the interface has one negative
-		// answer and that is right FOR THE EDGE, where identity's own routes are failing in the
-		// same breath. It is logged — WITHOUT the token and without any citizen identifier —
-		// because the alternative is an outage that looks like every citizen in the country
-		// mistyping their session at once.
-		//
-		// THE COLLAPSE IS MADE HERE AND NOWHERE DEEPER, so the ONE caller that must not make it
-		// can avoid it: across a service boundary, "identity is down" read as "everybody is
-		// signed out" tells every citizen in every commune that their session ended, through the
-		// one channel a commune is judged on (rule 10). See TraCuuCoLoi.
+		// Logged here — WITHOUT the token and without any citizen identifier — because the edge
+		// has no logger; returned, so the edge answers 503 rather than "no session" (core/httpx).
 		s.log.Error("phiên công dân: không tra cứu được, từ chối", "err", err)
-		return httpx.CitizenSession{}, false
+		return httpx.CitizenSession{}, false, err
 	}
-	return p, ok
+	return p, ok, nil
 }
 
 // TraCuuCoLoi is TraCuu with the third answer the edge deliberately does not have: the registry

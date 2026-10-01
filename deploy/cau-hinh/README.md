@@ -99,7 +99,8 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 |---|---|---|---|---|
 | `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | Cổng REST | `:8080` |
 | `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | gRPC của platform — phân giải tên miền ra xã. Tên Service + `9090` | `platform:9090` |
-| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting, platform | 6 dịch vụ trừ `identity` | gRPC của identity — đổi phiên cán bộ thành người dùng; với platform là tra phiên vận hành (`OperatorService`, ADR 0048 §01/10 #2). Tên Service + `9090` | `identity:9090` |
+| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090`. Platform **không** dùng biến này từ 01/10/2026: phiên vận hành đi cổng riêng, xem `IDENTITY_OPERATOR_GRPC_ADDR` | `identity:9090` |
+| `IDENTITY_OPERATOR_GRPC_ADDR` | **có (prod)** — platform | `vigov-service-platform` **chỉ nơi này** | gRPC `OperatorService` của identity — tra / mở phiên vận hành (ADR 0048 §01/10 #2; cổng riêng chốt 01/10/2026). Cổng `9093`, **không** phải `9090`: 9090 nhận năm dịch vụ cán bộ, 9093 chỉ nhận platform (quy tắc 11 của `deploy/base/mang/netpol.yaml`). Danh sách `host:port[,host:port]` | `identity:9093` — khớp cổng `grpc-operator` của Deployment/Service identity |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của documents — như trên | `documents:9090` |
 | `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents | `vigov-service-petitions`, `vigov-service-documents` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058). Tên Service + `9090` | `comms:9090` |
@@ -114,6 +115,7 @@ phải mở cổng `9090` (comms: đích `DeliverStaffNotifications` của bộ 
 | Key | Bắt buộc | Vì sao |
 |---|---|---|
 | `GRPC_LISTEN_ADDR` | không — mặc định `:9090` | mặc định `:9090` |
+| `OPERATOR_GRPC_LISTEN_ADDR` | không — mặc định `:9093` | mặc định `:9093` — cổng `OperatorService` của identity, khớp cổng `grpc-operator` và quy tắc 11 của netpol |
 | `TENANT_CACHE_TTL` | không — mặc định `30s` | mặc định `30s` |
 | `RABBITMQ_DSN` | không — chưa dịch vụ nào dùng | chưa dùng |
 | `RABBITMQ_EXCHANGE` | không — chưa dịch vụ nào dùng | chưa dùng |

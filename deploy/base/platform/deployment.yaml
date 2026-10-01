@@ -64,6 +64,13 @@ spec:
             - { name: rest, containerPort: 8080 }
             - { name: grpc, containerPort: 9090 }
 
+          env:
+            # identity's OPERATOR listener (`grpc-operator`, 9093) — the one address platform dials
+            # identity on (core/operatorclient). Not `identity:9090`: OperatorService is no longer
+            # registered there (user decision 01/10/2026), and platform makes no other identity call.
+            # Required in prod (config.OperatorEdge, ADR 0057) even while OPERATOR_HOST is unset.
+            - name: IDENTITY_OPERATOR_GRPC_ADDR
+              value: identity:9093
           envFrom:
             - configMapRef: { name: common-config }
             # BA khoá: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.

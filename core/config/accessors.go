@@ -152,6 +152,19 @@ func (c Config) OperatorHost() string {
 	return c.operatorHost
 }
 
+// OperatorGRPCListenAddr is OPERATOR_GRPC_LISTEN_ADDR, default ":9093" — identity's OperatorService
+// listener, with nothing else registered on it.
+func (c Config) OperatorGRPCListenAddr() string {
+	c.require("OperatorGRPCListenAddr", OperatorRealm)
+	return c.operatorGRPCListenAddr
+}
+
+// IdentityOperatorGRPCAddr is IDENTITY_OPERATOR_GRPC_ADDR — where platform dials OperatorService.
+func (c Config) IdentityOperatorGRPCAddr() string {
+	c.require("IdentityOperatorGRPCAddr", OperatorEdge)
+	return c.identityOperatorGRPCAddr
+}
+
 // OperatorTOTPEncryptionKeys are the decoded keys of OPERATOR_TOTP_ENCRYPTION_KEY.
 func (c Config) OperatorTOTPEncryptionKeys() []secret.Secret {
 	c.require("OperatorTOTPEncryptionKeys", OperatorRealm)
@@ -226,6 +239,8 @@ type configView struct {
 	OperatorSessionSigningKeys     []secret.Secret
 	OperatorTOTPEncryptionKeys     []secret.Secret
 	OperatorHost                   string
+	OperatorGRPCListenAddr         string
+	IdentityOperatorGRPCAddr       string
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
@@ -267,6 +282,8 @@ func (c Config) view() configView {
 		OperatorSessionSigningKeys:     c.operatorSessionSigningKeys,
 		OperatorTOTPEncryptionKeys:     c.operatorTOTPEncryptionKeys,
 		OperatorHost:                   c.operatorHost,
+		OperatorGRPCListenAddr:         c.operatorGRPCListenAddr,
+		IdentityOperatorGRPCAddr:       c.identityOperatorGRPCAddr,
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,

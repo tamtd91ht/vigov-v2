@@ -35,8 +35,8 @@ const (
 	GRPCServer
 	// PlatformClient: PLATFORM_GRPC_ADDR, GRPC_CALLER_KEY — resolving Host to a commune.
 	PlatformClient
-	// IdentityClient: IDENTITY_GRPC_ADDR, GRPC_CALLER_KEY — resolving a staff principal, or (platform
-	// only) an operator session through OperatorService.
+	// IdentityClient: IDENTITY_GRPC_ADDR, GRPC_CALLER_KEY — resolving a staff principal. NOT the
+	// operator session: that is IDENTITY_OPERATOR_GRPC_ADDR, group OperatorEdge, on its own port.
 	IdentityClient
 	// OrgUnitOwnerClients: PETITIONS_GRPC_ADDR, DOCUMENTS_GRPC_ADDR, GRPC_CALLER_KEY — identity
 	// asking the owners before it soft-deletes an org unit.
@@ -64,8 +64,8 @@ const (
 	MalwareScan
 	// SecretEncryption: SECRET_ENCRYPTION_KEYS — per-commune secrets at rest (ADR 0009).
 	SecretEncryption
-	// OperatorRealm: OPERATOR_SESSION_SIGNING_KEYS, OPERATOR_TOTP_ENCRYPTION_KEY (ADR 0048) — the
-	// service that ISSUES operator sessions (identity). The edge that only verifies them declares
+	// OperatorRealm: OPERATOR_SESSION_SIGNING_KEYS, OPERATOR_TOTP_ENCRYPTION_KEY,
+	// OPERATOR_GRPC_LISTEN_ADDR (ADR 0048) — the service that ISSUES operator sessions (identity). The edge that only verifies them declares
 	// OperatorEdge instead.
 	OperatorRealm
 	// RabbitMQ: RABBITMQ_DSN, RABBITMQ_EXCHANGE (ADR 0010).
@@ -76,7 +76,8 @@ const (
 	// notices into comms' bell inbox (ADR 0058 §3). APPENDED, never inserted: a Group is a bit
 	// position, and renumbering the ones above changes nothing on disk but reads badly in a diff.
 	CommsClient
-	// OperatorEdge: OPERATOR_HOST, OPERATOR_SESSION_SIGNING_KEYS — the operator area's HTTP edge,
+	// OperatorEdge: OPERATOR_HOST, OPERATOR_SESSION_SIGNING_KEYS, IDENTITY_OPERATOR_GRPC_ADDR — the
+	// operator area's HTTP edge,
 	// service-platform only (ADR 0048 §"Chốt của chủ dự án — 01/10/2026" #2). A SEPARATE GROUP FROM
 	// OperatorRealm because the edge needs the signing keys to check `op1.` signatures and nothing
 	// else: declaring OperatorRealm there would also demand OPERATOR_TOTP_ENCRYPTION_KEY, putting the

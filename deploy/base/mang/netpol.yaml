@@ -73,16 +73,17 @@ spec:
       ports:
         - { port: 9090, protocol: TCP }
 ---
-# 3b. identity 9090 ← các dịch vụ hỏi danh tính cán bộ (`identityclient`), và platform (quy tắc 11).
+# 3b. identity 9090 ← CHỈ năm dịch vụ hỏi danh tính cán bộ (`identityclient`).
 #
-# ⚠ NÓI THẲNG: RPC vận hành (OperatorService — mật khẩu, TOTP, token `op1.`) và RPC cán bộ CHUNG
-# MỘT CỔNG 9090. NetworkPolicy chỉ phân biệt theo pod và cổng, không theo RPC — nên năm dịch vụ
-# dưới đây tới được cổng mang kênh mật khẩu. Thứ tách hai loại RPC ở tầng ứng dụng CHỈ là khoá
-# người gọi (`GRPC_CALLER_KEY`) và miền (realm) của token — không phải biên mạng.
+# Từ 01/10/2026 (người dùng chốt "Cổng riêng cho OperatorService") 9090 KHÔNG còn mang RPC vận hành:
+# OperatorService chỉ đăng ký trên cổng 9093 của identity, và chỉ quy tắc 11 cho vào 9093. Trước đó
+# hai loại RPC chung 9090, nên một pod bị chiếm trong năm dịch vụ dưới đây gọi thẳng được
+# OpenOperatorSession — vòng qua giới hạn theo IP của platform, giả client_ip, khoá người vận hành 12
+# giờ. NetworkPolicy chỉ phân biệt theo pod và cổng, không theo RPC: tách cổng là cách duy nhất.
 #
-# platform KHÔNG có trong danh sách này: nó được cho vào ở quy tắc 11, một đối tượng riêng, để kênh
-# vận hành có tên của chính nó. Gộp vào đây thì xoá quy tắc 11 không còn bớt được gì. Cầu phiên công
-# dân 9091 là quy tắc 8, không phải ở đây.
+# platform KHÔNG có trong danh sách này và KHÔNG cần: lời gọi duy nhất của nó tới identity là
+# OperatorService (mã: `service-platform/cmd/server/operator_edge.go` — không `identityclient.Dial`
+# nào). Cầu phiên công dân 9091 là quy tắc 8, không phải ở đây.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -188,7 +189,7 @@ spec:
 # 4b. Đường RA gRPC 9090: mỗi bên gọi CHỈ tới đúng những dịch vụ nó quay số — mặt kia của quy tắc 3.
 #
 # Cần cả hai phía: quy tắc 1 từ chối cả vào lẫn ra, nên thiếu đường ra thì luật vào ở quy tắc 3 không
-# được dùng tới. platform → identity là quy tắc 11 (`allow-platform-egress-identity-grpc`), không ở đây.
+# được dùng tới. platform → identity:9093 là quy tắc 11 (`allow-platform-egress-identity-grpc`), không ở đây.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -447,25 +448,28 @@ spec:
       ports:
         - { port: 443, protocol: TCP }
 ---
-# 11. platform → identity gRPC 9090: kênh OperatorService của khu vận hành (ADR 0048 §01/10 #2).
+# 11. platform → identity gRPC 9093: kênh OperatorService của khu vận hành (ADR 0048 §01/10 #2), trên
+#     CỔNG RIÊNG `grpc-operator` (người dùng chốt 01/10/2026 "Cổng riêng cho OperatorService").
 #
 # Kênh này mang MẬT KHẨU, mã TOTP, mã khôi phục và token `op1.` của người vận hành, KHÔNG TLS —
 # người dùng chốt 01/10/2026: chung nợ với các kênh gRPC nội cụm hiện có, và là ĐIỀU KIỆN CHẶN
 # GO-LIVE: luật này phải được áp lên cụm thật TRƯỚC KHI đặt OPERATOR_HOST
 # (`core/operatorclient/dial.go`, dấu `@security-exception`).
 #
-# Từ 01/10/2026 quy tắc 3 và 4 đã hẹp theo từng cặp gọi, nên đây là đối tượng DUY NHẤT cho
-# platform vào identity:9090 và cho platform ra 9090. Trước đó luật này không thêm quyền nào
-# (`allow-grpc-internal` cho mọi pod vào 9090, NetworkPolicy chỉ cộng quyền) — và nó vẫn chỉ là
-# biên thật trên một cụm đã XOÁ `allow-grpc-internal` (cách xoá: đầu quy tắc 3).
+# ĐÂY LÀ ĐỐI TƯỢNG DUY NHẤT CHO VÀO 9093, và cổng 9093 chỉ phục vụ OperatorService (đúng một dịch vụ
+# đăng ký — `buildOperatorGRPCServer`, `service-identity/cmd/server/main.go`). Nên lần này biên mạng
+# giữ được RPC: năm dịch vụ cán bộ ở quy tắc 3b tới được 9090 nhưng không tới được 9093, và 9090 trả
+# Unimplemented cho mọi RPC vận hành. Thêm 9093 vào một chính sách khác là mở lại đúng lỗ đã đóng.
 #
-# ⚠ BIÊN NÀY CHỈ GIỮ AI TỚI ĐƯỢC CỔNG, KHÔNG GIỮ RPC NÀO: identity:9090 còn nhận năm dịch vụ khác cho
-# RPC cán bộ (quy tắc 3b), cùng cổng với RPC vận hành. Tách hai loại ở tầng ứng dụng chỉ là khoá
-# người gọi (`GRPC_CALLER_KEY`) và miền (realm) của token.
+# platform KHÔNG còn được vào identity:9090: nó không gọi RPC cán bộ nào (không `identityclient.Dial`
+# trong `service-platform/cmd/`).
 #
-# HẸP CÓ CHỦ Ý: chỉ pod platform, chỉ tới pod identity, chỉ cổng 9090. Không 8080, không 9091
-# (cầu phiên công dân — quy tắc 8). Giữ TÊN đối tượng cũ để `kubectl apply` sửa tại chỗ, không để
-# lại bản thừa trên cụm.
+# ⚠ ĐỔI CỔNG TRÊN CỤM ĐANG CHẠY: áp bản render này SỬA TẠI CHỖ hai đối tượng dưới đây (giữ TÊN cũ).
+# Thứ tự triển khai: identity (mở 9093) TRƯỚC platform (quay số 9093) — ngược lại thì trong khoảng
+# giữa mọi yêu cầu vận hành trả 503. Khu vận hành chưa lên sống nên khoảng ấy không chạm ai.
+#
+# HẸP CÓ CHỦ Ý: chỉ pod platform, chỉ tới pod identity, chỉ cổng 9093. Không 8080, không 9090, không
+# 9091 (cầu phiên công dân — quy tắc 8).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -479,7 +483,7 @@ spec:
         - podSelector:
             matchLabels: { app.kubernetes.io/name: platform }
       ports:
-        - { port: 9090, protocol: TCP }
+        - { port: 9093, protocol: TCP }
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -494,7 +498,7 @@ spec:
         - podSelector:
             matchLabels: { app.kubernetes.io/name: identity }
       ports:
-        - { port: 9090, protocol: TCP }
+        - { port: 9093, protocol: TCP }
 ---
 # 6. Đường RA của RIÊNG web-admin: tới REST 8080 của các pod trong namespace.
 #

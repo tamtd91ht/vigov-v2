@@ -284,16 +284,16 @@ const (
 )
 
 // vi-name-ok: implements the existing httpx.CitizenSessions interface method.
-func (fieldSessions) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool) {
+func (fieldSessions) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool, error) {
 	switch token {
 	case tokenFieldsA:
-		return httpx.CitizenSession{ID: "sid-a", CitizenID: idToi, TenantID: xaA}, true
+		return httpx.CitizenSession{ID: "sid-a", CitizenID: idToi, TenantID: xaA}, true, nil
 	case tokenFieldsB:
-		return httpx.CitizenSession{ID: "sid-b", CitizenID: idToi, TenantID: xaB}, true
+		return httpx.CitizenSession{ID: "sid-b", CitizenID: idToi, TenantID: xaB}, true, nil
 	case tokenFieldsNoPhone:
-		return httpx.CitizenSession{ID: "sid-np", TenantID: xaA}, true
+		return httpx.CitizenSession{ID: "sid-np", TenantID: xaA}, true, nil
 	}
-	return httpx.CitizenSession{}, false
+	return httpx.CitizenSession{}, false, nil
 }
 
 func citizenFieldsCall(t *testing.T, f *fieldCatalogueFake, token string) *httptest.ResponseRecorder {

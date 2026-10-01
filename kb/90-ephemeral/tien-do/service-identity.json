@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-30",
+  "cap_nhat": "2026-10-01",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -412,6 +412,20 @@
       "bang_chung": "internal/zalo/ — AccountID (/v2.0/me?fields=id, không secret, id giữ đúng chữ số), Phone (/v2.0/me/info, secret_key, appsecret_proof tắt mặc định, chuẩn hoá 84…), hai lớp lỗi ErrTokenInvalid/ErrZaloUnreachable, không lộ token/số/thông điệp Zalo; httptest xanh. Chưa ai gọi gói này. || 29c341e4 migration 0021 mini_app_secret + data_encryption_key. || Tuyến POST /api/v1/citizen-sessions (Public, idem.KhongCan, 10 lượt/5 phút/IP, thân 8 KB chặt): ResolveMiniApp phải là app riêng → mini_app_secret trong ngữ cảnh xã → thường: mở secret, AccountID, Phone; demo {appId, demoIdentity:true} khi demo_identity_enabled: không gọi Zalo, số 84900000000, mã tài khoản demo:<appId> → CauPhienCongDan.Mo trong tiến trình. 422 app_not_ready giống hệt cho 8 trường hợp. Envelope + SECRET_ENCRYPTION_KEYS (nhóm SecretEncryption). operatorctl mini-app-secret set|retire, mini-app-demo on|off (--ticket, secret từ stdin). netpol rule 10 identity ra 443. go build/vet/test xanh; make check exit 0.",
       "tiep_theo": "Vận hành TRƯỚC khi đẩy app riêng mới: đặt SECRET_ENCRYPTION_KEYS trong identity-secrets, áp netpol rule 10, triển khai service-identity, chạy `operatorctl mini-app-demo on --tenant <xã> --app-id <App ID> --ticket <n>` cho app chờ duyệt (và `mini-app-secret set` khi có secret). Test PostgreSQL (TestMiniAppSecretVersioningPG, TestIdentityDataEncryptionKeyPG) chưa chạy. Còn: đổi mã vị trí app riêng chuyển vào identity (quyết định 5); màn platform-admin (chặn bởi ADR 0048 bước 2–3); gỡ phần app riêng khỏi cầu 9091 sau khi Thăng Bình chạy đường mới. Mọi người dùng demo là MỘT định danh dùng chung toàn nền tảng. Cho security-reviewer xem tuyến công khai + đường demo.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "cong-grpc-rieng-operator-service",
+      "viec": "OperatorService chỉ phục vụ trên cổng gRPC riêng của identity (:9093, OPERATOR_GRPC_LISTEN_ADDR), gỡ khỏi 9090 và cổng cầu 9091 — người dùng chốt 01/10/2026 \"Cổng riêng cho OperatorService\"",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/main.go: buildOperatorGRPCServer (cùng chuỗi UnaryServerCallerAuth + UnaryServerInterceptor, đăng ký đúng một dịch vụ), bước 10c mở cổng, dừng êm cùng hai cổng kia; dungGRPCServer không còn đăng ký OperatorService. Miền vận hành chưa cấu hình vẫn trả FAILED_PRECONDITION trên cổng mới. operator_wiring_test.go: TestOperatorServiceAbsentFromInterServicePort (9090 có khoá → Unimplemented), TestOperatorServiceAbsentFromBridgePort, TestOperatorPortServesNothingElse, các ca có/không khoá chạy trên cổng mới. go vet/test service-identity xanh.",
+      "tiep_theo": "Triển khai identity TRƯỚC platform (platform quay số 9093). Áp netpol quy tắc 11 (9093) lên cụm thật trước khi đặt OPERATOR_HOST — điều kiện cũ của ADR 0048 §Chốt bổ sung 01/10 #2 giữ nguyên, chỉ đổi cổng."
+    },
+    {
+      "id": "phien-cong-dan-xa-ngung-hoat-dong",
+      "viec": "Phiên công dân đang mở của một xã đã tắt hoạt động bị từ chối trên MỌI yêu cầu, không chỉ lúc mở phiên (phát hiện cách ly 01/10/2026: CITIZEN_SESSION_TTL 720h)",
+      "trang_thai": "xong",
+      "bang_chung": "internal/grpc/phien_cong_dan.go ResolveCitizenSession: phiên có xã → hỏi sổ xã qua tenant.CachedCommune (TENANT_CACHE_TTL, cùng nhịp phân giải Host); xã ngừng / không còn → khongCoPhienCongDan() y hệt phiên hết hạn (luật 4 cấm #2); không hỏi được platform → UNAVAILABLE (đóng kín). Phiên chưa chọn xã không hỏi. Chỗ đặt: RPC này là đường DUY NHẤT mọi rìa công dân (core/httpx.CitizenEdge qua core/identityclient) đi qua; identity không có rìa HTTP công dân. Deps.Communes bắt buộc (NewServer panic). Kiểm: TestCitizenSessionActiveCommuneResolves, ...InactiveCommuneIsNoSession, ...DeactivatedMidSessionIsRefused, ...RegistryDownIsUnavailable, ...WithoutCommuneSkipsTheCheck; khung TTL ở core/tenant (đồng hồ giả).",
+      "tiep_theo": "Mỗi yêu cầu công dân thêm một lời gọi GetTenant tới platform khi bộ đệm hết hạn (mỗi xã một lần / 30 giây mỗi bản sao identity)."
     }
   ]
 }

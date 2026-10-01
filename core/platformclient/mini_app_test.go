@@ -136,3 +136,18 @@ func TestXaTrongNguCanhKhongCoThiOkFalseConHongThiLoi(t *testing.T) {
 		t.Fatalf("xã trả về khác xã hỏi: err = %v, muốn ErrNenTangTraSai", err)
 	}
 }
+
+// Current is XaTrongNguCanh under tenant.CommuneLookup: same commune asked, same three outcomes —
+// and an inactive commune comes back ok=true with Active=false, never folded into "unknown".
+func TestCurrentIsTheContextCommuneLookup(t *testing.T) {
+	ctx := tenant.Into(context.Background(), tenant.ID(ulidThu))
+
+	gia := &nenTangMiniAppGia{xa: &platformv1.GetTenantResponse{Tenant: &platformv1.Tenant{Id: ulidThu, Active: false}}}
+	x, ok, err := NewDirectory(gia, nil).Current(ctx)
+	if err != nil || !ok || x.Active || gia.hoiXa != ulidThu {
+		t.Fatalf("inactive commune: %+v ok=%v err=%v asked=%q", x, ok, err, gia.hoiXa)
+	}
+	if _, ok, err := NewDirectory(&nenTangMiniAppGia{loiXa: status.Error(codes.Unavailable, "x")}, nil).Current(ctx); ok || err == nil {
+		t.Fatalf("Unavailable: ok=%v err=%v, want an error", ok, err)
+	}
+}

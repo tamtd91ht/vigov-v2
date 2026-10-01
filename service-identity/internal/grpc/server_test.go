@@ -134,6 +134,9 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
 		// is about. Its fakes live in phien_cong_dan_test.go, beside the handler they exercise.
 		PhienCongDan: phienCongDanTot(),
+		// The registry's answer for the session's commune: every commune ACTIVE by default, so a test
+		// about anything else never trips the deactivation check. Fakes in phien_cong_dan_test.go.
+		Communes: &communesFake{},
 		// The ordinary week, no closures, no swap days — so a test about AdvanceWorkingHours
 		// overrides only the one table it is about. See lich_lam_viec_test.go.
 		Lich:   &lichGia{cas: tuanGia()},
@@ -592,6 +595,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			TaskBlocLabels: &taskBlocLabelFake{},
 			Quyen:          quyenGia{},
 			PhienCongDan:   &phienCongDanGia{},
+			Communes:       &communesFake{},
 			Lich:           &lichGia{},
 			NghiLe:         &nghiLeGia{},
 			LamBu:          &lamBuGia{},
@@ -606,8 +610,10 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 	ca := map[string]func(*Deps){
 		"thiếu signer": func(d *Deps) { d.Signer = nil },
 		"thiếu phiên":  func(d *Deps) { d.Phien = nil },
-		"thiếu cán bộ": func(d *Deps) { d.CanBo = nil },
-		"thiếu lô":     func(d *Deps) { d.Lo = nil },
+		// Missing it is a deactivated commune's citizen sessions working for up to CITIZEN_SESSION_TTL.
+		"missing commune registry": func(d *Deps) { d.Communes = nil },
+		"thiếu cán bộ":             func(d *Deps) { d.CanBo = nil },
+		"thiếu lô":                 func(d *Deps) { d.Lo = nil },
 		// Missing it is an idle session refused but never revoked or audited (#38).
 		"missing idle-session revoker": func(d *Deps) { d.IdleSessions = nil },
 		// Missing it is not "one RPC unavailable": ResolveStaffNames is the ONE path by which a

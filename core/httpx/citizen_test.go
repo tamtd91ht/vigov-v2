@@ -27,9 +27,9 @@ const (
 
 type soPhienGia map[string]CitizenSession
 
-func (m soPhienGia) TraCuu(_ context.Context, tok string) (CitizenSession, bool) {
+func (m soPhienGia) TraCuu(_ context.Context, tok string) (CitizenSession, bool, error) {
 	p, ok := m[tok]
-	return p, ok
+	return p, ok, nil
 }
 
 func soPhienMau() soPhienGia {

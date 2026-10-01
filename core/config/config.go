@@ -61,6 +61,8 @@
 //	OPERATOR_SESSION_SIGNING_KEYS         Secret     OperatorRealm + Edge   refused in staging/prod; dev: operator sign-in refused
 //	OPERATOR_TOTP_ENCRYPTION_KEY          Secret     OperatorRealm          as above
 //	OPERATOR_HOST                         Deploy env OperatorEdge           off, in EVERY environment: operator area answers 404
+//	OPERATOR_GRPC_LISTEN_ADDR             ConfigMap  OperatorRealm          default :9093
+//	IDENTITY_OPERATOR_GRPC_ADDR           Deploy env OperatorEdge           refused in staging/prod; dev: refused at Dial when OPERATOR_HOST is set
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ               refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -250,8 +252,8 @@ type Config struct {
 	// "identity is down" and sends somebody to inspect the wrong service for an afternoon.
 	//
 	// Group IdentityClient, which identity never declares: it builds its principal from its own session
-	// registry (its XacThuc). platform DOES declare it since 2026-10-01 — not for staff principals but
-	// for OperatorService (core/operatorclient), the operator area's session check (ADR 0048 §01/10 #2).
+	// registry (its XacThuc). platform does NOT declare it either: its one identity call is
+	// OperatorService, on identity's own operator port — IdentityOperatorGRPCAddr, group OperatorEdge.
 	//
 	// CLUSTER-INTERNAL ADDRESS ONLY. A WORKING SESSION TOKEN travels on this hop and there is no
 	// TLS on it (ADR 0025); an address that leaves the cluster puts every staff session on the wire
@@ -493,6 +495,32 @@ type Config struct {
 	// Group OperatorRealm, same reason and same refusal as OperatorSessionSigningKeys. k8s SECRET.
 	operatorTOTPEncryptionKeys []secret.Secret
 
+	// OperatorGRPCListenAddr is where identity serves OperatorService — a THIRD gRPC listener,
+	// serving that one service and nothing else (user decision 01/10/2026, ADR 0048 "Cổng riêng cho
+	// OperatorService"). Group OperatorRealm.
+	//
+	// WHY A PORT OF ITS OWN AND NOT GRPC_LISTEN_ADDR: identity:9090 is reached by five staff callers
+	// holding the one shared GRPC_CALLER_KEY. With OperatorService on that port, any one of those pods,
+	// compromised, could call OpenOperatorSession directly — around platform's per-IP limit, with a
+	// forged client_ip, locking an operator out for 12 hours. NetworkPolicy tells ports apart, never
+	// RPCs, so only a separate port lets the network admit platform alone to the operator RPCs.
+	//
+	// k8s CONFIGMAP (not a credential). DEFAULT ":9093", the GRPC_LISTEN_ADDR policy: the port the
+	// Service targetPort and the NetworkPolicy assume, so omitting the line from a manifest cannot move
+	// the listener away from them. NOT 9092 — the NetworkPolicy uses that for Kafka egress.
+	operatorGRPCListenAddr string
+
+	// IdentityOperatorGRPCAddr is where platform's operator edge reaches identity's OperatorService
+	// (core/operatorclient). Group OperatorEdge. The shape of IdentityGRPCAddr — no default, refused in
+	// staging/prod, refused by name at Dial in dev — but a SEPARATE VARIABLE because it names a
+	// separate role: the operator listener above, never the staff port 9090. Reusing
+	// IDENTITY_GRPC_ADDR would point platform at a port that no longer serves OperatorService.
+	//
+	// A comma-separated host:port list is passed to grpc.NewClient whole and never split to one host
+	// (rule 11 invariant 5). CLUSTER-INTERNAL ONLY: passwords, TOTP codes and `op1.` tokens travel on
+	// it without TLS (tools/security_debt.json, a go-live blocker).
+	identityOperatorGRPCAddr string
+
 	// SecretEncryptionKeys are the KEKs of ADR 0009, consumed by core/crypto.NewKeyring. Read from
 	// SECRET_ENCRYPTION_KEYS, same format as OPERATOR_TOTP_ENCRYPTION_KEY; the value held here is
 	// the DECODED key. Group SecretEncryption (comms, identity); why the backup is not optional:
@@ -651,6 +679,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// operator area answers 404 everywhere. The RAW value is kept too, to refuse "set but blank".
 	opHostRawEnv := os.Getenv("OPERATOR_HOST")
 	opHostRaw := r.read("OPERATOR_HOST", opHostRawEnv, optional, OperatorEdge)
+	// Optional: the default :9093 is the port the identity Service and NetworkPolicy rule 11 target —
+	// the GRPC_LISTEN_ADDR policy.
+	opGRPCListen := r.read("OPERATOR_GRPC_LISTEN_ADDR", os.Getenv("OPERATOR_GRPC_LISTEN_ADDR"), optional, OperatorRealm)
+	// Required in prod once declared — ADR 0057 derives it from the declaration, not from whether
+	// OPERATOR_HOST is set. In dev, empty is refused by name at Dial when the area is switched on.
+	opIdentityAddr := r.read("IDENTITY_OPERATOR_GRPC_ADDR", os.Getenv("IDENTITY_OPERATOR_GRPC_ADDR"), requiredInProd, OperatorEdge)
 
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
@@ -775,6 +809,8 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		operatorSessionSigningKeys: operatorSigningKeys,
 		operatorTOTPEncryptionKeys: operatorTOTPKeys,
 		operatorHost:               operatorHost,
+		operatorGRPCListenAddr:     firstNonEmpty(opGRPCListen, ":9093"),
+		identityOperatorGRPCAddr:   opIdentityAddr,
 
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,
