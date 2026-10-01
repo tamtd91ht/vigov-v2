@@ -780,6 +780,10 @@ dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở
 | Pod không được tạo, Events ghi `must specify limits.cpu` | Resource Quota của Project | mục 11.1 |
 | HTTPS lỗi chứng thư, HTTP vẫn chạy | Secret TLS sai tên môi trường | mục 11.2 |
 | Mọi xã trả 404 | `platform` chưa lên, hoặc xã chưa có hàng trong sổ đăng ký của `platform` | mục 5–6 |
+| Pod từ chối khởi động, log `thiếu biến môi trường bắt buộc: OBJECT_STORAGE_ACCESS_KEY…` / `OPERATOR_SESSION_SIGNING_KEYS` dù đã "thêm" | Key trong Secret viết **gạch ngang** (`OBJECT-STORAGE-ACCESS-KEY`) — `envFrom` lấy nguyên tên key nên biến gạch dưới vẫn rỗng; hoặc chưa `rollout restart` | mục 3, 11.2; `deploy/cau-hinh/README.md` |
+| Mini App: "Không gửi được vì mạng yếu…" nhưng mạng tốt, các màn chỉ đọc vẫn chạy | Preflight CORS của **nginx** không có `Idempotency-Key` → trình duyệt chặn `POST` | mục 13.2 |
+| Mini App: "Xã chưa mở kênh tiếp nhận phản ánh trực tuyến…" (`POST` → 503 `intake_not_configured`) | Xã chưa gieo **thời hạn xử lý** / **tuần làm việc**, hoặc petitions không gọi được identity | mục 13.3 |
+| Mini App gọi một host API mà trình duyệt báo không phân giải được | Thiếu bản ghi DNS hoặc rule Ingress dựng tay cho `<dịch vụ>.api.vigov.vn` | mục 13.1 |
 
 ## 12. `platform-admin` lần đầu — bàn điều khiển vận hành ViHAT
 
@@ -807,3 +811,79 @@ REST 8080 — và không gì khác (ADR 0003: bàn điều khiển không có đ
 nhãn đó** (`platform-admin` trên pod bàn điều khiển, `platform` trên pod platform), không thì luật
 không chọn pod nào: hoặc `deny-all` chặn hết (502), hoặc — nếu NetworkPolicy chưa áp lên cụm — không
 biên nào cả.
+
+## 13. Kênh công dân (Mini App) — kiểm sau khi lên, và đổi tên miền
+
+Mini App gọi thẳng `<dịch vụ>.api.vigov.vn` từ webview Zalo (origin `https://h5.zdn.vn`,
+`https://*.zdn.vn`, `https://zalo.me`…). Bảng host nó dùng **sinh từ `deploy/hosts.yaml`** lúc dựng
+(`citizen-app/src/cong-dan/api/service-hosts.gen.ts`), chỉ host prod (ADR 0046 §Sửa đổi 01/10/2026).
+Mọi lỗi mạng thật lẫn lỗi CORS đều hiện cho người dân cùng một câu "mạng yếu hoặc mất kết nối" — vì
+trình duyệt không cho mã biết hai thứ khác nhau. Kiểm theo đúng thứ tự dưới đây trước khi nghi mã.
+
+### 13.1 DNS và Ingress — mỗi dịch vụ Mini App gọi phải có host
+
+```sh
+for h in identity petitions comms; do nslookup $h.api.vigov.vn; done   # cùng một IP ingress
+kubectl -n vigov-prod get ingress -o jsonpath='{range .items[*].spec.rules[*]}{.host}{"\n"}{end}' | grep api
+```
+
+Thiếu host nào thì thêm bản ghi DNS (hoặc một bản ghi đại diện `*.api.vigov.vn`) và rule Ingress dựng
+tay `<dịch vụ>.api.vigov.vn` → Service `<dịch vụ>` cổng REST, TLS `vigov-api-wildcard-tls`. Hình dạng
+chuẩn của rule: `kubectl kustomize deploy/overlays/prod` (đối tượng `Ingress vigov`).
+
+### 13.2 CORS — preflight phải cho `Idempotency-Key`
+
+Mini App gửi `Authorization`, `Content-Type` và **`Idempotency-Key`** (chống gửi trùng, ở lúc gửi phản
+ánh và chấm sao). Dịch vụ tự trả CORS đúng (`core/httpx/cors.go`, origin lấy từ
+`CITIZEN_CORS_ALLOWED_ORIGINS`), nhưng nếu ingress-nginx **cũng** bật CORS thì nó ghi đè danh sách
+header của dịch vụ. Đã gặp 01/10/2026: danh sách chung của nginx thiếu `Idempotency-Key` → mọi lần gửi
+phản ánh bị trình duyệt chặn, mọi màn chỉ đọc vẫn chạy.
+
+```sh
+curl -si -X OPTIONS https://petitions.api.vigov.vn/api/v1/my-citizen-reports \
+  -H "Origin: https://h5.zdn.vn" -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: authorization,content-type,idempotency-key" | grep -i access-control
+```
+
+| Kết quả | Nghĩa |
+|---|---|
+| `Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key`, **không** `Allow-Credentials` | Dịch vụ tự trả — đúng thiết kế |
+| Danh sách dài của nginx **có** `Idempotency-Key` | Chạy được; còn `Allow-Credentials: true` là thừa (ViGov dùng bearer token, không cookie) |
+| Danh sách **không** có `Idempotency-Key` | Gửi phản ánh hỏng. Ưu tiên: annotation `nginx.ingress.kubernetes.io/enable-cors: "false"` trên Ingress của host API; nếu CORS đặt ở cấu hình **chung** của ingress-nginx (namespace của controller, dùng cho mọi dự án) thì nhờ bên vận hành cụm — Jenkins của ViGov không có quyền ở đó (`deploy/cluster/rbac-jenkins.yaml`) |
+
+### 13.3 Gửi phản ánh trả 503 — đọc `code` trong thân
+
+| `code` | Nguyên nhân | Sửa |
+|---|---|---|
+| `intake_not_configured` | identity không ấn định được hạn theo **giờ làm việc** của xã: xã chưa có tuần làm việc (`lich_lam_viec`) hoặc thời hạn xử lý (`sla`) — trạng thái của **mọi xã mới**, không gì gieo sẵn. Cũng là câu trả lời khi petitions không gọi được identity | Quản trị xã (quyền `admin.sla`) vào web-admin **Cấu hình → Thời hạn xử lý**, bấm gieo thời hạn mặc định, tuần làm việc mặc định, ngày lễ của năm; **soát lại** con số (đây là cam kết của xã với dân — luật 10). Tết, Giỗ Tổ, ngày liền kề 2/9 phải nhập tay |
+| `field_catalogue_unavailable` | petitions không đọc được bộ mã lĩnh vực từ platform quá 60 giây | Kiểm platform và đường petitions → platform:9090 |
+
+Phân biệt "chưa cấu hình" với "không gọi được identity" bằng log petitions:
+
+```sh
+kubectl -n vigov-prod logs deploy/vigov-service-petitions --since=15m | grep "từ chối tiếp nhận phản ánh"
+```
+
+`FailedPrecondition` = còn thiếu cấu hình của xã. `Unavailable` / `DeadlineExceeded` = đường gRPC tới
+identity (NetworkPolicy, `IDENTITY_GRPC_ADDR`, `GRPC_CALLER_KEY`). Log chỉ mang mã xã, không dữ liệu
+cá nhân.
+
+### 13.4 Xem lỗi ngay trên điện thoại — bản `--demo`
+
+Bản dựng `scripts/deploy.mjs --vao-thang --demo` ghi một dòng `console.warn("[ViGov] kết nối lỗi", …)`
+cho mỗi lần gọi ViGov không thành: tuyến, host, mã HTTP **hoặc** tên lỗi, số ms, `origin` của webview,
+`online`. Không thân, không token, không đường dẫn (`citizen-app/src/cong-dan/api/connection-log.ts`).
+Bản thường không có dòng này. Đọc nó trong công cụ debug của Zalo: `TypeError` không `status` = DNS,
+TLS hoặc CORS (13.1–13.2); `AbortError` = quá 20 giây; có `status` = máy chủ đã trả lời (13.3).
+
+### 13.5 Đổi một tên miền công khai
+
+1. Sửa **`deploy/hosts.yaml`** — chỗ duy nhất viết host (ngoại lệ có chủ ý: `admin.vigov.vn` của
+   bàn điều khiển, mục 12).
+2. `make kb` — sinh lại Ingress và hằng host của `core/config`, `service-platform`, `platform-admin`,
+   `citizen-app`; `make check` đỏ nếu tệp sinh lệch nguồn. Đổi `api_suffix` hay gốc web thì **cần thêm
+   migration** cho CHECK `service-platform/migrations/0007_tenant_domain_khong_danh_rieng.sql` —
+   `TestLuatTenMienDanhRiengGoVaSQLKhop` đỏ tới khi có.
+3. Dựng lại và đẩy Mini App; đóng lại ảnh các dịch vụ Go bị ảnh hưởng.
+4. Nhập lại Ingress vào Rancher từ `kubectl kustomize deploy/overlays/<mt>`; DNS, chứng thư TLS và danh
+   sách tên miền cho phép của App ID trên console Zalo là việc **ngoài kho**.
