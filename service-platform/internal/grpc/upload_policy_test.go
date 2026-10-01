@@ -36,7 +36,7 @@ func samplePolicies() policiesFake {
 		{Purpose: "content-video", MaxBytes: 2147483648,
 			AllowedMIMETypes: []string{"video/mp4", "video/quicktime"}, UpdatedAt: policyUpdatedAt},
 		{Purpose: "petition-photo", MaxBytes: 10485760,
-			AllowedMIMETypes: []string{"image/jpeg", "image/png", "image/webp", "image/heic"},
+			AllowedMIMETypes: []string{"image/jpeg", "image/png", "image/webp"},
 			FileCountLimited: true, MaxFilesPerSubject: 5, UpdatedAt: policyUpdatedAt},
 	}}
 }

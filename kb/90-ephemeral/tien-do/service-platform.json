@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-01",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -212,6 +212,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "service-platform/migrations/0013_upload_policy_content_audio.sql (chưa commit): CHECK 8 giá trị; seed ('content-audio', 31457280, ARRAY['audio/mpeg','audio/mp4'], 1) + một dòng platform_audit_log cùng câu lệnh. Phía Go đã vào cùng thẻ B5: core/storage PurposeContentAudio + MIMEMP3/MIMEM4A kèm bộ dò, platform.proto UPLOAD_PURPOSE_CONTENT_AUDIO = 8, internal/store/upload_policy_test.go thêm dòng want content-audio (maxFiles 1, tệp 0013) và chú thích ngày chốt 01/10/2026. go vet + go test ./... service-platform XANH.",
       "tiep_theo": "Commit cùng thẻ B5 (proto + core/storage + service-comms), không commit riêng tệp này. Xong commit thì đổi trang_thai sang xong."
+    },
+    {
+      "id": "petition-photo-bo-heic",
+      "viec": "Chính sách tải lên petition-photo bỏ HEIC — chỉ JPEG/PNG/WebP, giữ 10 MB và 5 ảnh (G3, ADR 0047; chủ dự án chốt lại 02/10/2026, /develop-feature phan-anh-nguoi-dan TASK-01)",
+      "trang_thai": "xong",
+      "bang_chung": "migrations/0014_upload_policy_petition_photo_no_heic.sql: một câu UPDATE…FROM chỉ khớp dòng seed 0008 còn nguyên (updated_by=system, đủ bốn giá trị cũ) + platform_audit_log 'upload_policy.changed' có before/after cùng câu; chạy lại không ghi gì. Ca kiểm: internal/store/upload_policy_test.go TestUploadPolicyPetitionPhotoNoHEICChange; upload_policy_pg_test.go TestPgPetitionPhotoNoHEICKeepsOperatorEdit + TestPgUploadPolicySeedAndRead đòi giá trị mới. go test ./... xanh; TestPg* bỏ qua vì không có VIGOV_TEST_DSN — CHƯA chạy trên Postgres thật.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa có bên đọc petition-photo (service-petitions TASK-03 sẽ đọc). NỢ CŨ ngoài lượt này: TestPgUploadPolicySeedAndRead còn đòi 7 chính sách / 7 dòng seeded và TestPgUploadPolicySoftDeletedIsAbsent đòi 6 — sau 0013 (content-audio) phải là 8/8/7; sẽ đỏ lần đầu chạy với Postgres thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

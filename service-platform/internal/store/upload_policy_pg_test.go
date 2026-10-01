@@ -69,6 +69,39 @@ func TestPgContentImageCoverKeepsOperatorEdit(t *testing.T) {
 	}
 }
 
+// The same guarantee for 0014 (G3): a petition-photo limit an operator set before it ran is kept.
+func TestPgPetitionPhotoNoHEICKeepsOperatorEdit(t *testing.T) {
+	db, _ := moKetNoi(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := migrate.Chay(ctx, db, migrationsBefore(t, petitionPhotoNoHEICMigration), "platform"); err != nil {
+		t.Fatalf("migrate up to 0013: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE upload_policy SET max_files_per_subject = 3, updated_by = 'VH-00001'
+		WHERE purpose = 'petition-photo'`); err != nil {
+		t.Fatalf("operator edit: %v", err)
+	}
+	chayMigration(t, db)
+
+	var maxFiles int
+	var mimes, by string
+	if err := db.QueryRow(`SELECT max_files_per_subject, allowed_mime_types::text, updated_by FROM upload_policy
+		WHERE purpose = 'petition-photo'`).Scan(&maxFiles, &mimes, &by); err != nil {
+		t.Fatalf("read row: %v", err)
+	}
+	if maxFiles != 3 || by != "VH-00001" || !strings.Contains(mimes, "image/heic") {
+		t.Errorf("0014 overwrote an operator's edit: max_files %d, mimes %s, by %s", maxFiles, mimes, by)
+	}
+	var changed int
+	if err := db.QueryRow(`SELECT count(*) FROM platform_audit_log
+		WHERE action = 'upload_policy.changed' AND subject = 'petition-photo'`).Scan(&changed); err != nil {
+		t.Fatalf("count change trail: %v", err)
+	}
+	if changed != 0 {
+		t.Errorf("change trail entries = %d, want 0 — nothing was changed", changed)
+	}
+}
+
 // Integration tests for migration 0008 against a real PostgreSQL — skipped without VIGOV_TEST_DSN,
 // like every *_pg_test.go here. The CHECKs, triggers and seed are behaviour the database owns.
 
@@ -87,8 +120,9 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 	for _, p := range ps {
 		switch p.Purpose {
 		case "petition-photo":
+			// 0014 (G3, ADR 0047): jpeg/png/webp, no HEIC; 10 MiB and 5 files kept from 0008.
 			if !p.FileCountLimited || p.MaxFilesPerSubject != 5 || p.MaxBytes != 10485760 ||
-				len(p.AllowedMIMETypes) != 4 {
+				!slices.Equal(p.AllowedMIMETypes, []string{"image/jpeg", "image/png", "image/webp"}) {
 				t.Errorf("petition-photo = %+v", p)
 			}
 		case "content-video":
@@ -115,6 +149,17 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 	if changed != 1 || !strings.Contains(before, `10485760`) || !strings.Contains(before, `image/heic`) ||
 		!strings.Contains(after, `52428800`) || strings.Contains(after, `image/heic`) {
 		t.Errorf("content-image change trail: %d entries, before %s, after %s", changed, before, after)
+	}
+
+	// 0014 rewrote petition-photo once: before holds HEIC, after does not, size and count unchanged.
+	if err := db.QueryRow(`SELECT count(*), min(before::text), min(after::text) FROM platform_audit_log
+		WHERE action = 'upload_policy.changed' AND actor = 'system' AND subject = 'petition-photo'`).
+		Scan(&changed, &before, &after); err != nil {
+		t.Fatalf("count petition-photo change trail: %v", err)
+	}
+	if changed != 1 || !strings.Contains(before, `image/heic`) || strings.Contains(after, `image/heic`) ||
+		!strings.Contains(after, `10485760`) || !strings.Contains(after, `"max_files_per_subject": 5`) {
+		t.Errorf("petition-photo change trail: %d entries, before %s, after %s", changed, before, after)
 	}
 
 	var entries int

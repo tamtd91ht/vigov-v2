@@ -103,7 +103,8 @@ func allSeeds(t *testing.T) []seedRow {
 // The owner's values, exactly: six of 2026-09-28 (0008), task-attachment of 2026-09-29 (0010),
 // content-audio of 2026-10-01 (0013, ADR 0067 §4).
 // These are the SEEDED values as written in each file. content-image's seed is later rewritten by
-// 0012 (TestUploadPolicyContentImageCoverChange pins that), so its effective value is not this one.
+// 0012 (TestUploadPolicyContentImageCoverChange pins that) and petition-photo's by 0014
+// (TestUploadPolicyPetitionPhotoNoHEICChange, G3: no HEIC), so their effective values are not these.
 func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 	images := []string{"image/jpeg", "image/png", "image/webp", "image/heic"}
 	want := map[string]seedRow{
@@ -359,6 +360,57 @@ func TestUploadPolicyContentImageCoverChange(t *testing.T) {
 		if _, ok := storage.ExtForMIME(m); !ok {
 			t.Errorf("MIME %q is not in core/storage's allow-list", m)
 		}
+	}
+}
+
+const petitionPhotoNoHEICMigration = "0014_upload_policy_petition_photo_no_heic.sql"
+
+// Chủ dự án chốt G3 (ADR 0047:255, 30/09/2026, nhắc lại 02/10/2026): scene photos are JPEG/PNG/WebP
+// only, no HEIC; 10 MiB and 5 files stay. 0014 rewrites 0008's petition-photo row to that — ONLY
+// while the row still holds 0008's seed, signed 'system' and live — and writes the trail from what
+// the UPDATE returned, in the same statement. Each clause is one whose loss would turn no other test red.
+func TestUploadPolicyPetitionPhotoNoHEICChange(t *testing.T) {
+	b, err := fs.ReadFile(migrations.FS, petitionPhotoNoHEICMigration)
+	if err != nil {
+		t.Fatalf("read %s: %v", petitionPhotoNoHEICMigration, err)
+	}
+	sql := sqlLineComment.ReplaceAllString(string(b), "")
+	for _, clause := range []string{
+		// The new value; size and count are deliberately not SET (G3 says nothing about them).
+		"SET allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp'],",
+		"updated_by         = 'system'",
+		// The filter: one purpose, untouched seed state only (rule 7 forbidden #2; never overwrite).
+		"WHERE u.purpose = 'petition-photo'",
+		"AND u.deleted_at IS NULL",
+		"AND u.updated_by = 'system'",
+		"AND u.max_bytes = 10485760",
+		"AND u.allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic']::text[]",
+		"AND u.max_files_per_subject = 5",
+		// The trail, same statement, before and after from the row itself (rule 6 inv 3, 5, 6).
+		"INSERT INTO platform_audit_log (actor, action, subject, before, after, reason)",
+		"'system', 'upload_policy.changed'",
+		"FROM changed c;",
+		"'migration " + petitionPhotoNoHEICMigration + ":",
+	} {
+		if !strings.Contains(sql, clause) {
+			t.Errorf("%s lacks %q", petitionPhotoNoHEICMigration, clause)
+		}
+	}
+	for _, forbidden := range []string{"max_bytes          =", "max_files_per_subject ="} {
+		if strings.Contains(sql[:strings.Index(sql, "FROM upload_policy AS prev")], forbidden) {
+			t.Errorf("%s SETs %q — G3 keeps 10 MiB and 5 files", petitionPhotoNoHEICMigration, forbidden)
+		}
+	}
+	set := regexp.MustCompile(`SET allowed_mime_types = ARRAY\[([^\]]*)\],`).FindStringSubmatch(sql)
+	if set == nil {
+		t.Fatal("new MIME list not found")
+	}
+	var got []string
+	for _, q := range strings.Split(set[1], ",") {
+		got = append(got, strings.Trim(strings.TrimSpace(q), "'"))
+	}
+	if want := []string{storage.MIMEJPEG, storage.MIMEPNG, storage.MIMEWebP}; !slices.Equal(got, want) {
+		t.Errorf("petition-photo MIME list = %v, want %v (G3; no HEIC)", got, want)
 	}
 }
 
