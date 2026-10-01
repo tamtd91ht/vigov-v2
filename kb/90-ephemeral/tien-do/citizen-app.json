@@ -356,6 +356,15 @@
       "no_confirm": [],
       "tiep_theo": "Người dùng chọn 'chỉ console, không nút' (01/10/2026). Còn chưa biết nguyên nhân thật: dựng --vao-thang --demo, gửi trên máy thật, đọc dòng '[ViGov] kết nối lỗi'. TypeError → CORS (origin chưa có trong CITIZEN_CORS_ALLOWED_ORIGINS của môi trường) hoặc ingress chặn OPTIONS; AbortError → quá 20 s; status có giá trị → máy chủ đã trả lời.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "o-truyen-thanh-video-goi-api",
+      "viec": "App riêng của xã: ô Truyền thanh và Video ở trang chủ đọc tin xã đã đăng theo loại, như ô Sự kiện",
+      "trang_thai": "xong",
+      "bang_chung": "9cbdff7f — TrangXa.tsx: hai nhánh 'truyen-thanh' / 'video' dùng NewsOfType(type) thay ManChuaCoDuLieu; câu rỗng đổi thành '…nào được đăng.'; ca kiểm ở commune-screens.test.tsx. vitest 53 tệp 1423/1423, tsc sạch, make check EXIT=0.",
+      "no_confirm": [],
+      "tiep_theo": "Bài truyền thanh mở ra màn chi tiết tin chung: chưa có trình phát audio — chưa rõ máy chủ có trường tệp âm thanh cho loại truyen-thanh không. Video mở bằng nút 'Xem video' có sẵn. Chưa thử trên máy thật.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

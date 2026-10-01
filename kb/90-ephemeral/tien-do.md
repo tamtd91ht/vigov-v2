@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 12ae65a1
+derived_from_commit: 9cbdff7f
 expires: 2026-12-30
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 78 |
 | chưa làm | 41 |
 | treo | 14 |
-| xong | 271 |
+| xong | 272 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -220,6 +220,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `_chung` | `apidoc-tuyen-mini-app-cong-khai` — apidoc xếp tuyến công khai của Mini App vào hàng việc web-admin, và bộ dò màn đọc cả tệp sinh dinh-tuyen.gen.ts | xong | — | Mù phương thức vẫn mở ở apidoc-khop-man-hinh-mu-phuong-thuc. |
 | `citizen-app` | `tin-xa-anh-bia` — App riêng: ảnh bìa tin từ image_url (thẻ 96×80, gọn 88×72; chi tiết 16:9) — ADR 0047 §6 (683c5902), máy chủ 606bf515 | xong | — | Chưa xem trên máy thật/webview Zalo: host kho ảnh công khai phải vào danh sách tên miền của App ID (ADR 0052 Còn mở #3). Thẻ tải bản 1280 px — bản thu nhỏ thứ hai là việc comms. Câu chính sách quyền riêng tư: xem chinh-sach-dung-voi-ban-dung. |
 | `citizen-app` | `tin-xa-gio-dang-su-kien-video` — App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd) | xong | — | Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm "trang video mà xã đăng kèm một tin trong ứng dụng của xã" lúc duyệt G9. Chưa thử trên máy thật. |
+| `citizen-app` | `o-truyen-thanh-video-goi-api` — App riêng của xã: ô Truyền thanh và Video ở trang chủ đọc tin xã đã đăng theo loại, như ô Sự kiện | xong | — | Bài truyền thanh mở ra màn chi tiết tin chung: chưa có trình phát audio — chưa rõ máy chủ có trường tệp âm thanh cho loại truyen-thanh không. Video mở bằng nút 'Xem video' có sẵn. Chưa thử trên máy thật. |
 | `core` | `storage-publish-derivative` — core/storage: PublishDerivative / UnpublishDerivative — đẩy bản dẫn xuất đã duyệt private → public, gỡ khi gỡ đăng (ADR 0052 §1 bổ sung 30/09/2026) | xong | — | TestIntegrationPublishUnpublish CHƯA CHẠY với MinIO thật (thiếu VIGOV_TEST_MINIO_ENDPOINT). Gỡ đăng không thu hồi bản CDN/trình duyệt đã cache (immutable 1 năm) — cần xoá cache CDN khi có CDN. |
 | `service-comms` | `tin-xa-cong-khai-mini-app` — Rìa công khai đầu tiên của comms: GET /api/v1/commune-news?host= và /{id} — tin đã đăng, văn bản thuần | xong | — | Giả định cần chủ dự án xem: cả sáu loại nội dung (kể cả banner, video) đều ra danh sách; sắp theo tao_luc. Không đếm lượt xem, không ảnh. domain/ten_mien_xa.go là BẢN CHÉP HopLeTenMienXa của identity — nên chuyển vào core/ cùng helper xaTheoHost (đang lặp ở hai service). Chưa giới hạn tần suất. |
 | `service-comms` | `chip-danh-muc-tin-cong-khai` — Chip danh mục hai tầng cho bảng tin công khai của Mini App: GET /api/v1/commune-news/categories?host=[&type=] và ?category= trên GET /api/v1/commune-news (người dùng quyết định 30/09/2026, ADR 0047 §6) | xong | — | Test PostgreSQL TestPgPublicCategoryFilterAndChips ĐÃ VIẾT nhưng CHƯA CHẠY (máy này không có VIGOV_TEST_DSN) — CTE đệ quy và phép nối chưa chạy trên cơ sở dữ liệu thật. Chưa giới hạn tần suất (core/ratelimit chưa có; luật 13 #7), như hai tuyến commune-news cũ. rest_api_guard coi @consumer là thẻ lạ (TAG_KNOWN ở .claude/hooks/rest_api_guard.py:68 thiếu) dù apidoc dùng nó. |
@@ -383,7 +384,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-10-01 · 41 mục
+Cập nhật 2026-10-01 · 42 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -427,6 +428,7 @@ Cập nhật 2026-10-01 · 41 mục
 | `doi-ma-loi-zalo-xuong-dong-phu` — Câu lỗi quyền Zalo: mã lỗi rời khỏi câu chính, xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>'; ghi ngoại lệ vào skills/accessibility-elderly | xong | 30/09/2026: câu chính không mang mã (ZALO_FAILURE, noi-dung.ts); dòng phụ 'Mã hỗ trợ: <mã>' (zaloSupportCode, lớp cd-ghi-chu / xa-phu, 16px, --ink-muted 7.4:1 trên nền trắng) ở năm chỗ: xác thực số, cổng phiên app xã, vị trí, tên Zalo, xác nhận xã. Ngoại lệ có tên ở skills/accessibility-elderly REQUIRED #5. tsc sạch; vitest 44 tệp / 1185 ca xanh (zalo-failure.test.ts 19 ca: câu chính không chữ số, dòng phụ đúng mã, không lỗi thì không dòng). | — | Chưa đo độ tương phản dòng phụ trên nền riêng của app xã. Chỗ tên Zalo ở TrangXa.tsx render inline, không có ca render riêng. |
 | `tin-xa-anh-bia` — App riêng: ảnh bìa tin từ image_url (thẻ 96×80, gọn 88×72; chi tiết 16:9) — ADR 0047 §6 (683c5902), máy chủ 606bf515 | xong | 2fd2b766 — readImageUrl (chỉ https: tuyệt đối, khác → không ảnh; không phải chuỗi → trang hỏng), NewsThumb (lỗi tải → biểu tượng), ArticleCover (vắng/lỗi → không dải). vitest 52 tệp 1396/1396, tsc sạch. | — | Chưa xem trên máy thật/webview Zalo: host kho ảnh công khai phải vào danh sách tên miền của App ID (ADR 0052 Còn mở #3). Thẻ tải bản 1280 px — bản thu nhỏ thứ hai là việc comms. Câu chính sách quyền riêng tư: xem chinh-sach-dung-voi-ban-dung. |
 | `tin-xa-gio-dang-su-kien-video` — App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd) | xong | 3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch. || e2ca1415 — nút Xem video (videoUrl chỉ https:, chỉ loại video), mở qua moRaNgoai("video", url) tiêm từ AppRieng; đích thứ sáu ở dich-ra-ngoai.ts, câu chính sách tự sinh "Có sáu chỗ…" (người dùng đồng ý, e4ace97c); phiên bản giữ 1.0. vitest 52 tệp 1417/1417, tsc sạch. | — | Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm "trang video mà xã đăng kèm một tin trong ứng dụng của xã" lúc duyệt G9. Chưa thử trên máy thật. |
+| `o-truyen-thanh-video-goi-api` — App riêng của xã: ô Truyền thanh và Video ở trang chủ đọc tin xã đã đăng theo loại, như ô Sự kiện | xong | 9cbdff7f — TrangXa.tsx: hai nhánh 'truyen-thanh' / 'video' dùng NewsOfType(type) thay ManChuaCoDuLieu; câu rỗng đổi thành '…nào được đăng.'; ca kiểm ở commune-screens.test.tsx. vitest 53 tệp 1423/1423, tsc sạch, make check EXIT=0. | — | Bài truyền thanh mở ra màn chi tiết tin chung: chưa có trình phát audio — chưa rõ máy chủ có trường tệp âm thanh cho loại truyen-thanh không. Video mở bằng nút 'Xem video' có sẵn. Chưa thử trên máy thật. |
 | `nhat-ky-ket-noi-loi-demo` — Chẩn đoán 'Không gửi được vì mạng yếu…' khi gửi phản ánh trên máy thật: bản --demo ghi console.warn mỗi lần gọi ViGov không thành; build Mini App sạch cảnh báo | dang-lam | 96013711 — vite.config.ts lọc EMPTY_IMPORT_META, chunkSizeWarningLimit 1200; vite build không cảnh báo. || 12ae65a1 — connection-log.ts (console.warn chỉ khi DEMO_BUILD; bản ghi: route, method, host, outcome, status/tên lỗi, elapsed_ms, origin, online — không thân, token, đường dẫn); goi-vigov.ts: 200/201 thân hỏng → loi-may-chu (trước đó rơi vào catch → loi-mang). cong-dan.test.tsx miễn đúng một tệp. Đo bundle: bản thường 0 console.warn, bản --demo có. vitest 54 tệp, make check EXIT=0 (golangci-lint chưa cài trên máy này). | — | Người dùng chọn 'chỉ console, không nút' (01/10/2026). Còn chưa biết nguyên nhân thật: dựng --vao-thang --demo, gửi trên máy thật, đọc dòng '[ViGov] kết nối lỗi'. TypeError → CORS (origin chưa có trong CITIZEN_CORS_ALLOWED_ORIGINS của môi trường) hoặc ingress chặn OPTIONS; AbortError → quá 20 s; status có giá trị → máy chủ đã trả lời. |
 
 ## `core`
