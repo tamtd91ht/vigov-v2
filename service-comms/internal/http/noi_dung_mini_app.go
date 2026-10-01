@@ -203,6 +203,12 @@ type noiDungRa struct {
 	// VideoURL — present only on `video`, and only when set: an http(s) link opened outside the Mini
 	// App (ADR 0047 §6 (3)).
 	VideoURL string `json:"video_url,omitempty"`
+
+	// LinkTo and DisplayOrder — `banner` only, only when set (migration 0012, ADR 0067 §5). LinkTo is an
+	// in-app path (`/…`) or an https URL; absent = not tappable. DisplayOrder ≥ 0, ascending; absent =
+	// after every ordered banner.
+	LinkTo       string `json:"link_to,omitempty"`
+	DisplayOrder *int   `json:"display_order,omitempty"`
 }
 
 // instantOut is a nullable instant on the wire: nil (the key is omitted) for the zero time.
@@ -241,6 +247,9 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 		VideoURL:      n.VideoURL,
 
 		CoverImageFileID: n.CoverImageFileID,
+
+		LinkTo:       n.LinkTo,
+		DisplayOrder: n.DisplayOrder,
 	}
 	if coThan {
 		than := n.NoiDung
@@ -270,6 +279,10 @@ type danhMucRa struct {
 
 	Order     int       `json:"order"`
 	CreatedAt time.Time `json:"created_at"`
+
+	// Hidden (migration 0012): residents are not offered this category as a filter chip; its items stay
+	// public. Staff keep filing under it.
+	Hidden bool `json:"hidden"`
 }
 
 // danhSachDanhMucRa wraps the whole tree. AN OBJECT AND NOT A BARE ARRAY, for the reason
@@ -287,6 +300,7 @@ func danhMucRaNgoai(dm domain.DanhMucMiniApp) danhMucRa {
 		ParentID:  dm.ChaID,
 		Order:     dm.ThuTu,
 		CreatedAt: dm.TaoLuc,
+		Hidden:    dm.Hidden,
 	}
 }
 
@@ -518,6 +532,13 @@ type themNoiDungVao struct {
 	// published with it. Any other file is a 409 `cover_not_usable`.
 	CoverImageFileID string `json:"cover_image_file_id,omitempty"`
 
+	// LinkTo and DisplayOrder — only for `type: banner` (422 `banner_fields_only_for_banner` otherwise).
+	// LinkTo: `/…` (a path inside the Mini App, never `//…`) or `https://host/…`, ≤ 500 characters, no
+	// whitespace or backslash (422 `invalid_link_to`). DisplayOrder ≥ 0 (422 `invalid_display_order`).
+	// A banner needs `cover_image_file_id` (422 `banner_cover_required`).
+	LinkTo       string `json:"link_to,omitempty"`
+	DisplayOrder *int   `json:"display_order,omitempty"`
+
 	// Publish is §7's `☐ Đăng lên Mini App`. Absent means false, which is the checkbox's own default
 	// and the safe direction: an item nobody chose to publish stays invisible. Ticking it also fixes
 	// `published_at` (G1) — there is no request field for that instant.
@@ -569,6 +590,8 @@ func (h *Handler) ThemNoiDung(w http.ResponseWriter, r *http.Request) {
 		DangLenMiniApp: vao.Publish,
 
 		CoverImageFileID: vao.CoverImageFileID,
+		LinkTo:           vao.LinkTo,
+		DisplayOrder:     vao.DisplayOrder,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "thêm", err)
@@ -610,6 +633,13 @@ type suaNoiDungVao struct {
 	// = a completed upload (`ready`) issued for THIS article (`content_item_id`). With the article
 	// published, the new cover's derivative is published and the old one withdrawn.
 	CoverImageFileID *string `json:"cover_image_file_id,omitempty"`
+
+	// LinkTo: ABSENT = leave alone; "" = clear (not tappable); a value = set (same rules as the create).
+	// DisplayOrder: ABSENT = leave alone; a number = set. There is no "clear" for display_order (a JSON
+	// null reads as absent); a type change away from `banner` clears both. Removing a banner's cover, or
+	// turning an item into a banner without one, is 422 `banner_cover_required`.
+	LinkTo       *string `json:"link_to,omitempty"`
+	DisplayOrder *int    `json:"display_order,omitempty"`
 }
 
 // optionalInstant is ParseEventInstant for a PATCH field: nil stays nil (leave alone), "" becomes a
@@ -672,6 +702,8 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		VideoURL:       vao.VideoURL,
 
 		CoverImageFileID: vao.CoverImageFileID,
+		LinkTo:           vao.LinkTo,
+		DisplayOrder:     vao.DisplayOrder,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "sửa", err)
@@ -719,6 +751,97 @@ func (h *Handler) ThemDanhMucNoiDung(w http.ResponseWriter, r *http.Request) {
 
 	idem.RecordCode(r.Context(), moi.Slug)
 	vietJSON(w, http.StatusCreated, danhMucRaNgoai(moi))
+}
+
+// updateCategoryIn is the body of PATCH /api/v1/content-categories/{id} (ADR 0067 §3). Every field is
+// a pointer: order 0 and hidden false are real values, and a dialog editing only the name must not move
+// the category to the top or show it again.
+//
+// `Slug` IS REFUSED, NOT IGNORED (400): an issued code never changes, and a client sending it back with
+// the rest of the row is told so rather than left to assume it could have changed it.
+type updateCategoryIn struct {
+	Name *string `json:"name,omitempty"`
+
+	// ParentID: ABSENT = leave alone; "" = move to the root; an id = move under that live category.
+	ParentID *string `json:"parent_id,omitempty"`
+	Order    *int    `json:"order,omitempty"`
+	Hidden   *bool   `json:"hidden,omitempty"`
+
+	Slug *string `json:"slug,omitempty"`
+}
+
+// deleteCategoryIn is the body of DELETE /api/v1/content-categories/{id}. The reason is mandatory
+// (rule 7, invariant 1); see DELETE /map-asset-types/{id} for why it travels in a body.
+type deleteCategoryIn struct {
+	Reason string `json:"reason"`
+}
+
+// UpdateContentCategory edits one category. PATCH /api/v1/content-categories/{id}
+func (h *Handler) UpdateContentCategory(w http.ResponseWriter, r *http.Request) {
+	var in updateCategoryIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	if in.Slug != nil {
+		h.traLoiLoiNoiDung(w, r, "sửa danh mục", domain.ErrSlugImmutable)
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.d.Log.Error("tuyến sửa danh mục Mini App chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
+			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	// Scoped in the use case: app.DanhMucNoiDungMiniApp opens db.For(ctx).Tx.
+	after, err := h.d.GhiDanhMucNoiDung.Update(r.Context(), r.PathValue("id"), domain.ContentCategoryUpdate{
+		Ten: in.Name, ChaID: in.ParentID, ThuTu: in.Order, Hidden: in.Hidden,
+	}, actor)
+	if err != nil {
+		h.categoryWriteError(w, r, "sửa danh mục", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, danhMucRaNgoai(after))
+}
+
+// DeleteContentCategory soft deletes one category. DELETE /api/v1/content-categories/{id} → 204.
+func (h *Handler) DeleteContentCategory(w http.ResponseWriter, r *http.Request) {
+	var in deleteCategoryIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.d.Log.Error("tuyến xoá danh mục Mini App chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
+			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	// Scoped in the use case: app.DanhMucNoiDungMiniApp opens db.For(ctx).Tx.
+	if err := h.d.GhiDanhMucNoiDung.Delete(r.Context(), r.PathValue("id"), in.Reason, actor); err != nil {
+		h.categoryWriteError(w, r, "xoá danh mục", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// categoryWriteError maps the edit/delete failures that differ from the shared mapping, then defers
+// to it. ON THESE TWO ROUTES the addressed category missing is a 404 (on an item write the same error
+// means "the category you filed under is gone", a 409). Another commune's id is the same 404.
+func (h *Handler) categoryWriteError(w http.ResponseWriter, r *http.Request, op string, err error) {
+	switch {
+	case errors.Is(err, commsstore.ErrDanhMucKhongTonTaiMiniApp):
+		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy danh mục này.", "")
+	case errors.Is(err, domain.ErrCategoryCycle):
+		httpx.WriteError(w, http.StatusConflict, "category_cycle",
+			"Không đặt được danh mục cha là một danh mục con (hoặc cháu) của chính nó.", "")
+	case errors.Is(err, app.ErrCategoryNotEmpty):
+		httpx.WriteError(w, http.StatusConflict, "category_not_empty",
+			"Danh mục còn nội dung hoặc danh mục con nên không xoá được. "+
+				"Hãy ẩn danh mục nếu không muốn bà con thấy nó trên Mini App.", "")
+	default:
+		h.traLoiLoiNoiDung(w, r, op, err)
+	}
 }
 
 // --- the error mapping ------------------------------------------------------------------------
@@ -772,6 +895,16 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 			"xa", string(tenant.MustFrom(r.Context())), "viec", viec, "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "storage_not_configured",
 			"Chưa cấu hình kho lưu tệp nên chưa dùng được ảnh bìa. Hãy báo quản trị hệ thống.", "")
+	case errors.Is(err, domain.ErrLinkToInvalid):
+		// 422 for the banner fields (the card's call): the body is well-formed JSON; this value breaks
+		// migration 0012's rule. The sentence names the field and never echoes the value.
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_link_to", err.Error(), "")
+	case errors.Is(err, domain.ErrDisplayOrderInvalid):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_display_order", err.Error(), "")
+	case errors.Is(err, domain.ErrBannerFieldsOnlyForBanner):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "banner_fields_only_for_banner", err.Error(), "")
+	case errors.Is(err, domain.ErrBannerCoverRequired):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "banner_cover_required", err.Error(), "")
 	case laLoiDauVaoNoiDung(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data and no internal detail, and a second sentence written here would drift from it.
@@ -819,6 +952,8 @@ func laLoiDauVaoNoiDung(err error) bool {
 		domain.ErrEventPlaceTooLong, domain.ErrEventPlaceInvalid,
 		domain.ErrEventTimeInvalid,
 		domain.ErrCoverFileIDInvalid,
+		// ADR 0067 §3: the category edit and delete.
+		domain.ErrSlugImmutable, domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
 	} {
 		if errors.Is(err, mot) {
 			return true

@@ -38,8 +38,10 @@ import (
 // THE COMMUNE IS $1 FROM THE CONTEXT. On the public route the handler put it there after the PLATFORM
 // resolved the `host` the caller named; this method cannot tell and does not need to.
 //
-// itemType "" = every type. Any other value is bound as the next placeholder; the handler has already
-// refused a code outside the six, and an unknown one here would only match nothing.
+// itemType "" = every type EXCEPT `banner` (ADR 0067 §5 decision 5: a banner is a promotional picture,
+// not news, and only ever comes back on `?type=banner` — PublicBanners). Any other value is bound as the
+// next placeholder; the handler has already refused a code outside the six. itemType `banner` here is
+// not reached from the handler (it calls PublicBanners) and would list banners by date.
 //
 // categoryID "" = every category (and items filed nowhere). Otherwise only items filed under that
 // category OR ANY LIVE DESCENDANT (user decision 2026-09-30: choosing a parent chip includes its
@@ -53,6 +55,9 @@ func (s *NoiDungMiniAppStore) DanhSachCongKhai(ctx context.Context, itemType dom
 	if itemType != "" {
 		args = append(args, string(itemType))
 		filter += fmt.Sprintf(` AND loai = $%d`, len(args)+1) // +1: $1 is the commune
+	} else {
+		args = append(args, string(domain.LoaiBanner))
+		filter += fmt.Sprintf(` AND loai <> $%d`, len(args)+1)
 	}
 	if categoryID != "" {
 		args = append(args, categoryID)
@@ -104,13 +109,17 @@ const publishedCategoryIDs = `SELECT DISTINCT nd.danh_muc_id FROM noi_dung_mini_
 
 // PublishedCategoryIDs returns the ids of the commune's live categories that hold ≥1 published item
 // DIRECTLY (not through a descendant — domain.CategoriesWithPublishedItems adds the ancestors).
-// itemType "" = every type.
+// itemType "" = every type but `banner` — the SAME set the default list shows, so a chip never leads to
+// a list that is empty because its only items are banners.
 func (s *NoiDungMiniAppStore) PublishedCategoryIDs(ctx context.Context, itemType domain.LoaiNoiDung) ([]string, error) {
 	args := []any{string(domain.TrangThaiDangHien)}
-	typeClause := ""
+	var typeClause string
 	if itemType != "" {
 		args = append(args, string(itemType))
 		typeClause = fmt.Sprintf(` AND nd.loai = $%d`, len(args)+1)
+	} else {
+		args = append(args, string(domain.LoaiBanner))
+		typeClause = fmt.Sprintf(` AND nd.loai <> $%d`, len(args)+1)
 	}
 	args = append(args, TranDanhMucMiniApp+1)
 	stmt := fmt.Sprintf(publishedCategoryIDs, typeClause, len(args)+1)
@@ -159,4 +168,37 @@ func (s *NoiDungMiniAppStore) CongKhaiTheoID(ctx context.Context, id string) (do
 		return domain.NoiDungMiniApp{}, ErrNoiDungKhongTonTai
 	}
 	return quetNoiDungMiniApp(rows, true)
+}
+
+// PublicBannerStripMax bounds the banner strip. Not a customer figure: it is page.MaxLimit, the bound
+// every public list here already has. A commune with more published banners than this gets the first
+// PublicBannerStripMax in display order, and the handler logs that it happened.
+const PublicBannerStripMax = page.MaxLimit
+
+// PublicBanners reads the commune's banner strip (ADR 0067 §5): PUBLISHED, not-deleted `banner` items
+// WITH A COVER, in `display_order` ASC NULLS LAST, then `id` — migration 0012's order and its
+// `noi_dung_mini_app_banner_strip` index. A legacy banner with no cover (0012 lets it exist) is skipped
+// here, never drawn as an empty slot. Returns at most limit rows, plus one more when there are more —
+// the caller trims and logs.
+func (s *NoiDungMiniAppStore) PublicBanners(ctx context.Context, limit int) ([]domain.NoiDungMiniApp, error) {
+	rows, err := s.db.For(ctx).Query(ctx, cotNoiDungMiniApp, "noi_dung_mini_app",
+		`AND deleted_at IS NULL AND trang_thai = $2 AND loai = $3 AND cover_image_file_id IS NOT NULL `+
+			`ORDER BY display_order ASC NULLS LAST, id LIMIT $4`,
+		string(domain.TrangThaiDangHien), string(domain.LoaiBanner), limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("noi_dung_mini_app: đọc dải banner: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.NoiDungMiniApp
+	for rows.Next() {
+		n, err := quetNoiDungMiniApp(rows, false)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("noi_dung_mini_app: duyệt dải banner: %w", err)
+	}
+	return out, nil
 }

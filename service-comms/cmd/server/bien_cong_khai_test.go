@@ -48,6 +48,11 @@ func (noiDungCongKhaiThu) PublishedCategoryIDs(ctx context.Context, _ domain.Loa
 	return []string{"dm-a"}, nil
 }
 
+func (noiDungCongKhaiThu) PublicBanners(ctx context.Context, _ int) ([]domain.NoiDungMiniApp, error) {
+	tenant.MustFrom(ctx)
+	return nil, nil
+}
+
 func (noiDungCongKhaiThu) CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error) {
 	tenant.MustFrom(ctx)
 	return domain.NoiDungMiniApp{ID: id, TieuDe: "Tin", TrangThai: domain.TrangThaiDangHien}, nil

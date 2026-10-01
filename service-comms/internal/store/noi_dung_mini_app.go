@@ -129,10 +129,15 @@ func NewNoiDungMiniAppStore(db *store.DB) *NoiDungMiniAppStore {
 // `event_starts_at` / `event_ends_at` are adjacent timestamps — a swap compiles and prints an event
 // that ends before it starts. `cover_image_file_id` follows them (the cover upload, ADR 0047 §6 (1)),
 // still before the body, so the body stays at the tail.
+//
+// MIGRATION 0012's TWO BANNER COLUMNS FOLLOW (`link_to`, `display_order`), still before the body. The
+// audio pair of 0012 is NOT read: no write path sets it yet (a later card), and a column read by
+// nothing is a field every layer would carry and no screen could trust.
 const cotNoiDungMiniApp = `id, loai, danh_muc_id, tieu_de, tom_tat, anh_dai_dien_url, ` +
 	`ngay_dang, luot_xem, trang_thai, nguon, nguon_url, nguon_id_ngoai, da_sua_tay, ` +
 	`nguoi_tao_ma, tao_luc, cap_nhat_luc, ` +
-	`published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id`
+	`published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id, ` +
+	`link_to, display_order`
 
 // cotNoiDungMiniAppChiTiet adds the body AT THE END. Nowhere else: the shared scan appends one
 // destination when it is asked for the body, and an insertion anywhere but the tail would shift every
@@ -313,12 +318,15 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 
 		publishedAt, startsAt, endsAt sql.NullTime
 		place, videoURL, cover        sql.NullString
+		linkTo                        sql.NullString
+		displayOrder                  sql.NullInt64
 	)
 	dich := []any{
 		&n.ID, &loai, &danhMuc, &n.TieuDe, &tomTat, &anh,
 		&n.NgayDang, &n.LuotXem, &trang, &nguon, &nguonURL, &nguonIDNgoai, &n.DaSuaTay,
 		&n.NguoiTaoMa, &n.TaoLuc, &n.CapNhatLuc,
 		&publishedAt, &startsAt, &endsAt, &place, &videoURL, &cover,
+		&linkTo, &displayOrder,
 	}
 	if coThan {
 		dich = append(dich, &than)
@@ -343,7 +351,20 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 	n.EventPlace = place.String
 	n.VideoURL = videoURL.String
 	n.CoverImageFileID = cover.String
+	n.LinkTo = linkTo.String
+	if displayOrder.Valid {
+		v := int(displayOrder.Int64)
+		n.DisplayOrder = &v
+	}
 	return n, nil
+}
+
+// intOrNull binds a nil *int as NULL.
+func intOrNull(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return int64(*p)
 }
 
 func nullTimeUTC(t sql.NullTime) time.Time {
@@ -400,9 +421,14 @@ func (s *NoiDungMiniAppStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedT
 // IT EXCLUDES SOFT-DELETED CATEGORIES, WHICH THE FOREIGN KEY DOES NOT. Filing a new article under a
 // category the commune retired last week is a mistake the constraint cannot see, because the row is
 // still there.
+//
+// `FOR SHARE` SINCE CATEGORIES CAN BE SOFT DELETED (ADR 0067 §3): the delete locks the category row
+// FOR UPDATE and refuses while live items are filed under it. Without the share lock an article could
+// be filed under it between that count and that commit — and a deleted category would hold a live
+// article. With it, this probe waits for the delete, re-reads the row, and finds it gone.
 func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (bool, error) {
 	const stmt = `SELECT 1 FROM danh_muc_mini_app ` +
-		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
 
 	var mot int
 	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&mot)
@@ -436,12 +462,15 @@ func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.Scope
 // UPDATE-only, so "set at INSERT exactly when the row is born `dang-hien`" is owed by this write path.
 // app.SoanNoiDungMiniApp.Them passes the instant when §7's checkbox is ticked and the zero time
 // (→ NULL) otherwise. `cover_image_file_id` ($17) is a completed upload app.Them checked; 0011's
-// trigger checks it again (same commune, issued for THIS id, past the scan).
+// trigger checks it again (same commune, issued for THIS id, past the scan). `link_to` ($18) and
+// `display_order` ($19) are migration 0012's banner pair; app.Them refused them on any other type and
+// refused a banner with no cover before this statement could meet 0012's trigger.
 const chenNoiDungMiniApp = `INSERT INTO noi_dung_mini_app
 	(tenant_id, id, loai, danh_muc_id, tieu_de, tom_tat, noi_dung, anh_dai_dien_url,
 	 ngay_dang, trang_thai, nguon, nguoi_tao_ma,
-	 published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16,$17)`
+	 published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id,
+	 link_to, display_order)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16,$17,$18,$19)`
 
 // Chen writes one item. The caller owns the transaction and the audit entry inside it.
 func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
@@ -458,7 +487,7 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 		string(n.TrangThai), n.NguoiTaoMa,
 		zeroTimeAsNull(n.PublishedAt), zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
 		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL),
-		rongThanhNull(n.CoverImageFileID)); err != nil {
+		rongThanhNull(n.CoverImageFileID), rongThanhNull(n.LinkTo), intOrNull(n.DisplayOrder)); err != nil {
 		return fmt.Errorf("noi_dung_mini_app: chèn: %w", err)
 	}
 	return nil
@@ -485,11 +514,22 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 // change nor clear it. $15 is non-NULL only on the edit that FIRST publishes the row (app.Sua decides),
 // which is the one case the trigger's second half admits. `cover_image_file_id` ($16) is written in
 // full from the merged row: NULL detaches, an id attaches (app.Sua checked it; 0011's trigger again).
+//
+// MIGRATION 0012: `link_to` ($17) and `display_order` ($18) are written in full from the merged row,
+// like the 0011 columns, so a type change away from `banner` clears them in this same UPDATE
+// (domain.NoiDungMiniApp.WithoutOtherTypeFields). The AUDIO pair has no writer yet, but 0012's CHECK
+// already refuses a non-`truyen-thanh` row that keeps it — so this statement clears it when the type it
+// writes is not `truyen-thanh`, and leaves it exactly as stored otherwise. Without that, the day the
+// audio card lands, changing a broadcast into a news article would be a CHECK violation and a 500.
 const capNhatNoiDungMiniApp = `UPDATE noi_dung_mini_app
 	SET loai = $3, danh_muc_id = $4, tieu_de = $5, tom_tat = $6, noi_dung = $7,
 	    anh_dai_dien_url = $8, trang_thai = $9, da_sua_tay = $10,
 	    event_starts_at = $11, event_ends_at = $12, event_place = $13, video_url = $14,
-	    published_at = COALESCE(published_at, $15), cover_image_file_id = $16, cap_nhat_luc = now()
+	    published_at = COALESCE(published_at, $15), cover_image_file_id = $16,
+	    link_to = $17, display_order = $18,
+	    audio_file_id = CASE WHEN $3 = 'truyen-thanh' THEN audio_file_id END,
+	    audio_duration_seconds = CASE WHEN $3 = 'truyen-thanh' THEN audio_duration_seconds END,
+	    cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the fields §7's modal may change. The caller has already read the row with
@@ -502,7 +542,7 @@ func (s *NoiDungMiniAppStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), string(n.TrangThai), n.DaSuaTay,
 		zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
 		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL), zeroTimeAsNull(n.PublishedAt),
-		rongThanhNull(n.CoverImageFileID))
+		rongThanhNull(n.CoverImageFileID), rongThanhNull(n.LinkTo), intOrNull(n.DisplayOrder))
 	if err != nil {
 		return fmt.Errorf("noi_dung_mini_app: cập nhật: %w", err)
 	}
@@ -549,7 +589,9 @@ func NewDanhMucMiniAppStore(db *store.DB) *DanhMucMiniAppStore {
 // cotDanhMucMiniApp IS READ BY POSITION in quetDanhMucMiniApp. `ten` and `slug` are adjacent TEXT
 // columns and `id` and `cha_id` are two more: swapping either pair compiles, runs, and produces a
 // tree whose every node is its own parent or whose every label is a slug.
-const cotDanhMucMiniApp = `id, ten, slug, cha_id, thu_tu, tao_luc`
+//
+// `hidden` (migration 0012) is at the tail.
+const cotDanhMucMiniApp = `id, ten, slug, cha_id, thu_tu, tao_luc, hidden`
 
 // DanhSach reads the commune's WHOLE category tree, ordered.
 //
@@ -602,7 +644,7 @@ func quetDanhMucMiniApp(r quetMotDongNoiDung) (domain.DanhMucMiniApp, error) {
 		dm  domain.DanhMucMiniApp
 		cha sql.NullString
 	)
-	if err := r.Scan(&dm.ID, &dm.Ten, &dm.Slug, &cha, &dm.ThuTu, &dm.TaoLuc); err != nil {
+	if err := r.Scan(&dm.ID, &dm.Ten, &dm.Slug, &cha, &dm.ThuTu, &dm.TaoLuc, &dm.Hidden); err != nil {
 		return domain.DanhMucMiniApp{}, fmt.Errorf("danh_muc_mini_app: đọc dòng: %w", err)
 	}
 	dm.ChaID = cha.String
@@ -648,9 +690,12 @@ func (s *DanhMucMiniAppStore) DemDangSong(ctx context.Context, tx *store.ScopedT
 // a SOFT-DELETED parent is still a row, so without this check a commune could file a new category
 // under one it retired — and §7's select, which excludes deleted rows, would then show a child whose
 // parent is nowhere on the screen.
+//
+// `FOR SHARE`, for the reason DanhMucCoThat gives: a delete refusing "live children exist" must not be
+// raced by a child created under the row it is deleting.
 func (s *DanhMucMiniAppStore) ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (bool, error) {
 	const stmt = `SELECT 1 FROM danh_muc_mini_app ` +
-		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
 
 	var mot int
 	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), chaID).Scan(&mot)
@@ -681,25 +726,143 @@ func (s *DanhMucMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 	return nil
 }
 
-// --- what is deliberately absent ---------------------------------------------------------------
+// --- editing and retiring a category (ADR 0067 §3, 01/10/2026) -------------------------------------
 //
-// NO `XoaMem` ON EITHER TABLE, AND NO CATEGORY UPDATE. Each absence is a decision:
+// Superseding the note that stood here: editing a category arrived WITH its ancestor walk
+// (AncestorChain, under LockTree), and deleting one arrived as a soft delete that REFUSES while live
+// items or live children exist — the owner chose refusal over un-filing articles (ADR 0067 §3: a bulk
+// un-filing is a silent edit of many records; hiding reaches the same goal without touching one).
+
+// ByIDForUpdate reads one live category inside the transaction and holds it until the end — the edit
+// and the delete are read-decide-write, and two of either racing must serialise on the row.
+func (s *DanhMucMiniAppStore) ByIDForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (
+	domain.DanhMucMiniApp, error) {
+
+	const stmt = `SELECT ` + cotDanhMucMiniApp + ` FROM danh_muc_mini_app ` +
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`
+	c, err := quetDanhMucMiniApp(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.DanhMucMiniApp{}, ErrDanhMucKhongTonTaiMiniApp
+	}
+	return c, err
+}
+
+// LockTree takes the commune's tree lock for the rest of the transaction.
+//
+// WHY A LOCK FOR THE WHOLE TREE AND NOT THE ROWS WALKED: two re-parentings racing — A under B while B
+// goes under A — each walk a chain the other has not written yet, both pass, and the tree holds a
+// cycle. Row locks on the walked chain would turn that into a deadlock instead. One advisory lock per
+// commune serialises re-parenting there and nowhere else; it is scoped to the transaction, so a crash
+// releases it. Same shape as service-petitions/internal/store/catalogue_import.go:38.
+func (s *DanhMucMiniAppStore) LockTree(ctx context.Context, tx *store.ScopedTx) error {
+	const stmt = `SELECT pg_advisory_xact_lock(hashtextextended('danh_muc_mini_app:cay:' || $1, 0))`
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID())); err != nil {
+		return fmt.Errorf("danh_muc_mini_app: khoá cây: %w", err)
+	}
+	return nil
+}
+
+// AncestorChain returns startID followed by its ancestors up to a root, SOFT-DELETED ROWS INCLUDED —
+// a deleted row's `cha_id` is still an edge (domain.ReparentCreatesCycle). Both halves of the
+// recursion bind `tenant_id = $1`; UNION (not UNION ALL) de-duplicates, so a cycle already in the data
+// terminates instead of hanging the request. An id that names nothing returns an empty chain.
+func (s *DanhMucMiniAppStore) AncestorChain(ctx context.Context, tx *store.ScopedTx, startID string) (
+	[]string, error) {
+
+	const stmt = `WITH RECURSIVE up(id, cha_id) AS (` +
+		`SELECT c.id, c.cha_id FROM danh_muc_mini_app c WHERE c.tenant_id = $1 AND c.id = $2 ` +
+		`UNION SELECT c.id, c.cha_id FROM danh_muc_mini_app c JOIN up ON c.id = up.cha_id ` +
+		`WHERE c.tenant_id = $1) SELECT id FROM up`
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), startID)
+	if err != nil {
+		return nil, fmt.Errorf("danh_muc_mini_app: đọc chuỗi tổ tiên: %w", err)
+	}
+	defer rows.Close()
+	var chain []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("danh_muc_mini_app: đọc dòng tổ tiên: %w", err)
+		}
+		chain = append(chain, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("danh_muc_mini_app: duyệt chuỗi tổ tiên: %w", err)
+	}
+	return chain, nil
+}
+
+// CountLiveChildren counts the category's live child categories — a delete is refused while any exist.
+func (s *DanhMucMiniAppStore) CountLiveChildren(ctx context.Context, tx *store.ScopedTx, id string) (int, error) {
+	const stmt = `SELECT count(*) FROM danh_muc_mini_app ` +
+		`WHERE tenant_id = $1 AND cha_id = $2 AND deleted_at IS NULL`
+	var n int
+	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&n); err != nil {
+		return 0, fmt.Errorf("danh_muc_mini_app: đếm danh mục con: %w", err)
+	}
+	return n, nil
+}
+
+// CountLiveItems counts the live items filed under the category, IN EVERY STATE — a draft is still a
+// record filed there. A delete is refused while any exist.
+func (s *DanhMucMiniAppStore) CountLiveItems(ctx context.Context, tx *store.ScopedTx, id string) (int, error) {
+	const stmt = `SELECT count(*) FROM noi_dung_mini_app ` +
+		`WHERE tenant_id = $1 AND danh_muc_id = $2 AND deleted_at IS NULL`
+	var n int
+	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&n); err != nil {
+		return 0, fmt.Errorf("danh_muc_mini_app: đếm nội dung trong danh mục: %w", err)
+	}
+	return n, nil
+}
+
+// updateCategoryStmt — `slug`, `tao_luc` and the soft-delete columns appear nowhere: the slug is
+// immutable (rule 7, invariant 3) and a row is not deleted by an edit.
+const updateCategoryStmt = `UPDATE danh_muc_mini_app
+	SET ten = $3, cha_id = $4, thu_tu = $5, hidden = $6, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// Update writes the editable fields of one category. The caller read it with ByIDForUpdate.
+func (s *DanhMucMiniAppStore) Update(ctx context.Context, tx *store.ScopedTx, c domain.DanhMucMiniApp) error {
+	res, err := tx.Exec(ctx, updateCategoryStmt, string(tx.TenantID()), c.ID,
+		c.Ten, rongThanhNull(c.ChaID), c.ThuTu, c.Hidden)
+	if err != nil {
+		return fmt.Errorf("danh_muc_mini_app: cập nhật: %w", err)
+	}
+	return oneCategoryRow(res, "cập nhật")
+}
+
+// softDeleteCategoryStmt — WHO (a staff business code, rule 6 invariant 8) and WHY are mandatory (the
+// CHECK `danh_muc_mini_app_xoa_mem_day_du` refuses a delete without them). `AND deleted_at IS NULL`:
+// a second delete touches nothing, so it cannot overwrite who deleted it or why.
+const softDeleteCategoryStmt = `UPDATE danh_muc_mini_app
+	SET deleted_at = now(), deleted_by = $3, delete_reason = $4, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// SoftDelete retires one category. The slug stays taken forever (SlugDaDung counts deleted rows).
+func (s *DanhMucMiniAppStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string) error {
+	res, err := tx.Exec(ctx, softDeleteCategoryStmt, string(tx.TenantID()), id, deletedBy, reason)
+	if err != nil {
+		return fmt.Errorf("danh_muc_mini_app: xoá mềm: %w", err)
+	}
+	return oneCategoryRow(res, "xoá mềm")
+}
+
+func oneCategoryRow(res sql.Result, op string) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("danh_muc_mini_app: %s: đọc số dòng: %w", op, err)
+	}
+	if n == 0 {
+		return ErrDanhMucKhongTonTaiMiniApp
+	}
+	return nil
+}
+
+// --- what is deliberately absent ---------------------------------------------------------------
 //
 //	deleting an item      §6's action column offers `✎` and NOTHING ELSE. §9 proposes a DELETE, but
 //	                      rule 7 makes that a soft delete with a MANDATORY reason (`delete_reason`),
-//	                      and no screen in chapter 11 collects one. Building the route would mean
-//	                      deciding what the reason says, which is the customer's sentence to write.
-//	                      Taking an item off the Mini App is `trang_thai = 'an'`, which the edit
-//	                      route already does.
-//	editing a category    §6's `⊞ Danh mục tin` button implies management, and §9 lists only
-//	                      GET/POST. Renaming is harmless; RE-PARENTING is not — it is the one write
-//	                      that can create a cycle through two or more rows, which no CHECK can refuse
-//	                      (migration 0006 says so) and which makes every tree walk in this module
-//	                      loop forever. That route arrives with its ancestor walk, not before it.
-//	deleting a category   a category holding articles cannot simply go: the foreign key refuses it,
-//	                      and what should happen to the articles is a question §11 does not answer.
-//	the sync writer       see migration 0006. Nothing in this repository can hold the portal's API
-//	                      key (ADR 0009, decision 7 — `core/crypto` does not exist), schedule a run,
-//	                      or make the call.
-//	a citizen read        §9's `/api/cong/mini-app/noi-dung`. See internal/http for the three
-//	                      separate reasons it is not built.
+//	                      and no screen in chapter 11 collects one. Taking an item off the Mini App is
+//	                      `trang_thai = 'an'`, which the edit route already does.
+//	the sync writer       a later card (ADR 0067 §2). It must call internal/richtext.Sanitize like the
+//	                      staff write path does.

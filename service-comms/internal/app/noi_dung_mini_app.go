@@ -35,6 +35,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	"github.com/vihat/vigov/service-comms/internal/richtext"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
@@ -60,6 +61,15 @@ type KhoDanhMucMiniApp interface {
 	DemDangSong(ctx context.Context, tx *store.ScopedTx) (int, error)
 	ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (bool, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, dm domain.DanhMucMiniApp) error
+
+	// The edit and the soft delete (ADR 0067 §3).
+	ByIDForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.DanhMucMiniApp, error)
+	LockTree(ctx context.Context, tx *store.ScopedTx) error
+	AncestorChain(ctx context.Context, tx *store.ScopedTx, startID string) ([]string, error)
+	CountLiveChildren(ctx context.Context, tx *store.ScopedTx, id string) (int, error)
+	CountLiveItems(ctx context.Context, tx *store.ScopedTx, id string) (int, error)
+	Update(ctx context.Context, tx *store.ScopedTx, c domain.DanhMucMiniApp) error
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string) error
 }
 
 // SoanNoiDungMiniApp owns composing and editing one commune's Mini App content.
@@ -117,7 +127,16 @@ const (
 	HanhViThemNoiDungMiniApp = "them_noi_dung_mini_app"
 	HanhViSuaNoiDungMiniApp  = "sua_noi_dung_mini_app"
 	HanhViThemDanhMucMiniApp = "them_danh_muc_mini_app"
+
+	// The verbs of ADR 0067 §3, same Vietnamese snake_case as their neighbours: an inspection reads these
+	// strings. English identifiers, Vietnamese values (rule 12 / ADR 0011).
+	ActionUpdateContentCategory = "sua_danh_muc_mini_app"
+	ActionDeleteContentCategory = "xoa_danh_muc_mini_app"
 )
+
+// ErrCategoryNotEmpty refuses deleting a category that still holds live items or live child
+// categories (ADR 0067 §3 decision 3). The handler's sentence suggests hiding it instead.
+var ErrCategoryNotEmpty = errors.New("danh_muc_mini_app: danh mục còn nội dung hoặc danh mục con")
 
 var (
 	// ErrThieuNguoiTaoNoiDung refuses the write when the request carries no staff business code.
@@ -144,8 +163,9 @@ var (
 //	                      format rules are platform's policy, read by the uploader, never here.
 //	few per-type fields   the event window and place (`su-kien`) and the external video link (`video`)
 //	                      ARE handled — the user decided them on 30/09/2026 (ADR 0047 §6) and
-//	                      migration 0011 added the columns. The audio file and its duration (a later
-//	                      card) and the banner link and order (not decided) are still absent.
+//	                      migration 0011 added the columns. The banner's link and order (migration
+//	                      0012, ADR 0067 §5) are handled too; the audio file and its duration are a
+//	                      later card.
 //	no approval step      `cho-duyet` is reachable only from the sync (§10.2). A commune composing by
 //	                      hand publishes or does not, which is exactly the one checkbox §7 offers.
 //
@@ -157,6 +177,10 @@ var (
 func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiDung,
 	nguoi audit.Actor) (domain.NoiDungMiniApp, error) {
 
+	// THE BODY IS SANITISED FIRST, on this and every other write path (ADR 0067 §1 decision 2), and
+	// BEFORE KiemTra so the length bound is checked on what will actually be stored.
+	yc.NoiDung = richtext.Sanitize(yc.NoiDung)
+
 	// VALIDATED BEFORE THE TRANSACTION OPENS. A request that fails its shape must never hold a
 	// transaction open while doing so, and the caller needs the reason rather than a rollback.
 	sach, err := yc.KiemTra()
@@ -165,6 +189,11 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 	}
 	if nguoi.ID == "" {
 		return domain.NoiDungMiniApp{}, ErrThieuNguoiTaoNoiDung
+	}
+	// A banner is born with its cover or not at all (migration 0012's trigger, asked first).
+	if err := domain.CheckBannerCover(nil, domain.NoiDungMiniApp{
+		Loai: domain.LoaiNoiDung(sach.Loai), CoverImageFileID: sach.CoverImageFileID}); err != nil {
+		return domain.NoiDungMiniApp{}, err
 	}
 
 	// THE ID. With a cover it is the id the upload minted (migration 0011: §7 uploads before `Lưu`) —
@@ -207,6 +236,8 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		EventEndsAt:   sach.EventEndsAt,
 		EventPlace:    sach.EventPlace,
 		VideoURL:      sach.VideoURL,
+		LinkTo:        sach.LinkTo,
+		DisplayOrder:  sach.DisplayOrder,
 		NgayDang:      ngayDang,
 		LuotXem:       0,
 
@@ -338,6 +369,13 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 	if id == "" {
 		return domain.NoiDungMiniApp{}, commsstore.ErrNoiDungKhongTonTai
 	}
+	// Sanitised before KiemTra, as on the create (ADR 0067 §1 decision 2). Only a body the request
+	// SENDS is touched: an edit that does not mention the body leaves a legacy row's stored HTML exactly
+	// as it is (rule 7) — the public read sanitises that one on the way out.
+	if yc.NoiDung != nil {
+		clean := richtext.Sanitize(*yc.NoiDung)
+		yc.NoiDung = &clean
+	}
 	// Shape first, outside the transaction. A request that fails its shape must never hold a row
 	// lock while doing so.
 	sach, err := yc.KiemTra()
@@ -400,6 +438,12 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		if sach.CoverImageFileID != nil {
 			sau.CoverImageFileID = *sach.CoverImageFileID // "" detaches; the file row stays (rule 7)
 		}
+		if sach.LinkTo != nil {
+			sau.LinkTo = *sach.LinkTo
+		}
+		if sach.DisplayOrder != nil {
+			sau.DisplayOrder = sach.DisplayOrder
+		}
 
 		// THE PER-TYPE FIELDS OF MIGRATION 0011, decided on the MERGED row because the type after the
 		// edit may come from the request or from the stored row.
@@ -418,8 +462,18 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			refusal = domain.ErrVideoURLOnlyForVideo
 			return refusal
 		}
+		if sau.Loai != domain.LoaiBanner && sach.SetsBannerField() {
+			refusal = domain.ErrBannerFieldsOnlyForBanner
+			return refusal
+		}
 		sau = sau.WithoutOtherTypeFields()
 		if err := sau.CheckTypeFields(); err != nil {
+			refusal = err
+			return refusal
+		}
+		// Migration 0012's cover trigger, on the merged row: no item becomes a banner without a cover,
+		// and a banner's cover is replaced, never removed.
+		if err := domain.CheckBannerCover(&truoc, sau); err != nil {
 			refusal = err
 			return refusal
 		}
@@ -578,10 +632,8 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 				return ErrDanhMucChaKhongTonTai
 			}
 			// NO CYCLE CHECK IS NEEDED ON A CREATE AND THAT IS WORTH SAYING OUT LOUD: `moi.ID` is a
-			// freshly minted ULID, so no existing row can already have it as an ancestor. The day a
-			// RE-PARENTING route is written, it must walk up from the proposed parent looking for
-			// itself — migration 0006 records the same obligation beside the CHECK that only catches
-			// the one-node case.
+			// freshly minted ULID, so no existing row can already have it as an ancestor. The
+			// re-parenting edit (Sua below) is where the ancestor walk lives.
 		}
 
 		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
@@ -608,6 +660,193 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		return domain.DanhMucMiniApp{}, bocNoiDung(ctx, "thêm danh mục Mini App", err)
 	}
 	return moi, nil
+}
+
+// Update edits one category: name, parent, order, hidden (ADR 0067 §3). The slug is not editable — the
+// handler refuses a body naming it (domain.ErrSlugImmutable).
+//
+// RE-PARENTING WALKS THE ANCESTORS OF THE PROPOSED PARENT, under the commune's tree lock, and refuses
+// when the category itself is among them (migration 0006:223-228). The lock is what makes the walk
+// true at commit: two re-parentings racing each other would otherwise each pass and leave a cycle.
+//
+// A NO-OP WRITES NOTHING AND AUDITS NOTHING — the reason the route can declare idem.KhongCan.
+func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domain.ContentCategoryUpdate,
+	actor audit.Actor) (domain.DanhMucMiniApp, error) {
+
+	if id == "" {
+		return domain.DanhMucMiniApp{}, commsstore.ErrDanhMucKhongTonTaiMiniApp
+	}
+	clean, err := yc.KiemTra()
+	if err != nil {
+		return domain.DanhMucMiniApp{}, err
+	}
+	if actor.ID == "" {
+		return domain.DanhMucMiniApp{}, ErrThieuNguoiTaoNoiDung
+	}
+
+	var after domain.DanhMucMiniApp
+	// refusal carries a refusal decided inside the transaction back out UNWRAPPED (bocNoiDung would
+	// prefix the commune id, and the handler returns a refusal's own sentence).
+	var refusal error
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		before, err := uc.kho.ByIDForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		after = before
+		if clean.Ten != nil {
+			after.Ten = *clean.Ten
+		}
+		if clean.ChaID != nil {
+			after.ChaID = *clean.ChaID
+		}
+		if clean.ThuTu != nil {
+			after.ThuTu = *clean.ThuTu
+		}
+		if clean.Hidden != nil {
+			after.Hidden = *clean.Hidden
+		}
+
+		if after.ChaID != before.ChaID && after.ChaID != "" {
+			if after.ChaID == after.ID {
+				refusal = domain.ErrDanhMucTuLamCha
+				return refusal
+			}
+			if err := uc.kho.LockTree(ctx, tx); err != nil {
+				return err
+			}
+			live, err := uc.kho.ChaCoThat(ctx, tx, after.ChaID)
+			if err != nil {
+				return err
+			}
+			if !live {
+				refusal = ErrDanhMucChaKhongTonTai
+				return refusal
+			}
+			chain, err := uc.kho.AncestorChain(ctx, tx, after.ChaID)
+			if err != nil {
+				return err
+			}
+			if domain.ReparentCreatesCycle(after.ID, chain) {
+				refusal = domain.ErrCategoryCycle
+				return refusal
+			}
+		}
+
+		if after == before {
+			return nil
+		}
+		// Scoped: tx comes from uc.db.For(ctx).Tx — tenant_id is $1 of the UPDATE.
+		if err := uc.kho.Update(ctx, tx, after); err != nil {
+			return err
+		}
+		// BEFORE AND AFTER OF THE FIELDS THAT MOVED (rule 6, invariant 5). A category name is how the
+		// authority files its own news, not personal data — the create already records it by value.
+		delta, err := json.Marshal(map[string]any{
+			"id":    after.ID,
+			"truoc": categoryChanges(before, after, true),
+			"sau":   categoryChanges(before, after, false),
+		})
+		if err != nil {
+			return fmt.Errorf("danh_muc_mini_app: mã hoá delta: %w", err)
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   actor,
+			Action:  ActionUpdateContentCategory,
+			Subject: after.Slug,
+			Delta:   delta,
+		})
+	})
+	if refusal != nil {
+		return domain.DanhMucMiniApp{}, refusal
+	}
+	if err != nil {
+		return domain.DanhMucMiniApp{}, bocNoiDung(ctx, "sửa danh mục Mini App", err)
+	}
+	return after, nil
+}
+
+// Delete soft deletes one category, with a mandatory reason (rule 7, invariant 1).
+//
+// REFUSED WHILE IT HOLDS ANY LIVE ITEM (in any state) OR ANY LIVE CHILD CATEGORY — the owner chose
+// refusal over un-filing (ADR 0067 §3): un-filing is a silent edit of many records, and hiding reaches
+// the same goal without touching one. The row stays, its slug is never reissued, its items keep their
+// `danh_muc_id`.
+func (uc *DanhMucNoiDungMiniApp) Delete(ctx context.Context, id, rawReason string, actor audit.Actor) error {
+	if id == "" {
+		return commsstore.ErrDanhMucKhongTonTaiMiniApp
+	}
+	reason, err := domain.ChuanHoaLyDoXoa(rawReason)
+	if err != nil {
+		return err
+	}
+	if actor.ID == "" {
+		return ErrThieuNguoiTaoNoiDung
+	}
+
+	var refusal error
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		before, err := uc.kho.ByIDForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		children, err := uc.kho.CountLiveChildren(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		items, err := uc.kho.CountLiveItems(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if children > 0 || items > 0 {
+			refusal = ErrCategoryNotEmpty
+			return refusal
+		}
+		// deleted_by is the actor's BUSINESS CODE — audit.Actor.ID is built from Principal.Ma
+		// (rule 6, invariant 8), so the column and the entry name the same person.
+		if err := uc.kho.SoftDelete(ctx, tx, before.ID, actor.ID, reason); err != nil {
+			return err
+		}
+		delta, err := json.Marshal(map[string]any{
+			"truoc":   tomTatDanhMucMiniApp(before),
+			"ly_do":   reason,
+			"xoa_mem": true,
+		})
+		if err != nil {
+			return fmt.Errorf("danh_muc_mini_app: mã hoá delta: %w", err)
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   actor,
+			Action:  ActionDeleteContentCategory,
+			Subject: before.Slug,
+			Delta:   delta,
+		})
+	})
+	if refusal != nil {
+		return refusal
+	}
+	if err != nil {
+		return bocNoiDung(ctx, "xoá danh mục Mini App", err)
+	}
+	return nil
+}
+
+// categoryChanges returns the fields that moved, from the before side (beforeSide) or the after side.
+func categoryChanges(before, after domain.DanhMucMiniApp, beforeSide bool) map[string]any {
+	out := map[string]any{}
+	if before.Ten != after.Ten {
+		out["ten"] = chon(beforeSide, before.Ten, after.Ten)
+	}
+	if before.ChaID != after.ChaID {
+		out["cha_id"] = chon(beforeSide, before.ChaID, after.ChaID)
+	}
+	if before.ThuTu != after.ThuTu {
+		out["thu_tu"] = chon(beforeSide, before.ThuTu, after.ThuTu)
+	}
+	if before.Hidden != after.Hidden {
+		out["hidden"] = chon(beforeSide, before.Hidden, after.Hidden)
+	}
+	return out
 }
 
 // trangThaiTu maps §7's one checkbox onto §6's chip.
@@ -669,6 +908,9 @@ func tomTatNoiDungMiniApp(n domain.NoiDungMiniApp) map[string]any {
 		"has_video_url":   n.VideoURL != "",
 		// The cover's FILE ID — an internal handle, not personal data; its file name never enters here.
 		"cover_image_file_id": n.CoverImageFileID,
+		// Migration 0012's banner pair, split like the video link: position by value, link by presence.
+		"display_order": orderOrNil(n.DisplayOrder),
+		"has_link_to":   n.LinkTo != "",
 	}
 }
 
@@ -734,7 +976,31 @@ func tomTatDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp, ben bool) map[str
 	if truoc.CoverImageFileID != sau.CoverImageFileID {
 		ra["cover_image_file_id"] = chon(ben, truoc.CoverImageFileID, sau.CoverImageFileID)
 	}
+	// Migration 0012's banner pair: the position by value (the authority's own arrangement), the link
+	// as "changed" only, like video_url.
+	if !sameOrder(truoc.DisplayOrder, sau.DisplayOrder) {
+		ra["display_order"] = orderOrNil(chon(ben, truoc.DisplayOrder, sau.DisplayOrder))
+	}
+	if truoc.LinkTo != sau.LinkTo {
+		ra["link_to_changed"] = true
+	}
 	return ra
+}
+
+// sameOrder compares two nullable display orders by value.
+func sameOrder(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// orderOrNil is an audit-delta value: the number, or nil (JSON null) for NULL.
+func orderOrNil(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 // tomTatDanhMucMiniApp is the audit delta's view of one category.
@@ -745,6 +1011,7 @@ func tomTatDanhMucMiniApp(dm domain.DanhMucMiniApp) map[string]any {
 		"slug":   dm.Slug,
 		"cha_id": dm.ChaID,
 		"thu_tu": dm.ThuTu,
+		"hidden": dm.Hidden,
 	}
 }
 
@@ -767,7 +1034,9 @@ func khongDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp) bool {
 		truoc.EventEndsAt.Equal(sau.EventEndsAt) &&
 		truoc.EventPlace == sau.EventPlace &&
 		truoc.VideoURL == sau.VideoURL &&
-		truoc.CoverImageFileID == sau.CoverImageFileID
+		truoc.CoverImageFileID == sau.CoverImageFileID &&
+		truoc.LinkTo == sau.LinkTo &&
+		sameOrder(truoc.DisplayOrder, sau.DisplayOrder)
 	// `PublishedAt` is NOT compared, for the reason `DaSuaTay` is not: it is derived from the act of
 	// publishing, which a changed TrangThai already makes a change.
 }

@@ -40,6 +40,10 @@ func TestDanhSachCongKhaiChiDangHienBuocXa(t *testing.T) {
 	if strings.Contains(l.sql, "loai =") {
 		t.Errorf("không lọc loại mà câu vẫn có `loai =`: %s", l.sql)
 	}
+	// ADR 0067 §5 decision 5: the default list never carries banners.
+	if !strings.Contains(l.sql, "loai <> $3") || l.args[2] != "banner" {
+		t.Errorf("danh sách mặc định phải loại banner (`loai <> $3` = banner): %s %v", l.sql, l.args)
+	}
 }
 
 func TestPublicContentListTypeFilterKeepsStateAndCommune(t *testing.T) {
@@ -95,12 +99,13 @@ func TestPublicContentListCategoryFilterWalksLiveSubtreeOfThisCommune(t *testing
 		t.Fatalf("tham số = %v, muốn [xã, dang-hien, su-kien, dm-cha, …]", stmt.args)
 	}
 
-	// Category alone: its placeholder is $3.
+	// Category alone: the banner exclusion takes $3, the category $4.
 	fake.lenh = nil
 	if _, err := repo.DanhSachCongKhai(ctx, "", "dm-cha", trangDauND(t)); err != nil {
 		t.Fatalf("lọc chỉ danh mục lỗi: %v", err)
 	}
-	if s := fake.lenh[0].sql; !strings.Contains(s, "c.id = $3") || strings.Contains(s, "loai =") {
+	if s := fake.lenh[0].sql; !strings.Contains(s, "loai <> $3") || !strings.Contains(s, "c.id = $4") ||
+		strings.Contains(s, "loai =") {
 		t.Errorf("chỉ lọc danh mục: %s", s)
 	}
 }
@@ -137,7 +142,9 @@ func TestPublishedCategoryIDsJoinsLiveCategoriesOfThisCommune(t *testing.T) {
 	if _, err := repo.PublishedCategoryIDs(ctx, ""); err != nil {
 		t.Fatalf("không lọc loại lỗi: %v", err)
 	}
-	if s := fake.lenh[0].sql; strings.Contains(s, "loai") || !strings.Contains(s, "LIMIT $3") {
+	// No type: every type but banner, the same set the default list shows.
+	if s := fake.lenh[0].sql; !strings.Contains(s, "nd.loai <> $3") || !strings.Contains(s, "LIMIT $4") ||
+		fake.lenh[0].args[2] != "banner" {
 		t.Errorf("không lọc loại: %s", s)
 	}
 }

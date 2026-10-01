@@ -149,11 +149,12 @@ type DanhMucMiniAppDoc interface {
 	DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error)
 }
 
-// GhiDanhMucMiniApp is the WRITE half of the category tree. ONE METHOD: §9 lists GET and POST, and
-// editing or removing a category is not shipped — internal/store says why, and the reason for the
-// edit route in particular is that RE-PARENTING can create a cycle no CHECK constraint can refuse.
+// GhiDanhMucMiniApp is the WRITE half of the category tree: add, edit (name, parent, order, hidden —
+// re-parenting walks the ancestors under a tree lock) and soft delete with a reason (ADR 0067 §3).
 type GhiDanhMucMiniApp interface {
 	Them(ctx context.Context, yc domain.YeuCauThemDanhMuc, nguoi audit.Actor) (domain.DanhMucMiniApp, error)
+	Update(ctx context.Context, id string, yc domain.ContentCategoryUpdate, actor audit.Actor) (domain.DanhMucMiniApp, error)
+	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
 // --- the map field schema (docs/ui-ux/14-cau-hinh.md §6) -----------------------------------------
@@ -291,7 +292,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("comms/http: thiếu kho hoặc use case hộp chuông — GET/PATCH /api/v1/notifications sẽ panic khi có người gọi")
 	}
 	if d.Checker == nil {
-		panic("comms/http: thiếu authz.Checker — mười chín tuyến có khai quyền sẽ không kiểm được quyền")
+		panic("comms/http: thiếu authz.Checker — mọi tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -621,6 +622,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// cover, the derivative is copied to the public bucket in the same transaction; the copy failing is
 	// 503 `cover_publish_unavailable` and nothing is written (app/content_cover.go, coverPublisher).
 	//
+	// `body` IS SANITISED BEFORE IT IS STORED (ADR 0067 §1, internal/richtext): p, br, strong, em, ul,
+	// ol, li, h2, h3 and https links survive, nothing else. 422 is a banner field refused (migration
+	// 0012): `invalid_link_to`, `invalid_display_order`, `banner_fields_only_for_banner`,
+	// `banner_cover_required`.
+	//
 	// @summary  Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy
 	// @screen   11-noi-dung-mini-app §7
 	// @request  themNoiDungVao
@@ -629,6 +635,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/content-items",
@@ -663,6 +670,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// copied in the transaction (503 `cover_publish_unavailable` if that fails, nothing written);
 	// unpublished, detached or replaced → the old copy is withdrawn after commit.
 	//
+	// A `body` sent is sanitised like the create's; a body not sent is left exactly as stored. 422 as on
+	// the create, plus `banner_cover_required` when the edit removes a banner's cover or turns an item
+	// into a banner without one. A type change away from `banner` clears `link_to` / `display_order`.
+	//
 	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
 	// @screen   11-noi-dung-mini-app §6, §7
 	// @request  suaNoiDungVao
@@ -672,6 +683,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("PATCH /api/v1/content-items/{id}",
@@ -789,6 +801,60 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.ThemDanhMucNoiDung))))
+
+	// --- the commune edits one category (ADR 0067 §3) ----------------------------------------------
+	//
+	// `content.update`, THE SAME KEY AS THE CREATE above: managing the tree is composing the commune's
+	// Mini App (§10.5 divides the screen into read and update, nothing else). Seeded at
+	// service-identity/migrations/0001_init.sql:293; no key invented (rule 5, invariant 3c).
+	//
+	// PATCH: name, parent (`""` = root), order, hidden. `slug` is REFUSED when sent (400) — an issued
+	// code never changes. A new parent that is the category itself is 400; one of its descendants is 409
+	// `category_cycle` (the use case walks the ancestors under the commune's tree lock); a parent that is
+	// not a live category of this commune is 409 `parent_missing`.
+	//
+	// idem.KhongCan: app.DanhMucNoiDungMiniApp.Update writes and audits nothing when nothing moved, so the
+	// same request twice leaves one state and one entry.
+	//
+	// @summary  Sửa tên, danh mục cha, thứ tự hoặc cờ ẩn của một danh mục tin Mini App — slug không đổi được
+	// @screen   11-noi-dung-mini-app §6
+	// @request  updateCategoryIn
+	// @reply    200 danhMucRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/content-categories/{id}",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.UpdateContentCategory))))
+
+	// --- the commune retires one category (ADR 0067 §3) --------------------------------------------
+	//
+	// A SOFT DELETE with a mandatory reason, IN THE BODY for the reason DELETE /map-asset-types/{id}
+	// gives: free text about a government record does not belong in a query string. REFUSED with 409
+	// `category_not_empty` while any live item (any state) or live child category is filed under it —
+	// the sentence suggests hiding instead. The slug stays taken forever.
+	//
+	// idem.KhongCan: a second delete is a 404 — the UPDATE carries `AND deleted_at IS NULL`, so it cannot
+	// overwrite who deleted it or why.
+	//
+	// @summary  Xoá mềm một danh mục tin Mini App kèm lý do bắt buộc — từ chối khi còn nội dung hoặc danh mục con
+	// @screen   11-noi-dung-mini-app §6
+	// @request  deleteCategoryIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/content-categories/{id}",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("xoá một danh mục đã xoá trả 404: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.DeleteContentCategory))))
 
 	// --- the map field schema (Cấu hình → Trường bản đồ) ----------------------------------------------
 	//

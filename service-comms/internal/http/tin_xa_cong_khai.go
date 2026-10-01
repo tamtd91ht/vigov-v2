@@ -35,6 +35,15 @@ package http
 //
 // ADDED 2026-09-30 (ADR 0047 §6, migration 0011), optional in the same way: `published_at` (G1),
 // `event_starts_at` / `event_ends_at` / `event_place` on `su-kien`, `video_url` on `video`.
+//
+// ADDED 2026-10-01 (ADR 0067 §1, §5; migration 0012), optional in the same way:
+//
+//	body_blocks   on the detail: the body as STRUCTURE (paragraph · heading · list · inline runs), built
+//	              here from the allow-list-sanitised HTML (internal/richtext). Sanitised AGAIN on this
+//	              read, so a row stored before the sanitiser existed leaves clean too. `body` stays the
+//	              plain text it always was, for app builds already on residents' phones.
+//	?type=banner  the home-screen banner strip, and ONLY there: the default list no longer carries banners.
+//	link_to       on a banner: an in-app path or an https URL, re-checked on the way out.
 
 import (
 	"context"
@@ -48,6 +57,7 @@ import (
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	"github.com/vihat/vigov/service-comms/internal/richtext"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
@@ -67,8 +77,13 @@ type NoiDungCongKhaiDoc interface {
 	DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNoiDung, categoryID string, yc page.Request) (page.Result[domain.NoiDungMiniApp], error)
 	CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error)
 
-	// PublishedCategoryIDs is the live categories holding ≥1 published item DIRECTLY (itemType "" = any).
+	// PublishedCategoryIDs is the live categories holding ≥1 published item DIRECTLY (itemType "" = any
+	// but banner).
 	PublishedCategoryIDs(ctx context.Context, itemType domain.LoaiNoiDung) ([]string, error)
+
+	// PublicBanners is the banner strip: published banners with a cover, display_order ASC NULLS LAST,
+	// at most limit+1 rows (the extra one says "there were more").
+	PublicBanners(ctx context.Context, limit int) ([]domain.NoiDungMiniApp, error)
 }
 
 // DepsCongKhai is everything the public routes may touch. Nothing else is reachable from them.
@@ -109,8 +124,9 @@ func newHandlerCongKhai(d DepsCongKhai) *HandlerCongKhai {
 // tinXaRa is one published item on the public wire.
 //
 // EVERY TEXT FIELD IS PLAIN TEXT (domain.VanBanThuanChoDan) — title and summary too, not only the body:
-// the staff screen accepts markup in any of them, and "no HTML reaches the citizen" is a property of the
-// response, not of one field.
+// the staff screen accepts markup in any of them. Formatting reaches residents ONLY as `body_blocks`
+// (ADR 0067 §1, which replaced the 27/09 "no HTML reaches the citizen" decision): structure, never
+// markup — "no field of this response is HTML" is a property of the response, not of one field.
 //
 // WHAT IS ABSENT IS THE CONTRACT: no `status` (it is always `dang-hien`), no author code, no portal id
 // (`source_ref`), no category id, no commune id or host, and:
@@ -175,6 +191,74 @@ type tinXaRa struct {
 	// uploaded cover or no public copy is recorded for it. On the list and the detail. The URL is
 	// immutable and cached a year (core/storage.PublicCacheControl).
 	ImageURL string `json:"image_url,omitempty"`
+
+	// LinkTo is a banner's tap target (ADR 0067 §5): an in-app path (`/…`) or an `https://` URL. ABSENT =
+	// the banner is not tappable. Only on `banner`; re-validated here (domain.NormalizeLinkTo) as the
+	// second wall under migration 0012's CHECK — an invalid stored value is dropped, not sent.
+	LinkTo string `json:"link_to,omitempty"`
+
+	// BodyBlocks is the body as structure, DETAIL ONLY (ADR 0067 §1 decision 3). ABSENT when the body has
+	// no text — the client then shows `body`. Never HTML: every `text` is plain text, every `href` https.
+	BodyBlocks []bodyBlockOut `json:"body_blocks,omitempty"`
+}
+
+// bodyBlockOut is one block of `body_blocks`.
+type bodyBlockOut struct {
+	// Kind is `paragraph`, `heading`, `bullet_list` or `ordered_list` — a closed list.
+	Kind string `json:"kind"`
+
+	// Level is 2 or 3 on a heading, absent otherwise.
+	Level int `json:"level,omitempty"`
+
+	// Runs is set on `paragraph` and `heading`.
+	Runs []inlineRunOut `json:"runs,omitempty"`
+
+	// Items is set on the two list kinds, one entry per list item.
+	Items []listItemOut `json:"items,omitempty"`
+}
+
+// listItemOut is one item of a list block.
+type listItemOut struct {
+	Runs []inlineRunOut `json:"runs"`
+}
+
+// inlineRunOut is a stretch of text with one formatting. "\n" inside `text` is a line break.
+type inlineRunOut struct {
+	Text   string `json:"text"`
+	Bold   bool   `json:"bold,omitempty"`
+	Italic bool   `json:"italic,omitempty"`
+
+	// Href is an https URL, present only on a link. The Mini App opens it outside the app after asking
+	// (owner, 01/10/2026).
+	Href string `json:"href,omitempty"`
+}
+
+// bodyBlocksOut sanitises the stored body AGAIN (legacy rows were stored as given, rule 7 forbids
+// rewriting them) and converts the blocks to the wire shape. nil when there is nothing to show.
+func bodyBlocksOut(stored string) []bodyBlockOut {
+	blocks := richtext.Blocks(richtext.Sanitize(stored))
+	if len(blocks) == 0 {
+		return nil
+	}
+	runs := func(rs []richtext.Run) []inlineRunOut {
+		out := make([]inlineRunOut, 0, len(rs))
+		for _, r := range rs {
+			out = append(out, inlineRunOut{Text: r.Text, Bold: r.Bold, Italic: r.Italic, Href: r.Href})
+		}
+		return out
+	}
+	out := make([]bodyBlockOut, 0, len(blocks))
+	for _, b := range blocks {
+		o := bodyBlockOut{Kind: string(b.Kind), Level: b.Level}
+		if len(b.Runs) > 0 {
+			o.Runs = runs(b.Runs)
+		}
+		for _, item := range b.Items {
+			o.Items = append(o.Items, listItemOut{Runs: runs(item)})
+		}
+		out = append(out, o)
+	}
+	return out
 }
 
 // coverIDs collects the cover file ids of the PUBLISHED items of a page — the only ones the public
@@ -224,9 +308,17 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 		// ONLY A PUBLISHED ITEM'S, a second wall under the store's predicate and coverIDs.
 		ra.ImageURL = images[n.CoverImageFileID]
 	}
+	if n.Loai == domain.LoaiBanner {
+		if u, err := domain.NormalizeLinkTo(n.LinkTo); err == nil {
+			// Dropped, not an error — the same reasoning as SourceURL above.
+			ra.LinkTo = u
+		}
+	}
 	if coThan {
+		// `body` EXACTLY AS BEFORE (ADR 0067 §1 decision 4): older app builds read it.
 		than := domain.VanBanThuanChoDan(n.NoiDung)
 		ra.Body = &than
+		ra.BodyBlocks = bodyBlocksOut(n.NoiDung)
 	}
 	return ra
 }
@@ -307,7 +399,8 @@ func (h *HandlerCongKhai) loi500(ctx context.Context, w http.ResponseWriter, vie
 //
 // OPTIONAL `type` FILTER: one of the six codes, the same values and the same 400 as the staff register's
 // filter. Validated BEFORE the platform is asked, like the cursor, so the 400/200 split says nothing about
-// which domains are communes. Absent or empty = every type.
+// which domains are communes. Absent or empty = every type EXCEPT `banner` (ADR 0067 §5 decision 5);
+// `type=banner` is the home banner strip instead (publicBannerStrip) — a different order, not paged.
 //
 // OPTIONAL `category` FILTER (user decision 2026-09-30, the chip row): an id from GET …/categories. Only
 // items filed under that category OR ANY LIVE DESCENDANT, ANDed with `type`. Its SHAPE is validated before
@@ -354,6 +447,10 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := tenant.Into(r.Context(), xa.ID)
+	if itemType == domain.LoaiBanner {
+		h.publicBannerStrip(ctx, w)
+		return
+	}
 	kq, err := h.d.NoiDung.DanhSachCongKhai(ctx, itemType, categoryID, yc)
 	if err != nil {
 		h.loi500(ctx, w, "tin của xã", err)
@@ -380,6 +477,49 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, false))
+	}
+	vietJSON(w, http.StatusOK, ra)
+}
+
+// publicBannerStrip answers GET /api/v1/commune-news?type=banner (ADR 0067 §5): the commune's home
+// banner strip, in display order.
+//
+// THE SAME page.Result SHAPE AS THE LIST, so one client type reads both — but NOT PAGED: the strip is
+// read whole, `has_more` is false and `next_cursor` absent; `cursor`, `limit` and `category` are not
+// applied (they were validated already, so a malformed one is still the list's 400). Past
+// commsstore.PublicBannerStripMax the first ones in order are returned and the overflow is logged.
+//
+// A BANNER IS SHOWN ONLY WITH A PICTURE: the store skips rows with no cover, and this skips any whose
+// cover has no published public copy — an empty slot on every resident's home screen is the failure.
+func (h *HandlerCongKhai) publicBannerStrip(ctx context.Context, w http.ResponseWriter) {
+	ra := page.Result[tinXaRa]{Items: []tinXaRa{}}
+	banners, err := h.d.NoiDung.PublicBanners(ctx, commsstore.PublicBannerStripMax)
+	if err != nil {
+		h.loi500(ctx, w, "dải banner của xã", err)
+		return
+	}
+	if len(banners) > commsstore.PublicBannerStripMax {
+		h.d.Log.WarnContext(ctx, "dải banner của xã: vượt trần, chỉ trả phần đầu theo thứ tự",
+			"xa", string(tenant.MustFrom(ctx)), "tran", commsstore.PublicBannerStripMax)
+		banners = banners[:commsstore.PublicBannerStripMax]
+	}
+	images, err := h.d.CoverImages.PublicImageURLs(ctx, coverIDs(banners))
+	if err != nil {
+		h.loi500(ctx, w, "dải banner của xã: ảnh bìa", err)
+		return
+	}
+	for _, n := range banners {
+		if !n.HienChoDan() || n.Loai != domain.LoaiBanner {
+			// The second wall, as on the list: should be impossible, loud if not.
+			h.d.Log.ErrorContext(ctx, "dải banner của xã: kho trả một mục không phải banner đã đăng — đã bỏ",
+				"xa", string(tenant.MustFrom(ctx)), "trang_thai", string(n.TrangThai), "loai", string(n.Loai))
+			continue
+		}
+		item := tinXaRaNgoai(n, nil, images, false)
+		if item.ImageURL == "" {
+			continue
+		}
+		ra.Items = append(ra.Items, item)
 	}
 	vietJSON(w, http.StatusOK, ra)
 }

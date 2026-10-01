@@ -26,6 +26,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -277,6 +278,115 @@ func checkTypeFields(loai LoaiNoiDung, startsAt, endsAt time.Time, place, videoU
 	return CheckEventWindow(startsAt, endsAt)
 }
 
+// --- banner fields (migration 0012, ADR 0067 §5) ------------------------------------------------
+
+// LinkToMaxRunes is migration 0012's `char_length(link_to) <= 500`. Characters, as the CHECK counts.
+const LinkToMaxRunes = 500
+
+var (
+	// ErrLinkToInvalid — `noi_dung_mini_app_link_to_valid`: an in-app path ('/' not followed by a second
+	// '/') or an https URL with a host; no whitespace, control character or backslash; at most 500
+	// characters. The value is never echoed.
+	ErrLinkToInvalid = errors.New(
+		"noi_dung_mini_app: `link_to` phải là đường trong app (bắt đầu bằng một dấu /) hoặc địa chỉ https://, tối đa 500 ký tự, không khoảng trắng")
+
+	// ErrDisplayOrderInvalid — `noi_dung_mini_app_display_order_non_negative`, plus the column's INT range.
+	ErrDisplayOrderInvalid = errors.New("noi_dung_mini_app: `display_order` phải là số nguyên không âm")
+
+	// ErrBannerFieldsOnlyForBanner — `noi_dung_mini_app_banner_fields_only_for_banner`. Refused, never
+	// dropped, when a VALUE is sent for another type: a tap target the author set is one they believe works.
+	ErrBannerFieldsOnlyForBanner = errors.New("noi_dung_mini_app: `link_to` và `display_order` chỉ dùng cho loại banner")
+
+	// ErrBannerCoverRequired — the trigger `noi_dung_mini_app_banner_cover_required`, asked first so the
+	// author reads a sentence instead of a 500: a banner is a picture (ADR 0067 §5 decision 1).
+	ErrBannerCoverRequired = errors.New("noi_dung_mini_app: banner phải có ảnh bìa — tải ảnh lên trước khi lưu, và không gỡ ảnh khỏi banner")
+)
+
+// displayOrderMax is the INT column's upper bound. Not a customer figure — the column's own range, so
+// an out-of-range JSON number is a 422 here rather than a driver error and a 500.
+const displayOrderMax = 1<<31 - 1
+
+// NormalizeLinkTo validates a banner's tap target with migration 0012's rule, re-checked with
+// url.Parse (the migration says the Go write path must: a regular expression is a floor, not a parser).
+// "" is valid and means "not tappable". An https URL is returned with the scheme lower-cased (0012 asks
+// for it); a path is returned as typed.
+func NormalizeLinkTo(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	if len([]rune(s)) > LinkToMaxRunes {
+		return "", ErrLinkToInvalid
+	}
+	for _, r := range s {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || r == '\\' {
+			return "", ErrLinkToInvalid
+		}
+	}
+	if s[0] == '/' {
+		// In-app path. `//host` is protocol-relative — it leaves the app — so a second '/' is refused.
+		if len(s) > 1 && s[1] == '/' {
+			return "", ErrLinkToInvalid
+		}
+		u, err := url.Parse(s)
+		if err != nil || u.Scheme != "" || u.Host != "" {
+			return "", ErrLinkToInvalid
+		}
+		return s, nil
+	}
+	const https = "https://"
+	if len(s) <= len(https) || !strings.EqualFold(s[:len(https)], https) {
+		return "", ErrLinkToInvalid
+	}
+	s = https + s[len(https):]
+	// The CHECK's host part: one or more characters that are not / ? # @ — `@` refused so a userinfo
+	// prefix cannot make `https://gov.vn@evil.example` read as a government link.
+	rest := s[len(https):]
+	end := strings.IndexAny(rest, "/?#")
+	if end < 0 {
+		end = len(rest)
+	}
+	host := rest[:end]
+	if host == "" || strings.Contains(host, "@") {
+		return "", ErrLinkToInvalid
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return "", ErrLinkToInvalid
+	}
+	return s, nil
+}
+
+// CheckDisplayOrder is `display_order >= 0` within the INT range. nil (NULL) is valid.
+func CheckDisplayOrder(n *int) error {
+	if n != nil && (*n < 0 || *n > displayOrderMax) {
+		return ErrDisplayOrderInvalid
+	}
+	return nil
+}
+
+// checkBannerFields is `..._banner_fields_only_for_banner` on one set of values.
+func checkBannerFields(loai LoaiNoiDung, linkTo string, displayOrder *int) error {
+	if loai != LoaiBanner && (linkTo != "" || displayOrder != nil) {
+		return ErrBannerFieldsOnlyForBanner
+	}
+	return nil
+}
+
+// CheckBannerCover is the cover trigger of migration 0012, asked of an act before it is written.
+// before is nil on a create. It refuses exactly the trigger's three cases — a banner born without a
+// cover, an item turned INTO a banner without one, a banner's cover removed — and lets through the
+// edit of a legacy banner that already had none (the trigger does too; the public strip skips it).
+func CheckBannerCover(before *NoiDungMiniApp, after NoiDungMiniApp) error {
+	if after.Loai != LoaiBanner || after.CoverImageFileID != "" {
+		return nil
+	}
+	if before == nil || before.Loai != LoaiBanner || before.CoverImageFileID != "" {
+		return ErrBannerCoverRequired
+	}
+	return nil
+}
+
 // ChuanHoaTieuDeNoiDung trims and validates an article title.
 //
 // IT CARRIES VIETNAMESE WITH DIACRITICS — it is a headline a resident reads — so nothing here
@@ -303,14 +413,11 @@ func ChuanHoaTieuDeNoiDung(tieuDe string) (string, error) {
 // NEWLINES, CARRIAGE RETURNS AND TABS ARE ALLOWED and every other control character is not. A
 // browser on Windows sends CRLF, and refusing it would reject an ordinary form submission.
 //
-// ⚠ IT DOES NOT SANITISE HTML, AND THAT LIMIT IS WRITTEN HERE RATHER THAN LEFT TO BE ASSUMED. §8
-// says `noi_dung` is HTML and §7 wants a rich-text editor, so the body is STORED AS GIVEN. There is
-// no HTML sanitiser in this repository, and writing one from scratch is how sanitisers get written
-// wrongly. What follows, stated so it is a known risk rather than a surprise: a member of staff with
-// `content.update` can put arbitrary markup — including script — into something every resident of
-// the commune opens. The permission is the only control today. The fix is a vetted sanitiser at the
-// point the Mini App renders it, or at this boundary, and it is a decision with an owner rather than
-// a line somebody adds here.
+// IT DOES NOT SANITISE HTML ITSELF — this package imports the standard library only. The body is
+// sanitised BEFORE it gets here, on every write path, by internal/richtext.Sanitize (ADR 0067 §1: the
+// allow-list p, br, strong, em, ul, ol, li, h2, h3, a[href https]); internal/app calls it ahead of
+// KiemTra, so the bound below is checked on what is actually stored. Rows written before 01/10/2026
+// were stored as given and are not rewritten (rule 7); the public read sanitises them again.
 func ChuanHoaVanBanDai(s string, tran int, quaDai error) (string, error) {
 	s = strings.TrimSpace(s)
 	if len([]rune(s)) > tran {
@@ -441,6 +548,11 @@ type DanhMucMiniApp struct {
 
 	ThuTu  int
 	TaoLuc time.Time
+
+	// Hidden is migration 0012's `hidden`: the category keeps its place in the staff tree and its items
+	// stay public, but residents are not offered it as a filter chip (owner, 01/10/2026). NOT a soft
+	// delete — staff keep filing under it.
+	Hidden bool
 }
 
 // NoiDungMiniApp is ONE item of content — the `ContentItem` entity of migration 0006.
@@ -460,7 +572,7 @@ type NoiDungMiniApp struct {
 
 	TieuDe  string
 	TomTat  string
-	NoiDung string // HTML, stored as given — see ChuanHoaVanBanDai for the sanitisation gap
+	NoiDung string // HTML, sanitised at write since ADR 0067 (internal/richtext); older rows as given
 
 	AnhDaiDienURL string
 
@@ -495,6 +607,12 @@ type NoiDungMiniApp struct {
 	// holding the UPLOADED cover (ADR 0047 §6 (1)). "" = NULL. Distinct from AnhDaiDienURL, which is a
 	// link to a file some other system serves and is never published by this service.
 	CoverImageFileID string
+
+	// LinkTo and DisplayOrder are migration 0012's banner columns (ADR 0067 §5), `banner` only. LinkTo
+	// "" = NULL = not tappable; otherwise an in-app path or an https URL (NormalizeLinkTo). DisplayOrder
+	// nil = NULL = after every ordered banner (the strip sorts NULLS LAST).
+	LinkTo       string
+	DisplayOrder *int
 
 	// Nguon, NguonURL, NguonIDNgoai and DaSuaTay are the provenance half of §8. They describe the
 	// ROW rather than the sync job, which is why they are here while the job is not — migration 0006
@@ -532,6 +650,9 @@ func (n NoiDungMiniApp) HienChoDan() bool { return n.TrangThai == TrangThaiDangH
 // asked of the MERGED row on an edit, because a PATCH naming only `event_ends_at` is valid or not
 // depending on the start already stored.
 func (n NoiDungMiniApp) CheckTypeFields() error {
+	if err := checkBannerFields(n.Loai, n.LinkTo, n.DisplayOrder); err != nil {
+		return err
+	}
 	return checkTypeFields(n.Loai, n.EventStartsAt, n.EventEndsAt, n.EventPlace, n.VideoURL)
 }
 
@@ -546,6 +667,10 @@ func (n NoiDungMiniApp) WithoutOtherTypeFields() NoiDungMiniApp {
 	}
 	if n.Loai != LoaiVideo {
 		n.VideoURL = ""
+	}
+	// Migration 0012: the banner's tap target and position go with the type (ADR 0067 §5).
+	if n.Loai != LoaiBanner {
+		n.LinkTo, n.DisplayOrder = "", nil
 	}
 	return n
 }
@@ -589,6 +714,10 @@ type YeuCauThemNoiDung struct {
 
 	// VideoURL — `video` only. "" = not given.
 	VideoURL string
+
+	// LinkTo, DisplayOrder — `banner` only (migration 0012). "" / nil = not given.
+	LinkTo       string
+	DisplayOrder *int
 
 	// CoverImageFileID — an uploaded, completed cover (`ready`) issued WITHOUT an article id; the new
 	// article takes the id that upload minted (migration 0011: the modal uploads before `Lưu`). "" = none.
@@ -642,7 +771,17 @@ func (y YeuCauThemNoiDung) KiemTra() (YeuCauThemNoiDung, error) {
 		return YeuCauThemNoiDung{}, err
 	}
 	ra.EventStartsAt, ra.EventEndsAt = y.EventStartsAt.UTC(), y.EventEndsAt.UTC() // zero stays zero
+	if ra.LinkTo, err = NormalizeLinkTo(y.LinkTo); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+	if err := CheckDisplayOrder(y.DisplayOrder); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+	ra.DisplayOrder = copyInt(y.DisplayOrder)
 	// On a create the type is known here, so the per-type CHECKs are answered before any transaction.
+	if err := checkBannerFields(LoaiNoiDung(ra.Loai), ra.LinkTo, ra.DisplayOrder); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
 	if err := checkTypeFields(LoaiNoiDung(ra.Loai), ra.EventStartsAt, ra.EventEndsAt,
 		ra.EventPlace, ra.VideoURL); err != nil {
 		return YeuCauThemNoiDung{}, err
@@ -685,6 +824,28 @@ type YeuCauSuaNoiDung struct {
 	// CoverImageFileID — nil = leave alone; "" = DETACH (the column goes NULL; the file row stays, rule
 	// 7); an id = attach that file, which must have been uploaded for THIS article and be `ready`.
 	CoverImageFileID *string
+
+	// LinkTo — nil = leave alone, "" = clear (not tappable). DisplayOrder — nil = leave alone, a value =
+	// set it. THERE IS NO "clear" FOR DisplayOrder ON AN EDIT: a JSON null cannot be told from an absent
+	// key through a pointer, and NULL only means "after every ordered banner", which a large number
+	// expresses as well. A type change away from `banner` clears both.
+	LinkTo       *string
+	DisplayOrder *int
+}
+
+// SetsBannerField reports whether the request gives a banner field a VALUE: such a request on an item
+// that will not be `banner` is refused, never silently dropped.
+func (y YeuCauSuaNoiDung) SetsBannerField() bool {
+	return (y.LinkTo != nil && *y.LinkTo != "") || y.DisplayOrder != nil
+}
+
+// copyInt keeps a request's pointer from aliasing the caller's variable.
+func copyInt(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }
 
 // SetsEventField reports whether the request gives an event field a VALUE (clearing one does not
@@ -774,6 +935,17 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 		v := y.EventEndsAt.UTC()
 		ra.EventEndsAt = &v
 	}
+	if y.LinkTo != nil {
+		v, err := NormalizeLinkTo(*y.LinkTo)
+		if err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		ra.LinkTo = &v
+	}
+	if err := CheckDisplayOrder(y.DisplayOrder); err != nil {
+		return YeuCauSuaNoiDung{}, err
+	}
+	ra.DisplayOrder = copyInt(y.DisplayOrder)
 	return ra, nil
 }
 
@@ -806,4 +978,66 @@ func (y YeuCauThemDanhMuc) KiemTra() (YeuCauThemDanhMuc, error) {
 		return YeuCauThemDanhMuc{}, fmt.Errorf("%w (tối đa %d ký tự)", ErrMaCanBoQuaDai, MaCanBoToiDa)
 	}
 	return ra, nil
+}
+
+// --- editing and retiring a category (ADR 0067 §3) ------------------------------------------------
+
+var (
+	// ErrCategoryCycle — the new parent is the category itself or one of its descendants. Migration
+	// 0006:195-200 stops only the one-node case; a cycle through two rows makes every tree walk of this
+	// module loop, so the write path walks the ancestors of the proposed parent first (0006:223-228).
+	ErrCategoryCycle = errors.New("danh_muc_mini_app: không đặt được danh mục cha là chính nó hoặc một danh mục con của nó")
+
+	// ErrSlugImmutable — the slug is the category's business code; an issued code never changes (rule
+	// 7, invariant 3, ADR 0067 §3 decision 1). Refused when SENT, even unchanged, so a client learns it
+	// is not editable rather than watching the field vanish.
+	ErrSlugImmutable = errors.New("danh_muc_mini_app: `slug` đã cấp thì không đổi được — sửa `name`, hoặc thêm danh mục mới")
+)
+
+// ContentCategoryUpdate is a PARTIAL edit of a category: nil = leave alone. ChaID "" = move to the root.
+// There is no slug field (ErrSlugImmutable).
+type ContentCategoryUpdate struct {
+	Ten    *string
+	ChaID  *string
+	ThuTu  *int
+	Hidden *bool
+}
+
+// KiemTra validates whatever the request mentioned.
+func (y ContentCategoryUpdate) KiemTra() (ContentCategoryUpdate, error) {
+	ra := ContentCategoryUpdate{Hidden: y.Hidden}
+	if y.Ten != nil {
+		v, err := ChuanHoaTenDanhMuc(*y.Ten)
+		if err != nil {
+			return ContentCategoryUpdate{}, err
+		}
+		ra.Ten = &v
+	}
+	if y.ThuTu != nil {
+		if err := KiemTraThuTuDanhMuc(*y.ThuTu); err != nil {
+			return ContentCategoryUpdate{}, err
+		}
+		ra.ThuTu = copyInt(y.ThuTu)
+	}
+	if y.ChaID != nil {
+		v := strings.TrimSpace(*y.ChaID)
+		if len(v) > MaCanBoToiDa {
+			return ContentCategoryUpdate{}, fmt.Errorf("%w (tối đa %d ký tự)", ErrMaCanBoQuaDai, MaCanBoToiDa)
+		}
+		ra.ChaID = &v
+	}
+	return ra, nil
+}
+
+// ReparentCreatesCycle reports whether making `parentChain[0]` the parent of categoryID closes a loop.
+// parentChain is the proposed parent followed by its ancestors up to a root — soft-deleted rows
+// included, because a deleted row's `cha_id` is still an edge the database holds. The category itself
+// appearing anywhere in that chain (the parent included) is a cycle.
+func ReparentCreatesCycle(categoryID string, parentChain []string) bool {
+	for _, id := range parentChain {
+		if id == categoryID {
+			return true
+		}
+	}
+	return false
 }

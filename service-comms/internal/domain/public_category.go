@@ -47,8 +47,15 @@ func ValidPublicCategoryID(s string) bool {
 // show a category the commune never placed at the top, and the list filter (store.DanhSachCongKhai)
 // walks the same live edges, so what is reachable here is exactly what a chip can select.
 //
-// CYCLES ARE NOT POSSIBLE TODAY (the only write is a create, migration 0006:223-228) but this walk
-// refuses to loop anyway: a node met twice on one walk up is treated as not rooted.
+// A HIDDEN CATEGORY (migration 0012) IS NEVER A CHIP, AND NEITHER IS ANYTHING UNDER IT. Hiding takes
+// away the filter chip only (owner, 01/10/2026) — its items still list under "Tất cả", and they still
+// count toward a VISIBLE ancestor's chip, because choosing that ancestor lists them (the list filter
+// walks the subtree regardless of `hidden`). A descendant of a hidden category is not promoted either:
+// every chip's parent_id must be another chip in the same answer, and promoting it to the top row would
+// show a category the commune never placed there.
+//
+// CYCLES are refused at the write (app.DanhMucNoiDungMiniApp.Update walks the ancestors); this walk still
+// refuses to loop: a node met twice on one walk up is treated as not rooted.
 func CategoriesWithPublishedItems(live []DanhMucMiniApp, withItems []string) []DanhMucMiniApp {
 	byID := make(map[string]DanhMucMiniApp, len(live))
 	for _, c := range live {
@@ -85,15 +92,29 @@ func CategoriesWithPublishedItems(live []DanhMucMiniApp, withItems []string) []D
 		return ok
 	}
 
+	// underHidden reports whether id or any ancestor is hidden. Only asked of ROOTED ids, so the walk
+	// ends at a root; the bound guards it anyway.
+	underHidden := func(id string) bool {
+		for cur, steps := id, 0; cur != "" && steps <= len(live); cur, steps = byID[cur].ChaID, steps+1 {
+			if byID[cur].Hidden {
+				return true
+			}
+		}
+		return false
+	}
+
 	visible := make(map[string]bool, len(withItems))
 	for _, id := range withItems {
 		if !isRooted(id) {
 			continue
 		}
 		// Mark the category and every ancestor: choosing a parent includes its descendants' items,
-		// so a parent with no item of its own is still a chip when a child has one.
+		// so a parent with no item of its own is still a chip when a child has one. Hidden nodes, and
+		// nodes under one, are walked through but never marked.
 		for cur := id; cur != "" && !visible[cur]; cur = byID[cur].ChaID {
-			visible[cur] = true
+			if !underHidden(cur) {
+				visible[cur] = true
+			}
 		}
 	}
 

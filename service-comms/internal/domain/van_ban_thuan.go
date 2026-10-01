@@ -7,13 +7,18 @@ import (
 )
 
 // VanBanThuanChoDan turns a stored article field into PLAIN TEXT for the public Mini App read
-// (GET /api/v1/commune-news, owner decision 2026-09-27: "no HTML ever reaches the citizen").
+// (GET /api/v1/commune-news): the title, the summary, the event place, category names, and the `body`
+// field older app builds read.
 //
-// WHY THE SERVER AND NOT THE MINI APP. The body is stored AS GIVEN (see ChuanHoaVanBanDai — §8 says
-// HTML, and a member of staff with content.update can put script into it). A client asked to "render it
-// safely" is one client update away from innerHTML; a server that never sends markup cannot be undone
-// by any client. This is a STRIPPER, not a sanitiser: nothing it returns is meant to be interpreted as
-// HTML at all, so it does not have to decide which markup is safe — it keeps none.
+// THE 27/09/2026 DECISION THIS COMMENT USED TO STATE ("no HTML ever reaches the citizen") WAS REPLACED
+// ON 01/10/2026 BY ADR 0067 §1: the body now reaches residents WITH FORMATTING — but as STRUCTURE
+// (`body_blocks`, built by internal/richtext from the allow-list-sanitised HTML), never as markup. What
+// still holds from 27/09: no field of the public answer is HTML, and no client is ever asked to render
+// markup safely — a client asked that is one update away from innerHTML. This function keeps serving
+// every plain-text field, `body` included (ADR 0067 §1 decision 4), unchanged.
+//
+// This is a STRIPPER, not a sanitiser: nothing it returns is meant to be interpreted as HTML at all, so
+// it does not have to decide which markup is safe — it keeps none. The sanitiser is internal/richtext.
 //
 // WHAT IT DOES, in order:
 //

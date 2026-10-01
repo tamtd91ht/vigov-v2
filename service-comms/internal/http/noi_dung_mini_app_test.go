@@ -146,6 +146,11 @@ type ghiDanhMucNDGia struct {
 	ycCuoi domain.YeuCauThemDanhMuc
 	ra     domain.DanhMucMiniApp
 	loi    error
+
+	// The edit and delete (ADR 0067 §3).
+	updates, deletes   int
+	lastID, lastReason string
+	lastUpdate         domain.ContentCategoryUpdate
 }
 
 func (g *ghiDanhMucNDGia) Them(ctx context.Context, yc domain.YeuCauThemDanhMuc, nguoi audit.Actor) (
@@ -158,6 +163,24 @@ func (g *ghiDanhMucNDGia) Them(ctx context.Context, yc domain.YeuCauThemDanhMuc,
 		return domain.DanhMucMiniApp{}, g.loi
 	}
 	return g.ra, nil
+}
+
+func (g *ghiDanhMucNDGia) Update(ctx context.Context, id string, yc domain.ContentCategoryUpdate,
+	actor audit.Actor) (domain.DanhMucMiniApp, error) {
+	g.updates++
+	g.xa = tenant.MustFrom(ctx)
+	g.lastID, g.lastUpdate, g.nguoi = id, yc, actor
+	if g.loi != nil {
+		return domain.DanhMucMiniApp{}, g.loi
+	}
+	return g.ra, nil
+}
+
+func (g *ghiDanhMucNDGia) Delete(ctx context.Context, id, reason string, actor audit.Actor) error {
+	g.deletes++
+	g.xa = tenant.MustFrom(ctx)
+	g.lastID, g.lastReason, g.nguoi = id, reason, actor
+	return g.loi
 }
 
 // --- harness -------------------------------------------------------------------------------
@@ -248,7 +271,7 @@ func (m *mayChuND) goi(t *testing.T, method, host, duong, than string, p *authz.
 	r := httptest.NewRequest(method, "https://"+host+duong, body)
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
-	if method == http.MethodPost || method == http.MethodPatch {
+	if method == http.MethodPost || method == http.MethodPatch || method == http.MethodDelete {
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set(idem.Header, "01JNOIDUNGKEY0000000000000")
 	}
@@ -316,6 +339,11 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.soDM.goi > 0 }},
 		{"thêm danh mục", http.MethodPost, duongDanhMucND, sua, doc, thanThemDanhMucHopLe, http.StatusCreated,
 			func(m *mayChuND) bool { return m.ghiDM.goi > 0 }},
+		// ADR 0067 §3: the edit and the soft delete, `content.update` like the create.
+		{"sửa danh mục", http.MethodPatch, duongDanhMucND + "/dm-001", sua, doc, `{"name":"Y tế","hidden":true}`,
+			http.StatusOK, func(m *mayChuND) bool { return m.ghiDM.updates > 0 }},
+		{"xoá danh mục", http.MethodDelete, duongDanhMucND + "/dm-001", sua, doc, `{"reason":"Gộp danh mục"}`,
+			http.StatusNoContent, func(m *mayChuND) bool { return m.ghiDM.deletes > 0 }},
 		// The cover upload (content_cover.go): `content.update` on both, `content.read` is the wrong key.
 		{"xin tải ảnh bìa", http.MethodPost, pathCoverImages, sua, doc, bodyCoverUploadOK, http.StatusCreated,
 			func(m *mayChuND) bool { return m.covers.requests > 0 }},

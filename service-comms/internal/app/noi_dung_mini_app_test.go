@@ -69,6 +69,12 @@ type khoNDGia struct {
 	// already run.
 	loiSau string
 	daNo   bool
+
+	// ADR 0067 §3 — what the category edit / delete reads find. category is the locked row (nil = none);
+	// ancestors is what the recursive walk returns; liveChildren / liveItems answer the two refusal counts.
+	category                *domain.DanhMucMiniApp
+	ancestors               []string
+	liveChildren, liveItems int64
 }
 
 func (k *khoNDGia) Connect(context.Context) (driver.Conn, error) { return &connNDGia{k: k}, nil }
@@ -117,6 +123,28 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 	c.k.lenh = append(c.k.lenh, lenhGhi{sql: q, args: gt})
 
 	switch {
+	case strings.Contains(q, "count(*) FROM noi_dung_mini_app"):
+		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.liveItems}}}, nil
+	case strings.Contains(q, "count(*)") && strings.Contains(q, "cha_id = $2"):
+		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.liveChildren}}}, nil
+	case strings.Contains(q, "WITH RECURSIVE up"):
+		hang := make([][]driver.Value, 0, len(c.k.ancestors))
+		for _, id := range c.k.ancestors {
+			hang = append(hang, []driver.Value{id})
+		}
+		return &rowsNDGia{cot: []string{"id"}, hang: hang}, nil
+	case strings.Contains(q, "FROM danh_muc_mini_app") && strings.Contains(q, "FOR UPDATE"):
+		cot := []string{"id", "ten", "slug", "cha_id", "thu_tu", "tao_luc", "hidden"}
+		if c.k.category == nil {
+			return &rowsNDGia{cot: cot}, nil
+		}
+		dm := *c.k.category
+		var cha driver.Value
+		if dm.ChaID != "" {
+			cha = dm.ChaID
+		}
+		return &rowsNDGia{cot: cot, hang: [][]driver.Value{{dm.ID, dm.Ten, dm.Slug, cha,
+			int64(dm.ThuTu), lucNDPinned, dm.Hidden}}}, nil
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "slug = $2"):
 		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.demSlug}}}, nil
 	case strings.Contains(q, "count(*)"):
@@ -144,7 +172,7 @@ func cotChiTietND() []string {
 		"ngay_dang", "luot_xem", "trang_thai", "nguon", "nguon_url", "nguon_id_ngoai",
 		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
 		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url",
-		"cover_image_file_id", "noi_dung"}
+		"cover_image_file_id", "link_to", "display_order", "noi_dung"}
 }
 
 func hangTu(n domain.NoiDungMiniApp) []driver.Value {
@@ -166,8 +194,16 @@ func hangTu(n domain.NoiDungMiniApp) []driver.Value {
 		rong(n.NguonURL), rong(n.NguonIDNgoai), n.DaSuaTay, n.NguoiTaoMa,
 		n.TaoLuc, n.CapNhatLuc,
 		instant(n.PublishedAt), instant(n.EventStartsAt), instant(n.EventEndsAt),
-		rong(n.EventPlace), rong(n.VideoURL), rong(n.CoverImageFileID), rong(n.NoiDung),
+		rong(n.EventPlace), rong(n.VideoURL), rong(n.CoverImageFileID),
+		rong(n.LinkTo), order(n.DisplayOrder), rong(n.NoiDung),
 	}
+}
+
+func order(p *int) driver.Value {
+	if p == nil {
+		return nil
+	}
+	return int64(*p)
 }
 
 type rowsNDGia struct {
@@ -307,8 +343,8 @@ func TestThemNoiDungQuyetDinhTrangThaiNguonVaNguoiTaoTaiDay(t *testing.T) {
 	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12–$17 cột của migration 0011 ($17 ảnh bìa).
 	// `nguon` là hằng trong câu lệnh.
 	args := l[0].args
-	if len(args) != 17 {
-		t.Fatalf("số tham số = %d, muốn 17", len(args))
+	if len(args) != 19 { // $18 link_to, $19 display_order (migration 0012)
+		t.Fatalf("số tham số = %d, muốn 19", len(args))
 	}
 	if args[16] != nil {
 		t.Errorf("không có ảnh bìa mà cover_image_file_id = %v, muốn NULL", args[16])
@@ -611,8 +647,8 @@ func updateArgs(t *testing.T, k *khoNDGia) []driver.Value {
 	if len(stmts) != 1 {
 		t.Fatalf("số câu cập nhật = %d, muốn 1", len(stmts))
 	}
-	if len(stmts[0].args) != 16 { // $16 cover_image_file_id
-		t.Fatalf("số tham số cập nhật = %d, muốn 16", len(stmts[0].args))
+	if len(stmts[0].args) != 18 { // $16 cover_image_file_id, $17 link_to, $18 display_order
+		t.Fatalf("số tham số cập nhật = %d, muốn 18", len(stmts[0].args))
 	}
 	return stmts[0].args
 }

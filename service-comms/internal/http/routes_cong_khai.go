@@ -50,6 +50,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// 200 is one page. An EMPTY page for a commune that published nothing AND for a domain no active
 	// commune holds — identical bytes. Also empty for a well-formed `category` naming nothing here.
+	// Without `type` the page carries every type EXCEPT `banner`; `type=banner` answers the home banner
+	// strip instead — published banners with a published cover, `display_order` ascending (unordered
+	// last), whole (not paged), each with `image_url`, `title` (the alt text) and an optional `link_to`
+	// (ADR 0067 §5).
 	//
 	// 400 is `host` missing, repeated or malformed (the platform is not asked), a `type` outside the six,
 	// a malformed `category`, or a bad `limit`/`cursor`.
@@ -96,9 +100,11 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 		authz.Public("hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần")(
 			http.HandlerFunc(h.PublicNewsCategories)))
 
-	// ONE published item, body included, as plain text.
+	// ONE published item, body included: `body` as plain text (older app builds) and `body_blocks` as
+	// structure — paragraphs, headings, lists, bold/italic/https-link runs — built here from the body
+	// sanitised AGAIN on this read (ADR 0067 §1). No field is ever HTML.
 	//
-	// @summary  Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404
+	// @summary  Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404
 	// @screen   11-noi-dung-mini-app §9
 	// @consumer citizen-app
 	//

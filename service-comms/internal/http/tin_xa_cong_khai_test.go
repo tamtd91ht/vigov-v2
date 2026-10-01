@@ -79,6 +79,9 @@ type ckNoiDung struct {
 	// from `tree` — so "parent includes children" and "another commune's id is empty" are visible here.
 	lastCategory string
 	tree         *ckDanhMuc
+
+	// bannerLimit is the limit the handler passed on the last banner-strip read.
+	bannerLimit int
 }
 
 // subtree is the fake's publicCategorySubtree: ids reachable from root through the commune's live tree.
@@ -118,7 +121,9 @@ func (k *ckNoiDung) DanhSachCongKhai(ctx context.Context, itemType domain.LoaiNo
 	}
 	var items []domain.NoiDungMiniApp
 	for _, n := range k.theoXa[xa] {
-		if (itemType == "" || n.Loai == itemType) && (in == nil || in[n.DanhMucID]) {
+		// The store's type predicate: "" = every type but banner (ADR 0067 §5 decision 5).
+		typeOK := n.Loai == itemType || (itemType == "" && n.Loai != domain.LoaiBanner)
+		if typeOK && (in == nil || in[n.DanhMucID]) {
 			items = append(items, n)
 		}
 	}
@@ -161,12 +166,48 @@ func (k *ckNoiDung) PublishedCategoryIDs(ctx context.Context, itemType domain.Lo
 	var ids []string
 	for _, n := range k.theoXa[xa] {
 		if n.TrangThai == domain.TrangThaiDangHien && live[n.DanhMucID] && !seen[n.DanhMucID] &&
-			(itemType == "" || n.Loai == itemType) {
+			(n.Loai == itemType || (itemType == "" && n.Loai != domain.LoaiBanner)) {
 			seen[n.DanhMucID] = true
 			ids = append(ids, n.DanhMucID)
 		}
 	}
 	return ids, nil
+}
+
+// PublicBanners returns the commune's `banner` rows RAW — every state, with or without a cover — in the
+// STORE's order (display_order ASC NULLS LAST, id). The state and cover predicates are the store's
+// (proven in internal/store); the handler's own walls — published only, a published picture only — are
+// what the tests over this fake prove.
+func (k *ckNoiDung) PublicBanners(ctx context.Context, limit int) ([]domain.NoiDungMiniApp, error) {
+	k.goi++
+	k.bannerLimit = limit
+	if k.loi != nil {
+		return nil, k.loi
+	}
+	var out []domain.NoiDungMiniApp
+	for _, n := range k.theoXa[tenant.MustFrom(ctx)] {
+		if n.Loai == domain.LoaiBanner {
+			out = append(out, n)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].DisplayOrder, out[j].DisplayOrder
+		switch {
+		case a == nil && b == nil:
+			return out[i].ID < out[j].ID
+		case a == nil:
+			return false
+		case b == nil:
+			return true
+		case *a != *b:
+			return *a < *b
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > limit+1 {
+		out = out[:limit+1]
+	}
+	return out, nil
 }
 
 type ckDanhMuc struct {
@@ -366,8 +407,23 @@ func TestMotTinXaToanVanLaVanBanThuan(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	if got := strings.Join(khoa, ","); got != "body,category_name,id,published_on,source,summary,title,type" {
+	if got := strings.Join(khoa, ","); got != "body,body_blocks,category_name,id,published_on,source,summary,title,type" {
 		t.Fatalf("trường của chi tiết = %s", got)
+	}
+	// ADR 0067 §1: the same legacy (unsanitised) row as structure — sanitised on THIS read, the script,
+	// the image and the entity-encoded markup gone (as in `body`), the two paragraphs kept.
+	// Re-encoded WITHOUT HTML escaping, so the comparison reads the text a client reads.
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(ra["body_blocks"]); err != nil {
+		t.Fatalf("mã hoá body_blocks: %v", err)
+	}
+	blocks := strings.TrimSpace(buf.String())
+	want := `[{"kind":"paragraph","runs":[{"text":"Lịch tiêm chủng"}]},` +
+		`{"kind":"paragraph","runs":[{"text":"Bà con & các cháu"}]}]`
+	if string(blocks) != want {
+		t.Fatalf("body_blocks =\n%s\nmuốn\n%s", blocks, want)
 	}
 }
 
