@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: fa7b8377
-expires: 2026-12-30
+derived_from_commit: cca3624b
+expires: 2026-12-31
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-01** · hết hạn **2026-12-30**.
+Sinh ngày **2026-10-02** · hết hạn **2026-12-31**.
 
 ## 1 · Theo chương đặc tả
 
@@ -39,7 +39,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 17 | 11/12 +5 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 21 | 12/18 +3 ngoài web | ✓ |
+| **11** Quản trị nội dung Mini App | 21 | 18/18 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 7 | 5/6 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
@@ -109,18 +109,18 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 30 | 16 | 3 | 0 |
-| `core` | 26 | 1 | 1 | 1 |
-| `deploy` | 17 | 9 | 1 | 0 |
+| `citizen-app` | 32 | 16 | 3 | 0 |
+| `core` | 27 | 1 | 1 | 1 |
+| `deploy` | 18 | 9 | 1 | 0 |
 | `platform-admin` | 4 | 0 | 1 | 0 |
 | `proto` | 14 | 0 | 0 | 0 |
-| `service-comms` | 17 | 8 | 2 | 4 |
+| `service-comms` | 18 | 8 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 19 | 4 | 0 | 0 |
 | `service-identity` | 35 | 11 | 2 | 1 |
-| `service-petitions` | 34 | 14 | 4 | 0 |
-| `service-platform` | 10 | 6 | 9 | 1 |
+| `service-petitions` | 35 | 14 | 4 | 0 |
+| `service-platform` | 11 | 6 | 9 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 19 | 0 | 0 | 0 |
-| `web-admin` | 23 | 15 | 3 | 1 |
+| `web-admin` | 25 | 15 | 3 | 1 |
 

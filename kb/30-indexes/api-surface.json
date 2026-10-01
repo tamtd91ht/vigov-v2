@@ -1005,12 +1005,13 @@
       "summary": "Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ",
       "screen": "11-noi-dung-mini-app §9",
       "permission_kind": "public",
-      "permission_reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần",
+      "permission_reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
       "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "page.Result_comms.tinXaRa",
         "400": "httpx.Error",
+        "429": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
@@ -1025,12 +1026,13 @@
       "summary": "Danh mục tin của xã có ít nhất một tin đã đăng (tự nó hoặc danh mục con), theo tên miền của xã — cho hàng chip lọc hai tầng trên Zalo Mini App",
       "screen": "11-noi-dung-mini-app §9",
       "permission_kind": "public",
-      "permission_reason": "hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần",
+      "permission_reason": "hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
       "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "comms.publicCategoriesOut",
         "400": "httpx.Error",
+        "429": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
@@ -1045,13 +1047,14 @@
       "summary": "Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404",
       "screen": "11-noi-dung-mini-app §9",
       "permission_kind": "public",
-      "permission_reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404",
+      "permission_reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
       "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "comms.tinXaRa",
         "400": "httpx.Error",
         "404": "httpx.Error",
+        "429": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
@@ -3319,7 +3322,7 @@
       "summary": "Cây chuyên mục của Cổng TTĐT, hỏi trực tiếp Cổng lúc mở cấu hình, kèm lựa chọn và ánh xạ loại đã lưu của xã",
       "screen": "11-noi-dung-mini-app §3",
       "permission_kind": "permission",
-      "permission": "content.read",
+      "permission": "content.update",
       "idempotency": "",
       "reply_schemas": {
         "200": "comms.portalCategoryTreeOut",

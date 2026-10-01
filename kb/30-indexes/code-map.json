@@ -144,7 +144,7 @@
     },
     "app.CategoryTree": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:263"
+      "at": "service-comms/internal/app/portal_sync_admin.go:282"
     },
     "app.CauPhienCongDan": {
       "kind": "type",
@@ -1064,11 +1064,11 @@
     },
     "app.NewPortalSyncAdmin": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:107"
+      "at": "service-comms/internal/app/portal_sync_admin.go:109"
     },
     "app.NewPortalSyncRunner": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_runner.go:176"
+      "at": "service-comms/internal/app/portal_sync_runner.go:222"
     },
     "app.NewRatePetition": {
       "kind": "func",
@@ -1344,47 +1344,47 @@
     },
     "app.PortalCallError": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:59"
+      "at": "service-comms/internal/app/portal_sync_admin.go:60"
     },
     "app.PortalCategoryNode": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:80"
+      "at": "service-comms/internal/app/portal_sync_admin.go:81"
     },
     "app.PortalCategoryTree": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:91"
+      "at": "service-comms/internal/app/portal_sync_admin.go:92"
     },
     "app.PortalClient": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:112"
+      "at": "service-comms/internal/app/portal_sync_runner.go:150"
     },
     "app.PortalCommuneRegistry": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:127"
+      "at": "service-comms/internal/app/portal_sync_runner.go:166"
     },
     "app.PortalRunLocks": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:119"
+      "at": "service-comms/internal/app/portal_sync_runner.go:158"
     },
     "app.PortalSyncAdmin": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:97"
+      "at": "service-comms/internal/app/portal_sync_admin.go:98"
     },
     "app.PortalSyncRepo": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:90"
+      "at": "service-comms/internal/app/portal_sync_runner.go:127"
     },
     "app.PortalSyncRunner": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:156"
+      "at": "service-comms/internal/app/portal_sync_runner.go:196"
     },
     "app.PortalSyncRunnerDeps": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_runner.go:143"
+      "at": "service-comms/internal/app/portal_sync_runner.go:183"
     },
     "app.PortalSyncSettingsView": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:65"
+      "at": "service-comms/internal/app/portal_sync_admin.go:66"
     },
     "app.Preview": {
       "kind": "func",
@@ -1560,7 +1560,7 @@
     },
     "app.Runs": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:382"
+      "at": "service-comms/internal/app/portal_sync_admin.go:417"
     },
     "app.SLA": {
       "kind": "type",
@@ -1572,7 +1572,7 @@
     },
     "app.SaveCategories": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:304"
+      "at": "service-comms/internal/app/portal_sync_admin.go:326"
     },
     "app.SaveMailSettingsRequest": {
       "kind": "type",
@@ -1580,7 +1580,7 @@
     },
     "app.SavePortalSyncSettingsRequest": {
       "kind": "type",
-      "at": "service-comms/internal/app/portal_sync_admin.go:74"
+      "at": "service-comms/internal/app/portal_sync_admin.go:75"
     },
     "app.SaveSetting": {
       "kind": "func",
@@ -1588,7 +1588,7 @@
     },
     "app.SaveSettings": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:130"
+      "at": "service-comms/internal/app/portal_sync_admin.go:140"
     },
     "app.SecretOpener": {
       "kind": "type",
@@ -1624,7 +1624,7 @@
     },
     "app.Settings": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:114"
+      "at": "service-comms/internal/app/portal_sync_admin.go:121"
     },
     "app.SignIn": {
       "kind": "func",
@@ -1676,11 +1676,11 @@
     },
     "app.StartManual": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_runner.go:309"
+      "at": "service-comms/internal/app/portal_sync_runner.go:443"
     },
     "app.StartRun": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:391"
+      "at": "service-comms/internal/app/portal_sync_admin.go:426"
     },
     "app.String": {
       "kind": "func",
@@ -1908,7 +1908,7 @@
     },
     "app.Wait": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_runner.go:219"
+      "at": "service-comms/internal/app/portal_sync_runner.go:336"
     },
     "app.WithAudioFiles": {
       "kind": "func",
@@ -2556,7 +2556,7 @@
     },
     "crosstenant.CommuneLockKey": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/portal_sync.go:83"
+      "at": "service-comms/internal/store/crosstenant/portal_sync.go:87"
     },
     "crosstenant.CommunesWithRecords": {
       "kind": "func",
@@ -2576,7 +2576,7 @@
     },
     "crosstenant.DueCommunes": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/portal_sync.go:48"
+      "at": "service-comms/internal/store/crosstenant/portal_sync.go:52"
     },
     "crosstenant.GhepPhienStore": {
       "kind": "type",
@@ -2632,7 +2632,7 @@
     },
     "crosstenant.SchedulerLockKey": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/portal_sync.go:82"
+      "at": "service-comms/internal/store/crosstenant/portal_sync.go:86"
     },
     "crosstenant.TaiKhoanZalo": {
       "kind": "type",
@@ -2660,7 +2660,7 @@
     },
     "crosstenant.TryLockCommune": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/portal_sync.go:93"
+      "at": "service-comms/internal/store/crosstenant/portal_sync.go:97"
     },
     "crosstenant.TryLockJobs": {
       "kind": "func",
@@ -2668,7 +2668,7 @@
     },
     "crosstenant.TryLockScheduler": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/portal_sync.go:87"
+      "at": "service-comms/internal/store/crosstenant/portal_sync.go:91"
     },
     "crosstenant.XaCuaCongDanTrongPhien": {
       "kind": "func",
@@ -2800,7 +2800,7 @@
     },
     "domain.AttachCandidate": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:198"
+      "at": "service-petitions/internal/domain/stored_file.go:202"
     },
     "domain.Attachable": {
       "kind": "func",
@@ -2972,11 +2972,11 @@
     },
     "domain.CheckAttachable": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/stored_file.go:207"
+      "at": "service-petitions/internal/domain/stored_file.go:211"
     },
     "domain.CheckAttachmentList": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/stored_file.go:186"
+      "at": "service-petitions/internal/domain/stored_file.go:190"
     },
     "domain.CheckAudioDuration": {
       "kind": "func",
@@ -2988,7 +2988,7 @@
     },
     "domain.CheckBannerCover": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:379"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:389"
     },
     "domain.CheckBulkPublication": {
       "kind": "func",
@@ -3000,11 +3000,11 @@
     },
     "domain.CheckDisplayOrder": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:360"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:370"
     },
     "domain.CheckEventWindow": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:256"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:266"
     },
     "domain.CheckMayChangeStatus": {
       "kind": "func",
@@ -3017,6 +3017,10 @@
     "domain.CheckOptionsKept": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_field_schema.go:222"
+    },
+    "domain.CheckPortalSelectedCount": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/portal_sync.go:167"
     },
     "domain.CheckPublicationRequest": {
       "kind": "func",
@@ -3056,7 +3060,7 @@
     },
     "domain.CheckTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:658"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:673"
     },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
@@ -3260,7 +3264,7 @@
     },
     "domain.ChuanHoaSlugDanhMuc": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:489"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:499"
     },
     "domain.ChuanHoaSoChungTu": {
       "kind": "func",
@@ -3292,7 +3296,7 @@
     },
     "domain.ChuanHoaTenDanhMuc": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:461"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:471"
     },
     "domain.ChuanHoaTenDuAn": {
       "kind": "func",
@@ -3320,7 +3324,7 @@
     },
     "domain.ChuanHoaTieuDeNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:394"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:404"
     },
     "domain.ChuanHoaTuKhoaTimCanBo": {
       "kind": "func",
@@ -3332,11 +3336,11 @@
     },
     "domain.ChuanHoaURL": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:436"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:446"
     },
     "domain.ChuanHoaVanBanDai": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:420"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:430"
     },
     "domain.ChungTuGiaiNgan": {
       "kind": "type",
@@ -3378,9 +3382,13 @@
       "kind": "type",
       "at": "service-petitions/internal/domain/summary_metrics.go:140"
     },
+    "domain.Clamped": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/portal_sync.go:154"
+    },
     "domain.CleanAttachmentName": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/stored_file.go:171"
+      "at": "service-petitions/internal/domain/stored_file.go:175"
     },
     "domain.CleanCoverFileName": {
       "kind": "func",
@@ -3396,7 +3404,7 @@
     },
     "domain.CoAnh": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:645"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:660"
     },
     "domain.CoCon": {
       "kind": "func",
@@ -3444,7 +3452,7 @@
     },
     "domain.ContentCategoryUpdate": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1046"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1061"
     },
     "domain.CotNganSach": {
       "kind": "type",
@@ -3488,7 +3496,7 @@
     },
     "domain.DanhMucMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:533"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:543"
     },
     "domain.DauVaoChonXa": {
       "kind": "type",
@@ -3508,7 +3516,7 @@
     },
     "domain.DefaultPortalSyncSettings": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:103"
+      "at": "service-comms/internal/domain/portal_sync.go:114"
     },
     "domain.DeliveryOutcome": {
       "kind": "type",
@@ -3804,7 +3812,7 @@
     },
     "domain.HienChoDan": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:653"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:668"
     },
     "domain.HienThiMot": {
       "kind": "func",
@@ -3876,7 +3884,7 @@
     },
     "domain.IsPortalTargetKind": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:72"
+      "at": "service-comms/internal/domain/portal_sync.go:83"
     },
     "domain.IsRatingInputError": {
       "kind": "func",
@@ -4452,7 +4460,7 @@
     },
     "domain.MayDownload": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/stored_file.go:224"
+      "at": "service-petitions/internal/domain/stored_file.go:228"
     },
     "domain.MergePetitionFields": {
       "kind": "func",
@@ -4460,7 +4468,7 @@
     },
     "domain.MergePortalSyncSettings": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:140"
+      "at": "service-comms/internal/domain/portal_sync.go:177"
     },
     "domain.MessageOverride": {
       "kind": "type",
@@ -4520,7 +4528,7 @@
     },
     "domain.NguonNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:83"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:93"
     },
     "domain.NguonVon": {
       "kind": "type",
@@ -4580,7 +4588,7 @@
     },
     "domain.NoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:563"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:573"
     },
     "domain.NormaliseAdjustmentReason": {
       "kind": "func",
@@ -4600,7 +4608,7 @@
     },
     "domain.NormalizeEventPlace": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:217"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:227"
     },
     "domain.NormalizeFieldCode": {
       "kind": "func",
@@ -4612,7 +4620,7 @@
     },
     "domain.NormalizeLinkTo": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:312"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:322"
     },
     "domain.NormalizeMailAddress": {
       "kind": "func",
@@ -4640,7 +4648,7 @@
     },
     "domain.NormalizePortalSelection": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:244"
+      "at": "service-comms/internal/domain/portal_sync.go:281"
     },
     "domain.NormalizeResidentialUnitCode": {
       "kind": "func",
@@ -4652,7 +4660,7 @@
     },
     "domain.NormalizeVideoURL": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:242"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:252"
     },
     "domain.NoticeKind": {
       "kind": "type",
@@ -4736,7 +4744,7 @@
     },
     "domain.ParseEventInstant": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:203"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:213"
     },
     "domain.ParseImportDeadline": {
       "kind": "func",
@@ -4872,51 +4880,51 @@
     },
     "domain.PortalAPIURLChanged": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:200"
+      "at": "service-comms/internal/domain/portal_sync.go:237"
     },
     "domain.PortalCategory": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:225"
+      "at": "service-comms/internal/domain/portal_sync.go:262"
     },
     "domain.PortalCategorySelection": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:236"
+      "at": "service-comms/internal/domain/portal_sync.go:273"
     },
     "domain.PortalExternalItemID": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:349"
+      "at": "service-comms/internal/domain/portal_sync.go:406"
     },
     "domain.PortalRunCounts": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:308"
+      "at": "service-comms/internal/domain/portal_sync.go:359"
     },
     "domain.PortalRunError": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:278"
+      "at": "service-comms/internal/domain/portal_sync.go:326"
     },
     "domain.PortalRunOutcome": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:334"
+      "at": "service-comms/internal/domain/portal_sync.go:391"
     },
     "domain.PortalSourceCredit": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:356"
+      "at": "service-comms/internal/domain/portal_sync.go:413"
     },
     "domain.PortalSyncDue": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:214"
+      "at": "service-comms/internal/domain/portal_sync.go:251"
     },
     "domain.PortalSyncRun": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:286"
+      "at": "service-comms/internal/domain/portal_sync.go:334"
     },
     "domain.PortalSyncSettings": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:86"
+      "at": "service-comms/internal/domain/portal_sync.go:97"
     },
     "domain.PortalSyncSettingsInput": {
       "kind": "type",
-      "at": "service-comms/internal/domain/portal_sync.go:113"
+      "at": "service-comms/internal/domain/portal_sync.go:124"
     },
     "domain.Province": {
       "kind": "type",
@@ -5008,7 +5016,7 @@
     },
     "domain.ReparentCreatesCycle": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1083"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1098"
     },
     "domain.ResetStatus": {
       "kind": "func",
@@ -5084,7 +5092,7 @@
     },
     "domain.SamePortalSyncSettings": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:206"
+      "at": "service-comms/internal/domain/portal_sync.go:243"
     },
     "domain.SauKhiPhanCong": {
       "kind": "func",
@@ -5112,19 +5120,19 @@
     },
     "domain.SetsAudioField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:862"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:877"
     },
     "domain.SetsBannerField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:868"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:883"
     },
     "domain.SetsEventField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:883"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:898"
     },
     "domain.SetsVideoURL": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:890"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:905"
     },
     "domain.SheetLockingClose": {
       "kind": "func",
@@ -5248,7 +5256,7 @@
     },
     "domain.StoredFile": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:91"
+      "at": "service-petitions/internal/domain/stored_file.go:94"
     },
     "domain.StoredFileEdges": {
       "kind": "func",
@@ -5256,7 +5264,7 @@
     },
     "domain.StoredFileFacts": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:119"
+      "at": "service-petitions/internal/domain/stored_file.go:123"
     },
     "domain.StoredFileStatus": {
       "kind": "type",
@@ -5328,7 +5336,7 @@
     },
     "domain.TaskLogAttachment": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:128"
+      "at": "service-petitions/internal/domain/stored_file.go:132"
     },
     "domain.TaskMetric": {
       "kind": "type",
@@ -5582,6 +5590,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/summary_metrics.go:124"
     },
+    "domain.ValidContentStatus": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:83"
+    },
     "domain.ValidMiniAppID": {
       "kind": "func",
       "at": "service-identity/internal/domain/mini_app_secret.go:13"
@@ -5640,7 +5652,7 @@
     },
     "domain.ValidatePortalAPIKey": {
       "kind": "func",
-      "at": "service-comms/internal/domain/portal_sync.go:184"
+      "at": "service-comms/internal/domain/portal_sync.go:221"
     },
     "domain.ValidateReason": {
       "kind": "func",
@@ -5696,7 +5708,7 @@
     },
     "domain.WithoutOtherTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:673"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:688"
     },
     "domain.YeuCauSoanThongBao": {
       "kind": "type",
@@ -5704,15 +5716,15 @@
     },
     "domain.YeuCauSuaNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:821"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:836"
     },
     "domain.YeuCauThemDanhMuc": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1000"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1015"
     },
     "domain.YeuCauThemNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:713"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:728"
     },
     "event.MauTinXa": {
       "kind": "type",
@@ -6260,7 +6272,7 @@
     },
     "http.DanhSachDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:477"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:495"
     },
     "http.DanhSachDeNghiLuiHan": {
       "kind": "func",
@@ -6308,7 +6320,7 @@
     },
     "http.DanhSachNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:367"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:377"
     },
     "http.DanhSachPhieu": {
       "kind": "func",
@@ -6332,7 +6344,7 @@
     },
     "http.DanhSachTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:460"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:496"
     },
     "http.DanhSachTrangThaiNhiemVu": {
       "kind": "func",
@@ -6372,7 +6384,7 @@
     },
     "http.DeleteContentCategory": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:837"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:855"
     },
     "http.DeleteMapFieldSchema": {
       "kind": "func",
@@ -6464,11 +6476,11 @@
     },
     "http.GetPortalCategories": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:221"
+      "at": "service-comms/internal/http/portal_sync.go:222"
     },
     "http.GetPortalSyncSettings": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:181"
+      "at": "service-comms/internal/http/portal_sync.go:182"
     },
     "http.GhiBienBanUseCase": {
       "kind": "type",
@@ -6732,7 +6744,7 @@
     },
     "http.ListPortalSyncRuns": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:259"
+      "at": "service-comms/internal/http/portal_sync.go:265"
     },
     "http.ListSystemMessages": {
       "kind": "func",
@@ -6808,11 +6820,11 @@
     },
     "http.MotNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:440"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:458"
     },
     "http.MotTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:733"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:769"
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
@@ -6872,7 +6884,7 @@
     },
     "http.NoiDungCongKhaiDoc": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:79"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:81"
     },
     "http.NoiDungMiniAppDoc": {
       "kind": "type",
@@ -6968,11 +6980,11 @@
     },
     "http.PortalSyncReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes_portal_sync.go:33"
+      "at": "service-comms/internal/http/routes_portal_sync.go:36"
     },
     "http.PortalSyncWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes_portal_sync.go:41"
+      "at": "service-comms/internal/http/routes_portal_sync.go:44"
     },
     "http.PreviewCapitalPlanCategoryImport": {
       "kind": "func",
@@ -7016,15 +7028,15 @@
     },
     "http.PublicAudioLinks": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:120"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:128"
     },
     "http.PublicCoverImages": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:114"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:122"
     },
     "http.PublicNewsCategories": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:664"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:700"
     },
     "http.PublishStaffBulk": {
       "kind": "func",
@@ -7036,11 +7048,11 @@
     },
     "http.PutPortalCategories": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:236"
+      "at": "service-comms/internal/http/portal_sync.go:242"
     },
     "http.PutPortalSyncSettings": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:191"
+      "at": "service-comms/internal/http/portal_sync.go:192"
     },
     "http.QuyenDoc": {
       "kind": "type",
@@ -7156,7 +7168,7 @@
     },
     "http.StartPortalSyncRun": {
       "kind": "func",
-      "at": "service-comms/internal/http/portal_sync.go:281"
+      "at": "service-comms/internal/http/portal_sync.go:287"
     },
     "http.SuaBangNganSach": {
       "kind": "func",
@@ -7236,7 +7248,7 @@
     },
     "http.SuaNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:689"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:707"
     },
     "http.SuaSLA": {
       "kind": "func",
@@ -7348,7 +7360,7 @@
     },
     "http.ThemDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:755"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:773"
     },
     "http.ThemDuAn": {
       "kind": "func",
@@ -7400,7 +7412,7 @@
     },
     "http.ThemNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:569"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:587"
     },
     "http.ThemVanBanDen": {
       "kind": "func",
@@ -7440,7 +7452,7 @@
     },
     "http.UpdateContentCategory": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:809"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:827"
     },
     "http.UpdateMapFieldSchema": {
       "kind": "func",
@@ -8596,27 +8608,27 @@
     },
     "portal.AddrAllowed": {
       "kind": "func",
-      "at": "service-comms/internal/portal/guard.go:103"
+      "at": "service-comms/internal/portal/guard.go:105"
     },
     "portal.Article": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:281"
+      "at": "service-comms/internal/portal/client.go:291"
     },
     "portal.ArticleBatch": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:308"
+      "at": "service-comms/internal/portal/client.go:320"
     },
     "portal.Articles": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:315"
+      "at": "service-comms/internal/portal/client.go:349"
     },
     "portal.Categories": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:227"
+      "at": "service-comms/internal/portal/client.go:237"
     },
     "portal.Category": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:212"
+      "at": "service-comms/internal/portal/client.go:222"
     },
     "portal.CheckURL": {
       "kind": "func",
@@ -8624,31 +8636,35 @@
     },
     "portal.ClassOf": {
       "kind": "func",
-      "at": "service-comms/internal/portal/errors.go:79"
+      "at": "service-comms/internal/portal/errors.go:93"
     },
     "portal.Client": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:86"
+      "at": "service-comms/internal/portal/client.go:95"
     },
     "portal.DialContext": {
       "kind": "func",
-      "at": "service-comms/internal/portal/guard.go:136"
+      "at": "service-comms/internal/portal/guard.go:138"
     },
     "portal.DialFunc": {
       "kind": "type",
-      "at": "service-comms/internal/portal/guard.go:125"
+      "at": "service-comms/internal/portal/guard.go:127"
     },
     "portal.Endpoint": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:117"
+      "at": "service-comms/internal/portal/client.go:126"
     },
     "portal.Error": {
       "kind": "func",
       "at": "service-comms/internal/portal/errors.go:26"
     },
+    "portal.HeldFunc": {
+      "kind": "type",
+      "at": "service-comms/internal/portal/client.go:332"
+    },
     "portal.Image": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:461"
+      "at": "service-comms/internal/portal/client.go:592"
     },
     "portal.Is": {
       "kind": "func",
@@ -8656,39 +8672,63 @@
     },
     "portal.IsHTTPStatus": {
       "kind": "func",
-      "at": "service-comms/internal/portal/errors.go:69"
+      "at": "service-comms/internal/portal/errors.go:83"
+    },
+    "portal.IsRefusal": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/errors.go:66"
+    },
+    "portal.Len": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/client.go:395"
+    },
+    "portal.Less": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/client.go:396"
     },
     "portal.New": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:93"
+      "at": "service-comms/internal/portal/client.go:102"
     },
     "portal.Options": {
       "kind": "type",
-      "at": "service-comms/internal/portal/client.go:79"
+      "at": "service-comms/internal/portal/client.go:88"
     },
     "portal.ParseBase": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:125"
+      "at": "service-comms/internal/portal/client.go:134"
     },
     "portal.ParseMoment": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:385"
+      "at": "service-comms/internal/portal/client.go:516"
     },
     "portal.PlainText": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:475"
+      "at": "service-comms/internal/portal/client.go:606"
+    },
+    "portal.Pop": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/client.go:399"
     },
     "portal.PortalLocation": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:74"
+      "at": "service-comms/internal/portal/client.go:83"
+    },
+    "portal.Push": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/client.go:398"
     },
     "portal.ResolveImage": {
       "kind": "func",
-      "at": "service-comms/internal/portal/client.go:421"
+      "at": "service-comms/internal/portal/client.go:552"
     },
     "portal.Resolver": {
       "kind": "type",
-      "at": "service-comms/internal/portal/guard.go:120"
+      "at": "service-comms/internal/portal/guard.go:122"
+    },
+    "portal.Swap": {
+      "kind": "func",
+      "at": "service-comms/internal/portal/client.go:397"
     },
     "privacy.MaskCccd": {
       "kind": "func",
@@ -8708,7 +8748,7 @@
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:141"
+      "at": "core/ratelimit/ratelimit.go:223"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -8716,7 +8756,15 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:103"
+      "at": "core/ratelimit/ratelimit.go:177"
+    },
+    "ratelimit.FailsOpen": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:78"
+    },
+    "ratelimit.Gate": {
+      "kind": "func",
+      "at": "core/ratelimit/middleware.go:59"
     },
     "ratelimit.Incr": {
       "kind": "func",
@@ -8724,11 +8772,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:68"
+      "at": "core/ratelimit/ratelimit.go:100"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:110"
+      "at": "core/ratelimit/ratelimit.go:184"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -8736,7 +8784,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:121"
+      "at": "core/ratelimit/ratelimit.go:199"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -8748,11 +8796,15 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:87"
+      "at": "core/ratelimit/ratelimit.go:158"
     },
     "ratelimit.Policy": {
-      "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:40"
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:210"
+    },
+    "ratelimit.PublicHostIPKey": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:131"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -9052,7 +9104,7 @@
     },
     "store.AncestorChain": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:783"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:857"
     },
     "store.Apdung": {
       "kind": "func",
@@ -9156,7 +9208,7 @@
     },
     "store.ByIDForUpdate": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:752"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:826"
     },
     "store.CaLamBuDeGhi": {
       "kind": "type",
@@ -9204,11 +9256,11 @@
     },
     "store.Categories": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:222"
+      "at": "service-comms/internal/store/portal_sync.go:246"
     },
     "store.CategoriesForUpdate": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:232"
+      "at": "service-comms/internal/store/portal_sync.go:256"
     },
     "store.CauHinhGiaiNganStore": {
       "kind": "type",
@@ -9216,7 +9268,7 @@
     },
     "store.ChaCoThat": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:710"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:784"
     },
     "store.ChaCua": {
       "kind": "func",
@@ -9372,11 +9424,11 @@
     },
     "store.CountLiveChildren": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:810"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:884"
     },
     "store.CountLiveItems": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:822"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:896"
     },
     "store.CountOpenHeldByOrgUnit": {
       "kind": "func",
@@ -9412,11 +9464,11 @@
     },
     "store.DanhMucCoThat": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:442"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:516"
     },
     "store.DanhMucMiniAppStore": {
       "kind": "type",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:595"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:669"
     },
     "store.DanhSach": {
       "kind": "func",
@@ -9548,7 +9600,7 @@
     },
     "store.ExistingPortalItems": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:409"
+      "at": "service-comms/internal/store/portal_sync.go:433"
     },
     "store.FieldCodeState": {
       "kind": "func",
@@ -9556,7 +9608,7 @@
     },
     "store.FinishRun": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:336"
+      "at": "service-comms/internal/store/portal_sync.go:360"
     },
     "store.For": {
       "kind": "func",
@@ -9668,7 +9720,7 @@
     },
     "store.InsertCategory": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:243"
+      "at": "service-comms/internal/store/portal_sync.go:267"
     },
     "store.InsertImported": {
       "kind": "func",
@@ -9692,7 +9744,7 @@
     },
     "store.InsertSyncedItem": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:463"
+      "at": "service-comms/internal/store/portal_sync.go:487"
     },
     "store.InsertUnit": {
       "kind": "func",
@@ -9856,7 +9908,7 @@
     },
     "store.LocNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:178"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:179"
     },
     "store.LocPhieu": {
       "kind": "type",
@@ -9900,7 +9952,7 @@
     },
     "store.LockTree": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:771"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:845"
     },
     "store.LockUnit": {
       "kind": "func",
@@ -10024,7 +10076,7 @@
     },
     "store.NewDanhMucMiniAppStore": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:599"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:673"
     },
     "store.NewDataEncryptionKeyStore": {
       "kind": "func",
@@ -10136,7 +10188,7 @@
     },
     "store.NewNoiDungMiniAppStore": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:106"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:107"
     },
     "store.NewOperatorRegistry": {
       "kind": "func",
@@ -10292,7 +10344,7 @@
     },
     "store.NoiDungMiniAppStore": {
       "kind": "type",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:102"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:103"
     },
     "store.OpenCitizenReportsForAutomation": {
       "kind": "func",
@@ -10456,7 +10508,7 @@
     },
     "store.ReapStuckRuns": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:374"
+      "at": "service-comms/internal/store/portal_sync.go:398"
     },
     "store.Reassign": {
       "kind": "func",
@@ -10486,6 +10538,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/data_encryption_key.go:110"
     },
+    "store.ResealKey": {
+      "kind": "func",
+      "at": "service-comms/internal/store/portal_sync.go:193"
+    },
     "store.Retire": {
       "kind": "func",
       "at": "service-identity/internal/store/mini_app_secret.go:82"
@@ -10508,7 +10564,7 @@
     },
     "store.Runs": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:311"
+      "at": "service-comms/internal/store/portal_sync.go:335"
     },
     "store.SLAStore": {
       "kind": "type",
@@ -10572,7 +10628,7 @@
     },
     "store.SlugDaDung": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:676"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:750"
     },
     "store.SoLonNhatDaCap": {
       "kind": "func",
@@ -10820,11 +10876,11 @@
     },
     "store.Update": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:839"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:913"
     },
     "store.UpdateCategory": {
       "kind": "func",
-      "at": "service-comms/internal/store/portal_sync.go:255"
+      "at": "service-comms/internal/store/portal_sync.go:279"
     },
     "store.UpdateSetting": {
       "kind": "func",
@@ -10936,19 +10992,19 @@
     },
     "tenant.ByHost": {
       "kind": "func",
-      "at": "core/tenant/cache.go:72"
+      "at": "core/tenant/cache.go:73"
     },
     "tenant.CachedCommune": {
       "kind": "type",
-      "at": "core/tenant/cache.go:186"
+      "at": "core/tenant/cache.go:239"
     },
     "tenant.CachedDirectory": {
       "kind": "type",
-      "at": "core/tenant/cache.go:35"
+      "at": "core/tenant/cache.go:36"
     },
     "tenant.CommuneLookup": {
       "kind": "type",
-      "at": "core/tenant/cache.go:170"
+      "at": "core/tenant/cache.go:223"
     },
     "tenant.Current": {
       "kind": "func",
@@ -10960,15 +11016,19 @@
     },
     "tenant.Forget": {
       "kind": "func",
-      "at": "core/tenant/cache.go:146"
+      "at": "core/tenant/cache.go:199"
     },
     "tenant.ForgetAll": {
       "kind": "func",
-      "at": "core/tenant/cache.go:154"
+      "at": "core/tenant/cache.go:207"
     },
     "tenant.From": {
       "kind": "func",
       "at": "core/tenant/tenant.go:39"
+    },
+    "tenant.HostResolver": {
+      "kind": "type",
+      "at": "core/tenant/cache.go:96"
     },
     "tenant.ID": {
       "kind": "type",
@@ -10992,11 +11052,11 @@
     },
     "tenant.NewCachedCommune": {
       "kind": "func",
-      "at": "core/tenant/cache.go:196"
+      "at": "core/tenant/cache.go:249"
     },
     "tenant.NewCachedDirectory": {
       "kind": "func",
-      "at": "core/tenant/cache.go:63"
+      "at": "core/tenant/cache.go:64"
     },
     "tenant.String": {
       "kind": "func",
@@ -11009,6 +11069,10 @@
     "tenant.Valid": {
       "kind": "func",
       "at": "core/tenant/tenant.go:27"
+    },
+    "tenant.XaTheoHost": {
+      "kind": "func",
+      "at": "core/tenant/cache.go:119"
     },
     "token.Claims": {
       "kind": "type",

@@ -4489,7 +4489,7 @@
         "x-vigov-screen": "11-noi-dung-mini-app §9",
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần"
+          "reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "b0dbfeba1b92",
@@ -4587,6 +4587,19 @@
               }
             }
           },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
           "500": {
             "description": "Internal Server Error",
             "content": {
@@ -4620,7 +4633,7 @@
         "x-vigov-screen": "11-noi-dung-mini-app §9",
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần"
+          "reason": "hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "1c417145306b",
@@ -4662,6 +4675,19 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -4706,7 +4732,7 @@
         "x-vigov-screen": "11-noi-dung-mini-app §9",
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404"
+          "reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "990d3853914d",
@@ -4750,6 +4776,19 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -5427,6 +5466,14 @@
           },
           {
             "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
             "in": "query",
             "required": true,
             "schema": {
@@ -14348,7 +14395,7 @@
         "x-vigov-screen": "11-noi-dung-mini-app §3",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "content.read"
+          "key": "content.update"
         },
         "x-vigov-task": "33a1f8cced40",
         "responses": {
@@ -24959,6 +25006,9 @@
           },
           "hand_edited": {
             "type": "boolean"
+          },
+          "portal_category_name": {
+            "type": "string"
           },
           "author_code": {
             "type": "string"

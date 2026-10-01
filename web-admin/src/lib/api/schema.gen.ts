@@ -273,6 +273,7 @@ export type comms_noiDungRa = {
   "source_url": string;
   "source_ref": string;
   "hand_edited": boolean;
+  "portal_category_name"?: string;
   "author_code": string;
   "created_at": string;
   "updated_at": string;
@@ -3818,8 +3819,12 @@ export type comms_get_commune_news = {
   phanHoi: {
     200: page_Result_comms_tinXaRa;
     400: httpx_Error;
+    429: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
   };
 };
 
@@ -3837,8 +3842,12 @@ export type comms_get_commune_news_categories = {
   phanHoi: {
     200: comms_publicCategoriesOut;
     400: httpx_Error;
+    429: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
   };
 };
 
@@ -3857,8 +3866,12 @@ export type comms_get_commune_news_by_id = {
     200: comms_tinXaRa;
     400: httpx_Error;
     404: httpx_Error;
+    429: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
   };
 };
 
@@ -4021,6 +4034,7 @@ export type comms_get_content_items = {
     "order"?: "asc" | "desc";
     "category": string;
     "q": string;
+    "status": string;
     "type": string;
   };
   than: never;
