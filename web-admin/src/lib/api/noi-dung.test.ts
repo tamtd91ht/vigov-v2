@@ -122,6 +122,9 @@ const SUA_DAY_DU: SuaNoiDungVao = {
   cover_image_file_id: "",
   link_to: "",
   display_order: 4,
+  // ADR 0067 §4: `""` is the remove signal; the duration rides along so the body names every key.
+  audio_file_id: "",
+  audio_duration_seconds: 200,
 };
 
 const THEM_DANH_MUC_DAY_DU: ThemDanhMucVao = {
