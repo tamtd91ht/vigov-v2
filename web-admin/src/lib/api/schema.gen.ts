@@ -1253,6 +1253,26 @@ export type identity_catalogueImportRejectedOut = {
   "errors": Array<identity_catalogueImportErrorOut>;
 };
 
+export type identity_citizenSessionIn = {
+  "appId": string;
+  "accessToken": string;
+  "phoneToken": string;
+  "demoIdentity": boolean;
+};
+
+export type identity_citizenSessionOut = {
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Bearer token phiên công dân ViGov — Mini App không có cookie nên phải nhận token trong thân; người dùng chốt 01/10/2026 thân 201 giữ y như vihat-miniapp {vigovSession:{token,...}} (ADR 0066 quyết định 1). Không lưu, không log, phản hồi no-store; thu hồi được qua sổ phiên công dân. */
+  "token"?: string;
+  "expiresAt"?: string;
+  "tenantDisplayName": string;
+  "phoneVerified": boolean;
+  "communePrimaryHost": string;
+};
+
+export type identity_citizenSessionsOut = {
+  "vigovSession": identity_citizenSessionOut;
+};
+
 export type identity_communeProfileOut = {
   "name": string;
   "office_address": string;
@@ -3509,6 +3529,35 @@ export type petitions_post_citizen_reports_by_maTraCuu_tasks = {
   };
   errorCodes: {
     409: "code_taken" | "petition_not_classified" | "petition_state" | "request_in_progress" | "restricted_field_no_task" | "task_document" | "task_tree";
+  };
+};
+
+/** POST /api/v1/citizen-sessions — App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov */
+export type identity_post_citizen_sessions = {
+  duongDan: "/api/v1/citizen-sessions";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenSessionIn;
+  phanHoi: {
+    201: identity_citizenSessionsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    422: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_body" | "phone_required";
+    401: "zalo_token_invalid";
+    422: "app_not_ready";
+    429: "too_many_attempts";
+    502: "zalo_unreachable";
+    503: "sign_in_unavailable";
   };
 };
 

@@ -166,6 +166,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/overdue_queue.go:76"
     },
+    "app.CitizenSessionOpener": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:85"
+    },
     "app.ClaimDue": {
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:348"
@@ -528,7 +532,7 @@
     },
     "app.KetQuaMoPhienCau": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:142"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:153"
     },
     "app.KetQuaThemDuAn": {
       "kind": "type",
@@ -806,9 +810,21 @@
       "kind": "func",
       "at": "service-reporting/internal/app/system_message.go:71"
     },
+    "app.MiniAppBinding": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:63"
+    },
+    "app.MiniAppSecretAdmin": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:87"
+    },
+    "app.MiniAppSecretRepo": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:73"
+    },
     "app.Mo": {
       "kind": "func",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:178"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:189"
     },
     "app.MoKhoa": {
       "kind": "func",
@@ -922,6 +938,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/map_field_schema.go:53"
     },
+    "app.NewMiniAppSecretAdmin": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:95"
+    },
     "app.NewNganSach": {
       "kind": "func",
       "at": "service-finance/internal/app/thu_chi_ngan_sach.go:112"
@@ -949,6 +969,10 @@
     "app.NewOverdueQueue": {
       "kind": "func",
       "at": "service-petitions/internal/app/overdue_queue.go:60"
+    },
+    "app.NewOwnAppSignIn": {
+      "kind": "func",
+      "at": "service-identity/internal/app/own_app_sign_in.go:109"
     },
     "app.NewPetitionFieldCatalogue": {
       "kind": "func",
@@ -1186,6 +1210,18 @@
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:129"
     },
+    "app.OwnAppSettingsReader": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:69"
+    },
+    "app.OwnAppSignIn": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:100"
+    },
+    "app.OwnAppSignInRequest": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:90"
+    },
     "app.PetitionFieldCatalogue": {
       "kind": "type",
       "at": "service-petitions/internal/app/petition_field_catalogue.go:83"
@@ -1346,6 +1382,10 @@
       "kind": "func",
       "at": "service-reporting/internal/app/system_message.go:146"
     },
+    "app.Retire": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:172"
+    },
     "app.Revoke": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_admin.go:192"
@@ -1394,6 +1434,14 @@
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:242"
     },
+    "app.SecretOpener": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:74"
+    },
+    "app.SecretSealer": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:68"
+    },
     "app.SeedDefaults": {
       "kind": "func",
       "at": "service-identity/internal/app/role_template.go:89"
@@ -1406,9 +1454,21 @@
       "kind": "type",
       "at": "service-identity/internal/app/session_idle.go:30"
     },
+    "app.SetDemo": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:138"
+    },
     "app.SetPublication": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_publication.go:52"
+    },
+    "app.SetSecret": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:107"
+    },
+    "app.SignIn": {
+      "kind": "func",
+      "at": "service-identity/internal/app/own_app_sign_in.go:121"
     },
     "app.SoDoToChuc": {
       "kind": "type",
@@ -1946,6 +2006,10 @@
       "kind": "type",
       "at": "service-documents/internal/app/van_ban_den.go:156"
     },
+    "app.ZaloExchange": {
+      "kind": "type",
+      "at": "service-identity/internal/app/own_app_sign_in.go:79"
+    },
     "audit.Actor": {
       "kind": "type",
       "at": "core/audit/audit.go:29"
@@ -2260,7 +2324,7 @@
     },
     "config.SecretEncryptionConfigured": {
       "kind": "func",
-      "at": "core/config/secret_encryption.go:30"
+      "at": "core/config/secret_encryption.go:31"
     },
     "config.SecretEncryptionKeys": {
       "kind": "func",
@@ -3185,6 +3249,10 @@
     "domain.DeliveryOutcome": {
       "kind": "type",
       "at": "service-comms/internal/domain/staff_notification.go:78"
+    },
+    "domain.DemoZaloAccountID": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/mini_app_secret.go:29"
     },
     "domain.DeriveCatalogueCode": {
       "kind": "func",
@@ -5146,6 +5214,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/summary_metrics.go:124"
     },
+    "domain.ValidMiniAppID": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/mini_app_secret.go:13"
+    },
     "domain.ValidNoticeKey": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:217"
@@ -5646,6 +5718,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/summary.go:45"
     },
+    "http.CitizenSessions": {
+      "kind": "func",
+      "at": "service-identity/internal/http/citizen_sessions.go:86"
+    },
     "http.CommuneProfiles": {
       "kind": "func",
       "at": "service-identity/internal/http/commune_profile.go:72"
@@ -5712,7 +5788,7 @@
     },
     "http.DanhMucXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_xa.go:99"
+      "at": "service-identity/internal/http/danh_muc_xa.go:102"
     },
     "http.DanhSachBienBan": {
       "kind": "func",
@@ -5864,7 +5940,7 @@
     },
     "http.DepsCongKhai": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes_cong_dan.go:29"
+      "at": "service-identity/internal/http/routes_cong_dan.go:30"
     },
     "http.DocBangNganSach": {
       "kind": "func",
@@ -6060,7 +6136,7 @@
     },
     "http.HandlerCongKhai": {
       "kind": "type",
-      "at": "service-identity/internal/http/danh_muc_xa.go:71"
+      "at": "service-identity/internal/http/danh_muc_xa.go:72"
     },
     "http.HangMucKeHoachVonDanhMuc": {
       "kind": "type",
@@ -6358,6 +6434,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/summary.go:284"
     },
+    "http.OwnAppSignInner": {
+      "kind": "type",
+      "at": "service-identity/internal/http/citizen_sessions.go:37"
+    },
     "http.PetitionFieldCatalogue": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_fields.go:29"
@@ -6488,7 +6568,7 @@
     },
     "http.RegisterCongKhai": {
       "kind": "func",
-      "at": "service-identity/internal/http/routes_cong_dan.go:59"
+      "at": "service-identity/internal/http/routes_cong_dan.go:64"
     },
     "http.RequestAutomationRun": {
       "kind": "func",
@@ -6836,7 +6916,7 @@
     },
     "http.TraXaTheoHost": {
       "kind": "type",
-      "at": "service-identity/internal/http/danh_muc_xa.go:29"
+      "at": "service-identity/internal/http/danh_muc_xa.go:30"
     },
     "http.TrangThaiNhiemVuDoc": {
       "kind": "type",
@@ -8368,7 +8448,7 @@
     },
     "store.CreateDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/data_encryption_key.go:87"
+      "at": "service-identity/internal/store/data_encryption_key.go:84"
     },
     "store.CuaCongDanTheoMaTraCuu": {
       "kind": "func",
@@ -8444,7 +8524,7 @@
     },
     "store.DataEncryptionKeyStore": {
       "kind": "type",
-      "at": "service-comms/internal/store/data_encryption_key.go:54"
+      "at": "service-identity/internal/store/data_encryption_key.go:52"
     },
     "store.DaySoStore": {
       "kind": "type",
@@ -8540,7 +8620,7 @@
     },
     "store.GetDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/data_encryption_key.go:65"
+      "at": "service-identity/internal/store/data_encryption_key.go:63"
     },
     "store.GhepPhienStore": {
       "kind": "type",
@@ -8624,7 +8704,7 @@
     },
     "store.Insert": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_field_schema.go:221"
+      "at": "service-identity/internal/store/mini_app_secret.go:99"
     },
     "store.InsertBudgetPeriodClose": {
       "kind": "func",
@@ -8749,6 +8829,10 @@
     "store.ListUploadPolicies": {
       "kind": "func",
       "at": "service-platform/internal/store/upload_policy.go:42"
+    },
+    "store.Live": {
+      "kind": "func",
+      "at": "service-identity/internal/store/mini_app_secret.go:60"
     },
     "store.LiveByCode": {
       "kind": "func",
@@ -8902,6 +8986,14 @@
       "kind": "func",
       "at": "service-platform/internal/store/mini_app.go:37"
     },
+    "store.MiniAppSecret": {
+      "kind": "type",
+      "at": "service-identity/internal/store/mini_app_secret.go:29"
+    },
+    "store.MiniAppSecretStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/mini_app_secret.go:52"
+    },
     "store.MoKhoa": {
       "kind": "func",
       "at": "service-finance/internal/store/chung_tu_giai_ngan.go:408"
@@ -8956,7 +9048,7 @@
     },
     "store.NewDataEncryptionKeyStore": {
       "kind": "func",
-      "at": "service-comms/internal/store/data_encryption_key.go:58"
+      "at": "service-identity/internal/store/data_encryption_key.go:56"
     },
     "store.NewDaySoStore": {
       "kind": "func",
@@ -9021,6 +9113,10 @@
     "store.NewMapFieldSchemaStore": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:31"
+    },
+    "store.NewMiniAppSecretStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/mini_app_secret.go:56"
     },
     "store.NewMoc": {
       "kind": "func",
@@ -9360,7 +9456,11 @@
     },
     "store.ReplaceDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/data_encryption_key.go:118"
+      "at": "service-identity/internal/store/data_encryption_key.go:110"
+    },
+    "store.Retire": {
+      "kind": "func",
+      "at": "service-identity/internal/store/mini_app_secret.go:82"
     },
     "store.RevokeIdle": {
       "kind": "func",

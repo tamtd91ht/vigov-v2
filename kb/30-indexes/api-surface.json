@@ -952,6 +952,31 @@
       "declared_in": "service-petitions/internal/http/routes.go"
     },
     {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/citizen-sessions",
+      "operation_id": "identity_post_citizen_sessions",
+      "task_id": "946bffc3c7e3",
+      "summary": "App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov",
+      "permission_kind": "public",
+      "permission_reason": "app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066",
+      "consumer": "citizen-app",
+      "idempotency": "khong-can",
+      "idempotency_reason": "mỗi lượt đăng nhập mở một phiên mới kèm vết riêng, không idempotent theo hợp đồng; gửi lại sau khi mất phản hồi để lại nhiều nhất một phiên thừa không ai cầm token, hết hạn theo TTL — chống lặp là việc của giới hạn tần suất",
+      "request_schema": "identity.citizenSessionIn",
+      "reply_schemas": {
+        "201": "identity.citizenSessionsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "422": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes_cong_dan.go"
+    },
+    {
       "service": "comms",
       "method": "GET",
       "path": "/api/v1/comms-audit-entries",

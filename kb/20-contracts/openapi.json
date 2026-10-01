@@ -4228,6 +4228,132 @@
         }
       }
     },
+    "/api/v1/citizen-sessions": {
+      "post": {
+        "summary": "App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov",
+        "operationId": "identity_post_citizen_sessions",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "946bffc3c7e3",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.citizenSessionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.citizenSessionsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_body",
+              "phone_required"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_token_invalid"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "app_not_ready"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "too_many_attempts"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unreachable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "sign_in_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/comms-audit-entries": {
       "get": {
         "summary": "Nhật ký hệ thống của phân hệ Thông tin – truyền thông — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng",
@@ -27182,6 +27308,71 @@
           "errors",
           "message",
           "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenSessionIn": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "phoneToken": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "demoIdentity": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accessToken",
+          "appId",
+          "demoIdentity",
+          "phoneToken"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenSessionOut": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Bearer token phiên công dân ViGov — Mini App không có cookie nên phải nhận token trong thân; người dùng chốt 01/10/2026 thân 201 giữ y như vihat-miniapp {vigovSession:{token,...}} (ADR 0066 quyết định 1). Không lưu, không log, phản hồi no-store; thu hồi được qua sổ phiên công dân."
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "tenantDisplayName": {
+            "type": "string"
+          },
+          "phoneVerified": {
+            "type": "boolean"
+          },
+          "communePrimaryHost": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "communePrimaryHost",
+          "phoneVerified",
+          "tenantDisplayName"
+        ],
+        "additionalProperties": false
+      },
+      "identity.citizenSessionsOut": {
+        "type": "object",
+        "properties": {
+          "vigovSession": {
+            "$ref": "#/components/schemas/identity.citizenSessionOut"
+          }
+        },
+        "required": [
+          "vigovSession"
         ],
         "additionalProperties": false
       },

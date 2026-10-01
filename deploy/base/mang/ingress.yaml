@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     178 tuyến của 6 dịch vụ — identity 60 · petitions 59 · finance 24 · comms 20 · documents 13 · reporting 2
+#     179 tuyến của 6 dịch vụ — identity 61 · petitions 59 · finance 24 · comms 20 · documents 13 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -96,12 +96,12 @@ spec:
                 name: finance
                 port: { name: rest }
     #
-    # identity — 18 tài nguyên: /api/v1/automation-jobs · /api/v1/commune-profiles
-    #   /api/v1/commune-staff · /api/v1/communes · /api/v1/identity-audit-entries
-    #   /api/v1/org-units · /api/v1/public-holidays · /api/v1/residential-unit-types
-    #   /api/v1/residential-units · /api/v1/role-permissions · /api/v1/roles · /api/v1/sessions
-    #   /api/v1/sla · /api/v1/staff · /api/v1/staff-directory · /api/v1/swap-working-days
-    #   /api/v1/task-blocs · /api/v1/working-hours
+    # identity — 19 tài nguyên: /api/v1/automation-jobs · /api/v1/citizen-sessions
+    #   /api/v1/commune-profiles · /api/v1/commune-staff · /api/v1/communes
+    #   /api/v1/identity-audit-entries · /api/v1/org-units · /api/v1/public-holidays
+    #   /api/v1/residential-unit-types · /api/v1/residential-units · /api/v1/role-permissions
+    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-directory
+    #   /api/v1/swap-working-days · /api/v1/task-blocs · /api/v1/working-hours
     - host: "identity.api.vigov.vn"
       http:
         paths:
