@@ -35,7 +35,8 @@ const (
 	GRPCServer
 	// PlatformClient: PLATFORM_GRPC_ADDR, GRPC_CALLER_KEY — resolving Host to a commune.
 	PlatformClient
-	// IdentityClient: IDENTITY_GRPC_ADDR, GRPC_CALLER_KEY — resolving a staff principal.
+	// IdentityClient: IDENTITY_GRPC_ADDR, GRPC_CALLER_KEY — resolving a staff principal, or (platform
+	// only) an operator session through OperatorService.
 	IdentityClient
 	// OrgUnitOwnerClients: PETITIONS_GRPC_ADDR, DOCUMENTS_GRPC_ADDR, GRPC_CALLER_KEY — identity
 	// asking the owners before it soft-deletes an org unit.

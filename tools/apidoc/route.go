@@ -117,10 +117,47 @@ func mergeErrorCodes(a, b []string) []string {
 // only when a route declares nothing — which this generator refuses, because an undeclared
 // route is callable by every staff role and nothing reports it.
 type quyenDecl struct {
-	Kind   string // permission | public | any-authenticated | citizen-only
-	Key    string // the flat permission key, for Kind == "permission"
-	LyDo   string // the mandatory reason for public / any-authenticated
+	Kind   string // permission | public | any-authenticated | citizen-only | operator-key | operator-signed-in | operator-public
+	Key    string // the flat permission key, for Kind == "permission"; the opauth.Key names for operator-key
+	LyDo   string // the mandatory reason for public / any-authenticated / operator-signed-in / operator-public
 	NguonF string // file it was read from, for error messages
+}
+
+// THE OPERATOR REALM (ADR 0048). service-platform's operator edge declares its routes with
+// `opauth.RequireKey` / `opauth.SignedIn` / `opauth.Public` (service-platform/internal/opauth) — the
+// operator-realm equivalent of the four authz declarations, because an operator holds `ops.*` keys of
+// its own realm, never rows of the per-commune `quyen` table (rule 5 invariant 3c).
+//
+// THOSE ROUTES ARE READ, CHECKED, AND THEN KEPT OUT OF EVERY COMMUNE-FACING OUTPUT: openapi.json,
+// api-surface.json and the tasks/web queue (splitOperatorRoutes, main.go). openapi.json is what
+// tools/ingress turns into the Ingress rules on every commune and API host and into web-admin's
+// gateway table — an operator route there would be routable from a commune's host, which is ADR 0048
+// stop condition #6 and §01/10 #6c. They are reachable only on OPERATOR_HOST, by a different chain.
+const (
+	kindOperatorKey      = "operator-key"
+	kindOperatorSignedIn = "operator-signed-in"
+	kindOperatorPublic   = "operator-public"
+)
+
+// isOperatorRoute reports whether a route belongs to the operator realm.
+func isOperatorRoute(t tuyen) bool {
+	switch t.Quyen.Kind {
+	case kindOperatorKey, kindOperatorSignedIn, kindOperatorPublic:
+		return true
+	}
+	return false
+}
+
+// splitOperatorRoutes separates the operator realm's routes from the commune surface. Order kept.
+func splitOperatorRoutes(all []tuyen) (commune, operator []tuyen) {
+	for _, t := range all {
+		if isOperatorRoute(t) {
+			operator = append(operator, t)
+		} else {
+			commune = append(commune, t)
+		}
+	}
+	return commune, operator
 }
 
 type idemDecl struct {
@@ -474,6 +511,20 @@ func kiemTuyen(t *tuyen) error {
 			"tuyến citizen-only đã là kênh công dân, tuyến cán bộ thì công dân không gọi được",
 			t.Consumer, t.Quyen.Kind)
 	}
+	if isOperatorRoute(*t) {
+		// The realm guard answers WHO; an operator route has no commune class and no citizen consumer.
+		if t.Xa.Kind != "" || t.Consumer != "" {
+			return fmt.Errorf("tuyến vận hành (%s) không mang lớp xã hay @consumer — người vận hành không thuộc xã nào (ADR 0048)",
+				t.Quyen.Kind)
+		}
+		if (t.Quyen.Kind == kindOperatorSignedIn || t.Quyen.Kind == kindOperatorPublic) && strings.TrimSpace(t.Quyen.LyDo) == "" {
+			return fmt.Errorf("%s cần lý do cụ thể dạng hằng chuỗi (luật 5 cấm #4)", t.Quyen.Kind)
+		}
+		if t.Quyen.Kind == kindOperatorKey && t.Quyen.Key == "" {
+			return fmt.Errorf("opauth.RequireKey không nêu khoá nào — khoá phải là hằng opauth.Key… viết thẳng trong câu lệnh")
+		}
+		return nil // no @screen note: operator screens live in platform-admin, not in docs/ui-ux
+	}
 	if t.Screen == "" {
 		fmt.Fprintf(os.Stderr, "apidoc: LƯU Ý %s %s không có @screen — web không biết màn hình nào dùng nó\n",
 			t.Method, t.Path)
@@ -504,7 +555,37 @@ func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, xaDecl, error) {
 		if !ok {
 			return true
 		}
-		switch goi.Name + "." + sel.Sel.Name {
+		ten := goi.Name + "." + sel.Sel.Name
+		// ONE REALM PER ROUTE. A statement holding both an authz.* and an opauth.* declaration is a
+		// route whose realm cannot be told — refused, never resolved by "the last one wins".
+		if q.Kind != "" && (strings.HasPrefix(ten, "authz.") || strings.HasPrefix(ten, "opauth.")) &&
+			(strings.HasPrefix(ten, "opauth.") != strings.HasPrefix(q.Kind, "operator-")) {
+			loi = errors.Join(loi, fmt.Errorf("một tuyến khai cả authz.* lẫn opauth.* — chọn đúng một miền tài khoản"))
+			return true
+		}
+		switch ten {
+		case "opauth.RequireKey":
+			var keys []string
+			if len(c.Args) >= 2 {
+				for _, a := range c.Args[1:] {
+					s, ok := a.(*ast.SelectorExpr)
+					if !ok {
+						loi = errors.Join(loi, fmt.Errorf("opauth.RequireKey: khoá phải là hằng opauth.Key… viết thẳng"))
+						return true
+					}
+					keys = append(keys, s.Sel.Name)
+				}
+			}
+			q = quyenDecl{Kind: kindOperatorKey, Key: strings.Join(keys, ",")}
+		case "opauth.SignedIn":
+			ly := ""
+			if len(c.Args) == 2 {
+				ly, _ = chuoiLit(c.Args[1])
+			}
+			q = quyenDecl{Kind: kindOperatorSignedIn, LyDo: ly}
+		case "opauth.Public":
+			ly, _ := chuoiLit(argDau(c))
+			q = quyenDecl{Kind: kindOperatorPublic, LyDo: ly}
 		case "authz.RequirePermission":
 			if len(c.Args) < 2 {
 				loi = errors.Join(loi, fmt.Errorf("authz.RequirePermission thiếu tham số"))

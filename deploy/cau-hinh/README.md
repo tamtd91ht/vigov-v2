@@ -35,7 +35,7 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 |---|---|---|---|
 | `DATABASE_DSN` | **có** — mọi dịch vụ | Kết nối PostgreSQL tới CSDL riêng của dịch vụ. Người quản trị PostgreSQL cấp user + mật khẩu | `postgres://<user>:<mật khẩu>@<host>:5432/vigov_<dịch vụ>?sslmode=require` — mỗi dịch vụ một CSDL riêng |
 | `GRPC_CALLER_KEY` | **có** — platform, identity, documents, finance, petitions, comms, reporting | Khoá xác thực lời gọi gRPC giữa các dịch vụ (ADR 0025). Sinh một lần, dùng lại ở cả 7 | `openssl rand -base64 48` — **cùng một giá trị** ở cả 7 |
-| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms | Redis chống gửi trùng + giới hạn tần suất. Người vận hành Redis cấp | `redis://:<mật khẩu>@<host>:6379/0` — 5 Secret, **không** có ở `platform-secrets` và `reporting-secrets` |
+| `REDIS_DSN` | **có (prod)** — identity, documents, finance, petitions, comms, platform | Redis chống gửi trùng + giới hạn tần suất. platform dùng nó cho giới hạn đăng nhập vận hành 20 lần / 15 phút / IP (ADR 0048 §01/10 #3) — thiếu thì mọi bước đăng nhập vận hành trả 503. Người vận hành Redis cấp | `redis://:<mật khẩu>@<host>:6379/0` — 6 Secret (từ 01/10/2026 có cả `platform-secrets`), **không** có ở `reporting-secrets` |
 
 **Key thêm, chỉ ở một Secret:**
 
@@ -44,7 +44,7 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 | `SESSION_SIGNING_KEYS` | **có (prod)** — identity | `identity-secrets` **chỉ nơi này** | Khoá ký phiên đăng nhập cán bộ. Tự sinh | `<khoá mới>,<khoá cũ>` (mỗi khoá `openssl rand -base64 48`) |
 | `CITIZEN_SESSION_BRIDGE_KEYS` | **có (prod)** — identity | `identity-secrets` | Khoá backend `vihat-miniapp` gửi khi đổi phiên công dân (ADR 0045). Tự sinh, đặt cùng giá trị ở hai bên | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte (`openssl rand -base64 48`). Cùng giá trị ở Secret của `vihat-miniapp`. Khác `GRPC_CALLER_KEY` |
 | `IDENTITY_ADMIN_SEED_PASSWORD` | không — kể cả prod | `identity-secrets` | Công tắc một lần tạo `admin` cho xã mới | mật khẩu ≥ 12 ký tự — tài khoản `admin` đầu tiên của xã mới. Gỡ key khi mọi xã đã đổi mật khẩu |
-| `OPERATOR_SESSION_SIGNING_KEYS` | **có (prod)** — identity (bên kiểm chữ ký chưa nối, ADR 0048 bước 2) | `identity-secrets` · `platform-secrets` — **cùng một giá trị** | Khoá ký phiên nhà vận hành: identity ký, platform kiểm chữ ký (ADR 0048 §01/10 #2). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
+| `OPERATOR_SESSION_SIGNING_KEYS` | **có (prod)** — identity, platform | `identity-secrets` · `platform-secrets` — **cùng một giá trị** | Khoá ký phiên nhà vận hành: identity ký, platform kiểm chữ ký (ADR 0048 §01/10 #2). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
 | `OPERATOR_TOTP_ENCRYPTION_KEY` | **có (prod)** — identity | `identity-secrets` | Khoá mã hoá bí mật TOTP nhà vận hành. Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` |
 | `SECRET_ENCRYPTION_KEYS` | **có (prod)** — comms, identity | `comms-secrets` · `identity-secrets` | Khoá mã hoá bí mật riêng của từng xã trong CSDL (ADR 0009): comms niêm mật khẩu máy chủ thư, identity niêm secret Zalo của app riêng từng xã (ADR 0066). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` — **mỗi Secret một giá trị riêng** (hai CSDL, hai bộ khoá dữ liệu). **Sao lưu riêng trước khi lưu bí mật đầu tiên** — mất là mất hết |
 | `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions | `petitions-secrets` | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ bucket của môi trường | access key MinIO riêng của dịch vụ |
@@ -99,7 +99,7 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 |---|---|---|---|---|
 | `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | Cổng REST | `:8080` |
 | `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | gRPC của platform — phân giải tên miền ra xã. Tên Service + `9090` | `platform:9090` |
-| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090` | `identity:9090` |
+| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting, platform | 6 dịch vụ trừ `identity` | gRPC của identity — đổi phiên cán bộ thành người dùng; với platform là tra phiên vận hành (`OperatorService`, ADR 0048 §01/10 #2). Tên Service + `9090` | `identity:9090` |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của documents — như trên | `documents:9090` |
 | `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents | `vigov-service-petitions`, `vigov-service-documents` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058). Tên Service + `9090` | `comms:9090` |

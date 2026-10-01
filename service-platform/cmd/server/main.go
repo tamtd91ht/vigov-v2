@@ -39,11 +39,19 @@ import (
 // group whose variables must be set for it to start (core/config/uses.go). Undeclared groups are
 // not read at all. TestConfigUsesMatchReads keeps this list equal to what the package reads.
 //
-// platform: serves REST and the inter-service port, and caches its own registry. Calls nobody over gRPC, holds no cache store.
+// platform: serves REST and the inter-service port, and caches its own registry. Since 2026-10-01 it
+// is also the operator area's only HTTP edge (ADR 0048 §01/10 #2): OperatorEdge (OPERATOR_HOST + the
+// `op1.` signing keys), IdentityClient (OperatorService, the per-request session check) and Redis
+// (the per-IP sign-in limit, §01/10 #3). Declared even where OPERATOR_HOST is unset: "used ⇒
+// required" is derived from the declaration (ADR 0057), so staging/prod need IDENTITY_GRPC_ADDR,
+// REDIS_DSN and OPERATOR_SESSION_SIGNING_KEYS for platform before this image rolls out.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
 	config.TenantCache,
+	config.IdentityClient,
+	config.Redis,
+	config.OperatorEdge,
 )
 
 func main() {
@@ -144,17 +152,24 @@ func run(log *slog.Logger) error {
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
+	// The OPERATOR edge (operator_edge.go): its own chain for Host == OPERATOR_HOST, or nothing at
+	// all when OPERATOR_HOST is unset. Its registry writes go through the SCOPED store, each one
+	// audited in the target commune's audit_log; its reads use the registry's raw handle, like
+	// the directory. Forget drops a written host from THIS process's cache at once.
+	opEdge, err := wireOperatorEdge(cfg, svcstore.NewOperatorRegistry(db),
+		svcstore.NewRegistryWriter(store.New(db)), directory.Forget, log)
+	if err != nil {
+		return err
+	}
+	defer opEdge.close()
+
 	// /healthz is mounted on an OUTER mux, so it is genuinely outside the chain above.
 	//
 	// It used to sit on the inner mux while the comment beside it claimed the opposite. That is
 	// the shape this whole service exists to prevent: an orchestrator probes by IP, the Host
 	// matches no commune, TenantMiddleware answers 404 — and a healthy process is restarted
 	// during a database blip, which is exactly when restarting it is worst.
-	ngoai := http.NewServeMux()
-	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	ngoai := buildOuter(h, opEdge.handler, cfg.OperatorHost())
 	// KHÔNG gắn webhook của Zalo Mini App ở đây, và chỗ trống này là có chủ ý — ADR 0032.
 	//
 	// Nó TỪNG nằm đúng chỗ này, biện hộ bằng `domain-boundaries.md`: "platform = Nền tảng —
@@ -167,8 +182,6 @@ func run(log *slog.Logger) error {
 	// kho `vihat-miniapp`. Còn ZNS gửi từ OA của TỪNG XÃ ký bằng khoá của xã, nên đường ấy Ở
 	// LẠI ViGov, tại `service-comms` (ADR 0018 giữ nguyên) — đừng suy rộng thành "mọi thứ
 	// dính chữ Zalo đều rời đi".
-
-	ngoai.Handle("/", h)
 
 	srv := &http.Server{
 		Addr: cfg.ListenAddr(),

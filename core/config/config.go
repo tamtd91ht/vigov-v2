@@ -235,8 +235,8 @@ type Config struct {
 	// resolving communes against something that is not the registry. Rule 1, forbidden #1 is
 	// about defaults on the isolation path, and the address of the registry is on it.
 	//
-	// Group PlatformClient, which platform itself never declares: it holds the registry and calls
-	// nobody. A declaring service is refused in staging/prod without it; in dev, platformclient.Dial
+	// Group PlatformClient, which platform itself never declares: it holds the registry and never
+	// asks itself. A declaring service is refused in staging/prod without it; in dev, platformclient.Dial
 	// refuses the empty address by name.
 	platformGRPCAddr string
 
@@ -249,8 +249,9 @@ type Config struct {
 	// way — it would make every staff request answer 503 while identity was healthy, which reads as
 	// "identity is down" and sends somebody to inspect the wrong service for an afternoon.
 	//
-	// Group IdentityClient, which two services never declare: identity itself builds its principal
-	// from its own session registry (its XacThuc), and platform holds the registry and calls nobody.
+	// Group IdentityClient, which identity never declares: it builds its principal from its own session
+	// registry (its XacThuc). platform DOES declare it since 2026-10-01 — not for staff principals but
+	// for OperatorService (core/operatorclient), the operator area's session check (ADR 0048 §01/10 #2).
 	//
 	// CLUSTER-INTERNAL ADDRESS ONLY. A WORKING SESSION TOKEN travels on this hop and there is no
 	// TLS on it (ADR 0025); an address that leaves the cluster puts every staff session on the wire

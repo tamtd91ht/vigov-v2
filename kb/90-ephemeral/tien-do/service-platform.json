@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-10-01",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -56,9 +56,9 @@
       "id": "so-mini-app-va-ho-so-hien-thi",
       "viec": "Sổ app_id → chế độ/xã (MiniApp), hồ sơ hiển thị xã (TenantDisplayProfile), cài đặt ResolveMiniApp và GetTenantProfile — ADR 0044, 0045",
       "trang_thai": "dang_lam",
-      "bang_chung": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql: hai bảng MỚI, không ALTER bảng cũ; CHECK (che_do = 'rieng') = (tenant_id IS NOT NULL); xoá mềm + trigger cấm xoá cứng. Store: internal/store/mini_app.go (Directory.MiniApp, đọc sổ không phạm vi xã), internal/store/ho_so_hien_thi.go (đọc qua core/store.Scoped). gRPC: internal/grpc/server.go ResolveMiniApp, GetTenantProfile. proto thêm GetTenantProfile; buf lint + buf breaking --against HEAD sạch. go vet + go test -race ./service-platform/... ./core/platformclient/... xanh. CÁC CA _pg_test.go BỊ BỎ QUA: máy này không có VIGOV_TEST_DSN, không có PostgreSQL, Docker không chạy — migration 0006 CHƯA CHẠY TRÊN CSDL THẬT NÀO — kiểm 2026-09-25",
+      "bang_chung": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql: hai bảng MỚI, không ALTER bảng cũ; CHECK (che_do = 'rieng') = (tenant_id IS NOT NULL); xoá mềm + trigger cấm xoá cứng. Store: internal/store/mini_app.go (Directory.MiniApp, đọc sổ không phạm vi xã), internal/store/ho_so_hien_thi.go (đọc qua core/store.Scoped). gRPC: internal/grpc/server.go ResolveMiniApp, GetTenantProfile. proto thêm GetTenantProfile; buf lint + buf breaking --against HEAD sạch. go vet + go test -race ./service-platform/... ./core/platformclient/... xanh. CÁC CA _pg_test.go BỊ BỎ QUA: máy này không có VIGOV_TEST_DSN, không có PostgreSQL, Docker không chạy — migration 0006 CHƯA CHẠY TRÊN CSDL THẬT NÀO — kiểm 2026-09-25 · 01/10/2026 (TASK-05): đường GHI đầu tiên cho mini_app — store.RegistryWriter.AttachMiniApp (internal/store/operator_writes.go: chế độ 'rieng', từ chối khi App ID đã có dòng kể cả đã xoá mềm, xã phải đang hoạt động, tao_boi = mã VH-, vết gan_mini_app cùng giao dịch), mở trên OPERATOR_HOST ở POST /api/v1/communes/{id}/mini-apps (ops.mini_app.manage). go test ./service-platform/... xanh; TestPgDomainsNameActivationMiniApp SKIP — không VIGOV_TEST_DSN, Docker không chạy",
       "no_confirm": [],
-      "tiep_theo": "(1) Chạy các ca TestPgMiniApp*/TestPgHoSoHienThi* với VIGOV_TEST_DSN trước khi coi là xong. (2) XONG 25/09/2026: ResolveMiniApp đã vào core/grpcx.methodsWithoutTenant; cmd/server/main_test.go TestResolveMiniAppDuocMienXaNhungVanCanKhoa ghim chiều mới (qua chuỗi thật, không xã, vẫn cần khoá gọi). (3) Chưa có đường GHI nào cho hai bảng: tuyến sửa hồ sơ cần khoá quyen (câu mở #27) và ghi vết cùng giao dịch. (4) Chưa chốt: bao nhiêu app chính, một xã được mấy app riêng — không có UNIQUE nào cho hai câu ấy. (5) Mục dang-viet-ten-tinh-thanh ở trên hẹn sửa ở 'migration 0006' — số ấy nay đã dùng, việc ấy sẽ là 0007 trở đi"
+      "tiep_theo": "(1) Chạy các ca TestPgMiniApp*/TestPgHoSoHienThi* với VIGOV_TEST_DSN trước khi coi là xong. (2) XONG 25/09/2026: ResolveMiniApp đã vào core/grpcx.methodsWithoutTenant; cmd/server/main_test.go TestResolveMiniAppDuocMienXaNhungVanCanKhoa ghim chiều mới (qua chuỗi thật, không xã, vẫn cần khoá gọi). (3) Chưa có đường GHI nào cho hai bảng: tuyến sửa hồ sơ cần khoá quyen (câu mở #27) và ghi vết cùng giao dịch. (4) Chưa chốt: bao nhiêu app chính, một xã được mấy app riêng — không có UNIQUE nào cho hai câu ấy. (5) Mục dang-viet-ten-tinh-thanh ở trên hẹn sửa ở 'migration 0006' — số ấy nay đã dùng, việc ấy sẽ là 0007 trở đi · (3) cập nhật 01/10/2026: mini_app ĐÃ có đường ghi (khu vận hành, ADR 0048 đợt 1); ho_so_hien_thi_xa VẪN CHƯA — đợt 2 (mục khu-van-hanh-dot2-ho-so-hien-thi). Chú thích cột tao_boi/cap_nhat_boi ở migration 0006 ('staff business code') phải sửa bằng migration mới — việc của data-migration-builder"
     },
     {
       "viec": "Tên miền dành riêng không bao giờ là xã — quy hoạch 4 tên miền (<xa>.vigov.vn · <xa>.stg.vigov.vn · <service>.api.vigov.vn · <service>.api-stg.vigov.vn), admin.vigov.vn là cổng quản trị tổng",
@@ -102,6 +102,62 @@
       "no_confirm": [],
       "tiep_theo": "Ca PG (TestPgUploadPolicySeedAndRead, TestPgContentImageCoverKeepsOperatorEdit) SKIP — chạy với VIGOV_TEST_DSN trước khi phát hành. Sau khi áp: kiểm bằng hai câu SELECT ở khối CHECK AFTER APPLYING trong tệp. Bộ đệm uploadpolicy của comms giữ giá trị cũ tới khi hết hạn.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "khu-van-hanh-bien-va-dang-nhap",
+      "viec": "Biên vận hành trên OPERATOR_HOST + xác thực realm operator (op1. kiểm chữ ký tại chỗ rồi ResolveOperatorSession mỗi yêu cầu, không cache) + các tuyến đăng nhập / đăng ký TOTP / đổi mật khẩu / mã khôi phục / đăng xuất — ADR 0048 §01/10 #2, #3",
+      "trang_thai": "dang_lam",
+      "bang_chung": "01/10/2026 (TASK-05): cmd/server/operator_edge.go (buildOuter tách theo Host; OPERATOR_HOST trống → không gắn tuyến nào, mọi host 404), internal/opauth (RequireKey/SignedIn/Public, cookie __Host-vigov_operator_session HttpOnly Secure SameSite=Strict, sai chữ ký/token cán bộ → 401 không gọi RPC, identity ngừng → 503), core/operatortoken (vector vàng khớp operatorauth của identity), core/operatorclient.Dial, giới hạn 20/15 phút/IP trước lời gọi identity (429; Redis hỏng → 503). Kiểm: go test service-platform (cmd/server TestOperatorRoutesOnlyOnOperatorHost, TestOperatorAreaOffIs404Everywhere; internal/opauth; internal/http TestGuardedRoutes, TestSignInRateLimit), core, tools/apidoc + tools/ingress xanh",
+      "no_confirm": [],
+      "tiep_theo": "(1) Người dùng chốt danh từ URL vận hành (operator-sessions, operator-enrollments, operators/current, provinces, domains, primary-domain, name, activation, mini-apps) rồi ghi vào kb/00-foundation/ubiquitous-language.md §Miền vận hành. (2) Trước khi đặt OPERATOR_HOST: áp NetworkPolicy allow-platform-*-identity-grpc lên cụm thật (deploy/base/mang/netpol.yaml quy tắc 11), thêm REDIS_DSN + OPERATOR_SESSION_SIGNING_KEYS vào platform-secrets, Ingress riêng cho OPERATOR_HOST → platform-admin, xong còn mở #12 ADR 0048. (3) rbac_guard chưa biết opauth.* — sửa hook cần người dùng duyệt"
+    },
+    {
+      "id": "so-xa-duong-ghi-van-hanh",
+      "viec": "Đường ghi sổ xã của khu vận hành đợt 1: tạo xã (tên, tỉnh từ tinh_thanh, tên miền chính), thêm tên miền, đặt tên miền chính, sửa lỗi gõ tên xã (bắt buộc lý do), bật/tắt hoạt động (bắt buộc lý do), liệt kê / xem một xã / danh mục tỉnh",
+      "trang_thai": "dang_lam",
+      "bang_chung": "01/10/2026 (TASK-05): internal/store/operator_writes.go — mỗi thao tác MỘT giao dịch, vết audit_log của xã ĐÍCH cùng giao dịch (actor_id = mã VH-, actor_kind 'operator', ip), hành động tao_xa · them_ten_mien · dat_ten_mien_chinh · sua_ten_xa · ngung_hoat_dong_xa · mo_lai_hoat_dong_xa · gan_mini_app; kiểm trùng tên trong tỉnh dưới khoá pg_advisory_xact_lock; không DELETE, không tuyến gỡ/trỏ lại tên miền. internal/store/operator_registry.go — danh sách liên xã có @cross-tenant, không ghi vết (ADR 0048 §30/09 #5). internal/http/operator_communes.go. go test xanh; các ca _pg_test (TestPgCreateCommune*, TestPgDomainsNameActivationMiniApp, TestPgOperatorRegistryReads) SKIP — không VIGOV_TEST_DSN, Docker không chạy",
+      "no_confirm": [],
+      "tiep_theo": "(1) Chạy các ca TestPg* ở internal/store/operator_writes_pg_test.go với VIGOV_TEST_DSN. (2) Hỏi người dùng: GET một xã (kèm dòng mini_app) có nằm trong ngoại lệ không ghi vết của §30/09 #5 không — hiện KHÔNG ghi vết. (3) Gỡ stage Jenkins 'Tạo xã Thăng Bình'/'Gắn Mini App' sau khi khu vận hành được kiểm trên prod (ADR 0048 §01/10 #6d)"
+    },
+    {
+      "id": "khu-van-hanh-dot2-ho-so-hien-thi",
+      "viec": "Khu vận hành đợt 2: sửa hồ sơ hiển thị xã + logo (ho_so_hien_thi_xa, ops.profile.manage, người ghi sau thắng — ADR 0048 §30/09 #7)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "service-platform/internal/http/operator_routes.go — thêm tuyến opauth.RequireKey(KeyProfileManage); logo theo ADR 0052 §2–§3"
+    },
+    {
+      "id": "khu-van-hanh-dot2-gioi-han-tai-len",
+      "viec": "Khu vận hành đợt 2: sửa giới hạn tải lên (upload_policy, ops.upload_policy.manage, vết platform_audit_log — ADR 0052 §10)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "internal/store/upload_policy.go + operator_routes.go"
+    },
+    {
+      "id": "khu-van-hanh-dot2-phat-hanh-qr",
+      "viec": "Khu vận hành đợt 2: phát hành QR cho tên miền xã (ops.qr.issue, không ghi vết — ADR 0048 §30/09 #9)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "operator_routes.go; tham số ?d=&src=qr đã chốt ở ubiquitous-language.md"
+    },
+    {
+      "id": "khu-van-hanh-dot2-linh-vuc-tang-1",
+      "viec": "Khu vận hành đợt 2: mã lĩnh vực phản ánh cấp 1 (petition_field, ADR 0060)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "internal/store/petition_field.go — khoá ops.* cho việc này chưa có trong 6 khoá đã chốt: hỏi trước"
+    },
+    {
+      "id": "khu-van-hanh-dot2-app-secret",
+      "viec": "Khu vận hành đợt 2: màn App secret của app riêng (ADR 0066)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "đọc ADR 0066 — secret thuộc identity, không thuộc platform; xác định service sở hữu trước khi dựng"
     }
   ]
 }

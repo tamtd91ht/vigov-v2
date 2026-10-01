@@ -132,16 +132,16 @@ type NewPasswordRefusal struct {
 // 0048 §01/10 #2) — a cached Resolve would keep a revoked or idle-expired session working for the
 // length of the cache.
 //
-// THIS PACKAGE DELIBERATELY HAS NO Dial. Building the connection means choosing its transport
-// credentials, and the only transport the cluster has today is plaintext (ADR 0025): a NEW
-// platform -> identity channel carrying operator passwords, TOTP codes and bearer tokens. Opening a
-// new unencrypted channel is a rule 13 STOP CONDITION, so the choice is left to whoever wires
-// service-platform, with the user's answer — not made silently in a shared package. The caller
-// builds the *grpc.ClientConn to IDENTITY_GRPC_ADDR (cluster-internal only) with UnaryInterceptors
-// and hands it to NewFromConn; the caller owns and closes it.
+// THE CONNECTION: Dial (dial.go) opens it over the SAME plaintext transport identityclient uses —
+// the user's answer of 2026-10-01 to the rule 13 stop condition this channel raised ("chung nợ kênh
+// gRPC nội cụm" — the same debt as the existing gRPC channels, and a go-live blocker). It carries
+// operator passwords, TOTP codes and bearer tokens, so the NetworkPolicy rule platform → identity
+// 9090 (deploy/base/mang/netpol.yaml, rule 11) must be on the real cluster before OPERATOR_HOST is
+// set. A caller that has its own connection uses NewFromConn with UnaryInterceptors instead.
 type Client struct {
-	cl  identityv1.OperatorServiceClient
-	log *slog.Logger
+	cl   identityv1.OperatorServiceClient
+	log  *slog.Logger
+	conn interface{ Close() error } // set by Dial only; nil on an injected client
 }
 
 // UnaryInterceptors is the chain the connection to identity MUST carry — pass it to

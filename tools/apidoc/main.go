@@ -188,9 +188,17 @@ func main() {
 func chay(c cauHinh) (int, ketQuaViec, error) {
 	var kq ketQuaViec
 
-	tuyens, err := quetTuyen(c.Root)
+	all, err := quetTuyen(c.Root)
 	if err != nil {
 		return 0, kq, err
+	}
+	// The operator realm's routes were read and checked above; from here on they are dropped. Every
+	// output below is the COMMUNE surface — see isOperatorRoute (route.go) for why an operator route
+	// in openapi.json is a route routable from a commune's host.
+	tuyens, operatorRoutes := splitOperatorRoutes(all)
+	if len(operatorRoutes) > 0 {
+		fmt.Fprintf(os.Stderr, "apidoc: %d tuyến vận hành (chỉ trên OPERATOR_HOST) — đã kiểm, KHÔNG đưa vào openapi.json\n",
+			len(operatorRoutes))
 	}
 
 	gm, err := moGiaiMa(c.Root)

@@ -240,3 +240,48 @@ spec:
             matchLabels: { vigov.vn/surface: rest }
       ports:
         - { port: 8080, protocol: TCP }
+# 11. platform → identity gRPC 9090: kênh OperatorService của khu vận hành (ADR 0048 §01/10 #2).
+#
+# Kênh này mang MẬT KHẨU, mã TOTP, mã khôi phục và token `op1.` của người vận hành, KHÔNG TLS —
+# người dùng chốt 01/10/2026: chung nợ với các kênh gRPC nội cụm hiện có, và là ĐIỀU KIỆN CHẶN
+# GO-LIVE: luật này phải được áp lên cụm thật TRƯỚC KHI đặt OPERATOR_HOST
+# (`core/operatorclient/dial.go`, dấu `@security-exception`).
+#
+# ⚠ NÓI THẲNG: hôm nay luật này CHƯA THÊM QUYỀN NÀO. Quy tắc 3 (`allow-grpc-internal`) đã cho mọi
+# pod trong namespace vào 9090, và quy tắc 4 đã cho mọi pod ra 9090. NetworkPolicy chỉ CỘNG quyền,
+# không bớt được — nên luật hẹp này chỉ thành biên thật vào ngày quy tắc 3 được hẹp lại theo từng
+# cặp gọi. Nó được viết ra để cặp platform → identity đã có tên sẵn khi việc ấy làm, và để không ai
+# đọc quy tắc 3 rồi tưởng kênh mật khẩu này đã được khoanh riêng.
+#
+# HẸP CÓ CHỦ Ý: chỉ pod platform, chỉ tới pod identity, chỉ cổng 9090. Không 8080, không 9091
+# (cầu phiên công dân — quy tắc 8).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-to-identity-grpc
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: identity }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: platform }
+      ports:
+        - { port: 9090, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-egress-identity-grpc
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: identity }
+      ports:
+        - { port: 9090, protocol: TCP }
+---

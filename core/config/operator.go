@@ -13,7 +13,8 @@ import (
 
 // Operator realm configuration (ADR 0048, owner's decisions of 2026-09-28 #2 and #10, 2026-10-01 #2).
 //
-// TWO GROUPS, NEITHER DECLARED YET. config.OperatorRealm (both keys) is for the service that
+// TWO GROUPS, each declared by exactly one service (identity: OperatorRealm; platform, since
+// 2026-10-01: OperatorEdge). config.OperatorRealm (both keys) is for the service that
 // ISSUES operator sessions — identity. config.OperatorEdge (OPERATOR_HOST + the signing keys) is
 // for the operator area's HTTP edge — platform, which checks the `op1.` signature locally before it
 // asks identity (§01/10 #2) and has no use for the TOTP key. Once a service declares its group,

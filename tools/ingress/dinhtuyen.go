@@ -35,6 +35,10 @@ const (
 
 	// dichVuWeb serves everything that is not /api/v1 — the Next.js admin web.
 	dichVuWeb = "web-admin"
+
+	// operatorRealmPrefix marks an operator-realm declaration in x-vigov-permission.kind
+	// (tools/apidoc: operator-key / operator-signed-in / operator-public).
+	operatorRealmPrefix = "operator-"
 )
 
 // phuongThuc — the HTTP verbs an OpenAPI path item may carry. Everything else under a path
@@ -107,9 +111,21 @@ func docHopDong(raw []byte) ([]tuyenHopDong, error) {
 			var op struct {
 				Tags        []string `json:"tags"`
 				OperationID string   `json:"operationId"`
+				Permission  struct {
+					Kind string `json:"kind"`
+				} `json:"x-vigov-permission"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
 				return nil, fmt.Errorf("tuyến %s %s: %w", strings.ToUpper(pt), duong, err)
+			}
+			// BACKSTOP FOR ADR 0048 §01/10 #6c. tools/apidoc keeps operator-realm routes out of this
+			// contract; if one ever arrives here anyway, every rule generated from it would make it
+			// routable on every commune and API host — stop condition #6 of ADR 0048. Refuse the
+			// whole run rather than emit a table with an operator route in it.
+			if strings.HasPrefix(op.Permission.Kind, operatorRealmPrefix) {
+				return nil, fmt.Errorf(
+					"tuyến %s %s thuộc miền vận hành (%s) — chỉ phục vụ trên OPERATOR_HOST, không bao giờ vào bảng định tuyến của xã (ADR 0048)",
+					strings.ToUpper(pt), duong, op.Permission.Kind)
 			}
 			if len(op.Tags) != 1 {
 				return nil, fmt.Errorf(
