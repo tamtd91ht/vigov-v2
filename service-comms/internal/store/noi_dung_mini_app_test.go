@@ -51,6 +51,7 @@ type dongNDMiniApp struct {
 	// Migration 0011. nil where the column is NULL — the commonest row there is.
 	publishedAt, eventStartsAt, eventEndsAt any
 	eventPlace, videoURL                    any
+	coverImageFileID                        any
 }
 
 func (d dongNDMiniApp) giaTri(cot string) driver.Value {
@@ -99,6 +100,8 @@ func (d dongNDMiniApp) giaTri(cot string) driver.Value {
 		return d.eventPlace
 	case "video_url":
 		return d.videoURL
+	case "cover_image_file_id":
+		return d.coverImageFileID
 	default:
 		// LOUD, NOT ZERO. A silent zero here would let a column be added to cotNoiDungMiniApp and
 		// never actually be read by anything, while this suite "passed" and proved nothing about it.
@@ -549,12 +552,12 @@ func TestChenNoiDungBienChuoiRongThanhNull(t *testing.T) {
 	}
 	// $1 xã, $2 id, $3 loại, $4 danh mục, $5 tiêu đề, $6 tóm tắt, $7 nội dung, $8 ảnh,
 	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12 published_at, $13 event_starts_at,
-	// $14 event_ends_at, $15 event_place, $16 video_url.
+	// $14 event_ends_at, $15 event_place, $16 video_url, $17 cover_image_file_id.
 	args := k.lenh[0].args
-	if len(args) != 16 {
-		t.Fatalf("số tham số = %d, muốn 16", len(args))
+	if len(args) != 17 {
+		t.Fatalf("số tham số = %d, muốn 17", len(args))
 	}
-	for _, i := range []int{3, 5, 6, 7, 11, 12, 13, 14, 15} {
+	for _, i := range []int{3, 5, 6, 7, 11, 12, 13, 14, 15, 16} {
 		if args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL cho chuỗi rỗng", i+1, args[i])
 		}
@@ -634,9 +637,43 @@ func TestReadsMigration0011ColumnsByNameAndNullAsEmpty(t *testing.T) {
 		!gotLegacy.EventEndsAt.IsZero() || gotLegacy.EventPlace != "" || gotLegacy.VideoURL != "" {
 		t.Errorf("dòng trước 0011 phải đọc NULL thành rỗng: %+v", gotLegacy)
 	}
-	// cover_image_file_id is deliberately not read until the upload card lands.
-	if strings.Contains(k.lenh[0].sql, "cover_image_file_id") {
-		t.Errorf("câu đọc không được chọn cover_image_file_id: %s", k.lenh[0].sql)
+	if gotLegacy.CoverImageFileID != "" {
+		t.Errorf("cover_image_file_id NULL phải đọc thành rỗng: %q", gotLegacy.CoverImageFileID)
+	}
+}
+
+func TestReadsCoverImageFileIDByName(t *testing.T) {
+	// The cover column sits between video_url and the body; read BY NAME, so a misplaced scan lands here.
+	withCover := dongNDMau()
+	withCover.id, withCover.coverImageFileID = "nd-cover", "01JCOVERFILE00000000000000"
+	k := &khoNDGia{dong: []dongNDMiniApp{withCover}}
+	kho, ctx := khoNoiDung(t, k)
+	result, err := kho.DanhSach(ctx, LocNoiDung{}, trangDauND(t))
+	if err != nil {
+		t.Fatalf("đọc sổ lỗi: %v", err)
+	}
+	if len(result.Items) != 1 || result.Items[0].CoverImageFileID != "01JCOVERFILE00000000000000" {
+		t.Fatalf("cover_image_file_id không đọc được: %+v", result.Items)
+	}
+	if !result.Items[0].CoAnh() {
+		t.Error("có ảnh bìa tải lên thì CoAnh phải đúng")
+	}
+}
+
+func TestInsertBindsCoverImageFileID(t *testing.T) {
+	k := &khoNDGia{}
+	kho, ctx := khoNoiDung(t, k)
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		return kho.Chen(ctx, tx, domain.NoiDungMiniApp{
+			ID: "nd-new", Loai: domain.LoaiTinTuc, TieuDe: "Tin", NgayDang: ngayMau,
+			TrangThai: domain.TrangThaiAn, NguoiTaoMa: "CB-1", CoverImageFileID: "01JCOVERFILE00000000000000",
+		})
+	})
+	if err != nil {
+		t.Fatalf("chèn lỗi: %v", err)
+	}
+	if got := k.lenh[0].args[16]; got != "01JCOVERFILE00000000000000" {
+		t.Errorf("$17 cover_image_file_id = %v", got)
 	}
 }
 
@@ -657,10 +694,10 @@ func TestInsertBindsMigration0011ColumnsInPosition(t *testing.T) {
 		t.Fatalf("chèn lỗi: %v", err)
 	}
 	stmt := k.lenh[0]
-	if strings.Contains(stmt.sql, "cover_image_file_id") {
-		t.Errorf("câu chèn không được ghi cover_image_file_id: %s", stmt.sql)
-	}
 	args := stmt.args
+	if len(args) != 17 || args[16] != nil {
+		t.Errorf("$17 cover_image_file_id phải là NULL khi không có ảnh bìa: %v", args)
+	}
 	if got, _ := args[11].(time.Time); !got.Equal(published) {
 		t.Errorf("$12 published_at = %v, muốn %v", args[11], published)
 	}
@@ -703,14 +740,15 @@ func TestUpdateCannotChangeFirstPublishAndWritesEveryTypeColumn(t *testing.T) {
 			t.Errorf("câu cập nhật thiếu %q: %s", want, stmt.sql)
 		}
 	}
-	if strings.Contains(stmt.sql, "cover_image_file_id") {
-		t.Errorf("câu cập nhật không được chạm cover_image_file_id: %s", stmt.sql)
+	// The cover is written in full from the merged row: NULL detaches (ADR 0047 §6 (1)).
+	if !strings.Contains(stmt.sql, "cover_image_file_id = $16") {
+		t.Errorf("câu cập nhật phải ghi cover_image_file_id = $16: %s", stmt.sql)
 	}
-	// A tin-tuc row: every per-type column and the unset instant bind as NULL.
-	if len(stmt.args) != 15 {
-		t.Fatalf("số tham số = %d, muốn 15", len(stmt.args))
+	// A tin-tuc row: every per-type column, the unset instant and the absent cover bind as NULL.
+	if len(stmt.args) != 16 {
+		t.Fatalf("số tham số = %d, muốn 16", len(stmt.args))
 	}
-	for i := 10; i < 15; i++ {
+	for i := 10; i < 16; i++ {
 		if stmt.args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL", i+1, stmt.args[i])
 		}

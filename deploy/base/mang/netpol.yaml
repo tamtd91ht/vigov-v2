@@ -143,6 +143,35 @@ spec:
         - { port: 9000, protocol: TCP }
         - { port: 3310, protocol: TCP }
 ---
+# 7b. Đường RA của RIÊNG comms: kho tệp MinIO và máy quét clamd (ADR 0052, ảnh bìa tin Mini App —
+# ADR 0047 §6 (1)). Người dùng xác nhận 01/10/2026: quyền ghi MinIO cho comms (private
+# content-source/…/comms/* và bucket public cho bản dẫn xuất) đã cấp, khoá nằm trong `comms-secrets`.
+#
+# MỘT CHÍNH SÁCH RIÊNG, KHÔNG nới `podSelector` của quy tắc 7: tên đối tượng k8s là danh tính của nó
+# khi `kubectl apply`, nên đổi tên quy tắc 7 để chứa cả hai sẽ để lại bản cũ trong cụm; còn giữ tên cũ
+# mà chọn thêm comms thì tên `allow-petitions-…` nói sai điều nó làm. Mỗi dịch vụ lưu tệp một chính
+# sách, đọc tên là biết pod nào ra được kho tệp — biên mạng không rộng hơn biên quyền IAM `…/comms/*`.
+#
+# ⚠ ĐÍCH TẠM MỞ, cùng nợ với quy tắc 4 và 7 (`_chung/netpol-duong-ra-tam-mo`); GIỮ giới hạn CỔNG.
+# Cổng 9000 (MinIO) và 3310 (clamd `vigov-clamav:3310`, a0d2afec) phải khớp OBJECT_STORAGE_ENDPOINT và
+# MALWARE_SCANNER_ADDRESS — sai cổng thì mọi lần tải ảnh bìa trả 503 dù pod xanh.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-comms-egress-storage
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: comms }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của MinIO / clamd
+      ports:
+        - { port: 9000, protocol: TCP }
+        - { port: 3310, protocol: TCP }
+---
 # 8. Cầu phiên công dân 9091 của identity: CHỈ từ pod `vihat-miniapp` (ADR 0045).
 #
 # Tách khỏi quy tắc 3 có chủ đích: 9090 tin mọi pod trong namespace, còn cầu này đổi một mã

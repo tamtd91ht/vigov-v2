@@ -211,6 +211,11 @@ type Deps struct {
 	DanhMucNoiDung    DanhMucMiniAppDoc
 	GhiDanhMucNoiDung GhiDanhMucMiniApp
 
+	// The cover upload of an article (ADR 0047 §6 (1), ADR 0052) — internal/http/content_cover.go.
+	// Built even when object storage, the scanner or platform's limits are absent: the two routes then
+	// answer 503 and every other route keeps serving.
+	ContentCovers ContentCoverActs
+
 	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
 	MapFieldSchemas      MapFieldSchemaReader
 	WriteMapFieldSchemas MapFieldSchemaWriter
@@ -263,6 +268,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.GhiDanhMucNoiDung == nil {
 		panic("comms/http: thiếu use case ghi danh mục Mini App — POST /api/v1/content-categories sẽ panic khi có người gọi")
+	}
+	if d.ContentCovers == nil {
+		panic("comms/http: thiếu use case ảnh bìa — hai tuyến /api/v1/content-items/cover-images và chi tiết nội dung sẽ panic khi có người gọi")
 	}
 	if d.MapFieldSchemas == nil {
 		panic("comms/http: thiếu kho trường bản đồ — GET /api/v1/map-field-schemas sẽ panic khi có người gọi")
@@ -608,6 +616,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// with a control character, an instant that is not RFC 3339 with an offset, a non-http(s) link.
 	// 409 is `category_missing`. `published_at` is never a request field: `publish: true` fixes it (G1).
 	//
+	// `cover_image_file_id` (optional): a completed cover upload issued without `content_item_id`; the
+	// item takes the id that upload reserved. 409 `cover_not_usable` for any other file. Published with a
+	// cover, the derivative is copied to the public bucket in the same transaction; the copy failing is
+	// 503 `cover_publish_unavailable` and nothing is written (app/content_cover.go, coverPublisher).
+	//
 	// @summary  Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy
 	// @screen   11-noi-dung-mini-app §7
 	// @request  themNoiDungVao
@@ -617,6 +630,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/content-items",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.Required(idem.DongKhiHong)(
@@ -644,6 +658,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `not_found`, 409 `category_missing`. The edit that first moves the item into `dang-hien` fixes
 	// `published_at` (G1); no edit changes it afterwards.
 	//
+	// `cover_image_file_id`: "" detaches, an id attaches a completed upload issued for THIS item (409
+	// `cover_not_usable` otherwise). The cover's public copy follows the item: published with a cover →
+	// copied in the transaction (503 `cover_publish_unavailable` if that fails, nothing written);
+	// unpublished, detached or replaced → the old copy is withdrawn after commit.
+	//
 	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
 	// @screen   11-noi-dung-mini-app §6, §7
 	// @request  suaNoiDungVao
@@ -654,10 +673,70 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
 	mux.Handle("PATCH /api/v1/content-items/{id}",
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng, đúng một vết, và không đặt cờ da_sua_tay")(
 				http.HandlerFunc(h.SuaNoiDung))))
+
+	// --- the cover image of an article: ADR 0052's three-step upload -----------------------------------
+	//
+	// internal/app/content_cover.go has the whole flow; internal/http/content_cover.go says why the noun
+	// is `cover-images` and why it sits at collection level. `content.update` on both: uploading a cover
+	// is composing the article (§10.5 divides the screen into read and update, nothing else). The key is
+	// seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// THE LIMITS ARE PLATFORM'S (`content-image` policy, ADR 0052 §10): size and types on every request.
+	// Not configured → 503 `storage_not_configured`, as is a missing object store or scanner.
+	//
+	// idem.Required(idem.MoKhiHong): a double submit issues a second pending row — one unused upload
+	// slot for 15 minutes, never a second stored file, never a second article. A cache outage must not
+	// stop a member of staff mid-composition (petitions' attachment route makes the same call).
+	//
+	// 404 is a named `content_item_id` that is no live article of this commune — the same answer as
+	// another commune's (rule 4, forbidden #2 on the commune axis).
+	//
+	// @summary  Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu
+	// @screen   11-noi-dung-mini-app §7
+	// @request  coverUploadIn
+	// @reply    201 coverUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/cover-images",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestCoverUpload))))
+
+	// HOÀN TẤT TẢI ẢNH BÌA — `completion`, a nominalised sub-resource (skills/rest-api-design §3). Only
+	// the officer the upload was issued to; anybody else's id answers 404.
+	//
+	// Stat · sniff (the client's type is never trusted) · the CURRENT policy · ClamAV · sha256 · copy to
+	// the private bucket · decode, orient, fit to 1280 px, re-encode JPEG without EXIF · `ready` and the
+	// trail in ONE transaction. Infected, wrong type, too large, undecodable, too many pixels → 422.
+	// Scanner or platform down → 503, nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
+	//
+	// idem.KhongCan: a second completion of a ready file answers that file and writes nothing; two in
+	// flight at once serialise on the row lock and the loser lands on the winner's row.
+	//
+	// @summary  Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF
+	// @screen   11-noi-dung-mini-app §7
+	// @reply    200 coverFileOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/cover-images/{id}/completion",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
+				http.HandlerFunc(h.CompleteCoverUpload))))
 
 	// --- the commune's Mini App category tree --------------------------------------------------------
 	//

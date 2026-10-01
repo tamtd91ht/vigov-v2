@@ -20,6 +20,7 @@ import (
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
+	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 )
@@ -68,7 +69,9 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 	mux := http.NewServeMux()
 	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{
 		Xa: xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The real use case with nothing configured: every image is absent, never an error.
+		CoverImages: commsapp.NewContentCovers(nil, nil, nil, nil, nil, nil),
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	return dungBienCongKhai(mux, nguon)
 }

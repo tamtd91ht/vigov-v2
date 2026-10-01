@@ -445,9 +445,6 @@ type DanhMucMiniApp struct {
 
 // NoiDungMiniApp is ONE item of content — the `ContentItem` entity of migration 0006.
 //
-// `cover_image_file_id` (migration 0011) IS NOT A FIELD HERE EITHER, yet: no path reads or writes it
-// until core/storage can put an object, and the card that adds the upload adds the field.
-//
 // `TepDinhKem` IS NOT A FIELD HERE, although migration 0006 creates the column §8 declares. Nothing
 // in this pass writes it, and §6's `Tệp đính kèm` column is `🔗 Có ảnh` / `—`, which is derived from
 // `AnhDaiDienURL` — see CoAnh below. A field read from a column no path fills is a field every layer
@@ -494,6 +491,11 @@ type NoiDungMiniApp struct {
 	// §6 (3)). "" means NULL.
 	VideoURL string
 
+	// CoverImageFileID is migration 0011's `cover_image_file_id`: this service's own `stored_file` row
+	// holding the UPLOADED cover (ADR 0047 §6 (1)). "" = NULL. Distinct from AnhDaiDienURL, which is a
+	// link to a file some other system serves and is never published by this service.
+	CoverImageFileID string
+
 	// Nguon, NguonURL, NguonIDNgoai and DaSuaTay are the provenance half of §8. They describe the
 	// ROW rather than the sync job, which is why they are here while the job is not — migration 0006
 	// argues it in full.
@@ -514,8 +516,9 @@ type NoiDungMiniApp struct {
 // not.
 //
 // DERIVED AND NOT STORED. A boolean column beside the URL would be two representations of one fact,
-// and the stale one is what a screen would read (rule 9).
-func (n NoiDungMiniApp) CoAnh() bool { return n.AnhDaiDienURL != "" }
+// and the stale one is what a screen would read (rule 9). Either image counts: the legacy link or the
+// uploaded cover (migration 0011).
+func (n NoiDungMiniApp) CoAnh() bool { return n.AnhDaiDienURL != "" || n.CoverImageFileID != "" }
 
 // HienChoDan reports whether residents can see this item at all.
 //
@@ -587,6 +590,10 @@ type YeuCauThemNoiDung struct {
 	// VideoURL — `video` only. "" = not given.
 	VideoURL string
 
+	// CoverImageFileID — an uploaded, completed cover (`ready`) issued WITHOUT an article id; the new
+	// article takes the id that upload minted (migration 0011: the modal uploads before `Lưu`). "" = none.
+	CoverImageFileID string
+
 	// DangLenMiniApp is §7's checkbox. true -> `dang-hien`, false -> `an`.
 	//
 	// THERE IS NO `PublishedAt` FIELD, for the reason there is no `TrangThai`: G1's instant is fixed by
@@ -631,6 +638,9 @@ func (y YeuCauThemNoiDung) KiemTra() (YeuCauThemNoiDung, error) {
 	if ra.VideoURL, err = NormalizeVideoURL(y.VideoURL); err != nil {
 		return YeuCauThemNoiDung{}, err
 	}
+	if ra.CoverImageFileID, err = cleanFileID(y.CoverImageFileID); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
 	ra.EventStartsAt, ra.EventEndsAt = y.EventStartsAt.UTC(), y.EventEndsAt.UTC() // zero stays zero
 	// On a create the type is known here, so the per-type CHECKs are answered before any transaction.
 	if err := checkTypeFields(LoaiNoiDung(ra.Loai), ra.EventStartsAt, ra.EventEndsAt,
@@ -671,6 +681,10 @@ type YeuCauSuaNoiDung struct {
 	EventEndsAt   *time.Time
 	EventPlace    *string
 	VideoURL      *string
+
+	// CoverImageFileID — nil = leave alone; "" = DETACH (the column goes NULL; the file row stays, rule
+	// 7); an id = attach that file, which must have been uploaded for THIS article and be `ready`.
+	CoverImageFileID *string
 }
 
 // SetsEventField reports whether the request gives an event field a VALUE (clearing one does not
@@ -744,6 +758,13 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 			return YeuCauSuaNoiDung{}, err
 		}
 		ra.VideoURL = &v
+	}
+	if y.CoverImageFileID != nil {
+		v, err := cleanFileID(*y.CoverImageFileID)
+		if err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		ra.CoverImageFileID = &v
 	}
 	if y.EventStartsAt != nil {
 		v := y.EventStartsAt.UTC()

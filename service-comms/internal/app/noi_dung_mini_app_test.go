@@ -143,7 +143,8 @@ func cotChiTietND() []string {
 	return []string{"id", "loai", "danh_muc_id", "tieu_de", "tom_tat", "anh_dai_dien_url",
 		"ngay_dang", "luot_xem", "trang_thai", "nguon", "nguon_url", "nguon_id_ngoai",
 		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
-		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url", "noi_dung"}
+		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url",
+		"cover_image_file_id", "noi_dung"}
 }
 
 func hangTu(n domain.NoiDungMiniApp) []driver.Value {
@@ -165,7 +166,7 @@ func hangTu(n domain.NoiDungMiniApp) []driver.Value {
 		rong(n.NguonURL), rong(n.NguonIDNgoai), n.DaSuaTay, n.NguoiTaoMa,
 		n.TaoLuc, n.CapNhatLuc,
 		instant(n.PublishedAt), instant(n.EventStartsAt), instant(n.EventEndsAt),
-		rong(n.EventPlace), rong(n.VideoURL), rong(n.NoiDung),
+		rong(n.EventPlace), rong(n.VideoURL), rong(n.CoverImageFileID), rong(n.NoiDung),
 	}
 }
 
@@ -303,11 +304,14 @@ func TestThemNoiDungQuyetDinhTrangThaiNguonVaNguoiTaoTaiDay(t *testing.T) {
 		t.Fatalf("số câu chèn = %d, muốn 1", len(l))
 	}
 	// $1 xã, $2 id, $3 loại, $4 danh mục, $5 tiêu đề, $6 tóm tắt, $7 nội dung, $8 ảnh,
-	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12–$16 cột của migration 0011. `nguon` là hằng
-	// trong câu lệnh.
+	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12–$17 cột của migration 0011 ($17 ảnh bìa).
+	// `nguon` là hằng trong câu lệnh.
 	args := l[0].args
-	if len(args) != 16 {
-		t.Fatalf("số tham số = %d, muốn 16", len(args))
+	if len(args) != 17 {
+		t.Fatalf("số tham số = %d, muốn 17", len(args))
+	}
+	if args[16] != nil {
+		t.Errorf("không có ảnh bìa mà cover_image_file_id = %v, muốn NULL", args[16])
 	}
 	if args[0] != string(xaA) {
 		t.Errorf("xã = %v, muốn %v — xã đến từ ngữ cảnh, không từ yêu cầu", args[0], xaA)
@@ -607,8 +611,8 @@ func updateArgs(t *testing.T, k *khoNDGia) []driver.Value {
 	if len(stmts) != 1 {
 		t.Fatalf("số câu cập nhật = %d, muốn 1", len(stmts))
 	}
-	if len(stmts[0].args) != 15 {
-		t.Fatalf("số tham số cập nhật = %d, muốn 15", len(stmts[0].args))
+	if len(stmts[0].args) != 16 { // $16 cover_image_file_id
+		t.Fatalf("số tham số cập nhật = %d, muốn 16", len(stmts[0].args))
 	}
 	return stmts[0].args
 }

@@ -30,6 +30,8 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 		panic("comms/http: thiếu kho nội dung công khai — tuyến tin của xã sẽ panic khi có người gọi")
 	case d.DanhMuc == nil:
 		panic("comms/http: thiếu kho danh mục nội dung — tuyến tin của xã sẽ panic khi có người gọi")
+	case d.CoverImages == nil:
+		panic("comms/http: thiếu đường đọc ảnh bìa công khai — tuyến tin của xã sẽ panic khi có người gọi")
 	}
 	h := newHandlerCongKhai(d)
 

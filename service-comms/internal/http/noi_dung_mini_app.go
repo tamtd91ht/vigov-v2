@@ -6,6 +6,8 @@ package http
 //	GET   /api/v1/content-items/{id}   content.read
 //	POST  /api/v1/content-items        content.update
 //	PATCH /api/v1/content-items/{id}   content.update
+//	POST  /api/v1/content-items/cover-images                  content.update (content_cover.go)
+//	POST  /api/v1/content-items/cover-images/{id}/completion  content.update (content_cover.go)
 //	GET   /api/v1/content-categories   content.read
 //	POST  /api/v1/content-categories   content.update
 //
@@ -78,10 +80,8 @@ package http
 //	                    a delete here a soft delete with a MANDATORY `delete_reason`, and no screen
 //	                    in chapter 11 collects one. Taking an item off the Mini App is the edit route
 //	                    with the checkbox cleared, which is what §7's own wording describes.
-//	no image upload     §7's `Chọn tệp từ máy · JPG, PNG hoặc WebP — tối đa 50MB`. There is no
-//	                    `core/storage` in this repository, so nothing can accept bytes;
-//	                    `image_url` carries a link instead, and §10.6's size and format rules belong
-//	                    to the uploader that does not exist.
+//	no image upload     SUPERSEDED 2026-10-01: the cover upload is content_cover.go
+//	                    (`…/content-items/cover-images`); `image_url` stays the legacy link field.
 
 import (
 	"errors"
@@ -143,12 +143,22 @@ type noiDungRa struct {
 	// carry it.
 	Body *string `json:"body,omitempty"`
 
-	// ImageURL is §7's `Ảnh đại diện`, as a LINK: there is no file storage in this repository.
+	// ImageURL is the LEGACY link form of §7's `Ảnh đại diện` (`anh_dai_dien_url`): a file some other
+	// system serves. The uploaded cover is CoverImageFileID below; this field is kept as it was.
 	ImageURL string `json:"image_url"`
 
-	// HasImage is §6's `Tệp đính kèm` column, `🔗 Có ảnh` / `—`. DERIVED from ImageURL and stored
-	// nowhere — a column beside the URL would be two representations of one fact (rule 9).
+	// HasImage is §6's `Tệp đính kèm` column, `🔗 Có ảnh` / `—`. DERIVED from ImageURL and the uploaded
+	// cover, stored nowhere — a column beside them would be two representations of one fact (rule 9).
 	HasImage bool `json:"has_image"`
+
+	// CoverImageFileID is the uploaded cover (POST …/cover-images, then …/completion); ABSENT when none.
+	// On the list and the detail.
+	CoverImageFileID string `json:"cover_image_file_id,omitempty"`
+
+	// CoverImage is the cover's status and a short-lived preview link — on the DETAIL only (GET
+	// /api/v1/content-items/{id}), absent from the list (one signature per row is a bearer credential
+	// per row nobody asked for) and from the write replies.
+	CoverImage *coverImageOut `json:"cover_image,omitempty"`
 
 	// PublishedOn is §6's `Ngày đăng`, a DATE. It is sent as a date-only string rather than a
 	// timestamp because that is what it is: an article carried over from the portal was published on
@@ -229,6 +239,8 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 		EventEndsAt:   instantOut(n.EventEndsAt),
 		EventPlace:    n.EventPlace,
 		VideoURL:      n.VideoURL,
+
+		CoverImageFileID: n.CoverImageFileID,
 	}
 	if coThan {
 		than := n.NoiDung
@@ -411,7 +423,13 @@ func (h *Handler) MotNoiDung(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiNoiDung(w, r, "đọc", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, noiDungRaNgoai(n, true))
+	ra := noiDungRaNgoai(n, true)
+	if n.CoverImageFileID != "" {
+		ra.CoverImage = h.coverView(r, n.CoverImageFileID)
+		// A presigned preview is a bearer credential: no shared cache keeps this reply.
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	vietJSON(w, http.StatusOK, ra)
 }
 
 // DanhSachDanhMucNoiDung serves the commune's whole Mini App category tree.
@@ -495,6 +513,11 @@ type themNoiDungVao struct {
 	// VideoURL is an http(s) link, only for `type: video`.
 	VideoURL string `json:"video_url,omitempty"`
 
+	// CoverImageFileID is a COMPLETED cover upload (status `ready`) issued WITHOUT `content_item_id`.
+	// The article is created under the id that upload reserved; with `publish: true` its derivative is
+	// published with it. Any other file is a 409 `cover_not_usable`.
+	CoverImageFileID string `json:"cover_image_file_id,omitempty"`
+
 	// Publish is §7's `☐ Đăng lên Mini App`. Absent means false, which is the checkbox's own default
 	// and the safe direction: an item nobody chose to publish stays invisible. Ticking it also fixes
 	// `published_at` (G1) — there is no request field for that instant.
@@ -544,6 +567,8 @@ func (h *Handler) ThemNoiDung(w http.ResponseWriter, r *http.Request) {
 		EventPlace:     vao.EventPlace,
 		VideoURL:       vao.VideoURL,
 		DangLenMiniApp: vao.Publish,
+
+		CoverImageFileID: vao.CoverImageFileID,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "thêm", err)
@@ -580,6 +605,11 @@ type suaNoiDungVao struct {
 	EventEndsAt   *string `json:"event_ends_at,omitempty"`
 	EventPlace    *string `json:"event_place,omitempty"`
 	VideoURL      *string `json:"video_url,omitempty"`
+
+	// CoverImageFileID: ABSENT = leave alone; "" = DETACH (the public copy, if any, is withdrawn); an id
+	// = a completed upload (`ready`) issued for THIS article (`content_item_id`). With the article
+	// published, the new cover's derivative is published and the old one withdrawn.
+	CoverImageFileID *string `json:"cover_image_file_id,omitempty"`
 }
 
 // optionalInstant is ParseEventInstant for a PATCH field: nil stays nil (leave alone), "" becomes a
@@ -640,6 +670,8 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		EventEndsAt:    endsAt,
 		EventPlace:     vao.EventPlace,
 		VideoURL:       vao.VideoURL,
+
+		CoverImageFileID: vao.CoverImageFileID,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "sửa", err)
@@ -725,6 +757,21 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, commsstore.ErrQuaNhieuDanhMucMiniApp):
 		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
 			"Danh mục tin của xã đã đạt số mục tối đa.", "")
+	case errors.Is(err, domain.ErrCoverNotUsable):
+		// One sentence for every cause (domain.ErrCoverNotUsable says why). 409: the body is well-formed;
+		// what is refused is this file against the state of the data.
+		httpx.WriteError(w, http.StatusConflict, "cover_not_usable",
+			"Ảnh bìa đã chọn không dùng được: chỉ dùng ảnh đã tải lên cho chính mục nội dung này và đã xử lý xong.", "")
+	case errors.Is(err, app.ErrCoverPublishUnavailable):
+		h.d.Log.Warn("CẢNH BÁO: chưa đăng được ảnh bìa lên kho công khai — không ghi gì",
+			"xa", string(tenant.MustFrom(r.Context())), "viec", viec, "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "cover_publish_unavailable",
+			"Chưa đăng được ảnh bìa nên nội dung CHƯA được lưu. Vui lòng thử lại sau ít phút.", "")
+	case errors.Is(err, app.ErrCoverUploadNotConfigured):
+		h.d.Log.Warn("CẢNH BÁO: từ chối thao tác ảnh bìa vì chưa cấu hình kho lưu tệp / máy quét / giới hạn",
+			"xa", string(tenant.MustFrom(r.Context())), "viec", viec, "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "storage_not_configured",
+			"Chưa cấu hình kho lưu tệp nên chưa dùng được ảnh bìa. Hãy báo quản trị hệ thống.", "")
 	case laLoiDauVaoNoiDung(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data and no internal detail, and a second sentence written here would drift from it.
@@ -771,6 +818,7 @@ func laLoiDauVaoNoiDung(err error) bool {
 		domain.ErrEventEndsWithoutStart, domain.ErrEventEndsBeforeStart,
 		domain.ErrEventPlaceTooLong, domain.ErrEventPlaceInvalid,
 		domain.ErrEventTimeInvalid,
+		domain.ErrCoverFileIDInvalid,
 	} {
 		if errors.Is(err, mot) {
 			return true

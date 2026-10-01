@@ -127,12 +127,12 @@ func NewNoiDungMiniAppStore(db *store.DB) *NoiDungMiniAppStore {
 //
 // THE FIVE COLUMNS OF MIGRATION 0011 SIT AFTER `cap_nhat_luc` AND BEFORE THE BODY, all nullable.
 // `event_starts_at` / `event_ends_at` are adjacent timestamps — a swap compiles and prints an event
-// that ends before it starts. `cover_image_file_id` is deliberately NOT read: nothing writes it until
-// the upload card lands, and a column read with no writer is a field every layer carries for nothing.
+// that ends before it starts. `cover_image_file_id` follows them (the cover upload, ADR 0047 §6 (1)),
+// still before the body, so the body stays at the tail.
 const cotNoiDungMiniApp = `id, loai, danh_muc_id, tieu_de, tom_tat, anh_dai_dien_url, ` +
 	`ngay_dang, luot_xem, trang_thai, nguon, nguon_url, nguon_id_ngoai, da_sua_tay, ` +
 	`nguoi_tao_ma, tao_luc, cap_nhat_luc, ` +
-	`published_at, event_starts_at, event_ends_at, event_place, video_url`
+	`published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id`
 
 // cotNoiDungMiniAppChiTiet adds the body AT THE END. Nowhere else: the shared scan appends one
 // destination when it is asked for the body, and an insertion anywhere but the tail would shift every
@@ -312,13 +312,13 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 		than                   sql.NullString
 
 		publishedAt, startsAt, endsAt sql.NullTime
-		place, videoURL               sql.NullString
+		place, videoURL, cover        sql.NullString
 	)
 	dich := []any{
 		&n.ID, &loai, &danhMuc, &n.TieuDe, &tomTat, &anh,
 		&n.NgayDang, &n.LuotXem, &trang, &nguon, &nguonURL, &nguonIDNgoai, &n.DaSuaTay,
 		&n.NguoiTaoMa, &n.TaoLuc, &n.CapNhatLuc,
-		&publishedAt, &startsAt, &endsAt, &place, &videoURL,
+		&publishedAt, &startsAt, &endsAt, &place, &videoURL, &cover,
 	}
 	if coThan {
 		dich = append(dich, &than)
@@ -342,6 +342,7 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 	n.EventEndsAt = nullTimeUTC(endsAt)
 	n.EventPlace = place.String
 	n.VideoURL = videoURL.String
+	n.CoverImageFileID = cover.String
 	return n, nil
 }
 
@@ -434,12 +435,13 @@ func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.Scope
 // `published_at` ($12) IS BOUND BY THE CALLER, and migration 0011 says why it must be: its trigger is
 // UPDATE-only, so "set at INSERT exactly when the row is born `dang-hien`" is owed by this write path.
 // app.SoanNoiDungMiniApp.Them passes the instant when §7's checkbox is ticked and the zero time
-// (→ NULL) otherwise. `cover_image_file_id` appears nowhere: no upload path exists yet.
+// (→ NULL) otherwise. `cover_image_file_id` ($17) is a completed upload app.Them checked; 0011's
+// trigger checks it again (same commune, issued for THIS id, past the scan).
 const chenNoiDungMiniApp = `INSERT INTO noi_dung_mini_app
 	(tenant_id, id, loai, danh_muc_id, tieu_de, tom_tat, noi_dung, anh_dai_dien_url,
 	 ngay_dang, trang_thai, nguon, nguoi_tao_ma,
-	 published_at, event_starts_at, event_ends_at, event_place, video_url)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16)`
+	 published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16,$17)`
 
 // Chen writes one item. The caller owns the transaction and the audit entry inside it.
 func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
@@ -455,7 +457,8 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), n.NgayDang.UTC(),
 		string(n.TrangThai), n.NguoiTaoMa,
 		zeroTimeAsNull(n.PublishedAt), zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
-		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL)); err != nil {
+		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL),
+		rongThanhNull(n.CoverImageFileID)); err != nil {
 		return fmt.Errorf("noi_dung_mini_app: chèn: %w", err)
 	}
 	return nil
@@ -480,12 +483,13 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 // `published_at = COALESCE(published_at, $15)` — G1 IN THE STATEMENT'S SHAPE, under the trigger that
 // enforces it: an instant already there is kept whatever is bound, so this statement can neither
 // change nor clear it. $15 is non-NULL only on the edit that FIRST publishes the row (app.Sua decides),
-// which is the one case the trigger's second half admits. `cover_image_file_id` appears nowhere.
+// which is the one case the trigger's second half admits. `cover_image_file_id` ($16) is written in
+// full from the merged row: NULL detaches, an id attaches (app.Sua checked it; 0011's trigger again).
 const capNhatNoiDungMiniApp = `UPDATE noi_dung_mini_app
 	SET loai = $3, danh_muc_id = $4, tieu_de = $5, tom_tat = $6, noi_dung = $7,
 	    anh_dai_dien_url = $8, trang_thai = $9, da_sua_tay = $10,
 	    event_starts_at = $11, event_ends_at = $12, event_place = $13, video_url = $14,
-	    published_at = COALESCE(published_at, $15), cap_nhat_luc = now()
+	    published_at = COALESCE(published_at, $15), cover_image_file_id = $16, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
 // CapNhat writes the fields §7's modal may change. The caller has already read the row with
@@ -497,7 +501,8 @@ func (s *NoiDungMiniAppStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 		string(n.Loai), rongThanhNull(n.DanhMucID), n.TieuDe, rongThanhNull(n.TomTat),
 		rongThanhNull(n.NoiDung), rongThanhNull(n.AnhDaiDienURL), string(n.TrangThai), n.DaSuaTay,
 		zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
-		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL), zeroTimeAsNull(n.PublishedAt))
+		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL), zeroTimeAsNull(n.PublishedAt),
+		rongThanhNull(n.CoverImageFileID))
 	if err != nil {
 		return fmt.Errorf("noi_dung_mini_app: cập nhật: %w", err)
 	}

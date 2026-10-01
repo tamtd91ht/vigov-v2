@@ -29,10 +29,13 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
+	"github.com/vihat/vigov/core/malwarescan"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
+	"github.com/vihat/vigov/core/storage"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
@@ -49,7 +52,10 @@ import (
 //
 // comms: REST, plus since 2026-09-29 a gRPC server (GRPCServer) for DeliverStaffNotifications — the
 // automation jobs' notices into the header bell (ADR 0058 §3); the one service storing per-commune
-// secrets (SecretEncryption).
+// secrets (SecretEncryption). Since 2026-10-01 it stores the Mini App cover image (ADR 0047 §6 (1),
+// ADR 0052): ObjectStore + MalwareScan like petitions, and PublicMedia because it is the first service
+// to PUBLISH a derivative — `image_url` on the public news routes is built from that base URL. Declared
+// ⇒ required in staging and prod (ADR 0057): comms refuses to start there without them.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -59,6 +65,9 @@ var configUses = config.Uses(
 	config.Redis,
 	config.CitizenCORS,
 	config.SecretEncryption,
+	config.ObjectStore,
+	config.PublicMedia,
+	config.MalwareScan,
 )
 
 func main() {
@@ -181,6 +190,39 @@ func main() {
 	noiDung := commsstore.NewNoiDungMiniAppStore(kho)
 	danhMucNoiDung := commsstore.NewDanhMucMiniAppStore(kho)
 
+	// The cover image (migration 0011's stored_file, ADR 0052). In staging and prod the three groups are
+	// declared, so config.Load already refused to start without them. In DEV they may be absent: the
+	// cover routes then answer 503 "chưa cấu hình kho lưu tệp" and everything else serves. A value that
+	// is present but malformed was refused by config.Load, and is refused again here.
+	//
+	// DECLARED AS THE INTERFACES AND LEFT nil WHEN ABSENT: a nil *storage.Client assigned into the
+	// interface would be a non-nil interface, pass the use case's nil check, and panic on first use.
+	storedFiles := commsstore.NewStoredFileStore(kho)
+	var objects commsapp.CoverObjectStore
+	switch c, err := storage.New(cfg.ObjectStorage()); {
+	case err == nil:
+		objects = c
+	case errors.Is(err, storage.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — ảnh bìa nội dung Mini App bị từ chối", "service", "comms", "err", err)
+	default:
+		log.Error("cấu hình kho lưu tệp không hợp lệ", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	var scanner commsapp.MalwareScanner
+	switch s, err := malwarescan.New(cfg.MalwareScanner()); {
+	case err == nil:
+		scanner = s
+	case errors.Is(err, malwarescan.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình máy quét mã độc — ảnh bìa nội dung Mini App bị từ chối", "service", "comms", "err", err)
+	default:
+		log.Error("cấu hình máy quét mã độc không hợp lệ", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	// Platform's per-purpose limits over the SAME connection the directory uses — its interceptors put
+	// "x-tenant-id" on every call, which ListUploadPolicies requires; the reader caches per commune.
+	policies := uploadpolicy.New(nenTang.Client(), log)
+	covers := commsapp.NewContentCovers(kho, noiDung, storedFiles, objects, scanner, policies)
+
 	// The map field schema (migration 0007). One store behind the read route and the write use
 	// case; the use case owns the transaction its audit entry shares.
 	mapFieldSchemas := commsstore.NewMapFieldSchemaStore(kho)
@@ -220,9 +262,10 @@ func main() {
 		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
 
 		NoiDung:           noiDung,
-		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung),
+		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung).WithCovers(storedFiles, objects, log),
 		DanhMucNoiDung:    danhMucNoiDung,
 		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(kho, danhMucNoiDung),
+		ContentCovers:     covers,
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.
@@ -244,10 +287,11 @@ func main() {
 	// only through their published-only reads.
 	muxCongKhai := http.NewServeMux()
 	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{
-		Xa:      nenTang,
-		NoiDung: noiDung,
-		DanhMuc: danhMucNoiDung,
-		Log:     log,
+		Xa:          nenTang,
+		NoiDung:     noiDung,
+		DanhMuc:     danhMucNoiDung,
+		CoverImages: covers,
+		Log:         log,
 	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 

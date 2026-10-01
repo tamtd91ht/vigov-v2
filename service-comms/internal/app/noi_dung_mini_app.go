@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -73,10 +74,24 @@ type SoanNoiDungMiniApp struct {
 	// the value is wrong.
 	sinhID func() (string, error)
 	bayGio func() time.Time
+
+	// covers keeps the cover's public copy in step with the article (content_cover.go). nil = no file
+	// store wired: a request naming a cover is refused with ErrCoverUploadNotConfigured.
+	covers *coverPublisher
 }
 
 func NewSoanNoiDungMiniApp(db *store.DB, kho KhoNoiDungMiniApp, khoDanh KhoDanhMucMiniApp) *SoanNoiDungMiniApp {
 	return &SoanNoiDungMiniApp{db: db, kho: kho, khoDanh: khoDanh, sinhID: ulid.Moi, bayGio: time.Now}
+}
+
+// WithCovers wires the cover file store and the object store (UNTYPED nil when not configured — see
+// NewContentCovers) so composing and editing can attach a cover and publish its derivative.
+func (uc *SoanNoiDungMiniApp) WithCovers(files CoverFiles, objects CoverObjectStore, log *slog.Logger) *SoanNoiDungMiniApp {
+	if log == nil {
+		log = slog.Default()
+	}
+	uc.covers = &coverPublisher{files: files, objects: objects, log: log}
+	return uc
 }
 
 // DanhMucNoiDungMiniApp owns adding categories to one commune's Mini App filing tree.
@@ -123,11 +138,10 @@ var (
 //
 // # WHAT IT DOES NOT DO, IN ORDER OF HOW LIKELY SOMEBODY IS TO LOOK FOR IT
 //
-//	no attachment upload  §7's `Ảnh đại diện · Chọn tệp từ máy · JPG, PNG hoặc WebP — tối đa 50MB`.
-//	                      There is no `core/storage` in this repository, so nothing here can accept
-//	                      bytes. `anh_dai_dien_url` holds a link to a file some other system serves,
-//	                      and §10.6's size and format rules belong to the uploader that does not
-//	                      exist yet — writing them here would be validating a request nobody sends.
+//	no upload here        §7's `Ảnh đại diện` is uploaded by ContentCovers (content_cover.go); this
+//	                      act only ATTACHES a completed upload (`CoverImageFileID`) and, when the item
+//	                      is born published, publishes its derivative (coverPublisher). The size and
+//	                      format rules are platform's policy, read by the uploader, never here.
 //	few per-type fields   the event window and place (`su-kien`) and the external video link (`video`)
 //	                      ARE handled — the user decided them on 30/09/2026 (ADR 0047 §6) and
 //	                      migration 0011 added the columns. The audio file and its duration (a later
@@ -153,8 +167,25 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		return domain.NoiDungMiniApp{}, ErrThieuNguoiTaoNoiDung
 	}
 
-	id, err := uc.sinhID()
-	if err != nil {
+	// THE ID. With a cover it is the id the upload minted (migration 0011: §7 uploads before `Lưu`) —
+	// read from the FILE ROW, never from the request, so a client cannot name the id of a new record.
+	var id string
+	if sach.CoverImageFileID != "" {
+		if uc.covers == nil {
+			return domain.NoiDungMiniApp{}, ErrCoverUploadNotConfigured
+		}
+		f, err := uc.covers.files.ByID(ctx, sach.CoverImageFileID)
+		if err != nil {
+			return domain.NoiDungMiniApp{}, bocNoiDung(ctx, "thêm nội dung Mini App", err)
+		}
+		if f == nil {
+			return domain.NoiDungMiniApp{}, domain.ErrCoverNotUsable
+		}
+		if err := domain.CheckCoverUsable(f, f.SubjectID, string(coverPurpose)); err != nil {
+			return domain.NoiDungMiniApp{}, err
+		}
+		id = f.SubjectID
+	} else if id, err = uc.sinhID(); err != nil {
 		return domain.NoiDungMiniApp{}, fmt.Errorf("noi_dung_mini_app: sinh mã: %w", err)
 	}
 
@@ -178,6 +209,8 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		VideoURL:      sach.VideoURL,
 		NgayDang:      ngayDang,
 		LuotXem:       0,
+
+		CoverImageFileID: sach.CoverImageFileID,
 		// THE STATE IS DECIDED HERE FROM §7'S CHECKBOX, never taken from the request. See
 		// domain.YeuCauThemNoiDung: a request that could name its own state could publish past
 		// whatever approval a commune later introduces, or claim `cho-duyet`, which §10.2 reserves
@@ -199,6 +232,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		moi.PublishedAt = luc
 	}
 
+	// PUBLISHED WITH A COVER: settle copies the derivative to the public bucket INSIDE this transaction
+	// and records its key (coverPublisher says why); a rollback after the copy withdraws it again.
+	var cover settlement
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if moi.DanhMucID != "" {
 			co, err := uc.kho.DanhMucCoThat(ctx, tx, moi.DanhMucID)
@@ -209,11 +245,34 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 				return commsstore.ErrDanhMucKhongTonTaiMiniApp
 			}
 		}
+		if moi.CoverImageFileID != "" {
+			// The upload's id must still be FREE: an upload issued for an existing article cannot be
+			// used to create a second one under its id.
+			switch _, err := uc.kho.TheoIDDeSua(ctx, tx, moi.ID); {
+			case err == nil:
+				return domain.ErrCoverNotUsable
+			case !errors.Is(err, commsstore.ErrNoiDungKhongTonTai):
+				return err
+			}
+			if err := uc.covers.checkAttach(ctx, tx, moi.ID, moi.CoverImageFileID); err != nil {
+				return err
+			}
+		}
 		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
 			return err
 		}
+		after := tomTatNoiDungMiniApp(moi)
+		if uc.covers != nil {
+			var err error
+			if cover, err = uc.covers.settle(ctx, tx, moi, luc); err != nil {
+				return err
+			}
+			if cover.published != "" {
+				after["cover_published_file_id"] = cover.published
+			}
+		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatNoiDungMiniApp(moi)})
+		delta, err := json.Marshal(map[string]any{"sau": after})
 		if err != nil {
 			return fmt.Errorf("noi_dung_mini_app: mã hoá delta: %w", err)
 		}
@@ -229,10 +288,28 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		})
 	})
 	if err != nil {
-		// Nothing was committed: no item, no trail. The two agree.
-		return domain.NoiDungMiniApp{}, bocNoiDung(ctx, "thêm nội dung Mini App", err)
+		// Nothing was committed: no item, no trail. The two agree — and a copy made for it is withdrawn.
+		if cover.copied {
+			uc.covers.undoPublish(ctx, moi.CoverImageFileID)
+		}
+		return domain.NoiDungMiniApp{}, coverRefusal(ctx, "thêm nội dung Mini App", err)
+	}
+	if len(cover.withdraw) > 0 {
+		uc.covers.withdrawAfterCommit(ctx, uc.db, moi, cover.withdraw, nguoi, luc)
 	}
 	return moi, nil
+}
+
+// coverRefusal returns a cover refusal UNWRAPPED (the handler answers it with its own sentence, which
+// names no commune) and wraps every other failure with bocNoiDung.
+func coverRefusal(ctx context.Context, viec string, err error) error {
+	for _, r := range []error{domain.ErrCoverNotUsable, ErrCoverPublishUnavailable,
+		ErrCoverUploadNotConfigured} {
+		if errors.Is(err, r) {
+			return err
+		}
+	}
+	return bocNoiDung(ctx, viec, err)
 }
 
 // Sua applies a partial edit — §6's `✎` reopening §7's modal.
@@ -272,6 +349,7 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 	}
 
 	var sau domain.NoiDungMiniApp
+	var cover settlement
 	// refusal carries a refusal decided INSIDE the transaction (it needs the stored row) back out
 	// UNWRAPPED. bocNoiDung would prefix it with the commune id, and the handler returns a refusal's
 	// own sentence to the client — which must name the field, not the commune.
@@ -319,6 +397,9 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		if sach.VideoURL != nil {
 			sau.VideoURL = *sach.VideoURL
 		}
+		if sach.CoverImageFileID != nil {
+			sau.CoverImageFileID = *sach.CoverImageFileID // "" detaches; the file row stays (rule 7)
+		}
 
 		// THE PER-TYPE FIELDS OF MIGRATION 0011, decided on the MERGED row because the type after the
 		// edit may come from the request or from the stored row.
@@ -356,6 +437,18 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			}
 		}
 
+		// A NEW cover is checked under lock, before anything is written: uploaded for THIS article,
+		// `ready` (its derivative exists), not deleted. Re-sending the current cover checks nothing.
+		if sau.CoverImageFileID != "" && sau.CoverImageFileID != truoc.CoverImageFileID {
+			if uc.covers == nil {
+				refusal = ErrCoverUploadNotConfigured
+				return refusal
+			}
+			if err := uc.covers.checkAttach(ctx, tx, sau.ID, sau.CoverImageFileID); err != nil {
+				return err
+			}
+		}
+
 		if khongDoiNoiDungMiniApp(truoc, sau) {
 			return nil
 		}
@@ -385,10 +478,22 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		// BEFORE AND AFTER, AND ONLY THE FIELDS THAT MOVED (rule 6, invariant 5). A delta carrying
 		// every column on every edit makes the one field somebody actually changed impossible to find
 		// in a ledger that is never deleted.
+		afterDelta := tomTatDoiNoiDungMiniApp(truoc, sau, false)
+		if uc.covers != nil {
+			// THE COVER'S PUBLIC COPY FOLLOWS THE ROW JUST WRITTEN (coverPublisher): published with a
+			// cover → copied and recorded here; anything else still public → withdrawn after commit.
+			var err error
+			if cover, err = uc.covers.settle(ctx, tx, sau, uc.bayGio().UTC()); err != nil {
+				return err
+			}
+			if cover.published != "" {
+				afterDelta["cover_published_file_id"] = cover.published
+			}
+		}
 		delta, err := json.Marshal(map[string]any{
 			"id":    sau.ID,
 			"truoc": tomTatDoiNoiDungMiniApp(truoc, sau, true),
-			"sau":   tomTatDoiNoiDungMiniApp(truoc, sau, false),
+			"sau":   afterDelta,
 		})
 		if err != nil {
 			return fmt.Errorf("noi_dung_mini_app: mã hoá delta: %w", err)
@@ -400,12 +505,19 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			Delta:   delta,
 		})
 	})
+	if err != nil && cover.copied {
+		// Rolled back after the public copy was made: withdraw it (coverPublisher, PUBLISH).
+		uc.covers.undoPublish(ctx, sau.CoverImageFileID)
+	}
 	if refusal != nil {
 		// Rolled back (the closure returned it); nothing was written, no trail.
 		return domain.NoiDungMiniApp{}, refusal
 	}
 	if err != nil {
-		return domain.NoiDungMiniApp{}, bocNoiDung(ctx, "sửa nội dung Mini App", err)
+		return domain.NoiDungMiniApp{}, coverRefusal(ctx, "sửa nội dung Mini App", err)
+	}
+	if len(cover.withdraw) > 0 {
+		uc.covers.withdrawAfterCommit(ctx, uc.db, sau, cover.withdraw, nguoi, uc.bayGio().UTC())
 	}
 	return sau, nil
 }
@@ -555,6 +667,8 @@ func tomTatNoiDungMiniApp(n domain.NoiDungMiniApp) map[string]any {
 		"event_ends_at":   instantOrEmpty(n.EventEndsAt),
 		"has_event_place": n.EventPlace != "",
 		"has_video_url":   n.VideoURL != "",
+		// The cover's FILE ID — an internal handle, not personal data; its file name never enters here.
+		"cover_image_file_id": n.CoverImageFileID,
 	}
 }
 
@@ -617,6 +731,9 @@ func tomTatDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp, ben bool) map[str
 	if truoc.VideoURL != sau.VideoURL {
 		ra["video_url_changed"] = true
 	}
+	if truoc.CoverImageFileID != sau.CoverImageFileID {
+		ra["cover_image_file_id"] = chon(ben, truoc.CoverImageFileID, sau.CoverImageFileID)
+	}
 	return ra
 }
 
@@ -649,7 +766,8 @@ func khongDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp) bool {
 		truoc.EventStartsAt.Equal(sau.EventStartsAt) &&
 		truoc.EventEndsAt.Equal(sau.EventEndsAt) &&
 		truoc.EventPlace == sau.EventPlace &&
-		truoc.VideoURL == sau.VideoURL
+		truoc.VideoURL == sau.VideoURL &&
+		truoc.CoverImageFileID == sau.CoverImageFileID
 	// `PublishedAt` is NOT compared, for the reason `DaSuaTay` is not: it is derived from the act of
 	// publishing, which a changed TrangThai already makes a change.
 }

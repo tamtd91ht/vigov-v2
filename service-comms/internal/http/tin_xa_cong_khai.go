@@ -80,7 +80,17 @@ type DepsCongKhai struct {
 	// own public articles — public by construction, and bounded (commsstore.TranDanhMucMiniApp).
 	DanhMuc DanhMucMiniAppDoc
 
+	// CoverImages resolves `image_url`: the public-bucket URL of a cover's PUBLISHED derivative.
+	// *app.ContentCovers satisfies it.
+	CoverImages PublicCoverImages
+
 	Log *slog.Logger
+}
+
+// PublicCoverImages maps cover file ids to the anonymous URL of their published derivative; a file
+// with no recorded public copy is absent (ADR 0052 §2, §11).
+type PublicCoverImages interface {
+	PublicImageURLs(ctx context.Context, fileIDs []string) (map[string]string, error)
 }
 
 // HandlerCongKhai serves the public routes. A SEPARATE TYPE from Handler, with its own Deps, so a
@@ -105,10 +115,10 @@ func newHandlerCongKhai(d DepsCongKhai) *HandlerCongKhai {
 // WHAT IS ABSENT IS THE CONTRACT: no `status` (it is always `dang-hien`), no author code, no portal id
 // (`source_ref`), no category id, no commune id or host, and:
 //
-//   - NO IMAGE. `anh_dai_dien_url` is a link a member of staff typed to a file SOME OTHER SYSTEM serves
+//   - NOT `anh_dai_dien_url`. It is a link a member of staff typed to a file SOME OTHER SYSTEM serves
 //     (migrations/0006_noi_dung_mini_app.sql:277-280) — not an approved derivative in the public bucket
 //     (ADR 0052 §2). Handing it to every resident would make the Mini App fetch whatever host was typed.
-//     It arrives when the image is stored as a public-bucket derivative.
+//     The image residents get is `image_url` (2026-10-01): the UPLOADED cover's published derivative.
 //   - NO VIEW COUNT. Nothing increments `luot_xem` (0006:93-97), so it is 0 on every row; a public 0 reads
 //     as "nobody read this", which is false.
 type tinXaRa struct {
@@ -159,9 +169,29 @@ type tinXaRa struct {
 	// SourceURL. The write path already refuses anything else (and so does 0011's CHECK); the output
 	// check is the second wall on a surface anybody can read.
 	VideoURL string `json:"video_url,omitempty"`
+
+	// ImageURL is the cover (ADR 0047 §6 (1), 2026-10-01): the anonymous URL of the 1280 px JPEG
+	// DERIVATIVE in the public bucket, never the original (ADR 0052 §2). ABSENT when the item has no
+	// uploaded cover or no public copy is recorded for it. On the list and the detail. The URL is
+	// immutable and cached a year (core/storage.PublicCacheControl).
+	ImageURL string `json:"image_url,omitempty"`
 }
 
-func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, coThan bool) tinXaRa {
+// coverIDs collects the cover file ids of the PUBLISHED items of a page — the only ones the public
+// surface may resolve an image for.
+func coverIDs(ds []domain.NoiDungMiniApp) []string {
+	ids := make([]string, 0, len(ds))
+	seen := make(map[string]bool, len(ds))
+	for _, n := range ds {
+		if n.HienChoDan() && n.CoverImageFileID != "" && !seen[n.CoverImageFileID] {
+			seen[n.CoverImageFileID] = true
+			ids = append(ids, n.CoverImageFileID)
+		}
+	}
+	return ids
+}
+
+func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images map[string]string, coThan bool) tinXaRa {
 	ra := tinXaRa{
 		ID:           n.ID,
 		Type:         string(n.Loai),
@@ -189,6 +219,10 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, coThan 
 			// Dropped, not an error — the same reasoning as SourceURL above.
 			ra.VideoURL = u
 		}
+	}
+	if n.HienChoDan() && n.CoverImageFileID != "" {
+		// ONLY A PUBLISHED ITEM'S, a second wall under the store's predicate and coverIDs.
+		ra.ImageURL = images[n.CoverImageFileID]
 	}
 	if coThan {
 		than := domain.VanBanThuanChoDan(n.NoiDung)
@@ -330,6 +364,11 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 		h.loi500(ctx, w, "tin của xã: tên danh mục", err)
 		return
 	}
+	images, err := h.d.CoverImages.PublicImageURLs(ctx, coverIDs(kq.Items))
+	if err != nil {
+		h.loi500(ctx, w, "tin của xã: ảnh bìa", err)
+		return
+	}
 
 	ra.NextCursor, ra.HasMore = kq.NextCursor, kq.HasMore
 	for _, n := range kq.Items {
@@ -340,7 +379,7 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 				"xa", string(xa.ID), "trang_thai", string(n.TrangThai))
 			continue
 		}
-		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, false))
+		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, false))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -540,5 +579,10 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 		h.loi500(ctx, w, "chi tiết tin của xã: tên danh mục", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, true))
+	images, err := h.d.CoverImages.PublicImageURLs(ctx, coverIDs([]domain.NoiDungMiniApp{n}))
+	if err != nil {
+		h.loi500(ctx, w, "chi tiết tin của xã: ảnh bìa", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, true))
 }

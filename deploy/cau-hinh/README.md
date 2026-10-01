@@ -47,8 +47,8 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 | `OPERATOR_SESSION_SIGNING_KEYS` | **có (prod)** — identity, platform | `identity-secrets` · `platform-secrets` — **cùng một giá trị** | Khoá ký phiên nhà vận hành: identity ký, platform kiểm chữ ký (ADR 0048 §01/10 #2). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
 | `OPERATOR_TOTP_ENCRYPTION_KEY` | **có (prod)** — identity | `identity-secrets` | Khoá mã hoá bí mật TOTP nhà vận hành. Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` |
 | `SECRET_ENCRYPTION_KEYS` | **có (prod)** — comms, identity | `comms-secrets` · `identity-secrets` | Khoá mã hoá bí mật riêng của từng xã trong CSDL (ADR 0009): comms niêm mật khẩu máy chủ thư, identity niêm secret Zalo của app riêng từng xã (ADR 0066). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` — **mỗi Secret một giá trị riêng** (hai CSDL, hai bộ khoá dữ liệu). **Sao lưu riêng trước khi lưu bí mật đầu tiên** — mất là mất hết |
-| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions | `petitions-secrets` | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ bucket của môi trường | access key MinIO riêng của dịch vụ |
-| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions | `petitions-secrets` | Nửa kia của cặp trên | secret key đi cặp |
+| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions, comms | `petitions-secrets` · `comms-secrets` — **mỗi Secret một cặp khác** | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ `…/<dịch vụ>/*` của môi trường; comms còn cần ghi bucket public (bản dẫn xuất ảnh bìa, ADR 0052 §11) | access key MinIO riêng của dịch vụ |
+| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions, comms | `petitions-secrets` · `comms-secrets` | Nửa kia của cặp trên | secret key đi cặp |
 
 **Việc cần làm trên cụm đang chạy — `SESSION_SIGNING_KEYS`:** chỉ để ở `identity-secrets`. **Xoá key
 này khỏi** `platform-secrets`, `documents-secrets`, `finance-secrets`, `petitions-secrets`,
@@ -74,12 +74,12 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `TRUSTED_PROXY_CIDRS` | **có (prod)** — mọi dịch vụ | Dải IP Pod của ingress-nginx và web-admin — trạm được tin khi báo IP người dùng qua `X-Forwarded-For`; thiếu thì vết kiểm toán ghi IP pod thay vì IP người thao tác. Cách lấy: ngay dưới bảng | dải IP pod ingress-nginx và web-admin, vd `10.42.0.0/16` |
 | `CITIZEN_CORS_ALLOWED_ORIGINS` | **có (prod)** — identity, petitions, comms | Miền Zalo Mini App được gọi API công dân (CORS). Chép đúng giá trị bên phải | `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me` |
 | `CITIZEN_SESSION_TTL` | không — mặc định `720h` | Thời hạn phiên công dân | `720h` |
-| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions | MinIO nội bộ lưu tệp đính kèm (ADR 0052). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
-| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
-| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | không — chưa dịch vụ nào dùng | URL gốc bucket media công khai | `https://<host media>/vigov-prod-public` |
+| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions, comms | MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin (ADR 0052). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions, comms | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App dựng từ đây. Thiếu thì comms **không khởi động** ở prod/staging. Người vận hành MinIO (bucket `<tiền tố>-public`, chỉ `GetObject` ẩn danh) | `https://<host media>/vigov-prod-public` |
 | `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
-| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
-| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
+| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions, comms | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
+| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions, comms | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
 
 **Lấy `TRUSTED_PROXY_CIDRS`:**
 
@@ -189,3 +189,10 @@ Trước khi Zalo duyệt app: `tat-demo-mini-app` — danh tính demo mở phi�
    dòng log của pod clamd. RAM, đường ra `database.clamav.net:443`, giới hạn cỡ tệp: đầu tệp manifest.
 2. Đặt đủ `OBJECT_STORAGE_*` (mục 1 và 2) — thiếu thì ảnh petitions mới cũng không khởi động.
 3. Job `service-petitions`.
+
+**comms cũng vậy từ 01/10/2026** (ảnh bìa tin Mini App): `config.Uses` của comms khai `ObjectStore`,
+`PublicMedia`, `MalwareScan`, nên trước job `service-comms` phải có `MALWARE_SCANNER_ADDRESS`,
+`OBJECT_STORAGE_ENDPOINT` · `_PUBLIC_ENDPOINT` · `_BUCKET_PREFIX` · `_PUBLIC_MEDIA_BASE_URL` trong
+`common-config`, và `OBJECT_STORAGE_ACCESS_KEY` · `_SECRET_KEY` trong `comms-secrets` — thiếu một là
+comms **từ chối khởi động** và gọi tên key. NetworkPolicy `allow-comms-egress-storage` (quy tắc 7b của
+`deploy/base/mang/netpol.yaml`) mở 9000/3310 cho pod comms.

@@ -126,6 +126,13 @@ spec:
             # khẩu máy chủ thư của từng xã. `config.Load` không đòi — thiếu thì chỉ hai tuyến ghi
             # `/api/v1/mail-settings` trả 503, mọi tuyến khác vẫn chạy; sai dạng thì pod không
             # khởi động. SAO LƯU KHOÁ TÁCH KHỎI BẢN SAO LƯU CSDL trước lần lưu đầu tiên.
+            # ⚠ TỪ 01/10/2026 (ảnh bìa tin Mini App, ADR 0047 §6 (1)): Secret này PHẢI có thêm
+            # OBJECT_STORAGE_ACCESS_KEY · OBJECT_STORAGE_SECRET_KEY — cặp khoá MinIO RIÊNG của comms
+            # (`…/comms/*` + ghi bucket public, ADR 0052 §3, §11), khác cặp của petitions. Và
+            # `common-config` phải có OBJECT_STORAGE_ENDPOINT · _PUBLIC_ENDPOINT · _BUCKET_PREFIX ·
+            # _PUBLIC_MEDIA_BASE_URL · MALWARE_SCANNER_ADDRESS. `configUses` khai ObjectStore,
+            # PublicMedia, MalwareScan, nên ở staging/prod thiếu một key là pod TỪ CHỐI KHỞI ĐỘNG và gọi
+            # tên key (ADR 0057). Đường ra 9000/3310: NetworkPolicy `allow-comms-egress-storage`.
             - secretRef: { name: comms-secrets }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:420`): nó trả lời "tiến

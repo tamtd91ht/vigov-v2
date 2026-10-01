@@ -64,6 +64,7 @@ func auditDeps(checker authz.Checker, fake AuditLogReader, log *slog.Logger) Dep
 		GhiNoiDung:           &ghiNoiDungGia{},
 		DanhMucNoiDung:       &soDanhMucNDGia{},
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
+		ContentCovers:        &fakeCovers{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         &fakeMailSettings{},

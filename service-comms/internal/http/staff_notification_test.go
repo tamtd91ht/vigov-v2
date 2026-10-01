@@ -138,6 +138,7 @@ func newInboxServer(t *testing.T) *inboxServer {
 		GhiNoiDung:           &ghiNoiDungGia{},
 		DanhMucNoiDung:       &soDanhMucNDGia{},
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
+		ContentCovers:        &fakeCovers{},
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         &fakeMailSettings{},
