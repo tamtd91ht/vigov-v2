@@ -8,6 +8,8 @@
  *   PATCH /api/v1/content-items/{id}                              content.update  (không cần khoá chống trùng)
  *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC
  *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
+ *   POST  /api/v1/content-items/audio-files                       content.update  + Idempotency-Key BẮT BUỘC (ADR 0067 §4)
+ *   POST  /api/v1/content-items/audio-files/{id}/completion       content.update  {audio_duration_seconds}
  *   GET   /api/v1/content-categories                              content.read
  *   POST  /api/v1/content-categories                              content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-categories/{id}                         content.update  (ADR 0067 §3)
@@ -63,6 +65,9 @@
 import { CHUNG, docJSON, docThanKetQua, goiGhi, LOI_KHONG_RO, thongBaoLoi, type KetQua } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type { CallResult } from "./task-attachments";
 import type {
+  comms_audioFileOut,
+  comms_audioUploadIn,
+  comms_audioUploadOut,
   comms_coverFileOut,
   comms_coverUploadIn,
   comms_coverUploadOut,
@@ -74,6 +79,8 @@ import type {
   comms_get_content_items_by_id,
   comms_noiDungRa,
   comms_patch_content_categories_by_id,
+  comms_post_content_items_audio_files,
+  comms_post_content_items_audio_files_by_id_completion,
   comms_post_content_items_cover_images,
   comms_post_content_items_cover_images_by_id_completion,
   comms_suaNoiDungVao,
@@ -184,6 +191,8 @@ export const CONTENT_TYPE_EVENT = "su-kien";
 export const CONTENT_TYPE_VIDEO = "video";
 /** `link_to` and `display_order` go with this type only (migration 0012, ADR 0067 §5): 422 otherwise. */
 export const CONTENT_TYPE_BANNER = "banner";
+/** The audio file goes with this type only (ADR 0067 §4): 422 `audio_only_for_truyen_thanh` otherwise. */
+export const CONTENT_TYPE_BROADCAST = "truyen-thanh";
 
 /**
  * Copies the per-type fields that the chosen type can carry, and only when they hold a value.
@@ -307,6 +316,11 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     // here would be a "leave alone" that looks like a clear — the form never builds one.
     link_to: than.link_to,
     display_order: than.display_order,
+    // Broadcast audio (ADR 0067 §4): absent = leave alone; `audio_file_id: ""` = REMOVE (the server
+    // clears both columns and retires the file). `thanSua` never sets either — attaching is the upload's
+    // completion, removing is `removeContentAudio` — so a form Lưu cannot touch the audio by accident.
+    audio_file_id: than.audio_file_id,
+    audio_duration_seconds: than.audio_duration_seconds,
   };
 
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
@@ -394,6 +408,118 @@ export async function completeCoverUpload(id: string): Promise<CallResult<comms_
   } catch {
     return { ok: false, status: 0, message: LOI_KHONG_RO };
   }
+}
+
+/* ── Truyền thanh §7 — ADR 0067 §4, backend 026ae398 ──────────────────────────────────────────
+ *
+ * The cover's three steps, for a broadcast's ONE audio file (MP3 / M4A, ≤ 30 MB, platform's
+ * `content-audio` policy). Two differences, both the server's:
+ *
+ *   1. `content_item_id` is REQUIRED: the audio is uploaded for a SAVED `truyen-thanh` item (400
+ *      otherwise, 422 `audio_only_for_truyen_thanh` when the saved type is another one).
+ *   2. The completion carries the duration THE OFFICER TYPED (`audio_duration_seconds`, 1 .. 21600) —
+ *      the server never measures it (ADR 0067 §4.1) — and ATTACHES the file to the item at once. There
+ *      is no `audio_file_id` to send on Lưu.
+ *
+ * Removing is `PATCH … {audio_file_id: ""}` (`removeContentAudio`). Replacing = remove, then upload:
+ * the item holds one file and a second declaration answers 409 `audio_limit`.
+ *
+ * The errors carry the server's `code` as well as its sentence: a 422 at completion is final for
+ * `audio_rejected` (the bytes were refused) but NOT for `invalid_audio_duration` (the file is still
+ * pending; correcting the duration and completing again is the way out). Both sentences are shown
+ * verbatim; the code only decides which button the screen offers.
+ *
+ * ⚠ Same bearer-credential rule as the cover: `upload.url` + `upload.fields` are used in the one
+ * request they sign and never logged; `file_name` can name a person (rule 3).
+ */
+
+/** A call's answer with the server's error `code` (`httpx.Error.code`), `""` when there is none. */
+export type AudioCallResult<T> =
+  | { readonly ok: true; readonly data: T }
+  | { readonly ok: false; readonly status: number; readonly code: string; readonly message: string };
+
+export const AUDIO_FORM_MISSING =
+  "Máy chủ không gửi kèm biểu mẫu tải lên cho tệp âm thanh này. Hãy chọn lại tệp.";
+
+async function readAudioJSON<T>(res: Response, want: number): Promise<AudioCallResult<T>> {
+  if (res.status !== want) {
+    let code = "";
+    let message = LOI_KHONG_RO;
+    try {
+      const body = (await res.json()) as { code?: unknown; message?: unknown };
+      if (typeof body?.code === "string") code = body.code;
+      if (typeof body?.message === "string" && body.message !== "") message = body.message;
+    } catch {
+      // Not the server's httpx.Error (a proxy page): the generic sentence, no code.
+    }
+    return { ok: false, status: res.status, code, message };
+  }
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, status: res.status, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/** a. Declare the audio for a SAVED broadcast. One Idempotency-Key per attempt (see the cover's). */
+export async function requestAudioUpload(
+  body: comms_audioUploadIn,
+  idempotencyKey: string,
+): Promise<AudioCallResult<comms_audioUploadOut>> {
+  const path: comms_post_content_items_audio_files["duongDan"] = "/api/v1/content-items/audio-files";
+  // Field by field — never `...body`.
+  const sent: comms_audioUploadIn = {
+    content_item_id: body.content_item_id,
+    file_name: body.file_name,
+    content_type: body.content_type,
+    size: body.size,
+  };
+  try {
+    const res = await fetch(path, {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(sent),
+    });
+    const r = await readAudioJSON<comms_audioUploadOut>(res, 201);
+    if (
+      r.ok &&
+      (r.data?.upload?.url === undefined || r.data.upload.fields === undefined || r.data.audio_file?.id === undefined)
+    ) {
+      return { ok: false, status: 201, code: "", message: AUDIO_FORM_MISSING };
+    }
+    return r;
+  } catch {
+    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/**
+ * c. Complete AND attach, with the typed duration. Safe to repeat: a file already `ready` answers itself
+ * again — and then the duration sent is NOT applied (the server's rule; correcting it is a PATCH).
+ */
+export async function completeAudioUpload(
+  id: string,
+  durationSeconds: number,
+): Promise<AudioCallResult<comms_audioFileOut>> {
+  const template: comms_post_content_items_audio_files_by_id_completion["duongDan"] =
+    "/api/v1/content-items/audio-files/{id}/completion";
+  try {
+    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio_duration_seconds: durationSeconds }),
+    });
+    return await readAudioJSON<comms_audioFileOut>(res, 200);
+  } catch {
+    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/** `Gỡ âm thanh`: PATCH `{audio_file_id: ""}` — the server clears both columns and retires the file. */
+export function removeContentAudio(id: string): Promise<KetQua<comms_noiDungRa>> {
+  return suaNoiDung(id, { audio_file_id: "" });
 }
 
 /* ── Danh mục tin §6 ───────────────────────────────────────────────────────────────────────── */

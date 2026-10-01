@@ -623,7 +623,8 @@ describe("khối `phần chưa dựng được`", () => {
     expect(html).toContain("content.update");
     expect(html).toContain("bộ lập lịch");
     expect(html).toContain("adapter HTTP đi ra THEO XÃ");
-    expect(html).toContain("lối tải tệp âm thanh");
+    // Built (ADR 0067 §4): the broadcast audio upload is no longer listed as missing.
+    expect(html).not.toContain("lối tải tệp âm thanh");
   });
 
   it("the cover upload is BUILT — no item still says it is missing", () => {

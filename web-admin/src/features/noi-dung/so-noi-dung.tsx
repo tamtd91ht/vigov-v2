@@ -17,6 +17,7 @@ import {
   layMotNoiDung,
   laySoNoiDung,
   CONTENT_TYPE_BANNER,
+  CONTENT_TYPE_BROADCAST,
   CONTENT_TYPE_EVENT,
   CONTENT_TYPE_VIDEO,
   deleteContentCategory,
@@ -36,7 +37,10 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  BANNER_APP_PATHS,
+  BANNER_ARTICLE_PATH_HINT,
   BANNER_COVER_NOTICE,
+  bannerLinkTapWarning,
   CANH_BAO_HTML_THO,
   CHUA_XEP_DANH_MUC,
   coThayDoi,
@@ -117,6 +121,8 @@ import {
   savedCoverText,
   type CoverUploadState,
 } from "./cover-image";
+import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
+import { BroadcastAudioField } from "./broadcast-audio-field";
 import { CategoryAdmin } from "./category-admin";
 import { RichTextEditor } from "./rich-text-editor";
 
@@ -729,6 +735,7 @@ export function FormNoiDung({
   huy,
   luu,
   initialCoverState,
+  initialAudioState,
 }: {
   tieuDeForm: string;
   moTa: string;
@@ -742,10 +749,13 @@ export function FormNoiDung({
   luu: (gt: GiaTriFormNoiDung, khoaChongTrung: string) => void;
   /** Tests only: render the cover block in a given upload state (this suite has no DOM events). */
   initialCoverState?: CoverUploadState;
+  /** Tests only: render the audio block in a given upload state. */
+  initialAudioState?: AudioUploadState;
 }) {
   const [gt, datGT] = useState<GiaTriFormNoiDung>(giaTriDau);
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const [cover, setCover] = useState<CoverUploadState>(initialCoverState ?? { kind: "idle" });
+  const [audioBusy, setAudioBusy] = useState(false);
 
   const tieuDeGon = gt.title.trim();
   // MỘT ĐIỀU KIỆN, KHÔNG BA. Hợp đồng đánh dấu `title` và `type` bắt buộc; `type` luôn có giá trị
@@ -759,7 +769,11 @@ export function FormNoiDung({
   const typeFieldError = validateTypeFields(gt, hang === undefined ? undefined : giaTriDau);
   // A cover still moving holds Lưu: saving now would drop the image the officer just chose.
   const coverBusy = coverInFlight(cover);
-  const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy;
+  // An audio upload still moving holds Lưu too: closing the form mid-upload would hide its outcome.
+  const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy && !audioBusy;
+  // The audio is uploaded for a SAVED broadcast only (the server requires `content_item_id`).
+  const savedAsBroadcast = hang !== undefined && hang.type === CONTENT_TYPE_BROADCAST;
+  const bannerLinkWarning = gt.type === CONTENT_TYPE_BANNER ? bannerLinkTapWarning(gt.link_to) : null;
 
   // Each state report; a `ready` one makes its id the form's cover. Functional update: the upload
   // resolves after renders the officer may have made meanwhile (typing the title), and those stay.
@@ -925,6 +939,25 @@ export function FormNoiDung({
         </div>
       )}
 
+      {/* ADR 0067 §4. The audio is uploaded for a SAVED broadcast: on the create form, or on an item
+          saved as another type, the officer is told to save first instead of being shown a picker the
+          server would refuse (400 / 422 `audio_only_for_truyen_thanh`). */}
+      {gt.type === CONTENT_TYPE_BROADCAST && !savedAsBroadcast && (
+        <p className="ghi-chu" role="note">
+          {AUDIO_SAVE_FIRST}
+        </p>
+      )}
+      {savedAsBroadcast && (
+        <BroadcastAudioField
+          itemId={hang.id}
+          initialAudio={hang.audio ?? null}
+          currentType={gt.type}
+          disabled={dangGui}
+          onBusyChange={setAudioBusy}
+          initialState={initialAudioState}
+        />
+      )}
+
       {/* ADR 0067 §5. Only for `Banner`: the server refuses `link_to` / `display_order` on any other type
           (422), and a type change away from banner clears both there — so these boxes are not sent then. */}
       {gt.type === CONTENT_TYPE_BANNER && (
@@ -939,12 +972,28 @@ export function FormNoiDung({
               maxLength={LINK_TO_MAX_CHARS}
               placeholder="/tin-tuc hoặc https://"
               autoComplete="off"
-              aria-describedby="lien-ket-banner-goi-y"
+              list="lien-ket-banner-duong-app"
+              aria-describedby={
+                bannerLinkWarning === null ? "lien-ket-banner-goi-y" : "lien-ket-banner-goi-y lien-ket-banner-canh-bao"
+              }
               onChange={(e) => datGT({ ...gt, link_to: e.target.value })}
             />
+            {/* The in-app paths the citizen Mini App can open (`BANNER_APP_PATHS`); free https:// still typed. */}
+            <datalist id="lien-ket-banner-duong-app">
+              {BANNER_APP_PATHS.map((p) => (
+                <option key={p.path} value={p.path} label={p.label} />
+              ))}
+            </datalist>
             <p className="ghi-chu" id="lien-ket-banner-goi-y">
-              {LINK_TO_HINT}
+              {LINK_TO_HINT} {BANNER_ARTICLE_PATH_HINT}
             </p>
+            {bannerLinkWarning !== null && (
+              // A WARNING, not a refusal: the server accepts any in-app path, and the Mini App may learn
+              // the screen later. The officer just must not believe it is tappable today.
+              <p className="ghi-chu" role="status" id="lien-ket-banner-canh-bao">
+                {bannerLinkWarning}
+              </p>
+            )}
           </div>
           <div className="o-nhap">
             <label htmlFor="thu-tu-banner">Thứ tự hiển thị</label>
@@ -993,6 +1042,7 @@ export function FormNoiDung({
       )}
 
       {coverBusy && <p className="ghi-chu">{COVER_WAIT_NOTE}</p>}
+      {audioBusy && <p className="ghi-chu">{AUDIO_WAIT_NOTE}</p>}
 
       <div className="cum-nut">
         <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>

@@ -120,7 +120,9 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
     expect(viPham).toEqual([]);
   });
 
-  it("the ONE `src` the screen builds is the server's signed cover preview, through `coverPreviewSrc`", () => {
+  it("every `src` the screen builds is a server-signed preview, through `coverPreviewSrc` / `audioPreviewSrc`", () => {
+    // The broadcast audio (ADR 0067 §4) brought the `<audio>` player: its `src` is held to the same rule,
+    // through `audioPreviewSrc` (`broadcast-audio.test.ts`: only `preview_url`, only http(s), only `ready`).
     // The cover upload (§7) brought the first `<img>` to this screen. The rule above forbids two
     // sources by name; this one is the allow-list: every `src={x}` must be an identifier bound, in
     // the same file, to `coverPreviewSrc(…)` — which reads only `preview_url` and only lets an
@@ -136,13 +138,14 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
         const ok =
           /^[A-Za-z_$][\w$]*$/.test(expr) &&
           binding !== null &&
-          /\bcoverPreviewSrc\(/.test(binding[1] ?? "") &&
+          /\b(coverPreviewSrc|audioPreviewSrc)\(/.test(binding[1] ?? "") &&
           !/image_url|source_url|createObjectURL|blob:/.test(binding[1] ?? "");
         if (!ok) viPham.push(`${t.duongDan}: src={${expr}}`);
       }
     }
     // A scan that finds nothing is a scan that is always green: the preview exists, so it must be seen.
-    expect(found.length).toBeGreaterThanOrEqual(1);
+    expect(found.length).toBeGreaterThanOrEqual(2);
+    expect(found.some((f) => f.startsWith("broadcast-audio-field.tsx"))).toBe(true);
     expect(viPham).toEqual([]);
   });
 

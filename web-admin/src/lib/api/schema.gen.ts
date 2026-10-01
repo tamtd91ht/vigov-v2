@@ -23,6 +23,41 @@ export type audit_EntryView = {
   "delta": JsonValue;
 };
 
+export type comms_audioCompletionIn = {
+  "audio_duration_seconds": number;
+};
+
+export type comms_audioFileOut = {
+  "id": string;
+  "content_item_id": string;
+  "mime_type": string;
+  "size_bytes": number;
+  "status": string;
+  "duration_seconds"?: number;
+};
+
+export type comms_audioOut = {
+  "file_id": string;
+  "status": string;
+  "mime_type"?: string;
+  "size_bytes"?: number;
+  "duration_seconds": number;
+  "preview_url"?: string;
+  "preview_expires_at"?: string | null;
+};
+
+export type comms_audioUploadIn = {
+  "content_item_id": string;
+  "file_name": string;
+  "content_type": string;
+  "size": number;
+};
+
+export type comms_audioUploadOut = {
+  "audio_file": comms_audioFileOut;
+  "upload": comms_presignedUploadOut;
+};
+
 export type comms_bodyBlockOut = {
   "kind": string;
   "level"?: number;
@@ -248,6 +283,9 @@ export type comms_noiDungRa = {
   "video_url"?: string;
   "link_to"?: string;
   "display_order"?: number | null;
+  "audio_file_id"?: string;
+  "audio_duration_seconds"?: number;
+  "audio"?: comms_audioOut | null;
 };
 
 export type comms_notificationOut = {
@@ -313,6 +351,8 @@ export type comms_suaNoiDungVao = {
   "cover_image_file_id"?: string | null;
   "link_to"?: string | null;
   "display_order"?: number | null;
+  "audio_file_id"?: string | null;
+  "audio_duration_seconds"?: number | null;
 };
 
 export type comms_themDanhMucVao = {
@@ -381,6 +421,9 @@ export type comms_tinXaRa = {
   "video_url"?: string;
   "image_url"?: string;
   "link_to"?: string;
+  "audio_duration_seconds"?: number;
+  "audio_url"?: string;
+  "audio_url_expires_at"?: string | null;
   "body_blocks"?: Array<comms_bodyBlockOut>;
 };
 
@@ -3911,6 +3954,51 @@ export type comms_post_content_items = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/audio-files — Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type comms_post_content_items_audio_files = {
+  duongDan: "/api/v1/content-items/audio-files";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_audioUploadIn;
+  phanHoi: {
+    201: comms_audioUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/audio-files/{id}/completion — Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập */
+export type comms_post_content_items_audio_files_by_id_completion = {
+  duongDan: "/api/v1/content-items/audio-files/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_audioCompletionIn;
+  phanHoi: {
+    200: comms_audioFileOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     409: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;

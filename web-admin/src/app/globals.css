@@ -1701,7 +1701,8 @@ body {
   font-size: 1rem;
 }
 
-.task-attachments .nut-phu {
+.task-attachments .nut-phu,
+.task-attachments .nut-chinh {
   min-height: 2.75rem;
   min-width: 2.75rem;
   font-size: 1rem;
@@ -1715,6 +1716,13 @@ body {
 .task-attachments input[type="file"]:focus-visible + label.nut-phu {
   outline: 3px solid var(--xanh);
   outline-offset: 2px;
+}
+
+/* The Truyền thanh preview player (ADR 0067 §4): browsers default `<audio controls>` to ~300px, wider
+   than the block at 320px. */
+.task-attachments audio {
+  width: 100%;
+  max-width: 30rem;
 }
 
 .task-attachments li {

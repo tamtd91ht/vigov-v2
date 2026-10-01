@@ -636,12 +636,11 @@ describe("client-side check of the per-type fields — mirrors the server", () =
 });
 
 describe("phần chưa dựng được", () => {
-  it("the list is PINNED: rich text, category edit/delete and banner left it when they were built", () => {
+  it("the list is PINNED: rich text, category edit/delete, banner and broadcast audio left it when built", () => {
     // EXACT, not a floor: an item silently dropped and an item silently kept are both a block that
-    // lies to the commune about what the screen does. ADR 0067 built three of them (§1, §3, §5).
+    // lies to the commune about what the screen does. ADR 0067 built four of them (§1, §3, §4, §5).
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Toàn bộ thẻ “Đồng bộ tin từ Cổng thông tin điện tử” (§3): chip trạng thái, `⟳ Đồng bộ ngay`, `Cấu hình`, `Chạy lần cuối`, khối log lỗi, cây 60 chuyên mục",
-      "Nhóm trường của loại `Truyền thanh` (§7, dòng cuối): tệp âm thanh và thời lượng",
       "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
       "Cột `Lượt xem` (§6)",
       "Nút xoá một bài (§9 đề xuất `DELETE`)",
@@ -658,8 +657,9 @@ describe("phần chưa dựng được", () => {
     expect(all).not.toContain("chưa có cột nào ở máy chủ");
     expect(all).not.toContain("<script>");
     expect(all).not.toContain("KHÔNG làm sạch");
-    // The audio item names what is really missing — the upload route — not what already exists.
-    expect(all).toContain("lối tải");
+    // The broadcast audio upload is built (ADR 0067 §4): no item may still say it is missing.
+    expect(all).not.toContain("tệp âm thanh");
+    expect(all).not.toContain("Truyền thanh");
   });
 
   it("the note under the editor says sanitising is the SERVER's, and no longer calls it raw HTML", () => {

@@ -358,6 +358,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa chạy với service-comms thật. Mã lỗi (category_cycle, parent_missing, category_not_empty, 400 tự làm cha, 422 banner) KHÔNG ánh xạ ở client: câu tiếng Việt của máy chủ hiện nguyên văn vì KetQua cố ý không mang code (lib/api/goi.ts) — câu 400/422 còn tiền tố kỹ thuật `danh_muc_mini_app:` / `noi_dung_mini_app:` từ domain, sửa ở service-comms nếu muốn bỏ. Truyền thanh còn chờ lối tải content-audio + trường hợp đồng ở comms. Tiptap đặt injectCSS:false để CSP sau này không cần 'unsafe-inline' cho style. ADR 0067 Còn mở #6 (Mini App mở liên kết `a` thế nào) vẫn của chủ dự án.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "noi-dung-truyen-thanh-am-thanh-banner-goi-y",
+      "viec": "Nội dung Mini App (B7b): tải tệp âm thanh Truyền thanh (mp3/m4a ≤ 30 MB, thời lượng cán bộ gõ, nghe thử qua link ký, gỡ âm thanh) và gợi ý đường trong Mini App cho link_to của Banner — ADR 0067 §4 §5, backend comms 026ae398",
+      "trang_thai": "xong",
+      "bang_chung": "CHƯA COMMIT (phiên chính commit). Tệp mới: web-admin/src/features/noi-dung/broadcast-audio.ts (kiểm trước kiểu/dung lượng 31457280 byte, parseAudioDuration m:ss | h:mm:ss trong 1..21600 s, máy trạng thái, runAudioUpload → uploadToStorage → completion; 422 invalid_audio_duration là 'thử lại' vì tệp còn pending), broadcast-audio-field.tsx (<audio preload=none> chỉ từ audioPreviewSrc, hết hạn → nút lấy link mới qua GET chi tiết, Gỡ âm thanh có bước xác nhận), broadcast-audio.test.tsx, banner-paths.test.ts. Sửa: lib/api/noi-dung.ts (requestAudioUpload, completeAudioUpload, removeContentAudio = PATCH {audio_file_id:\"\"}, AudioCallResult mang code), so-noi-dung.tsx (khối âm thanh chỉ cho mục ĐÃ LƯU loại truyen-thanh, câu 'lưu trước' cho form thêm; datalist BANNER_APP_PATHS + cảnh báo không chặn), nhan-noi-dung.ts (BANNER_APP_PATHS chép từ BANNER_ROUTES của citizen-app TrangXa.tsx — test đọc tệp ấy để canh lệch; PHAN_CHUA_DUNG bỏ mục Truyền thanh, còn 6), ranh-gioi-html.test.ts (cho phép audioPreviewSrc). globals.css: .task-attachments audio rộng 100% (≤30rem) cho màn 320px, .nut-chinh trong khối cũng 44px. schema.gen.ts sinh bằng gen-api-types từ openapi.json do `go run ./tools/apidoc` dựng trên git worktree tạm ở HEAD (không ghi kb/ của cây chính). Chạy 2026-10-01: tsc sạch · lint sạch · vitest 158 tệp 3047/3047 · npm run build xanh · npm audit --omit=dev 0 · python tools/check_security.py PASS (0 mới) · check:api ĐỎ trên cây chính vì kb/20-contracts/openapi.json chưa sinh lại (khớp hệt bản sinh ở worktree).",
+      "no_confirm": [],
+      "tiep_theo": "Phiên chính chạy `make kb` để kb/20-contracts/openapi.json có hai tuyến audio-files (check:api xanh lại; apidoc sẽ chuyển hai việc tasks/web tương ứng sang done). Chưa chạy với service-comms + MinIO thật. Chưa có ô sửa thời lượng sau khi đã gắn (PATCH audio_duration_seconds có ở máy chủ, chưa dựng). web-admin CHƯA có CSP (tools/security_debt.json, K9): ngày thêm CSP phải mở connect-src cho origin kho tệp (tải lên) và img-src + media-src cho origin link ký (ảnh bìa, nghe thử).",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

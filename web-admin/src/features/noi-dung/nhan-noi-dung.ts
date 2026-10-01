@@ -622,6 +622,56 @@ export function isValidLinkTo(raw: string): boolean {
   return host !== "" && !host.includes("@");
 }
 
+/**
+ * The in-app paths the citizen Mini App can OPEN from a banner — a COPY of the keys of `BANNER_ROUTES` in
+ * `citizen-app/src/cong-dan/man/TrangXa.tsx`, plus its `/tin-tuc/<id>` article form (`bannerScreen`).
+ *
+ * WHY A COPY, AND WHAT KEEPS IT HONEST: the two apps share no package, and the server accepts ANY in-app
+ * path (`domain.NormalizeLinkTo`) — the closed table lives in the Mini App. `nhan-noi-dung.test.ts` reads
+ * that file and turns red when its table and this one differ. These are SUGGESTIONS and a warning only:
+ * a path outside the table is still saved, it is just not tappable on the Mini App today.
+ */
+export const BANNER_APP_PATHS: readonly { readonly path: string; readonly label: string }[] = [
+  { path: "/tin-tuc", label: "Tab Tin tức" },
+  { path: "/phan-anh", label: "Tab Phản ánh" },
+  { path: "/ca-nhan", label: "Tab Cá nhân" },
+  { path: "/gui-phan-anh", label: "Gửi phản ánh" },
+  { path: "/danh-ba", label: "Danh bạ chính quyền" },
+  { path: "/su-kien", label: "Sự kiện" },
+  { path: "/truyen-thanh", label: "Truyền thanh" },
+  { path: "/video", label: "Video" },
+];
+
+export const BANNER_ARTICLE_PATH_HINT =
+  "Gợi ý: chọn một đường có sẵn trong danh sách, hoặc /tin-tuc/<mã bài> để mở thẳng một bài.";
+export const BANNER_PATH_NOT_TAPPABLE =
+  "Mini App chưa có màn nào cho đường này — banner vẫn lưu được, nhưng bà con bấm vào sẽ không mở gì. " +
+  "Hãy chọn một đường trong danh sách gợi ý hoặc /tin-tuc/<mã bài>.";
+
+/** Mirror of the Mini App's `bannerScreen`: is this in-app path one it opens? */
+export function isMiniAppBannerPath(path: string): boolean {
+  if (!path.startsWith("/") || path.startsWith("//") || /[?#\s\\]/.test(path)) return false;
+  const p = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  if (BANNER_APP_PATHS.some((r) => r.path === p)) return true;
+  const article = /^\/tin-tuc\/([^/]+)$/.exec(p);
+  if (article === null) return false;
+  try {
+    return decodeURIComponent(article[1] ?? "").trim() !== "";
+  } catch {
+    return false; // a malformed %-escape
+  }
+}
+
+/**
+ * The warning under `Liên kết khi bấm`, or `null`. Only for a VALID in-app path the Mini App cannot open:
+ * an invalid value already has its refusal (`ERR_LINK_TO_INVALID`), and https:// / empty are fine.
+ */
+export function bannerLinkTapWarning(raw: string): string | null {
+  const s = raw.trim();
+  if (s === "" || !s.startsWith("/") || !isValidLinkTo(s)) return null;
+  return isMiniAppBannerPath(s) ? null : BANNER_PATH_NOT_TAPPABLE;
+}
+
 /** `display_order` as typed → the number, or `null` when it is not a non-negative INT. */
 export function parseDisplayOrder(raw: string): number | null {
   const s = raw.trim();
@@ -933,17 +983,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "`chuyen_muc_cong` cùng các tuyến đọc, ghi chúng ở `service-comms`; một bộ lập lịch cho nhịp " +
       "`Mỗi 6 giờ`; và một adapter HTTP đi ra THEO XÃ để đọc cổng của từng xã. Vẽ thẻ ấy với số " +
       "liệu bịa là dựng một màn hình nói với xã rằng cổng của họ đang được đồng bộ.",
-  },
-  {
-    ten: "Nhóm trường của loại `Truyền thanh` (§7, dòng cuối): tệp âm thanh và thời lượng",
-    viSao:
-      "§7 kết bằng một câu “NÊN BỔ SUNG” cho bốn loại. Ba nhóm ĐÃ DỰNG: `Sự kiện` (Bắt đầu · Kết " +
-      "thúc · Địa điểm) và `Video` (Liên kết video) theo ADR 0047 §6, `Banner` (liên kết khi bấm, " +
-      "thứ tự hiển thị, ảnh bắt buộc) theo ADR 0067 §5. Còn `Truyền thanh`: ADR 0067 §4 đã chốt " +
-      "mp3/m4a tối đa 30 MB, thời lượng cán bộ gõ, lưu riêng tư và phát qua link ký ngắn hạn, mục " +
-      "đích tải lên `content-audio`. Cột đã có (migration 0012 của `service-comms`), nhưng lối tải " +
-      "tệp âm thanh lên và các trường của hợp đồng thì chưa — dựng ô nhập trước khi có tuyến là vẽ " +
-      "một ô không lưu được. Lối tải ảnh bìa đã có nhưng chỉ nhận ảnh.",
   },
   {
     ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
