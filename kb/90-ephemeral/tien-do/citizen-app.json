@@ -374,6 +374,15 @@
       "no_confirm": [],
       "tiep_theo": "Cần MinIO + ClamAV cho comms (ban-giao-phien.md §âm thanh) và chính sách tải tệp âm thanh ở platform (G7). Bản mẫu: ../vigov-require/apps/miniapp/src/pages/BroadcastPage.tsx (play/pause, tua, tốc độ). Trải ba bề mặt: phần máy chủ và web-admin thuộc sổ service-comms / web-admin khi bắt đầu làm.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "app-chung-buoc-chon-linh-vuc",
+      "viec": "App chung (GuiPhanAnhScreen): bước chọn lĩnh vực đầu luồng gửi, bắt buộc phía client, nhắc lại ở bước xác nhận (ADR 0050 phạm vi điểm 1 và 9, chủ dự án 01/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "2c158913 — field-catalogue.ts (phần thuần dùng chung hai app: readCatalogueAnswer, offeredCodes, fieldLabelOf); GuiPhanAnhScreen: bước 'field' (nút role=radio, 'Đã chọn' bằng chữ), BuocNhap 'Lĩnh vực: … · Đổi', BuocXacNhan hiện lĩnh vực, kiemPhanAnh đòi lĩnh vực, field_not_offered → về bước lĩnh vực + tải lại + khoá Idempotency mới; danh mục chỉ tải khi có phiên (hieu-ung-khong-phien.test.tsx spy citizenReportFields). App xã giữ nguyên hành vi. vitest 54 tệp 1442/1442 (+17), tsc sạch, make check EXIT=0.",
+      "no_confirm": [],
+      "tiep_theo": "Máy chủ: giờ hai app đều gửi field — có thể làm bước hoãn 'bắt buộc field ở máy chủ' (sổ service-petitions/linh-vuc-cho-dan-tang-2). Ô lĩnh vực app chung chỉ chữ, không biểu tượng/màu (thương hiệu app xã). Chưa thử trên máy thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
