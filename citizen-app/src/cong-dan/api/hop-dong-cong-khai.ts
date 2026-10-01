@@ -14,7 +14,11 @@
  *                                                             event_ends_at?, event_place?, video_url? }],
  *                                                             next_cursor, has_more }   (type: b22bf76;
  *                                                             the rest: ADR 0047 §6, 2026-09-30/10-01)
- *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
+ *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần) và
+ *                                                             `body_blocks?` (cấu trúc, ADR 0067 §1, abf0ca1d)
+ *   GET comms     /api/v1/commune-news?host=…&type=banner → { items: [{ id, type: "banner", title,
+ *                                                             image_url, link_to?, … }], has_more: false }
+ *                                                             (dải ảnh trang chủ, ADR 0067 §5, abf0ca1d)
  *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
  *                                                         → { items: [{ id, name, parent_id?, order }] }
  *                                                             (58abea4c; list route gained `&category=`)
@@ -305,7 +309,92 @@ export type TinXaTomTat = {
 export type BaiTinXa = TinXaTomTat & {
   /** VĂN BẢN THUẦN, đoạn cách nhau bằng một dòng trống. Không bao giờ được vẽ như HTML. */
   readonly noi_dung: string;
+  /**
+   * The body as STRUCTURE (ADR 0067 §1 decision 3) — ABSENT when the server sent none (an older server, or a
+   * body with no text) or when nothing in it was readable. The screen then shows `noi_dung`, exactly as
+   * before. Never HTML: every `text` is drawn as a React text node.
+   */
+  readonly bodyBlocks?: readonly BodyBlock[];
 };
+
+/** A stretch of text with one formatting. `"\n"` inside `text` is a line break. */
+export type BodyRun = {
+  readonly text: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  /** An absolute `https:` URL with no user part, or ABSENT — then the run is plain text. */
+  readonly href?: string;
+};
+
+/** One block of `body_blocks` — the server's closed list (`tin_xa_cong_khai.go` `bodyBlockOut`). */
+export type BodyBlock =
+  | { readonly kind: "paragraph"; readonly runs: readonly BodyRun[] }
+  | { readonly kind: "heading"; readonly level: 2 | 3; readonly runs: readonly BodyRun[] }
+  | { readonly kind: "bullet_list" | "ordered_list"; readonly items: readonly (readonly BodyRun[])[] };
+
+/**
+ * A link target the app may offer to open: an absolute `https:` URL with a host and no user part, or
+ * `null`. Same stance as `readVideoUrl`, one rule more: `https://gov.vn@other.example` names `other.example`,
+ * and the confirmation would then name a host the citizen did not read in the text — the server refuses it
+ * on banners (`domain.NormalizeLinkTo`), and nothing here trusts that it did. PURE.
+ */
+export function readHttpsLink(v: unknown): string | null {
+  if (!laChuoi(v)) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && u.hostname !== "" && u.username === "" && u.password === "" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One run. Not an object, or `text` not a string → `null` (the run is skipped). An `href` that is not a
+ * readable https link is DROPPED and the words stay, as plain text — the citizen still reads them, nothing
+ * opens.
+ */
+function readRun(v: unknown): BodyRun | null {
+  if (typeof v !== "object" || v === null) return null;
+  const r = v as Record<string, unknown>;
+  if (!laChuoi(r.text) || r.text === "") return null;
+  const href = r.href === undefined ? null : readHttpsLink(r.href);
+  return { text: r.text, bold: r.bold === true, italic: r.italic === true, ...(href === null ? {} : { href }) };
+}
+
+function readRuns(v: unknown): BodyRun[] {
+  if (!Array.isArray(v)) return [];
+  return v.map(readRun).filter((r): r is BodyRun => r !== null);
+}
+
+/**
+ * `body_blocks` → the blocks this app can draw, or `undefined` (show `body` instead).
+ *
+ * LENIENT, ON PURPOSE, unlike the rest of this file: the plain `body` beside it is always there, so a block
+ * this app cannot read costs the citizen nothing if it is skipped — while refusing the whole article over
+ * one would cost them the article. So: not an array → absent; an unknown `kind` (a later server's block, or
+ * anything that ever said `script`) → that block skipped; a block left with no text → skipped; nothing left
+ * → absent. A heading level other than 3 is drawn as level 2 — a size, not a fact.
+ */
+export function readBodyBlocks(v: unknown): readonly BodyBlock[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: BodyBlock[] = [];
+  for (const b of v) {
+    if (typeof b !== "object" || b === null) continue;
+    const r = b as Record<string, unknown>;
+    if (r.kind === "paragraph" || r.kind === "heading") {
+      const runs = readRuns(r.runs);
+      if (runs.length === 0) continue;
+      out.push(r.kind === "heading" ? { kind: "heading", level: r.level === 3 ? 3 : 2, runs } : { kind: "paragraph", runs });
+    } else if (r.kind === "bullet_list" || r.kind === "ordered_list") {
+      if (!Array.isArray(r.items)) continue;
+      const items = r.items
+        .map((it) => (typeof it === "object" && it !== null ? readRuns((it as Record<string, unknown>).runs) : []))
+        .filter((runs) => runs.length > 0);
+      if (items.length > 0) out.push({ kind: r.kind, items });
+    }
+  }
+  return out.length === 0 ? undefined : out;
+}
 
 export type TrangTinXa = {
   readonly muc: readonly TinXaTomTat[];
@@ -457,9 +546,67 @@ export function docTrangTinXa(than: unknown): TrangTinXa | null {
 export function docBaiTin(than: unknown): BaiTinXa | null {
   const t = docTin(than);
   if (t === null) return null;
-  const { body } = than as Record<string, unknown>;
+  const { body, body_blocks } = than as Record<string, unknown>;
   if (!laChuoi(body)) return null;
-  return { ...t, noi_dung: body };
+  const bodyBlocks = readBodyBlocks(body_blocks);
+  return { ...t, noi_dung: body, ...(bodyBlocks === undefined ? {} : { bodyBlocks }) };
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * DẢI ẢNH TRANG CHỦ — `?type=banner` (ADR 0067 §5, comms abf0ca1d)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The strip's address: the list route with `type=banner` — host and type, nothing else. */
+export function bannersAddress(ten_mien: string): string {
+  return voiHost(diaChiViGov("comms", DUONG_DAN_TIN_XA), ten_mien, { type: "banner" });
+}
+
+/**
+ * One banner. `title` is the picture's `alt` (§5 decision 1). `linkTo` is the tap target as the server
+ * re-checked it — an in-app path (`/…`, never `//…`) or an https link (`readHttpsLink`) — or ABSENT: the
+ * banner is then a picture and nothing else. WHICH in-app paths lead anywhere is the screen's call
+ * (`TrangXa.tsx` `bannerScreen`), not this file's.
+ */
+export type CommuneBannerItem = {
+  readonly id: string;
+  readonly title: string;
+  readonly imageUrl: string;
+  readonly linkTo?: string;
+};
+
+function readLinkTo(v: unknown): string | undefined | null {
+  if (v === undefined) return undefined;
+  if (!laChuoi(v)) return null;
+  if (v.startsWith("/")) return v.startsWith("//") || /[\s\\]/.test(v) ? undefined : v;
+  return readHttpsLink(v) ?? undefined;
+}
+
+/**
+ * `null` = malformed (a field of the wrong type, or not a list) — the caller then keeps the bundled picture,
+ * same stance as `docTrangTinXa`. A banner with no usable `https:` picture is DROPPED, not malformed: §5 makes
+ * the picture mandatory, so one without is a row the server should not have sent, and showing an empty frame
+ * for it is worse than not showing it. ORDER AS RECEIVED — the server sorts by `display_order`.
+ */
+export function readBanners(body: unknown): readonly CommuneBannerItem[] | null {
+  const items = docMang(body);
+  if (items === null) return null;
+  const out: CommuneBannerItem[] = [];
+  const seen = new Set<string>();
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    if (!laChuoi(r.id) || r.id === "" || !laChuoi(r.title)) return null;
+    const imageUrl = readImageUrl(r.image_url);
+    const linkTo = readLinkTo(r.link_to);
+    if (imageUrl === null || linkTo === null) return null;
+    // A repeated id is one banner twice and a duplicate React key; the first one stands.
+    if (imageUrl === undefined || seen.has(r.id)) continue;
+    seen.add(r.id);
+    const title = r.title.trim();
+    // A tappable picture with no words is a button a screen reader announces as nothing: no title, no tap.
+    out.push({ id: r.id, title, imageUrl, ...(linkTo === undefined || title === "" ? {} : { linkTo }) });
+  }
+  return out;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════

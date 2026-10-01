@@ -4,7 +4,7 @@
  * ⚠ VÌ SAO MỘT LỚP BỌC MỎNG NHƯ THẾ NÀY LẠI ĐÁNG CÓ — nó không phải một lớp trừu tượng cho đẹp:
  *
  *   Chính sách quyền riêng tư khai ĐẾM ĐƯỢC: *"Có <N> chỗ ứng dụng mở một trang bên ngoài"*, rồi
- *   liệt kê đủ N (sáu từ 01/10/2026). Trước tệp này, con số ấy là một con số đếm bằng mắt trên một cây mã có ba hình
+ *   liệt kê đủ N (bảy từ 01/10/2026). Trước tệp này, con số ấy là một con số đếm bằng mắt trên một cây mã có ba hình
  *   dạng mở trang khác nhau (`moTrangWeb`, `<a target="_blank">`, và bất cứ thứ gì người sau nghĩ
  *   ra). Nó đã phải sửa ba lần trong hai ngày, lần nào cũng nhờ người đọc lại văn bản.
  *
@@ -25,8 +25,9 @@
  *
  * KHÔNG CÓ GÌ CỦA NGƯỜI DÙNG ĐI KÈM. Địa chỉ truyền vào là địa chỉ đã có sẵn trong app (bản đồ
  * dựng từ địa chỉ văn phòng đã công bố, trang tin, trang chủ, OA), chính chuỗi người dùng vừa
- * quét được, hoặc (01/10/2026) đường dẫn video xã đã đăng kèm một tin — `App.tsx` tiêm lời gọi
- * `moRaNgoai("video", …)` xuống nửa nhà nước, vì nửa ấy không được nhập tệp này. Không token, không
+ * quét được, hoặc (01/10/2026) đường dẫn video xã đã đăng kèm một tin và liên kết xã gắn trong thân bài
+ * hay trên ảnh trang chủ — `App.tsx` tiêm lời gọi `moRaNgoai("video", …)` / `moRaNgoai("lien-ket-xa", …)`
+ * xuống nửa nhà nước, vì nửa ấy không được nhập tệp này. Không token, không
  * mã định danh, không toạ độ — và chính sách khai đúng như vậy.
  */
 

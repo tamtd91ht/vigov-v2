@@ -462,6 +462,13 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // Cách đếm KHÔNG ĐỔI — theo LOẠI ĐÍCH ĐẾN, không theo số nút: hai neo website là một dòng.
       // Xem `content/dich-ra-ngoai.ts`, nơi cả danh sách lẫn quy ước đếm được ghi ra một lần.
       cauKhaiDichRaNgoai(),
+      // ADDED 01/10/2026 (owner's answer to ADR 0067 Còn mở #6): links inside a commune's articles. TRUE BY
+      // CONSTRUCTION, not by promise: the tap goes to `cong-dan/man/leave-app.tsx`, which asks, then hands the URL
+      // to the platform's `openWebview` through `moRaNgoai` — no log line, no counter, no call to any server
+      // (`phase1-collects-nothing.test.ts` and `dich-ra-ngoai.test.ts` hold the two doors shut). "Trình duyệt
+      // của Zalo" and not "trình duyệt của máy": `openWebview` opens Zalo's in-app browser (`zalo-api.ts`
+      // `moTrangWeb`), and naming the phone's browser would describe a step the app does not take.
+      "Liên kết trong bài viết của xã mở ra ngoài ứng dụng, trong trình duyệt của Zalo, sau khi bạn xác nhận; ứng dụng không theo dõi việc bạn bấm liên kết nào hay xem gì ở trang ấy.",
       "Nút chỉ đường chỉ mang theo ĐỊA CHỈ VĂN PHÒNG của chúng tôi — không mang theo vị trí của bạn, vì ứng dụng không hề có vị trí của bạn.",
       "Zalo là nền tảng ứng dụng chạy trên đó. Việc bạn dùng Zalo chịu sự điều chỉnh của chính sách quyền riêng tư của Zalo, nằm ngoài phạm vi văn bản này.",
     ],

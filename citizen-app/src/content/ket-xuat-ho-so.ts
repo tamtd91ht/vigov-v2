@@ -458,9 +458,11 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
           "con trỏ trang tin do chính máy chủ trả ở trang trước, chỉ khi người dùng bấm “Xem thêm tin”",
       },
       {
+        // 01/10/2026 (ADR 0067 §5): the commune app also sends `type=banner` AT OPEN, for the home picture strip —
+        // the same key on the same route, so one line, saying both.
         khoa: "type",
         trong_chinh_sach:
-          "loại tin người dùng chọn xem (tin tức, sự kiện, thông báo), chỉ khi người dùng bấm một nút lọc hoặc ô “Sự kiện”",
+          "loại tin người dùng chọn xem (tin tức, sự kiện, thông báo), chỉ khi người dùng bấm một nút lọc hoặc ô “Sự kiện”; trong ứng dụng riêng của xã còn là `banner` ngay lúc mở, để hiện dải ảnh xã đăng trên trang chủ",
       },
       {
         // 30/09/2026 (comms 58abea4c, card D2): the chip the citizen tapped. The id is the server's own,
@@ -475,7 +477,7 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     commune_app: {
       man: `${TEN_MAN_CONG_KHAI.trang_chu_xa} · ${TEN_MAN_CONG_KHAI.commune_news_tab}`,
       khi_nao:
-        "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để hiện tin mới trên trang chủ; và khi người dùng mở tab “Tin tức”, bấm một ô Truyền thanh · Video · Sự kiện, chọn một loại tin hoặc một chuyên mục, hoặc bấm “Xem thêm tin”",
+        "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để hiện tin mới và dải ảnh xã đăng trên trang chủ; và khi người dùng mở tab “Tin tức”, bấm một ô Truyền thanh · Video · Sự kiện, chọn một loại tin hoặc một chuyên mục, hoặc bấm “Xem thêm tin”",
       nguoi_dung_bam: false,
     },
   },

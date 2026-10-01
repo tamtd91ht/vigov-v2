@@ -156,20 +156,23 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // (`cong-dan/man/TinTucAppXa.tsx`) opens the commune's posted link with this same call. The state half
     // does not import it — `App.tsx` injects `moRaNgoai("video", …)` — but a declaration by IMPORT GRAPH
     // instead of by WHO USES THE CALL would be the under-declaration this table exists to close.
+    // 01/10/2026 (ADR 0067 §1, §5): also a link inside a commune article's body and a home banner pointing at an
+    // https page — commune app only, each after the "Bạn sắp rời ứng dụng để mở <host>" question (`leave-app.tsx`).
     api: "openWebview",
     nua: "ca-hai",
-    man: "Mọi màn · Tin tức của xã (ứng dụng của xã)",
-    tinh_nang: "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website · Xem video của xã",
+    man: "Mọi màn · Tin tức của xã và Trang chủ (ứng dụng của xã)",
+    tinh_nang:
+      "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website · Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã",
     de_lam_gi:
-      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng.",
+      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, và trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, sau khi bạn xác nhận rời ứng dụng.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
     commune_app: {
-      man: "Tin tức – Sự kiện · Video",
-      tinh_nang: "Xem video của xã",
+      man: "Tin tức – Sự kiện · Video · Trang chủ",
+      tinh_nang: "Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã",
       de_lam_gi:
-        "Mở video mà xã đăng kèm một tin, ngay trong Zalo, và chỉ khi chính bạn bấm “Xem video”. Ứng dụng mở đúng địa chỉ xã đã đăng.",
-      roi_khoi_may: "Địa chỉ video xã đã đăng đi tới trình duyệt trong Zalo.",
+        "Mở video mà xã đăng kèm một tin khi chính bạn bấm “Xem video”, và mở trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ khi chính bạn bấm vào đó rồi chọn “Mở trang” ở câu hỏi “Bạn sắp rời ứng dụng để mở …”. Trang mở ngay trong Zalo; ứng dụng mở đúng địa chỉ xã đã đăng.",
+      roi_khoi_may: "Địa chỉ trang xã đã đăng đi tới trình duyệt trong Zalo.",
     },
   },
   {

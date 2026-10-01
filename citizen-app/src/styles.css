@@ -4171,6 +4171,117 @@ button.xa-o-nhanh {
   background: var(--xa-brand-soft);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
 }
+/* The commune-posted strip (ADR 0067 §5, `TrangXa.tsx` `BannerStrip`): swiped by the citizen, never moved by the
+   app — no autoplay, no smooth-scroll animation. One picture fills the width; with more, each takes 88% so the
+   next shows at the edge and says "there is more" without a dot or an arrow. */
+.xa-banner-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+.xa-banner-strip__item {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.xa-banner-strip--many .xa-banner-strip__item {
+  flex-basis: 88%;
+}
+/* A tappable banner is the whole picture: far above the tap minimum, stated anyway so the sweep measures it. */
+.xa-banner-strip__tap {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  cursor: pointer;
+}
+.xa-banner-strip__tap:focus-visible {
+  outline: 3px solid var(--xa-brand-dark);
+  outline-offset: 2px;
+}
+
+/* ---------- thân bài có định dạng (body_blocks, ADR 0067 §1 — `article-body.tsx`) ---------- */
+/* Headings: larger and bold, navy like the titles; body-size text never shrinks. Lists: real markers, the
+   paragraph's line height. The link: blue AND underlined (never colour alone, measured in
+   `accessibility.test.ts`), a real <button>; inline, so vertical padding grows its TAP AREA to ≥ 44px around a
+   ~20px line of text without moving the line — the next line's words stay where they are. */
+.xa-body-heading {
+  margin: 20px 0 10px;
+  color: var(--xa-navy, var(--navy));
+  font-size: calc(var(--text-body) + 3px);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.xa-body-heading--3 {
+  font-size: calc(var(--text-body) + 1px);
+}
+.xa-body-list {
+  margin: 0 0 14px;
+  padding-left: 1.6em;
+  font-size: var(--text-body);
+  line-height: 1.625;
+}
+.xa-body-list li {
+  margin: 0 0 6px;
+}
+.xa-body-link {
+  display: inline;
+  margin: 0;
+  padding: 12px 2px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--xa-blue-ink);
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.xa-body-link:focus-visible {
+  outline: 3px solid var(--xa-blue-ink);
+  outline-offset: 2px;
+}
+
+/* ---------- "Bạn sắp rời ứng dụng để mở …" (`leave-app.tsx`) ---------- */
+/* Over the whole screen, the box at the bottom where the thumb is. No transition: it appears, it does not slide. */
+.xa-leave-app {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.xa-leave-app__box {
+  width: 100%;
+  max-width: 480px;
+  margin: 0;
+  padding: 20px 16px;
+  display: grid;
+  gap: 12px;
+}
+.xa-leave-app__box p {
+  margin: 0;
+  line-height: 1.5;
+}
+.xa-leave-app__box .xa-nut--phu {
+  margin-top: 0;
+}
+/* A host can be one long word: it wraps instead of pushing the box wider than the screen. */
+.xa-leave-app__question {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 
 /* ---------- tab loại tin (Tin tức · Sự kiện · Thông báo) ---------- */
 /* Full width under the header: the negative margin undoes `.xa-trang--tab`'s 16px, and `sticky` keeps the row

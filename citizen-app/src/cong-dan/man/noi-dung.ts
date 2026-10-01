@@ -775,6 +775,20 @@ export const XA_TN = {
   watch_video: "Xem video",
   /** The opener said no (outside Zalo, the platform refused, the page did not open): what to do next, no code. */
   watch_video_failed: "Không mở được video lúc này. Bạn hãy bấm “Xem video” lần nữa sau ít phút.",
+  /**
+   * The confirmation before a link in an article, or a banner, opens OUTSIDE the app (owner, 01/10/2026). The
+   * question names the HOST, read from the link itself — the words of the link are the commune's, the host is
+   * where the citizen actually goes (`leave-app.tsx`).
+   */
+  leave_app_question: (host: string) => `Bạn sắp rời ứng dụng để mở ${host}`,
+  leave_app_note:
+    "Trang ấy mở trong trình duyệt của Zalo và không thuộc ứng dụng của xã. Ứng dụng không gửi kèm thông tin nào của bạn.",
+  leave_app_open: "Mở trang",
+  leave_app_stay: "Ở lại ứng dụng",
+  /** The opener said no (outside Zalo, the platform refused): what to do next, no code. */
+  leave_app_failed: "Không mở được trang lúc này. Bạn hãy bấm “Mở trang” lần nữa sau ít phút.",
+  /** Accessible name of the home banner strip (ADR 0067 §5) — a list of the commune's pictures. */
+  banner_strip: "Ảnh của xã",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",

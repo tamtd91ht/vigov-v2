@@ -27,7 +27,8 @@ export type ConnectionRoute =
   | "commune-profile"
   | "news"
   | "news-categories"
-  | "news-item";
+  | "news-item"
+  | "banners";
 
 export type ConnectionFailure = {
   readonly route: ConnectionRoute;

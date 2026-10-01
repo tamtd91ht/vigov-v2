@@ -48,7 +48,9 @@ import {
 } from "./hop-dong-phan-anh";
 import {
   type BaiTinXa,
+  bannersAddress,
   type CanBoCongKhai,
+  type CommuneBannerItem,
   type CommuneProfile,
   communeProfilesAddress,
   diaChiBaiTin,
@@ -62,6 +64,7 @@ import {
   type NewsCategory,
   newsCategoriesAddress,
   type NewsType,
+  readBanners,
   readCommuneProfiles,
   readNewsCategories,
   type TrangTinXa,
@@ -451,6 +454,14 @@ export function newsCategories(
   type: NewsType | null = null,
 ): Promise<KetQuaCongKhai<readonly NewsCategory[]>> {
   return goiCongKhai("news-categories", ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
+}
+
+/**
+ * The commune's home banner strip (`?type=banner`, ADR 0067 §5) — public by domain, like the news list. Any
+ * branch but `xong` with at least one banner leaves the bundled picture in place (`TrangXa.tsx`).
+ */
+export function communeBanners(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneBannerItem[]>> {
+  return goiCongKhai("banners", ten_mien, bannersAddress, readBanners);
 }
 
 /** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */

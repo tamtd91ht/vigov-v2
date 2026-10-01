@@ -167,8 +167,10 @@ const co_logo = LOGO_NGUON !== null && existsSync(LOGO_NGUON);
  * picture under the home header. `scripts/banner-xa/<domain>.png` is copied to `public/banner-xa.png`
  * for EXACTLY the `--vao-thang` build and removed in the same `finally`, so no other build — the shared
  * app above all — ever carries one commune's picture. No file for the domain = no banner: the home
- * screen renders nothing in its place (`TrangXa.tsx` `CommuneBanner`). Real source later: the
- * commune-posted `banner` content / display profile in service-platform, read at runtime.
+ * screen renders nothing in its place (`TrangXa.tsx` `CommuneBanner`). Since 01/10/2026 the real source
+ * exists — the commune-posted banners, read at runtime (`?type=banner`, ADR 0067 §5, `TrangXa.tsx`
+ * `HomeBanner`) — and this copy is only the FALLBACK under them. Remove this step, `scripts/banner-xa/`
+ * and `CommuneBanner` together once every commune has posted a banner (ADR 0067 §5 decision 6).
  */
 const BANNER_SOURCE = vao_thang ? new URL(`./banner-xa/${dich.ten_mien}.png`, import.meta.url) : null;
 const BANNER_TARGET = new URL("../public/banner-xa.png", import.meta.url);

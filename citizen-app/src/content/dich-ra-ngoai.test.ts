@@ -240,11 +240,21 @@ describe("câu khai của chính sách khớp với danh sách đích", () => {
     );
   });
 
-  it("SÁU đích từ 01/10/2026 — đích thứ sáu là video xã đăng kèm một tin, và câu nói ra ai chọn nơi ấy", () => {
+  it("BẢY đích từ 01/10/2026 — đích thứ bảy là liên kết xã gắn trong bài hay trên ảnh trang chủ, mở sau khi xác nhận", () => {
     // Ghim con số HÔM NAY để lần thêm/bớt đích tiếp theo là một ca đỏ có người đọc, không phải một câu
-    // pháp lý lặng lẽ đổi (chủ dự án đồng ý đổi câu này cho đích video, ADR 0047 §6, 01/10/2026).
-    expect(DICH_MO_RA_NGOAI).toHaveLength(6);
-    expect(cauKhaiDichRaNgoai()).toMatch(/^Có sáu chỗ ứng dụng mở một trang bên ngoài, và cả sáu đều chỉ mở khi chính bạn bấm: /);
+    // pháp lý lặng lẽ đổi. Sáu → bảy cùng ngày: chủ dự án trả lời ADR 0067 Còn mở #6 (liên kết trong thân bài
+    // mở ra ngoài SAU một câu xác nhận, và chính sách thêm một câu), §5 thêm ảnh trang chủ trỏ ra ngoài.
+    expect(DICH_MO_RA_NGOAI).toHaveLength(7);
+    expect(cauKhaiDichRaNgoai()).toMatch(/^Có bảy chỗ ứng dụng mở một trang bên ngoài, và cả bảy đều chỉ mở khi chính bạn bấm: /);
+    const link = DICH_MO_RA_NGOAI.find((d) => d.ma === "lien-ket-xa");
+    expect(link, "liên kết trong bài / ảnh trang chủ mở một nơi mà chính sách không khai").toBeDefined();
+    expect(link!.trong_chinh_sach).toMatch(/xã gắn vào một bài viết hoặc một ảnh trên trang chủ/);
+    expect(link!.trong_chinh_sach).toMatch(/sau khi bạn xác nhận rời ứng dụng/);
+    // The sentence the owner asked for: where the link opens, and that nothing follows the citizen there.
+    const thirdParty = MUC_CHINH_SACH.find((m) => m.ma === "ben-thu-ba")!.doan.join("\n");
+    expect(thirdParty).toContain(
+      "Liên kết trong bài viết của xã mở ra ngoài ứng dụng, trong trình duyệt của Zalo, sau khi bạn xác nhận; ứng dụng không theo dõi việc bạn bấm liên kết nào hay xem gì ở trang ấy.",
+    );
     const video = DICH_MO_RA_NGOAI.find((d) => d.ma === "video");
     expect(video, "nút Xem video mở một nơi mà chính sách không khai").toBeDefined();
     // Không phải một host cố định: đó là đường dẫn XÃ đăng — câu phải nói đúng như vậy, không gọi tên một trang

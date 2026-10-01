@@ -32,7 +32,7 @@
  */
 
 /** Mã đích đến. Là một union để `moRaNgoai` không nhận nổi một đích chưa khai. */
-export type MaDichRaNgoai = "ban-do" | "ma-qr" | "trang-chu" | "tin-tuc" | "chat-oa" | "video";
+export type MaDichRaNgoai = "ban-do" | "ma-qr" | "trang-chu" | "tin-tuc" | "chat-oa" | "video" | "lien-ket-xa";
 
 export type DichRaNgoai = {
   ma: MaDichRaNgoai;
@@ -41,7 +41,7 @@ export type DichRaNgoai = {
 };
 
 /**
- * SÁU ĐÍCH ĐẾN. Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
+ * BẢY ĐÍCH ĐẾN (từ 01/10/2026). Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
  *
  * Thêm một dòng ở đây là một thay đổi HÀNH VI XỬ LÝ DỮ LIỆU: bề mặt "dữ liệu của bạn có thể tới
  * những nơi nào" rộng ra thật sự. Xem bảng lên số phiên bản trong `chinh-sach-rieng-tu.ts`.
@@ -78,6 +78,18 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
     // So the phrase names WHO chose the destination (the commune) rather than a site this app cannot vouch for.
     ma: "video",
     trong_chinh_sach: "trang video mà xã đăng kèm một tin trong ứng dụng của xã, đúng địa chỉ xã đã đăng",
+  },
+  {
+    // ADDED 01/10/2026 (ADR 0067 §1, §5; owner's answer the same day): a link inside an article's body, and a
+    // home-strip banner whose target is an https page — both in the commune's OWN app, both opened only after
+    // the citizen answers "Mở trang" to "Bạn sắp rời ứng dụng để mở <host>" (`cong-dan/man/leave-app.tsx`).
+    //
+    // ONE ROW FOR BOTH, by the counting rule above: the destination is the same KIND of place — a page the
+    // commune itself chose to link — reached from two kinds of button. Like `video`, no fixed host: the
+    // phrase names who chose it, and says the app asks first.
+    ma: "lien-ket-xa",
+    trong_chinh_sach:
+      "trang web mà xã gắn vào một bài viết hoặc một ảnh trên trang chủ của ứng dụng của xã, chỉ sau khi bạn xác nhận rời ứng dụng",
   },
 ];
 

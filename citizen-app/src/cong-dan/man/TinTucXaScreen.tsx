@@ -4,18 +4,20 @@
  * ⚠ CÔNG KHAI, KHÔNG CẦN PHIÊN (`api/goi-vigov.ts` `tinCuaXa` · `baiTinCuaXa`). Cổng là TÊN MIỀN xã
  *   của lần mở này — màn chỉ được mở khi đã có nó (`KenhCongDan.tsx`).
  *
- * ⚠ VĂN BẢN THUẦN, KHÔNG BAO GIỜ HTML. Thân tin là chữ cán bộ gõ; nó được vẽ bằng nút chữ của React
- *   (tự thoát ký tự), chia đoạn theo dòng trống. Không `dangerouslySetInnerHTML` ở bất kỳ đâu: một
- *   thẻ lọt vào thân tin mà được vẽ ra là mã lạ chạy trong một app mang tên cơ quan nhà nước.
+ * ⚠ KHÔNG BAO GIỜ HTML. Thân tin được vẽ bằng phần tử React (tự thoát ký tự) — từ `body_blocks` có cấu
+ *   trúc khi máy chủ gửi (ADR 0067 §1), hoặc từ `body` văn bản thuần chia đoạn theo dòng trống. Không
+ *   một lối chèn HTML thô nào ở bất kỳ đâu (luật 13 cấm #3): một thẻ lọt vào thân tin mà được vẽ ra là mã
+ *   lạ chạy trong một app mang tên cơ quan nhà nước.
  *
  * ⚠ NÚT "XEM THÊM", KHÔNG CUỘN VÔ HẠN (`skills/accessibility-elderly`), cùng lối "Phản ánh của tôi".
  */
 import { useEffect, useRef, useState } from "react";
 
 import { baiTinCuaXa, type KetQuaCongKhai, tinCuaXa } from "../api/goi-vigov";
-import { type BaiTinXa, chiaDoan, type TinXaTomTat, type TrangTinXa } from "../api/hop-dong-cong-khai";
+import { type BaiTinXa, type TinXaTomTat, type TrangTinXa } from "../api/hop-dong-cong-khai";
 import { layPhienViGov } from "../api/phien-vigov";
 
+import { ArticleBody } from "./article-body";
 import { BangXa } from "./khung";
 import { QUAY_LAI, TIN_XA } from "./noi-dung";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
@@ -163,7 +165,11 @@ export function sauKhiTaiBai(kq: KetQuaCongKhai<BaiTinXa>): TrangBai {
   return { kieu: "loi", loi: loiCua(kq.kieu) };
 }
 
-/** Toàn văn. Mỗi đoạn là MỘT `<p>` chứa CHỮ — React thoát mọi ký tự, kể cả `<script>`. */
+/**
+ * Toàn văn. Mỗi đoạn là MỘT `<p>` chứa CHỮ — React thoát mọi ký tự, kể cả `<script>`. Có `body_blocks` thì vẽ
+ * định dạng từ cấu trúc (`article-body.tsx`); KHÔNG có trình mở liên kết ở app chung (chủ dự án 01/10/2026: mở
+ * ra ngoài chỉ ở app của xã), nên chữ của một liên kết hiện như chữ thường.
+ */
 export function BaiTin({ bai }: { bai: BaiTinXa }) {
   return (
     <article className="cd-tin">
@@ -171,11 +177,7 @@ export function BaiTin({ bai }: { bai: BaiTinXa }) {
       <p className="cd-ghi-chu">
         <DongPhu tin={bai} />
       </p>
-      {chiaDoan(bai.noi_dung).map((doan, i) => (
-        <p key={i} className="cd-tin__doan">
-          {doan}
-        </p>
-      ))}
+      <ArticleBody blocks={bai.bodyBlocks} text={bai.noi_dung} paragraphClass="cd-tin__doan" />
     </article>
   );
 }

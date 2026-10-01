@@ -7,8 +7,8 @@
  * sơ, danh bạ, truyền thanh, video, bản đồ, thông báo.
  *
  * DỮ LIỆU:
- *   · công khai — tên xã (`/communes`), tin tức (`/commune-news`), danh bạ (`/commune-staff`), theo tên
- *     miền, không phiên, không qua `vihat-miniapp`;
+ *   · công khai — tên xã (`/communes`), tin tức (`/commune-news`), dải ảnh trang chủ (`/commune-news?type=banner`,
+ *     ADR 0067 §5), danh bạ (`/commune-staff`), theo tên miền, không phiên, không qua `vihat-miniapp`;
  *   · họ tên — lấy từ Zalo MỘT LẦN, lúc mở app, ở đây (`getUserInfo`, tiêm từ lớp vỏ; quyết định của người
  *     dùng 29/09/2026). Các màn bên dưới chỉ HIỂN THỊ tên ấy hoặc "Chưa xác định" — không màn nào gọi Zalo
  *     lại. Tên chỉ điền sẵn, không cấp gì (luật 4);
@@ -29,7 +29,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
+import { communeBanners } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
+import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
 import { DEMO_BUILD, DEMO_CITIZEN_NAME } from "../../lib/demo-build";
 
@@ -45,6 +47,7 @@ import {
 import { dichGoi } from "./DanhBaCanBoScreen";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
+import { type OpenExternal, useLeaveApp } from "./leave-app";
 import {
   APP_RIENG,
   COMMUNE_APP_SESSION,
@@ -151,14 +154,17 @@ function ThanhTabXa({ tab, onChon }: { tab: TabXa; onChon: (t: TabXa) => void })
 /* ═════════════════════════════════ TRANG CHỦ ═════════════════════════════════ */
 
 /**
- * THE HOME BANNER — one rounded picture under the header, as the prototype's `BannerStrip` but with no
- * carousel and no autoplay (a strip that moves on its own is the hardest thing on a touch screen for a slow
- * reader, and there is one picture).
+ * THE BUNDLED HOME BANNER — one rounded picture under the header. Since ADR 0067 §5 it is the FALLBACK of the
+ * strip below (`HomeBanner`): shown while the strip loads, when the commune has posted no banner, when the call
+ * fails, or when every posted picture failed to load — never a blank hero.
  *
- * TEMPORARY, the same per-domain bundle exception as the logo (ADR 0047 §6): `deploy.mjs --vao-thang` copies
- * `scripts/banner-xa/<domain>.png` into THAT build only, as `./banner-xa.png`. The real source later is the
- * commune-posted `banner` content / display profile in service-platform, read at runtime — then this file
- * name goes away.
+ * STILL the per-domain bundle exception of ADR 0047:251 (`deploy.mjs --vao-thang` copies
+ * `scripts/banner-xa/<domain>.png` into THAT build only, as `./banner-xa.png`). ADR 0067 §5 decision 6 ends that
+ * exception once the strip is built; it is built (01/10/2026), but the fallback is kept until EVERY commune has
+ * posted at least one banner — removing it earlier blanks the home screen of each commune that has not. When
+ * that holds, this component, `scripts/banner-xa/` and the copy step in `deploy.mjs` go together. (On
+ * 01/10/2026 no PNG is checked in under `scripts/banner-xa/`, so today the fallback draws nothing in any build;
+ * the copy step stays because the deploy script's own tests pin it and a commune may still supply one.)
  *
  * No file (every other build, or a commune that supplied none) → `onError` → NOTHING at all, not a
  * placeholder: a grey box where the commune posted nothing reads as a screen that failed to load.
@@ -171,6 +177,148 @@ export function CommuneBanner() {
     <div className="xa-banner">
       <img className="xa-banner__anh" src="./banner-xa.png" alt="" onError={() => setMissing(true)} />
     </div>
+  );
+}
+
+/**
+ * THE IN-APP PATHS A BANNER MAY OPEN (`link_to` starting with `/`, ADR 0067 §5 decision 2) — a CLOSED table.
+ *
+ * The server accepts any `/…` path (migration 0012's CHECK), so which ones LEAD anywhere is decided here, by
+ * the screens this app has. A path not in the table makes the banner a picture, not a button: a tap that
+ * opens nothing — or the wrong screen — on a public authority's home page is worse than no tap. The path
+ * words are the tabs' and tiles' own names, so a staff member can guess them; `/tin-tuc/<id>` opens one
+ * article (the id is the server's own, as in the news list). No query, no fragment, one trailing `/` allowed.
+ * `/gui-phan-anh` passes the same session gate as the home tile (`go`). Home (`/`) is not listed: the strip
+ * sits on it.
+ */
+const BANNER_ROUTES: Readonly<Record<string, ManXa>> = {
+  "/tin-tuc": { kieu: "tab", tab: "tin-tuc" },
+  "/phan-anh": { kieu: "tab", tab: "phan-anh" },
+  "/ca-nhan": { kieu: "tab", tab: "ca-nhan" },
+  "/gui-phan-anh": { kieu: "gui" },
+  "/danh-ba": { kieu: "danh-ba" },
+  "/su-kien": { kieu: "su-kien" },
+  "/truyen-thanh": { kieu: "truyen-thanh" },
+  "/video": { kieu: "video" },
+};
+
+/** The screen an in-app `link_to` opens, or `null` (unknown → the banner is not tappable). PURE, exported for tests. */
+export function bannerScreen(path: string): ManXa | null {
+  if (!path.startsWith("/") || path.startsWith("//") || /[?#\s\\]/.test(path)) return null;
+  const p = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  const known = BANNER_ROUTES[p];
+  if (known !== undefined) return known;
+  const article = /^\/tin-tuc\/([^/]+)$/.exec(p);
+  if (article === null) return null;
+  try {
+    const id = decodeURIComponent(article[1]!);
+    return id.trim() === "" ? null : { kieu: "bai", id, tu: "trang-chu" };
+  } catch {
+    return null; // a malformed %-escape
+  }
+}
+
+/** What a tap on a banner does: open a screen, ask before an https page, or nothing. PURE, exported for tests. */
+export type BannerTap = { readonly kind: "screen"; readonly screen: ManXa } | { readonly kind: "web"; readonly url: string };
+
+/**
+ * `linkTo` → the tap, or `null` (a picture only). An https target is tappable only when the shell gave an opener
+ * (`canOpenWeb`) — without one (tests, a build with no opener) a button would do nothing.
+ */
+export function bannerTap(linkTo: string | undefined, canOpenWeb: boolean): BannerTap | null {
+  if (linkTo === undefined) return null;
+  if (linkTo.startsWith("/")) {
+    const screen = bannerScreen(linkTo);
+    return screen === null ? null : { kind: "screen", screen };
+  }
+  return canOpenWeb && readHttpsLink(linkTo) !== null ? { kind: "web", url: linkTo } : null;
+}
+
+/**
+ * THE BANNER STRIP (ADR 0067 §5) — the commune's posted pictures, in the order the server returned them
+ * (`display_order` ascending). Each picture's words are its `title`, as `alt`. A tappable one is a full-width
+ * `<button>` around the picture, so its accessible name is the title; the others are plain pictures.
+ *
+ * NO CAROUSEL, NO AUTOPLAY (same reason as before): one picture fills the width; with more, each takes most of
+ * it and the next one shows at the edge, and the citizen swipes when they choose to. PURE: `onFail` reports a
+ * picture that did not load, and the caller drops it.
+ */
+export function BannerStrip(props: {
+  items: readonly CommuneBannerItem[];
+  canOpenWeb: boolean;
+  onScreen: (m: ManXa) => void;
+  onWeb: (url: string) => void;
+  onFail: (id: string) => void;
+}) {
+  const many = props.items.length > 1;
+  return (
+    <div className="xa-banner">
+      <ul className={`xa-banner-strip${many ? " xa-banner-strip--many" : ""}`} aria-label={XA_TN.banner_strip}>
+        {props.items.map((b) => {
+          const picture = (
+            <img className="xa-banner__anh" src={b.imageUrl} alt={b.title} decoding="async" onError={() => props.onFail(b.id)} />
+          );
+          const tap = bannerTap(b.linkTo, props.canOpenWeb);
+          return (
+            <li key={b.id} className="xa-banner-strip__item">
+              {tap === null ? (
+                picture
+              ) : (
+                <button
+                  type="button"
+                  className="xa-banner-strip__tap"
+                  onClick={() => (tap.kind === "screen" ? props.onScreen(tap.screen) : props.onWeb(tap.url))}
+                >
+                  {picture}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The strip as loaded this open — `null` while loading, on any failure, or when the commune posted none (all
+ * three → the bundled fallback; a strip that failed says nothing, like the category chips: the home screen works
+ * without it). Loaded once, with the ref guard `useTinXa` uses against StrictMode's double run.
+ */
+function useCommuneBanners(ten_mien: string): readonly CommuneBannerItem[] | null {
+  const [items, setItems] = useState<readonly CommuneBannerItem[] | null>(null);
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    void communeBanners(ten_mien).then((kq) => {
+      if (kq.kieu === "xong" && kq.gia_tri.length > 0) setItems(kq.gia_tri);
+    });
+  }, [ten_mien]);
+  return items;
+}
+
+/**
+ * The home hero: the posted strip when there is something to show, else the bundled picture. A picture that
+ * fails to load is dropped; when every one has failed, the bundled picture comes back — never a blank band.
+ */
+export function HomeBanner(props: {
+  items: readonly CommuneBannerItem[] | null;
+  canOpenWeb: boolean;
+  onScreen: (m: ManXa) => void;
+  onWeb: (url: string) => void;
+}) {
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const shown = (props.items ?? []).filter((b) => !failed.has(b.id));
+  if (shown.length === 0) return <CommuneBanner />;
+  return (
+    <BannerStrip
+      items={shown}
+      canOpenWeb={props.canOpenWeb}
+      onScreen={props.onScreen}
+      onWeb={props.onWeb}
+      onFail={(id) => setFailed((s) => new Set(s).add(id))}
+    />
   );
 }
 
@@ -322,6 +470,10 @@ function TrangChuXa(props: {
   onRetryPetitions: () => void;
   /** The commune's declared office (`/commune-profiles`), or `null` — then no office block. */
   profile: CommuneProfile | null;
+  /** The posted banner strip (`useCommuneBanners`), or `null` — then the bundled picture. */
+  banners: readonly CommuneBannerItem[] | null;
+  /** Ask before opening a banner's https page (`useLeaveApp().ask`); absent → such banners are not tappable. */
+  askLeave?: (url: string) => void;
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, ho_ten, petitions } = props;
@@ -336,7 +488,12 @@ function TrangChuXa(props: {
           "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
       <RootTabHeader title={xa.ten} subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh} />
       <div className="xa-trang">
-        <CommuneBanner />
+        <HomeBanner
+          items={props.banners}
+          canOpenWeb={props.askLeave !== undefined}
+          onScreen={di}
+          onWeb={(url) => props.askLeave?.(url)}
+        />
 
         <div className="xa-trang__than">
           {props.name_card}
@@ -543,6 +700,7 @@ function AppCuaXa(props: {
   draftStore?: FeedbackDraftStore;
   openSession?: OpenCommuneAppSession;
   openVideo?: OpenVideo;
+  openLink?: OpenExternal;
 }) {
   const { ten_mien, xa, openSession } = props;
   // Họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Phiên ViGov chỉ trong bộ nhớ (`api/phien-vigov.ts`), mở ở
@@ -553,6 +711,9 @@ function AppCuaXa(props: {
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
   const tin = useTinXa(ten_mien);
   const profile = useCommuneProfile(ten_mien);
+  const banners = useCommuneBanners(ten_mien);
+  // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
+  const leave = useLeaveApp(props.openLink);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
   const lop = `xa-app xa-co-chu--${co_chu}`;
 
@@ -603,6 +764,7 @@ function AppCuaXa(props: {
           onMo={(id) => datMan({ kieu: "bai", id, tu: man.tu })}
           onQuayLai={() => veTab(man.tu)}
           openVideo={props.openVideo}
+          openLink={props.openLink}
         />
       );
       break;
@@ -759,6 +921,8 @@ function AppCuaXa(props: {
         onOpenPetitions={openPetitions}
         onRetryPetitions={() => void petitions.load()}
         profile={profile}
+        banners={banners}
+        askLeave={leave.ask}
         di={go}
       />
     );
@@ -815,6 +979,7 @@ function AppCuaXa(props: {
     <>
       <main id="main">{than}</main>
       <ThanhTabXa tab={tab} onChon={veTab} />
+      {tab === "trang-chu" && leave.dialog}
     </>,
   );
 }
@@ -856,8 +1021,14 @@ export function TrangXa(props: {
    * không nhập `features/` hay zmp-sdk. Không truyền (chạy thử, test) thì chi tiết tin không có nút "Xem video".
    */
   openVideo?: OpenVideo;
+  /**
+   * Mở một liên kết xã gắn trong thân bài hoặc trên ảnh trang chủ, ra ngoài app (`moRaNgoai("lien-ket-xa", …)`),
+   * do lớp vỏ tiêm. Mỗi lần bấm đều hỏi trước (`leave-app.tsx`). Không truyền (chạy thử, test) thì chữ liên kết
+   * là chữ thường và ảnh trỏ ra ngoài không bấm được.
+   */
+  openLink?: OpenExternal;
 }) {
-  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession, openVideo } = props;
+  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession, openVideo, openLink } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -919,6 +1090,7 @@ export function TrangXa(props: {
         draftStore={draftStore}
         openSession={openSession}
         openVideo={openVideo}
+        openLink={openLink}
       />
     );
   }

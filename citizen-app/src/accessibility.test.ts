@@ -802,6 +802,8 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       // Wave 1: the whole petition card is one tap; "Đổi" beside the picked field on the send form.
       ".xa-petition-card",
       ".xa-field-change",
+      // ADR 0067 §5 (01/10/2026): a tappable banner on the home strip.
+      ".xa-banner-strip__tap",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -882,6 +884,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["biểu tượng tròn 40px của hàng cài đặt, ô hình của thẻ tin", token("xa-blue-ink"), token("xa-blue-50")],
     ["dòng 'ViGov phiên bản' trên nền trang", token("ink-muted"), token("xa-nen")],
     ["nút 'Gọi' của danh bạ: chữ trắng trên nút đỏ thương hiệu", "#ffffff", token("xa-brand")],
+    // ADR 0067 §1 (01/10/2026): the formatted article body — a link (also underlined) and the headings.
+    ["liên kết trong thân bài (gạch chân) trên thẻ/nền trắng", token("xa-blue-ink"), token("surface")],
+    ["đầu mục trong thân bài (navy) trên nền trắng", token("xa-navy"), token("surface")],
   ];
   it("không còn màu hồng nào trong app riêng (chủ dự án, 30/09/2026)", () => {
     // Rules only: the comment that records WHY pink went names the old value.

@@ -4,14 +4,15 @@
  *
  * DỮ LIỆU VÀ QUY TẮC GIỮ NGUYÊN của `TinTucXaScreen.tsx` — cùng trạng thái thuần (`TIN_DAU`,
  * `sauKhiTaiTin`, `sauKhiTaiBai`), cùng tuyến công khai theo tên miền, cùng "Xem thêm" thay cho cuộn
- * vô hạn. VĂN BẢN THUẦN: thân tin vẽ bằng nút chữ của React, chia đoạn theo dòng trống; không HTML.
+ * vô hạn. KHÔNG HTML: thân tin vẽ từ `body_blocks` (đoạn · đầu mục · danh sách · chữ đậm/nghiêng · liên kết)
+ * bằng phần tử React (`article-body.tsx`, ADR 0067 §1), hoặc — máy chủ cũ — từ `body` văn bản thuần chia đoạn
+ * theo dòng trống. Liên kết trong thân hỏi trước rồi mới mở ra ngoài (`leave-app.tsx`).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baiTinCuaXa, newsCategories, tinCuaXa } from "../api/goi-vigov";
 import {
   type BaiTinXa as BaiTinXaData,
-  chiaDoan,
   type NewsCategory,
   type NewsType,
   type TinXaTomTat,
@@ -27,8 +28,10 @@ import {
   type TrangBai,
 } from "./TinTucXaScreen";
 
+import { ArticleBody } from "./article-body";
 import { BieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
+import { type OpenExternal, useLeaveApp } from "./leave-app";
 
 const ngay = (s: string) => ngayVN(s) ?? NGAY_KHONG_DOC_DUOC;
 
@@ -528,12 +531,18 @@ export function BaiTinXa(props: {
   onMo?: (id: string) => void;
   /** The shell's opener for a video link (`OpenVideo`). Absent → no "Xem video" button. */
   openVideo?: OpenVideo;
+  /**
+   * The shell's opener for a link in the body (`moRaNgoai("lien-ket-xa", …)`). Each tap asks first
+   * (`leave-app.tsx`). Absent → links are plain words.
+   */
+  openLink?: OpenExternal;
 }) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
   const da_tai = useRef(false);
   const openVideo = props.openVideo;
+  const leave = useLeaveApp(props.openLink);
 
   async function tai() {
     datTrang({ kieu: "dang-tai" });
@@ -586,9 +595,11 @@ export function BaiTinXa(props: {
             onMo={props.onMo}
             videoFailed={videoFailed}
             onWatchVideo={onWatchVideo}
+            onLink={leave.ask}
           />
         )}
       </TrangCon>
+      {leave.dialog}
     </>
   );
 }
@@ -626,6 +637,8 @@ export function NewsArticle(props: {
   onMo?: (id: string) => void;
   onWatchVideo?: () => void;
   videoFailed?: boolean;
+  /** A tap on a link in the body (`useLeaveApp().ask`). Absent → the link's words are plain text. */
+  onLink?: (href: string) => void;
 }) {
   const { bai } = props;
   return (
@@ -636,11 +649,7 @@ export function NewsArticle(props: {
       <EventDetails tin={bai} />
       {props.onWatchVideo !== undefined && <WatchVideo failed={props.videoFailed ?? false} onTap={props.onWatchVideo} />}
       <div className="xa-ke" />
-      {chiaDoan(bai.noi_dung).map((doan, i) => (
-        <p key={i} className="xa-bai__doan">
-          {doan}
-        </p>
-      ))}
+      <ArticleBody blocks={bai.bodyBlocks} text={bai.noi_dung} paragraphClass="xa-bai__doan" onLink={props.onLink} />
       <TinLienQuan ds={props.ds} bai={bai} onMo={props.onMo} />
     </article>
   );

@@ -12,6 +12,7 @@ import {
   type MoPhienViGov,
   NutVaoKenhCongDan,
   type OpenCommuneAppSession,
+  type OpenExternal,
   type OpenVideo,
   type ReopenWithPhone,
   type ReopenWithPhoneResult,
@@ -293,9 +294,18 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
       openVideo={openCommuneVideo}
+      openLink={openCommuneLink}
     />
   );
 }
+
+/**
+ * THE LINK OPENER of the commune's own app (ADR 0067 §1, §5; owner 01/10/2026): a link inside an article's body,
+ * and a home-strip banner pointing at an https page. Built here for the same reason as `openCommuneVideo`; the
+ * state half asks the citizen first (`cong-dan/man/leave-app.tsx`) and calls this only on "Mở trang". Destination
+ * `"lien-ket-xa"`, so the privacy policy's counted sentence names it. Not in `AppChung`.
+ */
+const openCommuneLink: OpenExternal = (url) => moRaNgoai("lien-ket-xa", url);
 
 /**
  * THE VIDEO OPENER of the commune's own app (ADR 0047 §6, 01/10/2026) — the shell builds it, the state half only
