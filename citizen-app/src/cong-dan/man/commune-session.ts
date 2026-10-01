@@ -22,7 +22,11 @@
  *
  * `openAtOnce` (the `--demo` build only, ADR 0047 §6 row of 01/10/2026): that build's opener asks Zalo for
  * nothing — there is no phone dialog — so the explanation written for that dialog has nothing to explain,
- * and `require` opens the session at once. Every outcome after that is handled exactly as in every build.
+ * and `require` opens the session at once. Every outcome after that is handled as in every build; only the
+ * retry button's words differ (`sessionGateRetryLabel`), since no "Đồng ý chia sẻ" act exists there.
+ *
+ * EVERY OUTCOME HAS AN EXIT: `reset` works at any time (including while an open runs), every `ket-qua`
+ * screen carries "Về trang chủ", and a retry only where a new tap can change the answer.
  */
 import {
   type CommuneAppSessionOutcome,
@@ -77,7 +81,14 @@ export function createSessionGate(
 ): SessionGate {
   let pending: (() => void) | null = null;
   let finalOutcome: SessionGateStop | null = null;
+  /** An open is in flight. Only one at a time: two would be two Zalo/server exchanges for one tap. */
   let busy = false;
+  /**
+   * The screen is waiting for the in-flight open. `reset` clears it WHILE `busy` too — the citizen's
+   * "Quay lại" must always work; a gate that ignored it (before 01/10/2026) left the citizen on "Đang kết
+   * nối…" with every button dead for as long as the opener took, or forever if it never settled.
+   */
+  let waiting = false;
 
   const gate: SessionGate = {
     require(run) {
@@ -99,6 +110,13 @@ export function createSessionGate(
         return;
       }
       pending = run;
+      if (busy) {
+        // The citizen left and came back while the earlier open still runs: wait for THAT one, never a
+        // second exchange — and never a silent tap.
+        waiting = true;
+        setState({ kieu: "dang-mo" });
+        return;
+      }
       if (openAtOnce) {
         void gate.allow();
         return;
@@ -109,9 +127,25 @@ export function createSessionGate(
     async allow() {
       if (open === undefined || pending === null || busy) return;
       busy = true;
+      waiting = true;
       setState({ kieu: "dang-mo" });
-      const outcome = await openCommuneAppSession(open, communeName());
-      busy = false;
+      let outcome: CommuneAppSessionOutcome;
+      try {
+        outcome = await openCommuneAppSession(open, communeName());
+      } catch {
+        // `openCommuneAppSession` already turns a throwing opener into `thu-lai`; this is the same promise
+        // for anything around it, so no path ends with the citizen on "Đang kết nối…".
+        outcome = { kieu: "thu-lai" };
+      } finally {
+        busy = false;
+      }
+      if (!waiting) {
+        // The citizen left while it ran. A session is already stored (the next act runs at once); a final
+        // outcome is remembered so the next act says it; nothing runs and nothing is shown now.
+        if (outcome.kieu !== "da-mo" && !CAN_ASK_AGAIN.has(outcome.kieu)) finalOutcome = outcome.kieu;
+        return;
+      }
+      waiting = false;
       if (outcome.kieu === "da-mo") {
         const run = pending;
         pending = null;
@@ -138,17 +172,30 @@ export function createSessionGate(
     },
 
     reset() {
-      if (busy) return;
       pending = null;
+      waiting = false;
       setState(null);
     },
   };
   return gate;
 }
 
-/** Whether the result sentence of this outcome offers the "Đồng ý…" button again. */
-export function sessionGateOffersRetry(outcome: SessionGateStop): boolean {
+/**
+ * Whether the result offers a retry button. Not after Zalo refused with a code that is not "try again
+ * later": the sentence itself says pressing again changes nothing, and a button that repeats the same
+ * refusal is the loop a citizen reads as a frozen app.
+ */
+export function sessionGateOffersRetry(outcome: SessionGateStop, zalo?: ZaloFailure): boolean {
+  if (outcome === "thu-lai" && zalo !== undefined && !zalo.transient) return false;
   return outcome === "thu-lai" || outcome === "cho-lat" || outcome === "tam-ngung";
+}
+
+/**
+ * The retry button's words. With `atOnce` (the `--demo` build) nothing is shared and no Zalo dialog opens,
+ * so "Đồng ý chia sẻ số điện thoại" would name an act that does not happen: the button is "Thử lại".
+ */
+export function sessionGateRetryLabel(atOnce: boolean): string {
+  return atOnce ? COMMUNE_APP_SESSION.retry : PHONE_VERIFICATION.allow;
 }
 
 /**
@@ -156,11 +203,19 @@ export function sessionGateOffersRetry(outcome: SessionGateStop): boolean {
  * when `zalo` is given (with `thu-lai`) the sentence names the missing Zalo permission, and ZALO's code goes
  * on the separate `zaloSupportCode` line the screen renders under it.
  */
-export function sessionGateMessage(outcome: SessionGateStop, task: PhoneVerificationTask, zalo?: ZaloFailure): string {
+export function sessionGateMessage(
+  outcome: SessionGateStop,
+  task: PhoneVerificationTask,
+  zalo?: ZaloFailure,
+  atOnce = false,
+): string {
   const t = PHONE_VERIFICATION_TASK[task];
   if (outcome === "thu-lai" && zalo !== undefined) {
     return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
   }
+  // `atOnce`: the two sentences that name the retry button name the one this build shows (`sessionGateRetryLabel`).
+  if (atOnce && outcome === "thu-lai") return COMMUNE_APP_SESSION.retry_at_once(t);
+  if (atOnce && outcome === "cho-lat") return COMMUNE_APP_SESSION.wait_at_once(t);
   switch (outcome) {
     case "tu-choi":
       return PHONE_VERIFICATION.refused(t);

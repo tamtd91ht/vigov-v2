@@ -320,6 +320,15 @@ export const COMMUNE_APP_SESSION = {
     `Zalo hoặc hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
   other_commune: (task: string) =>
     `Ứng dụng chưa xác nhận được bạn đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  /**
+   * The build whose gate opens at once (`createSessionGate` `openAtOnce`): Zalo shows no dialog and nothing
+   * is shared, so the retry button is "Thử lại" and the two sentences that name a button name that one.
+   */
+  retry: "Thử lại",
+  retry_at_once: (task: string) =>
+    `Chưa kết nối được với hệ thống của xã vì mạng yếu hoặc hệ thống đang bận, nên ${task}. Hãy kiểm tra mạng rồi bấm “Thử lại”.`,
+  wait_at_once: (task: string) =>
+    `Hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Thử lại”.`,
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

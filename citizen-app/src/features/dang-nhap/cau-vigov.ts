@@ -151,24 +151,21 @@ export async function openCommuneAppSessionWithPhone(
 }
 
 /**
- * THE `--demo` BUILD'S OPENER (owner 01/10/2026, ADR 0047 §6) — App ID + `getAccessToken` only, and the
- * `demoIdentity` body (`hop-dong.ts` fifth body). `getPhoneNumber` is never called: that build has no phone
- * dialog. `getAccessToken` shows no dialog either, so nothing here asks the citizen anything.
+ * THE `--demo` BUILD'S OPENER (owner 01/10/2026, ADR 0047 §6) — App ID + the `demoIdentity` body
+ * (`hop-dong.ts` fifth body), and NO Zalo SDK call of any kind: not `getUserInfo`, not `getPhoneNumber`,
+ * and not `getAccessToken`. A `--demo` build runs in an app Zalo has not approved, and Zalo refuses
+ * `getAccessToken` to it too — calling it is what left the citizen on "Zalo chưa cho phép…".
  *
- * Same order as `openCommuneAppSessionWithPhone`: App ID first (unknown → stop, nothing sent — without
- * `appId` the server would treat it as the shared app); an empty code is not sent.
+ * App ID first, as in `openCommuneAppSessionWithPhone`: unknown → stop, nothing sent (without `appId` the
+ * server would treat it as the shared app). Reading `window.APP_ID` is a global, not a permission.
  *
- * Wired only under `DEMO_BUILD` (`App.tsx`). `readAppId` / `requestAccessToken` / `call` are for tests.
+ * Wired only under `DEMO_BUILD` (`App.tsx`). `readAppId` / `call` are for tests.
  */
 export async function openCommuneAppSessionWithDemoIdentity(
   readAppId: () => string | null = readRuntimeAppId,
-  requestAccessToken: () => Promise<KetQuaXin<string>> = xinMaTruyCap,
   call: (req: CommuneAppDemoSessionRequest) => Promise<CommuneAppBridgeResult> = openCommuneAppDemoSessionCall,
 ): Promise<CommuneAppLoginResult> {
   const app_id = readAppId();
   if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
-  const code = await requestAccessToken();
-  if (code.kieu === "ngoai-zalo") return { kieu: "ngoai-zalo" };
-  if (code.kieu !== "xong" || code.du_lieu === "") return noCode(code);
-  return call({ access_token: code.du_lieu, app_id });
+  return call({ app_id });
 }

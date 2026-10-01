@@ -292,9 +292,9 @@ export async function openCommuneAppSessionCall(
 }
 
 /**
- * The `--demo` build's login (`hop-dong.ts` fifth body): App ID + access token, no phone token. Same route,
- * same status table as the fourth body — only the body differs. NO THROW, NO LOG: the access token is a
- * credential. `address` only lets a test inject a fake address.
+ * The `--demo` build's login (`hop-dong.ts` fifth body): App ID only — no access token, no phone token. Same
+ * route, same status table as the fourth body — only the body differs. NO THROW, NO LOG. `address` only lets
+ * a test inject a fake address.
  */
 export async function openCommuneAppDemoSessionCall(
   req: CommuneAppDemoSessionRequest,

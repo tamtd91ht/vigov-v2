@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * THE `--demo` BUILD'S LOGIN (owner 01/10/2026, ADR 0047 §6) — `POST /api/v1/sessions` with
- * `{ appId, accessToken, demoIdentity: true }` and NO `phoneToken`.
+ * `{ appId, demoIdentity: true }` and NO Zalo token of any kind.
  *
  * What must hold:
- *   · the body is exactly those three keys — the shape `vihat-miniapp` accepts for an App ID in its
- *     `DEMO_APP_IDS`, and nothing that could be read as a phone;
- *   · the opener calls `getAccessToken` (no dialog) and NEVER `getPhoneNumber` or `getUserInfo`;
+ *   · the body is exactly those two keys — no `accessToken`, no `phoneToken`, nothing a server could
+ *     exchange with Zalo;
+ *   · the opener calls NO Zalo identity API: not `getAccessToken` (an app Zalo has not approved is refused it
+ *     too — the 01/10/2026 report), not `getPhoneNumber`, not `getUserInfo`;
  *   · App ID unknown → nothing asked of Zalo, nothing sent (a body without `appId` is the shared app);
  *   · the status table is the commune app's ordinary one — a refusal by the server is an ordinary branch.
  *
@@ -27,7 +28,7 @@ import { communeAppDemoSessionBody, type CommuneAppDemoSessionRequest } from "./
 
 const ADDRESS = "https://mini.vidu.vn/api/v1/sessions";
 const APP_ID = "1234567890123456789";
-const REQUEST: CommuneAppDemoSessionRequest = { access_token: "access-test", app_id: APP_ID };
+const REQUEST: CommuneAppDemoSessionRequest = { app_id: APP_ID };
 
 type Call = { address: string; init: RequestInit };
 let calls: Call[] = [];
@@ -52,7 +53,7 @@ const SESSION = {
   },
 };
 
-const EXPECTED_BODY = { appId: APP_ID, accessToken: "access-test", demoIdentity: true };
+const EXPECTED_BODY = { appId: APP_ID, demoIdentity: true };
 
 beforeEach(() => {
   calls = [];
@@ -65,10 +66,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("body — appId + accessToken + demoIdentity, no phone token", () => {
-  it("exactly the three keys the server side accepts", () => {
+describe("body — appId + demoIdentity, no Zalo token", () => {
+  it("exactly the two keys", () => {
     const body = JSON.parse(communeAppDemoSessionBody(REQUEST)) as Record<string, unknown>;
     expect(body).toEqual(EXPECTED_BODY);
+    expect(body).not.toHaveProperty("accessToken");
     expect(body).not.toHaveProperty("phoneToken");
     expect(body).not.toHaveProperty("communeHostHint");
   });
@@ -113,51 +115,62 @@ describe("the call — same route, same table as the commune app's ordinary logi
   });
 });
 
-describe("opener — `getAccessToken` only; never `getPhoneNumber`, never `getUserInfo`", () => {
+describe("opener — NO Zalo identity call: never `getAccessToken`, `getPhoneNumber`, `getUserInfo`", () => {
   const toWire = (req: CommuneAppDemoSessionRequest) => openCommuneAppDemoSessionCall(req, ADDRESS);
 
-  it("real SDK wrapper: one access token, one call with the demo body, no phone or name asked", async () => {
-    stubFetch(answer(201, SESSION));
-    const result: CommuneAppLoginResult = await openCommuneAppSessionWithDemoIdentity(() => APP_ID, undefined, toWire);
-    expect(result.kieu).toBe("xong");
-    expect(sdk.getAccessToken).toHaveBeenCalledTimes(1);
+  function expectZaloUntouched() {
+    expect(sdk.getAccessToken).not.toHaveBeenCalled();
     expect(sdk.getPhoneNumber).not.toHaveBeenCalled();
     expect(sdk.getUserInfo).not.toHaveBeenCalled();
+  }
+
+  it("a session: one call with exactly the demo body, Zalo asked for nothing", async () => {
+    stubFetch(answer(201, SESSION));
+    const result: CommuneAppLoginResult = await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire);
+    expect(result.kieu).toBe("xong");
+    expectZaloUntouched();
+    expect(calls).toHaveLength(1);
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual(EXPECTED_BODY);
   });
 
-  it("unknown App ID → Zalo asked for NOTHING and nothing sent", async () => {
+  it("the default wiring (real `openCommuneAppDemoSessionCall`) also asks Zalo for nothing", async () => {
+    // Whatever the test build's server address, the opener's own default path must leave Zalo untouched.
     stubFetch(answer(201, SESSION));
-    expect(await openCommuneAppSessionWithDemoIdentity(() => null, undefined, toWire)).toEqual({ kieu: "khong-ro-app" });
-    expect(await openCommuneAppSessionWithDemoIdentity(() => "", undefined, toWire)).toEqual({ kieu: "khong-ro-app" });
-    expect(sdk.getAccessToken).not.toHaveBeenCalled();
+    await openCommuneAppSessionWithDemoIdentity(() => APP_ID);
+    expectZaloUntouched();
+  });
+
+  it("Zalo would refuse every identity call (an app not yet approved) → the login does not depend on it", async () => {
+    const refused = Object.assign(new Error("platform text"), { code: -1402 });
+    sdk.getAccessToken.mockRejectedValue(refused);
+    sdk.getPhoneNumber.mockRejectedValue(refused);
+    sdk.getUserInfo.mockRejectedValue(refused);
+    stubFetch(answer(201, SESSION));
+    expect((await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).kieu).toBe("xong");
+    expectZaloUntouched();
+  });
+
+  it("unknown App ID → nothing sent, Zalo asked for nothing", async () => {
+    stubFetch(answer(201, SESSION));
+    expect(await openCommuneAppSessionWithDemoIdentity(() => null, toWire)).toEqual({ kieu: "khong-ro-app" });
+    expect(await openCommuneAppSessionWithDemoIdentity(() => "", toWire)).toEqual({ kieu: "khong-ro-app" });
+    expectZaloUntouched();
     expect(calls).toHaveLength(0);
   });
 
-  it("Zalo refuses the access token with a code → that code goes up, nothing sent", async () => {
-    stubFetch(answer(201, SESSION));
-    sdk.getAccessToken.mockRejectedValue(Object.assign(new Error("platform text"), { code: -1402 }));
-    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, undefined, toWire)).toEqual({
-      kieu: "khong-lay-duoc-ma",
-      failure: { capability: "access-token", code: -1402, transient: false },
-    });
-    expect(calls).toHaveLength(0);
+  it.each<[number, CommuneAppBridgeResult["kieu"]]>([
+    [400, "yeu-cau-hong"],
+    [422, "app-chua-san-sang"],
+    [503, "cau-tat"],
+  ])("server refuses the body (%i, as it does until the server side exists) → %s, Zalo untouched", async (status, kieu) => {
+    stubFetch(answer(status, { message: "never read" }));
+    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).toEqual({ kieu });
+    expectZaloUntouched();
   });
 
-  it("an empty access token (development platform) is not sent", async () => {
-    stubFetch(answer(201, SESSION));
-    sdk.getAccessToken.mockResolvedValue("");
-    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, undefined, toWire)).toEqual({
-      kieu: "khong-lay-duoc-ma",
-    });
-    expect(calls).toHaveLength(0);
-  });
-
-  it("outside Zalo → ngoai-zalo, nothing sent", async () => {
-    const call = vi.fn(toWire);
-    expect(
-      await openCommuneAppSessionWithDemoIdentity(() => APP_ID, async () => ({ kieu: "ngoai-zalo" }), call),
-    ).toEqual({ kieu: "ngoai-zalo" });
-    expect(call).not.toHaveBeenCalled();
+  it("network failure → khong-goi-duoc, never a throw", async () => {
+    stubFetch(new Error("offline"));
+    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).toEqual({ kieu: "khong-goi-duoc" });
+    expectZaloUntouched();
   });
 });

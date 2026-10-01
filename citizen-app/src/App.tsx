@@ -335,8 +335,9 @@ export function toCommuneAppSessionResult(result: CommuneAppLoginResult): Commun
 }
 
 /**
- * `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the identity comes from `vihat-miniapp`'s fixed demo identity — no
- * `getPhoneNumber`, the `demoIdentity` body. Same result table: everything after the session is real.
+ * `DEMO_BUILD` (ADR 0047 §6, 01/10/2026): the identity is the server's fixed demo identity — no Zalo
+ * identity call at all (no `getAccessToken`, no `getPhoneNumber`), the `demoIdentity` body. Same result
+ * table: everything after the session is real.
  */
 const openCommuneAppSession: OpenCommuneAppSession = async () =>
   toCommuneAppSessionResult(

@@ -5,9 +5,10 @@
  *
  * WHAT IT CHANGES — THE IDENTITY SOURCE, NOTHING ELSE:
  *   · `getUserInfo` is never called; the name is `DEMO_CITIZEN_NAME`;
- *   · `getPhoneNumber` is never called; the session is opened with `getAccessToken` + App ID and
- *     `demoIdentity: true` (`features/dang-nhap/hop-dong.ts`), and `vihat-miniapp` — only for an App ID
- *     in its `DEMO_APP_IDS` — hands ViGov the number `DEMO_CITIZEN_PHONE`;
+ *   · `getPhoneNumber` and `getAccessToken` are never called either — an app Zalo has not approved is
+ *     refused all three. The session is opened with App ID + `demoIdentity: true` only
+ *     (`features/dang-nhap/hop-dong.ts`), and the server — only for an App ID it lists as a demo app —
+ *     hands ViGov the number `DEMO_CITIZEN_PHONE`;
  *   · the phone field of the send form is pre-filled with that number.
  * Everything after the session is REAL: real server calls, real petitions in the commune's register.
  *

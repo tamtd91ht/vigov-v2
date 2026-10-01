@@ -39,6 +39,7 @@ import {
   type SessionGate,
   sessionGateMessage,
   sessionGateOffersRetry,
+  sessionGateRetryLabel,
   type SessionGateState,
 } from "./commune-session";
 import { dichGoi } from "./DanhBaCanBoScreen";
@@ -439,12 +440,17 @@ function DauTab({ tieu_de }: { tieu_de: string }) {
  *
  *   `hoi`       WHY first, then what Zalo will ask, then the button — Zalo's dialog opens only on "Đồng ý"
  *               (policy 3.3.4; the words are `PHONE_VERIFICATION`'s, the same act as the shared app's)
- *   `dang-mo`   words, not a spinner
- *   `ket-qua`   one sentence saying what to do next; "Đồng ý…" again only where a new tap can help
+ *   `dang-mo`   words, not a spinner — and "Về trang chủ", which works while the open runs
+ *   `ket-qua`   one sentence saying what to do next, "Về trang chủ" always, a retry only where a new tap can
+ *               help ("Thử lại" in the `--demo` build, `atOnce`: no "Đồng ý chia sẻ" act exists there)
+ *
+ * Exported for `session-gate-exits.test.tsx` only.
  */
-function SessionGateScreen(props: {
+export function SessionGateScreen(props: {
   state: SessionGateState;
   task: PhoneVerificationTask;
+  /** The gate opens at once (`DEMO_BUILD`) — changes the retry button's words only. */
+  atOnce: boolean;
   onAllow: () => void;
   onDecline: () => void;
   onClose: () => void;
@@ -454,7 +460,14 @@ function SessionGateScreen(props: {
     <>
       <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
       <TrangCon>
-        {state.kieu === "dang-mo" && <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai />}
+        {state.kieu === "dang-mo" && (
+          <>
+            <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai />
+            <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
+              {XA_TN.nut_ve_trang_chu}
+            </button>
+          </>
+        )}
         {state.kieu === "hoi" && (
           <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-tieu-de">
             <h2 className="xa-dau-khoi__tieu-de" id="xa-cong-tieu-de">
@@ -475,9 +488,13 @@ function SessionGateScreen(props: {
             <KhoiTrangThai
               bieu_tuong="alert"
               loi
-              cau={sessionGateMessage(state.outcome, props.task, state.zalo)}
+              cau={sessionGateMessage(state.outcome, props.task, state.zalo, props.atOnce)}
               support_code={state.outcome === "thu-lai" ? zaloSupportCode(state.zalo) : null}
-              nut={sessionGateOffersRetry(state.outcome) ? { nhan: PHONE_VERIFICATION.allow, onBam: props.onAllow } : undefined}
+              nut={
+                sessionGateOffersRetry(state.outcome, state.zalo)
+                  ? { nhan: sessionGateRetryLabel(props.atOnce), onBam: props.onAllow }
+                  : undefined
+              }
             />
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
               {XA_TN.nut_ve_trang_chu}
@@ -678,6 +695,7 @@ function AppCuaXa(props: {
       <SessionGateScreen
         state={gateState}
         task={gateTask}
+        atOnce={DEMO_BUILD}
         onAllow={() => void gate.allow()}
         onDecline={gate.decline}
         onClose={gate.reset}
