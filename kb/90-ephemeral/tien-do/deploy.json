@@ -205,6 +205,15 @@
       "no_confirm": [],
       "tiep_theo": "CHƯA CHẠY TRÊN JENKINS. Lượt đầu sau khi đổi parameters sẽ dừng (Jenkins học tham số) — bấm lại. Sau khi chạy, việc của người vận hành (khoá bí mật không qua job, luật 8): (1) identity operatorctl mini-app-secret set cho App ID mới, (2) retire App ID cũ, (3) vihat-miniapp thêm cặp App ID mới vào biến app xã (đổi mã vị trí), (4) bật demo cho App ID mới nếu cần, (5) đẩy bundle với ZMP_TOKEN của App ID mới.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "trien-khai-platform-admin",
+      "viec": "Đường triển khai khu vận hành platform-admin tại admin.vigov.vn, chỉ prod (chủ dự án 01/10/2026, ADR 0048 §Chốt triển khai 01/10)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "c04d2bc6 — Dockerfile (guard NEXT_PUBLIC, USER node), Jenkinsfile (OPERATOR_HOST chép từ env vigov-service-platform, sai/rỗng thì dừng; PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080), /healthz ngoài proxy (+ ca kiểm), deploy/base/platform-admin + overlays/prod, netpol quy tắc 12 (platform-admin ↔ platform:8080), check_build biết platform-admin (cắn: 6 điều kiện), deploy/README §12. platform-admin tsc sạch, 126/126, next build OK, standalone /healthz 200; kubectl kustomize prod có platform-admin + 2 netpol; check_build PASS; check_security PASS. Docker daemon không chạy trên máy này — chưa đóng ảnh thử.",
+      "no_confirm": [],
+      "tiep_theo": "Ngoài kho (README §12): tạo Deployment vigov-platform-admin + Service platform-admin trong Rancher (nhãn app.kubernetes.io/name đúng để netpol chọn được), DNS admin.vigov.vn, Ingress Rancher admin.vigov.vn → platform-admin:3000 (vigov-wildcard-tls, enable-cors false, gỡ rule admin cũ trỏ web-admin nếu còn), OPERATOR_HOST=admin.vigov.vn trên vigov-service-platform, TRUSTED_PROXY_CIDRS phủ dải pod platform-admin, rồi chạy job vigov-platform-admin; tạo nhà vận hành đầu tiên bằng operatorctl. Chưa thử trên cụm thật.",
+      "menu": null
     }
   ]
 }
