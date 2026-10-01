@@ -16,7 +16,7 @@ import {
   type NewsType,
   type TinXaTomTat,
 } from "../api/hop-dong-cong-khai";
-import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
+import { NGAY_KHONG_DOC_DUOC, ngayVN, thoiDiemVN } from "../../lib/thoi-diem";
 import { NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
 import {
   batDauTaiTin,
@@ -32,8 +32,74 @@ import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 
 const ngay = (s: string) => ngayVN(s) ?? NGAY_KHONG_DOC_DUOC;
 
+/** An instant in Vietnam time (+07, pinned — `lib/thoi-diem.ts`), split into its day and its time; `null` if unreadable. */
+function vnDayTime(iso: string): { day: string; time: string } | null {
+  const s = thoiDiemVN(iso); // "dd/MM/yyyy HH:mm"
+  if (s === null) return null;
+  const [day, time] = s.split(" ") as [string, string];
+  return { day, time };
+}
+
+/**
+ * When the article was published, for the detail's meta line: "09:07 ngày 25/09/2026" (§6.5) when the first
+ * publish instant is known, else the publication day alone. PURE.
+ *
+ * THE TIME IS SHOWN ONLY WHEN IT FALLS ON `ngay_dang`. `ngay_dang` is the day the commune chose to display (the
+ * cards count "x ngày trước" from it); `publishedAt` is when it was first published. When the two disagree —
+ * a backdated item — printing the time beside `ngay_dang` would state an instant that never happened, and
+ * printing `publishedAt`'s own day would contradict the card the citizen just tapped. So the day alone.
+ */
+export function publishedLabel(tin: TinXaTomTat): string {
+  const at = tin.publishedAt === undefined ? null : vnDayTime(tin.publishedAt);
+  const day = ngayVN(tin.ngay_dang);
+  if (at === null || day === null || at.day !== day) return ngay(tin.ngay_dang);
+  return XA_TN.time_on_day(at.time, at.day);
+}
+
 function dongPhu(tin: TinXaTomTat): string {
-  return tin.chuyen_muc !== "" ? `${tin.chuyen_muc} · ${ngay(tin.ngay_dang)}` : ngay(tin.ngay_dang);
+  return tin.chuyen_muc !== "" ? `${tin.chuyen_muc} · ${publishedLabel(tin)}` : publishedLabel(tin);
+}
+
+/**
+ * An event's window in words. PURE. Start only → "08:00 ngày 05/10/2026"; same day → "08:00 – 11:00 ngày
+ * 05/10/2026"; two days → "08:00 ngày 05/10/2026 – 17:00 ngày 06/10/2026". No readable start → `null` (the
+ * block then shows no time row). An unreadable end → the start alone, never a guessed end.
+ */
+export function eventTimeLabel(startsAt: string | undefined, endsAt: string | undefined): string | null {
+  const start = startsAt === undefined ? null : vnDayTime(startsAt);
+  if (start === null) return null;
+  const end = endsAt === undefined ? null : vnDayTime(endsAt);
+  if (end === null) return XA_TN.time_on_day(start.time, start.day);
+  if (end.day === start.day) return XA_TN.time_on_day(`${start.time} – ${end.time}`, start.day);
+  return `${XA_TN.time_on_day(start.time, start.day)} – ${XA_TN.time_on_day(end.time, end.day)}`;
+}
+
+/**
+ * The event block of a `su-kien` article (§6.5 detail: "Thời gian / Địa điểm" on the purple tone the Sự kiện
+ * tile already uses). Each row only when the commune set it; neither → nothing at all. PLAIN TEXT. PURE.
+ */
+export function EventDetails({ tin }: { tin: TinXaTomTat }) {
+  const time = eventTimeLabel(tin.eventStartsAt, tin.eventEndsAt);
+  const place = tin.eventPlace;
+  if (time === null && place === undefined) return null;
+  return (
+    <section className="xa-bai__event" aria-label={XA_TN.event_details}>
+      <dl className="xa-bai__event-list">
+        {time !== null && (
+          <div>
+            <dt>{XA_TN.event_time}</dt>
+            <dd>{time}</dd>
+          </div>
+        )}
+        {place !== undefined && (
+          <div>
+            <dt>{XA_TN.event_place}</dt>
+            <dd>{place}</dd>
+          </div>
+        )}
+      </dl>
+    </section>
+  );
 }
 
 /** Today's date in Vietnam, `YYYY-MM-DD` — the one clock read of the news cards. */
@@ -490,7 +556,15 @@ export function ArticleCover(props: { imageUrl: string | undefined; failed: bool
   );
 }
 
-/** A loaded article — cover, title, meta line, body, related items. PURE: the cover's failure is the caller's. */
+/**
+ * A loaded article — cover, title, meta line (published at), the event block, body, related items. PURE: the
+ * cover's failure is the caller's.
+ *
+ * NO "Xem video" BUTTON YET, though `video_url` is on the wire (ADR 0047 §6 G1): every way out of the app goes
+ * through `features/tinh-nang/mo-ra-ngoai.ts` and a destination declared in `content/dich-ra-ngoai.ts`, and
+ * that list IS the privacy policy's counted sentence — a new destination changes the policy's wording, which
+ * the owner holds back for review (G9, 01/10/2026). Not built until that is decided.
+ */
 export function NewsArticle(props: {
   bai: BaiTinXaData;
   coverFailed: boolean;
@@ -504,6 +578,7 @@ export function NewsArticle(props: {
       <ArticleCover imageUrl={bai.imageUrl} failed={props.coverFailed} onFail={props.onCoverFail} />
       <h2 className="xa-bai__tieu-de">{bai.tieu_de}</h2>
       <p className="xa-phu">{dongPhu(bai)}</p>
+      <EventDetails tin={bai} />
       <div className="xa-ke" />
       {chiaDoan(bai.noi_dung).map((doan, i) => (
         <p key={i} className="xa-bai__doan">

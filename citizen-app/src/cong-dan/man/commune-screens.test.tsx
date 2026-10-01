@@ -23,7 +23,19 @@ import {
   stepsAhead,
 } from "./PhanAnhAppXa";
 import { CaNhanXa, dossierLookupReady, initials, TraCuuHoSoXa } from "./TienIchAppXa";
-import { ArticleCover, BaiTinXa, HangTin, NewsArticle, NewsListBody, NewsThumb, relativeDay, todayVN } from "./TinTucAppXa";
+import {
+  ArticleCover,
+  BaiTinXa,
+  EventDetails,
+  eventTimeLabel,
+  HangTin,
+  NewsArticle,
+  NewsListBody,
+  NewsThumb,
+  publishedLabel,
+  relativeDay,
+  todayVN,
+} from "./TinTucAppXa";
 import { NHOM_CHUC_NANG } from "./TrangXa";
 import { VONG_DOI } from "./trai-nghiem";
 
@@ -405,6 +417,76 @@ describe("Tin tức: cover picture (card and detail)", () => {
     (img!.props.onError as () => void)();
     expect(reported).toBe(1);
     expect(ArticleCover({ imageUrl: undefined, failed: false, onFail: noop })).toBeNull();
+  });
+});
+
+/**
+ * THE REST OF WAVE 1 ON THE ARTICLE (G1, ADR 0047 §6): the time it was published and, on an event, its window
+ * and place. Every one optional — absent means the line or block is simply not there. Vietnam time, pinned +07.
+ */
+describe("Tin tức: published time and the event block (G1)", () => {
+  const base: BaiTinXaData = {
+    id: "1",
+    tieu_de: "Tin một",
+    tom_tat: "",
+    chuyen_muc: "Kinh tế",
+    ngay_dang: "2026-09-25",
+    type: "tin-tuc",
+    noi_dung: "Đoạn một.",
+  };
+  const render = (bai: BaiTinXaData) => html(createElement(NewsArticle, { bai, coverFailed: false, onCoverFail: noop, ds: [] }));
+
+  it("published at: 'HH:mm ngày dd/MM/yyyy' in Vietnam time when it falls on ngay_dang; otherwise the day alone", () => {
+    expect(publishedLabel({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toBe("09:07 ngày 25/09/2026");
+    // 18:30 UTC on the 24th is 01:30 on the 25th in Vietnam — the day is Vietnam's, not the phone's or UTC's.
+    expect(publishedLabel({ ...base, publishedAt: "2026-09-24T18:30:00Z" })).toBe("01:30 ngày 25/09/2026");
+    // A backdated item: the instant is another day than the one displayed — no time is claimed.
+    expect(publishedLabel({ ...base, ngay_dang: "2026-09-20", publishedAt: "2026-09-25T02:07:00Z" })).toBe("20/09/2026");
+    expect(publishedLabel(base)).toBe("25/09/2026");
+    expect(render({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toContain('<p class="xa-phu">Kinh tế · 09:07 ngày 25/09/2026</p>');
+    expect(render(base)).toContain('<p class="xa-phu">Kinh tế · 25/09/2026</p>');
+  });
+
+  it("the event window in words: start only, same day, two days; no start → no time", () => {
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", undefined)).toBe("08:00 ngày 05/10/2026");
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-05T04:00:00Z")).toBe("08:00 – 11:00 ngày 05/10/2026");
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-06T10:00:00Z")).toBe("08:00 ngày 05/10/2026 – 17:00 ngày 06/10/2026");
+    expect(eventTimeLabel(undefined, "2026-10-06T10:00:00Z")).toBeNull();
+    expect(eventTimeLabel(undefined, undefined)).toBeNull();
+  });
+
+  it("an event article: the block under the meta line, labelled in words, each row only when set", () => {
+    const ev: BaiTinXaData = { ...base, type: "su-kien", eventStartsAt: "2026-10-05T01:00:00Z", eventEndsAt: "2026-10-05T04:00:00Z", eventPlace: "Nhà văn hoá thôn" };
+    const page = render(ev);
+    expect(page).toContain(
+      `<section class="xa-bai__event" aria-label="${XA_TN.event_details}"><dl class="xa-bai__event-list">` +
+        `<div><dt>Thời gian</dt><dd>08:00 – 11:00 ngày 05/10/2026</dd></div>` +
+        `<div><dt>Địa điểm</dt><dd>Nhà văn hoá thôn</dd></div></dl></section><div class="xa-ke"></div>`,
+    );
+    const placeOnly = render({ ...base, type: "su-kien", eventPlace: "Sân UBND" });
+    expect(placeOnly).toContain("<dt>Địa điểm</dt><dd>Sân UBND</dd>");
+    expect(placeOnly).not.toContain("Thời gian");
+    const timeOnly = render({ ...base, type: "su-kien", eventStartsAt: "2026-10-05T01:00:00Z" });
+    expect(timeOnly).toContain("<dt>Thời gian</dt><dd>08:00 ngày 05/10/2026</dd>");
+    expect(timeOnly).not.toContain("Địa điểm");
+  });
+
+  it("absent fields render NOTHING: no event block, no time, no video button", () => {
+    const page = render({ ...base, type: "su-kien" });
+    expect(page).not.toMatch(/xa-bai__event|Thời gian|Địa điểm|Xem video/);
+    expect(html(createElement(EventDetails, { tin: base }))).toBe("");
+  });
+
+  it("the event block uses the purple tone pairs `accessibility.test.ts` already measures, and sets no font size", async () => {
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.xa-bai__event \{[^}]*background: var\(--xa-purple-50\);/);
+    expect(css).toMatch(/\.xa-bai__event-list dt \{[^}]*color: var\(--xa-purple-ink\);/);
+    expect(css).toMatch(/\.xa-bai__event-list dd \{[^}]*color: var\(--ink\);/);
+    for (const m of css.matchAll(/\.xa-bai__event[^{]*\{([^}]*)\}/g)) expect(m[1]).not.toContain("font-size");
   });
 });
 

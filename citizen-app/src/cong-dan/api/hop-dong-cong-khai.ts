@@ -9,9 +9,13 @@
  *                                                             display_order?, residential_units_headed? }] }
  *   GET comms     /api/v1/commune-news?host=…[&cursor=…][&type=…]
  *                                                         → { items: [{ id, title, summary, published_on,
- *                                                             category_name, type?, source?, image_url? }],
+ *                                                             category_name, type?, source?, image_url?,
+ *                                                             published_at?, event_starts_at?,
+ *                                                             event_ends_at?, event_place? }],
  *                                                             next_cursor, has_more }   (type: b22bf76;
- *                                                             image_url: 2026-10-01, ADR 0047 §6)
+ *                                                             the rest: ADR 0047 §6, 2026-09-30/10-01.
+ *                                                             `video_url` is on the wire and NOT read
+ *                                                             yet — see `TinTucAppXa.tsx` `NewsArticle`)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
  *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
  *                                                         → { items: [{ id, name, parent_id?, order }] }
@@ -19,8 +23,8 @@
  *
  *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
  *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
- *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`; `image_url` (01/10/2026) từ cùng tệp
- *   `:173-177,223-226`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là máy chủ cũ, không phải sai khuôn.
+ *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`; `published_at`, `event_*` (2ed818bd) và
+ *   `image_url` (01/10/2026) từ cùng tệp `:155-177,209-226`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là máy chủ cũ, không phải sai khuôn.
  *
  * ⚠ CÔNG KHAI, KHÔNG BEARER. Ba tuyến này chỉ trả thứ xã đã công bố cho người dân. Tệp gọi mạng
  * (`goi-vigov.ts`) không gắn `Authorization` cho chúng — gắn vào là gửi phiên công dân tới một tuyến
@@ -279,6 +283,19 @@ export type TinXaTomTat = {
    * `<img src>` untouched and nowhere else — never parsed, logged, or used as a key.
    */
   readonly imageUrl?: string;
+  /**
+   * The instant of the FIRST publish (RFC 3339; G1, ADR 0047 §6) — set once, never moved. ABSENT for items
+   * published before the server recorded it (no backfill) or an unreadable value: the screen then shows
+   * `ngay_dang` alone, never a guessed time.
+   */
+  readonly publishedAt?: string;
+  /**
+   * An event's window and place (RFC 3339 · PLAIN TEXT) — only ever on a `su-kien` item, each only when set.
+   * `eventEndsAt` is kept only beside an `eventStartsAt` (the server refuses an end without a start).
+   */
+  readonly eventStartsAt?: string;
+  readonly eventEndsAt?: string;
+  readonly eventPlace?: string;
 };
 
 export type BaiTinXa = TinXaTomTat & {
@@ -315,6 +332,26 @@ function readImageUrl(v: unknown): string | undefined | null {
   }
 }
 
+/**
+ * Optional instant (`published_at`, `event_starts_at`, `event_ends_at`): absent, or `null` — which the contract
+ * allows (`kb/20-contracts/openapi.json` `comms.tinXaRa`, `["string","null"]`) — → `undefined`; not a string →
+ * malformed (`null`). A string no `Date` can read is treated as absent: the item is still worth reading, and
+ * a time the app cannot read is a time it must not print.
+ */
+function readInstant(v: unknown): string | undefined | null {
+  if (v === undefined || v === null) return undefined;
+  if (!laChuoi(v)) return null;
+  return Number.isNaN(new Date(v).getTime()) ? undefined : v;
+}
+
+/** Optional plain text (`event_place`): absent → `undefined`; not a string → malformed; blank → absent. */
+function readOptionalText(v: unknown): string | undefined | null {
+  if (v === undefined) return undefined;
+  if (!laChuoi(v)) return null;
+  const t = v.trim();
+  return t === "" ? undefined : t;
+}
+
 function docTin(m: unknown): TinXaTomTat | null {
   if (typeof m !== "object" || m === null) return null;
   const r = m as Record<string, unknown>;
@@ -331,16 +368,30 @@ function docTin(m: unknown): TinXaTomTat | null {
   // `type` is optional (additive): absent is an older server. Present, it must be a string.
   if (r.type !== undefined && !laChuoi(r.type)) return null;
   const imageUrl = readImageUrl(r.image_url);
-  if (imageUrl === null) return null;
+  const publishedAt = readInstant(r.published_at);
+  const eventStartsAt = readInstant(r.event_starts_at);
+  const eventEndsAt = readInstant(r.event_ends_at);
+  const eventPlace = readOptionalText(r.event_place);
+  if (imageUrl === null || publishedAt === null || eventStartsAt === null || eventEndsAt === null || eventPlace === null) {
+    return null;
+  }
+  const type = isNewsType(r.type) ? r.type : null;
+  // THE TYPE GATES THE EVENT FIELDS HERE TOO, as on the server (`tin_xa_cong_khai.go:210-216`): an event window
+  // printed on a news article is a date a resident acts on. An end with no start is dropped for the same reason.
+  const isEvent = type === "su-kien";
   return {
     id: r.id,
     tieu_de: r.title,
     tom_tat: r.summary,
     ngay_dang: r.published_on,
     chuyen_muc: r.category_name,
-    type: isNewsType(r.type) ? r.type : null,
-    // The key is left out, not set to `undefined`: "no cover" has one shape.
+    type,
+    // Keys are left out, not set to `undefined`: "not there" has one shape.
     ...(imageUrl === undefined ? {} : { imageUrl }),
+    ...(publishedAt === undefined ? {} : { publishedAt }),
+    ...(isEvent && eventStartsAt !== undefined ? { eventStartsAt } : {}),
+    ...(isEvent && eventStartsAt !== undefined && eventEndsAt !== undefined ? { eventEndsAt } : {}),
+    ...(isEvent && eventPlace !== undefined ? { eventPlace } : {}),
   };
 }
 

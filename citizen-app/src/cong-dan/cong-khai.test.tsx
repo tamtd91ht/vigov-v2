@@ -415,6 +415,62 @@ describe("tin của xã — lời gọi và đọc trang", () => {
     }
   });
 
+  /* G1 (ADR 0047 §6, server 2ed818bd): `published_at` and the event fields — all optional. */
+  const EVENT = { ...TIN_RA, type: "su-kien" };
+
+  it("published_at: kept as received; absent or `null` (the contract allows it) → absent; unreadable → absent", () => {
+    expect(page({ ...TIN_RA, published_at: "2026-09-25T02:07:00Z" })!.muc[0]!.publishedAt).toBe("2026-09-25T02:07:00Z");
+    for (const v of [undefined, null, "", "not-a-time"]) {
+      const t = page({ ...TIN_RA, published_at: v });
+      expect(t, String(v)).not.toBeNull();
+      expect(Object.keys(t!.muc[0]!), String(v)).not.toContain("publishedAt");
+    }
+  });
+
+  it("an event's window and place are read on `su-kien`, as received (place trimmed)", () => {
+    expect(
+      page({
+        ...EVENT,
+        event_starts_at: "2026-10-05T01:00:00Z",
+        event_ends_at: "2026-10-05T04:00:00Z",
+        event_place: "  Nhà văn hoá thôn  ",
+      }),
+    ).toStrictEqual({
+      muc: [
+        {
+          id: "tin-01",
+          tieu_de: TIN_RA.title,
+          tom_tat: TIN_RA.summary,
+          ngay_dang: "2026-09-27",
+          chuyen_muc: "Y tế",
+          type: "su-kien",
+          eventStartsAt: "2026-10-05T01:00:00Z",
+          eventEndsAt: "2026-10-05T04:00:00Z",
+          eventPlace: "Nhà văn hoá thôn",
+        },
+      ],
+      con_tro: "",
+      con_nua: false,
+    });
+  });
+
+  it("event fields on another type are DROPPED; an end with no start is dropped; a blank place is absent", () => {
+    const keys = (item: Record<string, unknown>) => Object.keys(page(item)!.muc[0]!);
+    const all = { event_starts_at: "2026-10-05T01:00:00Z", event_ends_at: "2026-10-05T04:00:00Z", event_place: "Sân UBND" };
+    for (const type of ["tin-tuc", "thong-bao", "video", undefined]) {
+      expect(keys({ ...TIN_RA, type, ...all }).filter((k) => k.startsWith("event")), String(type)).toEqual([]);
+    }
+    expect(keys({ ...EVENT, event_ends_at: "2026-10-05T04:00:00Z" }).filter((k) => k.startsWith("event"))).toEqual([]);
+    expect(keys({ ...EVENT, event_place: "   " })).not.toContain("eventPlace");
+  });
+
+  it("an event field or published_at that is present but not a string → the whole page is malformed", () => {
+    for (const field of ["published_at", "event_starts_at", "event_ends_at"]) {
+      for (const v of [123, true, {}]) expect(page({ ...EVENT, [field]: v }), `${field}=${String(v)}`).toBeNull();
+    }
+    for (const v of [123, null, {}]) expect(page({ ...EVENT, event_place: v }), String(v)).toBeNull();
+  });
+
   it("the URL is never logged and never sent back up", async () => {
     const said: unknown[] = [];
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((k) =>

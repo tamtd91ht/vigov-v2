@@ -3093,6 +3093,29 @@ button.xa-o-nhanh {
   object-fit: cover;
   display: block;
 }
+/* The event block of a `su-kien` article (§6.5: "khối sự kiện nền purple-50"): the purple tone the Sự kiện tile
+   already carries (`xa-mau--tim`), so no new colour family. Labels purple-ink, values ink — both pairs measured
+   in `accessibility.test.ts` ("tông tím", "tên lĩnh vực trên ô tông tím"). Body-size text, never smaller. */
+.xa-bai__event {
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--xa-purple-50);
+}
+.xa-bai__event-list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.xa-bai__event-list dt {
+  color: var(--xa-purple-ink);
+  font-weight: 700;
+}
+.xa-bai__event-list dd {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.5;
+}
 .xa-hang-tin__chu {
   flex: 1;
   min-width: 0;

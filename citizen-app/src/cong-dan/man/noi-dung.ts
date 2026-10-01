@@ -732,6 +732,12 @@ export const XA_TN = {
   /** A chosen category with nothing of the tab's type in it (published items can be withdrawn meanwhile). */
   news_category_empty: (category: string) => `Chưa có tin nào trong mục “${category}”.`,
   tin_lien_quan: "Tin liên quan",
+  /** A time on a day, as the article's meta line and event block print it (`PROTOTYPE.md` §6.5: "09:07 ngày …"). */
+  time_on_day: (time: string, day: string) => `${time} ngày ${day}`,
+  /** The event block of a `su-kien` article (§6.5 detail) — its accessible name and its two labels. */
+  event_details: "Thông tin sự kiện",
+  event_time: "Thời gian",
+  event_place: "Địa điểm",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",
