@@ -11,6 +11,7 @@ owns_facts:
   - "dân chấm 1–5 sao sau khi xử lý; 1–2 sao tự mở lại, không trần số lần, không tính lại hạn; từ 3 sao giữ nguyên trạng thái (vòng 2, 28/09/2026 — thay luật mở lại theo cấu hình của ADR 0008)"
   - "Mini App có công tắc 'Gửi ẩn danh' tuỳ chọn; bật thì không gửi họ tên, số điện thoại"
   - "trường bắt buộc khi dân gửi phản ánh: lĩnh vực, mô tả, ảnh/video, vị trí, người gửi trừ khi ẩn danh"
+  - "điểm 1 và 9 áp cả app chung: lĩnh vực là bước đầu, bắt buộc phía client, nhắc lại ở bước xác nhận; máy chủ còn tuỳ chọn (01/10/2026)"
   - "phản ánh 'Thái độ / tác phong cán bộ': luồng riêng, mặc định chỉ Bí thư/Chủ tịch xem, không công khai, xã tắt được"
   - "tra cứu hồ sơ phía dân: số điện thoại đầy đủ + 4 số cuối số hồ sơ"
   - "chatbot OA mức P1; hỏi đáp TTHC, lịch tiếp công dân, khảo sát (P1) và thanh toán (P2) thuộc phạm vi"
@@ -38,6 +39,9 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 > cách hiểu trước khi dựng — nháp giữ lĩnh vực, mô tả, nơi xảy ra, họ tên, số điện thoại và cờ ẩn danh
 > như `store/draft.ts` của kho yêu cầu, chỉ trong app riêng của xã — chủ dự án không phản đối. Phạm vi
 > điểm 5, điểm 7, điểm 8 chuyển từ CHỜ sang ĐÃ CHỐT.
+>
+> 01/10/2026 — chủ dự án chốt **phạm vi điểm 1 và 9 cho app chung**, trước đó chỉ ngầm hiểu: xem đoạn
+> "Phạm vi điểm 1 và 9" dưới bảng.
 
 ## Bối cảnh
 
@@ -65,6 +69,12 @@ xung đột với require thì làm theo prototype"*.
 | 13 | Phạm vi M6.1 còn lại | **Vòng 2, 28/09/2026 — ĐÃ CHỐT thuộc phạm vi**, đúng mức ưu tiên của `SRS.md:412-417`: M6.1.8 hỏi đáp TTHC (P1), M6.1.10 lịch tiếp công dân + đăng ký lịch gặp (P1), M6.1.11 khảo sát – lấy ý kiến (P1), M6.1.13 thanh toán phí – lệ phí (P2). **Chưa có service nào sở hữu** cả bốn — luật 2 điều kiện dừng #1: tới lượt thì contract-designer đề xuất, chủ dự án quyết | `SRS.md:412-417` | — |
 
 Phạm vi điểm 5: **ĐÃ CHỐT vòng 4** — cả app chung lẫn app riêng (dòng 5 ở bảng trên).
+
+Phạm vi điểm 1 và 9: **ĐÃ CHỐT 01/10/2026** (chủ dự án) — áp cho **cả app chung** ViHAT
+(`GuiPhanAnhScreen`), không chỉ app riêng: (a) bước chọn lĩnh vực có ở app chung và lĩnh vực **bắt
+buộc phía client** như app riêng; (b) đó là **bước ĐẦU TIÊN** của luồng gửi, như app riêng và
+`NewFeedbackPage` của kho yêu cầu; (c) bước xác nhận **nhắc lại lĩnh vực đã chọn**. Máy chủ **vẫn để
+tuỳ chọn** — bắt buộc phía máy chủ là bước hoãn, theo dõi ở sổ `service-petitions/linh-vuc-cho-dan-tang-2`.
 
 Chỗ không xung đột: theo prototype (bước 2 là bước gửi; bước 3 là màn kết quả — bản trải nghiệm ghi
 "Đã lưu phản ánh (bản trải nghiệm)" vì phiếu chỉ nằm trong bộ nhớ máy, **chưa gửi tới xã**; trang chủ 2
