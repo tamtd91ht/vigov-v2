@@ -2,8 +2,72 @@ package store
 
 import (
 	"context"
+	"io/fs"
+	"slices"
+	"strings"
 	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/vihat/vigov/core/migrate"
+	"github.com/vihat/vigov/service-platform/migrations"
 )
+
+// migrationsBefore returns the embedded migrations whose name sorts before stop — the schema as it
+// stood before that file was released, so a test can put a row into a state 0012 must respect.
+func migrationsBefore(t *testing.T, stop string) fs.FS {
+	t.Helper()
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	if err != nil {
+		t.Fatalf("read migrations: %v", err)
+	}
+	out := fstest.MapFS{}
+	for _, e := range entries {
+		if e.IsDir() || e.Name() >= stop {
+			continue
+		}
+		b, err := fs.ReadFile(migrations.FS, e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		out[e.Name()] = &fstest.MapFile{Data: b}
+	}
+	return out
+}
+
+// A content-image limit an operator set before 0012 ran is a limit somebody chose and signed: 0012
+// must leave it — values, signer and trail — exactly as it found it.
+func TestPgContentImageCoverKeepsOperatorEdit(t *testing.T) {
+	db, _ := moKetNoi(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := migrate.Chay(ctx, db, migrationsBefore(t, contentImageCoverMigration), "platform"); err != nil {
+		t.Fatalf("migrate up to 0011: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE upload_policy SET max_bytes = 20971520, updated_by = 'VH-00001'
+		WHERE purpose = 'content-image'`); err != nil {
+		t.Fatalf("operator edit: %v", err)
+	}
+	chayMigration(t, db)
+
+	var maxBytes int64
+	var mimes, by string
+	if err := db.QueryRow(`SELECT max_bytes, allowed_mime_types::text, updated_by FROM upload_policy
+		WHERE purpose = 'content-image'`).Scan(&maxBytes, &mimes, &by); err != nil {
+		t.Fatalf("read row: %v", err)
+	}
+	if maxBytes != 20971520 || by != "VH-00001" || !strings.Contains(mimes, "image/heic") {
+		t.Errorf("0012 overwrote an operator's edit: max_bytes %d, mimes %s, by %s", maxBytes, mimes, by)
+	}
+	var changed int
+	if err := db.QueryRow(`SELECT count(*) FROM platform_audit_log
+		WHERE action = 'upload_policy.changed' AND subject = 'content-image'`).Scan(&changed); err != nil {
+		t.Fatalf("count change trail: %v", err)
+	}
+	if changed != 0 {
+		t.Errorf("change trail entries = %d, want 0 — nothing was changed", changed)
+	}
+}
 
 // Integration tests for migration 0008 against a real PostgreSQL — skipped without VIGOV_TEST_DSN,
 // like every *_pg_test.go here. The CHECKs, triggers and seed are behaviour the database owns.
@@ -31,7 +95,26 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 			if p.FileCountLimited || p.MaxBytes != 2147483648 || len(p.AllowedMIMETypes) != 2 {
 				t.Errorf("content-video = %+v", p)
 			}
+		case "content-image":
+			// 0012 (người dùng chốt 01/10/2026): 50 MiB, jpeg/png/webp, no HEIC, no count limit.
+			if p.FileCountLimited || p.MaxBytes != 52428800 ||
+				!slices.Equal(p.AllowedMIMETypes, []string{"image/jpeg", "image/png", "image/webp"}) {
+				t.Errorf("content-image = %+v", p)
+			}
 		}
+	}
+
+	// 0012 rewrote content-image once, with one trail entry carrying 0008's values as before.
+	var changed int
+	var before, after string
+	if err := db.QueryRow(`SELECT count(*), min(before::text), min(after::text) FROM platform_audit_log
+		WHERE action = 'upload_policy.changed' AND actor = 'system' AND subject = 'content-image'`).
+		Scan(&changed, &before, &after); err != nil {
+		t.Fatalf("count change trail: %v", err)
+	}
+	if changed != 1 || !strings.Contains(before, `10485760`) || !strings.Contains(before, `image/heic`) ||
+		!strings.Contains(after, `52428800`) || strings.Contains(after, `image/heic`) {
+		t.Errorf("content-image change trail: %d entries, before %s, after %s", changed, before, after)
 	}
 
 	var entries int

@@ -101,6 +101,8 @@ func allSeeds(t *testing.T) []seedRow {
 }
 
 // The owner's values, exactly: six of 2026-09-28 (0008), task-attachment of 2026-09-29 (0010).
+// These are the SEEDED values as written in each file. content-image's seed is later rewritten by
+// 0012 (TestUploadPolicyContentImageCoverChange pins that), so its effective value is not this one.
 func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 	images := []string{"image/jpeg", "image/png", "image/webp", "image/heic"}
 	want := map[string]seedRow{
@@ -302,6 +304,57 @@ func TestUploadPolicySeedFilesWriteTrail(t *testing.T) {
 			if !strings.Contains(sql, clause) {
 				t.Errorf("%s seeds a policy but lacks %q", f, clause)
 			}
+		}
+	}
+}
+
+const contentImageCoverMigration = "0012_upload_policy_content_image_cover.sql"
+
+// Người dùng chốt 01/10/2026: the Mini App cover image is 50 MiB, JPEG/PNG/WebP, no HEIC
+// (docs/ui-ux/11-noi-dung-mini-app.md:126,201). 0012 rewrites 0008's content-image row to that —
+// but ONLY while the row still holds 0008's seed, signed 'system' and live, so a limit an operator
+// set is never overwritten; and it writes the trail from what the UPDATE returned, in the same
+// statement. Each clause below is one whose loss would turn no other test red.
+func TestUploadPolicyContentImageCoverChange(t *testing.T) {
+	b, err := fs.ReadFile(migrations.FS, contentImageCoverMigration)
+	if err != nil {
+		t.Fatalf("read %s: %v", contentImageCoverMigration, err)
+	}
+	sql := sqlLineComment.ReplaceAllString(string(b), "")
+	for _, clause := range []string{
+		// The new values.
+		"SET max_bytes          = 52428800",
+		"allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']",
+		"updated_by         = 'system'",
+		// The filter: one purpose, untouched seed state only (rule 7 forbidden #2; never overwrite).
+		"WHERE u.purpose = 'content-image'",
+		"AND u.deleted_at IS NULL",
+		"AND u.updated_by = 'system'",
+		"AND u.max_bytes = 10485760",
+		"AND u.allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic']::text[]",
+		"AND u.max_files_per_subject IS NULL",
+		// The trail, same statement, before and after from the row itself (rule 6 inv 3, 5, 6).
+		"INSERT INTO platform_audit_log (actor, action, subject, before, after, reason)",
+		"'system', 'upload_policy.changed'",
+		"FROM changed c;",
+		"'migration " + contentImageCoverMigration + ":",
+	} {
+		if !strings.Contains(sql, clause) {
+			t.Errorf("%s lacks %q", contentImageCoverMigration, clause)
+		}
+	}
+	// The values set must stay inside core/storage's allow-list, and HEIC must be gone.
+	set := regexp.MustCompile(`allowed_mime_types = ARRAY\[([^\]]*)\],`).FindStringSubmatch(sql)
+	if set == nil {
+		t.Fatal("new MIME list not found")
+	}
+	for _, q := range strings.Split(set[1], ",") {
+		m := strings.Trim(strings.TrimSpace(q), "'")
+		if m == storage.MIMEHEIC {
+			t.Error("content-image still allows HEIC — the user decided against it on 2026-10-01")
+		}
+		if _, ok := storage.ExtForMIME(m); !ok {
+			t.Errorf("MIME %q is not in core/storage's allow-list", m)
 		}
 	}
 }
