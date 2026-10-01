@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-09-30",
+  "cap_nhat": "2026-10-01",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -347,6 +347,15 @@
       "no_confirm": [],
       "tiep_theo": "Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm \"trang video mà xã đăng kèm một tin trong ứng dụng của xã\" lúc duyệt G9. Chưa thử trên máy thật.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "nhat-ky-ket-noi-loi-demo",
+      "viec": "Chẩn đoán 'Không gửi được vì mạng yếu…' khi gửi phản ánh trên máy thật: bản --demo ghi console.warn mỗi lần gọi ViGov không thành; build Mini App sạch cảnh báo",
+      "trang_thai": "dang-lam",
+      "bang_chung": "96013711 — vite.config.ts lọc EMPTY_IMPORT_META, chunkSizeWarningLimit 1200; vite build không cảnh báo. || 12ae65a1 — connection-log.ts (console.warn chỉ khi DEMO_BUILD; bản ghi: route, method, host, outcome, status/tên lỗi, elapsed_ms, origin, online — không thân, token, đường dẫn); goi-vigov.ts: 200/201 thân hỏng → loi-may-chu (trước đó rơi vào catch → loi-mang). cong-dan.test.tsx miễn đúng một tệp. Đo bundle: bản thường 0 console.warn, bản --demo có. vitest 54 tệp, make check EXIT=0 (golangci-lint chưa cài trên máy này).",
+      "no_confirm": [],
+      "tiep_theo": "Người dùng chọn 'chỉ console, không nút' (01/10/2026). Còn chưa biết nguyên nhân thật: dựng --vao-thang --demo, gửi trên máy thật, đọc dòng '[ViGov] kết nối lỗi'. TypeError → CORS (origin chưa có trong CITIZEN_CORS_ALLOWED_ORIGINS của môi trường) hoặc ingress chặn OPTIONS; AbortError → quá 20 s; status có giá trị → máy chủ đã trả lời.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

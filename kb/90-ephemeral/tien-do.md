@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 8b3cfca5
+derived_from_commit: 12ae65a1
 expires: 2026-12-30
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -207,6 +207,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `tools` | `apidoc-ma-loi-co-ten` — tools/apidoc công bố mã lỗi có tên: @reply <status> <Type> [mã…] → x-vigov-error-codes; gen:api sinh errorCodes | xong | — | Còn tuyến chưa gắn mã: POST /tasks và các tuyến ghi nhiệm vụ khác, ghi cán bộ identity, POST /staff/publications, vòng đời phiếu (xu_ly_phan_anh.go), rating 409, cả documents/comms/finance/reporting; mã của middleware (401/403/400 idem/503) chưa suy tự động. |
 | `web-admin` | `phan-anh-danh-gia-kiem-duyet` — Phản ánh (09): hiện đánh giá sao của dân, số lần mở lại, kiểm duyệt công khai, lọc Bị đánh giá thấp, nhãn nhật ký cho hai hành vi của dân | xong | — | Chưa mở trình duyệt ở 320px. Đường 200 của PUT publication (vẽ lại ngăn + tải lại danh sách) chỉ có ca API, SoPhanAnh chưa có khung test. Nhãn công khai theo đặc tả §8.3/require feedback-display.ts:75-94. PHAN_CHUA_DUNG còn 8 (thêm dòng §8.6 'cán bộ không nhập hộ đánh giá' — quyết định người dùng 27/09, CHƯA CÓ ADR ghi nó). Lọc không đẩy lên URL (các lọc khác cũng không). |
 | `web-admin` | `phan-anh-vi-tri-hien-truong` — Phản ánh (09): dòng Vị trí hiện trường — địa chỉ + toạ độ dân gửi kèm, dạng chữ | xong | — | KHÔNG có bản đồ nhỏ/bản đồ nhiệt: gửi toạ độ dân ra một nguồn tile bên ngoài là luật 3 điểm dừng #2 + CSP luật 13 — CHỦ DỰ ÁN CHƯA CHỌN nhà cung cấp bản đồ. Ghi ở PHAN_CHUA_DUNG (9 mục). Thiếu tên thôn cạnh địa chỉ (hợp đồng không trả). |
+| `citizen-app` | `nhat-ky-ket-noi-loi-demo` — Chẩn đoán 'Không gửi được vì mạng yếu…' khi gửi phản ánh trên máy thật: bản --demo ghi console.warn mỗi lần gọi ViGov không thành; build Mini App sạch cảnh báo | ? | — | Người dùng chọn 'chỉ console, không nút' (01/10/2026). Còn chưa biết nguyên nhân thật: dựng --vao-thang --demo, gửi trên máy thật, đọc dòng '[ViGov] kết nối lỗi'. TypeError → CORS (origin chưa có trong CITIZEN_CORS_ALLOWED_ORIGINS của môi trường) hoặc ingress chặn OPTIONS; AbortError → quá 20 s; status có giá trị → máy chủ đã trả lời. |
 
 ### `noi-dung-mini-app` — [docs/ui-ux/11-noi-dung-mini-app.md](../../docs/ui-ux/11-noi-dung-mini-app.md)
 
@@ -382,7 +383,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-09-30 · 40 mục
+Cập nhật 2026-10-01 · 41 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -426,6 +427,7 @@ Cập nhật 2026-09-30 · 40 mục
 | `doi-ma-loi-zalo-xuong-dong-phu` — Câu lỗi quyền Zalo: mã lỗi rời khỏi câu chính, xuống dòng phụ nhỏ 'Mã hỗ trợ: <mã>'; ghi ngoại lệ vào skills/accessibility-elderly | xong | 30/09/2026: câu chính không mang mã (ZALO_FAILURE, noi-dung.ts); dòng phụ 'Mã hỗ trợ: <mã>' (zaloSupportCode, lớp cd-ghi-chu / xa-phu, 16px, --ink-muted 7.4:1 trên nền trắng) ở năm chỗ: xác thực số, cổng phiên app xã, vị trí, tên Zalo, xác nhận xã. Ngoại lệ có tên ở skills/accessibility-elderly REQUIRED #5. tsc sạch; vitest 44 tệp / 1185 ca xanh (zalo-failure.test.ts 19 ca: câu chính không chữ số, dòng phụ đúng mã, không lỗi thì không dòng). | — | Chưa đo độ tương phản dòng phụ trên nền riêng của app xã. Chỗ tên Zalo ở TrangXa.tsx render inline, không có ca render riêng. |
 | `tin-xa-anh-bia` — App riêng: ảnh bìa tin từ image_url (thẻ 96×80, gọn 88×72; chi tiết 16:9) — ADR 0047 §6 (683c5902), máy chủ 606bf515 | xong | 2fd2b766 — readImageUrl (chỉ https: tuyệt đối, khác → không ảnh; không phải chuỗi → trang hỏng), NewsThumb (lỗi tải → biểu tượng), ArticleCover (vắng/lỗi → không dải). vitest 52 tệp 1396/1396, tsc sạch. | — | Chưa xem trên máy thật/webview Zalo: host kho ảnh công khai phải vào danh sách tên miền của App ID (ADR 0052 Còn mở #3). Thẻ tải bản 1280 px — bản thu nhỏ thứ hai là việc comms. Câu chính sách quyền riêng tư: xem chinh-sach-dung-voi-ban-dung. |
 | `tin-xa-gio-dang-su-kien-video` — App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd) | xong | 3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch. || e2ca1415 — nút Xem video (videoUrl chỉ https:, chỉ loại video), mở qua moRaNgoai("video", url) tiêm từ AppRieng; đích thứ sáu ở dich-ra-ngoai.ts, câu chính sách tự sinh "Có sáu chỗ…" (người dùng đồng ý, e4ace97c); phiên bản giữ 1.0. vitest 52 tệp 1417/1417, tsc sạch. | — | Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm "trang video mà xã đăng kèm một tin trong ứng dụng của xã" lúc duyệt G9. Chưa thử trên máy thật. |
+| `nhat-ky-ket-noi-loi-demo` — Chẩn đoán 'Không gửi được vì mạng yếu…' khi gửi phản ánh trên máy thật: bản --demo ghi console.warn mỗi lần gọi ViGov không thành; build Mini App sạch cảnh báo | dang-lam | 96013711 — vite.config.ts lọc EMPTY_IMPORT_META, chunkSizeWarningLimit 1200; vite build không cảnh báo. || 12ae65a1 — connection-log.ts (console.warn chỉ khi DEMO_BUILD; bản ghi: route, method, host, outcome, status/tên lỗi, elapsed_ms, origin, online — không thân, token, đường dẫn); goi-vigov.ts: 200/201 thân hỏng → loi-may-chu (trước đó rơi vào catch → loi-mang). cong-dan.test.tsx miễn đúng một tệp. Đo bundle: bản thường 0 console.warn, bản --demo có. vitest 54 tệp, make check EXIT=0 (golangci-lint chưa cài trên máy này). | — | Người dùng chọn 'chỉ console, không nút' (01/10/2026). Còn chưa biết nguyên nhân thật: dựng --vao-thang --demo, gửi trên máy thật, đọc dòng '[ViGov] kết nối lỗi'. TypeError → CORS (origin chưa có trong CITIZEN_CORS_ALLOWED_ORIGINS của môi trường) hoặc ingress chặn OPTIONS; AbortError → quá 20 s; status có giá trị → máy chủ đã trả lời. |
 
 ## `core`
 
