@@ -4048,7 +4048,7 @@
     },
     "domain.LaTenMienDanhRieng": {
       "kind": "func",
-      "at": "service-platform/internal/domain/ten_mien_danh_rieng.go:51"
+      "at": "service-platform/internal/domain/ten_mien_danh_rieng.go:57"
     },
     "domain.LaTraLaiLamTiep": {
       "kind": "func",

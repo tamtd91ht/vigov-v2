@@ -187,6 +187,15 @@
       "trang_thai": "xong",
       "bang_chung": "deploy/base/identity/{deployment,service}.yaml, deploy/base/platform/deployment.yaml, deploy/base/mang/netpol.yaml. 9093 trước đó không dùng ở deploy/ (9092 là Kafka). Không chính sách nào khác cho vào 9093. platform không còn vào identity:9090 — mã không có identityclient.Dial nào trong service-platform/cmd/. kubectl kustomize staging + prod sạch; tools/check_build.py PASS.",
       "tiep_theo": "Thứ tự lên cụm: identity trước, platform sau. Áp netpol (quy tắc 11 sửa tại chỗ, giữ tên). Sổ cặp gọi `netpol-grpc-theo-cap-goi`: cặp platform→identity nay là cổng 9093, không phải 9090."
+    },
+    {
+      "id": "mot-nguon-ten-mien-cong-khai",
+      "viec": "Tên miền công khai về MỘT nguồn: deploy/hosts.yaml; Ingress, hằng số host của core/config, service-platform, platform-admin, citizen-app và Jenkinsfile đều đọc/sinh từ nó (chủ dự án 01/10/2026, ADR 0046 sửa đổi 01/10)",
+      "trang_thai": "xong",
+      "bang_chung": "8dfc994f — tools/ingress đọc hosts.yaml (yaml.v3 KnownFields, 16 ca từ chối), Ingress sinh lại giống từng byte (git diff rỗng); 4 tệp hằng sinh có ca kiểm lệch; ten_mien_danh_rieng.go, operator.go, operator-host.ts, dia-chi-vigov.ts dùng hằng sinh, hành vi giữ nguyên; deploy/Jenkinsfile đọc api_suffix bằng awk, sai thì dừng. go test tools/ingress, core/config, service-platform/internal/{domain,grpc,http} xanh; citizen-app 1443/1443, platform-admin 122/122. make check toàn kho ĐỎ ở service-platform/internal/store vì migration 0013_upload_policy_content_audio.sql CHƯA commit của phiên song song — đã chạy sạch trên worktree tại HEAD: xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Ingress trên cụm vẫn dựng tay trong Rancher (chủ dự án giữ): đổi host thì sửa hosts.yaml → make kb → nhập lại kết quả kubectl kustomize deploy/overlays/<env>. Đổi api_suffix/gốc web cần migration mới cho CHECK 0007. Nhãn dành riêng (admin, api, stg, www) vẫn viết tay trong mã.",
+      "menu": null
     }
   ]
 }

@@ -392,6 +392,15 @@
       "no_confirm": [],
       "tiep_theo": "Hồ sơ xin quyền app xã (tmp/xin-quyen-zalo/README.md, Phần B) còn nợ: Chính sách quyền riêng tư riêng cho app xã (bên kiểm soát dữ liệu — câu của chủ dự án), khai các tuyến petitions vào khối 'Những gì rời khỏi máy', chụp ảnh b00–b08 trong Zalo trên bản không --demo. Câu tuyến vị trí vẫn nói máy chủ ViHAT — đúng tới khi lượt chuyển bước đổi mã vị trí (ADR 0066 quyết định 5) làm xong.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "cors-ingress-thieu-idempotency-key",
+      "viec": "Nguyên nhân 'Không gửi được vì mạng yếu' ở app xã: preflight CORS do nginx của Ingress dựng tay trả lời, Access-Control-Allow-Headers KHÔNG có Idempotency-Key",
+      "trang_thai": "dang_lam",
+      "bang_chung": "curl 01/10/2026 14:33 UTC: DNS petitions/comms/identity.api.vigov.vn → cùng IP; OPTIONS petitions.api.vigov.vn/api/v1/my-citizen-reports (Origin h5.zdn.vn) = 204 với danh sách header của nginx (không Idempotency-Key, có Allow-Credentials: true); POST không token = 401 có ACAO. App gửi Idempotency-Key ở POST gửi phản ánh và chấm sao (goi-vigov.ts) → trình duyệt chặn → TypeError → loi-mang. GET không mang header đó nên chạy.",
+      "no_confirm": [],
+      "tiep_theo": "Người vận hành sửa Ingress trong Rancher: tắt CORS của nginx cho host API (enable-cors false, để core/httpx/cors.go trả lời — không Allow-Credentials) hoặc thêm Idempotency-Key vào cors-allow-headers; kiểm lại bằng curl OPTIONS. Rồi gửi thử trên máy thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
