@@ -150,6 +150,10 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// internal/http/staff_notification_test.go.
 		StaffInbox:      commsstore.NewStaffNotificationStore(nil),
 		WriteStaffInbox: commsapp.NewStaffNotifications(nil, nil),
+		// The portal sync, on nil dependencies for the same reason: nothing here calls it; its
+		// six-route suite is internal/http/portal_sync_test.go.
+		PortalSync:      commsapp.NewPortalSyncAdmin(nil, nil, nil, nil, nil),
+		WritePortalSync: commsapp.NewPortalSyncAdmin(nil, nil, nil, nil, nil),
 		Log:             log,
 	})
 

@@ -239,6 +239,11 @@ type Deps struct {
 	StaffInbox      StaffInboxReader
 	WriteStaffInbox StaffInboxWriter
 
+	// The portal sync (migration 0013, ADR 0067 §2) — internal/http/routes_portal_sync.go. Built even
+	// without SECRET_ENCRYPTION_KEYS: its writes then answer 503 and every other route keeps serving.
+	PortalSync      PortalSyncReader
+	WritePortalSync PortalSyncWriter
+
 	Log *slog.Logger
 }
 
@@ -299,6 +304,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.StaffInbox == nil || d.WriteStaffInbox == nil {
 		panic("comms/http: thiếu kho hoặc use case hộp chuông — GET/PATCH /api/v1/notifications sẽ panic khi có người gọi")
 	}
+	if d.PortalSync == nil || d.WritePortalSync == nil {
+		panic("comms/http: thiếu use case đồng bộ Cổng — sáu tuyến /api/v1/portal-sync/… sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
 		panic("comms/http: thiếu authz.Checker — mọi tuyến có khai quyền sẽ không kiểm được quyền")
 	}
@@ -310,6 +318,9 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// The map-asset-type Excel import — three routes, all `admin.lookup` (routes_map_asset_type_import.go).
 	registerMapAssetTypeImportRoutes(mux, d, h)
+
+	// The portal sync — six routes, `content.read` / `content.update` (routes_portal_sync.go).
+	registerPortalSyncRoutes(mux, h)
 
 	// --- the commune's map-asset-type catalogue -----------------------------------------------
 	//

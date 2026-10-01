@@ -214,6 +214,14 @@
       "no_confirm": [],
       "tiep_theo": "Ngoài kho (README §12): tạo Deployment vigov-platform-admin + Service platform-admin trong Rancher (nhãn app.kubernetes.io/name đúng để netpol chọn được), DNS admin.vigov.vn, Ingress Rancher admin.vigov.vn → platform-admin:3000 (vigov-wildcard-tls, enable-cors false, gỡ rule admin cũ trỏ web-admin nếu còn), OPERATOR_HOST=admin.vigov.vn trên vigov-service-platform, TRUSTED_PROXY_CIDRS phủ dải pod platform-admin, rồi chạy job vigov-platform-admin; tạo nhà vận hành đầu tiên bằng operatorctl. Chưa thử trên cụm thật.",
       "menu": null
+    },
+    {
+      "id": "netpol-comms-ra-443-cong-ttdt",
+      "viec": "NetworkPolicy quy tắc 7c allow-comms-egress-portal: pod comms ra 443 tới Cổng TTĐT của xã (ADR 0067 §2)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "CHƯA COMMIT. deploy/base/mang/netpol.yaml: chỉ pod comms, chỉ TCP 443, ipBlock 0.0.0.0/0 (nợ cùng loại quy tắc 4/9/10, `_chung/netpol-duong-ra-tam-mo`); chú thích ghi rõ biên thật là hai phép kiểm trong service-comms/internal/portal (tên .gov.vn + địa chỉ công khai lúc quay số). kubectl kustomize deploy/overlays/prod và staging sạch.",
+      "tiep_theo": "Áp lên cụm cùng bản comms có đồng bộ Cổng. Thay 0.0.0.0/0 bằng egress gateway / FQDN policy khi cụm có.",
+      "no_confirm": []
     }
   ]
 }

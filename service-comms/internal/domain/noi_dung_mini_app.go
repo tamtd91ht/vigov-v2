@@ -63,10 +63,9 @@ func LoaiNoiDungHopLe(l string) bool {
 
 // TrangThaiNoiDung is §6's chip.
 //
-// `TrangThaiChoDuyet` HAS NO WRITER IN THIS REPOSITORY and that is deliberate rather than
-// unfinished: §10.2 puts an item here only when the PORTAL SYNC runs in `chờ duyệt` mode, and the
-// sync is not built. The value exists because §6 draws the chip, and because leaving it out of the
-// schema would make the sync's first pass a migration on live data.
+// `TrangThaiChoDuyet` HAS ONE WRITER, the portal sync in `chờ duyệt` mode (§10.2,
+// app/portal_sync_runner.go). Staff composing by hand never land an item here: §7 offers one
+// checkbox, published or not.
 type TrangThaiNoiDung string
 
 const (

@@ -878,5 +878,6 @@ func oneCategoryRow(res sql.Result, op string) error {
 //	                      rule 7 makes that a soft delete with a MANDATORY reason (`delete_reason`),
 //	                      and no screen in chapter 11 collects one. Taking an item off the Mini App is
 //	                      `trang_thai = 'an'`, which the edit route already does.
-//	the sync writer       a later card (ADR 0067 §2). It must call internal/richtext.Sanitize like the
-//	                      staff write path does.
+//	the sync writer       NOT HERE BY DESIGN: it is its own statement, PortalSyncStore.InsertSyncedItem
+//	                      (portal_sync.go), with `nguon` the literal 'dong-bo-cong'; the run sanitises
+//	                      the body with internal/richtext.Sanitize before it (app/portal_sync_runner.go).

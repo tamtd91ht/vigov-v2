@@ -106,6 +106,8 @@ func newMailServer(t *testing.T) *mailServer {
 		AuditLog:             &auditLogFake{},
 		StaffInbox:           &fakeInbox{},
 		WriteStaffInbox:      &fakeInbox{},
+		PortalSync:           &fakePortalSync{},
+		WritePortalSync:      &fakePortalSync{},
 		Log:                  log,
 	})
 

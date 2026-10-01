@@ -147,6 +147,8 @@ func newInboxServer(t *testing.T) *inboxServer {
 		AuditLog:             &auditLogFake{},
 		StaffInbox:           inbox,
 		WriteStaffInbox:      inbox,
+		PortalSync:           &fakePortalSync{},
+		WritePortalSync:      &fakePortalSync{},
 		Log:                  im,
 	})
 	var h http.Handler = mux

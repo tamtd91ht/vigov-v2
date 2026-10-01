@@ -42,7 +42,9 @@ import (
 	svcgrpc "github.com/vihat/vigov/service-comms/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 	"github.com/vihat/vigov/service-comms/internal/mail"
+	"github.com/vihat/vigov/service-comms/internal/portal"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
+	"github.com/vihat/vigov/service-comms/internal/store/crosstenant"
 	"github.com/vihat/vigov/service-comms/migrations"
 )
 
@@ -261,6 +263,28 @@ func main() {
 	staffInbox := commsstore.NewStaffNotificationStore(kho)
 	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox)
 
+	// The portal sync (migration 0013, ADR 0067 §2). ONE outbound client for the process — its
+	// transport is the only way to a socket and it carries both SSRF checks (internal/portal). NO NEW
+	// VARIABLE: the portal address and key are PER-COMMUNE values, read at runtime from the commune's own
+	// row (rule 1 invariant 10, rule 11 forbidden #6); the timeouts and caps are vendor constants in the
+	// adapter. The runner's locks and its "which communes are due" list are the countable unscoped
+	// statements of internal/store/crosstenant, on the raw pool, and nothing else gets that pool.
+	//
+	// The same envelope as the mail server: nil without SECRET_ENCRYPTION_KEYS, and then every portal
+	// write answers 503 and every scheduled run ends `that-bai` by name. The same cover pipeline as the
+	// staff upload (`covers`): without object storage or a scanner, articles import without images.
+	portalStore := commsstore.NewPortalSyncStore(kho)
+	portalClient := portal.New(portal.Options{})
+	portalRunner, err := commsapp.NewPortalSyncRunner(commsapp.PortalSyncRunnerDeps{
+		DB: kho, Repo: portalStore, Locks: crosstenant.NewPortalSync(db), Registry: nenTang,
+		Client: portalClient, Envelope: envelope, Covers: covers, Log: log,
+	})
+	if err != nil {
+		log.Error("không dựng được bộ chạy đồng bộ Cổng", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	portalSync := commsapp.NewPortalSyncAdmin(kho, portalStore, envelope, portalClient, portalRunner)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -287,6 +311,8 @@ func main() {
 		AuditLog:        audit.NewLog(kho),
 		StaffInbox:      staffInbox,
 		WriteStaffInbox: staffNotifications,
+		PortalSync:      portalSync,
+		WritePortalSync: portalSync,
 		Log:             log,
 	})
 
@@ -346,6 +372,16 @@ func main() {
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
+	// THE PORTAL SYNC RUNNER lives as long as this context. Cancelled FIRST on shutdown, so a run in
+	// progress stops between articles and still writes its one finish fill (on a context the cancel
+	// cannot reach — app.PortalSyncRunner.finish); manual runs started from HTTP derive from it too.
+	jobs, stopJobs := context.WithCancel(context.Background())
+	runnerDone := make(chan struct{})
+	go func() {
+		defer close(runnerDone)
+		portalRunner.Run(jobs)
+	}()
+
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
 	loi := make(chan error, 2)
 	go func() {
@@ -373,6 +409,7 @@ func main() {
 		// One surface failing takes the process down rather than leaving it half-serving: REST up with
 		// gRPC down looks healthy while every automation job's delivery is refused.
 		log.Error("server stopped", "err", err)
+		stopJobs()
 		grpcSrv.Stop()
 		_ = srv.Close()
 		os.Exit(1)
@@ -380,6 +417,18 @@ func main() {
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "comms")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
+
+		// The sync stops first and drains in parallel with the servers, inside the same 20 seconds. A run
+		// that cannot finish in time is left unfinished and is closed `that-bai` by the next run (0013).
+		stopJobs()
+		jobsDrained := make(chan bool, 1)
+		go func() {
+			select {
+			case <-runnerDone:
+			case <-ctx.Done():
+			}
+			jobsDrained <- portalRunner.Wait(time.Until(deadlineOf(ctx)))
+		}()
 
 		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
 		grpcDone := make(chan struct{})
@@ -393,6 +442,9 @@ func main() {
 		case <-ctx.Done():
 			log.Warn("gRPC không đóng kịp hạn, buộc dừng", "service", "comms")
 			grpcSrv.Stop()
+		}
+		if !<-jobsDrained {
+			log.Warn("lượt đồng bộ Cổng chưa xong kịp hạn — sẽ được đóng `that-bai` ở lượt sau", "service", "comms")
 		}
 		if errHTTP != nil {
 			log.Error("đóng không sạch", "err", errHTTP)
@@ -506,6 +558,14 @@ func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.
 	c = httpx.StripTenantHeaders(c)
 	c = httpx.CORSCongDan(nguonCORS)(c)
 	return c
+}
+
+// deadlineOf is ctx's deadline, or now when it has none (the shutdown context always has one).
+func deadlineOf(ctx context.Context) time.Time {
+	if d, ok := ctx.Deadline(); ok {
+		return d
+	}
+	return time.Now()
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

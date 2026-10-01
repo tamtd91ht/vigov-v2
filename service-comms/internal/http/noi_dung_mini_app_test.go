@@ -234,6 +234,8 @@ func dungMayChuND(t *testing.T) *mayChuND {
 		// The header bell: present because Register refuses a nil one; its suite is staff_notification_test.go.
 		StaffInbox:      &fakeInbox{},
 		WriteStaffInbox: &fakeInbox{},
+		PortalSync:      &fakePortalSync{},
+		WritePortalSync: &fakePortalSync{},
 		Log:             im,
 	})
 

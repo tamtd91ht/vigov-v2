@@ -73,6 +73,8 @@ func auditDeps(checker authz.Checker, fake AuditLogReader, log *slog.Logger) Dep
 		AuditLog:             fake,
 		StaffInbox:           &fakeInbox{},
 		WriteStaffInbox:      &fakeInbox{},
+		PortalSync:           &fakePortalSync{},
+		WritePortalSync:      &fakePortalSync{},
 		Log:                  log,
 	}
 }

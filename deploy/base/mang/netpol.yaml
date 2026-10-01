@@ -369,6 +369,37 @@ spec:
         - { port: 9000, protocol: TCP }
         - { port: 3310, protocol: TCP }
 ---
+# 7c. Đường RA của RIÊNG comms: 443 tới Cổng TTĐT của xã (ADR 0067 §2 — đồng bộ tin, API chia sẻ
+# của Cổng dùng chung Đà Nẵng; migration 0013). Thiếu luật này thì pod xanh mà mọi lượt đồng bộ
+# kết thúc `that-bai` với lỗi `connect`, và nút "Cấu hình" báo 502 — đúng kiểu hỏng trông như chạy được.
+#
+# ⚠ 443 mở tới `0.0.0.0/0` vì Cổng không công bố dải địa chỉ (và mỗi xã một host `.gov.vn`); CHỈ pod
+# comms, CHỈ cổng 443 — cùng loại nợ với quy tắc 4, 9 và 10 (`_chung/netpol-duong-ra-tam-mo`).
+#
+# LUẬT NÀY KHÔNG PHẢI BIÊN. Biên thật nằm trong mã, ở `service-comms/internal/portal`: (1) mọi URL —
+# api_url, mọi đích chuyển hướng (≤ 3 lần), mọi ảnh — phải là https, host là tên DNS đuôi `.gov.vn`,
+# không IP, không userinfo, chỉ cổng 443; (2) lúc QUAY SỐ, tên được phân giải tại chỗ và MỌI địa chỉ trả
+# về phải là địa chỉ công khai (từ chối loopback, dải riêng, link-local gồm 169.254.169.254 metadata,
+# CGNAT, ULA…), rồi nối thẳng tới địa chỉ đã kiểm — nên đổi DNS giữa chừng (rebinding) không chạm được
+# vào cụm. Nới một trong hai phép kiểm ấy là mở cửa, dù luật mạng này giữ nguyên.
+#
+# Một pod comms bị chiếm quyền gửi được tới bất kỳ máy nào mở 443, thay vì chỉ tới Cổng. Thay bằng
+# egress gateway / FQDN policy khi cụm có.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-comms-egress-portal
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: comms }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: Cổng không công bố dải; giữ giới hạn cổng 443
+      ports:
+        - { port: 443, protocol: TCP }
+---
 # 8. Cầu phiên công dân 9091 của identity: CHỈ từ pod `vihat-miniapp` (ADR 0045).
 #
 # Tách khỏi quy tắc 3 có chủ đích: 9090 là bề mặt giữa các dịch vụ ViGov, còn cầu này đổi một mã

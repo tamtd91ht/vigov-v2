@@ -121,6 +121,8 @@ func newImportServer(t *testing.T) *importServer {
 		AuditLog:             &auditLogFake{},
 		StaffInbox:           &fakeInbox{},
 		WriteStaffInbox:      &fakeInbox{},
+		PortalSync:           &fakePortalSync{},
+		WritePortalSync:      &fakePortalSync{},
 		Log:                  im,
 	})
 	var h http.Handler = mux
