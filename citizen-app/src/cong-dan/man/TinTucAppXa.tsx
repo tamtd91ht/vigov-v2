@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { baiTinCuaXa, newsCategories, tinCuaXa } from "../api/goi-vigov";
 import {
   type BaiTinXa as BaiTinXaData,
+  type BroadcastAudio,
   type NewsCategory,
   type NewsType,
   type TinXaTomTat,
@@ -30,6 +31,7 @@ import {
 
 import { ArticleBody } from "./article-body";
 import { BieuTuong } from "./BieuTuong";
+import { BroadcastPlayer, durationWords, formatClock } from "./broadcast-player";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 
@@ -214,8 +216,24 @@ export function HangTin({
       <span className="xa-hang-tin__chu">
         <strong className="xa-hang-tin__tieu-de xa-cat-2">{tin.tieu_de}</strong>
         <span className="xa-phu">{relativeDay(tin.ngay_dang, today)}</span>
+        {tin.audio?.durationSeconds !== undefined && <BroadcastLength seconds={tin.audio.durationSeconds} />}
       </span>
     </button>
+  );
+}
+
+/**
+ * The length of a broadcast on its list row (ADR 0067 §4): a speaker icon and "3:20" for the eye, the words
+ * ("Bản tin dài 3 phút 20 giây") for a screen reader — the row is one button, and "3:20" read aloud is a clock
+ * time. Only when the item has playable audio with a typed length. PURE.
+ */
+export function BroadcastLength({ seconds }: { seconds: number }) {
+  return (
+    <span className="xa-hang-tin__duration">
+      <BieuTuong ten="speaker" co={18} />
+      <span aria-hidden="true">{formatClock(seconds)}</span>
+      <span className="xa-sr-only">{XA_TN.broadcast_length(durationWords(seconds))}</span>
+    </span>
   );
 }
 
@@ -564,6 +582,14 @@ export function BaiTinXa(props: {
   // The button exists only with BOTH a link on the item and an opener from the shell. A new tap clears the old
   // failure first, so the sentence never stands under a tap that is still opening.
   const videoUrl = trang.kieu === "xong" ? trang.bai.videoUrl : undefined;
+
+  // The broadcast's link expires (≤ 15 minutes): the player asks for a fresh one by re-reading THIS item, once per
+  // attempt (`broadcast-player.tsx`). Only the audio is taken from the re-read — the article on screen stays as the
+  // citizen is reading it.
+  const refreshAudio = async (): Promise<BroadcastAudio | null> => {
+    const kq = await baiTinCuaXa(props.ten_mien, props.id);
+    return kq.kieu === "xong" ? (kq.gia_tri.audio ?? null) : null;
+  };
   const onWatchVideo =
     openVideo === undefined || videoUrl === undefined
       ? undefined
@@ -596,6 +622,7 @@ export function BaiTinXa(props: {
             videoFailed={videoFailed}
             onWatchVideo={onWatchVideo}
             onLink={leave.ask}
+            refreshAudio={refreshAudio}
           />
         )}
       </TrangCon>
@@ -639,6 +666,8 @@ export function NewsArticle(props: {
   videoFailed?: boolean;
   /** A tap on a link in the body (`useLeaveApp().ask`). Absent → the link's words are plain text. */
   onLink?: (href: string) => void;
+  /** Re-reads the item for a fresh audio link (`BaiTinXa`). Absent → an expired link ends in the failure sentence. */
+  refreshAudio?: () => Promise<BroadcastAudio | null>;
 }) {
   const { bai } = props;
   return (
@@ -648,6 +677,8 @@ export function NewsArticle(props: {
       <p className="xa-phu">{dongPhu(bai)}</p>
       <EventDetails tin={bai} />
       {props.onWatchVideo !== undefined && <WatchVideo failed={props.videoFailed ?? false} onTap={props.onWatchVideo} />}
+      {/* ADR 0067 §4: only a `truyen-thanh` item with a verified file carries `audio` (`readBroadcastAudio`). */}
+      {bai.audio !== undefined && <BroadcastPlayer audio={bai.audio} refresh={props.refreshAudio} />}
       <div className="xa-ke" />
       <ArticleBody blocks={bai.bodyBlocks} text={bai.noi_dung} paragraphClass="xa-bai__doan" onLink={props.onLink} />
       <TinLienQuan ds={props.ds} bai={bai} onMo={props.onMo} />

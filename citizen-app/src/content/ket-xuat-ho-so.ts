@@ -511,10 +511,13 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
       { khoa: "id", trong_chinh_sach: "mã của tin người dùng bấm đọc, do chính máy chủ trả trong danh sách tin" },
     ],
     app: "both",
-    // Articles open from the home screen, the news tab, and the Truyền thanh · Video · Sự kiện tiles.
+    // Articles open from the home screen, the news tab, and the Truyền thanh · Video · Sự kiện tiles. 01/10/2026
+    // (ADR 0067 §4): the same route, the same two keys, is read AGAIN when a broadcast's short-lived audio link has
+    // expired as the citizen taps "Nghe" (`cong-dan/man/broadcast-player.tsx`) — once per tap, so it is said here.
     commune_app: {
       man: `${TEN_MAN_CONG_KHAI.trang_chu_xa} · ${TEN_MAN_CONG_KHAI.commune_news_tab}`,
-      khi_nao: "người dùng tự bấm vào một tin để đọc — trên trang chủ, ở tab “Tin tức”, hoặc trong các ô Truyền thanh · Video · Sự kiện",
+      khi_nao:
+        "người dùng tự bấm vào một tin để đọc — trên trang chủ, ở tab “Tin tức”, hoặc trong các ô Truyền thanh · Video · Sự kiện; và đọc lại đúng tin ấy một lần khi người dùng bấm “Nghe” một bản tin truyền thanh mà đường dẫn âm thanh đã hết hạn, để lấy đường dẫn mới",
       nguoi_dung_bam: true,
     },
   },

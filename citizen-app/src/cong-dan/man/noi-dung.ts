@@ -789,6 +789,29 @@ export const XA_TN = {
   leave_app_failed: "Không mở được trang lúc này. Bạn hãy bấm “Mở trang” lần nữa sau ít phút.",
   /** Accessible name of the home banner strip (ADR 0067 §5) — a list of the commune's pictures. */
   banner_strip: "Ảnh của xã",
+  /** The Truyền thanh player on a broadcast's article (ADR 0067 §4, `broadcast-player.tsx`). */
+  broadcast_player: "Nghe bản tin truyền thanh",
+  broadcast_play: "Nghe",
+  broadcast_pause: "Tạm dừng",
+  broadcast_loading: "Đang tải bản tin…",
+  broadcast_back: "Lùi 15 giây",
+  broadcast_forward: "Tới 15 giây",
+  /** The seek bar's name, and the words a screen reader reads for its value. */
+  broadcast_position: "Vị trí đang nghe",
+  broadcast_position_text: (elapsed: string, total: string) => `${elapsed} trên tổng ${total}`,
+  /** A length in words ("3 phút 20 giây"), for screen readers and the list row. */
+  duration_words: (h: number, m: number, s: number) =>
+    [h > 0 ? `${h} giờ` : "", m > 0 ? `${m} phút` : "", s > 0 || (h === 0 && m === 0) ? `${s} giây` : ""]
+      .filter((p) => p !== "")
+      .join(" "),
+  /** Beside a broadcast on a list: how long it is. */
+  broadcast_length: (words: string) => `Bản tin dài ${words}`,
+  /**
+   * The link failed twice in a row (once as given, once freshly re-read) — or the item could not be re-read. What
+   * to do next, no code.
+   */
+  broadcast_failed:
+    "Chưa phát được bản tin lúc này. Bà con kiểm tra kết nối mạng rồi bấm “Nghe” lần nữa, hoặc quay lại sau ít phút.",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",

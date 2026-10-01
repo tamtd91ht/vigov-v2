@@ -804,6 +804,8 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-field-change",
       // ADR 0067 §5 (01/10/2026): a tappable banner on the home strip.
       ".xa-banner-strip__tap",
+      // ADR 0067 §4 (01/10/2026): the Truyền thanh player — Nghe / Tạm dừng and the two ±15 giây buttons.
+      ".xa-player__nut",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -887,6 +889,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     // ADR 0067 §1 (01/10/2026): the formatted article body — a link (also underlined) and the headings.
     ["liên kết trong thân bài (gạch chân) trên thẻ/nền trắng", token("xa-blue-ink"), token("surface")],
     ["đầu mục trong thân bài (navy) trên nền trắng", token("xa-navy"), token("surface")],
+    // ADR 0067 §4 (01/10/2026): the Truyền thanh player box and the length chip on a list row.
+    ["thời gian và khung trình phát truyền thanh: chữ trên nền xanh ngọc nhạt", token("ink"), token("xa-cyan-50")],
+    ["độ dài bản tin truyền thanh trên hàng danh sách", token("xa-cyan-ink"), token("xa-cyan-50")],
   ];
   it("không còn màu hồng nào trong app riêng (chủ dự án, 30/09/2026)", () => {
     // Rules only: the comment that records WHY pink went names the old value.

@@ -11,7 +11,9 @@
  *                                                         → { items: [{ id, title, summary, published_on,
  *                                                             category_name, type?, source?, image_url?,
  *                                                             published_at?, event_starts_at?,
- *                                                             event_ends_at?, event_place?, video_url? }],
+ *                                                             event_ends_at?, event_place?, video_url?,
+ *                                                             audio_url?, audio_url_expires_at?,
+ *                                                             audio_duration_seconds? }],
  *                                                             next_cursor, has_more }   (type: b22bf76;
  *                                                             the rest: ADR 0047 §6, 2026-09-30/10-01)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần) và
@@ -304,6 +306,27 @@ export type TinXaTomTat = {
    * through the shell's opener (`moRaNgoai("video", …)`); never fetched, embedded or logged here.
    */
   readonly videoUrl?: string;
+  /**
+   * A broadcast's audio (ADR 0067 §4, comms 026ae398) — only on a `truyen-thanh` item whose file is attached and
+   * verified, or ABSENT. See `readBroadcastAudio`.
+   */
+  readonly audio?: BroadcastAudio;
+};
+
+/**
+ * The playable audio of one `truyen-thanh` item.
+ *
+ * `url` is a PRESIGNED link to the commune's PRIVATE original (no public copy exists, ADR 0067 §4.2), valid until
+ * `expiresAt` (≤ 15 minutes). It is OPAQUE and SHORT-LIVED: handed to `<audio src>` as received and nowhere else —
+ * never logged, stored, shared or used as a key; when it has expired the screen re-reads the item for a fresh one
+ * (`broadcast-player.tsx`). Like `imageUrl`, its path carries `t_<tenant_id>`, which nothing here reads.
+ */
+export type BroadcastAudio = {
+  readonly url: string;
+  /** RFC 3339; ABSENT when unreadable — the player then learns of expiry from the media error alone. */
+  readonly expiresAt?: string;
+  /** What the commune's officer typed, in whole seconds (> 0); ABSENT when not usable. */
+  readonly durationSeconds?: number;
 };
 
 export type BaiTinXa = TinXaTomTat & {
@@ -463,6 +486,27 @@ function readVideoUrl(v: unknown): string | undefined | null {
   }
 }
 
+/**
+ * `audio_url` · `audio_url_expires_at` · `audio_duration_seconds` (`tin_xa_cong_khai.go` `tinXaRa`, all omitempty)
+ * → the item's audio, or `undefined`. PURE.
+ *
+ * LENIENT, ON PURPOSE, unlike the other optional fields of an item: a broadcast whose audio fields are odd is still
+ * an item worth listing and reading (title, summary, body), so nothing here ever makes the page malformed — a
+ * wrong value is DROPPED. The link decides: no readable `https:` link (`readHttpsLink`: a host, no user part) → no
+ * audio at all, and the duration goes with it, as on the server ("a player bar with nothing to play is the
+ * failure"). Why only `https:`: the Mini App runs over https, so an `http:` source is mixed content — blocked, or
+ * a broken player on a public authority's page. An expiry no `Date` can read → absent (expiry is then learnt
+ * from the media error). A duration that is not a positive whole number → absent (no total is printed).
+ */
+export function readBroadcastAudio(url: unknown, expiresAt: unknown, durationSeconds: unknown): BroadcastAudio | undefined {
+  const link = readHttpsLink(url);
+  if (link === null) return undefined;
+  const exp = laChuoi(expiresAt) && !Number.isNaN(new Date(expiresAt).getTime()) ? expiresAt : undefined;
+  const dur =
+    typeof durationSeconds === "number" && Number.isInteger(durationSeconds) && durationSeconds > 0 ? durationSeconds : undefined;
+  return { url: link, ...(exp === undefined ? {} : { expiresAt: exp }), ...(dur === undefined ? {} : { durationSeconds: dur }) };
+}
+
 /** Optional plain text (`event_place`): absent → `undefined`; not a string → malformed; blank → absent. */
 function readOptionalText(v: unknown): string | undefined | null {
   if (v === undefined) return undefined;
@@ -506,6 +550,9 @@ function docTin(m: unknown): TinXaTomTat | null {
   // THE TYPE GATES THE EVENT FIELDS HERE TOO, as on the server (`tin_xa_cong_khai.go:210-216`): an event window
   // printed on a news article is a date a resident acts on. An end with no start is dropped for the same reason.
   const isEvent = type === "su-kien";
+  // Gated by type, as on the server (`tin_xa_cong_khai.go:348`): a player on an item that is not a broadcast would
+  // play something the commune never published as one.
+  const audio = type === "truyen-thanh" ? readBroadcastAudio(r.audio_url, r.audio_url_expires_at, r.audio_duration_seconds) : undefined;
   return {
     id: r.id,
     tieu_de: r.title,
@@ -522,6 +569,7 @@ function docTin(m: unknown): TinXaTomTat | null {
     // Gated by type like the event fields, and as on the server (`tin_xa_cong_khai.go:217-221`): a "Xem video"
     // button on an article that is not a video would open a link the commune never offered as one.
     ...(type === "video" && videoUrl !== undefined ? { videoUrl } : {}),
+    ...(audio === undefined ? {} : { audio }),
   };
 }
 

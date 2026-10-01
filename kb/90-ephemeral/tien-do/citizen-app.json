@@ -369,10 +369,10 @@
     {
       "id": "truyen-thanh-phat-am-thanh",
       "viec": "Truyền thanh phát được âm thanh: cột tệp âm thanh + thời lượng và tuyến tải lên ở service-comms, ô tải tệp ở web-admin, trình phát ở citizen-app (ADR 0047 G7: mp3/m4a, 30 MB, thời lượng cán bộ gõ)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Chưa có dòng mã nào. Ô Truyền thanh đã liệt kê tin loại truyen-thanh (o-truyen-thanh-video-goi-api) nhưng bài mở ra không nghe được.",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Máy chủ: 026ae398 (comms trả audio_url ký 15 phút, audio_url_expires_at, audio_duration_seconds chỉ cho truyen-thanh đã đăng có tệp đã kiểm). citizen-app (chưa commit): hop-dong-cong-khai.ts readBroadcastAudio — chỉ nhận https, sai kiểu thì bỏ âm thanh chứ không bỏ cả trang, chỉ cho loại truyen-thanh; cong-dan/man/broadcast-player.tsx — <audio> gốc không controls, preload=none, không autoplay, không src trước lần bấm đầu; nút Nghe/Tạm dừng có chữ, Lùi/Tới 15 giây, thanh tiến độ đọc bằng lời, m:ss từ thời lượng cán bộ gõ; link hết hạn (đồng hồ hoặc lỗi media) thì đọc lại tin MỘT lần rồi phát tiếp, lần hai hỏng thì một câu nói việc cần làm; dừng khi rời màn / app xuống nền (visibilitychange, pagehide). TinTucAppXa.tsx: trình phát trên bài, chip thời lượng trên hàng danh sách. ket-xuat-ho-so.ts: dòng /commune-news/{id} của app xã khai thêm lần đọc lại. Ca kiểm broadcast-player.test.tsx. tsc sạch; vitest 56 tệp 1514/1514; npm run build xanh.",
       "no_confirm": [],
-      "tiep_theo": "Cần MinIO + ClamAV cho comms (ban-giao-phien.md §âm thanh) và chính sách tải tệp âm thanh ở platform (G7). Bản mẫu: ../vigov-require/apps/miniapp/src/pages/BroadcastPage.tsx (play/pause, tua, tốc độ). Trải ba bề mặt: phần máy chủ và web-admin thuộc sổ service-comms / web-admin khi bắt đầu làm.",
+      "tiep_theo": "Thử trên máy thật trong Zalo: phát, tua 15 giây, link hết hạn giữa chừng, app xuống nền. Nếu Zalo chặn nguồn media ngoài danh sách tên miền của app thì thêm origin kho lưu trữ (cùng origin ảnh bìa) ở Zalo Developer Console — bước ngoài kho mã. Chưa có thanh kéo để tua (input range bị phase1-collects-nothing.test.ts chặn ngoài hai tệp ô nhập) và chưa có chỉnh tốc độ như bản mẫu BroadcastPage.tsx — chờ chủ dự án nếu cần. App chung (TinTucXaScreen) chưa có trình phát. Ô tải tệp ở web-admin thuộc sổ web-admin.",
       "menu": "noi-dung-mini-app"
     },
     {
