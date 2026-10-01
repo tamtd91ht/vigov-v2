@@ -101,7 +101,16 @@ describe("one tap (`locateOnce`)", () => {
 describe("what the citizen sees — live form (shared app)", () => {
   type InputLocation = Parameters<typeof BuocNhap>[0]["location"];
   const input = (form: PhanAnhMoi, location: InputLocation) =>
-    renderToStaticMarkup(createElement(BuocNhap, { pa: form, loi: null, onDoi: () => {}, onTiep: () => {}, location }));
+    renderToStaticMarkup(
+      createElement(BuocNhap, {
+        pa: form,
+        loi: null,
+        onDoi: () => {},
+        onTiep: () => {},
+        field: { label: "Điện chiếu sáng", onChange: () => {} },
+        location,
+      }),
+    );
   const idle = { locating: false, failure: null, onLocate: () => {} };
 
   it("no injected function: no button at all", () => {
@@ -149,12 +158,18 @@ describe("what the citizen sees — live form (shared app)", () => {
 
   it("the confirmation step names the commune AND says the location goes with it", () => {
     const html = renderToStaticMarkup(
-      createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", onGui: () => {}, onSua: () => {}, location: HERE }),
+      createElement(BuocXacNhan, {
+        ten_xa: "Xã Thử Nghiệm",
+        fieldLabel: "Điện chiếu sáng",
+        onGui: () => {},
+        onSua: () => {},
+        location: HERE,
+      }),
     );
     expect(html).toContain("Xã Thử Nghiệm");
     expect(html).toContain(GUI.confirm_location("15.57123, 108.47654"));
     const without = renderToStaticMarkup(
-      createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", onGui: () => {}, onSua: () => {} }),
+      createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", fieldLabel: "Điện chiếu sáng", onGui: () => {}, onSua: () => {} }),
     );
     expect(without).not.toContain("Kèm vị trí hiện tại");
   });

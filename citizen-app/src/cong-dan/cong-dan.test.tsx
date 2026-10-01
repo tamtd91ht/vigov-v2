@@ -12,6 +12,7 @@ import type { PhieuCuaToi } from "./api/hop-dong-phan-anh";
 import {
   BuocXacNhan,
   DangGui,
+  FieldPickStep,
   GuiPhanAnhScreen,
   ID_DAU_BUOC,
   KetQuaGui,
@@ -202,14 +203,20 @@ describe("chữ của màn hình", () => {
   });
 
   it("nội dung bắt buộc, độ dài theo máy chủ, và ẩn danh không tính họ tên", () => {
-    expect(kiemPhanAnh(PHAN_ANH_TRONG)).toBe(GUI.thieu_noi_dung);
-    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "   \n " })).toBe(GUI.thieu_noi_dung);
-    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "Đèn đường hỏng" })).toBeNull();
-    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "ă".repeat(4001) })).not.toBeNull();
-    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "ă".repeat(4000) })).toBeNull();
-    expect(
-      kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "x", ho_ten: "a".repeat(201), an_danh: true }),
-    ).toBeNull();
+    const CO_LV = { ...PHAN_ANH_TRONG, field: "dien" };
+    expect(kiemPhanAnh(CO_LV)).toBe(GUI.thieu_noi_dung);
+    expect(kiemPhanAnh({ ...CO_LV, noi_dung: "   \n " })).toBe(GUI.thieu_noi_dung);
+    expect(kiemPhanAnh({ ...CO_LV, noi_dung: "Đèn đường hỏng" })).toBeNull();
+    expect(kiemPhanAnh({ ...CO_LV, noi_dung: "ă".repeat(4001) })).not.toBeNull();
+    expect(kiemPhanAnh({ ...CO_LV, noi_dung: "ă".repeat(4000) })).toBeNull();
+    expect(kiemPhanAnh({ ...CO_LV, noi_dung: "x", ho_ten: "a".repeat(201), an_danh: true })).toBeNull();
+  });
+
+  it("the field is required in the shared app (owner, 01/10/2026): no field → the field sentence, first", () => {
+    expect(kiemPhanAnh(PHAN_ANH_TRONG)).toBe(GUI.field_missing);
+    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "Đèn đường hỏng" })).toBe(GUI.field_missing);
+    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "Đèn đường hỏng", field: "  " })).toBe(GUI.field_missing);
+    expect(kiemPhanAnh({ ...PHAN_ANH_TRONG, noi_dung: "Đèn đường hỏng", field: null })).toBe(GUI.field_missing);
   });
 
   it("không câu chữ nào của nửa nhà nước là một mã lỗi hay tên trường kỹ thuật", () => {
@@ -284,8 +291,29 @@ describe("trình đọc màn hình: đổi bước và kết quả được báo
   const theMo = (html: string, id: string) => html.match(new RegExp(`<[a-z0-9]+[^>]* id="${id}"[^>]*>`))?.[0] ?? "";
 
   it("mỗi bước có đúng một chỗ nhận tiêu điểm, `tabindex=\"-1\"`, mang `id` hiệu ứng tìm", () => {
+    const fieldStep = (catalogue: Parameters<typeof FieldPickStep>[0]["catalogue"]) =>
+      renderToStaticMarkup(
+        createElement(FieldPickStep, {
+          catalogue,
+          picked: "",
+          fieldChanged: false,
+          onPick: () => {},
+          onNext: () => {},
+          onRetry: () => {},
+        }),
+      );
     const buoc: Array<[keyof typeof ID_DAU_BUOC, string]> = [
-      ["xac-nhan", renderToStaticMarkup(createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", onGui: () => {}, onSua: () => {} }))],
+      // Step 1 carries its heading in EVERY state — loading, failed, empty, ready — so focus always lands.
+      ["field", fieldStep({ kind: "loading" })],
+      ["field", fieldStep({ kind: "failed", failure: "network" })],
+      ["field", fieldStep({ kind: "ready", fields: [] })],
+      ["field", fieldStep({ kind: "ready", fields: [{ code: "dien", label: "Điện", icon: null, tone: null }] })],
+      [
+        "xac-nhan",
+        renderToStaticMarkup(
+          createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", fieldLabel: "Điện", onGui: () => {}, onSua: () => {} }),
+        ),
+      ],
       ["dang-gui", renderToStaticMarkup(createElement(DangGui))],
       ["xong", renderToStaticMarkup(createElement(KetQuaGui, { phieu: PHIEU, onGuiKhac: () => {} }))],
       ["loi", renderToStaticMarkup(createElement(LoiGui, { nhanh: "loi-mang", onGuiLai: () => {}, onSua: () => {} }))],

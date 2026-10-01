@@ -131,7 +131,9 @@ describe("gửi phản ánh — khoá chống trùng, bearer, thân", () => {
     expect(khoa[2]).not.toBe(khoa[0]);
   });
 
-  it("thân mang ĐÚNG năm trường máy chủ nhận — không lĩnh vực, không xã, không người gửi", () => {
+  // `PA` has no field picked, so no `field` key goes out — the send screens make it required, the contract keeps
+  // it optional (`thanGuiPhanAnh`). With a code picked it is the one extra key (`shared-send-field.test.tsx`).
+  it("chưa chọn lĩnh vực: thân mang ĐÚNG năm trường máy chủ nhận — không `field`, không xã, không người gửi", () => {
     const than = JSON.parse(thanGuiPhanAnh(PA)) as Record<string, unknown>;
     expect(Object.keys(than).sort()).toEqual([...TRUONG_DUOC_NHAN].sort());
     for (const cam of [

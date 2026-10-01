@@ -2431,6 +2431,73 @@ body {
   font-weight: 700;
 }
 
+/* Step 1 of "Gửi phản ánh" — the commune's fields, one full-width tile each. The picked tile has a thicker
+   border AND the words "Đã chọn": the choice is never shown by a border or a colour alone. */
+.cd-fields {
+  margin: 0 0 12px;
+}
+
+.cd-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  border: 2px solid var(--ink-muted);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--ink);
+}
+
+.cd-field--picked {
+  border: 3px solid var(--navy);
+}
+
+.cd-field__state {
+  flex: none;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* "Lĩnh vực: <tên> · Đổi" on the writing step. */
+.cd-field-picked {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 8px 8px 8px 14px;
+  border-left: 4px solid var(--navy);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.cd-field-change {
+  flex: none;
+  min-width: calc(var(--tap-min) + 4px);
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 8px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.cd-field:focus-visible,
+.cd-field-change:focus-visible,
 .cd-nut:focus-visible,
 .cd-nut-phu:focus-visible,
 .cd-cong-tac:focus-visible {

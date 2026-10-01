@@ -34,7 +34,6 @@ import {
   traCuuPhieu, // vi-name-ok: existing export, not renamed (rule 12 #3)
 } from "../api/goi-vigov";
 import {
-  type CitizenField,
   DO_DAI_TOI_DA,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
@@ -47,6 +46,13 @@ import { DEMO_BUILD, DEMO_CITIZEN_PHONE } from "../../lib/demo-build";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
+import {
+  type Catalogue,
+  type CatalogueAnswer,
+  type CatalogueFailure,
+  offeredCodes,
+  readCatalogueAnswer,
+} from "./field-catalogue";
 import { nhanLinhVuc } from "./khung";
 import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
@@ -734,35 +740,30 @@ export const COMMUNE_LOCATION_WORDS: SceneLocationWords = {
 
 /* ───────────── THE COMMUNE'S FIELD CATALOGUE (step 1) — `GET /api/v1/my-citizen-report-fields` ───────────── */
 
-export type CatalogueFailure = "unavailable" | "network" | "server" | "closed";
-
-/**
+/*
  * The fields this commune offers on the form, loaded when the send screen opens — which is always AFTER
  * the gate, because the route needs a session. There is NO built-in list to fall back on (ADR 0060 §3):
- * failed means "say so, offer Thử lại", never "show twelve names the commune may not use".
+ * failed means "say so, offer Thử lại", never "show twelve names the commune may not use". The types and
+ * the reading of an answer are shared with the shared app's send screen (`field-catalogue.ts`).
  */
-export type Catalogue =
-  | { readonly kind: "loading" }
-  | { readonly kind: "failed"; readonly failure: CatalogueFailure }
-  | { readonly kind: "ready"; readonly fields: readonly CitizenField[] };
+export type { Catalogue, CatalogueFailure } from "./field-catalogue";
+export { offeredCodes } from "./field-catalogue";
 
 /** One catalogue call's result → the next state, or `"session"` (gate again). PURE. */
-export function catalogueOutcome(kq: Awaited<ReturnType<typeof citizenReportFields>>): Catalogue | "session" {
-  switch (kq.kieu) {
-    case "xong":
-      return { kind: "ready", fields: kq.fields };
-    case "chua-co-phien":
-    case "het-phien":
-    case "can-xac-thuc-so":
+export function catalogueOutcome(kq: CatalogueAnswer): Catalogue | "session" {
+  const read = readCatalogueAnswer(kq);
+  switch (read.kind) {
+    case "no-session":
+    case "expired":
+    case "phone-required":
       return "session";
-    case "field-catalogue-unavailable":
-      return { kind: "failed", failure: "unavailable" };
-    case "chua-cau-hinh":
+    case "not-configured":
       return { kind: "failed", failure: "closed" };
-    case "loi-mang":
-      return { kind: "failed", failure: "network" };
-    default:
+    case "intake-closed":
+      // A 503 other than `field_catalogue_unavailable`: the commune app has always said "server" here.
       return { kind: "failed", failure: "server" };
+    default:
+      return read;
   }
 }
 
@@ -805,11 +806,6 @@ function useFieldCatalogue(onSessionLost: OnSessionLost) {
   }, []);
 
   return { catalogue, reload: () => void load() };
-}
-
-/** The codes the commune offers now, or `null` while not known (loading / failed). */
-export function offeredCodes(c: Catalogue): readonly string[] | null {
-  return c.kind === "ready" ? c.fields.map((f) => f.code) : null;
 }
 
 /**

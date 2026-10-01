@@ -130,7 +130,17 @@ describe("text and targets stay usable for an ageing eye", () => {
     // Người dùng hai màn này thường lớn tuổi, đứng ngoài trời, một tay cầm máy; bấm trượt ở bước
     // xác nhận là gửi nhầm việc. Đọc cả con số từ CSS: hạ `--tap-min` thì ca này đỏ theo.
     // `.cd-goi` (27/09/2026): liên kết gọi của danh bạ cán bộ — một đích chạm như nút.
-    for (const lop of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap", ".cd-the-cua-toi", ".cd-goi"]) {
+    // `.cd-field`, `.cd-field-change` (01/10/2026): the field tiles of step 1 and "Đổi" beside the picked field.
+    for (const lop of [
+      ".cd-nut",
+      ".cd-nut-phu",
+      ".cd-cong-tac",
+      ".cd-o__nhap",
+      ".cd-the-cua-toi",
+      ".cd-goi",
+      ".cd-field",
+      ".cd-field-change",
+    ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
       );

@@ -119,6 +119,31 @@ export const GUI = {
   nut_gui_lai: "Gửi lại",
   /** Shown on the confirmation step when a location is attached — the citizen sees what goes with it. */
   confirm_location: (coordinates: string) => `Kèm vị trí hiện tại: ${coordinates}.`,
+
+  // Step 1 — the commune's field catalogue (`my-citizen-report-fields`), REQUIRED in the shared app as in the
+  // commune's own (ADR 0050 #9, owner 01/10/2026). No fallback list (ADR 0060 §3): every failure is a sentence.
+  field_title: "Chọn lĩnh vực phản ánh",
+  field_prompt: "Bạn chọn lĩnh vực gần đúng nhất với sự việc, rồi bấm “Tiếp tục”.",
+  field_pick_first: "Bạn cần chọn một lĩnh vực thì mới bấm được “Tiếp tục”.",
+  /** On the picked tile, beside its name — the choice is said in words, not by a border alone. */
+  field_picked: "Đã chọn",
+  field_loading: "Đang tải danh sách lĩnh vực của xã…",
+  field_unavailable:
+    "Chưa tải được danh sách lĩnh vực của xã. Bạn hãy chờ vài phút rồi bấm “Thử lại”.",
+  field_network:
+    "Không tải được danh sách lĩnh vực vì mạng yếu hoặc mất kết nối. Bạn hãy kiểm tra mạng rồi bấm “Thử lại”.",
+  field_server:
+    "Hệ thống của xã đang gặp sự cố nên chưa tải được danh sách lĩnh vực. Bạn hãy chờ vài phút rồi bấm “Thử lại”.",
+  field_expired:
+    "Phiên làm việc đã hết hạn nên chưa tải được danh sách lĩnh vực. Bạn hãy đóng ứng dụng, mở lại rồi gửi phản ánh.",
+  field_empty:
+    "Hiện xã chưa mở lĩnh vực nào để nhận phản ánh qua ứng dụng. Bạn hãy gọi điện thoại cho xã hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
+  field_missing: "Bạn chưa chọn lĩnh vực phản ánh. Hãy chọn một lĩnh vực trước khi gửi.",
+  /** "Lĩnh vực: <tên>" on the writing step and on the confirmation step. */
+  field_label: "Lĩnh vực",
+  field_change: "Đổi",
+  /** The accessible name of "Đổi": the visible word alone does not say what changes. */
+  field_change_name: "Đổi lĩnh vực",
 } as const;
 
 /**

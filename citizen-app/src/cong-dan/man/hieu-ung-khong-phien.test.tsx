@@ -43,14 +43,16 @@ vi.mock("../api/goi-vigov", async (importOriginal) => {
     guiPhanAnh: vi.fn(goc.guiPhanAnh),
     traCuuPhieu: vi.fn(goc.traCuuPhieu),
     phanAnhCuaToi: vi.fn(goc.phanAnhCuaToi),
+    citizenReportFields: vi.fn(goc.citizenReportFields),
   };
 });
 
-import { guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "../api/goi-vigov";
+import { citizenReportFields, guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "../api/goi-vigov";
+import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import { layPhienViGov } from "../api/phien-vigov";
 
-import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { CUA_TOI, KENH_CHUA_MO, PHONE_VERIFICATION, QUAY_LAI } from "./noi-dung";
+import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
+import { CUA_TOI, GUI, KENH_CHUA_MO, LOI_GUI, PHONE_VERIFICATION, QUAY_LAI } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
@@ -111,8 +113,22 @@ class NutGia {
     this.childNodes = [];
     if (chu !== "" && this.ownerDocument !== null) this.appendChild(this.ownerDocument.createTextNode(chu));
   }
-  addEventListener() {}
-  removeEventListener() {}
+  /**
+   * Listeners are KEPT (since 01/10/2026) so `press` / `typeInto` below can deliver an event: React 19 listens
+   * once, on the root container, and dispatches from there. Before that the shim could not press a button, and
+   * the shared app's field step could only be tested as static markup.
+   */
+  readonly listeners = new Map<string, Array<{ fn: (e: unknown) => void; capture: boolean }>>();
+  addEventListener(type: string, fn: (e: unknown) => void, opt?: boolean | { capture?: boolean }) {
+    const capture = typeof opt === "boolean" ? opt : opt?.capture === true;
+    const list = this.listeners.get(type) ?? [];
+    list.push({ fn, capture });
+    this.listeners.set(type, list);
+  }
+  removeEventListener(type: string, fn: (e: unknown) => void, opt?: boolean | { capture?: boolean }) {
+    const capture = typeof opt === "boolean" ? opt : opt?.capture === true;
+    this.listeners.set(type, (this.listeners.get(type) ?? []).filter((l) => l.fn !== fn || l.capture !== capture));
+  }
 }
 
 class ChuGia extends NutGia {
@@ -156,6 +172,10 @@ class PhanTuGia extends NutGia {
   removeAttribute(ten: string) {
     this.thuoc_tinh.delete(ten);
   }
+  /** The screen moves focus to the new step's heading (`ID_DAU_BUOC`); the shim records where it went. */
+  focus() {
+    if (this.ownerDocument !== null) this.ownerDocument.activeElement = this;
+  }
 }
 
 class TaiLieuGia extends NutGia {
@@ -163,6 +183,11 @@ class TaiLieuGia extends NutGia {
   readonly body: PhanTuGia;
   activeElement: PhanTuGia | null = null;
   defaultView: unknown = null;
+  /**
+   * Present so React (`isEventSupported("input")`, read when `react-dom` loads) takes the `input` event path
+   * for typing, not the old-IE polyfill — that one calls `attachEvent`, which no shim needs to fake.
+   */
+  oninput: null = null;
   constructor() {
     super(9, "#document", null);
     this.documentElement = this.createElement("html");
@@ -176,10 +201,64 @@ class TaiLieuGia extends NutGia {
   createTextNode(chu: string) {
     return new ChuGia(chu, this);
   }
+  getElementById(id: string): PhanTuGia | null {
+    return tatCaPhanTu(this).find((p) => p.getAttribute("id") === id) ?? null;
+  }
 }
 
 function tatCaPhanTu(nut: NutGia): PhanTuGia[] {
   return nut.childNodes.flatMap((c) => (c instanceof PhanTuGia ? [c, ...tatCaPhanTu(c)] : []));
+}
+
+/** Deliver one bubbling event to `target`: capture listeners root → target, then bubble target → root. */
+function dispatch(target: PhanTuGia, type: string) {
+  const path: NutGia[] = [];
+  for (let n: NutGia | null = target; n !== null; n = n.parentNode) path.push(n);
+  let stopped = false;
+  const event = {
+    type,
+    target,
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    defaultPrevented: false,
+    timeStamp: Date.now(),
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      stopped = true;
+    },
+  };
+  for (const n of [...path].reverse()) {
+    for (const l of n.listeners.get(type) ?? []) if (l.capture && !stopped) l.fn(event);
+  }
+  for (const n of path) {
+    for (const l of n.listeners.get(type) ?? []) if (!l.capture && !stopped) l.fn(event);
+  }
+}
+
+/** Press a button, then let every promise the press started settle (a mocked call answers on the next tick). */
+async function press(button: PhanTuGia) {
+  await act(async () => {
+    dispatch(button, "click");
+  });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** Type into a text box: set its value as the browser would, then the `input` event React listens for. */
+async function typeInto(box: PhanTuGia, text: string) {
+  (box as unknown as { value: string }).value = text;
+  await act(async () => {
+    dispatch(box, "input");
+  });
+}
+
+/** The buttons under `root` whose text is exactly `text`. */
+function buttonsNamed(root: PhanTuGia, text: string): PhanTuGia[] {
+  return tatCaPhanTu(root).filter((p) => p.tagName === "BUTTON" && p.textContent === text);
 }
 
 // `react-dom/client` quyết định "có DOM không" LÚC NẠP MÔ-ĐUN — nên dựng `window`/`document` trước,
@@ -216,6 +295,7 @@ beforeEach(() => {
   vi.mocked(guiPhanAnh).mockClear();
   vi.mocked(traCuuPhieu).mockClear();
   vi.mocked(phanAnhCuaToi).mockClear();
+  vi.mocked(citizenReportFields).mockClear();
   fetch_gia = vi.fn();
   vi.stubGlobal("fetch", fetch_gia);
   loi_react = [];
@@ -298,10 +378,12 @@ describe("nguồn phiên THẬT (null) — màn gắn thật, hiệu ứng chạ
     await go();
   });
 
-  it("Gửi phản ánh: không nút gửi, không gọi `guiPhanAnh`, không `fetch`", async () => {
+  it("Gửi phản ánh: không nút gửi, không gọi `guiPhanAnh`, không tải danh mục lĩnh vực, không `fetch`", async () => {
     const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
     khangDinhKenhChuaMo(khung);
     expect(guiPhanAnh).not.toHaveBeenCalled();
+    // The catalogue hook runs on every mount (hooks before the early return); its effect must stop itself.
+    expect(citizenReportFields).not.toHaveBeenCalled();
     expect(fetch_gia).not.toHaveBeenCalled();
     await go();
   });
@@ -366,6 +448,170 @@ describe("đối chứng: có phiên thì chính khung gắn này thấy hiệu 
     vi.mocked(traCuuPhieu).mockResolvedValueOnce({ kieu: "khong-thay" });
     const { go } = await gan(createElement(TraCuuPhieuScreen, { onQuayLai: () => {}, ma_ban_dau: "PA7K2QX9M4TD" }));
     expect(vi.mocked(traCuuPhieu).mock.calls).toEqual([["PA7K2QX9M4TD"]]);
+    await go();
+  });
+
+  it("Gửi phản ánh gọi `citizenReportFields()` một lần dù StrictMode chạy hiệu ứng hai lần, và vẽ danh mục", async () => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm" };
+    vi.mocked(citizenReportFields).mockResolvedValueOnce({ kieu: "xong", fields: FIELDS });
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    expect(vi.mocked(citizenReportFields).mock.calls).toEqual([[]]);
+    expect(khung.textContent).toContain(GUI.field_title);
+    expect(khung.textContent).toContain("Rác thải – Vệ sinh môi trường");
+    expect(guiPhanAnh).not.toHaveBeenCalled();
+    expect(fetch_gia).not.toHaveBeenCalled();
+    await go();
+  });
+});
+
+/* ─────────────── the shared app's field step, mounted and pressed (owner, 01/10/2026) ─────────────── */
+
+const FIELDS = [
+  { code: "rac-thai", label: "Rác thải – Vệ sinh môi trường", icon: "Trash2", tone: "orange" },
+  { code: "an-ninh", label: "An ninh trật tự", icon: null, tone: null },
+] as const;
+
+const SENT: PhieuCuaToi = {
+  ma_tra_cuu: "PA7K2QX9M4TD",
+  trang_thai: "da-tiep-nhan",
+  linh_vuc: "an-ninh",
+  nhan_linh_vuc: "An ninh trật tự",
+  noi_dung: "Tụ tập gây ồn sau 23 giờ",
+  dia_chi: "",
+  ho_ten_da_che: "",
+  dien_thoai_da_che: "",
+  an_danh: true,
+  goc_dem_han: "2026-10-01T01:30:00Z",
+  han_tiep_nhan: null,
+  han_xu_ly_xong: null,
+  ket_qua: "",
+  ly_do: "",
+  co_quan_nhan: "",
+  rating: null,
+  rated_at: null,
+};
+
+describe("app chung — bước lĩnh vực: bắt buộc, mã chọn được đi lên `field`, không danh sách dự phòng", () => {
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm" };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+  });
+
+  const radios = (root: PhanTuGia) => tatCaPhanTu(root).filter((p) => p.getAttribute("role") === "radio");
+  const nextButton = (root: PhanTuGia) => buttonsNamed(root, GUI.nut_tiep)[0]!;
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+
+  /** Mount, pick `label`, go on, write the content, go on — the screen is then on the confirmation step. */
+  async function upToConfirm(label: string) {
+    const mounted = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    await press(radios(mounted.khung).find((r) => r.textContent.startsWith(label))!);
+    await press(nextButton(mounted.khung));
+    await typeInto(doc().getElementById("cd-noi-dung")!, "Tụ tập gây ồn sau 23 giờ");
+    await press(nextButton(mounted.khung));
+    return mounted;
+  }
+
+  it("'Tiếp tục' is disabled until a field is picked; picking says 'Đã chọn' in words and enables it", async () => {
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    expect(radios(khung).map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "false"]);
+    expect(nextButton(khung).hasAttribute("disabled")).toBe(true);
+    expect(khung.textContent).toContain(GUI.field_pick_first);
+    // Pressing the disabled button does nothing: still step 1, no textarea.
+    await press(nextButton(khung));
+    expect(doc().getElementById("cd-noi-dung")).toBeNull();
+
+    await press(radios(khung)[1]!);
+    expect(radios(khung).map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "true"]);
+    expect(radios(khung)[1]!.textContent).toContain(GUI.field_picked);
+    expect(nextButton(khung).hasAttribute("disabled")).toBe(false);
+    expect(khung.textContent).not.toContain(GUI.field_pick_first);
+    await go();
+  });
+
+  it("step 2 shows 'Lĩnh vực: <tên> · Đổi'; 'Đổi' goes back to step 1 with the pick kept, focus on its heading", async () => {
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    await press(radios(khung)[0]!);
+    await press(nextButton(khung));
+    expect(doc().activeElement?.getAttribute("id")).toBe(ID_DAU_BUOC.nhap);
+    expect(khung.textContent).toContain(`${GUI.field_label}: ${FIELDS[0].label}`);
+    const change = buttonsNamed(khung, GUI.field_change)[0]!;
+    expect(change.getAttribute("aria-label")).toBe(GUI.field_change_name);
+    await press(change);
+    expect(doc().activeElement?.getAttribute("id")).toBe(ID_DAU_BUOC.field);
+    expect(radios(khung)[0]!.getAttribute("aria-checked")).toBe("true");
+    // Only one catalogue call for all of it: going back does not reload.
+    expect(citizenReportFields).toHaveBeenCalledTimes(1);
+    await go();
+  });
+
+  it("the confirmation step reads the field's name with the commune; the picked CODE reaches the POST body", async () => {
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+    vi.mocked(guiPhanAnh).mockResolvedValue({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await upToConfirm("An ninh trật tự");
+    expect(khung.textContent).toContain(GUI.xac_nhan_tieu_de);
+    expect(khung.textContent).toContain(`${GUI.field_label}: An ninh trật tự`);
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(vi.mocked(guiPhanAnh).mock.calls[0]![0].than) as Record<string, unknown>;
+    expect(body["field"]).toBe("an-ninh");
+    expect(body["content"]).toBe("Tụ tập gây ồn sau 23 giờ");
+    expect(khung.textContent).toContain(SENT.ma_tra_cuu);
+    await go();
+  });
+
+  it("400 field_not_offered: back to step 1 with the reason, the catalogue reloaded, nothing picked, words kept", async () => {
+    vi.mocked(citizenReportFields)
+      .mockResolvedValueOnce({ kieu: "xong", fields: FIELDS })
+      .mockResolvedValueOnce({ kieu: "xong", fields: [FIELDS[0]] });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "field-not-offered" });
+    const { khung, go } = await upToConfirm("An ninh trật tự");
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+
+    expect(doc().activeElement?.getAttribute("id")).toBe(ID_DAU_BUOC.field);
+    expect(khung.textContent).toContain(LOI_GUI["field-not-offered"].cau);
+    expect(citizenReportFields).toHaveBeenCalledTimes(2);
+    expect(radios(khung).map((r) => r.textContent)).toEqual([FIELDS[0].label]);
+    expect(nextButton(khung).hasAttribute("disabled")).toBe(true);
+    // Not the dead-end error step of before: no "Gửi lại", and the next send is a NEW attempt with the new pick.
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    await press(radios(khung)[0]!);
+    expect(khung.textContent).not.toContain(LOI_GUI["field-not-offered"].cau);
+    await press(nextButton(khung));
+    expect(doc().getElementById("cd-noi-dung")).not.toBeNull();
+
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    // Straight on: the words were kept, so step 2 passes without typing them again.
+    await press(nextButton(khung));
+    await press(buttonsNamed(khung, GUI.nut_gui("Xã Thử Nghiệm"))[0]!);
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    const body = JSON.parse(second!.than) as Record<string, unknown>;
+    expect(body["field"]).toBe("rac-thai");
+    expect(body["content"]).toBe("Tụ tập gây ồn sau 23 giờ");
+    expect(second!.khoa).not.toBe(first!.khoa);
+    await go();
+  });
+
+  it("503 field_catalogue_unavailable: the sentence and 'Thử lại', no tile, no 'Tiếp tục'; 'Thử lại' loads again", async () => {
+    vi.mocked(citizenReportFields)
+      .mockResolvedValueOnce({ kieu: "field-catalogue-unavailable" })
+      .mockResolvedValueOnce({ kieu: "xong", fields: FIELDS });
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    expect(khung.textContent).toContain(GUI.field_unavailable);
+    expect(radios(khung)).toEqual([]);
+    expect(buttonsNamed(khung, GUI.nut_tiep)).toEqual([]);
+    await press(buttonsNamed(khung, CUA_TOI.nut_thu_lai)[0]!);
+    expect(citizenReportFields).toHaveBeenCalledTimes(2);
+    expect(radios(khung)).toHaveLength(2);
+    await go();
+  });
+
+  it("no session on the server's side (chua-co-phien) → the channel is closed, as on every other branch", async () => {
+    vi.mocked(citizenReportFields).mockResolvedValueOnce({ kieu: "chua-co-phien" });
+    const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    khangDinhKenhChuaMo(khung);
     await go();
   });
 });
