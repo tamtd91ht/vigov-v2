@@ -13,7 +13,7 @@ owns_facts:
 
 # 0032. Webhook Mini App rời khỏi ViGov — và phép thử quyết định điều đó
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-21 · **Nối tiếp ADR 0031** · **ADR 0018 giữ nguyên**
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-21 · **Nối tiếp ADR 0031** · **ADR 0018 giữ nguyên** · **Bị thay một phần bởi [0066](0066-dang-nhap-app-rieng-cua-xa-o-vigov.md) (01/10/2026): đổi token của APP RIÊNG của xã nay ở ViGov `service-identity`; app chung của ViHAT giữ như dưới đây**
 
 ## Bối cảnh
 
