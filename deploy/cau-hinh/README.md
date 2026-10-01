@@ -76,7 +76,7 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `CITIZEN_SESSION_TTL` | không — mặc định `720h` | Thời hạn phiên công dân | `720h` |
 | `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions, comms | MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin (ADR 0052). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
 | `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions, comms | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
-| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App dựng từ đây. Thiếu thì comms **không khởi động** ở prod/staging. Người vận hành MinIO (bucket `<tiền tố>-public`, chỉ `GetObject` ẩn danh) | `https://<host media>/vigov-prod-public` |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App dựng từ đây. Thiếu thì comms **không khởi động** ở prod/staging. Người vận hành MinIO: tạo bucket `<tiền tố>-public` trong MinIO đang có, chỉ `GetObject` ẩn danh — lệnh ở mục 6, "Bucket media công khai" | `<OBJECT_STORAGE_PUBLIC_ENDPOINT>/vigov-prod-public` — **không** phải `OBJECT_STORAGE_ENDPOINT` |
 | `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
 | `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions, comms | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
 | `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions, comms | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
@@ -196,3 +196,44 @@ Trước khi Zalo duyệt app: `tat-demo-mini-app` — danh tính demo mở phi�
 `common-config`, và `OBJECT_STORAGE_ACCESS_KEY` · `_SECRET_KEY` trong `comms-secrets` — thiếu một là
 comms **từ chối khởi động** và gọi tên key. NetworkPolicy `allow-comms-egress-storage` (quy tắc 7b của
 `deploy/base/mang/netpol.yaml`) mở 9000/3310 cho pod comms.
+
+### Bucket media công khai — trong MinIO đang có, TRƯỚC job `service-comms`
+
+Một MinIO chung cho mọi dịch vụ; trong đó **ba bucket** ghép từ `OBJECT_STORAGE_BUCKET_PREFIX`
+(`core/storage/storage.go` `Bucket`, ADR 0052 §2). `-private` và `-temp` petitions đã dùng; ảnh bìa tin
+cần thêm `-public`. Người dùng chốt 01/10/2026: **bucket riêng**, không mở đọc ẩn danh một tiền tố trong
+bucket private — sai một ký tự trong policy ấy là lộ hồ sơ của mọi xã, và private bật versioning nên ảnh
+đã gỡ đăng vẫn còn bản cũ.
+
+```sh
+# <alias> = alias mc của MinIO; <tiền tố> = OBJECT_STORAGE_BUCKET_PREFIX (prod: vigov-prod, staging: vigov-stg)
+mc mb <alias>/<tiền tố>-public                       # versioning để TẮT (mặc định)
+mc anonymous set download <alias>/<tiền tố>-public   # ẩn danh CHỈ GetObject, không liệt kê, không ghi
+mc anonymous get <alias>/<tiền tố>-public            # phải in: download
+mc anonymous get <alias>/<tiền tố>-private           # phải in: private — KHÔNG BAO GIỜ mở bucket này
+```
+
+Policy của user MinIO **riêng của comms** (cặp khoá trong `comms-secrets`) cần thêm, ngoài quyền ở
+`<tiền tố>-private` / `-temp` trên `…/comms/*`:
+
+```json
+{ "Effect": "Allow",
+  "Action": ["s3:PutObject", "s3:DeleteObject"],
+  "Resource": ["arn:aws:s3:::<tiền tố>-public/public-media/*"] }
+```
+
+Rồi đặt trong `common-config`:
+
+```
+OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL = <giá trị OBJECT_STORAGE_PUBLIC_ENDPOINT>/<tiền tố>-public
+```
+
+Vì sao không lấy `OBJECT_STORAGE_ENDPOINT`: `image_url` = giá trị này + `/` + khoá
+(`core/storage/storage.go` `PublicURL`), và URL ấy tới **thẳng điện thoại người dân** — phải ra được
+Internet, phải `https` (webview Zalo chặn `http` trộn), và phải mang tên bucket vì khoá không có. Tách
+biến riêng để ngày đặt CDN phía trước chỉ đổi giá trị, không đổi mã.
+
+**Kiểm:** đăng một tin có ảnh bìa, mở `image_url` trong trình duyệt ẩn danh → thấy ảnh; bỏ `/public-media/…`
+đi, mở `<base>/` → **phải bị từ chối** (không liệt kê). Host công khai còn phải nằm trong danh sách tên
+miền cho phép của App ID trên console Zalo (ADR 0052, Còn mở #3) — thiếu thì trình duyệt thấy ảnh mà Zalo
+không.
