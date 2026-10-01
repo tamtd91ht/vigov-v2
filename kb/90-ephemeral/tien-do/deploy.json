@@ -169,8 +169,8 @@
       "id": "dung-clamav-cho-petitions",
       "viec": "Dựng ClamAV (clamd) trên cụm qua job vigov-deploy cho service-petitions (MALWARE_SCANNER_ADDRESS, ADR 0052 §9)",
       "trang_thai": "dang_lam",
-      "bang_chung": "deploy/cluster/clamav.yaml: Deployment + Service vigov-clamav, clamav/clamav:1.4.6, cổng 3310, không Ingress, RAM 1536Mi–3Gi, root nhưng bỏ hết capability trừ CHOWN/FOWNER/DAC_OVERRIDE/SETUID/SETGID (entrypoint cần để hạ quyền về clamav). HANH_DONG dung-clamav: apply, rollout status 600 s, pod một lần PING→PONG, đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config chỉ khi chưa có. check_build, check_security, brain, hooks xanh; YAML parse 2 tài liệu.",
-      "tiep_theo": "CHƯA CHẠY trên cụm. Chạy dung-clamav MT=prod rồi MT=staging. StreamMaxLength để mặc định 25 MB: đính kèm nhiệm vụ PDF tới 50 MB (platform 0010) sẽ bị từ chối khi >25 MB — chưa quyết (ADR 0052 Còn mở #4). Nếu cụm có NetworkPolicy: clamd cần vào 3310 từ petitions, ra DNS + 443 tới database.clamav.net. Petitions bản mới còn cần OBJECT_STORAGE_* (MinIO) trước khi lên.",
+      "bang_chung": "deploy/cluster/clamav.yaml: Deployment + Service vigov-clamav, clamav/clamav:1.4.6, cổng 3310, không Ingress, RAM 1536Mi–3Gi, root nhưng bỏ hết capability trừ CHOWN/FOWNER/DAC_OVERRIDE/SETUID/SETGID (entrypoint cần để hạ quyền về clamav). HANH_DONG dung-clamav: apply, rollout status 600 s, pod một lần PING→PONG, đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config chỉ khi chưa có. check_build, check_security, brain, hooks xanh; YAML parse 2 tài liệu. || Chủ dự án chốt 01/10/2026 trần 50 MB: CLAMD_CONF_StreamMaxLength=50M (entrypoint clamav-docker ghi CLAMD_CONF_<Khoá> vào clamd.conf — đã đọc), limit RAM 3Gi → 3584Mi.",
+      "tiep_theo": "CHƯA CHẠY trên cụm. Chạy dung-clamav MT=prod rồi MT=staging. Tệp > 50 MB (video) vẫn bị từ chối ở bước quét — nâng tiếp là quyết định riêng. Nếu cụm có NetworkPolicy: clamd cần vào 3310 từ petitions, ra DNS + 443 tới database.clamav.net. Petitions bản mới còn cần OBJECT_STORAGE_* (MinIO) trước khi lên.",
       "menu": "phan-anh-nguoi-dan"
     }
   ]

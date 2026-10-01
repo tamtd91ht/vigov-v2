@@ -1389,8 +1389,8 @@ OBJECT_STORAGE_PUBLIC_ENDPOINT · OBJECT_STORAGE_BUCKET_PREFIX (common-config) v
 OBJECT_STORAGE_ACCESS_KEY · OBJECT_STORAGE_SECRET_KEY (petitions-secrets) — thiếu là TỪ CHỐI KHỞI
 ĐỘNG. Dạng giá trị: deploy/cau-hinh/README.md mục 1 và 2.
 
-⚠ clamd đang ở StreamMaxLength mặc định 25 MB: tệp lớn hơn (PDF đính kèm nhiệm vụ cho tới 50 MB) bị
-TỪ CHỐI tải lên, không bao giờ coi là sạch. Nâng mức là ADR 0052 CÒN MỞ #4 — đầu tệp deploy/cluster/clamav.yaml.
+Trần quét của clamd: StreamMaxLength = 50M (CLAMD_CONF_StreamMaxLength, chủ dự án chốt 01/10/2026).
+Tệp lớn hơn 50 MB bị TỪ CHỐI tải lên, không bao giờ coi là sạch — đầu tệp deploy/cluster/clamav.yaml.
 EOF
         '''
       }

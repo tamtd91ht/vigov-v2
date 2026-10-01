@@ -11,19 +11,22 @@
 #
 # RAM: cơ sở dữ liệu chữ ký nạp vào bộ nhớ ~1–1,5 GB mỗi clamd; lúc freshclam tải bản mới, clamd
 # nạp bản mới TRƯỚC rồi mới bỏ bản cũ (ConcurrentDatabaseReload mặc định bật) — đỉnh gần gấp đôi.
-# Nên request 1536Mi, limit 3Gi. Hạ limit xuống dưới ~2,5 GB là OOMKilled mỗi lần cập nhật chữ ký.
+# Nên request 1536Mi, limit 3584Mi (3Gi cho chữ ký + phần đệm cho luồng 50 MB). Hạ limit xuống dưới ~2,5 GB là OOMKilled mỗi lần cập nhật chữ ký.
 #
 # ĐƯỜNG RA: freshclam cần HTTPS tới database.clamav.net:443 (CDN, không có dải IP cố định) + DNS.
 # Lần khởi động đầu tải ~300 MB rồi mới mở 3310 — vài phút; readiness đợi việc ấy. Namespace có
 # NetworkPolicy chặn đường ra thì pod này kẹt ở "Updating initial database" mãi — mở 443 + DNS cho
 # RIÊNG pod này (podSelector theo nhãn app.kubernetes.io/name: vigov-clamav).
 #
-# CỠ TỆP: clamd mặc định StreamMaxLength = 25 MB. Ảnh phản ánh ≤ 10 MB lọt dưới mức ấy. NHƯNG đính
-# kèm nhật ký nhiệm vụ cho PDF tới 50 MB (platform migration 0010) và video tới 2 GB (ADR 0052 §10):
-# tệp lớn hơn 25 MB bị clamd từ chối → core/malwarescan trả ErrTooLarge → tải lên BỊ TỪ CHỐI (không
-# bao giờ coi là sạch). Nâng giới hạn là ADR 0052 CÒN MỞ #4 (devops/chủ dự án quyết) — KHÔNG đặt ở
-# đây. Khi quyết: env `CLAMD_CONF_StreamMaxLength` (entrypoint của ảnh ghi vào clamd.conf), và RAM
-# phải tăng theo.
+# CỠ TỆP — TRẦN 50 MB (chủ dự án chốt 01/10/2026: "tôi muốn nâng trần file lên 50MB"). clamd mặc
+# định StreamMaxLength = 25 MB, thấp hơn đính kèm nhật ký nhiệm vụ PDF tới 50 MB (platform migration
+# 0010): tệp 25–50 MB bị clamd từ chối → core/malwarescan trả ErrTooLarge → tải lên BỊ TỪ CHỐI. Nay
+# đặt StreamMaxLength = 50M qua env `CLAMD_CONF_StreamMaxLength` — entrypoint của ảnh đọc mọi
+# `CLAMD_CONF_<Khoá>` và ghi `<Khoá>` vào /etc/clamav/clamd.conf (đã đọc clamav-docker
+# docker-entrypoint.sh, 01/10/2026). MaxFileSize (mặc định 100M) và MaxScanSize (400M) đã lớn hơn
+# 50M nên không cần đặt. Tệp > 50 MB (video tới 2 GB, ADR 0052 §10) VẪN bị từ chối — không bao giờ
+# coi là sạch; nâng tiếp là quyết định riêng, RAM và /tmp phải tăng theo. clamd ghi luồng ra tệp tạm
+# trong container (không giữ trọn trong RAM), nên RAM tăng ít: nâng limit 3Gi → 3584Mi cho phần đệm.
 #
 # KHÔNG INGRESS, KHÔNG NodePort: giao thức clamd KHÔNG mã hoá, không xác thực — ai tới được 3310
 # là gửi được tệp bắt clamd quét (tốn CPU/RAM) và dò được phiên bản chữ ký. Chỉ petitions gọi nó,
@@ -76,12 +79,18 @@ spec:
               protocol: TCP
           # freshclam chạy nền trong cùng container, mặc định của ảnh: FRESHCLAM_CHECKS=1 (một lần
           # kiểm chữ ký mới mỗi ngày). Đổi tần suất là thêm env ấy — chưa ai yêu cầu.
+          env:
+            # Trần luồng INSTREAM = trần tệp tải lên lớn nhất đang cho phép (50 MB) — xem đầu tệp.
+            # Phải ≥ giới hạn `max_bytes` lớn nhất trong upload_policy của platform; nâng chính sách
+            # tải lên quá 50 MB mà quên dòng này là tệp hợp lệ bị từ chối ở bước quét.
+            - name: CLAMD_CONF_StreamMaxLength
+              value: "50M"
           resources:
             requests:
               memory: 1536Mi
               cpu: 250m
             limits:
-              memory: 3Gi
+              memory: 3584Mi
           # tcpSocket ĐỦ làm phép sẵn sàng: clamd chỉ mở 3310 SAU khi đã nạp xong chữ ký. Pod bắt
           # đầu ở trạng thái CHƯA sẵn sàng và chỉ thành sẵn sàng ở lần thử ĐẦU TIÊN thành công —
           # failureThreshold không chặn lần tải đầu (nó chỉ đếm từ sẵn sàng → không sẵn sàng), nên
