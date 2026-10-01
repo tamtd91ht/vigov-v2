@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-10-01",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -219,6 +219,22 @@
       "trang_thai": "xong",
       "bang_chung": "ac884434 — migration 0011: stored_file của comms (CommsStoredFile) + cột cover_image_file_id, published_at (khoá sau lần đăng đầu), event_starts_at/ends_at/place (chỉ su-kien), video_url (chỉ video, http(s)). go test migrations, core/migrate, tools/kb, check_khoa_duy_nhat xanh. || 2ed818bd — published_at lần đầu (COALESCE), sự kiện/video theo loại, công khai tinXaRa thêm published_at, event_*, video_url. go test xanh. core/storage PutServerProduced 4081b756 sẵn cho phần ảnh bìa. || 606bf515 — ảnh bìa: POST /api/v1/content-items/cover-images + /{id}/completion (content.update; quét ClamAV, giải mã JPG/PNG/WebP, xoay EXIF, bỏ EXIF, JPEG thumb-1280 qua PutServerProduced; chỉ gắn khi ready); cover_image_file_id trên POST/PATCH; PublishDerivative trong tx khi đăng, UnpublishDerivative sau commit khi gỡ; image_url ở commune-news chỉ khi đã đăng. Cấu hình ObjectStore·PublicMedia·MalwareScan; netpol 7b. go test ./... comms xanh; govulncheck: x/image v0.46.0 sạch (17 lỗ còn lại là thư viện chuẩn go1.26.2).",
       "tiep_theo": "Trước khi triển khai comms: common-config phải có OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL (cùng ENDPOINT, PUBLIC_ENDPOINT, BUCKET_PREFIX, MALWARE_SCANNER_ADDRESS) và comms-secrets có cặp OBJECT_STORAGE_ACCESS_KEY/SECRET_KEY riêng — thiếu là pod từ chối khởi động. CHƯA CHẠY: ca PG (trigger ảnh bìa 0011, stored_file_guard), MinIO, clamd thật. Trần giải mã 160 MiB (pod 384Mi) — JPEG progressive > ~11 MP bị 422. Chưa: retain_until khi gỡ đăng (ADR 0052 §6 tạm), xoá cache CDN, kiểm toán xem trước của cán bộ. Nợ: dòng thuật ngữ cover-images ở ubiquitous-language.md; luồng noi_dung_mini_app_anh_bia_cong_khai ở transaction-boundaries; Jenkinsfile:1387 cảnh báo trước triển khai chỉ nêu petitions. Mini App chưa hiện image_url.",
+      "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "noi-dung-mini-app-a-luoc-do-am-thanh-banner",
+      "viec": "Nội dung Mini App phần A — lược đồ: cờ ẩn danh mục (danh_muc_mini_app.hidden), tệp âm thanh + thời lượng cho Truyền thanh, link đích + thứ tự + bắt buộc ảnh bìa cho Banner (chủ dự án chốt 01/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-comms/migrations/0012_content_item_audio_banner.sql (chưa commit): hidden BOOLEAN NOT NULL DEFAULT false; audio_file_id → stored_file (tenant_id, id), audio_duration_seconds 1..21600, chỉ khi loai='truyen-thanh', cả hai hoặc không; link_to ≤500 ('/…' không phải '//', hoặc https:// không userinfo), display_order ≥0, chỉ khi loai='banner'; chỉ mục noi_dung_mini_app_banner_strip (tenant_id, loai, display_order, id) WHERE deleted_at IS NULL; trigger kiểm tệp âm thanh (purpose content-audio, đúng tin, đã qua quét) và trigger bắt buộc ảnh bìa cho banner. stored_file KHÔNG đổi (content-source/content-item/private đã đủ, purpose chỉ kiểm hình dạng). migrations/content_audio_banner_portal_test.go. go test ./migrations/... ./internal/store/... comms xanh; check_khoa_duy_nhat xanh. CHƯA CHẠY trên PG (VIGOV_TEST_DSN không đặt).",
+      "tiep_theo": "Go chưa đọc/ghi các cột mới. Ảnh bìa banner là TRIGGER chứ không phải CHECK: banner cũ không có ảnh bìa vẫn tồn tại hợp lệ — đường đọc dải banner công khai phải bỏ qua banner không ảnh. Công khai âm thanh qua bucket public cần một variant âm thanh trong core/storage (variantPattern chưa có). Đổi loai khỏi truyen-thanh/banner phải xoá cột của loại đó trong cùng UPDATE. Đường đọc phải quyết 'ẩn danh mục' có ẩn tin thuộc danh mục hay không.",
+      "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "noi-dung-mini-app-a-luoc-do-dong-bo-cong",
+      "viec": "Nội dung Mini App phần A — lược đồ đồng bộ Cổng TTĐT (cttdt Đà Nẵng): cấu hình mỗi xã (khoá API niêm phong), chuyên mục cổng được chọn + ánh xạ loại, sổ lượt chạy chỉ ghi thêm; noi_dung_mini_app.portal_category_id",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-comms/migrations/0013_portal_sync.sql (chưa commit): portal_sync_settings (PK tenant_id; provider 'cttdt-danang'; api_url https + host *.gov.vn; api_key_sealed BYTEA như mail_settings.password_sealed; publish_mode cho-duyet|dang-thang mặc định cho-duyet; interval_hours 0..24 mặc định 6; window_days 90; max_items_per_run 100; keep_source_credit true; is_enabled false; last_run_at; updated_by mã nghiệp vụ; cấm DELETE/đổi xã). portal_categories (UNIQUE (tenant_id, external_id) không từng phần; target_kind tin-tuc|su-kien|thong-bao; is_selected thay cho xoá mềm; external_id bất biến; cấm DELETE). portal_sync_runs (theo-lich|chay-tay, actor 'system' hoặc mã cán bộ; kết thúc điền một lần duy nhất: outcome thanh-cong|mot-phan|that-bai, 5 bộ đếm, error_summary JSONB mảng ≤64 KiB không dữ liệu cá nhân; cấm DELETE). noi_dung_mini_app.portal_category_id → portal_categories, chỉ khi nguon='dong-bo-cong', ghi một lần. Đều phân mảnh MODULUS 32. go test comms xanh; check_khoa_duy_nhat xanh. CHƯA CHẠY trên PG.",
+      "tiep_theo": "Giá trị enum theo ADR 0011 (tiếng Việt không dấu): theo-lich/chay-tay, thanh-cong/mot-phan/that-bai — không phải 'schedule'/'manual' như phiếu giao; cần ADR ghi lại. Việc job còn nợ: khoá advisory mỗi xã trước khi chèn lượt chạy (lược đồ không chặn hai lượt song song), bộ dọn lượt chạy treo (điền that-bai), adapter kiểm lại host .gov.vn sau parse và không theo redirect ra ngoài, AAD 'portal_sync_settings/api_key_sealed/<tenant>'. Màn hình không hiện được '****654bf' (khoá chỉ báo đã đặt/chưa).",
       "menu": "noi-dung-mini-app"
     }
   ]
