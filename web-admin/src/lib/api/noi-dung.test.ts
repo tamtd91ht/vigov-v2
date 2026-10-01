@@ -12,6 +12,7 @@ import {
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
+  portalCategoryName,
   requestCoverUpload,
   suaNoiDung,
   themDanhMucNoiDung,
@@ -176,8 +177,34 @@ describe("GET /api/v1/content-items — đường dẫn và bộ lọc §6", () 
   it("bộ lọc rỗng thì VẮNG khỏi query, không đi thành `type=`", () => {
     // `type=` rỗng vẫn là một tham số có mặt, và `thamSoLoc` trả `""` — cùng kết quả hôm nay,
     // nhưng nó là một hình dạng mời người sau thêm một nhánh "rỗng nghĩa là gì".
-    const duong = duongDanSoNoiDung({ loai: "", danhMucID: "", tim: "" });
+    const duong = duongDanSoNoiDung({ loai: "", danhMucID: "", tim: "", status: "" });
     expect(duong).toBe("/api/v1/content-items");
+  });
+
+  it("the status filter goes as `status`, combined with the other three", () => {
+    const q = new URL(
+      duongDanSoNoiDung({ loai: "tin-tuc", danhMucID: "01JDM1", tim: "hội nghị", status: "cho-duyet", limit: 20 }),
+      "https://xa.example",
+    ).searchParams;
+    expect(q.get("status")).toBe("cho-duyet");
+    expect(q.get("type")).toBe("tin-tuc");
+    expect(q.get("category")).toBe("01JDM1");
+    expect(q.get("q")).toBe("hội nghị");
+    // Never the Vietnamese spelling, which the server would ignore and answer the whole register.
+    expect(q.has("trang_thai")).toBe(false);
+  });
+
+  it("an unknown status comes back as the server's 400 sentence, verbatim", async () => {
+    const cau = "Tham số `status` phải là một trong ba trạng thái: an, cho-duyet, dang-hien.";
+    batFetch(traJSON(400, { code: "invalid_request", message: cau }));
+    const kq = await laySoNoiDung({ status: "xoa" });
+    expect(kq).toEqual({ ok: false, thongBao: cau });
+  });
+
+  it("`portalCategoryName` reads the synced item's category, `\"\"` when absent", () => {
+    const row = { id: "1" } as unknown as Parameters<typeof portalCategoryName>[0];
+    expect(portalCategoryName(row)).toBe("");
+    expect(portalCategoryName({ ...row, portal_category_name: "Tin địa phương" } as never)).toBe("Tin địa phương");
   });
 
   it("KHÔNG gửi `sort` hay `order` — mặc định máy chủ đã đúng thứ tự §6", () => {
@@ -756,11 +783,12 @@ describe("ba tên bộ lọc khớp handler thật", () => {
     expect(cuaMayChu.length).toBeGreaterThan(0);
 
     const gui = new URL(
-      duongDanSoNoiDung({ loai: "su-kien", danhMucID: "01JDM1", tim: "x" }),
+      duongDanSoNoiDung({ loai: "su-kien", danhMucID: "01JDM1", tim: "x", status: "cho-duyet" }),
       "https://xa.example",
     ).searchParams;
 
-    expect(cuaMayChu.slice().sort()).toEqual(["category", "q", "type"]);
+    // `status` is the fourth (02/10/2026, C1) — the screen draws it as the `Trạng thái` select.
+    expect(cuaMayChu.slice().sort()).toEqual(["category", "q", "status", "type"]);
     for (const ten of cuaMayChu) {
       expect(gui.has(ten), `màn hình phải gửi được bộ lọc \`${ten}\``).toBe(true);
     }

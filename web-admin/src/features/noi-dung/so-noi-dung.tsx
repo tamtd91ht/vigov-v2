@@ -16,6 +16,7 @@ import {
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
+  portalCategoryName,
   CONTENT_TYPE_BANNER,
   CONTENT_TYPE_BROADCAST,
   CONTENT_TYPE_EVENT,
@@ -82,10 +83,13 @@ import {
   nhanTrangThai,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
+  portalCategoryLabel,
   publishedAtLabel,
   SLUG_DANH_MUC_TOI_DA,
   SO_RONG,
   SOURCE_PORTAL_SYNC,
+  STATUS_FILTER_OPTIONS,
+  STATUS_PENDING_REVIEW,
   TEN_DANH_MUC_TOI_DA,
   TIEU_DE_FORM_THEM,
   TIEU_DE_THE_DANH_BA,
@@ -174,9 +178,11 @@ type BoLocMan = {
   readonly loai: string;
   readonly danhMucID: string;
   readonly tim: string;
+  /** §6 `Trạng thái` — `""` = every status (no `status` sent). */
+  readonly status: string;
 };
 
-const LOC_TRONG: BoLocMan = { loai: "", danhMucID: "", tim: "" };
+const LOC_TRONG: BoLocMan = { loai: "", danhMucID: "", tim: "", status: "" };
 
 export function SoNoiDung() {
   const [loc, datLoc] = useState<BoLocMan>(LOC_TRONG);
@@ -210,7 +216,7 @@ export function SoNoiDung() {
     kq: KetQua<comms_noiDungRa>;
   } | null>(null);
 
-  const khoaSo = `${loc.loai}|${loc.danhMucID}|${loc.tim}|${nganXep.hienTai ?? ""}|${lanTai}`;
+  const khoaSo = `${loc.loai}|${loc.danhMucID}|${loc.tim}|${loc.status}|${nganXep.hienTai ?? ""}|${lanTai}`;
 
   useEffect(() => {
     let bo = false;
@@ -218,6 +224,7 @@ export function SoNoiDung() {
       loai: loc.loai,
       danhMucID: loc.danhMucID,
       tim: loc.tim,
+      status: loc.status,
       limit: SO_HANG_MOI_TRANG,
       cursor: nganXep.hienTai,
     };
@@ -227,7 +234,7 @@ export function SoNoiDung() {
     return () => {
       bo = true;
     };
-  }, [loc.loai, loc.danhMucID, loc.tim, nganXep.hienTai, khoaSo]);
+  }, [loc.loai, loc.danhMucID, loc.tim, loc.status, nganXep.hienTai, khoaSo]);
 
   useEffect(() => {
     let bo = false;
@@ -329,7 +336,14 @@ export function SoNoiDung() {
       <h2 id="tieu-de-so-noi-dung">Sổ nội dung Mini App</h2>
 
       <KhoiChuaDung />
-      <PortalSyncCard />
+      <PortalSyncCard
+        // `Xem tin chờ duyệt` on the card is the same `Trạng thái` filter, set from there — one filter,
+        // two ways in. Every other filter is kept: the queue narrowed by type is still the queue.
+        showPendingReview={() => {
+          datNganXep(TRANG_DAU);
+          datLoc({ ...loc, status: STATUS_PENDING_REVIEW });
+        }}
+      />
       <TheDanhBaChinhQuyen />
 
       <div className="cum-nut">
@@ -433,6 +447,11 @@ export function SoNoiDung() {
           datLoc({ ...loc, tim: tim.trim() });
         }}
         danhMuc={dsDanhMuc}
+        status={loc.status}
+        setStatus={(st) => {
+          datNganXep(TRANG_DAU);
+          datLoc({ ...loc, status: st });
+        }}
       />
 
       {danhMuc !== null && !danhMuc.ok && (
@@ -566,7 +585,12 @@ export function ThanhTabLoai({
   );
 }
 
-/** Hàng lọc §6 — ô tìm theo tiêu đề và ô chọn danh mục. */
+/**
+ * Hàng lọc §6 — ô tìm theo tiêu đề, ô chọn danh mục và ô chọn trạng thái.
+ *
+ * THE STATUS FILTER IS THE SERVER'S (`status`, 02/10/2026 C1), never a filter of the page in hand: a
+ * client-side filter would hide every `Chờ duyệt` item on the other pages.
+ */
 export function HangLocNoiDung({
   danhMucID,
   datDanhMucID,
@@ -574,6 +598,8 @@ export function HangLocNoiDung({
   datTim,
   timNgay,
   danhMuc,
+  status,
+  setStatus,
 }: {
   danhMucID: string;
   datDanhMucID: (id: string) => void;
@@ -581,6 +607,8 @@ export function HangLocNoiDung({
   datTim: (s: string) => void;
   timNgay: () => void;
   danhMuc: readonly comms_danhMucRa[];
+  status: string;
+  setStatus: (status: string) => void;
 }) {
   function gui(e: FormEvent) {
     e.preventDefault();
@@ -622,6 +650,17 @@ export function HangLocNoiDung({
           {dungCayDanhMuc(danhMuc).map((m) => (
             <option key={m.dm.id} value={m.dm.id}>
               {nhanMucDanhMuc(m)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="o-chon">
+        <label htmlFor="loc-trang-thai">Trạng thái</label>
+        <select id="loc-trang-thai" value={status} onChange={(e) => setStatus(e.target.value)}>
+          {STATUS_FILTER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -681,6 +720,10 @@ export function BangNoiDung({
                         `Chờ duyệt` ones waiting for somebody to publish them. */}
                     {nd.source === SOURCE_PORTAL_SYNC && (
                       <span className="dong-phu">{nhanNguon(nd.source)}</span>
+                    )}
+                    {/* The portal category it came in under (C2, 02/10/2026) — synced rows only. */}
+                    {nd.source === SOURCE_PORTAL_SYNC && portalCategoryName(nd) !== "" && (
+                      <span className="dong-phu">{portalCategoryLabel(portalCategoryName(nd))}</span>
                     )}
                     {nd.hand_edited && <span className="dong-phu">{NHAN_DA_SUA_TAY}</span>}
                   </td>
@@ -1214,6 +1257,12 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
           {hang.hand_edited && <> · {NHAN_DA_SUA_TAY}</>}
         </dd>
       </div>
+      {hang.source === SOURCE_PORTAL_SYNC && portalCategoryName(hang) !== "" && (
+        <div>
+          <dt>Chuyên mục Cổng</dt>
+          <dd>{portalCategoryName(hang)}</dd>
+        </div>
+      )}
       <div>
         <dt>Liên kết bài gốc</dt>
         <dd>{hang.source_url === "" ? DAU_GACH : hang.source_url}</dd>

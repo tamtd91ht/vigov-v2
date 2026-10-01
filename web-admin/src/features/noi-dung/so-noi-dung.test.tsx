@@ -27,7 +27,9 @@ import {
   NHAN_O_DANG,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
+  portalCategoryLabel,
   SO_RONG,
+  STATUS_FILTER_OPTIONS,
   VIDEO_URL_HINT,
 } from "./nhan-noi-dung";
 import {
@@ -509,6 +511,8 @@ describe("hàng lọc §6", () => {
         datTim={() => {}}
         timNgay={() => {}}
         danhMuc={[danhMuc()]}
+        status=""
+        setStatus={() => {}}
       />,
     );
 
@@ -528,10 +532,65 @@ describe("hàng lọc §6", () => {
         datTim={() => {}}
         timNgay={() => {}}
         danhMuc={[]}
+        status=""
+        setStatus={() => {}}
       />,
     );
     expect(html).toContain('role="search"');
     expect(html).toContain('type="submit"');
+  });
+});
+
+describe("§6 status filter", () => {
+  function filterRow(status: string) {
+    return renderToStaticMarkup(
+      <HangLocNoiDung
+        danhMucID=""
+        datDanhMucID={() => {}}
+        tim=""
+        datTim={() => {}}
+        timNgay={() => {}}
+        danhMuc={[]}
+        status={status}
+        setStatus={() => {}}
+      />,
+    );
+  }
+
+  it("offers Tất cả / Đang hiện / Ẩn / Chờ duyệt with the server's three codes, Tất cả sending nothing", () => {
+    const html = filterRow("");
+    expect(html).toContain('<label for="loc-trang-thai">Trạng thái</label>');
+    const options = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)]
+      .map((m) => [m[1], m[2]])
+      .filter(([v]) => ["", "dang-hien", "an", "cho-duyet"].includes(v ?? "x"));
+    expect(options.slice(-4)).toEqual([
+      ["", "Tất cả"],
+      ["dang-hien", "Đang hiện"],
+      ["an", "Ẩn"],
+      ["cho-duyet", "Chờ duyệt"],
+    ]);
+    expect(STATUS_FILTER_OPTIONS.map((o) => o.value)).toEqual(["", "dang-hien", "an", "cho-duyet"]);
+  });
+
+  it("the chosen status is the select's value", () => {
+    expect(filterRow("cho-duyet")).toMatch(/<option value="cho-duyet" selected="">Chờ duyệt<\/option>/);
+  });
+});
+
+describe("portal category of a synced item (C2)", () => {
+  it("the row shows it under the source line; a hand-written row and a synced one without it do not", () => {
+    const synced = { ...hang({ id: "A", source: "dong-bo-cong", status: "cho-duyet" }), portal_category_name: "Tin địa phương" };
+    const html = veBang([synced, hang({ id: "B" }), hang({ id: "C", source: "dong-bo-cong" })]);
+    expect(html.split(portalCategoryLabel("Tin địa phương")).length - 1).toBe(1);
+    expect(html.indexOf("Đồng bộ từ Cổng")).toBeLessThan(html.indexOf(portalCategoryLabel("Tin địa phương")));
+    expect(html).not.toContain("Chuyên mục Cổng: <");
+  });
+
+  it("the detail's read-only block names it; absent when the server sent none", () => {
+    const synced = { ...hang({ source: "dong-bo-cong", body: "<p>x</p>" }), portal_category_name: "Tin địa phương" };
+    const html = renderToStaticMarkup(<ThongTinChiDoc hang={synced} />);
+    expect(html).toContain("<dt>Chuyên mục Cổng</dt><dd>Tin địa phương</dd>");
+    expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang({ body: "" })} />)).not.toContain("Chuyên mục Cổng");
   });
 });
 
@@ -623,10 +682,12 @@ describe("khối `phần chưa dựng được`", () => {
   it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
     expect(html).toContain("content.update");
     // Built (ADR 0067 §2): the portal sync card is no longer listed as missing; what is left of §3 is
-    // named — the meta count and the status filter the contract lacks.
+    // named — the meta count. The status filter is BUILT (02/10/2026): no item may still say it is missing.
     expect(html).not.toContain("bộ lập lịch");
     expect(html).not.toContain("adapter HTTP đi ra THEO XÃ");
-    expect(html).toContain("Cần thêm tham số `status` vào hợp đồng");
+    expect(html).not.toContain(nhuTrongHTML("Cần thêm tham số `status` vào hợp đồng"));
+    expect(html).not.toContain(nhuTrongHTML("Lọc riêng các bài `Chờ duyệt`"));
+    expect(html).toContain(nhuTrongHTML("`đã chọn n/30`"));
     // Built (ADR 0067 §4): the broadcast audio upload is no longer listed as missing.
     expect(html).not.toContain("lối tải tệp âm thanh");
   });

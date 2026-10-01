@@ -184,6 +184,25 @@ export function nhanTrangThai(ma: string): string {
   return NHAN_TRANG_THAI[ma] ?? ma;
 }
 
+/** The status code the portal sync's review mode puts imports in — the `Chờ duyệt` queue. */
+export const STATUS_PENDING_REVIEW = "cho-duyet";
+
+/**
+ * §6 `Trạng thái` filter, in the order the owner named it (02/10/2026): `Tất cả` (no `status` sent),
+ * then the three codes the server accepts. The server refuses any other code with a 400.
+ */
+export const STATUS_FILTER_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "", label: "Tất cả" },
+  { value: "dang-hien", label: "Đang hiện" },
+  { value: "an", label: "Ẩn" },
+  { value: STATUS_PENDING_REVIEW, label: "Chờ duyệt" },
+];
+
+/** Under the source line of a synced row, and in the detail: the portal category it came in under. */
+export function portalCategoryLabel(name: string): string {
+  return `Chuyên mục Cổng: ${name}`;
+}
+
 /**
  * Lớp CSS của chip trạng thái §6.
  *
@@ -989,16 +1008,8 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Danh sách chuyên mục không được chép về hệ thống (ADR 0067 §2): mỗi lần đọc là một lần hỏi " +
       "thẳng Cổng của xã. Đếm trên thẻ thì mỗi lần mở màn này là một lần gọi ra Cổng, nên thẻ không " +
-      "hiện con số ấy. Số đã chọn hiện ở mục `Cấu hình`, dạng `đã chọn n/m`, đếm từ danh sách Cổng " +
-      "vừa trả về.",
-  },
-  {
-    ten: "Lọc riêng các bài `Chờ duyệt` trên bảng §6",
-    viSao:
-      "Tuyến đọc sổ nội dung chỉ nhận ba bộ lọc: loại, danh mục và tiêu đề — chưa có tham số trạng " +
-      "thái. Lọc ở phía màn hình chỉ lọc được trang đang xem, tức giấu các bài chờ duyệt ở trang " +
-      "khác. Hôm nay mỗi bài chờ duyệt vẫn hiện chip `Chờ duyệt`, bài về từ Cổng ghi `Đồng bộ từ " +
-      "Cổng` dưới tiêu đề, và mở bài ra là đăng được. Cần thêm tham số `status` vào hợp đồng.",
+      "hiện con số ấy. Số đã chọn hiện ở mục `Cấu hình`, dạng `đã chọn n/30` (mỗi xã chọn tối đa " +
+      "30 chuyên mục).",
   },
   {
     ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",

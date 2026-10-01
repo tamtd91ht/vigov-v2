@@ -4,10 +4,14 @@
  *
  *   GET  /api/v1/portal-sync/settings     content.read
  *   PUT  /api/v1/portal-sync/settings     content.update  (no Idempotency-Key: PUT of the whole form)
- *   GET  /api/v1/portal-sync/categories   content.read    (asks the PORTAL live — 409 / 502 possible)
- *   PUT  /api/v1/portal-sync/categories   content.update
+ *   GET  /api/v1/portal-sync/categories   content.update  (asks the PORTAL live — 409 / 502 possible;
+ *                                                         a GET under the WRITE key, owner 02/10/2026 D3:
+ *                                                         it spends the commune's sealed portal key)
+ *   PUT  /api/v1/portal-sync/categories   content.update  (422 too_many_categories past 30 selected)
  *   GET  /api/v1/portal-sync/runs         content.read    (newest first, paginated)
  *   POST /api/v1/portal-sync/runs         content.update  + Idempotency-Key REQUIRED → 202
+ *                                                         (503 portal_sync_busy + Retry-After when the
+ *                                                         platform's run slots are all taken)
  *
  * THE KEY IS WRITE-ONLY, AND THIS FILE IS THE ONLY PLACE IT TRAVELS. `api_key` is put on the PUT body
  * only when the officer typed one; nothing here reads it back (the response has `api_key_set`, never
@@ -23,7 +27,7 @@
  * would be a second copy of the server's rules.
  */
 
-import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
+import { CHUNG, docJSON, docThanKetQua, errorMessageOr, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type {
   comms_get_portal_sync_categories,
   comms_get_portal_sync_runs,
@@ -74,8 +78,30 @@ export function savePortalSyncSettings(
  * stored selections the portal no longer lists. Called only when the `Cấu hình` section is open: every
  * call is an outbound request to the commune's portal.
  */
-export function getPortalCategories(): Promise<KetQua<comms_portalCategoryTreeOut>> {
-  return docJSON<comms_portalCategoryTreeOut>(CATEGORIES_PATH);
+export type CategoryTreeResult =
+  | { ok: true; duLieu: comms_portalCategoryTreeOut }
+  // `forbidden`: the answer was 403 — the account reads the register (`content.read`) but may not make
+  // the service spend the commune's portal key (`content.update`, D3). The card says which right is
+  // missing next to the server's own sentence; the rest of the card keeps working.
+  | { ok: false; thongBao: string; forbidden?: boolean };
+
+export async function getPortalCategories(): Promise<CategoryTreeResult> {
+  let res: Response;
+  try {
+    res = await fetch(CATEGORIES_PATH, { ...CHUNG, method: "GET" });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+  if (res.status !== 200) {
+    // 502/503 can be a proxy's page: the fallback then names a refusal, not a lost connection.
+    const thongBao = await errorMessageOr(res, LOI_KHONG_RO);
+    return res.status === 403 ? { ok: false, thongBao, forbidden: true } : { ok: false, thongBao };
+  }
+  try {
+    return { ok: true, duLieu: (await res.json()) as comms_portalCategoryTreeOut };
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
 }
 
 /** PUT categories — the selection and its mapping. Entries rebuilt field by field. */
@@ -118,8 +144,29 @@ export function listPortalSyncRuns(): Promise<KetQua<page_Result_comms_portalRun
  * this answer. The caller holds the key (one per press, reused on a retry after a failure, which
  * `core/idem` releases), so a double click becomes one run.
  */
-export function startPortalSyncRun(idempotencyKey: string): Promise<KetQua<null>> {
-  return goiGhi(RUNS_PATH, "POST", undefined, 202, { "Idempotency-Key": idempotencyKey }).then(
-    (r): KetQua<null> => (r.ok ? { ok: true, duLieu: null } : r),
-  );
+export type StartRunResult =
+  | { ok: true; duLieu: null }
+  // `retryAfterSeconds`: the server's `Retry-After` on 503 `portal_sync_busy` (every run slot of the
+  // platform is taken). Shown as a wait; the screen NEVER retries on its own — a tab of every commune
+  // retrying on a timer is exactly the load that filled the slots.
+  | { ok: false; thongBao: string; retryAfterSeconds?: number };
+
+/** `Retry-After` as delta-seconds; an HTTP-date or anything else is ignored (no wait shown). */
+export function parseRetryAfter(v: string | null): number | undefined {
+  if (v === null || !/^\d+$/.test(v.trim())) return undefined;
+  const n = Number.parseInt(v.trim(), 10);
+  return n > 0 ? n : undefined;
+}
+
+export async function startPortalSyncRun(idempotencyKey: string): Promise<StartRunResult> {
+  let res: Response;
+  try {
+    res = await fetch(RUNS_PATH, { ...CHUNG, method: "POST", headers: { "Idempotency-Key": idempotencyKey } });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+  if (res.status === 202) return { ok: true, duLieu: null };
+  const thongBao = await errorMessageOr(res, LOI_KHONG_RO);
+  const retryAfterSeconds = res.status === 503 ? parseRetryAfter(res.headers.get("Retry-After")) : undefined;
+  return retryAfterSeconds === undefined ? { ok: false, thongBao } : { ok: false, thongBao, retryAfterSeconds };
 }

@@ -639,10 +639,10 @@ describe("phần chưa dựng được", () => {
   it("the list is PINNED: rich text, category edit/delete, banner, broadcast audio and the portal sync card left it when built", () => {
     // EXACT, not a floor: an item silently dropped and an item silently kept are both a block that
     // lies to the commune about what the screen does. ADR 0067 built five of them (§1, §2, §3, §4, §5);
-    // the portal sync card brought two narrower gaps of its own (the meta count, the status filter).
+    // the portal sync card brought two narrower gaps of its own; the status filter left on 02/10/2026
+    // (`status` on GET content-items, C1), the meta count stays.
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
-      "Lọc riêng các bài `Chờ duyệt` trên bảng §6",
       "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
       "Cột `Lượt xem` (§6)",
       "Nút xoá một bài (§9 đề xuất `DELETE`)",

@@ -11,11 +11,12 @@ import {
   savePortalCategories,
   savePortalSyncSettings,
   startPortalSyncRun,
+  type CategoryTreeResult,
+  type StartRunResult,
 } from "@/lib/api/portal-sync";
 import type {
   comms_portalCategoriesIn,
   comms_portalCategoriesOut,
-  comms_portalCategoryTreeOut,
   comms_portalRunOut,
   comms_portalSyncSettingsIn,
   comms_portalSyncSettingsOut,
@@ -27,8 +28,10 @@ import {
   API_URL_HINT,
   categoriesBody,
   CATEGORIES_EMPTY,
+  CATEGORIES_LIMIT_REACHED,
   CATEGORIES_LOADING,
   CATEGORIES_NEED_SETTINGS,
+  CATEGORIES_NEED_UPDATE,
   CATEGORIES_NOTHING_CHANGED,
   CATEGORIES_SAVED,
   choicesFromTree,
@@ -41,6 +44,8 @@ import {
   keyHint,
   keyRequirement,
   LOADING_SETTINGS,
+  MAX_ITEMS_HINT,
+  MAX_ITEMS_PER_RUN_MAX,
   MISSING_ON_PORTAL,
   NO_RUN_YET,
   orderAsTree,
@@ -56,20 +61,28 @@ import {
   portalSyncStatusExplainer,
   portalSyncStatusLabel,
   PUBLISH_MODE_OPTIONS,
+  PUBLISH_MODE_REVIEW,
   publishModeLabel,
   RELOAD_LABEL,
+  retryWaitLabel,
   RUN_NOW_LABEL,
   RUN_STARTED,
   runCountsLine,
   runErrorLine,
   runIsUnfinished,
   runNowBlockedReason,
+  SELECTED_CATEGORIES_MAX,
+  selectAllUpToLimit,
+  selectedCount,
   selectedCountLabel,
   SETTINGS_SAVED,
   settingsBody,
   settingsFormError,
+  SHOW_PENDING_LABEL,
   TARGET_KIND_OPTIONS,
   triggerLabel,
+  WINDOW_DAYS_HINT,
+  WINDOW_DAYS_MAX,
   type CategoryChoice,
   type SettingsForm,
 } from "./portal-sync";
@@ -87,7 +100,9 @@ import {
  *
  * NO PERMISSION GATE ON THE CLIENT, same as the rest of this screen: `service-comms` checks
  * `content.read` / `content.update` on every call and a 403 sentence reaches the card verbatim (rule 5,
- * forbidden #1).
+ * forbidden #1). The category tree is a GET under `content.update` (owner 02/10/2026, D3): an account
+ * with `content.read` only opens `Cấu hình`, the tree's call answers 403, and the picker alone says which
+ * right is missing — the settings, the history and the run button are untouched.
  *
  * `Cấu hình` IS AN IN-PAGE SECTION, NOT AN OVERLAY — the same reason as §7's form (`PHAN_CHUA_DUNG`,
  * item `Bố cục §2`).
@@ -97,10 +112,10 @@ import {
 export type PortalSyncApi = {
   getSettings: () => Promise<KetQua<comms_portalSyncSettingsOut>>;
   saveSettings: (b: comms_portalSyncSettingsIn) => Promise<KetQua<comms_portalSyncSettingsOut>>;
-  getCategories: () => Promise<KetQua<comms_portalCategoryTreeOut>>;
+  getCategories: () => Promise<CategoryTreeResult>;
   saveCategories: (b: comms_portalCategoriesIn) => Promise<KetQua<comms_portalCategoriesOut>>;
   listRuns: () => Promise<KetQua<page_Result_comms_portalRunOut>>;
-  startRun: (idempotencyKey: string) => Promise<KetQua<null>>;
+  startRun: (idempotencyKey: string) => Promise<StartRunResult>;
 };
 
 export const PORTAL_SYNC_API: PortalSyncApi = {
@@ -115,9 +130,12 @@ export const PORTAL_SYNC_API: PortalSyncApi = {
 export function PortalSyncCard({
   api = PORTAL_SYNC_API,
   pollIntervalMs = POLL_INTERVAL_MS,
+  showPendingReview,
 }: {
   api?: PortalSyncApi;
   pollIntervalMs?: number;
+  /** Sets §6's `Trạng thái` filter to `Chờ duyệt`. Absent = no link (the card alone, in a test). */
+  showPendingReview?: () => void;
 }) {
   const [settings, setSettings] = useState<KetQua<comms_portalSyncSettingsOut> | null>(null);
   const [runs, setRuns] = useState<KetQua<page_Result_comms_portalRunOut> | null>(null);
@@ -128,7 +146,8 @@ export function PortalSyncCard({
   // it into one run. Renewed only after a 202 — a refused attempt is released by the server.
   const [runKey, setRunKey] = useState(khoaChongTrungMoi);
   const [starting, setStarting] = useState(false);
-  const [startMessage, setStartMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  // `wait`: the Retry-After sentence of a 503 portal_sync_busy, under the server's own sentence.
+  const [startMessage, setStartMessage] = useState<{ ok: boolean; text: string; wait?: string } | null>(null);
   // `left` reads still owed after a 202; `null` = not polling. Reaching 0 with the run unfinished
   // shows POLL_GAVE_UP.
   const [poll, setPoll] = useState<{ left: number } | null>(null);
@@ -179,8 +198,14 @@ export function PortalSyncCard({
     api.startRun(runKey).then((r) => {
       setStarting(false);
       if (!r.ok) {
-        // 409 portal_sync_in_progress / not_configured, 503 — the server's sentence, verbatim.
-        setStartMessage({ ok: false, text: r.thongBao });
+        // 409 portal_sync_in_progress / not_configured, 503 — the server's sentence, verbatim. On 503
+        // portal_sync_busy the Retry-After wait is said too — and NOTHING is scheduled: the officer
+        // presses again (same key, released by the server).
+        setStartMessage(
+          r.retryAfterSeconds === undefined
+            ? { ok: false, text: r.thongBao }
+            : { ok: false, text: r.thongBao, wait: retryWaitLabel(r.retryAfterSeconds) },
+        );
         return;
       }
       setRunKey(khoaChongTrungMoi());
@@ -247,6 +272,15 @@ export function PortalSyncCard({
             )}
           </p>
           {portalSyncStatusExplainer(status) !== "" && <p className="ghi-chu">{portalSyncStatusExplainer(status)}</p>}
+          {/* Review mode puts every import in `Chờ duyệt`; the way to that queue is one press. No count:
+              the list route has no total, and a number read off one page would be wrong. */}
+          {showPendingReview !== undefined && s.configured && s.publish_mode === PUBLISH_MODE_REVIEW && (
+            <p>
+              <button type="button" className="nut-phu" onClick={showPendingReview}>
+                {SHOW_PENDING_LABEL}
+              </button>
+            </p>
+          )}
         </>
       )}
 
@@ -265,6 +299,11 @@ export function PortalSyncCard({
       {startMessage !== null && (
         <p role={startMessage.ok ? "status" : "alert"} className={startMessage.ok ? undefined : "thong-bao-loi"}>
           {startMessage.text}
+          {startMessage.wait !== undefined && (
+            <span className="dong-phu" data-testid="portal-sync-retry-wait">
+              {startMessage.wait}
+            </span>
+          )}
         </p>
       )}
       {poll !== null && poll.left <= 0 && <p role="status">{POLL_GAVE_UP}</p>}
@@ -524,10 +563,15 @@ function SettingsFormView({
           type="number"
           inputMode="numeric"
           min={1}
+          max={WINDOW_DAYS_MAX}
           step={1}
           value={form.window_days}
+          aria-describedby="portal-sync-window-hint"
           onChange={(e) => setForm({ ...form, window_days: e.target.value })}
         />
+        <p className="ghi-chu" id="portal-sync-window-hint">
+          {WINDOW_DAYS_HINT}
+        </p>
       </div>
 
       <div className="o-nhap">
@@ -537,10 +581,15 @@ function SettingsFormView({
           type="number"
           inputMode="numeric"
           min={1}
+          max={MAX_ITEMS_PER_RUN_MAX}
           step={1}
           value={form.max_items_per_run}
+          aria-describedby="portal-sync-max-items-hint"
           onChange={(e) => setForm({ ...form, max_items_per_run: e.target.value })}
         />
+        <p className="ghi-chu" id="portal-sync-max-items-hint">
+          {MAX_ITEMS_HINT}
+        </p>
       </div>
 
       <div className="o-nhap">
@@ -597,7 +646,7 @@ function SettingsFormView({
 
 /** The live category tree with ticks and a kind per ticked category; `Lưu chuyên mục` saves only changes. */
 export function CategoryPicker({ api }: { api: PortalSyncApi }) {
-  const [loaded, setLoaded] = useState<KetQua<comms_portalCategoryTreeOut> | null>(null);
+  const [loaded, setLoaded] = useState<CategoryTreeResult | null>(null);
   const [initial, setInitial] = useState<CategoryChoice[]>([]);
   const [choices, setChoices] = useState<CategoryChoice[]>([]);
   const [sending, setSending] = useState(false);
@@ -633,12 +682,11 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
 
   function setAll(selected: boolean): void {
     setMessage(null);
+    // Ticking all stops at the ceiling (30); unticking all clears the portal's rows.
     setChoices((cs) =>
-      cs.map((c) =>
-        c.on_portal
-          ? { ...c, selected, target_kind: selected && c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind }
-          : c,
-      ),
+      selected
+        ? selectAllUpToLimit(cs, DEFAULT_TARGET_KIND)
+        : cs.map((c) => (c.on_portal ? { ...c, selected: false } : c)),
     );
   }
 
@@ -665,14 +713,20 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
   if (loaded === null) return <p role="status">{CATEGORIES_LOADING}</p>;
   if (!loaded.ok) {
     // 409 not configured, 502 portal_<class> — the server's sentence, which never quotes the portal.
+    // 403: the same sentence, plus which right the tree needs (D3). Only this block; the form above stays.
     return (
-      <p className="thong-bao-loi" role="alert">
-        {loaded.thongBao}
-      </p>
+      <div data-testid="portal-sync-categories-refused">
+        {loaded.forbidden === true && <p className="ghi-chu">{CATEGORIES_NEED_UPDATE}</p>}
+        <p className="thong-bao-loi" role="alert">
+          {loaded.thongBao}
+        </p>
+      </div>
     );
   }
 
   const rows = orderAsTree(choices);
+  // A HINT, not the rule: unticked boxes go off at 30 and the server's 422 is what refuses.
+  const atLimit = selectedCount(choices) >= SELECTED_CATEGORIES_MAX;
 
   return (
     <form className="form-danh-muc" onSubmit={save} aria-labelledby="portal-sync-categories-title">
@@ -685,11 +739,16 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
       </p>
 
       {rows.length === 0 && <p className="trang-thai-rong">{CATEGORIES_EMPTY}</p>}
+      {atLimit && (
+        <p className="ghi-chu" role="status" data-testid="portal-sync-categories-limit">
+          {CATEGORIES_LIMIT_REACHED}
+        </p>
+      )}
 
       {rows.length > 0 && (
         <>
           <div className="cum-nut">
-            <button type="button" className="nut-phu" onClick={() => setAll(true)}>
+            <button type="button" className="nut-phu" disabled={atLimit} onClick={() => setAll(true)}>
               Chọn tất cả
             </button>
             <button type="button" className="nut-phu" onClick={() => setAll(false)}>
@@ -711,6 +770,7 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
                       id={tickId}
                       type="checkbox"
                       checked={c.selected}
+                      disabled={!c.selected && atLimit}
                       onChange={(e) => tick(c, e.target.checked)}
                     />{" "}
                     {c.name}

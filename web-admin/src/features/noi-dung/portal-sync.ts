@@ -183,6 +183,18 @@ export const POLL_GAVE_UP =
   "Lượt đồng bộ vẫn đang chạy ở máy chủ. Màn hình đã thôi tự kiểm tra — bấm “Tải lại” để xem kết quả.";
 export const RUN_STARTED = "Đã mở một lượt đồng bộ. Kết quả sẽ hiện ở đây khi lượt chạy xong.";
 
+/**
+ * The wait after 503 `portal_sync_busy`, from the server's `Retry-After` (60 s today). Said, never acted
+ * on: the screen does not retry by itself — the officer presses again.
+ */
+export function retryWaitLabel(seconds: number): string {
+  if (seconds < 60) return `Có thể bấm lại sau khoảng ${seconds} giây.`;
+  return `Có thể bấm lại sau khoảng ${Math.ceil(seconds / 60)} phút.`;
+}
+
+/** The card's way into §6's `Chờ duyệt` queue (the table's `Trạng thái` filter). */
+export const SHOW_PENDING_LABEL = "Xem các tin chờ duyệt";
+
 /** Why `⟳ Đồng bộ ngay` is off, or `null` when it is on. UX only — the server answers 409/503 anyway. */
 export function runNowBlockedReason(
   s: comms_portalSyncSettingsOut,
@@ -255,23 +267,39 @@ export function keyHint(s: comms_portalSyncSettingsOut, form: SettingsForm): str
   return KEY_SAVED_HINT;
 }
 
-function positiveInt(text: string): number | null {
+/**
+ * The owner's CEILINGS (02/10/2026, D1) — `domain.PortalWindowDaysMax`, `PortalMaxItemsMax` and
+ * `PortalSelectedCategoriesMax` in service-comms. Copied here ONLY as a hint (the inputs' `max`, the
+ * `n/30` counter); the server is where a value is refused (400 / 422, shown verbatim).
+ * `portal-sync.test.ts` reads the Go constants and turns red the day they move.
+ */
+export const WINDOW_DAYS_MAX = 90;
+export const MAX_ITEMS_PER_RUN_MAX = 100;
+export const SELECTED_CATEGORIES_MAX = 30;
+
+export const WINDOW_DAYS_HINT = `Từ 1 tới ${WINDOW_DAYS_MAX} ngày — ${WINDOW_DAYS_MAX} là mức tối đa, xã chọn ít hơn được.`;
+export const MAX_ITEMS_HINT = `Từ 1 tới ${MAX_ITEMS_PER_RUN_MAX} tin — ${MAX_ITEMS_PER_RUN_MAX} là mức tối đa, xã chọn ít hơn được.`;
+export const WINDOW_DAYS_ERROR = `Số ngày lấy tin phải là một số nguyên từ 1 tới ${WINDOW_DAYS_MAX}.`;
+export const MAX_ITEMS_ERROR = `Số tin tối đa mỗi lượt phải là một số nguyên từ 1 tới ${MAX_ITEMS_PER_RUN_MAX}.`;
+
+/** An integer in 1..max typed as text, or `null` (half-typed, zero, above the ceiling). */
+function intInRange(text: string, max: number): number | null {
   const t = text.trim();
   if (!/^\d+$/.test(t)) return null;
   const n = Number.parseInt(t, 10);
-  return n >= 1 ? n : null;
+  return n >= 1 && n <= max ? n : null;
 }
 
 /**
- * The sentence that holds `Lưu cấu hình` off, or `null`. Only what the officer can see is missing — the
- * value rules (url shape, upper bounds) are the server's 400, shown verbatim.
+ * The sentence that holds `Lưu cấu hình` off, or `null`. What the officer can see is missing or past a
+ * ceiling — the url shape stays the server's 400, shown verbatim.
  */
 export function settingsFormError(s: comms_portalSyncSettingsOut, form: SettingsForm): string | null {
   if (form.api_url.trim() === "") return "Hãy nhập địa chỉ API của Cổng.";
   const req = keyRequirement(s, form);
   if (req !== null && form.api_key === "") return req === "first" ? KEY_FIRST_HINT : KEY_NEW_URL_HINT;
-  if (positiveInt(form.window_days) === null) return "Số ngày lấy tin phải là một số nguyên từ 1 trở lên.";
-  if (positiveInt(form.max_items_per_run) === null) return "Số tin tối đa mỗi lượt phải là một số nguyên từ 1 trở lên.";
+  if (intInRange(form.window_days, WINDOW_DAYS_MAX) === null) return WINDOW_DAYS_ERROR;
+  if (intInRange(form.max_items_per_run, MAX_ITEMS_PER_RUN_MAX) === null) return MAX_ITEMS_ERROR;
   return null;
 }
 
@@ -287,8 +315,8 @@ export function settingsBody(form: SettingsForm): comms_portalSyncSettingsIn {
     api_url: form.api_url.trim(),
     publish_mode: form.publish_mode,
     interval_hours: form.interval_hours,
-    window_days: positiveInt(form.window_days),
-    max_items_per_run: positiveInt(form.max_items_per_run),
+    window_days: intInRange(form.window_days, WINDOW_DAYS_MAX),
+    max_items_per_run: intInRange(form.max_items_per_run, MAX_ITEMS_PER_RUN_MAX),
     keep_source_credit: form.keep_source_credit,
     is_enabled: form.is_enabled,
   };
@@ -314,6 +342,10 @@ export const CATEGORIES_LOADING = "Đang hỏi Cổng danh sách chuyên mục�
 export const CATEGORIES_EMPTY = "Cổng không trả về chuyên mục nào.";
 export const CATEGORIES_NOTHING_CHANGED = "Không có chuyên mục nào thay đổi — chưa gửi gì.";
 export const CATEGORIES_SAVED = "Đã lưu lựa chọn chuyên mục.";
+/** Beside the server's 403 sentence when the tree needs `content.update` (D3) and the account lacks it. */
+export const CATEGORIES_NEED_UPDATE = "Cần quyền sửa nội dung để xem cây chuyên mục.";
+export const CATEGORIES_LIMIT_REACHED =
+  `Đã chọn đủ ${SELECTED_CATEGORIES_MAX} chuyên mục — mức tối đa của mỗi xã. Bỏ chọn một chuyên mục để chọn chuyên mục khác.`;
 export const SETTINGS_SAVED = "Đã lưu cấu hình đồng bộ.";
 
 /** One row of the picker: a portal category (live) or a stored one the portal no longer lists. */
@@ -408,8 +440,29 @@ export function categoriesBody(
   return { categories };
 }
 
-/** `đã chọn {n}/{m}` — counted over the categories the portal lists now. */
+/**
+ * How many are ticked — EVERY ticked row, the ones the portal no longer lists included: the server's
+ * ceiling counts every stored selection (`domain.CheckPortalSelectedCount`), so a hidden one would make
+ * `29/30` answer 422.
+ */
+export function selectedCount(choices: readonly CategoryChoice[]): number {
+  return choices.filter((c) => c.selected).length;
+}
+
+/** `đã chọn {n}/30` — against the ceiling, not against the tree's size. */
 export function selectedCountLabel(choices: readonly CategoryChoice[]): string {
-  const live = choices.filter((c) => c.on_portal);
-  return `đã chọn ${live.filter((c) => c.selected).length}/${live.length}`;
+  return `đã chọn ${selectedCount(choices)}/${SELECTED_CATEGORIES_MAX}`;
+}
+
+/**
+ * `Chọn tất cả` under the ceiling: ticks the portal's rows in the order given until 30 are ticked, the
+ * already-ticked ones counted first. Never more — the hint is the client's; the server's 422 decides.
+ */
+export function selectAllUpToLimit(choices: readonly CategoryChoice[], defaultKind: string): CategoryChoice[] {
+  let n = selectedCount(choices);
+  return choices.map((c) => {
+    if (!c.on_portal || c.selected || n >= SELECTED_CATEGORIES_MAX) return c;
+    n++;
+    return { ...c, selected: true, target_kind: c.target_kind === "" ? defaultKind : c.target_kind };
+  });
 }

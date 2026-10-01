@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  getPortalCategories,
+  parseRetryAfter,
   portalSyncRunsPath,
   savePortalCategories,
   savePortalSyncSettings,
@@ -25,6 +27,8 @@ import {
   KEY_FIRST_HINT,
   KEY_NEW_URL_HINT,
   KEY_SAVED_HINT,
+  MAX_ITEMS_ERROR,
+  MAX_ITEMS_PER_RUN_MAX,
   orderAsTree,
   outcomeLabel,
   POLL_INTERVAL_MS,
@@ -33,11 +37,17 @@ import {
   portalSyncStatusLabel,
   runCountsLine,
   runErrorLine,
+  retryWaitLabel,
   runNowBlockedReason,
+  SELECTED_CATEGORIES_MAX,
+  selectAllUpToLimit,
   selectedCountLabel,
   settingsBody,
   settingsFormError,
   TARGET_KIND_OPTIONS,
+  WINDOW_DAYS_ERROR,
+  WINDOW_DAYS_MAX,
+  type CategoryChoice,
 } from "./portal-sync";
 
 function settingsOut(over: Partial<comms_portalSyncSettingsOut> = {}): comms_portalSyncSettingsOut {
@@ -185,6 +195,48 @@ describe("settings form — the key is write-only", () => {
     expect(settingsFormError(s, { ...f, max_items_per_run: "0" })).toContain("Số tin tối đa");
     expect(settingsFormError(s, { ...f, api_url: "  " })).toContain("địa chỉ API");
   });
+
+  it("the owner's ceilings hold Lưu with a sentence naming the range: window 1..90, items 1..100", () => {
+    const s = settingsOut();
+    const f = formFromSettings(s);
+    expect(settingsFormError(s, { ...f, window_days: "90", max_items_per_run: "100" })).toBeNull();
+    expect(settingsFormError(s, { ...f, window_days: "1", max_items_per_run: "1" })).toBeNull();
+    expect(settingsFormError(s, { ...f, window_days: "91" })).toBe(WINDOW_DAYS_ERROR);
+    expect(settingsFormError(s, { ...f, window_days: "0" })).toBe(WINDOW_DAYS_ERROR);
+    expect(settingsFormError(s, { ...f, max_items_per_run: "101" })).toBe(MAX_ITEMS_ERROR);
+    expect(WINDOW_DAYS_ERROR).toContain("từ 1 tới 90");
+    expect(MAX_ITEMS_ERROR).toContain("từ 1 tới 100");
+    // Never sent past a ceiling: the body carries null, not 91 (and Lưu is off anyway).
+    expect(settingsBody({ ...f, window_days: "91" }).window_days).toBeNull();
+  });
+
+  it("the ceilings are service-comms' own constants, not a second copy that could drift", () => {
+    const go = readFileSync(
+      fileURLToPath(new URL("../../../../service-comms/internal/domain/portal_sync.go", import.meta.url)),
+      "utf8",
+    );
+    const constant = (name: string) => Number(new RegExp(`${name}\\s*=\\s*(\\d+)`).exec(go)?.[1]);
+    expect(constant("PortalWindowDaysMax")).toBe(WINDOW_DAYS_MAX);
+    expect(constant("PortalMaxItemsMax")).toBe(MAX_ITEMS_PER_RUN_MAX);
+    expect(constant("PortalSelectedCategoriesMax")).toBe(SELECTED_CATEGORIES_MAX);
+  });
+});
+
+describe("Retry-After after 503 portal_sync_busy", () => {
+  it("delta-seconds only; an HTTP-date, a blank or a zero shows no wait", () => {
+    expect(parseRetryAfter("60")).toBe(60);
+    expect(parseRetryAfter(" 120 ")).toBe(120);
+    expect(parseRetryAfter(null)).toBeUndefined();
+    expect(parseRetryAfter("")).toBeUndefined();
+    expect(parseRetryAfter("0")).toBeUndefined();
+    expect(parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT")).toBeUndefined();
+  });
+
+  it("the wait is said in seconds under a minute, in whole minutes rounded up after", () => {
+    expect(retryWaitLabel(60)).toBe("Có thể bấm lại sau khoảng 1 phút.");
+    expect(retryWaitLabel(90)).toBe("Có thể bấm lại sau khoảng 2 phút.");
+    expect(retryWaitLabel(30)).toBe("Có thể bấm lại sau khoảng 30 giây.");
+  });
 });
 
 const TREE: comms_portalCategoryTreeOut = {
@@ -212,7 +264,28 @@ describe("category tree", () => {
       ["9", 0],
     ]);
     expect(rows.find((r) => r.choice.external_id === "9")?.choice.on_portal).toBe(false);
-    expect(selectedCountLabel(choicesFromTree(TREE))).toBe("đã chọn 2/4");
+    // Against the ceiling, and the missing-but-selected one counts: the server's 30 counts it too.
+    expect(selectedCountLabel(choicesFromTree(TREE))).toBe("đã chọn 3/30");
+  });
+
+  it("`Chọn tất cả` stops at 30, already-ticked ones counted first; missing rows are never ticked by it", () => {
+    const many: CategoryChoice[] = Array.from({ length: 40 }, (_, i) => ({
+      external_id: String(i),
+      name: `C${i}`,
+      parent_id: "",
+      selected: i >= 35, // five already ticked, at the END of the order
+      target_kind: i >= 35 ? "su-kien" : "",
+      on_portal: true,
+    }));
+    many.push({ external_id: "gone", name: "Gone", parent_id: "", selected: false, target_kind: "", on_portal: false });
+    const after = selectAllUpToLimit(many, "tin-tuc");
+    expect(after.filter((c) => c.selected).length).toBe(SELECTED_CATEGORIES_MAX);
+    expect(after.slice(0, 25).every((c) => c.selected && c.target_kind === "tin-tuc")).toBe(true);
+    expect(after.slice(25, 35).some((c) => c.selected)).toBe(false);
+    expect(after.slice(35, 40).every((c) => c.selected && c.target_kind === "su-kien")).toBe(true);
+    expect(after.find((c) => c.external_id === "gone")?.selected).toBe(false);
+    // Already at the ceiling: nothing moves.
+    expect(selectAllUpToLimit(after, "tin-tuc")).toEqual(after);
   });
 
   it("a cycle or an unknown parent cannot drop or repeat a row", () => {
@@ -287,6 +360,45 @@ describe("lib/api/portal-sync — what goes on the wire", () => {
     expect(JSON.parse(String(f.mock.calls[0]![1]?.body))).toEqual({
       categories: [{ external_id: "1", name: "A", target_kind: "tin-tuc", is_selected: true }],
     });
+  });
+
+  it("GET categories: a 403 is flagged `forbidden` with the server's sentence; a 502 is not", async () => {
+    const sentence = "Tài khoản của bạn không có quyền thực hiện thao tác này.";
+    const f = stubFetch(403, { code: "forbidden", message: sentence });
+    expect(await getPortalCategories()).toEqual({ ok: false, thongBao: sentence, forbidden: true });
+    expect(f.mock.calls[0]![0]).toBe("/api/v1/portal-sync/categories");
+    expect(f.mock.calls[0]![1]?.method).toBe("GET");
+
+    stubFetch(502, { code: "portal_timeout", message: "Cổng không trả lời kịp. Hãy thử lại sau." });
+    expect(await getPortalCategories()).toEqual({ ok: false, thongBao: "Cổng không trả lời kịp. Hãy thử lại sau." });
+  });
+
+  it("PUT categories: 422 too_many_categories reaches the screen verbatim", async () => {
+    const sentence = "Mỗi xã chọn tối đa 30 chuyên mục Cổng. Hãy bỏ chọn bớt rồi lưu lại.";
+    stubFetch(422, { code: "too_many_categories", message: sentence });
+    expect(await savePortalCategories({ categories: [] })).toEqual({ ok: false, thongBao: sentence });
+  });
+
+  it("POST runs: 503 portal_sync_busy carries the sentence and the Retry-After seconds", async () => {
+    const sentence = "Hệ thống đang chạy đồng bộ cho các xã khác. Hãy thử lại sau ít phút.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ code: "portal_sync_busy", message: sentence }), {
+          status: 503,
+          headers: { "Retry-After": "60" },
+        }),
+      ),
+    );
+    expect(await startPortalSyncRun("k-1")).toEqual({ ok: false, thongBao: sentence, retryAfterSeconds: 60 });
+  });
+
+  it("POST runs: a 409 has no wait, and a 503 without Retry-After none either", async () => {
+    const sentence = "Đang có một lượt đồng bộ của xã. Hãy chờ lượt ấy xong rồi chạy lại.";
+    stubFetch(409, { code: "portal_sync_in_progress", message: sentence });
+    expect(await startPortalSyncRun("k-1")).toEqual({ ok: false, thongBao: sentence });
+    stubFetch(503, { code: "portal_sync_unavailable", message: "Bộ chạy đồng bộ đang khởi động lại." });
+    expect(await startPortalSyncRun("k-1")).toEqual({ ok: false, thongBao: "Bộ chạy đồng bộ đang khởi động lại." });
   });
 
   it("POST runs carries the Idempotency-Key, no body, and 202 is success whatever the body", async () => {
