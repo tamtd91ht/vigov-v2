@@ -37,6 +37,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -218,7 +219,7 @@ func (h *Handler) ThemCanBo(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiGhiCanBo(w, r, "thêm cán bộ", err)
 		return
 	}
-	vietJSON(w, http.StatusCreated, raNgoai(cb))
+	vietJSON(w, http.StatusCreated, adminStaffView(cb, time.Now().UTC()))
 }
 
 // SuaCanBo corrects one profile. PATCH /api/v1/staff/{id}
@@ -246,7 +247,7 @@ func (h *Handler) SuaCanBo(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiGhiCanBo(w, r, "sửa hồ sơ cán bộ", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, raNgoai(cb))
+	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
 }
 
 // KhoaCanBo shuts one account. POST /api/v1/staff/{id}/lockout
@@ -283,8 +284,9 @@ func (h *Handler) datKhoaCanBo(w http.ResponseWriter, r *http.Request, khoa bool
 	// 200 WITH THE RECORD, NOT 204, INCLUDING ON THE DELETE. The screen redraws the row it just
 	// changed; a 204 would make every lock two requests, and the second one could show a row
 	// somebody else had edited in between — which reads as the first request having done something
-	// it did not.
-	vietJSON(w, http.StatusOK, raNgoai(cb))
+	// it did not. After DELETE the automatic lock is gone too (the use case clears it from the row it
+	// returns), so the redrawn row no longer shows it.
+	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
 }
 
 // DoiVaiTroCanBo moves one person to a role. PUT /api/v1/staff/{id}/role
@@ -304,7 +306,7 @@ func (h *Handler) DoiVaiTroCanBo(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiGhiCanBo(w, r, "đổi vai trò cán bộ", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, raNgoai(cb))
+	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
 }
 
 // DatCongKhaiCanBo publishes one person to the Mini App directory, or takes them off it.
@@ -339,6 +341,8 @@ func (h *Handler) DatCongKhaiCanBo(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiGhiCanBo(w, r, "đặt công khai Mini App", err)
 		return
 	}
+	// raNgoai AND NOT adminStaffView: this route is `content.update`, and account-security state (the
+	// automatic sign-in lock) is not for that authority — see canBoTomTat.SignInLockedUntil.
 	vietJSON(w, http.StatusOK, raNgoai(cb))
 }
 

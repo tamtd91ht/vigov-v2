@@ -25,6 +25,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/service-identity/internal/app"
@@ -91,7 +92,7 @@ func (h *Handler) CapTaiKhoanCanBo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vietJSON(w, http.StatusCreated, capTaiKhoanRa{
-		Staff:             raNgoai(kq.CanBo),
+		Staff:             adminStaffView(kq.CanBo, time.Now().UTC()),
 		TemporaryPassword: kq.MatKhauTam,
 	})
 }
@@ -111,7 +112,7 @@ func (h *Handler) DatLaiMatKhauCanBo(w http.ResponseWriter, r *http.Request) {
 	// 200 AND NOT 201: the account already existed, only its credential moved. The administrator
 	// screen redraws the same row it was already showing.
 	vietJSON(w, http.StatusOK, capTaiKhoanRa{
-		Staff:             raNgoai(kq.CanBo),
+		Staff:             adminStaffView(kq.CanBo, time.Now().UTC()),
 		TemporaryPassword: kq.MatKhauTam,
 	})
 }

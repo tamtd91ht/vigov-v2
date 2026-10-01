@@ -77,3 +77,28 @@ func TestSessionIdleExpired(t *testing.T) {
 		t.Errorf("admin permission asked %d times outside the 15–30 minute window — a query per request for nothing", asked)
 	}
 }
+
+// SignInLockedAt is what the staff register shows: the end of a lock IN FORCE, nil otherwise —
+// derived against now, so a stored instant in the past (nobody clears it) shows nothing.
+func TestCanBoTomTatSignInLockedAt(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	future, past := now.Add(time.Hour), now.Add(-time.Second)
+
+	if got := (CanBoTomTat{}).SignInLockedAt(now); got != nil {
+		t.Errorf("never locked: %v, want nil", got)
+	}
+	if got := (CanBoTomTat{SignInLockedUntil: &past}).SignInLockedAt(now); got != nil {
+		t.Errorf("expired: %v, want nil", got)
+	}
+	if got := (CanBoTomTat{SignInLockedUntil: &now}).SignInLockedAt(now); got != nil {
+		t.Errorf("at the end instant: %v, want nil (LockedAt is now.Before(until))", got)
+	}
+	cb := CanBoTomTat{SignInLockedUntil: &future}
+	got := cb.SignInLockedAt(now)
+	if got == nil || !got.Equal(future) {
+		t.Fatalf("in force: %v, want %v", got, future)
+	}
+	if got == cb.SignInLockedUntil {
+		t.Error("returned the row's own pointer — a caller editing it would edit the row")
+	}
+}

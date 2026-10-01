@@ -158,7 +158,7 @@ func dungXaPg(t *testing.T, db *sql.DB, xa, vaiTroID string, quyen []string, ngu
 
 func ucThat(db *sql.DB) *DanhBaCanBo {
 	kho := pkgstore.New(db)
-	return NewDanhBaCanBo(kho, idstore.NewCanBoStore(kho))
+	return NewDanhBaCanBo(kho, idstore.NewCanBoStore(kho), slogBoQua())
 }
 
 func nguoiPg(id string) NguoiThucHien {

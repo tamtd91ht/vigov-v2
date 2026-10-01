@@ -41,6 +41,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -48,6 +49,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
@@ -231,15 +233,26 @@ type DanhBaCanBo struct {
 	db  *store.DB
 	kho KhoDanhBaCanBo
 
+	// log is the SECURITY log (skills/security-logging, TCVN 14423 §5.6): account locked / unlocked,
+	// manual or automatic, must be emitted. The same *slog.Logger the sign-in use case writes
+	// staff.sign_in_locked to, so the lock and its lifting land in one stream. It is NOT the audit
+	// trail — that is audit.Write, in the transaction; this is the operational line an alert reads.
+	log *slog.Logger
+
 	// Injected so a test can pin them. In production: ulid.Moi, domain.SinhMaCanBo, time.Now.
 	sinhID func() (string, error)
 	sinhMa func(time.Time) (string, error)
 	bayGio func() time.Time
 }
 
-func NewDanhBaCanBo(db *store.DB, kho KhoDanhBaCanBo) *DanhBaCanBo {
+// NewDanhBaCanBo refuses a nil logger at construction: without it every lock and unlock would still
+// be audited but never reach the security log, and nothing would report the gap.
+func NewDanhBaCanBo(db *store.DB, kho KhoDanhBaCanBo, log *slog.Logger) *DanhBaCanBo {
+	if log == nil {
+		panic("app.NewDanhBaCanBo: log is required — lock/unlock must reach the security log")
+	}
 	return &DanhBaCanBo{
-		db: db, kho: kho,
+		db: db, kho: kho, log: log,
 		sinhID: ulid.Moi,
 		sinhMa: domain.SinhMaCanBo,
 		bayGio: func() time.Time { return time.Now().UTC() },
@@ -552,7 +565,14 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 	}
 
 	var sau domain.CanBoTomTat
+	// What this transaction changed, for the security log written AFTER the commit. Reset at the top
+	// of the closure so a line can only describe the attempt that committed.
+	var (
+		manualChanged bool
+		lifted        *domain.SignInLock // the automatic lock as it was before it was lifted; nil = none
+	)
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		manualChanged, lifted = false, nil
 		quanTri, err := uc.kho.QuanTriDangHoatDong(ctx, tx)
 		if err != nil {
 			return err
@@ -568,8 +588,12 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 		// LOCKS STAY TWO FACTS: each is lifted only if it is actually set, each under its own verb,
 		// and locking (khoa = true) never touches the automatic one.
 		if !khoa {
-			if err := uc.liftSignInLock(ctx, tx, truoc, nguoi); err != nil {
+			if lifted, err = uc.liftSignInLock(ctx, tx, truoc, nguoi); err != nil {
 				return err
+			}
+			if lifted != nil {
+				// The reply redraws the row: it must not still show the lock it just lifted.
+				truoc.SignInLockedUntil = nil
 			}
 		}
 
@@ -588,6 +612,7 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 		if err := uc.kho.DatKhoa(ctx, tx, truoc.ID, !khoa); err != nil {
 			return err
 		}
+		manualChanged = true
 		sau = truoc
 		sau.DangHoatDong = !khoa
 
@@ -634,28 +659,83 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
+	uc.logLockChanges(ctx, sau.Ma, khoa, manualChanged, lifted, nguoi)
 	return sau, nil
+}
+
+// The security-log events of DatKhoa (skills/security-logging: "account locked / unlocked, manual
+// or automatic"). Named beside staff.sign_in_locked, which the sign-in use case writes when the
+// automatic lock is SET; these three are the administrator's acts.
+const (
+	EventStaffAccountLocked   = "staff.account_locked"   // manual lock, #10
+	EventStaffAccountUnlocked = "staff.account_unlocked" // manual unlock, #10
+	EventStaffSignInUnlocked  = "staff.sign_in_unlocked" // early lift of the automatic lock, #39
+)
+
+// logLockChanges writes one security-log line per lock that actually moved, AFTER the commit — a
+// line for an act that rolled back would tell an incident responder about a lock that never changed.
+// A no-op request (already in the requested state, nothing to lift) writes nothing, like the trail.
+//
+// WHAT IS LOGGED: the staff CODES of both people (never a name, email or phone — rule 3), the commune
+// and the administrator's IP. The lifted lock's end and count are security state, not personal data,
+// and they are what tells a reader whether a live brute-force lock was forgiven.
+//
+// LEVELS: the manual lock and unlock are routine administration → Info. Lifting a lock IN FORCE is
+// Warn: it cancels the brute-force defence while it is working, so it is the line an alert should be
+// able to key on (the same level staff.sign_in_locked uses). Clearing only a pending run of failures
+// (no lock in force) is Info.
+func (uc *DanhBaCanBo) logLockChanges(ctx context.Context, subject string, khoa, manualChanged bool,
+	lifted *domain.SignInLock, nguoi NguoiThucHien) {
+
+	xa := string(tenant.MustFrom(ctx))
+	if lifted != nil {
+		wasLocked := lifted.LockedAt(uc.bayGio())
+		until := ""
+		if lifted.LockedUntil != nil {
+			until = lifted.LockedUntil.UTC().Format(time.RFC3339)
+		}
+		level := slog.LevelInfo
+		if wasLocked {
+			level = slog.LevelWarn
+		}
+		uc.log.Log(ctx, level, "quản trị viên mở sớm khoá đăng nhập tự động của cán bộ",
+			"event", EventStaffSignInUnlocked, "outcome", "unlocked",
+			"actor", nguoi.Vet.ID, "subject", subject, "xa", xa, "ip", nguoi.Vet.IP,
+			"was_locked", wasLocked, "locked_until", until, "failed_sign_in_count", lifted.FailedCount)
+	}
+	if !manualChanged {
+		return
+	}
+	event, outcome, msg := EventStaffAccountUnlocked, "unlocked", "quản trị viên mở khoá tài khoản cán bộ"
+	if khoa {
+		event, outcome, msg = EventStaffAccountLocked, "locked", "quản trị viên khoá tài khoản cán bộ"
+	}
+	uc.log.Info(msg, "event", event, "outcome", outcome,
+		"actor", nguoi.Vet.ID, "subject", subject, "xa", xa, "ip", nguoi.Vet.IP)
 }
 
 // liftSignInLock clears the automatic lockout of #39 — a lock in force, or a run of failures that has
 // not reached the threshold yet — and writes its own audit entry in the caller's transaction. A clean
 // account (or one whose lock has already run out with no failures since) writes nothing: an entry
 // saying "unlocked" for an account that was not locked would be a false record.
+//
+// It returns the lock AS IT WAS when something was lifted, nil when nothing was — the caller's
+// security-log line describes what was forgiven.
 func (uc *DanhBaCanBo) liftSignInLock(ctx context.Context, tx *store.ScopedTx,
-	cb domain.CanBoTomTat, nguoi NguoiThucHien) error {
+	cb domain.CanBoTomTat, nguoi NguoiThucHien) (*domain.SignInLock, error) {
 
 	lock, err := uc.kho.SignInLockForUpdate(ctx, tx, cb.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !lock.LockedAt(uc.bayGio()) && lock.FailedCount == 0 {
-		return nil
+		return nil, nil
 	}
 	cleared := lock.Clear()
 	if err := uc.kho.SetSignInLock(ctx, tx, cb.ID, cleared); err != nil {
-		return err
+		return nil, err
 	}
-	return audit.Write(ctx, tx, audit.Entry{
+	if err := audit.Write(ctx, tx, audit.Entry{
 		Actor:   nguoi.Vet,
 		Action:  ActionSignInLockLifted,
 		Subject: cb.Ma,
@@ -663,7 +743,10 @@ func (uc *DanhBaCanBo) liftSignInLock(ctx context.Context, tx *store.ScopedTx,
 			"truoc": signInLockDelta(lock),
 			"sau":   signInLockDelta(cleared),
 		}),
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return &lock, nil
 }
 
 // DoiVaiTro moves one person to a role, or to no role at all.

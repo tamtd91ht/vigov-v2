@@ -90,7 +90,8 @@ const cotTomTat = `id, ma, ho_ten, coalesce(email,''), chuc_vu,
                    dien_thoai_co_quan, di_dong_ca_nhan, co_tai_khoan, dang_hoat_dong,
                    dang_nhap_gan_nhat, tao_luc,
                    co_zalo, thu_tu_danh_ba, hien_tren_mini_app,
-                   dong_y_cong_khai_luc, dong_y_cong_khai_ghi_boi`
+                   dong_y_cong_khai_luc, dong_y_cong_khai_ghi_boi,
+                   sign_in_locked_until`
 
 // locTomTat is the ONE predicate both read paths share.
 //
@@ -266,5 +267,8 @@ func dichQuetTomTat(cb *domain.CanBoTomTat) []any {
 		&cb.CoTaiKhoan, &cb.DangHoatDong,
 		&cb.DangNhapGanNhat, &cb.TaoLuc,
 		&cb.CoZalo, &cb.ThuTuDanhBa, &cb.HienTrenMiniApp,
-		&cb.DongYCongKhaiLuc, &cb.DongYCongKhaiGhiBoi}
+		&cb.DongYCongKhaiLuc, &cb.DongYCongKhaiGhiBoi,
+		// Migration 0020. **time.Time: NULL is "never auto-locked". Only the stored instant is read;
+		// whether it is in force is derived at the edge (domain.CanBoTomTat.SignInLockedAt).
+		&cb.SignInLockedUntil}
 }

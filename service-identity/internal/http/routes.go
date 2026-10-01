@@ -874,12 +874,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// authority's record is itself information (rule 4, forbidden #2). Same reading as the sid on
 	// DELETE /api/v1/sessions/{sid} above.
 	//
+	// `sign_in_locked_until` (on this route, the list and the search — all `admin.user`) is present only
+	// while the automatic sign-in lock is in force; see canBoTomTat.SignInLockedUntil.
+	//
 	// @summary  Chi tiết một cán bộ trong xã
 	// @screen   14-cau-hinh §3
 	// @reply    200 canBoTomTat
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
+	// @reply    404 httpx.Error staff_not_found
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/staff/{id}",
 		authz.RequirePermission(d.Checker, "admin.user")(
@@ -1099,13 +1102,17 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan — locking an account that is already locked writes nothing and audits nothing,
 	// so the second request leaves exactly one row and one entry.
 	//
+	// SECURITY LOG (skills/security-logging): a lock that moved writes `staff.account_locked` (Info)
+	// after the commit; a request that finds the account already locked writes nothing. The automatic
+	// sign-in lock of #39 is not touched in this direction.
+	//
 	// @summary  Khoá tài khoản một cán bộ đã nghỉ hưu hoặc chuyển công tác — người này vẫn còn trong danh bạ
 	// @screen   14-cau-hinh §3
 	// @reply    200 canBoTomTat
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
+	// @reply    403 httpx.Error self_target_forbidden
+	// @reply    404 httpx.Error staff_not_found
+	// @reply    409 httpx.Error last_admin
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/staff/{id}/lockout",
 		authz.RequirePermission(d.Checker, "admin.user")(
@@ -1123,12 +1130,18 @@ func Register(mux *http.ServeMux, d Deps) {
 	// administrators BIGGER, and a rule that fires on an operation which cannot cause the harm is a
 	// rule people learn to route around.
 	//
-	// @summary  Mở khoá tài khoản một cán bộ
+	// IT ALSO LIFTS THE AUTOMATIC SIGN-IN LOCK OF #39 EARLY (5 failures → 12 hours), each lock only if
+	// set, each with its own audit verb. The reply no longer carries `sign_in_locked_until`. SECURITY
+	// LOG after the commit, one line per lock that moved: `staff.sign_in_unlocked` (Warn when a lock in
+	// force was lifted, Info when only a pending run of failures was cleared) and
+	// `staff.account_unlocked` (Info).
+	//
+	// @summary  Mở khoá tài khoản một cán bộ — gồm cả khoá đăng nhập tự động do nhập sai mật khẩu nhiều lần
 	// @screen   14-cau-hinh §3
 	// @reply    200 canBoTomTat
 	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
+	// @reply    403 httpx.Error self_target_forbidden
+	// @reply    404 httpx.Error staff_not_found
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/staff/{id}/lockout",
 		authz.RequirePermission(d.Checker, "admin.user")(

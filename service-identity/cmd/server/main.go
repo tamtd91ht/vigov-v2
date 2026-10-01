@@ -253,7 +253,9 @@ func run(log *slog.Logger) error {
 	// IT IS A USE CASE AND NOT A STORE ON Deps, and that is the whole reason this line exists here
 	// rather than reusing `canBo` directly: every method opens the transaction that the business
 	// write and its audit entry share (rule 6, invariant 3).
-	ghiDanhBa := app.NewDanhBaCanBo(kho, canBo)
+	// `log` — the SAME logger NewDangNhap got above, so locking and unlocking reach the security log
+	// in the stream staff.sign_in_locked is written to (skills/security-logging).
+	ghiDanhBa := app.NewDanhBaCanBo(kho, canBo, log)
 	// The CREDENTIAL surface (open questions #9, #17, both decided 2026-09-22): issuing an account,
 	// an administrator resetting a password, and a person changing their own.
 	//

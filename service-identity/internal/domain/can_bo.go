@@ -135,6 +135,24 @@ type CanBoTomTat struct {
 	HienTrenMiniApp     bool
 	DongYCongKhaiLuc    *time.Time
 	DongYCongKhaiGhiBoi string
+
+	// SignInLockedUntil — the STORED end of the automatic sign-in lock of #39 (migration 0020), as
+	// read. NOT "is locked": an instant in the past is a lock that has run out by itself, so whether
+	// it is in force is derived against a clock by whoever shows it (SignInLock.LockedAt). The failed
+	// count is deliberately not carried: no screen needs it, and it is a signal for an attacker
+	// probing how many guesses remain.
+	SignInLockedUntil *time.Time
+}
+
+// SignInLockedAt returns the end of the automatic sign-in lock if it is IN FORCE at now, else nil.
+// Derived on every read, never a flag, for the same reason as SignInLock.LockedAt: a lock that has
+// run out needs nobody to clear it.
+func (cb CanBoTomTat) SignInLockedAt(now time.Time) *time.Time {
+	if !(SignInLock{LockedUntil: cb.SignInLockedUntil}).LockedAt(now) {
+		return nil
+	}
+	until := cb.SignInLockedUntil.UTC()
+	return &until
 }
 
 // CanBoVaiTro is one staff member as the INTER-SERVICE contract sees them, and it is

@@ -44,6 +44,10 @@ var dsMoc = time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 // timestamp in the dataset, so a swap with tao_luc or dang_nhap_gan_nhat is visible.
 var dsMocDongY = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 
+// dsSignInLockedUntil is the stored end of the automatic sign-in lock (migration 0020) on nd-01 —
+// again distinct from every other timestamp, so a swap with dong_y_cong_khai_luc is visible.
+var dsSignInLockedUntil = time.Date(2026, 9, 30, 21, 0, 0, 0, time.UTC)
+
 const dsXaB = "01J0000000000000000000000B"
 
 // dsDuLieu is one `nguoi_dung` table across two communes.
@@ -73,7 +77,7 @@ var dsDuLieu = []hangND{
 		chucVu: "Chủ tịch UBND xã", boPhan: "bp-001", vaiTro: "vt-001",
 		dienThoaiCoQuan: "0900000001", diDongCaNhan: "0300000001",
 		coTaiKhoan: true, dangHoatDong: true, dangNhap: &dsMoc, taoLuc: dsMoc.Add(1 * time.Minute),
-		coZalo: true, hienMiniApp: false},
+		coZalo: true, hienMiniApp: false, signInLockedUntil: &dsSignInLockedUntil},
 	{xa: xaMau, id: "nd-02", ma: "CB-002", hoTen: "Trần Thị B", email: "b@example.gov.vn",
 		chucVu: "Trưởng thôn", boPhan: "bp-002",
 		dienThoaiCoQuan: "0900000002", diDongCaNhan: "0300000002",
@@ -591,6 +595,9 @@ type hangND struct {
 	thuTu               *int
 	dongYLuc            *time.Time
 	dongYGhiBoi         string
+
+	// Migration 0020 — the stored end of the automatic sign-in lock.
+	signInLockedUntil *time.Time
 }
 
 func dsSo(v int) *int { return &v }
@@ -642,6 +649,11 @@ func (h hangND) giaTri(cot string) driver.Value {
 		return *h.dongYLuc
 	case "dong_y_cong_khai_ghi_boi":
 		return h.dongYGhiBoi
+	case "sign_in_locked_until":
+		if h.signInLockedUntil == nil {
+			return nil // SQL NULL — never auto-locked
+		}
+		return *h.signInLockedUntil
 	case "tenant_id":
 		return h.xa
 	default:
@@ -1183,5 +1195,44 @@ func TestCotMiniAppVeDungChoCuaNo(t *testing.T) {
 	}
 	if thay != len(muon) {
 		t.Fatalf("chỉ thấy %d/%d bản ghi mẫu trong danh sách — bài kiểm không kiểm đủ", thay, len(muon))
+	}
+}
+
+// TestSignInLockedUntilIsReadIntoItsOwnField pins the migration-0020 column at the END of cotTomTat:
+// nd-01 carries a stored lock end, nd-02 carries NULL and a consent time (the other nullable
+// timestamp beside it). A positional slip would put one instant in the other's field.
+func TestSignInLockedUntilIsReadIntoItsOwnField(t *testing.T) {
+	b := moBanThuDS(t)
+
+	check := func(path string, cb domain.CanBoTomTat) {
+		t.Helper()
+		switch cb.ID {
+		case "nd-01":
+			if cb.SignInLockedUntil == nil || !cb.SignInLockedUntil.Equal(dsSignInLockedUntil) {
+				t.Errorf("%s nd-01: SignInLockedUntil = %v, want %v", path, cb.SignInLockedUntil, dsSignInLockedUntil)
+			}
+		case "nd-02":
+			if cb.SignInLockedUntil != nil {
+				t.Errorf("%s nd-02: SignInLockedUntil = %v, want nil (SQL NULL)", path, cb.SignInLockedUntil)
+			}
+			if cb.DongYCongKhaiLuc == nil || !cb.DongYCongKhaiLuc.Equal(dsMocDongY) {
+				t.Errorf("%s nd-02: DongYCongKhaiLuc = %v — shifted by the new column", path, cb.DongYCongKhaiLuc)
+			}
+		}
+	}
+
+	for _, id := range []string{"nd-01", "nd-02"} {
+		cb, err := b.kho.ChiTiet(ctxXa(xaMau), id)
+		if err != nil {
+			t.Fatalf("ChiTiet %s: %v", id, err)
+		}
+		check("ChiTiet", cb)
+	}
+	kq, err := b.kho.DanhSach(ctxXa(xaMau), domain.LocCanBo{}, yeuCauTrang(t, "limit=100"))
+	if err != nil {
+		t.Fatalf("DanhSach: %v", err)
+	}
+	for _, cb := range kq.Items {
+		check("DanhSach", cb)
 	}
 }

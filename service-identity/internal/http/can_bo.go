@@ -76,6 +76,22 @@ type canBoTomTat struct {
 	Published         bool       `json:"published"`
 	DisplayOrder      *int       `json:"display_order"`
 	ConsentRecordedAt *time.Time `json:"consent_recorded_at"`
+
+	// SignInLockedUntil — the automatic sign-in lock of #39 (5 failures → 12 hours, migration 0020),
+	// so the Người dùng screen can say why somebody cannot sign in and offer DELETE .../lockout.
+	// ABSENT unless the lock is IN FORCE at the moment of the reply: derived against the clock, never
+	// a stored flag, so a lock that has run out disappears by itself. It is not `active`: that is the
+	// manual lock of #10, a different fact.
+	//
+	// SET ONLY BY adminStaffView, i.e. only on routes that require `admin.user`. The one route that
+	// returns this shape under another key (PUT .../publication, `content.update`) uses raNgoai and
+	// never carries it: whether an account is under a password-guessing lock is account-security
+	// state, and managing accounts is not the authority `content.update` grants. omitempty keeps the
+	// contract change additive for every existing client.
+	//
+	// THE FAILED-ATTEMPT COUNT IS DELIBERATELY NOT EXPOSED: no screen decision turns on it, and "how
+	// many guesses are left before the lock" is information for whoever is guessing.
+	SignInLockedUntil *time.Time `json:"sign_in_locked_until,omitempty"`
 }
 
 // soRaManHinhNoiBo decides what a staff telephone number looks like on the way out of THIS
@@ -111,7 +127,8 @@ type canBoTomTat struct {
 func soRaManHinhNoiBo(so string) string { return so }
 
 // raNgoai converts one record for the wire. IT IS THE ONLY EXIT — for the two read routes AND for
-// the five write routes in can_bo_ghi.go — which is what makes the decision above enforceable:
+// the five write routes in can_bo_ghi.go, the `admin.user` ones through adminStaffView, which starts
+// from this function — which is what makes the decision above enforceable:
 // there is no second place that builds this shape, so a masking rule cannot hold on the list and
 // be forgotten on the reply to an edit.
 //
@@ -142,6 +159,17 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		DisplayOrder:      cb.ThuTuDanhBa,
 		ConsentRecordedAt: cb.DongYCongKhaiLuc,
 	}
+}
+
+// adminStaffView is raNgoai PLUS the account-security state only an `admin.user` holder is shown:
+// the automatic sign-in lock, if it is in force at now. Every staff route guarded by `admin.user`
+// answers through this; PUT .../publication (`content.update`) deliberately does not — see the note
+// on canBoTomTat.SignInLockedUntil. Built ON raNgoai, so the masking decision above still has one
+// place.
+func adminStaffView(cb domain.CanBoTomTat, now time.Time) canBoTomTat {
+	v := raNgoai(cb)
+	v.SignInLockedUntil = cb.SignInLockedAt(now)
+	return v
 }
 
 // DanhSachCanBo serves one page of the register. GET /api/v1/staff
@@ -281,8 +309,10 @@ func (h *Handler) traTrangCanBo(w http.ResponseWriter, r *http.Request, viec str
 		NextCursor: kq.NextCursor,
 		HasMore:    kq.HasMore,
 	}
+	// ONE instant for the whole page, so two rows cannot disagree about the same moment.
+	now := time.Now().UTC()
 	for _, cb := range kq.Items {
-		ra.Items = append(ra.Items, raNgoai(cb))
+		ra.Items = append(ra.Items, adminStaffView(cb, now)) // both callers are `admin.user` routes
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -309,5 +339,5 @@ func (h *Handler) ChiTietCanBo(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
-	vietJSON(w, http.StatusOK, raNgoai(cb))
+	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
 }

@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -207,6 +209,7 @@ type banThuDanhBa struct {
 	uc  *DanhBaCanBo
 	kho *khoGia
 	ghi *ghiChep
+	log *bytes.Buffer // the security log, JSON lines
 }
 
 func dungBanThuDanhBa(t *testing.T) *banThuDanhBa {
@@ -227,7 +230,8 @@ func dungBanThuDanhBa(t *testing.T) *banThuDanhBa {
 		quyenToi: []string{"admin.user", "budget.confirm", "document.read"},
 	}
 
-	uc := NewDanhBaCanBo(db, kho)
+	var logBuf bytes.Buffer
+	uc := NewDanhBaCanBo(db, kho, slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	uc.sinhID = func() (string, error) { return "nd-moi-0001", nil }
 	lan := 0
 	uc.sinhMa = func(time.Time) (string, error) {
@@ -236,7 +240,7 @@ func dungBanThuDanhBa(t *testing.T) *banThuDanhBa {
 	}
 	uc.bayGio = func() time.Time { return time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC) }
 
-	return &banThuDanhBa{uc: uc, kho: kho, ghi: g}
+	return &banThuDanhBa{uc: uc, kho: kho, ghi: g, log: &logBuf}
 }
 
 func yeuCauThemGia() YeuCauThemCanBo {
