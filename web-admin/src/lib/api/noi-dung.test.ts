@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  completeCoverUpload,
+  COVER_FORM_MISSING,
   duongDanMotNoiDung,
   duongDanSoNoiDung,
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
+  requestCoverUpload,
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
@@ -67,6 +70,7 @@ const THEM_DAY_DU: ThemNoiDungVao = {
   summary: "Hội nghị diễn ra sáng 14/9 tại hội trường UBND xã.",
   body: "<p>Sáng 14/9, UBND xã tổ chức hội nghị tổng kết.</p>",
   image_url: "https://cdn.example.vn/anh/hoi-nghi.jpg",
+  cover_image_file_id: "01JCOVER1",
   publish: true,
 };
 
@@ -104,6 +108,7 @@ const SUA_DAY_DU: SuaNoiDungVao = {
   event_ends_at: "",
   event_place: "Hội trường UBND xã",
   video_url: "",
+  cover_image_file_id: "",
 };
 
 const THEM_DANH_MUC_DAY_DU: ThemDanhMucVao = {
@@ -351,6 +356,87 @@ describe("PATCH /api/v1/content-items/{id} — sửa", () => {
   });
 });
 
+/* ── Ảnh bìa §7 ─────────────────────────────────────────────────────────────────────────────── */
+
+const COVER_UPLOAD = {
+  cover_image: { id: "01JCOVER1", mime_type: "", size_bytes: 0, status: "pending" },
+  upload: {
+    url: "https://files.example.test/vigov-stg-temp",
+    fields: { key: "upload/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/jpeg" },
+    expires_at: "2026-10-01T03:15:00Z",
+  },
+};
+
+describe("cover upload — a. declare, c. complete", () => {
+  it("POST …/cover-images, the caller's Idempotency-Key, field by field, no `content_item_id` for a new article", async () => {
+    const gia = batFetch(traJSON(201, COVER_UPLOAD));
+    const r = await requestCoverUpload(
+      { file_name: "anh.jpg", content_type: "image/jpeg", size: 1234, extra: 1 } as never,
+      "khoa-anh",
+    );
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-items/cover-images");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("POST");
+    expect(loiGoi(gia, 0).header.get("Idempotency-Key")).toBe("khoa-anh");
+    expect(thanDaGui(gia, 0)).toEqual({ file_name: "anh.jpg", content_type: "image/jpeg", size: 1234 });
+    expect(r).toEqual({ ok: true, data: COVER_UPLOAD });
+  });
+
+  it("the edit form names its article; an empty id is left out, not sent as `\"\"`", async () => {
+    const gia = batFetch(traJSON(201, COVER_UPLOAD));
+    await requestCoverUpload({ file_name: "a.png", content_type: "image/png", size: 1, content_item_id: "01JND1" }, "k");
+    await requestCoverUpload({ file_name: "a.png", content_type: "image/png", size: 1, content_item_id: "" }, "k");
+    expect(thanDaGui(gia, 0).content_item_id).toBe("01JND1");
+    expect(thanDaGui(gia, 1)).not.toHaveProperty("content_item_id");
+  });
+
+  it("a refusal comes back VERBATIM with its status", async () => {
+    const cau = "Ảnh lớn hơn dung lượng tối đa được phép.";
+    batFetch(traJSON(400, { code: "invalid_request", message: cau }));
+    expect(await requestCoverUpload({ file_name: "a.jpg", content_type: "image/jpeg", size: 1 }, "k")).toEqual({
+      ok: false,
+      status: 400,
+      message: cau,
+    });
+  });
+
+  it("a replayed 201 without the signed form is NOT an upload slot", async () => {
+    batFetch(traJSON(201, { code: "", replayed: true }));
+    expect(await requestCoverUpload({ file_name: "a.jpg", content_type: "image/jpeg", size: 1 }, "k")).toEqual({
+      ok: false,
+      status: 201,
+      message: COVER_FORM_MISSING,
+    });
+  });
+
+  it("completion: POST …/{id}/completion, id encoded, no body; 422 sentence verbatim", async () => {
+    const cau = "Ảnh bị từ chối: nội dung tệp không phải JPG, PNG hoặc WebP được phép.";
+    const gia = batFetch(traJSON(422, { code: "cover_rejected", message: cau }));
+    const r = await completeCoverUpload("01J/X");
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-items/cover-images/01J%2FX/completion");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("POST");
+    expect(loiGoi(gia, 0).tuyChon.body).toBeUndefined();
+    expect(r).toEqual({ ok: false, status: 422, message: cau });
+  });
+});
+
+describe("the cover on the article", () => {
+  it("POST carries `cover_image_file_id` when given, omits it when empty", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await themNoiDung(THEM_DAY_DU, "k");
+    await themNoiDung({ ...THEM_DAY_DU, cover_image_file_id: "" }, "k");
+    expect(thanDaGui(gia, 0).cover_image_file_id).toBe("01JCOVER1");
+    expect(thanDaGui(gia, 1)).not.toHaveProperty("cover_image_file_id");
+  });
+
+  it("PATCH `cover_image_file_id: \"\"` IS sent — it is DETACH; absent means leave alone", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await suaNoiDung("01JND1", { cover_image_file_id: "" });
+    await suaNoiDung("01JND1", { title: "x" });
+    expect(thanDaGui(gia, 0)).toEqual({ cover_image_file_id: "" });
+    expect(thanDaGui(gia, 1)).not.toHaveProperty("cover_image_file_id");
+  });
+});
+
 describe("danh mục tin §6", () => {
   it("GET đúng tuyến, không tham số nào", async () => {
     const gia = batFetch(traJSON(200, { items: [] }));
@@ -465,9 +551,10 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(Object.keys(p["/api/v1/content-categories"] ?? {})).not.toContain("delete");
   });
 
-  it("sáu tuyến vẫn đứng sau đúng hai khoá màn đang giả định", () => {
-    // MÀN NÀY KHÔNG CÓ CỔNG QUYỀN Ở CLIENT (xem `PHAN_CHUA_DUNG`), nên không có hằng nào trong
-    // `lib/quyen.ts` để canh. Bài kiểm này là chỗ duy nhất phát hiện được ngày máy chủ tách khoá.
+  it("tám tuyến vẫn đứng sau đúng hai khoá màn đang giả định", () => {
+    // `lib/quyen.ts` có hằng cho hai khoá (`QUYEN_XEM_NOI_DUNG`, `QUYEN_CONG_KHAI_DANH_BA`) — chỉ menu
+    // và danh bạ dùng; MÀN NÀY vẫn cố ý không có cổng quyền ở client (xem `PHAN_CHUA_DUNG`). Bài
+    // kiểm này là chỗ phát hiện được ngày máy chủ tách khoá của một trong tám tuyến.
     const p = hopDong().paths;
     const khoa = (duong: string, pt: string) => p[duong]?.[pt]?.["x-vigov-permission"]?.key;
 
@@ -477,6 +564,18 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(khoa("/api/v1/content-items", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/{id}", "patch")).toBe("content.update");
     expect(khoa("/api/v1/content-categories", "post")).toBe("content.update");
+    expect(khoa("/api/v1/content-items/cover-images", "post")).toBe("content.update");
+    expect(khoa("/api/v1/content-items/cover-images/{id}/completion", "post")).toBe("content.update");
+  });
+
+  it("`requestCoverUpload` sends EXACTLY the keys of `comms.coverUploadIn`", async () => {
+    const cuaHopDong = khoaCuaLuocDo("comms.coverUploadIn");
+    const gia = batFetch(traJSON(201, COVER_UPLOAD));
+    await requestCoverUpload(
+      { file_name: "anh.jpg", content_type: "image/jpeg", size: 10, content_item_id: "01JND1" },
+      "k",
+    );
+    expect(Object.keys(thanDaGui(gia, 0)).sort()).toEqual(cuaHopDong.slice().sort());
   });
 });
 

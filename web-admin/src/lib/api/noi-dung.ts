@@ -1,13 +1,15 @@
 /**
- * Sáu tuyến của màn "Nội dung Mini App" (`docs/ui-ux/11-noi-dung-mini-app.md`), đúng bộ tuyến
+ * Tám tuyến của màn "Nội dung Mini App" (`docs/ui-ux/11-noi-dung-mini-app.md`), đúng bộ tuyến
  * `service-comms/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
  *
- *   GET   /api/v1/content-items         content.read
- *   GET   /api/v1/content-items/{id}    content.read
- *   POST  /api/v1/content-items         content.update  + Idempotency-Key BẮT BUỘC
- *   PATCH /api/v1/content-items/{id}    content.update  (không cần khoá chống trùng)
- *   GET   /api/v1/content-categories    content.read
- *   POST  /api/v1/content-categories    content.update  + Idempotency-Key BẮT BUỘC
+ *   GET   /api/v1/content-items                                   content.read
+ *   GET   /api/v1/content-items/{id}                              content.read
+ *   POST  /api/v1/content-items                                   content.update  + Idempotency-Key BẮT BUỘC
+ *   PATCH /api/v1/content-items/{id}                              content.update  (không cần khoá chống trùng)
+ *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC
+ *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
+ *   GET   /api/v1/content-categories                              content.read
+ *   POST  /api/v1/content-categories                              content.update  + Idempotency-Key BẮT BUỘC
  *
  * KHÔNG CÓ `DELETE`, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §9 đề xuất một tuyến xoá; §6 chỉ vẽ
  * `✎`. Gỡ một bài khỏi Mini App là `PATCH` với `publish: false` — đúng như §7 tự mô tả ô tích của
@@ -44,8 +46,9 @@
  *   3. `status` DO MÁY CHỦ QUYẾT từ ô tích `publish` của §7. Không thân nào ở đây mang `status`:
  *      một client tự khai trạng thái là một client đăng vượt qua bước duyệt mà §10.2 dành cho
  *      lượt đồng bộ.
- *   4. `view_count` chỉ để HIỆN. Không đường ghi nào ở đây đụng tới nó — thứ duy nhất được phép
- *      tăng nó là một cư dân mở bài, và tuyến công khai của §9 chưa dựng.
+ *   4. `view_count` không đi đâu cả. Hệ thống không đếm lượt xem (ADR 0047, người dùng bỏ cột
+ *      01/10/2026): tuyến công khai của §9 đã dựng (`GET /api/v1/commune-news`) và cũng không tăng
+ *      nó. Không đường ghi nào ở đây đụng tới nó, và màn không vẽ nó.
  *
  * KHÔNG CÓ `tenant_id` Ở BẤT KỲ ĐÂU — không thân, không query, không header. Xã suy từ `Host` ở
  * rìa ngoài cùng; client tự khai xã là client tự cấp quyền (luật 1, cấm #2).
@@ -55,14 +58,20 @@
  * tệp, vào URL hay vào khoá đệm (luật 3, cấm #1 và #4).
  */
 
-import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
+import { CHUNG, docJSON, docThanKetQua, goiGhi, LOI_KHONG_RO, thongBaoLoi, type KetQua } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
+import type { CallResult } from "./task-attachments";
 import type {
+  comms_coverFileOut,
+  comms_coverUploadIn,
+  comms_coverUploadOut,
   comms_danhMucRa,
   comms_danhSachDanhMucRa,
   comms_get_content_categories,
   comms_get_content_items,
   comms_get_content_items_by_id,
   comms_noiDungRa,
+  comms_post_content_items_cover_images,
+  comms_post_content_items_cover_images_by_id_completion,
   comms_suaNoiDungVao,
   comms_themDanhMucVao,
   comms_themNoiDungVao,
@@ -223,6 +232,9 @@ export function themNoiDung(
     image_url: than.image_url,
     publish: than.publish,
   };
+  // An uploaded cover (`completeCoverUpload` answered `ready`). Omitted when none: on a POST an
+  // absent id and an empty one mean the same, and the shorter body is the one with nothing to misread.
+  if (than.cover_image_file_id) thanGui.cover_image_file_id = than.cover_image_file_id;
   // Event instants travel as RFC 3339 WITH an offset (`2026-10-05T08:00:00+07:00`); building them
   // from a datetime-local input is the form's job (`nhan-noi-dung.ts`). There is no `published_at`
   // in a request: ticking `publish` fixes it at the first publication and it never moves after.
@@ -273,11 +285,96 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     event_ends_at: than.event_ends_at,
     event_place: than.event_place,
     video_url: than.video_url,
+    // Absent = leave the cover alone; "" = DETACH (the server withdraws the public copy); an id = a
+    // `ready` upload issued for THIS article (`content_item_id`). Passed through as given, `""` included.
+    cover_image_file_id: than.cover_image_file_id,
   };
 
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
     docThanKetQua<comms_noiDungRa>,
   );
+}
+
+/* ── Ảnh bìa §7 — ADR 0052 §1, backend 606bf515 ───────────────────────────────────────────────
+ *
+ * Same three steps as the task attachments (`./task-attachments.ts`), and the middle step IS that
+ * module's `uploadToStorage` — the bytes go STRAIGHT to the object store, never through this app (so
+ * `proxy.ts`'s 10 MB body cap never applies: `/api/` is outside its matcher anyway, and the upload's
+ * URL is the store's own origin).
+ *
+ *   a. `requestCoverUpload`   declare {file_name, content_type, size[, content_item_id]} → 201 form
+ *   b. `uploadToStorage`      the presigned POST form, fields first, file last, no cookie
+ *   c. `completeCoverUpload`  sniff, scan, derive the 1280 px copy → 200 `ready` | 422 | 409 | 503
+ *
+ * then the article carries `cover_image_file_id` on POST / PATCH.
+ *
+ * ⚠ `upload.url` + `upload.fields` ARE A BEARER CREDENTIAL: used in the one request they sign and
+ * nowhere else — never logged, never kept in state past that request. `file_name` can name a person
+ * (rule 3): it goes in the declaration body and nowhere else.
+ */
+
+export const COVER_FORM_MISSING =
+  "Máy chủ không gửi kèm biểu mẫu tải lên cho ảnh này. Hãy chọn lại ảnh.";
+
+async function readCallJSON<T>(res: Response, want: number): Promise<CallResult<T>> {
+  if (res.status !== want) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, status: res.status, message: LOI_KHONG_RO };
+  }
+}
+
+/**
+ * a. Declare the cover. The server checks it against the platform's `content-image` policy (type,
+ * size) and answers a refusal in one sentence, shown verbatim.
+ *
+ * `content_item_id` ONLY FOR AN ARTICLE ALREADY SAVED (the edit form). Absent for a new one: the
+ * server reserves the article's id, and the POST that carries this upload's id creates it under that
+ * id. Sending `""` would be a third spelling of "none", so an empty one is left out.
+ *
+ * `idempotencyKey`: ONE KEY PER ATTEMPT, minted by the caller — a replayed answer cannot carry the
+ * signed form again (`core/idem` stores a code, not a body), so a retry is a new declaration.
+ */
+export async function requestCoverUpload(
+  body: comms_coverUploadIn,
+  idempotencyKey: string,
+): Promise<CallResult<comms_coverUploadOut>> {
+  const path: comms_post_content_items_cover_images["duongDan"] = "/api/v1/content-items/cover-images";
+  // Field by field — never `...body`.
+  const sent: comms_coverUploadIn = {
+    file_name: body.file_name,
+    content_type: body.content_type,
+    size: body.size,
+  };
+  if (body.content_item_id) sent.content_item_id = body.content_item_id;
+  try {
+    const res = await fetch(path, {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(sent),
+    });
+    const r = await readCallJSON<comms_coverUploadOut>(res, 201);
+    if (r.ok && (r.data?.upload?.url === undefined || r.data.upload.fields === undefined || r.data.cover_image?.id === undefined)) {
+      return { ok: false, status: 201, message: COVER_FORM_MISSING };
+    }
+    return r;
+  } catch {
+    return { ok: false, status: 0, message: LOI_KHONG_RO };
+  }
+}
+
+/** c. Complete. Safe to repeat — a cover already `ready` answers itself again. */
+export async function completeCoverUpload(id: string): Promise<CallResult<comms_coverFileOut>> {
+  const template: comms_post_content_items_cover_images_by_id_completion["duongDan"] =
+    "/api/v1/content-items/cover-images/{id}/completion";
+  try {
+    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), { ...CHUNG, method: "POST" });
+    return await readCallJSON<comms_coverFileOut>(res, 200);
+  } catch {
+    return { ok: false, status: 0, message: LOI_KHONG_RO };
+  }
 }
 
 /* ── Danh mục tin §6 ───────────────────────────────────────────────────────────────────────── */

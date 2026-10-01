@@ -108,7 +108,7 @@ export const DANH_MUC_RONG = "Xã chưa có danh mục tin nào.";
 export const DANG_TAI_SO = "Đang tải danh sách nội dung…";
 export const DANG_TAI_TOAN_VAN = "Đang tải toàn văn bài viết…";
 
-/* ── Ba câu cảnh báo phải ĐỨNG CẠNH ô nhập, không nằm trong chú thích mã ────────────────── */
+/* ── Câu cảnh báo phải ĐỨNG CẠNH ô nhập, không nằm trong chú thích mã ─────────────────────── */
 
 /**
  * Câu đứng ngay dưới ô `Nội dung` của §7.
@@ -125,11 +125,6 @@ export const CANH_BAO_HTML_THO =
 export const CANH_BAO_XEM_MA_NGUON =
   "Dưới đây là MÃ NGUỒN HTML của bài, hiện dưới dạng văn bản thuần. Màn quản trị cố ý KHÔNG dựng " +
   "HTML — xem phần chưa dựng được ở đầu màn.";
-
-/** Câu đứng dưới ô nhập liên kết ảnh — nói trước điều máy chủ sẽ từ chối. */
-export const CANH_BAO_LIEN_KET_ANH =
-  "Chỉ nhận địa chỉ bắt đầu bằng http:// hoặc https://, tối đa " +
-  `${URL_TOI_DA} ký tự. Tải ảnh từ máy chưa dựng được — xem phần chưa dựng được ở đầu màn.`;
 
 /** Câu đứng cạnh cột hành động — vì sao không có nút xoá. */
 export const GHI_CHU_KHONG_CO_XOA =
@@ -508,6 +503,10 @@ export function tenDanhMuc(id: string, ds: readonly comms_danhMucRa[]): string {
 /**
  * Bảy ô của §7, cộng bốn ô theo loại của :131 (ADR 0047 §6): ba ô cho `Sự kiện`, một cho `Video`.
  *
+ * `Ảnh đại diện` IS THE UPLOADED COVER'S ID (`cover_image_file_id`), not a link. The legacy
+ * `image_url` link has no box any more and is never sent from this form: the server keeps whatever
+ * a row already holds (absent on a PATCH = leave alone), and the read-only block shows it as text.
+ *
  * THE TWO EVENT INSTANTS ARE HELD AS THE INPUT'S OWN STRING ("2026-10-05T08:00", Vietnam wall-clock
  * time), not as the wire instant: the box shows exactly what was typed, and the conversion to
  * `+07:00` happens once, in `thanThem` / `thanSua`.
@@ -522,7 +521,11 @@ export type GiaTriFormNoiDung = {
   readonly title: string;
   readonly summary: string;
   readonly body: string;
-  readonly image_url: string;
+  /**
+   * §7 `Ảnh đại diện`: the id of a `ready` cover upload, `""` = none. On the edit form it starts as the
+   * article's current cover; a new upload replaces it, `Gỡ ảnh` empties it.
+   */
+  readonly cover_image_file_id: string;
   /** §7 `☐ Đăng lên Mini App`. */
   readonly publish: boolean;
   /** `Sự kiện` — `Bắt đầu`, a `datetime-local` value. `""` = none. */
@@ -542,7 +545,7 @@ export const FORM_TRONG: GiaTriFormNoiDung = {
   title: "",
   summary: "",
   body: "",
-  image_url: "",
+  cover_image_file_id: "",
   publish: false,
   event_starts_local: "",
   event_ends_local: "",
@@ -636,7 +639,7 @@ export function giaTriTuHang(nd: comms_noiDungRa): GiaTriFormNoiDung {
     title: nd.title,
     summary: nd.summary,
     body: thanBaiNeuCo(nd) ?? "",
-    image_url: nd.image_url,
+    cover_image_file_id: nd.cover_image_file_id ?? "",
     publish: nd.status === "dang-hien",
     event_starts_local: instantToLocalInput(nd.event_starts_at),
     event_ends_local: instantToLocalInput(nd.event_ends_at),
@@ -646,8 +649,10 @@ export function giaTriTuHang(nd: comms_noiDungRa): GiaTriFormNoiDung {
 }
 
 /**
- * Thân `POST` từ biểu mẫu. Bảy trường của §7, cộng các trường theo loại CHỈ KHI loại đã chọn mang
+ * Thân `POST` từ biểu mẫu. Các trường của §7, cộng các trường theo loại CHỈ KHI loại đã chọn mang
  * được chúng VÀ chúng có giá trị — gửi một trường sự kiện cho `Tin tức` là 400 ở máy chủ.
+ *
+ * `cover_image_file_id` only when a cover was uploaded; no `image_url` (no box for it).
  */
 export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
   const ra: comms_themNoiDungVao = {
@@ -656,9 +661,9 @@ export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
     category_id: gt.category_id,
     summary: gt.summary.trim(),
     body: gt.body,
-    image_url: gt.image_url.trim(),
     publish: gt.publish,
   };
+  if (gt.cover_image_file_id !== "") ra.cover_image_file_id = gt.cover_image_file_id;
   if (gt.type === CONTENT_TYPE_EVENT) {
     const start = localInputToInstant(gt.event_starts_local);
     const end = localInputToInstant(gt.event_ends_local);
@@ -702,8 +707,12 @@ export function thanSua(
   if (moi.title.trim() !== dau.title) ra.title = moi.title.trim();
   if (moi.summary.trim() !== dau.summary) ra.summary = moi.summary.trim();
   if (moi.body !== dau.body) ra.body = moi.body;
-  if (moi.image_url.trim() !== dau.image_url) ra.image_url = moi.image_url.trim();
   if (moi.publish !== dau.publish) ra.publish = moi.publish;
+  // The cover: only when it changed. A new upload sends its id; `Gỡ ảnh` on an article that had one
+  // sends `""` — the server's spelling of DETACH. Untouched = absent = leave alone.
+  if (moi.cover_image_file_id !== dau.cover_image_file_id) {
+    ra.cover_image_file_id = moi.cover_image_file_id;
+  }
 
   // THE PER-TYPE FIELDS: only for the type AFTER the edit, only when changed, and an emptied box is
   // sent as `""` — the server's one spelling of "clear". A type moved away from `su-kien` / `video`
@@ -771,17 +780,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "liệu bịa là dựng một màn hình nói với xã rằng cổng của họ đang được đồng bộ.",
   },
   {
-    ten: "Ô `Ảnh đại diện` dạng `Chọn tệp từ máy` — `JPG, PNG hoặc WebP — tối đa 50MB` (§7, §10.6)",
-    viSao:
-      "Kho lưu tệp dùng chung (`core/storage`) đã có, nhưng `service-comms` chưa mở lối tải ảnh lên " +
-      "cho màn này — lối ấy đang được dựng. Cho tới khi có, máy chủ chỉ nhận `image_url`, một LIÊN " +
-      "KẾT, và chỉ nhận lược đồ `http`/`https` — danh sách trắng ấy không phải làm đẹp: " +
-      "`anh_dai_dien_url` được dựng thành `src` của một thẻ ảnh trong ứng dụng bà con cầm trên " +
-      "tay, nên `javascript:…` ở đó là thực thi mã trên kênh công dân. Màn hình vì thế vẽ một ô " +
-      "NHẬP LIÊN KẾT và nói trước điều máy chủ sẽ từ chối, thay vì một nút chọn tệp chưa có nơi để " +
-      "gửi tệp tới.",
-  },
-  {
     ten: "Sửa và xoá một danh mục tin (§6, `⊞ Danh mục tin`)",
     viSao:
       "Hợp đồng chỉ có `GET` và `POST` trên `/api/v1/content-categories` — không có `PATCH`, không " +
@@ -795,8 +793,8 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "§7 kết bằng một câu “NÊN BỔ SUNG” cho bốn loại. Hai nhóm ĐÃ DỰNG theo ADR 0047 §6: `Sự " +
       "kiện` có Bắt đầu · Kết thúc · Địa điểm, `Video` có Liên kết video. Còn lại: `Truyền thanh` " +
-      "(tệp âm thanh mp3/m4a và thời lượng, G7) cần lối tải tệp lên, chưa nối ở màn này — cùng " +
-      "chỗ với ô chọn ảnh ở trên; `Banner` (link đích và thứ tự hiển thị) chưa có cột nào ở máy chủ và chưa có câu chốt " +
+      "(tệp âm thanh mp3/m4a và thời lượng, G7) cần một lối tải tệp âm thanh lên, máy chủ chưa mở — " +
+      "lối tải ảnh bìa đã có nhưng chỉ nhận ảnh; `Banner` (link đích và thứ tự hiển thị) chưa có cột nào ở máy chủ và chưa có câu chốt " +
       "hình dạng. Dựng ô nhập trước khi có cột là tự quyết một câu của khách.",
   },
   {
@@ -827,8 +825,9 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Bố cục §2: tabs thật, hai thẻ đầu màn, modal dạng lớp phủ, cắt tóm tắt đúng 1 dòng",
     viSao:
-      "Cả bốn là chuyện của CSS: `globals.css` chưa có `.man-noi-dung`, chưa có lớp cho tab, cho " +
-      "lớp phủ, cho `line-clamp`, và lượt này không được thêm CSS. Sáu tab vì thế là sáu nút " +
+      "Cả bốn là chuyện của CSS: `globals.css` có `.man-noi-dung` (chỉ lề trên) nhưng chưa có lớp " +
+      "cho tab, cho lớp phủ, cho `line-clamp` của bảng này, và lượt này không được thêm CSS. Sáu tab " +
+      "vì thế là sáu nút " +
       "`aria-pressed` dùng lại `.thanh-sap-xep`; hai biểu mẫu dựng NỐI TIẾP trong trang thay vì " +
       "làm lớp phủ; tóm tắt cắt theo KÝ TỰ, một phép xấp xỉ, với toàn văn nằm ở khối chi tiết. Tên " +
       "lớp cần thêm đã báo về.",

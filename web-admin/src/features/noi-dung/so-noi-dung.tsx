@@ -25,6 +25,7 @@ import {
   type BoLocNoiDung,
 } from "@/lib/api/noi-dung";
 import type {
+  comms_coverImageOut,
   comms_danhMucRa,
   comms_danhSachDanhMucRa,
   comms_noiDungRa,
@@ -33,7 +34,6 @@ import type {
 
 import {
   CANH_BAO_HTML_THO,
-  CANH_BAO_LIEN_KET_ANH,
   CANH_BAO_XEM_MA_NGUON,
   CHUA_XEP_DANH_MUC,
   coThayDoi,
@@ -91,6 +91,26 @@ import {
   VIDEO_URL_HINT,
   type GiaTriFormNoiDung,
 } from "./nhan-noi-dung";
+import {
+  COVER_ACCEPT,
+  COVER_HINT,
+  COVER_NONE,
+  COVER_PICK_BUTTON,
+  COVER_PREVIEW_ALT,
+  COVER_PREVIEW_MISSING,
+  COVER_REMOVE_BUTTON,
+  COVER_REPLACE_BUTTON,
+  COVER_RETRY_BUTTON,
+  COVER_WAIT_NOTE,
+  COVER_WILL_DETACH,
+  coverInFlight,
+  coverPreviewSrc,
+  coverStateText,
+  retryCoverCompletion,
+  runCoverUpload,
+  savedCoverText,
+  type CoverUploadState,
+} from "./cover-image";
 
 /**
  * Màn "Nội dung Mini App" — `docs/ui-ux/11-noi-dung-mini-app.md` §2 (bố cục), §5 (sáu tab),
@@ -697,6 +717,7 @@ export function FormNoiDung({
   loi,
   huy,
   luu,
+  initialCoverState,
 }: {
   tieuDeForm: string;
   moTa: string;
@@ -708,9 +729,12 @@ export function FormNoiDung({
   loi: string | null;
   huy: () => void;
   luu: (gt: GiaTriFormNoiDung, khoaChongTrung: string) => void;
+  /** Tests only: render the cover block in a given upload state (this suite has no DOM events). */
+  initialCoverState?: CoverUploadState;
 }) {
   const [gt, datGT] = useState<GiaTriFormNoiDung>(giaTriDau);
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
+  const [cover, setCover] = useState<CoverUploadState>(initialCoverState ?? { kind: "idle" });
 
   const tieuDeGon = gt.title.trim();
   // MỘT ĐIỀU KIỆN, KHÔNG BA. Hợp đồng đánh dấu `title` và `type` bắt buộc; `type` luôn có giá trị
@@ -721,7 +745,16 @@ export function FormNoiDung({
   // start" while fixing it, not after a round trip. It mirrors the server; the server's own 400 still
   // reaches `loi` word for word.
   const typeFieldError = validateTypeFields(gt);
-  const duDieuKien = tieuDeGon !== "" && typeFieldError === null;
+  // A cover still moving holds Lưu: saving now would drop the image the officer just chose.
+  const coverBusy = coverInFlight(cover);
+  const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy;
+
+  // Each state report; a `ready` one makes its id the form's cover. Functional update: the upload
+  // resolves after renders the officer may have made meanwhile (typing the title), and those stay.
+  function onCoverState(s: CoverUploadState): void {
+    setCover(s);
+    if (s.kind === "ready") datGT((g) => ({ ...g, cover_image_file_id: s.id }));
+  }
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -810,20 +843,19 @@ export function FormNoiDung({
         {gt.body === "" && <p className="ghi-chu">{THAN_BAI_RONG}</p>}
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="anh-noi-dung">Ảnh đại diện (liên kết)</label>
-        <input
-          id="anh-noi-dung"
-          name="anh-noi-dung"
-          type="url"
-          value={gt.image_url}
-          maxLength={URL_TOI_DA}
-          placeholder="https://"
-          autoComplete="off"
-          onChange={(e) => datGT({ ...gt, image_url: e.target.value })}
-        />
-        <p className="ghi-chu">{CANH_BAO_LIEN_KET_ANH}</p>
-      </div>
+      <CoverImageField
+        fileId={gt.cover_image_file_id}
+        savedFileId={hang?.cover_image_file_id ?? ""}
+        savedCover={hang?.cover_image}
+        state={cover}
+        disabled={dangGui}
+        onPick={(file) => void runCoverUpload(file, hang?.id, onCoverState)}
+        onRetry={(id) => void retryCoverCompletion(id, onCoverState)}
+        onRemove={() => {
+          setCover({ kind: "idle" });
+          datGT((g) => ({ ...g, cover_image_file_id: "" }));
+        }}
+      />
 
       {/* :131 of the spec, ADR 0047 §6. Rendered only for the type that can carry them — the server
           refuses an event field on any other type, and a box that is shown is a box somebody fills. */}
@@ -906,6 +938,8 @@ export function FormNoiDung({
         </p>
       )}
 
+      {coverBusy && <p className="ghi-chu">{COVER_WAIT_NOTE}</p>}
+
       <div className="cum-nut">
         <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
           {NHAN_NUT_HUY}
@@ -915,6 +949,115 @@ export function FormNoiDung({
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * §7 `Ảnh đại diện` — `Chọn tệp từ máy` · `JPG, PNG hoặc WebP — tối đa 50MB`. Presentational: the
+ * form owns the id and the upload state (`cover-image.ts` runs the flow).
+ *
+ * THE PREVIEW IS THE SERVER'S SIGNED LINK AND NOTHING ELSE (`coverPreviewSrc`), shown only for the
+ * cover already saved on the article. A just-uploaded file shows a sentence, not a picture: there is
+ * no server preview for it until the article is saved, and a `blob:` of the officer's own file would
+ * be a second, unchecked source of `src` on this screen.
+ *
+ * Same control shape as `📎 Đính kèm` (`task-attachments-ui.tsx`): the file input is visually hidden
+ * and stays in the tab order, its label is the visible button, ringed on focus; `.task-attachments`
+ * gives every control 44 px and 16 px text (reused rather than a new CSS rule).
+ */
+export function CoverImageField({
+  fileId,
+  savedFileId,
+  savedCover,
+  state,
+  disabled,
+  onPick,
+  onRetry,
+  onRemove,
+}: {
+  /** The form's current `cover_image_file_id`, `""` = none. */
+  fileId: string;
+  /** The article's cover when the form opened, `""` on the create form. */
+  savedFileId: string;
+  /** The detail route's cover block, edit form only. */
+  savedCover: comms_coverImageOut | null | undefined;
+  state: CoverUploadState;
+  disabled: boolean;
+  onPick: (file: File) => void;
+  onRetry: (id: string) => void;
+  onRemove: () => void;
+}) {
+  const busy = coverInFlight(state);
+  const showingSaved = fileId !== "" && fileId === savedFileId;
+  const previewSrc = showingSaved ? coverPreviewSrc(savedCover) : null;
+  const stateText = coverStateText(state);
+  const refused = state.kind === "refused" || state.kind === "retry";
+
+  return (
+    <div className="o-nhap task-attachments" role="group" aria-labelledby="anh-noi-dung-nhan">
+      <span id="anh-noi-dung-nhan">Ảnh đại diện</span>
+
+      {showingSaved && (
+        <>
+          <p>{savedCoverText(savedCover)}</p>
+          {previewSrc !== null ? (
+            // A plain <img>, not next/image: the optimiser would fetch this presigned link server-side
+            // and cache a bearer credential under the commune's own origin.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewSrc} alt={COVER_PREVIEW_ALT} width={240} />
+          ) : (
+            <p className="ghi-chu">{COVER_PREVIEW_MISSING}</p>
+          )}
+        </>
+      )}
+      {fileId === "" && savedFileId !== "" && <p>{COVER_WILL_DETACH}</p>}
+      {fileId === "" && savedFileId === "" && <p className="ghi-chu">{COVER_NONE}</p>}
+
+      {/* The input FIRST, visually hidden but focusable; the label right after it is the visible
+          button (`input:focus-visible + label`). Enter/Space on the focused input open the picker. */}
+      <input
+        id="anh-noi-dung"
+        name="anh-noi-dung"
+        type="file"
+        accept={COVER_ACCEPT}
+        className="an-thi-giac"
+        aria-describedby="anh-noi-dung-goi-y"
+        disabled={disabled || busy}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = ""; // the same file can be chosen again after a refusal
+          if (f !== undefined) onPick(f);
+        }}
+      />
+      <label htmlFor="anh-noi-dung" className="nut-phu">
+        {fileId === "" ? COVER_PICK_BUTTON : COVER_REPLACE_BUTTON}
+        <span className="an-thi-giac"> — Ảnh đại diện</span>
+      </label>
+      <p className="ghi-chu" id="anh-noi-dung-goi-y">
+        {COVER_HINT}
+      </p>
+
+      {stateText !== "" && (
+        <p role={refused ? "alert" : "status"} className={refused ? "thong-bao-loi" : undefined}>
+          {stateText}
+        </p>
+      )}
+
+      {(state.kind === "retry" || fileId !== "") && (
+        <div className="cum-nut">
+          {state.kind === "retry" && (
+            <button type="button" className="nut-phu" disabled={disabled} onClick={() => onRetry(state.id)}>
+              {COVER_RETRY_BUTTON}
+            </button>
+          )}
+          {fileId !== "" && (
+            <button type="button" className="nut-phu" disabled={disabled || busy} onClick={onRemove}>
+              {COVER_REMOVE_BUTTON}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -956,6 +1099,14 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
         <dt>Liên kết bài gốc</dt>
         <dd>{hang.source_url === "" ? DAU_GACH : hang.source_url}</dd>
       </div>
+      {/* The LEGACY image link (`image_url`) has no box any more; a row that still carries one shows
+          it as TEXT, never as a `src` — same reason as `source_url` above. */}
+      {hang.image_url !== "" && (
+        <div>
+          <dt>Liên kết ảnh (cách cũ)</dt>
+          <dd>{hang.image_url}</dd>
+        </div>
+      )}
       <div>
         <dt>Người soạn</dt>
         {/* MÃ NGHIỆP VỤ (`CB-2026-7K3M9Q`), không phải họ tên và không phải id nội bộ (luật 6,

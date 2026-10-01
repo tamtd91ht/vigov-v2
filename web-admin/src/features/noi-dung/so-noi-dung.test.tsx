@@ -5,7 +5,6 @@ import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 
 import {
   CANH_BAO_HTML_THO,
-  CANH_BAO_LIEN_KET_ANH,
   CANH_BAO_XEM_MA_NGUON,
   CHUA_XEP_DANH_MUC,
   ERR_EVENT_END_BEFORE_START,
@@ -25,6 +24,16 @@ import {
   SO_RONG,
   VIDEO_URL_HINT,
 } from "./nhan-noi-dung";
+import {
+  COVER_HINT,
+  COVER_PICK_BUTTON,
+  COVER_PREVIEW_MISSING,
+  COVER_REMOVE_BUTTON,
+  COVER_REPLACE_BUTTON,
+  COVER_WAIT_NOTE,
+  COVER_WILL_DETACH,
+  type CoverUploadState,
+} from "./cover-image";
 import {
   BangNoiDung,
   FormDanhMuc,
@@ -110,7 +119,7 @@ function veBang(ds: readonly comms_noiDungRa[], dm: readonly comms_danhMucRa[] =
   return renderToStaticMarkup(<BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} />);
 }
 
-function veForm(gt = FORM_TRONG, h?: comms_noiDungRa) {
+function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadState) {
   return renderToStaticMarkup(
     <FormNoiDung
       tieuDeForm="Thêm nội dung cho Mini App"
@@ -122,6 +131,7 @@ function veForm(gt = FORM_TRONG, h?: comms_noiDungRa) {
       loi={null}
       huy={() => {}}
       luu={() => {}}
+      initialCoverState={coverState}
     />,
   );
 }
@@ -274,11 +284,16 @@ describe("biểu mẫu nội dung §7", () => {
     expect(html).not.toContain("Chờ duyệt");
   });
 
-  it("KHÔNG có nút chọn tệp — lối tải ảnh lên chưa mở, chỉ nhập được LIÊN KẾT", () => {
+  it("`Ảnh đại diện` is a file picker — `Chọn tệp từ máy`, JPG/PNG/WebP, no link box", () => {
     const html = veForm();
-    expect(html).not.toContain('type="file"');
-    expect(html).not.toContain("Chọn tệp từ máy");
-    expect(html).toContain(nhuTrongHTML(CANH_BAO_LIEN_KET_ANH));
+    expect(html).toMatch(/<input[^>]*id="anh-noi-dung"[^>]*type="file"[^>]*accept="\.jpg,\.jpeg,\.png,\.webp,image\/jpeg,image\/png,image\/webp"/);
+    // The visible control is the input's LABEL — keyboard: the input itself stays focusable.
+    expect(html).toContain(`<label for="anh-noi-dung" class="nut-phu">${COVER_PICK_BUTTON}`);
+    expect(html).toContain(COVER_HINT);
+    expect(html).not.toContain("heic");
+    // The legacy link box is gone: no URL input carries the image any more.
+    expect(html).not.toContain("Ảnh đại diện (liên kết)");
+    expect(html).not.toMatch(/<input[^>]*id="anh-noi-dung"[^>]*type="url"/);
   });
 
   it("sáu loại của §5 đều có trong ô chọn", () => {
@@ -334,7 +349,7 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
     }
   });
 
-  it("the image-link box is untouched by the type — still there for `Sự kiện` and `Video`", () => {
+  it("the cover picker is untouched by the type — still there for `Sự kiện` and `Video`", () => {
     expect(veForm({ ...FORM_TRONG, type: "su-kien" })).toContain('id="anh-noi-dung"');
     expect(veForm({ ...FORM_TRONG, type: "video" })).toContain('id="anh-noi-dung"');
   });
@@ -553,7 +568,13 @@ describe("khối `phần chưa dựng được`", () => {
     expect(html).toContain("content.update");
     expect(html).toContain("bộ lập lịch");
     expect(html).toContain("adapter HTTP đi ra THEO XÃ");
-    expect(html).toContain("lối tải ảnh lên");
+    expect(html).toContain("lối tải tệp âm thanh");
+  });
+
+  it("the cover upload is BUILT — no item still says it is missing", () => {
+    expect(html).not.toContain("Chọn tệp từ máy");
+    expect(html).not.toContain("chưa mở lối tải ảnh lên");
+    expect(html).not.toContain(nhuTrongHTML("chưa có `.man-noi-dung`"));
   });
 
   it("KHÔNG còn câu nào nói một phần đã có là chưa có", () => {
@@ -570,5 +591,82 @@ describe("khối `phần chưa dựng được`", () => {
 describe("nhãn nút chính của màn", () => {
   it("đúng chữ đặc tả, kể cả dấu cộng", () => {
     expect(NHAN_NUT_THEM).toBe("+ Thêm nội dung");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §7 `Ảnh đại diện` — the cover block in each state (no DOM: rendered to a string)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("cover block of §7", () => {
+  const READY_FORM = { ...FORM_TRONG, title: "Có tiêu đề" };
+
+  it("uploading: progress as `role=status`, Lưu held, the wait note said", () => {
+    const html = veForm(READY_FORM, undefined, { kind: "uploading", id: "01JC", percent: 40 });
+    expect(html).toContain('<p role="status">Đang tải lên 40%</p>');
+    expect(html).toContain(COVER_WAIT_NOTE);
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
+    // The picker is frozen while one file moves.
+    expect(html).toMatch(/<input[^>]*id="anh-noi-dung"[^>]*disabled=""/);
+  });
+
+  it("the server's 422 sentence is shown VERBATIM as an alert — text, not colour only", () => {
+    const sentence = "Ảnh bị từ chối vì phát hiện mã độc và không được lưu.";
+    const html = veForm(READY_FORM, undefined, { kind: "refused", message: sentence });
+    expect(html).toContain(`<p role="alert" class="thong-bao-loi">Bị từ chối: ${sentence}</p>`);
+    // A refusal does not hold Lưu: the article can be saved without a cover.
+    expect(html).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
+  it("retry state offers `Kiểm tra lại` (re-complete, never re-upload)", () => {
+    const html = veForm(READY_FORM, undefined, { kind: "retry", id: "01JC", message: "Chưa quét được mã độc." });
+    expect(html).toContain(">Kiểm tra lại</button>");
+    expect(html).toContain("Chưa kiểm tra xong: Chưa quét được mã độc.");
+  });
+
+  it("edit form: the saved cover's preview comes ONLY from the server's `preview_url`", () => {
+    const row = hang({
+      body: "",
+      image_url: "https://legacy.example.vn/anh.jpg",
+      cover_image_file_id: "01JCOVER0",
+      cover_image: {
+        file_id: "01JCOVER0",
+        status: "ready",
+        public: true,
+        preview_url: "https://files.example.test/vigov-pub/t_01JXA/cover.jpg?X-Amz-Signature=S",
+      },
+    });
+    const html = veForm(giaTriTuHang(row), row);
+    expect(html).toContain('src="https://files.example.test/vigov-pub/t_01JXA/cover.jpg?X-Amz-Signature=S"');
+    expect(html.match(/<img /g)?.length).toBe(1);
+    // The legacy link is shown as text in the read-only block, never as a `src`.
+    expect(html).not.toContain('src="https://legacy.example.vn/anh.jpg"');
+    expect(html).toContain("https://legacy.example.vn/anh.jpg");
+    expect(html).toContain(`>${COVER_REPLACE_BUTTON}`);
+    expect(html).toContain(`>${COVER_REMOVE_BUTTON}</button>`);
+  });
+
+  it("a non-http(s) `preview_url` is never a `src`; a missing one says so", () => {
+    const row = hang({
+      body: "",
+      cover_image_file_id: "01JCOVER0",
+      cover_image: { file_id: "01JCOVER0", status: "ready", public: false, preview_url: "javascript:alert(1)" },
+    });
+    const html = veForm(giaTriTuHang(row), row);
+    expect(html).not.toContain("<img");
+    expect(html).toContain(COVER_PREVIEW_MISSING);
+  });
+
+  it("no cover on the article: no image, no `Gỡ ảnh`", () => {
+    const html = veForm(READY_FORM);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(`>${COVER_REMOVE_BUTTON}<`);
+  });
+
+  it("`Gỡ ảnh` pressed on a saved cover: the detach is said before Lưu", () => {
+    const row = hang({ body: "", cover_image_file_id: "01JCOVER0" });
+    const html = veForm({ ...giaTriTuHang(row), cover_image_file_id: "" }, row);
+    expect(html).toContain(COVER_WILL_DETACH);
+    expect(html).not.toContain("<img");
   });
 });

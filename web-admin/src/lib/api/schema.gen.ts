@@ -23,6 +23,33 @@ export type audit_EntryView = {
   "delta": JsonValue;
 };
 
+export type comms_coverFileOut = {
+  "id": string;
+  "mime_type": string;
+  "size_bytes": number;
+  "status": string;
+};
+
+export type comms_coverImageOut = {
+  "file_id": string;
+  "status": string;
+  "public": boolean;
+  "preview_url"?: string;
+  "preview_expires_at"?: string | null;
+};
+
+export type comms_coverUploadIn = {
+  "file_name": string;
+  "content_type": string;
+  "size": number;
+  "content_item_id"?: string;
+};
+
+export type comms_coverUploadOut = {
+  "cover_image": comms_coverFileOut;
+  "upload": comms_presignedUploadOut;
+};
+
 export type comms_createMapFieldSchemaIn = {
   "asset_type_code": string;
   "field_code": string;
@@ -179,6 +206,8 @@ export type comms_noiDungRa = {
   "body"?: string | null;
   "image_url": string;
   "has_image": boolean;
+  "cover_image_file_id"?: string;
+  "cover_image"?: comms_coverImageOut | null;
   "published_on": string;
   "view_count": number;
   "status": string;
@@ -217,6 +246,12 @@ export type comms_phatHanhThongBaoVao = {
   "email_requested"?: boolean;
 };
 
+export type comms_presignedUploadOut = {
+  "url": string;
+  "fields": Record<string, string>;
+  "expires_at": string;
+};
+
 export type comms_publicCategoriesOut = {
   "items": Array<comms_publicCategoryOut>;
 };
@@ -250,6 +285,7 @@ export type comms_suaNoiDungVao = {
   "event_ends_at"?: string | null;
   "event_place"?: string | null;
   "video_url"?: string | null;
+  "cover_image_file_id"?: string | null;
 };
 
 export type comms_themDanhMucVao = {
@@ -279,6 +315,7 @@ export type comms_themNoiDungVao = {
   "event_ends_at"?: string;
   "event_place"?: string;
   "video_url"?: string;
+  "cover_image_file_id"?: string;
   "publish"?: boolean;
 };
 
@@ -313,6 +350,7 @@ export type comms_tinXaRa = {
   "event_ends_at"?: string | null;
   "event_place"?: string;
   "video_url"?: string;
+  "image_url"?: string;
 };
 
 export type comms_unreadCountOut = {
@@ -3794,6 +3832,50 @@ export type comms_post_content_items = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/cover-images — Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu */
+export type comms_post_content_items_cover_images = {
+  duongDan: "/api/v1/content-items/cover-images";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_coverUploadIn;
+  phanHoi: {
+    201: comms_coverUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/cover-images/{id}/completion — Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF */
+export type comms_post_content_items_cover_images_by_id_completion = {
+  duongDan: "/api/v1/content-items/cover-images/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_coverFileOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -3834,6 +3916,7 @@ export type comms_patch_content_items_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

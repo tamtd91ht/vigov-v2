@@ -261,10 +261,17 @@ describe("biểu mẫu §7 — giá trị ban đầu", () => {
     expect(giaTriTuHang(hang({ body: "<p>x</p>" })).body).toBe("<p>x</p>");
     expect(giaTriTuHang(hang()).body).toBe("");
   });
+
+  it("the cover starts as the article's own `cover_image_file_id`, `\"\"` when it has none", () => {
+    expect(giaTriTuHang(hang({ cover_image_file_id: "01JCOVER0" })).cover_image_file_id).toBe("01JCOVER0");
+    expect(giaTriTuHang(hang()).cover_image_file_id).toBe("");
+    // The legacy link is not a form value: no box edits it, so nothing can send it back.
+    expect(Object.keys(giaTriTuHang(hang()))).not.toContain("image_url");
+  });
 });
 
 describe("thân POST", () => {
-  it("cắt hai đầu tiêu đề, tóm tắt và liên kết ảnh — KHÔNG cắt thân bài", () => {
+  it("cắt hai đầu tiêu đề và tóm tắt — KHÔNG cắt thân bài", () => {
     const than = thanThem({
       ...FORM_TRONG,
       type: "su-kien",
@@ -272,28 +279,33 @@ describe("thân POST", () => {
       title: "  Hội nghị  ",
       summary: "  tóm tắt  ",
       body: "  <p>x</p>  ",
-      image_url: "  https://a.vn/b.jpg  ",
+      cover_image_file_id: "01JCOVER1",
       publish: true,
     });
 
     expect(than.title).toBe("Hội nghị");
     expect(than.summary).toBe("tóm tắt");
-    expect(than.image_url).toBe("https://a.vn/b.jpg");
+    expect(than.cover_image_file_id).toBe("01JCOVER1");
     // Máy chủ tự cắt hai đầu thân bài khi lưu. Cắt thêm ở đây chỉ tạo một chỗ nữa để hai bên lệch.
     expect(than.body).toBe("  <p>x</p>  ");
   });
 
-  it("gửi đủ bảy trường, không thừa trường nào", () => {
+  it("gửi đủ sáu trường, không thừa trường nào — không `image_url`, không ảnh khi chưa tải", () => {
     const than = thanThem(FORM_TRONG);
     expect(Object.keys(than).sort()).toEqual([
       "body",
       "category_id",
-      "image_url",
       "publish",
       "summary",
       "title",
       "type",
     ]);
+  });
+
+  it("an uploaded cover goes with the create as `cover_image_file_id`", () => {
+    expect(Object.keys(thanThem({ ...FORM_TRONG, cover_image_file_id: "01JCOVER1" }))).toContain(
+      "cover_image_file_id",
+    );
   });
 });
 
@@ -305,7 +317,7 @@ describe("thân PATCH — CHỈ những ô thật sự đổi", () => {
     title: "Tiêu đề cũ",
     summary: "Tóm tắt cũ",
     body: "<p>thân cũ</p>",
-    image_url: "https://a.vn/b.jpg",
+    cover_image_file_id: "01JCOVER0",
     publish: true,
   };
 
@@ -363,18 +375,38 @@ describe("thân PATCH — CHỈ những ô thật sự đổi", () => {
       title: "T",
       summary: "S",
       body: "B",
-      image_url: "",
+      cover_image_file_id: "",
       publish: false,
     });
     expect(Object.keys(than).sort()).toEqual([
       "body",
       "category_id",
-      "image_url",
+      "cover_image_file_id",
       "publish",
       "summary",
       "title",
       "type",
     ]);
+  });
+
+  it("`Gỡ ảnh` on an article that had a cover sends `\"\"` — the server's DETACH", () => {
+    expect(thanSua(dau, { ...dau, cover_image_file_id: "" })).toEqual({ cover_image_file_id: "" });
+  });
+
+  it("a new upload sends its id; an untouched cover is absent (leave alone)", () => {
+    expect(thanSua(dau, { ...dau, cover_image_file_id: "01JCOVER2" })).toEqual({
+      cover_image_file_id: "01JCOVER2",
+    });
+    expect(thanSua(dau, { ...dau, title: "x" })).not.toHaveProperty("cover_image_file_id");
+  });
+
+  it("no cover before, none after: nothing about the cover is sent", () => {
+    const bare: GiaTriFormNoiDung = { ...dau, cover_image_file_id: "" };
+    expect(thanSua(bare, { ...bare, title: "x" })).toEqual({ title: "x" });
+  });
+
+  it("NEVER sends `image_url` — the legacy link has no box on this form", () => {
+    expect(thanSua(dau, { ...dau, title: "x", cover_image_file_id: "" })).not.toHaveProperty("image_url");
   });
 
   it("KHÔNG BAO GIỜ gửi `status`, `source`, `author_code` hay `view_count`", () => {
@@ -594,7 +626,9 @@ describe("client-side check of the per-type fields — mirrors the server", () =
 
 describe("phần chưa dựng được", () => {
   it("có danh sách, và mục đầu tiên nói về HTML không được làm sạch", () => {
-    expect(PHAN_CHUA_DUNG.length).toBeGreaterThanOrEqual(10);
+    // A FLOOR, lowered on purpose: the cover upload (§7 `Chọn tệp từ máy`) left the list when it
+    // was built (606bf515 + the screen). Nine is what remains; losing more without building them is red.
+    expect(PHAN_CHUA_DUNG.length).toBeGreaterThanOrEqual(9);
     // Thứ tự có ý nghĩa: đây là rủi ro lớn nhất của màn, nên nó đứng đầu khối `<details>`.
     expect(PHAN_CHUA_DUNG[0]?.ten).toContain("rich text");
     expect(PHAN_CHUA_DUNG[0]?.viSao).toContain("content.update");

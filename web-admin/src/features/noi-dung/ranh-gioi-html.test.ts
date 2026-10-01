@@ -119,4 +119,35 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
     ).map((t) => t.duongDan);
     expect(viPham).toEqual([]);
   });
+
+  it("the ONE `src` the screen builds is the server's signed cover preview, through `coverPreviewSrc`", () => {
+    // The cover upload (§7) brought the first `<img>` to this screen. The rule above forbids two
+    // sources by name; this one is the allow-list: every `src={x}` must be an identifier bound, in
+    // the same file, to `coverPreviewSrc(…)` — which reads only `preview_url` and only lets an
+    // absolute http(s) URL through (`cover-image.test.ts`). A `blob:` of the officer's own file, an
+    // `image_url`, or any other string becomes red here.
+    const found: string[] = [];
+    const viPham: string[] = [];
+    for (const t of TEP) {
+      for (const m of t.noiDung.matchAll(/\bsrc\s*=\s*\{([^}]*)\}/g)) {
+        const expr = (m[1] ?? "").trim();
+        found.push(`${t.duongDan}: ${expr}`);
+        const binding = new RegExp(`const\\s+${expr}\\s*=([^;]*);`).exec(t.noiDung);
+        const ok =
+          /^[A-Za-z_$][\w$]*$/.test(expr) &&
+          binding !== null &&
+          /\bcoverPreviewSrc\(/.test(binding[1] ?? "") &&
+          !/image_url|source_url|createObjectURL|blob:/.test(binding[1] ?? "");
+        if (!ok) viPham.push(`${t.duongDan}: src={${expr}}`);
+      }
+    }
+    // A scan that finds nothing is a scan that is always green: the preview exists, so it must be seen.
+    expect(found.length).toBeGreaterThanOrEqual(1);
+    expect(viPham).toEqual([]);
+  });
+
+  it("no file of the screen makes a `blob:` / object URL", () => {
+    const viPham = TEP.filter((t) => /createObjectURL|["'`]blob:/.test(t.noiDung)).map((t) => t.duongDan);
+    expect(viPham).toEqual([]);
+  });
 });
