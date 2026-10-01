@@ -236,6 +236,10 @@ service tiếp tục các tệp kẹt ở `processing`. **Đăng** thì chép b�
 `cau-phien-cong-dan-vigov`). Link đọc ký, sống ngắn, **chỉ cấp sau khi** kiểm danh tính phiên + xã
 (luật 4 bất biến 7); bỏ EXIF; giới hạn tần suất theo công dân.
 
+**02/10/2026:** điều chờ ấy đã thoả cho **app riêng của xã** — app ấy mở thẳng phiên công dân ViGov từ
+commit `8df525c9` (ADR 0066); việc dựng do dòng *"Ảnh hiện trường khi gửi phản ánh"* trong bảng mục 6
+của ADR 0047 quyết.
+
 ## Cái giá
 
 | Điều | Nội dung |
