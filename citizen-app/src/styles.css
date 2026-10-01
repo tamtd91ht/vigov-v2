@@ -3045,9 +3045,11 @@ button.xa-o-nhanh {
 }
 
 /* ---------- thẻ tin (NewsCard) · bài ---------- */
-/* `PROTOTYPE.md` §6.5 NewsCard: the picture slot, the title on two lines, how long ago. The slot is an ICON on
-   the blue tone until the API carries images; the featured card and the article's cover band are gone (wave
-   1) — a coloured block where a photo belongs reads as a picture that failed to load. */
+/* `PROTOTYPE.md` §6.5 NewsCard: the picture slot, the title on two lines, how long ago. The slot is 96×80 on
+   lists and 88×72 on the home screen (`--compact`). It holds the item's cover when it has one (ADR 0047 §6,
+   01/10/2026), and the newspaper ICON on the blue tone when it has none or the picture fails — the slot itself
+   never goes, so cards of one list keep one shape. No pre-drawn stand-in picture (owner): a stock photo would
+   be presented as the article's own. */
 .xa-hang-tin {
   display: flex;
   align-items: center;
@@ -3056,14 +3058,40 @@ button.xa-o-nhanh {
   min-height: calc(var(--tap-min) + 4px);
 }
 .xa-hang-tin__o {
-  width: 88px;
-  height: 72px;
+  width: 96px;
+  height: 80px;
   border-radius: 12px;
   background: var(--xa-blue-50);
   color: var(--xa-blue-ink);
   display: grid;
   place-items: center;
   flex: none;
+  overflow: hidden;
+}
+.xa-hang-tin--compact .xa-hang-tin__o {
+  width: 88px;
+  height: 72px;
+}
+.xa-hang-tin__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* The article's cover (§6.5 detail): 16:9, edge to edge — `.xa-trang--con` pads 16px, so the band pulls itself
+   flush with negative margins (the same arithmetic as `.xa-tim`). No picture or a failed one → no band at all
+   (`ArticleCover` renders nothing), never an empty box. */
+.xa-bai__cover {
+  margin: -16px -16px 16px;
+  aspect-ratio: 16 / 9;
+  background: var(--xa-nen);
+  overflow: hidden;
+}
+.xa-bai__cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .xa-hang-tin__chu {
   flex: 1;

@@ -396,7 +396,7 @@ function TrangChuXa(props: {
               <ul className="xa-ds">
                 {tin_moi.map((t) => (
                   <li key={t.id}>
-                    <HangTin tin={t} onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                    <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
                   </li>
                 ))}
               </ul>

@@ -362,6 +362,78 @@ describe("tin của xã — lời gọi và đọc trang", () => {
     expect(docBaiTin({ ...TIN_RA, body: "Đoạn một." })?.noi_dung).toBe("Đoạn một.");
   });
 
+  /*
+   * `image_url` (ADR 0047 §6, 01/10/2026): optional, an absolute `https:` URL to the public derivative, OPAQUE.
+   * The URL below is fake and points nowhere; no real picture is a fixture.
+   */
+  const COVER = "https://media.vigov.example/t_TENANT/cover-1280.jpg";
+  const page = (item: Record<string, unknown>) => docTrangTinXa({ items: [item], next_cursor: "", has_more: false });
+
+  it("image_url: an https URL is carried AS RECEIVED, on the list and on the detail", () => {
+    expect(page({ ...TIN_RA, type: "tin-tuc", image_url: COVER })).toStrictEqual({
+      muc: [
+        {
+          id: "tin-01",
+          tieu_de: TIN_RA.title,
+          tom_tat: TIN_RA.summary,
+          ngay_dang: "2026-09-27",
+          chuyen_muc: "Y tế",
+          type: "tin-tuc",
+          imageUrl: COVER,
+        },
+      ],
+      con_tro: "",
+      con_nua: false,
+    });
+    expect(docBaiTin({ ...TIN_RA, body: "x", image_url: COVER })?.imageUrl).toBe(COVER);
+  });
+
+  it("absent → the key is absent, not `undefined`", () => {
+    expect(Object.keys(page(TIN_RA)!.muc[0]!)).not.toContain("imageUrl");
+  });
+
+  it("http:, javascript:, data:, relative, empty → treated as NO cover (the item still shows)", () => {
+    for (const v of [
+      "http://media.vigov.example/t_TENANT/cover.jpg",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "/t_TENANT/cover.jpg",
+      "//media.vigov.example/cover.jpg",
+      "",
+      "HTTPS-not-a-url",
+    ]) {
+      const t = page({ ...TIN_RA, image_url: v });
+      expect(t, v).not.toBeNull();
+      expect(Object.keys(t!.muc[0]!), v).not.toContain("imageUrl");
+    }
+  });
+
+  it("present but not a string → the whole page is malformed, as for every field", () => {
+    for (const v of [123, null, true, {}, [COVER]]) {
+      expect(page({ ...TIN_RA, image_url: v }), String(v)).toBeNull();
+      expect(docBaiTin({ ...TIN_RA, body: "x", image_url: v }), String(v)).toBeNull();
+    }
+  });
+
+  it("the URL is never logged and never sent back up", async () => {
+    const said: unknown[] = [];
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((k) =>
+      vi.spyOn(console, k).mockImplementation((...a: unknown[]) => void said.push(...a)),
+    );
+    try {
+      datFetch(
+        traLoi(200, { items: [{ ...TIN_RA, image_url: COVER }], next_cursor: "", has_more: false }),
+        traLoi(200, { ...TIN_RA, body: "x", image_url: COVER }),
+      );
+      expect((await tinCuaXa(TEN_MIEN, "")).kieu).toBe("xong");
+      expect((await baiTinCuaXa(TEN_MIEN, "tin-01")).kieu).toBe("xong");
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
+    expect(JSON.stringify(said)).not.toContain("t_TENANT");
+    for (const g of loi_goi) expect(g.dia_chi).not.toContain("t_TENANT");
+  });
+
   it("'Xem thêm' NỐI trang sau vào cuối và bỏ tin trùng", () => {
     const t1 = { id: "1", tieu_de: "a", tom_tat: "", ngay_dang: "2026-09-27", chuyen_muc: "", type: null };
     const t2 = { ...t1, id: "2" };

@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
-import { createElement } from "react";
+import { createElement, isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { CanBoCongKhai, TinXaTomTat } from "../api/hop-dong-cong-khai";
+import type { BaiTinXa as BaiTinXaData, CanBoCongKhai, TinXaTomTat } from "../api/hop-dong-cong-khai";
 import type { PhieuCuaToi, PhieuCuaToiTomTat } from "../api/hop-dong-phan-anh"; // vi-name-ok: existing contract types
 import { BUILD_LABEL } from "../../lib/build-label";
 
@@ -23,7 +23,7 @@ import {
   stepsAhead,
 } from "./PhanAnhAppXa";
 import { CaNhanXa, dossierLookupReady, initials, TraCuuHoSoXa } from "./TienIchAppXa";
-import { BaiTinXa, NewsListBody, relativeDay, todayVN } from "./TinTucAppXa";
+import { ArticleCover, BaiTinXa, HangTin, NewsArticle, NewsListBody, NewsThumb, relativeDay, todayVN } from "./TinTucAppXa";
 import { NHOM_CHUC_NANG } from "./TrangXa";
 import { VONG_DOI } from "./trai-nghiem";
 
@@ -296,12 +296,115 @@ describe("Tin tức (§6.5)", () => {
     expect(list).not.toMatch(/xa-noi-bat|lượt xem/);
   });
 
-  it("the article's header names its TYPE, known from the row it was opened from; no cover band", () => {
+  it("the article's header names its TYPE, known from the row it was opened from; no cover while it loads", () => {
     const article = html(createElement(BaiTinXa, { ten_mien: "xa-thu.vigov.vn", id: "7", ds: [item("7", "su-kien")], onQuayLai: noop }));
     expect(article).toContain(`<h1 class="xa-dau-con__tieu-de">${NEWS_TYPE_LABEL["su-kien"]}</h1>`);
     const unknown = html(createElement(BaiTinXa, { ten_mien: "xa-thu.vigov.vn", id: "8", onQuayLai: noop }));
     expect(unknown).toContain(`<h1 class="xa-dau-con__tieu-de">${TIN_XA.tieu_de}</h1>`);
-    expect(article).not.toContain("xa-bai__bia");
+    expect(article).not.toContain("xa-bai__cover");
+  });
+});
+
+/**
+ * THE NEWS COVER (owner, 01/10/2026, ADR 0047 §6): commune app only. Card: the picture in the slot when the item
+ * has one, the newspaper icon when it has none or the picture fails — the slot never goes. Detail: a 16:9 band
+ * above the title when it has one; none or failed → no band at all. The URL is fake and points nowhere.
+ */
+describe("Tin tức: cover picture (card and detail)", () => {
+  const COVER = "https://media.vigov.example/t_TENANT/cover-1280.jpg";
+  const plain: TinXaTomTat = { id: "1", tieu_de: "Tin một", tom_tat: "", chuyen_muc: "Kinh tế", ngay_dang: "2026-09-28", type: "tin-tuc" };
+  const withCover: TinXaTomTat = { ...plain, imageUrl: COVER };
+  const article: BaiTinXaData = { ...withCover, noi_dung: "Đoạn một." };
+
+  /** The one `<img>` a hookless element tree holds, found without rendering it. */
+  function findImg(node: unknown): ReactElement<Record<string, unknown>> | null {
+    if (!isValidElement(node)) return null;
+    const el = node as ReactElement<Record<string, unknown>>;
+    if (el.type === "img") return el;
+    const kids = el.props.children;
+    for (const k of Array.isArray(kids) ? kids : [kids]) {
+      const hit = findImg(k);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+
+  it("card with a cover: the picture fills the slot, decorative and lazy; no icon beside it", () => {
+    const card = html(createElement(HangTin, { tin: withCover, onMo: noop, today: "2026-09-30" }));
+    expect(card).toContain(
+      `<span class="xa-hang-tin__o" aria-hidden="true"><img class="xa-hang-tin__image" src="${COVER}" alt="" loading="lazy" decoding="async"/></span>`,
+    );
+    expect(card).not.toContain("<svg");
+  });
+
+  it("card without a cover: the newspaper icon, as before — the slot stays", () => {
+    const card = html(createElement(HangTin, { tin: plain, onMo: noop, today: "2026-09-30" }));
+    expect(card).toContain('<span class="xa-hang-tin__o" aria-hidden="true"><svg');
+    expect(card).not.toContain("<img");
+  });
+
+  it("a failed picture falls back to the icon, and the image's onError is what reports the failure", () => {
+    const failed = html(createElement(NewsThumb, { imageUrl: COVER, failed: true, onFail: noop }));
+    expect(failed).toContain("<svg");
+    expect(failed).not.toContain("<img");
+    let reported = 0;
+    const img = findImg(NewsThumb({ imageUrl: COVER, failed: false, onFail: () => reported++ }));
+    expect(img?.props.alt).toBe("");
+    (img!.props.onError as () => void)();
+    expect(reported).toBe(1);
+  });
+
+  it("the home screen's card is the compact one (88×72); lists keep 96×80", async () => {
+    // Read from disk, not imported — the reason and the variable specifier are `accessibility.test.ts:8-19`'s.
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    expect(html(createElement(HangTin, { tin: plain, onMo: noop, compact: true }))).toMatch(
+      /^<button type="button" class="xa-the xa-hang-tin xa-hang-tin--compact">/,
+    );
+    expect(html(createElement(HangTin, { tin: plain, onMo: noop }))).toMatch(/^<button type="button" class="xa-the xa-hang-tin">/);
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.xa-hang-tin__o \{[^}]*width: 96px;[^}]*height: 80px;/);
+    expect(css).toMatch(/\.xa-hang-tin--compact \.xa-hang-tin__o \{[^}]*width: 88px;[^}]*height: 72px;/);
+    expect(css).toMatch(/\.xa-bai__cover \{[^}]*aspect-ratio: 16 \/ 9;/);
+    const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    expect(src).toContain("<HangTin tin={t} compact ");
+  });
+
+  it("detail with a cover: one decorative band ABOVE the title", () => {
+    // Server rendering adds a `<link rel="preload">` for a non-lazy image (React's own, as in
+    // `commune-app-look.test.tsx`); the article itself is what is pinned.
+    const page = html(createElement(NewsArticle, { bai: article, coverFailed: false, onCoverFail: noop, ds: [] })).replace(
+      /^<link rel="preload"[^>]*\/>/,
+      "",
+    );
+    expect(page).toMatch(
+      new RegExp(`^<article class="xa-bai"><div class="xa-bai__cover"><img class="xa-bai__cover-image" src="${COVER.replace(/[.]/g, "\\.")}" alt="" decoding="async"/></div><h2 class="xa-bai__tieu-de">`),
+    );
+    expect(page.match(/<img /g)).toHaveLength(1);
+  });
+
+  it("detail without a cover, or with one that failed: NO band at all", () => {
+    for (const bai of [{ ...plain, noi_dung: "Đoạn một." }, article]) {
+      const page = html(createElement(NewsArticle, { bai, coverFailed: bai === article, onCoverFail: noop, ds: [] }));
+      expect(page).toMatch(/^<article class="xa-bai"><h2 class="xa-bai__tieu-de">/);
+      expect(page).not.toMatch(/xa-bai__cover|<img/);
+    }
+  });
+
+  it("the band's onError reaches the article's onCoverFail", () => {
+    let reported = 0;
+    const onCoverFail = () => reported++;
+    const tree = NewsArticle({ bai: article, coverFailed: false, onCoverFail, ds: [] });
+    const cover = (tree.props as { children: unknown[] }).children.find(
+      (c) => isValidElement(c) && c.type === ArticleCover,
+    ) as ReactElement<{ onFail: () => void }>;
+    expect(cover.props.onFail).toBe(onCoverFail);
+    const img = findImg(ArticleCover({ imageUrl: COVER, failed: false, onFail: onCoverFail }));
+    (img!.props.onError as () => void)();
+    expect(reported).toBe(1);
+    expect(ArticleCover({ imageUrl: undefined, failed: false, onFail: noop })).toBeNull();
   });
 });
 

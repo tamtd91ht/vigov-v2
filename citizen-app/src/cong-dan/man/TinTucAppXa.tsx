@@ -9,7 +9,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baiTinCuaXa, newsCategories, tinCuaXa } from "../api/goi-vigov";
-import { chiaDoan, type NewsCategory, type NewsType, type TinXaTomTat } from "../api/hop-dong-cong-khai";
+import {
+  type BaiTinXa as BaiTinXaData,
+  chiaDoan,
+  type NewsCategory,
+  type NewsType,
+  type TinXaTomTat,
+} from "../api/hop-dong-cong-khai";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
 import { NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
 import {
@@ -54,16 +60,52 @@ export function relativeDay(day: string, today: string): string {
 }
 
 /**
- * One news card (`PROTOTYPE.md` §6.5 NewsCard) — on the news tab, the home screen and "Tin liên quan": the
- * picture slot, the title on two lines, how long ago. No view count (owner). The slot holds an ICON until the
- * API carries images (a later card) — marked as decoration, never presented as the article's picture.
+ * The card's picture slot. PURE — `failed` is the caller's state, so both outcomes render without a DOM.
+ *
+ * The cover when the item has one and it has not failed; otherwise the newspaper ICON (owner, 01/10/2026):
+ * the slot never disappears — cards of one list keep one shape, and a missing picture must not read as a
+ * card that broke. Decoration either way (`alt=""` + `aria-hidden`): the title is the card's words.
  */
-export function HangTin({ tin, onMo, today = todayVN() }: { tin: TinXaTomTat; onMo: (id: string) => void; today?: string }) {
+export function NewsThumb(props: { imageUrl: string | undefined; failed: boolean; onFail: () => void }) {
+  const show = props.imageUrl !== undefined && !props.failed;
   return (
-    <button type="button" className="xa-the xa-hang-tin" onClick={() => onMo(tin.id)}>
-      <span className="xa-hang-tin__o" aria-hidden="true">
+    <span className="xa-hang-tin__o" aria-hidden="true">
+      {show ? (
+        <img
+          className="xa-hang-tin__image"
+          src={props.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={props.onFail}
+        />
+      ) : (
         <BieuTuong ten="newspaper" co={30} />
-      </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * One news card (`PROTOTYPE.md` §6.5 NewsCard) — on the news tab, the home screen and "Tin liên quan": the
+ * picture slot (`NewsThumb`), the title on two lines, how long ago. No view count (owner). `compact`: the
+ * home screen's smaller slot (88×72 against 96×80, §6.5).
+ */
+export function HangTin({
+  tin,
+  onMo,
+  today = todayVN(),
+  compact = false,
+}: {
+  tin: TinXaTomTat;
+  onMo: (id: string) => void;
+  today?: string;
+  compact?: boolean;
+}) {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  return (
+    <button type="button" className={`xa-the xa-hang-tin${compact ? " xa-hang-tin--compact" : ""}`} onClick={() => onMo(tin.id)}>
+      <NewsThumb imageUrl={tin.imageUrl} failed={thumbFailed} onFail={() => setThumbFailed(true)} />
       <span className="xa-hang-tin__chu">
         <strong className="xa-hang-tin__tieu-de xa-cat-2">{tin.tieu_de}</strong>
         <span className="xa-phu">{relativeDay(tin.ngay_dang, today)}</span>
@@ -374,7 +416,7 @@ export function useTinXa(ten_mien: string, type: NewsType | null = null, categor
   };
 }
 
-/** Một bài — dải bìa + tiêu đề + ngày + toàn văn. Màn con, có nút quay lại. */
+/** Một bài — ảnh bìa (khi có) + tiêu đề + ngày + toàn văn. Màn con, có nút quay lại. */
 export function BaiTinXa(props: {
   ten_mien: string;
   id: string;
@@ -384,6 +426,7 @@ export function BaiTinXa(props: {
   onMo?: (id: string) => void;
 }) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
+  const [coverFailed, setCoverFailed] = useState(false);
   const da_tai = useRef(false);
 
   async function tai() {
@@ -418,22 +461,57 @@ export function BaiTinXa(props: {
           />
         )}
         {trang.kieu === "xong" && (
-          // No cover band: the prototype's cover is the article's PHOTO, which the API does not carry yet (a later
-          // card). A coloured block in its place would read as a picture that failed to load.
-          <article className="xa-bai">
-            <h2 className="xa-bai__tieu-de">{trang.bai.tieu_de}</h2>
-            <p className="xa-phu">{dongPhu(trang.bai)}</p>
-            <div className="xa-ke" />
-            {chiaDoan(trang.bai.noi_dung).map((doan, i) => (
-              <p key={i} className="xa-bai__doan">
-                {doan}
-              </p>
-            ))}
-            <TinLienQuan ds={props.ds ?? []} bai={trang.bai} onMo={props.onMo} />
-          </article>
+          <NewsArticle
+            bai={trang.bai}
+            coverFailed={coverFailed}
+            onCoverFail={() => setCoverFailed(true)}
+            ds={props.ds ?? []}
+            onMo={props.onMo}
+          />
         )}
       </TrangCon>
     </>
+  );
+}
+
+/**
+ * The article's cover: the item's picture, 16:9, the full width of the screen, above the title. PURE.
+ *
+ * NO PICTURE, OR ONE THAT FAILED TO LOAD → NO BAND AT ALL (owner, 01/10/2026; same stance as `CommuneBanner`):
+ * a coloured or empty block where a photo belongs reads as a page that failed to load. `alt=""`: the picture
+ * is decoration — the title right under it says what the article is.
+ */
+export function ArticleCover(props: { imageUrl: string | undefined; failed: boolean; onFail: () => void }) {
+  if (props.imageUrl === undefined || props.failed) return null;
+  return (
+    <div className="xa-bai__cover">
+      <img className="xa-bai__cover-image" src={props.imageUrl} alt="" decoding="async" onError={props.onFail} />
+    </div>
+  );
+}
+
+/** A loaded article — cover, title, meta line, body, related items. PURE: the cover's failure is the caller's. */
+export function NewsArticle(props: {
+  bai: BaiTinXaData;
+  coverFailed: boolean;
+  onCoverFail: () => void;
+  ds: readonly TinXaTomTat[];
+  onMo?: (id: string) => void;
+}) {
+  const { bai } = props;
+  return (
+    <article className="xa-bai">
+      <ArticleCover imageUrl={bai.imageUrl} failed={props.coverFailed} onFail={props.onCoverFail} />
+      <h2 className="xa-bai__tieu-de">{bai.tieu_de}</h2>
+      <p className="xa-phu">{dongPhu(bai)}</p>
+      <div className="xa-ke" />
+      {chiaDoan(bai.noi_dung).map((doan, i) => (
+        <p key={i} className="xa-bai__doan">
+          {doan}
+        </p>
+      ))}
+      <TinLienQuan ds={props.ds} bai={bai} onMo={props.onMo} />
+    </article>
   );
 }
 

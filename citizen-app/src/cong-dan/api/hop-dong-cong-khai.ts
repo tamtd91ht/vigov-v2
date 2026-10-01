@@ -9,8 +9,9 @@
  *                                                             display_order?, residential_units_headed? }] }
  *   GET comms     /api/v1/commune-news?host=…[&cursor=…][&type=…]
  *                                                         → { items: [{ id, title, summary, published_on,
- *                                                             category_name, type?, source? }],
- *                                                             next_cursor, has_more }   (type: b22bf76)
+ *                                                             category_name, type?, source?, image_url? }],
+ *                                                             next_cursor, has_more }   (type: b22bf76;
+ *                                                             image_url: 2026-10-01, ADR 0047 §6)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
  *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
  *                                                         → { items: [{ id, name, parent_id?, order }] }
@@ -18,15 +19,20 @@
  *
  *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
  *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
- *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là
- *   máy chủ cũ, không phải sai khuôn.
+ *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`; `image_url` (01/10/2026) từ cùng tệp
+ *   `:173-177,223-226`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là máy chủ cũ, không phải sai khuôn.
  *
  * ⚠ CÔNG KHAI, KHÔNG BEARER. Ba tuyến này chỉ trả thứ xã đã công bố cho người dân. Tệp gọi mạng
  * (`goi-vigov.ts`) không gắn `Authorization` cho chúng — gắn vào là gửi phiên công dân tới một tuyến
  * không cần nó.
  *
  * ⚠ `host` LÀ KHOÁ TRA, KHÔNG PHẢI THAM CHIẾU XÃ (ADR 0047 câu 3, điều kiện dừng #1). Không có mã xã
- * nào đi lên hay đi về: `/communes` cố ý chỉ trả tên và tỉnh.
+ * nào đi lên, và không TRƯỜNG nào mang mã xã đi về: `/communes` cố ý chỉ trả tên và tỉnh.
+ *
+ * ONE EXCEPTION, AND IT IS OPAQUE: a news item's `image_url` is an object URL in the public bucket, whose
+ * key carries `t_<tenant_id>` (ADR 0052). This app never reads that out of it — the URL is handed to `<img
+ * src>` as received (after the protocol check in `readImageUrl`), never split, never logged, never used as
+ * a key — so the commune id is not a value anything here can act on.
  *
  * ⚠ KIỂM TỪNG TRƯỜNG, KHÔNG ÉP KIỂU — cùng lý do với `docPhieu`: một `as` cho `undefined` đi tiếp và
  * hiện ra màn hình thành chữ "undefined". Sai khuôn ở một dòng thì cả trang là `null`, không bỏ dòng
@@ -267,6 +273,12 @@ export type TinXaTomTat = {
    * type this app does not list (`banner`, or a seventh code added later) — never guessed from the category.
    */
   readonly type: NewsType | null;
+  /**
+   * The cover picture — the public derivative's absolute `https:` URL, or ABSENT (no uploaded cover, an older
+   * server, or a value `readImageUrl` refused). OPAQUE: it carries `t_<tenant_id>` in its path, so it goes to
+   * `<img src>` untouched and nowhere else — never parsed, logged, or used as a key.
+   */
+  readonly imageUrl?: string;
 };
 
 export type BaiTinXa = TinXaTomTat & {
@@ -279,6 +291,29 @@ export type TrangTinXa = {
   readonly con_tro: string;
   readonly con_nua: boolean;
 };
+
+/**
+ * Optional `image_url`: absent → `undefined` (no cover); present and not a string → malformed (`null`, the
+ * caller refuses the whole page, as for every other field).
+ *
+ * A STRING IS USED ONLY WHEN IT IS AN ABSOLUTE `https:` URL; anything else is treated as absent, not as
+ * malformed — the article is still worth reading without its picture. Why only `https:`:
+ *   · the Mini App runs in Zalo's webview over https, so an `http:` picture is mixed content: blocked, or a
+ *     warning in front of a public authority's page — either way a broken box;
+ *   · `javascript:` / `data:` / a relative path must never become an `src` — the server writes only its
+ *     own bucket's URL here, so anything else means something upstream is wrong, and showing it is worse
+ *     than showing the icon.
+ * The check reads the PROTOCOL and nothing else; the value returned is the string as received.
+ */
+function readImageUrl(v: unknown): string | undefined | null {
+  if (v === undefined) return undefined;
+  if (!laChuoi(v)) return null;
+  try {
+    return new URL(v).protocol === "https:" ? v : undefined;
+  } catch {
+    return undefined; // not an absolute URL
+  }
+}
 
 function docTin(m: unknown): TinXaTomTat | null {
   if (typeof m !== "object" || m === null) return null;
@@ -295,6 +330,8 @@ function docTin(m: unknown): TinXaTomTat | null {
   }
   // `type` is optional (additive): absent is an older server. Present, it must be a string.
   if (r.type !== undefined && !laChuoi(r.type)) return null;
+  const imageUrl = readImageUrl(r.image_url);
+  if (imageUrl === null) return null;
   return {
     id: r.id,
     tieu_de: r.title,
@@ -302,6 +339,8 @@ function docTin(m: unknown): TinXaTomTat | null {
     ngay_dang: r.published_on,
     chuyen_muc: r.category_name,
     type: isNewsType(r.type) ? r.type : null,
+    // The key is left out, not set to `undefined`: "no cover" has one shape.
+    ...(imageUrl === undefined ? {} : { imageUrl }),
   };
 }
 
