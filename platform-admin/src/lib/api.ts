@@ -17,46 +17,279 @@
  * forwards them to service-platform (`lib/server/gateway.ts`), whose address is a server-only
  * setting. There is no `NEXT_PUBLIC_*` base URL — ADR 0048 STOP CONDITION #5, rule 8 inv. 4.
  *
- * TYPES: everything below is a PLACEHOLDER until service-platform publishes the operator
- * contract (TASK-05). TODO(TASK-06b): replace these hand-written shapes with the types generated
- * from that contract — never keep a hand copy beside a generated one.
+ * TYPES ARE HAND-WRITTEN, DELIBERATELY AND TEMPORARILY. The operator routes are kept OUT of
+ * kb/20-contracts/openapi.json on purpose (a route there is routable on a commune's host — ADR
+ * 0048 §01/10 #6c, `service-platform/internal/http/operator_routes.go` header), so there is no
+ * generated operator contract to import yet. Each shape below mirrors one Go struct, named in its
+ * comment; when an operator contract is generated, these are DELETED in favour of it — never kept
+ * beside it (the drift agent rule 6 exists to prevent).
+ *
+ * CREDENTIALS: passwords, TOTP codes, recovery codes and the TOTP secret travel ONLY in JSON
+ * bodies of POST/PUT — never in a path or a query, never in storage. The session cookie is
+ * HttpOnly and set by the server; nothing here reads or writes it.
+ *
+ * NO RETRIES. A write repeated by a client library is a second write the person never asked for:
+ * a second commune, a second recovery-code batch voiding the first, a second sign-in attempt
+ * counted against the per-IP limit. Every failure surfaces once, as an `ApiError`.
  */
 
 /** Same-origin prefix of every call. Relative on purpose: no host, no build-time constant. */
 export const API_PREFIX = "/api/v1";
 
-/** Metadata only: name, status, domain. Never business content (ADR 0003). */
-export type TenantSummary = {
-  tenantId: string;
-  host: string;
-  displayName: string;
+// --- wire shapes (hand-written; see the header) -----------------------------------------------
+
+/** operator_sessions.go `operatorSessionView`. */
+export type OperatorSession = { operator_code: string; expires_at: string };
+
+/** operator_sessions.go `operatorEnrollmentView`. Both strings are the TOTP secret — never logged. */
+export type EnrollmentStart = { operator_code: string; provisioning_uri: string; manual_entry_key: string };
+
+/** operator_sessions.go `operatorEnrollmentCompletedView`. */
+export type EnrollmentCompleted = { operator_code: string; expires_at: string; recovery_codes: string[] };
+
+/** operator_sessions.go `operatorWhoAmIView`. */
+export type CurrentOperator = { operator_code: string; permission_keys: string[] };
+
+/** operator_sessions.go `operatorRecoveryCodesView`. */
+export type RecoveryCodes = { recovery_codes: string[] };
+
+/** operator_communes.go `communeView` — registry metadata ONLY (ADR 0003, ADR 0048 §30/09 #5). */
+export type CommuneSummary = {
+  id: string;
+  name: string;
+  province: string;
   active: boolean;
+  /** Primary first. */
+  domains: string[];
 };
+
+/** operator_communes.go `communePageView`. */
+export type CommunePage = { items: CommuneSummary[]; next_cursor: string; has_more: boolean };
+
+/** operator_communes.go `miniAppView`. */
+export type MiniApp = { app_id: string; mode: string; active: boolean; created_at: string; created_by: string };
+
+/** operator_communes.go `communeDetailView`. */
+export type CommuneDetail = CommuneSummary & { mini_apps: MiniApp[] };
+
+/** operator_communes.go `provinceView`. */
+export type Province = { id: string; name: string };
 
 /** Second factor of an operator sign-in (ADR 0048 §28/09 #10): TOTP, or a one-time recovery code. */
 export type SecondFactor = { kind: "totp"; code: string } | { kind: "recovery"; code: string };
 
-export type SignInInput = {
-  email: string;
-  password: string;
-  secondFactor: SecondFactor;
-};
+export type SignInInput = { email: string; password: string; secondFactor: SecondFactor };
 
-/** Thrown by every call whose endpoint does not exist yet. Never a faked success. */
-export class NotWiredError extends Error {
-  constructor(what: string) {
-    super(`${what}: not wired yet — TODO(TASK-06b)`);
-    this.name = "NotWiredError";
+/** `ops.*` keys the console hints with (service-platform/internal/opauth/opauth.go `Key…`). */
+export const OPS_KEYS = {
+  tenantManage: "ops.tenant.manage",
+  domainManage: "ops.domain.manage",
+  miniAppManage: "ops.mini_app.manage",
+} as const;
+
+/** passwordRejectionView.problem (operator_sessions.go). */
+export type PasswordProblem = "empty" | "not_utf8" | "too_short" | "too_long" | "same_as_current";
+
+export type PasswordRejection = { problem: PasswordProblem | ""; minLength: number; maxLength: number };
+
+// --- errors ----------------------------------------------------------------------------------
+
+/**
+ * Every refusal, in the server's one error shape (`core/httpx` `{code, message, trace_id}`), plus
+ * what two routes add: `Retry-After` on 429 and the rule a new password failed on 422.
+ *
+ * `status` 0 means the request never got an answer (network down, gateway unreachable from the
+ * browser). It is NOT a 401: an operator whose network blipped is not signed out.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly traceId: string,
+    readonly retryAfterSeconds: number | null = null,
+    readonly passwordRejection: PasswordRejection | null = null,
+  ) {
+    super(message);
+    this.name = "ApiError";
   }
 }
 
-export async function listTenants(): Promise<TenantSummary[]> {
-  // TODO(TASK-06b): the operator tenant-list route of service-platform (TASK-05), under API_PREFIX.
-  throw new NotWiredError("listTenants");
+/** `Retry-After` in whole seconds (core/ratelimit sends that form only). Anything else is unknown. */
+export function parseRetryAfter(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value.trim())) return null;
+  const n = Number(value.trim());
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
-export async function signIn(_input: SignInInput): Promise<void> {
-  // TODO(TASK-06b): the operator sign-in route of service-platform (TASK-05), under API_PREFIX.
-  // The session cookie is set by the server (HttpOnly, host-only); nothing here touches it.
-  throw new NotWiredError("signIn");
+function asString(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+function asNumber(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+async function errorFrom(res: Response): Promise<ApiError> {
+  let body: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = await res.json();
+    if (parsed !== null && typeof parsed === "object") body = parsed as Record<string, unknown>;
+  } catch {
+    // A body that is not the error shape (a proxy page, an empty 5xx): keep the status, name no code.
+  }
+  const code = asString(body.code) || "unexpected_response";
+  const rejection =
+    code === "new_password_rejected"
+      ? {
+          problem: asString(body.problem) as PasswordProblem | "",
+          minLength: asNumber(body.min_length),
+          maxLength: asNumber(body.max_length),
+        }
+      : null;
+  return new ApiError(
+    res.status,
+    code,
+    asString(body.message),
+    asString(body.trace_id),
+    res.status === 429 ? parseRetryAfter(res.headers.get("Retry-After")) : null,
+    rejection,
+  );
+}
+
+type Method = "GET" | "POST" | "PUT" | "DELETE";
+
+/**
+ * One call, no retry. `path` is built by the functions below from fixed segments plus
+ * `encodeURIComponent`-escaped ids — never from user text spliced in raw.
+ */
+async function call<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(API_PREFIX + path, {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: body === undefined ? { Accept: "application/json" } : { Accept: "application/json", "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, "network_error", "", "");
+  }
+  if (!res.ok) throw await errorFrom(res);
+  if (res.status === 204) return undefined as T;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw new ApiError(res.status, "unexpected_response", "", "");
+  }
+}
+
+const id = (v: string) => encodeURIComponent(v);
+
+// --- sign-in and the signed-in operator -------------------------------------------------------
+
+/**
+ * Exactly one factor field is sent: the server answers both with 400 `second_factor_ambiguous`,
+ * and an empty second key is still a key `DisallowUnknownFields` reads.
+ */
+export function signIn(input: SignInInput): Promise<OperatorSession> {
+  const factor =
+    input.secondFactor.kind === "totp"
+      ? { totp_code: input.secondFactor.code }
+      : { recovery_code: input.secondFactor.code };
+  return call("POST", "/operator-sessions", { email: input.email, password: input.password, ...factor });
+}
+
+export function beginEnrollment(input: { email: string; temporaryPassword: string }): Promise<EnrollmentStart> {
+  return call("POST", "/operator-enrollments", {
+    email: input.email,
+    temporary_password: input.temporaryPassword,
+  });
+}
+
+export function completeEnrollment(input: {
+  email: string;
+  temporaryPassword: string;
+  newPassword: string;
+  totpCode: string;
+}): Promise<EnrollmentCompleted> {
+  return call("POST", "/operator-enrollments/completion", {
+    email: input.email,
+    temporary_password: input.temporaryPassword,
+    new_password: input.newPassword,
+    totp_code: input.totpCode,
+  });
+}
+
+export function getCurrentOperator(): Promise<CurrentOperator> {
+  return call("GET", "/operator-sessions/current");
+}
+
+export function signOut(): Promise<void> {
+  return call("DELETE", "/operator-sessions/current");
+}
+
+/** 204 = every session of the account is revoked, this one included: sign in again. */
+export function changePassword(input: { currentPassword: string; newPassword: string; totpCode: string }): Promise<void> {
+  return call("PUT", "/operators/current/password", {
+    current_password: input.currentPassword,
+    new_password: input.newPassword,
+    totp_code: input.totpCode,
+  });
+}
+
+/** Voids the previous batch. */
+export function regenerateRecoveryCodes(input: { totpCode: string }): Promise<RecoveryCodes> {
+  return call("POST", "/operators/current/recovery-codes", { totp_code: input.totpCode });
+}
+
+// --- the commune registry --------------------------------------------------------------------
+
+export function listCommunes(input: { limit?: number; cursor?: string } = {}): Promise<CommunePage> {
+  const q = new URLSearchParams();
+  if (input.limit !== undefined) q.set("limit", String(input.limit));
+  if (input.cursor) q.set("cursor", input.cursor);
+  const qs = q.toString();
+  return call("GET", "/communes" + (qs ? "?" + qs : ""));
+}
+
+export function getCommune(communeId: string): Promise<CommuneDetail> {
+  return call("GET", `/communes/${id(communeId)}`);
+}
+
+export async function listProvinces(): Promise<Province[]> {
+  const res = await call<{ items: Province[] }>("GET", "/provinces");
+  return res.items;
+}
+
+export function createCommune(input: { name: string; provinceId: string; primaryDomain: string }): Promise<CommuneDetail> {
+  return call("POST", "/communes", {
+    name: input.name,
+    province_id: input.provinceId,
+    primary_domain: input.primaryDomain,
+  });
+}
+
+export function addDomain(communeId: string, domain: string): Promise<CommuneDetail> {
+  return call("POST", `/communes/${id(communeId)}/domains`, { domain });
+}
+
+export function setPrimaryDomain(communeId: string, domain: string): Promise<CommuneDetail> {
+  return call("PUT", `/communes/${id(communeId)}/primary-domain`, { domain });
+}
+
+export function correctName(communeId: string, input: { name: string; reason: string }): Promise<CommuneDetail> {
+  return call("PUT", `/communes/${id(communeId)}/name`, { name: input.name, reason: input.reason });
+}
+
+export function setActivation(communeId: string, input: { active: boolean; reason: string }): Promise<CommuneDetail> {
+  return call("PUT", `/communes/${id(communeId)}/activation`, { active: input.active, reason: input.reason });
+}
+
+/** `note` is sent only when given: an empty one is not a note. */
+export function attachMiniApp(communeId: string, input: { appId: string; note?: string }): Promise<MiniApp> {
+  const body: { app_id: string; note?: string } = { app_id: input.appId };
+  if (input.note) body.note = input.note;
+  return call("POST", `/communes/${id(communeId)}/mini-apps`, body);
 }

@@ -1,4 +1,4 @@
-import { SignInForm } from "@/features/auth/sign-in-form";
+import { SignInFlow } from "@/features/auth/sign-in-flow";
 
 export const metadata = { title: "Đăng nhập — ViGov Khu vận hành nền tảng" };
 
@@ -18,7 +18,7 @@ export default function SignInPage() {
         <p className="brand-note">Dành cho người vận hành của ViHAT.</p>
       </section>
       <main className="form-column">
-        <SignInForm />
+        <SignInFlow />
       </main>
     </div>
   );

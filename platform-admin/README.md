@@ -45,6 +45,8 @@ tiếp sang `service-platform` (`src/lib/server/gateway.ts`). Không có biến 
 |---|---|---|
 | `PLATFORM_HTTP_ADDR` | Origin cổng REST của `service-platform` trong cụm, dạng `scheme://host:port`, không đường dẫn, không thông tin đăng nhập. Trong cụm: tên Service `platform`, cổng `rest` (`deploy/base/platform/service.yaml`) | Mọi `/api/v1/*` trả **503**, không đoán địa chỉ nào; log nêu tên biến, không nêu giá trị |
 
-Hiện trạng: màn `/dang-nhap` chưa nối máy chủ (bấm đăng nhập báo chưa hoạt động); tên cookie
-phiên vận hành chưa chốt (`src/lib/session.ts`), nên mọi màn khác chuyển về `/dang-nhap`. Cả hai
-chờ tuyến vận hành của `service-platform`.
+Đợt 1 (ADR 0048 §01/10 #4) đã nối với tuyến vận hành của `service-platform`
+(`service-platform/internal/http/operator_routes.go`): đăng nhập + đăng ký ứng dụng xác thực lần
+đầu (`/dang-nhap`), đổi mật khẩu và tạo lại mã khôi phục (`/tai-khoan/*`), danh sách xã (`/xa`), tạo
+xã (`/xa/moi`), chi tiết xã (`/xa/[id]`). Kiểu dữ liệu trong `src/lib/api.ts` viết tay có chủ ý —
+tuyến vận hành không nằm trong `kb/20-contracts/openapi.json` — lý do ghi ở đầu tệp.

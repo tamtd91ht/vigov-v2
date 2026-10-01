@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import proxy from "../proxy";
 
 import { needsSignIn } from "./route-access";
+import { OPERATOR_SESSION_COOKIE } from "./session";
 
 const none = () => false;
 const all = () => true;
@@ -14,7 +15,7 @@ describe("needsSignIn — denied cases", () => {
     expect(needsSignIn("/", "s", none)).toBe(true);
   });
 
-  it("while the cookie name is undecided, EVERY console route is denied, cookies or not", () => {
+  it("a null cookie name (undecided) still denies EVERY console route, cookies or not", () => {
     expect(needsSignIn("/xa", null, all)).toBe(true);
   });
 
@@ -34,7 +35,27 @@ describe("needsSignIn — allowed cases", () => {
 });
 
 describe("proxy", () => {
-  it("redirects /xa to /dang-nhap today, with the CSP on the redirect", () => {
+  it("names the cookie service-platform sets, host-only by its __Host- prefix", () => {
+    expect(OPERATOR_SESSION_COOKIE).toBe("__Host-vigov_operator_session");
+  });
+
+  it("a console page with the operator cookie present renders (the server validates it on every call)", () => {
+    const req = new NextRequest("https://admin.example.gov.vn/xa", {
+      headers: { cookie: `${OPERATOR_SESSION_COOKIE}=op1.opaque` },
+    });
+    const res = proxy(req);
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.headers.get("content-security-policy")).toMatch(/'nonce-/);
+  });
+
+  it("another cookie — the commune staff one, say — does not count as an operator session", () => {
+    const req = new NextRequest("https://admin.example.gov.vn/xa/moi", {
+      headers: { cookie: "vigov_session=x; __Host-vigov_operator_session_old=y" },
+    });
+    expect(new URL(proxy(req).headers.get("location") ?? "").pathname).toBe("/dang-nhap");
+  });
+
+  it("redirects /xa to /dang-nhap without a session, with the CSP on the redirect", () => {
     const res = proxy(new NextRequest("https://admin.example.gov.vn/xa?x=1"));
     expect(res.status).toBe(307);
     expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/dang-nhap");
