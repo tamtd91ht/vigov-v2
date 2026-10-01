@@ -3,7 +3,7 @@ id: 0048-khu-van-hanh-vihat-trong-web-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 301c816
+derived_from_commit: c21ab453
 expires: null
 owns_facts:
   - "tài khoản vận hành ở service-identity, bảng riêng (operator_account, operator_session, operator_permission_grant), không tenant_id (chốt 28/09/2026)"
@@ -19,14 +19,22 @@ owns_facts:
   - "ho_so_hien_thi_xa: người ghi sau thắng giữa người vận hành và cán bộ xã; mã VH-/CB- trong vết nói miền"
   - "phát hành QR không ghi vết (người dùng chốt 30/09/2026)"
   - "on-premise do ViHAT vận hành từ xa"
+  - "tạo xã ở platform-admin không gieo cấu hình nội bộ của xã (vai trò, SLA, giờ làm việc, ngày lễ, cán bộ, phòng ban) — admin xã tự khai (chốt 01/10/2026)"
+  - "service-platform kiểm chữ ký token op1. tại chỗ rồi gọi RPC identity tra sổ phiên vận hành mỗi yêu cầu, không cache; RPC vận hành không xã nằm trong methodsWithoutTenant (chốt 01/10/2026)"
+  - "giới hạn đăng nhập vận hành 20 lần / 15 phút / IP, cửa sổ cố định trong Redis, vượt → 429 (chốt 01/10/2026)"
+  - "phạm vi đợt 1 và đợt 2 của platform-admin; sửa tên xã ở đợt 1 chỉ là sửa lỗi gõ, có lý do và vết (chốt 01/10/2026)"
 ---
 
 # 0048. Khu vực vận hành ViHAT trong `web-admin`
 
+> Tiêu đề và tên tệp giữ chữ *"trong `web-admin`"* để không gãy liên kết. Khu vận hành dựng trong
+> app riêng **`platform-admin/`** — §*Sửa của chủ dự án — 27/09/2026*.
+
 **Trạng thái:** **đã chốt hướng** (chủ dự án, 27/09/2026 — ba điều kiện ở §*Quyết định*; điều kiện
 #1 sửa ở §*Sửa của chủ dự án — 27/09/2026*) · **§Thiết kế #1–#4, #10 đã chốt** 28/09/2026 (§*Chốt
 của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · #6 chốt 28/09 (§*Chốt bước 1*) · **#5, #7,
-#9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · #12 là bước vận hành, chưa
+#9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · **đợt 1 `platform-admin` chốt
+01/10/2026** (§*Chốt của chủ dự án — 01/10/2026*) · #12 là bước vận hành, chưa
 làm — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
@@ -225,6 +233,20 @@ Mục này ghi thêm, không sửa phần trên. Người dùng trả lời từ
 
 **§Thiết kế #12** (gỡ hai dòng `admin*.vigov.vn`) là **bước vận hành**, không phải quyết định — giữ
 nguyên ở bảng *Còn mở*, phải xong trước khi host vận hành lên sống.
+
+## Chốt của chủ dự án — 01/10/2026 (cổng ROUTING §0.3, đợt 1 platform-admin)
+
+Mục này ghi thêm, không sửa phần trên. Người dùng trả lời ở cổng §0.3 của đợt 1 trong phiên chính
+01/10/2026. **Chưa dựng gì**: mỗi dòng là điều phải đúng khi dựng.
+
+| # | Đã chốt | Vì sao | Giá · hệ quả người dùng chấp nhận | Luật |
+|---|---|---|---|---|
+| 1 | **Cấu hình nội bộ của xã — vai trò, SLA, giờ làm việc, ngày lễ, cán bộ, phòng ban — là việc của xã, admin xã tự khai.** Tạo xã ở `platform-admin` **không gieo gì** trong số đó. Người dùng: *"đây là nghiệp vụ của xã, vihat không nằm và cũng không được quyết cái này, nên nó là admin xã tự khai"*. Người quản trị đầu tiên của xã **giữ nguyên** như ADR 0046 §*Quyết định 2* | Đúng ranh giới siêu dữ liệu của ADR 0003 (bảng *Được / Không được*) — đây là áp dụng, không phải sửa ADR 0003 | **Không lấy** các hành vi sau của bản mẫu `../vigov-require/apps/platform`: gieo vai trò / danh mục / thời hạn / ngày lễ khi tạo xã (`../vigov-require/apps/platform/src/app/xa/moi/page.tsx:11-14`); tạo admin đầu tiên kèm mật khẩu tạm đưa qua URL (cùng tệp `:136-156`, `:45-47`); đẩy quyền xuống các xã (`../vigov-require/apps/platform/src/app/quyen/page.tsx:9-19`); đọc nhật ký thao tác của mọi xã (`../vigov-require/apps/platform/src/app/nhat-ky/page.tsx:9-15` — ADR 0003:32 cấm); số đếm sử dụng theo xã (`../vigov-require/apps/platform/src/app/xa/[tenantId]/page.tsx:83-99` — ADR 0003:33 chỉ cho số đếm **qua sự kiện**, hôm nay chưa có sự kiện nào). Xã vừa tạo đứng trống cho tới khi admin xã tự khai | ADR 0003; ADR 0046; luật 1 dừng #5 |
+| 2 | **Xác thực người vận hành giữa các service: lai, KHÔNG cache.** `service-platform` — biên HTTP duy nhất của khu vận hành, trên `OPERATOR_HOST` — kiểm **chữ ký** token `op1.` tại chỗ trước (nên platform cũng giữ `OPERATOR_SESSION_SIGNING_KEYS`); token đúng chữ ký thì **mỗi yêu cầu** gọi một RPC mới của identity tra **sổ phiên vận hành** (`sid`, nhàn rỗi 5 phút, thu hồi). Các RPC vận hành mới của identity **không mang xã** và được **THÊM vào `methodsWithoutTenant`** — đây là câu trả lời cho điều kiện dừng của ADR 0012 (`0012-grpc-boundary-contract.md:96-98`) mà §*Chốt bước 1* hoãn sang bước 2 | Chỉ kiểm chữ ký thì **gãy** hai điều đã chốt 28/09: nhàn rỗi 5 phút không đo được, và thu hồi phải chờ tới hạn tuyệt đối 8 giờ. Lưu lượng vận hành là vài người ViHAT trên **một** host, không bao giờ là lưu lượng của xã. RPC phiên vận hành không thể biết xã vì người vận hành không thuộc xã nào — qua được phép thử của ADR 0012 | **Đã bác:** chỉ kiểm chữ ký (người dùng nghiêng về nó lúc đầu vì lo tải). Giá: một lời gọi gRPC tới identity mỗi yêu cầu vận hành; identity ngừng thì khu vận hành ngừng (đóng kín, đúng nguyên tắc *fail closed*). Khoá ký vận hành nằm ở hai service — xoay khoá chạm cả hai. **Ghi lại, không quyết ở đây:** nỗi lo tải người dùng nêu thực ra thuộc về kiểm phiên **cán bộ** (`ResolveStaffPrincipal`, không cache, mỗi yêu cầu của cán bộ) — một việc riêng | Luật 5 bất biến 4; luật 2 bất biến 8 (ADR 0012); luật 11 |
+| 3 | **Giới hạn đăng nhập vận hành theo IP: 20 lần / 15 phút / IP**, cửa sổ cố định đếm trong Redis, áp cho bước **mật khẩu, TOTP và mã khôi phục** của khu vận hành; vượt → **HTTP 429** | §*Chốt bước 1* (sửa sau rà bảo mật) đã nói: khoá 12 giờ thì đoán được email là khoá được người vận hành 12 giờ, nên tuyến **phải** giới hạn theo IP, không chỉ theo tài khoản | Ngưỡng bảo mật do **người dùng chọn** (luật 13) — đổi con số là điều kiện dừng của luật 13, không phải chỉnh tham số | Luật 13 bất biến 7 |
+| 4 | **Phạm vi đợt 1:** biên `OPERATOR_HOST`; đăng nhập (mật khẩu + TOTP + đăng ký lần đầu); liệt kê xã; tạo xã (tên, tỉnh chọn từ danh mục `tinh_thanh`, tên miền chính); thêm tên miền; đặt tên miền chính; bật / tắt hoạt động xã; gắn Mini App riêng của xã (`mini_app`, chế độ `rieng`). **Đợt 2:** hồ sơ hiển thị + logo, sửa giới hạn tải lên, phát hành QR, mã lĩnh vực phản ánh cấp 1, màn App secret (ADR 0066) | Đợt 1 là đủ để mở một xã mới không qua SQL tay (§*Bối cảnh*) | Thứ tự dựng ở §*Chốt bước 1* (bước 4 là giới hạn tải lên) **nhường** cho phạm vi này: giới hạn tải lên sang đợt 2 | — |
+| 5 | **Tên miền và tên xã sau khi tạo:** đợt 1 chỉ **thêm** tên miền và **đặt tên miền chính**. **Không** gỡ tên miền, **không** trỏ một tên miền sang xã khác, **không** sáp nhập / chia — vẫn là ĐIỀU KIỆN DỪNG #4, qua `skills/admin-unit-merge`, một đợt riêng. **Sửa tên xã ĐƯỢC** ở đợt 1 nhưng **chỉ là sửa lỗi gõ**: bắt buộc lý do, ghi vết giá trị trước / sau. Người dùng chọn *"Thêm cả sửa tên khi gõ nhầm"* | Sửa lỗi nhập liệu không phải đổi tên đơn vị hành chính — đổi tên thật vẫn là ĐIỀU KIỆN DỪNG #4. Trỏ lại tên miền là đường sáp nhập (ADR 0047 câu 4), nên đi cùng sáp nhập | Hẹp hơn ADR 0003:30 (cho *đổi tên, gán tên miền*) và §*Phạm vi của khu* (*Gắn / trỏ lại*): trỏ lại chưa có màn. Ranh giới "lỗi gõ" với "đổi tên" dựa vào **lý do** người vận hành ghi — máy không phân biệt được | Luật 1 dừng #3; luật 6 bất biến 5; luật 7 bất biến 6 |
+| 6 | **Mặc định đã nêu với người dùng, không bị phản đối:** (a) tài khoản vận hành vẫn quản lý bằng CLI `operatorctl` phía máy chủ (§*Chốt bước 1*) — **không** màn quản lý tài khoản; (b) bật / tắt xã do khoá **`ops.tenant.manage`** đã có canh — **không** khoá mới; (c) tuyến vận hành phải **loại khỏi** các bề mặt sinh ra cho xã (Ingress sinh từ openapi và cổng web-admin), chỉ tới được trên `OPERATOR_HOST`; (d) các stage SQL tạm trong Jenkins cho Xã Thăng Bình **giữ** tới khi khu vận hành được kiểm trên prod | (b) thêm khoá là điều kiện dừng #1. (c) một tuyến vận hành lọt ra host xã là ĐIỀU KIỆN DỪNG #6 và là lỗi bảo mật (§*Hệ quả*) | **Còn mở #12** (gỡ hai dòng `admin*.vigov.vn`) vẫn phải xong **trước khi** host vận hành lên sống — đợt 1 không đóng nó | Luật 5 bất biến 3; luật 1 bất biến 3 |
 
 ## ĐIỀU KIỆN DỪNG
 
