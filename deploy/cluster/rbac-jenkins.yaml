@@ -27,6 +27,13 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log", "events"]
     verbs: ["get", "list", "watch"]            # chỉ đọc — để chẩn đoán khi rollout đỏ
+  # Pod MỘT LƯỢT của vigov-deploy: psql (`chay_psql`), operatorctl, thử PING clamd (`dung-clamav`).
+  # create + delete, KHÔNG exec/attach. ⚠ Tạo được pod là đọc GIÁN TIẾP được mọi Secret của
+  # namespace (pod tự gắn envFrom) — đúng điều các việc ấy dùng (platform-secrets cho psql); RBAC
+  # không giới hạn được nội dung pod. Giới hạn thật là ai sửa được deploy/Jenkinsfile.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
@@ -71,6 +78,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log", "events"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete"]               # như vigov-prod — lý do ở trên
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
