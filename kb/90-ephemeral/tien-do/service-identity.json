@@ -404,6 +404,14 @@
       "no_confirm": [],
       "tiep_theo": "GIẢ ĐỊNH NHÀ CUNG CẤP: 'phiên quản trị' = cầm admin.user; khoá tự động KHÔNG thu hồi phiên đang mở (tránh để kẻ biết email đá người khác ra); lần sai dưới ngưỡng chỉ vào log an ninh. CÒN: giới hạn tần suất theo địa chỉ nguồn (chưa có core/ratelimit); màn cán bộ chưa thấy khoá tự động (canBoTomTat chưa có trường — đổi hợp đồng + web); mở/khoá thủ công chưa vào log an ninh; ca PostgreSQL cho FOR UPDATE hai lần đoán song song (VIGOV_TEST_DSN).",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "dang-nhap-app-rieng-o-identity",
+      "viec": "Đăng nhập app riêng của xã thẳng ViGov: identity đổi accessToken/phoneToken (và mã vị trí) bằng secret của App ID theo xã, mở phiên công dân; vihat-miniapp chỉ còn app chung/demo (ADR 0066)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "internal/zalo/ — AccountID (/v2.0/me?fields=id, không secret, id giữ đúng chữ số), Phone (/v2.0/me/info, secret_key, appsecret_proof tắt mặc định, chuẩn hoá 84…), hai lớp lỗi ErrTokenInvalid/ErrZaloUnreachable, không lộ token/số/thông điệp Zalo; httptest xanh. Chưa ai gọi gói này.",
+      "tiep_theo": "Chờ người dùng chốt 6 câu (tuyến POST /api/v1/citizen-sessions, ngưỡng tần suất, nhập secret bằng operatorctl, đường platform-admin, chuyển đổi mã vị trí, dùng lại SECRET_ENCRYPTION_KEYS). Migration bảng secret + tuyến + nối main.go ĐỢI phiên song song commit service-identity. Hạ tầng: netpol identity ra 443, SECRET_ENCRYPTION_KEYS trong identity-secrets. Màn platform-admin chặn bởi ADR 0048 bước 2–3.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
