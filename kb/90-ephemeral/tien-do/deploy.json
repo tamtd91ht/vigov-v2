@@ -142,10 +142,10 @@
     {
       "id": "gan-mini-app-thang-binh",
       "viec": "Việc một lần trong job vigov-deploy: ghi dòng mini_app App ID 3291993990104489440 → Xã Thăng Bình (tạm, tới khi platform-admin có màn ghi sổ)",
-      "trang_thai": "dang_lam",
+      "trang_thai": "xong",
       "bang_chung": "deploy/Jenkinsfile stage 'Gắn Mini App Thăng Bình' (HANH_DONG=gan-mini-app-thang-binh, MT=prod, XAC_NHAN=vigov-prod): một giao dịch, RAISE khi xã thiếu/ngừng hoặc App ID đã có dòng (kể cả xoá mềm), INSERT mini_app + audit_log 'gan_mini_app' cùng giao dịch, chủ thể van-hanh:<người bấm>; chạy qua chay_psql như tao-xa-thang-binh. make check exit 0.",
       "no_confirm": [],
-      "tiep_theo": "CHƯA CHẠY TRÊN JENKINS, chưa qua trình phân tích Groovy. Lượt đầu sau khi đổi parameters sẽ dừng (Jenkins học tham số) — bấm lại. Cần migration platform 0006 đã áp. Gỡ stage khi platform-admin có màn ghi sổ mini_app.",
+      "tiep_theo": "ĐÃ CHẠY TRÊN PROD — chủ dự án xác nhận 01/10/2026 (dòng mini_app 3291993990104489440 đã ghi). Cùng ngày Xã Thăng Bình đổi App ID: xem mục doi-app-id-thang-binh. Stage giữ ở dạng LỊCH SỬ (chạy lại sẽ DỪNG ở phép kiểm); gỡ khi platform-admin có màn ghi sổ mini_app.",
       "menu": "phan-anh-nguoi-dan"
     },
     {
@@ -196,6 +196,15 @@
       "no_confirm": [],
       "tiep_theo": "Ingress trên cụm vẫn dựng tay trong Rancher (chủ dự án giữ): đổi host thì sửa hosts.yaml → make kb → nhập lại kết quả kubectl kustomize deploy/overlays/<env>. Đổi api_suffix/gốc web cần migration mới cho CHECK 0007. Nhãn dành riêng (admin, api, stg, www) vẫn viết tay trong mã.",
       "menu": null
+    },
+    {
+      "id": "doi-app-id-thang-binh",
+      "viec": "Việc một lần trong job vigov-deploy: Xã Thăng Bình đổi App ID 3291993990104489440 → 3043188591857102858 (chủ dự án 01/10/2026); thêm dòng mini_app mới, TẮT dòng cũ (dang_hoat_dong=false, không xoá — chủ dự án chọn tắt, không để hai app cùng chạy)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "deploy/Jenkinsfile stage 'Đổi App ID Thăng Bình' (HANH_DONG=doi-app-id-thang-binh, MT=prod, XAC_NHAN=vigov-prod): một giao dịch — RAISE khi xã thiếu/ngừng, khi dòng cũ không còn hoạt động/đã xoá mềm/gắn xã khác, khi App ID mới đã có dòng; INSERT mini_app mới + UPDATE dòng cũ + hai audit_log (gan_mini_app, tat_mini_app có truoc/sau) cùng giao dịch, chủ thể van-hanh:<người bấm>. Mặc định APP_ID đổi sang App ID mới. citizen-app/scripts/ung-dung-theo-ten-mien.mjs cùng commit.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY TRÊN JENKINS. Lượt đầu sau khi đổi parameters sẽ dừng (Jenkins học tham số) — bấm lại. Sau khi chạy, việc của người vận hành (khoá bí mật không qua job, luật 8): (1) identity operatorctl mini-app-secret set cho App ID mới, (2) retire App ID cũ, (3) vihat-miniapp thêm cặp App ID mới vào biến app xã (đổi mã vị trí), (4) bật demo cho App ID mới nếu cần, (5) đẩy bundle với ZMP_TOKEN của App ID mới.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

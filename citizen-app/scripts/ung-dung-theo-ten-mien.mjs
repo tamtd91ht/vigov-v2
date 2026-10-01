@@ -24,9 +24,11 @@
  */
 export const APP_ID_THEO_TEN_MIEN = {
   "xa-vi-du.vigov.example": "<APP-ID-MINI-APP-CUA-XA>",
-  // Given by the owner 2026-09-27. Its `mini_app` row in service-platform is entered by an
-  // operator; until then the app deploys but the server refuses to open it (ADR 0047, #3).
-  "thangbinh-danang.vigov.vn": "3291993990104489440",
+  // Given by the owner 2026-10-01, replacing 3291993990104489440 (given 2026-09-27). Its `mini_app`
+  // row in service-platform is entered by the Jenkins stage `doi-app-id-thang-binh`, which also
+  // switches the old row off; until it runs the app deploys but the server refuses to open it
+  // (ADR 0047, #3).
+  "thangbinh-danang.vigov.vn": "3043188591857102858",
 };
 
 /**

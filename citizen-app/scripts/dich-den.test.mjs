@@ -89,7 +89,7 @@ describe("tệp ánh xạ", () => {
     // Every real pair is pinned here, so adding one is a deliberate two-file change a reviewer
     // sees — and the same pair needs its `mini_app` row in service-platform (ADR 0047, #3).
     const DA_GIAO = {
-      "thangbinh-danang.vigov.vn": "3291993990104489440", // owner, 2026-09-27
+      "thangbinh-danang.vigov.vn": "3043188591857102858", // owner, 2026-10-01 (replaced 3291993990104489440)
     };
     const that = Object.fromEntries(
       Object.entries(APP_ID_THEO_TEN_MIEN).filter(([, app_id]) => !laPlaceholder(app_id)),

@@ -76,12 +76,15 @@ pipeline {
     // chạy nó TRƯỚC `doi-ten-mien-thang-binh`.
     // `doi-ten-mien-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026). Hai việc gỡ bằng một commit
     // khi chủ dự án xác nhận xong.
-    // `gan-mini-app-thang-binh` là việc MỘT LẦN (chủ dự án, 27/09/2026) — tạm thời, tới khi
-    // platform-admin có màn ghi sổ mini_app; gỡ cùng lúc ấy.
+    // `gan-mini-app-thang-binh` là việc MỘT LẦN (chủ dự án, 27/09/2026) — ĐÃ CHẠY (chủ dự án xác nhận
+    // 01/10/2026); chạy lại sẽ DỪNG ở phép kiểm vì App ID cũ đã có dòng.
+    // `doi-app-id-thang-binh` là việc MỘT LẦN (chủ dự án, 01/10/2026): Xã Thăng Bình chuyển sang App ID
+    // 3043188591857102858, dòng App ID cũ bị TẮT (không xoá). Gỡ cả hai khi platform-admin có màn
+    // ghi sổ mini_app.
     // Sáu việc đăng nhập app riêng (ADR 0066) — thứ tự ở khối chú thích trước stage
     // 'Tạo khoá mã hoá identity'. Gỡ cùng commit đưa platform-admin có màn tương ứng.
     choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
-                                  'gan-mini-app-thang-binh',
+                                  'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
                                   'dung-clamav'],
@@ -104,8 +107,10 @@ pipeline {
                         'TRƯỚC job service-platform có migration 0007) · ' +
                         'tao-xa-thang-binh: LỊCH SỬ — đã chạy 26/09/2026; chạy lại sẽ DỪNG ở phép kiểm, và sau ' +
                         'platform 0007 câu INSERT admin.* của nó bị CHECK từ chối · ' +
-                        'gan-mini-app-thang-binh: ghi dòng mini_app App ID 3291993990104489440 → Xã Thăng Bình ' +
-                        '(MT=prod; cần platform migration 0006) · ' +
+                        'gan-mini-app-thang-binh: LỊCH SỬ — đã ghi dòng mini_app App ID 3291993990104489440 → ' +
+                        'Xã Thăng Bình; chạy lại sẽ DỪNG ở phép kiểm · ' +
+                        'doi-app-id-thang-binh: ghi dòng mini_app App ID 3043188591857102858 → Xã Thăng Bình VÀ tắt ' +
+                        'dòng App ID 3291993990104489440 (không xoá), một giao dịch, có vết (MT=prod) · ' +
                         'dung-clamav: áp deploy/cluster/clamav.yaml (clamd, ADR 0052 §9) vào namespace của MT, đợi sẵn sàng, ' +
                         'thử PING/PONG, rồi đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config NẾU CHƯA CÓ ' +
                         '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions)')
@@ -116,15 +121,15 @@ pipeline {
                      'vigov-service-reporting', 'vigov-web-admin'],
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
-           description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / ' +
+           description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
                         'tao-khoa-ma-hoa-identity / bat-demo-mini-app / tat-demo-mini-app: gõ đúng vigov-prod. ' +
                         'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / dung-clamav: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
-    string(name: 'APP_ID', defaultValue: '3291993990104489440',
+    string(name: 'APP_ID', defaultValue: '3043188591857102858',
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
-                        '(gan-mini-app-thang-binh). Mặc định: app riêng của Xã Thăng Bình.')
+                        '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
     string(name: 'TICKET', defaultValue: '',
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: BẮT BUỘC — số phiếu yêu cầu, ghi vào vết kiểm toán ' +
                         'của xã đích (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
@@ -151,7 +156,7 @@ pipeline {
           // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
           if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
-                                  'gan-mini-app-thang-binh',
+                                  'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
                                   'dung-clamav'])) {
@@ -509,6 +514,105 @@ SQL
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" gan-mini-app.sql
           echo ""
           echo "Xong. Bước kế: cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang"
+        ''')
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // VIỆC MỘT LẦN — Xã Thăng Bình ĐỔI App ID (chủ dự án, 01/10/2026): 3291993990104489440 → 3043188591857102858.
+    //
+    // TẮT, KHÔNG XOÁ, dòng cũ: `dang_hoat_dong = false` là đúng cách migration 0006 dành cho việc này
+    // (`0006:74-76` — một dòng tắt được trả lời như App ID lạ: từ chối). Dòng cũ là thứ đã quyết xã
+    // của các phiên công dân trước đây, nên nó ở lại (luật 7), và App ID cũ không bao giờ được gắn
+    // lại lặng lẽ (khoá chính giữ nó). Chủ dự án chọn TẮT (01/10/2026), không để hai app cùng chạy.
+    //
+    // MỘT GIAO DỊCH: thêm dòng mới, tắt dòng cũ, hai dòng `audit_log` — hoặc tất cả, hoặc không gì.
+    // Một nửa (đã tắt cũ, chưa có mới) là một xã không mở được app nào. Mọi phép kiểm RAISE và
+    // không ghi gì: xã thiếu/ngừng; dòng cũ không có, không còn hoạt động, đã xoá mềm, hay gắn xã
+    // khác; App ID mới đã có dòng (kể cả xoá mềm).
+    //
+    // Cặp mới cũng phải sửa ở `citizen-app/scripts/ung-dung-theo-ten-mien.mjs` (đích đẩy bundle) —
+    // cùng commit với stage này (ADR 0047 CÒN MỞ #3: hai nơi, chưa có phép đối chiếu).
+    //
+    // KHÔNG làm ở đây, là việc của người vận hành — khoá bí mật không đi qua tệp này (luật 8):
+    //   · identity: `operatorctl mini-app-secret set --tenant 01M3CS7HHK72V71CGRRJHGR8E8
+    //     --app-id 3043188591857102858 --ticket <n> < tệp-khoá` (khoá của App ID MỚI, lấy ở Zalo),
+    //     rồi `mini-app-secret retire ... --app-id 3291993990104489440`.
+    //   · vihat-miniapp: thêm cặp App ID mới = khoá vào biến các app xã (bước đổi mã vị trí).
+    //   · Nếu App ID cũ đang bật chế độ demo: `bat-demo-mini-app` với APP_ID mới.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Đổi App ID Thăng Bình') {
+      when { expression { params.HANH_DONG == 'doi-app-id-thang-binh' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('doi-app-id-thang-binh chỉ chạy với MT=prod.') }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          // Tên người bấm đi THẲNG vào câu SQL bên dưới — chỉ nhận ký tự an toàn.
+          if (!(env.NGUOI_BAM ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("Tên người bấm '${env.NGUOI_BAM}' có ký tự không an toàn cho câu SQL — dừng.")
+          }
+        }
+        writeFile file: 'doi-app-id.sql', encoding: 'UTF-8', text: """\\set ON_ERROR_STOP on
+BEGIN;
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND dang_hoat_dong) THEN
+    RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 chua co hoac khong con hoat dong — khong ghi gi';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM mini_app WHERE app_id = '3291993990104489440'
+                   AND che_do = 'rieng' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'
+                   AND dang_hoat_dong AND deleted_at IS NULL) THEN
+    RAISE EXCEPTION 'DUNG: App ID cu 3291993990104489440 khong co dong dang hoat dong gan Xa Thang Binh (xem bang doc o tren) — khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM mini_app WHERE app_id = '3043188591857102858') THEN
+    RAISE EXCEPTION 'DUNG: App ID moi 3043188591857102858 da co dong trong mini_app (xem bang doc o tren) — khong ghi gi';
+  END IF;
+END \$\$;
+INSERT INTO mini_app (app_id, che_do, tenant_id, ghi_chu, tao_boi, cap_nhat_boi)
+  VALUES ('3043188591857102858', 'rieng', '01M3CS7HHK72V71CGRRJHGR8E8',
+          'App riêng Xã Thăng Bình — App ID chủ dự án giao 01/10/2026, thay 3291993990104489440 (jenkins vigov-deploy #${env.BUILD_NUMBER})',
+          'van-hanh:${env.NGUOI_BAM}', 'van-hanh:${env.NGUOI_BAM}');
+UPDATE mini_app
+   SET dang_hoat_dong = false, cap_nhat_luc = now(), cap_nhat_boi = 'van-hanh:${env.NGUOI_BAM}'
+ WHERE app_id = '3291993990104489440' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND dang_hoat_dong;
+INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
+  VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'gan_mini_app',
+          'MiniApp 3043188591857102858', now(),
+          jsonb_build_object('app_id', '3043188591857102858', 'che_do', 'rieng',
+                             'xa', 'Xã Thăng Bình', 'thay_cho', '3291993990104489440',
+                             'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
+INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
+  VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'tat_mini_app',
+          'MiniApp 3291993990104489440', now(),
+          jsonb_build_object('app_id', '3291993990104489440',
+                             'truoc', jsonb_build_object('dang_hoat_dong', true),
+                             'sau', jsonb_build_object('dang_hoat_dong', false),
+                             'ly_do', 'Xã Thăng Bình chuyển sang App ID 3043188591857102858 (chủ dự án, 01/10/2026)',
+                             'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
+COMMIT;
+SELECT m.app_id, m.che_do, m.tenant_id, t.ten, m.dang_hoat_dong, m.tao_boi, m.tao_luc, m.cap_nhat_boi, m.cap_nhat_luc
+  FROM mini_app m JOIN tenant t ON t.id = m.tenant_id
+ WHERE m.app_id IN ('3291993990104489440', '3043188591857102858')
+ ORDER BY m.tao_luc;
+"""
+        sh(CHAY_PSQL + '''
+          echo "── CSDL, xã, và sổ mini_app (trước khi ghi)"
+          cat > doc-doi-app-id.sql <<'SQL'
+SELECT current_database() AS csdl, current_user AS vai;
+SELECT id, ten, dang_hoat_dong FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8';
+SELECT app_id, che_do, tenant_id, dang_hoat_dong, deleted_at FROM mini_app ORDER BY tao_luc;
+SQL
+          chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-doi-app-id.sql
+          echo "── ghi"
+          chay_psql "vigov-psql-ghi-$BUILD_NUMBER" doi-app-id.sql
+          echo ""
+          echo "Xong ở platform. Còn việc của người vận hành (khoá bí mật, không qua job này):"
+          echo "  1. identity: operatorctl mini-app-secret set --tenant 01M3CS7HHK72V71CGRRJHGR8E8 --app-id 3043188591857102858 --ticket <n> < tệp-khoá"
+          echo "  2. identity: operatorctl mini-app-secret retire --tenant 01M3CS7HHK72V71CGRRJHGR8E8 --app-id 3291993990104489440 --ticket <n>"
+          echo "  3. vihat-miniapp: thêm cặp 3043188591857102858=<khoá> vào biến các app xã (đổi mã vị trí)"
+          echo "  4. cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang (ZMP_TOKEN của App ID mới)"
         ''')
       }
     }
