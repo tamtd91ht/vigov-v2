@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/vihat/vigov/core/secret"
@@ -43,7 +44,7 @@ var (
 )
 
 // operatorConsoleLabels are the only first labels OPERATOR_HOST may carry directly under the
-// platform's own domains (platformRoot, platformStagingRoot).
+// platform's own domains (platformWebRoots).
 //
 // WHY ANY OTHER LABEL THERE IS REFUSED: under vigov.vn every other first label is a commune's web
 // host or a candidate for one (ADR 0046: `<xa>.vigov.vn`, `<xa>.stg.vigov.vn`), or a service API
@@ -60,10 +61,9 @@ var (
 // this repository for what a commune host looks like on a domain it does not know.
 var operatorConsoleLabels = map[string]bool{"admin": true, "admin-stg": true}
 
-const (
-	platformRoot        = "vigov.vn"
-	platformStagingRoot = "stg.vigov.vn"
-)
+// platformWebRoots and platformRoot are GENERATED into hosts.gen.go from deploy/hosts.yaml, the one
+// place public hostnames are written (owner, 01/10/2026) — the same source service-platform's
+// reserved-domain rule and platform-admin's copy of this check are generated from.
 
 // parseOperatorHost validates OPERATOR_HOST. raw is the value as the environment held it, trimmed
 // the value r.read returned. "" is the designed OFF state and is returned as such.
@@ -109,12 +109,12 @@ func parseOperatorHost(raw, trimmed string) (string, error) {
 				"not starting or ending with '-')", ErrOperatorHostInvalid, h, l)
 		}
 	}
-	if h == platformRoot || h == platformStagingRoot {
+	if slices.Contains(platformWebRoots, h) {
 		return "", fmt.Errorf("%w: %q is the platform's root domain, not the operator console", ErrOperatorHostInvalid, h)
 	}
-	// The staging root is tried first: "admin.stg.vigov.vn" also ends in ".vigov.vn", and its
-	// label under vigov.vn ("admin.stg") would miss the table.
-	for _, root := range []string{platformStagingRoot, platformRoot} {
+	// Most specific root first (the generated order): "admin.stg.vigov.vn" also ends in
+	// ".vigov.vn", and its label under vigov.vn ("admin.stg") would miss the table.
+	for _, root := range platformWebRoots {
 		if under, ok := strings.CutSuffix(h, "."+root); ok {
 			if !operatorConsoleLabels[under] {
 				return "", fmt.Errorf("%w: %q is shaped like a commune or service host under %s — "+

@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Reserved hosts: the addresses of the platform itself, which must NEVER resolve to a commune.
 //
@@ -19,9 +22,17 @@ import "strings"
 // boundary ADR 0003 draws. The rows are kept (rule 7; the owner decides their removal); what
 // changes is that the lookup refuses them before it reads the table.
 //
+// THE ROOTS AND SUFFIXES ARE NOT TYPED HERE: platformWebRoots and platformAPISuffixes are GENERATED
+// into hosts.gen.go from deploy/hosts.yaml, the one place public hostnames are written (owner,
+// 01/10/2026). Generated into this package rather than imported from core/, because domain/ imports
+// the standard library only.
+//
 // KEPT IN LOCK-STEP with the CHECK `tenant_domain_khong_danh_rieng` in
 // migrations/0007_tenant_domain_khong_danh_rieng.sql. Changing one without the other is caught by
-// domain.TestLuatTenMienDanhRiengGoVaSQLKhop, which runs both over the same table of hosts.
+// domain.TestLuatTenMienDanhRiengGoVaSQLKhop, which runs both over the same table of hosts. That
+// includes an edit to deploy/hosts.yaml: a changed root or api_suffix moves the Go half on the next
+// `make kb`, the SQL half cannot read that file, so it needs a NEW migration (0007 is applied and
+// is never edited) — the test is red on the hosts its table holds until that migration exists.
 
 // nhanDanhRieng are the first labels, directly under vigov.vn or stg.vigov.vn, that name a
 // platform surface rather than a commune.
@@ -33,11 +44,6 @@ var nhanDanhRieng = map[string]bool{
 	"stg":       true,
 	"www":       true,
 }
-
-const (
-	mienGoc    = "vigov.vn"
-	mienGocStg = "stg.vigov.vn"
-)
 
 // LaTenMienDanhRieng reports whether host is a platform address that must never resolve to a
 // commune. host may arrive raw: it is lower-cased, trimmed, stripped of its port and of any
@@ -55,15 +61,17 @@ func LaTenMienDanhRieng(host string) bool {
 	}
 	h = strings.TrimRight(h, ".")
 
-	if h == mienGoc || h == mienGocStg {
+	if slices.Contains(platformWebRoots, h) {
 		return true
 	}
-	if strings.HasSuffix(h, ".api."+mienGoc) || strings.HasSuffix(h, ".api-stg."+mienGoc) {
-		return true
+	for _, suffix := range platformAPISuffixes {
+		if strings.HasSuffix(h, "."+suffix) {
+			return true
+		}
 	}
-	// The stg suffix is tried first: "admin.stg.vigov.vn" also ends in ".vigov.vn", and its
-	// label under vigov.vn ("admin.stg") would miss the table.
-	for _, goc := range []string{mienGocStg, mienGoc} {
+	// Most specific root first (the generated order): "admin.stg.vigov.vn" also ends in
+	// ".vigov.vn", and its label under vigov.vn ("admin.stg") would miss the table.
+	for _, goc := range platformWebRoots {
 		if nhan, ok := strings.CutSuffix(h, "."+goc); ok {
 			return nhanDanhRieng[nhan]
 		}

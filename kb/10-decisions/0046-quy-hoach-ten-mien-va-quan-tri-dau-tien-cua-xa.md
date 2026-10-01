@@ -11,6 +11,7 @@ owns_facts:
   - "vì sao hai dòng tenant_domain admin.vigov.vn / admin-stg.vigov.vn được giữ mà không phân giải, và vì sao không VALIDATE ràng buộc 0007"
   - "vì sao web cán bộ không gọi thẳng <service>.api.vigov.vn"
   - "vì sao người quản trị đầu tiên của xã được gieo ở lần đăng nhập admin đầu tiên bằng IDENTITY_ADMIN_SEED_PASSWORD, và nó căng với ADR 0003 ở đâu"
+  - "vì sao tên miền công khai có một nguồn duy nhất là tệp deploy/hosts.yaml chứ không phải ConfigMap, vì sao Mini App chỉ dựng với host prod, và vì sao Ingress trên cụm vẫn dựng tay (01/10/2026)"
 ---
 
 # 0046. Quy hoạch tên miền, và người quản trị đầu tiên của xã
@@ -40,6 +41,9 @@ người quản trị cho xã nào.
 | `<service>.api.vigov.vn` | API từng dịch vụ prod — vận hành, gỡ lỗi, Mini App về sau |
 | `<service>.api-stg.vigov.vn` | API từng dịch vụ staging |
 | `admin.vigov.vn` | cổng quản trị tổng liên xã của Vihat — **CHƯA DỰNG** |
+
+> 01/10/2026 — chủ dự án chốt **nơi viết các host này**: một nguồn duy nhất `deploy/hosts.yaml`,
+> giá trị không đổi. Xem [Sửa đổi 01/10/2026](#sửa-đổi-01102026--một-nguồn-cho-tên-miền-công-khai).
 
 ### Vì sao bốn dạng không chồng nhau
 
@@ -147,7 +151,7 @@ xoá mềm thì từ chối, không tạo lại.
 | Việc | Vì sao quan trọng |
 |---|---|
 | Staging và prod **dùng chung CSDL, Redis, khoá ký phiên** | Tên miền chỉ tách môi trường **bằng mắt**; liên kết host chính (`la_chinh`) trên staging là liên kết prod |
-| Mini App có **một** địa chỉ gốc, hiện rỗng (`citizen-app/src/cong-dan/api/dia-chi-vigov.ts:21`); dịch vụ Go **không có CORS** | Cả hai phải có trước khi Mini App gọi `<service>.api.vigov.vn`. **Cho phép origin nào là quyết định của chủ dự án** |
+| Mini App có **một** địa chỉ gốc, hiện rỗng (`citizen-app/src/cong-dan/api/dia-chi-vigov.ts:21`); dịch vụ Go **không có CORS** | Cả hai phải có trước khi Mini App gọi `<service>.api.vigov.vn`. **Cho phép origin nào là quyết định của chủ dự án** · 01/10/2026: bảng host API của Mini App sinh từ `deploy/hosts.yaml`, chỉ prod (Sửa đổi 01/10/2026) |
 | Host `*.api` là host dành riêng → biên trả 404 mọi tuyến cần xã | Mini App gọi qua đó cần xã đến từ **phiên** (ADR 0005, 0045), không từ Host — chưa dựng |
 | Gỡ hai dòng `admin*.vigov.vn` rồi `VALIDATE` | Quyết định của chủ dự án (luật 7) |
 | Ca `_pg_test` của gieo (ON CONFLICT trên bảng phân mảnh, ba lần đăng nhập đầu đồng thời) chưa chạy trên PostgreSQL thật | Test xanh ở máy không Docker là SKIP, không phải bằng chứng |
@@ -159,8 +163,20 @@ xoá mềm thì từ chối, không tạo lại.
 |---|---|---|
 | Hai dòng `admin*.vigov.vn` | **Gỡ** — `admin.vigov.vn` là tên miền của pod web quản trị tổng liên xã (chưa dựng) | bước `doi-ten-mien-thang-binh` (`deploy/Jenkinsfile`), DELETE lọc đúng host + đúng xã, cùng giao dịch với vết `doi_ten_mien`. Sau khi gỡ, `VALIDATE` 0007 làm được bằng một migration sau |
 | Mini App và CORS | Chủ dự án giao nhà cung cấp đề xuất, cho **nới rộng một chút** vì triển khai phụ thuộc Zalo | `CITIZEN_CORS_ALLOWED_ORIGINS`, **chỉ** rìa công dân (`core/httpx/cors.go`); giá trị đề xuất `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me`; `*` trơn và `http` bị từ chối. Mini App gọi `https://petitions.api.vigov.vn` (`dia-chi-vigov.ts`) — rìa công dân lấy xã từ phiên nên host dành riêng không cản |
-| Staging dùng chung CSDL/Redis/khoá | **Chấp nhận tạm** — thực tế chỉ dùng prod, staging để dự phòng | — |
+| Staging dùng chung CSDL/Redis/khoá | **Chấp nhận tạm** — thực tế chỉ dùng prod, staging để dự phòng. **01/10/2026:** vì thế Mini App không có trục staging — xem đoạn dưới | — |
 | `<service>.api.vigov.vn` mở cả cổng rest | **Đồng ý** | — |
+
+## Sửa đổi 01/10/2026 — một nguồn cho tên miền công khai
+
+Chủ dự án chốt; giá trị host **không đổi** so với mô hình 26/09.
+
+| # | Quyết định | Vì sao |
+|---|---|---|
+| 1 | Host công khai có **một nguồn** trong kho: [`deploy/hosts.yaml`](../../deploy/hosts.yaml). Mọi chỗ khác **đọc nó hoặc được `tools/ingress` sinh ra từ nó**: Ingress base + overlay, hằng host của luật tên miền dành riêng (service-platform) và phép kiểm `OPERATOR_HOST` (core/config, platform-admin), bảng host API theo dịch vụ của Mini App (sinh lúc build, tệp sinh được commit) | Cùng một host gõ lại ở nhiều nơi là nhiều bản sẽ lệch; bản bị quên là bản ai đó đọc |
+| 2 | Mini App **chỉ dựng với host prod**, không có trục staging (`mini_app_environment`) | Staging dùng chung CSDL với prod (bảng trên); thêm một giá trị là thêm một bundle (ADR 0047). Câu "thêm dòng staging là quyết định của chủ dự án" coi như đã trả lời |
+| 3 | Luật tên miền dành riêng theo cùng nguồn, **cùng một lượt** | CHECK SQL ở `service-platform/migrations/0007_tenant_domain_khong_danh_rieng.sql` không đọc được tệp: đổi `api_suffix` hay gốc `web_host` phải kèm **migration MỚI**; `TestLuatTenMienDanhRiengGoVaSQLKhop` (`service-platform/internal/domain/ten_mien_danh_rieng_sql_test.go:30`) đỏ tới khi có |
+| 4 | Ingress trên cụm vẫn **dựng tay trong Rancher**; kho chỉ render (`kubectl kustomize deploy/overlays/<env>`) để nhập vào. **Không** có job Jenkins apply. DNS và Secret TLS nằm **ngoài** kho | Giữ nguyên cách vận hành cụm hiện có; kho là bản mẫu, không phải nơi ra lệnh cho cụm |
+| 5 | Chủ dự án nói *"cấu hình hết vào ConfigMap cho linh động"*; dựng thành **tệp trong kho** | Không bên tiêu thụ nào đọc được ConfigMap của cụm: Mini App là bundle tĩnh trên Zalo, và host của Ingress không tham chiếu được ConfigMap |
 
 ## Liên quan
 

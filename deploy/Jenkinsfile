@@ -1074,7 +1074,28 @@ EOF
       when { expression { params.HANH_DONG == 'kiem-tra-dang-nhap-app-rieng' } }
       steps {
         script {
-          env.API_HOST = (params.MT == 'prod') ? 'identity.api.vigov.vn' : 'identity.api-stg.vigov.vn'
+          // Host đọc từ deploy/hosts.yaml — nơi DUY NHẤT viết host công khai (chủ dự án, 01/10/2026),
+          // không gõ lại ở đây. Pipeline này không dùng readYaml (pipeline-utility-steps) ở đâu khác,
+          // nên đọc bằng awk: đúng MỘT `api_suffix` dưới mục `name: <MT>` của `environments`, đúng dạng
+          // tên miền. Không thấy, thấy hai, hay sai dạng → DỪNG lượt; không bao giờ đoán host.
+          def suffix = ''
+          withEnv(["MT=${params.MT}"]) {
+            suffix = sh(returnStdout: true, script: '''
+              set -eu
+              [ -r deploy/hosts.yaml ] || { echo "DỪNG: không đọc được deploy/hosts.yaml" >&2; exit 1; }
+              v=$(awk -v want="$MT" '
+                /^[^ #]/ { inenv = ($0 ~ /^environments:/); name = ""; next }
+                inenv && /^  - name:/ { name = $3; gsub(/"/, "", name); next }
+                inenv && /^    api_suffix:/ && name == want { s = $2; gsub(/"/, "", s); print s }
+              ' deploy/hosts.yaml)
+              n=$(printf '%s\\n' "$v" | grep -c . || true)
+              [ "$n" = "1" ] || { echo "DỪNG: deploy/hosts.yaml có $n api_suffix cho MT=$MT, cần đúng 1" >&2; exit 1; }
+              printf '%s' "$v" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' \
+                || { echo "DỪNG: api_suffix của MT=$MT trong deploy/hosts.yaml không phải tên miền" >&2; exit 1; }
+              printf '%s' "$v"
+            ''').trim()
+          }
+          env.API_HOST = "identity.${suffix}"
         }
         sh '''
           set -u

@@ -21,6 +21,10 @@
 // isolation path — and a route silently pointed at the wrong service is a request handled by
 // a service that does not own the data.
 //
+// HOSTS come from deploy/hosts.yaml (hosts.go), the one place public hostnames are written
+// (owner, 01/10/2026). The same run also generates the host constants that file's other
+// consumers read (sinhhosts.go), so no host is typed anywhere else.
+//
 // Output is deterministic (sorted everywhere) so regenerating an unchanged contract produces
 // no diff.
 package main

@@ -1,10 +1,16 @@
 /**
  * ĐỊA CHỈ MÁY CHỦ ViGov CHO KÊNH CÔNG DÂN — MỘT HOST CHO MỖI DỊCH VỤ SỞ HỮU TUYẾN (ADR 0046).
  *
- * Chủ dự án chốt 26/09/2026: API đi theo DỊCH VỤ, `<service>.api.vigov.vn`. Tuyến
+ * Chủ dự án chốt 26/09/2026: API đi theo DỊCH VỤ, `<service>.<api_suffix>`. Tuyến
  * `/api/v1/my-citizen-reports…` thuộc `service-petitions`, nên host của nó là
- * `petitions.api.vigov.vn`. `<service>.api-stg.vigov.vn` có trong quy hoạch nhưng chủ dự án chỉ
- * chạy prod — không có dòng staging ở đây, và thêm một dòng như thế là quyết định của chủ dự án.
+ * `petitions.api.vigov.vn`.
+ *
+ * HOST KHÔNG CÒN GÕ Ở ĐÂY (chủ dự án, 01/10/2026): `service-hosts.gen.ts` SINH từ
+ * `deploy/hosts.yaml` — nơi DUY NHẤT viết host công khai — bằng `tools/ingress` (`make kb`), cho
+ * ĐÚNG các dịch vụ kiểu `DichVuViGov` dưới đây liệt kê (bộ sinh đọc dòng ấy). Mini App chỉ dựng với
+ * host của `mini_app_environment` = prod (chủ dự án, 01/10/2026): staging dùng chung CSDL với prod
+ * (ADR 0046), và giá trị thứ hai là bundle thứ hai (ADR 0047). Đổi môi trường là sửa tệp ấy, không
+ * phải tệp này. Thêm một dịch vụ vào `DichVuViGov` mà Ingress không có host cho nó thì bộ sinh DỪNG.
  *
  * BA DỊCH VỤ, MỖI DÒNG CÓ TUYẾN GỌI TỚI (27/09/2026) — một host không có tuyến nào gọi tới là một
  * host không ai kiểm được nó đúng hay sai:
@@ -35,13 +41,14 @@
  * Chuỗi RỖNG vẫn là tín hiệu dừng (`chua-cau-hinh`) mà `goi-vigov.ts` đọc trước mọi lời gọi: một
  * dòng để trống, hoặc một tên dịch vụ không có trong bảng, là KHÔNG gọi — không bao giờ là đoán.
  */
+import { SERVICE_API_HOSTS } from "./service-hosts.gen";
+
+// Đọc bởi `tools/ingress` (sinhhosts.go): giữ đúng MỘT dòng, dạng `"a" | "b"` — dạng khác thì bộ sinh dừng.
 export type DichVuViGov = "petitions" | "identity" | "comms";
 
-const MAY_CHU_THEO_DICH_VU: Readonly<Record<DichVuViGov, string>> = {
-  petitions: "https://petitions.api.vigov.vn",
-  identity: "https://identity.api.vigov.vn",
-  comms: "https://comms.api.vigov.vn",
-};
+// Kiểu `Record<DichVuViGov, …>` bắt chiều thiếu: một dịch vụ trong `DichVuViGov` mà tệp sinh không có
+// thì `tsc` đỏ.
+const MAY_CHU_THEO_DICH_VU: Readonly<Record<DichVuViGov, string>> = SERVICE_API_HOSTS;
 
 /** Địa chỉ đầy đủ của một tuyến ViGov trên host của dịch vụ sở hữu nó, hoặc chuỗi RỖNG. */
 export function diaChiViGov(dich_vu: DichVuViGov, duong_dan: string): string {

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { PLATFORM_WEB_ROOTS } from "./host-plan.gen";
+
 /**
  * The host this console's gateway names as `Host` on EVERY call to service-platform.
  *
@@ -30,8 +32,9 @@ export type OperatorHostResult =
 
 /** `admin` / `admin-stg` — the labels ADR 0046 reserves for the vendor console (`operatorConsoleLabels`). */
 const CONSOLE_LABELS = new Set(["admin", "admin-stg"]);
-const PLATFORM_ROOT = "vigov.vn";
-const PLATFORM_STAGING_ROOT = "stg.vigov.vn";
+// The platform's web roots are GENERATED from deploy/hosts.yaml (owner, 01/10/2026) — the same
+// source and order core/config's `platformWebRoots` is generated with, so the two sides cannot
+// disagree about which domains are the platform's own.
 
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
@@ -61,9 +64,9 @@ export function operatorHost(): OperatorHostResult {
   if (labels.length < 2) return malformed("không phải tên host đầy đủ");
   if (!labels.every((l) => LABEL.test(l))) return malformed("có nhãn không hợp lệ");
 
-  if (h === PLATFORM_ROOT || h === PLATFORM_STAGING_ROOT) return malformed("là tên miền gốc của nền tảng");
-  // Staging root first: "admin.stg.vigov.vn" also ends in ".vigov.vn" (same order as Go).
-  for (const root of [PLATFORM_STAGING_ROOT, PLATFORM_ROOT]) {
+  if (PLATFORM_WEB_ROOTS.includes(h)) return malformed("là tên miền gốc của nền tảng");
+  // Most specific root first (the generated order): "admin.stg.vigov.vn" also ends in ".vigov.vn".
+  for (const root of PLATFORM_WEB_ROOTS) {
     const suffix = `.${root}`;
     if (h.endsWith(suffix)) {
       if (!CONSOLE_LABELS.has(h.slice(0, -suffix.length))) {

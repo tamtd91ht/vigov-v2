@@ -1,0 +1,34 @@
+# THE ONE PLACE PUBLIC HOSTNAMES ARE WRITTEN (owner, 01/10/2026 — ADR 0046, amendment of that date).
+#
+# Everything else READS or is GENERATED from this file; nothing retypes a host:
+#   tools/ingress        → deploy/base/mang/ingress.yaml, deploy/overlays/<env>/ingress-moi-truong.yaml
+#                          and the generated host constants the reserved-domain checks use
+#   citizen-app (build)  → the per-service API hosts of `mini_app_environment`, baked in at build time
+#
+# Change a value here, then: `make kb` (regenerates and tests), rebuild the Mini App, and re-import the
+# Ingress into Rancher from `kubectl kustomize deploy/overlays/<env>` (the cluster's Ingress is built by
+# hand — deploy/README.md). DNS records and TLS Secrets live OUTSIDE this repository and must follow.
+#
+# ⚠ HOSTS ARE PLATFORM-WIDE, NEVER PER COMMUNE (rule 1, invariant 10): a commune is told apart by its own
+#   label under `web_host`, and by the session on the citizen channel — never by a host listed here.
+# ⚠ Changing an `api_suffix` or a `web_host` root also changes which commune domains are reserved: the
+#   SQL CHECK in service-platform/migrations/0007_tenant_domain_khong_danh_rieng.sql cannot read this
+#   file, so it needs a NEW migration — `TestLuatTenMienDanhRiengGoVaSQLKhop` turns red until it has one.
+# ⚠ A wildcard matches EXACTLY ONE label: the four families must not overlap (tools/ingress tests).
+
+environments:
+  # The first entry is also what deploy/base carries.
+  - name: prod
+    web_host: "*.vigov.vn"            # commune web, one label per commune: <xa>.vigov.vn
+    api_suffix: "api.vigov.vn"        # service API: <service>.api.vigov.vn
+    web_tls_secret: vigov-wildcard-tls
+    api_tls_secret: vigov-api-wildcard-tls
+  - name: staging
+    web_host: "*.stg.vigov.vn"
+    api_suffix: "api-stg.vigov.vn"
+    web_tls_secret: vigov-staging-tls
+    api_tls_secret: vigov-api-staging-tls
+
+# The environment whose API hosts the citizen Mini App is built with. Prod only (owner, 01/10/2026):
+# staging shares prod's database (ADR 0046), and a second value is a second bundle (ADR 0047).
+mini_app_environment: prod

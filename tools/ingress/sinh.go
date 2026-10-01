@@ -26,19 +26,13 @@ type moiTruong struct {
 	TLSAPI  string // TLS Secret covering *.<DuoiAPI> — created outside this repository
 }
 
-// cacMoiTruong — the first entry is also what base carries (see sinhYAML). Every overlay
-// still patches every host, prod to the same value, so no environment depends on base being
-// right. The TLS Secret names of the web families are the ones already in use before
-// 2026-09-26; the two API ones are new names this generator introduced with the API hosts.
-var cacMoiTruong = []moiTruong{
-	{Ten: "prod", HostWeb: "*.vigov.vn", DuoiAPI: "api.vigov.vn", TLSWeb: "vigov-wildcard-tls", TLSAPI: "vigov-api-wildcard-tls"},
-	{Ten: "staging", HostWeb: "*.stg.vigov.vn", DuoiAPI: "api-stg.vigov.vn", TLSWeb: "vigov-staging-tls", TLSAPI: "vigov-api-staging-tls"},
-}
-
-// hostMacDinh is the web host written into base. It is a wildcard and not an empty host on
-// purpose: an Ingress rule with no host matches EVERY host, which on the isolation path is the
-// one thing that must never be the default (rule 1).
-var hostMacDinh = cacMoiTruong[0].HostWeb
+// The environments are read from deploy/hosts.yaml (hosts.go), never typed here. The first entry
+// is also what base carries (see sinhYAML). Every overlay still patches every host, prod to the
+// same value, so no environment depends on base being right.
+//
+// The web host written into base is that first entry's wildcard, never an empty host: an Ingress
+// rule with no host matches EVERY host, which on the isolation path is the one thing that must
+// never be the default (rule 1). parseHostPlan refuses an empty web_host for that reason.
 
 // nhanDNS — a k8s Service name is already a DNS-1035 label, but the host is built from it by
 // concatenation, so it is checked here rather than trusted: a name that is not one label would
@@ -64,7 +58,7 @@ func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 			continue
 		}
 		if !nhanDNS.MatchString(l.DichVu) {
-			return nil, fmt.Errorf("dịch vụ %q không phải một nhãn DNS — không dựng được host %s.%s", l.DichVu, l.DichVu, cacMoiTruong[0].DuoiAPI)
+			return nil, fmt.Errorf("dịch vụ %q không phải một nhãn DNS — không dựng được host %s.<api_suffix>", l.DichVu, l.DichVu)
 		}
 		if l.DichVu == dichVuWeb {
 			// web-admin answers the commune hosts; a contract path owned by it would give it
@@ -106,7 +100,8 @@ func luatWeb(luats []luatIngress) (luatIngress, error) {
 
 // sinhYAML renders the generated Ingress. Every line is derived; nothing here is a value a
 // person is expected to edit.
-func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress) ([]byte, error) {
+// base is the first environment of deploy/hosts.yaml.
+func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byte, error) {
 	web, err := luatWeb(luats)
 	if err != nil {
 		return nil, err
@@ -136,7 +131,7 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress) ([]byte, error) {
 	for _, d := range tenDichVu {
 		phanBo = append(phanBo, fmt.Sprintf("%s %d", d, demTheoDichVu[d]))
 	}
-	duoi := cacMoiTruong[0].DuoiAPI
+	duoi := base.DuoiAPI
 
 	b.WriteString("# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress. KHÔNG SỬA TAY — sửa tay là mất, im lặng, ở\n")
 	b.WriteString("# lần sinh sau (luật 9, bất biến 8). Sinh lại: `go run ./tools/ingress` (hoặc `make kb`).\n")
@@ -180,7 +175,7 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress) ([]byte, error) {
 	b.WriteString("    #\n")
 	b.WriteString("    # Nhãn đầu `admin` · `admin-stg` · `api` · `api-stg` · `stg` · `www` khớp ký tự đại diện này\n")
 	b.WriteString("    # nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên chúng nhận 404.\n")
-	b.WriteString(fmt.Sprintf("    - host: %q\n", hostMacDinh))
+	b.WriteString(fmt.Sprintf("    - host: %q\n", base.HostWeb))
 	b.WriteString("      http:\n")
 	b.WriteString("        paths:\n")
 	b.WriteString("          # BẮT HẾT — web quản trị (Next.js). KHÔNG sinh từ hợp đồng. `/api/v1/*` cũng tới đây và\n")
@@ -222,12 +217,11 @@ func duongOverlay(mt string) string {
 // Each `replace` is preceded by a `test` on the base value. A base regenerated with a new
 // service shifts the indices; with the `test` the overlay then fails at build time instead of
 // patching a neighbour's host.
-func sinhOverlay(mt moiTruong, luats []luatIngress) ([]byte, error) {
+func sinhOverlay(mt, goc moiTruong, luats []luatIngress) ([]byte, error) {
 	hosts, err := cacHostDichVu(luats)
 	if err != nil {
 		return nil, err
 	}
-	goc := cacMoiTruong[0]
 	var b strings.Builder
 	b.WriteString("# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress (`go run ./tools/ingress`, hoặc `make kb`). KHÔNG SỬA\n")
 	b.WriteString("# TAY. Phần MÔI TRƯỜNG `" + mt.Ten + "` của Ingress — host và TLS, và CHỈ hai thứ ấy. Bảng định\n")

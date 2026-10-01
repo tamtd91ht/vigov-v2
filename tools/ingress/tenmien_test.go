@@ -23,8 +23,15 @@ func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bộ sinh DỪNG: %v", err)
 	}
-	muonTep := []string{duongTepSinh, duongTepTS}
-	for _, mt := range cacMoiTruong {
+	plan, err := loadHostPlan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The host constants are in this list on purpose: they are generated files like the others, and
+	// a stale one is a reserved-domain rule or a Mini App host that no longer says what
+	// deploy/hosts.yaml says.
+	muonTep := []string{duongTepSinh, duongTepTS, configHostsPath, domainHostsPath, operatorHostsPath, citizenHostsPath}
+	for _, mt := range plan.Environments {
 		muonTep = append(muonTep, duongOverlay(mt.Ten))
 	}
 	if len(tep) != len(muonTep) {
@@ -42,18 +49,23 @@ func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 			continue
 		}
 		if string(coTren) != string(muon) {
-			t.Errorf("%s KHÔNG khớp %s.\n"+
+			t.Errorf("%s KHÔNG khớp bản sinh từ %s + %s.\n"+
 				"Sinh lại: go run ./tools/ingress   (hoặc `make kb`)\n"+
 				"Tệp trên đĩa %d byte, bản sinh ra %d byte.\n"+
 				"Nếu bạn vừa sửa tay tệp ấy: đừng — nó là tầng SINH RA (luật 9, bất biến 8).",
-				duong, duongHopDong, len(coTren), len(muon))
+				duong, duongHopDong, hostsFilePath, len(coTren), len(muon))
 		}
 	}
 }
 
 // Literal copies of the owner's decision of 2026-09-26, deliberately NOT read from
-// cacMoiTruong: a test that took its expectation from the generator's own table would pass
-// whatever that table said.
+// deploy/hosts.yaml: a test that took its expectation from the file it checks would pass
+// whatever that file said.
+//
+// THIS GUARD IS MEANT TO TURN RED WHEN deploy/hosts.yaml CHANGES. The file is the one source of
+// hosts (owner, 01/10/2026), and one edit there moves the Ingress, the reserved-domain rule and
+// the Mini App at once. Red here makes that edit a conscious act: change the file, see this
+// test fail, then update these literals in the same commit — never delete the guard to get green.
 const (
 	webProd    = "*.vigov.vn"
 	apiProd    = "api.vigov.vn"
@@ -63,15 +75,32 @@ const (
 
 var moHinhChot = map[string][2]string{"prod": {webProd, apiProd}, "staging": {webStaging, apiStaging}}
 
+// pinnedTLSSecrets — the Secret names the cluster already holds (web: in use before 2026-09-26;
+// API: introduced with the API hosts). A rename in deploy/hosts.yaml without creating the Secret
+// is an Ingress that serves no certificate, so it is pinned the same way.
+var pinnedTLSSecrets = map[string][2]string{
+	"prod":    {"vigov-wildcard-tls", "vigov-api-wildcard-tls"},
+	"staging": {"vigov-staging-tls", "vigov-api-staging-tls"},
+}
+
 func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
-	if len(cacMoiTruong) != len(moHinhChot) {
-		t.Fatalf("có %d môi trường, quyết định 26/09/2026 có %d", len(cacMoiTruong), len(moHinhChot))
+	plan, err := loadHostPlan(goc(t))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if cacMoiTruong[0].Ten != "prod" {
-		t.Errorf("môi trường đầu (thứ base mang) là %q, mong prod", cacMoiTruong[0].Ten)
+	envs := plan.Environments
+	if len(envs) != len(moHinhChot) {
+		t.Fatalf("%s có %d môi trường, quyết định 26/09/2026 có %d", hostsFilePath, len(envs), len(moHinhChot))
+	}
+	if envs[0].Ten != "prod" {
+		t.Errorf("môi trường đầu (thứ base mang) là %q, mong prod", envs[0].Ten)
+	}
+	// Owner, 01/10/2026: the Mini App is built with prod hosts only.
+	if plan.MiniApp.Ten != "prod" {
+		t.Errorf("mini_app_environment là %q, chủ dự án chốt prod (01/10/2026)", plan.MiniApp.Ten)
 	}
 	tlsDaDung := map[string]string{}
-	for _, mt := range cacMoiTruong {
+	for _, mt := range envs {
 		m, co := moHinhChot[mt.Ten]
 		if !co {
 			t.Errorf("môi trường lạ %q", mt.Ten)
@@ -79,6 +108,9 @@ func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
 		}
 		if mt.HostWeb != m[0] || mt.DuoiAPI != m[1] {
 			t.Errorf("%s: web %q · api %q — quyết định là %q · %q", mt.Ten, mt.HostWeb, mt.DuoiAPI, m[0], m[1])
+		}
+		if s := pinnedTLSSecrets[mt.Ten]; mt.TLSWeb != s[0] || mt.TLSAPI != s[1] {
+			t.Errorf("%s: Secret TLS %q · %q — trên cụm là %q · %q", mt.Ten, mt.TLSWeb, mt.TLSAPI, s[0], s[1])
 		}
 		for _, s := range []string{mt.TLSWeb, mt.TLSAPI} {
 			if s == "" {
