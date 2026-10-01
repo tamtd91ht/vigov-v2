@@ -93,6 +93,15 @@
       "no_confirm": [],
       "tiep_theo": "Petitions (W4): tầng 2 enabled/nhãn/thứ tự trên nhan_linh_vuc, tuyến ghi cán bộ, tuyến danh mục công dân (XaTuPhienChiXem), POST nhận field + CheckForIntake + hai hạn lúc tạo. Chú thích lỗi thời: sla_gieo.go:69-71, nhan-phieu.ts:410-423 (bản chép tay web xoá khi có tuyến danh mục).",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "content-image-anh-bia-50mb",
+      "viec": "Chính sách tải lên content-image (ảnh bìa tin Mini App): 50 MB, chỉ JPEG/PNG/WebP, không HEIC — người dùng chốt 01/10/2026 (ADR 0047 §6, e5674292)",
+      "trang_thai": "xong",
+      "bang_chung": "97342b4c — migrations/0012_upload_policy_content_image_cover.sql: chỉ sửa đúng dòng seed 0008 chưa ai sửa (updated_by system, giá trị 0008), ghi platform_audit_log upload_policy.changed trong cùng câu lệnh (UPDATE … FROM tự nối, PG 16). go test ./... service-platform xanh; TestUploadPolicyContentImageCoverChange xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Ca PG (TestPgUploadPolicySeedAndRead, TestPgContentImageCoverKeepsOperatorEdit) SKIP — chạy với VIGOV_TEST_DSN trước khi phát hành. Sau khi áp: kiểm bằng hai câu SELECT ở khối CHECK AFTER APPLYING trong tệp. Bộ đệm uploadpolicy của comms giữ giá trị cũ tới khi hết hạn.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
