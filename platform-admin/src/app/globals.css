@@ -1,0 +1,315 @@
+/*
+ * Shared styles of the operator console. Palette and proportions follow web-admin's, written
+ * small-screen first: 320px is the smallest supported width, so the stacked layout is the default
+ * and two columns appear only from 768px. Small text keeps a contrast of at least 4.5:1, and
+ * focus is always visible.
+ */
+
+:root {
+  --navy: #0d1b34;
+  --navy-light: #1c2f52;
+  --navy-deep: #0f172a;
+  --blue: #1d4ed8;
+  --grey-text: #4b5563;
+  --grey-border: #d1d5db;
+  --error-red: #b42318;
+  --background: #f5f6f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--background);
+  color: #111827;
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* ---- sign-in ---------------------------------------------------------------------------- */
+
+.sign-in-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-column {
+  background: var(--navy);
+  color: #e5e7eb;
+  padding: 2rem 1.5rem;
+}
+
+.brand-mark {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: var(--navy-light);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-name {
+  margin: 1rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.brand-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+}
+
+.brand-rule {
+  border: 0;
+  border-top: 1px solid #334155;
+  margin: 1.5rem 0;
+}
+
+.brand-note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #cbd5e1;
+}
+
+.form-column {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.sign-in-form {
+  width: 100%;
+  max-width: 24rem;
+  background: #fff;
+  border: 1px solid var(--grey-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.form-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.25rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.field input:disabled {
+  background: #f3f4f6;
+}
+
+.link-button {
+  margin-top: 0.375rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font-size: 0.875rem;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Always in the DOM, even empty: adding it later shifts the form and some screen readers miss a
+   live region inserted after load. */
+.form-error {
+  margin: 0 0 0.75rem;
+  min-height: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--error-red);
+}
+
+.primary-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--blue);
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  background: #6b7280;
+  cursor: progress;
+}
+
+@media (min-width: 768px) {
+  .sign-in-page {
+    flex-direction: row;
+  }
+
+  .brand-column {
+    width: 40%;
+    max-width: 26rem;
+    padding: 3rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .form-column {
+    width: 60%;
+    padding: 2rem 1.5rem;
+  }
+
+  .sign-in-form {
+    padding: 1.5rem;
+  }
+}
+
+/* ---- signed-in frame -------------------------------------------------------------------- */
+
+/* Below 1024px the sidebar is a strip across the top; from 1024px it is a left column. */
+.console-frame {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  padding: 1rem 0.75rem;
+  background: var(--navy-deep);
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sidebar-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.375rem;
+  background: #1e293b;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.sidebar-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-product {
+  color: #fff;
+  font-weight: 600;
+}
+
+.sidebar-subtitle {
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.125rem;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.4375rem 0.625rem;
+  border-radius: 0.375rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.sidebar-link:hover,
+.sidebar-link.current {
+  background: #1e293b;
+  color: #fff;
+}
+
+@media (min-width: 1024px) {
+  .console-frame {
+    grid-template-columns: 15rem 1fr;
+  }
+
+  .sidebar-list {
+    flex-direction: column;
+  }
+}
+
+.page-body {
+  padding: 1.5rem 1rem;
+  min-width: 0;
+}
+
+.page-title {
+  margin: 0 0 1rem;
+  font-size: 1.375rem;
+}
+
+.empty-state {
+  padding: 2rem 1rem;
+  background: #fff;
+  border: 1px dashed var(--grey-border);
+  border-radius: 0.75rem;
+  text-align: center;
+}
+
+.empty-state-title {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.empty-state-detail {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--grey-text);
+}

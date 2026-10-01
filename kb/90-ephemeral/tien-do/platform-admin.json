@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-10-01",
   "muc": [
     {
       "id": "ts-chua-tung-duoc-kiem",
@@ -14,10 +14,10 @@
     {
       "id": "chua-dung-man-hinh-nao",
       "viec": "Console quản trị nền tảng chưa có màn hình nào",
-      "trang_thai": "chua_lam",
-      "bang_chung": "platform-admin/src/{app,components,features}/ đều RỖNG; chỉ có src/lib/api.ts. Commit cuối chạm vào module: 6d1d333 (lượt đưa mỗi đơn vị lên cấp một) — kiểm 2026-09-20",
+      "trang_thai": "dang_lam",
+      "bang_chung": "01/10/2026 (TASK-06a, chưa commit): ĐÃ CÓ KHUNG, CHƯA CÓ MÀN NÀO GỌI MÁY CHỦ. (1) `next.config.ts` gửi CSP nền + HSTS 2 năm + nosniff + Referrer-Policy no-referrer + X-Frame-Options DENY trên mọi đường; mỗi trang HTML nhận thêm CSP có nonce theo yêu cầu do `src/proxy.ts` dựng (`src/lib/csp.ts`) — script chỉ chạy bằng nonce, không 'unsafe-inline'. ĐO bằng `next start` + curl: trang nhận ĐÚNG MỘT header CSP (bản nonce thay bản nền), 9/9 thẻ script mang nonce, không thẻ style nội dòng; `/api/v1/*` và tệp tĩnh nhận bản nền. Mục `platform-admin missing-security-headers` đã xoá khỏi `tools/security_debt.json`. (2) `NEXT_PUBLIC_PLATFORM_API` đã gỡ: trình duyệt gọi đường tương đối `/api/v1/...`, `src/app/api/v1/[...path]/route.ts` chuyển tiếp sang service-platform bằng `node:http` (giữ nguyên Host, cookie, set-cookie; bỏ x-tenant*, forwarded, x-forwarded-host). Địa chỉ đọc lúc chạy từ `PLATFORM_HTTP_ADDR` (cùng quy ước `<SERVICE>_HTTP_ADDR` của web-admin), KHÔNG mặc định: vắng/hỏng → 503 `platform_unconfigured`, không gọi đi đâu, log nêu tên biến không nêu giá trị. (3) Khung: bố cục gốc lang=vi; `/dang-nhap` có thư điện tử, mật khẩu, mã TOTP / mã khôi phục (nút đổi) — gửi đi gọi `signIn` trong `src/lib/api.ts`, hàm này NÉM `NotWiredError` (TODO(TASK-06b)), biểu mẫu báo 'chưa hoạt động'; bố cục `(console)` có thanh bên một mục 'Danh sách xã' (`/xa`), trang `/xa` hiện trạng thái trống nói 'chưa tải được', không nói 'không có xã'. (4) Tên cookie phiên vận hành CHƯA CHỐT (`src/lib/session.ts` = null) → proxy coi mọi yêu cầu là chưa đăng nhập, mọi màn trừ `/dang-nhap` chuyển về `/dang-nhap` (đóng kín). (5) next nâng 16.3.5 → 16.3.8: 16.3.5 dính GHSA-vcvr-r3jv-pc5j (critical); sau nâng `npm audit --omit=dev` = 0. KIỂM: tsc rc=0, eslint rc=0, vitest 30/30, `next build` rc=0, `python tools/check_security.py` xanh.",
       "no_confirm": [],
-      "tiep_theo": "ĐỌC ADR 0003 TRƯỚC khi dựng màn đầu tiên: platform chỉ giữ SIÊU DỮ LIỆU, nên console này không được có đường nào đọc dữ liệu nghiệp vụ của một xã. Đó cũng là stop condition #5 của luật 1 — quản trị viên nhà cung cấp chạm dữ liệu nghiệp vụ của xã là câu phải hỏi người dùng, không tự quyết"
+      "tiep_theo": "TASK-06b, sau khi TASK-05 công bố tuyến vận hành của service-platform: đặt `OPERATOR_SESSION_COOKIE` đúng tên máy chủ đặt; nối `signIn` (mật khẩu + TOTP + mã khôi phục + đăng ký lần đầu) và `listTenants` bằng kiểu SINH từ hợp đồng, xoá kiểu viết tay trong `src/lib/api.ts`; thêm tham số quay lại sau đăng nhập (có kiểm như `web-admin/src/features/auth/duong-dan-tiep-tuc.ts`). CÒN MỞ, không quyết ở thẻ này: (a) ADR 0048 §28/09 #2+#4 ghi lớp biên một host '(và app platform-admin)' — khung này CHƯA kiểm Host == OPERATOR_HOST ở phía Next, chỉ dựa vào biên của service-platform; trang của khung không mang dữ liệu nên chưa lộ gì, nhưng phải quyết trước khi lên sống. (b) Dockerfile, manifest k8s, đầu dò `/healthz` (proxy hiện bắt cả `/healthz` và chuyển hướng) — thẻ sau. (c) `web-admin` vẫn ở next 16.3.5 dính cùng GHSA-vcvr-r3jv-pc5j — ngoài phạm vi thẻ này. ĐỌC ADR 0003 trước mọi màn mới: không đường nào đọc dữ liệu nghiệp vụ của xã (luật 1 dừng #5)"
     }
   ]
 }

@@ -27,3 +27,24 @@ authorities, that difference is the whole point.
 
 It must be a **support session granted by the commune**: time-limited, narrow in scope, fully
 audited, and **visible to the commune**. Never a standing permission.
+
+## Chạy
+
+```sh
+npm install
+npm run dev        # phát triển
+npm run build && npm run start
+npm run typecheck && npm run lint && npm test
+```
+
+Trình duyệt chỉ gọi đường tương đối cùng nguồn `/api/v1/...`; máy chủ Next của app này chuyển
+tiếp sang `service-platform` (`src/lib/server/gateway.ts`). Không có biến `NEXT_PUBLIC_*` nào
+(ADR 0048 điều kiện dừng #5).
+
+| Biến (chỉ phía máy chủ) | Nghĩa | Vắng thì |
+|---|---|---|
+| `PLATFORM_HTTP_ADDR` | Origin cổng REST của `service-platform` trong cụm, dạng `scheme://host:port`, không đường dẫn, không thông tin đăng nhập. Trong cụm: tên Service `platform`, cổng `rest` (`deploy/base/platform/service.yaml`) | Mọi `/api/v1/*` trả **503**, không đoán địa chỉ nào; log nêu tên biến, không nêu giá trị |
+
+Hiện trạng: màn `/dang-nhap` chưa nối máy chủ (bấm đăng nhập báo chưa hoạt động); tên cookie
+phiên vận hành chưa chốt (`src/lib/session.ts`), nên mọi màn khác chuyển về `/dang-nhap`. Cả hai
+chờ tuyến vận hành của `service-platform`.

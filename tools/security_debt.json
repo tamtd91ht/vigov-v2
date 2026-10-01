@@ -28,13 +28,6 @@
       "tcvn": "5.17.2.3",
       "reason": "next.config.ts sets no CSP, HSTS, nosniff, Referrer-Policy or framing header, and neither does the ingress. Priority P0 in kb/90-ephemeral/tcvn-14423-danh-gia.md (K9).",
       "expires": "2026-11-30"
-    },
-    {
-      "file": "platform-admin",
-      "label": "missing-security-headers",
-      "tcvn": "5.17.2.3",
-      "reason": "Has no next.config at all yet. The operator console (ADR 0048) is the most privileged surface in the system; headers must land before it is deployed.",
-      "expires": "2026-11-30"
     }
   ]
 }
