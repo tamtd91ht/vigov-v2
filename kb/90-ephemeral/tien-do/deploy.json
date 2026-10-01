@@ -156,6 +156,14 @@
       "no_confirm": [],
       "tiep_theo": "VẬN HÀNH (cụm dựng tay trên Rancher, không từ base/): chép ba thay đổi lên cụm thật; đặt CITIZEN_SESSION_BRIDGE_KEYS ở identity-secrets và cùng giá trị ở Secret vihat-miniapp; vihat-miniapp đặt VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=identity:9091, ZALO_MINIAPP_COMMUNE_APP_SECRETS, CORS có https://h5.zdn.vn; petitions/identity đặt CITIZEN_CORS_ALLOWED_ORIGINS. Chưa chạy trên cụm thật. Nợ: 443 tới 0.0.0.0/0 (Zalo không công bố dải) — cùng loại _chung/netpol-duong-ra-tam-mo.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "trien-khai-dang-nhap-app-rieng",
+      "viec": "Đưa các bước triển khai đăng nhập app riêng qua identity (ADR 0066) vào job vigov-deploy",
+      "trang_thai": "dang_lam",
+      "bang_chung": "deploy/Jenkinsfile: HANH_DONG tao-khoa-ma-hoa-identity (sinh SECRET_ENCRYPTION_KEYS vào identity-secrets prod + chép cùng giá trị sang staging vì chung CSDL; đã có thì không ghi đè; khoá đi qua tệp umask 077 + --patch-file, không in), mo-netpol-identity-zalo (không có NetworkPolicy thì không làm gì; có thì mở 443 cho pod identity theo selector thật), kiem-tra-dang-nhap-app-rieng (chỉ đọc; gọi thử POST /api/v1/citizen-sessions mong 400 invalid_body), bat-demo-mini-app / tat-demo-mini-app (pod một lần chạy /operatorctl mini-app-demo từ ảnh identity đang chạy). service-identity/Dockerfile thêm /operatorctl. deploy/cau-hinh/README.md mục 6 thứ tự chạy. check_build, check_security, brain, hooks xanh; bash -n các khối shell.",
+      "tiep_theo": "CHƯA CHẠY trên Jenkins/cụm thật. Thứ tự: tao-khoa-ma-hoa-identity → mo-netpol-identity-zalo → job service-identity → kiem-tra-dang-nhap-app-rieng → bat-demo-mini-app → npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang --demo. Sao lưu khoá ngay sau bước 1. Pod của bat-demo không mang nhãn Deployment — nếu NetworkPolicy chặn chiều ra theo nhãn thì có thể không tới CSDL/platform.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

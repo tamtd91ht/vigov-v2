@@ -56,6 +56,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/server ./cmd/server
 
+# operatorctl đi CÙNG ảnh (ADR 0066 — `mini-app-demo on|off`, `mini-app-secret set|retire`, và các
+# lệnh nhà vận hành ADR 0048). Nó phải chạy với ĐÚNG môi trường và đúng phiên bản schema của
+# identity; ảnh riêng là hai thứ có thể lệch phiên bản nhau. Job `vigov-deploy` chạy nó bằng một
+# pod một lượt từ CHÍNH ảnh đang chạy (`--command /operatorctl`). ENTRYPOINT vẫn là /server.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags "-s -w" -o /out/operatorctl ./cmd/operatorctl
+
 # ---------------------------------------------------------------------------------------
 FROM ${RUNTIME}
 ARG VERSION=dev
@@ -67,6 +75,7 @@ ARG VERSION=dev
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
 COPY --from=build /out/server /server
+COPY --from=build /out/operatorctl /operatorctl
 
 # 8080 REST ra trình duyệt · 9090 gRPC giữa các dịch vụ.
 # 9090 KHÔNG ĐƯỢC PHƠI RA INTERNET: không mTLS, không qua lớp kiểm quyền của bề mặt REST.

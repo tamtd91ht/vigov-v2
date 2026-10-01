@@ -144,3 +144,24 @@ Mô hình bốn dạng host, nhãn dành riêng (`admin` · `admin-stg` · `api`
 2. Job `vigov-deploy`, việc `doi-ten-mien-thang-binh` (`MT=prod`, `XAC_NHAN=vigov-prod`).
 3. Job `service-platform` (migration 0007). Sau 0007 mọi `UPDATE` dòng `admin.vigov.vn` bị CHECK
    từ chối, nên bước 2 **tự dừng, không ghi gì** nếu 0007 đã chạy.
+
+## 6. Đăng nhập app riêng của xã (ADR 0066) — thứ tự đưa lên cụm
+
+Mọi bước là job `vigov-deploy` (`deploy/Jenkinsfile`, cùng thứ tự ở khối chú thích trước stage
+"Tạo khoá mã hoá identity" — sửa một thì sửa cả hai), trừ bước 3 và bước cuối. Key và dạng giá trị:
+bảng mục 1.
+
+1. `tao-khoa-ma-hoa-identity` (`MT=prod`, `XAC_NHAN=vigov-prod`) — sinh `SECRET_ENCRYPTION_KEYS` vào
+   `identity-secrets` của `vigov-prod` và **cùng giá trị** vào `vigov-staging` (chung CSDL). Đã có ở
+   prod thì **dừng, không đổi prod**; staging có giá trị khác thì dừng. Không in giá trị — log in lệnh
+   sao lưu; **sao lưu ngay**, tách khỏi bản sao lưu CSDL.
+2. `mo-netpol-identity-zalo` (`MT=prod`, rồi `MT=staging`; `XAC_NHAN` = namespace) — mở 443 cho pod
+   identity **chỉ khi** đường ra của nó đang bị NetworkPolicy hạn chế; không thì không làm gì.
+3. Job `service-identity` — ảnh có migration 0021 và `/operatorctl`, khởi động lại pod để đọc khoá.
+   Rồi `kiem-tra-dang-nhap-app-rieng` (chỉ đọc): key, ảnh, Ingress `identity.api.vigov.vn`, và
+   `POST /api/v1/citizen-sessions` thân `{}` phải trả `400 invalid_body` (`404` = ảnh cũ hoặc Ingress sai).
+4. `bat-demo-mini-app` (`MT=prod`, `XAC_NHAN=vigov-prod`, `TENANT_ID`, `APP_ID`, `TICKET` bắt buộc) —
+   `operatorctl mini-app-demo on` trong một pod một lượt từ ảnh identity đang chạy.
+5. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang --demo`
+
+Trước khi Zalo duyệt app: `tat-demo-mini-app` — danh tính demo mở phiên không xác minh số điện thoại.
