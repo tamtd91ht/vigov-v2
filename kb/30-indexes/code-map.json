@@ -194,6 +194,34 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_enrollment.go:152"
     },
+    "app.ContentCovers": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:166"
+    },
+    "app.CoverFiles": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:146"
+    },
+    "app.CoverObjectStore": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:117"
+    },
+    "app.CoverRejection": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:110"
+    },
+    "app.CoverUpload": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:232"
+    },
+    "app.CoverUploadRequest": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:222"
+    },
+    "app.CoverView": {
+      "kind": "type",
+      "at": "service-comms/internal/app/content_cover.go:777"
+    },
     "app.Create": {
       "kind": "func",
       "at": "service-identity/internal/app/residential_unit.go:94"
@@ -260,7 +288,7 @@
     },
     "app.DanhMucNoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:83"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:98"
     },
     "app.DanhSach": {
       "kind": "func",
@@ -560,7 +588,7 @@
     },
     "app.KhoDanhMucMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:57"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:58"
     },
     "app.KhoDaySo": {
       "kind": "type",
@@ -620,7 +648,7 @@
     },
     "app.KhoNoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:47"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:48"
     },
     "app.KhoPhanQuyen": {
       "kind": "type",
@@ -858,6 +886,10 @@
       "kind": "type",
       "at": "service-finance/internal/app/thu_chi_ngan_sach.go:173"
     },
+    "app.NewContentCovers": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:187"
+    },
     "app.NewDangNhap": {
       "kind": "func",
       "at": "service-identity/internal/app/dang_nhap.go:49"
@@ -900,7 +932,7 @@
     },
     "app.NewDanhMucNoiDungMiniApp": {
       "kind": "func",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:90"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:105"
     },
     "app.NewDuAn": {
       "kind": "func",
@@ -1024,7 +1056,7 @@
     },
     "app.NewSoanNoiDungMiniApp": {
       "kind": "func",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:78"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:83"
     },
     "app.NewSoanThongBaoNoiBo": {
       "kind": "func",
@@ -1270,6 +1302,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/map_asset_type_import.go:56"
     },
+    "app.PublicImageURLs": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:826"
+    },
     "app.PublishMany": {
       "kind": "func",
       "at": "service-identity/internal/app/danh_ba_can_bo.go:1035"
@@ -1480,7 +1516,7 @@
     },
     "app.SoanNoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:65"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:66"
     },
     "app.SoanThongBaoNoiBo": {
       "kind": "type",
@@ -1733,6 +1769,14 @@
     "app.VanBanDi": {
       "kind": "type",
       "at": "service-documents/internal/app/van_ban_di.go:80"
+    },
+    "app.View": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:793"
+    },
+    "app.WithCovers": {
+      "kind": "func",
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:89"
     },
     "app.WithHoldingsSources": {
       "kind": "func",
@@ -2132,11 +2176,11 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:778"
+      "at": "core/config/config.go:843"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:978"
+      "at": "core/config/config.go:1046"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -2172,7 +2216,7 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:104"
+      "at": "core/config/config.go:107"
     },
     "config.Configured": {
       "kind": "func",
@@ -2184,23 +2228,23 @@
     },
     "config.ElasticsearchAPIKey": {
       "kind": "func",
-      "at": "core/config/accessors.go:172"
+      "at": "core/config/accessors.go:193"
     },
     "config.ElasticsearchAddrs": {
       "kind": "func",
-      "at": "core/config/accessors.go:166"
+      "at": "core/config/accessors.go:187"
     },
     "config.ElasticsearchIndexPrefix": {
       "kind": "func",
-      "at": "core/config/accessors.go:178"
+      "at": "core/config/accessors.go:199"
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:207"
+      "at": "core/config/uses.go:218"
     },
     "config.Format": {
       "kind": "func",
-      "at": "core/config/accessors.go:269"
+      "at": "core/config/accessors.go:296"
     },
     "config.GRPCCallerKey": {
       "kind": "func",
@@ -2216,7 +2260,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:141"
+      "at": "core/config/uses.go:152"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -2226,13 +2270,17 @@
       "kind": "func",
       "at": "core/config/accessors.go:51"
     },
+    "config.IdentityOperatorGRPCAddr": {
+      "kind": "func",
+      "at": "core/config/accessors.go:163"
+    },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:510"
+      "at": "core/config/config.go:553"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:969"
+      "at": "core/config/config.go:1037"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -2240,11 +2288,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:531"
+      "at": "core/config/config.go:574"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "core/config/accessors.go:274"
+      "at": "core/config/accessors.go:301"
     },
     "config.MalwareScanner": {
       "kind": "type",
@@ -2252,7 +2300,7 @@
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "core/config/accessors.go:277"
+      "at": "core/config/accessors.go:304"
     },
     "config.Missing": {
       "kind": "func",
@@ -2266,17 +2314,25 @@
       "kind": "type",
       "at": "core/config/object_storage.go:29"
     },
+    "config.OperatorGRPCListenAddr": {
+      "kind": "func",
+      "at": "core/config/accessors.go:157"
+    },
+    "config.OperatorHost": {
+      "kind": "func",
+      "at": "core/config/accessors.go:150"
+    },
     "config.OperatorRealmConfigured": {
       "kind": "func",
-      "at": "core/config/operator.go:111"
+      "at": "core/config/operator.go:226"
     },
     "config.OperatorSessionSigningKeys": {
       "kind": "func",
-      "at": "core/config/accessors.go:142"
+      "at": "core/config/accessors.go:143"
     },
     "config.OperatorTOTPEncryptionKeys": {
       "kind": "func",
-      "at": "core/config/accessors.go:148"
+      "at": "core/config/accessors.go:169"
     },
     "config.ParseMalwareScannerAddresses": {
       "kind": "func",
@@ -2304,15 +2360,15 @@
     },
     "config.RabbitMQDSN": {
       "kind": "func",
-      "at": "core/config/accessors.go:154"
+      "at": "core/config/accessors.go:175"
     },
     "config.RabbitMQExchange": {
       "kind": "func",
-      "at": "core/config/accessors.go:160"
+      "at": "core/config/accessors.go:181"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:841"
+      "at": "core/config/config.go:909"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -2336,7 +2392,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:103"
+      "at": "core/config/uses.go:114"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -2348,11 +2404,11 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:112"
+      "at": "core/config/uses.go:123"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:118"
+      "at": "core/config/uses.go:129"
     },
     "crosstenant.Automation": {
       "kind": "type",
@@ -2758,6 +2814,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/bulk_publication.go:40"
     },
+    "domain.CheckCoverUsable": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/content_cover.go:175"
+    },
     "domain.CheckEventWindow": {
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:256"
@@ -2812,7 +2872,7 @@
     },
     "domain.CheckTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:531"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:534"
     },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
@@ -3138,6 +3198,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/stored_file.go:171"
     },
+    "domain.CleanCoverFileName": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/content_cover.go:130"
+    },
     "domain.CleanRecipients": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:171"
@@ -3148,7 +3212,7 @@
     },
     "domain.CoAnh": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:518"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:521"
     },
     "domain.CoCon": {
       "kind": "func",
@@ -3165,6 +3229,14 @@
     "domain.Columns": {
       "kind": "func",
       "at": "service-petitions/internal/domain/catalogue_import.go:72"
+    },
+    "domain.Commune": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/commune.go:12"
+    },
+    "domain.CommuneMiniApp": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/commune.go:24"
     },
     "domain.ConChuaPhanBo": {
       "kind": "func",
@@ -3540,7 +3612,7 @@
     },
     "domain.HienChoDan": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:526"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:529"
     },
     "domain.HienThiMot": {
       "kind": "func",
@@ -3617,6 +3689,10 @@
     "domain.IsReopen": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:170"
+    },
+    "domain.IsReservedCommuneHost": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:86"
     },
     "domain.IsYearClose": {
       "kind": "func",
@@ -4206,6 +4282,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/tien_gio_lam_viec.go:66"
     },
+    "domain.NameKey": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:157"
+    },
     "domain.NeedsApproval": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:189"
@@ -4300,7 +4380,7 @@
     },
     "domain.NoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:455"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:452"
     },
     "domain.NormaliseAdjustmentReason": {
       "kind": "func",
@@ -4386,6 +4466,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/operator.go:179"
     },
+    "domain.OperatorActor": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/commune.go:42"
+    },
     "domain.OperatorAuditAction": {
       "kind": "type",
       "at": "service-identity/internal/domain/operator.go:266"
@@ -4437,6 +4521,10 @@
     "domain.OverdueNotice": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:296"
+    },
+    "domain.ParseCommuneHost": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:48"
     },
     "domain.ParseEventInstant": {
       "kind": "func",
@@ -4573,6 +4661,14 @@
     "domain.PlannedStaff": {
       "kind": "type",
       "at": "service-identity/internal/domain/staff_import.go:123"
+    },
+    "domain.Province": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/commune.go:35"
+    },
+    "domain.ProvinceKey": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:169"
     },
     "domain.PublicationAfterClassification": {
       "kind": "func",
@@ -4752,11 +4848,11 @@
     },
     "domain.SetsEventField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:678"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:692"
     },
     "domain.SetsVideoURL": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:685"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:699"
     },
     "domain.SheetLockingClose": {
       "kind": "func",
@@ -5250,6 +5346,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/budget_period_close.go:145"
     },
+    "domain.ValidateCommuneName": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:118"
+    },
     "domain.ValidateDeliveries": {
       "kind": "func",
       "at": "service-comms/internal/domain/staff_notification.go:94"
@@ -5261,6 +5361,14 @@
     "domain.ValidateMailPassword": {
       "kind": "func",
       "at": "service-comms/internal/domain/mail_settings.go:137"
+    },
+    "domain.ValidateMiniAppID": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:185"
+    },
+    "domain.ValidateReason": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:124"
     },
     "domain.VanBanDen": {
       "kind": "type",
@@ -5312,7 +5420,7 @@
     },
     "domain.WithoutOtherTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:540"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:543"
     },
     "domain.YeuCauSoanThongBao": {
       "kind": "type",
@@ -5320,15 +5428,15 @@
     },
     "domain.YeuCauSuaNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:658"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:668"
     },
     "domain.YeuCauThemDanhMuc": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:760"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:781"
     },
     "domain.YeuCauThemNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:571"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:574"
     },
     "event.MauTinXa": {
       "kind": "type",
@@ -5376,7 +5484,11 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:546"
+      "at": "service-identity/internal/grpc/server.go:554"
+    },
+    "grpc.BeginOperatorEnrollment": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:234"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
@@ -5398,9 +5510,17 @@
       "kind": "type",
       "at": "service-identity/internal/grpc/cau_phien.go:43"
     },
+    "grpc.ChangeOperatorPassword": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:185"
+    },
     "grpc.ClaimDueAutomationRuns": {
       "kind": "func",
       "at": "service-identity/internal/grpc/automation.go:31"
+    },
+    "grpc.CompleteOperatorEnrollment": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:259"
     },
     "grpc.CountOrgUnitHoldings": {
       "kind": "func",
@@ -5454,6 +5574,10 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/cau_phien.go:50"
     },
+    "grpc.NewOperatorServer": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:76"
+    },
     "grpc.NewServer": {
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:93"
@@ -5473,6 +5597,18 @@
     "grpc.OpenCitizenSession": {
       "kind": "func",
       "at": "service-identity/internal/grpc/cau_phien.go:61"
+    },
+    "grpc.OpenOperatorSession": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:100"
+    },
+    "grpc.OperatorAuthenticator": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/operator.go:54"
+    },
+    "grpc.OperatorServer": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/operator.go:66"
     },
     "grpc.OrgUnitHoldingsCounter": {
       "kind": "type",
@@ -5496,7 +5632,7 @@
     },
     "grpc.PhienCongDanDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/phien_cong_dan.go:45"
+      "at": "service-identity/internal/grpc/phien_cong_dan.go:46"
     },
     "grpc.PhienDoc": {
       "kind": "type",
@@ -5510,13 +5646,17 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/automation.go:90"
     },
+    "grpc.RegenerateOperatorRecoveryCodes": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:213"
+    },
     "grpc.ResolveAssignableStaff": {
       "kind": "func",
       "at": "service-identity/internal/grpc/giao_viec.go:45"
     },
     "grpc.ResolveCitizenSession": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/phien_cong_dan.go:79"
+      "at": "service-identity/internal/grpc/phien_cong_dan.go:80"
     },
     "grpc.ResolveDeadlines": {
       "kind": "func",
@@ -5550,6 +5690,10 @@
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:178"
     },
+    "grpc.ResolveOperatorSession": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:131"
+    },
     "grpc.ResolveOrgUnitNames": {
       "kind": "func",
       "at": "service-identity/internal/grpc/reference_names.go:36"
@@ -5568,7 +5712,7 @@
     },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:356"
+      "at": "service-identity/internal/grpc/server.go:364"
     },
     "grpc.ResolveTaskBlocLabels": {
       "kind": "func",
@@ -5577,6 +5721,10 @@
     "grpc.ResolveUnassignedHoldInstants": {
       "kind": "func",
       "at": "service-identity/internal/grpc/unassigned_hold.go:27"
+    },
+    "grpc.RevokeOperatorSession": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:168"
     },
     "grpc.SLADoc": {
       "kind": "type",
@@ -5604,7 +5752,7 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:210"
+      "at": "core/grpcx/grpcx.go:236"
     },
     "grpcx.UnaryClientCallerAuth": {
       "kind": "func",
@@ -5612,7 +5760,7 @@
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:226"
+      "at": "core/grpcx/grpcx.go:252"
     },
     "grpcx.UnaryServerBridgeKey": {
       "kind": "func",
@@ -5624,7 +5772,7 @@
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:259"
+      "at": "core/grpcx/grpcx.go:285"
     },
     "http.AddTaskLogEntry": {
       "kind": "func",
@@ -5726,9 +5874,25 @@
       "kind": "func",
       "at": "service-identity/internal/http/commune_profile.go:72"
     },
+    "http.CommuneReader": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_communes.go:20"
+    },
+    "http.CommuneWriter": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_communes.go:28"
+    },
+    "http.CompleteCoverUpload": {
+      "kind": "func",
+      "at": "service-comms/internal/http/content_cover.go:133"
+    },
     "http.CompleteTaskAttachment": {
       "kind": "func",
       "at": "service-petitions/internal/http/task_attachment.go:122"
+    },
+    "http.ContentCoverActs": {
+      "kind": "type",
+      "at": "service-comms/internal/http/content_cover.go:39"
     },
     "http.CountMyUnreadNotifications": {
       "kind": "func",
@@ -5812,7 +5976,7 @@
     },
     "http.DanhSachDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:429"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:447"
     },
     "http.DanhSachDeNghiLuiHan": {
       "kind": "func",
@@ -5860,7 +6024,7 @@
     },
     "http.DanhSachNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:329"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:341"
     },
     "http.DanhSachPhieu": {
       "kind": "func",
@@ -5884,7 +6048,7 @@
     },
     "http.DanhSachTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:286"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:320"
     },
     "http.DanhSachTrangThaiNhiemVu": {
       "kind": "func",
@@ -6344,11 +6508,11 @@
     },
     "http.MotNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:402"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:414"
     },
     "http.MotTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:501"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:540"
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
@@ -6413,6 +6577,18 @@
     "http.NoiDungMiniAppDoc": {
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:133"
+    },
+    "http.OperatorDeps": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_routes.go:37"
+    },
+    "http.OperatorHandler": {
+      "kind": "func",
+      "at": "service-platform/internal/http/operator_routes.go:63"
+    },
+    "http.OperatorIdentity": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_sessions.go:23"
     },
     "http.OrgUnitImportTemplate": {
       "kind": "func",
@@ -6530,9 +6706,13 @@
       "kind": "func",
       "at": "service-petitions/internal/http/catalogue_import.go:387"
     },
+    "http.PublicCoverImages": {
+      "kind": "type",
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:92"
+    },
     "http.PublicNewsCategories": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:432"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:471"
     },
     "http.PublishStaffBulk": {
       "kind": "func",
@@ -6573,6 +6753,10 @@
     "http.RequestAutomationRun": {
       "kind": "func",
       "at": "service-identity/internal/http/automation.go:209"
+    },
+    "http.RequestCoverUpload": {
+      "kind": "func",
+      "at": "service-comms/internal/http/content_cover.go:106"
     },
     "http.RequestTaskAttachmentUpload": {
       "kind": "func",
@@ -6724,7 +6908,7 @@
     },
     "http.SuaNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:603"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:633"
     },
     "http.SuaSLA": {
       "kind": "func",
@@ -6836,7 +7020,7 @@
     },
     "http.ThemDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:662"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:694"
     },
     "http.ThemDuAn": {
       "kind": "func",
@@ -6888,7 +7072,7 @@
     },
     "http.ThemNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:509"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:532"
     },
     "http.ThemVanBanDen": {
       "kind": "func",
@@ -7040,7 +7224,7 @@
     },
     "httpx.CitizenEdge": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:107"
+      "at": "core/httpx/citizen.go:115"
     },
     "httpx.CitizenSession": {
       "kind": "type",
@@ -7048,11 +7232,11 @@
     },
     "httpx.CitizenSessionFrom": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:144"
+      "at": "core/httpx/citizen.go:164"
     },
     "httpx.CitizenSessions": {
       "kind": "type",
-      "at": "core/httpx/citizen.go:80"
+      "at": "core/httpx/citizen.go:87"
     },
     "httpx.ClientIP": {
       "kind": "func",
@@ -7068,7 +7252,7 @@
     },
     "httpx.KhongThuocXa": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:234"
+      "at": "core/httpx/citizen.go:254"
     },
     "httpx.NguonCORS": {
       "kind": "type",
@@ -7088,7 +7272,7 @@
     },
     "httpx.Write": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:293"
+      "at": "core/httpx/citizen.go:313"
     },
     "httpx.WriteError": {
       "kind": "func",
@@ -7096,15 +7280,15 @@
     },
     "httpx.WriteHeader": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:281"
+      "at": "core/httpx/citizen.go:301"
     },
     "httpx.XaTuPhien": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:164"
+      "at": "core/httpx/citizen.go:184"
     },
     "httpx.XaTuPhienChiXem": {
       "kind": "func",
-      "at": "core/httpx/citizen.go:177"
+      "at": "core/httpx/citizen.go:197"
     },
     "idem.CheDoHong": {
       "kind": "type",
@@ -7256,7 +7440,7 @@
     },
     "identityclient.NewSoPhienCongDan": {
       "kind": "func",
-      "at": "core/identityclient/phien_cong_dan.go:60"
+      "at": "core/identityclient/phien_cong_dan.go:61"
     },
     "identityclient.OrgUnitName": {
       "kind": "type",
@@ -7280,7 +7464,7 @@
     },
     "identityclient.SoPhienCongDan": {
       "kind": "type",
-      "at": "core/identityclient/phien_cong_dan.go:51"
+      "at": "core/identityclient/phien_cong_dan.go:52"
     },
     "identityclient.StaffOrgUnits": {
       "kind": "func",
@@ -7308,11 +7492,11 @@
     },
     "identityclient.TraCuu": {
       "kind": "func",
-      "at": "core/identityclient/phien_cong_dan.go:102"
+      "at": "core/identityclient/phien_cong_dan.go:83"
     },
     "identityclient.TraCuuPhienCongDan": {
       "kind": "func",
-      "at": "core/identityclient/phien_cong_dan.go:140"
+      "at": "core/identityclient/phien_cong_dan.go:120"
     },
     "identityclient.UnassignedHoldInstants": {
       "kind": "func",
@@ -7337,6 +7521,10 @@
     "mail.Sender": {
       "kind": "type",
       "at": "service-comms/internal/mail/sender.go:91"
+    },
+    "main.Incr": {
+      "kind": "func",
+      "at": "service-platform/cmd/server/operator_edge.go:89"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -7381,6 +7569,70 @@
     "migrate.KetQua": {
       "kind": "type",
       "at": "core/migrate/migrate.go:88"
+    },
+    "opauth.Auth": {
+      "kind": "type",
+      "at": "service-platform/internal/opauth/opauth.go:115"
+    },
+    "opauth.ClearCookie": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:292"
+    },
+    "opauth.From": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:93"
+    },
+    "opauth.Has": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:81"
+    },
+    "opauth.Into": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:99"
+    },
+    "opauth.Key": {
+      "kind": "type",
+      "at": "service-platform/internal/opauth/opauth.go:55"
+    },
+    "opauth.NewAuth": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:125"
+    },
+    "opauth.Principal": {
+      "kind": "type",
+      "at": "service-platform/internal/opauth/opauth.go:72"
+    },
+    "opauth.Public": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:256"
+    },
+    "opauth.RequireKey": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:204"
+    },
+    "opauth.SessionResolver": {
+      "kind": "type",
+      "at": "service-platform/internal/opauth/opauth.go:109"
+    },
+    "opauth.SetCookie": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:268"
+    },
+    "opauth.SignedIn": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:235"
+    },
+    "opauth.TokenFrom": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:145"
+    },
+    "opauth.TokenVerifier": {
+      "kind": "type",
+      "at": "service-platform/internal/opauth/opauth.go:104"
+    },
+    "opauth.WithClock": {
+      "kind": "func",
+      "at": "service-platform/internal/opauth/opauth.go:136"
     },
     "operatorauth.CodeAt": {
       "kind": "func",
@@ -7465,6 +7717,114 @@
     "operatorauth.Verify": {
       "kind": "func",
       "at": "service-identity/internal/operatorauth/totp.go:112"
+    },
+    "operatorclient.BeginEnrollment": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:234"
+    },
+    "operatorclient.BeginEnrollmentRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:217"
+    },
+    "operatorclient.BeginEnrollmentResult": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:226"
+    },
+    "operatorclient.ChangePassword": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:150"
+    },
+    "operatorclient.ChangePasswordRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:134"
+    },
+    "operatorclient.ChangePasswordResult": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:143"
+    },
+    "operatorclient.Client": {
+      "kind": "type",
+      "at": "core/operatorclient/operatorclient.go:141"
+    },
+    "operatorclient.Close": {
+      "kind": "func",
+      "at": "core/operatorclient/dial.go:48"
+    },
+    "operatorclient.CompleteEnrollment": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:284"
+    },
+    "operatorclient.CompleteEnrollmentRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:264"
+    },
+    "operatorclient.CompleteEnrollmentResult": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:276"
+    },
+    "operatorclient.Dial": {
+      "kind": "func",
+      "at": "core/operatorclient/dial.go:30"
+    },
+    "operatorclient.New": {
+      "kind": "func",
+      "at": "core/operatorclient/operatorclient.go:165"
+    },
+    "operatorclient.NewFromConn": {
+      "kind": "func",
+      "at": "core/operatorclient/operatorclient.go:160"
+    },
+    "operatorclient.NewPasswordRefusal": {
+      "kind": "type",
+      "at": "core/operatorclient/operatorclient.go:123"
+    },
+    "operatorclient.Open": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:43"
+    },
+    "operatorclient.OpenRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:21"
+    },
+    "operatorclient.OpenResult": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:33"
+    },
+    "operatorclient.Outcome": {
+      "kind": "type",
+      "at": "core/operatorclient/operatorclient.go:71"
+    },
+    "operatorclient.Principal": {
+      "kind": "type",
+      "at": "core/operatorclient/operatorclient.go:113"
+    },
+    "operatorclient.RecoveryCodesResult": {
+      "kind": "type",
+      "at": "core/operatorclient/calls.go:182"
+    },
+    "operatorclient.RegenerateRecoveryCodes": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:188"
+    },
+    "operatorclient.Resolve": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:81"
+    },
+    "operatorclient.Revoke": {
+      "kind": "func",
+      "at": "core/operatorclient/calls.go:116"
+    },
+    "operatorclient.SessionGrant": {
+      "kind": "type",
+      "at": "core/operatorclient/operatorclient.go:100"
+    },
+    "operatorclient.String": {
+      "kind": "func",
+      "at": "core/operatorclient/operatorclient.go:85"
+    },
+    "operatorclient.UnaryInterceptors": {
+      "kind": "func",
+      "at": "core/operatorclient/operatorclient.go:155"
     },
     "operatorstore.ActivateTOTP": {
       "kind": "func",
@@ -7621,6 +7981,42 @@
     "operatorstore.UseRecoveryCode": {
       "kind": "func",
       "at": "service-identity/internal/store/operatorstore/store.go:1026"
+    },
+    "operatortoken.Claims": {
+      "kind": "type",
+      "at": "core/operatortoken/operatortoken.go:78"
+    },
+    "operatortoken.Format": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:198"
+    },
+    "operatortoken.GoString": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:196"
+    },
+    "operatortoken.LogValue": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:206"
+    },
+    "operatortoken.NewSigner": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:102"
+    },
+    "operatortoken.Sign": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:120"
+    },
+    "operatortoken.Signer": {
+      "kind": "type",
+      "at": "core/operatortoken/operatortoken.go:96"
+    },
+    "operatortoken.String": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:194"
+    },
+    "operatortoken.Verify": {
+      "kind": "func",
+      "at": "core/operatortoken/operatortoken.go:139"
     },
     "orgunitxlsx.Parse": {
       "kind": "func",
@@ -7806,6 +8202,10 @@
       "kind": "func",
       "at": "core/platformclient/directory.go:122"
     },
+    "platformclient.Current": {
+      "kind": "func",
+      "at": "core/platformclient/mini_app.go:138"
+    },
     "platformclient.Dial": {
       "kind": "func",
       "at": "core/platformclient/directory.go:72"
@@ -7877,6 +8277,58 @@
     "privacy.MaskPhone": {
       "kind": "func",
       "at": "core/privacy/mask.go:12"
+    },
+    "ratelimit.Allow": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:141"
+    },
+    "ratelimit.Close": {
+      "kind": "func",
+      "at": "core/ratelimit/redis.go:65"
+    },
+    "ratelimit.Counter": {
+      "kind": "type",
+      "at": "core/ratelimit/ratelimit.go:103"
+    },
+    "ratelimit.Incr": {
+      "kind": "func",
+      "at": "core/ratelimit/redis.go:56"
+    },
+    "ratelimit.Key": {
+      "kind": "type",
+      "at": "core/ratelimit/ratelimit.go:68"
+    },
+    "ratelimit.Limiter": {
+      "kind": "type",
+      "at": "core/ratelimit/ratelimit.go:110"
+    },
+    "ratelimit.Middleware": {
+      "kind": "func",
+      "at": "core/ratelimit/middleware.go:25"
+    },
+    "ratelimit.New": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:121"
+    },
+    "ratelimit.NewRedisCounter": {
+      "kind": "func",
+      "at": "core/ratelimit/redis.go:40"
+    },
+    "ratelimit.NewRedisCounterWith": {
+      "kind": "func",
+      "at": "core/ratelimit/redis.go:53"
+    },
+    "ratelimit.OperatorIPKey": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:87"
+    },
+    "ratelimit.Policy": {
+      "kind": "type",
+      "at": "core/ratelimit/ratelimit.go:40"
+    },
+    "ratelimit.RedisCounter": {
+      "kind": "type",
+      "at": "core/ratelimit/redis.go:31"
     },
     "secret.DSN": {
       "kind": "type",
@@ -8130,6 +8582,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/staff_notification.go:110"
     },
+    "store.AddDomain": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:240"
+    },
     "store.AddOverride": {
       "kind": "func",
       "at": "service-reporting/internal/store/system_message_override.go:100"
@@ -8157,6 +8613,10 @@
     "store.AttachCandidates": {
       "kind": "func",
       "at": "service-petitions/internal/store/stored_file.go:373"
+    },
+    "store.AttachMiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:456"
     },
     "store.AttachTreeFactsTx": {
       "kind": "func",
@@ -8228,15 +8688,15 @@
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:99"
+      "at": "service-platform/internal/store/directory.go:140"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:138"
+      "at": "service-platform/internal/store/directory.go:180"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:173"
+      "at": "service-platform/internal/store/directory.go:215"
     },
     "store.ByIDForUpdate": {
       "kind": "func",
@@ -8292,7 +8752,7 @@
     },
     "store.ChaCoThat": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:646"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:651"
     },
     "store.ChaCua": {
       "kind": "func",
@@ -8402,6 +8862,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:430"
     },
+    "store.Commune": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_registry.go:106"
+    },
     "store.ConTrucTiep": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:115"
@@ -8413,6 +8877,10 @@
     "store.CorrectDeadline": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:535"
+    },
+    "store.CorrectName": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:333"
     },
     "store.CotCuaBang": {
       "kind": "func",
@@ -8446,6 +8914,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/staff_notification.go:81"
     },
+    "store.CreateCommune": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:125"
+    },
     "store.CreateDEK": {
       "kind": "func",
       "at": "service-identity/internal/store/data_encryption_key.go:84"
@@ -8468,11 +8940,11 @@
     },
     "store.DanhMucCoThat": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:402"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:403"
     },
     "store.DanhMucMiniAppStore": {
       "kind": "type",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:536"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:541"
     },
     "store.DanhSach": {
       "kind": "func",
@@ -8644,7 +9116,7 @@
     },
     "store.GhiNhanDung": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:615"
+      "at": "service-identity/internal/store/phien_cong_dan.go:604"
     },
     "store.GhiNhatKy": {
       "kind": "func",
@@ -8689,6 +9161,10 @@
     "store.HoSoHienThiStore": {
       "kind": "type",
       "at": "service-platform/internal/store/ho_so_hien_thi.go:21"
+    },
+    "store.HostHeld": {
+      "kind": "func",
+      "at": "service-platform/internal/store/directory.go:60"
     },
     "store.Huy": {
       "kind": "func",
@@ -8813,6 +9289,10 @@
     "store.List": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:127"
+    },
+    "store.ListCommunes": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_registry.go:50"
     },
     "store.ListLive": {
       "kind": "func",
@@ -9042,9 +9522,13 @@
       "kind": "func",
       "at": "service-finance/internal/store/chung_tu_giai_ngan.go:44"
     },
+    "store.NewCommune": {
+      "kind": "type",
+      "at": "service-platform/internal/store/operator_writes.go:114"
+    },
     "store.NewDanhMucMiniAppStore": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:540"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:545"
     },
     "store.NewDataEncryptionKeyStore": {
       "kind": "func",
@@ -9060,7 +9544,7 @@
     },
     "store.NewDirectory": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:36"
+      "at": "service-platform/internal/store/directory.go:50"
     },
     "store.NewDuAnGhiStore": {
       "kind": "func",
@@ -9158,6 +9642,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:106"
     },
+    "store.NewOperatorRegistry": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_registry.go:27"
+    },
     "store.NewPetitionFieldStore": {
       "kind": "func",
       "at": "service-platform/internal/store/petition_field.go:23"
@@ -9185,6 +9673,10 @@
     "store.NewQuyenStore": {
       "kind": "func",
       "at": "service-identity/internal/store/quyen.go:25"
+    },
+    "store.NewRegistryWriter": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:34"
     },
     "store.NewRoleTemplateStore": {
       "kind": "func",
@@ -9314,6 +9806,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/automation.go:61"
     },
+    "store.OperatorRegistry": {
+      "kind": "type",
+      "at": "service-platform/internal/store/operator_registry.go:20"
+    },
     "store.OrgUnitPermissionHolders": {
       "kind": "func",
       "at": "service-identity/internal/store/notice_recipients.go:43"
@@ -9368,7 +9864,7 @@
     },
     "store.PhienCauMoi": {
       "kind": "type",
-      "at": "service-identity/internal/store/phien_cong_dan.go:418"
+      "at": "service-identity/internal/store/phien_cong_dan.go:407"
     },
     "store.PhienCongDanStore": {
       "kind": "type",
@@ -9376,7 +9872,7 @@
     },
     "store.PhienMoi": {
       "kind": "type",
-      "at": "service-identity/internal/store/phien_cong_dan.go:305"
+      "at": "service-identity/internal/store/phien_cong_dan.go:294"
     },
     "store.PhienStore": {
       "kind": "type",
@@ -9385,6 +9881,18 @@
     "store.PhieuPhanAnhStore": {
       "kind": "type",
       "at": "service-petitions/internal/store/phieu_phan_anh.go:27"
+    },
+    "store.Provinces": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_registry.go:155"
+    },
+    "store.PublicForSubject": {
+      "kind": "func",
+      "at": "service-comms/internal/store/stored_file.go:199"
+    },
+    "store.PublicObjectKeys": {
+      "kind": "func",
+      "at": "service-comms/internal/store/stored_file.go:224"
     },
     "store.PublishedCategoryIDs": {
       "kind": "func",
@@ -9446,6 +9954,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/automation.go:239"
     },
+    "store.RegistryWriter": {
+      "kind": "type",
+      "at": "service-platform/internal/store/operator_writes.go:29"
+    },
     "store.ReopenBudgetPeriodClose": {
       "kind": "func",
       "at": "service-finance/internal/store/budget_period_close.go:201"
@@ -9498,6 +10010,18 @@
       "kind": "type",
       "at": "core/store/scoped.go:110"
     },
+    "store.SetActivation": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:380"
+    },
+    "store.SetPrimaryDomain": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:271"
+    },
+    "store.SetPublicObjectKey": {
+      "kind": "func",
+      "at": "service-comms/internal/store/stored_file.go:175"
+    },
     "store.SetPublicationStatus": {
       "kind": "func",
       "at": "service-petitions/internal/store/petition_publication.go:26"
@@ -9520,7 +10044,7 @@
     },
     "store.SlugDaDung": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_mini_app.go:615"
+      "at": "service-comms/internal/store/noi_dung_mini_app.go:620"
     },
     "store.SoLonNhatDaCap": {
       "kind": "func",
@@ -9600,7 +10124,7 @@
     },
     "store.TaoChuaChonXa": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:379"
+      "at": "service-identity/internal/store/phien_cong_dan.go:368"
     },
     "store.TaoKetLuan": {
       "kind": "func",
@@ -9608,7 +10132,7 @@
     },
     "store.TaoQuaCau": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:448"
+      "at": "service-identity/internal/store/phien_cong_dan.go:437"
     },
     "store.TaskRelatedScope": {
       "kind": "type",
@@ -9708,11 +10232,11 @@
     },
     "store.ThuHoi": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:534"
+      "at": "service-identity/internal/store/phien_cong_dan.go:523"
     },
     "store.ThuHoiChuaChonXa": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:554"
+      "at": "service-identity/internal/store/phien_cong_dan.go:543"
     },
     "store.ThuHoiCuaCanBo": {
       "kind": "func",
@@ -9720,11 +10244,11 @@
     },
     "store.ThuHoiCuaCongDan": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:575"
+      "at": "service-identity/internal/store/phien_cong_dan.go:564"
     },
     "store.ThuHoiCuaTaiKhoanZalo": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:499"
+      "at": "service-identity/internal/store/phien_cong_dan.go:488"
     },
     "store.ThuTuLonNhat": {
       "kind": "func",
@@ -9740,11 +10264,11 @@
     },
     "store.TraCuu": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:181"
+      "at": "service-identity/internal/store/phien_cong_dan.go:178"
     },
     "store.TraCuuCoLoi": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:221"
+      "at": "service-identity/internal/store/phien_cong_dan.go:210"
     },
     "store.Transition": {
       "kind": "func",
@@ -9878,9 +10402,17 @@
       "kind": "func",
       "at": "core/tenant/cache.go:72"
     },
+    "tenant.CachedCommune": {
+      "kind": "type",
+      "at": "core/tenant/cache.go:186"
+    },
     "tenant.CachedDirectory": {
       "kind": "type",
       "at": "core/tenant/cache.go:35"
+    },
+    "tenant.CommuneLookup": {
+      "kind": "type",
+      "at": "core/tenant/cache.go:170"
     },
     "tenant.Current": {
       "kind": "func",
@@ -9921,6 +10453,10 @@
     "tenant.MustFrom": {
       "kind": "func",
       "at": "core/tenant/tenant.go:91"
+    },
+    "tenant.NewCachedCommune": {
+      "kind": "func",
+      "at": "core/tenant/cache.go:196"
     },
     "tenant.NewCachedDirectory": {
       "kind": "func",

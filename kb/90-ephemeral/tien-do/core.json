@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-01",
   "muc": [
     {
+      "id": "ghim-go-toolchain-1-26-6",
+      "viec": "Ghim toolchain go1.26.6 ở mọi go.mod và GO_VERSION=1.26.6 ở mọi Dockerfile — đóng 107 phát hiện check_vuln (toàn bộ thư viện chuẩn Go)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Rà bảo mật 01/10/2026: mọi phát hiện được gọi tới đều ở stdlib, bản vá go1.26.3–1.26.6; máy dựng cục bộ chạy go1.26.2; service-*/Dockerfile dùng GO_VERSION=1.26 (trôi theo bản vá mới nhất). Không phát hiện nào sinh từ đợt platform-admin",
+      "no_confirm": [],
+      "tiep_theo": "Người dùng CHỐT ghim go1.26.6 (01/10/2026) rồi HOÃN để đẩy bản build sớm. Làm: dòng `toolchain go1.26.6` ở core/, tools/ và mọi service-*/go.mod; `GO_VERSION=1.26.6` ở mọi Dockerfile; chạy lại `make vuln`. Một commit riêng, chạy một mình (chạm mọi module)"
+    },
+    {
       "id": "backfill-theo-xa",
       "viec": "Backfill dữ liệu theo từng xã",
       "trang_thai": "treo",

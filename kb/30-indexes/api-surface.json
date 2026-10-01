@@ -1212,7 +1212,57 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "409": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items/cover-images",
+      "operation_id": "comms_post_content_items_cover_images",
+      "task_id": "0dc6d61a7e40",
+      "summary": "Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.coverUploadIn",
+      "reply_schemas": {
+        "201": "comms.coverUploadOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items/cover-images/{id}/completion",
+      "operation_id": "comms_post_content_items_cover_images_by_id_completion",
+      "task_id": "57dfe8cdc240",
+      "summary": "Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng",
+      "reply_schemas": {
+        "200": "comms.coverFileOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes.go"
     },
@@ -1256,7 +1306,8 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes.go"
     },
