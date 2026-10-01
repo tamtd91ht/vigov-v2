@@ -141,7 +141,20 @@ export default defineConfig(() => ({
     // it versions the whole bundle on deploy.
     target: "es2015",
     modulePreload: false,
+    // ONE FILE BY CONSTRUCTION (`iife` cannot split), so the 500 kB default only repeats on every build
+    // that the file is the file. Measured 01/10/2026: 835 kB raw / 224 kB gzip. The limit sits above that
+    // so the warning comes back the day the bundle really grows, not never.
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
+      // EMPTY_IMPORT_META only, and only because it is harmless HERE: the one `import.meta` user is Vite's
+      // preload helper around `await import("zmp-sdk")` (zalo-api.ts — dynamic on purpose: a failed import
+      // means "not inside Zalo"). With `iife` that import is inlined, the helper is called with no deps and
+      // never reads `import.meta.url`. NOT `define: { "import.meta": {} }` — Vitest shares this config and
+      // the source-scanning tests run on `import.meta.glob`. Every other warning still prints.
+      onwarn(warning, warn) {
+        if (warning.code === "EMPTY_IMPORT_META") return;
+        warn(warning);
+      },
       output: {
         format: "iife",
         entryFileNames: "assets/app.js",
