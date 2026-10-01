@@ -23,7 +23,8 @@
 //   dịch vụ sở hữu ảnh của nó  ·  kho sở hữu bất biến của kho.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
-// MÁY CHỦ BUILD CẦN: go (1.26+), buf, node (22+), Python 3.8+ (tên `python3.X` hoặc `python3`, stage đầu tự chọn), và một trình biên dịch C —
+// MÁY CHỦ BUILD CẦN: go (1.26+; go.mod/go.work ghim `toolchain go1.26.6`, nên với GOTOOLCHAIN=auto
+// mặc định bản cũ hơn tự tải go1.26.6 — đặt GOTOOLCHAIN=local thì phải cài sẵn ≥ 1.26.6), buf, node (22+), Python 3.8+ (tên `python3.X` hoặc `python3`, stage đầu tự chọn), và một trình biên dịch C —
 // `go test -race` cần cgo. KHÔNG cần docker: tệp này không đóng ảnh.
 
 pipeline {
@@ -152,7 +153,8 @@ pipeline {
         //
         // KẾT QUẢ PHỤ THUỘC BẢN `go` CỦA MÁY NÀY: govulncheck chấm thư viện chuẩn theo bộ công
         // cụ đang chạy nó. Đo 28/09/2026 trên go1.26.2: mọi phát hiện đều ở thư viện chuẩn
-        // (crypto/tls, crypto/x509, net, encoding/…), vá hết ở go1.26.6.
+        // (crypto/tls, crypto/x509, net, encoding/…), vá hết ở go1.26.6 — nay đã ghim bằng dòng
+        // `toolchain go1.26.6` ở go.work và mọi go.mod (đo lại 01/10/2026: 0 phát hiện Go).
         sh 'make vuln PYTHON="$PYTHON"'
       }
     }

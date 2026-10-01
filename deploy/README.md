@@ -182,7 +182,9 @@ Không xác định được người bấm ⇒ `vigov-deploy` **dừng** ở st
 chạm cụm. Job không có trigger tự động nên mọi lượt hợp lệ đều do một người đã đăng nhập bấm
 — gặp lần đỏ ấy thì kiểm xem có job/timer/script nào gọi hộ không, đừng nới hàm.
 
-**Công cụ trên máy chủ:** `go` 1.26+ · `buf` · `node` 22+ · `npm` · `python3` **3.8+** · một trình
+**Công cụ trên máy chủ:** `go` 1.26+ (kho ghim `toolchain go1.26.6`; với `GOTOOLCHAIN=auto` mặc
+định, bản cũ hơn tự tải go1.26.6 — cần mạng ra `proxy.golang.org`; đặt `GOTOOLCHAIN=local` thì
+phải cài sẵn ≥ 1.26.6, nếu không `make vuln` đỏ) · `buf` · `node` 22+ · `npm` · `python3` **3.8+** · một trình
 biên dịch C (`go test -race` cần cgo) · `docker` có BuildKit. Riêng `vigov-deploy` thêm
 `kubectl` và `skopeo`. Mỗi pipeline tự kiểm ở stage đầu và **dừng ngay** nếu thiếu.
 

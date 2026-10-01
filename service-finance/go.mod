@@ -2,6 +2,8 @@ module github.com/vihat/vigov/service-finance
 
 go 1.26.0
 
+toolchain go1.26.6
+
 require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/vihat/vigov/core v0.0.0

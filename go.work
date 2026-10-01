@@ -11,6 +11,14 @@
 
 go 1.26.0
 
+// Why the toolchain is pinned to an exact patch: govulncheck judges the standard library by
+// the toolchain running it, and go1.26.2 carried ~107 called stdlib findings (crypto/tls,
+// crypto/x509, net, encoding/xml GO-2026-6088 ...) fixed only by go1.26.6. With
+// GOTOOLCHAIN=auto an older local go downloads this one instead of building with holes.
+// The same line sits in every go.mod and GO_VERSION in every service-*/Dockerfile — raise
+// all of them together, never one.
+toolchain go1.26.6
+
 use (
 	./core
 	./service-comms

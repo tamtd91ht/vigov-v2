@@ -20,7 +20,10 @@
 # module thấy nhau qua thư mục, nên nó CHE mất một `require` bị thiếu trong go.mod. Ảnh không
 # có nó, nên lượt build này CHỨNG MINH dịch vụ dựng được chỉ với `core/` và chính nó.
 
-ARG GO_VERSION=1.26
+# Exact patch, never the floating `1.26`: the stdlib's known holes are fixed per patch (go1.26.6
+# closes GO-2026-6088 and the rest check_vuln reported), and a floating tag makes "which Go built
+# this image" unanswerable. Must equal `toolchain` in go.mod/go.work — raise them together.
+ARG GO_VERSION=1.26.6
 ARG RUNTIME=gcr.io/distroless/static-debian12:nonroot   #[bat-bien] khong shell, khong root
 
 # ---------------------------------------------------------------------------------------

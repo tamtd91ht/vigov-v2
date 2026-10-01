@@ -2,6 +2,8 @@ module github.com/vihat/vigov/tools
 
 go 1.26.0
 
+toolchain go1.26.6
+
 // `schema-smoke` áp migration CỦA TỪNG DỊCH VỤ, nên nó phải nhập đúng gói `migrations` mà mỗi
 // dịch vụ nhúng vào binary của mình. Không có cách nào khác giữ được tính chất quan trọng nhất:
 // thứ được kiểm ở đây LÀ thứ dịch vụ mang theo lúc khởi động, không phải một bản sao trên đĩa.
