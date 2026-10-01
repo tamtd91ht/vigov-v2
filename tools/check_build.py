@@ -568,6 +568,43 @@ def main() -> int:
         if re.search(r":latest\b", nd):
             loi.append("web-admin/Jenkinsfile đẩy thẻ di động `latest`")
 
+    # platform-admin — bàn điều khiển vận hành ViHAT (ADR 0048), cùng khuôn với web-admin. Danh sách
+    # kích hoạt chỉ `platform-admin/**`: nó không sinh kiểu từ hợp đồng REST nên không có
+    # `kb/20-contracts/**`, và ngữ cảnh dựng là thư mục của nó nên không gì ngoài đó vào được ảnh.
+    pa = os.path.join(GOC, "platform-admin", "Dockerfile")
+    if not os.path.isfile(pa):
+        loi.append("platform-admin/Dockerfile KHÔNG TỒN TẠI — bàn điều khiển vận hành không có ảnh")
+    else:
+        with open(pa, encoding="utf-8") as f:
+            noi_dung = f.read()
+        # Với bàn điều khiển, một NEXT_PUBLIC_* là bật hay trỏ khu vận hành bằng hằng số lúc build
+        # — ĐIỀU KIỆN DỪNG #5 của ADR 0048.
+        if "NEXT_PUBLIC_" not in noi_dung:
+            loi.append(
+                "platform-admin/Dockerfile mất rào chắn NEXT_PUBLIC_*\n"
+                "        → Biến đó bị nung vào bundle trình duyệt; bật hay trỏ khu vận hành bằng một "
+                "hằng số lúc build là điều kiện dừng #5 của ADR 0048."
+            )
+        if re.search(r"^\s*USER\s+(?!root\b|0\b)\S+", noi_dung, re.M) is None:
+            loi.append("platform-admin/Dockerfile không khai USER không phải root")
+
+    pj = os.path.join(GOC, "platform-admin", "Jenkinsfile")
+    if not os.path.isfile(pj):
+        loi.append("platform-admin/Jenkinsfile KHÔNG TỒN TẠI")
+    else:
+        with open(pj, encoding="utf-8") as f:
+            nd = f.read()
+        than_pa = re.search(r"List<String>\s+duongKichHoat\(\)\s*\{(.*?)\}", nd, re.S)
+        ds_pa = than_pa.group(1) if than_pa else ""
+        if "'platform-admin/**'" not in ds_pa:
+            loi.append(
+                "platform-admin/Jenkinsfile không kích hoạt theo 'platform-admin/**'\n"
+                "        → Mã của bàn điều khiển đổi mà job không dựng lại: Harbor thiếu ảnh, cụm chạy "
+                "mã cũ, và không có gì đỏ để ai nhìn thấy."
+            )
+        if re.search(r":latest\b", nd):
+            loi.append("platform-admin/Jenkinsfile đẩy thẻ di động `latest`")
+
     # citizen-app: không Dockerfile, không ảnh — chỉ Jenkinsfile đẩy lên Zalo. Tự chấm phép kiểm
     # TRƯỚC, rồi mới chấm tệp thật: một phép kiểm đã chết thì dòng [PASS] của tệp thật vô nghĩa.
     so_ca_citizen = 1 + len(_CITIZEN_HONG)
@@ -584,7 +621,7 @@ def main() -> int:
                 loi.append(f"citizen-app/Jenkinsfile {l}")
 
     if loi:
-        print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web")
+        print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web-admin + platform-admin")
         for l in loi:
             print(f"      - {l}")
         return 1
@@ -592,8 +629,8 @@ def main() -> int:
     # `so_dong_em` IN RA CHỨ KHÔNG ẨN, và đó là bài học của chính phép kiểm ấy: bản đầu ghép sai
     # tên thư mục nên không đối chiếu được cặp nào, mà dòng [PASS] vẫn y hệt lúc nó chạy đúng.
     # Một con số 0 ở đây là câu "cổng này chưa canh gì cả", đọc được mà không cần đột biến.
-    print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web · "
-          f"{len(svcs) + 1} Dockerfile · {len(svcs) + 1} Jenkinsfile · "
+    print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web-admin + platform-admin · "
+          f"{len(svcs) + 2} Dockerfile · {len(svcs) + 2} Jenkinsfile · "
           f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · "
           f"{so_dong_em} cặp hạn đóng-êm đối chiếu · "
           f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · 0 vi phạm")

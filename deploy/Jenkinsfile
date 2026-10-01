@@ -118,7 +118,7 @@ pipeline {
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
                      'vigov-service-documents', 'vigov-service-finance', 'vigov-service-petitions',
-                     'vigov-service-reporting', 'vigov-web-admin'],
+                     'vigov-service-reporting', 'vigov-web-admin', 'vigov-platform-admin'],
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +

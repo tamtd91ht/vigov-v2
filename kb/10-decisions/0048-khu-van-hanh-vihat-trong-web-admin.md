@@ -3,7 +3,7 @@ id: 0048-khu-van-hanh-vihat-trong-web-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: c21ab453
+derived_from_commit: 07bec99d
 expires: null
 owns_facts:
   - "tài khoản vận hành ở service-identity, bảng riêng (operator_account, operator_session, operator_permission_grant), không tenant_id (chốt 28/09/2026)"
@@ -29,6 +29,7 @@ owns_facts:
   - "vì sao kiểm trùng tên xã phân biệt dấu nhưng không phân biệt hoa thường và khoảng trắng, so trong cùng tỉnh"
   - "vì sao đăng nhập chỉ có mật khẩu vẫn được chuyển tới identity"
   - "vì sao hành động vết của khu vận hành giữ tên tao_xa / gan_mini_app của stage Jenkins"
+  - "platform-admin chỉ ở admin.vigov.vn trên prod, không IP/VPN, Ingress dựng tay ngoài deploy/hosts.yaml, lên sống trước khi đủ điều kiện §Chốt bổ sung #2 (chốt 01/10/2026)"
 ---
 
 # 0048. Khu vực vận hành ViHAT trong `web-admin`
@@ -41,7 +42,8 @@ owns_facts:
 của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · #6 chốt 28/09 (§*Chốt bước 1*) · **#5, #7,
 #9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · **đợt 1 `platform-admin` chốt
 01/10/2026** (§*Chốt của chủ dự án — 01/10/2026*) · **điều kiện lên sống của `OPERATOR_HOST`
-chốt 01/10/2026, sau khi dựng** (§*Chốt bổ sung — 01/10/2026, sau khi dựng*) · #12 là bước vận hành, chưa
+chốt 01/10/2026, sau khi dựng** (§*Chốt bổ sung — 01/10/2026, sau khi dựng*) · **lên sống ở `admin.vigov.vn`
+trước khi đủ điều kiện, chốt 01/10/2026** (§*Chốt triển khai — 01/10/2026*) · #12 là bước vận hành, chưa
 làm — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
@@ -268,6 +270,31 @@ lượt — ghi ở `kb/00-foundation/ubiquitous-language.md` §*Miền vận h�
 | 3 | **Xem chi tiết MỘT xã** (tên, tỉnh, trạng thái, tên miền, App ID Mini App) **không ghi vết**. Ngoại lệ 30/09 #5 mở rộng từ *"liệt kê"* sang *"liệt kê + xem siêu dữ liệu một xã"* | Cùng lý do với #5: chỉ là siêu dữ liệu sổ xã, không dữ liệu công dân. **Giới hạn giữ nguyên:** thêm bất kỳ trường nào ngoài siêu dữ liệu sổ xã vào màn xem là **ra khỏi ngoại lệ**, phải hỏi lại | Luật 6 bất biến 7 |
 | 4 | **Ba điều đã dựng, ghi lý do** (mã ở `service-platform/internal/domain/operator_commune.go:124-152`, `internal/http/operator_sessions.go:196-199`, `internal/store/operator_writes.go:47-56`): **(a)** kiểm trùng tên xã **không** phân biệt hoa thường và khoảng trắng nhưng **CÓ** phân biệt dấu, so **trong cùng tỉnh**, bỏ tiền tố *"Thành phố"* / *"Tỉnh"* ở đầu tên tỉnh; **(b)** đăng nhập chỉ có mật khẩu vẫn **chuyển tới identity**; **(c)** hành động vết giữ tên **`tao_xa`** / **`gan_mini_app`** của các stage Jenkins | (a) Gộp dấu thì *"Tân Phú"* và *"Tấn Phú"* thành một tên — hai từ khác nhau, có thể là hai xã, và lời từ chối ở đây **không có đường vượt**. Bỏ tiền tố tỉnh vì `tenant.tinh_thanh` cũ ghi *"Thành phố Đà Nẵng"* còn danh mục ghi *"Đà Nẵng"*; bỏ ở cả hai phía chỉ làm phép kiểm **chặt hơn**. (b) identity trả `ENROLLMENT_REQUIRED` **trước** khi kiểm yếu tố thứ hai; chặn tại chỗ thì tài khoản mới không bao giờ biết mình phải đăng ký. (c) Cùng một hành vi đã có mục vết dưới tên ấy từ stage Jenkins; tên mới là hai tên cho một hành vi trong cùng một cột | (c) luật 6 bất biến 1; ADR 0011 |
 | 5 | **Đổi bộ não, người dùng duyệt:** `rbac_guard` nhận các khai báo `opauth.*` (`RequireKey` / `SignedIn` / `Public`) như khai báo quyền hợp lệ; `check_security` theo dõi **hạn** của một `// @security-exception:` có trỏ tới một mục trong sổ nợ | Không có điều thứ nhất, mọi tuyến vận hành bị báo *thiếu khai báo* — báo động giả dạy người ta bỏ qua báo động. Không có điều thứ hai, một ngoại lệ trỏ sổ nợ sống qua hạn của chính món nợ ấy mà cổng vẫn xanh | Luật 5 bất biến 1; luật 13 |
+
+## Chốt triển khai — 01/10/2026 (`admin.vigov.vn`, lên sống)
+
+Mục này ghi thêm, không sửa phần trên. Chủ dự án trả lời trong phiên chính 01/10/2026.
+
+| # | Đã chốt | Vì sao · giá chủ dự án chấp nhận | Luật |
+|---|---|---|---|
+| 1 | `platform-admin` phục vụ ở **`admin.vigov.vn`, CHỈ prod** (namespace `vigov-prod`). **Không** có console staging: `admin-stg.vigov.vn` không triển khai | Staging dùng chung CSDL với prod (ADR 0046 §*Sửa đổi 26/09/2026*) — console staging chỉ là cửa thứ hai vào cùng sổ xã | ADR 0046 |
+| 2 | **Không** giới hạn IP, **không** VPN cho `admin.vigov.vn`. Bảo vệ là MFA TOTP (§*Chốt 28/09* #10) và giới hạn 20 lần / 15 phút / IP (§*Chốt 01/10* #3) | Câu mở #37 (`kb/00-foundation/open-questions.json:944`) chốt *"không giới hạn mạng theo IP/VPN"* **chỉ cho cán bộ xã**; ở đây chủ dự án **mở rộng tường minh** cùng lựa chọn sang host vận hành. **Giá:** TCVN 14423 §5.12 nêu VPN cho quản trị từ xa (`kb/90-ephemeral/tcvn-14423-danh-gia.md:66`) — không đáp ứng, chấp nhận | Luật 13 |
+| 3 | Quy tắc Ingress công khai của `admin.vigov.vn` **dựng tay trong Rancher**, **không** nằm trong `deploy/hosts.yaml` / `tools/ingress` | **Ngoại lệ có chủ ý** của [ADR 0046 §*Sửa đổi 01/10/2026*](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-01102026--một-nguồn-cho-tên-miền-công-khai). **Giá:** host này là quy tắc Ingress duy nhất kho không render — đổi nó là việc tay, không phép kiểm nào thấy | ADR 0046 |
+| 4 | **Lên sống NGAY**, trước khi đủ bốn điều kiện của §*Chốt bổ sung* #2 (chủ dự án: *"làm và mở luôn"*) | Bảng dưới ghi điều nào chưa đạt và giá | Luật 13 bất biến 1 |
+
+| Điều kiện | Trạng thái 01/10/2026 | Bằng chứng | Giá chấp nhận |
+|---|---|---|---|
+| (a) quy tắc 3 hẹp theo cặp gọi | Đã sửa trong kho, sổ ghi `dang_lam` | `kb/90-ephemeral/tien-do/deploy.json:177-182` (`netpol-grpc-theo-cap-goi`) | — |
+| (b) NetworkPolicy áp trên cụm thật | **Chưa** — phải áp bản render và xoá tay `allow-grpc-internal` | cùng việc, `tiep_theo` | Tới khi áp, cụm chưa có biên mạng nào cho cổng gRPC của identity, gồm 9093 |
+| (c) còn mở #12 | **Chưa** — hai dòng `admin*.vigov.vn` → Xã Thăng Bình còn | `kb/90-ephemeral/tien-do/service-identity.json:254` | Giảm nhẹ: `LaTenMienDanhRieng` từ chối host dành riêng **trước khi tra bảng** (`service-platform/internal/domain/ten_mien_danh_rieng.go:18-23`, `:57`), nên `admin.vigov.vn` không vào biên của xã. Hai dòng vẫn nằm trong sổ |
+| (d) biến của platform và identity | Trách nhiệm người vận hành cụm; kho không kiểm được | — | Thiếu thì platform từ chối khởi động (ADR 0057) — không xã nào phân giải |
+| Thêm: kênh `platform → identity:9093` không TLS | Nợ, chưa trả | `tools/security_debt.json:19-23` (`core/operatorclient/dial.go`, nhãn `grpc-plaintext-operator-channel`, hạn **2026-12-28**) | Mật khẩu, TOTP và token `op1.` đi không mã hoá trong cụm, không có NetworkPolicy che (b) |
+
+**Đính chính 01/10/2026 cho §*Chốt bổ sung* #2 (d):** dòng ấy ghi `IDENTITY_GRPC_ADDR` trong
+`platform-secrets`. Mã nay đọc **`IDENTITY_OPERATOR_GRPC_ADDR`** = `identity:9093` (cổng `grpc-operator`,
+không phải cổng cán bộ 9090), đặt ở **env của Deployment**, không ở Secret
+(`core/config/config.go:65`, `:513-517`; `core/config/hints.go:212-218`;
+`service-platform/cmd/server/main.go:44-51`). Dòng cũ giữ làm lịch sử; đọc (d) theo tên mới.
 
 ## ĐIỀU KIỆN DỪNG
 

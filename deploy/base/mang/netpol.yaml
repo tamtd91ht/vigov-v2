@@ -518,3 +518,48 @@ spec:
             matchLabels: { vigov.vn/surface: rest }
       ports:
         - { port: 8080, protocol: TCP }
+---
+# 12. platform-admin (bàn điều khiển vận hành ViHAT, ADR 0048) → REST 8080 của platform, và CHỈ thế.
+#
+# Gateway của nó (`platform-admin/src/app/api/v1/[...path]/route.ts`) chuyển mọi `/api/v1/*` tới
+# PLATFORM_HTTP_ADDR. Quy tắc 2 chỉ mở 8080 từ ingress-nginx, nên thiếu cặp này mọi lời gọi là 502 dù
+# pod xanh.
+#
+# KHÔNG DÙNG LẠI quy tắc 5/6 của web-admin, có chủ ý: chúng mở tới MỌI pod `vigov.vn/surface: rest`,
+# tức mọi dịch vụ nghiệp vụ. Bàn điều khiển không có đường nào tới dữ liệu của xã (ADR 0003) — ở mã
+# (không client nghiệp vụ nào) và ở đây (chỉ pod platform). Hai biên, một ý.
+#
+# DNS không cần luật riêng: quy tắc 4 (`allow-egress`, `podSelector: {}`) đã mở 53 cho mọi pod.
+#
+# Nhãn `vigov.vn/surface: rest` trên pod platform-admin cũng làm quy tắc 5 (`allow-rest-from-web-admin`)
+# chọn nó — VÔ HẠI: luật ấy chỉ mở 8080, mà pod này chỉ nghe 3000. Nhãn ấy có mặt để quy tắc 2 mở 3000
+# từ ingress-nginx (Ingress dựng tay của admin.vigov.vn).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rest-from-platform-admin
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: platform-admin }
+      ports:
+        - { port: 8080, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-admin-egress-platform
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform-admin }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: platform }
+      ports:
+        - { port: 8080, protocol: TCP }

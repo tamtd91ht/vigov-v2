@@ -4,6 +4,9 @@ namespace: vigov-prod
 
 resources:
   - ../../base
+  # Bàn điều khiển vận hành ViHAT — CHỈ PROD (chủ dự án chốt 01/10/2026), nên nằm ở đây chứ không ở
+  # `base/kustomization.yaml`. Ingress của nó (admin.vigov.vn) dựng tay trong Rancher, không ở đây.
+  - ../../base/platform-admin
 
 # Host + TLS của prod. Bảng định tuyến của Ingress KHÔNG ở đây: nó SINH ra ở
 # `base/mang/ingress.yaml` từ `kb/20-contracts/openapi.json`. Xem `ingress-moi-truong.yaml`.
@@ -57,4 +60,6 @@ images:
   - name: harbor.omicrm.services/ci/vigov-service-petitions
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
   - name: harbor.omicrm.services/ci/vigov-service-reporting
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-platform-admin
     newTag: CHUA-TRIEN-KHAI-LAN-NAO

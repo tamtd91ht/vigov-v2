@@ -1,0 +1,107 @@
+# Bàn điều khiển vận hành ViHAT (ADR 0048) — Next.js standalone, `node server.js`, cổng 3000.
+#
+# CHỈ PROD (chủ dự án chốt 01/10/2026): đơn vị này được `overlays/prod` kéo vào, KHÔNG nằm trong
+# `deploy/base/kustomization.yaml` — staging không có bàn điều khiển. Host công khai `admin.vigov.vn`
+# và Ingress của nó DỰNG TAY trong Rancher, không sinh từ `deploy/hosts.yaml` (deploy/README.md, mục
+# "platform-admin lần đầu").
+#
+# KHÔNG có client nào tới dịch vụ nghiệp vụ (ADR 0003): đường ra duy nhất là REST 8080 của platform
+# (`deploy/base/mang/netpol.yaml`, quy tắc 12). Không `NEXT_PUBLIC_*`, không bí mật.
+#
+# Ảnh chạy bằng user `node` (UID 1000), như web-admin.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-admin
+  labels:
+    app.kubernetes.io/name: platform-admin
+    app.kubernetes.io/part-of: vigov
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app.kubernetes.io/name: platform-admin }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform-admin
+        app.kubernetes.io/part-of: vigov
+        # Nhãn này mở 3000 từ ingress-nginx (netpol quy tắc 2) — Ingress dựng tay của admin.vigov.vn
+        # đi qua đúng ingress controller ấy.
+        vigov.vn/surface: rest
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: platform-admin }
+
+      terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+
+      containers:
+        - name: web
+          image: harbor.omicrm.services/ci/vigov-platform-admin:CHUA-GHIM-THE
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - { name: http, containerPort: 3000 }
+
+          env:
+            - { name: PORT,     value: "3000" }
+            - { name: HOSTNAME, value: "0.0.0.0" }   # mặc định của Next là 127.0.0.1 → probe không tới được
+            # Địa chỉ nội bộ REST của platform (`src/lib/server/platform-origin.ts`). KHÔNG có mặc
+            # định trong mã: thiếu là 503 nêu tên biến. `platform` là tên Service của `deploy/base`;
+            # cụm dựng tay dùng `vigov-service-platform` và job đặt đè (platform-admin/Jenkinsfile).
+            - { name: PLATFORM_HTTP_ADDR, value: "http://platform:8080" }
+            # PHẢI BẰNG ĐÚNG OPERATOR_HOST CỦA PLATFORM. Gateway gửi Host = giá trị này trên mọi lời
+            # gọi (`src/lib/server/operator-host.ts`); lệch nhau thì mọi tuyến vận hành 404. Trên cụm,
+            # job ĐỌC giá trị từ Deployment platform đang chạy rồi đặt vào đây — không gõ lần hai.
+            - { name: OPERATOR_HOST, value: "admin.vigov.vn" }
+
+          # Chỉ `ENV` từ ConfigMap chung. KHÔNG có `secretRef`: ứng dụng này không giữ bí mật nào
+          # (phiên vận hành do platform ký và kiểm; cookie chỉ đi qua).
+          envFrom:
+            - configMapRef: { name: common-config }
+
+          # `/healthz` không gọi platform, không đọc Host, không cần hai biến trên. Probe `/` sẽ bị
+          # proxy chuyển sang `/dang-nhap` (307) vì không có cookie — pod không bao giờ Ready.
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+            failureThreshold: 5
+
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits:   { memory: 512Mi }
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+
+          volumeMounts:
+            - { name: tmp,   mountPath: /tmp }
+            - { name: cache, mountPath: /app/.next/cache }   # Next ghi cache lúc chạy
+
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+        - name: cache
+          emptyDir: { sizeLimit: 256Mi }
+
+      imagePullSecrets:
+        - name: harbor-vigov

@@ -19,7 +19,7 @@
       "file": "core/operatorclient/dial.go",
       "label": "grpc-plaintext-operator-channel",
       "tcvn": "5.4.2.4",
-      "reason": "Người dùng chốt 01/10/2026: chung nợ kênh gRPC nội cụm (mang mật khẩu, TOTP, token vận hành). ĐIỀU KIỆN BẬT OPERATOR_HOST: quy tắc 3 của deploy/base/mang/netpol.yaml đã hẹp theo từng cặp gọi + NetworkPolicy đã áp trên cụm thật + ADR 0048 mục #12.",
+      "reason": "Người dùng chốt 01/10/2026: chung nợ kênh gRPC nội cụm (mang mật khẩu, TOTP, token vận hành). Cùng ngày chủ dự án cho khu vận hành lên sống TRƯỚC ba điều kiện từng đặt ở đây (netpol quy tắc 3 hẹp theo cặp gọi, netpol áp trên cụm thật, ADR 0048 mục #12) — rủi ro đã nhận ghi ở ADR 0048 §Chốt triển khai 01/10/2026. Kênh này chỉ còn NetworkPolicy che cho tới khi trả nợ; hạn không đổi.",
       "expires": "2026-12-28"
     },
     {

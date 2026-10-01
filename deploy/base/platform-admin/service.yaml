@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-admin
+spec:
+  selector: { app.kubernetes.io/name: platform-admin }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

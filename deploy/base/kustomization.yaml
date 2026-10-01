@@ -11,9 +11,13 @@ resources:
   # (số tuyến hiện tại ở đầu `mang/ingress.yaml` — tệp sinh ra, không chép con số vào đây).
   #
   # `reporting` vào sau cùng, 29/09/2026: tới commit 35314b7 nó có 0 tuyến và cố ý không có
-  # manifest; commit ấy cho nó ba tuyến `/api/v1/reporting-system-messages`. `citizen-app` và
-  # `platform-admin` vẫn không: cái đầu chạy trong Zalo Mini App chứ không thành pod, cái sau
-  # chưa có Dockerfile nên chưa có ảnh để đưa lên.
+  # manifest; commit ấy cho nó ba tuyến `/api/v1/reporting-system-messages`. `citizen-app` không
+  # có ở đây vì nó chạy trong Zalo Mini App chứ không thành pod.
+  #
+  # `platform-admin` CÓ đơn vị ở `deploy/base/platform-admin/` nhưng CỐ Ý KHÔNG được liệt kê ở
+  # đây: chủ dự án chốt 01/10/2026 bàn điều khiển vận hành chỉ chạy ở PROD, nên chỉ
+  # `overlays/prod` kéo nó vào. Liệt kê ở base là cho staging một bàn điều khiển không ai muốn,
+  # trỏ vào một khu vận hành mà staging không bật.
   - comms
   - documents
   - finance

@@ -1,0 +1,26 @@
+# Ngữ cảnh build của ứng dụng này là chính thư mục này — xem đầu tệp Dockerfile.
+#
+# Một tệp lọt vào ngữ cảnh là một tệp có thể lọt vào ảnh, và một ảnh đã đi tới registry thì
+# không gọi về được nữa.
+#
+# DANH SÁCH NÀY CỐ Ý HẸP. Loại trừ thêm tệp test hay tệp cấu hình nghe có vẻ gọn hơn, nhưng
+# `tsconfig.json` đưa cả `src` vào phép kiểm kiểu của `next build`, nên bỏ bớt tệp là đổi
+# thứ được kiểm lúc đóng ảnh so với thứ được kiểm ở cổng kiểm. Vài kilobyte không đáng đổi
+# lấy hai phép kiểm khác nhau trên cùng một mã nguồn.
+
+# Bí mật — không bao giờ
+.env
+.env.*
+*.pem
+*.key
+
+# Kết quả build của máy dev. Ảnh tự sinh lại từ đầu; chép vào chỉ tổ để một bản build cũ
+# của ai đó lẫn vào ảnh phát hành.
+node_modules
+.next
+out
+tsconfig.tsbuildinfo
+
+# Chính hai tệp này
+Dockerfile
+.dockerignore

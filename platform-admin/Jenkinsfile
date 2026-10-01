@@ -1,0 +1,343 @@
+// Pipeline của bàn điều khiển vận hành ViHAT (platform-admin, ADR 0048). Tệp này thuộc về ỨNG DỤNG NÀY.
+//
+//   · build CÁI GÌ    — đúng một ảnh, vigov-platform-admin
+//   · build KHI NÀO   — xem `canDungLai()` ở cuối tệp
+//   · đẩy ĐI ĐÂU      — hằng số REGISTRY/PROJECT trong khối `environment` ngay dưới
+//   · chạy lên ĐÂU    — hằng số KUBECONFIG/NS trong cùng khối
+//
+// BẤM TAY, KHÔNG TỰ CHẠY — cùng quy trình với web-admin và các dịch vụ Go (lý do đầy đủ ở đầu
+// `service-platform/Jenkinsfile`): push `main` → người bấm → đóng ảnh → đặt ảnh lên cụm.
+//
+// CHỈ PROD (chủ dự án chốt 01/10/2026): không có bàn điều khiển staging, nên NS là hằng số
+// `vigov-prod`. Host công khai `admin.vigov.vn` và Ingress của nó DỰNG TAY trong Rancher — không
+// nằm trong `deploy/hosts.yaml` hay `tools/ingress` (deploy/README.md, mục "platform-admin lần đầu").
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+
+  // REGISTRY và PROJECT là HẰNG SỐ, không phải tham số của lượt chạy — lý do ở web-admin/Jenkinsfile.
+  environment {
+    REGISTRY = 'harbor.omicrm.services'
+    PROJECT  = 'ci'
+    DOCKER_BUILDKIT = '1'
+    UNG_DUNG = 'platform-admin'
+
+    // Kubeconfig của ViGov — KHÔNG phải `rancher-omi.yaml` nằm cạnh nó (xem service-platform).
+    KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
+    NS = 'vigov-prod'
+    // Tên Deployment THẬT trên cụm (dựng tay trong Rancher) — xem service-platform/Jenkinsfile.
+    TEN_K8S = 'vigov-platform-admin'
+    // Deployment của service-platform trên cụm: NGUỒN DUY NHẤT của OPERATOR_HOST (stage Triển khai).
+    TEN_K8S_PLATFORM = 'vigov-service-platform'
+  }
+
+  stages {
+
+    stage('Chuẩn bị') {
+      steps {
+        sh '''
+          set -eu
+          thieu=""
+          for cc in node npm docker kubectl; do
+            command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
+          done
+          if [ -n "$thieu" ]; then
+            echo ""
+            echo "MÁY CHỦ BUILD THIẾU:$thieu"
+            echo "Dừng ở đây thay vì đổ giữa chừng với một lỗi không đọc được."
+            echo ""
+            exit 1
+          fi
+        '''
+        // Docker phải >= 18.09 (BuildKit) vì Dockerfile dùng `--mount=type=cache`.
+        sh 'node --version; docker version --format "server {{.Server.Version}}" || docker version'
+
+        // MÁY CHỦ ĐÃ ĐĂNG NHẬP REGISTRY CHƯA — lý do ở `Jenkinsfile` gốc, mục
+        // "VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE".
+        sh '''
+          cfg="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+          if ! grep -q "$REGISTRY" "$cfg" 2>/dev/null; then
+            echo ""
+            echo "MÁY CHỦ BUILD CHƯA ĐĂNG NHẬP $REGISTRY"
+            echo "Chạy MỘT LẦN dưới user jenkins:  sudo -u jenkins docker login $REGISTRY"
+            echo ""
+            exit 1
+          fi
+        '''
+        sh '''
+          set -eu
+          if [ ! -r "$KUBECONFIG" ]; then
+            echo ""
+            echo "KHÔNG ĐỌC ĐƯỢC KUBECONFIG: $KUBECONFIG"
+            echo ""
+            exit 1
+          fi
+          echo "cụm: $(kubectl config current-context) · namespace: $NS"
+
+          # Deployment phải có sẵn — kiểm TRƯỚC khi dựng (lý do ở service-platform/Jenkinsfile).
+          if ! loi=$(kubectl -n "$NS" get deploy/"$TEN_K8S" -o name 2>&1); then
+            echo ""
+            echo "cụm trả lời: $loi"
+            echo "KHÔNG ĐỌC ĐƯỢC deploy/$TEN_K8S TRONG NAMESPACE $NS của cụm $(kubectl config current-context)."
+            echo "Lần đầu: dựng Deployment này trong Rancher theo deploy/README.md, mục 'platform-admin lần đầu'."
+            echo "Hoặc hệ thống đang chạy ở namespace khác — xem:  kubectl get deploy -A"
+            echo ""
+            exit 1
+          fi
+        '''
+        script {
+          env.DA_DAT = 'chua'
+          env.NGUOI_BAM = nguoiBam()
+          if (!env.NGUOI_BAM) {
+            error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng trước khi dựng và trước khi chạm cụm.\n' +
+                  'Job này chỉ chạy khi có người đã đăng nhập bấm. Kiểm mục Build Triggers: phải để trống.')
+          }
+          env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+          if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
+          env.CAN_DUNG = canDungLai() ? 'co' : 'khong'
+          echo "web ${env.UNG_DUNG} · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG} · bấm bởi ${env.NGUOI_BAM}"
+          if (env.CAN_DUNG == 'khong') {
+            echo "Không có gì đổi kể từ ảnh đang chạy (${mocDaDongAnh()}) — không dựng, không đặt ảnh."
+          }
+        }
+      }
+    }
+
+    stage('Cổng kiểm của ứng dụng') {
+      steps {
+        // `cd` thay cho `dir('platform-admin')`: `dir()` để lại `platform-admin@tmp/` trong workspace.
+        //
+        // KHÔNG có `npm run check:api` như web-admin, có chủ ý: ứng dụng này không sinh kiểu từ
+        // `kb/20-contracts/openapi.json` nên không có script ấy (`make check` cũng bỏ qua nó).
+        sh '''
+          set -eu
+          cd platform-admin
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+        '''
+      }
+    }
+
+    // KHÔNG DÙNG `docker.build` / `docker.withRegistry` — lý do ở `Jenkinsfile` gốc.
+    stage('Đóng ảnh') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        script { env.ANH = "${env.REGISTRY}/${env.PROJECT}/vigov-${env.UNG_DUNG}:${env.TAG}" }
+
+        // Ngữ cảnh dựng là THƯ MỤC `platform-admin` (xem đầu platform-admin/Dockerfile).
+        sh '''
+          docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f platform-admin/Dockerfile platform-admin
+          docker push "$ANH"
+          docker image rm "$ANH" || true
+        '''
+
+        echo "ĐÃ ĐẨY  ${env.ANH}\n" +
+             "  Nghe cổng 3000, chạy dưới UID 1000 — đặt runAsNonRoot: true.\n" +
+             "  Đọc LÚC CHẠY đúng hai biến: PLATFORM_HTTP_ADDR và OPERATOR_HOST (stage Triển khai đặt cả hai)."
+      }
+    }
+
+    stage('Triển khai') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        sh '''
+          set -eu
+          echo "trước lượt này: $(kubectl -n "$NS" get deploy/"$TEN_K8S" \
+              -o jsonpath='{.spec.template.spec.containers[*].image}')"
+        '''
+        // OPERATOR_HOST LẤY TỪ Deployment ĐANG CHẠY của service-platform, không gõ ở đây.
+        //
+        // Gateway của bàn điều khiển gửi Host = OPERATOR_HOST trên MỌI lời gọi
+        // (`src/lib/server/operator-host.ts`), và platform chỉ đưa Host bằng đúng OPERATOR_HOST của
+        // NÓ vào chuỗi vận hành. Hai pod mang hai giá trị khác nhau thì mọi tuyến vận hành 404 —
+        // đóng, nhưng hỏng. Một nguồn thì không lệch được: giá trị gõ lần thứ hai ở đây là bản sao
+        // thứ hai, và bản sao bị quên là bản sai.
+        //
+        // KHÔNG CÓ MẶC ĐỊNH. Platform chưa có OPERATOR_HOST nghĩa là khu vận hành đang TẮT — đặt
+        // bàn điều khiển lên lúc ấy là đưa ra một màn hình chỉ trả 404. Dừng và nói rõ.
+        //
+        // Phép kiểm hình dạng dưới đây cố ý HẸP hơn `operator-host.ts`: nhãn đầu phải là `admin`
+        // hoặc `admin-stg` (ADR 0046). Ứng dụng vẫn tự kiểm đầy đủ lúc chạy (503 nêu tên biến).
+        // Đứng TRƯỚC `DA_DAT = 'roi'`: đỏ ở đây là đỏ trước khi chạm cụm, không có gì để rút lại.
+        script {
+          env.OPERATOR_HOST_TU_PLATFORM = sh(returnStdout: true, script: '''
+            set -eu
+            if ! op=$(kubectl -n "$NS" get deploy/"$TEN_K8S_PLATFORM" \
+                -o jsonpath='{.spec.template.spec.containers[*].env[?(@.name=="OPERATOR_HOST")].value}' 2>&1); then
+              echo "" >&2
+              echo "cụm trả lời: $op" >&2
+              echo "KHÔNG ĐỌC ĐƯỢC deploy/$TEN_K8S_PLATFORM TRONG NAMESPACE $NS — không có nguồn cho OPERATOR_HOST." >&2
+              echo "Dừng trước khi chạm deploy/$TEN_K8S." >&2
+              exit 1
+            fi
+            loi=""
+            case "$op" in
+              "")              loi="deploy/$TEN_K8S_PLATFORM CHƯA ĐẶT OPERATOR_HOST (hoặc đặt qua valueFrom/envFrom — job chỉ đọc được giá trị env ghi thẳng). Khu vận hành đang TẮT." ;;
+              *[!a-z0-9.-]*)   loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM chứa ký tự ngoài a-z 0-9 . - (khoảng trắng, scheme, cổng, chữ hoa, hay hai container mang hai giá trị)." ;;
+              .*|*.|*..*|*-.*|*.-*) loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM không phải tên host hợp lệ." ;;
+              admin.*.*|admin-stg.*.*) ;;
+              *)               loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM không phải host của bàn điều khiển (nhãn đầu phải là admin hoặc admin-stg)." ;;
+            esac
+            if [ -n "$loi" ]; then
+              echo "" >&2
+              echo "TỪ CHỐI TRIỂN KHAI: $loi" >&2
+              echo "Bàn điều khiển phải mang ĐÚNG OPERATOR_HOST của platform, nên job này không tự điền giá trị nào." >&2
+              echo "Đặt OPERATOR_HOST=admin.vigov.vn trên $TEN_K8S_PLATFORM trước (deploy/README.md, mục 'platform-admin lần đầu'), rồi bấm lại." >&2
+              exit 1
+            fi
+            printf '%s' "$op"
+          ''').trim()
+          echo "OPERATOR_HOST lấy từ deploy/${env.TEN_K8S_PLATFORM}: ${env.OPERATOR_HOST_TU_PLATFORM}"
+        }
+        script { env.DA_DAT = 'roi' }
+        // PLATFORM_HTTP_ADDR: tên Service THẬT trên cụm dựng tay (`vigov-service-platform`), khác tên
+        // trong `deploy/base` (`platform`). Tên NGẮN — mỗi namespace gọi platform của CHÍNH nó.
+        // Không có mặc định trong mã (`platform-origin.ts`), nên thiếu bước này mọi lời gọi là 503.
+        sh '''
+          set -eu
+          kubectl -n "$NS" set env deploy/"$TEN_K8S" \
+            PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080 \
+            OPERATOR_HOST="$OPERATOR_HOST_TU_PLATFORM"
+        '''
+        // `*=` — mọi container, tên container trên cụm dựng tay không cố định.
+        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'
+        sh 'kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=6m'
+        script {
+          currentBuild.description = "${nhanAnh()}${env.TAG}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG} → ${env.NS} · ${env.NGUOI_BAM}"
+        }
+        echo "XONG  ${env.ANH} đang chạy ở ${env.NS} — bấm bởi ${env.NGUOI_BAM}"
+      }
+    }
+  }
+
+  post {
+    failure {
+      script {
+        if (env.DA_DAT != 'roi') {
+          echo 'Đỏ TRƯỚC khi chạm cụm — không có gì để rút lại, cụm không bị đụng tới.'
+        } else {
+          sh '''
+            set +e
+            echo "THẤT BẠI — quay lại bản trước ở cụm"
+            kubectl -n "$NS" rollout undo deploy/"$TEN_K8S"
+            kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=5m
+            exit 0
+          '''
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ĐỎ ${env.TAG} → ${env.NS} · đã rollout undo · ${env.NGUOI_BAM}"
+        }
+      }
+    }
+  }
+}
+
+// AI BẤM LƯỢT NÀY — cùng hàm với service-platform/Jenkinsfile, lý do ở đó.
+String nguoiBam() {
+  List nn
+  try {
+    nn = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+  } catch (Throwable e) {
+    echo "Không đọc được nguyên nhân lượt build (${e.getClass().getSimpleName()})."
+    return ''
+  }
+  if (nn == null || nn.isEmpty()) { return '' }
+  def id = nn[0].userId
+  return id == null ? '' : id.toString().trim()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// KHI NÀO BÀN ĐIỀU KHIỂN PHẢI DỰNG LẠI.
+//
+// Chỉ `platform-admin/**`. Ngữ cảnh dựng là thư mục ấy, nên không tệp nào ngoài nó vào được ảnh.
+//
+// `deploy/hosts.yaml` KHÔNG có trong danh sách, có chủ ý: thứ duy nhất ứng dụng lấy từ nó là
+// `src/lib/server/host-plan.gen.ts`, một tệp SINH RA và COMMIT nằm ngay trong `platform-admin/`.
+// Đổi gốc tên miền thì tệp sinh đổi theo, và chính nó kích hoạt lượt dựng. Thêm `hosts.yaml` vào
+// đây chỉ làm mỗi lượt thêm xã (phần lớn các thay đổi của tệp ấy) dựng lại một ảnh y hệt.
+// Tệp sinh lệch nguồn thì phép kiểm tệp sinh của `tools/ingress` (`tenmien_test.go`, chạy trong
+// `make check`) đỏ — không phải việc của job này.
+//
+// Không có `kb/20-contracts/**` như web-admin: ứng dụng này không sinh kiểu từ openapi.json
+// (không có `check:api`), nên hợp đồng đổi không đổi gì trong ảnh.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+// #[dung-chung] Khai ở ĐÚNG MỘT CHỖ, dưới dạng HÀM chứ không phải biến mức script — lý do ở
+// `web-admin/Jenkinsfile`.
+List<String> duongKichHoat() {
+  return ['platform-admin/**']
+}
+
+boolean canDungLai() {
+  String moc = mocDaDongAnh()
+
+  // Chưa lượt nào ghi mốc: lượt build đầu tiên, hoặc `buildDiscarder` đã dọn lịch sử qua
+  // mốc. Cả hai đều DỰNG. Sai về phía dựng thừa tốn vài phút máy chủ; sai về phía bỏ qua là
+  // một bản vá nằm lại trong kho mã trong khi ảnh đang chạy vẫn mang mã cũ.
+  if (moc == null) {
+    echo 'Chưa lượt build nào ghi mốc đã đóng ảnh — dựng.'
+    return true
+  }
+
+  // Mốc phải có thật trong bản sao này. Clone nông, force-push, hoặc lịch sử đã bị dọn đều
+  // làm nó biến mất — và khi KHÔNG SO ĐƯỢC thì dựng, không phải bỏ qua.
+  if (sh(script: "git cat-file -e '${moc}^{commit}' 2>/dev/null", returnStatus: true) != 0) {
+    echo "Không thấy mốc ${moc} trong bản sao này (clone nông? force-push?) — dựng cho chắc."
+    return true
+  }
+
+  String ketQua = sh(script: "git diff --name-only ${moc}..HEAD", returnStdout: true).trim()
+  if (!ketQua) { return false }
+
+  for (String duong : ketQua.split('\n')) {
+    for (String mau : duongKichHoat()) {
+      String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
+      if (bo != null ? duong.startsWith(bo) : duong == mau) {
+        echo "kích hoạt bởi: ${duong}   (so với mốc ${moc})"
+        return true
+      }
+    }
+  }
+  return false
+}
+
+// Commit mà lượt build gần nhất ĐÃ ĐÓNG THÀNH ẢNH. Đây là mốc để so, và nó thay cho
+// `currentBuild.changeSets`.
+//
+// VÌ SAO KHÔNG DÙNG `changeSets`: nó liệt kê thay đổi kể từ lượt build TRƯỚC — bất kể lượt
+// ấy xanh hay đỏ. Nên MỘT LƯỢT ĐỎ NUỐT MẤT CHANGESET CỦA NÓ:
+//
+//     commit #1 đụng core/authz   → build chạy → ĐỎ ở cổng kiểm       → chưa có ảnh
+//     commit #2 chỉ đụng kb/      → build chạy → XANH, changeSets chỉ có kb/ → BỎ QUA đóng ảnh
+//
+// Kết cục: bản vá trong `core/authz` không bao giờ thành ảnh. Pipeline xanh, Harbor thiếu
+// ảnh, KHÔNG CÓ GÌ ĐỎ để ai nhìn thấy — đúng dạng hỏng mà `core/**` trong `duongKichHoat()`
+// sinh ra để chặn. `previousSuccessfulBuild == null` chỉ xử được lượt đầu tiên, không xử
+// được ca này.
+//
+// Mốc đúng là "commit đã thành ảnh", và nơi duy nhất biết điều đó là lượt build đã đẩy nó —
+// nên lượt ấy tự ghi lại vào `description` của chính mình, ngay sau khi push thành công.
+String mocDaDongAnh() {
+  def b = currentBuild.previousBuild
+  while (b != null) {
+    String moTa = b.description
+    if (moTa != null && moTa.startsWith(nhanAnh())) {
+      return moTa.substring(nhanAnh().length()).trim()
+    }
+    b = b.previousBuild
+  }
+  return null
+}
+
+// #[dung-chung] Tiền tố của mốc. Một HÀM chứ không phải biến mức script, cùng lý do với
+// `duongKichHoat()`: một biến mức script cần @Field kèm import, và một import bị quên là lỗi
+// lúc CHẠY chứ không phải lúc đọc.
+String nhanAnh() { return 'anh-tu-commit:' }

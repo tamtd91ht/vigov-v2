@@ -39,12 +39,15 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Every path except Next's static assets, the favicon and `/api/`.
+  // Every path except Next's static assets, the favicon, `/api/` and `/healthz`.
   //
   // `/api/` goes through this app (`app/api/v1/[...path]/route.ts` forwards it to service-platform)
   // but deliberately NOT through the proxy, for web-admin's measured reason: a path matched by the
   // proxy has its body copied and CUT at `proxyClientMaxBodySize` (10 MB by default), and an API
   // client expects a 401 JSON, not a 307 to the sign-in page. service-platform authenticates and
   // authorises every API call itself.
-  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico).*)"],
+  //
+  // `/healthz` (exactly — `healthz$`) is the k8s probe: pod IP as Host, no cookie. Matched here it
+  // would 307 to `/dang-nhap` and no pod would ever become Ready (`app/healthz/route.ts`).
+  matcher: ["/((?!api/|healthz$|_next/static|_next/image|favicon.ico).*)"],
 };

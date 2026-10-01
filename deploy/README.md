@@ -61,9 +61,9 @@ commit ghim thẻ. Muốn giữ vĩnh viễn thì phải có một sổ ngoài J
 
 Mã nguồn đi thẳng vào `main`, không nhánh phụ. Nhánh chỉ mở khi chủ dự án quyết.
 
-## 2. Dựng 10 job trên Jenkins
+## 2. Dựng 11 job trên Jenkins
 
-Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. Tạo 10 job kiểu
+Jenkins **không tự tìm ra** mười một `Jenkinsfile` nằm rải trong kho. Tạo 11 job kiểu
 **Pipeline**, tất cả trỏ về cùng một kho, khác nhau đúng ô **Script Path**.
 
 | Tên job | Script Path | Kích hoạt |
@@ -77,6 +77,7 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. T�
 | `vigov-svc-platform` | `service-platform/Jenkinsfile` | ″ |
 | `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | ″ |
 | `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
+| `vigov-platform-admin` | `platform-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh. **Chỉ prod**; lần đầu xem mục 12 |
 
 | `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `ap-manifest` (giữ thẻ đang chạy) · `xem-log` · `sao-chep-tu-staging` (một lần) |
 
@@ -85,7 +86,7 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 **không** đặt ảnh (việc của job dịch vụ) và **không** tạo Secret (tạo trong Rancher).
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
-`web-admin`. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không
+`web-admin`. `platform-admin` chỉ cần `platform` (và `identity` cho đăng nhập vận hành) đã lên. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không
 đặt ảnh.
 
 `New Item` → tên → **Pipeline** → OK, rồi:
@@ -108,7 +109,7 @@ Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` �
 | `Sparse checkout` | Bảy dịch vụ Go lấy ngữ cảnh build ở **gốc kho**: `go.mod` của chúng `replace core => ../core`. Thiếu `core/` là `docker build` đổ |
 | `Lightweight checkout` | Chỉ kéo riêng tệp Jenkinsfile qua API, không tạo cây làm việc — mà `canDungLai()` chạy `git` thật ở stage `Chuẩn bị` |
 
-### Vì sao 10 job, không phải một job có tham số `DICH_VU`
+### Vì sao 11 job, không phải một job có tham số `DICH_VU`
 
 Mốc "commit đã thành ảnh" được ghi vào **`description` của lượt build**, và mỗi job có lịch
 sử riêng. Gộp tám đơn vị vào một job thì tám mốc chen nhau trong **một** dòng lịch sử: job
@@ -148,7 +149,7 @@ mục 1 phải sửa cùng lượt. Đừng đổi một nửa.
 
 | ID | Kiểu | Dùng ở |
 |---|---|---|
-| tuỳ đặt (gợi ý `git-vigov`) | Username with password (PAT) | ô `SCM` của cả 10 job |
+| tuỳ đặt (gợi ý `git-vigov`) | Username with password (PAT) | ô `SCM` của cả 11 job |
 
 **ID đặt tên gì cũng được** — bản tài liệu trước viết là phải khớp từng ký tự, và điều đó
 **không còn đúng** kể từ khi `deploy/Jenkinsfile` bỏ `withCredentials`: hôm nay **không một
@@ -283,9 +284,9 @@ Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
 | Nơi đọc | Số biến | Ghi chú |
 |---|---|---|
 | `core/config` — **7 dịch vụ Go** | Đúng số biến trong các bảng `deploy/cau-hinh/README.md` mục 1–4 (`tools/check_env_map.py` in ra số này; 35 ngày 29/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
-| `web-admin` — **mã ứng dụng** | **0** | Không một `process.env` nào trong `web-admin/src`. Nó gọi API bằng đường dẫn **tương đối** `/api/v1/…` trên cùng tên miền, nên không cần địa chỉ backend — và đó là lý do nó **không có `envFrom`** |
+| `web-admin` — **mã ứng dụng** | 6 — `*_HTTP_ADDR` | Từ 25/09/2026 web-admin là cổng của `/api/v1/*` và đọc địa chỉ nội bộ của sáu dịch vụ Go có REST (`web-admin/src/lib/may-chu/goc-dich-vu.ts`); job `web-admin` đặt chúng bằng `kubectl set env`. `envFrom` chỉ `common-config` (lấy `ENV`), **không `secretRef`** — web-admin không giữ bí mật nào |
 | `web-admin` — máy chủ Next standalone | 4, **đã nằm trong ảnh** | `NODE_ENV` · `NEXT_TELEMETRY_DISABLED` nung trong `Dockerfile`; `PORT=3000` · `HOSTNAME=0.0.0.0` đặt lại ở `deployment.yaml` |
-| `platform-admin` | 1 — `NEXT_PUBLIC_PLATFORM_API` | **chưa triển khai**: không có `Dockerfile`, nên chưa có ảnh. Ngày dựng nó thì đây là một `NEXT_PUBLIC_*`, tức **ship trong bundle trình duyệt** — không bao giờ chứa bí mật (luật 8, bất biến 4) |
+| `platform-admin` | 2 — `PLATFORM_HTTP_ADDR` · `OPERATOR_HOST` | Đọc LÚC CHẠY, phía máy chủ (`platform-admin/src/lib/server/`), **không mặc định**: thiếu là 503 nêu tên biến. Không còn `NEXT_PUBLIC_*` nào — `Dockerfile` từ chối build nếu môi trường có biến ấy. Job `platform-admin` đặt cả hai; `OPERATOR_HOST` **chép từ** Deployment platform đang chạy (mục 12) |
 | `citizen-app` | 0 | Chạy trong Zalo Mini App, không thành pod |
 
 **Chỉ bốn biến bắt buộc lúc khởi động** (`DATABASE_DSN`, `GRPC_CALLER_KEY`, `SESSION_SIGNING_KEYS`,
@@ -470,8 +471,9 @@ Thứ tự không phải thói quen — nó là thứ tự phụ thuộc lúc ch
 
 Tổng **82 tuyến REST**, đếm từ `kb/20-contracts/openapi.json` ngày 23/09/2026 — không từ cảm giác.
 
-Không có manifest, **có cân nhắc**: `platform-admin` (là app Next.js nhưng **chưa có `Dockerfile`**, nên chưa có ảnh) ·
-`citizen-app` (chạy trong Zalo Mini App, không thành pod).
+Không có manifest, **có cân nhắc**: `citizen-app` (chạy trong Zalo Mini App, không thành pod).
+`platform-admin` có manifest (`base/platform-admin/`) nhưng **chỉ `overlays/prod`** kéo vào, và
+đi theo mục 12, không theo bảng trên.
 
 ## 6. Kiểm sau khi lên
 
@@ -712,9 +714,9 @@ kubectl kustomize deploy/overlays/staging > vigov-staging.yaml
 kubectl kustomize deploy/overlays/prod    > vigov-prod.yaml
 ```
 
-Đã chạy thử ngày 29/09/2026 với kubectl v1.29.1: mỗi overlay ra **27 đối tượng**, gồm 8
-Deployment · 8 Service · 1 ConfigMap · 1 Ingress · 7 NetworkPolicy · 2 PodDisruptionBudget. Số
-khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
+Đã chạy thử ngày 01/10/2026: staging ra **45 đối tượng** — 8 Deployment · 8 Service · 1 ConfigMap ·
+1 Ingress · 25 NetworkPolicy · 2 PodDisruptionBudget; prod ra **47**, thêm Deployment + Service
+`platform-admin` (chỉ prod, mục 12). Số khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
 
 - **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
 - **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL trong luật `allow-egress` của
@@ -778,3 +780,30 @@ dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở
 | Pod không được tạo, Events ghi `must specify limits.cpu` | Resource Quota của Project | mục 11.1 |
 | HTTPS lỗi chứng thư, HTTP vẫn chạy | Secret TLS sai tên môi trường | mục 11.2 |
 | Mọi xã trả 404 | `platform` chưa lên, hoặc xã chưa có hàng trong sổ đăng ký của `platform` | mục 5–6 |
+
+## 12. `platform-admin` lần đầu — bàn điều khiển vận hành ViHAT
+
+Chủ dự án chốt 01/10/2026: host **`admin.vigov.vn`**, **chỉ prod** (`vigov-prod`, không có bàn điều
+khiển staging), **không** allow-list IP / VPN — chỉ MFA và giới hạn đăng nhập sẵn có của platform
+(20 lần / 15 phút / IP). Ingress công khai của host này **dựng tay trong Rancher**: không thêm vào
+`deploy/hosts.yaml`, không thêm vào `tools/ingress`, không sửa `base/mang/ingress.yaml` (tệp sinh).
+
+Làm đúng thứ tự — mỗi bước sau dựa vào bước trước:
+
+| # | Việc | Xanh khi |
+|---|---|---|
+| 1 | **Deployment `vigov-platform-admin`** trong Rancher, namespace `vigov-prod`: ảnh `harbor.omicrm.services/ci/vigov-platform-admin` (thẻ tạm bất kỳ — job đặt thẻ thật), cổng 3000, UID 1000, root chỉ đọc, `emptyDir` ở `/tmp` và `/app/.next/cache`, probe `/healthz`, `envFrom` chỉ `common-config`, `imagePullSecrets: harbor-vigov`. Hình dạng chuẩn: đối tượng `Deployment platform-admin` trong `kubectl kustomize deploy/overlays/prod` — có thể nhập riêng đối tượng ấy (đổi tên thành `vigov-platform-admin`), **không** nhập cả bản render (mục 11.5) | `kubectl -n vigov-prod get deploy/vigov-platform-admin` trả lời. Job đỏ ngay ở stage đầu nếu chưa có |
+| 2 | **Service** cho Deployment ấy, cổng tên `http` 3000 → 3000 | `kubectl -n vigov-prod get endpoints` có địa chỉ pod sau bước 7 |
+| 3 | **DNS** `admin.vigov.vn` → địa chỉ ingress controller của cụm prod | `nslookup admin.vigov.vn` |
+| 4 | **Ingress dựng tay** trong Rancher: host `admin.vigov.vn`, đường `/` → Service bước 2 cổng 3000, TLS `vigov-wildcard-tls`, annotation `nginx.ingress.kubernetes.io/enable-cors: "false"` (bàn điều khiển gọi API cùng origin; không origin nào khác được phép). **Kiểm trước** rằng không Ingress nào khác còn giữ `admin.vigov.vn` — tới 25/09/2026 host này từng trỏ vào web quản trị xã (đầu tệp này) | `https://admin.vigov.vn/healthz` trả `ok` sau bước 7 |
+| 5 | **`OPERATOR_HOST=admin.vigov.vn`** trên `vigov-service-platform` — biến env ghi thẳng trên Deployment (không `valueFrom`, không ConfigMap), vì job ở bước 7 **đọc nó từ đó**. Điều kiện chặn của ADR 0048 (NetworkPolicy 9093, mục #12) và bảng biến: `deploy/cau-hinh/README.md` | platform khởi động lại, không log `OPERATOR_HOST` không hợp lệ |
+| 6 | **`TRUSTED_PROXY_CIDRS`** (common-config) phải **bao dải IP pod của `platform-admin`**. Gateway của bàn điều khiển chuyển tiếp `X-Forwarded-For`; platform chỉ tin nó khi trạm trước nằm trong dải ấy. Thiếu thì **mọi người vận hành chung một IP** — IP pod platform-admin — cho giới hạn 20/15 phút (một người gõ sai khoá cả nhóm) và cho cột IP của vết kiểm toán. Đặt cả dải pod của cụm (vd `10.42.0.0/16`) đã bao sẵn | vết kiểm toán của một lần đăng nhập thử ghi IP máy người thử, không phải IP pod |
+| 7 | **Bấm job `vigov-platform-admin`**. Job đặt `PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080` và chép `OPERATOR_HOST` từ `vigov-service-platform` đang chạy — platform chưa có, hay có giá trị không phải host bàn điều khiển (`admin.*` / `admin-stg.*`), thì job **dừng trước khi chạm cụm** và nói rõ; nó không tự điền giá trị nào | `rollout status` xanh; `https://admin.vigov.vn/` chuyển về `/dang-nhap` |
+| 8 | **Người vận hành đầu tiên**: `operatorctl create --email <địa chỉ> --name <tên> --ticket <số phiếu>` trong một pod một lượt từ **ảnh identity đang chạy** (cùng `envFrom` của identity — cách job `vigov-deploy` chạy `operatorctl` ở việc `bat-demo-mini-app`), rồi `operatorctl grant --code VH-… --permission ops.<key> --ticket <n>`. Mật khẩu tạm in ra một lần — không chép vào phiếu, log hay chat | đăng nhập được, bị buộc đặt MFA |
+
+**NetworkPolicy:** `base/mang/netpol.yaml` quy tắc 12 mở đúng một cặp — `platform-admin` → `platform`
+REST 8080 — và không gì khác (ADR 0003: bàn điều khiển không có đường tới dịch vụ nghiệp vụ). Hai luật
+ấy chọn pod theo nhãn `app.kubernetes.io/name`; Deployment dựng tay trong Rancher **phải mang đúng
+nhãn đó** (`platform-admin` trên pod bàn điều khiển, `platform` trên pod platform), không thì luật
+không chọn pod nào: hoặc `deny-all` chặn hết (502), hoặc — nếu NetworkPolicy chưa áp lên cụm — không
+biên nào cả.
