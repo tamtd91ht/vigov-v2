@@ -3,7 +3,7 @@ id: 0067-mini-app-content-part-a
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: e1a3ab63
+derived_from_commit: a3460acb
 expires: null
 owns_facts:
   - "thân bài nội dung Mini App là HTML đã làm sạch ở máy chủ lúc ghi theo danh sách cho phép (p, br, strong, em, ul, ol, li, h2, h3, a chỉ href https); Mini App dựng từ body_blocks có cấu trúc, không bao giờ dựng HTML; body văn bản thuần giữ cho bản app cũ — thay quyết định 27/09/2026 'không HTML nào tới dân'"
@@ -14,6 +14,9 @@ owns_facts:
   - "danh mục nội dung: sửa tên, cha, thứ tự; slug cố định; cờ ẩn/hiện; xoá mềm có lý do, từ chối khi còn nội dung hoặc danh mục con còn sống"
   - "truyền thanh: mp3/m4a, ≤ 30 MB, thời lượng cán bộ gõ, bucket private, link ký ngắn hạn, mục đích tải lên content-audio, người tải cần content.update"
   - "banner: ảnh bắt buộc, tiêu đề là alt, link_to tuỳ chọn, display_order tăng dần theo xã, không lịch, chỉ ở dải trang chủ Mini App, chỉ trả khi ?type=banner"
+  - "ẩn danh mục chỉ gỡ chip lọc của nó và của danh mục con trên Mini App; bài vẫn hiện ở Tất cả (chốt 01/10/2026)"
+  - "Cổng chuyển hướng: tối đa 3 lần, mỗi đích qua cùng phép kiểm của api_url (chốt 01/10/2026)"
+  - "liên kết trong thân bài: hỏi xác nhận rời ứng dụng rồi mở bằng openWebview của Zalo (chốt 01/10/2026)"
 ---
 
 # 0067. Nội dung Mini App — phần A: thân bài định dạng, đồng bộ Cổng TTĐT, danh mục, truyền thanh, banner
@@ -202,9 +205,9 @@ tab Tin tức của bản app hiện có hiện một "tin" chỉ có ảnh và 
 | 1 | Nhà cung cấp Cổng khác ngoài Đà Nẵng, và giao diện provider chung | Chủ dự án, khi có xã thứ nhất ngoài Đà Nẵng |
 | 2 | Bản dẫn xuất / chuyển mã âm thanh — chưa có `ffmpeg` | Devops / chủ dự án |
 | 3 | Bốn việc ADR 0009 còn nợ (`kb/10-decisions/0009-per-tenant-secret-encryption.md:148-155`) **vẫn nợ** — đồng bộ Cổng thêm một bí mật nữa phụ thuộc vào chúng | Chủ dự án / vận hành |
-| 4 | Ẩn một danh mục có ẩn luôn tin trong nó trên Mini App không — §3 chỉ chốt cờ, chưa chốt hệ quả ở tuyến công khai | Chủ dự án |
-| 5 | Cổng trả chuyển hướng (redirect) thì xử lý ra sao — cách đọc của người viết: đích chuyển hướng phải qua cùng phép kiểm §2, nhưng chưa ai chốt | Chủ dự án |
-| 6 | Mini App mở một liên kết `a` trong thân bài thế nào, và câu khai đích ra ngoài trong chính sách quyền riêng tư (ADR 0047:258) | Chủ dự án |
+| 4 | Ẩn một danh mục có ẩn luôn tin trong nó trên Mini App không — §3 chỉ chốt cờ, chưa chốt hệ quả ở tuyến công khai | **Đã đóng** 01/10/2026 → §Chốt bổ sung, A1 |
+| 5 | Cổng trả chuyển hướng (redirect) thì xử lý ra sao — cách đọc của người viết: đích chuyển hướng phải qua cùng phép kiểm §2, nhưng chưa ai chốt | **Đã đóng** 01/10/2026 → §Chốt bổ sung, A2 |
+| 6 | Mini App mở một liên kết `a` trong thân bài thế nào, và câu khai đích ra ngoài trong chính sách quyền riêng tư (ADR 0047:258) | **Đã đóng** 01/10/2026 → §Chốt bổ sung, A3 (câu chữ chính sách còn chờ xác nhận — mục C1) |
 
 ## ĐIỀU KIỆN DỪNG
 
@@ -217,3 +220,77 @@ tab Tin tức của bản app hiện có hiện một "tin" chỉ có ảnh và 
 
 → ADR 0009 (bí mật theo xã) · ADR 0047 (citizen-app, G7, ngoại lệ banner) · ADR 0052 (kho tệp) ·
 ADR 0058 (việc nền) · luật 1, 3, 6, 7, 13
+
+## Chốt bổ sung — 01/10/2026, sau khi dựng
+
+Phần trên giữ nguyên. Mục này ghi (A) ba câu chủ dự án trả lời sau ADR, (B) những chỗ khi dựng phải
+chọn mà phần trên chưa nói — chỉ phần **vì sao**; cách làm nằm ở mã được dẫn — và (C) việc còn mở.
+Dựng ở `abf0ca1d`, `026ae398`, `cce556ec`, `07bec99d`, `75ea3b5c`, `2fca3658`/`a7e7d364`, `fa7b8377`.
+
+### A. Chủ dự án chốt, 01/10/2026
+
+| # | Câu hỏi (Còn mở) | Chốt | Ở mã |
+|---|---|---|---|
+| A1 | #4 — ẩn danh mục | Ẩn **chỉ gỡ chip lọc** của danh mục ấy và của mọi danh mục con trên Mini App. Bài vẫn hiện ở "Tất cả" và vẫn mở được từng bài | `service-comms/internal/domain/public_category.go:50-55` |
+| A2 | #5 — Cổng chuyển hướng | Theo **tối đa 3** lần; mỗi đích phải qua **đúng phép kiểm của `api_url`** (https, host đuôi `.gov.vn`, cổng 443, IP công khai lúc quay số). Trái điều nào → lượt chạy ghi lỗi | `service-comms/internal/portal/client.go:48-50`, `:152-161` |
+| A3 | #6 — liên kết trong thân bài | Bấm → hỏi *"Bạn sắp rời ứng dụng để mở <tên miền>"* → mở trong **trình duyệt trong Zalo** (`openWebview`). Chính sách quyền riêng tư thêm một câu | `citizen-app/src/cong-dan/man/leave-app.tsx:49`; `citizen-app/src/features/tinh-nang/zalo-api.ts:573-582`; `citizen-app/src/content/chinh-sach-rieng-tu.ts:471` |
+
+**Vì sao A1 chỉ gỡ chip:** ẩn là để thay xoá (§3 điều 2). Nếu ẩn làm bài biến mất thì ẩn một danh
+mục thành gỡ hàng loạt bài khỏi tay dân — đúng điều §3 đã từ chối. Danh mục con cũng mất chip vì
+một chip con mất cha sẽ bị đẩy lên hàng đầu, chỗ xã chưa bao giờ đặt nó.
+
+**Vì sao A3 hỏi trước:** dân phải biết mình đang rời ứng dụng của cơ quan nhà nước sang một tên miền
+khác — một liên kết trong bài của xã trông như lời xã bảo đảm cho trang đích.
+
+### B. Chọn khi dựng — điều đáng giữ là lý do
+
+**Thân bài (§1)**
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| B1 | Bộ làm sạch là gói riêng `service-comms/internal/richtext`, **không** ở `internal/domain` | `domain` chỉ dùng thư viện chuẩn; bộ làm sạch tự viết trên thư viện chuẩn là cách bộ làm sạch bị viết sai. Một hàm duy nhất, nên không đường ghi nào mang chính sách thứ hai | `service-comms/internal/richtext/richtext.go:13-17`; `service-comms/go.mod:9` (bluemonday v1.0.27) |
+| B2 | Mọi liên kết còn lại mang `rel="noopener noreferrer nofollow"`, bất kể đầu vào | Trang đích không điều khiển được trang mở nó; không lộ địa chỉ quản trị; trang cơ quan nhà nước không cho trang lạ mượn thứ hạng | `richtext/richtext.go:29-32` |
+| B3 | Markup đến ở dạng mã thực thể (`&lt;script&gt;`) bị **bỏ** khỏi `body_blocks` | Để `body_blocks` khớp `body` văn bản thuần — hai dạng thân bài phải nói cùng một điều (§Hệ quả) | `richtext/blocks.go:82` |
+
+**Truyền thanh (§4)**
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| B4 | Tệp **gắn vào bài lúc hoàn tất tải lên**, cùng thời lượng cán bộ gõ, trong **một giao dịch** | Chính sách `content-audio` chỉ cho **một tệp sống mỗi bài**: tệp hoàn tất mà chưa gắn giữ mất chỗ duy nhất; CHECK "có cả hai hoặc không có gì" đòi tệp và thời lượng trong cùng một lần ghi | `service-comms/internal/app/content_audio.go:17-24`; `service-comms/migrations/0012_content_item_audio_banner.sql:138` |
+| B5 | Thay âm thanh = **gỡ rồi tải lại** | Một chỗ duy nhất; tệp cũ xoá mềm, không bao giờ hai tệp sống trên một bài | `content_audio.go:25-27` |
+| B6 | Link công khai = GET ký trước **15 phút** tới bản gốc private, **không tên tệp**, **không gắn danh tính** | Luật 4 bất biến 7 gắn danh tính cho **tệp đính kèm của công dân**; đây là tin xã phát cho mọi cư dân, trên tuyến không có phiên để gắn. Không tên tệp: tên cán bộ đặt cho tệp không tới URL của dân | `content_audio.go:83`, `:782-787` |
+| B7 | m4a chỉ nhận khi **có rãnh âm thanh và không có rãnh hình** | Video mang nhãn M4A vẫn là video. Hệ quả đã biết: tệp âm thanh major brand `isom` không có nhãn M4A bị **từ chối nhầm** — danh sách đóng chọn từ chối nhầm hơn là đoán | `core/storage/audio.go:20-21`; `core/storage/mime.go:69-77` |
+| B8 | Trình phát tua bằng **hai nút ±15 giây**, không thanh kéo | `citizen-app/src/phase1-collects-nothing.test.ts:397-399` chỉ cho ô nhập ở đúng hai tệp; `<input type="range">` là ô nhập, thanh ARIA tự dựng là cùng thứ ấy né phép kiểm. Muốn thanh kéo → chủ dự án quyết về phép kiểm ấy (C6) | `citizen-app/src/cong-dan/man/broadcast-player.tsx:240-242` |
+
+**Banner (§5)**
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| B9 | Đường trong app mà banner mở được là **bảng đóng** ở Mini App; web-admin gợi ý đúng danh sách ấy; một phép kiểm đỏ khi hai bên lệch | Máy chủ nhận mọi đường `/…`; đường không dẫn tới màn nào là nút bấm không mở gì trên trang chủ cơ quan nhà nước — tệ hơn không bấm được | `citizen-app/src/cong-dan/man/TrangXa.tsx:183-194`; `web-admin/src/features/noi-dung/nhan-noi-dung.ts:634`; `web-admin/src/features/noi-dung/banner-paths.test.ts:27-33` |
+| B10 | Banner không có ảnh bìa (dòng cũ) bị **bỏ qua** ở dải công khai | Ràng buộc "banner phải có ảnh" là trigger, không phải CHECK, để không vỡ vì dòng cũ; dòng cũ thì tuyến đọc bỏ — một ô trống trên màn hình mọi cư dân là lỗi | `service-comms/internal/http/tin_xa_cong_khai.go:545-546`; `0012_content_item_audio_banner.sql:239-253` |
+| B11 | Ảnh banner theo tên miền nung trong bundle **giữ làm dự phòng** tới khi mọi xã đã đăng banner — ngoại lệ ADR 0047:251 chưa đóng hẳn (khác §5 điều 6) | Gỡ sớm thì trang chủ của xã chưa đăng banner thành trống | `TrangXa.tsx:161-167` |
+
+**Đồng bộ Cổng (§2)**
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| B12 | **Chỉ cổng 443**; IP kiểm **lúc quay số**, nối tới đúng IP đã kiểm | Kiểm tên thôi không đủ: `x.gov.vn` có thể trỏ đi bất cứ đâu, và câu trả lời DNS đổi được giữa lúc kiểm và lúc nối (rebinding). NetworkPolicy mở 443 ra mọi nơi, nên hai phép kiểm này mới là ranh giới | `service-comms/internal/portal/guard.go:6-19`, `:36-38` |
+| B13 | Lỗi chỉ mang **lớp lỗi**, lỗi gốc bị bỏ | Mã bảo mật nằm trong query string; lỗi của `net/http` trích nguyên URL vào nhật ký, nhật ký lượt chạy hay một 500 | `service-comms/internal/portal/errors.go:13-15` |
+| B14 | Ảnh: chỉ lưu bản dẫn xuất `thumb-1280` đã mã hoá lại, **không lưu bản gốc** | `core/storage` cố ý từ chối bản gốc do máy chủ ghi (ADR 0052); Cổng tự giữ bản của nó. Nhận bản gốc tải về là sửa danh sách luồng của ADR 0052 — việc của chủ dự án | `service-comms/internal/app/portal_image.go:9-15` |
+| B15 | Trần **10 MiB mỗi ảnh** khi tải | Giới hạn **bộ nhớ**, không phải con số của khách: 6 ảnh song song × 50 MB của chính sách vượt pod | `portal_image.go:21-22`, `:43-46` |
+| B16 | Khoá khử trùng có tiền tố nhà cung cấp: `cttdt-danang:<TinTucID>` | `UNIQUE (tenant_id, nguon_id_ngoai)` là toàn bộ việc khử trùng; Cổng thứ hai trùng id sẽ bị đọc là "đã nhập" | `service-comms/internal/domain/portal_sync.go:345-351` |
+| B17 | Ghi nguồn là **đoạn cuối thân bài**, lấy từ `NguonTin`; `TacGia` **không bao giờ đọc** | `TacGia` nêu tên một người (luật 3). Đặt trong thân bài, không ở tóm tắt — tóm tắt là dòng xem trước | `service-comms/internal/portal/client.go:288-289`; `portal_sync.go:353-361`; `service-comms/internal/app/portal_sync_runner.go:756-763` |
+| B18 | `nguon_url` để **NULL** | API Cổng không trả địa chỉ bài; một địa chỉ đoán là một liên kết sai trong hồ sơ lưu trữ | `service-comms/internal/store/portal_sync.go:453-454` |
+| B19 | Mọi tin nhập ghi vết bằng **chủ thể hệ thống**, kể cả lượt chạy tay | Bài là của Cổng, hành vi là của lượt chạy; người bấm nút nằm trên dòng lượt chạy và vết bắt đầu của nó | `portal_sync_runner.go:719-721` |
+| B20 | Chế độ `dang-thang`: `published_at` = lúc nhập | G1 (ADR 0047 §6): lần đăng đầu chính là hành vi nhập; ngày Cổng đăng nằm ở `ngay_dang` | `portal_sync_runner.go:769-783` |
+
+### C. Còn mở sau khi dựng
+
+| # | Việc | Của ai |
+|---|---|---|
+| C1 | Câu chữ câu thêm vào chính sách quyền riêng tư (`chinh-sach-rieng-tu.ts:471`) — **chờ chủ dự án xác nhận** | Chủ dự án |
+| C2 | Tên chuyên mục Cổng trong danh sách của cán bộ — hợp đồng danh sách chưa có `portal_category_id`, nên §2 "Chế độ đăng" #5 chưa đủ ở màn quản trị | Kỹ thuật |
+| C3 | Thử trên máy Zalo thật: trình phát, liên kết, danh sách trắng nguồn media | Kỹ thuật / chủ dự án |
+| C4 | Chưa chạy với PG, MinIO, clamd và Cổng thật | Kỹ thuật / vận hành |
+| C5 | Đối tượng dẫn xuất mồ côi nằm lại trong bucket tới khi có worker dọn của ADR 0052 §6 (`service-comms/internal/store/stored_file.go:259`) | Chủ dự án / kỹ thuật |
+| C6 | Thanh kéo tua cho trình phát — chỉ khi chủ dự án nới phép kiểm ở B8 | Chủ dự án |
