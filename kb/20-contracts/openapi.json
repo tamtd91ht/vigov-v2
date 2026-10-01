@@ -16842,7 +16842,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "staff_not_found"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -17051,7 +17054,7 @@
         }
       ],
       "delete": {
-        "summary": "Mở khoá tài khoản một cán bộ",
+        "summary": "Mở khoá tài khoản một cán bộ — gồm cả khoá đăng nhập tự động do nhập sai mật khẩu nhiều lần",
         "operationId": "identity_delete_staff_by_id_lockout",
         "tags": [
           "identity"
@@ -17091,7 +17094,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "self_target_forbidden"
+            ]
           },
           "404": {
             "description": "Not Found",
@@ -17101,7 +17107,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "staff_not_found"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -17156,7 +17165,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "self_target_forbidden"
+            ]
           },
           "404": {
             "description": "Not Found",
@@ -17166,7 +17178,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "staff_not_found"
+            ]
           },
           "409": {
             "description": "Conflict",
@@ -17176,7 +17191,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "last_admin"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -26980,6 +26998,13 @@
             ]
           },
           "consent_recorded_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "sign_in_locked_until": {
             "type": [
               "string",
               "null"

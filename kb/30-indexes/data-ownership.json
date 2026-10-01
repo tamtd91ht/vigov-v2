@@ -208,6 +208,13 @@
       "source": "service-finance/migrations/0007_nguon_von.sql:134"
     },
     {
+      "entity": "IdentityDataEncryptionKey",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "data_encryption_key",
+      "source": "service-identity/migrations/0021_mini_app_secret.sql:80"
+    },
+    {
       "entity": "IncomingDocument",
       "service": "documents",
       "scope": "tenant",
@@ -255,6 +262,13 @@
       "scope": "platform",
       "table": "mini_app",
       "source": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:68"
+    },
+    {
+      "entity": "MiniAppSecret",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "mini_app_secret",
+      "source": "service-identity/migrations/0021_mini_app_secret.sql:184"
     },
     {
       "entity": "OperatorAccount",

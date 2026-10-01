@@ -1204,6 +1204,7 @@ export type identity_canBoTomTat = {
   "published": boolean;
   "display_order": number | null;
   "consent_recorded_at": string | null;
+  "sign_in_locked_until"?: string | null;
 };
 
 export type identity_capQuyenRa = {
@@ -6314,6 +6315,9 @@ export type identity_get_staff_by_id = {
     404: httpx_Error;
     500: httpx_Error;
   };
+  errorCodes: {
+    404: "staff_not_found";
+  };
 };
 
 /** PATCH /api/v1/staff/{id} — Sửa hồ sơ một cán bộ — họ tên, chức vụ, thư điện tử, bộ phận, hai số điện thoại */
@@ -6396,9 +6400,14 @@ export type identity_post_staff_by_id_lockout = {
     409: httpx_Error;
     500: httpx_Error;
   };
+  errorCodes: {
+    403: "self_target_forbidden";
+    404: "staff_not_found";
+    409: "last_admin";
+  };
 };
 
-/** DELETE /api/v1/staff/{id}/lockout — Mở khoá tài khoản một cán bộ */
+/** DELETE /api/v1/staff/{id}/lockout — Mở khoá tài khoản một cán bộ — gồm cả khoá đăng nhập tự động do nhập sai mật khẩu nhiều lần */
 export type identity_delete_staff_by_id_lockout = {
   duongDan: "/api/v1/staff/{id}/lockout";
   phuongThuc: "DELETE";
@@ -6414,6 +6423,10 @@ export type identity_delete_staff_by_id_lockout = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    403: "self_target_forbidden";
+    404: "staff_not_found";
   };
 };
 

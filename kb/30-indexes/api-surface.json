@@ -4086,7 +4086,7 @@
       "path": "/api/v1/staff/{id}/lockout",
       "operation_id": "identity_delete_staff_by_id_lockout",
       "task_id": "28c50a1d9ed5",
-      "summary": "Mở khoá tài khoản một cán bộ",
+      "summary": "Mở khoá tài khoản một cán bộ — gồm cả khoá đăng nhập tự động do nhập sai mật khẩu nhiều lần",
       "screen": "14-cau-hinh §3",
       "permission_kind": "permission",
       "permission": "admin.user",
