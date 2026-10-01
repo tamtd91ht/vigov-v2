@@ -200,7 +200,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "4a665f0: hai câu khai bước xác nhận xã ở mục Đăng nhập (người dùng duyệt nguyên văn 27/09). Hồ sơ Zalo: 7 đường rời khỏi máy.",
       "no_confirm": [],
-      "tiep_theo": "BỐN CÂU CŨ NAY SAI (chưa phát hành nên chưa ai đọc): 'chỉ gửi đi ở đúng HAI việc', 'Ngoài số điện thoại… không gửi thông tin nào khác', 'Nơi duy nhất nhận… là máy chủ của Tập đoàn ViHAT Group', 'Thứ nó gửi đi là hai mã đăng nhập'; chưa khai vihat-miniapp chuyển gì sang ViGov và kênh phản ánh gửi gì. Người dùng chọn 27/09: agent soạn bản sửa đầy đủ, chủ dự án duyệt — PHẢI XONG TRƯỚC khi nộp Zalo duyệt; pháp chế nên xem."
+      "tiep_theo": "BỐN CÂU CŨ NAY SAI (chưa phát hành nên chưa ai đọc): 'chỉ gửi đi ở đúng HAI việc', 'Ngoài số điện thoại… không gửi thông tin nào khác', 'Nơi duy nhất nhận… là máy chủ của Tập đoàn ViHAT Group', 'Thứ nó gửi đi là hai mã đăng nhập'; chưa khai vihat-miniapp chuyển gì sang ViGov và kênh phản ánh gửi gì. Người dùng chọn 27/09: agent soạn bản sửa đầy đủ, chủ dự án duyệt — PHẢI XONG TRƯỚC khi nộp Zalo duyệt; pháp chế nên xem. || THÊM 01/10/2026 (người dùng chọn 'ghi sổ, chủ dự án duyệt lời sau', ADR 0047 §6, 683c5902): ảnh bìa tin ở app riêng làm máy người dân tải ảnh từ host kho ảnh công khai (OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL) — không gửi dữ liệu cá nhân, nhưng host ấy thấy IP và user agent, và tải ngay khi danh sách hiện, không cần bấm. Câu 'nơi duy nhất nhận gì đó… là máy chủ ViHAT' (chinh-sach-rieng-tu.ts:444) và bảng DUONG_CONG_KHAI (ket-xuat-ho-so.ts:344-441, test đếm 14 đường) chưa nói điều này; phép kiểm phase1-collects-nothing không thấy <img>. Cần một câu + một dòng khai, lên phiên bản, chủ dự án duyệt."
     },
     {
       "id": "co-vao-thang-app-rieng",
@@ -329,6 +329,24 @@
         "noi-dung-mini-app",
         "phan-anh-nguoi-dan"
       ]
+    },
+    {
+      "id": "tin-xa-anh-bia",
+      "viec": "App riêng: ảnh bìa tin từ image_url (thẻ 96×80, gọn 88×72; chi tiết 16:9) — ADR 0047 §6 (683c5902), máy chủ 606bf515",
+      "trang_thai": "xong",
+      "bang_chung": "2fd2b766 — readImageUrl (chỉ https: tuyệt đối, khác → không ảnh; không phải chuỗi → trang hỏng), NewsThumb (lỗi tải → biểu tượng), ArticleCover (vắng/lỗi → không dải). vitest 52 tệp 1396/1396, tsc sạch.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa xem trên máy thật/webview Zalo: host kho ảnh công khai phải vào danh sách tên miền của App ID (ADR 0052 Còn mở #3). Thẻ tải bản 1280 px — bản thu nhỏ thứ hai là việc comms. Câu chính sách quyền riêng tư: xem chinh-sach-dung-voi-ban-dung.",
+      "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "tin-xa-gio-dang-su-kien-video",
+      "viec": "App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch.",
+      "no_confirm": [],
+      "tiep_theo": "Nút Xem video CHƯA dựng: lối mở ra ngoài duy nhất moRaNgoai chỉ nhận đích khai ở content/dich-ra-ngoai.ts, và danh sách ấy sinh câu đếm trong chính sách quyền riêng tư (cauKhaiDichRaNgoai) — thêm đích video đổi lời văn, đang chờ chủ dự án duyệt (G9). Thêm nữa: dòng openWebview trong KHAI_BAO_LOI_GOI (zalo-api.ts:146) chỉ khai cho nửa thương mại; nửa công dân không được import features/ (ranh-gioi-hai-nua.test.ts) nên lớp vỏ phải tiêm hàm mở.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
