@@ -12,7 +12,9 @@ package http
 // `content.read` / `content.update` — §10.5's own keys for this screen, seeded at
 // service-identity/migrations/0001_init.sql:292-293. NO KEY WAS INVENTED (rule 5, invariant 3c). Reads
 // are `content.read`; every write — the configuration, the selection, starting a run — is
-// `content.update`, the key that already publishes to every resident: the sync publishes too.
+// `content.update`, the key that already publishes to every resident: the sync publishes too. ONE READ
+// IS `content.update` AS WELL — the live category tree, because it USES the commune's secret (owner,
+// 02/10/2026, D3; registerPortalSyncRoutes says why).
 //
 // THE KEYS ARE LITERALS AT EVERY CALL SITE: tools/apidoc reads them from the authz.RequirePermission
 // call and refuses anything else (routes.go says why).
@@ -29,10 +31,11 @@ import (
 	"github.com/vihat/vigov/service-comms/internal/domain"
 )
 
-// PortalSyncReader is the READ half. *app.PortalSyncAdmin satisfies it. CategoryTree calls the portal.
+// PortalSyncReader is the READ half. *app.PortalSyncAdmin satisfies it. CategoryTree calls the portal,
+// and takes the caller so a refused outbound URL names who asked (security log, R2 02/10/2026).
 type PortalSyncReader interface {
 	Settings(ctx context.Context) (app.PortalSyncSettingsView, error)
-	CategoryTree(ctx context.Context) (app.PortalCategoryTree, error)
+	CategoryTree(ctx context.Context, actor audit.Actor) (app.PortalCategoryTree, error)
 	Runs(ctx context.Context, req page.Request) (page.Result[domain.PortalSyncRun], error)
 }
 
@@ -86,6 +89,12 @@ func registerPortalSyncRoutes(mux *http.ServeMux, h *Handler) {
 	// commune's stored choice merged in. Uses the SAVED settings. 409 when nothing is saved; 502 when
 	// the portal fails, with a code per error class and a sentence that never quotes the portal.
 	//
+	// `content.update`, NOT `content.read`, ALTHOUGH IT IS A GET (owner, 02/10/2026, D3): the call opens
+	// the commune's sealed portal key and sends it to the saved host. Who may make the service spend a
+	// commune secret is who may configure it — the precedent is the mail-settings test message, which
+	// sends with the commune's password under the write key. A reader of the register still sees the
+	// saved choice in PUT's reply and the run history; only the live call needs the write key.
+	//
 	// @summary  Cây chuyên mục của Cổng TTĐT, hỏi trực tiếp Cổng lúc mở cấu hình, kèm lựa chọn và ánh xạ loại đã lưu của xã
 	// @screen   11-noi-dung-mini-app §3
 	// @reply    200 portalCategoryTreeOut
@@ -96,7 +105,7 @@ func registerPortalSyncRoutes(mux *http.ServeMux, h *Handler) {
 	// @reply    503 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/portal-sync/categories",
-		authz.RequirePermission(h.d.Checker, "content.read")(
+		authz.RequirePermission(h.d.Checker, "content.update")(
 			http.HandlerFunc(h.GetPortalCategories)))
 
 	// The selection and mapping: [{external_id, name, target_kind, is_selected}]. Upserted — a row is

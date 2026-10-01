@@ -43,7 +43,7 @@ func (e *Error) Is(target error) bool {
 var (
 	ErrURLRefused        = &Error{Class: "url-refused"}        // not https / not .gov.vn / IP literal / userinfo / port
 	ErrAddressRefused    = &Error{Class: "address-refused"}    // the name resolved to a non-public address
-	ErrRedirectRefused   = &Error{Class: "redirect-refused"}   // a redirect target failed CheckURL (or left the image host)
+	ErrRedirectRefused   = &Error{Class: "redirect-refused"}   // a redirect target failed CheckURL or left the api_url's host
 	ErrTooManyRedirects  = &Error{Class: "too-many-redirects"} // more than MaxRedirects hops
 	ErrDNS               = &Error{Class: "dns"}
 	ErrConnect           = &Error{Class: "connect"}
@@ -56,7 +56,21 @@ var (
 	ErrImageForeignHost  = &Error{Class: "image-foreign-host"} // ADR 0067 §2 decision 2: dropped, never fetched
 	ErrImageInvalidURL   = &Error{Class: "image-invalid-url"}  // unparseable / non-https on another host / no path
 	ErrMissingCredential = &Error{Class: "missing-credential"} // no key to send
+	ErrKeepInvalid       = &Error{Class: "keep-invalid"}       // Articles asked to keep < 1 or > MaxKeepPerCategory
+	ErrHeldLookup        = &Error{Class: "held-lookup"}        // the caller's HeldFunc failed, or none was given
 )
+
+// IsRefusal reports whether err is a class where THIS SIDE refused an outbound destination — a URL, a
+// redirect target or a resolved address the guard would not reach. Each is the security event
+// `outbound_url_refused` (R2, 02/10/2026). Network failures, statuses and parse errors are not refusals.
+func IsRefusal(err error) bool {
+	switch ClassOf(err) {
+	case ErrURLRefused.Class, ErrAddressRefused.Class, ErrRedirectRefused.Class, ErrTooManyRedirects.Class,
+		ErrImageForeignHost.Class, ErrImageInvalidURL.Class:
+		return true
+	}
+	return false
+}
 
 // ErrHTTPStatus is the sentinel `errors.Is(err, ErrHTTPStatus)` matches for ANY status.
 var ErrHTTPStatus = &Error{Class: "http"}

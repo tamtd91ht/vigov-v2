@@ -78,6 +78,16 @@ const (
 	TrangThaiDangHien TrangThaiNoiDung = "dang-hien"
 )
 
+// ValidContentStatus reports whether s is one of the three statuses — the staff list's `status` filter
+// (02/10/2026, C1). A switch for LoaiNoiDungHopLe's reason.
+func ValidContentStatus(s string) bool {
+	switch TrangThaiNoiDung(s) {
+	case TrangThaiAn, TrangThaiChoDuyet, TrangThaiDangHien:
+		return true
+	}
+	return false
+}
+
 // NguonNoiDung is §8's `nguon`: how this row came to exist. IT IS NEVER TAKEN FROM A REQUEST — see
 // YeuCauThemNoiDung — and migration 0006 makes it immutable once written.
 type NguonNoiDung string
@@ -572,6 +582,11 @@ type NoiDungMiniApp struct {
 	TieuDe  string
 	TomTat  string
 	NoiDung string // HTML, sanitised at write since ADR 0067 (internal/richtext); older rows as given
+
+	// PortalCategoryName — READ ONLY, staff list and detail: the name of the portal category a SYNCED
+	// item came in under (`portal_categories.name`, as last seen on the portal), joined in the commune.
+	// "" for a hand-composed item. ADR 0067 §2 "Chế độ đăng" #5 / C2 (02/10/2026). Never written from here.
+	PortalCategoryName string
 
 	AnhDaiDienURL string
 

@@ -385,6 +385,13 @@ spec:
 #
 # Một pod comms bị chiếm quyền gửi được tới bất kỳ máy nào mở 443, thay vì chỉ tới Cổng. Thay bằng
 # egress gateway / FQDN policy khi cụm có.
+#
+# `except` (02/10/2026, rà soát R3): lớp thứ hai cho đúng điều phép kiểm lúc quay số đã chặn — dải riêng
+# RFC 1918, link-local (169.254.169.254 metadata) và CGNAT (100.64.0.0/10, có đám mây đặt metadata ở
+# đó). Mã sai một lần thì mạng vẫn không cho 443 vào cụm hay vào metadata. Luật NetworkPolicy là phép
+# HỢP: `except` chỉ hẹp đường 443 của luật này; các luật khác của comms (4, 7b) theo cổng riêng của chúng.
+# Cổng TTĐT là máy công khai nên không mất gì; nếu Cổng của một xã nằm trong dải riêng (mạng nội bộ
+# của tỉnh) thì phép kiểm trong mã đã từ chối nó từ trước — đó là quyết định của chủ dự án, không sửa ở đây.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -397,6 +404,12 @@ spec:
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0       # ← NỢ: Cổng không công bố dải; giữ giới hạn cổng 443
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
       ports:
         - { port: 443, protocol: TCP }
 ---

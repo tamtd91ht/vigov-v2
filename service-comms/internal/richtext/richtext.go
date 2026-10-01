@@ -119,8 +119,23 @@ func attr(t html.Token, key string) string {
 	return ""
 }
 
-// isHTTPS is the last check on a link before it leaves this package, in either form.
+// isHTTPS is the last check on a link before it leaves this package, in either form: an https URL with
+// a non-empty authority and NO USERINFO (R5, 02/10/2026 — the same rule as domain.NormalizeLinkTo).
+// `https://thangbinh.danang.gov.vn@evil.example/` names evil.example; shown in an article of a public
+// authority, the part before `@` reads as the government host the resident is about to visit. The
+// authority ends at the first `/ ? #` — or `\`, which browsers read as `/` in an https URL, so a `\@`
+// cannot hide an `@` from this check while the browser sees no userinfo.
 func isHTTPS(href string) bool {
+	const scheme = "https://"
 	h := strings.TrimSpace(href)
-	return len(h) > len("https://") && strings.EqualFold(h[:len("https://")], "https://")
+	if len(h) <= len(scheme) || !strings.EqualFold(h[:len(scheme)], scheme) {
+		return false
+	}
+	rest := h[len(scheme):]
+	end := strings.IndexAny(rest, `/?#\`)
+	if end < 0 {
+		end = len(rest)
+	}
+	authority := rest[:end]
+	return authority != "" && !strings.Contains(authority, "@")
 }

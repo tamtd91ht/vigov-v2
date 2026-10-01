@@ -277,7 +277,9 @@ func TestRedirects(t *testing.T) {
 		"to userinfo":         {[]string{"https://u:p@" + portalHost + "/x"}, ErrRedirectRefused},
 		"four hops":           {[]string{"/a", "/b", "/c", "/d"}, ErrTooManyRedirects},
 		"three hops are fine": {[]string{"/a", "/b", "/c"}, nil},
-		"another gov host":    {[]string{"https://" + otherHost + "/x"}, nil},
+		// D4 (owner, 02/10/2026): another .gov.vn host is no longer enough — same host as api_url only.
+		"another gov host": {[]string{"https://" + otherHost + "/x"}, ErrRedirectRefused},
+		"same host, https": {[]string{"https://" + portalHost + "/elsewhere"}, nil},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -317,7 +319,7 @@ func TestErrorsNeverCarryTheKey(t *testing.T) {
 			// An error page quoting the request — the body is never read into the error.
 			http.Error(w, "bad request for "+r.URL.String(), http.StatusServiceUnavailable)
 		})
-		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{})
+		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, 100, noneHeld)
 		if code, ok := IsHTTPStatus(err); !ok || code != 503 || ClassOf(err) != "http-503" {
 			t.Fatalf("err = %v, want http-503", err)
 		}
@@ -335,7 +337,7 @@ func TestErrorsNeverCarryTheKey(t *testing.T) {
 			c, _, _ := hj.Hijack()
 			_ = c.Close()
 		})
-		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{})
+		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, 100, noneHeld)
 		assertNoSecret(t, err)
 	})
 	t.Run("connect refused", func(t *testing.T) {
@@ -343,7 +345,7 @@ func TestErrorsNeverCarryTheKey(t *testing.T) {
 		p.client = New(Options{Resolver: fakeResolver{p}, Dial: func(ctx context.Context, n, a string) (net.Conn, error) {
 			return nil, &net.OpError{Op: "dial", Net: n, Err: errors.New("connection refused")}
 		}})
-		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{})
+		_, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, 100, noneHeld)
 		if !errors.Is(err, ErrConnect) {
 			t.Fatalf("err = %v, want connect", err)
 		}
@@ -353,7 +355,7 @@ func TestErrorsNeverCarryTheKey(t *testing.T) {
 		p := newTestPortal(t, func(w http.ResponseWriter, r *http.Request) { time.Sleep(300 * time.Millisecond) })
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
-		_, err := p.client.Articles(ctx, p.endpoint(t), "120", time.Time{})
+		_, err := p.client.Articles(ctx, p.endpoint(t), "120", time.Time{}, 100, noneHeld)
 		if !errors.Is(err, ErrTimeout) {
 			t.Fatalf("err = %v, want timeout", err)
 		}
@@ -376,7 +378,7 @@ func TestErrorsNeverCarryTheKey(t *testing.T) {
 
 func TestTheKeyTravelsOnlyInTheQuery(t *testing.T) {
 	p := newTestPortal(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`[]`)) })
-	if _, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}); err != nil {
+	if _, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, 100, noneHeld); err != nil {
 		t.Fatal(err)
 	}
 	q := p.queries[0]
@@ -391,7 +393,7 @@ func TestTheKeyTravelsOnlyInTheQuery(t *testing.T) {
 func TestEmptyCategoryIsNeverAsked(t *testing.T) {
 	p := newTestPortal(t, func(w http.ResponseWriter, r *http.Request) { t.Error("the portal was called") })
 	for _, id := range []string{"", " ", "0"} {
-		if _, err := p.client.Articles(context.Background(), p.endpoint(t), id, time.Time{}); !errors.Is(err, ErrCategoryRequired) {
+		if _, err := p.client.Articles(context.Background(), p.endpoint(t), id, time.Time{}, 100, noneHeld); !errors.Is(err, ErrCategoryRequired) {
 			t.Errorf("Articles(%q) = %v, want category-required", id, err)
 		}
 	}
@@ -436,7 +438,7 @@ func TestParseArticles(t *testing.T) {
 		{"TinTucID":"9004","TieuDe":"Đã xoá","NgayDang":"2026-09-29T08:00:00","isDelete":true},
 		{"TinTucID":"","TieuDe":"Không mã","NgayDang":"2026-09-29T08:00:00"},
 		{"TinTucID":"9005","TieuDe":"Ảnh nhỏ","AnhNhoUrl":"http://portal.example.gov.vn/b.png","NgayDang":"2026-09-30"}]`
-	b, err := parseArticles([]byte(body), since)
+	b, err := parseArticles(context.Background(), []byte(body), since, 100, noneHeld)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +448,8 @@ func TestParseArticles(t *testing.T) {
 	if len(b.Articles) != 2 {
 		t.Fatalf("kept %d, want 2: %+v", len(b.Articles), b.Articles)
 	}
-	a := b.Articles[0]
+	// Newest first: 9005 (30/09) before 9001 (29/09).
+	a := b.Articles[1]
 	if a.ExternalID != "9001" || a.Title != "Hội nghị & tổng kết" || a.Summary != "Tóm tắt" {
 		t.Errorf("article = %+v", a)
 	}
@@ -460,10 +463,10 @@ func TestParseArticles(t *testing.T) {
 	if want := time.Date(2026, 9, 29, 21, 27, 27, 367e6, portalLocation); !a.PublishedAt.Equal(want) {
 		t.Errorf("published = %v, want %v (+07:00, not UTC)", a.PublishedAt, want)
 	}
-	if b.Articles[1].ImageRef != "http://portal.example.gov.vn/b.png" {
-		t.Errorf("small image fallback = %q", b.Articles[1].ImageRef)
+	if b.Articles[0].ExternalID != "9005" || b.Articles[0].ImageRef != "http://portal.example.gov.vn/b.png" {
+		t.Errorf("small image fallback = %+v", b.Articles[0])
 	}
-	if _, err := parseArticles([]byte(`[{"TinTucID":`), since); !errors.Is(err, ErrParse) {
+	if _, err := parseArticles(context.Background(), []byte(`[{"TinTucID":`), since, 100, noneHeld); !errors.Is(err, ErrParse) {
 		t.Errorf("truncated JSON = %v, want parse", err)
 	}
 }
@@ -537,5 +540,196 @@ func TestPlainText(t *testing.T) {
 		if got := PlainText(in); got != want {
 			t.Errorf("PlainText(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// R1 (02/10/2026): a category answering many in-window rows keeps only the newest keep, newest first,
+// ties in the portal's order — and Read still counts every usable row.
+func TestParseArticlesKeepsOnlyTheNewest(t *testing.T) {
+	since := time.Date(2026, 1, 1, 0, 0, 0, 0, portalLocation)
+	var b strings.Builder
+	b.WriteString("[")
+	// 50 rows, published on days in a shuffled order; days 7 and 7 tie (ids 107, 207).
+	days := []int{3, 17, 9, 25, 7, 1, 30, 12, 7, 22}
+	for i := 0; i < 50; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		d := days[i%len(days)]
+		id := fmt.Sprintf("%d%02d", i/10+1, d)
+		if i%10 == 8 {
+			id = fmt.Sprintf("%d%02d", i/10+2, d) // the second day-7 row of each block
+		}
+		fmt.Fprintf(&b, `{"TinTucID":"%s-%d","TieuDe":"T","NgayDang":"2026-03-%02dT08:00:00"}`, id, i, d)
+	}
+	b.WriteString("]")
+	got, err := parseArticles(context.Background(), []byte(b.String()), since, 3, noneHeld)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Read != 50 {
+		t.Fatalf("Read = %d, want 50", got.Read)
+	}
+	if len(got.Articles) != 3 {
+		t.Fatalf("kept %d, want 3", len(got.Articles))
+	}
+	for i, a := range got.Articles {
+		if a.PublishedAt.Day() != 30 {
+			t.Fatalf("article %d is day %d, want the three day-30 rows", i, a.PublishedAt.Day())
+		}
+	}
+	// The five day-30 rows are at positions 6, 16, 26, 36, 46: a tie keeps the portal's order.
+	if got.Articles[0].ExternalID != "130-6" || got.Articles[1].ExternalID != "230-16" || got.Articles[2].ExternalID != "330-26" {
+		t.Fatalf("tie order = %s %s %s", got.Articles[0].ExternalID, got.Articles[1].ExternalID, got.Articles[2].ExternalID)
+	}
+}
+
+func TestArticlesRefusesAKeepOutsideItsBounds(t *testing.T) {
+	p := newTestPortal(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`[]`)) })
+	for _, keep := range []int{0, -1, MaxKeepPerCategory + 1} {
+		if _, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, keep, noneHeld); !errors.Is(err, ErrKeepInvalid) {
+			t.Errorf("keep %d: err = %v, want keep-invalid", keep, err)
+		}
+	}
+	if len(p.queries) != 0 {
+		t.Fatal("a refused keep still called the portal")
+	}
+}
+
+// R4 (02/10/2026): the IPv4-compatible and IPv4-translated IPv6 forms of a private v4 are refused.
+func TestAddrAllowedRefusesEmbeddedIPv4Forms(t *testing.T) {
+	for _, s := range []string{"::10.0.0.1", "::a00:1", "::169.254.169.254", "::ffff:0:10.0.0.1", "::ffff:0:a9fe:a9fe",
+		"::ffff:0:93.184.216.34"} {
+		if AddrAllowed(netip.MustParseAddr(s)) {
+			t.Errorf("AddrAllowed(%s) = true, want refused", s)
+		}
+	}
+}
+
+func TestIsRefusal(t *testing.T) {
+	for _, e := range []error{ErrURLRefused, ErrAddressRefused, ErrRedirectRefused, ErrTooManyRedirects,
+		ErrImageForeignHost, ErrImageInvalidURL} {
+		if !IsRefusal(e) {
+			t.Errorf("%v is a refusal", e)
+		}
+	}
+	for _, e := range []error{ErrTimeout, ErrConnect, ErrParse, httpStatusError(503), errors.New("x"), nil} {
+		if IsRefusal(e) {
+			t.Errorf("%v is not a refusal", e)
+		}
+	}
+}
+
+// noneHeld is a HeldFunc for a commune that holds nothing yet.
+func noneHeld(context.Context, []string) (map[string]bool, error) { return nil, nil }
+
+// heldRecorder holds a fixed set and records every chunk it was asked about.
+type heldRecorder struct {
+	held   map[string]bool
+	chunks [][]string
+}
+
+func (h *heldRecorder) fn(_ context.Context, ids []string) (map[string]bool, error) {
+	h.chunks = append(h.chunks, append([]string(nil), ids...))
+	out := map[string]bool{}
+	for _, id := range ids {
+		if d, ok := h.held[id]; ok {
+			out[id] = d
+		}
+	}
+	return out, nil
+}
+
+// manyArticles is n in-window rows, ids "1".."n", row i published i hours after the window start —
+// so the highest ids are the newest.
+func manyArticles(n int) []byte {
+	var b strings.Builder
+	b.WriteString("[")
+	for i := 1; i <= n; i++ {
+		if i > 1 {
+			b.WriteString(",")
+		}
+		at := time.Date(2026, 3, 1, 0, 0, 0, 0, portalLocation).Add(time.Duration(i) * time.Hour)
+		fmt.Fprintf(&b, `{"TinTucID":"%d","TieuDe":"T","NgayDang":"%s"}`, i, at.Format("2006-01-02T15:04:05"))
+	}
+	b.WriteString("]")
+	return []byte(b.String())
+}
+
+// Follow-up 02/10/2026: already-held rows (live OR soft-deleted) never take a heap slot, so the newest
+// NOT-held ones are kept — the next run continues below what this one imported.
+func TestParseArticlesHeldRowsNeverOccupySlots(t *testing.T) {
+	since := time.Date(2026, 1, 1, 0, 0, 0, 0, portalLocation)
+	h := &heldRecorder{held: map[string]bool{"10": false, "9": true, "7": false}}
+	got, err := parseArticles(context.Background(), manyArticles(10), since, 3, h.fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, a := range got.Articles {
+		ids = append(ids, a.ExternalID)
+	}
+	if strings.Join(ids, ",") != "8,6,5" {
+		t.Fatalf("kept %v, want the newest three not held: 8,6,5", ids)
+	}
+	if got.HeldLive != 2 || got.HeldDeleted != 1 || got.Read != 10 {
+		t.Fatalf("held live %d deleted %d read %d", got.HeldLive, got.HeldDeleted, got.Read)
+	}
+
+	// Run two: what run one kept is now held too → the next three.
+	for _, id := range ids {
+		h.held[id] = false
+	}
+	got, err = parseArticles(context.Background(), manyArticles(10), since, 3, h.fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids = ids[:0]
+	for _, a := range got.Articles {
+		ids = append(ids, a.ExternalID)
+	}
+	if strings.Join(ids, ",") != "4,3,2" {
+		t.Fatalf("second run kept %v, want 4,3,2", ids)
+	}
+}
+
+// The lookup is batched: at most heldChunk ids per call, and a large category is asked in chunks.
+func TestParseArticlesAsksHeldInChunks(t *testing.T) {
+	since := time.Date(2026, 1, 1, 0, 0, 0, 0, portalLocation)
+	h := &heldRecorder{held: map[string]bool{}}
+	// Ascending dates: every row is better than the heap's worst, so every row is buffered and asked.
+	if _, err := parseArticles(context.Background(), manyArticles(450), since, 100, h.fn); err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, c := range h.chunks {
+		if len(c) > heldChunk {
+			t.Fatalf("a chunk of %d ids, ceiling %d", len(c), heldChunk)
+		}
+		total += len(c)
+	}
+	if len(h.chunks) != 3 || total != 450 {
+		t.Fatalf("chunks = %d holding %d ids, want 3 holding 450", len(h.chunks), total)
+	}
+}
+
+func TestParseArticlesHeldFailureIsAClass(t *testing.T) {
+	since := time.Date(2026, 1, 1, 0, 0, 0, 0, portalLocation)
+	fail := func(context.Context, []string) (map[string]bool, error) {
+		return nil, errors.New("pq: secret_code=leak")
+	}
+	_, err := parseArticles(context.Background(), manyArticles(5), since, 3, fail)
+	if !errors.Is(err, ErrHeldLookup) || strings.Contains(err.Error(), "secret_code") {
+		t.Fatalf("err = %v, want held-lookup and nothing of the caller's error", err)
+	}
+}
+
+func TestArticlesRefusesANilHeldFunc(t *testing.T) {
+	p := newTestPortal(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`[]`)) })
+	if _, err := p.client.Articles(context.Background(), p.endpoint(t), "120", time.Time{}, 10, nil); !errors.Is(err, ErrHeldLookup) {
+		t.Fatalf("err = %v, want held-lookup", err)
+	}
+	if len(p.queries) != 0 {
+		t.Fatal("the portal was called without a held lookup")
 	}
 }

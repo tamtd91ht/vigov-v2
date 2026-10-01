@@ -17,6 +17,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -219,7 +220,12 @@ func (h *Handler) PutPortalSyncSettings(w http.ResponseWriter, r *http.Request) 
 
 // GetPortalCategories — GET /api/v1/portal-sync/categories (the LIVE tree)
 func (h *Handler) GetPortalCategories(w http.ResponseWriter, r *http.Request) {
-	t, err := h.d.PortalSync.CategoryTree(r.Context())
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.missingPrincipal(w, r)
+		return
+	}
+	t, err := h.d.PortalSync.CategoryTree(r.Context(), actor)
 	if err != nil {
 		h.writePortalSyncError(w, r, "đọc chuyên mục Cổng", err)
 		return
@@ -297,7 +303,7 @@ func (h *Handler) StartPortalSyncRun(w http.ResponseWriter, r *http.Request) {
 var portalCallFailures = map[string]string{
 	"url-refused":        "Địa chỉ API đã lưu không còn đạt điều kiện (https, tên máy .gov.vn, cổng 443). Hãy sửa địa chỉ trong cấu hình.",
 	"address-refused":    "Tên máy của Cổng trỏ tới một địa chỉ mạng nội bộ, nên hệ thống không gọi tới. Hãy kiểm tra địa chỉ API, hoặc báo đơn vị quản lý Cổng.",
-	"redirect-refused":   "Cổng chuyển hướng tới một địa chỉ không đạt điều kiện (https, tên máy .gov.vn), nên hệ thống dừng lại.",
+	"redirect-refused":   "Cổng chuyển hướng sang một máy chủ khác với địa chỉ API đã khai (hoặc không phải https), nên hệ thống dừng lại. Hãy khai đúng địa chỉ API mà Cổng đang dùng.",
 	"too-many-redirects": "Cổng chuyển hướng quá ba lần, nên hệ thống dừng lại. Hãy kiểm tra địa chỉ API.",
 	"dns":                "Không tìm thấy tên máy của Cổng. Hãy kiểm tra địa chỉ API.",
 	"connect":            "Không kết nối được tới Cổng. Hãy thử lại sau.",
@@ -313,8 +319,8 @@ var portalCallFailures = map[string]string{
 const portalCallFallback = "Cổng trả lời lỗi. Hãy thử lại sau, hoặc báo đơn vị quản lý Cổng."
 
 // writePortalSyncError maps a use-case failure onto a status. 503 when the platform cannot seal or run,
-// 502 when the portal failed, 422 for the key rules, 409 for the state of the data, 400 for the request,
-// 500 for everything not listed — never a default 400.
+// 502 when the portal failed, 422 for the key rules and the category ceiling, 409 for the state of the
+// data, 400 for the request, 500 for everything not listed — never a default 400.
 func (h *Handler) writePortalSyncError(w http.ResponseWriter, r *http.Request, op string, err error) {
 	xa := string(tenant.MustFrom(r.Context()))
 	var call *app.PortalCallError
@@ -344,6 +350,18 @@ func (h *Handler) writePortalSyncError(w http.ResponseWriter, r *http.Request, o
 		httpx.WriteError(w, http.StatusConflict, "portal_sync_in_progress",
 			"Đang có một lượt đồng bộ của xã. Hãy chờ lượt ấy xong rồi chạy lại.", "")
 		return
+	case errors.Is(err, app.ErrPortalRunnerBusy):
+		// The PROCESS is at its concurrent-run ceiling (R1, 02/10/2026) — a capacity condition, not the
+		// state of this commune's data, so 503 and not 409. Retry-After: a run is minutes, not seconds.
+		w.Header().Set("Retry-After", "60")
+		httpx.WriteError(w, http.StatusServiceUnavailable, "portal_sync_busy",
+			"Hệ thống đang chạy đồng bộ cho các xã khác. Hãy thử lại sau ít phút.", "")
+		return
+	case errors.Is(err, domain.ErrPortalTooManySelected):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "too_many_categories",
+			"Mỗi xã chọn tối đa "+strconv.Itoa(domain.PortalSelectedCategoriesMax)+" chuyên mục Cổng. "+
+				"Hãy bỏ chọn bớt rồi lưu lại.", "")
+		return
 	case errors.As(err, &call):
 		// The class and the commune only — the adapter's errors carry no URL and no key.
 		h.d.Log.Warn("đồng bộ Cổng: gọi Cổng không được", "xa", xa, "loai", call.Class)
@@ -372,8 +390,8 @@ var portalSyncRefusals = []refusal{
 		"không kèm cổng khác 443, tài khoản, tham số (?…) hay địa chỉ IP."},
 	{domain.ErrPortalPublishMode, "Hãy chọn Chờ duyệt hoặc Đăng thẳng."},
 	{domain.ErrPortalInterval, "Nhịp đồng bộ phải từ 0 (chỉ chạy tay) tới 24 giờ."},
-	{domain.ErrPortalWindow, "Số ngày lấy tin không hợp lệ."},
-	{domain.ErrPortalMaxItems, "Số tin tối đa mỗi lượt không hợp lệ."},
+	{domain.ErrPortalWindow, "Số ngày lấy tin phải từ 1 tới " + strconv.Itoa(domain.PortalWindowDaysMax) + "."},
+	{domain.ErrPortalMaxItems, "Số tin tối đa mỗi lượt phải từ 1 tới " + strconv.Itoa(domain.PortalMaxItemsMax) + "."},
 	{domain.ErrPortalAPIKeyShape, "Mã bảo mật quá dài hoặc chứa khoảng trắng hay ký tự không hợp lệ."},
 	{domain.ErrPortalSelectionEmpty, "Có chuyên mục Cổng không có mã."},
 	{domain.ErrPortalSelectionName, "Có chuyên mục Cổng không có tên, tên quá dài hoặc chứa ký tự không hợp lệ."},

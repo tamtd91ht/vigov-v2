@@ -35,6 +35,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,6 +187,17 @@ type LocNoiDung struct {
 	// Tu is §6's `🔍 Tìm theo tiêu đề…`. Title only — §6 says so, and searching the BODY would put
 	// the HTML of every article through a pattern match on every keystroke.
 	Tu string
+
+	// TrangThai is the `status` filter (02/10/2026, C1): one of the three statuses — `cho-duyet` is the
+	// queue of synced items waiting for a person. Refused by the caller when it is not one of them.
+	//
+	// NO INDEX LEADS WITH IT, stated rather than hoped about: the page walks `noi_dung_mini_app_so`
+	// (tenant_id, tao_luc DESC, id) newest first and filters, so a filter matching few rows of a large
+	// register reads further down the commune's live rows before a page fills — bounded by the commune
+	// partition, and by the page size when matches are dense. An index (tenant_id, trang_thai, tao_luc
+	// DESC, id) WHERE deleted_at IS NULL is the answer if it becomes slow — a migration on a populated
+	// table, the data-migration owner's.
+	TrangThai string
 }
 
 // thoatLike escapes the three characters PostgreSQL's LIKE treats specially.
@@ -234,6 +246,11 @@ func (l LocNoiDung) menhDe() (string, []any) {
 		args = append(args, "%"+thoatLike.Replace(tu)+"%")
 		n++
 	}
+	if l.TrangThai != "" {
+		fmt.Fprintf(&b, " AND trang_thai = $%d", n)
+		args = append(args, l.TrangThai)
+		n++
+	}
 	return b.String(), args
 }
 
@@ -269,7 +286,58 @@ func (s *NoiDungMiniAppStore) DanhSach(ctx context.Context, loc LocNoiDung, yc p
 	if err != nil {
 		return kq, err
 	}
+	if err := s.fillPortalCategoryNames(ctx, kq.Items); err != nil {
+		return kq, err
+	}
 	return kq, nil
+}
+
+// fillPortalCategoryNames sets PortalCategoryName on the SYNCED items of a page (C2, 02/10/2026): ONE
+// joined read for the page, only when it holds a synced item — a commune that never synced pays nothing.
+//
+// A SECOND STATEMENT, NOT A COLUMN OF cotNoiDungMiniApp: that list is read by position by every content
+// read, the public ones included, and the public surface must not carry the portal's taxonomy (rule 9:
+// one reader, one place). BOTH TABLES ARE BOUND TO $1 (core/store.QueryJoin's contract) — a join on id
+// alone would print another commune's category name wherever ids collided.
+func (s *NoiDungMiniAppStore) fillPortalCategoryNames(ctx context.Context, items []domain.NoiDungMiniApp) error {
+	var ids []string
+	for _, n := range items {
+		if n.Nguon == domain.NguonDongBoCong {
+			ids = append(ids, n.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	marks := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		marks[i] = "$" + strconv.Itoa(i+2) // $1 is the commune
+		args[i] = id
+	}
+	stmt := `SELECT nd.id, pc.name FROM noi_dung_mini_app nd
+		JOIN portal_categories pc ON pc.tenant_id = $1 AND pc.id = nd.portal_category_id
+		WHERE nd.tenant_id = $1 AND nd.deleted_at IS NULL AND nd.id IN (` + strings.Join(marks, ", ") + `)`
+	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, args...)
+	if err != nil {
+		return fmt.Errorf("noi_dung_mini_app: đọc tên chuyên mục Cổng: %w", err)
+	}
+	defer rows.Close()
+	names := make(map[string]string, len(ids))
+	for rows.Next() {
+		var id, name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return fmt.Errorf("noi_dung_mini_app: đọc tên chuyên mục Cổng: %w", err)
+		}
+		names[id] = name
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("noi_dung_mini_app: đọc tên chuyên mục Cổng: %w", err)
+	}
+	for i := range items {
+		items[i].PortalCategoryName = names[items[i].ID]
+	}
+	return nil
 }
 
 // TheoID reads ONE live item of THIS COMMUNE, body included — §7's modal reopened by §6's `✎`.
@@ -294,7 +362,13 @@ func (s *NoiDungMiniAppStore) TheoID(ctx context.Context, id string) (domain.Noi
 	if err != nil {
 		return domain.NoiDungMiniApp{}, err
 	}
-	return n, nil
+	// rows must be released before the second statement: the pool may hold one connection.
+	rows.Close()
+	one := []domain.NoiDungMiniApp{n}
+	if err := s.fillPortalCategoryNames(ctx, one); err != nil {
+		return domain.NoiDungMiniApp{}, err
+	}
+	return one[0], nil
 }
 
 // quetMotDongNoiDung is what both *sql.Rows and *sql.Row satisfy, so one scan serves every read.

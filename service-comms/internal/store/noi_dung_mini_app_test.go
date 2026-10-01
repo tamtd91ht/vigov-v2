@@ -164,6 +164,9 @@ type khoNDGia struct {
 
 	soDongDoi int64 // what Exec reports as RowsAffected; 1 unless a test says otherwise
 	loi       error
+
+	// portalNames is what the portal-category join answers: item id → category name (C2).
+	portalNames map[string]string
 }
 
 func (k *khoNDGia) Connect(context.Context) (driver.Conn, error) { return &connND{k: k}, nil }
@@ -222,6 +225,15 @@ func (c *connND) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		return &rowsGhiGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 	}
 
+	if strings.Contains(q, "JOIN portal_categories") {
+		hang := [][]driver.Value{}
+		for _, a := range args[1:] {
+			if name, ok := c.k.portalNames[a.Value.(string)]; ok {
+				hang = append(hang, []driver.Value{a.Value, name})
+			}
+		}
+		return &rowsGhiGia{cot: []string{"id", "name"}, hang: hang}, nil
+	}
 	if strings.Contains(q, "SELECT DISTINCT nd.danh_muc_id") {
 		hang := make([][]driver.Value, 0, len(c.k.categoriesWithItems))
 		for _, id := range c.k.categoriesWithItems {
@@ -365,7 +377,9 @@ func TestDanhSachNoiDungBuocXaVaLocDongDaXoaMem(t *testing.T) {
 
 	var cau string
 	for _, l := range k.lenh {
-		if strings.Contains(l.sql, "FROM noi_dung_mini_app") {
+		// The page read, not the portal-category name join that follows it for a synced item (C2) —
+		// that one has its own test, TestDanhSachNoiDungDocTenChuyenMucCongTrongXa.
+		if strings.Contains(l.sql, "FROM noi_dung_mini_app") && !strings.Contains(l.sql, "JOIN portal_categories") {
 			cau = l.sql
 			if len(l.args) == 0 || l.args[0] != string(xaMotND) {
 				t.Fatalf("tham số $1 = %v, muốn xã %v — xã đến từ ngữ cảnh (luật 1, bất biến 5)",
@@ -906,5 +920,74 @@ func TestChenDanhMucBuocXaVaBienChaRongThanhNull(t *testing.T) {
 	// A ROOT CATEGORY HAS NO PARENT, and '' would fail the self-referencing foreign key.
 	if args[4] != nil {
 		t.Errorf("cha rỗng = %v, muốn NULL", args[4])
+	}
+}
+
+// --- 02/10/2026: the `status` filter (C1) and the portal category name (C2) -----------------------
+
+func TestDanhSachNoiDungLocTheoTrangThaiLaThamSoRang(t *testing.T) {
+	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}}
+	kho, ctx := khoNoiDung(t, k)
+	if _, err := kho.DanhSach(ctx, LocNoiDung{Loai: "tin-tuc", TrangThai: "cho-duyet"}, trangDauND(t)); err != nil {
+		t.Fatal(err)
+	}
+	l := k.lenh[0]
+	if !strings.Contains(l.sql, "AND loai = $2") || !strings.Contains(l.sql, "AND trang_thai = $3") {
+		t.Fatalf("filter = %s", l.sql)
+	}
+	if len(l.args) < 3 || l.args[1] != "tin-tuc" || l.args[2] != "cho-duyet" {
+		t.Fatalf("args = %v", l.args)
+	}
+}
+
+// The name is read for SYNCED items only, in ONE joined statement whose two tables are both bound to the
+// commune — never a join on id alone.
+func TestDanhSachNoiDungDocTenChuyenMucCongTrongXa(t *testing.T) {
+	thuCong := dongNDMau()
+	thuCong.id, thuCong.nguon = "nd-002", "thu-cong"
+	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau(), thuCong}, portalNames: map[string]string{"nd-001": "Tin tức › Thời sự"}}
+	kho, ctx := khoNoiDung(t, k)
+	kq, err := kho.DanhSach(ctx, LocNoiDung{}, trangDauND(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.Items[0].PortalCategoryName != "Tin tức › Thời sự" || kq.Items[1].PortalCategoryName != "" {
+		t.Fatalf("names = %q / %q", kq.Items[0].PortalCategoryName, kq.Items[1].PortalCategoryName)
+	}
+	var join *lenhGhi
+	for i := range k.lenh {
+		if strings.Contains(k.lenh[i].sql, "JOIN portal_categories") {
+			join = &k.lenh[i]
+		}
+	}
+	if join == nil {
+		t.Fatal("no join statement")
+	}
+	for _, want := range []string{"pc.tenant_id = $1", "nd.tenant_id = $1", "nd.deleted_at IS NULL"} {
+		if !strings.Contains(join.sql, want) {
+			t.Errorf("join lacks %q: %s", want, join.sql)
+		}
+	}
+	if join.args[0] != string(xaMotND) || len(join.args) != 2 || join.args[1] != "nd-001" {
+		t.Fatalf("join args = %v — the commune, then only the synced item", join.args)
+	}
+
+	// A page with no synced item asks nothing more.
+	k2 := &khoNDGia{dong: []dongNDMiniApp{thuCong}}
+	kho2, ctx2 := khoNoiDung(t, k2)
+	if _, err := kho2.DanhSach(ctx2, LocNoiDung{}, trangDauND(t)); err != nil {
+		t.Fatal(err)
+	}
+	if len(k2.lenh) != 1 {
+		t.Fatalf("statements = %d, want the page read only", len(k2.lenh))
+	}
+}
+
+func TestTheoIDDocTenChuyenMucCong(t *testing.T) {
+	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}, portalNames: map[string]string{"nd-001": "Sự kiện"}}
+	kho, ctx := khoNoiDung(t, k)
+	n, err := kho.TheoID(ctx, "nd-001")
+	if err != nil || n.PortalCategoryName != "Sự kiện" || n.NoiDung != "<p>Toàn văn</p>" {
+		t.Fatalf("item = %+v, %v", n, err)
 	}
 }

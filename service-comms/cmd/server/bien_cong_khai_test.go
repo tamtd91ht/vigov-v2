@@ -19,6 +19,7 @@ import (
 
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -72,8 +73,14 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 		t.Fatalf("PhanTichNguonCORS: %v", err)
 	}
 	mux := http.NewServeMux()
+	// The dev wiring with no Redis: the counter that always fails, under the fail-OPEN public policy.
+	lim, err := ratelimit.New(unavailableCounter{}, ratelimit.PublicNewsRead)
+	if err != nil {
+		t.Fatal(err)
+	}
 	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{
-		Xa: xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
+		Limiter: lim,
+		Xa:      xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
 		// The real use case with nothing configured: every image is absent, never an error.
 		CoverImages: commsapp.NewContentCovers(nil, nil, nil, nil, nil, nil),
 		Audio:       commsapp.NewContentAudio(nil, nil, nil, nil, nil, nil),

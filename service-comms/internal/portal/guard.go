@@ -82,15 +82,17 @@ func checkHostName(host string) error {
 // blockedPrefixes are the non-public ranges netip's predicates do not cover. Each is a way back into
 // a network that is not the public Internet: carrier NAT (some clouds put metadata there —
 // 100.100.100.200), the "this network" block, benchmark and documentation ranges, the reserved class
-// E, and the IPv6 transition prefixes that EMBED an IPv4 address (NAT64, 6to4, Teredo), which would
-// otherwise let a v6 answer name a private v4 host.
+// E, and the IPv6 transition prefixes that EMBED an IPv4 address (NAT64, 6to4, Teredo, and — added
+// 02/10/2026, R4 — the deprecated IPv4-compatible ::/96 and the SIIT IPv4-translated ::ffff:0:0:0/96),
+// which would otherwise let a v6 answer name a private v4 host. IPv4-MAPPED (::ffff:0:0/96) needs no
+// row: AddrAllowed unmaps it and judges the IPv4 it carries.
 var blockedPrefixes = func() []netip.Prefix {
 	var out []netip.Prefix
 	for _, s := range []string{
 		"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
 		"198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "255.255.255.255/32",
 		"64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/32", "2001:db8::/32", "2002::/16",
-		"fec0::/10",
+		"fec0::/10", "::/96", "::ffff:0:0:0/96",
 	} {
 		out = append(out, netip.MustParsePrefix(s))
 	}

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-10-01",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "ghim-go-toolchain-1-26-6",
@@ -234,6 +234,14 @@
       "trang_thai": "xong",
       "bang_chung": "CHƯA COMMIT (đi cùng thẻ B5). key.go PurposeContentAudio trong knownPurposes; mime.go MIMEMP3/MIMEM4A, isMedia (inline), isID3v2 + isMP3Frame (chỉ Layer III), ftyp 'M4A '/'M4B ' → audio/mp4; major isom/mp42 chỉ thành audio/mp4 khi có brand M4A và KHÔNG có brand video (M4V/avc1/qt) — video thường vẫn là video/mp4. audio.go CheckAudioStream: M4A phải có track 'soun', không track nào ngoài soun/text (track 'vide' → từ chối), moov ≤ 16 MiB; MP3 bỏ qua thẻ ID3 rồi đòi HAI khung Layer III liên tiếp. audio_test.go + mime_test.go (TestSniffVideoNeverAudio, wav/ogg/flac/ADTS/M4P bị từ chối); TestClosedListsDoNotCollide, uploadpolicy TestEnumAndStoragePurposesMatchBothWays xanh. go vet + go test core xanh.",
       "tiep_theo": "File isom-major KHÔNG có brand M4A (một số bộ mã hoá) bị từ chối như video/mp4 — từ chối nhầm, có chủ ý; nếu xã gặp nhiều thì cân nhắc đọc moov ngay ở bước dò."
+    },
+    {
+      "id": "ratelimit-public-news-read",
+      "viec": "core/ratelimit: chính sách thứ hai PublicNewsRead (120/phút, chủ dự án 02/10/2026) MỞ khi Redis hỏng theo từng chính sách; khoá theo xã PublicHostIPKey (t:<tenant_id> từ ctx, từ chối khi thiếu); Gate dùng chung cho Middleware và handler; tenant.CachedDirectory.XaTheoHost — tra theo host có báo lỗi, cùng bộ đệm/TTL/trần, không nhớ lỗi",
+      "trang_thai": "xong",
+      "bang_chung": "CHƯA COMMIT. ratelimit.go: Policy.failOpen (chỉ PublicNewsRead true; OperatorSignIn vẫn đóng kín — test ghim), Key.tenant + redisKey 't:<tenant>:rl:<policy>:<subject>', ErrNoCommune, ipSubject dùng chung (IPv6 /64). middleware.go: Gate (429 + Retry-After; 503 khi chính sách đóng; mở + đúng 1 cảnh báo rate_limit.store_unavailable mỗi cửa sổ, không IP/khoá); Middleware gọi Gate. go test ./ratelimit xanh; service-platform internal/http, cmd/server, internal/opauth xanh (người dùng cũ của Middleware). core/tenant/cache.go: HostResolver + CachedDirectory.XaTheoHost, ErrNoHostResolver; cache_host_resolver_test.go (50 lần tra một host lạ = 1 lần gọi nền tảng; lỗi không được nhớ; trần TranMuc giữ nguyên).",
+      "tiep_theo": "Chính sách thứ ba trở đi: mở khi Redis hỏng chỉ khi chủ dự án quyết như D2 — mặc định đóng.",
+      "no_confirm": []
     }
   ]
 }

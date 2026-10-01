@@ -38,10 +38,14 @@ func NewPortalSync(db *sql.DB) *PortalSync { return &PortalSync{db: db} }
 
 // dueCommunesQuery — enabled, scheduled (interval > 0), and never run or last started at least one
 // interval ago, by the DATABASE clock (the one every replica shares). One row per commune by key.
+//
+// MOST OVERDUE FIRST (R1, 02/10/2026): never-run communes, then the oldest last_run_at; tenant_id only
+// breaks ties. A tick cut by its time budget leaves the rest due, and they lead the next tick — ordered
+// by tenant_id alone, the same communes at the end would be the ones cut every time.
 const dueCommunesQuery = `SELECT tenant_id FROM portal_sync_settings
 	WHERE is_enabled AND interval_hours > 0
 	  AND (last_run_at IS NULL OR last_run_at + make_interval(hours => interval_hours) <= now())
-	ORDER BY tenant_id`
+	ORDER BY last_run_at NULLS FIRST, tenant_id`
 
 // DueCommunes lists the communes whose scheduled sync is due. Identifiers that are not ULID-shaped
 // are dropped: they cannot name a commune.

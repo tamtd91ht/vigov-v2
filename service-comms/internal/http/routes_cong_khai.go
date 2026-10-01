@@ -34,6 +34,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 		panic("comms/http: thiếu đường đọc ảnh bìa công khai — tuyến tin của xã sẽ panic khi có người gọi")
 	case d.Audio == nil:
 		panic("comms/http: thiếu đường ký liên kết âm thanh truyền thanh — tuyến tin của xã sẽ panic khi có người gọi")
+	case d.Limiter == nil:
+		// Rule 13 invariant 7: an unauthenticated route without its rate limit is refused at startup,
+		// never served unbounded.
+		panic("comms/http: thiếu bộ giới hạn tần suất tuyến công khai (ratelimit.PublicNewsRead)")
 	}
 	h := newHandlerCongKhai(d)
 
@@ -45,6 +49,13 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// the Mini App has no account and needs none to read the commune's own notice board.
 	//
 	// NO idem.* DECLARATION: a GET changes no state (and nothing here counts views).
+	//
+	// RATE LIMIT — ratelimit.PublicNewsRead, ON ALL THREE ROUTES BELOW (rule 13, invariant 7; owner
+	// 02/10/2026): 120 requests per minute per (host, client network), counted in xaTheoHost once the
+	// platform has resolved the host — the key is `t:<tenant_id>:…` for a commune (rule 1, invariant 7).
+	// Over the limit: 429 `rate_limited` + Retry-After. A Redis outage SERVES (fail-open, the owner's
+	// exception) with one security warning per minute. Not a middleware on the route because no
+	// middleware can know the commune before the handler asked the platform.
 	//
 	// @summary  Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ
 	// @screen   11-noi-dung-mini-app §9
@@ -66,12 +77,15 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// 500 is a store failure. 503 is the platform registry unreachable.
 	//
+	// 429 is the rate limit above.
+	//
 	// @reply    200 page.Result[tinXaRa]
 	// @reply    400 httpx.Error
+	// @reply    429 httpx.Error rate_limited
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune-news",
-		authz.Public("bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần")(
+		authz.Public("bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi")(
 			http.HandlerFunc(h.DanhSachTinXa)))
 
 	// The chip row of the Mini App news tab (user decision 2026-09-30, reversing the 2026-09-27 "no
@@ -98,12 +112,15 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// 500 is a store failure or the category cap exceeded. 503 is the platform registry unreachable.
 	//
+	// 429 is the rate limit above.
+	//
 	// @reply    200 publicCategoriesOut
 	// @reply    400 httpx.Error
+	// @reply    429 httpx.Error rate_limited
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune-news/categories",
-		authz.Public("hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần")(
+		authz.Public("hàng chip danh mục của bảng tin xã trên Zalo Mini App (người dùng quyết định 30/09/2026): người dân đọc không cần tài khoản; chỉ trả tên danh mục của đúng xã mà nền tảng phân giải từ tên miền, và chỉ danh mục có tin đã đăng (dang-hien), dạng văn bản thuần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi")(
 			http.HandlerFunc(h.PublicNewsCategories)))
 
 	// ONE published item, body included: `body` as plain text (older app builds) and `body_blocks` as
@@ -118,12 +135,15 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// 404 is ONE answer for: no such id, another commune's id, not published, soft-deleted, or a domain
 	// no active commune holds.
 	//
+	// 429 is the rate limit above.
+	//
 	// @reply    200 tinXaRa
 	// @reply    400 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    429 httpx.Error rate_limited
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune-news/{id}",
-		authz.Public("toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404")(
+		authz.Public("toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi")(
 			http.HandlerFunc(h.MotTinXa)))
 }

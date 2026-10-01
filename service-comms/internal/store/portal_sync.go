@@ -185,6 +185,30 @@ func (s *PortalSyncStore) MarkRunStarted(ctx context.Context, tx *store.ScopedTx
 	return nil
 }
 
+// ResealKey replaces the sealed key with one sealed under the api_url binding (R6), ONLY IF the row
+// still holds apiURL and oldSealed — a compare-and-swap, so a configuration save that ran between the
+// read and this write wins and nothing is overwritten. swapped=false is that case, not an error.
+// `updated_by` / `updated_at` are not touched: re-sealing is not a configuration change by anyone; the
+// use case files the system entry in the same transaction.
+func (s *PortalSyncStore) ResealKey(ctx context.Context, tx *store.ScopedTx, apiURL string, oldSealed,
+	newSealed []byte) (bool, error) {
+
+	if len(newSealed) == 0 {
+		return false, errors.New("portal_sync_settings: reseal without a sealed key")
+	}
+	const stmt = `UPDATE portal_sync_settings SET api_key_sealed = $4
+		WHERE tenant_id = $1 AND api_url = $2 AND api_key_sealed = $3`
+	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), apiURL, oldSealed, newSealed)
+	if err != nil {
+		return false, fmt.Errorf("portal_sync_settings: reseal: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("portal_sync_settings: reseal: %w", err)
+	}
+	return n == 1, nil
+}
+
 // --- categories ------------------------------------------------------------------------------------
 
 const portalCategoryCols = `id, external_id, name, target_kind, is_selected, created_at, updated_at`

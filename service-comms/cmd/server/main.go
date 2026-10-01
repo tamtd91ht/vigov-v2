@@ -33,6 +33,7 @@ import (
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/storage"
@@ -320,9 +321,39 @@ func main() {
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
 	// only through their published-only reads.
+	//
+	// THE PUBLIC RATE LIMIT (ratelimit.PublicNewsRead, owner 02/10/2026) counts in the same Redis as the
+	// idempotency store (REDIS_DSN — config.Redis is declared, so staging and prod refuse to start
+	// without it). In DEV without Redis the counter fails every count and this policy FAILS OPEN by the
+	// owner's decision: the routes serve and one security warning per minute says the bound is off.
+	var publicCounter ratelimit.Counter = unavailableCounter{}
+	if dsn := cfg.RedisDSN(); dsn != "" {
+		rc, err := ratelimit.NewRedisCounter(dsn.Lo())
+		if err != nil {
+			log.Error("không mở được Redis cho giới hạn tần suất tuyến công khai", "service", "comms", "err", err)
+			os.Exit(1)
+		}
+		publicCounter = rc
+	}
+	publicLimiter, err := ratelimit.New(publicCounter, ratelimit.PublicNewsRead)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất tuyến công khai", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	// THE PUBLIC HOST LOOKUP IS CACHED (02/10/2026): the same tenant.CachedDirectory, the same
+	// TENANT_CACHE_TTL and TranMuc ceiling as the staff edge, misses remembered — so a flood of one
+	// unknown host costs one ResolveHost per TTL, not one per request (the limiter above counts only
+	// AFTER the lookup). Asked through XaTheoHost, which never caches an error, so an outage stays a 503.
+	//
+	// ITS OWN INSTANCE, NOT `directory`: the staff edge asks through ByHost, which cannot tell an
+	// outage from an unknown host and caches both as a miss. Shared, a registry blip seen by a staff
+	// request would serve residents an empty notice board for one TTL instead of the 503 this surface
+	// promises (TraXaTheoHost). The cost is a second bounded map; comms never calls Forget on either.
+	publicDirectory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL())
 	muxCongKhai := http.NewServeMux()
 	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{
-		Xa:          nenTang,
+		Limiter:     publicLimiter,
+		Xa:          publicDirectory,
 		NoiDung:     noiDung,
 		DanhMuc:     danhMucNoiDung,
 		CoverImages: covers,
@@ -552,6 +583,15 @@ func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staf
 // session, and nothing on this surface writes. The commune is resolved per request from `?host=`.
 //
 // A NAMED FUNCTION so main_test.go can drive the real chain.
+// unavailableCounter is the public rate-limit store when REDIS_DSN is unset (dev only — staging and
+// prod refuse to start without it). It fails every count; ratelimit.PublicNewsRead fails OPEN, so the
+// public routes serve and the limiter warns once per window that its bound is off.
+type unavailableCounter struct{}
+
+func (unavailableCounter) Incr(context.Context, string, time.Duration) (int64, time.Duration, error) {
+	return 0, 0, errors.New("REDIS_DSN chưa đặt")
+}
+
 func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
 	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)

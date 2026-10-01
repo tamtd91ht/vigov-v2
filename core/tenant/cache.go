@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -87,6 +88,58 @@ func (c *CachedDirectory) ByHost(ctx context.Context, host string) (Tenant, bool
 	c.ghiCoTran(host, cacheEntry{t: t, ok: ok, hetHan: c.now().Add(c.ttl)})
 	c.mu.Unlock()
 	return t, ok
+}
+
+// HostResolver is a Directory that can say WHY a lookup found nothing — the three outcomes
+// CommuneLookup has, by host: err != nil "could not ask", ok=false "no commune holds this host".
+// *platformclient.Directory implements it.
+type HostResolver interface {
+	// vi-name-ok: the existing method name of core/platformclient.Directory, which this must match
+	XaTheoHost(ctx context.Context, host string) (Tenant, bool, error)
+}
+
+// ErrNoHostResolver — XaTheoHost was called on a CachedDirectory whose inner directory cannot report
+// an outage. A wiring fault; refused rather than folded into "unknown host".
+var ErrNoHostResolver = errors.New("tenant: the wrapped directory cannot tell an outage from an unknown host")
+
+// XaTheoHost is ByHost for a caller that must answer an outage differently from an unknown host —
+// the comms public news routes, where "registry down" is a 503 and never an empty page that reads
+// as "this commune published nothing".
+//
+// THE SAME CACHE AS ByHost: the same map, TTL and TranMuc ceiling, and misses remembered for the
+// same reason (a scan for communes must not set the registry's query rate). THE ONE DIFFERENCE:
+// an ERROR IS NEVER CACHED — CachedCommune's rule — so a registry blip costs a retry on the next
+// request instead of one TTL of wrong negatives.
+//
+// DO NOT MIX THE TWO METHODS ON ONE INSTANCE when the error matters: ByHost stores a transport
+// failure as a miss (it cannot tell them apart), and XaTheoHost would then serve that miss. A caller
+// that needs the outage reported uses its own instance through this method only.
+//
+// vi-name-ok: implements HostResolver, whose method name is platformclient's
+func (c *CachedDirectory) XaTheoHost(ctx context.Context, host string) (Tenant, bool, error) {
+	r, ok := c.inner.(HostResolver)
+	if !ok {
+		return Tenant{}, false, ErrNoHostResolver
+	}
+	if c.ttl <= 0 {
+		return r.XaTheoHost(ctx, host)
+	}
+
+	c.mu.RLock()
+	e, found := c.entries[host]
+	c.mu.RUnlock()
+	if found && c.now().Before(e.hetHan) {
+		return e.t, e.ok, nil
+	}
+
+	t, ok, err := r.XaTheoHost(ctx, host)
+	if err != nil {
+		return Tenant{}, false, err
+	}
+	c.mu.Lock()
+	c.ghiCoTran(host, cacheEntry{t: t, ok: ok, hetHan: c.now().Add(c.ttl)})
+	c.mu.Unlock()
+	return t, ok, nil
 }
 
 // TranMuc bounds the map. Reached only by something that is not ordinary traffic.

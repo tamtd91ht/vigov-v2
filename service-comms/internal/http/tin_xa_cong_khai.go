@@ -57,6 +57,7 @@ import (
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -65,7 +66,8 @@ import (
 )
 
 // TraXaTheoHost is the one platform read the public surface makes. *platformclient.Directory
-// satisfies it — the SAME client main() already dials for the Host edge.
+// satisfies it — the SAME client main() already dials for the Host edge — and main() wraps it in a
+// tenant.CachedDirectory of its own (02/10/2026: TENANT_CACHE_TTL, misses cached, errors never).
 //
 // NOT tenant.Directory: its bool folds an outage into "unknown Host", which is right for the staff edge
 // (404 either way) and wrong here, where an outage must be 503 and never an empty list that reads as
@@ -105,6 +107,12 @@ type DepsCongKhai struct {
 	// Audio resolves `audio_url`: a short-lived presigned GET of a broadcast's PRIVATE original (ADR 0067
 	// §4.2). *app.ContentAudio satisfies it.
 	Audio PublicAudioLinks
+
+	// Limiter is ratelimit.PublicNewsRead (owner, 02/10/2026): 120 requests per minute per (host, client
+	// network), the key prefixed `t:<tenant_id>` once the host resolved (rule 1, invariant 7). Applied in
+	// xaTheoHost, AFTER the platform answered, because the commune is not known before. FAILS OPEN on a
+	// Redis outage — the owner's explicit exception, ratelimit.Policy.failOpen.
+	Limiter *ratelimit.Limiter
 
 	Log *slog.Logger
 }
@@ -389,6 +397,16 @@ func viet404Tin(w http.ResponseWriter) {
 //
 // The host is logged on an outage because it is a domain, not a person, and it has passed
 // domain.HopLeTenMienXa, so it cannot carry a log-injection payload.
+//
+// THE RATE LIMIT (ratelimit.PublicNewsRead, owner 02/10/2026) IS COUNTED HERE, on all three routes,
+// because this is the first point where the commune is known: ok=false also covers "429 written".
+// The SAME limit, at the same threshold, applies to a host no commune holds — keyed by the host, with
+// no tenant prefix — so a 429 does not tell a client which domains are communes (PublicHostIPKey).
+//
+// The platform lookup above runs BEFORE the count (the commune must be known to scope the key). It is
+// cached per host (main.go, tenant.CachedDirectory.XaTheoHost), so repeating one host costs one
+// ResolveHost per TTL; a flood of DISTINCT host names still costs one each until the cache's TranMuc
+// ceiling, after which misses are no longer remembered (that cache's stated trade-off).
 func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, host, viec string) (tenant.Tenant, bool, bool) {
 	xa, co, err := h.d.Xa.XaTheoHost(r.Context(), host)
 	if err != nil {
@@ -397,7 +415,25 @@ func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, hos
 			"Hệ thống đang bận. Vui lòng thử lại sau ít phút.", "")
 		return tenant.Tenant{}, false, false
 	}
-	if !co || !xa.Active || !xa.ID.Valid() {
+	resolved := co && xa.Active && xa.ID.Valid()
+	ctx := r.Context()
+	var attrs []any
+	if resolved {
+		ctx = tenant.Into(ctx, xa.ID)
+		attrs = []any{"xa", string(xa.ID)}
+	}
+	key, err := ratelimit.PublicHostIPKey(ctx, resolved, host, httpx.ClientIP(r))
+	if err != nil {
+		// Unreachable — resolved implies ctx carries the commune — and refused if ever reached: an
+		// unscoped counter for a commune's route is the default rule 1 forbids.
+		h.d.Log.ErrorContext(ctx, viec+": không dựng được khoá giới hạn tần suất", "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return tenant.Tenant{}, false, false
+	}
+	if !ratelimit.Gate(w, r.WithContext(ctx), h.d.Limiter, key, h.d.Log, attrs...) {
+		return tenant.Tenant{}, false, false
+	}
+	if !resolved {
 		return tenant.Tenant{}, false, true
 	}
 	return xa, true, true

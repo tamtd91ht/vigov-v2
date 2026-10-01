@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -141,5 +142,57 @@ func TestPortalSourceCreditIsEscaped(t *testing.T) {
 	}
 	if PortalExternalItemID(PortalProviderCityShared, "9001") != "cttdt-danang:9001" {
 		t.Error("external id is not namespaced by provider")
+	}
+}
+
+// D1 (owner, 02/10/2026): 90 days and 100 items are CEILINGS; 30 selected categories at most.
+func TestPortalCeilingsArePinned(t *testing.T) {
+	if PortalWindowDaysMax != 90 || PortalMaxItemsMax != 100 || PortalSelectedCategoriesMax != 30 {
+		t.Fatalf("ceilings = %d / %d / %d, the owner decided 90 / 100 / 30",
+			PortalWindowDaysMax, PortalMaxItemsMax, PortalSelectedCategoriesMax)
+	}
+	if PortalDefaultWindowDays != PortalWindowDaysMax || PortalDefaultMaxItems != PortalMaxItemsMax {
+		t.Fatal("the defaults are the ceilings")
+	}
+}
+
+func TestPortalSettingsClamped(t *testing.T) {
+	s := DefaultPortalSyncSettings()
+	if got, lowered := s.Clamped(); lowered || got != s {
+		t.Fatalf("a row at the defaults was changed: %+v", got)
+	}
+	s.WindowDays, s.MaxItemsPerRun = 3650, 1000
+	got, lowered := s.Clamped()
+	if !lowered || got.WindowDays != 90 || got.MaxItemsPerRun != 100 {
+		t.Fatalf("clamped = %+v, %v", got, lowered)
+	}
+	s.WindowDays, s.MaxItemsPerRun = 7, 5
+	if got, lowered := s.Clamped(); lowered || got.WindowDays != 7 || got.MaxItemsPerRun != 5 {
+		t.Fatalf("a value under the ceiling was changed: %+v", got)
+	}
+}
+
+func TestNormalizePortalSelectionRefusesMoreThanThirtySelected(t *testing.T) {
+	mk := func(n, unticked int) []PortalCategorySelection {
+		out := make([]PortalCategorySelection, 0, n+unticked)
+		for i := 0; i < n+unticked; i++ {
+			out = append(out, PortalCategorySelection{ExternalID: fmt.Sprintf("%d", i+1), Name: "C", TargetKind: "tin-tuc",
+				IsSelected: i < n})
+		}
+		return out
+	}
+	if _, err := NormalizePortalSelection(mk(31, 0)); !errors.Is(err, ErrPortalTooManySelected) {
+		t.Fatalf("31 selected: %v", err)
+	}
+	if _, err := NormalizePortalSelection(mk(30, 50)); err != nil {
+		t.Fatalf("30 selected and 50 unticked is allowed: %v", err)
+	}
+}
+
+func TestValidContentStatus(t *testing.T) {
+	for s, ok := range map[string]bool{"an": true, "cho-duyet": true, "dang-hien": true, "": false, "Cho-Duyet": false, "xoa": false} {
+		if ValidContentStatus(s) != ok {
+			t.Errorf("ValidContentStatus(%q) = %v", s, !ok)
+		}
 	}
 }

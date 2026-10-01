@@ -58,8 +58,9 @@ func (f *fakePortalSync) Settings(ctx context.Context) (app.PortalSyncSettingsVi
 	return f.view, f.err
 }
 
-func (f *fakePortalSync) CategoryTree(ctx context.Context) (app.PortalCategoryTree, error) {
+func (f *fakePortalSync) CategoryTree(ctx context.Context, actor audit.Actor) (app.PortalCategoryTree, error) {
 	f.note(ctx)
+	f.lastActor = actor
 	return f.tree, f.err
 }
 
@@ -196,13 +197,14 @@ type portalRoute struct {
 }
 
 // sixRoutes — every permission case runs on every route. The wrong key is real and adjacent: a reader
-// of the content register (`content.read`) must not change the sync, and an administrator of
+// of the content register (`content.read`) must not change the sync — nor make the service spend the
+// commune's portal key on the live category tree (owner, 02/10/2026, D3) — and an administrator of
 // catalogues (`admin.lookup`) must not read it.
 func sixRoutes() []portalRoute {
 	return []portalRoute{
 		{"GET settings", http.MethodGet, portalSettingsPath, "", "content.read", "admin.lookup", http.StatusOK},
 		{"PUT settings", http.MethodPut, portalSettingsPath, putPortalBody, "content.update", "content.read", http.StatusOK},
-		{"GET categories", http.MethodGet, portalCategoriesPath, "", "content.read", "admin.lookup", http.StatusOK},
+		{"GET categories", http.MethodGet, portalCategoriesPath, "", "content.update", "content.read", http.StatusOK},
 		{"PUT categories", http.MethodPut, portalCategoriesPath, putCategoriesBody, "content.update", "content.read", http.StatusOK},
 		{"GET runs", http.MethodGet, portalRunsPath, "", "content.read", "admin.lookup", http.StatusOK},
 		{"POST runs", http.MethodPost, portalRunsPath, "", "content.update", "content.read", http.StatusAccepted},
@@ -286,7 +288,7 @@ func TestPortalRoutes_RightPermissionRightCommune(t *testing.T) {
 			if s.fake.calls != 1 || s.fake.lastCommune != xaA {
 				t.Fatalf("use case ran %d times in commune %q, want once in %q", s.fake.calls, s.fake.lastCommune, xaA)
 			}
-			if tc.method == http.MethodGet {
+			if tc.method == http.MethodGet && tc.path != portalCategoriesPath {
 				return
 			}
 			// Rule 6, invariant 8: the BUSINESS CODE, never the internal id.
@@ -349,7 +351,11 @@ func TestPortalErrorsMapToStatuses(t *testing.T) {
 		"portal odd status":  {http.MethodGet, portalCategoriesPath, "", &app.PortalCallError{Class: "http-418"}, http.StatusBadGateway, "portal_http_418"},
 		"run in progress":    {http.MethodPost, portalRunsPath, "", app.ErrPortalRunInProgress, http.StatusConflict, "portal_sync_in_progress"},
 		"runner stopped":     {http.MethodPost, portalRunsPath, "", app.ErrPortalRunnerStopped, http.StatusServiceUnavailable, "portal_sync_unavailable"},
-		"store broken":       {http.MethodGet, portalRunsPath, "", errors.New("cơ sở dữ liệu không phản hồi secret_code=x"), http.StatusInternalServerError, "internal"},
+		// 02/10/2026: R1's capacity refusal and D1's category ceiling.
+		"runner busy":       {http.MethodPost, portalRunsPath, "", app.ErrPortalRunnerBusy, http.StatusServiceUnavailable, "portal_sync_busy"},
+		"too many selected": {http.MethodPut, portalCategoriesPath, putCategoriesBody, domain.ErrPortalTooManySelected, http.StatusUnprocessableEntity, "too_many_categories"},
+		"redirect refused":  {http.MethodGet, portalCategoriesPath, "", &app.PortalCallError{Class: "redirect-refused"}, http.StatusBadGateway, "portal_redirect_refused"},
+		"store broken":      {http.MethodGet, portalRunsPath, "", errors.New("cơ sở dữ liệu không phản hồi secret_code=x"), http.StatusInternalServerError, "internal"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newPortalServer(t)

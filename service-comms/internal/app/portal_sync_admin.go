@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -101,12 +102,18 @@ type PortalSyncAdmin struct {
 	client   PortalClient
 	runner   *PortalSyncRunner
 	newID    func() (string, error)
+	log      *slog.Logger // the runner's: one stream for the security events of both (R2)
 }
 
 // NewPortalSyncAdmin builds the use cases. runner is the process's one runner (manual runs).
 func NewPortalSyncAdmin(db *store.DB, repo PortalSyncRepo, envelope *crypto.Envelope, client PortalClient,
 	runner *PortalSyncRunner) *PortalSyncAdmin {
-	return &PortalSyncAdmin{db: db, repo: repo, envelope: envelope, client: client, runner: runner, newID: ulid.Moi}
+	log := slog.Default()
+	if runner != nil && runner.log != nil {
+		log = runner.log
+	}
+	return &PortalSyncAdmin{db: db, repo: repo, envelope: envelope, client: client, runner: runner, newID: ulid.Moi,
+		log: log}
 }
 
 // Settings reads the commune's settings; an unconfigured commune gets the defaults and
@@ -121,6 +128,9 @@ func (uc *PortalSyncAdmin) Settings(ctx context.Context) (PortalSyncSettingsView
 	if err != nil {
 		return PortalSyncSettingsView{}, fmt.Errorf("dong_bo_cong: đọc cấu hình cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
+	// D1: a row saved above today's ceilings READS at the ceilings — what the next run will use and what
+	// the next save will write. The row itself is not rewritten (rule 7).
+	st, _ = st.Clamped()
 	v.Settings, v.Configured = st, true
 	return v, nil
 }
@@ -149,7 +159,8 @@ func (uc *PortalSyncAdmin) SaveSettings(ctx context.Context, req SavePortalSyncS
 			return PortalSyncSettingsView{}, err
 		}
 		var err error
-		if newSealed, err = uc.envelope.Seal(ctx, req.APIKey, portalKeyAAD(ctx)); err != nil {
+		// BOUND TO THE api_url BEING SAVED (R6): the same trimmed value MergePortalSyncSettings stores.
+		if newSealed, err = uc.envelope.Seal(ctx, req.APIKey, portalKeyAAD(ctx, req.Input.APIURL)); err != nil {
 			return PortalSyncSettingsView{}, fmt.Errorf("dong_bo_cong: niêm mã bảo mật: %w", err)
 		}
 	}
@@ -162,7 +173,10 @@ func (uc *PortalSyncAdmin) SaveSettings(ctx context.Context, req SavePortalSyncS
 		}
 		base := domain.DefaultPortalSyncSettings()
 		if found {
-			base = before
+			// D1: merged onto the CLAMPED row, so an omitted window/ceiling saves the allowed value instead
+			// of refusing the whole form for a number staff did not type. The audit diff below compares
+			// against the row AS STORED, so lowering 365 → 90 on that save is recorded.
+			base, _ = before.Clamped()
 		}
 		after, err := domain.MergePortalSyncSettings(base, req.Input)
 		if err != nil {
@@ -237,8 +251,9 @@ func diffPortalSettings(before, after domain.PortalSyncSettings, beforeSide bool
 	return out
 }
 
-// endpoint opens the stored key for a call.
-func (uc *PortalSyncAdmin) endpoint(ctx context.Context) (portal.Endpoint, func(), error) {
+// endpoint opens the stored key for a call. actor names who asked, for the security event of a refused
+// address (R2).
+func (uc *PortalSyncAdmin) endpoint(ctx context.Context, actor audit.Actor) (portal.Endpoint, func(), error) {
 	if uc.envelope == nil {
 		return portal.Endpoint{}, nil, crypto.ErrNotConfigured
 	}
@@ -248,26 +263,33 @@ func (uc *PortalSyncAdmin) endpoint(ctx context.Context) (portal.Endpoint, func(
 	}
 	base, err := portal.ParseBase(st.APIURL)
 	if err != nil {
+		if portal.IsRefusal(err) {
+			logOutboundRefused(ctx, uc.log, actor.ID, "", "api", err)
+		}
 		return portal.Endpoint{}, nil, &PortalCallError{Class: portal.ClassOf(err)}
 	}
-	key, err := uc.envelope.Open(ctx, sealed, portalKeyAAD(ctx))
+	key, err := openPortalKey(ctx, uc.db, uc.repo, uc.envelope, st, sealed, uc.log)
 	if err != nil {
 		return portal.Endpoint{}, nil, fmt.Errorf("dong_bo_cong: mở mã bảo mật cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
-	return portal.Endpoint{Base: base, Key: secret.Secret(key)}, func() { clear(key) }, nil
+	return portal.Endpoint{Base: base, Key: key}, func() { clear(key) }, nil
 }
 
 // CategoryTree asks the portal for its category tree NOW (ADR 0067 §2 "Chế độ đăng" #4: the tree is
 // never copied) and merges the commune's stored choice into it. NOT AUDITED: it reads, in the commune
-// it belongs to, from the host the commune saved — no destination a person chose at this moment.
-func (uc *PortalSyncAdmin) CategoryTree(ctx context.Context) (PortalCategoryTree, error) {
-	ep, done, err := uc.endpoint(ctx)
+// it belongs to, from the host the commune saved — no destination a person chose at this moment. Its
+// route needs `content.update` (owner, 02/10/2026, D3): the call spends the commune's secret.
+func (uc *PortalSyncAdmin) CategoryTree(ctx context.Context, actor audit.Actor) (PortalCategoryTree, error) {
+	ep, done, err := uc.endpoint(ctx, actor)
 	if err != nil {
 		return PortalCategoryTree{}, err
 	}
 	defer done()
 	live, err := uc.client.Categories(ctx, ep)
 	if err != nil {
+		if portal.IsRefusal(err) {
+			logOutboundRefused(ctx, uc.log, actor.ID, "", "api", err)
+		}
 		return PortalCategoryTree{}, &PortalCallError{Class: portal.ClassOf(err)}
 	}
 	stored, err := uc.repo.Categories(ctx)
@@ -352,8 +374,18 @@ func (uc *PortalSyncAdmin) SaveCategories(ctx context.Context, sel []domain.Port
 					"sau":   map[string]any{"name": next.Name, "target_kind": next.TargetKind, "is_selected": next.IsSelected}})
 			}
 		}
+		selected := 0
 		for _, c := range byExt {
 			result = append(result, c)
+			if c.IsSelected {
+				selected++
+			}
+		}
+		// D1: the ceiling is on what the commune HAS selected after this save — the rows absent from the
+		// body keep their state, so the request alone cannot decide it. Refused before the entry: the
+		// transaction rolls back every row above.
+		if err := domain.CheckPortalSelectedCount(selected); err != nil {
+			return err
 		}
 		if len(changes) == 0 {
 			return nil
@@ -363,6 +395,9 @@ func (uc *PortalSyncAdmin) SaveCategories(ctx context.Context, sel []domain.Port
 			time.Now().UTC(), map[string]any{"changes": changes})
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrPortalTooManySelected) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("dong_bo_cong: lưu chuyên mục cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
 	sortPortalCategories(result)

@@ -49,14 +49,18 @@ func TestPortalSettingsSave(t *testing.T) {
 		if bytes.Contains(sealed, []byte(portalTestKey)) {
 			t.Fatal("the key is stored in the clear")
 		}
-		opened, err := r.env.Open(r.ctx, sealed, portalKeyAAD(r.ctx))
+		opened, err := r.env.Open(r.ctx, sealed, portalKeyAAD(r.ctx, in.APIURL))
 		if err != nil || string(opened) != portalTestKey {
 			t.Fatalf("the sealed key does not open back: %v", err)
 		}
 		// Bound to THIS commune: under another commune's binding it refuses.
 		other := tenant.Into(context.Background(), xaB)
-		if _, err := r.env.Open(other, sealed, portalKeyAAD(other)); err == nil {
+		if _, err := r.env.Open(other, sealed, portalKeyAAD(other, in.APIURL)); err == nil {
 			t.Fatal("the sealed key opens in another commune")
+		}
+		// R6: bound to THIS api_url — under another address's binding it refuses too.
+		if _, err := r.env.Open(r.ctx, sealed, portalKeyAAD(r.ctx, "https://other.example.gov.vn/api")); err == nil {
+			t.Fatal("the sealed key opens for another api_url")
 		}
 		au := r.sql.auditsOf(ActionSavePortalSyncSettings)
 		if len(au) != 1 || !strings.Contains(au[0].delta, `"api_key_changed":true`) || au[0].actor != "CB-00123" ||
@@ -220,7 +224,7 @@ func TestPortalSaveCategories(t *testing.T) {
 func TestPortalCategoryTreeIsAskedLiveAndMerged(t *testing.T) {
 	r := newPortalRig(t)
 	r.client.cats = []portal.Category{{ExternalID: "120", Name: "Tin tức"}, {ExternalID: "999", Name: "Chưa chọn"}}
-	tree, err := r.admin.CategoryTree(r.ctx)
+	tree, err := r.admin.CategoryTree(r.ctx, audit.Actor{ID: "CB-00123", Kind: "staff"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +238,7 @@ func TestPortalCategoryTreeIsAskedLiveAndMerged(t *testing.T) {
 		t.Errorf("keys = %v", r.client.keys)
 	}
 	r.client.catErr = portal.ErrAddressRefused
-	_, err = r.admin.CategoryTree(r.ctx)
+	_, err = r.admin.CategoryTree(r.ctx, audit.Actor{ID: "CB-00123", Kind: "staff"})
 	var call *PortalCallError
 	if !errors.As(err, &call) || call.Class != "address-refused" || !errors.Is(err, ErrPortalUnavailable) {
 		t.Fatalf("err = %v", err)

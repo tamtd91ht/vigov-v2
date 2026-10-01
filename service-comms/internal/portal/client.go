@@ -25,6 +25,7 @@ package portal
 
 import (
 	"bytes"
+	"container/heap"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -47,7 +48,15 @@ import (
 
 // MaxRedirects — the owner's answer of 01/10/2026 (ADR 0067 Còn mở #5): at most three redirects, and
 // every target must pass CheckURL like the api_url itself; otherwise the call fails.
+//
+// NARROWED 02/10/2026 (owner, D4): every target must also stay on the SAME HOST as the api_url — for
+// the API calls exactly as for the images. "Another .gov.vn host" is no longer enough: the key travels
+// in the query string, and a redirect is the portal choosing where the next request goes. A hop to any
+// other host refuses the call; the run records it per category.
 const MaxRedirects = 3
+
+// MaxKeepPerCategory bounds Articles' keep — the run's MaxItemsPerRun ceiling (domain, owner 02/10).
+const MaxKeepPerCategory = 100
 
 // The bounds. Vendor numbers, chosen and stated, not customer figures.
 const (
@@ -146,9 +155,10 @@ func (e Endpoint) endpoint(elem string, q url.Values) *url.URL {
 	return &u
 }
 
-// redirectPolicy returns the CheckRedirect for one call. sameHost (images) also refuses a hop off the
-// host the call started on — ADR 0067 §2 decision 2 says images come from the api_url's host only,
-// and a redirect would otherwise be a way around it.
+// redirectPolicy returns the CheckRedirect for one call: at most MaxRedirects hops, each passing
+// CheckURL AND staying on sameHost — the api_url's host, for every call (D4, 02/10/2026; images since
+// ADR 0067 §2 decision 2). sameHost is required: an empty one refuses every hop rather than meaning
+// "any host", so a caller that forgets it fails closed.
 func redirectPolicy(sameHost string) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if len(via) > MaxRedirects {
@@ -157,7 +167,7 @@ func redirectPolicy(sameHost string) func(*http.Request, []*http.Request) error 
 		if CheckURL(req.URL) != nil {
 			return ErrRedirectRefused
 		}
-		if sameHost != "" && !strings.EqualFold(req.URL.Hostname(), sameHost) {
+		if sameHost == "" || !strings.EqualFold(req.URL.Hostname(), sameHost) {
 			return ErrRedirectRefused
 		}
 		return nil
@@ -231,7 +241,7 @@ func (c *Client) Categories(ctx context.Context, e Endpoint) ([]Category, error)
 	ctx, cancel := context.WithTimeout(ctx, categoriesTimeout)
 	defer cancel()
 	body, err := c.get(ctx, e.endpoint("chuyenmuc", url.Values{"secret_code": {string(e.Key.Lo())}}),
-		maxCategoriesBytes, "")
+		maxCategoriesBytes, e.Base.Hostname())
 	if err != nil {
 		return nil, err
 	}
@@ -303,19 +313,53 @@ type wireArticle struct {
 	Deleted2   json.RawMessage `json:"isDeleted"`
 }
 
-// ArticleBatch is one category's answer: the articles kept (dated, published at or after `since`), and
-// how many usable rows the portal returned in total — this category's share of `fetched_count`.
+// ArticleBatch is one category's answer: the articles kept (dated, published at or after `since`, NOT
+// already held by the commune, the newest `keep` of those, newest first), how many usable rows the
+// portal returned in total — this category's share of `fetched_count` — and how many in-window rows
+// were already held, live or soft-deleted.
 type ArticleBatch struct {
 	Articles []Article
 	Read     int
+	// HeldLive / HeldDeleted count the in-window rows HeldFunc reported, per category (an article filed
+	// under two categories is counted in both; the caller deduplicates if it needs to).
+	HeldLive    int
+	HeldDeleted int
 }
 
-// Articles reads ONE category and keeps the articles published at or after since. Undated rows are
+// HeldFunc reports which of articleIDs — the PORTAL'S OWN ids, one chunk of one category — the commune
+// already holds: id → true when the holder is soft-deleted, false when live, absent when not held. The
+// caller owns the namespacing and the store (this package knows no SQL); the commune is in ctx.
+type HeldFunc func(ctx context.Context, articleIDs []string) (map[string]bool, error)
+
+// heldChunk is how many in-window candidates are buffered before one HeldFunc call: one query per 200
+// rows, and the most decoded articles held at once besides the heap.
+const heldChunk = 200
+
+// Articles reads ONE category and keeps the NEWEST keep articles published at or after since THAT THE
+// COMMUNE DOES NOT ALREADY HOLD (held, soft-deleted included, is asked BEFORE an article may take a heap
+// slot — follow-up of 02/10/2026). keep is 1..MaxKeepPerCategory; the run passes its MaxItemsPerRun.
+//
+// WHY THE LOOKUP SITS BEFORE THE HEAP: kept after it, the newest keep rows of a category would be the
+// same already-imported rows run after run, and an older in-window article would never be reached — a
+// backlog larger than one run's ceiling would never drain. Asked first, already-held rows never occupy
+// a slot, so each run takes the newest keep NOT YET imported and the next run continues below them.
+//
+// Memory stays bounded: the heap (keep) plus one chunk (heldChunk) of decoded articles. Undated rows are
 // dropped with the old ones: a row the window cannot place is not imported under today's date.
-func (c *Client) Articles(ctx context.Context, e Endpoint, categoryID string, since time.Time) (ArticleBatch, error) {
+func (c *Client) Articles(ctx context.Context, e Endpoint, categoryID string, since time.Time, keep int,
+	held HeldFunc) (ArticleBatch, error) {
+
 	categoryID = strings.TrimSpace(categoryID)
 	if categoryID == "" || categoryID == "0" {
 		return ArticleBatch{}, ErrCategoryRequired
+	}
+	if keep < 1 || keep > MaxKeepPerCategory {
+		return ArticleBatch{}, ErrKeepInvalid
+	}
+	if held == nil {
+		// Without it every held article would compete for a slot — the drain this exists for is lost,
+		// silently. Refused, never defaulted to "nothing is held".
+		return ArticleBatch{}, ErrHeldLookup
 	}
 	if len(e.Key) == 0 || e.Base == nil {
 		return ArticleBatch{}, ErrMissingCredential
@@ -323,16 +367,46 @@ func (c *Client) Articles(ctx context.Context, e Endpoint, categoryID string, si
 	ctx, cancel := context.WithTimeout(ctx, articlesTimeout)
 	defer cancel()
 	q := url.Values{"lstChuyenMuc": {categoryID}, "secret_code": {string(e.Key.Lo())}}
-	body, err := c.get(ctx, e.endpoint("tintheochuyenmuc", q), maxArticlesBytes, "")
+	body, err := c.get(ctx, e.endpoint("tintheochuyenmuc", q), maxArticlesBytes, e.Base.Hostname())
 	if err != nil {
 		return ArticleBatch{}, err
 	}
-	return parseArticles(body, since)
+	return parseArticles(ctx, body, since, keep, held)
 }
 
-// parseArticles streams the array: one element decoded at a time, the ones outside the window dropped
-// at once, so the kept articles are what stays in memory — not every row of a large category.
-func parseArticles(body []byte, since time.Time) (ArticleBatch, error) {
+// newestArticles is a bounded min-heap of the newest articles seen. Its root is the WORST kept one (the
+// oldest; on a tie, the later in the portal's answer) and is evicted when a better one arrives, so a
+// category answering thousands of in-window rows holds keep decoded articles, never all of them.
+type newestArticles []rankedArticle
+
+type rankedArticle struct {
+	a   Article
+	pos int // position in the portal's answer: ties keep the portal's order
+}
+
+// worse reports whether x ranks below y: older, or as old and later in the answer.
+func worse(x, y rankedArticle) bool {
+	if !x.a.PublishedAt.Equal(y.a.PublishedAt) {
+		return x.a.PublishedAt.Before(y.a.PublishedAt)
+	}
+	return x.pos > y.pos
+}
+
+func (h newestArticles) Len() int           { return len(h) }
+func (h newestArticles) Less(i, j int) bool { return worse(h[i], h[j]) }
+func (h newestArticles) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *newestArticles) Push(x any)        { *h = append(*h, x.(rankedArticle)) }
+func (h *newestArticles) Pop() any {
+	old := *h
+	x := old[len(old)-1]
+	*h = old[:len(old)-1]
+	return x
+}
+
+// parseArticles streams the array: one element decoded at a time, the ones outside the window dropped at
+// once, the rest buffered heldChunk at a time, the commune's holdings asked once per chunk, and only the
+// newest keep NOT-held ones kept (newestArticles). The result is newest first, ties in the portal's order.
+func parseArticles(ctx context.Context, body []byte, since time.Time, keep int, held HeldFunc) (ArticleBatch, error) {
 	dec := json.NewDecoder(bytes.NewReader(body))
 	tok, err := dec.Token()
 	if err != nil {
@@ -342,6 +416,45 @@ func parseArticles(body []byte, since time.Time) (ArticleBatch, error) {
 		return ArticleBatch{}, ErrParse
 	}
 	var out ArticleBatch
+	kept := make(newestArticles, 0, keep)
+	chunk := make([]rankedArticle, 0, heldChunk)
+	offer := func(cand rankedArticle) {
+		switch {
+		case len(kept) < keep:
+			heap.Push(&kept, cand)
+		case worse(kept[0], cand):
+			kept[0] = cand
+			heap.Fix(&kept, 0)
+		}
+	}
+	flush := func() error {
+		if len(chunk) == 0 {
+			return nil
+		}
+		ids := make([]string, len(chunk))
+		for i, c := range chunk {
+			ids[i] = c.a.ExternalID
+		}
+		// The caller's error is DROPPED, like every error here: this package returns classes only.
+		have, err := held(ctx, ids)
+		if err != nil {
+			return ErrHeldLookup
+		}
+		for _, c := range chunk {
+			if deleted, ok := have[c.a.ExternalID]; ok {
+				if deleted {
+					out.HeldDeleted++
+				} else {
+					out.HeldLive++
+				}
+				continue // never occupies a slot
+			}
+			offer(c)
+		}
+		chunk = chunk[:0]
+		return nil
+	}
+	pos := 0
 	for dec.More() {
 		var r wireArticle
 		if err := dec.Decode(&r); err != nil {
@@ -360,22 +473,40 @@ func parseArticles(body []byte, since time.Time) (ArticleBatch, error) {
 		if at.IsZero() || at.Before(since) {
 			continue
 		}
+		cand := rankedArticle{pos: pos, a: Article{ExternalID: id, PublishedAt: at}}
+		pos++
+		// The heap's worst only ever improves, so a row no better than it now can never enter: it is
+		// not buffered, not looked up and its body never unescaped. (It is not counted as held either —
+		// the held counts cover the rows that were asked about.)
+		if len(kept) == keep && !worse(kept[0], cand) {
+			continue
+		}
 		img := strings.TrimSpace(r.LargeImage)
 		if img == "" {
 			img = strings.TrimSpace(r.SmallImage)
 		}
-		out.Articles = append(out.Articles, Article{
-			ExternalID:  id,
-			Title:       title,
-			Summary:     PlainText(r.Summary),
-			BodyHTML:    strings.TrimSpace(html.UnescapeString(r.Body)), // ONCE: the portal encodes twice
-			ImageRef:    img,
-			PublishedAt: at,
-			SourceLabel: PlainText(r.Source),
-		})
+		cand.a.Title = title
+		cand.a.Summary = PlainText(r.Summary)
+		cand.a.BodyHTML = strings.TrimSpace(html.UnescapeString(r.Body)) // ONCE: the portal encodes twice
+		cand.a.ImageRef = img
+		cand.a.SourceLabel = PlainText(r.Source)
+		chunk = append(chunk, cand)
+		if len(chunk) == heldChunk {
+			if err := flush(); err != nil {
+				return ArticleBatch{}, err
+			}
+		}
 	}
 	if _, err := dec.Token(); err != nil { // the closing ']'
 		return ArticleBatch{}, ErrParse
+	}
+	if err := flush(); err != nil {
+		return ArticleBatch{}, err
+	}
+	sort.Slice(kept, func(i, j int) bool { return worse(kept[j], kept[i]) })
+	out.Articles = make([]Article, len(kept))
+	for i, k := range kept {
+		out.Articles[i] = k.a
 	}
 	return out, nil
 }

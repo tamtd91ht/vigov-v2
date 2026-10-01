@@ -889,3 +889,55 @@ func TestStaffItemCarriesTheNewFieldsOnlyWhenSet(t *testing.T) {
 		}
 	}
 }
+
+// --- 02/10/2026: `status` (C1) and `portal_category_name` (C2) --------------------------------------
+
+func TestContentListStatusFilterReachesTheStore(t *testing.T) {
+	for _, st := range []string{"an", "cho-duyet", "dang-hien"} {
+		m := dungMayChuND(t)
+		m.capQuyen(xaA, QuyenDocNoiDung)
+		w := m.goi(t, http.MethodGet, hostA, duongNoiDung+"?status="+st+"&type=tin-tuc", "", canBo(xaA))
+		doiMa(t, w, http.StatusOK)
+		if m.so.locCuoi.TrangThai != st || m.so.locCuoi.Loai != "tin-tuc" {
+			t.Errorf("%s: filter = %+v", st, m.so.locCuoi)
+		}
+	}
+}
+
+func TestContentListUnknownStatusIs400(t *testing.T) {
+	for _, st := range []string{"choduyet", "deleted", "DANG-HIEN"} {
+		m := dungMayChuND(t)
+		m.capQuyen(xaA, QuyenDocNoiDung)
+		w := m.goi(t, http.MethodGet, hostA, duongNoiDung+"?status="+st, "", canBo(xaA))
+		doiMa(t, w, http.StatusBadRequest)
+		if m.so.goiDanhSach != 0 {
+			t.Errorf("%s: an unknown status still queried", st)
+		}
+		if e := loiTra(t, w); e.Code != "invalid_request" || strings.Contains(e.Message, st) {
+			t.Errorf("%s: error = %+v", st, e)
+		}
+	}
+}
+
+func TestContentPortalCategoryNameOnListAndDetail(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenDocNoiDung)
+	synced := noiDungMau()
+	synced.PortalCategoryName = "Tin tức › Thời sự"
+	hand := noiDungMau()
+	hand.ID, hand.Nguon, hand.PortalCategoryName = "nd-002", domain.NguonThuCong, ""
+	m.so.ra = page.Result[domain.NoiDungMiniApp]{Items: []domain.NoiDungMiniApp{synced, hand}}
+	m.so.mot = synced
+
+	w := m.goi(t, http.MethodGet, hostA, duongNoiDung, "", canBo(xaA))
+	doiMa(t, w, http.StatusOK)
+	if strings.Count(w.Body.String(), `"portal_category_name":"Tin tức › Thời sự"`) != 1 ||
+		strings.Count(w.Body.String(), `"portal_category_name"`) != 1 {
+		t.Fatalf("list: the name must be on the synced item only: %s", w.Body.String())
+	}
+	w = m.goi(t, http.MethodGet, hostA, duongNoiDung+"/nd-001", "", canBo(xaA))
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"portal_category_name":"Tin tức › Thời sự"`) {
+		t.Fatalf("detail lacks the name: %s", w.Body.String())
+	}
+}

@@ -41,16 +41,27 @@ const (
 	PortalRunFailed    = "that-bai"
 )
 
-// The owner's DEFAULTS (01/10/2026, ADR 0067 §2 "Ghi" #3 and #4) and the schema's vendor BOUNDS (0013
-// CHECKs). The bounds are guards against a bogus value, not customer figures.
+// The owner's DEFAULTS (01/10/2026, ADR 0067 §2 "Ghi" #3 and #4) and CEILINGS (02/10/2026, D1).
+//
+// 90 DAYS AND 100 ITEMS ARE CEILINGS, NOT ONLY DEFAULTS (owner, 02/10/2026): a commune may choose less,
+// never more. THIS FILE IS THE ENFORCING LAYER. Migration 0013's CHECKs still admit 1..3650 days and
+// 1..1000 items — that migration is applied and its checksum is recorded, so it is not edited; a row
+// written before 02/10 may hold more, and is CLAMPED where it is read or run (PortalSyncSettings.
+// Clamped), never rewritten in bulk (rule 7). A later migration may narrow the CHECK once no row is
+// above the ceiling — the data-migration owner's call.
 const (
 	PortalDefaultIntervalHours = 6
 	PortalDefaultWindowDays    = 90
 	PortalDefaultMaxItems      = 100
 
 	PortalIntervalMax   = 24 // 0 = manual only
-	PortalWindowDaysMax = 3650
-	PortalMaxItemsMax   = 1000
+	PortalWindowDaysMax = 90
+	PortalMaxItemsMax   = 100
+
+	// PortalSelectedCategoriesMax is the owner's ceiling on the categories ONE commune has selected at
+	// once (02/10/2026, D1). A save that would leave more selected is refused (422
+	// too_many_categories); rows selected before the ceiling existed are clamped at run time.
+	PortalSelectedCategoriesMax = 30
 
 	// PortalAPIURLMaxLen is 0013's `char_length(api_url) <= 2048`.
 	PortalAPIURLMaxLen = 2048
@@ -124,15 +135,41 @@ var (
 	ErrPortalAPIURLInvalid   = errors.New("dong_bo_cong: địa chỉ API phải là https, tên máy kết thúc bằng .gov.vn, cổng 443, không kèm tài khoản, tham số hay địa chỉ IP")
 	ErrPortalPublishMode     = errors.New("dong_bo_cong: chế độ đăng phải là chờ duyệt hoặc đăng thẳng")
 	ErrPortalInterval        = errors.New("dong_bo_cong: nhịp đồng bộ phải từ 0 (chỉ chạy tay) tới 24 giờ")
-	ErrPortalWindow          = errors.New("dong_bo_cong: số ngày lấy tin không hợp lệ")
-	ErrPortalMaxItems        = errors.New("dong_bo_cong: số tin tối đa mỗi lượt không hợp lệ")
+	ErrPortalWindow          = errors.New("dong_bo_cong: số ngày lấy tin phải từ 1 tới 90")
+	ErrPortalMaxItems        = errors.New("dong_bo_cong: số tin tối đa mỗi lượt phải từ 1 tới 100")
 	ErrPortalAPIKeyShape     = errors.New("dong_bo_cong: mã bảo mật quá dài hoặc chứa ký tự không hợp lệ")
 	ErrPortalSelectionEmpty  = errors.New("dong_bo_cong: mã chuyên mục Cổng trống hoặc không hợp lệ")
 	ErrPortalSelectionName   = errors.New("dong_bo_cong: tên chuyên mục Cổng trống, quá dài hoặc chứa ký tự không hợp lệ")
 	ErrPortalSelectionKind   = errors.New("dong_bo_cong: loại nội dung của chuyên mục Cổng phải là tin tức, sự kiện hoặc thông báo")
 	ErrPortalSelectionDup    = errors.New("dong_bo_cong: một chuyên mục Cổng xuất hiện hai lần")
 	ErrPortalSelectionTooBig = errors.New("dong_bo_cong: quá nhiều chuyên mục Cổng trong một lần lưu")
+	// ErrPortalTooManySelected — the save would leave more than PortalSelectedCategoriesMax selected. 422.
+	ErrPortalTooManySelected = errors.New("dong_bo_cong: số chuyên mục Cổng được chọn vượt trần")
 )
+
+// Clamped returns s with WindowDays and MaxItemsPerRun brought down to the owner's ceilings (D1,
+// 02/10/2026). A ROW ABOVE THEM can exist — written while 0013's wider CHECK was the only bound — and
+// is NOT rewritten (rule 7): every read and every run applies this instead, so the screen shows and the
+// run uses the value the commune is allowed. The second result says whether anything was lowered.
+func (s PortalSyncSettings) Clamped() (PortalSyncSettings, bool) {
+	changed := false
+	if s.WindowDays > PortalWindowDaysMax {
+		s.WindowDays, changed = PortalWindowDaysMax, true
+	}
+	if s.MaxItemsPerRun > PortalMaxItemsMax {
+		s.MaxItemsPerRun, changed = PortalMaxItemsMax, true
+	}
+	return s, changed
+}
+
+// CheckPortalSelectedCount refuses a selection that leaves more than PortalSelectedCategoriesMax
+// categories selected.
+func CheckPortalSelectedCount(n int) error {
+	if n > PortalSelectedCategoriesMax {
+		return ErrPortalTooManySelected
+	}
+	return nil
+}
 
 // MergePortalSyncSettings applies an input onto a base (the stored row, or the defaults) and checks the
 // result. The api_url is only shape-checked here (length, characters); whether it may be CALLED is
@@ -267,6 +304,17 @@ func NormalizePortalSelection(in []PortalCategorySelection) ([]PortalCategorySel
 		seen[s.ExternalID] = true
 		out = append(out, s)
 	}
+	// The request alone already over the ceiling is refused before any statement runs; the use case
+	// checks again against the stored rows, because categories absent from the body keep their state.
+	selected := 0
+	for _, s := range out {
+		if s.IsSelected {
+			selected++
+		}
+	}
+	if err := CheckPortalSelectedCount(selected); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -303,8 +351,11 @@ type PortalSyncRun struct {
 //	Failed           an article inside the window that could not be imported
 //
 // Fetched − (Imported + Skipped* + Failed) is the rows outside the window, undated, repeated across
-// categories, or past the run's ceiling (MaxItemsPerRun bounds the articles ATTEMPTED; the rest wait
-// for the next run, which skips what this one imported).
+// categories, or past a ceiling: each category keeps only its newest MaxItemsPerRun in-window rows NOT
+// already held (R1 + follow-up, 02/10/2026), and MaxItemsPerRun bounds the articles ATTEMPTED across
+// categories. The rest WAIT for the next run, which skips what this one imported — a backlog drains.
+// Skipped* count the held rows that were asked about: a row older than a full heap's worst is not asked,
+// so it is in neither Skipped count.
 type PortalRunCounts struct {
 	Fetched         int
 	Imported        int
@@ -320,6 +371,12 @@ const (
 	PortalRunErrorInterrupted = "interrupted"
 	// PortalRunErrorNoCategory marks a run with nothing selected to read.
 	PortalRunErrorNoCategory = "no-category-selected"
+	// PortalRunErrorTimeBudget marks a run cut by its own or its tick's time budget (R1, 02/10/2026).
+	PortalRunErrorTimeBudget = "time-budget"
+	// PortalRunErrorCategoriesOverCeiling marks a run whose commune has more than
+	// PortalSelectedCategoriesMax categories selected (rows from before the ceiling): only the first ones
+	// were read.
+	PortalRunErrorCategoriesOverCeiling = "categories-over-ceiling"
 )
 
 // PortalRunOutcome is the outcome of a run from what happened:

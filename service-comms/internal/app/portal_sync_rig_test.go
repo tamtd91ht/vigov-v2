@@ -20,6 +20,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -172,6 +173,12 @@ type fakePortalRepo struct {
 	finished    []domain.PortalSyncRun
 	reapBefore  []time.Time
 	markedStart []time.Time
+	reseals     []portalReseal
+}
+
+type portalReseal struct {
+	apiURL         string
+	old, newSealed []byte
 }
 
 func (f *fakePortalRepo) Settings(context.Context) (domain.PortalSyncSettings, error) {
@@ -206,6 +213,16 @@ func (f *fakePortalRepo) MarkRunStarted(_ context.Context, _ *store.ScopedTx, at
 	defer f.mu.Unlock()
 	f.markedStart = append(f.markedStart, at)
 	return nil
+}
+func (f *fakePortalRepo) ResealKey(_ context.Context, _ *store.ScopedTx, apiURL string, oldSealed, newSealed []byte) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reseals = append(f.reseals, portalReseal{apiURL, oldSealed, newSealed})
+	if f.settings == nil || f.settings.APIURL != apiURL || !bytes.Equal(f.sealed, oldSealed) {
+		return false, nil
+	}
+	f.sealed = newSealed
+	return true, nil
 }
 func (f *fakePortalRepo) Categories(context.Context) ([]domain.PortalCategory, error) {
 	f.mu.Lock()
@@ -279,6 +296,7 @@ type fakePortalClient struct {
 	images     map[string][]byte
 	imageCalls []string
 	keys       []string // the key every call received
+	keeps      []int    // the keep every Articles call received
 	onArticles func()
 }
 
@@ -288,10 +306,14 @@ func (c *fakePortalClient) Categories(_ context.Context, e portal.Endpoint) ([]p
 	c.keys = append(c.keys, string(e.Key.Lo()))
 	return c.cats, c.catErr
 }
-func (c *fakePortalClient) Articles(_ context.Context, e portal.Endpoint, id string, since time.Time) (portal.ArticleBatch, error) {
+
+// Articles emulates the adapter's contract: the held lookup BEFORE the slots, then the newest keep.
+func (c *fakePortalClient) Articles(ctx context.Context, e portal.Endpoint, id string, since time.Time, keep int,
+	held portal.HeldFunc) (portal.ArticleBatch, error) {
 	c.mu.Lock()
 	c.keys = append(c.keys, string(e.Key.Lo()))
 	c.since = append(c.since, since)
+	c.keeps = append(c.keeps, keep)
 	hook := c.onArticles
 	arts, err := c.articles[id], c.errs[id]
 	c.mu.Unlock()
@@ -301,7 +323,25 @@ func (c *fakePortalClient) Articles(_ context.Context, e portal.Endpoint, id str
 	if err != nil {
 		return portal.ArticleBatch{}, err
 	}
-	return portal.ArticleBatch{Articles: arts, Read: len(arts) + 1}, nil
+	ids := make([]string, len(arts))
+	for i, a := range arts {
+		ids[i] = a.ExternalID
+	}
+	have, herr := held(ctx, ids)
+	if herr != nil {
+		return portal.ArticleBatch{}, portal.ErrHeldLookup
+	}
+	kept := make([]portal.Article, 0, len(arts))
+	for _, a := range arts {
+		if _, ok := have[a.ExternalID]; !ok {
+			kept = append(kept, a)
+		}
+	}
+	sort.SliceStable(kept, func(i, j int) bool { return kept[i].PublishedAt.After(kept[j].PublishedAt) })
+	if len(kept) > keep {
+		kept = kept[:keep]
+	}
+	return portal.ArticleBatch{Articles: kept, Read: len(arts) + 1}, nil
 }
 func (c *fakePortalClient) Image(_ context.Context, _ portal.Endpoint, u *url.URL, _ int64) ([]byte, error) {
 	c.mu.Lock()
@@ -354,6 +394,8 @@ type fakePortalCovers struct {
 	recorded  []string // file ids
 	published []string
 	withdrawn []string
+	discarded []string
+	recordErr error
 }
 
 func (c *fakePortalCovers) portalImageLimit(context.Context) (int64, error) { return 1 << 20, nil }
@@ -367,8 +409,17 @@ func (c *fakePortalCovers) preparePortalCover(_ context.Context, itemID string, 
 func (c *fakePortalCovers) recordPortalCover(_ context.Context, _ *store.ScopedTx, pc portalCover) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.recordErr != nil {
+		return c.recordErr
+	}
 	c.recorded = append(c.recorded, pc.file.ID)
 	return nil
+}
+func (c *fakePortalCovers) discardPortalCover(_ context.Context, f domain.StoredFile) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.discarded = append(c.discarded, f.ID)
+	return true, nil
 }
 func (c *fakePortalCovers) publishPortalCover(_ context.Context, _ *store.ScopedTx, n domain.NoiDungMiniApp,
 	_ time.Time) (bool, error) {
@@ -426,12 +477,12 @@ func newPortalRig(t *testing.T) *portalRig {
 
 	env := testEnvelope(t)
 	ctx := tenant.Into(context.Background(), xaA)
-	sealed, err := env.Seal(ctx, secret.Secret(portalTestKey), portalKeyAAD(ctx))
+	st := domain.DefaultPortalSyncSettings()
+	st.APIURL, st.IsEnabled, st.APIKeySet = "https://portal.example.gov.vn/api", true, true
+	sealed, err := env.Seal(ctx, secret.Secret(portalTestKey), portalKeyAAD(ctx, st.APIURL))
 	if err != nil {
 		t.Fatal(err)
 	}
-	st := domain.DefaultPortalSyncSettings()
-	st.APIURL, st.IsEnabled, st.APIKeySet = "https://portal.example.gov.vn/api", true, true
 	repo := &fakePortalRepo{settings: &st, sealed: sealed, existing: map[string]bool{},
 		cats: []domain.PortalCategory{
 			{ID: "CAT-NEWS", ExternalID: "120", Name: "Tin tức", TargetKind: "tin-tuc", IsSelected: true},

@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vihat/vigov/core/tenant"
 )
 
 // fakeCounter is an in-memory fixed-window counter with a controllable clock — the module has no
@@ -296,5 +298,147 @@ func TestMiddleware429LogsSecurityEvent(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), "rl:") {
 		t.Fatalf("the counter key was logged: %s", buf.String())
+	}
+}
+
+// ---- the public news read (owner, 02/10/2026) ------------------------------------------------
+
+const testCommune = "01JTESTCOMMUNE000000000000"
+
+// The decided threshold, pinned like the operator one.
+func TestPublicNewsReadIs120PerMinuteAndFailsOpen(t *testing.T) {
+	if PublicNewsReadLimit != 120 || PublicNewsReadWindow != time.Minute {
+		t.Fatalf("owner decided 120 / minute, got %d / %v", PublicNewsReadLimit, PublicNewsReadWindow)
+	}
+	if PublicNewsRead.limit != PublicNewsReadLimit || PublicNewsRead.window != PublicNewsReadWindow {
+		t.Fatal("PublicNewsRead does not use the named constants")
+	}
+	if !PublicNewsRead.FailsOpen() {
+		t.Fatal("the owner's exception: the public news read fails OPEN")
+	}
+	if OperatorSignIn.FailsOpen() {
+		t.Fatal("the operator sign-in limit must stay fail-CLOSED")
+	}
+}
+
+// Rule 1 invariant 7: a resolved commune's counter is prefixed t:<tenant_id>, the tenant taken from
+// ctx; an unresolved host's counter belongs to no commune; no commune in ctx is a refusal, never an
+// unscoped key.
+func TestPublicHostIPKeyShape(t *testing.T) {
+	f := newFake()
+	l, err := New(f, PublicNewsRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+
+	k, err := PublicHostIPKey(ctx, true, "Xa-A.Vigov.VN", "2001:db8:1:2::9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _ = l.Allow(ctx, k)
+	k2, _ := PublicHostIPKey(ctx, false, "unknown.vigov.vn", "203.0.113.7")
+	_, _, _ = l.Allow(ctx, k2)
+	want := []string{
+		"t:" + testCommune + ":rl:public-news:host:xa-a.vigov.vn:ip:2001:db8:1:2::/64",
+		"rl:public-news:host:unknown.vigov.vn:ip:203.0.113.7",
+	}
+	if len(f.keys) != 2 || f.keys[0] != want[0] || f.keys[1] != want[1] {
+		t.Fatalf("keys = %v, want %v", f.keys, want)
+	}
+
+	if _, err := PublicHostIPKey(context.Background(), true, "xa-a.vigov.vn", "203.0.113.7"); !errors.Is(err, ErrNoCommune) {
+		t.Fatalf("no commune in ctx: err = %v, want ErrNoCommune", err)
+	}
+}
+
+// Two communes never share a budget: one commune's flood does not throttle the other's residents.
+func TestPublicNewsBudgetIsPerCommune(t *testing.T) {
+	l, _ := New(newFake(), PublicNewsRead)
+	a := tenant.Into(context.Background(), tenant.ID(testCommune))
+	b := tenant.Into(context.Background(), tenant.ID("01JTESTCOMMUNEB00000000000"))
+	ka, _ := PublicHostIPKey(a, true, "xa.vigov.vn", "203.0.113.7")
+	kb, _ := PublicHostIPKey(b, true, "xa.vigov.vn", "203.0.113.7")
+	for i := 0; i < PublicNewsReadLimit; i++ {
+		if ok, _, _ := l.Allow(a, ka); !ok {
+			t.Fatalf("request %d refused", i+1)
+		}
+	}
+	if ok, _, _ := l.Allow(a, ka); ok {
+		t.Fatal("request 121 allowed")
+	}
+	if ok, _, _ := l.Allow(b, kb); !ok {
+		t.Fatal("commune B refused on commune A's budget")
+	}
+}
+
+func gateReq() *http.Request {
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/commune-news?host=xa.vigov.vn", nil)
+	r.RemoteAddr = "203.0.113.7:51000"
+	return r
+}
+
+// FAIL OPEN for the public policy only: served, and ONE warning per window however many requests.
+func TestGateFailOpenServesAndWarnsOncePerWindow(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	f := newFake()
+	f.fail = errors.New("dial tcp: connection refused")
+	l, _ := New(f, PublicNewsRead)
+	clock := time.Unix(1_800_000_000, 0)
+	l.now = func() time.Time { return clock }
+	k, _ := PublicHostIPKey(context.Background(), false, "xa.vigov.vn", "203.0.113.7")
+
+	for i := 0; i < 5; i++ {
+		rec := httptest.NewRecorder()
+		if !Gate(rec, gateReq(), l, k, log) || rec.Code != http.StatusOK {
+			t.Fatalf("request %d: not served while the store is down (code %d)", i+1, rec.Code)
+		}
+	}
+	if n := strings.Count(buf.String(), "rate_limit.store_unavailable"); n != 1 {
+		t.Fatalf("warnings in one window = %d, want 1: %s", n, buf.String())
+	}
+	clock = clock.Add(PublicNewsReadWindow)
+	Gate(httptest.NewRecorder(), gateReq(), l, k, log)
+	if n := strings.Count(buf.String(), "rate_limit.store_unavailable"); n != 2 {
+		t.Fatalf("a new window did not warn again (%d)", n)
+	}
+	if strings.Contains(buf.String(), "203.0.113.7") || strings.Contains(buf.String(), "rl:") {
+		t.Fatalf("the outage warning names a client or a key: %s", buf.String())
+	}
+}
+
+// The closed policy through Gate is still closed.
+func TestGateClosedPolicyAnswers503(t *testing.T) {
+	f := newFake()
+	f.fail = errors.New("i/o timeout")
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), mustNew(t, f), OperatorIPKey("203.0.113.7"), nil) {
+		t.Fatal("closed policy served while the store is down")
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code = %d, want 503", rec.Code)
+	}
+}
+
+// Over the limit through Gate: 429, Retry-After, the extra attrs on the security event.
+func TestGate429CarriesAttrs(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	l, _ := New(newFake(), PublicNewsRead)
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+	k, _ := PublicHostIPKey(ctx, true, "xa.vigov.vn", "203.0.113.7")
+	for i := 0; i < PublicNewsReadLimit; i++ {
+		Gate(httptest.NewRecorder(), gateReq(), l, k, log, "xa", testCommune)
+	}
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), l, k, log, "xa", testCommune) {
+		t.Fatal("request 121 served")
+	}
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" {
+		t.Fatalf("code = %d, Retry-After = %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if !strings.Contains(buf.String(), `"event":"public_news.rate_limited"`) || !strings.Contains(buf.String(), `"xa":"`+testCommune+`"`) {
+		t.Fatalf("event shape: %s", buf.String())
 	}
 }

@@ -213,6 +213,30 @@ func (uc *ContentCovers) withdrawPortalCover(ctx context.Context, f domain.Store
 	return nil
 }
 
+// discardPortalCover deletes the PRIVATE derivative of a cover whose import did not commit (R7,
+// 02/10/2026) — before this, it stayed in the bucket until a purge worker that does not exist yet.
+//
+// THE ROW IS ASKED FIRST: an import whose commit returned an error may still have committed (the
+// connection dropped after COMMIT reached the server). A stored_file row naming the file means the
+// article owns the object, and it is kept (deleted=false, err=nil). An error reading the row is an
+// error — "could not check" is not "no row" — and the object is kept for the caller to log by key.
+func (uc *ContentCovers) discardPortalCover(ctx context.Context, f domain.StoredFile) (bool, error) {
+	if uc.objects == nil || uc.files == nil {
+		return false, ErrCoverUploadNotConfigured
+	}
+	row, err := uc.files.ByID(ctx, f.ID)
+	if err != nil {
+		return false, fmt.Errorf("ảnh bìa: kiểm dòng tệp trước khi xoá bản dẫn xuất: %w", err)
+	}
+	if row != nil {
+		return false, nil
+	}
+	if err := uc.objects.PurgeAllVersions(ctx, storage.BucketPrivate, f.ObjectKey); err != nil {
+		return false, coverStorageErr("xoá ảnh dẫn xuất của tin không nhập", err)
+	}
+	return true, nil
+}
+
 // portalCoverRejectReason names why an image was dropped, for the run's error summary.
 func portalCoverRejectReason(err error) string {
 	var rej *CoverRejection

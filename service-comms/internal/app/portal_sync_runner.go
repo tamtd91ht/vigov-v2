@@ -24,17 +24,39 @@ package app
 // ONE CATEGORY FAILING NEVER FAILS THE RUN (spec §10.3): it is recorded by class in the summary and the
 // run ends `mot-phan`. ONE COMMUNE FAILING NEVER STOPS ANOTHER: each runs behind its own recover.
 //
+// BOUNDS ON ONE PROCESS (R1, 02/10/2026) — what keeps one slow portal from holding the scheduler lock
+// for hours, and N communes from holding N × a run's memory:
+//
+//	portalMaxConcurrentRuns   a process-wide semaphore, shared by scheduled and manual runs. A scheduled
+//	                          commune WAITS for a slot (inside the tick's budget); a manual start does not
+//	                          wait — it answers ErrPortalRunnerBusy (HTTP 503 `portal_sync_busy`): the
+//	                          condition is this process's capacity, not the commune's data, so not 409.
+//	portalCommuneRunBudget    one run's wall-clock budget. Hit, the run stops between articles and ends
+//	                          with the class `time-budget`; the commune's next due tick continues.
+//	portalTickBudget          one scheduler pass's budget. Hit, the remaining due communes wait for the
+//	                          next tick — and come FIRST then (crosstenant orders by last_run_at, oldest
+//	                          first), so no commune is starved by the ones ahead of it.
+//
+// Memory of one run is bounded by the adapter: each category keeps only the newest MaxItemsPerRun
+// articles THE COMMUNE DOES NOT ALREADY HOLD (portal.Articles' keep + HeldFunc — the register, soft-
+// deleted rows included, is asked per chunk of 200 BEFORE an article may take a slot). So a backlog
+// larger than one run's ceiling DRAINS: each run imports the newest not-yet-imported ones, and the next
+// run continues below them (follow-up of 02/10/2026, owner "làm theo đề xuất").
+//
 // WHAT IS NEVER LOGGED: an article's title, summary, body or URL (they name people — rule 3), the
 // api_url's query, the key. Logs carry the commune id, the run id, counts and error classes.
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -67,6 +89,16 @@ const (
 	// portalErrorSummaryMax bounds the summary's entries, under 0013's 64 KiB CHECK with room: one entry
 	// per failing category and per error class, never per article.
 	portalErrorSummaryMax = 200
+
+	// R1 (02/10/2026) — VENDOR BOUNDS on one process, not customer figures (file header). Two runs at
+	// once: each holds up to 3 category bodies (≤ 32 MiB each) and 6 images (≤ 10 MiB each).
+	portalMaxConcurrentRuns = 2
+	// portalCommuneRunBudget — well under portalStuckAfter, so a live run is never mistaken for a
+	// crashed one by the reaper.
+	portalCommuneRunBudget = 10 * time.Minute
+	// portalTickBudget — one pass of the scheduler, under portalStuckAfter, and the longest the global
+	// scheduler lock is held.
+	portalTickBudget = 30 * time.Minute
 )
 
 var (
@@ -74,6 +106,8 @@ var (
 	ErrPortalRunInProgress = errors.New("dong_bo_cong: đang có một lượt đồng bộ của xã")
 	// ErrPortalRunnerStopped — the runner is not running (shutting down, or not started). 503.
 	ErrPortalRunnerStopped = errors.New("dong_bo_cong: bộ chạy đồng bộ chưa sẵn sàng")
+	// ErrPortalRunnerBusy — every run slot of this process is taken (R1). 503 `portal_sync_busy`.
+	ErrPortalRunnerBusy = errors.New("dong_bo_cong: bộ chạy đồng bộ đang bận với các xã khác")
 )
 
 // The verbs in the trail (ADR 0011: Vietnamese snake_case values).
@@ -81,6 +115,9 @@ const (
 	ActionStartPortalSync  = "bat_dau_dong_bo_cong"
 	ActionFinishPortalSync = "ket_thuc_dong_bo_cong"
 	ActionImportPortalItem = "nhap_tin_tu_cong"
+	// ActionResealPortalKey — the stored key re-sealed under the api_url-bound additional data (R6),
+	// by the system, the first time a row sealed before 02/10/2026 is opened.
+	ActionResealPortalKey = "niem_lai_ma_bao_mat_cong"
 )
 
 // systemPrincipal is the "who" of every scheduled write and of every import (rule 6, invariant 6).
@@ -93,6 +130,7 @@ type PortalSyncRepo interface {
 	SettingsForUpdate(ctx context.Context, tx *store.ScopedTx) (domain.PortalSyncSettings, []byte, bool, error)
 	UpsertSettings(ctx context.Context, tx *store.ScopedTx, s domain.PortalSyncSettings, sealed []byte, by string) error
 	MarkRunStarted(ctx context.Context, tx *store.ScopedTx, at time.Time) error
+	ResealKey(ctx context.Context, tx *store.ScopedTx, apiURL string, oldSealed, newSealed []byte) (bool, error)
 
 	Categories(ctx context.Context) ([]domain.PortalCategory, error)
 	CategoriesForUpdate(ctx context.Context, tx *store.ScopedTx) ([]domain.PortalCategory, error)
@@ -111,7 +149,8 @@ type PortalSyncRepo interface {
 // PortalClient is internal/portal's *Client.
 type PortalClient interface {
 	Categories(ctx context.Context, e portal.Endpoint) ([]portal.Category, error)
-	Articles(ctx context.Context, e portal.Endpoint, categoryID string, since time.Time) (portal.ArticleBatch, error)
+	Articles(ctx context.Context, e portal.Endpoint, categoryID string, since time.Time, keep int,
+		held portal.HeldFunc) (portal.ArticleBatch, error)
 	Image(ctx context.Context, e portal.Endpoint, u *url.URL, max int64) ([]byte, error)
 }
 
@@ -136,6 +175,7 @@ type portalCoverPipeline interface {
 	recordPortalCover(ctx context.Context, tx *store.ScopedTx, pc portalCover) error
 	publishPortalCover(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp, at time.Time) (bool, error)
 	withdrawPortalCover(ctx context.Context, f domain.StoredFile) error
+	discardPortalCover(ctx context.Context, f domain.StoredFile) (bool, error)
 }
 
 // PortalSyncRunnerDeps wires the runner. Envelope may be nil (no SECRET_ENCRYPTION_KEYS): every run then
@@ -167,6 +207,12 @@ type PortalSyncRunner struct {
 	now      func() time.Time
 	newID    func() (string, error)
 
+	// slots is the process-wide run semaphore (portalMaxConcurrentRuns); runBudget / tickBudget are
+	// portalCommuneRunBudget / portalTickBudget, fields so a test can shorten them.
+	slots      chan struct{}
+	runBudget  time.Duration
+	tickBudget time.Duration
+
 	mu   sync.Mutex
 	base context.Context // Run's context: manual runs live as long as the process, not the request
 	wg   sync.WaitGroup
@@ -182,17 +228,88 @@ func NewPortalSyncRunner(d PortalSyncRunnerDeps) (*PortalSyncRunner, error) {
 	}
 	r := &PortalSyncRunner{db: d.DB, repo: d.Repo, locks: d.Locks, registry: d.Registry, client: d.Client,
 		envelope: d.Envelope, log: d.Log, interval: PortalSyncTickInterval,
-		now: func() time.Time { return time.Now().UTC() }, newID: ulid.Moi}
+		now: func() time.Time { return time.Now().UTC() }, newID: ulid.Moi,
+		slots: make(chan struct{}, portalMaxConcurrentRuns), runBudget: portalCommuneRunBudget,
+		tickBudget: portalTickBudget}
 	if d.Covers != nil {
 		r.covers = d.Covers
 	}
 	return r, nil
 }
 
-// portalKeyAAD binds the sealed key to THIS table, column and commune — 0013's binding string, the
-// shape mail_settings uses. Copied onto another row, it does not open.
-func portalKeyAAD(ctx context.Context) []byte {
+// portalKeyAAD binds the sealed key to THIS table, column, commune AND api_url (R6, 02/10/2026): the
+// tenant-only string of 0013 plus the sha256 of the trimmed api_url. Copied onto another row it does not
+// open, and neither does it after `api_url` was changed in the database without the key being typed
+// again — the screen already re-seals on every address change (ADR 0067 §2 decision 5); this makes a
+// write that went around the screen unable to send the key to a new host. The hash, not the URL: the
+// value is additional data, and its length should not depend on what was typed.
+//
+// 0013's own comment still describes the tenant-only string; that migration is applied (checksum) and
+// is not edited — this function is the source of truth for the binding.
+func portalKeyAAD(ctx context.Context, apiURL string) []byte {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(apiURL)))
+	return []byte("portal_sync_settings/api_key_sealed/" + string(tenant.MustFrom(ctx)) + "/" + hex.EncodeToString(sum[:]))
+}
+
+// legacyPortalKeyAAD is 0013's tenant-only binding, kept ONLY to open — once — a row sealed before
+// 02/10/2026, which openPortalKey then re-seals under portalKeyAAD. Never used to seal.
+//
+// WHY A FALLBACK AND NOT "NO SUCH ROW EXISTS": the sync was committed on 01/10/2026 (fa7b8377) and
+// nothing in this repository proves no commune saved a key since; refusing those rows would end every
+// such commune's runs `credential-unavailable` until staff retype a key they have no reason to think is
+// wrong. The fallback's cost: until its first open, a legacy row is exactly as protected as before R6.
+// Remove it once no legacy row remains (each migration files ActionResealPortalKey in the trail).
+func legacyPortalKeyAAD(ctx context.Context) []byte {
 	return []byte("portal_sync_settings/api_key_sealed/" + string(tenant.MustFrom(ctx)))
+}
+
+// openPortalKey opens the commune's sealed key for st.APIURL. A row sealed under the legacy binding is
+// opened with it ONCE and re-sealed under the api_url binding in a transaction with its audit entry
+// (system principal, rule 6 invariant 6) — compare-and-swap on the sealed bytes and the api_url, so a
+// save that raced it wins. A failed re-seal is logged and the call proceeds with the key it opened: the
+// row stays legacy and the next open tries again.
+func openPortalKey(ctx context.Context, db *store.DB, repo PortalSyncRepo, env *crypto.Envelope,
+	st domain.PortalSyncSettings, sealed []byte, log *slog.Logger) (secret.Secret, error) {
+
+	key, err := env.Open(ctx, sealed, portalKeyAAD(ctx, st.APIURL))
+	if err == nil {
+		return key, nil
+	}
+	key, legacyErr := env.Open(ctx, sealed, legacyPortalKeyAAD(ctx))
+	if legacyErr != nil {
+		return nil, err
+	}
+	resealed, err := env.Seal(ctx, key, portalKeyAAD(ctx, st.APIURL))
+	if err != nil {
+		log.WarnContext(ctx, "CẢNH BÁO: không niêm lại được mã bảo mật Cổng theo địa chỉ API — giữ dạng cũ, thử lại lần sau",
+			"service", "comms", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		return key, nil
+	}
+	now := time.Now().UTC()
+	err = db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		swapped, err := repo.ResealKey(ctx, tx, st.APIURL, sealed, resealed)
+		if err != nil || !swapped {
+			return err // !swapped: a save replaced the row meanwhile — nothing left to migrate
+		}
+		// NEVER THE KEY OR EITHER SEALED VALUE in the delta: only that the binding moved.
+		return writePortalAudit(ctx, tx, systemPrincipal, ActionResealPortalKey, domain.PortalSyncSettingsSubject,
+			now, map[string]any{"api_key_changed": false, "binding": "tenant+api_url"})
+	})
+	if err != nil {
+		log.WarnContext(ctx, "CẢNH BÁO: không ghi được bản niêm mới của mã bảo mật Cổng — giữ dạng cũ, thử lại lần sau",
+			"service", "comms", "xa", string(tenant.MustFrom(ctx)), "err", err)
+	}
+	return key, nil
+}
+
+// logOutboundRefused is the security event of an outbound destination this side refused (R2,
+// 02/10/2026; skills/security-logging): event, outcome, commune, actor (the staff business code, or
+// `system`), the error CLASS, the run id ("" outside a run) and which kind of call it was (`api`,
+// `image`). NEVER the URL — its query carries the key — nor a host typed by staff, nor an article field.
+func logOutboundRefused(ctx context.Context, log *slog.Logger, actor, runID, call string, err error) {
+	log.WarnContext(ctx, "CẢNH BÁO BẢO MẬT: từ chối một địa chỉ gọi ra ngoài",
+		"event", "outbound_url_refused", "outcome", "refused", "xa", string(tenant.MustFrom(ctx)),
+		"actor", actor, "class", portal.ClassOf(err), "run_id", runID, "call", call)
 }
 
 // Run ticks until ctx is cancelled — once at start, then every interval. Manual runs started while it
@@ -241,16 +358,26 @@ func (r *PortalSyncRunner) Tick(ctx context.Context) {
 		return // another replica ticks
 	}
 	defer release()
-	ids, err := r.locks.DueCommunes(ctx)
+	// THE TICK'S BUDGET (R1): the global lock is held at most this long. Every run below derives from
+	// tctx, so a run that would outlive the tick is cut at its end like one that outlives its own budget.
+	tctx, cancel := context.WithTimeout(ctx, r.tickBudget)
+	defer cancel()
+	ids, err := r.locks.DueCommunes(tctx)
 	if err != nil {
 		r.log.WarnContext(ctx, "CẢNH BÁO: không liệt kê được xã tới hạn đồng bộ Cổng", "service", "comms", "err", err)
 		return
 	}
-	for _, id := range ids {
+	for i, id := range ids {
 		if ctx.Err() != nil {
 			return
 		}
-		r.runScheduled(ctx, id)
+		if tctx.Err() != nil {
+			// Not an error of any commune: they stay due and come first next tick (oldest last_run_at).
+			r.log.WarnContext(ctx, "CẢNH BÁO: nhịp đồng bộ Cổng hết thời gian, các xã còn lại chờ nhịp sau",
+				"service", "comms", "con_lai", len(ids)-i)
+			return
+		}
+		r.runScheduled(tctx, id)
 	}
 }
 
@@ -273,6 +400,13 @@ func (r *PortalSyncRunner) runScheduled(ctx context.Context, id tenant.ID) {
 		if !ok || !t.Active {
 			return
 		}
+	}
+	// A RUN SLOT FIRST (R1), waited for inside the tick's budget: manual runs may hold every slot.
+	select {
+	case r.slots <- struct{}{}:
+		defer func() { <-r.slots }()
+	case <-ctx.Done():
+		return
 	}
 	release, ok, err := r.locks.TryLockCommune(cctx, id)
 	if err != nil {
@@ -324,24 +458,32 @@ func (r *PortalSyncRunner) StartManual(ctx context.Context, actor audit.Actor) (
 	if !ok {
 		return domain.PortalSyncRun{}, ErrPortalRunInProgress
 	}
+	// A RUN SLOT, NOT WAITED FOR (R1): a request does not queue behind other communes' runs.
+	select {
+	case r.slots <- struct{}{}:
+	default:
+		release()
+		return domain.PortalSyncRun{}, ErrPortalRunnerBusy
+	}
+	releaseAll := func() { <-r.slots; release() }
 	st, sealed, err := r.repo.SettingsWithKey(ctx)
 	if err != nil {
-		release()
+		releaseAll()
 		return domain.PortalSyncRun{}, err
 	}
 	if r.envelope == nil {
-		release()
+		releaseAll()
 		return domain.PortalSyncRun{}, crypto.ErrNotConfigured
 	}
 	run, err := r.begin(ctx, domain.PortalRunManual, actor)
 	if err != nil {
-		release()
+		releaseAll()
 		return domain.PortalSyncRun{}, err
 	}
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		defer release()
+		defer releaseAll()
 		defer func() {
 			if p := recover(); p != nil {
 				r.log.Error("LỖI: lượt đồng bộ Cổng chạy tay bị panic", "service", "comms", "xa", string(id),
@@ -416,6 +558,9 @@ type runTally struct {
 	categoriesFailed int
 	notes            map[noteKey]*domain.PortalRunError
 	order            []noteKey
+	// heldSeen deduplicates the skipped counts across categories: an article filed under two categories
+	// is one skip. Short ids only, bounded by the rows the portal returned in the window.
+	heldSeen map[string]bool
 }
 
 type noteKey struct{ categoryID, class string }
@@ -456,27 +601,45 @@ type candidate struct {
 	extID   string // domain.PortalExternalItemID
 	itemID  string
 	cover   *portalCover
+	// settled: the import committed, so the cover's row owns its object. An unsettled cover's private
+	// derivative is discarded at the end of the run (R7).
+	settled bool
 }
 
 // execute is steps 3–7. It ALWAYS ends with the run's finish fill (or a logged failure to write it).
+//
+// THE RUN'S BUDGET (R1) is a deadline on the work, not on the finish: a run cut by it — or by the tick's
+// budget it derives from — ends with the class `time-budget`; one cut by a shutdown, `interrupted`.
 func (r *PortalSyncRunner) execute(ctx context.Context, run domain.PortalSyncRun, st domain.PortalSyncSettings, sealed []byte) {
 	t := &runTally{}
+	wctx, cancel := context.WithTimeout(ctx, r.runBudget)
+	defer cancel()
 	defer func() {
 		if p := recover(); p != nil {
 			r.log.ErrorContext(ctx, "LỖI: lượt đồng bộ Cổng bị panic", "service", "comms", "run_id", run.ID, "panic", fmt.Sprint(p))
 			t.note(domain.PortalCategory{}, "internal")
-			r.finish(ctx, run, t, false)
+			r.finish(ctx, run, t, nil)
 		}
 	}()
-	r.work(ctx, run, st, sealed, t)
-	r.finish(ctx, run, t, ctx.Err() != nil)
+	r.work(wctx, run, st, sealed, t)
+	r.finish(ctx, run, t, wctx.Err())
 }
 
 func (r *PortalSyncRunner) work(ctx context.Context, run domain.PortalSyncRun, st domain.PortalSyncSettings,
 	sealed []byte, t *runTally) {
 
+	// D1 (owner, 02/10/2026): a row saved above today's ceilings runs AT the ceilings; the row is not
+	// rewritten (domain.PortalSyncSettings.Clamped).
+	if clamped, lowered := st.Clamped(); lowered {
+		r.log.InfoContext(ctx, "cấu hình đồng bộ Cổng vượt trần — lượt này chạy theo trần", "service", "comms",
+			"xa", string(tenant.MustFrom(ctx)), "run_id", run.ID, "so_ngay", clamped.WindowDays, "so_tin", clamped.MaxItemsPerRun)
+		st = clamped
+	}
 	base, err := portal.ParseBase(st.APIURL)
 	if err != nil {
+		if portal.IsRefusal(err) {
+			logOutboundRefused(ctx, r.log, run.Actor, run.ID, "api", err)
+		}
 		t.note(domain.PortalCategory{}, portal.ClassOf(err))
 		return
 	}
@@ -484,13 +647,13 @@ func (r *PortalSyncRunner) work(ctx context.Context, run domain.PortalSyncRun, s
 		t.note(domain.PortalCategory{}, "encryption-not-configured")
 		return
 	}
-	key, err := r.envelope.Open(ctx, sealed, portalKeyAAD(ctx))
+	key, err := openPortalKey(ctx, r.db, r.repo, r.envelope, st, sealed, r.log)
 	if err != nil {
 		t.note(domain.PortalCategory{}, "credential-unavailable")
 		return
 	}
 	defer clear(key)
-	ep := portal.Endpoint{Base: base, Key: secret.Secret(key)}
+	ep := portal.Endpoint{Base: base, Key: key}
 
 	all, err := r.repo.Categories(ctx)
 	if err != nil {
@@ -507,14 +670,23 @@ func (r *PortalSyncRunner) work(ctx context.Context, run domain.PortalSyncRun, s
 		t.note(domain.PortalCategory{}, domain.PortalRunErrorNoCategory)
 		return
 	}
+	if len(cats) > domain.PortalSelectedCategoriesMax {
+		// Selected before the ceiling existed (D1): the first ones in the store's order (name) run; the
+		// summary says the rest were not read, so the screen can tell staff to untick some.
+		t.note(domain.PortalCategory{}, domain.PortalRunErrorCategoriesOverCeiling)
+		cats = cats[:domain.PortalSelectedCategoriesMax]
+	}
 
 	since := r.now().Add(-time.Duration(st.WindowDays) * 24 * time.Hour)
-	batches := r.fetchCategories(ctx, ep, cats, since, t)
+	batches := r.fetchCategories(ctx, run, ep, cats, since, st.MaxItemsPerRun, t)
 	chosen := r.choose(ctx, cats, batches, st.MaxItemsPerRun, t)
 	if len(chosen) == 0 || ctx.Err() != nil {
 		return
 	}
-	r.fetchImages(ctx, ep, chosen, t)
+	// R7: whatever does not end imported — a failed or raced transaction, a refused item, a run cut by
+	// its budget before reaching it — leaves its private derivative behind unless discarded here.
+	defer r.discardUnsettled(ctx, run, chosen)
+	r.fetchImages(ctx, run, ep, chosen, t)
 	for i := range chosen {
 		if ctx.Err() != nil {
 			return
@@ -524,8 +696,8 @@ func (r *PortalSyncRunner) work(ctx context.Context, run domain.PortalSyncRun, s
 }
 
 // fetchCategories is step 3, three categories at a time. A failure is recorded per category.
-func (r *PortalSyncRunner) fetchCategories(ctx context.Context, ep portal.Endpoint, cats []domain.PortalCategory,
-	since time.Time, t *runTally) [][]portal.Article {
+func (r *PortalSyncRunner) fetchCategories(ctx context.Context, run domain.PortalSyncRun, ep portal.Endpoint,
+	cats []domain.PortalCategory, since time.Time, keep int, t *runTally) [][]portal.Article {
 
 	out := make([][]portal.Article, len(cats))
 	gate := make(chan struct{}, portalCategoryConcurrency)
@@ -540,7 +712,7 @@ func (r *PortalSyncRunner) fetchCategories(ctx context.Context, ep portal.Endpoi
 			case <-ctx.Done():
 				return
 			}
-			b, err := r.client.Articles(ctx, ep, c.ExternalID, since)
+			b, err := r.client.Articles(ctx, ep, c.ExternalID, since, keep, r.heldFunc(t))
 			t.mu.Lock()
 			if err != nil {
 				t.categoriesFailed++
@@ -550,6 +722,9 @@ func (r *PortalSyncRunner) fetchCategories(ctx context.Context, ep portal.Endpoi
 			}
 			t.mu.Unlock()
 			if err != nil {
+				if portal.IsRefusal(err) {
+					logOutboundRefused(ctx, r.log, run.Actor, run.ID, "api", err)
+				}
 				// The CLASS only: the adapter's errors carry nothing else, and this is the run log.
 				t.note(c, portal.ClassOf(err))
 				r.log.WarnContext(ctx, "CẢNH BÁO: đọc một chuyên mục Cổng không được", "service", "comms",
@@ -563,9 +738,52 @@ func (r *PortalSyncRunner) fetchCategories(ctx context.Context, ep portal.Endpoi
 	return out
 }
 
+// heldFunc is the adapter's register lookup for one run: portal ids → namespaced external ids, ONE
+// tenant-scoped ExistingPortalItems per chunk, COUNTING SOFT-DELETED ITEMS (a removed article is never
+// imported again — ADR 0067 §2 "Ghi" #2). It also counts the skips, once per article across categories.
+// A store error is logged here (the adapter keeps only the class) and fails that category.
+func (r *PortalSyncRunner) heldFunc(t *runTally) portal.HeldFunc {
+	return func(ctx context.Context, ids []string) (map[string]bool, error) {
+		ext := make([]string, len(ids))
+		for i, id := range ids {
+			ext[i] = domain.PortalExternalItemID(domain.PortalProviderCityShared, id)
+		}
+		have, err := r.repo.ExistingPortalItems(ctx, ext)
+		if err != nil {
+			r.log.WarnContext(ctx, "CẢNH BÁO: không kiểm được tin Cổng đã có", "service", "comms",
+				"xa", string(tenant.MustFrom(ctx)), "err", err)
+			return nil, err
+		}
+		out := make(map[string]bool, len(have))
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if t.heldSeen == nil {
+			t.heldSeen = map[string]bool{}
+		}
+		for i, id := range ids {
+			deleted, ok := have[ext[i]]
+			if !ok {
+				continue
+			}
+			out[id] = deleted
+			if t.heldSeen[ext[i]] {
+				continue
+			}
+			t.heldSeen[ext[i]] = true
+			if deleted {
+				t.counts.SkippedDeleted++
+			} else {
+				t.counts.SkippedExisting++
+			}
+		}
+		return out, nil
+	}
+}
+
 // choose is step 4: merge newest first (ties keep selection order), deduplicate by portal id across
-// categories (the first category in selection order wins), check against the register COUNTING
-// SOFT-DELETED ITEMS, and keep at most max new ones.
+// categories (the first category in selection order wins), and keep at most max. The register was
+// already asked per chunk by heldFunc, BEFORE the heap: nothing here is held, soft-deleted or live (a
+// concurrent insert is still caught by the unique key at import — ErrPortalItemExists).
 func (r *PortalSyncRunner) choose(ctx context.Context, cats []domain.PortalCategory, batches [][]portal.Article,
 	max int, t *runTally) []candidate {
 
@@ -585,27 +803,8 @@ func (r *PortalSyncRunner) choose(ctx context.Context, cats []domain.PortalCateg
 	if len(all) == 0 {
 		return nil
 	}
-	ids := make([]string, len(all))
-	for i, c := range all {
-		ids[i] = c.extID
-	}
-	held, err := r.repo.ExistingPortalItems(ctx, ids)
-	if err != nil {
-		t.note(domain.PortalCategory{}, "store")
-		return nil
-	}
 	var chosen []candidate
 	for _, c := range all {
-		if deleted, ok := held[c.extID]; ok {
-			t.mu.Lock()
-			if deleted {
-				t.counts.SkippedDeleted++
-			} else {
-				t.counts.SkippedExisting++
-			}
-			t.mu.Unlock()
-			continue
-		}
 		if len(chosen) >= max {
 			break // the ceiling: the rest wait for the next run
 		}
@@ -624,7 +823,8 @@ func (r *PortalSyncRunner) choose(ctx context.Context, cats []domain.PortalCateg
 }
 
 // fetchImages is step 5, six at a time. Every failure is noted and the article goes on without one.
-func (r *PortalSyncRunner) fetchImages(ctx context.Context, ep portal.Endpoint, chosen []candidate, t *runTally) {
+func (r *PortalSyncRunner) fetchImages(ctx context.Context, run domain.PortalSyncRun, ep portal.Endpoint,
+	chosen []candidate, t *runTally) {
 	if r.covers == nil {
 		for _, c := range chosen {
 			if c.article.ImageRef != "" {
@@ -643,6 +843,9 @@ func (r *PortalSyncRunner) fetchImages(ctx context.Context, ep portal.Endpoint, 
 		}
 		u, err := portal.ResolveImage(ep.Base, c.article.ImageRef)
 		if err != nil {
+			if portal.IsRefusal(err) {
+				logOutboundRefused(ctx, r.log, run.Actor, run.ID, "image", err)
+			}
 			t.note(c.cat, portal.ClassOf(err))
 			continue
 		}
@@ -661,6 +864,9 @@ func (r *PortalSyncRunner) fetchImages(ctx context.Context, ep portal.Endpoint, 
 			}
 			data, err := r.client.Image(ctx, ep, u, limit)
 			if err != nil {
+				if portal.IsRefusal(err) {
+					logOutboundRefused(ctx, r.log, run.Actor, run.ID, "image", err)
+				}
 				t.note(c.cat, "image-"+portal.ClassOf(err))
 				return
 			}
@@ -721,6 +927,7 @@ func (r *PortalSyncRunner) importOne(ctx context.Context, run domain.PortalSyncR
 		return writePortalAudit(ctx, tx, systemPrincipal, ActionImportPortalItem, chuDeNoiDungMiniApp(n), n.TaoLuc, d)
 	})
 	if err == nil {
+		c.settled = true
 		t.mu.Lock()
 		t.counts.Imported++
 		t.mu.Unlock()
@@ -790,11 +997,42 @@ func buildPortalItem(c *candidate, st domain.PortalSyncSettings, base *url.URL, 
 	return n, ""
 }
 
+// discardUnsettled is R7 (02/10/2026): every prepared cover whose import did not commit has its PRIVATE
+// derivative deleted — after a check that no stored_file row claims it (an ambiguous commit that did
+// land keeps its object). On a context the run's budget or a shutdown cannot cancel.
+//
+// A FAILED DELETE IS LOGGED BY OBJECT KEY, as a structured event the purge worker of ADR 0052 §6 can
+// act on when it exists (ADR 0067 C5). The key names a commune, a date and two random ids — no person.
+func (r *PortalSyncRunner) discardUnsettled(ctx context.Context, run domain.PortalSyncRun, chosen []candidate) {
+	if r.covers == nil {
+		return
+	}
+	dctx := context.WithoutCancel(ctx)
+	for i := range chosen {
+		c := &chosen[i]
+		if c.cover == nil || c.settled {
+			continue
+		}
+		if _, err := r.covers.discardPortalCover(dctx, c.cover.file); err != nil {
+			r.log.WarnContext(dctx, "CẢNH BÁO: không xoá được ảnh dẫn xuất của tin không nhập — đối tượng mồ côi chờ dọn",
+				"event", "orphan_object", "service", "comms", "xa", string(tenant.MustFrom(dctx)), "run_id", run.ID,
+				"tep_id", c.cover.file.ID, "object_key", c.cover.file.ObjectKey, "err", err)
+		}
+	}
+}
+
 // finish is step 7: the run's one fill and its audit entry, on a context a shutdown cannot cancel —
 // an interrupted run is still recorded as what it was.
-func (r *PortalSyncRunner) finish(ctx context.Context, run domain.PortalSyncRun, t *runTally, interrupted bool) {
+//
+// stopped is why the work stopped early (its context's error) or nil: DeadlineExceeded is the run's or
+// the tick's budget (`time-budget`), anything else a shutdown (`interrupted`). Both lower the outcome.
+func (r *PortalSyncRunner) finish(ctx context.Context, run domain.PortalSyncRun, t *runTally, stopped error) {
 	fctx := context.WithoutCancel(ctx)
-	if interrupted {
+	interrupted := stopped != nil
+	switch {
+	case errors.Is(stopped, context.DeadlineExceeded):
+		t.note(domain.PortalCategory{}, domain.PortalRunErrorTimeBudget)
+	case interrupted:
 		t.note(domain.PortalCategory{}, domain.PortalRunErrorInterrupted)
 	}
 	t.mu.Lock()

@@ -181,6 +181,11 @@ type noiDungRa struct {
 	SourceRef  string `json:"source_ref"`
 	HandEdited bool   `json:"hand_edited"`
 
+	// PortalCategoryName — on the list and the detail, ONLY for a synced item (`source` =
+	// `dong-bo-cong`): the portal category it came in under, as last seen on the portal (ADR 0067 §2
+	// "Chế độ đăng" #5; C2, 02/10/2026). Absent on a hand-composed item.
+	PortalCategoryName string `json:"portal_category_name,omitempty"`
+
 	// AuthorCode is a STAFF BUSINESS CODE (`CB-2026-7K3M9Q`), never an internal id (rule 6,
 	// invariant 8). No name is joined in: this service does not own the staff directory (rule 2).
 	AuthorCode string `json:"author_code"`
@@ -246,8 +251,10 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 		SourceRef:   n.NguonIDNgoai,
 		HandEdited:  n.DaSuaTay,
 		AuthorCode:  n.NguoiTaoMa,
-		CreatedAt:   n.TaoLuc,
-		UpdatedAt:   n.CapNhatLuc,
+
+		PortalCategoryName: n.PortalCategoryName,
+		CreatedAt:          n.TaoLuc,
+		UpdatedAt:          n.CapNhatLuc,
 
 		PublishedAt:   instantOut(n.PublishedAt),
 		EventStartsAt: instantOut(n.EventStartsAt),
@@ -348,6 +355,9 @@ func thamSoLoc(q url.Values, ten string) string {
 //
 // # THE THREE FILTERS ARE §6'S OWN AND AN UNKNOWN `type` IS A 400
 //
+// A FOURTH, `status` (02/10/2026, C1): `an` · `cho-duyet` · `dang-hien`, refused when unknown — the
+// screen's `Chờ duyệt` queue of synced items. ANDed with the other three.
+//
 // §6 offers the six tabs, `Tất cả danh mục ▾` and `🔍 Tìm theo tiêu đề…`; §9 names them `loai`,
 // `danh_muc` and `q`. The parameters here are the English spellings the contract surface uses
 // (ADR 0011) — `type`, `category`, `q` — matching `citizen-letters`' own `?type=`.
@@ -372,11 +382,19 @@ func (h *Handler) DanhSachNoiDung(w http.ResponseWriter, r *http.Request) {
 		Loai:      thamSoLoc(q, "type"),
 		DanhMucID: thamSoLoc(q, "category"),
 		Tu:        thamSoLoc(q, "q"),
+		TrangThai: thamSoLoc(q, "status"),
 	}
 	if loc.Loai != "" && !domain.LoaiNoiDungHopLe(loc.Loai) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Tham số `type` phải là một trong sáu loại nội dung: tin-tuc, su-kien, thong-bao, "+
 				"truyen-thanh, video, banner.", "")
+		return
+	}
+	// `status` (02/10/2026, C1) — refused when unknown, for `type`'s reason: passed through it would
+	// match nothing and read as an empty queue.
+	if loc.TrangThai != "" && !domain.ValidContentStatus(loc.TrangThai) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Tham số `status` phải là một trong ba trạng thái: an, cho-duyet, dang-hien.", "")
 		return
 	}
 	if len([]rune(loc.Tu)) > commsstore.TuKhoaTimToiDa {

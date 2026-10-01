@@ -286,7 +286,7 @@ func publicAudioFixture() (*ckNoiDung, *ckDanhMuc, *fakePublicAudio, time.Time) 
 func newPublicAudioServer(t *testing.T, nd *ckNoiDung, dm *ckDanhMuc, audio *fakePublicAudio) http.Handler {
 	t.Helper()
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{},
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{},
 		Audio: audio, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	return mux
 }

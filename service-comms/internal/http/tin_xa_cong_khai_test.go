@@ -255,7 +255,7 @@ func ckMayChu(t *testing.T, nt *ckNenTang, nd *ckNoiDung, dm *ckDanhMuc, log *sl
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: nt, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}, Log: log})
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: nt, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}, Log: log})
 	return mux
 }
 
@@ -678,7 +678,7 @@ func TestTinXaTuongThuHaiBoMucChuaDangVaGhiNhatKy(t *testing.T) {
 func TestMauTinXaKhopTuyenDaDangKy(t *testing.T) {
 	nd, dm := ckDuLieu()
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}})
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}})
 	for p, muon := range map[string]string{
 		MauTinXa:                 "GET " + MauTinXa,
 		MauTinXa + "/abc":        "GET " + MauTinXa + "/{id}",
@@ -693,11 +693,13 @@ func TestMauTinXaKhopTuyenDaDangKy(t *testing.T) {
 func TestRegisterCongKhaiThieuKhoThiPanic(t *testing.T) {
 	nd, dm := ckDuLieu()
 	for ten, d := range map[string]DepsCongKhai{
-		"thiếu nền tảng": {NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu nội dung": {Xa: &ckNenTang{}, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu danh mục": {Xa: &ckNenTang{}, NoiDung: nd, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu ảnh bìa":  {Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm},
-		"thiếu âm thanh": {Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}},
+		"thiếu nền tảng": {Limiter: ckLimiter(), NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu nội dung": {Limiter: ckLimiter(), Xa: &ckNenTang{}, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu danh mục": {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu ảnh bìa":  {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm},
+		"thiếu âm thanh": {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}},
+		// Rule 13 invariant 7: no public route is mounted without its rate limit.
+		"thiếu giới hạn tần suất": {Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
 	} {
 		func() {
 			defer func() {

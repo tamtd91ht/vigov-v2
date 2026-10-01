@@ -55,6 +55,9 @@ func TestSanitizeLinksHTTPSOnlyWithFixedRel(t *testing.T) {
 		"javascript:alert(1)", "JaVaScRiPt:alert(1)", "data:text/html,<script>alert(1)</script>",
 		"http://x.example/a", "//evil.example/a", "/duong-trong-app", "vbscript:x", "mailto:a@b.vn",
 		"&#106;avascript:alert(1)", " javascript:alert(1)",
+		// R5 (02/10/2026): userinfo in the authority, in every spelling that reaches the tokenizer.
+		"https://thangbinh.danang.gov.vn@evil.example/", "https://u:p@thangbinh.danang.gov.vn/",
+		"https://@evil.example/", "https://a%40b@evil.example/", "https:///path-only",
 	} {
 		got := Sanitize(`<p><a href="` + href + `">chữ</a></p>`)
 		if strings.Contains(got, "<a") || strings.Contains(got, "href") {
@@ -186,6 +189,31 @@ func TestBlocksEmptyIsNil(t *testing.T) {
 	for _, in := range []string{"", "   ", "<p></p>", "<script>x</script>"} {
 		if got := Blocks(Sanitize(in)); got != nil {
 			t.Errorf("%q: got %#v, want nil", in, got)
+		}
+	}
+}
+
+// R5 (02/10/2026): the link check itself — and in Blocks, a userinfo link never becomes a link run.
+func TestIsHTTPSRefusesUserinfo(t *testing.T) {
+	for href, want := range map[string]bool{
+		"https://thangbinh.danang.gov.vn/tin":           true,
+		"https://thangbinh.danang.gov.vn/a@b":           true, // '@' in the path is not userinfo
+		"https://thangbinh.danang.gov.vn?x=a@b":         true,
+		"https://gov.vn@evil.example/":                  false,
+		"HTTPS://u:p@thangbinh.danang.gov.vn":           false,
+		`https://evil.example\@thangbinh.danang.gov.vn`: true, // browsers: host evil.example, path /@…
+		"https://":   false,
+		"https:///x": false,
+	} {
+		if got := isHTTPS(href); got != want {
+			t.Errorf("isHTTPS(%q) = %v, want %v", href, got, want)
+		}
+	}
+	for _, b := range Blocks(`<p><a href="https://gov.vn@evil.example/">chữ</a></p>`) {
+		for _, run := range b.Runs {
+			if run.Href != "" {
+				t.Fatalf("a userinfo link became a link run: %+v", run)
+			}
 		}
 	}
 }
