@@ -1,0 +1,322 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  portalSyncRunsPath,
+  savePortalCategories,
+  savePortalSyncSettings,
+  startPortalSyncRun,
+} from "@/lib/api/portal-sync";
+import type {
+  comms_portalCategoryTreeOut,
+  comms_portalRunOut,
+  comms_portalSyncSettingsOut,
+} from "@/lib/api/schema.gen";
+
+import {
+  categoriesBody,
+  choicesFromTree,
+  formFromSettings,
+  intervalLabel,
+  keyHint,
+  keyRequirement,
+  KEY_FIRST_HINT,
+  KEY_NEW_URL_HINT,
+  KEY_SAVED_HINT,
+  orderAsTree,
+  outcomeLabel,
+  POLL_INTERVAL_MS,
+  POLL_MAX_ATTEMPTS,
+  portalSyncStatus,
+  portalSyncStatusLabel,
+  runCountsLine,
+  runErrorLine,
+  runNowBlockedReason,
+  selectedCountLabel,
+  settingsBody,
+  settingsFormError,
+  TARGET_KIND_OPTIONS,
+} from "./portal-sync";
+
+function settingsOut(over: Partial<comms_portalSyncSettingsOut> = {}): comms_portalSyncSettingsOut {
+  return {
+    configured: true,
+    encryption_configured: true,
+    provider: "cttdt-danang",
+    api_url: "https://xa.danang.gov.vn/api",
+    api_key_set: true,
+    publish_mode: "cho-duyet",
+    interval_hours: 6,
+    window_days: 90,
+    max_items_per_run: 100,
+    keep_source_credit: true,
+    is_enabled: true,
+    last_run_at: null,
+    updated_by: "CB-00123",
+    ...over,
+  };
+}
+
+function run(over: Partial<comms_portalRunOut> = {}): comms_portalRunOut {
+  return {
+    id: "R1",
+    trigger_kind: "chay-tay",
+    actor: "CB-00123",
+    started_at: "2026-09-14T01:09:00Z",
+    finished_at: "2026-09-14T01:10:00Z",
+    outcome: "thanh-cong",
+    fetched_count: 3600,
+    imported_count: 1,
+    skipped_existing_count: 3500,
+    skipped_deleted_count: 63,
+    failed_count: 0,
+    error_summary: [],
+    ...over,
+  };
+}
+
+describe("status chip", () => {
+  it("four states, the missing platform key winning over everything", () => {
+    expect(portalSyncStatus(settingsOut())).toBe("enabled");
+    expect(portalSyncStatus(settingsOut({ is_enabled: false }))).toBe("disabled");
+    expect(portalSyncStatus(settingsOut({ configured: false }))).toBe("not-configured");
+    expect(portalSyncStatus(settingsOut({ configured: false, encryption_configured: false }))).toBe(
+      "missing-encryption",
+    );
+    expect(portalSyncStatus(settingsOut({ encryption_configured: false }))).toBe("missing-encryption");
+    expect(
+      (["enabled", "disabled", "not-configured", "missing-encryption"] as const).map(portalSyncStatusLabel),
+    ).toEqual(["Đang bật", "Đang tắt", "Chưa cấu hình", "Thiếu khoá mã hoá"]);
+  });
+
+  it("interval 0 reads as manual only", () => {
+    expect(intervalLabel(0)).toBe("Chỉ chạy tay");
+    expect(intervalLabel(6)).toBe("Mỗi 6 giờ");
+  });
+});
+
+describe("runs", () => {
+  it("outcome labels, an unfinished run included", () => {
+    expect(outcomeLabel("thanh-cong")).toBe("Thành công");
+    expect(outcomeLabel("mot-phan")).toBe("Một phần");
+    expect(outcomeLabel("that-bai")).toBe("Thất bại");
+    expect(outcomeLabel("")).toBe("Đang chạy");
+  });
+
+  it("§3's counts: new items, both kinds of skip summed, failures only when any", () => {
+    expect(runCountsLine(run())).toBe("1 tin mới · bỏ qua 3563");
+    expect(runCountsLine(run({ failed_count: 2 }))).toBe("1 tin mới · bỏ qua 3563 · lỗi 2");
+  });
+
+  it("an error line is a category and a class — a run-level one says so", () => {
+    expect(runErrorLine({ category_external_id: "7", category_name: "Các dự án", error: "timeout", count: 1 })).toBe(
+      "Các dự án: timeout",
+    );
+    expect(runErrorLine({ category_external_id: "", category_name: "", error: "interrupted", count: 3 })).toBe(
+      "Cả lượt: interrupted (3 lần)",
+    );
+  });
+
+  it("the run button is off while a run is unfinished, and before the commune can run at all", () => {
+    expect(runNowBlockedReason(settingsOut(), run())).toBeNull();
+    expect(runNowBlockedReason(settingsOut(), undefined)).toBeNull();
+    expect(runNowBlockedReason(settingsOut(), run({ finished_at: null, outcome: "" }))).toContain("Đang có");
+    expect(runNowBlockedReason(settingsOut({ configured: false }), undefined)).toContain("chưa lưu");
+    expect(runNowBlockedReason(settingsOut({ encryption_configured: false }), undefined)).toContain("khoá mã hoá");
+  });
+
+  it("polling is BOUNDED: a handful of reads a few seconds apart, about a minute in all", () => {
+    expect(POLL_MAX_ATTEMPTS).toBeGreaterThan(0);
+    expect(POLL_MAX_ATTEMPTS).toBeLessThanOrEqual(20);
+    expect(POLL_INTERVAL_MS).toBeGreaterThanOrEqual(2000);
+    expect(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS).toBeLessThanOrEqual(120_000);
+  });
+});
+
+describe("settings form — the key is write-only", () => {
+  it("the form never starts with a key, whatever the server says", () => {
+    expect(formFromSettings(settingsOut({ api_key_set: true })).api_key).toBe("");
+  });
+
+  it("first save requires the key; a stored key may be kept blank; a NEW address requires it again", () => {
+    const s = settingsOut();
+    const f = formFromSettings(s);
+    expect(keyRequirement(s, f)).toBeNull();
+    expect(keyHint(s, f)).toBe(KEY_SAVED_HINT);
+    expect(settingsFormError(s, f)).toBeNull();
+
+    const moved = { ...f, api_url: "https://khac.danang.gov.vn/api" };
+    expect(keyRequirement(s, moved)).toBe("new-url");
+    expect(keyHint(s, moved)).toBe(KEY_NEW_URL_HINT);
+    expect(settingsFormError(s, moved)).toBe(KEY_NEW_URL_HINT);
+    expect(settingsFormError(s, { ...moved, api_key: "abc" })).toBeNull();
+
+    // Trimming only — same rule as domain.PortalAPIURLChanged.
+    expect(keyRequirement(s, { ...f, api_url: `  ${s.api_url} ` })).toBeNull();
+
+    const fresh = settingsOut({ configured: false, api_key_set: false, api_url: "" });
+    const ff = { ...formFromSettings(fresh), api_url: "https://xa.danang.gov.vn/api" };
+    expect(keyRequirement(fresh, ff)).toBe("first");
+    expect(settingsFormError(fresh, ff)).toBe(KEY_FIRST_HINT);
+  });
+
+  it("the body is the whole form; the key only when typed, untrimmed", () => {
+    const f = formFromSettings(settingsOut());
+    const b = settingsBody({ ...f, api_url: " https://xa.danang.gov.vn/api " });
+    expect(b).toEqual({
+      api_url: "https://xa.danang.gov.vn/api",
+      publish_mode: "cho-duyet",
+      interval_hours: 6,
+      window_days: 90,
+      max_items_per_run: 100,
+      keep_source_credit: true,
+      is_enabled: true,
+    });
+    expect("api_key" in b).toBe(false);
+    expect(settingsBody({ ...f, api_key: "k3y" }).api_key).toBe("k3y");
+  });
+
+  it("a half-typed number holds Lưu with a sentence, never sent as 0", () => {
+    const s = settingsOut();
+    const f = formFromSettings(s);
+    expect(settingsFormError(s, { ...f, window_days: "" })).toContain("Số ngày");
+    expect(settingsFormError(s, { ...f, max_items_per_run: "0" })).toContain("Số tin tối đa");
+    expect(settingsFormError(s, { ...f, api_url: "  " })).toContain("địa chỉ API");
+  });
+});
+
+const TREE: comms_portalCategoryTreeOut = {
+  items: [
+    { external_id: "1", name: "Danh mục", parent_id: "", parent_name: "", is_selected: false, target_kind: "" },
+    { external_id: "2", name: "Chuyển đổi số", parent_id: "1", parent_name: "Danh mục", is_selected: true, target_kind: "tin-tuc" },
+    { external_id: "3", name: "Kinh tế", parent_id: "", parent_name: "", is_selected: true, target_kind: "thong-bao" },
+    { external_id: "4", name: "Nông thôn mới", parent_id: "3", parent_name: "Kinh tế", is_selected: false, target_kind: "" },
+  ],
+  missing: [{ id: "X", external_id: "9", name: "Mục cũ", target_kind: "su-kien", is_selected: true }],
+};
+
+describe("category tree", () => {
+  it("only three target kinds (ADR 0067 §2), never Truyền thanh / Video / Banner", () => {
+    expect(TARGET_KIND_OPTIONS.map((o) => o.value)).toEqual(["tin-tuc", "su-kien", "thong-bao"]);
+  });
+
+  it("orders roots then children with depth; missing ones at the root, flagged", () => {
+    const rows = orderAsTree(choicesFromTree(TREE));
+    expect(rows.map((r) => [r.choice.external_id, r.depth])).toEqual([
+      ["1", 0],
+      ["2", 1],
+      ["3", 0],
+      ["4", 1],
+      ["9", 0],
+    ]);
+    expect(rows.find((r) => r.choice.external_id === "9")?.choice.on_portal).toBe(false);
+    expect(selectedCountLabel(choicesFromTree(TREE))).toBe("đã chọn 2/4");
+  });
+
+  it("a cycle or an unknown parent cannot drop or repeat a row", () => {
+    const rows = orderAsTree([
+      { external_id: "a", name: "A", parent_id: "b", selected: false, target_kind: "", on_portal: true },
+      { external_id: "b", name: "B", parent_id: "a", selected: false, target_kind: "", on_portal: true },
+      { external_id: "c", name: "C", parent_id: "zz", selected: false, target_kind: "", on_portal: true },
+    ]);
+    expect(rows.map((r) => r.choice.external_id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("the body holds ONLY what changed, each entry with a valid kind", () => {
+    const initial = choicesFromTree(TREE);
+    expect(categoriesBody(initial, initial)).toEqual({ categories: [] });
+
+    const current = initial.map((c) => {
+      if (c.external_id === "1") return { ...c, selected: true }; // newly ticked, no kind yet
+      if (c.external_id === "2") return { ...c, selected: false }; // unticked
+      if (c.external_id === "3") return { ...c, target_kind: "su-kien" }; // kind changed
+      if (c.external_id === "9") return { ...c, selected: false }; // missing one unticked
+      return c;
+    });
+    expect(categoriesBody(initial, current)).toEqual({
+      categories: [
+        { external_id: "1", name: "Danh mục", target_kind: "tin-tuc", is_selected: true },
+        { external_id: "2", name: "Chuyển đổi số", target_kind: "tin-tuc", is_selected: false },
+        { external_id: "3", name: "Kinh tế", target_kind: "su-kien", is_selected: true },
+        { external_id: "9", name: "Mục cũ", target_kind: "su-kien", is_selected: false },
+      ],
+    });
+  });
+});
+
+/* ── The wire ─────────────────────────────────────────────────────────────────────────────────── */
+
+describe("lib/api/portal-sync — what goes on the wire", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetch(status: number, body: unknown) {
+    const f = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(body === null ? null : JSON.stringify(body), { status }),
+    );
+    vi.stubGlobal("fetch", f);
+    return f;
+  }
+
+  it("PUT settings omits a blank key and never carries a commune", async () => {
+    const f = stubFetch(200, settingsOut());
+    await savePortalSyncSettings({ api_url: "https://xa.danang.gov.vn/api", api_key: "", interval_hours: 0 });
+    const [url, init] = f.mock.calls[0]!;
+    expect(url).toBe("/api/v1/portal-sync/settings");
+    expect(init?.method).toBe("PUT");
+    const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect("api_key" in sent).toBe(false);
+    expect(sent.interval_hours).toBe(0);
+    expect(JSON.stringify(sent)).not.toContain("tenant");
+  });
+
+  it("PUT settings passes a 422 sentence through verbatim", async () => {
+    const sentence = "Đã đổi địa chỉ API thì phải nhập lại mã bảo mật.";
+    stubFetch(422, { code: "api_key_required_for_new_url", message: sentence });
+    const r = await savePortalSyncSettings({ api_url: "https://khac.gov.vn/api" });
+    expect(r).toEqual({ ok: false, thongBao: sentence });
+  });
+
+  it("PUT categories rebuilds every entry field by field", async () => {
+    const f = stubFetch(200, { items: [] });
+    const extra = { external_id: "1", name: "A", target_kind: "tin-tuc", is_selected: true, status: "x" };
+    await savePortalCategories({ categories: [extra] });
+    expect(JSON.parse(String(f.mock.calls[0]![1]?.body))).toEqual({
+      categories: [{ external_id: "1", name: "A", target_kind: "tin-tuc", is_selected: true }],
+    });
+  });
+
+  it("POST runs carries the Idempotency-Key, no body, and 202 is success whatever the body", async () => {
+    const f = stubFetch(202, { replayed: true });
+    const r = await startPortalSyncRun("k-1");
+    expect(r).toEqual({ ok: true, duLieu: null });
+    const init = f.mock.calls[0]![1]!;
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("k-1");
+  });
+
+  it("the history asks newest-first by default — no sort sent", () => {
+    expect(portalSyncRunsPath()).toBe("/api/v1/portal-sync/runs?limit=10");
+  });
+
+  it("the routes are the ones service-comms declares", () => {
+    const go = readFileSync(
+      fileURLToPath(new URL("../../../../service-comms/internal/http/routes_portal_sync.go", import.meta.url)),
+      "utf8",
+    );
+    for (const r of [
+      "GET /api/v1/portal-sync/settings",
+      "PUT /api/v1/portal-sync/settings",
+      "GET /api/v1/portal-sync/categories",
+      "PUT /api/v1/portal-sync/categories",
+      "GET /api/v1/portal-sync/runs",
+      "POST /api/v1/portal-sync/runs",
+    ]) {
+      expect(go).toContain(`"${r}"`);
+    }
+  });
+});

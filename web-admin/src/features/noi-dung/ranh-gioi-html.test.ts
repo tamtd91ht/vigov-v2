@@ -32,6 +32,8 @@ const PHAM_VI = [
   fileURLToPath(new URL(".", import.meta.url)),
   fileURLToPath(new URL("../../app/noi-dung/", import.meta.url)),
   fileURLToPath(new URL("../../lib/api/noi-dung.ts", import.meta.url)),
+  // §3's routes (ADR 0067 §2). The card itself (`portal-sync-card.tsx`) is in this folder already.
+  fileURLToPath(new URL("../../lib/api/portal-sync.ts", import.meta.url)),
 ];
 
 /**
@@ -90,6 +92,8 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
     // được làm đỏ, nhưng MẤT hết tệp thì phải đỏ.
     expect(TEP.length).toBeGreaterThanOrEqual(4);
     expect(TEP.map((t) => t.duongDan)).toContain("so-noi-dung.tsx");
+    expect(TEP.map((t) => t.duongDan)).toContain("portal-sync-card.tsx");
+    expect(TEP.some((t) => t.duongDan.endsWith("lib/api/portal-sync.ts"))).toBe(true);
   });
 
   it("KHÔNG tệp nào của màn chứa `dangerouslySetInnerHTML`", () => {

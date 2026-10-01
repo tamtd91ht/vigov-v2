@@ -25,6 +25,7 @@ import {
   NHAN_NUT_SUA,
   NHAN_NUT_THEM,
   NHAN_O_DANG,
+  PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
   SO_RONG,
   VIDEO_URL_HINT,
@@ -621,8 +622,11 @@ describe("khối `phần chưa dựng được`", () => {
 
   it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
     expect(html).toContain("content.update");
-    expect(html).toContain("bộ lập lịch");
-    expect(html).toContain("adapter HTTP đi ra THEO XÃ");
+    // Built (ADR 0067 §2): the portal sync card is no longer listed as missing; what is left of §3 is
+    // named — the meta count and the status filter the contract lacks.
+    expect(html).not.toContain("bộ lập lịch");
+    expect(html).not.toContain("adapter HTTP đi ra THEO XÃ");
+    expect(html).toContain("Cần thêm tham số `status` vào hợp đồng");
     // Built (ADR 0067 §4): the broadcast audio upload is no longer listed as missing.
     expect(html).not.toContain("lối tải tệp âm thanh");
   });
@@ -724,5 +728,30 @@ describe("cover block of §7", () => {
     const html = veForm({ ...giaTriTuHang(row), cover_image_file_id: "" }, row);
     expect(html).toContain(COVER_WILL_DETACH);
     expect(html).not.toContain("<img");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * Items from the portal sync (ADR 0067 §2) — visible, and publishable when waiting for approval
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("portal-synced items in the table and the edit form", () => {
+  it("a synced row says it came from the portal; a hand-written one does not", () => {
+    const html = veBang([
+      hang({ id: "A", source: "dong-bo-cong", status: "cho-duyet" }),
+      hang({ id: "B", source: "thu-cong" }),
+    ]);
+    expect(html.split("Đồng bộ từ Cổng").length - 1).toBe(1);
+    expect(html).toContain(">Chờ duyệt<");
+  });
+
+  it("an item waiting for approval says how to publish it; a published one does not", () => {
+    const waiting = hang({ source: "dong-bo-cong", status: "cho-duyet", body: "<p>x</p>" });
+    const html = veForm(giaTriTuHang(waiting), waiting);
+    expect(html).toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
+    // The tick is OFF for `cho-duyet`, so ticking it is what publishes (thanSua sends publish: true).
+    expect(giaTriTuHang(waiting).publish).toBe(false);
+    const live = hang({ status: "dang-hien", body: "<p>x</p>" });
+    expect(veForm(giaTriTuHang(live), live)).not.toContain(nhuTrongHTML(PENDING_REVIEW_HINT));
   });
 });

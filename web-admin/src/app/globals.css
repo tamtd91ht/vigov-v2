@@ -1785,6 +1785,12 @@ body {
   list-style: none;
 }
 
+/* §3 portal sync card (ADR 0067 §2): the address hint is one long URL and portal category names run
+ * long — neither may push the 320px layout sideways. */
+.portal-sync-card {
+  overflow-wrap: anywhere;
+}
+
 .category-row {
   display: flex;
   flex-direction: column;

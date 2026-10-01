@@ -80,10 +80,12 @@ import {
   nhanNguon,
   nhanTepDinhKem,
   nhanTrangThai,
+  PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
   publishedAtLabel,
   SLUG_DANH_MUC_TOI_DA,
   SO_RONG,
+  SOURCE_PORTAL_SYNC,
   TEN_DANH_MUC_TOI_DA,
   TIEU_DE_FORM_THEM,
   TIEU_DE_THE_DANH_BA,
@@ -124,11 +126,12 @@ import {
 import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
 import { BroadcastAudioField } from "./broadcast-audio-field";
 import { CategoryAdmin } from "./category-admin";
+import { PortalSyncCard } from "./portal-sync-card";
 import { RichTextEditor } from "./rich-text-editor";
 
 /**
- * Màn "Nội dung Mini App" — `docs/ui-ux/11-noi-dung-mini-app.md` §2 (bố cục), §5 (sáu tab),
- * §6 (bảng), §7 (biểu mẫu).
+ * Màn "Nội dung Mini App" — `docs/ui-ux/11-noi-dung-mini-app.md` §2 (bố cục), §3 (thẻ đồng bộ
+ * Cổng, `portal-sync-card.tsx`), §5 (sáu tab), §6 (bảng), §7 (biểu mẫu).
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG MỘT DÒNG NÀO Ở ĐÂY ĐƯA MỘT CHUỖI HTML VÀO TRANG**.
@@ -326,6 +329,7 @@ export function SoNoiDung() {
       <h2 id="tieu-de-so-noi-dung">Sổ nội dung Mini App</h2>
 
       <KhoiChuaDung />
+      <PortalSyncCard />
       <TheDanhBaChinhQuyen />
 
       <div className="cum-nut">
@@ -672,6 +676,12 @@ export function BangNoiDung({
                   <td>
                     <span className="ten-can-bo">{nd.title}</span>
                     {trich !== "" && <span className="dong-phu">{trich}</span>}
+                    {/* The portal sync's items say so under the title (ADR 0067 §2): the
+                        commune must see which rows came from its portal, most of all the
+                        `Chờ duyệt` ones waiting for somebody to publish them. */}
+                    {nd.source === SOURCE_PORTAL_SYNC && (
+                      <span className="dong-phu">{nhanNguon(nd.source)}</span>
+                    )}
                     {nd.hand_edited && <span className="dong-phu">{NHAN_DA_SUA_TAY}</span>}
                   </td>
                   <td>{nhanLoai(nd.type)}</td>
@@ -1023,6 +1033,11 @@ export function FormNoiDung({
       )}
 
       <div className="o-nhap">
+        {hang !== undefined && hang.status === "cho-duyet" && (
+          <p className="ghi-chu" role="note">
+            {PENDING_REVIEW_HINT}
+          </p>
+        )}
         <label htmlFor="dang-len-mini-app">
           <input
             id="dang-len-mini-app"

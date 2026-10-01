@@ -309,6 +309,92 @@ export type comms_phatHanhThongBaoVao = {
   "email_requested"?: boolean;
 };
 
+export type comms_portalCategoriesIn = {
+  "categories": Array<comms_portalCategoryIn>;
+};
+
+export type comms_portalCategoriesOut = {
+  "items": Array<comms_portalStoredCategoryOut>;
+};
+
+export type comms_portalCategoryIn = {
+  "external_id": string;
+  "name": string;
+  "target_kind": string;
+  "is_selected": boolean;
+};
+
+export type comms_portalCategoryNodeOut = {
+  "external_id": string;
+  "name": string;
+  "parent_id": string;
+  "parent_name": string;
+  "is_selected": boolean;
+  "target_kind": string;
+};
+
+export type comms_portalCategoryTreeOut = {
+  "items": Array<comms_portalCategoryNodeOut>;
+  "missing": Array<comms_portalStoredCategoryOut>;
+};
+
+export type comms_portalRunErrorOut = {
+  "category_external_id": string;
+  "category_name": string;
+  "error": string;
+  "count": number;
+};
+
+export type comms_portalRunOut = {
+  "id": string;
+  "trigger_kind": string;
+  "actor": string;
+  "started_at": string | null;
+  "finished_at": string | null;
+  "outcome": string;
+  "fetched_count": number;
+  "imported_count": number;
+  "skipped_existing_count": number;
+  "skipped_deleted_count": number;
+  "failed_count": number;
+  "error_summary": Array<comms_portalRunErrorOut>;
+};
+
+export type comms_portalStoredCategoryOut = {
+  "id": string;
+  "external_id": string;
+  "name": string;
+  "target_kind": string;
+  "is_selected": boolean;
+};
+
+export type comms_portalSyncSettingsIn = {
+  "api_url": string;
+  "api_key"?: string;
+  "publish_mode"?: string;
+  "interval_hours"?: number | null;
+  "window_days"?: number | null;
+  "max_items_per_run"?: number | null;
+  "keep_source_credit"?: boolean | null;
+  "is_enabled"?: boolean | null;
+};
+
+export type comms_portalSyncSettingsOut = {
+  "configured": boolean;
+  "encryption_configured": boolean;
+  "provider": string;
+  "api_url": string;
+  "api_key_set": boolean;
+  "publish_mode": string;
+  "interval_hours": number;
+  "window_days": number;
+  "max_items_per_run": number;
+  "keep_source_credit": boolean;
+  "is_enabled": boolean;
+  "last_run_at": string | null;
+  "updated_by": string;
+};
+
 export type comms_presignedUploadOut = {
   "url": string;
   "fields": Record<string, string>;
@@ -1988,6 +2074,13 @@ export type page_Result_comms_noiDungRa = {
 
 export type page_Result_comms_notificationOut = {
   "items": Array<comms_notificationOut>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_comms_portalRunOut = {
+  "items": Array<comms_portalRunOut>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -5844,6 +5937,122 @@ export type petitions_delete_petitions_system_messages_by_code_override = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/portal-sync/categories — Cây chuyên mục của Cổng TTĐT, hỏi trực tiếp Cổng lúc mở cấu hình, kèm lựa chọn và ánh xạ loại đã lưu của xã */
+export type comms_get_portal_sync_categories = {
+  duongDan: "/api/v1/portal-sync/categories";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_portalCategoryTreeOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/portal-sync/categories — Lưu lựa chọn chuyên mục Cổng và ánh xạ loại nội dung (tin tức, sự kiện, thông báo) */
+export type comms_put_portal_sync_categories = {
+  duongDan: "/api/v1/portal-sync/categories";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_portalCategoriesIn;
+  phanHoi: {
+    200: comms_portalCategoriesOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/portal-sync/runs — Lịch sử các lượt đồng bộ Cổng của xã — mới nhất trước, kèm số tin đọc, nhập, bỏ qua, lỗi */
+export type comms_get_portal_sync_runs = {
+  duongDan: "/api/v1/portal-sync/runs";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "started_at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_portalRunOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/portal-sync/runs — Đồng bộ ngay — mở một lượt đồng bộ Cổng chạy tay cho xã, chạy nền, kết quả xem ở lịch sử */
+export type comms_post_portal_sync_runs = {
+  duongDan: "/api/v1/portal-sync/runs";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    202: comms_portalRunOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/portal-sync/settings — Cấu hình đồng bộ tin từ Cổng TTĐT của xã — không bao giờ trả mã bảo mật, chỉ báo đã đặt hay chưa */
+export type comms_get_portal_sync_settings = {
+  duongDan: "/api/v1/portal-sync/settings";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_portalSyncSettingsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/portal-sync/settings — Lưu cấu hình đồng bộ Cổng TTĐT — mã bảo mật chỉ ghi, để trống là giữ, đổi địa chỉ API thì phải nhập lại */
+export type comms_put_portal_sync_settings = {
+  duongDan: "/api/v1/portal-sync/settings";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_portalSyncSettingsIn;
+  phanHoi: {
+    200: comms_portalSyncSettingsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

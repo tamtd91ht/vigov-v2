@@ -205,13 +205,24 @@ const NHAN_NGUON: Readonly<Record<string, string>> = {
 /**
  * Nhãn nguồn của một bài.
  *
- * HÔM NAY MỌI HÀNG ĐỀU LÀ `thu-cong`, vì lượt đồng bộ chưa dựng. Nhãn thứ hai vẫn được viết ra vì
- * §6 là màn hình duy nhất nói được cho xã biết bài nào về từ Cổng của họ — và ngày lượt đồng bộ
- * hạ cánh, màn hình không được cần thêm một trường mới để nói điều ấy.
+ * `dong-bo-cong` is written by the portal sync (ADR 0067 §2, service-comms fa7b8377). §6 is the only
+ * screen that tells the commune which items came from its portal, so the table shows this label under
+ * the title of every synced row (`BangNoiDung`), and the edit form's read-only block shows it too.
  */
 export function nhanNguon(ma: string): string {
   return NHAN_NGUON[ma] ?? ma;
 }
+
+/** The source code the portal sync writes (migration 0006 `nguon`). */
+export const SOURCE_PORTAL_SYNC = "dong-bo-cong";
+
+/**
+ * Shown on the edit form of an item waiting for approval (`cho-duyet` — where the portal sync puts
+ * imports in its default mode). Publishing IS the existing tick: `thanSua` sends `publish: true` only
+ * when the officer ticks it, and the server turns the item `dang-hien`.
+ */
+export const PENDING_REVIEW_HINT =
+  "Bài này đang chờ duyệt — bà con chưa thấy. Tích “Đăng lên Mini App” rồi Lưu để đăng cho bà con.";
 
 /** §10.4 — bài đồng bộ đã bị cán bộ sửa tay thì lượt đồng bộ sau không ghi đè nữa. */
 export const NHAN_DA_SUA_TAY = "Đã sửa tay — lượt đồng bộ sau không ghi đè";
@@ -974,15 +985,20 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Toàn bộ thẻ “Đồng bộ tin từ Cổng thông tin điện tử” (§3): chip trạng thái, `⟳ Đồng bộ ngay`, `Cấu hình`, `Chạy lần cuối`, khối log lỗi, cây 60 chuyên mục",
+    ten: "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
     viSao:
-      "Cột trung tâm của cấu hình đồng bộ là `ma_bao_mat` — credential thô của một cổng thông tin " +
-      "chính quyền, thứ sẽ nằm trong mọi bản sao lưu nếu lưu thẳng. Phép mã hoá theo xã mà ADR " +
-      "0009 quyết định 7 đòi cho cột ấy NAY ĐÃ CÓ (`core/crypto`, đang giữ mật khẩu máy chủ thư " +
-      "của xã), nên đó không còn là thứ chặn. Thứ còn thiếu: bảng `cau_hinh_dong_bo_cong` và " +
-      "`chuyen_muc_cong` cùng các tuyến đọc, ghi chúng ở `service-comms`; một bộ lập lịch cho nhịp " +
-      "`Mỗi 6 giờ`; và một adapter HTTP đi ra THEO XÃ để đọc cổng của từng xã. Vẽ thẻ ấy với số " +
-      "liệu bịa là dựng một màn hình nói với xã rằng cổng của họ đang được đồng bộ.",
+      "Danh sách chuyên mục không được chép về hệ thống (ADR 0067 §2): mỗi lần đọc là một lần hỏi " +
+      "thẳng Cổng của xã. Đếm trên thẻ thì mỗi lần mở màn này là một lần gọi ra Cổng, nên thẻ không " +
+      "hiện con số ấy. Số đã chọn hiện ở mục `Cấu hình`, dạng `đã chọn n/m`, đếm từ danh sách Cổng " +
+      "vừa trả về.",
+  },
+  {
+    ten: "Lọc riêng các bài `Chờ duyệt` trên bảng §6",
+    viSao:
+      "Tuyến đọc sổ nội dung chỉ nhận ba bộ lọc: loại, danh mục và tiêu đề — chưa có tham số trạng " +
+      "thái. Lọc ở phía màn hình chỉ lọc được trang đang xem, tức giấu các bài chờ duyệt ở trang " +
+      "khác. Hôm nay mỗi bài chờ duyệt vẫn hiện chip `Chờ duyệt`, bài về từ Cổng ghi `Đồng bộ từ " +
+      "Cổng` dưới tiêu đề, và mở bài ra là đăng được. Cần thêm tham số `status` vào hợp đồng.",
   },
   {
     ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
