@@ -78,11 +78,11 @@ pipeline {
     // khi chủ dự án xác nhận xong.
     // `gan-mini-app-thang-binh` là việc MỘT LẦN (chủ dự án, 27/09/2026) — tạm thời, tới khi
     // platform-admin có màn ghi sổ mini_app; gỡ cùng lúc ấy.
-    // Năm việc đăng nhập app riêng (ADR 0066) — thứ tự ở khối chú thích trước stage
+    // Sáu việc đăng nhập app riêng (ADR 0066) — thứ tự ở khối chú thích trước stage
     // 'Tạo khoá mã hoá identity'. Gỡ cùng commit đưa platform-admin có màn tương ứng.
     choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh',
-                                  'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo',
+                                  'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app'],
            description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
@@ -90,9 +90,13 @@ pipeline {
                         '(MT=prod; chạy TRƯỚC job service-identity) · ' +
                         'mo-netpol-identity-zalo: (bước 2) mở đường ra 443 cho pod identity nếu namespace MT có NetworkPolicy ' +
                         '(không có cái nào = không cần, không đổi gì) · ' +
-                        'kiem-tra-dang-nhap-app-rieng: (bước 3, SAU job service-identity) chỉ đọc — key, ảnh, Ingress, ' +
+                        'bo-sung-cau-hinh-identity: (bước 3, TRƯỚC job service-identity) thêm PETITIONS_GRPC_ADDR / ' +
+                        'DOCUMENTS_GRPC_ADDR / CITIZEN_SESSION_BRIDGE_LISTEN_ADDR vào env của deploy identity nếu chưa có ' +
+                        '(có rồi thì giữ nguyên), CITIZEN_SESSION_BRIDGE_KEYS vào identity-secrets (cùng giá trị prod + ' +
+                        'staging; đã có thì giữ), rồi khởi động lại identity của MT · ' +
+                        'kiem-tra-dang-nhap-app-rieng: (bước 4, SAU job service-identity) chỉ đọc — key, ảnh, Ingress, ' +
                         'thử POST /api/v1/citizen-sessions · ' +
-                        'bat-demo-mini-app / tat-demo-mini-app: (bước 4) operatorctl mini-app-demo on|off cho TENANT_ID + APP_ID ' +
+                        'bat-demo-mini-app / tat-demo-mini-app: (bước 5) operatorctl mini-app-demo on|off cho TENANT_ID + APP_ID ' +
                         '(MT=prod; chỉ chạy SAU khi ảnh identity có migration 0021 + /operatorctl đã triển khai) · ' +
                         'doi-ten-mien-thang-binh: đặt thangbinh-danang.vigov.vn làm tên miền chính của Xã Thăng Bình ' +
                         '+ thangbinh-danang.stg.vigov.vn (MT=prod; chạy SAU khi DNS/TLS/Ingress của hai host chạy, ' +
@@ -110,7 +114,7 @@ pipeline {
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / ' +
                         'tao-khoa-ma-hoa-identity / bat-demo-mini-app / tat-demo-mini-app: gõ đúng vigov-prod. ' +
-                        'Cho mo-netpol-identity-zalo: gõ đúng namespace của MT (vigov-prod hoặc vigov-staging).')
+                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity: gõ đúng namespace của MT (vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
     string(name: 'APP_ID', defaultValue: '3291993990104489440',
@@ -143,7 +147,7 @@ pipeline {
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
           if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh',
-                                  'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo',
+                                  'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
@@ -510,15 +514,21 @@ SQL
     //                                                 của vigov-prod + vigov-staging, cùng giá trị.
     //                                                 Thiếu nó thì ảnh identity mới TỪ CHỐI khởi động.
     //   2. mo-netpol-identity-zalo       (MT=prod, rồi MT=staging)   đường ra 443 tới Zalo, nếu cần.
-    //   3. job `service-identity` (service-identity/Jenkinsfile) — ảnh có migration 0021 +
+    //   3. bo-sung-cau-hinh-identity     (MT=prod, rồi MT=staging)   PETITIONS_GRPC_ADDR ·
+    //                                                 DOCUMENTS_GRPC_ADDR · CITIZEN_SESSION_BRIDGE_LISTEN_ADDR
+    //                                                 vào env của deploy identity, CITIZEN_SESSION_BRIDGE_KEYS
+    //                                                 vào identity-secrets (cùng giá trị hai namespace).
+    //                                                 Thiếu chúng thì ảnh identity mới TỪ CHỐI khởi động
+    //                                                 (sự cố 01/10/2026).
+    //   4. job `service-identity` (service-identity/Jenkinsfile) — ảnh có migration 0021 +
     //      /operatorctl, và khởi động lại pod để đọc khoá ở bước 1. KHÔNG làm lại ở đây.
     //      rồi kiem-tra-dang-nhap-app-rieng (chỉ đọc) — tuyến mới có sống chưa.
-    //   4. bat-demo-mini-app             (MT=prod)   bật danh tính demo cho App ID của xã.
+    //   5. bat-demo-mini-app             (MT=prod)   bật danh tính demo cho App ID của xã.
     //   rồi: cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang --demo
     //   Trước khi Zalo duyệt app: tat-demo-mini-app (MT=prod).
     //
     // Cùng bản ở trang của người vận hành: deploy/cau-hinh/README.md mục 6. Sửa một thì sửa cả hai.
-    // Gỡ năm việc này cùng commit đưa platform-admin có màn tương ứng.
+    // Gỡ sáu việc này cùng commit đưa platform-admin có màn tương ứng.
     // ─────────────────────────────────────────────────────────────────────────────────────
 
     // ─────────────────────────────────────────────────────────────────────────────────────
@@ -599,7 +609,8 @@ Cất TÁCH khỏi bản sao lưu CSDL identity: một bản sao lưu chứa c�
 
 identity đọc biến lúc KHỞI ĐỘNG: pod đang chạy chưa thấy khoá này. Bước kế:
   2. job này, HANH_DONG=mo-netpol-identity-zalo (MT=prod, rồi MT=staging)
-  3. job service-identity — triển khai ảnh mới và khởi động lại pod
+  3. job này, HANH_DONG=bo-sung-cau-hinh-identity (MT=prod, rồi MT=staging)
+  4. job service-identity — triển khai ảnh mới và khởi động lại pod
 EOF
           }
 
@@ -773,13 +784,281 @@ YAML
           kubectl -n "$NS" get networkpolicy "$POLICY" -o wide
           echo ""
           echo "DNS: identity đã gọi platform/CSDL theo tên, nên chính sách đang có phải đã mở DNS cho nó — tên"
-          echo "graph.zalo.me đi cùng đường ấy. Bước kế: job service-identity, rồi HANH_DONG=kiem-tra-dang-nhap-app-rieng."
+          echo "graph.zalo.me đi cùng đường ấy. Bước kế: HANH_DONG=bo-sung-cau-hinh-identity, rồi job service-identity."
         '''
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
-    // SAU BƯỚC 3 (job service-identity) — CHỈ ĐỌC. Tuyến mới có sống thật chưa: key có trong
+    // BƯỚC 3 — bốn biến mà ảnh identity từ `config.Uses` (29/09/2026) đòi ở staging/prod. Sự cố
+    // 01/10/2026: ảnh mới crash-loop ở vigov-prod, "thiếu biến môi trường bắt buộc: PETITIONS_GRPC_ADDR,
+    // DOCUMENTS_GRPC_ADDR, CITIZEN_SESSION_BRIDGE_LISTEN_ADDR, CITIZEN_SESSION_BRIDGE_KEYS". Chỗ đặt
+    // và dạng giá trị: core/config/hints.go + deploy/cau-hinh/README.md mục 1 và 3.
+    //
+    //   ba biến KHÔNG bí mật → `env:` của deploy identity (KHÔNG common-config: dịch vụ khác không
+    //   dùng chúng, và CITIZEN_SESSION_BRIDGE_LISTEN_ADDR không có khoá đi kèm thì pod khác từ chối
+    //   khởi động). CHỈ THÊM cái còn thiếu; cái đã có — dù khác giá trị ở đây — GIỮ NGUYÊN và in ra:
+    //   một giá trị ai đó đã đặt tay là quyết định của người ấy, không phải của job này.
+    //   CITIZEN_SESSION_BRIDGE_KEYS → identity-secrets: 48 byte /dev/urandom, base64 (đúng
+    //   `openssl rand -base64 48` của hints.go), MỘT khoá. Bảng quyết định Y HỆT bước 1 (đã có ở prod
+    //   → giữ; staging thiếu → chép prod sang; staging KHÁC → DỪNG trước khi ghi gì; chỉ lượt MT=prod
+    //   được SINH khoá — lượt MT=staging thấy prod chưa có thì DỪNG). Cùng giá trị ở
+    //   hai namespace cho đồng bộ với bước 1: người vận hành chỉ phải chép MỘT giá trị sang Secret
+    //   của vihat-miniapp, và hai môi trường không lệch nhau một cách không ai ghi lại.
+    //
+    // THỨ TỰ: mọi phép ĐỌC trước, rồi khoá, rồi env. `kubectl set env` đổi pod template = BẮT ĐẦU
+    // rollout; làm nó sau khoá thì rollout ấy đã thấy khoá, và một DỪNG ở bước khoá để Deployment
+    // nguyên vẹn. Khởi động lại CHỈ khi đọc lại từ cụm thấy đủ cả bốn — không đủ thì khởi động lại chỉ
+    // ra thêm một vòng crash-loop.
+    //
+    // Service petitions/documents thiếu cổng 9090 → CHỈ CẢNH BÁO, không sửa Service: identity vẫn
+    // khởi động (gRPC quay số lười), chỉ việc xoá mềm đơn vị hỏng tới khi Service mở 9090. Sửa Service
+    // dựng tay trong Rancher là việc của người vận hành, không phải tác dụng phụ của việc này.
+    //
+    // GIÁ TRỊ KHOÁ không bao giờ vào log hay dòng lệnh — cùng cách bước 1 (umask 077, tệp tạm,
+    // --patch-file, so bằng cmp -s, không set -x). Giá trị ba biến env không bí mật nên được in.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Bổ sung cấu hình identity') {
+      when { expression { params.HANH_DONG == 'bo-sung-cau-hinh-identity' } }
+      steps {
+        script {
+          if (!(params.MT in ['prod', 'staging'])) { error("bo-sung-cau-hinh-identity: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          trap 'rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          DEP=vigov-service-identity
+          KEY=CITIZEN_SESSION_BRIDGE_KEYS
+          PETITIONS_SVC=vigov-service-petitions
+          DOCUMENTS_SVC=vigov-service-documents
+          BRIDGE_ADDR=:9091   # deploy/base/identity (cổng `bridge`), netpol.yaml quy tắc 8–9
+
+          # ── 0. ĐỌC — chưa ghi gì. Hỏng một điều kiện = DỪNG, cụm không bị đụng.
+          kubectl patch --help 2>/dev/null | grep -q -- '--patch-file' || {
+            echo "DỪNG: kubectl của máy chủ build không có 'patch --patch-file' — giá trị sẽ phải đi qua dòng lệnh. Không đổi gì."
+            exit 1; }
+          kubectl -n "$NS" get deploy "$DEP" >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy deploy/$DEP trong $NS — không đổi gì."; exit 1; }
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết đặt env vào cái nào. Không đổi gì."; exit 1; }
+          # Tên Service là một nửa giá trị sẽ ghi. Không thấy (kể cả vì thiếu quyền đọc) = DỪNG, không đoán.
+          missing_svc=""
+          for s in "$PETITIONS_SVC" "$DOCUMENTS_SVC"; do
+            kubectl -n "$NS" get svc "$s" >/dev/null 2>&1 || missing_svc="$missing_svc $s"
+          done
+          if [ -n "$missing_svc" ]; then
+            echo "DỪNG: không thấy Service:$missing_svc trong $NS — tên khác giả định của job này. Không đổi gì."
+            echo "Service đang có (tên · cổng):"
+            kubectl -n "$NS" get svc -o go-template='{{range .items}}   {{.metadata.name}} ·{{range .spec.ports}} {{.port}}/{{.protocol}}{{end}}{{"\\n"}}{{end}}' || true
+            exit 1
+          fi
+          for ns in vigov-prod vigov-staging; do
+            kubectl -n "$ns" get secret identity-secrets >/dev/null 2>&1 || {
+              echo "DỪNG: không thấy secret/identity-secrets trong $ns — không đổi gì."; exit 1; }
+          done
+
+          svc_ports() { kubectl -n "$NS" get svc "$1" -o go-template='{{range .spec.ports}} {{.port}}/{{.protocol}}{{end}}'; }
+          dep_ports() { kubectl -n "$NS" get deploy "$1" -o go-template='{{range (index .spec.template.spec.containers 0).ports}} {{.containerPort}}{{end}}'; }
+          env_names() {
+            kubectl -n "$NS" get deploy "$1" \
+              -o go-template='{{range (index .spec.template.spec.containers 0).env}}{{.name}}{{"\\n"}}{{end}}'
+          }
+          # Chỉ dùng cho biến KHÔNG bí mật. valueFrom không đọc theo — in nguồn, không in giá trị.
+          env_value() {
+            kubectl -n "$NS" get deploy "$1" \
+              -o go-template='{{range (index .spec.template.spec.containers 0).env}}{{if eq .name "'"$2"'"}}{{if .valueFrom}}<valueFrom>{{else}}{{.value}}{{end}}{{end}}{{end}}'
+          }
+
+          # ── 2. CHỈ CẢNH BÁO — petitions/documents có nghe gRPC ở 9090 qua Service không.
+          grpc_cm=$(kubectl -n "$NS" get configmap common-config \
+                      -o go-template='{{range $k, $v := .data}}{{if eq $k "GRPC_LISTEN_ADDR"}}{{$v}}{{end}}{{end}}' 2>/dev/null || true)
+          grpc_warn=""
+          for s in "$PETITIONS_SVC" "$DOCUMENTS_SVC"; do
+            ports=$(svc_ports "$s")
+            echo "── svc/$s, cổng:${ports:- (không có)}"
+            case " $ports " in *" 9090/TCP "*) echo "   ✓ có 9090"; continue ;; esac
+            grpc_warn="$grpc_warn $s"
+            echo "   ⚠ KHÔNG có 9090"
+            if kubectl -n "$NS" get deploy "$s" >/dev/null 2>&1; then
+              grpc_dep=$(env_value "$s" GRPC_LISTEN_ADDR)
+              echo "   deploy/$s: containerPort:$(dep_ports "$s")"
+              echo "   GRPC_LISTEN_ADDR: env của Deployment '${grpc_dep:-(không đặt)}' · common-config '${grpc_cm:-(không đặt)}'"
+              if [ -z "$grpc_dep" ] && [ -z "$grpc_cm" ]; then
+                echo "   → không đặt ở đâu: tiến trình nghe gRPC ở MẶC ĐỊNH :9090 (core/config, GRPC_LISTEN_ADDR)."
+              fi
+            else
+              echo "   (không thấy deploy/$s — không đọc được cổng của pod)"
+            fi
+          done
+          if [ -n "$grpc_warn" ]; then
+            cat <<EOF
+
+⚠ CẢNH BÁO — Service$grpc_warn không mở 9090. identity VẪN khởi động được (gRPC quay số lười),
+nhưng XOÁ MỀM MỘT ĐƠN VỊ sẽ HỎNG (identity hỏi petitions/documents trước khi xoá) tới khi:
+  (a) Service mở cổng 9090/TCP → targetPort 9090, VÀ
+  (b) pod thật sự nghe 9090 (GRPC_LISTEN_ADDR như in ở trên; không đặt = :9090).
+Job này KHÔNG sửa Service — người vận hành thêm cổng trong Rancher (deploy/cau-hinh/README.md mục 3).
+EOF
+          fi
+          id_ports=$(svc_ports "$DEP")
+          case " $id_ports " in
+            *" 9091/TCP "*) ;;
+            *) echo ""
+               echo "⚠ svc/$DEP, cổng:${id_ports:- (không có)} — chưa mở 9091 (cầu phiên công dân). identity vẫn khởi động;"
+               echo "  vihat-miniapp chỉ gọi được cầu khi Service + containerPort có 9091 (deploy/base/identity, netpol quy tắc 8–9)." ;;
+          esac
+
+          # ── 3. KHOÁ — bảng quyết định của bước 1, đổi tên key. Không in giá trị.
+          has_key() {
+            kubectl -n "$1" get secret identity-secrets \
+              -o go-template='{{range $k, $v := .data}}{{if eq $k "CITIZEN_SESSION_BRIDGE_KEYS"}}yes{{end}}{{end}}'
+          }
+          read_key() {
+            kubectl -n "$1" get secret identity-secrets \
+              -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' > "$2"
+          }
+          write_patch() {
+            { printf '{"data":{"CITIZEN_SESSION_BRIDGE_KEYS":"'; tr -d '\\n' < "$1"; printf '"}}'; } > "$2"
+          }
+          copy_prod_to_staging() {
+            read_key vigov-prod "$TMP_DIR/prod"
+            write_patch "$TMP_DIR/prod" "$TMP_DIR/patch-staging.json"
+            kubectl -n vigov-staging patch secret identity-secrets --type=merge \
+                --patch-file "$TMP_DIR/patch-staging.json" >/dev/null || {
+              echo "⚠ prod ĐÃ CÓ $KEY, staging CHƯA ghi được — chạy lại việc này (nó chỉ chép prod sang staging)."
+              exit 1; }
+            read_key vigov-staging "$TMP_DIR/staging"
+            cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging" || {
+              echo "⚠ sau khi ghi, $KEY ở vigov-staging KHÁC vigov-prod — dừng, kiểm tay (không in giá trị)."; exit 1; }
+            echo "✓ vigov-staging: identity-secrets có $KEY, CÙNG giá trị với prod (so bằng cmp, không in)"
+          }
+          ensure_key() {
+            in_prod=$(has_key vigov-prod)
+            in_staging=$(has_key vigov-staging)
+            if [ -n "$in_prod" ]; then
+              echo "identity-secrets của vigov-prod ĐÃ CÓ $KEY — giữ nguyên (đổi nó là cắt vihat-miniapp đang dùng khoá ấy)."
+              if [ -z "$in_staging" ]; then
+                echo "vigov-staging còn THIẾU — chép giá trị của prod sang (không ghi đè gì):"
+                copy_prod_to_staging
+                return 0
+              fi
+              read_key vigov-prod "$TMP_DIR/prod"
+              read_key vigov-staging "$TMP_DIR/staging"
+              if cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging"; then
+                echo "✓ vigov-staging cũng có, CÙNG giá trị. Không đổi Secret nào."
+                return 0
+              fi
+              echo "DỪNG: vigov-staging có $KEY KHÁC prod. Không đổi gì (env của deploy cũng chưa đổi) — người vận"
+              echo "hành xác định vihat-miniapp đang gửi khoá nào trước khi chọn giữ giá trị nào."
+              exit 1
+            fi
+            if [ -n "$in_staging" ]; then
+              echo "DỪNG: vigov-prod CHƯA có $KEY nhưng vigov-staging ĐÃ CÓ — khoá sinh mới sẽ KHÁC giá trị ấy."
+              echo "Không đổi gì. Nếu vihat-miniapp đã dùng khoá của staging thì prod phải dùng ĐÚNG giá trị ấy —"
+              echo "chép tay theo tên, qua tệp, không in ra."
+              exit 1
+            fi
+            # Lượt MT=staging chỉ được xác nhận cho vigov-staging — nó không là lượt sinh khoá cho prod.
+            if [ "$NS" != "vigov-prod" ]; then
+              echo "DỪNG: cả hai namespace đều chưa có $KEY. Khoá sinh ở prod rồi chép sang staging — chạy việc"
+              echo "này với MT=prod (XAC_NHAN=vigov-prod) trước. Không đổi gì."
+              exit 1
+            fi
+            head -c 48 /dev/urandom | base64 -w0 > "$TMP_DIR/key"
+            [ "$(base64 -d < "$TMP_DIR/key" | wc -c)" -eq 48 ] || {
+              echo "DỪNG: khoá sinh ra không đủ 48 byte — không đổi gì."; exit 1; }
+            # .data là base64 của GIÁ TRỊ, mà giá trị là base64 của khoá — mã hoá thêm một lần.
+            base64 -w0 < "$TMP_DIR/key" > "$TMP_DIR/key.data"
+            write_patch "$TMP_DIR/key.data" "$TMP_DIR/patch-prod.json"
+            kubectl -n vigov-prod patch secret identity-secrets --type=merge \
+                --patch-file "$TMP_DIR/patch-prod.json" >/dev/null
+            read_key vigov-prod "$TMP_DIR/prod"
+            cmp -s "$TMP_DIR/key.data" "$TMP_DIR/prod" || {
+              echo "⚠ đọc lại từ cụm, $KEY ở vigov-prod không khớp giá trị vừa sinh — dừng, kiểm tay."; exit 1; }
+            echo "✓ vigov-prod: đã thêm $KEY vào identity-secrets (một khoá, 48 byte; giá trị không in)"
+            copy_prod_to_staging
+          }
+          echo ""
+          echo "── $KEY trong identity-secrets (vigov-prod + vigov-staging)"
+          ensure_key
+
+          # ── 1. ENV — chỉ thêm cái còn thiếu, không đổi cái đã có.
+          echo ""
+          echo "── env của deploy/$DEP"
+          env_names "$DEP" > "$TMP_DIR/env-names"
+          to_set=""
+          for pair in "PETITIONS_GRPC_ADDR=$PETITIONS_SVC:9090" \
+                      "DOCUMENTS_GRPC_ADDR=$DOCUMENTS_SVC:9090" \
+                      "CITIZEN_SESSION_BRIDGE_LISTEN_ADDR=$BRIDGE_ADDR"; do
+            name=${pair%%=*}
+            if grep -qxF "$name" "$TMP_DIR/env-names"; then
+              echo "   $name: giữ nguyên — đang là '$(env_value "$DEP" "$name")'"
+            else
+              echo "   $name: chưa có → đặt ${pair#*=}"
+              to_set="$to_set $pair"
+            fi
+          done
+          if [ -n "$to_set" ]; then
+            # Giá trị không bí mật, không có khoảng trắng — tách từ ở đây là cố ý.
+            kubectl -n "$NS" set env deploy/"$DEP" $to_set
+          fi
+
+          # ── 4. ĐỌC LẠI từ cụm; đủ cả bốn mới khởi động lại.
+          missing=""
+          for name in PETITIONS_GRPC_ADDR DOCUMENTS_GRPC_ADDR CITIZEN_SESSION_BRIDGE_LISTEN_ADDR; do
+            [ -n "$(env_value "$DEP" "$name")" ] || missing="$missing $name"
+          done
+          [ -n "$(has_key "$NS")" ] || missing="$missing $KEY"
+          if [ -n "$missing" ]; then
+            echo "DỪNG: đọc lại vẫn thiếu (hoặc rỗng):$missing — KHÔNG khởi động lại. Sửa tay rồi chạy lại việc này."
+            exit 1
+          fi
+          echo "✓ đủ bốn biến cho deploy/$DEP trong $NS — khởi động lại"
+          kubectl -n "$NS" rollout restart deploy/"$DEP"
+          if ! kubectl -n "$NS" rollout status deploy/"$DEP" --timeout=180s; then
+            pod=$(kubectl -n "$NS" get pod --sort-by=.metadata.creationTimestamp -o name 2>/dev/null \
+                    | grep "^pod/$DEP-" | tail -1 || true)
+            echo ""
+            echo "✗ rollout chưa xong sau 3 phút. 60 dòng log cuối của ${pod:-(không thấy pod)}"
+            echo "  (lỗi cấu hình chỉ in TÊN biến, không giá trị):"
+            if [ -n "$pod" ]; then
+              kubectl -n "$NS" logs "$pod" --tail=60 2>&1 || true
+              echo "── lần chạy trước của pod ấy:"
+              kubectl -n "$NS" logs "$pod" --tail=60 --previous 2>/dev/null || echo "   (không có)"
+            fi
+            exit 1
+          fi
+          echo "✓ deploy/$DEP trong $NS đã sẵn sàng."
+
+          cat <<'EOF'
+
+CÙNG GIÁ TRỊ CITIZEN_SESSION_BRIDGE_KEYS PHẢI VÀO Secret của vihat-miniapp khi cầu của app chung được
+triển khai (ADR 0045; phía ấy đặt VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS trỏ tới cổng 9091 của identity).
+Từ một máy tin cậy có kubeconfig ViGov (KHÔNG phải máy chủ build), vào tệp được bảo vệ, không in ra:
+
+  umask 077
+  kubectl -n vigov-prod get secret identity-secrets \\
+    -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' | base64 -d > <tệp trong kho bí mật>
+
+Chép theo tệp, xoá tệp khi xong. Không dán vào chat, ticket hay dòng lệnh.
+EOF
+          if [ "$NS" = "vigov-prod" ]; then
+            echo "Bước kế: chạy lại việc này với MT=staging (XAC_NHAN=vigov-staging) — Secret staging đã có khoá,"
+            echo "nhưng env + khởi động lại của deploy identity ở staging là lượt riêng. Rồi job service-identity."
+          else
+            echo "Bước kế: job service-identity (nếu ảnh mới chưa triển khai), rồi HANH_DONG=kiem-tra-dang-nhap-app-rieng."
+          fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // SAU BƯỚC 4 (job service-identity) — CHỈ ĐỌC. Tuyến mới có sống thật chưa: key có trong
     // Secret (chỉ TÊN), ảnh đang chạy, Ingress của host API identity trỏ về Service nào, và một
     // `POST /api/v1/citizen-sessions` thân `{}` — mong 400 `invalid_body` (tuyến mới trả lời);
     // 404 = ảnh cũ hoặc Ingress sai. Lượt thử tính vào giới hạn 10 lần / 5 phút / IP của tuyến ấy.
@@ -852,7 +1131,7 @@ YAML
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
-    // BƯỚC 4 — `operatorctl mini-app-demo on|off` cho một App ID của một xã (ADR 0066 quyết định 3,
+    // BƯỚC 5 — `operatorctl mini-app-demo on|off` cho một App ID của một xã (ADR 0066 quyết định 3,
     // tới khi platform-admin có màn). Danh tính demo mở phiên KHÔNG xác minh số điện thoại: là cờ
     // nguy hiểm (luật 8 bất biến 7) — TẮT trước khi Zalo duyệt app.
     //
