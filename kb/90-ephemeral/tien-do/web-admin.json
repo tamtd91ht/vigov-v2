@@ -321,7 +321,7 @@
       "viec": "Nội dung Mini App: ô sự kiện (bắt đầu, kết thúc, địa điểm), liên kết video, hiện 'Đăng lần đầu lúc' (ADR 0047 §6, hợp đồng comms 2ed818bd)",
       "trang_thai": "xong",
       "bang_chung": "9ebb928b — nhan-noi-dung.ts (localInputToInstant +07:00 cố định, validateTypeFields, thanSua chỉ trường đổi), so-noi-dung.tsx (ô theo loại, khoá Lưu), noi-dung.ts (POST theo loại, PATCH '' để xoá). vitest 150 tệp 2868/2868, check:api khớp.",
-      "tiep_theo": "Tải ảnh bìa (thay ô 'Ảnh đại diện (liên kết)') sau card comms ảnh bìa. Truyền thanh (tệp âm thanh) và Banner chưa có cột máy chủ.",
+      "tiep_theo": "Ảnh bìa: xong ở noi-dung-anh-bia-tai-len (1d5a2fa2). Truyền thanh (tệp âm thanh) và Banner chưa có cột máy chủ.",
       "menu": "noi-dung-mini-app"
     },
     {
@@ -331,6 +331,15 @@
       "bang_chung": "cd4f0586 — PHAN_CHUA_DUNG gọi tên thứ chặn thật (bảng + tuyến đồng bộ cổng ở comms, bộ lập lịch, adapter đi ra theo xã; lối tải ảnh của comms), bỏ mục tuyến công khai (đã có), chú thích page.tsx và bộ lọc. || edc56753 — gỡ cột, ô chi tiết, ghi chú Lượt xem; test cột vắng khi view_count = 42. vitest noi-dung 4 tệp 145/145, tsc sạch.",
       "no_confirm": [],
       "tiep_theo": "Còn câu cũ ngoài phạm vi card: lib/api/noi-dung.ts:48-49 (tuyến công khai §9 \"chưa dựng\"), lib/api/noi-dung.test.ts:469-470 (\"quyen.ts chưa có hằng\"), mục bố cục nói globals.css chưa có .man-noi-dung (nay có, :1187). CẦN KIỂM: CANH_BAO_HTML_THO nói HTML thô tới điện thoại bà con, trong khi 10337524 nói tuyến công khai đổi sang chữ thuần (van_ban_thuan.go) — cảnh báo an ninh, chưa nới khi chưa kiểm.",
+      "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "noi-dung-anh-bia-tai-len",
+      "viec": "Nội dung Mini App: ô tải ảnh bìa (JPG/PNG/WebP ≤ 50 MB) thay ô liên kết — 3 bước ADR 0052, xem trước từ preview_url của máy chủ (ADR 0047 §6 (1), hợp đồng comms 606bf515)",
+      "trang_thai": "xong",
+      "bang_chung": "1d5a2fa2 — cover-image.ts (kiểm phía client, runCoverUpload, retryCoverCompletion, coverPreviewSrc), CoverImageField trong so-noi-dung.tsx, requestCoverUpload/completeCoverUpload ở lib/api/noi-dung.ts; openapi.json + schema.gen.ts + ingress sinh lại cùng commit. vitest src/features/noi-dung src/lib/api 40 tệp 745/745, tsc sạch, check:api khớp; builder chạy cả bộ 153 tệp 2941/2941 và 7 đột biến đều đỏ.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa chạy với comms/MinIO/clamd thật. 50 MB tính 50×1024×1024 (khớp máy chủ 52428800). Ảnh vừa tải hiện một câu, ảnh xem trước chỉ hiện sau khi Lưu. image_url cũ (liên kết) không còn gửi từ form, không bị xoá; hiện ở khối chỉ đọc \"Liên kết ảnh (cách cũ)\". Khi thêm CSP (nợ missing-security-headers, hạn 2026-11-30): connect-src VÀ img-src phải cho OBJECT_STORAGE_PUBLIC_ENDPOINT. Còn CANH_BAO_HTML_THO cần kiểm (xem noi-dung-cau-chua-dung-va-luot-xem).",
       "menu": "noi-dung-mini-app"
     }
   ]
