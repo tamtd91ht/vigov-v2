@@ -138,10 +138,18 @@ func (c Config) SecretEncryptionKeys() []secret.Secret {
 	return c.secretEncryptionKeys
 }
 
-// OperatorSessionSigningKeys is OPERATOR_SESSION_SIGNING_KEYS, first entry signs.
+// OperatorSessionSigningKeys is OPERATOR_SESSION_SIGNING_KEYS, first entry signs. Identity
+// (OperatorRealm) signs with it; platform's operator edge (OperatorEdge) only verifies.
 func (c Config) OperatorSessionSigningKeys() []secret.Secret {
-	c.require("OperatorSessionSigningKeys", OperatorRealm)
+	c.require("OperatorSessionSigningKeys", OperatorRealm, OperatorEdge)
 	return c.operatorSessionSigningKeys
+}
+
+// OperatorHost is OPERATOR_HOST, validated; "" means the operator area is OFF and every operator
+// route answers 404 (ADR 0048 #2 + #4).
+func (c Config) OperatorHost() string {
+	c.require("OperatorHost", OperatorEdge)
+	return c.operatorHost
 }
 
 // OperatorTOTPEncryptionKeys are the decoded keys of OPERATOR_TOTP_ENCRYPTION_KEY.
@@ -217,6 +225,7 @@ type configView struct {
 	SecretEncryptionKeys           []secret.Secret
 	OperatorSessionSigningKeys     []secret.Secret
 	OperatorTOTPEncryptionKeys     []secret.Secret
+	OperatorHost                   string
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
@@ -257,6 +266,7 @@ func (c Config) view() configView {
 		SecretEncryptionKeys:           c.secretEncryptionKeys,
 		OperatorSessionSigningKeys:     c.operatorSessionSigningKeys,
 		OperatorTOTPEncryptionKeys:     c.operatorTOTPEncryptionKeys,
+		OperatorHost:                   c.operatorHost,
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,

@@ -58,8 +58,9 @@
 //	OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL  ConfigMap  PublicMedia            refused in staging/prod; dev: PublicURL refused
 //	MALWARE_SCANNER_ADDRESS               ConfigMap  MalwareScan            refused in staging/prod; dev: uploads refused
 //	SECRET_ENCRYPTION_KEYS                Secret     SecretEncryption       refused in staging/prod; dev: those operations refused
-//	OPERATOR_SESSION_SIGNING_KEYS         Secret     OperatorRealm          refused in staging/prod; dev: operator sign-in refused
+//	OPERATOR_SESSION_SIGNING_KEYS         Secret     OperatorRealm + Edge   refused in staging/prod; dev: operator sign-in refused
 //	OPERATOR_TOTP_ENCRYPTION_KEY          Secret     OperatorRealm          as above
+//	OPERATOR_HOST                         Deploy env OperatorEdge           off, in EVERY environment: operator area answers 404
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ               refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -463,12 +464,25 @@ type Config struct {
 
 	// OperatorSessionSigningKeys sign and verify the OPERATOR realm token (`op1.`, ADR 0048
 	// owner's decision #2) — a SEPARATE list from SessionSigningKeys, refused by Load if any entry
-	// is shared with it. First entry signs, every entry verifies. Read by identity only.
+	// is shared with it. First entry signs, every entry verifies.
 	//
-	// Group OperatorRealm, which no service declares yet (ADR 0048 is not wired): absent means
-	// operator sign-in is refused (operatorauth.ErrNotConfigured). See operator.go. k8s SECRET,
+	// Groups OperatorRealm (identity, which signs) and OperatorEdge (platform, which checks the
+	// signature before asking identity — ADR 0048 §01/10 #2). THE SAME VALUE in both Secrets: a
+	// platform holding a different list refuses every token identity issues. Absent means operator
+	// sign-in is refused (operatorauth.ErrNotConfigured). See operator.go. k8s SECRET,
 	// secret.Secret (rule 8). Minimum length is owned by operatorauth.NewTokenSigner.
 	operatorSessionSigningKeys []secret.Secret
+
+	// OperatorHost is the ONE host the operator area answers on (ADR 0048 §28/09 #2 + #4, §01/10
+	// #2), read by service-platform's second edge. Group OperatorEdge.
+	//
+	// OPTIONAL IN EVERY ENVIRONMENT, prod included, AND EMPTY MEANS THE AREA IS OFF: every operator
+	// route answers 404 on every host. Presence is the feature switch ADR 0048 decided (a
+	// deployment with no operator area — the on-premise case of condition #1 — simply does not set
+	// it), so requiring it would force the area on everywhere. A platform-wide constant (rule 8,
+	// invariant 5): one host for the whole deployment, never a commune's value. Validated by
+	// parseOperatorHost (operator.go); malformed is fatal, never trimmed into shape.
+	operatorHost string
 
 	// OperatorTOTPEncryptionKeys encrypt operator TOTP secrets at rest (AES-256-GCM, ADR 0048
 	// owner's decision #10). Read from OPERATOR_TOTP_ENCRYPTION_KEY — singular name, but a
@@ -625,10 +639,17 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// Required in prod: without it every save/read of a commune secret is refused.
 	secretKeysRaw := r.read("SECRET_ENCRYPTION_KEYS", os.Getenv("SECRET_ENCRYPTION_KEYS"), requiredInProd, SecretEncryption)
 
-	// ---- OperatorRealm (ADR 0048; no service declares it yet) -----------------------------
-	// Required in prod once declared: a declared operator area that cannot sign anybody in.
-	opSigningRaw := r.read("OPERATOR_SESSION_SIGNING_KEYS", os.Getenv("OPERATOR_SESSION_SIGNING_KEYS"), requiredInProd, OperatorRealm)
+	// ---- OperatorRealm / OperatorEdge (ADR 0048) ------------------------------------------
+	// Required in prod once declared: a declared operator area that cannot sign anybody in. The
+	// signing keys belong to BOTH groups — identity signs, platform's edge verifies (§01/10 #2) —
+	// and are therefore required in prod for platform even while OPERATOR_HOST is unset: ADR 0057
+	// derives "required" from the declaration, not from whether the feature is switched on.
+	opSigningRaw := r.read("OPERATOR_SESSION_SIGNING_KEYS", os.Getenv("OPERATOR_SESSION_SIGNING_KEYS"), requiredInProd, OperatorRealm, OperatorEdge)
 	opTOTPRaw := r.read("OPERATOR_TOTP_ENCRYPTION_KEY", os.Getenv("OPERATOR_TOTP_ENCRYPTION_KEY"), requiredInProd, OperatorRealm)
+	// Optional IN EVERY ENVIRONMENT: presence is the feature switch (ADR 0048 #2 + #4); empty = the
+	// operator area answers 404 everywhere. The RAW value is kept too, to refuse "set but blank".
+	opHostRawEnv := os.Getenv("OPERATOR_HOST")
+	opHostRaw := r.read("OPERATOR_HOST", opHostRawEnv, optional, OperatorEdge)
 
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
@@ -706,6 +727,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
+	var operatorHost string
+	if uses.has(OperatorEdge) {
+		if operatorHost, err = parseOperatorHost(opHostRawEnv, opHostRaw); err != nil {
+			return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+		}
+	}
 
 	// Malformed is fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
 	secretEncryptionKeys, err := parseAES256KeyList(secretKeysRaw, ErrSecretEncryptionKeysInvalid)
@@ -746,6 +773,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		secretEncryptionKeys:       secretEncryptionKeys,
 		operatorSessionSigningKeys: operatorSigningKeys,
 		operatorTOTPEncryptionKeys: operatorTOTPKeys,
+		operatorHost:               operatorHost,
 
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,
@@ -815,6 +843,9 @@ func (c Config) CanhBao() []string {
 	}
 	if c.uses.has(OperatorRealm) {
 		ra = append(ra, c.operatorWarnings()...)
+	}
+	if c.uses.has(OperatorEdge) {
+		ra = append(ra, c.operatorEdgeWarnings()...)
 	}
 	if c.uses.has(StaffSessionSigning) {
 		// Only reachable in dev — Load refuses to start anywhere else.

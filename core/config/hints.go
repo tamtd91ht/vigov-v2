@@ -201,10 +201,11 @@ var envHints = map[string]envHint{
 		shape: newKeyList,
 	},
 	"OPERATOR_SESSION_SIGNING_KEYS": {
-		meaning: "Khoá ký phiên của khu vực nhà vận hành (ADR 0048) — tách hẳn khỏi SESSION_SIGNING_KEYS.",
-		source:  "Mỗi khoá: openssl rand -base64 48; không trùng khoá nào của SESSION_SIGNING_KEYS (trùng thì pod từ chối).",
-		place:   inSecret,
-		shape:   newKeyList,
+		meaning: "Khoá ký phiên của khu vực nhà vận hành (ADR 0048) — tách hẳn khỏi SESSION_SIGNING_KEYS. identity ký, platform kiểm chữ ký.",
+		source: "Mỗi khoá: openssl rand -base64 48; không trùng khoá nào của SESSION_SIGNING_KEYS (trùng thì pod từ chối). " +
+			"CÙNG MỘT giá trị ở Secret của identity và của platform — khác nhau thì platform từ chối mọi phiên vận hành.",
+		place: inSecret,
+		shape: newKeyList,
 	},
 	"OPERATOR_TOTP_ENCRYPTION_KEY": {
 		meaning: "Khoá AES-256 mã hoá bí mật TOTP của tài khoản nhà vận hành (ADR 0048).",

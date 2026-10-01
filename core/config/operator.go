@@ -5,18 +5,22 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 
 	"github.com/vihat/vigov/core/secret"
 )
 
-// Operator realm configuration (ADR 0048, owner's decisions of 2026-09-28 #2 and #10).
+// Operator realm configuration (ADR 0048, owner's decisions of 2026-09-28 #2 and #10, 2026-10-01 #2).
 //
-// GROUP config.OperatorRealm, WHICH NO SERVICE DECLARES YET: ADR 0048 is not wired into identity's
-// main, so neither variable is read anywhere today. Once identity declares the group, staging and
-// prod refuse to start it without both; a deployment with no operator area (the on-premise case of
-// ADR 0048 condition #1) is then one whose main does NOT declare it — an owner's call, not a
-// default. In dev, absent means operator sign-in is REFUSED (operatorauth answers
-// ErrNotConfigured), never a fallback.
+// TWO GROUPS, NEITHER DECLARED YET. config.OperatorRealm (both keys) is for the service that
+// ISSUES operator sessions — identity. config.OperatorEdge (OPERATOR_HOST + the signing keys) is
+// for the operator area's HTTP edge — platform, which checks the `op1.` signature locally before it
+// asks identity (§01/10 #2) and has no use for the TOTP key. Once a service declares its group,
+// staging and prod refuse to start it without the keys; a deployment with no operator area (the
+// on-premise case of ADR 0048 condition #1) leaves OPERATOR_HOST unset, which turns the area off
+// without touching the declaration. In dev, absent keys mean operator sign-in is REFUSED
+// (operatorauth answers ErrNotConfigured), never a fallback.
 //
 // ROTATION: both are lists, first entry signs/encrypts, every entry verifies/decrypts. HOW OFTEN
 // they rotate is not decided — the same gap SESSION_SIGNING_KEYS carries under ADR 0025 and rule
@@ -32,7 +36,117 @@ var (
 
 	// ErrOperatorTOTPKeyInvalid is a malformed OPERATOR_TOTP_ENCRYPTION_KEY. Load refuses.
 	ErrOperatorTOTPKeyInvalid = errors.New("config: OPERATOR_TOTP_ENCRYPTION_KEY is invalid")
+
+	// ErrOperatorHostInvalid is a malformed or commune-shaped OPERATOR_HOST. Load refuses.
+	ErrOperatorHostInvalid = errors.New("config: OPERATOR_HOST is invalid")
 )
+
+// operatorConsoleLabels are the only first labels OPERATOR_HOST may carry directly under the
+// platform's own domains (platformRoot, platformStagingRoot).
+//
+// WHY ANY OTHER LABEL THERE IS REFUSED: under vigov.vn every other first label is a commune's web
+// host or a candidate for one (ADR 0046: `<xa>.vigov.vn`, `<xa>.stg.vigov.vn`), or a service API
+// host (`<service>.api.vigov.vn`). Pointing the operator area at one of those makes a commune's
+// surface and the vendor's cross-commune surface the same surface — ADR 0048 stop condition #6 and
+// the boundary ADR 0003 draws. `admin` / `admin-stg` are the labels ADR 0046 reserves for the
+// vendor console.
+//
+// A SUBSET COPY of service-platform/internal/domain/ten_mien_danh_rieng.go (nhanDanhRieng), which
+// core cannot import (rule 2, forbidden #1). It only ever needs to be NARROWER than that list: a
+// label accepted here but not reserved there would be a host a commune row could also claim.
+//
+// A host OUTSIDE vigov.vn (a deployment on another domain) is not judged here: there is no rule in
+// this repository for what a commune host looks like on a domain it does not know.
+var operatorConsoleLabels = map[string]bool{"admin": true, "admin-stg": true}
+
+const (
+	platformRoot        = "vigov.vn"
+	platformStagingRoot = "stg.vigov.vn"
+)
+
+// parseOperatorHost validates OPERATOR_HOST. raw is the value as the environment held it, trimmed
+// the value r.read returned. "" is the designed OFF state and is returned as such.
+//
+// REFUSED, NEVER REPAIRED — unlike domain.NormaliseHost, which lower-cases and strips a port
+// because its input is a client's Host header. This value is written by an operator, once: a port,
+// an upper-case letter or a scheme means they meant something this field cannot express, and
+// silently normalising it would make the edge answer on a host nobody wrote down. Every refusal
+// quotes the value — a host name is not a credential, and the operator needs to see what they set.
+func parseOperatorHost(raw, trimmed string) (string, error) {
+	if trimmed == "" {
+		if raw != "" {
+			// Set, but only whitespace: somebody meant to turn the area on and the value got lost
+			// in a paste. Reading it as OFF would hide that until the first operator tries to sign in.
+			return "", fmt.Errorf("%w: set but blank — unset it to turn the operator area off", ErrOperatorHostInvalid)
+		}
+		return "", nil
+	}
+	h := trimmed
+	switch {
+	case strings.Contains(h, "://") || strings.Contains(h, "/"):
+		return "", fmt.Errorf("%w: %q must be a bare host name, no scheme or path", ErrOperatorHostInvalid, h)
+	case strings.Contains(h, ":") || strings.Contains(h, "["):
+		return "", fmt.Errorf("%w: %q must not carry a port (or be an IPv6 literal)", ErrOperatorHostInvalid, h)
+	case h != strings.ToLower(h):
+		return "", fmt.Errorf("%w: %q must be lower-case — the edge compares Host lower-cased", ErrOperatorHostInvalid, h)
+	case strings.HasSuffix(h, "."):
+		return "", fmt.Errorf("%w: %q must not end with a dot", ErrOperatorHostInvalid, h)
+	case net.ParseIP(h) != nil:
+		// A host-only cookie on an IP is a cookie for whatever else answers on that address, and
+		// TLS for the area needs a name.
+		return "", fmt.Errorf("%w: %q is an IP address, the operator area needs a host name", ErrOperatorHostInvalid, h)
+	case len(h) > 253:
+		return "", fmt.Errorf("%w: longer than 253 characters", ErrOperatorHostInvalid)
+	}
+	labels := strings.Split(h, ".")
+	if len(labels) < 2 {
+		return "", fmt.Errorf("%w: %q is not a fully qualified host name", ErrOperatorHostInvalid, h)
+	}
+	for _, l := range labels {
+		if !validHostLabel(l) {
+			return "", fmt.Errorf("%w: %q has an invalid label %q (letters a-z, digits, '-', 1-63 characters, "+
+				"not starting or ending with '-')", ErrOperatorHostInvalid, h, l)
+		}
+	}
+	if h == platformRoot || h == platformStagingRoot {
+		return "", fmt.Errorf("%w: %q is the platform's root domain, not the operator console", ErrOperatorHostInvalid, h)
+	}
+	// The staging root is tried first: "admin.stg.vigov.vn" also ends in ".vigov.vn", and its
+	// label under vigov.vn ("admin.stg") would miss the table.
+	for _, root := range []string{platformStagingRoot, platformRoot} {
+		if under, ok := strings.CutSuffix(h, "."+root); ok {
+			if !operatorConsoleLabels[under] {
+				return "", fmt.Errorf("%w: %q is shaped like a commune or service host under %s — "+
+					"the operator area must never share a host with a commune (ADR 0048 stop condition #6); "+
+					"use admin.%s or admin-stg.%s", ErrOperatorHostInvalid, h, root, platformRoot, platformRoot)
+			}
+			break
+		}
+	}
+	return h, nil
+}
+
+func validHostLabel(l string) bool {
+	if l == "" || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' {
+		return false
+	}
+	for _, c := range l {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// operatorEdgeWarnings is the CanhBao contribution of OperatorEdge. Reachable in dev only: in
+// staging/prod Load already refused a declared edge without signing keys.
+func (c Config) operatorEdgeWarnings() []string {
+	if c.operatorHost != "" && len(c.operatorSessionSigningKeys) == 0 {
+		return []string{"OPERATOR_HOST có giá trị nhưng OPERATOR_SESSION_SIGNING_KEYS trống — " +
+			"khu vận hành bật mà không kiểm được phiên nào; mọi yêu cầu vận hành sẽ bị từ chối"}
+	}
+	return nil
+}
 
 // parseOperatorSigningKeys splits OPERATOR_SESSION_SIGNING_KEYS and refuses any entry that is
 // also a staff SESSION_SIGNING_KEYS entry.

@@ -63,7 +63,9 @@ const (
 	MalwareScan
 	// SecretEncryption: SECRET_ENCRYPTION_KEYS — per-commune secrets at rest (ADR 0009).
 	SecretEncryption
-	// OperatorRealm: OPERATOR_SESSION_SIGNING_KEYS, OPERATOR_TOTP_ENCRYPTION_KEY (ADR 0048).
+	// OperatorRealm: OPERATOR_SESSION_SIGNING_KEYS, OPERATOR_TOTP_ENCRYPTION_KEY (ADR 0048) — the
+	// service that ISSUES operator sessions (identity). The edge that only verifies them declares
+	// OperatorEdge instead.
 	OperatorRealm
 	// RabbitMQ: RABBITMQ_DSN, RABBITMQ_EXCHANGE (ADR 0010).
 	RabbitMQ
@@ -73,6 +75,12 @@ const (
 	// notices into comms' bell inbox (ADR 0058 §3). APPENDED, never inserted: a Group is a bit
 	// position, and renumbering the ones above changes nothing on disk but reads badly in a diff.
 	CommsClient
+	// OperatorEdge: OPERATOR_HOST, OPERATOR_SESSION_SIGNING_KEYS — the operator area's HTTP edge,
+	// service-platform only (ADR 0048 §"Chốt của chủ dự án — 01/10/2026" #2). A SEPARATE GROUP FROM
+	// OperatorRealm because the edge needs the signing keys to check `op1.` signatures and nothing
+	// else: declaring OperatorRealm there would also demand OPERATOR_TOTP_ENCRYPTION_KEY, putting the
+	// key that decrypts every operator's second factor into a pod that never decrypts one.
+	OperatorEdge
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -97,6 +105,7 @@ var groupNames = map[Group]string{
 	RabbitMQ:            "RabbitMQ",
 	Elasticsearch:       "Elasticsearch",
 	CommsClient:         "CommsClient",
+	OperatorEdge:        "OperatorEdge",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

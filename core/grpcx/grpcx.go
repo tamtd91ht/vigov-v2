@@ -196,11 +196,37 @@ const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
 // ListTenants and ResolveTenantSuccession STAY ABSENT. One question being answered does not
 // answer the others — theirs is a different question with a different exposure, spelled out
 // above, and it has not been put to the user.
+//
+// THE SEVEN OperatorService RPCs WERE asked, and answered on 2026-10-01: the owner said yes (ADR
+// 0048 §"Chốt của chủ dự án — 01/10/2026" #2 — the answer to ADR 0012 decision 1's stop condition
+// that ADR 0048 §"Chốt bước 1" deferred). They pass ADR 0012's test with the most structural no of
+// all: an operator belongs to NO commune (ADR 0048 condition #3), so there is no commune to know at
+// call time, before or after. What keeps them from widening the hole (proto/vigov/identity/v1/
+// operator.proto, service comment):
+//
+//	no request carries a commune field, and no handler reads tenant.From — inventing one would be
+//	a default on the isolation path (rule 1, forbidden #1);
+//	no response carries business data of any commune — the `ops.*` keys ResolveOperatorSession
+//	returns authorise platform METADATA routes only (ADR 0003), and none answers without a
+//	password, a second factor or a live `op1.` token;
+//	the exemption is from the COMMUNE, not from the CALLER: every one still needs the caller key
+//	(caller_auth_exempt_test.go iterates this map).
+//
+// Listed BY FULL NAME, all seven, not by service prefix: an eighth RPC added to OperatorService
+// later must be a visible diff here, not inherited.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost:           {},
 	MethodResolveCitizenSession: {},
 	MethodOpenCitizenSession:    {},
 	MethodResolveMiniApp:        {},
+
+	"/vigov.identity.v1.OperatorService/OpenOperatorSession":             {},
+	"/vigov.identity.v1.OperatorService/ResolveOperatorSession":          {},
+	"/vigov.identity.v1.OperatorService/RevokeOperatorSession":           {},
+	"/vigov.identity.v1.OperatorService/ChangeOperatorPassword":          {},
+	"/vigov.identity.v1.OperatorService/RegenerateOperatorRecoveryCodes": {},
+	"/vigov.identity.v1.OperatorService/BeginOperatorEnrollment":         {},
+	"/vigov.identity.v1.OperatorService/CompleteOperatorEnrollment":      {},
 }
 
 // ExemptFromTenant reports whether fullMethod may be called without a commune.

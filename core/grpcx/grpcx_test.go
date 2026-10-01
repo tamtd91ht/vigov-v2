@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
@@ -73,6 +74,32 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 		if !grpcx.ExemptFromTenant(m) {
 			t.Fatalf("%s phải được miễn: nó QUYẾT ĐỊNH / TRẢ LỜI xã nào, không thể mang xã lúc gọi", m)
 		}
+	}
+	// Owner's decision of 2026-10-01 (ADR 0048 §01/10 #2): an operator belongs to no commune, so
+	// these seven have none to carry. Literal strings, same reason as above — and checked against
+	// the generated names too, so a renamed RPC in the proto turns this red instead of silently
+	// losing its exemption.
+	operatorRPCs := map[string]string{
+		"/vigov.identity.v1.OperatorService/OpenOperatorSession":             identityv1.OperatorService_OpenOperatorSession_FullMethodName,
+		"/vigov.identity.v1.OperatorService/ResolveOperatorSession":          identityv1.OperatorService_ResolveOperatorSession_FullMethodName,
+		"/vigov.identity.v1.OperatorService/RevokeOperatorSession":           identityv1.OperatorService_RevokeOperatorSession_FullMethodName,
+		"/vigov.identity.v1.OperatorService/ChangeOperatorPassword":          identityv1.OperatorService_ChangeOperatorPassword_FullMethodName,
+		"/vigov.identity.v1.OperatorService/RegenerateOperatorRecoveryCodes": identityv1.OperatorService_RegenerateOperatorRecoveryCodes_FullMethodName,
+		"/vigov.identity.v1.OperatorService/BeginOperatorEnrollment":         identityv1.OperatorService_BeginOperatorEnrollment_FullMethodName,
+		"/vigov.identity.v1.OperatorService/CompleteOperatorEnrollment":      identityv1.OperatorService_CompleteOperatorEnrollment_FullMethodName,
+	}
+	for literal, generated := range operatorRPCs {
+		if literal != generated {
+			t.Fatalf("the proto renamed %s to %s — the exemption no longer names the real RPC", literal, generated)
+		}
+		if !grpcx.ExemptFromTenant(literal) {
+			t.Fatalf("%s phải được miễn: người vận hành không thuộc xã nào (ADR 0048 §01/10 #2)", literal)
+		}
+	}
+	// The exemption is per RPC, never per service: an RPC added to OperatorService later is NOT
+	// inherited.
+	if grpcx.ExemptFromTenant("/vigov.identity.v1.OperatorService/ListOperators") {
+		t.Fatal("OperatorService được miễn theo tiền tố — RPC mới phải là một dòng diff hiển nhiên")
 	}
 	// Anything not named on the list is not exempt. This is the half of the rule that decays
 	// first: an exemption that applies by default applies to every RPC written afterwards.

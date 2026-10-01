@@ -1,0 +1,229 @@
+package ratelimit
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// fakeCounter is an in-memory fixed-window counter with a controllable clock — the module has no
+// in-memory Redis, and adding one for a single test is a dependency nobody reviewed.
+type fakeCounter struct {
+	mu    sync.Mutex
+	now   time.Time
+	n     map[string]int64
+	until map[string]time.Time
+	keys  []string
+	fail  error
+}
+
+func newFake() *fakeCounter {
+	return &fakeCounter{now: time.Unix(1_800_000_000, 0), n: map[string]int64{}, until: map[string]time.Time{}}
+}
+
+func (f *fakeCounter) Incr(_ context.Context, key string, window time.Duration) (int64, time.Duration, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keys = append(f.keys, key)
+	if f.fail != nil {
+		return 0, 0, f.fail
+	}
+	if u, ok := f.until[key]; !ok || !f.now.Before(u) {
+		f.n[key] = 0
+		f.until[key] = f.now.Add(window)
+	}
+	f.n[key]++
+	return f.n[key], f.until[key].Sub(f.now), nil
+}
+
+func mustNew(t *testing.T, c Counter) *Limiter {
+	t.Helper()
+	l, err := New(c, OperatorSignIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}
+
+// The decided threshold, pinned: changing it is a rule 13 stop condition, so a change must turn
+// something red rather than slip through as a refactor.
+func TestOperatorSignInIsTwentyPerFifteenMinutes(t *testing.T) {
+	if OperatorSignInLimit != 20 || OperatorSignInWindow != 15*time.Minute {
+		t.Fatalf("ADR 0048 §01/10 #3 decided 20 / 15 min / IP, got %d / %v", OperatorSignInLimit, OperatorSignInWindow)
+	}
+	if OperatorSignIn.limit != OperatorSignInLimit || OperatorSignIn.window != OperatorSignInWindow {
+		t.Fatal("OperatorSignIn does not use the named constants")
+	}
+}
+
+func TestTwentyAllowedThenRefusedUntilTheWindowEnds(t *testing.T) {
+	f := newFake()
+	l := mustNew(t, f)
+	ctx := context.Background()
+	k := OperatorIPKey("203.0.113.7")
+
+	for i := 1; i <= 20; i++ {
+		ok, _, err := l.Allow(ctx, k)
+		if err != nil || !ok {
+			t.Fatalf("attempt %d refused (err %v)", i, err)
+		}
+	}
+	f.now = f.now.Add(5 * time.Minute)
+	ok, retry, err := l.Allow(ctx, k)
+	if err != nil || ok {
+		t.Fatalf("attempt 21 allowed (err %v)", err)
+	}
+	if retry != 10*time.Minute {
+		t.Fatalf("retryAfter = %v, want the rest of the window (10m)", retry)
+	}
+
+	// Another address has its own budget.
+	if ok, _, _ := l.Allow(ctx, OperatorIPKey("203.0.113.8")); !ok {
+		t.Fatal("a second address was refused on the first's budget")
+	}
+
+	// The window is fixed: it ends on schedule even though refused attempts kept counting.
+	f.now = f.now.Add(10 * time.Minute)
+	if ok, _, _ := l.Allow(ctx, k); !ok {
+		t.Fatal("a new window did not start a new budget")
+	}
+}
+
+// FAIL CLOSED: a store that cannot be asked never lets the attempt through.
+func TestStoreFailureIsNotAllowed(t *testing.T) {
+	f := newFake()
+	f.fail = errors.New("dial tcp: connection refused")
+	l := mustNew(t, f)
+	ok, _, err := l.Allow(context.Background(), OperatorIPKey("203.0.113.7"))
+	if ok {
+		t.Fatal("an unreachable store ALLOWED the attempt — the limiter failed open")
+	}
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("want ErrUnavailable, got %v", err)
+	}
+}
+
+// The operator key has no tenant prefix (the realm has no commune) and is namespaced by policy.
+func TestOperatorKeyShape(t *testing.T) {
+	f := newFake()
+	l := mustNew(t, f)
+	_, _, _ = l.Allow(context.Background(), OperatorIPKey("203.0.113.7"))
+	if len(f.keys) != 1 || f.keys[0] != "rl:op-signin:ip:203.0.113.7" {
+		t.Fatalf("key = %v", f.keys)
+	}
+	if strings.HasPrefix(f.keys[0], "t:") {
+		t.Fatal("an operator key carries a tenant prefix — the operator area has no commune")
+	}
+}
+
+// A store answering a TTL outside the window never becomes Retry-After 0 or hours.
+type badTTL struct{ ttl time.Duration }
+
+func (b badTTL) Incr(context.Context, string, time.Duration) (int64, time.Duration, error) {
+	return 999, b.ttl, nil
+}
+
+func TestOutOfRangeTTLIsClampedToTheWindow(t *testing.T) {
+	for _, ttl := range []time.Duration{-1, 0, 48 * time.Hour} {
+		l := mustNew(t, badTTL{ttl})
+		ok, retry, err := l.Allow(context.Background(), OperatorIPKey(""))
+		if ok || err != nil || retry != OperatorSignInWindow {
+			t.Errorf("ttl %v: ok=%v retry=%v err=%v", ttl, ok, retry, err)
+		}
+	}
+}
+
+func TestNewRefusesWiringFaults(t *testing.T) {
+	if _, err := New(nil, OperatorSignIn); err == nil {
+		t.Error("nil counter accepted")
+	}
+	if _, err := New(newFake(), Policy{}); err == nil {
+		t.Error("empty policy accepted — it would allow everything")
+	}
+}
+
+func TestParseIncrResult(t *testing.T) {
+	n, ttl, err := parseIncrResult([]any{int64(3), int64(1500)})
+	if err != nil || n != 3 || ttl != 1500*time.Millisecond {
+		t.Fatalf("got %d %v %v", n, ttl, err)
+	}
+	for _, bad := range []any{nil, "x", []any{int64(1)}, []any{"1", int64(1)}, []any{int64(0), int64(1)}} {
+		if _, _, err := parseIncrResult(bad); err == nil {
+			t.Errorf("%#v accepted", bad)
+		}
+	}
+}
+
+func TestNewRedisCounterRefusesEmptyDSN(t *testing.T) {
+	if _, err := NewRedisCounter(""); err == nil {
+		t.Fatal("empty REDIS_DSN accepted — the security limiter would never be built")
+	}
+}
+
+// ---- middleware -----------------------------------------------------------------------------
+
+func serve(h http.Handler) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/operator-sessions", nil)
+	req.RemoteAddr = "203.0.113.7:51000"
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func ipKey(r *http.Request) Key { return OperatorIPKey(strings.Split(r.RemoteAddr, ":")[0]) }
+
+func TestMiddleware429WithRetryAfter(t *testing.T) {
+	f := newFake()
+	l := mustNew(t, f)
+	ran := 0
+	h := Middleware(l, ipKey, nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { ran++ }))
+
+	for i := 0; i < OperatorSignInLimit; i++ {
+		if rec := serve(h); rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d: %d", i+1, rec.Code)
+		}
+	}
+	f.now = f.now.Add(14*time.Minute + 500*time.Millisecond)
+	rec := serve(h)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("over the limit: %d, want 429", rec.Code)
+	}
+	if got := rec.Header().Get("Retry-After"); got != "60" {
+		t.Fatalf("Retry-After = %q, want 60 (59.5 s rounded up)", got)
+	}
+	if ran != OperatorSignInLimit {
+		t.Fatalf("handler ran %d times, want %d — a throttled attempt reached the handler", ran, OperatorSignInLimit)
+	}
+}
+
+func TestMiddleware503WhenStoreDown(t *testing.T) {
+	f := newFake()
+	f.fail = errors.New("i/o timeout")
+	ran := false
+	h := Middleware(mustNew(t, f), ipKey, nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { ran = true }))
+	rec := serve(h)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("store down: %d, want 503", rec.Code)
+	}
+	if ran {
+		t.Fatal("store down, yet the handler ran — failed open")
+	}
+	if rec.Header().Get("Retry-After") != "" {
+		t.Error("a 503 for an outage must not claim a window")
+	}
+}
+
+func TestRetryAfterSeconds(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		0: "1", time.Millisecond: "1", time.Second: "1", 1001 * time.Millisecond: "2", 15 * time.Minute: "900",
+	} {
+		if got := retryAfterSeconds(d); got != want {
+			t.Errorf("%v → %q, want %q", d, got, want)
+		}
+	}
+}
