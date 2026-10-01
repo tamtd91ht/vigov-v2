@@ -83,7 +83,8 @@ pipeline {
     choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
-                                  'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app'],
+                                  'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
+                                  'dung-clamav'],
            description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
                         'của vigov-prod VÀ cùng giá trị vào vigov-staging (chung CSDL); đã có thì DỪNG, không đổi gì ' +
@@ -104,7 +105,10 @@ pipeline {
                         'tao-xa-thang-binh: LỊCH SỬ — đã chạy 26/09/2026; chạy lại sẽ DỪNG ở phép kiểm, và sau ' +
                         'platform 0007 câu INSERT admin.* của nó bị CHECK từ chối · ' +
                         'gan-mini-app-thang-binh: ghi dòng mini_app App ID 3291993990104489440 → Xã Thăng Bình ' +
-                        '(MT=prod; cần platform migration 0006)')
+                        '(MT=prod; cần platform migration 0006) · ' +
+                        'dung-clamav: áp deploy/cluster/clamav.yaml (clamd, ADR 0052 §9) vào namespace của MT, đợi sẵn sàng, ' +
+                        'thử PING/PONG, rồi đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config NẾU CHƯA CÓ ' +
+                        '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -114,7 +118,8 @@ pipeline {
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / ' +
                         'tao-khoa-ma-hoa-identity / bat-demo-mini-app / tat-demo-mini-app: gõ đúng vigov-prod. ' +
-                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity: gõ đúng namespace của MT (vigov-prod hoặc vigov-staging).')
+                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / dung-clamav: gõ đúng namespace của MT ' +
+                        '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
     string(name: 'APP_ID', defaultValue: '3291993990104489440',
@@ -148,7 +153,8 @@ pipeline {
           if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
-                                  'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app'])) {
+                                  'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
+                                  'dung-clamav'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -1228,6 +1234,164 @@ EOF
           else
             echo "Xong — danh tính demo đã tắt cho app $APP_ID."
           fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // DỰNG CLAMAV (clamd) — máy quét mã độc tệp tải lên của petitions (ADR 0052 §9). Manifest và
+    // lý do từng lựa chọn (RAM, đường ra freshclam, StreamMaxLength, không Ingress): đầu tệp
+    // deploy/cluster/clamav.yaml. Chạy MT=prod và MT=staging riêng — mỗi namespace một clamd.
+    //
+    // THỨ TỰ: ĐỌC trước (common-config có không, NetworkPolicy nào đang có) → `apply` (chạy lại
+    // không sinh bản thứ hai) → đợi sẵn sàng → THỬ THẬT bằng PING/PONG từ một pod khác qua Service
+    // (đúng đường petitions sẽ đi, không phải từ trong pod clamd) → MỚI ghi common-config.
+    // Ghi địa chỉ trước khi clamd trả lời là để petitions khởi động với một máy quét chưa ai thấy chạy.
+    //
+    // MALWARE_SCANNER_ADDRESS CHỈ THÊM KHI CHƯA CÓ — có rồi (kể cả khác giá trị) thì GIỮ NGUYÊN và
+    // in ra: giá trị ai đó đặt tay là quyết định của người ấy. Không bí mật nên được in.
+    // KHÔNG khởi động lại dịch vụ nào: petitions đọc key ở lần khởi động kế (job service-petitions).
+    //
+    // POD THỬ: dùng LẠI ảnh clamav của Deployment (đã kéo về node, cùng pull secret) với `command`
+    // thay entrypoint — `echo PING | nc` như clamdcheck.sh của ảnh. Không attach/stdin (lý do ở
+    // `chay_psql`): hỏi pha bằng `get`, đọc `logs`, xoá pod. Nhãn KHÁC nhãn của Deployment, không thì
+    // Service vigov-clamav gửi lưu lượng vào pod thử.
+    //
+    // THỜI GIAN: lần đầu freshclam tải ~300 MB rồi clamd mới mở 3310 — `rollout status` 600 giây +
+    // pod thử ≤ 2 phút, dưới giới hạn 20 phút của job.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Dựng ClamAV') {
+      when { expression { params.HANH_DONG == 'dung-clamav' } }
+      steps {
+        script {
+          if (!(params.MT in ['prod', 'staging'])) { error("dung-clamav: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+        }
+        sh '''
+          set -eu
+          TMP_DIR=$(mktemp -d)
+          DEP=vigov-clamav
+          ADDR=vigov-clamav:3310
+          KEY=MALWARE_SCANNER_ADDRESS
+          POD="vigov-clamav-ping-$BUILD_NUMBER"
+          trap 'kubectl -n "$NS" delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+
+          # In sự kiện + 80 dòng log của pod clamd mới nhất, rồi đỏ.
+          fail() {
+            echo ""
+            echo "✗ $1"
+            echo "── deploy/$DEP"
+            kubectl -n "$NS" describe deploy "$DEP" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            pod=$(kubectl -n "$NS" get pod -l app.kubernetes.io/name=vigov-clamav \
+                    --sort-by=.metadata.creationTimestamp -o name 2>/dev/null | tail -1 || true)
+            if [ -n "$pod" ]; then
+              echo "── $pod — sự kiện"
+              kubectl -n "$NS" describe "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              echo "── $pod — 80 dòng log cuối"
+              kubectl -n "$NS" logs "$pod" --tail=80 2>&1 || true
+              echo "── $pod — lần chạy TRƯỚC (nếu đã khởi động lại)"
+              kubectl -n "$NS" logs "$pod" --tail=80 --previous 2>/dev/null || echo "   (không có)"
+            else
+              echo "   (không thấy pod clamd nào)"
+            fi
+            echo ""
+            echo "Gợi ý: kẹt ở 'Updating initial database' = không tới được database.clamav.net:443 (NetworkPolicy /"
+            echo "tường lửa); ImagePullBackOff = thiếu/sai secret dockerhub-omicrm; OOMKilled = limit bộ nhớ quá thấp."
+            exit 1
+          }
+
+          # ── 0. ĐỌC — chưa ghi gì.
+          [ -r deploy/cluster/clamav.yaml ] || { echo "DỪNG: không thấy deploy/cluster/clamav.yaml trong kho — không đổi gì."; exit 1; }
+          kubectl -n "$NS" get configmap common-config >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy configmap/common-config trong $NS — không đổi gì (job này không tạo nó)."; exit 1; }
+          kubectl -n "$NS" get secret dockerhub-omicrm >/dev/null 2>&1 || \\
+            echo "⚠ không đọc được secret/dockerhub-omicrm trong $NS (thiếu, hoặc job không có quyền đọc tên) — kéo ảnh Docker Hub có thể bị giới hạn."
+          echo "── NetworkPolicy trong $NS (tên | loại)"
+          kubectl -n "$NS" get networkpolicy \\
+            -o go-template='{{range .items}}   {{.metadata.name}} |{{range .spec.policyTypes}} {{.}}{{end}}{{"\\n"}}{{end}}' > "$TMP_DIR/netpol" || true
+          if [ -s "$TMP_DIR/netpol" ]; then
+            cat "$TMP_DIR/netpol"
+            echo "⚠ Namespace CÓ NetworkPolicy. pod clamd cần: VÀO 3310 từ petitions; RA DNS + 443 (database.clamav.net)."
+            echo "  Job này KHÔNG mở — chặn thì bước đợi bên dưới đỏ và in log."
+          else
+            echo "   (không có cái nào — đường vào/ra không bị hạn chế)"
+          fi
+
+          # ── 1. ÁP manifest — idempotent.
+          echo ""
+          echo "── kubectl apply deploy/cluster/clamav.yaml → $NS"
+          kubectl -n "$NS" apply -f deploy/cluster/clamav.yaml
+
+          # ── 2. ĐỢI sẵn sàng — lần đầu là tải chữ ký, chậm.
+          echo ""
+          echo "── đợi deploy/$DEP sẵn sàng (tối đa 600 giây; lần đầu tải ~300 MB chữ ký)"
+          kubectl -n "$NS" rollout status deploy/"$DEP" --timeout=600s || fail "deploy/$DEP chưa sẵn sàng sau 600 giây."
+
+          # ── 3. THỬ qua Service: PING → PONG.
+          IMG=$(kubectl -n "$NS" get deploy "$DEP" -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo ""
+          echo "── thử PING → $ADDR từ pod $POD (ảnh $IMG)"
+          cat > "$TMP_DIR/pod.json" <<'JSON'
+{"apiVersion":"v1","kind":"Pod",
+ "metadata":{"name":"@POD@","labels":{"app.kubernetes.io/name":"vigov-clamav-ping"}},
+ "spec":{"restartPolicy":"Never","automountServiceAccountToken":false,
+   "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+   "securityContext":{"runAsNonRoot":true,"runAsUser":100,"seccompProfile":{"type":"RuntimeDefault"}},
+   "containers":[{"name":"ping","image":"@IMG@",
+     "command":["sh","-c","out=$(echo PING | nc -w 10 vigov-clamav 3310); echo clamd tra loi: $out; test $out = PONG"],
+     "securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}},
+     "resources":{"requests":{"cpu":"10m","memory":"16Mi"},"limits":{"memory":"64Mi"}}}]}}
+JSON
+          sed -i -e "s|@POD@|$POD|" -e "s|@IMG@|$IMG|" "$TMP_DIR/pod.json"
+          kubectl -n "$NS" create -f "$TMP_DIR/pod.json" >/dev/null
+          phase=""; i=0
+          while [ $i -lt 24 ]; do   # 24 × 5 giây = 2 phút
+            phase=$(kubectl -n "$NS" get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            case "$phase" in Succeeded|Failed) break ;; esac
+            sleep 5; i=$((i+1))
+          done
+          kubectl -n "$NS" logs "$POD" 2>&1 | sed 's/^/   /' || true
+          if [ "$phase" != "Succeeded" ]; then
+            echo "── pod $POD kết thúc ở pha '$phase' — sự kiện:"
+            kubectl -n "$NS" describe pod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            fail "clamd KHÔNG trả PONG qua Service $ADDR — common-config KHÔNG bị đổi."
+          fi
+          kubectl -n "$NS" delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+          echo "   ✓ clamd trả PONG qua Service $ADDR"
+
+          # ── 4. common-config: CHỈ THÊM khi chưa có key.
+          echo ""
+          echo "── $KEY trong configmap/common-config của $NS"
+          has=$(kubectl -n "$NS" get configmap common-config \\
+                  -o go-template='{{range $k, $v := .data}}{{if eq $k "MALWARE_SCANNER_ADDRESS"}}yes{{end}}{{end}}')
+          if [ -n "$has" ]; then
+            cur=$(kubectl -n "$NS" get configmap common-config -o go-template='{{index .data "MALWARE_SCANNER_ADDRESS"}}')
+            echo "   giữ nguyên — đang là '$cur'"
+            if [ "$cur" != "$ADDR" ]; then
+              echo "   ⚠ KHÁC Service vừa dựng ($ADDR). Job này không đổi giá trị đặt tay; sửa tay nếu nó trỏ nhầm."
+            fi
+          else
+            kubectl -n "$NS" patch configmap common-config --type=merge \\
+              -p '{"data":{"MALWARE_SCANNER_ADDRESS":"vigov-clamav:3310"}}' >/dev/null
+            cur=$(kubectl -n "$NS" get configmap common-config -o go-template='{{index .data "MALWARE_SCANNER_ADDRESS"}}')
+            [ "$cur" = "$ADDR" ] || { echo "✗ đọc lại $KEY = '$cur', không phải '$ADDR' — kiểm tay."; exit 1; }
+            echo "   ✓ đã đặt $KEY=$ADDR (đọc lại từ cụm khớp)"
+          fi
+
+          cat <<'EOF'
+
+KHÔNG dịch vụ nào bị khởi động lại. petitions đọc MALWARE_SCANNER_ADDRESS ở lần khởi động kế.
+
+⚠ TRƯỚC job service-petitions: ảnh petitions mới (config.Uses) còn đòi OBJECT_STORAGE_ENDPOINT ·
+OBJECT_STORAGE_PUBLIC_ENDPOINT · OBJECT_STORAGE_BUCKET_PREFIX (common-config) và
+OBJECT_STORAGE_ACCESS_KEY · OBJECT_STORAGE_SECRET_KEY (petitions-secrets) — thiếu là TỪ CHỐI KHỞI
+ĐỘNG. Dạng giá trị: deploy/cau-hinh/README.md mục 1 và 2.
+
+⚠ clamd đang ở StreamMaxLength mặc định 25 MB: tệp lớn hơn (PDF đính kèm nhiệm vụ cho tới 50 MB) bị
+TỪ CHỐI tải lên, không bao giờ coi là sạch. Nâng mức là ADR 0052 CÒN MỞ #4 — đầu tệp deploy/cluster/clamav.yaml.
+EOF
         '''
       }
     }

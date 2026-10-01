@@ -1,0 +1,150 @@
+# ClamAV (clamd) của ViGov — máy quét mã độc cho tệp tải lên (ADR 0052 §9).
+#
+# VÌ SAO: petitions quét MỌI tệp trước khi chép từ vùng tạm sang kho riêng (core/malwarescan,
+# lệnh INSTREAM qua TCP 3310). Thiếu máy quét là ĐÓNG KÍN: mọi lượt tải lên bị từ chối, không bao
+# giờ lưu tệp chưa quét. Ở staging/prod, ảnh petitions có `config.Uses(MalwareScan)` còn TỪ CHỐI
+# KHỞI ĐỘNG nếu `MALWARE_SCANNER_ADDRESS` trống (ADR 0057). Giá trị cho Service dưới đây:
+# `vigov-clamav:3310` — không `tcp://`; nhiều bản sao thì danh sách `host:port` cách dấu phẩy.
+#
+# ÁP BẰNG job `vigov-deploy`, việc `dung-clamav` (deploy/Jenkinsfile). KHÔNG ghi namespace ở đây:
+# cùng một tệp áp cho vigov-prod và vigov-staging qua `kubectl -n <ns> apply -f`.
+#
+# RAM: cơ sở dữ liệu chữ ký nạp vào bộ nhớ ~1–1,5 GB mỗi clamd; lúc freshclam tải bản mới, clamd
+# nạp bản mới TRƯỚC rồi mới bỏ bản cũ (ConcurrentDatabaseReload mặc định bật) — đỉnh gần gấp đôi.
+# Nên request 1536Mi, limit 3Gi. Hạ limit xuống dưới ~2,5 GB là OOMKilled mỗi lần cập nhật chữ ký.
+#
+# ĐƯỜNG RA: freshclam cần HTTPS tới database.clamav.net:443 (CDN, không có dải IP cố định) + DNS.
+# Lần khởi động đầu tải ~300 MB rồi mới mở 3310 — vài phút; readiness đợi việc ấy. Namespace có
+# NetworkPolicy chặn đường ra thì pod này kẹt ở "Updating initial database" mãi — mở 443 + DNS cho
+# RIÊNG pod này (podSelector theo nhãn app.kubernetes.io/name: vigov-clamav).
+#
+# CỠ TỆP: clamd mặc định StreamMaxLength = 25 MB. Ảnh phản ánh ≤ 10 MB lọt dưới mức ấy. NHƯNG đính
+# kèm nhật ký nhiệm vụ cho PDF tới 50 MB (platform migration 0010) và video tới 2 GB (ADR 0052 §10):
+# tệp lớn hơn 25 MB bị clamd từ chối → core/malwarescan trả ErrTooLarge → tải lên BỊ TỪ CHỐI (không
+# bao giờ coi là sạch). Nâng giới hạn là ADR 0052 CÒN MỞ #4 (devops/chủ dự án quyết) — KHÔNG đặt ở
+# đây. Khi quyết: env `CLAMD_CONF_StreamMaxLength` (entrypoint của ảnh ghi vào clamd.conf), và RAM
+# phải tăng theo.
+#
+# KHÔNG INGRESS, KHÔNG NodePort: giao thức clamd KHÔNG mã hoá, không xác thực — ai tới được 3310
+# là gửi được tệp bắt clamd quét (tốn CPU/RAM) và dò được phiên bản chữ ký. Chỉ petitions gọi nó,
+# trong cụm, qua Service ClusterIP. (Luật 13 bất biến 1: kênh không mã hoá này là nợ đã biết của
+# ADR 0052 §9 — nằm trong cụm, không bao giờ ra ngoài.)
+#
+# ẢNH: `clamav/clamav` chính thức của Cisco Talos trên Docker Hub, GHIM bản 1.4.6 (dòng LTS 1.4,
+# phát hành 28/09/2026) — không `latest`, không `1.4` trôi: đổi bản là một commit có người đọc.
+# Kéo ảnh Docker Hub bằng `dockerhub-omicrm` như pod psql của job (CHAY_PSQL).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vigov-clamav
+  labels:
+    app.kubernetes.io/name: vigov-clamav
+    app.kubernetes.io/part-of: vigov
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vigov-clamav
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Pod mới tải chữ ký vài phút trước khi sẵn sàng; giữ pod cũ phục vụ tới lúc ấy.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vigov-clamav
+        app.kubernetes.io/part-of: vigov
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-omicrm
+      automountServiceAccountToken: false   # clamd không gọi API k8s
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: clamd
+          image: clamav/clamav:1.4.6
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: clamd
+              containerPort: 3310
+              protocol: TCP
+          # freshclam chạy nền trong cùng container, mặc định của ảnh: FRESHCLAM_CHECKS=1 (một lần
+          # kiểm chữ ký mới mỗi ngày). Đổi tần suất là thêm env ấy — chưa ai yêu cầu.
+          resources:
+            requests:
+              memory: 1536Mi
+              cpu: 250m
+            limits:
+              memory: 3Gi
+          # tcpSocket ĐỦ làm phép sẵn sàng: clamd chỉ mở 3310 SAU khi đã nạp xong chữ ký. Pod bắt
+          # đầu ở trạng thái CHƯA sẵn sàng và chỉ thành sẵn sàng ở lần thử ĐẦU TIÊN thành công —
+          # failureThreshold không chặn lần tải đầu (nó chỉ đếm từ sẵn sàng → không sẵn sàng), nên
+          # giữ nhỏ: một clamd chết không được nhận lưu lượng thêm nhiều phút.
+          readinessProbe:
+            tcpSocket:
+              port: clamd
+            initialDelaySeconds: 120
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+          # Liveness GIẾT container: đợi lâu hơn hẳn lần tải chữ ký đầu (CDN chậm có thể >10 phút),
+          # không thì pod bị giết giữa chừng tải và lặp mãi. 900 giây + 4 × 30 giây.
+          livenessProbe:
+            tcpSocket:
+              port: clamd
+            initialDelaySeconds: 900
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 4
+          # CHẶT NHẤT MÀ ẢNH CHỊU ĐƯỢC — đọc từ entrypoint của ảnh (clamav-docker, /init):
+          #   · /init chạy bằng ROOT: `chown -R clamav:clamav /var/lib/clamav`, `install -d -o clamav
+          #     /run/clamav`, `sed -i` clamd.conf/freshclam.conf, rồi freshclam (--user=clamav) và
+          #     clamd (`User clamav` trong clamd.conf) TỰ HẠ QUYỀN xuống user clamav (uid 100).
+          #     → KHÔNG runAsNonRoot / runAsUser được: chown và hạ quyền cần root.
+          #   · Năng lực giữ lại là đúng những gì các bước ấy dùng: CHOWN + FOWNER + DAC_OVERRIDE
+          #     (chown/install trên thư mục của clamav), SETUID + SETGID (hạ quyền). Bỏ hết cái khác.
+          #   · allowPrivilegeEscalation: false — hạ quyền bằng setuid()/setgid() từ root vẫn chạy
+          #     dưới no_new_privs; chỉ việc LEO quyền qua tệp setuid bị chặn.
+          #   · KHÔNG readOnlyRootFilesystem: /init ghi /etc/clamav/*.conf, /run/lock, /var/lock,
+          #     /var/log/clamav, /tmp. Bịt từng chỗ bằng emptyDir là đoán theo bản ảnh hôm nay —
+          #     bản sau thêm một chỗ ghi là clamd không khởi động.
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER", "DAC_OVERRIDE", "SETUID", "SETGID"]
+          volumeMounts:
+            - name: signatures
+              mountPath: /var/lib/clamav
+      volumes:
+        # emptyDir: mỗi lần pod khởi động lại là TẢI LẠI ~300 MB chữ ký (vài phút không sẵn sàng,
+        # và CDN của ClamAV giới hạn tần suất theo IP — tải lại dồn dập có thể bị chặn tạm). Một PVC
+        # nhỏ (1Gi) ở đây tránh việc ấy; chưa dùng vì cụm dựng tay chưa chốt StorageClass.
+        - name: signatures
+          emptyDir:
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vigov-clamav
+  labels:
+    app.kubernetes.io/name: vigov-clamav
+    app.kubernetes.io/part-of: vigov
+spec:
+  type: ClusterIP           # KHÔNG NodePort/LoadBalancer, KHÔNG Ingress — xem đầu tệp
+  selector:
+    app.kubernetes.io/name: vigov-clamav
+  ports:
+    - name: clamd
+      port: 3310
+      targetPort: clamd
+      protocol: TCP

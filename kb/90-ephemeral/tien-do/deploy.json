@@ -164,6 +164,14 @@
       "bang_chung": "deploy/Jenkinsfile: HANH_DONG tao-khoa-ma-hoa-identity (sinh SECRET_ENCRYPTION_KEYS vào identity-secrets prod + chép cùng giá trị sang staging vì chung CSDL; đã có thì không ghi đè; khoá đi qua tệp umask 077 + --patch-file, không in), mo-netpol-identity-zalo (không có NetworkPolicy thì không làm gì; có thì mở 443 cho pod identity theo selector thật), kiem-tra-dang-nhap-app-rieng (chỉ đọc; gọi thử POST /api/v1/citizen-sessions mong 400 invalid_body), bat-demo-mini-app / tat-demo-mini-app (pod một lần chạy /operatorctl mini-app-demo từ ảnh identity đang chạy). service-identity/Dockerfile thêm /operatorctl. deploy/cau-hinh/README.md mục 6 thứ tự chạy. check_build, check_security, brain, hooks xanh; bash -n các khối shell. || Sự cố 01/10/2026: ảnh identity 22ac0ce06976 CrashLoopBackOff trên vigov-prod — thiếu PETITIONS_GRPC_ADDR, DOCUMENTS_GRPC_ADDR, CITIZEN_SESSION_BRIDGE_LISTEN_ADDR, CITIZEN_SESSION_BRIDGE_KEYS (yêu cầu có từ trước lượt này; ảnh cũ 57d5101bb966 chưa đòi). Thêm HANH_DONG bo-sung-cau-hinh-identity: khoá cầu phiên sinh vào identity-secrets + chép staging (bảng quyết định như tạo khoá), 3 biến env đặt nếu thiếu, khởi động lại + rollout status 180 s, hỏng thì in 60 dòng log.",
       "tiep_theo": "Chạy bo-sung-cau-hinh-identity MT=prod rồi MT=staging. Service petitions/documents chỉ mở 8080: xoá đơn vị sẽ lỗi tới khi thêm cổng 9090 (và pod nghe 9090) trên Rancher; Service identity chưa mở 9091 (chỉ cần khi vihat-miniapp gọi cầu). Sau đó: kiem-tra-dang-nhap-app-rieng → bat-demo-mini-app → đẩy app --demo. Chép CITIZEN_SESSION_BRIDGE_KEYS sang Secret của vihat-miniapp khi triển khai cầu app chung.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "dung-clamav-cho-petitions",
+      "viec": "Dựng ClamAV (clamd) trên cụm qua job vigov-deploy cho service-petitions (MALWARE_SCANNER_ADDRESS, ADR 0052 §9)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "deploy/cluster/clamav.yaml: Deployment + Service vigov-clamav, clamav/clamav:1.4.6, cổng 3310, không Ingress, RAM 1536Mi–3Gi, root nhưng bỏ hết capability trừ CHOWN/FOWNER/DAC_OVERRIDE/SETUID/SETGID (entrypoint cần để hạ quyền về clamav). HANH_DONG dung-clamav: apply, rollout status 600 s, pod một lần PING→PONG, đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config chỉ khi chưa có. check_build, check_security, brain, hooks xanh; YAML parse 2 tài liệu.",
+      "tiep_theo": "CHƯA CHẠY trên cụm. Chạy dung-clamav MT=prod rồi MT=staging. StreamMaxLength để mặc định 25 MB: đính kèm nhiệm vụ PDF tới 50 MB (platform 0010) sẽ bị từ chối khi >25 MB — chưa quyết (ADR 0052 Còn mở #4). Nếu cụm có NetworkPolicy: clamd cần vào 3310 từ petitions, ra DNS + 443 tới database.clamav.net. Petitions bản mới còn cần OBJECT_STORAGE_* (MinIO) trước khi lên.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

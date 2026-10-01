@@ -79,7 +79,7 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | không — chưa dịch vụ nào dùng | URL gốc bucket media công khai | `https://<host media>/vigov-prod-public` |
 | `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
 | `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
-| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://` | `clamav:3310` |
+| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
 
 **Lấy `TRUSTED_PROXY_CIDRS`:**
 
@@ -175,3 +175,17 @@ bảng mục 1 và mục 3.
 6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn --vao-thang --demo`
 
 Trước khi Zalo duyệt app: `tat-demo-mini-app` — danh tính demo mở phiên không xác minh số điện thoại.
+
+### ClamAV cho petitions — TRƯỚC job `service-petitions`
+
+Độc lập với sáu bước trên. Ảnh petitions có `config.Uses` **không khởi động** ở staging/prod khi
+`MALWARE_SCANNER_ADDRESS` trống (ADR 0052 §9, ADR 0057).
+
+1. Job `vigov-deploy`, việc `dung-clamav` (`MT=prod`, rồi `MT=staging`; `XAC_NHAN` = namespace) — áp
+   [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml) (Deployment + Service `vigov-clamav`, cổng
+   3310, không Ingress), đợi sẵn sàng tối đa 10 phút (lần đầu tải chữ ký), thử `PING`→`PONG` qua
+   Service, rồi đặt `MALWARE_SCANNER_ADDRESS=vigov-clamav:3310` vào `common-config` **chỉ khi chưa có**
+   (có rồi thì giữ nguyên và in giá trị). Không khởi động lại dịch vụ nào. Hỏng thì in sự kiện + 80
+   dòng log của pod clamd. RAM, đường ra `database.clamav.net:443`, giới hạn cỡ tệp: đầu tệp manifest.
+2. Đặt đủ `OBJECT_STORAGE_*` (mục 1 và 2) — thiếu thì ảnh petitions mới cũng không khởi động.
+3. Job `service-petitions`.
