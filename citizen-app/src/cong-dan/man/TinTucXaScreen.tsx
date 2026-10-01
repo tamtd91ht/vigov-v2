@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 
-import { baiTinCuaXa, type KetQuaCongKhai, tinCuaXa } from "../api/goi-vigov";
+import { baiTinCuaXa, type NewsReadResult, tinCuaXa } from "../api/goi-vigov";
 import { type BaiTinXa, type TinXaTomTat, type TrangTinXa } from "../api/hop-dong-cong-khai";
 import { layPhienViGov } from "../api/phien-vigov";
 
@@ -22,19 +22,42 @@ import { BangXa } from "./khung";
 import { QUAY_LAI, TIN_XA } from "./noi-dung";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
 
-/** Ba câu lỗi. `khong-hop-le` không mời thử lại: bấm lại không đổi được gì. */
-export type LoiTin = "loi-mang" | "loi-may-chu" | "khong-hop-le";
+/**
+ * Bốn câu lỗi. `khong-hop-le` không mời thử lại: bấm lại không đổi được gì. `rate-limited` (429, 02/10/2026)
+ * keeps the "Thử lại" button but never retries by itself: a screen that re-asks on its own is the loop the limit
+ * exists to stop.
+ */
+export type LoiTin = "loi-mang" | "loi-may-chu" | "khong-hop-le" | "rate-limited";
 
-const CAU_LOI: Readonly<Record<LoiTin, string>> = {
+const CAU_LOI: Readonly<Record<Exclude<LoiTin, "rate-limited">, string>> = {
   "loi-mang": TIN_XA.loi_mang,
   "loi-may-chu": TIN_XA.loi_may_chu,
   "khong-hop-le": TIN_XA.khong_hop_le,
 };
 
-function loiCua(kieu: Exclude<KetQuaCongKhai<unknown>["kieu"], "xong">): LoiTin {
+/** The wait in words: seconds up to 90, whole minutes (rounded up) beyond. PURE. */
+export function waitWords(seconds: number): string {
+  return seconds <= 90 ? `${seconds} giây` : `${Math.ceil(seconds / 60)} phút`;
+}
+
+/** The sentence for an error; `retryAfterSeconds` matters only to `rate-limited`. PURE. */
+export function errorSentence(loi: LoiTin, retryAfterSeconds: number | null = null): string {
+  if (loi !== "rate-limited") return CAU_LOI[loi];
+  return retryAfterSeconds === null || retryAfterSeconds <= 0
+    ? TIN_XA.rate_limited
+    : TIN_XA.rate_limited_wait(waitWords(retryAfterSeconds));
+}
+
+function loiCua(kieu: Exclude<NewsReadResult<unknown>["kieu"], "xong">): LoiTin {
   if (kieu === "loi-mang") return "loi-mang";
   if (kieu === "khong-hop-le") return "khong-hop-le";
+  if (kieu === "rate-limited") return "rate-limited";
   return "loi-may-chu";
+}
+
+/** The server's wait, when the failure was a 429 that named one. */
+function waitOf(kq: NewsReadResult<unknown>): number | null {
+  return kq.kieu === "rate-limited" ? kq.retryAfterSeconds : null;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -48,6 +71,8 @@ export type DanhSachTin = {
   readonly da_co_trang_dau: boolean;
   readonly dang_tai: boolean;
   readonly loi: LoiTin | null;
+  /** The server's wait with a `rate-limited` error (seconds); absent or `null` otherwise. */
+  readonly retryAfterSeconds?: number | null;
 };
 
 export const TIN_DAU: DanhSachTin = {
@@ -64,8 +89,8 @@ export function batDauTaiTin(ds: DanhSachTin): DanhSachTin {
 }
 
 /** Trang mới NỐI VÀO SAU; tin trùng `id` (hai lần tải chồng nhau) bị bỏ. */
-export function sauKhiTaiTin(ds: DanhSachTin, kq: KetQuaCongKhai<TrangTinXa>): DanhSachTin {
-  if (kq.kieu !== "xong") return { ...ds, dang_tai: false, loi: loiCua(kq.kieu) };
+export function sauKhiTaiTin(ds: DanhSachTin, kq: NewsReadResult<TrangTinXa>): DanhSachTin {
+  if (kq.kieu !== "xong") return { ...ds, dang_tai: false, loi: loiCua(kq.kieu), retryAfterSeconds: waitOf(kq) };
   const da_co = new Set(ds.muc.map((t) => t.id));
   return {
     muc: [...ds.muc, ...kq.gia_tri.muc.filter((t) => !da_co.has(t.id))],
@@ -128,7 +153,7 @@ export function ThanTinXa(props: { ds: DanhSachTin; onMo: (id: string) => void; 
       {ds.loi !== null && (
         <div className="cd-buoc">
           <p className="cd-loi" role="alert">
-            {CAU_LOI[ds.loi]}
+            {errorSentence(ds.loi, ds.retryAfterSeconds ?? null)}
           </p>
           {ds.loi !== "khong-hop-le" && (
             <button type="button" className="cd-nut" disabled={ds.dang_tai} onClick={props.onTai}>
@@ -157,12 +182,12 @@ export type TrangBai =
   | { readonly kieu: "dang-tai" }
   | { readonly kieu: "xong"; readonly bai: BaiTinXa }
   | { readonly kieu: "khong-thay" }
-  | { readonly kieu: "loi"; readonly loi: LoiTin };
+  | { readonly kieu: "loi"; readonly loi: LoiTin; readonly retryAfterSeconds?: number | null };
 
-export function sauKhiTaiBai(kq: KetQuaCongKhai<BaiTinXa>): TrangBai {
+export function sauKhiTaiBai(kq: NewsReadResult<BaiTinXa>): TrangBai {
   if (kq.kieu === "xong") return { kieu: "xong", bai: kq.gia_tri };
   if (kq.kieu === "khong-thay") return { kieu: "khong-thay" };
-  return { kieu: "loi", loi: loiCua(kq.kieu) };
+  return { kieu: "loi", loi: loiCua(kq.kieu), retryAfterSeconds: waitOf(kq) };
 }
 
 /**
@@ -202,7 +227,7 @@ export function ThanBaiTin(props: { trang: TrangBai; onTai: () => void }) {
   return (
     <div className="cd-buoc">
       <p className="cd-loi" role="alert">
-        {CAU_LOI[trang.loi]}
+        {errorSentence(trang.loi, trang.retryAfterSeconds ?? null)}
       </p>
       {trang.loi !== "khong-hop-le" && (
         <button type="button" className="cd-nut" onClick={props.onTai}>

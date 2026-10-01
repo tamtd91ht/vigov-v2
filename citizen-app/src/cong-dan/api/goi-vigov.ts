@@ -122,6 +122,41 @@ type NhanhKhongThanh = Exclude<KetQuaGoi, { kieu: "xong" }>;
  */
 export type KetQuaDanhSach = { kieu: "xong"; trang: TrangPhieuCuaToi } | NhanhKhongThanh;
 
+/**
+ * 429 `rate_limited` — the public commune-news reads are limited per client (owner, 02/10/2026: 120/min, comms).
+ * `retryAfterSeconds` is the server's `Retry-After` as a whole number of seconds; `null` when it is absent or not
+ * one. Its own branch because "the system is broken, wait minutes" (`loi-may-chu`) is the wrong next step for a
+ * citizen who only tapped quickly: the answer is "wait a few seconds".
+ */
+export type RateLimited = { kieu: "rate-limited"; retryAfterSeconds: number | null };
+
+/** What one call can become — every route's branches, plus `rate-limited` until the route decides what it means. */
+type CallResult<T> = { kieu: "xong"; gia_tri: T } | NhanhKhongThanh | RateLimited;
+
+/**
+ * Routes with no 429 in their contract (the petition routes): one arriving there is a stray, and stays
+ * `loi-may-chu` exactly as it was before 02/10/2026.
+ */
+function withoutRateLimit<T>(kq: CallResult<T>): { kieu: "xong"; gia_tri: T } | NhanhKhongThanh {
+  return kq.kieu === "rate-limited" ? { kieu: "loi-may-chu" } : kq;
+}
+
+/**
+ * `Retry-After` in seconds (RFC 9110 delay-seconds), or `null`. The HTTP-date form is not read: the server sends
+ * seconds, and a phone clock that is off would turn a date into a nonsense wait. Never throws — a missing or
+ * broken header object must not fall into the network branch ("check your connection" for an answer that came).
+ */
+function readRetryAfter(response: Response): number | null {
+  let raw: string | null = null;
+  try {
+    raw = response.headers.get("Retry-After");
+  } catch {
+    return null;
+  }
+  if (typeof raw !== "string" || !/^\s*\d{1,6}\s*$/.test(raw)) return null;
+  return Number(raw.trim());
+}
+
 /** Quá hạn chờ. Người dân đang cầm máy đứng chờ; thà nói "thử lại" sớm. */
 const HAN_CHO_MS = 20_000;
 
@@ -143,7 +178,7 @@ async function goi<T>(
   tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
-): Promise<{ kieu: "xong"; gia_tri: T } | NhanhKhongThanh> {
+): Promise<CallResult<T>> {
   const startedAt = Date.now();
   const trace: CallTrace = {};
   const kq = await callOnce(dia_chi, tuy_chon, doc, khi_404, trace);
@@ -170,7 +205,7 @@ async function callOnce<T>(
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
   trace: CallTrace,
-): Promise<{ kieu: "xong"; gia_tri: T } | NhanhKhongThanh> {
+): Promise<CallResult<T>> {
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
 
@@ -225,6 +260,9 @@ async function callOnce<T>(
         return khi_404;
       case 409:
         return { kieu: "dang-xu-ly-truoc" };
+      case 429:
+        // Only the wait is read; the body is never read (nothing to show, nothing to log).
+        return { kieu: "rate-limited", retryAfterSeconds: readRetryAfter(tra_loi) };
       case 503:
         return (await readErrorCode(tra_loi)) === FIELD_CATALOGUE_UNAVAILABLE_CODE
           ? { kieu: "field-catalogue-unavailable" }
@@ -264,7 +302,9 @@ export async function citizenReportFields(): Promise<
 > {
   const cong = moCong(citizenFieldsAddress());
   if ("kieu" in cong) return cong;
-  const kq = await goi(cong.dia_chi, { route: "report-fields", method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" });
+  const kq = withoutRateLimit(
+    await goi(cong.dia_chi, { route: "report-fields", method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" }),
+  );
   return kq.kieu === "xong" ? { kieu: "xong", fields: kq.gia_tri } : kq;
 }
 
@@ -281,12 +321,14 @@ export async function guiPhanAnh(lan: LanGui): Promise<KetQuaGoi> {
   const cong = moCong(diaChiGuiPhanAnh());
   if ("kieu" in cong) return cong;
   return thanhPhieu(
-    await goi(
-      cong.dia_chi,
-      { route: "send-petition", method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
-      docPhieu,
-      // Tuyến gửi không có 404 trong hợp đồng; gặp nó là tuyến chưa được định tuyến ở cụm.
-      { kieu: "loi-may-chu" },
+    withoutRateLimit(
+      await goi(
+        cong.dia_chi,
+        { route: "send-petition", method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
+        docPhieu,
+        // Tuyến gửi không có 404 trong hợp đồng; gặp nó là tuyến chưa được định tuyến ở cụm.
+        { kieu: "loi-may-chu" },
+      ),
     ),
   );
 }
@@ -303,7 +345,9 @@ export async function traCuuPhieu(ma_tra_cuu: string): Promise<KetQuaGoi> {
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   return thanhPhieu(
-    await goi(cong.dia_chi, { route: "lookup-petition", method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
+    withoutRateLimit(
+      await goi(cong.dia_chi, { route: "lookup-petition", method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
+    ),
   );
 }
 
@@ -319,9 +363,11 @@ export async function traCuuPhieu(ma_tra_cuu: string): Promise<KetQuaGoi> {
 export async function phanAnhCuaToi(con_tro: string): Promise<KetQuaDanhSach> {
   const cong = moCong(diaChiDanhSach(con_tro));
   if ("kieu" in cong) return cong;
-  const kq = await goi(cong.dia_chi, { route: "my-petitions", method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
-    kieu: "loi-may-chu",
-  });
+  const kq = withoutRateLimit(
+    await goi(cong.dia_chi, { route: "my-petitions", method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
+      kieu: "loi-may-chu",
+    }),
+  );
   if (kq.kieu === "xong") return { kieu: "xong", trang: kq.gia_tri };
   if (kq.kieu === "dang-xu-ly-truoc" || kq.kieu === "kenh-chua-mo") return { kieu: "loi-may-chu" };
   return kq;
@@ -347,11 +393,13 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   const kq = thanhPhieu(
-    await goi(
-      cong.dia_chi,
-      { route: "rate-petition", method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
-      docPhieu,
-      { kieu: "khong-thay" },
+    withoutRateLimit(
+      await goi(
+        cong.dia_chi,
+        { route: "rate-petition", method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
+        docPhieu,
+        { kieu: "khong-thay" },
+      ),
     ),
   );
   return kq.kieu === "kenh-chua-mo" ? { kieu: "loi-may-chu" } : kq;
@@ -371,6 +419,9 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
  *   `loi-may-chu`   500, mã lạ, thân sai khuôn
  *   `loi-mang`      mất mạng, quá hạn chờ
  *   `chua-cau-hinh` bảng host thiếu dòng — không gọi
+ *
+ * The comms reads (news, categories, banners, one item) add `rate-limited` — `NewsReadResult`. The identity reads
+ * keep this type: their contract has no 429, so one there stays `loi-may-chu` (`identityRead`).
  */
 export type KetQuaCongKhai<T> =
   | { kieu: "xong"; gia_tri: T }
@@ -381,12 +432,15 @@ export type KetQuaCongKhai<T> =
   | { kieu: "loi-mang" }
   | { kieu: "chua-cau-hinh" };
 
+/** A public comms read: `KetQuaCongKhai`, or 429 (owner, 02/10/2026). */
+export type NewsReadResult<T> = KetQuaCongKhai<T> | RateLimited;
+
 async function goiCongKhai<T>(
   route: ConnectionRoute,
   ten_mien: string,
   dia_chi: (ten_mien: string) => string,
   doc: (than: unknown) => T | null,
-): Promise<KetQuaCongKhai<T>> {
+): Promise<NewsReadResult<T>> {
   // Cổng TÊN MIỀN đứng trước cổng địa chỉ: không có tên miền đúng khuôn thì không một byte nào đi ra.
   if (!laTenMien(ten_mien)) return { kieu: "khong-hop-le" };
   const url = dia_chi(ten_mien);
@@ -398,6 +452,7 @@ async function goiCongKhai<T>(
     case "khong-thay":
     case "loi-may-chu":
     case "loi-mang":
+    case "rate-limited":
       return kq;
     case "kenh-chua-mo":
       return { kieu: "tam-ngung" };
@@ -407,12 +462,17 @@ async function goiCongKhai<T>(
   }
 }
 
+/** An identity public read has no 429 in its contract: a stray one stays `loi-may-chu`, as before 02/10/2026. */
+function identityRead<T>(kq: NewsReadResult<T>): KetQuaCongKhai<T> {
+  return kq.kieu === "rate-limited" ? { kieu: "loi-may-chu" } : kq;
+}
+
 /**
  * Tên và tỉnh của xã ứng với tên miền trên QR — cho màn xác nhận. Mảng rỗng là "không xã nào".
  * Tên miền là KHOÁ TRA; kết quả không cấp gì, và không được nhớ làm xã của phiên.
  */
 export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<readonly XaTraDuoc[]>> {
-  return goiCongKhai("commune-lookup", ten_mien, diaChiTraXa, docXa);
+  return goiCongKhai("commune-lookup", ten_mien, diaChiTraXa, docXa).then(identityRead);
 }
 
 /**
@@ -420,7 +480,7 @@ export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<reado
  * chỉ ghi khuôn cố định của `connection-log.ts` (tuyến, mã HTTP), không một dòng nào của thân.
  */
 export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
-  return goiCongKhai("commune-staff", ten_mien, diaChiDanhBa, docDanhBa);
+  return goiCongKhai("commune-staff", ten_mien, diaChiDanhBa, docDanhBa).then(identityRead);
 }
 
 /**
@@ -428,7 +488,7 @@ export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly
  * phiên. Không có logo — xem `hop-dong-cong-khai.ts`.
  */
 export function communeProfiles(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneProfile[]>> {
-  return goiCongKhai("commune-profile", ten_mien, communeProfilesAddress, readCommuneProfiles);
+  return goiCongKhai("commune-profile", ten_mien, communeProfilesAddress, readCommuneProfiles).then(identityRead);
 }
 
 /**
@@ -441,7 +501,7 @@ export function tinCuaXa(
   type: NewsType | null = null,
   /** A category id from `newsCategories`; `null` = every category. The server includes its descendants. */
   category: string | null = null,
-): Promise<KetQuaCongKhai<TrangTinXa>> {
+): Promise<NewsReadResult<TrangTinXa>> {
   return goiCongKhai("news", ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
 }
 
@@ -452,7 +512,7 @@ export function tinCuaXa(
 export function newsCategories(
   ten_mien: string,
   type: NewsType | null = null,
-): Promise<KetQuaCongKhai<readonly NewsCategory[]>> {
+): Promise<NewsReadResult<readonly NewsCategory[]>> {
   return goiCongKhai("news-categories", ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
 }
 
@@ -460,12 +520,12 @@ export function newsCategories(
  * The commune's home banner strip (`?type=banner`, ADR 0067 §5) — public by domain, like the news list. Any
  * branch but `xong` with at least one banner leaves the bundled picture in place (`TrangXa.tsx`).
  */
-export function communeBanners(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneBannerItem[]>> {
+export function communeBanners(ten_mien: string): Promise<NewsReadResult<readonly CommuneBannerItem[]>> {
   return goiCongKhai("banners", ten_mien, bannersAddress, readBanners);
 }
 
 /** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */
-export function baiTinCuaXa(ten_mien: string, id: string): Promise<KetQuaCongKhai<BaiTinXa>> {
+export function baiTinCuaXa(ten_mien: string, id: string): Promise<NewsReadResult<BaiTinXa>> {
   if (id === "") return Promise.resolve({ kieu: "khong-thay" });
   return goiCongKhai("news-item", ten_mien, (t) => diaChiBaiTin(t, id), docBaiTin);
 }

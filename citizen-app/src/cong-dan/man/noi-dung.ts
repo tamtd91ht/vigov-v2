@@ -604,6 +604,13 @@ export const TIN_XA = {
   loi_may_chu: "Hệ thống của xã đang bận nên chưa tải được tin. Hãy chờ vài phút rồi bấm Thử lại.",
   /** Tên miền trên mã bị từ chối giữa chừng — thử lại không đổi được gì. */
   khong_hop_le: "Chưa tải được tin của xã. Hãy đóng ứng dụng rồi quét lại mã QR của xã.",
+  /**
+   * 429 on the public news reads (owner, 02/10/2026). Calm on purpose: nothing is broken, the citizen only tapped
+   * quickly. With the server's wait, the next step says how long; without it, the owner's sentence alone.
+   */
+  rate_limited: "Bạn thao tác hơi nhanh, vui lòng thử lại sau ít giây.",
+  rate_limited_wait: (wait: string) =>
+    `Bạn thao tác hơi nhanh, vui lòng thử lại sau ít giây. Hãy chờ khoảng ${wait} rồi bấm Thử lại.`,
   // How long ago a news item was published, on the commune app's news cards (`TinTucAppXa.tsx` `relativeDay`).
   today: "Hôm nay",
   yesterday: "Hôm qua",

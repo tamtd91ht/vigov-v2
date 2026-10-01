@@ -29,7 +29,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
-import { communeBanners } from "../api/goi-vigov";
+import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
@@ -291,11 +291,40 @@ function useCommuneBanners(ten_mien: string): readonly CommuneBannerItem[] | nul
   useEffect(() => {
     if (loaded.current) return;
     loaded.current = true;
-    void communeBanners(ten_mien).then((kq) => {
-      if (kq.kieu === "xong" && kq.gia_tri.length > 0) setItems(kq.gia_tri);
+    void loadBanners(
+      () => communeBanners(ten_mien),
+      (ms) => new Promise((done) => setTimeout(done, ms)),
+    ).then((got) => {
+      if (got !== null) setItems(got);
     });
   }, [ten_mien]);
   return items;
+}
+
+/** Wait before the one banner retry when a 429 named no wait, and the cap when it named a long one. */
+const BANNER_RETRY_DEFAULT_SECONDS = 5;
+const BANNER_RETRY_MAX_SECONDS = 60;
+
+/**
+ * The strip's load: the posted banners, or `null` for the bundled picture — SILENTLY, whatever went wrong.
+ *
+ * A 429 (owner, 02/10/2026: the public news reads are limited per client) gets EXACTLY ONE retry, after the
+ * server's `Retry-After` (capped at 60 s; 5 s when absent). One, never a loop: a second 429 — or any other
+ * failure — ends in `null` and the bundled picture stays. The strip is decoration over a home screen that works
+ * without it, so a failure here never says anything (same stance as the category chips). PURE apart from
+ * `load` and `wait`, which the caller injects.
+ */
+export async function loadBanners(
+  load: () => Promise<NewsReadResult<readonly CommuneBannerItem[]>>,
+  wait: (ms: number) => Promise<void>,
+): Promise<readonly CommuneBannerItem[] | null> {
+  let kq = await load();
+  if (kq.kieu === "rate-limited") {
+    const seconds = kq.retryAfterSeconds === null ? BANNER_RETRY_DEFAULT_SECONDS : kq.retryAfterSeconds;
+    await wait(Math.min(Math.max(seconds, 1), BANNER_RETRY_MAX_SECONDS) * 1000);
+    kq = await load();
+  }
+  return kq.kieu === "xong" && kq.gia_tri.length > 0 ? kq.gia_tri : null;
 }
 
 /**

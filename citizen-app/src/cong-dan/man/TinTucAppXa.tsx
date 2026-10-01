@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { baiTinCuaXa, newsCategories, tinCuaXa } from "../api/goi-vigov";
+import { baiTinCuaXa, newsCategories, type NewsReadResult, tinCuaXa } from "../api/goi-vigov";
 import {
   type BaiTinXa as BaiTinXaData,
   type BroadcastAudio,
@@ -23,6 +23,7 @@ import { NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
 import {
   batDauTaiTin,
   type DanhSachTin,
+  errorSentence,
   sauKhiTaiBai,
   sauKhiTaiTin,
   TIN_DAU,
@@ -236,12 +237,6 @@ export function BroadcastLength({ seconds }: { seconds: number }) {
     </span>
   );
 }
-
-const CAU_LOI = {
-  "loi-mang": TIN_XA.loi_mang,
-  "loi-may-chu": TIN_XA.loi_may_chu,
-  "khong-hop-le": TIN_XA.khong_hop_le,
-} as const;
 
 /**
  * The type tabs of the news tab — exactly the prototype's three (`NewsPage.tsx` TABS: Tin tức · Sự kiện ·
@@ -476,7 +471,7 @@ export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => voi
       <KhoiTrangThai
         bieu_tuong="alert"
         loi
-        cau={CAU_LOI[ds.loi]}
+        cau={errorSentence(ds.loi, ds.retryAfterSeconds ?? null)}
         nut={ds.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: props.onTai } : undefined}
       />
     );
@@ -497,7 +492,7 @@ export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => voi
         <KhoiTrangThai
           bieu_tuong="alert"
           loi
-          cau={CAU_LOI[ds.loi]}
+          cau={errorSentence(ds.loi, ds.retryAfterSeconds ?? null)}
           nut={ds.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: props.onTai } : undefined}
         />
       )}
@@ -537,6 +532,15 @@ export function useTinXa(ten_mien: string, type: NewsType | null = null, categor
       if (!ds.dang_tai) void tai(ds.da_co_trang_dau ? ds.con_tro : "");
     },
   };
+}
+
+/**
+ * The fresh audio from a re-read of the item, or `null`. EVERY failure is `null` — a 429 included (owner,
+ * 02/10/2026): the player then shows its existing failure sentence and waits for the citizen's next tap, which is
+ * a new attempt with its own single re-read (`broadcast-player.tsx`). Never a retry from here. PURE.
+ */
+export function audioOfReread(kq: NewsReadResult<BaiTinXaData>): BroadcastAudio | null {
+  return kq.kieu === "xong" ? (kq.gia_tri.audio ?? null) : null;
 }
 
 /** Một bài — ảnh bìa (khi có) + tiêu đề + ngày + toàn văn. Màn con, có nút quay lại. */
@@ -586,10 +590,7 @@ export function BaiTinXa(props: {
   // The broadcast's link expires (≤ 15 minutes): the player asks for a fresh one by re-reading THIS item, once per
   // attempt (`broadcast-player.tsx`). Only the audio is taken from the re-read — the article on screen stays as the
   // citizen is reading it.
-  const refreshAudio = async (): Promise<BroadcastAudio | null> => {
-    const kq = await baiTinCuaXa(props.ten_mien, props.id);
-    return kq.kieu === "xong" ? (kq.gia_tri.audio ?? null) : null;
-  };
+  const refreshAudio = async (): Promise<BroadcastAudio | null> => audioOfReread(await baiTinCuaXa(props.ten_mien, props.id));
   const onWatchVideo =
     openVideo === undefined || videoUrl === undefined
       ? undefined
@@ -608,7 +609,7 @@ export function BaiTinXa(props: {
           <KhoiTrangThai
             bieu_tuong="alert"
             loi
-            cau={CAU_LOI[trang.loi]}
+            cau={errorSentence(trang.loi, trang.retryAfterSeconds ?? null)}
             nut={trang.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: () => void tai() } : undefined}
           />
         )}
