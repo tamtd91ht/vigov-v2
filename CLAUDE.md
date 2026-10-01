@@ -48,22 +48,16 @@ it costs.**
 
 | Repository | Holds |
 |---|---|
-| `vihat-miniapp` — **sibling directory**, `github.com/tamtd91ht/vihat-miniapp` | ViHAT's **shared/demo app**: Zalo registration, App ID + app secret, login backend (`POST /api/v1/sessions`), Zalo webhook, the QR codes it issues. Separate Go repo, commercial, **not ViGov** |
-| `vigov-v2/citizen-app` (here) | The **front-end running inside** the app — the shared app, and each commune's own app (`--vao-thang`) |
+| `vihat-miniapp` — **sibling directory**, `github.com/tamtd91ht/vihat-miniapp` | ViHAT's **shared/demo app**: Zalo registration, App ID + secret, login (`POST /api/v1/sessions`), webhook, QR. Commercial Go repo, **not ViGov** |
+| `vigov-v2/citizen-app` (here) | The **front-end** of the shared app and of each commune's own app |
 
-**Which repo a Zalo surface belongs to is decided by WHICH APP and WHICH SECRET SIGNS IT** —
-not by "who the vendor is". Answered wrongly once, and the wrong answer shipped (ADR 0032); the
-split by app is ADR 0066 (01/10/2026):
+**Which repo a Zalo surface belongs to is decided by WHICH APP'S SECRET SIGNS IT** (ADR 0032, split by app in ADR 0066):
 
 | Surface | Signed with | Repo |
 |---|---|---|
-| **Shared/demo app**: webhook · `accessToken`/`phoneToken` exchange | ViHAT's app secret of that App ID | `vihat-miniapp` |
-| **A commune's own app**: `accessToken`/`phoneToken` exchange, citizen session | the secret of **that commune's App ID**, per-commune config | **here**, `service-identity` (ADR 0066) |
+| Shared/demo app: webhook · token exchange | that App ID's secret | `vihat-miniapp` |
+| **Commune's own app**: token exchange, citizen session | that App ID's secret, per-commune config | **here**, `service-identity` |
 | **ZNS from EACH COMMUNE's OA** | that commune's key | **here**, `service-comms` (ADR 0018) |
-
-Do **not** generalise the last two rows away into "anything Zalo leaves ViGov", nor the first
-into "anything Zalo is `vihat-miniapp`". Demo for a new commune runs on the shared app with the
-shared demo domain (ADR 0066).
 
 A QR from `vihat-miniapp` carries parameters that load into `citizen-app`. They **steer the
 interface and grant nothing**: client-supplied data (rule 1, forbidden #2), commune enters a
