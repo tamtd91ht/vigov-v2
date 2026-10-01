@@ -102,6 +102,16 @@ bật theo App ID trong cấu hình của xã, **mặc định tắt**.
 app); ADR 0032 đánh dấu bị thay một phần bởi ADR này. ADR 0045 và 0047 §6 mô tả luồng app riêng qua
 `vihat-miniapp`: dòng ở ADR này thắng khi nói khác.
 
+## Đã quyết 01/10/2026 — trả lời ba câu dưới (người dùng: *"ok theo đề xuất nhé, làm đi"*)
+
+| Câu | Chốt |
+|---|---|
+| Nơi giữ secret | Bảng mới thuộc `service-identity`: App ID, secret **mã hoá AES-GCM**, ngày đặt, người đặt. Khoá giải mã là **một** bí mật nền tảng qua Secret k8s (luật 8 đk dừng #1 — người dùng đồng ý). Không để secret từng xã trong biến môi trường (luật 1 bất biến 10) |
+| Ai nhập, xoay secret | Vận hành ViHAT ở `platform-admin`, cùng chỗ khai App ID của xã. Thay = ghi bản mới, vết kiểm toán không chứa giá trị. Xã on-premise: người vận hành của xã |
+| Cầu 9091 | Giữ song song tới khi app riêng Thăng Bình chạy đường mới, rồi gỡ phần app riêng khỏi cầu; app chung vẫn dùng |
+| `--demo` của app riêng | Cột bật danh tính cố định theo App ID, **mặc định tắt**; bật thì identity nhận đăng nhập không `phoneToken`, gán số cố định; tắt trước khi Zalo duyệt |
+| Thứ tự | Phần không đụng `service-identity` làm trước; tuyến identity đợi phiên song song đang sửa `service-identity` commit xong |
+
 ## Chưa quyết
 
 1. Nơi giữ secret App A theo xã: bảng cấu hình mã hoá trong `service-identity`, hay Secret k8s theo xã
