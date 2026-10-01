@@ -95,6 +95,14 @@ export type KhaiBaoLoiGoi = {
    * quyền riêng tư, và `ranh-gioi-hai-nua.test.ts` buộc mỗi lời gọi có khai cột này.
    */
   roi_khoi_may: string;
+  /**
+   * How the COMMUNE'S OWN APP uses a call both halves use — required when `nua` is "ca-hai"
+   * (`ket-xuat-ho-so.test.ts` §7). The commune app is a separate App ID with its own Zalo submission, and its
+   * dossier (`tmp/xin-quyen-zalo/README.md`) must describe what THAT app does. The shared sentences above name
+   * screens the commune app does not have (Liên hệ, Tư vấn và báo giá) and a route it no longer takes (ViHAT's
+   * server for the login, ADR 0066); a reviewer who reads them looks for a button that is not there.
+   */
+  commune_app?: { man: string; tinh_nang: string; de_lam_gi: string; roi_khoi_may: string };
 };
 
 /**
@@ -156,6 +164,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+    commune_app: {
+      man: "Tin tức – Sự kiện · Video",
+      tinh_nang: "Xem video của xã",
+      de_lam_gi:
+        "Mở video mà xã đăng kèm một tin, ngay trong Zalo, và chỉ khi chính bạn bấm “Xem video”. Ứng dụng mở đúng địa chỉ xã đã đăng.",
+      roi_khoi_may: "Địa chỉ video xã đã đăng đi tới trình duyệt trong Zalo.",
+    },
   },
   {
     api: "keepScreen",
@@ -239,6 +254,16 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     hoi_nguoi_dung: false,
     roi_khoi_may:
       "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập, để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
+    // ADR 0066: the commune app's login goes straight to ViGov identity; only the location exchange still
+    // goes to `vihat-miniapp` (decision 5 moves it later — change this sentence in that card).
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      tinh_nang: "Xác nhận số điện thoại với xã · Vị trí nơi xảy ra sự việc",
+      de_lam_gi:
+        "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+      roi_khoi_may:
+        "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của Tập đoàn ViHAT Group để đổi mã vị trí thành toạ độ.",
+    },
   },
   {
     // "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi" THÊM 28/09/2026 (quyết định của người
@@ -254,6 +279,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập, hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      tinh_nang: "Xác nhận số điện thoại với xã",
+      de_lam_gi:
+        "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
+      roi_khoi_may: "Mã số điện thoại được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã.",
+    },
   },
   {
     // THÊM 28/09/2026 — lời gọi ĐẦU TIÊN của riêng nửa nhà nước. Chủ dự án: "không còn đăng nhập nữa, chỉ
@@ -289,6 +321,14 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Ở màn Gửi phản ánh: mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi. Ở màn Liên hệ: không có gì rời khỏi máy.",
+    commune_app: {
+      man: "Gửi phản ánh",
+      tinh_nang: "Vị trí nơi xảy ra sự việc",
+      de_lam_gi:
+        "Lấy mã vị trí khi bạn bấm “Lấy vị trí hiện tại” và đồng ý chia sẻ. Mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+      roi_khoi_may:
+        "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
+    },
   },
 ];
 

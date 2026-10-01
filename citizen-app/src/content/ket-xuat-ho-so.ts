@@ -151,21 +151,29 @@ const NHAN_NUA: Readonly<Record<string, string>> = {
  * sự thật về mã nguồn. Sinh ra một cột mà nguồn của nó không nằm trong mã là bịa, và bịa đúng
  * vào chỗ người duyệt đối chiếu. Hai thứ ấy ở lại phần văn xuôi giữ tay.
  */
-export function bangQuyen(khai: readonly KhaiBaoLoiGoi[]): string {
+export function bangQuyen(khai: readonly KhaiBaoLoiGoi[], options: { communeApp?: boolean } = {}): string {
+  // The commune app's dossier has no "Nửa" column: that app has one half, and a column saying "Cả hai"
+  // to its reviewer points at a commercial half the submitted app does not contain.
+  const communeApp = options.communeApp === true;
   const dong: string[] = [
-    `> Khối này là **bản sinh ra** từ \`KHAI_BAO_LOI_GOI\` trong`,
+    communeApp
+      ? "> Khối này là **bản sinh ra** từ `KHAI_BAO_LOI_GOI` (mọi dòng không thuộc riêng nửa thương mại, theo phần `commune_app` của dòng ấy) trong"
+      : `> Khối này là **bản sinh ra** từ \`KHAI_BAO_LOI_GOI\` trong`,
     `> \`citizen-app/src/features/tinh-nang/zalo-api.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
     "",
-    "| # | Lời gọi nền tảng | Nửa | Màn (tab) | Tính năng | Zalo hỏi bạn? | Rời khỏi máy |",
-    "|---|---|---|---|---|---|---|",
+    communeApp
+      ? "| # | Lời gọi nền tảng | Màn | Tính năng | Zalo hỏi bạn? | Rời khỏi máy |"
+      : "| # | Lời gọi nền tảng | Nửa | Màn (tab) | Tính năng | Zalo hỏi bạn? | Rời khỏi máy |",
+    communeApp ? "|---|---|---|---|---|---|" : "|---|---|---|---|---|---|---|",
   ];
 
   khai.forEach((mot, thu_tu) => {
     const roi = mot.roi_khoi_may.trim() === "" ? "Không có gì" : oBang(mot.roi_khoi_may);
+    const nua = communeApp ? "" : ` ${NHAN_NUA[mot.nua] ?? oBang(mot.nua)} |`;
     dong.push(
-      `| ${thu_tu + 1} | \`${mot.api}\` | ${NHAN_NUA[mot.nua] ?? oBang(mot.nua)} | ${oBang(
-        mot.man,
-      )} | ${oBang(mot.tinh_nang)} | ${mot.hoi_nguoi_dung ? "Có" : "Không"} | ${roi} |`,
+      `| ${thu_tu + 1} | \`${mot.api}\` |${nua} ${oBang(mot.man)} | ${oBang(mot.tinh_nang)} | ${
+        mot.hoi_nguoi_dung ? "Có" : "Không"
+      } | ${roi} |`,
     );
   });
 
@@ -246,6 +254,18 @@ export type DuongRoiKhoiMay = {
   /** Màn hình nơi việc ấy xảy ra, đúng tiêu đề trên màn. */
   man: string;
   truong: readonly TruongGuiDi[];
+  /**
+   * Which Mini App runs this route: the shared ViHAT Group app, the commune's own app, or both. Each app is a
+   * separate App ID and a separate Zalo submission, so each dossier lists only its own routes
+   * (`communeAppRoutes`).
+   */
+  app: "shared" | "commune" | "both";
+  /**
+   * The commune app's view of a `both` row — required there (`ket-xuat-ho-so.test.ts` §7). The shared row's
+   * sentences say "sau khi đã xác nhận xã"; the commune app has no confirmation step, and it loads some of
+   * these routes at open, without a tap.
+   */
+  commune_app?: { man: string; khi_nao: string; nguoi_dung_bam: boolean };
 };
 
 /**
@@ -256,7 +276,7 @@ export type DuongRoiKhoiMay = {
  * không đưa gì ra khỏi máy (`scanQRCode`), và một đường dữ liệu có thể không dùng lời gọi nền tảng
  * nào (`fetch` tới tuyến yêu cầu). Gộp chúng lại là mất đúng nửa mà lượt này vừa vá.
  */
-export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
+export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[], options: { communeApp?: boolean } = {}): string {
   const tu_chay = duong.filter((d) => !d.nguoi_dung_bam).length;
   // ⚠ CÂU NÀY TỪNG GÕ CỨNG "không đường nào chạy lúc mở ứng dụng" — và thành SAI ngày 27/09/2026, khi
   // màn xác nhận xã tra tên xã ngay lúc app mở bằng mã QR. Nay nó đếm từ cột `nguoi_dung_bam`.
@@ -264,14 +284,29 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
     tu_chay === 0
       ? `Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`
       : `${duong.length - tu_chay} đường chạy khi chính người dùng bấm; ${tu_chay} đường chạy mà không cần một cú bấm — xem mục "Chạy khi" của từng đường.`;
+  // The commune app's header names ITS sources and says the block is NOT yet complete: "đầy đủ" printed over
+  // a list that still lacks the petition routes would be the false declaration this block exists to prevent.
+  const header =
+    options.communeApp === true
+      ? [
+          "> Khối này là **bản sinh ra** từ `DUONG_ROI_KHOI_MAY` — chỉ các dòng **ứng dụng riêng của xã** chạy (cột `app`),",
+          "> theo phần `commune_app` của từng dòng — trong `citizen-app/src/content/ket-xuat-ho-so.ts`, cùng",
+          "> `COMMUNE_APP_SESSION_FIELDS` / `COMMUNE_APP_LOCATION_FIELDS` (`citizen-app/src/features/dang-nhap/hop-dong.ts`).",
+          `> Sinh lại: \`${LENH_SINH_LAI}\`.`,
+          "",
+          COMMUNE_APP_ROUTES_OWED,
+        ]
+      : [
+          "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV`, `BRIDGE_FIELDS_WITH_PHONE` và `COMMUNE_APP_SESSION_FIELDS`",
+          "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
+          "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
+          `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
+          "",
+          "> **Đây là câu trả lời đầy đủ cho \"dữ liệu của tôi đi đâu\".** Phần văn xuôi của hồ sơ không",
+          "> nhắc con số nào về việc này, có chủ đích: một con số gõ tay là con số sẽ sai ở lần đổi sau.",
+        ];
   const dong: string[] = [
-    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV`, `BRIDGE_FIELDS_WITH_PHONE` và `COMMUNE_APP_SESSION_FIELDS`",
-    "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
-    "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
-    `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
-    "",
-    "> **Đây là câu trả lời đầy đủ cho \"dữ liệu của tôi đi đâu\".** Phần văn xuôi của hồ sơ không",
-    "> nhắc con số nào về việc này, có chủ đích: một con số gõ tay là con số sẽ sai ở lần đổi sau.",
+    ...header,
     "",
     `Ứng dụng có **${duong.length} đường** đưa dữ liệu ra khỏi máy. ${cau_khi_chay}`,
   ];
@@ -320,6 +355,17 @@ const HOST_CONG_KHAI: TruongGuiDi = {
     "tên miền của xã — lấy từ mã QR hoặc đường liên kết đã mở ứng dụng, hoặc do phiên làm việc với xã trả về; không kèm số điện thoại, mã Zalo hay thông tin nào khác của bạn",
 };
 
+/**
+ * The same `host` in the commune's own app: there the domain is fixed when the app is built
+ * (`deploy.mjs --domain=… --vao-thang`), never read from a QR code or link — saying "lấy từ mã QR" to that
+ * app's reviewer describes a step the app does not have.
+ */
+const COMMUNE_APP_HOST: TruongGuiDi = {
+  khoa: "host",
+  trong_chinh_sach:
+    "tên miền của xã — gắn sẵn trong ứng dụng của xã từ lúc dựng; không kèm số điện thoại, mã Zalo hay thông tin nào khác của bạn",
+};
+
 /** Ba màn phản ánh nơi xã có thể cần xác nhận số điện thoại — chép, khoá như `TEN_MAN_CONG_KHAI`. */
 export const PHONE_VERIFICATION_SCREENS = "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi";
 
@@ -339,7 +385,19 @@ export const TEN_MAN_CONG_KHAI = {
   tin_xa: "Tin tức của xã",
   /** The commune app's home tab label (`XA_GIAO_DIEN.tab_trang_chu`), prefixed like the other commune rows. */
   trang_chu_xa: "Ứng dụng của xã: Trang chủ",
+  /** The commune app's news tab header (`XA_TN.news_tab_title`), prefixed the same way. */
+  commune_news_tab: "Ứng dụng của xã: Tin tức – Sự kiện",
+  /** The commune app's directory screen (`ManDanhBa` titles it `DANH_BA.tieu_de`), prefixed the same way. */
+  commune_directory: "Ứng dụng của xã: Danh bạ cán bộ xã",
 } as const;
+
+/**
+ * The sentence the commune app's "Những gì rời khỏi máy" block carries until the petition routes are
+ * declared (see the header of `DUONG_ROI_KHOI_MAY`). Printed INSIDE the generated block, so a dossier built
+ * from this list cannot be pasted without the gap being on the page.
+ */
+export const COMMUNE_APP_ROUTES_OWED =
+  "> ⚠ **CHƯA ĐỦ — CÁC TUYẾN PHẢN ÁNH CHƯA ĐƯỢC KHAI Ở ĐÂY:** gửi phản ánh, *Phản ánh của tôi*, tra cứu phiếu, đánh giá kết quả xử lý. Chúng mang nội dung phản ánh, họ tên, số điện thoại người dân tự gõ và toạ độ (nếu người dân đã lấy vị trí), tới ViGov — dịch vụ `petitions`. Khai chúng ở `citizen-app/src/content/ket-xuat-ho-so.ts` trước khi nộp.";
 
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
@@ -350,6 +408,14 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: false,
     man: TIEU_DE_XAC_NHAN_XA,
     truong: [HOST_CONG_KHAI],
+    app: "both",
+    // `TrangXa` looks the commune up at open, for the name in the header — the domain is the build's.
+    commune_app: {
+      man: TEN_MAN_CONG_KHAI.trang_chu_xa,
+      khi_nao:
+        "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để lấy tên xã hiện ở đầu màn hình",
+      nguoi_dung_bam: false,
+    },
   },
   {
     // 29/09/2026 (identity cdbf276): the commune's declared office — address, hotline, office hours — shown
@@ -362,6 +428,7 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: false,
     man: TEN_MAN_CONG_KHAI.trang_chu_xa,
     truong: [HOST_CONG_KHAI],
+    app: "commune",
   },
   {
     tuyen: "/api/v1/commune-staff",
@@ -370,6 +437,12 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: TEN_MAN_CONG_KHAI.danh_ba,
     truong: [HOST_CONG_KHAI],
+    app: "both",
+    commune_app: {
+      man: TEN_MAN_CONG_KHAI.commune_directory,
+      khi_nao: "người dùng tự bấm ô “Danh bạ” hoặc “Xem tất cả” trên trang chủ",
+      nguoi_dung_bam: true,
+    },
   },
   {
     tuyen: "/api/v1/commune-news",
@@ -397,6 +470,14 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
           "mã chuyên mục tin người dùng chọn xem, do chính máy chủ trả trong danh sách chuyên mục, chỉ khi người dùng bấm một chuyên mục",
       },
     ],
+    app: "both",
+    // The commune app's home screen shows the latest news (`AppCuaXa` → `useTinXa`), so the list loads at open.
+    commune_app: {
+      man: `${TEN_MAN_CONG_KHAI.trang_chu_xa} · ${TEN_MAN_CONG_KHAI.commune_news_tab}`,
+      khi_nao:
+        "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để hiện tin mới trên trang chủ; và khi người dùng mở tab “Tin tức”, bấm một ô Truyền thanh · Video · Sự kiện, chọn một loại tin hoặc một chuyên mục, hoặc bấm “Xem thêm tin”",
+      nguoi_dung_bam: false,
+    },
   },
   {
     // 30/09/2026 (comms 58abea4c, card D2): the category chip rows above the news list. Runs when the
@@ -414,6 +495,12 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
         trong_chinh_sach: "loại tin người dùng đang xem (tin tức, sự kiện, thông báo), để chỉ hiện chuyên mục có tin thuộc loại ấy",
       },
     ],
+    app: "both",
+    commune_app: {
+      man: TEN_MAN_CONG_KHAI.commune_news_tab,
+      khi_nao: "người dùng tự mở tab “Tin tức” hoặc chọn một loại tin — để hiện các chuyên mục có tin",
+      nguoi_dung_bam: true,
+    },
   },
   {
     tuyen: "/api/v1/commune-news/{id}",
@@ -425,6 +512,12 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
       HOST_CONG_KHAI,
       { khoa: "id", trong_chinh_sach: "mã của tin người dùng bấm đọc, do chính máy chủ trả trong danh sách tin" },
     ],
+    app: "both",
+    commune_app: {
+      man: TEN_MAN_CONG_KHAI.commune_news_tab,
+      khi_nao: "người dùng tự bấm vào một tin để đọc",
+      nguoi_dung_bam: true,
+    },
   },
 ];
 
@@ -452,6 +545,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: "Liên hệ — khối “Đăng nhập bằng số Zalo”",
     truong: TRUONG_GUI_DI_PHIEN,
+    app: "shared",
   },
   {
     tuyen: DUONG_DAN_YEU_CAU,
@@ -460,6 +554,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: "Tư vấn và báo giá",
     truong: TRUONG_GUI_DI,
+    app: "shared",
   },
   DUONG_CONG_KHAI[0]!,
   {
@@ -471,6 +566,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: TIEU_DE_XAC_NHAN_XA,
     truong: TRUONG_GUI_DI_CAU_VIGOV,
+    app: "shared",
   },
   {
     // CÙNG TUYẾN, THÂN THỨ BA (28/09/2026): mở lại phiên với xã KÈM `phoneToken`, khi ViGov đòi số điện
@@ -484,6 +580,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: PHONE_VERIFICATION_SCREENS,
     truong: BRIDGE_FIELDS_WITH_PHONE,
+    app: "shared",
   },
   {
     // FOURTH BODY (29/09/2026): login from a commune's OWN app — `appId` instead of a commune domain, and
@@ -505,6 +602,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: COMMUNE_APP_SESSION_SCREENS,
     truong: COMMUNE_APP_SESSION_FIELDS,
+    app: "commune",
   },
   {
     // 29/09/2026 — the location exchange (`vihat-miniapp` 0dada0f). A SECOND route to the same server,
@@ -521,6 +619,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: SEND_SCREEN_NAME,
     truong: LOCATION_FIELDS,
+    app: "shared",
   },
   {
     // SAME ROUTE, the commune's OWN app (29/09/2026, `vihat-miniapp` 4114f00): the body adds `appId` so
@@ -536,6 +635,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
     truong: COMMUNE_APP_LOCATION_FIELDS,
+    app: "commune",
   },
   {
     // 29/09/2026 (service-petitions af3fff0): the commune's field list for step 1 of "Gửi phản ánh" in the
@@ -550,9 +650,50 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
     truong: [],
+    app: "commune",
   },
   ...DUONG_CONG_KHAI.slice(1),
 ];
+
+/* =============================================================================================
+   THE COMMUNE APP'S DOSSIER — the same declarations, seen from the app being submitted
+   ============================================================================================= */
+
+/**
+ * The calls the commune's own app makes: every row that is not commercial-only, in its `commune_app` words.
+ *
+ * DERIVED, NOT A SECOND TABLE. A second list of calls would be a second place to forget a call; this one
+ * follows `KHAI_BAO_LOI_GOI`, and a `ca-hai` row without a commune view is refused here rather than printed
+ * in the shared app's words to the commune app's reviewer.
+ */
+export function communeAppCalls(khai: readonly KhaiBaoLoiGoi[]): KhaiBaoLoiGoi[] {
+  return khai
+    .filter((row) => row.nua !== "thuong-mai")
+    .map((row) => {
+      if (row.nua === "nha-nuoc") return row;
+      if (row.commune_app === undefined) {
+        throw new Error(`\`${row.api}\` is used by both halves but declares no \`commune_app\` view (zalo-api.ts).`);
+      }
+      return { ...row, ...row.commune_app };
+    });
+}
+
+/**
+ * The routes the commune's own app runs, `both` rows in their `commune_app` words. Same stance as above.
+ * Every `host` field becomes `COMMUNE_APP_HOST`: in that app the domain is ALWAYS the build's, so the
+ * sentence is a fact of the app, not of the row.
+ */
+export function communeAppRoutes(routes: readonly DuongRoiKhoiMay[]): DuongRoiKhoiMay[] {
+  return routes
+    .filter((row) => row.app !== "shared")
+    .map((row) => {
+      if (row.app === "both" && row.commune_app === undefined) {
+        throw new Error(`\`${row.tuyen}\` runs in both apps but declares no \`commune_app\` view (ket-xuat-ho-so.ts).`);
+      }
+      const truong = row.truong.map((t) => (t.khoa === HOST_CONG_KHAI.khoa ? COMMUNE_APP_HOST : t));
+      return { ...row, ...(row.app === "both" ? row.commune_app : {}), truong };
+    });
+}
 
 /* =============================================================================================
    RÀO CHẶN CHO PHẦN VĂN XUÔI GIỮ TAY

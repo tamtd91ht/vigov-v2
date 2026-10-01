@@ -401,6 +401,15 @@
       "no_confirm": [],
       "tiep_theo": "Người vận hành sửa Ingress trong Rancher: tắt CORS của nginx cho host API (enable-cors false, để core/httpx/cors.go trả lời — không Allow-Credentials) hoặc thêm Idempotency-Key vào cors-allow-headers; kiểm lại bằng curl OPTIONS. Rồi gửi thử trên máy thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "ho-so-zalo-tach-app-xa",
+      "viec": "Hồ sơ xin quyền Zalo tách theo App ID: tmp/xin-quyen-zalo/README.md là hồ sơ NỘP APP XÃ (người dùng 01/10/2026: 'ảnh là ảnh của app xã… tôi đang xin để submit app xã lên'); hồ sơ app chung ViHAT Group dời sang tmp/xin-quyen-zalo/app-chung-vihat/ cùng 7 ảnh cũ và hai tệp .txt",
+      "trang_thai": "xong",
+      "bang_chung": "zalo-api.ts: trường commune_app cho bốn dòng ca-hai (openWebview, getAccessToken, getPhoneNumber, getLocation). ket-xuat-ho-so.ts: cột app (shared|commune|both) trên mọi dòng DUONG_ROI_KHOI_MAY/DUONG_CONG_KHAI, commune_app cho dòng both (app xã tra xã, hồ sơ trụ sở và tin mới chạy NGAY LÚC MỞ), communeAppCalls/communeAppRoutes (dòng both thiếu phần app xã thì ném lỗi), host app xã = 'gắn sẵn trong ứng dụng của xã'; khối app xã in sẵn COMMUNE_APP_ROUTES_OWED, không nói 'đầy đủ'. scripts/ho-so-zalo.mjs sinh hai hồ sơ, kiểm cả hai trước khi ghi. ket-xuat-ho-so.test.ts §7 (10 ca). vitest 1453/1453, tsc sạch, npm run ho-so xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Trước khi nộp app xã: (1) khai các tuyến phản ánh (gửi, của tôi, tra cứu, đánh giá) vào DUONG_ROI_KHOI_MAY với app 'commune'/'both'; (2) Chính sách quyền riêng tư riêng cho app xã — bên kiểm soát dữ liệu là câu của chủ dự án; (3) chụp ảnh 01–09 trong Zalo trên bản không --demo. Còn lệch ở hồ sơ app chung (chưa sửa, ngoài lượt): dòng /my-citizen-report-fields chỉ khai cho app xã trong khi app chung cũng tải danh mục từ 2c158913; bảng app chung vẫn in cả các dòng chỉ app xã dùng.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

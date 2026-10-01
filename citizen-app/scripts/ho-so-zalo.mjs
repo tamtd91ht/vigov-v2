@@ -1,11 +1,19 @@
 /**
  * SINH CẢ BỘ HỒ SƠ NỘP ZALO TỪ NGUỒN SỐNG — `npm run ho-so`.
  *
+ * TWO DOSSIERS, TWO APP IDs, TWO ZALO SUBMISSIONS (01/10/2026). The folder's own README is the COMMUNE'S
+ * OWN APP — the app being submitted; the shared ViHAT Group app's dossier lives one level down.
+ *
  * | Tệp kết quả | Sinh từ |
  * |---|---|
- * | `tmp/xin-quyen-zalo/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
- * | `tmp/xin-quyen-zalo/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
- * | `tmp/xin-quyen-zalo/README.md`, phần giữa hai mốc | `KHAI_BAO_LOI_GOI` trong `src/features/tinh-nang/zalo-api.ts` |
+ * | `tmp/xin-quyen-zalo/README.md`, hai khối giữa các mốc | `communeAppCalls` / `communeAppRoutes` (`src/content/ket-xuat-ho-so.ts`) |
+ * | `tmp/xin-quyen-zalo/app-chung-vihat/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
+ * | `tmp/xin-quyen-zalo/app-chung-vihat/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
+ * | `tmp/xin-quyen-zalo/app-chung-vihat/README.md`, hai khối giữa các mốc | `KHAI_BAO_LOI_GOI` trong `src/features/tinh-nang/zalo-api.ts` |
+ *
+ * The two `.txt` files are the SHARED app's policy and terms, so they are written beside its README only:
+ * the commune app has no published policy yet, and a ViHAT Group policy in the commune app's folder is one
+ * paste away from being submitted as the commune's.
  *
  * ⚠ VÌ SAO TỆP NÀY TỒN TẠI — MỘT LỖI ĐÃ ĐO ĐƯỢC, KHÔNG PHẢI MỘT Ý THÍCH:
  *
@@ -38,7 +46,8 @@ import { createServer } from "vite";
 
 const GOC_APP = fileURLToPath(new URL("..", import.meta.url));
 const GOC_KHO = fileURLToPath(new URL("../..", import.meta.url));
-const THU_MUC_HO_SO = fileURLToPath(new URL("../../tmp/xin-quyen-zalo/", import.meta.url));
+const COMMUNE_APP_DIR = fileURLToPath(new URL("../../tmp/xin-quyen-zalo/", import.meta.url));
+const SHARED_APP_DIR = fileURLToPath(new URL("../../tmp/xin-quyen-zalo/app-chung-vihat/", import.meta.url));
 
 /**
  * Dòng đầu của README hồ sơ — tệp DUY NHẤT trong ba tệp kết quả vẫn còn phần viết tay.
@@ -87,7 +96,7 @@ async function main() {
     const ket_xuat = await may_chu.ssrLoadModule("/src/content/ket-xuat-ho-so.ts");
     const zalo_api = await may_chu.ssrLoadModule("/src/features/tinh-nang/zalo-api.ts");
 
-    await mkdir(THU_MUC_HO_SO, { recursive: true });
+    await mkdir(SHARED_APP_DIR, { recursive: true });
 
     const da_ghi = [];
 
@@ -95,7 +104,7 @@ async function main() {
       ["chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
       ["dieu-khoan-su-dung.txt", ket_xuat.VAN_BAN_DIEU_KHOAN],
     ]) {
-      const duong_dan = resolve(THU_MUC_HO_SO, ten_tep);
+      const duong_dan = resolve(SHARED_APP_DIR, ten_tep);
       await writeFile(duong_dan, ket_xuat.ketXuatVanBan(van_ban), "utf8");
       da_ghi.push(`${duongDanNgan(duong_dan)}  <- ${van_ban.nguon}`);
     }
@@ -105,49 +114,72 @@ async function main() {
     // KHÔNG TỰ DỰNG LẠI README TỪ ĐẦU, và đó là một ranh giới chứ không phải một sự lười: phần
     // văn xuôi mô tả từng chức năng cho người duyệt đọc, và không một dòng nào của nó suy ra được
     // từ mã nguồn. Sinh ra nó là bịa; xoá nó là làm hồ sơ mất phần người duyệt cần nhất.
-    const duong_dan_readme = resolve(THU_MUC_HO_SO, "README.md");
-    const readme_cu = await readFile(duong_dan_readme, "utf8");
-
     // HAI KHỐI SINH RA, THAY LẦN LƯỢT. Khối thứ hai ("Những gì rời khỏi máy") thêm 22/09/2026:
     // bảng quyền đọc `KHAI_BAO_LOI_GOI`, mà bảng ấy chỉ biết lời gọi `zmp-sdk` — một `fetch` thuần
     // vô hình với nó, và đó là cái lỗ đã để một lời khai sai sống trong hồ sơ.
-    const readme_moi = datDongBao(
-      ket_xuat.thayKhoiSinhRa(
-        ket_xuat.thayKhoiSinhRa(readme_cu, ket_xuat.bangQuyen(zalo_api.KHAI_BAO_LOI_GOI)),
-        ket_xuat.khoiRoiKhoiMay(ket_xuat.DUONG_ROI_KHOI_MAY),
-        ket_xuat.MOC_BAT_DAU_ROI_MAY,
-        ket_xuat.MOC_KET_THUC_ROI_MAY,
-      ),
-    );
+    //
+    // HAI HỒ SƠ (01/10/2026): app riêng của xã ở thư mục gốc — app đem nộp — và app chung ViHAT Group ở
+    // `app-chung-vihat/`. Cả hai đọc cùng các bảng khai; hồ sơ app xã chỉ lấy phần app xã thật sự chạy.
+    const dossiers = [
+      {
+        dir: COMMUNE_APP_DIR,
+        calls: ket_xuat.bangQuyen(ket_xuat.communeAppCalls(zalo_api.KHAI_BAO_LOI_GOI), { communeApp: true }),
+        routes: ket_xuat.khoiRoiKhoiMay(ket_xuat.communeAppRoutes(ket_xuat.DUONG_ROI_KHOI_MAY), { communeApp: true }),
+        from: "communeAppCalls + communeAppRoutes (hai khối sinh ra, ứng dụng riêng của xã)",
+      },
+      {
+        dir: SHARED_APP_DIR,
+        calls: ket_xuat.bangQuyen(zalo_api.KHAI_BAO_LOI_GOI),
+        routes: ket_xuat.khoiRoiKhoiMay(ket_xuat.DUONG_ROI_KHOI_MAY),
+        from: "zalo-api.ts + hop-dong.ts + hop-dong-yeu-cau.ts (hai khối sinh ra, app chung ViHAT Group)",
+      },
+    ];
 
-    /**
-     * RÀO CHO PHẦN VĂN XUÔI GIỮ TAY — QUÉT TRƯỚC KHI GHI, VÀ DỪNG HẲN NẾU BẨN.
-     *
-     * Phần văn xuôi không nằm trong kho (`tmp/` bị `.gitignore`), nên không một `npm test` nào
-     * nhìn thấy nó. Chỗ DUY NHẤT vừa chạy được vừa nhìn thấy nó là đúng lệnh này. Ghi tệp rồi mới
-     * cảnh báo thì hồ sơ bẩn đã nằm trên đĩa và sẵn sàng để ai đó nộp; nên quét TRƯỚC khi ghi.
-     */
-    const canh_bao = ket_xuat.canhBaoVanXuoi(readme_moi);
-    if (canh_bao.length > 0) {
-      const ke = canh_bao
-        .map((c, i) => `  ${i + 1}. "${c.cau}"\n     → ${c.vi_sao}`)
-        .join("\n");
-      throw new Error(
-        `Phần văn xuôi giữ tay của README hồ sơ đang khai SAI về dữ liệu rời khỏi máy.\n` +
-          `${duongDanNgan(duong_dan_readme)} — ${canh_bao.length} chỗ phải sửa:\n${ke}\n\n` +
-          `Hồ sơ KHÔNG được ghi lại. Sửa những câu trên rồi chạy lại.`,
+    // Compute and check BOTH before writing EITHER: a run that writes one README and refuses the other
+    // leaves two dossiers taken from two different moments of the source.
+    const pending = [];
+    for (const d of dossiers) {
+      const duong_dan_readme = resolve(d.dir, "README.md");
+      const readme_cu = await readFile(duong_dan_readme, "utf8");
+      const readme_moi = datDongBao(
+        ket_xuat.thayKhoiSinhRa(
+          ket_xuat.thayKhoiSinhRa(readme_cu, d.calls),
+          d.routes,
+          ket_xuat.MOC_BAT_DAU_ROI_MAY,
+          ket_xuat.MOC_KET_THUC_ROI_MAY,
+        ),
       );
+
+      /**
+       * RÀO CHO PHẦN VĂN XUÔI GIỮ TAY — QUÉT TRƯỚC KHI GHI, VÀ DỪNG HẲN NẾU BẨN.
+       *
+       * Phần văn xuôi không nằm trong kho (`tmp/` bị `.gitignore`), nên không một `npm test` nào
+       * nhìn thấy nó. Chỗ DUY NHẤT vừa chạy được vừa nhìn thấy nó là đúng lệnh này. Ghi tệp rồi mới
+       * cảnh báo thì hồ sơ bẩn đã nằm trên đĩa và sẵn sàng để ai đó nộp; nên quét TRƯỚC khi ghi.
+       */
+      const canh_bao = ket_xuat.canhBaoVanXuoi(readme_moi);
+      if (canh_bao.length > 0) {
+        const ke = canh_bao
+          .map((c, i) => `  ${i + 1}. "${c.cau}"\n     → ${c.vi_sao}`)
+          .join("\n");
+        throw new Error(
+          `Phần văn xuôi giữ tay của README hồ sơ đang khai SAI về dữ liệu rời khỏi máy.\n` +
+            `${duongDanNgan(duong_dan_readme)} — ${canh_bao.length} chỗ phải sửa:\n${ke}\n\n` +
+            `Hồ sơ KHÔNG được ghi lại. Sửa những câu trên rồi chạy lại.`,
+        );
+      }
+      pending.push({ path: duong_dan_readme, text: readme_moi, from: d.from });
     }
 
-    await writeFile(duong_dan_readme, readme_moi, "utf8");
-    da_ghi.push(
-      `${duongDanNgan(duong_dan_readme)}  <- zalo-api.ts + hop-dong.ts + hop-dong-yeu-cau.ts (hai khối sinh ra)`,
-    );
+    for (const p of pending) {
+      await writeFile(p.path, p.text, "utf8");
+      da_ghi.push(`${duongDanNgan(p.path)}  <- ${p.from}`);
+    }
 
     console.log("Đã sinh hồ sơ nộp Zalo:");
     for (const dong of da_ghi) console.log(`  ${dong}`);
     console.log(
-      "\nBa tệp trên là BẢN SINH RA. Sửa nội dung thì sửa tệp nguồn rồi chạy lại `npm run ho-so`.",
+      "\nCác tệp trên là BẢN SINH RA. Sửa nội dung thì sửa tệp nguồn rồi chạy lại `npm run ho-so`.",
     );
   } finally {
     await may_chu.close();

@@ -18,7 +18,8 @@ import {
 } from "../cong-dan/api/hop-dong-cong-khai";
 import { diaChiViGov } from "../cong-dan/api/dia-chi-vigov";
 import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
-import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
+import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN, XA_TN } from "../cong-dan/man/noi-dung";
+import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
   bridgeBodyWithPhone,
@@ -40,7 +41,10 @@ import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
 import {
   canhBaoVanXuoi,
+  COMMUNE_APP_ROUTES_OWED,
   COMMUNE_APP_SESSION_SCREENS,
+  communeAppCalls,
+  communeAppRoutes,
   DUONG_CONG_KHAI,
   DUONG_ROI_KHOI_MAY,
   PHONE_VERIFICATION_SCREENS,
@@ -671,5 +675,100 @@ describe("6 — văn xuôi giữ tay không được tự đếm thứ rời kh�
     // đòi một tệp không có trong kho là một ca đỏ vì lý do sai trên mọi bản sao mới. Thứ kiểm
     // được ở đây là chính bản sinh ra của khối — và nó phải không tự kích hoạt rào.
     expect(canhBaoVanXuoi(khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY))).toEqual([]);
+  });
+});
+
+/* =============================================================================================
+   7 — HỒ SƠ CỦA ỨNG DỤNG RIÊNG CỦA XÃ: chỉ những gì app ấy làm, bằng lời của app ấy
+   ============================================================================================= */
+
+describe("7 — the commune app's dossier lists that app only, in its own words", () => {
+  const calls = communeAppCalls(KHAI_BAO_LOI_GOI);
+  const routes = communeAppRoutes(DUONG_ROI_KHOI_MAY);
+
+  it("every call both halves use declares a commune view; every commercial-only call is left out", () => {
+    for (const row of KHAI_BAO_LOI_GOI) {
+      if (row.nua === "ca-hai") expect(row.commune_app, row.api).toBeDefined();
+    }
+    expect(calls.map((c) => c.api)).toEqual(KHAI_BAO_LOI_GOI.filter((r) => r.nua !== "thuong-mai").map((r) => r.api));
+    // Whether Zalo asks is a fact of the platform call, not of the app — never overridden.
+    for (const c of calls) {
+      expect(c.hoi_nguoi_dung, c.api).toBe(KHAI_BAO_LOI_GOI.find((r) => r.api === c.api)!.hoi_nguoi_dung);
+    }
+  });
+
+  it("every route running in both apps declares a commune view; shared-only routes are left out", () => {
+    for (const row of DUONG_ROI_KHOI_MAY) {
+      if (row.app === "both") expect(row.commune_app, row.tuyen).toBeDefined();
+    }
+    expect(routes).toHaveLength(DUONG_ROI_KHOI_MAY.filter((r) => r.app !== "shared").length);
+    // `communeAppRoutes` rebuilds each field list, so compare by route + keys, not by reference.
+    const shape = (tuyen: string, truong: readonly { khoa: string }[]) => `${tuyen}|${truong.map((t) => t.khoa).join(",")}`;
+    const printed = routes.map((r) => shape(r.tuyen, r.truong));
+    for (const shared of DUONG_ROI_KHOI_MAY.filter((r) => r.app === "shared")) {
+      expect(printed, shared.tuyen).not.toContain(shape(shared.tuyen, shared.truong));
+    }
+    expect(printed).toContain(shape(COMMUNE_APP_SESSION_PATH, COMMUNE_APP_SESSION_FIELDS));
+    expect(printed).toContain(shape(LOCATION_PATH, COMMUNE_APP_LOCATION_FIELDS));
+  });
+
+  it("in the commune app, `host` is the build's domain — never 'from a QR code or link'", () => {
+    for (const r of routes) {
+      for (const t of r.truong.filter((t) => t.khoa === "host")) {
+        expect(t.trong_chinh_sach, r.tuyen).toContain("gắn sẵn trong ứng dụng của xã");
+        expect(t.trong_chinh_sach, r.tuyen).not.toContain("mã QR");
+      }
+    }
+    // The shared dossier keeps its own sentence.
+    expect(khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY)).toContain("lấy từ mã QR");
+  });
+
+  it("the commune app's login is declared as going straight to ViGov, never through ViHAT's server (ADR 0066)", () => {
+    const login = routes.find((r) => r.tuyen === COMMUNE_APP_SESSION_PATH)!;
+    expect(login.truong.map((t) => t.khoa)).toEqual(COMMUNE_APP_SESSION_FIELDS.map((t) => t.khoa));
+    expect(login.may_chu).toContain("không qua máy chủ của Tập đoàn ViHAT Group");
+    for (const api of ["getPhoneNumber", "getAccessToken"]) {
+      expect(calls.find((c) => c.api === api)!.roi_khoi_may, api).toContain("thẳng tới hệ thống của xã");
+    }
+  });
+
+  it("no commune-app sentence names a screen of the shared app", () => {
+    const tables = [bangQuyen(calls, { communeApp: true }), khoiRoiKhoiMay(routes, { communeApp: true })];
+    for (const t of tables) {
+      for (const sharedScreen of ["Liên hệ", "Tư vấn và báo giá", "Danh thiếp", TIEU_DE_XAC_NHAN_XA, "sau khi đã xác nhận xã"]) {
+        expect(t, sharedScreen).not.toContain(sharedScreen);
+      }
+      expect(t).not.toContain("| Nửa |");
+    }
+  });
+
+  it("what runs at open, the commune app says so: the lookup, the office profile and the home-screen news", () => {
+    const atOpen = routes.filter((r) => !r.nguoi_dung_bam).map((r) => r.tuyen).sort();
+    expect(atOpen).toEqual([COMMUNE_PROFILES_PATH, DUONG_DAN_TIN_XA, DUONG_DAN_XA].sort());
+  });
+
+  it("the gap is printed inside the block until the petition routes are declared", () => {
+    const block = khoiRoiKhoiMay(routes, { communeApp: true });
+    expect(block).toContain(COMMUNE_APP_ROUTES_OWED);
+    // Not "đầy đủ" over a list that still lacks the petition routes; not the shared app's sources either.
+    expect(block).not.toContain("câu trả lời đầy đủ");
+    expect(block).not.toContain("TRUONG_GUI_DI_PHIEN");
+    expect(khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY)).not.toContain(COMMUNE_APP_ROUTES_OWED);
+  });
+
+  it("the copied commune screen names match the real screens word for word", () => {
+    expect(TEN_MAN_CONG_KHAI.commune_news_tab).toBe(`Ứng dụng của xã: ${XA_TN.news_tab_title}`);
+    expect(TEN_MAN_CONG_KHAI.commune_directory).toBe(`Ứng dụng của xã: ${DANH_BA.tieu_de}`);
+  });
+
+  it("a `both` row with no commune view is refused, not printed in the shared app's words", () => {
+    const bare = { ...DUONG_ROI_KHOI_MAY[0]!, app: "both" as const, commune_app: undefined };
+    expect(() => communeAppRoutes([bare])).toThrow();
+    const bareCall = { ...KHAI_BAO_LOI_GOI.find((r) => r.nua === "ca-hai")!, commune_app: undefined };
+    expect(() => communeAppCalls([bareCall])).toThrow();
+  });
+
+  it("the commune app's blocks do not trip the prose guard", () => {
+    expect(canhBaoVanXuoi(khoiRoiKhoiMay(routes, { communeApp: true }))).toEqual([]);
   });
 });
