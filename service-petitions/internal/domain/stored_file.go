@@ -78,6 +78,9 @@ func (s StoredFileStatus) Attachable() bool {
 const (
 	// StoredFileSubjectTask: the file was issued for one task. `SubjectID` is the task's INTERNAL id.
 	StoredFileSubjectTask = "task"
+	// StoredFileSubjectPetition: the file was issued for one petition (migration 0026). `SubjectID` is
+	// the petition's INTERNAL id (`phieu_phan_anh.id`), never its lookup code.
+	StoredFileSubjectPetition = "petition"
 
 	// Bucket ROLES (core/storage.Bucket), not bucket names — see migration 0021 on `bucket`.
 	StoredFileBucketPrivate = "private"
@@ -105,7 +108,8 @@ type StoredFile struct {
 
 	Status StoredFileStatus
 
-	// UploadedBy is a STAFF BUSINESS CODE (rule 6, invariant 8).
+	// UploadedBy is a STAFF BUSINESS CODE (rule 6, invariant 8), or CitizenLogActor on a citizen's
+	// scene photo — never the citizen's id, which lives on the petition (migration 0026).
 	UploadedBy string
 
 	RetainUntil time.Time // zero = not fixed (always zero for `records`)

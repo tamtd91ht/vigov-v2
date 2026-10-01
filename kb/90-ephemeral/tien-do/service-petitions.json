@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-01",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "vong-doi-phieu-phan-anh",
@@ -466,6 +466,15 @@
       "trang_thai": "xong",
       "bang_chung": "Đổi hợp đồng core/httpx.CitizenSessions.TraCuu (thêm error) — petitions không đổi mã chạy, chỉ cập nhật các giả lập trong test. go vet/test service-petitions xanh.",
       "tiep_theo": "Mini App cần hiểu 503 service_unavailable là \"thử lại\", không mở lại phiên (citizen-app — ngoài phạm vi lượt này)."
+    },
+    {
+      "id": "anh-hien-truong-luu-tru",
+      "viec": "Ảnh hiện trường phản ánh — lớp lưu trữ: stored_file nhận subject 'petition', ảnh công dân tối đa 5/phiếu ở CSDL (/develop-feature phan-anh-nguoi-dan TASK-02; chủ dự án chốt 02/10/2026, ADR 0047 dòng 'Ảnh hiện trường khi gửi phản ánh')",
+      "trang_thai": "xong",
+      "bang_chung": "migrations/0026_petition_scene_photo.sql: CHECK subject_type IN ('task','petition'); stored_file_citizen_upload_shape (uploaded_by='cong-dan' chỉ cho petition-photo); stored_file_petition_photo_shape (petition-photo ⇒ citizen-media + bucket private — 'không bao giờ công khai' thành luật CSDL); trigger stored_file_petition_check khoá phiếu FOR UPDATE, từ chối phiếu không có cong_dan_id, từ chối ảnh thứ 6 (đếm stored/processing/ready). Người tải = 'cong-dan' (domain.CitizenLogActor, theo nhat_ky_phan_anh.go:59-68 và petition_rating.go:24,209 — người thật ghi ở audit_log kind citizen). domain/stored_file.go thêm StoredFileSubjectPetition. migrations/petition_scene_photo_test.go 4 ca; go test ./... xanh; check_khoa_duy_nhat / check_audit_actor / check_security / check_quyen xanh. CHƯA chạy trên Postgres thật (không VIGOV_TEST_DSN, Docker tắt) — chạy go run ./tools/schema-smoke với PG16 trước khi tin trigger.",
+      "no_confirm": [],
+      "tiep_theo": "TASK-03 (use case + tuyến): đếm cả lượt tải đang chờ trong giao dịch khoá phiếu (CSDL chỉ đếm ảnh đã vào kho); link đọc ký gắn phieu_phan_anh.cong_dan_id (stored_file không giữ id công dân); retain_until của citizen-media (24 tháng sau đóng phiếu) chưa có hành vi đặt. Số 5 nằm ở hai nơi (trigger + upload_policy platform). ADR 0052:156 ghi uploaded_by = 'tham chiếu phiên công dân' — mã theo quy ước 'cong-dan', cần một dòng sửa ADR.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
