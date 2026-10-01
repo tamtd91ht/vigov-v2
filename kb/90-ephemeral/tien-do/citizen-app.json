@@ -410,6 +410,15 @@
       "no_confirm": [],
       "tiep_theo": "Trước khi nộp app xã: (1) khai các tuyến phản ánh (gửi, của tôi, tra cứu, đánh giá) vào DUONG_ROI_KHOI_MAY với app 'commune'/'both'; (2) Chính sách quyền riêng tư riêng cho app xã — bên kiểm soát dữ liệu là câu của chủ dự án; (3) chụp ảnh 01–09 trong Zalo trên bản không --demo. Còn lệch ở hồ sơ app chung (chưa sửa, ngoài lượt): dòng /my-citizen-report-fields chỉ khai cho app xã trong khi app chung cũng tải danh mục từ 2c158913; bảng app chung vẫn in cả các dòng chỉ app xã dùng.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "ho-so-app-xa-soat-lai-sau-trinh-sat",
+      "viec": "Soát lại hai commit c8318323 · 76089e7a bằng context-scout + cross-context-scout (chạy SAU khi đã commit — trái ROUTING §0, ghi ra để lần sau không lặp) và sửa những gì hai bản báo cáo đúng",
+      "trang_thai": "xong",
+      "bang_chung": "(1) Câu cũ 'qua máy chủ ViHAT Group' còn hiện ở app xã trên đường đánh giá → 403 chua_xac_thuc_so: PhoneVerificationPanel nhận zaloAsks, PetitionRating chuyền, PhanAnhAppXa truyền COMMUNE_APP_SESSION.zalo_asks; ca mới ở phone-verification.test.tsx. (2) Nhãn tuyến: /commune-news/categories → commune (chỉ TinTucAppXa gọi); /my-citizen-report-fields → both (GuiPhanAnhScreen app chung cũng gọi từ 2c158913), câu app chung viết lại. (3) Câu chữ: Xem tất cả 'của nhóm Chính quyền số'; tin đọc từ trang chủ/tab/ô. (4) Hai tệp .txt chính sách/điều khoản về thư mục gốc tmp/xin-quyen-zalo/, MỘT bản cho mọi app — ADR 0044 câu 1–2 và §Hệ quả dòng 115, câu hỏi mở #28 DECIDED: app xã đứng tên ViHAT Group, một chính sách dùng chung. README app xã đã gỡ câu sai 'app xã cần chính sách riêng / chọn đơn vị đứng tên', thêm: công văn của xã (0044:27,110), chính sách dùng chung phải phủ app xã, app xã chưa có lối vào chính sách (đã tìm cong-dan/man), identity đã triển khai citizen-sessions chưa, identity gọi Zalo từ IP Việt Nam. vitest 1454/1454, tsc sạch, npm run ho-so xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA SỬA, NÊU RA: (a) hồ sơ app chung (app-chung-vihat/) vẫn in cả dòng chỉ app xã dùng (getUserInfo, citizen-sessions, vị trí app xã, commune-profiles, categories) — khai thừa, không giấu; lọc nó cần viết lại câu gốc của các dòng ca-hai. (b) 'hệ thống của xã' trong COMMUNE_APP_SESSION.zalo_asks: ViGov do ViHAT Group vận hành (#28) — câu chữ của chủ dự án. (c) Mục `app-rieng-noi-may-chu` của sổ này và kb/90-ephemeral/ban-giao-phien.md (:57, :160) còn tả đăng nhập app xã qua vihat-miniapp — cũ từ ADR 0066; ban-giao-phien sửa bằng /handover. (d) ADR 0066 mục 'Chưa quyết' (:128-134) trái với 'Đã quyết' (:105-112) — knowledge-keeper.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

@@ -7,13 +7,13 @@
  * | Tệp kết quả | Sinh từ |
  * |---|---|
  * | `tmp/xin-quyen-zalo/README.md`, hai khối giữa các mốc | `communeAppCalls` / `communeAppRoutes` (`src/content/ket-xuat-ho-so.ts`) |
- * | `tmp/xin-quyen-zalo/app-chung-vihat/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
- * | `tmp/xin-quyen-zalo/app-chung-vihat/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
+ * | `tmp/xin-quyen-zalo/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
+ * | `tmp/xin-quyen-zalo/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
  * | `tmp/xin-quyen-zalo/app-chung-vihat/README.md`, hai khối giữa các mốc | `KHAI_BAO_LOI_GOI` trong `src/features/tinh-nang/zalo-api.ts` |
  *
- * The two `.txt` files are the SHARED app's policy and terms, so they are written beside its README only:
- * the commune app has no published policy yet, and a ViHAT Group policy in the commune app's folder is one
- * paste away from being submitted as the commune's.
+ * The two `.txt` files sit at the folder root, ONE copy for both dossiers: every app is published by
+ * ViHAT Group and shares one privacy policy (ADR 0044 §Hệ quả, open question #28 DECIDED). A copy per
+ * dossier would be two copies of one legal text.
  *
  * ⚠ VÌ SAO TỆP NÀY TỒN TẠI — MỘT LỖI ĐÃ ĐO ĐƯỢC, KHÔNG PHẢI MỘT Ý THÍCH:
  *
@@ -104,7 +104,7 @@ async function main() {
       ["chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
       ["dieu-khoan-su-dung.txt", ket_xuat.VAN_BAN_DIEU_KHOAN],
     ]) {
-      const duong_dan = resolve(SHARED_APP_DIR, ten_tep);
+      const duong_dan = resolve(COMMUNE_APP_DIR, ten_tep);
       await writeFile(duong_dan, ket_xuat.ketXuatVanBan(van_ban), "utf8");
       da_ghi.push(`${duongDanNgan(duong_dan)}  <- ${van_ban.nguon}`);
     }

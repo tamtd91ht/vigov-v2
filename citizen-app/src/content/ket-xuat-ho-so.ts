@@ -440,7 +440,7 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     app: "both",
     commune_app: {
       man: TEN_MAN_CONG_KHAI.commune_directory,
-      khi_nao: "người dùng tự bấm ô “Danh bạ” hoặc “Xem tất cả” trên trang chủ",
+      khi_nao: "người dùng tự bấm ô “Danh bạ” hoặc “Xem tất cả” của nhóm “Chính quyền số” trên trang chủ",
       nguoi_dung_bam: true,
     },
   },
@@ -482,12 +482,13 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
     // 30/09/2026 (comms 58abea4c, card D2): the category chip rows above the news list. Runs when the
     // citizen opens the news tab or taps a type tab — a tap, like the list itself; carries only the domain
-    // and the chosen type.
+    // and the chosen type. COMMUNE APP ONLY: its one caller is `TinTucAppXa.tsx` (the shared app's
+    // `TinTucXaScreen` has no chips).
     tuyen: "/api/v1/commune-news/categories",
     may_chu: "ViGov — dịch vụ `comms`",
-    khi_nao: `người dùng tự bấm “${TEN_MAN_CONG_KHAI.tin_xa}” hoặc chọn một loại tin, sau khi đã xác nhận xã — để hiện các chuyên mục có tin`,
+    khi_nao: "trong ứng dụng riêng của một xã, người dùng tự mở tab “Tin tức” hoặc chọn một loại tin — để hiện các chuyên mục có tin",
     nguoi_dung_bam: true,
-    man: TEN_MAN_CONG_KHAI.tin_xa,
+    man: TEN_MAN_CONG_KHAI.commune_news_tab,
     truong: [
       HOST_CONG_KHAI,
       {
@@ -495,12 +496,7 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
         trong_chinh_sach: "loại tin người dùng đang xem (tin tức, sự kiện, thông báo), để chỉ hiện chuyên mục có tin thuộc loại ấy",
       },
     ],
-    app: "both",
-    commune_app: {
-      man: TEN_MAN_CONG_KHAI.commune_news_tab,
-      khi_nao: "người dùng tự mở tab “Tin tức” hoặc chọn một loại tin — để hiện các chuyên mục có tin",
-      nguoi_dung_bam: true,
-    },
+    app: "commune",
   },
   {
     tuyen: "/api/v1/commune-news/{id}",
@@ -513,9 +509,10 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
       { khoa: "id", trong_chinh_sach: "mã của tin người dùng bấm đọc, do chính máy chủ trả trong danh sách tin" },
     ],
     app: "both",
+    // Articles open from the home screen, the news tab, and the Truyền thanh · Video · Sự kiện tiles.
     commune_app: {
-      man: TEN_MAN_CONG_KHAI.commune_news_tab,
-      khi_nao: "người dùng tự bấm vào một tin để đọc",
+      man: `${TEN_MAN_CONG_KHAI.trang_chu_xa} · ${TEN_MAN_CONG_KHAI.commune_news_tab}`,
+      khi_nao: "người dùng tự bấm vào một tin để đọc — trên trang chủ, ở tab “Tin tức”, hoặc trong các ô Truyền thanh · Video · Sự kiện",
       nguoi_dung_bam: true,
     },
   },
@@ -638,19 +635,27 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     app: "commune",
   },
   {
-    // 29/09/2026 (service-petitions af3fff0): the commune's field list for step 1 of "Gửi phản ánh" in the
-    // commune's own app. The FIRST `petitions` route declared here (the send/read routes, which carry the
-    // petition itself, are still owed — see the header of this table): it carries NO field at all — no
-    // query, no body — only the session header, from which the server takes the commune. Path copied from
+    // 29/09/2026 (service-petitions af3fff0): the commune's field list for step 1 of "Gửi phản ánh". The
+    // FIRST `petitions` route declared here (the send/read routes, which carry the petition itself, are
+    // still owed — see the header of this table): it carries NO field at all — no query, no body — only the
+    // session header, from which the server takes the commune. Path copied from
     // `cong-dan/api/hop-dong-phan-anh.ts` `CITIZEN_FIELDS_PATH` (boundary); the test pins it.
+    // BOTH APPS since 2c158913 (01/10/2026): the shared app's `GuiPhanAnhScreen` loads it too, once a session
+    // with the confirmed commune exists.
     tuyen: "/api/v1/my-citizen-report-fields",
     may_chu: "ViGov — dịch vụ `petitions`",
     khi_nao:
-      "trong ứng dụng riêng của một xã, người dùng mở “Gửi phản ánh” sau khi đã đồng ý chia sẻ số điện thoại (phiên làm việc với xã đã mở), hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được",
+      "người dùng mở “Gửi phản ánh” khi đã có phiên làm việc với xã đã xác nhận, hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được",
     nguoi_dung_bam: true,
-    man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+    man: SEND_SCREEN_NAME,
     truong: [],
-    app: "commune",
+    app: "both",
+    commune_app: {
+      man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+      khi_nao:
+        "trong ứng dụng riêng của một xã, người dùng mở “Gửi phản ánh” sau khi đã đồng ý chia sẻ số điện thoại (phiên làm việc với xã đã mở), hoặc bấm “Thử lại” khi danh sách lĩnh vực chưa tải được",
+      nguoi_dung_bam: true,
+    },
   },
   ...DUONG_CONG_KHAI.slice(1),
 ];

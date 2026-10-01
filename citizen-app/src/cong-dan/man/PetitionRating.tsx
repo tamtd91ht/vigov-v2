@@ -202,6 +202,8 @@ export function PetitionRating(props: {
   /** Read the petition again (after a 409). */
   onReload: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /** Passed to the phone panel — the commune's own app names its own route (`PhoneVerificationPanel`). */
+  zaloAsks?: string;
 }) {
   const { petition } = props;
   const phone = usePhoneVerification(props.reopenWithPhone);
@@ -289,6 +291,7 @@ export function PetitionRating(props: {
           <PhoneVerificationPanel
             state={phone.state}
             task="rate"
+            zaloAsks={props.zaloAsks}
             onAllow={() => void phone.allow()}
             onDecline={phone.decline}
           />

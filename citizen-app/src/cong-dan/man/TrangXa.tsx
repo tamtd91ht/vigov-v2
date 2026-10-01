@@ -845,7 +845,7 @@ export function TrangXa(props: {
    */
   draftStore?: FeedbackDraftStore;
   /**
-   * Mở phiên công dân ViGov (App ID + `getAccessToken` + `getPhoneNumber` → `vihat-miniapp`), do lớp vỏ
+   * Mở phiên công dân ViGov (App ID + `getAccessToken` + `getPhoneNumber` → ViGov identity trực tiếp, ADR 0066), do lớp vỏ
    * tiêm — nửa này không nhập zmp-sdk. Gọi CHỈ ở việc cá nhân đầu tiên, sau lời giải thích và cú bấm đồng
    * ý (`commune-session.ts`), không bao giờ lúc mở app (ADR 0047:251). Không truyền (chạy thử, test) thì
    * mọi việc cá nhân nói "chưa kết nối" và không gọi mạng.

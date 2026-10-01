@@ -184,6 +184,12 @@ export function PhoneVerificationPanel(props: {
   focusId?: string;
   /** Màn gửi: nói thêm rằng nội dung đang viết vẫn còn. */
   draftKept?: boolean;
+  /**
+   * Where the number goes, said before Zalo's dialog. Default: the shared app's route (through
+   * `vihat-miniapp`). The commune's own app passes `COMMUNE_APP_SESSION.zalo_asks`: its reopen goes straight
+   * to ViGov identity (ADR 0066), and the shared sentence would name a server the number never reaches.
+   */
+  zaloAsks?: string;
   onAllow: () => void;
   onDecline: () => void;
 }) {
@@ -223,7 +229,7 @@ export function PhoneVerificationPanel(props: {
         {PHONE_VERIFICATION.title}
       </h2>
       <p className="cd-cau">{PHONE_VERIFICATION.why}</p>
-      <p className="cd-ghi-chu">{PHONE_VERIFICATION.zalo_asks}</p>
+      <p className="cd-ghi-chu">{props.zaloAsks ?? PHONE_VERIFICATION.zalo_asks}</p>
       {draft}
       <button type="button" className="cd-nut" onClick={props.onAllow}>
         {PHONE_VERIFICATION.allow}

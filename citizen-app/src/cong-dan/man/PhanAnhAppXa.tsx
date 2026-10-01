@@ -56,6 +56,7 @@ import {
 import { nhanLinhVuc } from "./khung";
 import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
+  COMMUNE_APP_SESSION,
   CUA_TOI,
   GUI,
   giaiThichTrangThai,
@@ -539,6 +540,7 @@ export function PetitionBody(props: {
           onRated={props.onRated}
           onReload={props.onReload}
           reopenWithPhone={props.reopenWithPhone}
+          zaloAsks={COMMUNE_APP_SESSION.zalo_asks}
         />
       )}
     </>

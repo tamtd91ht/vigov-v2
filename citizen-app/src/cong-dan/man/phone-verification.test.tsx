@@ -16,7 +16,7 @@ import { type ReopenWithPhone, type ReopenWithPhoneResult, reopenSessionWithPhon
 import { datPhienViGov, layPhienViGov } from "../api/phien-vigov";
 
 import { buocSauKhiGui } from "./GuiPhanAnhScreen";
-import { PHONE_VERIFICATION, PHONE_VERIFICATION_TASK } from "./noi-dung";
+import { COMMUNE_APP_SESSION, PHONE_VERIFICATION, PHONE_VERIFICATION_TASK } from "./noi-dung";
 import {
   createPhoneVerification,
   PhoneVerificationPanel,
@@ -344,6 +344,25 @@ describe("PhoneVerificationPanel — nói vì sao trước, hai nút to, kết c
     expect(html).toContain(`<button type="button" class="cd-nut-phu">${PHONE_VERIFICATION.decline}</button>`);
     // Câu vì sao đứng TRƯỚC nút đồng ý.
     expect(html.indexOf(PHONE_VERIFICATION.why)).toBeLessThan(html.indexOf(PHONE_VERIFICATION.allow));
+  });
+
+  it("the commune's own app names ITS route (ADR 0066) — the rating block's reopen says the same as the gate", () => {
+    const html = renderToStaticMarkup(
+      createElement(PhoneVerificationPanel, {
+        state: { kieu: "hoi" },
+        task: "rate",
+        zaloAsks: COMMUNE_APP_SESSION.zalo_asks,
+        onAllow: () => {},
+        onDecline: () => {},
+      }),
+    );
+    expect(html).toContain(COMMUNE_APP_SESSION.zalo_asks);
+    expect(html).not.toContain(PHONE_VERIFICATION.zalo_asks);
+    // The one commune-app caller passes it: `PhanAnhAppXa` is rendered only by `TrangXa` (the commune's own app).
+    const source = Object.values(
+      import.meta.glob("./PhanAnhAppXa.tsx", { query: "?raw", import: "default", eager: true }),
+    )[0] as string;
+    expect(source).toContain("zaloAsks={COMMUNE_APP_SESSION.zalo_asks}");
   });
 
   it("đang xác nhận: một vùng `role=\"status\"`, không nút nào bấm được", () => {
