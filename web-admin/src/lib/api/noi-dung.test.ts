@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   completeCoverUpload,
+  contentCategoryPath,
   COVER_FORM_MISSING,
+  deleteContentCategory,
   duongDanMotNoiDung,
   duongDanSoNoiDung,
   layDanhMucNoiDung,
@@ -14,6 +16,7 @@ import {
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
+  updateContentCategory,
   type SuaNoiDungVao,
   type ThemDanhMucVao,
   type ThemNoiDungVao,
@@ -92,6 +95,14 @@ const VIDEO_FULL: ThemNoiDungVao = {
   video_url: "https://video.example.vn/hoi-nghi",
 };
 
+/** The banner's two fields (ADR 0067 §5), only on `type: banner`. */
+const BANNER_FULL: ThemNoiDungVao = {
+  ...THEM_DAY_DU,
+  type: "banner",
+  link_to: "/tin-tuc",
+  display_order: 2,
+};
+
 /**
  * Thân SỬA đầy đủ — cùng lý do. `suaNoiDung` does not filter by type (a PATCH often carries none),
  * so one body can hold every key; which ones the form puts in is `thanSua`'s test.
@@ -109,6 +120,8 @@ const SUA_DAY_DU: SuaNoiDungVao = {
   event_place: "Hội trường UBND xã",
   video_url: "",
   cover_image_file_id: "",
+  link_to: "",
+  display_order: 4,
 };
 
 const THEM_DANH_MUC_DAY_DU: ThemDanhMucVao = {
@@ -470,6 +483,116 @@ describe("danh mục tin §6", () => {
   });
 });
 
+describe("category edit / delete (ADR 0067 §3)", () => {
+  it("PATCH goes to the encoded id, sends exactly what it was given, and no Idempotency-Key", async () => {
+    const gia = batFetch(traJSON(200, { id: "01JDM1" }));
+    // A whole row read back from the list — `slug`, `created_at` — must not ride along: `slug` is a 400.
+    const row = { name: "Tên mới", slug: "chuyen-doi-so", created_at: "x" } as unknown as Parameters<
+      typeof updateContentCategory
+    >[1];
+    const kq = await updateContentCategory("a/b", row);
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/content-categories/a%2Fb");
+    expect(tuyChon.method).toBe("PATCH");
+    expect(header.get("Idempotency-Key")).toBeNull();
+    expect(thanDaGui(gia, 0)).toEqual({ name: "Tên mới" });
+    expect(kq.ok).toBe(true);
+  });
+
+  it("`parent_id: \"\"` IS sent — it is MOVE TO ROOT; `hidden: false` IS sent — it is SHOW", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await updateContentCategory("01JDM1", { parent_id: "" });
+    await updateContentCategory("01JDM1", { hidden: false });
+    expect(thanDaGui(gia, 0)).toEqual({ parent_id: "" });
+    expect(thanDaGui(gia, 1)).toEqual({ hidden: false });
+  });
+
+  it("DELETE carries the reason IN THE BODY, never in the URL, and 204 is success", async () => {
+    const gia = batFetch(new Response(null, { status: 204 }));
+    const kq = await deleteContentCategory("01JDM1", "Trùng với danh mục An ninh");
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe(contentCategoryPath("01JDM1"));
+    expect(duongDan).not.toContain("?");
+    expect(tuyChon.method).toBe("DELETE");
+    expect(thanDaGui(gia, 0)).toEqual({ reason: "Trùng với danh mục An ninh" });
+    expect(kq).toEqual({ ok: true, duLieu: null });
+  });
+
+  // Each refusal the card names, with the sentence the server writes for it
+  // (service-comms/internal/http/noi_dung_mini_app.go). The screen shows it AS IT CAME: `KetQua` carries
+  // no `code` on purpose (`goi.ts`), so a client-side copy of these sentences could only drift.
+  const REFUSALS: { name: string; status: number; code: string; message: string; call: () => Promise<{ ok: boolean }> }[] = [
+    {
+      name: "self parent (400)",
+      status: 400,
+      code: "invalid_request",
+      message: "danh_muc_mini_app: một danh mục không thể là cha của chính nó",
+      call: () => updateContentCategory("01JDM1", { parent_id: "01JDM1" }),
+    },
+    {
+      name: "slug sent (400)",
+      status: 400,
+      code: "invalid_request",
+      message: "danh_muc_mini_app: `slug` đã cấp thì không đổi được — sửa `name`, hoặc thêm danh mục mới",
+      call: () => updateContentCategory("01JDM1", { name: "x" }),
+    },
+    {
+      name: "category_cycle (409)",
+      status: 409,
+      code: "category_cycle",
+      message: "Không đặt được danh mục cha là một danh mục con (hoặc cháu) của chính nó.",
+      call: () => updateContentCategory("01JDM1", { parent_id: "01JDM3" }),
+    },
+    {
+      name: "parent_missing (409)",
+      status: 409,
+      code: "parent_missing",
+      message:
+        "Danh mục cha đã chọn không còn trong danh mục tin của xã. Hãy tải lại trang và chọn lại.",
+      call: () => updateContentCategory("01JDM1", { parent_id: "01JGONE" }),
+    },
+    {
+      name: "category_not_empty (409)",
+      status: 409,
+      code: "category_not_empty",
+      message:
+        "Danh mục còn nội dung hoặc danh mục con nên không xoá được. " +
+        "Hãy ẩn danh mục nếu không muốn bà con thấy nó trên Mini App.",
+      call: () => deleteContentCategory("01JDM1", "Không dùng nữa"),
+    },
+  ];
+
+  for (const r of REFUSALS) {
+    it(`${r.name}: the server's Vietnamese sentence reaches the screen verbatim`, async () => {
+      batFetch(traJSON(r.status, { code: r.code, message: r.message, trace_id: "t-1" }));
+      const kq = (await r.call()) as { ok: boolean; thongBao?: string };
+      expect(kq.ok).toBe(false);
+      expect(kq.thongBao).toBe(r.message);
+      // Neither the machine code nor the trace id is shown to the officer.
+      expect(kq.thongBao).not.toContain(r.code);
+      expect(kq.thongBao).not.toContain("t-1");
+    });
+  }
+
+  it("a banner 422 (`banner_cover_required`) on POST reaches the form verbatim too", async () => {
+    const message =
+      "noi_dung_mini_app: banner phải có ảnh bìa — tải ảnh lên trước khi lưu, và không gỡ ảnh khỏi banner";
+    batFetch(traJSON(422, { code: "banner_cover_required", message }));
+    const kq = await themNoiDung({ ...BANNER_FULL, cover_image_file_id: "" }, "k");
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toBe(message);
+  });
+
+  it("POST sends the banner fields for a banner only", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await themNoiDung(BANNER_FULL, "k");
+    await themNoiDung({ ...BANNER_FULL, type: "tin-tuc" }, "k");
+    expect(thanDaGui(gia, 0)).toMatchObject({ link_to: "/tin-tuc", display_order: 2 });
+    expect(thanDaGui(gia, 1)).not.toHaveProperty("link_to");
+    expect(thanDaGui(gia, 1)).not.toHaveProperty("display_order");
+  });
+});
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * SO VỚI HỢP ĐỒNG — đọc thẳng `kb/20-contracts/openapi.json`
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -503,11 +626,12 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     const gia = batFetch(traJSON(201, {}));
     await themNoiDung(EVENT_FULL, "k");
     await themNoiDung(VIDEO_FULL, "k");
+    await themNoiDung(BANNER_FULL, "k");
 
     // Thân đầy đủ: mọi trường tuỳ chọn đều có giá trị, nên bộ khoá gửi đi phải trùng KHÍT bộ khoá
     // hợp đồng. Thừa một trường là gửi thứ máy chủ không nhận; thiếu một trường là một ô biểu mẫu
-    // không bao giờ tới nơi. UNION of the event body and the video body: no one type carries both.
-    const sent = new Set([...Object.keys(thanDaGui(gia, 0)), ...Object.keys(thanDaGui(gia, 1))]);
+    // không bao giờ tới nơi. UNION of the event, video and banner bodies: no one type carries all.
+    const sent = new Set([0, 1, 2].flatMap((n) => Object.keys(thanDaGui(gia, n))));
     expect([...sent].sort()).toEqual(cuaHopDong.slice().sort());
   });
 
@@ -543,12 +667,32 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(luocDo?.required ?? []).not.toContain("body");
   });
 
-  it("KHÔNG có tuyến `DELETE` nào cho nội dung — §6 chỉ có `✎`", () => {
+  it("KHÔNG có tuyến `DELETE` nào cho một mục nội dung — §6 chỉ có `✎`; a CATEGORY has one", () => {
     // Ngày tuyến xoá xuất hiện, bài kiểm này đỏ và người đọc biết rằng phải quay lại luật 7: xoá
     // một bản ghi nghiệp vụ là xoá MỀM, bắt buộc có `delete_reason`, mà màn này không thu câu ấy.
     const p = hopDong().paths;
     expect(Object.keys(p["/api/v1/content-items/{id}"] ?? {})).not.toContain("delete");
     expect(Object.keys(p["/api/v1/content-categories"] ?? {})).not.toContain("delete");
+    // ADR 0067 §3: the category's soft delete with a mandatory reason.
+    const methods = Object.keys(p["/api/v1/content-categories/{id}"] ?? {}).filter((k) => k !== "parameters");
+    expect(methods.sort()).toEqual(["delete", "patch"]);
+  });
+
+  it("`updateContentCategory` sends at most the keys of `comms.updateCategoryIn`, never `slug`", async () => {
+    const cuaHopDong = khoaCuaLuocDo("comms.updateCategoryIn");
+    const gia = batFetch(traJSON(200, {}));
+    await updateContentCategory("01JDM1", { name: "A", parent_id: "", order: 1, hidden: true });
+    const sent = Object.keys(thanDaGui(gia, 0)).sort();
+    expect(sent).toEqual(["hidden", "name", "order", "parent_id"]);
+    // The contract still lists `slug` — only so the server can REFUSE it (400). Every other key matches.
+    expect(cuaHopDong.filter((k) => k !== "slug").sort()).toEqual(sent);
+  });
+
+  it("`deleteContentCategory` sends EXACTLY the keys of `comms.deleteCategoryIn`", async () => {
+    const cuaHopDong = khoaCuaLuocDo("comms.deleteCategoryIn");
+    const gia = batFetch(new Response(null, { status: 204 }));
+    await deleteContentCategory("01JDM1", "Gộp vào danh mục khác");
+    expect(Object.keys(thanDaGui(gia, 0)).sort()).toEqual(cuaHopDong.slice().sort());
   });
 
   it("tám tuyến vẫn đứng sau đúng hai khoá màn đang giả định", () => {
@@ -566,6 +710,8 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(khoa("/api/v1/content-categories", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/cover-images", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/cover-images/{id}/completion", "post")).toBe("content.update");
+    expect(khoa("/api/v1/content-categories/{id}", "patch")).toBe("content.update");
+    expect(khoa("/api/v1/content-categories/{id}", "delete")).toBe("content.update");
   });
 
   it("`requestCoverUpload` sends EXACTLY the keys of `comms.coverUploadIn`", async () => {

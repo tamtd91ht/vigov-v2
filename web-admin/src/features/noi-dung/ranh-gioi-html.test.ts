@@ -8,10 +8,10 @@ import { describe, expect, it } from "vitest";
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * MỘT LỆNH CẤM KHÔNG CÓ PHÉP KIỂM LÀ MỘT LỆNH CẤM SẼ BỊ PHÁ TRONG IM LẶNG.
  *
- * `noi_dung` là HTML (§8) và MÁY CHỦ KHÔNG LÀM SẠCH NÓ — kho chưa có bộ làm sạch nào, và giới hạn
- * ấy được ghi thẳng trong `service-comms/internal/domain/noi_dung_mini_app.go`
- * (`ChuanHoaVanBanDai`). Một cán bộ có `content.update` đặt được `<script>` vào thứ mọi cư dân xã
- * mở trên điện thoại, và màn Phân quyền của xã có thể đã cấp khoá ấy cho nhiều người.
+ * `noi_dung` là HTML (§8). Since ADR 0067 §1 the server sanitises it on every write
+ * (`service-comms/internal/richtext`), but rows written before that are archival records that are
+ * never rewritten, and the server is one wall, not two: this screen still never hands a string of
+ * HTML to the page. The body is edited in Tiptap, which draws the document from its parsed schema.
  *
  * Vi phạm lệnh cấm dưới đây KHÔNG làm hỏng màn hình nào, KHÔNG làm đỏ test nào khác, và chạy đúng
  * trên máy người viết: một `dangerouslySetInnerHTML` thêm vào "để xem trước cho tiện" hiện ra đúng
@@ -93,8 +93,8 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
   });
 
   it("KHÔNG tệp nào của màn chứa `dangerouslySetInnerHTML`", () => {
-    // Máy chủ lưu HTML NGUYÊN VĂN và không có bộ làm sạch nào phía sau. Dựng chuỗi ấy — kể cả chỉ
-    // để "xem trước" — là chạy mã của người vừa gõ, trên màn hình quản trị của xã.
+    // A stored body may predate the server's sanitiser (ADR 0067 §1 decision 5). Rendering it as a
+    // string — even "just a preview" — runs whatever it holds on the commune's admin screen.
     const viPham = TEP.filter((t) => t.noiDung.includes("dangerouslySetInnerHTML")).map(
       (t) => t.duongDan,
     );

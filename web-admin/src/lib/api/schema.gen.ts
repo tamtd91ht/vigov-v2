@@ -23,6 +23,13 @@ export type audit_EntryView = {
   "delta": JsonValue;
 };
 
+export type comms_bodyBlockOut = {
+  "kind": string;
+  "level"?: number;
+  "runs"?: Array<comms_inlineRunOut>;
+  "items"?: Array<comms_listItemOut>;
+};
+
 export type comms_coverFileOut = {
   "id": string;
   "mime_type": string;
@@ -67,6 +74,7 @@ export type comms_danhMucRa = {
   "parent_id": string;
   "order": number;
   "created_at": string;
+  "hidden": boolean;
 };
 
 export type comms_danhSachDanhMucRa = {
@@ -75,6 +83,10 @@ export type comms_danhSachDanhMucRa = {
 
 export type comms_danhSachLoaiTaiNguyenRa = {
   "items": Array<comms_loaiTaiNguyenRa>;
+};
+
+export type comms_deleteCategoryIn = {
+  "reason": string;
 };
 
 export type comms_deleteMapFieldSchemaIn = {
@@ -89,6 +101,17 @@ export type comms_fieldOptionIn = {
 export type comms_fieldOptionOut = {
   "value": string;
   "label": string;
+};
+
+export type comms_inlineRunOut = {
+  "text": string;
+  "bold"?: boolean;
+  "italic"?: boolean;
+  "href"?: string;
+};
+
+export type comms_listItemOut = {
+  "runs": Array<comms_inlineRunOut>;
 };
 
 export type comms_loaiTaiNguyenRa = {
@@ -223,6 +246,8 @@ export type comms_noiDungRa = {
   "event_ends_at"?: string | null;
   "event_place"?: string;
   "video_url"?: string;
+  "link_to"?: string;
+  "display_order"?: number | null;
 };
 
 export type comms_notificationOut = {
@@ -286,6 +311,8 @@ export type comms_suaNoiDungVao = {
   "event_place"?: string | null;
   "video_url"?: string | null;
   "cover_image_file_id"?: string | null;
+  "link_to"?: string | null;
+  "display_order"?: number | null;
 };
 
 export type comms_themDanhMucVao = {
@@ -316,6 +343,8 @@ export type comms_themNoiDungVao = {
   "event_place"?: string;
   "video_url"?: string;
   "cover_image_file_id"?: string;
+  "link_to"?: string;
+  "display_order"?: number | null;
   "publish"?: boolean;
 };
 
@@ -351,10 +380,20 @@ export type comms_tinXaRa = {
   "event_place"?: string;
   "video_url"?: string;
   "image_url"?: string;
+  "link_to"?: string;
+  "body_blocks"?: Array<comms_bodyBlockOut>;
 };
 
 export type comms_unreadCountOut = {
   "unread": number;
+};
+
+export type comms_updateCategoryIn = {
+  "name"?: string | null;
+  "parent_id"?: string | null;
+  "order"?: number | null;
+  "hidden"?: boolean | null;
+  "slug"?: string | null;
 };
 
 export type comms_updateMapFieldSchemaIn = {
@@ -3667,7 +3706,7 @@ export type comms_get_commune_news_categories = {
   };
 };
 
-/** GET /api/v1/commune-news/{id} — Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404 */
+/** GET /api/v1/commune-news/{id} — Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404 */
 export type comms_get_commune_news_by_id = {
   duongDan: "/api/v1/commune-news/{id}";
   phuongThuc: "GET";
@@ -3791,6 +3830,48 @@ export type comms_post_content_categories = {
   };
 };
 
+/** PATCH /api/v1/content-categories/{id} — Sửa tên, danh mục cha, thứ tự hoặc cờ ẩn của một danh mục tin Mini App — slug không đổi được */
+export type comms_patch_content_categories_by_id = {
+  duongDan: "/api/v1/content-categories/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_updateCategoryIn;
+  phanHoi: {
+    200: comms_danhMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/content-categories/{id} — Xoá mềm một danh mục tin Mini App kèm lý do bắt buộc — từ chối khi còn nội dung hoặc danh mục con */
+export type comms_delete_content_categories_by_id = {
+  duongDan: "/api/v1/content-categories/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteCategoryIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/content-items — Sổ nội dung Mini App của xã — một trang của bảng §6, lọc theo loại, danh mục và tiêu đề */
 export type comms_get_content_items = {
   duongDan: "/api/v1/content-items";
@@ -3831,6 +3912,7 @@ export type comms_post_content_items = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -3915,6 +3997,7 @@ export type comms_patch_content_items_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };

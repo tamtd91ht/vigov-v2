@@ -3,20 +3,29 @@ import { describe, expect, it } from "vitest";
 import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 
 import {
+  CANH_BAO_HTML_THO,
+  categoryPatchBody,
   CHUA_XEP_DANH_MUC,
   coThayDoi,
   DAU_GACH,
   dungCayDanhMuc,
   ERR_EVENT_END_BEFORE_START,
   ERR_EVENT_END_WITHOUT_START,
+  ERR_BANNER_COVER_REQUIRED,
+  ERR_DISPLAY_ORDER_CANNOT_CLEAR,
+  ERR_DISPLAY_ORDER_INVALID,
   ERR_EVENT_PLACE_TOO_LONG,
+  ERR_LINK_TO_INVALID,
   ERR_VIDEO_URL_INVALID,
   EVENT_PLACE_MAX_CHARS,
   FORM_TRONG,
   formatVietnamDateTime,
   giaTriTuHang,
   instantToLocalInput,
+  isValidLinkTo,
   localInputToInstant,
+  parentChoices,
+  parseDisplayOrder,
   publishedAtLabel,
   validateTypeFields,
   LOAI_MAC_DINH,
@@ -30,6 +39,7 @@ import {
   nhanTepDinhKem,
   nhanTrangThai,
   PHAN_CHUA_DUNG,
+  selfAndDescendants,
   tenDanhMuc,
   thanBaiNeuCo,
   thanSua,
@@ -58,6 +68,7 @@ function danhMuc(sua: Partial<comms_danhMucRa> = {}): comms_danhMucRa {
     parent_id: "",
     order: 0,
     created_at: "2026-09-01T02:00:00Z",
+    hidden: false,
     ...sua,
   };
 }
@@ -625,13 +636,36 @@ describe("client-side check of the per-type fields — mirrors the server", () =
 });
 
 describe("phần chưa dựng được", () => {
-  it("có danh sách, và mục đầu tiên nói về HTML không được làm sạch", () => {
-    // A FLOOR, lowered on purpose: the cover upload (§7 `Chọn tệp từ máy`) left the list when it
-    // was built (606bf515 + the screen). Nine is what remains; losing more without building them is red.
-    expect(PHAN_CHUA_DUNG.length).toBeGreaterThanOrEqual(9);
-    // Thứ tự có ý nghĩa: đây là rủi ro lớn nhất của màn, nên nó đứng đầu khối `<details>`.
-    expect(PHAN_CHUA_DUNG[0]?.ten).toContain("rich text");
-    expect(PHAN_CHUA_DUNG[0]?.viSao).toContain("content.update");
+  it("the list is PINNED: rich text, category edit/delete and banner left it when they were built", () => {
+    // EXACT, not a floor: an item silently dropped and an item silently kept are both a block that
+    // lies to the commune about what the screen does. ADR 0067 built three of them (§1, §3, §5).
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
+      "Toàn bộ thẻ “Đồng bộ tin từ Cổng thông tin điện tử” (§3): chip trạng thái, `⟳ Đồng bộ ngay`, `Cấu hình`, `Chạy lần cuối`, khối log lỗi, cây 60 chuyên mục",
+      "Nhóm trường của loại `Truyền thanh` (§7, dòng cuối): tệp âm thanh và thời lượng",
+      "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
+      "Cột `Lượt xem` (§6)",
+      "Nút xoá một bài (§9 đề xuất `DELETE`)",
+      "Bố cục §2: tabs thật, hai thẻ đầu màn, modal dạng lớp phủ, cắt tóm tắt đúng 1 dòng",
+      "Cổng quyền `content.read` / `content.update` ở phía giao diện",
+    ]);
+  });
+
+  it("no item still claims the built parts are missing, or that raw script reaches residents", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
+    expect(all).not.toContain("rich text");
+    expect(all).not.toContain("Sửa và xoá một danh mục");
+    expect(all).not.toContain("không có `PATCH`");
+    expect(all).not.toContain("chưa có cột nào ở máy chủ");
+    expect(all).not.toContain("<script>");
+    expect(all).not.toContain("KHÔNG làm sạch");
+    // The audio item names what is really missing — the upload route — not what already exists.
+    expect(all).toContain("lối tải");
+  });
+
+  it("the note under the editor says sanitising is the SERVER's, and no longer calls it raw HTML", () => {
+    expect(CANH_BAO_HTML_THO).toContain("Máy chủ làm sạch");
+    expect(CANH_BAO_HTML_THO).not.toContain("MÃ NGUỒN HTML");
+    expect(CANH_BAO_HTML_THO).not.toContain("KHÔNG làm sạch");
   });
 
   it("mỗi mục đều có lý do, không mục nào là một dòng tên suông", () => {
@@ -639,5 +673,151 @@ describe("phần chưa dựng được", () => {
       expect(p.ten.length).toBeGreaterThan(10);
       expect(p.viSao.length).toBeGreaterThan(80);
     }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * Banner fields (ADR 0067 §5) — mirror of domain.NormalizeLinkTo / CheckDisplayOrder / CheckBannerCover
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("banner `link_to`", () => {
+  it("accepts an in-app path, an https URL (any case), and empty", () => {
+    expect(isValidLinkTo("")).toBe(true);
+    expect(isValidLinkTo("/tin-tuc")).toBe(true);
+    expect(isValidLinkTo("/")).toBe(true);
+    expect(isValidLinkTo("https://xa.gov.vn/tin/1")).toBe(true);
+    expect(isValidLinkTo("HTTPS://xa.gov.vn")).toBe(true);
+  });
+
+  it("refuses what the server refuses", () => {
+    for (const bad of [
+      "//evil.example/x", // protocol-relative leaves the app
+      "http://xa.gov.vn", // https only
+      "javascript:alert(1)",
+      "tin-tuc", // neither a path nor a URL
+      "https://", // no host
+      "https:///x",
+      "https://gov.vn@evil.example/x", // userinfo
+      "/a b", // whitespace
+      "/a\\b", // backslash
+      "/" + "a".repeat(500), // 501 characters
+    ]) {
+      expect(isValidLinkTo(bad), bad).toBe(false);
+    }
+  });
+
+  it("`display_order` is a non-negative INT", () => {
+    expect(parseDisplayOrder("0")).toBe(0);
+    expect(parseDisplayOrder(" 12 ")).toBe(12);
+    expect(parseDisplayOrder("-1")).toBeNull();
+    expect(parseDisplayOrder("1.5")).toBeNull();
+    expect(parseDisplayOrder("2147483648")).toBeNull();
+    expect(parseDisplayOrder("")).toBeNull();
+  });
+});
+
+describe("banner validation and bodies", () => {
+  const banner: GiaTriFormNoiDung = {
+    ...FORM_TRONG,
+    type: "banner",
+    title: "Ngày hội chuyển đổi số",
+    cover_image_file_id: "01JCOVER1",
+  };
+
+  it("a banner without a cover is held, with the sentence", () => {
+    expect(validateTypeFields({ ...banner, cover_image_file_id: "" })).toBe(ERR_BANNER_COVER_REQUIRED);
+    expect(validateTypeFields(banner)).toBeNull();
+  });
+
+  it("a LEGACY coverless banner can still be edited — the trigger lets it through too", () => {
+    const before = { ...banner, cover_image_file_id: "" };
+    expect(validateTypeFields(before, before)).toBeNull();
+    // ...but turning a news item into a coverless banner is refused.
+    expect(validateTypeFields(before, { ...FORM_TRONG, title: "x" })).toBe(ERR_BANNER_COVER_REQUIRED);
+  });
+
+  it("bad link and bad order are named", () => {
+    expect(validateTypeFields({ ...banner, link_to: "//x" })).toBe(ERR_LINK_TO_INVALID);
+    expect(validateTypeFields({ ...banner, display_order: "-3" })).toBe(ERR_DISPLAY_ORDER_INVALID);
+  });
+
+  it("an order already set cannot be emptied — a PATCH has no spelling for that", () => {
+    const before = { ...banner, display_order: "2" };
+    expect(validateTypeFields({ ...before, display_order: "" }, before)).toBe(
+      ERR_DISPLAY_ORDER_CANNOT_CLEAR,
+    );
+    expect(validateTypeFields({ ...banner, display_order: "" }, banner)).toBeNull();
+  });
+
+  it("banner rules never block another type, whose banner boxes are hidden", () => {
+    expect(validateTypeFields({ ...FORM_TRONG, title: "x", link_to: "//bad" })).toBeNull();
+  });
+
+  it("POST carries `link_to` / `display_order` for a banner only, and only with a value", () => {
+    const full = thanThem({ ...banner, link_to: " /tin-tuc ", display_order: "3" });
+    expect(full.link_to).toBe("/tin-tuc");
+    expect(full.display_order).toBe(3);
+    const bare = thanThem(banner);
+    expect(bare).not.toHaveProperty("link_to");
+    expect(bare).not.toHaveProperty("display_order");
+    const news = thanThem({ ...banner, type: "tin-tuc", link_to: "/x", display_order: "1" });
+    expect(news).not.toHaveProperty("link_to");
+    expect(news).not.toHaveProperty("display_order");
+  });
+
+  it("PATCH: changed banner fields only; `link_to: \"\"` clears; a type change away sends neither", () => {
+    const before = { ...banner, link_to: "/tin-tuc", display_order: "2" };
+    expect(thanSua(before, { ...before, link_to: "" })).toEqual({ link_to: "" });
+    expect(thanSua(before, { ...before, display_order: "5" })).toEqual({ display_order: 5 });
+    expect(thanSua(before, before)).toEqual({});
+    // Away from banner: the server clears both itself; sending them would be a 422.
+    expect(thanSua(before, { ...before, type: "tin-tuc" })).toEqual({ type: "tin-tuc" });
+  });
+
+  it("`giaTriTuHang` reads the banner fields back", () => {
+    const gt = giaTriTuHang(hang({ type: "banner", body: "", link_to: "/su-kien", display_order: 0 }));
+    expect(gt.link_to).toBe("/su-kien");
+    expect(gt.display_order).toBe("0");
+    const none = giaTriTuHang(hang({ body: "", display_order: null }));
+    expect(none.display_order).toBe("");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * `⊞ Danh mục tin` — edit (ADR 0067 §3)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("category edit", () => {
+  const tree = [
+    danhMuc({ id: "A", name: "A" }),
+    danhMuc({ id: "B", name: "B", parent_id: "A" }),
+    danhMuc({ id: "C", name: "C", parent_id: "B" }),
+    danhMuc({ id: "D", name: "D" }),
+  ];
+
+  it("the parent select leaves out the category and all its descendants", () => {
+    expect([...selfAndDescendants("A", tree)].sort()).toEqual(["A", "B", "C"]);
+    expect(parentChoices("A", tree).map((m) => m.dm.id)).toEqual(["D"]);
+    expect(parentChoices("C", tree).map((m) => m.dm.id)).toEqual(["A", "B", "D"]);
+  });
+
+  it("a cycle already in the data does not hang the walk", () => {
+    const loop = [danhMuc({ id: "X", parent_id: "Y" }), danhMuc({ id: "Y", parent_id: "X" })];
+    expect([...selfAndDescendants("X", loop)].sort()).toEqual(["X", "Y"]);
+  });
+
+  it("the PATCH body holds only what changed, never `slug` or `hidden`", () => {
+    const b = tree[1]!;
+    expect(categoryPatchBody(b, { name: "B", parentId: "A", order: "0" })).toEqual({});
+    expect(categoryPatchBody(b, { name: "  Tên mới ", parentId: "A", order: "0" })).toEqual({
+      name: "Tên mới",
+    });
+    // "" is the server's spelling of "move to the root".
+    expect(categoryPatchBody(b, { name: "B", parentId: "", order: "4" })).toEqual({
+      parent_id: "",
+      order: 4,
+    });
+    const body = categoryPatchBody(b, { name: "Z", parentId: "D", order: "1" });
+    expect(Object.keys(body).sort()).toEqual(["name", "order", "parent_id"]);
   });
 });

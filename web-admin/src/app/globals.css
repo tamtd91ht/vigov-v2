@@ -1724,3 +1724,63 @@ body {
   align-items: center;
   margin: 0.25rem 0;
 }
+
+/* ---- Nội dung Mini App: ô soạn thảo thân bài (ADR 0067 §1) và danh mục tin (§3) ------------- */
+
+/* The editable area is a `div`, so `.o-nhap label` cannot style its name; this span takes the same look. */
+.o-nhap .nhan-o {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Same frame as an input, so the box reads as a box. `min-height` gives room for a paragraph at 320px;
+ * the toolbar above wraps (`.cum-nut`) instead of scrolling — a hidden button is a button nobody presses. */
+.rich-text-area {
+  min-height: 12rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  /* What Tiptap would inject (`injectCSS` is off): ProseMirror needs whitespace kept as typed. */
+  position: relative;
+  white-space: pre-wrap;
+  font-variant-ligatures: none;
+}
+
+.rich-text-area:focus-visible {
+  outline: 3px solid var(--xanh);
+  outline-offset: 2px;
+}
+
+.rich-text-toolbar {
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-toolbar .nut-phu,
+.rich-text-link .nut-phu,
+.category-row .nut-phu {
+  min-height: 2.75rem;
+}
+
+.rich-text-link {
+  margin-top: 0.75rem;
+}
+
+.category-list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.category-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--xam-vien);
+}

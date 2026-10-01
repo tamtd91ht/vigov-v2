@@ -10,8 +10,10 @@
  *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
  *   GET   /api/v1/content-categories                              content.read
  *   POST  /api/v1/content-categories                              content.update  + Idempotency-Key BẮT BUỘC
+ *   PATCH /api/v1/content-categories/{id}                         content.update  (ADR 0067 §3)
+ *   DELETE /api/v1/content-categories/{id}  {reason}              content.update  → 204 (soft delete)
  *
- * KHÔNG CÓ `DELETE`, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §9 đề xuất một tuyến xoá; §6 chỉ vẽ
+ * KHÔNG CÓ `DELETE` CHO MỘT MỤC NỘI DUNG, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §9 đề xuất một tuyến xoá; §6 chỉ vẽ
  * `✎`. Gỡ một bài khỏi Mini App là `PATCH` với `publish: false` — đúng như §7 tự mô tả ô tích của
  * nó. Không hàm nào ở đây dựng một đường `DELETE`: một hàm gọi vào tuyến không tồn tại là một hàm
  * biên dịch được, kiểm được bằng `fetch` giả, và 404 ở lần chạy thật.
@@ -65,16 +67,19 @@ import type {
   comms_coverUploadIn,
   comms_coverUploadOut,
   comms_danhMucRa,
+  comms_deleteCategoryIn,
   comms_danhSachDanhMucRa,
   comms_get_content_categories,
   comms_get_content_items,
   comms_get_content_items_by_id,
   comms_noiDungRa,
+  comms_patch_content_categories_by_id,
   comms_post_content_items_cover_images,
   comms_post_content_items_cover_images_by_id_completion,
   comms_suaNoiDungVao,
   comms_themDanhMucVao,
   comms_themNoiDungVao,
+  comms_updateCategoryIn,
   page_Result_comms_noiDungRa,
 } from "./schema.gen";
 
@@ -177,6 +182,8 @@ export function layMotNoiDung(id: string): Promise<KetQua<comms_noiDungRa>> {
  */
 export const CONTENT_TYPE_EVENT = "su-kien";
 export const CONTENT_TYPE_VIDEO = "video";
+/** `link_to` and `display_order` go with this type only (migration 0012, ADR 0067 §5): 422 otherwise. */
+export const CONTENT_TYPE_BANNER = "banner";
 
 /**
  * Copies the per-type fields that the chosen type can carry, and only when they hold a value.
@@ -191,6 +198,13 @@ function addTypeFieldsForCreate(out: ThemNoiDungVao, than: ThemNoiDungVao): void
     if (than.event_place) out.event_place = than.event_place;
   }
   if (than.type === CONTENT_TYPE_VIDEO && than.video_url) out.video_url = than.video_url;
+  // Banner: an empty `link_to` is "not tappable", the same as absent; `display_order` absent = none.
+  if (than.type === CONTENT_TYPE_BANNER) {
+    if (than.link_to) out.link_to = than.link_to;
+    if (than.display_order !== undefined && than.display_order !== null) {
+      out.display_order = than.display_order;
+    }
+  }
 }
 
 /**
@@ -288,6 +302,11 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     // Absent = leave the cover alone; "" = DETACH (the server withdraws the public copy); an id = a
     // `ready` upload issued for THIS article (`content_item_id`). Passed through as given, `""` included.
     cover_image_file_id: than.cover_image_file_id,
+    // Banner fields, same PATCH meaning: absent = leave alone; `link_to: ""` = not tappable any more.
+    // `display_order` has NO clear on the wire (a JSON null reads as absent at the server), so a `null`
+    // here would be a "leave alone" that looks like a clear — the form never builds one.
+    link_to: than.link_to,
+    display_order: than.display_order,
   };
 
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
@@ -421,5 +440,52 @@ export function themDanhMucNoiDung(
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
     docThanKetQua<comms_danhMucRa>,
+  );
+}
+
+/** Path of one category, `{id}` encoded — same reason as `duongDanMotNoiDung`. */
+export function contentCategoryPath(id: string): string {
+  const template: comms_patch_content_categories_by_id["duongDan"] = "/api/v1/content-categories/{id}";
+  return template.replace("{id}", encodeURIComponent(id));
+}
+
+/** Body of `PATCH /api/v1/content-categories/{id}`. Alias of the GENERATED type. */
+export type UpdateCategoryIn = comms_updateCategoryIn;
+
+/**
+ * PATCH /api/v1/content-categories/{id} — name, parent (`""` = root), order, hidden. 200, the row after.
+ *
+ * FIELD BY FIELD, AND `slug` IS NEVER COPIED: the server refuses a body naming it (400, an issued code
+ * never changes), so a caller that passed a whole row read back from the list would turn every edit into
+ * a refusal. Absent = leave alone; `JSON.stringify` drops the `undefined` ones.
+ *
+ * No `Idempotency-Key`: the contract does not take one, and the use case writes nothing when nothing moved.
+ */
+export function updateContentCategory(
+  id: string,
+  body: UpdateCategoryIn,
+): Promise<KetQua<comms_danhMucRa>> {
+  const sent: UpdateCategoryIn = {
+    name: body.name,
+    parent_id: body.parent_id,
+    order: body.order,
+    hidden: body.hidden,
+  };
+  return goiGhi(contentCategoryPath(id), "PATCH", sent, 200, undefined).then(
+    docThanKetQua<comms_danhMucRa>,
+  );
+}
+
+/**
+ * DELETE /api/v1/content-categories/{id} with `{reason}` — a SOFT delete (rule 7). 204, no body.
+ *
+ * THE REASON TRAVELS IN THE BODY, never in the URL: free text about a government record does not belong
+ * in a query string that every access log keeps. 409 while the category still holds an article or a child
+ * category; the server's sentence (which suggests hiding instead) reaches the screen as it came.
+ */
+export function deleteContentCategory(id: string, reason: string): Promise<KetQua<null>> {
+  const sent: comms_deleteCategoryIn = { reason };
+  return goiGhi(contentCategoryPath(id), "DELETE", sent, 204, undefined).then((kq) =>
+    kq.ok ? { ok: true, duLieu: null } : kq,
   );
 }

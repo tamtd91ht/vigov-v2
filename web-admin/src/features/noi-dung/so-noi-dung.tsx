@@ -16,12 +16,15 @@ import {
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
+  CONTENT_TYPE_BANNER,
   CONTENT_TYPE_EVENT,
   CONTENT_TYPE_VIDEO,
+  deleteContentCategory,
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
   TU_KHOA_TIM_TOI_DA,
+  updateContentCategory,
   type BoLocNoiDung,
 } from "@/lib/api/noi-dung";
 import type {
@@ -33,14 +36,16 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  BANNER_COVER_NOTICE,
   CANH_BAO_HTML_THO,
-  CANH_BAO_XEM_MA_NGUON,
   CHUA_XEP_DANH_MUC,
   coThayDoi,
   DANG_TAI_SO,
   DANG_TAI_TOAN_VAN,
   DANH_MUC_RONG,
   DAU_GACH,
+  DISPLAY_ORDER_HINT,
+  DISPLAY_ORDER_MAX,
   dungCayDanhMuc,
   EVENT_PLACE_MAX_CHARS,
   EVENT_TIME_HINT,
@@ -48,6 +53,8 @@ import {
   GHI_CHU_KHONG_CO_XOA,
   giaTriTuHang,
   KHONG_CO_GI_DOI,
+  LINK_TO_HINT,
+  LINK_TO_MAX_CHARS,
   LOAI_MAC_DINH,
   lopChipTrangThai,
   MO_TA_FORM_THEM,
@@ -78,7 +85,6 @@ import {
   TIEU_DE_THE_DANH_BA,
   TIEU_DE_TOI_DA,
   THAN_BAI_RONG,
-  THAN_BAI_TOI_DA,
   THU_TU_DANH_MUC_TOI_DA,
   TIM_PLACEHOLDER,
   TOM_TAT_TOI_DA,
@@ -111,26 +117,25 @@ import {
   savedCoverText,
   type CoverUploadState,
 } from "./cover-image";
+import { CategoryAdmin } from "./category-admin";
+import { RichTextEditor } from "./rich-text-editor";
 
 /**
  * Màn "Nội dung Mini App" — `docs/ui-ux/11-noi-dung-mini-app.md` §2 (bố cục), §5 (sáu tab),
  * §6 (bảng), §7 (biểu mẫu).
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
- * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG MỘT DÒNG NÀO Ở ĐÂY DỰNG HTML**.
+ * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG MỘT DÒNG NÀO Ở ĐÂY ĐƯA MỘT CHUỖI HTML VÀO TRANG**.
  *
- * `noi_dung` là HTML (§8) và máy chủ KHÔNG làm sạch nó — kho chưa có bộ làm sạch nào, và giới hạn
- * ấy được ghi thẳng trong `service-comms/internal/domain/noi_dung_mini_app.go`. Một cán bộ có
- * `content.update` đặt được `<script>` vào thứ mọi cư dân xã mở trên điện thoại, và màn Phân quyền
- * của xã có thể đã cấp khoá ấy cho nhiều người.
- *
- * Nên: KHÔNG `dangerouslySetInnerHTML` ở bất kỳ đâu, kể cả để xem trước. Thân bài hiện dưới dạng
- * VĂN BẢN THUẦN trong một `<textarea>`, kèm câu nói rõ đây là mã nguồn chứ không phải bản dựng.
- * `ranh-gioi-html.test.ts` đọc thẳng mã nguồn của thư mục này và đỏ nếu chuỗi ấy xuất hiện.
+ * `noi_dung` là HTML (§8). The server sanitises it on every write to the ADR 0067 §1 allow-list, and
+ * the body is edited in Tiptap (`rich-text-editor.tsx`), which draws the document from its parsed
+ * structure. So: NO `dangerouslySetInnerHTML` anywhere, not even for a preview — the editor IS the
+ * preview. `ranh-gioi-html.test.ts` reads this folder's source and turns red if the string appears.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
- * KHÔNG CÓ NÚT XOÁ, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §6 chỉ vẽ `✎`, hợp đồng không có tuyến
- * `DELETE` nào. Gỡ một bài khỏi Mini App là tắt ô `Đăng lên Mini App` ở màn sửa.
+ * KHÔNG CÓ NÚT XOÁ MỘT BÀI, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §6 chỉ vẽ `✎`, hợp đồng không có
+ * tuyến `DELETE` nào cho một mục nội dung. Gỡ một bài khỏi Mini App là tắt ô `Đăng lên Mini App` ở màn
+ * sửa. (A CATEGORY has a soft delete with a reason — `category-admin.tsx`, ADR 0067 §3.)
  *
  * KHÔNG CÓ CỔNG QUYỀN Ở CLIENT — xem `PHAN_CHUA_DUNG`. `service-comms` kiểm `content.read` /
  * `content.update` trên TỪNG lời gọi; tài khoản thiếu khoá nhận nguyên câu 403 ra màn hình. Ẩn một
@@ -358,14 +363,22 @@ export function SoNoiDung() {
       )}
 
       {dangMoDanhMuc && (
-        <FormDanhMuc
-          key={`danh-muc|${lanGhiXong}`}
-          danhMuc={dsDanhMuc}
-          dangGui={dangGui}
-          loi={loiForm}
-          huy={dongMoiBieuMau}
-          luu={themDanhMuc}
-        />
+        <>
+          <CategoryAdmin
+            categories={dsDanhMuc}
+            update={updateContentCategory}
+            remove={deleteContentCategory}
+            changed={() => datLanTaiDanhMuc((n) => n + 1)}
+          />
+          <FormDanhMuc
+            key={`danh-muc|${lanGhiXong}`}
+            danhMuc={dsDanhMuc}
+            dangGui={dangGui}
+            loi={loiForm}
+            huy={dongMoiBieuMau}
+            luu={themDanhMuc}
+          />
+        </>
       )}
 
       {chiTiet !== null && chiTiet.pha === "dangTai" && <p role="status">{DANG_TAI_TOAN_VAN}</p>}
@@ -694,10 +707,8 @@ export function BangNoiDung({
  * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một khối nằm trong trang — KHÔNG phải một lớp phủ — vì một
  * lớp phủ cần lớp CSS chưa có trong `globals.css`, và lượt này không được thêm CSS.
  *
- * ⚠ Ô `Nội dung` LÀ MỘT `<textarea>`, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH AN TOÀN CHỨ KHÔNG PHẢI MỘT PHIÊN BẢN
- * RÚT GỌN CỦA RICH TEXT. Máy chủ không làm sạch HTML; một ô xem trước dựng chính chuỗi ấy là chạy
- * mã của người vừa gõ, ngay trên màn hình quản trị của xã. `<textarea>` hiện đúng MÃ NGUỒN, và câu
- * ngay dưới nói rằng đó là mã nguồn.
+ * Ô `Nội dung` IS THE TIPTAP EDITOR (`RichTextEditor`), limited to the server's allow-list. It reports
+ * a change only when the officer edits, so `thanSua` never sends a body nobody touched.
  *
  * KHÔNG CÓ Ô `Trạng thái`: máy chủ suy trạng thái từ ô tích `Đăng lên Mini App`. Một thân tự khai
  * trạng thái là một bài đăng vượt qua bước duyệt mà §10.2 dành cho lượt đồng bộ.
@@ -744,7 +755,8 @@ export function FormNoiDung({
   // The per-type check is shown LIVE next to the boxes and holds Lưu off: the author sees "end before
   // start" while fixing it, not after a round trip. It mirrors the server; the server's own 400 still
   // reaches `loi` word for word.
-  const typeFieldError = validateTypeFields(gt);
+  // The edit form passes its starting values: two banner rules depend on what the item WAS.
+  const typeFieldError = validateTypeFields(gt, hang === undefined ? undefined : giaTriDau);
   // A cover still moving holds Lưu: saving now would drop the image the officer just chose.
   const coverBusy = coverInFlight(cover);
   const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy;
@@ -825,21 +837,21 @@ export function FormNoiDung({
       </div>
 
       <div className="o-nhap">
-        <label htmlFor="than-bai-noi-dung">Nội dung</label>
-        {/* MÃ NGUỒN HTML, HIỆN DƯỚI DẠNG VĂN BẢN THUẦN. Không có ô xem trước, và không được thêm
-            một ô như thế: máy chủ không làm sạch HTML, nên dựng chuỗi này là chạy mã của người vừa
-            gõ trên màn hình quản trị của xã. */}
-        <textarea
+        <span id="than-bai-noi-dung-nhan" className="nhan-o">
+          Nội dung
+        </span>
+        {/* The editor starts from the body as it was when the form opened (`giaTriDau`), never from
+            `gt.body`: feeding its own output back in would reset the cursor on every keystroke. */}
+        <RichTextEditor
           id="than-bai-noi-dung"
-          name="than-bai-noi-dung"
-          rows={10}
-          value={gt.body}
-          maxLength={THAN_BAI_TOI_DA}
-          spellCheck={false}
-          onChange={(e) => datGT({ ...gt, body: e.target.value })}
+          labelId="than-bai-noi-dung-nhan"
+          initialHtml={giaTriDau.body}
+          disabled={dangGui}
+          onChange={(body) => datGT((g) => ({ ...g, body }))}
         />
-        <p className="ghi-chu">{CANH_BAO_HTML_THO}</p>
-        <p className="ghi-chu">{CANH_BAO_XEM_MA_NGUON}</p>
+        <p className="ghi-chu" id="than-bai-noi-dung-hint">
+          {CANH_BAO_HTML_THO}
+        </p>
         {gt.body === "" && <p className="ghi-chu">{THAN_BAI_RONG}</p>}
       </div>
 
@@ -911,6 +923,48 @@ export function FormNoiDung({
           />
           <p className="ghi-chu">{VIDEO_URL_HINT}</p>
         </div>
+      )}
+
+      {/* ADR 0067 §5. Only for `Banner`: the server refuses `link_to` / `display_order` on any other type
+          (422), and a type change away from banner clears both there — so these boxes are not sent then. */}
+      {gt.type === CONTENT_TYPE_BANNER && (
+        <>
+          <p className="ghi-chu">{BANNER_COVER_NOTICE}</p>
+          <div className="o-nhap">
+            <label htmlFor="lien-ket-banner">Liên kết khi bấm</label>
+            <input
+              id="lien-ket-banner"
+              name="lien-ket-banner"
+              value={gt.link_to}
+              maxLength={LINK_TO_MAX_CHARS}
+              placeholder="/tin-tuc hoặc https://"
+              autoComplete="off"
+              aria-describedby="lien-ket-banner-goi-y"
+              onChange={(e) => datGT({ ...gt, link_to: e.target.value })}
+            />
+            <p className="ghi-chu" id="lien-ket-banner-goi-y">
+              {LINK_TO_HINT}
+            </p>
+          </div>
+          <div className="o-nhap">
+            <label htmlFor="thu-tu-banner">Thứ tự hiển thị</label>
+            <input
+              id="thu-tu-banner"
+              name="thu-tu-banner"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={DISPLAY_ORDER_MAX}
+              step={1}
+              value={gt.display_order}
+              aria-describedby="thu-tu-banner-goi-y"
+              onChange={(e) => datGT({ ...gt, display_order: e.target.value })}
+            />
+            <p className="ghi-chu" id="thu-tu-banner-goi-y">
+              {DISPLAY_ORDER_HINT}
+            </p>
+          </div>
+        </>
       )}
 
       {typeFieldError !== null && (
@@ -1122,11 +1176,8 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
 }
 
 /**
- * Biểu mẫu `⊞ Danh mục tin` §6 — THÊM một danh mục.
- *
- * CHỈ THÊM. Hợp đồng không có `PATCH` và không có `DELETE` cho danh mục, nên không có nút sửa và
- * không có nút xoá — xem `PHAN_CHUA_DUNG`. Một danh mục gõ sai tên hôm nay không sửa lại được, và
- * điều đó được nói ra trên màn chứ không để cán bộ tự phát hiện.
+ * Biểu mẫu `⊞ Danh mục tin` §6 — THÊM một danh mục. Sửa, ẩn/hiện và xoá nằm ở `CategoryAdmin`
+ * (`category-admin.tsx`, ADR 0067 §3), drawn right above this form.
  */
 export function FormDanhMuc({
   danhMuc,

@@ -6,24 +6,25 @@
  * cơ quan nhà nước là một chữ có người phải trả lời.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
- * ⚠ ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: HTML KHÔNG ĐƯỢC LÀM SẠCH Ở BẤT KỲ ĐÂU.
+ * ⚠ ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: KHÔNG DÒNG NÀO Ở ĐÂY ĐƯA MỘT CHUỖI HTML VÀO TRANG.
  *
- * §8 khai `noi_dung` là HTML và §7 muốn một ô soạn thảo rich text. Máy chủ lưu NGUYÊN VĂN những
- * gì được gửi lên và nói thẳng giới hạn ấy trong mã của chính nó
- * (`service-comms/internal/domain/noi_dung_mini_app.go`, `ChuanHoaVanBanDai`): kho không có bộ
- * làm sạch HTML nào, và tự viết một cái là cách các bộ làm sạch bị viết sai.
- *
- * Hệ quả cho MÀN NÀY: một cán bộ có `content.update` đặt được markup tuỳ ý — kể cả `<script>` —
- * vào thứ mọi cư dân của xã mở ra xem, và màn Phân quyền của xã có thể đã cấp khoá ấy cho nhiều
- * người. Nên màn này KHÔNG dựng HTML ở bất kỳ đâu, kể cả để "xem trước": toàn văn hiện dưới dạng
- * VĂN BẢN THUẦN, kèm một câu nói rõ đây là mã nguồn chứ không phải bản dựng.
+ * `noi_dung` is HTML (§8). Since ADR 0067 §1 the SERVER sanitises it on every write path to the
+ * allow-list p · br · strong · em · ul · ol · li · h2 · h3 · a[https] (`service-comms/internal/
+ * richtext`), and the Mini App never renders HTML at all — it gets `body_blocks`. This screen edits
+ * the body in Tiptap (`rich-text.ts`), whose schema is that same list; the editor draws the document
+ * from the parsed structure, so no `dangerouslySetInnerHTML` is needed and none is allowed.
  *
  * Lệnh cấm ấy có phép kiểm riêng đọc thẳng mã nguồn — `ranh-gioi-html.test.ts`. Một lệnh cấm
  * không có phép kiểm là một lệnh cấm sẽ bị phá trong im lặng.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
-import { CONTENT_TYPE_EVENT, CONTENT_TYPE_VIDEO } from "@/lib/api/noi-dung";
+import {
+  CONTENT_TYPE_BANNER,
+  CONTENT_TYPE_EVENT,
+  CONTENT_TYPE_VIDEO,
+  type UpdateCategoryIn,
+} from "@/lib/api/noi-dung";
 import type {
   comms_danhMucRa,
   comms_noiDungRa,
@@ -57,6 +58,12 @@ export const THU_TU_DANH_MUC_TOI_DA = 9999;
  * any character outside the BMP.
  */
 export const EVENT_PLACE_MAX_CHARS = 500;
+/** `domain.LinkToMaxRunes` — characters, as migration 0012's CHECK counts. */
+export const LINK_TO_MAX_CHARS = 500;
+/** The INT column's upper bound for `display_order` (`displayOrderMax`) — not a customer figure. */
+export const DISPLAY_ORDER_MAX = 2147483647;
+/** `domain.LyDoXoaToiDa` — the soft-delete reason of a category. */
+export const DELETE_REASON_MAX_CHARS = 500;
 
 /* ── Chữ trên màn ──────────────────────────────────────────────────────────────────────────── */
 
@@ -111,20 +118,12 @@ export const DANG_TAI_TOAN_VAN = "Đang tải toàn văn bài viết…";
 /* ── Câu cảnh báo phải ĐỨNG CẠNH ô nhập, không nằm trong chú thích mã ─────────────────────── */
 
 /**
- * Câu đứng ngay dưới ô `Nội dung` của §7.
- *
- * Nó nói HAI điều, và cả hai đều là sự thật của máy chủ hôm nay: ô này nhận MÃ NGUỒN HTML, và
- * không có bộ làm sạch nào phía sau. Cán bộ cần biết cả hai trước khi dán một đoạn từ nơi khác.
+ * The one line under §7's `Nội dung` box (ADR 0067 §1). It says what survives and WHERE that is
+ * decided: a paste from Word keeps only these, and the server — not this screen — enforces it.
  */
 export const CANH_BAO_HTML_THO =
-  "Ô này nhận MÃ NGUỒN HTML (§8), không phải văn bản có định dạng — ô soạn thảo rich text chưa " +
-  "dựng được. Hệ thống KHÔNG làm sạch HTML: chỉ dán mã từ nguồn bạn tin được, vì mọi thẻ gõ vào " +
-  "đây sẽ tới điện thoại của bà con.";
-
-/** Câu đứng trên phần toàn văn ở khối chi tiết — nói rõ đây là mã nguồn, không phải bản dựng. */
-export const CANH_BAO_XEM_MA_NGUON =
-  "Dưới đây là MÃ NGUỒN HTML của bài, hiện dưới dạng văn bản thuần. Màn quản trị cố ý KHÔNG dựng " +
-  "HTML — xem phần chưa dựng được ở đầu màn.";
+  "Giữ được: đoạn văn, tiêu đề lớn/nhỏ, chữ đậm, chữ nghiêng, danh sách và liên kết https. Máy chủ " +
+  "làm sạch thân bài mỗi lần lưu — ảnh, bảng, màu chữ và mọi định dạng khác bị bỏ trước khi tới bà con.";
 
 /** Câu đứng cạnh cột hành động — vì sao không có nút xoá. */
 export const GHI_CHU_KHONG_CO_XOA =
@@ -536,6 +535,10 @@ export type GiaTriFormNoiDung = {
   readonly event_place: string;
   /** `Video` — `Liên kết video`. */
   readonly video_url: string;
+  /** `Banner` — the tap target: `/…` inside the Mini App or `https://…`. `""` = not tappable. */
+  readonly link_to: string;
+  /** `Banner` — `Thứ tự hiển thị`, AS TYPED (a number box gives a string). `""` = none. */
+  readonly display_order: string;
 };
 
 /** Biểu mẫu trống của §7 — loại mặc định `Tin tức`, ô tích TẮT. */
@@ -551,6 +554,8 @@ export const FORM_TRONG: GiaTriFormNoiDung = {
   event_ends_local: "",
   event_place: "",
   video_url: "",
+  link_to: "",
+  display_order: "",
 };
 
 /* ── Client-side check of the per-type fields ─────────────────────────────────────────────────
@@ -569,6 +574,24 @@ export const ERR_VIDEO_URL_INVALID =
   "Liên kết video phải bắt đầu bằng http:// hoặc https:// và không chứa dấu cách.";
 export const ERR_VIDEO_URL_TOO_LONG = `Liên kết video tối đa ${URL_TOI_DA} ký tự.`;
 
+export const ERR_LINK_TO_INVALID =
+  "Liên kết khi bấm phải là đường trong Mini App (bắt đầu bằng một dấu /) hoặc địa chỉ https://, " +
+  `tối đa ${LINK_TO_MAX_CHARS} ký tự, không có dấu cách.`;
+export const ERR_DISPLAY_ORDER_INVALID = "Thứ tự hiển thị phải là số nguyên không âm.";
+export const ERR_DISPLAY_ORDER_CANNOT_CLEAR =
+  "Banner đã có thứ tự hiển thị thì không bỏ trống được nữa — hãy nhập một số không âm.";
+export const ERR_BANNER_COVER_REQUIRED =
+  "Banner bắt buộc có Ảnh đại diện — hãy tải ảnh lên trước khi lưu.";
+
+/** Under the banner boxes: the picture IS the banner, and the title is what a screen reader says. */
+export const BANNER_COVER_NOTICE =
+  "Banner là một tấm ảnh ở dải đầu trang chủ Mini App: bắt buộc có Ảnh đại diện, và tiêu đề được " +
+  "đọc thay cho ảnh với người dùng trình đọc màn hình.";
+export const LINK_TO_HINT =
+  "Để trống thì banner không bấm được. Đường trong Mini App bắt đầu bằng /, ví dụ /tin-tuc; trang " +
+  "bên ngoài phải bắt đầu bằng https://.";
+export const DISPLAY_ORDER_HINT = "Số nhỏ hiện trước trên dải banner. Để trống nếu chưa cần xếp thứ tự.";
+
 /** The hint under the two event boxes — says which clock they are read in. */
 export const EVENT_TIME_HINT =
   "Giờ Việt Nam (GMT+7), không phụ thuộc múi giờ đặt trên máy tính này.";
@@ -578,14 +601,49 @@ export const VIDEO_URL_HINT =
 
 const CONTROL_CHAR = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROL_OR_SPACE = /[\s\u0000-\u001f\u007f-\u009f]/;
+const CONTROL_SPACE_OR_BACKSLASH = /[\s\u0000-\u001f\u007f-\u009f\\]/;
+
+/**
+ * A banner's `link_to`, checked as `domain.NormalizeLinkTo` does: `""` is fine (not tappable); an in-app
+ * path is `/` NOT followed by a second `/` (`//host` leaves the app); otherwise `https://` + a host with
+ * no `@` (a userinfo prefix would make `https://gov.vn@other.example` read as a government link).
+ */
+export function isValidLinkTo(raw: string): boolean {
+  const s = raw.trim();
+  if (s === "") return true;
+  if ([...s].length > LINK_TO_MAX_CHARS) return false;
+  if (CONTROL_SPACE_OR_BACKSLASH.test(s)) return false;
+  if (s.startsWith("/")) return !s.startsWith("//");
+  const https = "https://";
+  if (s.length <= https.length || s.slice(0, https.length).toLowerCase() !== https) return false;
+  const rest = s.slice(https.length);
+  const end = rest.search(/[/?#]/);
+  const host = end < 0 ? rest : rest.slice(0, end);
+  return host !== "" && !host.includes("@");
+}
+
+/** `display_order` as typed → the number, or `null` when it is not a non-negative INT. */
+export function parseDisplayOrder(raw: string): number | null {
+  const s = raw.trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n <= DISPLAY_ORDER_MAX ? n : null;
+}
 
 /**
  * The first problem with the per-type fields of the CHOSEN type, or `null`.
  *
  * Only the chosen type is checked: the other type's boxes are hidden and never sent, so an error on
  * them would block a save for a value that cannot leave the form.
+ *
+ * `before` is the edit form's starting values (absent on the create form). The banner rules need it:
+ * `display_order` cannot be cleared by a PATCH, and the cover rule is migration 0012's trigger, which
+ * lets a LEGACY banner that already had no cover be edited (`domain.CheckBannerCover`).
  */
-export function validateTypeFields(gt: GiaTriFormNoiDung): string | null {
+export function validateTypeFields(
+  gt: GiaTriFormNoiDung,
+  before?: GiaTriFormNoiDung,
+): string | null {
   if (gt.type === CONTENT_TYPE_EVENT) {
     const start = gt.event_starts_local;
     const end = gt.event_ends_local;
@@ -617,6 +675,17 @@ export function validateTypeFields(gt: GiaTriFormNoiDung): string | null {
       if (CONTROL_OR_SPACE.test(url)) return ERR_VIDEO_URL_INVALID;
     }
   }
+  if (gt.type === CONTENT_TYPE_BANNER) {
+    if (!isValidLinkTo(gt.link_to)) return ERR_LINK_TO_INVALID;
+    const order = gt.display_order.trim();
+    if (order !== "" && parseDisplayOrder(order) === null) return ERR_DISPLAY_ORDER_INVALID;
+    const wasBanner = before !== undefined && before.type === CONTENT_TYPE_BANNER;
+    if (order === "" && wasBanner && before.display_order !== "") {
+      return ERR_DISPLAY_ORDER_CANNOT_CLEAR;
+    }
+    const legacyCoverless = wasBanner && before.cover_image_file_id === "";
+    if (gt.cover_image_file_id === "" && !legacyCoverless) return ERR_BANNER_COVER_REQUIRED;
+  }
   return null;
 }
 
@@ -645,6 +714,9 @@ export function giaTriTuHang(nd: comms_noiDungRa): GiaTriFormNoiDung {
     event_ends_local: instantToLocalInput(nd.event_ends_at),
     event_place: nd.event_place ?? "",
     video_url: nd.video_url ?? "",
+    link_to: nd.link_to ?? "",
+    display_order:
+      nd.display_order === undefined || nd.display_order === null ? "" : String(nd.display_order),
   };
 }
 
@@ -675,6 +747,12 @@ export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
   if (gt.type === CONTENT_TYPE_VIDEO) {
     const url = gt.video_url.trim();
     if (url !== "") ra.video_url = url;
+  }
+  if (gt.type === CONTENT_TYPE_BANNER) {
+    const link = gt.link_to.trim();
+    const order = parseDisplayOrder(gt.display_order);
+    if (link !== "") ra.link_to = link;
+    if (order !== null) ra.display_order = order;
   }
   return ra;
 }
@@ -730,6 +808,15 @@ export function thanSua(
   if (moi.type === CONTENT_TYPE_VIDEO && moi.video_url.trim() !== dau.video_url) {
     ra.video_url = moi.video_url.trim();
   }
+  // Banner: same shape. `link_to: ""` is the server's "not tappable any more". `display_order` has no
+  // clear on the wire, so an emptied box sends nothing — `validateTypeFields` holds Lưu with a sentence
+  // instead of letting the officer believe the order was removed. A type moved away from `banner` sends
+  // neither: the server clears both itself, and sending one would be a 422.
+  if (moi.type === CONTENT_TYPE_BANNER) {
+    if (moi.link_to.trim() !== dau.link_to) ra.link_to = moi.link_to.trim();
+    const order = parseDisplayOrder(moi.display_order);
+    if (order !== null && moi.display_order.trim() !== dau.display_order) ra.display_order = order;
+  }
 
   return ra;
 }
@@ -741,6 +828,87 @@ export function coThayDoi(than: Record<string, unknown>): boolean {
 
 /** Câu hiện khi bấm Lưu mà không ô nào đổi. */
 export const KHONG_CO_GI_DOI = "Chưa có ô nào thay đổi, nên không có gì để lưu.";
+
+/* ── `⊞ Danh mục tin`: edit, hide, delete (ADR 0067 §3) ─────────────────────────────────────── */
+
+/** The owner's answer of 01/10/2026, said next to the toggle: hiding is about the chip, not the items. */
+export const CATEGORY_HIDE_EXPLAINER =
+  "Ẩn một danh mục chỉ bỏ nút lọc của danh mục ấy trên Mini App. Các bài trong danh mục vẫn hiện " +
+  "cho bà con như cũ.";
+export const CATEGORY_DELETE_NOTE =
+  "Xoá là xoá mềm: danh mục và lý do xoá vẫn được lưu, slug không cấp lại. Chỉ xoá được danh mục " +
+  "không còn bài nào và không còn danh mục con — còn thì hãy ẩn danh mục thay vì xoá.";
+export const CATEGORY_PARENT_HINT =
+  "Danh sách đã bỏ chính danh mục này và các danh mục con của nó. Máy chủ vẫn kiểm lại khi lưu.";
+export const CATEGORY_SLUG_FIXED = "Slug đã cấp thì không đổi được.";
+export const CATEGORY_SHOWN = "Đang hiện trên Mini App";
+export const CATEGORY_HIDDEN = "Đã ẩn trên Mini App";
+export const CATEGORY_HIDE_BUTTON = "Ẩn trên Mini App";
+export const CATEGORY_SHOW_BUTTON = "Hiện lại trên Mini App";
+export const CATEGORY_DELETE_BUTTON = "Xoá";
+export const CATEGORY_EDIT_BUTTON = "Sửa";
+export const CATEGORY_REASON_LABEL = "Lý do xoá *";
+
+/**
+ * The category itself and every category under it — the parents an edit must not offer.
+ *
+ * A HINT, NOT THE RULE: the server walks the ancestors under the commune's tree lock and answers 409
+ * `category_cycle`. This only keeps the officer from picking a value that is certain to be refused. A
+ * cycle already in the data cannot hang it: every id is visited once.
+ */
+export function selfAndDescendants(id: string, ds: readonly comms_danhMucRa[]): ReadonlySet<string> {
+  const out = new Set<string>([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const d of ds) {
+      if (!out.has(d.id) && d.parent_id !== "" && out.has(d.parent_id)) {
+        out.add(d.id);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
+/** The tree for the parent select of the edit form, without the category and its descendants. */
+export function parentChoices(id: string, ds: readonly comms_danhMucRa[]): readonly MucDanhMuc[] {
+  const excluded = selfAndDescendants(id, ds);
+  return dungCayDanhMuc(ds).filter((m) => !excluded.has(m.dm.id));
+}
+
+/** The three boxes of the edit form, as typed. */
+export type CategoryEditValues = {
+  readonly name: string;
+  readonly parentId: string;
+  readonly order: string;
+};
+
+export function categoryEditValues(dm: comms_danhMucRa): CategoryEditValues {
+  return { name: dm.name, parentId: dm.parent_id, order: String(dm.order) };
+}
+
+/**
+ * The PATCH body: ONLY what changed. Every field is a pointer at the server, so sending the order back
+ * unchanged is harmless — but sending `parent_id` back unchanged re-runs the cycle walk under a lock for
+ * nothing, and a body that names only what moved is the one the audit entry will describe. `hidden` is
+ * not here: it has its own button and its own one-field PATCH. `slug` is never here (400).
+ *
+ * An unreadable order is sent as nothing: the box is `type=number` with `min=0`, and the server's own
+ * 400 names the rule if a value ever gets through.
+ */
+export function categoryPatchBody(
+  before: comms_danhMucRa,
+  v: CategoryEditValues,
+): UpdateCategoryIn {
+  const out: UpdateCategoryIn = {};
+  const name = v.name.trim();
+  if (name !== before.name) out.name = name;
+  if (v.parentId !== before.parent_id) out.parent_id = v.parentId;
+  const order = Number.parseInt(v.order, 10);
+  if (!Number.isNaN(order) && order !== before.order) out.order = order;
+  return out;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
@@ -756,19 +924,6 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Ô soạn thảo rich text, và phép LÀM SẠCH HTML đứng sau nó (§7, §8)",
-    viSao:
-      "ĐÂY LÀ MỤC QUAN TRỌNG NHẤT CỦA DANH SÁCH NÀY. §8 khai `noi_dung` là HTML và §7 muốn một ô " +
-      "soạn thảo rich text. Máy chủ LƯU NGUYÊN VĂN và nói thẳng giới hạn ấy trong mã của chính nó " +
-      "(`domain/noi_dung_mini_app.go`, `ChuanHoaVanBanDai`): kho chưa có bộ làm sạch HTML nào, và " +
-      "tự viết một cái là cách các bộ làm sạch bị viết sai. Hệ quả: một cán bộ có `content.update` " +
-      "đặt được markup tuỳ ý — kể cả `<script>` — vào thứ mọi cư dân xã mở trên điện thoại, và " +
-      "QUYỀN là biện pháp duy nhất hôm nay. Vì thế màn quản trị KHÔNG dựng HTML ở bất kỳ đâu, kể " +
-      "cả để xem trước: toàn văn hiện dưới dạng VĂN BẢN THUẦN. Thứ còn thiếu là một bộ làm sạch " +
-      "đã được kiểm chứng, đặt ở chỗ Mini App dựng bài hoặc ở biên máy chủ — một quyết định có " +
-      "chủ, không phải một dòng ai đó thêm vào.",
-  },
-  {
     ten: "Toàn bộ thẻ “Đồng bộ tin từ Cổng thông tin điện tử” (§3): chip trạng thái, `⟳ Đồng bộ ngay`, `Cấu hình`, `Chạy lần cuối`, khối log lỗi, cây 60 chuyên mục",
     viSao:
       "Cột trung tâm của cấu hình đồng bộ là `ma_bao_mat` — credential thô của một cổng thông tin " +
@@ -780,22 +935,15 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "liệu bịa là dựng một màn hình nói với xã rằng cổng của họ đang được đồng bộ.",
   },
   {
-    ten: "Sửa và xoá một danh mục tin (§6, `⊞ Danh mục tin`)",
+    ten: "Nhóm trường của loại `Truyền thanh` (§7, dòng cuối): tệp âm thanh và thời lượng",
     viSao:
-      "Hợp đồng chỉ có `GET` và `POST` trên `/api/v1/content-categories` — không có `PATCH`, không " +
-      "có `DELETE`. Nên màn này THÊM được danh mục và không sửa được tên đã gõ sai. Một nút sửa vẽ " +
-      "ra ở đây là một nút không có tuyến nào phía sau. Lưu ý kèm theo, vì nó sẽ làm người dùng " +
-      "ngạc nhiên: slug đã cấp thì KHÔNG cấp lại, kể cả sau khi danh mục mang slug ấy bị xoá — máy " +
-      "chủ trả 409 kèm nguyên câu giải thích, và câu ấy ra thẳng màn hình.",
-  },
-  {
-    ten: "Hai trong bốn nhóm trường theo loại nội dung (§7, dòng cuối): `Truyền thanh` và `Banner`",
-    viSao:
-      "§7 kết bằng một câu “NÊN BỔ SUNG” cho bốn loại. Hai nhóm ĐÃ DỰNG theo ADR 0047 §6: `Sự " +
-      "kiện` có Bắt đầu · Kết thúc · Địa điểm, `Video` có Liên kết video. Còn lại: `Truyền thanh` " +
-      "(tệp âm thanh mp3/m4a và thời lượng, G7) cần một lối tải tệp âm thanh lên, máy chủ chưa mở — " +
-      "lối tải ảnh bìa đã có nhưng chỉ nhận ảnh; `Banner` (link đích và thứ tự hiển thị) chưa có cột nào ở máy chủ và chưa có câu chốt " +
-      "hình dạng. Dựng ô nhập trước khi có cột là tự quyết một câu của khách.",
+      "§7 kết bằng một câu “NÊN BỔ SUNG” cho bốn loại. Ba nhóm ĐÃ DỰNG: `Sự kiện` (Bắt đầu · Kết " +
+      "thúc · Địa điểm) và `Video` (Liên kết video) theo ADR 0047 §6, `Banner` (liên kết khi bấm, " +
+      "thứ tự hiển thị, ảnh bắt buộc) theo ADR 0067 §5. Còn `Truyền thanh`: ADR 0067 §4 đã chốt " +
+      "mp3/m4a tối đa 30 MB, thời lượng cán bộ gõ, lưu riêng tư và phát qua link ký ngắn hạn, mục " +
+      "đích tải lên `content-audio`. Cột đã có (migration 0012 của `service-comms`), nhưng lối tải " +
+      "tệp âm thanh lên và các trường của hợp đồng thì chưa — dựng ô nhập trước khi có tuyến là vẽ " +
+      "một ô không lưu được. Lối tải ảnh bìa đã có nhưng chỉ nhận ảnh.",
   },
   {
     ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",

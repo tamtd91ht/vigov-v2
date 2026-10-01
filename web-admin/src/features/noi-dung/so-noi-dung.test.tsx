@@ -4,9 +4,13 @@ import { describe, expect, it } from "vitest";
 import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 
 import {
+  BANNER_COVER_NOTICE,
   CANH_BAO_HTML_THO,
-  CANH_BAO_XEM_MA_NGUON,
+  CATEGORY_HIDDEN,
+  CATEGORY_HIDE_EXPLAINER,
+  CATEGORY_SHOWN,
   CHUA_XEP_DANH_MUC,
+  ERR_BANNER_COVER_REQUIRED,
   ERR_EVENT_END_BEFORE_START,
   ERR_EVENT_END_WITHOUT_START,
   ERR_VIDEO_URL_INVALID,
@@ -14,6 +18,7 @@ import {
   FORM_TRONG,
   GHI_CHU_KHONG_CO_XOA,
   giaTriTuHang,
+  LINK_TO_HINT,
   MOI_DANH_MUC,
   MOI_LOAI_NHAN,
   NHAN_DA_SUA_TAY,
@@ -34,6 +39,8 @@ import {
   COVER_WILL_DETACH,
   type CoverUploadState,
 } from "./cover-image";
+import { CategoryAdmin } from "./category-admin";
+import { EDITOR_LOADING } from "./rich-text-editor";
 import {
   BangNoiDung,
   FormDanhMuc,
@@ -48,10 +55,9 @@ import {
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
  *
- * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM **HTML KHÔNG ĐƯỢC DỰNG**. Máy chủ lưu `noi_dung` nguyên
- * văn và không có bộ làm sạch nào phía sau, nên một ô xem trước dựng chuỗi ấy là chạy mã của người
- * vừa gõ, trên màn hình quản trị của xã. Bài kiểm dưới đòi thân bài ra tới trang ở dạng ĐÃ THOÁT —
- * tức là dữ liệu, không phải mã.
+ * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM **HTML KHÔNG ĐƯỢC DỰNG**: the body is never handed to the
+ * page as a string. On the server render the editor has not mounted (it needs a DOM), so the stored body
+ * must not appear AT ALL — escaped or not; the editor's own behaviour is `rich-text.test.ts` (jsdom).
  *
  * Nhóm thứ hai canh một sự VẮNG MẶT, thứ khó canh nhất vì không có gì để tìm trên trang: KHÔNG có
  * nút xoá ở cột hành động, và KHÔNG có ô chọn trạng thái trong biểu mẫu.
@@ -88,6 +94,7 @@ function danhMuc(sua: Partial<comms_danhMucRa> = {}): comms_danhMucRa {
     parent_id: "",
     order: 0,
     created_at: "2026-09-01T02:00:00Z",
+    hidden: false,
     ...sua,
   };
 }
@@ -143,34 +150,30 @@ function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadSt
 describe("thân bài ra tới trang dưới dạng DỮ LIỆU, không phải mã", () => {
   const DOC = '<script>alert("xin chao")</script><img src=x onerror=alert(1)>';
 
-  it("mã nguồn HTML của bài hiện ĐÃ THOÁT trong ô nhập", () => {
+  it("a stored body never reaches the server-rendered page — neither as markup nor as text", () => {
     const html = veForm({ ...FORM_TRONG, body: DOC });
-
-    // Thẻ `<script>` phải nằm trên trang ở dạng ĐÃ THOÁT — cán bộ vẫn đọc và sửa được nó.
-    expect(html).toContain("&lt;script&gt;");
-    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
-
-    // Và KHÔNG được MỞ một thẻ nào từ chữ ấy. Đây là phép so canh đúng điều màn này sinh ra để
-    // tránh: một cán bộ có `content.update` chạy mã trên màn hình quản trị của xã.
-    //
-    // SO THEO DẤU MỞ THẺ (`<script`, `<img`), KHÔNG so theo chuỗi `onerror=alert`: chuỗi ấy VẪN
-    // nằm trên trang, đúng và an toàn, ở giữa `&lt;` và `&gt;`. Một phép so bắt nó sẽ đỏ oan —
-    // và một test đỏ oan là một test có người tắt đi.
+    // No tag opened from it: the danger this screen exists to avoid.
     expect(html).not.toContain("<script");
     expect(html).not.toContain("<img");
+    // And not even escaped: the body lives only inside the editor, which mounts in the browser.
+    expect(html).not.toContain("alert");
+    expect(html).toContain(EDITOR_LOADING);
   });
 
-  it("hai câu cảnh báo đứng NGAY CẠNH ô nội dung, không nằm trong chú thích mã", () => {
+  it("the one note about sanitising stands NEXT TO the box, not in a code comment", () => {
     const html = veForm();
     expect(html).toContain(nhuTrongHTML(CANH_BAO_HTML_THO));
-    expect(html).toContain(nhuTrongHTML(CANH_BAO_XEM_MA_NGUON));
+    expect(html).toContain('id="than-bai-noi-dung-hint"');
+    // The old sentences about raw HTML source are gone with the textarea.
+    expect(html).not.toContain("MÃ NGUỒN HTML");
+    expect(html).not.toContain("<textarea id=\"than-bai-noi-dung\"");
   });
 
   it("KHÔNG có ô xem trước nào — không `dangerouslySetInnerHTML`, không khối `preview`", () => {
     // Phép quét mã nguồn nằm ở `ranh-gioi-html.test.ts`; ca này canh cùng điều ấy ở đầu ra.
     const html = veForm({ ...FORM_TRONG, body: "<b>đậm</b>" });
     expect(html).not.toContain("<b>đậm</b>");
-    expect(html).toContain("&lt;b&gt;");
+    expect(html).not.toContain("&lt;b&gt;");
   });
 
   it("tiêu đề mang dấu ngoặc nhọn cũng ra dạng đã thoát ở BẢNG", () => {
@@ -349,6 +352,31 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
     }
   });
 
+  it("`Banner` shows Liên kết khi bấm · Thứ tự hiển thị and the cover notice; no other type does", () => {
+    const html = veForm({ ...FORM_TRONG, type: "banner" });
+    expect(html).toContain('id="lien-ket-banner"');
+    expect(html).toContain('id="thu-tu-banner"');
+    expect(html).toContain(">Liên kết khi bấm<");
+    expect(html).toContain(">Thứ tự hiển thị<");
+    expect(html).toContain(nhuTrongHTML(BANNER_COVER_NOTICE));
+    expect(html).toContain(nhuTrongHTML(LINK_TO_HINT));
+    for (const type of ["tin-tuc", "su-kien", "thong-bao", "truyen-thanh", "video"]) {
+      const other = veForm({ ...FORM_TRONG, type, link_to: "/x", display_order: "1" });
+      expect(other, type).not.toContain('id="lien-ket-banner"');
+      expect(other, type).not.toContain('id="thu-tu-banner"');
+      expect(other, type).not.toContain(nhuTrongHTML(BANNER_COVER_NOTICE));
+    }
+  });
+
+  it("a banner with no cover says so and holds Lưu; with a cover Lưu is free", () => {
+    const html = veForm({ ...FORM_TRONG, type: "banner", title: "Banner" });
+    expect(html).toContain(ERR_BANNER_COVER_REQUIRED);
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
+    const ok = veForm({ ...FORM_TRONG, type: "banner", title: "Banner", cover_image_file_id: "01JC" });
+    expect(ok).not.toContain(ERR_BANNER_COVER_REQUIRED);
+    expect(ok).not.toMatch(/<button type="submit"[^>]*disabled=""/);
+  });
+
   it("the cover picker is untouched by the type — still there for `Sự kiện` and `Video`", () => {
     expect(veForm({ ...FORM_TRONG, type: "su-kien" })).toContain('id="anh-noi-dung"');
     expect(veForm({ ...FORM_TRONG, type: "video" })).toContain('id="anh-noi-dung"');
@@ -517,8 +545,7 @@ describe("thẻ Danh bạ chính quyền §4", () => {
 });
 
 describe("biểu mẫu danh mục tin", () => {
-  it("chỉ THÊM — không nút sửa, không nút xoá", () => {
-    // Hợp đồng chỉ có `GET` và `POST` trên `/api/v1/content-categories`.
+  it("the ADD form stays an add form — edit and delete live in `CategoryAdmin`", () => {
     const html = renderToStaticMarkup(
       <FormDanhMuc
         danhMuc={[danhMuc()]}
@@ -541,6 +568,34 @@ describe("biểu mẫu danh mục tin", () => {
     );
     expect(html).toContain("chữ thường a-z");
     expect(html).toContain("KHÔNG cấp lại");
+  });
+});
+
+describe("`CategoryAdmin` — the tree with Sửa · Ẩn/Hiện · Xoá (ADR 0067 §3)", () => {
+  const never = () => new Promise<never>(() => {});
+  const ve = (ds: readonly comms_danhMucRa[]) =>
+    renderToStaticMarkup(
+      <CategoryAdmin categories={ds} update={never} remove={never} changed={() => {}} />,
+    );
+
+  it("every row has the three actions, named with the category", () => {
+    const html = ve([danhMuc(), danhMuc({ id: "01JDM2", name: "An ninh", slug: "an-ninh" })]);
+    expect(html).toContain(nhuTrongHTML("Sửa danh mục Chuyển đổi số"));
+    expect(html).toContain(nhuTrongHTML("Xoá danh mục An ninh"));
+    expect(html.match(/>Sửa</g)?.length).toBe(2);
+    expect(html.match(/>Xoá</g)?.length).toBe(2);
+    expect(html).toContain("Slug: chuyen-doi-so");
+  });
+
+  it("the hide toggle reads the row's state, and the owner's rule is said next to it", () => {
+    const html = ve([danhMuc(), danhMuc({ id: "01JDM2", name: "Cũ", hidden: true })]);
+    expect(html).toContain(CATEGORY_SHOWN);
+    expect(html).toContain(CATEGORY_HIDDEN);
+    expect(html).toContain(">Ẩn trên Mini App<");
+    expect(html).toContain(">Hiện lại trên Mini App<");
+    // Hiding removes the chip only — the articles still show (owner, 01/10/2026).
+    expect(html).toContain(nhuTrongHTML(CATEGORY_HIDE_EXPLAINER));
+    expect(CATEGORY_HIDE_EXPLAINER).toContain("vẫn hiện");
   });
 });
 

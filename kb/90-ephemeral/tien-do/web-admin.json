@@ -349,6 +349,15 @@
       "bang_chung": "web-admin/package.json ^16.3.8 cho cả hai; package-lock.json sinh lại bằng npm install (5 gói đổi). `npm audit --omit=dev` 0 lỗ hổng · tsc sạch · lint sạch · vitest 153 tệp 2941/2941 · `npm run build` xanh (Proxy vẫn nhận) — kiểm 2026-10-01. Không cần sửa mã. tools/vuln_exceptions.json không có mục cho mã này.",
       "no_confirm": [],
       "tiep_theo": "tools/check_vuln.py vẫn đỏ vì 107 phát hiện Go (core, service-*, tools) — không thuộc việc này, không có phát hiện npm nào."
+    },
+    {
+      "id": "noi-dung-rich-text-danh-muc-banner",
+      "viec": "Nội dung Mini App (B7a): ô soạn thảo Tiptap đúng danh sách cho phép của máy chủ; sửa / ẩn-hiện / xoá mềm danh mục tin; ô Banner (link_to, display_order, ảnh bắt buộc) — ADR 0067 §1 §3 §5, backend comms abf0ca1d",
+      "trang_thai": "xong",
+      "bang_chung": "CHƯA COMMIT (phiên chính commit). Tệp mới: web-admin/src/features/noi-dung/rich-text.ts (lược đồ = p·br·strong·em·ul·ol·li·h2·h3·a https; Link chỉ href + rel cố định, không paste rule), rich-text-editor.tsx, category-admin.tsx; sửa nhan-noi-dung.ts (PHAN_CHUA_DUNG còn 7 mục, ghim đúng danh sách; CANH_BAO_HTML_THO một câu 'máy chủ làm sạch'; validateTypeFields(gt, before) cho banner), so-noi-dung.tsx, lib/api/noi-dung.ts (updateContentCategory, deleteContentCategory, link_to/display_order), globals.css (.rich-text-area, .category-list). Phụ thuộc ghim bản: @tiptap/* 3.31.4, jsdom 30.1.1 (dev, chỉ cho 3 tệp test có `@vitest-environment jsdom`). `go run ./tools/apidoc` không đổi gì so với đĩa; `npm run gen:api` thêm hidden/link_to/display_order/updateCategoryIn/deleteCategoryIn vào schema.gen.ts. Chạy 2026-10-01: tsc sạch · lint sạch · vitest 156 tệp 3002/3002 · npm run build xanh · npm audit --omit=dev 0 · npm audit 0 · check:api khớp · python tools/check_security.py PASS (0 mới).",
+      "no_confirm": [],
+      "tiep_theo": "Chưa chạy với service-comms thật. Mã lỗi (category_cycle, parent_missing, category_not_empty, 400 tự làm cha, 422 banner) KHÔNG ánh xạ ở client: câu tiếng Việt của máy chủ hiện nguyên văn vì KetQua cố ý không mang code (lib/api/goi.ts) — câu 400/422 còn tiền tố kỹ thuật `danh_muc_mini_app:` / `noi_dung_mini_app:` từ domain, sửa ở service-comms nếu muốn bỏ. Truyền thanh còn chờ lối tải content-audio + trường hợp đồng ở comms. Tiptap đặt injectCSS:false để CSP sau này không cần 'unsafe-inline' cho style. ADR 0067 Còn mở #6 (Mini App mở liên kết `a` thế nào) vẫn của chủ dự án.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
