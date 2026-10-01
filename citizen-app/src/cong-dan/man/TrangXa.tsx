@@ -648,13 +648,26 @@ function AppCuaXa(props: {
       );
       break;
     case "truyen-thanh":
+    case "video": {
+      // Same list as "su-kien" below, filtered by the server's `?type=` (comms accepts both types). Until
+      // 01/10/2026 both tiles opened a static "nothing yet" screen although the commune could already
+      // publish these types from web-admin — the citizen was told there was nothing when there was.
+      const newsType = man.kieu;
       man_con = (
-        <ManChuaCoDuLieu tieu_de={XA_TN.truyen_thanh_tieu_de} bieu_tuong="radio" cau={XA_TN.truyen_thanh_trong} onQuayLai={ve} />
+        <>
+          <DauManCon tieu_de={newsType === "video" ? XA_TN.video_tieu_de : XA_TN.truyen_thanh_tieu_de} onQuayLai={ve} />
+          <TrangCon>
+            <NewsOfType
+              ten_mien={ten_mien}
+              type={newsType}
+              onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
+              empty={newsType === "video" ? XA_TN.video_trong : XA_TN.truyen_thanh_trong}
+            />
+          </TrangCon>
+        </>
       );
       break;
-    case "video":
-      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.video_tieu_de} bieu_tuong="play" cau={XA_TN.video_trong} onQuayLai={ve} />;
-      break;
+    }
     case "ban-do":
       man_con = <ManChuaCoDuLieu tieu_de={XA_TN.ban_do_tieu_de} bieu_tuong="map" cau={XA_TN.ban_do_trong} onQuayLai={ve} />;
       break;

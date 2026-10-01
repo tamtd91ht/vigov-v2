@@ -801,9 +801,9 @@ export const XA_TN = {
   tra_cuu_can_ma: "Bà con nhập đủ số điện thoại và 4 số cuối của số hồ sơ.",
   // Màn chưa có dữ liệu
   truyen_thanh_tieu_de: "Truyền thanh",
-  truyen_thanh_trong: "Chưa có bản tin truyền thanh nào trên ứng dụng.",
+  truyen_thanh_trong: "Chưa có bản tin truyền thanh nào được đăng.",
   video_tieu_de: "Video tuyên truyền",
-  video_trong: "Chưa có video tuyên truyền nào trên ứng dụng.",
+  video_trong: "Chưa có video tuyên truyền nào được đăng.",
   // SRS M6.1.12 gọi màn phía dân là "Bản đồ tiện ích"; "bản đồ kinh tế số" là màn M5 của cán bộ.
   ban_do_tieu_de: "Bản đồ tiện ích",
   ban_do_trong: "Chưa có dữ liệu bản đồ tiện ích (chợ, trường, trạm y tế, di tích…) trên ứng dụng.",

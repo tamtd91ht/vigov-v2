@@ -108,6 +108,15 @@ describe("home: tiles and headers per §6.1, the bell gone (decision 10)", () =>
     expect(code).not.toMatch(/xa-hero__chuong|right=\{/);
     // …and "Thông báo" is reachable from Cá nhân instead (below).
   });
+
+  it("Truyền thanh and Video read the commune's published items by type, like Sự kiện — not a static empty screen", () => {
+    const src = import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    const code = Object.values(src)[0]!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const block = code.slice(code.indexOf('case "truyen-thanh":'), code.indexOf('case "ban-do":'));
+    expect(block).toContain('case "video":');
+    expect(block).toMatch(/<NewsOfType[\s\S]*type=\{newsType\}/);
+    expect(block).not.toContain("ManChuaCoDuLieu");
+  });
 });
 
 describe("Phản ánh của tôi: the card and the empty list (§6.3)", () => {
