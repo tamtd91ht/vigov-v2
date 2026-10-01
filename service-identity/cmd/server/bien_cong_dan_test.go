@@ -16,11 +16,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
 )
@@ -50,6 +52,14 @@ func (profileStub) TenantProfile(ctx context.Context) (platformclient.TenantProf
 	return platformclient.TenantProfile{}, false, nil
 }
 
+// signInStub answers every own-app sign-in with 503: what is under test here is only WHICH chain the
+// path reaches, and an answer from the public mux proves it.
+type signInStub struct{}
+
+func (signInStub) SignIn(context.Context, app.OwnAppSignInRequest) (app.KetQuaMoPhienCau, error) {
+	return app.KetQuaMoPhienCau{}, app.ErrOwnAppUnavailable
+}
+
 // canBoDanhDau stands in for the whole staff chain: it only records that it was reached.
 type canBoDanhDau struct{ goi int }
 
@@ -65,7 +75,8 @@ func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau) {
 		t.Fatalf("PhanTichNguonCORS: %v", err)
 	}
 	mux := http.NewServeMux()
-	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}, Profile: profileStub{}})
+	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}, Profile: profileStub{},
+		CitizenSessions: signInStub{}})
 	cb := &canBoDanhDau{}
 	return dungNgoai(cb, dungBienCongKhai(mux, nguon)), cb
 }
@@ -96,6 +107,35 @@ func TestTuyenCongKhaiDiChuoiCongKhaiKhongCanPhien(t *testing.T) {
 		if cb.goi != 0 {
 			t.Fatalf("%s: chuỗi cán bộ bị gọi %d lần cho tuyến công khai", p, cb.goi)
 		}
+	}
+}
+
+// POST /api/v1/citizen-sessions (ADR 0066) reaches the PUBLIC chain with no session, and the STAFF
+// sign-in POST /api/v1/sessions — a different path on the same host — stays on the staff chain.
+func TestCitizenSessionsOnPublicChain(t *testing.T) {
+	h, cb := dungNgoaiThu(t)
+	r := httptest.NewRequest(http.MethodPost, "https://"+hostApiIdentity+svchttp.CitizenSessionsPath,
+		strings.NewReader(`{"appId":"1234567890123456789","demoIdentity":true}`))
+	r.Host = hostApiIdentity
+	r.Header.Set("Origin", nguonMiniAppThu)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable || cb.goi != 0 {
+		t.Fatalf("citizen-sessions: status %d, staff chain hit %d times — want the public mux's 503", w.Code, cb.goi)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != nguonMiniAppThu {
+		t.Errorf("citizen-sessions: Access-Control-Allow-Origin = %q", got)
+	}
+
+	h, cb = dungNgoaiThu(t)
+	goiThu(h, http.MethodPost, "/api/v1/sessions", "")
+	if cb.goi != 1 {
+		t.Fatalf("staff sign-in reached the staff chain %d times, want 1", cb.goi)
+	}
+	h, cb = dungNgoaiThu(t)
+	goiThu(h, http.MethodPost, svchttp.CitizenSessionsPath+"/x", "")
+	if cb.goi != 1 {
+		t.Fatalf("a path under citizen-sessions must not reach the public chain (exact path only)")
 	}
 }
 

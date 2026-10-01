@@ -60,7 +60,7 @@ func TestParseArgsValidation(t *testing.T) {
 // config.Load, which would otherwise fail on this machine's empty environment with exit 1.
 func TestRunRefusesMissingTicketBeforeTouchingAnything(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := run([]string{"grant", "--code", "VH-00001", "--permission", "ops.qr.issue"}, &out, &errOut)
+	code := run([]string{"grant", "--code", "VH-00001", "--permission", "ops.qr.issue"}, nil, &out, &errOut)
 	if code != exitUsage {
 		t.Fatalf("exit = %d, want %d", code, exitUsage)
 	}

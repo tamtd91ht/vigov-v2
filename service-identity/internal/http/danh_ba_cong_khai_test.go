@@ -240,6 +240,8 @@ func TestDanhBaCongKhaiLoiKhoLa500KhongLoDuLieuCaNhan(t *testing.T) {
 			DanhBa:  &danhBaCongKhaiGia{loi: loi},
 			Profile: &profileReaderFake{},
 			Log:     slog.New(slog.NewJSONHandler(&nhatKy, nil)),
+			// The own-app sign-in is not under test here.
+			CitizenSessions: &signInFake{},
 		})
 		w := goiDanhBa(mux, qHost(hostQR))
 		if w.Code != http.StatusInternalServerError {

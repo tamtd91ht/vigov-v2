@@ -480,7 +480,7 @@ type Config struct {
 
 	// SecretEncryptionKeys are the KEKs of ADR 0009, consumed by core/crypto.NewKeyring. Read from
 	// SECRET_ENCRYPTION_KEYS, same format as OPERATOR_TOTP_ENCRYPTION_KEY; the value held here is
-	// the DECODED key. Group SecretEncryption (comms); why the backup is not optional:
+	// the DECODED key. Group SecretEncryption (comms, identity); why the backup is not optional:
 	// secret_encryption.go.
 	secretEncryptionKeys []secret.Secret
 }

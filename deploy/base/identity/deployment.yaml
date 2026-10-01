@@ -101,6 +101,10 @@ spec:
             # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
             # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
             # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
+            # ⚠ THÊM `SECRET_ENCRYPTION_KEYS` vào `identity-secrets` TRƯỚC khi triển khai bản có ADR 0066:
+            # khoá gốc niêm secret Zalo của app riêng từng xã (bảng `mini_app_secret`). Identity khai
+            # nhóm này, nên staging/prod THIẾU LÀ POD KHÔNG KHỞI ĐỘNG (ADR 0057). Giá trị riêng của
+            # identity, khác của comms. SAO LƯU KHOÁ TÁCH KHỎI BẢN SAO LƯU CSDL trước lần đặt secret đầu tiên.
             - secretRef:    { name: identity-secrets }
 
           startupProbe:

@@ -136,6 +136,17 @@ type YeuCauMoPhienCau struct {
 	SoDaXacThuc string
 	IP          string
 	ThietBi     string
+
+	// RequireOwnAppOf is set ONLY by the in-process own-app sign-in (own_app_sign_in.go, ADR 0066),
+	// which already resolved the App ID and checked THAT commune's secret. Mo then refuses
+	// (ErrCauAppChuaSanSang) unless its own ResolveMiniApp still answers "own app of this commune":
+	// a binding moved in between must not open a session in a commune whose secret nobody checked.
+	// Empty on the gRPC bridge — the caller there is vihat-miniapp and the field is not on the wire.
+	RequireOwnAppOf tenant.ID
+	// DemoIdentity marks a session opened with an own app's `--demo` fixed identity (no phone
+	// verification, ADR 0066). Written into the session's audit entry, so "which sessions were
+	// opened without a verified phone" is answerable from the trail. Never set by the gRPC bridge.
+	DemoIdentity bool
 }
 
 // KetQuaMoPhienCau is OpenCitizenSessionResponse. Token/Sid/HetHan are empty exactly when Xa is.
@@ -205,6 +216,9 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: app_id chưa đăng ký", ErrCauAppChuaSanSang)
 	}
 	cheDo := sangCheDo(app.CheDo)
+	if yc.RequireOwnAppOf != "" && (cheDo != domain.CheDoAppRieng || app.XaRieng != yc.RequireOwnAppOf) {
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: app không còn là app riêng của xã đã kiểm secret", ErrCauAppChuaSanSang)
+	}
 
 	// --- 1b. the confirmed domain → its commune (main app only) ------------------------------
 	// Resolved ONLY where it counts. A dedicated app, or a main-app open without confirmation,
@@ -346,14 +360,18 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		if err != nil {
 			return err
 		}
-		if err := ghiVetCau(ctxXa, tx, chuThe, yc.IP, HanhDongMoPhienCongDan, sid, map[string]any{
+		sessionDelta := map[string]any{
 			"app_id":             yc.AppID,
 			"che_do":             tenCheDo(cheDo),
 			"nguon_xa":           string(ungVien.Nguon),
 			"da_co_so":           congDan != "",
 			"tai_khoan_zalo":     tk.ID,
 			"tai_khoan_zalo_moi": taiKhoanMoi,
-		}); err != nil {
+		}
+		if yc.DemoIdentity {
+			sessionDelta["danh_tinh_demo"] = true
+		}
+		if err := ghiVetCau(ctxXa, tx, chuThe, yc.IP, HanhDongMoPhienCongDan, sid, sessionDelta); err != nil {
 			return err
 		}
 

@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/idem"
 )
 
 // DepsCongKhai is everything the public routes may touch. Nothing else is reachable from them.
@@ -38,6 +39,10 @@ type DepsCongKhai struct {
 	// Profile is the commune display-profile read — PLATFORM data over gRPC (ADR 0045 decision 5), for
 	// the commune the host resolved to. Never a store of this service.
 	Profile TenantProfileReader
+
+	// CitizenSessions is the own-app sign-in (app.OwnAppSignIn, ADR 0066) — the one WRITE on this
+	// surface: it opens a citizen session and its audit entry, inside the use case's transaction.
+	CitizenSessions OwnAppSignInner
 
 	Log *slog.Logger
 }
@@ -65,6 +70,9 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	}
 	if d.Profile == nil {
 		panic("identity/http: thiếu lối đọc hồ sơ hiển thị xã — GET /api/v1/commune-profiles sẽ panic khi có người gọi")
+	}
+	if d.CitizenSessions == nil {
+		panic("identity/http: thiếu use case đăng nhập app riêng — POST /api/v1/citizen-sessions sẽ panic khi có người gọi")
 	}
 	h := newHandlerCongKhai(d)
 
@@ -173,4 +181,55 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	mux.Handle("GET /api/v1/commune-profiles",
 		authz.Public("Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân")(
 			http.HandlerFunc(h.CommuneProfiles)))
+
+	// --- a commune's OWN Mini App signing a citizen in (ADR 0066) ----------------------------------
+	//
+	// `citizen-sessions` — a citizen session is created. NOT `sessions`: that collection is the STAFF
+	// sign-in of this service, and one noun for two credentials on one host is how a client ends up
+	// sending a staff body to the citizen route, or the reverse.
+	//
+	// PUBLIC (ADR 0066 decision row 1, user decision 2026-10-01): this IS the sign-in — the caller has
+	// no session yet. What stands in front of it is a Zalo token only Zalo issues, exchanged with the
+	// App ID's own sealed secret, and the per-IP rate limit below. The `--demo` body opens a session
+	// with NO phone check, and only for an App ID an operator switched on (default off).
+	//
+	// RATE LIMIT (rule 13, invariant 7; ADR 0066 decision row 2): 10 attempts / 5 minutes / client IP,
+	// in memory per pod, checked before the body is read (rate_limit.go). 429 carries Retry-After.
+	//
+	// idem.KhongCan: NOT idempotent by contract, like the bridge it calls (app.CauPhienCongDan "NOT
+	// IDEMPOTENT, BY CONTRACT"). Every success writes a new session and its audit entry; a retry
+	// after a lost reply leaves one extra session nobody holds the token of, which expires by TTL.
+	// The surface also has no idem.Middleware (cmd/server dungBienCongKhai), so Required could not work.
+	//
+	// @summary  App riêng của xã đổi accessToken/phoneToken Zalo (hoặc danh tính demo khi App ID bật --demo) lấy phiên công dân ViGov
+	// @consumer citizen-app
+	// NO @screen: docs/ui-ux/ has no section for the Mini App sign-in; it is silent, no screen of its own.
+	//
+	// @request  citizenSessionIn
+	// 201 `{vigovSession:{token, expiresAt, tenantDisplayName, phoneVerified, communePrimaryHost}}`.
+	//
+	// 400 invalid_body: body not one JSON object of the known fields, over 8 KB, appId not digits,
+	// tokens missing, or a demo body carrying tokens. phone_required: no phoneToken, or a demo body
+	// for an App ID whose demo identity is off — vihat-miniapp's "cần số để xác minh app".
+	//
+	// 401 zalo_token_invalid: Zalo refused accessToken/phoneToken.
+	//
+	// 422 app_not_ready: ONE answer for an unknown App ID, the shared ViHAT app, a commune not active,
+	// and an App ID with no settings (or demo-only settings on a real sign-in).
+	//
+	// 502 zalo_unreachable. 503 sign_in_unavailable: platform or this service's store unreachable, or
+	// the sealed secret does not open — nothing was issued.
+	//
+	// @reply    201 citizenSessionsOut
+	// @reply    400 httpx.Error invalid_body phone_required
+	// @reply    401 httpx.Error zalo_token_invalid
+	// @reply    422 httpx.Error app_not_ready
+	// @reply    429 httpx.Error too_many_attempts
+	// @reply    500 httpx.Error
+	// @reply    502 httpx.Error zalo_unreachable
+	// @reply    503 httpx.Error sign_in_unavailable
+	mux.Handle("POST /api/v1/citizen-sessions",
+		authz.Public("app riêng của xã đổi accessToken/phoneToken lấy phiên công dân trước khi có phiên — ADR 0066")(
+			idem.KhongCan("mỗi lượt đăng nhập mở một phiên mới kèm vết riêng, không idempotent theo hợp đồng; gửi lại sau khi mất phản hồi để lại nhiều nhất một phiên thừa không ai cầm token, hết hạn theo TTL — chống lặp là việc của giới hạn tần suất")(
+				http.HandlerFunc(h.CitizenSessions))))
 }

@@ -54,7 +54,7 @@ func twoProfiles() *profileReaderFake {
 func profileServer(t *testing.T, nt *nenTangXaGia, pr *profileReaderFake, log *slog.Logger) http.Handler {
 	t.Helper()
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: nt, DanhBa: &danhBaCongKhaiGia{}, Profile: pr, Log: log})
+	RegisterCongKhai(mux, DepsCongKhai{Xa: nt, DanhBa: &danhBaCongKhaiGia{}, Profile: pr, CitizenSessions: &signInFake{}, Log: log})
 	return mux
 }
 

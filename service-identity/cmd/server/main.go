@@ -23,6 +23,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/documentsclient"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -40,6 +41,7 @@ import (
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 	"github.com/vihat/vigov/service-identity/internal/store/crosstenant"
+	"github.com/vihat/vigov/service-identity/internal/zalo"
 	"github.com/vihat/vigov/service-identity/migrations"
 )
 
@@ -59,6 +61,10 @@ var configUses = config.Uses(
 	config.CitizenBridge,
 	config.AdminSeed,
 	config.OrgUnitOwnerClients,
+	// ADR 0066 decision 6: a commune's own Mini App secret is sealed with SECRET_ENCRYPTION_KEYS
+	// through core/crypto, one DEK per commune. Declared, so staging/prod refuse to start without
+	// it, ADR 0057. No parentheses in this list: tools/check_env_map.py reads it up to the first one.
+	config.SecretEncryption,
 )
 
 func main() {
@@ -352,6 +358,28 @@ func run(log *slog.Logger) error {
 	cauPhien := app.NewCauPhienCongDan(kho, nenTang, taiKhoanZalo, crosstenant.NewDinhDanhStore(),
 		phienCongDan, cfg.CitizenSessionTTL(), log)
 
+	// The own-app sign-in (ADR 0066): POST /api/v1/citizen-sessions on the public chain, calling the
+	// SAME bridge use case in-process.
+	//
+	// A NIL *crypto.Envelope IS A VALID PROCESS IN DEV ONLY: staging/prod refuse to start without
+	// SECRET_ENCRYPTION_KEYS (config.SecretEncryption is declared above). In dev a real own-app
+	// sign-in then answers 503 by name; `--demo` sign-ins, which need no secret, keep working. A
+	// MALFORMED value never reaches here — config.Load refuses it.
+	var envelope *crypto.Envelope
+	if cfg.SecretEncryptionConfigured() {
+		envelope, err = crypto.New(cfg.SecretEncryptionKeys(), idstore.NewDataEncryptionKeyStore(kho))
+		if err != nil {
+			return fmt.Errorf("identity: không dựng được bộ niêm bí mật theo xã: %w", err)
+		}
+	} else {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"SECRET_ENCRYPTION_KEYS trống — đăng nhập app riêng của xã (không --demo) sẽ trả 503 (ADR 0066)")
+	}
+	// zalo.New("") is the real Graph API (zalo.DefaultBaseURL) — a protocol constant, not a variable
+	// (rule 11: no address that differs per environment).
+	ownAppSignIn := app.NewOwnAppSignIn(nenTang, idstore.NewMiniAppSecretStore(kho), envelope,
+		zalo.New(""), cauPhien, log)
+
 	// 7. idempotency store. An empty REDIS_DSN happens in DEV only — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. Staging and prod
 	//    refuse to start without it (config.Redis is declared in configUses).
@@ -509,7 +537,8 @@ func run(log *slog.Logger) error {
 	//     sit behind httpx.CitizenEdge. `nenTang` is the SAME platform client every Host resolution
 	//     uses; `canBo` is the SAME staff store, reached only through its DanhBaCongKhai read.
 	muxCongKhai := http.NewServeMux()
-	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Profile: nenTang, Log: log})
+	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Profile: nenTang,
+		CitizenSessions: ownAppSignIn, Log: log})
 	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
 	ngoai := dungNgoai(h, ck)
@@ -817,7 +846,8 @@ func dungCongCau(khoaCau []secret.Secret, cau *svcgrpc.CauServer, log *slog.Logg
 // read, and CitizenEdge refuses (500) any success from a route that declared no citizen commune
 // class — which a Public route cannot declare (tools/apidoc).
 //
-// NO idem.Middleware: this surface has no write.
+// NO idem.Middleware: the one write here, POST /api/v1/citizen-sessions, is declared idem.KhongCan —
+// not idempotent by contract (routes_cong_dan.go).
 //
 // A NAMED FUNCTION so bien_cong_dan_test.go can drive the real chain.
 func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
@@ -851,6 +881,9 @@ func dungNgoai(canBo, congKhai http.Handler) *http.ServeMux {
 	ngoai.Handle(svchttp.MauDanhMucXa, congKhai)
 	ngoai.Handle(svchttp.MauDanhBaCongKhai, congKhai)
 	ngoai.Handle(svchttp.CommuneProfilesPath, congKhai)
+	// The own app's citizen sign-in (ADR 0066). An exact path like the three above; the STAFF sign-in
+	// `/api/v1/sessions` is a different path and stays on the staff chain.
+	ngoai.Handle(svchttp.CitizenSessionsPath, congKhai)
 	ngoai.Handle("/", canBo)
 	return ngoai
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
@@ -70,6 +71,8 @@ type xaCongKhai struct {
 // invariant 5 asks of citizen routes, applied to routes that are even less trusted.
 type HandlerCongKhai struct {
 	d DepsCongKhai
+	// limiter guards POST /api/v1/citizen-sessions only (rate_limit.go). One per mux, so one per pod.
+	limiter *ipRateLimiter
 }
 
 // DanhMucXa answers which commune, if any, a domain belongs to. GET /api/v1/communes?host=
@@ -159,5 +162,6 @@ func newHandlerCongKhai(d DepsCongKhai) *HandlerCongKhai {
 	if d.Log == nil {
 		d.Log = slog.Default()
 	}
-	return &HandlerCongKhai{d: d}
+	return &HandlerCongKhai{d: d,
+		limiter: newIPRateLimiter(citizenSessionLimit, citizenSessionWindow, rateLimitMaxKeys, time.Now)}
 }

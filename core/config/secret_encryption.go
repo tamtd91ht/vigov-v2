@@ -12,7 +12,8 @@ import "errors"
 // One format for both on purpose: an operator who has rotated one of them already knows the other.
 //
 // GROUP config.SecretEncryption: only a service that stores per-commune secrets declares it —
-// comms — and no other service reads it. The declaring service is refused in staging/prod without
+// comms (mail server password) and identity (a commune's own Mini App secret, ADR 0066) — and no
+// other service reads it. Each declaring service has its OWN value in its own Secret. The declaring service is refused in staging/prod without
 // it; in dev it REFUSES the operation by name (crypto.ErrNotConfigured), never falls back to
 // storing a secret in the clear (ADR 0009 #3).
 //

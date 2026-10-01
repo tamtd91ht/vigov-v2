@@ -78,7 +78,7 @@ func dungChuoiCongKhai(t *testing.T, nt *nenTangXaGia, db *danhBaCongKhaiGia) ht
 		db = &danhBaCongKhaiGia{}
 	}
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: nt, DanhBa: db, Profile: &profileReaderFake{}})
+	RegisterCongKhai(mux, DepsCongKhai{Xa: nt, DanhBa: db, Profile: &profileReaderFake{}, CitizenSessions: &signInFake{}})
 	return mux
 }
 
@@ -214,7 +214,7 @@ func TestMauCongKhaiKhopTuyenDaDangKy(t *testing.T) {
 	// cmd/server routes these constants to the public chain; routes_cong_dan.go registers literals.
 	// If they drift, the outer mux sends the route to the staff chain and the reserved API host 404s.
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Xa: &nenTangXaGia{}, DanhBa: &danhBaCongKhaiGia{}, Profile: &profileReaderFake{}})
+	RegisterCongKhai(mux, DepsCongKhai{Xa: &nenTangXaGia{}, DanhBa: &danhBaCongKhaiGia{}, Profile: &profileReaderFake{}, CitizenSessions: &signInFake{}})
 	for _, p := range []string{MauDanhMucXa, MauDanhBaCongKhai, CommuneProfilesPath} {
 		_, mau := mux.Handler(httptest.NewRequest("GET", p, nil))
 		if mau != "GET "+p {
@@ -225,9 +225,10 @@ func TestMauCongKhaiKhopTuyenDaDangKy(t *testing.T) {
 
 func TestRegisterCongKhaiThieuKhoThiPanic(t *testing.T) {
 	for ten, d := range map[string]DepsCongKhai{
-		"thiếu kho tra xã":     {DanhBa: &danhBaCongKhaiGia{}, Profile: &profileReaderFake{}},
-		"thiếu kho danh bạ":    {Xa: &nenTangXaGia{}, Profile: &profileReaderFake{}},
-		"thiếu hồ sơ hiển thị": {Xa: &nenTangXaGia{}, DanhBa: &danhBaCongKhaiGia{}},
+		"thiếu kho tra xã":     {DanhBa: &danhBaCongKhaiGia{}, Profile: &profileReaderFake{}, CitizenSessions: &signInFake{}},
+		"thiếu kho danh bạ":    {Xa: &nenTangXaGia{}, Profile: &profileReaderFake{}, CitizenSessions: &signInFake{}},
+		"thiếu hồ sơ hiển thị": {Xa: &nenTangXaGia{}, DanhBa: &danhBaCongKhaiGia{}, CitizenSessions: &signInFake{}},
+		"missing sign-in":      {Xa: &nenTangXaGia{}, DanhBa: &danhBaCongKhaiGia{}, Profile: &profileReaderFake{}},
 		"thiếu cả ba kho đọc":  {},
 	} {
 		func() {
