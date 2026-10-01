@@ -4698,7 +4698,7 @@
         }
       ],
       "get": {
-        "summary": "Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404",
+        "summary": "Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404",
         "operationId": "comms_get_commune_news_by_id",
         "tags": [
           "comms"
@@ -5161,6 +5161,201 @@
         }
       }
     },
+    "/api/v1/content-categories/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một danh mục tin Mini App kèm lý do bắt buộc — từ chối khi còn nội dung hoặc danh mục con",
+        "operationId": "comms_delete_content_categories_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "0ed142945e39",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.deleteCategoryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa tên, danh mục cha, thứ tự hoặc cờ ẩn của một danh mục tin Mini App — slug không đổi được",
+        "operationId": "comms_patch_content_categories_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "5e3b47388077",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.updateCategoryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.danhMucRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/content-items": {
       "get": {
         "summary": "Sổ nội dung Mini App của xã — một trang của bảng §6, lọc theo loại, danh mục và tiêu đề",
@@ -5381,6 +5576,276 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/content-items/audio-files": {
+      "post": {
+        "summary": "Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "operationId": "comms_post_content_items_audio_files",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "01e99ab45ca4",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.audioUploadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.audioUploadOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/content-items/audio-files/{id}/completion": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập",
+        "operationId": "comms_post_content_items_audio_files_by_id_completion",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "71707e1f7567",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.audioCompletionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.audioFileOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -5793,6 +6258,16 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -13852,6 +14327,527 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal-sync/categories": {
+      "get": {
+        "summary": "Cây chuyên mục của Cổng TTĐT, hỏi trực tiếp Cổng lúc mở cấu hình, kèm lựa chọn và ánh xạ loại đã lưu của xã",
+        "operationId": "comms_get_portal_sync_categories",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "33a1f8cced40",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.portalCategoryTreeOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Lưu lựa chọn chuyên mục Cổng và ánh xạ loại nội dung (tin tức, sự kiện, thông báo)",
+        "operationId": "comms_put_portal_sync_categories",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "d2811cd08539",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.portalCategoriesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.portalCategoriesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal-sync/runs": {
+      "get": {
+        "summary": "Lịch sử các lượt đồng bộ Cổng của xã — mới nhất trước, kèm số tin đọc, nhập, bỏ qua, lỗi",
+        "operationId": "comms_get_portal_sync_runs",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "a272d5330b59",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "started_at"
+              ],
+              "default": "started_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_comms.portalRunOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Đồng bộ ngay — mở một lượt đồng bộ Cổng chạy tay cho xã, chạy nền, kết quả xem ở lịch sử",
+        "operationId": "comms_post_portal_sync_runs",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "5e46c1878093",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.portalRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal-sync/settings": {
+      "get": {
+        "summary": "Cấu hình đồng bộ tin từ Cổng TTĐT của xã — không bao giờ trả mã bảo mật, chỉ báo đã đặt hay chưa",
+        "operationId": "comms_get_portal_sync_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "709717b0fbc5",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.portalSyncSettingsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Lưu cấu hình đồng bộ Cổng TTĐT — mã bảo mật chỉ ghi, để trống là giữ, đổi địa chỉ API thì phải nhập lại",
+        "operationId": "comms_put_portal_sync_settings",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "ba5bf4cd2d92",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.portalSyncSettingsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.portalSyncSettingsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -23099,6 +24095,155 @@
         ],
         "additionalProperties": false
       },
+      "comms.audioCompletionIn": {
+        "type": "object",
+        "properties": {
+          "audio_duration_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "audio_duration_seconds"
+        ],
+        "additionalProperties": false
+      },
+      "comms.audioFileOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "content_item_id": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "duration_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content_item_id",
+          "id",
+          "mime_type",
+          "size_bytes",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "comms.audioOut": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration_seconds": {
+            "type": "integer"
+          },
+          "preview_url": {
+            "type": "string"
+          },
+          "preview_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "duration_seconds",
+          "file_id",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "comms.audioUploadIn": {
+        "type": "object",
+        "properties": {
+          "content_item_id": {
+            "type": "string"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "content_item_id",
+          "content_type",
+          "file_name",
+          "size"
+        ],
+        "additionalProperties": false
+      },
+      "comms.audioUploadOut": {
+        "type": "object",
+        "properties": {
+          "audio_file": {
+            "$ref": "#/components/schemas/comms.audioFileOut"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/comms.presignedUploadOut"
+          }
+        },
+        "required": [
+          "audio_file",
+          "upload"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyBlockOut": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.inlineRunOut"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.listItemOut"
+            }
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
       "comms.coverFileOut": {
         "type": "object",
         "properties": {
@@ -23251,10 +24396,14 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "hidden": {
+            "type": "boolean"
           }
         },
         "required": [
           "created_at",
+          "hidden",
           "id",
           "name",
           "order",
@@ -23290,6 +24439,18 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.deleteCategoryIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -23334,6 +24495,42 @@
         "required": [
           "label",
           "value"
+        ],
+        "additionalProperties": false
+      },
+      "comms.inlineRunOut": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "bold": {
+            "type": "boolean"
+          },
+          "italic": {
+            "type": "boolean"
+          },
+          "href": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "comms.listItemOut": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.inlineRunOut"
+            }
+          }
+        },
+        "required": [
+          "runs"
         ],
         "additionalProperties": false
       },
@@ -23800,6 +24997,31 @@
           },
           "video_url": {
             "type": "string"
+          },
+          "link_to": {
+            "type": "string"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "audio_file_id": {
+            "type": "string"
+          },
+          "audio_duration_seconds": {
+            "type": "integer"
+          },
+          "audio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.audioOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -23902,6 +25124,346 @@
         "required": [
           "body",
           "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalCategoriesIn": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalCategoryIn"
+            }
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalCategoriesOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalStoredCategoryOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalCategoryIn": {
+        "type": "object",
+        "properties": {
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target_kind": {
+            "type": "string"
+          },
+          "is_selected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "external_id",
+          "is_selected",
+          "name",
+          "target_kind"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalCategoryNodeOut": {
+        "type": "object",
+        "properties": {
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "parent_name": {
+            "type": "string"
+          },
+          "is_selected": {
+            "type": "boolean"
+          },
+          "target_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_id",
+          "is_selected",
+          "name",
+          "parent_id",
+          "parent_name",
+          "target_kind"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalCategoryTreeOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalCategoryNodeOut"
+            }
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalStoredCategoryOut"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "missing"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalRunErrorOut": {
+        "type": "object",
+        "properties": {
+          "category_external_id": {
+            "type": "string"
+          },
+          "category_name": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category_external_id",
+          "category_name",
+          "count",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalRunOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "trigger_kind": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "fetched_count": {
+            "type": "integer"
+          },
+          "imported_count": {
+            "type": "integer"
+          },
+          "skipped_existing_count": {
+            "type": "integer"
+          },
+          "skipped_deleted_count": {
+            "type": "integer"
+          },
+          "failed_count": {
+            "type": "integer"
+          },
+          "error_summary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalRunErrorOut"
+            }
+          }
+        },
+        "required": [
+          "actor",
+          "error_summary",
+          "failed_count",
+          "fetched_count",
+          "finished_at",
+          "id",
+          "imported_count",
+          "outcome",
+          "skipped_deleted_count",
+          "skipped_existing_count",
+          "started_at",
+          "trigger_kind"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalStoredCategoryOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target_kind": {
+            "type": "string"
+          },
+          "is_selected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "external_id",
+          "id",
+          "is_selected",
+          "name",
+          "target_kind"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalSyncSettingsIn": {
+        "type": "object",
+        "properties": {
+          "api_url": {
+            "type": "string"
+          },
+          "api_key": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "publish_mode": {
+            "type": "string"
+          },
+          "interval_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "window_days": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "max_items_per_run": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "keep_source_credit": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "is_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "api_url"
+        ],
+        "additionalProperties": false
+      },
+      "comms.portalSyncSettingsOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "encryption_configured": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "api_url": {
+            "type": "string"
+          },
+          "api_key_set": {
+            "type": "boolean"
+          },
+          "publish_mode": {
+            "type": "string"
+          },
+          "interval_hours": {
+            "type": "integer"
+          },
+          "window_days": {
+            "type": "integer"
+          },
+          "max_items_per_run": {
+            "type": "integer"
+          },
+          "keep_source_credit": {
+            "type": "boolean"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "api_key_set",
+          "api_url",
+          "configured",
+          "encryption_configured",
+          "interval_hours",
+          "is_enabled",
+          "keep_source_credit",
+          "last_run_at",
+          "max_items_per_run",
+          "provider",
+          "publish_mode",
+          "updated_by",
+          "window_days"
         ],
         "additionalProperties": false
       },
@@ -24089,6 +25651,30 @@
               "string",
               "null"
             ]
+          },
+          "link_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "audio_file_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "audio_duration_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "additionalProperties": false
@@ -24184,6 +25770,15 @@
           },
           "cover_image_file_id": {
             "type": "string"
+          },
+          "link_to": {
+            "type": "string"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "publish": {
             "type": "boolean"
@@ -24322,6 +25917,28 @@
           },
           "image_url": {
             "type": "string"
+          },
+          "link_to": {
+            "type": "string"
+          },
+          "audio_duration_seconds": {
+            "type": "integer"
+          },
+          "audio_url": {
+            "type": "string"
+          },
+          "audio_url_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "body_blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.bodyBlockOut"
+            }
           }
         },
         "required": [
@@ -24343,6 +25960,42 @@
         "required": [
           "unread"
         ],
+        "additionalProperties": false
+      },
+      "comms.updateCategoryIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hidden": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "comms.updateMapFieldSchemaIn": {
@@ -29965,6 +31618,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/comms.notificationOut"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_comms.portalRunOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.portalRunOut"
             }
           },
           "next_cursor": {

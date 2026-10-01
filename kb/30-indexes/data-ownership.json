@@ -369,6 +369,27 @@
       "source": "service-platform/migrations/0008_upload_policy.sql:132"
     },
     {
+      "entity": "PortalCategory",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "portal_categories",
+      "source": "service-comms/migrations/0013_portal_sync.sql:210"
+    },
+    {
+      "entity": "PortalSyncRun",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "portal_sync_runs",
+      "source": "service-comms/migrations/0013_portal_sync.sql:311"
+    },
+    {
+      "entity": "PortalSyncSettings",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "portal_sync_settings",
+      "source": "service-comms/migrations/0013_portal_sync.sql:81"
+    },
+    {
       "entity": "ProcessingDeadline",
       "service": "identity",
       "scope": "tenant",
