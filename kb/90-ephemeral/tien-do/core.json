@@ -6,10 +6,10 @@
     {
       "id": "ghim-go-toolchain-1-26-6",
       "viec": "Ghim toolchain go1.26.6 ở mọi go.mod và GO_VERSION=1.26.6 ở mọi Dockerfile — đóng 107 phát hiện check_vuln (toàn bộ thư viện chuẩn Go)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "Rà bảo mật 01/10/2026: mọi phát hiện được gọi tới đều ở stdlib, bản vá go1.26.3–1.26.6; máy dựng cục bộ chạy go1.26.2; service-*/Dockerfile dùng GO_VERSION=1.26 (trôi theo bản vá mới nhất). Không phát hiện nào sinh từ đợt platform-admin",
+      "trang_thai": "xong",
+      "bang_chung": "01/10/2026: `toolchain go1.26.6` ở go.work + 9 go.mod (core, tools, 7 service-*), dòng `go 1.26.0` giữ nguyên; `ARG GO_VERSION=1.26.6` ở 7 service-*/Dockerfile. Máy trạm go1.26.2 + GOTOOLCHAIN=auto tự chuyển: `go version` trong mọi module = go1.26.6. `go build ./...` + `go test -count=1 ./...` xanh cả 9 module. tools/check_vuln.py PASS — 0 Go · 0 npm (đối chứng: core dưới go1.26.2 = 11 lỗ hổng stdlib được gọi). check_build PASS, check_security PASS. Còn lại duy nhất ghi chú GO-2026-5932 (golang.org/x/crypto/openpgp, KHÔNG được gọi, không có bản vá) ở core + 5 dịch vụ — không phải phát hiện. Rà bảo mật ban đầu: 107 phát hiện, 22 mã, toàn stdlib",
       "no_confirm": [],
-      "tiep_theo": "Người dùng CHỐT ghim go1.26.6 (01/10/2026) rồi HOÃN để đẩy bản build sớm. Làm: dòng `toolchain go1.26.6` ở core/, tools/ và mọi service-*/go.mod; `GO_VERSION=1.26.6` ở mọi Dockerfile; chạy lại `make vuln`. Một commit riêng, chạy một mình (chạm mọi module)"
+      "tiep_theo": "Máy Jenkins (đo 24/09: go1.26.5) chưa chạy lại `make vuln` sau khi ghim — nó chỉ xanh nếu GOTOOLCHAIN=auto và ra được proxy.golang.org, hoặc đã cài ≥1.26.6. go1.26.7 và 1.26.8 đã phát hành; govulncheck ngày 01/10 không đòi chúng, nhưng lần nâng sau phải nâng go.work, mọi go.mod và mọi Dockerfile CÙNG LÚC"
     },
     {
       "id": "backfill-theo-xa",
