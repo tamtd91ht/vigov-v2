@@ -245,8 +245,10 @@ lại và hỏi**, đừng tự dịch rồi viết route — đường dẫn kh
 
 ### Miền vận hành ViHAT — ADR 0048
 
-Chốt 28/09/2026 bởi **chủ dự án** (ADR 0048 §*Chốt* và §*Chốt bước 1*). Không tài nguyên URL nào
-ở đây: tuyến tới ở bước 2, trên host vận hành — đừng điền sẵn.
+Chốt 28/09/2026 bởi **chủ dự án** (ADR 0048 §*Chốt* và §*Chốt bước 1*). Tài nguyên URL của khu
+vận hành: **người dùng chốt 01/10/2026**, đúng các tên đã dựng ở `a62e2659` — bảng *Tài nguyên URL
+của khu vận hành* ngay dưới. Khái niệm vận hành nào **không có** trong bảng ấy (hồ sơ hiển thị,
+logo, giới hạn tải lên, phát hành QR — đợt 2) thì **vẫn để trống, đừng điền sẵn**.
 
 | Khái niệm | Thực thể / bảng | Vì sao không phải từ dễ đoán |
 |---|---|---|
@@ -255,6 +257,31 @@ Chốt 28/09/2026 bởi **chủ dự án** (ADR 0048 §*Chốt* và §*Chốt b�
 | Cấp quyền vận hành | `operator_permission_grant` · khoá `ops.<nhóm>.<việc>` | **Không** phải dòng trong `quyen`/`vai_tro_quyen` (theo xã). Cấp thẳng cho tài khoản, không qua vai trò |
 | Mã khôi phục | `operator_recovery_code` | *Recovery code* — mã dùng một lần khi mất ứng dụng xác thực. Không gọi `backup_code` |
 | Vết vận hành | `operator_audit_log` | Vết **không có xã** của miền vận hành trong `identity`; khác `platform_audit_log` (thuộc `platform`, luật 2) |
+
+#### Tài nguyên URL của khu vận hành — người dùng chốt 01/10/2026
+
+Chỉ phục vụ trên `OPERATOR_HOST`, **không** nằm trong `kb/20-contracts/openapi.json` (ADR 0048
+§*01/10* #6c). Phương thức, khoá `ops.*` và handler: đọc `service-platform/internal/http/operator_routes.go`
+— bảng này chỉ giữ **danh từ đã chốt**.
+
+| Khái niệm | Tài nguyên URL | Ghi chú |
+|---|---|---|
+| Phiên vận hành | `operator-sessions` · `operator-sessions/current` | Tiền tố `operator-` vì `sessions` (cán bộ) và `citizen-sessions` đã có — ba lớp tin cậy, ba danh từ. `current` là bộ chọn, cùng hình dạng `sessions/current` |
+| Đăng ký xác thực hai lớp (lần đăng nhập đầu) | `operator-enrollments` · `operator-enrollments/completion` | Việc đăng ký là một tài nguyên riêng, **không** phải một loại phiên: lúc đó chưa có phiên nào |
+| Mật khẩu người vận hành | `operators/current/password` | Chỉ của chính mình — không có đường đổi mật khẩu người khác (CLI `operatorctl`, ADR 0048 §*Chốt bước 1*) |
+| Mã khôi phục | `operators/current/recovery-codes` | Khớp tên bảng `operator_recovery_code`; không `backup-codes` |
+| Tỉnh/thành | `provinces` | Đọc danh mục `tinh_thanh` để chọn tỉnh khi tạo xã |
+| Xã | `communes` · `communes/{id}` | Cùng danh từ với sổ xã ở §*Hai đường dẫn `communes`* — **cùng một loại tài nguyên**, tách nhau bằng **host**, không bằng đường dẫn |
+| Tên miền | `communes/{id}/domains` | Đợt 1 chỉ **thêm**; không gỡ, không trỏ sang xã khác (ADR 0048 §*01/10* #5) |
+| Tên miền chính | `communes/{id}/primary-domain` | |
+| Sửa tên (lỗi gõ) | `communes/{id}/name` | **Chỉ** sửa lỗi gõ, bắt buộc lý do. Đổi tên đơn vị hành chính thật **không** đi qua đây — luật 1 điều kiện dừng #3 |
+| Trạng thái hoạt động | `communes/{id}/activation` | Bật / tắt, cùng hình dạng `lockout`, `publication`: một danh từ trạng thái, không động từ trên đường dẫn |
+| Mini App riêng của xã | `communes/{id}/mini-apps` | Dòng `mini_app` chế độ `rieng` |
+
+⚠ `GET /api/v1/communes` có **hai** người gọi trên **hai** host: công dân (Mini App, `identity`,
+`Public`) và người vận hành (`platform`, `ops.tenant.manage`). Đường dẫn trùng là **cố ý** — cùng
+một loại tài nguyên. Thứ giữ chúng tách nhau là biên host của ADR 0048 và việc tuyến vận hành nằm
+ngoài `openapi.json`; một tuyến vận hành lọt vào hợp đồng xã là ADR 0048 ĐIỀU KIỆN DỪNG #6.
 
 ### Danh mục tham chiếu — ADR 0024
 

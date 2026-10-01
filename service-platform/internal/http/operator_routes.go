@@ -17,12 +17,9 @@ package http
 // gateway table are generated (ADR 0048 §01/10 #6c). A route here that reached that file would be
 // routable on a commune's host.
 //
-// ⚠ THE PATH NOUNS BELOW ARE NOT YET IN kb/00-foundation/ubiquitous-language.md. `communes` is (the
-// commune registry); `operator-sessions`, `operator-enrollments`, `operators/current`, `provinces`,
-// `domains`, `primary-domain`, `name`, `activation`, `mini-apps` are proposals following the
-// glossary's existing shapes (`citizen-sessions`, `sessions/current`, `staff/current/password`,
-// `lockout`, `publication`). They must be confirmed by the user and recorded there before the
-// operator host goes live — a path an integrator calls cannot be renamed.
+// THE PATH NOUNS BELOW were confirmed by the user on 2026-10-01 and are recorded in
+// kb/00-foundation/ubiquitous-language.md §"Miền vận hành ViHAT". Renaming one now is a contract
+// change, not a tidy-up: the console and anything an integrator wrote call these exact paths.
 
 import (
 	"log/slog"

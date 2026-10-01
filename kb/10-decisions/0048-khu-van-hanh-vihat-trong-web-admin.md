@@ -23,6 +23,12 @@ owns_facts:
   - "service-platform kiểm chữ ký token op1. tại chỗ rồi gọi RPC identity tra sổ phiên vận hành mỗi yêu cầu, không cache; RPC vận hành không xã nằm trong methodsWithoutTenant (chốt 01/10/2026)"
   - "giới hạn đăng nhập vận hành 20 lần / 15 phút / IP, cửa sổ cố định trong Redis, vượt → 429 (chốt 01/10/2026)"
   - "phạm vi đợt 1 và đợt 2 của platform-admin; sửa tên xã ở đợt 1 chỉ là sửa lỗi gõ, có lý do và vết (chốt 01/10/2026)"
+  - "kênh gRPC platform→identity của khu vận hành chung nợ plaintext-grpc với các kênh gRPC nội cụm và chặn lên sống (chốt 01/10/2026)"
+  - "điều kiện lên sống trước khi đặt OPERATOR_HOST: thu hẹp quy tắc 3 NetworkPolicy theo cặp gọi, áp NetworkPolicy trên cụm thật, xong còn mở #12, đủ khoá ở platform-secrets và identity-secrets (chốt 01/10/2026)"
+  - "xem chi tiết MỘT xã (siêu dữ liệu sổ xã) không ghi vết — ngoại lệ 30/09 #5 mở từ liệt kê sang liệt kê + xem một xã (chốt 01/10/2026)"
+  - "vì sao kiểm trùng tên xã phân biệt dấu nhưng không phân biệt hoa thường và khoảng trắng, so trong cùng tỉnh"
+  - "vì sao đăng nhập chỉ có mật khẩu vẫn được chuyển tới identity"
+  - "vì sao hành động vết của khu vận hành giữ tên tao_xa / gan_mini_app của stage Jenkins"
 ---
 
 # 0048. Khu vực vận hành ViHAT trong `web-admin`
@@ -34,7 +40,8 @@ owns_facts:
 #1 sửa ở §*Sửa của chủ dự án — 27/09/2026*) · **§Thiết kế #1–#4, #10 đã chốt** 28/09/2026 (§*Chốt
 của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · #6 chốt 28/09 (§*Chốt bước 1*) · **#5, #7,
 #9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · **đợt 1 `platform-admin` chốt
-01/10/2026** (§*Chốt của chủ dự án — 01/10/2026*) · #12 là bước vận hành, chưa
+01/10/2026** (§*Chốt của chủ dự án — 01/10/2026*) · **điều kiện lên sống của `OPERATOR_HOST`
+chốt 01/10/2026, sau khi dựng** (§*Chốt bổ sung — 01/10/2026, sau khi dựng*) · #12 là bước vận hành, chưa
 làm — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
@@ -247,6 +254,20 @@ Mục này ghi thêm, không sửa phần trên. Người dùng trả lời ở 
 | 4 | **Phạm vi đợt 1:** biên `OPERATOR_HOST`; đăng nhập (mật khẩu + TOTP + đăng ký lần đầu); liệt kê xã; tạo xã (tên, tỉnh chọn từ danh mục `tinh_thanh`, tên miền chính); thêm tên miền; đặt tên miền chính; bật / tắt hoạt động xã; gắn Mini App riêng của xã (`mini_app`, chế độ `rieng`). **Đợt 2:** hồ sơ hiển thị + logo, sửa giới hạn tải lên, phát hành QR, mã lĩnh vực phản ánh cấp 1, màn App secret (ADR 0066) | Đợt 1 là đủ để mở một xã mới không qua SQL tay (§*Bối cảnh*) | Thứ tự dựng ở §*Chốt bước 1* (bước 4 là giới hạn tải lên) **nhường** cho phạm vi này: giới hạn tải lên sang đợt 2 | — |
 | 5 | **Tên miền và tên xã sau khi tạo:** đợt 1 chỉ **thêm** tên miền và **đặt tên miền chính**. **Không** gỡ tên miền, **không** trỏ một tên miền sang xã khác, **không** sáp nhập / chia — vẫn là ĐIỀU KIỆN DỪNG #4, qua `skills/admin-unit-merge`, một đợt riêng. **Sửa tên xã ĐƯỢC** ở đợt 1 nhưng **chỉ là sửa lỗi gõ**: bắt buộc lý do, ghi vết giá trị trước / sau. Người dùng chọn *"Thêm cả sửa tên khi gõ nhầm"* | Sửa lỗi nhập liệu không phải đổi tên đơn vị hành chính — đổi tên thật vẫn là ĐIỀU KIỆN DỪNG #4. Trỏ lại tên miền là đường sáp nhập (ADR 0047 câu 4), nên đi cùng sáp nhập | Hẹp hơn ADR 0003:30 (cho *đổi tên, gán tên miền*) và §*Phạm vi của khu* (*Gắn / trỏ lại*): trỏ lại chưa có màn. Ranh giới "lỗi gõ" với "đổi tên" dựa vào **lý do** người vận hành ghi — máy không phân biệt được | Luật 1 dừng #3; luật 6 bất biến 5; luật 7 bất biến 6 |
 | 6 | **Mặc định đã nêu với người dùng, không bị phản đối:** (a) tài khoản vận hành vẫn quản lý bằng CLI `operatorctl` phía máy chủ (§*Chốt bước 1*) — **không** màn quản lý tài khoản; (b) bật / tắt xã do khoá **`ops.tenant.manage`** đã có canh — **không** khoá mới; (c) tuyến vận hành phải **loại khỏi** các bề mặt sinh ra cho xã (Ingress sinh từ openapi và cổng web-admin), chỉ tới được trên `OPERATOR_HOST`; (d) các stage SQL tạm trong Jenkins cho Xã Thăng Bình **giữ** tới khi khu vận hành được kiểm trên prod | (b) thêm khoá là điều kiện dừng #1. (c) một tuyến vận hành lọt ra host xã là ĐIỀU KIỆN DỪNG #6 và là lỗi bảo mật (§*Hệ quả*) | **Còn mở #12** (gỡ hai dòng `admin*.vigov.vn`) vẫn phải xong **trước khi** host vận hành lên sống — đợt 1 không đóng nó | Luật 5 bất biến 3; luật 1 bất biến 3 |
+
+## Chốt bổ sung — 01/10/2026, sau khi dựng
+
+Mục này ghi thêm, không sửa phần trên. Đợt 1 đã dựng ở `a62e2659`; người dùng trả lời các câu nảy
+ra **trong lúc dựng**, trong phiên chính 01/10/2026. Tên tài nguyên URL đã dựng cũng được chốt cùng
+lượt — ghi ở `kb/00-foundation/ubiquitous-language.md` §*Miền vận hành ViHAT*, không chép lại ở đây.
+
+| # | Đã chốt | Vì sao · giá người dùng chấp nhận | Luật |
+|---|---|---|---|
+| 1 | **Kênh gRPC mới `platform → identity`** (RPC vận hành của #2 ở mục trên) chạy **không TLS** dù mang mật khẩu, mã TOTP và token `op1.`. Người dùng chọn **"chung nợ hiện có + chặn go-live"**: cùng món nợ `plaintext-grpc` với các kênh gRPC nội cụm đã có (`tools/security_debt.json`, hạn **2026-12-28**), khai bằng `// @security-exception:` trỏ tới sổ nợ ở `core/operatorclient/dial.go` | Kênh này không tệ hơn kênh `identityclient` đang mang token phiên cán bộ; tách một món nợ riêng là hai lời hứa cho một bản sửa. Bản sửa là TLS cho cả ba kênh cùng lúc. **Giá:** tới khi có TLS, biên duy nhất của cổng 9090 là NetworkPolicy — nên dòng #2 là điều kiện cứng | Luật 13 bất biến 1, điều kiện dừng *kênh không mã hoá mới* |
+| 2 | **Phát hiện:** quy tắc 11 của `deploy/base/mang/netpol.yaml` (`allow-platform-to-identity-grpc`) hôm nay **không hẹp thêm gì**, vì quy tắc 3 (`allow-grpc-internal`) đã cho **mọi pod** trong namespace vào 9090, và NetworkPolicy chỉ **cộng** quyền. Người dùng chọn: **thu hẹp quy tắc 3 theo đúng cặp gọi thật TRƯỚC khi lên sống**. **Điều kiện để đặt `OPERATOR_HOST`** — đủ cả bốn: **(a)** quy tắc 3 đã thu hẹp theo từng cặp gọi; **(b)** NetworkPolicy đã áp trên cụm thật; **(c)** còn mở #12 (gỡ hai dòng `admin*.vigov.vn`) đã xong; **(d)** `platform-secrets` có `IDENTITY_GRPC_ADDR`, `REDIS_DSN`, `OPERATOR_SESSION_SIGNING_KEYS` (**cùng giá trị** với identity), và `identity-secrets` có `OPERATOR_SESSION_SIGNING_KEYS` + `OPERATOR_TOTP_ENCRYPTION_KEY` | Một quy tắc hẹp nằm cạnh một quy tắc rộng là một rào trông như đang canh mà không canh gì. (d): thiếu biến mà service dùng thì service **từ chối khởi động** (ADR 0057) — và platform không khởi động thì **không xã nào** phân giải được, không riêng khu vận hành | Luật 13 bất biến 1; luật 11 bất biến 8; ADR 0057; ADR 0046 |
+| 3 | **Xem chi tiết MỘT xã** (tên, tỉnh, trạng thái, tên miền, App ID Mini App) **không ghi vết**. Ngoại lệ 30/09 #5 mở rộng từ *"liệt kê"* sang *"liệt kê + xem siêu dữ liệu một xã"* | Cùng lý do với #5: chỉ là siêu dữ liệu sổ xã, không dữ liệu công dân. **Giới hạn giữ nguyên:** thêm bất kỳ trường nào ngoài siêu dữ liệu sổ xã vào màn xem là **ra khỏi ngoại lệ**, phải hỏi lại | Luật 6 bất biến 7 |
+| 4 | **Ba điều đã dựng, ghi lý do** (mã ở `service-platform/internal/domain/operator_commune.go:124-152`, `internal/http/operator_sessions.go:196-199`, `internal/store/operator_writes.go:47-56`): **(a)** kiểm trùng tên xã **không** phân biệt hoa thường và khoảng trắng nhưng **CÓ** phân biệt dấu, so **trong cùng tỉnh**, bỏ tiền tố *"Thành phố"* / *"Tỉnh"* ở đầu tên tỉnh; **(b)** đăng nhập chỉ có mật khẩu vẫn **chuyển tới identity**; **(c)** hành động vết giữ tên **`tao_xa`** / **`gan_mini_app`** của các stage Jenkins | (a) Gộp dấu thì *"Tân Phú"* và *"Tấn Phú"* thành một tên — hai từ khác nhau, có thể là hai xã, và lời từ chối ở đây **không có đường vượt**. Bỏ tiền tố tỉnh vì `tenant.tinh_thanh` cũ ghi *"Thành phố Đà Nẵng"* còn danh mục ghi *"Đà Nẵng"*; bỏ ở cả hai phía chỉ làm phép kiểm **chặt hơn**. (b) identity trả `ENROLLMENT_REQUIRED` **trước** khi kiểm yếu tố thứ hai; chặn tại chỗ thì tài khoản mới không bao giờ biết mình phải đăng ký. (c) Cùng một hành vi đã có mục vết dưới tên ấy từ stage Jenkins; tên mới là hai tên cho một hành vi trong cùng một cột | (c) luật 6 bất biến 1; ADR 0011 |
+| 5 | **Đổi bộ não, người dùng duyệt:** `rbac_guard` nhận các khai báo `opauth.*` (`RequireKey` / `SignedIn` / `Public`) như khai báo quyền hợp lệ; `check_security` theo dõi **hạn** của một `// @security-exception:` có trỏ tới một mục trong sổ nợ | Không có điều thứ nhất, mọi tuyến vận hành bị báo *thiếu khai báo* — báo động giả dạy người ta bỏ qua báo động. Không có điều thứ hai, một ngoại lệ trỏ sổ nợ sống qua hạn của chính món nợ ấy mà cổng vẫn xanh | Luật 5 bất biến 1; luật 13 |
 
 ## ĐIỀU KIỆN DỪNG
 
