@@ -239,8 +239,17 @@ describe("chữ của màn hình", () => {
     expect(DOI_XA.test("hãy quay lại và Đổi xã trước khi gửi")).toBe(true);
   });
 
-  it("không `console.*` ở bất kỳ tệp nào của nửa nhà nước (luật 3)", () => {
-    expect(SAN_XUAT.filter((f) => /\bconsole\s*\./.test(f.code)).map((f) => f.path)).toEqual([]);
+  it("không `console.*` ở bất kỳ tệp nào của nửa nhà nước (luật 3) — trừ đúng một tệp chẩn đoán", () => {
+    // The one exemption (owner, 01/10/2026): `api/connection-log.ts`, fixed-shape record, `--demo` only.
+    // Its shape is pinned in `api/connection-log.test.ts`; widening this list is widening rule 3.
+    const allowed = ["./api/connection-log.ts"];
+    expect(
+      SAN_XUAT.filter((f) => /\bconsole\s*\./.test(f.code) && !allowed.includes(f.path)).map((f) => f.path),
+    ).toEqual([]);
+    const log = SAN_XUAT.find((f) => f.path === allowed[0]);
+    expect(log, "the exempted file moved — the exemption now guards nothing").toBeDefined();
+    expect(log!.code.match(/\bconsole\s*\.\w+/g)).toEqual(["console.warn"]);
+    expect(log!.code).toMatch(/if \(!DEMO_BUILD\) return;/);
   });
 });
 

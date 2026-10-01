@@ -26,7 +26,8 @@
  * là một khe để ai đó nhét phiếu phiên của `vihat-miniapp` vào, và phiếu ấy KHÔNG phải phiên ViGov.
  *
  * ⚠ KHÔNG `console.*`, KHÔNG IN THÂN YÊU CẦU HAY PHẢN HỒI. Chúng mang nội dung phản ánh, họ tên và
- * số điện thoại của người thật (luật 3, bất biến 1).
+ * số điện thoại của người thật (luật 3, bất biến 1). A failed call is reported ONLY through
+ * `connection-log.ts` — fixed shape, `--demo` build only, no body (owner, 01/10/2026).
  */
 import {
   type CitizenField,
@@ -67,6 +68,7 @@ import {
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
 import type { LanGui } from "./lan-gui";
+import { type ConnectionRoute, describeThrown, hostOf, logConnectionFailure } from "./connection-log";
 import { layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
@@ -134,10 +136,37 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
  */
 async function goi<T>(
   dia_chi: string,
-  /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. */
+  /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. `route` names the call in the log only. */
+  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
+  doc: (than: unknown) => T | null,
+  khi_404: NhanhKhongThanh,
+): Promise<{ kieu: "xong"; gia_tri: T } | NhanhKhongThanh> {
+  const startedAt = Date.now();
+  const trace: CallTrace = {};
+  const kq = await callOnce(dia_chi, tuy_chon, doc, khi_404, trace);
+  if (kq.kieu !== "xong") {
+    logConnectionFailure({
+      route: tuy_chon.route,
+      method: tuy_chon.method,
+      host: hostOf(dia_chi),
+      outcome: kq.kieu,
+      ...trace,
+      elapsed_ms: Date.now() - startedAt,
+    });
+  }
+  return kq;
+}
+
+/** What `callOnce` saw — a status and a thrown value's name, never a body (`connection-log.ts`). */
+type CallTrace = { status?: number; error?: string };
+
+/** `goi` without the log. */
+async function callOnce<T>(
+  dia_chi: string,
   tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
+  trace: CallTrace,
 ): Promise<{ kieu: "xong"; gia_tri: T } | NhanhKhongThanh> {
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
@@ -154,11 +183,21 @@ async function goi<T>(
       body: tuy_chon.than,
       signal: bo_dieu_khien.signal,
     });
+    trace.status = tra_loi.status;
 
     switch (tra_loi.status) {
       case 200:
       case 201: {
-        const gia_tri = doc(await tra_loi.json());
+        // A body that is not JSON is the SERVER's answer, not the network's: before 01/10/2026 it fell to
+        // the `catch` below and the citizen was told to check their connection for a reply that had arrived.
+        let body: unknown;
+        try {
+          body = await tra_loi.json();
+        } catch (err) {
+          trace.error = describeThrown(err);
+          return { kieu: "loi-may-chu" };
+        }
+        const gia_tri = doc(body);
         return gia_tri === null ? { kieu: "loi-may-chu" } : { kieu: "xong", gia_tri };
       }
       case 400:
@@ -189,7 +228,8 @@ async function goi<T>(
       default:
         return { kieu: "loi-may-chu" };
     }
-  } catch {
+  } catch (err) {
+    trace.error = describeThrown(err);
     return { kieu: "loi-mang" };
   } finally {
     clearTimeout(dong_ho);
@@ -220,7 +260,7 @@ export async function citizenReportFields(): Promise<
 > {
   const cong = moCong(citizenFieldsAddress());
   if ("kieu" in cong) return cong;
-  const kq = await goi(cong.dia_chi, { method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" });
+  const kq = await goi(cong.dia_chi, { route: "report-fields", method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" });
   return kq.kieu === "xong" ? { kieu: "xong", fields: kq.gia_tri } : kq;
 }
 
@@ -239,7 +279,7 @@ export async function guiPhanAnh(lan: LanGui): Promise<KetQuaGoi> {
   return thanhPhieu(
     await goi(
       cong.dia_chi,
-      { method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
+      { route: "send-petition", method: "POST", token: cong.token, khoa: lan.khoa, than: lan.than },
       docPhieu,
       // Tuyến gửi không có 404 trong hợp đồng; gặp nó là tuyến chưa được định tuyến ở cụm.
       { kieu: "loi-may-chu" },
@@ -259,7 +299,7 @@ export async function traCuuPhieu(ma_tra_cuu: string): Promise<KetQuaGoi> {
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   return thanhPhieu(
-    await goi(cong.dia_chi, { method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
+    await goi(cong.dia_chi, { route: "lookup-petition", method: "GET", token: cong.token }, docPhieu, { kieu: "khong-thay" }),
   );
 }
 
@@ -275,7 +315,7 @@ export async function traCuuPhieu(ma_tra_cuu: string): Promise<KetQuaGoi> {
 export async function phanAnhCuaToi(con_tro: string): Promise<KetQuaDanhSach> {
   const cong = moCong(diaChiDanhSach(con_tro));
   if ("kieu" in cong) return cong;
-  const kq = await goi(cong.dia_chi, { method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
+  const kq = await goi(cong.dia_chi, { route: "my-petitions", method: "GET", token: cong.token }, docTrangPhieuCuaToi, {
     kieu: "loi-may-chu",
   });
   if (kq.kieu === "xong") return { kieu: "xong", trang: kq.gia_tri };
@@ -305,7 +345,7 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
   const kq = thanhPhieu(
     await goi(
       cong.dia_chi,
-      { method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
+      { route: "rate-petition", method: "POST", token: cong.token, khoa: attempt.khoa, than: attempt.than },
       docPhieu,
       { kieu: "khong-thay" },
     ),
@@ -338,6 +378,7 @@ export type KetQuaCongKhai<T> =
   | { kieu: "chua-cau-hinh" };
 
 async function goiCongKhai<T>(
+  route: ConnectionRoute,
   ten_mien: string,
   dia_chi: (ten_mien: string) => string,
   doc: (than: unknown) => T | null,
@@ -346,7 +387,7 @@ async function goiCongKhai<T>(
   if (!laTenMien(ten_mien)) return { kieu: "khong-hop-le" };
   const url = dia_chi(ten_mien);
   if (url === "") return { kieu: "chua-cau-hinh" };
-  const kq = await goi(url, { method: "GET" }, doc, { kieu: "khong-thay" });
+  const kq = await goi(url, { route, method: "GET" }, doc, { kieu: "khong-thay" });
   switch (kq.kieu) {
     case "xong":
     case "khong-hop-le":
@@ -367,12 +408,12 @@ async function goiCongKhai<T>(
  * Tên miền là KHOÁ TRA; kết quả không cấp gì, và không được nhớ làm xã của phiên.
  */
 export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<readonly XaTraDuoc[]>> {
-  return goiCongKhai(ten_mien, diaChiTraXa, docXa);
+  return goiCongKhai("commune-lookup", ten_mien, diaChiTraXa, docXa);
 }
 
 /** Danh bạ cán bộ xã đã công khai. Không ghi log gì: danh bạ mang số di động cá nhân. */
 export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
-  return goiCongKhai(ten_mien, diaChiDanhBa, docDanhBa);
+  return goiCongKhai("commune-staff", ten_mien, diaChiDanhBa, docDanhBa);
 }
 
 /**
@@ -380,7 +421,7 @@ export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly
  * phiên. Không có logo — xem `hop-dong-cong-khai.ts`.
  */
 export function communeProfiles(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneProfile[]>> {
-  return goiCongKhai(ten_mien, communeProfilesAddress, readCommuneProfiles);
+  return goiCongKhai("commune-profile", ten_mien, communeProfilesAddress, readCommuneProfiles);
 }
 
 /**
@@ -394,7 +435,7 @@ export function tinCuaXa(
   /** A category id from `newsCategories`; `null` = every category. The server includes its descendants. */
   category: string | null = null,
 ): Promise<KetQuaCongKhai<TrangTinXa>> {
-  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
+  return goiCongKhai("news", ten_mien, (t) => diaChiTinXa(t, con_tro, type, category), docTrangTinXa);
 }
 
 /**
@@ -405,11 +446,11 @@ export function newsCategories(
   ten_mien: string,
   type: NewsType | null = null,
 ): Promise<KetQuaCongKhai<readonly NewsCategory[]>> {
-  return goiCongKhai(ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
+  return goiCongKhai("news-categories", ten_mien, (t) => newsCategoriesAddress(t, type), readNewsCategories);
 }
 
 /** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */
 export function baiTinCuaXa(ten_mien: string, id: string): Promise<KetQuaCongKhai<BaiTinXa>> {
   if (id === "") return Promise.resolve({ kieu: "khong-thay" });
-  return goiCongKhai(ten_mien, (t) => diaChiBaiTin(t, id), docBaiTin);
+  return goiCongKhai("news-item", ten_mien, (t) => diaChiBaiTin(t, id), docBaiTin);
 }
