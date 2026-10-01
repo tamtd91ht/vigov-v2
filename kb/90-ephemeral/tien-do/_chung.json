@@ -314,7 +314,8 @@
       "trang_thai": "xong",
       "bang_chung": "f645dfe: chú thích route @consumer citizen-app (danh sách đóng, chỉ trên authz.Public) → không vào tasks/web, ra x-vigov-consumer; tien_do_san_pham/xuat_tien_do đếm về phía Mini App. Bộ dò màn bỏ qua mọi *.gen.ts (nguyên nhân thật của 'GET /communes đã có màn': dinh-tuyen.gen.ts chứa tiền tố '/api/v1/communes'). go test ./tools/apidoc xanh, test_hooks 257/257, đột biến từng nhánh đỏ; make kb sau đó: 0 việc mới, 0 chuyển nhầm.",
       "no_confirm": [],
-      "tiep_theo": "Mù phương thức vẫn mở ở apidoc-khop-man-hinh-mu-phuong-thuc."
+      "tiep_theo": "Mù phương thức vẫn mở ở apidoc-khop-man-hinh-mu-phuong-thuc.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
