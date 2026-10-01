@@ -113,6 +113,16 @@ function hoTenTuN(gia_tri: string): string {
 const LA_LIEN_KET = /^https?:\/\//i;
 
 /**
+ * Whether a scanned address may be offered as "open". The SAME rule as a bare link QR (`LA_LIEN_KET`),
+ * now also applied to a vCard `URL` field (02/10/2026, security review F2): that field is whatever the
+ * card's author typed, and before this it went to `openWebview` unchecked — `javascript:`, `intent:`,
+ * `data:` included. Anything else is still SHOWN (it is what the card says), as plain text with no button.
+ */
+export function isOpenableWebLink(v: string): boolean {
+  return LA_LIEN_KET.test(v);
+}
+
+/**
  * Đọc nội dung một mã QR và nói ra nó là thứ gì.
  *
  * Ba nhánh, theo đúng thứ tự chắc chắn giảm dần: vCard (có dấu hiệu mở đầu rõ ràng) → liên kết

@@ -428,6 +428,15 @@
       "no_confirm": [],
       "tiep_theo": "CHƯA LÀM, NÊU RA: (a) Ngoại lệ ảnh bìa nung trong bundle (ADR 0047:251) GỠ ĐƯỢC khi MỌI xã đã đăng ít nhất một banner — lúc ấy bỏ cùng lúc CommuneBanner, bước chép trong scripts/deploy.mjs và scripts/banner-xa/; hôm nay chưa xã nào có PNG trong scripts/banner-xa/, nên ảnh dự phòng thực tế không vẽ gì. (b) Bảng đường trong app cho link_to là quyết định của lượt này (chưa ai chốt chữ): web-admin nên gợi ý đúng các đường ấy ở ô link_to của banner — việc của web-admin-builder, nguồn là TrangXa.tsx BANNER_ROUTES. (c) Chính sách đổi câu khai sáu → bảy và thêm một câu; PHIEN_BAN_CHINH_SACH giữ 1.0 (chưa công bố). Hồ sơ tmp/xin-quyen-zalo/ (ngoài citizen-app) chưa sinh lại — chạy `npm run ho-so`. App xã vẫn chưa có lối vào chính sách (mục ho-so-app-xa-soat-lai-sau-trinh-sat). (d) Hộp xác nhận chưa đo trên máy Zalo thật (focus, cuộn dưới lớp phủ).",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "cua-mo-ra-ngoai-chi-https-lien-ket-xa",
+      "viec": "F2 (rà soát bảo mật 02/10/2026) — cửa mở trang ngoài tự từ chối liên kết xã không phải https tuyệt đối, phòng thủ nhiều lớp",
+      "trang_thai": "xong",
+      "bang_chung": "features/tinh-nang/mo-ra-ngoai.ts: đích 'lien-ket-xa' qua isHttpsLink (bản sao cục bộ của readHttpsLink — không nhập được cong-dan/api vì ranh-gioi-hai-nua.test.ts 3a và lệnh cấm client ViGov), không đạt thì trả false (cùng kết quả như nền tảng từ chối, nơi gọi hiện câu thất bại sẵn có). Đích khác không đổi. Ca mới mo-ra-ngoai.test.ts: http, javascript:, đường tương đối, //host, userinfo, data:, rỗng bị từ chối và không tới nền tảng; https mở nguyên địa chỉ; đối chiếu khớp readHttpsLink từng ca; ma-qr vẫn mở http. Kiểm: tsc sạch; vitest 1528/1528; npm run build xanh. --- BỔ SUNG 02/10/2026 (chủ dự án: 'làm theo đề xuất'): (1) 'video' vào HTTPS_ONLY — cùng isHttpsLink, video_url có userinfo/http/javascript: bị từ chối ở cửa. (2) danh-thiep.ts isOpenableWebLink (đúng luật LA_LIEN_KET, http(s) tuyệt đối) — ManDanhThiep.tsx chỉ vẽ nút 'mở' cho trường URL của vCard khi đạt; không đạt (javascript:, intent:, data:, tương đối, www. trần) thì vẫn hiện nguyên văn, không có nút, không tới cửa mở. Ca mới: mo-ra-ngoai.test.ts thêm ca video; scanned-card-url.test.tsx 9 ca (5 từ chối, 3 vẫn mở, 1 đối chiếu với luật liên kết trần). Kiểm: tsc sạch; vitest 1538/1538 (58 tệp); npm run build xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA LÀM, NÊU RA: (a) 'ma-qr' nhận địa chỉ từ mã QR người dùng quét — liên kết trần qua danh-thiep.ts LA_LIEN_KET (http/https), nhưng trường URL của vCard được đẩy thẳng không kiểm lược đồ, nên javascript:/intent: tới được openWebview; cần chủ dự án chọn có thu hẹp về http(s) không. (b) 'video' dựa vào readVideoUrl (https, CHƯA kiểm userinfo) ở nơi gọi; cửa chưa kiểm lại. --- 02/10/2026: (a) và (b) ĐÃ LÀM theo câu chốt của chủ dự án (xem bằng chứng). Còn lại: 'ma-qr' liên kết trần vẫn nhận http (đúng luật cũ, có chủ đích).",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

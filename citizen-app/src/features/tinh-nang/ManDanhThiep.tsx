@@ -21,7 +21,7 @@ import { useState } from "react";
 
 import { NamecardGlyph } from "../company-intro/icons";
 
-import { type DanhThiep, docMaQR, thiepCoNoiDung } from "./danh-thiep";
+import { type DanhThiep, docMaQR, isOpenableWebLink, thiepCoNoiDung } from "./danh-thiep";
 import { KhungTinhNang, type TrangThai } from "./khung";
 import { ManThiepCuaChungToi } from "./ManThiepCuaChungToi";
 import { moRaNgoai } from "./mo-ra-ngoai";
@@ -107,13 +107,16 @@ export function TheDanhThiep({
             nhan={DANH_THIEP.nhan_trang_web}
             gia_tri={duong_dan}
             hanh_dong={
-              <button
-                type="button"
-                className="tn-hanh-dong"
-                onClick={() => onMoLienKet(duong_dan)}
-              >
-                {DANH_THIEP.nut_mo_lien_ket}
-              </button>
+              // Not http(s): shown as text only, never handed to the opener (`isOpenableWebLink`).
+              isOpenableWebLink(duong_dan) ? (
+                <button
+                  type="button"
+                  className="tn-hanh-dong"
+                  onClick={() => onMoLienKet(duong_dan)}
+                >
+                  {DANH_THIEP.nut_mo_lien_ket}
+                </button>
+              ) : undefined
             }
           />
         ))}

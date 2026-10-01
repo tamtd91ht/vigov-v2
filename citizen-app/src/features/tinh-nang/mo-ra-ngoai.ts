@@ -38,6 +38,35 @@ import { moTrangWeb } from "./zalo-api";
 const DA_KHAI: ReadonlySet<string> = new Set(DICH_MO_RA_NGOAI.map((d) => d.ma));
 
 /**
+ * Destinations whose address is chosen by a COMMUNE (an article body link, a home-strip banner) and must
+ * be re-checked here, at the door, not only by the caller.
+ *
+ * WHY THE DOOR CHECKS AGAIN (security review 02/10/2026, F2): every caller today runs `readHttpsLink`
+ * before calling (`cong-dan/man/leave-app.tsx`, `TrangXa.tsx`), so this is defence in depth, not a fix
+ * of a live hole. But the opener is the ONE place every exit passes through; a future caller that forgets
+ * the check would hand `openWebview` a `javascript:`/`http:` address, or `https://gov.vn@other.example`,
+ * whose confirmation sentence names a host the citizen never reaches.
+ */
+// `video` joined 02/10/2026 (owner: "làm theo đề xuất"): its address is the commune's `video_url`, and the
+// caller's `readVideoUrl` checks https but not the user part.
+const HTTPS_ONLY: ReadonlySet<MaDichRaNgoai> = new Set<MaDichRaNgoai>(["lien-ket-xa", "video"]);
+
+/**
+ * An absolute `https:` URL with a host and no user part. A LOCAL COPY of `readHttpsLink`
+ * (`cong-dan/api/hop-dong-cong-khai.ts`), on purpose: this file is in the commercial half, and
+ * `ranh-gioi-hai-nua.test.ts` forbids it (3a) — and every file outside `./cong-dan/` (the ViGov-client
+ * ban) — from importing that module. Keep the two rules identical; if one tightens, tighten both.
+ */
+function isHttpsLink(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && u.hostname !== "" && u.username === "" && u.password === "";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Mở một trang ngoài cho một đích ĐÃ KHAI. Trả về `true` khi nền tảng mở được.
  *
  * ⚠ CHƯA KHAI THÌ KHÔNG MỞ — fail closed, và đây không phải một nhánh chết:
@@ -49,6 +78,8 @@ const DA_KHAI: ReadonlySet<string> = new Set(DICH_MO_RA_NGOAI.map((d) => d.ma));
  */
 export async function moRaNgoai(dich: MaDichRaNgoai, duong_dan: string): Promise<boolean> {
   if (!DA_KHAI.has(dich) || duong_dan === "") return false;
+  // Same failure result as a platform refusal, so the caller shows its own "what to do next" sentence.
+  if (HTTPS_ONLY.has(dich) && !isHttpsLink(duong_dan)) return false;
   const ket_qua = await moTrangWeb(duong_dan);
   return ket_qua.kieu === "xong";
 }
