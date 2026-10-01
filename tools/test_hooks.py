@@ -354,6 +354,41 @@ CASES = [
      w("petitions/internal/http/routes.go",
        'mux.Handle("POST /api/v1/citizen-reports",\n'
        '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
+    # The operator realm (ADR 0048, service-platform/internal/opauth). PASS cases are the three
+    # shapes operator_routes.go really uses; BLOCK cases are the same shapes with the reason or
+    # key removed, the realm mixed, or a commune file borrowing the operator guard.
+    ("rbac_guard", "operator route with opauth.RequireKey", PASS,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("POST /api/v1/communes",\n'
+       '\topauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(\n\t\thttp.HandlerFunc(h.create)))')),
+    ("rbac_guard", "operator route with opauth.SignedIn and a reason", PASS,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("GET /api/v1/operator-sessions/current",\n'
+       '\topauth.SignedIn(h.d.Auth, "the console shows who is signed in")(\n'
+       '\t\thttp.HandlerFunc(h.whoAmI)))')),
+    ("rbac_guard", "operator route with opauth.Public and a reason", PASS,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("POST /api/v1/operator-sessions", limit(\n'
+       '\topauth.Public("signing in is what creates an operator session")(\n'
+       '\t\thttp.HandlerFunc(h.createSession))))')),
+    ("rbac_guard", "opauth.SignedIn with no reason", BLOCK,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("GET /api/v1/operator-sessions/current",\n'
+       '\topauth.SignedIn(h.d.Auth)(http.HandlerFunc(h.whoAmI)))')),
+    ("rbac_guard", "opauth.Public with no reason", BLOCK,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("POST /api/v1/operator-sessions", limit(opauth.Public()(http.HandlerFunc(h.createSession))))')),
+    ("rbac_guard", "opauth.RequireKey naming no key", BLOCK,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("POST /api/v1/communes", opauth.RequireKey(h.d.Auth)(http.HandlerFunc(h.create)))')),
+    ("rbac_guard", "authz and opauth in one route", BLOCK,
+     w("service-platform/internal/http/operator_routes.go",
+       'mux.Handle("POST /api/v1/communes", authz.RequirePermission(c, "admin.users")(\n'
+       '\topauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(http.HandlerFunc(h.create))))')),
+    ("rbac_guard", "opauth.SignedIn on a commune service is no declaration", BLOCK,
+     w("petitions/internal/http/routes.go",
+       'mux.Handle("GET /api/v1/citizen-reports",\n'
+       '\topauth.SignedIn(d.Auth, "any operator")(http.HandlerFunc(h.List)))')),
 
     # ---- REST surface · path language + duplicate requests --------------------
     ("rest_api_guard", "Vietnamese path segment, transliterated", BLOCK,
@@ -707,6 +742,16 @@ CASES = [
      w("core/foo/pick.go",
        "import (\n\t// @security-exception: picks which scanner host to try first, not a secret\n"
        "\t\"math/rand/v2\"\n)\n")),
+    # `debt=<label>` points the exception at a ledger entry. The hook accepts the shape; the
+    # ledger check itself is CHECK_SECURITY_CASES (pure, below).
+    ("security_guard", "@security-exception pointing at a debt entry", PASS,
+     w("core/fooclient/client.go",
+       "func dial() {\n\t// @security-exception: debt=grpc-plaintext-foo shared in-cluster debt\n"
+       "\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")),
+    ("security_guard", "@security-exception: debt= with no label", BLOCK,
+     w("core/fooclient/client.go",
+       "func dial() {\n\t// @security-exception: debt= shared debt\n"
+       "\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")),
     ("security_guard", "banned name only inside a comment", PASS,
      w("web-admin/src/features/x/view.tsx",
        "/** Rendered as text nodes — never `dangerouslySetInnerHTML`, never eval(). */\n"
@@ -1283,6 +1328,42 @@ KHOA_QUYEN_CASES = [
 ]
 
 
+# ---- check_security.judge: a debt-linked `@security-exception` against the ledger ----
+#
+# The scan is security_guard's REAL one (quet + scan_debt_markers) over a synthetic file, then
+# judged against a synthetic ledger — so the case exercises the same decision `make check` runs.
+# Before 2026-10-01 a marked line was simply "no violation": its ledger entry read as FIXED and
+# its expiry was watched by nobody.
+_DEBT_SRC = ("func dial() {\n\t// @security-exception: debt=grpc-plaintext-x shared in-cluster debt\n"
+             "\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")
+_BARE_SRC = "func dial() {\n\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}"
+_PLAIN_SRC = ("func dial() {\n\t// @security-exception: test harness only\n"
+              "\tgrpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))\n}")
+_FIXED_SRC = "func dial() {\n\tgrpc.NewClient(a, grpc.WithTransportCredentials(creds))\n}"
+
+
+def _entry(expires: str) -> dict:
+    return {"file": "core/xclient/dial.go", "label": "grpc-plaintext-x",
+            "reason": "user decision", "expires": expires}
+
+
+CHECK_SECURITY_CASES = [
+    # (source, ledger, today, expected problem kinds, label)
+    (_DEBT_SRC, [_entry("2026-12-28")], "2026-10-01", set(),
+     "debt= marker, entry present and unexpired — pass, NOT reported FIXED"),
+    (_DEBT_SRC, [_entry("2026-09-30")], "2026-10-01", {"EXPIRED"},
+     "debt= marker, entry expired — red"),
+    (_DEBT_SRC, [], "2026-10-01", {"MISSING"},
+     "debt= marker naming no entry — red"),
+    (_BARE_SRC, [_entry("2026-12-28")], "2026-10-01", {"NEW", "FIXED"},
+     "unmarked plaintext gRPC — red even with an entry for the debt label"),
+    (_PLAIN_SRC, [], "2026-10-01", set(),
+     "plain @security-exception keeps today's behaviour — no violation, no entry needed"),
+    (_FIXED_SRC, [_entry("2026-12-28")], "2026-10-01", {"FIXED"},
+     "violation and marker gone, entry left behind — red FIXED"),
+]
+
+
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     """Trả về các ca SAI của phần THUẦN. Import tại chỗ: hook tự thêm thư mục của nó vào sys.path."""
     sys.path.insert(0, HOOKS)
@@ -1312,6 +1393,19 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         print(f"{mark} [{want}] {'quyen_keys.khoa_trong_go':24s} {nhan}")
         if not ok:
             sai.append((src[:40], nhan, str(mong), str(duoc)))
+
+    import security_guard as sgd  # noqa: E402
+    import check_security as chs  # noqa: E402
+    path = "core/xclient/dial.go"
+    for src, ledger, today, want_kinds, label in CHECK_SECURITY_CASES:
+        found = [(path, ln, lb) for ln, lb in sgd.quet(src, path)]
+        marked = [(path, ln, d) for ln, _p, d in sgd.scan_debt_markers(src, path)]
+        got_kinds = {p.split()[0] for p in chs.judge(found, marked, ledger, today)}
+        ok = got_kinds == want_kinds
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'RED ' if want_kinds else 'PASS'}] "
+              f"{'check_security.judge':24s} {label}")
+        if not ok:
+            sai.append((src[:40], label, str(want_kinds), str(got_kinds)))
 
     for src, mong, nhan in VET_ACTOR_CASES:
         duoc = len(va.vi_pham_trong_go(src))
@@ -1515,7 +1609,7 @@ if __name__ == "__main__":
             + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES) + 1 + len(CA_NHAN_XLSX_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
-            + len(VET_ACTOR_CASES))
+            + len(VET_ACTOR_CASES) + len(CHECK_SECURITY_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

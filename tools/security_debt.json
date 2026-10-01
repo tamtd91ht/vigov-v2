@@ -16,6 +16,13 @@
       "expires": "2026-12-28"
     },
     {
+      "file": "core/operatorclient/dial.go",
+      "label": "grpc-plaintext-operator-channel",
+      "tcvn": "5.4.2.4",
+      "reason": "Người dùng chốt 01/10/2026: chung nợ kênh gRPC nội cụm (mang mật khẩu, TOTP, token vận hành). ĐIỀU KIỆN BẬT OPERATOR_HOST: quy tắc 3 của deploy/base/mang/netpol.yaml đã hẹp theo từng cặp gọi + NetworkPolicy đã áp trên cụm thật + ADR 0048 mục #12.",
+      "expires": "2026-12-28"
+    },
+    {
       "file": "core/malwarescan/malwarescan.go",
       "label": "non-crypto-random",
       "tcvn": "6.16.2.8",

@@ -21,6 +21,11 @@ THE DEBT LEDGER (tools/security_debt.json) IS A RATCHET, NOT AN ALLOW-LIST
                                                  silently cover the next regression in that file
   The third rule is what keeps the ledger from becoming the "known issues" file nobody reads —
   an allow-list that only grows is a gate that has quietly switched itself off.
+
+  A line marked `// @security-exception: debt=<label>` is a debt the user agreed to AT the line:
+  it is not listed as a violation, but it counts as "seen" for entry (file, <label>) — so that
+  entry expires like any other and is never reported FIXED while the marker stands. A marker
+  whose entry does not exist -> MISSING (red).
 """
 
 from __future__ import annotations
@@ -81,14 +86,23 @@ def source_files() -> list[str]:
             if f.replace("\\", "/").split("/", 1)[0] not in SKIP_DIRS]
 
 
-def pattern_violations() -> list[tuple[str, int, str]]:
+def pattern_violations() -> tuple[list[tuple[str, int, str]], list[tuple[str, int, str]]]:
+    """(unexcused violations, debt-linked markers) as [(file, line, label)].
+
+    For a marker the label is the DEBT label it names (`@security-exception: debt=<label>`), the
+    key its ledger entry is matched on.
+    """
     out: list[tuple[str, int, str]] = []
+    marked: list[tuple[str, int, str]] = []
     for rel in source_files():
         if not sg.in_scope(rel) or not os.path.isfile(os.path.join(ROOT, rel)):
             continue
-        for line, label in sg.quet(rd(os.path.join(ROOT, rel)), rel):
+        text = rd(os.path.join(ROOT, rel))
+        for line, label in sg.quet(text, rel):
             out.append((rel, line, label))
-    return out
+        for line, _pattern, debt in sg.scan_debt_markers(text, rel):
+            marked.append((rel, line, debt))
+    return out, marked
 
 
 def header_violations() -> list[tuple[str, int, str]]:
@@ -114,6 +128,36 @@ def header_violations() -> list[tuple[str, int, str]]:
     return out
 
 
+def judge(found: list[tuple[str, int, str]], marked: list[tuple[str, int, str]],
+          debt: list[dict], today: str) -> list[str]:
+    """The pure half: every problem line for these findings against this ledger. No I/O.
+
+    `marked` are debt-linked exceptions (`@security-exception: debt=<label>`). They are NOT
+    violations to list, but they DO keep their entry alive and DO expire with it — a plain
+    marker would make the entry look FIXED and leave its date unwatched. A marker naming no entry
+    is red: the promise it points at was never written down.
+    """
+    listed = {(d.get("file", ""), d.get("label", "")): d for d in debt}
+
+    new = [(f, ln, lb) for f, ln, lb in found if (f, lb) not in listed]
+    missing = [(f, ln, lb) for f, ln, lb in marked if (f, lb) not in listed]
+    seen = {(f, lb) for f, _, lb in found} | {(f, lb) for f, _, lb in marked}
+    stale = [k for k in listed if k not in seen]
+    expired = [(k, d.get("expires", "")) for k, d in listed.items()
+               if k in seen and str(d.get("expires", "")) < today]
+    no_reason = [k for k, d in listed.items() if not d.get("reason") or not d.get("expires")]
+
+    problems: list[str] = []
+    problems += [f"NEW      {f}:{ln} {lb}" for f, ln, lb in new]
+    problems += [f"MISSING  {f}:{ln} @security-exception: debt={lb} — no such entry in "
+                 f"tools/security_debt.json (same file + label)" for f, ln, lb in missing]
+    problems += [f"EXPIRED  {f} {lb} (expires {ex})" for (f, lb), ex in expired]
+    problems += [f"FIXED    {f} {lb} — delete this entry from tools/security_debt.json"
+                 for f, lb in stale]
+    problems += [f"INVALID  {f} {lb} — an entry needs a reason and an expiry" for f, lb in no_reason]
+    return problems
+
+
 def main() -> int:
     for s in (sys.stdout, sys.stderr):
         try:
@@ -128,22 +172,9 @@ def main() -> int:
         return 1
 
     today = datetime.date.today().isoformat()
-    found = pattern_violations() + header_violations()
-    listed = {(d.get("file", ""), d.get("label", "")): d for d in debt}
-
-    new = [(f, ln, lb) for f, ln, lb in found if (f, lb) not in listed]
-    seen = {(f, lb) for f, _, lb in found}
-    stale = [k for k in listed if k not in seen]
-    expired = [(k, d.get("expires", "")) for k, d in listed.items()
-               if k in seen and str(d.get("expires", "")) < today]
-    no_reason = [k for k, d in listed.items() if not d.get("reason") or not d.get("expires")]
-
-    problems: list[str] = []
-    problems += [f"NEW      {f}:{ln} {lb}" for f, ln, lb in new]
-    problems += [f"EXPIRED  {f} {lb} (expires {ex})" for (f, lb), ex in expired]
-    problems += [f"FIXED    {f} {lb} — delete this entry from tools/security_debt.json"
-                 for f, lb in stale]
-    problems += [f"INVALID  {f} {lb} — an entry needs a reason and an expiry" for f, lb in no_reason]
+    patterns, marked = pattern_violations()
+    found = patterns + header_violations()
+    problems = judge(found, marked, debt, today)
 
     if problems:
         print(f"[FAIL] security baseline (rule 13) — {len(problems)} problem(s)")
@@ -152,7 +183,8 @@ def main() -> int:
         print("        → Rule 13: .claude/rules/critical/13-security-baseline.md")
         return 1
 
-    print(f"[PASS] security baseline (rule 13) — {len(found)} known violation(s), "
+    print(f"[PASS] security baseline (rule 13) — {len(found)} known violation(s) + "
+          f"{len({(f, lb) for f, _, lb in marked})} debt-linked exception(s), "
           f"all in the debt ledger and unexpired · 0 new")
     return 0
 

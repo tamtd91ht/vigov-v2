@@ -111,4 +111,11 @@ will declare it next to `idem.*`, the same way duplicate-request protection is d
 remove the violation AND its entry in the same commit. Adding one needs the user's agreement
 and an expiry — it is a promise with a date, not a place to park findings.
 
+A debt the user agreed to **at a specific line** is marked there with a pointer, not a plain
+exception: `// @security-exception: debt=<label> <short reason>`, plus an entry with the same
+`file` and `label` in the ledger. `check_security.py` then treats the entry as live (never
+FIXED while the marker stands), turns red when it expires, and turns red (MISSING) when the
+marker names no entry. A plain `@security-exception: <reason>` means "not a violation" and is
+never tracked — do not use it for a debt.
+
 → Rule 13 · `skills/security-logging` · `skills/session-and-token` · `/review-security`

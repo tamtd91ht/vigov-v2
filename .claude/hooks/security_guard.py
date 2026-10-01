@@ -72,7 +72,17 @@ PATTERNS: list[tuple[re.Pattern, str, tuple[str, ...]]] = [
 # `// @security-exception: <reason>` (or `#` in YAML) on the line or the line above. A reason
 # is mandatory — same discipline as `@cross-tenant:` (rule 1) and `@env-ok:` (rule 11).
 EXCEPTION = re.compile(r"(?://|#)\s*@security-exception:\s*\S+")
-EXCEPTION_EMPTY = re.compile(r"(?://|#)\s*@security-exception:\s*$")
+EXCEPTION_EMPTY = re.compile(r"(?://|#)\s*@security-exception:\s*(?:debt=\s*)?$")
+
+# `// @security-exception: debt=<label> …` — the exception is NOT a judgement that the line is
+# safe, it is a pointer to a promise in tools/security_debt.json (same file, that label). Needed
+# because a plain marker reads as "no violation": a ledger entry written for the same line then
+# looked FIXED, and nothing tracked its expiry (core/operatorclient, 2026-10-01). The hook only
+# checks the SHAPE; tools/check_security.py checks the entry exists and has not expired.
+DEBT_REF = re.compile(r"(?://|#)\s*@security-exception:\s*debt=([A-Za-z0-9][\w.-]*)")
+# `debt=` with no usable label: a pointer to nothing. It must NOT excuse the line, or a typo
+# would be a silent permanent exemption that no ledger entry ever covers.
+DEBT_BROKEN = re.compile(r"(?://|#)\s*@security-exception:\s*debt=(?![A-Za-z0-9])")
 
 
 def kind_of(path: str) -> tuple[str, ...] | None:
@@ -148,22 +158,50 @@ def quet(noi_dung: str, path: str) -> list[tuple[int, str]]:
     Kept pure so tools/test_hooks.py and tools/check_security.py call the SAME decision — two
     copies of a pattern list are two lists that drift, and the looser one is the one that runs.
     """
+    return _scan(noi_dung, path)[0]
+
+
+def scan_debt_markers(content: str, path: str) -> list[tuple[int, str, str]]:
+    """[(line, pattern label, debt label)] for every violation excused by `debt=<label>`.
+
+    Only markers that actually excuse a violation are returned: a `debt=` marker on a harmless
+    line would otherwise keep a ledger entry alive after the code it covered was fixed.
+    """
+    return _scan(content, path)[1]
+
+
+def _exception_on(line: str) -> tuple[bool, str | None]:
+    """(excused?, debt label or None) for one raw line."""
+    if DEBT_BROKEN.search(line):
+        return False, None
+    m = DEBT_REF.search(line)
+    if m:
+        return True, m.group(1)
+    return bool(EXCEPTION.search(line)), None
+
+
+def _scan(content: str, path: str) -> tuple[list[tuple[int, str]], list[tuple[int, str, str]]]:
     kind = kind_of(path)
     if kind is None:
-        return []
-    raw = noi_dung.split("\n")
-    code = strip_comments(noi_dung, kind is YAML).split("\n")
+        return [], []
+    raw = content.split("\n")
+    code = strip_comments(content, kind is YAML).split("\n")
     hits: list[tuple[int, str]] = []
+    debts: list[tuple[int, str, str]] = []
     for idx, line in enumerate(code):
         for pat, label, kinds in PATTERNS:
             if kind[0] not in kinds or not pat.search(line):
                 continue
             here = raw[idx] if idx < len(raw) else ""
             above = raw[idx - 1] if idx >= 1 else ""
-            if EXCEPTION.search(here) or EXCEPTION.search(above):
-                continue
-            hits.append((idx + 1, label))
-    return hits
+            excused, debt = _exception_on(here)
+            if not excused:
+                excused, debt = _exception_on(above)
+            if not excused:
+                hits.append((idx + 1, label))
+            elif debt:
+                debts.append((idx + 1, label, debt))
+    return hits, debts
 
 
 def main() -> None:
@@ -208,6 +246,9 @@ def main() -> None:
             "  Genuinely not a secret or not a trust boundary (load spreading, a test harness)?",
             "    // @security-exception: <specific reason>",
             "  on the line or the line above. Existing debt lives in tools/security_debt.json.",
+            "  A known, user-agreed debt instead points at its ledger entry (same file + label):",
+            "    // @security-exception: debt=<label> <short reason>",
+            "  tools/check_security.py then tracks that entry's expiry.",
             "",
             "  → Rule 13: .claude/rules/critical/13-security-baseline.md",
             "  → Skill:   .claude/skills/security-baseline/SKILL.md",

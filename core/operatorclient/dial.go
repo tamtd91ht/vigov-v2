@@ -28,7 +28,7 @@ func Dial(addr string, key secret.Secret, log *slog.Logger) (*Client, error) {
 		return nil, fmt.Errorf("operatorclient: thiếu địa chỉ IDENTITY_GRPC_ADDR")
 	}
 	conn, err := grpc.NewClient(addr,
-		// @security-exception: user decision 2026-10-01 — same in-cluster plaintext gRPC debt as core/identityclient (tools/security_debt.json, expires 2026-12-28); go-live blocker until the platform→identity:9090 NetworkPolicy is applied
+		// @security-exception: debt=grpc-plaintext-operator-channel — user decision 2026-10-01, same in-cluster plaintext gRPC debt as core/identityclient (tools/security_debt.json tracks the expiry); go-live blocker until the platform→identity:9090 NetworkPolicy is applied
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithChainUnaryInterceptor(UnaryInterceptors(key)...),
 	)
