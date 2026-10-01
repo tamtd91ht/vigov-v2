@@ -1,0 +1,430 @@
+syntax = "proto3";
+
+package vigov.identity.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// OperatorService is the Vihat OPERATOR realm of service-identity, exposed to service-platform —
+// the only HTTP edge of the operator area, on OPERATOR_HOST (ADR 0048 §"Chốt của chủ dự án —
+// 28/09/2026" #2 + #4). The use cases behind it: service-identity/internal/app/operator_auth.go and
+// operator_enrollment.go. Accounts are created, granted, locked and reset by the server-side CLI
+// `operatorctl`, never through this service (ADR 0048 §"Chốt bước 1", row "Ai tạo, ai cấp quyền").
+//
+// A SEPARATE SERVICE, NOT METHODS ON IdentityService, FOR THREE REASONS:
+//
+//   * A different trust domain. IdentityService serves the staff and citizen realms of ONE commune
+//     at a time; an operator belongs to no commune (ADR 0048 condition #3). A staff token accepted
+//     on an operator path, or the reverse, is ADR 0048 stop condition #6. Separate services mean
+//     separate generated clients: a caller holding an OperatorServiceClient cannot reach a staff
+//     RPC by a typo, and the other way round.
+//   * The commune rule holds for EVERY method here, not for some. IdentityService's header states
+//     "the commune travels in metadata, always"; seven exceptions scattered through it would make
+//     that sentence false. Here the exception is the service itself, stated once, below.
+//   * One caller. Only service-platform calls this service. NOTHING IN THE WIRING ENFORCES THAT:
+//     it is served on identity's inter-service listener behind the one shared caller key (ADR
+//     0025), which every ViGov service holds. What a stray caller could do with it is exactly what
+//     the operator HTTP routes allow somebody holding the same credentials — no RPC here answers
+//     without a password, a second factor, or a live `op1.` token.
+//
+// THE COMMUNE: NONE, AND THAT IS THE ANSWER TO A STOP CONDITION, NOT A SHORTCUT. Every RPC of this
+// service is on core/grpcx.methodsWithoutTenant. Adding a name there is a STOP CONDITION (ADR 0012,
+// decision 1, `0012-grpc-boundary-contract.md:96-98`); the owner answered it YES on 2026-10-01 — ADR
+// 0048 §"Chốt của chủ dự án — 01/10/2026" #2. They pass ADR 0012's test with a structural no: an
+// operator belongs to no commune, so there is no commune to know at call time. What keeps the
+// exemption from widening the hole:
+//
+//   * No request here has a commune field, and no handler reads tenant.From — there is no commune
+//     to read, and inventing one would be a default on the isolation path (rule 1, forbidden #1).
+//   * No response here carries business data of any commune. The `ops.*` keys returned by
+//     ResolveOperatorSession authorise PLATFORM METADATA routes only (ADR 0003, ADR 0048 condition
+//     #2); service-platform has no gRPC client into a business service.
+//
+// AUTHENTICATION IS HYBRID AND NOT CACHED (ADR 0048 §01/10 #2). service-platform verifies the `op1.`
+// signature locally (it holds OPERATOR_SESSION_SIGNING_KEYS too), then calls ResolveOperatorSession
+// on EVERY operator request. Signature-only was rejected: it cannot measure the 5-minute idle limit
+// and makes a revocation wait for the 8-hour absolute expiry. Declared in
+// kb/30-indexes/transaction-boundaries.json, `xac_thuc_van_hanh_lien_service`.
+//
+// STATUS CODES SAY WHETHER THE CALL WAS MADE PROPERLY; THE RESPONSE SAYS WHAT WAS DECIDED. Same
+// discipline as ResolveStaffPrincipal: a wrong password is an ordinary answer, not an RPC failure.
+// One table for every RPC of this service:
+//
+//   OK                   decided. Read `outcome` (or, for ResolveOperatorSession, `principal`).
+//   INVALID_ARGUMENT     a WIRING FAULT in the caller, decided from the request alone, before any
+//                        lookup — so it says nothing about any account: an empty `session_token`
+//                        on a session-bound RPC; both `totp_code` and `recovery_code` on
+//                        OpenOperatorSession. Nothing was counted, nothing was written.
+//   FAILED_PRECONDITION  the operator realm is not configured in identity
+//                        (OPERATOR_SESSION_SIGNING_KEYS or OPERATOR_TOTP_ENCRYPTION_KEY absent —
+//                        app.ErrOperatorRealmNotConfigured). A deployment fault: the caller answers
+//                        503 and alerts. Never "refused", never retried blindly.
+//   UNAUTHENTICATED      NEVER produced by these RPCs. It belongs to the caller-key interceptor
+//                        (core/grpcx.UnaryServerCallerAuth, ADR 0025) and means the DEPLOYMENT is
+//                        misconfigured. Reusing it for "wrong password" would make a fleet-wide
+//                        outage indistinguishable from one operator's typo.
+//   RESOURCE_EXHAUSTED   NEVER produced here. The per-IP limit (20 / 15 min / IP, ADR 0048 §01/10 #3)
+//                        is service-platform's, in Redis, and it is checked BEFORE this service is
+//                        called — so a throttled attempt is never counted toward the 12-hour
+//                        account lockout.
+//   UNAVAILABLE etc.     the call did not happen, or its transaction rolled back: no session, no
+//                        audit entry, no counted failure. IT IS NOT "refused" and NOT "signed out":
+//                        the caller answers 503 (fail closed — identity down means the operator area
+//                        is down, the cost the owner accepted on 01/10).
+//
+// THE ONE CREDENTIAL ANSWER. Unknown email, wrong password, wrong or replayed TOTP code, used or
+// unknown recovery code, password without a second factor, locked account, disabled account,
+// temporary password past its 24 hours, pending TOTP secret past its 10 minutes: ALL are
+// OPERATOR_AUTH_OUTCOME_REFUSED, byte for byte, with no reason field and no way to add one without
+// editing this paragraph (app.ErrOperatorLoginFailed). An operator account reaches every commune's
+// platform metadata, so the directory a second answer would leak is worth more than a commune's.
+// The response TIME is equalised too (operator_auth.go, timingEqualiser).
+//
+// NEVER LOG A MESSAGE OF THIS FILE. The generated String() prints every field in full (`debug_redact`
+// is a no-op in protobuf-go v1.36.12, measured 2026-09-20). Requests carry passwords, TOTP codes,
+// recovery codes and bearer tokens; responses carry bearer tokens, TOTP secrets and recovery codes
+// (rule 8), and requests carry an operator's email (personal data, rule 3). Log the fields you
+// chose — the business code `VH-xxxxx`, the outcome — never the message.
+//
+// Not batched (ADR 0012 decision 2 does not apply): every caller is ONE HTTP request holding ONE
+// credential, so a batched form is a shape no caller can fill.
+//
+// Field numbers are never reused; a removed field becomes `reserved`. New fields are always
+// optional with a safe default.
+service OperatorService {
+  // OpenOperatorSession signs an operator in: password AND exactly one second factor, in ONE call
+  // (app.OperatorAuth.Login). There is no "password step" RPC that answers before the second factor:
+  // a password-only answer would be a free password oracle (operator_auth.go, the `default:` branch).
+  //
+  //   ACCEPTED             `session` is set. Failure counter cleared, session row + login_succeeded
+  //                        entry written in one transaction.
+  //   REFUSED              the one credential answer above. A counted failure is COMMITTED.
+  //   ENROLLMENT_REQUIRED  the password was RIGHT and the account has no active second factor yet
+  //                        (first sign-in, or after `operatorctl reset-mfa`). No session. The
+  //                        caller sends the person to BeginOperatorEnrollment. Only ever answered
+  //                        after the password verified, and never for a temporary password past its
+  //                        24 hours (that is REFUSED — the path no longer exists).
+  //
+  // Both factors in one request is INVALID_ARGUMENT (a property of the request, decided before any
+  // lookup). Not idempotent: every ACCEPTED call opens a new session.
+  rpc OpenOperatorSession(OpenOperatorSessionRequest) returns (OpenOperatorSessionResponse);
+
+  // ResolveOperatorSession turns the `op1.` token into the operator behind it, on EVERY operator
+  // request (app.OperatorAuth.ResolveSession), and REFRESHES THE IDLE TIMER (operator_session
+  // last_seen_at). So it is not a pure read: a caller must call it only for requests a person made —
+  // a background poll would hold a session open for 8 hours with nobody at the screen, which is the
+  // 5-minute idle limit (TCVN 14423, ADR 0048 §"Chốt bước 1" security amendment) defeated silently.
+  //
+  //   OK + principal      live session, account enabled. Keys read live, in this request.
+  //   OK + no principal   not usable, for ANY reason: bad signature, other realm (a staff `v1.`
+  //                       token), absolute expiry, idle expiry, revoked, account disabled. One
+  //                       answer. The caller answers 401 and clears the cookie.
+  //   INVALID_ARGUMENT    empty `session_token` — a caller with no cookie must not call at all.
+  //
+  // The caller's own signature check comes FIRST and does not replace this call: it saves a round
+  // trip for garbage, it decides nothing for a well-signed token.
+  rpc ResolveOperatorSession(ResolveOperatorSessionRequest) returns (ResolveOperatorSessionResponse);
+
+  // RevokeOperatorSession signs the bearer out: revokes the session NAMED BY THE TOKEN — never a
+  // session id from a parameter — and writes logged_out in the same transaction
+  // (app.OperatorAuth.Logout).
+  //
+  //   ACCEPTED          revoked.
+  //   SESSION_NOT_LIVE  nothing to revoke (already expired, revoked, account disabled, bad token).
+  //
+  // Either way the caller clears the cookie and answers success: signing out of a dead session is
+  // not an error to the person.
+  rpc RevokeOperatorSession(RevokeOperatorSessionRequest) returns (RevokeOperatorSessionResponse);
+
+  // ChangeOperatorPassword: a signed-in operator sets a new password, re-proving the current
+  // password AND a TOTP code (a stolen cookie alone must not take the account over). On success
+  // EVERY session of the account is revoked, the current one included (app.OperatorAuth.
+  // ChangePassword); the caller clears the cookie and sends the person to sign in again.
+  //
+  //   ACCEPTED               changed; every session revoked.
+  //   NEW_PASSWORD_REJECTED  `new_password_refusal` says which rule. Decided from the new value
+  //                          alone, before any account read — it says nothing about the account.
+  //   REFUSED                current password or TOTP wrong, or the account is locked. COUNTED as a
+  //                          SESSION-HOLDER failure: the lockout it may cause revokes every session
+  //                          (ADR 0048 §"Chốt bước 1" security amendment, last row).
+  //   SESSION_NOT_LIVE       the token names no live session. The caller answers 401.
+  rpc ChangeOperatorPassword(ChangeOperatorPasswordRequest) returns (ChangeOperatorPasswordResponse);
+
+  // RegenerateOperatorRecoveryCodes voids every live recovery code and returns a fresh batch of 10,
+  // shown ONCE (app.OperatorAuth.RegenerateRecoveryCodes). Needs a current TOTP code.
+  //
+  //   ACCEPTED          `recovery_codes` is set.
+  //   REFUSED           TOTP wrong or account locked. COUNTED as a session-holder failure, as above.
+  //   SESSION_NOT_LIVE  the caller answers 401.
+  rpc RegenerateOperatorRecoveryCodes(RegenerateOperatorRecoveryCodesRequest) returns (RegenerateOperatorRecoveryCodesResponse);
+
+  // BeginOperatorEnrollment: first step of a first sign-in (or the first after an MFA reset). Checks
+  // the TEMPORARY password and stores a fresh pending TOTP secret, valid 10 minutes, audited as
+  // totp_enrollment_started (app.OperatorAuth.BeginEnrollment). Calling it again replaces the
+  // pending secret — an operator who lost the QR code starts over.
+  //
+  //   ACCEPTED  `provisioning_uri` / `manual_entry_key` are set.
+  //   REFUSED   the one credential answer — including an account that already HAS a factor
+  //             (replacing a factor is `operatorctl reset-mfa`, never a password) and a temporary
+  //             password past its 24 hours. A wrong password is COUNTED.
+  rpc BeginOperatorEnrollment(BeginOperatorEnrollmentRequest) returns (BeginOperatorEnrollmentResponse);
+
+  // CompleteOperatorEnrollment: second step. Temporary password + the operator's own new password +
+  // a code from the pending secret. In ONE transaction: activates the factor, sets the password,
+  // issues 10 recovery codes, opens a session, writes four audit entries
+  // (app.OperatorAuth.CompleteEnrollment).
+  //
+  //   ACCEPTED               `session` and `recovery_codes` are set.
+  //   NEW_PASSWORD_REJECTED  `new_password_refusal` says which rule; decided before any account
+  //                          read (SAME_AS_CURRENT here means equal to the temporary password).
+  //   REFUSED                the one credential answer — including "BeginOperatorEnrollment was not
+  //                          called" and a pending secret past its 10 minutes. A wrong password or
+  //                          a wrong code is COUNTED.
+  rpc CompleteOperatorEnrollment(CompleteOperatorEnrollmentRequest) returns (CompleteOperatorEnrollmentResponse);
+}
+
+// What an RPC of OperatorService decided. Each RPC's comment lists the subset it answers; a value
+// outside that subset is never sent.
+//
+// UNSPECIFIED (0) IS NEVER SENT by a conforming server, and a caller that receives it — an identity
+// older than a field, a server bug — treats it as REFUSED: no session, no change, fail closed.
+enum OperatorAuthOutcome {
+  OPERATOR_AUTH_OUTCOME_UNSPECIFIED = 0;
+  // Done: session opened, password changed, codes issued, session revoked, enrolment started.
+  OPERATOR_AUTH_OUTCOME_ACCEPTED = 1;
+  // The ONE credential answer (see the service comment). Never refined.
+  OPERATOR_AUTH_OUTCOME_REFUSED = 2;
+  // OpenOperatorSession only: password right, no active second factor. Grants nothing.
+  OPERATOR_AUTH_OUTCOME_ENROLLMENT_REQUIRED = 3;
+  // Session-bound RPCs only: the token names no live session.
+  OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE = 4;
+  // ChangeOperatorPassword / CompleteOperatorEnrollment only: see `new_password_refusal`.
+  OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED = 5;
+}
+
+// Which password rule refused the new value (service-identity/internal/domain/mat_khau.go —
+// the staff policy, reused). Names the RULE, never the value.
+enum NewPasswordProblem {
+  NEW_PASSWORD_PROBLEM_UNSPECIFIED = 0;
+  NEW_PASSWORD_PROBLEM_EMPTY = 1;
+  // Not valid UTF-8.
+  NEW_PASSWORD_PROBLEM_NOT_UTF8 = 2;
+  // Fewer runes than `min_length`.
+  NEW_PASSWORD_PROBLEM_TOO_SHORT = 3;
+  // More runes than `max_length`.
+  NEW_PASSWORD_PROBLEM_TOO_LONG = 4;
+  // Equal to the current password (ChangeOperatorPassword) or to the temporary one
+  // (CompleteOperatorEnrollment).
+  NEW_PASSWORD_PROBLEM_SAME_AS_CURRENT = 5;
+}
+
+// Set exactly when outcome is NEW_PASSWORD_REJECTED.
+message NewPasswordRefusal {
+  NewPasswordProblem problem = 1;
+  // The bounds in force (domain.DaiMatKhauToiThieu / DaiMatKhauToiDa), in runes. Sent so the
+  // operator console never holds its own copy of "12": two literals are two values that drift
+  // (the argument on DaiMatKhauToiThieu).
+  uint32 min_length = 2;
+  uint32 max_length = 3;
+}
+
+// A session just opened. Returned ONCE.
+message OperatorSessionGrant {
+  // The `op1.` bearer token. A CREDENTIAL (rule 8): the caller sets it as a host-only, HttpOnly,
+  // Secure cookie on OPERATOR_HOST (rule 1 forbidden #3, rule 13 invariant 4) and never logs,
+  // persists or echoes it. Only the SHA-256 of the session id inside it is stored.
+  string session_token = 1;
+
+  // The ABSOLUTE expiry (8 hours). For the cookie's lifetime only. It is NOT when the session stops
+  // working: the 5-minute idle limit and revocation can end it sooner, and only
+  // ResolveOperatorSession says whether it is live.
+  google.protobuf.Timestamp expires_at = 2;
+
+  // The operator's business code, `VH-00001`. Display and log correlation; may be logged.
+  string operator_code = 3;
+}
+
+message OpenOperatorSessionRequest {
+  // The operator account's email as typed. PERSONAL DATA (rule 3): never logged — the server logs a
+  // one-way fingerprint of it on refusal. Not normalised by the caller.
+  string email = 1;
+
+  // CREDENTIAL. Verbatim, not trimmed: a password is stored exactly as typed (domain/mat_khau.go).
+  string password = 2;
+
+  // CREDENTIAL. The 6-digit code from the authenticator app. Exactly one of `totp_code` /
+  // `recovery_code` is non-empty; both is INVALID_ARGUMENT, neither is REFUSED (counted).
+  string totp_code = 3;
+
+  // CREDENTIAL. A one-time recovery code. Consumed on success.
+  string recovery_code = 4;
+
+  // The address the BROWSER connected from, as service-platform observed it on ITS OWN SOCKET —
+  // never X-Forwarded-For (any client sets that header).
+  //
+  // A CLAIM, worth exactly what the caller key is worth (ADR 0025). UNLIKE
+  // ResolveStaffPrincipalRequest.client_ip it IS STORED — in operator_audit_log.actor_ip and
+  // operator_session.created_ip — because service-platform is the only observer of the address
+  // there is: the operator realm has no other edge. It DECIDES NOTHING: the lockout counts per
+  // account, the per-IP limit is service-platform's. "" is valid and means "not observed".
+  string client_ip = 5;
+
+  // The browser's User-Agent, for operator_session.user_agent. Diagnostics only. The server keeps
+  // at most the first 256 runes rather than refusing: a diagnostic field must not fail a sign-in.
+  string user_agent = 6;
+}
+
+message OpenOperatorSessionResponse {
+  // ACCEPTED, REFUSED or ENROLLMENT_REQUIRED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when outcome is ACCEPTED.
+  OperatorSessionGrant session = 2;
+}
+
+message ResolveOperatorSessionRequest {
+  // The `op1.` token exactly as the cookie held it — verbatim, not parsed, not re-encoded.
+  // CREDENTIAL (rule 8): never logged at either end, at any level. Empty is INVALID_ARGUMENT.
+  //
+  // DELIBERATELY NO client_ip: the use case reads none and writes none, and a field no code reads is
+  // a contract that promises something nobody does. Add it (optional, new number) the day a line of
+  // code consumes it.
+  string session_token = 1;
+}
+
+// Wrapped, not a bare OperatorPrincipal: adding a field later must not change the RPC signature.
+message ResolveOperatorSessionResponse {
+  // ABSENT MEANS NOT SIGNED IN, for one of the reasons the RPC comment lists and deliberately does
+  // not distinguish. PRESENT WITH EMPTY permission_keys is different: a live session of an operator
+  // who holds no key — the operator is signed in and every guarded operator route answers 403.
+  OperatorPrincipal principal = 1;
+}
+
+// The operator behind a live session. Scoped to the ONE request it authenticated: never written
+// into a token, a cookie, a cache or a disk (rule 5, invariant 4 — a withdrawn key must stop working
+// on the next request).
+//
+// DELIBERATELY ABSENT:
+//
+//   session id   it is the raw registry key — the store keeps only its SHA-256 — so echoing it is a
+//                second copy of a credential in a message somebody will log. The caller already
+//                holds it inside the token it verified, and the only job it does (sign-out) is done
+//                by RevokeOperatorSession from the token.
+//   expiry       decided by the registry and re-read on the next request. A caller holding it is one
+//                edit away from deciding validity from it — the revocation hole this RPC closes.
+//   tenant_id    an operator has none (ADR 0048 condition #3). Not "", not a placeholder: no field.
+//   email        personal data no guard reads (rule 3, invariant 1).
+message OperatorPrincipal {
+  // The INTERNAL id of operator_account. Authorises; never written into a trail as "who".
+  string operator_id = 1;
+
+  // The BUSINESS CODE, `VH-00001` (ADR 0048 §"Chốt bước 1"). What every audit entry records as
+  // "who" (rule 6, invariant 8) — in platform_audit_log and in the target commune's audit_log. Never
+  // empty on a present principal; a caller that finds it empty refuses the write, no fallback to
+  // operator_id.
+  string operator_code = 2;
+
+  // Every `ops.<group>.<action>` key granted to this account, read live (operator_permission_grant).
+  // The realm's OWN closed list — never a row of the per-commune `quyen` table (ADR 0048 §28/09 #3).
+  // Ordered; the order carries no meaning.
+  repeated string permission_keys = 3;
+}
+
+message RevokeOperatorSessionRequest {
+  // CREDENTIAL — see ResolveOperatorSessionRequest.session_token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // As OpenOperatorSessionRequest.client_ip: stored as the logged_out entry's actor_ip.
+  string client_ip = 2;
+}
+
+message RevokeOperatorSessionResponse {
+  // ACCEPTED or SESSION_NOT_LIVE.
+  OperatorAuthOutcome outcome = 1;
+}
+
+message ChangeOperatorPasswordRequest {
+  // CREDENTIAL. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // CREDENTIAL. Verbatim.
+  string current_password = 2;
+  // CREDENTIAL. Verbatim — never trimmed or normalised.
+  string new_password = 3;
+  // CREDENTIAL. Required: a session alone does not change a password.
+  string totp_code = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+}
+
+message ChangeOperatorPasswordResponse {
+  // ACCEPTED, NEW_PASSWORD_REJECTED, REFUSED or SESSION_NOT_LIVE.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when outcome is NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 2;
+}
+
+message RegenerateOperatorRecoveryCodesRequest {
+  // CREDENTIAL. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // CREDENTIAL. Required.
+  string totp_code = 2;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 3;
+}
+
+message RegenerateOperatorRecoveryCodesResponse {
+  // ACCEPTED, REFUSED or SESSION_NOT_LIVE.
+  OperatorAuthOutcome outcome = 1;
+  // CREDENTIALS, returned HERE AND NOWHERE ELSE — only their SHA-256 is stored. Shown once to the
+  // operator; never logged, cached or persisted by the caller. Set exactly when ACCEPTED.
+  repeated string recovery_codes = 2;
+}
+
+message BeginOperatorEnrollmentRequest {
+  // PERSONAL DATA — see OpenOperatorSessionRequest.email.
+  string email = 1;
+  // CREDENTIAL. The temporary password `operatorctl` printed once.
+  string temporary_password = 2;
+  // As OpenOperatorSessionRequest.client_ip: stored as the totp_enrollment_started entry's actor_ip.
+  string client_ip = 3;
+}
+
+message BeginOperatorEnrollmentResponse {
+  // ACCEPTED or REFUSED.
+  OperatorAuthOutcome outcome = 1;
+
+  // `VH-00001`. Set when ACCEPTED.
+  string operator_code = 2;
+
+  // SECRET: the `otpauth://` URI the QR code encodes — it CONTAINS THE TOTP SECRET. Rendered to the
+  // operator once; never logged, cached or persisted by the caller. Its label is the operator CODE,
+  // never the email (rule 3, forbidden #4). Set when ACCEPTED.
+  string provisioning_uri = 3;
+
+  // SECRET: the same TOTP secret in base32, for typing in by hand. Same handling. Set when ACCEPTED.
+  string manual_entry_key = 4;
+}
+
+message CompleteOperatorEnrollmentRequest {
+  // PERSONAL DATA — see OpenOperatorSessionRequest.email.
+  string email = 1;
+  // CREDENTIAL.
+  string temporary_password = 2;
+  // CREDENTIAL. The operator's own password from now on. Verbatim.
+  string new_password = 3;
+  // CREDENTIAL. A code from the PENDING secret BeginOperatorEnrollment issued.
+  string totp_code = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+  // As OpenOperatorSessionRequest.user_agent.
+  string user_agent = 6;
+}
+
+message CompleteOperatorEnrollmentResponse {
+  // ACCEPTED, NEW_PASSWORD_REJECTED or REFUSED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED.
+  OperatorSessionGrant session = 2;
+  // CREDENTIALS, returned HERE AND NOWHERE ELSE — see RegenerateOperatorRecoveryCodesResponse.
+  // Set exactly when ACCEPTED.
+  repeated string recovery_codes = 3;
+  // Set exactly when NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 4;
+}
