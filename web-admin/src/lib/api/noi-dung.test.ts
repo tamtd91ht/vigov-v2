@@ -481,11 +481,11 @@ describe("thân yêu cầu khớp hợp đồng", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BA TÊN BỘ LỌC — ĐỌC THẲNG MÃ MÁY CHỦ, VÌ HỢP ĐỒNG KHÔNG KHAI CHÚNG
+ * BA TÊN BỘ LỌC — ĐỌC THẲNG MÃ MÁY CHỦ, VÌ CLIENT KHÔNG DỰNG TRUY VẤN THEO KIỂU HỢP ĐỒNG
  *
- * `tools/apidoc/truyvan.go` đọc được tên tham số ở một CLOSURE CỤC BỘ nhưng không đọc được ở một
- * HÀM CẤP GÓI, mà `thamSoLoc(q, "type")` là hàm cấp gói. Nên `comms_get_content_items["truyVan"]`
- * chỉ có bốn khoá phân trang, và ba bộ lọc của §6 không có kiểu nào canh.
+ * Hợp đồng nay khai `type` · `category` · `q` trong `comms_get_content_items["truyVan"]`, nhưng
+ * đánh dấu cả ba là bắt buộc, trong khi handler coi tham số vắng là "không lọc". Client vì thế chỉ
+ * gửi bộ lọc đang có giá trị và không dựng URL theo kiểu ấy — tức ba tên vẫn không có kiểu nào canh.
  *
  * Bài kiểm dưới thay chỗ cho cái kiểu ấy. Nó so BỘ TÊN, không so từng tên: ngày máy chủ thêm một
  * bộ lọc thứ tư, nó đỏ và có người phải quyết định màn hình có vẽ ô ấy hay không — thay vì một bộ

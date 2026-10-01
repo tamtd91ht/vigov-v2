@@ -19,21 +19,20 @@
  * `page_Result_comms_noiDungRa` đều đến từ `schema.gen.ts` (sinh từ `kb/20-contracts/openapi.json`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * ⚠ HỢP ĐỒNG KHÔNG KHAI BA THAM SỐ LỌC CỦA §6, VÀ MÁY CHỦ THÌ ĐỌC ĐỦ CẢ BA.
+ * ⚠ HỢP ĐỒNG NAY KHAI ĐỦ BA THAM SỐ LỌC CỦA §6 — NHƯNG KHAI SAI LÀ BẮT BUỘC.
  *
- * `comms_get_content_items["truyVan"]` sinh ra đúng bốn khoá phân trang (`limit` · `cursor` ·
- * `sort` · `order`), trong khi handler đọc thêm `type` · `category` · `q`
- * (`service-comms/internal/http/noi_dung_mini_app.go:296-317`). Nguyên nhân đã đo được và nằm ở
- * bộ sinh, không ở máy chủ: `tools/apidoc/truyvan.go` đọc được tên tham số ở một CLOSURE CỤC BỘ
- * (`lay("hamlet")`) nhưng không đọc được ở một HÀM CẤP GÓI — mà `thamSoLoc(q, "type")` chính là
- * hàm cấp gói ấy, và nó được đưa vào để tránh hai hook báo động nhầm (:250-266). Cái giá không ai
- * thấy lúc viết là ba tham số biến mất khỏi hợp đồng.
+ * `comms_get_content_items["truyVan"]` có `type` · `category` · `q` (`kb/20-contracts/openapi.json`,
+ * tuyến `GET /api/v1/content-items`), đúng bộ tên handler đọc
+ * (`service-comms/internal/http/noi_dung_mini_app.go:333-337`). Hợp đồng lại đánh dấu cả ba
+ * `required: true`, trong khi handler coi một tham số VẮNG là "không lọc" — đó là lỗi của bộ sinh
+ * hợp đồng, không phải của máy chủ. Gửi cả ba mỗi lần cho đúng kiểu là gửi `type=` rỗng, một hình
+ * dạng màn hình không có lý do gì để dựa vào.
  *
- * Hệ quả nói thẳng chứ không giấu: **ba tên ấy không có kiểu nào của hợp đồng canh giúp**. Gõ
- * `loai` thay `type` thì `tsc` im lặng, máy chủ bỏ qua trong im lặng và trả cả quyển sổ trong khi
- * cán bộ tin mình đang xem một lát cắt. Vì thế ba cái tên nằm trong ĐÚNG MỘT hàm
- * (`themLocVaoTruyVan`) và `noi-dung.test.ts` đọc THẲNG tệp Go để so lại từng tên. Ngày hợp đồng
- * khai đủ `parameters`, đây là chỗ duy nhất phải sửa. Đã báo về.
+ * Vì thế client KHÔNG dựng truy vấn theo kiểu `truyVan`: ba tên vẫn nằm trong ĐÚNG MỘT hàm
+ * (`themLocVaoTruyVan`), chỉ gửi bộ lọc nào đang có giá trị, và `noi-dung.test.ts` vẫn đọc THẲNG
+ * tệp Go để so lại từng tên — gõ `loai` thay `type` thì `tsc` im lặng, máy chủ bỏ qua và trả cả
+ * quyển sổ trong khi cán bộ tin mình đang xem một lát cắt. Ngày hợp đồng khai ba tham số là tuỳ
+ * chọn, hàm ấy là chỗ duy nhất phải sửa.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
  * BỐN ĐIỀU MÁY CHỦ ĐÃ QUYẾT, VÀ MÔ-ĐUN NÀY KHÔNG VẼ KHÁC:

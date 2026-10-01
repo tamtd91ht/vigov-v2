@@ -267,7 +267,7 @@ describe("biểu mẫu nội dung §7", () => {
     expect(html).not.toContain("Chờ duyệt");
   });
 
-  it("KHÔNG có nút chọn tệp — `core/storage` chưa có, chỉ nhập được LIÊN KẾT", () => {
+  it("KHÔNG có nút chọn tệp — lối tải ảnh lên chưa mở, chỉ nhập được LIÊN KẾT", () => {
     const html = veForm();
     expect(html).not.toContain('type="file"');
     expect(html).not.toContain("Chọn tệp từ máy");
@@ -540,11 +540,21 @@ describe("khối `phần chưa dựng được`", () => {
     }
   });
 
-  it("bốn thứ chặn lớn nhất đều được gọi tên", () => {
-    expect(html).toContain("core/crypto");
-    expect(html).toContain("core/storage");
-    expect(html).toContain(nhuTrongHTML("KHÔNG CÓ TÊN MIỀN"));
+  it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
     expect(html).toContain("content.update");
+    expect(html).toContain("bộ lập lịch");
+    expect(html).toContain("adapter HTTP đi ra THEO XÃ");
+    expect(html).toContain("lối tải ảnh lên");
+  });
+
+  it("KHÔNG còn câu nào nói một phần đã có là chưa có", () => {
+    // `core/crypto` (45f4f110), `core/storage` và tuyến công khai `GET /api/v1/commune-news`
+    // (10337524) đều đã có. Một khối "chưa dựng được" nói sai lý do là một khối cán bộ thôi tin.
+    expect(html).not.toContain("core/crypto` chưa tồn tại");
+    expect(html).not.toContain("core/storage` chưa tồn tại");
+    expect(html).not.toContain("/api/cong/mini-app");
+    expect(html).not.toContain(nhuTrongHTML("KHÔNG CÓ TÊN MIỀN"));
+    expect(html).not.toContain("chưa có hằng");
   });
 });
 

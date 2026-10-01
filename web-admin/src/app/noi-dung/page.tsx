@@ -11,15 +11,14 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * `/noi-dung` — Quản trị nội dung Mini App (`docs/ui-ux/11-noi-dung-mini-app.md`).
  *
  * ⚠ ĐƯỜNG DẪN LÀ `/noi-dung`, ĐẶC TẢ GHI `/mini-app`. Sự lệch ấy được nói ra chứ không giấu: mục
- * menu `Nội dung Mini App` trong `components/muc-menu.ts` hôm nay còn `duong: null`, nên chưa có
- * đường nào trong ứng dụng trỏ tới trang này và chưa có gì phải đổi theo. Chọn đường dẫn nào là
- * việc của phiên chính cùng lúc mở mục menu ấy — đã báo về kèm dòng chính xác.
+ * menu `Nội dung Mini App` (`components/muc-menu.ts`) trỏ tới `/noi-dung`, nên đổi đường dẫn là
+ * đổi cả hai chỗ cùng lúc.
  *
  * KHÔNG CÓ `<CongQuyen>` Ở ĐÂY, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT QUYẾT ĐỊNH CHỨ KHÔNG PHẢI MỘT LẦN BỎ QUA.
  * Sáu tuyến đứng sau `content.read` / `content.update` thật — hai khoá ĐÃ được gieo sẵn trong bảng
- * `quyen` (`service-identity/migrations/0001_init.sql`, nhóm nội dung) và tuyến khai chúng trên
- * từng yêu cầu. Thứ thiếu là hằng ở `src/lib/quyen.ts`, tệp lượt này không được sửa; gõ thẳng
- * chuỗi `"content.read"` vào màn là dựng bản sao thứ hai của một khoá phân quyền.
+ * `quyen` (`service-identity/migrations/0001_init.sql:292-293`) và tuyến khai chúng trên từng yêu
+ * cầu. Hằng `QUYEN_XEM_NOI_DUNG` (`src/lib/quyen.ts`) đã có và mục menu dùng nó để ẩn mục với tài
+ * khoản thiếu `content.read`; trang vẫn cố ý không bọc `<CongQuyen>`, cùng khuôn màn Thông báo.
  *
  * Lớp chặn thật không đổi: `authz.RequirePermission` ở máy chủ, trên TỪNG lời gọi (luật 5, cấm
  * #1). Thứ thiếu là sự tiện dụng — cán bộ phải bấm vào rồi mới biết mình không có quyền.

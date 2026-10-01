@@ -131,10 +131,9 @@ export const CANH_BAO_LIEN_KET_ANH =
   "Chỉ nhận địa chỉ bắt đầu bằng http:// hoặc https://, tối đa " +
   `${URL_TOI_DA} ký tự. Tải ảnh từ máy chưa dựng được — xem phần chưa dựng được ở đầu màn.`;
 
-/** Câu đứng cạnh cột `Lượt xem` — con số hôm nay luôn là 0, và im lặng về điều đó là nói dối. */
+/** Câu đứng cạnh cột `Lượt xem` — con số luôn là 0, và im lặng về điều đó là nói dối. */
 export const GHI_CHU_LUOT_XEM =
-  "Lượt xem hôm nay LUÔN là 0: thứ duy nhất được phép tăng nó là một cư dân mở bài, mà tuyến " +
-  "công khai cho Mini App chưa dựng.";
+  "Lượt xem LUÔN là 0: hệ thống không đếm lượt xem, kể cả khi bà con mở bài trên Mini App.";
 
 /** Câu đứng cạnh cột hành động — vì sao không có nút xoá. */
 export const GHI_CHU_KHONG_CO_XOA =
@@ -772,22 +771,24 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Toàn bộ thẻ “Đồng bộ tin từ Cổng thông tin điện tử” (§3): chip trạng thái, `⟳ Đồng bộ ngay`, `Cấu hình`, `Chạy lần cuối`, khối log lỗi, cây 60 chuyên mục",
     viSao:
-      "Bảng `cau_hinh_dong_bo_cong` chưa tồn tại, và thứ chặn nó là ADR 0009 quyết định 7: " +
-      "`core/crypto` chưa tồn tại, mà cột trung tâm của bảng ấy là `ma_bao_mat` — credential thô " +
-      "của một cổng thông tin chính quyền, thứ sẽ nằm trong mọi bản sao lưu nếu lưu thẳng. Bảng " +
-      "`chuyen_muc_cong` chỉ có nghĩa cùng bảng trên, và nhịp `Mỗi 6 giờ` cần một bộ lập lịch cộng " +
-      "một adapter HTTP đi ra THEO XÃ mà kho chưa có. Vẽ thẻ ấy với số liệu bịa là dựng một màn " +
-      "hình nói với xã rằng cổng của họ đang được đồng bộ.",
+      "Cột trung tâm của cấu hình đồng bộ là `ma_bao_mat` — credential thô của một cổng thông tin " +
+      "chính quyền, thứ sẽ nằm trong mọi bản sao lưu nếu lưu thẳng. Phép mã hoá theo xã mà ADR " +
+      "0009 quyết định 7 đòi cho cột ấy NAY ĐÃ CÓ (`core/crypto`, đang giữ mật khẩu máy chủ thư " +
+      "của xã), nên đó không còn là thứ chặn. Thứ còn thiếu: bảng `cau_hinh_dong_bo_cong` và " +
+      "`chuyen_muc_cong` cùng các tuyến đọc, ghi chúng ở `service-comms`; một bộ lập lịch cho nhịp " +
+      "`Mỗi 6 giờ`; và một adapter HTTP đi ra THEO XÃ để đọc cổng của từng xã. Vẽ thẻ ấy với số " +
+      "liệu bịa là dựng một màn hình nói với xã rằng cổng của họ đang được đồng bộ.",
   },
   {
     ten: "Ô `Ảnh đại diện` dạng `Chọn tệp từ máy` — `JPG, PNG hoặc WebP — tối đa 50MB` (§7, §10.6)",
     viSao:
-      "`core/storage` chưa tồn tại: không có chỗ nhận tệp, không có đường phát ra một liên kết đã " +
-      "ký. Máy chủ chỉ nhận `image_url`, một LIÊN KẾT, và chỉ nhận lược đồ `http`/`https` — danh " +
-      "sách trắng ấy không phải làm đẹp: `anh_dai_dien_url` được dựng thành `src` của một thẻ ảnh " +
-      "trong ứng dụng bà con cầm trên tay, nên `javascript:…` ở đó là thực thi mã trên kênh công " +
-      "dân. Màn hình vì thế vẽ một ô NHẬP LIÊN KẾT và nói trước điều máy chủ sẽ từ chối, thay vì " +
-      "một nút chọn tệp không có nơi để gửi tệp tới.",
+      "Kho lưu tệp dùng chung (`core/storage`) đã có, nhưng `service-comms` chưa mở lối tải ảnh lên " +
+      "cho màn này — lối ấy đang được dựng. Cho tới khi có, máy chủ chỉ nhận `image_url`, một LIÊN " +
+      "KẾT, và chỉ nhận lược đồ `http`/`https` — danh sách trắng ấy không phải làm đẹp: " +
+      "`anh_dai_dien_url` được dựng thành `src` của một thẻ ảnh trong ứng dụng bà con cầm trên " +
+      "tay, nên `javascript:…` ở đó là thực thi mã trên kênh công dân. Màn hình vì thế vẽ một ô " +
+      "NHẬP LIÊN KẾT và nói trước điều máy chủ sẽ từ chối, thay vì một nút chọn tệp chưa có nơi để " +
+      "gửi tệp tới.",
   },
   {
     ten: "Sửa và xoá một danh mục tin (§6, `⊞ Danh mục tin`)",
@@ -808,15 +809,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hình dạng. Dựng ô nhập trước khi có cột là tự quyết một câu của khách.",
   },
   {
-    ten: "Tuyến công khai cho Mini App đọc (§9: `/api/cong/mini-app/noi-dung`, `/api/cong/mini-app/danh-ba`)",
-    viSao:
-      "Chặn bởi một điều nặng hơn thứ tự ưu tiên: **Mini App KHÔNG CÓ TÊN MIỀN**. Hệ thống phân " +
-      "biệt xã bằng `Host`, nên một tuyến không phiên, gọi từ một App ID dùng chung cho mọi xã, " +
-      "không xác định được xã — và luật 1 bất biến 3 nói rõ phải làm gì khi không xác định được " +
-      "xã: 404, không bao giờ một xã mặc định. Hình dạng đúng của tuyến ấy là một quyết định về " +
-      "kênh công dân (ADR 0005 · 0019 · 0022), không phải một route thêm vào cho đủ §9.",
-  },
-  {
     ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
     viSao:
       "Liên kết sang `/danh-ba` thì vẽ được và có vẽ. Con số thì không: nó đếm cờ " +
@@ -827,10 +819,9 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Cột `Lượt xem` luôn bằng 0 (§6)",
     viSao:
-      "Không phải lỗi hiển thị: `luot_xem` KHÔNG BAO GIỜ giảm và màn cán bộ KHÔNG tăng nó. Thứ duy " +
-      "nhất được phép tăng nó là một cư dân mở bài trên Mini App, mà tuyến công khai của §9 chưa " +
-      "dựng (mục trên). Cột vẫn được vẽ vì nó là cột của §6 và vì ngày tuyến ấy ra đời, con số " +
-      "chạy mà không màn nào phải sửa — kèm một dòng chữ nói rõ vì sao hôm nay nó là 0.",
+      "Không phải lỗi hiển thị: hệ thống không đếm lượt xem (ADR 0047), kể cả trên tuyến công " +
+      "khai mà Mini App đọc tin của xã, nên `luot_xem` đứng yên ở 0. Cột vẫn được vẽ vì nó là cột " +
+      "của §6 — kèm một dòng chữ nói rõ vì sao nó là 0.",
   },
   {
     ten: "Nút xoá một bài (§9 đề xuất `DELETE`)",
@@ -853,10 +844,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Cổng quyền `content.read` / `content.update` ở phía giao diện",
     viSao:
-      "`src/lib/quyen.ts` chưa có hằng cho hai khoá ấy và lượt này không được sửa tệp đó, còn gõ " +
-      "thẳng chuỗi vào màn là dựng bản sao thứ hai của một khoá phân quyền. Vì thế màn này KHÔNG " +
-      "có cổng ở client — đúng khuôn màn Thông báo và màn Văn bản: `service-comms` kiểm quyền trên " +
-      "TỪNG lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình. Ẩn một " +
-      "nút chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn một lần bấm.",
+      "Hai khoá đã có hằng ở `src/lib/quyen.ts` (`QUYEN_XEM_NOI_DUNG`, `QUYEN_CONG_KHAI_DANH_BA`), " +
+      "và mục menu `Nội dung Mini App` đã ẩn với tài khoản thiếu `content.read`. Bản thân màn này " +
+      "vẫn CỐ Ý không có cổng ở client — đúng khuôn màn Thông báo và màn Văn bản: " +
+      "`service-comms` kiểm quyền trên TỪNG lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 " +
+      "của máy chủ ra màn hình. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở " +
+      "đây chỉ tốn một lần bấm.",
   },
 ];
