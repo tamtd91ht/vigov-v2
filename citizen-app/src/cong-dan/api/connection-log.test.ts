@@ -71,6 +71,21 @@ describe("connection log", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("0900000000");
   });
 
+  it("a 201 whose body is cut off mid-read (timeout, dropped link) is still the network", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const err of [Object.assign(new Error("aborted"), { name: "AbortError" }), new TypeError("network error")]) {
+      vi.stubGlobal("fetch", () =>
+        Promise.resolve({
+          status: 201,
+          json: async () => {
+            throw err;
+          },
+        }),
+      );
+      expect(await guiPhanAnh(lan()), err.name).toEqual({ kieu: "loi-mang" });
+    }
+  });
+
   it("the lookup code is in the path, and the path is never logged", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.stubGlobal("fetch", () => Promise.resolve({ status: 500, json: async () => ({}) }));

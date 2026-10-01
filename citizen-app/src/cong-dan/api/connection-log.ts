@@ -47,6 +47,12 @@ export type ConnectionFailure = {
 const MESSAGE_KEPT_FOR: ReadonlySet<string> = new Set(["TypeError", "AbortError"]);
 const MESSAGE_MAX = 160;
 
+/** Whether a thrown value is the network failing (fetch's `TypeError`, the timeout's `AbortError`). */
+export function isNetworkFailure(thrown: unknown): boolean {
+  const name = typeof thrown === "object" && thrown !== null ? (thrown as { name?: unknown }).name : undefined;
+  return typeof name === "string" && MESSAGE_KEPT_FOR.has(name);
+}
+
 /** `name` and, for network failures only, a capped `message` of whatever was thrown. */
 export function describeThrown(thrown: unknown): string {
   if (typeof thrown !== "object" || thrown === null) return typeof thrown;

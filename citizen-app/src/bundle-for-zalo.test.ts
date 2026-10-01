@@ -654,4 +654,10 @@ describe("the `--demo` build: a fixed identity, and not one demo word in either 
     expect(ban).not.toContain(DEMO_CITIZEN_NAME);
     expect(ban).not.toContain("demoIdentity");
   });
+
+  it("the connection log (connection-log.ts) is in the --demo build only", () => {
+    // Measured by the log's own tag, not by `console.warn`: the libraries (React, zmp-sdk) carry their own.
+    expect(demo, "the --demo build lost its connection log").toContain("[ViGov] kết nối lỗi");
+    expect(ban, "the guard stopped folding away — the log ships in the real app").not.toContain("[ViGov] kết nối lỗi");
+  });
 });

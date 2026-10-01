@@ -68,7 +68,7 @@ import {
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
 import type { LanGui } from "./lan-gui";
-import { type ConnectionRoute, describeThrown, hostOf, logConnectionFailure } from "./connection-log";
+import { type ConnectionRoute, describeThrown, hostOf, isNetworkFailure, logConnectionFailure } from "./connection-log";
 import { layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
@@ -195,7 +195,8 @@ async function callOnce<T>(
           body = await tra_loi.json();
         } catch (err) {
           trace.error = describeThrown(err);
-          return { kieu: "loi-may-chu" };
+          // …but a body CUT OFF mid-read (the 20 s abort, a dropped link) is the network after all.
+          return isNetworkFailure(err) ? { kieu: "loi-mang" } : { kieu: "loi-may-chu" };
         }
         const gia_tri = doc(body);
         return gia_tri === null ? { kieu: "loi-may-chu" } : { kieu: "xong", gia_tri };
@@ -411,7 +412,10 @@ export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<reado
   return goiCongKhai("commune-lookup", ten_mien, diaChiTraXa, docXa);
 }
 
-/** Danh bạ cán bộ xã đã công khai. Không ghi log gì: danh bạ mang số di động cá nhân. */
+/**
+ * Danh bạ cán bộ xã đã công khai. Không ghi log nội dung: danh bạ mang số di động cá nhân — bản `--demo`
+ * chỉ ghi khuôn cố định của `connection-log.ts` (tuyến, mã HTTP), không một dòng nào của thân.
+ */
 export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
   return goiCongKhai("commune-staff", ten_mien, diaChiDanhBa, docDanhBa);
 }
