@@ -58,6 +58,10 @@ docs/ui-ux/*.zip
 # việc, và một tệp nháp không bị bỏ qua là một tệp sẽ bị 'git add -A' của người khác cuốn vào.
 tmp/
 
+# Tài liệu tham chiếu đặt tạm trên máy (bản gốc TCVN 14423…): tài liệu có bản quyền, và một
+# tệp đã vào lịch sử git thì không gỡ ra được nữa. Tham chiếu nó bằng tên, không đưa vào kho.
+rule/
+
 # codegraph index — per machine, rebuilt by `codegraph init .` (ROUTING §0.1)
 .codegraph/
 
