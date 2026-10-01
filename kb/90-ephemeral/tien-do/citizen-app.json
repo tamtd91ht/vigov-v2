@@ -342,10 +342,10 @@
     {
       "id": "tin-xa-gio-dang-su-kien-video",
       "viec": "App riêng: chi tiết tin hiện giờ đăng, khối sự kiện, nút Xem video (G1, máy chủ 2ed818bd)",
-      "trang_thai": "dang_lam",
-      "bang_chung": "3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch.",
+      "trang_thai": "xong",
+      "bang_chung": "3f2cf028 — publishedAt (giờ chỉ hiện khi rơi đúng ngày đăng theo +07), EventDetails (Thời gian, Địa điểm; chỉ su-kien; kết thúc thiếu bắt đầu thì bỏ). vitest 52 tệp 1405/1405, tsc sạch. || e2ca1415 — nút Xem video (videoUrl chỉ https:, chỉ loại video), mở qua moRaNgoai(\"video\", url) tiêm từ AppRieng; đích thứ sáu ở dich-ra-ngoai.ts, câu chính sách tự sinh \"Có sáu chỗ…\" (người dùng đồng ý, e4ace97c); phiên bản giữ 1.0. vitest 52 tệp 1417/1417, tsc sạch.",
       "no_confirm": [],
-      "tiep_theo": "Nút Xem video CHƯA dựng: lối mở ra ngoài duy nhất moRaNgoai chỉ nhận đích khai ở content/dich-ra-ngoai.ts, và danh sách ấy sinh câu đếm trong chính sách quyền riêng tư (cauKhaiDichRaNgoai) — thêm đích video đổi lời văn, đang chờ chủ dự án duyệt (G9). Thêm nữa: dòng openWebview trong KHAI_BAO_LOI_GOI (zalo-api.ts:146) chỉ khai cho nửa thương mại; nửa công dân không được import features/ (ranh-gioi-hai-nua.test.ts) nên lớp vỏ phải tiêm hàm mở.",
+      "tiep_theo": "Liên kết video http: mà xã đăng thì không có nút và không lời giải thích — máy chủ (domain.ChuanHoaURL) vẫn nhận http: — siết ở comms hoặc cảnh báo ở web-admin. Chủ dự án xác nhận cụm \"trang video mà xã đăng kèm một tin trong ứng dụng của xã\" lúc duyệt G9. Chưa thử trên máy thật.",
       "menu": "noi-dung-mini-app"
     }
   ]
