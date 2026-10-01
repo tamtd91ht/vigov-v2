@@ -3,19 +3,21 @@ id: 0067-mini-app-content-part-a
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: a3460acb
+derived_from_commit: 300301fb
 expires: null
 owns_facts:
   - "thân bài nội dung Mini App là HTML đã làm sạch ở máy chủ lúc ghi theo danh sách cho phép (p, br, strong, em, ul, ol, li, h2, h3, a chỉ href https); Mini App dựng từ body_blocks có cấu trúc, không bao giờ dựng HTML; body văn bản thuần giữ cho bản app cũ — thay quyết định 27/09/2026 'không HTML nào tới dân'"
   - "dòng nội dung đã lưu không bị viết lại; dòng cũ chưa làm sạch được làm sạch lại trên tuyến đọc công khai"
-  - "đồng bộ Cổng TTĐT: chỉ API cổng dùng chung của Đà Nẵng; https và host đuôi .gov.vn; ảnh chỉ cùng host với api_url; mặc định chờ duyệt; không ghi đè tin đã có, không nhập lại tin đã xoá mềm; giới hạn 90 ngày, 100 tin/lượt, 3 chuyên mục và 6 ảnh song song, nhịp 0–24 giờ mặc định 6"
+  - "đồng bộ Cổng TTĐT: chỉ API cổng dùng chung của Đà Nẵng; https và host đuôi .gov.vn; ảnh chỉ cùng host với api_url; mặc định chờ duyệt; không ghi đè tin đã có, không nhập lại tin đã xoá mềm; 90 ngày và 100 tin/lượt là mặc định và TRẦN (1..90, 1..100), trần 30 chuyên mục được chọn mỗi xã, dòng vượt trần bị kẹp lúc đọc/chạy chứ không viết lại (chốt 02/10/2026, D1); 3 chuyên mục và 6 ảnh song song, nhịp 0–24 giờ mặc định 6"
   - "chuyên mục Cổng (chuyen_muc_cong) là bảng riêng, không gộp với danh mục của xã; không chép cây chuyên mục của Cổng — hỏi Cổng lúc mở cấu hình, chỉ lưu lựa chọn và ánh xạ loại (tin-tuc, su-kien, thong-bao)"
   - "ma_bao_mat của Cổng mã hoá theo xã (ADR 0009), chỉ ghi, hiện dạng che; đổi api_url buộc nhập lại mã"
   - "danh mục nội dung: sửa tên, cha, thứ tự; slug cố định; cờ ẩn/hiện; xoá mềm có lý do, từ chối khi còn nội dung hoặc danh mục con còn sống"
   - "truyền thanh: mp3/m4a, ≤ 30 MB, thời lượng cán bộ gõ, bucket private, link ký ngắn hạn, mục đích tải lên content-audio, người tải cần content.update"
   - "banner: ảnh bắt buộc, tiêu đề là alt, link_to tuỳ chọn, display_order tăng dần theo xã, không lịch, chỉ ở dải trang chủ Mini App, chỉ trả khi ?type=banner"
   - "ẩn danh mục chỉ gỡ chip lọc của nó và của danh mục con trên Mini App; bài vẫn hiện ở Tất cả (chốt 01/10/2026)"
-  - "Cổng chuyển hướng: tối đa 3 lần, mỗi đích qua cùng phép kiểm của api_url (chốt 01/10/2026)"
+  - "Cổng chuyển hướng: tối đa 3 lần, mỗi đích qua cùng phép kiểm của api_url VÀ ở lại đúng host của api_url — cho cả lời gọi API lẫn ảnh (chốt 02/10/2026, D4, hẹp lại A2 của 01/10)"
+  - "tuyến đọc tin công khai Mini App: 120 yêu cầu/phút mỗi (host, mạng khách — IPv4 hoặc IPv6 /64), 429 + Retry-After; Redis không hỏi được thì CHO QUA (ngoại lệ riêng của chính sách này), đăng nhập vận hành vẫn đóng (chốt 02/10/2026, D2)"
+  - "xem cây chuyên mục Cổng trực tiếp cần content.update, không phải content.read (chốt 02/10/2026, D3)"
   - "liên kết trong thân bài: hỏi xác nhận rời ứng dụng rồi mở bằng openWebview của Zalo (chốt 01/10/2026)"
 ---
 
@@ -294,3 +296,47 @@ khác — một liên kết trong bài của xã trông như lời xã bảo đ�
 | C4 | Chưa chạy với PG, MinIO, clamd và Cổng thật | Kỹ thuật / vận hành |
 | C5 | Đối tượng dẫn xuất mồ côi nằm lại trong bucket tới khi có worker dọn của ADR 0052 §6 (`service-comms/internal/store/stored_file.go:259`) | Chủ dự án / kỹ thuật |
 | C6 | Thanh kéo tua cho trình phát — chỉ khi chủ dự án nới phép kiểm ở B8 | Chủ dự án |
+
+## Chốt của chủ dự án — 02/10/2026 (sau rà cô lập + rà bảo mật)
+
+Phần trên, kể cả §Chốt bổ sung 01/10, giữ nguyên chữ. Mục này ghi bốn câu chủ dự án chốt sau hai lượt
+rà (mỗi câu chọn đúng phương án đề xuất), rồi lý do của các bản vá đi kèm mà chủ dự án để "làm theo đề
+xuất". Dựng ở `300301fb` (comms, core, deploy) và `8b62b914` (citizen-app).
+
+### D. Chủ dự án chốt, 02/10/2026
+
+| # | Chốt | Vì sao / cái giá | Ở mã |
+|---|---|---|---|
+| D1 | 90 ngày và 100 tin/lượt là **TRẦN**, không chỉ mặc định: cửa sổ 1..90, số tin 1..100. Thêm trần **30 chuyên mục được chọn** mỗi xã (lưu vượt → 422 `too_many_categories`). Dòng đã lưu vượt trần bị **kẹp lúc đọc/chạy, không viết lại** | Luật 7: không viết lại hàng loạt. CHECK của migration 0013 (1..3650 ngày, 1..1000 tin) **giữ nguyên** — migration đã áp, checksum đã ghi; **tầng domain là tầng chặn**. Thu hẹp CHECK sau này là việc của người sở hữu migration dữ liệu, khi không còn dòng vượt | `service-comms/internal/domain/portal_sync.go:44-64`, `:150-157` (`Clamped`), `:307-315`; `service-comms/internal/app/portal_sync_runner.go:631-637` |
+| D2 | Ba tuyến đọc tin công khai của Mini App: **120 yêu cầu/phút** mỗi khách (địa chỉ IPv4 / mạng IPv6 /64), khoá `t:<tenant>:rl:public-news:host:<host>:ip:<net>`, vượt → **429 + `Retry-After`**. Redis không hỏi được → **CHO QUA**, chỉ cho các tuyến nội dung công khai này, một cảnh báo bảo mật mỗi phút. Đăng nhập vận hành **vẫn đóng** | Đây là **ngoại lệ có chủ ý** với mặc định fail-closed của bộ giới hạn: thứ nó chặn là tải trên bảng tin xã đã công bố cho mọi cư dân, và một sự cố Redis biến bảng tin mọi xã thành 503 là hỏng nặng hơn. Ngoại lệ là trường của **từng chính sách**, không phải chế độ của gói — chính sách khác không được chép nếu không có quyết định tương tự. **Cái giá:** cư dân sau cùng một IPv4 NAT nhà mạng dùng chung một hạn mức; tra host chạy **trước** khi đếm (phải biết xã mới dựng khoá) — bộ nhớ đệm theo host, **không nhớ lỗi**, giới hạn chi phí ấy. Host không thuộc xã nào đếm theo khoá **không tiền tố xã**, cùng ngưỡng, để 429 không lộ tên miền nào là của xã | `core/ratelimit/ratelimit.go:11-13`, `:46-52`, `:64-74`, `:85-88`; `core/ratelimit/middleware.go:91-92`; `service-comms/internal/http/tin_xa_cong_khai.go:401-435`; `core/tenant/cache.go:109-112` |
+| D3 | Xem **cây chuyên mục Cổng trực tiếp** cần `content.update`, dù là GET | Lời gọi dùng **mã bảo mật của xã** để gọi ra ngoài; tiền lệ: gửi thư thử ở cài đặt thư | `service-comms/internal/http/routes_portal_sync.go:15-16`, `:92-108` |
+| D4 | Chuyển hướng của **API Cổng** phải ở lại **đúng host của `api_url`** (như ảnh đã vậy từ §2 điều 2). Sang host khác → lời gọi bị từ chối, lượt ghi lỗi theo chuyên mục | Mã bảo mật nằm trong query string; chuyển hướng là Cổng chọn nơi lời gọi kế tiếp đi tới. "Một host `.gov.vn` khác" không còn đủ. `sameHost` rỗng → từ chối mọi bước (đóng khi quên) | `service-comms/internal/portal/client.go:49-56`, `:158-175` |
+
+**D4 THAY A2** (§Chốt bổ sung 01/10). Chữ của A2 giữ nguyên làm hồ sơ; từ 02/10/2026 điều có hiệu lực
+là: tối đa 3 lần, mỗi đích qua phép kiểm của `api_url` **và** cùng host với nó. Dòng `owns_facts` về
+chuyển hướng đã đổi theo.
+
+**B12 hẹp lại theo E4 (dưới):** câu "NetworkPolicy mở 443 ra mọi nơi" của B12 không còn đúng hẳn —
+luật 7c nay trừ các dải nội bộ. Phép kiểm lúc quay số vẫn là ranh giới chính; mạng là lớp thứ hai.
+
+### E. Bản vá đi kèm — điều đáng giữ là lý do
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| E1 | Mỗi chuyên mục giữ một **heap N tin mới nhất CHƯA NHẬP**; sổ tin đã có (tính cả dòng xoá mềm) được hỏi **theo lô 200 trước khi** một tin vào heap | Nếu heap giữ N tin mới nhất bất kể đã nhập, một tồn đọng lớn hơn trần một lượt không bao giờ vơi: lượt nào cũng thấy lại đúng N tin đã có. Hỏi trước heap thì mỗi lượt nhập N tin mới nhất chưa có, lượt sau đi tiếp bên dưới. Bộ nhớ = heap + một lô | `service-comms/internal/portal/client.go:329-347`, `:377`, `:409-494`; `portal_sync_runner.go:40-44` |
+| E2 | Mỗi tiến trình **tối đa 2 lượt đồng thời** (lịch và tay dùng chung); quỹ **10 phút/lượt**, **30 phút/nhịp lịch**; xã đến hạn xếp `last_run_at NULLS FIRST` | Một Cổng chậm không được giữ khoá lịch hàng giờ; N xã không được giữ N lần bộ nhớ một lượt (mỗi lượt tới 3 thân chuyên mục và 6 ảnh). Đây là giới hạn **của nhà cung cấp**, không phải con số của khách. Lượt tay không chờ chỗ: 503 `portal_sync_busy` — sức chứa tiến trình, không phải dữ liệu của xã, nên không 409. Xếp cũ nhất trước để xã bị cắt ở nhịp này đứng đầu nhịp sau, không xã nào bị bỏ đói | `portal_sync_runner.go:27-38`, `:93-101`; `service-comms/internal/store/crosstenant/portal_sync.go:48` |
+| E3 | Sự kiện bảo mật **`outbound_url_refused`** cho mọi đích ra ngoài bị từ chối (URL, địa chỉ phân giải, chuyển hướng) | `skills/security-logging`: từ chối SSRF là sự kiện an ninh, không chỉ là lỗi lượt chạy. **Không bao giờ** ghi URL (query mang mã), host cán bộ gõ hay trường bài | `portal_sync_runner.go:305-310`; `service-comms/internal/portal/errors.go:64-68` |
+| E4 | Luật mạng 7c trừ RFC 1918, link-local (`169.254.0.0/16`, metadata) và CGNAT (`100.64.0.0/10`) khỏi đường 443 | Lớp thứ hai cho đúng thứ phép kiểm lúc quay số đã chặn: mã sai một lần thì mạng vẫn không cho 443 vào cụm hay vào metadata. Cổng xã là máy công khai nên không mất gì | `deploy/base/mang/netpol.yaml:389-412` |
+| E5 | Chặn thêm dải IPv6 **IPv4-compatible `::/96`** và **IPv4-translated `::ffff:0:0:0/96`** | Không chặn thì một câu trả lời v6 gọi tên được một máy v4 nội bộ. IPv4-mapped không cần dòng riêng | `service-comms/internal/portal/guard.go:86-95` |
+| E6 | Liên kết trong thân bài có `@` trong phần authority bị **bỏ** | `https://gov.vn@other.example` hiện tên một host mà dân không bao giờ tới — câu hỏi xác nhận của A3 thành nói sai. `@` trong đường dẫn không phải userinfo nên vẫn nhận | `service-comms/internal/richtext/richtext.go:140`; `service-comms/internal/domain/noi_dung_mini_app.go:359` |
+| E7 | Mã bảo mật niêm phong gắn AAD = bảng/cột + **xã** + **sha256(`api_url`)**. Dòng niêm phong trước 02/10 mở **một lần** bằng AAD cũ (chỉ xã) rồi **niêm phong lại**, cùng vết `ActionResealPortalKey` | §2 điều 5 chỉ chặn ở màn hình; gắn `api_url` vào AAD thì một lần ghi đi vòng qua màn hình cũng không gửi được mã sang host mới. Băm chứ không phải URL: độ dài AAD không phụ thuộc chữ gõ. Có đường lùi vì không gì trong kho chứng minh chưa xã nào lưu mã từ `fa7b8377`; không có nó thì những xã ấy hỏng `credential-unavailable` tới khi gõ lại mã. **Gỡ đường lùi khi không còn dòng cũ** (đếm vết reseal). Chú thích của 0013 còn tả AAD cũ — migration đã áp, hàm là nguồn sự thật | `portal_sync_runner.go:240-264`, `:266-290` |
+| E8 | Nhập hỏng → **xoá bản dẫn xuất private mồ côi** của ảnh đã chuẩn bị, sau khi kiểm không dòng `stored_file` nào giữ nó; xoá hỏng thì ghi theo khoá đối tượng | Thu hẹp C5 cho đường đồng bộ: không để rác trong bucket chờ worker dọn của ADR 0052 §6. Khoá đối tượng chỉ chứa xã, ngày, hai id ngẫu nhiên — không người nào | `portal_sync_runner.go:1000-1006` |
+| E9 | Cửa mở ra ngoài của citizen-app chỉ nhận **https, có host, không userinfo** cho liên kết trong bài (`lien-ket-xa`) và **video**; URL trong danh thiếp quét được chỉ có nút mở khi là **http(s)** — `javascript:`/`intent:`/`data:` hiện dạng chữ | Cửa là chỗ duy nhất mọi lối ra đi qua: người gọi sau quên kiểm thì cửa vẫn chặn (phòng thủ chiều sâu, không phải vá lỗ đang mở). Trường `URL` của vCard là chữ người làm thẻ gõ, trước đó tới `openWebview` không kiểm | `citizen-app/src/features/tinh-nang/mo-ra-ngoai.ts:40-85`; `citizen-app/src/features/tinh-nang/danh-thiep.ts:113-118` |
+
+### F. Còn mở sau 02/10
+
+| # | Việc | Của ai |
+|---|---|---|
+| F1 | Chạy với PG và Cổng thật (nối tiếp C4) — các bản vá trên chưa chạy trên cụm thật | Kỹ thuật / vận hành |
+| F2 | Chỉ mục cho bộ lọc `status` của danh sách nội dung — chỉ thêm nếu đo thấy chậm | Kỹ thuật |
+| F3 | QR chỉ chứa một liên kết trần (`ma-qr`) vẫn nhận `http:` (`danh-thiep.ts:113`, `LA_LIEN_KET`) — E9 chưa siết tới đây | Chủ dự án / kỹ thuật |
