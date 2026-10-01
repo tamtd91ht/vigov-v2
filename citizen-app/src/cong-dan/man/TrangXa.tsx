@@ -72,7 +72,7 @@ import {
   useMyPetitions,
 } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
-import { BaiTinXa, DanhSachTinXa, HangTin, NewsOfType, useTinXa } from "./TinTucAppXa";
+import { BaiTinXa, DanhSachTinXa, HangTin, NewsOfType, type OpenVideo, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
 import {
   afterNameAsk,
@@ -541,6 +541,7 @@ function AppCuaXa(props: {
   getSceneLocation?: GetSceneLocation;
   draftStore?: FeedbackDraftStore;
   openSession?: OpenCommuneAppSession;
+  openVideo?: OpenVideo;
 }) {
   const { ten_mien, xa, openSession } = props;
   // Họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Phiên ViGov chỉ trong bộ nhớ (`api/phien-vigov.ts`), mở ở
@@ -600,6 +601,7 @@ function AppCuaXa(props: {
           ds={tin.ds.muc}
           onMo={(id) => datMan({ kieu: "bai", id, tu: man.tu })}
           onQuayLai={() => veTab(man.tu)}
+          openVideo={props.openVideo}
         />
       );
       break;
@@ -835,8 +837,13 @@ export function TrangXa(props: {
    * mọi việc cá nhân nói "chưa kết nối" và không gọi mạng.
    */
   openSession?: OpenCommuneAppSession;
+  /**
+   * Mở đường dẫn video xã đăng kèm một tin, ra ngoài app (`moRaNgoai("video", …)`), do lớp vỏ tiêm — nửa này
+   * không nhập `features/` hay zmp-sdk. Không truyền (chạy thử, test) thì chi tiết tin không có nút "Xem video".
+   */
+  openVideo?: OpenVideo;
 }) {
-  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession } = props;
+  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession, openVideo } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -897,6 +904,7 @@ export function TrangXa(props: {
         getSceneLocation={getSceneLocation}
         draftStore={draftStore}
         openSession={openSession}
+        openVideo={openVideo}
       />
     );
   }

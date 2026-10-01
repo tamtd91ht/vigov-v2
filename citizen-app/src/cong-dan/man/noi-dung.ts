@@ -738,6 +738,10 @@ export const XA_TN = {
   event_details: "Thông tin sự kiện",
   event_time: "Thời gian",
   event_place: "Địa điểm",
+  /** The button of a `video` article with a link (`TinTucAppXa.tsx` `WatchVideo`) — the citizen's tap opens it outside the app. */
+  watch_video: "Xem video",
+  /** The opener said no (outside Zalo, the platform refused, the page did not open): what to do next, no code. */
+  watch_video_failed: "Không mở được video lúc này. Bạn hãy bấm “Xem video” lần nữa sau ít phút.",
   nhom_khac: "Cán bộ khác",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",

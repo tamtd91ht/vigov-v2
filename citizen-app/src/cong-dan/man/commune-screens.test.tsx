@@ -35,6 +35,8 @@ import {
   publishedLabel,
   relativeDay,
   todayVN,
+  videoOpenFailed,
+  WatchVideo,
 } from "./TinTucAppXa";
 import { NHOM_CHUC_NANG } from "./TrangXa";
 import { VONG_DOI } from "./trai-nghiem";
@@ -487,6 +489,113 @@ describe("Tin tức: published time and the event block (G1)", () => {
     expect(css).toMatch(/\.xa-bai__event-list dt \{[^}]*color: var\(--xa-purple-ink\);/);
     expect(css).toMatch(/\.xa-bai__event-list dd \{[^}]*color: var\(--ink\);/);
     for (const m of css.matchAll(/\.xa-bai__event[^{]*\{([^}]*)\}/g)) expect(m[1]).not.toContain("font-size");
+  });
+});
+
+/**
+ * "XEM VIDEO" (owner, 01/10/2026, ADR 0047 §6): on the detail of a `video` item with a link, in the commune's own
+ * app only. The tap hands the commune's link, unchanged, to the opener the shell injects (`moRaNgoai("video", …)`);
+ * a failed open says what to do next in one sentence. The link is fake and points nowhere.
+ */
+describe("Tin tức: the 'Xem video' button", () => {
+  const CLIP = "https://video.example.vn/xem/abc123?t=10";
+  const video: BaiTinXaData = {
+    id: "9",
+    tieu_de: "Hướng dẫn nộp hồ sơ trực tuyến",
+    tom_tat: "",
+    chuyen_muc: "Hành chính",
+    ngay_dang: "2026-09-25",
+    type: "video",
+    videoUrl: CLIP,
+    noi_dung: "Đoạn một.",
+  };
+  const render = (extra: Record<string, unknown>) =>
+    html(createElement(NewsArticle, { bai: video, coverFailed: false, onCoverFail: noop, ds: [], ...extra }));
+  const BUTTON = `<div class="xa-bai__video"><button type="button" class="xa-nut">${XA_TN.watch_video}</button></div>`;
+
+  it("present: one red primary button in plain words, after the meta line and before the body", () => {
+    const page = render({ onWatchVideo: noop });
+    expect(XA_TN.watch_video).toBe("Xem video");
+    expect(page).toContain(`<p class="xa-phu">Hành chính · 25/09/2026</p>${BUTTON}<div class="xa-ke"></div>`);
+    expect(page.match(/Xem video/g)).toHaveLength(1);
+    expect(page).not.toContain('role="alert"');
+  });
+
+  it("absent: no opener → no button, even with a link (tests, the shared app)", () => {
+    expect(render({})).not.toMatch(/xa-bai__video|Xem video/);
+    // And `BaiTinXa` with no `openVideo`, or still loading, draws none either.
+    const detail = html(createElement(BaiTinXa, { ten_mien: "xa-thu.vigov.vn", id: "9", ds: [video], onQuayLai: noop }));
+    expect(detail).not.toContain("Xem video");
+  });
+
+  it("a failed tap: one sentence under the button, saying what to do next — words, no code", () => {
+    const page = render({ onWatchVideo: noop, videoFailed: true });
+    expect(page).toContain(
+      `<div class="xa-bai__video"><button type="button" class="xa-nut">Xem video</button>` +
+        `<p class="xa-error-box" role="alert">${XA_TN.watch_video_failed}</p></div>`,
+    );
+    expect(XA_TN.watch_video_failed).toMatch(/bấm “Xem video” lần nữa/);
+    expect(XA_TN.watch_video_failed).not.toMatch(/\d{3}|lỗi|error|demo|trải nghiệm/i);
+  });
+
+  it("the tap reaches the caller's handler: article → WatchVideo → the button's onClick", () => {
+    let taps = 0;
+    const onWatchVideo = () => taps++;
+    const tree = NewsArticle({ bai: video, coverFailed: false, onCoverFail: noop, ds: [], onWatchVideo });
+    const button = (tree.props as { children: unknown[] }).children.find(
+      (c) => isValidElement(c) && c.type === WatchVideo,
+    ) as ReactElement<{ onTap: () => void }>;
+    expect(button.props.onTap).toBe(onWatchVideo);
+    const el = WatchVideo({ failed: false, onTap: onWatchVideo });
+    const inner = (el.props as { children: unknown[] }).children[0] as ReactElement<{ onClick: () => void }>;
+    inner.props.onClick();
+    expect(taps).toBe(1);
+  });
+
+  it("one tap calls the injected opener with EXACTLY the commune's link, once; failed = it did not open", async () => {
+    const calls: string[] = [];
+    const opener = (answer: boolean) => async (url: string) => {
+      calls.push(url);
+      return answer;
+    };
+    expect(await videoOpenFailed(opener(true), CLIP)).toBe(false);
+    expect(calls).toEqual([CLIP]);
+    expect(await videoOpenFailed(opener(false), CLIP)).toBe(true);
+    // A rejected opener is a failure too, never an unhandled rejection under a button.
+    expect(await videoOpenFailed(() => Promise.reject(new Error("x")), CLIP)).toBe(true);
+    expect(calls).toEqual([CLIP, CLIP]);
+  });
+
+  it("wired in the commune's own app only, through the declared destination 'video'", () => {
+    const raw = import.meta.glob(["../../App.tsx", "./TinTucXaScreen.tsx", "./TinTucAppXa.tsx"], {
+      query: "?raw",
+      import: "default",
+      eager: true,
+    }) as Record<string, string>;
+    const app = raw["../../App.tsx"]!;
+    const own = app.slice(app.indexOf("export function AppRieng("), app.indexOf("function AppChung("));
+    expect(own).toMatch(/openVideo=\{openCommuneVideo\}/);
+    expect(app).toMatch(/const openCommuneVideo: OpenVideo = \(url\) => moRaNgoai\("video", url\);/);
+    expect(app.slice(app.indexOf("function AppChung("))).not.toMatch(/openVideo|openCommuneVideo/);
+    // The shared app's news screen is untouched (owner, 01/10/2026: commune app only).
+    expect(raw["./TinTucXaScreen.tsx"]).not.toMatch(/Xem video|watch_video|openVideo/);
+    // And the state half itself opens nothing: it only calls what it was given. Comments stripped — they may NAME
+    // the door they do not use (same expression as `ranh-gioi-hai-nua.test.ts`).
+    const code = raw["./TinTucAppXa.tsx"]!.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(?<!:)\/\/[^\n]*/g, " ");
+    expect(code.length).toBeGreaterThan(1000);
+    expect(code).not.toMatch(/moRaNgoai|moTrangWeb|zmp-sdk|window\s*\.\s*open/);
+  });
+
+  it("the block sets spacing only — the button's size and colour are `xa-nut`'s, already measured", async () => {
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    const block = css.match(/\.xa-bai__video \{([^}]*)\}/);
+    expect(block, "no .xa-bai__video rule").not.toBeNull();
+    expect(block![1]).not.toMatch(/font-size|color|background|height/);
+    expect(css).toMatch(/\.xa-nut \{[^}]*min-height: calc\(var\(--tap-min\) \+ 4px\);[^}]*font-size: var\(--text-body\);/);
   });
 });
 

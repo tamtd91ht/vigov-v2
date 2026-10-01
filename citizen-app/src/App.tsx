@@ -12,6 +12,7 @@ import {
   type MoPhienViGov,
   NutVaoKenhCongDan,
   type OpenCommuneAppSession,
+  type OpenVideo,
   type ReopenWithPhone,
   type ReopenWithPhoneResult,
   type SceneLocationResult,
@@ -35,6 +36,7 @@ import {
   getCommuneAppLocation,
   getCurrentLocation,
 } from "./features/dang-nhap/current-location";
+import { moRaNgoai } from "./features/tinh-nang/mo-ra-ngoai";
 import { layTenZalo, type SdkFailure } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
@@ -290,9 +292,19 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       getSceneLocation={DEMO_BUILD ? undefined : getCommuneSceneLocation}
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
+      openVideo={openCommuneVideo}
     />
   );
 }
+
+/**
+ * THE VIDEO OPENER of the commune's own app (ADR 0047 §6, 01/10/2026) — the shell builds it, the state half only
+ * declares its type (`OpenVideo`), as for `lay_ten`. It goes through the one declared door, `moRaNgoai`, under
+ * the destination `"video"`, which is what makes the privacy policy's counted sentence name it
+ * (`content/dich-ra-ngoai.ts`). Only the link the commune posted goes out — nothing of the citizen's.
+ * Not in `AppChung`: the shared app's news screen (`TinTucXaScreen`) has no video button.
+ */
+const openCommuneVideo: OpenVideo = (url) => moRaNgoai("video", url);
 
 /**
  * THE COMMUNE APP'S SESSION OPENER — the shell builds it, the state half only declares its type

@@ -143,12 +143,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     //
     // DANH SÁCH ĐÍCH ĐẾN KHÔNG NẰM Ở ĐÂY mà ở `content/dich-ra-ngoai.ts`, vì chính sách quyền
     // riêng tư đếm từ đó. Hai danh sách cho một sự thật thì một trong hai sẽ cũ.
+    //
+    // `nua` BECAME "ca-hai" ON 01/10/2026: the "Xem video" button of a news item in the commune's own app
+    // (`cong-dan/man/TinTucAppXa.tsx`) opens the commune's posted link with this same call. The state half
+    // does not import it — `App.tsx` injects `moRaNgoai("video", …)` — but a declaration by IMPORT GRAPH
+    // instead of by WHO USES THE CALL would be the under-declaration this table exists to close.
     api: "openWebview",
-    nua: "thuong-mai",
-    man: "Mọi màn",
-    tinh_nang: "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website",
+    nua: "ca-hai",
+    man: "Mọi màn · Tin tức của xã (ứng dụng của xã)",
+    tinh_nang: "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website · Xem video của xã",
     de_lam_gi:
-      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, hoặc trang web chính thức của chúng tôi.",
+      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
   },

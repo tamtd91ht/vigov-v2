@@ -3116,6 +3116,13 @@ button.xa-o-nhanh {
   color: var(--ink);
   line-height: 1.5;
 }
+/* "Xem video" under the meta line: the red primary `xa-nut` (≥44px, body text) and, after a failed tap, the
+   `xa-error-box` sentence under it. Spacing only — no new colour, no font size. */
+.xa-bai__video {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 12px;
+}
 .xa-hang-tin__chu {
   flex: 1;
   min-width: 0;

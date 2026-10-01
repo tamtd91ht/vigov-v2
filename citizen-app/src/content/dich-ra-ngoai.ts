@@ -32,7 +32,7 @@
  */
 
 /** Mã đích đến. Là một union để `moRaNgoai` không nhận nổi một đích chưa khai. */
-export type MaDichRaNgoai = "ban-do" | "ma-qr" | "trang-chu" | "tin-tuc" | "chat-oa";
+export type MaDichRaNgoai = "ban-do" | "ma-qr" | "trang-chu" | "tin-tuc" | "chat-oa" | "video";
 
 export type DichRaNgoai = {
   ma: MaDichRaNgoai;
@@ -41,7 +41,7 @@ export type DichRaNgoai = {
 };
 
 /**
- * NĂM ĐÍCH ĐẾN. Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
+ * SÁU ĐÍCH ĐẾN. Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
  *
  * Thêm một dòng ở đây là một thay đổi HÀNH VI XỬ LÝ DỮ LIỆU: bề mặt "dữ liệu của bạn có thể tới
  * những nơi nào" rộng ra thật sự. Xem bảng lên số phiên bản trong `chinh-sach-rieng-tu.ts`.
@@ -66,6 +66,18 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
   {
     ma: "chat-oa",
     trong_chinh_sach: "cửa sổ trò chuyện với Official Account của chúng tôi trên Zalo",
+  },
+  {
+    // ADDED 01/10/2026 — the "Xem video" button of a news item in the commune's OWN app (`TinTucAppXa.tsx`
+    // `NewsArticle`, ADR 0047 §6; the owner accepted that this sentence changes in that pass).
+    //
+    // NOT A FIXED HOST, and the wording does not pretend it is: the address is whatever link the commune
+    // posted with that one item (`video_url`, https only — `cong-dan/api/hop-dong-cong-khai.ts`
+    // `readVideoUrl`). What leaves the app is that address and nothing else — no session, no name, no phone
+    // (the closing clause of `cauKhaiDichRaNgoai` says so for every row) — and only on the citizen's own tap.
+    // So the phrase names WHO chose the destination (the commune) rather than a site this app cannot vouch for.
+    ma: "video",
+    trong_chinh_sach: "trang video mà xã đăng kèm một tin trong ứng dụng của xã, đúng địa chỉ xã đã đăng",
   },
 ];
 

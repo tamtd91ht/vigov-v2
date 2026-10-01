@@ -471,6 +471,64 @@ describe("tin của xã — lời gọi và đọc trang", () => {
     for (const v of [123, null, {}]) expect(page({ ...EVENT, event_place: v }), String(v)).toBeNull();
   });
 
+  /*
+   * `video_url` (ADR 0047 §6, 01/10/2026): optional, only on `video`, kept only when it is an absolute `https:`
+   * URL (`readVideoUrl` says why stricter than the server's http(s)). The link below is fake and points nowhere.
+   */
+  const VIDEO = { ...TIN_RA, type: "video" };
+  const CLIP = "https://video.example.vn/xem/abc123?t=10";
+
+  it("video_url: an https link on a `video` item is carried AS RECEIVED, on the list and on the detail", () => {
+    expect(page({ ...VIDEO, video_url: CLIP })).toStrictEqual({
+      muc: [
+        {
+          id: "tin-01",
+          tieu_de: TIN_RA.title,
+          tom_tat: TIN_RA.summary,
+          ngay_dang: "2026-09-27",
+          chuyen_muc: "Y tế",
+          type: "video",
+          videoUrl: CLIP,
+        },
+      ],
+      con_tro: "",
+      con_nua: false,
+    });
+    expect(docBaiTin({ ...VIDEO, body: "x", video_url: CLIP })?.videoUrl).toBe(CLIP);
+  });
+
+  it("video_url on another type, or with no type, is DROPPED — the button is for video items only", () => {
+    for (const type of ["tin-tuc", "su-kien", "thong-bao", "truyen-thanh", "banner", undefined]) {
+      const t = page({ ...TIN_RA, type, video_url: CLIP });
+      expect(t, String(type)).not.toBeNull();
+      expect(Object.keys(t!.muc[0]!), String(type)).not.toContain("videoUrl");
+    }
+  });
+
+  it("absent, http:, javascript:, data:, relative, empty, not a URL → NO link (the item still shows)", () => {
+    for (const v of [
+      undefined,
+      "http://video.example.vn/xem/abc123",
+      "javascript:alert(1)",
+      "data:text/html;base64,AAAA",
+      "/xem/abc123",
+      "//video.example.vn/xem/abc123",
+      "",
+      "HTTPS-not-a-url",
+    ]) {
+      const t = page({ ...VIDEO, video_url: v });
+      expect(t, String(v)).not.toBeNull();
+      expect(Object.keys(t!.muc[0]!), String(v)).not.toContain("videoUrl");
+    }
+  });
+
+  it("video_url present but not a string → the whole page is malformed, as for every field", () => {
+    for (const v of [123, null, true, {}, [CLIP]]) {
+      expect(page({ ...VIDEO, video_url: v }), String(v)).toBeNull();
+      expect(docBaiTin({ ...VIDEO, body: "x", video_url: v }), String(v)).toBeNull();
+    }
+  });
+
   it("the URL is never logged and never sent back up", async () => {
     const said: unknown[] = [];
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((k) =>

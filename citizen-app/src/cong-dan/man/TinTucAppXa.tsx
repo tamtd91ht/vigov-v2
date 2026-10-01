@@ -102,6 +102,42 @@ export function EventDetails({ tin }: { tin: TinXaTomTat }) {
   );
 }
 
+/**
+ * OPENS A VIDEO LINK OUTSIDE THE APP — `true` when it opened. Injected by the shell (`App.tsx` `AppRieng`, which
+ * opens it through the one declared door under the destination "video"): this half may not import `features/` or
+ * `zmp-sdk` (`ranh-gioi-hai-nua.test.ts` §3a), the same way it receives the Zalo name bridge. Not injected (tests,
+ * the shared app) → no button.
+ */
+export type OpenVideo = (url: string) => Promise<boolean>;
+
+/**
+ * One tap on "Xem video": hand the commune's link to the opener, unchanged, and answer whether it FAILED. A
+ * rejected promise is a failure too — never an unhandled rejection under a button. PURE apart from `open`.
+ */
+export async function videoOpenFailed(open: OpenVideo, url: string): Promise<boolean> {
+  return !(await open(url).catch(() => false));
+}
+
+/**
+ * The "Xem video" button (red primary `xa-nut`: ≥44px, body-size text) and, after a failed tap, one sentence
+ * saying what to do next (`xa-error-box`, `role="alert"`, words — not colour alone). PURE: `failed` is the
+ * caller's state.
+ */
+export function WatchVideo(props: { failed: boolean; onTap: () => void }) {
+  return (
+    <div className="xa-bai__video">
+      <button type="button" className="xa-nut" onClick={props.onTap}>
+        {XA_TN.watch_video}
+      </button>
+      {props.failed && (
+        <p className="xa-error-box" role="alert">
+          {XA_TN.watch_video_failed}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Today's date in Vietnam, `YYYY-MM-DD` — the one clock read of the news cards. */
 export function todayVN(now: number = Date.now()): string {
   return new Date(now + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -490,10 +526,14 @@ export function BaiTinXa(props: {
   /** Tin đã tải ở danh sách — nguồn "tin liên quan" (không gọi thêm mạng). */
   ds?: readonly TinXaTomTat[];
   onMo?: (id: string) => void;
+  /** The shell's opener for a video link (`OpenVideo`). Absent → no "Xem video" button. */
+  openVideo?: OpenVideo;
 }) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
   const [coverFailed, setCoverFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
   const da_tai = useRef(false);
+  const openVideo = props.openVideo;
 
   async function tai() {
     datTrang({ kieu: "dang-tai" });
@@ -511,6 +551,17 @@ export function BaiTinXa(props: {
   // known → the old general title.
   const type = trang.kieu === "xong" ? trang.bai.type : (props.ds?.find((t) => t.id === props.id)?.type ?? null);
   const title = type !== null ? NEWS_TYPE_LABEL[type] : TIN_XA.tieu_de;
+
+  // The button exists only with BOTH a link on the item and an opener from the shell. A new tap clears the old
+  // failure first, so the sentence never stands under a tap that is still opening.
+  const videoUrl = trang.kieu === "xong" ? trang.bai.videoUrl : undefined;
+  const onWatchVideo =
+    openVideo === undefined || videoUrl === undefined
+      ? undefined
+      : () => {
+          setVideoFailed(false);
+          void videoOpenFailed(openVideo, videoUrl).then(setVideoFailed);
+        };
 
   return (
     <>
@@ -533,6 +584,8 @@ export function BaiTinXa(props: {
             onCoverFail={() => setCoverFailed(true)}
             ds={props.ds ?? []}
             onMo={props.onMo}
+            videoFailed={videoFailed}
+            onWatchVideo={onWatchVideo}
           />
         )}
       </TrangCon>
@@ -557,13 +610,13 @@ export function ArticleCover(props: { imageUrl: string | undefined; failed: bool
 }
 
 /**
- * A loaded article — cover, title, meta line (published at), the event block, body, related items. PURE: the
- * cover's failure is the caller's.
+ * A loaded article — cover, title, meta line (published at), the event block, the "Xem video" button, body,
+ * related items. PURE: the cover's and the video's failures are the caller's.
  *
- * NO "Xem video" BUTTON YET, though `video_url` is on the wire (ADR 0047 §6 G1): every way out of the app goes
- * through `features/tinh-nang/mo-ra-ngoai.ts` and a destination declared in `content/dich-ra-ngoai.ts`, and
- * that list IS the privacy policy's counted sentence — a new destination changes the policy's wording, which
- * the owner holds back for review (G9, 01/10/2026). Not built until that is decided.
+ * "Xem video" (owner, 01/10/2026, ADR 0047 §6): only when the caller passes `onWatchVideo`, which `BaiTinXa` does
+ * only for an item with a `videoUrl` (a `video` item with an https link) AND an injected opener. The way out is
+ * the declared destination `"video"` (`content/dich-ra-ngoai.ts`), so the privacy policy's counted sentence
+ * names it.
  */
 export function NewsArticle(props: {
   bai: BaiTinXaData;
@@ -571,6 +624,8 @@ export function NewsArticle(props: {
   onCoverFail: () => void;
   ds: readonly TinXaTomTat[];
   onMo?: (id: string) => void;
+  onWatchVideo?: () => void;
+  videoFailed?: boolean;
 }) {
   const { bai } = props;
   return (
@@ -579,6 +634,7 @@ export function NewsArticle(props: {
       <h2 className="xa-bai__tieu-de">{bai.tieu_de}</h2>
       <p className="xa-phu">{dongPhu(bai)}</p>
       <EventDetails tin={bai} />
+      {props.onWatchVideo !== undefined && <WatchVideo failed={props.videoFailed ?? false} onTap={props.onWatchVideo} />}
       <div className="xa-ke" />
       {chiaDoan(bai.noi_dung).map((doan, i) => (
         <p key={i} className="xa-bai__doan">

@@ -520,8 +520,9 @@ lượt soạn thảo này, giữ lại vì chúng nói rõ ranh giới hơn m�
 
 ### Câu ĐẾM số chỗ mở trang ngoài — không còn gõ tay (21/09/2026, tối)
 
-Mục "Chuyển dữ liệu cho bên thứ ba" khai *"Có **năm** chỗ ứng dụng mở một trang bên ngoài"* rồi
-liệt kê đủ năm. Con số ấy đã phải sửa **bốn lần trong hai ngày** (ba → hai → ba → năm), lần nào
+Mục "Chuyển dữ liệu cho bên thứ ba" khai *"Có **sáu** chỗ ứng dụng mở một trang bên ngoài"* rồi
+liệt kê đủ sáu (thứ sáu — video xã đăng kèm tin — thêm 01/10/2026, tự sinh từ danh sách). Con số
+ấy đã phải sửa **bốn lần trong hai ngày** (ba → hai → ba → năm), lần nào
 cũng do một **người** đọc lại văn bản mà phát hiện, không lần nào do một phép kiểm.
 
 Nên nó thôi là một con số gõ tay:

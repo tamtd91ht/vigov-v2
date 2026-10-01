@@ -240,6 +240,21 @@ describe("câu khai của chính sách khớp với danh sách đích", () => {
     );
   });
 
+  it("SÁU đích từ 01/10/2026 — đích thứ sáu là video xã đăng kèm một tin, và câu nói ra ai chọn nơi ấy", () => {
+    // Ghim con số HÔM NAY để lần thêm/bớt đích tiếp theo là một ca đỏ có người đọc, không phải một câu
+    // pháp lý lặng lẽ đổi (chủ dự án đồng ý đổi câu này cho đích video, ADR 0047 §6, 01/10/2026).
+    expect(DICH_MO_RA_NGOAI).toHaveLength(6);
+    expect(cauKhaiDichRaNgoai()).toMatch(/^Có sáu chỗ ứng dụng mở một trang bên ngoài, và cả sáu đều chỉ mở khi chính bạn bấm: /);
+    const video = DICH_MO_RA_NGOAI.find((d) => d.ma === "video");
+    expect(video, "nút Xem video mở một nơi mà chính sách không khai").toBeDefined();
+    // Không phải một host cố định: đó là đường dẫn XÃ đăng — câu phải nói đúng như vậy, không gọi tên một trang
+    // nào mà app không bảo đảm được.
+    expect(video!.trong_chinh_sach).toMatch(/xã đăng/);
+    expect(video!.trong_chinh_sach).toMatch(/đúng địa chỉ xã đã đăng/);
+    // Và vế "không gửi kèm thông tin nào của bạn" vẫn phủ lên nó.
+    expect(cauKhaiDichRaNgoai()).toContain("Ứng dụng không gửi kèm thông tin nào của bạn khi mở chúng");
+  });
+
   it("đọc số thành chữ, và không im lặng khi vượt bảng", () => {
     expect(soChu(5)).toBe("năm");
     expect(soChu(10)).toBe("mười");

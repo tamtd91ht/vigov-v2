@@ -11,11 +11,9 @@
  *                                                         → { items: [{ id, title, summary, published_on,
  *                                                             category_name, type?, source?, image_url?,
  *                                                             published_at?, event_starts_at?,
- *                                                             event_ends_at?, event_place? }],
+ *                                                             event_ends_at?, event_place?, video_url? }],
  *                                                             next_cursor, has_more }   (type: b22bf76;
- *                                                             the rest: ADR 0047 §6, 2026-09-30/10-01.
- *                                                             `video_url` is on the wire and NOT read
- *                                                             yet — see `TinTucAppXa.tsx` `NewsArticle`)
+ *                                                             the rest: ADR 0047 §6, 2026-09-30/10-01)
  *   GET comms     /api/v1/commune-news/{id}?host=…        → cùng một mục, thêm `body` (văn bản thuần)
  *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
  *                                                         → { items: [{ id, name, parent_id?, order }] }
@@ -24,7 +22,7 @@
  *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
  *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
  *   `service-comms/internal/http/tin_xa_cong_khai.go:103-123`; `published_at`, `event_*` (2ed818bd) và
- *   `image_url` (01/10/2026) từ cùng tệp `:155-177,209-226`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là máy chủ cũ, không phải sai khuôn.
+ *   `image_url` (01/10/2026) từ cùng tệp `:155-177,209-226`; `video_url` (01/10/2026) `:168-171,217-221`. Mọi trường thêm đều TUỲ CHỌN: vắng mặt là máy chủ cũ, không phải sai khuôn.
  *
  * ⚠ CÔNG KHAI, KHÔNG BEARER. Ba tuyến này chỉ trả thứ xã đã công bố cho người dân. Tệp gọi mạng
  * (`goi-vigov.ts`) không gắn `Authorization` cho chúng — gắn vào là gửi phiên công dân tới một tuyến
@@ -296,6 +294,12 @@ export type TinXaTomTat = {
   readonly eventStartsAt?: string;
   readonly eventEndsAt?: string;
   readonly eventPlace?: string;
+  /**
+   * The link the commune posted for a `video` item — an absolute `https:` URL, or ABSENT (another type, no
+   * link, or a value `readVideoUrl` refused). Opened OUTSIDE the app only on the citizen's tap ("Xem video"),
+   * through the shell's opener (`moRaNgoai("video", …)`); never fetched, embedded or logged here.
+   */
+  readonly videoUrl?: string;
 };
 
 export type BaiTinXa = TinXaTomTat & {
@@ -344,6 +348,32 @@ function readInstant(v: unknown): string | undefined | null {
   return Number.isNaN(new Date(v).getTime()) ? undefined : v;
 }
 
+/**
+ * Optional `video_url` (`comms.tinXaRa`, `type: string`, omitted when empty): absent → `undefined`; present and
+ * not a string → malformed (`null`, the whole page is refused — `null` included, the contract does not allow it).
+ *
+ * ONLY AN ABSOLUTE `https:` URL IS KEPT, though the server accepts `http:` too (`domain.ChuanHoaURL`). Anything
+ * else is absent, not malformed — the article is still worth reading; it just has no "Xem video" button. Why
+ * stricter than the server, when the link opens in Zalo's browser and not inside this page (so mixed content is
+ * not the reason it is for `image_url`):
+ *   · the button sits on a public authority's screen, so the citizen trusts what opens. Over `http:` anyone on
+ *     the same network (a café Wi-Fi) can replace that page — a fake "đăng nhập Zalo để xem" form is then shown
+ *     under the commune's name. Over `https:` the page that opens is the one the commune posted;
+ *   · `javascript:` / `data:` / a relative path must never reach the opener at all.
+ * COST, stated: a commune that posts an `http:` link sees no button for it in the app. Video hosts serve
+ * `https:`; the write path accepting `http:` is a finding for `service-comms` / web-admin, not something this
+ * screen papers over. The check reads the PROTOCOL only; the string returned is the one received.
+ */
+function readVideoUrl(v: unknown): string | undefined | null {
+  if (v === undefined) return undefined;
+  if (!laChuoi(v)) return null;
+  try {
+    return new URL(v).protocol === "https:" ? v : undefined;
+  } catch {
+    return undefined; // not an absolute URL
+  }
+}
+
 /** Optional plain text (`event_place`): absent → `undefined`; not a string → malformed; blank → absent. */
 function readOptionalText(v: unknown): string | undefined | null {
   if (v === undefined) return undefined;
@@ -372,7 +402,15 @@ function docTin(m: unknown): TinXaTomTat | null {
   const eventStartsAt = readInstant(r.event_starts_at);
   const eventEndsAt = readInstant(r.event_ends_at);
   const eventPlace = readOptionalText(r.event_place);
-  if (imageUrl === null || publishedAt === null || eventStartsAt === null || eventEndsAt === null || eventPlace === null) {
+  const videoUrl = readVideoUrl(r.video_url);
+  if (
+    imageUrl === null ||
+    publishedAt === null ||
+    eventStartsAt === null ||
+    eventEndsAt === null ||
+    eventPlace === null ||
+    videoUrl === null
+  ) {
     return null;
   }
   const type = isNewsType(r.type) ? r.type : null;
@@ -392,6 +430,9 @@ function docTin(m: unknown): TinXaTomTat | null {
     ...(isEvent && eventStartsAt !== undefined ? { eventStartsAt } : {}),
     ...(isEvent && eventStartsAt !== undefined && eventEndsAt !== undefined ? { eventEndsAt } : {}),
     ...(isEvent && eventPlace !== undefined ? { eventPlace } : {}),
+    // Gated by type like the event fields, and as on the server (`tin_xa_cong_khai.go:217-221`): a "Xem video"
+    // button on an article that is not a video would open a link the commune never offered as one.
+    ...(type === "video" && videoUrl !== undefined ? { videoUrl } : {}),
   };
 }
 
