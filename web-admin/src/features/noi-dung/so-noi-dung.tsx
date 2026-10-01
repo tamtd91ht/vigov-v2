@@ -46,7 +46,6 @@ import {
   EVENT_TIME_HINT,
   FORM_TRONG,
   GHI_CHU_KHONG_CO_XOA,
-  GHI_CHU_LUOT_XEM,
   giaTriTuHang,
   KHONG_CO_GI_DOI,
   LOAI_MAC_DINH,
@@ -64,7 +63,6 @@ import {
   NHAN_NUT_THEM,
   NHAN_O_DANG,
   nhanLoai,
-  nhanLuotXem,
   nhanMoc,
   nhanMucDanhMuc,
   nhanNgayDang,
@@ -622,7 +620,6 @@ export function BangNoiDung({
               <th scope="col">Chuyên mục</th>
               <th scope="col">Tệp đính kèm</th>
               <th scope="col">Ngày đăng</th>
-              <th scope="col">Lượt xem</th>
               <th scope="col">Trạng thái</th>
               <th scope="col">Sửa</th>
             </tr>
@@ -645,7 +642,6 @@ export function BangNoiDung({
                     {nhanNgayDang(nd.published_on)}
                     {firstPublished !== null && <span className="dong-phu">{firstPublished}</span>}
                   </td>
-                  <td>{nhanLuotXem(nd.view_count)}</td>
                   <td>
                     <span className={lopChipTrangThai(nd.status)}>{nhanTrangThai(nd.status)}</span>
                   </td>
@@ -667,7 +663,6 @@ export function BangNoiDung({
           </tbody>
         </table>
       </div>
-      <p className="ghi-chu">{GHI_CHU_LUOT_XEM}</p>
       <p className="ghi-chu">{GHI_CHU_KHONG_CO_XOA}</p>
     </>
   );
@@ -926,7 +921,8 @@ export function FormNoiDung({
 /**
  * Khối chỉ đọc của biểu mẫu SỬA — những thứ máy chủ quyết và biểu mẫu không đổi được.
  *
- * `luot_xem` CHỈ HIỆN, KHÔNG CÓ Ô NÀO SỬA NÓ. `hand_edited` là nửa nhìn thấy được của §10.4, và
+ * KHÔNG CÓ `luot_xem`: hệ thống không đếm lượt xem (ADR 0047), người dùng bỏ cột ấy 01/10/2026 —
+ * xem `PHAN_CHUA_DUNG`. `hand_edited` là nửa nhìn thấy được của §10.4, và
  * đây là chỗ duy nhất màn hình biết được rằng bản sửa vừa rồi nay được bảo vệ khỏi lượt đồng bộ
  * sau. `source_url` hiện dưới dạng CHỮ, không phải một liên kết bấm được: máy chủ chỉ nhận
  * `http(s)` khi GHI, nhưng một hàng cũ trong CSDL không có gì bảo đảm điều đó, và một `href` dựng
@@ -948,10 +944,6 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
           {nhanNgayDang(hang.published_on)}
           {firstPublished !== null && <> · {firstPublished}</>}
         </dd>
-      </div>
-      <div>
-        <dt>Lượt xem</dt>
-        <dd>{nhanLuotXem(hang.view_count)}</dd>
       </div>
       <div>
         <dt>Nguồn</dt>

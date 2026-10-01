@@ -131,10 +131,6 @@ export const CANH_BAO_LIEN_KET_ANH =
   "Chỉ nhận địa chỉ bắt đầu bằng http:// hoặc https://, tối đa " +
   `${URL_TOI_DA} ký tự. Tải ảnh từ máy chưa dựng được — xem phần chưa dựng được ở đầu màn.`;
 
-/** Câu đứng cạnh cột `Lượt xem` — con số luôn là 0, và im lặng về điều đó là nói dối. */
-export const GHI_CHU_LUOT_XEM =
-  "Lượt xem LUÔN là 0: hệ thống không đếm lượt xem, kể cả khi bà con mở bài trên Mini App.";
-
 /** Câu đứng cạnh cột hành động — vì sao không có nút xoá. */
 export const GHI_CHU_KHONG_CO_XOA =
   "Không có nút xoá, có chủ ý: gỡ một bài khỏi Mini App là tắt ô “Đăng lên Mini App” ở màn sửa. " +
@@ -385,11 +381,6 @@ export function nhanNgayDang(ngay: string | null): string {
 /** §6 cột `Tệp đính kèm`: `🔗 Có ảnh` / `—`. Suy từ `has_image`, thứ máy chủ đã suy từ URL ảnh. */
 export function nhanTepDinhKem(coAnh: boolean): string {
   return coAnh ? "🔗 Có ảnh" : DAU_GACH;
-}
-
-/** §6 cột `Lượt xem`: `👁 0`. */
-export function nhanLuotXem(n: number): string {
-  return `👁 ${n}`;
 }
 
 /**
@@ -817,11 +808,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "rằng bà con không thấy cán bộ nào.",
   },
   {
-    ten: "Cột `Lượt xem` luôn bằng 0 (§6)",
+    ten: "Cột `Lượt xem` (§6)",
     viSao:
-      "Không phải lỗi hiển thị: hệ thống không đếm lượt xem (ADR 0047), kể cả trên tuyến công " +
-      "khai mà Mini App đọc tin của xã, nên `luot_xem` đứng yên ở 0. Cột vẫn được vẽ vì nó là cột " +
-      "của §6 — kèm một dòng chữ nói rõ vì sao nó là 0.",
+      "Bỏ có chủ ý, không phải chưa kịp làm (người dùng quyết định 01/10/2026): hệ thống không " +
+      "đếm lượt xem (ADR 0047), kể cả trên tuyến công khai mà Mini App đọc tin của xã. Một cột " +
+      "luôn bằng 0 chỉ làm cán bộ tưởng bài của xã không ai đọc, nên bảng và khối chi tiết không " +
+      "vẽ cột ấy.",
   },
   {
     ten: "Nút xoá một bài (§9 đề xuất `DELETE`)",

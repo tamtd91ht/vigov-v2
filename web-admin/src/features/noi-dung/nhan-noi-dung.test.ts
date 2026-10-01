@@ -23,7 +23,6 @@ import {
   lopChipTrangThai,
   MOI_LOAI,
   nhanLoai,
-  nhanLuotXem,
   nhanMoc,
   nhanMucDanhMuc,
   nhanNgayDang,
@@ -166,11 +165,6 @@ describe("hai ô nhỏ của bảng §6", () => {
   it("`Tệp đính kèm` suy từ `has_image`", () => {
     expect(nhanTepDinhKem(true)).toBe("🔗 Có ảnh");
     expect(nhanTepDinhKem(false)).toBe(DAU_GACH);
-  });
-
-  it("`Lượt xem` luôn có ký hiệu mắt, kể cả khi bằng 0", () => {
-    expect(nhanLuotXem(0)).toBe("👁 0");
-    expect(nhanLuotXem(1234)).toBe("👁 1234");
   });
 
   it("tóm tắt gộp về một dòng rồi cắt", () => {

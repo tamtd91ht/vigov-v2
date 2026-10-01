@@ -14,7 +14,6 @@ import {
   EVENT_TIME_HINT,
   FORM_TRONG,
   GHI_CHU_KHONG_CO_XOA,
-  GHI_CHU_LUOT_XEM,
   giaTriTuHang,
   MOI_DANH_MUC,
   MOI_LOAI_NHAN,
@@ -187,7 +186,7 @@ describe("thân bài ra tới trang dưới dạng DỮ LIỆU, không phải m�
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 describe("bảng nội dung §6", () => {
-  it("bảy cột dữ liệu của đặc tả cùng ra một hàng", () => {
+  it("sáu cột dữ liệu cùng ra một hàng", () => {
     const html = veBang([hang()]);
 
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
@@ -196,8 +195,17 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain("Chuyển đổi số");
     expect(html).toContain("🔗 Có ảnh");
     expect(html).toContain("14/9/2026");
-    expect(html).toContain("👁 0");
     expect(html).toContain("Đang hiện");
+  });
+
+  it("KHÔNG có cột `Lượt xem` — hệ thống không đếm lượt xem (người dùng bỏ cột 01/10/2026)", () => {
+    // `view_count` vẫn có trong hợp đồng; hàng thử mang một số KHÁC 0 để một ô còn sót lại không
+    // trốn được sau con số 0 của dữ liệu mặc định.
+    const html = veBang([hang({ view_count: 42 })]);
+    expect(html).not.toContain("Lượt xem");
+    expect(html).not.toContain("👁");
+    expect(html).not.toContain(">42<");
+    expect(html.match(/<th scope="col">/g)?.length).toBe(7);
   });
 
   it("cột hành động CHỈ có `✎` — không nút xoá, không thùng rác", () => {
@@ -216,9 +224,8 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain(nhuTrongHTML("Sửa: Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"));
   });
 
-  it("hai dòng chữ dưới bảng nói vì sao lượt xem là 0 và vì sao không có nút xoá", () => {
+  it("dòng chữ dưới bảng nói vì sao không có nút xoá", () => {
     const html = veBang([hang()]);
-    expect(html).toContain(nhuTrongHTML(GHI_CHU_LUOT_XEM));
     expect(html).toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_XOA));
   });
 
@@ -419,9 +426,11 @@ describe("khối thông tin chỉ đọc", () => {
     expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />)).toContain("CB-2026-7K3M9Q");
   });
 
-  it("lượt xem chỉ HIỆN — không có ô nhập nào cho nó", () => {
+  it("KHÔNG có dòng `Lượt xem` và không có ô nhập nào", () => {
     const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 42 })} />);
-    expect(html).toContain("👁 42");
+    expect(html).not.toContain("Lượt xem");
+    expect(html).not.toContain("👁");
+    expect(html).not.toContain("42");
     expect(html).not.toContain("<input");
   });
 });
