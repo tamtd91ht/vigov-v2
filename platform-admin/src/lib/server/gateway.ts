@@ -9,6 +9,7 @@ import { request as httpsRequest } from "node:https";
 import { pipeline, Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
+import { operatorHost } from "./operator-host";
 import { platformOrigin } from "./platform-origin";
 
 /**
@@ -22,8 +23,13 @@ import { platformOrigin } from "./platform-origin";
  *     `operator` realm and the `ops.*` key on every call (ADR 0048 §01/10 #2). A copy here drifts.
  *   - Read, parse or log the session cookie. It travels in `cookie` unchanged, like every other
  *     end-to-end header; `set-cookie` comes back unchanged.
- *   - Decide the host. `Host` is forwarded untouched: service-platform's operator edge answers
- *     only on OPERATOR_HOST and 404s everything else (ADR 0048 §28/09 #2 + #4).
+ *   - Relay the client's `Host`. service-platform's outer mux (`buildOuter`,
+ *     `service-platform/cmd/server/operator_edge.go`) does NOT 404 a non-operator host: it sends
+ *     Host == OPERATOR_HOST to the operator chain and EVERY other Host to the COMMUNE chain. A
+ *     relayed `Host: <commune host>` would reach platform's commune REST surface from this pod,
+ *     which may be a trusted proxy there. So the upstream Host is pinned to OPERATOR_HOST, read
+ *     server-side per request (`operator-host.ts`); the client's value is dropped. `Origin` is
+ *     forwarded unchanged — platform compares it with https://OPERATOR_HOST on writes.
  *   - Pick a route table. TASK-05's operator routes are not published yet, so every `/api/v1/*`
  *     path goes to platform and platform 404s what it does not serve. There is no second owner
  *     to choose between, by design.
@@ -46,7 +52,7 @@ const CONNECTION_SCOPED = new Set([
 ]);
 
 /**
- * Dropped from the REQUEST on top of the connection-scoped ones: `host` is set explicitly;
+ * Dropped from the REQUEST on top of the connection-scoped ones: `host` is pinned to OPERATOR_HOST;
  * `forwarded` and `x-forwarded-host` are second claims about the host that some future code might
  * believe; `expect` was already answered by this server.
  */
@@ -120,7 +126,8 @@ type UpstreamCall = {
 /**
  * WHY `node:http` AND NOT `fetch`, measured in web-admin (ledger `web-admin/goc-api-noi-bo`):
  * undici overwrites a caller-set `Host` with the URL's host, so platform would see its internal
- * service name instead of OPERATOR_HOST — and 404 every operator call.
+ * service name instead of OPERATOR_HOST — and route every operator call to the commune chain, which
+ * 404s a host it does not know.
  */
 function callPlatform(origin: URL, call: UpstreamCall): Promise<IncomingMessage> {
   const send = origin.protocol === "https:" ? httpsRequest : httpRequest;
@@ -185,8 +192,21 @@ export async function forwardToPlatform(req: Request): Promise<Response> {
     );
   }
 
-  const host = req.headers.get("host") ?? "";
-  if (host === "") return jsonError(404, "not_found", "Không tìm thấy trang này.");
+  // FAIL CLOSED the same way: no pinned host, no call. Never the client's Host as a fallback —
+  // that is the exact relay into platform's commune chain this variable exists to prevent.
+  const pinned = operatorHost();
+  if (!pinned.ok) {
+    console.error(
+      JSON.stringify({ msg: "api_gateway_unconfigured", reason: pinned.reason, detail: pinned.detail }),
+    );
+    logLine(req.method, 503, startedAt);
+    return jsonError(
+      503,
+      "platform_unconfigured",
+      "Khu vận hành chưa được cấu hình kết nối tới dịch vụ nền tảng. Vui lòng báo bộ phận kỹ thuật.",
+    );
+  }
+  const host = pinned.host;
 
   const url = new URL(req.url);
   const hasBody = req.method !== "GET" && req.method !== "HEAD" && req.body !== null;

@@ -44,6 +44,7 @@ tiếp sang `service-platform` (`src/lib/server/gateway.ts`). Không có biến 
 | Biến (chỉ phía máy chủ) | Nghĩa | Vắng thì |
 |---|---|---|
 | `PLATFORM_HTTP_ADDR` | Origin cổng REST của `service-platform` trong cụm, dạng `scheme://host:port`, không đường dẫn, không thông tin đăng nhập. Trong cụm: tên Service `platform`, cổng `rest` (`deploy/base/platform/service.yaml`) | Mọi `/api/v1/*` trả **503**, không đoán địa chỉ nào; log nêu tên biến, không nêu giá trị |
+| `OPERATOR_HOST` | Cùng tên, cùng giá trị với biến của `service-platform` (`core/config/operator.go`): tên host trần, viết thường, không scheme / cổng / đường dẫn, ví dụ `admin.vigov.vn`. Cổng nối gửi giá trị này làm `Host` cho **mọi** lần gọi, không bao giờ chuyển `Host` của trình duyệt — `service-platform` đưa mọi Host khác vào chuỗi của xã | Như trên: **503**, không gọi đi; log nêu tên biến, không nêu giá trị |
 
 Đợt 1 (ADR 0048 §01/10 #4) đã nối với tuyến vận hành của `service-platform`
 (`service-platform/internal/http/operator_routes.go`): đăng nhập + đăng ký ứng dụng xác thực lần
