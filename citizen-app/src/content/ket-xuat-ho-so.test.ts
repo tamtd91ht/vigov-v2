@@ -16,6 +16,7 @@ import {
   NEWS_CATEGORIES_PATH,
   newsCategoriesAddress,
 } from "../cong-dan/api/hop-dong-cong-khai";
+import { diaChiViGov } from "../cong-dan/api/dia-chi-vigov";
 import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
 import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "../cong-dan/man/noi-dung";
 import {
@@ -23,6 +24,8 @@ import {
   bridgeBodyWithPhone,
   COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
+  COMMUNE_APP_SESSION_PATH,
+  communeAppSessionAddress,
   communeAppSessionBody,
   LOCATION_FIELDS,
   LOCATION_PATH,
@@ -460,10 +463,19 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     expect(locationRow!.truong).toBe(LOCATION_FIELDS);
     expect(locationRow!.man).toBe(SEND_SCREEN_NAME);
     const tuyen = DUONG_ROI_KHOI_MAY.map((d) => d.tuyen);
-    expect(tuyen.filter((t) => t === "/api/v1/sessions")).toHaveLength(4);
+    // Three bodies of the SHARED app's `vihat-miniapp` login; the commune app's login left it (ADR 0066).
+    expect(tuyen.filter((t) => t === "/api/v1/sessions")).toHaveLength(3);
     // The commune app's login prints ITS table — `appId` and `phoneToken`, no commune domain — after a tap.
     const communeAppRow = DUONG_ROI_KHOI_MAY.find((d) => d.truong === COMMUNE_APP_SESSION_FIELDS);
     expect(communeAppRow, "hồ sơ không khai đăng nhập từ app riêng của xã").toBeDefined();
+    // ...and it says the truth about WHERE: ViGov identity's own route, directly (ADR 0066).
+    expect(communeAppRow!.tuyen).toBe(COMMUNE_APP_SESSION_PATH);
+    expect(communeAppRow!.tuyen).toBe("/api/v1/citizen-sessions");
+    expect(communeAppRow!.may_chu).toMatch(/^ViGov — dịch vụ `identity`/);
+    expect(communeAppRow!.may_chu).toContain("không qua máy chủ của Tập đoàn ViHAT Group");
+    // The declared path is the one the real call reaches, on the host the state half's map gives.
+    expect(new URL(communeAppSessionAddress(diaChiViGov("identity", ""))).pathname).toBe(communeAppRow!.tuyen);
+    expect(tuyen.filter((t) => t === COMMUNE_APP_SESSION_PATH)).toHaveLength(1);
     expect(communeAppRow!.nguoi_dung_bam).toBe(true);
     expect(communeAppRow!.man).toBe(COMMUNE_APP_SESSION_SCREENS);
     expect(communeAppRow!.truong.map((t) => t.khoa)).not.toContain("communeHostHint");

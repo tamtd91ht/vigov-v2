@@ -33,6 +33,13 @@
  * ⚠ ĐỊA CHỈ MÁY CHỦ LÀ MỘT. Không bao giờ ghép địa chỉ theo từng đơn vị: máy chủ là bên ghi
  * phiên đang làm việc với ai, client không được tự chọn máy chủ của mình.
  * → `.claude/skills/zalo-miniapp-multi-tenant` §"The API host is singular".
+ *
+ * ⚠ ONE EXCEPTION SINCE ADR 0066 (01/10/2026): the FOURTH and FIFTH bodies — login from a commune's OWN
+ *   app (`--vao-thang`) — no longer go to `vihat-miniapp`. They go to ViGov `service-identity`,
+ *   `POST /api/v1/citizen-sessions` (`COMMUNE_APP_SESSION_PATH` below), because that app's secret now sits
+ *   in ViGov. Still one host per route, still not chosen per commune: the host is the platform-wide
+ *   `identity` row of `cong-dan/api/dia-chi-vigov.ts`, never `VIGOV_API_HOST` (that variable is
+ *   `vihat-miniapp`'s address). Every other body here still goes to `vihat-miniapp`.
  */
 import { diaChiApi } from "../../api/dia-chi";
 import type { TruongGuiDi } from "../../api/hop-dong-yeu-cau";
@@ -252,7 +259,14 @@ export function bridgeBodyWithPhone(yc: BridgeRequestWithPhone): string {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
- * THÂN THỨ TƯ — ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ (`vihat-miniapp` 4114f00, 29/09/2026)
+ * THÂN THỨ TƯ — ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ (`vihat-miniapp` 4114f00, 29/09/2026;
+ * MOVED TO ViGov `service-identity` BY ADR 0066, 01/10/2026)
+ *
+ *   POST https://identity.api.vigov.vn/api/v1/citizen-sessions   (NOT `vihat-miniapp` `/api/v1/sessions`)
+ *
+ *   The body and the status table below are UNCHANGED by the move — the owner fixed them identical to
+ *   `vihat-miniapp`'s (ADR 0066, "sáu câu dựng tuyến" #1). The `vihat-miniapp` file references below
+ *   describe the contract this route copies; the server that answers is now identity.
  *
  *   gửi : { "accessToken", "phoneToken", "appId": "<App ID của app đang chạy>" }
  *         — KHÔNG `communeHostHint`, KHÔNG `communeConfirmed`: `vihat-miniapp` nhận ra app riêng từ
@@ -274,6 +288,29 @@ export function bridgeBodyWithPhone(yc: BridgeRequestWithPhone): string {
  *   phát một PHIẾU THƯƠNG MẠI, tiêu luôn số điện thoại vào CSDL thương mại. Vì vậy `app_id` rỗng không
  *   bao giờ tới hàm này: `cau-vigov.ts` dừng trước khi xin mã nào.
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Path of the commune app's login at ViGov identity (ADR 0066). Carries nothing of the user (rule 3 #4).
+ *
+ * Exported for `content/ket-xuat-ho-so.ts` (the data-flow declaration) and `bundle-for-zalo.test.ts` (one
+ * call path per route) — both read this constant instead of retyping it, so a contract change cannot leave
+ * a stale copy that stays green because it finds nothing.
+ */
+export const COMMUNE_APP_SESSION_PATH = "/api/v1/citizen-sessions";
+
+/**
+ * Full address of the commune app's login, or EMPTY — `goi-may-chu.ts` then sends nothing.
+ *
+ * WHY THE HOST IS A PARAMETER: it is ViGov's `identity` host, which lives in the state half's address map
+ * (`cong-dan/api/dia-chi-vigov.ts`). This file is the commercial half and may not import that map, and
+ * neither may `App.tsx` (`ranh-gioi-hai-nua.test.ts` §3a). So the state half hands the host to the opener
+ * it is injected with (`cong-dan/api/mo-phien-vigov.ts`), and the path is joined here. A host typed into
+ * this file would be a second copy of the map — the one nobody updates.
+ */
+export function communeAppSessionAddress(identityHost: string): string {
+  const host = identityHost.replace(/\/+$/, "");
+  return host === "" ? "" : `${host}${COMMUNE_APP_SESSION_PATH}`;
+}
 
 /** Yêu cầu đăng nhập từ app riêng: hai mã Zalo + App ID của app đang chạy. */
 export type CommuneAppSessionRequest = MaDangNhap & {
@@ -310,6 +347,7 @@ export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * FIFTH BODY — THE `--demo` BUILD'S LOGIN FROM A COMMUNE'S OWN APP (owner 01/10/2026, ADR 0047 §6)
  *
+ *   route  : the fourth body's — ViGov identity `POST /api/v1/citizen-sessions` (ADR 0066)
  *   send   : { "appId", "demoIdentity": true }  — NO `accessToken`, NO `phoneToken`
  *   receive: the fourth body's 201, errors and status table, unchanged (`openCommuneAppSessionCall`)
  *
@@ -321,8 +359,8 @@ export function communeAppSessionBody(req: CommuneAppSessionRequest): string {
  * The server side must accept this body ONLY for an App ID it lists as a demo app and then hand ViGov the
  * fixed number; any other App ID is refused, so this body never turns a real app into one without phone
  * verification. Built only under `DEMO_BUILD` (`App.tsx`), so a normal bundle does not carry it at all.
- * ⚠ As of 01/10/2026 no server accepts it yet (ADR 0066 moves the commune app's login into
- * `service-identity`; that route is not built) — a refusal lands in the ordinary status table.
+ * ⚠ As of 01/10/2026 the identity route is being built in parallel (ADR 0066) — until it answers, a
+ * refusal lands in the ordinary status table.
  *
  * NOT declared in `content/ket-xuat-ho-so.ts`: that is the Zalo submission file, and a `--demo` build is
  * never submitted — the owner drops the flag first.
@@ -452,6 +490,11 @@ export const LOCATION_FIELDS: readonly TruongGuiDi[] = [
  * selects which app secret exchanges the token — the commune app's own. Without it the server uses the
  * shared app's secret and Zalo answers 502 for a commune app's token. Same sentence as the login body's
  * `appId` row — one declaration, referenced, not copied.
+ *
+ * ⚠ STILL `vihat-miniapp` (01/10/2026), unlike the commune app's login: ADR 0066 decision 5 moves this
+ *   exchange into identity as well, but that is a later card and its route does not exist yet. Until then
+ *   the commune app holds its secret in TWO places, and its location keeps working only while
+ *   `vihat-miniapp` still knows the App ID.
  */
 export const COMMUNE_APP_LOCATION_FIELDS: readonly TruongGuiDi[] = [
   ...LOCATION_FIELDS,

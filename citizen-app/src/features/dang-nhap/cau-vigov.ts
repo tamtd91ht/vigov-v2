@@ -34,6 +34,7 @@ import type {
   CommuneAppSessionRequest,
   YeuCauCauViGov,
 } from "./hop-dong";
+import { communeAppSessionAddress } from "./hop-dong";
 
 /**
  * No code from Zalo. `failure` is what the SDK answered (capability + code) when it threw one; absent
@@ -113,15 +114,21 @@ export type CommuneAppLoginResult =
 
 /**
  * MỞ PHIÊN CÔNG DÂN ViGov TỪ APP RIÊNG CỦA MỘT XÃ — App ID lúc chạy + `getAccessToken` + `getPhoneNumber`
- * → `vihat-miniapp` (`hop-dong.ts` thân thứ tư). Dùng cho CẢ lần mở đầu (việc cá nhân đầu tiên) LẪN lần
- * mở lại khi ViGov trả 403 `chua_xac_thuc_so`: thân app riêng luôn mang số, nên hai việc là một lời gọi.
+ * → ViGov identity `POST /api/v1/citizen-sessions` (`hop-dong.ts` thân thứ tư; ADR 0066 — no longer
+ * `vihat-miniapp`). Dùng cho CẢ lần mở đầu (việc cá nhân đầu tiên) LẪN lần mở lại khi ViGov trả 403
+ * `chua_xac_thuc_so`: thân app riêng luôn mang số, nên hai việc là một lời gọi.
  *
  * CHỈ CHẠY SAU CÚ BẤM ĐỒNG Ý trên lời giải thích của nửa nhà nước (chính sách 3.3.4): hàm này bật hộp
  * thoại xin số của Zalo.
  *
+ * `identityHost` comes from the state half's address map, through the injected opener (`App.tsx`,
+ * `cong-dan/api/mo-phien-vigov.ts`) — see `communeAppSessionAddress` for why it is a parameter.
+ *
  * THỨ TỰ LÀ THIẾT KẾ:
- *   1. App ID trước — không rõ thì DỪNG, không hộp thoại nào hiện ra. Thân thiếu `appId` là app chung ở
- *      máy chủ, và máy chủ sẽ tiêu số điện thoại vào một phiếu thương mại (ADR 0032).
+ *   0. No address → STOP before anything: asking for the phone with nowhere to send it is a consent spent
+ *      for nothing.
+ *   1. App ID trước — không rõ thì DỪNG, không hộp thoại nào hiện ra. The server picks the app secret
+ *      (and so the commune) from `appId`; without it there is nothing to verify the codes against.
  *   2. `xinMaDangNhap`: `getAccessToken` (không hỏi ai) rồi `getPhoneNumber` (hỏi) — hỏng thì hỏng trước
  *      khi người dân bị hỏi.
  *   3. Mã rỗng (câu trả lời của nền tảng ở môi trường phát triển) không gửi.
@@ -131,10 +138,13 @@ export type CommuneAppLoginResult =
  * `readAppId` / `requestCodes` / `call` chỉ để phép kiểm thay ba mảnh — mã sản phẩm không truyền chúng.
  */
 export async function openCommuneAppSessionWithPhone(
+  identityHost: string,
   readAppId: () => string | null = readRuntimeAppId,
   requestCodes: () => Promise<KetQuaXin<MaDangNhap>> = xinMaDangNhap,
-  call: (req: CommuneAppSessionRequest) => Promise<CommuneAppBridgeResult> = openCommuneAppSessionCall,
+  call: (req: CommuneAppSessionRequest, address: string) => Promise<CommuneAppBridgeResult> = openCommuneAppSessionCall,
 ): Promise<CommuneAppLoginResult> {
+  const address = communeAppSessionAddress(identityHost);
+  if (address === "") return { kieu: "chua-khai-host" };
   const app_id = readAppId();
   if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
   const codes = await requestCodes();
@@ -143,11 +153,14 @@ export async function openCommuneAppSessionWithPhone(
   if (codes.kieu !== "xong" || codes.du_lieu.ma_truy_cap === "" || codes.du_lieu.ma_so_dien_thoai === "") {
     return noCode(codes);
   }
-  return call({
-    ma_truy_cap: codes.du_lieu.ma_truy_cap,
-    ma_so_dien_thoai: codes.du_lieu.ma_so_dien_thoai,
-    app_id,
-  });
+  return call(
+    {
+      ma_truy_cap: codes.du_lieu.ma_truy_cap,
+      ma_so_dien_thoai: codes.du_lieu.ma_so_dien_thoai,
+      app_id,
+    },
+    address,
+  );
 }
 
 /**
@@ -156,16 +169,21 @@ export async function openCommuneAppSessionWithPhone(
  * and not `getAccessToken`. A `--demo` build runs in an app Zalo has not approved, and Zalo refuses
  * `getAccessToken` to it too — calling it is what left the citizen on "Zalo chưa cho phép…".
  *
- * App ID first, as in `openCommuneAppSessionWithPhone`: unknown → stop, nothing sent (without `appId` the
- * server would treat it as the shared app). Reading `window.APP_ID` is a global, not a permission.
+ * Same route as `openCommuneAppSessionWithPhone` — ViGov identity (ADR 0066), whose demo switch is per App ID
+ * and off by default. No address → stop; App ID unknown → stop, nothing sent (the server enables the fixed
+ * identity per App ID, so there is nothing to ask without it). Reading `window.APP_ID` is a global, not a
+ * permission.
  *
  * Wired only under `DEMO_BUILD` (`App.tsx`). `readAppId` / `call` are for tests.
  */
 export async function openCommuneAppSessionWithDemoIdentity(
+  identityHost: string,
   readAppId: () => string | null = readRuntimeAppId,
-  call: (req: CommuneAppDemoSessionRequest) => Promise<CommuneAppBridgeResult> = openCommuneAppDemoSessionCall,
+  call: (req: CommuneAppDemoSessionRequest, address: string) => Promise<CommuneAppBridgeResult> = openCommuneAppDemoSessionCall,
 ): Promise<CommuneAppLoginResult> {
+  const address = communeAppSessionAddress(identityHost);
+  if (address === "") return { kieu: "chua-khai-host" };
   const app_id = readAppId();
   if (app_id === null || app_id === "") return { kieu: "khong-ro-app" };
-  return call({ app_id });
+  return call({ app_id }, address);
 }

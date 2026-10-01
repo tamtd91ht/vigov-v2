@@ -30,6 +30,7 @@ const never = vi.fn(async () => {
 describe("the bridge keeps the failure and calls nothing", () => {
   it("commune app sign-in: phone refused by Zalo", async () => {
     const result = await openCommuneAppSessionWithPhone(
+      "https://identity.vidu.example",
       () => "1234567890",
       async () => failed<MaDangNhap>(PHONE),
       never,
@@ -39,7 +40,7 @@ describe("the bridge keeps the failure and calls nothing", () => {
   });
 
   it("commune app sign-in: -201 is still refusal", async () => {
-    const result = await openCommuneAppSessionWithPhone(() => "1234567890", async () => ({ kieu: "tu-choi" }), never);
+    const result = await openCommuneAppSessionWithPhone("https://identity.vidu.example", () => "1234567890", async () => ({ kieu: "tu-choi" }), never);
     expect(result).toEqual({ kieu: "tu-choi" });
   });
 

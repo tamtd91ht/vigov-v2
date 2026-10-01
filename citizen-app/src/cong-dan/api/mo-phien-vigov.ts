@@ -19,6 +19,7 @@
  * ⚠ BEARER KHÔNG ĐI NGƯỢC LÊN. Kết quả trả cho màn hình chỉ có TÊN XÃ; bearer vào `phien-vigov.ts` và
  *   chỉ `goi-vigov.ts` đọc nó ra.
  */
+import { diaChiViGov } from "./dia-chi-vigov";
 import { datPhienViGov, layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
@@ -193,8 +194,11 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
  * ánh của mình, tra cứu phiếu của mình, chấm sao — SAU lời giải thích và cú bấm đồng ý, vì lần mở nào của
  * app riêng cũng xin số điện thoại (`vihat-miniapp` xác minh App ID bằng lượt đổi số).
  *
- * ⚠ HÀM TIÊM VÀO KHÔNG NHẬN THAM SỐ, cùng lý do `ReopenWithPhone`: App ID, hai mã Zalo và số điện thoại
- *   không bao giờ vào nửa này. Không có tên miền nào để gửi — xã do máy chủ tra từ App ID.
+ * ⚠ HÀM TIÊM VÀO NHẬN ĐÚNG MỘT THAM SỐ, VÀ NÓ ĐI RA, KHÔNG ĐI VÀO: the ViGov `identity` host from this
+ *   half's address map (ADR 0066 — the commune app's login now goes to identity). App ID, hai mã Zalo và số
+ *   điện thoại vẫn không bao giờ vào nửa này. Không có tên miền nào để gửi — xã do máy chủ tra từ App ID.
+ *   The host is handed out because the shell cannot import this map (`ranh-gioi-hai-nua.test.ts` §3a)
+ *   and the commercial half must not copy it.
  *
  * ⚠ CÙNG XÃ VỚI ĐẦU MÀN HÌNH, HOẶC KHÔNG GHI. Header của app riêng đọc tên xã từ tuyến công khai theo
  *   tên miền của bản dựng; phiên đọc tên xã từ dòng `mini_app` của App ID. Hai nguồn ấy phải nói CÙNG một
@@ -224,7 +228,17 @@ export type CommuneAppSessionResult =
   | { readonly kieu: "thu-lai"; readonly zalo?: ZaloFailure }
   | { readonly kieu: "ngoai-zalo" };
 
-export type OpenCommuneAppSession = () => Promise<CommuneAppSessionResult>;
+/** `identityHost`: ViGov identity's host (`communeAppIdentityHost`), where the commune app's login goes. */
+export type OpenCommuneAppSession = (identityHost: string) => Promise<CommuneAppSessionResult>;
+
+/**
+ * The host the commune app's login goes to — the platform-wide `identity` row, never a per-commune value and
+ * never `VIGOV_API_HOST` (that is `vihat-miniapp`). Empty only if the row were emptied; the opener then
+ * sends nothing.
+ */
+export function communeAppIdentityHost(): string {
+  return diaChiViGov("identity", "");
+}
 
 /**
  * Kết quả cho màn hình — KHÔNG mang bearer.
@@ -255,7 +269,7 @@ export async function openCommuneAppSession(
 ): Promise<CommuneAppSessionOutcome> {
   let result: CommuneAppSessionResult;
   try {
-    result = await open();
+    result = await open(communeAppIdentityHost());
   } catch {
     return { kieu: "thu-lai" };
   }
@@ -283,7 +297,7 @@ export function dropCommuneAppSession(): void {
  */
 export function communeAppReopen(open: OpenCommuneAppSession): ReopenWithPhone {
   return async () => {
-    const result = await open();
+    const result = await open(communeAppIdentityHost());
     switch (result.kieu) {
       case "xong":
       case "tu-choi":

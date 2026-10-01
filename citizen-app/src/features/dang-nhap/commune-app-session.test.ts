@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { toCommuneAppSessionResult } from "../../App";
+import { diaChiViGov } from "../../cong-dan/api/dia-chi-vigov";
+import {
+  communeAppIdentityHost,
+  communeAppReopen,
+  openCommuneAppSession as openCommuneAppSessionInStateHalf,
+} from "../../cong-dan/api/mo-phien-vigov";
 import { readRuntimeAppId } from "../tinh-nang/zalo-api";
 
 import { type CommuneAppLoginResult, openCommuneAppSessionWithPhone } from "./cau-vigov";
@@ -9,14 +15,22 @@ import { type CommuneAppBridgeResult, exchangeLocation, openCommuneAppSessionCal
 import {
   COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
+  COMMUNE_APP_SESSION_PATH,
+  communeAppSessionAddress,
   communeAppSessionBody,
   type CommuneAppSessionRequest,
+  diaChiPhien,
+  DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   locationBody,
 } from "./hop-dong";
 
+/** A made-up identity host: the composer joins the path to whatever host the state half hands it. */
+const IDENTITY_HOST = "https://identity.vidu.example";
+
 /**
- * LOGIN FROM A COMMUNE'S OWN APP — `POST /api/v1/sessions` with `appId` (`vihat-miniapp` 4114f00).
+ * LOGIN FROM A COMMUNE'S OWN APP — `POST /api/v1/citizen-sessions` at ViGov identity with `appId` (ADR 0066;
+ * same body and status table as `vihat-miniapp` 4114f00 had).
  *
  * What must hold: the body carries `appId` + BOTH Zalo codes and never a commune domain; every status the
  * server documents lands on a branch the citizen can act on; nothing is asked of Zalo when the App ID is
@@ -24,7 +38,7 @@ import {
  * commercial ticket).
  */
 
-const ADDRESS = "https://mini.vidu.vn/api/v1/sessions";
+const ADDRESS = `${IDENTITY_HOST}/api/v1/citizen-sessions`;
 const APP_ID = "1234567890123456789";
 const REQUEST: CommuneAppSessionRequest = { ma_truy_cap: "access-test", ma_so_dien_thoai: "phone-test", app_id: APP_ID };
 
@@ -133,15 +147,15 @@ describe("composer — App ID first, then the two codes, then one call", () => {
   it("unknown App ID → asks Zalo for NOTHING and sends nothing", async () => {
     const requestCodes = vi.fn(codes);
     const call = neverCalled();
-    expect(await openCommuneAppSessionWithPhone(() => null, requestCodes, call)).toEqual({ kieu: "khong-ro-app" });
-    expect(await openCommuneAppSessionWithPhone(() => "", requestCodes, call)).toEqual({ kieu: "khong-ro-app" });
+    expect(await openCommuneAppSessionWithPhone(IDENTITY_HOST, () => null, requestCodes, call)).toEqual({ kieu: "khong-ro-app" });
+    expect(await openCommuneAppSessionWithPhone(IDENTITY_HOST, () => "", requestCodes, call)).toEqual({ kieu: "khong-ro-app" });
     expect(requestCodes).not.toHaveBeenCalled();
     expect(call).not.toHaveBeenCalled();
   });
 
   it("refusal of the phone dialog → tu-choi, no call", async () => {
     const call = neverCalled();
-    expect(await openCommuneAppSessionWithPhone(() => APP_ID, async () => ({ kieu: "tu-choi" }), call)).toEqual({
+    expect(await openCommuneAppSessionWithPhone(IDENTITY_HOST, () => APP_ID, async () => ({ kieu: "tu-choi" }), call)).toEqual({
       kieu: "tu-choi",
     });
     expect(call).not.toHaveBeenCalled();
@@ -149,11 +163,12 @@ describe("composer — App ID first, then the two codes, then one call", () => {
 
   it("outside Zalo → ngoai-zalo; an empty code → khong-lay-duoc-ma; neither calls", async () => {
     const call = neverCalled();
-    expect(await openCommuneAppSessionWithPhone(() => APP_ID, async () => ({ kieu: "ngoai-zalo" }), call)).toEqual({
+    expect(await openCommuneAppSessionWithPhone(IDENTITY_HOST, () => APP_ID, async () => ({ kieu: "ngoai-zalo" }), call)).toEqual({
       kieu: "ngoai-zalo",
     });
     expect(
       await openCommuneAppSessionWithPhone(
+        IDENTITY_HOST,
         () => APP_ID,
         async () => ({ kieu: "xong", du_lieu: { ma_truy_cap: "access-test", ma_so_dien_thoai: "" } }),
         call,
@@ -162,11 +177,76 @@ describe("composer — App ID first, then the two codes, then one call", () => {
     expect(call).not.toHaveBeenCalled();
   });
 
-  it("all present → exactly one call carrying the App ID and both codes", async () => {
+  it("all present → exactly one call carrying the App ID and both codes, to identity's route", async () => {
     const call = vi.fn(async (): Promise<CommuneAppBridgeResult> => ({ kieu: "app-chua-san-sang" }));
-    expect(await openCommuneAppSessionWithPhone(() => APP_ID, codes, call)).toEqual({ kieu: "app-chua-san-sang" });
+    expect(await openCommuneAppSessionWithPhone(IDENTITY_HOST, () => APP_ID, codes, call)).toEqual({ kieu: "app-chua-san-sang" });
     expect(call).toHaveBeenCalledTimes(1);
-    expect(call).toHaveBeenCalledWith(REQUEST);
+    expect(call).toHaveBeenCalledWith(REQUEST, `${IDENTITY_HOST}${COMMUNE_APP_SESSION_PATH}`);
+  });
+
+  it("no identity host → asks Zalo for NOTHING, reads no App ID, sends nothing", async () => {
+    const readAppId = vi.fn(() => APP_ID);
+    const requestCodes = vi.fn(codes);
+    const call = neverCalled();
+    expect(await openCommuneAppSessionWithPhone("", readAppId, requestCodes, call)).toEqual({ kieu: "chua-khai-host" });
+    expect(readAppId).not.toHaveBeenCalled();
+    expect(requestCodes).not.toHaveBeenCalled();
+    expect(call).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * WHERE THE COMMUNE APP'S LOGIN GOES — ADR 0066 (01/10/2026). The commune app (`--vao-thang`) posts to ViGov
+ * identity `POST /api/v1/citizen-sessions`, with the host taken from the state half's address map; the
+ * SHARED app keeps `vihat-miniapp` `/api/v1/sessions`, from `VIGOV_API_HOST`. Measured end to end on the
+ * real composition (state half's host → commercial opener → the one `fetch`).
+ */
+describe("route target per app", () => {
+  const IDENTITY_ROUTE = "https://identity.api.vigov.vn/api/v1/citizen-sessions";
+
+  it("commune app: the state half's identity host + `/api/v1/citizen-sessions` — the exact URL", async () => {
+    expect(communeAppIdentityHost()).toBe(new URL(diaChiViGov("identity", "/")).origin);
+    expect(communeAppSessionAddress(communeAppIdentityHost())).toBe(IDENTITY_ROUTE);
+
+    stubFetch(answer(201, SESSION));
+    const codes = async () => ({
+      kieu: "xong" as const,
+      du_lieu: { ma_truy_cap: "access-test", ma_so_dien_thoai: "phone-test" },
+    });
+    const result = await openCommuneAppSessionWithPhone(communeAppIdentityHost(), () => APP_ID, codes);
+    expect(result.kieu).toBe("xong");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.address).toBe(IDENTITY_ROUTE);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      accessToken: "access-test",
+      phoneToken: "phone-test",
+      appId: APP_ID,
+    });
+  });
+
+  it("commune app: never the `vihat-miniapp` route, whatever `VIGOV_API_HOST` holds", () => {
+    expect(IDENTITY_ROUTE).not.toContain(DUONG_DAN_PHIEN);
+    expect(COMMUNE_APP_SESSION_PATH).not.toBe(DUONG_DAN_PHIEN);
+    const shared = diaChiPhien();
+    if (shared !== "") expect(new URL(shared).host).not.toBe(new URL(IDENTITY_ROUTE).host);
+  });
+
+  it("shared app: still `vihat-miniapp` `/api/v1/sessions`, untouched by the move", () => {
+    // `diaChiPhien` is the shared app's only login address (`moPhienViGovQuaCau`, `phatHanhPhien`,
+    // `reopenViGovSessionWithPhone` default to it). It may be empty under Vitest (no `VIGOV_API_HOST`); when
+    // it is not, it ends in the commercial route and is not identity's host.
+    const shared = diaChiPhien();
+    expect(shared === "" || shared.endsWith(DUONG_DAN_PHIEN)).toBe(true);
+    expect(shared).not.toContain(COMMUNE_APP_SESSION_PATH);
+    expect(shared).not.toContain("identity.api.vigov.vn");
+  });
+
+  it("the state half hands the identity host to the injected opener — on first open and on reopen", async () => {
+    const open = vi.fn(async (_host: string) => ({ kieu: "tam-ngung" as const }));
+    await openCommuneAppSessionInStateHalf(open, "Xã Thử Nghiệm");
+    await communeAppReopen(open)();
+    expect(open).toHaveBeenCalledTimes(2);
+    for (const [host] of open.mock.calls) expect(host).toBe(communeAppIdentityHost());
   });
 });
 

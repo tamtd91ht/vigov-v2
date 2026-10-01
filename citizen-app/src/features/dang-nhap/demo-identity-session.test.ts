@@ -24,9 +24,18 @@ vi.mock("zmp-sdk", () => sdk);
 
 import { type CommuneAppLoginResult, openCommuneAppSessionWithDemoIdentity } from "./cau-vigov";
 import { type CommuneAppBridgeResult, openCommuneAppDemoSessionCall } from "./goi-may-chu";
-import { communeAppDemoSessionBody, type CommuneAppDemoSessionRequest } from "./hop-dong";
+import { communeAppIdentityHost } from "../../cong-dan/api/mo-phien-vigov";
 
-const ADDRESS = "https://mini.vidu.vn/api/v1/sessions";
+import {
+  communeAppDemoSessionBody,
+  type CommuneAppDemoSessionRequest,
+  COMMUNE_APP_SESSION_PATH,
+  DUONG_DAN_PHIEN,
+} from "./hop-dong";
+
+/** A made-up identity host (ADR 0066: the demo login goes to ViGov identity too). */
+const IDENTITY_HOST = "https://identity.vidu.example";
+const ADDRESS = `${IDENTITY_HOST}${COMMUNE_APP_SESSION_PATH}`;
 const APP_ID = "1234567890123456789";
 const REQUEST: CommuneAppDemoSessionRequest = { app_id: APP_ID };
 
@@ -126,7 +135,7 @@ describe("opener — NO Zalo identity call: never `getAccessToken`, `getPhoneNum
 
   it("a session: one call with exactly the demo body, Zalo asked for nothing", async () => {
     stubFetch(answer(201, SESSION));
-    const result: CommuneAppLoginResult = await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire);
+    const result: CommuneAppLoginResult = await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => APP_ID, toWire);
     expect(result.kieu).toBe("xong");
     expectZaloUntouched();
     expect(calls).toHaveLength(1);
@@ -136,7 +145,25 @@ describe("opener — NO Zalo identity call: never `getAccessToken`, `getPhoneNum
   it("the default wiring (real `openCommuneAppDemoSessionCall`) also asks Zalo for nothing", async () => {
     // Whatever the test build's server address, the opener's own default path must leave Zalo untouched.
     stubFetch(answer(201, SESSION));
-    await openCommuneAppSessionWithDemoIdentity(() => APP_ID);
+    await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => APP_ID);
+    expectZaloUntouched();
+  });
+
+  it("the default wiring posts to ViGov identity `/api/v1/citizen-sessions`, never `vihat-miniapp`", async () => {
+    stubFetch(answer(201, SESSION));
+    expect((await openCommuneAppSessionWithDemoIdentity(communeAppIdentityHost(), () => APP_ID)).kieu).toBe("xong");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.address).toBe("https://identity.api.vigov.vn/api/v1/citizen-sessions");
+    expect(calls[0]!.address).not.toContain(DUONG_DAN_PHIEN);
+    // Still no token of any kind on the wire.
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual(EXPECTED_BODY);
+    expectZaloUntouched();
+  });
+
+  it("no identity host → nothing sent, Zalo asked for nothing", async () => {
+    stubFetch(answer(201, SESSION));
+    expect(await openCommuneAppSessionWithDemoIdentity("", () => APP_ID, toWire)).toEqual({ kieu: "chua-khai-host" });
+    expect(calls).toHaveLength(0);
     expectZaloUntouched();
   });
 
@@ -146,14 +173,14 @@ describe("opener — NO Zalo identity call: never `getAccessToken`, `getPhoneNum
     sdk.getPhoneNumber.mockRejectedValue(refused);
     sdk.getUserInfo.mockRejectedValue(refused);
     stubFetch(answer(201, SESSION));
-    expect((await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).kieu).toBe("xong");
+    expect((await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => APP_ID, toWire)).kieu).toBe("xong");
     expectZaloUntouched();
   });
 
   it("unknown App ID → nothing sent, Zalo asked for nothing", async () => {
     stubFetch(answer(201, SESSION));
-    expect(await openCommuneAppSessionWithDemoIdentity(() => null, toWire)).toEqual({ kieu: "khong-ro-app" });
-    expect(await openCommuneAppSessionWithDemoIdentity(() => "", toWire)).toEqual({ kieu: "khong-ro-app" });
+    expect(await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => null, toWire)).toEqual({ kieu: "khong-ro-app" });
+    expect(await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => "", toWire)).toEqual({ kieu: "khong-ro-app" });
     expectZaloUntouched();
     expect(calls).toHaveLength(0);
   });
@@ -164,13 +191,13 @@ describe("opener — NO Zalo identity call: never `getAccessToken`, `getPhoneNum
     [503, "cau-tat"],
   ])("server refuses the body (%i, as it does until the server side exists) → %s, Zalo untouched", async (status, kieu) => {
     stubFetch(answer(status, { message: "never read" }));
-    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).toEqual({ kieu });
+    expect(await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => APP_ID, toWire)).toEqual({ kieu });
     expectZaloUntouched();
   });
 
   it("network failure → khong-goi-duoc, never a throw", async () => {
     stubFetch(new Error("offline"));
-    expect(await openCommuneAppSessionWithDemoIdentity(() => APP_ID, toWire)).toEqual({ kieu: "khong-goi-duoc" });
+    expect(await openCommuneAppSessionWithDemoIdentity(IDENTITY_HOST, () => APP_ID, toWire)).toEqual({ kieu: "khong-goi-duoc" });
     expectZaloUntouched();
   });
 });

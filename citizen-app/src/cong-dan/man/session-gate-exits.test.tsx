@@ -151,9 +151,12 @@ describe("gate in `openAtOnce` mode — each failure the opener answers is a fin
 
 describe("the `--demo` opener through the shell table and the gate — Zalo never asked, every end has an exit", () => {
   function demoOpen(readAppId: () => string | null): OpenCommuneAppSession {
-    return async () =>
+    // The host the state half hands in is real; the call is pinned to the test's ADDRESS.
+    return async (identityHost) =>
       toCommuneAppSessionResult(
-        await openCommuneAppSessionWithDemoIdentity(readAppId, (req) => openCommuneAppDemoSessionCall(req, ADDRESS)),
+        await openCommuneAppSessionWithDemoIdentity(identityHost, readAppId, (req) =>
+          openCommuneAppDemoSessionCall(req, ADDRESS),
+        ),
       );
   }
 

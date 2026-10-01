@@ -44,7 +44,12 @@ import {
 // một trong hai: mỗi hàm là "thân yêu cầu" của đúng tuyến nó phục vụ, và đổi tên để tiện cho một
 // tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
 import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
-import { DUONG_DAN_PHIEN, LOCATION_PATH, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
+import {
+  COMMUNE_APP_SESSION_PATH,
+  DUONG_DAN_PHIEN,
+  LOCATION_PATH,
+  thanYeuCau as thanYeuCauPhien,
+} from "./features/dang-nhap/hop-dong";
 import { nhanNguon, TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha/goi-y";
 import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
@@ -352,6 +357,16 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     expect(dem("locationToken"), "bundle không mang tên trường locationToken").toBeGreaterThan(0);
   });
 
+  it("carries exactly ONE call path for the commune app's login at ViGov identity (ADR 0066)", () => {
+    // The commune app's login left `vihat-miniapp` `/api/v1/sessions` for identity `/api/v1/citizen-sessions`.
+    // 0 = the commune app cannot log in at all; 2+ = a second caller. Its host is identity's, read from the
+    // same map the code reads, not retyped.
+    expect(dem(COMMUNE_APP_SESSION_PATH), "bundle must name the commune app's login route exactly once").toBe(1);
+    const host_identity = new URL(diaChiViGov("identity", "/")).host;
+    expect(host_identity).toBe("identity.api.vigov.vn");
+    expect(ban, "bundle does not carry identity's host").toContain(host_identity);
+  });
+
   it("mang đúng MỘT đường gọi tuyến yêu cầu", () => {
     const ten_truong = Object.keys(
       JSON.parse(
@@ -631,6 +646,8 @@ describe("the `--demo` build: a fixed identity, and not one demo word in either 
     expect(demo, "the fixed name is gone — the flag no longer does anything").toContain(DEMO_CITIZEN_NAME);
     expect(demo, "the fixed number is gone").toContain(DEMO_CITIZEN_PHONE);
     expect(demo, "the demo login body is gone").toContain("demoIdentity");
+    // The demo login goes to identity too (ADR 0066): one call path, as in the normal build.
+    expect(demo.split(COMMUNE_APP_SESSION_PATH).length - 1).toBe(1);
   });
 
   it("the normal build carries none of it — unreachable is not enough, it is not there", () => {

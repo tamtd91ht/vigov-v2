@@ -22,6 +22,7 @@ import {
   BRIDGE_FIELDS_WITH_PHONE,
   COMMUNE_APP_LOCATION_FIELDS,
   COMMUNE_APP_SESSION_FIELDS,
+  COMMUNE_APP_SESSION_PATH,
   DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   LOCATION_PATH,
@@ -485,16 +486,20 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     truong: BRIDGE_FIELDS_WITH_PHONE,
   },
   {
-    // SAME ROUTE, FOURTH BODY (29/09/2026, `vihat-miniapp` 4114f00): login from a commune's OWN app —
-    // `appId` instead of a commune domain, and ALWAYS `phoneToken` (the server verifies the App ID by
-    // exchanging it). Runs only after the citizen reads why and taps "Đồng ý chia sẻ số điện thoại", at the
-    // first personal act — never when the app opens (ADR 0047:251).
+    // FOURTH BODY (29/09/2026): login from a commune's OWN app — `appId` instead of a commune domain, and
+    // ALWAYS `phoneToken` (the server verifies the App ID by exchanging it). Runs only after the citizen reads
+    // why and taps "Đồng ý chia sẻ số điện thoại", at the first personal act — never when the app opens
+    // (ADR 0047:251).
+    //
+    // ⚠ OWN ROUTE SINCE ADR 0066 (01/10/2026): ViGov identity `POST /api/v1/citizen-sessions`, DIRECTLY — no
+    //   longer through `vihat-miniapp`. Same body, so the same field table.
     //
     // ⚠ THE PRIVACY-POLICY SENTENCE FOR `appId` IS STILL OWED — legal wording is the project owner's, same
-    //   stance as `bridgeBodyWithPhone`. `chinh-sach.test.ts` pins the gap.
-    tuyen: DUONG_DAN_PHIEN,
+    //   stance as `bridgeBodyWithPhone`. `chinh-sach.test.ts` pins the gap. So is the policy's statement of
+    //   WHERE this login goes now (ViGov, not ViHAT's server): also the owner's wording.
+    tuyen: COMMUNE_APP_SESSION_PATH,
     may_chu:
-      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu số điện thoại ở lượt này; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở phiên với xã của ứng dụng",
+      "ViGov — dịch vụ `identity`, trực tiếp, không qua máy chủ của Tập đoàn ViHAT Group; dịch vụ ấy đổi hai mã Zalo bằng khoá bí mật của ứng dụng xã để mở phiên với xã của ứng dụng",
     khi_nao:
       "trong ứng dụng riêng của một xã, người dùng làm việc cá nhân đầu tiên (gửi, xem, tra cứu hoặc đánh giá phản ánh), đọc lời giải thích, tự bấm “Đồng ý chia sẻ số điện thoại” và đồng ý trên hộp thoại của Zalo",
     nguoi_dung_bam: true,
@@ -521,6 +526,9 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // SAME ROUTE, the commune's OWN app (29/09/2026, `vihat-miniapp` 4114f00): the body adds `appId` so
     // the server exchanges the token with that app's secret. Same tap, same screen, one more key.
     // ⚠ Policy sentence still owed (same stance as the row above); `chinh-sach.test.ts` pins it.
+    // ⚠ Still `vihat-miniapp` on 01/10/2026 although the commune app's LOGIN moved to identity: ADR 0066
+    //   decision 5 moves this exchange too, in a later card. Change this row in that card, not before.
+    //   Not offered at all in the `--demo` build (`App.tsx` `AppRieng`).
     tuyen: LOCATION_PATH,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
     khi_nao:

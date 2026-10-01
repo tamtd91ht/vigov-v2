@@ -917,6 +917,9 @@ export const XA_PA = {
   // 29/09/2026: the app now takes the current location (button under the address box); a MAP pin is still
   // not there, and a location is still not enforced (ADR 0050 #9 — the server keeps it optional, b5d17bb).
   vi_tri_sap_co: "Bà con bấm “Lấy vị trí hiện tại” ở dưới để gửi kèm vị trí, và ghi rõ nơi xảy ra ở ô dưới.",
+  // When the form has NO location button (the `--demo` build, owner 01/10/2026; outside Zalo): the sentence
+  // above would point at a button that is not there. Same next step, without it.
+  location_without_button: "Bà con ghi rõ nơi xảy ra ở ô dưới: thôn, tổ, đường, số nhà.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
   bat_buoc: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí, họ tên người gửi.",

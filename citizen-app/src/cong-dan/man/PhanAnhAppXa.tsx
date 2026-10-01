@@ -1236,7 +1236,7 @@ export function CommuneSendScreen(props: {
             <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
             <p className="xa-phu">{XA_PA.anh_sap_co}</p>
             <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
-            <p className="xa-phu">{XA_PA.vi_tri_sap_co}</p>
+            <p className="xa-phu">{props.getSceneLocation ? XA_PA.vi_tri_sap_co : XA_PA.location_without_button}</p>
             <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={form.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={edit("dia_chi")} />
             {errors.dia_chi && <p className="xa-loi-o" role="alert">{errors.dia_chi}</p>}
             {props.getSceneLocation && (

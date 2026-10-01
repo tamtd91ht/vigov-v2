@@ -252,8 +252,13 @@ export async function exchangeLocation(
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
- * ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ — cùng tuyến `/api/v1/sessions`, thân thứ tư (`hop-dong.ts`
- * `communeAppSessionBody`), bảng mã trạng thái RIÊNG vì việc người dân làm tiếp khác app chung:
+ * ĐĂNG NHẬP TỪ APP RIÊNG CỦA MỘT XÃ — thân thứ tư (`hop-dong.ts` `communeAppSessionBody`), bảng mã trạng
+ * thái RIÊNG vì việc người dân làm tiếp khác app chung.
+ *
+ * ⚠ SINCE ADR 0066 (01/10/2026) THIS IS A DIFFERENT SERVER: ViGov identity `POST /api/v1/citizen-sessions`,
+ *   not `vihat-miniapp`. Hence NO default address here — the caller passes
+ *   `communeAppSessionAddress(<identity host>)`. A default of `diaChiPhien()` would silently send the
+ *   commune app's two Zalo codes to the commercial server again. Status table unchanged by the move:
  *
  *   `xong`                 201 có `vigovSession` dùng được
  *   `app-chua-san-sang`    422 — App ID lạ với máy chủ, hoặc app chưa gắn xã / xã ngừng: bấm lại vô ích
@@ -263,7 +268,7 @@ export async function exchangeLocation(
  *   `zalo-khong-tra-loi`   502 — máy chủ không với tới Zalo; chờ một lát
  *   `qua-nhieu-lan`        429 — chờ vài phút
  *   `khong-goi-duoc`       mạng, quá hạn chờ, mã lạ, thân sai khuôn
- *   `chua-khai-host`       bản dựng không có địa chỉ `vihat-miniapp` — không gọi
+ *   `chua-khai-host`       no identity address was handed in — nothing is sent
  *
  * App chung (`callBridge`) gộp 502/503/429 thành một `tam-ngung`; ở đây tách ra vì app riêng không có
  * đường lùi nào khác, và "chờ một lát" (502) khác hẳn "hệ thống chưa bật" (503).
@@ -281,24 +286,24 @@ export type CommuneAppBridgeResult =
   | { kieu: "chua-khai-host" };
 
 /**
- * Đổi hai mã Zalo + App ID lấy một phiên công dân ViGov. KHÔNG NÉM, KHÔNG LOG: thân mang mã đổi được
- * thành số điện thoại (luật 3). `address` chỉ để phép kiểm đưa địa chỉ giả vào.
+ * Đổi hai mã Zalo + App ID lấy một phiên công dân ViGov, tại identity. KHÔNG NÉM, KHÔNG LOG: thân mang mã
+ * đổi được thành số điện thoại (luật 3). `address` is REQUIRED: `communeAppSessionAddress(<identity host>)`.
  */
 export async function openCommuneAppSessionCall(
   req: CommuneAppSessionRequest,
-  address: string = diaChiPhien(),
+  address: string,
 ): Promise<CommuneAppBridgeResult> {
   return postCommuneAppSession(communeAppSessionBody(req), address);
 }
 
 /**
  * The `--demo` build's login (`hop-dong.ts` fifth body): App ID only — no access token, no phone token. Same
- * route, same status table as the fourth body — only the body differs. NO THROW, NO LOG. `address` only lets
- * a test inject a fake address.
+ * route, same status table as the fourth body — only the body differs. NO THROW, NO LOG. `address` is
+ * required, as above.
  */
 export async function openCommuneAppDemoSessionCall(
   req: CommuneAppDemoSessionRequest,
-  address: string = diaChiPhien(),
+  address: string,
 ): Promise<CommuneAppBridgeResult> {
   return postCommuneAppSession(communeAppDemoSessionBody(req), address);
 }
