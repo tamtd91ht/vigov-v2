@@ -1,7 +1,20 @@
 "use client";
 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  CloudOff,
+  Construction,
+  ImageOff,
+  Images,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/cn";
 import { listPetitionPhotos } from "@/lib/api/phieu-phan-anh";
 import type { petitions_photoLinkOut, petitions_photoListOut } from "@/lib/api/schema.gen";
 import type { CallResult } from "@/lib/api/task-attachments";
@@ -27,6 +40,7 @@ import {
   scenePhotoOpenLabel,
   scenePhotoSrc,
 } from "./nhan-phieu";
+import { buttonClass, Glyph, SectionTitle } from "./petition-ui";
 
 /**
  * §8.4 `Ảnh trước và sau khi xử lý` on the petition drawer — the "before" column is the photos the
@@ -247,34 +261,64 @@ export function ScenePhotosView({
   const nextPhoto = openIndex >= 0 ? items[openIndex + 1] : undefined;
 
   return (
-    <section className="khoi-chi-tiet scene-photos" aria-labelledby={headingId}>
-      <h4 id={headingId}>{SCENE_PHOTOS_TITLE}</h4>
+    <Card as="section" className="scene-photos" aria-labelledby={headingId}>
+      <CardHeader>
+        <SectionTitle icon={Images} id={headingId}>
+          {SCENE_PHOTOS_TITLE}
+        </SectionTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 [&>p]:m-0">
 
-      <h5>{SCENE_PHOTOS_BEFORE}</h5>
-      {state.kind === "loading" && <p role="status">{SCENE_PHOTOS_LOADING}</p>}
-      {state.kind === "empty" && <p className="trang-thai-rong">{SCENE_PHOTOS_EMPTY}</p>}
-      {(state.kind === "unavailable" || state.kind === "error") && (
+      <h5 className={COLUMN_TITLE}>{SCENE_PHOTOS_BEFORE}</h5>
+      {state.kind === "loading" && (
         <>
-          <p className="thong-bao-loi" role="alert">
-            {state.kind === "unavailable" ? SCENE_PHOTOS_UNAVAILABLE : state.message}
+          <p role="status" className="text-sm text-ink-500">
+            {SCENE_PHOTOS_LOADING}
           </p>
-          <button type="button" className="nut-phu" onClick={retry}>
-            {SCENE_PHOTOS_RETRY}
-          </button>
+          {/* Decorative placeholders in the grid's shape; the sentence above is the announcement. */}
+          <div aria-hidden="true" className={THUMB_GRID}>
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="aspect-[4/3] rounded-lg bg-line motion-safe:animate-pulse" />
+            ))}
+          </div>
         </>
       )}
+      {state.kind === "empty" && (
+        <p className="inline-flex items-center gap-2 text-sm text-ink-500">
+          <Glyph icon={ImageOff} className="size-4 shrink-0" />
+          {SCENE_PHOTOS_EMPTY}
+        </p>
+      )}
+      {(state.kind === "unavailable" || state.kind === "error") && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Glyph icon={CloudOff} className="size-[18px] shrink-0 text-danger-600" />
+          <p className="thong-bao-loi m-0 min-w-0 flex-1" role="alert">
+            {state.kind === "unavailable" ? SCENE_PHOTOS_UNAVAILABLE : state.message}
+          </p>
+          <button type="button" className={buttonClass("secondary", "sm")} onClick={retry}>
+            <Glyph icon={RefreshCw} />
+            {SCENE_PHOTOS_RETRY}
+          </button>
+        </div>
+      )}
       {state.kind === "list" && (
-        <ul aria-label={SCENE_PHOTOS_BEFORE}>
+        <ul aria-label={SCENE_PHOTOS_BEFORE} className={cn(THUMB_GRID, "m-0 list-none p-0")}>
           {items.map((p, i) => {
             const thumbSrc = scenePhotoSrc(p);
             return (
-              <li key={p.id}>
+              <li key={p.id} className="min-w-0">
                 <button
                   type="button"
                   id={thumbId(lookupCode, p.id)}
                   aria-label={scenePhotoOpenLabel(i, items.length)}
                   aria-pressed={i === openIndex}
                   onClick={() => open(p.id)}
+                  className={cn(
+                    "block aspect-[4/3] w-full cursor-pointer overflow-hidden rounded-lg border border-line bg-surface-muted p-0",
+                    "transition-[border-color,box-shadow] duration-150 hover:border-brand-500",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+                    i === openIndex && "border-brand-600 ring-2 ring-brand-500",
+                  )}
                 >
                   {thumbSrc !== null ? (
                     // eslint-disable-next-line @next/next/no-img-element -- see the file header
@@ -283,9 +327,12 @@ export function ScenePhotosView({
                       alt={scenePhotoAlt(i, items.length)}
                       referrerPolicy="no-referrer"
                       decoding="async"
+                      className="block size-full object-cover"
                     />
                   ) : (
-                    <span>{scenePhotoAlt(i, items.length)}</span>
+                    <span className="grid size-full place-items-center px-2 text-center text-xs text-ink-500">
+                      {scenePhotoAlt(i, items.length)}
+                    </span>
                   )}
                 </button>
               </li>
@@ -293,7 +340,11 @@ export function ScenePhotosView({
           })}
         </ul>
       )}
-      {refreshing && <p role="status">{SCENE_PHOTOS_REFRESHING}</p>}
+      {refreshing && (
+        <p role="status" className="text-sm text-ink-500">
+          {SCENE_PHOTOS_REFRESHING}
+        </p>
+      )}
       {notice !== null && <p className="ghi-chu">{notice}</p>}
 
       {opened !== undefined && (
@@ -314,11 +365,21 @@ export function ScenePhotosView({
         />
       )}
 
-      <h5>{SCENE_PHOTOS_AFTER}</h5>
-      <p className="trang-thai-rong">{SCENE_PHOTOS_AFTER_NOT_BUILT}</p>
-    </section>
+      <h5 className={COLUMN_TITLE}>{SCENE_PHOTOS_AFTER}</h5>
+      <p className="inline-flex items-start gap-2 text-sm text-ink-500">
+        <Glyph icon={Construction} className="mt-0.5 size-4 shrink-0" />
+        {SCENE_PHOTOS_AFTER_NOT_BUILT}
+      </p>
+      </CardContent>
+    </Card>
   );
 }
+
+/** Square-ish thumbnails, as many columns as fit (spec §6.5 grid rule), never wider than the card. */
+const THUMB_GRID = "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3";
+
+/** `Trước khi xử lý` / `Sau khi xử lý` — 12px/600 column labels (spec §3). */
+const COLUMN_TITLE = "m-0 text-xs font-semibold text-ink-700";
 
 function thumbId(lookupCode: string, photoId: string): string {
   return `anh-phieu-${lookupCode}-${photoId}`;
@@ -365,40 +426,57 @@ function FullSizePhoto({
 
   return (
     <section
-      className="khoi-chi-tiet scene-photo-full"
+      className="scene-photo-full flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-3 [&>p]:m-0"
       role="dialog"
       aria-labelledby={titleId}
       onKeyDown={onKeyDown}
     >
-      <h5 id={titleId} ref={titleRef} tabIndex={-1}>
-        {label}
-      </h5>
-      <p className="ghi-chu">Người dân gửi lúc {nhanThoiDiem(photo.created_at)}</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h5 id={titleId} ref={titleRef} tabIndex={-1} className="m-0 text-sm font-semibold text-ink-900">
+          {label}
+        </h5>
+        <p className="ghi-chu m-0 inline-flex items-center gap-1">
+          <Glyph icon={Clock} className="size-3.5 shrink-0" />
+          Người dân gửi lúc {nhanThoiDiem(photo.created_at)}
+        </p>
+      </div>
       {src !== null && !broken ? (
         // eslint-disable-next-line @next/next/no-img-element -- see the file header
-        <img src={src} alt={label} referrerPolicy="no-referrer" decoding="async" onError={onError} />
+        <img
+          src={src}
+          alt={label}
+          referrerPolicy="no-referrer"
+          decoding="async"
+          onError={onError}
+          className="mx-auto block max-h-[70vh] w-auto max-w-full rounded-lg bg-surface object-contain"
+        />
       ) : (
-        <>
-          <p className="thong-bao-loi" role="alert">
+        <div className="flex flex-wrap items-center gap-3">
+          <Glyph icon={ImageOff} className="size-[18px] shrink-0 text-danger-600" />
+          <p className="thong-bao-loi m-0 min-w-0 flex-1" role="alert">
             {SCENE_PHOTO_BROKEN}
           </p>
-          <button type="button" className="nut-phu" onClick={retry}>
+          <button type="button" className={buttonClass("secondary", "sm")} onClick={retry}>
+            <Glyph icon={RefreshCw} />
             {SCENE_PHOTOS_RETRY}
           </button>
-        </>
+        </div>
       )}
-      <div className="cum-nut">
+      <div className="cum-nut justify-end">
         {previous !== undefined && (
-          <button type="button" className="nut-phu" onClick={previous}>
+          <button type="button" className={buttonClass("secondary", "sm")} onClick={previous}>
+            <Glyph icon={ChevronLeft} />
             {SCENE_PHOTO_PREVIOUS}
           </button>
         )}
         {next !== undefined && (
-          <button type="button" className="nut-phu" onClick={next}>
+          <button type="button" className={buttonClass("secondary", "sm")} onClick={next}>
             {SCENE_PHOTO_NEXT}
+            <Glyph icon={ChevronRight} />
           </button>
         )}
-        <button type="button" className="nut-phu" onClick={close}>
+        <button type="button" className={buttonClass("secondary", "sm")} onClick={close}>
+          <Glyph icon={X} />
           {SCENE_PHOTO_CLOSE}
         </button>
       </div>

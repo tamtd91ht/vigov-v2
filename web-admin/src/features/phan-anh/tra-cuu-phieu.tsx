@@ -1,7 +1,11 @@
 "use client";
 
+import { Hash, Info, LoaderCircle, ScanSearch, Search, SearchX } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
 import { layPhieuPhanAnh } from "@/lib/api/phieu-phan-anh";
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
@@ -21,6 +25,7 @@ import {
   trangThaiHan,
 } from "./nhan-phieu";
 import { CitizenRatingBlock, PublicationBox, SceneLocation } from "./citizen-report-blocks";
+import { FIELD_LIST_CLASS, Glyph, PetitionStatusBadge } from "./petition-ui";
 
 /**
  * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
@@ -75,39 +80,68 @@ export function TraCuuPhieu() {
   }
 
   return (
-    <section className="man-phan-anh" aria-labelledby="tieu-de-tra-cuu">
-      <h2 id="tieu-de-tra-cuu">Tra cứu phiếu phản ánh</h2>
-      <p className="ghi-chu">{HUONG_DAN_TRA_CUU}</p>
+    <section className="man-phan-anh mt-0 flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-tra-cuu">
+      <Card>
+        <CardHeader className="flex-col items-start gap-1">
+          <h2
+            id="tieu-de-tra-cuu"
+            className="m-0 flex items-center gap-2 text-[15px] leading-snug font-semibold text-ink-900"
+          >
+            <Glyph icon={ScanSearch} className="size-[18px] shrink-0 text-brand-600" />
+            Tra cứu phiếu phản ánh
+          </h2>
+          <p className="ghi-chu m-0">{HUONG_DAN_TRA_CUU}</p>
+        </CardHeader>
 
-      <form className="form-tra-cuu" onSubmit={tra}>
-        <div className="o-nhap">
-          <label htmlFor="ma-tra-cuu">Mã tra cứu</label>
-          <input
-            id="ma-tra-cuu"
-            name="ma-tra-cuu"
-            value={ma}
-            onChange={(e) => datMa(e.target.value)}
-            // Không `autoComplete`: mã tra cứu là chuỗi mở một phiếu của người dân, và trình
-            // duyệt lưu lại nó trên một máy dùng chung ở trụ sở xã là một bản sao không ai quản.
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-        <button className="nut-chinh" type="submit" disabled={trangThai.pha === "dangTra"}>
-          {trangThai.pha === "dangTra" ? "Đang tra…" : "Tra cứu"}
-        </button>
-      </form>
+        <CardContent className="flex flex-col gap-3">
+          <form
+            className="form-tra-cuu m-0 flex min-w-0 max-w-[480px] flex-row flex-wrap items-end gap-2"
+            onSubmit={tra}
+          >
+            <Field label="Mã tra cứu" htmlFor="ma-tra-cuu" icon={Hash} grow="search" className="max-w-none">
+              <input
+                id="ma-tra-cuu"
+                name="ma-tra-cuu"
+                value={ma}
+                onChange={(e) => datMa(e.target.value)}
+                // Không `autoComplete`: mã tra cứu là chuỗi mở một phiếu của người dân, và trình
+                // duyệt lưu lại nó trên một máy dùng chung ở trụ sở xã là một bản sao không ai quản.
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={trangThai.pha === "dangTra"}
+              icon={<Glyph icon={trangThai.pha === "dangTra" ? LoaderCircle : Search} className={trangThai.pha === "dangTra" ? "motion-safe:animate-spin" : undefined} />}
+            >
+              {trangThai.pha === "dangTra" ? "Đang tra…" : "Tra cứu"}
+            </Button>
+          </form>
 
-      {trangThai.pha === "chuaTra" && <p className="trang-thai-rong">{CHUA_TRA_CUU}</p>}
-      {trangThai.pha === "dangTra" && <p role="status">Đang tra phiếu…</p>}
+          {trangThai.pha === "chuaTra" && (
+            <p className="m-0 inline-flex items-center gap-2 text-sm text-ink-500">
+              <Glyph icon={Info} className="size-4 shrink-0" />
+              {CHUA_TRA_CUU}
+            </p>
+          )}
+          {trangThai.pha === "dangTra" && (
+            <p role="status" className="m-0 text-sm text-ink-500">
+              Đang tra phiếu…
+            </p>
+          )}
 
-      {/* Hiện ĐÚNG `message` của máy chủ. Không thêm "có thể bạn gõ nhầm", không thêm "phiếu này
-          thuộc xã khác" — cả hai đều là những câu nói ra điều máy chủ vừa cố ý không nói. */}
-      {trangThai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {trangThai.thongBao}
-        </p>
-      )}
+          {/* Hiện ĐÚNG `message` của máy chủ. Không thêm "có thể bạn gõ nhầm", không thêm "phiếu này
+              thuộc xã khác" — cả hai đều là những câu nói ra điều máy chủ vừa cố ý không nói. */}
+          {trangThai.pha === "loi" && (
+            <p className="thong-bao-loi m-0 inline-flex items-start gap-2" role="alert">
+              <Glyph icon={SearchX} className="mt-0.5 size-4 shrink-0" />
+              {trangThai.thongBao}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {trangThai.pha === "xong" && <ThongTinPhieu phieu={trangThai.phieu} bayGio={new Date()} />}
     </section>
@@ -131,13 +165,14 @@ export function ThongTinPhieu({
   const reopened = reopenLine(phieu.reopen_count);
 
   return (
-    <div className="khoi-chi-tiet">
-      <div className="dau-khoi-chi-tiet">
-        <h3 className="ma-muc">{phieu.code}</h3>
-        <span className="chip chip-ngung">{nhanTrangThai(phieu.status)}</span>
-      </div>
-
-      <dl className="danh-sach-truong">
+    <div className="flex min-w-0 flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <h3 className="ma-muc m-0 text-base font-semibold text-ink-900">{phieu.code}</h3>
+          <PetitionStatusBadge status={phieu.status}>{nhanTrangThai(phieu.status)}</PetitionStatusBadge>
+        </CardHeader>
+        <CardContent className="py-1">
+      <dl className={FIELD_LIST_CLASS}>
         <dt>Lĩnh vực</dt>
         <dd>{nhanLinhVuc(linhVuc)}</dd>
 
@@ -187,6 +222,8 @@ export function ThongTinPhieu({
           <PublicationBox petition={phieu} mayModerate={false} />
         </dd>
       </dl>
+        </CardContent>
+      </Card>
 
       <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-tra-cuu" />
     </div>

@@ -1,3 +1,6 @@
+import { Eye, EyeOff, Star } from "lucide-react";
+
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 import type { PublicationTarget } from "@/lib/api/phieu-phan-anh";
 
@@ -16,6 +19,7 @@ import {
   SCENE_NO_COORDINATES,
   sceneCoordinates,
 } from "./nhan-phieu";
+import { buttonClass, Glyph, SectionTitle } from "./petition-ui";
 
 /**
  * Three read blocks shared by the register drawer (`so-phan-anh.tsx`) and the lookup view
@@ -40,10 +44,10 @@ export function SceneLocation({ petition }: { petition: petitions_phieuPhanAnhRa
     <>
       <p>{petition.address === "" ? SCENE_NO_ADDRESS : petition.address}</p>
       {coordinates === null ? (
-        <p className="trang-thai-rong">{SCENE_NO_COORDINATES}</p>
+        <p className="text-ink-500 italic">{SCENE_NO_COORDINATES}</p>
       ) : (
         <>
-          <p>{coordinates}</p>
+          <p className="tabular-nums">{coordinates}</p>
           <p className="ghi-chu">{SCENE_COORDINATES_NOTE}</p>
         </>
       )}
@@ -70,24 +74,30 @@ export function CitizenRatingBlock({
 }) {
   const view = ratingView(petition);
   return (
-    <section aria-labelledby={headingId}>
-      <h4 id={headingId}>{RATING_TITLE}</h4>
-      {view.kind === "none" ? (
-        <p className="trang-thai-rong">{NOT_RATED}</p>
-      ) : (
-        <>
-          <p>
-            <span role="img" aria-label={`${view.score} sao`}>
-              {view.stars}
-            </span>{" "}
-            <strong className={view.low ? "nhan-lech" : undefined}>{view.score}</strong>
-            {view.at !== null && <> · {view.at}</>}
-          </p>
-          {view.comment !== "" && <p className="noi-dung-phan-anh">“{view.comment}”</p>}
-          {view.reopened && <p className="nhan-lech">{LOW_RATING_REOPENED}</p>}
-        </>
-      )}
-    </section>
+    <Card as="section" aria-labelledby={headingId}>
+      <CardHeader>
+        <SectionTitle icon={Star} id={headingId}>
+          {RATING_TITLE}
+        </SectionTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm [&>p]:m-0">
+        {view.kind === "none" ? (
+          <p className="text-ink-500 italic">{NOT_RATED}</p>
+        ) : (
+          <>
+            <p className="inline-flex flex-wrap items-center gap-x-2">
+              <span role="img" aria-label={`${view.score} sao`} className="text-lg leading-none text-legal-800">
+                {view.stars}
+              </span>{" "}
+              <strong className={view.low ? "nhan-lech" : undefined}>{view.score}</strong>
+              {view.at !== null && <span className="text-ink-500"> · {view.at}</span>}
+            </p>
+            {view.comment !== "" && <p className="noi-dung-phan-anh">“{view.comment}”</p>}
+            {view.reopened && <p className="nhan-lech">{LOW_RATING_REOPENED}</p>}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -104,6 +114,9 @@ export function starsLabel(rating: number): string {
  * refuses a `can-bo` petition with 409 `never_public`; both sentences reach the screen verbatim through
  * the drawer's error line. `setPublication` absent (the lookup view, which has no write surface) means
  * read-only, whatever the permissions.
+ *
+ * NATIVE `<button>`s, ON PURPOSE: `so-phan-anh.test.tsx` calls this block as a function and drives the
+ * `"button"` elements of its tree; a `Button` component there would hide them from that walk.
  */
 export function PublicationBox({
   petition,
@@ -120,27 +133,32 @@ export function PublicationBox({
   const writable = setPublication !== undefined;
   return (
     <>
-      <p>{view.label}</p>
+      <p className="inline-flex items-center gap-1.5 font-medium">
+        <Glyph icon={view.status === "cong-khai" ? Eye : EyeOff} className="size-4 shrink-0 text-ink-500" />
+        {view.label}
+      </p>
       {view.hint !== "" && <p className="ghi-chu">{view.hint}</p>}
       {writable && mayModerate && (view.canPublish || view.canHide) && (
-        <div className="cum-nut">
+        <div className="cum-nut mt-2">
           {view.canPublish && (
             <button
               type="button"
-              className="nut-phu"
+              className={buttonClass("secondary", "sm")}
               disabled={busy}
               onClick={() => setPublication("cong-khai")}
             >
+              <Glyph icon={Eye} />
               {PUBLISH_BUTTON_LABEL}
             </button>
           )}
           {view.canHide && (
             <button
               type="button"
-              className="nut-phu"
+              className={buttonClass("secondary", "sm")}
               disabled={busy}
               onClick={() => setPublication("an")}
             >
+              <Glyph icon={EyeOff} />
               {HIDE_BUTTON_LABEL}
             </button>
           )}

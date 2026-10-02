@@ -412,9 +412,12 @@ export function publicationView(p: petitions_phieuPhanAnhRa): PublicationView {
   };
 }
 
-/** Button labels — spec §8.3 verbatim. */
-export const PUBLISH_BUTTON_LABEL = "👁 Cho hiện công khai";
-export const HIDE_BUTTON_LABEL = "🚫 Ẩn khỏi trang công khai";
+/**
+ * Button labels — spec §8.3's words. The spec's emoji (👁, 🚫) are now lucide icons drawn beside the
+ * words (`Eye`, `EyeOff` in `PublicationBox`, ADR 0068 §2 "bỏ emoji làm icon").
+ */
+export const PUBLISH_BUTTON_LABEL = "Cho hiện công khai";
+export const HIDE_BUTTON_LABEL = "Ẩn khỏi trang công khai";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * THE CITIZEN'S RATING (§8.3, §14.3) — rating, rating_comment, rated_at, reopen_count; ADR 0050 pt 2

@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck, ClipboardPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { FormGiaoViec } from "@/features/nhiem-vu/so-nhiem-vu";
@@ -27,6 +28,7 @@ import {
   TASK_REGISTER_HREF,
   TASK_REGISTER_LINK_LABEL,
 } from "./nhan-phieu";
+import { ACT_CLASS, buttonClass, Glyph } from "./petition-ui";
 
 /**
  * `Tạo nhiệm vụ` on the petition drawer (`docs/ui-ux/09` §13) — POST …/tasks.
@@ -160,30 +162,34 @@ export function PetitionTaskView({
   cancel: () => void;
   send: (body: petitions_petitionTaskIn, idempotencyKey: string) => void;
 }) {
+  // One act of the drawer's `Xử lý phiếu` card (`ACT_CLASS`): secondary, because the card's solid
+  // button is the processing act itself; this one books follow-up work.
   return (
-    <div className="form-danh-muc">
+    <div className={ACT_CLASS}>
       <div className="cum-nut">
         <button
           type="button"
-          className="nut-phu"
+          className={buttonClass("secondary")}
           id="nut-tao-nhiem-vu-tu-phieu"
           aria-expanded={open}
           disabled={sending}
           onClick={toggle}
         >
+          <Glyph icon={ClipboardPlus} />
           {PETITION_TASK_BUTTON}
         </button>
       </div>
 
       {createdCode !== null && (
-        <p className="ghi-chu" role="status">
+        <p className="ghi-chu m-0 inline-flex flex-wrap items-center gap-1" role="status">
+          <Glyph icon={CircleCheck} className="size-3.5 shrink-0 text-success-600" />
           {petitionTaskCreated(createdCode)} <a href={TASK_REGISTER_HREF}>{TASK_REGISTER_LINK_LABEL}</a>
         </p>
       )}
 
       {open && (
         <div>
-          <p className="ghi-chu">{petitionTaskSourceNote(lookupCode)}</p>
+          <p className="ghi-chu mt-0">{petitionTaskSourceNote(lookupCode)}</p>
           <FormGiaoViec
             danhMuc={catalogue}
             danhBa={danhBa}

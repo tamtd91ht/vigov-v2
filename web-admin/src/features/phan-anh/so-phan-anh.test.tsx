@@ -75,6 +75,18 @@ function nhuTrongHTML(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
+/**
+ * The opening tag of the first submit button, WITHOUT its `class` attribute.
+ *
+ * Since the 02/10/2026 redesign the class string carries Tailwind's `disabled:` variants
+ * (`disabled:opacity-60`), so `toContain("disabled")` on the whole tag would be green for an
+ * ENABLED button too — the positive assertions would check nothing. Stripping the class leaves
+ * the `disabled=""` attribute as the only way the word can appear.
+ */
+function submitTag(html: string): string {
+  return (html.match(/<button type="submit"[^>]*>/)?.[0] ?? "").replace(/\sclass="[^"]*"/, "");
+}
+
 function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
   return {
     code: "PA-2026-0021",
@@ -479,9 +491,9 @@ describe("biểu mẫu nhánh rẽ", () => {
     );
   }
 
-  /** Nút gửi là nút `type="submit"`; lấy riêng thẻ ấy để đọc `disabled`. */
+  /** Nút gửi là nút `type="submit"`; lấy riêng thẻ ấy (bỏ `class`) để đọc thuộc tính `disabled`. */
   function nutGui(html: string): string {
-    return html.match(/<button type="submit"[^>]*>/)?.[0] ?? "";
+    return submitTag(html);
   }
 
   it("nhãn ô lý do nói người dân đọc được, và cảnh báo không hoàn tác + người dân được báo", () => {
@@ -773,7 +785,7 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(html).toMatch(/0(<!-- -->)?\/(<!-- -->)?2000(<!-- -->)? ký tự/);
     expect(html).toContain(nhuTrongHTML(NHAC_DU_LIEU_CA_NHAN));
     // Trống thì nút lưu khoá.
-    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).toContain("disabled");
+    expect(submitTag(html)).toContain("disabled");
   });
 
   it("biểu mẫu ghi: câu 403/400 của máy chủ ra NGUYÊN VĂN", () => {
@@ -790,7 +802,7 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
       />,
     );
     expect(html).toContain(cau);
-    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).not.toContain("disabled");
+    expect(submitTag(html)).not.toContain("disabled");
   });
 });
 
@@ -833,7 +845,7 @@ describe("ghi chú nội bộ trên sáu thao tác — ô nhập", () => {
         ghiChuBanDau={"ệ".repeat(2001)}
       />,
     );
-    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).toContain("disabled");
+    expect(submitTag(html)).toContain("disabled");
   });
 });
 
@@ -1013,7 +1025,8 @@ describe("moderation buttons send the right target", () => {
         setPublication={() => {}}
       />,
     );
-    expect(html.match(/<button[^>]*disabled/g)?.length).toBe(2);
+    // The ATTRIBUTE, not the word: the class string carries `disabled:` variants since 02/10/2026.
+    expect(html.match(/<button[^>]*\sdisabled=""/g)?.length).toBe(2);
   });
 });
 

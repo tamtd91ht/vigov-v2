@@ -1,4 +1,7 @@
+import { MessageSquareWarning, Smartphone } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -42,11 +45,17 @@ export default async function TrangPhanAnh({
         <ThanhBen />
         <DauTrang />
         <main className="than-trang">
-          <h1>Phản ánh của người dân</h1>
-          <p className="mo-ta-trang">
-            Tiếp nhận từ Zalo Mini App và các kênh khác, theo dõi thời hạn, đối chiếu ảnh trước và
-            sau khi xử lý.
-          </p>
+          <PageHeader
+            icon={MessageSquareWarning}
+            title="Phản ánh của người dân"
+            subtitle={
+              <span className="inline-flex items-center gap-1.5">
+                <Smartphone aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                Tiếp nhận từ Zalo Mini App và các kênh khác, theo dõi thời hạn, đối chiếu ảnh trước và
+                sau khi xử lý.
+              </span>
+            }
+          />
           <CongQuyen
             khoa={QUYEN_XEM_PHAN_ANH}
             cauThieuQuyen={
@@ -58,8 +67,11 @@ export default async function TrangPhanAnh({
                 sau một khoá hẹp hơn). Bốn thao tác ghi có cổng RIÊNG bên trong, và một trong bốn
                 — `Đóng phiếu` — cố ý đứng sau khoá khác với nút tiến trạng thái; xem
                 `QUYEN_DONG_PHAN_ANH` ở `lib/quyen.ts`. */}
-            <SoPhanAnh key={drillDownKey(drillDown)} drillDown={drillDown} />
-            <TraCuuPhieu />
+            {/* One spacing between the register and the lookup (spec §6.9). */}
+            <div className="flex min-w-0 flex-col gap-6">
+              <SoPhanAnh key={drillDownKey(drillDown)} drillDown={drillDown} />
+              <TraCuuPhieu />
+            </div>
           </CongQuyen>
         </main>
         </div>
