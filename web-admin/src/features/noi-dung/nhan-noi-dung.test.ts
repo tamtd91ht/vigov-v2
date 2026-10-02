@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
+import { QUYEN_CONG_KHAI_DANH_BA } from "@/lib/quyen";
 
 import {
+  canEditContent,
   CANH_BAO_HTML_THO,
   categoryPatchBody,
+  CONTENT_UPDATE_PERMISSION,
+  MO_TA_THE_DANH_BA,
+  PUBLISHED_STAFF_UNREAD,
+  publishedStaffText,
   CHUA_XEP_DANH_MUC,
   coThayDoi,
   DAU_GACH,
@@ -178,10 +184,11 @@ describe("hai ô nhỏ của bảng §6", () => {
     expect(nhanTepDinhKem(false)).toBe(DAU_GACH);
   });
 
-  it("tóm tắt gộp về một dòng rồi cắt", () => {
+  it("tóm tắt gộp về một dòng, and is NOT cut — the one-line cut is CSS's (`.summary-one-line`)", () => {
     expect(trichTomTat("  hai   dòng\nnối lại  ")).toBe("hai dòng nối lại");
     expect(trichTomTat("")).toBe("");
-    expect(trichTomTat("abcdefghij", 5)).toBe("abcde…");
+    const long = "ạ".repeat(500);
+    expect(trichTomTat(long)).toBe(long);
   });
 });
 
@@ -640,16 +647,67 @@ describe("phần chưa dựng được", () => {
     // EXACT, not a floor: an item silently dropped and an item silently kept are both a block that
     // lies to the commune about what the screen does. ADR 0067 built five of them (§1, §2, §3, §4, §5);
     // the portal sync card brought two narrower gaps of its own; the status filter left on 02/10/2026
-    // (`status` on GET content-items, C1), the meta count stays.
+    // (`status` on GET content-items, C1), the meta count stays. Also 02/10/2026, following the
+    // prototype: the §4 count, the §2 layout and the `content.update` gate left it.
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
-      "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
       "Cột `Lượt xem` (§6)",
       "Nút xoá một bài (§9 đề xuất `DELETE`)",
-      "Bố cục §2: tabs thật, hai thẻ đầu màn, modal dạng lớp phủ, cắt tóm tắt đúng 1 dòng",
-      "Cổng quyền `content.read` / `content.update` ở phía giao diện",
     ]);
   });
+
+  it("no item still claims the §4 count, the §2 layout or the permission gate are missing", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
+    expect(all).not.toContain("Đang hiện 26 cán bộ");
+    expect(all).not.toContain("aria-pressed");
+    expect(all).not.toContain("không được thêm CSS");
+    expect(all).not.toContain("Cổng quyền");
+  });
+});
+
+describe("`canEditContent` — who sees the write controls (fail closed, no flash)", () => {
+  const session = (permissions: string[]) =>
+    ({ ok: true, duLieu: { permissions } }) as unknown as Parameters<typeof canEditContent>[0];
+
+  it("the key is `content.update`, the SAME literal as `lib/quyen.ts` holds — not a second copy", () => {
+    expect(CONTENT_UPDATE_PERMISSION).toBe("content.update");
+    expect(CONTENT_UPDATE_PERMISSION).toBe(QUYEN_CONG_KHAI_DANH_BA);
+  });
+
+  it("session not read yet → no (the buttons appear later, never vanish)", () => {
+    expect(canEditContent(null)).toBe(false);
+  });
+
+  it("session read with an error → no", () => {
+    expect(canEditContent({ ok: false, thongBao: "Phiên đã hết hạn." })).toBe(false);
+  });
+
+  it("`content.read` alone → no; neighbouring keys do not open it", () => {
+    expect(canEditContent(session(["content.read"]))).toBe(false);
+    expect(canEditContent(session(["admin.user", "announcement.create", "content.updat"]))).toBe(false);
+  });
+
+  it("`content.update` held → yes", () => {
+    expect(canEditContent(session(["content.read", "content.update"]))).toBe(true);
+  });
+});
+
+describe("`publishedStaffText` — §4's line in three states", () => {
+  it("a number only after a successful read", () => {
+    expect(publishedStaffText({ ok: true, duLieu: 26 })).toEqual({
+      line: "Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.",
+      note: null,
+    });
+    expect(publishedStaffText(null)).toEqual({ line: MO_TA_THE_DANH_BA, note: null });
+    expect(publishedStaffText({ ok: false, thongBao: "x" })).toEqual({
+      line: MO_TA_THE_DANH_BA,
+      note: PUBLISHED_STAFF_UNREAD,
+    });
+    expect(MO_TA_THE_DANH_BA).not.toMatch(/\d/);
+  });
+});
+
+describe("phần chưa dựng được — the remaining items", () => {
 
   it("no item still claims the built parts are missing, or that raw script reaches residents", () => {
     const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");

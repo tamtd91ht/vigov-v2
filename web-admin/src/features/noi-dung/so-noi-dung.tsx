@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
@@ -11,8 +11,11 @@ import {
   veTrangTruoc,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { tabKeTheoPhim } from "@/features/cau-hinh/thanh-tab-cau-hinh";
+import { usePhien } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
 import {
+  countPublishedStaff,
   layDanhMucNoiDung,
   layMotNoiDung,
   laySoNoiDung,
@@ -42,8 +45,10 @@ import {
   BANNER_ARTICLE_PATH_HINT,
   BANNER_COVER_NOTICE,
   bannerLinkTapWarning,
+  canEditContent,
   CANH_BAO_HTML_THO,
   CHUA_XEP_DANH_MUC,
+  CLOSE_LABEL,
   coThayDoi,
   DANG_TAI_SO,
   DANG_TAI_TOAN_VAN,
@@ -52,6 +57,7 @@ import {
   DISPLAY_ORDER_HINT,
   DISPLAY_ORDER_MAX,
   dungCayDanhMuc,
+  EDIT_FORM_TITLE,
   EVENT_PLACE_MAX_CHARS,
   EVENT_TIME_HINT,
   FORM_TRONG,
@@ -63,7 +69,6 @@ import {
   LOAI_MAC_DINH,
   lopChipTrangThai,
   MO_TA_FORM_THEM,
-  MO_TA_THE_DANH_BA,
   MOI_DANH_MUC,
   MOI_LOAI,
   MOI_LOAI_NHAN,
@@ -85,6 +90,7 @@ import {
   PHAN_CHUA_DUNG,
   portalCategoryLabel,
   publishedAtLabel,
+  publishedStaffText,
   SLUG_DANH_MUC_TOI_DA,
   SO_RONG,
   SOURCE_PORTAL_SYNC,
@@ -130,6 +136,7 @@ import {
 import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
 import { BroadcastAudioField } from "./broadcast-audio-field";
 import { CategoryAdmin } from "./category-admin";
+import { OverlayDialog } from "./overlay-dialog";
 import { PortalSyncCard } from "./portal-sync-card";
 import { RichTextEditor } from "./rich-text-editor";
 
@@ -150,9 +157,10 @@ import { RichTextEditor } from "./rich-text-editor";
  * tuyến `DELETE` nào cho một mục nội dung. Gỡ một bài khỏi Mini App là tắt ô `Đăng lên Mini App` ở màn
  * sửa. (A CATEGORY has a soft delete with a reason — `category-admin.tsx`, ADR 0067 §3.)
  *
- * KHÔNG CÓ CỔNG QUYỀN Ở CLIENT — xem `PHAN_CHUA_DUNG`. `service-comms` kiểm `content.read` /
- * `content.update` trên TỪNG lời gọi; tài khoản thiếu khoá nhận nguyên câu 403 ra màn hình. Ẩn một
- * nút chưa bao giờ là biện pháp (luật 5, cấm #1).
+ * WRITE CONTROLS FOLLOW `content.update` (`canEditContent`, 02/10/2026, as the prototype does): without
+ * it the screen is read-only — no `+ Thêm nội dung`, no `✎`, no `⊞ Danh mục tin`, no run/config on the
+ * portal card. That is CONVENIENCE: `service-comms` still checks `content.read` / `content.update` on
+ * EVERY call, and a 403 sentence still reaches the screen verbatim (rule 5, forbidden #1).
  *
  * TIÊU ĐỀ, TÓM TẮT VÀ THÂN BÀI LÀ TIN BÀI CỦA XÃ, thường nhắc tên và hoàn cảnh của một công dân cụ
  * thể: không dòng nào ở đây ghi chúng vào log, vào tên tệp hay vào một URL (luật 3, cấm #1 và #4).
@@ -259,6 +267,27 @@ export function SoNoiDung() {
     };
   }, [dangSuaID, khoaChiTiet]);
 
+  // §4's count. `null` = still loading: the card shows no number until the server has answered.
+  const [publishedCount, setPublishedCount] = useState<KetQua<number> | null>(null);
+
+  useEffect(() => {
+    let gone = false;
+    // THE DOMAIN THE BROWSER IS ON is the one to ask about. This page rendered at all, so the edge
+    // resolved this Host to a commune (`layCauHinhXa`, 404 otherwise); the route resolves the `host` it
+    // is given through the same platform registry. The commune context deliberately carries no `host`
+    // (`lib/cau-hinh-xa-hien-thi.ts`), so a second copy is not invented here. The route answers an
+    // unknown domain with `{items: []}` — which is why it must be THIS page's domain, never a typed one.
+    countPublishedStaff(window.location.hostname).then((r) => {
+      if (!gone) setPublishedCount(r);
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  const session = usePhien();
+  const canEdit = canEditContent(session);
+
   const so = taiTu(daTai, khoaSo);
   const dsDanhMuc: readonly comms_danhMucRa[] =
     danhMuc !== null && danhMuc.ok ? danhMuc.duLieu.items : [];
@@ -275,6 +304,11 @@ export function SoNoiDung() {
     datDangMoDanhMuc(false);
     datDangSuaID(null);
     datLoiForm(null);
+  }
+
+  /** Esc on an open overlay: refused while a save is in flight, like the forms' own `Huỷ`. */
+  function dismissOverlay(): void {
+    if (!dangGui) dongMoiBieuMau();
   }
 
   function themBai(gt: GiaTriFormNoiDung, khoa: string): void {
@@ -336,58 +370,56 @@ export function SoNoiDung() {
       <h2 id="tieu-de-so-noi-dung">Sổ nội dung Mini App</h2>
 
       <KhoiChuaDung />
-      <PortalSyncCard
-        // `Xem tin chờ duyệt` on the card is the same `Trạng thái` filter, set from there — one filter,
-        // two ways in. Every other filter is kept: the queue narrowed by type is still the queue.
-        showPendingReview={() => {
-          datNganXep(TRANG_DAU);
-          datLoc({ ...loc, status: STATUS_PENDING_REVIEW });
+
+      {/* §2: `[+ Thêm nội dung]` sits in the page header, above the two cards. */}
+      <HeaderActions
+        canEdit={canEdit}
+        addOpen={dangMoThem}
+        openAdd={() => {
+          dongMoiBieuMau();
+          datDangMoThem(true);
         }}
       />
-      <TheDanhBaChinhQuyen />
 
-      <div className="cum-nut">
-        <button
-          type="button"
-          className="nut-chinh"
-          aria-expanded={dangMoThem}
-          onClick={() => {
-            dongMoiBieuMau();
-            datDangMoThem(!dangMoThem);
+      {/* §2: Card 1 and Card 2 side by side on a wide screen, stacked at 320px. */}
+      <div className="content-top-cards">
+        <PortalSyncCard
+          canEdit={canEdit}
+          // `Xem tin chờ duyệt` on the card is the same `Trạng thái` filter, set from there — one filter,
+          // two ways in. Every other filter is kept: the queue narrowed by type is still the queue.
+          showPendingReview={() => {
+            datNganXep(TRANG_DAU);
+            datLoc({ ...loc, status: STATUS_PENDING_REVIEW });
           }}
-        >
-          {NHAN_NUT_THEM}
-        </button>
-        <button
-          type="button"
-          className="nut-phu"
-          aria-expanded={dangMoDanhMuc}
-          onClick={() => {
-            dongMoiBieuMau();
-            datDangMoDanhMuc(!dangMoDanhMuc);
-          }}
-        >
-          {NHAN_NUT_DANH_MUC}
-        </button>
+        />
+        <TheDanhBaChinhQuyen publishedCount={publishedCount} />
       </div>
 
-      {dangMoThem && (
-        <FormNoiDung
-          // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
-          key={`them|${lanGhiXong}`}
-          tieuDeForm={TIEU_DE_FORM_THEM}
-          moTa={MO_TA_FORM_THEM}
-          giaTriDau={FORM_TRONG}
-          danhMuc={dsDanhMuc}
-          dangGui={dangGui}
-          loi={loiForm}
-          huy={dongMoiBieuMau}
-          luu={(gt, khoa) => themBai(gt, khoa)}
-        />
+      {canEdit && dangMoThem && (
+        <OverlayDialog titleId="tieu-de-form-noi-dung" onDismiss={dismissOverlay}>
+          <FormNoiDung
+            // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
+            key={`them|${lanGhiXong}`}
+            tieuDeForm={TIEU_DE_FORM_THEM}
+            moTa={MO_TA_FORM_THEM}
+            giaTriDau={FORM_TRONG}
+            danhMuc={dsDanhMuc}
+            dangGui={dangGui}
+            loi={loiForm}
+            huy={dongMoiBieuMau}
+            luu={(gt, khoa) => themBai(gt, khoa)}
+          />
+        </OverlayDialog>
       )}
 
-      {dangMoDanhMuc && (
-        <>
+      {canEdit && dangMoDanhMuc && (
+        <OverlayDialog titleId="tieu-de-hop-danh-muc" onDismiss={dismissOverlay}>
+          <div className="dau-khoi-chi-tiet">
+            <h3 id="tieu-de-hop-danh-muc">{NHAN_NUT_DANH_MUC}</h3>
+            <button type="button" className="nut-phu" disabled={dangGui} onClick={dongMoiBieuMau}>
+              {CLOSE_LABEL}
+            </button>
+          </div>
           <CategoryAdmin
             categories={dsDanhMuc}
             update={updateContentCategory}
@@ -402,28 +434,44 @@ export function SoNoiDung() {
             huy={dongMoiBieuMau}
             luu={themDanhMuc}
           />
-        </>
+        </OverlayDialog>
       )}
 
-      {chiTiet !== null && chiTiet.pha === "dangTai" && <p role="status">{DANG_TAI_TOAN_VAN}</p>}
-      {chiTiet !== null && chiTiet.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {chiTiet.thongBao}
-        </p>
-      )}
-      {chiTiet !== null && chiTiet.pha === "xong" && dangSuaID !== null && (
-        <FormNoiDung
-          key={`sua|${dangSuaID}|${lanGhiXong}`}
-          tieuDeForm={`Sửa nội dung: ${chiTiet.duLieu.title}`}
-          moTa={MO_TA_FORM_THEM}
-          giaTriDau={giaTriTuHang(chiTiet.duLieu)}
-          hang={chiTiet.duLieu}
-          danhMuc={dsDanhMuc}
-          dangGui={dangGui}
-          loi={loiForm}
-          huy={dongMoiBieuMau}
-          luu={(gt) => suaBai(dangSuaID, giaTriTuHang(chiTiet.duLieu), gt)}
-        />
+      {canEdit && chiTiet !== null && dangSuaID !== null && (
+        <OverlayDialog titleId="tieu-de-form-noi-dung" onDismiss={dismissOverlay}>
+          {chiTiet.pha === "xong" ? (
+            <FormNoiDung
+              key={`sua|${dangSuaID}|${lanGhiXong}`}
+              tieuDeForm={`Sửa nội dung: ${chiTiet.duLieu.title}`}
+              moTa={MO_TA_FORM_THEM}
+              giaTriDau={giaTriTuHang(chiTiet.duLieu)}
+              hang={chiTiet.duLieu}
+              danhMuc={dsDanhMuc}
+              dangGui={dangGui}
+              loi={loiForm}
+              huy={dongMoiBieuMau}
+              luu={(gt) => suaBai(dangSuaID, giaTriTuHang(chiTiet.duLieu), gt)}
+            />
+          ) : (
+            // The dialog opens at once on `✎`; the full text arrives a moment later. Until then it
+            // carries a heading (its accessible name) and a way out.
+            <>
+              <h3 id="tieu-de-form-noi-dung">{EDIT_FORM_TITLE}</h3>
+              {chiTiet.pha === "dangTai" ? (
+                <p role="status">{DANG_TAI_TOAN_VAN}</p>
+              ) : (
+                <p className="thong-bao-loi" role="alert">
+                  {chiTiet.thongBao}
+                </p>
+              )}
+              <div className="cum-nut">
+                <button type="button" className="nut-phu" onClick={dongMoiBieuMau}>
+                  {CLOSE_LABEL}
+                </button>
+              </div>
+            </>
+          )}
+        </OverlayDialog>
       )}
 
       <ThanhTabLoai
@@ -434,42 +482,75 @@ export function SoNoiDung() {
         }}
       />
 
-      <HangLocNoiDung
-        danhMucID={loc.danhMucID}
-        datDanhMucID={(id) => {
-          datNganXep(TRANG_DAU);
-          datLoc({ ...loc, danhMucID: id });
-        }}
-        tim={tim}
-        datTim={datTim}
-        timNgay={() => {
-          datNganXep(TRANG_DAU);
-          datLoc({ ...loc, tim: tim.trim() });
-        }}
-        danhMuc={dsDanhMuc}
-        status={loc.status}
-        setStatus={(st) => {
-          datNganXep(TRANG_DAU);
-          datLoc({ ...loc, status: st });
-        }}
-      />
+      <div
+        role="tabpanel"
+        id={CONTENT_TABPANEL_ID}
+        aria-labelledby={contentTabId(loc.loai)}
+        // The panel itself takes focus after the tablist (WAI-ARIA tabs): Tab from the selected tab
+        // lands here, not on the first filter box three controls further down.
+        tabIndex={0}
+      >
+        <HangLocNoiDung
+          danhMucID={loc.danhMucID}
+          datDanhMucID={(id) => {
+            datNganXep(TRANG_DAU);
+            datLoc({ ...loc, danhMucID: id });
+          }}
+          tim={tim}
+          datTim={datTim}
+          timNgay={() => {
+            datNganXep(TRANG_DAU);
+            datLoc({ ...loc, tim: tim.trim() });
+          }}
+          danhMuc={dsDanhMuc}
+          status={loc.status}
+          setStatus={(st) => {
+            datNganXep(TRANG_DAU);
+            datLoc({ ...loc, status: st });
+          }}
+          // §2: `[⊞ Danh mục tin]` closes the filter row. `content.update` only — it opens the tree's
+          // edit/hide/delete and the add form, nothing to read in it that the filter does not show.
+          extra={
+            canEdit ? (
+              <button
+                type="button"
+                className="nut-phu"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  dongMoiBieuMau();
+                  datDangMoDanhMuc(true);
+                }}
+              >
+                {NHAN_NUT_DANH_MUC}
+              </button>
+            ) : null
+          }
+        />
 
-      {danhMuc !== null && !danhMuc.ok && (
-        <p className="thong-bao-loi" role="alert">
-          {danhMuc.thongBao}
-        </p>
-      )}
+        {danhMuc !== null && !danhMuc.ok && (
+          <p className="thong-bao-loi" role="alert">
+            {danhMuc.thongBao}
+          </p>
+        )}
 
-      {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-      {so.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {so.thongBao}
-        </p>
-      )}
+        {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+        {so.pha === "loi" && (
+          <p className="thong-bao-loi" role="alert">
+            {so.thongBao}
+          </p>
+        )}
 
-      {so.pha === "xong" && (
+        {so.pha === "xong" && (
         <>
-          <BangNoiDung ds={so.duLieu.items} danhMuc={dsDanhMuc} sua={datDangSuaID} />
+          <BangNoiDung
+            ds={so.duLieu.items}
+            danhMuc={dsDanhMuc}
+            sua={(id) => {
+              dongMoiBieuMau();
+              datDangSuaID(id);
+            }}
+            canEdit={canEdit}
+          />
           <nav className="dieu-huong-trang" aria-label="Phân trang sổ nội dung Mini App">
             <button
               type="button"
@@ -491,8 +572,38 @@ export function SoNoiDung() {
             </button>
           </nav>
         </>
-      )}
+        )}
+      </div>
     </section>
+  );
+}
+
+/**
+ * §2's page-header action: `[+ Thêm nội dung]`. Drawn only with `content.update` (`canEditContent`):
+ * before the session is read it is absent too, so it can appear but never flash and vanish.
+ */
+export function HeaderActions({
+  canEdit,
+  addOpen,
+  openAdd,
+}: {
+  canEdit: boolean;
+  addOpen: boolean;
+  openAdd: () => void;
+}) {
+  if (!canEdit) return null;
+  return (
+    <div className="cum-nut">
+      <button
+        type="button"
+        className="nut-chinh"
+        aria-haspopup="dialog"
+        aria-expanded={addOpen}
+        onClick={openAdd}
+      >
+        {NHAN_NUT_THEM}
+      </button>
+    </div>
   );
 }
 
@@ -523,24 +634,34 @@ export function KhoiChuaDung() {
 }
 
 /**
- * Thẻ §4 — Danh bạ chính quyền.
+ * Thẻ §4 — Danh bạ chính quyền: `Đang hiện {n} cán bộ cho bà con` and the link to `/danh-ba`.
  *
- * LIÊN KẾT CÓ, CON SỐ KHÔNG. `Đang hiện 26 cán bộ cho bà con` đếm cờ `hien_tren_mini_app` trên danh
- * bạ, thứ `service-identity` sở hữu và không tuyến nào hôm nay trả về. Hiện một số 0 ở đó là nói
- * với xã rằng bà con không thấy cán bộ nào — xem `PHAN_CHUA_DUNG`.
+ * THE NUMBER IS SHOWN ONLY AFTER THE SERVER ANSWERED (`publishedStaffText`). While loading, or when the
+ * read failed, the line carries no number at all — a `0` there would tell the commune that residents
+ * see nobody. Presentational: `SoNoiDung` reads the count (`countPublishedStaff`).
  */
-export function TheDanhBaChinhQuyen() {
+export function TheDanhBaChinhQuyen({ publishedCount }: { publishedCount: KetQua<number> | null }) {
+  const text = publishedStaffText(publishedCount);
   return (
-    <div className="khoi-chi-tiet">
+    <section className="khoi-chi-tiet" aria-labelledby="government-directory-title">
       <div className="dau-khoi-chi-tiet">
-        <h3>📖 {TIEU_DE_THE_DANH_BA}</h3>
+        <h3 id="government-directory-title">📖 {TIEU_DE_THE_DANH_BA}</h3>
+        <Link className="nut-phu" href="/danh-ba">
+          Mở danh bạ cán bộ →
+        </Link>
       </div>
-      <p>{MO_TA_THE_DANH_BA}</p>
-      <Link className="nut-phu" href="/danh-ba">
-        Mở danh bạ cán bộ →
-      </Link>
-    </div>
+      <p>{text.line}</p>
+      {text.note !== null && <p className="ghi-chu">{text.note}</p>}
+    </section>
   );
+}
+
+/** The one panel the content-type tabs control: the filter row, the table and its pagination. */
+export const CONTENT_TABPANEL_ID = "content-type-panel";
+
+/** The id of one tab; `""` is `Tất cả`. */
+export function contentTabId(type: string): string {
+  return `content-type-tab-${type === "" ? "all" : type}`;
 }
 
 /**
@@ -550,8 +671,11 @@ export function TheDanhBaChinhQuyen() {
  * được ở trạng thái không lọc, vì `type` VẮNG là hình dạng duy nhất nói "mọi loại" — gửi `type=`
  * rỗng thì máy chủ vẫn coi là không lọc, nhưng màn hình sẽ không có nút nào để quay về đó.
  *
- * SÁU NÚT `aria-pressed`, KHÔNG PHẢI TAB THẬT: `globals.css` chưa có lớp nào cho tab và lượt này
- * không được thêm CSS. `.thanh-sap-xep` đã có sẵn kiểu cho một hàng nút bật/tắt.
+ * REAL TABS, THE CẤU HÌNH SCREEN'S PATTERN (`features/cau-hinh/khung-tab-cau-hinh.tsx`): `tablist` /
+ * `tab` / `tabpanel`, one tab in the Tab order (roving `tabIndex`), ← → Home End move AND select
+ * (`tabKeTheoPhim`, reused), and the same `.thanh-tab-cau-hinh` look (44px targets, wraps at 320px).
+ * ONE panel for seven tabs: every tab shows the same table under a different `type` filter, so all
+ * seven `aria-controls` name it.
  */
 export function ThanhTabLoai({
   loai,
@@ -560,25 +684,36 @@ export function ThanhTabLoai({
   loai: string;
   datLoai: (l: string) => void;
 }) {
+  const types: readonly string[] = ["", ...MOI_LOAI];
+  const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  function onKey(e: KeyboardEvent<HTMLButtonElement>, index: number): void {
+    const next = tabKeTheoPhim(e.key, index, types.length);
+    const to = next === null ? undefined : types[next];
+    if (to === undefined) return;
+    e.preventDefault();
+    datLoai(to);
+    buttons.current[to]?.focus();
+  }
+
   return (
-    <div className="thanh-sap-xep" role="group" aria-label="Loại nội dung">
-      <button
-        type="button"
-        className="nut-phu"
-        aria-pressed={loai === ""}
-        onClick={() => datLoai("")}
-      >
-        {MOI_LOAI_NHAN}
-      </button>
-      {MOI_LOAI.map((ma) => (
+    <div className="thanh-tab-cau-hinh" role="tablist" aria-label="Loại nội dung">
+      {types.map((type, i) => (
         <button
-          key={ma}
+          key={type === "" ? "all" : type}
+          ref={(el) => {
+            buttons.current[type] = el;
+          }}
           type="button"
-          className="nut-phu"
-          aria-pressed={loai === ma}
-          onClick={() => datLoai(ma)}
+          role="tab"
+          id={contentTabId(type)}
+          aria-selected={loai === type}
+          aria-controls={CONTENT_TABPANEL_ID}
+          tabIndex={loai === type ? 0 : -1}
+          onClick={() => datLoai(type)}
+          onKeyDown={(e) => onKey(e, i)}
         >
-          {nhanLoai(ma)}
+          {type === "" ? MOI_LOAI_NHAN : nhanLoai(type)}
         </button>
       ))}
     </div>
@@ -600,6 +735,7 @@ export function HangLocNoiDung({
   danhMuc,
   status,
   setStatus,
+  extra,
 }: {
   danhMucID: string;
   datDanhMucID: (id: string) => void;
@@ -609,6 +745,8 @@ export function HangLocNoiDung({
   danhMuc: readonly comms_danhMucRa[];
   status: string;
   setStatus: (status: string) => void;
+  /** What closes the row — §2's `[⊞ Danh mục tin]`, when the account may edit. */
+  extra?: ReactNode;
 }) {
   function gui(e: FormEvent) {
     e.preventDefault();
@@ -665,6 +803,8 @@ export function HangLocNoiDung({
           ))}
         </select>
       </div>
+
+      {extra}
     </div>
   );
 }
@@ -678,15 +818,24 @@ export function HangLocNoiDung({
  *
  * KHÔNG CỘT NÀO DỰNG HTML. `title` và `summary` là văn bản thuần ở đây; thân bài không có mặt
  * trong phản hồi danh sách và màn hình không đi đoán nó.
+ *
+ * WITHOUT `content.update` THE ACTION COLUMN IS NOT DRAWN AT ALL (`canEdit`), header included — an
+ * empty `Sửa` column is a column promising something. The note under the table goes with it: it
+ * explains the edit screen, which that account cannot open.
+ *
+ * THE SUMMARY IS CLAMPED BY CSS TO ONE LINE (`.summary-one-line`), never cut by characters: the whole
+ * text is in the page for a screen reader, and the cut follows the column's real width.
  */
 export function BangNoiDung({
   ds,
   danhMuc,
   sua,
+  canEdit,
 }: {
   ds: readonly comms_noiDungRa[];
   danhMuc: readonly comms_danhMucRa[];
   sua: (id: string) => void;
+  canEdit: boolean;
 }) {
   if (ds.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
 
@@ -703,7 +852,7 @@ export function BangNoiDung({
               <th scope="col">Tệp đính kèm</th>
               <th scope="col">Ngày đăng</th>
               <th scope="col">Trạng thái</th>
-              <th scope="col">Sửa</th>
+              {canEdit && <th scope="col">Sửa</th>}
             </tr>
           </thead>
           <tbody>
@@ -714,7 +863,7 @@ export function BangNoiDung({
                 <tr key={nd.id}>
                   <td>
                     <span className="ten-can-bo">{nd.title}</span>
-                    {trich !== "" && <span className="dong-phu">{trich}</span>}
+                    {trich !== "" && <span className="dong-phu summary-one-line">{trich}</span>}
                     {/* The portal sync's items say so under the title (ADR 0067 §2): the
                         commune must see which rows came from its portal, most of all the
                         `Chờ duyệt` ones waiting for somebody to publish them. */}
@@ -737,25 +886,28 @@ export function BangNoiDung({
                   <td>
                     <span className={lopChipTrangThai(nd.status)}>{nhanTrangThai(nd.status)}</span>
                   </td>
-                  <td className="o-thao-tac">
-                    <button
-                      type="button"
-                      className="nut-phu"
-                      onClick={() => sua(nd.id)}
-                      // Ký hiệu một mình không đọc được bằng trình đọc màn hình, và sáu hàng đều
-                      // mang cùng một ký hiệu. Nhãn mang theo tiêu đề để nói rõ đang sửa bài nào.
-                      aria-label={`${NHAN_NUT_SUA} Sửa: ${nd.title}`}
-                    >
-                      {NHAN_NUT_SUA}
-                    </button>
-                  </td>
+                  {canEdit && (
+                    <td className="o-thao-tac">
+                      <button
+                        type="button"
+                        className="nut-phu"
+                        aria-haspopup="dialog"
+                        onClick={() => sua(nd.id)}
+                        // Ký hiệu một mình không đọc được bằng trình đọc màn hình, và sáu hàng đều
+                        // mang cùng một ký hiệu. Nhãn mang theo tiêu đề để nói rõ đang sửa bài nào.
+                        aria-label={`${NHAN_NUT_SUA} Sửa: ${nd.title}`}
+                      >
+                        {NHAN_NUT_SUA}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="ghi-chu">{GHI_CHU_KHONG_CO_XOA}</p>
+      {canEdit && <p className="ghi-chu">{GHI_CHU_KHONG_CO_XOA}</p>}
     </>
   );
 }
@@ -763,8 +915,9 @@ export function BangNoiDung({
 /**
  * Biểu mẫu §7, dùng cho cả THÊM và SỬA.
  *
- * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một khối nằm trong trang — KHÔNG phải một lớp phủ — vì một
- * lớp phủ cần lớp CSS chưa có trong `globals.css`, và lượt này không được thêm CSS.
+ * ĐẶC TẢ GỌI NÓ LÀ MODAL, and it is one: `SoNoiDung` mounts it inside `OverlayDialog` (native
+ * `<dialog>` + `showModal`, `overlay-dialog.tsx`). The form itself knows nothing of the overlay, so its
+ * tests still render it alone.
  *
  * Ô `Nội dung` IS THE TIPTAP EDITOR (`RichTextEditor`), limited to the server's allow-list. It reports
  * a change only when the officer edits, so `thanSua` never sends a body nobody touched.

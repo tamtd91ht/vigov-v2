@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   completeCoverUpload,
   contentCategoryPath,
+  countPublishedStaff,
+  publishedStaffPath,
   COVER_FORM_MISSING,
   deleteContentCategory,
   duongDanMotNoiDung,
@@ -726,9 +728,9 @@ describe("thân yêu cầu khớp hợp đồng", () => {
   });
 
   it("tám tuyến vẫn đứng sau đúng hai khoá màn đang giả định", () => {
-    // `lib/quyen.ts` có hằng cho hai khoá (`QUYEN_XEM_NOI_DUNG`, `QUYEN_CONG_KHAI_DANH_BA`) — chỉ menu
-    // và danh bạ dùng; MÀN NÀY vẫn cố ý không có cổng quyền ở client (xem `PHAN_CHUA_DUNG`). Bài
-    // kiểm này là chỗ phát hiện được ngày máy chủ tách khoá của một trong tám tuyến.
+    // The screen hides its write controls behind `content.update` (`canEditContent`, 02/10/2026) on the
+    // ASSUMPTION that every write route declares exactly that key. This test is where the day the
+    // server splits the key of one of these routes turns red.
     const p = hopDong().paths;
     const khoa = (duong: string, pt: string) => p[duong]?.[pt]?.["x-vigov-permission"]?.key;
 
@@ -792,5 +794,52 @@ describe("ba tên bộ lọc khớp handler thật", () => {
     for (const ten of cuaMayChu) {
       expect(gui.has(ten), `màn hình phải gửi được bộ lọc \`${ten}\``).toBe(true);
     }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §4 — how many staff residents see (`GET /api/v1/commune-staff?host=`, identity, public)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("`countPublishedStaff` — §4's number", () => {
+  it("asks for exactly the domain it is given, as the one `host` parameter the route reads", () => {
+    expect(publishedStaffPath("xa-a.example.vn")).toBe("/api/v1/commune-staff?host=xa-a.example.vn");
+    // The name on the wire is the contract's (`identity_get_commune_staff["truyVan"]`), not a guess.
+    const p = hopDong().paths["/api/v1/commune-staff"]?.["get"] as unknown as {
+      parameters?: { name: string; in: string }[];
+    };
+    expect(p.parameters?.map((x) => `${x.in}:${x.name}`)).toEqual(["query:host"]);
+  });
+
+  it("a 200 gives the COUNT only — the names and numbers of the reply never leave the function", async () => {
+    const gia = batFetch(
+      traJSON(200, {
+        items: [
+          { full_name: "Nguyễn Văn A", position: "Chủ tịch", department_name: "", phone: "", mobile: "0900000000", has_zalo: true },
+          { full_name: "Trần Thị B", position: "Văn thư", department_name: "", phone: "", mobile: "", has_zalo: false },
+        ],
+      }),
+    );
+    const kq = await countPublishedStaff("xa-a.example.vn");
+    expect(kq).toEqual({ ok: true, duLieu: 2 });
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/commune-staff?host=xa-a.example.vn");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("GET");
+  });
+
+  it("a refusal or a dead network is a failure, NEVER a count of 0", async () => {
+    batFetch(traJSON(400, { code: "host_invalid", message: "Tên miền không hợp lệ.", trace_id: "t" }));
+    const refused = await countPublishedStaff("localhost");
+    expect(refused.ok).toBe(false);
+
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("offline"))));
+    const offline = await countPublishedStaff("xa-a.example.vn");
+    expect(offline.ok).toBe(false);
+  });
+
+  it("the route is the public one the Mini App reads — the staff screen counts the SAME set residents see", () => {
+    const op = hopDong().paths["/api/v1/commune-staff"]?.["get"] as unknown as {
+      "x-vigov-permission"?: { kind?: string };
+    };
+    expect(op["x-vigov-permission"]?.kind).toBe("public");
   });
 });

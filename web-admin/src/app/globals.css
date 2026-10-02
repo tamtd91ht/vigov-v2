@@ -1799,6 +1799,87 @@ body {
   border-bottom: 1px solid var(--xam-vien);
 }
 
+/* ---- Nội dung Mini App: bố cục §2 (02/10/2026) -------------------------------------------------- */
+
+/* §2's two cards at the head of the screen: stacked at 320px, side by side from 1024px. The portal card
+ * is the wider one — it holds the last run and the error block; the directory card is two lines. */
+.content-top-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.content-top-cards > .khoi-chi-tiet {
+  margin: 0;
+  min-width: 0; /* a long portal URL must wrap inside its column, not widen the grid */
+}
+
+@media (min-width: 1024px) {
+  .content-top-cards {
+    grid-template-columns: 2fr 1fr;
+    align-items: start;
+  }
+}
+
+/* `⊞ Danh mục tin` closes the filter row (§2): its own width at 320px, pushed right on a wide screen. */
+.man-noi-dung .hang-loc > .nut-phu {
+  align-self: flex-start;
+  min-height: 2.75rem;
+}
+
+@media (min-width: 768px) {
+  .man-noi-dung .hang-loc > .nut-phu {
+    margin-left: auto;
+  }
+}
+
+/* §6 "tóm tắt cắt 1 dòng". The cut is the column's real width, so it is CSS's, never a character count
+ * — the whole summary stays in the DOM for a screen reader. `white-space: normal` undoes the table's
+ * `nowrap` (`.bang-can-bo td`), without which the text never wraps and so never clamps; the max width
+ * keeps one long summary from widening the whole table. Same `-webkit-` pairing as `.tieu-de-the`. */
+.summary-one-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  white-space: normal;
+  max-width: 28rem;
+}
+
+/* The overlay of §7 and §3 (`overlay-dialog.tsx`, native `<dialog>` + `showModal`). At 320px it takes
+ * the whole width but a 0.5rem margin, and scrolls INSIDE itself: a form taller than the screen must
+ * still reach its `Lưu`. The backdrop dims the page that `showModal` made inert. */
+.overlay-dialog {
+  width: min(48rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem);
+  margin: auto;
+  padding: 1rem;
+  overflow-y: auto;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.overlay-dialog::backdrop {
+  background: rgb(17 24 39 / 55%);
+}
+
+/* The form inside already draws its frame; inside the overlay it must not draw a second one. */
+.overlay-dialog > .form-danh-muc {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.overlay-dialog .dau-khoi-chi-tiet .nut-phu {
+  min-height: 2.75rem;
+}
+
 /* ---- Ảnh hiện trường của phiếu phản ánh (§8.4 `Trước khi xử lý`) ------------------------------
    A grid that fills by width, so 320px shows two to three thumbnails per row and never scrolls
    sideways. Each thumbnail is a 44px+ button (`skills/accessibility-elderly`); the full-size image

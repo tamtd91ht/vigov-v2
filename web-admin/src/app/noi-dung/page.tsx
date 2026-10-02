@@ -21,7 +21,8 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * khoản thiếu `content.read`; trang vẫn cố ý không bọc `<CongQuyen>`, cùng khuôn màn Thông báo.
  *
  * Lớp chặn thật không đổi: `authz.RequirePermission` ở máy chủ, trên TỪNG lời gọi (luật 5, cấm
- * #1). Thứ thiếu là sự tiện dụng — cán bộ phải bấm vào rồi mới biết mình không có quyền.
+ * #1). Inside the screen the WRITE controls are hidden without `content.update` (`canEditContent`,
+ * 02/10/2026) — convenience on top of that check, never instead of it.
  *
  * TIÊU ĐỀ VÀ CÂU MÔ TẢ LẤY TỪ `nhan-noi-dung.ts`, không gõ lại ở đây: chúng là chữ NGUYÊN VĂN của
  * §1 và §3, và một bản thứ hai của một câu là một bản sẽ trôi (luật 9, cấm #2).

@@ -19,6 +19,8 @@
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
+import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
+import type { KetQua } from "@/lib/api/goi";
 import {
   CONTENT_TYPE_BANNER,
   CONTENT_TYPE_EVENT,
@@ -31,6 +33,7 @@ import type {
   comms_suaNoiDungVao,
   comms_themNoiDungVao,
 } from "@/lib/api/schema.gen";
+import { QUYEN_CONG_KHAI_DANH_BA, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 /* ── Trần độ dài, đúng bằng trần máy chủ ────────────────────────────────────────────────────
  *
@@ -81,6 +84,10 @@ export const NHAN_NUT_HUY = "Huỷ";
 export const NHAN_NUT_LUU = "Lưu";
 /** §6 — cột hành động chỉ có ký hiệu này. KHÔNG có nút xoá: không tuyến nào xoá được. */
 export const NHAN_NUT_SUA = "✎";
+/** The way out of an overlay that holds no form of its own (the category manager, a loading edit). */
+export const CLOSE_LABEL = "Đóng";
+/** The edit overlay's heading while the full text is still loading — the title is not known yet. */
+export const EDIT_FORM_TITLE = "Sửa nội dung";
 
 /** §7 — nguyên văn tiêu đề và mô tả của modal thêm. */
 export const TIEU_DE_FORM_THEM = "Thêm nội dung cho Mini App";
@@ -99,10 +106,67 @@ export const MOI_DANH_MUC = "Tất cả danh mục";
 /** §6 — placeholder ô tìm, nguyên văn kể cả dấu ba chấm. */
 export const TIM_PLACEHOLDER = "Tìm theo tiêu đề…";
 
-/** §4 — nguyên văn hai dòng của thẻ Danh bạ chính quyền, TRỪ con số không đọc về được. */
+/** §4 — the card's title, verbatim. */
 export const TIEU_DE_THE_DANH_BA = "Danh bạ chính quyền";
+/**
+ * The card's line while the count is loading or could not be read: no number in it. A `0` shown
+ * then would tell the commune that residents see nobody.
+ */
 export const MO_TA_THE_DANH_BA =
   "Chọn thêm hoặc bớt cán bộ hiện cho bà con ở màn Danh bạ cán bộ.";
+/** Said under the line when the count could not be read — a fact, never a guessed figure. */
+export const PUBLISHED_STAFF_UNREAD = "Chưa đọc được số cán bộ đang hiện cho bà con.";
+
+/** §4 verbatim, with the count the server returned: `Đang hiện 26 cán bộ cho bà con. …` */
+export function publishedStaffLine(n: number): string {
+  return `Đang hiện ${n} cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.`;
+}
+
+/**
+ * The card's text for the three states of the count. `null` = still loading.
+ *
+ * ONLY A SUCCESSFUL READ CARRIES A NUMBER. Loading and failure both give the line without one, and a
+ * failure says so underneath. A `0` here on success is true (nobody published yet); a `0` on failure
+ * would be a lie about a public channel.
+ */
+export function publishedStaffText(count: KetQua<number> | null): {
+  readonly line: string;
+  readonly note: string | null;
+} {
+  if (count === null) return { line: MO_TA_THE_DANH_BA, note: null };
+  if (!count.ok) return { line: MO_TA_THE_DANH_BA, note: PUBLISHED_STAFF_UNREAD };
+  return { line: publishedStaffLine(count.duLieu), note: null };
+}
+
+/* ── Permission: who sees the write controls ──────────────────────────────────────────────────── */
+
+/**
+ * `content.update` — the key every write route of this screen declares (`lib/api/noi-dung.ts` header,
+ * `lib/api/portal-sync.ts` header; seeded at `service-identity/migrations/0001_init.sql:293`, "Sửa nội
+ * dung và danh bạ Mini App").
+ *
+ * AN ALIAS, NOT A SECOND LITERAL: `lib/quyen.ts` already holds this string as `QUYEN_CONG_KHAI_DANH_BA`
+ * (named for the directory screen, where it was first gated). One key, one literal — a second copy of
+ * the string is the copy that drifts the day the key is split.
+ */
+export const CONTENT_UPDATE_PERMISSION = QUYEN_CONG_KHAI_DANH_BA;
+
+/**
+ * Whether this screen draws its WRITE controls: `+ Thêm nội dung`, `✎`, `⊞ Danh mục tin` (the
+ * category tree and its edit/hide/delete), `⟳ Đồng bộ ngay` and `Cấu hình` of the portal sync card.
+ * The prototype gates the same set (`vigov-require/.../ContentWorkspace.tsx:99,174,272,447`).
+ *
+ * FAIL CLOSED, AND NO FLASH: a session not read yet (`null`) or read with an error is "no". The
+ * controls can therefore only APPEAR once the session is in, never appear and then vanish.
+ *
+ * CONVENIENCE, NOT PROTECTION: `service-comms` checks `content.update` on every write (rule 5,
+ * forbidden #1). The READ key `content.read` gets no gate here on purpose — the menu item is gated by
+ * it (`QUYEN_XEM_NOI_DUNG`), and an account without it gets the server's own 403 sentence on the list,
+ * the same pattern as `/van-ban`.
+ */
+export function canEditContent(session: PhienDaDoc): boolean {
+  return session !== null && quyetDinhTheoKhoa(session, CONTENT_UPDATE_PERMISSION).hien;
+}
 
 /**
  * Sổ rỗng. Đặc tả không có câu nào cho trạng thái này, nên câu dưới là câu viết mới, cùng giọng
@@ -410,20 +474,16 @@ export function nhanTepDinhKem(coAnh: boolean): string {
 /**
  * Tóm tắt cho dòng phụ §6 (*"tóm tắt cắt 1 dòng"*).
  *
- * CẮT THEO KÝ TỰ, KHÔNG THEO DÒNG, và sự khác ấy được nói thẳng: "1 dòng" là một phép cắt của CSS
- * (`line-clamp`) phụ thuộc bề rộng thật của cột — `globals.css` chưa có lớp nào cho nó và lượt này
- * không được thêm CSS. Toàn văn tóm tắt vẫn đọc được ở khối chi tiết, nên không chữ nào mất hẳn.
+ * NOT CUT HERE ANY MORE (02/10/2026). "1 dòng" is a cut by the column's real width, so it is CSS's
+ * (`.summary-one-line`, `line-clamp: 1` in `globals.css`); a character count could only approximate it —
+ * too long on a narrow screen, too short on a wide one. The whole summary stays in the page, so a screen
+ * reader reads all of it, and the edit form's `Tóm tắt` box holds it in full.
  *
- * Xuống dòng bị đổi thành dấu cách: một đoạn nhiều dòng nhét vào một dòng trích sẽ dính chữ cuối
- * dòng trên vào chữ đầu dòng dưới.
+ * Runs of whitespace (line breaks included) still become one space: a multi-line summary squeezed into
+ * one line would otherwise glue the last word of a line to the first word of the next.
  */
-export const TRICH_TOI_DA = 140;
-
-export function trichTomTat(tomTat: string, tran: number = TRICH_TOI_DA): string {
-  const mot = tomTat.replace(/\s+/g, " ").trim();
-  if (mot === "") return "";
-  if (mot.length <= tran) return mot;
-  return `${mot.slice(0, tran).trimEnd()}…`;
+export function trichTomTat(tomTat: string): string {
+  return tomTat.replace(/\s+/g, " ").trim();
 }
 
 /* ── Toàn văn: chỉ lấy được từ TUYẾN CHI TIẾT ─────────────────────────────────────────────── */
@@ -1012,14 +1072,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "30 chuyên mục).",
   },
   {
-    ten: "Con số `Đang hiện 26 cán bộ cho bà con` trên thẻ Danh bạ chính quyền (§4)",
-    viSao:
-      "Liên kết sang `/danh-ba` thì vẽ được và có vẽ. Con số thì không: nó đếm cờ " +
-      "`hien_tren_mini_app` trên danh bạ cán bộ, mà danh bạ thuộc `service-identity` (luật 2) và " +
-      "không tuyến nào của hợp đồng hôm nay trả về con số ấy. Hiện một số 0 ở chỗ đó là nói với xã " +
-      "rằng bà con không thấy cán bộ nào.",
-  },
-  {
     ten: "Cột `Lượt xem` (§6)",
     viSao:
       "Bỏ có chủ ý, không phải chưa kịp làm (người dùng quyết định 01/10/2026): hệ thống không " +
@@ -1035,25 +1087,5 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "`Đăng lên Mini App` tắt đi. Nếu ngày nào cần xoá thật, luật 7 biến nó thành xoá MỀM bắt " +
       "buộc có `delete_reason`, mà không màn nào thu câu ấy — tức tuyến xoá kéo theo một ô nhập lý " +
       "do, không phải một nút thùng rác.",
-  },
-  {
-    ten: "Bố cục §2: tabs thật, hai thẻ đầu màn, modal dạng lớp phủ, cắt tóm tắt đúng 1 dòng",
-    viSao:
-      "Cả bốn là chuyện của CSS: `globals.css` có `.man-noi-dung` (chỉ lề trên) nhưng chưa có lớp " +
-      "cho tab, cho lớp phủ, cho `line-clamp` của bảng này, và lượt này không được thêm CSS. Sáu tab " +
-      "vì thế là sáu nút " +
-      "`aria-pressed` dùng lại `.thanh-sap-xep`; hai biểu mẫu dựng NỐI TIẾP trong trang thay vì " +
-      "làm lớp phủ; tóm tắt cắt theo KÝ TỰ, một phép xấp xỉ, với toàn văn nằm ở khối chi tiết. Tên " +
-      "lớp cần thêm đã báo về.",
-  },
-  {
-    ten: "Cổng quyền `content.read` / `content.update` ở phía giao diện",
-    viSao:
-      "Hai khoá đã có hằng ở `src/lib/quyen.ts` (`QUYEN_XEM_NOI_DUNG`, `QUYEN_CONG_KHAI_DANH_BA`), " +
-      "và mục menu `Nội dung Mini App` đã ẩn với tài khoản thiếu `content.read`. Bản thân màn này " +
-      "vẫn CỐ Ý không có cổng ở client — đúng khuôn màn Thông báo và màn Văn bản: " +
-      "`service-comms` kiểm quyền trên TỪNG lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 " +
-      "của máy chủ ra màn hình. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở " +
-      "đây chỉ tốn một lần bấm.",
   },
 ];

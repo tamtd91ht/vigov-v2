@@ -113,12 +113,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-async function mount(api: Fakes, pollIntervalMs = 1000, showPendingReview?: () => void): Promise<void> {
+async function mount(
+  api: Fakes,
+  pollIntervalMs = 1000,
+  showPendingReview?: () => void,
+  canEdit = true,
+): Promise<void> {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root!.render(<PortalSyncCard api={api} pollIntervalMs={pollIntervalMs} showPendingReview={showPendingReview} />);
+    root!.render(
+      <PortalSyncCard api={api} pollIntervalMs={pollIntervalMs} showPendingReview={showPendingReview} canEdit={canEdit} />,
+    );
   });
 }
 
@@ -170,6 +177,42 @@ describe("denied — the server's 403 reaches the card verbatim", () => {
     expect(host!.querySelector('[role="alert"]')?.textContent).toBe(sentence);
     expect(button("⟳ Đồng bộ ngay").disabled).toBe(true);
     expect(button("Cấu hình").disabled).toBe(true);
+  });
+});
+
+describe("`content.update` gates the two write controls (prototype `ContentSourcePanel canEdit`)", () => {
+  const has = (label: string) => Array.from(host!.querySelectorAll("button")).some((b) => b.textContent === label);
+
+  it("DENIED: no `⟳ Đồng bộ ngay`, no `Cấu hình`, no run-blocked hint — status, last run and reload stay", async () => {
+    await mount(fakes({ settings: { ok: true, duLieu: settingsOut({ configured: false }) } }), 1000, undefined, false);
+    expect(has("⟳ Đồng bộ ngay")).toBe(false);
+    expect(has("Cấu hình")).toBe(false);
+    expect(host!.querySelector("#portal-sync-run-blocked")).toBeNull();
+    expect(host!.querySelector("dialog")).toBeNull();
+    expect(chip()).toBe("Chưa cấu hình");
+    expect(has("Tải lại")).toBe(true);
+  });
+
+  it("ALLOWED: both are there, and `Cấu hình` opens the settings in an overlay `<dialog>` named by its heading", async () => {
+    await mount(fakes());
+    expect(has("⟳ Đồng bộ ngay")).toBe(true);
+    expect(host!.querySelector("dialog")).toBeNull();
+    await click(button("Cấu hình"));
+    const dialog = host!.querySelector("dialog")!;
+    expect(dialog.className).toBe("overlay-dialog");
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(dialog.getAttribute("aria-labelledby")).toBe("portal-sync-config-title");
+    expect(dialog.querySelector("#portal-sync-config-title")).not.toBeNull();
+    expect(dialog.querySelector("#portal-sync-config")).not.toBeNull();
+  });
+
+  it("Esc (`cancel`) closes the overlay", async () => {
+    await mount(fakes());
+    await click(button("Cấu hình"));
+    await act(async () => {
+      host!.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true }));
+    });
+    expect(host!.querySelector("dialog")).toBeNull();
   });
 });
 

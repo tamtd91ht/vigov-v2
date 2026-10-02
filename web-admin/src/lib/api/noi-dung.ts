@@ -15,6 +15,9 @@
  *   PATCH /api/v1/content-categories/{id}                         content.update  (ADR 0067 §3)
  *   DELETE /api/v1/content-categories/{id}  {reason}              content.update  → 204 (soft delete)
  *
+ * Plus ONE route that is not `service-comms`': `GET /api/v1/commune-staff?host=` (`identity`, public) —
+ * read for its COUNT only, for §4's card (`countPublishedStaff` below).
+ *
  * KHÔNG CÓ `DELETE` CHO MỘT MỤC NỘI DUNG, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §9 đề xuất một tuyến xoá; §6 chỉ vẽ
  * `✎`. Gỡ một bài khỏi Mini App là `PATCH` với `publish: false` — đúng như §7 tự mô tả ô tích của
  * nó. Không hàm nào ở đây dựng một đường `DELETE`: một hàm gọi vào tuyến không tồn tại là một hàm
@@ -66,7 +69,16 @@
  * tệp, vào URL hay vào khoá đệm (luật 3, cấm #1 và #4).
  */
 
-import { CHUNG, docJSON, docThanKetQua, goiGhi, LOI_KHONG_RO, thongBaoLoi, type KetQua } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
+import {
+  CHUNG,
+  docJSON,
+  docThanKetQua,
+  goiGhi,
+  LOI_KHONG_RO,
+  thamSoTheoHopDong,
+  thongBaoLoi,
+  type KetQua,
+} from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type { CallResult } from "./task-attachments";
 import type {
   comms_audioFileOut,
@@ -91,6 +103,8 @@ import type {
   comms_themDanhMucVao,
   comms_themNoiDungVao,
   comms_updateCategoryIn,
+  identity_danhBaCongKhaiRa,
+  identity_get_commune_staff,
   page_Result_comms_noiDungRa,
 } from "./schema.gen";
 
@@ -639,5 +653,40 @@ export function deleteContentCategory(id: string, reason: string): Promise<KetQu
   const sent: comms_deleteCategoryIn = { reason };
   return goiGhi(contentCategoryPath(id), "DELETE", sent, 204, undefined).then((kq) =>
     kq.ok ? { ok: true, duLieu: null } : kq,
+  );
+}
+
+/* ── §4 Danh bạ chính quyền: how many staff residents see ─────────────────────────────────────── */
+
+/**
+ * The path of `GET /api/v1/commune-staff?host=` for one commune domain. Split from the call so a test
+ * reads the exact URL without replacing `fetch`.
+ */
+export function publishedStaffPath(host: string): string {
+  const path: identity_get_commune_staff["duongDan"] = "/api/v1/commune-staff";
+  const query = new URLSearchParams();
+  thamSoTheoHopDong<identity_get_commune_staff["truyVan"]>(query)("host", host);
+  const s = query.toString();
+  return s === "" ? path : `${path}?${s}`;
+}
+
+/**
+ * The number of staff the commune's Zalo Mini App shows residents — §4's `Đang hiện {n} cán bộ cho bà
+ * con` (`service-identity/internal/http/danh_ba_cong_khai.go`).
+ *
+ * WHY THE STAFF SCREEN CALLS A CITIZEN-CHANNEL ROUTE (user's decision, 02/10/2026): the route is `public`
+ * and its consumer is `citizen-app`, but it is the ONE place that answers "who exactly do residents
+ * see" — the same filter the Mini App reads (published, active, not deleted). A count rebuilt here from
+ * the staff register (`GET /api/v1/staff`, `admin.user`) would be a second copy of that filter, and it
+ * would also hide the number from a `content.update` holder without `admin.user`.
+ *
+ * ONLY THE COUNT LEAVES THIS FUNCTION. The reply carries every published name and personal mobile
+ * (consented, #12); this screen needs none of them, so none is kept in component state (rule 3).
+ *
+ * `host` is the domain the browser is on — see the caller for why that is the right one.
+ */
+export function countPublishedStaff(host: string): Promise<KetQua<number>> {
+  return docJSON<identity_danhBaCongKhaiRa>(publishedStaffPath(host)).then((kq) =>
+    kq.ok ? { ok: true, duLieu: kq.duLieu.items.length } : kq,
   );
 }

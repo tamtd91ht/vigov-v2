@@ -86,6 +86,7 @@ import {
   type CategoryChoice,
   type SettingsForm,
 } from "./portal-sync";
+import { OverlayDialog } from "./overlay-dialog";
 
 /**
  * §3 — the card "Đồng bộ tin từ Cổng thông tin điện tử" (ADR 0067 §2): chip, meta line, last run,
@@ -98,14 +99,14 @@ import {
  * portal (ADR 0067 §2: never copied), so the card's meta line does not show §3's `{n} chuyên mục` — see
  * `PHAN_CHUA_DUNG`. The count is shown inside the form, from the live tree.
  *
- * NO PERMISSION GATE ON THE CLIENT, same as the rest of this screen: `service-comms` checks
- * `content.read` / `content.update` on every call and a 403 sentence reaches the card verbatim (rule 5,
- * forbidden #1). The category tree is a GET under `content.update` (owner 02/10/2026, D3): an account
- * with `content.read` only opens `Cấu hình`, the tree's call answers 403, and the picker alone says which
- * right is missing — the settings, the history and the run button are untouched.
+ * `⟳ Đồng bộ ngay` AND `Cấu hình` ARE DRAWN ONLY WITH `content.update` (`canEdit`, 02/10/2026, as the
+ * prototype's `ContentSourcePanel canEdit`): every call behind them declares that key — the run, both
+ * PUTs, and the category tree, a GET under the write key (owner 02/10/2026, D3). An account with
+ * `content.read` only sees the status, the last run and the history. Hiding is convenience:
+ * `service-comms` checks the key on every call and a 403 sentence reaches the card verbatim (rule 5,
+ * forbidden #1).
  *
- * `Cấu hình` IS AN IN-PAGE SECTION, NOT AN OVERLAY — the same reason as §7's form (`PHAN_CHUA_DUNG`,
- * item `Bố cục §2`).
+ * `Cấu hình` OPENS AN OVERLAY (`OverlayDialog`), §3's "modal cấu hình đồng bộ".
  */
 
 /** The six calls, injectable so the tests press the buttons against fakes. */
@@ -131,9 +132,12 @@ export function PortalSyncCard({
   api = PORTAL_SYNC_API,
   pollIntervalMs = POLL_INTERVAL_MS,
   showPendingReview,
+  canEdit,
 }: {
   api?: PortalSyncApi;
   pollIntervalMs?: number;
+  /** `content.update` held (`canEditContent`). Required: no default, so no caller forgets to decide. */
+  canEdit: boolean;
   /** Sets §6's `Trạng thái` filter to `Chờ duyệt`. Absent = no link (the card alone, in a test). */
   showPendingReview?: () => void;
 }) {
@@ -232,19 +236,23 @@ export function PortalSyncCard({
       <div className="dau-khoi-chi-tiet">
         <h3 id="portal-sync-title">🔗 {PORTAL_SYNC_TITLE}</h3>
         <div className="cum-nut">
-          <button type="button" className="nut-chinh" disabled={runDisabled} onClick={runNow}>
-            {RUN_NOW_LABEL}
-          </button>
-          <button
-            type="button"
-            className="nut-phu"
-            aria-expanded={configOpen}
-            aria-controls="portal-sync-config"
-            disabled={s === null}
-            onClick={() => setConfigOpen(!configOpen)}
-          >
-            {CONFIGURE_LABEL}
-          </button>
+          {canEdit && (
+            <>
+              <button type="button" className="nut-chinh" disabled={runDisabled} onClick={runNow}>
+                {RUN_NOW_LABEL}
+              </button>
+              <button
+                type="button"
+                className="nut-phu"
+                aria-haspopup="dialog"
+                aria-expanded={configOpen}
+                disabled={s === null}
+                onClick={() => setConfigOpen(true)}
+              >
+                {CONFIGURE_LABEL}
+              </button>
+            </>
+          )}
           <button type="button" className="nut-phu" onClick={reloadAll}>
             {RELOAD_LABEL}
           </button>
@@ -291,7 +299,7 @@ export function PortalSyncCard({
       )}
       {runs !== null && runs.ok && <LastRun run={latest} />}
 
-      {blocked !== null && s !== null && (
+      {canEdit && blocked !== null && s !== null && (
         <p className="ghi-chu" id="portal-sync-run-blocked">
           {blocked}
         </p>
@@ -310,13 +318,18 @@ export function PortalSyncCard({
 
       {runs !== null && runs.ok && runs.duLieu.items.length > 0 && <RunHistory runs={runs.duLieu.items} />}
 
-      {configOpen && s !== null && (
-        <PortalSyncConfig
-          settings={s}
-          api={api}
-          close={() => setConfigOpen(false)}
-          saved={(next) => setSettings({ ok: true, duLieu: next })}
-        />
+      {canEdit && configOpen && s !== null && (
+        <OverlayDialog titleId="portal-sync-config-title" onDismiss={() => setConfigOpen(false)}>
+          <div className="dau-khoi-chi-tiet">
+            <h3 id="portal-sync-config-title">{PORTAL_SYNC_TITLE}</h3>
+          </div>
+          <PortalSyncConfig
+            settings={s}
+            api={api}
+            close={() => setConfigOpen(false)}
+            saved={(next) => setSettings({ ok: true, duLieu: next })}
+          />
+        </OverlayDialog>
       )}
     </section>
   );

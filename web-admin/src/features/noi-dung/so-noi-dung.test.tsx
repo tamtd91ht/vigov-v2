@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -19,15 +20,18 @@ import {
   GHI_CHU_KHONG_CO_XOA,
   giaTriTuHang,
   LINK_TO_HINT,
+  MO_TA_THE_DANH_BA,
   MOI_DANH_MUC,
   MOI_LOAI_NHAN,
   NHAN_DA_SUA_TAY,
+  NHAN_NUT_DANH_MUC,
   NHAN_NUT_SUA,
   NHAN_NUT_THEM,
   NHAN_O_DANG,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
   portalCategoryLabel,
+  PUBLISHED_STAFF_UNREAD,
   SO_RONG,
   STATUS_FILTER_OPTIONS,
   VIDEO_URL_HINT,
@@ -46,9 +50,12 @@ import { CategoryAdmin } from "./category-admin";
 import { EDITOR_LOADING } from "./rich-text-editor";
 import {
   BangNoiDung,
+  CONTENT_TABPANEL_ID,
+  contentTabId,
   FormDanhMuc,
   FormNoiDung,
   HangLocNoiDung,
+  HeaderActions,
   KhoiChuaDung,
   ThanhTabLoai,
   TheDanhBaChinhQuyen,
@@ -125,8 +132,12 @@ function hang(sua: Partial<comms_noiDungRa> = {}): comms_noiDungRa {
   };
 }
 
-function veBang(ds: readonly comms_noiDungRa[], dm: readonly comms_danhMucRa[] = [danhMuc()]) {
-  return renderToStaticMarkup(<BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} />);
+function veBang(
+  ds: readonly comms_noiDungRa[],
+  dm: readonly comms_danhMucRa[] = [danhMuc()],
+  canEdit = true,
+) {
+  return renderToStaticMarkup(<BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} canEdit={canEdit} />);
 }
 
 function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadState) {
@@ -262,6 +273,58 @@ describe("bảng nội dung §6", () => {
 
   it("sổ rỗng thì nói ra, không để trang trắng", () => {
     expect(veBang([])).toContain(SO_RONG);
+  });
+
+  it("the summary is clamped by CSS to one line — NEVER cut by characters", () => {
+    // 400 characters: well past the old 140-character cut, so a surviving slice would show here.
+    const long = `${"Hội nghị tổng kết công tác chuyển đổi số của xã ".repeat(8)}KẾT-THÚC`;
+    const html = veBang([hang({ summary: long })]);
+    expect(html).toContain('<span class="dong-phu summary-one-line">');
+    expect(html).toContain("KẾT-THÚC");
+    expect(html).not.toContain("…");
+  });
+});
+
+describe("`content.update` gates the table's write controls", () => {
+  it("DENIED: no `✎`, no `Sửa` column, no note about the edit screen — the data columns stay", () => {
+    const html = veBang([hang()], [danhMuc()], false);
+    expect(html).not.toContain(NHAN_NUT_SUA);
+    expect(html).not.toContain(">Sửa</th>");
+    expect(html.match(/<th scope="col">/g)?.length).toBe(6);
+    expect(html).not.toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_XOA));
+    expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
+  });
+
+  it("ALLOWED: `✎` on every row, and it says it opens a dialog", () => {
+    const html = veBang([hang({ id: "A" }), hang({ id: "B" })], [danhMuc()], true);
+    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(2);
+    expect(html).toContain(">Sửa</th>");
+  });
+
+  it("`+ Thêm nội dung`: absent without the key, present with it", () => {
+    expect(renderToStaticMarkup(<HeaderActions canEdit={false} addOpen={false} openAdd={() => {}} />)).toBe("");
+    const html = renderToStaticMarkup(<HeaderActions canEdit addOpen={false} openAdd={() => {}} />);
+    expect(html).toContain(nhuTrongHTML(NHAN_NUT_THEM));
+    expect(html).toContain('aria-haspopup="dialog"');
+  });
+
+  it("the filter row draws what it is given at its end, and nothing when given nothing", () => {
+    const row = (extra?: ReactNode) =>
+      renderToStaticMarkup(
+        <HangLocNoiDung
+          danhMucID=""
+          datDanhMucID={() => {}}
+          tim=""
+          datTim={() => {}}
+          timNgay={() => {}}
+          danhMuc={[]}
+          status=""
+          setStatus={() => {}}
+          extra={extra}
+        />,
+      );
+    expect(row()).not.toContain(NHAN_NUT_DANH_MUC);
+    expect(row(<button type="button">{NHAN_NUT_DANH_MUC}</button>)).toContain(NHAN_NUT_DANH_MUC);
   });
 });
 
@@ -494,10 +557,25 @@ describe("sáu tab loại §5", () => {
     }
   });
 
-  it("tab đang chọn đánh dấu bằng `aria-pressed`, không mượn lớp CSS của thứ khác", () => {
+  it("real tabs: a `tablist` of seven `tab`s, exactly one selected and the only one in the Tab order", () => {
     const html = renderToStaticMarkup(<ThanhTabLoai loai="video" datLoai={() => {}} />);
-    // Đúng một nút đang bật.
-    expect(html.match(/aria-pressed="true"/g)?.length).toBe(1);
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('aria-label="Loại nội dung"');
+    expect(html.match(/role="tab"/g)?.length).toBe(7);
+    expect(html.match(/aria-selected="true"/g)?.length).toBe(1);
+    expect(html.match(/tabindex="0"/g)?.length).toBe(1);
+    expect(html.match(/tabindex="-1"/g)?.length).toBe(6);
+    expect(html).toMatch(/id="content-type-tab-video"[^>]*aria-selected="true"[^>]*tabindex="0"/);
+    // Every tab controls the one panel; no button is a toggle any more.
+    expect(html.match(new RegExp(`aria-controls="${CONTENT_TABPANEL_ID}"`, "g"))?.length).toBe(7);
+    expect(html).not.toContain("aria-pressed");
+  });
+
+  it("`Tất cả` is selected when no type is filtered, and its id is stable", () => {
+    const html = renderToStaticMarkup(<ThanhTabLoai loai="" datLoai={() => {}} />);
+    expect(html).toMatch(/id="content-type-tab-all"[^>]*aria-selected="true"/);
+    expect(contentTabId("")).toBe("content-type-tab-all");
+    expect(contentTabId("banner")).toBe("content-type-tab-banner");
   });
 });
 
@@ -595,12 +673,32 @@ describe("portal category of a synced item (C2)", () => {
 });
 
 describe("thẻ Danh bạ chính quyền §4", () => {
-  it("liên kết sang `/danh-ba` có, con số cán bộ thì KHÔNG", () => {
-    // Con số đếm cờ `hien_tren_mini_app` ở `service-identity`, không tuyến nào trả về. Hiện một
-    // số 0 ở đó là nói với xã rằng bà con không thấy cán bộ nào.
-    const html = renderToStaticMarkup(<TheDanhBaChinhQuyen />);
+  const card = (count: Parameters<typeof TheDanhBaChinhQuyen>[0]["publishedCount"]) =>
+    renderToStaticMarkup(<TheDanhBaChinhQuyen publishedCount={count} />);
+
+  it("after a successful read: §4's sentence with the server's number, and the link", () => {
+    const html = card({ ok: true, duLieu: 26 });
+    expect(html).toContain("Đang hiện 26 cán bộ cho bà con. Chọn thêm hoặc bớt ở màn Danh bạ cán bộ.");
     expect(html).toContain('href="/danh-ba"');
+  });
+
+  it("a successful 0 is said — it is true", () => {
+    expect(card({ ok: true, duLieu: 0 })).toContain("Đang hiện 0 cán bộ cho bà con.");
+  });
+
+  it("while loading: NO number at all", () => {
+    const html = card(null);
     expect(html).not.toMatch(/\d+ cán bộ/);
+    expect(html).toContain(MO_TA_THE_DANH_BA);
+    expect(html).not.toContain(PUBLISHED_STAFF_UNREAD);
+    expect(html).toContain('href="/danh-ba"');
+  });
+
+  it("after a failed read: NO number — never a 0 that lies — and the failure is said", () => {
+    const html = card({ ok: false, thongBao: "Không kết nối được máy chủ. Vui lòng thử lại." });
+    expect(html).not.toMatch(/\d+ cán bộ/);
+    expect(html).toContain(MO_TA_THE_DANH_BA);
+    expect(html).toContain(PUBLISHED_STAFF_UNREAD);
   });
 });
 
@@ -680,7 +778,12 @@ describe("khối `phần chưa dựng được`", () => {
   });
 
   it("thứ chặn THẬT được gọi tên — không phải thứ đã có", () => {
-    expect(html).toContain("content.update");
+    // Built 02/10/2026: the §4 count, the §2 layout (tabs, cards, overlay, line clamp) and the
+    // `content.update` gate. No item may still say they are missing.
+    expect(html).not.toContain("Đang hiện 26 cán bộ");
+    expect(html).not.toContain("aria-pressed");
+    expect(html).not.toContain("lượt này không được thêm CSS");
+    expect(html).not.toContain("CỐ Ý không có cổng ở client");
     // Built (ADR 0067 §2): the portal sync card is no longer listed as missing; what is left of §3 is
     // named — the meta count. The status filter is BUILT (02/10/2026): no item may still say it is missing.
     expect(html).not.toContain("bộ lập lịch");
