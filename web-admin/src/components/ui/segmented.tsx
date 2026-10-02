@@ -2,6 +2,8 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 
+import { PendingMarker, type PendingFeatureInfo } from "./pending-feature";
+
 /**
  * Segmented control — spec §7: a select with ≤ 4 options drawn as one row of segments.
  *
@@ -16,12 +18,21 @@ import { cn } from "@/lib/cn";
  *   `buttons` native `<button type="button" aria-pressed>` — for a screen whose current control is
  *             already a pair of toggle buttons, so its accessible roles stay the same.
  *
- * No hooks: safe under the mocked-React test runners (see `button.tsx`).
+ * No hooks: safe under the mocked-React test runners (see `button.tsx`). An option with `pending`
+ * adds a `PendingMarker` element, which does use hooks — fine as an element in the tree, but a
+ * runner that renders the tree by calling every component must not be given such an option.
  */
 export type SegmentedOption = {
   value: string;
   label: string;
   icon?: LucideIcon;
+  /**
+   * An unbuilt segment (ADR 0068 §14): drawn DISABLED at its spec position with a "?" beside it, and
+   * never emitted — `onChange` cannot fire for it. Leave it unset for every real option.
+   */
+  pending?: PendingFeatureInfo;
+  /** With `pending`: the description says the segment belongs to Phase 2. */
+  phase2?: boolean;
 };
 
 export type SegmentedProps = {
@@ -74,6 +85,25 @@ export function Segmented({
           {options.map((o) => {
             const on = o.value === value;
             const Icon = o.icon;
+            if (o.pending !== undefined) {
+              return (
+                <span key={o.value} className="relative inline-flex">
+                  <button
+                    type="button"
+                    aria-pressed={false}
+                    disabled
+                    className={cn(
+                      SEGMENT,
+                      "cursor-not-allowed border-0 bg-transparent pr-8 [font-family:inherit] opacity-60 hover:text-ink-500",
+                    )}
+                  >
+                    {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                    {o.label}
+                  </button>
+                  <PendingMarker info={o.pending} phase2={o.phase2} side="bottom" placement="end" />
+                </span>
+              );
+            }
             return (
               <button
                 key={o.value}
@@ -109,6 +139,30 @@ export function Segmented({
           const on = o.value === value;
           const id = optionId(name, o.value);
           const Icon = o.icon;
+          if (o.pending !== undefined) {
+            // Disabled and UNCONTROLLED (no `checked`, no `onChange`): it can never be selected, so it
+            // can never put a value into the screen's state.
+            return (
+              <span key={o.value} className="relative inline-flex">
+                <input
+                  id={id}
+                  type="radio"
+                  name={name}
+                  value={o.value}
+                  disabled
+                  className="peer absolute inset-0 m-0 appearance-none rounded-lg opacity-0"
+                />
+                <label
+                  htmlFor={id}
+                  className={cn(SEGMENT, "pointer-events-none cursor-not-allowed pr-8 opacity-60 hover:text-ink-500")}
+                >
+                  {Icon !== undefined && <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                  {o.label}
+                </label>
+                <PendingMarker info={o.pending} phase2={o.phase2} side="bottom" placement="end" />
+              </span>
+            );
+          }
           return (
             <span key={o.value} className="relative inline-flex">
               <input

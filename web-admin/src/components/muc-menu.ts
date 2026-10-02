@@ -1,3 +1,4 @@
+import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { coQuyen } from "@/lib/quyen";
 import {
   AUDIT_READ_PERMISSION,
@@ -27,7 +28,7 @@ import {
 export type MucMenu = {
   /** Nhãn hiện trên menu, nguyên văn đặc tả §2. */
   readonly nhan: string;
-  /** Đường dẫn — `null` nghĩa là CHƯA CÓ MÀN, xem `CHUA_CO_MAN` dưới. */
+  /** Đường dẫn — `null` nghĩa là CHƯA CÓ MÀN, xem `PENDING_SCREENS` dưới. */
   readonly duong: string | null;
   /**
    * Khoá quyền cần có để thấy mục. `null` = ai đăng nhập cũng thấy. Một DANH SÁCH = có bất kỳ khoá
@@ -70,25 +71,50 @@ export type NhomMenu = {
 };
 
 /**
- * VÌ SAO CHÍN MỤC CÓ `duong: null` VẪN NẰM TRONG DANH SÁCH, thay vì bị xoá đi.
+ * VÌ SAO CÁC MỤC CÓ `duong: null` VẪN NẰM TRONG DANH SÁCH, thay vì bị xoá đi. (No count here on
+ * purpose: "chín mục" outlived the day it stopped being nine. The list below is the count.)
  *
  * Kho này có tiền lệ rõ và đúng: `dau-trang.tsx` TỪ CHỐI vẽ ô tìm kiếm vì *"vẽ ra một ô tìm
  * kiếm không tìm được gì là hứa với cán bộ một chức năng không tồn tại"*. Luật ấy giữ nguyên ở
- * đây — chín mục này KHÔNG phải liên kết, không bấm được, không điều hướng đi đâu.
+ * đây — các mục này KHÔNG phải liên kết, không bấm được, không điều hướng đi đâu.
  *
  * Nhưng xoá hẳn chúng thì sai theo chiều ngược lại, và chiều ấy vừa gây thiệt hại thật: ngày
  * 23/09/2026 chủ dự án nói *"vậy mà tôi tưởng làm xong hết rồi"* sau khi đọc một con số tiến độ
  * đếm mục việc thay vì đếm sản phẩm. Một thanh menu chỉ hiện năm mục lặp lại đúng sự hiểu nhầm
  * ấy: nó trình bày một phần năm sản phẩm như thể đó là toàn bộ sản phẩm.
  *
- * Nên chúng hiện, có nhãn thật, và nói thẳng là chưa có. Đây cũng là khuôn màn Danh bạ vừa dùng:
- * đưa phần KHÔNG dùng được RA MÀN HÌNH kèm lý do, thay vì giấu trong chú thích hoặc vẽ một nút
- * chắc chắn hỏng.
+ * So they show, with their real label, disabled, carrying the "?" of ADR 0068 §14: hover says
+ * "Tính năng đang phát triển", pressing it reads the item's `PENDING_SCREENS` entry — what the screen
+ * is and why it is not built. The same pattern every screen uses for its unbuilt parts: put what
+ * does NOT work ON THE SCREEN with its reason, instead of hiding it in a comment or drawing a button
+ * that surely fails.
  *
- * KHI MỘT MÀN RA ĐỜI: đổi `duong: null` thành đường dẫn thật và điền `khoa`. Không cần đụng
- * component.
+ * KEYED BY LABEL IN A SEPARATE TABLE, NOT A FIELD ON THE ITEM: `tools/tien_do_san_pham.py`
+ * (`MAU_MUC`) reads each item as ONE `{ nhan, duong, khoa }` literal. An item with a fourth field
+ * stops matching and silently drops out of the product progress count — the menu would then report
+ * fewer unbuilt screens than it shows. `sidebar-view.test.tsx` holds that every `duong: null` item
+ * has an entry here and no built item does.
+ *
+ * KHI MỘT MÀN RA ĐỜI: đổi `duong: null` thành đường dẫn thật, điền `khoa`, xoá dòng của nó trong
+ * `PENDING_SCREENS`. Không cần đụng component.
  */
-export const CHUA_CO_MAN = "Chưa có màn hình";
+export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
+  "Sổ tay lãnh đạo": {
+    ten: "Sổ tay lãnh đạo",
+    viSao:
+      "Màn dành cho lãnh đạo, gom ba việc cần biết ngay: việc quá hạn, việc chờ duyệt và việc mình đã giao. Màn này chưa được dựng.",
+  },
+  "Bản đồ kinh tế số": {
+    ten: "Bản đồ kinh tế số",
+    viSao:
+      "Bản đồ số của xã: định vị doanh nghiệp, hộ kinh doanh, hợp tác xã, chợ, trường học, cơ sở y tế, di tích và công trình trên địa bàn, kèm sổ địa điểm dạng bảng. Chưa dựng vì chưa chọn nhà cung cấp bản đồ.",
+  },
+  "Báo cáo": {
+    ten: "Báo cáo",
+    viSao:
+      "Báo cáo tổng hợp toàn xã theo kỳ để in, xuất và trình bày: chọn được khoảng ngày bất kỳ, có xếp hạng bộ phận và so sánh với kỳ trước. Màn này chưa được dựng.",
+  },
+};
 
 /**
  * Grouped BY BUSINESS AREA (spec v2 §5, 02/10/2026). Only the grouping and the order moved; every

@@ -1,12 +1,13 @@
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { CauHinhXaHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 
 import { CommuneIdentity } from "./commune-identity";
 import { menuIcon } from "./menu-icons";
-import { CHUA_CO_MAN, dangChon, type NhomMenu } from "./muc-menu";
+import { dangChon, PENDING_SCREENS, type NhomMenu } from "./muc-menu";
 
 /**
  * What the sidebar DRAWS, given what `ThanhBen` decided — spec §5, owner decisions 02/10/2026.
@@ -17,13 +18,6 @@ import { CHUA_CO_MAN, dangChon, type NhomMenu } from "./muc-menu";
  *
  * Nothing here filters or orders items: `groups` arrives already filtered by `locMenu`.
  */
-
-/**
- * Badge on an item with no screen yet. "Chưa có", NEVER "Sắp có": a public authority's menu saying
- * "coming soon" is a promise with a date nobody set (owner decision 02/10/2026). The full sentence
- * `CHUA_CO_MAN` ("Chưa có màn hình") stays the item's `title`.
- */
-export const NOT_BUILT_BADGE = "Chưa có";
 
 export const COLLAPSE_LABEL = "Thu gọn menu";
 export const EXPAND_LABEL = "Mở rộng menu";
@@ -60,14 +54,32 @@ export function SidebarView({ commune, groups, pathname, collapsed, onToggleColl
                   // chặng chết để tới mục dùng được. Một `<span>` mang `aria-disabled` nằm ngoài
                   // thứ tự tiêu điểm và vẫn được trình đọc màn hình đọc đúng.
                   //
-                  // Collapsed, the label is hidden from the eye, so the native tooltip names the
-                  // item as well as saying it has no screen.
+                  // The ONE focusable thing is the "?" (ADR 0068 §14): it opens what the screen is and
+                  // why it is not built, and its accessible name already names the item. Collapsed on
+                  // a wide screen the label is hidden from the eye, so the "?" moves to the icon's
+                  // corner and its tooltip names the item too. Under 1024px the bar is a strip with
+                  // labels shown whatever was saved (`globals.css`), so it stays in the row there.
+                  const info = PENDING_SCREENS[m.nhan];
                   return (
                     <li key={m.nhan} className="thanh-ben-muc chua-co">
-                      <span aria-disabled="true" title={collapsed ? `${m.nhan} — ${CHUA_CO_MAN}` : CHUA_CO_MAN}>
-                        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
-                        <span className="thanh-ben-nhan">{m.nhan}</span>
-                        <span className="thanh-ben-dau-chua-co">{NOT_BUILT_BADGE}</span>
+                      <span>
+                        {/* `aria-disabled` on an INNER span, never on the row: ARIA applies it to
+                            every focusable descendant too, and the "?" would be announced disabled. */}
+                        <span
+                          aria-disabled="true"
+                          className={collapsed ? "flex min-w-0 flex-1 items-center gap-3 lg:flex-none" : "flex min-w-0 flex-1 items-center gap-3"}
+                        >
+                          <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                          <span className="thanh-ben-nhan">{m.nhan}</span>
+                        </span>
+                        {info !== undefined && (
+                          <PendingMarker
+                            info={info}
+                            side="right"
+                            nameInHover={collapsed}
+                            className={collapsed ? "ml-auto lg:absolute lg:top-0 lg:right-0" : "ml-auto"}
+                          />
+                        )}
                       </span>
                     </li>
                   );

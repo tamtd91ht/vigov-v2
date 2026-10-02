@@ -2,9 +2,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { MENU_ICONS } from "./menu-icons";
-import { CHUA_CO_MAN, locMenu, NHOM_MENU } from "./muc-menu";
+import { pendingMarkerLabel } from "./ui/pending-feature";
+import { locMenu, NHOM_MENU, PENDING_SCREENS } from "./muc-menu";
 import { AUTHORITY_KIND } from "./commune-identity";
-import { COLLAPSE_LABEL, EXPAND_LABEL, NOT_BUILT_BADGE, SidebarView } from "./sidebar-view";
+import { COLLAPSE_LABEL, EXPAND_LABEL, SidebarView } from "./sidebar-view";
 
 /**
  * The sidebar's DRAWING, in both states. The collapsed state can only be seen here: the server
@@ -92,13 +93,36 @@ describe("menu icons", () => {
   });
 });
 
-describe("items with no screen", () => {
-  it("carry the 'Chưa có' badge INSIDE the item and the full sentence as title", () => {
-    const html = view(false);
-    expect(html.match(new RegExp(`<span class="thanh-ben-dau-chua-co">${NOT_BUILT_BADGE}</span>`, "g"))).toHaveLength(
-      NOT_BUILT.length,
-    );
-    expect(html.match(new RegExp(`title="${CHUA_CO_MAN}"`, "g"))).toHaveLength(NOT_BUILT.length);
+/** The `<li>` that draws the item labelled `label`. */
+function itemOf(html: string, label: string): string {
+  const at = html.indexOf(`<span class="thanh-ben-nhan">${esc(label)}</span>`);
+  return html.slice(html.lastIndexOf("<li", at), html.indexOf("</li>", at));
+}
+
+describe("items with no screen (ADR 0068 §14)", () => {
+  it("every one has a description, and no built item has one", () => {
+    expect(NOT_BUILT.length).toBeGreaterThan(0);
+    for (const m of NOT_BUILT) {
+      const info = PENDING_SCREENS[m.nhan];
+      expect(info, m.nhan).toBeDefined();
+      expect(info!.ten, m.nhan).toBe(m.nhan);
+      expect(info!.viSao.trim(), m.nhan).not.toBe("");
+    }
+    expect(Object.keys(PENDING_SCREENS).sort()).toEqual(NOT_BUILT.map((m) => m.nhan).sort());
+  });
+
+  it("carry a '?' button INSIDE the item, named with the item — no 'Chưa có' badge left", () => {
+    for (const collapsed of [false, true]) {
+      const html = view(collapsed);
+      expect(html.match(/data-pending-marker=""/g)).toHaveLength(NOT_BUILT.length);
+      for (const m of NOT_BUILT) expect(itemOf(html, m.nhan), m.nhan).toContain(`aria-label="${pendingMarkerLabel(m.nhan)}"`);
+      expect(html).not.toContain("Chưa có");
+      expect(html).not.toContain("thanh-ben-dau-chua-co");
+    }
+  });
+
+  it("the map's blocker is stated, not only 'not built'", () => {
+    expect(PENDING_SCREENS["Bản đồ kinh tế số"]!.viSao).toContain("chưa chọn nhà cung cấp bản đồ");
   });
 
   it("never say 'Sắp có' — a public authority does not promise a date nobody set", () => {
@@ -106,14 +130,17 @@ describe("items with no screen", () => {
     expect(view(true)).not.toContain("Sắp có");
   });
 
-  it("stay non-clickable: no link, no button, aria-disabled", () => {
+  it("stay non-navigable: no link, aria-disabled, and the '?' is the ONLY button", () => {
     const html = view(false);
     for (const m of NOT_BUILT) {
-      const at = html.indexOf(`<span class="thanh-ben-nhan">${m.nhan}</span>`);
-      const li = html.slice(html.lastIndexOf("<li", at), html.indexOf("</li>", at));
+      const li = itemOf(html, m.nhan);
       expect(li, m.nhan).toContain('aria-disabled="true"');
       expect(li, m.nhan).not.toContain("<a ");
-      expect(li, m.nhan).not.toContain("<button");
+      expect(li.match(/<button/g), m.nhan).toHaveLength(1);
+      expect(li, m.nhan).toMatch(/<button [^>]*data-pending-marker=""/);
+      // The "?" sits OUTSIDE the aria-disabled span: ARIA would otherwise announce it disabled too.
+      const disabledSpan = li.slice(li.indexOf('aria-disabled="true"'), li.indexOf("</span></span>"));
+      expect(disabledSpan, m.nhan).not.toContain("<button");
     }
   });
 });
@@ -148,8 +175,13 @@ describe("collapse control", () => {
     for (const g of NHOM_MENU) for (const m of g.muc) expect(html).toContain(`<span class="thanh-ben-nhan">${esc(m.nhan)}</span>`);
   });
 
-  it("collapsed: an item with no screen names itself in its tooltip, not only 'Chưa có màn hình'", () => {
+  it("collapsed: an item with no screen still names itself through its '?', pinned to the icon corner", () => {
     const html = view(true);
-    for (const m of NOT_BUILT) expect(html).toContain(`title="${m.nhan} — ${CHUA_CO_MAN}"`);
+    for (const m of NOT_BUILT) {
+      const li = itemOf(html, m.nhan);
+      expect(li, m.nhan).toContain(`aria-label="${pendingMarkerLabel(m.nhan)}"`);
+      expect(li, m.nhan).toContain("lg:absolute");
+    }
+    expect(itemOf(view(false), NOT_BUILT[0]!.nhan)).not.toContain("lg:absolute");
   });
 });

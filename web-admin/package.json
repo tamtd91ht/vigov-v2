@@ -15,6 +15,7 @@
   "dependencies": {
     "@fontsource/be-vietnam-pro": "5.3.0",
     "@radix-ui/react-dropdown-menu": "2.1.24",
+    "@radix-ui/react-popover": "1.1.23",
     "@radix-ui/react-tooltip": "1.2.16",
     "@tiptap/core": "3.31.4",
     "@tiptap/extension-bold": "3.31.4",
