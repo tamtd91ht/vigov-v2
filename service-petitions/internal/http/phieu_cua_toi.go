@@ -98,6 +98,10 @@ type DepsCongDan struct {
 	// the petition intake is untouched. Required.
 	Photos CitizenPetitionPhotos
 
+	// VerificationPhotos is the citizen's read of the staff verification photos on their own petition
+	// (app.CitizenVerificationPhotos) — identity-filtered, purpose-bound, never a log attachment. Required.
+	VerificationPhotos CitizenVerificationPhotoReader
+
 	// PhotoLimiter is ratelimit.CitizenPhotoUpload: the per-citizen bound ADR 0052 §12 requires on the
 	// two photo write routes. Required — a write route a weak identity can drive without bound is not
 	// served at all.

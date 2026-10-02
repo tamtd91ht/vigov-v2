@@ -160,8 +160,12 @@ func (h *Handler) writeSystemMessageError(w http.ResponseWriter, r *http.Request
 //	                                         (domain.KiemLyDoKetThucNhanh). "Too short" and "too long"
 //	                                         keep their sentences: they carry the bound, the key does not.
 //
+//	ErrVerificationPhotoRequired → after_photo_required   the close gate (app.XuLyPhanAnh.Dong,
+//	                                         ADR 0008 decision 3): no stored verification photo in a
+//	                                         commune whose switch requires one.
+//
 // feedback.never_public is read in petition_publication.go, whose branch is not in this table's switch.
-// feedback.after_photo_required and feedback.unknown_field have NO branch in this service yet.
+// feedback.unknown_field has NO branch in this service yet.
 var refusalMessageKeys = []struct {
 	cause error
 	key   string
@@ -169,6 +173,7 @@ var refusalMessageKeys = []struct {
 	{domain.ErrKhongConCamKet, domain.KeyFeedbackInvalidTransition},
 	{domain.ErrThieuBoPhan, domain.KeyFeedbackAssignmentRequired},
 	{domain.ErrThieuLyDo, domain.KeyFeedbackReasonRequired},
+	{domain.ErrVerificationPhotoRequired, domain.KeyFeedbackAfterPhotoRequired},
 }
 
 // refusalMessageKey returns the key of the first configurable refusal in the chain.

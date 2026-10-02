@@ -218,6 +218,19 @@ type CitizenPetitionPhotos struct {
 	scanner  MalwareScanner
 	policies UploadPolicies
 
+	// The memory bounds of this process's image work — SHARED with the staff verification photos
+	// (petition_verification_photo.go), which re-encode on the same pod against the same budget.
+	*photoSlots
+
+	newID func() (string, error)
+	now   func() time.Time
+}
+
+// photoSlots are the PROCESS-WIDE bounds on image work, one value per process shared by every flow
+// that decodes an upload (the citizen's scene photo, staff's verification photo). Two flows with a
+// slot each would be two decode budgets against one 384 MiB pod — the exact arithmetic photoReadSlots
+// lays out, silently doubled.
+type photoSlots struct {
 	// decodeSlot admits ONE decode at a time in this process: photoDecodeBudget is a per-decode bound,
 	// and two at once would be two budgets against one pod.
 	decodeSlot chan struct{}
@@ -229,9 +242,11 @@ type CitizenPetitionPhotos struct {
 	// the second caller waits for the first one's answer instead of reading a second copy of the bytes.
 	mu       sync.Mutex
 	inflight map[string]*photoCompletion
+}
 
-	newID func() (string, error)
-	now   func() time.Time
+func newPhotoSlots() *photoSlots {
+	return &photoSlots{decodeSlot: make(chan struct{}, 1), readSlot: make(chan struct{}, photoReadSlots),
+		inflight: map[string]*photoCompletion{}}
 }
 
 // photoCompletion is one completion in progress. file and err are written before done is closed.
@@ -247,9 +262,7 @@ type photoCompletion struct {
 func NewCitizenPetitionPhotos(db *store.DB, petitions CitizenPhotoPetitions, files PetitionPhotoFiles,
 	objects PhotoObjectStore, scanner MalwareScanner, policies UploadPolicies) *CitizenPetitionPhotos {
 	return &CitizenPetitionPhotos{db: db, petitions: petitions, files: files, objects: objects,
-		scanner: scanner, policies: policies, decodeSlot: make(chan struct{}, 1),
-		readSlot: make(chan struct{}, photoReadSlots), inflight: map[string]*photoCompletion{},
-		newID: storage.NewObjectID}
+		scanner: scanner, policies: policies, photoSlots: newPhotoSlots(), newID: storage.NewObjectID}
 }
 
 func (uc *CitizenPetitionPhotos) clock() time.Time {
@@ -277,18 +290,25 @@ func citizenOnly(citizen audit.Actor) error {
 // photoPolicy reads platform's limit for petition photos. Not configured, unreachable, and a policy
 // with no per-petition count are all refusals — there is no default anywhere (ADR 0052 stop #4).
 func (uc *CitizenPetitionPhotos) photoPolicy(ctx context.Context) (uploadpolicy.Policy, error) {
-	p, ok, err := uc.policies.Policy(ctx, storage.PurposePetitionPhoto)
+	return photoPolicyFor(ctx, uc.policies, storage.PurposePetitionPhoto)
+}
+
+// photoPolicyFor is photoPolicy for any photo purpose of a petition — the citizen's scene photo, staff's
+// verification photo. The owner's ceiling is 5 for both, so a policy with no count is NOT CONFIGURED.
+func photoPolicyFor(ctx context.Context, policies UploadPolicies, purpose storage.Purpose) (
+	uploadpolicy.Policy, error) {
+	p, ok, err := policies.Policy(ctx, purpose)
 	switch {
 	case errors.Is(err, uploadpolicy.ErrUnavailable):
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: %w", ErrUploadLimitsUnavailable, err)
 	case err != nil:
-		return uploadpolicy.Policy{}, fmt.Errorf("ảnh hiện trường: đọc giới hạn tải tệp: %w", err)
+		return uploadpolicy.Policy{}, fmt.Errorf("ảnh phiếu: đọc giới hạn tải tệp: %w", err)
 	case !ok:
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: platform has no limit for %s",
-			ErrUploadNotConfigured, storage.PurposePetitionPhoto)
+			ErrUploadNotConfigured, purpose)
 	case !p.FileCountLimited || p.MaxFilesPerSubject <= 0:
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: the %s policy has no per-petition file count",
-			ErrUploadNotConfigured, storage.PurposePetitionPhoto)
+			ErrUploadNotConfigured, purpose)
 	}
 	return p, nil
 }
@@ -494,7 +514,7 @@ func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, ci
 // the work itself: the abandoned run wrote nothing it would not find again (fromDestination).
 //
 // Per process only: a second pod reads its own copy, which its own readSlot bounds.
-func (uc *CitizenPetitionPhotos) completeOnce(ctx context.Context, id string,
+func (uc *photoSlots) completeOnce(ctx context.Context, id string,
 	complete func(context.Context) (domain.StoredFile, error)) (domain.StoredFile, error) {
 
 	key := string(tenant.MustFrom(ctx)) + "/" + id
@@ -542,7 +562,7 @@ func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id str
 	}
 
 	// 2. Object-store and pixel work, no lock held.
-	insp, err := uc.inspect(ctx, f, dst, pol)
+	insp, err := uc.inspector().inspect(ctx, f, dst, pol)
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
@@ -666,9 +686,25 @@ func photoUploadExts(pol uploadpolicy.Policy) []string {
 	return out
 }
 
+// photoInspector is the lock-free half of a completion that RE-ENCODES the upload — the citizen's scene
+// photo and staff's verification photo (petition_verification_photo.go). The count it pre-checks is over
+// the ROW's own subject and purpose, so the two photo kinds never consume each other's 5.
+type photoInspector struct {
+	objects PhotoObjectStore
+	scanner MalwareScanner
+	files   storedFileCounter
+	slots   *photoSlots
+	clock   func() time.Time
+}
+
+func (uc *CitizenPetitionPhotos) inspector() photoInspector {
+	return photoInspector{objects: uc.objects, scanner: uc.scanner, files: uc.files, slots: uc.photoSlots,
+		clock: uc.clock}
+}
+
 // inspect is the lock-free half of Complete. An error means nothing may be decided yet (scanner down,
 // object replaced, store failure): nothing is written and the row stays `pending`, retryable.
-func (uc *CitizenPetitionPhotos) inspect(ctx context.Context, f domain.StoredFile, dst storage.Key,
+func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst storage.Key,
 	pol uploadpolicy.Policy) (photoInspection, error) {
 
 	var (
@@ -701,8 +737,8 @@ func (uc *CitizenPetitionPhotos) inspect(ctx context.Context, f domain.StoredFil
 	// A READ SLOT BEFORE THE BYTES, held until this function returns (photoReadSlots says why and how
 	// much). Waiting here costs nothing but time; reading first and waiting later cost 10 MB per caller.
 	select {
-	case uc.readSlot <- struct{}{}:
-		defer func() { <-uc.readSlot }()
+	case uc.slots.readSlot <- struct{}{}:
+		defer func() { <-uc.slots.readSlot }()
 	case <-ctx.Done():
 		return photoInspection{}, ctx.Err()
 	}
@@ -732,8 +768,7 @@ func (uc *CitizenPetitionPhotos) inspect(ctx context.Context, f domain.StoredFil
 		return uc.reject(ctx, uploadKey, RejectTypeMismatch, ""), nil
 	}
 	// BEFORE the scan and the decode: the cheap refusal first. Re-checked under the lock at the end.
-	have, err := uc.files.CountForSubject(ctx, domain.StoredFileSubjectPetition, f.SubjectID,
-		domain.PurposePetitionPhoto, time.Time{})
+	have, err := uc.files.CountForSubject(ctx, f.SubjectType, f.SubjectID, f.Purpose, time.Time{})
 	if err != nil {
 		return photoInspection{}, err
 	}
@@ -779,10 +814,10 @@ func (uc *CitizenPetitionPhotos) inspect(ctx context.Context, f domain.StoredFil
 
 // reencode is the G3 step: decode, orient, fit, re-encode JPEG with no metadata. A refusal of THE IMAGE
 // is a reason (422 to the citizen); only a cancelled context is an error.
-func (uc *CitizenPetitionPhotos) reencode(ctx context.Context, mime string, data []byte) ([]byte, string, error) {
+func (uc photoInspector) reencode(ctx context.Context, mime string, data []byte) ([]byte, string, error) {
 	select {
-	case uc.decodeSlot <- struct{}{}:
-		defer func() { <-uc.decodeSlot }()
+	case uc.slots.decodeSlot <- struct{}{}:
+		defer func() { <-uc.slots.decodeSlot }()
 	case <-ctx.Done():
 		return nil, "", ctx.Err()
 	}
@@ -808,9 +843,10 @@ func (uc *CitizenPetitionPhotos) reencode(ctx context.Context, mime string, data
 // happened, the transaction did not — measure it and record it), or nothing arrived.
 //
 // A destination object is TRUSTED AS CLEAN because nothing else writes there: PutServerProduced on a
-// fresh server-side id is the only path into `citizen-media/…/petitions/petition-photo/…`, it runs only
-// after a clean scan and a re-encode, and IAM scopes this service's key to its own subtree.
-func (uc *CitizenPetitionPhotos) fromDestination(ctx context.Context, f domain.StoredFile) (photoInspection, error) {
+// fresh server-side id is the only path into `citizen-media/…/petitions/petition-photo/…` and
+// `records/…/petitions/petition-verification-photo/…`, it runs only after a clean scan and a re-encode,
+// and IAM scopes this service's key to its own subtree.
+func (uc photoInspector) fromDestination(ctx context.Context, f domain.StoredFile) (photoInspection, error) {
 	st, err := uc.objects.Stat(ctx, storage.BucketPrivate, f.ObjectKey)
 	if errors.Is(err, storage.ErrNotFound) {
 		if uc.clock().After(f.CreatedAt.Add(storage.UploadTTL)) {
@@ -827,7 +863,7 @@ func (uc *CitizenPetitionPhotos) fromDestination(ctx context.Context, f domain.S
 	}
 	if mime, _, ok := storage.SniffMIME(head); !ok || mime != imaging.MIMEJPEG {
 		// PutServerProduced refuses exactly this, so it cannot be ours. Not recorded; an operator looks.
-		return photoInspection{}, errors.New("ảnh hiện trường: đối tượng ở kho lưu không phải JPEG đã mã hoá lại")
+		return photoInspection{}, errors.New("ảnh phiếu: đối tượng ở kho lưu không phải JPEG đã mã hoá lại")
 	}
 	sum, err := uc.objects.SHA256(ctx, storage.BucketPrivate, f.ObjectKey, st.ETag)
 	if err != nil {
@@ -838,7 +874,7 @@ func (uc *CitizenPetitionPhotos) fromDestination(ctx context.Context, f domain.S
 }
 
 // reject deletes the temp object and reports the outcome; a failed delete is recorded, not hidden.
-func (uc *CitizenPetitionPhotos) reject(ctx context.Context, uploadKey, reason, signature string) photoInspection {
+func (uc photoInspector) reject(ctx context.Context, uploadKey, reason, signature string) photoInspection {
 	removed := uc.objects.PurgeAllVersions(ctx, storage.BucketTemp, uploadKey) == nil
 	return photoInspection{kind: outcomeRejected, reason: reason, signature: signature, tempRemoved: removed}
 }
@@ -871,10 +907,20 @@ func signPhotos(ctx context.Context, files photoLister, objects PhotoObjectStore
 	if err != nil {
 		return nil, bocPhieu(ctx, "đọc ảnh hiện trường", err)
 	}
+	return signPhotoList(ctx, objects, photos, func(f domain.StoredFile) bool {
+		return domain.IsCitizenPhotoOf(f, petitionID) // exactly what migration 0026 shapes
+	}, now)
+}
+
+// signPhotoList signs one GET per photo that is in the private bucket AND passes `shaped` — the second
+// wall behind the store's own filter, so a row of another purpose that a future query lets through is
+// skipped rather than signed.
+func signPhotoList(ctx context.Context, objects PhotoObjectStore, photos []domain.StoredFile,
+	shaped func(domain.StoredFile) bool, now time.Time) ([]PhotoLink, error) {
 	out := make([]PhotoLink, 0, len(photos))
 	for _, f := range photos {
-		if f.Bucket != domain.StoredFileBucketPrivate || !domain.IsCitizenPhotoOf(f, petitionID) {
-			continue // never sign anything that is not exactly what migration 0026 shapes
+		if f.Bucket != domain.StoredFileBucketPrivate || !shaped(f) {
+			continue
 		}
 		u, err := objects.PresignDownload(ctx, storage.BucketPrivate, f.ObjectKey, storage.MaxDownloadTTL,
 			f.OriginalName)
@@ -952,8 +998,20 @@ func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayRea
 		now = uc.now().UTC()
 	}
 	links, err := signPhotos(ctx, uc.files, uc.objects, p.ID, now)
-	if err != nil || len(links) == 0 {
-		return links, err
+	if err != nil {
+		return nil, err
+	}
+	return auditStaffPhotoRead(ctx, uc.db, reader, p.MaTraCuu, ActionPetitionPhotosViewed, links, now)
+}
+
+// auditStaffPhotoRead commits the trail of one staff read of a petition's photos, THEN returns the
+// links — the scene photos' rule (ListPhotos above), shared with the verification photos so the two
+// lists cannot drift apart on it. No photo, no disclosure, no entry. An error writing the entry means no
+// links at all: a disclosure with no trail is the one state rule 6 does not permit.
+func auditStaffPhotoRead(ctx context.Context, db *store.DB, reader audit.Actor, code, action string,
+	links []PhotoLink, now time.Time) ([]PhotoLink, error) {
+	if len(links) == 0 {
+		return links, nil
 	}
 	// The delta names WHICH files were opened — ids and a count. Never a URL (a bearer credential until
 	// it expires), never a file name, never a byte of the image.
@@ -963,16 +1021,16 @@ func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayRea
 	}
 	delta, err := json.Marshal(map[string]any{"so_anh": len(ids), "tep_id": ids, "quyen": "feedback.read"})
 	if err != nil {
-		return nil, fmt.Errorf("ảnh hiện trường: mã hoá delta: %w", err)
+		return nil, fmt.Errorf("ảnh phiếu: mã hoá delta: %w", err)
 	}
-	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// TenantID unset: audit.Write takes it from the transaction (rule 1, invariant 4).
-		return audit.Write(ctx, tx, audit.Entry{Actor: reader, Action: ActionPetitionPhotosViewed,
-			Subject: p.MaTraCuu, At: now, Delta: delta})
+		return audit.Write(ctx, tx, audit.Entry{Actor: reader, Action: action, Subject: code, At: now,
+			Delta: delta})
 	})
 	if err != nil {
 		// Neither the code nor the reader in the message (rule 3) — the commune is what an operator needs.
-		return nil, fmt.Errorf("ảnh hiện trường: ghi vết cán bộ xem ảnh cho xã %s: %w", tenant.MustFrom(ctx), err)
+		return nil, fmt.Errorf("ảnh phiếu: ghi vết cán bộ xem ảnh cho xã %s: %w", tenant.MustFrom(ctx), err)
 	}
 	return links, nil
 }

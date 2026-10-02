@@ -399,8 +399,11 @@ func dungXuLy(t *testing.T, k *khoPhieuXuLyGia, han DocHanXuLyXong) (*XuLyPhanAn
 	kho := pkgstore.New(db)
 	// The assignee check answers EVERY asked code as assignable by default, so the tests about the
 	// other acts are not about it; the tests about it replace uc.giaoViec (giao_viec_phan_anh_test.go).
+	// THE CLOSE GATE answers "required, and one photo is stored" by default, so every closing test that
+	// is not about the gate closes as before; the gate's own cases replace uc.settings / uc.staffFiles
+	// (petition_close_gate_test.go).
 	uc := NewXuLyPhanAnh(kho, petstore.NewPhieuPhanAnhStore(kho), petstore.NewSuKienDiStore(kho), han,
-		&giaoViecGia{duocTatCa: true})
+		&giaoViecGia{duocTatCa: true}, &closeSwitchFake{required: true}, &staffFilesFake{photos: 1})
 	uc.sinhID = func() (string, error) { return idSuKienThu, nil }
 	uc.nay = func() time.Time { return mocThaoTac }
 	return uc, ctxXa(xaThu)

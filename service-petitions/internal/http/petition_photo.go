@@ -40,6 +40,12 @@ type CitizenPetitionPhotos interface {
 	ListPhotos(ctx context.Context, ma string, citizen audit.Actor) ([]app.PhotoLink, error)
 }
 
+// CitizenVerificationPhotoReader is the citizen's read of the staff verification photos on their own
+// petition (app.CitizenVerificationPhotos). The actor IS the owner, from the session.
+type CitizenVerificationPhotoReader interface {
+	ListPhotos(ctx context.Context, ma string, citizen audit.Actor) ([]app.PhotoLink, error)
+}
+
 // StaffPetitionPhotos is the staff read (app.StaffPetitionPhotos).
 type StaffPetitionPhotos interface {
 	// reader is the staff member, ID = their business code (principal.Ma): the use case audits the read.
@@ -195,6 +201,22 @@ func (h *HandlerCongDan) ListMyPetitionPhotos(w http.ResponseWriter, r *http.Req
 	links, err := h.d.Photos.ListPhotos(r.Context(), ma, citizen)
 	if err != nil {
 		h.answerPhotoError(w, r, "đọc ảnh hiện trường", err)
+		return
+	}
+	noStore(w)
+	vietJSON(w, http.StatusOK, photoListFrom(links))
+}
+
+// ListMyVerificationPhotos serves GET /api/v1/my-citizen-reports/{maTraCuu}/verification-photos — the
+// staff "after" photos of the citizen's own petition. Same identity check, same 404 body, same 503.
+func (h *HandlerCongDan) ListMyVerificationPhotos(w http.ResponseWriter, r *http.Request) {
+	citizen, ma, ok := h.citizenPhotoActor(w, r)
+	if !ok {
+		return
+	}
+	links, err := h.d.VerificationPhotos.ListPhotos(r.Context(), ma, citizen)
+	if err != nil {
+		h.answerPhotoError(w, r, "đọc ảnh sau xử lý", err)
 		return
 	}
 	noStore(w)

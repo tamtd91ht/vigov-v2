@@ -204,7 +204,14 @@ func (uc *TaskAttachments) uploadsConfigured() bool {
 
 // policy reads platform's limit for task attachments, mapping the three answers of uploadpolicy.
 func (uc *TaskAttachments) policy(ctx context.Context) (uploadpolicy.Policy, error) {
-	p, ok, err := uc.policies.Policy(ctx, storage.PurposeTaskAttachment)
+	return attachmentPolicyFor(ctx, uc.policies, storage.PurposeTaskAttachment)
+}
+
+// attachmentPolicyFor reads platform's limit for one attachment purpose — the task's and the petition
+// log's — mapping the three answers of uploadpolicy. There is no default anywhere (ADR 0052 stop #4).
+func attachmentPolicyFor(ctx context.Context, policies UploadPolicies, purpose storage.Purpose) (
+	uploadpolicy.Policy, error) {
+	p, ok, err := policies.Policy(ctx, purpose)
 	switch {
 	case errors.Is(err, uploadpolicy.ErrUnavailable):
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: %w", ErrUploadLimitsUnavailable, err)
@@ -212,7 +219,7 @@ func (uc *TaskAttachments) policy(ctx context.Context) (uploadpolicy.Policy, err
 		return uploadpolicy.Policy{}, fmt.Errorf("tệp đính kèm: đọc giới hạn tải tệp: %w", err)
 	case !ok:
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: platform has no limit for %s",
-			ErrUploadNotConfigured, storage.PurposeTaskAttachment)
+			ErrUploadNotConfigured, purpose)
 	}
 	return p, nil
 }
@@ -407,7 +414,7 @@ func (uc *TaskAttachments) Complete(ctx context.Context, ma, id string, actor au
 	}
 
 	// 2. The object-store work, no lock held.
-	insp, err := uc.inspect(ctx, *f, key, pol, n.ID)
+	insp, err := uc.inspector().inspect(ctx, *f, key, pol)
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
@@ -503,11 +510,35 @@ func writeAttachmentAudit(ctx context.Context, tx *store.ScopedTx, actor audit.A
 	return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: action, Subject: subject, At: at, Delta: delta})
 }
 
+// storedFileCounter is the one read the lock-free inspection makes: the per-subject count.
+type storedFileCounter interface {
+	CountForSubject(ctx context.Context, subjectType, subjectID, purpose string,
+		pendingSince time.Time) (int, error)
+}
+
+// uploadInspector is the lock-free half of a completion that PROMOTES the uploaded bytes unchanged —
+// the task attachment and the petition log attachment (petition_log_attachment.go). Both are records:
+// sniffed, scanned, hashed and copied as uploaded, never re-encoded.
+//
+// ONE IMPLEMENTATION FOR BOTH, keyed on the ROW: the subject and the purpose the count is taken over
+// are the stored_file row's own (frozen at issue time by migration 0021's guard), so a petition file can
+// never be counted against a task's limit, nor the other way round.
+type uploadInspector struct {
+	objects ObjectStore
+	scanner MalwareScanner
+	files   storedFileCounter
+	clock   func() time.Time
+}
+
+func (uc *TaskAttachments) inspector() uploadInspector {
+	return uploadInspector{objects: uc.objects, scanner: uc.scanner, files: uc.files, clock: uc.clock}
+}
+
 // inspect is the lock-free half of Complete. It returns an outcome, or an error when nothing may be
 // decided yet (scanner down, object replaced mid-inspection, store failure) — in which case nothing is
 // written and the row stays `pending`, retryable.
-func (uc *TaskAttachments) inspect(ctx context.Context, f domain.StoredFile, key storage.Key,
-	pol uploadpolicy.Policy, taskID string) (inspection, error) {
+func (uc uploadInspector) inspect(ctx context.Context, f domain.StoredFile, key storage.Key,
+	pol uploadpolicy.Policy) (inspection, error) {
 
 	uploadKey, err := key.UploadPath()
 	if err != nil {
@@ -540,8 +571,7 @@ func (uc *TaskAttachments) inspect(ctx context.Context, f domain.StoredFile, key
 	}
 	if pol.FileCountLimited {
 		// BEFORE the copy: once promoted, a records object can never be purged again.
-		have, err := uc.files.CountForSubject(ctx, domain.StoredFileSubjectTask, taskID,
-			string(storage.PurposeTaskAttachment), time.Time{})
+		have, err := uc.files.CountForSubject(ctx, f.SubjectType, f.SubjectID, f.Purpose, time.Time{})
 		if err != nil {
 			return inspection{}, err
 		}
@@ -595,9 +625,9 @@ func (uc *TaskAttachments) inspect(ctx context.Context, f domain.StoredFile, key
 // happened, the transaction did not — measure the destination and record it), or nothing arrived.
 //
 // A destination object is TRUSTED AS SCANNED because nothing else writes there: Promote is the only
-// path into `records/…/petitions/task-attachment/…`, it runs only after a clean scan, and IAM scopes
-// this service's key to its own subtree (ADR 0052 §3).
-func (uc *TaskAttachments) fromDestination(ctx context.Context, f domain.StoredFile,
+// path into `records/…/petitions/task-attachment/…` and `records/…/petitions/petition-log-attachment/…`,
+// it runs only after a clean scan, and IAM scopes this service's key to its own subtree (ADR 0052 §3).
+func (uc uploadInspector) fromDestination(ctx context.Context, f domain.StoredFile,
 	key storage.Key) (inspection, error) {
 
 	st, err := uc.objects.Stat(ctx, storage.BucketPrivate, f.ObjectKey)
@@ -630,7 +660,7 @@ func (uc *TaskAttachments) fromDestination(ctx context.Context, f domain.StoredF
 // reject deletes the temp object (ADR 0052 §1c "xoá đối tượng temp") and reports the outcome. A delete
 // that fails is RECORDED, not hidden: the trail says `da_xoa_tep_tam: false`, and the temp bucket's
 // lifecycle removes the object within a day. The rejection itself is not held back by it.
-func (uc *TaskAttachments) reject(ctx context.Context, uploadKey, reason, signature string) inspection {
+func (uc uploadInspector) reject(ctx context.Context, uploadKey, reason, signature string) inspection {
 	removed := uc.objects.PurgeAllVersions(ctx, storage.BucketTemp, uploadKey) == nil
 	return inspection{kind: outcomeRejected, reason: reason, signature: signature, tempRemoved: removed}
 }

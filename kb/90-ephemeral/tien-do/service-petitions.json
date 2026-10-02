@@ -511,6 +511,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai gọi. Khi thẻ hành vi nối vào Dong (app/xu_ly_phan_anh.go:904-909): TỪ BẢN PHÁT HÀNH ẤY mọi xã chưa có dòng không đóng được phiếu thiếu ảnh nghiệm thu, kể cả phiếu đang dở — ghi vào ghi chú phát hành. Màn bật/tắt cho quản trị xã để lượt sau. Khoá mở lại KHÔNG vào bảng này (ADR 0050 biến mở lại thành luật cố định, ADR 0008:61-63).",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "phan-anh-tep-can-bo-chan-dong",
+      "viec": "Phản ánh: đính kèm nhật ký phiếu, ảnh nghiệm thu của cán bộ (mã hoá lại bỏ EXIF), chặn đóng phiếu khi xã bật cờ mà thiếu ảnh, người dân xem ảnh nghiệm thu phiếu của mình (đợt 02/10/2026, TASK-P1)",
+      "trang_thai": "xong",
+      "bang_chung": "Tuyến cán bộ: POST/GET …/citizen-reports/{maTraCuu}/verification-photos (+ /{id}/completion) — ghi cần feedback.resolve, đọc feedback.read có vết xem_anh_sau_xu_ly; POST …/log-attachments (+ /{id}/completion, /{id}/download có vết tai_tep_nhat_ky_phan_anh) — feedback.read + duocGhiChu; POST …/log-entries nhận attachments[] (cộng thêm), GET trả attachments[] mỗi dòng. Tuyến dân: GET /api/v1/my-citizen-reports/{maTraCuu}/verification-photos (tuyến anh em, không thêm kind vào …/photos — khách cũ sẽ hiện ảnh cán bộ như ảnh của mình). Chặn đóng: trong giao dịch Dong trên dòng đã khoá, đọc petition_settings (không dòng = bật), thiếu ảnh nghiệm thu → 409 after_photo_required theo lời nhắn feedback.after_photo_required của xã; lỗi đọc = từ chối (fail closed); Dong là nơi duy nhất ghi da-dong. Cửa sổ tải ảnh nghiệm thu: mọi trạng thái trừ da-dong / khong-tiep-nhan / chuyen-cap-tren. core/storage PutServerProduced nhận đúng một dạng khoá records (petitions + petition-verification-photo + original), ca kiểm chứng minh mục đích records khác vẫn bị từ chối. Dùng chung khe giải mã/đọc của ảnh dân (một ngân sách bộ nhớ mỗi pod). 401/403/401-sai-xã/2xx cho cả sáu tuyến cán bộ; 404 đồng nhất bên dân. go test -count=1 ./... xanh, go vet sạch, check_quyen/security/audit_actor xanh.",
+      "no_confirm": [],
+      "tiep_theo": "GHI CHÚ PHÁT HÀNH BẮT BUỘC: từ bản này mọi xã chưa tắt cờ (chưa có dòng petition_settings) KHÔNG đóng được phiếu thiếu ảnh nghiệm thu, kể cả phiếu đang dở. Câu hỏi cho chủ dự án: (1) ảnh nghiệm thu trước khi mở lại có còn thoả cổng đóng không (đang: có); (2) dân thấy ảnh nghiệm thu khi phiếu chưa đóng không (đang: có, mọi trạng thái); (3) chỉ người có feedback.resolve tải ảnh nghiệm thu — trưởng thôn chỉ có feedback.read thì không; (4) bản sạch records còn lại khi từ chối muộn tích lại không xoá được — cần chính sách dọn?; (5) tải tệp nhật ký có vết (khác nhiệm vụ) có chấp nhận không. Chưa chạy Postgres/MinIO/ClamAV thật. Tệp dò tạm tools/apidoc/zz_tmp_probe_test.go chưa xoá (bị chặn) — không commit.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

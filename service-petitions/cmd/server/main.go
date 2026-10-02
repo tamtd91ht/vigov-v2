@@ -290,6 +290,12 @@ func chay(log *slog.Logger) error {
 	// "x-tenant-id" on every call, which ListUploadPolicies requires; the reader caches per commune.
 	policies := uploadpolicy.New(nenTang.Client(), log)
 
+	// THE PHOTO FLOWS, BUILT ONCE: the citizen's scene photos, and staff's verification photos built ON
+	// them — the same object store, scanner and policies, and above all the SAME process-wide decode and
+	// read slots (app.photoSlots). Two instances would be two decode budgets against one pod.
+	citizenPhotos := app.NewCitizenPetitionPhotos(kho, phieu, storedFiles, photoObjects, scanner, policies)
+	verificationPhotos := app.NewStaffVerificationPhotos(kho, phieu, storedFiles, citizenPhotos)
+
 	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
 
 	// THE PETITION FIELD CATALOGUE (ADR 0026 + 0060): tier 1 over the SAME platform connection the
@@ -337,7 +343,10 @@ func chay(log *slog.Logger) error {
 		// It is passed TWICE, as two roles: the deadline read, and the assignee check that assignment
 		// runs on a client-supplied officer code before writing it (ResolveAssignableStaff).
 		DanhSachPhieu: phieu,
-		XuLyPhieu:     app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh),
+		// The closing act's gate (ADR 0008 decision 3) reads the per-commune switch and counts the stored
+		// verification photos in its own transaction; `storedFiles` also links a note's attachments.
+		XuLyPhieu: app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
+			petstore.NewPetitionSettingsStore(kho), storedFiles),
 		// The processing logbook's read (migration 0013) — the SAME store the acts write it through.
 		NhatKyPhieu: phieu,
 		// The trail for a full-view read of a reporter's name and number. It takes the same
@@ -385,6 +394,12 @@ func chay(log *slog.Logger) error {
 		// citizen upload writes through, and the SAME object store — `photoObjects` is `objects` as the
 		// wider interface, nil when object storage is not configured (the route then answers 503).
 		PetitionPhotos: app.NewStaffPetitionPhotos(kho, phieu, storedFiles, photoObjects),
+		// "SAU KHI XỬ LÝ" (migration 0027): built on the citizen photo flow's slots — see above.
+		VerificationPhotos: verificationPhotos,
+		// §8.7's `📎 Đính kèm` on the petition log: the SAME stored-file store the note links through.
+		PetitionLogAttachments: app.NewPetitionLogAttachments(kho, phieu, storedFiles, objects, scanner,
+			policies),
+		PetitionLogAttachmentsReader: storedFiles,
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register
@@ -448,7 +463,9 @@ func chay(log *slog.Logger) error {
 		// The citizen's scene photos (ADR 0047 G3, migration 0026): the identity-filtered petition reads,
 		// the SAME stored-file store, object store, scanner and platform policy reader as the task
 		// attachments. Any of the three absent → the photo routes answer 503; the intake is untouched.
-		Photos: app.NewCitizenPetitionPhotos(kho, phieu, storedFiles, photoObjects, scanner, policies),
+		Photos: citizenPhotos,
+		// The staff "after" photos of the citizen's own petition: identity-filtered read, purpose-bound.
+		VerificationPhotos: app.NewCitizenVerificationPhotos(phieu, storedFiles, photoObjects),
 		// Per-citizen bound on the two photo writes (ADR 0052 §12), counted in the SAME Redis as the
 		// idempotency store. FAILS CLOSED: with no REDIS_DSN (dev only — staging and prod refuse to start
 		// without it, config.Redis is declared) every photo write answers 503 `rate_limit_unavailable`.

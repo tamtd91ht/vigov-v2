@@ -136,6 +136,9 @@ type xuLyPhieuGia struct {
 	// publication is the status the publication route handed down.
 	publication string
 
+	// attachmentIDs are the log attachments the note route handed down (migration 0027).
+	attachmentIDs []string
+
 	loi error
 }
 
@@ -210,18 +213,25 @@ func (x *xuLyPhieuGia) KhongTiepNhan(ctx context.Context, ma, lyDo, ghiChu strin
 
 // GhiChuNoiBo RECORDS the two facts and the note, and answers with a row shaped like the real one.
 // Whether the note is ALLOWED is app.duocGhiChu's and is proved over the real store in internal/app.
-func (x *xuLyPhieuGia) GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
-	quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (domain.NhatKyPhanAnh, error) {
+func (x *xuLyPhieuGia) GhiChuNoiBo(ctx context.Context, ma, ghiChu string, attachmentIDs []string,
+	nguoi audit.Actor, quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (
+	domain.NhatKyPhanAnh, []domain.PetitionLogAttachment, error) {
 
 	x.ghi(ctx, "ghi-chu", ma, nguoi, hanChe)
-	x.ghiChu, x.quyenGhiChu = ghiChu, quyen
+	x.ghiChu, x.quyenGhiChu, x.attachmentIDs = ghiChu, quyen, attachmentIDs
 	if x.loi != nil {
-		return domain.NhatKyPhanAnh{}, x.loi
+		return domain.NhatKyPhanAnh{}, nil, x.loi
+	}
+	files := make([]domain.PetitionLogAttachment, 0, len(attachmentIDs))
+	for _, id := range attachmentIDs {
+		files = append(files, domain.PetitionLogAttachment{LogEntryID: "nkpa-01JTHU", FileID: id,
+			OriginalName: "bien-ban.pdf", MIMEType: "application/pdf", SizeBytes: 1024,
+			Status: domain.StoredFileStored})
 	}
 	return domain.NhatKyPhanAnh{
 		ID: "nkpa-01JTHU", PhieuPhanAnhID: "pa-001", ThoiDiem: mocVaoSo, NguoiMa: nguoi.ID,
 		HanhVi: domain.NhatKyGhiChu, TrangThai: domain.DangPhanLoai, NoiDung: ghiChu,
-	}, nil
+	}, files, nil
 }
 
 // SetPublication RECORDS the requested status; whether it is allowed is the use case's, proved over
@@ -976,6 +986,8 @@ func TestTuChoiXuLyCauCoDinhKhongLoNoiBo(t *testing.T) {
 		{domain.ErrDongSaiLuc, http.StatusConflict, "petition_state"},
 		{domain.ErrKetThucNhanhSaiLuc, http.StatusConflict, "petition_state"},
 		{domain.ErrKhongConCamKet, http.StatusConflict, "petition_state"},
+		// The close gate (ADR 0008 decision 3) — configurable wording, its own code.
+		{domain.ErrVerificationPhotoRequired, http.StatusConflict, "after_photo_required"},
 		{domain.ErrThieuLinhVuc, http.StatusBadRequest, "invalid_request"},
 		{domain.ErrLinhVucSaiDang, http.StatusBadRequest, "invalid_request"},
 		{domain.ErrThieuBoPhan, http.StatusBadRequest, "invalid_request"},

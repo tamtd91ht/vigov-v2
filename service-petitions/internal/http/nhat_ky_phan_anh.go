@@ -47,6 +47,10 @@ const (
 // ⚠ PERSONAL DATA MAY BE IN IT (rule 3). At most domain.GhiChuToiDa characters.
 type ghiChuPhieuVao struct {
 	Note string `json:"note"`
+	// Attachments are ids returned by POST /api/v1/citizen-reports/{maTraCuu}/log-attachments and
+	// COMPLETED through …/{id}/completion, by the SAME officer. OPTIONAL and additive: omitted, the note
+	// is written alone as before. Each id once; linked in the note's transaction.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // nhatKyPhieuRa is one timeline row as it leaves the API to a member of staff.
@@ -84,17 +88,19 @@ type nhatKyPhieuRa struct {
 	// ⚠ PERSONAL DATA MAY BE IN IT (rule 3) — staff-internal.
 	Note string `json:"note"`
 
-	// NO `attachments` FIELD, ON PURPOSE. Migration 0013 reserves `dinh_kem`, but there is no file
-	// store yet, so the element shape does not exist — and an untyped `[]any` on the wire is refused
-	// by web-admin's type generator (scripts/gen-api-types.mjs), rightly: it would reach tsc as an
-	// empty type. The day the store exists the field is added as an OPTIONAL one, which breaks no
-	// client.
+	// Attachments are the files written with this entry (`📎 Đính kèm`, migration 0027's
+	// `petition_log_attachment`), in the order they were attached — the task timeline's element shape.
+	// ALWAYS AN ARRAY, [] for an entry with none. Read for a whole page in ONE statement. A new field,
+	// which breaks no client. `nhat_ky_phan_anh.dinh_kem` (0013) is NOT written: the link table is the
+	// one source. STAFF-ONLY, like every field of this row.
+	Attachments []taskAttachmentOut `json:"attachments"`
 }
 
-func nhatKyRaNgoai(e domain.NhatKyPhanAnh) nhatKyPhieuRa {
+func nhatKyRaNgoai(e domain.NhatKyPhanAnh, files []domain.PetitionLogAttachment) nhatKyPhieuRa {
 	return nhatKyPhieuRa{
 		ID: e.ID, At: e.ThoiDiem, ActorCode: e.NguoiMa, Action: string(e.HanhVi),
 		Status: string(e.TrangThai), Unit: e.BoPhanID, Assignee: e.CanBoXuLyMa, Note: e.NoiDung,
+		Attachments: taskAttachmentsOut(files),
 	}
 }
 
@@ -149,6 +155,21 @@ func (h *Handler) DocNhatKyPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The page's attachments, ONE statement for the whole page, keyed by the entry ids just read — so a
+	// file is reachable only through an entry of a petition this caller may read.
+	ids := make([]string, 0, len(kq.Items))
+	for _, e := range kq.Items {
+		ids = append(ids, e.ID)
+	}
+	files, err := h.d.PetitionLogAttachmentsReader.PetitionAttachmentsByLogEntries(ctx, ids)
+	if err != nil {
+		h.d.Log.Error("đọc tệp đính kèm nhật ký phiếu: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	// make(..., 0, ...) so an empty timeline marshals as [] and never as null.
 	ra := page.Result[nhatKyPhieuRa]{
 		Items:      make([]nhatKyPhieuRa, 0, len(kq.Items)),
@@ -156,7 +177,7 @@ func (h *Handler) DocNhatKyPhieu(w http.ResponseWriter, r *http.Request) {
 		HasMore:    kq.HasMore,
 	}
 	for _, e := range kq.Items {
-		ra.Items = append(ra.Items, nhatKyRaNgoai(e))
+		ra.Items = append(ra.Items, nhatKyRaNgoai(e, files[e.ID]))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -177,15 +198,17 @@ func (h *Handler) GhiChuPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	dong, err := h.d.XuLyPhieu.GhiChuNoiBo(ctx, r.PathValue("maTraCuu"), vao.Note, nguoi,
-		h.coQuyenGhiChuCaXa(ctx), h.coQuyenHanChe(ctx))
+	dong, files, err := h.d.XuLyPhieu.GhiChuNoiBo(ctx, r.PathValue("maTraCuu"), vao.Note, vao.Attachments,
+		nguoi, h.coQuyenGhiChuCaXa(ctx), h.coQuyenHanChe(ctx))
 	if err != nil {
-		h.traLoiLoiXuLy(w, r, "ghi chú", err)
+		// Through the attachment mapper: it answers the two attachment refusals (400) and hands every
+		// petition refusal to traLoiLoiXuLy.
+		h.answerPetitionLogAttachmentError(w, r, "ghi chú", err)
 		return
 	}
 	// What a retry carrying the same Idempotency-Key is told: the row's id, never the note.
 	idem.RecordCode(ctx, dong.ID)
-	vietJSON(w, http.StatusCreated, nhatKyRaNgoai(dong))
+	vietJSON(w, http.StatusCreated, nhatKyRaNgoai(dong, files))
 }
 
 // coQuyenGhiChuCaXa: does this account hold feedback.resolve, feedback.assign OR feedback.classify?

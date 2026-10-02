@@ -67,6 +67,9 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	case d.Photos == nil:
 		panic("petitions/http: thiếu use case ảnh hiện trường — ba tuyến " +
 			"/api/v1/my-citizen-reports/{maTraCuu}/photos sẽ panic khi có người dân đính ảnh")
+	case d.VerificationPhotos == nil:
+		panic("petitions/http: thiếu đường đọc ảnh sau xử lý của công dân — " +
+			"GET /api/v1/my-citizen-reports/{maTraCuu}/verification-photos sẽ panic khi có người dân mở phiếu")
 	case d.PhotoLimiter == nil:
 		panic("petitions/http: thiếu bộ giới hạn tần suất ảnh hiện trường (ratelimit.CitizenPhotoUpload) — " +
 			"tuyến ghi ảnh của công dân không được phục vụ khi không có giới hạn (ADR 0052 §12)")
@@ -427,6 +430,36 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 		authz.CitizenOnly()(
 			httpx.XaTuPhien()(
 				http.HandlerFunc(h.ListMyPetitionPhotos))))
+
+	// ẢNH SAU XỬ LÝ CỦA PHIẾU CỦA MÌNH — the "after" half of "Ảnh trước và sau khi xử lý" (owner decision
+	// C, 02/10/2026): the verification photos STAFF stored on the citizen's OWN petition, signed links of
+	// at most 15 minutes, any status. A SIBLING ROUTE AND NOT A `kind` FIELD ON `…/photos`, on purpose:
+	// that list has meant "the photos I sent" since it was published, and a client that renders every
+	// item as the citizen's own would silently start showing staff photos as theirs.
+	//
+	// NEVER A LOG ATTACHMENT: the read binds purpose `petition-verification-photo` (migration 0027 Q4;
+	// rule 4, forbidden #5). NOT AUDITED: the citizen reading their own petition. The photos were
+	// re-encoded WITHOUT EXIF before they were stored.
+	//
+	// @summary  Ảnh sau xử lý cán bộ đã lưu cho phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 200 WITH `items: []` when staff stored none.
+	//
+	// 404: the SAME FOUR CAUSES AND THE SAME BODY as GET /api/v1/my-citizen-reports/{maTraCuu}: no such
+	// code · another citizen's code · another commune's code · soft deleted (rule 4, forbidden #2).
+	//
+	// 503 `storage_not_configured`: no object store to sign links against.
+	//
+	// @reply    200 photoListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}/verification-photos",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				http.HandlerFunc(h.ListMyVerificationPhotos))))
 
 	// --- the fields the commune offers on the new-submission form (ADR 0050 point 1) --------------
 	//

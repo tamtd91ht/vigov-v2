@@ -683,6 +683,13 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		// chuỗi ấy đi ra dây trong `trace_id`. `httpx.Error` KHÔNG có trường `field`; muốn trả tên
 		// trường thì đó là một thay đổi ở `core/httpx` cho cả tám dịch vụ.
 		h.tuChoiXuLy(w, r, http.StatusConflict, "petition_state", viec, err)
+	case errors.Is(err, domain.ErrVerificationPhotoRequired):
+		// 409 AND NOT 400 OR 403: the caller holds `feedback.resolve` and sent a valid result; what is
+		// refused is closing THIS petition while it holds no verification photo, in a commune whose
+		// switch requires one (ADR 0008 decision 3). The sentence is the commune's "Lời hệ thống"
+		// wording of `feedback.after_photo_required` (refusalMessageKeys). Its own code, so the screen
+		// can open the "⬆ Tải ảnh sau xử lý" button instead of telling the officer to reload.
+		h.tuChoiXuLy(w, r, http.StatusConflict, "after_photo_required", viec, err)
 	case errors.Is(err, app.ErrKhongPhaiNguoiDuocGiao):
 		// 403 AND NOT 409, WHICH IS THE OPPOSITE CALL FROM EVERY CASE AROUND IT. The three above
 		// refuse an act by somebody who HOLDS the right; this one refuses the caller themselves. A 409

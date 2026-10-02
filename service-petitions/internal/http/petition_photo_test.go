@@ -186,7 +186,7 @@ func buildPhotoServer(t *testing.T) *photoServer {
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
-		CitizenFields: newFieldCatalogueFake(), Photos: f, PhotoLimiter: photoLimiterOn(c), Log: log,
+		CitizenFields: newFieldCatalogueFake(), Photos: f, VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterOn(c), Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(khoIdemMoi(), log)(h)

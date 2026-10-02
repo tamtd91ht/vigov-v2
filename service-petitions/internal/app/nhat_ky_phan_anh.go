@@ -108,19 +108,38 @@ func duocGhiChu(p domain.PhieuPhanAnh, nguoi audit.Actor, quyen QuyenGhiChuCaXa)
 //
 // NO EVENT: nothing the citizen can see changed, and the note is staff-internal (rule 4,
 // forbidden #5).
-func (uc *XuLyPhanAnh) GhiChuNoiBo(ctx context.Context, ma, ghiChuTho string, nguoi audit.Actor,
-	quyen QuyenGhiChuCaXa, hanChe QuyenXemHanChe) (domain.NhatKyPhanAnh, error) {
+//
+// # ATTACHMENTS (`📎 Đính kèm`, migration 0027) — the task log entry's shape (task_log_entry.go)
+//
+// The note may carry files the SAME officer uploaded as log attachments for the SAME petition and
+// completed beforehand (petition_log_attachment.go). Read FOR UPDATE and checked first
+// (domain.CheckPetitionLogAttachable), so a wrong id is a 400 with a sentence and writes nothing; then
+// linked IN THIS TRANSACTION, after the row exists — migration 0027's trigger refuses a link to an entry
+// another transaction wrote. Optional and additive: no id, no file read, the note as before.
+func (uc *XuLyPhanAnh) GhiChuNoiBo(ctx context.Context, ma, ghiChuTho string, attachmentIDs []string,
+	nguoi audit.Actor, quyen QuyenGhiChuCaXa, hanChe QuyenXemHanChe) (
+	domain.NhatKyPhanAnh, []domain.PetitionLogAttachment, error) {
 
 	ghiChu, err := domain.KiemGhiChu(ghiChuTho)
 	if err != nil {
-		return domain.NhatKyPhanAnh{}, err
+		return domain.NhatKyPhanAnh{}, nil, err
 	}
 	if err := coCanBoThucHien(nguoi); err != nil {
-		return domain.NhatKyPhanAnh{}, err
+		return domain.NhatKyPhanAnh{}, nil, err
+	}
+	if err := domain.CheckAttachmentList(attachmentIDs); err != nil {
+		return domain.NhatKyPhanAnh{}, nil, err
+	}
+	if len(attachmentIDs) > 0 && uc.staffFiles == nil {
+		// A wiring fault (500), never a reason to drop the files and write the text alone.
+		return domain.NhatKyPhanAnh{}, nil, errors.New("nhat_ky_phan_anh: chưa nối kho tệp đính kèm")
 	}
 
 	bayGio := uc.nayHoac()
-	var dong domain.NhatKyPhanAnh
+	var (
+		dong     domain.NhatKyPhanAnh
+		attached = []domain.PetitionLogAttachment{}
+	)
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
@@ -132,6 +151,26 @@ func (uc *XuLyPhanAnh) GhiChuNoiBo(ctx context.Context, ma, ghiChuTho string, ng
 		}
 		if err := duocGhiChu(p, nguoi, quyen); err != nil {
 			return err
+		}
+		// The files, read under lock and checked BEFORE the entry is written, so a refusal writes nothing.
+		if len(attachmentIDs) > 0 {
+			cands, err := uc.staffFiles.PetitionAttachCandidates(ctx, tx, attachmentIDs)
+			if err != nil {
+				return err
+			}
+			for _, fid := range attachmentIDs {
+				c, ok := cands[fid]
+				if !ok {
+					return domain.ErrPetitionAttachmentNotUsable
+				}
+				if err := domain.CheckPetitionLogAttachable(c, p.ID, nguoi.ID); err != nil {
+					return err
+				}
+				attached = append(attached, domain.PetitionLogAttachment{
+					FileID: fid, OriginalName: c.File.OriginalName, MIMEType: c.File.MIMEType,
+					SizeBytes: c.File.SizeBytes, Status: c.File.Status,
+				})
+			}
 		}
 
 		id, err := uc.sinhID()
@@ -150,14 +189,27 @@ func (uc *XuLyPhanAnh) GhiChuNoiBo(ctx context.Context, ma, ghiChuTho string, ng
 		if err := uc.kho.GhiNhatKy(ctx, tx, dong); err != nil {
 			return err
 		}
+		if len(attachmentIDs) > 0 {
+			if err := uc.staffFiles.LinkToPetitionLogEntry(ctx, tx, id, attachmentIDs); err != nil {
+				return err
+			}
+			for i := range attached {
+				attached[i].LogEntryID = id
+			}
+		}
 
 		// THE LENGTH AND THE ROW, NEVER THE TEXT (rule 6, forbidden #4). The row id lets an inspection
 		// go from the trail to the timeline entry; the text is there, frozen by the trigger.
-		delta, err := json.Marshal(map[string]any{
+		d := map[string]any{
 			"nhat_ky_id":               id,
 			"trang_thai_tai_thoi_diem": string(p.TrangThai),
 			"do_dai_ghi_chu":           utf8.RuneCountInString(ghiChu),
-		})
+		}
+		if len(attachmentIDs) > 0 {
+			// The file IDS, never their names (personal data when they describe a case — rule 3).
+			d["tep_dinh_kem"] = attachmentIDs
+		}
+		delta, err := json.Marshal(d)
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -169,7 +221,7 @@ func (uc *XuLyPhanAnh) GhiChuNoiBo(ctx context.Context, ma, ghiChuTho string, ng
 		})
 	})
 	if err != nil {
-		return domain.NhatKyPhanAnh{}, bocPhieu(ctx, "ghi chú", err)
+		return domain.NhatKyPhanAnh{}, nil, bocPhieu(ctx, "ghi chú", err)
 	}
-	return dong, nil
+	return dong, attached, nil
 }

@@ -248,7 +248,7 @@ func dungMayChuGui(t *testing.T) *mayChuGui {
 		GuiPhieu:      so,
 		Rating:        newRatingFake(),
 		NhanLinhVuc:   nhan,
-		CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: log,
 	})
 
@@ -346,7 +346,7 @@ func TestGuiPhienChuaChonXaLa401(t *testing.T) {
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(), Log: log,
+		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(m.kho, log)(h)
@@ -720,6 +720,6 @@ func TestRegisterCongDanThieuUseCaseGuiThiPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: phieuCuaToiMau(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 	})
 }

@@ -392,6 +392,13 @@ type XuLyPhanAnh struct {
 	// check cannot run, and PhanCong then REFUSES any assignment naming an officer (fail closed).
 	giaoViec KiemCanBoGiaoViec
 
+	// settings and staffFiles are the CLOSE GATE's two reads (Dong) — the per-commune switch and the
+	// count of stored verification photos — and staffFiles also links a note's attachments
+	// (GhiChuNoiBo). nil means the check cannot run: Dong then REFUSES every closing, and a note carrying
+	// attachments is refused (fail closed — closing on a guess is the one outcome that cannot be undone).
+	settings   VerificationPhotoSwitch
+	staffFiles PetitionStaffFiles
+
 	// sinhID is injected so a test can pin the outbox row's id. In production it is ulid.Moi.
 	sinhID func() (string, error)
 
@@ -406,8 +413,65 @@ type XuLyPhanAnh struct {
 }
 
 func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHanXuLyXong,
-	giaoViec KiemCanBoGiaoViec) *XuLyPhanAnh {
-	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, giaoViec: giaoViec, sinhID: ulid.Moi}
+	giaoViec KiemCanBoGiaoViec, settings VerificationPhotoSwitch, staffFiles PetitionStaffFiles) *XuLyPhanAnh {
+	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, giaoViec: giaoViec,
+		settings: settings, staffFiles: staffFiles, sinhID: ulid.Moi}
+}
+
+// VerificationPhotoSwitch reads ADR 0008 decision 3's per-commune switch INSIDE the closing
+// transaction. *petstore.PetitionSettingsStore satisfies it: no row is TRUE, a failure is an error and
+// never answered with a default.
+type VerificationPhotoSwitch interface {
+	VerificationPhotoRequiredTx(ctx context.Context, tx *store.ScopedTx) (bool, error)
+}
+
+// PetitionStaffFiles is the part of *petstore.StoredFileStore the petition acts need: the close gate's
+// count, and the two calls that link a note's attachments in the note's transaction.
+type PetitionStaffFiles interface {
+	CountForSubjectTx(ctx context.Context, tx *store.ScopedTx, subjectType, subjectID, purpose string,
+		pendingSince time.Time) (int, error)
+	PetitionAttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
+		map[string]domain.AttachCandidate, error)
+	LinkToPetitionLogEntry(ctx context.Context, tx *store.ScopedTx, logEntryID string, fileIDs []string) error
+}
+
+// errCloseGateNotWired: the close gate's reads are absent. A wiring fault (500) — never "closing
+// allowed", which would silently drop a rule the customer stated (ADR 0008 decision 3).
+var errCloseGateNotWired = errors.New("xu_ly_phan_anh: chưa nối dây kiểm ảnh sau xử lý trước khi đóng phiếu")
+
+// checkVerificationPhotoGate is THE CLOSE GATE (docs/ui-ux/09 §14.2; ADR 0008 decision 3; ADR 0047 row
+// "Ảnh 'sau xử lý' của cán bộ"): in a commune whose switch is on — and a commune with no settings row is
+// ON — a petition with no STORED verification photo is not closed.
+//
+// INSIDE THE CLOSING TRANSACTION, ON THE LOCKED ROW. The petition is FOR UPDATE, and migration 0027's
+// trigger takes the same lock before a photo enters the stored set, so a photo completing concurrently
+// is either counted here or committed after this close — never half-seen. "Stored" is stored /
+// processing / ready, not soft-deleted (CountForSubjectTx with no pending window): a pending upload is
+// not evidence.
+//
+// ⚠ A PHOTO STORED BEFORE A REOPENING STILL COUNTS. The switch says "at least one photo", and nothing
+// decided says a reopened petition needs a NEW one. Reported as an open question, not chosen silently.
+func (uc *XuLyPhanAnh) checkVerificationPhotoGate(ctx context.Context, tx *store.ScopedTx,
+	p domain.PhieuPhanAnh) error {
+	if uc.settings == nil || uc.staffFiles == nil {
+		return errCloseGateNotWired
+	}
+	required, err := uc.settings.VerificationPhotoRequiredTx(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("xu_ly_phan_anh: đọc công tắc ảnh sau xử lý: %w", err)
+	}
+	if !required {
+		return nil
+	}
+	n, err := uc.staffFiles.CountForSubjectTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
+		domain.PurposePetitionVerificationPhoto, time.Time{})
+	if err != nil {
+		return fmt.Errorf("xu_ly_phan_anh: đếm ảnh sau xử lý: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrVerificationPhotoRequired
+	}
+	return nil
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -901,12 +965,12 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma, ghiChuTho string, 
 // "đã xử lý" — because a citizen who is told only that their report was closed cannot tell being
 // helped from being dismissed.
 //
-// ⚠ WHAT THIS CANNOT ENFORCE, SAID PLAINLY: docs/ui-ux/09 §14 rule 2 forbids closing without an
-// "after" photograph, and ADR 0008 makes that a PER-COMMUNE flag `bat_buoc_anh_nghiem_thu` (default
-// TRUE). Neither the `anh_phan_anh` table nor a store for the flags exists in this repository, so
-// this act cannot check it. Writing a hardcoded TRUE would block every closing in every commune on a
-// table that does not exist; writing FALSE would silently drop a rule the customer stated. Neither is
-// chosen — it is reported as the gap it is.
+// THE CLOSE GATE (docs/ui-ux/09 §14 rule 2; ADR 0008 decision 3, `bat_buoc_anh_nghiem_thu`, default
+// TRUE): checkVerificationPhotoGate, on the locked row, after the lifecycle check — so a petition that cannot be
+// closed anyway answers the state refusal, and one that could is told the photo is missing. It is the
+// ONLY act that writes `da-dong` (store Dong), so it is the only place the gate lives: the two
+// terminal branches (KhongTiepNhan, ChuyenCapTren) end a petition the commune did NOT work on — there
+// is nothing "after processing" to photograph — and no automatic closing exists in this service.
 func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho, ghiChuTho string, nguoi audit.Actor,
 	hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
@@ -946,6 +1010,9 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho, ghiChuTho string
 		// actually finished, exactly as a closing from `cho-dan-xac-nhan` does.
 		boQuaXacNhan, err := domain.DongDuoc(p)
 		if err != nil {
+			return err
+		}
+		if err := uc.checkVerificationPhotoGate(ctx, tx, p); err != nil {
 			return err
 		}
 		if err := uc.kho.Dong(ctx, tx, p.ID, p.TrangThai, ketQua, bayGio); err != nil {

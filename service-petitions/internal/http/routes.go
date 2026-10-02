@@ -380,8 +380,11 @@ type (
 		// The manual internal note (POST …/log-entries). It takes the restricted fact like every act,
 		// and its own commune-wide fact — ANY of resolve/assign/classify — which only ever widens to
 		// the officers who already work on petitions commune-wide (app.duocGhiChu decides).
-		GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
-			quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (domain.NhatKyPhanAnh, error)
+		// `attachmentIDs` are the caller's completed log attachments, linked in the note's
+		// transaction (optional; nil writes the note alone).
+		GhiChuNoiBo(ctx context.Context, ma, ghiChu string, attachmentIDs []string, nguoi audit.Actor,
+			quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (
+			domain.NhatKyPhanAnh, []domain.PetitionLogAttachment, error)
 		// SetPublication is the staff moderation of the public page (PUT …/publication, ADR 0050 point
 		// 8). It takes the restricted fact like every act, so a colleague cannot even hide a report
 		// about a member of staff; it moves no lifecycle status.
@@ -532,6 +535,13 @@ type Deps struct {
 	// PetitionPhotos lists a petition's citizen scene photos with signed links for "TRƯỚC KHI XỬ LÝ"
 	// (app.StaffPetitionPhotos — built even without object storage; its route then answers 503).
 	PetitionPhotos StaffPetitionPhotos
+	// VerificationPhotos is "SAU KHI XỬ LÝ": staff's upload, completion and audited list
+	// (app.StaffVerificationPhotos — built even without object storage; its routes then answer 503).
+	VerificationPhotos StaffVerificationPhotoActs
+	// §8.7's `📎 Đính kèm` on the petition log: the three acts (app.PetitionLogAttachments) and the
+	// batched read the timeline renders them from. STAFF-ONLY — nothing on the citizen Deps reaches them.
+	PetitionLogAttachments       PetitionLogAttachmentActs
+	PetitionLogAttachmentsReader PetitionLogAttachmentReader
 
 	// The MEETING MINUTES register — one read path in this pass (migration 0007). It is the ORIGIN
 	// of the tasks above: a conclusion is split into a task and the task keeps a permanent back-link
@@ -645,6 +655,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
 	case d.PetitionPhotos == nil:
 		panic("petitions/http: thiếu đường đọc ảnh hiện trường — GET /api/v1/citizen-reports/{maTraCuu}/photos sẽ panic khi có người gọi")
+	case d.VerificationPhotos == nil:
+		panic("petitions/http: thiếu use case ảnh sau xử lý — ba tuyến /api/v1/citizen-reports/{maTraCuu}/verification-photos sẽ panic khi có người gọi")
+	case d.PetitionLogAttachments == nil:
+		panic("petitions/http: thiếu use case tệp đính kèm nhật ký phiếu — ba tuyến /api/v1/citizen-reports/{maTraCuu}/log-attachments sẽ panic khi có người gọi")
+	case d.PetitionLogAttachmentsReader == nil:
+		panic("petitions/http: thiếu đường đọc tệp đính kèm của nhật ký phiếu — GET /api/v1/citizen-reports/{maTraCuu}/log-entries sẽ panic khi có người gọi")
 	case d.TaskLogAttachments == nil:
 		panic("petitions/http: thiếu đường đọc tệp đính kèm của nhật ký — GET /api/v1/tasks/{ma}/log-entries sẽ panic khi có người gọi")
 	case d.DanhSachBienBan == nil:
@@ -934,6 +950,93 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/photos",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.ListPetitionPhotos)))
+
+	// ẢNH SAU XỬ LÝ — "SAU KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4), owner decisions of
+	// 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3). The scene
+	// photo's three steps for a member of staff (internal/app/petition_verification_photo.go): at most 5
+	// per petition (platform's `petition-verification-photo` policy, migration 0027's floor), JPEG / PNG /
+	// WebP, RE-ENCODED WITHOUT EXIF (the citizen sees it), private, class records.
+	//
+	// `verification-photos`: "verification" is the glossary's English for nghiệm thu
+	// (kb/00-foundation/ubiquitous-language.md, core/storage PurposePetitionVerificationPhoto) — the act
+	// this photo evidences. A SIBLING of `photos`, not a `kind` on it: the two have different uploaders,
+	// different keys, different counts, and the citizen's list must never grow a staff file by default.
+	//
+	// `feedback.resolve` ON BOTH WRITES — the key that guards the closing (open question #7), because
+	// this photo IS the closing's evidence; `feedback.read` on the list, the detail's own key. Both seeded
+	// (service-identity/migrations/0001_init.sql); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	// `feedback.restricted` narrows inside: a `can-bo` petition without it is the detail's 404.
+	//
+	// WHEN: every status but the three endings (domain.VerificationPhotoUploadOpen).
+	//
+	// idem.Required(idem.MoKhiHong) on the request, the citizen photo's declaration and reason: a replay
+	// answers the FILE ID, never a second row and never the form.
+	//
+	// @summary  Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// @request  photoUploadIn
+	// 401 is no session AND a session of another commune (authz compares the commune before the key).
+	// 403: no `feedback.resolve`. 404: unknown, another commune's, soft-deleted, or `can-bo` without
+	// `feedback.restricted` — one body. 409 `petition_state` (ended) · `photo_limit` · `request_in_progress`.
+	// 503 `storage_not_configured` · `upload_limits_unavailable`: nothing written.
+	//
+	// @reply    201 photoUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/verification-photos",
+		authz.RequirePermission(d.Checker, "feedback.resolve")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestVerificationPhotoUpload))))
+
+	// HOÀN TẤT ẢNH SAU XỬ LÝ — the citizen photo's completion: stat · sniff · the CURRENT policy · ClamAV
+	// · decode · orient · re-encode JPEG (≤ 2560 px, NO EXIF) · write ONLY the clean copy · purge temp ·
+	// `stored` + trail in ONE transaction that re-checks the window and the count under the petition's
+	// lock. Only the officer the upload was issued to; anybody else's id answers 404.
+	//
+	// ⚠ A CLEAN COPY REFUSED UNDER THE LOCK (petition ended, or full, meanwhile) STAYS in the private
+	// bucket — a records object cannot be purged — with a `rejected` row; never listed.
+	//
+	// @summary  Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 409 `petition_state` · `photo_state` · `upload_not_received` · `upload_expired` · `upload_changed`.
+	// 422 `photo_rejected`. 503 `storage_not_configured` · `upload_limits_unavailable` ·
+	// `malware_scan_unavailable`: nothing stored, retryable, never stored unscanned.
+	//
+	// @reply    200 photoOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion",
+		authz.RequirePermission(d.Checker, "feedback.resolve")(
+			idem.KhongCan("hoàn tất lần hai trên ảnh đã lưu trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng phiếu")(
+				http.HandlerFunc(h.CompleteVerificationPhoto))))
+
+	// DANH SÁCH ẢNH SAU XỬ LÝ — the `photos` list's twin: signed links of at most 15 minutes, AUDITED
+	// (`xem_anh_sau_xu_ly`, by the officer's business code, committed before the reply), `no-store`.
+	//
+	// @summary  Ảnh sau xử lý cán bộ đã tải cho một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 200 WITH `items: []` when none. 404 is the detail's four causes, one body.
+	// 503 `storage_not_configured`: no object store to sign links against.
+	//
+	// @reply    200 photoListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/verification-photos",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			http.HandlerFunc(h.ListVerificationPhotos)))
 
 	// --- THE STAFF PROCESSING PATH. SEVEN ROUTES (the two branches added 25/09/2026) --------------
 	//
@@ -1225,6 +1328,80 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.GhiChuPhieu))))
+
+	// 📎 ĐÍNH KÈM (§8.7 :197) — the task attachment's three steps on the PETITION log, then the file
+	// rides on the next note (`attachments` on the POST above). internal/app/petition_log_attachment.go
+	// has the whole flow. STAFF-ONLY (owner decision B, 02/10/2026): no citizen route reads these files.
+	//
+	// `log-attachments` AND NOT `attachments`: a petition carries THREE kinds of file (the citizen's
+	// scene photos, staff's verification photos, these), and a bare `attachments` would not say which.
+	//
+	// `feedback.read` AT THE GATE ON ALL THREE, the note route's shape: whether this person may upload
+	// onto THIS petition is the note rule (app.duocGhiChu — the assignee, or a holder of feedback.resolve
+	// / feedback.assign / feedback.classify), decided on the locked row, because an upload exists only to
+	// be attached to a note. Seeded keys only (rule 5, invariant 3c). Every status, like the note.
+	//
+	// THE LIMITS ARE PLATFORM'S (`petition-log-attachment`, ADR 0052 §10): 50 MB, PDF / JPEG / PNG today.
+	//
+	// @summary  Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @screen   09-phan-anh-nguoi-dan §8.7
+	// @request  taskAttachmentUploadIn
+	// 401 is no session AND a session of another commune. 403: no `feedback.read`, or — inside — not the
+	// assignee and none of the three commune-wide keys. 404: the petition's four causes. 409
+	// `attachment_limit` · `request_in_progress`. 503 `storage_not_configured` · `upload_limits_unavailable`.
+	//
+	// @reply    201 taskAttachmentUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/log-attachments",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestPetitionLogAttachmentUpload))))
+
+	// HOÀN TẤT TẢI LÊN — the task attachment's completion: sniff · the CURRENT policy · ClamAV · sha256 ·
+	// copy to the private bucket at the records key, AS UPLOADED (not shown to a citizen, so no EXIF
+	// re-encode — a re-encoded record would no longer be the record). Only the uploader.
+	//
+	// @summary  Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ
+	// @screen   09-phan-anh-nguoi-dan §8.7
+	// 409 `attachment_state` · `upload_not_received` · `upload_expired` · `upload_changed`. 422
+	// `attachment_rejected`. 503 `storage_not_configured` · `upload_limits_unavailable` ·
+	// `malware_scan_unavailable`.
+	//
+	// @reply    200 taskAttachmentOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			idem.KhongCan("hoàn tất lần hai trên tệp đã lưu trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
+				http.HandlerFunc(h.CompletePetitionLogAttachment))))
+
+	// TẢI VỀ — `feedback.read`, the key of the timeline the file is shown on. A file on a log entry is
+	// part of the timeline every staff reader sees; a file not yet attached only its uploader may fetch.
+	// AUDITED (`tai_tep_nhat_ky_phan_anh`), UNLIKE THE TASK TWIN: a file on a petition's log is evidence
+	// about one citizen's case and cannot be masked (rule 6, invariant 7). `no-store`.
+	//
+	// @summary  Liên kết tải về một tệp đính kèm của nhật ký xử lý phiếu (sống tối đa 15 phút)
+	// @screen   09-phan-anh-nguoi-dan §8.7
+	// @reply    200 taskAttachmentDownloadOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			http.HandlerFunc(h.PetitionLogAttachmentDownload)))
 
 	// TẠO NHIỆM VỤ TỪ PHIẾU (user decision 30/09/2026) — the only door by which a `phan-anh` task is
 	// booked: POST /api/v1/tasks refuses that source (commit 2d34eba4) because nothing there can check

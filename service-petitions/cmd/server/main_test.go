@@ -406,7 +406,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// invoked cannot dereference the nil handle. Their own four-case suites live in
 		// internal/http/xu_ly_phan_anh_test.go.
 		DanhSachPhieu: khoPhieu{},
-		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil, nil),
+		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil, nil, nil, nil),
 		// Never invoked here; Register refuses a nil. Own suite: internal/http/nhat_ky_phan_anh_test.go.
 		NhatKyPhieu:     petstore.NewPhieuPhanAnhStore(nil),
 		NhiemVu:         khoNhiemVu{},
@@ -437,7 +437,12 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		TaskAttachments:    app.NewTaskAttachments(nil, nil, nil, nil, nil, nil),
 		TaskLogAttachments: petstore.NewStoredFileStore(nil),
 		PetitionPhotos:     app.NewStaffPetitionPhotos(nil, nil, nil, nil),
-		DanhSachBienBan:    khoBienBan{},
+		// The petition's staff files, unconfigured — never invoked here; Register refuses a nil. Own
+		// suites: internal/app/petition_staff_file_test.go and internal/http/petition_staff_file_test.go.
+		VerificationPhotos:           app.NewStaffVerificationPhotos(nil, nil, nil, nil),
+		PetitionLogAttachments:       app.NewPetitionLogAttachments(nil, nil, nil, nil, nil, nil),
+		PetitionLogAttachmentsReader: petstore.NewStoredFileStore(nil),
+		DanhSachBienBan:              khoBienBan{},
 		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
 		// suite lives in internal/http/bien_ban_hop_ghi_test.go.
@@ -467,6 +472,8 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		NhanLinhVuc:   khoNhanLinhVuc{},
 		CitizenFields: fieldCatalogueStub{},
 		Photos:        app.NewCitizenPetitionPhotos(nil, nil, nil, nil, nil, nil),
+		// Never invoked here; RegisterCongDan refuses a nil.
+		VerificationPhotos: app.NewCitizenVerificationPhotos(nil, nil, nil),
 		// The dev wiring with no Redis: the always-failing counter under the fail-CLOSED citizen photo
 		// policy — what main builds when REDIS_DSN is unset.
 		PhotoLimiter: testPhotoLimiter(t),

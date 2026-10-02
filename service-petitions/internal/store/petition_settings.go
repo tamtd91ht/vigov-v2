@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -14,8 +15,8 @@ import (
 // It holds *store.DB, never a *sql.DB: the commune is $1, bound by Scoped.Query from the context
 // (rule 1, invariants 4 and 5), and no method takes it as a parameter.
 //
-// READ ONLY TODAY. The write path, its permission and its audit entry are a later card; so is wiring
-// this read into the closing act (app/xu_ly_phan_anh.go Dong).
+// READ ONLY TODAY. The write path, its permission and its audit entry are a later card. The closing
+// act (app/xu_ly_phan_anh.go Dong) reads it through VerificationPhotoRequiredTx.
 type PetitionSettingsStore struct {
 	db *store.DB
 }
@@ -42,7 +43,20 @@ var ErrPetitionSettingsDuplicate = errors.New("petition_settings: more than one 
 // default: the caller is the closing act, and closing on a guess is the one outcome that cannot be
 // taken back (fail closed).
 func (s *PetitionSettingsStore) VerificationPhotoRequired(ctx context.Context) (bool, error) {
-	rows, err := s.db.For(ctx).Query(ctx, "verification_photo_required", "petition_settings", "LIMIT 2")
+	return readVerificationPhotoRequired(s.db.For(ctx).Query(ctx, "verification_photo_required",
+		"petition_settings", "LIMIT 2"))
+}
+
+// VerificationPhotoRequiredTx is VerificationPhotoRequired INSIDE the caller's transaction — the
+// closing act (app.XuLyPhanAnh.Dong), so the switch it obeys and the close it gates are read and
+// written in one transaction (rule 2, invariant 6). Same answers: no row is TRUE, a failure is an error.
+func (s *PetitionSettingsStore) VerificationPhotoRequiredTx(ctx context.Context, tx *store.ScopedTx) (bool, error) {
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
+	return readVerificationPhotoRequired(tx.Query(ctx, "verification_photo_required",
+		"petition_settings", "LIMIT 2"))
+}
+
+func readVerificationPhotoRequired(rows *sql.Rows, err error) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("petition_settings: read: %w", err)
 	}

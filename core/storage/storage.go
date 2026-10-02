@@ -522,7 +522,7 @@ func sameObject(a, b Key) bool {
 		strings.EqualFold(a.ObjectID, b.ObjectID) && a.Variant == b.Variant
 }
 
-// MaxServerProducedBytes caps PutServerProduced. The two flows it serves write re-encoded images,
+// MaxServerProducedBytes caps PutServerProduced. The three flows it serves write re-encoded images,
 // and the image ceiling of ADR 0052 §10 is 10 MB for what a client may upload; a server re-encode
 // of such an image stays well below 32 MiB. The cap exists so a caller bug (a size taken from the
 // wrong variable) fails here instead of streaming an unbounded body. A video transcode (ADR 0052
@@ -542,7 +542,7 @@ type Produced struct {
 
 // PutServerProduced writes bytes the server itself produced to dst in the PRIVATE bucket. It is
 // the only write path in this package whose bytes do not come from a client upload, and it serves
-// exactly two flows (ADR 0047 §6, approved 2026-09-30):
+// exactly three flows (a and b: ADR 0047 §6, approved 2026-09-30; c: owner decision 02/10/2026):
 //
 //	a. news cover image: the promoted original is decoded, oriented, resized and re-encoded; the
 //	   result is stored as a derivative (`thumb-1280`, class content-source) so PublishDerivative
@@ -552,9 +552,16 @@ type Produced struct {
 //	   upload never reaches the private bucket; the caller then removes it from temp with
 //	   PurgeAllVersions(ctx, BucketTemp, uploadKey) (allowed for every class in temp).
 //
+//	c. staff verification photo (petitions, `petition-verification-photo`, owner decision of
+//	   02/10/2026): the same re-encode as (b), WITHOUT EXIF, because the citizen sees this photo on
+//	   their own petition and a staff phone's EXIF carries GPS and device ids just as a citizen's does
+//	   (rule 3). Stored as variant `original` of class records — see isVerificationPhotoOriginal.
+//
 // Refused before any byte is read:
-//   - class records → ErrInvalidArgument. An administrative record is what a person filed; the
-//     server never manufactures one, and a re-encoded record would no longer be the record.
+//   - class records → ErrInvalidArgument, EXCEPT flow (c). An administrative record is what a person
+//     filed; the server never manufactures one, and a re-encoded record would no longer be the
+//     record. Flow (c) is the one exception the owner chose, knowingly: the clean re-encode IS the
+//     record of that photo, exactly as in (b).
 //   - class public-media → ErrInvalidArgument. Only PublishDerivative writes the public bucket.
 //   - class content-source with variant `original` → ErrInvalidArgument. There the original is the
 //     scanned client upload and arrives only through Promote; letting the server write one would
@@ -583,7 +590,7 @@ func (c *Client) PutServerProduced(ctx context.Context, dst Key, r io.Reader, si
 		return Produced{}, err
 	}
 	switch {
-	case dst.Class == ClassRecords:
+	case dst.Class == ClassRecords && !isVerificationPhotoOriginal(dst):
 		return Produced{}, fmt.Errorf("%w: %s objects are never produced by the server", ErrInvalidArgument, ClassRecords)
 	case dst.Class == ClassPublicMedia:
 		return Produced{}, fmt.Errorf("%w: only PublishDerivative writes %s", ErrInvalidArgument, ClassPublicMedia)
@@ -634,6 +641,21 @@ func (c *Client) PutServerProduced(ctx context.Context, dst Key, r io.Reader, si
 		Key: dstKey, Size: size, ETag: info.ETag, VersionID: info.VersionID,
 		ContentType: mime, SHA256: hex.EncodeToString(er.h.Sum(nil)),
 	}, nil
+}
+
+// isVerificationPhotoOriginal is flow (c) of PutServerProduced, and the ONLY records key the server
+// may produce: service petitions, purpose petition-verification-photo, variant original.
+//
+// NARROW ON PURPOSE. Widening the records refusal to "any image" would let the server rewrite a
+// document scan or a task attachment — records whose bytes are what an officer filed. Every other
+// records purpose stays refused (produce_test.go pins it).
+//
+// ⚠ COST: a records object is never purgeable outside temp (PurgeAllVersions), so a clean copy
+// written here and then refused by the caller's transaction stays in the private bucket. The caller
+// records that it remains; it is never silently deleted.
+func isVerificationPhotoOriginal(k Key) bool {
+	return k.Class == ClassRecords && k.Service == ServicePetitions &&
+		k.Purpose == PurposePetitionVerificationPhoto && k.Variant == VariantOriginal
 }
 
 // exactBufSize is the read-ahead buffer of PutServerProduced; exactWindow is how far before the end

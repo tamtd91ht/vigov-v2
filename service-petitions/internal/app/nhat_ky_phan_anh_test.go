@@ -376,7 +376,7 @@ func TestGhiChuNoiBoDuocPhep(t *testing.T) {
 			k.hang = ca.hang
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			dong, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, canBoThu(), ca.quyen, ca.hanChe)
+			dong, _, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, nil, canBoThu(), ca.quyen, ca.hanChe)
 			if err != nil {
 				t.Fatalf("GhiChuNoiBo: %v", err)
 			}
@@ -442,7 +442,7 @@ func TestGhiChuNoiBoBiTuChoi(t *testing.T) {
 			k.hang = ca.hang
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			_, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, canBoThu(), ca.quyen, ca.hanChe)
+			_, _, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, nil, canBoThu(), ca.quyen, ca.hanChe)
 			if !errors.Is(err, ca.muon) {
 				t.Fatalf("lỗi = %v, muốn %v", err, ca.muon)
 			}
@@ -478,7 +478,7 @@ func TestGhiChuNoiBoDauVaoSai(t *testing.T) {
 			k.hang = phieuDaGiaoCho(maCanBoThu)
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			_, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ca.ghiChu, ca.nguoi, coQuyenGhiChu, coQuyenHanChe)
+			_, _, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ca.ghiChu, nil, ca.nguoi, coQuyenGhiChu, coQuyenHanChe)
 			if err == nil || (ca.muon != nil && !errors.Is(err, ca.muon)) {
 				t.Fatalf("lỗi = %v, muốn %v", err, ca.muon)
 			}
@@ -496,7 +496,7 @@ func TestGhiChuNoiBoDongHongThiQuayLui(t *testing.T) {
 	k.loiSau = "INSERT INTO nhat_ky_phan_anh"
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	if _, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, canBoThu(), khongQuyenGhiChu,
+	if _, _, err := uc.GhiChuNoiBo(ctx, maPhieuThu, ghiChuThu, nil, canBoThu(), khongQuyenGhiChu,
 		khongQuyenHanChe); err == nil {
 		t.Fatal("thành công dù dòng nhật ký không ghi được")
 	}

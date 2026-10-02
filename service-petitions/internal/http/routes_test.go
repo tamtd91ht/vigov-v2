@@ -240,6 +240,10 @@ type mayChu struct {
 	// staffPhotos is the petition's scene photos, staff read — petition_photo_test.go.
 	staffPhotos *staffPhotosFake
 
+	// The petition's staff files — petition_staff_file_test.go.
+	verificationPhotos *verificationPhotosFake
+	petitionLogFiles   *petitionLogAttachmentsFake
+
 	// fields is the petition field catalogue — petition_fields_test.go.
 	fields *fieldCatalogueFake
 }
@@ -291,6 +295,9 @@ func dungMayChu(t *testing.T) *mayChu {
 	logAttachments := &logAttachmentsFake{}
 	// The petition's scene photos, staff read — petition_photo_test.go.
 	staffPhotos := newStaffPhotosFake()
+	// The petition's staff files — petition_staff_file_test.go.
+	verificationPhotos := &verificationPhotosFake{}
+	petitionLogFiles := &petitionLogAttachmentsFake{}
 	// The field catalogue — petition_fields_test.go.
 	fields := newFieldCatalogueFake()
 
@@ -324,31 +331,35 @@ func dungMayChu(t *testing.T) *mayChu {
 			TaskPriorityImports: taskPriorityImportsFake(),
 			// Task-status wording: own suite in trang_thai_nhiem_vu_test.go; present because
 			// Register refuses a nil dependency.
-			TrangThaiNhiemVu:     docTrangThaiMau(),
-			GhiTrangThaiNhiemVu:  &ghiTrangThaiGia{},
-			Phieu:                phieu,
-			NhanLinhVuc:          nhan,
-			PetitionFields:       fields,
-			Vet:                  vet,
-			DanhSachPhieu:        danhSach,
-			XuLyPhieu:            xuLy,
-			NhatKyPhieu:          nhatKy,
-			NhiemVu:              nhiemVu,
-			DanhSachNhiemVu:      nhiemVu,
-			TaskFilterIdentity:   filterIdentity,
-			TaskRegisterExport:   registerExport,
-			TaskImport:           taskImport,
-			DeNghiChoDuyet:       deNghiCho,
-			GhiNhiemVu:           ghiNhiemVu,
-			PetitionTasks:        petitionTasks,
-			TaskAttachments:      taskAttachments,
-			TaskLogAttachments:   logAttachments,
-			PetitionPhotos:       staffPhotos,
-			DanhSachBienBan:      bienBan,
-			GhiBienBan:           ghiBienBan,
-			TaskSummary:          taskSummary,
-			CitizenReportSummary: reportSummary,
-			OverdueQueue:         overdue,
+			TrangThaiNhiemVu:    docTrangThaiMau(),
+			GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
+			Phieu:               phieu,
+			NhanLinhVuc:         nhan,
+			PetitionFields:      fields,
+			Vet:                 vet,
+			DanhSachPhieu:       danhSach,
+			XuLyPhieu:           xuLy,
+			NhatKyPhieu:         nhatKy,
+			NhiemVu:             nhiemVu,
+			DanhSachNhiemVu:     nhiemVu,
+			TaskFilterIdentity:  filterIdentity,
+			TaskRegisterExport:  registerExport,
+			TaskImport:          taskImport,
+			DeNghiChoDuyet:      deNghiCho,
+			GhiNhiemVu:          ghiNhiemVu,
+			PetitionTasks:       petitionTasks,
+			TaskAttachments:     taskAttachments,
+			TaskLogAttachments:  logAttachments,
+			PetitionPhotos:      staffPhotos,
+			// The petition's staff files — petition_staff_file_test.go.
+			VerificationPhotos:           verificationPhotos,
+			PetitionLogAttachments:       petitionLogFiles,
+			PetitionLogAttachmentsReader: petitionLogFiles,
+			DanhSachBienBan:              bienBan,
+			GhiBienBan:                   ghiBienBan,
+			TaskSummary:                  taskSummary,
+			CitizenReportSummary:         reportSummary,
+			OverdueQueue:                 overdue,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -386,6 +397,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		taskAttachments: taskAttachments,
 		logAttachments:  logAttachments,
 		staffPhotos:     staffPhotos,
+
+		verificationPhotos: verificationPhotos,
+		petitionLogFiles:   petitionLogFiles,
 
 		fields: fields,
 	}
@@ -489,8 +503,12 @@ func depsDay() Deps {
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
 		PetitionPhotos:     &staffPhotosFake{},
-		DanhSachBienBan:    bienBanMau(),
-		GhiBienBan:         &ghiBienBanGia{},
+		// The petition's staff files.
+		VerificationPhotos:           &verificationPhotosFake{},
+		PetitionLogAttachments:       &petitionLogAttachmentsFake{},
+		PetitionLogAttachmentsReader: &petitionLogAttachmentsFake{},
+		DanhSachBienBan:              bienBanMau(),
+		GhiBienBan:                   &ghiBienBanGia{},
 		// The leadership overview.
 		TaskSummary:          taskSummarySample(),
 		CitizenReportSummary: citizenReportSummarySample(),

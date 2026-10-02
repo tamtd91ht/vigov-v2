@@ -264,7 +264,7 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 		// surface. The write surface has its own suite, gui_phan_anh_test.go.
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
@@ -360,7 +360,7 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 		Phieu:       m.phieu,
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux
@@ -604,7 +604,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 				}
 			}()
 			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
-				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu()}
+				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -620,7 +620,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 	})
 }
 

@@ -198,9 +198,11 @@ func TestDocNhatKyTraDungHinhDangVaThuTu(t *testing.T) {
 		t.Errorf("dòng phân loại = %+v", pl)
 	}
 	for _, dong := range tho {
-		// No file store yet, so no attachments field at all — never an untyped promise on the wire.
-		if _, co := dong["attachments"]; co {
-			t.Error("có attachments dù chưa có kho tệp")
+		// Migration 0027: attachments are ALWAYS an array — [] for an entry with none, never null.
+		if v, co := dong["attachments"]; !co {
+			t.Error("thiếu attachments")
+		} else if _, laMang := v.([]any); !laMang {
+			t.Errorf("attachments = %#v, muốn một mảng", v)
 		}
 		// The precedent resolves no names — the field must not appear as an empty promise.
 		if _, co := dong["actor_name"]; co {
@@ -473,7 +475,7 @@ func TestTruongNoteTuyChonTrenSauThan(t *testing.T) {
 func TestTuyenCongDanKhongCoNhatKy(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	for _, p := range []string{

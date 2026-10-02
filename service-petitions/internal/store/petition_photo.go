@@ -46,3 +46,36 @@ func (s *StoredFileStore) PetitionPhotos(ctx context.Context, petitionID string)
 	}
 	return out, nil
 }
+
+// verificationPhotosTail selects the verification photos a reader can be shown: purpose
+// `petition-verification-photo` BOUND EXPLICITLY (migration 0027 question 4: never "every petition
+// file", which would hand a citizen the staff-only log attachments), uploaded by staff — never the
+// citizen marker — reached the destination and not soft-deleted (rule 7, invariant 2).
+const verificationPhotosTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4 AND uploaded_by <> $5
+	AND deleted_at IS NULL AND status IN ('stored', 'ready')
+	ORDER BY created_at, id`
+
+// VerificationPhotos reads the staff verification photos ("SAU KHI XỬ LÝ") of ONE petition of this
+// commune, oldest first. The caller's own read already applied its isolation — the citizen's identity
+// filter or the staff register's — and the commune is $1 from the context. At most 5 rows exist by
+// migration 0027's trigger, so there is no paging.
+func (s *StoredFileStore) VerificationPhotos(ctx context.Context, petitionID string) ([]domain.StoredFile, error) {
+	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file", verificationPhotosTail,
+		domain.StoredFileSubjectPetition, petitionID, domain.PurposePetitionVerificationPhoto, domain.CitizenLogActor)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc ảnh sau xử lý: %w", err)
+	}
+	defer rows.Close()
+	out := []domain.StoredFile{}
+	for rows.Next() {
+		f, err := scanStoredFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt ảnh sau xử lý: %w", err)
+	}
+	return out, nil
+}

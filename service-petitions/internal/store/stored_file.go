@@ -152,8 +152,18 @@ func oneStoredFileRow(res sql.Result, what string) error {
 	return nil
 }
 
-// $1 is the commune and $2 the entry, in every VALUES tuple; the file ids start at $3.
-const linkInsertHead = `INSERT INTO task_log_attachment (tenant_id, log_entry_id, stored_file_id) VALUES `
+// The two link tables a log entry's files live in — a CLOSED list, so the table name concatenated into
+// the statements below is never a value from a request. task_log_attachment is migration 0021's,
+// petition_log_attachment migration 0027's; their columns and triggers have the same shape.
+const (
+	taskLinkTable     = "task_log_attachment"
+	petitionLinkTable = "petition_log_attachment"
+)
+
+// linkInsertHead: $1 is the commune and $2 the entry, in every VALUES tuple; the file ids start at $3.
+func linkInsertHead(table string) string {
+	return `INSERT INTO ` + table + ` (tenant_id, log_entry_id, stored_file_id) VALUES `
+}
 
 // LinkToLogEntry attaches files to a log entry, in ONE statement, INSIDE THE TRANSACTION THAT
 // WROTE THE ENTRY (GhiNhatKy) — the schema refuses a link to an entry written by another
@@ -162,6 +172,20 @@ const linkInsertHead = `INSERT INTO task_log_attachment (tenant_id, log_entry_id
 //
 // An empty list writes nothing. An empty id or a duplicate is refused before any SQL.
 func (s *StoredFileStore) LinkToLogEntry(ctx context.Context, tx *store.ScopedTx, logEntryID string,
+	fileIDs []string) error {
+	return s.linkToLogEntry(ctx, tx, taskLinkTable, logEntryID, fileIDs)
+}
+
+// LinkToPetitionLogEntry is LinkToLogEntry for a PETITION log entry (migration 0027): the schema
+// refuses a link to an entry another transaction wrote, to another petition's file, to another
+// author's file, to a file that is not a `petition-log-attachment`, or to one not yet stored
+// (petition_log_attachment_check).
+func (s *StoredFileStore) LinkToPetitionLogEntry(ctx context.Context, tx *store.ScopedTx, logEntryID string,
+	fileIDs []string) error {
+	return s.linkToLogEntry(ctx, tx, petitionLinkTable, logEntryID, fileIDs)
+}
+
+func (s *StoredFileStore) linkToLogEntry(ctx context.Context, tx *store.ScopedTx, table, logEntryID string,
 	fileIDs []string) error {
 
 	if len(fileIDs) == 0 {
@@ -177,9 +201,9 @@ func (s *StoredFileStore) LinkToLogEntry(ctx context.Context, tx *store.ScopedTx
 		tuples = append(tuples, "($1, $2, $"+strconv.Itoa(i+3)+")")
 		args = append(args, id)
 	}
-	stmt := linkInsertHead + strings.Join(tuples, ", ")
+	stmt := linkInsertHead(table) + strings.Join(tuples, ", ")
 	if _, err := tx.Exec(ctx, stmt, args...); err != nil {
-		return fmt.Errorf("task_log_attachment: gắn tệp vào nhật ký: %w", err)
+		return fmt.Errorf("%s: gắn tệp vào nhật ký: %w", table, err)
 	}
 	return nil
 }
@@ -197,11 +221,13 @@ func distinctNonEmpty(ids []string) bool {
 
 // Both tables are constrained to $1 (core/store QueryJoin's contract): joining on id alone would
 // match another commune's row wherever ids collide.
-const attachmentsByEntriesStmt = `SELECT a.log_entry_id, f.id, f.original_name, f.mime_type,
-	f.size_bytes, f.status FROM task_log_attachment a
+func attachmentsByEntriesStmt(table string) string {
+	return `SELECT a.log_entry_id, f.id, f.original_name, f.mime_type,
+	f.size_bytes, f.status FROM ` + table + ` a
 	JOIN stored_file f ON f.tenant_id = $1 AND f.id = a.stored_file_id
 	WHERE a.tenant_id = $1 AND a.log_entry_id = ANY($2) AND f.deleted_at IS NULL
 	ORDER BY a.log_entry_id, a.attached_at, f.id`
+}
 
 // AttachmentsByLogEntries reads the attachments of a page of log entries in ONE statement, keyed by
 // entry id; an entry with none is absent from the map. SOFT-DELETED FILES ARE EXCLUDED (rule 7,
@@ -212,6 +238,19 @@ const attachmentsByEntriesStmt = `SELECT a.log_entry_id, f.id, f.original_name, 
 // here is the context's, so another commune's id matches nothing.
 func (s *StoredFileStore) AttachmentsByLogEntries(ctx context.Context, logEntryIDs []string) (
 	map[string][]domain.TaskLogAttachment, error) {
+	return s.attachmentsByLogEntries(ctx, taskLinkTable, logEntryIDs)
+}
+
+// PetitionAttachmentsByLogEntries is AttachmentsByLogEntries for one page of a PETITION timeline
+// (petition_log_attachment, migration 0027). STAFF-ONLY: no citizen route may call it (rule 4,
+// forbidden #5).
+func (s *StoredFileStore) PetitionAttachmentsByLogEntries(ctx context.Context, logEntryIDs []string) (
+	map[string][]domain.PetitionLogAttachment, error) {
+	return s.attachmentsByLogEntries(ctx, petitionLinkTable, logEntryIDs)
+}
+
+func (s *StoredFileStore) attachmentsByLogEntries(ctx context.Context, table string, logEntryIDs []string) (
+	map[string][]domain.TaskLogAttachment, error) {
 
 	out := make(map[string][]domain.TaskLogAttachment)
 	if len(logEntryIDs) == 0 {
@@ -220,9 +259,9 @@ func (s *StoredFileStore) AttachmentsByLogEntries(ctx context.Context, logEntryI
 	if len(logEntryIDs) > MaxLogEntriesPerAttachmentRead || !distinctNonEmpty(logEntryIDs) {
 		return nil, ErrAttachmentList
 	}
-	rows, err := s.db.For(ctx).QueryJoin(ctx, attachmentsByEntriesStmt, logEntryIDs)
+	rows, err := s.db.For(ctx).QueryJoin(ctx, attachmentsByEntriesStmt(table), logEntryIDs)
 	if err != nil {
-		return nil, fmt.Errorf("task_log_attachment: đọc tệp đính kèm: %w", err)
+		return nil, fmt.Errorf("%s: đọc tệp đính kèm: %w", table, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -270,10 +309,19 @@ func (s *StoredFileStore) ByID(ctx context.Context, id string) (*domain.StoredFi
 // LinkedLogEntry returns the log entry a file is attached to, "" when it is on none. A file is on at
 // most one entry (primary key (tenant_id, stored_file_id)), so there is no list to choose from.
 func (s *StoredFileStore) LinkedLogEntry(ctx context.Context, fileID string) (string, error) {
-	rows, err := s.db.For(ctx).Query(ctx, "log_entry_id", "task_log_attachment",
-		"AND stored_file_id = $2", fileID)
+	return s.linkedLogEntry(ctx, taskLinkTable, fileID)
+}
+
+// LinkedPetitionLogEntry is LinkedLogEntry for a petition log attachment (migration 0027).
+func (s *StoredFileStore) LinkedPetitionLogEntry(ctx context.Context, fileID string) (string, error) {
+	return s.linkedLogEntry(ctx, petitionLinkTable, fileID)
+}
+
+func (s *StoredFileStore) linkedLogEntry(ctx context.Context, table, fileID string) (string, error) {
+	// Scoped.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context.
+	rows, err := s.db.For(ctx).Query(ctx, "log_entry_id", table, "AND stored_file_id = $2", fileID)
 	if err != nil {
-		return "", fmt.Errorf("task_log_attachment: đọc dòng gắn tệp: %w", err)
+		return "", fmt.Errorf("%s: đọc dòng gắn tệp: %w", table, err)
 	}
 	defer rows.Close()
 	var entry string
@@ -363,14 +411,28 @@ const MaxAttachCandidates = 100
 // attachCandidatesHead is read by position in lockstep with AttachCandidates' Scan: storedFileCols,
 // then the link. `FOR UPDATE OF f`: the outer join's nullable side cannot be locked, and the file row
 // is the one a concurrent soft delete or a second link would touch.
-const attachCandidatesHead = `SELECT ` + storedFileCols + `, a.log_entry_id FROM stored_file f
-	LEFT JOIN task_log_attachment a ON a.tenant_id = $1 AND a.stored_file_id = f.id
+func attachCandidatesHead(table string) string {
+	return `SELECT ` + storedFileCols + `, a.log_entry_id FROM stored_file f
+	LEFT JOIN ` + table + ` a ON a.tenant_id = $1 AND a.stored_file_id = f.id
 	WHERE f.tenant_id = $1 AND f.deleted_at IS NULL AND f.id IN (`
+}
 
 // AttachCandidates reads the files a log entry asks to carry, INSIDE the entry's transaction, each
 // with the entry it is already on (if any), and LOCKS the file rows. Ids that match no live row of
 // this commune are simply absent from the map. Both tables are constrained to $1.
 func (s *StoredFileStore) AttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
+	map[string]domain.AttachCandidate, error) {
+	return s.attachCandidates(ctx, tx, taskLinkTable, ids)
+}
+
+// PetitionAttachCandidates is AttachCandidates for a PETITION log entry: each file with the petition
+// log entry it is already on (petition_log_attachment), locked FOR UPDATE.
+func (s *StoredFileStore) PetitionAttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
+	map[string]domain.AttachCandidate, error) {
+	return s.attachCandidates(ctx, tx, petitionLinkTable, ids)
+}
+
+func (s *StoredFileStore) attachCandidates(ctx context.Context, tx *store.ScopedTx, table string, ids []string) (
 	map[string]domain.AttachCandidate, error) {
 
 	out := make(map[string]domain.AttachCandidate, len(ids))
@@ -387,7 +449,7 @@ func (s *StoredFileStore) AttachCandidates(ctx context.Context, tx *store.Scoped
 		marks = append(marks, "$"+strconv.Itoa(i+2))
 		args = append(args, id)
 	}
-	stmt := attachCandidatesHead + strings.Join(marks, ", ") + `) FOR UPDATE OF f`
+	stmt := attachCandidatesHead(table) + strings.Join(marks, ", ") + `) FOR UPDATE OF f`
 	// $1 is tx.TenantID() and BOTH tables carry `tenant_id = $1` (attachCandidatesHead).
 	rows, err := tx.Underlying().QueryContext(ctx, stmt, args...)
 	if err != nil {

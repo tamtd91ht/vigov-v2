@@ -42,6 +42,58 @@ func scenePhoto() Key {
 	return k
 }
 
+// verificationPhoto is flow (c): the clean re-encode of a staff verification photo, a records original.
+func verificationPhoto() Key {
+	k := validKey()
+	k.Class, k.Service, k.Purpose, k.Variant, k.Ext = ClassRecords, ServicePetitions, PurposePetitionVerificationPhoto, VariantOriginal, "jpg"
+	return k
+}
+
+// TestPutServerProducedRecordsExceptionIsNarrow pins the ONE records key the server may produce
+// (flow c) and proves every neighbour of it is still refused before any network call — another
+// records purpose, another service, another variant.
+func TestPutServerProducedRecordsExceptionIsNarrow(t *testing.T) {
+	c := testClient(t)
+	ctx := context.Background()
+	img := jpegBytes(100)
+
+	refused := map[string]Key{
+		"task attachment": func() Key {
+			k := verificationPhoto()
+			k.Purpose = PurposeTaskAttachment
+			return k
+		}(),
+		"petition log attachment": func() Key {
+			k := verificationPhoto()
+			k.Purpose = PurposePetitionLogAttachment
+			return k
+		}(),
+		"document scan": func() Key {
+			k := verificationPhoto()
+			k.Service, k.Purpose = ServiceDocuments, PurposeDocumentScan
+			return k
+		}(),
+		"verification photo, a derivative variant": func() Key {
+			k := verificationPhoto()
+			k.Variant = "thumb-1280"
+			return k
+		}(),
+	}
+	for name, dst := range refused {
+		t.Run(name, func(t *testing.T) {
+			if _, err := dst.Path(); err != nil {
+				t.Skipf("key itself invalid (%v) — refused earlier, which is also a refusal", err)
+			}
+			if _, err := c.PutServerProduced(ctx, dst, bytes.NewReader(img), 100); !errors.Is(err, ErrInvalidArgument) {
+				t.Fatalf("err = %v, want ErrInvalidArgument", err)
+			}
+		})
+	}
+	if !isVerificationPhotoOriginal(verificationPhoto()) {
+		t.Fatal("flow (c) key is not recognised")
+	}
+}
+
 // Every refusal here happens before any network call: testClient points at a host that does not
 // exist, so reaching the server would surface a different error than the one each case expects.
 func TestPutServerProducedRefusals(t *testing.T) {
@@ -196,6 +248,7 @@ func TestPutServerProducedStoresExactBytes(t *testing.T) {
 	}{
 		"cover derivative (a)":       {coverThumb(), 1000},
 		"citizen clean original (b)": {scenePhoto(), 1000},
+		"staff verification (c)":     {verificationPhoto(), 1000},
 		// Larger than the read-ahead buffer and the final window, so every branch of
 		// exactReader runs: bounded reads, then the peek before the last bytes.
 		"multi-buffer body":    {scenePhoto(), 3*exactBufSize + 123},
