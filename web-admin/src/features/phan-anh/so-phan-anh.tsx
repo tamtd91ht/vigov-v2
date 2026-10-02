@@ -115,6 +115,7 @@ import {
 } from "./citizen-report-blocks";
 import { NhatKyPhieu } from "./nhat-ky-phieu";
 import { PetitionTaskBlock } from "./petition-task";
+import { ScenePhotos } from "./scene-photos";
 import {
   QUYEN_DONG_PHAN_ANH,
   QUYEN_PHAN_CONG_PHAN_ANH,
@@ -662,8 +663,10 @@ export function DanhSachThe({
 /**
  * Một thẻ phiếu (§7).
  *
- * KHÔNG CÓ THUMBNAIL: bảng ảnh chưa tồn tại — xem `PHAN_CHUA_DUNG`. Không vẽ một ô ảnh giữ chỗ
- * trông như đang chờ tải.
+ * NO THUMBNAIL, ON PURPOSE: the scene photos are read per petition (`GET …/photos`, opened in the
+ * detail — `ScenePhotos`). A thumbnail per card would be one call per row, each signing fresh links
+ * over a citizen's photographs (rule 3) for twenty petitions nobody opened. Nor is a placeholder drawn
+ * that looks like it is still loading.
  */
 export function ThePhieu({
   phieu,
@@ -956,6 +959,11 @@ export function ChiTietPhieu({
           {loiGhi}
         </p>
       )}
+
+      {/* §8.4 photos. A separate component, NOT a hook here: it reads the network (`useEffect`), and
+          `chon-can-bo.test.tsx` calls this block as a plain function. Hidden without `feedback.read` —
+          UX only; the route checks the same key and `feedback.restricted` (rule 5, forbidden #1). */}
+      {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && <ScenePhotos lookupCode={phieu.code} />}
 
       <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-phieu" />
 

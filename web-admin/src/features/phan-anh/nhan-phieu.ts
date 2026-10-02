@@ -177,6 +177,86 @@ export function sceneCoordinates(
   return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * SCENE PHOTOS (§8.4 `Ảnh trước và sau khi xử lý`) — owner, 02/10/2026 (ADR 0047, row "Ảnh hiện
+ * trường khi gửi phản ánh"): staff with `feedback.read` see the photos the citizen attached.
+ *
+ * ONLY THE "BEFORE" HALF EXISTS. Staff "after" photos are deferred (ADR 0047 G8): the "after" column
+ * says so and points at `PHAN_CHUA_DUNG`, and it does NOT print the spec's red "Bắt buộc phải có trước
+ * khi đóng phiếu" — no rule enforces it today, and a sentence claiming one would be false.
+ *
+ * A PHOTOGRAPH IS PERSONAL DATA (rule 3) that cannot be masked. Its alt text is a position ("Ảnh hiện
+ * trường 2/3"), never the reporter's name or anything else from the petition.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const SCENE_PHOTOS_TITLE = "Ảnh trước và sau khi xử lý";
+export const SCENE_PHOTOS_BEFORE = "Trước khi xử lý";
+export const SCENE_PHOTOS_AFTER = "Sau khi xử lý";
+export const SCENE_PHOTOS_LOADING = "Đang tải ảnh người dân gửi kèm phiếu…";
+export const SCENE_PHOTOS_EMPTY = "Người dân không gửi ảnh kèm phiếu này.";
+/** 503 `storage_not_configured`. Says the rest of the petition still works — it does. */
+export const SCENE_PHOTOS_UNAVAILABLE =
+  "Kho ảnh tạm thời chưa sẵn sàng nên chưa xem được ảnh hiện trường. Các thông tin khác của phiếu vẫn dùng bình thường.";
+export const SCENE_PHOTOS_RETRY = "Tải lại ảnh";
+export const SCENE_PHOTOS_REFRESHING = "Đang lấy liên kết xem ảnh mới…";
+export const SCENE_PHOTO_BROKEN =
+  "Không hiện được ảnh này. Bấm “Tải lại ảnh” để lấy liên kết xem mới.";
+export const SCENE_PHOTO_GONE = "Ảnh này không còn trong danh sách ảnh của phiếu.";
+// Not "Ảnh trước" / "Ảnh sau": on this block those read as "before / after processing".
+export const SCENE_PHOTO_PREVIOUS = "Xem ảnh liền trước";
+export const SCENE_PHOTO_NEXT = "Xem ảnh tiếp theo";
+export const SCENE_PHOTO_CLOSE = "Đóng ảnh";
+export const SCENE_PHOTOS_AFTER_NOT_BUILT =
+  "Chưa dựng: cán bộ chưa tải được ảnh sau khi xử lý. Lý do ở mục “Ảnh sau khi xử lý (§8.4)” trong danh sách phần chưa dựng đầu màn.";
+
+/** `Ảnh hiện trường 2/3` — 1-based position. Alt text, dialog title and button label all use it. */
+export function scenePhotoAlt(index: number, total: number): string {
+  return `Ảnh hiện trường ${index + 1}/${total}`;
+}
+
+/** Screen-reader label of a thumbnail button. */
+export function scenePhotoOpenLabel(index: number, total: number): string {
+  return `Xem cỡ lớn ${scenePhotoAlt(index, total).toLowerCase()}`;
+}
+
+/**
+ * How long before `url_expires_at` a link already counts as expired. An image request takes time to
+ * reach the store; a link opened 5 s before its end can arrive after it and be refused.
+ */
+export const PHOTO_LINK_MARGIN_MS = 30_000;
+
+/**
+ * Is this signed link still safe to put in an `<img src>` now?
+ *
+ * FAIL CLOSED: an `url_expires_at` that does not parse counts as expired, so the screen asks for a fresh
+ * list instead of using a link of unknown age (the server's contract says ≤ 15 minutes; the screen does
+ * not trust a link past what it was told).
+ */
+export function photoLinkUsable(
+  photo: { url_expires_at: string },
+  now: Date,
+  marginMs: number = PHOTO_LINK_MARGIN_MS,
+): boolean {
+  const expires = new Date(photo.url_expires_at).getTime();
+  if (Number.isNaN(expires)) return false;
+  return expires - now.getTime() > marginMs;
+}
+
+/**
+ * THE ONLY `src` A SCENE PHOTO GETS: the server's signed `url`, and only when it parses as an absolute
+ * http(s) URL — same rule as `coverPreviewSrc` (`features/noi-dung/cover-image.ts`).
+ */
+export function scenePhotoSrc(photo: { url: string }): string | null {
+  if (photo.url === "") return null;
+  let u: URL;
+  try {
+    u = new URL(photo.url);
+  } catch {
+    return null;
+  }
+  return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+}
+
 /**
  * Trạng thái của MỘT hạn xử lý.
  *
@@ -979,13 +1059,14 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Ảnh trước / sau khi xử lý (§8.4)",
+    ten: "Ảnh sau khi xử lý (§8.4)",
     viSao:
-      "Bảng `anh_phan_anh` KHÔNG TỒN TẠI — migration `0005_duong_xu_ly_phan_anh.sql:29-33` khai " +
-      "thẳng rằng nó cố ý chưa được tạo — và hợp đồng không có tuyến tải ảnh nào. Hệ quả nặng hơn " +
-      "một ô ảnh trống: quy tắc §14.2 *“không đóng phiếu được khi thiếu ảnh sau xử lý”* hôm nay " +
-      "KHÔNG được cưỡng chế ở đâu cả, vì cả bảng ảnh lẫn cờ `bat_buoc_anh_nghiem_thu` của ADR 0008 " +
-      "đều chưa có. Nút Đóng phiếu bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
+      "Ảnh người dân gửi kèm phiếu (cột `Trước khi xử lý`) nay đã hiện trong chi tiết phiếu. Ảnh " +
+      "nghiệm thu do cán bộ tải lên sau khi xử lý thì chủ dự án đã hoãn (ADR 0047, G8): hợp đồng " +
+      "chưa có tuyến nào cho cán bộ tải ảnh. Hệ quả nặng hơn một ô ảnh trống: quy tắc §14.2 " +
+      "*“không đóng phiếu được khi thiếu ảnh sau xử lý”* hôm nay KHÔNG được cưỡng chế ở đâu cả, vì " +
+      "cả ảnh sau xử lý lẫn cờ `bat_buoc_anh_nghiem_thu` của ADR 0008 đều chưa có. Nút Đóng phiếu " +
+      "bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
   },
   {
     ten: "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",

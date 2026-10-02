@@ -661,7 +661,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // dựng theo quyết định của chủ dự án) cộng một (bản đồ nhỏ §8.4 — toạ độ đã về, nhà cung cấp
     // bản đồ chưa được quyết) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
     expect(PHAN_CHUA_DUNG.length).toBe(9);
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh trước / sau"))).toBe(true);
+    // Only the "after" half stays listed: the citizen's "before" photos are built (02/10/2026).
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(true);
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
   });
 });
 

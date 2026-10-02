@@ -404,9 +404,11 @@ describe("lĩnh vực hạn chế — màn hình KHÔNG nói ra rằng có phi�
 });
 
 describe("phần chưa dựng được — ra tới màn hình, không giấu trong chú thích mã", () => {
-  it("khối ấy nêu đích danh bảng ảnh còn thiếu và hệ quả với luật “phải có ảnh sau”", () => {
+  it("khối ấy nêu đích danh ảnh sau xử lý còn thiếu (G8) và hệ quả với luật “phải có ảnh sau”", () => {
     const html = renderToStaticMarkup(<KhoiChuaDung />);
-    expect(html).toContain("anh_phan_anh");
+    // The "before" photos are built; only the staff "after" photos stay listed, deferred by the owner.
+    expect(html).toContain("ADR 0047, G8");
+    expect(html).not.toContain("anh_phan_anh");
     // Nhật ký xử lý ĐÃ dựng (26/09/2026) — nó không còn là "phần chưa dựng được".
     expect(html).not.toContain("nhat_ky_phan_anh");
     // Hệ quả nặng nhất phải có mặt: không cưỡng chế được luật “không đóng phiếu khi thiếu ảnh sau”.

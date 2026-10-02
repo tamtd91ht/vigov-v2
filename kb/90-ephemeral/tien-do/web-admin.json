@@ -385,6 +385,15 @@
       "no_confirm": [],
       "tiep_theo": "Sau `make kb` (openapi.json có `status` và `portal_category_name`): chạy `npm run gen:api`, rồi bỏ kiểu ghép ContentItemOut trong lib/api/noi-dung.ts nếu comms_noiDungRa đã có trường; bài kiểm `ba tên bộ lọc khớp handler thật` nay chờ bốn tên (category, q, status, type). Nút `Xem các tin chờ duyệt` không kèm con số: tuyến danh sách không trả tổng, đếm từ một trang là sai. Hằng 90/100/30 là bản sao để gợi ý; portal-sync.test.ts đỏ nếu hằng Go đổi. Chưa chạy với service-comms thật.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "anh-hien-truong-truoc-xu-ly",
+      "viec": "Chi tiết phiếu phản ánh: cán bộ xem ảnh hiện trường người dân gửi ('Trước khi xử lý', spec 09 §8.4) — /develop-feature phan-anh-nguoi-dan TASK-05",
+      "trang_thai": "xong",
+      "bang_chung": "features/phan-anh/scene-photos.tsx (+21 ca ở scene-photos.test.tsx): lưới ảnh nhỏ (nút ≥44px, alt 'Ảnh hiện trường i/n', không tên người dân), xem cỡ lớn bằng hộp thoại có sẵn của app, trống / 503 / lỗi có câu tiếng Việt + 'Tải lại ảnh'; link ký ≤15 phút chỉ nằm ở <img src>, hết hạn (trừ 30 s) thì đọc lại danh sách đúng một lần, không timer, không lazy, no-referrer. lib/api/phieu-phan-anh.ts listPetitionPhotos (GET /api/v1/citizen-reports/{maTraCuu}/photos, đường dẫn từ kiểu hợp đồng). Chỉ hiện khi phiên có feedback.read. PHAN_CHUA_DUNG nay chỉ còn 'Ảnh sau khi xử lý' (G8). vitest phan-anh 255/255, eslint sạch, check:api khớp. tsc/vitest toàn bộ còn đỏ ở noi-dung — việc dở của phiên song song, không do thẻ này.",
+      "no_confirm": [],
+      "tiep_theo": "(1) CSP web-admin chưa có (nợ tools/security_debt.json) — khi viết, img-src phải có host kho tệp ký link (ADR 0052 §4); (2) màn tra cứu phiếu theo mã (tra-cuu-phieu.tsx) chưa hiện ảnh — chưa ai yêu cầu; (3) ảnh sau xử lý của cán bộ để sau (G8).",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

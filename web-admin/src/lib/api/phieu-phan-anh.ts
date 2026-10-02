@@ -1,5 +1,5 @@
 /**
- * Mười hai tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
+ * Mười ba tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
  * `service-petitions/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
  *
  *   GET  /api/v1/citizen-reports                            feedback.read
@@ -14,6 +14,7 @@
  *   GET  /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read
  *   POST /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read + luật nghiệp vụ, Idempotency-Key
  *   POST /api/v1/citizen-reports/{maTraCuu}/tasks           task.create + feedback.read, Idempotency-Key
+ *   GET  /api/v1/citizen-reports/{maTraCuu}/photos          feedback.read (signed links, ≤ 15 min)
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_phieuPhanAnhRa`, `petitions_phanLoaiVao`,
  * `petitions_phanCongVao`, `petitions_dongPhieuVao` đều đến từ `schema.gen.ts`.
@@ -45,13 +46,24 @@
 
 import { isPeriodMetric, type CitizenReportMetric } from "@/lib/drill-down";
 
-import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
+import {
+  CHUNG,
+  docJSON,
+  docThanLoiGoi,
+  goiGhi,
+  LOI_KHONG_RO,
+  thamSoTheoHopDong,
+  thongBaoLoi,
+  type KetQua,
+} from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
+import type { CallResult } from "./task-attachments";
 import type {
   petitions_chuyenCapTrenVao,
   petitions_dongPhieuVao,
   petitions_get_citizen_reports,
   petitions_get_citizen_reports_by_maTraCuu,
   petitions_get_citizen_reports_by_maTraCuu_log_entries,
+  petitions_get_citizen_reports_by_maTraCuu_photos,
   petitions_ghiChuPhieuVao,
   petitions_khongTiepNhanVao,
   petitions_nhatKyPhieuRa,
@@ -60,6 +72,7 @@ import type {
   petitions_phanCongVao,
   petitions_phanLoaiVao,
   petitions_phieuPhanAnhRa,
+  petitions_photoListOut,
   petitions_post_citizen_reports_by_maTraCuu_assignment,
   petitions_post_citizen_reports_by_maTraCuu_classification,
   petitions_post_citizen_reports_by_maTraCuu_closure,
@@ -487,6 +500,47 @@ export function layNhatKyPhieu(
   trang: TrangNhatKy = {},
 ): Promise<KetQua<page_Result_petitions_nhatKyPhieuRa>> {
   return docJSON<page_Result_petitions_nhatKyPhieuRa>(duongDanNhatKyPhieu(maTraCuu, trang));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * SCENE PHOTOS (§8.4 `TRƯỚC KHI XỬ LÝ`) — GET …/photos, `feedback.read`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * GET …/photos — the photos the citizen attached, each with a presigned GET of at most 15 minutes.
+ *
+ * RETURNS THE STATUS, unlike `docJSON`, for ONE reason: 503 `storage_not_configured` means "the object
+ * store is not there", and the drawer must say that in its own sentence while everything else on the
+ * petition keeps working. The server's 503 sentence is written for the CITIZEN's upload ("Phản ánh vẫn
+ * được ghi nhận bình thường"), so it is the wrong sentence on a staff screen. Every other status shows
+ * the server's message verbatim — 404 included, which is the detail's own four-cause 404 (rule 4,
+ * forbidden #2); the screen does not branch on `code`.
+ *
+ * ⚠ EVERY `url` IN THE ANSWER IS A BEARER CREDENTIAL to a citizen's photograph (rule 3): it goes into an
+ * `<img src>` and nowhere else — never logged, never stored beyond the component's state, never put in
+ * the address bar. `no-store` comes from `CHUNG`. Called when the section is shown and when a link has
+ * expired, NEVER on a timer: each call signs fresh links over personal data.
+ */
+export async function listPetitionPhotos(
+  maTraCuu: string,
+): Promise<CallResult<petitions_photoListOut>> {
+  const mau: petitions_get_citizen_reports_by_maTraCuu_photos["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/photos";
+  let res: Response;
+  try {
+    res = await fetch(duongDanPhieu(mau, maTraCuu), { ...CHUNG, method: "GET" });
+  } catch {
+    // Status 0 = no answer at all. Nothing logged: the answer would have held signed links.
+    return { ok: false, status: 0, message: LOI_KHONG_RO };
+  }
+  if (res.status !== 200) {
+    return { ok: false, status: res.status, message: await thongBaoLoi(res) };
+  }
+  try {
+    return { ok: true, data: (await res.json()) as petitions_photoListOut };
+  } catch {
+    return { ok: false, status: res.status, message: LOI_KHONG_RO };
+  }
 }
 
 /**
