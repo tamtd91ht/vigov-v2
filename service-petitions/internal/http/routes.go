@@ -915,8 +915,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// words: "cán bộ có quyền đọc phiếu xem được". `feedback.restricted` is consulted inside, as on the
 	// detail: a `can-bo` petition without it is the detail's own 404.
 	//
-	// NOT AUDITED — the footing of the detail read, stated on app.StaffPetitionPhotos.ListPhotos, and put to
-	// the owner as an open question because a photo cannot be masked. `Cache-Control: no-store`.
+	// AUDITED (rule 6, invariant 7): a photo cannot be masked, so every list that hands out links is a read
+	// of full personal data — one entry per call, by the officer's business code, committed before the
+	// reply (app.StaffPetitionPhotos.ListPhotos). `Cache-Control: no-store`.
 	//
 	// @summary  Ảnh hiện trường người dân gửi kèm một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút
 	// @screen   09-phan-anh-nguoi-dan §8.4

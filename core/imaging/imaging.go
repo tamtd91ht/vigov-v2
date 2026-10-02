@@ -62,6 +62,23 @@ type Header struct {
 	Config      image.Config
 	Orientation int // EXIF 1..8; 1 when absent
 	Progressive bool
+
+	// layout is what ReadHeader PROVED from the head about the container: PNG interlace and
+	// transparency, the WebP chunk kind. Unexported on purpose, and its zero value is the WORST case:
+	// a Header built by hand (service-comms rebuilds one from its own three fields) cannot claim a
+	// cheap layout it never read, so DecodeCost charges it the most expensive decode the type allows.
+	layout layout
+}
+
+// layout: see Header.layout. Every field's zero value is the expensive answer.
+type layout struct {
+	proved bool // the fields below were read from the head; false = assume the worst
+
+	pngInterlaced  bool // IHDR interlace method 1 (Adam7)
+	pngTransparent bool // a tRNS chunk before IDAT, OR the head ended before IDAT (not provable)
+
+	webpSimpleLossy bool // the first chunk is `VP8 ` — lossy, no alpha, no extended header
+	webpLossless    bool // the first chunk is `VP8L`
 }
 
 // ReadHeader inspects the head of an image of sniffed type mime.
@@ -77,8 +94,10 @@ func ReadHeader(mime string, head []byte) (Header, error) {
 		h.Progressive = jpegProgressive(head)
 	case MIMEPNG:
 		h.Config, err = png.DecodeConfig(bytes.NewReader(head))
+		h.layout = pngLayout(head)
 	case MIMEWebP:
 		h.Config, err = webp.DecodeConfig(bytes.NewReader(head))
+		h.layout = webpLayout(head)
 	default:
 		return Header{}, ErrUndecodable
 	}
@@ -92,25 +111,65 @@ func ReadHeader(mime string, head []byte) (Header, error) {
 // wrong must be a refusal of a decodable image, never an out-of-memory kill of the pod. The caller
 // compares it with its own budget, which depends on its pod's memory limit.
 //
-//	JPEG baseline     ≤ 3 B/px (YCbCr 4:4:4; 4:2:0 is 1.5)
-//	JPEG progressive  + 12 B/px: image/jpeg keeps every coefficient as int32 until the last scan
-//	PNG               by colour model: 1 (gray, paletted) · 2 (gray16) · 4 (RGBA) · 8 (RGBA64)
-//	WebP              4 B/px (lossless decodes to NRGBA; lossy YCbCr+alpha is ≤ 2.5)
+// Each figure is what the Go decoder ALLOCATES (go1.26 image/jpeg, image/png, x/image v0.46 webp),
+// measured on crafted files by imaging_cost_test.go — not what the pixel format suggests. Until
+// 2026-10-02 JPEG was 3 B/px whatever its colour model: a flat 7300×7300 CMYK JPEG of ~0.8 MB passed
+// a 160 MiB budget at ~160 MB and allocates 8.01 B/px measured (~427 MB), above the 384 MiB pod limit.
+//
+//	JPEG gray / YCbCr      3 B/px   one YCbCr (≤ 4:4:4) or Gray plane set
+//	JPEG RGB (Adobe 0)     7 B/px   the YCbCr planes + the RGBA it is converted into (reader.go convertToRGB)
+//	JPEG CMYK / YCbCrK     8 B/px   the YCbCr planes + the K plane (scan.go:45) + the CMYK/RGBA output
+//	                                (reader.go applyBlack)
+//	JPEG progressive       + 4 B/px PER COMPONENT: every coefficient kept as int32 until the last
+//	                                scan (scan.go:156) — +12 for 3 components, +16 for 4
+//	                       dimensions rounded up to a 32-px MCU, the size image/jpeg really allocates
+//	PNG                    by colour model 1 · 2 · 4 · 8, where a tRNS chunk promotes gray to NRGBA
+//	                       (4) and gray16 to NRGBA64 (8) although DecodeConfig still says Gray;
+//	                       ×2 when Adam7-interlaced (the full image plus every pass, reader.go:377-387)
+//	WebP `VP8 ` lossy      4 B/px   YCbCr 4:2:0 is 1.5; kept at the old, generous figure
+//	WebP `VP8L` lossless   8 B/px   ARGB pixels + the colour-indexing transform's second buffer
+//	WebP `VP8X` extended  12 B/px   may carry a VP8L-coded alpha plane (the same 8) on top of a lossy
+//	                                YCbCr image and the alpha copy
+//
+// A layout the head did not prove (Header.layout zero) is charged as interlaced + transparent PNG
+// and as extended WebP.
+//
+// On top of the pixels: decodeOverhead for the decoder's own state (measured ~20 KB JPEG, ~48 KB PNG
+// at 1024 px wide), and for PNG the two filter rows image/png keeps (2 × (1 + width × 8)), which grow
+// with the width alone and so dominate a one-row image of enormous width.
 func DecodeCost(mime string, h Header) int64 {
-	px := int64(h.Config.Width) * int64(h.Config.Height)
-	per := int64(8)
+	w, ht := int64(h.Config.Width), int64(h.Config.Height)
+	per, extra := int64(8), int64(decodeOverhead)
 	switch mime {
 	case MIMEJPEG:
-		per = 3
+		w, ht = roundUp(w, 32), roundUp(ht, 32)
+		comps := int64(3)
+		switch h.Config.ColorModel {
+		case nil, color.GrayModel, color.YCbCrModel:
+			// nil only from a Header built by hand: jpeg.DecodeConfig reports exactly these four models.
+			per = 3
+		case color.RGBAModel:
+			per = 7
+		default: // color.CMYKModel, and anything unrecognised is charged as the most expensive one
+			per, comps = 8, 4
+		}
 		if h.Progressive {
-			per += 12
+			per += 4 * comps
 		}
 	case MIMEPNG:
+		l := h.layout
+		transparent := !l.proved || l.pngTransparent
 		switch h.Config.ColorModel {
 		case color.GrayModel:
 			per = 1
+			if transparent {
+				per = 4
+			}
 		case color.Gray16Model:
 			per = 2
+			if transparent {
+				per = 8
+			}
 		case color.RGBAModel, color.NRGBAModel:
 			per = 4
 		default:
@@ -120,10 +179,67 @@ func DecodeCost(mime string, h Header) int64 {
 				per = 8
 			}
 		}
+		if !l.proved || l.pngInterlaced {
+			per *= 2
+		}
+		extra += 2 * (1 + 8*w)
 	case MIMEWebP:
-		per = 4
+		switch l := h.layout; {
+		case l.proved && l.webpSimpleLossy:
+			per = 4
+		case l.proved && l.webpLossless:
+			per = 8
+		default:
+			per = 12
+		}
 	}
-	return px * per
+	return w*ht*per + extra
+}
+
+// decodeOverhead: see DecodeCost. 1 MiB is ~20× the measured fixed cost — generous because it is
+// negligible against any budget a caller would set, and the error it absorbs is the dangerous kind.
+const decodeOverhead = 1 << 20
+
+func roundUp(n, m int64) int64 { return (n + m - 1) / m * m }
+
+// pngLayout reads the IHDR interlace byte and looks for tRNS among the chunks before IDAT. A head that
+// ends before IDAT cannot prove there is no tRNS, so it reports one.
+func pngLayout(head []byte) layout {
+	const ihdrInterlace = 8 + 8 + 12 // signature · length+type · width,height,depth,colour,compression,filter
+	if len(head) <= ihdrInterlace || string(head[12:16]) != "IHDR" {
+		return layout{}
+	}
+	l := layout{proved: true, pngInterlaced: head[ihdrInterlace] != 0, pngTransparent: true}
+	for off := 8; off+8 <= len(head); {
+		n := int64(binary.BigEndian.Uint32(head[off : off+4]))
+		switch string(head[off+4 : off+8]) {
+		case "tRNS":
+			return l
+		case "IDAT":
+			l.pngTransparent = false
+			return l
+		}
+		next := int64(off) + 12 + n
+		if next > int64(len(head)) {
+			break
+		}
+		off = int(next)
+	}
+	return l
+}
+
+// webpLayout reads the FourCC of the first chunk after `RIFF....WEBP`.
+func webpLayout(head []byte) layout {
+	if len(head) < 16 || string(head[0:4]) != "RIFF" || string(head[8:12]) != "WEBP" {
+		return layout{}
+	}
+	switch string(head[12:16]) {
+	case "VP8 ":
+		return layout{proved: true, webpSimpleLossy: true}
+	case "VP8L":
+		return layout{proved: true, webpLossless: true}
+	}
+	return layout{proved: true} // VP8X or unknown: the expensive case
 }
 
 // Decode decodes a full image of sniffed type mime. A read error from r stays in the chain

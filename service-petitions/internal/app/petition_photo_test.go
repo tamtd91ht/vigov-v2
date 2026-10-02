@@ -18,6 +18,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -288,6 +289,25 @@ type ppObjects struct {
 	*objectStoreFake
 	produced []string
 	putErr   error
+
+	opens    atomic.Int32
+	opened   chan struct{} // when set, signalled on every Open (the caller then holds a read slot)
+	openGate chan struct{} // when set, Open waits for it to close — or for the caller's context to end
+}
+
+func (o *ppObjects) Open(ctx context.Context, b storage.Bucket, key, etag string) (io.ReadCloser, int64, error) {
+	o.opens.Add(1)
+	if o.opened != nil {
+		o.opened <- struct{}{}
+	}
+	if o.openGate != nil {
+		select {
+		case <-o.openGate:
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		}
+	}
+	return o.objectStoreFake.Open(ctx, b, key, etag)
 }
 
 func (o *ppObjects) PutServerProduced(_ context.Context, dst storage.Key, r io.Reader, size int64) (storage.Produced, error) {
@@ -348,6 +368,7 @@ func ppPhotoPolicy() *ppPolicy {
 type ppHarness struct {
 	uc      *CitizenPetitionPhotos
 	db      *ppDB
+	store   *pkgstore.DB
 	pets    *ppPetitions
 	files   *ppFiles
 	objects *ppObjects
@@ -380,7 +401,8 @@ func buildPhotos(t *testing.T) *ppHarness {
 		policy:  ppPhotoPolicy(),
 		ctx:     ctxXa(xaThu),
 	}
-	h.uc = NewCitizenPetitionPhotos(pkgstore.New(db), h.pets, h.files, h.objects, h.scanner, h.policy)
+	h.store = pkgstore.New(db)
+	h.uc = NewCitizenPetitionPhotos(h.store, h.pets, h.files, h.objects, h.scanner, h.policy)
 	h.uc.newID = func() (string, error) { return ppFileID, nil }
 	h.uc.now = func() time.Time { return ppNow }
 	return h
@@ -889,27 +911,215 @@ func TestPhotoListsSignOnlyStoredPhotosAfterTheIsolationCheck(t *testing.T) {
 		t.Errorf("no store: %v", err)
 	}
 
-	staff := NewStaffPetitionPhotos(h.pets, h.files, h.objects)
+	// The citizen's own reads left no trail (their own petition, as the detail route).
+	if a := h.db.audits(); len(a) != 0 {
+		t.Errorf("the citizen's own list wrote a trail: %v", a)
+	}
+
+	staff := NewStaffPetitionPhotos(h.store, h.pets, h.files, h.objects)
 	staff.now = func() time.Time { return ppNow }
-	if links, err := staff.ListPhotos(h.ctx, ppCode, false); err != nil || len(links) != 1 {
+	if links, err := staff.ListPhotos(h.ctx, ppCode, false, ppStaffActor()); err != nil || len(links) != 1 {
 		t.Errorf("staff list = %v, %v", links, err)
 	}
 	restricted := ppPetitionRow(domain.DangXuLy)
 	restricted.LinhVuc = domain.LinhVucHanChe
 	h.pets.byCommune[xaThu][ppCode] = restricted
-	if _, err := staff.ListPhotos(h.ctx, ppCode, false); !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
+	if _, err := staff.ListPhotos(h.ctx, ppCode, false, ppStaffActor()); !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
 		t.Errorf("restricted without the key: %v", err)
 	}
-	if _, err := staff.ListPhotos(h.ctx, ppCode, true); err != nil {
+	if _, err := staff.ListPhotos(h.ctx, ppCode, true, ppStaffActor()); err != nil {
 		t.Errorf("restricted with the key: %v", err)
 	}
-	if _, err := staff.ListPhotos(ctxXa(tenant.ID("01JB"+strings.Repeat("B", 22))), ppCode, true); !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
+	if _, err := staff.ListPhotos(ctxXa(tenant.ID("01JB"+strings.Repeat("B", 22))), ppCode, true, ppStaffActor()); !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
 		t.Errorf("another commune: %v", err)
 	}
+}
+
+func ppStaffActor() audit.Actor { return audit.Actor{ID: "CB-00123", Kind: "staff", IP: "10.0.0.7"} }
+
+// Rule 6, invariant 7: a scene photo cannot be masked, so a staff list that hands out links is a read of
+// full personal data and leaves ONE committed entry per call — by the officer's business code, on the
+// petition's code, naming the files and never a URL.
+func TestStaffPhotoListIsAuditedBeforeTheLinksLeave(t *testing.T) {
+	h := buildPhotos(t)
+	h.addPhoto("01JPHOTOSTORED000000000001", domain.StoredFileStored, ppNow.Add(-time.Hour))
+	h.addPhoto("01JPHOTOSTORED000000000002", domain.StoredFileStored, ppNow.Add(-time.Hour))
+	staff := NewStaffPetitionPhotos(h.store, h.pets, h.files, h.objects)
+	staff.now = func() time.Time { return ppNow }
+
+	links, err := staff.ListPhotos(h.ctx, ppCode, false, ppStaffActor())
+	if err != nil || len(links) != 2 {
+		t.Fatalf("links = %v, err = %v", links, err)
+	}
+	a := h.db.audits()
+	if len(a) != 1 || a[0][0] != "CB-00123" || a[0][1] != "staff" || a[0][2] != ActionPetitionPhotosViewed ||
+		a[0][3] != ppCode {
+		t.Fatalf("trail = %v", a)
+	}
+	for _, want := range []string{`"so_anh":2`, "01JPHOTOSTORED000000000001", "01JPHOTOSTORED000000000002"} {
+		if !strings.Contains(a[0][4], want) {
+			t.Errorf("delta lacks %s: %s", want, a[0][4])
+		}
+	}
+	for _, never := range []string{"http", "Signature", domain.PetitionPhotoName, "citizen-media/"} {
+		if strings.Contains(a[0][4], never) {
+			t.Errorf("delta carries %q — a link, a name or a key: %s", never, a[0][4])
+		}
+	}
+
+	t.Run("the trail cannot be written: no links", func(t *testing.T) {
+		h.db.execErr = errors.New("audit_log: disk full")
+		defer func() { h.db.execErr = nil }()
+		links, err := staff.ListPhotos(h.ctx, ppCode, false, ppStaffActor())
+		if err == nil || links != nil {
+			t.Fatalf("links handed out without a trail: %v, %v", links, err)
+		}
+		if strings.Contains(err.Error(), ppCode) || strings.Contains(err.Error(), "CB-00123") {
+			t.Errorf("error carries the code or the officer: %v", err)
+		}
+	})
+	t.Run("no business code: refused before any read, no fallback", func(t *testing.T) {
+		before := len(h.objects.downloads)
+		for _, r := range []audit.Actor{{Kind: "staff", IP: "10.0.0.7"}, {ID: ppCitizen, Kind: "citizen"}} {
+			if _, err := staff.ListPhotos(h.ctx, ppCode, false, r); err == nil {
+				t.Errorf("reader %+v accepted", r)
+			}
+		}
+		if len(h.objects.downloads) != before {
+			t.Error("links signed for a reader with no business code")
+		}
+	})
+	t.Run("nothing stored: nothing disclosed, nothing written", func(t *testing.T) {
+		h2 := buildPhotos(t)
+		s2 := NewStaffPetitionPhotos(h2.store, h2.pets, h2.files, h2.objects)
+		if links, err := s2.ListPhotos(h2.ctx, ppCode, false, ppStaffActor()); err != nil || len(links) != 0 {
+			t.Fatalf("links = %v, err = %v", links, err)
+		}
+		if h2.db.begun != 0 {
+			t.Error("a transaction for an empty list")
+		}
+	})
 }
 
 func TestPhotoPurposePinnedToCoreStorage(t *testing.T) {
 	if domain.PurposePetitionPhoto != string(storage.PurposePetitionPhoto) {
 		t.Fatal("domain.PurposePetitionPhoto drifted from core/storage")
+	}
+}
+
+// --- H2: memory held by concurrent completions ---------------------------------------------------------
+
+// waitForWaiters blocks until n callers are waiting on the in-flight completion of ppFileID.
+func waitForWaiters(t *testing.T, uc *CitizenPetitionPhotos, n int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		uc.mu.Lock()
+		c := uc.inflight[string(xaThu)+"/"+ppFileID]
+		got := 0
+		if c != nil {
+			got = c.waiters
+		}
+		uc.mu.Unlock()
+		if got == n {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("%d callers never joined the in-flight completion", n)
+}
+
+// Concurrent completions of ONE file read its bytes ONCE: the others wait for, and return, that answer.
+func TestPhotoConcurrentCompletionsOfOneFileReadTheBytesOnce(t *testing.T) {
+	h := buildPhotos(t)
+	h.seedPendingPhoto("jpg", ppJPEG(t, 40, 30, 1), ppNow.Add(-time.Minute))
+	h.objects.opened, h.objects.openGate = make(chan struct{}, 8), make(chan struct{})
+
+	type result struct {
+		f   domain.StoredFile
+		err error
+	}
+	const followers = 5
+	results := make(chan result, followers+1)
+	run := func() {
+		f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		results <- result{f, err}
+	}
+	go run()
+	<-h.objects.opened // the first caller holds the bytes' read slot and is registered in flight
+	for i := 0; i < followers; i++ {
+		go run()
+	}
+	waitForWaiters(t, h.uc, followers)
+	close(h.objects.openGate)
+
+	for i := 0; i < followers+1; i++ {
+		r := <-results
+		if r.err != nil || r.f.ID != ppFileID || r.f.Status != domain.StoredFileStored {
+			t.Errorf("caller %d: %+v, %v", i, r.f, r.err)
+		}
+	}
+	if n := h.objects.opens.Load(); n != 1 {
+		t.Errorf("the upload was opened %d times, want 1", n)
+	}
+	if h.scanner.calls != 1 || len(h.objects.produced) != 1 || len(h.db.audits()) != 1 {
+		t.Errorf("scans %d, produced %d, trail %d — want one of each", h.scanner.calls, len(h.objects.produced),
+			len(h.db.audits()))
+	}
+}
+
+// A first caller that gives up does not strand the one waiting on it: that one does the work.
+func TestPhotoWaitingCompletionTakesOverWhenTheFirstGivesUp(t *testing.T) {
+	h := buildPhotos(t)
+	h.seedPendingPhoto("jpg", ppJPEG(t, 40, 30, 1), ppNow.Add(-time.Minute))
+	h.objects.opened, h.objects.openGate = make(chan struct{}, 8), make(chan struct{})
+
+	firstCtx, cancel := context.WithCancel(h.ctx)
+	firstErr := make(chan error, 1)
+	go func() {
+		_, err := h.uc.Complete(firstCtx, ppCode, ppFileID, ppCitizenActor())
+		firstErr <- err
+	}()
+	<-h.objects.opened
+	second := make(chan error, 1)
+	go func() {
+		_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		second <- err
+	}()
+	waitForWaiters(t, h.uc, 1)
+	cancel()
+	if err := <-firstErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("first caller: %v", err)
+	}
+	close(h.objects.openGate)
+	if err := <-second; err != nil {
+		t.Fatalf("the waiting caller was stranded: %v", err)
+	}
+	if h.files.all(xaThu)[ppFileID].Status != domain.StoredFileStored || h.objects.opens.Load() != 2 {
+		t.Errorf("row %s, opens %d", h.files.all(xaThu)[ppFileID].Status, h.objects.opens.Load())
+	}
+}
+
+// The read slot is taken BEFORE the bytes: with every slot held, a completion waits without reading.
+func TestPhotoCompletionWaitsForAReadSlotBeforeReadingTheBytes(t *testing.T) {
+	h := buildPhotos(t)
+	h.seedPendingPhoto("jpg", ppJPEG(t, 40, 30, 1), ppNow.Add(-time.Minute))
+	for i := 0; i < photoReadSlots; i++ {
+		h.uc.readSlot <- struct{}{}
+	}
+	ctx, cancel := context.WithTimeout(h.ctx, 50*time.Millisecond)
+	defer cancel()
+	if _, err := h.uc.Complete(ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the caller's deadline", err)
+	}
+	if n := h.objects.opens.Load(); n != 0 {
+		t.Errorf("the upload was opened %d times with no read slot free", n)
+	}
+	if len(h.db.committed) != 0 || h.files.all(xaThu)[ppFileID].Status != domain.StoredFilePending ||
+		!h.objects.has(storage.BucketTemp, ppUploadKey("jpg")) {
+		t.Error("a completion that never got a slot changed something")
+	}
+	if len(h.uc.inflight) != 0 {
+		t.Error("the abandoned completion is still registered in flight")
 	}
 }

@@ -116,14 +116,16 @@ type staffPhotosFake struct {
 	calls      int
 	seenTenant tenant.ID
 	restricted bool
+	reader     audit.Actor
 	err        error
 }
 
 func newStaffPhotosFake() *staffPhotosFake { return &staffPhotosFake{} }
 
-func (f *staffPhotosFake) ListPhotos(ctx context.Context, ma string, mayReadRestricted bool) ([]app.PhotoLink, error) {
+func (f *staffPhotosFake) ListPhotos(ctx context.Context, ma string, mayReadRestricted bool,
+	reader audit.Actor) ([]app.PhotoLink, error) {
 	f.calls++
-	f.seenTenant, f.restricted = tenant.MustFrom(ctx), mayReadRestricted
+	f.seenTenant, f.restricted, f.reader = tenant.MustFrom(ctx), mayReadRestricted, reader
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -465,6 +467,10 @@ func TestStaffPetitionPhotos_RightPermissionRightCommune200(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	if m.staffPhotos.calls != 1 || m.staffPhotos.seenTenant != xaA || m.staffPhotos.restricted {
 		t.Fatalf("use case: %+v", m.staffPhotos)
+	}
+	// The audited reader is the officer's BUSINESS CODE, never the internal id (rule 6, invariant 8).
+	if r := m.staffPhotos.reader; r.ID != maCanBo || r.ID == idCanBo || r.Kind != "staff" || r.IP == "" {
+		t.Errorf("reader handed to the use case = %+v, want ID %q kind staff with an IP", r, maCanBo)
 	}
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Error("signed links cacheable")

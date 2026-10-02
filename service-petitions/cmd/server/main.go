@@ -384,7 +384,7 @@ func chay(log *slog.Logger) error {
 		// "TRƯỚC KHI XỬ LÝ": the citizen's scene photos, signed links only. The SAME stored-file store the
 		// citizen upload writes through, and the SAME object store — `photoObjects` is `objects` as the
 		// wider interface, nil when object storage is not configured (the route then answers 503).
-		PetitionPhotos: app.NewStaffPetitionPhotos(phieu, storedFiles, photoObjects),
+		PetitionPhotos: app.NewStaffPetitionPhotos(kho, phieu, storedFiles, photoObjects),
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register

@@ -58,6 +58,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -100,7 +101,28 @@ const (
 	// photoDecodeBudget is comms' coverDecodeBudget, for the same pod size and the same reason: the
 	// estimated decode of ONE image (imaging.DecodeCost), refused from the header before any pixel.
 	photoDecodeBudget = 160 << 20
+	// photoReadSlots is how many completions in this process may hold an upload's bytes in memory at
+	// once — from the read of the temp object until inspect returns. Each holds at most pol.MaxBytes
+	// (10 MB today). Before 2026-10-02 the bytes were read BEFORE waiting on decodeSlot, and the route
+	// is idem.KhongCan, so 25 parallel completions buffered 250 MB in a 384 MiB pod.
+	//
+	// THE WORST CASE THIS PROCESS NOW REACHES, all of it bounded:
+	//
+	//	2 buffered uploads             2 × 10 MB              20 MB
+	//	1 decode (decodeSlot)          ≤ photoDecodeBudget   160 MiB   (imaging.DecodeCost, measured)
+	//	the render of that decode      2560² RGBA × 2 (scale, orient) + the JPEG out    ~55 MB
+	//	                                                     ≈ 245 MB of the pod's 384 MiB
+	//
+	// The ~140 MiB left is the rest of the service (pgx, gRPC, every other route) and the GC's headroom:
+	// without GOMEMLIMIT the Go heap may grow to twice its live size before collecting, so this table is
+	// not by itself a proof the pod cannot be OOM-killed — see the report of TASK-03b. Raising this, the
+	// policy's MaxBytes, or the decode budget means raising the pod limit with it.
+	photoReadSlots = 2
 )
+
+// errPhotoCompletionAborted is what a waiting completion receives if the one doing the work never
+// recorded a result (it panicked). Never a zero StoredFile with a nil error: that would answer 200.
+var errPhotoCompletionAborted = errors.New("ảnh hiện trường: lượt hoàn tất song song dừng giữa chừng")
 
 var (
 	// ErrPhotoNotFound: no such photo ON THIS PETITION — unknown id, another petition's, another
@@ -199,9 +221,25 @@ type CitizenPetitionPhotos struct {
 	// decodeSlot admits ONE decode at a time in this process: photoDecodeBudget is a per-decode bound,
 	// and two at once would be two budgets against one pod.
 	decodeSlot chan struct{}
+	// readSlot admits photoReadSlots uploads into memory at a time. Always taken BEFORE decodeSlot, so
+	// the two cannot deadlock.
+	readSlot chan struct{}
+
+	// inflight de-duplicates concurrent completions of ONE file in this process (key: commune + file id):
+	// the second caller waits for the first one's answer instead of reading a second copy of the bytes.
+	mu       sync.Mutex
+	inflight map[string]*photoCompletion
 
 	newID func() (string, error)
 	now   func() time.Time
+}
+
+// photoCompletion is one completion in progress. file and err are written before done is closed.
+type photoCompletion struct {
+	done    chan struct{}
+	file    domain.StoredFile
+	err     error
+	waiters int // callers waiting on done; read by the tests to know the race is set up
 }
 
 // NewCitizenPetitionPhotos builds the use case. Pass UNTYPED nil for a dependency that is not configured
@@ -209,7 +247,9 @@ type CitizenPetitionPhotos struct {
 func NewCitizenPetitionPhotos(db *store.DB, petitions CitizenPhotoPetitions, files PetitionPhotoFiles,
 	objects PhotoObjectStore, scanner MalwareScanner, policies UploadPolicies) *CitizenPetitionPhotos {
 	return &CitizenPetitionPhotos{db: db, petitions: petitions, files: files, objects: objects,
-		scanner: scanner, policies: policies, decodeSlot: make(chan struct{}, 1), newID: storage.NewObjectID}
+		scanner: scanner, policies: policies, decodeSlot: make(chan struct{}, 1),
+		readSlot: make(chan struct{}, photoReadSlots), inflight: map[string]*photoCompletion{},
+		newID: storage.NewObjectID}
 }
 
 func (uc *CitizenPetitionPhotos) clock() time.Time {
@@ -439,6 +479,59 @@ func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, ci
 	if !domain.PhotoUploadOpen(p.TrangThai) {
 		return domain.StoredFile{}, ErrPhotoWindowClosed
 	}
+	// ONLY NOW, with the caller proved to own this file, may it join another caller's completion: the
+	// shared answer goes to nobody who could not have asked for it.
+	return uc.completeOnce(ctx, id, func(ctx context.Context) (domain.StoredFile, error) {
+		return uc.completePending(ctx, ma, id, citizen, *f)
+	})
+}
+
+// completeOnce runs complete for (commune, id) unless a completion of the same file is already running
+// in this process, in which case it waits for that one and returns ITS answer — the same answer a
+// retry after it would get, since a stored photo answers as stored. One read of the bytes, not two.
+//
+// If the first caller gave up (its context ended) while this one still wants the answer, this one does
+// the work itself: the abandoned run wrote nothing it would not find again (fromDestination).
+//
+// Per process only: a second pod reads its own copy, which its own readSlot bounds.
+func (uc *CitizenPetitionPhotos) completeOnce(ctx context.Context, id string,
+	complete func(context.Context) (domain.StoredFile, error)) (domain.StoredFile, error) {
+
+	key := string(tenant.MustFrom(ctx)) + "/" + id
+	uc.mu.Lock()
+	if c, ok := uc.inflight[key]; ok {
+		c.waiters++
+		uc.mu.Unlock()
+		select {
+		case <-c.done:
+		case <-ctx.Done():
+			return domain.StoredFile{}, ctx.Err()
+		}
+		if (errors.Is(c.err, context.Canceled) || errors.Is(c.err, context.DeadlineExceeded)) && ctx.Err() == nil {
+			return uc.completeOnce(ctx, id, complete)
+		}
+		return c.file, c.err
+	}
+	if uc.inflight == nil {
+		uc.inflight = map[string]*photoCompletion{}
+	}
+	c := &photoCompletion{done: make(chan struct{}), err: errPhotoCompletionAborted}
+	uc.inflight[key] = c
+	uc.mu.Unlock()
+	defer func() {
+		uc.mu.Lock()
+		delete(uc.inflight, key)
+		uc.mu.Unlock()
+		close(c.done)
+	}()
+	c.file, c.err = complete(ctx)
+	return c.file, c.err
+}
+
+// completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`.
+func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id string, citizen audit.Actor,
+	f domain.StoredFile) (domain.StoredFile, error) {
+
 	pol, err := uc.photoPolicy(ctx)
 	if err != nil {
 		return domain.StoredFile{}, err
@@ -449,7 +542,7 @@ func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, ci
 	}
 
 	// 2. Object-store and pixel work, no lock held.
-	insp, err := uc.inspect(ctx, *f, dst, pol)
+	insp, err := uc.inspect(ctx, f, dst, pol)
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
@@ -604,6 +697,14 @@ func (uc *CitizenPetitionPhotos) inspect(ctx context.Context, f domain.StoredFil
 	// The CURRENT policy decides (platform.proto (c)): a limit tightened since the request rejects here.
 	if st.Size <= 0 || st.Size > pol.MaxBytes {
 		return uc.reject(ctx, uploadKey, RejectTooLarge, ""), nil
+	}
+	// A READ SLOT BEFORE THE BYTES, held until this function returns (photoReadSlots says why and how
+	// much). Waiting here costs nothing but time; reading first and waiting later cost 10 MB per caller.
+	select {
+	case uc.readSlot <- struct{}{}:
+		defer func() { <-uc.readSlot }()
+	case <-ctx.Done():
+		return photoInspection{}, ctx.Err()
 	}
 	// The bytes are read ONCE, bound to the ETag, and everything below — sniff, scan, decode — runs on
 	// that one copy, so the bytes scanned are exactly the bytes re-encoded. At most pol.MaxBytes (10 MB).
@@ -796,6 +897,7 @@ type StaffPhotoPetitions interface {
 
 // StaffPetitionPhotos lists a petition's citizen photos to a member of staff who may read the petition.
 type StaffPetitionPhotos struct {
+	db        *store.DB
 	petitions StaffPhotoPetitions
 	files     photoLister
 	objects   PhotoObjectStore
@@ -803,10 +905,13 @@ type StaffPetitionPhotos struct {
 }
 
 // NewStaffPetitionPhotos builds the staff read. objects may be UNTYPED nil (not configured → 503).
-func NewStaffPetitionPhotos(petitions StaffPhotoPetitions, files PetitionPhotoFiles,
+func NewStaffPetitionPhotos(db *store.DB, petitions StaffPhotoPetitions, files PetitionPhotoFiles,
 	objects PhotoObjectStore) *StaffPetitionPhotos {
-	return &StaffPetitionPhotos{petitions: petitions, files: files, objects: objects}
+	return &StaffPetitionPhotos{db: db, petitions: petitions, files: files, objects: objects}
 }
+
+// ActionPetitionPhotosViewed is the verb of the trail a staff read of the photos leaves.
+const ActionPetitionPhotosViewed = "xem_anh_hien_truong"
 
 // ListPhotos answers the photos of petition `ma` in this commune with signed links.
 //
@@ -814,12 +919,24 @@ func NewStaffPetitionPhotos(petitions StaffPhotoPetitions, files PetitionPhotoFi
 // checker. A `can-bo` petition without it is ErrPhieuKhongTonTai — the SAME answer GET
 // /api/v1/citizen-reports/{code} gives, so this route cannot confirm such a report exists.
 //
-// NOT AUDITED, stated rather than assumed, on the footing of the petition read itself: a member of
-// staff with `feedback.read`, in their own commune, reading a petition's content — which is not audited
-// on GET /api/v1/citizen-reports/{code} either (only the unmasked contact details are, rule 6
-// invariant 7, ADR 0030). A photo cannot be masked, so whether opening one counts as reading "full
-// personal data" is put to the owner as an open question.
-func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayReadRestricted bool) ([]PhotoLink, error) {
+// AUDITED (rule 6, invariant 7) — changed 2026-10-02 from "not audited". A scene photo is personal
+// data (rule 3) that CANNOT BE MASKED, so every link handed to staff is a read of full personal data,
+// the same footing as `feedback.unmask` on the detail (XemNguoiGui, ADR 0030). The precedent is
+// followed exactly: the entry is COMMITTED BEFORE the links are returned, and an error writing it means
+// no links at all — a disclosure with no trail is the one state rule 6 does not permit. It is written
+// after the links are signed, so a signing failure does not leave an entry for a disclosure that never
+// happened. A petition with no stored photo discloses nothing and writes nothing.
+//
+// `reader` is the STAFF member, its ID their business code (`principal.Ma`, rule 6 invariant 8) —
+// built by the handler; an empty code refuses the read, never falls back to the internal id.
+func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayReadRestricted bool,
+	reader audit.Actor) ([]PhotoLink, error) {
+
+	if reader.ID == "" || reader.Kind != "staff" {
+		// Fail closed BEFORE any read: with no business code there is nobody to attribute the read to.
+		return nil, fmt.Errorf("anh_hien_truong: người đọc không phải cán bộ có mã (kind=%q) — "+
+			"không ghi được vết thì không mở ảnh", reader.Kind)
+	}
 	if uc.objects == nil {
 		return nil, ErrUploadNotConfigured
 	}
@@ -834,7 +951,30 @@ func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayRea
 	if uc.now != nil {
 		now = uc.now().UTC()
 	}
-	return signPhotos(ctx, uc.files, uc.objects, p.ID, now)
+	links, err := signPhotos(ctx, uc.files, uc.objects, p.ID, now)
+	if err != nil || len(links) == 0 {
+		return links, err
+	}
+	// The delta names WHICH files were opened — ids and a count. Never a URL (a bearer credential until
+	// it expires), never a file name, never a byte of the image.
+	ids := make([]string, 0, len(links))
+	for _, l := range links {
+		ids = append(ids, l.File.ID)
+	}
+	delta, err := json.Marshal(map[string]any{"so_anh": len(ids), "tep_id": ids, "quyen": "feedback.read"})
+	if err != nil {
+		return nil, fmt.Errorf("ảnh hiện trường: mã hoá delta: %w", err)
+	}
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// TenantID unset: audit.Write takes it from the transaction (rule 1, invariant 4).
+		return audit.Write(ctx, tx, audit.Entry{Actor: reader, Action: ActionPetitionPhotosViewed,
+			Subject: p.MaTraCuu, At: now, Delta: delta})
+	})
+	if err != nil {
+		// Neither the code nor the reader in the message (rule 3) — the commune is what an operator needs.
+		return nil, fmt.Errorf("ảnh hiện trường: ghi vết cán bộ xem ảnh cho xã %s: %w", tenant.MustFrom(ctx), err)
+	}
+	return links, nil
 }
 
 // Compile-time proof the real dependencies satisfy the interfaces.

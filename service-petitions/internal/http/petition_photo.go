@@ -42,7 +42,8 @@ type CitizenPetitionPhotos interface {
 
 // StaffPetitionPhotos is the staff read (app.StaffPetitionPhotos).
 type StaffPetitionPhotos interface {
-	ListPhotos(ctx context.Context, ma string, mayReadRestricted bool) ([]app.PhotoLink, error)
+	// reader is the staff member, ID = their business code (principal.Ma): the use case audits the read.
+	ListPhotos(ctx context.Context, ma string, mayReadRestricted bool, reader audit.Actor) ([]app.PhotoLink, error)
 }
 
 // photoUploadIn is what the phone declares before it uploads. TWO FIELDS AND NO FILE NAME
@@ -299,7 +300,14 @@ func (h *Handler) ListPetitionPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, ok := authz.From(ctx)
 	mayRestricted := ok && h.d.Checker.Allows(ctx, principal, QuyenHanChe)
-	links, err := h.d.PetitionPhotos.ListPhotos(ctx, ma, mayRestricted)
+	// The trail's "who" is `principal.Ma`, NEVER `principal.ID` (rule 6, invariant 8), and there is no
+	// fallback: an empty code reaches the use case empty and the read is refused there. The IP is this
+	// socket's (httpx.ClientIP does not trust X-Forwarded-For), as on DocPhieuPhanAnh's unmask trail.
+	reader := audit.Actor{Kind: principal.Kind, IP: httpx.ClientIP(r)}
+	if ok {
+		reader.ID = principal.Ma
+	}
+	links, err := h.d.PetitionPhotos.ListPhotos(ctx, ma, mayRestricted, reader)
 	switch {
 	case err == nil:
 		noStore(w)

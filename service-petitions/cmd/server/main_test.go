@@ -436,7 +436,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// suites: internal/app/task_attachment_test.go and internal/http/task_attachment_test.go.
 		TaskAttachments:    app.NewTaskAttachments(nil, nil, nil, nil, nil, nil),
 		TaskLogAttachments: petstore.NewStoredFileStore(nil),
-		PetitionPhotos:     app.NewStaffPetitionPhotos(nil, nil, nil),
+		PetitionPhotos:     app.NewStaffPetitionPhotos(nil, nil, nil, nil),
 		DanhSachBienBan:    khoBienBan{},
 		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
