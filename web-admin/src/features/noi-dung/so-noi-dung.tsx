@@ -25,6 +25,7 @@ import {
   CONTENT_TYPE_EVENT,
   CONTENT_TYPE_VIDEO,
   deleteContentCategory,
+  deleteContentItem,
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
@@ -41,6 +42,7 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  ACTIONS_COLUMN_LABEL,
   BANNER_APP_PATHS,
   BANNER_ARTICLE_PATH_HINT,
   BANNER_COVER_NOTICE,
@@ -49,6 +51,11 @@ import {
   CANH_BAO_HTML_THO,
   CHUA_XEP_DANH_MUC,
   CLOSE_LABEL,
+  CONTENT_DELETE_GONE,
+  CONTENT_DELETE_SYMBOL,
+  CONTENT_DELETE_TITLE,
+  CONTENT_DELETED,
+  contentDeleteAriaLabel,
   coThayDoi,
   DANG_TAI_SO,
   DANG_TAI_TOAN_VAN,
@@ -61,7 +68,6 @@ import {
   EVENT_PLACE_MAX_CHARS,
   EVENT_TIME_HINT,
   FORM_TRONG,
-  GHI_CHU_KHONG_CO_XOA,
   giaTriTuHang,
   KHONG_CO_GI_DOI,
   LINK_TO_HINT,
@@ -86,6 +92,7 @@ import {
   nhanNguon,
   nhanTepDinhKem,
   nhanTrangThai,
+  pageAfterDelete,
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
   portalCategoryLabel,
@@ -136,6 +143,7 @@ import {
 import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
 import { BroadcastAudioField } from "./broadcast-audio-field";
 import { CategoryAdmin } from "./category-admin";
+import { ContentDeleteDialog } from "./content-delete-dialog";
 import { OverlayDialog } from "./overlay-dialog";
 import { PortalSyncCard } from "./portal-sync-card";
 import { RichTextEditor } from "./rich-text-editor";
@@ -153,12 +161,14 @@ import { RichTextEditor } from "./rich-text-editor";
  * preview. `ranh-gioi-html.test.ts` reads this folder's source and turns red if the string appears.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
- * KHÔNG CÓ NÚT XOÁ MỘT BÀI, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §6 chỉ vẽ `✎`, hợp đồng không có
- * tuyến `DELETE` nào cho một mục nội dung. Gỡ một bài khỏi Mini App là tắt ô `Đăng lên Mini App` ở màn
- * sửa. (A CATEGORY has a soft delete with a reason — `category-admin.tsx`, ADR 0067 §3.)
+ * EACH ROW HAS A DELETE (`🗑`, the prototype's trash button, user's decision 02/10/2026): a SOFT delete
+ * with a MANDATORY reason (rule 7) asked in `ContentDeleteDialog` — the prototype's one-click delete
+ * minus the missing reason. TABLE ROW ONLY: §6 draws the actions in the table, §7's form has none. The
+ * reversible way off the Mini App is still unticking `Đăng lên Mini App` in the edit form. (A CATEGORY
+ * has its own soft delete — `category-admin.tsx`, ADR 0067 §3.)
  *
  * WRITE CONTROLS FOLLOW `content.update` (`canEditContent`, 02/10/2026, as the prototype does): without
- * it the screen is read-only — no `+ Thêm nội dung`, no `✎`, no `⊞ Danh mục tin`, no run/config on the
+ * it the screen is read-only — no `+ Thêm nội dung`, no `✎`, no `🗑`, no `⊞ Danh mục tin`, no run/config on the
  * portal card. That is CONVENIENCE: `service-comms` still checks `content.read` / `content.update` on
  * EVERY call, and a 403 sentence still reaches the screen verbatim (rule 5, forbidden #1).
  *
@@ -223,6 +233,11 @@ export function SoNoiDung() {
     khoa: string;
     kq: KetQua<comms_noiDungRa>;
   } | null>(null);
+
+  // The row whose `🗑` was pressed — the whole row, since the dialog shows only its title (no body
+  // needed). `deleteNotice` is the line above the table after the dialog closed on a 204 or a 404.
+  const [deleting, setDeleting] = useState<comms_noiDungRa | null>(null);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
 
   const khoaSo = `${loc.loai}|${loc.danhMucID}|${loc.tim}|${loc.status}|${nganXep.hienTai ?? ""}|${lanTai}`;
 
@@ -304,6 +319,21 @@ export function SoNoiDung() {
     datDangMoDanhMuc(false);
     datDangSuaID(null);
     datLoiForm(null);
+    setDeleting(null);
+    setDeleteNotice(null);
+  }
+
+  /**
+   * After the delete dialog closed on a 204 or a 404: say what happened and read the SAME page again
+   * (one back if that row was its last — `pageAfterDelete`), not the first page as after a save: the
+   * officer clearing several rows on page 3 stays on page 3.
+   */
+  function afterDelete(notice: string): void {
+    const rows = so.pha === "xong" ? so.duLieu.items.length : 0;
+    setDeleting(null);
+    setDeleteNotice(notice);
+    datNganXep((stack) => pageAfterDelete(stack, rows));
+    datLanTai((n) => n + 1);
   }
 
   /** Esc on an open overlay: refused while a save is in flight, like the forms' own `Huỷ`. */
@@ -474,6 +504,17 @@ export function SoNoiDung() {
         </OverlayDialog>
       )}
 
+      {canEdit && deleting !== null && (
+        <ContentDeleteDialog
+          key={deleting.id}
+          item={deleting}
+          remove={deleteContentItem}
+          deleted={() => afterDelete(CONTENT_DELETED)}
+          gone={() => afterDelete(CONTENT_DELETE_GONE)}
+          close={() => setDeleting(null)}
+        />
+      )}
+
       <ThanhTabLoai
         loai={loc.loai}
         datLoai={(l) => {
@@ -533,6 +574,7 @@ export function SoNoiDung() {
           </p>
         )}
 
+        {deleteNotice !== null && <p role="status">{deleteNotice}</p>}
         {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
         {so.pha === "loi" && (
           <p className="thong-bao-loi" role="alert">
@@ -548,6 +590,10 @@ export function SoNoiDung() {
             sua={(id) => {
               dongMoiBieuMau();
               datDangSuaID(id);
+            }}
+            remove={(nd) => {
+              dongMoiBieuMau();
+              setDeleting(nd);
             }}
             canEdit={canEdit}
           />
@@ -812,16 +858,14 @@ export function HangLocNoiDung({
 /**
  * Bảng §6.
  *
- * CỘT HÀNH ĐỘNG CHỈ CÓ `✎`. Không nút xoá: không tuyến nào xoá được, và §6 cũng chỉ vẽ một ký hiệu.
- * Một dòng chữ dưới bảng nói vì sao, thay vì một nút mờ — một nút mờ nói "bạn không có quyền",
- * trong khi sự thật là chức năng không tồn tại, và hai câu ấy không được lẫn vào nhau.
+ * THE ACTION COLUMN HOLDS `✎` AND `🗑` (the prototype's pencil and trash). `🗑` only OPENS the dialog
+ * that asks for the reason — nothing is deleted on the click itself.
  *
  * KHÔNG CỘT NÀO DỰNG HTML. `title` và `summary` là văn bản thuần ở đây; thân bài không có mặt
  * trong phản hồi danh sách và màn hình không đi đoán nó.
  *
  * WITHOUT `content.update` THE ACTION COLUMN IS NOT DRAWN AT ALL (`canEdit`), header included — an
- * empty `Sửa` column is a column promising something. The note under the table goes with it: it
- * explains the edit screen, which that account cannot open.
+ * empty `Thao tác` column is a column promising something.
  *
  * THE SUMMARY IS CLAMPED BY CSS TO ONE LINE (`.summary-one-line`), never cut by characters: the whole
  * text is in the page for a screen reader, and the cut follows the column's real width.
@@ -830,11 +874,14 @@ export function BangNoiDung({
   ds,
   danhMuc,
   sua,
+  remove,
   canEdit,
 }: {
   ds: readonly comms_noiDungRa[];
   danhMuc: readonly comms_danhMucRa[];
   sua: (id: string) => void;
+  /** Opens the delete dialog for this row. */
+  remove: (nd: comms_noiDungRa) => void;
   canEdit: boolean;
 }) {
   if (ds.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
@@ -852,7 +899,7 @@ export function BangNoiDung({
               <th scope="col">Tệp đính kèm</th>
               <th scope="col">Ngày đăng</th>
               <th scope="col">Trạng thái</th>
-              {canEdit && <th scope="col">Sửa</th>}
+              {canEdit && <th scope="col">{ACTIONS_COLUMN_LABEL}</th>}
             </tr>
           </thead>
           <tbody>
@@ -899,6 +946,17 @@ export function BangNoiDung({
                       >
                         {NHAN_NUT_SUA}
                       </button>
+                      <button
+                        type="button"
+                        className="nut-phu nut-xoa"
+                        aria-haspopup="dialog"
+                        onClick={() => remove(nd)}
+                        // Same reason as `✎`: the symbol alone names no row.
+                        aria-label={contentDeleteAriaLabel(nd.title)}
+                        title={CONTENT_DELETE_TITLE}
+                      >
+                        {CONTENT_DELETE_SYMBOL}
+                      </button>
                     </td>
                   )}
                 </tr>
@@ -907,7 +965,6 @@ export function BangNoiDung({
           </tbody>
         </table>
       </div>
-      {canEdit && <p className="ghi-chu">{GHI_CHU_KHONG_CO_XOA}</p>}
     </>
   );
 }

@@ -8,7 +8,9 @@ import {
   countPublishedStaff,
   publishedStaffPath,
   COVER_FORM_MISSING,
+  contentItemDeletePath,
   deleteContentCategory,
+  deleteContentItem,
   duongDanMotNoiDung,
   duongDanSoNoiDung,
   layDanhMucNoiDung,
@@ -606,6 +608,47 @@ describe("category edit / delete (ADR 0067 §3)", () => {
     });
   }
 
+  it("item DELETE: the reason IN THE BODY, never in the URL; 204 is success", async () => {
+    const gia = batFetch(new Response(null, { status: 204 }));
+    const r = await deleteContentItem("01J/ND 1", "Đăng nhầm bài của thôn khác");
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/content-items/01J%2FND%201");
+    expect(duongDan).toBe(contentItemDeletePath("01J/ND 1"));
+    expect(duongDan).not.toContain("?");
+    expect(duongDan).not.toContain("nh%E1%BA%A7m");
+    expect(tuyChon.method).toBe("DELETE");
+    // same-origin, never "include": the session cookie stays on this commune's host (rule 1, forbidden #3).
+    expect(tuyChon.credentials).toBe("same-origin");
+    expect(thanDaGui(gia, 0)).toEqual({ reason: "Đăng nhầm bài của thôn khác" });
+    expect(r).toEqual({ ok: true, data: null });
+  });
+
+  const ITEM_DELETE_REFUSALS: { status: number; code: string; message: string }[] = [
+    {
+      status: 400,
+      code: "invalid_request",
+      message: "Hãy nhập lý do xoá. Nội dung đã đăng là hồ sơ lưu trữ, xoá phải ghi rõ vì sao.",
+    },
+    { status: 400, code: "invalid_request", message: "Lý do xoá quá dài (tối đa 500 ký tự)." },
+    { status: 404, code: "not_found", message: "Không tìm thấy nội dung này." },
+    { status: 403, code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." },
+  ];
+
+  for (const r of ITEM_DELETE_REFUSALS) {
+    it(`item DELETE ${r.status} (${r.message.slice(0, 24)}…): status kept, server sentence verbatim`, async () => {
+      batFetch(traJSON(r.status, { code: r.code, message: r.message, trace_id: "t-1" }));
+      const kq = await deleteContentItem("01JND1", "x");
+      expect(kq).toEqual({ ok: false, status: r.status, message: r.message });
+    });
+  }
+
+  it("item DELETE with no answer at all: status 0 and the generic sentence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("network"))));
+    const kq = await deleteContentItem("01JND1", "x");
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.status).toBe(0);
+  });
+
   it("a banner 422 (`banner_cover_required`) on POST reaches the form verbatim too", async () => {
     const message =
       "noi_dung_mini_app: banner phải có ảnh bìa — tải ảnh lên trước khi lưu, và không gỡ ảnh khỏi banner";
@@ -699,15 +742,23 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(luocDo?.required ?? []).not.toContain("body");
   });
 
-  it("KHÔNG có tuyến `DELETE` nào cho một mục nội dung — §6 chỉ có `✎`; a CATEGORY has one", () => {
-    // Ngày tuyến xoá xuất hiện, bài kiểm này đỏ và người đọc biết rằng phải quay lại luật 7: xoá
-    // một bản ghi nghiệp vụ là xoá MỀM, bắt buộc có `delete_reason`, mà màn này không thu câu ấy.
+  it("an item and a category each have ONE `DELETE`, and both take a reason in the body", () => {
+    // Replaces the test that pinned the ABSENCE of the item's DELETE (it was written to go red the day
+    // the route landed, 5bb1d962). Both deletes are soft, with a mandatory reason (rule 7).
     const p = hopDong().paths;
-    expect(Object.keys(p["/api/v1/content-items/{id}"] ?? {})).not.toContain("delete");
+    const methods = (path: string) => Object.keys(p[path] ?? {}).filter((k) => k !== "parameters").sort();
+    expect(methods("/api/v1/content-items/{id}")).toEqual(["delete", "get", "patch"]);
+    expect(methods("/api/v1/content-categories/{id}")).toEqual(["delete", "patch"]);
+    expect(Object.keys(p["/api/v1/content-items"] ?? {})).not.toContain("delete");
     expect(Object.keys(p["/api/v1/content-categories"] ?? {})).not.toContain("delete");
-    // ADR 0067 §3: the category's soft delete with a mandatory reason.
-    const methods = Object.keys(p["/api/v1/content-categories/{id}"] ?? {}).filter((k) => k !== "parameters");
-    expect(methods.sort()).toEqual(["delete", "patch"]);
+    expect(khoaCuaLuocDo("comms.deleteContentItemIn")).toEqual(["reason"]);
+  });
+
+  it("`deleteContentItem` sends EXACTLY the keys of `comms.deleteContentItemIn`", async () => {
+    const cuaHopDong = khoaCuaLuocDo("comms.deleteContentItemIn");
+    const gia = batFetch(new Response(null, { status: 204 }));
+    await deleteContentItem("01JND1", "Đăng trùng với bài ngày 14/9");
+    expect(Object.keys(thanDaGui(gia, 0)).sort()).toEqual(cuaHopDong.slice().sort());
   });
 
   it("`updateContentCategory` sends at most the keys of `comms.updateCategoryIn`, never `slug`", async () => {
@@ -739,6 +790,7 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(khoa("/api/v1/content-categories", "get")).toBe("content.read");
     expect(khoa("/api/v1/content-items", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/{id}", "patch")).toBe("content.update");
+    expect(khoa("/api/v1/content-items/{id}", "delete")).toBe("content.update");
     expect(khoa("/api/v1/content-categories", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/cover-images", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/cover-images/{id}/completion", "post")).toBe("content.update");

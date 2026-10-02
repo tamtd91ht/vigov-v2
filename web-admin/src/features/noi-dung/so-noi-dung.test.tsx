@@ -16,8 +16,10 @@ import {
   ERR_EVENT_END_WITHOUT_START,
   ERR_VIDEO_URL_INVALID,
   EVENT_TIME_HINT,
+  ACTIONS_COLUMN_LABEL,
+  CONTENT_DELETE_SYMBOL,
+  contentDeleteAriaLabel,
   FORM_TRONG,
-  GHI_CHU_KHONG_CO_XOA,
   giaTriTuHang,
   LINK_TO_HINT,
   MO_TA_THE_DANH_BA,
@@ -69,8 +71,8 @@ import {
  * page as a string. On the server render the editor has not mounted (it needs a DOM), so the stored body
  * must not appear AT ALL — escaped or not; the editor's own behaviour is `rich-text.test.ts` (jsdom).
  *
- * Nhóm thứ hai canh một sự VẮNG MẶT, thứ khó canh nhất vì không có gì để tìm trên trang: KHÔNG có
- * nút xoá ở cột hành động, và KHÔNG có ô chọn trạng thái trong biểu mẫu.
+ * Nhóm thứ hai canh một sự VẮNG MẶT, thứ khó canh nhất vì không có gì để tìm trên trang: without
+ * `content.update` there is no `✎`/`🗑` in the table, and KHÔNG có ô chọn trạng thái trong biểu mẫu.
  */
 
 /**
@@ -137,7 +139,9 @@ function veBang(
   dm: readonly comms_danhMucRa[] = [danhMuc()],
   canEdit = true,
 ) {
-  return renderToStaticMarkup(<BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} canEdit={canEdit} />);
+  return renderToStaticMarkup(
+    <BangNoiDung ds={ds} danhMuc={dm} sua={() => {}} remove={() => {}} canEdit={canEdit} />,
+  );
 }
 
 function veForm(gt = FORM_TRONG, h?: comms_noiDungRa, coverState?: CoverUploadState) {
@@ -235,15 +239,11 @@ describe("bảng nội dung §6", () => {
     expect(html.match(/<th scope="col">/g)?.length).toBe(7);
   });
 
-  it("cột hành động CHỈ có `✎` — không nút xoá, không thùng rác", () => {
-    // Hợp đồng không có tuyến `DELETE` nào. Một nút xoá vẽ ra ở đây là một nút không có đường nào
-    // phía sau, và luật 7 biến việc xoá thành xoá MỀM bắt buộc có lý do — thứ màn này không thu.
+  it("the action column holds `✎` and `🗑` — the prototype's pencil and trash", () => {
     const html = veBang([hang()]);
-
     expect(html).toContain(NHAN_NUT_SUA);
-    expect(html).not.toContain("🗑");
-    expect(html).not.toContain("Xoá");
-    expect(html).not.toContain("Xóa");
+    expect(html).toContain(CONTENT_DELETE_SYMBOL);
+    expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
   });
 
   it("nút sửa mang nhãn nói rõ đang sửa bài nào — sáu hàng cùng một ký hiệu thì đọc không ra", () => {
@@ -251,9 +251,12 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain(nhuTrongHTML("Sửa: Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"));
   });
 
-  it("dòng chữ dưới bảng nói vì sao không có nút xoá", () => {
+  it("the delete button names its row too, and only OPENS a dialog", () => {
     const html = veBang([hang()]);
-    expect(html).toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_XOA));
+    expect(html).toContain(
+      `aria-label="${nhuTrongHTML(contentDeleteAriaLabel("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số"))}"`,
+    );
+    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(2);
   });
 
   it("bài chưa xếp danh mục hiện đúng chữ đặc tả, không hiện ô trống", () => {
@@ -286,19 +289,22 @@ describe("bảng nội dung §6", () => {
 });
 
 describe("`content.update` gates the table's write controls", () => {
-  it("DENIED: no `✎`, no `Sửa` column, no note about the edit screen — the data columns stay", () => {
+  it("DENIED: no `✎`, no `🗑`, no action column — the data columns stay", () => {
     const html = veBang([hang()], [danhMuc()], false);
     expect(html).not.toContain(NHAN_NUT_SUA);
-    expect(html).not.toContain(">Sửa</th>");
+    expect(html).not.toContain(CONTENT_DELETE_SYMBOL);
+    expect(html).not.toContain("Xoá");
+    expect(html).not.toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
+    expect(html).not.toContain("aria-haspopup");
     expect(html.match(/<th scope="col">/g)?.length).toBe(6);
-    expect(html).not.toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_XOA));
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
   });
 
-  it("ALLOWED: `✎` on every row, and it says it opens a dialog", () => {
+  it("ALLOWED: `✎` and `🗑` on every row, each saying it opens a dialog", () => {
     const html = veBang([hang({ id: "A" }), hang({ id: "B" })], [danhMuc()], true);
-    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(2);
-    expect(html).toContain(">Sửa</th>");
+    expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(4);
+    expect(html.match(new RegExp(CONTENT_DELETE_SYMBOL, "g"))?.length).toBe(2);
+    expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
   });
 
   it("`+ Thêm nội dung`: absent without the key, present with it", () => {

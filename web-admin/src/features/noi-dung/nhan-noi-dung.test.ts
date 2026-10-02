@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 import { QUYEN_CONG_KHAI_DANH_BA } from "@/lib/quyen";
+import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 
 import {
   canEditContent,
@@ -14,6 +15,11 @@ import {
   CHUA_XEP_DANH_MUC,
   coThayDoi,
   DAU_GACH,
+  DELETE_REASON_MAX_CHARS,
+  deleteReasonCounter,
+  deleteReasonLength,
+  deleteReasonReady,
+  pageAfterDelete,
   dungCayDanhMuc,
   ERR_EVENT_END_BEFORE_START,
   ERR_EVENT_END_WITHOUT_START,
@@ -648,12 +654,18 @@ describe("phần chưa dựng được", () => {
     // lies to the commune about what the screen does. ADR 0067 built five of them (§1, §2, §3, §4, §5);
     // the portal sync card brought two narrower gaps of its own; the status filter left on 02/10/2026
     // (`status` on GET content-items, C1), the meta count stays. Also 02/10/2026, following the
-    // prototype: the §4 count, the §2 layout and the `content.update` gate left it.
+    // prototype: the §4 count, the §2 layout and the `content.update` gate left it — and then the
+    // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}).
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
       "Cột `Lượt xem` (§6)",
-      "Nút xoá một bài (§9 đề xuất `DELETE`)",
     ]);
+  });
+
+  it("no item still claims an item cannot be deleted", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
+    expect(all).not.toContain("Nút xoá");
+    expect(all).not.toContain("DELETE");
   });
 
   it("no item still claims the §4 count, the §2 layout or the permission gate are missing", () => {
@@ -689,6 +701,42 @@ describe("`canEditContent` — who sees the write controls (fail closed, no flas
 
   it("`content.update` held → yes", () => {
     expect(canEditContent(session(["content.read", "content.update"]))).toBe(true);
+  });
+});
+
+describe("delete reason — counted as the server counts it (trimmed, runes, ≤ 500)", () => {
+  it("blank and whitespace-only are not ready", () => {
+    expect(deleteReasonReady("")).toBe(false);
+    expect(deleteReasonReady("   \n\t ")).toBe(false);
+  });
+
+  it("500 characters are ready, 501 are not; surrounding spaces do not count", () => {
+    expect(DELETE_REASON_MAX_CHARS).toBe(500);
+    expect(deleteReasonReady("ạ".repeat(500))).toBe(true);
+    expect(deleteReasonReady(`  ${"ạ".repeat(500)}  `)).toBe(true);
+    expect(deleteReasonReady("a".repeat(501))).toBe(false);
+  });
+
+  it("a character outside the BMP is ONE character, as a Go rune is", () => {
+    expect(deleteReasonLength("𠀀")).toBe(1);
+    expect(deleteReasonReady("𠀀".repeat(500))).toBe(true);
+    expect(deleteReasonCounter(" Trùng bài ")).toBe("9/500");
+  });
+});
+
+describe("`pageAfterDelete` — stay on the page, one back when it empties", () => {
+  const page3 = { daQua: [null, "c2"], hienTai: "c3" } as const;
+
+  it("rows left on the page → the same page is read again", () => {
+    expect(pageAfterDelete(page3, 5)).toBe(page3);
+  });
+
+  it("the last row of a later page → one page back", () => {
+    expect(pageAfterDelete(page3, 1)).toEqual({ daQua: [null], hienTai: "c2" });
+  });
+
+  it("the last row of the first page → still the first page", () => {
+    expect(pageAfterDelete(TRANG_DAU, 1)).toBe(TRANG_DAU);
   });
 });
 

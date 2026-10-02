@@ -19,6 +19,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  */
 
+import { coTrangTruoc, veTrangTruoc, type NganXepConTro } from "@/features/cau-hinh/ngan-xep-con-tro"; // vi-name-ok: existing exports of the pager (rule 12 inv 3)
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 import type { KetQua } from "@/lib/api/goi";
 import {
@@ -65,7 +66,10 @@ export const EVENT_PLACE_MAX_CHARS = 500;
 export const LINK_TO_MAX_CHARS = 500;
 /** The INT column's upper bound for `display_order` (`displayOrderMax`) — not a customer figure. */
 export const DISPLAY_ORDER_MAX = 2147483647;
-/** `domain.LyDoXoaToiDa` — the soft-delete reason of a category. */
+/**
+ * `domain.LyDoXoaToiDa` — the soft-delete reason of a category AND of a content item (the same
+ * `domain.ChuanHoaLyDoXoa`, 500 RUNES after trimming): counted in code points, see `deleteReasonLength`.
+ */
 export const DELETE_REASON_MAX_CHARS = 500;
 
 /* ── Chữ trên màn ──────────────────────────────────────────────────────────────────────────── */
@@ -82,7 +86,7 @@ export const NHAN_NUT_THEM = "+ Thêm nội dung";
 export const NHAN_NUT_DANH_MUC = "⊞ Danh mục tin";
 export const NHAN_NUT_HUY = "Huỷ";
 export const NHAN_NUT_LUU = "Lưu";
-/** §6 — cột hành động chỉ có ký hiệu này. KHÔNG có nút xoá: không tuyến nào xoá được. */
+/** §6 — the edit symbol of the action column. */
 export const NHAN_NUT_SUA = "✎";
 /** The way out of an overlay that holds no form of its own (the category manager, a loading edit). */
 export const CLOSE_LABEL = "Đóng";
@@ -189,10 +193,65 @@ export const CANH_BAO_HTML_THO =
   "Giữ được: đoạn văn, tiêu đề lớn/nhỏ, chữ đậm, chữ nghiêng, danh sách và liên kết https. Máy chủ " +
   "làm sạch thân bài mỗi lần lưu — ảnh, bảng, màu chữ và mọi định dạng khác bị bỏ trước khi tới bà con.";
 
-/** Câu đứng cạnh cột hành động — vì sao không có nút xoá. */
-export const GHI_CHU_KHONG_CO_XOA =
-  "Không có nút xoá, có chủ ý: gỡ một bài khỏi Mini App là tắt ô “Đăng lên Mini App” ở màn sửa. " +
-  "Bài vẫn còn trong sổ của xã.";
+/* ── Xoá một mục nội dung — soft delete with a mandatory reason (rule 7) ─────────────────────────
+ *
+ * The prototype's trash button (`vigov-require/.../ContentWorkspace.tsx:469-477`, user's decision
+ * 02/10/2026), with one deviation rule 7 mandates: the prototype deletes on one click without a reason;
+ * here a dialog asks for the reason first, and the server refuses a blank one anyway.
+ */
+
+/** The action column's header: it now holds `✎` and `🗑`. */
+export const ACTIONS_COLUMN_LABEL = "Thao tác";
+/** The row's delete symbol; the accessible name carries the title (`contentDeleteAriaLabel`). */
+export const CONTENT_DELETE_SYMBOL = "🗑";
+export const CONTENT_DELETE_TITLE = "Xoá nội dung";
+export const CONTENT_DELETE_SUBMIT = "Xoá";
+export const CONTENT_DELETE_REASON_LABEL = "Lý do xoá *";
+/** Said in the dialog, before the reason: what the act does and what it keeps. */
+export const CONTENT_DELETE_NOTE =
+  "Nội dung sẽ được gỡ khỏi Mini App và không còn trong danh sách. Hồ sơ, lý do xoá và lịch sử " +
+  "thao tác vẫn được lưu lại. Nếu chỉ muốn tạm ẩn với bà con, hãy sửa nội dung và bỏ chọn “Đăng " +
+  "lên Mini App”.";
+/** Shown above the table after a 204 — the prototype's toast, worded for a delete. */
+export const CONTENT_DELETED = "Đã xoá khỏi Mini App.";
+/**
+ * Shown above the table after a 404. The server gives ONE answer for "already deleted", "another
+ * commune's" and "never existed" (rule 4, forbidden #2), so this sentence guesses no further than that.
+ */
+export const CONTENT_DELETE_GONE =
+  "Nội dung này không còn trong sổ của xã — có thể cán bộ khác đã xoá. Danh sách đã được tải lại.";
+
+export function contentDeleteAriaLabel(title: string): string {
+  return `Xoá: ${title}`;
+}
+
+/**
+ * Length of a reason AS THE SERVER COUNTS IT: trimmed, in code points (Go runes) — `.length` counts
+ * UTF-16 units and would disagree on any character outside the BMP.
+ */
+export function deleteReasonLength(reason: string): number {
+  return [...reason.trim()].length;
+}
+
+/** Whether `Xoá` may be pressed: a non-blank reason within the server's bound. */
+export function deleteReasonReady(reason: string): boolean {
+  const n = deleteReasonLength(reason);
+  return n > 0 && n <= DELETE_REASON_MAX_CHARS;
+}
+
+/**
+ * The page to show after a delete. The CURRENT page is read again (not the first: the officer stays
+ * where they were) — unless the deleted row was the last one on it, then one page back, so the screen
+ * does not land on an empty page with rows still before it. On the first page it stays put.
+ */
+export function pageAfterDelete(stack: NganXepConTro, rowsOnPage: number): NganXepConTro {
+  return rowsOnPage <= 1 && coTrangTruoc(stack) ? veTrangTruoc(stack) : stack;
+}
+
+/** The live counter under the reason box: `12/500`. */
+export function deleteReasonCounter(reason: string): string {
+  return `${deleteReasonLength(reason)}/${DELETE_REASON_MAX_CHARS}`;
+}
 
 /* ── Sáu loại nội dung §5 ──────────────────────────────────────────────────────────────────── */
 
@@ -1078,14 +1137,5 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "đếm lượt xem (ADR 0047), kể cả trên tuyến công khai mà Mini App đọc tin của xã. Một cột " +
       "luôn bằng 0 chỉ làm cán bộ tưởng bài của xã không ai đọc, nên bảng và khối chi tiết không " +
       "vẽ cột ấy.",
-  },
-  {
-    ten: "Nút xoá một bài (§9 đề xuất `DELETE`)",
-    viSao:
-      "§6 chỉ có `✎` và hợp đồng không có tuyến `DELETE` nào — cả hai khớp nhau, nên đây là một " +
-      "quyết định chứ không phải một thiếu sót. Gỡ một bài khỏi Mini App là `PATCH` với ô tích " +
-      "`Đăng lên Mini App` tắt đi. Nếu ngày nào cần xoá thật, luật 7 biến nó thành xoá MỀM bắt " +
-      "buộc có `delete_reason`, mà không màn nào thu câu ấy — tức tuyến xoá kéo theo một ô nhập lý " +
-      "do, không phải một nút thùng rác.",
   },
 ];

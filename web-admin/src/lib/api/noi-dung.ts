@@ -6,6 +6,7 @@
  *   GET   /api/v1/content-items/{id}                              content.read
  *   POST  /api/v1/content-items                                   content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-items/{id}                              content.update  (không cần khoá chống trùng)
+ *   DELETE /api/v1/content-items/{id}  {reason}                   content.update  → 204 (soft delete)
  *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC
  *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
  *   POST  /api/v1/content-items/audio-files                       content.update  + Idempotency-Key BẮT BUỘC (ADR 0067 §4)
@@ -18,10 +19,10 @@
  * Plus ONE route that is not `service-comms`': `GET /api/v1/commune-staff?host=` (`identity`, public) —
  * read for its COUNT only, for §4's card (`countPublishedStaff` below).
  *
- * KHÔNG CÓ `DELETE` CHO MỘT MỤC NỘI DUNG, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT CÂU TRẢ LỜI. §9 đề xuất một tuyến xoá; §6 chỉ vẽ
- * `✎`. Gỡ một bài khỏi Mini App là `PATCH` với `publish: false` — đúng như §7 tự mô tả ô tích của
- * nó. Không hàm nào ở đây dựng một đường `DELETE`: một hàm gọi vào tuyến không tồn tại là một hàm
- * biên dịch được, kiểm được bằng `fetch` giả, và 404 ở lần chạy thật.
+ * DELETING ONE ITEM (§9's `DELETE`, the prototype's trash button — user's decision 02/10/2026) is a SOFT
+ * delete with a MANDATORY reason (rule 7), `deleteContentItem`: the item leaves the Mini App and every
+ * list, the record and its history stay. The REVERSIBLE way off the Mini App still exists and is still
+ * `PATCH` with `publish: false`, as §7 describes its checkbox — the item stays in the register.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `comms_noiDungRa`, `comms_themNoiDungVao`,
  * `comms_suaNoiDungVao`, `comms_danhMucRa`, `comms_danhSachDanhMucRa`, `comms_themDanhMucVao`,
@@ -53,7 +54,7 @@
  *   1. `body` VẮNG ở danh sách, CÓ ở chi tiết. Hợp đồng sinh ra `body?: string | null` đúng vì
  *      thế: `""` sẽ mang hai nghĩa — "bài này không có thân" và "bạn vừa hỏi một TRANG, mà trang
  *      thì không mang thân". Muốn toàn văn thì gọi `layMotNoiDung`, không suy từ danh sách.
- *   2. Không có `DELETE` — xem trên.
+ *   2. `DELETE` is a soft delete with a reason in the body — see above.
  *   3. `status` DO MÁY CHỦ QUYẾT từ ô tích `publish` của §7. Không thân nào ở đây mang `status`:
  *      một client tự khai trạng thái là một client đăng vượt qua bước duyệt mà §10.2 dành cho
  *      lượt đồng bộ.
@@ -89,6 +90,8 @@ import type {
   comms_coverUploadOut,
   comms_danhMucRa,
   comms_deleteCategoryIn,
+  comms_deleteContentItemIn,
+  comms_delete_content_items_by_id,
   comms_danhSachDanhMucRa,
   comms_get_content_categories,
   comms_get_content_items,
@@ -366,6 +369,41 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
     docThanKetQua<comms_noiDungRa>,
   );
+}
+
+/** `DELETE /api/v1/content-items/{id}` — the generated path, `{id}` encoded (same reason as `duongDanMotNoiDung`). */
+export function contentItemDeletePath(id: string): string {
+  const template: comms_delete_content_items_by_id["duongDan"] = "/api/v1/content-items/{id}";
+  return template.replace("{id}", encodeURIComponent(id));
+}
+
+/**
+ * DELETE /api/v1/content-items/{id} with `{reason}` — a SOFT delete (rule 7). 204, no body.
+ *
+ * The server removes the item from the Mini App in the same write (unpublishes it, withdraws the public
+ * cover copy) and audits it; the row and its history stay.
+ *
+ * THE REASON TRAVELS IN THE BODY, never in the URL: free text about a government record does not belong
+ * in a query string that every access log keeps — `deleteContentCategory`'s rule.
+ *
+ * `CallResult`, NOT `KetQua`, because the screen needs the STATUS: a 404 (already deleted by someone
+ * else, or never in this commune — one answer, no leak) closes the dialog and reloads, while every other
+ * refusal keeps the dialog open with the typed reason. The branch is on the status, never on `code`.
+ */
+export async function deleteContentItem(id: string, reason: string): Promise<CallResult<null>> {
+  const sent: comms_deleteContentItemIn = { reason };
+  try {
+    const res = await fetch(contentItemDeletePath(id), {
+      ...CHUNG,
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sent),
+    });
+    if (res.status !== 204) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
+    return { ok: true, data: null };
+  } catch {
+    return { ok: false, status: 0, message: LOI_KHONG_RO };
+  }
 }
 
 /* ── Ảnh bìa §7 — ADR 0052 §1, backend 606bf515 ───────────────────────────────────────────────
