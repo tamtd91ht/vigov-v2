@@ -1,6 +1,11 @@
 "use client";
 
+import { Eye, EyeOff, KeyRound, LogOut } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { DAI_TOI_THIEU, doiMatKhau, type NhapDoiMatKhau } from "./doi-mat-khau";
 
@@ -77,10 +82,10 @@ export function FormDoiMatKhau() {
         phiên vừa gọi — người dùng sẽ bị đưa về màn đăng nhập. Không nói trước thì lần bị đá ra
         ấy đọc y hệt một lần hệ thống hỏng ngay sau khi họ làm đúng.
       */}
-      <p className="canh-bao-pham-vi">
+      <Notice tone="info" icon={LogOut} className="mb-4">
         Sau khi đổi, hệ thống kết thúc tất cả phiên đang mở của bạn — kể cả phiên trên máy này.
         Bạn sẽ được đưa về màn đăng nhập và cần đăng nhập lại bằng mật khẩu mới.
-      </p>
+      </Notice>
 
       <div className="o-nhap">
         <label htmlFor={idHienTai}>Mật khẩu hiện tại</label>
@@ -148,14 +153,22 @@ export function FormDoiMatKhau() {
         chữ mình gõ, và một con mắt gạch chéo là thứ phải đoán nghĩa. `aria-pressed` để người
         dùng trình đọc màn hình biết trạng thái hiện thời chứ không chỉ biết tên nút.
       */}
-      <button
+      <Button
         type="button"
-        className="nut-phu nut-hien-mat-khau"
+        variant="secondary"
+        className="nut-hien-mat-khau"
         aria-pressed={hienChu}
         onClick={() => datHienChu((truoc) => !truoc)}
+        icon={
+          hienChu ? (
+            <EyeOff aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          ) : (
+            <Eye aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          )
+        }
       >
         {hienChu ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-      </button>
+      </Button>
 
       {/*
         Vùng thông báo LUÔN có mặt trong DOM, kể cả khi rỗng: thêm/bớt một phần tử làm cả biểu mẫu
@@ -168,9 +181,19 @@ export function FormDoiMatKhau() {
         {thongBao ?? ""}
       </p>
 
-      <button type="submit" className="nut-chinh" disabled={dangGui} aria-busy={dangGui}>
-        {dangGui ? "Đang đổi mật khẩu…" : "Đổi mật khẩu"}
-      </button>
+      {/* Full width inside the card, like the login button; 46px (`lg`) and the legacy 44px floor of
+          `.form-doi-mat-khau .nut-chinh` both hold. The busy words keep the button's width. */}
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        className="w-full"
+        disabled={dangGui}
+        aria-busy={dangGui}
+        icon={dangGui ? undefined : <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+      >
+        <BusyLabel busy={dangGui} label="Đổi mật khẩu" busyText="Đang đổi mật khẩu…" />
+      </Button>
     </form>
   );
 }

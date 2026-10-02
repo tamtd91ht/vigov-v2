@@ -1,7 +1,20 @@
 "use client";
 
+import { Layers, MapPinned, Pencil, Plus, Power, PowerOff, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layLoaiTaiNguyenBanDo } from "@/lib/api/danh-muc-nghiep-vu";
@@ -31,7 +44,8 @@ import { kiemLyDoXoa } from "./tang-danh-muc";
 
 export const MAP_FIELD_TITLE = "Trường bản đồ";
 export const ASSET_TYPE_LABEL = "Nhóm tài nguyên";
-export const ADD_FIELD_BUTTON = "+ Thêm trường";
+// No leading "+": the button draws a lucide `Plus` beside the words (ADR 0068 §2).
+export const ADD_FIELD_BUTTON = "Thêm trường";
 
 /** §6's footnote, minus its first sentence: no Excel import of assets exists to "keep columns". */
 export const MAP_FIELD_NOTE =
@@ -223,26 +237,42 @@ export function MapFieldTab() {
     );
 
   return (
-    <section className="tab-danh-muc" aria-labelledby="tieu-de-truong-ban-do">
-      <h2 id="tieu-de-truong-ban-do">{MAP_FIELD_TITLE}</h2>
-      <p className="ghi-chu">{MAP_FIELD_NOTE}</p>
-      <p className="ghi-chu">{NO_REGISTER_NOTE}</p>
-      {writeDecision !== null && !writeDecision.hien && <p className="trang-thai-rong">{READ_ONLY_NOTE}</p>}
+    <section
+      className="tab-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm"
+      aria-labelledby="tieu-de-truong-ban-do"
+    >
+      <CardHeader className="m-0">
+        <div className="min-w-0 flex-1 basis-64">
+          <CardTitle as="h2" id="tieu-de-truong-ban-do" className="flex items-center gap-2">
+            <MapPinned aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+            {MAP_FIELD_TITLE}
+          </CardTitle>
+          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{MAP_FIELD_NOTE}</p>
+        </div>
+      </CardHeader>
+      <div className="flex min-w-0 flex-col gap-3 p-4 [&>*]:my-0">
+      <Notice tone="info" className="ghi-chu">
+        {NO_REGISTER_NOTE}
+      </Notice>
+      {writeDecision !== null && !writeDecision.hien && <Notice tone="neutral">{READ_ONLY_NOTE}</Notice>}
 
-      {types === null && <p role="status">Đang tải nhóm tài nguyên…</p>}
+      {types === null && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải nhóm tài nguyên…
+          </p>
+          <SkeletonRows rows={3} className="rounded-xl border border-line" />
+        </>
+      )}
       {types !== null && !types.ok && (
-        <p className="thong-bao-loi" role="alert">
-          {types.thongBao}
-        </p>
+        <ErrorState role="alert" title="Chưa tải được nhóm tài nguyên" message={types.thongBao} />
       )}
-      {types !== null && types.ok && typeItems.length === 0 && (
-        <p className="trang-thai-rong">{NO_ASSET_TYPES}</p>
-      )}
+      {types !== null && types.ok && typeItems.length === 0 && <EmptyState icon={Layers} title={NO_ASSET_TYPES} />}
 
       {typeItems.length > 0 && (
         <>
-          <div className="o-nhap">
-            <label htmlFor="o-nhom-tai-nguyen">{ASSET_TYPE_LABEL}</label>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+          <Field label={ASSET_TYPE_LABEL} htmlFor="o-nhom-tai-nguyen" kind="select" icon={Layers} className="min-w-[220px] flex-[0_1_320px]">
             <select
               id="o-nhom-tai-nguyen"
               value={chosenType}
@@ -259,20 +289,26 @@ export function MapFieldTab() {
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
           {canWrite && (
-            <p>
-              <button
+            <p className="m-0">
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="primary"
+                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => start({ kind: "create", idempotencyKey: crypto.randomUUID() }, newDraft(chosenType))}
               >
                 {ADD_FIELD_BUTTON}
-              </button>
+              </Button>
             </p>
           )}
-          {done !== "" && <p role="status">{done}</p>}
+          </div>
+          {done !== "" && (
+            <p role="status" className="text-sm font-medium text-success-600">
+              {done}
+            </p>
+          )}
           {rowError !== "" && (
             <p className="thong-bao-loi" role="alert">
               {rowError}
@@ -280,11 +316,16 @@ export function MapFieldTab() {
           )}
           {open !== null && open.kind === "create" && formNode}
 
-          {fields === null && <p role="status">Đang tải các trường…</p>}
+          {fields === null && (
+            <>
+              <p role="status" className="an-thi-giac">
+                Đang tải các trường…
+              </p>
+              <SkeletonRows rows={3} className="rounded-xl border border-line" />
+            </>
+          )}
           {fields !== null && !fields.ok && (
-            <p className="thong-bao-loi" role="alert">
-              {fields.thongBao}
-            </p>
+            <ErrorState role="alert" title="Chưa tải được các trường" message={fields.thongBao} />
           )}
           {fields !== null && fields.ok && (
             <MapFieldTable
@@ -299,6 +340,7 @@ export function MapFieldTab() {
           )}
         </>
       )}
+      </div>
     </section>
   );
 }
@@ -327,11 +369,11 @@ export function MapFieldTable({
   onToggle: (row: comms_mapFieldSchemaOut) => void;
   onDelete: (row: comms_mapFieldSchemaOut) => void;
 }) {
-  if (rows.length === 0) return <p className="trang-thai-rong">{NO_FIELDS}</p>;
+  if (rows.length === 0) return <EmptyState icon={MapPinned} title={NO_FIELDS} />;
   const cols = canWrite ? 7 : 6;
   return (
-    <div className="bang-cuon" role="region" aria-label="Các trường tuỳ biến" tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll sticky aria-label="Các trường tuỳ biến">
+      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
         <thead>
           <tr>
             <th scope="col">Nhãn hiển thị</th>
@@ -362,7 +404,7 @@ export function MapFieldTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -392,39 +434,51 @@ function FieldRow({
         <td>{row.is_required ? "Có" : "—"}</td>
         <td>{row.sort_order}</td>
         <td>
-          <span className={row.is_active ? "chip chip-hoat-dong" : "chip chip-ngung"}>
-            {row.is_active ? "Đang dùng" : "Đang tắt"}
-          </span>
+          {/* Tone by the CODE (`is_active`); icon + word, never colour alone. */}
+          <Badge tone={row.is_active ? "success" : "neutral"}>{row.is_active ? "Đang dùng" : "Đang tắt"}</Badge>
         </td>
         {canWrite && (
           <td>
-            <span className="cum-nut">
-              <button type="button" className="nut-phu" aria-label={`Sửa trường ${row.label}`} onClick={() => onEdit(row)}>
-                ✎ Sửa
-              </button>
-              <button
+            <span className="cum-nut flex flex-wrap items-center gap-1.5">
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="ghost"
+                size="sm"
+                aria-label={`Sửa trường ${row.label}`}
+                icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                onClick={() => onEdit(row)}
+              >
+                Sửa
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 aria-label={`${row.is_active ? "Tắt" : "Bật"} trường ${row.label}`}
+                icon={row.is_active ? <PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} /> : <Power aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => onToggle(row)}
               >
                 {row.is_active ? "Tắt" : "Bật"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="nut-phu nut-xoa"
+                variant="danger"
+                size="sm"
                 aria-label={`Xoá trường ${row.label}`}
+                icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => onDelete(row)}
               >
-                🗑 Xoá
-              </button>
+                Xoá
+              </Button>
             </span>
           </td>
         )}
       </tr>
       {form !== null && (
         <tr>
-          <td colSpan={cols}>{form}</td>
+          <td colSpan={cols} className="whitespace-normal">
+            {form}
+          </td>
         </tr>
       )}
     </>
@@ -456,7 +510,7 @@ export function MapFieldForm({
   const title = mode === "create" ? "Thêm trường" : `Sửa trường ${draft.label}`;
   return (
     <form
-      className="form-danh-muc"
+      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full [&>.ghi-chu]:col-span-full [&>fieldset]:col-span-full"
       aria-label={title}
       onSubmit={(e) => {
         e.preventDefault();
@@ -466,7 +520,7 @@ export function MapFieldForm({
         if (e.key === "Escape" && !sending) onCancel();
       }}
     >
-      <h4>{title}</h4>
+      <h4 className="text-[15px] font-semibold text-ink-900">{title}</h4>
 
       <div className="o-nhap">
         <label htmlFor="o-nhan-truong">Nhãn hiển thị</label>
@@ -517,8 +571,8 @@ export function MapFieldForm({
 
       {draft.valueType === CHOICE_TYPE && <OptionsEditor draft={draft} setDraft={setDraft} />}
 
-      <div className="o-nhap">
-        <label>
+      <div className="o-nhap self-end">
+        <label className="inline-flex min-h-10 cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             name="is_required"
@@ -546,13 +600,13 @@ export function MapFieldForm({
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={sending}>
-          Lưu
-        </button>
-        <button type="button" className="nut-phu" onClick={onCancel} disabled={sending}>
+      <div className="cum-nut flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={sending} aria-busy={sending}>
+          <BusyLabel busy={sending} label="Lưu" busyText={BUSY_SAVING} />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
           Huỷ
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -560,11 +614,11 @@ export function MapFieldForm({
 
 function OptionsEditor({ draft, setDraft }: { draft: MapFieldDraft; setDraft: (d: MapFieldDraft) => void }) {
   return (
-    <fieldset className="o-nhap">
-      <legend>Các lựa chọn</legend>
-      <p className="ghi-chu">{OPTIONS_HINT}</p>
+    <fieldset className="o-nhap m-0 flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 [&>*]:my-0">
+      <legend className="px-1 text-xs font-semibold text-ink-700">Các lựa chọn</legend>
+      <p className="ghi-chu text-[13px] text-ink-500">{OPTIONS_HINT}</p>
       {draft.options.map((o, i) => (
-        <div className="cum-nut" key={i}>
+        <div className="cum-nut grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" key={i}>
           <label htmlFor={`o-gia-tri-${i}`} className="an-thi-giac">{`Giá trị lựa chọn ${i + 1}`}</label>
           <input
             id={`o-gia-tri-${i}`}
@@ -584,20 +638,29 @@ function OptionsEditor({ draft, setDraft }: { draft: MapFieldDraft; setDraft: (d
             onChange={(e) => setDraft(setOptionLabel(draft, i, e.target.value))}
           />
           {!o.locked && (
-            <button
+            <Button
               type="button"
-              className="nut-phu"
+              variant="ghost"
+              size="sm"
               aria-label={`Bỏ lựa chọn ${i + 1}`}
+              icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
               onClick={() => setDraft(removeOption(draft, i))}
             >
               Bỏ
-            </button>
+            </Button>
           )}
         </div>
       ))}
-      <button type="button" className="nut-phu" onClick={() => setDraft(addOption(draft))}>
-        + Thêm lựa chọn
-      </button>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="self-start"
+        icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        onClick={() => setDraft(addOption(draft))}
+      >
+        Thêm lựa chọn
+      </Button>
     </fieldset>
   );
 }
@@ -621,8 +684,10 @@ export function MapFieldDeleteForm({
 }) {
   const title = deleteFieldTitle(label);
   return (
-    <form
-      className="form-danh-muc"
+    // The existing confirm form, framed as the shared ConfirmDialog (spec v2 §7).
+    <ConfirmDialog
+      as="form"
+      className="form-danh-muc m-0"
       aria-label={title}
       onSubmit={(e) => {
         e.preventDefault();
@@ -631,26 +696,31 @@ export function MapFieldDeleteForm({
       onKeyDown={(e) => {
         if (e.key === "Escape" && !sending) onCancel();
       }}
+      title={title}
+      titleAs="h4"
+      tone="danger"
+      icon={Trash2}
+      actions={
+        <>
+          <Button type="submit" variant="danger" disabled={sending} aria-busy={sending}>
+            <BusyLabel busy={sending} label="Xác nhận xoá" busyText={BUSY_DELETING} />
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
+            Huỷ
+          </Button>
+        </>
+      }
     >
-      <h4>{title}</h4>
-      <p className="ghi-chu">{DELETE_FIELD_EXPLANATION}</p>
-      <div className="o-nhap">
+      <p className="ghi-chu m-0">{DELETE_FIELD_EXPLANATION}</p>
+      <div className="o-nhap m-0">
         <label htmlFor="o-ly-do-xoa-truong">Lý do xoá</label>
         <textarea id="o-ly-do-xoa-truong" name="reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
       </div>
       {error !== "" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {error}
         </p>
       )}
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh nut-xoa" disabled={sending}>
-          Xác nhận xoá
-        </button>
-        <button type="button" className="nut-phu" onClick={onCancel} disabled={sending}>
-          Huỷ
-        </button>
-      </div>
-    </form>
+    </ConfirmDialog>
   );
 }

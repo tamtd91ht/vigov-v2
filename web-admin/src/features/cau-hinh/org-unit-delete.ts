@@ -29,7 +29,8 @@ export function holdingLines(h: identity_orgUnitHoldingsOut): readonly string[] 
   return lines;
 }
 
-export const DELETE_BUTTON = "🗑 Xoá";
+// No emoji: the screen draws a lucide `Trash2` beside the word (ADR 0068 §2).
+export const DELETE_BUTTON = "Xoá";
 export const DELETE_CONFIRM_BUTTON = "Xác nhận xoá";
 export const DELETE_CANCEL_BUTTON = "Huỷ";
 export const DELETE_REASON_LABEL = "Lý do xoá";

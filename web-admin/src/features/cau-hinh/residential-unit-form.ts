@@ -282,8 +282,10 @@ export function headOptions(
 
 /* ---- words --------------------------------------------------------------------------------- */
 
-export const ADD_BUTTON = "+ Thêm thôn / tổ dân phố";
-export const EDIT_BUTTON = "✎ Sửa";
+// No leading "+": the screen draws a lucide `Plus` beside the words (ADR 0068 §2).
+export const ADD_BUTTON = "Thêm thôn / tổ dân phố";
+// No emoji: the screen draws a lucide `Pencil` beside the word (ADR 0068 §2).
+export const EDIT_BUTTON = "Sửa";
 export const RETIRE_BUTTON = "Ngừng dùng";
 export const REACTIVATE_BUTTON = "Dùng lại";
 export const CONFIRM_RETIRE_BUTTON = "Xác nhận ngừng dùng";

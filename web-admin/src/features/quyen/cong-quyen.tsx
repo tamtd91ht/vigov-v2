@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { NoAccess } from "@/components/ui/no-access";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { quyetDinhTheoKhoa, type QuyetDinhHien } from "@/lib/quyen";
 
@@ -84,7 +85,20 @@ export function KhungQuyen({
   // Thiếu quyền là trạng thái BÌNH THƯỜNG của một tài khoản, không phải lỗi: `trang-thai-rong`
   // chứ không `role="alert"` — báo động cắt ngang người dùng trình đọc màn hình vì một chuyện
   // không có gì hỏng.
-  if (!quyetDinh.hien) return <p className="trang-thai-rong">{cauThieuQuyen}</p>;
+  //
+  // DRAWN WITH THE SHARED `NoAccess` (spec v2 §8b), and the screen's own sentence stays, verbatim,
+  // in the same `<p className="trang-thai-rong">`: it names WHICH right is missing, which the generic
+  // title cannot. The legacy box of that class is flattened from the wrapper (same variant for every
+  // override) so it reads as the caption of the state, not a second box under it. No role is given,
+  // for the reason above.
+  if (!quyetDinh.hien) {
+    return (
+      <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
+        <NoAccess className="pb-4" />
+        <p className="trang-thai-rong">{cauThieuQuyen}</p>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }

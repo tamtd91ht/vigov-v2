@@ -1,5 +1,6 @@
 "use client";
 
+import { NoAccess } from "@/components/ui/no-access";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { DanhBaCanBo } from "./danh-ba-can-bo";
@@ -54,11 +55,15 @@ export function TabNguoiDung() {
   }
 
   if (!quyetDinh.hien) {
+    // Shared `NoAccess` (spec v2 §8b) + this tab's own sentence, verbatim, as its caption.
     return (
-      <p className="trang-thai-rong">
-        Tài khoản của bạn không có quyền quản lý người dùng, nên tab này không hiển thị. Liên hệ
-        quản trị viên của đơn vị nếu bạn cần quyền này.
-      </p>
+      <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
+        <NoAccess className="pb-4" />
+        <p className="trang-thai-rong">
+          Tài khoản của bạn không có quyền quản lý người dùng, nên tab này không hiển thị. Liên hệ
+          quản trị viên của đơn vị nếu bạn cần quyền này.
+        </p>
+      </div>
     );
   }
 

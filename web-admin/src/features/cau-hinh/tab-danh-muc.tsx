@@ -1,6 +1,24 @@
 "use client";
 
+import {
+  ListTree,
+  Pencil,
+  Plus,
+  Power,
+  PowerOff,
+  Trash2,
+  TriangleAlert,
+  Upload,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import {
   suaMuc,
@@ -43,7 +61,6 @@ import {
   daThem,
   daXoa,
   giaiThichKhongThaoTac,
-  lopTrangThaiMuc,
   nhanMacDinh,
   nhanNguon,
   nhanNhomRong,
@@ -278,16 +295,36 @@ export function TabDanhMuc() {
   }, [ban, dangGui, dangMo, xong]);
 
   return (
-    <section className="tab-danh-muc" aria-labelledby="tieu-de-danh-muc">
-      <h2 id="tieu-de-danh-muc">Danh mục</h2>
-      <p className="ghi-chu">{GHI_CHU_BA_TANG}</p>
+    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-danh-muc">
+      <Card>
+        <CardHeader>
+          <div className="min-w-0 flex-1 basis-64">
+            <CardTitle as="h2" id="tieu-de-danh-muc" className="flex items-center gap-2">
+              <ListTree aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+              Danh mục
+            </CardTitle>
+            <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{GHI_CHU_BA_TANG}</p>
+          </div>
+        </CardHeader>
+        <CardContent className="flex min-w-0 flex-col gap-3 empty:hidden [&>*]:my-0">
 
       {/* MỘT dòng `role="status"` cho cả tab, không phải bảy. Bảy vùng thông báo cùng đọc
           "Đang tải…" là bảy lần trình đọc màn hình ngắt lời người dùng về cùng một chuyện. */}
-      {bay === null && <p role="status">Đang tải danh mục của đơn vị…</p>}
+      {bay === null && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải danh mục của đơn vị…
+          </p>
+          <SkeletonRows rows={4} className="rounded-xl border border-line" />
+        </>
+      )}
 
       {/* Câu xác nhận sau khi ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+      {cauDaXong !== "" && (
+        <p role="status" className="text-sm font-medium text-success-600">
+          {cauDaXong}
+        </p>
+      )}
 
       {/* Không đọc được quyền (phiên hết hạn, mạng hỏng) thì nói đúng câu của máy chủ, và không
           vẽ nút ghi nào. Đóng khi không chắc. */}
@@ -297,10 +334,12 @@ export function TabDanhMuc() {
         </p>
       )}
       {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen" && (
-        <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>
+        <Notice tone="neutral">{CAU_THIEU_QUYEN_GHI}</Notice>
       )}
 
-      {coMucNao && <p className="ghi-chu">{GIAI_THICH_DA_TAT}</p>}
+      {coMucNao && <p className="ghi-chu text-[13px] text-ink-500">{GIAI_THICH_DA_TAT}</p>}
+        </CardContent>
+      </Card>
 
       {nhom.map((n) => {
         const groupWrite = n.ghi;
@@ -460,32 +499,45 @@ export function NhomMuc({
   const veDuocNutGhi = ghi !== null && coQuyenGhi;
 
   return (
-    <section className="nhom-danh-muc" aria-labelledby={maTieuDe}>
-      <h3 id={maTieuDe}>
-        {nhom.nhan}
-        {nhom.trangThai.pha === "coMuc" && (
-          <span className="dem-muc">{nhanSoMuc(nhom.trangThai.muc.length)}</span>
+    // One card per group (spec v2 §7): title + count on the left, the group's own buttons on the right.
+    <section
+      className="nhom-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface p-0 shadow-sm"
+      aria-labelledby={maTieuDe}
+    >
+      <CardHeader className="m-0 justify-between">
+        <div className="min-w-0 flex-1 basis-64">
+          <h3 id={maTieuDe} className="m-0 flex flex-wrap items-center gap-2 text-[15px] leading-snug font-semibold text-ink-900">
+            {nhom.nhan}
+            {nhom.trangThai.pha === "coMuc" && (
+              <span className="dem-muc text-xs font-medium text-ink-500">{nhanSoMuc(nhom.trangThai.muc.length)}</span>
+            )}
+          </h3>
+          {/* Nhóm chưa có tuyến ghi thì NÓI RA, một lần, ngay dưới tiêu đề của chính nó. Không vẽ
+              nút mờ để dành chỗ: một nút bấm vào không có gì xảy ra khiến cán bộ tin mình bấm sai. */}
+          {ghi === null && <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{GHI_CHU_NHOM_CHI_XEM}</p>}
+        </div>
+
+        {((veDuocNutGhi && ghi !== null) || importAllowed) && (
+          <p className="cum-nut m-0 flex flex-wrap items-center gap-2">
+            {veDuocNutGhi && ghi !== null && (
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                onClick={() => thaoTac.them(ghi, nhom.nhan)}
+              >
+                {NUT_THEM}
+              </Button>
+            )}
+            {importAllowed && (
+              <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
+                {IMPORT_BUTTON}
+              </Button>
+            )}
+          </p>
         )}
-      </h3>
-
-      {/* Nhóm chưa có tuyến ghi thì NÓI RA, một lần, ngay dưới tiêu đề của chính nó. Không vẽ
-          nút mờ để dành chỗ: một nút bấm vào không có gì xảy ra khiến cán bộ tin mình bấm sai. */}
-      {ghi === null && <p className="ghi-chu">{GHI_CHU_NHOM_CHI_XEM}</p>}
-
-      {((veDuocNutGhi && ghi !== null) || importAllowed) && (
-        <p className="cum-nut">
-          {veDuocNutGhi && ghi !== null && (
-            <button type="button" className="nut-phu" onClick={() => thaoTac.them(ghi, nhom.nhan)}>
-              {NUT_THEM}
-            </button>
-          )}
-          {importAllowed && (
-            <button type="button" className="nut-phu" onClick={onOpenImport}>
-              {IMPORT_BUTTON}
-            </button>
-          )}
-        </p>
-      )}
+      </CardHeader>
+      <div className="flex min-w-0 flex-col gap-3 p-4 empty:hidden [&>*]:my-0">
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải, không rẽ nhánh theo `code`, không
           hiện `trace_id` (`lib/api/goi.ts`). Năm dịch vụ đứng sau bảy nhóm, nên một nhóm hỏng
@@ -517,6 +569,7 @@ export function NhomMuc({
 
       {form}
       {importPanel}
+      </div>
     </section>
   );
 }
@@ -558,8 +611,8 @@ function BangMuc({
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím — ở 320px bảng cuộn
     // ngang chứ không đổi thành thẻ, vì đổi `display` của phần tử bảng làm mất ngữ nghĩa bảng với
     // trình đọc màn hình (cùng lý lẽ với `bang-can-bo`).
-    <div className="bang-cuon" role="region" aria-label={`Danh mục ${nhan}`} tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll sticky aria-label={`Danh mục ${nhan}`}>
+      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
         <caption className="an-thi-giac">
           Các mục của danh mục {nhan}, theo đúng thứ tự đơn vị đã sắp
         </caption>
@@ -594,7 +647,8 @@ function BangMuc({
               <td>{nhanMacDinh(m.is_default)}</td>
               {ghi !== null && <td>{laMucGhi(m) ? nhanNguon(m.source) : ""}</td>}
               <td>
-                <span className={lopTrangThaiMuc(m.active)}>{nhanTrangThaiMuc(m.active)}</span>
+                {/* Tone by the CODE (`active`); icon + word, never colour alone. */}
+                <Badge tone={m.active ? "success" : "neutral"}>{nhanTrangThaiMuc(m.active)}</Badge>
               </td>
               {ghi !== null && (
                 <td className="o-thao-tac">
@@ -611,7 +665,7 @@ function BangMuc({
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -653,55 +707,63 @@ function NutCuaDong({
   }
 
   return (
-    <span className="cum-nut">
+    <span className="cum-nut flex flex-wrap items-center gap-1.5">
       {cho.doiNhan && (
-        <button
+        <Button
           type="button"
-          className="nut-phu"
+          variant="ghost"
+          size="sm"
           aria-label={nhanNutCuaDong(NUT_SUA, m.label)}
+          icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.sua(ghi, nhanNhom, m)}
         >
           {NUT_SUA}
-        </button>
+        </Button>
       )}
 
       {/* `Tắt` THEO TẦNG, `Bật lại` THÌ KHÔNG. Trigger chỉ từ chối chiều bật → tắt ở tầng 3;
           chiều ngược lại luôn được phép, và phải được phép, nếu không một dòng tầng 3 lỡ tắt
           sẽ không còn đường quay lại (`tang-danh-muc.ts`, `choBatLai`). */}
       {cho.tat && m.active && (
-        <button
+        <Button
           type="button"
-          className="nut-phu"
+          variant="ghost"
+          size="sm"
           aria-label={nhanNutCuaDong(NUT_TAT, m.label)}
+          icon={<PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, false)}
         >
           {NUT_TAT}
-        </button>
+        </Button>
       )}
       {batLaiDuoc && (
-        <button
+        <Button
           type="button"
-          className="nut-phu"
+          variant="ghost"
+          size="sm"
           aria-label={nhanNutCuaDong(NUT_BAT_LAI, m.label)}
+          icon={<Power aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.datTrangThai(ghi, nhanNhom, m, true)}
         >
           {NUT_BAT_LAI}
-        </button>
+        </Button>
       )}
 
       {cho.xoa && (
-        <button
+        <Button
           type="button"
-          className="nut-phu nut-xoa"
+          variant="danger"
+          size="sm"
           aria-label={nhanNutCuaDong(NUT_XOA, m.label)}
+          icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
           onClick={() => thaoTac.xoa(ghi, nhanNhom, m)}
         >
           {NUT_XOA}
-        </button>
+        </Button>
       )}
 
       {/* Tầng 2 và 3 vẫn phải nói vì sao thiếu nút, kể cả khi còn nút `Sửa` đứng bên cạnh. */}
-      {!cho.xoa && <span className="ghi-chu">{giaiThichKhongThaoTac(m.tier)}</span>}
+      {!cho.xoa && <span className="ghi-chu text-xs whitespace-normal text-ink-500">{giaiThichKhongThaoTac(m.tier)}</span>}
     </span>
   );
 }
@@ -744,14 +806,19 @@ export function BieuMauGhi({
 
   return (
     <form
-      className="form-danh-muc"
+      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full [&>.canh-bao-pham-vi]:col-span-full"
       aria-label={tieuDe}
       onSubmit={(e) => {
         e.preventDefault();
         onGui();
       }}
     >
-      <h4>{tieuDe}</h4>
+      <h4 className="flex items-center gap-2 text-[15px] font-semibold text-ink-900">
+        {dangMo.kieu === "xoa" && (
+          <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-danger-600" />
+        )}
+        {tieuDe}
+      </h4>
 
       {dangMo.kieu === "them" && (
         <div className="o-nhap">
@@ -798,7 +865,7 @@ export function BieuMauGhi({
             />
           </div>
 
-          <div className="o-nhap o-chon">
+          <div className="o-nhap o-chon self-end">
             <input
               id="o-mac-dinh-muc"
               name="macDinh"
@@ -813,7 +880,9 @@ export function BieuMauGhi({
 
       {dangMo.kieu === "xoa" && (
         <>
-          <p className="canh-bao-pham-vi">{CANH_BAO_XOA}</p>
+          <Notice tone="neutral" icon={TriangleAlert} className="canh-bao-pham-vi col-span-full m-0 border-l border-line">
+            {CANH_BAO_XOA}
+          </Notice>
           <div className="o-nhap">
             <label htmlFor="o-ly-do-xoa">{O_LY_DO_XOA}</label>
             {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được
@@ -846,13 +915,17 @@ export function BieuMauGhi({
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {dangMo.kieu === "xoa" ? NUT_XAC_NHAN_XOA : NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
+      <div className="cum-nut flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant={dangMo.kieu === "xoa" ? "danger" : "primary"} disabled={dangGui} aria-busy={dangGui}>
+          <BusyLabel
+            busy={dangGui}
+            label={dangMo.kieu === "xoa" ? NUT_XAC_NHAN_XOA : NUT_LUU}
+            busyText={dangMo.kieu === "xoa" ? BUSY_DELETING : BUSY_SAVING}
+          />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
           {NUT_HUY}
-        </button>
+        </Button>
       </div>
     </form>
   );

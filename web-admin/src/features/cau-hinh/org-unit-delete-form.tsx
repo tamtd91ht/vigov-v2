@@ -1,5 +1,10 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { identity_boPhanRa, identity_orgUnitHoldingsOut } from "@/lib/api/schema.gen";
 
 import {
@@ -51,8 +56,11 @@ export function OrgUnitDeleteForm({
   const title = deleteFormTitle(unit.name);
   const lines = refusal?.holdings ? holdingLines(refusal.holdings) : [];
   return (
-    <form
-      className="form-danh-muc form-bo-phan"
+    // The existing confirm form, framed as the shared ConfirmDialog (spec v2 §7): same element,
+    // same `onSubmit`/`onKeyDown`, the specific title, a red confirm button that names the action.
+    <ConfirmDialog
+      as="form"
+      className="form-danh-muc form-bo-phan m-0"
       aria-label={title}
       onSubmit={(e) => {
         e.preventDefault();
@@ -61,11 +69,24 @@ export function OrgUnitDeleteForm({
       onKeyDown={(e) => {
         if (e.key === "Escape" && !sending) onCancel();
       }}
+      title={title}
+      titleAs="h4"
+      tone="danger"
+      icon={Trash2}
+      actions={
+        <>
+          <Button type="submit" variant="danger" disabled={sending} aria-busy={sending}>
+            <BusyLabel busy={sending} label={DELETE_CONFIRM_BUTTON} busyText={BUSY_DELETING} />
+          </Button>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
+            {DELETE_CANCEL_BUTTON}
+          </Button>
+        </>
+      }
     >
-      <h4>{title}</h4>
-      <p className="ghi-chu">{DELETE_EXPLANATION}</p>
+      <p className="ghi-chu m-0">{DELETE_EXPLANATION}</p>
 
-      <div className="o-nhap">
+      <div className="o-nhap m-0">
         <label htmlFor={DELETE_REASON_ID}>{DELETE_REASON_LABEL}</label>
         <textarea
           id={DELETE_REASON_ID}
@@ -82,13 +103,13 @@ export function OrgUnitDeleteForm({
       </div>
 
       {localError !== "" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {localError}
         </p>
       )}
 
       {refusal !== null && (
-        <div className="thong-bao-loi" role="alert">
+        <div className="thong-bao-loi m-0 [&_p]:m-0 [&_ul]:my-1" role="alert">
           {/* The server's sentence first, verbatim — it already says "chuyển trước khi xoá". */}
           <p>{refusal.message}</p>
           {lines.length > 0 && (
@@ -104,14 +125,6 @@ export function OrgUnitDeleteForm({
         </div>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh nut-xoa" disabled={sending}>
-          {DELETE_CONFIRM_BUTTON}
-        </button>
-        <button type="button" className="nut-phu" onClick={onCancel} disabled={sending}>
-          {DELETE_CANCEL_BUTTON}
-        </button>
-      </div>
-    </form>
+    </ConfirmDialog>
   );
 }

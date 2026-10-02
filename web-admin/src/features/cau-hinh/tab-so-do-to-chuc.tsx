@@ -1,6 +1,15 @@
 "use client";
 
+import { Building2, Network, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { identity_boPhanRa } from "@/lib/api/schema.gen";
@@ -267,11 +276,29 @@ export function TabSoDoToChuc() {
     );
 
   return (
-    <section className="tab-so-do-to-chuc" aria-labelledby="tieu-de-so-do">
-      <h2 id="tieu-de-so-do">{TIEU_DE_SO_DO}</h2>
+    <Card as="section" className="tab-so-do-to-chuc" aria-labelledby="tieu-de-so-do">
+      <CardHeader>
+        <CardTitle as="h2" id="tieu-de-so-do" className="flex items-center gap-2">
+          <Network aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          {TIEU_DE_SO_DO}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
 
-      {tai.pha === "dangDoc" && <p role="status">{DANG_TAI}</p>}
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+      {/* FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets placeholder rows. */}
+      {tai.pha === "dangDoc" && (
+        <>
+          <p role="status" className="an-thi-giac">
+            {DANG_TAI}
+          </p>
+          <SkeletonRows rows={4} columns={2} className="rounded-xl border border-line" />
+        </>
+      )}
+      {cauDaXong !== "" && (
+        <p role="status" className="text-sm font-medium text-success-600">
+          {cauDaXong}
+        </p>
+      )}
 
       {quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-doc-duoc" && (
         <p className="thong-bao-loi" role="alert">
@@ -304,7 +331,8 @@ export function TabSoDoToChuc() {
               : null
         }
       />
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -358,34 +386,36 @@ export function KhungSoDo({
   return (
     <>
       {coQuyenGhi && (
-        <p className="cum-nut">
-          <button type="button" className="nut-phu" onClick={onOpenImport}>
+        <p className="cum-nut m-0 flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={onOpenImport}>
             {IMPORT_BUTTON}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="nut-phu"
+            variant="primary"
             id={idNutMo("themGoc")}
+            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
             onClick={thaoTac.themGoc}
           >
             {NUT_THEM_BO_PHAN}
-          </button>
+          </Button>
         </p>
       )}
-      {thieuQuyen && <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>}
+      {/* Read-only is a normal state of an account, not an error: a neutral note, no role. */}
+      {thieuQuyen && (
+        <Notice tone="neutral" className="m-0">
+          {CAU_THIEU_QUYEN_GHI}
+        </Notice>
+      )}
 
       {bieuMauDauTab}
 
       {/* LỖI ĐỌC: nguyên câu của máy chủ, không diễn giải, không rẽ nhánh theo `code`. */}
       {tai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {tai.thongBao}
-        </p>
+        <ErrorState role="alert" title="Chưa tải được sơ đồ tổ chức" message={tai.thongBao} />
       )}
 
-      {tai.pha === "xong" && cay.length === 0 && (
-        <p className="trang-thai-rong">{nhanCayRong(coQuyenGhi)}</p>
-      )}
+      {tai.pha === "xong" && cay.length === 0 && <EmptyState icon={Network} title={nhanCayRong(coQuyenGhi)} />}
 
       {tai.pha === "xong" && cay.length > 0 && (
         <CapBoPhan
@@ -455,46 +485,54 @@ function TheBoPhan({
   return (
     <div className="the-bo-phan">
       <div className="the-bo-phan-than">
-        <span className="the-bo-phan-ten">
-          <span aria-hidden="true">🏛 </span>
+        <span className="the-bo-phan-ten inline-flex items-center gap-2">
+          <Building2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
           {bp.name}
         </span>
         {/* Mã font đẳng chiều: nó là slug đọc qua điện thoại, `l`/`1` phải phân biệt được. */}
         <span className="ma-muc the-bo-phan-ma">{bp.code}</span>
       </div>
-      <span className="the-bo-phan-so">
-        <span aria-hidden="true">👥 </span>
+      <span className="the-bo-phan-so inline-flex items-center gap-1.5">
+        <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-ink-500" />
         {nhanSoCanBo(bp.staff_count)}
       </span>
       {coQuyenGhi && (
-        <span className="cum-nut">
-          <button
+        // Icon + word on every button, Xoá included (spec v2 §7: an action with a consequence is never
+        // icon-only). Same ids, names and handlers.
+        <span className="cum-nut flex flex-wrap items-center gap-1.5">
+          <Button
             type="button"
-            className="nut-phu"
+            variant="ghost"
+            size="sm"
             id={idNutMo("themCon", bp.id)}
             aria-label={nhanNutThemCon(bp.name)}
+            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
             onClick={() => thaoTac.themCon(bp)}
           >
             {NUT_THEM_CON}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="nut-phu"
+            variant="ghost"
+            size="sm"
             id={idNutMo("sua", bp.id)}
             aria-label={nhanNutSua(bp.name)}
+            icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
             onClick={() => thaoTac.sua(bp)}
           >
             {NUT_SUA_BO_PHAN}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="nut-phu nut-xoa"
+            variant="danger"
+            size="sm"
             id={deleteButtonId(bp.id)}
             aria-label={deleteButtonLabel(bp.name)}
+            icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
             onClick={() => thaoTac.xoa(bp)}
           >
             {DELETE_BUTTON}
-          </button>
+          </Button>
         </span>
       )}
     </div>
@@ -541,7 +579,7 @@ export function BieuMauBoPhan({
 
   return (
     <form
-      className="form-danh-muc form-bo-phan"
+      className="form-danh-muc form-bo-phan grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full"
       aria-label={tieuDe}
       onSubmit={(e) => {
         e.preventDefault();
@@ -552,7 +590,7 @@ export function BieuMauBoPhan({
         if (e.key === "Escape" && !dangGui) onHuy();
       }}
     >
-      <h4>{tieuDe}</h4>
+      <h4 className="text-[15px] font-semibold text-ink-900">{tieuDe}</h4>
 
       <div className="o-nhap">
         <label htmlFor={O_TEN_ID}>{O_TEN}</label>
@@ -641,13 +679,13 @@ export function BieuMauBoPhan({
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
+      <div className="cum-nut flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui}>
+          <BusyLabel busy={dangGui} label={NUT_LUU} busyText={BUSY_SAVING} />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
           {NUT_HUY}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -1,4 +1,7 @@
+import { KeyRound, LockKeyhole } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { FormDoiMatKhau } from "@/features/mat-khau/form-doi-mat-khau";
@@ -45,12 +48,24 @@ export default async function TrangDoiMatKhau() {
       <PhienProvider>
         <DauTrang withCommune />
         <main className="than-trang">
-          <h1>Đổi mật khẩu</h1>
-          <p className="mo-ta-trang">
-            Mật khẩu của tài khoản đang đăng nhập trên trình duyệt này.
-          </p>
-          <NhacBatDoiMatKhau />
-          <FormDoiMatKhau />
+          {/* One task on one screen: a narrow, centred column inside the form-page width (spec v2
+              §5 `.page--form`), the same shape at 320px as on a wide screen. */}
+          <div className="page--form mx-auto w-full">
+            <div className="mx-auto flex w-full max-w-[28rem] flex-col [&>.nhac-bat-doi]:mt-0">
+              <PageHeader
+                icon={KeyRound}
+                title="Đổi mật khẩu"
+                subtitle={
+                  <span className="inline-flex items-center gap-1.5">
+                    <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                    Mật khẩu của tài khoản đang đăng nhập trên trình duyệt này.
+                  </span>
+                }
+              />
+              <NhacBatDoiMatKhau />
+              <FormDoiMatKhau />
+            </div>
+          </div>
         </main>
       </PhienProvider>
     </CauHinhXaProvider>

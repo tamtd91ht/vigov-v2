@@ -1,6 +1,13 @@
 "use client";
 
+import { CircleCheck, Download, FileSearch, FileSpreadsheet, Upload, X } from "lucide-react";
 import { useReducer, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { commitImport, downloadImportTemplate, previewImport } from "@/lib/api/excel-import";
 import type { ImportPreview, ImportResult } from "@/lib/api/excel-import";
@@ -144,15 +151,31 @@ export function ExcelImportView<R, C = R>({
   const titleId = `tieu-de-nhap-${target.id}`;
   const fileId = `o-tep-nhap-${target.id}`;
   return (
-    <section className="form-danh-muc" aria-labelledby={titleId}>
-      <h4 id={titleId}>{target.title}</h4>
-      <p className="ghi-chu">{target.explanation}</p>
-
-      <p>
-        <button type="button" className="nut-phu" onClick={onDownloadTemplate} disabled={busy !== ""}>
+    // A card of its own (spec v2 §7); NO HOOKS anywhere in this view — the staff-import test renders
+    // it under a mocked React that only knows useState/useReducer inside its own render loop.
+    <section
+      className="form-danh-muc m-0 min-w-0 overflow-hidden rounded-card border border-line bg-surface p-0 shadow-sm"
+      aria-labelledby={titleId}
+    >
+      <CardHeader className="m-0 justify-between">
+        <div className="min-w-0 flex-1 basis-64">
+          <CardTitle as="h4" id={titleId} className="flex items-center gap-2">
+            <FileSpreadsheet aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+            {target.title}
+          </CardTitle>
+          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{target.explanation}</p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          icon={<Download aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={onDownloadTemplate}
+          disabled={busy !== ""}
+        >
           {TEMPLATE_BUTTON}
-        </button>
-      </p>
+        </Button>
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
       {templateError !== "" && (
         <p className="thong-bao-loi" role="alert">
           {templateError}
@@ -160,7 +183,7 @@ export function ExcelImportView<R, C = R>({
       )}
 
       {!done && (
-        <div className="o-nhap">
+        <div className="o-nhap m-0">
           <label htmlFor={fileId}>{FILE_LABEL}</label>
           <input
             id={fileId}
@@ -173,10 +196,17 @@ export function ExcelImportView<R, C = R>({
       )}
 
       {!done && (
-        <p>
-          <button type="button" className="nut-phu" onClick={onPreview} disabled={!fileChosen || busy !== ""}>
-            {busy === "preview" ? PREVIEW_SENDING : PREVIEW_BUTTON}
-          </button>
+        <p className="m-0">
+          <Button
+            type="button"
+            variant="secondary"
+            icon={busy === "preview" ? undefined : <FileSearch aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={onPreview}
+            disabled={!fileChosen || busy !== ""}
+            aria-busy={busy === "preview"}
+          >
+            <BusyLabel busy={busy === "preview"} label={PREVIEW_BUTTON} busyText={PREVIEW_SENDING} />
+          </Button>
         </p>
       )}
 
@@ -198,26 +228,36 @@ export function ExcelImportView<R, C = R>({
       )}
 
       {result !== null && !result.ok && (
-        <div className="thong-bao-loi" role="alert">
+        <div className="thong-bao-loi [&_p]:m-0 [&>p]:mb-2" role="alert">
           <p>{result.message}</p>
           {result.errors.length > 0 && <ErrorsTable rows={errorRows(result.errors)} />}
         </div>
       )}
 
       {result !== null && result.ok && (
-        <p role="status">{target.importedSentence(result.created === null ? null : result.created.length)}</p>
+        <p role="status" className="flex items-center gap-2 font-medium text-success-600">
+          <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0" />
+          {target.importedSentence(result.created === null ? null : result.created.length)}
+        </p>
       )}
 
       {/* A target with its own result view owns closing once the import is in (`resultView`). */}
       {result !== null && result.ok && target.resultView !== undefined ? (
         target.resultView(result.created, onClose)
       ) : (
-        <p>
-          <button type="button" className="nut-phu" onClick={onClose} disabled={busy === "import"}>
+        <p className="m-0 flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={onClose}
+            disabled={busy === "import"}
+          >
             {CLOSE_BUTTON}
-          </button>
+          </Button>
         </p>
       )}
+      </CardContent>
     </section>
   );
 }
@@ -237,18 +277,18 @@ function PreviewBody<R, C>({
 }) {
   if (!preview.valid) {
     return (
-      <div className="thong-bao-loi" role="alert">
+      <div className="thong-bao-loi [&_p]:m-0 [&>p]:mb-2" role="alert">
         <p>{target.errorsHeading}</p>
         <ErrorsTable rows={errorRows(preview.errors)} />
       </div>
     );
   }
-  if (!canImport(preview)) return <p className="trang-thai-rong">{NOTHING_TO_CREATE}</p>;
+  if (!canImport(preview)) return <EmptyState icon={FileSpreadsheet} title={NOTHING_TO_CREATE} />;
   return (
-    <div>
+    <div className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
       <p>{target.previewLead(preview.rows.length)}</p>
-      <div className="bang-cuon" role="region" aria-label={target.rowsLabel} tabIndex={0}>
-        <table className="bang-danh-muc">
+      <TableScroll sticky aria-label={target.rowsLabel} className="m-0">
+        <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
           <thead>
             <tr>
               {target.columns.map((c) => (
@@ -270,11 +310,18 @@ function PreviewBody<R, C>({
             ))}
           </tbody>
         </table>
-      </div>
-      <p>
-        <button type="button" className="nut-chinh" onClick={onImport} disabled={disabled}>
-          {importing ? IMPORT_SENDING : target.confirmButton}
-        </button>
+      </TableScroll>
+      <p className="m-0 flex justify-end">
+        <Button
+          type="button"
+          variant="primary"
+          icon={importing ? undefined : <Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={onImport}
+          disabled={disabled}
+          aria-busy={importing}
+        >
+          <BusyLabel busy={importing} label={target.confirmButton} busyText={IMPORT_SENDING} />
+        </Button>
       </p>
     </div>
   );
@@ -283,8 +330,8 @@ function PreviewBody<R, C>({
 /** Row · column · message. A table, not a list: staff go back to the spreadsheet cell by cell. */
 export function ErrorsTable({ rows }: { rows: readonly ErrorRow[] }) {
   return (
-    <div className="bang-cuon" role="region" aria-label="Lỗi trong tệp" tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll sticky aria-label="Lỗi trong tệp" className="m-0">
+      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
         <thead>
           <tr>
             <th scope="col">Dòng</th>
@@ -303,6 +350,6 @@ export function ErrorsTable({ rows }: { rows: readonly ErrorRow[] }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }

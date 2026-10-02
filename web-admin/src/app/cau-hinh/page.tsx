@@ -1,4 +1,7 @@
+import { Settings, SlidersHorizontal } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -80,12 +83,21 @@ export default async function TrangCauHinh() {
         <ThanhBen />
         <DauTrang />
         <main className="than-trang">
-          <h1>Cấu hình hệ thống</h1>
-          <p className="mo-ta-trang">
-            Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
-          </p>
-          {/* Thứ tự tab của đặc tả §0 nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). */}
-          <KhungTabCauHinh />
+          <PageHeader
+            icon={Settings}
+            title="Cấu hình hệ thống"
+            subtitle={
+              <span className="inline-flex items-center gap-1.5">
+                <SlidersHorizontal aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
+              </span>
+            }
+          />
+          {/* Thứ tự tab của đặc tả §0 nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). `min-w-0`: a
+              wide tab (the permission matrix) scrolls inside its own region, never the page. */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <KhungTabCauHinh />
+          </div>
           {/* Những phần của đặc tả chưa dựng, kèm lý do — ở CUỐI trang để không chen giữa các tab
               đang dùng được (`features/cau-hinh/nhan-cau-hinh.ts`). */}
           <KhoiChuaDung />

@@ -73,7 +73,7 @@ export function unheldPermissionWarnings(
     out.push({
       code: w.code,
       label,
-      sentence: `⚠ Chưa vai trò nào (ngoài Quản trị hệ thống) có quyền "${label}" (${w.code}) — ${w.consequence}`,
+      sentence: `Chưa vai trò nào (ngoài Quản trị hệ thống) có quyền "${label}" (${w.code}) — ${w.consequence}`,
     });
   }
   return out;

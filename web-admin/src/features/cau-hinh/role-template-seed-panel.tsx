@@ -1,6 +1,11 @@
 "use client";
 
+import { CircleCheck, LayoutTemplate } from "lucide-react";
 import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import type { KetQua } from "@/lib/api/goi";
 import { seedRoleTemplates } from "@/lib/api/role-templates";
@@ -70,27 +75,48 @@ export function RoleTemplateSeedView({
   onCancel: () => void;
 }) {
   return (
-    <div className="khoi-vai-tro-mau">
-      <p className="ghi-chu">{SEED_HINT}</p>
-
+    <div className="khoi-vai-tro-mau flex min-w-0 flex-col gap-3 [&>*]:my-0">
       {phase.kind === "confirming" || phase.kind === "sending" ? (
-        <div className="form-danh-muc" role="group" aria-label={SEED_BUTTON}>
-          <p>{SEED_CONFIRM_TEXT}</p>
-          <div className="cum-nut">
-            <button type="button" className="nut-chinh" onClick={onConfirm} disabled={phase.kind === "sending"}>
-              {phase.kind === "sending" ? SEED_SENDING : SEED_CONFIRM_BUTTON}
-            </button>
-            <button type="button" className="nut-phu" onClick={onCancel} disabled={phase.kind === "sending"}>
-              {SEED_CANCEL_BUTTON}
-            </button>
-          </div>
-        </div>
+        <>
+          <p className="ghi-chu m-0 text-[13px] text-ink-500">{SEED_HINT}</p>
+          <ConfirmDialog
+            className="form-danh-muc m-0"
+            role="group"
+            aria-label={SEED_BUTTON}
+            icon={LayoutTemplate}
+            title={SEED_BUTTON}
+            actions={
+              <>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={onConfirm}
+                  disabled={phase.kind === "sending"}
+                  aria-busy={phase.kind === "sending"}
+                >
+                  <BusyLabel busy={phase.kind === "sending"} label={SEED_CONFIRM_BUTTON} busyText={SEED_SENDING} />
+                </Button>
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={phase.kind === "sending"}>
+                  {SEED_CANCEL_BUTTON}
+                </Button>
+              </>
+            }
+          >
+            <p className="m-0">{SEED_CONFIRM_TEXT}</p>
+          </ConfirmDialog>
+        </>
       ) : (
-        <p>
-          <button type="button" className="nut-phu" onClick={onOpen}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{SEED_HINT}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<LayoutTemplate aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={onOpen}
+          >
             {SEED_BUTTON}
-          </button>
-        </p>
+          </Button>
+        </div>
       )}
 
       {phase.kind === "done" && !phase.result.ok && (
@@ -109,8 +135,11 @@ export function RoleTemplateSeedView({
 function SeedResult({ result }: { result: identity_seedRoleTemplatesOut }) {
   const { lead, blocks } = seedSummary(result);
   return (
-    <div role="status">
-      <p>{lead}</p>
+    <div role="status" className="rounded-xl border border-line bg-surface-muted px-3.5 py-3 text-[13px] [&_p]:m-0 [&_ul]:my-1">
+      <p className="flex items-center gap-2 font-medium text-success-600">
+        <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0" />
+        {lead}
+      </p>
       {blocks.map((b) => (
         <div key={b.heading}>
           <p className="dong-phu">{b.heading}</p>

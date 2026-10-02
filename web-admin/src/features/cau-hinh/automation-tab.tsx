@@ -1,6 +1,17 @@
 "use client";
 
+import { BellRing, History, Play, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NoAccess } from "@/components/ui/no-access";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
@@ -74,9 +85,13 @@ export function AutomationTab() {
         {decision.thongBao}
       </p>
     ) : (
-      <p className="trang-thai-rong">
-        Tài khoản của bạn không có quyền cấu hình tự động hoá, nên tab này không hiển thị.
-      </p>
+      // Shared `NoAccess` (spec v2 §8b) + this tab's own sentence, verbatim, as its caption.
+      <div className="khung-thieu-quyen flex min-w-0 flex-col items-center pb-10 [&>.trang-thai-rong]:m-0 [&>.trang-thai-rong]:max-w-md [&>.trang-thai-rong]:border-0 [&>.trang-thai-rong]:bg-transparent [&>.trang-thai-rong]:px-4 [&>.trang-thai-rong]:py-0 [&>.trang-thai-rong]:text-center [&>.trang-thai-rong]:text-[13px] [&>.trang-thai-rong]:text-ink-500">
+        <NoAccess className="pb-4" />
+        <p className="trang-thai-rong">
+          Tài khoản của bạn không có quyền cấu hình tự động hoá, nên tab này không hiển thị.
+        </p>
+      </div>
     );
   }
 
@@ -86,18 +101,37 @@ export function AutomationTab() {
 /** Pure list rendering — exported so the loading, failure and empty states have tests. */
 export function AutomationTabView({ loaded }: { loaded: KetQua<readonly AutomationJob[]> | null }) {
   return (
-    <section className="tab-danh-muc" aria-labelledby="tieu-de-tu-dong-hoa">
-      <h2 id="tieu-de-tu-dong-hoa">{AUTOMATION_TITLE}</h2>
-      <p className="ghi-chu">{AUTOMATION_GUIDANCE}</p>
-      <p className="ghi-chu">{AUTOMATION_RECIPIENTS}</p>
+    <section className="tab-danh-muc flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-tu-dong-hoa">
+      <div className="min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+        <CardHeader className="m-0">
+          <div className="min-w-0 flex-1 basis-64">
+            <CardTitle as="h2" id="tieu-de-tu-dong-hoa" className="flex items-center gap-2">
+              <BellRing aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+              {AUTOMATION_TITLE}
+            </CardTitle>
+            <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{AUTOMATION_GUIDANCE}</p>
+          </div>
+        </CardHeader>
+        <div className="p-4">
+          <Notice tone="info" className="ghi-chu">
+            {AUTOMATION_RECIPIENTS}
+          </Notice>
+        </div>
+      </div>
       {loaded === null ? (
-        <p role="status">Đang tải cấu hình tự động hoá…</p>
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải cấu hình tự động hoá…
+          </p>
+          <SkeletonRows rows={3} className="rounded-card border border-line bg-surface" />
+        </>
       ) : !loaded.ok ? (
+        // Kept as the one-line alert (not ErrorState): the tab's test pins this exact markup.
         <p className="thong-bao-loi" role="alert">
           {loaded.thongBao}
         </p>
       ) : loaded.duLieu.length === 0 ? (
-        <p className="trang-thai-rong">Chưa có việc tự động hoá nào.</p>
+        <EmptyState icon={BellRing} title="Chưa có việc tự động hoá nào." className="rounded-card border border-line bg-surface" />
       ) : (
         loaded.duLieu.map((j) => <AutomationJobCard key={j.job} initial={j} />)
       )}
@@ -184,30 +218,40 @@ export function AutomationJobCardView({
   const canRunNow = job.configured && job.enabled;
 
   return (
-    <article className="the-loi-he-thong" aria-labelledby={`${id}-ten`}>
-      <h3 id={`${id}-ten`}>{words.title}</h3>
-      {words.description !== "" && <p className="ghi-chu">{words.description}</p>}
-      <p>
-        <span className={job.configured && job.enabled ? "chip chip-hoat-dong" : "chip chip-ngung"}>
-          {stateSentence(job)}
-        </span>
-      </p>
+    <article
+      className="the-loi-he-thong m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0"
+      aria-labelledby={`${id}-ten`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-64">
+          <h3 id={`${id}-ten`} className="m-0 text-[15px] font-semibold text-ink-900">
+            {words.title}
+          </h3>
+          {words.description !== "" && <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{words.description}</p>}
+        </div>
+        <p className="m-0">
+          {/* Tone by the CODES (`configured`, `enabled`); icon + word, never colour alone. */}
+          <Badge tone={job.configured && job.enabled ? "success" : "neutral"} className="whitespace-normal">
+            {stateSentence(job)}
+          </Badge>
+        </p>
+      </div>
       {job.configured && job.enabled && (
-        <p className="ghi-chu">
+        <p className="ghi-chu text-[13px] text-ink-500">
           {cadenceSentence(job)} ({timezoneLabel(job.timezone)}). Bật từ {when(job.enabled_at)}.
         </p>
       )}
 
       <form
-        className="form-danh-muc"
+        className="form-danh-muc m-0"
         aria-label={`Cấu hình việc ${words.title}`}
         onSubmit={(e) => {
           e.preventDefault();
           onSave();
         }}
       >
-        <fieldset disabled={busy !== ""}>
-          <div className="o-nhap o-chon">
+        <fieldset disabled={busy !== ""} className="m-0 grid min-w-0 gap-4 border-0 p-0 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.ghi-chu]:col-span-full">
+          <div className="o-nhap o-chon col-span-full">
             <input
               id={`${id}-bat`}
               type="checkbox"
@@ -268,15 +312,26 @@ export function AutomationJobCardView({
             </div>
           )}
 
-          <div className="cum-nut">
-            <button type="submit" className="nut-chinh">
-              {busy === "save" ? SAVING : SAVE_BUTTON}
-            </button>
+          <div className="cum-nut flex flex-wrap justify-end gap-2">
             {canRunNow && (
-              <button type="button" className="nut-phu" onClick={onRunNow}>
-                {busy === "run" ? RUN_NOW_SENDING : RUN_NOW_BUTTON}
-              </button>
+              <Button
+                type="button"
+                variant="secondary"
+                icon={busy === "run" ? undefined : <Play aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                onClick={onRunNow}
+                aria-busy={busy === "run"}
+              >
+                <BusyLabel busy={busy === "run"} label={RUN_NOW_BUTTON} busyText={RUN_NOW_SENDING} />
+              </Button>
             )}
+            <Button
+              type="submit"
+              variant="primary"
+              icon={busy === "save" ? undefined : <Save aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              aria-busy={busy === "save"}
+            >
+              <BusyLabel busy={busy === "save"} label={SAVE_BUTTON} busyText={SAVING} />
+            </Button>
           </div>
           {!canRunNow && <p className="ghi-chu">{RUN_NOW_NEEDS_ON}</p>}
         </fieldset>
@@ -284,7 +339,9 @@ export function AutomationJobCardView({
 
       {notice !== null &&
         (notice.ok ? (
-          <p role="status">{notice.text}</p>
+          <p role="status" className="text-sm font-medium text-success-600">
+            {notice.text}
+          </p>
         ) : (
           // Server sentences (400 bound, 409 disabled / changed) arrive here verbatim.
           <p className="thong-bao-loi" role="alert">
@@ -292,14 +349,17 @@ export function AutomationJobCardView({
           </p>
         ))}
 
-      {requestLine !== null && <p className="ghi-chu">{requestLine}</p>}
+      {requestLine !== null && <p className="ghi-chu text-[13px] text-ink-500">{requestLine}</p>}
 
-      <h4>Lượt chạy gần nhất</h4>
+      <h4 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <History aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-ink-500" />
+        Lượt chạy gần nhất
+      </h4>
       {job.last_runs.length === 0 ? (
-        <p className="trang-thai-rong">{NO_RUNS_YET}</p>
+        <p className="trang-thai-rong m-0">{NO_RUNS_YET}</p>
       ) : (
-        <div className="bang-cuon" role="region" aria-label={`Lượt chạy gần nhất — ${words.title}`} tabIndex={0}>
-          <table className="bang-danh-muc">
+        <TableScroll sticky aria-label={`Lượt chạy gần nhất — ${words.title}`}>
+          <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
             <thead>
               <tr>
                 <th scope="col">Loại việc</th>
@@ -325,7 +385,7 @@ export function AutomationJobCardView({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
     </article>
   );

@@ -13,9 +13,10 @@ export const TIEU_DE_SO_DO = "Sơ đồ tổ chức";
  * tượng là một nút phải đoán, và trình đọc màn hình đọc `✎` thành tên một ký tự chứ không thành
  * "sửa" (cùng lý lẽ `GHI_CHU_NUT_CO_CHU` ở `nhan-danh-muc.ts`).
  */
-export const NUT_THEM_BO_PHAN = "+ Thêm bộ phận";
-export const NUT_THEM_CON = "＋ Thêm bộ phận con";
-export const NUT_SUA_BO_PHAN = "✎ Sửa";
+// No leading symbol: the screen draws a lucide `Plus` beside the word (ADR 0068 §2, spec §4).
+export const NUT_THEM_BO_PHAN = "Thêm bộ phận";
+export const NUT_THEM_CON = "Thêm bộ phận con";
+export const NUT_SUA_BO_PHAN = "Sửa";
 export const NUT_LUU = "Lưu";
 export const NUT_HUY = "Huỷ";
 
@@ -117,7 +118,7 @@ export const DANG_TAI = "Đang tải sơ đồ tổ chức của đơn vị…";
 export function nhanCayRong(themDuoc: boolean): string {
   const dau = "Đơn vị chưa có bộ phận nào trong sơ đồ tổ chức.";
   return themDuoc
-    ? `${dau} Bấm ${NUT_THEM_BO_PHAN} ở trên để lập bộ phận đầu tiên.`
+    ? `${dau} Bấm + ${NUT_THEM_BO_PHAN} ở trên để lập bộ phận đầu tiên.` // "+" = the Plus icon; words verbatim
     : `${dau} Tài khoản của bạn không có quyền thêm bộ phận.`;
 }
 

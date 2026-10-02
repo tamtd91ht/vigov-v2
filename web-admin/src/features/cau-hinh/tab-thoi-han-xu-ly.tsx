@@ -1,6 +1,28 @@
 "use client";
 
+import {
+  CalendarClock,
+  CalendarDays,
+  CalendarOff,
+  CalendarPlus,
+  Clock,
+  Pencil,
+  Plus,
+  Sprout,
+  Timer,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+
+import { Button } from "@/components/ui/button";
+import { CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { ChonNam } from "@/components/chon-nam";
 import { usePhien } from "@/features/phien/phien-hien-tai";
@@ -508,23 +530,35 @@ export function ManThoiHanXuLy({
   const khoi = khoiCanhBao(tinhTrangBang(du.thoiHan), tinhTrangBang(du.tuan));
 
   return (
-    <section className="tab-thoi-han" aria-labelledby="tieu-de-thoi-han">
-      <h2 id="tieu-de-thoi-han">Thời hạn xử lý và lịch làm việc</h2>
-
+    <section className="tab-thoi-han flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-thoi-han">
+      <div className="min-w-0 overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+        <CardHeader className="m-0">
+          <CardTitle as="h2" id="tieu-de-thoi-han" className="flex items-center gap-2">
+            <CalendarClock aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+            Thời hạn xử lý và lịch làm việc
+          </CardTitle>
+        </CardHeader>
+        <div className="flex min-w-0 flex-col gap-3 p-4 empty:hidden [&>*]:my-0">
       <KhoiChuaKhai khoi={khoi} coQuyenGhi={coQuyenGhi} dangGui={dangGui} thaoTac={thaoTac} />
 
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+      {cauDaXong !== "" && (
+        <p role="status" className="text-sm font-medium text-success-600">
+          {cauDaXong}
+        </p>
+      )}
       {loiMayChuNgoaiForm !== "" && (
         <p className="thong-bao-loi" role="alert">
           {loiMayChuNgoaiForm}
         </p>
       )}
       {thieuQuyen && (
-        <p className="trang-thai-rong">
+        <Notice tone="neutral">
           Tài khoản của bạn không có quyền sửa cấu hình thời hạn xử lý và lịch làm việc. Bảng dưới
           đây vẫn xem được.
-        </p>
+        </Notice>
       )}
+        </div>
+      </div>
 
       <BangThoiHan
         kq={du.thoiHan}
@@ -534,8 +568,13 @@ export function ManThoiHanXuLy({
         form={nhomForm === "thoiHan" ? form : null}
       />
 
-      <h3>Lịch làm việc của đơn vị</h3>
-      <p className="ghi-chu">{DAN_LICH_LAM_VIEC}</p>
+      <div className="mt-2">
+        <h3 className="m-0 flex items-center gap-2 text-base font-semibold text-ink-900">
+          <CalendarDays aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          Lịch làm việc của đơn vị
+        </h3>
+        <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{DAN_LICH_LAM_VIEC}</p>
+      </div>
 
       <BangGioLamViec
         kq={du.tuan}
@@ -611,21 +650,29 @@ export function KhoiChuaKhai({
           VẪN hiện, vì người không có quyền cũng cần biết vì sao xã chưa tiếp nhận được, để đi tìm
           đúng người. */}
       {coQuyenGhi && (
-        <p className="cum-nut">
+        // One solid button per block: the second seed button turns secondary when both are drawn.
+        <p className="cum-nut flex flex-wrap gap-2">
           {khoi.thieuThoiHan && (
-            <button
+            <Button
               type="button"
-              className="nut-chinh"
+              variant="primary"
+              icon={<Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />}
               disabled={dangGui}
               onClick={thaoTac.gieoThoiHan}
             >
               {NUT_GIEO_THOI_HAN}
-            </button>
+            </Button>
           )}
           {khoi.thieuLichTuan && (
-            <button type="button" className="nut-chinh" disabled={dangGui} onClick={thaoTac.gieoTuan}>
+            <Button
+              type="button"
+              variant={khoi.thieuThoiHan ? "secondary" : "primary"}
+              icon={<Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              disabled={dangGui}
+              onClick={thaoTac.gieoTuan}
+            >
               {NUT_GIEO_TUAN}
-            </button>
+            </Button>
           )}
         </p>
       )}
@@ -636,14 +683,19 @@ export function KhoiChuaKhai({
 
 /** Khung "đang tải" / "lỗi" dùng chung cho bốn bảng. */
 function KhungTai({ kq, dangTai }: { kq: KetQua<unknown> | null; dangTai: string }) {
-  if (kq === null) return <p role="status">{dangTai}</p>;
+  // FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets placeholder rows.
+  if (kq === null)
+    return (
+      <>
+        <p role="status" className="an-thi-giac">
+          {dangTai}
+        </p>
+        <SkeletonRows rows={3} className="rounded-xl border border-line" />
+      </>
+    );
   if (kq.ok) return null;
   // NGUYÊN VĂN câu máy chủ viết — kể cả 403 thiếu quyền của `GET /api/v1/sla`.
-  return (
-    <p className="thong-bao-loi" role="alert">
-      {kq.thongBao}
-    </p>
-  );
+  return <ErrorState role="alert" title="Chưa tải được bảng này" message={kq.thongBao} className="py-6" />;
 }
 
 /**
@@ -666,12 +718,15 @@ export function BangThoiHan({
   form: ReactNode;
 }) {
   return (
-    <div className="nhom-lich">
-      <h3>Thời hạn xử lý</h3>
+    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0 [&>h3]:flex [&>h3]:items-center [&>h3]:gap-2 [&>h3]:text-[15px] [&>h3]:font-semibold [&>h3]:text-ink-900">
+      <h3>
+        <Timer aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        Thời hạn xử lý
+      </h3>
       {/* HAI CÂU DẪN BẮT BUỘC GIỮ của đặc tả. Câu đầu là điều dễ hiểu sai nhất trên màn hình. */}
-      <p className="canh-bao-pham-vi">{DAN_THOI_HAN_1}</p>
-      <p className="ghi-chu">{DAN_THOI_HAN_2}</p>
-      <p className="ghi-chu">{GHI_CHU_HAI_COT_LEO_THANG}</p>
+      <Notice tone="info">{DAN_THOI_HAN_1}</Notice>
+      <p className="ghi-chu text-[13px] text-ink-500">{DAN_THOI_HAN_2}</p>
+      <p className="ghi-chu text-[13px] text-ink-500">{GHI_CHU_HAI_COT_LEO_THANG}</p>
 
       <KhungTai kq={kq} dangTai="Đang tải bảng thời hạn xử lý…" />
 
@@ -688,21 +743,22 @@ export function BangThoiHan({
           {/* Nút gieo ở ĐÂY chỉ dành cho bảng ĐÃ CÓ dòng (vá lại bộ thiếu). Bảng rỗng thì nút nằm
               trong khối cảnh báo phía trên — một việc, một nút, không hai chỗ cùng lúc. */}
           {coQuyenGhi && kq.duLieu.items.length > 0 && (
-            <p>
-              <button
+            <p className="flex justify-end">
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
+                icon={<Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 disabled={dangGui}
                 onClick={thaoTac.gieoThoiHan}
               >
                 {NUT_GIEO_THOI_HAN}
-              </button>
+              </Button>
             </p>
           )}
 
           {kq.duLieu.items.length > 0 && (
-            <div className="bang-cuon" role="region" aria-label="Thời hạn xử lý" tabIndex={0}>
-              <table className="bang-danh-muc">
+            <TableScroll sticky aria-label="Thời hạn xử lý">
+              <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
                 <caption className="an-thi-giac">
                   Số giờ làm việc cho từng loại việc và lĩnh vực của đơn vị
                 </caption>
@@ -737,21 +793,23 @@ export function BangThoiHan({
                       ))}
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
-                          <button
+                          <Button
                             type="button"
-                            className="nut-phu"
+                            variant="ghost"
+                            size="sm"
                             aria-label={`${NUT_SUA} thời hạn ${nhanLoaiViec(d.work_kind)} — ${nhanLinhVuc(d.field, d.is_default)}`}
+                            icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                             onClick={() => thaoTac.suaThoiHan(d)}
                           >
                             {NUT_SUA}
-                          </button>
+                          </Button>
                         </td>
                       )}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </>
       )}
@@ -775,9 +833,12 @@ export function BangGioLamViec({
   form: ReactNode;
 }) {
   return (
-    <div className="nhom-lich">
-      <h3>Giờ làm việc trong tuần</h3>
-      <p className="ghi-chu">{GIAI_THICH_CA}</p>
+    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0 [&>h3]:flex [&>h3]:items-center [&>h3]:gap-2 [&>h3]:text-[15px] [&>h3]:font-semibold [&>h3]:text-ink-900">
+      <h3>
+        <Clock aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        Giờ làm việc trong tuần
+      </h3>
+      <p className="ghi-chu text-[13px] text-ink-500">{GIAI_THICH_CA}</p>
 
       <KhungTai kq={kq} dangTai="Đang tải giờ làm việc…" />
 
@@ -790,26 +851,33 @@ export function BangGioLamViec({
           ))}
 
           {coQuyenGhi && (
-            <p className="cum-nut">
-              <button type="button" className="nut-phu" disabled={dangGui} onClick={thaoTac.themCa}>
+            <p className="cum-nut flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                disabled={dangGui}
+                onClick={thaoTac.themCa}
+              >
                 {NUT_THEM_CA}
-              </button>
+              </Button>
               {kq.duLieu.items.length > 0 && (
-                <button
+                <Button
                   type="button"
-                  className="nut-phu"
+                  variant="secondary"
+                  icon={<Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                   disabled={dangGui}
                   onClick={thaoTac.gieoTuan}
                 >
                   {NUT_GIEO_TUAN}
-                </button>
+                </Button>
               )}
             </p>
           )}
 
           {kq.duLieu.items.length > 0 && (
-            <div className="bang-cuon" role="region" aria-label="Giờ làm việc trong tuần" tabIndex={0}>
-              <table className="bang-danh-muc">
+            <TableScroll sticky aria-label="Giờ làm việc trong tuần">
+              <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
                 <caption className="an-thi-giac">
                   Các ca làm việc thông thường của đơn vị theo từng thứ trong tuần
                 </caption>
@@ -833,23 +901,27 @@ export function BangGioLamViec({
                       <td>{c.note === "" ? <span className="nhan-trong">—</span> : c.note}</td>
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
-                          <span className="cum-nut">
-                            <button
+                          <span className="cum-nut flex flex-wrap items-center gap-1.5">
+                            <Button
                               type="button"
-                              className="nut-phu"
+                              variant="ghost"
+                              size="sm"
                               aria-label={`${NUT_SUA} ca ${tenThu(c.weekday)} ${nhanCa(c.start, c.end)}`}
+                              icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.suaCa(c)}
                             >
                               {NUT_SUA}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="nut-phu nut-xoa"
+                              variant="danger"
+                              size="sm"
                               aria-label={`${NUT_XOA} ca ${tenThu(c.weekday)} ${nhanCa(c.start, c.end)}`}
+                              icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.xoaCa(c)}
                             >
                               {NUT_XOA}
-                            </button>
+                            </Button>
                           </span>
                         </td>
                       )}
@@ -857,7 +929,7 @@ export function BangGioLamViec({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </>
       )}
@@ -883,31 +955,36 @@ export function BangNgayNghi({
   form: ReactNode;
 }) {
   return (
-    <div className="nhom-lich">
-      <h3>Ngày nghỉ lễ — đơn vị KHÔNG làm việc</h3>
+    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0 [&>h3]:flex [&>h3]:items-center [&>h3]:gap-2 [&>h3]:text-[15px] [&>h3]:font-semibold [&>h3]:text-ink-900">
+      <h3>
+        <CalendarOff aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        Ngày nghỉ lễ — đơn vị KHÔNG làm việc
+      </h3>
 
       <KhungTai kq={kq} dangTai="Đang tải ngày nghỉ lễ…" />
 
       {kq !== null && kq.ok && (
         <>
           {coQuyenGhi && (
-            <p className="cum-nut">
-              <button
+            <p className="cum-nut flex flex-wrap justify-end gap-2">
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
+                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 disabled={dangGui}
                 onClick={thaoTac.themNghi}
               >
                 {NUT_THEM_NGAY_NGHI}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
+                icon={<Sprout aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 disabled={dangGui}
                 onClick={thaoTac.gieoNgayLe}
               >
                 {NUT_GIEO_NGAY_LE}
-              </button>
+              </Button>
             </p>
           )}
 
@@ -915,16 +992,24 @@ export function BangNgayNghi({
               chỉ gieo BỐN ngày cố định theo dương lịch và `seeded: 4` đọc ra là "xong" — trong khi
               Tết Nguyên đán, Giỗ Tổ Hùng Vương và ngày liền kề 02/9 vẫn còn thiếu. Không nói ra thì
               xã tưởng đã đủ, và mọi hạn rơi vào dịp Tết bị tính sai mà không gì báo lỗi. */}
-          <p className="canh-bao-pham-vi">{CON_THIEU_NGAY_LE}</p>
+          <Notice tone="neutral" icon={TriangleAlert}>
+            {CON_THIEU_NGAY_LE}
+          </Notice>
 
           {kq.duLieu.items.length === 0 ? (
-            <p className="trang-thai-rong">
-              Năm {nam} chưa khai ngày nghỉ lễ nào, nên mọi thời hạn của năm này đang được đếm như
-              thể đơn vị không nghỉ ngày nào.
-            </p>
+            <EmptyState
+              icon={CalendarOff}
+              className="rounded-xl border border-dashed border-line-strong py-6"
+              title={
+                <>
+                  Năm {nam} chưa khai ngày nghỉ lễ nào, nên mọi thời hạn của năm này đang được đếm như
+                  thể đơn vị không nghỉ ngày nào.
+                </>
+              }
+            />
           ) : (
-            <div className="bang-cuon" role="region" aria-label={`Ngày nghỉ lễ năm ${nam}`} tabIndex={0}>
-              <table className="bang-danh-muc">
+            <TableScroll sticky aria-label={`Ngày nghỉ lễ năm ${nam}`}>
+              <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
                 <caption className="an-thi-giac">
                   Những ngày đơn vị đóng cửa trong năm {nam}, gồm cả lễ quốc gia lẫn lễ địa phương
                 </caption>
@@ -946,23 +1031,27 @@ export function BangNgayNghi({
                       <td>{n.name}</td>
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
-                          <span className="cum-nut">
-                            <button
+                          <span className="cum-nut flex flex-wrap items-center gap-1.5">
+                            <Button
                               type="button"
-                              className="nut-phu"
+                              variant="ghost"
+                              size="sm"
                               aria-label={`${NUT_SUA} ngày nghỉ ${nhanNgay(n.date)}`}
+                              icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.suaNghi(n)}
                             >
                               {NUT_SUA}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="nut-phu nut-xoa"
+                              variant="danger"
+                              size="sm"
                               aria-label={`${NUT_XOA} ngày nghỉ ${nhanNgay(n.date)}`}
+                              icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.xoaNghi(n)}
                             >
                               {NUT_XOA}
-                            </button>
+                            </Button>
                           </span>
                         </td>
                       )}
@@ -970,7 +1059,7 @@ export function BangNgayNghi({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </>
       )}
@@ -996,8 +1085,11 @@ export function BangNgayLamBu({
   form: ReactNode;
 }) {
   return (
-    <div className="nhom-lich">
-      <h3>Ngày làm bù — đơn vị CÓ làm việc</h3>
+    <div className="nhom-lich m-0 flex min-w-0 flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm [&>*]:my-0 [&>h3]:flex [&>h3]:items-center [&>h3]:gap-2 [&>h3]:text-[15px] [&>h3]:font-semibold [&>h3]:text-ink-900">
+      <h3>
+        <CalendarPlus aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        Ngày làm bù — đơn vị CÓ làm việc
+      </h3>
 
       <KhungTai kq={kq} dangTai="Đang tải ngày làm bù…" />
 
@@ -1013,26 +1105,34 @@ export function BangNgayLamBu({
               chỉ tồn tại vì Thủ tướng công bố cho riêng một năm, nên không có bộ mặc định nào để
               gieo. Phần lớn năm, phần lớn xã không có ngày làm bù nào. */}
           {coQuyenGhi && (
-            <p>
-              <button
+            <p className="flex justify-end">
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
+                icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 disabled={dangGui}
                 onClick={thaoTac.themLamBu}
               >
                 {NUT_THEM_NGAY_LAM_BU}
-              </button>
+              </Button>
             </p>
           )}
 
           {kq.duLieu.items.length === 0 ? (
-            <p className="trang-thai-rong">
-              Năm {nam} không có ngày làm bù nào. Phần lớn các năm là như vậy — khác hẳn giờ làm
-              việc trong tuần để trống, vốn nghĩa là đơn vị không có giờ làm việc nào.
-            </p>
+            <EmptyState
+              icon={CalendarPlus}
+              tone="neutral"
+              className="rounded-xl border border-dashed border-line-strong py-6"
+              title={
+                <>
+                  Năm {nam} không có ngày làm bù nào. Phần lớn các năm là như vậy — khác hẳn giờ làm
+                  việc trong tuần để trống, vốn nghĩa là đơn vị không có giờ làm việc nào.
+                </>
+              }
+            />
           ) : (
-            <div className="bang-cuon" role="region" aria-label={`Ngày làm bù năm ${nam}`} tabIndex={0}>
-              <table className="bang-danh-muc">
+            <TableScroll sticky aria-label={`Ngày làm bù năm ${nam}`}>
+              <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
                 <caption className="an-thi-giac">
                   Những ngày đơn vị vẫn làm việc trong năm {nam} dù lịch tuần nói không, kèm giờ làm
                   của chính ngày đó
@@ -1057,23 +1157,27 @@ export function BangNgayLamBu({
                       <td>{c.name}</td>
                       {coQuyenGhi && (
                         <td className="o-thao-tac">
-                          <span className="cum-nut">
-                            <button
+                          <span className="cum-nut flex flex-wrap items-center gap-1.5">
+                            <Button
                               type="button"
-                              className="nut-phu"
+                              variant="ghost"
+                              size="sm"
                               aria-label={`${NUT_SUA} ca làm bù ${nhanNgay(c.date)}`}
+                              icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.suaLamBu(c)}
                             >
                               {NUT_SUA}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="nut-phu nut-xoa"
+                              variant="danger"
+                              size="sm"
                               aria-label={`${NUT_XOA} ca làm bù ${nhanNgay(c.date)}`}
+                              icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                               onClick={() => thaoTac.xoaLamBu(c)}
                             >
                               {NUT_XOA}
-                            </button>
+                            </Button>
                           </span>
                         </td>
                       )}
@@ -1081,7 +1185,7 @@ export function BangNgayLamBu({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </>
       )}
@@ -1159,18 +1263,23 @@ export function BieuMauThoiHan({
 
   return (
     <form
-      className="form-danh-muc"
+      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full [&>.canh-bao-pham-vi]:col-span-full"
       aria-label={tieuDe}
       onSubmit={(e) => {
         e.preventDefault();
         onGui();
       }}
     >
-      <h4>{tieuDe}</h4>
+      <h4 className="flex items-center gap-2 text-[15px] font-semibold text-ink-900">
+        {laXoa && <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-danger-600" />}
+        {tieuDe}
+      </h4>
 
       {dangMo.kieu === "suaThoiHan" && (
         <>
-          <p className="canh-bao-pham-vi">{DAN_THOI_HAN_1}</p>
+          <Notice tone="info" className="canh-bao-pham-vi">
+            {DAN_THOI_HAN_1}
+          </Notice>
           {COT_GIO.map((c) => (
             <div className="o-nhap" key={c}>
               <label htmlFor={`o-gio-${c}`}>{NHAN_COT[c]} (giờ làm việc)</label>
@@ -1265,13 +1374,13 @@ export function BieuMauThoiHan({
 
       {laXoa && (
         <>
-          <p className="canh-bao-pham-vi">
+          <Notice tone="neutral" icon={TriangleAlert} className="canh-bao-pham-vi">
             {dangMo.kieu === "xoaCa"
               ? CANH_BAO_XOA_CA
               : dangMo.kieu === "xoaNghi"
                 ? CANH_BAO_XOA_NGAY_NGHI
                 : CANH_BAO_XOA_NGAY_LAM_BU}
-          </p>
+          </Notice>
           <div className="o-nhap">
             <label htmlFor="o-ly-do-xoa-lich">{O_LY_DO_XOA}</label>
             {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được một
@@ -1306,13 +1415,13 @@ export function BieuMauThoiHan({
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {laXoa ? NUT_XAC_NHAN_XOA : NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
+      <div className="cum-nut flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant={laXoa ? "danger" : "primary"} disabled={dangGui} aria-busy={dangGui}>
+          <BusyLabel busy={dangGui} label={laXoa ? NUT_XAC_NHAN_XOA : NUT_LUU} busyText={laXoa ? BUSY_DELETING : BUSY_SAVING} />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
           {NUT_HUY}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -1,6 +1,18 @@
 "use client";
 
+import { Home, Pencil, Plus, PowerOff, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layLoaiDonViDanCu } from "@/lib/api/danh-muc-nghiep-vu";
@@ -21,7 +33,6 @@ import { NUT_HUY, NUT_LUU } from "./nhan-so-do";
 import {
   loaiDonVi,
   lopLoaiDonVi,
-  lopTrangThaiDiaBan,
   nhanLoaiDonVi,
   nhanSoDem,
   nhanTrangThaiDiaBan,
@@ -303,8 +314,14 @@ export function TabThonToDanPho() {
     );
 
   return (
-    <section className="tab-thon-to-dan-pho" aria-labelledby="tieu-de-thon">
-      <h2 id="tieu-de-thon">Thôn / Tổ dân phố</h2>
+    <Card as="section" className="tab-thon-to-dan-pho" aria-labelledby="tieu-de-thon">
+      <CardHeader>
+        <CardTitle as="h2" id="tieu-de-thon" className="flex items-center gap-2">
+          <Home aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          Thôn / Tổ dân phố
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
       {decision !== null && !decision.hien && decision.vi === "khong-doc-duoc" && (
         <p className="thong-bao-loi" role="alert">
           {decision.thongBao}
@@ -331,7 +348,8 @@ export function TabThonToDanPho() {
         retiring={retiring}
         rowError={rowError}
       />
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -370,34 +388,55 @@ export function ResidentialUnitsView({
 }) {
   return (
     <>
-      <p className="ghi-chu">{GHI_CHU_CHI_XEM_THON}</p>
-
-      {canWrite && (
-        <p className="cum-nut">
-          <button type="button" className="nut-phu" onClick={actions.openImport}>
-            {IMPORT_BUTTON}
-          </button>
-          <button type="button" className="nut-phu" id={ADD_BUTTON_ID} onClick={actions.add}>
-            {ADD_BUTTON}
-          </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="ghi-chu m-0 min-w-0 flex-1 basis-64 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_THON}</p>
+        {canWrite && (
+          <p className="cum-nut m-0 flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" icon={<Upload aria-hidden="true" focusable="false" strokeWidth={1.8} />} onClick={actions.openImport}>
+              {IMPORT_BUTTON}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              id={ADD_BUTTON_ID}
+              icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              onClick={actions.add}
+            >
+              {ADD_BUTTON}
+            </Button>
+          </p>
+        )}
+      </div>
+      {/* Read-only is a normal state of an account: a neutral note, no role. */}
+      {missingPermission && (
+        <Notice tone="neutral" className="m-0">
+          {NO_WRITE_PERMISSION}
+        </Notice>
+      )}
+      {doneSentence !== "" && (
+        <p role="status" className="text-sm font-medium text-success-600">
+          {doneSentence}
         </p>
       )}
-      {missingPermission && <p className="trang-thai-rong">{NO_WRITE_PERMISSION}</p>}
-      {doneSentence !== "" && <p role="status">{doneSentence}</p>}
 
       {topPanel}
 
-      {load.phase === "loading" && <p role="status">Đang tải danh sách địa bàn…</p>}
+      {load.phase === "loading" && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải danh sách địa bàn…
+          </p>
+          <SkeletonRows rows={4} className="rounded-xl border border-line" />
+        </>
+      )}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
       {load.phase === "error" && (
-        <p className="thong-bao-loi" role="alert">
-          {load.message}
-        </p>
+        <ErrorState role="alert" title="Chưa tải được danh sách thôn / tổ dân phố" message={load.message} />
       )}
 
       {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Máy chủ trả `items: []`, không bao giờ `null`. */}
-      {load.phase === "ready" && load.units.length === 0 && <p className="trang-thai-rong">{THON_RONG}</p>}
+      {load.phase === "ready" && load.units.length === 0 && <EmptyState icon={Home} title={THON_RONG} />}
 
       {load.phase === "ready" && load.units.length > 0 && (
         <UnitsTable
@@ -434,8 +473,8 @@ function UnitsTable({
 }) {
   const columns = canWrite ? 8 : 7;
   return (
-    <div className="bang-cuon" role="region" aria-label="Danh sách thôn / tổ dân phố" tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll sticky aria-label="Danh sách thôn / tổ dân phố">
+      <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
         <caption className="an-thi-giac">Danh sách thôn và tổ dân phố của đơn vị</caption>
         <thead>
           <tr>
@@ -467,41 +506,48 @@ function UnitsTable({
                   <td>{nhanSoDem(t.household_count)}</td>
                   <td>{nhanSoDem(t.population_count)}</td>
                   <td>
-                    <span className={lopTrangThaiDiaBan(t.active)}>{nhanTrangThaiDiaBan(t.active)}</span>
+                    {/* Tone by the CODE (`active`); icon + word, never colour alone. */}
+                    <Badge tone={t.active ? "success" : "neutral"}>{nhanTrangThaiDiaBan(t.active)}</Badge>
                   </td>
                   {canWrite && (
                     <td>
-                      <span className="cum-nut">
-                        <button
+                      <span className="cum-nut flex flex-wrap items-center gap-1.5">
+                        <Button
                           type="button"
-                          className="nut-phu"
+                          variant="ghost"
+                          size="sm"
                           id={editButtonId(t.id)}
                           aria-label={editButtonLabel(t.name)}
+                          icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                           onClick={() => actions.edit(t)}
                           disabled={sending}
                         >
                           {EDIT_BUTTON}
-                        </button>
+                        </Button>
                         {t.active ? (
-                          <button
+                          <Button
                             type="button"
-                            className="nut-phu"
+                            variant="ghost"
+                            size="sm"
                             aria-label={retireButtonLabel(t.name)}
+                            icon={<PowerOff aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                             onClick={() => actions.askRetire(t)}
                             disabled={sending}
                           >
                             {RETIRE_BUTTON}
-                          </button>
+                          </Button>
                         ) : (
-                          <button
+                          <Button
                             type="button"
-                            className="nut-phu"
+                            variant="ghost"
+                            size="sm"
                             aria-label={reactivateButtonLabel(t.name)}
+                            icon={<RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                             onClick={() => actions.reactivate(t)}
                             disabled={sending}
                           >
                             {REACTIVATE_BUTTON}
-                          </button>
+                          </Button>
                         )}
                       </span>
                     </td>
@@ -509,16 +555,24 @@ function UnitsTable({
                 </tr>
                 {canWrite && retiring !== null && retiring.id === t.id && (
                   <tr>
-                    <td colSpan={columns}>
-                      <p>{retireConfirmSentence(t.name)}</p>
-                      <p className="cum-nut">
-                        <button type="button" className="nut-chinh" onClick={actions.confirmRetire} disabled={sending}>
-                          {CONFIRM_RETIRE_BUTTON}
-                        </button>
-                        <button type="button" className="nut-phu" onClick={actions.cancelRetire} disabled={sending}>
-                          {NUT_HUY}
-                        </button>
-                      </p>
+                    <td colSpan={columns} className="whitespace-normal">
+                      <ConfirmDialog
+                        icon={PowerOff}
+                        title={`${RETIRE_BUTTON} ${t.name}?`}
+                        className="m-0"
+                        actions={
+                          <>
+                            <Button type="button" variant="primary" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
+                              <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_SAVING} />
+                            </Button>
+                            <Button type="button" variant="secondary" onClick={actions.cancelRetire} disabled={sending}>
+                              {NUT_HUY}
+                            </Button>
+                          </>
+                        }
+                      >
+                        <p className="m-0">{retireConfirmSentence(t.name)}</p>
+                      </ConfirmDialog>
                     </td>
                   </tr>
                 )}
@@ -536,7 +590,7 @@ function UnitsTable({
           })}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -583,7 +637,7 @@ export function ResidentialUnitForm({
   const title = open.kind === "edit" ? editTitle(open.unit.name) : CREATE_TITLE;
   return (
     <form
-      className="form-danh-muc"
+      className="form-danh-muc grid min-w-0 gap-4 sm:grid-cols-2 [&>*]:m-0 [&>.cum-nut]:col-span-full [&>.thong-bao-loi]:col-span-full [&>h4]:col-span-full"
       aria-label={title}
       onSubmit={(e) => {
         e.preventDefault();
@@ -594,7 +648,7 @@ export function ResidentialUnitForm({
         if (e.key === "Escape" && !sending) onCancel();
       }}
     >
-      <h4>{title}</h4>
+      <h4 className="text-[15px] font-semibold text-ink-900">{title}</h4>
 
       <TextBox id={NAME_INPUT_ID} label={FIELD_NAME} help={NAME_HELP} value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
 
@@ -672,13 +726,13 @@ export function ResidentialUnitForm({
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={sending}>
-          {NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onCancel} disabled={sending}>
+      <div className="cum-nut flex flex-wrap justify-end gap-2">
+        <Button type="submit" variant="primary" disabled={sending} aria-busy={sending}>
+          <BusyLabel busy={sending} label={NUT_LUU} busyText={BUSY_SAVING} />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={sending}>
           {NUT_HUY}
-        </button>
+        </Button>
       </div>
     </form>
   );

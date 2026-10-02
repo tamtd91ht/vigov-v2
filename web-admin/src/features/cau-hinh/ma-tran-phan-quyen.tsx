@@ -1,6 +1,14 @@
 "use client";
 
+import { Check, Crown, KeyRound, Minus, ShieldQuestion, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
 
 import type { KetQua } from "@/lib/api/goi";
 import { layMaTranQuyen, luuPhanQuyenVaiTro } from "@/lib/api/phan-quyen";
@@ -141,33 +149,48 @@ export function MaTranPhanQuyen({
   }
 
   return (
-    <section className="tab-phan-quyen" aria-labelledby="tieu-de-phan-quyen">
-      <h2 id="tieu-de-phan-quyen">Phân quyền</h2>
+    <section className="tab-phan-quyen flex min-w-0 flex-col gap-4 [&>*]:my-0" aria-labelledby="tieu-de-phan-quyen">
+      <Card>
+      <CardHeader>
+        <div className="min-w-0 flex-1 basis-64">
+          <CardTitle as="h2" id="tieu-de-phan-quyen" className="flex items-center gap-2">
+            <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+            Phân quyền
+          </CardTitle>
+          {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
+          <p className="ghi-chu m-0 mt-1 text-[13px] text-ink-500">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
+        </div>
+      </CardHeader>
 
-      {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
-      <p className="ghi-chu">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
+      <div className="flex min-w-0 flex-col gap-3 px-4 py-3 empty:hidden [&>*]:my-0">
 
       {/* The seed button follows the same gate as the ticks: `admin.role`, the key the route
           declares. Convenience only — the server checks it, and #14, on the call. */}
       {choSua && <RoleTemplateSeedPanel onSeeded={() => setReloadCount((n) => n + 1)} />}
 
       <UnheldPermissionWarnings warnings={warnings} />
+      </div>
 
-      {trangThai.pha === "dangDoc" && <p role="status">Đang tải ma trận phân quyền…</p>}
+      {trangThai.pha === "dangDoc" && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải ma trận phân quyền…
+          </p>
+          <SkeletonRows rows={6} />
+        </>
+      )}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải, không rẽ nhánh theo `code`, không
           hiện `trace_id` (`lib/api/goi.ts`). 403 ở đây là ca thật: quyền `admin.role` có thể vừa
           bị gỡ giữa lúc màn hình đang mở. */}
       {trangThai.pha === "khongDocDuoc" && (
-        <p className="thong-bao-loi" role="alert">
-          {trangThai.thongBao}
-        </p>
+        <ErrorState role="alert" title="Chưa tải được ma trận phân quyền" message={trangThai.thongBao} />
       )}
 
       {/* TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI — và không bao giờ là một bảng trống không có
           lời giải thích nào. Xem `nhan-ma-tran.ts`. */}
       {trangThai.pha === "chuaCauHinh" && (
-        <p className="trang-thai-rong">{nhanChuaCauHinh(trangThai.thieu)}</p>
+        <EmptyState icon={ShieldQuestion} title={nhanChuaCauHinh(trangThai.thieu)} />
       )}
 
       {trangThai.pha === "coDuLieu" &&
@@ -188,6 +211,7 @@ export function MaTranPhanQuyen({
         ) : (
           <BangMaTran nhom={trangThai.nhom} vaiTro={trangThai.vaiTro} daCap={trangThai.daCap} />
         ))}
+      </Card>
     </section>
   );
 }
@@ -245,7 +269,7 @@ export function BangMaTran({
     // `role="region"` + `tabIndex` để vùng cuộn tới được bằng bàn phím — vùng này cuộn CẢ HAI
     // chiều, nên không tới được bằng bàn phím là 33 hàng đọc được bằng chuột thôi.
     <div
-      className="bang-cuon bang-cuon-ma-tran"
+      className="bang-cuon bang-cuon-ma-tran m-0 rounded-none border-0 border-t border-line shadow-none"
       role="region"
       aria-label="Ma trận phân quyền"
       tabIndex={0}
@@ -269,7 +293,11 @@ export function BangMaTran({
                   luật 5 cấm ở #2 và #3. Cấp bậc lãnh đạo là thông tin tổ chức, không phải thang
                   quyền (`service-identity/internal/domain/quyen.go`).
                 */}
-                {vt.is_leader && <span className="chip chip-lanh-dao">{NHAN_LANH_DAO}</span>}
+                {vt.is_leader && (
+                  <Badge tone="info" icon={Crown} className="chip-lanh-dao">
+                    {NHAN_LANH_DAO}
+                  </Badge>
+                )}
                 {/* HAI SỐ ĐẾM, và số sau là tập con của số trước — câu chữ và lý do ở `nhan-ma-tran.ts`. */}
                 <span className="dong-phu">{nhanSoNguoiGiuVaiTro(vt)}</span>
                 {chinhSua !== undefined && <DauCotSua vt={vt} chinhSua={chinhSua} />}
@@ -340,11 +368,11 @@ export function BangMaTran({
 export function UnheldPermissionWarnings({ warnings }: { warnings: readonly UnheldWarning[] }) {
   if (warnings.length === 0) return null;
   return (
-    <div className="canh-bao-pham-vi" role="note">
+    <Notice tone="neutral" icon={TriangleAlert} role="note" className="[&_p]:m-0 [&_p+p]:mt-1">
       {warnings.map((w) => (
         <p key={w.code}>{w.sentence}</p>
       ))}
-    </div>
+    </Notice>
   );
 }
 
@@ -416,7 +444,12 @@ function DauCotSua({ vt, chinhSua }: { vt: identity_vaiTroCotRa; chinhSua: Chinh
 function ODaCap({ daCap }: { daCap: boolean }) {
   return (
     <td className={daCap ? "o-da-cap" : "o-chua-cap"}>
-      <span aria-hidden="true">{daCap ? "✓" : "–"}</span>
+      {/* Two SHAPES (a tick, a dash), not two colours; the words are for the screen reader. */}
+      {daCap ? (
+        <Check aria-hidden="true" focusable="false" strokeWidth={2.2} className="inline-block size-4 text-success-600" />
+      ) : (
+        <Minus aria-hidden="true" focusable="false" strokeWidth={1.8} className="inline-block size-4 text-ink-400" />
+      )}
       <span className="an-thi-giac">{nhanO(daCap)}</span>
     </td>
   );

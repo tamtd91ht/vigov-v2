@@ -195,7 +195,8 @@ describe("Danh mục — which group offers the import, to whom", () => {
         importPanel={<p>PANEL</p>}
       />,
     );
-    expect(shown).toContain(">⬆ Nhập từ Excel</button>");
+    // The ⬆ glyph became a lucide `Upload` icon (ADR 0068 §2); the words are unchanged.
+    expect(shown).toContain(">Nhập từ Excel</button>");
     expect(shown).toContain("<p>PANEL</p>");
     const denied = renderToStaticMarkup(<NhomMuc nhom={group} coQuyenGhi={false} thaoTac={noActions} form={null} />);
     expect(denied).not.toContain("Nhập từ Excel");

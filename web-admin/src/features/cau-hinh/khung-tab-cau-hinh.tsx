@@ -1,7 +1,22 @@
 "use client";
 
+import {
+  BellRing,
+  CalendarClock,
+  FileClock,
+  Home,
+  KeyRound,
+  ListTree,
+  Mail,
+  MapPinned,
+  MessageSquareText,
+  Network,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { Tab, TabList } from "@/components/ui/tabs";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { AuditLogTab } from "./audit-log-tab";
@@ -35,6 +50,21 @@ const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
+};
+
+/** Icon of each tab (spec §7 "Tab: chữ 14/500 + icon"). Decorative: the tab's word carries the meaning. */
+const ICON_TAB: Record<MaTabCauHinh, LucideIcon> = {
+  "so-do-to-chuc": Network,
+  "thon-to-dan-pho": Home,
+  "nguoi-dung": UsersRound,
+  "phan-quyen": KeyRound,
+  "danh-muc": ListTree,
+  "truong-ban-do": MapPinned,
+  "loi-he-thong": MessageSquareText,
+  "thoi-han-xu-ly": CalendarClock,
+  "tu-dong-hoa": BellRing,
+  "may-chu-thu": Mail,
+  "nhat-ky-he-thong": FileClock,
 };
 
 const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;
@@ -85,26 +115,26 @@ export function KhungTabCauHinh() {
       )}
 
       {coThanh && (
-        <div role="tablist" aria-label="Các phần cấu hình" className="thanh-tab-cau-hinh">
+        <TabList aria-label="Các phần cấu hình" className="mb-4">
           {hien.map((t, i) => (
-            <button
+            <Tab
               key={t.ma}
               ref={(el) => {
                 nutTab.current[t.ma] = el;
               }}
               type="button"
-              role="tab"
+              icon={ICON_TAB[t.ma]}
               id={idTab(t.ma)}
-              aria-selected={t.ma === chon}
+              selected={t.ma === chon}
               aria-controls={idPanel(t.ma)}
               tabIndex={t.ma === chon ? 0 : -1}
               onClick={() => datDangChon(t.ma)}
               onKeyDown={(e) => xuLyPhim(e, i)}
             >
               {t.nhan}
-            </button>
+            </Tab>
           ))}
-        </div>
+        </TabList>
       )}
 
       {/* Cùng một danh sách có `key` ở cả hai trạng thái (có thanh / không thanh), nên khi thanh

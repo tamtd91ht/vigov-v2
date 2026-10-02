@@ -109,7 +109,8 @@ export function nhanNhomRong(tenNhom: string, loiRa: LoiRaCuaNhomRong): string {
   const dau = `Đơn vị chưa có mục nào trong danh mục ${tenNhom}.`;
   switch (loiRa) {
     case "themDuoc":
-      return `${dau} Bấm ${NUT_THEM} ở trên để lập mục đầu tiên.`;
+      // "+" kept in the sentence: it names the Plus icon the button now draws, and the words stay verbatim.
+      return `${dau} Bấm + ${NUT_THEM} ở trên để lập mục đầu tiên.`;
     case "thieuQuyen":
       return `${dau} Tài khoản của bạn không có quyền thêm mục cho danh mục này.`;
     case "khongCoTuyen":
@@ -118,11 +119,12 @@ export function nhanNhomRong(tenNhom: string, loiRa: LoiRaCuaNhomRong): string {
 }
 
 /** Nhãn các nút thao tác. Có chữ, không chỉ có biểu tượng — xem `GHI_CHU_NUT_CO_CHU`. */
-export const NUT_THEM = "+ Thêm mục";
-export const NUT_SUA = "✎ Sửa";
+// No leading symbols: the screen draws lucide `Plus` / `Pencil` / `Trash2` beside the words (ADR 0068 §2).
+export const NUT_THEM = "Thêm mục";
+export const NUT_SUA = "Sửa";
 export const NUT_TAT = "Tắt";
 export const NUT_BAT_LAI = "Bật lại";
-export const NUT_XOA = "🗑 Xoá";
+export const NUT_XOA = "Xoá";
 export const NUT_LUU = "Lưu";
 export const NUT_HUY = "Huỷ";
 export const NUT_XAC_NHAN_XOA = "Xoá mục";

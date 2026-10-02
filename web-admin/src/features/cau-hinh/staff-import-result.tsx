@@ -1,5 +1,11 @@
 "use client";
 
+import { Check, Download, KeyRound, TriangleAlert } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { Notice } from "@/components/ui/notice";
 import type { StaffImportCreatedRow } from "@/lib/api/staff-import";
 
 import { CAU_VIEC_CAN_LAM, NUT_DAT_LAI_MAT_KHAU } from "./mat-khau-tam";
@@ -147,12 +153,14 @@ export function StaffImportResult({
 }) {
   if (created === null) {
     return (
-      <div>
-        <p className="canh-bao-pham-vi">{REPLAY_SENTENCE}</p>
-        <p>
-          <button type="button" className="nut-phu" onClick={onClose}>
+      <div className="flex flex-col gap-3">
+        <Notice tone="neutral" icon={TriangleAlert}>
+          {REPLAY_SENTENCE}
+        </Notice>
+        <p className="m-0 flex justify-end">
+          <Button type="button" variant="secondary" onClick={onClose}>
             {PLAIN_CLOSE_BUTTON}
-          </button>
+          </Button>
         </p>
       </div>
     );
@@ -163,18 +171,26 @@ export function StaffImportResult({
   const missing = issuedWithoutPassword(created);
 
   return (
-    <section className="khoi-chi-tiet" aria-labelledby="tieu-de-mat-khau-nhap">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-mat-khau-nhap">
+    // No hooks: rendered inside the import view, which a test renders under a mocked React.
+    <section
+      className="khoi-chi-tiet m-0 min-w-0 overflow-hidden rounded-card border border-brand-100 bg-surface p-0 shadow-sm"
+      aria-labelledby="tieu-de-mat-khau-nhap"
+    >
+      <CardHeader className="dau-khoi-chi-tiet m-0">
+        <CardTitle as="h3" id="tieu-de-mat-khau-nhap" className="flex items-center gap-2">
+          <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
           {issued.length > 0 ? "Mật khẩu tạm — chỉ hiện một lần" : "Tài khoản đăng nhập"}
-        </h3>
-      </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-3 [&>*]:my-0">
 
       {issued.length > 0 && (
         <>
-          <p className="canh-bao-pham-vi">{ONCE_WARNING}</p>
-          <div className="bang-cuon" role="region" aria-label="Tài khoản vừa cấp" tabIndex={0}>
-            <table className="bang-danh-muc">
+          <Notice tone="neutral" icon={TriangleAlert}>
+            {ONCE_WARNING}
+          </Notice>
+          <TableScroll sticky aria-label="Tài khoản vừa cấp">
+            <table className={`bang-danh-muc ${DATA_TABLE_CLASS}`}>
               <thead>
                 <tr>
                   {CSV_HEADER.map((h) => (
@@ -195,14 +211,14 @@ export function StaffImportResult({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           <p className="ghi-chu">{CAU_VIEC_CAN_LAM}</p>
           <p className="ghi-chu">{CSV_CAUTION}</p>
         </>
       )}
 
       {missing.length > 0 && (
-        <div className="thong-bao-loi" role="alert">
+        <div className="thong-bao-loi [&_p]:m-0 [&_ul]:my-1" role="alert">
           <p>{MISSING_PASSWORD_SENTENCE}</p>
           <ul>
             {missing.map((p) => (
@@ -215,7 +231,7 @@ export function StaffImportResult({
       )}
 
       {noAccount.length > 0 && (
-        <div>
+        <div className="[&_p]:m-0 [&_ul]:my-1">
           <p>Những người sau {NO_EMAIL_REASON}:</p>
           <ul>
             {noAccount.map((p) => (
@@ -227,16 +243,27 @@ export function StaffImportResult({
         </div>
       )}
 
-      <div className="cum-nut">
+      <div className="cum-nut m-0 flex flex-wrap justify-end gap-2">
         {issued.length > 0 && (
-          <button type="button" className="nut-phu" onClick={() => downloadCredentialsCsv(issued)}>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Download aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={() => downloadCredentialsCsv(issued)}
+          >
             {CSV_BUTTON}
-          </button>
+          </Button>
         )}
-        <button type="button" className="nut-chinh" onClick={onClose}>
+        <Button
+          type="button"
+          variant="primary"
+          icon={<Check aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={onClose}
+        >
           {issued.length > 0 ? SAVED_CLOSE_BUTTON : PLAIN_CLOSE_BUTTON}
-        </button>
+        </Button>
       </div>
+      </CardContent>
     </section>
   );
 }

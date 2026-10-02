@@ -168,5 +168,6 @@ export const PREVIEW_BUTTON = "Kiểm tra tệp";
 export const PREVIEW_SENDING = "Đang kiểm tra tệp…";
 export const IMPORT_SENDING = "Đang nhập…";
 export const CLOSE_BUTTON = "Đóng";
-export const IMPORT_BUTTON = "⬆ Nhập từ Excel";
+// No emoji: the screens draw a lucide `Upload` beside the word (ADR 0068 §2, spec §4).
+export const IMPORT_BUTTON = "Nhập từ Excel";
 export const NOTHING_TO_CREATE = "Tệp không có dòng nào để nhập.";

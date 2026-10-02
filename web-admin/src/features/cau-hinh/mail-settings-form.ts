@@ -98,21 +98,22 @@ export function testKey(
   return current !== null && current.recipient === recipient ? current : { key: mint(), recipient };
 }
 
-export const MAIL_TITLE = "✉ Máy chủ thư của xã";
+// No emoji in these three: the screen draws lucide `Mail` / `Save` / `Send` (ADR 0068 §2).
+export const MAIL_TITLE = "Máy chủ thư của xã";
 export const MAIL_DESCRIPTION =
   "Thông báo nội bộ gửi từ hộp thư của cán bộ bằng chính địa chỉ công vụ của xã. Chưa khai thì hệ " +
   "thống dùng máy chủ thư của tỉnh nếu tỉnh có.";
 export const NOT_CONFIGURED_WARNING =
-  "⚠ Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi.";
+  "Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi."; // ⚠ is drawn as a lucide icon (ADR 0068 §2)
 export const ENCRYPTION_MISSING =
   "Nền tảng chưa cấu hình khoá mã hoá bí mật, nên chưa lưu được mật khẩu máy chủ thư và chưa gửi thử " +
   "được. Biểu mẫu tạm chỉ để xem. Hãy báo đơn vị vận hành hệ thống.";
 export const PASSWORD_SAVED = "Đã lưu mật khẩu. Để trống ô này nếu không đổi mật khẩu.";
 export const PORT_HINT = "587 dùng START TLS, 465 dùng TLS ngay từ đầu.";
-export const SAVE_BUTTON = "💾 Lưu cấu hình";
+export const SAVE_BUTTON = "Lưu cấu hình";
 export const SAVED_SENTENCE = "Đã lưu cấu hình máy chủ thư.";
 export const TEST_LABEL = "Gửi thư thử tới";
-export const TEST_BUTTON = "✉ Gửi thử";
+export const TEST_BUTTON = "Gửi thử";
 export const TEST_SAVED_ONLY =
   "Thư thử được gửi bằng cấu hình ĐÃ LƯU — hãy lưu trước nếu vừa sửa biểu mẫu.";
 

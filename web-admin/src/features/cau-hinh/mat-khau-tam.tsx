@@ -1,6 +1,13 @@
 "use client";
 
+import { Check, KeyRound, TriangleAlert, UserPlus } from "lucide-react";
+
 import { NUT_HUY } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Notice } from "@/components/ui/notice";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 import { LOI_KHONG_RO } from "@/lib/api/goi";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
@@ -221,19 +228,41 @@ export function XacNhanTaiKhoan({
 }) {
   const tieuDe = tieuDeXacNhan(dangMo);
   return (
-    <form
-      className="form-danh-muc"
+    // The existing confirm form, framed as the shared ConfirmDialog (spec v2 §7): the title is the
+    // specific question-line it always was, the confirm button names the action. Same element, same
+    // `onSubmit`, same `aria-label`.
+    <ConfirmDialog
+      as="form"
+      className="form-danh-muc m-0"
       aria-label={tieuDe}
       onSubmit={(e) => {
         e.preventDefault();
         onGui();
       }}
+      title={tieuDe}
+      titleAs="h4"
+      tone={dangMo.kieu === "datLai" ? "danger" : "default"}
+      icon={dangMo.kieu === "cap" ? UserPlus : KeyRound}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui}>
+            <BusyLabel
+              busy={dangGui}
+              label={dangMo.kieu === "cap" ? NUT_XAC_NHAN_CAP : NUT_XAC_NHAN_DAT_LAI}
+              busyText="Đang lưu…"
+            />
+          </Button>
+          <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
+            {NUT_HUY}
+          </Button>
+        </>
+      }
     >
-      <h4>{tieuDe}</h4>
+      <p className="ghi-chu m-0">Mã cán bộ: {dangMo.canBo.code}</p>
 
-      <p className="ghi-chu">Mã cán bộ: {dangMo.canBo.code}</p>
-
-      <p className="canh-bao-pham-vi">{canhBaoTruocKhiGui(dangMo.kieu)}</p>
+      <Notice tone="neutral" icon={TriangleAlert} className="m-0">
+        {canhBaoTruocKhiGui(dangMo.kieu)}
+      </Notice>
 
       {/*
         LỖI CỦA MÁY CHỦ HIỆN NGUYÊN VĂN. 409 của tuyến cấp nghĩa là người này ĐÃ có tài khoản, và
@@ -254,18 +283,11 @@ export function XacNhanTaiKhoan({
         nghĩa là đã ghi xong, nên câu bổ sung mời kiểm tra lại thay vì tuyên bố thất bại.
       */}
       {loiMayChu === LOI_KHONG_RO && (
-        <p className="canh-bao-pham-vi">{cauKhongRoKetQua(dangMo.kieu)}</p>
+        <Notice tone="neutral" icon={TriangleAlert} className="m-0">
+          {cauKhongRoKetQua(dangMo.kieu)}
+        </Notice>
       )}
-
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {dangMo.kieu === "cap" ? NUT_XAC_NHAN_CAP : NUT_XAC_NHAN_DAT_LAI}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </button>
-      </div>
-    </form>
+    </ConfirmDialog>
   );
 }
 
@@ -290,14 +312,20 @@ export function OMatKhauTam({
   onDong: () => void;
 }) {
   return (
-    <section className="khoi-chi-tiet" aria-labelledby="tieu-de-mat-khau-tam">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-mat-khau-tam">Mật khẩu tạm — chỉ hiện một lần</h3>
-      </div>
+    <Card as="section" className="khoi-chi-tiet m-0 border-brand-100 p-0" aria-labelledby="tieu-de-mat-khau-tam">
+      <CardHeader className="dau-khoi-chi-tiet m-0">
+        <CardTitle as="h3" id="tieu-de-mat-khau-tam" className="flex items-center gap-2">
+          <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          Mật khẩu tạm — chỉ hiện một lần
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 [&>*]:my-0">
 
-      <p role="status">{cauDaGhiXong(matKhauTam)}</p>
+      <p role="status" className="font-medium text-success-600">{cauDaGhiXong(matKhauTam)}</p>
 
-      <p className="canh-bao-pham-vi">{CAU_CHI_HIEN_MOT_LAN}</p>
+      <Notice tone="neutral" icon={TriangleAlert}>
+        {CAU_CHI_HIEN_MOT_LAN}
+      </Notice>
 
       {/* `<dt>` LÀ NHÃN, GIÁ TRỊ NẰM TRONG `<dd>`. Không `aria-label`, không `title`, không `input`
           — ba chỗ ấy đều là chỗ giá trị này bị mang đi (luật 3, cấm #4), và một `input` còn kéo
@@ -309,11 +337,17 @@ export function OMatKhauTam({
 
       <p className="ghi-chu">{CAU_VIEC_CAN_LAM}</p>
 
-      <div className="cum-nut">
-        <button type="button" className="nut-chinh" onClick={onDong}>
+      <div className="cum-nut m-0 flex justify-end">
+        <Button
+          type="button"
+          variant="primary"
+          icon={<Check aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={onDong}
+        >
           {NUT_DA_GHI_LAI}
-        </button>
+        </Button>
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
