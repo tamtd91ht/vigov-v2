@@ -140,6 +140,7 @@ type NoiDungMiniAppDoc interface {
 type GhiNoiDungMiniApp interface {
 	Them(ctx context.Context, yc domain.YeuCauThemNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
 	Sua(ctx context.Context, id string, yc domain.YeuCauSuaNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
+	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
 // DanhMucMiniAppDoc is the READ half of the commune's Mini App category tree. NO page.Request
@@ -709,6 +710,45 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng, đúng một vết, và không đặt cờ da_sua_tay")(
 				http.HandlerFunc(h.SuaNoiDung))))
+
+	// --- the commune retires one item (user decision 2026-10-02) -------------------------------------
+	//
+	// The per-row delete of the requirement prototype (../vigov-require/apps/api/app/modules/content/
+	// router.py:120-126, guarded by `content.update`), with ONE DIFFERENCE: the reason is MANDATORY (rule
+	// 7, invariant 1; migration 0006's CHECK `noi_dung_mini_app_xoa_mem_day_du`). The shape is
+	// DELETE /api/v1/staff/{id}'s in service-identity: a body `{ "reason": "…" }`, 204, no body back.
+	//
+	// `content.update`, THE KEY THE PROTOTYPE USES and the one every write of this screen carries; seeded
+	// at service-identity/migrations/0001_init.sql:293. No key invented (rule 5, invariant 3c).
+	//
+	// THE ITEM LEAVES THE MINI APP IN THE SAME UPDATE (`trang_thai = 'an'` as a literal), and its cover's
+	// public copy is withdrawn after commit, the way an unpublish withdraws it (app.SoanNoiDungMiniApp.Delete).
+	// `nguon_id_ngoai` is kept, so the portal sync counts the article as skipped_deleted and never imports
+	// it again.
+	//
+	//	400 invalid_request   no / blank reason, a reason past 500 characters, a body that is not JSON.
+	//	404 not_found         already deleted, another commune's id, or invented — one answer (rule 4,
+	//	                      forbidden #2 on the commune axis).
+	//
+	// A BODY ON A DELETE: a query string would put free text about a public record into every access log
+	// and proxy cache.
+	//
+	// idem.KhongCan — deleting an already-deleted item is a 404 either way, and the second request cannot
+	// overwrite who deleted it or why: both the locked read and the UPDATE carry `AND deleted_at IS NULL`.
+	//
+	// @summary  Xoá mềm một mục nội dung Mini App, kèm lý do bắt buộc — gỡ khỏi Mini App ngay trong cùng lần ghi
+	// @screen   11-noi-dung-mini-app §6
+	// @request  deleteContentItemIn
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/content-items/{id}",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("xoá một mục đã xoá cho cùng một kết quả: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.DeleteContentItem))))
 
 	// --- the cover image of an article: ADR 0052's three-step upload -----------------------------------
 	//

@@ -637,6 +637,32 @@ func (s *NoiDungMiniAppStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 	return doiMotDongNoiDung(kq, "cập nhật")
 }
 
+// softDeleteContentItemStmt retires one item: WHO (a staff business code, rule 6 invariant 8), WHEN
+// and WHY together — the CHECK `noi_dung_mini_app_xoa_mem_day_du` refuses any one without the others.
+//
+// `trang_thai = 'an'` IS A LITERAL IN THE SAME UPDATE: a deleted item leaves the Mini App in the very
+// statement that deletes it, so no reader that forgot `deleted_at` could still find it `dang-hien`.
+// Nothing else moves — the cover, the audio, the provenance and `nguon_id_ngoai` stay exactly as they
+// were (rule 7: the record is kept). Keeping `nguon_id_ngoai` is what stops the portal sync importing
+// the article again: ExistingPortalItems sees it held by a deleted row and skips it.
+//
+// `AND deleted_at IS NULL`: a second delete touches nothing, so it cannot overwrite who deleted the
+// item or why (migration 0006's trigger makes those write-once as well).
+const softDeleteContentItemStmt = `UPDATE noi_dung_mini_app
+	SET deleted_at = $5, deleted_by = $3, delete_reason = $4, trang_thai = 'an', cap_nhat_luc = $5
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// SoftDelete retires one item. The caller read it with TheoIDDeSua and owns the audit entry.
+func (s *NoiDungMiniAppStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string,
+	at time.Time) error {
+
+	kq, err := tx.Exec(ctx, softDeleteContentItemStmt, string(tx.TenantID()), id, deletedBy, reason, at.UTC())
+	if err != nil {
+		return fmt.Errorf("noi_dung_mini_app: xoá mềm: %w", err)
+	}
+	return doiMotDongNoiDung(kq, "xoá mềm")
+}
+
 // rongThanhNull turns "" into a NULL bind. See the note on Chen for why the distinction is load
 // bearing on `danh_muc_id` in particular.
 func rongThanhNull(s string) any {
@@ -948,10 +974,9 @@ func oneCategoryRow(res sql.Result, op string) error {
 
 // --- what is deliberately absent ---------------------------------------------------------------
 //
-//	deleting an item      §6's action column offers `✎` and NOTHING ELSE. §9 proposes a DELETE, but
-//	                      rule 7 makes that a soft delete with a MANDATORY reason (`delete_reason`),
-//	                      and no screen in chapter 11 collects one. Taking an item off the Mini App is
-//	                      `trang_thai = 'an'`, which the edit route already does.
+//	a hard delete         an item is retired by SoftDelete above (user decision 2026-10-02: follow
+//	                      the requirement prototype's per-row delete), with a MANDATORY reason —
+//	                      never by removing the row.
 //	the sync writer       NOT HERE BY DESIGN: it is its own statement, PortalSyncStore.InsertSyncedItem
 //	                      (portal_sync.go), with `nguon` the literal 'dong-bo-cong'; the run sanitises
 //	                      the body with internal/richtext.Sanitize before it (app/portal_sync_runner.go).

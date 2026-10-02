@@ -6,7 +6,8 @@ package http
 //	GET   /api/v1/content-items/{id}   content.read
 //	POST  /api/v1/content-items        content.update
 //	PATCH /api/v1/content-items/{id}   content.update
-//	POST  /api/v1/content-items/cover-images                  content.update (content_cover.go)
+//	DELETE /api/v1/content-items/{id}  content.update (soft delete, reason required)
+//	POST  /api/v1/content-items/cover-images                 content.update (content_cover.go)
 //	POST  /api/v1/content-items/cover-images/{id}/completion  content.update (content_cover.go)
 //	GET   /api/v1/content-categories   content.read
 //	POST  /api/v1/content-categories   content.update
@@ -85,6 +86,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -757,6 +759,52 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vietJSON(w, http.StatusOK, noiDungRaNgoai(sau, true))
+}
+
+// deleteContentItemIn is the body of DELETE /api/v1/content-items/{id}. The reason is mandatory (rule
+// 7, invariant 1) and travels in the body, never the query string; trimmed and bounded by the use case
+// (domain.ChuanHoaLyDoXoa, 500 runes — the bound service-identity's staff delete uses).
+type deleteContentItemIn struct {
+	Reason string `json:"reason"`
+}
+
+// DeleteContentItem soft-deletes one item. DELETE /api/v1/content-items/{id} → 204.
+//
+// 204 AND NO BODY: the item is gone from every read path, so there is no row for §6 to redraw — the
+// answer DELETE /api/v1/staff/{id} and DELETE /api/v1/content-categories/{id} give.
+func (h *Handler) DeleteContentItem(w http.ResponseWriter, r *http.Request) {
+	var in deleteContentItemIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.d.Log.Error("tuyến xoá nội dung Mini App chạy mà không có chủ thể — SAI CẤU HÌNH ROUTE",
+			"xa", string(tenant.MustFrom(r.Context())), "duong", r.URL.Path)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	// Scoped in the use case: app.SoanNoiDungMiniApp.Delete opens db.For(ctx).Tx.
+	if err := h.d.GhiNoiDung.Delete(r.Context(), r.PathValue("id"), in.Reason, actor); err != nil {
+		h.contentItemDeleteError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// contentItemDeleteError gives the two reason refusals a sentence about THIS act — the shared domain
+// errors are worded for the catalogue (`danh_muc: …`) — then defers to the shared mapping (404, 500).
+func (h *Handler) contentItemDeleteError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, domain.ErrThieuLyDoXoa):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Hãy nhập lý do xoá. Nội dung đã đăng là hồ sơ lưu trữ, xoá phải ghi rõ vì sao.", "")
+	case errors.Is(err, domain.ErrLyDoXoaQuaDai):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			fmt.Sprintf("Lý do xoá quá dài (tối đa %d ký tự).", domain.LyDoXoaToiDa), "")
+	default:
+		h.traLoiLoiNoiDung(w, r, "xoá", err)
+	}
 }
 
 // themDanhMucVao is the body of POST /api/v1/content-categories — §6's `⊞ Danh mục tin`.

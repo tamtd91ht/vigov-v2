@@ -92,6 +92,10 @@ type ghiNoiDungGia struct {
 	idCuoi          string
 	ra              domain.NoiDungMiniApp
 	loi             error
+
+	// The soft delete (2026-10-02).
+	deletes    int
+	lastReason string
 }
 
 func (g *ghiNoiDungGia) Them(ctx context.Context, yc domain.YeuCauThemNoiDung, nguoi audit.Actor) (
@@ -119,7 +123,14 @@ func (g *ghiNoiDungGia) Sua(ctx context.Context, id string, yc domain.YeuCauSuaN
 	return g.ra, nil
 }
 
-func (g *ghiNoiDungGia) tongGoi() int { return g.themGoi + g.suaGoi }
+func (g *ghiNoiDungGia) Delete(ctx context.Context, id, reason string, actor audit.Actor) error {
+	g.deletes++
+	g.xa = tenant.MustFrom(ctx)
+	g.idCuoi, g.lastReason, g.nguoi = id, reason, actor
+	return g.loi
+}
+
+func (g *ghiNoiDungGia) tongGoi() int { return g.themGoi + g.suaGoi + g.deletes }
 
 // soDanhMucNDGia is the category READ half.
 type soDanhMucNDGia struct {
@@ -340,6 +351,8 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.ghi.themGoi > 0 }},
 		{"sửa nội dung", http.MethodPatch, duongNoiDung + "/nd-001", sua, doc, thanSuaNoiDungHopLe, http.StatusOK,
 			func(m *mayChuND) bool { return m.ghi.suaGoi > 0 }},
+		{"xoá nội dung", http.MethodDelete, duongNoiDung + "/nd-001", sua, doc, `{"reason":"Đăng nhầm bài"}`,
+			http.StatusNoContent, func(m *mayChuND) bool { return m.ghi.deletes > 0 }},
 		{"đọc danh mục", http.MethodGet, duongDanhMucND, doc, sua, "", http.StatusOK,
 			func(m *mayChuND) bool { return m.soDM.goi > 0 }},
 		{"thêm danh mục", http.MethodPost, duongDanhMucND, sua, doc, thanThemDanhMucHopLe, http.StatusCreated,

@@ -627,6 +627,63 @@ func TestPgCapNhatDongDaXoaMemLa404(t *testing.T) {
 	}
 }
 
+func TestPgSoftDeleteLeavesEveryReadAndTheSyncSkipsIt(t *testing.T) {
+	// THE STAFF DELETE (2026-10-02) THROUGH THE REAL STORE, against the real CHECK and partial indexes:
+	// the row leaves the staff list and detail and every public read, it is no longer `dang-hien`, the
+	// portal sync sees its id as held by a DELETED row (skipped_deleted, never re-imported), and a second
+	// delete finds nothing.
+	xa1, _ := xaRieng(t)
+	db := moKetNoi(t)
+	ctx := ctxXa(tenant.ID(xa1))
+	kho := khoNoiDungThat(t)
+	themNoiDungThat(t, xa1, "nd-1", "tin-tuc", "Bài từ Cổng", "dang-hien", "dong-bo-cong", "cong-77", time.Now().UTC())
+
+	del := func() error {
+		return pkgstore.New(db).For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			if _, err := kho.TheoIDDeSua(ctx, tx, "nd-1"); err != nil {
+				return err
+			}
+			return kho.SoftDelete(ctx, tx, "nd-1", "CB-2026-7K3M9Q", "Bài đăng nhầm", time.Now().UTC())
+		})
+	}
+	if err := del(); err != nil {
+		t.Fatalf("xoá mềm qua kho thật: %v", err)
+	}
+	if err := del(); err == nil || !strings.Contains(err.Error(), "không có bản ghi") {
+		t.Errorf("xoá lần hai = %v, muốn ErrNoiDungKhongTonTai", err)
+	}
+
+	var state, by, reason string
+	if err := db.QueryRow(`SELECT trang_thai, deleted_by, delete_reason FROM noi_dung_mini_app
+		WHERE tenant_id = $1 AND id = 'nd-1'`, xa1).Scan(&state, &by, &reason); err != nil {
+		t.Fatalf("đọc dòng đã xoá: %v", err)
+	}
+	if state != "an" || by != "CB-2026-7K3M9Q" || reason != "Bài đăng nhầm" {
+		t.Errorf("dòng đã xoá = %q / %q / %q", state, by, reason)
+	}
+
+	if kq, err := kho.DanhSach(ctx, LocNoiDung{}, trangDauNDThat(t)); err != nil || len(kq.Items) != 0 {
+		t.Errorf("sổ cán bộ = %+v, %v — dòng đã xoá còn trong danh sách", kq.Items, err)
+	}
+	if _, err := kho.TheoID(ctx, "nd-1"); err == nil {
+		t.Error("chi tiết cán bộ vẫn đọc được dòng đã xoá")
+	}
+	if kq, err := kho.DanhSachCongKhai(ctx, "", "", trangDauNDThat(t)); err != nil || len(kq.Items) != 0 {
+		t.Errorf("bảng tin công khai = %+v, %v — dòng đã xoá còn hiện cho bà con", kq.Items, err)
+	}
+	if _, err := kho.CongKhaiTheoID(ctx, "nd-1"); err == nil {
+		t.Error("tin công khai vẫn đọc được dòng đã xoá")
+	}
+
+	held, err := NewPortalSyncStore(pkgstore.New(db)).ExistingPortalItems(ctx, []string{"cong-77"})
+	if err != nil {
+		t.Fatalf("đọc mã bài trên Cổng: %v", err)
+	}
+	if deleted, ok := held["cong-77"]; !ok || !deleted {
+		t.Errorf("held = %v — lượt đồng bộ sau phải thấy mã bị một dòng ĐÃ XOÁ giữ và bỏ qua", held)
+	}
+}
+
 // ctxXa lives in loai_tai_nguyen_ban_do_test.go, next to the first fake driver, and is shared with
 // this file. ONE way to put a commune into a context, not two: the second copy is the one that ends
 // up subtly different from what the edge really does.

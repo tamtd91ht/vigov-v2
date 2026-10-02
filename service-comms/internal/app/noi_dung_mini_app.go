@@ -51,6 +51,7 @@ type KhoNoiDungMiniApp interface {
 	DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (bool, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp) error
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string, at time.Time) error
 }
 
 // KhoDanhMucMiniApp is the category store. A SECOND INTERFACE rather than four more methods on the
@@ -146,6 +147,10 @@ const (
 	HanhViThemNoiDungMiniApp = "them_noi_dung_mini_app"
 	HanhViSuaNoiDungMiniApp  = "sua_noi_dung_mini_app"
 	HanhViThemDanhMucMiniApp = "them_danh_muc_mini_app"
+
+	// ActionDeleteContentItem — the per-row delete of §6 (user decision 2026-10-02). English identifier,
+	// Vietnamese value (rule 12 / ADR 0011), the table named in the verb like its neighbours.
+	ActionDeleteContentItem = "xoa_noi_dung_mini_app"
 
 	// The verbs of ADR 0067 §3, same Vietnamese snake_case as their neighbours: an inspection reads these
 	// strings. English identifiers, Vietnamese values (rule 12 / ADR 0011).
@@ -637,6 +642,107 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		uc.covers.withdrawAfterCommit(ctx, uc.db, sau, cover.withdraw, nguoi, uc.bayGio().UTC())
 	}
 	return sau, nil
+}
+
+// Delete soft-deletes one item — §6's per-row delete (user decision 2026-10-02: follow the requirement
+// prototype, ../vigov-require/apps/api/app/modules/content/service.py:170-179, soft delete + unpublish).
+//
+// WHAT DIFFERS FROM THE PROTOTYPE: THE REASON IS REQUIRED. The prototype deletes without one; rule 7
+// invariant 1 and migration 0006's CHECK `noi_dung_mini_app_xoa_mem_day_du` make `delete_reason` part
+// of what a soft delete is. Shape-checked before the transaction opens.
+//
+// ONE TRANSACTION: the row read FOR UPDATE (live rows of THIS commune only — so another commune's id, an
+// invented one and an already-deleted one are one ErrNoiDungKhongTonTai), the UPDATE that sets the three
+// soft-delete columns AND `trang_thai = 'an'`, and the audit entry. `deleted_by` and the entry's actor
+// are the same staff BUSINESS CODE (audit.Actor.ID is built from Principal.Ma — rule 6, invariant 8).
+//
+// THE COVER'S PUBLIC COPY GOES THE WAY AN UNPUBLISH SENDS IT (coverPublisher): settle runs on the row as
+// deleted — no longer `dang-hien` — so every file of the item still carrying a public key is listed, and
+// withdrawn after commit with its own entry. A failed withdrawal keeps the key; see the ⚠ below.
+//
+// THE AUDIO FILE IS NOT TOUCHED: it is never public (content_audio.go) — residents get a presigned GET
+// of at most PublicAudioURLTTL, signed only for items a public read returns, and a deleted item is
+// returned by none. The file row stays attached to the record (rule 7).
+//
+// ⚠ A WITHDRAWAL THAT FAILS AFTER COMMIT IS NOT RETRIED BY ANYTHING. For an edit, the next edit retries
+// it (PublicForSubject finds the key); a deleted item has no next edit. The copy is then reachable only
+// through its key — two random ULIDs, a public bucket that is not listable (ADR 0052 §2) — and no read
+// of this service links it any more. Logged by withdrawAfterCommit; a sweep is owed (reported).
+//
+// THE REASON TEXT IS NOT IN THE DELTA, ITS LENGTH IS — service-identity's staff delete convention
+// (app/danh_ba_can_bo.go:1271-1291). It is free text about a public record that can name a household;
+// the ledger is never deleted, and the reason itself is kept for ever in `delete_reason`.
+func (uc *SoanNoiDungMiniApp) Delete(ctx context.Context, id, rawReason string, actor audit.Actor) error {
+	if id == "" {
+		return commsstore.ErrNoiDungKhongTonTai
+	}
+	reason, err := domain.ChuanHoaLyDoXoa(rawReason)
+	if err != nil {
+		return err
+	}
+	if actor.ID == "" {
+		return ErrThieuNguoiTaoNoiDung
+	}
+
+	at := uc.bayGio().UTC()
+	var after domain.NoiDungMiniApp
+	var cover settlement
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		before, err := uc.kho.TheoIDDeSua(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := uc.kho.SoftDelete(ctx, tx, before.ID, actor.ID, reason, at); err != nil {
+			return err
+		}
+		after = before
+		after.TrangThai = domain.TrangThaiAn
+
+		afterDelta := map[string]any{"trang_thai": string(after.TrangThai), "da_xoa": true}
+		if uc.covers != nil {
+			var err error
+			if cover, err = uc.covers.settle(ctx, tx, after, at); err != nil {
+				return err
+			}
+			if len(cover.withdraw) > 0 {
+				ids := make([]string, 0, len(cover.withdraw))
+				for _, f := range cover.withdraw {
+					ids = append(ids, f.ID)
+				}
+				afterDelta["cover_withdraw_file_ids"] = ids
+			}
+		}
+
+		beforeDelta := tomTatNoiDungMiniApp(before)
+		beforeDelta["da_xoa"] = false
+		delta, err := json.Marshal(map[string]any{
+			"id":           before.ID,
+			"truoc":        beforeDelta,
+			"sau":          afterDelta,
+			"do_dai_ly_do": len([]rune(reason)),
+			"xoa_luc":      at.Format(time.RFC3339),
+		})
+		if err != nil {
+			return fmt.Errorf("noi_dung_mini_app: mã hoá delta: %w", err)
+		}
+		// SAME TRANSACTION AS THE UPDATE (rule 6, invariant 3); TenantID filled by audit.Write from the tx.
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   actor,
+			Action:  ActionDeleteContentItem,
+			Subject: chuDeNoiDungMiniApp(before),
+			At:      at,
+			Delta:   delta,
+		})
+	})
+	if err != nil {
+		// Rolled back: no deletion, no trail. settle never copies for a row that is not `dang-hien`, so
+		// there is no public copy to undo. %w keeps ErrNoiDungKhongTonTai visible to the handler (404).
+		return bocNoiDung(ctx, "xoá nội dung Mini App", err)
+	}
+	if len(cover.withdraw) > 0 {
+		uc.covers.withdrawAfterCommit(ctx, uc.db, after, cover.withdraw, actor, at)
+	}
+	return nil
 }
 
 // Them adds one category to the commune's filing tree — §6's `⊞ Danh mục tin`.
