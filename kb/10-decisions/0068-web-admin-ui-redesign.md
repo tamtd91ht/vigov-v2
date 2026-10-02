@@ -292,9 +292,13 @@ tính năng đang phát triển, có thể view thêm mô tả"*.
 |---|---|
 | ⟳ Tính lại ngay, huy hiệu "cũ hơn 10 phút" | Đã quyết không làm — ADR 0053 |
 | Ghi nhận đánh giá của người dân | Đã quyết không làm — ADR 0062 |
-| Cột Lượt xem, "{n} chuyên mục" (Nội dung) | Đã quyết không làm |
+| "{n} chuyên mục" (Nội dung) | Đã quyết không làm |
 | Tác vụ Tính lại số liệu Tổng quan | Đã quyết không làm — ADR 0053 |
 | Lựa chọn bố cục thuần (hộp thoại hay tại chỗ, cổng quyền phía trình duyệt, ghim cả sổ) | Không phải tính năng, không có gì để giữ chỗ |
+
+**02/10/2026 — cột Lượt xem ra khỏi bảng trên:** chủ dự án đảo quyết định "không lượt xem", nên cột
+"Lượt xem" và dòng ở ngăn chi tiết của Nội dung Mini App **được dựng** (số thật, không sắp xếp theo
+nó), không phải chỗ giữ. Nội dung quyết định: ADR 0047 §6, dòng "Lượt xem tin".
 
 **Mục "chưa dựng" đã cũ — bỏ hoặc sửa:**
 
