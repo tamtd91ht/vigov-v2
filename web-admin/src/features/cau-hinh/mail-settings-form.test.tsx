@@ -26,7 +26,7 @@ const SAVED: comms_mailSettingsOut = {
   security: "starttls",
   username: "ubnd@xa.gov.vn",
   from_address: "ubnd@xa.gov.vn",
-  from_name: "ViGov",
+  from_name: "UBND xã",
   is_enabled: true,
   password_set: true,
   encryption_configured: true,
@@ -46,6 +46,7 @@ function view(saved: comms_mailSettingsOut, draft: MailDraft = draftFromSettings
       testing={false}
       testMessage={null}
       onTest={() => {}}
+      communeName="UBND xã Tân Phú"
     />,
   );
 }
@@ -93,6 +94,13 @@ describe("states", () => {
     const html = view({ ...SAVED, configured: false, password_set: false });
     expect(html).toContain(NOT_CONFIGURED_WARNING);
     expect((html.match(/<fieldset disabled="">/g) ?? []).length).toBe(1);
+  });
+
+  it("sender-name placeholder is the commune's name, never the product name (ADR 0068 §13)", () => {
+    const html = view(SAVED);
+    expect(html).toMatch(/<input id="o-smtp-ten-gui"[^>]*placeholder="UBND xã Tân Phú"/);
+    expect(html.replace(/<[^>]*>/g, " ")).not.toMatch(/vigov/i);
+    expect(html).not.toContain('placeholder="ViGov"');
   });
 
   it("port is a select of the four accepted ports", () => {

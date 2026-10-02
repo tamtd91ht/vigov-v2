@@ -7,7 +7,7 @@ import { ThanhBen } from "@/components/thanh-ben";
 import { DashboardPage } from "@/features/dashboard/overview";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/tong-quan` — Tổng quan điều hành (`docs/ui-ux/01-tong-quan-dieu-hanh.md`).
@@ -23,9 +23,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Tổng quan điều hành · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Tổng quan điều hành");
+}
 
 export default async function OverviewPage() {
   const commune = await layCauHinhXa();

@@ -4,7 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { SoBienBan } from "@/features/bien-ban/so-bien-ban";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/nhiem-vu/bien-ban` — Biên bản và kết luận họp (`docs/ui-ux/04-bien-ban-hop.md`).
@@ -29,10 +29,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, KHÔNG mang tên xã — tên xã hiện trên đầu trang, đọc lúc chạy.
-  title: "Biên bản và kết luận họp · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Biên bản và kết luận họp");
+}
 
 export default async function TrangBienBanHop() {
   const xa = await layCauHinhXa();

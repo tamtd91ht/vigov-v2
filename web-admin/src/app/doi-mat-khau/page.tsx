@@ -7,7 +7,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { FormDoiMatKhau } from "@/features/mat-khau/form-doi-mat-khau";
 import { NhacBatDoiMatKhau } from "@/features/mat-khau/nhac-bat-doi";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/doi-mat-khau` — cán bộ tự đổi mật khẩu của chính mình (`15-phu-luc-giao-dien-chung` §1,
@@ -34,11 +34,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, không mang tên xã: tên xã đọc lúc chạy từ `Host` và hiện trên đầu
-  // trang (luật 1, bất biến 10).
-  title: "Đổi mật khẩu · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Đổi mật khẩu");
+}
 
 export default async function TrangDoiMatKhau() {
   const xa = await layCauHinhXa();

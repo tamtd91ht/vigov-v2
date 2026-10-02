@@ -3,6 +3,7 @@
 import { Mail, Save, Send, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { Button } from "@/components/ui/button";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
@@ -48,6 +49,9 @@ import { mailServerTabDecision } from "./quyen-tab";
  */
 export function MailServerTab() {
   const phien = usePhien();
+  // The sender-name placeholder is the signed-in commune (ADR 0068 §13), read from the
+  // server-built context like every other commune value — never a product name.
+  const commune = useCauHinhXa();
   const decision = phien === null ? null : mailServerTabDecision(phien);
   const allowed = decision !== null && decision.hien;
 
@@ -155,6 +159,7 @@ export function MailServerTab() {
       testing={testing}
       testMessage={testMessage}
       onTest={() => void test()}
+      communeName={commune.displayName}
     />
   );
 }
@@ -175,6 +180,7 @@ export function MailServerView({
   testing,
   testMessage,
   onTest,
+  communeName,
 }: {
   saved: comms_mailSettingsOut;
   draft: MailDraft;
@@ -187,6 +193,8 @@ export function MailServerView({
   testing: boolean;
   testMessage: { ok: boolean; text: string } | null;
   onTest: () => void;
+  /** The signed-in commune's `displayName`, verbatim — the sender-name placeholder. */
+  communeName: string;
 }) {
   const readOnly = !saved.encryption_configured;
   const note = passwordNote(saved, draft);
@@ -335,7 +343,7 @@ export function MailServerView({
               id="o-smtp-ten-gui"
               name="from_name"
               value={draft.fromName}
-              placeholder="ViGov"
+              placeholder={communeName}
               onChange={(e) => setDraft({ ...draft, fromName: e.target.value })}
             />
           </div>

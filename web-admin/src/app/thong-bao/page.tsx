@@ -4,7 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { SoThongBao } from "@/features/thong-bao/so-thong-bao";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/thong-bao` — Thông báo nội bộ (`docs/ui-ux/08-thong-bao.md`), đúng đường dẫn đặc tả ghi ở đầu
@@ -32,9 +32,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Thông báo · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Thông báo");
+}
 
 export default async function TrangThongBao() {
   const xa = await layCauHinhXa();

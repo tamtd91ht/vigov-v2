@@ -9,7 +9,7 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { SoVanBanDen } from "@/features/van-ban/so-van-ban-den";
 import { SoVanBanDi } from "@/features/van-ban/so-van-ban-di";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/van-ban` — Văn bản & Đơn thư (`docs/ui-ux/05-van-ban-don-thu.md`).
@@ -38,10 +38,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, KHÔNG mang tên xã — tên xã hiện trên đầu trang, đọc lúc chạy.
-  title: "Văn bản & đơn thư · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Văn bản & đơn thư");
+}
 
 export default async function TrangVanBan({
   searchParams,

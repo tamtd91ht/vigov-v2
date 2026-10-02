@@ -9,7 +9,7 @@ import { BangDuAn } from "@/features/giai-ngan/bang-du-an";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/giai-ngan` — Theo dõi giải ngân (`docs/ui-ux/06-giai-ngan.md`).
@@ -29,10 +29,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, KHÔNG mang tên xã — tên xã hiện trên đầu trang, đọc lúc chạy.
-  title: "Theo dõi giải ngân · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Theo dõi giải ngân");
+}
 
 export default async function TrangGiaiNgan() {
   const xa = await layCauHinhXa();

@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
@@ -49,3 +50,18 @@ export const layCauHinhXa = cache(async (): Promise<TenantConfig> => {
 
   return cauHinh;
 });
+
+/**
+ * Tab title of a commune screen: "<screen> · <commune displayName>" (ADR 0068 §13 — staff never
+ * see the product name; they see the commune they are signed in to).
+ *
+ * Built from `layCauHinhXa`, the same `cache`d call the page body makes, so it costs no second
+ * request — and it inherits that call's failure: a `Host` matching no commune is a 404 here too.
+ * There is deliberately no fallback name. A title that falls back to some fixed string when the
+ * commune is unknown is a default on the isolation path (rule 1, forbidden #1), and it would put
+ * a name on a tab for a commune that does not exist.
+ */
+export async function communePageMetadata(screen: string): Promise<Metadata> {
+  const commune = await layCauHinhXa();
+  return { title: `${screen} · ${commune.displayName}` };
+}

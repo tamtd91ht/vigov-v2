@@ -4,7 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { SoNoiDung } from "@/features/noi-dung/so-noi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/noi-dung` — Quản trị nội dung Mini App (`docs/ui-ux/11-noi-dung-mini-app.md`).
@@ -28,9 +28,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Nội dung Mini App · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Nội dung Mini App");
+}
 
 export default async function TrangNoiDungMiniApp() {
   const xa = await layCauHinhXa();

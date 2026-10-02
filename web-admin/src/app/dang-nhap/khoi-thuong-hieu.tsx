@@ -8,7 +8,11 @@ import { useCauHinhXa } from "@/components/cau-hinh-xa";
  * Cột thương hiệu của màn đăng nhập — spec giao diện 02/10/2026 §8.4: logo, khẩu hiệu ngắn, bốn ô
  * phân hệ, tên xã.
  *
- * `ViGov`, khẩu hiệu và bốn tên phân hệ là hằng số của SẢN PHẨM — viết thẳng được, giống nhau ở
+ * KHÔNG CÓ TÊN SẢN PHẨM (ADR 0068 §13, chủ dự án chốt 02/10/2026): chỗ trước đây in `ViGov` nay in
+ * tên xã, phụ đề là "Hệ thống điều hành số". Tên xã vì thế chỉ in MỘT lần, ở đầu cột; khối dưới
+ * cùng chỉ còn cơ quan cấp trên (ẩn khi xã không khai, như `components/commune-identity.tsx`).
+ *
+ * Phụ đề, khẩu hiệu và bốn tên phân hệ là hằng số của SẢN PHẨM — viết thẳng được, giống nhau ở
  * mọi xã. Tên xã và cơ quan cấp trên thì KHÔNG: chúng đi xuống qua ngữ cảnh do máy chủ dựng, đọc
  * lúc chạy từ `Host`. Đây chính là chỗ một `NEXT_PUBLIC_TEN_XA` sẽ len vào nếu không ai để ý — và
  * một bundle không mang nổi tên của 300 xã, nên nó sẽ kéo theo mỗi xã một bản dựng riêng.
@@ -36,8 +40,8 @@ export function KhoiThuongHieu() {
           <Star focusable="false" />
         </div>
         <div>
-          <p className="ten-san-pham">ViGov</p>
-          <p className="phu-de-san-pham">Điều hành số cấp xã</p>
+          <p className="ten-san-pham">{xa.displayName}</p>
+          <p className="phu-de-san-pham">Hệ thống điều hành số</p>
         </div>
       </div>
 
@@ -56,15 +60,16 @@ export function KhoiThuongHieu() {
         ))}
       </ul>
 
-      <div className="login-commune">
-        <span className="login-commune-icon" aria-hidden="true">
-          <Landmark focusable="false" strokeWidth={1.8} />
-        </span>
-        <div>
-          <p className="ten-xa">{xa.displayName}</p>
-          <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
+      {xa.parentAuthority !== "" && (
+        <div className="login-commune">
+          <span className="login-commune-icon" aria-hidden="true">
+            <Landmark focusable="false" strokeWidth={1.8} />
+          </span>
+          <div>
+            <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

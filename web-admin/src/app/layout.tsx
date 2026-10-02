@@ -31,9 +31,12 @@ const FONT_VARIABLE_CLASS = "font-be-vietnam";
  * tiếng Việt, và quyết định trình duyệt ngắt dòng, kiểm chính tả theo tiếng Việt.
  */
 export const metadata = {
-  // Hằng số của sản phẩm, không phải giá trị theo xã — tên xã không bao giờ nằm trong thứ
-  // được nung lúc build (luật 1, bất biến 10). Tên xã hiện trên đầu trang, đọc lúc chạy.
-  title: "ViGov — Điều hành số cấp xã",
+  // A platform constant, not a per-commune value: this layout cannot resolve the commune (see
+  // above), and a commune name is never baked into the build (rule 1, invariant 10). It carries
+  // no product name either — staff see the commune, never "ViGov" (ADR 0068 §13, owner wording).
+  // Every commune screen overrides it with "<screen> · <commune>" via `communePageMetadata`;
+  // this is what the sign-in and 404 pages inherit.
+  title: "Hệ thống điều hành số cấp xã",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

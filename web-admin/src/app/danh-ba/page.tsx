@@ -10,7 +10,7 @@ import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "@/features/danh-ba/
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_QUAN_LY_NGUOI_DUNG } from "@/lib/quyen";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/danh-ba` — Danh bạ cán bộ (`docs/ui-ux/12-danh-ba-can-bo.md`), đúng đường dẫn đặc tả ghi ở
@@ -40,9 +40,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Danh bạ cán bộ · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Danh bạ cán bộ");
+}
 
 export default async function TrangDanhBa() {
   const xa = await layCauHinhXa();

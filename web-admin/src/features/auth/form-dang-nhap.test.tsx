@@ -40,15 +40,32 @@ describe("FormDangNhap after the redesign", () => {
 });
 
 describe("KhoiThuongHieu", () => {
-  it("prints the commune's name verbatim, from configuration, never upper-cased in data", () => {
-    const html = renderToStaticMarkup(
-      <CauHinhXaProvider giaTri={{ displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" }}>
+  const render = (parentAuthority: string) =>
+    renderToStaticMarkup(
+      <CauHinhXaProvider giaTri={{ displayName: "UBND xã Tân Phú", parentAuthority }}>
         <KhoiThuongHieu />
       </CauHinhXaProvider>,
     );
-    expect(html).toContain('<p class="ten-xa">UBND xã Tân Phú</p>');
+
+  it("prints the commune's name verbatim, once, where the product name used to be", () => {
+    const html = render("Tỉnh Đồng Nai");
+    expect(html).toContain('<p class="ten-san-pham">UBND xã Tân Phú</p>');
+    expect(html).toContain('<p class="phu-de-san-pham">Hệ thống điều hành số</p>');
+    expect(html.match(/UBND xã Tân Phú/g)).toHaveLength(1);
     expect(html).toContain('<p class="co-quan-cap-tren">Tỉnh Đồng Nai</p>');
     // The module tiles are illustration, not navigation: an anonymous visitor reaches no module.
     expect(html).not.toContain("<a ");
+  });
+
+  it("shows no product name a staff member can read (ADR 0068 §13)", () => {
+    // Text only: the `logo-vigov` CSS class is an identifier and is meant to stay.
+    const text = render("Tỉnh Đồng Nai").replace(/<[^>]*>/g, " ");
+    expect(text).not.toMatch(/vigov/i);
+  });
+
+  it("drops the parent-authority block when the commune declares none", () => {
+    const html = render("");
+    expect(html).not.toContain("co-quan-cap-tren");
+    expect(html).not.toContain("login-commune");
   });
 });

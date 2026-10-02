@@ -9,6 +9,12 @@ vi.mock("@/features/phien/phien-hien-tai", () => ({
   usePhien: () => phienGia,
 }));
 
+// The real page wraps this frame in `CauHinhXaProvider`; the mail-server tab reads the commune
+// name from it (sender-name placeholder, ADR 0068 §13).
+vi.mock("@/components/cau-hinh-xa", () => ({
+  useCauHinhXa: () => ({ displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" }),
+}));
+
 const { KhungTabCauHinh } = await import("./khung-tab-cau-hinh");
 
 function phienCo(quyen: readonly string[]): PhienDaDoc {

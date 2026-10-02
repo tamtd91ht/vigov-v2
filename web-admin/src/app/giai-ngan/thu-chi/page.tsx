@@ -10,7 +10,7 @@ import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { BangThuChi } from "@/features/thu-chi/bang-thu-chi";
 import { CAU_THIEU_QUYEN_XEM } from "@/features/thu-chi/nhan-thu-chi";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/giai-ngan/thu-chi` — Thu - Chi ngân sách xã (`docs/ui-ux/07-thu-chi-ngan-sach.md`).
@@ -34,10 +34,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, KHÔNG mang tên xã — tên xã hiện trên đầu trang, đọc lúc chạy.
-  title: "Thu - Chi ngân sách · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Thu - Chi ngân sách");
+}
 
 export default async function TrangThuChiNganSach() {
   const xa = await layCauHinhXa();

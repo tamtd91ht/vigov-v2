@@ -5,7 +5,7 @@ import { ThanhBen } from "@/components/thanh-ben";
 import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/nhiem-vu` — Quản lý nhiệm vụ (`docs/ui-ux/02-nhiem-vu.md`), đúng đường dẫn đặc tả ghi ở đầu
@@ -24,9 +24,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Quản lý nhiệm vụ · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Quản lý nhiệm vụ");
+}
 
 export default async function TrangNhiemVu({
   searchParams,

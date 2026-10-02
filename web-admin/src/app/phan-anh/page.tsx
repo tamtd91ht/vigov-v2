@@ -11,7 +11,7 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/phan-anh` — Phản ánh của người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng đường dẫn
@@ -24,9 +24,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Phản ánh của người dân · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Phản ánh của người dân");
+}
 
 export default async function TrangPhanAnh({
   searchParams,

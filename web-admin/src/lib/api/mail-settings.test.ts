@@ -30,7 +30,7 @@ const SAVED = {
   security: "starttls",
   username: "ubnd@xa.gov.vn",
   from_address: "ubnd@xa.gov.vn",
-  from_name: "ViGov",
+  from_name: "UBND xã",
   is_enabled: true,
   password_set: true,
   encryption_configured: true,
@@ -42,7 +42,7 @@ const INPUT = {
   security: "starttls",
   username: "ubnd@xa.gov.vn",
   from_address: "ubnd@xa.gov.vn",
-  from_name: "ViGov",
+  from_name: "UBND xã",
   is_enabled: true,
 };
 

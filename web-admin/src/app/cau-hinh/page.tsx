@@ -8,7 +8,7 @@ import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { KhoiChuaDung } from "@/features/cau-hinh/khoi-chua-dung";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/cau-hinh` — màn hình Cấu hình hệ thống (`docs/ui-ux/14-cau-hinh.md`).
@@ -67,11 +67,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  // Hằng số của sản phẩm, không mang tên xã: tên xã đọc lúc chạy từ `Host` và hiện trên đầu
-  // trang (luật 1, bất biến 10).
-  title: "Cấu hình hệ thống · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Cấu hình hệ thống");
+}
 
 export default async function TrangCauHinh() {
   const xa = await layCauHinhXa();

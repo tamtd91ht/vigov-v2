@@ -8,7 +8,7 @@ import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
-import { layCauHinhXa } from "@/lib/tenant.server";
+import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
  * `/giai-ngan/du-an/:id` — chi tiết một dự án (`docs/ui-ux/06-giai-ngan.md §8`), đúng đường dẫn
@@ -21,9 +21,11 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Chi tiết dự án · ViGov",
-};
+// Tab title carries the signed-in commune, never the product name (ADR 0068 §13); a Host
+// matching no commune 404s here exactly as the page body does.
+export function generateMetadata() {
+  return communePageMetadata("Chi tiết dự án");
+}
 
 export default async function TrangChiTietDuAn({ params }: { params: Promise<{ id: string }> }) {
   const [xa, { id }] = await Promise.all([layCauHinhXa(), params]);
