@@ -412,6 +412,15 @@
       "no_confirm": [],
       "tiep_theo": "(1) CSP web-admin chưa có (nợ tools/security_debt.json) — khi viết, img-src phải có host kho tệp ký link (ADR 0052 §4); (2) màn tra cứu phiếu theo mã (tra-cuu-phieu.tsx) chưa hiện ảnh — chưa ai yêu cầu; (3) ảnh sau xử lý của cán bộ để sau (G8).",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "phan-anh-dot-02-10",
+      "viec": "Phản ánh (09) Web Admin đợt 02/10/2026: đính kèm nhật ký phiếu, ảnh sau xử lý + chặn đóng khi thiếu ảnh, nhập hộ phản ánh, ba thẻ KPI còn thiếu, 9 câu trạng thái, sửa câu sai 'chờ khách duyệt'",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Mở từ /develop-web-admin phan-anh-nguoi-dan (người dùng 02/10/2026: 'tập trung làm nó đi', 'nối luôn cả miniapp'), theo ghi chú đối chiếu kb/50-doi-chieu/2026-10-02-feat-m8-multitenant-foundation-phan-anh.md. Người dùng chốt 02/10: C làm ảnh sau xử lý + công tắc bắt buộc ảnh nghiệm thu mặc định BẬT, người dân thấy ảnh trước/sau trong app xã (đảo G8); A nhập hộ KHÔNG gắn tài khoản Zalo — cán bộ đưa mã tra cứu; F dùng nguyên 9 câu trạng thái của bản mẫu; E màn giữ 'Quá hạn' + hạn cuối nhưng dựng RPC identity đo giờ làm việc đã trôi cho đồng bộ.",
+      "no_confirm": [],
+      "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

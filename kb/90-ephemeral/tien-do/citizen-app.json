@@ -472,6 +472,15 @@
       "no_confirm": [],
       "tiep_theo": "CHỜ CHỦ DỰ ÁN DUYỆT từng câu; duyệt xong thì gỡ dấu cùng lúc và cập nhật bản đồ dấu trong chinh-sach.test.ts. Cần chốt: (1) số phiên bản 1.0 (theo quy tắc trong tệp) hay 1.1 (ADR 0047 G9 :255); (2) cách gọi nơi nhận ảnh: 'máy chủ của Tập đoàn ViHAT Group' (#28) vs 'kho lưu tệp nội bộ của ViGov' (ket-xuat-ho-so.ts). Câu CŨ đã sai với app xã, ngoài lượt này: CAU_DAU, ben-thu-ba, rui-ro, cach-thuc, quyen-cua-ban (không lưu xuống máy / đúng hai việc gửi đi) — trái bản nháp ADR 0050 #7, gửi phản ánh, đổi vị trí; chính sách chưa có mục PHẢN ÁNH (nội dung, họ tên, SĐT, toạ độ); cac-quyen 'đúng sáu tính năng' là của app chung. ket-xuat-ho-so.ts:442-446, :673-674 còn ghi 'STILL OWED' — tệp ấy phiên song song đang sửa.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "phan-anh-dot-02-10-app-xa",
+      "viec": "Phản ánh (09) app xã đợt 02/10/2026: ảnh trước/sau xử lý trên phiếu của người dân, 9 câu trạng thái theo bản mẫu",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Mở từ /develop-web-admin phan-anh-nguoi-dan (người dùng 02/10/2026: 'tập trung làm nó đi', 'nối luôn cả miniapp'), theo ghi chú đối chiếu kb/50-doi-chieu/2026-10-02-feat-m8-multitenant-foundation-phan-anh.md. Người dùng chốt 02/10: C làm ảnh sau xử lý + công tắc bắt buộc ảnh nghiệm thu mặc định BẬT, người dân thấy ảnh trước/sau trong app xã (đảo G8); A nhập hộ KHÔNG gắn tài khoản Zalo — cán bộ đưa mã tra cứu; F dùng nguyên 9 câu trạng thái của bản mẫu; E màn giữ 'Quá hạn' + hạn cuối nhưng dựng RPC identity đo giờ làm việc đã trôi cho đồng bộ.",
+      "no_confirm": [],
+      "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

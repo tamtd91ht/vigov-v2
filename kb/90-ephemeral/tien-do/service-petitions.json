@@ -484,6 +484,15 @@
       "no_confirm": [],
       "tiep_theo": "TASK-03 (use case + tuyến): đếm cả lượt tải đang chờ trong giao dịch khoá phiếu (CSDL chỉ đếm ảnh đã vào kho); link đọc ký gắn phieu_phan_anh.cong_dan_id (stored_file không giữ id công dân); retain_until của citizen-media (24 tháng sau đóng phiếu) chưa có hành vi đặt. Số 5 nằm ở hai nơi (trigger + upload_policy platform). ADR 0052:156 ghi uploaded_by = 'tham chiếu phiên công dân' — mã theo quy ước 'cong-dan', cần một dòng sửa ADR.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "phan-anh-dot-02-10-may-chu",
+      "viec": "Phản ánh (09) máy chủ đợt 02/10/2026: tuyến đính kèm nhật ký phiếu, ảnh sau xử lý + cờ bắt buộc ảnh nghiệm thu theo xã, POST nhập hộ (ADR 0028 §F), KPI điểm hài lòng / đánh giá thấp / chờ kiểm duyệt, giờ làm việc quá hạn qua RPC identity",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Mở từ /develop-web-admin phan-anh-nguoi-dan (người dùng 02/10/2026: 'tập trung làm nó đi', 'nối luôn cả miniapp'), theo ghi chú đối chiếu kb/50-doi-chieu/2026-10-02-feat-m8-multitenant-foundation-phan-anh.md. Người dùng chốt 02/10: C làm ảnh sau xử lý + công tắc bắt buộc ảnh nghiệm thu mặc định BẬT, người dân thấy ảnh trước/sau trong app xã (đảo G8); A nhập hộ KHÔNG gắn tài khoản Zalo — cán bộ đưa mã tra cứu; F dùng nguyên 9 câu trạng thái của bản mẫu; E màn giữ 'Quá hạn' + hạn cuối nhưng dựng RPC identity đo giờ làm việc đã trôi cho đồng bộ.",
+      "no_confirm": [],
+      "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
