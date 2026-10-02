@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-02",
   "muc": [
     {
+      "id": "operator-mini-app-secret",
+      "viec": "Hợp đồng OperatorService.SetMiniAppSecret / RetireMiniAppSecret: service-platform đặt / thu hồi khoá bí mật Zalo của App ID riêng của xã thay mặt người vận hành (ADR 0070 #4, Bổ sung 02/10 #6 #7)",
+      "trang_thai": "xong",
+      "bang_chung": "proto/vigov/identity/v1/operator.proto — rpc SetMiniAppSecret, RetireMiniAppSecret; message SetMiniAppSecretRequest(session_token, app_id, app_secret, reason, client_ip), SetMiniAppSecretResponse(outcome, version), RetireMiniAppSecretRequest(session_token, app_id, reason, client_ip), RetireMiniAppSecretResponse(outcome, retirement), MiniAppSecretVersion(app_id, version, set_at, set_by), MiniAppSecretRetirement(app_id, retired_version, retired_at, retired_by); enum OperatorAuthOutcome thêm PERMISSION_DENIED = 6. Xã ĐÍCH đi metadata x-tenant-id, KHÔNG thêm vào methodsWithoutTenant; đầu tệp sửa cho đúng (miễn xã chỉ của bảy RPC cũ). Ranh giới: transaction-boundaries.json `dat_thu_hoi_khoa_bi_mat_app_rieng_qua_van_hanh`. TỰ CHẠY 02/10/2026: buf lint rc=0 · buf breaking --against '.git#ref=HEAD' rc=0 · buf generate rc=0 (core/gen bị gitignore) · go build ./... core, service-identity, service-platform rc=0 · go test core/grpcx, core/identityclient, service-identity/internal/grpc + cmd/... rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "TASK-P2b cài đặt trong identity (hôm nay hai RPC trả UNIMPLEMENTED qua UnimplementedOperatorServiceServer): phân giải phiên từ session_token, kiểm ops.mini_app.manage, MiniAppSecretAdmin cần biến thể có người làm là người vận hành (actor_kind operator, mã VH-, actor_ip, lý do tự do ≤500 ký tự thay cho ticket:<n>); core/audit.Actor.Kind hiện chỉ khai staff|citizen|system. Tách lỗi: ErrMiniAppNotOwnApp → FAILED_PRECONDITION, ErrMiniAppSettingsNotFound → NOT_FOUND. Nhật ký chỉ hiện ở nhật ký vận hành (ADR 0070 #7) — chọn chỗ lưu là việc của P2b. TASK-P2c: tuyến REST platform, FAILED_PRECONDITION → 409, NOT_FOUND khi tự thu hồi = xong."
+    },
+    {
       "id": "resolve-staff-names",
       "viec": "RPC để HỒ SƠ CŨ đọc được TÊN một cán bộ, kể cả id đã xoá mềm — đòi hỏi bắt buộc kèm quyết định câu mở #10 (22/09/2026)",
       "trang_thai": "xong",

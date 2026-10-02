@@ -17,27 +17,44 @@ import "google/protobuf/timestamp.proto";
 //     on an operator path, or the reverse, is ADR 0048 stop condition #6. Separate services mean
 //     separate generated clients: a caller holding an OperatorServiceClient cannot reach a staff
 //     RPC by a typo, and the other way round.
-//   * The commune rule holds for EVERY method here, not for some. IdentityService's header states
-//     "the commune travels in metadata, always"; seven exceptions scattered through it would make
-//     that sentence false. Here the exception is the service itself, stated once, below.
+//   * The commune rule is stated once, here, not scattered. IdentityService's header states "the
+//     commune travels in metadata, always"; seven exceptions scattered through it would make that
+//     sentence false. Here the exception is the realm's own seven RPCs, stated once, below — and the
+//     two RPCs that act ON a commune (SetMiniAppSecret, RetireMiniAppSecret) are NOT exempt.
 //   * One caller. Only service-platform calls this service. NOTHING IN THE WIRING ENFORCES THAT:
 //     it is served on identity's inter-service listener behind the one shared caller key (ADR
 //     0025), which every ViGov service holds. What a stray caller could do with it is exactly what
 //     the operator HTTP routes allow somebody holding the same credentials — no RPC here answers
 //     without a password, a second factor, or a live `op1.` token.
 //
-// THE COMMUNE: NONE, AND THAT IS THE ANSWER TO A STOP CONDITION, NOT A SHORTCUT. Every RPC of this
-// service is on core/grpcx.methodsWithoutTenant. Adding a name there is a STOP CONDITION (ADR 0012,
+// THE COMMUNE, FOR THE SEVEN REALM RPCs: NONE, AND THAT IS THE ANSWER TO A STOP CONDITION, NOT A
+// SHORTCUT. OpenOperatorSession through CompleteOperatorEnrollment are on
+// core/grpcx.methodsWithoutTenant, BY FULL NAME. Adding a name there is a STOP CONDITION (ADR 0012,
 // decision 1, `0012-grpc-boundary-contract.md:96-98`); the owner answered it YES on 2026-10-01 — ADR
 // 0048 §"Chốt của chủ dự án — 01/10/2026" #2. They pass ADR 0012's test with a structural no: an
 // operator belongs to no commune, so there is no commune to know at call time. What keeps the
 // exemption from widening the hole:
 //
-//   * No request here has a commune field, and no handler reads tenant.From — there is no commune
-//     to read, and inventing one would be a default on the isolation path (rule 1, forbidden #1).
-//   * No response here carries business data of any commune. The `ops.*` keys returned by
+//   * No request of those seven has a commune field, and no handler of theirs reads tenant.From —
+//     there is no commune to read, and inventing one would be a default on the isolation path
+//     (rule 1, forbidden #1).
+//   * No response of those seven carries business data of any commune. The `ops.*` keys returned by
 //     ResolveOperatorSession authorise PLATFORM METADATA routes only (ADR 0003, ADR 0048 condition
 //     #2); service-platform has no gRPC client into a business service.
+//
+// THE COMMUNE, FOR THE TWO MINI APP SECRET RPCs: THE TARGET COMMUNE, IN METADATA "x-tenant-id", LIKE
+// EVERY OTHER INTER-SERVICE CALL (rule 2, invariant 8). SetMiniAppSecret and RetireMiniAppSecret
+// write a commune's own data (service-identity mini_app_secret, migration 0021, ADR 0066), so they
+// are NOT on methodsWithoutTenant and never may be: the commune interceptor on this port
+// (buildOperatorGRPCServer, the same chain as 9090) refuses them with INVALID_ARGUMENT when the
+// metadata is absent — exactly what that interceptor was kept on this port for. The commune is the
+// one the operator's URL names on service-platform's operator route; it is a CLAIM of the caller,
+// and identity does not trust it alone: SetMiniAppSecret re-reads the platform binding (App ID →
+// commune) before it writes, and RetireMiniAppSecret only ever touches rows already scoped to that
+// commune. Neither request has a commune FIELD — the body is caller-declared data (rule 1,
+// forbidden #2). Why these two live HERE and not on IdentityService: ADR 0070 §"Bổ sung 02/10/2026"
+// #6 — the secret travels platform → identity on the operator port 9093 and nowhere else, and an
+// operator principal is resolved only by this service.
 //
 // AUTHENTICATION IS HYBRID AND NOT CACHED (ADR 0048 §01/10 #2). service-platform verifies the `op1.`
 // signature locally (it holds OPERATOR_SESSION_SIGNING_KEYS too), then calls ResolveOperatorSession
@@ -53,11 +70,19 @@ import "google/protobuf/timestamp.proto";
 //   INVALID_ARGUMENT     a WIRING FAULT in the caller, decided from the request alone, before any
 //                        lookup — so it says nothing about any account: an empty `session_token`
 //                        on a session-bound RPC; both `totp_code` and `recovery_code` on
-//                        OpenOperatorSession. Nothing was counted, nothing was written.
+//                        OpenOperatorSession; on the two Mini App secret RPCs also: no "x-tenant-id"
+//                        metadata (the commune interceptor), an `app_id` that is not 1-32 digits, an
+//                        `app_secret` outside its shape, a `reason` empty or over 500 runes. Nothing
+//                        was counted, nothing was written. The status MESSAGE never quotes a value.
 //   FAILED_PRECONDITION  the operator realm is not configured in identity
 //                        (OPERATOR_SESSION_SIGNING_KEYS or OPERATOR_TOTP_ENCRYPTION_KEY absent —
 //                        app.ErrOperatorRealmNotConfigured). A deployment fault: the caller answers
 //                        503 and alerts. Never "refused", never retried blindly.
+//                        ON SetMiniAppSecret ONLY, A SECOND MEANING: the platform does not bind this
+//                        App ID, live, to the target commune as its own app. See that RPC for why the
+//                        two meanings cannot be confused by a conforming caller.
+//   NOT_FOUND            RetireMiniAppSecret only: the App ID has no live settings in the target
+//                        commune. Never produced by the seven realm RPCs.
 //   UNAUTHENTICATED      NEVER produced by these RPCs. It belongs to the caller-key interceptor
 //                        (core/grpcx.UnaryServerCallerAuth, ADR 0025) and means the DEPLOYMENT is
 //                        misconfigured. Reusing it for "wrong password" would make a fleet-wide
@@ -81,9 +106,9 @@ import "google/protobuf/timestamp.proto";
 //
 // NEVER LOG A MESSAGE OF THIS FILE. The generated String() prints every field in full (`debug_redact`
 // is a no-op in protobuf-go v1.36.12, measured 2026-09-20). Requests carry passwords, TOTP codes,
-// recovery codes and bearer tokens; responses carry bearer tokens, TOTP secrets and recovery codes
-// (rule 8), and requests carry an operator's email (personal data, rule 3). Log the fields you
-// chose — the business code `VH-xxxxx`, the outcome — never the message.
+// recovery codes, bearer tokens and a commune's Zalo app secret; responses carry bearer tokens, TOTP
+// secrets and recovery codes (rule 8), and requests carry an operator's email (personal data, rule
+// 3). Log the fields you chose — the business code `VH-xxxxx`, the outcome — never the message.
 //
 // Not batched (ADR 0012 decision 2 does not apply): every caller is ONE HTTP request holding ONE
 // credential, so a batched form is a shape no caller can fill.
@@ -180,6 +205,76 @@ service OperatorService {
   //                          called" and a pending secret past its 10 minutes. A wrong password or
   //                          a wrong code is COUNTED.
   rpc CompleteOperatorEnrollment(CompleteOperatorEnrollmentRequest) returns (CompleteOperatorEnrollmentResponse);
+
+  // ---- Acts ON a commune: the commune's own Mini App sign-in settings (ADR 0066, ADR 0070) ----
+  //
+  // WHO CALLS AND WHEN. service-platform's operator route on the commune detail screen of
+  // platform-admin (ADR 0070 #4, §"Bổ sung 02/10/2026" #6), for a request a person made, AFTER its
+  // own ResolveOperatorSession and `ops.mini_app.manage` check on that same request. Platform
+  // forwards the secret and keeps nothing: it does not store it, log it, or put it in its own trail.
+  //
+  // THE OPERATOR IS RESOLVED HERE, FROM THE TOKEN — never a code the caller names. Same shape as
+  // ChangeOperatorPassword: `session_token` is the `op1.` cookie verbatim, and identity resolves it
+  // itself (app.OperatorAuth.ResolveSession, which also refreshes the idle timer). A `VH-` code in
+  // the request would be a caller-declared "who" on an archival trail; the token is the credential
+  // the person actually holds. Identity also checks `ops.mini_app.manage` on the principal it
+  // resolved — the key ADR 0070 #5 names — so a write into a commune's data never rests on a check
+  // made in another process alone. No TOTP re-entry (ADR 0070 #5).
+  //
+  // THE TRAIL. One entry per call, in the SAME transaction as the version change (rule 6, invariant
+  // 3), in service-identity, attributed `actor_kind = "operator"` and `actor = <VH- code>` of the
+  // resolved principal (rule 6, invariant 8 — an empty code refuses the write, no fallback to
+  // operator_id), `actor_ip = client_ip`, `reason` in the delta. It names the App ID and whether a
+  // secret is set, NEVER the value (ADR 0066). Visible in the OPERATOR log, not on the commune staff's
+  // audit screen (ADR 0070 §"Bổ sung 02/10/2026" #7) — where it is stored to achieve that is the
+  // implementation's (TASK-P2b), the "same transaction" is not negotiable.
+  //
+  // ANSWERS, beyond the service table:
+  //
+  //   OK + ACCEPTED          written; the response says what, never the secret.
+  //   OK + SESSION_NOT_LIVE  the token names no live session. Caller answers 401. Nothing written.
+  //   OK + PERMISSION_DENIED live session, `ops.mini_app.manage` not granted. Caller answers 403.
+  //                          Nothing written.
+  //
+  // NOT IDEMPOTENT, AND SAFE TO RETRY: each ACCEPTED call is a new version row and a new entry. A
+  // retry after a lost response writes one more version holding the same secret — two true entries,
+  // never a wrong state.
+
+  // SetMiniAppSecret seals `app_secret` and makes it the live Zalo app secret of `app_id` in the
+  // target commune: retire the live version, insert the next, one transaction
+  // (app.MiniAppSecretAdmin.SetSecret). The `--demo` switch carries over unchanged.
+  //
+  //   FAILED_PRECONDITION  the platform (ResolveMiniApp, read live, not cached) does not bind this
+  //                        App ID, live, to THE TARGET COMMUNE as its own app: unregistered, turned
+  //                        off, bound to ANOTHER commune, the shared main app, or its commune inactive.
+  //                        ONE answer for all five — so it says nothing about another commune's apps.
+  //                        A secret stored where the binding does not point would never be read.
+  //                        The caller answers 409 ("bind / turn on the App ID first"). Nothing sealed,
+  //                        nothing written. ORDER THAT FOLLOWS: in a change of App ID the platform
+  //                        binding is switched FIRST, then this RPC is called for the NEW App ID.
+  //                        NOT TO BE CONFUSED with the realm-not-configured meaning in the service
+  //                        table: that one is answered by ResolveOperatorSession, which the caller
+  //                        has already called on the same request — a caller that skipped it is not
+  //                        a conforming caller.
+  //   INVALID_ARGUMENT     shape only (see the request fields), decided before any lookup.
+  rpc SetMiniAppSecret(SetMiniAppSecretRequest) returns (SetMiniAppSecretResponse);
+
+  // RetireMiniAppSecret ends the live settings of `app_id` in the target commune — its own app signs
+  // nobody in under that App ID until they are set again (app.MiniAppSecretAdmin.Retire). The sealed
+  // bytes stay in the retired version row (rule 7: no hard delete).
+  //
+  // DELIBERATELY NO BINDING CHECK: retiring REDUCES what the App ID can do, so it is allowed after
+  // the binding moved or was turned off — which is exactly when ADR 0070 #4 needs it ("đổi/gỡ thì
+  // khoá của App ID cũ tự thu hồi"). It only touches rows already scoped to the target commune, so it
+  // cannot reach another commune's settings.
+  //
+  //   NOT_FOUND         this App ID has no live settings in the target commune — never set, already
+  //                     retired, or another commune's App ID (rows are per commune, so "another
+  //                     commune's" is simply "none here"; nothing leaks). For the automatic revoke
+  //                     after a change or removal, the caller reads it as "nothing left to revoke":
+  //                     done, not an error to the operator. Nothing written.
+  //   INVALID_ARGUMENT  shape only, decided before any lookup.
+  rpc RetireMiniAppSecret(RetireMiniAppSecretRequest) returns (RetireMiniAppSecretResponse);
 }
 
 // What an RPC of OperatorService decided. Each RPC's comment lists the subset it answers; a value
@@ -199,6 +294,10 @@ enum OperatorAuthOutcome {
   OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE = 4;
   // ChangeOperatorPassword / CompleteOperatorEnrollment only: see `new_password_refusal`.
   OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED = 5;
+  // SetMiniAppSecret / RetireMiniAppSecret only: a live session whose operator lacks the key the
+  // act needs (`ops.mini_app.manage`). Nothing written. Never sent by the seven realm RPCs — none of
+  // them is guarded by a key.
+  OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED = 6;
 }
 
 // Which password rule refused the new value (service-identity/internal/domain/mat_khau.go —
@@ -427,4 +526,89 @@ message CompleteOperatorEnrollmentResponse {
   repeated string recovery_codes = 3;
   // Set exactly when NEW_PASSWORD_REJECTED.
   NewPasswordRefusal new_password_refusal = 4;
+}
+
+message SetMiniAppSecretRequest {
+  // CREDENTIAL — see ResolveOperatorSessionRequest.session_token. The acting operator is resolved
+  // from it; there is no operator field. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+
+  // The Zalo Mini App ID: 1-32 ASCII digits after trimming surrounding space
+  // (domain.ValidMiniAppID). A Zalo-issued public identifier, not personal data; may be logged.
+  // Anything else is INVALID_ARGUMENT.
+  string app_id = 2;
+
+  // SECRET (rule 8) — the commune's Zalo app secret for `app_id`. WRITE-ONLY:
+  //   * never echoed — no response of this service carries it, in any form, ever;
+  //   * never logged at either end, at any level, nor this whole message (String() prints it);
+  //   * never in a status message, an error, a trail entry or a metric label;
+  //   * service-platform forwards it and keeps nothing — no store, no cache, no request log body.
+  // Identity seals it at once (envelope encryption, AAD bound to commune + App ID, ADR 0066) and
+  // keeps only the sealed bytes. Verbatim, not trimmed: 1-256 bytes, printable, no whitespace
+  // anywhere (app.validAppSecret); outside that is INVALID_ARGUMENT, decided before any lookup, and
+  // the message names the rule, never the value.
+  string app_secret = 3;
+
+  // Why the operator acts, as typed in the confirmation dialog (ADR 0070 #5). Required: trimmed,
+  // non-empty, at most 500 runes, valid UTF-8 — the same bound as service-platform's
+  // domain.ValidateReason, which checks first; identity re-checks because it is the one that writes
+  // it into the trail. Outside that is INVALID_ARGUMENT. Not logged (free text an operator typed).
+  string reason = 4;
+
+  // As OpenOperatorSessionRequest.client_ip: stored as the trail entry's actor_ip. Decides nothing.
+  string client_ip = 5;
+}
+
+message SetMiniAppSecretResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // The version just made live. Set exactly when ACCEPTED. Metadata only — never the secret.
+  MiniAppSecretVersion version = 2;
+}
+
+message RetireMiniAppSecretRequest {
+  // CREDENTIAL — as SetMiniAppSecretRequest.session_token.
+  string session_token = 1;
+  // As SetMiniAppSecretRequest.app_id.
+  string app_id = 2;
+  // As SetMiniAppSecretRequest.reason. Required: retiring is a removal and ADR 0070 #2 demands one.
+  // For the automatic revoke after a change of App ID, the caller passes the operator's reason for
+  // the change — the same act, the same justification.
+  string reason = 3;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 4;
+}
+
+message RetireMiniAppSecretResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // The version just retired. Set exactly when ACCEPTED. Metadata only.
+  MiniAppSecretRetirement retirement = 2;
+}
+
+// One version of an App ID's settings in one commune (service-identity mini_app_secret). What the
+// commune detail screen may show about a secret: that it exists, since when, set by whom. NEVER the
+// value, a prefix, a length, a hash or a fingerprint of it — each of those narrows a guess.
+//
+// DELIBERATELY ABSENT: tenant_id (the caller named it in metadata; echoing it is a second source),
+// the `--demo` switch (no caller reads it yet; add it, new number, the day one does).
+message MiniAppSecretVersion {
+  // As SetMiniAppSecretRequest.app_id, normalised (trimmed).
+  string app_id = 1;
+  // The version row's id (ULID). Correlates with the trail entry; authorises nothing.
+  string version = 2;
+  google.protobuf.Timestamp set_at = 3;
+  // The BUSINESS CODE of the operator who set it, `VH-00001` (rule 6, invariant 8). Never an
+  // internal id.
+  string set_by = 4;
+}
+
+message MiniAppSecretRetirement {
+  // As SetMiniAppSecretRequest.app_id, normalised (trimmed).
+  string app_id = 1;
+  // The id (ULID) of the version that was live and is now retired.
+  string retired_version = 2;
+  google.protobuf.Timestamp retired_at = 3;
+  // The BUSINESS CODE of the operator, `VH-00001`.
+  string retired_by = 4;
 }
