@@ -17,6 +17,8 @@ owns_facts:
   - "làm mới giao diện được ưu tiên hơn mọi việc web-admin khác; Phản ánh đứng đầu đợt 2; đợt 1 = nền móng + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập; đợt 2 = 9 màn còn lại + bố cục thẻ trên điện thoại + rà căn hàng/trợ năng"
   - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt ('Chưa có', @fontsource, topbar 'Ủy ban nhân dân') thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
   - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
+  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên (chốt 02/10/2026)"
+  - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ; vị trí do Claude đề xuất, chủ dự án duyệt trước khi dựng (chốt 02/10/2026)"
 ---
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
@@ -193,6 +195,49 @@ lên trên): áp dụng cho **mọi** thanh lọc của web-admin.
 
 **Vì sao số đếm trên nút là bắt buộc:** một bộ lọc đang chọn mà bị giấu thì danh sách rỗng trông
 như "chưa có văn bản nào" — cán bộ kết luận sai rằng văn bản chưa vào sổ.
+
+### 13. Không còn chữ "ViGov" trên web-admin — thay bằng tên xã đang đăng nhập
+
+Chủ dự án chốt 02/10/2026: *"trong web admin sẽ không còn khái niệm Vigov nữa nên ở đâu đang xài thì
+bỏ đi"*; hỏi lại thì chốt chữ thay là **"Tên xã đang đăng nhập"**, phạm vi **mọi màn Web Admin**.
+
+| Chỗ | Làm gì |
+|---|---|
+| Chỗ cán bộ nhìn thấy (chữ trên màn, tiêu đề tab trình duyệt, khối thương hiệu màn đăng nhập, thông báo lỗi, chữ trong biểu mẫu) mà đang đứng tên sản phẩm | Hiện **tên xã đang đăng nhập** |
+| Câu nhắc tới sản phẩm ("hệ thống ViGov") | Bỏ chữ "ViGov": **"hệ thống"** |
+| Định danh trong mã, chú thích, tên gói, tên biến môi trường | **Giữ** — cán bộ không nhìn thấy; đổi tên cũ là việc rule 12 bất biến 3 không cho |
+| Tên miền `vigov.vn` | **Giữ** — là tên miền thật, không phải tên sản phẩm hiện ra |
+
+Tên xã đọc **lúc chạy** theo tên miền (luật 1 bất biến 10) qua `communes/current` — xem
+`kb/00-foundation/ubiquitous-language.md` mục "Xã của yêu cầu này". Hiện **nguyên văn**, không ghép
+chuỗi — §7 vẫn áp.
+
+**Vì sao:** chủ dự án không nêu lý do ngoài câu trên. Ghi lại để phiên sau không đưa chữ "ViGov" trở
+lại màn và không hỏi lại.
+
+### 14. Phần đặc tả chưa dựng: control thật ở đúng vị trí, vô hiệu, dấu "?"
+
+Chủ dự án chốt 02/10/2026: *"Các phần của bản thiết kế chưa dựng được, tôi không muốn để ntn hiện
+tại, hãy đề xuất vị trí, tạo sẵn menu/nut...tùy theo loại, để dấu ? trên đó, hover vào thì thông báo
+tính năng đang phát triển, có thể view thêm mô tả"*.
+
+| Quy tắc | Nội dung |
+|---|---|
+| Vị trí | Đúng chỗ đặc tả của màn ấy đặt nó |
+| Hình dạng | Đúng loại control nó sẽ là: mục menu, tab, nút, thẻ, cột, ô nhập… |
+| Trạng thái | Vô hiệu, mang dấu **"?"** |
+| Di chuột | **"Tính năng đang phát triển"** |
+| Bấm | Mở mô tả — chính đoạn lý do trước đây nằm trong khối "Chưa dựng" (`PHAN_CHUA_DUNG`, `khoi-chua-dung`) |
+| Hành vi | **Không** gọi máy chủ, **không** lưu gì |
+| Việc chủ dự án quyết **không làm** (ví dụ ADR 0062) | **Không** có chỗ giữ |
+| Trình tự | Claude đề xuất vị trí từng phần; chủ dự án **duyệt trước khi dựng** — **chưa duyệt** tại ngày chốt |
+
+**Vì sao:** chủ dự án không muốn giữ cách hiện tại (khối chữ "Chưa dựng" đứng riêng). Không gọi máy
+chủ, không lưu: chỗ giữ là trình bày, không phải tính năng (§1). Việc đã quyết không làm thì không có
+gì để giữ chỗ — một chỗ giữ cho nó là báo một tính năng cơ quan đã từ chối.
+
+**Chưa chốt:** mục menu chưa có màn đang mang huy hiệu "Chưa có" (§6) có chuyển sang dấu "?" hay
+không. Tới khi chủ dự án chốt, §6 giữ nguyên.
 
 ## Hệ quả
 
