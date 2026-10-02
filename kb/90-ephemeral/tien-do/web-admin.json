@@ -548,6 +548,26 @@
       "bang_chung": "app/cau-hinh: PageHeader (Settings) + dòng phụ nguyên văn; thanh tab là TabList/Tab có icon (giữ id, aria-controls, tabIndex, onKeyDown, panel .panel-cau-hinh). Mỗi tab là Card có tiêu đề + icon + mô tả ngắn: Người dùng, Phân quyền, Sơ đồ tổ chức, Thôn/TDP, Danh mục (mỗi nhóm một thẻ), Trường bản đồ, Lời hệ thống, Thời hạn xử lý (4 khối lịch thành thẻ), Tự động hoá, Máy chủ thư (.page--form 880px, lưới 2 cột cho ô ngắn), Nhật ký hệ thống (5 ô lọc → FilterBar: ô Đối tượng đầu, 2 ô ngày; Người thực hiện/Thao tác sau nút Bộ lọc). Bảng: TableScroll dính tiêu đề + data-table 48px; trạng thái = Badge theo MÃ (active/is_active/customised/overridden/configured). Ma trận phân quyền giữ ghim cột/hàng cũ, ✓/– → Check/Minus. Biểu mẫu: lưới 2 cột từ 640px, một nút đặc, BusyLabel 'Đang lưu…'/'Đang xoá…'; hộp cấp tài khoản/đặt lại mật khẩu/xoá bộ phận/xoá trường/gieo vai trò mẫu/ngừng dùng thôn/khôi phục câu = ConfirmDialog. §8b: khung xương + câu đang tải ẩn thị giác, ErrorState cho lỗi tải (trừ Tự động hoá: test ghim <p role=alert>), EmptyState cho rỗng. Cổng quyền: KhungQuyen (features/quyen) và cổng tab Người dùng/Phân quyền/Lời hệ thống/Tự động hoá/Máy chủ thư/Nhật ký vẽ NoAccess + câu riêng nguyên văn trong <p class=trang-thai-rong>. Đổi mật khẩu: cột hẹp giữa .page--form, PageHeader KeyRound, Notice báo hệ quả, nút Hiện/Ẩn có icon + chữ, nút Đổi mật khẩu đặc toàn chiều 46px (sàn 44px giữ), mọi câu và autocomplete giữ nguyên. Emoji → lucide, chữ giữ: hằng số bỏ ký hiệu (IMPORT_BUTTON, NUT_THEM/NUT_SUA/NUT_XOA danh mục, nút sơ đồ, DELETE_BUTTON, EDIT_BUTTON/ADD_BUTTON thôn, ADD_FIELD_BUTTON, 3 nhãn máy chủ thư, ⚠ ở NOT_CONFIGURED_WARNING và cảnh báo vai trò); câu 'Bấm + Thêm mục/bộ phận ở trên' giữ nguyên văn. Ghim test đổi: excel-import.test ('>⬆ Nhập từ Excel</button>' → '>Nhập từ Excel</button>'), tab-so-do-to-chuc.test (đếm NUT_THEM_CON/NUT_SUA_BO_PHAN/DELETE_BUTTON bằng '>…</button>'), tab-danh-muc.test (9 khẳng định có-mặt NUT_SUA/NUT_XOA/NUT_THEM → '>…</button>'). Kiểm (rc thật, 02/10, cây chính): tsc 0, lint 0, vitest 181 tệp/3428 ca 0, next build 0, check_security 0.",
       "no_confirm": [],
       "tiep_theo": "(1) Chủ dự án xem bằng mắt ở 320/768/1280px — chưa chạy trình duyệt. (2) NoAccess trong KhungQuyen có nút 'Về Tổng quan' — ở chính màn Tổng quan (thiếu report.read) nút ấy trỏ về trang đang đứng; sửa cần thêm prop homeHref cho CongQuyen + đổi features/dashboard (ngoài phạm vi). (3) Hàng nút trong bảng Người dùng và đầu cột Phân quyền giữ nút gốc nut-phu: test khẳng định không có chữ 'disabled' trong HTML, mà lớp Tailwind của Button chứa 'disabled:'; chưa đổi sang menu ⋯ vì menu đóng không vẽ mục và test đọc các nút theo aria-label. (4) Mũi tên sắp xếp ↑ ↓ ⇅ ở tab Người dùng còn là ký tự (lớp .nut-sap-xep dùng chung với Nhiệm vụ). (5) Hộp ngừng dùng thôn có tiêu đề mới 'Ngừng dùng <tên>?'; hộp khôi phục câu lấy tiêu đề từ aria-label sẵn có."
+    },
+    {
+      "id": "bo-chu-vigov-va-cho-giu-phan-chua-dung",
+      "menu": [
+        "tong-quan-dieu-hanh",
+        "so-tay-lanh-dao",
+        "bien-ban-hop",
+        "van-ban-don-thu",
+        "giai-ngan",
+        "thu-chi-ngan-sach",
+        "thong-bao",
+        "phan-anh-nguoi-dan",
+        "ban-do-kinh-te-so",
+        "danh-ba-can-bo",
+        "bao-cao",
+        "cau-hinh"
+      ],
+      "viec": "Bỏ chữ 'ViGov' khỏi mọi chỗ cán bộ nhìn thấy (thay bằng tên xã đang đăng nhập) và hiện phần đặc tả chưa dựng thành control thật vô hiệu có dấu '?' đúng vị trí đặc tả (ADR 0068 §13 §14, chủ dự án duyệt vị trí 02/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 7bbe9864 (tiêu đề tab '<Màn> · <tên xã>' qua communePageMetadata, 404 'Hệ thống điều hành số cấp xã', khối đăng nhập, ô người gửi thư), 6dd3bc27 (câu phạm vi ngân sách + thư thử, service-finance/comms), 7e445766 (components/ui/pending-feature.tsx; menu Sổ tay/Bản đồ/Báo cáo đổi 'Chưa có' → '?'), d3d20296 (Văn bản, Biên bản), 54e3acb7 (Giải ngân, Thu-Chi), 54927d37 (Tổng quan, ô tìm kiếm, Cấu hình, Danh bạ), 8b5c37b0 (Thông báo, Phản ánh), 6b07b705 (Điểm hài lòng số thật ở Tổng quan, ô Ảnh đại diện form cán bộ, mô tả viết lại cho cán bộ đọc, xoá khối cũ). web-admin: typecheck 0, lint 0, vitest 192 tệp / 3503 test xanh 02/10/2026. Còn lại có chủ ý: issuer TOTP 'ViGov' của tài khoản vận hành (ADR 0068 §13); câu phạm vi xã đã tự sửa không ghi đè; docs/ui-ux còn chữ ViGov (đặc tả gốc, không phải giao diện)."
     }
   ]
 }
