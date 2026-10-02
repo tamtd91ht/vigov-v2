@@ -530,6 +530,20 @@ export function nhanTepDinhKem(coAnh: boolean): string {
   return coAnh ? "🔗 Có ảnh" : DAU_GACH;
 }
 
+/** §6 column and detail row label for `view_count`. */
+export const VIEW_COUNT_LABEL = "Lượt xem";
+
+const VIEW_COUNT_FORMAT = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
+
+/**
+ * `view_count` → `1.234`. READ-ONLY: the server counts each open of the article in the Mini App
+ * (ADR 0047, row 02/10/2026); the screen never sends it back (`thanThem`/`thanSua`). `0` prints `0`,
+ * never a dash: the server always sends the key, and "nobody opened it yet" is a real answer.
+ */
+export function viewCountText(n: number): string {
+  return VIEW_COUNT_FORMAT.format(n);
+}
+
 /**
  * Tóm tắt cho dòng phụ §6 (*"tóm tắt cắt 1 dòng"*).
  *
@@ -1129,13 +1143,5 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "thẳng Cổng của xã. Đếm trên thẻ thì mỗi lần mở màn này là một lần gọi ra Cổng, nên thẻ không " +
       "hiện con số ấy. Số đã chọn hiện ở mục `Cấu hình`, dạng `đã chọn n/30` (mỗi xã chọn tối đa " +
       "30 chuyên mục).",
-  },
-  {
-    ten: "Cột `Lượt xem` (§6)",
-    viSao:
-      "Bỏ có chủ ý, không phải chưa kịp làm (người dùng quyết định 01/10/2026): hệ thống không " +
-      "đếm lượt xem (ADR 0047), kể cả trên tuyến công khai mà Mini App đọc tin của xã. Một cột " +
-      "luôn bằng 0 chỉ làm cán bộ tưởng bài của xã không ai đọc, nên bảng và khối chi tiết không " +
-      "vẽ cột ấy.",
   },
 ];

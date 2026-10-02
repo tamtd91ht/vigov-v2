@@ -40,6 +40,7 @@ import {
   parseDisplayOrder,
   publishedAtLabel,
   validateTypeFields,
+  viewCountText,
   LOAI_MAC_DINH,
   lopChipTrangThai,
   MOI_LOAI,
@@ -648,6 +649,15 @@ describe("client-side check of the per-type fields — mirrors the server", () =
   });
 });
 
+describe("viewCountText", () => {
+  it("groups thousands the vi-VN way and prints 0 as 0", () => {
+    expect(viewCountText(1234)).toBe("1.234");
+    expect(viewCountText(1234567)).toBe("1.234.567");
+    expect(viewCountText(0)).toBe("0");
+    expect(viewCountText(42)).toBe("42");
+  });
+});
+
 describe("phần chưa dựng được", () => {
   it("the list is PINNED: rich text, category edit/delete, banner, broadcast audio and the portal sync card left it when built", () => {
     // EXACT, not a floor: an item silently dropped and an item silently kept are both a block that
@@ -655,11 +665,17 @@ describe("phần chưa dựng được", () => {
     // the portal sync card brought two narrower gaps of its own; the status filter left on 02/10/2026
     // (`status` on GET content-items, C1), the meta count stays. Also 02/10/2026, following the
     // prototype: the §4 count, the §2 layout and the `content.update` gate left it — and then the
-    // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}).
+    // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}). The `Lượt xem` column
+    // left it the same day: the owner decided to show the server's count (ADR 0047, row 02/10/2026).
     expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
       "Con số `{n} chuyên mục` trên dòng tóm tắt của thẻ Đồng bộ Cổng (§3)",
-      "Cột `Lượt xem` (§6)",
     ]);
+  });
+
+  it("no item still claims the view count is not shown", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
+    expect(all).not.toContain("Lượt xem");
+    expect(all).not.toContain("lượt xem");
   });
 
   it("no item still claims an item cannot be deleted", () => {

@@ -231,14 +231,34 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain("Đang hiện");
   });
 
-  it("KHÔNG có cột `Lượt xem` — hệ thống không đếm lượt xem (người dùng bỏ cột 01/10/2026)", () => {
-    // `view_count` vẫn có trong hợp đồng; hàng thử mang một số KHÁC 0 để một ô còn sót lại không
-    // trốn được sau con số 0 của dữ liệu mặc định.
+  it("cột `Lượt xem` nằm sau `Ngày đăng`, trước `Trạng thái` (§6, owner 02/10/2026)", () => {
     const html = veBang([hang({ view_count: 42 })]);
-    expect(html).not.toContain("Lượt xem");
-    expect(html).not.toContain("👁");
-    expect(html).not.toContain(">42<");
-    expect(html.match(/<th scope="col">/g)?.length).toBe(7);
+    const headers = [...html.matchAll(/<th scope="col"[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(headers).toEqual([
+      "Tiêu đề",
+      "Loại",
+      "Chuyên mục",
+      "Tệp đính kèm",
+      "Ngày đăng",
+      "Lượt xem",
+      "Trạng thái",
+      ACTIONS_COLUMN_LABEL,
+    ]);
+    expect(html).toContain("lucide-eye");
+    expect(html).toContain(">42</span>");
+  });
+
+  it("lượt xem in theo vi-VN: 1234 → `1.234`, và 0 hiện `0` (không phải dấu gạch)", () => {
+    expect(veBang([hang({ view_count: 1234 })])).toContain(">1.234</span>");
+    expect(veBang([hang({ view_count: 0 })])).toMatch(/lucide-eye[^]*?<\/svg>0<\/span>/);
+  });
+
+  it("cột `Lượt xem` không sắp xếp được — chỉ là chữ, không nút, không aria-sort", () => {
+    const html = veBang([hang({ view_count: 42 })]);
+    const th = /<th scope="col"[^>]*>Lượt xem<\/th>/.exec(html)?.[0] ?? "";
+    expect(th).not.toBe("");
+    expect(th).not.toContain("aria-sort");
+    expect(th).not.toContain("<button");
   });
 
   it("the action column holds the pencil and the trash (lucide icons since ADR 0068)", () => {
@@ -545,12 +565,15 @@ describe("khối thông tin chỉ đọc", () => {
     expect(renderToStaticMarkup(<ThongTinChiDoc hang={hang()} />)).toContain("CB-2026-7K3M9Q");
   });
 
-  it("KHÔNG có dòng `Lượt xem` và không có ô nhập nào", () => {
-    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 42 })} />);
-    expect(html).not.toContain("Lượt xem");
-    expect(html).not.toContain("👁");
-    expect(html).not.toContain("42");
+  it("có dòng `Lượt xem` chỉ đọc, và không có ô nhập nào", () => {
+    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 1234 })} />);
+    expect(html).toContain("<dt>Lượt xem</dt><dd>1.234</dd>");
     expect(html).not.toContain("<input");
+  });
+
+  it("lượt xem bằng 0 hiện `0`", () => {
+    const html = renderToStaticMarkup(<ThongTinChiDoc hang={hang({ view_count: 0 })} />);
+    expect(html).toContain("<dt>Lượt xem</dt><dd>0</dd>");
   });
 });
 

@@ -58,9 +58,9 @@
  *   3. `status` DO MÁY CHỦ QUYẾT từ ô tích `publish` của §7. Không thân nào ở đây mang `status`:
  *      một client tự khai trạng thái là một client đăng vượt qua bước duyệt mà §10.2 dành cho
  *      lượt đồng bộ.
- *   4. `view_count` không đi đâu cả. Hệ thống không đếm lượt xem (ADR 0047, người dùng bỏ cột
- *      01/10/2026): tuyến công khai của §9 đã dựng (`GET /api/v1/commune-news`) và cũng không tăng
- *      nó. Không đường ghi nào ở đây đụng tới nó, và màn không vẽ nó.
+ *   4. `view_count` is READ-ONLY. The server counts each open of the article in the Mini App
+ *      (ADR 0047, row 02/10/2026); the screen shows it (§6 column, detail block) and no write path
+ *      here ever sends it.
  *
  * KHÔNG CÓ `tenant_id` Ở BẤT KỲ ĐÂU — không thân, không query, không header. Xã suy từ `Host` ở
  * rìa ngoài cùng; client tự khai xã là client tự cấp quyền (luật 1, cấm #2).
@@ -281,7 +281,7 @@ export type ThemNoiDungVao = comms_themNoiDungVao;
  *
  * DỰNG TỪNG TRƯỜNG, KHÔNG `...than`: một phép trải ở đây là đường để một trường lạ đi lên máy chủ
  * vào ngày ai đó truyền vào một đối tượng vừa đọc được từ nơi khác — mà hàng đọc về CÓ mang
- * `status`, `source` và `view_count`.
+ * `status`, `source` và `view_count` (server-counted, read-only — never sent on write).
  */
 export function themNoiDung(
   than: ThemNoiDungVao,

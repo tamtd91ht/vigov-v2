@@ -162,6 +162,8 @@ import {
   URL_TOI_DA,
   validateTypeFields,
   VIDEO_URL_HINT,
+  VIEW_COUNT_LABEL,
+  viewCountText,
   type GiaTriFormNoiDung,
 } from "./nhan-noi-dung";
 import {
@@ -1046,6 +1048,11 @@ export function BangNoiDung({
               <th scope="col">Chuyên mục</th>
               <th scope="col">Tệp đính kèm</th>
               <th scope="col">Ngày đăng</th>
+              {/* Not sortable (owner, 02/10/2026): keyset paging over a number that moves while the
+                  officer pages would skip and repeat rows. */}
+              <th scope="col" className="text-right">
+                {VIEW_COUNT_LABEL}
+              </th>
               <th scope="col">Trạng thái</th>
               {canEdit && <th scope="col">{ACTIONS_COLUMN_LABEL}</th>}
             </tr>
@@ -1086,6 +1093,12 @@ export function BangNoiDung({
                   <td>
                     {nhanNgayDang(nd.published_on)}
                     {firstPublished !== null && <span className="dong-phu">{firstPublished}</span>}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <Eye aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-500" />
+                      {viewCountText(nd.view_count)}
+                    </span>
                   </td>
                   <td>
                     <ContentStatusBadge status={nd.status} />
@@ -1671,8 +1684,8 @@ export function CoverImageField({
 /**
  * Khối chỉ đọc của biểu mẫu SỬA — những thứ máy chủ quyết và biểu mẫu không đổi được.
  *
- * KHÔNG CÓ `luot_xem`: hệ thống không đếm lượt xem (ADR 0047), người dùng bỏ cột ấy 01/10/2026 —
- * xem `PHAN_CHUA_DUNG`. `hand_edited` là nửa nhìn thấy được của §10.4, và
+ * `Lượt xem` (`view_count`) is shown READ-ONLY: the server counts each open of the article in the
+ * Mini App (ADR 0047, row 02/10/2026) and the form never sends it on write. `hand_edited` là nửa nhìn thấy được của §10.4, và
  * đây là chỗ duy nhất màn hình biết được rằng bản sửa vừa rồi nay được bảo vệ khỏi lượt đồng bộ
  * sau. `source_url` hiện dưới dạng CHỮ, không phải một liên kết bấm được: máy chủ chỉ nhận
  * `http(s)` khi GHI, nhưng một hàng cũ trong CSDL không có gì bảo đảm điều đó, và một `href` dựng
@@ -1700,6 +1713,10 @@ export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
           {nhanNgayDang(hang.published_on)}
           {firstPublished !== null && <> · {firstPublished}</>}
         </dd>
+      </div>
+      <div>
+        <dt>{VIEW_COUNT_LABEL}</dt>
+        <dd>{viewCountText(hang.view_count)}</dd>
       </div>
       <div>
         <dt>Nguồn</dt>
