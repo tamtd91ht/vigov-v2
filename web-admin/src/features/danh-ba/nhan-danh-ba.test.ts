@@ -100,9 +100,10 @@ describe("danh sách phần chưa mở", () => {
 
   it("nêu đủ những thứ đặc tả vẽ mà hợp đồng hoặc khách chưa cho phép", () => {
     const tatCa = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
-    expect(tatCa).toContain("TỔNG SỐ CÁN BỘ");
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Tổng số cán bộ", "Đang hiện trên Mini App", "Ảnh đại diện"]);
     expect(tatCa).toContain("Mini App");
-    expect(tatCa).toContain("Excel");
+    // Nhập cán bộ từ Excel ĐÃ dựng ở Cấu hình (ADR 0059) — một dòng "chưa mở" cho nó là câu sai.
+    expect(tatCa).not.toMatch(/Excel/);
     // Nút xoá dòng trùng ĐÃ dựng (TASK-03) — không còn dòng "chưa mở" nào nói về nó.
     expect(tatCa).not.toContain("Xoá khỏi danh bạ");
   });

@@ -1,6 +1,5 @@
 import {
   AlarmClock,
-  Banknote,
   BellRing,
   CalendarDays,
   CircleCheck,
@@ -12,12 +11,12 @@ import {
   Inbox,
   Loader,
   Mail,
-  Map as MapIcon,
   MessageSquareWarning,
   Minus,
   RefreshCw,
   RotateCw,
   Siren,
+  Star,
   Target,
   TrendingDown,
   TrendingUp,
@@ -32,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PendingSection, PendingStatCard } from "@/components/ui/pending-feature";
 import { Segmented } from "@/components/ui/segmented";
 import { NO_DATA_CAPTION, StatCard, type StatTone } from "@/components/ui/stat-card";
 import { TodoList, type TodoItem } from "@/components/ui/todo-list";
@@ -79,6 +79,7 @@ import {
   ratioPercent,
 } from "./figures";
 import type { ComparisonLine, DrillTarget, FigureKind, MergedQueue, Trend } from "./figures";
+import { pendingPart } from "./labels";
 import {
   comparisonNote,
   formatDateTime,
@@ -671,21 +672,6 @@ function MetricList({ children }: { children: ReactNode }) {
   return <dl className="-mx-2 m-0 flex flex-col">{children}</dl>;
 }
 
-/** The friendly "no source" body of a block (spec §8.2): `Database` + "Chưa có dữ liệu" + why. */
-function NoSourceBody() {
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-dashed border-line-strong px-3.5 py-3">
-      <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-[#f1f4f8] text-ink-500">
-        <Database className="size-[18px]" strokeWidth={1.8} focusable="false" />
-      </span>
-      <div className="min-w-0">
-        <p className="m-0 text-sm font-semibold text-ink-900">{NO_DATA_CAPTION}</p>
-        <p className="m-0 text-[13px] text-ink-500">{NO_SOURCE_DATA}</p>
-      </div>
-    </div>
-  );
-}
-
 function SmallNote({ children }: { children: ReactNode }) {
   return <p className="m-0 text-xs leading-relaxed text-ink-500">{children}</p>;
 }
@@ -808,16 +794,20 @@ export function PeriodStatusBlock({
 }
 
 /**
- * "VĂN BẢN & ĐƠN THƯ" — the two figures of the spec's document block that have no source yet: the
- * on-time rate (the register stores no settled instant) and citizen letters (`don_thu`).
+ * "VĂN BẢN & ĐƠN THƯ" — the two figures of the spec's document block that are not drawn yet.
+ *
+ * The on-time rate is a NO-SOURCE row (the register stores no settled instant): a data gap, not an
+ * unbuilt feature, so it keeps "Chưa có dữ liệu". "Đơn thư trong kỳ" is an unbuilt part — there is
+ * no citizen-letter register to count — so it is the KPI card it will be, with the "?" of ADR 0068
+ * §14 (`labels.ts`).
  */
 export function DocumentSourcesBlock() {
   return (
     <SectionCard title="Văn bản & Đơn thư" icon={Mail}>
       <MetricList>
         <NoSourceRow label="Tỷ lệ đúng hạn văn bản" />
-        <NoSourceRow label="Đơn thư trong kỳ" />
       </MetricList>
+      <PendingStatCard info={pendingPart("Đơn thư trong kỳ")} icon={Inbox} />
     </SectionCard>
   );
 }
@@ -879,17 +869,9 @@ export function CitizenReportBlock({
         {figures.map((f) => (
           <MetricRow key={f.id} figure={f} />
         ))}
-        <NoSourceRow label="Điểm hài lòng" />
       </MetricList>
-    </SectionCard>
-  );
-}
-
-/** A whole block with no source data in wave 1. */
-export function NoSourceBlock({ title, icon, tile = "brand" }: { title: string; icon: LucideIcon; tile?: TileTone }) {
-  return (
-    <SectionCard title={title} icon={icon} tile={tile}>
-      <NoSourceBody />
+      {/* Spec §4.5's fifth figure, as the KPI card it will be, with the "?" (ADR 0068 §14). */}
+      <PendingStatCard info={pendingPart("Điểm hài lòng")} icon={Star} />
     </SectionCard>
   );
 }
@@ -1168,7 +1150,10 @@ export function blockVisibility(permissions: readonly string[]): BlockVisibility
  * as "—": a figure the account may not read must not be implied either way.
  *
  * `Kinh tế & Tài nguyên` has no source data and no read key of its own in wave 1; it opens nothing,
- * so it shows under the page gate (`report.read`) alone.
+ * so it shows under the page gate (`report.read`) alone. It and `Giải ngân ngân sách` are unbuilt
+ * parts, drawn as cards with the "?" of ADR 0068 §14 (`labels.ts`) — no figure, no link, no call.
+ * `Giải ngân ngân sách` stays under `budget.read`: a placeholder must not reveal a block the account
+ * would not see once it is built.
  *
  * THE PAGE TITLE IS NOT HERE: `app/tong-quan/page.tsx` draws the `PageHeader` outside the
  * `report.read` gate, so an account without the key still reads which page it is on. The context
@@ -1242,9 +1227,9 @@ export function DashboardView({
           <CitizenReportBlock pair={data.citizenReports} windows={data.windows} onReload={reload} />
         )}
         {visible.incomingDocuments && <DocumentSourcesBlock />}
-        {visible.budget && <NoSourceBlock title="Giải ngân ngân sách" icon={Banknote} />}
+        {visible.budget && <PendingSection info={pendingPart("Giải ngân ngân sách")} titleAs="h2" />}
         {visible.budget && <FiscalBlock result={data.fiscal} year={data.fiscalYear} onReload={reload} />}
-        <NoSourceBlock title="Kinh tế & Tài nguyên" icon={MapIcon} tile="neutral" />
+        <PendingSection info={pendingPart("Kinh tế & Tài nguyên")} titleAs="h2" />
       </div>
     </>
   );

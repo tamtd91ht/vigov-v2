@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { IconButton } from "@/components/ui/icon-button";
+import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { nhanBoPhan } from "@/features/cau-hinh/nhan-can-bo";
 import { traTen, type BangTraDanhMuc, type KetTra } from "@/features/cau-hinh/tra-danh-muc";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
@@ -41,6 +42,7 @@ import {
   COT_MAY_BAN,
   EDIT_SHORT,
   NUT_SUA_THONG_TIN,
+  pendingPart,
 } from "./nhan-danh-ba";
 
 /**
@@ -74,7 +76,8 @@ import {
  * của bản kia, nên trình đọc màn hình chỉ gặp một. Cả hai đọc CÙNG các hàm nhãn và CÙNG các handler
  * — mỗi nút ở bản thẻ là đúng nút ở bản bảng, cùng `aria-label`, cùng lời gọi.
  *
- * THUẦN TRÌNH BÀY: không đọc mạng, không giữ state. Nhờ vậy kết xuất được bằng `react-dom/server`
+ * THUẦN TRÌNH BÀY: không đọc mạng, không giữ state, KHÔNG GỌI HOOK — cột "?" là phần tử con
+ * (`PendingColumnHeader`), nên gọi `BangLienHe` như một hàm vẫn an toàn. Nhờ vậy kết xuất được bằng `react-dom/server`
  * trong Node và bài kiểm hỏi thẳng được "dòng này có RA TỚI TRANG không".
  */
 export function BangLienHe({
@@ -131,6 +134,9 @@ export function BangLienHe({
           </caption>
           <thead>
             <tr>
+              {/* Spec §5/§7 "Ảnh đại diện": a column the data does not have yet, drawn with the "?" of
+                  ADR 0068 §14 (`PHAN_CHUA_DUNG`). Desktop table only — the phone card keeps the initials. */}
+              <PendingColumnHeader info={pendingPart("Ảnh đại diện")} />
               <th scope="col">{COT_HO_TEN}</th>
               <th scope="col">{COT_CHUC_VU}</th>
               <th scope="col">{COT_KHOI}</th>
@@ -148,6 +154,7 @@ export function BangLienHe({
           <tbody>
             {danhSach.map((cb) => (
               <tr key={cb.id}>
+                <PendingCell />
                 <td>
                   {/* Tên đậm + dòng phụ thư điện tử — đúng §4. Tên KHÔNG phải nút mở chi tiết như
                       đặc tả vẽ: màn này không có khối chi tiết riêng, vì mọi trường `canBoTomTat`

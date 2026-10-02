@@ -4,6 +4,7 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { PageHeader } from "@/components/ui/page-header";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
+import { DashboardHeaderActions } from "@/features/dashboard/header-actions";
 import { DashboardPage } from "@/features/dashboard/overview";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
@@ -40,7 +41,7 @@ export default async function OverviewPage() {
           <DauTrang />
           <main className="than-trang">
             {/* Outside the `report.read` gate: an account without the key still reads the title. */}
-            <PageHeader icon={LayoutDashboard} title="Tổng quan điều hành" />
+            <PageHeader icon={LayoutDashboard} title="Tổng quan điều hành" actions={<DashboardHeaderActions />} />
             <DashboardPage />
           </main>
         </div>

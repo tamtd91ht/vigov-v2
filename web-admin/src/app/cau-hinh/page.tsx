@@ -6,7 +6,6 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { KhoiChuaDung } from "@/features/cau-hinh/khoi-chua-dung";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
@@ -98,9 +97,6 @@ export default async function TrangCauHinh() {
           <div className="flex min-w-0 flex-col gap-4">
             <KhungTabCauHinh />
           </div>
-          {/* Những phần của đặc tả chưa dựng, kèm lý do — ở CUỐI trang để không chen giữa các tab
-              đang dùng được (`features/cau-hinh/nhan-cau-hinh.ts`). */}
-          <KhoiChuaDung />
         </main>
         </div>
       </PhienProvider>

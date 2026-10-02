@@ -1,4 +1,3 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { BAY_DANH_MUC_GHI } from "@/lib/api/danh-muc";
@@ -9,19 +8,19 @@ import {
   RESIDENTIAL_UNIT_IMPORT_TARGET,
   STAFF_IMPORT_TARGET,
 } from "./excel-import-targets";
-import { KhoiChuaDung } from "./khoi-chua-dung";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 
 /**
- * Mỗi mục `PHAN_CHUA_DUNG` phải RA TỚI TRANG — đó là lý do mảng ấy tồn tại, và là thứ
- * `tools/tien_do_san_pham.py` giả định khi đếm nó. Ca này KHÔNG kiểm mục còn đúng hay không.
+ * The entries of `PHAN_CHUA_DUNG` must stay TRUE: each one is the description behind a "?" on the
+ * screen (ADR 0068 §14) and a line `tools/tien_do_san_pham.py` counts. That each entry REACHES the
+ * page is held where it is drawn (`automation-tab.pending.test.tsx`); the collapsed bottom block that
+ * used to print them all is retired.
  */
-describe("khối phần chưa dựng của màn Cấu hình", () => {
-  it("hiện từng mục, cả tên lẫn lý do", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
+describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () => {
+  it("mỗi mục có tên và lý do", () => {
     expect(PHAN_CHUA_DUNG.length).toBeGreaterThan(0);
     for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(`<dt>${p.ten}</dt>`);
+      expect(p.ten.trim()).not.toBe("");
       expect(p.viSao.trim()).not.toBe("");
     }
   });
@@ -61,14 +60,13 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     expect(PHAN_CHUA_DUNG.some((p) => /Excel|Nhập từ/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
-  it("Tự động hoá đã dựng: chỉ còn mục hai việc không dựng (bỏ / hoãn), kèm lý do", () => {
-    const automation = PHAN_CHUA_DUNG.filter((p) => /Tự động hoá/.test(p.ten));
-    expect(automation).toHaveLength(1);
-    expect(automation[0]!.ten).not.toMatch(/^Tab Tự động hoá/);
-    expect(automation[0]!.ten).toMatch(/Tính lại số liệu Tổng quan/);
-    expect(automation[0]!.ten).toMatch(/Gửi báo cáo định kỳ/);
-    expect(automation[0]!.viSao).toMatch(/ADR 0053/);
-    expect(automation[0]!.viSao).toMatch(/ADR 0058/);
+  it("Tự động hoá: chỉ còn Gửi báo cáo định kỳ (chờ màn Báo cáo); Tính lại số liệu Tổng quan đã bỏ, không có mục", () => {
+    // ADR 0053 / ADR 0068 §14: a job the owner refused gets no placeholder and no entry — an entry
+    // would make the progress report count it as "not built yet".
+    expect(PHAN_CHUA_DUNG.some((p) => /Tính lại số liệu/.test(`${p.ten} ${p.viSao}`))).toBe(false);
+    const report = PHAN_CHUA_DUNG.filter((p) => p.ten === "Gửi báo cáo định kỳ");
+    expect(report).toHaveLength(1);
+    expect(report[0]!.viSao).toMatch(/màn Báo cáo/);
   });
 
   it("không còn mục Lời hệ thống — nhóm Báo cáo `report.*` đã có chủ và có tuyến (reporting)", () => {

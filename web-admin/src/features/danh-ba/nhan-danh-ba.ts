@@ -6,8 +6,8 @@
  * module thuần kiểm được bằng một phép so chuỗi, còn cùng quyết định ấy viết thẳng trong JSX thì
  * chỉ kiểm được bằng cách kết xuất cả cây. Cùng khuôn với `components/danh-ba/nhan-ghi-danh-ba.ts`.
  *
- * MÀN NÀY ÍT HƠN ĐẶC TẢ RẤT NHIỀU, VÀ TỪNG PHẦN VẮNG MẶT ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG`
- * đưa đúng danh sách ấy RA MÀN HÌNH chứ không giấu trong chú thích. Một cán bộ mở `/danh-ba` và
+ * TỪNG PHẦN ĐẶC TẢ CHƯA DỰNG ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG` là mô tả sau dấu "?" của
+ * phần ấy, đặt ngay trên màn hình chứ không giấu trong chú thích. Một cán bộ mở `/danh-ba` và
  * không thấy một nút mà đặc tả vẽ sẽ kết luận hệ thống hỏng, rồi gọi lên tỉnh; thứ thật sự thiếu
  * thường là một tuyến API hoặc một quyết định của khách.
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -61,8 +61,8 @@ export type SoKhoi =
 /**
  * Đếm số khối / đơn vị từ kết quả đọc `GET /api/v1/org-units`.
  *
- * ĐẾM ĐƯỢC VÌ TUYẾN ẤY TRẢ NGUYÊN DANH SÁCH, KHÔNG PHÂN TRANG (`lib/api/danh-muc.ts`). Đó cũng
- * chính là lý do hai thẻ KPI kia KHÔNG dựng được: xem `PHAN_CHUA_DUNG`.
+ * ĐẾM ĐƯỢC VÌ TUYẾN ẤY TRẢ NGUYÊN DANH SÁCH, KHÔNG PHÂN TRANG (`lib/api/danh-muc.ts`). Hai thẻ KPI
+ * kia thì KHÔNG đếm được như thế — xem `PHAN_CHUA_DUNG`.
  */
 export function demSoKhoi(kq: KetQua<{ items: readonly unknown[] }> | null): SoKhoi {
   if (kq === null) return { pha: "dangDoc" };
@@ -151,11 +151,6 @@ export function ariaMoreActions(hoTen: string): string {
   return `Thao tác khác: ${hoTen}`;
 }
 
-/** Tiêu đề thu gọn của khối "phần chưa mở" (đặc tả giao diện §8.1: "N phần chưa mở"). */
-export function notBuiltSummary(count: number): string {
-  return `${count} phần chưa mở`;
-}
-
 /**
  * Câu cho một danh bạ rỗng.
  *
@@ -196,47 +191,48 @@ export const GHI_CHU_SO_DIEN_THOAI =
 /**
  * Một mục của danh sách "đặc tả có, ở đây không". `viSao` phải nói cả CÁI GÌ MỞ KHOÁ nó.
  *
- * CÙNG TÊN HẰNG, CÙNG HAI KHOÁ `ten` / `viSao` như các màn khác (`nhiem-vu`, `bien-ban`), vì
- * `tools/tien_do_san_pham.py` đếm đúng hình ấy: tìm chữ `PHAN_CHUA_DUNG` rồi đếm mọi dòng
- * `ten: "` tới HẾT TỆP. Đặt tên khác là báo cáo tiến độ in "không khai" trong khi màn vẫn hiện đủ
- * các dòng — và vì thế mảng dưới đây phải là khối CUỐI CÙNG có dòng `ten:` trong tệp này.
+ * CÙNG TÊN HẰNG, CÙNG HAI KHOÁ `ten` / `viSao` như các màn khác, vì `tools/tien_do_san_pham.py` đếm
+ * các dòng `ten: "` NẰM TRONG khối khai báo `PHAN_CHUA_DUNG` (tới dấu `];` đầu dòng). Đặt tên khác là
+ * báo cáo tiến độ in "không khai" trong khi màn vẫn hiện đủ các dấu "?".
  */
 export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
 
 /**
- * Những phần đặc tả vẽ mà hợp đồng hoặc một quyết định của khách chưa cho phép dựng.
+ * Những phần đặc tả vẽ mà hợp đồng chưa cho phép dựng.
  *
- * ĐƯA RA MÀN HÌNH, KHÔNG GIẤU TRONG CHÚ THÍCH. Vẽ ra một điều khiển không chạy được tệ hơn hẳn
- * không vẽ; nhưng KHÔNG vẽ mà cũng không nói gì thì cán bộ đi tìm một thứ đặc tả đã hứa với họ.
- * Mỗi dòng nói luôn cái gì mở khoá nó, để lần sau không ai phải ngồi suy lại. Dựng xong một phần
- * thì XOÁ dòng của nó ở đây — một dòng "chưa mở" cho thứ đã mở là một câu sai trên màn hình.
+ * MỖI MỤC RA TỚI MÀN HÌNH Ở ĐÚNG CHỖ ĐẶC TẢ ĐẶT NÓ (ADR 0068 §14): hai thẻ KPI ở đầu màn
+ * (`pending-staff-kpis.tsx`), cột Ảnh đại diện trong bảng (`bang-lien-he.tsx`) — mỗi chỗ là control nó
+ * sẽ là, bị vô hiệu, mang dấu "?"; bấm "?" đọc đúng mục ở đây. Khối gập "N phần chưa mở" cuối màn đã
+ * bỏ. Dựng xong một phần thì XOÁ dòng của nó ở đây — một dòng "chưa mở" cho thứ đã mở là một câu sai
+ * trên màn hình.
  *
- * KHÔNG DÒNG NÀO Ở ĐÂY LÀ "CHƯA LÀM TỚI": mỗi dòng thiếu một tuyến API, một cột trong lược đồ, một
- * quyết định của khách, hoặc một khoá quyền mà bảng `quyen` không có.
+ * KHÔNG DÒNG NÀO Ở ĐÂY LÀ "CHƯA LÀM TỚI": mỗi dòng thiếu một tuyến API hoặc một trường trong hợp đồng.
+ * "Nhập từ Excel" đã ra khỏi danh sách: nhập cán bộ từ Excel đã dựng ở Cấu hình (ADR 0059).
  */
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Thẻ TỔNG SỐ CÁN BỘ, thẻ ĐANG HIỆN TRÊN MINI APP (§2) và bộ đếm cạnh mỗi khối (§3)",
+    ten: "Tổng số cán bộ",
     viSao:
-      "Hợp đồng cố ý không trả tổng số: máy chủ đọc theo mốc (keyset) và không chạy COUNT(*) trên " +
-      "bảng đã phân mảnh. Đếm số dòng của trang đang mở rồi gọi đó là tổng là báo một con số " +
-      "không ai tính. Danh mục khối / đơn vị cũng không trả số người đang hiện trên Mini App của " +
-      "từng khối, nên ô lọc chỉ ghi tên khối. Muốn biết ai đang hiện, dùng ô lọc “Đang hiện trên " +
-      "Mini App”.",
+      "Máy chủ đọc danh bạ theo từng trang và cố ý không đếm tổng, nên chưa có con số này. Đếm số " +
+      "dòng của trang đang mở rồi gọi đó là tổng là báo một con số không ai tính.",
   },
   {
-    ten: "Ảnh đại diện (§4, §5)",
+    ten: "Đang hiện trên Mini App",
     viSao:
-      "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat) và chưa có tuyến " +
-      "tải ảnh lên.",
+      "Máy chủ chưa trả số cán bộ đang hiện trên Mini App, của cả xã lẫn của từng khối, nên ô lọc " +
+      "khối cũng chỉ ghi tên khối. Muốn biết ai đang hiện, dùng bộ lọc “Đang hiện trên Mini App”.",
   },
   {
-    ten: "Nhập từ Excel và tải mẫu Excel (§6)",
+    ten: "Ảnh đại diện",
     viSao:
-      "Không có tuyến nào trong hợp đồng. Một bản nhập khớp theo email hoặc họ tên + khối còn cần " +
-      "một quy tắc gộp bản ghi mà máy chủ phải là nơi quyết định, không phải trình duyệt.",
+      "Hồ sơ cán bộ chưa có trường ảnh và máy chủ chưa có tuyến tải ảnh cán bộ lên, nên bảng và " +
+      "biểu mẫu chưa có ảnh; danh bạ hiện chữ cái đầu của họ tên thay ảnh.",
   },
 ];
 
-/** Tiêu đề của khối giải thích trên. */
-export const TIEU_DE_PHAN_CHUA_DUNG = "Những phần chưa mở trên màn hình này";
+/** One entry by its `ten`. Throws on an unknown name — a "?" with no description is never drawn. */
+export function pendingPart(ten: string): PhanChuaDung {
+  const found = PHAN_CHUA_DUNG.find((p) => p.ten === ten);
+  if (found === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${ten}"`);
+  return found;
+}

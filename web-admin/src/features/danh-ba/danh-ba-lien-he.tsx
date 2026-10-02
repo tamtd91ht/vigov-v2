@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 
 import {
   Building2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
   CloudOff,
-  Construction,
   Eye,
   EyeOff,
   List,
@@ -111,13 +109,11 @@ import {
   NO_MATCH_TITLE,
   PAGE_NEXT,
   PAGE_PREVIOUS,
-  PHAN_CHUA_DUNG,
   RELOAD,
-  TIEU_DE_PHAN_CHUA_DUNG,
   demSoKhoi,
-  notBuiltSummary,
   unitCountText,
 } from "./nhan-danh-ba";
+import { PendingStaffKpis } from "./pending-staff-kpis";
 
 /**
  * Màn **Danh bạ cán bộ** — `docs/ui-ux/12-danh-ba-can-bo.md`, đường dẫn `/danh-ba`.
@@ -126,8 +122,8 @@ import {
  * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Các tuyến ghi và đọc của danh bạ đã có chủ ở
  * `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
  * `components/danh-ba/`. Màn này chỉ thêm đúng thứ nó sở hữu: bố cục của một trang riêng, thẻ KPI
- * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và danh sách nói
- * rõ phần nào chưa mở.
+ * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và chỗ giữ "?"
+ * cho phần chưa mở (`PHAN_CHUA_DUNG`).
  *
  * BỐN THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
  * liên hệ, Có Zalo), `PUT .../publication` (công khai / rút MỘT người trên Mini App, #12,
@@ -524,7 +520,8 @@ export function DanhBaLienHe() {
         `lg:absolute` against the `relative` wrapper `page.tsx` puts around header + gate (the
         header reserves the space with `lg:pr-*`). Below `lg` they simply flow as the first row.
 
-        MỘT THẺ KPI, KHÔNG BA — xem `PHAN_CHUA_DUNG`. Con số chỉ ghép khi đã đếm xong (`unitCountText`).
+        The one countable KPI (khối / đơn vị) is this badge; the number is joined only once counted
+        (`unitCountText`). The two that cannot be counted are the disabled cards below (`PendingStaffKpis`).
       */}
       <div className="flex flex-wrap items-center gap-3 lg:absolute lg:top-0 lg:right-0 lg:h-12 lg:justify-end">
         <p className="m-0">
@@ -552,6 +549,9 @@ export function DanhBaLienHe() {
           </span>
         )}
       </div>
+
+      {/* Spec §2 "3 thẻ KPI": TỔNG SỐ CÁN BỘ and ĐANG HIỆN TRÊN MINI APP, disabled with "?" (ADR 0068 §14). */}
+      <PendingStaffKpis />
 
       {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, không để hai mươi ô cùng báo lỗi. Hiện
           đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
@@ -697,8 +697,6 @@ export function DanhBaLienHe() {
           {GHI_CHU_SO_DIEN_THOAI}
         </Notice>
       )}
-
-      <KhoiChuaMo />
     </section>
   );
 }
@@ -857,43 +855,6 @@ const TALL_ON_PHONE =
   "max-md:[&_input:not([type=checkbox]):not([type=radio])]:h-11 max-md:[&_select]:h-11";
 
 const SEGMENT_ICON: Record<MaHienThi, LucideIcon> = { "": List, "1": Eye, "0": EyeOff };
-
-/**
- * Danh sách "đặc tả có, ở đây không" — hiện ngay trên màn hình, không giấu trong chú thích.
- *
- * ĐẶT CUỐI TRANG, KHÔNG ĐẦU TRANG: người mở danh bạ đến để tìm một số điện thoại, và bảy dòng giải
- * thích chắn trước bảng là bảy dòng bị lướt qua mỗi ngày. Ở cuối, nó là thứ người ta đọc đúng lúc
- * đi tìm một nút không thấy.
- *
- * THU GỌN, XÁM, VIỀN ĐỨT (đặc tả giao diện §8.1, ADR 0068): đây không phải báo động. Nội dung vẫn
- * nguyên văn và vẫn trong HTML khi đóng — `<details>` chỉ thu gọn, không bỏ đi; mở ra bằng một cú
- * bấm hay phím Enter/Space trên dòng tiêu đề.
- */
-function KhoiChuaMo() {
-  return (
-    <details className="khoi-chua-khai group m-0" aria-labelledby="tieu-de-danh-ba-chua-mo">
-      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
-        <span className="font-semibold text-ink-700">{notBuiltSummary(PHAN_CHUA_DUNG.length)}</span>
-        <ChevronDown
-          aria-hidden="true"
-          focusable="false"
-          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <h3 id="tieu-de-danh-ba-chua-mo" className="mt-2 mb-1.5 text-[13px] font-semibold text-ink-700">
-        {TIEU_DE_PHAN_CHUA_DUNG}
-      </h3>
-      <ul className="m-0 pl-5">
-        {PHAN_CHUA_DUNG.map((p) => (
-          <li key={p.ten} className="mb-1.5">
-            <strong>{p.ten}</strong> — {p.viSao}
-          </li>
-        ))}
-      </ul>
-    </details>
-  );
-}
 
 /**
  * Phân trang theo con trỏ.

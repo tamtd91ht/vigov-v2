@@ -10,6 +10,7 @@ import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NoAccess } from "@/components/ui/no-access";
 import { Notice } from "@/components/ui/notice";
+import { PendingSection } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { BusyLabel } from "@/features/danh-ba/busy-label";
 
@@ -49,15 +50,17 @@ import {
   workKindLabel,
   type AutomationDraft,
 } from "./automation-form";
+import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
 import { automationTabDecision } from "./quyen-tab";
 
 /**
  * "Cấu hình → Tự động hoá" (§9, ADR 0058). All three routes declare `admin.sla`, the read included, so
  * the tab hides as a whole without it — convenience; the server refuses on every request.
  *
- * TWO JOBS OF §9 ARE NOT HERE, on purpose: `Tính lại số liệu Tổng quan` is dropped (ADR 0053: the
- * overview counts live, there is nothing to precompute) and `Gửi báo cáo định kỳ` waits for `/bao-cao`
- * (ADR 0058 §4). Both are said in `PHAN_CHUA_DUNG`, with the reason.
+ * TWO JOBS OF §9 ARE NOT LIVE CARDS: `Tính lại số liệu Tổng quan` is dropped (ADR 0053: the overview
+ * counts live, there is nothing to precompute) and gets NO placeholder — a spot for it would announce
+ * a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` waits for `/bao-cao` (ADR 0058 §4)
+ * and sits in its spec position, the last card, disabled with the "?" (`PendingReportJobCard`).
  */
 export function AutomationTab() {
   const phien = usePhien();
@@ -135,7 +138,30 @@ export function AutomationTabView({ loaded }: { loaded: KetQua<readonly Automati
       ) : (
         loaded.duLieu.map((j) => <AutomationJobCard key={j.job} initial={j} />)
       )}
+      <PendingReportJobCard />
     </section>
+  );
+}
+
+/** The `Gửi báo cáo định kỳ` entry — looked up by name so a renamed entry fails a test, not a screen. */
+const REPORT_JOB = PHAN_CHUA_DUNG.find((p) => p.ten === "Gửi báo cáo định kỳ");
+
+/**
+ * Spec §9's fifth card, "Gửi báo cáo định kỳ", in the shape of a job card: its spec description and
+ * a DISABLED on/off switch, with the "?" in the header. No server call, nothing to save.
+ */
+function PendingReportJobCard() {
+  if (REPORT_JOB === undefined) return null;
+  return (
+    <PendingSection info={REPORT_JOB} titleAs="h3" className="m-0">
+      <div className="flex flex-col gap-3">
+        <p className="m-0 text-[13px] text-ink-500">Báo cáo tuần vào đầu tuần, báo cáo tháng vào ngày mùng 1.</p>
+        <div className="o-nhap o-chon m-0">
+          <input id="tu-dong-hoa-bao-cao-dinh-ky-bat" type="checkbox" role="switch" disabled />
+          <label htmlFor="tu-dong-hoa-bao-cao-dinh-ky-bat">{ENABLE_LABEL}</label>
+        </div>
+      </div>
+    </PendingSection>
   );
 }
 

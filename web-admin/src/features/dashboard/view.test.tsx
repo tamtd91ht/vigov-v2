@@ -11,6 +11,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { parseDrillDown } from "@/lib/drill-down";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
 
 import { NOTHING_URGENT } from "./figures";
@@ -162,11 +163,12 @@ describe("incoming document figures", () => {
     expect(html).not.toContain('href="/nhiem-vu');
   });
 
-  it("cells with no source say so — never 0, never a link", () => {
+  it("the no-source row says so, the unbuilt figure carries the '?' — never 0, never a link", () => {
     const sources = renderToStaticMarkup(<DocumentSourcesBlock />);
-    expect(sources).toContain("Đơn thư trong kỳ");
     expect(sources).toContain("Tỷ lệ đúng hạn văn bản");
-    expect(sources.split(NO_DATA_CAPTION)).toHaveLength(3);
+    expect(sources.split(NO_DATA_CAPTION)).toHaveLength(2);
+    expect(sources).toContain("Đơn thư trong kỳ");
+    expect(sources).toContain(`aria-label="${pendingMarkerLabel("Đơn thư trong kỳ")}"`);
     expect(sources).not.toContain("href=");
   });
 });
