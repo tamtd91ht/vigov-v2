@@ -502,6 +502,15 @@
       "trang_thai": "xong",
       "no_confirm": [],
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "petition-settings-co-anh-nghiem-thu",
+      "viec": "Bảng petition_settings (một dòng mỗi xã) giữ cờ verification_photo_required = bat_buoc_anh_nghiem_thu của ADR 0008, mặc định BẬT; chưa có dòng = BẬT (chủ dự án chốt 02/10/2026 đặt ở service-petitions)",
+      "trang_thai": "xong",
+      "bang_chung": "migrations/0028_petition_settings.sql: PK tenant_id, 32 phân vùng băm, người ghi là mã nghiệp vụ, guard cấm DELETE / đổi tenant_id / sửa created_*; không cột xoá mềm có chủ đích (xoá dòng = lặng lẽ bật lại cờ không vết). store/petition_settings.go VerificationPhotoRequired(ctx) — không dòng = true, lỗi driver trả lỗi không trả mặc định. 7 ca kiểm xanh, check_khoa_duy_nhat / check_audit_actor xanh. Chưa chạy Postgres thật.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai gọi. Khi thẻ hành vi nối vào Dong (app/xu_ly_phan_anh.go:904-909): TỪ BẢN PHÁT HÀNH ẤY mọi xã chưa có dòng không đóng được phiếu thiếu ảnh nghiệm thu, kể cả phiếu đang dở — ghi vào ghi chú phát hành. Màn bật/tắt cho quản trị xã để lượt sau. Khoá mở lại KHÔNG vào bảng này (ADR 0050 biến mở lại thành luật cố định, ADR 0008:61-63).",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
