@@ -65,8 +65,8 @@ const (
 // The fixed test message. NO CITIZEN DATA, NO COMMUNE DATA: it proves the configuration works and
 // says nothing else. Wording after ../vigov-require's email_config.send_test.
 const (
-	testMailSubject = "ViGov — thư thử cấu hình máy chủ thư"
-	testMailBody    = "Đây là thư thử do hệ thống ViGov gửi.\n\n" +
+	testMailSubject = "Thư thử cấu hình máy chủ thư"
+	testMailBody    = "Đây là thư thử do hệ thống gửi.\n\n" +
 		"Nhận được thư này nghĩa là cấu hình máy chủ thư của xã đã đúng, và thông báo nội bộ " +
 		"sẽ gửi được tới hộp thư của cán bộ.\n"
 )

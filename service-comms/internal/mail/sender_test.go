@@ -201,7 +201,7 @@ func account(s *smtpServer, security string) Account {
 }
 
 var testMessage = Message{FromAddress: "ubnd@example.test", FromName: "UBND xã Thử", To: "canbo@example.test",
-	Subject: "ViGov — thư thử", Body: "Đây là thư thử."}
+	Subject: "Thư thử", Body: "Đây là thư thử."}
 
 func TestSendOverImplicitTLSVerifiesAndDelivers(t *testing.T) {
 	s := startSMTP(t, &smtpServer{implicitTLS: true})

@@ -40,7 +40,7 @@ var shippedMessages = []ShippedMessage{
 	{
 		Key:         KeyBudgetScopeNotice,
 		Description: "Dòng ghi rõ ranh giới sản phẩm, hiện ở đầu màn hình theo dõi giải ngân và đi kèm mọi số liệu API trả về",
-		DefaultText: "ViGov là công cụ theo dõi và điều hành, không phải phần mềm kế toán. Số liệu phục vụ chỉ đạo, không thay thế sổ sách kế toán và không đối chiếu với Kho bạc.",
+		DefaultText: "Hệ thống là công cụ theo dõi và điều hành, không phải phần mềm kế toán. Số liệu phục vụ chỉ đạo, không thay thế sổ sách kế toán và không đối chiếu với Kho bạc.",
 	},
 }
 
