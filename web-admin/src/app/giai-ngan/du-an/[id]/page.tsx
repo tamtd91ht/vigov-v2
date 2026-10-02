@@ -28,7 +28,7 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
-        <DauTrang />
+        <DauTrang withCommune />
         <main className="than-trang">
           <h1>Chi tiết dự án</h1>
           <CongQuyen

@@ -43,7 +43,7 @@ export default async function TrangDoiMatKhau() {
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
-        <DauTrang />
+        <DauTrang withCommune />
         <main className="than-trang">
           <h1>Đổi mật khẩu</h1>
           <p className="mo-ta-trang">

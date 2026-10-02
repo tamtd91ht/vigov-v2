@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { MENU_ICONS } from "./menu-icons";
 import { CHUA_CO_MAN, locMenu, NHOM_MENU } from "./muc-menu";
+import { AUTHORITY_KIND } from "./commune-identity";
 import { COLLAPSE_LABEL, EXPAND_LABEL, NOT_BUILT_BADGE, SidebarView } from "./sidebar-view";
 
 /**
@@ -21,11 +22,42 @@ const NOT_BUILT = NHOM_MENU.flatMap((g) => g.muc).filter((m) => m.duong === null
 /** React escapes `&` in text; menu labels such as "Văn bản & Đơn thư" carry one. */
 const esc = (s: string) => s.replace(/&/g, "&amp;");
 
-function view(collapsed: boolean, pathname = "/danh-ba") {
+const COMMUNE = { displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" };
+
+function view(collapsed: boolean, pathname = "/danh-ba", commune = COMMUNE) {
   return renderToStaticMarkup(
-    <SidebarView groups={GROUPS} pathname={pathname} collapsed={collapsed} onToggleCollapsed={() => {}} />,
+    <SidebarView commune={commune} groups={GROUPS} pathname={pathname} collapsed={collapsed} onToggleCollapsed={() => {}} />,
   );
 }
+
+/**
+ * The sidebar's top is the commune's People's Committee, not the vendor's product (owner decision
+ * 02/10/2026). The failure guarded is silent and public: a string-built "UBND " + name reads right
+ * for "xã Tân Phú" and wrong — "UBND UBND xã Tân Phú" — for a commune that declared the prefix.
+ */
+describe("commune identity at the top", () => {
+  it("prints displayName exactly as configured, under the authority kind, with no product name", () => {
+    const html = view(false, "/danh-ba", { displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" });
+    expect(html).toContain('<p class="ten-co-quan">UBND xã Tân Phú</p>');
+    expect(html).not.toContain("UBND UBND");
+    expect(html).toContain('<p class="co-quan-cap-tren">Tỉnh Đồng Nai</p>');
+    expect(html.indexOf(AUTHORITY_KIND)).toBeLessThan(html.indexOf("UBND xã Tân Phú"));
+    expect(html.indexOf("commune-identity")).toBeLessThan(html.indexOf("thanh-ben-muc"));
+    expect(html).not.toContain("ViGov");
+    expect(html).not.toContain("Điều hành số cấp xã");
+  });
+
+  it("a commune that declared no parent authority gets no line — never a guess", () => {
+    const html = view(false, "/danh-ba", { displayName: "Xã Tân Phú", parentAuthority: "" });
+    expect(html).not.toContain("co-quan-cap-tren");
+  });
+
+  it("collapsed: the emblem stays, the name stays in the DOM for screen readers", () => {
+    const html = view(true);
+    expect(html).toContain("commune-emblem");
+    expect(html).toContain('<p class="ten-co-quan">Xã Tân Phú</p>');
+  });
+});
 
 describe("menu icons", () => {
   it("every item of NHOM_MENU has its own icon — a new item cannot fall back silently", () => {
@@ -35,7 +67,7 @@ describe("menu icons", () => {
   it("the full menu is drawn: one icon per item, same count as NHOM_MENU", () => {
     const html = view(false);
     expect(GROUPS.reduce((n, g) => n + g.muc.length, 0)).toBe(ITEM_COUNT);
-    // One icon per item, plus the star logo and the collapse control.
+    // One icon per item, plus the commune emblem tile and the collapse control.
     expect(html.match(/<svg/g)).toHaveLength(ITEM_COUNT + 2);
     expect(html).toContain("lucide-layout-dashboard");
     expect(html).toContain("lucide-contact-round");

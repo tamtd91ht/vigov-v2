@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { useCauHinhXa } from "./cau-hinh-xa";
 import { locMenu, NHOM_MENU } from "./muc-menu";
 import { SidebarView } from "./sidebar-view";
 
@@ -66,6 +67,7 @@ function docThuGonOMayChu(): boolean {
 }
 
 export function ThanhBen() {
+  const xa = useCauHinhXa();
   const phien = usePhien();
   const duongHienTai = usePathname() ?? "/";
   const thuGon = useSyncExternalStore(dangKy, docThuGon, docThuGonOMayChu);
@@ -85,5 +87,5 @@ export function ThanhBen() {
   const dsQuyen = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
   const nhom = locMenu(NHOM_MENU, dsQuyen);
 
-  return <SidebarView groups={nhom} pathname={duongHienTai} collapsed={thuGon} onToggleCollapsed={doiThuGon} />;
+  return <SidebarView commune={xa} groups={nhom} pathname={duongHienTai} collapsed={thuGon} onToggleCollapsed={doiThuGon} />;
 }

@@ -1,26 +1,21 @@
 "use client";
 
-import { Landmark } from "lucide-react";
-
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
 import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { useCauHinhXa } from "./cau-hinh-xa";
+import { CommuneIdentity } from "./commune-identity";
 import { NotificationBell } from "./notification-bell";
 import { userInitials } from "./user-initials";
 
 /**
  * Đầu trang — spec giao diện 02/10/2026 §5 (thay `15-phu-luc-giao-dien-chung` §3 về hình thức).
  *
- * Bên trái là tên cơ quan và cơ quan cấp trên, đọc lúc chạy từ cấu hình xã. Một tên xã sai trên
- * đầu trang của một cơ quan nhà nước là sự cố có người phải trả lời, nên nó không bao giờ là
- * hằng số trong mã và không bao giờ là giá trị dự phòng.
- *
- * `xa.displayName` IN NGUYÊN VĂN, KHÔNG BAO GIỜ GHÉP CHUỖI ("UBND " + tên): tên đúng của đơn vị là
- * dữ liệu do xã khai, và một tiền tố ghép trong mã sẽ sai ngay ở xã đầu tiên khai tên đã có chữ
- * "UBND". Dòng nhỏ "Ủy ban nhân dân" phía trên là nhãn LOẠI cơ quan, một hằng số của sản phẩm —
- * quyết định của chủ dự án 02/10/2026 — không phải một phần của tên.
+ * TÊN CƠ QUAN ĐÃ CHUYỂN SANG GÓC TRÁI CỦA THANH BÊN (chủ dự án 02/10/2026) — `CommuneIdentity`.
+ * Đầu trang chỉ in lại nó khi trang KHÔNG có thanh bên (`withCommune`: đổi mật khẩu, chi tiết dự
+ * án), để không trang đã đăng nhập nào thiếu tên cơ quan; in ở cả hai chỗ là lặp. Tên xã đọc lúc
+ * chạy từ cấu hình xã, không bao giờ là hằng số hay giá trị dự phòng.
  *
  * Bên phải là khối người dùng — họ tên và chức vụ của chính người đang đăng nhập, đọc từ
  * `GET /api/v1/sessions/current` qua `PhienProvider`. Không đọc được thì khối ấy BIẾN MẤT chứ
@@ -32,26 +27,16 @@ import { userInitials } from "./user-initials";
  * không có hộp thư của ai để đếm, và bốn tuyến ấy sẽ chỉ trả 401.
  *
  * Ô tìm kiếm toàn hệ thống (§3.1) vẫn chưa có: chưa có route nào trong hợp đồng phục vụ nó. Vẽ ra
- * một ô tìm kiếm không tìm được gì là hứa với cán bộ một chức năng không tồn tại.
+ * một ô tìm kiếm không tìm được gì là hứa với cán bộ một chức năng không tồn tại. Khoảng trống bên
+ * trái chừa cho nó (`ROADMAP_PHASE2.md`, ADR 0068 §11).
  */
-export const AUTHORITY_KIND = "Ủy ban nhân dân";
-
-export function DauTrang() {
+export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
   const xa = useCauHinhXa();
   const nguoi = khoiNguoiDung(usePhien());
 
   return (
     <header className="dau-trang">
-      <div className="khoi-co-quan">
-        <span className="topbar-commune-icon" aria-hidden="true">
-          <Landmark focusable="false" strokeWidth={1.8} />
-        </span>
-        <div className="topbar-commune-text">
-          <p className="topbar-authority-kind">{AUTHORITY_KIND}</p>
-          <p className="ten-co-quan">{xa.displayName}</p>
-          <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
-        </div>
-      </div>
+      <div className="khoi-co-quan">{withCommune && <CommuneIdentity commune={xa} />}</div>
       <div className="khoi-nguoi-dung">
         {nguoi.hien && <NotificationBell />}
         {nguoi.hien ? (

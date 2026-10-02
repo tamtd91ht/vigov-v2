@@ -1,8 +1,10 @@
-import { PanelLeftClose, PanelLeftOpen, Star } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 
 import { Tooltip } from "@/components/ui/tooltip";
+import type { CauHinhXaHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 
+import { CommuneIdentity } from "./commune-identity";
 import { menuIcon } from "./menu-icons";
 import { CHUA_CO_MAN, dangChon, type NhomMenu } from "./muc-menu";
 
@@ -27,26 +29,21 @@ export const COLLAPSE_LABEL = "Thu gọn menu";
 export const EXPAND_LABEL = "Mở rộng menu";
 
 export type SidebarViewProps = {
+  commune: CauHinhXaHienThi;
   groups: readonly NhomMenu[];
   pathname: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 };
 
-export function SidebarView({ groups, pathname, collapsed, onToggleCollapsed }: SidebarViewProps) {
+export function SidebarView({ commune, groups, pathname, collapsed, onToggleCollapsed }: SidebarViewProps) {
   const toggleLabel = collapsed ? EXPAND_LABEL : COLLAPSE_LABEL;
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
     <nav className={collapsed ? "thanh-ben thu-gon" : "thanh-ben"} aria-label="Điều hướng chính">
       <div className="thanh-ben-dinh">
-        <span className="thanh-ben-dau" aria-hidden="true">
-          <Star focusable="false" />
-        </span>
-        <span className="thanh-ben-ten">
-          <span className="thanh-ben-san-pham">ViGov</span>
-          <span className="thanh-ben-phu">Điều hành số cấp xã</span>
-        </span>
+        <CommuneIdentity commune={commune} />
       </div>
 
       <div className="thanh-ben-cuon">
