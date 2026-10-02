@@ -658,8 +658,14 @@ export function luaChonCanBo(
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
- * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của
- * màn Thu - Chi ngân sách và màn Phản ánh.
+ * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Mỗi mục là câu hiện ra khi bấm dấu
+ * "?" đặt đúng chỗ đặc tả (ADR 0068 §14, `meeting-pending.tsx`), và là thứ `tools/tien_do_san_pham.py`
+ * đếm thành cột "chưa dựng" — nên một mục RỜI mảng ngay khi phần ấy được dựng.
+ *
+ * KHÔNG CÓ MỤC CHO LỰA CHỌN BỐ CỤC (biểu mẫu trong trang thay hộp thoại nổi; không cổng quyền
+ * `task.create` ở client): đó là quyết định, không phải phần còn thiếu — một mục ở đây sẽ đếm chúng
+ * thành "chưa dựng" mãi mãi (ADR 0068 §14, bảng "không có chỗ giữ"). Lý do của từng lựa chọn nằm ở
+ * chú thích ngay chỗ nó, trong `so-bien-ban.tsx`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type PhanChuaDung = {
@@ -686,25 +692,8 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Tệp đính kèm — bản scan biên bản (§4)",
     viSao:
-      "Kho chưa có nơi lưu tệp và hợp đồng không có tuyến tải lên nào; cột `dinh_kem` giữ nguyên " +
-      "mặc định `'[]'` (migration 0007). Vẽ một vùng kéo thả không có chỗ lưu là mời cán bộ thả " +
-      "một bản scan vào rồi mất.",
-  },
-  {
-    ten: "Cổng quyền `task.read` / `task.create` ở phía giao diện — chỉ nút Ký có cổng",
-    viSao:
-      "Nút `Ký biên bản` ẩn với phiên thiếu `task.approve` (`QUYEN_KY_BIEN_BAN`) — tiện dụng, " +
-      "không phải biện pháp. Mọi nút khác (nhập, sửa, gỡ, đánh dấu, tách) KHÔNG có cổng theo " +
-      "`task.create` ở client, đúng khuôn màn Văn bản: dịch vụ `petitions` kiểm quyền trên TỪNG " +
-      "lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình. Ẩn một nút " +
-      "chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn một lần bấm.",
-  },
-  {
-    ten: "Biểu mẫu dạng hộp thoại nổi (modal) (§2, §4)",
-    viSao:
-      "Đặc tả vẽ các biểu mẫu — Nhập/Sửa biên bản §4, Giao việc §3, hộp Ký, Thông báo kết luận, " +
-      "Gỡ — và khung Xem biên bản dưới dạng lớp phủ modal. Màn dựng chúng NỐI TIẾP trong trang, " +
-      "ngay dưới thẻ hay dòng kết luận đang thao tác: một hộp nổi phải tự lo bẫy tiêu điểm, phím " +
-      "Esc và cuộn nền, còn một khối trong luồng thì không che mất biên bản cán bộ đang đối chiếu.",
+      "Hệ thống đã có nơi lưu tệp, nhưng chưa có loại tệp dành cho bản scan biên bản họp, và máy " +
+      "chủ chưa có chức năng gắn tệp vào một biên bản hay đọc lại tệp đã gắn. Cho chọn tệp lúc này " +
+      "là mời cán bộ đưa một bản scan lên rồi mất.",
   },
 ];

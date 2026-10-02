@@ -29,7 +29,6 @@ import {
   NHAN_NUT_LUU,
   NHAN_NUT_TACH,
   NHAN_NUT_THEM_KET_LUAN,
-  PHAN_CHUA_DUNG,
   PLACEHOLDER_KET_LUAN,
   SO_RONG,
 } from "./nhan-bien-ban";
@@ -39,7 +38,6 @@ import {
   DongKetLuan,
   FormNhapBienBan,
   HangThemKetLuan,
-  KhoiChuaDung,
   TheBienBan,
   type CheBieuMau,
   type PhepTach,
@@ -399,14 +397,22 @@ describe("nút `Tách thành nhiệm vụ` §3", () => {
     expect(veDong(ketLuan(), phepTach({ dangGui: true }))).toContain("disabled");
   });
 
-  it("phần §3 CÒN THIẾU nằm trong khối chưa dựng được ở đầu màn, không chỉ trong chú thích mã", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
+  /**
+   * Phần §3 còn thiếu (hạn gợi ý) hiện ĐÚNG CHỖ nó sẽ ở — trong khung biểu mẫu Giao việc mở từ Tách —
+   * dưới dạng dòng gợi ý vô hiệu mang dấu "?" (ADR 0068 §14), không còn trong khối gập đầu màn.
+   */
+  it("hộp Tách mở thì có dòng HẠN GỢI Ý vô hiệu kèm dấu “?”; hộp đóng thì không", () => {
+    const mo = veDong(ketLuan({ id: "k7" }), phepTach({ moOKetLuan: "k7" }));
+    expect(mo).toContain("Hạn gợi ý từ ngày nêu trong kết luận");
+    expect(mo).toContain('aria-disabled="true"');
+    expect(mo).toContain("data-pending-marker");
+    expect(mo).toContain("tính năng đang phát triển. Bấm để xem mô tả");
 
-    // Thứ còn thiếu là ĐIỀN SẴN, không còn là cả cái nút.
-    expect(html).toContain("ĐIỀN SẴN");
-    expect(html).toContain(String(PHAN_CHUA_DUNG.length));
-    // Cổng quyền client cũng phải được nói ra — nó là thứ người đọc màn sẽ đi tìm.
-    expect(html).toContain("task.create");
+    expect(veDong(ketLuan({ id: "k7" }), phepTach())).not.toContain("Hạn gợi ý từ ngày nêu");
+  });
+
+  it("khối gập “N phần của bản thiết kế chưa dựng được” không còn trên thẻ", () => {
+    expect(veThe(bienBan())).not.toContain("phần của bản thiết kế chưa dựng được");
   });
 });
 
@@ -548,8 +554,21 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).toContain('id="thanh-phan-khac"');
   });
 
-  it("KHÔNG có vùng tệp đính kèm — phần đã khai là chưa dựng", () => {
-    expect(veForm()).not.toContain('type="file"');
+  /**
+   * Ô tệp ở CUỐI biểu mẫu (§4) là chỗ giữ: vô hiệu, mang dấu "?", và KHÔNG có `name` — nên nó không
+   * bao giờ đi lên cùng thân yêu cầu, kể cả khi ai đó gỡ `disabled`.
+   */
+  it("ô Tệp đính kèm là ô tệp VÔ HIỆU, không `name`, có dấu “?”, đứng sau ô cuối cùng dựng được", () => {
+    const html = veForm();
+    const tep = /<input[^>]*type="file"[^>]*>/.exec(html)?.[0] ?? "";
+
+    expect(tep).toContain('id="tep-dinh-kem-bien-ban"');
+    expect(tep).toContain('disabled=""');
+    expect(tep).not.toContain("name=");
+    expect(html).toContain("Tệp đính kèm — bản scan biên bản (§4) — tính năng đang phát triển");
+    expect(html.indexOf('id="tep-dinh-kem-bien-ban"')).toBeGreaterThan(html.indexOf('id="cac-ket-luan"'));
+    // Bản sửa cũng có ô ấy: đặc tả §4 dùng một biểu mẫu cho cả hai.
+    expect(veForm(null, { loai: "sua", ban: bienBan() })).toContain('id="tep-dinh-kem-bien-ban"');
   });
 
   it("biểu mẫu BỔ SUNG nói nó bổ sung cho biên bản đã ký nào", () => {

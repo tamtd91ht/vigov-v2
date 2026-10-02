@@ -404,3 +404,50 @@ export const DAN_SO_DI =
 
 export const DAN_SO_DEN =
   "Sổ vào công văn đến của xã. Hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * PHẦN CỦA ĐẶC TẢ CHƯA DỰNG ĐƯỢC — mô tả cho dấu "?" đặt đúng chỗ đặc tả (ADR 0068 §14).
+ *
+ * Mỗi mục là đúng câu hiện ra khi cán bộ bấm "?", nên `viSao` phải ĐÚNG HÔM NAY: một lý do đã cũ
+ * là màn hình nói sai với cán bộ về việc của chính xã họ. Mảng này cũng là thứ
+ * `tools/tien_do_san_pham.py` đếm làm cột "chưa dựng" của bảng tiến độ — thêm hay bớt một mục là
+ * đổi con số báo lên, nên một phần dựng xong thì RỜI mảng cùng lần dựng.
+ *
+ * KHÔNG CÓ MỤC "Chuyển thành nhiệm vụ", dù nó cũng chưa dựng: nó không nằm trong bảng vị trí chủ
+ * dự án đã duyệt, và một mục ở đây không có chỗ giữ trên màn là một câu không ai đọc được.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type PendingPart = {
+  // vi-name-ok: same `{ten, viSao}` shape as every other screen's PHAN_CHUA_DUNG, passed as-is to the "?"
+  readonly ten: string;
+  // vi-name-ok: same `{ten, viSao}` shape as every other screen's PHAN_CHUA_DUNG, passed as-is to the "?"
+  readonly viSao: string;
+};
+
+export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
+  {
+    ten: "Đơn thư công dân",
+    viSao:
+      "Sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị, đề nghị của công dân chưa có ở máy chủ, nên " +
+      "tab này chưa có dữ liệu để hiện.",
+  },
+  {
+    ten: "Báo cáo",
+    viSao:
+      "Báo cáo tiến độ tiếp nhận và xử lý đơn thư lấy số liệu từ sổ đơn thư công dân, mà sổ ấy " +
+      "chưa có ở máy chủ.",
+  },
+  {
+    ten: "Quét & OCR",
+    viSao:
+      "Hệ thống chưa có phần đọc chữ từ bản quét. Gửi bản quét — có thể chứa thông tin cá nhân " +
+      "của công dân — tới một dịch vụ nhận dạng chữ bên ngoài là việc chờ cơ quan quyết định.",
+  },
+  {
+    ten: "Chuyển trạng thái văn bản đến",
+    viSao:
+      "Các bước của văn bản đến đã được chốt: Đã vào sổ → Chờ trình/phân luồng → Đã chuyển xử lý → " +
+      "Đang xử lý → Hoàn thành. Máy chủ chưa có chức năng đổi trạng thái theo các bước ấy, nên các " +
+      "nút chưa bấm được. Chuyển văn bản cho bộ phận khác vẫn làm được như hiện nay.",
+  },
+];

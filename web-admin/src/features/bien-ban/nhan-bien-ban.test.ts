@@ -213,8 +213,13 @@ describe("phần chưa dựng được", () => {
    * LẦN THỨ NĂM (02/10/2026, ADR 0068): đợt làm mới giao diện dựng thẻ biên bản và ô tròn số thứ tự
    * bằng Tailwind, nên mục "Lớp CSS" RỜI danh sách; phần của nó còn đúng — biểu mẫu dựng nối tiếp
    * trong trang thay vì lớp phủ modal — ở lại thành mục "modal".
+   *
+   * LẦN THỨ SÁU (02/10/2026, ADR 0068 §14): danh sách thành mô tả cho dấu "?" đặt đúng chỗ đặc tả.
+   * Hai mục "modal" và "cổng quyền `task.create` ở client" RỜI danh sách: đó là lựa chọn bố cục, không
+   * phải phần còn thiếu — giữ chúng là đếm chúng thành "chưa dựng" mãi mãi, và ADR xếp chúng vào bảng
+   * "không có chỗ giữ". Lý do của hai lựa chọn ấy nay nằm ở chú thích `so-bien-ban.tsx`.
    */
-  it("năm mục đã dựng RỜI danh sách; tệp đính kèm, hạn gợi ý, modal Ở LẠI", () => {
+  it("mục đã dựng và lựa chọn bố cục RỜI danh sách; tệp đính kèm, hạn gợi ý Ở LẠI", () => {
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join("\n");
     expect(ten).not.toContain("Ô chọn `Chủ trì`");
     expect(ten).not.toContain("KHI ĐỌC LẠI");
@@ -225,7 +230,20 @@ describe("phần chưa dựng được", () => {
     expect(ten).toContain("Tệp đính kèm");
     expect(ten).toContain("HẠN GỢI Ý");
     expect(ten).not.toContain("Lớp CSS");
-    expect(ten).toContain("modal");
+    expect(ten).not.toContain("modal");
+    expect(ten).not.toContain("task.create");
+    expect(PHAN_CHUA_DUNG).toHaveLength(2);
+  });
+
+  /**
+   * Lý do cũ "kho chưa có nơi lưu tệp" đã SAI từ ADR 0052: nơi lưu tệp có rồi. Thứ còn thiếu là loại
+   * tệp cho bản scan biên bản và tuyến gắn tệp vào biên bản — câu hiện cho cán bộ phải nói đúng thế.
+   */
+  it("lý do của tệp đính kèm nói đúng chỗ thiếu hôm nay, không còn câu “chưa có nơi lưu tệp”", () => {
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Tệp đính kèm"));
+    expect(muc?.viSao).not.toMatch(/chưa có nơi lưu tệp/i);
+    expect(muc?.viSao).toContain("đã có nơi lưu tệp");
+    expect(muc?.viSao).toContain("gắn tệp vào một biên bản");
   });
 });
 

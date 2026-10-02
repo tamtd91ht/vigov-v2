@@ -44,6 +44,7 @@ import {
   trangThaiHanVanBan,
   type BanChuyen,
 } from "./nhan-van-ban";
+import { StatusChangeRow } from "./document-pending";
 import { DeadlineMark, DocumentStatusBadge, Glyph, UrgencyBadge } from "./document-ui";
 
 /**
@@ -60,9 +61,10 @@ import { DeadlineMark, DocumentStatusBadge, Glyph, UrgencyBadge } from "./docume
  * tiết" của đúng dòng ấy (bên gọi làm việc ấy — nó biết dòng nào).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ NÚT ĐỔI TRẠNG THÁI, KHÔNG CÓ "CHUYỂN THÀNH NHIỆM VỤ", có chủ ý: bộ trạng thái của văn bản
- * đến còn là câu hỏi mở của khách hàng (C2), và biến văn bản thành nhiệm vụ cần một hợp đồng giữa
- * hai dịch vụ chưa có. Một nút ở đây là một quyết định nghiệp vụ không ai đưa ra.
+ * BỐN NÚT ĐỔI TRẠNG THÁI LÀ CHỖ GIỮ VÔ HIỆU mang dấu "?" (`StatusChangeRow`, ADR 0068 §14): bộ trạng
+ * thái riêng của văn bản đến đã chốt (30/09/2026) nhưng máy chủ chưa có tuyến đổi trạng thái. KHÔNG
+ * CÓ "CHUYỂN THÀNH NHIỆM VỤ", có chủ ý: nó cần một hợp đồng giữa hai dịch vụ chưa có, và không nằm
+ * trong bảng vị trí đã duyệt.
  *
  * KHÔNG CÓ NÚT NÀO SỬA HAY XOÁ MỘT DÒNG LỊCH SỬ: bảng lịch sử chỉ-thêm ở tầng CSDL (trigger
  * `lich_su_chuyen_chi_them`) và hợp đồng không có tuyến nào làm việc ấy (luật 7, cấm #5).
@@ -211,6 +213,9 @@ export function ThongTinVanBanDen({
   return (
     <>
       <p className="m-0 text-[15px] leading-relaxed text-ink-900">{vb.summary}</p>
+
+      {/* Spec §3.5 order: header text, then the status row, then the chips. Disabled placeholder. */}
+      <StatusChangeRow />
 
       <p className="m-0 flex flex-wrap items-center gap-2" aria-label="Trạng thái và thuộc tính">
         <DocumentStatusBadge status={vb.status}>{nhanTrangThai(vb.status)}</DocumentStatusBadge>{" "}

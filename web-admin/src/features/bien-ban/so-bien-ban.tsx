@@ -7,7 +7,6 @@ import {
   CircleCheck,
   CircleMinus,
   CloudOff,
-  Construction,
   Eye,
   FilePlus2,
   ListChecks,
@@ -154,7 +153,6 @@ import {
   nhanTrangThaiKetLuan,
   NOI_DUNG_BIEN_BAN_TOI_DA,
   NOI_DUNG_KET_LUAN_TOI_DA,
-  PHAN_CHUA_DUNG,
   PLACEHOLDER_KET_LUAN,
   quyTacBienBan,
   quyTacKetLuan,
@@ -170,6 +168,7 @@ import {
   type GiaTriBieuMau,
   type QuyTacNut,
 } from "./nhan-bien-ban";
+import { ScanAttachmentField, SuggestedDeadlineHint } from "./meeting-pending";
 import {
   ConclusionOrdinal,
   ConclusionStatusBadge,
@@ -195,7 +194,9 @@ import {
  *
  * CỔNG QUYỀN DUY NHẤT Ở CLIENT LÀ NÚT KÝ (`task.approve`), và nó là TIỆN DỤNG. Dịch vụ `petitions`
  * kiểm quyền trên TỪNG lời gọi; tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình
- * (luật 5, cấm #1). Xem `PHAN_CHUA_DUNG`.
+ * (luật 5, cấm #1). Mọi nút khác (nhập, sửa, gỡ, đánh dấu, tách) KHÔNG có cổng `task.create` ở
+ * client, đúng khuôn màn Văn bản: ẩn một nút chưa bao giờ là biện pháp, và thiếu nó chỉ tốn một lần
+ * bấm. Đây là lựa chọn, không phải phần còn thiếu — nên không có dấu "?" nào cho nó (ADR 0068 §14).
  *
  * NỘI DUNG BIÊN BẢN LÀ CHỮ CỦA MỘT CUỘC HỌP CÓ THỂ NHẮC TỚI HỒ SƠ CÔNG DÂN: không dòng nào ở đây
  * ghi nó vào log, vào storage hay vào một URL (luật 3, cấm #1 và #4). URL chỉ mang id biên bản —
@@ -686,8 +687,6 @@ export function SoBienBan() {
       className="man-bien-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
       aria-labelledby="tieu-de-so-bien-ban"
     >
-      <KhoiChuaDung />
-
       <div ref={vungBieuMau} className="empty:hidden">
         {bieuMau !== null && (
           <FormNhapBienBan
@@ -807,39 +806,6 @@ export function SoBienBan() {
       )}
     </section>
     </>
-  );
-}
-
-/**
- * Những phần đặc tả đòi mà hợp đồng hoặc lượt làm này không có — HIỆN LÊN ĐẦU MÀN, không giấu
- * trong chú thích mã.
- */
-export function KhoiChuaDung() {
-  // COLLAPSED, GREY, DASHED (spec §8.1, ADR 0068): a list of what is not built is not an alarm. The
-  // words stay verbatim and stay in the HTML while closed — `<details>` only folds them.
-  return (
-    <details className="khoi-chua-khai group m-0">
-      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
-        <span className="font-semibold text-ink-700">
-          {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
-          do
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          focusable="false"
-          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <dl className="danh-sach-truong">
-        {PHAN_CHUA_DUNG.map((p) => (
-          <div key={p.ten}>
-            <dt>{p.ten}</dt>
-            <dd>{p.viSao}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
   );
 }
 
@@ -1807,6 +1773,9 @@ export function DongKetLuan({
               <LockKeyhole aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
               {NGUON_GIAO_KHOA}
             </p>
+            {/* Spec §3 "Hạn gợi ý" belongs beside the deadline field INSIDE FormGiaoViec, whose markup
+                is shared with Phản ánh and Nhiệm vụ — so it sits in this frame, just above the form. */}
+            <SuggestedDeadlineHint />
             <FormGiaoViec
               danhMuc={tach.danhMuc}
               danhBa={tach.danhBa}
@@ -1879,7 +1848,12 @@ export function HangThemKetLuan({
 /**
  * Biểu mẫu biên bản §4 — NHẬP MỚI, NHẬP BỔ SUNG cho một biên bản đã ký, hoặc SỬA một bản nháp.
  *
- * ĐẶC TẢ GỌI NÓ LÀ MODAL; ở đây nó là một khối trong trang (xem `PHAN_CHUA_DUNG`, mục modal).
+ * ĐẶC TẢ GỌI NÓ LÀ MODAL; ở đây nó là một khối trong trang, ngay dưới thẻ đang thao tác: một hộp
+ * nổi phải tự lo bẫy tiêu điểm, phím Esc và cuộn nền, còn một khối trong luồng thì không che mất
+ * biên bản cán bộ đang đối chiếu. Lựa chọn bố cục, không phải phần còn thiếu — không có dấu "?".
+ *
+ * Ô CUỐI "Tệp đính kèm" LÀ CHỖ GIỮ VÔ HIỆU (`ScanAttachmentField`): không có `name`, không vào
+ * `GiaTriBieuMau`, nên không bao giờ đi lên cùng thân yêu cầu.
  *
  * BẢN SỬA KHÔNG CÓ Ô "Các kết luận": kết luận của bản nháp sửa, gỡ, thêm TỪNG DÒNG trên thẻ, vì mỗi
  * dòng mang số đã cấp và có thể đã có nhiệm vụ trỏ vào.
@@ -2147,6 +2121,9 @@ export function FormNhapBienBan({
             </p>
           </div>
         )}
+
+        {/* Last field of spec §4, a disabled placeholder — see the block comment above. */}
+        <ScanAttachmentField />
 
         {loi !== null && (
           <p className="thong-bao-loi m-0" role="alert">

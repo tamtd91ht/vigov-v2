@@ -21,7 +21,8 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY, đúng khuôn `/van-ban` đang dùng: `src/proxy.ts` chặn người CHƯA ĐĂNG
  * NHẬP ở phía máy chủ, còn `task.*` do dịch vụ `petitions` kiểm trên TỪNG lời gọi API thật (luật 5,
- * cấm #1). Trong thân màn chỉ nút Ký ẩn theo `task.approve` — tiện dụng, xem `PHAN_CHUA_DUNG`.
+ * cấm #1). Trong thân màn chỉ nút Ký ẩn theo `task.approve` — tiện dụng, xem chú thích đầu
+ * `features/bien-ban/so-bien-ban.tsx`.
  *
  * XÃ ĐỌC LÚC CHẠY TỪ `Host`, như mọi trang khác: không có giá trị riêng của xã nào nằm trong
  * bundle, và `Host` không khớp xã nào thì trang này là 404 trước khi dựng gì (luật 1, bất biến 3

@@ -339,3 +339,21 @@ describe("lý do chuyển không rò ra ngoài (luật 3)", () => {
     }
   });
 });
+
+describe("hàng chuyển trạng thái (chỗ giữ “?”, ADR 0068 §14)", () => {
+  it("đứng sau trích yếu, trước hàng chip; bốn nút đều vô hiệu, có dấu “?”", () => {
+    const html = ve();
+    const hang = html.indexOf('aria-labelledby="nhan-chuyen-trang-thai"');
+
+    expect(hang).toBeGreaterThan(html.indexOf("Về việc rà soát hồ sơ cán bộ"));
+    expect(hang).toBeLessThan(html.indexOf('aria-label="Trạng thái và thuộc tính"'));
+    const nut = html.match(/<button[^>]*aria-label="Chuyển sang [^"]*"[^>]*>/g) ?? [];
+    expect(nut).toHaveLength(4);
+    for (const n of nut) expect(n).toContain('disabled=""');
+    expect(html).toContain("Chuyển trạng thái văn bản đến — tính năng đang phát triển");
+  });
+
+  it("chưa đọc được văn bản thì không có hàng ấy", () => {
+    expect(ve({ vb: null })).not.toContain("nhan-chuyen-trang-thai");
+  });
+});
