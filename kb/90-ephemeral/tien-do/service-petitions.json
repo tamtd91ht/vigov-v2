@@ -538,6 +538,15 @@
       "no_confirm": [],
       "tiep_theo": "NGÕ CỤT CHỜ CHỦ DỰ ÁN: trần 5 ảnh nghiệm thu đếm MỌI ảnh đã lưu (RequestUpload + trigger 0027) và không tuyến nào gỡ ảnh — phiếu bị mở lại khi đã đủ 5 ảnh thì không tải được ảnh mới, ở xã bật cờ sẽ KHÔNG BAO GIỜ đóng được. Hai mốc 'sau' dựa vào đồng hồ ứng dụng của hai pod. citizen-app chưa đối chiếu với danh sách rỗng trước cho-dan-xac-nhan. Chưa chạy Postgres thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "migration-tran-theo-luot-va-nhap-ho",
+      "viec": "Migration 0029 (trần 5 ảnh nghiệm thu theo từng lượt xử lý — ADR 0047 (e)) và 0030 (hanh_vi 'nhap-ho' cho nhật ký phiếu — ADR 0028 Bổ sung 02/10 dòng 6)",
+      "trang_thai": "xong",
+      "bang_chung": "0029 CREATE OR REPLACE stored_file_verification_photo_check(): vẫn khoá phiếu FOR UPDATE trước; round_start = max(thoi_diem) của dòng mo-lai-theo-danh-gia (đúng truy vấn LatestReopenAtTx); chỉ đếm ảnh created_at > round_start (đúng countStoredCreatedAfterTail); chưa mở lại → đếm hết. 0030 nới CHECK nhat_ky_phan_anh_hanh_vi_hop_le thêm 'nhap-ho'. Ca kiểm văn bản SQL xanh, check_khoa_duy_nhat xanh. Chưa chạy Postgres thật.",
+      "no_confirm": [],
+      "tiep_theo": "P3b: ứng dụng còn đếm mọi lượt ở petition_verification_photo.go:232 (xin chỗ) và :371 (hoàn tất) qua CountForSubjectTx — phải thu theo lượt; thêm hằng domain 'nhap-ho' + liệt trong TestLogActionsAreAllowedByTheSchema; màn nhật ký Web Admin phải hiện hành vi mới. Ảnh xin chỗ trước khi mở lại mà hoàn tất sau thì không thuộc lượt nào (cổng đóng cũng bỏ qua nó — nhất quán). Phiếu mở lại có thể có >5 ảnh nghiệm thu tổng cộng.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
