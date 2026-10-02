@@ -421,6 +421,15 @@
       "no_confirm": [],
       "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "giao-dien-nen-w1-f",
+      "viec": "Nâng cấp giao diện Web Admin đợt 1 — thẻ NỀN (W1-F): Tailwind v4 + bộ component kiểu shadcn, token theo đặc tả UI_UPGRADE_SPEC, khung (thanh bên trắng có icon, mục chưa có màn mang nhãn 'Chưa có', đầu trang dính có khối Ủy ban nhân dân), màn đăng nhập mới, các lớp cũ dùng chung được làm mới tại chỗ. Chỉ trình bày — không đổi route, API, state, quyền, tên trường",
+      "trang_thai": "xong",
+      "bang_chung": "Phụ thuộc ghim đúng bản: tailwindcss/@tailwindcss/postcss 4.3.3, postcss 8.5.28, lucide-react 1.49.0, clsx 2.1.1, tailwind-merge 3.7.0, class-variance-authority 0.7.1, @fontsource/be-vietnam-pro 5.3.0 (tự phục vụ, không next/font/google), @radix-ui/react-tooltip 1.2.16; lock có sẵn nhị phân linux-x64-musl của @tailwindcss/oxide và lightningcss (ảnh node:22-alpine). globals.css: toàn bộ CSS cũ nằm trong @layer legacy, không preflight, token đặc tả + biến cũ trỏ về token, khối tối khai nhưng không bật; .khung-trang minmax(0,1fr) chặn cuộn ngang. Component: src/components/ui/{button,icon-button,badge,card,page-header,field,segmented,tabs,stat-card,empty-state,notice,tooltip}.tsx, lib/cn.ts; khung: components/sidebar-view.tsx, menu-icons.ts, user-initials.ts, dau-trang.tsx, thanh-ben.tsx; đăng nhập: app/dang-nhap/khoi-thuong-hieu.tsx, features/auth/form-dang-nhap.tsx. Ca kiểm mới: ui.test.tsx (19), sidebar-view.test.tsx (10), dau-trang.test.tsx (5), form-dang-nhap.test.tsx (4), app/ui-foundation.test.ts (12); không ca cũ nào phải sửa. vitest 3250/3250, eslint sạch, npm audit --omit=dev 0, check:api khớp, check_security PASS, check_vuln PASS, test_hooks 306/306. tsc và bước kiểu của next build còn đỏ ĐÚNG 3 lỗi ở features/phan-anh/{petition-task,so-phan-anh}.test.tsx (attachments bắt buộc sau gen:api ở c331cfc9) — không do thẻ này; phần biên dịch của next build xanh.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Các thẻ màn hình W1 (Danh bạ, Tổng quan, Nhiệm vụ…) dùng component mới; dashboard.module.css nằm NGOÀI lớp (unlayered) nên thắng mọi utility — thẻ Tổng quan phải chuyển nó vào lớp hoặc thay. (2) Chủ dự án xem lại: dòng 'Ủy ban nhân dân' trên đầu trang lặp nghĩa khi displayName đã là 'UBND xã …'. (3) Dòng 'Kết nối được mã hoá' ở màn đăng nhập chỉ trọn nghĩa khi đóng nợ HSTS/CSP của web-admin (tools/security_debt.json). (4) Preflight của Tailwind chỉ bật khi mọi màn đã chuyển.",
+      "menu": "phu-luc-giao-dien-chung"
     }
   ]
 }

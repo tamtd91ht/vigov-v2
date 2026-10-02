@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { dangXuat } from "@/lib/api/phien";
@@ -72,8 +73,10 @@ export function NutDangXuat() {
 
   return (
     <div className="khoi-dang-xuat">
-      <button type="button" className="nut-phu" onClick={bam} disabled={dangGui} aria-busy={dangGui}>
-        {dangGui ? "Đang đăng xuất…" : "Đăng xuất"}
+      <button type="button" className="nut-phu" title="Đăng xuất" onClick={bam} disabled={dangGui} aria-busy={dangGui}>
+        <LogOut aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        {/* The word stays the accessible name; below 640px it is clipped for the eye only. */}
+        <span className="logout-label">{dangGui ? "Đang đăng xuất…" : "Đăng xuất"}</span>
       </button>
       {thongBaoLoi !== null && (
         <p className="thong-bao-loi" role="alert" aria-live="assertive">

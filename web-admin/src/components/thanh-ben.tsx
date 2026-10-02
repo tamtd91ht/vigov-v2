@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
-import { CHUA_CO_MAN, dangChon, locMenu, NHOM_MENU } from "./muc-menu";
+import { locMenu, NHOM_MENU } from "./muc-menu";
+import { SidebarView } from "./sidebar-view";
 
 /**
  * Thanh bên — `docs/ui-ux/15-phu-luc-giao-dien-chung.md` §2.
@@ -15,7 +15,8 @@ import { CHUA_CO_MAN, dangChon, locMenu, NHOM_MENU } from "./muc-menu";
  * component điều hướng nào, nên `/danh-ba`, `/van-ban`, `/giai-ngan`, `/phan-anh` và `/cau-hinh`
  * **chỉ tới được bằng cách gõ đường dẫn**. Năm màn đã dựng xong mà không ai bấm tới được.
  *
- * QUYẾT ĐỊNH VÀ LỌC nằm ở `muc-menu.ts`, không ở đây — xem khối chú thích đầu tệp ấy để biết vì
+ * HÌNH VẼ nằm ở `sidebar-view.tsx` (spec giao diện 02/10/2026): tệp này chỉ đọc phiên, đường dẫn và
+ * trạng thái thu gọn rồi trao cho nó. QUYẾT ĐỊNH VÀ LỌC nằm ở `muc-menu.ts`, không ở đây — xem khối chú thích đầu tệp ấy để biết vì
  * sao chín mục chưa có màn vẫn hiện, và vì sao chúng không phải liên kết.
  *
  * TRẠNG THÁI THU GỌN đọc/ghi `localStorage` qua `useSyncExternalStore`, KHÔNG qua
@@ -84,59 +85,5 @@ export function ThanhBen() {
   const dsQuyen = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
   const nhom = locMenu(NHOM_MENU, dsQuyen);
 
-  return (
-    <nav className={thuGon ? "thanh-ben thu-gon" : "thanh-ben"} aria-label="Điều hướng chính">
-      <div className="thanh-ben-dinh">
-        <span className="thanh-ben-dau" aria-hidden="true">
-          VG
-        </span>
-        <span className="thanh-ben-ten">
-          <span className="thanh-ben-san-pham">ViGov</span>
-          <span className="thanh-ben-phu">ĐIỀU HÀNH SỐ CẤP XÃ</span>
-        </span>
-        <button
-          type="button"
-          className="thanh-ben-nut-thu-gon"
-          onClick={doiThuGon}
-          aria-expanded={!thuGon}
-          // Nhãn nói HÀNH ĐỘNG SẼ XẢY RA, không nói trạng thái hiện tại: người dùng trình đọc
-          // màn hình nghe "Thu gọn menu" thì biết bấm vào sẽ thu gọn.
-        >
-          {thuGon ? "Mở rộng menu" : "Thu gọn menu"}
-        </button>
-      </div>
-
-      {nhom.map((n) => (
-        <div key={n.ten} className="thanh-ben-nhom">
-          <p className="thanh-ben-nhan-nhom">{n.ten}</p>
-          <ul>
-            {n.muc.map((m) =>
-              m.duong === null ? (
-                // KHÔNG PHẢI LIÊN KẾT, và không phải `<button disabled>`: cả hai đều nhận được
-                // tiêu điểm bàn phím rồi không làm gì, tức bắt người dùng bàn phím đi qua chín
-                // chặng chết để tới mục dùng được. Một `<span>` mang `aria-disabled` nằm ngoài
-                // thứ tự tiêu điểm và vẫn được trình đọc màn hình đọc đúng.
-                <li key={m.nhan} className="thanh-ben-muc chua-co">
-                  <span aria-disabled="true" title={CHUA_CO_MAN}>
-                    {m.nhan}
-                  </span>
-                  <span className="thanh-ben-dau-chua-co">{CHUA_CO_MAN}</span>
-                </li>
-              ) : (
-                <li key={m.nhan} className="thanh-ben-muc">
-                  <Link
-                    href={m.duong}
-                    aria-current={dangChon(m.duong, duongHienTai) ? "page" : undefined}
-                    className={dangChon(m.duong, duongHienTai) ? "dang-chon" : undefined}
-                  >
-                    {m.nhan}
-                  </Link>
-                </li>
-              ),
-            )}
-          </ul>
-        </div>
-      ))}
-    </nav>
-  );
+  return <SidebarView groups={nhom} pathname={duongHienTai} collapsed={thuGon} onToggleCollapsed={doiThuGon} />;
 }

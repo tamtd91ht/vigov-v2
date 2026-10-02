@@ -1,5 +1,6 @@
 "use client";
 
+import { LockKeyhole, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
 import { dangNhap } from "@/lib/api/phien";
@@ -65,35 +66,42 @@ export function FormDangNhap({ tiepTuc }: { tiepTuc: string | null }) {
   return (
     <form className="form-dang-nhap" onSubmit={guiDi} noValidate>
       <h1 className="tieu-de-form">Đăng nhập hệ thống</h1>
+      <p className="login-card-sub">Dành cho cán bộ, công chức của xã</p>
 
       <div className="o-nhap">
         <label htmlFor={idEmail}>Thư điện tử công vụ</label>
-        <input
-          id={idEmail}
-          name="email"
-          type="email"
-          autoComplete="username"
-          autoCapitalize="none"
-          spellCheck={false}
-          value={email}
-          onChange={(su) => datEmail(su.target.value)}
-          disabled={dangGui}
-          aria-describedby={thongBaoLoi ? idLoi : undefined}
-        />
+        <div className="login-input">
+          <Mail aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          <input
+            id={idEmail}
+            name="email"
+            type="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={email}
+            onChange={(su) => datEmail(su.target.value)}
+            disabled={dangGui}
+            aria-describedby={thongBaoLoi ? idLoi : undefined}
+          />
+        </div>
       </div>
 
       <div className="o-nhap">
         <label htmlFor={idMatKhau}>Mật khẩu</label>
-        <input
-          id={idMatKhau}
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          value={matKhau}
-          onChange={(su) => datMatKhau(su.target.value)}
-          disabled={dangGui}
-          aria-describedby={thongBaoLoi ? idLoi : undefined}
-        />
+        <div className="login-input">
+          <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />
+          <input
+            id={idMatKhau}
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={matKhau}
+            onChange={(su) => datMatKhau(su.target.value)}
+            disabled={dangGui}
+            aria-describedby={thongBaoLoi ? idLoi : undefined}
+          />
+        </div>
       </div>
 
       {/*
@@ -105,8 +113,18 @@ export function FormDangNhap({ tiepTuc }: { tiepTuc: string | null }) {
       </p>
 
       <button type="submit" className="nut-chinh" disabled={dangGui} aria-busy={dangGui}>
+        <LogIn aria-hidden="true" focusable="false" strokeWidth={1.8} />
         {dangGui ? "Đang đăng nhập…" : "Đăng nhập"}
       </button>
+
+      {/* Trust line requested by the owner (spec §8.4, 02/10/2026). It is a statement about the
+          transport: the session cookie is `Secure`, so a sign-in over plain HTTP cannot complete.
+          HSTS is NOT sent yet (`tools/security_debt.json`, web-admin headers) — closing that debt
+          is what makes this sentence true for the very first request too. */}
+      <p className="login-trust">
+        <ShieldCheck aria-hidden="true" focusable="false" strokeWidth={1.8} />
+        Kết nối được mã hoá
+      </p>
     </form>
   );
 }

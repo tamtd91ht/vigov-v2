@@ -1,4 +1,181 @@
 /*
+ * LAYER ORDER — read this before adding a rule anywhere in this file.
+ *
+ *   theme   Tailwind's design variables (and ours, via `@theme` below)
+ *   base    ViGov design tokens (`:root`), the font variable, reduced motion
+ *   legacy  EVERY rule this app had before the 02/10/2026 redesign, verbatim, restyled in place
+ *   components / utilities  Tailwind
+ *
+ * WHY THE OLD CSS SITS IN A LAYER RATHER THAN UNLAYERED: unlayered CSS beats every layer, so a
+ * utility class written on a component would silently lose to any legacy rule touching the same
+ * property — `.nut-chinh { width: 100% }` would win over `w-auto`. Inside `legacy`, utilities win
+ * by layer order alone, whatever the specificity of the old selector.
+ *
+ * WHY NO PREFLIGHT: Tailwind's reset (`tailwindcss/preflight.css`) zeroes margins, list styles,
+ * heading sizes and button chrome for the WHOLE document. Nine screens are still drawn purely by
+ * the legacy classes and rely on those browser defaults; importing it would restyle them all in
+ * one line, outside any screen card. The ui components therefore reset what they need themselves.
+ */
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * Tokens exposed to Tailwind. `inline` makes each utility read the RUNTIME variable (`var(--brand-600)`)
+ * instead of a value frozen at build time, so the dark block below re-themes utilities too.
+ */
+@theme inline {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+
+  --color-ink-900: var(--ink-900);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+
+  /* Status colours: reserved for status, always paired with an icon and a word (spec §1). */
+  --color-success-50: var(--green-50);
+  --color-success-600: var(--green-600);
+  --color-warning-50: var(--amber-50);
+  --color-warning-600: var(--amber-600);
+  --color-danger-50: var(--red-50);
+  --color-danger-200: var(--red-200);
+  --color-danger-600: var(--red-600);
+
+  /* Identity accents — logo and the 4px strip ONLY (owner decision 02/10/2026). */
+  --color-flag-red: var(--red-600);
+  --color-star-gold: var(--gold-500);
+  --color-legal-50: var(--gold-50);
+  --color-legal-200: var(--gold-200);
+  --color-legal-800: var(--gold-800);
+
+  --font-sans: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --radius-control: var(--r-control);
+  --radius-card: var(--r-lg);
+  --radius-hero: var(--r-xl);
+}
+
+/* Same values as the spec tokens of the same name, so `shadow-sm` and `var(--shadow-sm)` agree. */
+@theme {
+  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
+  --shadow-md: 0 4px 16px rgba(15, 27, 45, 0.06);
+  --shadow-lg: 0 1px 2px rgba(15, 27, 45, 0.04), 0 8px 24px -6px rgba(15, 27, 45, 0.12);
+  --shadow-xl: 0 2px 4px rgba(11, 79, 168, 0.04), 0 16px 40px -8px rgba(11, 79, 168, 0.16);
+}
+
+@layer base {
+  /* Spec §3, verbatim, plus the few derived tokens the components need (`--red-200`, `--gold-*`). */
+  :root {
+    --brand-700: #0b4fa8;
+    --brand-600: #1565c0;
+    --brand-500: #1e7be0;
+    --brand-100: #e3eefb;
+    --brand-50: #f1f6fd;
+
+    --red-600: #c62828;
+    --red-200: #f3c5c5;
+    --red-50: #fdecec;
+    --gold-500: #f2b705;
+    --gold-200: #f5e1a4;
+    --gold-50: #fff8e1;
+    --gold-800: #6b5200;
+
+    --green-600: #157034;
+    --green-50: #e7f6ec;
+    --amber-600: #8f5600;
+    --amber-50: #fff4e0;
+
+    /* `--ink-400` is 2.56:1 on white: disabled controls and decorative icons only, never text. */
+    --ink-900: #0f1b2d;
+    --ink-700: #34445c;
+    --ink-500: #5b6b82;
+    --ink-400: #94a3b8;
+
+    --line: #e5eaf1;
+    --line-strong: #d5dce6;
+    --bg: #f5f7fb;
+    --surface: #ffffff;
+    --surface-muted: #f8fafc;
+
+    --r-sm: 8px;
+    --r-control: 10px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
+    --shadow-md: 0 4px 16px rgba(15, 27, 45, 0.06);
+
+    --control-h: 40px;
+    --gap: 16px;
+    --sidebar-w: 256px;
+    --sidebar-w-collapsed: 72px;
+    --topbar-h: 64px;
+
+    /* One duration for every micro-interaction; zeroed under reduced motion below. */
+    --motion: 160ms;
+  }
+
+  /*
+   * DARK TOKENS — DEFINED, DELIBERATELY NOT ENABLED (owner decision 02/10/2026). Nothing in the app
+   * sets `data-theme="dark"`, and there is no `prefers-color-scheme` query: turning it on is a
+   * decision, not a side effect of a user's OS setting. Values: spec §3, measured there.
+   */
+  :root[data-theme="dark"] {
+    --bg: #0e1626;
+    --surface: #162033;
+    --surface-muted: #1a2639;
+    --line: #24314a;
+    --line-strong: #33425e;
+    --ink-900: #e6edf7;
+    --ink-700: #c3cfdf;
+    --ink-500: #aebbcc;
+    --ink-400: #8ea0b8;
+    --brand-50: #16294a;
+    --brand-100: #1d3560;
+    --brand-600: #4c8fe6;
+    --brand-700: #8db8f2;
+    color-scheme: dark;
+  }
+
+  /*
+   * The font variable, set by the class `src/app/layout.tsx` puts on `<html>`. The faces come from
+   * `@fontsource/be-vietnam-pro`, bundled and served from this app's own host: no request leaves
+   * for a font CDN, so a commune's staff page loads the same on a network that blocks Google.
+   */
+  .font-be-vietnam {
+    --font-be-vietnam: "Be Vietnam Pro";
+  }
+
+  /*
+   * Reduced motion: `!important` in an EARLY layer beats `!important` in every later one (the
+   * cascade reverses layer order for important declarations), so no utility can re-enable motion.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer legacy {
+
+/*
  * Kiểu trình bày dùng chung.
  *
  * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`: dưới 768px là bố cục một cột). Màn
@@ -9,95 +186,217 @@
  * bộ dùng hệ thống này cả ngày, trên đủ loại màn hình.
  */
 
+/* The old names now POINT AT the spec tokens (spec §3, "không tạo hệ song song"): every rule
+ * below that reads `--xanh` or `--xam-vien` follows the redesign without being edited, and there
+ * is one palette, not two. `--navy` is no longer a background anywhere — the sidebar and the
+ * login column are white — so it survives as the strong text colour it is still used for. */
 :root {
-  --navy: #0d1b34;
-  --navy-nhat: #1c2f52;
-  --xanh: #1d4ed8;
-  --xam-chu: #4b5563;
-  --xam-vien: #d1d5db;
-  --do-loi: #b42318;
-  --nen: #f5f6f8;
+  --navy: var(--ink-900);
+  --navy-nhat: var(--ink-700);
+  --navy-dam: var(--surface);
+  --xanh: var(--brand-600);
+  --xam-chu: var(--ink-500);
+  --xam-vien: var(--line-strong);
+  --do-loi: var(--red-600);
+  --nen: var(--bg);
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* `html` stays at 16px so every `rem` in this file keeps its meaning (44px targets stay 44px);
+ * only the body text drops to the spec's 14px. */
 html,
 body {
   margin: 0;
   padding: 0;
   background: var(--nen);
-  color: #111827;
-  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink-900);
+  font-family: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
 }
 
+body {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 :focus-visible {
-  outline: 3px solid var(--xanh);
+  outline: 2px solid var(--brand-500);
   outline-offset: 2px;
 }
 
 /* ---- màn đăng nhập ---------------------------------------------------------------------- */
 
+/* Spec §8.4: a very light blue gradient, the red–gold strip across the top, the brand column on
+ * the left and a 420px card on the right. Stacked below 768px (320px is the smallest width). */
 .trang-dang-nhap {
+  position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  background:
+    radial-gradient(60rem 30rem at 0% 0%, rgba(30, 123, 224, 0.1), transparent 60%),
+    linear-gradient(180deg, #eaf2fc 0%, var(--bg) 60%);
+}
+
+.trang-dang-nhap::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--red-600) 0 70%, var(--gold-500) 70%);
 }
 
 .cot-thuong-hieu {
-  background: var(--navy);
-  color: #e5e7eb;
-  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2.5rem 1.5rem 1rem;
+  color: var(--ink-900);
+}
+
+.login-brand-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .logo-vigov {
+  flex: none;
   width: 3rem;
   height: 3rem;
   border-radius: 0.75rem;
-  background: var(--navy-nhat);
-  color: #fff;
-  font-weight: 700;
+  background: var(--red-600);
+  color: var(--gold-500);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 6px 16px -6px rgba(198, 40, 40, 0.5);
+}
+
+.logo-vigov svg {
+  width: 1.625rem;
+  height: 1.625rem;
+  fill: currentColor;
+  stroke: none;
 }
 
 .ten-san-pham {
-  margin: 1rem 0 0;
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: 1.375rem;
   font-weight: 700;
-  color: #fff;
+  line-height: 1.2;
+  color: var(--ink-900);
 }
 
 .phu-de-san-pham {
-  margin: 0.25rem 0 0;
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  color: #9ca3af;
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-500);
+}
+
+.login-slogan {
+  margin: 0;
+  max-width: 32rem;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+}
+
+.login-slogan span {
+  color: var(--brand-600);
+}
+
+.login-modules {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(2, minmax(0, 15rem));
+  gap: 0.75rem;
+}
+
+.login-modules li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--ink-700);
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+
+.login-module-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+}
+
+.login-module-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.login-module-icon.tone-brand { background: var(--brand-50); color: var(--brand-600); }
+.login-module-icon.tone-amber { background: var(--amber-50); color: var(--amber-600); }
+.login-module-icon.tone-green { background: var(--green-50); color: var(--green-600); }
+.login-module-icon.tone-red { background: var(--red-50); color: var(--red-600); }
+
+.login-commune {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-commune-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.625rem;
+  background: var(--surface);
+  color: var(--red-600);
+}
+
+.login-commune-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .gach-ngang {
   border: 0;
-  border-top: 1px solid #334155;
+  border-top: 1px solid var(--line);
   margin: 1.5rem 0;
 }
 
-/* Chữ hoa là cách TRÌNH BÀY. Dữ liệu giữ nguyên tên đúng của đơn vị hành chính. */
+/* The commune's name is DATA and is shown exactly as configured — no `text-transform`. The old
+ * upper-casing was presentation, but the spec now shows the name as written. */
 .ten-xa {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #fff;
-  text-transform: uppercase;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-900);
 }
 
 .co-quan-cap-tren {
-  margin: 0.25rem 0 0;
-  font-size: 0.875rem;
-  color: #9ca3af;
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--ink-500);
 }
 
 .cot-form {
@@ -105,45 +404,145 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 1.5rem;
+  padding: 1rem 1rem 2.5rem;
 }
 
 .form-dang-nhap {
   width: 100%;
-  max-width: 24rem;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
+  max-width: 26.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  padding: 1.75rem 1.5rem;
+  box-shadow: 0 2px 4px rgba(11, 79, 168, 0.04), 0 16px 40px -8px rgba(11, 79, 168, 0.16);
 }
 
 .tieu-de-form {
-  margin: 0 0 1.25rem;
-  font-size: 1.25rem;
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
+.login-card-sub {
+  margin: 0.25rem 0 1.5rem;
+  color: var(--ink-500);
+}
+
+/* Field: label ABOVE the control, 6px apart, 12–13px/600 (spec §6.3). */
 .o-nhap {
   margin-bottom: 1rem;
 }
 
-.o-nhap label {
+.o-nhap label,
+.o-nhap legend {
   display: block;
   margin-bottom: 0.375rem;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 600;
+  color: var(--ink-700);
 }
 
-.o-nhap input {
+/* One control height (40px) and one frame for every native input, select and textarea drawn by
+ * the legacy classes — `.o-nhap` wraps most of them; a few carry the class themselves. Text stays
+ * 16px below 768px: iOS zooms the page on focus into anything smaller.
+ *
+ * ZERO SPECIFICITY (`:where`), ON PURPOSE: older contextual rules further down — 44px inputs on the
+ * password form, the staff search box — must keep winning. A frame that out-ranked them would
+ * quietly undo touch targets chosen for older staff (`skills/accessibility-elderly`). */
+:where(.o-nhap) :where(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea),
+:where(input.o-nhap, textarea.o-nhap, select.o-chon) {
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #9ca3af;
-  border-radius: 0.5rem;
+  min-height: var(--control-h);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background-color: var(--surface);
+  color: var(--ink-900);
   font-size: 1rem;
   font-family: inherit;
+  line-height: 1.4;
+  transition:
+    border-color var(--motion) ease,
+    box-shadow var(--motion) ease;
 }
 
-.o-nhap input:disabled {
-  background: #f3f4f6;
+:where(.o-nhap) :where(input, select, textarea):where(:hover:not(:disabled)),
+:where(input.o-nhap, select.o-chon):where(:hover:not(:disabled)) {
+  border-color: #c3ccd9;
+}
+
+/* Specificity 0,1,0 and later in the file than the global `:focus-visible`, so this ring replaces
+ * the outline instead of stacking a second ring on top of it. */
+:where(.o-nhap) :where(input:not([type="checkbox"], [type="radio"]), select, textarea):focus-visible,
+:where(input.o-nhap, textarea.o-nhap, select.o-chon):focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+
+:where(.o-nhap) :where(input, select, textarea):where(:disabled),
+:where(input.o-nhap, select.o-chon):where(:disabled) {
+  background: var(--surface-muted);
+  color: var(--ink-500);
+  cursor: not-allowed;
+}
+
+/* `--ink-500`, not `--ink-400`: a placeholder is text someone has to read (spec contrast table). */
+:where(.o-nhap) ::placeholder,
+:where(input.o-nhap)::placeholder {
+  color: var(--ink-500);
+  opacity: 1;
+}
+
+@media (min-width: 768px) {
+  :where(.o-nhap) :where(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea),
+  :where(input.o-nhap, textarea.o-nhap, select.o-chon) {
+    font-size: 0.875rem;
+  }
+}
+
+/* Login inputs: 46px with a leading icon (spec §8.4). The icon sits over the input's padding. */
+.login-input {
+  position: relative;
+}
+
+.login-input svg {
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  width: 1.125rem;
+  height: 1.125rem;
+  transform: translateY(-50%);
+  color: var(--ink-500);
+  pointer-events: none;
+}
+
+.form-dang-nhap .login-input input {
+  min-height: 2.875rem;
+  padding-left: 2.75rem;
+}
+
+.form-dang-nhap .nut-chinh {
+  width: 100%;
+  min-height: 2.875rem;
+  font-size: 0.9375rem;
+}
+
+.login-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  margin: 1.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--ink-500);
+}
+
+.login-trust svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--green-600);
 }
 
 /*
@@ -157,66 +556,187 @@ body {
   color: var(--do-loi);
 }
 
+/* A sentence present gets a soft frame so it reads as a message, not stray red text. The empty
+ * region keeps its bare reserved height (see above) — a framed empty box would look like a bug. */
+p.thong-bao-loi:not(:empty),
+div.thong-bao-loi:not(:empty) {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--red-200);
+  border-radius: var(--r-control);
+  background: var(--red-50);
+}
+
+/* PRIMARY BUTTON — spec §7. No longer `width: 100%`: a full-width primary button on a desktop page
+ * was the spec's issue #6. The few places that want full width (login card, the stacked search
+ * form at 320px) say so themselves. */
 .nut-chinh {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 0;
-  border-radius: 0.5rem;
-  background: var(--xanh);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--control-h);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--brand-600);
+  border-radius: var(--r-control);
+  background: var(--brand-600);
   color: #fff;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-family: inherit;
   font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(11, 79, 168, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease,
+    box-shadow var(--motion) ease,
+    transform var(--motion) ease;
+}
+
+.nut-chinh:hover:not(:disabled) {
+  background: var(--brand-700);
+  border-color: var(--brand-700);
+  box-shadow: 0 4px 12px -2px rgba(11, 79, 168, 0.3);
+}
+
+.nut-chinh:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .nut-chinh:disabled {
-  background: #6b7280;
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Sending (`aria-busy`) keeps the old "progress" cursor: the button is busy, not refused. */
+.nut-chinh[aria-busy="true"] {
   cursor: progress;
+}
+
+.nut-chinh svg,
+.nut-phu svg {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 @media (min-width: 768px) {
   .trang-dang-nhap {
     flex-direction: row;
+    align-items: stretch;
   }
 
   .cot-thuong-hieu {
-    width: 40%;
-    max-width: 26rem;
-    padding: 3rem 2.5rem;
-    display: flex;
-    flex-direction: column;
+    width: 52%;
+    padding: 3.5rem 4rem;
     justify-content: center;
+    gap: 1.75rem;
+  }
+
+  .login-slogan {
+    font-size: 2.125rem;
+  }
+
+  .login-modules {
+    display: grid;
+  }
+
+  .logo-vigov {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 0.875rem;
+  }
+
+  .ten-san-pham {
+    font-size: 1.5rem;
   }
 
   .cot-form {
-    width: 60%;
+    width: 48%;
+    padding: 2.5rem;
+  }
+
+  .form-dang-nhap {
+    padding: 2rem;
   }
 }
 
 /* ---- khung đã đăng nhập ----------------------------------------------------------------- */
 
+/* TOPBAR — spec §5. Sticky, translucent with a backdrop blur so content scrolling under it stays
+ * faintly visible; `min-width: 0` because it is a grid child (see `.khung-trang`). It wraps
+ * instead of overflowing at 320px. */
 .dau-trang {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-width: 0;
+  min-height: var(--topbar-h);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.75rem 1rem;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-  background: #fff;
-  border-bottom: 1px solid var(--xam-vien);
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom: 1px solid var(--line);
+  -webkit-backdrop-filter: saturate(1.6) blur(12px);
+  backdrop-filter: saturate(1.6) blur(12px);
 }
 
+.khoi-co-quan {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.topbar-commune-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+
+.topbar-commune-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.topbar-commune-text {
+  min-width: 0;
+}
+
+.topbar-authority-kind {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--ink-500);
+}
+
+/* The commune's name is shown exactly as configured — never upper-cased, never rebuilt. */
 .ten-co-quan {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink-900);
+  overflow-wrap: anywhere;
 }
 
 .khoi-co-quan .co-quan-cap-tren {
+  margin: 0;
   color: var(--xam-chu);
   font-size: 0.75rem;
+  line-height: 1.3;
 }
 
 /* Khối người dùng — `15-phu-luc-giao-dien-chung §3`, vùng Phải.
@@ -225,24 +745,84 @@ body {
 .khoi-nguoi-dung {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
+  gap: 0.5rem 0.75rem;
   align-items: center;
   justify-content: flex-end;
-  text-align: right;
+  margin-left: auto;
+  text-align: left;
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--line);
+}
+
+/* Avatar: initials of the signed-in person's own name (spec §7), purely decorative — the name
+ * itself sits right beside it, so the circle is `aria-hidden`. */
+.topbar-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-100), #d3e4fa);
+  color: var(--brand-700);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.topbar-user-text {
+  min-width: 0;
 }
 
 .khoi-nguoi-dung .ho-ten {
+  margin: 0;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
 }
 
 .khoi-nguoi-dung .chuc-vu {
+  margin: 0;
   color: var(--xam-chu);
   font-size: 0.75rem;
+  line-height: 1.3;
 }
 
 .khoi-dang-xuat {
   text-align: right;
+}
+
+.khoi-dang-xuat .ghi-chu {
+  max-width: 16rem;
+}
+
+/* Logout keeps its visible word from 640px up; below, the word is clipped for the eye only and
+ * stays the button's accessible name. */
+.logout-label {
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .topbar-user-text,
+  .logout-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .topbar-user {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* Chuông thông báo — `08-thong-bao §8`. Bảng mở xuống dưới, neo mép phải; ở 320px nó rộng bằng màn
@@ -259,11 +839,22 @@ body {
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: var(--navy);
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink-700);
   cursor: pointer;
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease,
+    color var(--motion) ease;
+}
+
+.nut-chuong:hover,
+.nut-chuong[aria-expanded="true"] {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-700);
 }
 
 .huy-hieu-chuong {
@@ -292,10 +883,18 @@ body {
   max-height: 70vh;
   overflow-y: auto;
   padding: 0.75rem;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 2px 4px rgba(15, 27, 45, 0.04), 0 16px 40px -8px rgba(15, 27, 45, 0.18);
+  animation: menu-in var(--motion) ease-out;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
 }
 
 .dau-bang-chuong {
@@ -358,17 +957,51 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* SECONDARY BUTTON — spec §7: white, `--line-strong` border, `--ink-700` text. 36px rather than
+ * 40px by default because it also sits in table rows and toolbars; contexts that need a 44px
+ * target already say so further down (`.o-thao-tac .nut-phu` and friends). */
 .nut-phu {
-  display: inline-block;
-  padding: 0.5rem 0.875rem;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink-700);
   font-size: 0.875rem;
   font-family: inherit;
+  font-weight: 500;
+  line-height: 1.25;
   text-decoration: none;
+  vertical-align: middle;
   cursor: pointer;
+  transition:
+    background-color var(--motion) ease,
+    border-color var(--motion) ease,
+    color var(--motion) ease,
+    box-shadow var(--motion) ease;
+}
+
+.nut-phu:hover:not(:disabled) {
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  color: var(--brand-700);
+}
+
+.nut-phu:disabled {
+  background: var(--surface-muted);
+  color: var(--ink-500);
+  cursor: not-allowed;
+}
+
+.nut-phu[aria-pressed="true"] {
+  background: var(--brand-50);
+  border-color: var(--brand-600);
+  color: var(--brand-700);
+  font-weight: 600;
 }
 
 .ghi-chu {
@@ -377,48 +1010,96 @@ body {
   color: var(--xam-chu);
 }
 
+/* Page body: spec §5 padding, a readable max width, and `min-width: 0` — a grid child without it
+ * grows to its widest table, which was the page-wide horizontal scroll (spec issue #2). */
 .than-trang,
 .trang-404 {
-  padding: 1.5rem 1rem;
+  min-width: 0;
+  padding: 1.5rem 1rem 2.5rem;
 }
 
-/* ---- thanh bên · `15-phu-luc-giao-dien-chung` §2 ----------------------------------------- */
+.than-trang {
+  width: 100%;
+  max-width: 90rem;
+}
+
+.than-trang > h1,
+.trang-404 > h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+}
+
+@media (min-width: 768px) {
+  .than-trang,
+  .trang-404 {
+    padding: 1.5rem 1.75rem 2.5rem;
+  }
+}
+
+/* ---- thanh bên · spec §5 (supersedes `15-phu-luc-giao-dien-chung` §2 on visuals) ------------ */
 
 /* KHUNG HAI CỘT dựng bằng grid trên một bọc ngoài, KHÔNG bằng `position: fixed` trên thanh bên.
    Fixed thì thân trang phải mang một `margin-left` bằng đúng chiều rộng thanh — hai con số cho
-   một sự thật, và chúng lệch nhau đúng lúc thanh đổi chiều rộng (thu gọn). Grid thì chỉ có một. */
+   một sự thật, và chúng lệch nhau đúng lúc thanh đổi chiều rộng (thu gọn). Grid thì chỉ có một.
+
+   `minmax(0, 1fr)`, NOT `1fr`: a bare `1fr` track has an automatic minimum equal to its widest
+   child, so one wide table pushed the whole page sideways (spec issue #2, measured 1135px of
+   content in a 1035px viewport). `minmax(0, …)` lets the column shrink and the table scroll inside
+   its own `.bang-cuon`. */
 .khung-trang {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Thanh bên TRẢI CẢ HAI HÀNG, nên đầu trang và thân trang ở lại làm anh em của nó thay vì phải
-   bọc thêm một tầng div. Ít một tầng DOM, và quan trọng hơn: sáu trang đang có giữ nguyên thụt
-   lề, nên diff của lần thêm menu này đọc được — nó chỉ thêm dòng, không dời cả thân trang. */
+   bọc thêm một tầng div. */
 .thanh-ben {
   grid-row: 1 / -1;
 }
 
+/* White sidebar, hairline right border, the red–gold identity strip on top (spec §5). Sticky at
+   full viewport height so the menu never scrolls away with a long page. */
 .thanh-ben {
-  width: 15rem;
-  padding: 1rem 0.75rem;
-  background: var(--navy-dam, #0f172a);
-  color: #cbd5e1;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  width: var(--sidebar-w);
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  color: var(--ink-700);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0;
+  transition: width var(--motion) ease;
+}
+
+.thanh-ben::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--red-600) 0 70%, var(--gold-500) 70%);
 }
 
 .thanh-ben.thu-gon {
-  width: 4rem;
+  width: var(--sidebar-w-collapsed);
 }
 
 /* Thu gọn ẩn CHỮ, giữ nguyên cây DOM và thứ tự tiêu điểm: `display: none` ở đây sẽ làm người
    dùng bàn phím mất hẳn đường điều hướng khi thanh đang thu, mà nút thu gọn thì vẫn ở đó. */
 .thanh-ben.thu-gon .thanh-ben-ten,
 .thanh-ben.thu-gon .thanh-ben-nhan-nhom,
+.thanh-ben.thu-gon .thanh-ben-nhan,
 .thanh-ben.thu-gon .thanh-ben-dau-chua-co {
   position: absolute;
   width: 1px;
@@ -431,56 +1112,78 @@ body {
 .thanh-ben-dinh {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1.375rem 1.25rem 1rem;
 }
 
+.thanh-ben.thu-gon .thanh-ben-dinh {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* ViGov star logo: a gold star on a flag-red tile. A simple star only — no state emblem is drawn
+   without an official file (spec §10). */
 .thanh-ben-dau {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.375rem;
-  background: #1e293b;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  background: var(--red-600);
+  color: var(--gold-500);
+  box-shadow: 0 4px 12px -4px rgba(198, 40, 40, 0.5);
+}
+
+.thanh-ben-dau svg {
+  width: 1.375rem;
+  height: 1.375rem;
+  fill: currentColor;
+  stroke: none;
 }
 
 .thanh-ben-ten {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .thanh-ben-san-pham {
-  color: #fff;
-  font-weight: 600;
+  color: var(--ink-900);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .thanh-ben-phu {
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
-  color: #94a3b8;
+  font-size: 0.75rem;
+  color: var(--ink-500);
 }
 
-.thanh-ben-nut-thu-gon {
-  margin-left: auto;
-  background: none;
-  border: 1px solid #334155;
-  border-radius: 0.375rem;
-  color: #cbd5e1;
-  font-size: 0.6875rem;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
+/* The scrolling middle: only the menu scrolls, the logo and the collapse button stay put. */
+.thanh-ben-cuon {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.75rem 0.75rem;
 }
 
+.thanh-ben-nhom + .thanh-ben-nhom {
+  margin-top: 0.5rem;
+}
+
+/* Group label: 11px/600, upper case, tracked. `--ink-500` where spec §5 says `--ink-400`: that is
+   2.56:1, and the spec's own contrast table bars it from text people read. */
 .thanh-ben-nhan-nhom {
-  margin: 0 0 0.375rem;
+  margin: 0;
+  padding: 0.875rem 0.5rem 0.375rem;
   font-size: 0.6875rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #64748b;
+  letter-spacing: 0.06em;
+  color: var(--ink-500);
 }
 
 .thanh-ben-nhom ul {
@@ -492,61 +1195,227 @@ body {
   gap: 0.125rem;
 }
 
+/* Menu item: 40px, 18px icon + 14px/500 label, 12px apart, 8px radius (spec §5). */
 .thanh-ben-muc a,
 .thanh-ben-muc > span {
-  display: block;
-  padding: 0.4375rem 0.625rem;
-  border-radius: 0.375rem;
-  color: inherit;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border-radius: var(--r-sm);
+  color: var(--ink-700);
   text-decoration: none;
   font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    background-color var(--motion) ease,
+    color var(--motion) ease,
+    box-shadow var(--motion) ease;
+}
+
+.thanh-ben.thu-gon .thanh-ben-muc a,
+.thanh-ben.thu-gon .thanh-ben-muc > span {
+  justify-content: center;
+  padding: 0;
+}
+
+.thanh-ben-muc svg {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--ink-500);
+  transition: color var(--motion) ease;
+}
+
+.thanh-ben-nhan {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .thanh-ben-muc a:hover {
-  background: #1e293b;
-  color: #fff;
+  background: var(--surface-muted);
+  color: var(--ink-900);
 }
 
+.thanh-ben-muc a:hover svg {
+  color: var(--brand-600);
+}
+
+/* Active: `--brand-50` fill, `--brand-700` text, a 3px inset bar (spec §5). The weight changes too,
+   so the active item is not told apart by colour alone. */
 .thanh-ben-muc a.dang-chon {
-  background: #1e293b;
-  color: #fff;
+  background: var(--brand-50);
+  color: var(--brand-700);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--brand-600);
+}
+
+.thanh-ben-muc a.dang-chon svg {
+  color: var(--brand-600);
 }
 
 /* MỤC CHƯA CÓ MÀN: mờ đi và KHÔNG có con trỏ bàn tay. Con trỏ bàn tay trên thứ không bấm được
-   là một lời hứa nhỏ mà mỗi lần rê chuột lại lặp lại. */
+   là một lời hứa nhỏ mà mỗi lần rê chuột lại lặp lại. The label stays `--ink-500` (still readable);
+   only the icon drops to the decorative `--ink-400`. */
 .thanh-ben-muc.chua-co > span {
-  color: #64748b;
+  color: var(--ink-500);
   cursor: default;
 }
 
-.thanh-ben-dau-chua-co {
-  display: block;
-  padding: 0 0.625rem 0.25rem;
-  font-size: 0.625rem;
-  color: #475569;
+.thanh-ben-muc.chua-co svg {
+  color: var(--ink-400);
 }
 
-/* Dưới 1024px thanh bên xếp thành một dải ngang trên cùng — `15-phu-luc` §7. */
+/* "Chưa có" badge, merged into the item itself (owner decision 02/10/2026 — never "Sắp có", which
+   would read as a promise made by a public authority). */
+.thanh-ben-dau-chua-co {
+  flex: none;
+  margin-left: auto;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  background: #f1f4f8;
+  color: var(--ink-500);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Collapse control at the BOTTOM (spec §5): icon + small word, icon only when collapsed. */
+.thanh-ben-chan {
+  flex: none;
+  padding: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.thanh-ben-nut-thu-gon {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 2.5rem;
+  margin: 0;
+  padding: 0 0.75rem;
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--ink-500);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    background-color var(--motion) ease,
+    color var(--motion) ease;
+}
+
+.thanh-ben-nut-thu-gon:hover {
+  background: var(--surface-muted);
+  color: var(--ink-900);
+}
+
+.thanh-ben-nut-thu-gon svg {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.thanh-ben.thu-gon .thanh-ben-nut-thu-gon {
+  justify-content: center;
+  padding: 0;
+}
+
+/* Dưới 1024px thanh bên xếp thành một dải ngang trên cùng — `15-phu-luc` §7. Same items, same
+   order: the groups lay out in one row that scrolls INSIDE the bar, so the page itself never
+   scrolls sideways. Collapsing means nothing here, so its control is not drawn. */
 @media (max-width: 1023px) {
   .khung-trang {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .thanh-ben,
   .thanh-ben.thu-gon {
+    position: relative;
     width: auto;
+    height: auto;
+    min-width: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .thanh-ben-dinh,
+  .thanh-ben.thu-gon .thanh-ben-dinh {
+    justify-content: flex-start;
+    padding: 0.875rem 1rem 0.5rem;
+  }
+
+  .thanh-ben-cuon {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0.75rem 0.625rem;
+    scrollbar-width: thin;
+  }
+
+  .thanh-ben-nhom + .thanh-ben-nhom {
+    margin-top: 0;
+  }
+
+  .thanh-ben-nhan-nhom {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .thanh-ben-nhom ul {
     flex-direction: row;
-    flex-wrap: wrap;
+  }
+
+  .thanh-ben-muc a,
+  .thanh-ben-muc > span,
+  .thanh-ben.thu-gon .thanh-ben-muc a,
+  .thanh-ben.thu-gon .thanh-ben-muc > span {
+    justify-content: flex-start;
+    padding: 0 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* A collapsed choice saved on a wide screen must not hide labels on a narrow one. */
+  .thanh-ben.thu-gon .thanh-ben-ten,
+  .thanh-ben.thu-gon .thanh-ben-nhan,
+  .thanh-ben.thu-gon .thanh-ben-dau-chua-co {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .thanh-ben-muc a.dang-chon {
+    box-shadow: inset 0 -2px 0 var(--brand-600);
+  }
+
+  .thanh-ben-chan {
+    display: none;
+  }
+
+  .dau-trang {
+    position: relative;
   }
 }
 
 /* ---- màn cấu hình · tab Người dùng ------------------------------------------------------ */
 
 .mo-ta-trang {
-  margin: 0.25rem 0 1.5rem;
+  margin: 0.25rem 0 1.25rem;
+  max-width: 60rem;
+  font-size: 0.8125rem;
   color: var(--xam-chu);
 }
 
@@ -590,11 +1459,15 @@ body {
  * thẻ — nhưng đổi `display` của `table`/`tr`/`td` làm mất ngữ nghĩa bảng với trình đọc màn hình,
  * và đây đúng là dữ liệu dạng bảng. Nên vùng bảng cuộn ngang, và vùng cuộn ấy tới được bằng bàn
  * phím (`tabindex` + `role="region"` trong danh-ba-can-bo.tsx). */
+/* The table's own scroller, framed as a card (spec §6.7): ONLY the table scrolls, never the page.
+ * `max-width: 100%` keeps it inside its column even inside a flex or grid parent. */
 .bang-cuon {
+  max-width: 100%;
   overflow-x: auto;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .bang-can-bo {
@@ -603,21 +1476,35 @@ body {
   font-size: 0.875rem;
 }
 
+/* Cells: 12px 16px, vertically centred, figures in tabular digits so phone numbers and amounts
+ * line up column by column (spec §6.7). */
 .bang-can-bo th,
 .bang-can-bo td {
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
-  border-bottom: 1px solid var(--xam-vien);
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
 
+/* Column headers: sentence case 12px/600 on `#F8FAFC` — no more ALL-CAPS headers (spec §3). */
 .bang-can-bo thead th {
-  background: var(--nen);
+  padding-block: 0.625rem;
+  background: var(--surface-muted);
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
   color: var(--xam-chu);
+}
+
+.bang-can-bo tbody tr,
+.bang-danh-muc tbody tr {
+  transition: background-color var(--motion) ease;
+}
+
+.bang-can-bo tbody tr:hover,
+.bang-danh-muc tbody tr:hover {
+  background: var(--brand-50);
 }
 
 .bang-can-bo tbody tr:last-child td {
@@ -661,50 +1548,71 @@ body {
   color: var(--do-loi);
 }
 
+/* Status pill: 24px, fully rounded, 12px/600, never wraps mid-word (spec §7). Status colours are
+ * reserved for status and the WORD inside always carries the meaning (a11y §8). */
 .chip {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-height: 1.5rem;
+  padding: 0.125rem 0.625rem;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.chip svg {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .chip-hoat-dong {
-  background: #dcfce7;
-  color: #14532d;
+  background: var(--green-50);
+  color: var(--green-600);
 }
 
 .chip-ngung {
-  background: #f3f4f6;
-  color: #374151;
+  background: #f1f4f8;
+  color: var(--ink-500);
 }
 
+/* Empty state: a quiet framed line, not an alarm. Screens that adopt `EmptyState` get the icon
+ * version; this keeps the 77 existing sentences readable without touching their markup. */
 .trang-thai-rong {
   margin: 1rem 0;
   padding: 1.25rem 1rem;
-  background: #fff;
-  border: 1px dashed var(--xam-vien);
-  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
   color: var(--xam-chu);
 }
 
+/* Pagination: right-aligned, as at the foot of the spec's table cards. */
 .dieu-huong-trang {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
   margin: 1rem 0;
 }
 
 .dieu-huong-trang .nut-phu:disabled {
-  color: #9ca3af;
+  color: var(--ink-400);
+  background: var(--surface-muted);
   cursor: not-allowed;
 }
 
+/* Detail block = the spec's card: white, hairline border, 16px radius, soft shadow. */
 .khoi-chi-tiet {
   margin: 1rem 0;
   padding: 1rem;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .dau-khoi-chi-tiet {
@@ -717,7 +1625,8 @@ body {
 
 .dau-khoi-chi-tiet h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .danh-sach-truong {
@@ -729,8 +1638,7 @@ body {
 
 .danh-sach-truong dt {
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
   color: var(--xam-chu);
 }
 
@@ -794,7 +1702,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--nen);
+  background: var(--surface-muted);
   font-size: 0.75rem;
   color: var(--xam-chu);
 }
@@ -934,31 +1842,45 @@ body {
  * `flex-wrap`: ở 320px sáu nhãn xuống hai-ba hàng thay vì tràn ngang. Nút cao tối thiểu 44px để
  * bấm được bằng ngón tay. Tab đang chọn khác tab thường ở CẢ chữ đậm, nền lẫn gạch dưới — không
  * dựa vào màu riêng lẻ (`15-phu-luc §8`). */
+/* Underline tabs (spec §7): 14px/500, a 2px `--brand-600` underline on the selected tab, which is
+ * ALSO bolder and darker — never colour alone. */
 .thanh-tab-cau-hinh {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-top: 1.5rem;
-  border-bottom: 1px solid var(--xam-vien);
+  border-bottom: 1px solid var(--line);
 }
 
 .thanh-tab-cau-hinh [role="tab"] {
   font: inherit;
   min-height: 44px;
+  margin-bottom: -1px;
   padding: 0.5rem 0.875rem;
   border: 0;
-  border-bottom: 3px solid transparent;
-  border-radius: 0.375rem 0.375rem 0 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
   background: transparent;
   color: var(--xam-chu);
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
+  transition:
+    color var(--motion) ease,
+    background-color var(--motion) ease,
+    border-color var(--motion) ease;
+}
+
+.thanh-tab-cau-hinh [role="tab"]:hover {
+  color: var(--ink-900);
+  background: var(--surface-muted);
 }
 
 .thanh-tab-cau-hinh [role="tab"][aria-selected="true"] {
-  font-weight: 700;
-  color: #111827;
-  background: #e8eefc;
-  border-bottom-color: var(--xanh);
+  font-weight: 600;
+  color: var(--brand-700);
+  background: transparent;
+  border-bottom-color: var(--brand-600);
 }
 
 /* Mỗi phần tự đặt `margin-top: 2.5rem` từ thời còn dựng nối tiếp; ngay dưới thanh tab thì bớt đi. */
@@ -995,10 +1917,11 @@ body {
   align-items: center;
   gap: 0.5rem 1rem;
   margin: 0.5rem 0;
-  padding: 0.75rem;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
-  background: #fff;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .the-bo-phan-than {
@@ -1029,7 +1952,7 @@ body {
 .form-bo-phan select {
   width: 100%;
   padding: 0.625rem 0.75rem;
-  border: 1px solid #9ca3af;
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   font-size: 1rem;
   font-family: inherit;
@@ -1071,18 +1994,19 @@ body {
 
 .bang-danh-muc th,
 .bang-danh-muc td {
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
-  border-bottom: 1px solid var(--xam-vien);
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
 
 .bang-danh-muc thead th {
-  background: var(--nen);
+  padding-block: 0.625rem;
+  background: var(--surface-muted);
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
   color: var(--xam-chu);
 }
 
@@ -1125,19 +2049,21 @@ body {
 .canh-bao-pham-vi {
   margin: 0.75rem 0;
   padding: 0.75rem 1rem;
-  background: var(--nen);
-  border-left: 4px solid var(--xam-chu);
-  border-radius: 0.25rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--ink-500);
+  border-radius: var(--r-md);
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--ink-900);
 }
 
 /* Hàng lọc xếp DỌC ở bề rộng nhỏ nhất (320px) và nằm ngang từ 768px — `15-phu-luc §7`. Không
- * dùng `white-space: nowrap`: nhãn "Năm ngân sách" cạnh ô chọn phải xuống dòng được. */
+ * dùng `white-space: nowrap`: nhãn "Năm ngân sách" cạnh ô chọn phải xuống dòng được.
+ * From 768px the controls align on their BOTTOM edge (spec §6.4), so a wrapped row still lines up. */
 .hang-loc {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem 1.5rem;
+  gap: 0.75rem 1rem;
   margin: 1rem 0;
 }
 
@@ -1145,30 +2071,54 @@ body {
   .hang-loc {
     flex-direction: row;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: flex-end;
   }
 }
 
+/* Label ABOVE the select, 6px apart (spec §6.3) — the markup already has a `<label>` beside the
+ * `<select>`; a column flex is all it takes, and the space text node between them collapses. */
 .chon-nam,
 .chon-hang-muc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
   margin: 0.5rem 0;
   font-size: 0.875rem;
 }
 
+.hang-loc .chon-nam,
+.hang-loc .chon-hang-muc {
+  margin: 0;
+}
+
 .chon-nam label,
 .chon-hang-muc label {
-  color: var(--xam-chu);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-700);
 }
 
 .chon-nam select,
 .chon-hang-muc select {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.375rem;
-  background: #fff;
+  min-width: 10rem;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background-color: var(--surface);
+  color: var(--ink-900);
   font: inherit;
   /* Ô chạm tối thiểu: dưới mức này thì trên điện thoại phải bấm hai ba lần mới trúng. */
-  min-height: 2.25rem;
+  min-height: var(--control-h);
+  cursor: pointer;
+}
+
+.chon-nam select:focus-visible,
+.chon-hang-muc select:focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
 }
 
 /* Chip "Chậm N điểm". Đỏ, VÀ chữ đã nói rõ — màu không bao giờ là tín hiệu duy nhất (a11y §8). */
@@ -1227,16 +2177,48 @@ body {
 .khoi-chua-khai {
   margin: 1rem 0 1.5rem;
   padding: 1rem;
-  background: #fef3f2;
-  border: 1px solid var(--do-loi);
-  border-left: 6px solid var(--do-loi);
-  border-radius: 0.5rem;
+  background: var(--red-50);
+  border: 1px solid var(--red-200);
+  border-left: 4px solid var(--do-loi);
+  border-radius: var(--r-md);
 }
 
 .khoi-chua-khai h3 {
   margin: 0 0 0.5rem;
-  font-size: 1.0625rem;
+  font-size: 1rem;
   color: var(--do-loi);
+}
+
+/* "PARTS NOT BUILT YET" BLOCKS ARE NOT ALARMS (spec §8.1, owner decision 02/10/2026). The same class
+ * also frames two real alarms — the deadline tab's "this commune receives nothing" and the mail tab's
+ * missing encryption, both `role="alert"` — and those stay red above. The disclosure (`<details>`)
+ * and the Danh bạ `<aside>` list what this screen does not do yet: collapsed, dashed, neutral grey.
+ * Red is kept for something actually wrong; a false alarm on every screen teaches staff to ignore red. */
+details.khoi-chua-khai,
+aside.khoi-chua-khai {
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  border-left: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  color: var(--ink-500);
+  font-size: 0.8125rem;
+}
+
+details.khoi-chua-khai > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-700);
+  list-style-position: inside;
+}
+
+details.khoi-chua-khai[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+aside.khoi-chua-khai h3 {
+  font-size: 0.875rem;
+  color: var(--ink-700);
 }
 
 /* Câu hậu quả KHÔNG nhỏ hơn chữ thường và không xám: nó là câu quan trọng nhất màn hình, và một
@@ -1383,6 +2365,12 @@ body {
 /* Nút Xoá KHÔNG chỉ khác màu — chữ trong nút đã nói "Xoá". Màu chỉ là dấu hiệu thứ hai, để
  * người không phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
 .nut-xoa {
+  border-color: var(--red-200);
+  color: var(--do-loi);
+}
+
+.nut-xoa:hover:not(:disabled) {
+  background: var(--red-50);
   border-color: var(--do-loi);
   color: var(--do-loi);
 }
@@ -1393,10 +2381,10 @@ body {
 .form-danh-muc {
   margin: 1rem 0;
   padding: 1rem;
-  border: 1px solid var(--xam-vien);
+  border: 1px solid var(--line);
   border-left: 4px solid var(--xanh);
-  border-radius: 0.5rem;
-  background: var(--nen);
+  border-radius: var(--r-md);
+  background: var(--surface-muted);
 }
 
 .form-danh-muc h4 {
@@ -1435,9 +2423,10 @@ body {
   max-width: 28rem;
   margin: 0;
   padding: 1.25rem;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 /* VÙNG CHẠM TỐI THIỂU — cùng ngưỡng và cùng lý do với `.o-thao-tac .nut-phu` ở trên: cán bộ lớn
@@ -1465,10 +2454,10 @@ body {
   max-width: 28rem;
   margin: 0 0 1rem;
   padding: 0.875rem 1rem;
-  background: #fff;
-  border: 1px solid var(--xam-vien);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
   border-left: 4px solid var(--xanh);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
 }
 
 @media (min-width: 480px) {
@@ -1638,7 +2627,7 @@ body {
   max-height: 18rem;
   overflow-y: auto;
   background: #fff;
-  border: 1px solid #9ca3af;
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
 }
 
@@ -1748,7 +2737,7 @@ body {
 .rich-text-area {
   min-height: 12rem;
   padding: 0.625rem 0.75rem;
-  border: 1px solid #9ca3af;
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   background: #fff;
   font-size: 1rem;
@@ -1857,15 +2846,18 @@ body {
   margin: auto;
   padding: 1rem;
   overflow-y: auto;
-  border: 1px solid var(--xam-vien);
-  border-radius: 0.5rem;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
   color: inherit;
   overflow-wrap: anywhere;
+  box-shadow: 0 24px 64px -12px rgba(15, 27, 45, 0.35);
 }
 
 .overlay-dialog::backdrop {
-  background: rgb(17 24 39 / 55%);
+  background: rgb(15 27 45 / 50%);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
 }
 
 /* The form inside already draws its frame; inside the overlay it must not draw a second one. */
@@ -1933,3 +2925,5 @@ body {
   height: auto;
   margin: 0.5rem 0;
 }
+
+} /* end @layer legacy */

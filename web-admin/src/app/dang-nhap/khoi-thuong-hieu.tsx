@@ -1,31 +1,70 @@
 "use client";
 
+import { Banknote, Landmark, ListChecks, Mail, MessageSquareWarning, Star, type LucideIcon } from "lucide-react";
+
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 
 /**
- * Nền trái của màn đăng nhập: khối thương hiệu ViGov + tên xã (§1).
+ * Cột thương hiệu của màn đăng nhập — spec giao diện 02/10/2026 §8.4: logo, khẩu hiệu ngắn, bốn ô
+ * phân hệ, tên xã.
  *
- * `ViGov` và `ĐIỀU HÀNH SỐ CẤP XÃ` là hằng số của sản phẩm — viết thẳng được. Tên xã và cơ quan
- * cấp trên thì KHÔNG: chúng đi xuống qua ngữ cảnh do máy chủ dựng, đọc lúc chạy từ `Host`. Đây
- * chính là chỗ một `NEXT_PUBLIC_TEN_XA` sẽ len vào nếu không ai để ý — và một bundle không mang
- * nổi tên của 300 xã, nên nó sẽ kéo theo mỗi xã một bản dựng riêng.
+ * `ViGov`, khẩu hiệu và bốn tên phân hệ là hằng số của SẢN PHẨM — viết thẳng được, giống nhau ở
+ * mọi xã. Tên xã và cơ quan cấp trên thì KHÔNG: chúng đi xuống qua ngữ cảnh do máy chủ dựng, đọc
+ * lúc chạy từ `Host`. Đây chính là chỗ một `NEXT_PUBLIC_TEN_XA` sẽ len vào nếu không ai để ý — và
+ * một bundle không mang nổi tên của 300 xã, nên nó sẽ kéo theo mỗi xã một bản dựng riêng.
  *
- * Tên xã viết HOA bằng CSS (`text-transform`), không viết HOA trong dữ liệu: chữ hoa là cách
- * trình bày, còn tên đúng của đơn vị hành chính là dữ liệu — và còn dùng ở chỗ khác.
+ * Tên xã in NGUYÊN VĂN, không viết HOA, không ghép tiền tố: tên đúng của đơn vị hành chính là dữ
+ * liệu do xã khai.
+ *
+ * Bốn ô phân hệ chỉ là hình minh hoạ, KHÔNG phải liên kết: người chưa đăng nhập không vào được
+ * phân hệ nào, và một ô trông như bấm được mà không dẫn đi đâu là một lời hứa suông.
  */
+const MODULES: readonly { label: string; Icon: LucideIcon; tone: string }[] = [
+  { label: "Nhiệm vụ", Icon: ListChecks, tone: "tone-brand" },
+  { label: "Văn bản & Đơn thư", Icon: Mail, tone: "tone-amber" },
+  { label: "Ngân sách", Icon: Banknote, tone: "tone-green" },
+  { label: "Phản ánh người dân", Icon: MessageSquareWarning, tone: "tone-red" },
+];
+
 export function KhoiThuongHieu() {
   const xa = useCauHinhXa();
 
   return (
     <section className="cot-thuong-hieu">
-      <div className="logo-vigov" aria-hidden="true">
-        VG
+      <div className="login-brand-head">
+        <div className="logo-vigov" aria-hidden="true">
+          <Star focusable="false" />
+        </div>
+        <div>
+          <p className="ten-san-pham">ViGov</p>
+          <p className="phu-de-san-pham">Điều hành số cấp xã</p>
+        </div>
       </div>
-      <p className="ten-san-pham">ViGov</p>
-      <p className="phu-de-san-pham">ĐIỀU HÀNH SỐ CẤP XÃ</p>
-      <hr className="gach-ngang" />
-      <p className="ten-xa">{xa.displayName}</p>
-      <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
+
+      <p className="login-slogan">
+        Điều hành <span>thông suốt</span>, phục vụ người dân <span>kịp thời</span>
+      </p>
+
+      <ul className="login-modules" aria-label="Các phân hệ">
+        {MODULES.map(({ label, Icon, tone }) => (
+          <li key={label}>
+            <span className={`login-module-icon ${tone}`} aria-hidden="true">
+              <Icon focusable="false" strokeWidth={1.8} />
+            </span>
+            {label}
+          </li>
+        ))}
+      </ul>
+
+      <div className="login-commune">
+        <span className="login-commune-icon" aria-hidden="true">
+          <Landmark focusable="false" strokeWidth={1.8} />
+        </span>
+        <div>
+          <p className="ten-xa">{xa.displayName}</p>
+          <p className="co-quan-cap-tren">{xa.parentAuthority}</p>
+        </div>
+      </div>
     </section>
   );
 }
