@@ -27,7 +27,7 @@ export const DIA_DIEM_TOI_DA = 300;
 export const NOI_DUNG_BIEN_BAN_TOI_DA = 50000;
 export const NOI_DUNG_KET_LUAN_TOI_DA = 5000;
 /** Bao nhiêu kết luận MỘT LẦN NHẬP mang được. Không phải trần của cả biên bản — thêm tiếp bằng
- *  hàng `+ Thêm kết luận` ở cuối thẻ, và tuyến ấy không bị đếm vào đây. */
+ *  hàng `Thêm kết luận` ở cuối thẻ, và tuyến ấy không bị đếm vào đây. */
 export const KET_LUAN_MOI_LAN_TOI_DA = 50;
 export const THANH_PHAN_MOT_DONG_TOI_DA = 200;
 export const THANH_PHAN_TOI_DA = 200;
@@ -45,8 +45,9 @@ export const MO_TA_MAN =
   "Nhập một biên bản, tách thành nhiều nhiệm vụ. Mỗi nhiệm vụ giữ liên kết ngược về kết luận gốc " +
   "để truy vết được về sau.";
 
-export const NHAN_NUT_NHAP_BIEN_BAN = "+ Nhập biên bản";
-export const NHAN_NUT_THEM_KET_LUAN = "+ Thêm kết luận";
+// The leading "+" of the spec's drawing is a `Plus` icon now (ADR 0068 §2); the words are unchanged.
+export const NHAN_NUT_NHAP_BIEN_BAN = "Nhập biên bản";
+export const NHAN_NUT_THEM_KET_LUAN = "Thêm kết luận";
 /** §2 — nguyên văn placeholder của hàng thêm kết luận. */
 export const PLACEHOLDER_KET_LUAN = "Nhập một kết luận của cuộc họp…";
 
@@ -67,13 +68,14 @@ export const DANG_TAI_SO = "Đang tải danh sách biên bản…";
 export const CHUA_TACH_NHIEM_VU = "Chưa tách thành nhiệm vụ nào";
 
 /**
- * Nút `✂ Tách thành nhiệm vụ` (§2, §3) — nguyên văn nhãn đặc tả vẽ.
+ * Nút `Tách thành nhiệm vụ` (§2, §3) — nguyên văn nhãn đặc tả vẽ; dấu kéo `✂` của bản vẽ nay là icon
+ * `Scissors` (ADR 0068 §2), không còn là ký tự trong nhãn.
  *
  * TỪ 24/09/2026 ĐÂY LÀ MỘT NÚT THẬT. Trước đó chỗ này là một dòng chữ `CHO_NUT_TACH` nói rằng màn
  * chưa dựng, vì biểu mẫu "Giao việc mới" của `02-nhiem-vu.md` §7 chưa có; nay nó có và được dùng
  * lại nguyên bản. Phần §3 CÒN THIẾU là điền sẵn — xem `PHAN_CHUA_DUNG`.
  */
-export const NHAN_NUT_TACH = "✂ Tách thành nhiệm vụ";
+export const NHAN_NUT_TACH = "Tách thành nhiệm vụ";
 
 /**
  * Tên đọc được của nút Tách, mang SỐ THỨ TỰ CỦA KẾT LUẬN.
@@ -88,7 +90,7 @@ export const NHAN_NUT_TACH = "✂ Tách thành nhiệm vụ";
  *
  * MỞ ĐẦU BẰNG ĐÚNG CHỮ HIỆN TRÊN NÚT, không phải một câu viết lại: tên đọc được của một nút phải
  * CHỨA nhãn nhìn thấy được, nếu không thì người điều khiển bằng giọng nói đọc đúng chữ trên màn mà
- * không bấm được nút ấy (WCAG 2.5.3). Chỉ dấu kéo `✂` là trang trí nên không vào tên.
+ * không bấm được nút ấy (WCAG 2.5.3). Icon kéo là trang trí nên không vào tên.
  */
 export function nhanNutTach(kl: petitions_ketLuanRa): string {
   return `Tách thành nhiệm vụ — kết luận số ${soThuTuKetLuan(kl)}`;
@@ -669,7 +671,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "HẠN GỢI Ý của biểu mẫu Tách (§3) — nút và điền sẵn thì đã dựng",
     viSao:
-      "Nút `✂ Tách thành nhiệm vụ` đã có, mở đúng biểu mẫu “Giao việc mới” của `02-nhiem-vu.md` " +
+      "Nút `Tách thành nhiệm vụ` đã có, mở đúng biểu mẫu “Giao việc mới” của `02-nhiem-vu.md` " +
       "§7 (dùng lại nguyên `FormGiaoViec`, không bản thứ hai), và ô “Nội dung nhiệm vụ” NAY ĐÃ " +
       "ĐIỀN SẴN nội dung kết luận. Thứ còn thiếu là HẠN GỢI Ý: §3 muốn đọc ngày từ chính câu kết " +
       "luận (`báo cáo trước ngày 20/8` → 20/8). Đây KHÔNG phải một việc chưa tới lượt mà là một " +
@@ -698,14 +700,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn một lần bấm.",
   },
   {
-    ten: "Lớp CSS riêng cho thẻ biên bản và ô tròn số thứ tự (§2)",
+    ten: "Biểu mẫu dạng hộp thoại nổi (modal) (§2, §4)",
     viSao:
-      "`globals.css` chưa có lớp nào cho danh sách thẻ, cho ô tròn xanh nhạt của số thứ tự, hay " +
-      "cho một lớp phủ modal, và lượt này không được thêm CSS. Màn dùng lại các lớp sẵn có " +
-      "(`khoi-chi-tiet`, `chip`), còn các biểu mẫu — Nhập/Sửa biên bản §4, Giao việc §3, hộp Ký, " +
-      "Thông báo kết luận, Gỡ — và khung Xem biên bản đều dựng NỐI TIẾP trong trang thay vì làm lớp " +
-      "phủ như chữ “modal” của đặc tả. " +
-      "Mượn một lớp của thứ khác cho đúng hình hôm nay sẽ lệch hẳn vào ngày lớp ấy đổi vì cái nó " +
-      "thật sự phục vụ; tên lớp cần thêm đã báo về.",
+      "Đặc tả vẽ các biểu mẫu — Nhập/Sửa biên bản §4, Giao việc §3, hộp Ký, Thông báo kết luận, " +
+      "Gỡ — và khung Xem biên bản dưới dạng lớp phủ modal. Màn dựng chúng NỐI TIẾP trong trang, " +
+      "ngay dưới thẻ hay dòng kết luận đang thao tác: một hộp nổi phải tự lo bẫy tiêu điểm, phím " +
+      "Esc và cuộn nền, còn một khối trong luồng thì không che mất biên bản cán bộ đang đối chiếu.",
   },
 ];

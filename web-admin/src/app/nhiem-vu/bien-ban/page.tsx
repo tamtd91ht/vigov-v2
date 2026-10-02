@@ -3,7 +3,6 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { SoBienBan } from "@/features/bien-ban/so-bien-ban";
-import { MO_TA_MAN, TIEU_DE_MAN } from "@/features/bien-ban/nhan-bien-ban";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
@@ -45,8 +44,9 @@ export default async function TrangBienBanHop() {
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>{TIEU_DE_MAN}</h1>
-            <p className="mo-ta-trang">{MO_TA_MAN}</p>
+            {/* The page header (`<h1>` = `TIEU_DE_MAN`, subtitle = `MO_TA_MAN`, the `Nhập biên bản`
+                button) is drawn by `SoBienBan`: the button sits on the title row (spec §5) and the
+                state it toggles — which form is open — lives in that component. */}
             <SoBienBan />
           </main>
         </div>

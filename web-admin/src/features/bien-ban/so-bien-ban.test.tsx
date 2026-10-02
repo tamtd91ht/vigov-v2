@@ -67,6 +67,30 @@ function nhuTrongHTML(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
+/**
+ * The ordinal tile of a conclusion, as it sits in the HTML: a `<span>` whose classes include the
+ * stable hook `conclusion-ordinal`, holding exactly the number.
+ *
+ * PRESENTATIONAL PIN, re-pinned for ADR 0068: it was `<span class="chip">N</span>` before the
+ * restyle. What it guards is unchanged — WHICH numbers are drawn — so the regex matches the hook
+ * class only, not the utility classes beside it, which are look.
+ */
+function ordinalTile(n: number): RegExp {
+  return new RegExp(`<span class="(?:[^"]* )?conclusion-ordinal(?: [^"]*)?">${n}</span>`);
+}
+
+/**
+ * The class list of the status pill whose word is `word` (the `<span>` that directly holds an icon
+ * and then that word). PRESENTATIONAL PIN for ADR 0068: was `<span class="chip chip-cham">…`.
+ */
+function pillClassOf(html: string, word: string): string {
+  const end = html.indexOf(`</svg>${word}</span>`);
+  if (end < 0) return "";
+  const open = '<span class="';
+  const start = html.lastIndexOf(open, end) + open.length;
+  return html.slice(start, html.indexOf('"', start));
+}
+
 function ketLuan(sua: Partial<petitions_ketLuanRa> = {}): petitions_ketLuanRa {
   return {
     id: "01JKL1",
@@ -249,19 +273,19 @@ describe("SỐ THỨ TỰ KẾT LUẬN — nối tiếp số đã cấp, không 
   it("vẽ ①③④ đúng như máy chủ trả, KHÔNG vẽ ①②③", () => {
     const html = veThe(CO_KHOANG_TRONG);
 
-    // Số nằm trong một `<span class="chip">`, nên so cả thẻ bao quanh: một phép `toContain("3")`
+    // Số nằm trong ô tròn `conclusion-ordinal`, nên so cả thẻ bao quanh: một phép `toContain("3")`
     // trần sẽ xanh nhờ bất kỳ con số nào khác trên thẻ — kể cả `1/3 nhiệm vụ xong`.
-    expect(html).toContain('<span class="chip">1</span>');
-    expect(html).toContain('<span class="chip">3</span>');
-    expect(html).toContain('<span class="chip">4</span>');
-    expect(html).not.toContain('<span class="chip">2</span>');
+    expect(html).toMatch(ordinalTile(1));
+    expect(html).toMatch(ordinalTile(3));
+    expect(html).toMatch(ordinalTile(4));
+    expect(html).not.toMatch(ordinalTile(2));
   });
 
   it("nội dung đi CÙNG đúng con số của nó, không lệch một dòng", () => {
     const html = veDong(ketLuan({ ordinal: 4 }));
 
-    expect(html).toContain('<span class="chip">4</span>');
-    expect(html).not.toContain('<span class="chip">1</span>');
+    expect(html).toMatch(ordinalTile(4));
+    expect(html).not.toMatch(ordinalTile(1));
   });
 
   it("dòng phụ nói `Chưa tách thành nhiệm vụ nào` khi chưa có nhiệm vụ nào", () => {
@@ -298,7 +322,7 @@ describe("SỐ THỨ TỰ KẾT LUẬN — nối tiếp số đã cấp, không 
  * Biểu mẫu nay đã có và được dùng lại nguyên bản, nên hành vi đổi và ca kiểm đổi theo — KHÔNG gỡ
  * đi: mỗi điều ca cũ canh đều có một ca mới canh điều tương ứng ở hành vi mới.
  */
-describe("nút `✂ Tách thành nhiệm vụ` §3", () => {
+describe("nút `Tách thành nhiệm vụ` §3", () => {
   it("chỗ ấy NAY LÀ MỘT NÚT THẬT, mang đúng nhãn đặc tả vẽ", () => {
     const html = veDong(ketLuan());
 
@@ -630,7 +654,12 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
       vongDoi({ hop: { dich: "01JBB1", loai: "xoa" } }),
     );
     expect(html).toContain("Lý do gỡ biên bản *");
-    expect(html).toContain('<button type="submit" class="nut-xoa" disabled="">');
+    // PRESENTATIONAL PIN re-pinned for ADR 0068 (was `<button type="submit" class="nut-xoa"
+    // disabled="">`): the submit is still the red removal button, and still disabled.
+    const submitStart = html.indexOf('<button type="submit"');
+    const submitTag = html.slice(submitStart, html.indexOf(">", submitStart));
+    expect(submitTag).toContain("nut-xoa");
+    expect(submitTag).toContain('disabled=""');
   });
 
   it("câu lỗi vòng đời của MỘT biên bản chỉ hiện trên thẻ ấy", () => {
@@ -727,8 +756,11 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
     expect(
       veDong(ketLuan({ status: "hoan-thanh", task_count: 1, task_done_count: 1 })),
     ).toContain(">Hoàn thành<");
-    expect(veDong(ketLuan({ status: "qua-han", task_count: 1 }))).toContain(
-      '<span class="chip chip-cham">Quá hạn</span>',
+    // Quá hạn là huy hiệu ĐỎ (tông `danger`) — và chữ đã nói rõ, màu không là tín hiệu duy nhất.
+    const overdue = veDong(ketLuan({ status: "qua-han", task_count: 1 }));
+    expect(pillClassOf(overdue, "Quá hạn")).toContain("text-danger-600");
+    expect(pillClassOf(veDong(ketLuan({ status: "chua-giao" })), "Chưa giao")).not.toContain(
+      "text-danger-600",
     );
   });
 

@@ -1,6 +1,31 @@
 "use client";
 
 import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleMinus,
+  CloudOff,
+  Construction,
+  Eye,
+  FilePlus2,
+  ListChecks,
+  LoaderCircle,
+  LockKeyhole,
+  NotebookPen,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Scissors,
+  Signature,
+  Stamp,
+  Trash2,
+  Undo2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
   useEffect,
   useRef,
   useState,
@@ -10,6 +35,21 @@ import {
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
+import {
+  Button,
+  buttonVariants,
+  LEGACY_BUTTON_CLASS,
+  type ButtonVariant,
+} from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { Glyph, LoadingBar, TaskStatusBadge } from "@/features/nhiem-vu/task-ui";
+import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -79,9 +119,8 @@ import {
   KET_LUAN_MOI_LAN_TOI_DA,
   KHONG_GHI_CAN_BO,
   laDaKy,
-  lopChipBienBan,
-  lopChipKetLuan,
   LY_DO_XOA_TOI_DA,
+  MO_TA_MAN,
   neoBienBan,
   NGUON_GIAO_KHOA,
   NHAN_NUT_BO_DAU,
@@ -127,9 +166,16 @@ import {
   thanSuaTuBieuMau,
   thanTaoTuBieuMau,
   thanThongBao,
+  TIEU_DE_MAN,
   type GiaTriBieuMau,
   type QuyTacNut,
 } from "./nhan-bien-ban";
+import {
+  ConclusionOrdinal,
+  ConclusionStatusBadge,
+  MeetingCardsSkeleton,
+  MeetingStatusBadge,
+} from "./meeting-ui";
 
 /**
  * Sổ Biên bản và kết luận họp — `docs/ui-ux/04-bien-ban-hop.md` §2 (thẻ), §3 (tách), §4 (biểu
@@ -602,28 +648,47 @@ export function SoBienBan() {
   const chiTietNgoaiTrang =
     chiTiet !== null && so.pha === "xong" && !so.duLieu.items.some((bb) => bb.id === chiTiet.id);
   const moNhapMoi = bieuMau?.loai === "tao" && bieuMau.boSungCho === null;
+  // The previous page, while a re-read is in flight (after every write `docLai` bumps the key): drawn
+  // dimmed and `inert` in its own subtree, never acted on. It is a DIFFERENT subtree from the fresh
+  // list, so the fresh list mounts anew exactly as it did when the old screen showed only a sentence.
+  const sanCu =
+    so.pha === "dangTai" && daTai !== null && daTai.kq.ok && daTai.kq.duLieu.items.length > 0
+      ? daTai.kq.duLieu.items
+      : null;
 
   return (
-    <section className="man-bien-ban" aria-labelledby="tieu-de-so-bien-ban">
-      <h2 id="tieu-de-so-bien-ban">Danh sách biên bản</h2>
+    <>
+      {/* The `<h1>` moved here from `page.tsx`: the primary button sits on the title row (spec §5)
+          and its state — which form is open — lives in this component. */}
+      <PageHeader
+        icon={NotebookPen}
+        title={TIEU_DE_MAN}
+        subtitle={<span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_MAN}</span>}
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            icon={<Glyph icon={moNhapMoi ? X : Plus} />}
+            aria-expanded={moNhapMoi}
+            onClick={() => {
+              datBieuMau(moNhapMoi ? null : { loai: "tao", boSungCho: null });
+              datLoiBieuMau(null);
+            }}
+          >
+            {NHAN_NUT_NHAP_BIEN_BAN}
+          </Button>
+        }
+      />
 
+    {/* `[&>*]:my-0`: the section's `gap` is the one spacing between blocks (spec §6.9); legacy
+        vertical margins on direct children would add to it unevenly. */}
+    <section
+      className="man-bien-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+      aria-labelledby="tieu-de-so-bien-ban"
+    >
       <KhoiChuaDung />
 
-      <div className="cum-nut">
-        <button
-          type="button"
-          className="nut-chinh"
-          aria-expanded={moNhapMoi}
-          onClick={() => {
-            datBieuMau(moNhapMoi ? null : { loai: "tao", boSungCho: null });
-            datLoiBieuMau(null);
-          }}
-        >
-          {NHAN_NUT_NHAP_BIEN_BAN}
-        </button>
-      </div>
-
-      <div ref={vungBieuMau}>
+      <div ref={vungBieuMau} className="empty:hidden">
         {bieuMau !== null && (
           <FormNhapBienBan
             // Khoá dựng lại: mỗi lần GHI XONG, và mỗi lần đổi biểu mẫu, là một khoá chống trùng mới.
@@ -649,11 +714,60 @@ export function SoBienBan() {
         <ChiTietBienBan tai={chiTiet.tai} danhBa={bangDanhBa} dong={dongChiTiet} />
       )}
 
-      {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+      <h2 id="tieu-de-so-bien-ban" className="m-0 text-[15px] leading-snug font-semibold text-ink-900">
+        Danh sách biên bản
+      </h2>
+
+      {/* LOADING (spec §8b). The sentence stays the live region, read out as before; the eye gets a
+          2px bar and either the previous page dimmed (a re-read) or card-shaped placeholders (the
+          first read). */}
+      {so.pha === "dangTai" && (
+        <div className="flex min-w-0 flex-col gap-4">
+          <LoadingBar />
+          <p className="an-thi-giac" role="status">
+            {DANG_TAI_SO}
+          </p>
+          {sanCu !== null ? (
+            <div inert className="pointer-events-none opacity-60 transition-opacity">
+              <DanhSachBienBan
+                bienBan={sanCu}
+                lanGhiXong={lanGhiXong}
+                dangGui={dangGui}
+                loiKetLuan={loiKetLuan}
+                guiKetLuan={guiKetLuan}
+                tach={phepTach}
+                vongDoi={vongDoi}
+              />
+            </div>
+          ) : (
+            <MeetingCardsSkeleton />
+          )}
+        </div>
+      )}
+      {/* LOAD ERROR (spec §8b): the server's sentence VERBATIM stays the alert; `Tải lại` asks the
+          same read again through the screen's existing re-read key (`lanTai`). */}
       {so.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {so.thongBao}
-        </p>
+        <Card>
+          <EmptyState
+            icon={CloudOff}
+            title="Chưa tải được danh sách biên bản"
+            description={
+              <span className="text-danger-600" role="alert">
+                {so.thongBao}
+              </span>
+            }
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<Glyph icon={RefreshCw} />}
+                onClick={() => datLanTai((n) => n + 1)}
+              >
+                Tải lại
+              </Button>
+            }
+          />
+        </Card>
       )}
 
       {so.pha === "xong" && (
@@ -667,27 +781,32 @@ export function SoBienBan() {
             tach={phepTach}
             vongDoi={vongDoi}
           />
-          <nav className="dieu-huong-trang" aria-label="Phân trang danh sách biên bản">
-            <button
+          <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh sách biên bản">
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
+              icon={<Glyph icon={ChevronLeft} />}
               disabled={!coTrangTruoc(nganXep)}
               onClick={() => datNganXep(veTrangTruoc(nganXep))}
             >
               Trang trước
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
               disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
               onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
             >
               Trang sau
-            </button>
+              <Glyph icon={ChevronRight} />
+            </Button>
           </nav>
         </>
       )}
     </section>
+    </>
   );
 }
 
@@ -696,11 +815,21 @@ export function SoBienBan() {
  * trong chú thích mã.
  */
 export function KhoiChuaDung() {
+  // COLLAPSED, GREY, DASHED (spec §8.1, ADR 0068): a list of what is not built is not an alarm. The
+  // words stay verbatim and stay in the HTML while closed — `<details>` only folds them.
   return (
-    <details className="khoi-chua-khai">
-      <summary>
-        {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
-        do
+    <details className="khoi-chua-khai group m-0">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
+        <span className="font-semibold text-ink-700">
+          {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
+          do
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          focusable="false"
+          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
+        />
       </summary>
       <dl className="danh-sach-truong">
         {PHAN_CHUA_DUNG.map((p) => (
@@ -732,13 +861,25 @@ export function DanhSachBienBan({
   tach: PhepTach;
   vongDoi: PhepVongDoi;
 }) {
-  if (bienBan.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  if (bienBan.length === 0) {
+    // The screen has no filter, so "empty" here is only ever the empty register — never "empty under
+    // these filters".
+    return (
+      <Card>
+        <EmptyState
+          icon={NotebookPen}
+          title={SO_RONG}
+          description={`Bấm “${NHAN_NUT_NHAP_BIEN_BAN}” để nhập biên bản đầu tiên.`}
+        />
+      </Card>
+    );
+  }
 
   return (
-    <ul aria-label="Danh sách biên bản họp">
+    <ul aria-label="Danh sách biên bản họp" className="m-0 flex list-none flex-col gap-4 p-0">
       {bienBan.map((bb) => (
         // `id` là neo `#bien-ban-{id}` — liên kết từ drawer nhiệm vụ cuộn tới đúng thẻ này.
-        <li key={bb.id} id={neoBienBan(bb.id)}>
+        <li key={bb.id} id={neoBienBan(bb.id)} className="scroll-mt-4">
           <TheBienBan
             bienBan={bb}
             lanGhiXong={lanGhiXong}
@@ -763,6 +904,9 @@ function NutCoLyDo({
   dangGui,
   onClick,
   moRa,
+  icon,
+  variant = "secondary",
+  size = "md",
 }: {
   quyTac: QuyTacNut;
   id: string;
@@ -771,12 +915,18 @@ function NutCoLyDo({
   dangGui: boolean;
   onClick: () => void;
   moRa?: boolean;
+  /** Decorative leading icon; the label always stays (spec v2: important actions keep their words). */
+  icon?: LucideIcon;
+  variant?: ButtonVariant;
+  size?: "sm" | "md";
 }) {
   if (!quyTac.hien) return null;
   return (
-    <button
+    <Button
       type="button"
-      className="nut-phu"
+      variant={variant}
+      size={size}
+      icon={icon === undefined ? undefined : <Glyph icon={icon} />}
       aria-label={ariaLabel}
       aria-expanded={moRa}
       aria-describedby={quyTac.viSaoTat === null ? undefined : `ly-do-${id}`}
@@ -784,7 +934,7 @@ function NutCoLyDo({
       onClick={onClick}
     >
       {nhan}
-    </button>
+    </Button>
   );
 }
 
@@ -792,7 +942,7 @@ function NutCoLyDo({
 function LyDoTat({ quyTac, id }: { quyTac: QuyTacNut; id: string }) {
   if (!quyTac.hien || quyTac.viSaoTat === null) return null;
   return (
-    <p className="ghi-chu" id={`ly-do-${id}`}>
+    <p className="ghi-chu m-0 text-xs text-ink-500" id={`ly-do-${id}`}>
       {quyTac.viSaoTat}
     </p>
   );
@@ -822,147 +972,188 @@ export function TheBienBan({
   const chiTiet = vongDoi.chiTiet?.id === bienBan.id ? vongDoi.chiTiet : null;
 
   return (
-    <div className="khoi-chi-tiet">
-      <div className="dau-khoi-chi-tiet">
-        <span aria-hidden="true">📋</span>
-        <h3>{bienBan.title}</h3>
-        <span className={lopChipBienBan(bienBan)}>{nhanTrangThaiBienBan(bienBan)}</span>
-      </div>
+    <Card>
+      <CardHeader className="flex-nowrap items-start">
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600"
+        >
+          <NotebookPen className="size-[18px]" strokeWidth={1.8} focusable="false" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <CardTitle as="h3" className="break-words">
+            {bienBan.title}
+          </CardTitle>
+          <p className="dong-phu mt-0.5 mb-0 text-[13px] tabular-nums">{dongMeta(bienBan)}</p>
+        </div>
+        <MeetingStatusBadge meeting={bienBan}>{nhanTrangThaiBienBan(bienBan)}</MeetingStatusBadge>
+      </CardHeader>
 
-      <p className="dong-phu">{dongMeta(bienBan)}</p>
-
-      {/* CON SỐ CHÍNH là kết luận hoàn thành; số nhiệm vụ là phụ. Cả bốn số do máy chủ đếm. */}
-      <p>
-        <strong>{nhanTienDoBienBan(bienBan)}</strong>{" "}
-        <span className="dong-phu">· {nhanBadge(bienBan)}</span>
-      </p>
-
-      {bienBan.supplements_id !== undefined && bienBan.supplements_id !== "" && (
-        <p className="ghi-chu">
-          Biên bản bổ sung — <a href={`#${neoBienBan(bienBan.supplements_id)}`}>xem biên bản gốc</a>
+      <CardContent className="flex flex-col gap-3">
+        {/* CON SỐ CHÍNH là kết luận hoàn thành; số nhiệm vụ là phụ. Cả bốn số do máy chủ đếm.
+            The `<strong>` carries no class: the tests read it as `<strong>0/1 kết luận…</strong>`,
+            so its look comes from the parent. */}
+        <p className="m-0 text-sm tabular-nums text-ink-700 [&>strong]:font-semibold [&>strong]:text-ink-900">
+          <strong>{nhanTienDoBienBan(bienBan)}</strong>{" "}
+          <span className="text-ink-500">· {nhanBadge(bienBan)}</span>
         </p>
-      )}
 
-      <div className="cum-nut">
-        {chiTiet !== null ? (
-          <button type="button" className="nut-phu" onClick={vongDoi.dongChiTiet}>
-            {NHAN_NUT_DONG_BIEN_BAN}
-          </button>
-        ) : (
-          <a className="nut-phu" href={`#${neoBienBan(bienBan.id)}`}>
-            {NHAN_NUT_XEM_BIEN_BAN}
-          </a>
+        {bienBan.supplements_id !== undefined && bienBan.supplements_id !== "" && (
+          <p className="ghi-chu m-0">
+            Biên bản bổ sung — <a href={`#${neoBienBan(bienBan.supplements_id)}`}>xem biên bản gốc</a>
+          </p>
         )}
-        <NutCoLyDo
-          quyTac={qt.sua}
-          id={`sua-${bienBan.id}`}
-          nhan={NHAN_NUT_SUA_BIEN_BAN}
-          dangGui={vongDoi.dangGui}
-          onClick={() => vongDoi.moSua(bienBan)}
-        />
-        <NutCoLyDo
-          quyTac={qt.ky}
-          id={`ky-${bienBan.id}`}
-          nhan={NHAN_NUT_KY}
-          dangGui={vongDoi.dangGui}
-          moRa={hop === "ky"}
-          onClick={() => vongDoi.moHop(bienBan.id, "ky")}
-        />
-        <NutCoLyDo
-          quyTac={qt.ghiThongBao}
-          id={`thong-bao-${bienBan.id}`}
-          nhan={NHAN_NUT_GHI_THONG_BAO}
-          dangGui={vongDoi.dangGui}
-          moRa={hop === "thong-bao"}
-          onClick={() => vongDoi.moHop(bienBan.id, "thong-bao")}
-        />
-        <NutCoLyDo
-          quyTac={qt.boSung}
-          id={`bo-sung-${bienBan.id}`}
-          nhan={NHAN_NUT_BO_SUNG}
-          dangGui={vongDoi.dangGui}
-          onClick={() => vongDoi.moBoSung(bienBan)}
-        />
-        <NutCoLyDo
-          quyTac={qt.xoa}
-          id={`xoa-${bienBan.id}`}
-          nhan={NHAN_NUT_XOA_BIEN_BAN}
-          dangGui={vongDoi.dangGui}
-          moRa={hop === "xoa"}
-          onClick={() => vongDoi.moHop(bienBan.id, "xoa")}
-        />
+
+        {/* ONE solid button in this region: `Ký biên bản`, the act that fixes the record. Every
+            other action keeps its words (spec v2: important actions are never icon-only). */}
+        <div className="cum-nut">
+          {chiTiet !== null ? (
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<Glyph icon={X} />}
+              onClick={vongDoi.dongChiTiet}
+            >
+              {NHAN_NUT_DONG_BIEN_BAN}
+            </Button>
+          ) : (
+            <a
+              className={cn("nut-phu", buttonVariants({ variant: "secondary" }))}
+              href={`#${neoBienBan(bienBan.id)}`}
+            >
+              <Glyph icon={Eye} />
+              {NHAN_NUT_XEM_BIEN_BAN}
+            </a>
+          )}
+          <NutCoLyDo
+            quyTac={qt.sua}
+            id={`sua-${bienBan.id}`}
+            nhan={NHAN_NUT_SUA_BIEN_BAN}
+            icon={Pencil}
+            dangGui={vongDoi.dangGui}
+            onClick={() => vongDoi.moSua(bienBan)}
+          />
+          <NutCoLyDo
+            quyTac={qt.ky}
+            id={`ky-${bienBan.id}`}
+            nhan={NHAN_NUT_KY}
+            icon={Signature}
+            variant="primary"
+            dangGui={vongDoi.dangGui}
+            moRa={hop === "ky"}
+            onClick={() => vongDoi.moHop(bienBan.id, "ky")}
+          />
+          <NutCoLyDo
+            quyTac={qt.ghiThongBao}
+            id={`thong-bao-${bienBan.id}`}
+            nhan={NHAN_NUT_GHI_THONG_BAO}
+            icon={Stamp}
+            dangGui={vongDoi.dangGui}
+            moRa={hop === "thong-bao"}
+            onClick={() => vongDoi.moHop(bienBan.id, "thong-bao")}
+          />
+          <NutCoLyDo
+            quyTac={qt.boSung}
+            id={`bo-sung-${bienBan.id}`}
+            nhan={NHAN_NUT_BO_SUNG}
+            icon={FilePlus2}
+            dangGui={vongDoi.dangGui}
+            onClick={() => vongDoi.moBoSung(bienBan)}
+          />
+          <NutCoLyDo
+            quyTac={qt.xoa}
+            id={`xoa-${bienBan.id}`}
+            nhan={NHAN_NUT_XOA_BIEN_BAN}
+            icon={Trash2}
+            variant="danger"
+            dangGui={vongDoi.dangGui}
+            moRa={hop === "xoa"}
+            onClick={() => vongDoi.moHop(bienBan.id, "xoa")}
+          />
+        </div>
+        <LyDoTat quyTac={qt.xoa} id={`xoa-${bienBan.id}`} />
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
+
+        {hop === "ky" && (
+          <FormKy
+            bienBanID={bienBan.id}
+            question={`Ký biên bản “${bienBan.title}”?`}
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            ky={(tb) => vongDoi.ky(bienBan, tb)}
+          />
+        )}
+        {hop === "thong-bao" && (
+          <FormThongBao
+            bienBanID={bienBan.id}
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            ghi={(tb) => vongDoi.ghiThongBao(bienBan, tb)}
+          />
+        )}
+        {hop === "xoa" && (
+          <FormLyDo
+            id={`ly-do-xoa-bien-ban-${bienBan.id}`}
+            question={`Gỡ biên bản “${bienBan.title}”?`}
+            nhan="Lý do gỡ biên bản *"
+            nhanNut={NHAN_NUT_XOA_BIEN_BAN}
+            ghiChu="Biên bản là hồ sơ lưu trữ: gỡ là xoá mềm, ghi lại ai gỡ, lúc nào và vì sao."
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            gui={(lyDo) => vongDoi.xoa(bienBan, lyDo)}
+          />
+        )}
+
+        {chiTiet !== null && (
+          <ChiTietBienBan tai={chiTiet.tai} danhBa={vongDoi.danhBa} dong={vongDoi.dongChiTiet} />
+        )}
+      </CardContent>
+
+      <div className="border-t border-line px-4">
+        {bienBan.conclusions.length === 0 ? (
+          // §7.3: biên bản không có kết luận nào VẪN LƯU ĐƯỢC (nhập nháp trước, bổ sung sau).
+          <p className="nhan-trong m-0 py-4 text-sm">Biên bản này chưa ghi kết luận nào.</p>
+        ) : (
+          <ol
+            aria-label={`Các kết luận của biên bản ${bienBan.title}`}
+            className="m-0 list-none divide-y divide-line p-0"
+          >
+            {/* ⚠ KHÔNG LẤY CHỈ SỐ CỦA `map` RA DÙNG. Số trong ô tròn và `{stt}` trên đường dẫn đều
+                là `ordinal` MÁY CHỦ TRẢ — xem `DongKetLuan` và `soThuTuKetLuan`. */}
+            {bienBan.conclusions.map((kl) => (
+              <li key={kl.id} className="py-3">
+                <DongKetLuan bienBan={bienBan} ketLuan={kl} tach={tach} vongDoi={vongDoi} />
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
-      <LyDoTat quyTac={qt.xoa} id={`xoa-${bienBan.id}`} />
 
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
+      {(loiKetLuan !== null || qt.themKetLuan.hien) && (
+        <CardFooter className="block text-sm text-ink-900">
+          {loiKetLuan !== null && (
+            <p className="thong-bao-loi" role="alert">
+              {loiKetLuan}
+            </p>
+          )}
 
-      {hop === "ky" && (
-        <FormKy
-          bienBanID={bienBan.id}
-          dangGui={vongDoi.dangGui}
-          huy={vongDoi.dongHop}
-          ky={(tb) => vongDoi.ky(bienBan, tb)}
-        />
+          {/* Biên bản ĐÃ KÝ không nhận kết luận mới — sai sót đi đường biên bản bổ sung. */}
+          {qt.themKetLuan.hien && (
+            <HangThemKetLuan
+              key={`${bienBan.id}|${lanGhiXong}`}
+              bienBanID={bienBan.id}
+              dangGui={dangGui}
+              gui={guiKetLuan}
+            />
+          )}
+        </CardFooter>
       )}
-      {hop === "thong-bao" && (
-        <FormThongBao
-          bienBanID={bienBan.id}
-          dangGui={vongDoi.dangGui}
-          huy={vongDoi.dongHop}
-          ghi={(tb) => vongDoi.ghiThongBao(bienBan, tb)}
-        />
-      )}
-      {hop === "xoa" && (
-        <FormLyDo
-          id={`ly-do-xoa-bien-ban-${bienBan.id}`}
-          nhan="Lý do gỡ biên bản *"
-          nhanNut={NHAN_NUT_XOA_BIEN_BAN}
-          ghiChu="Biên bản là hồ sơ lưu trữ: gỡ là xoá mềm, ghi lại ai gỡ, lúc nào và vì sao."
-          dangGui={vongDoi.dangGui}
-          huy={vongDoi.dongHop}
-          gui={(lyDo) => vongDoi.xoa(bienBan, lyDo)}
-        />
-      )}
-
-      {chiTiet !== null && (
-        <ChiTietBienBan tai={chiTiet.tai} danhBa={vongDoi.danhBa} dong={vongDoi.dongChiTiet} />
-      )}
-
-      {bienBan.conclusions.length === 0 ? (
-        // §7.3: biên bản không có kết luận nào VẪN LƯU ĐƯỢC (nhập nháp trước, bổ sung sau).
-        <p className="trang-thai-rong">Biên bản này chưa ghi kết luận nào.</p>
-      ) : (
-        <ol aria-label={`Các kết luận của biên bản ${bienBan.title}`}>
-          {/* ⚠ KHÔNG LẤY CHỈ SỐ CỦA `map` RA DÙNG. Số trong ô tròn và `{stt}` trên đường dẫn đều
-              là `ordinal` MÁY CHỦ TRẢ — xem `DongKetLuan` và `soThuTuKetLuan`. */}
-          {bienBan.conclusions.map((kl) => (
-            <li key={kl.id}>
-              <DongKetLuan bienBan={bienBan} ketLuan={kl} tach={tach} vongDoi={vongDoi} />
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {loiKetLuan !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loiKetLuan}
-        </p>
-      )}
-
-      {/* Biên bản ĐÃ KÝ không nhận kết luận mới — sai sót đi đường biên bản bổ sung. */}
-      {qt.themKetLuan.hien && (
-        <HangThemKetLuan
-          key={`${bienBan.id}|${lanGhiXong}`}
-          bienBanID={bienBan.id}
-          dangGui={dangGui}
-          gui={guiKetLuan}
-        />
-      )}
-    </div>
+    </Card>
   );
 }
 
@@ -996,30 +1187,46 @@ export function ChiTietBienBan({
   dong: () => void;
 }) {
   return (
-    <section className="khoi-chi-tiet" aria-label="Toàn văn biên bản">
-      {tai.pha === "dangTai" && <p role="status">Đang tải biên bản…</p>}
+    <section
+      className="min-w-0 rounded-xl border border-line bg-surface-muted p-4 text-sm"
+      aria-label="Toàn văn biên bản"
+    >
+      {tai.pha === "dangTai" && (
+        <p role="status" className="m-0 inline-flex items-center gap-2 text-ink-500">
+          <LoaderCircle aria-hidden="true" focusable="false" className="size-4 shrink-0 motion-safe:animate-spin" />
+          Đang tải biên bản…
+        </p>
+      )}
+      {/* No `Tải lại` here: this block has no re-read of its own to call — closing and reopening
+          "Xem biên bản" is the existing way to read it again. */}
       {tai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {tai.thongBao}
+        <p className="m-0 flex items-start gap-2">
+          <CloudOff aria-hidden="true" focusable="false" className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+          <span className="text-danger-600" role="alert">
+            {tai.thongBao}
+          </span>
         </p>
       )}
       {tai.pha === "xong" && <NoiDungChiTiet bb={tai.duLieu} danhBa={danhBa} />}
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" onClick={dong}>
+      <div className="cum-nut mt-4 justify-end">
+        <Button type="button" variant="secondary" icon={<Glyph icon={X} />} onClick={dong}>
           {NHAN_NUT_DONG_BIEN_BAN}
-        </button>
+        </Button>
       </div>
     </section>
   );
 }
+
+/** Heading inside "Xem biên bản": 13px/600, the card's sub-section level. */
+const DETAIL_HEADING = "m-0 mb-2 text-[13px] leading-snug font-semibold text-ink-900";
 
 function NoiDungChiTiet({ bb, danhBa }: { bb: petitions_bienBanRa; danhBa: DanhBaTheoMa | null }) {
   const thanhPhan = bb.attendees ?? [];
   const boSungBoi = bb.supplemented_by ?? [];
   return (
     <>
-      <h4>{bb.title}</h4>
-      <dl className="danh-sach-truong">
+      <h4 className={cn(DETAIL_HEADING, "text-[15px]")}>{bb.title}</h4>
+      <dl className="danh-sach-truong mb-4">
         <dt>Ngày họp</dt>
         <dd>{nhanNgayHop(bb.held_on)}</dd>
         <dt>Số hiệu biên bản</dt>
@@ -1037,7 +1244,7 @@ function NoiDungChiTiet({ bb, danhBa }: { bb: petitions_bienBanRa; danhBa: DanhB
           {thanhPhan.length === 0 ? (
             "Không ghi"
           ) : (
-            <ul>
+            <ul className="m-0 list-disc pl-5 marker:text-ink-400">
               {thanhPhan.map((d) => (
                 <li key={d}>{nhanThanhPhan(d, danhBa)}</li>
               ))}
@@ -1064,7 +1271,7 @@ function NoiDungChiTiet({ bb, danhBa }: { bb: petitions_bienBanRa; danhBa: DanhB
           <>
             <dt>Biên bản bổ sung</dt>
             <dd>
-              <ul>
+              <ul className="m-0 list-disc pl-5 marker:text-ink-400">
                 {boSungBoi.map((id, i) => (
                   <li key={id}>
                     <a href={`#${neoBienBan(id)}`}>Mở biên bản bổ sung thứ {i + 1}</a>
@@ -1077,11 +1284,13 @@ function NoiDungChiTiet({ bb, danhBa }: { bb: petitions_bienBanRa; danhBa: DanhB
         <dt>Người nhập</dt>
         <dd>{nhanCanBo(bb.created_by, danhBa)}</dd>
       </dl>
-      <h4>Nội dung biên bản</h4>
+      <h4 className={DETAIL_HEADING}>Nội dung biên bản</h4>
       {bb.content === undefined || bb.content === null || bb.content === "" ? (
-        <p className="nhan-trong">Không ghi toàn văn.</p>
+        <p className="nhan-trong m-0">Không ghi toàn văn.</p>
       ) : (
-        <DoanNhieuDong chu={bb.content} />
+        <div className="rounded-lg border border-line bg-surface p-3 leading-relaxed [&>p]:m-0">
+          <DoanNhieuDong chu={bb.content} />
+        </div>
       )}
     </>
   );
@@ -1102,7 +1311,7 @@ function OThongBao({
   datNgay: (s: string) => void;
 }) {
   return (
-    <>
+    <div className="grid gap-4 sm:grid-cols-2 [&>.o-nhap]:mb-0">
       <div className="o-nhap">
         <label htmlFor={`so-thong-bao-${bienBanID}`}>Số, ký hiệu Thông báo kết luận</label>
         <input
@@ -1122,18 +1331,70 @@ function OThongBao({
           onChange={(e) => datNgay(e.target.value)}
         />
       </div>
-    </>
+    </div>
+  );
+}
+
+/**
+ * A form's submit button: the native `<button type="submit">` with `type` FIRST (tests read the tag
+ * as `<button type="submit" …>`), the same classes as `Button`, and the spec §8b busy state —
+ * spinner + "Đang lưu…", same width (`BusyLabel`). `busy` is the screen's one `dangGui` flag; the
+ * button is already disabled by it, as before.
+ */
+function SubmitButton({
+  label,
+  busy,
+  disabled,
+  variant = "primary",
+  busyText = BUSY_SAVING,
+}: {
+  label: string;
+  busy: boolean;
+  disabled: boolean;
+  variant?: "primary" | "secondary" | "danger";
+  busyText?: string;
+}) {
+  return (
+    <button
+      type="submit"
+      className={cn(LEGACY_BUTTON_CLASS[variant], buttonVariants({ variant }))}
+      disabled={disabled}
+      aria-busy={busy}
+    >
+      <BusyLabel busy={busy} label={label} busyText={busyText} />
+    </button>
+  );
+}
+
+/** One helper line under a control (spec §3 "Chú thích": 12px, `--ink-500`). */
+const HINT = "ghi-chu mt-1.5 mb-0 text-xs text-ink-500";
+
+/** Frame of a form opened INSIDE a card (edit one conclusion, add one): quieter than the card. */
+const INLINE_FORM = "m-0 flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-3";
+
+/** Busy words of a removal (gỡ = soft delete) — "Đang lưu…" would misname the act. */
+const BUSY_REMOVING = "Đang gỡ…";
+
+/** `Huỷ` of every form on this screen. */
+function CancelButton({ dangGui, huy }: { dangGui: boolean; huy: () => void }) {
+  return (
+    <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+      {NHAN_NUT_HUY}
+    </Button>
   );
 }
 
 /** Hộp Ký — câu xác nhận nói đúng hệ quả, và hai ô Thông báo tuỳ chọn. */
 export function FormKy({
   bienBanID,
+  question,
   dangGui,
   huy,
   ky,
 }: {
   bienBanID: string;
+  /** The specific question heading the box (spec §7 "Hộp xác nhận"), e.g. `Ký biên bản “…”?`. */
+  question: string;
   dangGui: boolean;
   huy: () => void;
   ky: (thongBao: ThongBaoVao | null) => void;
@@ -1147,19 +1408,26 @@ export function FormKy({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={gui} aria-label={NHAN_NUT_KY}>
-      <p role="note">{CAU_XAC_NHAN_KY}</p>
+    <ConfirmDialog
+      as="form"
+      titleAs="h4"
+      icon={Signature}
+      title={question}
+      onSubmit={gui}
+      aria-label={NHAN_NUT_KY}
+      actions={
+        <>
+          <CancelButton dangGui={dangGui} huy={huy} />
+          <SubmitButton label={NHAN_NUT_XAC_NHAN_KY} busy={dangGui} disabled={dangGui} />
+        </>
+      }
+    >
+      <p role="note" className="m-0">
+        {CAU_XAC_NHAN_KY}
+      </p>
       <OThongBao bienBanID={bienBanID} so={so} ngay={ngay} datSo={datSo} datNgay={datNgay} />
-      <p className="ghi-chu">Thông báo kết luận không bắt buộc lúc ký; ghi sau được một lần.</p>
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {NHAN_NUT_XAC_NHAN_KY}
-        </button>
-      </div>
-    </form>
+      <p className="ghi-chu m-0">Thông báo kết luận không bắt buộc lúc ký; ghi sau được một lần.</p>
+    </ConfirmDialog>
   );
 }
 
@@ -1185,24 +1453,30 @@ export function FormThongBao({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={gui} aria-label={NHAN_NUT_GHI_THONG_BAO}>
+    <ConfirmDialog
+      as="form"
+      titleAs="h4"
+      icon={Stamp}
+      title={NHAN_NUT_GHI_THONG_BAO}
+      onSubmit={gui}
+      aria-label={NHAN_NUT_GHI_THONG_BAO}
+      actions={
+        <>
+          <CancelButton dangGui={dangGui} huy={huy} />
+          <SubmitButton label={NHAN_NUT_GHI_THONG_BAO} busy={dangGui} disabled={dangGui || tb === null} />
+        </>
+      }
+    >
       <OThongBao bienBanID={bienBanID} so={so} ngay={ngay} datSo={datSo} datNgay={datNgay} />
-      <p className="ghi-chu">{CAU_THONG_BAO_MOT_LAN}</p>
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || tb === null}>
-          {NHAN_NUT_GHI_THONG_BAO}
-        </button>
-      </div>
-    </form>
+      <p className="ghi-chu m-0">{CAU_THONG_BAO_MOT_LAN}</p>
+    </ConfirmDialog>
   );
 }
 
 /** Ô lý do BẮT BUỘC của một lần gỡ (biên bản hay kết luận) — xoá mềm phải ghi vì sao. */
 export function FormLyDo({
   id,
+  question,
   nhan,
   nhanNut,
   ghiChu,
@@ -1211,6 +1485,8 @@ export function FormLyDo({
   gui,
 }: {
   id: string;
+  /** The specific question heading the box (spec §7 "Hộp xác nhận"), e.g. `Gỡ kết luận số 3?`. */
+  question: string;
   nhan: string;
   nhanNut: string;
   ghiChu: string;
@@ -1227,8 +1503,27 @@ export function FormLyDo({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay}>
-      <div className="o-nhap">
+    <ConfirmDialog
+      as="form"
+      titleAs="h4"
+      tone="danger"
+      icon={Trash2}
+      title={question}
+      onSubmit={guiNgay}
+      actions={
+        <>
+          <CancelButton dangGui={dangGui} huy={huy} />
+          <SubmitButton
+            label={nhanNut}
+            variant="danger"
+            busy={dangGui}
+            busyText={BUSY_REMOVING}
+            disabled={dangGui || gon === ""}
+          />
+        </>
+      }
+    >
+      <div className="o-nhap mb-0">
         <label htmlFor={id}>{nhan}</label>
         <textarea
           id={id}
@@ -1237,17 +1532,9 @@ export function FormLyDo({
           maxLength={LY_DO_XOA_TOI_DA}
           onChange={(e) => datLyDo(e.target.value)}
         />
-        <p className="ghi-chu">{ghiChu}</p>
+        <p className="ghi-chu mt-1.5 mb-0">{ghiChu}</p>
       </div>
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className="nut-xoa" disabled={dangGui || gon === ""}>
-          {nhanNut}
-        </button>
-      </div>
-    </form>
+    </ConfirmDialog>
   );
 }
 
@@ -1273,8 +1560,8 @@ export function FormSuaKetLuan({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={gui}>
-      <div className="o-nhap">
+    <form className={INLINE_FORM} onSubmit={gui}>
+      <div className="o-nhap mb-0">
         <label htmlFor={`sua-ket-luan-${ketLuan.id}`}>
           Nội dung kết luận số {soThuTuKetLuan(ketLuan)}
         </label>
@@ -1286,13 +1573,9 @@ export function FormSuaKetLuan({
           onChange={(e) => datNoiDung(e.target.value)}
         />
       </div>
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || !doiDuoc}>
-          {NHAN_NUT_LUU_SUA}
-        </button>
+      <div className="cum-nut justify-end">
+        <CancelButton dangGui={dangGui} huy={huy} />
+        <SubmitButton label={NHAN_NUT_LUU_SUA} busy={dangGui} disabled={dangGui || !doiDuoc} />
       </div>
     </form>
   );
@@ -1306,25 +1589,37 @@ export function DanhSachNhiemVuKetLuan({
   tai: TrangThaiTai<readonly petitions_nhiemVuRa[]>;
   nhanTT: BangNhanTrangThai;
 }) {
-  if (tai.pha === "dangTai") return <p role="status">Đang tải nhiệm vụ đã tách…</p>;
+  if (tai.pha === "dangTai") {
+    return (
+      <p role="status" className="m-0 inline-flex items-center gap-2 text-[13px] text-ink-500">
+        <LoaderCircle aria-hidden="true" focusable="false" className="size-4 shrink-0 motion-safe:animate-spin" />
+        Đang tải nhiệm vụ đã tách…
+      </p>
+    );
+  }
   if (tai.pha === "loi") {
     return (
-      <p className="thong-bao-loi" role="alert">
+      <p className="thong-bao-loi m-0" role="alert">
         {tai.thongBao}
       </p>
     );
   }
   if (tai.duLieu.length === 0) {
-    return <p className="ghi-chu">Không còn nhiệm vụ nào đang hiệu lực tách từ kết luận này.</p>;
+    return <p className="ghi-chu m-0">Không còn nhiệm vụ nào đang hiệu lực tách từ kết luận này.</p>;
   }
   return (
-    <ul aria-label="Nhiệm vụ đã tách từ kết luận">
+    <ul
+      aria-label="Nhiệm vụ đã tách từ kết luận"
+      className="m-0 list-none divide-y divide-line rounded-xl border border-line bg-surface p-0"
+    >
       {tai.duLieu.map((nv) => (
-        <li key={nv.code}>
-          <span className="ma-muc">{nv.code}</span> {nv.title}
-          <span className="dong-phu">
-            {" "}
-            · {nhanTrangThai(nhanTT, nv.status)} · Hạn {nhanNgay(nv.due_at)}
+        <li key={nv.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
+          <span className="ma-muc tabular-nums">{nv.code}</span>
+          <span className="min-w-0 flex-1 basis-48 text-ink-900">{nv.title}</span>
+          {/* Icon by the status CODE, word = the commune's label for it (`nhanTT`), verbatim. */}
+          <TaskStatusBadge status={nv.status}>{nhanTrangThai(nhanTT, nv.status)}</TaskStatusBadge>
+          <span className="text-[13px] whitespace-nowrap text-ink-500 tabular-nums">
+            {`Hạn ${nhanNgay(nv.due_at)}`}
           </span>
         </li>
       ))}
@@ -1359,138 +1654,174 @@ export function DongKetLuan({
   const hop = vongDoi.hop?.dich === ketLuan.id ? vongDoi.hop.loai : null;
   const nhiemVu = vongDoi.nhiemVuKL.get(ketLuan.id);
 
+  const moNhiemVu = nhiemVu !== undefined;
+
   return (
-    <div>
-      <span className="chip">{so}</span> <span>{ketLuan.content}</span>{" "}
-      <span className={lopChipKetLuan(ketLuan)}>{nhanTrangThaiKetLuan(ketLuan)}</span>
-      <p className="dong-phu">{nhanTienDoKetLuan(ketLuan)}</p>
+    <div className="flex min-w-0 gap-3">
+      <ConclusionOrdinal n={so} className="mt-px" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+          <span className="min-w-0 flex-1 basis-56 text-sm leading-relaxed break-words text-ink-900">
+            {ketLuan.content}
+          </span>{" "}
+          <ConclusionStatusBadge conclusion={ketLuan}>{nhanTrangThaiKetLuan(ketLuan)}</ConclusionStatusBadge>
+        </div>
+        <p className="dong-phu m-0 text-xs tabular-nums">{nhanTienDoKetLuan(ketLuan)}</p>
 
-      {ketLuan.task_count > 0 && (
-        <button
-          type="button"
-          className="nut-phu"
-          aria-expanded={nhiemVu !== undefined}
-          aria-label={`${nhanNutXemNhiemVu(ketLuan, nhiemVu !== undefined)} — kết luận số ${so}`}
-          onClick={() => vongDoi.batNhiemVuKL(bienBan, ketLuan)}
-        >
-          {nhanNutXemNhiemVu(ketLuan, nhiemVu !== undefined)}
-        </button>
-      )}
-      {nhiemVu !== undefined && <DanhSachNhiemVuKetLuan tai={nhiemVu} nhanTT={vongDoi.nhanTT} />}
-
-      <div className="cum-nut">
-        {/* KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY: tài khoản thiếu `task.create` nhận nguyên câu 403 của máy chủ
-            ngay dưới dòng. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1). */}
-        {qt.tach.hien && (
-          <button
-            type="button"
-            className="nut-phu"
-            aria-label={nhanNutTach(ketLuan)}
-            aria-expanded={dangMo}
-            disabled={tach.dangGui}
-            onClick={() => tach.mo(ketLuan.id)}
-          >
-            {NHAN_NUT_TACH}
-          </button>
+        {ketLuan.task_count > 0 && (
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-3"
+              icon={<Glyph icon={ListChecks} />}
+              aria-expanded={moNhiemVu}
+              aria-label={`${nhanNutXemNhiemVu(ketLuan, moNhiemVu)} — kết luận số ${so}`}
+              onClick={() => vongDoi.batNhiemVuKL(bienBan, ketLuan)}
+            >
+              {nhanNutXemNhiemVu(ketLuan, moNhiemVu)}
+              <Glyph icon={ChevronDown} className={cn("transition-transform", moNhiemVu && "rotate-180")} />
+            </Button>
+          </div>
         )}
-        <NutCoLyDo
-          quyTac={qt.sua}
-          id={`sua-kl-${ketLuan.id}`}
-          nhan={NHAN_NUT_SUA_KL}
-          ariaLabel={`Sửa kết luận số ${so}`}
-          dangGui={vongDoi.dangGui}
-          moRa={hop === "sua-kl"}
-          onClick={() => vongDoi.moHop(ketLuan.id, "sua-kl")}
-        />
-        <NutCoLyDo
-          quyTac={qt.go}
-          id={`go-kl-${ketLuan.id}`}
-          nhan={NHAN_NUT_GO_KL}
-          ariaLabel={`Gỡ kết luận số ${so}`}
-          dangGui={vongDoi.dangGui}
-          moRa={hop === "go-kl"}
-          onClick={() => vongDoi.moHop(ketLuan.id, "go-kl")}
-        />
-        <NutCoLyDo
-          quyTac={qt.danhDau}
-          id={`danh-dau-${ketLuan.id}`}
-          nhan={NHAN_NUT_DANH_DAU}
-          ariaLabel={`${NHAN_NUT_DANH_DAU} — kết luận số ${so}`}
-          dangGui={vongDoi.dangGui}
-          onClick={() => vongDoi.danhDau(bienBan, ketLuan)}
-        />
-        <NutCoLyDo
-          quyTac={qt.boDau}
-          id={`bo-dau-${ketLuan.id}`}
-          nhan={NHAN_NUT_BO_DAU}
-          ariaLabel={`${NHAN_NUT_BO_DAU} — kết luận số ${so}`}
-          dangGui={vongDoi.dangGui}
-          onClick={() => vongDoi.boDau(bienBan, ketLuan)}
-        />
-      </div>
-      {/* Sửa và Gỡ tắt vì CÙNG một lý do — hiện MỘT câu; nút Gỡ trỏ `aria-describedby` vào câu
-          của chính nó nên câu ấy cũng phải có mặt, chỉ không lặp lại cho mắt nhìn. */}
-      <LyDoTat quyTac={qt.sua} id={`sua-kl-${ketLuan.id}`} />
-      {qt.go.viSaoTat !== null && (
-        <p className="an-thi-giac" id={`ly-do-go-kl-${ketLuan.id}`}>
-          {qt.go.viSaoTat}
-        </p>
-      )}
+        {nhiemVu !== undefined && <DanhSachNhiemVuKetLuan tai={nhiemVu} nhanTT={vongDoi.nhanTT} />}
 
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      {hop === "sua-kl" && (
-        <FormSuaKetLuan
-          ketLuan={ketLuan}
-          dangGui={vongDoi.dangGui}
-          huy={vongDoi.dongHop}
-          luu={(noiDung) => vongDoi.suaKL(bienBan, ketLuan, noiDung)}
-        />
-      )}
-      {hop === "go-kl" && (
-        <FormLyDo
-          id={`o-ly-do-go-kl-${ketLuan.id}`}
-          nhan={`Lý do gỡ kết luận số ${so} *`}
-          nhanNut={`Gỡ kết luận số ${so}`}
-          ghiChu="Gỡ là xoá mềm. Số thứ tự đã cấp không cấp lại cho kết luận thêm sau."
-          dangGui={vongDoi.dangGui}
-          huy={vongDoi.dongHop}
-          gui={(lyDo) => vongDoi.goKL(bienBan, ketLuan, lyDo)}
-        />
-      )}
-
-      {daXong !== null && (
-        <p className="ghi-chu" role="status">
-          {cauDaTach(daXong)}
-        </p>
-      )}
-
-      {dangMo && qt.tach.hien && (
-        <div>
-          {/* KẾT LUẬN GỐC ĐỨNG NGAY TRÊN BIỂU MẪU và Ở LẠI kể cả khi ô đã tự điền: ô kia là thứ
-              cán bộ SẼ SỬA, nên câu gốc phải còn để đối chiếu. */}
-          <p>
-            <span className="chip">{so}</span> {ketLuan.content}
-          </p>
-          <p className="ghi-chu">{NGUON_GIAO_KHOA}</p>
-          <FormGiaoViec
-            danhMuc={tach.danhMuc}
-            danhBa={tach.danhBa}
-            danhBaLanhDao={tach.danhBaLanhDao}
-            dangGui={tach.dangGui}
-            loi={loiTach}
-            huy={tach.dong}
-            giaoViec={(than, khoaChongTrung) =>
-              tach.gui(bienBan.id, ketLuan, than, khoaChongTrung)
-            }
-            tieuDeCoSan={ketLuan.content}
+        <div className="cum-nut gap-1.5">
+          {/* KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY: tài khoản thiếu `task.create` nhận nguyên câu 403 của máy chủ
+              ngay dưới dòng. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1). */}
+          {qt.tach.hien && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<Glyph icon={Scissors} />}
+              aria-label={nhanNutTach(ketLuan)}
+              aria-expanded={dangMo}
+              disabled={tach.dangGui}
+              onClick={() => tach.mo(ketLuan.id)}
+            >
+              {NHAN_NUT_TACH}
+            </Button>
+          )}
+          <NutCoLyDo
+            quyTac={qt.sua}
+            id={`sua-kl-${ketLuan.id}`}
+            nhan={NHAN_NUT_SUA_KL}
+            ariaLabel={`Sửa kết luận số ${so}`}
+            icon={Pencil}
+            variant="ghost"
+            size="sm"
+            dangGui={vongDoi.dangGui}
+            moRa={hop === "sua-kl"}
+            onClick={() => vongDoi.moHop(ketLuan.id, "sua-kl")}
+          />
+          <NutCoLyDo
+            quyTac={qt.go}
+            id={`go-kl-${ketLuan.id}`}
+            nhan={NHAN_NUT_GO_KL}
+            ariaLabel={`Gỡ kết luận số ${so}`}
+            icon={Trash2}
+            variant="danger"
+            size="sm"
+            dangGui={vongDoi.dangGui}
+            moRa={hop === "go-kl"}
+            onClick={() => vongDoi.moHop(ketLuan.id, "go-kl")}
+          />
+          <NutCoLyDo
+            quyTac={qt.danhDau}
+            id={`danh-dau-${ketLuan.id}`}
+            nhan={NHAN_NUT_DANH_DAU}
+            ariaLabel={`${NHAN_NUT_DANH_DAU} — kết luận số ${so}`}
+            icon={CircleMinus}
+            variant="ghost"
+            size="sm"
+            dangGui={vongDoi.dangGui}
+            onClick={() => vongDoi.danhDau(bienBan, ketLuan)}
+          />
+          <NutCoLyDo
+            quyTac={qt.boDau}
+            id={`bo-dau-${ketLuan.id}`}
+            nhan={NHAN_NUT_BO_DAU}
+            ariaLabel={`${NHAN_NUT_BO_DAU} — kết luận số ${so}`}
+            icon={Undo2}
+            variant="ghost"
+            size="sm"
+            dangGui={vongDoi.dangGui}
+            onClick={() => vongDoi.boDau(bienBan, ketLuan)}
           />
         </div>
-      )}
+        {/* Sửa và Gỡ tắt vì CÙNG một lý do — hiện MỘT câu; nút Gỡ trỏ `aria-describedby` vào câu
+            của chính nó nên câu ấy cũng phải có mặt, chỉ không lặp lại cho mắt nhìn. */}
+        <LyDoTat quyTac={qt.sua} id={`sua-kl-${ketLuan.id}`} />
+        {qt.go.viSaoTat !== null && (
+          <p className="an-thi-giac" id={`ly-do-go-kl-${ketLuan.id}`}>
+            {qt.go.viSaoTat}
+          </p>
+        )}
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
+
+        {hop === "sua-kl" && (
+          <FormSuaKetLuan
+            ketLuan={ketLuan}
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            luu={(noiDung) => vongDoi.suaKL(bienBan, ketLuan, noiDung)}
+          />
+        )}
+        {hop === "go-kl" && (
+          <FormLyDo
+            id={`o-ly-do-go-kl-${ketLuan.id}`}
+            question={`Gỡ kết luận số ${so}?`}
+            nhan={`Lý do gỡ kết luận số ${so} *`}
+            nhanNut={`Gỡ kết luận số ${so}`}
+            ghiChu="Gỡ là xoá mềm. Số thứ tự đã cấp không cấp lại cho kết luận thêm sau."
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            gui={(lyDo) => vongDoi.goKL(bienBan, ketLuan, lyDo)}
+          />
+        )}
+
+        {daXong !== null && (
+          <p className="ghi-chu m-0 inline-flex items-center gap-1.5 text-success-600" role="status">
+            <CircleCheck aria-hidden="true" focusable="false" className="size-4 shrink-0" />
+            {cauDaTach(daXong)}
+          </p>
+        )}
+
+        {dangMo && qt.tach.hien && (
+          // FormGiaoViec's own markup is shared with Phản ánh and Nhiệm vụ and stays untouched;
+          // only this frame around it is the Biên bản screen's.
+          <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
+            {/* KẾT LUẬN GỐC ĐỨNG NGAY TRÊN BIỂU MẪU và Ở LẠI kể cả khi ô đã tự điền: ô kia là thứ
+                cán bộ SẼ SỬA, nên câu gốc phải còn để đối chiếu. */}
+            <p className="m-0 flex items-start gap-2 text-sm text-ink-900">
+              <ConclusionOrdinal n={so} /> {ketLuan.content}
+            </p>
+            <p className="ghi-chu m-0 inline-flex items-center gap-1.5">
+              <LockKeyhole aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+              {NGUON_GIAO_KHOA}
+            </p>
+            <FormGiaoViec
+              danhMuc={tach.danhMuc}
+              danhBa={tach.danhBa}
+              danhBaLanhDao={tach.danhBaLanhDao}
+              dangGui={tach.dangGui}
+              loi={loiTach}
+              huy={tach.dong}
+              giaoViec={(than, khoaChongTrung) =>
+                tach.gui(bienBan.id, ketLuan, than, khoaChongTrung)
+              }
+              tieuDeCoSan={ketLuan.content}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1518,8 +1849,8 @@ export function HangThemKetLuan({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay}>
-      <div className="o-nhap">
+    <form className="m-0 flex flex-wrap items-end gap-3" onSubmit={guiNgay}>
+      <div className="o-nhap mb-0 min-w-0 flex-1 basis-64">
         <label htmlFor={`them-ket-luan-${bienBanID}`}>Thêm một kết luận</label>
         <textarea
           id={`them-ket-luan-${bienBanID}`}
@@ -1531,7 +1862,14 @@ export function HangThemKetLuan({
           onChange={(e) => datNoiDung(e.target.value)}
         />
       </div>
-      <button type="submit" className="nut-phu" disabled={dangGui || canGon === ""}>
+      {/* No busy words here: `dangGui` is the whole screen's flag, so "Đang lưu…" would light up on
+          every card at once. Disabled while anything is sending, exactly as before. */}
+      <button
+        type="submit"
+        className={cn(LEGACY_BUTTON_CLASS.secondary, buttonVariants({ variant: "secondary" }))}
+        disabled={dangGui || canGon === ""}
+      >
+        <Glyph icon={Plus} />
         {NHAN_NUT_THEM_KET_LUAN}
       </button>
     </form>
@@ -1541,7 +1879,7 @@ export function HangThemKetLuan({
 /**
  * Biểu mẫu biên bản §4 — NHẬP MỚI, NHẬP BỔ SUNG cho một biên bản đã ký, hoặc SỬA một bản nháp.
  *
- * ĐẶC TẢ GỌI NÓ LÀ MODAL; ở đây nó là một khối trong trang (xem `PHAN_CHUA_DUNG`, mục CSS).
+ * ĐẶC TẢ GỌI NÓ LÀ MODAL; ở đây nó là một khối trong trang (xem `PHAN_CHUA_DUNG`, mục modal).
  *
  * BẢN SỬA KHÔNG CÓ Ô "Các kết luận": kết luận của bản nháp sửa, gỡ, thêm TỪNG DÒNG trên thẻ, vì mỗi
  * dòng mang số đã cấp và có thể đã có nhiệm vụ trỏ vào.
@@ -1599,193 +1937,234 @@ export function FormNhapBienBan({
   const chuaChon = danhBa.filter((cb) => !gt.thanhPhanCanBo.includes(cb.code));
 
   return (
-    <form className="form-danh-muc" onSubmit={luuNgay} aria-labelledby="tieu-de-nhap-bien-ban">
-      <h3 id="tieu-de-nhap-bien-ban">{tieuDe}</h3>
-
-      {/* ĐÃ QUYẾT 25/09/2026: nội dung mật không bao giờ vào ViGov — không có cờ "mật" nào. */}
-      <p className="canh-bao-pham-vi" role="note">
-        {CANH_BAO_BI_MAT}
-      </p>
-
-      {che.loai === "tao" && che.boSungCho !== null && (
-        <p className="ghi-chu">
-          Bổ sung cho biên bản đã ký: <strong>{che.boSungCho.title}</strong> ·{" "}
-          {dongMeta(che.boSungCho)}
-        </p>
-      )}
-
-      <div className="o-nhap">
-        <label htmlFor="ten-cuoc-hop">Tên cuộc họp *</label>
-        <input
-          id="ten-cuoc-hop"
-          name="ten-cuoc-hop"
-          value={gt.ten}
-          maxLength={TEN_CUOC_HOP_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => doi({ ten: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="ngay-hop">Ngày họp *</label>
-        {/* `type="date"` trả đúng `2026-08-05` — ngày lịch, không múi giờ. */}
-        <input
-          id="ngay-hop"
-          name="ngay-hop"
-          type="date"
-          value={gt.ngay}
-          onChange={(e) => doi({ ngay: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="so-hieu-bien-ban">Số hiệu biên bản</label>
-        <input
-          id="so-hieu-bien-ban"
-          name="so-hieu-bien-ban"
-          value={gt.soHieu}
-          maxLength={SO_HIEU_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => doi({ soHieu: e.target.value })}
-        />
-        <p className="ghi-chu">
-          Ví dụ 31/BB-UBND. Không bắt buộc, và không phải mã tra cứu — số hiệu lặp lại giữa các
-          năm.
-        </p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="dia-diem-hop">Địa điểm</label>
-        <input
-          id="dia-diem-hop"
-          name="dia-diem-hop"
-          value={gt.diaDiem}
-          maxLength={DIA_DIEM_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => doi({ diaDiem: e.target.value })}
-        />
-      </div>
-
-      <OChonCanBo
-        id="chu-tri-bien-ban"
-        nhan="Chủ trì"
-        nhanTrong={KHONG_GHI_CAN_BO}
-        giaTri={gt.chuTri}
-        danhBa={danhBa}
-        dat={(ma) => doi({ chuTri: ma })}
-      />
-      <OChonCanBo
-        id="thu-ky-bien-ban"
-        nhan="Thư ký"
-        nhanTrong={KHONG_GHI_CAN_BO}
-        giaTri={gt.thuKy}
-        danhBa={danhBa}
-        dat={(ma) => doi({ thuKy: ma })}
-      />
-      {loiDanhBa !== null && (
-        <p className="thong-bao-loi" role="alert">
-          Chưa đọc được danh bạ cán bộ: {loiDanhBa}
-        </p>
-      )}
-
-      <fieldset className="o-nhap">
-        <legend>Thành phần tham dự</legend>
-        {gt.thanhPhanCanBo.length > 0 && (
-          <ul aria-label="Cán bộ tham dự đã chọn">
-            {gt.thanhPhanCanBo.map((ma) => (
-              <li key={ma}>
-                {nhanThanhPhan(ma, bangDanhBa)}{" "}
-                <button
-                  type="button"
-                  className="nut-phu"
-                  aria-label={`Bỏ ${nhanThanhPhan(ma, bangDanhBa)} khỏi thành phần tham dự`}
-                  onClick={() =>
-                    doi({ thanhPhanCanBo: gt.thanhPhanCanBo.filter((m) => m !== ma) })
-                  }
-                >
-                  Bỏ
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <label htmlFor="chon-thanh-phan">Thêm cán bộ tham dự</label>
-        <select
-          id="chon-thanh-phan"
-          className="o-chon"
-          value=""
-          onChange={(e) => {
-            const ma = e.target.value;
-            if (ma !== "") doi({ thanhPhanCanBo: [...gt.thanhPhanCanBo, ma] });
-          }}
+    <Card as="form" onSubmit={luuNgay} aria-labelledby="tieu-de-nhap-bien-ban">
+      <CardHeader>
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600"
         >
-          <option value="">— Chọn cán bộ —</option>
-          {chuaChon.map((cb) => (
-            <option key={cb.code} value={cb.code}>
-              {nhanThanhPhan(cb.code, bangDanhBa)}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="thanh-phan-khac">Thành phần khác</label>
-        <textarea
-          id="thanh-phan-khac"
-          name="thanh-phan-khac"
-          rows={3}
-          value={gt.thanhPhanKhac}
-          // KHÔNG CÓ `maxLength`: trần máy chủ là 200 dòng VÀ 200 ký tự mỗi dòng — một con số trên
-          // cả ô sẽ cắt sai ở cả hai chiều. Máy chủ từ chối bằng câu nói đúng dòng nào sai.
-          onChange={(e) => doi({ thanhPhanKhac: e.target.value })}
-        />
-        <p className="ghi-chu">
-          Mỗi dòng một người — khách mời, đại diện thôn, người không có tài khoản trên hệ thống.
-        </p>
-      </fieldset>
+          {che.loai === "sua" ? (
+            <Pencil className="size-[18px]" strokeWidth={1.8} focusable="false" />
+          ) : che.boSungCho !== null ? (
+            <FilePlus2 className="size-[18px]" strokeWidth={1.8} focusable="false" />
+          ) : (
+            <NotebookPen className="size-[18px]" strokeWidth={1.8} focusable="false" />
+          )}
+        </span>
+        <CardTitle as="h3" id="tieu-de-nhap-bien-ban">
+          {tieuDe}
+        </CardTitle>
+      </CardHeader>
 
-      <div className="o-nhap">
-        <label htmlFor="noi-dung-bien-ban">Nội dung biên bản</label>
-        <textarea
-          id="noi-dung-bien-ban"
-          name="noi-dung-bien-ban"
-          rows={6}
-          value={gt.noiDung}
-          maxLength={NOI_DUNG_BIEN_BAN_TOI_DA}
-          onChange={(e) => doi({ noiDung: e.target.value })}
-        />
-        <p className="ghi-chu">Toàn văn. Đọc lại bằng nút “{NHAN_NUT_XEM_BIEN_BAN}” trên thẻ.</p>
-      </div>
+      {/* `[&_.o-nhap]:mb-0`: the grid `gap` is the one spacing between fields; the legacy 1rem
+          bottom margin of `.o-nhap` would double it. Labels stay above their controls (`.o-nhap`). */}
+      <CardContent className="flex flex-col gap-4 [&_.o-nhap]:mb-0">
+        {/* ĐÃ QUYẾT 25/09/2026: nội dung mật không bao giờ vào ViGov — không có cờ "mật" nào. */}
+        <Notice tone="legal" role="note">
+          {CANH_BAO_BI_MAT}
+        </Notice>
 
-      {che.loai === "tao" && (
-        <div className="o-nhap">
-          <label htmlFor="cac-ket-luan">Các kết luận</label>
-          <textarea
-            id="cac-ket-luan"
-            name="cac-ket-luan"
-            rows={4}
-            value={gt.ketLuan}
-            onChange={(e) => doi({ ketLuan: e.target.value })}
-          />
-          <p className="ghi-chu">
-            Mỗi dòng một kết luận, đánh số ① ② ③ theo thứ tự nhập. Tối đa{" "}
-            {KET_LUAN_MOI_LAN_TOI_DA} kết luận một lần nhập; thêm tiếp bằng nút “
-            {NHAN_NUT_THEM_KET_LUAN}” ở cuối thẻ. Để trống cũng lưu được.
+        {che.loai === "tao" && che.boSungCho !== null && (
+          <p className="ghi-chu m-0">
+            Bổ sung cho biên bản đã ký: <strong>{che.boSungCho.title}</strong> ·{" "}
+            {dongMeta(che.boSungCho)}
           </p>
+        )}
+
+        {/* Two columns from 640px (`sm`): Chủ trì and Thư ký are two selects side by side (owner,
+            02/10/2026). Their markup is `OChonCanBo`'s own — label above, full column width. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="o-nhap sm:col-span-2">
+            <label htmlFor="ten-cuoc-hop">Tên cuộc họp *</label>
+            <input
+              id="ten-cuoc-hop"
+              name="ten-cuoc-hop"
+              value={gt.ten}
+              maxLength={TEN_CUOC_HOP_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => doi({ ten: e.target.value })}
+            />
+          </div>
+
+          <div className="o-nhap">
+            <label htmlFor="ngay-hop">Ngày họp *</label>
+            {/* `type="date"` trả đúng `2026-08-05` — ngày lịch, không múi giờ. */}
+            <input
+              id="ngay-hop"
+              name="ngay-hop"
+              type="date"
+              value={gt.ngay}
+              onChange={(e) => doi({ ngay: e.target.value })}
+            />
+          </div>
+
+          <div className="o-nhap">
+            <label htmlFor="so-hieu-bien-ban">Số hiệu biên bản</label>
+            <input
+              id="so-hieu-bien-ban"
+              name="so-hieu-bien-ban"
+              value={gt.soHieu}
+              maxLength={SO_HIEU_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => doi({ soHieu: e.target.value })}
+            />
+            <p className={HINT}>
+              Ví dụ 31/BB-UBND. Không bắt buộc, và không phải mã tra cứu — số hiệu lặp lại giữa các
+              năm.
+            </p>
+          </div>
+
+          <div className="o-nhap sm:col-span-2">
+            <label htmlFor="dia-diem-hop">Địa điểm</label>
+            <input
+              id="dia-diem-hop"
+              name="dia-diem-hop"
+              value={gt.diaDiem}
+              maxLength={DIA_DIEM_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => doi({ diaDiem: e.target.value })}
+            />
+          </div>
+
+          <OChonCanBo
+            id="chu-tri-bien-ban"
+            nhan="Chủ trì"
+            nhanTrong={KHONG_GHI_CAN_BO}
+            giaTri={gt.chuTri}
+            danhBa={danhBa}
+            dat={(ma) => doi({ chuTri: ma })}
+          />
+          <OChonCanBo
+            id="thu-ky-bien-ban"
+            nhan="Thư ký"
+            nhanTrong={KHONG_GHI_CAN_BO}
+            giaTri={gt.thuKy}
+            danhBa={danhBa}
+            dat={(ma) => doi({ thuKy: ma })}
+          />
         </div>
-      )}
+        {loiDanhBa !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            Chưa đọc được danh bạ cán bộ: {loiDanhBa}
+          </p>
+        )}
 
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
+        <fieldset className="o-nhap m-0 flex min-w-0 flex-col gap-3 rounded-xl border border-line p-4">
+          <legend className="px-1">Thành phần tham dự</legend>
+          {gt.thanhPhanCanBo.length > 0 && (
+            <ul aria-label="Cán bộ tham dự đã chọn" className="m-0 flex list-none flex-wrap gap-2 p-0">
+              {gt.thanhPhanCanBo.map((ma) => (
+                <li
+                  key={ma}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-surface-muted py-0.5 pr-0.5 pl-3 text-[13px] text-ink-900"
+                >
+                  <span className="min-w-0 break-words">{nhanThanhPhan(ma, bangDanhBa)}</span>{" "}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 rounded-full px-2"
+                    icon={<Glyph icon={X} />}
+                    aria-label={`Bỏ ${nhanThanhPhan(ma, bangDanhBa)} khỏi thành phần tham dự`}
+                    onClick={() =>
+                      doi({ thanhPhanCanBo: gt.thanhPhanCanBo.filter((m) => m !== ma) })
+                    }
+                  >
+                    Bỏ
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* `[&_label]:mb-0`: inside this `.o-nhap` fieldset the legacy label margin would stack on
+              the columns' own 6px gap. */}
+          <div className="grid gap-4 sm:grid-cols-2 [&_label]:mb-0">
+            {/* Field wraps the screen's own native `<select>` — same id, value and onChange; it only
+                draws the label above, the 40px frame and the chevron (owner, 02/10/2026). */}
+            <Field label="Thêm cán bộ tham dự" htmlFor="chon-thanh-phan" kind="select" grow="auto" className="min-w-0">
+              <select
+                id="chon-thanh-phan"
+                className="o-chon"
+                value=""
+                onChange={(e) => {
+                  const ma = e.target.value;
+                  if (ma !== "") doi({ thanhPhanCanBo: [...gt.thanhPhanCanBo, ma] });
+                }}
+              >
+                <option value="">— Chọn cán bộ —</option>
+                {chuaChon.map((cb) => (
+                  <option key={cb.code} value={cb.code}>
+                    {nhanThanhPhan(cb.code, bangDanhBa)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <label htmlFor="thanh-phan-khac">Thành phần khác</label>
+              <textarea
+                id="thanh-phan-khac"
+                name="thanh-phan-khac"
+                rows={3}
+                value={gt.thanhPhanKhac}
+                // KHÔNG CÓ `maxLength`: trần máy chủ là 200 dòng VÀ 200 ký tự mỗi dòng — một con số trên
+                // cả ô sẽ cắt sai ở cả hai chiều. Máy chủ từ chối bằng câu nói đúng dòng nào sai.
+                onChange={(e) => doi({ thanhPhanKhac: e.target.value })}
+              />
+              <p className={HINT}>
+                Mỗi dòng một người — khách mời, đại diện thôn, người không có tài khoản trên hệ thống.
+              </p>
+            </div>
+          </div>
+        </fieldset>
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          {NHAN_NUT_HUY}
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || !duDieuKien}>
-          {che.loai === "sua" ? NHAN_NUT_LUU_SUA : NHAN_NUT_LUU}
-        </button>
-      </div>
-    </form>
+        <div className="o-nhap">
+          <label htmlFor="noi-dung-bien-ban">Nội dung biên bản</label>
+          <textarea
+            id="noi-dung-bien-ban"
+            name="noi-dung-bien-ban"
+            rows={6}
+            value={gt.noiDung}
+            maxLength={NOI_DUNG_BIEN_BAN_TOI_DA}
+            onChange={(e) => doi({ noiDung: e.target.value })}
+          />
+          <p className={HINT}>Toàn văn. Đọc lại bằng nút “{NHAN_NUT_XEM_BIEN_BAN}” trên thẻ.</p>
+        </div>
+
+        {che.loai === "tao" && (
+          <div className="o-nhap">
+            <label htmlFor="cac-ket-luan">Các kết luận</label>
+            <textarea
+              id="cac-ket-luan"
+              name="cac-ket-luan"
+              rows={4}
+              value={gt.ketLuan}
+              onChange={(e) => doi({ ketLuan: e.target.value })}
+            />
+            <p className={HINT}>
+              Mỗi dòng một kết luận, đánh số ① ② ③ theo thứ tự nhập. Tối đa{" "}
+              {KET_LUAN_MOI_LAN_TOI_DA} kết luận một lần nhập; thêm tiếp bằng nút “
+              {NHAN_NUT_THEM_KET_LUAN}” ở cuối thẻ. Để trống cũng lưu được.
+            </p>
+          </div>
+        )}
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
+      </CardContent>
+
+      {/* Lưu/Huỷ right-aligned at the foot of the form (spec §6.5); Lưu is the region's one solid
+          button and stays the LAST button of the form. */}
+      <CardFooter className="justify-end">
+        <CancelButton dangGui={dangGui} huy={huy} />
+        <SubmitButton
+          label={che.loai === "sua" ? NHAN_NUT_LUU_SUA : NHAN_NUT_LUU}
+          busy={dangGui}
+          disabled={dangGui || !duDieuKien}
+        />
+      </CardFooter>
+    </Card>
   );
 }

@@ -209,8 +209,12 @@ describe("phần chưa dựng được", () => {
    * của một kết luận, danh bạ chọn người và thứ tự theo ngày họp — năm mục ấy RỜI danh sách. Ba mục
    * vẫn đúng (tệp đính kèm, hạn gợi ý, CSS) thì Ở LẠI. Một danh sách kể tên thứ đã dựng là danh sách
    * khiến người sau dựng lần hai.
+   *
+   * LẦN THỨ NĂM (02/10/2026, ADR 0068): đợt làm mới giao diện dựng thẻ biên bản và ô tròn số thứ tự
+   * bằng Tailwind, nên mục "Lớp CSS" RỜI danh sách; phần của nó còn đúng — biểu mẫu dựng nối tiếp
+   * trong trang thay vì lớp phủ modal — ở lại thành mục "modal".
    */
-  it("năm mục đã dựng RỜI danh sách; tệp đính kèm, hạn gợi ý, CSS Ở LẠI", () => {
+  it("năm mục đã dựng RỜI danh sách; tệp đính kèm, hạn gợi ý, modal Ở LẠI", () => {
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join("\n");
     expect(ten).not.toContain("Ô chọn `Chủ trì`");
     expect(ten).not.toContain("KHI ĐỌC LẠI");
@@ -220,7 +224,8 @@ describe("phần chưa dựng được", () => {
 
     expect(ten).toContain("Tệp đính kèm");
     expect(ten).toContain("HẠN GỢI Ý");
-    expect(ten).toContain("Lớp CSS");
+    expect(ten).not.toContain("Lớp CSS");
+    expect(ten).toContain("modal");
   });
 });
 
