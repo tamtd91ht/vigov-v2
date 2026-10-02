@@ -59,6 +59,24 @@ describe("commune identity at the top", () => {
   });
 });
 
+describe("groups by business area (spec v2 §5)", () => {
+  it("Tổng quan alone with no heading, then CÔNG VIỆC · TÀI CHÍNH · NGƯỜI DÂN · HỆ THỐNG", () => {
+    expect(NHOM_MENU.map((g) => g.ten)).toEqual(["", "CÔNG VIỆC", "TÀI CHÍNH", "NGƯỜI DÂN", "HỆ THỐNG"]);
+    expect(NHOM_MENU[0]!.muc.map((m) => m.nhan)).toEqual(["Tổng quan"]);
+    const html = view(false);
+    // Four headings drawn, none of them empty.
+    expect(html.match(/<p class="thanh-ben-nhan-nhom">/g)).toHaveLength(4);
+    expect(html).not.toContain('<p class="thanh-ben-nhan-nhom"></p>');
+    expect(html.indexOf("Tổng quan")).toBeLessThan(html.indexOf("CÔNG VIỆC"));
+  });
+
+  it("the internal announcement book sits under CÔNG VIỆC, not NGƯỜI DÂN", () => {
+    const group = (label: string) => NHOM_MENU.find((g) => g.muc.some((m) => m.nhan === label))?.ten;
+    expect(group("Thông báo")).toBe("CÔNG VIỆC");
+    expect(group("Phản ánh người dân")).toBe("NGƯỜI DÂN");
+  });
+});
+
 describe("menu icons", () => {
   it("every item of NHOM_MENU has its own icon — a new item cannot fall back silently", () => {
     for (const g of NHOM_MENU) for (const m of g.muc) expect(MENU_ICONS[m.nhan], m.nhan).toBeDefined();

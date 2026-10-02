@@ -34,8 +34,8 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary: [
-          "border-brand-600 bg-brand-600 text-white shadow-sm",
-          "hover:not-disabled:border-brand-700 hover:not-disabled:bg-brand-700 hover:not-disabled:shadow-md",
+          "border-brand-600 bg-brand-600 text-white",
+          "hover:not-disabled:border-brand-700 hover:not-disabled:bg-brand-700",
         ],
         secondary: [
           "border-line-strong bg-surface text-ink-700",

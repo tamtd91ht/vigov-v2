@@ -66,12 +66,14 @@
   --radius-hero: var(--r-xl);
 }
 
-/* Same values as the spec tokens of the same name, so `shadow-sm` and `var(--shadow-sm)` agree. */
+/* Same values as the spec tokens of the same name, so `shadow-sm` and `var(--shadow-sm)` agree.
+ * `lg` / `xl` are capped at `md`: spec v2 allows "bóng đổ rất nhẹ" only, so a stronger utility
+ * written somewhere cannot bring back the floating-card look (ADR 0068 §11). */
 @theme {
   --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
   --shadow-md: 0 4px 16px rgba(15, 27, 45, 0.06);
-  --shadow-lg: 0 1px 2px rgba(15, 27, 45, 0.04), 0 8px 24px -6px rgba(15, 27, 45, 0.12);
-  --shadow-xl: 0 2px 4px rgba(11, 79, 168, 0.04), 0 16px 40px -8px rgba(11, 79, 168, 0.16);
+  --shadow-lg: 0 4px 16px rgba(15, 27, 45, 0.08);
+  --shadow-xl: 0 4px 16px rgba(15, 27, 45, 0.08);
 }
 
 @layer base {
@@ -118,12 +120,28 @@
 
     --control-h: 40px;
     --gap: 16px;
-    --sidebar-w: 256px;
+    --row-h: 48px;
+    --sidebar-w: 240px;
     --sidebar-w-collapsed: 72px;
-    --topbar-h: 64px;
+    --topbar-h: 60px;
 
-    /* One duration for every micro-interaction; zeroed under reduced motion below. */
-    --motion: 160ms;
+    /* Spacing on the 4/8px grid (spec v2 §3, §6.1). */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+
+    /* Motion — light, for feedback and orientation only (spec v2 §8b): hover/focus use `--dur-fast`,
+     * menus and drawers `--dur`, the sidebar collapse `--dur-slow`. All zeroed under reduced motion
+     * below. `--motion` is the older single duration the legacy rules still read; it now points at
+     * `--dur-fast` so there is one set of numbers, not two. */
+    --dur-fast: 150ms;
+    --dur: 200ms;
+    --dur-slow: 250ms;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+    --motion: var(--dur-fast);
   }
 
   /*
@@ -162,6 +180,12 @@
    * cascade reverses layer order for important declarations), so no utility can re-enable motion.
    */
   @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-fast: 0.01ms;
+      --dur: 0.01ms;
+      --dur-slow: 0.01ms;
+    }
+
     *,
     *::before,
     *::after {
@@ -239,9 +263,9 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(60rem 30rem at 0% 0%, rgba(30, 123, 224, 0.1), transparent 60%),
-    linear-gradient(180deg, #eaf2fc 0%, var(--bg) 60%);
+  /* One very light vertical tint, as spec v2 §8.4 still asks for this screen; the radial glow that
+   * sat on top of it was decoration and is gone (ADR 0068 §11). */
+  background: linear-gradient(180deg, var(--brand-50) 0%, var(--bg) 60%);
 }
 
 .trang-dang-nhap::before {
@@ -276,7 +300,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 16px -6px rgba(198, 40, 40, 0.5);
 }
 
 .logo-vigov svg {
@@ -414,7 +437,7 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   padding: 1.75rem 1.5rem;
-  box-shadow: 0 2px 4px rgba(11, 79, 168, 0.04), 0 16px 40px -8px rgba(11, 79, 168, 0.16);
+  box-shadow: var(--shadow-md);
 }
 
 .tieu-de-form {
@@ -483,7 +506,7 @@ body {
 
 :where(.o-nhap) :where(input, select, textarea):where(:disabled),
 :where(input.o-nhap, select.o-chon):where(:disabled) {
-  background: var(--surface-muted);
+  background-color: var(--surface-muted);
   color: var(--ink-500);
   cursor: not-allowed;
 }
@@ -500,6 +523,112 @@ body {
   :where(input.o-nhap, textarea.o-nhap, select.o-chon) {
     font-size: 0.875rem;
   }
+}
+
+/* ---- every native single select: one modern frame (owner, 02/10/2026) ---------------------
+ *
+ * "Quá hẹp, view xấu, lạc hậu" — the Nội dung editor's selects were browser-default boxes with the
+ * label beside them. Screens not yet restyled draw dozens of bare `<select>`s, so the frame is given
+ * HERE, once, to all of them: the same look as `components/ui/field.tsx` `controlClass` — 40px,
+ * `--line-strong` hairline, `--r-control` radius, a ChevronDown, the brand focus ring.
+ *
+ * ZERO SPECIFICITY (`:where`) AND IN `legacy`, ON PURPOSE, for the same reason as the `.o-nhap`
+ * frame above: every contextual rule (44px touch targets, filter rows, a form's own select) must
+ * keep winning, and `Field`'s utilities win by layer. Only the look changes — no id, name, value
+ * or handler is touched, and `multiple` / `size` list boxes keep the browser's list drawing.
+ *
+ * The chevron is a background image because a `<select>` has no pseudo-elements. A data URI cannot
+ * read a CSS variable, so its colour is `--ink-500` (#5b6b82) written out — the one literal colour
+ * here; dark mode is defined but not enabled (see `:root[data-theme="dark"]`). `Field` draws its own
+ * chevron icon, so it switches this image off (`[&_select]:bg-none` in field.tsx). */
+:where(select:not([multiple], [size])) {
+  box-sizing: border-box;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  min-width: 12rem;
+  max-width: 100%;
+  padding: 0 2.25rem 0 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6b82' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  color: var(--ink-900);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+:where(select:not([multiple], [size])):where(:hover:not(:disabled)) {
+  border-color: #c3ccd9;
+}
+
+:where(select:not([multiple], [size])):focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+
+:where(select:not([multiple], [size])):where(:disabled) {
+  background-color: var(--surface-muted);
+  color: var(--ink-500);
+  cursor: not-allowed;
+}
+
+@media (min-width: 768px) {
+  :where(select:not([multiple], [size])) {
+    font-size: 0.875rem;
+  }
+}
+
+/* Inside a table cell the column decides the width: a 12rem floor would widen the whole table
+ * (`bang-thu-chi.tsx` "Cách tính" column). */
+:where(td, th) :where(select) {
+  min-width: 0;
+}
+
+/* LABEL ABOVE, everywhere a label sits BESIDE its select (spec §6.3: never mix label-left and
+ * label-above). Three legacy shapes:
+ *   `.o-chon` holding a select   (`.o-chon` is also the tick-box wrapper — only `:has(> select)`)
+ *   `.chon-nam` / `.chon-hang-muc` (already a column; see their own block)
+ *   a bare `<p>` / `<div>` whose children are `<label>` then `<select>` (Thu – Chi forms)
+ * `.o-nhap` is excluded from the bare shape: its label is already a block above the control, and a
+ * flex gap would stack on the label's own margin. A row whose label wraps a tick box never matches,
+ * because its label is not followed by a select. */
+.o-chon:has(> select) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+
+:where(p, div):where(:not(.o-nhap, .o-chon, .chon-nam, .chon-hang-muc)):where(:has(> label + select)) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.o-chon:has(> select) > label,
+:where(p, div):where(:not(.o-nhap, .o-chon, .chon-nam, .chon-hang-muc)):where(:has(> label + select)) > :where(label) {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.o-chon:has(> select) > select,
+:where(p, div):where(:not(.o-nhap, .o-chon, .chon-nam, .chon-hang-muc)):where(:has(> label + select)) > :where(select) {
+  width: 100%;
 }
 
 /* Login inputs: 46px with a leading icon (spec §8.4). The icon sits over the input's padding. */
@@ -586,7 +715,7 @@ div.thong-bao-loi:not(:empty) {
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(11, 79, 168, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: none;
   transition:
     background-color var(--motion) ease,
     border-color var(--motion) ease,
@@ -597,7 +726,6 @@ div.thong-bao-loi:not(:empty) {
 .nut-chinh:hover:not(:disabled) {
   background: var(--brand-700);
   border-color: var(--brand-700);
-  box-shadow: 0 4px 12px -2px rgba(11, 79, 168, 0.3);
 }
 
 .nut-chinh:active:not(:disabled) {
@@ -686,6 +814,46 @@ div.thong-bao-loi:not(:empty) {
 
 .khoi-co-quan {
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* Role pill — "ShieldCheck Vai trò: <role>" (spec v2 §5, `role-pill.tsx`). Neutral, not a status
+ * colour: it states context, not a state. One line; a long role name ends in "…". */
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink-700);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.role-pill > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-pill strong {
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.role-pill svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--brand-600);
 }
 
 /* Commune identity — sidebar top, or the topbar on pages with no sidebar (`commune-identity.tsx`). */
@@ -775,7 +943,7 @@ div.thong-bao-loi:not(:empty) {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--brand-100), #d3e4fa);
+  background: var(--brand-100);
   color: var(--brand-700);
   font-size: 0.8125rem;
   font-weight: 700;
@@ -891,8 +1059,8 @@ div.thong-bao-loi:not(:empty) {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  box-shadow: 0 2px 4px rgba(15, 27, 45, 0.04), 0 16px 40px -8px rgba(15, 27, 45, 0.18);
-  animation: menu-in var(--motion) ease-out;
+  box-shadow: var(--shadow-md);
+  animation: menu-in var(--dur) var(--ease);
 }
 
 @keyframes menu-in {
@@ -1085,7 +1253,7 @@ div.thong-bao-loi:not(:empty) {
   display: flex;
   flex-direction: column;
   gap: 0;
-  transition: width var(--motion) ease;
+  transition: width var(--dur-slow) var(--ease);
 }
 
 .thanh-ben::before {
@@ -1161,24 +1329,26 @@ div.thong-bao-loi:not(:empty) {
   gap: 0.125rem;
 }
 
-/* Menu item: 40px, 18px icon + 14px/500 label, 12px apart, 8px radius (spec §5). */
+/* Menu item: 36px, 18px icon + 13.5px/500 label, 12px apart, 8px radius; a long label ends in "…"
+   on one line, never wraps (spec v2 §5). */
 .thanh-ben-muc a,
 .thanh-ben-muc > span {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  min-height: 2.5rem;
+  min-width: 0;
+  min-height: 2.25rem;
   padding: 0 0.75rem;
   border-radius: var(--r-sm);
   color: var(--ink-700);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 13.5px;
   font-weight: 500;
   transition:
-    background-color var(--motion) ease,
-    color var(--motion) ease,
-    box-shadow var(--motion) ease;
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
 }
 
 .thanh-ben.thu-gon .thanh-ben-muc a,
@@ -1917,12 +2087,14 @@ div.thong-bao-loi:not(:empty) {
  * chọn của màn khác. */
 .form-bo-phan select {
   width: 100%;
-  padding: 0.625rem 0.75rem;
+  /* `background-color`, not the `background` shorthand: the shorthand would also erase the global
+   * select frame's chevron image, leaving an `appearance: none` select with no arrow at all. */
+  padding: 0.625rem 2.25rem 0.625rem 0.75rem;
   border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   font-size: 1rem;
   font-family: inherit;
-  background: #fff;
+  background-color: var(--surface);
 }
 
 /* MỖI NHÓM DANH MỤC LÀ MỘT KHỐI RIÊNG, CÁCH NHAU RÕ. Bảy bảng nhỏ nối nhau mà không có khoảng
@@ -2069,7 +2241,8 @@ div.thong-bao-loi:not(:empty) {
 .chon-hang-muc select {
   min-width: 10rem;
   max-width: 100%;
-  padding: 0.5rem 0.75rem;
+  /* Right padding leaves room for the chevron of the global select frame. */
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-control);
   background-color: var(--surface);
@@ -2309,7 +2482,7 @@ aside.khoi-chua-khai h3 {
 
 :is(.hang-loc, .filter-bar) .o-chon:has(> select) > select {
   max-width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-control);
   background-color: var(--surface);
@@ -3001,13 +3174,12 @@ aside.khoi-chua-khai h3 {
   background: var(--surface);
   color: inherit;
   overflow-wrap: anywhere;
-  box-shadow: 0 24px 64px -12px rgba(15, 27, 45, 0.35);
+  box-shadow: var(--shadow-md);
 }
 
+/* A flat scrim, no blur: spec v2 forbids frosted glass (ADR 0068 §11). */
 .overlay-dialog::backdrop {
   background: rgb(15 27 45 / 50%);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
 }
 
 /* The form inside already draws its frame; inside the overlay it must not draw a second one. */
@@ -3074,6 +3246,45 @@ aside.khoi-chua-khai h3 {
   max-height: 80vh;
   height: auto;
   margin: 0.5rem 0;
+}
+
+/* ---- shared shell helpers, spec v2 (ADR 0068 §11) --------------------------------------- */
+
+/* Content width by page kind (spec v2 §5). A data page uses the full column; a form stays at a
+ * readable line length; a detail page in between. `min-width: 0` keeps a wide child from pushing
+ * the page sideways inside the grid column. */
+.page--data {
+  max-width: none;
+  min-width: 0;
+}
+
+.page--form {
+  max-width: 880px;
+  min-width: 0;
+}
+
+.page--detail {
+  max-width: 1120px;
+  min-width: 0;
+}
+
+/* `ui/data-table.tsx`. Body rows one `--row-h` tall; the header row sticks inside a capped scroller
+ * (`.table-scroll--sticky`) — the cap is what gives `position: sticky` something to stick to. */
+.data-table tbody td {
+  height: var(--row-h);
+}
+
+.table-scroll--sticky {
+  max-height: min(70vh, 48rem);
+  overflow-y: auto;
+}
+
+.table-scroll--sticky .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-muted);
+  box-shadow: inset 0 -1px 0 var(--line);
 }
 
 } /* end @layer legacy */

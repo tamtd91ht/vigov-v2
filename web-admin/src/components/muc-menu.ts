@@ -90,26 +90,50 @@ export type NhomMenu = {
  */
 export const CHUA_CO_MAN = "Chưa có màn hình";
 
+/**
+ * Grouped BY BUSINESS AREA (spec v2 §5, 02/10/2026). Only the grouping and the order moved; every
+ * item keeps its label, route and permission key, and `locMenu` filters them exactly as before.
+ *
+ * `ten: ""` = a group drawn with no heading (Tổng quan stands alone at the top).
+ *
+ * "Thông báo" sits under CÔNG VIỆC, not NGƯỜI DÂN where the spec's table puts it: the spec says to
+ * move it if it is staff-internal, and it is — `/thong-bao` is the internal announcement book sent to
+ * departments (`docs/ui-ux/08-thong-bao.md` §1, `features/thong-bao/so-thong-bao.tsx`). Under
+ * NGƯỜI DÂN it would read as a message to citizens, which it never is.
+ */
 export const NHOM_MENU: readonly NhomMenu[] = [
   {
-    ten: "ĐIỀU HÀNH",
+    ten: "",
+    muc: [{ nhan: "Tổng quan", duong: "/tong-quan", khoa: REPORT_READ_PERMISSION }],
+  },
+  {
+    ten: "CÔNG VIỆC",
     muc: [
-      { nhan: "Tổng quan", duong: "/tong-quan", khoa: REPORT_READ_PERMISSION },
       { nhan: "Nhiệm vụ", duong: "/nhiem-vu", khoa: QUYEN_XEM_NHIEM_VU },
-      { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
       { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_XEM_VAN_BAN },
+      { nhan: "Thông báo", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
+      { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
+    ],
+  },
+  {
+    ten: "TÀI CHÍNH",
+    muc: [
       { nhan: "Giải ngân", duong: "/giai-ngan", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
-      { nhan: "Thông báo", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
+    ],
+  },
+  {
+    ten: "NGƯỜI DÂN",
+    muc: [
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
+      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Bản đồ kinh tế số", duong: null, khoa: null },
     ],
   },
   {
-    ten: "QUẢN TRỊ",
+    ten: "HỆ THỐNG",
     muc: [
-      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
       { nhan: "Báo cáo", duong: null, khoa: null },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },

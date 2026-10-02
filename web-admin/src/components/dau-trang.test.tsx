@@ -44,6 +44,10 @@ describe("DauTrang — commune block", () => {
     expect(html).not.toContain("topbar-avatar");
     expect(html).not.toContain("ho-ten");
   });
+
+  it("while the session is unread, draws no role pill — never a guessed role", () => {
+    expect(render("Xã Tân Phú", "Tỉnh Đồng Nai")).not.toContain("role-pill");
+  });
 });
 
 describe("userInitials", () => {

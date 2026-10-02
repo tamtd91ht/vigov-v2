@@ -13,7 +13,20 @@ import { cn } from "@/lib/cn";
  *
  * Renders a `<div>`; give it `role="status"` from the caller only where the screen already
  * announced the empty state.
+ *
+ * `tone` colours the icon circle only: `brand` (default, unchanged), `neutral` for a calm
+ * "nothing reachable" (e.g. `CloudOff` when the source is simply not connected), `danger` for a real
+ * failure. Red stays reserved for a real error (spec v2 §2) — a load failure with a retry belongs in
+ * `ErrorState`.
  */
+export type EmptyStateTone = "brand" | "neutral" | "danger";
+
+const TONE_CIRCLE: Record<EmptyStateTone, string> = {
+  brand: "bg-brand-50 text-brand-600",
+  neutral: "bg-surface-muted text-ink-500",
+  danger: "bg-danger-50 text-danger-600",
+};
+
 export type EmptyStateProps = {
   icon?: LucideIcon;
   title: ReactNode;
@@ -21,12 +34,13 @@ export type EmptyStateProps = {
   action?: ReactNode;
   className?: string;
   role?: "status";
+  tone?: EmptyStateTone;
 };
 
-export function EmptyState({ icon: Icon = Inbox, title, description, action, className, role }: EmptyStateProps) {
+export function EmptyState({ icon: Icon = Inbox, title, description, action, className, role, tone = "brand" }: EmptyStateProps) {
   return (
     <div role={role} className={cn("flex flex-col items-center gap-2 px-4 py-10 text-center", className)}>
-      <span aria-hidden="true" className="mb-2 grid size-[72px] place-items-center rounded-full bg-brand-50 text-brand-600">
+      <span aria-hidden="true" className={cn("mb-2 grid size-[72px] place-items-center rounded-full", TONE_CIRCLE[tone])}>
         <Icon className="size-8" strokeWidth={1.6} focusable="false" />
       </span>
       <p className="m-0 text-base font-semibold text-ink-900">{title}</p>

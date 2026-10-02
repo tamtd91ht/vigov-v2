@@ -47,9 +47,10 @@ export function SidebarView({ commune, groups, pathname, collapsed, onToggleColl
       </div>
 
       <div className="thanh-ben-cuon">
-        {groups.map((n) => (
-          <div key={n.ten} className="thanh-ben-nhom">
-            <p className="thanh-ben-nhan-nhom">{n.ten}</p>
+        {groups.map((n, i) => (
+          <div key={n.ten === "" ? `untitled-${i}` : n.ten} className="thanh-ben-nhom">
+            {/* A group with no heading (Tổng quan) draws no empty label line. */}
+            {n.ten !== "" && <p className="thanh-ben-nhan-nhom">{n.ten}</p>}
             <ul>
               {n.muc.map((m) => {
                 const Icon = menuIcon(m.nhan);

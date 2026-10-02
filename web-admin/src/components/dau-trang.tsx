@@ -7,6 +7,7 @@ import { usePhien } from "@/features/phien/phien-hien-tai";
 import { useCauHinhXa } from "./cau-hinh-xa";
 import { CommuneIdentity } from "./commune-identity";
 import { NotificationBell } from "./notification-bell";
+import { RolePill, sessionRoleName } from "./role-pill";
 import { userInitials } from "./user-initials";
 
 /**
@@ -32,11 +33,19 @@ import { userInitials } from "./user-initials";
  */
 export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
   const xa = useCauHinhXa();
-  const nguoi = khoiNguoiDung(usePhien());
+  const phien = usePhien();
+  const nguoi = khoiNguoiDung(phien);
+  const roleName = sessionRoleName(phien);
 
+  // Left: commune (only with no sidebar) + role pill. The MIDDLE stays empty on purpose — room for
+  // the future system-wide search (ROADMAP_PHASE2 "chừa sẵn"); `justify-content: space-between`
+  // keeps it open.
   return (
     <header className="dau-trang">
-      <div className="khoi-co-quan">{withCommune && <CommuneIdentity commune={xa} />}</div>
+      <div className="khoi-co-quan">
+        {withCommune && <CommuneIdentity commune={xa} />}
+        {roleName !== null && <RolePill roleName={roleName} />}
+      </div>
       <div className="khoi-nguoi-dung">
         {nguoi.hien && <NotificationBell />}
         {nguoi.hien ? (

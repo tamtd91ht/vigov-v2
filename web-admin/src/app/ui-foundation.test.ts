@@ -49,8 +49,20 @@ const ALL = sourceFiles(SRC);
 const NEW_UI = ALL.filter(
   (f) =>
     f.path.startsWith("components/ui/") ||
-    ["components/sidebar-view.tsx", "components/menu-icons.ts", "components/user-initials.ts", "lib/cn.ts"].includes(f.path),
+    [
+      "components/sidebar-view.tsx",
+      "components/menu-icons.ts",
+      "components/user-initials.ts",
+      "components/role-pill.tsx",
+      "lib/cn.ts",
+    ].includes(f.path),
 );
+
+/** Innermost `selector { body }` pairs of the comment-stripped CSS (nested @media included). */
+const RULES = [...stripComments(CSS).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+  selector: m[1]!.trim(),
+  body: m[2]!,
+}));
 
 describe("globals.css layering", () => {
   it("declares the layer order with legacy BELOW the utilities", () => {
@@ -111,6 +123,93 @@ describe("globals.css layering", () => {
 
   it("honours reduced motion", () => {
     expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
+  });
+});
+
+/**
+ * Spec v2 (ADR 0068 §11): "modern = less friction, not decoration". Each guard below is a look that
+ * nothing else would catch coming back — a blur or a gradient tile is invisible to every other test.
+ */
+describe("spec v2 shell", () => {
+  it("declares the v2 tokens: 240/72px sidebar, 60px topbar, 48px rows, 4/8px spacing, motion", () => {
+    for (const decl of [
+      "--sidebar-w: 240px;",
+      "--sidebar-w-collapsed: 72px;",
+      "--topbar-h: 60px;",
+      "--row-h: 48px;",
+      "--space-1: 4px;",
+      "--space-6: 32px;",
+      "--dur-fast: 150ms;",
+      "--dur: 200ms;",
+      "--dur-slow: 250ms;",
+      "--ease: cubic-bezier(0.2, 0, 0, 1);",
+    ])
+      expect(CSS, decl).toContain(decl);
+  });
+
+  it("zeroes the motion tokens under reduced motion", () => {
+    const block = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n {2}\}/.exec(CSS)?.[1] ?? "";
+    expect(block).toContain("--dur-fast: 0.01ms;");
+    expect(block).toContain("--dur-slow: 0.01ms;");
+  });
+
+  it("no frosted glass anywhere: no backdrop-filter, no blur()", () => {
+    expect(stripComments(CSS)).not.toMatch(/backdrop-filter|blur\(/);
+    for (const f of NEW_UI) expect(f.text, f.path).not.toMatch(/backdrop-blur|backdrop-filter/);
+  });
+
+  it("no gradient in the shared components (the PageHeader tile is flat)", () => {
+    for (const f of NEW_UI) expect(f.text, f.path).not.toMatch(/bg-linear|bg-gradient|from-brand-|linear-gradient/);
+  });
+
+  it("page width classes exist: data none, form 880px, detail 1120px", () => {
+    expect(CSS).toMatch(/\.page--data \{[^}]*max-width: none;/);
+    expect(CSS).toMatch(/\.page--form \{[^}]*max-width: 880px;/);
+    expect(CSS).toMatch(/\.page--detail \{[^}]*max-width: 1120px;/);
+  });
+});
+
+/**
+ * The global select frame (owner, 02/10/2026: "quá hẹp, view xấu, lạc hậu"). It must stay at ZERO
+ * specificity so contextual rules (44px touch targets, filter rows) keep winning, and nothing may
+ * erase its chevron: an `appearance: none` select whose chevron image was wiped by a `background:`
+ * shorthand has no arrow at all and no longer looks like something to open.
+ */
+describe("global select frame", () => {
+  const frame = RULES.find((r) => r.selector === ":where(select:not([multiple], [size]))" && r.body.includes("appearance"));
+
+  it("exists, at zero specificity, inside the legacy layer", () => {
+    expect(frame).toBeDefined();
+    const at = CSS.indexOf(":where(select:not([multiple], [size])) {");
+    expect(at).toBeGreaterThan(CSS.indexOf("@layer legacy {"));
+    expect(at).toBeLessThan(CSS.lastIndexOf("} /* end @layer legacy */"));
+  });
+
+  it("is the controlClass look: 40px, line-strong hairline, control radius, chevron, no native arrow", () => {
+    const b = frame?.body ?? "";
+    for (const decl of [
+      "height: var(--control-h);",
+      "border: 1px solid var(--line-strong);",
+      "border-radius: var(--r-control);",
+      "appearance: none;",
+      "background-image: url(\"data:image/svg+xml,",
+    ])
+      expect(b, decl).toContain(decl);
+  });
+
+  it("no rule that targets a select uses the `background` shorthand", () => {
+    const offenders = RULES.filter((r) => /\bselect\b/.test(r.selector) && /(^|[\s;])background\s*:/.test(r.body));
+    expect(offenders.map((r) => r.selector)).toEqual([]);
+  });
+
+  it("Field, which draws its own chevron icon, switches the frame's image off", () => {
+    const field = readFileSync(join(SRC, "components", "ui", "field.tsx"), "utf8");
+    expect(field).toContain('kind === "select" && "[&_select]:bg-none"');
+  });
+
+  it("puts the label ABOVE every label-beside-select shape, never on tick-box rows", () => {
+    expect(CSS).toMatch(/\.o-chon:has\(> select\) \{[^}]*flex-direction: column;/);
+    expect(CSS).toMatch(/:where\(p, div\):where\(:not\(\.o-nhap, \.o-chon, \.chon-nam, \.chon-hang-muc\)\):where\(:has\(> label \+ select\)\) \{[^}]*flex-direction: column;/);
   });
 });
 

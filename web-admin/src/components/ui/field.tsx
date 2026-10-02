@@ -22,12 +22,20 @@ export const controlClass = cn(
   "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-500",
 );
 
-export function Toolbar({ className, ...props }: ComponentProps<"div">) {
+/**
+ * `end` is the right-hand slot (ROADMAP_PHASE2 "chừa sẵn": the future "Cột" / "Xuất" buttons). It is
+ * drawn as a `ToolbarActions` after the filters, so it stays at the right end and wraps last. Pass
+ * only controls the screen already has — the slot existing is not a reason to add one.
+ */
+export function Toolbar({ className, children, end, ...props }: ComponentProps<"div"> & { end?: ReactNode }) {
   return (
     <div
       className={cn("flex min-w-0 flex-wrap items-end gap-3 border-b border-line px-4 py-3.5", className)}
       {...props}
-    />
+    >
+      {children}
+      {end !== undefined && <ToolbarActions className="toolbar-end">{end}</ToolbarActions>}
+    </div>
   );
 }
 
@@ -108,6 +116,9 @@ export function Field({
           // `padding-left`/`padding-right` sort after `padding-inline`, so these win.
           Icon !== undefined && "[&_:is(input,select,textarea)]:pl-10",
           kind === "select" && "[&_select]:cursor-pointer [&_select]:appearance-none [&_:is(input,select,textarea)]:pr-9",
+          // Field draws its own ChevronDown icon below; the global select frame's background-image
+          // chevron (`globals.css`) would be a second one.
+          kind === "select" && "[&_select]:bg-none",
         )}
       >
         {Icon !== undefined && (

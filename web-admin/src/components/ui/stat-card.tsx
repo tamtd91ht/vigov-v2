@@ -43,8 +43,9 @@ export function StatCard({ icon: Icon, label, value, caption, tone = "brand", al
   return (
     <div
       className={cn(
+        // No hover lift: the card is not clickable, and a card that rises under the pointer
+        // promises an action it does not have (spec v2: flat, very light shadow).
         "flex h-full min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-4 shadow-sm",
-        "transition-[box-shadow,border-color] duration-150 hover:border-line-strong hover:shadow-md",
         className,
       )}
     >
