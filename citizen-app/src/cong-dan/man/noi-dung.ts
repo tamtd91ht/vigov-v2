@@ -30,8 +30,10 @@ import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
  *   resolved→da-xu-ly · awaiting_citizen_confirm→cho-dan-xac-nhan · closed→da-dong ·
  *   rejected→khong-tiep-nhan · out_of_scope→chuyen-cap-tren
  * ĐỪNG SỬA CHỮ Ở ĐÂY — câu là quyết định của chủ dự án, `cong-dan.test.tsx` ghim từng câu với từng mã.
- * ⚠ Câu của `da-dong` ("… Phải có ảnh sau xử lý mới đóng được.") chỉ đúng ở xã bật cờ
- *   `bat_buoc_anh_nghiem_thu` (ADR 0008 quyết định 3) — ADR 0027 ghi đó là chỗ CHƯA KHỚP, chưa chốt.
+ * MỘT NGOẠI LỆ, chủ dự án chốt 02/10/2026 (ADR 0027 "Bổ sung 2026-10-02"): câu của `da-dong` gửi NGƯỜI DÂN
+ *   bỏ vế sau — người dân đọc "Phiếu đã đóng."; câu đủ của bản mẫu ("… Phải có ảnh sau xử lý mới đóng
+ *   được.") là luật cho CÁN BỘ, chỉ đúng ở xã bật cờ `bat_buoc_anh_nghiem_thu`, và chỉ Web Admin hiện nó.
+ *   Bảng này dùng chung cho app chung và app xã (chủ dự án: "cả hai app cùng 9 câu").
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 export const TRANG_THAI: Readonly<Record<string, { giai_thich: string | null }>> = {
   "da-tiep-nhan": { giai_thich: "Phiếu vừa vào sổ, chưa phân cho ai." },
@@ -40,7 +42,7 @@ export const TRANG_THAI: Readonly<Record<string, { giai_thich: string | null }>>
   "dang-xu-ly": { giai_thich: "Bộ phận đang xử lý tại hiện trường." },
   "da-xu-ly": { giai_thich: "Đã làm xong, chờ báo lại cho người dân." },
   "cho-dan-xac-nhan": { giai_thich: "Đã báo người dân, chờ họ xác nhận và chấm điểm." },
-  "da-dong": { giai_thich: "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được." },
+  "da-dong": { giai_thich: "Phiếu đã đóng." },
   "khong-tiep-nhan": { giai_thich: "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do." },
   "chuyen-cap-tren": { giai_thich: "Vượt thẩm quyền của xã, đã chuyển lên cấp trên." },
 };

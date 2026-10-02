@@ -245,6 +245,17 @@ phải chữ hiện trên màn.
 - Người dân thấy **bốn nhóm**, không phải chín trạng thái (ADR 0050 điểm 5). Câu nào hiện cạnh nhóm
   hay bước nào ở phía dân là việc của lượt dựng, chưa ai chốt.
 
+**Đã chốt cùng ngày, sau lượt dựng app xã** (chủ dự án chọn đề xuất cả ba):
+
+| # | Quyết định |
+|---|---|
+| 4 | **Cả hai app** (app chung ViHAT và app riêng của xã) cùng chín câu — một bảng (`citizen-app/src/cong-dan/man/noi-dung.ts` `TRANG_THAI`), không tách theo app |
+| 5 | Câu của `da-dong` gửi **người dân** bỏ vế sau: chỉ *"Phiếu đã đóng."*. Câu đủ của bản mẫu là **luật cho cán bộ**, chỉ Web Admin hiện — gỡ chỗ chưa khớp thứ nhất ở trên |
+| 6 | Các câu bản mẫu viết theo giọng cán bộ (nói về người dân ở ngôi thứ ba, ví dụ *"chờ báo lại cho người dân"*) **giữ nguyên văn** ở cả phía dân |
+
+Câu người dân thấy ở bước nào: dòng phụ dưới **bước hiện tại** của dòng thời gian, đúng chỗ câu cũ
+đã hiện — gỡ chỗ chưa khớp thứ hai.
+
 ## Bổ sung 2026-09-20 (muộn hơn trong ngày) — #23 và #24 đã đóng, ADR 0028
 
 **Ba điều đổi ở tệp này, và đúng ba điều đó:**

@@ -216,7 +216,9 @@ describe("chữ của màn hình", () => {
     "dang-xu-ly": ["in_progress", "Bộ phận đang xử lý tại hiện trường."],
     "da-xu-ly": ["resolved", "Đã làm xong, chờ báo lại cho người dân."],
     "cho-dan-xac-nhan": ["awaiting_citizen_confirm", "Đã báo người dân, chờ họ xác nhận và chấm điểm."],
-    "da-dong": ["closed", "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được."],
+    // The one owner-decided cut (ADR 0027, 02/10/2026): the citizen reads only the first clause; the
+    // prototype's "Phải có ảnh sau xử lý mới đóng được." is a rule for staff, shown on Web Admin only.
+    "da-dong": ["closed", "Phiếu đã đóng."],
     "khong-tiep-nhan": ["rejected", "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do."],
     "chuyen-cap-tren": ["out_of_scope", "Vượt thẩm quyền của xã, đã chuyển lên cấp trên."],
   };
