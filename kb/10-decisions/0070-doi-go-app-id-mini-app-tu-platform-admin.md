@@ -10,6 +10,8 @@ owns_facts:
   - "gỡ Mini App khỏi xã = tắt liên kết (dang_hoat_dong=false), BẮT BUỘC lý do, có nhật ký; App ID đã tắt bật lại được cho CHÍNH xã đó (cũng bắt buộc lý do); không bao giờ chuyển App ID sang xã khác (chốt 02/10/2026)"
   - "khoá bí mật Zalo của App ID nhập ngay trên màn chi tiết xã, lưu mã hoá ở service-identity (ADR 0066 dòng 4); đổi hoặc gỡ App ID thì khoá của App ID cũ tự thu hồi (chốt 02/10/2026)"
   - "đổi/gỡ/bật lại App ID bảo vệ bằng hộp xác nhận hỏi đúng việc + lý do, quyền ops.mini_app.manage; không đòi nhập lại TOTP (chốt 02/10/2026)"
+  - "khoá bí mật App ID đi platform-admin → service-platform (tuyến vận hành) → identity qua gRPC 9093; platform chỉ chuyển tiếp, không lưu, không log — thay dòng 'không vòng qua service-platform' của ADR 0066 dòng 4 (chốt 02/10/2026)"
+  - "thao tác của người vận hành ViHAT trên một xã chỉ hiện ở nhật ký vận hành, không hiện trên màn nhật ký hệ thống của cán bộ xã; dòng nhật ký vẫn ghi cùng giao dịch, actor_kind operator, mã VH- (chốt 02/10/2026)"
 ---
 
 # 0070. Đổi và gỡ App ID Mini App của xã từ platform-admin
@@ -40,6 +42,21 @@ app chỉ đặt được bằng `operatorctl`.
 **Vì sao bật lại được (nới thiết kế cũ):** khoá chính `mini_app.app_id` giữ cả dòng đã tắt nên trước
 đây một App ID gỡ nhầm là mất vĩnh viễn. Chỉ cho bật lại **trong cùng xã** giữ đúng điều thiết kế cũ
 muốn chặn — một App ID lặng lẽ đổi sang xã khác.
+
+### Bổ sung 02/10/2026 — đường đi của khoá bí mật, nhật ký
+
+Agent dựng phát hiện quyết định #4 ("platform-admin gọi thẳng tuyến vận hành của identity", chép từ
+ADR 0066 dòng 4) **không làm được như viết**: identity không có cổng HTTP vận hành; platform-admin chỉ
+tới được service-platform (bộ định tuyến + NetworkPolicy luật 12); ADR 0048 §01/10 #2 chốt
+service-platform là cổng HTTP **duy nhất** của khu vận hành. Chủ dự án chốt:
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 6 | Đường đi của khoá bí mật | platform-admin → **service-platform** (tuyến vận hành, `ops.mini_app.manage`) → **identity qua gRPC 9093** (kênh vận hành đã có). Platform chỉ chuyển khoá đi, không lưu, không ghi log. **Thay** dòng "không vòng qua service-platform" của ADR 0066 dòng 4 và #4 ở trên |
+| 7 | Nhật ký | Thao tác của người vận hành trên một xã **chỉ hiện ở nhật ký vận hành** — không hiện trên màn nhật ký hệ thống cán bộ xã xem (ADR 0054). Dòng nhật ký **vẫn ghi** cùng giao dịch (luật 6 bất biến 1), loại người làm `operator`, mã VH- |
+
+**Vì sao qua platform:** không mở kênh mạng mới mang khoá bí mật (luật 13 STOP), không chép phần kiểm
+phiên vận hành sang dịch vụ khác, không thêm biến cấu hình, không đổi bộ định tuyến.
 
 ## Hệ quả
 
