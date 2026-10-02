@@ -617,6 +617,8 @@ export const TIN_XA = {
   today: "Hôm nay",
   yesterday: "Hôm qua",
   days_ago: (n: number) => `${n} ngày trước`,
+  /** "1.234 lượt xem" — grouped the Vietnamese way (a dot), so a reader never takes "1,234" for one-point-something. */
+  view_count: (n: number) => `${new Intl.NumberFormat("vi-VN").format(n)} lượt xem`,
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

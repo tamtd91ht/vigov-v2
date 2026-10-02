@@ -2818,6 +2818,25 @@ body {
   font-size: var(--text-small);
   color: var(--ink-muted);
 }
+/*
+ * A news meta line that carries a view count (both apps, owner 02/10/2026): the day, then "{n} lượt xem" with its
+ * eye. Wraps rather than shrinks on a 320px screen — the text stays the line's own size (≥ 16px), never smaller
+ * than the date beside it. Only set when a count exists, so a line without one is unchanged.
+ */
+.news-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+.view-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .xa-giua {
   text-align: center;
   margin: 12px 0;

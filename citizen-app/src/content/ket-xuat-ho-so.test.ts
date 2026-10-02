@@ -620,7 +620,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien", "dm-thu"), []],
       // Card D2: the category chips' route — host and type.
       [NEWS_CATEGORIES_PATH, newsCategoriesAddress(TEN_MIEN, "su-kien"), []],
-      [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu"), ["id"]],
+      // Every parameter the client can send: the audio re-read's `no_view` too (02/10/2026).
+      [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu", { noView: true }), ["id"]],
     ];
     expect(DUONG_CONG_KHAI).toHaveLength(CA.length);
     for (const [tuyen, dia_chi, tham_so_duong_dan] of CA) {

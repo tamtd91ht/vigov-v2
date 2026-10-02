@@ -730,8 +730,15 @@ export function communeBanners(ten_mien: string): Promise<NewsReadResult<readonl
   return goiCongKhai("banners", ten_mien, bannersAddress, readBanners);
 }
 
-/** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */
-export function baiTinCuaXa(ten_mien: string, id: string): Promise<NewsReadResult<BaiTinXa>> {
+/**
+ * Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. `noView`: a re-read that
+ * is not an open (`diaChiBaiTin`) — the server then does not count a view.
+ */
+export function baiTinCuaXa(
+  ten_mien: string,
+  id: string,
+  options: { noView?: boolean } = {},
+): Promise<NewsReadResult<BaiTinXa>> {
   if (id === "") return Promise.resolve({ kieu: "khong-thay" });
-  return goiCongKhai("news-item", ten_mien, (t) => diaChiBaiTin(t, id), docBaiTin);
+  return goiCongKhai("news-item", ten_mien, (t) => diaChiBaiTin(t, id, options), docBaiTin);
 }

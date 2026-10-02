@@ -28,6 +28,7 @@ import {
   sauKhiTaiTin,
   TIN_DAU,
   type TrangBai,
+  ViewCount,
 } from "./TinTucXaScreen";
 
 import { ArticleBody } from "./article-body";
@@ -196,27 +197,36 @@ export function NewsThumb(props: { imageUrl: string | undefined; failed: boolean
 
 /**
  * One news card (`PROTOTYPE.md` §6.5 NewsCard) — on the news tab, the home screen and "Tin liên quan": the
- * picture slot (`NewsThumb`), the title on two lines, how long ago. No view count (owner). `compact`: the
- * home screen's smaller slot (88×72 against 96×80, §6.5).
+ * picture slot (`NewsThumb`), the title on two lines, how long ago. `compact`: the home screen's smaller slot
+ * (88×72 against 96×80, §6.5).
+ *
+ * `showViews` (owner, 02/10/2026): the view count after the day, when the server sent one — on the lists and
+ * "Tin liên quan", NOT on the home screen's "Tin mới" nor the Video list, so it is off unless a caller asks.
  */
 export function HangTin({
   tin,
   onMo,
   today = todayVN(),
   compact = false,
+  showViews = false,
 }: {
   tin: TinXaTomTat;
   onMo: (id: string) => void;
   today?: string;
   compact?: boolean;
+  showViews?: boolean;
 }) {
   const [thumbFailed, setThumbFailed] = useState(false);
+  const views = showViews ? tin.viewCount : undefined;
   return (
     <button type="button" className={`xa-the xa-hang-tin${compact ? " xa-hang-tin--compact" : ""}`} onClick={() => onMo(tin.id)}>
       <NewsThumb imageUrl={tin.imageUrl} failed={thumbFailed} onFail={() => setThumbFailed(true)} />
       <span className="xa-hang-tin__chu">
         <strong className="xa-hang-tin__tieu-de xa-cat-2">{tin.tieu_de}</strong>
-        <span className="xa-phu">{relativeDay(tin.ngay_dang, today)}</span>
+        <span className={views === undefined ? "xa-phu" : "xa-phu news-meta"}>
+          {relativeDay(tin.ngay_dang, today)}
+          {views !== undefined && <ViewCount count={views} />}
+        </span>
         {tin.audio?.durationSeconds !== undefined && <BroadcastLength seconds={tin.audio.durationSeconds} />}
       </span>
     </button>
@@ -457,12 +467,22 @@ export function NewsOfType(props: {
   empty: string;
 }) {
   const news = useTinXa(props.ten_mien, props.type, props.category ?? null);
-  return <NewsListBody ds={news.ds} onMo={props.onMo} onTai={news.taiTiep} empty={props.empty} />;
+  // The Video list carries no view count (owner, 02/10/2026).
+  return (
+    <NewsListBody ds={news.ds} onMo={props.onMo} onTai={news.taiTiep} empty={props.empty} showViews={props.type !== "video"} />
+  );
 }
 
-/** Loading · failed · empty · the list with "Xem thêm". PURE apart from the callbacks. */
-export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => void; onTai: () => void; empty: string }) {
+/** Loading · failed · empty · the list with "Xem thêm". `showViews` (default on): see `HangTin`. PURE apart from the callbacks. */
+export function NewsListBody(props: {
+  ds: DanhSachTin;
+  onMo: (id: string) => void;
+  onTai: () => void;
+  empty: string;
+  showViews?: boolean;
+}) {
   const { ds } = props;
+  const showViews = props.showViews ?? true;
   if (!ds.da_co_trang_dau && ds.dang_tai) {
     return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />;
   }
@@ -484,7 +504,7 @@ export function NewsListBody(props: { ds: DanhSachTin; onMo: (id: string) => voi
       <ul className="xa-ds">
         {ds.muc.map((t) => (
           <li key={t.id}>
-            <HangTin tin={t} onMo={props.onMo} />
+            <HangTin tin={t} onMo={props.onMo} showViews={showViews} />
           </li>
         ))}
       </ul>
@@ -543,6 +563,15 @@ export function audioOfReread(kq: NewsReadResult<BaiTinXaData>): BroadcastAudio 
   return kq.kieu === "xong" ? (kq.gia_tri.audio ?? null) : null;
 }
 
+/**
+ * The player's re-read of an OPEN article for a fresh audio link — sent with `no_view=1` (owner, 02/10/2026): the
+ * citizen opened the article once, and an expired link must not add a second view. Exported so the test pins the
+ * address it really sends.
+ */
+export async function rereadAudio(ten_mien: string, id: string): Promise<BroadcastAudio | null> {
+  return audioOfReread(await baiTinCuaXa(ten_mien, id, { noView: true }));
+}
+
 /** Một bài — ảnh bìa (khi có) + tiêu đề + ngày + toàn văn. Màn con, có nút quay lại. */
 export function BaiTinXa(props: {
   ten_mien: string;
@@ -566,6 +595,9 @@ export function BaiTinXa(props: {
   const openVideo = props.openVideo;
   const leave = useLeaveApp(props.openLink);
 
+  // THE COUNTED READ: once per open. The ref keeps StrictMode's second effect run from reading (and counting)
+  // again; "Thử lại" reads again because the failed read was not an open the server counted. The shell keys this
+  // screen by id, so a related article is a new mount — a new open.
   async function tai() {
     datTrang({ kieu: "dang-tai" });
     datTrang(sauKhiTaiBai(await baiTinCuaXa(props.ten_mien, props.id)));
@@ -589,8 +621,8 @@ export function BaiTinXa(props: {
 
   // The broadcast's link expires (≤ 15 minutes): the player asks for a fresh one by re-reading THIS item, once per
   // attempt (`broadcast-player.tsx`). Only the audio is taken from the re-read — the article on screen stays as the
-  // citizen is reading it.
-  const refreshAudio = async (): Promise<BroadcastAudio | null> => audioOfReread(await baiTinCuaXa(props.ten_mien, props.id));
+  // citizen is reading it. Not counted as a view (`rereadAudio`); the mount's read and "Thử lại" are.
+  const refreshAudio = (): Promise<BroadcastAudio | null> => rereadAudio(props.ten_mien, props.id);
   const onWatchVideo =
     openVideo === undefined || videoUrl === undefined
       ? undefined
@@ -675,7 +707,10 @@ export function NewsArticle(props: {
     <article className="xa-bai">
       <ArticleCover imageUrl={bai.imageUrl} failed={props.coverFailed} onFail={props.onCoverFail} />
       <h2 className="xa-bai__tieu-de">{bai.tieu_de}</h2>
-      <p className="xa-phu">{dongPhu(bai)}</p>
+      <p className={bai.viewCount === undefined ? "xa-phu" : "xa-phu news-meta"}>
+        {dongPhu(bai)}
+        {bai.viewCount !== undefined && <ViewCount count={bai.viewCount} />}
+      </p>
       <EventDetails tin={bai} />
       {props.onWatchVideo !== undefined && <WatchVideo failed={props.videoFailed ?? false} onTap={props.onWatchVideo} />}
       {/* ADR 0067 §4: only a `truyen-thanh` item with a verified file carries `audio` (`readBroadcastAudio`). */}
@@ -697,7 +732,7 @@ function TinLienQuan(props: { ds: readonly TinXaTomTat[]; bai: TinXaTomTat; onMo
       <ul className="xa-ds">
         {lq.map((t) => (
           <li key={t.id}>
-            <HangTin tin={t} onMo={mo} />
+            <HangTin tin={t} onMo={mo} showViews />
           </li>
         ))}
       </ul>

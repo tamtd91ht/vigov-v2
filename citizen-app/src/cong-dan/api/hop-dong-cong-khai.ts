@@ -116,9 +116,15 @@ export function newsCategoriesAddress(ten_mien: string, type: NewsType | null = 
 }
 
 /** `encodeURIComponent` cho `id`: một ký tự lạ không được đổi đường dẫn. */
-export function diaChiBaiTin(ten_mien: string, id: string): string {
+/**
+ * `noView`: add `no_view=1`, which tells the server this read is NOT an open and must not be counted (owner,
+ * 02/10/2026). Only the re-read for a fresh broadcast audio link sends it — the article is already open, and
+ * counting that read would add a view for every expired link. Every real open (first load, "Thử lại", a related
+ * article) leaves it out, so it counts.
+ */
+export function diaChiBaiTin(ten_mien: string, id: string, options: { noView?: boolean } = {}): string {
   const goc = diaChiViGov("comms", DUONG_DAN_TIN_XA);
-  return goc === "" ? "" : voiHost(`${goc}/${encodeURIComponent(id)}`, ten_mien);
+  return goc === "" ? "" : voiHost(`${goc}/${encodeURIComponent(id)}`, ten_mien, options.noView === true ? { no_view: "1" } : {});
 }
 
 const laChuoi = (v: unknown): v is string => typeof v === "string";
@@ -337,6 +343,12 @@ export type TinXaTomTat = {
    * verified, or ABSENT. See `readBroadcastAudio`.
    */
   readonly audio?: BroadcastAudio;
+  /**
+   * How many times the article was opened (owner, 02/10/2026) — a whole number ≥ 0, or ABSENT: an older server
+   * that sends no `view_count`, or a value `readViewCount` refused. Absent shows NOTHING — never a made-up "0",
+   * which would tell a commune nobody read an article the server simply did not count.
+   */
+  readonly viewCount?: number;
 };
 
 /**
@@ -541,6 +553,16 @@ function readOptionalText(v: unknown): string | undefined | null {
   return t === "" ? undefined : t;
 }
 
+/**
+ * Optional `view_count` → a whole number ≥ 0, or `undefined`. PURE.
+ *
+ * LENIENT, like the audio fields: a count the app cannot read costs the citizen nothing if it is dropped, while
+ * refusing the whole page over it would cost them the news. So a fraction, a negative, a string, `null` → absent.
+ */
+export function readViewCount(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+}
+
 function docTin(m: unknown): TinXaTomTat | null {
   if (typeof m !== "object" || m === null) return null;
   const r = m as Record<string, unknown>;
@@ -579,6 +601,7 @@ function docTin(m: unknown): TinXaTomTat | null {
   // Gated by type, as on the server (`tin_xa_cong_khai.go:348`): a player on an item that is not a broadcast would
   // play something the commune never published as one.
   const audio = type === "truyen-thanh" ? readBroadcastAudio(r.audio_url, r.audio_url_expires_at, r.audio_duration_seconds) : undefined;
+  const viewCount = readViewCount(r.view_count);
   return {
     id: r.id,
     tieu_de: r.title,
@@ -596,6 +619,7 @@ function docTin(m: unknown): TinXaTomTat | null {
     // button on an article that is not a video would open a link the commune never offered as one.
     ...(type === "video" && videoUrl !== undefined ? { videoUrl } : {}),
     ...(audio === undefined ? {} : { audio }),
+    ...(viewCount === undefined ? {} : { viewCount }),
   };
 }
 

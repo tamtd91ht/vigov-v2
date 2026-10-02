@@ -18,6 +18,7 @@ import { type BaiTinXa, type TinXaTomTat, type TrangTinXa } from "../api/hop-don
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { ArticleBody } from "./article-body";
+import { BieuTuong } from "./BieuTuong";
 import { BangXa } from "./khung";
 import { QUAY_LAI, TIN_XA } from "./noi-dung";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
@@ -104,12 +105,30 @@ export function sauKhiTaiTin(ds: DanhSachTin, kq: NewsReadResult<TrangTinXa>): D
 
 const ngay = (s: string) => ngayVN(s) ?? NGAY_KHONG_DOC_DUOC;
 
-/** Dòng phụ chung cho thẻ và bài: chuyên mục · ngày đăng — bằng chữ, có nhãn. */
+/**
+ * An eye and "1.234 lượt xem" at the end of a meta line, both apps (owner, 02/10/2026; prototype `NewsCard.tsx:31-34`). The
+ * eye is decoration (`aria-hidden` in `BieuTuong`): the words carry the meaning, so a screen reader hears
+ * "1.234 lượt xem" and nobody has to read a picture. Rendered only for a count the server sent (`viewCount`).
+ */
+export function ViewCount({ count }: { count: number }) {
+  return (
+    <span className="view-count">
+      <BieuTuong ten="eye" co={16} />
+      {TIN_XA.view_count(count)}
+    </span>
+  );
+}
+
+/**
+ * Dòng phụ chung cho thẻ và bài: chuyên mục · ngày đăng — bằng chữ, có nhãn — then the view count when the server
+ * sent one. Without a count the markup is exactly what it was.
+ */
 function DongPhu({ tin }: { tin: TinXaTomTat }) {
   return (
-    <span className="cd-the-cua-toi__dong">
+    <span className={tin.viewCount === undefined ? "cd-the-cua-toi__dong" : "cd-the-cua-toi__dong news-meta"}>
       {tin.chuyen_muc !== "" && `${TIN_XA.chuyen_muc}: ${tin.chuyen_muc} · `}
       {TIN_XA.ngay_dang}: {ngay(tin.ngay_dang)}
+      {tin.viewCount !== undefined && <ViewCount count={tin.viewCount} />}
     </span>
   );
 }
@@ -238,7 +257,11 @@ export function ThanBaiTin(props: { trang: TrangBai; onTai: () => void }) {
   );
 }
 
-function ManBaiTin(props: { ten_mien: string; id: string; onQuayLai: () => void; ten_xa: string | null }) {
+/**
+ * One open of an article: ONE counted read on mount (the ref survives StrictMode's second effect run), and one more
+ * only when the citizen taps "Thử lại" — the failed read was not counted, so the retry is the open.
+ */
+export function ManBaiTin(props: { ten_mien: string; id: string; onQuayLai: () => void; ten_xa: string | null }) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
   const da_tai = useRef(false);
 

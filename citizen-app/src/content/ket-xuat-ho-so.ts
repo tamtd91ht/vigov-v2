@@ -643,6 +643,14 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     truong: [
       HOST_CONG_KHAI,
       { khoa: "id", trong_chinh_sach: "mã của tin người dùng bấm đọc, do chính máy chủ trả trong danh sách tin" },
+      {
+        // 02/10/2026 (owner: articles show a view count, counted by the server on this route): the commune app's
+        // audio re-read sends a fixed `no_view=1` so that read is not counted. A constant, nothing about the
+        // citizen — declared because the dossier lists every key that leaves the phone (`ket-xuat-ho-so.test.ts`).
+        khoa: "no_view",
+        trong_chinh_sach:
+          "chỉ trong ứng dụng riêng của xã: giá trị cố định `1`, gửi khi đọc lại đúng tin đang mở để lấy đường dẫn âm thanh mới, để máy chủ không tính lần đọc lại ấy là một lượt xem",
+      },
     ],
     app: "both",
     // Articles open from the home screen, the news tab, and the Truyền thanh · Video · Sự kiện tiles. 01/10/2026

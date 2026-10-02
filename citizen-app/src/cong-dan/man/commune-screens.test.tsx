@@ -38,6 +38,7 @@ import {
   videoOpenFailed,
   WatchVideo,
 } from "./TinTucAppXa";
+import { BaiTin, TheTin } from "./TinTucXaScreen"; // vi-name-ok: existing shared-app components
 import { NHOM_CHUC_NANG } from "./TrangXa";
 import { VONG_DOI } from "./trai-nghiem";
 
@@ -306,7 +307,7 @@ describe("Tin tức (§6.5)", () => {
     expect(todayVN(Date.UTC(2026, 8, 30, 18, 0))).toBe("2026-10-01"); // 01:00 on 1 Oct in Vietnam
   });
 
-  it("every item is the same card: no featured first card, no view count", () => {
+  it("every item is the same card: no featured first card", () => {
     const list = html(
       createElement(NewsListBody, {
         ds: { muc: [item("1"), item("2")], con_tro: "", con_nua: false, da_co_trang_dau: true, dang_tai: false, loi: null },
@@ -316,7 +317,94 @@ describe("Tin tức (§6.5)", () => {
       }),
     );
     expect(list.match(/class="xa-the xa-hang-tin"/g)).toHaveLength(2);
-    expect(list).not.toMatch(/xa-noi-bat|lượt xem/);
+    expect(list).not.toMatch(/xa-noi-bat/);
+  });
+
+  /**
+   * THE VIEW COUNT (owner, 02/10/2026): "{n} lượt xem" after the day, with an aria-hidden eye, on the list cards and
+   * the article in BOTH apps; never on the home "Tin mới" card or the Video list. An older server sends no count →
+   * nothing at all, never a made-up "0". A count of 0 (a new article) is a real count → "0 lượt xem".
+   */
+  describe("view count", () => {
+    const VIEWS = '<span class="view-count"><svg class="xa-bt" width="16" height="16"';
+    const page = (muc: TinXaTomTat[], showViews?: boolean) =>
+      html(
+        createElement(NewsListBody, {
+          ds: { muc, con_tro: "", con_nua: false, da_co_trang_dau: true, dang_tai: false, loi: null },
+          onMo: noop,
+          onTai: noop,
+          empty: "",
+          ...(showViews === undefined ? {} : { showViews }),
+        }),
+      );
+
+    it("vi-VN grouping: 1.234, 0 → '0 lượt xem'", () => {
+      expect(TIN_XA.view_count(1234)).toBe("1.234 lượt xem");
+      expect(TIN_XA.view_count(1234567)).toBe("1.234.567 lượt xem");
+      expect(TIN_XA.view_count(0)).toBe("0 lượt xem");
+    });
+
+    it("commune app list: after the day, eye aria-hidden at 16px; 0 shows; absent shows nothing", () => {
+      const list = page([{ ...item("1"), viewCount: 1234 }, { ...item("2"), viewCount: 0 }, item("3")]);
+      expect(list).toMatch(
+        /<span class="xa-phu news-meta">[^<]*<span class="view-count"><svg class="xa-bt" width="16" height="16"[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/svg>1\.234 lượt xem<\/span><\/span>/,
+      );
+      expect(list).toContain("</svg>0 lượt xem</span>");
+      expect(list.match(/lượt xem/g)).toHaveLength(2);
+      // The card without a count keeps exactly its old line.
+      expect(list.match(/<span class="xa-phu">/g)).toHaveLength(1);
+    });
+
+    it("NOT on the Video list, NOT on the home screen's compact card; YES on 'Tin liên quan'", () => {
+      expect(page([{ ...item("1"), viewCount: 5 }], false)).not.toContain("lượt xem");
+      expect(html(createElement(HangTin, { tin: { ...item("1"), viewCount: 5 }, onMo: noop, compact: true }))).not.toContain(
+        "lượt xem",
+      );
+      const tin = { ...item("1"), viewCount: 9 };
+      const related = html(
+        createElement(NewsArticle, {
+          bai: { ...item("0"), noi_dung: "Đoạn." },
+          coverFailed: false,
+          onCoverFail: noop,
+          ds: [tin],
+          onMo: noop,
+        }),
+      );
+      expect(related).toContain("9 lượt xem");
+    });
+
+    it("the Video list and the home card are wired that way in the source", () => {
+      const src = import.meta.glob(["./TinTucAppXa.tsx", "./TrangXa.tsx"], { query: "?raw", import: "default", eager: true }) as Record<
+        string,
+        string
+      >;
+      expect(src["./TinTucAppXa.tsx"]).toContain('showViews={props.type !== "video"}');
+      expect(src["./TrangXa.tsx"]).not.toMatch(/<HangTin[^>]*showViews/);
+    });
+
+    it("commune app article: the meta line ends with the count; absent → the old line exactly", () => {
+      const bai: BaiTinXaData = { ...item("1"), ngay_dang: "2026-09-25", noi_dung: "Đoạn.", viewCount: 1234 };
+      const withCount = html(createElement(NewsArticle, { bai, coverFailed: false, onCoverFail: noop, ds: [] }));
+      expect(withCount).toMatch(/<p class="xa-phu news-meta">Kinh tế · 25\/09\/2026<span class="view-count"><svg[^>]*>[\s\S]*?<\/svg>1\.234 lượt xem<\/span><\/p>/);
+      const { viewCount: _drop, ...noCount } = bai;
+      const without = html(createElement(NewsArticle, { bai: noCount, coverFailed: false, onCoverFail: noop, ds: [] }));
+      expect(without).toContain('<p class="xa-phu">Kinh tế · 25/09/2026</p>');
+      expect(without).not.toContain("lượt xem");
+      expect(html(createElement(NewsArticle, { bai: { ...bai, viewCount: 0 }, coverFailed: false, onCoverFail: noop, ds: [] }))).toContain(
+        "0 lượt xem",
+      );
+    });
+
+    it("shared app: list card and article both carry it; absent → nothing", () => {
+      const card = html(createElement(TheTin, { tin: { ...item("1"), viewCount: 1234 }, onMo: noop }));
+      expect(card).toContain('<span class="cd-the-cua-toi__dong news-meta">');
+      expect(card).toContain(VIEWS);
+      expect(card).toContain("1.234 lượt xem");
+      expect(html(createElement(TheTin, { tin: item("1"), onMo: noop }))).not.toContain("lượt xem");
+      const article = html(createElement(BaiTin, { bai: { ...item("1"), noi_dung: "Đoạn.", viewCount: 0 } }));
+      expect(article).toContain("0 lượt xem");
+      expect(html(createElement(BaiTin, { bai: { ...item("1"), noi_dung: "Đoạn." } }))).not.toContain("lượt xem");
+    });
   });
 
   it("the article's header names its TYPE, known from the row it was opened from; no cover while it loads", () => {
