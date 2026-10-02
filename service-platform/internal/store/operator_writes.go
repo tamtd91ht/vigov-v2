@@ -43,6 +43,16 @@ var (
 	// ErrCommuneSucceeded — reactivation refused: tenant_succession names this commune as a
 	// predecessor (a merged or split unit). See SetActivation.
 	ErrCommuneSucceeded = errors.New("operator registry: xã đã được kế thừa bởi đơn vị khác — không mở lại")
+	// ErrMiniAppNotInCommune — the App ID is not a not-deleted `rieng` row of THIS commune. Unknown,
+	// soft-deleted, a main app, and a row bound to ANOTHER commune are one answer on purpose: the
+	// operator console must not learn which commune holds an App ID through a refusal, and no path
+	// here can move a row across communes (ADR 0070 #3).
+	ErrMiniAppNotInCommune = errors.New("operator registry: App ID không phải Mini App riêng của xã này")
+	// ErrMiniAppInactive — a replacement names an old App ID that is already switched off.
+	ErrMiniAppInactive = errors.New("operator registry: App ID đã tắt")
+	// ErrMiniAppAlreadyRunning — attaching or reactivating would leave the commune with two running
+	// dedicated apps (ADR 0070 #1). The console uses the replacement route instead.
+	ErrMiniAppAlreadyRunning = errors.New("operator registry: xã đã có một Mini App riêng đang chạy")
 )
 
 // Audit actions written to audit_log.action. VALUES ARE VIETNAMESE snake_case, as every commune
@@ -57,6 +67,10 @@ const (
 	ActionDeactivate       = "ngung_hoat_dong_xa"
 	ActionReactivate       = "mo_lai_hoat_dong_xa"
 	ActionAttachMiniApp    = "gan_mini_app"
+	// `tat_mini_app` is what the Jenkins stage `doi-app-id-thang-binh` wrote for the same act.
+	ActionDeactivateMiniApp = "tat_mini_app"
+	// `bat_lai_mini_app` is NEW (ADR 0070 #3): no channel could switch an App ID back on before.
+	ActionReactivateMiniApp = "bat_lai_mini_app"
 )
 
 // nameLock serialises every write that can create a duplicate commune name. There is NO unique
@@ -451,8 +465,10 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 
 // AttachMiniApp registers the commune's OWN Mini App (che_do 'rieng') — the Jenkins stage
 // `gan-mini-app-thang-binh`, with `tao_boi` = the operator's business code instead of
-// `van-hanh:<user>`. Refused when the commune is inactive, and when the App ID has ANY row,
-// soft-deleted included: an App ID once bound is never silently re-bound (rule 7 invariant 3).
+// `van-hanh:<user>`. Refused when the commune is inactive, when the App ID has ANY row,
+// soft-deleted included: an App ID once bound is never silently re-bound (rule 7 invariant 3) — and
+// when the commune already has a RUNNING dedicated app: attaching beside it would leave two apps
+// serving one commune, which ADR 0070 #1 rules out. Changing the App ID is ReplaceMiniApp.
 func (w *RegistryWriter) AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error) {
 	act, err := w.actor(by)
 	if err != nil {
@@ -468,26 +484,15 @@ func (w *RegistryWriter) AttachMiniApp(ctx context.Context, appID, note string, 
 		if !c.active {
 			return ErrCommuneInactive
 		}
-		var one int
-		// @cross-tenant: mini_app.app_id is globally unique by design (migration 0006) and keeps
-		// soft-deleted rows — "has this App ID EVER been registered" spans every commune.
-		err = tx.Underlying().QueryRowContext(ctx, `SELECT 1 FROM mini_app WHERE app_id = $1`, appID).Scan(&one)
-		switch {
-		case err == nil:
-			return ErrMiniAppTaken
-		case !errors.Is(err, sql.ErrNoRows):
-			return fmt.Errorf("operator registry: mini app lookup: %w", err)
+		if err := appIDFree(ctx, tx.Underlying(), appID); err != nil {
+			return err
 		}
-		if err := tx.Underlying().QueryRowContext(ctx,
-			`INSERT INTO mini_app (app_id, che_do, tenant_id, ghi_chu, tao_boi, cap_nhat_boi)
-			 VALUES ($1, 'rieng', $2, $3, $4, $4)
-			 RETURNING app_id, che_do, dang_hoat_dong, tao_luc, tao_boi`,
-			appID, tx.TenantID().String(), note, by.Code).
-			Scan(&out.AppID, &out.Mode, &out.Active, &out.CreatedAt, &out.CreatedBy); err != nil {
-			if isUniqueViolation(err) {
-				return ErrMiniAppTaken
-			}
-			return fmt.Errorf("operator registry: insert mini app: %w", err)
+		if err := noOtherRunningApp(ctx, tx, ""); err != nil {
+			return err
+		}
+		out, err = insertOwnMiniApp(ctx, tx, appID, note, by.Code)
+		if err != nil {
+			return err
 		}
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor: act, Action: ActionAttachMiniApp, Subject: "MiniApp " + appID,
@@ -498,4 +503,223 @@ func (w *RegistryWriter) AttachMiniApp(ctx context.Context, appID, note string, 
 		return domain.CommuneMiniApp{}, err
 	}
 	return out, nil
+}
+
+// appIDFree refuses an App ID that has ANY row — any commune, the main app, soft-deleted included.
+func appIDFree(ctx context.Context, raw *sql.Tx, appID string) error {
+	var one int
+	// @cross-tenant: mini_app.app_id is globally unique by design (migration 0006) and keeps
+	// soft-deleted rows — "has this App ID EVER been registered" spans every commune.
+	err := raw.QueryRowContext(ctx, `SELECT 1 FROM mini_app WHERE app_id = $1`, appID).Scan(&one)
+	switch {
+	case err == nil:
+		return ErrMiniAppTaken
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("operator registry: mini app lookup: %w", err)
+	}
+	return nil
+}
+
+// noOtherRunningApp refuses when the commune in tx has an active, not-deleted `rieng` row other than
+// exceptAppID. It holds against a concurrent write only because every caller has locked the tenant
+// row first (lockCommune): every write that can switch a dedicated app on goes through that lock.
+func noOtherRunningApp(ctx context.Context, tx *corestore.ScopedTx, exceptAppID string) error {
+	var one int
+	err := tx.Underlying().QueryRowContext(ctx,
+		`SELECT 1 FROM mini_app
+		  WHERE tenant_id = $1 AND che_do = 'rieng' AND dang_hoat_dong AND deleted_at IS NULL AND app_id <> $2
+		  LIMIT 1`,
+		tx.TenantID().String(), exceptAppID).Scan(&one)
+	switch {
+	case err == nil:
+		return ErrMiniAppAlreadyRunning
+	case !errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("operator registry: running mini app lookup: %w", err)
+	}
+	return nil
+}
+
+func insertOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID, note, byCode string) (domain.CommuneMiniApp, error) {
+	var out domain.CommuneMiniApp
+	if err := tx.Underlying().QueryRowContext(ctx,
+		`INSERT INTO mini_app (app_id, che_do, tenant_id, ghi_chu, tao_boi, cap_nhat_boi)
+		 VALUES ($1, 'rieng', $2, $3, $4, $4)
+		 RETURNING app_id, che_do, dang_hoat_dong, tao_luc, tao_boi`,
+		appID, tx.TenantID().String(), note, byCode).
+		Scan(&out.AppID, &out.Mode, &out.Active, &out.CreatedAt, &out.CreatedBy); err != nil {
+		if isUniqueViolation(err) {
+			return domain.CommuneMiniApp{}, ErrMiniAppTaken
+		}
+		return domain.CommuneMiniApp{}, fmt.Errorf("operator registry: insert mini app: %w", err)
+	}
+	return out, nil
+}
+
+// lockOwnMiniApp reads and LOCKS one not-deleted `rieng` row of the commune in tx, returning whether
+// it is active. The tenant filter is the point: a row of another commune is ErrMiniAppNotInCommune,
+// exactly like an unknown App ID (see that error).
+func lockOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID string) (active bool, err error) {
+	err = tx.Underlying().QueryRowContext(ctx,
+		`SELECT dang_hoat_dong FROM mini_app
+		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL
+		  FOR UPDATE`,
+		appID, tx.TenantID().String()).Scan(&active)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, ErrMiniAppNotInCommune
+	case err != nil:
+		return false, fmt.Errorf("operator registry: lock mini app: %w", err)
+	}
+	return active, nil
+}
+
+// setOwnMiniAppActive flips one row the caller has locked with lockOwnMiniApp. The WHERE repeats the
+// state it expects, so a row that is not in that state is reported, never silently "updated".
+func setOwnMiniAppActive(ctx context.Context, tx *corestore.ScopedTx, appID string, active bool, byCode string) error {
+	res, err := tx.Exec(ctx,
+		`UPDATE mini_app SET dang_hoat_dong = $3, cap_nhat_luc = now(), cap_nhat_boi = $4
+		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL
+		    AND dang_hoat_dong = NOT $3`,
+		appID, tx.TenantID().String(), active, byCode)
+	if err != nil {
+		return fmt.Errorf("operator registry: update mini app: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("operator registry: update mini app: %w", err)
+	}
+	if n != 1 {
+		return fmt.Errorf("operator registry: update mini app: %d rows changed, want 1", n)
+	}
+	return nil
+}
+
+// ReplaceMiniApp CHANGES the commune's dedicated App ID (ADR 0070 #1): the Jenkins stage
+// `doi-app-id-thang-binh`, as one transaction — insert the new `rieng` row, switch the old one off
+// (never delete it: it decided the commune of every earlier citizen session, rule 7), and write
+// `gan_mini_app` (with `thay_cho`) and `tat_mini_app` (before/after, reason). All or nothing: half of
+// it — old off, new missing — is a commune whose citizens can open no app at all.
+//
+// Refused, writing nothing, in the stage's order: commune unknown or inactive; old App ID not an
+// active, not-deleted `rieng` row of THIS commune; new App ID already has any row.
+//
+// Other running dedicated apps of the commune are not checked: a replacement never increases their
+// number, and attach/reactivate refuse to create a second one.
+//
+// WHAT THIS DOES NOT DO: the identity secret of either App ID, vihat-miniapp's environment, the
+// citizen-app build — kb/30-indexes/transaction-boundaries.json `doi_app_id_mini_app_cua_xa`.
+func (w *RegistryWriter) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error) {
+	act, err := w.actor(by)
+	if err != nil {
+		return domain.CommuneMiniApp{}, err
+	}
+	s := w.db.For(ctx)
+	var out domain.CommuneMiniApp
+	err = s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+		c, err := lockCommune(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if !c.active {
+			return ErrCommuneInactive
+		}
+		active, err := lockOwnMiniApp(ctx, tx, oldAppID)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return ErrMiniAppInactive
+		}
+		if err := appIDFree(ctx, tx.Underlying(), newAppID); err != nil {
+			return err
+		}
+		// The reason is the note of the new row too: it is why this App ID was bound.
+		out, err = insertOwnMiniApp(ctx, tx, newAppID, reason, by.Code)
+		if err != nil {
+			return err
+		}
+		if err := setOwnMiniAppActive(ctx, tx, oldAppID, false, by.Code); err != nil {
+			return err
+		}
+		if err := audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: ActionAttachMiniApp, Subject: "MiniApp " + newAppID,
+			Delta: delta(map[string]any{"app_id": newAppID, "che_do": string(domain.CheDoRieng), "xa": c.name,
+				"thay_cho": oldAppID, "ly_do": reason}),
+		}); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: ActionDeactivateMiniApp, Subject: "MiniApp " + oldAppID,
+			Delta: delta(map[string]any{
+				"app_id":    oldAppID,
+				"truoc":     map[string]any{"dang_hoat_dong": true},
+				"sau":       map[string]any{"dang_hoat_dong": false},
+				"ly_do":     reason,
+				"thay_bang": newAppID,
+			}),
+		})
+	})
+	if err != nil {
+		return domain.CommuneMiniApp{}, err
+	}
+	return out, nil
+}
+
+// SetMiniAppActivation switches one of the commune's dedicated apps off (ADR 0070 #2, "gỡ") or back
+// on (#3), with a mandatory reason. changed=false when it was already in that state — no write, no
+// entry, the convention of SetActivation.
+//
+// Refused, writing nothing: commune unknown or inactive (rule 7 invariant 6 keeps a merged commune's
+// registry unchanged); App ID not a not-deleted `rieng` row of THIS commune — so an App ID is never
+// switched on for, or moved to, another commune; switching on while the commune has ANOTHER running
+// dedicated app (ADR 0070 #1).
+//
+// Switching off takes effect on the next citizen sign-in: the resolver (Directory.MiniApp) has no
+// cache. Sessions already open live to their expiry (ADR 0070 §Hệ quả).
+func (w *RegistryWriter) SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (changed bool, err error) {
+	act, err := w.actor(by)
+	if err != nil {
+		return false, err
+	}
+	s := w.db.For(ctx)
+	err = s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+		c, err := lockCommune(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if !c.active {
+			return ErrCommuneInactive
+		}
+		current, err := lockOwnMiniApp(ctx, tx, appID)
+		if err != nil {
+			return err
+		}
+		if current == active {
+			return nil
+		}
+		if active {
+			if err := noOtherRunningApp(ctx, tx, appID); err != nil {
+				return err
+			}
+		}
+		if err := setOwnMiniAppActive(ctx, tx, appID, active, by.Code); err != nil {
+			return err
+		}
+		changed = true
+		action := ActionDeactivateMiniApp
+		if active {
+			action = ActionReactivateMiniApp
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: action, Subject: "MiniApp " + appID,
+			Delta: delta(map[string]any{
+				"app_id": appID,
+				"truoc":  map[string]any{"dang_hoat_dong": current},
+				"sau":    map[string]any{"dang_hoat_dong": active},
+				"ly_do":  reason,
+				"xa":     c.name,
+			}),
+		})
+	})
+	return changed, err
 }

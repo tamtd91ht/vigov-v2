@@ -142,6 +142,8 @@ type writerFake struct {
 	lastName  string
 	lastHost  string
 	lastState *bool
+	// The mini-app routes: the App ID of the path, the new one of a replacement, the reason.
+	lastApp, lastNewApp, lastReason string
 }
 
 func (w *writerFake) record(ctx context.Context, by domain.OperatorActor) {
@@ -182,6 +184,18 @@ func (w *writerFake) SetActivation(ctx context.Context, active bool, _ string, b
 func (w *writerFake) AttachMiniApp(ctx context.Context, appID, _ string, by domain.OperatorActor) (domain.CommuneMiniApp, error) {
 	w.record(ctx, by)
 	return domain.CommuneMiniApp{AppID: appID, Mode: domain.CheDoRieng, Active: true, CreatedBy: by.Code}, w.err
+}
+
+func (w *writerFake) ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error) {
+	w.record(ctx, by)
+	w.lastApp, w.lastNewApp, w.lastReason = oldAppID, newAppID, reason
+	return domain.CommuneMiniApp{AppID: newAppID, Mode: domain.CheDoRieng, Active: true, CreatedBy: by.Code}, w.err
+}
+
+func (w *writerFake) SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (bool, error) {
+	w.record(ctx, by)
+	w.lastApp, w.lastReason, w.lastState = appID, reason, &active
+	return true, w.err
 }
 
 // memCounter is Redis, absent: one fixed window per key.
@@ -313,6 +327,10 @@ var guarded = []guardedRoute{
 		[]string{"ops.tenant.manage"}, 200},
 	{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps", `{"app_id":"3291993990104489440"}`,
 		[]string{"ops.mini_app.manage"}, 201},
+	{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/replacement",
+		`{"new_app_id":"3043188591857102858","reason":"Xã đổi App ID"}`, []string{"ops.mini_app.manage"}, 201},
+	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/activation",
+		`{"active":false,"reason":"Xã ngừng dùng app riêng"}`, []string{"ops.mini_app.manage"}, 200},
 	{"GET", "/api/v1/operator-sessions/current", "", nil, 200},
 	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204},
 }

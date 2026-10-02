@@ -281,11 +281,41 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
-	// @reply    409 httpx.Error mini_app_taken commune_inactive
+	// @reply    409 httpx.Error mini_app_taken commune_inactive mini_app_already_running
 	// @reply    422 httpx.Error invalid_app_id invalid_note
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("POST /api/v1/communes/{id}/mini-apps",
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
 			idem.KhongCan("a repeat is refused by mini_app.app_id, the primary key, which keeps soft-deleted rows")(
 				http.HandlerFunc(h.attachMiniApp))))
+
+	// @summary  Đổi App ID Mini App riêng của xã: gắn App ID mới và tắt App ID ở đường dẫn, một giao dịch (bắt buộc lý do)
+	// @request  miniAppReplacementBody
+	// @reply    201 communeDetailView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found mini_app_not_found
+	// @reply    409 httpx.Error mini_app_taken mini_app_inactive commune_inactive
+	// @reply    422 httpx.Error invalid_app_id invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("POST /api/v1/communes/{id}/mini-apps/{app_id}/replacement",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("a repeat is refused: the old App ID is no longer running (mini_app_inactive) and the new one has a row (mini_app_taken)")(
+				http.HandlerFunc(h.replaceMiniApp))))
+
+	// @summary  Gỡ (tắt) hoặc bật lại một Mini App riêng của xã (bắt buộc lý do); không chuyển App ID sang xã khác
+	// @request  miniAppActivationBody
+	// @reply    200 communeDetailView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found mini_app_not_found
+	// @reply    409 httpx.Error commune_inactive mini_app_already_running
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/communes/{id}/mini-apps/{app_id}/activation",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.setMiniAppActivation))))
 }

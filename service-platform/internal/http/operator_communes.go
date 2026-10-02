@@ -32,6 +32,8 @@ type CommuneWriter interface {
 	CorrectName(ctx context.Context, name, reason string, by domain.OperatorActor) (bool, error)
 	SetActivation(ctx context.Context, active bool, reason string, by domain.OperatorActor) (bool, []string, error)
 	AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
+	ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
+	SetMiniAppActivation(ctx context.Context, appID string, active bool, reason string, by domain.OperatorActor) (bool, error)
 }
 
 // --- shapes ---------------------------------------------------------------------------------------
@@ -108,6 +110,19 @@ type attachMiniAppBody struct {
 	Note  string `json:"note"`
 }
 
+// miniAppReplacementBody — the OLD App ID is the path's, never the body's: the operator confirms the
+// row they saw on the screen, and the store checks it is this commune's running app.
+type miniAppReplacementBody struct {
+	NewAppID string `json:"new_app_id"`
+	Reason   string `json:"reason"`
+}
+
+type miniAppActivationBody struct {
+	// A pointer so an absent field is a 400, never a silent `false` that detaches a commune's app.
+	Active *bool  `json:"active"`
+	Reason string `json:"reason"`
+}
+
 func toCommuneView(c domain.Commune) communeView {
 	d := c.Domains
 	if d == nil {
@@ -153,6 +168,11 @@ func (h *operatorHandlers) writeRegistryError(w http.ResponseWriter, r *http.Req
 		store.ErrCommuneInactive:    {http.StatusConflict, "commune_inactive", "Xã đã ngừng hoạt động."},
 		store.ErrDomainNotInCommune: {http.StatusUnprocessableEntity, "domain_not_in_commune", "Tên miền không thuộc xã này."},
 		store.ErrMiniAppTaken:       {http.StatusConflict, "mini_app_taken", "App ID đã có trong sổ Mini App."},
+		store.ErrMiniAppNotInCommune: {http.StatusNotFound, "mini_app_not_found",
+			"Không tìm thấy Mini App riêng này ở xã."},
+		store.ErrMiniAppInactive: {http.StatusConflict, "mini_app_inactive", "App ID này đã tắt."},
+		store.ErrMiniAppAlreadyRunning: {http.StatusConflict, "mini_app_already_running",
+			"Xã đã có một Mini App riêng đang chạy. Dùng thao tác đổi App ID."},
 		store.ErrCommuneSucceeded: {http.StatusConflict, "commune_succeeded",
 			"Xã đã được sáp nhập hoặc chia tách vào đơn vị khác, không mở lại hoạt động được."},
 		domain.ErrCommuneHostInvalid:  {http.StatusUnprocessableEntity, "invalid_domain", "Tên miền không hợp lệ."},
@@ -412,4 +432,77 @@ func (h *operatorHandlers) attachMiniApp(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusCreated, toMiniAppView(app))
+}
+
+// pathMiniApp is the App ID of the path. A malformed one is answered exactly like one this commune
+// does not hold — the store's ErrMiniAppNotInCommune.
+func (h *operatorHandlers) pathMiniApp(w http.ResponseWriter, r *http.Request) (string, bool) {
+	appID := r.PathValue("app_id")
+	if domain.ValidateMiniAppID(appID) != nil {
+		h.writeRegistryError(w, r, store.ErrMiniAppNotInCommune)
+		return "", false
+	}
+	return appID, true
+}
+
+// replaceMiniApp changes the commune's dedicated App ID (ADR 0070 #1): new row on, old row off, one
+// transaction. Answers the commune as it now stands, so the console shows both rows.
+func (h *operatorHandlers) replaceMiniApp(w http.ResponseWriter, r *http.Request) {
+	ctx, id, ok := targetCommune(w, r)
+	if !ok {
+		return
+	}
+	oldAppID, ok := h.pathMiniApp(w, r)
+	if !ok {
+		return
+	}
+	var b miniAppReplacementBody
+	if !decodeBody(w, r, &b) {
+		return
+	}
+	if err := domain.ValidateMiniAppID(b.NewAppID); err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	if _, err := h.d.Writer.ReplaceMiniApp(ctx, oldAppID, b.NewAppID, reason, actorOf(r)); err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	h.respondCommune(w, r, id, http.StatusCreated)
+}
+
+// setMiniAppActivation detaches (active=false) or reactivates (active=true) one of the commune's
+// dedicated apps (ADR 0070 #2, #3). Nothing to forget in a cache: Directory.MiniApp has none.
+func (h *operatorHandlers) setMiniAppActivation(w http.ResponseWriter, r *http.Request) {
+	ctx, id, ok := targetCommune(w, r)
+	if !ok {
+		return
+	}
+	appID, ok := h.pathMiniApp(w, r)
+	if !ok {
+		return
+	}
+	var b miniAppActivationBody
+	if !decodeBody(w, r, &b) {
+		return
+	}
+	if b.Active == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_body", msgInvalidBody, "")
+		return
+	}
+	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	if _, err := h.d.Writer.SetMiniAppActivation(ctx, appID, *b.Active, reason, actorOf(r)); err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	h.respondCommune(w, r, id, http.StatusOK)
 }
