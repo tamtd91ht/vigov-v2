@@ -101,8 +101,13 @@ export function Field({
           "[&_:is(input,select,textarea):focus-visible]:shadow-[0_0_0_3px_var(--brand-100)]",
           "[&_:is(input,select,textarea):disabled]:cursor-not-allowed [&_:is(input,select,textarea):disabled]:bg-surface-muted",
           "[&_::placeholder]:text-ink-500",
-          Icon !== undefined && "[&_:is(input,select)]:pl-10",
-          kind === "select" && "[&_select]:cursor-pointer [&_select]:appearance-none [&_select]:pr-9",
+          // SAME VARIANT AS `px-3` ON PURPOSE. Tailwind orders rules by variant first, property
+          // second: written as `[&_:is(input,select)]:pl-10` it was emitted BEFORE the
+          // `[&_:is(input,select,textarea)]:px-3` rule, which then reset the left padding and the
+          // icon sat on top of the text (owner screenshot 02/10/2026). Within one variant
+          // `padding-left`/`padding-right` sort after `padding-inline`, so these win.
+          Icon !== undefined && "[&_:is(input,select,textarea)]:pl-10",
+          kind === "select" && "[&_select]:cursor-pointer [&_select]:appearance-none [&_:is(input,select,textarea)]:pr-9",
         )}
       >
         {Icon !== undefined && (
