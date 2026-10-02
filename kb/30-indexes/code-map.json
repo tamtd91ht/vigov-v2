@@ -190,6 +190,14 @@
       "kind": "type",
       "at": "service-petitions/internal/app/gui_phan_anh.go:94"
     },
+    "app.CitizenPetitionPhotos": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:186"
+    },
+    "app.CitizenPhotoPetitions": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:158"
+    },
     "app.CitizenReportAutomationReader": {
       "kind": "type",
       "at": "service-petitions/internal/app/automation_runner.go:88"
@@ -794,6 +802,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_store.go:73"
     },
+    "app.ListPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_photo.go:820"
+    },
     "app.LogAttachmentLinker": {
       "kind": "type",
       "at": "service-petitions/internal/app/task_log_entry.go:43"
@@ -921,6 +933,10 @@
     "app.NewChungTuGiaiNgan": {
       "kind": "func",
       "at": "service-finance/internal/app/chung_tu_giai_ngan.go:106"
+    },
+    "app.NewCitizenPetitionPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_photo.go:207"
     },
     "app.NewColumn": {
       "kind": "type",
@@ -1122,6 +1138,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/staff_notification.go:66"
     },
+    "app.NewStaffPetitionPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_photo.go:804"
+    },
     "app.NewSystemMessages": {
       "kind": "func",
       "at": "service-reporting/internal/app/system_message.go:62"
@@ -1314,6 +1334,10 @@
       "kind": "type",
       "at": "service-identity/internal/app/org_unit_delete.go:49"
     },
+    "app.PetitionPhotoFiles": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:141"
+    },
     "app.PetitionRatingStore": {
       "kind": "type",
       "at": "service-petitions/internal/app/petition_rating.go:52"
@@ -1341,6 +1365,22 @@
     "app.PhienCauKho": {
       "kind": "type",
       "at": "service-identity/internal/app/cau_phien_cong_dan.go:102"
+    },
+    "app.PhotoLink": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:179"
+    },
+    "app.PhotoObjectStore": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:122"
+    },
+    "app.PhotoUpload": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:173"
+    },
+    "app.PhotoUploadRequest": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:167"
     },
     "app.PortalCallError": {
       "kind": "type",
@@ -1673,6 +1713,14 @@
     "app.StaffNotifications": {
       "kind": "type",
       "at": "service-comms/internal/app/staff_notification.go:57"
+    },
+    "app.StaffPetitionPhotos": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:796"
+    },
+    "app.StaffPhotoPetitions": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:790"
     },
     "app.StartManual": {
       "kind": "func",
@@ -3870,6 +3918,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:409"
     },
+    "domain.IsCitizenPhotoOf": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_photo.go:28"
+    },
     "domain.IsClear": {
       "kind": "func",
       "at": "service-identity/internal/domain/sign_in_lock.go:43"
@@ -4829,6 +4881,10 @@
     "domain.PhieuPhanAnh": {
       "kind": "type",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:187"
+    },
+    "domain.PhotoUploadOpen": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_photo.go:22"
     },
     "domain.PlanCatalogueImport": {
       "kind": "func",
@@ -6142,6 +6198,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/petition_fields.go:36"
     },
+    "http.CitizenPetitionPhotos": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/petition_photo.go:37"
+    },
     "http.CitizenRating": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_rating.go:33"
@@ -6177,6 +6237,10 @@
     "http.CompleteCoverUpload": {
       "kind": "func",
       "at": "service-comms/internal/http/content_cover.go:133"
+    },
+    "http.CompletePetitionPhoto": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_photo.go:173"
     },
     "http.CompleteTaskAttachment": {
       "kind": "func",
@@ -6400,7 +6464,7 @@
     },
     "http.DepsCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:72"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:73"
     },
     "http.DepsCongKhai": {
       "kind": "type",
@@ -6592,7 +6656,7 @@
     },
     "http.GuiPhanAnhCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:62"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:63"
     },
     "http.GuiPhieu": {
       "kind": "func",
@@ -6604,7 +6668,7 @@
     },
     "http.HandlerCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:99"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:110"
     },
     "http.HandlerCongKhai": {
       "kind": "type",
@@ -6738,9 +6802,17 @@
       "kind": "func",
       "at": "service-comms/internal/http/staff_notification.go:116"
     },
+    "http.ListMyPetitionPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_photo.go:189"
+    },
     "http.ListPetitionFields": {
       "kind": "func",
       "at": "service-petitions/internal/http/petition_fields.go:74"
+    },
+    "http.ListPetitionPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_photo.go:293"
     },
     "http.ListPortalSyncRuns": {
       "kind": "func",
@@ -6836,7 +6908,7 @@
     },
     "http.NewHandlerCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:103"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:114"
     },
     "http.NganSachDoc": {
       "kind": "type",
@@ -6964,11 +7036,11 @@
     },
     "http.PhieuCuaCongDanDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:44"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:45"
     },
     "http.PhieuCuaToi": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:322"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:333"
     },
     "http.PhieuPhanAnhDanhSach": {
       "kind": "type",
@@ -7094,6 +7166,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/content_cover.go:106"
     },
+    "http.RequestPetitionPhotoUpload": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_photo.go:147"
+    },
     "http.RequestTaskAttachmentUpload": {
       "kind": "func",
       "at": "service-petitions/internal/http/task_attachment.go:97"
@@ -7165,6 +7241,10 @@
     "http.StaffInboxWriter": {
       "kind": "type",
       "at": "service-comms/internal/http/routes_staff_notification.go:44"
+    },
+    "http.StaffPetitionPhotos": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/petition_photo.go:44"
     },
     "http.StartPortalSyncRun": {
       "kind": "func",
@@ -7845,6 +7925,34 @@
     "identityclient.UnassignedHoldInstants": {
       "kind": "func",
       "at": "core/identityclient/automation.go:159"
+    },
+    "imaging.Decode": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:131"
+    },
+    "imaging.DecodeCost": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:99"
+    },
+    "imaging.FitInside": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:189"
+    },
+    "imaging.Header": {
+      "kind": "type",
+      "at": "core/imaging/imaging.go:61"
+    },
+    "imaging.JPEGOrientation": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:250"
+    },
+    "imaging.ReadHeader": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:68"
+    },
+    "imaging.RenderJPEG": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:154"
     },
     "mail.Account": {
       "kind": "type",
@@ -8748,7 +8856,11 @@
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:223"
+      "at": "core/ratelimit/ratelimit.go:273"
+    },
+    "ratelimit.CitizenKey": {
+      "kind": "func",
+      "at": "core/ratelimit/ratelimit.go:177"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -8756,11 +8868,11 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:177"
+      "at": "core/ratelimit/ratelimit.go:227"
     },
     "ratelimit.FailsOpen": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:78"
+      "at": "core/ratelimit/ratelimit.go:92"
     },
     "ratelimit.Gate": {
       "kind": "func",
@@ -8772,11 +8884,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:100"
+      "at": "core/ratelimit/ratelimit.go:122"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:184"
+      "at": "core/ratelimit/ratelimit.go:234"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -8784,7 +8896,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:199"
+      "at": "core/ratelimit/ratelimit.go:249"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -8796,15 +8908,15 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:158"
+      "at": "core/ratelimit/ratelimit.go:208"
     },
     "ratelimit.Policy": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:210"
+      "at": "core/ratelimit/ratelimit.go:260"
     },
     "ratelimit.PublicHostIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:131"
+      "at": "core/ratelimit/ratelimit.go:153"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -10393,6 +10505,10 @@
     "store.PetitionFieldStore": {
       "kind": "type",
       "at": "service-platform/internal/store/petition_field.go:19"
+    },
+    "store.PetitionPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/petition_photo.go:29"
     },
     "store.PhanBoTheoDuAn": {
       "kind": "func",

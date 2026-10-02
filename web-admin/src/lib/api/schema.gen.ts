@@ -2573,6 +2573,37 @@ export type petitions_phieuPhanAnhRa = {
   "reopen_count"?: number | null;
 };
 
+export type petitions_photoLinkOut = {
+  "id": string;
+  "content_type": string;
+  "size_bytes": number;
+  "created_at": string;
+  "url": string;
+  "url_expires_at": string;
+};
+
+export type petitions_photoListOut = {
+  "items": Array<petitions_photoLinkOut>;
+};
+
+export type petitions_photoOut = {
+  "id": string;
+  "content_type": string;
+  "size_bytes": number;
+  "status": string;
+  "created_at": string;
+};
+
+export type petitions_photoUploadIn = {
+  "content_type": string;
+  "size": number;
+};
+
+export type petitions_photoUploadOut = {
+  "photo": petitions_photoOut;
+  "upload": petitions_presignedUploadOut;
+};
+
 export type petitions_presignedUploadOut = {
   "url": string;
   "fields": Record<string, string>;
@@ -3635,6 +3666,26 @@ export type petitions_post_citizen_reports_by_maTraCuu_log_entries = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-reports/{maTraCuu}/photos — Ảnh hiện trường người dân gửi kèm một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút */
+export type petitions_get_citizen_reports_by_maTraCuu_photos = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/photos";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -5508,6 +5559,84 @@ export type petitions_get_my_citizen_reports_by_maTraCuu = {
   };
   errorCodes: {
     403: "chua_xac_thuc_so";
+  };
+};
+
+/** GET /api/v1/my-citizen-reports/{maTraCuu}/photos — Ảnh hiện trường đã lưu của phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút */
+export type petitions_get_my_citizen_reports_by_maTraCuu_photos = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/photos";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
+};
+
+/** POST /api/v1/my-citizen-reports/{maTraCuu}/photos — Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type petitions_post_my_citizen_reports_by_maTraCuu_photos = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/photos";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_photoUploadIn;
+  phanHoi: {
+    201: petitions_photoUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+    429: "rate_limited";
+  };
+};
+
+/** POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion — Công dân hoàn tất tải một ảnh hiện trường — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng */
+export type petitions_post_my_citizen_reports_by_maTraCuu_photos_by_id_completion = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+    429: "rate_limited";
   };
 };
 
