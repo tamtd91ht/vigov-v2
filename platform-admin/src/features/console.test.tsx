@@ -12,12 +12,19 @@ vi.mock("next/navigation", () => ({
 
 import { ACCOUNT_ITEMS, Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
-import type { CommuneDetail } from "@/lib/api";
+import type { CommuneDetail, MiniApp } from "@/lib/api";
 import { canCreateCommune, canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
 
 import { ChangePasswordDone, CHANGE_PASSWORD_DONE } from "./account/change-password-form";
 import { CommuneDetailBody, DEACTIVATE_WARNING, NAME_CORRECTION_NOTICE } from "./communes/commune-detail";
 import { CommuneListToolbar, CommuneTable } from "./communes/commune-list";
+import {
+  MANUAL_STEPS,
+  MiniAppOutcomeNotices,
+  MiniAppSection,
+  SECRET_NOT_RETIRED,
+  type MiniAppOutcome,
+} from "./communes/mini-app-section";
 import {
   CREATE_FORBIDDEN_NOTICE,
   CreateCommuneGate,
@@ -30,18 +37,33 @@ const DOMAIN = "ops.domain.manage";
 const MINI_APP = "ops.mini_app.manage";
 const ALL = [TENANT, DOMAIN, MINI_APP];
 
+const APP: MiniApp = { app_id: "4096", mode: "rieng", active: true, created_at: "2026-10-01T03:00:00Z", created_by: "VH-00001" };
+
 const COMMUNE: CommuneDetail = {
   id: "01J0000000000000000000000A",
   name: "Xã Kiểm Thử",
   province: "Tỉnh Kiểm Thử",
   active: true,
   domains: ["chinh.example.vn", "phu.example.vn"],
-  mini_apps: [
-    { app_id: "4096", mode: "rieng", active: true, created_at: "2026-10-01T03:00:00Z", created_by: "VH-00001" },
-  ],
+  mini_apps: [APP],
 };
 
 const noop = () => {};
+
+const NO_RUNNING_APP: CommuneDetail = {
+  ...COMMUNE,
+  mini_apps: [{ ...APP, active: false }],
+};
+
+const REPLACED_NOT_RETIRED: MiniAppOutcome = {
+  kind: "replace",
+  appId: "4096",
+  newAppId: "8192",
+  newSecretSet: false,
+  secretRetired: false,
+  retirementError: "identity_unavailable",
+  reason: "Zalo cấp App ID mới",
+};
 
 describe("permission hints — denied cases first", () => {
   it("Tạo xã needs BOTH ops.tenant.manage and ops.domain.manage", () => {
@@ -93,7 +115,7 @@ describe("permission hints — denied cases first", () => {
 
   it("with every key: all wave-1 controls, and still no remove / repoint domain", () => {
     const html = renderToString(
-      <CommuneDetailBody commune={COMMUNE} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
+      <CommuneDetailBody commune={NO_RUNNING_APP} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
     );
     for (const control of ["Sửa lỗi gõ trong tên xã", "Ngừng hoạt động xã", "Thêm tên miền", "Đặt làm tên miền chính", "Gắn Mini App"]) {
       expect(html).toContain(control);
@@ -108,6 +130,64 @@ describe("permission hints — denied cases first", () => {
     expect(html).toContain("Bật hoạt động trở lại");
     expect(html).not.toContain("Ngừng hoạt động xã");
     expect(html).toContain("Ngừng hoạt động"); // the status badge, in text
+  });
+});
+
+describe("Mini App change / detach / reactivate / secret (ADR 0070)", () => {
+  const MINI_CONTROLS = ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật", "Bật lại"];
+
+  it("without ops.mini_app.manage: no Mini App control at all", () => {
+    for (const keys of [[], [TENANT, DOMAIN]]) {
+      for (const commune of [COMMUNE, NO_RUNNING_APP]) {
+        const html = renderToString(
+          <CommuneDetailBody commune={commune} permissionKeys={keys} onChanged={noop} onMiniAppAttached={noop} />,
+        );
+        for (const c of [...MINI_CONTROLS, "Gắn Mini App"]) expect(html).not.toContain(c);
+      }
+    }
+  });
+
+  it("a running own app offers change, secret and detach — and hides the attach form", () => {
+    const html = renderToString(<MiniAppSection commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    for (const c of ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật"]) expect(html).toContain(c);
+    expect(html).not.toContain("Bật lại");
+    expect(html).not.toContain("Gắn Mini App");
+  });
+
+  it("an inactive row offers Bật lại only", () => {
+    const html = renderToString(
+      <MiniAppSection commune={NO_RUNNING_APP} allowed onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(html).toContain("Bật lại");
+    for (const c of ["Đổi App ID", "Gỡ khỏi xã", "Đặt/đổi khoá bí mật"]) expect(html).not.toContain(c);
+  });
+
+  it("the shared app carries no control", () => {
+    const shared = { ...COMMUNE, mini_apps: [{ ...APP, mode: "chung" }] };
+    const html = renderToString(<MiniAppSection commune={shared} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    for (const c of MINI_CONTROLS) expect(html).not.toContain(c);
+  });
+
+  it("secret_retired false shows the not-retired notice with Thu hồi lại, plus the manual steps", () => {
+    const html = renderToString(<MiniAppOutcomeNotices communeId={COMMUNE.id} outcome={REPLACED_NOT_RETIRED} onUpdate={noop} />);
+    expect(html).toContain(SECRET_NOT_RETIRED);
+    expect(html).toContain("Thu hồi lại");
+    expect(html).toContain("ZALO_MINIAPP_COMMUNE_APP_SECRETS");
+    for (const s of MANUAL_STEPS) expect(html).toContain(s);
+    expect(html).toContain("Đặt khoá bí mật cho App ID 8192");
+  });
+
+  it("a retired secret shows no retry", () => {
+    const html = renderToString(
+      <MiniAppOutcomeNotices
+        communeId={COMMUNE.id}
+        outcome={{ ...REPLACED_NOT_RETIRED, secretRetired: true, newSecretSet: true }}
+        onUpdate={noop}
+      />,
+    );
+    expect(html).not.toContain(SECRET_NOT_RETIRED);
+    expect(html).not.toContain("Thu hồi lại");
+    expect(html).not.toContain("Đặt khoá bí mật cho App ID 8192");
   });
 });
 
@@ -183,6 +263,9 @@ describe("the CSP holds: no screen draws a style attribute", () => {
       <CreateCommuneGate key="cf" ready permissionKeys={[]} />,
       <CommuneDetailBody key="d" commune={COMMUNE} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
       <ChangePasswordDone key="pd" />,
+      <MiniAppSection key="ms" commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />,
+      <MiniAppSection key="mi" commune={NO_RUNNING_APP} allowed onChanged={noop} onMiniAppAttached={noop} />,
+      <MiniAppOutcomeNotices key="mo" communeId={COMMUNE.id} outcome={REPLACED_NOT_RETIRED} onUpdate={noop} />,
     ];
     for (const s of screens) expect(renderToString(s)).not.toContain("style=");
   });

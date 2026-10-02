@@ -8,7 +8,6 @@ import { FormMessage, TextAreaField, TextField } from "@/components/form-parts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
@@ -19,7 +18,6 @@ import { useGuardedError } from "@/features/operator/use-guarded-error";
 import {
   addDomain,
   ApiError,
-  attachMiniApp,
   correctName,
   getCommune,
   setActivation,
@@ -29,7 +27,8 @@ import {
 import { communeError, type CommuneField } from "@/lib/errors";
 import { canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
 
-import { formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
+import { StatusBadge } from "./commune-parts";
+import { MiniAppSection } from "./mini-app-section";
 
 /**
  * `/xa/[id]` — one commune's registry record and the wave-1 writes on it (ADR 0048 §01/10 #4, #5).
@@ -182,8 +181,12 @@ export function CommuneDetailBody({
       </SectionCard>
 
       <SectionCard id="commune-mini-apps" title="Mini App riêng của xã" icon={Smartphone}>
-        <MiniAppTable apps={commune.mini_apps} />
-        {miniAppsAllowed ? <AttachMiniAppForm commune={commune} onAttached={onMiniAppAttached} /> : null}
+        <MiniAppSection
+          commune={commune}
+          allowed={miniAppsAllowed}
+          onChanged={onChanged}
+          onMiniAppAttached={onMiniAppAttached}
+        />
       </SectionCard>
     </div>
   );
@@ -510,124 +513,5 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
         </form>
       </Dialog>
     </>
-  );
-}
-
-// --- Mini Apps -------------------------------------------------------------------------------
-
-export function MiniAppTable({ apps }: { apps: CommuneDetail["mini_apps"] }) {
-  if (apps.length === 0) {
-    return <EmptyState icon={Smartphone} tone="neutral" title="Xã chưa gắn Mini App riêng nào." className="py-6" />;
-  }
-  return (
-    <TableScroll aria-label="Mini App riêng của xã" className="shadow-none">
-      <table className={DATA_TABLE_CLASS}>
-        <thead>
-          <tr>
-            <th scope="col">App ID</th>
-            <th scope="col">Chế độ</th>
-            <th scope="col">Trạng thái</th>
-            <th scope="col">Gắn lúc</th>
-            <th scope="col">Người gắn</th>
-          </tr>
-        </thead>
-        <tbody>
-          {apps.map((a) => (
-            <tr key={a.app_id}>
-              <td>
-                <code className="font-mono text-[13px] text-ink-900">{a.app_id}</code>
-              </td>
-              <td className="text-ink-700">{miniAppModeLabel(a.mode)}</td>
-              <td>
-                <StatusBadge active={a.active} />
-              </td>
-              <td className="text-ink-700">{formatDateTime(a.created_at)}</td>
-              <td className="text-ink-700">{a.created_by}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </TableScroll>
-  );
-}
-
-function AttachMiniAppForm({
-  commune,
-  onAttached,
-}: {
-  commune: CommuneDetail;
-  onAttached: (app: CommuneDetail["mini_apps"][number]) => void;
-}) {
-  const guarded = useGuardedError();
-  const [appId, setAppId] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<{ field: CommuneField; text: string } | null>(null);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const id = appId.trim();
-    if (!/^\d+$/.test(id)) {
-      setError({ field: "appId", text: "App ID chỉ gồm chữ số, tối đa 32 chữ số." });
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      onAttached(await attachMiniApp(commune.id, { appId: id, note: note.trim() === "" ? undefined : note }));
-      setAppId("");
-      setNote("");
-    } catch (err) {
-      let field: CommuneField = "form";
-      const text = guarded(err, "gắn Mini App", (e) => {
-        const known = fieldError(e);
-        if (known) field = known.field;
-        return known?.text ?? null;
-      });
-      if (text !== null) setError({ field, text });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form className="flex max-w-xl flex-col gap-3 border-t border-line pt-4" method="post" onSubmit={submit} noValidate>
-      <TextField
-        label="App ID của Mini App riêng"
-        hint="Dãy chữ số Zalo cấp cho Mini App của xã."
-        name="app_id"
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={32}
-        value={appId}
-        onChange={(e) => setAppId(e.target.value)}
-        disabled={busy}
-        error={error?.field === "appId" ? error.text : null}
-      />
-      <TextAreaField
-        label="Ghi chú (không bắt buộc)"
-        name="note"
-        rows={2}
-        maxLength={500}
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        disabled={busy}
-        error={error?.field === "note" ? error.text : null}
-      />
-      <FormMessage text={error && error.field !== "appId" && error.field !== "note" ? error.text : null} />
-      <div>
-        <Button
-          type="submit"
-          variant="secondary"
-          disabled={busy}
-          aria-busy={busy}
-          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-        >
-          {busy ? "Đang gắn…" : "Gắn Mini App"}
-        </Button>
-      </div>
-    </form>
   );
 }

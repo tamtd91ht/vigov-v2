@@ -293,3 +293,67 @@ export function attachMiniApp(communeId: string, input: { appId: string; note?: 
   if (input.note) body.note = input.note;
   return call("POST", `/communes/${id(communeId)}/mini-apps`, body);
 }
+
+/** Why identity did not retire a turned-off App ID's secret (operator_mini_app_secrets.go). */
+export type SecretRetirementError = "identity_unavailable" | "session_not_live" | "forbidden" | "refused";
+
+/**
+ * operator_mini_app_secrets.go `miniAppChangeView`: the commune as it now stands, plus — whenever an
+ * App ID was turned off — whether its secret was retired. `secret_retired` absent on a reactivation.
+ */
+export type MiniAppChange = CommuneDetail & {
+  secret_retired?: boolean;
+  secret_retirement_error?: SecretRetirementError;
+};
+
+/** operator_mini_app_secrets.go `miniAppSecretView` — version metadata only, never the value. */
+export type MiniAppSecretSet = { app_id: string; version: string; set_at: string; set_by: string };
+
+/** operator_mini_app_secrets.go `miniAppSecretRetirementView`. `retired` false = nothing was live. */
+export type MiniAppSecretRetirement = {
+  app_id: string;
+  retired: boolean;
+  retired_version?: string;
+  retired_at?: string;
+  retired_by?: string;
+};
+
+/** One transaction: the new App ID bound, the old one turned off (ADR 0070 #1). */
+export function replaceMiniApp(
+  communeId: string,
+  appId: string,
+  input: { newAppId: string; reason: string },
+): Promise<MiniAppChange> {
+  return call("POST", `/communes/${id(communeId)}/mini-apps/${id(appId)}/replacement`, {
+    new_app_id: input.newAppId,
+    reason: input.reason,
+  });
+}
+
+/** `active: false` detaches (turns off, never deletes); `true` reactivates the commune's own App ID. */
+export function setMiniAppActivation(
+  communeId: string,
+  appId: string,
+  input: { active: boolean; reason: string },
+): Promise<MiniAppChange> {
+  return call("PUT", `/communes/${id(communeId)}/mini-apps/${id(appId)}/activation`, {
+    active: input.active,
+    reason: input.reason,
+  });
+}
+
+/** The secret travels in the JSON body only — never a path, a query, storage or a log line. */
+export function setMiniAppSecret(
+  communeId: string,
+  appId: string,
+  input: { secret: string; reason: string },
+): Promise<MiniAppSecretSet> {
+  return call("PUT", `/communes/${id(communeId)}/mini-apps/${id(appId)}/secret`, {
+    secret: input.secret,
+    reason: input.reason,
+  });
+}
+
+export function retireMiniAppSecret(communeId: string, appId: string, input: { reason: string }): Promise<MiniAppSecretRetirement> {
+  return call("DELETE", `/communes/${id(communeId)}/mini-apps/${id(appId)}/secret`, { reason: input.reason });
+}

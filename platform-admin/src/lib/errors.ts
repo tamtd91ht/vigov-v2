@@ -76,7 +76,9 @@ export function handleGuardedError(
   if (err.status === 403 && err.code === "forbidden") {
     return `Tài khoản vận hành của bạn không có quyền ${action}. Nếu cần, đề nghị người quản lý tài khoản vận hành cấp quyền.`;
   }
-  if (err.status === 503) return AUTH_UNAVAILABLE;
+  // A 503 the screen names (mini_app_secret_unavailable: identity could not store a secret) is not
+  // the auth service being down; any other 503 is.
+  if (err.status === 503) return specific?.(err) ?? AUTH_UNAVAILABLE;
   if (err.status === 429) return waitMessage(err.retryAfterSeconds);
   if (err.code === "invalid_body") return INVALID_BODY;
   return specific?.(err) ?? GENERIC_ERROR;
@@ -86,7 +88,7 @@ export function handleGuardedError(
  * Commune-registry refusals (operator_communes.go `writeRegistryError`), each with the next step.
  * `field` says which input the sentence belongs under, so a form shows it there.
  */
-export type CommuneField = "name" | "province" | "domain" | "reason" | "appId" | "note" | "form";
+export type CommuneField = "name" | "province" | "domain" | "reason" | "appId" | "note" | "secret" | "form";
 
 const COMMUNE_ERRORS: Record<string, { field: CommuneField; text: string }> = {
   commune_not_found: { field: "form", text: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại." },
@@ -111,7 +113,49 @@ const COMMUNE_ERRORS: Record<string, { field: CommuneField; text: string }> = {
   invalid_app_id: { field: "appId", text: "App ID chỉ gồm chữ số, tối đa 32 chữ số." },
   invalid_note: { field: "note", text: "Ghi chú tối đa 500 ký tự, không chứa ký tự điều khiển." },
   mini_app_taken: { field: "appId", text: "App ID này đã có trong sổ Mini App, không gắn thêm được." },
+  commune_succeeded: {
+    field: "form",
+    text: "Xã đã được sáp nhập hoặc chia tách vào đơn vị khác, không mở lại hoạt động được.",
+  },
+  mini_app_not_found: {
+    field: "form",
+    text: "Không tìm thấy App ID này trong các Mini App riêng của xã. Tải lại trang rồi chọn lại.",
+  },
+  mini_app_inactive: {
+    field: "form",
+    text: "App ID này đã tắt nên không đổi được. Tải lại trang để xem App ID đang chạy của xã.",
+  },
+  mini_app_already_running: {
+    field: "form",
+    text: "Xã đã có một Mini App riêng đang chạy. Muốn dùng App ID khác, chọn “Đổi App ID” ở dòng App ID đang chạy.",
+  },
+  mini_app_not_bound: {
+    field: "form",
+    text: "App ID này chưa gắn hoặc đang tắt ở xã. Bật lại App ID trước khi đặt khoá bí mật.",
+  },
+  invalid_secret: {
+    field: "secret",
+    text: "Khoá bí mật không hợp lệ: không để trống, không chứa khoảng trắng hay ký tự điều khiển. Sao chép lại khoá từ trang quản lý Mini App của Zalo.",
+  },
+  mini_app_secret_unavailable: {
+    field: "form",
+    text: "Hệ thống tạm thời không lưu được khoá bí mật, khoá chưa được đặt. Vui lòng thử lại sau ít phút.",
+  },
 };
+
+/** `secret_retirement_error` of a change answer, as the next step to take. */
+export function secretRetirementText(code: string | undefined): string {
+  switch (code) {
+    case "identity_unavailable":
+      return "Hệ thống xác thực tạm không phản hồi. Thử thu hồi lại sau ít phút.";
+    case "session_not_live":
+      return "Phiên vận hành không còn hiệu lực ở hệ thống xác thực. Đăng nhập lại rồi thu hồi lại.";
+    case "forbidden":
+      return "Tài khoản vận hành của bạn không có quyền thu hồi khoá. Đề nghị người quản lý tài khoản vận hành cấp quyền.";
+    default:
+      return "Hệ thống xác thực từ chối thu hồi khoá. Thử thu hồi lại; nếu vẫn lỗi, báo bộ phận kỹ thuật.";
+  }
+}
 
 export function communeError(err: ApiError): { field: CommuneField; text: string } | null {
   return COMMUNE_ERRORS[err.code] ?? null;
