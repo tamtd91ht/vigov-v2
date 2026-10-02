@@ -3,7 +3,7 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: d357dee6
+derived_from_commit: 09928975
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026)"
@@ -11,14 +11,14 @@ owns_facts:
   - "globals.css cũ nằm trong cascade layer `legacy` để tiện ích Tailwind thắng; preflight của Tailwind KHÔNG bật ở đợt 1"
   - "không dùng component shadcn vi phạm rào chắn của kho: sidebar (document.cookie, Math.random), chart (dangerouslySetInnerHTML), sonner (chèn <style> lúc chạy); component bọc button/select/input gốc, không thay chúng"
   - "khi làm mới giao diện, kỳ vọng trình bày trong test (chuỗi class, ký tự emoji, markup bao ngoài) được đổi theo; khẳng định hành vi thì không"
-  - "mục menu chưa có màn hiện huy hiệu 'Chưa có' kèm tooltip 'Chưa có màn hình' — không bao giờ 'Sắp có'"
+  - "mục menu chưa có màn (Sổ tay lãnh đạo, Bản đồ kinh tế số, Báo cáo) mang dấu '?' như mọi phần chưa dựng (thay huy hiệu 'Chưa có' từ 02/10/2026), không có trang khung — không bao giờ 'Sắp có'"
   - "topbar hiện 'Ủy ban nhân dân' làm dòng chú thích phía trên displayName của xã giữ nguyên văn — tên xã không bao giờ được ghép chuỗi"
   - "đặc tả giao diện chủ dự án cung cấp 02/10/2026 thay docs/ui-ux/15 về mặt hình thức (sidebar trắng thay navy); docs/ui-ux là bản sao yêu cầu, không sửa"
   - "làm mới giao diện được ưu tiên hơn mọi việc web-admin khác; Phản ánh đứng đầu đợt 2; đợt 1 = nền móng + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập; đợt 2 = 9 màn còn lại + bố cục thẻ trên điện thoại + rà căn hàng/trợ năng"
-  - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt ('Chưa có', @fontsource, topbar 'Ủy ban nhân dân') thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
+  - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt (@fontsource, topbar 'Ủy ban nhân dân'; dấu '?' thay 'Chưa có' theo §14) thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
   - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
-  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên (chốt 02/10/2026)"
-  - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ; vị trí do Claude đề xuất, chủ dự án duyệt trước khi dựng (chốt 02/10/2026)"
+  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên (chốt 02/10/2026)"
+  - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ, mục ROADMAP_PHASE2 thì có (mô tả ghi giai đoạn 2); khối gập 'phần chưa dựng' cuối màn bị bỏ; bảng vị trí từng màn chủ dự án đã duyệt (chốt 02/10/2026)"
   - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
 ---
 
@@ -123,6 +123,9 @@ cho xanh" lan sang cả hành vi — chính kiểu phép kiểm xanh sai lý do 
 
 ### 6. Mục menu chưa có màn: "Chưa có", không "Sắp có"
 
+> **Huy hiệu "Chưa có" đã được thay bằng dấu "?" (§14, chốt 02/10/2026).** Việc bác "Sắp có" và lý do
+> bên dưới vẫn giữ.
+
 Gộp dòng "Chưa có màn hình" vào chính mục đó dưới dạng huy hiệu **"Chưa có"**, tooltip **"Chưa có
 màn hình"**. Mục vẫn không bấm được, không có liên kết. Đặc tả đề xuất "Sắp có" — **bị bác**.
 
@@ -171,8 +174,8 @@ Bản v2 thắng bản đầu ở chỗ hai bản khác nhau: nền phẳng sán
 (backdrop-blur), **không** gradient làm phong cách chính; dòng bảng 48px, tiêu đề bảng dính; thao
 tác phụ vào menu "⋯", thao tác quan trọng luôn có chữ; mỗi màn có đủ trạng thái đang tải / rỗng /
 rỗng theo bộ lọc / lỗi + Tải lại / không có quyền — chỉ những trạng thái mã nguồn đã phân biệt được.
-Ba chỗ v2 khác quyết định đã chốt thì **quyết định đã chốt thắng**: huy hiệu "Chưa có" (§6, v2 viết
-"Sắp có"), phông `@fontsource` (§2, v2 viết `next/font`), topbar "Ủy ban nhân dân" + tên xã nguyên
+Ba chỗ v2 khác quyết định đã chốt thì **quyết định đã chốt thắng**: không "Sắp có" (§6; huy hiệu
+nay là dấu "?", §14), phông `@fontsource` (§2, v2 viết `next/font`), topbar "Ủy ban nhân dân" + tên xã nguyên
 văn (§7). Các mục của `ROADMAP_PHASE2.md` (tìm kiếm toàn hệ thống, lịch sử thao tác, xuất Excel,
 chọn nhiều dòng, ẩn/hiện cột, tổng số bản ghi, trợ lý AI, biểu đồ, chế độ tối…) **không** làm trong
 đợt này — giao diện chỉ chừa chỗ (khoảng giữa topbar, khe phải của Toolbar, khe metadata của
@@ -213,6 +216,17 @@ Tên xã đọc **lúc chạy** theo tên miền (luật 1 bất biến 10) qua 
 `kb/00-foundation/ubiquitous-language.md` mục "Xã của yêu cầu này". Hiện **nguyên văn**, không ghép
 chuỗi — §7 vẫn áp.
 
+Câu chữ thay thế, chủ dự án duyệt 02/10/2026:
+
+| Chỗ | Chữ hiện |
+|---|---|
+| Khối thương hiệu màn đăng nhập | Tiêu đề = **tên xã**; dòng phụ **"Hệ thống điều hành số"** |
+| Tiêu đề tab mặc định (layout gốc, trang 404 — nơi chưa xác định được xã) | **"Hệ thống điều hành số cấp xã"** |
+| Tiêu đề tab của từng màn | **"<Màn> · <tên xã>"** |
+| Gợi ý ô tên hiển thị người gửi thư | **Tên xã** |
+| Câu máy chủ: câu báo phạm vi mặc định của service-finance, tiêu đề/nội dung thư thử của service-comms | "ViGov" → **"hệ thống"** |
+| Câu báo phạm vi mà xã đã tự lưu đè | **Không** viết lại — là dữ liệu của xã |
+
 **Vì sao:** chủ dự án không nêu lý do ngoài câu trên. Ghi lại để phiên sau không đưa chữ "ViGov" trở
 lại màn và không hỏi lại.
 
@@ -231,14 +245,69 @@ tính năng đang phát triển, có thể view thêm mô tả"*.
 | Bấm | Mở mô tả — chính đoạn lý do trước đây nằm trong khối "Chưa dựng" (`PHAN_CHUA_DUNG`, `khoi-chua-dung`) |
 | Hành vi | **Không** gọi máy chủ, **không** lưu gì |
 | Việc chủ dự án quyết **không làm** (ví dụ ADR 0062) | **Không** có chỗ giữ |
-| Trình tự | Claude đề xuất vị trí từng phần; chủ dự án **duyệt trước khi dựng** — **chưa duyệt** tại ngày chốt |
+| Mục của `ROADMAP_PHASE2.md` | **Có** chỗ giữ "?"; mô tả ghi rõ thuộc **giai đoạn 2** — vẫn là hoãn, không phải bác (§11 không đổi) |
+| Khối gập "N phần của bản thiết kế chưa dựng được" cuối màn | **Bỏ**. Các mảng `PHAN_CHUA_DUNG*` giữ lại làm danh mục mô tả cho dấu "?" |
+| Trình tự | Claude đề xuất vị trí từng phần; chủ dự án **đã duyệt nguyên đề xuất** 02/10/2026 (bảng dưới) |
+
+**Vị trí đã duyệt** (02/10/2026):
+
+| Màn | Phần | Vị trí | Loại control |
+|---|---|---|---|
+| Tổng quan | Điểm hài lòng | Khối Phản ánh | Thẻ KPI |
+| Tổng quan | "Giải ngân ngân sách", "Kinh tế & Tài nguyên" | Lưới KPI | Thẻ |
+| Tổng quan | "Đơn thư trong kỳ" | Khối Văn bản | Thẻ KPI |
+| Tổng quan | PDF / XLSX / PPTX, ⤢ Trình chiếu (giai đoạn 2) | PageHeader | Nút |
+| Khung chung | Tìm kiếm toàn hệ thống (giai đoạn 2) | Giữa topbar | Ô nhập |
+| Biên bản | Tệp đính kèm (bản quét) | Ô cuối biểu mẫu Nhập biên bản | Ô tệp |
+| Biên bản | Hạn gợi ý | Cạnh ô hạn trong biểu mẫu Giao việc | Dòng gợi ý |
+| Văn bản & Đơn thư | [Đơn thư công dân] [Báo cáo] | Dưới PageHeader | Tab |
+| Văn bản & Đơn thư | Quét & OCR | Nút thứ 2 của PageHeader | Nút |
+| Văn bản & Đơn thư | 4 nút chuyển trạng thái | Ngăn kéo văn bản đến | Nút |
+| Giải ngân (danh sách) | ☰ Hạng mục, ⬆ Nhập giải ngân | PageHeader | Nút |
+| Giải ngân (danh sách) | 4 thẻ KPI, biểu đồ luỹ kế, bảng Tiến độ theo hạng mục, mục Tiến độ theo nguồn vốn | Thân màn | Thẻ / biểu đồ / bảng / mục |
+| Giải ngân (danh sách) | ☐ Chỉ dự án chậm, ☑ Gộp theo hạng mục | Thanh lọc | Ô chọn |
+| Giải ngân (danh sách) | Nguồn vốn, Vướng mắc mới nhất | Bảng dự án | Cột |
+| Giải ngân (chi tiết) | Giải ngân theo nguồn vốn | Thân chi tiết | Mục |
+| Giải ngân (chi tiết) | Vướng mắc / Biểu đồ / Trao đổi | Thân chi tiết | Tab |
+| Giải ngân (chi tiết) | Nguồn vốn | Bảng chứng từ | Cột |
+| Giải ngân (Thêm dự án) | Tự sinh mã; Đơn vị, Cán bộ; danh sách Nguồn vốn | Hộp Thêm dự án | Nút / ô chọn / danh sách |
+| Thu – Chi | ⬆ Nạp từ Excel | Trước nút 🗑 Gỡ | Nút |
+| Thông báo | "Gửi cho tôi" | Thanh phân đoạn | Phân đoạn |
+| Thông báo | Chip Bộ phận nhận, Lưu nháp | Biểu mẫu Soạn | Chip / nút |
+| Thông báo | Danh sách Người nhận, 🗑 Gỡ, chip Đã xác nhận, chip trạng thái thư | Chi tiết thông báo | Danh sách / nút / chip |
+| Phản ánh | Bản đồ nhiệt, Báo cáo | Thanh tab | Tab |
+| Phản ánh | "Liên quan đến tôi" | Tab phạm vi | Tab |
+| Phản ánh | Bản đồ nhỏ | Ngăn kéo phiếu | Khung bản đồ |
+| Phản ánh | Thôn; Đính ảnh hiện trường | Hộp Nhập hộ | Ô chọn / ô tệp |
+| Danh bạ | Tổng số cán bộ, Đang hiện trên Mini App | Đầu màn | 2 thẻ KPI |
+| Danh bạ | Ảnh đại diện | Bảng + biểu mẫu | Cột + ô tệp |
+| Cấu hình | "Gửi báo cáo định kỳ" | Tab Tự động hoá | Thẻ |
+| Nhiệm vụ | — | — | Không có |
+| Menu | Sổ tay lãnh đạo, Bản đồ kinh tế số, Báo cáo | Mục menu | Dấu "?" **thay** huy hiệu "Chưa có" (§6); không dựng trang khung |
+
+**Không có chỗ giữ** (chốt 02/10/2026):
+
+| Phần | Vì sao |
+|---|---|
+| ⟳ Tính lại ngay, huy hiệu "cũ hơn 10 phút" | Đã quyết không làm — ADR 0053 |
+| Ghi nhận đánh giá của người dân | Đã quyết không làm — ADR 0062 |
+| Cột Lượt xem, "{n} chuyên mục" (Nội dung) | Đã quyết không làm |
+| Tác vụ Tính lại số liệu Tổng quan | Đã quyết không làm — ADR 0053 |
+| Lựa chọn bố cục thuần (hộp thoại hay tại chỗ, cổng quyền phía trình duyệt, ghim cả sổ) | Không phải tính năng, không có gì để giữ chỗ |
+
+**Mục "chưa dựng" đã cũ — bỏ hoặc sửa:**
+
+| Mục | Thực tế |
+|---|---|
+| Chuông Thông báo | Đã dựng — bỏ |
+| Cổng quyền phía trình duyệt của Thông báo | Đã dựng — bỏ |
+| Nhập Danh bạ từ Excel | Đã dựng ở Cấu hình (ADR 0059) — bỏ |
+| Bản quét Biên bản, lý do "kho chưa có nơi lưu tệp" | Nơi lưu tệp đã có (ADR 0052) — viết lại lý do, giữ chỗ |
 
 **Vì sao:** chủ dự án không muốn giữ cách hiện tại (khối chữ "Chưa dựng" đứng riêng). Không gọi máy
 chủ, không lưu: chỗ giữ là trình bày, không phải tính năng (§1). Việc đã quyết không làm thì không có
-gì để giữ chỗ — một chỗ giữ cho nó là báo một tính năng cơ quan đã từ chối.
-
-**Chưa chốt:** mục menu chưa có màn đang mang huy hiệu "Chưa có" (§6) có chuyển sang dấu "?" hay
-không. Tới khi chủ dự án chốt, §6 giữ nguyên.
+gì để giữ chỗ — một chỗ giữ cho nó là báo một tính năng cơ quan đã từ chối. Mục menu chưa có màn
+theo cùng một quy tắc với phần chưa dựng trong màn, nên dùng chung dấu "?" thay huy hiệu riêng.
 
 ### 15. Bốn điểm trình bày chủ dự án chốt sau đợt 2
 
