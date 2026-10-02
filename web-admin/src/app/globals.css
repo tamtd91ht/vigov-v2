@@ -2257,6 +2257,190 @@ aside.khoi-chua-khai h3 {
   }
 }
 
+/* The submit button is as tall as the box it submits — a 36px "Tìm" beside a 40px input is the
+ * misaligned bottom edge the owner pointed at (02/10/2026). */
+.form-tra-cuu :is(.nut-phu, .nut-chinh) {
+  min-height: var(--control-h);
+}
+
+/* ---- filter rows: `.hang-loc` (legacy) and `FilterBar` (`components/ui/filter-bar.tsx`) -------
+ *
+ * ONE LABEL STYLE, ONE CONTROL HEIGHT, ZERO STRAY MARGINS (spec §6.2–§6.4; owner, 02/10/2026: "các ô
+ * nằm không thẳng hàng … cái nằm trên cái nằm dưới"). Three legacy wrappers draw filter controls —
+ * `.form-tra-cuu > .o-nhap` (13px label, form margin 1rem 0), `.chon-nam` / `.chon-hang-muc` (12px
+ * label), `.o-chon` (label BESIDE its select) — and each brought its own label size and margin, so the
+ * search box sat 16px higher than the selects next to it. Inside a filter row they are normalised
+ * here, in place, so no screen's markup, id or handler has to change.
+ *
+ * `.o-chon` is ALSO the checkbox wrapper (label beside a tick box, which is right for a tick box), so
+ * only an `.o-chon` holding a `<select>` is turned into a label-above column (`:has(> select)`).
+ *
+ * Specificity stays at or below (0,2,0) for buttons, so `.man-noi-dung .hang-loc > .nut-phu` (the
+ * 44px `Danh mục tin` target) still wins. */
+:is(.hang-loc, .filter-bar) :is(.form-tra-cuu, .chon-nam, .chon-hang-muc, .o-chon, .o-nhap) {
+  margin: 0;
+}
+
+:is(.hang-loc, .filter-bar) .o-chon:has(> select) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+
+/* Below 768px a filter row is one column and every control spans it (spec §9). */
+:is(.hang-loc, .filter-bar) :is(.chon-nam, .chon-hang-muc) {
+  align-items: stretch;
+}
+
+:is(.hang-loc, .filter-bar) :is(.o-nhap, .chon-nam, .chon-hang-muc, .o-chon:has(> select)) > label {
+  display: block;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+/* `.o-nhap > label` is a block with its own bottom margin; the other wrappers use the flex gap. */
+:is(.hang-loc, .filter-bar) .o-nhap > label {
+  margin-bottom: 0.375rem;
+}
+
+:is(.hang-loc, .filter-bar) .o-chon:has(> select) > select {
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background-color: var(--surface);
+  color: var(--ink-900);
+  font: inherit;
+  cursor: pointer;
+}
+
+:is(.hang-loc, .filter-bar) .o-chon:has(> select) > select:focus-visible {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+
+/* Exactly 40px — `min-height` alone let a 16px-text input grow to 40.4px below 768px. */
+:is(.hang-loc, .filter-bar) :is(.form-tra-cuu, .chon-nam, .chon-hang-muc, .o-chon) :is(input:not([type="checkbox"], [type="radio"]), select) {
+  height: var(--control-h);
+  min-height: var(--control-h);
+}
+
+:is(.hang-loc, .filter-bar) :is(.nut-phu, .nut-chinh) {
+  min-height: var(--control-h);
+}
+
+/* The search form grows; its button keeps its own width (see `.form-tra-cuu` above). */
+:is(.hang-loc, .filter-bar) .form-tra-cuu {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+/* An error line under the search box (always in the DOM, an `aria-live` region): zero height while
+ * empty so it does not open a gap in the row; from 768px it takes its own line under the row. */
+.hang-loc > .thong-bao-loi {
+  margin: 0;
+}
+
+.hang-loc > .thong-bao-loi:empty {
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  :is(.hang-loc, .filter-bar) .form-tra-cuu {
+    max-width: 30rem;
+  }
+
+  .hang-loc > .thong-bao-loi {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  /* Selects in a row are equal columns (spec §6.4 `.field`: 180–220px), not their content width. */
+  :is(.hang-loc, .filter-bar-row) > :is(.chon-nam, .chon-hang-muc, .o-chon:has(> select)) {
+    flex: 0 1 13.75rem;
+    min-width: 11.25rem;
+  }
+
+  :is(.hang-loc, .filter-bar-row) > :is(.chon-nam, .chon-hang-muc, .o-chon:has(> select)) select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.filter-bar {
+  min-width: 0;
+  margin: 1rem 0;
+}
+
+.filter-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* The panel: equal columns, labels above. `align-items: start`, not `end`: the staff picker
+ * (`StaffCombobox`) hangs a hint line BELOW its control, and bottom alignment would then line the
+ * other controls up with that hint instead of with the control. Every label is the same single
+ * 12px line, so top alignment puts every control on the same top AND bottom edge. */
+.filter-bar-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  align-items: start;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-muted);
+}
+
+/* `display: grid` above would otherwise override the `hidden` attribute's `display: none`. */
+.filter-bar-panel[hidden] {
+  display: none;
+}
+
+.filter-bar-panel > * {
+  min-width: 0;
+}
+
+.filter-bar-panel select,
+.filter-bar-panel .chon-nam select,
+.filter-bar-panel .chon-hang-muc select {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A tick box has no label above it: it starts one label line + the 6px gap down (12px × 1.25 + 6px)
+ * and is 40px tall, so it sits level with the controls of its grid row. */
+.filter-bar-panel > .o-chon:has(> label > input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-h);
+  margin-top: 1.3125rem;
+}
+
+@media (min-width: 768px) {
+  .filter-bar-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .filter-bar-toggle {
+    margin-left: auto;
+  }
+
+  .filter-bar-panel {
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  }
+}
+
 /* Nội dung phản ánh là lời của người dân, có thể dài và có xuống dòng. `pre-wrap` giữ nguyên
  * cách họ ngắt dòng; `overflow-wrap` chặn một chuỗi dài không dấu cách đẩy vỡ bố cục 320px. */
 .noi-dung-phan-anh {

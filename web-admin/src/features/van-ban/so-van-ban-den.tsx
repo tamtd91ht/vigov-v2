@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { FilterBar } from "@/components/ui/filter-bar";
 import {
   bangTraTuKetQua,
   traTen,
@@ -748,56 +749,71 @@ function LocSoVanBanDen({
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
 }) {
+  // Filters behind the "Bộ lọc" button that are not at their default — the defaults are the ones
+  // this screen already starts from ("" = all, "" = server's number order).
+  const moreActiveCount = [loaiLoc !== "", boPhanLoc !== "", thuTu !== ""].filter(Boolean).length;
+
+  // Search first (owner, 02/10/2026: "ô tìm kiếm nên nằm ở bên trái"), then the register's year and
+  // the status — the two filters that decide which page of the register is in front of you.
   return (
-    <div className="hang-loc">
-      <ChonNam id="nam-so-van-ban-den" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
+    <FilterBar
+      id="incoming-document-filters"
+      moreActiveCount={moreActiveCount}
+      primary={
+        <>
+          <OTimVanBan id="tim-van-ban-den" goiY={GOI_Y_TIM_DEN} tim={tim} datTim={datTim} />
 
-      <p className="chon-hang-muc">
-        <label htmlFor="loc-trang-thai-den">Trạng thái</label>{" "}
-        <select
-          id="loc-trang-thai-den"
-          value={trangThai}
-          onChange={(e) => datTrangThai(e.target.value)}
-        >
-          <option value="">Tất cả trạng thái</option>
-          {MA_TRANG_THAI.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanTrangThai(ma)}
-            </option>
-          ))}
-        </select>
-      </p>
+          <ChonNam id="nam-so-van-ban-den" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
 
-      <p className="chon-hang-muc">
-        <label htmlFor="loc-loai-den">Loại văn bản</label>{" "}
-        <select id="loc-loai-den" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
-          <option value="">Tất cả loại</option>
-          {traLoai.pha === "xong" &&
-            [...traLoai.ten].map(([ma, ten]) => (
-              <option key={ma} value={ma}>
-                {ten}
-              </option>
-            ))}
-        </select>
-      </p>
+          <p className="chon-hang-muc">
+            <label htmlFor="loc-trang-thai-den">Trạng thái</label>{" "}
+            <select
+              id="loc-trang-thai-den"
+              value={trangThai}
+              onChange={(e) => datTrangThai(e.target.value)}
+            >
+              <option value="">Tất cả trạng thái</option>
+              {MA_TRANG_THAI.map((ma) => (
+                <option key={ma} value={ma}>
+                  {nhanTrangThai(ma)}
+                </option>
+              ))}
+            </select>
+          </p>
+        </>
+      }
+      more={
+        <>
+          <p className="chon-hang-muc">
+            <label htmlFor="loc-loai-den">Loại văn bản</label>{" "}
+            <select id="loc-loai-den" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
+              <option value="">Tất cả loại</option>
+              {traLoai.pha === "xong" &&
+                [...traLoai.ten].map(([ma, ten]) => (
+                  <option key={ma} value={ma}>
+                    {ten}
+                  </option>
+                ))}
+            </select>
+          </p>
 
-      <p className="chon-hang-muc">
-        <label htmlFor="loc-bo-phan-den">Bộ phận đang giữ</label>{" "}
-        <select id="loc-bo-phan-den" value={boPhanLoc} onChange={(e) => datBoPhanLoc(e.target.value)}>
-          <option value="">Tất cả bộ phận</option>
-          {traBoPhan.pha === "xong" &&
-            [...traBoPhan.ten].map(([id, ten]) => (
-              <option key={id} value={id}>
-                {ten}
-              </option>
-            ))}
-        </select>
-      </p>
+          <p className="chon-hang-muc">
+            <label htmlFor="loc-bo-phan-den">Bộ phận đang giữ</label>{" "}
+            <select id="loc-bo-phan-den" value={boPhanLoc} onChange={(e) => datBoPhanLoc(e.target.value)}>
+              <option value="">Tất cả bộ phận</option>
+              {traBoPhan.pha === "xong" &&
+                [...traBoPhan.ten].map(([id, ten]) => (
+                  <option key={id} value={id}>
+                    {ten}
+                  </option>
+                ))}
+            </select>
+          </p>
 
-      <ChonThuTu id="thu-tu-so-den" thuTu={thuTu} datThuTu={datThuTu} />
-
-      <OTimVanBan id="tim-van-ban-den" goiY={GOI_Y_TIM_DEN} tim={tim} datTim={datTim} />
-    </div>
+          <ChonThuTu id="thu-tu-so-den" thuTu={thuTu} datThuTu={datThuTu} />
+        </>
+      }
+    />
   );
 }
 

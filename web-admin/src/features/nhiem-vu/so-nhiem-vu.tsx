@@ -50,7 +50,8 @@ import { StaffCombobox } from "@/components/staff-combobox";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Field, Toolbar } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { IconButton } from "@/components/ui/icon-button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tab, TabList } from "@/components/ui/tabs";
@@ -1576,6 +1577,17 @@ export function HangLoc({
   nhanTT: BangNhanTrangThai;
 }) {
   const db = docDanhBaChonNguoi(danhBa);
+  // Panel filters that are on — each is ABSENT from `loc` at its default, exactly what is not sent.
+  const moreActiveCount = [
+    loc.loai,
+    loc.khoi,
+    loc.mucUuTien,
+    loc.nguonGiao,
+    loc.boPhanID,
+    loc.nguoiThucHienMa,
+    loc.chiTreHan,
+    loc.dueSoon,
+  ].filter((v) => v !== undefined).length;
 
   function timNgay(e: FormEvent) {
     e.preventDefault();
@@ -1621,181 +1633,192 @@ export function HangLoc({
         </p>
       )}
 
-      {/* ONE FILTER ROW (spec §6.4): label above every control, every control 40px, bottoms aligned,
-          wrapping with straight left edges. Every native control keeps its id, value and handler. */}
-      <Toolbar>
-      {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
-          đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
-      <form
-        className="form-tra-cuu m-0 flex min-w-0 flex-[1_1_320px] flex-row items-end gap-2 max-w-[480px]"
-        onSubmit={timNgay}
-        role="search"
-      >
-        <Field label="Tìm trong sổ" htmlFor="tim-nhiem-vu" icon={Search} grow="search" className="max-w-none">
-          <input
-            id="tim-nhiem-vu"
-            name="tim-nhiem-vu"
-            value={tim}
-            placeholder={TIM_PLACEHOLDER}
-            onChange={(e) => datTim(e.target.value)}
-            autoComplete="off"
-            // Máy chủ trả 400 khi quá 200 ký tự (`store.TimNhiemVuToiDa`). Chặn ở ô nhập để cán bộ
-            // thấy giới hạn thay vì thấy "không tải được".
-            maxLength={200}
-          />
-        </Field>
-        <Button variant="secondary" type="submit">
-          Tìm
-        </Button>
-      </form>
+      {/* ONE FILTER ROW (spec §6.4) + "Bộ lọc" (owner, 02/10/2026): the search box first, then the
+          status; the seven narrower filters sit in the panel behind the button. Every native control
+          keeps its id, value and handler. */}
+      <FilterBar
+        id="task-filters"
+        className="m-0 border-b border-line px-4 py-3.5"
+        moreActiveCount={moreActiveCount}
+        primary={
+          <>
+            {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
+                đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
+            <form
+              className="form-tra-cuu m-0 flex min-w-0 flex-[1_1_320px] flex-row items-end gap-2 max-w-[480px]"
+              onSubmit={timNgay}
+              role="search"
+            >
+              <Field label="Tìm trong sổ" htmlFor="tim-nhiem-vu" icon={Search} grow="search" className="max-w-none">
+                <input
+                  id="tim-nhiem-vu"
+                  name="tim-nhiem-vu"
+                  value={tim}
+                  placeholder={TIM_PLACEHOLDER}
+                  onChange={(e) => datTim(e.target.value)}
+                  autoComplete="off"
+                  // Máy chủ trả 400 khi quá 200 ký tự (`store.TimNhiemVuToiDa`). Chặn ở ô nhập để cán bộ
+                  // thấy giới hạn thay vì thấy "không tải được".
+                  maxLength={200}
+                />
+              </Field>
+              <Button variant="secondary" type="submit">
+                Tìm
+              </Button>
+            </form>
 
-      <Field label="Trạng thái" htmlFor="loc-trang-thai" icon={CircleDot} kind="select">
-        <select
-          id="loc-trang-thai"
-          value={loc.trangThai ?? ""}
-          onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
-        >
-          <option value="">{MOI_TRANG_THAI_NHAN}</option>
-          {nhanTT.thuTu.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanTrangThai(nhanTT, ma)}
-            </option>
-          ))}
-        </select>
-      </Field>
+            <Field label="Trạng thái" htmlFor="loc-trang-thai" icon={CircleDot} kind="select">
+              <select
+                id="loc-trang-thai"
+                value={loc.trangThai ?? ""}
+                onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
+              >
+                <option value="">{MOI_TRANG_THAI_NHAN}</option>
+                {nhanTT.thuTu.map((ma) => (
+                  <option key={ma} value={ma}>
+                    {nhanTrangThai(nhanTT, ma)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        }
+        more={
+          <>
+            <Field label="Loại nhiệm vụ" htmlFor="loc-loai" icon={Shapes} kind="select">
+              <select
+                id="loc-loai"
+                value={loc.loai ?? ""}
+                onChange={(e) => datLoc({ ...loc, loai: e.target.value || undefined })}
+              >
+                <option value="">{MOI_LOAI_NHAN}</option>
+                {danhMuc.loai.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-      <Field label="Loại nhiệm vụ" htmlFor="loc-loai" icon={Shapes} kind="select">
-        <select
-          id="loc-loai"
-          value={loc.loai ?? ""}
-          onChange={(e) => datLoc({ ...loc, loai: e.target.value || undefined })}
-        >
-          <option value="">{MOI_LOAI_NHAN}</option>
-          {danhMuc.loai.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+            <Field label="Khối" htmlFor="loc-khoi" icon={Layers} kind="select">
+              <select
+                id="loc-khoi"
+                value={loc.khoi ?? ""}
+                onChange={(e) => datLoc({ ...loc, khoi: e.target.value || undefined })}
+              >
+                <option value="">{MOI_KHOI_NHAN}</option>
+                {danhMuc.khoi.map((k) => (
+                  <option key={k.code} value={k.code}>
+                    {k.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-      <Field label="Khối" htmlFor="loc-khoi" icon={Layers} kind="select">
-        <select
-          id="loc-khoi"
-          value={loc.khoi ?? ""}
-          onChange={(e) => datLoc({ ...loc, khoi: e.target.value || undefined })}
-        >
-          <option value="">{MOI_KHOI_NHAN}</option>
-          {danhMuc.khoi.map((k) => (
-            <option key={k.code} value={k.code}>
-              {k.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+            <Field label="Mức ưu tiên" htmlFor="loc-uu-tien" icon={Flag} kind="select">
+              <select
+                id="loc-uu-tien"
+                value={loc.mucUuTien ?? ""}
+                onChange={(e) => datLoc({ ...loc, mucUuTien: e.target.value || undefined })}
+              >
+                <option value="">{MOI_MUC_UU_TIEN_NHAN}</option>
+                {/* KHÔNG SẮP XẾP LẠI MẢNG NÀY: thứ tự `items` LÀ thang bậc của xã, không phải sở thích
+                    trình bày (`muc_uu_tien_nhiem_vu.go`). */}
+                {danhMuc.mucUuTien.map((m) => (
+                  <option key={m.code} value={m.code}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-      <Field label="Mức ưu tiên" htmlFor="loc-uu-tien" icon={Flag} kind="select">
-        <select
-          id="loc-uu-tien"
-          value={loc.mucUuTien ?? ""}
-          onChange={(e) => datLoc({ ...loc, mucUuTien: e.target.value || undefined })}
-        >
-          <option value="">{MOI_MUC_UU_TIEN_NHAN}</option>
-          {/* KHÔNG SẮP XẾP LẠI MẢNG NÀY: thứ tự `items` LÀ thang bậc của xã, không phải sở thích
-              trình bày (`muc_uu_tien_nhiem_vu.go`). */}
-          {danhMuc.mucUuTien.map((m) => (
-            <option key={m.code} value={m.code}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+            <Field label="Nguồn giao" htmlFor="loc-nguon-giao" icon={GitBranch} kind="select">
+              <select
+                id="loc-nguon-giao"
+                value={loc.nguonGiao ?? ""}
+                onChange={(e) => datLoc({ ...loc, nguonGiao: e.target.value || undefined })}
+              >
+                <option value="">{MOI_NGUON_GIAO_NHAN}</option>
+                {MOI_NGUON_GIAO.map((ma) => (
+                  <option key={ma} value={ma}>
+                    {nhanNguonGiao(ma)}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-      <Field label="Nguồn giao" htmlFor="loc-nguon-giao" icon={GitBranch} kind="select">
-        <select
-          id="loc-nguon-giao"
-          value={loc.nguonGiao ?? ""}
-          onChange={(e) => datLoc({ ...loc, nguonGiao: e.target.value || undefined })}
-        >
-          <option value="">{MOI_NGUON_GIAO_NHAN}</option>
-          {MOI_NGUON_GIAO.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanNguonGiao(ma)}
-            </option>
-          ))}
-        </select>
-      </Field>
+            <Field label="Bộ phận" htmlFor="loc-bo-phan" icon={Building2} kind="select">
+              <select
+                id="loc-bo-phan"
+                value={loc.boPhanID ?? ""}
+                onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
+              >
+                <option value="">{MOI_BO_PHAN_NHAN}</option>
+                {danhMuc.boPhan.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-      <Field label="Bộ phận" htmlFor="loc-bo-phan" icon={Building2} kind="select">
-        <select
-          id="loc-bo-phan"
-          value={loc.boPhanID ?? ""}
-          onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
-        >
-          <option value="">{MOI_BO_PHAN_NHAN}</option>
-          {danhMuc.boPhan.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+            {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
+                chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4).
+                The combobox is a shared component with its own label and hint; the frame below only
+                restyles it to the Field look by descendant selectors and draws the leading icon. It aligns
+                on its TOP (label row) because its hint line hangs below the control. */}
+            <div className={STAFF_FILTER_FRAME}>
+              <Glyph
+                icon={UserRound}
+                className="pointer-events-none absolute top-[32px] left-3 z-[1] size-[18px] text-ink-500"
+              />
+              <StaffCombobox
+                id="loc-nguoi-thuc-hien"
+                label="Người thực hiện"
+                emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
+                value={loc.nguoiThucHienMa ?? ""}
+                directory={db.ds}
+                disabled={db.dangTai}
+                onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
+              />
+            </div>
+            {db.loi !== null && (
+              <p className="thong-bao-loi col-span-full m-0" role="alert">
+                {cauLoiDanhBaLoc(db.loi)}
+              </p>
+            )}
 
-      {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
-          chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4).
-          The combobox is a shared component with its own label and hint; the frame below only
-          restyles it to the Field look by descendant selectors and draws the leading icon. It aligns
-          on its TOP (label row) because its hint line hangs below the control. */}
-      <div className={STAFF_FILTER_FRAME}>
-        <Glyph
-          icon={UserRound}
-          className="pointer-events-none absolute top-[33px] left-3 z-[1] size-[18px] text-ink-500"
-        />
-        <StaffCombobox
-          id="loc-nguoi-thuc-hien"
-          label="Người thực hiện"
-          emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
-          value={loc.nguoiThucHienMa ?? ""}
-          directory={db.ds}
-          disabled={db.dangTai}
-          onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
-        />
-      </div>
-      {db.loi !== null && (
-        <p className="thong-bao-loi m-0 basis-full" role="alert">
-          {cauLoiDanhBaLoc(db.loi)}
-        </p>
-      )}
+            <div className="o-chon h-10">
+              <label htmlFor="loc-qua-han">
+                <input
+                  id="loc-qua-han"
+                  type="checkbox"
+                  checked={loc.chiTreHan === true}
+                  // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
+                  // chuỗi `true` và trả 400 cho mọi giá trị khác.
+                  onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
+                />{" "}
+                {CHI_QUA_HAN_NHAN}
+              </label>
+            </div>
 
-      <div className="o-chon h-10">
-        <label htmlFor="loc-qua-han">
-          <input
-            id="loc-qua-han"
-            type="checkbox"
-            checked={loc.chiTreHan === true}
-            // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
-            // chuỗi `true` và trả 400 cho mọi giá trị khác.
-            onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
-          />{" "}
-          {CHI_QUA_HAN_NHAN}
-        </label>
-      </div>
-
-      {/* §3 `☐ Sắp đến hạn` (W5). Only the switch goes up — `soon=true`, never a number: the
-          threshold is the commune's own, read by the server from identity. A commune that set none
-          gets the server's 409 sentence in place of the page, verbatim. Unticked = absent. */}
-      <div className="o-chon h-10">
-        <label htmlFor="loc-sap-den-han">
-          <input
-            id="loc-sap-den-han"
-            type="checkbox"
-            checked={loc.dueSoon === true}
-            onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}
-          />{" "}
-          {DUE_SOON_FILTER_LABEL}
-        </label>
-      </div>
-      </Toolbar>
+            {/* §3 `☐ Sắp đến hạn` (W5). Only the switch goes up — `soon=true`, never a number: the
+                threshold is the commune's own, read by the server from identity. A commune that set none
+                gets the server's 409 sentence in place of the page, verbatim. Unticked = absent. */}
+            <div className="o-chon h-10">
+              <label htmlFor="loc-sap-den-han">
+                <input
+                  id="loc-sap-den-han"
+                  type="checkbox"
+                  checked={loc.dueSoon === true}
+                  onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}
+                />{" "}
+                {DUE_SOON_FILTER_LABEL}
+              </label>
+            </div>
+          </>
+        }
+      />
     </>
   );
 }
@@ -1804,12 +1827,13 @@ export function HangLoc({
  * Restyles the shared `StaffCombobox` (its own `.o-nhap` label + input + hint) to the Field look of
  * the filter row: 12px/600 label 6px above a 40px control, room for the leading icon. Descendant
  * selectors only — the component's markup, ids and behaviour are not touched (it is outside this
- * screen's scope). The icon's `top-[33px]` follows from this: 16px label + 6px gap + (40−18)/2.
+ * screen's scope). The icon's `top-[32px]` follows from this: 15px label (12px × 1.25, the Field
+ * label) + 6px gap + (40−18)/2. It sits in the FilterBar panel grid, so it takes its cell's width.
  */
 const STAFF_FILTER_FRAME = cn(
-  "relative min-w-[200px] flex-[0_1_260px] self-start",
+  "relative min-w-0 self-start",
   "[&_.o-nhap]:m-0 [&_.o-nhap]:flex [&_.o-nhap]:flex-col [&_.o-nhap]:gap-1.5",
-  "[&_.o-nhap>label]:m-0 [&_.o-nhap>label]:text-xs [&_.o-nhap>label]:leading-4 [&_.o-nhap>label]:font-semibold [&_.o-nhap>label]:text-ink-700",
+  "[&_.o-nhap>label]:m-0 [&_.o-nhap>label]:text-xs [&_.o-nhap>label]:leading-tight [&_.o-nhap>label]:font-semibold [&_.o-nhap>label]:text-ink-700",
   "[&_.hop-tim-can-bo_input]:h-10 [&_.hop-tim-can-bo_input]:min-h-10 [&_.hop-tim-can-bo_input]:pl-10 [&_.hop-tim-can-bo_input]:text-base md:[&_.hop-tim-can-bo_input]:text-sm",
   "[&_.nut-mo-danh-sach]:size-10 [&_.nut-mo-danh-sach]:min-h-10 [&_.nut-mo-danh-sach]:min-w-10 [&_.nut-mo-danh-sach]:p-0",
   "[&_.goi-y-tim]:text-xs",

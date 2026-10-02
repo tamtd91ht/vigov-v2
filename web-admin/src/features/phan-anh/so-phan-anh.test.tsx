@@ -958,7 +958,12 @@ describe("drawer — moderation buttons (§8.3), gated by `feedback.assign`", ()
 
 type ThuocTinh = Record<string, unknown> & { children?: ReactNode };
 
-/** Every inline element of a tree, depth first (components are not expanded). */
+/**
+ * Every inline element of a tree, depth first (components are not expanded). Besides `children` it
+ * walks the two slot props of `FilterBar` (`primary`, `more`), where the filter row's controls are
+ * passed since the 02/10/2026 redesign — otherwise a control moved into a slot would vanish from the
+ * walk and the test would fail for a layout reason, not a behaviour one.
+ */
 function moiPhanTu(nut: ReactNode, ra: ReactElement<ThuocTinh>[] = []): ReactElement<ThuocTinh>[] {
   if (Array.isArray(nut)) {
     for (const con of nut) moiPhanTu(con as ReactNode, ra);
@@ -968,6 +973,8 @@ function moiPhanTu(nut: ReactNode, ra: ReactElement<ThuocTinh>[] = []): ReactEle
     const pt = nut as ReactElement<ThuocTinh>;
     ra.push(pt);
     moiPhanTu(pt.props.children, ra);
+    moiPhanTu(pt.props.primary as ReactNode, ra);
+    moiPhanTu(pt.props.more as ReactNode, ra);
   }
   return ra;
 }

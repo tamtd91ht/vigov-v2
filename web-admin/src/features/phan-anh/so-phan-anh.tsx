@@ -35,6 +35,7 @@ import type {
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
 import { residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
 
@@ -461,165 +462,188 @@ export function HangLoc({
     datLoc({ ...loc, tim: canGon === "" ? undefined : canGon });
   }
 
+  // Filters behind the "Bộ lọc" button that are on — each is ABSENT from `loc` at its default, the
+  // same rule the request builder uses, so "on" here is "sent to the server".
+  const moreActiveCount = [
+    loc.linhVuc !== undefined,
+    loc.thonID !== undefined,
+    loc.boPhanID !== undefined,
+    loc.kenh !== undefined,
+    loc.chiTreHan !== undefined,
+    loc.ratingMax !== undefined,
+  ].filter(Boolean).length;
+
+  // Search first (owner, 02/10/2026: "ô tìm kiếm nên nằm ở bên trái"), then the scope tabs and the
+  // status — what decides which petitions are in front of you; the six narrower filters sit behind
+  // "Bộ lọc".
   return (
-    <div className="hang-loc">
-      {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã
-          cán bộ từ PHIÊN. Tab `Liên quan đến tôi` không vẽ: máy chủ trả 400 cho `scope=related`
-          (xem `PHAN_CHUA_DUNG`). */}
-      <div className="o-chon" role="group" aria-label="Phạm vi">
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc.phamVi !== "mine"}
-          onClick={() => datLoc({ ...loc, phamVi: undefined })}
-        >
-          {PHAM_VI_TOAN_XA}
-        </button>
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc.phamVi === "mine"}
-          onClick={() => datLoc({ ...loc, phamVi: "mine" })}
-        >
-          {PHAM_VI_GIAO_CHO_TOI}
-        </button>
-      </div>
+    <FilterBar
+      id="petition-filters"
+      moreActiveCount={moreActiveCount}
+      primary={
+        <>
+          {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
+              đang gõ vào một URL — và chuỗi ấy có thể là tên hay địa chỉ một công dân (luật 3, cấm #4).
+              Gõ xong rồi bấm là một lần. */}
+          <form className="form-tra-cuu" onSubmit={timNgay} role="search">
+            <div className="o-nhap">
+              <label htmlFor="tim-phan-anh">Tìm trong sổ</label>
+              <input
+                id="tim-phan-anh"
+                name="tim-phan-anh"
+                value={tim}
+                placeholder={TIM_PLACEHOLDER}
+                onChange={(e) => datTim(e.target.value)}
+                autoComplete="off"
+                // Máy chủ trả 400 khi quá 200 ký tự (`store.TimPhieuToiDa`). Chặn ở ô nhập để cán bộ
+                // thấy giới hạn thay vì thấy "không tải được".
+                maxLength={200}
+              />
+            </div>
+            <button className="nut-phu" type="submit">
+              Tìm
+            </button>
+          </form>
 
-      {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
-          đang gõ vào một URL — và chuỗi ấy có thể là tên hay địa chỉ một công dân (luật 3, cấm #4).
-          Gõ xong rồi bấm là một lần. */}
-      <form className="form-tra-cuu" onSubmit={timNgay} role="search">
-        <div className="o-nhap">
-          <label htmlFor="tim-phan-anh">Tìm trong sổ</label>
-          <input
-            id="tim-phan-anh"
-            name="tim-phan-anh"
-            value={tim}
-            placeholder={TIM_PLACEHOLDER}
-            onChange={(e) => datTim(e.target.value)}
-            autoComplete="off"
-            // Máy chủ trả 400 khi quá 200 ký tự (`store.TimPhieuToiDa`). Chặn ở ô nhập để cán bộ
-            // thấy giới hạn thay vì thấy "không tải được".
-            maxLength={200}
-          />
-        </div>
-        <button className="nut-phu" type="submit">
-          Tìm
-        </button>
-      </form>
+          {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã
+              cán bộ từ PHIÊN. Tab `Liên quan đến tôi` không vẽ: máy chủ trả 400 cho `scope=related`
+              (xem `PHAN_CHUA_DUNG`). */}
+          <div className="o-chon" role="group" aria-label="Phạm vi">
+            <button
+              type="button"
+              className="nut-phu"
+              aria-pressed={loc.phamVi !== "mine"}
+              onClick={() => datLoc({ ...loc, phamVi: undefined })}
+            >
+              {PHAM_VI_TOAN_XA}
+            </button>
+            <button
+              type="button"
+              className="nut-phu"
+              aria-pressed={loc.phamVi === "mine"}
+              onClick={() => datLoc({ ...loc, phamVi: "mine" })}
+            >
+              {PHAM_VI_GIAO_CHO_TOI}
+            </button>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-trang-thai">Trạng thái</label>
-        <select
-          id="loc-trang-thai"
-          value={loc.trangThai ?? ""}
-          onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
-        >
-          <option value="">{MOI_TRANG_THAI_NHAN}</option>
-          {MOI_TRANG_THAI.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanTrangThai(ma)}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="o-chon">
+            <label htmlFor="loc-trang-thai">Trạng thái</label>
+            <select
+              id="loc-trang-thai"
+              value={loc.trangThai ?? ""}
+              onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
+            >
+              <option value="">{MOI_TRANG_THAI_NHAN}</option>
+              {MOI_TRANG_THAI.map((ma) => (
+                <option key={ma} value={ma}>
+                  {nhanTrangThai(ma)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      }
+      more={
+        <>
+          <div className="o-chon">
+            <label htmlFor="loc-linh-vuc">Lĩnh vực</label>
+            <select
+              id="loc-linh-vuc"
+              value={loc.linhVuc ?? ""}
+              onChange={(e) => datLoc({ ...loc, linhVuc: e.target.value || undefined })}
+            >
+              <option value="">{MOI_LINH_VUC_NHAN}</option>
+              {LINH_VUC_PHAN_ANH.map((l) => (
+                <option key={l.ma} value={l.ma}>
+                  {l.nhan}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-linh-vuc">Lĩnh vực</label>
-        <select
-          id="loc-linh-vuc"
-          value={loc.linhVuc ?? ""}
-          onChange={(e) => datLoc({ ...loc, linhVuc: e.target.value || undefined })}
-        >
-          <option value="">{MOI_LINH_VUC_NHAN}</option>
-          {LINH_VUC_PHAN_ANH.map((l) => (
-            <option key={l.ma} value={l.ma}>
-              {l.nhan}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="o-chon">
+            <label htmlFor="loc-dia-ban">Địa bàn</label>
+            <select
+              id="loc-dia-ban"
+              value={loc.thonID ?? ""}
+              onChange={(e) => datLoc({ ...loc, thonID: e.target.value || undefined })}
+            >
+              <option value="">{MOI_DIA_BAN_NHAN}</option>
+              {/* A FILTER, not a picker: out-of-use units STAY (petitions recorded there must still be
+                  findable), marked as such (`residentialUnitFilterLabel`). */}
+              {thon.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {residentialUnitFilterLabel(t)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-dia-ban">Địa bàn</label>
-        <select
-          id="loc-dia-ban"
-          value={loc.thonID ?? ""}
-          onChange={(e) => datLoc({ ...loc, thonID: e.target.value || undefined })}
-        >
-          <option value="">{MOI_DIA_BAN_NHAN}</option>
-          {/* A FILTER, not a picker: out-of-use units STAY (petitions recorded there must still be
-              findable), marked as such (`residentialUnitFilterLabel`). */}
-          {thon.map((t) => (
-            <option key={t.id} value={t.id}>
-              {residentialUnitFilterLabel(t)}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="o-chon">
+            <label htmlFor="loc-bo-phan">Bộ phận đang giữ</label>
+            <select
+              id="loc-bo-phan"
+              value={loc.boPhanID ?? ""}
+              onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
+            >
+              <option value="">{MOI_BO_PHAN_NHAN}</option>
+              {boPhan.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-bo-phan">Bộ phận đang giữ</label>
-        <select
-          id="loc-bo-phan"
-          value={loc.boPhanID ?? ""}
-          onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
-        >
-          <option value="">{MOI_BO_PHAN_NHAN}</option>
-          {boPhan.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="o-chon">
+            <label htmlFor="loc-kenh">Kênh tiếp nhận</label>
+            <select
+              id="loc-kenh"
+              value={loc.kenh ?? ""}
+              onChange={(e) => datLoc({ ...loc, kenh: e.target.value || undefined })}
+            >
+              <option value="">{MOI_KENH_NHAN}</option>
+              {MOI_KENH.map((ma) => (
+                <option key={ma} value={ma}>
+                  {nhanKenh(ma)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-kenh">Kênh tiếp nhận</label>
-        <select
-          id="loc-kenh"
-          value={loc.kenh ?? ""}
-          onChange={(e) => datLoc({ ...loc, kenh: e.target.value || undefined })}
-        >
-          <option value="">{MOI_KENH_NHAN}</option>
-          {MOI_KENH.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanKenh(ma)}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div className="o-chon">
+            <label htmlFor="loc-tre-han">
+              <input
+                id="loc-tre-han"
+                type="checkbox"
+                checked={loc.chiTreHan === true}
+                // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
+                // chuỗi `true` và trả 400 cho mọi giá trị khác.
+                onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
+              />{" "}
+              {CHI_TRE_HAN_NHAN}
+            </label>
+          </div>
 
-      <div className="o-chon">
-        <label htmlFor="loc-tre-han">
-          <input
-            id="loc-tre-han"
-            type="checkbox"
-            checked={loc.chiTreHan === true}
-            // Ô bỏ tích thì tham số VẮNG MẶT HẲN, không gửi `late=false` — máy chủ chỉ nhận đúng
-            // chuỗi `true` và trả 400 cho mọi giá trị khác.
-            onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
-          />{" "}
-          {CHI_TRE_HAN_NHAN}
-        </label>
-      </div>
-
-      <div className="o-chon">
-        <label htmlFor="loc-danh-gia-thap">
-          <input
-            id="loc-danh-gia-thap"
-            type="checkbox"
-            checked={loc.ratingMax === LOW_RATING_MAX}
-            // Spec §4 "phiếu 1–2 sao" → `rating_max=2`. Unticked, the parameter is ABSENT — never an
-            // empty `rating_max=`, which the server answers with 400.
-            onChange={(e) =>
-              datLoc({ ...loc, ratingMax: e.target.checked ? LOW_RATING_MAX : undefined })
-            }
-          />{" "}
-          {LOW_RATING_FILTER_LABEL}
-        </label>
-      </div>
-    </div>
+          <div className="o-chon">
+            <label htmlFor="loc-danh-gia-thap">
+              <input
+                id="loc-danh-gia-thap"
+                type="checkbox"
+                checked={loc.ratingMax === LOW_RATING_MAX}
+                // Spec §4 "phiếu 1–2 sao" → `rating_max=2`. Unticked, the parameter is ABSENT — never an
+                // empty `rating_max=`, which the server answers with 400.
+                onChange={(e) =>
+                  datLoc({ ...loc, ratingMax: e.target.checked ? LOW_RATING_MAX : undefined })
+                }
+              />{" "}
+              {LOW_RATING_FILTER_LABEL}
+            </label>
+          </div>
+        </>
+      }
+    />
   );
 }
 

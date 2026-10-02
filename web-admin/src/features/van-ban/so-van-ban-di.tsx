@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { FilterBar } from "@/components/ui/filter-bar";
 import {
   TRANG_DAU,
   type NganXepConTro,
@@ -382,25 +383,36 @@ export function ManSoVanBanDi({
 
       {form}
 
-      <div className="hang-loc">
-        <ChonNam id="nam-so-van-ban-di" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
-        <p className="chon-hang-muc">
-          <label htmlFor="loc-loai-di">Loại văn bản</label>{" "}
-          <select id="loc-loai-di" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
-            <option value="">Tất cả loại</option>
-            {traLoai.pha === "xong" &&
-              [...traLoai.ten].map(([ma, ten]) => (
-                <option key={ma} value={ma}>
-                  {ten}
-                </option>
-              ))}
-          </select>
-        </p>
+      {/* Search first (owner, 02/10/2026), then the register's year; type and order sit behind
+          "Bộ lọc". The count is of those two not at their default ("" = all, "" = number order). */}
+      <FilterBar
+        id="outgoing-document-filters"
+        moreActiveCount={[loaiLoc !== "", thuTu !== ""].filter(Boolean).length}
+        primary={
+          <>
+            <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
+            <ChonNam id="nam-so-van-ban-di" nhan="Năm của sổ" nam={nam} namGoc={namGoc} datNam={datNam} />
+          </>
+        }
+        more={
+          <>
+            <p className="chon-hang-muc">
+              <label htmlFor="loc-loai-di">Loại văn bản</label>{" "}
+              <select id="loc-loai-di" value={loaiLoc} onChange={(e) => datLoaiLoc(e.target.value)}>
+                <option value="">Tất cả loại</option>
+                {traLoai.pha === "xong" &&
+                  [...traLoai.ten].map(([ma, ten]) => (
+                    <option key={ma} value={ma}>
+                      {ten}
+                    </option>
+                  ))}
+              </select>
+            </p>
 
-        <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
-
-        <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
-      </div>
+            <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
+          </>
+        }
+      />
 
       <BangVanBanDi
         kq={kq}
