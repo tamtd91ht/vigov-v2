@@ -41,13 +41,15 @@ package app
 // The lookup code, the citizen id, any presigned URL or form field, image bytes. Errors carry the
 // commune (bocPhieu) and the act. The trail carries the file id, the sniffed types, size and hash.
 //
-// # NOT YET ENFORCED — THE APP THE SESSION CAME FROM
+// # NOT CHECKED, BY DECISION — THE APP THE SESSION CAME FROM
 //
-// The owner limits this feature to the commune's OWN app. The citizen session this service sees
-// (core/httpx.CitizenSession: session id, citizen id, commune — "there is no fourth field";
-// identity.proto CitizenSessionPrincipal) records NOTHING about which app opened it, so this file
-// cannot refuse a session opened from the shared ViHAT app without inventing that fact. Reported to
-// the owner rather than guessed.
+// The citizen session this service sees (core/httpx.CitizenSession: session id, citizen id, commune —
+// "there is no fourth field"; identity.proto CitizenSessionPrincipal) records nothing about which app
+// opened it. Asked 02/10/2026, the owner answered that a photo may come from either app ("mở ở đâu cũng
+// được"): "only the commune's own app" is the scope of the BUTTON (citizen-app `AppRieng`), not a server
+// rule. What still holds here is the sender and the commune — the session's citizen must own the
+// petition, in the session's commune. A field recording the opening app is optional future work
+// (ADR 0047, row "Ảnh hiện trường khi gửi phản ánh"); do not add a check against it without that.
 
 import (
 	"bytes"
