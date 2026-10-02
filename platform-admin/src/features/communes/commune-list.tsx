@@ -1,9 +1,16 @@
 "use client";
 
+import { Landmark, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { FormMessage } from "@/components/form-parts";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { usePermissionKeys } from "@/features/operator/operator-context";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { listCommunes, type CommuneSummary } from "@/lib/api";
@@ -17,6 +24,9 @@ import { StatusBadge } from "./commune-parts";
  *
  * Cursor pagination with "Xem thêm": the server's order is creation time, and a cursor is the one
  * way a page boundary stays put while communes are being created (core/page).
+ *
+ * No filter bar: the list route takes no filter (`listCommunes` sends `limit` and `cursor` only),
+ * and a search box that filtered only the rows already loaded would hide communes on later pages.
  */
 
 export const PAGE_SIZE = 20;
@@ -27,26 +37,30 @@ export function CommuneListToolbar({ permissionKeys }: { permissionKeys: readonl
   // UI hint only: POST /communes is guarded by both keys on the server.
   if (!canCreateCommune(permissionKeys)) return null;
   return (
-    <div className="toolbar">
-      <Link href="/xa/moi" className="primary-link-button">
-        Tạo xã
-      </Link>
-    </div>
+    <Link href="/xa/moi" className={buttonVariants({ variant: "primary" })}>
+      <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
+      Tạo xã
+    </Link>
   );
+}
+
+/** The page header's action slot: the toolbar fed with the operator's keys. */
+export function CommuneListActions() {
+  return <CommuneListToolbar permissionKeys={usePermissionKeys()} />;
 }
 
 export function CommuneTable({ items }: { items: readonly CommuneSummary[] }) {
   if (items.length === 0) {
     return (
-      <section className="empty-state">
-        <p className="empty-state-title">Sổ xã chưa có xã nào.</p>
-      </section>
+      <Card as="section">
+        <EmptyState icon={Landmark} title="Sổ xã chưa có xã nào." />
+      </Card>
     );
   }
   return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <caption className="visually-hidden">Danh sách xã trên nền tảng</caption>
+    <TableScroll sticky aria-label="Danh sách xã">
+      <table className={DATA_TABLE_CLASS}>
+        <caption className="sr-only">Danh sách xã trên nền tảng</caption>
         <thead>
           <tr>
             <th scope="col">Tên xã</th>
@@ -60,24 +74,28 @@ export function CommuneTable({ items }: { items: readonly CommuneSummary[] }) {
           {items.map((c) => (
             <tr key={c.id}>
               <td>
-                <Link href={`/xa/${encodeURIComponent(c.id)}`}>{c.name}</Link>
+                <Link
+                  href={`/xa/${encodeURIComponent(c.id)}`}
+                  className="font-semibold text-brand-700 no-underline hover:underline focus-visible:underline"
+                >
+                  {c.name}
+                </Link>
               </td>
-              <td>{c.province}</td>
+              <td className="text-ink-700">{c.province}</td>
               <td>
                 <StatusBadge active={c.active} />
               </td>
-              <td>{c.domains[0] ?? "—"}</td>
-              <td>{c.domains.length > 1 ? c.domains.length - 1 : "Không có"}</td>
+              <td className="font-mono text-[13px] text-ink-700">{c.domains[0] ?? "—"}</td>
+              <td className="text-ink-700">{c.domains.length > 1 ? c.domains.length - 1 : "Không có"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
 export function CommuneList() {
-  const keys = usePermissionKeys();
   const guarded = useGuardedError();
   const [items, setItems] = useState<CommuneSummary[]>([]);
   const [cursor, setCursor] = useState("");
@@ -124,21 +142,35 @@ export function CommuneList() {
     }
   }
 
+  // The first page never arrived: the server's sentence, verbatim, in place of the table. No
+  // "Tải lại" — the screen has no reload mechanism (`ui/error-state.tsx`).
+  if (!loaded && error !== null) {
+    return (
+      <Card as="section">
+        <ErrorState role="alert" title="Chưa tải được danh sách xã" message={error} />
+      </Card>
+    );
+  }
+
   return (
-    <>
-      <CommuneListToolbar permissionKeys={keys} />
+    <div className="flex flex-col gap-4">
       {loaded ? <CommuneTable items={items} /> : null}
       {!loaded && loading ? (
-        <p role="status" className="loading-line">
-          Đang tải danh sách xã…
-        </p>
+        <Card>
+          <p role="status" className="sr-only">
+            Đang tải danh sách xã…
+          </p>
+          <SkeletonRows rows={6} />
+        </Card>
       ) : null}
-      <FormMessage text={error} />
+      {loaded ? <FormMessage text={error} /> : null}
       {loaded && hasMore ? (
-        <button type="button" className="secondary-button" onClick={loadMore} disabled={loading} aria-busy={loading}>
-          {loading ? "Đang tải…" : "Xem thêm"}
-        </button>
+        <div className="flex justify-center">
+          <Button type="button" variant="secondary" onClick={loadMore} disabled={loading} aria-busy={loading}>
+            {loading ? "Đang tải…" : "Xem thêm"}
+          </Button>
+        </div>
       ) : null}
-    </>
+    </div>
   );
 }

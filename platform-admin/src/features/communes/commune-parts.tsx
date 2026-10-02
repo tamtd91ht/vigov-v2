@@ -1,19 +1,16 @@
+import { Badge } from "@/components/ui/badge";
+
 /**
  * Small presentational pieces shared by the commune screens. No data loading here, so each is
  * rendered to a string in tests.
  */
 
-/** Text plus a mark, never colour alone (skills/accessibility-elderly #6). */
+/**
+ * Text plus an icon of its own shape, never colour alone (skills/accessibility-elderly #6). The tone
+ * follows the `active` flag the server sends, never the wording.
+ */
 export function StatusBadge({ active }: { active: boolean }) {
-  return active ? (
-    <span className="badge badge-active">
-      <span aria-hidden="true">● </span>Đang hoạt động
-    </span>
-  ) : (
-    <span className="badge badge-inactive">
-      <span aria-hidden="true">○ </span>Ngừng hoạt động
-    </span>
-  );
+  return active ? <Badge tone="success">Đang hoạt động</Badge> : <Badge tone="neutral">Ngừng hoạt động</Badge>;
 }
 
 const DATE_TIME = new Intl.DateTimeFormat("vi-VN", {

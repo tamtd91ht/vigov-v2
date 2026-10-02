@@ -132,6 +132,16 @@ describe("sign-in screens", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Tiếp tục<\/button>/);
     expect(recoveryCodesText(codes)).toContain(codes.join("\n"));
   });
+
+  // The production CSP refuses `style` attributes (`lib/csp.ts`); the redesign draws with classes.
+  it("no sign-in screen draws a style attribute", () => {
+    const screens = [
+      <SignInFlow key="a" />,
+      <EnrollFinishStep key="b" state={{ ...INITIAL_SIGN_IN_STATE, step: "enroll_finish", enrollment: START }} dispatch={() => {}} />,
+      <RecoveryCodesOnce key="c" codes={["k7dq-2mxa"]} onSaved={() => {}} continueLabel="Tiếp tục" />,
+    ];
+    for (const s of screens) expect(renderToString(s)).not.toContain("style=");
+  });
 });
 
 describe("QR code", () => {

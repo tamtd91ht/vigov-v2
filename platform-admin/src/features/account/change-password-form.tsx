@@ -1,8 +1,12 @@
 "use client";
 
+import { KeyRound, LogIn } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { FormMessage, TextField } from "@/components/form-parts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { changePassword } from "@/lib/api";
 import { passwordRejectionText } from "@/lib/errors";
@@ -28,12 +32,19 @@ export const CREDENTIALS_REFUSED = "Mật khẩu hiện tại hoặc mã xác th
 
 export function ChangePasswordDone() {
   return (
-    <section className="panel" role="status">
-      <p>{CHANGE_PASSWORD_DONE}</p>
-      <button type="button" className="primary-button" onClick={() => goTo(SIGN_IN_PATH)}>
-        Đăng nhập lại
-      </button>
-    </section>
+    <Card as="section" role="status">
+      <CardContent className="flex flex-col items-start gap-4">
+        <p className="m-0 text-sm text-ink-700">{CHANGE_PASSWORD_DONE}</p>
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => goTo(SIGN_IN_PATH)}
+          icon={<LogIn aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        >
+          Đăng nhập lại
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -83,51 +94,63 @@ export function ChangePasswordForm() {
   if (done) return <ChangePasswordDone />;
 
   return (
-    <form className="panel narrow" method="post" onSubmit={submit} noValidate>
-      <p>Sau khi đổi, mọi phiên đăng nhập của tài khoản sẽ kết thúc và bạn cần đăng nhập lại.</p>
-      <TextField
-        label="Mật khẩu hiện tại"
-        name="current_password"
-        type="password"
-        autoComplete="current-password"
-        value={current}
-        onChange={(e) => setCurrent(e.target.value)}
-        disabled={busy}
-      />
-      <TextField
-        label="Mật khẩu mới"
-        name="new_password"
-        type="password"
-        autoComplete="new-password"
-        value={next}
-        onChange={(e) => setNext(e.target.value)}
-        disabled={busy}
-      />
-      <TextField
-        label="Nhập lại mật khẩu mới"
-        name="confirm_password"
-        type="password"
-        autoComplete="new-password"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-        disabled={busy}
-        error={mismatch ? "Hai lần nhập mật khẩu mới không khớp. Hãy nhập lại." : null}
-      />
-      <TextField
-        label="Mã xác thực (6 số trên ứng dụng xác thực)"
-        name="totp_code"
-        type="text"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        maxLength={6}
-        value={totp}
-        onChange={(e) => setTotp(e.target.value)}
-        disabled={busy}
-      />
-      <FormMessage text={error} />
-      <button type="submit" className="primary-button" disabled={busy} aria-busy={busy}>
-        {busy ? "Đang đổi mật khẩu…" : "Đổi mật khẩu"}
-      </button>
-    </form>
+    <Card as="form" method="post" onSubmit={submit} noValidate>
+      <CardContent className="flex flex-col gap-4">
+        <Notice tone="info">
+          <p>Sau khi đổi, mọi phiên đăng nhập của tài khoản sẽ kết thúc và bạn cần đăng nhập lại.</p>
+        </Notice>
+        <TextField
+          label="Mật khẩu hiện tại"
+          name="current_password"
+          type="password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          disabled={busy}
+        />
+        <TextField
+          label="Mật khẩu mới"
+          name="new_password"
+          type="password"
+          autoComplete="new-password"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          disabled={busy}
+        />
+        <TextField
+          label="Nhập lại mật khẩu mới"
+          name="confirm_password"
+          type="password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          disabled={busy}
+          error={mismatch ? "Hai lần nhập mật khẩu mới không khớp. Hãy nhập lại." : null}
+        />
+        <TextField
+          label="Mã xác thực (6 số trên ứng dụng xác thực)"
+          name="totp_code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          value={totp}
+          onChange={(e) => setTotp(e.target.value)}
+          disabled={busy}
+        />
+        <FormMessage text={error} />
+      </CardContent>
+      <CardFooter className="justify-end">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy}
+          aria-busy={busy}
+          icon={<KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        >
+          {busy ? "Đang đổi mật khẩu…" : "Đổi mật khẩu"}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ACCOUNT_ITEMS, Sidebar } from "@/components/sidebar";
+import { Topbar } from "@/components/topbar";
 import type { CommuneDetail } from "@/lib/api";
 import { canCreateCommune, canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
 
@@ -151,14 +152,39 @@ describe("list and shell", () => {
     expect(renderToString(<CommuneTable items={[]} />)).toContain("Sổ xã chưa có xã nào.");
   });
 
-  it("the sidebar carries the account menu and a sign-out button", () => {
+  // The sign-out button moved from the sidebar to the topbar in the 02/10/2026 redesign (ADR 0068
+  // look): where it is drawn is presentation; that the signed-in shell carries it is the behaviour.
+  it("the sidebar carries the account menu, and the topbar the operator code and sign-out", () => {
     const html = renderToString(<Sidebar />);
     expect(html).toContain("Danh sách xã");
     expect(html).toContain('aria-current="page"');
     for (const item of ACCOUNT_ITEMS) expect(html).toContain(`href="${item.href}"`);
     expect(html).toContain("Đổi mật khẩu");
     expect(html).toContain("Tạo lại mã khôi phục");
-    expect(html).toContain("Đăng xuất");
+    const top = renderToString(<Topbar />);
+    expect(top).toContain("Người vận hành");
+    expect(top).toContain("Đăng xuất");
+  });
+});
+
+describe("the CSP holds: no screen draws a style attribute", () => {
+  // The production document policy has `style-src 'self' 'nonce-…'` and no 'unsafe-inline'
+  // (`lib/csp.ts`): a `style="…"` attribute in the server HTML is refused by the browser, silently,
+  // and the element renders unstyled. The redesign draws with classes only — this pins it for
+  // every component that renders to a string here (lucide icons included).
+  it("shell, list, create form, detail and account screens render without style=", () => {
+    const screens = [
+      <Sidebar key="s" />,
+      <Topbar key="t" />,
+      <CommuneListToolbar key="lt" permissionKeys={ALL} />,
+      <CommuneTable key="ct" items={[COMMUNE]} />,
+      <CommuneTable key="ce" items={[]} />,
+      <CreateCommuneGate key="cg" ready permissionKeys={[TENANT, DOMAIN]} />,
+      <CreateCommuneGate key="cf" ready permissionKeys={[]} />,
+      <CommuneDetailBody key="d" commune={COMMUNE} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
+      <ChangePasswordDone key="pd" />,
+    ];
+    for (const s of screens) expect(renderToString(s)).not.toContain("style=");
   });
 });
 

@@ -1,4 +1,7 @@
-import { CommuneList } from "@/features/communes/commune-list";
+import { Landmark } from "lucide-react";
+
+import { PageHeader } from "@/components/ui/page-header";
+import { CommuneList, CommuneListActions } from "@/features/communes/commune-list";
 
 export const metadata = { title: "Danh sách xã — ViGov Khu vận hành nền tảng" };
 
@@ -6,7 +9,7 @@ export const metadata = { title: "Danh sách xã — ViGov Khu vận hành nền
 export default function CommuneListPage() {
   return (
     <>
-      <h1 className="page-title">Danh sách xã</h1>
+      <PageHeader icon={Landmark} title="Danh sách xã" actions={<CommuneListActions />} />
       <CommuneList />
     </>
   );

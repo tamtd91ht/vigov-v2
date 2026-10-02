@@ -1,12 +1,17 @@
 "use client";
 
+import { ChevronDown, Plus, ShieldX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 
-import { FormMessage, TextField } from "@/components/form-parts";
+import { controlClass, FieldError, FormMessage, labelClass, TextField } from "@/components/form-parts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Notice } from "@/components/ui/notice";
 import { useOperator } from "@/features/operator/operator-context";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { createCommune, listProvinces, type Province } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { communeError, type CommuneField } from "@/lib/errors";
 import { canCreateCommune } from "@/lib/permissions";
 
@@ -33,9 +38,11 @@ export const CREATE_FORBIDDEN_NOTICE =
 
 export function CreateCommuneNotices() {
   return (
-    <section className="notice-box" aria-label="Lưu ý trước khi tạo xã">
-      <p>{EMPTY_COMMUNE_NOTICE}</p>
-      <p>{FIRST_ADMIN_NOTICE}</p>
+    <section aria-label="Lưu ý trước khi tạo xã">
+      <Notice tone="info">
+        <p>{EMPTY_COMMUNE_NOTICE}</p>
+        <p>{FIRST_ADMIN_NOTICE}</p>
+      </Notice>
     </section>
   );
 }
@@ -44,9 +51,9 @@ export function CreateCommuneNotices() {
 export function CreateCommuneGate({ permissionKeys, ready }: { permissionKeys: readonly string[]; ready: boolean }) {
   if (ready && !canCreateCommune(permissionKeys)) {
     return (
-      <p className="notice-box" role="status">
+      <Notice tone="neutral" icon={ShieldX} role="status">
         {CREATE_FORBIDDEN_NOTICE}
-      </p>
+      </Notice>
     );
   }
   return <CreateCommuneForm />;
@@ -120,63 +127,85 @@ function CreateCommuneForm() {
 
   const provinceErrorId = provinceId + "-error";
 
+  // One column at 320px, two from 640px (name across both). Labels above every control.
   return (
-    <form className="panel" method="post" onSubmit={submit} noValidate>
-      <CreateCommuneNotices />
-      <TextField
-        label="Tên xã"
-        hint="Ghi đủ loại đơn vị và tên (“Xã …”, “Phường …”, “Đặc khu …”), đúng như văn bản thành lập."
-        name="name"
-        type="text"
-        autoComplete="off"
-        maxLength={200}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        disabled={submitting}
-        error={errors.name}
-      />
-      <div className="field">
-        <label htmlFor={provinceId}>Tỉnh, thành phố</label>
-        <select
-          id={provinceId}
-          name="province_id"
-          value={province}
-          onChange={(e) => setProvince(e.target.value)}
-          disabled={submitting || provinces === null}
-          aria-invalid={errors.province ? true : undefined}
-          aria-describedby={errors.province ? provinceErrorId : undefined}
+    <Card as="form" method="post" onSubmit={submit} noValidate>
+      <CardContent className="flex flex-col gap-5">
+        <CreateCommuneNotices />
+        <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <TextField
+              label="Tên xã"
+              hint="Ghi đủ loại đơn vị và tên (“Xã …”, “Phường …”, “Đặc khu …”), đúng như văn bản thành lập."
+              name="name"
+              type="text"
+              autoComplete="off"
+              maxLength={200}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={submitting}
+              error={errors.name}
+            />
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor={provinceId} className={labelClass}>
+              Tỉnh, thành phố
+            </label>
+            <div className="relative">
+              <select
+                id={provinceId}
+                name="province_id"
+                value={province}
+                onChange={(e) => setProvince(e.target.value)}
+                disabled={submitting || provinces === null}
+                aria-invalid={errors.province ? true : undefined}
+                aria-describedby={errors.province ? provinceErrorId : undefined}
+                className={cn(controlClass, "cursor-pointer appearance-none pr-9")}
+              >
+                <option value="">{provinces === null ? "Đang tải danh mục…" : "Chọn tỉnh, thành phố"}</option>
+                {(provinces ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                focusable="false"
+                strokeWidth={1.8}
+                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-ink-500"
+              />
+            </div>
+            {errors.province ? <FieldError id={provinceErrorId} text={errors.province} /> : null}
+          </div>
+          <TextField
+            label="Tên miền chính"
+            hint="Tên miền trần, không kèm https:// hay đường dẫn. Cán bộ xã mở trang quản trị của xã tại tên miền này."
+            name="primary_domain"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            disabled={submitting}
+            error={errors.domain}
+          />
+        </div>
+        <FormMessage text={errors.form ?? provinceLoadError} />
+      </CardContent>
+      <CardFooter className="justify-end">
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={submitting}
+          aria-busy={submitting}
+          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
         >
-          <option value="">{provinces === null ? "Đang tải danh mục…" : "Chọn tỉnh, thành phố"}</option>
-          {(provinces ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        {errors.province ? (
-          <p id={provinceErrorId} className="field-error">
-            {errors.province}
-          </p>
-        ) : null}
-      </div>
-      <TextField
-        label="Tên miền chính"
-        hint="Tên miền trần, không kèm https:// hay đường dẫn. Cán bộ xã mở trang quản trị của xã tại tên miền này."
-        name="primary_domain"
-        type="text"
-        inputMode="url"
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        value={domain}
-        onChange={(e) => setDomain(e.target.value)}
-        disabled={submitting}
-        error={errors.domain}
-      />
-      <FormMessage text={errors.form ?? provinceLoadError} />
-      <button type="submit" className="primary-button" disabled={submitting} aria-busy={submitting}>
-        {submitting ? "Đang tạo xã…" : "Tạo xã"}
-      </button>
-    </form>
+          {submitting ? "Đang tạo xã…" : "Tạo xã"}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

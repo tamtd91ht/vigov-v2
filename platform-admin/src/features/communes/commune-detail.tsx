@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Globe, Landmark, Pencil, Plus, Power, Smartphone, Star, TriangleAlert } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import { Dialog } from "@/components/dialog";
+import { Dialog, DialogActions } from "@/components/dialog";
 import { FormMessage, TextAreaField, TextField } from "@/components/form-parts";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { usePermissionKeys } from "@/features/operator/operator-context";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import {
@@ -32,6 +42,10 @@ import { formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
  * Every control is shown by the operator's `ops.*` keys (`lib/permissions.ts`) — a hint; the
  * server checks each call. Every write answers the commune as the registry now holds it, and that
  * answer replaces what is on screen: the page never patches its own copy.
+ *
+ * LAYOUT (ADR 0068 look, presentation only): a page header with the commune's name, then one card
+ * per concern — name and status, domains, Mini Apps. The commune's name is printed exactly
+ * as the registry holds it, never rebuilt (ADR 0068 §7).
  */
 
 type Props = { communeId: string };
@@ -71,13 +85,20 @@ export function CommuneDetailScreen({ communeId }: Props) {
   if (commune === null) {
     return (
       <>
-        <h1 className="page-title">Thông tin xã</h1>
+        <PageHeader icon={Landmark} title="Thông tin xã" />
         {loadError === null ? (
-          <p role="status" className="loading-line">
-            Đang tải thông tin xã…
-          </p>
-        ) : null}
-        <FormMessage text={loadError} />
+          <Card>
+            <p role="status" className="sr-only">
+              Đang tải thông tin xã…
+            </p>
+            <SkeletonRows rows={4} columns={2} />
+          </Card>
+        ) : (
+          // The server's sentence verbatim (an unknown id reads "not found"); no reload mechanism.
+          <Card as="section">
+            <ErrorState role="alert" title="Chưa tải được thông tin xã" message={loadError} />
+          </Card>
+        )}
       </>
     );
   }
@@ -89,6 +110,28 @@ export function CommuneDetailScreen({ communeId }: Props) {
       onChanged={setCommune}
       onMiniAppAttached={(app) => setCommune((c) => (c ? { ...c, mini_apps: [...c.mini_apps, app] } : c))}
     />
+  );
+}
+
+function SectionCard({
+  id,
+  title,
+  icon: Icon,
+  children,
+}: {
+  id: string;
+  title: string;
+  icon: typeof Globe;
+  children: ReactNode;
+}) {
+  return (
+    <Card as="section" aria-labelledby={id}>
+      <CardHeader>
+        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+        <CardTitle id={id}>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -109,49 +152,40 @@ export function CommuneDetailBody({
   const miniAppsAllowed = canManageMiniApps(permissionKeys);
 
   return (
-    <>
-      <h1 className="page-title">{commune.name}</h1>
-      <dl className="facts">
-        <div>
-          <dt>Tỉnh, thành phố</dt>
-          <dd>{commune.province}</dd>
-        </div>
-        <div>
-          <dt>Trạng thái</dt>
-          <dd>
-            <StatusBadge active={commune.active} />
-          </dd>
-        </div>
-      </dl>
+    <div className="flex max-w-[1120px] min-w-0 flex-col gap-4">
+      <PageHeader icon={Landmark} title={commune.name} className="mb-1" />
 
-      {communeAllowed ? (
-        <section className="panel" aria-labelledby="commune-admin">
-          <h2 id="commune-admin" className="section-title">
-            Tên và trạng thái
-          </h2>
-          <div className="button-row">
+      <SectionCard id="commune-admin" title="Tên và trạng thái" icon={Landmark}>
+        <dl className="m-0 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <dt className="text-xs font-medium text-ink-500">Tỉnh, thành phố</dt>
+            <dd className="m-0 text-sm font-semibold text-ink-900">{commune.province}</dd>
+          </div>
+          <div className="flex min-w-0 flex-col items-start gap-1">
+            <dt className="text-xs font-medium text-ink-500">Trạng thái</dt>
+            <dd className="m-0">
+              <StatusBadge active={commune.active} />
+            </dd>
+          </div>
+        </dl>
+        {communeAllowed ? (
+          <div className="flex flex-wrap gap-2 border-t border-line pt-4">
             <NameCorrection commune={commune} onChanged={onChanged} />
             <ActivationToggle commune={commune} onChanged={onChanged} />
           </div>
-        </section>
-      ) : null}
+        ) : null}
+      </SectionCard>
 
-      <section className="panel" aria-labelledby="commune-domains">
-        <h2 id="commune-domains" className="section-title">
-          Tên miền
-        </h2>
+      <SectionCard id="commune-domains" title="Tên miền" icon={Globe}>
         <DomainList commune={commune} allowed={domainsAllowed} onChanged={onChanged} />
         {domainsAllowed ? <AddDomainForm commune={commune} onChanged={onChanged} /> : null}
-      </section>
+      </SectionCard>
 
-      <section className="panel" aria-labelledby="commune-mini-apps">
-        <h2 id="commune-mini-apps" className="section-title">
-          Mini App riêng của xã
-        </h2>
+      <SectionCard id="commune-mini-apps" title="Mini App riêng của xã" icon={Smartphone}>
         <MiniAppTable apps={commune.mini_apps} />
         {miniAppsAllowed ? <AttachMiniAppForm commune={commune} onAttached={onMiniAppAttached} /> : null}
-      </section>
-    </>
+      </SectionCard>
+    </div>
   );
 }
 
@@ -185,43 +219,53 @@ function DomainList({
     }
   }
 
-  if (commune.domains.length === 0) return <p>Xã chưa có tên miền nào.</p>;
+  if (commune.domains.length === 0) {
+    return <EmptyState icon={Globe} tone="neutral" title="Xã chưa có tên miền nào." className="py-6" />;
+  }
 
   return (
     <>
-      <ul className="domain-list">
+      <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-xl border border-line p-0">
         {commune.domains.map((d, i) => (
-          <li key={d}>
-            <code>{d}</code>
-            {i === 0 ? <span className="tag">Tên miền chính</span> : null}
+          <li key={d} className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+            <code className="min-w-0 font-mono text-[13px] break-all text-ink-900">{d}</code>
+            {i === 0 ? (
+              <Badge tone="info" icon={Star}>
+                Tên miền chính
+              </Badge>
+            ) : null}
             {i > 0 && allowed ? (
-              <button
+              <Button
                 type="button"
-                className="link-button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                icon={<Star aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                 onClick={() => {
                   setError(null);
                   setTarget(d);
                 }}
               >
                 Đặt làm tên miền chính
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}
       </ul>
-      <Dialog open={target !== null} title="Đặt tên miền chính" onClose={() => !busy && setTarget(null)}>
+      <Dialog open={target !== null} title="Đặt tên miền chính" icon={Star} onClose={() => !busy && setTarget(null)}>
         <p>
-          Đặt <code>{target}</code> làm tên miền chính của {commune.name}? Các tên miền khác của xã vẫn được giữ.
+          Đặt <code className="font-mono text-[13px] break-all text-ink-900">{target}</code> làm tên miền chính của{" "}
+          {commune.name}? Các tên miền khác của xã vẫn được giữ.
         </p>
         <FormMessage text={error} />
-        <div className="button-row">
-          <button type="button" className="primary-button" onClick={confirm} disabled={busy} aria-busy={busy}>
+        <DialogActions>
+          <Button type="button" variant="primary" onClick={confirm} disabled={busy} aria-busy={busy}>
             {busy ? "Đang lưu…" : "Đặt làm tên miền chính"}
-          </button>
-          <button type="button" className="secondary-button" onClick={() => setTarget(null)} disabled={busy}>
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setTarget(null)} disabled={busy}>
             Huỷ
-          </button>
-        </div>
+          </Button>
+        </DialogActions>
       </Dialog>
     </>
   );
@@ -259,7 +303,7 @@ function AddDomainForm({ commune, onChanged }: { commune: CommuneDetail; onChang
   }
 
   return (
-    <form className="inline-form" method="post" onSubmit={submit} noValidate>
+    <form className="flex max-w-xl flex-col gap-3 border-t border-line pt-4" method="post" onSubmit={submit} noValidate>
       <TextField
         label="Thêm tên miền"
         hint="Tên miền trần, không kèm https:// hay đường dẫn. Tên miền đã thêm không gỡ được ở màn này."
@@ -275,9 +319,17 @@ function AddDomainForm({ commune, onChanged }: { commune: CommuneDetail; onChang
         error={error?.field === "domain" ? error.text : null}
       />
       <FormMessage text={error && error.field !== "domain" ? error.text : null} />
-      <button type="submit" className="secondary-button" disabled={busy} aria-busy={busy}>
-        {busy ? "Đang thêm…" : "Thêm tên miền"}
-      </button>
+      <div>
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={busy}
+          aria-busy={busy}
+          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        >
+          {busy ? "Đang thêm…" : "Thêm tên miền"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -324,12 +376,17 @@ function NameCorrection({ commune, onChanged }: { commune: CommuneDetail; onChan
 
   return (
     <>
-      <button type="button" className="secondary-button" onClick={openDialog}>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={openDialog}
+        icon={<Pencil aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+      >
         Sửa lỗi gõ trong tên xã
-      </button>
-      <Dialog open={open} title="Sửa lỗi gõ trong tên xã" onClose={() => !busy && setOpen(false)}>
-        <form method="post" onSubmit={submit} noValidate>
-          <p className="notice-box">{NAME_CORRECTION_NOTICE}</p>
+      </Button>
+      <Dialog open={open} title="Sửa lỗi gõ trong tên xã" icon={Pencil} onClose={() => !busy && setOpen(false)}>
+        <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
+          <Notice tone="info">{NAME_CORRECTION_NOTICE}</Notice>
           <TextField
             label="Tên xã sau khi sửa"
             name="name"
@@ -353,14 +410,14 @@ function NameCorrection({ commune, onChanged }: { commune: CommuneDetail; onChan
             error={error?.field === "reason" ? error.text : null}
           />
           <FormMessage text={error && error.field !== "name" && error.field !== "reason" ? error.text : null} />
-          <div className="button-row">
-            <button type="submit" className="primary-button" disabled={busy} aria-busy={busy}>
+          <DialogActions>
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
               {busy ? "Đang lưu…" : "Lưu tên đã sửa"}
-            </button>
-            <button type="button" className="secondary-button" onClick={() => setOpen(false)} disabled={busy}>
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={busy}>
               Huỷ
-            </button>
-          </div>
+            </Button>
+          </DialogActions>
         </form>
       </Dialog>
     </>
@@ -375,6 +432,9 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
   const [error, setError] = useState<{ field: CommuneField; text: string } | null>(null);
   const deactivating = commune.active;
   const label = deactivating ? "Ngừng hoạt động xã" : "Bật hoạt động trở lại";
+  // The dialog asks the SPECIFIC question (web-admin confirm box); the confirm button keeps the
+  // action's own name. The commune's name is inserted verbatim, never rebuilt.
+  const question = deactivating ? `Ngừng hoạt động ${commune.name}?` : `Bật hoạt động trở lại cho ${commune.name}?`;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -400,9 +460,10 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={deactivating ? "danger-button" : "secondary-button"}
+        variant={deactivating ? "danger" : "secondary"}
+        icon={<Power aria-hidden="true" focusable="false" strokeWidth={1.8} />}
         onClick={() => {
           setReason("");
           setError(null);
@@ -410,14 +471,19 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
         }}
       >
         {label}
-      </button>
-      <Dialog open={open} title={label} onClose={() => !busy && setOpen(false)}>
-        <form method="post" onSubmit={submit} noValidate>
+      </Button>
+      <Dialog
+        open={open}
+        title={question}
+        tone={deactivating ? "danger" : "default"}
+        icon={deactivating ? TriangleAlert : Power}
+        onClose={() => !busy && setOpen(false)}
+      >
+        <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
           {deactivating ? (
-            <p className="warning-box">
-              <strong>Lưu ý: </strong>
+            <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
               {DEACTIVATE_WARNING}
-            </p>
+            </Notice>
           ) : (
             <p>Các trang của xã trên các tên miền của xã sẽ hoạt động trở lại.</p>
           )}
@@ -433,19 +499,14 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
             error={error?.field === "reason" ? error.text : null}
           />
           <FormMessage text={error && error.field !== "reason" ? error.text : null} />
-          <div className="button-row">
-            <button
-              type="submit"
-              className={deactivating ? "danger-button" : "primary-button"}
-              disabled={busy}
-              aria-busy={busy}
-            >
+          <DialogActions>
+            <Button type="submit" variant={deactivating ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
               {busy ? "Đang lưu…" : label}
-            </button>
-            <button type="button" className="secondary-button" onClick={() => setOpen(false)} disabled={busy}>
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={busy}>
               Huỷ
-            </button>
-          </div>
+            </Button>
+          </DialogActions>
         </form>
       </Dialog>
     </>
@@ -455,10 +516,12 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
 // --- Mini Apps -------------------------------------------------------------------------------
 
 export function MiniAppTable({ apps }: { apps: CommuneDetail["mini_apps"] }) {
-  if (apps.length === 0) return <p>Xã chưa gắn Mini App riêng nào.</p>;
+  if (apps.length === 0) {
+    return <EmptyState icon={Smartphone} tone="neutral" title="Xã chưa gắn Mini App riêng nào." className="py-6" />;
+  }
   return (
-    <div className="table-wrap">
-      <table className="data-table">
+    <TableScroll aria-label="Mini App riêng của xã" className="shadow-none">
+      <table className={DATA_TABLE_CLASS}>
         <thead>
           <tr>
             <th scope="col">App ID</th>
@@ -472,19 +535,19 @@ export function MiniAppTable({ apps }: { apps: CommuneDetail["mini_apps"] }) {
           {apps.map((a) => (
             <tr key={a.app_id}>
               <td>
-                <code>{a.app_id}</code>
+                <code className="font-mono text-[13px] text-ink-900">{a.app_id}</code>
               </td>
-              <td>{miniAppModeLabel(a.mode)}</td>
+              <td className="text-ink-700">{miniAppModeLabel(a.mode)}</td>
               <td>
                 <StatusBadge active={a.active} />
               </td>
-              <td>{formatDateTime(a.created_at)}</td>
-              <td>{a.created_by}</td>
+              <td className="text-ink-700">{formatDateTime(a.created_at)}</td>
+              <td className="text-ink-700">{a.created_by}</td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -529,7 +592,7 @@ function AttachMiniAppForm({
   }
 
   return (
-    <form className="inline-form" method="post" onSubmit={submit} noValidate>
+    <form className="flex max-w-xl flex-col gap-3 border-t border-line pt-4" method="post" onSubmit={submit} noValidate>
       <TextField
         label="App ID của Mini App riêng"
         hint="Dãy chữ số Zalo cấp cho Mini App của xã."
@@ -554,9 +617,17 @@ function AttachMiniAppForm({
         error={error?.field === "note" ? error.text : null}
       />
       <FormMessage text={error && error.field !== "appId" && error.field !== "note" ? error.text : null} />
-      <button type="submit" className="secondary-button" disabled={busy} aria-busy={busy}>
-        {busy ? "Đang gắn…" : "Gắn Mini App"}
-      </button>
+      <div>
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={busy}
+          aria-busy={busy}
+          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        >
+          {busy ? "Đang gắn…" : "Gắn Mini App"}
+        </Button>
+      </div>
     </form>
   );
 }

@@ -11,8 +11,9 @@ import { encode } from "uqr";
  * where a wrong module means an operator cannot enrol. The manual-entry key is always shown
  * beside it, so a scanner that cannot read the code is never a dead end.
  *
- * CSP: only SVG presentation ATTRIBUTES (`fill`), no `style` — the document policy has no
- * 'unsafe-inline' for styles (`lib/csp.ts`).
+ * CSP: only SVG presentation ATTRIBUTES (`fill`) and classes, no `style` — the document policy has
+ * no 'unsafe-inline' for styles (`lib/csp.ts`). The frame stays white whatever the theme: a scanner
+ * needs dark modules on a light ground.
  */
 
 /** One `M x y h1 v1 h-1 z` square per dark module. Exported for the test. */
@@ -31,7 +32,13 @@ export function QrCode({ value, label }: { value: string; label: string }) {
   // the code stays small. Border 4 is the quiet zone the standard asks for.
   const qr = encode(value, { ecc: "M", border: 4 });
   return (
-    <svg className="qr-code" viewBox={`0 0 ${qr.size} ${qr.size}`} role="img" aria-label={label} shapeRendering="crispEdges">
+    <svg
+      className="block h-auto w-full max-w-56 rounded-control border border-line bg-white"
+      viewBox={`0 0 ${qr.size} ${qr.size}`}
+      role="img"
+      aria-label={label}
+      shapeRendering="crispEdges"
+    >
       <rect width={qr.size} height={qr.size} fill="#fff" />
       <path d={qrPath(qr.data)} fill="#000" />
     </svg>

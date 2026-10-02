@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { BackLink } from "@/components/back-link";
 import { CommuneDetailScreen } from "@/features/communes/commune-detail";
 
 export const metadata = { title: "Thông tin xã — ViGov Khu vận hành nền tảng" };
@@ -12,9 +11,7 @@ export default async function CommunePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   return (
     <>
-      <p className="breadcrumb">
-        <Link href="/xa">Danh sách xã</Link>
-      </p>
+      <BackLink href="/xa">Danh sách xã</BackLink>
       <CommuneDetailScreen communeId={id} />
     </>
   );

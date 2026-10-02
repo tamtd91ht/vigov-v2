@@ -1,714 +1,255 @@
 /*
- * Shared styles of the operator console. Palette and proportions follow web-admin's, written
- * small-screen first: 320px is the smallest supported width, so the stacked layout is the default
- * and two columns appear only from 768px. Small text keeps a contrast of at least 4.5:1, and
- * focus is always visible.
+ * LAYER ORDER — the same as web-admin's (ADR 0068 §2–§3); read this before adding a rule.
+ *
+ *   theme   Tailwind's design variables (and ours, via `@theme` below)
+ *   base    design tokens (`:root`), the font variable, reduced motion
+ *   legacy  the document defaults this console had before the redesign (box model, body text,
+ *           focus ring). Every screen is now drawn by utilities, so only those few rules remain
+ *   components  the table helpers of `components/ui/data-table.tsx`
+ *   utilities   Tailwind
+ *
+ * WHY LAYERS AT ALL: unlayered CSS beats every layer, so a utility written on a component would
+ * silently lose to an unlayered rule touching the same property. Inside layers, utilities win by
+ * layer order alone, whatever the specificity of the older selector.
+ *
+ * WHY NO PREFLIGHT: kept off exactly as in web-admin, so the two consoles share one set of component
+ * classes that each reset what they need (`m-0`, `list-none`, `p-0`, `border-0`…). Turning it on in
+ * one app only would make the same class string draw differently in the other.
+ *
+ * CSP (`src/lib/csp.ts`): this file is compiled at build time and served from this host, which
+ * `style-src 'self'` allows. No rule here, and no component, relies on a `style` attribute or an
+ * injected `<style>` — the production policy has no 'unsafe-inline' for styles.
+ *
+ * Tokens are COPIED from `web-admin/src/app/globals.css` (no shared package yet). Change both.
  */
+@layer theme, base, legacy, components, utilities;
 
-:root {
-  --navy: #0d1b34;
-  --navy-light: #1c2f52;
-  --navy-deep: #0f172a;
-  --blue: #1d4ed8;
-  --grey-text: #4b5563;
-  --grey-border: #d1d5db;
-  --error-red: #b42318;
-  --background: #f5f6f8;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * Tokens exposed to Tailwind. `inline` makes each utility read the RUNTIME variable (`var(--brand-600)`)
+ * instead of a value frozen at build time, so the dark block below re-themes utilities too.
+ */
+@theme inline {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+
+  --color-ink-900: var(--ink-900);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-ink-400: var(--ink-400);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+
+  /* Status colours: reserved for status, always paired with an icon and a word. */
+  --color-success-50: var(--green-50);
+  --color-success-600: var(--green-600);
+  --color-warning-50: var(--amber-50);
+  --color-warning-600: var(--amber-600);
+  --color-danger-50: var(--red-50);
+  --color-danger-200: var(--red-200);
+  --color-danger-600: var(--red-600);
+
+  --color-legal-50: var(--gold-50);
+  --color-legal-200: var(--gold-200);
+  --color-legal-800: var(--gold-800);
+
+  --font-sans: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --radius-control: var(--r-control);
+  --radius-card: var(--r-lg);
+  --radius-hero: var(--r-xl);
 }
 
-* {
-  box-sizing: border-box;
+/* `lg` / `xl` capped at `md`: "bóng đổ rất nhẹ" only (ADR 0068 §11). */
+@theme {
+  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
+  --shadow-md: 0 4px 16px rgba(15, 27, 45, 0.06);
+  --shadow-lg: 0 4px 16px rgba(15, 27, 45, 0.08);
+  --shadow-xl: 0 4px 16px rgba(15, 27, 45, 0.08);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--background);
-  color: #111827;
-  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-}
+@layer base {
+  :root {
+    --brand-700: #0b4fa8;
+    --brand-600: #1565c0;
+    --brand-500: #1e7be0;
+    --brand-100: #e3eefb;
+    --brand-50: #f1f6fd;
 
-:focus-visible {
-  outline: 3px solid var(--blue);
-  outline-offset: 2px;
-}
+    --red-600: #c62828;
+    --red-200: #f3c5c5;
+    --red-50: #fdecec;
+    --gold-200: #f5e1a4;
+    --gold-50: #fff8e1;
+    --gold-800: #6b5200;
 
-/* ---- sign-in ---------------------------------------------------------------------------- */
+    --green-600: #157034;
+    --green-50: #e7f6ec;
+    --amber-600: #8f5600;
+    --amber-50: #fff4e0;
 
-.sign-in-page {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+    /* `--ink-400` is 2.56:1 on white: disabled controls and decorative icons only, never text. */
+    --ink-900: #0f1b2d;
+    --ink-700: #34445c;
+    --ink-500: #5b6b82;
+    --ink-400: #94a3b8;
 
-.brand-column {
-  background: var(--navy);
-  color: #e5e7eb;
-  padding: 2rem 1.5rem;
-}
+    --line: #e5eaf1;
+    --line-strong: #d5dce6;
+    --bg: #f5f7fb;
+    --surface: #ffffff;
+    --surface-muted: #f8fafc;
 
-.brand-mark {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
-  background: var(--navy-light);
-  color: #fff;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+    --r-sm: 8px;
+    --r-control: 10px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
 
-.brand-name {
-  margin: 1rem 0 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.brand-subtitle {
-  margin: 0.25rem 0 0;
-  font-size: 0.6875rem;
-  letter-spacing: 0.12em;
-  color: #9ca3af;
-}
-
-.brand-rule {
-  border: 0;
-  border-top: 1px solid #334155;
-  margin: 1.5rem 0;
-}
-
-.brand-note {
-  margin: 0;
-  font-size: 0.875rem;
-  color: #cbd5e1;
-}
-
-.form-column {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-}
-
-.sign-in-form {
-  width: 100%;
-  max-width: 24rem;
-  background: #fff;
-  border: 1px solid var(--grey-border);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-}
-
-.form-title {
-  margin: 0 0 1.25rem;
-  font-size: 1.25rem;
-}
-
-.field {
-  margin-bottom: 1rem;
-}
-
-.field label {
-  display: block;
-  margin-bottom: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.field input {
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #9ca3af;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-.field input:disabled {
-  background: #f3f4f6;
-}
-
-.link-button {
-  margin-top: 0.375rem;
-  padding: 0.25rem 0;
-  border: 0;
-  background: none;
-  color: var(--blue);
-  font-size: 0.875rem;
-  font-family: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* Always in the DOM, even empty: adding it later shifts the form and some screen readers miss a
-   live region inserted after load. */
-.form-error {
-  margin: 0 0 0.75rem;
-  min-height: 1.25rem;
-  font-size: 0.875rem;
-  color: var(--error-red);
-}
-
-.primary-button {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 0;
-  border-radius: 0.5rem;
-  background: var(--blue);
-  color: #fff;
-  font-size: 1rem;
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.primary-button:disabled {
-  background: #6b7280;
-  cursor: progress;
-}
-
-@media (min-width: 768px) {
-  .sign-in-page {
-    flex-direction: row;
+    --row-h: 48px;
+    --sidebar-w: 240px;
+    --sidebar-w-collapsed: 72px;
+    --topbar-h: 60px;
   }
 
-  .brand-column {
-    width: 40%;
-    max-width: 26rem;
-    padding: 3rem 2.5rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+  /* Dark tokens: defined, deliberately NOT enabled — the same decision as web-admin (ADR 0068 §2). */
+  :root[data-theme="dark"] {
+    --bg: #0e1626;
+    --surface: #162033;
+    --surface-muted: #1a2639;
+    --line: #24314a;
+    --line-strong: #33425e;
+    --ink-900: #e6edf7;
+    --ink-700: #c3cfdf;
+    --ink-500: #aebbcc;
+    --ink-400: #8ea0b8;
+    --brand-50: #16294a;
+    --brand-100: #1d3560;
+    --brand-600: #4c8fe6;
+    --brand-700: #8db8f2;
+    color-scheme: dark;
   }
 
-  .form-column {
-    width: 60%;
-    padding: 2rem 1.5rem;
+  /*
+   * The font variable, set by the class `src/app/layout.tsx` puts on `<html>`. The faces come from
+   * `@fontsource/be-vietnam-pro`, bundled and served from this host (`font-src 'self'`): no request
+   * leaves for a font CDN.
+   */
+  .font-be-vietnam {
+    --font-be-vietnam: "Be Vietnam Pro";
   }
 
-  .sign-in-form {
-    padding: 1.5rem;
+  /* `!important` in an EARLY layer beats `!important` in every later one, so no utility re-enables motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-/* ---- signed-in frame -------------------------------------------------------------------- */
-
-/* Below 1024px the sidebar is a strip across the top; from 1024px it is a left column. */
-.console-frame {
-  display: grid;
-  grid-template-columns: 1fr;
-  min-height: 100vh;
-}
-
-.sidebar {
-  padding: 1rem 0.75rem;
-  background: var(--navy-deep);
-  color: #cbd5e1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.sidebar-top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.sidebar-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.375rem;
-  background: #1e293b;
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.75rem;
-}
-
-.sidebar-title {
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-product {
-  color: #fff;
-  font-weight: 600;
-}
-
-.sidebar-subtitle {
-  font-size: 0.625rem;
-  letter-spacing: 0.08em;
-  color: #94a3b8;
-}
-
-.sidebar-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 0.125rem;
-}
-
-.sidebar-link {
-  display: block;
-  padding: 0.4375rem 0.625rem;
-  border-radius: 0.375rem;
-  color: inherit;
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-
-.sidebar-link:hover,
-.sidebar-link.current {
-  background: #1e293b;
-  color: #fff;
-}
-
-@media (min-width: 1024px) {
-  .console-frame {
-    grid-template-columns: 15rem 1fr;
+@layer legacy {
+  * {
+    box-sizing: border-box;
   }
 
-  .sidebar-list {
-    flex-direction: column;
+  /* `html` stays at 16px so `rem` keeps its meaning; body text is 14px like web-admin. Small
+   * screens first: 320px is the smallest supported width. */
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink-900);
+    font-family: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  body {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Focus is always visible. */
+  :focus-visible {
+    outline: 2px solid var(--brand-500);
+    outline-offset: 2px;
   }
 }
 
-.page-body {
-  padding: 1.5rem 1rem;
-  min-width: 0;
-}
-
-.page-title {
-  margin: 0 0 1rem;
-  font-size: 1.375rem;
-}
-
-.empty-state {
-  padding: 2rem 1rem;
-  background: #fff;
-  border: 1px dashed var(--grey-border);
-  border-radius: 0.75rem;
-  text-align: center;
-}
-
-.empty-state-title {
-  margin: 0 0 0.5rem;
-  font-weight: 600;
-}
-
-.empty-state-detail {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--grey-text);
-}
-
-/* ---- shared form parts ------------------------------------------------------------------ */
-
-.field select,
-.field textarea {
-  width: 100%;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #9ca3af;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
-  background: #fff;
-}
-
-/* An invalid field is marked by a thicker border AND the sentence under it — never colour alone. */
-.field input[aria-invalid="true"],
-.field select[aria-invalid="true"],
-.field textarea[aria-invalid="true"] {
-  border-color: var(--error-red);
-  border-width: 2px;
-}
-
-.field-hint {
-  margin: 0 0 0.375rem;
-  font-size: 0.875rem;
-  color: var(--grey-text);
-}
-
-.field-error {
-  margin: 0.375rem 0 0;
-  font-size: 0.875rem;
-  color: var(--error-red);
-  font-weight: 600;
-}
-
-.form-error p {
-  margin: 0;
-}
-
-.trace-line {
-  margin-top: 0.25rem;
-  color: var(--grey-text);
-}
-
-.form-notice {
-  min-height: 1.25rem;
-  font-size: 0.875rem;
-  color: var(--grey-text);
-}
-
-.form-footnote {
-  margin-top: 1rem;
-}
-
-.form-subtitle,
-.section-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.125rem;
-}
-
-/* Touch targets of at least 44px. */
-.link-button {
-  min-height: 2.75rem;
-}
-
-.field-toggle {
-  margin: -0.5rem 0 0.75rem;
-}
-
-.secondary-button,
-.danger-button,
-.primary-link-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.75rem;
-  padding: 0.625rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.secondary-button {
-  border: 1px solid var(--blue);
-  background: #fff;
-  color: var(--blue);
-}
-
-.danger-button {
-  border: 0;
-  background: var(--error-red);
-  color: #fff;
-}
-
-.primary-link-button {
-  border: 0;
-  background: var(--blue);
-  color: #fff;
-}
-
-.secondary-button:disabled,
-.danger-button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
-}
-
-.button-row .primary-button {
-  width: auto;
-}
-
-.check-field {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin: 1rem 0;
-}
-
-.check-field input {
-  width: 1.5rem;
-  height: 1.5rem;
-  flex: none;
-}
-
-.sign-in-form.wide {
-  max-width: 34rem;
-}
-
-.steps {
-  padding-left: 1.25rem;
-}
-
-.steps > li {
-  margin-bottom: 1rem;
-}
-
-.qr-code {
-  display: block;
-  width: 100%;
-  max-width: 14rem;
-  height: auto;
-  margin: 0.5rem 0;
-  border: 1px solid var(--grey-border);
-}
-
-.manual-key code,
-.code-list code {
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 1.0625rem;
-  letter-spacing: 0.05em;
-  word-break: break-all;
-}
-
-.manual-key {
-  padding: 0.5rem 0.75rem;
-  background: #f3f4f6;
-  border-radius: 0.5rem;
-}
-
-.code-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: 0.375rem 1rem;
-  padding: 0.75rem 0.75rem 0.75rem 2rem;
-  background: #f3f4f6;
-  border-radius: 0.5rem;
-}
-
-/* ---- console screens -------------------------------------------------------------------- */
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.breadcrumb {
-  margin: 0 0 0.5rem;
-  font-size: 0.875rem;
-}
-
-.breadcrumb a,
-.data-table a {
-  color: var(--blue);
-}
-
-.toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 1rem;
-}
-
-.loading-line {
-  color: var(--grey-text);
-}
-
-.panel {
-  background: #fff;
-  border: 1px solid var(--grey-border);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  margin-bottom: 1rem;
-}
-
-.panel.narrow {
-  max-width: 32rem;
-}
-
-.notice-box,
-.warning-box {
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  margin: 0 0 1rem;
-}
-
-.notice-box {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-}
-
-.notice-box p {
-  margin: 0 0 0.5rem;
-}
-
-.notice-box p:last-child {
-  margin-bottom: 0;
-}
-
-.warning-box {
-  background: #fef3f2;
-  border: 1px solid #fecdca;
-}
-
-/* Narrow screens scroll the table sideways instead of crushing it (320px is supported). */
-.table-wrap {
-  overflow-x: auto;
-  background: #fff;
-  border: 1px solid var(--grey-border);
-  border-radius: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9375rem;
-}
-
-.data-table th,
-.data-table td {
-  padding: 0.625rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid #e5e7eb;
-  white-space: nowrap;
-}
-
-.data-table th {
-  background: #f9fafb;
-  font-weight: 600;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.125rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.badge-active {
-  background: #ecfdf3;
-  color: #05603a;
-}
-
-.badge-inactive {
-  background: #f2f4f7;
-  color: #344054;
-}
-
-.tag {
-  display: inline-block;
-  padding: 0 0.5rem;
-  border-radius: 0.25rem;
-  background: #eff6ff;
-  color: #1e40af;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 2rem;
-  margin: 0 0 1rem;
-}
-
-.facts dt {
-  font-size: 0.875rem;
-  color: var(--grey-text);
-}
-
-.facts dd {
-  margin: 0;
-  font-weight: 600;
-}
-
-.domain-list {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
-}
-
-.domain-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.75rem;
-  padding: 0.375rem 0;
-  border-bottom: 1px solid #f3f4f6;
-  word-break: break-all;
-}
-
-.inline-form {
-  max-width: 32rem;
-  padding-top: 0.5rem;
-}
-
-.dialog {
-  width: min(32rem, calc(100vw - 2rem));
-  border: 0;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-}
-
-.dialog::backdrop {
-  background: rgba(15, 23, 42, 0.55);
-}
-
-.dialog-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.25rem;
-}
-
-/* ---- sidebar account -------------------------------------------------------------------- */
-
-.sidebar-account {
-  border-top: 1px solid #1e293b;
-  padding-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.sidebar-operator {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-operator-label {
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-.sidebar-operator-code {
-  color: #fff;
-  font-weight: 600;
-}
-
-.sidebar-alert {
-  margin: 0;
-  font-size: 0.875rem;
-  color: #fecaca;
-}
-
-.sidebar-signout {
-  align-self: flex-start;
-  min-height: 2.75rem;
-  padding: 0.5rem 0.875rem;
-  border: 1px solid #475569;
-  border-radius: 0.375rem;
-  background: transparent;
-  color: #fff;
-  font-size: 0.875rem;
-  font-family: inherit;
-  cursor: pointer;
+@layer components {
+  /* `ui/data-table.tsx`: only the table scrolls (never the page), framed as a card; body rows one
+   * `--row-h` tall; the header row sticks inside a capped scroller — the cap is what gives
+   * `position: sticky` something to stick to. Narrow screens scroll the table sideways instead of
+   * crushing it into cards, which would lose table semantics for screen readers. */
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .table-scroll--sticky {
+    max-height: min(70vh, 48rem);
+    overflow-y: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .data-table thead th {
+    padding-block: 0.625rem;
+    background: var(--surface-muted);
+    color: var(--ink-700);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .data-table tbody td {
+    height: var(--row-h);
+  }
+
+  .data-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .data-table tbody tr:hover td {
+    background: var(--surface-muted);
+  }
+
+  .table-scroll--sticky .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    box-shadow: inset 0 -1px 0 var(--line);
+  }
 }

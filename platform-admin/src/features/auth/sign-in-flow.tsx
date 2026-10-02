@@ -1,10 +1,13 @@
 "use client";
 
+import { KeyRound, LockKeyhole, LogIn, Mail } from "lucide-react";
 import { useReducer, useState, type FormEvent } from "react";
 
-import { FormMessage, TextField } from "@/components/form-parts";
+import { FormMessage, hintClass, TextField } from "@/components/form-parts";
 import { QrCode } from "@/components/qr-code";
+import { Button } from "@/components/ui/button";
 import { beginEnrollment, completeEnrollment, signIn, type SecondFactor } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { goTo } from "@/lib/navigate";
 
 import { RecoveryCodesOnce } from "./recovery-codes-once";
@@ -39,6 +42,21 @@ import {
 
 export const CONSOLE_HOME = "/xa";
 
+/**
+ * The sign-in card — web-admin's `.form-dang-nhap` look: 420px, 20px radius, a light shadow. `wide`
+ * for the steps that hold a QR code or a grid of codes.
+ */
+function cardClass(wide = false): string {
+  return cn(
+    "flex w-full flex-col gap-4 rounded-hero border border-line bg-surface px-6 py-7 shadow-md md:p-8",
+    wide ? "max-w-[34rem]" : "max-w-[420px]",
+  );
+}
+
+const titleClass = "m-0 text-[22px] leading-snug font-bold text-ink-900";
+
+const loginIcon = <LogIn aria-hidden="true" focusable="false" strokeWidth={1.8} />;
+
 export function SignInFlow() {
   const [state, dispatch] = useReducer(signInReducer, INITIAL_SIGN_IN_STATE);
 
@@ -51,8 +69,8 @@ export function SignInFlow() {
       return <EnrollFinishStep state={state} dispatch={dispatch} />;
     case "recovery_codes":
       return (
-        <div className="sign-in-form wide">
-          <h1 className="form-title">Đăng ký hoàn tất</h1>
+        <div className={cardClass(true)}>
+          <h1 className={titleClass}>Đăng ký hoàn tất</h1>
           <RecoveryCodesOnce
             codes={state.recoveryCodes}
             continueLabel="Tiếp tục vào khu vận hành"
@@ -65,8 +83,8 @@ export function SignInFlow() {
       );
     case "done":
       return (
-        <div className="sign-in-form" role="status">
-          <p>Đang mở khu vận hành…</p>
+        <div className={cardClass()} role="status">
+          <p className="m-0 text-sm text-ink-700">Đang mở khu vận hành…</p>
         </div>
       );
   }
@@ -112,9 +130,11 @@ export function SignInStep({ state, dispatch }: StepProps) {
   }
 
   return (
-    <form className="sign-in-form" method="post" onSubmit={submit} noValidate>
-      <h1 className="form-title">Đăng nhập khu vận hành</h1>
+    <form className={cardClass()} method="post" onSubmit={submit} noValidate>
+      <h1 className={titleClass}>Đăng nhập khu vận hành</h1>
       <TextField
+        icon={Mail}
+        tall
         label="Thư điện tử"
         name="email"
         type="email"
@@ -126,6 +146,8 @@ export function SignInStep({ state, dispatch }: StepProps) {
         disabled={submitting}
       />
       <TextField
+        icon={LockKeyhole}
+        tall
         label="Mật khẩu"
         name="password"
         type="password"
@@ -135,6 +157,8 @@ export function SignInStep({ state, dispatch }: StepProps) {
         disabled={submitting}
       />
       <TextField
+        icon={KeyRound}
+        tall
         label={factor === "totp" ? "Mã xác thực (6 số trên ứng dụng xác thực)" : "Mã khôi phục"}
         name={factor === "totp" ? "totp_code" : "recovery_code"}
         type="text"
@@ -147,14 +171,14 @@ export function SignInStep({ state, dispatch }: StepProps) {
         onChange={(e) => setCode(e.target.value)}
         disabled={submitting}
       />
-      <button type="button" className="link-button field-toggle" onClick={switchFactor} disabled={submitting}>
+      <Button type="button" variant="link" size="sm" className="-mt-2 self-start" onClick={switchFactor} disabled={submitting}>
         {factor === "totp" ? "Dùng mã khôi phục" : "Dùng mã trên ứng dụng xác thực"}
-      </button>
+      </Button>
       <FormMessage text={failure?.text ?? null} trace={failure?.trace} />
-      <button type="submit" className="primary-button" disabled={submitting} aria-busy={submitting}>
+      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting} aria-busy={submitting} icon={loginIcon}>
         {submitting ? "Đang đăng nhập…" : "Đăng nhập"}
-      </button>
-      <p className="field-hint form-footnote">
+      </Button>
+      <p className={hintClass}>
         Lần đầu đăng nhập: nhập thư điện tử và mật khẩu tạm được cấp, để trống mã xác thực. Hệ thống sẽ hướng dẫn
         đăng ký ứng dụng xác thực.
       </p>
@@ -183,13 +207,15 @@ export function EnrollStartStep({ state, dispatch }: StepProps) {
   }
 
   return (
-    <form className="sign-in-form" method="post" onSubmit={submit} noValidate>
-      <h1 className="form-title">Đăng ký ứng dụng xác thực</h1>
-      <p>
+    <form className={cardClass()} method="post" onSubmit={submit} noValidate>
+      <h1 className={titleClass}>Đăng ký ứng dụng xác thực</h1>
+      <p className="m-0 text-sm text-ink-700">
         Tài khoản của bạn chưa đăng ký ứng dụng xác thực. Mỗi lần đăng nhập khu vận hành đều cần mã 6 số từ ứng
         dụng này. Chuẩn bị điện thoại đã cài một ứng dụng xác thực rồi bấm “Tiếp tục”.
       </p>
       <TextField
+        icon={Mail}
+        tall
         label="Thư điện tử"
         name="email"
         type="email"
@@ -201,6 +227,8 @@ export function EnrollStartStep({ state, dispatch }: StepProps) {
         disabled={submitting}
       />
       <TextField
+        icon={LockKeyhole}
+        tall
         label="Mật khẩu tạm được cấp"
         name="temporary_password"
         type="password"
@@ -210,12 +238,19 @@ export function EnrollStartStep({ state, dispatch }: StepProps) {
         disabled={submitting}
       />
       <FormMessage text={failure?.text ?? null} trace={failure?.trace} />
-      <button type="submit" className="primary-button" disabled={submitting} aria-busy={submitting}>
+      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting} aria-busy={submitting}>
         {submitting ? "Đang xử lý…" : "Tiếp tục"}
-      </button>
-      <button type="button" className="link-button" onClick={() => dispatch({ type: "restart" })} disabled={submitting}>
+      </Button>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="self-center"
+        onClick={() => dispatch({ type: "restart" })}
+        disabled={submitting}
+      >
         Quay lại đăng nhập
-      </button>
+      </Button>
     </form>
   );
 }
@@ -265,41 +300,47 @@ export function EnrollFinishStep({ state, dispatch }: StepProps) {
   }
 
   return (
-    <form className="sign-in-form wide" method="post" onSubmit={submit} noValidate>
-      <h1 className="form-title">Đăng ký ứng dụng xác thực</h1>
-      <ol className="steps">
-        <li>
-          <p>Mở ứng dụng xác thực trên điện thoại, chọn thêm tài khoản và quét mã QR dưới đây.</p>
-          <QrCode value={enrollment.provisioning_uri} label="Mã QR để thêm tài khoản vận hành vào ứng dụng xác thực" />
-          <p>Không quét được? Chọn nhập khoá thủ công và gõ khoá sau:</p>
-          <p className="manual-key">
-            <code>{groupKey(enrollment.manual_entry_key)}</code>
-          </p>
-          <p className="field-hint">Không chụp ảnh, không gửi mã QR hay khoá này cho bất kỳ ai.</p>
+    <form className={cardClass(true)} method="post" onSubmit={submit} noValidate>
+      <h1 className={titleClass}>Đăng ký ứng dụng xác thực</h1>
+      <ol className="m-0 flex list-decimal flex-col gap-5 pl-5 text-sm text-ink-700 marker:font-semibold marker:text-brand-700">
+        <li className="pl-1">
+          <div className="flex flex-col gap-3">
+            <p className="m-0">Mở ứng dụng xác thực trên điện thoại, chọn thêm tài khoản và quét mã QR dưới đây.</p>
+            <QrCode value={enrollment.provisioning_uri} label="Mã QR để thêm tài khoản vận hành vào ứng dụng xác thực" />
+            <p className="m-0">Không quét được? Chọn nhập khoá thủ công và gõ khoá sau:</p>
+            <p className="m-0 rounded-control border border-line bg-surface-muted px-3 py-2">
+              <code className="font-mono text-[17px] tracking-[0.05em] break-all text-ink-900">
+                {groupKey(enrollment.manual_entry_key)}
+              </code>
+            </p>
+            <p className={hintClass}>Không chụp ảnh, không gửi mã QR hay khoá này cho bất kỳ ai.</p>
+          </div>
         </li>
-        <li>
-          <p>Đặt mật khẩu mới thay cho mật khẩu tạm.</p>
-          <TextField
-            label="Mật khẩu mới"
-            name="new_password"
-            type="password"
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            disabled={submitting}
-          />
-          <TextField
-            label="Nhập lại mật khẩu mới"
-            name="confirm_password"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            disabled={submitting}
-            error={mismatch ? "Hai lần nhập mật khẩu mới không khớp. Hãy nhập lại." : null}
-          />
+        <li className="pl-1">
+          <div className="flex flex-col gap-3">
+            <p className="m-0">Đặt mật khẩu mới thay cho mật khẩu tạm.</p>
+            <TextField
+              label="Mật khẩu mới"
+              name="new_password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              disabled={submitting}
+            />
+            <TextField
+              label="Nhập lại mật khẩu mới"
+              name="confirm_password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={submitting}
+              error={mismatch ? "Hai lần nhập mật khẩu mới không khớp. Hãy nhập lại." : null}
+            />
+          </div>
         </li>
-        <li>
+        <li className="pl-1">
           <TextField
             label="Mã xác thực (6 số đang hiện trên ứng dụng)"
             name="totp_code"
@@ -314,12 +355,19 @@ export function EnrollFinishStep({ state, dispatch }: StepProps) {
         </li>
       </ol>
       <FormMessage text={failure?.text ?? null} trace={failure?.trace} />
-      <button type="submit" className="primary-button" disabled={submitting} aria-busy={submitting}>
+      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={submitting} aria-busy={submitting}>
         {submitting ? "Đang hoàn tất…" : "Hoàn tất đăng ký"}
-      </button>
-      <button type="button" className="link-button" onClick={() => dispatch({ type: "restart" })} disabled={submitting}>
+      </Button>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="self-center"
+        onClick={() => dispatch({ type: "restart" })}
+        disabled={submitting}
+      >
         Bắt đầu lại
-      </button>
+      </Button>
     </form>
   );
 }

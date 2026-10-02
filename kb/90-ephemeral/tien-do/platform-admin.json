@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-10-01",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "ts-chua-tung-duoc-kiem",
@@ -42,6 +42,14 @@
       "bang_chung": "Ghi nhận 01/10/2026 khi rà TASK-06c. Màn `/xa` và `/xa/[id]` của platform-admin gọi các tuyến đọc xã của service-platform; các tuyến ấy khai `ops.tenant.manage` — `service-platform/internal/http/operator_routes.go:167-169` (GET /communes), `:177-179` (GET /communes/{id}), `:186-188` (GET /provinces), đều `opauth.RequireKey(…, opauth.KeyTenantManage)`. Hệ quả: một tài khoản được cấp riêng việc gắn App ID Mini App hoặc thêm tên miền không thể mở xã để làm đúng việc của mình — các nút theo khoá ops.* trên `/xa/[id]` không bao giờ tới được.",
       "no_confirm": [],
       "tiep_theo": "Chủ: service-platform. Cần QUYẾT ĐỊNH của người dùng (luật 5, dừng #1 dạng gần): quyền đọc xã đi theo BẤT KỲ khoá ops.* nào, hay cần một khoá đọc riêng (khoá mới phải có trong bảng quyền / danh mục khoá vận hành, không tự thêm). platform-admin không sửa gì cho tới khi có quyết định — ẩn nút ở UI không phải là cách giải."
+    },
+    {
+      "id": "giao-dien-giong-web-admin",
+      "viec": "Làm mới giao diện platform-admin theo web-admin (chỉ trình bày): Tailwind v4, component ui, sidebar trắng + topbar, đăng nhập hai cột, các màn xã và tài khoản",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 thẻ PA-UI (chưa commit), theo yêu cầu chủ dự án 'platform-web-admin làm xấu quá… nâng cấp nó lên giống web-admin'. (1) Nền: Tailwind 4.3.3 qua `@tailwindcss/postcss` 4.3.3 + postcss 8.5.28, clsx 2.1.1, tailwind-merge 3.7.0, class-variance-authority 0.7.1, lucide-react 1.49.0, @fontsource/be-vietnam-pro 5.3.0 — đúng số ghim của web-admin; KHÔNG thêm @radix-ui (Radix đặt thuộc tính `style`, CSP của app này không có 'unsafe-inline' cho style). `src/app/globals.css`: thứ tự layer, token và `@theme inline` chép từ web-admin, preflight tắt; CSS cũ của app đã được thay hết bằng tiện ích, layer `legacy` chỉ còn box-sizing / chữ thân / vòng focus; bảng (`.data-table`, `.table-scroll`) ở layer `components`. (2) `src/components/ui/` CHÉP từ web-admin: button (bỏ lớp legacy, thêm `danger-solid`, `link`), badge, card, page-header (bỏ `meta`), notice, empty-state, skeleton, error-state (bỏ nút Tải lại — không màn nào có cơ chế tải lại), data-table; `src/lib/cn.ts` chép. Không làm gói dùng chung. (3) Khung: `sidebar.tsx` trắng 240px, icon, mục đang chọn nền brand-50 + vạch 3px, thu gọn 72px từ 1024px (chỉ giữ trong state, không lưu trình duyệt), dưới 1024px là dải ngang; `topbar.tsx` mới 60px: mã VH- + Đăng xuất (logic đăng xuất chuyển nguyên từ sidebar). (4) Màn: đăng nhập hai cột (thẻ 420px, ô 46px có icon) gồm bước TOTP / đăng ký / mã khôi phục một lần (cảnh báo vàng, lưới mã đơn cách, Chép / Tải về như cũ); `/xa` PageHeader + nút Tạo xã, bảng dòng 48px tiêu đề dính, trạng thái bằng Badge theo cờ `active`, khung xương khi tải, ErrorState khi tải hỏng (câu máy chủ nguyên văn), EmptyState khi rỗng; `/xa/moi` thẻ biểu mẫu, lưới 2 cột từ 640px; `/xa/[id]` 3 thẻ (Tên và trạng thái dạng dl, Tên miền, Mini App), hộp thoại `<dialog>` gốc kiểu hộp xác nhận (bật/tắt hỏi đích danh 'Ngừng hoạt động <tên xã>?'); `/tai-khoan/*` thẻ giữa trang, ô 44px. Không đổi tuyến, lời gọi API, state, handler, name/id ô nhập, quyền. KIỂM (từ platform-admin/): `npm install` rc=0; `npx tsc --noEmit` rc=0; `npm run lint` rc=0; `npm test` rc=0 128/128 (8 tệp; thêm 2 ca 'không màn nào có style='); `npm run build` rc=0; `npm audit --omit=dev` 0; `python tools/check_security.py` rc=0; `PYTHONIOENCODING=utf-8 mingw32-make check` ở gốc kho rc=0 (cả cây chung, gồm web-admin 3541/3541). `next start` + curl: mỗi trang đúng 1 header CSP (nonce, style-src không 'unsafe-inline'), 0 thuộc tính `style=`, 0 thẻ `<style>`, mọi `<script>` mang nonce; tệp CSS và phông woff2 phục vụ từ chính host (200, font/woff2). Chrome headless qua CDP ở 1280px và 320px với một máy chủ giả: không màn nào tràn ngang (scrollWidth = clientWidth), phông tính ra là Be Vietnam Pro.",
+      "no_confirm": [],
+      "tiep_theo": "MÂU THUẪN CẦN CHỦ DỰ ÁN XEM: ADR 0048 §Sửa 27/09 ghi 'phần giao diện dùng chung (nếu có) tách thành gói chung, không chép' — thẻ này CHÉP 10 component + cn.ts + token từ web-admin theo chỉ đạo của thẻ (gói chung ngoài phạm vi). Hai bản phải đổi cùng nhau tới khi có gói chung. Chưa kiểm trên trình duyệt thật với service-platform thật. Dấu đỏ–vàng nhận diện của web-admin cố ý không dùng (đây là console của nhà cung cấp, không phải của cơ quan nhà nước)."
     }
   ]
 }
