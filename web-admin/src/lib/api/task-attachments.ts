@@ -47,7 +47,8 @@ function taskPath(template: string, code: string, id?: string): string {
   return p;
 }
 
-async function readJSON<T>(res: Response, want: number): Promise<CallResult<T>> {
+/** Also used by the commune-branding calls (`commune-branding.ts`), which share this answer shape. */
+export async function readJSON<T>(res: Response, want: number): Promise<CallResult<T>> {
   if (res.status !== want) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
   try {
     return { ok: true, data: (await res.json()) as T };

@@ -576,6 +576,17 @@
       "bang_chung": "02/10/2026 (TASK-3, chưa commit): src/lib/may-chu/goc-dich-vu.ts thêm platform { PLATFORM_HTTP_ADDR, mặc định http://platform:8080 } — kiểu ánh xạ trên DichVuAPI đỏ cho tới khi có dòng này; chuyen-tiep.test.ts thêm vào hai danh sách; web-admin/Jenkinsfile set env PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080. dinh-tuyen.gen.ts + schema.gen.ts SINH LẠI. tsc + vitest src/lib/may-chu xanh; make check rc=0.",
       "no_confirm": [],
       "tiep_theo": "TASK-5: màn Cấu hình › Nhận diện xã dùng 7 tuyến commune-branding (tasks/web/open/)."
+    },
+    {
+      "id": "nhan-dien-xa-logo-banner-web",
+      "menu": [
+        "cau-hinh"
+      ],
+      "viec": "Nhận diện xã (ADR 0069) phía web-admin: logo xã ở ô thanh bên + màn đăng nhập, dải banner dưới thanh trên cùng ở mọi trang, tab Cấu hình › Nhận diện xã (tải lên / gỡ logo và banner, quyền admin.org)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chưa commit (02/10/2026). Cấu hình lúc chạy: lib/tenant-config.ts + lib/cau-hinh-xa-hien-thi.ts mang logoUrl, webAdminBannerUrl (bắt buộc, \"\" = chưa có), qua lib/public-image-url.ts (chỉ URL http(s) tuyệt đối, còn lại thành \"\"); không thêm tenantId, không cache. components/commune-identity.tsx: có logo thì <img> alt=\"\" trong ô aria-hidden (tên xã in ngay bên), object-contain, nền surface; không thì Landmark. Màn đăng nhập (app/dang-nhap/khoi-thuong-hieu.tsx) dùng cùng CommuneLogoImage; chưa có logo thì GIỮ ô ngôi sao cũ. components/commune-banner.tsx do DauTrang vẽ ngay SAU <header> (anh em, không nằm trong thanh dính): cao 72px, 112px từ 768px, object-cover, bo var(--r-lg), alt=\"\"; .khung-trang:has(> .commune-banner) thêm một hàng lưới. Tab: features/cau-hinh/{commune-branding.ts,commune-branding-tab.tsx}, lib/api/commune-branding.ts (dùng lại uploadToStorage, readJSON của task-attachments; Idempotency-Key crypto.randomUUID); cổng brandingTabDecision (admin.org) đứng cuối TAB_CAU_HINH. Kiểm trước khi upload: PNG/WebP/JPEG, ≤ 2 097 152 byte (đúng upload_policy migration 0016). 503/409 lúc hoàn tất → câu máy chủ nguyên văn + nút 'Hoàn tất lại' (chỉ gọi lại completion); gỡ qua ConfirmDialog; xong thì đọc lại /commune-branding và router.refresh(). Kiểm 02/10/2026: tsc 0 · lint 0 · vitest 193 tệp/3536 ca · build 0 · check:api 0 · check_security 0. Đột biến: cổng đổi sang admin.lookup → 5 ca đỏ; banner vẽ cả khi \"\" → 1 ca đỏ.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA KIỂM: mở trình duyệt thật ở 320px và 1440px; chưa chạy với platform + MinIO + ClamAV thật (tải, quét, chuẩn hoá, ảnh công khai hiện ở thanh bên). Màn đăng nhập chưa có logo vẫn là ô ngôi sao của thiết kế 02/10 — ADR 0069 #7 nói 'biểu tượng toà nhà' cho chỗ chưa có logo; cần chủ dự án chọn có đổi ô đăng nhập sang Landmark không. Ảnh hỏng (kho công khai không trả) hiện ô/dải trống, không quay về biểu tượng. Khi trả nợ CSP web-admin (tools/security_debt.json, missing-security-headers): img-src phải cho host OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL, connect-src cho OBJECT_STORAGE_PUBLIC_ENDPOINT (biểu mẫu tải thẳng)."
     }
   ]
 }

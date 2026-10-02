@@ -16,19 +16,23 @@ import type { CauHinhXaHienThi } from "@/lib/cau-hinh-xa-hien-thi";
  * `parentAuthority` "" means the commune declared none: the line is left out, never guessed
  * (`lib/tenant-config.ts`).
  *
- * THE TILE IS AN ICON, NOT A LOGO, ON PURPOSE. The commune's own logo lives in service-platform's
- * display profile (`ho_so_hien_thi_xa.logo_url`), which `GET /api/v1/communes/current` does not
- * return and no screen can set yet. Drawing a state emblem without an official file, or another
- * body's mark, is a public authority displaying something it never issued. The tile is replaced
- * the day the contract carries the logo.
+ * THE TILE SHOWS THE COMMUNE'S OWN LOGO WHEN IT HAS ONE, THE BUILDING ICON OTHERWISE (ADR 0069 #7).
+ * The logo is the file the commune itself uploaded in Cấu hình › Nhận diện xã, scanned and normalised
+ * by platform to a 512 px square PNG that keeps its transparency; it arrives as `logoUrl` from the
+ * public `GET /api/v1/communes/current`. `logoUrl` "" — none uploaded, or platform did not answer —
+ * draws the icon: never a state emblem or any other picture the commune did not issue itself.
  */
 export const AUTHORITY_KIND = "Ủy ban nhân dân";
 
 export function CommuneIdentity({ commune }: { commune: CauHinhXaHienThi }) {
   return (
     <div className="commune-identity">
-      <span className="commune-emblem" aria-hidden="true">
-        <Landmark focusable="false" strokeWidth={1.8} />
+      <span className={commune.logoUrl !== "" ? "commune-emblem has-logo" : "commune-emblem"} aria-hidden="true">
+        {commune.logoUrl !== "" ? (
+          <CommuneLogoImage src={commune.logoUrl} />
+        ) : (
+          <Landmark focusable="false" strokeWidth={1.8} />
+        )}
       </span>
       <div className="commune-identity-text">
         <p className="commune-authority-kind">{AUTHORITY_KIND}</p>
@@ -36,5 +40,27 @@ export function CommuneIdentity({ commune }: { commune: CauHinhXaHienThi }) {
         {commune.parentAuthority !== "" && <p className="co-quan-cap-tren">{commune.parentAuthority}</p>}
       </div>
     </div>
+  );
+}
+
+/**
+ * The logo itself, shared by the sidebar tile and the sign-in screen's tile so both draw it the
+ * same way: `object-fit: contain` (`.commune-logo`), so a logo is never cropped and its transparent
+ * background shows the tile's surface rather than a white box.
+ *
+ * `alt=""` AND THE TILE IS `aria-hidden`, ON PURPOSE: the commune's name is printed as text right
+ * beside it in both places (and stays in the DOM when the sidebar collapses). An alt naming the body
+ * would make a screen reader read the name twice in a row; the image adds nothing a listener lacks.
+ *
+ * A PLAIN `<img>`, NOT `next/image`: the optimiser needs every remote host declared in
+ * `next.config.ts` AT BUILD TIME, and the public media host is deployment configuration read by
+ * platform (`OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL`), not by this app — baking it in would bind one build
+ * to one storage endpoint. The file is already normalised to 512 px server-side, so there is
+ * nothing for the optimiser to do. `width`/`height` are the published size, so no layout shift.
+ */
+export function CommuneLogoImage({ src }: { src: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- see the doc comment above
+    <img className="commune-logo" src={src} alt="" width={512} height={512} decoding="async" referrerPolicy="no-referrer" />
   );
 }

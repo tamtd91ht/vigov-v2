@@ -44,7 +44,7 @@ function mount(): HTMLDivElement {
   root = r;
   act(() =>
     r.render(
-      <CauHinhXaProvider giaTri={{ displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" }}>
+      <CauHinhXaProvider giaTri={{ displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai", logoUrl: "", webAdminBannerUrl: "" }}>
         <DauTrang />
       </CauHinhXaProvider>,
     ),

@@ -24,6 +24,7 @@ import {
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
   QUYEN_QUAN_LY_NGUOI_DUNG,
+  QUYEN_QUAN_LY_SO_DO,
   quyetDinhTheoKhoa,
   type QuyetDinhHien,
 } from "@/lib/quyen";
@@ -111,6 +112,16 @@ export function automationTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
  */
 export function auditLogTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, AUDIT_READ_PERMISSION);
+}
+
+/**
+ * Tab "Nhận diện xã" — `admin.org` (ADR 0069 #2), the key platform declares on all seven
+ * `/api/v1/commune-branding` routes, the read included, so the tab hides as a whole without it.
+ * Same string as `QUYEN_QUAN_LY_SO_DO` (the org-chart write key): the `quyen` table has one row for
+ * it, and ADR 0069 chose that existing key rather than a new one (rule 5, invariant 3c).
+ */
+export function brandingTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_SO_DO);
 }
 
 /**

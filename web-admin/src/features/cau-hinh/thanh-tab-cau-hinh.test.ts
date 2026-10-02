@@ -69,6 +69,18 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Tự động hoá");
   });
 
+  it("Nhận diện xã đi theo `admin.org` — khoá của cả bảy tuyến commune-branding; ca bị từ chối", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.org"]));
+    const shown = nhan(cacTabHien(TAB_CAU_HINH, holder));
+    expect(shown).toContain("Nhận diện xã");
+    expect(shown[shown.length - 1]).toBe("Nhận diện xã");
+    // Other admin keys and look-alikes do not open it (rule 5, invariant 3b).
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit", "admin.orgs", "ADMIN.ORG"]),
+    );
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Nhận diện xã");
+  });
+
   it("Trường bản đồ đi theo `asset.read` (khoá ĐỌC), không theo `admin.lookup`", async () => {
     // `admin.lookup` là khoá GHI của tab ấy: có nó mà không có `asset.read` thì GET vẫn 403.
     const writeOnly = await phienVoi(phanHoiPhien(["admin.lookup"]));
@@ -146,6 +158,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Lời hệ thống");
     expect(hien).not.toContain("Tự động hoá");
     expect(hien).not.toContain("Nhật ký hệ thống");
+    expect(hien).not.toContain("Nhận diện xã");
   });
 
   it("chưa đọc xong phiên → tab có cổng chưa hiện, và CHƯA dựng thanh", () => {

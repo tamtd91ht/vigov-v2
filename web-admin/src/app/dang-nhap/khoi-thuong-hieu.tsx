@@ -1,8 +1,9 @@
 "use client";
 
-import { Banknote, Landmark, ListChecks, Mail, MessageSquareWarning, Star, type LucideIcon } from "lucide-react";
+import { Banknote, Landmark, ListChecks, Mail, MessageSquareWarning, type LucideIcon } from "lucide-react";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
+import { CommuneLogoImage } from "@/components/commune-identity";
 
 /**
  * Cột thương hiệu của màn đăng nhập — spec giao diện 02/10/2026 §8.4: logo, khẩu hiệu ngắn, bốn ô
@@ -36,8 +37,12 @@ export function KhoiThuongHieu() {
   return (
     <section className="cot-thuong-hieu">
       <div className="login-brand-head">
-        <div className="logo-vigov" aria-hidden="true">
-          <Star focusable="false" />
+        {/* The commune's own logo when it uploaded one (ADR 0069 #4), drawn exactly as in the sidebar
+            tile (`CommuneLogoImage`: contain, transparency kept, alt "" because the name is printed
+            right beside it). None yet → the building icon, as in the sidebar (ADR 0069 #7): the old star
+            was the product's mark, and ADR 0068 §13 removed the product from this screen. */}
+        <div className={xa.logoUrl !== "" ? "logo-vigov has-logo" : "logo-vigov"} aria-hidden="true">
+          {xa.logoUrl !== "" ? <CommuneLogoImage src={xa.logoUrl} /> : <Landmark focusable="false" strokeWidth={1.8} />}
         </div>
         <div>
           <p className="ten-san-pham">{xa.displayName}</p>

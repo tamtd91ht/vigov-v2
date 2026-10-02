@@ -5,6 +5,7 @@ import {
   CalendarClock,
   FileClock,
   Home,
+  ImageIcon,
   KeyRound,
   ListTree,
   Mail,
@@ -21,6 +22,7 @@ import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { AuditLogTab } from "./audit-log-tab";
 import { AutomationTab } from "./automation-tab";
+import { CommuneBrandingTab } from "./commune-branding-tab";
 import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
 import { SystemMessagesTab } from "./system-messages-tab";
@@ -50,6 +52,7 @@ const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
+  "nhan-dien-xa": () => <CommuneBrandingTab />,
 };
 
 /** Icon of each tab (spec §7 "Tab: chữ 14/500 + icon"). Decorative: the tab's word carries the meaning. */
@@ -65,6 +68,7 @@ const ICON_TAB: Record<MaTabCauHinh, LucideIcon> = {
   "tu-dong-hoa": BellRing,
   "may-chu-thu": Mail,
   "nhat-ky-he-thong": FileClock,
+  "nhan-dien-xa": ImageIcon,
 };
 
 const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;

@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 /** Thân 200 đúng hình dạng `identity.thongTinXa` của hợp đồng. */
-function thongTinXa(than: { name: string; host: string; province: string }) {
+function thongTinXa(than: { name: string; host: string; province: string; logo_url?: string | undefined; web_admin_banner_url?: string | undefined }) {
   traLoi = (res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(than));
@@ -122,7 +122,36 @@ describe("resolveTenant — 200", () => {
       host: XA_A,
       displayName: "UBND xã Tân Phú",
       parentAuthority: "Thành phố Đà Nẵng",
+      logoUrl: "",
+      webAdminBannerUrl: "",
     });
+  });
+
+  it("logo và banner (ADR 0069) đi qua nguyên vẹn khi là URL http(s) tuyệt đối", async () => {
+    const logo = "https://media.example.test/vigov-public/t_01JXA/logo-512.png";
+    const banner = "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg";
+    thongTinXa({ name: "UBND xã Tân Phú", host: XA_A, province: "", logo_url: logo, web_admin_banner_url: banner });
+    const xa = await resolveTenant(XA_A);
+
+    expect(xa?.logoUrl).toBe(logo);
+    expect(xa?.webAdminBannerUrl).toBe(banner);
+  });
+
+  it("logo/banner rỗng, vắng khoá (identity cũ) hay không phải http(s) đều thành \"\" — biểu tượng toà nhà, không dải", async () => {
+    // "" là "chưa có" — và cũng là câu identity trả khi platform không kịp trả lời. Một `javascript:`
+    // hay một đường dẫn tương đối không bao giờ được thành `src`.
+    for (const [logo_url, web_admin_banner_url] of [
+      ["", ""],
+      [undefined, undefined],
+      ["javascript:alert(1)", "data:image/png;base64,AAAA"],
+      ["/api/v1/khac", "khong-phai-url"],
+    ] as const) {
+      nhan = [];
+      thongTinXa({ name: "UBND xã Tân Phú", host: XA_A, province: "", logo_url, web_admin_banner_url });
+      const xa = await resolveTenant(XA_A);
+      expect(xa?.logoUrl).toBe("");
+      expect(xa?.webAdminBannerUrl).toBe("");
+    }
   });
 
   it("không mang `tenantId` và không mang `active` — hai trường hợp đồng CỐ Ý không trả", async () => {
@@ -133,7 +162,7 @@ describe("resolveTenant — 200", () => {
     thongTinXa({ name: "UBND xã Tân Phú", host: XA_A, province: "" });
     const xa = await resolveTenant(XA_A);
 
-    expect(Object.keys(xa ?? {}).sort()).toEqual(["displayName", "host", "parentAuthority"]);
+    expect(Object.keys(xa ?? {}).sort()).toEqual(["displayName", "host", "logoUrl", "parentAuthority", "webAdminBannerUrl"]);
   });
 
   it("tỉnh/thành rỗng đi nguyên vẹn thành chuỗi rỗng — không bịa, không mặc định", async () => {

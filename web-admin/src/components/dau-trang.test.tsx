@@ -13,9 +13,9 @@ import { userInitials } from "./user-initials";
  * ONLY on pages with no sidebar (`withCommune`), so no signed-in page is without the body's name —
  * and no page prints it twice. Verbatim-name rules are pinned in `sidebar-view.test.tsx`.
  */
-function render(displayName: string, parentAuthority: string, withCommune = false) {
+function render(displayName: string, parentAuthority: string, withCommune = false, webAdminBannerUrl = "") {
   return renderToStaticMarkup(
-    <CauHinhXaProvider giaTri={{ displayName, parentAuthority }}>
+    <CauHinhXaProvider giaTri={{ displayName, parentAuthority, logoUrl: "", webAdminBannerUrl }}>
       <PhienProvider>
         <DauTrang withCommune={withCommune} />
       </PhienProvider>
@@ -47,6 +47,32 @@ describe("DauTrang — commune block", () => {
 
   it("while the session is unread, draws no role pill — never a guessed role", () => {
     expect(render("Xã Tân Phú", "Tỉnh Đồng Nai")).not.toContain("role-pill");
+  });
+});
+
+/**
+ * ADR 0069 #5: the commune's web-admin banner is a strip under the topbar on EVERY signed-in page —
+ * drawn here, once, so no page can forget it. No banner = no strip at all (ADR 0069 #7).
+ */
+describe("DauTrang — banner strip", () => {
+  const URL_BANNER = "https://media.example.test/vigov-public/t_01JXA/banner-1600.jpg";
+
+  it("no banner: no strip, no image, no empty frame", () => {
+    for (const withCommune of [false, true]) {
+      const html = render("Xã Tân Phú", "Tỉnh Đồng Nai", withCommune);
+      expect(html).not.toContain("commune-banner");
+      expect(html).not.toContain("<img");
+    }
+  });
+
+  it("a banner: one decorative image AFTER the header (sibling, so the sticky topbar does not carry it)", () => {
+    for (const withCommune of [false, true]) {
+      const html = render("Xã Tân Phú", "Tỉnh Đồng Nai", withCommune, URL_BANNER);
+      expect(html.match(/<img /g)).toHaveLength(1);
+      expect(html).toContain(`src="${URL_BANNER}"`);
+      expect(html).toContain('alt=""');
+      expect(html.indexOf('<div class="commune-banner">')).toBeGreaterThan(html.indexOf("</header>"));
+    }
   });
 });
 

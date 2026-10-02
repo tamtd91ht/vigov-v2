@@ -12,8 +12,11 @@ vi.mock("@/features/phien/phien-hien-tai", () => ({
 // The real page wraps this frame in `CauHinhXaProvider`; the mail-server tab reads the commune
 // name from it (sender-name placeholder, ADR 0068 §13).
 vi.mock("@/components/cau-hinh-xa", () => ({
-  useCauHinhXa: () => ({ displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" }),
+  useCauHinhXa: () => ({ displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai", logoUrl: "", webAdminBannerUrl: "" }),
 }));
+
+// The Nhận diện xã tab refreshes the server-rendered shell after a change; no app router in a test.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
 const { KhungTabCauHinh } = await import("./khung-tab-cau-hinh");
 
@@ -88,6 +91,20 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).toContain(">Máy chủ thư</button>");
     expect(html).not.toContain(">Trường bản đồ</button>");
     expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
+  });
+
+  it("`admin.org` → tab Nhận diện xã có nút và panel (ADR 0069 #2)", () => {
+    phienGia = phienCo(["admin.org"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).toContain(">Nhận diện xã</button>");
+    expect(html).toContain('id="panel-cau-hinh-nhan-dien-xa"');
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu `admin.org` (dù có mọi khoá admin.* khác) → không nút, không panel Nhận diện xã", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit", "asset.read", "admin.orgs"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).not.toContain(">Nhận diện xã</button>");
+    expect(html).not.toContain("panel-cau-hinh-nhan-dien-xa");
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {

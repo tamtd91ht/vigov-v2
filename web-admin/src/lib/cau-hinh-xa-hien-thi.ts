@@ -13,6 +13,14 @@ export type CauHinhXaHienThi = {
   displayName: string;
   /** Cơ quan cấp trên — hiện ở dòng dưới tên xã trên đầu trang. */
   parentAuthority: string;
+  /**
+   * Logo của xã (ADR 0069) — URL ảnh công khai, "" = chưa có (vẽ biểu tượng toà nhà). Chỉ để hiển
+   * thị: không định danh ai, không cấp quyền gì. Bắt buộc, không tuỳ chọn: thiếu khoá thì `tsc` đỏ
+   * ở chỗ dựng, thay vì một ô logo lặng lẽ rỗng.
+   */
+  logoUrl: string;
+  /** Banner web-admin (ADR 0069 #5) — "" = không có dải dưới thanh trên cùng. */
+  webAdminBannerUrl: string;
 };
 
 /**
@@ -25,5 +33,10 @@ export type CauHinhXaHienThi = {
  * nào nên dùng được ở cả hai phía.
  */
 export function phanHienThi(cauHinh: TenantConfig): CauHinhXaHienThi {
-  return { displayName: cauHinh.displayName, parentAuthority: cauHinh.parentAuthority };
+  return {
+    displayName: cauHinh.displayName,
+    parentAuthority: cauHinh.parentAuthority,
+    logoUrl: cauHinh.logoUrl,
+    webAdminBannerUrl: cauHinh.webAdminBannerUrl,
+  };
 }

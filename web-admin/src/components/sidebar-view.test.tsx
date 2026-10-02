@@ -23,7 +23,7 @@ const NOT_BUILT = NHOM_MENU.flatMap((g) => g.muc).filter((m) => m.duong === null
 /** React escapes `&` in text; menu labels such as "Văn bản & Đơn thư" carry one. */
 const esc = (s: string) => s.replace(/&/g, "&amp;");
 
-const COMMUNE = { displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" };
+const COMMUNE = { displayName: "Xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai", logoUrl: "", webAdminBannerUrl: "" };
 
 function view(collapsed: boolean, pathname = "/danh-ba", commune = COMMUNE) {
   return renderToStaticMarkup(
@@ -38,7 +38,7 @@ function view(collapsed: boolean, pathname = "/danh-ba", commune = COMMUNE) {
  */
 describe("commune identity at the top", () => {
   it("prints displayName exactly as configured, under the authority kind, with no product name", () => {
-    const html = view(false, "/danh-ba", { displayName: "UBND xã Tân Phú", parentAuthority: "Tỉnh Đồng Nai" });
+    const html = view(false, "/danh-ba", { ...COMMUNE, displayName: "UBND xã Tân Phú" });
     expect(html).toContain('<p class="ten-co-quan">UBND xã Tân Phú</p>');
     expect(html).not.toContain("UBND UBND");
     expect(html).toContain('<p class="co-quan-cap-tren">Tỉnh Đồng Nai</p>');
@@ -49,8 +49,30 @@ describe("commune identity at the top", () => {
   });
 
   it("a commune that declared no parent authority gets no line — never a guess", () => {
-    const html = view(false, "/danh-ba", { displayName: "Xã Tân Phú", parentAuthority: "" });
+    const html = view(false, "/danh-ba", { ...COMMUNE, parentAuthority: "" });
     expect(html).not.toContain("co-quan-cap-tren");
+  });
+
+  it("no logo uploaded: the building icon in the tile, no image (ADR 0069 #7)", () => {
+    const html = view(false);
+    expect(html).toContain('<span class="commune-emblem" aria-hidden="true">');
+    expect(html).toContain("lucide-landmark");
+    expect(html).not.toContain("<img");
+  });
+
+  it("logo uploaded: the commune's own image replaces the icon, contained, decorative beside the name", () => {
+    const url = "https://media.example.test/vigov-public/t_01JXA/logo-512.png";
+    for (const collapsed of [false, true]) {
+      const html = view(collapsed, "/danh-ba", { ...COMMUNE, logoUrl: url });
+      expect(html).toContain('<span class="commune-emblem has-logo" aria-hidden="true">');
+      expect(html.match(/<img /g)).toHaveLength(1);
+      expect(html).toContain(`src="${url}"`);
+      expect(html).toContain('class="commune-logo"');
+      // alt "" inside an aria-hidden tile: the name right beside it is the text alternative.
+      expect(html).toContain('alt=""');
+      expect(html).not.toContain("lucide-landmark");
+      expect(html).toContain('<p class="ten-co-quan">Xã Tân Phú</p>');
+    }
   });
 
   it("collapsed: the emblem stays, the name stays in the DOM for screen readers", () => {

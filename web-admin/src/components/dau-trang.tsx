@@ -7,6 +7,7 @@ import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { useCauHinhXa } from "./cau-hinh-xa";
+import { CommuneBanner } from "./commune-banner";
 import { CommuneIdentity } from "./commune-identity";
 import { NotificationBell } from "./notification-bell";
 import { PendingMarker, type PendingFeatureInfo } from "./ui/pending-feature";
@@ -42,7 +43,13 @@ export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
 
   // Left: commune (only with no sidebar) + role pill. Middle: the Phase-2 system-wide search, as a
   // disabled field with "?". Right: bell, person, sign-out.
+  //
+  // The commune's banner strip (ADR 0069 #5) follows the header as its SIBLING, not inside it: the
+  // header is sticky, and a 112 px picture inside it would stay on screen over every scrolled page.
+  // Here it scrolls away with the page. Placed in this one component so every page with a topbar
+  // has it and none adds it by hand; `CommuneBanner` renders nothing when the commune has none.
   return (
+    <>
     <header className="dau-trang">
       <div className="khoi-co-quan">
         {withCommune && <CommuneIdentity commune={xa} />}
@@ -67,6 +74,8 @@ export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
         <NutDangXuat />
       </div>
     </header>
+    <CommuneBanner src={xa.webAdminBannerUrl} />
+    </>
   );
 }
 

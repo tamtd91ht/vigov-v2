@@ -24,6 +24,7 @@ import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
   auditLogTabDecision,
   automationTabDecision,
+  brandingTabDecision,
   mailServerTabDecision,
   mapFieldTabDecision,
   quyetDinhTabNguoiDung,
@@ -43,7 +44,8 @@ export type MaTabCauHinh =
   | "thoi-han-xu-ly"
   | "tu-dong-hoa"
   | "may-chu-thu"
-  | "nhat-ky-he-thong";
+  | "nhat-ky-he-thong"
+  | "nhan-dien-xa";
 
 /** `null` là chưa đọc xong phiên — cùng ba trạng thái với `PhienDaDoc` của `PhienProvider`. */
 export type PhienDoc = KetQua<identity_phienHienTaiRa> | null;
@@ -56,11 +58,14 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
 };
 
 /**
- * Mười một tab đã dựng. Mười tab đầu đúng thứ tự và đúng nhãn của §0. Tự động hoá có cổng `admin.sla`
+ * Mười hai tab đã dựng. Mười tab đầu đúng thứ tự và đúng nhãn của §0. Tự động hoá có cổng `admin.sla`
  * vì cả ba tuyến của nó — kể cả tuyến đọc — khai khoá ấy (`automationTabDecision`).
  *
  * "Nhật ký hệ thống" không có trong thanh tab của §0 — đặc tả chỉ nói quyền `admin.audit` để xem
  * (§12.1) — nên nó đứng CUỐI, sau mọi tab của §0 (ADR 0054 §6: dựng cùng lượt với khoá menu).
+ *
+ * "Nhận diện xã" (ADR 0069, 02/10/2026) cũng không có trong §0, nên đứng sau Nhật ký hệ thống. Cổng
+ * `admin.org` — khoá của cả bảy tuyến `/api/v1/commune-branding`, kể cả tuyến đọc.
  */
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
@@ -74,6 +79,7 @@ export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "tu-dong-hoa", nhan: "Tự động hoá", cong: automationTabDecision },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
   { ma: "nhat-ky-he-thong", nhan: "Nhật ký hệ thống", cong: auditLogTabDecision },
+  { ma: "nhan-dien-xa", nhan: "Nhận diện xã", cong: brandingTabDecision },
 ];
 
 /**

@@ -14,6 +14,7 @@
  */
 
 import { goiNoiBo } from "./may-chu/goi-noi-bo";
+import { publicImageUrl } from "./public-image-url";
 
 import type { identity_get_communes_current, identity_thongTinXa } from "./api/schema.gen";
 
@@ -48,6 +49,15 @@ export type TenantConfig = {
    * → `kb/10-decisions/0017-contract-field-naming.md`
    */
   parentAuthority: string;
+  /**
+   * The commune's own logo (ADR 0069): a public URL of the 512 px PNG platform published, or "" —
+   * not uploaded yet, OR platform did not answer within its budget (identity still answers 200 then,
+   * commit d93851b9). Both draw the building icon. DISPLAY ONLY: it identifies nobody and grants
+   * nothing. Passed through `publicImageUrl`, so anything but an absolute http(s) URL is "".
+   */
+  logoUrl: string;
+  /** The web-admin banner (ADR 0069 #5), same rules as `logoUrl`; "" = no strip under the topbar. */
+  webAdminBannerUrl: string;
 };
 
 /**
@@ -156,6 +166,8 @@ export async function resolveTenant(host: string): Promise<TenantConfig | null> 
     displayName: than.name,
     // The one place the contract's name and this layer's name are joined — ADR 0017.
     parentAuthority: than.province,
+    logoUrl: publicImageUrl(than.logo_url),
+    webAdminBannerUrl: publicImageUrl(than.web_admin_banner_url),
   };
 }
 

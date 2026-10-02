@@ -40,12 +40,28 @@ describe("FormDangNhap after the redesign", () => {
 });
 
 describe("KhoiThuongHieu", () => {
-  const render = (parentAuthority: string) =>
+  const render = (parentAuthority: string, logoUrl = "") =>
     renderToStaticMarkup(
-      <CauHinhXaProvider giaTri={{ displayName: "UBND xã Tân Phú", parentAuthority }}>
+      <CauHinhXaProvider giaTri={{ displayName: "UBND xã Tân Phú", parentAuthority, logoUrl, webAdminBannerUrl: "" }}>
         <KhoiThuongHieu />
       </CauHinhXaProvider>,
     );
+
+  it("no logo uploaded: the star tile, no image (ADR 0069 #7 — never a picture the commune did not issue)", () => {
+    const html = render("Tỉnh Đồng Nai");
+    expect(html).not.toContain("<img");
+    expect(html).toContain('<div class="logo-vigov" aria-hidden="true">');
+  });
+
+  it("logo uploaded: the commune's image in the tile, decorative (the name is printed beside it)", () => {
+    const url = "https://media.example.test/vigov-public/t_01JXA/logo-512.png";
+    const html = render("Tỉnh Đồng Nai", url);
+    expect(html).toContain('<div class="logo-vigov has-logo" aria-hidden="true">');
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(html).toContain(`src="${url}"`);
+    expect(html).toContain('alt=""');
+    expect(html).toContain('class="commune-logo"');
+  });
 
   it("prints the commune's name verbatim, once, where the product name used to be", () => {
     const html = render("Tỉnh Đồng Nai");
