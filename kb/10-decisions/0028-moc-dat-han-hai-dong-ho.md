@@ -219,6 +219,10 @@ phan-anh-nguoi-dan`, câu trả lời: *"Không — cán bộ đưa mã tra cứ
 | 1 | Phiếu nhập hộ (`can-bo-nhap-ho`, `docs/ui-ux/09-phan-anh-nguoi-dan.md` §11) **không gắn với tài khoản Zalo nào** |
 | 2 | Phiếu ấy **không hiện** ở "Phản ánh của tôi" của người dân, kể cả khi số điện thoại cán bộ gõ trùng số của một tài khoản |
 | 3 | Cán bộ **đưa mã tra cứu** cho người dân lúc vào sổ (luật 10 bất biến 1) |
+| 4 | Ô chọn lĩnh vực của modal nhập hộ đọc từ **một tuyến riêng cho người có `feedback.create`**, trả đúng các lĩnh vực xã đang bật — không mở trang quản trị danh mục (`admin.lookup`) cho người không quản trị (chủ dự án, cùng ngày, chọn đề xuất) |
+| 5 | Kênh của phiếu nhập hộ **luôn là `can-bo-nhap-ho`**; modal không có ô "Tiếp nhận qua kênh" để chọn kênh khác — chọn kênh là chọn cách đặt hạn (điều kiện dừng #6 ở dưới). Nguồn thật (điện thoại, trực tiếp, công văn…) ghi trong nội dung (cùng ngày) |
+| 6 | Lúc nhập hộ ghi **một dòng nhật ký xử lý** của phiếu ("cán bộ X nhập hộ"), ngoài vết kiểm toán (cùng ngày) |
+| 7 | Phiếu nhập hộ bắt đầu ở **`da-tiep-nhan`**, đi cùng quy trình như phiếu từ Zalo, vẫn qua bước phân loại (cùng ngày) |
 
 **Vì sao không ghép theo số điện thoại cán bộ gõ.** Số ấy là thứ một người gõ lại từ cuộc gọi hay
 tờ giấy. Gõ sai một chữ số thì phiếu — nội dung, nơi xảy ra, họ tên người phản ánh — hiện ra trong app của
