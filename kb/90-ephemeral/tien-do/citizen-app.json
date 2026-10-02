@@ -508,6 +508,17 @@
       "viec": "Hiện '{n} lượt xem' ở danh sách tin và chi tiết bài của cả app riêng xã và app chung (ADR 0047 §6 'Lượt xem tin', 02/10/2026)",
       "trang_thai": "xong",
       "bang_chung": "Commit 6a29447b: readViewCount (hop-dong-cong-khai.ts), ViewCount + biểu tượng mắt; thẻ Tin liên quan và chi tiết bài video cũng hiện, không ở thẻ gọn Trang chủ và danh sách Video; rereadAudio gửi no_view=1; khai no_view trong hồ sơ Zalo; chính sách quyền riêng tư không đổi (chủ dự án). npm test 1663/1663, typecheck sạch."
+    },
+    {
+      "id": "giao-dien-sinh-dong-css",
+      "menu": [
+        "noi-dung-mini-app",
+        "phan-anh-nguoi-dan",
+        "danh-ba-can-bo"
+      ],
+      "viec": "Giao diện Mini App sinh động hơn trên CSS sẵn có, cả hai app (ADR 0047 §6, chủ dự án 02/10/2026): chuyển động ≤250ms, khung xương kèm chữ, tin nổi bật có ảnh ở Trang chủ app riêng, màn rỗng có hình minh hoạ + câu hướng dẫn, nút lún khi bấm",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit d232c19e: state-visuals.tsx (LoadingSkeleton, EmptyIllustration), KhoiTrangThai shape/rows, LoadingNotice/EmptyNotice (khung.tsx), FeaturedNews (TinTucAppXa.tsx), .xa-frame--enter/.cd-man/.xa-card-open, :active scale(.98) — tất cả trong khối prefers-reduced-motion: no-preference; accessibility.test.ts nay chặn cả transition/:active ngoài khối. npm test 1673/1673, typecheck sạch, build xanh. CÒN: (a) chưa xem trên máy thật/Zalo webview (320px, trình đọc màn hình, new Image()); (b) chủ dự án duyệt 3 câu mới: petition_filter_empty_hint, map_empty_hint, TIN_XA.empty_hint (app chung xưng 'bạn'); (c) thẻ tin nổi bật hiện SAU khi ảnh tải xong nên khối tin có thể giãn ra một lần."
     }
   ]
 }
