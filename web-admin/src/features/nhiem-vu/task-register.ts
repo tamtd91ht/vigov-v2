@@ -17,8 +17,8 @@ import {
   type NhomVanBan, // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 } from "./nhan-nhiem-vu";
 
-/** View-mode button — verbatim §2. */
-export const REGISTER_VIEW_LABEL = "▤ Sổ theo dõi";
+/** View-mode button — verbatim §2; its `▤` glyph is a lucide icon beside the word (ADR 0068). */
+export const REGISTER_VIEW_LABEL = "Sổ theo dõi";
 
 /**
  * §4.3's columns IN ORDER (`02-nhiem-vu.md:117-126`), after the `☐` column (drawn only with

@@ -45,10 +45,9 @@ export default async function TrangNhiemVu({
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>Quản lý nhiệm vụ</h1>
-            <p className="mo-ta-trang">
-              Giao việc từ kết luận họp, theo dõi tiến độ và đôn đốc tự động.
-            </p>
+            {/* The page header (`<h1>`, subtitle, `Nhập từ Excel` · `Giao việc mới`) is drawn by
+                `SoNhiemVu`: the two buttons sit on the title row (spec §5) and their state — the
+                open dialog, the open form, the `task.create` gate — lives in that component. */}
             <SoNhiemVu key={drillDownKey(drillDown)} drillDown={drillDown} />
           </main>
         </div>

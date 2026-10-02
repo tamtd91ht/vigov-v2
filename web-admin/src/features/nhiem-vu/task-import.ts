@@ -5,9 +5,10 @@
 
 import type { petitions_taskImportErrorOut } from "@/lib/api/schema.gen";
 
-export const IMPORT_OPEN_BUTTON = "⬆ Nhập từ Excel";
+/** The spec's `⬆` / `⬇` glyphs are drawn as lucide icons (`Upload`, `Download`), ADR 0068. */
+export const IMPORT_OPEN_BUTTON = "Nhập từ Excel";
 export const IMPORT_TITLE = "Nhập nhiệm vụ từ Excel";
-export const IMPORT_TEMPLATE_BUTTON = "⬇ Tải mẫu nhiệm vụ";
+export const IMPORT_TEMPLATE_BUTTON = "Tải mẫu nhiệm vụ";
 export const IMPORT_FILE_LABEL = "Chọn tệp .xlsx";
 export const IMPORT_DROP_HINT = "hoặc kéo thả tệp vào đây";
 export const IMPORT_CHECK_BUTTON = "Kiểm tra trước";

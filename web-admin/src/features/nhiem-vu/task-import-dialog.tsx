@@ -1,5 +1,6 @@
 "use client";
 
+import { Download } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 
 import {
@@ -33,6 +34,7 @@ import {
   replayedText,
   sortedImportErrors,
 } from "./task-import";
+import { Glyph } from "./task-ui";
 
 /** The last answer on screen: which mode sent it, and what came back (or the refusal sentence). */
 export type ImportAnswer =
@@ -172,6 +174,7 @@ export function TaskImportView({
 
       <div className="cum-nut">
         <button type="button" className="nut-phu" disabled={templateBusy} onClick={onTemplate}>
+          <Glyph icon={Download} className="size-[18px]" />
           {IMPORT_TEMPLATE_BUTTON}
         </button>
       </div>

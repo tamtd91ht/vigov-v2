@@ -612,9 +612,12 @@ export const NHAN_XEM_THEM_NHAT_KY_NHIEM_VU = "Xem thêm";
 
 /* ── MANUAL ENTRY (§5.9) ─────────────────────────────────────────────────────────────────── */
 
-/** Placeholder and button — verbatim §5.9. */
+/**
+ * Placeholder and button — verbatim §5.9, except the `➤` glyph: the button draws a lucide icon
+ * instead (ADR 0068 — no emoji as icons). The words are unchanged.
+ */
 export const LOG_ENTRY_PLACEHOLDER = "Đã làm được gì, còn vướng gì…";
-export const LOG_ENTRY_BUTTON = "➤ Ghi nhật ký";
+export const LOG_ENTRY_BUTTON = "Ghi nhật ký";
 /** A visible label: a placeholder alone vanishes on the first keystroke and is no label (a11y). */
 export const LOG_ENTRY_LABEL = "Ghi vào nhật ký của nhiệm vụ";
 /** The table is append-only (rule 7): said BEFORE the click, since nothing undoes it. */
@@ -2434,9 +2437,12 @@ export function loiSauKhiDocLai(
  * BẢNG KANBAN §4.1 — CÂU CHỮ VÀ HAI PHÉP QUYẾT ĐỊNH
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** Chế độ xem Kanban và Danh sách; chế độ thứ ba (`Sổ theo dõi` §4.3) là `REGISTER_VIEW_LABEL`. */
-export const NHAN_CHE_DO_KANBAN = "▦ Kanban";
-export const NHAN_CHE_DO_DANH_SACH = "☰ Danh sách";
+/**
+ * Chế độ xem Kanban và Danh sách; chế độ thứ ba (`Sổ theo dõi` §4.3) là `REGISTER_VIEW_LABEL`.
+ * The `▦`/`☰` glyphs of the spec are drawn as lucide icons beside the words (ADR 0068).
+ */
+export const NHAN_CHE_DO_KANBAN = "Kanban";
+export const NHAN_CHE_DO_DANH_SACH = "Danh sách";
 
 /** Đặt cạnh cụm chọn chế độ xem, để cán bộ không đi tìm cái nút thứ ba của đặc tả. */
 

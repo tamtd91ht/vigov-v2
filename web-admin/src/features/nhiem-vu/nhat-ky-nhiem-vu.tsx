@@ -1,5 +1,6 @@
 "use client";
 
+import { SendHorizontal } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
@@ -28,6 +29,7 @@ import {
   logEntryNote,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
+import { Glyph } from "./task-ui";
 
 /**
  * Nhật ký & Trao đổi của MỘT nhiệm vụ (§5.9): dòng thời gian mới nhất trước, `Xem thêm` theo con
@@ -252,6 +254,7 @@ export function TaskLogEntryForm({
       )}
       {done && <p role="status">{LOG_ENTRY_DONE}</p>}
       <button type="submit" className="nut-chinh" disabled={sending || waiting || note === null}>
+        <Glyph icon={SendHorizontal} className="size-[18px]" />
         {LOG_ENTRY_BUTTON}
       </button>
     </form>

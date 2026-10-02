@@ -111,7 +111,8 @@ export async function runBatchDelete(
 
 /* ── words ─────────────────────────────────────────────────────────────────────────────────── */
 
-export const BATCH_DELETE_BUTTON = "🗑 Xoá đã chọn";
+/** The spec's `🗑` is drawn as a lucide `Trash2` beside the word (ADR 0068). */
+export const BATCH_DELETE_BUTTON = "Xoá đã chọn";
 export const BATCH_REASON_LABEL = "Lý do xoá (bắt buộc, dùng chung cho mọi nhiệm vụ đã chọn)";
 export const BATCH_CLEAR_BUTTON = "Bỏ chọn tất cả";
 export const BATCH_NOTE =

@@ -9,7 +9,8 @@
 
 import type { petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
 
-export const ATTACH_BUTTON = "📎 Đính kèm";
+/** The spec's `📎` is drawn as a lucide `Paperclip` beside the word (ADR 0068). */
+export const ATTACH_BUTTON = "Đính kèm";
 export const ATTACH_INPUT_LABEL = "Chọn tệp đính kèm (PDF, JPG, PNG)";
 export const ATTACH_NOTE =
   "Mỗi tệp được tải lên, kiểm tra kiểu và quét mã độc trước khi gắn vào dòng nhật ký. Chỉ tệp đã " +

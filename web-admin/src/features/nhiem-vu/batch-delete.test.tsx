@@ -155,7 +155,11 @@ describe("the bar", () => {
     const html = render();
     expect(html).toContain(">Đã chọn 2 nhiệm vụ</h3>");
     expect(html).toMatch(/<input id="ly-do-xoa-da-chon"[^>]*required=""/);
-    expect(html).toContain(`<button type="submit" class="nut-xoa" disabled="">${BATCH_DELETE_BUTTON}</button>`);
+    // ADR 0068: the `🗑` glyph is a decorative lucide icon before the word now; the button, its
+    // type, its class and its disabled state are what this pins.
+    expect(html).toMatch(
+      new RegExp(`<button type="submit" class="nut-xoa" disabled=""><svg[^>]*aria-hidden="true"[^>]*>.*?</svg>${BATCH_DELETE_BUTTON}</button>`),
+    );
   });
 
   it("running: progress in the live region, every control off", () => {

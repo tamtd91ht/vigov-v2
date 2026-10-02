@@ -117,7 +117,10 @@ describe("bộ lọc — mặc định `Chờ tôi duyệt`, và tham số đi l
 
   it("nút lọc đang chọn mang `aria-pressed`, và đọc được bằng chữ Sổ tay lãnh đạo", () => {
     const html = ve({ pha: "xong", dong: [], conNua: false });
-    expect(html).toContain(`aria-pressed="true">${NHAN_LOC_CHO_TOI}</button>`);
+    // ADR 0068: drawn as a segmented control — classes and a decorative icon sit between the
+    // attribute and the word. Still ONE pressed button, and it is `Chờ tôi duyệt`.
+    expect(html.match(/aria-pressed="true"/g)?.length).toBe(1);
+    expect(html).toMatch(new RegExp(`aria-pressed="true">(?:<svg[^>]*aria-hidden="true"[^>]*>.*?</svg>)?${NHAN_LOC_CHO_TOI}</button>`));
     expect(html).toContain(`id="${ID_HANG_CHO}"`);
   });
 });

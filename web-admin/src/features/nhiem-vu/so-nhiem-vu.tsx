@@ -1,5 +1,37 @@
 "use client";
 
+import {
+  AlarmClock,
+  BookOpen,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  ClipboardList,
+  Clock,
+  CloudOff,
+  Download,
+  Flag,
+  GitBranch,
+  History,
+  Landmark,
+  Layers,
+  Link2,
+  List,
+  ListChecks,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  SearchX,
+  Shapes,
+  SquareKanban,
+  Trash2,
+  Upload,
+  UserRound,
+  Workflow,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
@@ -15,6 +47,14 @@ import {
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
 import { StaffCombobox } from "@/components/staff-combobox";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field, Toolbar } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Tab, TabList } from "@/components/ui/tabs";
+import { cn } from "@/lib/cn";
 import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import {
@@ -115,7 +155,6 @@ import {
   NHAN_NUT_TRA_LAI,
   NHAN_NUT_HUY,
   NHAN_NUT_LUU,
-  NHAN_NUT_SUA,
   NHAN_THEM_VAN_BAN,
   NHAN_TIEU_DE_THEO_VAN_BAN,
   NO_DEADLINE_LAST_NOTE,
@@ -261,6 +300,25 @@ import {
 } from "./task-assignment";
 import { TaskAssignmentBlock } from "./task-assignment-block";
 import { TaskExtensionBlock } from "./task-extension-block";
+import {
+  Glyph,
+  LoadingBar,
+  TaskRowsSkeleton,
+  TaskStatusBadge,
+  TOGGLE_TRACK,
+  toggleButtonClass,
+} from "./task-ui";
+
+/**
+ * The list and register tables inside the list card (spec §6.7, v2 §8.1): flush with the card (no
+ * second frame), their OWN scroller both ways so the header row can stay put (`sticky` inside
+ * the scroller), 48px rows, thin horizontal rules only — `.bang-danh-muc` already draws those.
+ */
+const TABLE_IN_CARD = cn(
+  "bang-cuon max-h-[70vh] overflow-auto rounded-none border-0 shadow-none",
+  "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:shadow-[inset_0_-1px_0_var(--line)]",
+  "[&_tbody_td]:h-12",
+);
 
 /**
  * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.1 (bảng Kanban),
@@ -847,41 +905,129 @@ export function SoNhiemVu({
       }
     : null;
 
+  // PRESENTATION ONLY (spec §8b) — nothing below reads the network or changes what is sent.
+  // The previous answer, while a new key loads: shown dimmed and inert, never acted on.
+  const staleItems =
+    so.pha === "dangTai" && daTai !== null && daTai.kq.ok && daTai.kq.duLieu.items.length > 0
+      ? daTai.kq.duLieu.items
+      : null;
+  // "Nothing at all" vs "nothing under these filters": no filter key set (sort keys aside), no
+  // drill-down, first page. Only then may the screen say the commune has no task yet.
+  const noFilter =
+    !drillDownActive &&
+    !coTrangTruoc(nganXep) &&
+    Object.entries(loc).every(([k, v]) => k === "sapXep" || k === "chieu" || v === undefined);
+  const emptyList = noFilter ? (
+    <EmptyState
+      icon={ClipboardList}
+      title="Chưa có nhiệm vụ nào"
+      description={quyen.giaoViec ? "Bấm “Giao việc mới” hoặc nhập từ Excel để bắt đầu." : undefined}
+      action={
+        quyen.giaoViec && !moFormTao ? (
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Glyph icon={Plus} />}
+            onClick={() => {
+              // The header button's own steps, opening only: this button is not a toggle.
+              datMoFormTao(true);
+              setChildFormFor(null);
+              datLoiGhi(null);
+            }}
+          >
+            Giao việc mới
+          </Button>
+        ) : undefined
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={SearchX}
+      title={SO_RONG}
+      description={drillDownActive ? undefined : "Thử đổi hoặc bỏ bớt bộ lọc."}
+    />
+  );
+  const listTable = (items: readonly petitions_nhiemVuRa[]) => (
+    <BangNhiemVu
+      nhiemVu={items}
+      danhMuc={danhMuc}
+      danhBa={danhBaMa}
+      nhanTT={nhanTT}
+      tenBoPhan={tenBoPhan}
+      bayGio={new Date()}
+      maDangMo={maDrawer}
+      moNhiemVu={(n) => {
+        guiDrawer({ loai: "mo", nhiemVu: n });
+        datLoiGhi(null);
+      }}
+      sapXep={sapXepDayDu(loc)}
+      doiSapXep={(cot) => {
+        const moi = bamSapXep(loc, cot);
+        datLocDaDoi(moi.loc);
+        datNganXep(moi.nganXep);
+      }}
+      selection={taskSelection}
+      empty={emptyList}
+    />
+  );
+
   return (
-    <section className="man-nhiem-vu" aria-labelledby="tieu-de-so-nhiem-vu">
-      <h2 id="tieu-de-so-nhiem-vu">Sổ nhiệm vụ của xã</h2>
+    <>
+    <PageHeader
+      icon={ListChecks}
+      title="Quản lý nhiệm vụ"
+      subtitle={
+        <span className="inline-flex items-center gap-1.5">
+          <Glyph icon={Workflow} />
+          Giao việc từ kết luận họp, theo dõi tiến độ và đôn đốc tự động.
+        </span>
+      }
+      actions={
+        quyen.giaoViec ? (
+          <>
+            {/* §1 draws `[Nhập từ Excel] [Giao việc mới]` — both `task.create` (the import IS
+                creation; the route checks again). */}
+            <Button
+              ref={importButtonRef}
+              type="button"
+              variant="secondary"
+              icon={<Glyph icon={Upload} />}
+              aria-expanded={importOpen}
+              onClick={() => setImportOpen((o) => !o)}
+            >
+              {IMPORT_OPEN_BUTTON}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              icon={<Glyph icon={moFormTao ? X : Plus} />}
+              onClick={() => {
+                datMoFormTao((m) => !m);
+                setChildFormFor(null);
+                datLoiGhi(null);
+              }}
+              aria-expanded={moFormTao}
+            >
+              {moFormTao ? "Đóng biểu mẫu giao việc" : "Giao việc mới"}
+            </Button>
+          </>
+        ) : undefined
+      }
+    />
+    {/* Direct children lose their legacy vertical margins: the section's `gap` is the one spacing
+        between blocks (spec §6.9, 16px card ↔ card). */}
+    <section
+      className="man-nhiem-vu mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+      aria-labelledby="tieu-de-so-nhiem-vu"
+    >
+      {/* Kept for the section's accessible name; the page's visible title is the `<h1>` above. */}
+      <h2 id="tieu-de-so-nhiem-vu" className="an-thi-giac">
+        Sổ nhiệm vụ của xã
+      </h2>
 
       <KhoiChuaDung />
 
       <CanhBaoNhanTrangThai canhBao={canhBaoNhanTT} />
-
-      {quyen.giaoViec && (
-        <div className="cum-nut">
-          {/* §1 draws `[⬆ Nhập từ Excel] [+ Giao việc mới]` — both `task.create` (the import IS
-              creation; the route checks again). */}
-          <button
-            ref={importButtonRef}
-            type="button"
-            className="nut-phu"
-            aria-expanded={importOpen}
-            onClick={() => setImportOpen((o) => !o)}
-          >
-            {IMPORT_OPEN_BUTTON}
-          </button>
-          <button
-            type="button"
-            className="nut-chinh"
-            onClick={() => {
-              datMoFormTao((m) => !m);
-              setChildFormFor(null);
-              datLoiGhi(null);
-            }}
-            aria-expanded={moFormTao}
-          >
-            {moFormTao ? "Đóng biểu mẫu giao việc" : "+ Giao việc mới"}
-          </button>
-        </div>
-      )}
 
       {importOpen && quyen.giaoViec && (
         <TaskImportDialog
@@ -955,6 +1101,10 @@ export function SoNhiemVu({
         showInvalid={locDaDoi === null}
       />
 
+      {/* THE LIST CARD (spec §5, §8.3): scope tabs + one filter row at its head, the view switch,
+          the board or table in its own scroller, and notes + paging in its footer. `overflow-visible`:
+          the staff combobox opens its list in the flow, and a focus ring on the edge must not be cut. */}
+      <Card className="overflow-visible">
       {!drillDownActive && (
         <HangLoc
           loc={loc}
@@ -968,37 +1118,44 @@ export function SoNhiemVu({
       )}
 
       {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): BA nút.
-          `Sổ theo dõi` §4.3 đọc cùng trang với Danh sách, kèm `include=documents` (90d12ff). */}
+          `Sổ theo dõi` §4.3 đọc cùng trang với Danh sách, kèm `include=documents` (90d12ff).
+          Drawn as a segmented control; the buttons stay native `aria-pressed` toggles. */}
       {!drillDownActive && (
-      <div className="o-chon" role="group" aria-label="Chế độ xem">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+      <div className={TOGGLE_TRACK} role="group" aria-label="Chế độ xem">
         <button
           type="button"
-          className="nut-phu"
+          className={toggleButtonClass(cheDoXem === "kanban")}
           aria-pressed={cheDoXem === "kanban"}
           onClick={() => datCheDoXem("kanban")}
         >
+          <Glyph icon={SquareKanban} />
           {NHAN_CHE_DO_KANBAN}
         </button>
         <button
           type="button"
-          className="nut-phu"
+          className={toggleButtonClass(cheDoXem === "danh-sach")}
           aria-pressed={cheDoXem === "danh-sach"}
           onClick={() => datCheDoXem("danh-sach")}
         >
+          <Glyph icon={List} />
           {NHAN_CHE_DO_DANH_SACH}
         </button>
         <button
           type="button"
-          className="nut-phu"
+          className={toggleButtonClass(cheDoXem === "so-theo-doi")}
           aria-pressed={cheDoXem === "so-theo-doi"}
           onClick={() => datCheDoXem("so-theo-doi")}
         >
+          <Glyph icon={BookOpen} />
           {REGISTER_VIEW_LABEL}
         </button>
+      </div>
       </div>
       )}
 
       {quyen.xoa && (selection.size > 0 || batchResults !== null || batchProgress !== null) && (
+        <div className="border-b border-line px-4 py-3 [&>*]:my-0">
         <BatchDeleteBar
           count={selection.size}
           progress={batchProgress}
@@ -1009,9 +1166,11 @@ export function SoNhiemVu({
             setBatchResults(null);
           }}
         />
+        </div>
       )}
 
       {viewMode === "kanban" && (
+        <div className="min-w-0 p-4">
         <BangKanban
           cot={cotKanban}
           danhMuc={danhMuc}
@@ -1033,13 +1192,20 @@ export function SoNhiemVu({
           }}
           selection={taskSelection}
         />
+        </div>
       )}
 
       {viewMode === "so-theo-doi" && (
-        <div className="cum-nut">
-          <button type="button" className="nut-phu" disabled={exporting} onClick={exportRegister}>
+        <div className="cum-nut border-b border-line px-4 py-3 [&>p]:my-0">
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Glyph icon={Download} />}
+            disabled={exporting}
+            onClick={exportRegister}
+          >
             {REGISTER_EXPORT_BUTTON}
-          </button>
+          </Button>
           <p className="ghi-chu">{REGISTER_EXPORT_NOTE}</p>
           {/* Always in the DOM in this view: a live region inserted later is not always announced. */}
           <p role="status">
@@ -1057,11 +1223,49 @@ export function SoNhiemVu({
         </div>
       )}
 
-      {viewMode !== "kanban" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+      {/* LOADING (spec §8b). The sentence stays the live region, read out as before; the eye gets a
+          2px bar and either the PREVIOUS page dimmed (a re-read: `daTai` still holds the last
+          answer while the new key loads) or row-shaped placeholders (the first read). The dimmed
+          rows are `inert`: an answer to the old question is shown, never acted on. Only the List
+          view re-shows old rows — the register's document columns depend on `include=documents`,
+          which the previous answer may not carry. */}
+      {viewMode !== "kanban" && so.pha === "dangTai" && (
+        <>
+          <LoadingBar />
+          <p className="an-thi-giac" role="status">
+            {DANG_TAI_SO}
+          </p>
+          {viewMode === "danh-sach" && staleItems !== null ? (
+            <div inert className="pointer-events-none opacity-60 transition-opacity">
+              {listTable(staleItems)}
+            </div>
+          ) : (
+            <TaskRowsSkeleton />
+          )}
+        </>
+      )}
+      {/* LOAD ERROR (spec §8b): the server's sentence VERBATIM stays the alert; `Tải lại` asks the
+          same read again through the screen's existing re-read key (`lanTai`). */}
       {viewMode !== "kanban" && so.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {so.thongBao}
-        </p>
+        <EmptyState
+          icon={CloudOff}
+          title="Chưa tải được sổ nhiệm vụ"
+          description={
+            <span className="text-danger-600" role="alert">
+              {so.thongBao}
+            </span>
+          }
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<Glyph icon={RefreshCw} />}
+              onClick={() => datLanTai((n) => n + 1)}
+            >
+              Tải lại
+            </Button>
+          }
+        />
       )}
 
       {viewMode === "so-theo-doi" && so.pha === "xong" && (
@@ -1077,58 +1281,47 @@ export function SoNhiemVu({
             datLoiGhi(null);
           }}
           selection={taskSelection}
+          empty={emptyList}
         />
       )}
 
       {viewMode !== "kanban" && so.pha === "xong" && (
         <>
-          {viewMode === "danh-sach" && (
-          <BangNhiemVu
-            nhiemVu={so.duLieu.items}
-            danhMuc={danhMuc}
-            danhBa={danhBaMa}
-            nhanTT={nhanTT}
-            tenBoPhan={tenBoPhan}
-            bayGio={new Date()}
-            maDangMo={maDrawer}
-            moNhiemVu={(n) => {
-              guiDrawer({ loai: "mo", nhiemVu: n });
-              datLoiGhi(null);
-            }}
-            sapXep={sapXepDayDu(loc)}
-            doiSapXep={(cot) => {
-              const moi = bamSapXep(loc, cot);
-              datLocDaDoi(moi.loc);
-              datNganXep(moi.nganXep);
-            }}
-            selection={taskSelection}
-          />
-          )}
+          {viewMode === "danh-sach" && listTable(so.duLieu.items)}
+          <CardFooter className="justify-between">
+            <div className="min-w-0 [&>.ghi-chu]:m-0">
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
           <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
           <p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>
-          <nav className="dieu-huong-trang" aria-label="Phân trang sổ nhiệm vụ">
-            <button
+            </div>
+          <nav className="dieu-huong-trang m-0" aria-label="Phân trang sổ nhiệm vụ">
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
+              icon={<Glyph icon={ChevronLeft} />}
               disabled={!coTrangTruoc(nganXep)}
               onClick={() => datNganXep(veTrangTruoc(nganXep))}
             >
               Trang trước
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
               // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
               // tới đó.
               disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
               onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
             >
               Trang sau
-            </button>
+              <Glyph icon={ChevronRight} />
+            </Button>
           </nav>
+          </CardFooter>
         </>
       )}
+      </Card>
 
       {drawer !== null && (
         <ChiTietNhiemVu
@@ -1308,6 +1501,7 @@ export function SoNhiemVu({
         />
       )}
     </section>
+    </>
   );
 }
 
@@ -1390,49 +1584,54 @@ export function HangLoc({
   }
 
   return (
-    <div className="hang-loc">
+    <>
       {/* BA TAB PHẠM VI (§3). `mine` và `related` KHÔNG mang theo danh tính nào — máy chủ lấy mã cán
           bộ từ PHIÊN, và với `related` tự hỏi `identity` bộ phận của người ấy. Một tab gửi lên
           `?assignee=CB-…` của chính mình sẽ là client tự khai mình là ai (luật 1, cấm #2).
-          ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab thứ ba có từ khi máy chủ phục vụ `scope=related`. */}
-      <div className="o-chon" role="group" aria-label="Phạm vi">
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc.phamVi !== "mine" && loc.phamVi !== "related"}
+          ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab thứ ba có từ khi máy chủ phục vụ `scope=related`.
+          Drawn as underline tabs at the head of the list card (spec §8.3); the click handlers and the
+          value each tab sends are unchanged. */}
+      <TabList aria-label="Phạm vi" className="px-4">
+        <Tab
+          icon={Landmark}
+          selected={loc.phamVi !== "mine" && loc.phamVi !== "related"}
           onClick={() => datLoc({ ...loc, phamVi: undefined })}
         >
           {PHAM_VI_TOAN_XA}
-        </button>
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc.phamVi === "mine"}
+        </Tab>
+        <Tab
+          icon={UserRound}
+          selected={loc.phamVi === "mine"}
           onClick={() => datLoc({ ...loc, phamVi: "mine" })}
         >
           {PHAM_VI_CUA_TOI}
-        </button>
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc.phamVi === "related"}
+        </Tab>
+        <Tab
+          icon={Link2}
+          selected={loc.phamVi === "related"}
           aria-describedby={loc.phamVi === "related" ? "pham-vi-lien-quan-ghi-chu" : undefined}
           onClick={() => datLoc({ ...loc, phamVi: "related" })}
         >
           {SCOPE_RELATED_LABEL}
-        </button>
-      </div>
+        </Tab>
+      </TabList>
       {loc.phamVi === "related" && (
-        <p id="pham-vi-lien-quan-ghi-chu" className="ghi-chu">
+        <p id="pham-vi-lien-quan-ghi-chu" className="ghi-chu mx-4 mt-2">
           {SCOPE_RELATED_NOTE}
         </p>
       )}
 
+      {/* ONE FILTER ROW (spec §6.4): label above every control, every control 40px, bottoms aligned,
+          wrapping with straight left edges. Every native control keeps its id, value and handler. */}
+      <Toolbar>
       {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
           đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
-      <form className="form-tra-cuu" onSubmit={timNgay} role="search">
-        <div className="o-nhap">
-          <label htmlFor="tim-nhiem-vu">Tìm trong sổ</label>
+      <form
+        className="form-tra-cuu m-0 flex min-w-0 flex-[1_1_320px] flex-row items-end gap-2 max-w-[480px]"
+        onSubmit={timNgay}
+        role="search"
+      >
+        <Field label="Tìm trong sổ" htmlFor="tim-nhiem-vu" icon={Search} grow="search" className="max-w-none">
           <input
             id="tim-nhiem-vu"
             name="tim-nhiem-vu"
@@ -1444,14 +1643,13 @@ export function HangLoc({
             // thấy giới hạn thay vì thấy "không tải được".
             maxLength={200}
           />
-        </div>
-        <button className="nut-phu" type="submit">
+        </Field>
+        <Button variant="secondary" type="submit">
           Tìm
-        </button>
+        </Button>
       </form>
 
-      <div className="o-chon">
-        <label htmlFor="loc-trang-thai">Trạng thái</label>
+      <Field label="Trạng thái" htmlFor="loc-trang-thai" icon={CircleDot} kind="select">
         <select
           id="loc-trang-thai"
           value={loc.trangThai ?? ""}
@@ -1464,10 +1662,9 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-loai">Loại nhiệm vụ</label>
+      <Field label="Loại nhiệm vụ" htmlFor="loc-loai" icon={Shapes} kind="select">
         <select
           id="loc-loai"
           value={loc.loai ?? ""}
@@ -1480,10 +1677,9 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-khoi">Khối</label>
+      <Field label="Khối" htmlFor="loc-khoi" icon={Layers} kind="select">
         <select
           id="loc-khoi"
           value={loc.khoi ?? ""}
@@ -1496,10 +1692,9 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-uu-tien">Mức ưu tiên</label>
+      <Field label="Mức ưu tiên" htmlFor="loc-uu-tien" icon={Flag} kind="select">
         <select
           id="loc-uu-tien"
           value={loc.mucUuTien ?? ""}
@@ -1514,10 +1709,9 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-nguon-giao">Nguồn giao</label>
+      <Field label="Nguồn giao" htmlFor="loc-nguon-giao" icon={GitBranch} kind="select">
         <select
           id="loc-nguon-giao"
           value={loc.nguonGiao ?? ""}
@@ -1530,10 +1724,9 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-bo-phan">Bộ phận</label>
+      <Field label="Bộ phận" htmlFor="loc-bo-phan" icon={Building2} kind="select">
         <select
           id="loc-bo-phan"
           value={loc.boPhanID ?? ""}
@@ -1546,26 +1739,35 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
       {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
-          chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4). */}
-      <StaffCombobox
-        id="loc-nguoi-thuc-hien"
-        label="Người thực hiện"
-        emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
-        value={loc.nguoiThucHienMa ?? ""}
-        directory={db.ds}
-        disabled={db.dangTai}
-        onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
-      />
+          chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4).
+          The combobox is a shared component with its own label and hint; the frame below only
+          restyles it to the Field look by descendant selectors and draws the leading icon. It aligns
+          on its TOP (label row) because its hint line hangs below the control. */}
+      <div className={STAFF_FILTER_FRAME}>
+        <Glyph
+          icon={UserRound}
+          className="pointer-events-none absolute top-[33px] left-3 z-[1] size-[18px] text-ink-500"
+        />
+        <StaffCombobox
+          id="loc-nguoi-thuc-hien"
+          label="Người thực hiện"
+          emptyLabel={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
+          value={loc.nguoiThucHienMa ?? ""}
+          directory={db.ds}
+          disabled={db.dangTai}
+          onChange={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
+        />
+      </div>
       {db.loi !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0 basis-full" role="alert">
           {cauLoiDanhBaLoc(db.loi)}
         </p>
       )}
 
-      <div className="o-chon">
+      <div className="o-chon h-10">
         <label htmlFor="loc-qua-han">
           <input
             id="loc-qua-han"
@@ -1582,7 +1784,7 @@ export function HangLoc({
       {/* §3 `☐ Sắp đến hạn` (W5). Only the switch goes up — `soon=true`, never a number: the
           threshold is the commune's own, read by the server from identity. A commune that set none
           gets the server's 409 sentence in place of the page, verbatim. Unticked = absent. */}
-      <div className="o-chon">
+      <div className="o-chon h-10">
         <label htmlFor="loc-sap-den-han">
           <input
             id="loc-sap-den-han"
@@ -1593,9 +1795,25 @@ export function HangLoc({
           {DUE_SOON_FILTER_LABEL}
         </label>
       </div>
-    </div>
+      </Toolbar>
+    </>
   );
 }
+
+/**
+ * Restyles the shared `StaffCombobox` (its own `.o-nhap` label + input + hint) to the Field look of
+ * the filter row: 12px/600 label 6px above a 40px control, room for the leading icon. Descendant
+ * selectors only — the component's markup, ids and behaviour are not touched (it is outside this
+ * screen's scope). The icon's `top-[33px]` follows from this: 16px label + 6px gap + (40−18)/2.
+ */
+const STAFF_FILTER_FRAME = cn(
+  "relative min-w-[200px] flex-[0_1_260px] self-start",
+  "[&_.o-nhap]:m-0 [&_.o-nhap]:flex [&_.o-nhap]:flex-col [&_.o-nhap]:gap-1.5",
+  "[&_.o-nhap>label]:m-0 [&_.o-nhap>label]:text-xs [&_.o-nhap>label]:leading-4 [&_.o-nhap>label]:font-semibold [&_.o-nhap>label]:text-ink-700",
+  "[&_.hop-tim-can-bo_input]:h-10 [&_.hop-tim-can-bo_input]:min-h-10 [&_.hop-tim-can-bo_input]:pl-10 [&_.hop-tim-can-bo_input]:text-base md:[&_.hop-tim-can-bo_input]:text-sm",
+  "[&_.nut-mo-danh-sach]:size-10 [&_.nut-mo-danh-sach]:min-h-10 [&_.nut-mo-danh-sach]:min-w-10 [&_.nut-mo-danh-sach]:p-0",
+  "[&_.goi-y-tim]:text-xs",
+);
 
 /** Which gesture started a Kanban move — only focus handling differs, never the request. */
 export type KanbanMoveVia = "menu" | "drag";
@@ -1903,6 +2121,7 @@ export function BangSoTheoDoi({
   maDangMo,
   moNhiemVu,
   selection = null,
+  empty,
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
@@ -1912,12 +2131,14 @@ export function BangSoTheoDoi({
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
   selection?: TaskSelection | null;
+  /** What an empty page shows — see `BangNhiemVu`. */
+  empty?: ReactNode;
 }) {
-  if (nhiemVu.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  if (nhiemVu.length === 0) return empty ?? <EmptyState icon={ClipboardList} title={SO_RONG} />;
   const unit = (id: string) => (id === "" ? O_TRONG : (tenBoPhan.get(id) ?? id));
 
   return (
-    <div className="bang-cuon" role="region" aria-label="Sổ theo dõi nhiệm vụ" tabIndex={0}>
+    <div className={TABLE_IN_CARD} role="region" aria-label="Sổ theo dõi nhiệm vụ" tabIndex={0}>
       <table className="bang-danh-muc">
         <thead>
           <tr>
@@ -2101,7 +2322,7 @@ export function TheNhiemVu({
       </p>
       {/* `Trễ 87 ngày` · `Hạn 20/12/2026` · `Hạn —` — cùng một hàm với dải hạn của drawer. */}
       <p className={treHan ? "nhan-lech" : "dong-phu"}>
-        <span aria-hidden="true">⏱ </span>
+        <Glyph icon={treHan ? AlarmClock : Clock} className="mr-1 inline size-3.5 align-[-2px]" />
         {nhanHanThe(nhiemVu.due_at, bayGio)}
       </p>
       <p className="dong-phu">
@@ -2216,6 +2437,7 @@ export function BangNhiemVu({
   sapXep,
   doiSapXep,
   selection = null,
+  empty,
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
@@ -2232,11 +2454,17 @@ export function BangNhiemVu({
   doiSapXep: (cot: CotSapXepNhiemVu) => void;
   /** The `☐` column — see `TaskSelection`. `null` = no column. */
   selection?: TaskSelection | null;
+  /**
+   * What an empty page shows. The screen passes "nothing yet" or "nothing under these filters"
+   * (spec §8b) — a choice it makes from its own filter state; this table never guesses. Absent =
+   * the filter sentence `SO_RONG`.
+   */
+  empty?: ReactNode;
 }) {
-  if (nhiemVu.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  if (nhiemVu.length === 0) return empty ?? <EmptyState icon={ClipboardList} title={SO_RONG} />;
 
   return (
-    <div className="bang-cuon" role="region" aria-label="Sổ nhiệm vụ" tabIndex={0}>
+    <div className={TABLE_IN_CARD} role="region" aria-label="Sổ nhiệm vụ" tabIndex={0}>
       <table className="bang-danh-muc">
         <thead>
           <tr>
@@ -2322,11 +2550,18 @@ export function BangNhiemVu({
                 <td>
                   {o.ngay}
                   {/* PHẦN TRỄ TÁCH RIÊNG để tô đỏ, đúng §4.2. `oHan` trả hai mảnh sẵn, nên ở đây
-                      không có phép cắt chuỗi nào. */}
-                  {o.phanTre !== "" && <span className="nhan-lech"> {o.phanTre}</span>}
+                      không có phép cắt chuỗi nào. AlarmClock = the spec's overdue icon, beside the
+                      words (never instead of them). */}
+                  {o.phanTre !== "" && (
+                    <span className="nhan-lech">
+                      {" "}
+                      <Glyph icon={AlarmClock} className="inline size-3.5 align-[-2px]" />
+                      {o.phanTre}
+                    </span>
+                  )}
                 </td>
                 <td>
-                  <span className="chip chip-ngung">{nhanTrangThai(nhanTT, n.status)}</span>
+                  <TaskStatusBadge status={n.status}>{nhanTrangThai(nhanTT, n.status)}</TaskStatusBadge>
                   {hoanThanhTreHan(n.completed_at, n.original_due_at) && (
                     <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
                   )}
@@ -2479,10 +2714,16 @@ export function ChiTietNhiemVu({
         <h3 id="tieu-de-chi-tiet-nhiem-vu" className="ma-muc">
           [{nhiemVu.code}] {nhiemVu.title}
         </h3>
-        <button type="button" className="nut-phu" onClick={dong} aria-label="Đóng chi tiết nhiệm vụ">
-          ✕
-        </button>
+        <IconButton label="Đóng chi tiết nhiệm vụ" type="button" variant="secondary" onClick={dong}>
+          <Glyph icon={X} />
+        </IconButton>
       </div>
+      {/* Metadata the record already carries (v2 §8b "Minh bạch"): when it last changed. No
+          "by whom" — the task carries no `updated_by`, and the timeline below names every actor. */}
+      <p className="ghi-chu inline-flex items-center gap-1">
+        <Glyph icon={History} className="size-3.5" />
+        Cập nhật {nhanNgay(nhiemVu.updated_at)}
+      </p>
 
       <p className="ghi-chu">
         {nhiemVu.unit === ""
@@ -2811,7 +3052,12 @@ export function ChiTietNhiemVu({
             onChange={(e) => datLyDoXoa(e.target.value)}
           />
         </div>
-        <button type="submit" className="nut-xoa" disabled={dangGui || lyDoXoa.trim() === ""}>
+        <button
+          type="submit"
+          className="nut-xoa"
+          disabled={dangGui || lyDoXoa.trim() === ""}
+        >
+          <Glyph icon={Trash2} className="mr-1.5 inline size-[18px] align-[-4px]" />
           Xoá nhiệm vụ
         </button>
       </form>
@@ -2945,7 +3191,10 @@ export function KhoiVanBanChiDao({
             disabled={lyDoKhoa !== null}
             onClick={() => datDangSua(true)}
           >
-            {NHAN_NUT_SUA}
+            {/* `✎` was a glyph inside `NHAN_NUT_SUA`; that constant is shared with the Nội dung
+                screen, so this button draws the lucide icon and the word itself. */}
+            <Glyph icon={Pencil} className="size-[18px]" />
+            Sửa
           </button>
         )}
       </div>

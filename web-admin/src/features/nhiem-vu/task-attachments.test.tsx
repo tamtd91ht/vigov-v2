@@ -94,7 +94,8 @@ describe("the picker — per-file state, progress as status, refusals as alert",
   );
 
   it("the control is a keyboard-reachable label of a multi-file input, pdf/jpg/png", () => {
-    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu">📎 Đính kèm/);
+    // ADR 0068: the `📎` glyph is a decorative lucide icon (aria-hidden) before the word now.
+    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Đính kèm/);
     expect(html).toMatch(/type="file"[^>]*multiple=""[^>]*accept="\.pdf,\.jpg,\.jpeg,\.png/);
   });
 

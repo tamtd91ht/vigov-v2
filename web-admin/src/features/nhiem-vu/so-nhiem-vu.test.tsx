@@ -1271,13 +1271,16 @@ describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi ch�
     const nut = theNutSua(html);
     expect(nut).not.toBeNull();
     expect(nut).not.toContain("disabled");
-    expect(html).toContain(`${NHAN_NUT_SUA}</button>`);
+    // ADR 0068: `✎` is a lucide icon now; the visible word is `Sửa` (NHAN_NUT_SUA, shared with
+    // the Nội dung screen, keeps its glyph there). The accessible name is the aria-label above.
+    expect(html).toMatch(/aria-label="Sửa sổ theo dõi văn bản chỉ đạo"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Sửa<\/button>/);
   });
 
   it("loại `co-ban`: KHÔNG có nút, kể cả khi đã có văn bản trong tay", () => {
     const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
     expect(theNutSua(html)).toBeNull();
     expect(html).not.toContain(NHAN_NUT_SUA);
+    expect(html).not.toContain("aria-label=\"Sửa sổ theo dõi văn bản chỉ đạo\"");
   });
 
   it("khối ĐANG TẢI: nút KHOÁ, và lý do khoá ra tới trang", () => {
@@ -1459,11 +1462,13 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(html).toContain('<label for="ghi-nhat-ky-NV19">Ghi vào nhật ký của nhiệm vụ</label>');
     expect(html).toContain('placeholder="Đã làm được gì, còn vướng gì…"');
     expect(html).toMatch(/<textarea id="ghi-nhat-ky-NV19"[^>]*maxLength="5000"/);
-    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">➤ Ghi nhật ký<\/button>/);
+    // ADR 0068: `➤` is a decorative lucide icon before the word now.
+    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled=""><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Ghi nhật ký<\/button>/);
     expect(html).toContain("Dòng đã ghi không sửa, không xoá được");
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): this pinned "no 📎" — the server had no file store. It has
     // one now (ADR 0052, b37ec2d); the picker is part of the form, behind the same gate.
-    expect(html).toContain("📎 Đính kèm");
+    // ADR 0068: `📎` is a lucide icon now; the label still says `Đính kèm`.
+    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu"><svg[^>]*>.*?<\/svg>Đính kèm/);
     expect(html).toMatch(/<input id="ghi-nhat-ky-NV19-dinh-kem"[^>]*type="file"[^>]*multiple=""/);
     // The form sits INSIDE the §5.9 block, above the timeline.
     const khoi = html.slice(html.indexOf('aria-labelledby="tieu-de-nhat-ky-nhiem-vu-NV19"'));
@@ -2021,7 +2026,9 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
     expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
     expect(html).not.toContain('id="han-moi-lui-han"');
     expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
-    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_SUA));
+    // ADR 0068: the button no longer shows the `✎ Sửa` glyph text, so absence is checked on the
+    // button itself — a not-contains on the old text would pass whatever this page drew.
+    expect(theNutSua(html)).toBeNull();
     // Phần ĐỌC vẫn nguyên: hạn, khối văn bản, nhật ký.
     expect(html).toContain("Hạn ban đầu");
     expect(html).toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));

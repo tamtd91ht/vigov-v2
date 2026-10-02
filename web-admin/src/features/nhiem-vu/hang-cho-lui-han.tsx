@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarClock, Check, Landmark, LoaderCircle, UserCheck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
@@ -25,6 +26,7 @@ import {
   thamSoHangCho,
   type LocHangCho,
 } from "./nhan-nhiem-vu";
+import { Glyph, TOGGLE_TRACK, toggleButtonClass } from "./task-ui";
 
 /**
  * Hàng chờ duyệt lùi hạn §5.8 — một mục trên sổ `/nhiem-vu`, không phải trong drawer. Vì sao: khối
@@ -236,51 +238,76 @@ export function KhoiHangChoLuiHan({
 }) {
   const idTieuDe = `tieu-de-${ID_HANG_CHO}`;
   return (
-    <section id={ID_HANG_CHO} className="khoi-chi-tiet" aria-labelledby={idTieuDe}>
-      <h3 id={idTieuDe}>{TIEU_DE_HANG_CHO}</h3>
+    // A COMPACT HORIZONTAL CARD (spec §8.3): icon tile · title + ONE status line · the two filter
+    // buttons as a segmented control on the right. The status line is where the loading, empty and
+    // error sentences already were — same words, same roles; only their place and frame changed.
+    <section
+      id={ID_HANG_CHO}
+      className="khoi-chi-tiet m-0 flex flex-col gap-3 px-4 py-3.5"
+      aria-labelledby={idTieuDe}
+    >
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <span
+          aria-hidden="true"
+          className="grid size-11 shrink-0 place-items-center rounded-xl bg-warning-50 text-warning-600"
+        >
+          <Glyph icon={CalendarClock} className="size-[22px]" />
+        </span>
+        <div className="min-w-0 flex-1 basis-56">
+          <h3 id={idTieuDe} className="m-0 text-[15px] leading-snug font-semibold text-ink-900">
+            {TIEU_DE_HANG_CHO}
+          </h3>
+          {tai.pha === "dangTai" && (
+            <p className="m-0 mt-0.5 text-[13px] text-ink-500" role="status">
+              {DANG_TAI_HANG_CHO}
+            </p>
+          )}
+          {tai.pha === "loi" && (
+            <p className="thong-bao-loi m-0 mt-0.5" role="alert">
+              {tai.thongBao}
+            </p>
+          )}
+          {tai.pha === "xong" && tai.dong.length === 0 && (
+            <p className="m-0 mt-0.5 text-[13px] text-ink-500">{cauHangChoRong(loc)}</p>
+          )}
+        </div>
 
-      <div className="o-chon" role="group" aria-label="Lọc đề nghị lùi hạn">
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc === "cua-toi"}
-          onClick={() => datLoc("cua-toi")}
-        >
-          {NHAN_LOC_CHO_TOI}
-        </button>
-        <button
-          type="button"
-          className="nut-phu"
-          aria-pressed={loc === "toan-xa"}
-          onClick={() => datLoc("toan-xa")}
-        >
-          {NHAN_LOC_TOAN_XA}
-        </button>
+        <div className={`${TOGGLE_TRACK} sm:ml-auto`} role="group" aria-label="Lọc đề nghị lùi hạn">
+          <button
+            type="button"
+            className={toggleButtonClass(loc === "cua-toi")}
+            aria-pressed={loc === "cua-toi"}
+            onClick={() => datLoc("cua-toi")}
+          >
+            <Glyph icon={UserCheck} />
+            {NHAN_LOC_CHO_TOI}
+          </button>
+          <button
+            type="button"
+            className={toggleButtonClass(loc === "toan-xa")}
+            aria-pressed={loc === "toan-xa"}
+            onClick={() => datLoc("toan-xa")}
+          >
+            <Glyph icon={Landmark} />
+            {NHAN_LOC_TOAN_XA}
+          </button>
+        </div>
       </div>
 
       {loiMo !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {loiMo}
         </p>
       )}
 
-      {tai.pha === "dangTai" && <p role="status">{DANG_TAI_HANG_CHO}</p>}
-      {tai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {tai.thongBao}
-        </p>
-      )}
-      {tai.pha === "xong" && tai.dong.length === 0 && (
-        <p className="trang-thai-rong">{cauHangChoRong(loc)}</p>
-      )}
       {tai.pha === "xong" && tai.dong.length > 0 && (
-        <ol aria-label={`${TIEU_DE_HANG_CHO}, chờ lâu nhất trước`}>
+        <ol aria-label={`${TIEU_DE_HANG_CHO}, chờ lâu nhất trước`} className="m-0 flex flex-col gap-3 p-0 [list-style:none]">
           {tai.dong.map((d) => {
             const h = hienDongHangCho(d, danhBa, maNguoiDangNhap, coQuyenDuyetGiaHan);
             const idGhiChu = `ghi-chu-quyet-dinh-${h.id}`;
             const dangChay = dangQuyet === h.id;
             return (
-              <li key={h.id}>
+              <li key={h.id} className="rounded-xl border border-line p-3 [&>*:first-child]:mt-0">
                 <p>
                   <button
                     type="button"
@@ -321,13 +348,19 @@ export function KhoiHangChoLuiHan({
                       />
                     </div>
                     <div className="cum-nut">
+                      {/* Busy (spec §8b): a fixed minimum width so the button does not jump when
+                          its word becomes "Đang gửi…"; the spinner is decorative. */}
                       <button
                         type="button"
-                        className="nut-chinh"
+                        className="nut-chinh min-w-[8.5rem]"
                         disabled={dangQuyet !== null}
                         onClick={() => quyetDinh(d, true)}
                         aria-label={`Duyệt lùi hạn ${h.maNhiemVu}`}
                       >
+                        <Glyph
+                          icon={dangChay ? LoaderCircle : Check}
+                          className={dangChay ? "size-[18px] motion-safe:animate-spin" : "size-[18px]"}
+                        />
                         {dangChay ? "Đang gửi…" : "Duyệt"}
                       </button>
                       <button
@@ -337,6 +370,7 @@ export function KhoiHangChoLuiHan({
                         onClick={() => quyetDinh(d, false)}
                         aria-label={`Từ chối lùi hạn ${h.maNhiemVu}`}
                       >
+                        <Glyph icon={X} className="size-[18px]" />
                         Từ chối
                       </button>
                     </div>

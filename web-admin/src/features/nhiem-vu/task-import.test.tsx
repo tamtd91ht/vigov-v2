@@ -165,7 +165,9 @@ describe("wiring (source)", () => {
     expect(PAGE).toContain("{IMPORT_OPEN_BUTTON}");
     expect(PAGE).toContain("{importOpen && quyen.giaoViec && (");
     expect(PAGE).toContain("onImported={() => datLanTai((n) => n + 1)}");
-    expect(IMPORT_OPEN_BUTTON).toBe("⬆ Nhập từ Excel");
+    // ADR 0068: the `⬆` glyph is a lucide `Upload` icon drawn by the button; the words stay.
+    expect(IMPORT_OPEN_BUTTON).toBe("Nhập từ Excel");
+    expect(PAGE).toContain("icon={<Glyph icon={Upload} />}");
   });
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Paperclip } from "lucide-react";
 import { useRef, useState } from "react";
 
 import {
@@ -28,6 +29,7 @@ import {
   type AttachmentItem,
   type AttachmentState,
 } from "./task-attachments";
+import { Glyph } from "./task-ui";
 
 /**
  * The files of ONE log entry being written, and the ADR 0052 flow for each (a → b → c). The entry
@@ -140,6 +142,7 @@ export function AttachmentPicker({
         }}
       />
       <label htmlFor={inputId} className="nut-phu">
+        <Glyph icon={Paperclip} className="size-[18px]" />
         {ATTACH_BUTTON}
         <span className="an-thi-giac"> — {ATTACH_INPUT_LABEL}</span>
       </label>
@@ -217,7 +220,8 @@ export function TimelineAttachments({
       {attachments.map((a) => (
         <li key={a.id}>
           <span>
-            📎 {a.file_name} · {formatBytes(a.size_bytes)} · {attachmentTypeLabel(a.mime_type)}
+            <Glyph icon={Paperclip} className="mr-1 inline size-3.5 align-[-2px]" />
+            {a.file_name} · {formatBytes(a.size_bytes)} · {attachmentTypeLabel(a.mime_type)}
           </span>
           <button
             type="button"

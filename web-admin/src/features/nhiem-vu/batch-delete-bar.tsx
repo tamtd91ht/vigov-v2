@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -14,6 +15,7 @@ import {
   selectedCountLabel,
   type BatchDeleteResult,
 } from "./batch-delete";
+import { Glyph } from "./task-ui";
 
 /**
  * The bar §2 draws where filter row 2's right side was: `Đã chọn {N} nhiệm vụ` + the red
@@ -70,6 +72,7 @@ export function BatchDeleteBar({
               {BATCH_CLEAR_BUTTON}
             </button>
             <button type="submit" className="nut-xoa" disabled={running || reason === null}>
+              <Glyph icon={Trash2} className="mr-1.5 inline size-[18px] align-[-4px]" />
               {BATCH_DELETE_BUTTON}
             </button>
           </div>
