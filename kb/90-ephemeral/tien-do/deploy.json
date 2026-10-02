@@ -194,8 +194,7 @@
       "trang_thai": "xong",
       "bang_chung": "8dfc994f — tools/ingress đọc hosts.yaml (yaml.v3 KnownFields, 16 ca từ chối), Ingress sinh lại giống từng byte (git diff rỗng); 4 tệp hằng sinh có ca kiểm lệch; ten_mien_danh_rieng.go, operator.go, operator-host.ts, dia-chi-vigov.ts dùng hằng sinh, hành vi giữ nguyên; deploy/Jenkinsfile đọc api_suffix bằng awk, sai thì dừng. go test tools/ingress, core/config, service-platform/internal/{domain,grpc,http} xanh; citizen-app 1443/1443, platform-admin 122/122. make check toàn kho ĐỎ ở service-platform/internal/store vì migration 0013_upload_policy_content_audio.sql CHƯA commit của phiên song song — đã chạy sạch trên worktree tại HEAD: xanh.",
       "no_confirm": [],
-      "tiep_theo": "Ingress trên cụm vẫn dựng tay trong Rancher (chủ dự án giữ): đổi host thì sửa hosts.yaml → make kb → nhập lại kết quả kubectl kustomize deploy/overlays/<env>. Đổi api_suffix/gốc web cần migration mới cho CHECK 0007. Nhãn dành riêng (admin, api, stg, www) vẫn viết tay trong mã.",
-      "menu": null
+      "tiep_theo": "Ingress trên cụm vẫn dựng tay trong Rancher (chủ dự án giữ): đổi host thì sửa hosts.yaml → make kb → nhập lại kết quả kubectl kustomize deploy/overlays/<env>. Đổi api_suffix/gốc web cần migration mới cho CHECK 0007. Nhãn dành riêng (admin, api, stg, www) vẫn viết tay trong mã."
     },
     {
       "id": "doi-app-id-thang-binh",
@@ -212,8 +211,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "c04d2bc6 — Dockerfile (guard NEXT_PUBLIC, USER node), Jenkinsfile (OPERATOR_HOST chép từ env vigov-service-platform, sai/rỗng thì dừng; PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080), /healthz ngoài proxy (+ ca kiểm), deploy/base/platform-admin + overlays/prod, netpol quy tắc 12 (platform-admin ↔ platform:8080), check_build biết platform-admin (cắn: 6 điều kiện), deploy/README §12. platform-admin tsc sạch, 126/126, next build OK, standalone /healthz 200; kubectl kustomize prod có platform-admin + 2 netpol; check_build PASS; check_security PASS. Docker daemon không chạy trên máy này — chưa đóng ảnh thử.",
       "no_confirm": [],
-      "tiep_theo": "Ngoài kho (README §12): tạo Deployment vigov-platform-admin + Service platform-admin trong Rancher (nhãn app.kubernetes.io/name đúng để netpol chọn được), DNS admin.vigov.vn, Ingress Rancher admin.vigov.vn → platform-admin:3000 (vigov-wildcard-tls, enable-cors false, gỡ rule admin cũ trỏ web-admin nếu còn), OPERATOR_HOST=admin.vigov.vn trên vigov-service-platform, TRUSTED_PROXY_CIDRS phủ dải pod platform-admin, rồi chạy job vigov-platform-admin; tạo nhà vận hành đầu tiên bằng operatorctl. Chưa thử trên cụm thật.",
-      "menu": null
+      "tiep_theo": "Ngoài kho (README §12): tạo Deployment vigov-platform-admin + Service platform-admin trong Rancher (nhãn app.kubernetes.io/name đúng để netpol chọn được), DNS admin.vigov.vn, Ingress Rancher admin.vigov.vn → platform-admin:3000 (vigov-wildcard-tls, enable-cors false, gỡ rule admin cũ trỏ web-admin nếu còn), OPERATOR_HOST=admin.vigov.vn trên vigov-service-platform, TRUSTED_PROXY_CIDRS phủ dải pod platform-admin, rồi chạy job vigov-platform-admin; tạo nhà vận hành đầu tiên bằng operatorctl — nay qua job vigov-deploy HANH_DONG=tao-tai-khoan-van-hanh (mục jenkins-tao-tai-khoan-van-hanh). Chưa thử trên cụm thật."
+    },
+    {
+      "id": "jenkins-tao-tai-khoan-van-hanh",
+      "viec": "vigov-deploy: HANH_DONG=tao-tai-khoan-van-hanh — operatorctl create (email + tên) rồi grant đủ 6 quyền ops.* cho platform-admin, pod một lượt từ ảnh identity đang chạy (chủ dự án 02/10/2026: seed qua máy chủ triển khai)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "deploy/Jenkinsfile stage 'Tạo tài khoản vận hành' (sau stage 'Bật/tắt demo Mini App'); tham số EMAIL_VAN_HANH, TEN_VAN_HANH, TICKET; MT=prod + XAC_NHAN=vigov-prod. Đúng ADR 0048: tên đăng nhập là email, mật khẩu do hệ thống sinh — KHÔNG nhận mật khẩu đặt trước (chủ dự án hỏi user admin + mật khẩu cố định; được nêu lệch ADR 0048 và chọn phương án Jenkins). bash -n trên khối shell đã giải mã: sạch; JSON lệnh pod dựng thử đúng; make buildfiles + check_security PASS. CHƯA CHẠY trên Jenkins thật.",
+      "no_confirm": [],
+      "tiep_theo": "Chạy job trên Jenkins (lượt đầu sau khi đổi parameters có thể chỉ nạp tham số — bấm lại). GIÁ ĐÃ CHẤP NHẬN: mật khẩu tạm in vào log lượt build (giữ 200 lượt) — người nhận phải đăng nhập, đổi mật khẩu và đăng ký TOTP ngay; tạm tự hết hạn 24 giờ."
     },
     {
       "id": "netpol-comms-ra-443-cong-ttdt",

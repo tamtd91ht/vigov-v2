@@ -87,7 +87,7 @@ pipeline {
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
-                                  'dung-clamav'],
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh'],
            description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
                         'của vigov-prod VÀ cùng giá trị vào vigov-staging (chung CSDL); đã có thì DỪNG, không đổi gì ' +
@@ -113,7 +113,11 @@ pipeline {
                         'dòng App ID 3291993990104489440 (không xoá), một giao dịch, có vết (MT=prod) · ' +
                         'dung-clamav: áp deploy/cluster/clamav.yaml (clamd, ADR 0052 §9) vào namespace của MT, đợi sẵn sàng, ' +
                         'thử PING/PONG, rồi đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config NẾU CHƯA CÓ ' +
-                        '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions)')
+                        '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions) · ' +
+                        'tao-tai-khoan-van-hanh: operatorctl create cho EMAIL_VAN_HANH + TEN_VAN_HANH rồi cấp đủ 6 quyền ops.* ' +
+                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc). ⚠ MẬT KHẨU TẠM IN VÀO LOG LƯỢT BUILD NÀY ' +
+                        '(chủ dự án chấp nhận 02/10/2026): đăng nhập platform-admin, đổi mật khẩu + đăng ký TOTP NGAY; ' +
+                        'mật khẩu tạm tự hết hạn sau 24 giờ')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -131,8 +135,13 @@ pipeline {
            description: 'Cho bat-demo-mini-app / tat-demo-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
                         '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
     string(name: 'TICKET', defaultValue: '',
-           description: 'Cho bat-demo-mini-app / tat-demo-mini-app: BẮT BUỘC — số phiếu yêu cầu, ghi vào vết kiểm toán ' +
-                        'của xã đích (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
+           description: 'Cho bat-demo-mini-app / tat-demo-mini-app / tao-tai-khoan-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
+                        'ghi vào vết kiểm toán (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
+    string(name: 'EMAIL_VAN_HANH', defaultValue: '',
+           description: 'Cho tao-tai-khoan-van-hanh: email đăng nhập platform-admin của người vận hành (ADR 0048 — ' +
+                        'tên đăng nhập LÀ email). Là dữ liệu cá nhân: job không in nó ra log, nhưng Jenkins lưu tham số của lượt build.')
+    string(name: 'TEN_VAN_HANH', defaultValue: '',
+           description: 'Cho tao-tai-khoan-van-hanh: tên hiển thị (chữ cái, khoảng trắng, . \' -; tối đa 100 ký tự).')
   }
 
   environment {
@@ -1358,6 +1367,137 @@ EOF
             echo "⚠ TẮT (tat-demo-mini-app) trước khi Zalo duyệt app."
           else
             echo "Xong — danh tính demo đã tắt cho app $APP_ID."
+          fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // TẠO TÀI KHOẢN VẬN HÀNH platform-admin — `operatorctl create` rồi `grant` đủ sáu quyền `ops.*`
+    // (service-identity/internal/domain/operator.go:36-41). Chủ dự án chọn 02/10/2026 chạy qua job này
+    // thay vì kubectl tay.
+    //
+    // ĐÚNG ADR 0048 (§Chốt 28/09, dòng "Ai tạo, ai cấp quyền"): tên đăng nhập là EMAIL, mật khẩu do
+    // hệ thống sinh, in MỘT lần, hết hạn sau 24 giờ, buộc đổi + đăng ký TOTP ở lần đăng nhập đầu. Job
+    // KHÔNG nhận mật khẩu đặt trước — seed một bí mật qua cấu hình là phương án ADR ấy đã bác.
+    //
+    // GIÁ ĐÃ CHẤP NHẬN (chủ dự án 02/10/2026): `operatorctl` in mật khẩu tạm ra stdout, nên nó nằm trong
+    // log lượt build này (giữ 200 lượt). ADR 0048 §"Mật khẩu tạm" nêu đúng mối nguy: ai đọc được trước
+    // người nhận là tự đăng ký TOTP của mình và chiếm tài khoản. Nên: đăng nhập và đổi NGAY sau lượt chạy.
+    //
+    // EMAIL LÀ DỮ LIỆU CÁ NHÂN (luật 3): không echo, không lên tên lượt build. Nó vẫn đi vào lệnh của
+    // pod (`kubectl describe` thấy) và Jenkins lưu tham số — pod bị xoá khi kết thúc.
+    //
+    // Cùng khuôn pod một lượt của bước 5 ở trên (ảnh distroless, không shell → mỗi lệnh một pod; env
+    // của Deployment đọc từ cụm, viết vào TỆP, không lên dòng lệnh). MT=prod chỉ: sổ vận hành nằm trong
+    // CSDL identity, staging dùng chung CSDL.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Tạo tài khoản vận hành') {
+      when { expression { params.HANH_DONG == 'tao-tai-khoan-van-hanh' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error("tao-tai-khoan-van-hanh chỉ chạy với MT=prod (staging dùng chung CSDL).") }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          // Các giá trị đi vào manifest JSON của pod — chỉ nhận đúng dạng, không ký tự nào phải thoát
+          // (không " \ hay ký tự điều khiển), trước mọi lệnh kubectl.
+          if (!(params.EMAIL_VAN_HANH ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/)) {
+            error("EMAIL_VAN_HANH không đúng dạng email. Không ghi gì cả.")   // không in lại giá trị (luật 3)
+          }
+          if (!(params.TEN_VAN_HANH ==~ /^\p{L}[\p{L} .'-]{0,99}$/)) {
+            error("TEN_VAN_HANH chỉ nhận chữ cái, khoảng trắng, . ' - (tối đa 100 ký tự). Không ghi gì cả.")
+          }
+          if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
+          }
+          env.OP_EMAIL = params.EMAIL_VAN_HANH
+          env.OP_NAME = params.TEN_VAN_HANH
+          env.TICKET = params.TICKET
+          env.RUN_DETAIL = "tạo tài khoản vận hành · ticket ${params.TICKET}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          DEP=vigov-service-identity
+          PODS=""
+          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+
+          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
+          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          IMG=$(get_field '{.spec.template.spec.containers[0].image}')
+          get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
+          get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
+          get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
+          for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
+          echo "── ảnh: $IMG"
+
+          # run_op <hậu tố pod> <mảng lệnh JSON đã dựng sẵn> — một pod một lượt, log vào $TMP_DIR/<hậu tố>.log.
+          # Trả 0 khi pod Succeeded.
+          run_op() {
+            pod="vigov-operatorctl-$BUILD_NUMBER-$1"
+            PODS="$PODS $pod"
+            {
+              printf '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"%s","labels":{"app.kubernetes.io/name":"identity-operatorctl"}},' "$pod"
+              printf '"spec":{"restartPolicy":"Never","imagePullSecrets":'; cat "$TMP_DIR/pull"
+              printf ',"containers":[{"name":"operatorctl","image":"%s","envFrom":' "$IMG"; cat "$TMP_DIR/envfrom"
+              printf ',"env":'; cat "$TMP_DIR/env"
+              printf ',"command":%s}]}}' "$2"
+            } > "$TMP_DIR/pod-$1.json"
+            # `|| return 1`: run_op chạy trong `if`, nơi `set -e` không có tác dụng — thiếu nó thì một
+            # lần create hỏng vẫn đợi đủ 5 phút cho một pod không tồn tại.
+            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
+            phase=""; i=0
+            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$phase" in Succeeded|Failed) break ;; esac
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            if [ "$phase" != "Succeeded" ]; then
+              cat "$TMP_DIR/$1.log"
+              echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
+              kubectl -n vigov-prod describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              return 1
+            fi
+            return 0
+          }
+
+          echo "── operatorctl create --email *** --name <TEN_VAN_HANH> --ticket $TICKET"
+          if ! run_op create "[\\"/operatorctl\\",\\"create\\",\\"--email\\",\\"$OP_EMAIL\\",\\"--name\\",\\"$OP_NAME\\",\\"--ticket\\",\\"$TICKET\\"]"; then
+            echo "Gợi ý: 'no such file' /operatorctl = ảnh identity cũ; 'operator tables do not exist' = migration 0012"
+            echo "chưa áp; email đã có tài khoản = dùng operatorctl list / reset-mfa, KHÔNG tạo lại. Không cấp quyền nào."
+            exit 1
+          fi
+          CODE=$(grep -o 'created VH-[0-9]\\{5\\}' "$TMP_DIR/create.log" | head -1 | cut -d' ' -f2)
+          [ -n "$CODE" ] || { cat "$TMP_DIR/create.log"; echo "DỪNG: không đọc được mã VH- trong kết quả create."; exit 1; }
+          echo "── đã tạo $CODE"
+
+          failed=""
+          for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue; do
+            suffix="grant-$(printf '%s' "$perm" | tr '._' '--')"
+            if run_op "$suffix" "[\\"/operatorctl\\",\\"grant\\",\\"--code\\",\\"$CODE\\",\\"--permission\\",\\"$perm\\",\\"--ticket\\",\\"$TICKET\\"]"; then
+              echo "   ✓ $perm"
+            else
+              failed="$failed $perm"
+            fi
+          done
+
+          echo ""
+          echo "════════════════════════════════════════════════════════════════════════════"
+          # Dòng mật khẩu tạm — lần DUY NHẤT nó xuất hiện. Chủ dự án chấp nhận nó nằm trong log này.
+          grep -A1 '^temporary password' "$TMP_DIR/create.log" || true
+          echo "════════════════════════════════════════════════════════════════════════════"
+          echo "Tài khoản $CODE. Đăng nhập platform-admin bằng email vừa nhập + mật khẩu tạm trên,"
+          echo "đổi mật khẩu (tối thiểu 12 ký tự) và đăng ký TOTP NGAY — mật khẩu tạm hết hạn sau 24 giờ."
+          if [ -n "$failed" ]; then
+            echo ""
+            echo "CHƯA CẤP ĐƯỢC:$failed — tài khoản ĐÃ tạo; cấp nốt bằng operatorctl grant --code $CODE ..."
+            exit 1
           fi
         '''
       }
