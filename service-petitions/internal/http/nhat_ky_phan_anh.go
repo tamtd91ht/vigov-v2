@@ -71,7 +71,9 @@ type nhatKyPhieuRa struct {
 	// `dong-phieu`, `khong-tiep-nhan`, `chuyen-cap-tren`, `ghi-chu` — or one of the two rating codes
 	// (ADR 0050 point 2): `danh-gia` (rated, status unchanged) and `mo-lai-theo-danh-gia` (rated 1–2
 	// stars, the petition reopened). On those two, Note carries "Người dân đánh giá n sao[ — phiếu được
-	// mở lại]" and never the citizen's comment.
+	// mở lại]" and never the citizen's comment. Also `tao-nhiem-vu` (a task booked from the petition,
+	// migration 0023) and `nhap-ho` (an officer booked the petition on a citizen's behalf, migration 0030;
+	// ActorCode is that officer, Note is ""). The wording a screen shows is web-admin's.
 	Action string `json:"action"`
 
 	// Status is the status the petition stood in at this moment — AFTER the act, for an act that

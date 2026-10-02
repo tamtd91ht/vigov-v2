@@ -695,6 +695,11 @@ type photoInspector struct {
 	files   storedFileCounter
 	slots   *photoSlots
 	clock   func() time.Time
+
+	// preCount, when set, replaces the pre-check's whole-subject count. The staff verification photo
+	// sets it because its cap counts PER PROCESSING ROUND (StaffVerificationPhotos.countThisRound); the
+	// citizen photo leaves it nil and keeps counting every stored photo of the petition.
+	preCount func(ctx context.Context, f domain.StoredFile) (int, error)
 }
 
 func (uc *CitizenPetitionPhotos) inspector() photoInspector {
@@ -768,7 +773,12 @@ func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst s
 		return uc.reject(ctx, uploadKey, RejectTypeMismatch, ""), nil
 	}
 	// BEFORE the scan and the decode: the cheap refusal first. Re-checked under the lock at the end.
-	have, err := uc.files.CountForSubject(ctx, f.SubjectType, f.SubjectID, f.Purpose, time.Time{})
+	var have int
+	if uc.preCount != nil {
+		have, err = uc.preCount(ctx, f)
+	} else {
+		have, err = uc.files.CountForSubject(ctx, f.SubjectType, f.SubjectID, f.Purpose, time.Time{})
+	}
 	if err != nil {
 		return photoInspection{}, err
 	}

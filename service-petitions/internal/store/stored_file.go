@@ -411,6 +411,34 @@ func (s *StoredFileStore) CountStoredCreatedAfterTx(ctx context.Context, tx *sto
 		subjectType, subjectID, purpose, after))
 }
 
+// countLiveCreatedAfterTail is countForSubjectTail (stored rows, plus pending/scanning rows whose form
+// can still receive bytes) narrowed to rows whose upload slot was issued STRICTLY AFTER $6 — the same
+// `created_at >` cut as countStoredCreatedAfterTail, so "this round" means one thing at slot time, at
+// completion, at the close gate and in migration 0029's trigger.
+const countLiveCreatedAfterTail = countForSubjectTail + ` AND created_at > $6`
+
+// errPendingSinceZero: CountLiveCreatedAfterTx was asked to count live pending slots with no window,
+// which would count every abandoned upload for ever (countForSubjectTail says why). Refused.
+var errPendingSinceZero = errors.New("stored_file: đếm lượt tải đang chờ mà không có mốc hết hạn")
+
+// CountLiveCreatedAfterTx is CountForSubjectTx (with a pending window) restricted to rows whose slot was
+// issued strictly after `after`, inside the caller's transaction — the upload request's count on a
+// REOPENED petition (app.StaffVerificationPhotos.RequestUpload, ADR 0047 (e): the cap counts per round).
+// A zero `after` or a zero `pendingSince` is an error, never "no bound".
+func (s *StoredFileStore) CountLiveCreatedAfterTx(ctx context.Context, tx *store.ScopedTx,
+	subjectType, subjectID, purpose string, after, pendingSince time.Time) (int, error) {
+
+	if after.IsZero() {
+		return 0, errCreatedAfterZero
+	}
+	if pendingSince.IsZero() {
+		return 0, errPendingSinceZero
+	}
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
+	return scanCount(tx.Query(ctx, "count(*)", "stored_file", countLiveCreatedAfterTail,
+		subjectType, subjectID, purpose, pendingSince, after))
+}
+
 func scanCount(rows *sql.Rows, err error) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("stored_file: đếm tệp: %w", err)

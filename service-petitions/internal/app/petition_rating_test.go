@@ -428,6 +428,7 @@ func TestLogActionsAreAllowedByTheSchema(t *testing.T) {
 		domain.NhatKyKhongTiepNhan, domain.NhatKyChuyenCapTren, domain.NhatKyGhiChu,
 		domain.LogActionCitizenRating, domain.LogActionReopenByRating,
 		domain.LogActionTaskCreated, // migration 0023 (task from a petition, 30/09/2026)
+		domain.LogActionStaffIntake, // migration 0030 (staff intake, ADR 0028 Bổ sung 2026-10-02 row 6)
 	} {
 		if !allowed[string(a)] {
 			t.Errorf("mã hành vi %q không có trong CHECK nhat_ky_phan_anh_hanh_vi_hop_le mới nhất — "+

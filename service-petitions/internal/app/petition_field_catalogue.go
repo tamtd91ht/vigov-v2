@@ -144,16 +144,27 @@ func (c *PetitionFieldCatalogue) CheckCitizenIntakeField(ctx context.Context, co
 	return "", ErrFieldNotOffered
 }
 
-// CheckStaffIntakeField is CheckCitizenIntakeField for the staff-booked modal: the same catalogue read
-// and the same single refusal, under domain.PetitionFieldView.OfferedToStaffIntake (which, unlike the
-// citizen rule, admits `can-bo`).
-func (c *PetitionFieldCatalogue) CheckStaffIntakeField(ctx context.Context, code string) (string, error) {
+// StaffIntakeCatalogue is what the staff intake modal ("Nhập hộ phản ánh", docs/ui-ux/09 §11) offers:
+// active on the platform and enabled by the commune, `can-bo` included
+// (domain.PetitionFieldView.OfferedToStaffIntake). CheckStaffIntakeField searches THIS list, so a code
+// the modal shows is a code the write accepts and the other way round (ADR 0028 Bổ sung 2026-10-02 row 4).
+func (c *PetitionFieldCatalogue) StaffIntakeCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
 	merged, err := c.Catalogue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return domain.StaffIntakeCatalogue(merged), nil
+}
+
+// CheckStaffIntakeField is CheckCitizenIntakeField for the staff-booked modal: the same single refusal,
+// over StaffIntakeCatalogue — the very list the modal is filled from.
+func (c *PetitionFieldCatalogue) CheckStaffIntakeField(ctx context.Context, code string) (string, error) {
+	offered, err := c.StaffIntakeCatalogue(ctx)
 	if err != nil {
 		return "", err
 	}
-	for _, v := range merged {
-		if v.Code == code && v.OfferedToStaffIntake() {
+	for _, v := range offered {
+		if v.Code == code {
 			return v.Code, nil
 		}
 	}

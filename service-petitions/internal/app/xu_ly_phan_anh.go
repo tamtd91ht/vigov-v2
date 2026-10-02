@@ -462,10 +462,9 @@ var errCloseGateNotWired = errors.New("xu_ly_phan_anh: chưa nối dây kiểm �
 // "after" is the photo's upload slot issued strictly later. A counter above zero with NO such row is a
 // register that contradicts itself — refused as an error, never closed on the old photos.
 //
-// ⚠ COST, NOT DECIDED HERE: a petition that already holds the maximum of 5 stored photos when it is
-// reopened cannot receive a sixth (migration 0027's trigger and RequestUpload both count every stored
-// photo), and there is no route that removes one — so in a commune with the switch on, such a petition
-// cannot be closed again until that is decided.
+// THE CAP OF 5 COUNTS PER ROUND (ADR 0047 (e), 02/10/2026) with this same boundary — migration 0029's
+// trigger and StaffVerificationPhotos.countThisRound — so a reopened petition that already holds 5 can
+// still receive the photo this gate demands.
 func (uc *XuLyPhanAnh) checkVerificationPhotoGate(ctx context.Context, tx *store.ScopedTx,
 	p domain.PhieuPhanAnh) error {
 	if uc.settings == nil || uc.staffFiles == nil {

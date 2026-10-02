@@ -224,6 +224,11 @@ func (fieldCatalogueStub) Edit(ctx context.Context, _ string, _ domain.PetitionF
 	return domain.PetitionFieldView{}, errors.New("danh mục giả: phép kiểm này không đi qua tuyến sửa")
 }
 
+func (fieldCatalogueStub) StaffIntakeCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
+	_ = tenant.MustFrom(ctx)
+	return nil, nil
+}
+
 func (fieldCatalogueStub) CitizenCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
 	if tenant.MustFrom(ctx) != xaA {
 		return nil, errors.New("danh mục giả: xã không phải của phiên công dân")

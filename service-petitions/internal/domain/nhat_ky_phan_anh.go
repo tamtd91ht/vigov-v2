@@ -47,6 +47,13 @@ const (
 	// Migration 0023 widens the CHECK for it; the Vietnamese value follows ADR 0011 (enum values are
 	// never translated).
 	LogActionTaskCreated HanhViNhatKy = "tao-nhiem-vu"
+
+	// LogActionStaffIntake is the row POST /api/v1/citizen-reports writes: an officer booked this
+	// petition on a citizen's behalf (ADR 0028 Bổ sung 2026-10-02 row 6). It moves nothing — the row's
+	// status is `da-tiep-nhan`, the status the petition is born in — and carries no note. Migration 0030
+	// widens the CHECK for it; the value follows ADR 0011 (an enum value, never translated). The staff
+	// screens label it "Nhập hộ phản ánh" (docs/ui-ux/09 §11).
+	LogActionStaffIntake HanhViNhatKy = "nhap-ho"
 )
 
 // TaskCreatedLogText is the timeline sentence for LogActionTaskCreated. It carries the task's REGISTER

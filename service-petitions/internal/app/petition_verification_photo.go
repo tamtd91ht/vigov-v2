@@ -4,7 +4,7 @@ package app
 // decisions of 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3),
 // storage of migration 0027. The scene photo's three steps (petition_photo.go), for a member of staff:
 //
-//	a. RequestUpload  pending row + presigned POST              the petition locked, ≤ 5, not ended
+//	a. RequestUpload  pending row + presigned POST              the petition locked, ≤ 5 this round, not ended
 //	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT
 //	c. Complete       stat · sniff · scan · DECODE · ORIENT · RE-ENCODE JPEG WITHOUT EXIF ·
 //	                  PutServerProduced into private (class records) · purge temp · `stored` + trail
@@ -67,8 +67,8 @@ var (
 	ErrVerificationPhotoNotFound = errors.New("ảnh sau xử lý: không tìm thấy")
 	// ErrVerificationPhotoWindowClosed: the petition has ended (closed, refused, referred). 409.
 	ErrVerificationPhotoWindowClosed = errors.New("ảnh sau xử lý: phiếu đã kết thúc, không thêm ảnh được")
-	// ErrVerificationPhotoCountReached: the petition already holds platform's maximum, live slots
-	// included. 409.
+	// ErrVerificationPhotoCountReached: the petition's CURRENT ROUND already holds platform's maximum,
+	// live slots included (countThisRound). 409.
 	ErrVerificationPhotoCountReached = errors.New("ảnh sau xử lý: phiếu đã đủ số ảnh tối đa")
 )
 
@@ -79,6 +79,8 @@ type VerificationPhotoPetitions interface {
 	TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error)
 	// vi-name-ok: mirrors the existing PhieuPhanAnhStore method; rule 12 invariant 3 keeps existing names
 	TheoMaTraCuuDeSua(ctx context.Context, tx *store.ScopedTx, ma string) (domain.PhieuPhanAnh, error)
+	// LatestReopenAtTx is where the current processing round starts — the close gate's instant.
+	LatestReopenAtTx(ctx context.Context, tx *store.ScopedTx, petitionID string) (time.Time, error)
 }
 
 // verificationPhotoLister is the one read the link signing needs.
@@ -99,6 +101,12 @@ type VerificationPhotoFiles interface {
 		pendingSince time.Time) (int, error)
 	CountForSubject(ctx context.Context, subjectType, subjectID, purpose string,
 		pendingSince time.Time) (int, error)
+	// The two per-round counts (ADR 0047 (e)): stored only — the completion re-check — and stored plus
+	// live pending slots — the upload request.
+	CountStoredCreatedAfterTx(ctx context.Context, tx *store.ScopedTx, subjectType, subjectID, purpose string,
+		after time.Time) (int, error)
+	CountLiveCreatedAfterTx(ctx context.Context, tx *store.ScopedTx, subjectType, subjectID, purpose string,
+		after, pendingSince time.Time) (int, error)
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
 }
 
@@ -146,9 +154,22 @@ func (uc *StaffVerificationPhotos) uploadsConfigured() bool {
 	return uc.objects != nil && uc.scanner != nil && uc.policies != nil
 }
 
-func (uc *StaffVerificationPhotos) inspector() photoInspector {
+// inspector is the citizen photo's inspector with the pre-check counting THIS ROUND of petition `p`
+// (the lock-free pre-read), in a short read-only transaction because the round's two reads take one.
+// The decision is still the re-check under the lock in completePending; this only keeps a photo the
+// round has no place for from being re-encoded into the records bucket, where it could never be purged.
+func (uc *StaffVerificationPhotos) inspector(p domain.PhieuPhanAnh) photoInspector {
 	return photoInspector{objects: uc.objects, scanner: uc.scanner, files: uc.files, slots: uc.photoSlots,
-		clock: uc.clock}
+		clock: uc.clock,
+		preCount: func(ctx context.Context, _ domain.StoredFile) (int, error) {
+			var n int
+			err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+				var err error
+				n, err = uc.countThisRound(ctx, tx, p, time.Time{})
+				return err
+			})
+			return n, err
+		}}
 }
 
 // verificationPhotoKey is the destination key: class records, purpose petition-verification-photo,
@@ -229,8 +250,8 @@ func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string,
 		if !domain.VerificationPhotoUploadOpen(p.TrangThai) {
 			return ErrVerificationPhotoWindowClosed
 		}
-		live, err := uc.files.CountForSubjectTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
-			domain.PurposePetitionVerificationPhoto, now.Add(-storage.UploadTTL))
+		// Live pending slots of THIS round still count, exactly as before the cap became per round.
+		live, err := uc.countThisRound(ctx, tx, p, now.Add(-storage.UploadTTL))
 		if err != nil {
 			return err
 		}
@@ -265,6 +286,47 @@ func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string,
 		return PhotoUpload{}, bocPhieu(ctx, "xin tải ảnh sau xử lý", err)
 	}
 	return out, nil
+}
+
+// countThisRound counts the verification photos of petition `p` that hold one of platform's
+// `max_files_per_subject` places IN THE CURRENT PROCESSING ROUND, inside the caller's transaction (the
+// petition row is held FOR UPDATE, which is also what a reopen updates, so the round cannot start
+// between this count and the write that follows it).
+//
+// PER ROUND, NOT PER PETITION (owner decision 02/10/2026, ADR 0047 row "THAY G8" item (e)). Platform's
+// policy value for petition-verification-photo (5) is READ HERE AS "PER ROUND": the policy itself is one
+// number per purpose and per subject, and nothing in it names a round — the round is this service's
+// notion. A reopen (`mo-lai-theo-danh-gia`) starts a new round allowed up to 5 again; earlier rounds'
+// photos stay as the evidence each round was closed on, and are never deleted.
+//
+// THE BOUNDARY IS THE CLOSE GATE'S AND MIGRATION 0029's, TO THE LETTER: the round starts at the
+// timeline's latest reopen (store.LatestReopenAtTx) and a photo belongs to it when its slot was issued
+// strictly after that instant (`created_at >`). Never reopened (`so_lan_mo_lai` = 0) → every photo
+// counts, unchanged. Reopened with no reopen row on the timeline → errReopenInstantMissing (500), as at
+// the close gate: the count cannot tell old photos from new, and guessing either way is wrong.
+//
+// `pendingSince` zero counts STORED photos only (the completion re-check); non-zero adds the pending
+// slots issued at or after it (the upload request — an unexpired form is a place already promised).
+func (uc *StaffVerificationPhotos) countThisRound(ctx context.Context, tx *store.ScopedTx,
+	p domain.PhieuPhanAnh, pendingSince time.Time) (int, error) {
+
+	if p.SoLanMoLai <= 0 {
+		return uc.files.CountForSubjectTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
+			domain.PurposePetitionVerificationPhoto, pendingSince)
+	}
+	roundStart, err := uc.petitions.LatestReopenAtTx(ctx, tx, p.ID)
+	if err != nil {
+		return 0, fmt.Errorf("ảnh sau xử lý: đọc lần mở lại gần nhất: %w", err)
+	}
+	if roundStart.IsZero() {
+		return 0, errReopenInstantMissing
+	}
+	if pendingSince.IsZero() {
+		return uc.files.CountStoredCreatedAfterTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
+			domain.PurposePetitionVerificationPhoto, roundStart)
+	}
+	return uc.files.CountLiveCreatedAfterTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
+		domain.PurposePetitionVerificationPhoto, roundStart, pendingSince)
 }
 
 // --- c. complete ------------------------------------------------------------------------------------
@@ -309,13 +371,14 @@ func (uc *StaffVerificationPhotos) Complete(ctx context.Context, ma, id string, 
 		return domain.StoredFile{}, ErrVerificationPhotoWindowClosed
 	}
 	return uc.completeOnce(ctx, id, func(ctx context.Context) (domain.StoredFile, error) {
-		return uc.completePending(ctx, ma, id, actor, restricted, *f)
+		return uc.completePending(ctx, ma, id, actor, restricted, p, *f)
 	})
 }
 
-// completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`.
+// completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`. `p` is
+// the lock-free pre-read, used only by the pre-check's round count; every decision re-reads it locked.
 func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id string, actor audit.Actor,
-	restricted QuyenXemHanChe, f domain.StoredFile) (domain.StoredFile, error) {
+	restricted QuyenXemHanChe, p domain.PhieuPhanAnh, f domain.StoredFile) (domain.StoredFile, error) {
 
 	pol, err := photoPolicyFor(ctx, uc.policies, storage.PurposePetitionVerificationPhoto)
 	if err != nil {
@@ -327,7 +390,7 @@ func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id s
 	}
 
 	// 2. Object-store and pixel work, no lock held.
-	insp, err := uc.inspector().inspect(ctx, f, dst, pol)
+	insp, err := uc.inspector(p).inspect(ctx, f, dst, pol)
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
@@ -368,8 +431,8 @@ func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id s
 			if !domain.VerificationPhotoUploadOpen(lp.TrangThai) {
 				lateReason = RejectPetitionMoved
 			} else {
-				have, err := uc.files.CountForSubjectTx(ctx, tx, domain.StoredFileSubjectPetition, lp.ID,
-					domain.PurposePetitionVerificationPhoto, time.Time{})
+				// Stored photos of THIS round only; the row being completed is pending and never counts itself.
+				have, err := uc.countThisRound(ctx, tx, lp, time.Time{})
 				if err != nil {
 					return err
 				}

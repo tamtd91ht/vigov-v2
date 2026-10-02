@@ -547,6 +547,15 @@
       "no_confirm": [],
       "tiep_theo": "P3b: ứng dụng còn đếm mọi lượt ở petition_verification_photo.go:232 (xin chỗ) và :371 (hoàn tất) qua CountForSubjectTx — phải thu theo lượt; thêm hằng domain 'nhap-ho' + liệt trong TestLogActionsAreAllowedByTheSchema; màn nhật ký Web Admin phải hiện hành vi mới. Ảnh xin chỗ trước khi mở lại mà hoàn tất sau thì không thuộc lượt nào (cổng đóng cũng bỏ qua nó — nhất quán). Phiếu mở lại có thể có >5 ảnh nghiệm thu tổng cộng.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "tran-theo-luot-danh-muc-nhap-ho-nhat-ky",
+      "viec": "Phản ánh: trần ảnh nghiệm thu theo lượt ở ứng dụng, GET /api/v1/citizen-report-intake-fields (feedback.create), dòng nhật ký nhap-ho lúc nhập hộ (đợt 02/10/2026, TASK-P3b)",
+      "trang_thai": "xong",
+      "bang_chung": "countThisRound dùng chung cho xin chỗ (CountLiveCreatedAfterTx mới — đã lưu + chỗ chưa hết hạn của lượt), hoàn tất (CountStoredCreatedAfterTx) và kiểm sơ bộ ngoài giao dịch của photoInspector (móc preCount — nơi đếm thứ ba người giao việc chưa liệt kê); max_files_per_subject đọc là 'theo lượt'. Danh mục nhập hộ: domain.StaffIntakeCatalogue lọc OfferedToStaffIntake, CheckStaffIntakeField tìm trên cùng danh sách (danh sách và lần ghi không thể lệch), dạng citizenFieldListOut, 401/403/403-quyền-xã-khác/401-sai-xã/200/503. Nhập hộ ghi một dòng nhat_ky_phan_anh 'nhap-ho' (LogActionStaffIntake) cùng giao dịch trước vết kiểm toán; vết mang nhat_ky_id. go test -count=1 ./... xanh, vet sạch, check_quyen/audit_actor/security xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Web Admin còn nợ nhãn 'nhap-ho' → 'Nhập hộ phản ánh' ở nhan-phieu.ts:892-910 (thẻ Web Admin sau khi màn Phản ánh được làm lại). Chú thích câu hỏi 4 của migration 0029 còn nói ứng dụng đếm mọi lượt — đã cũ, không sửa vì migration có checksum. Phiếu đã mở lại mà không có dòng mở lại: ứng dụng từ chối (500), trigger coi như chưa mở lại.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

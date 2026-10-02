@@ -246,6 +246,38 @@ func TestCitizenIntakeFieldCheckPlatformDown(t *testing.T) {
 	}
 }
 
+// The modal's list and the write's check are ONE rule: every listed code is accepted, every tier-1 code
+// not listed is refused (ADR 0028 Bổ sung 2026-10-02 row 4).
+func TestStaffIntakeCatalogueAndCheckAgree(t *testing.T) {
+	c := catalogueForIntake(nil)
+	ctx := tenant.Into(context.Background(), communeFields)
+	offered, err := c.StaffIntakeCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, v := range offered {
+		listed[v.Code] = true
+	}
+	if !listed["rac-thai"] || !listed["can-bo"] || listed["giao-thong"] || listed["ma-cu"] {
+		t.Fatalf("staff intake list = %v, want rac-thai and can-bo only", listed)
+	}
+	all, err := c.Catalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range all {
+		_, err := c.CheckStaffIntakeField(ctx, v.Code)
+		if accepted := err == nil; accepted != listed[v.Code] {
+			t.Errorf("%s: listed %v, accepted %v (%v)", v.Code, listed[v.Code], accepted, err)
+		}
+	}
+	down := catalogueForIntake(fmt.Errorf("%w: x", ErrFieldCatalogueUnavailable))
+	if _, err := down.StaffIntakeCatalogue(ctx); !errors.Is(err, ErrFieldCatalogueUnavailable) {
+		t.Errorf("platform down: err = %v", err)
+	}
+}
+
 func TestEffectiveFieldLabelsOverrideElseDefaultNeverFiltered(t *testing.T) {
 	labels, err := NewEffectiveFieldLabels(catalogueForIntake(nil)).DanhSach(tenant.Into(context.Background(), communeFields))
 	if err != nil {

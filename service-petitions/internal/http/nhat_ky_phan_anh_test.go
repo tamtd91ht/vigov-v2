@@ -216,6 +216,24 @@ func TestDocNhatKyTraDungHinhDangVaThuTu(t *testing.T) {
 	}
 }
 
+// The staff intake's `nhap-ho` row (migration 0030) reaches the staff timeline like any other act: the
+// read filters no act code, so the drawer sees who booked the petition.
+func TestPetitionLogReturnsTheStaffIntakeRow(t *testing.T) {
+	m := dungMayChu(t)
+	m.nhatKy.theo[xaA]["pa-001"] = []domain.NhatKyPhanAnh{{ID: "nk-nh", PhieuPhanAnhID: "pa-001",
+		ThoiDiem: mocNK1, NguoiMa: maCanBo, HanhVi: domain.LogActionStaffIntake, TrangThai: domain.DaTiepNhan}}
+	w := m.goi(t, http.MethodGet, hostA, duongNhatKy(maPhieuThuong), canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	got, _ := docTrangNhatKy(t, w.Body.Bytes())
+	if len(got.Items) != 1 {
+		t.Fatalf("items = %+v", got.Items)
+	}
+	if r := got.Items[0]; r.Action != "nhap-ho" || r.Status != "da-tiep-nhan" || r.ActorCode != maCanBo ||
+		r.Note != "" || r.Unit != "" || r.Assignee != "" {
+		t.Errorf("staff intake row = %+v", r)
+	}
+}
+
 func TestDocNhatKyRongThiItemsLaMangRong(t *testing.T) {
 	m := dungMayChu(t)
 	m.nhatKy.theo[xaA]["pa-001"] = nil

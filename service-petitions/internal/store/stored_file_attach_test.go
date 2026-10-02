@@ -117,6 +117,49 @@ func TestCountStoredCreatedAfterTx(t *testing.T) {
 	}
 }
 
+func TestCountLiveCreatedAfterTx(t *testing.T) {
+	since := sfAt.Add(-15 * time.Minute)
+	d := &sfDB{rows: []map[string]driver.Value{{"count(*)": int64(4)}}}
+	s, h := sfStore(d)
+	var n int
+	err := sfInTx(t, h, xaThu, func(ctx context.Context, tx *pkgstore.ScopedTx) error {
+		var e error
+		n, e = s.CountLiveCreatedAfterTx(ctx, tx, "petition", "pa-1", "petition-verification-photo", sfAt, since)
+		return e
+	})
+	if err != nil || n != 4 {
+		t.Fatalf("count = %d, %v", n, err)
+	}
+	st := d.stmts[0]
+	for _, frag := range []string{"FROM stored_file WHERE tenant_id = $1", "subject_type = $2", "subject_id = $3",
+		"purpose = $4", "deleted_at IS NULL", "status IN ('stored', 'processing', 'ready')",
+		"status IN ('pending', 'scanning') AND created_at >= $5", "created_at > $6"} {
+		if !strings.Contains(st.sql, frag) {
+			t.Errorf("statement lacks %q: %s", frag, st.sql)
+		}
+	}
+	want := []driver.Value{string(xaThu), "petition", "pa-1", "petition-verification-photo", since, sfAt}
+	if !reflect.DeepEqual(st.args, want) {
+		t.Errorf("args = %v\nwant   %v", st.args, want)
+	}
+
+	// Either bound zero is refused before any statement.
+	for name, c := range map[string]struct{ after, since time.Time }{
+		"zero round start":    {time.Time{}, since},
+		"zero pending window": {sfAt, time.Time{}},
+	} {
+		d2 := &sfDB{rows: []map[string]driver.Value{{"count(*)": int64(9)}}}
+		s2, h2 := sfStore(d2)
+		err := sfInTx(t, h2, xaThu, func(ctx context.Context, tx *pkgstore.ScopedTx) error {
+			_, e := s2.CountLiveCreatedAfterTx(ctx, tx, "petition", "pa-1", "petition-verification-photo", c.after, c.since)
+			return e
+		})
+		if err == nil || len(d2.stmts) != 0 {
+			t.Errorf("%s: err %v, %d statements — want refused, none", name, err, len(d2.stmts))
+		}
+	}
+}
+
 func TestLatestReopenAtTx(t *testing.T) {
 	at := time.Date(2026, 9, 25, 1, 2, 3, 0, time.UTC)
 	for name, c := range map[string]struct {

@@ -10,7 +10,7 @@ package app
 //	0. CHECK the field against the commune's catalogue (ADR 0026, 0060) — REQUIRED on this channel
 //	1. ASK identity for the RESOLVE deadline only, counted from `goc_dem_han`
 //	2. MINT the lookup code — the same crypto/rand generator as the citizen path (rule 4, invariant 4)
-//	3. ONE TRANSACTION: the row and its audit entry (rule 6, invariant 3)
+//	3. ONE TRANSACTION: the row, its timeline row (`nhap-ho`) and its audit entry (rule 6, invariant 3)
 //
 // # WHAT ADR 0028 DECIDES ABOUT THIS CHANNEL, AND WHERE EACH DECISION LANDS
 //
@@ -63,6 +63,14 @@ type ResolveDeadlineReader interface {
 		can []identityv1.DeadlineKind) (map[identityv1.DeadlineKind]time.Time, error)
 }
 
+// StaffIntakePetitions is the petition register as this act needs it: the row, and the ONE timeline row
+// that says an officer booked it (ADR 0028 Bổ sung 2026-10-02 row 6) — the same append-only writer every
+// other petition act uses. *petstore.PhieuPhanAnhStore satisfies it.
+type StaffIntakePetitions interface {
+	KhoPhieuGhi
+	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyPhanAnh) error // vi-name-ok: existing petstore method
+}
+
 // StaffIntakeFields checks the field an officer picked. *PetitionFieldCatalogue satisfies it; answers
 // ErrFieldNotOffered or ErrFieldCatalogueUnavailable.
 type StaffIntakeFields interface {
@@ -98,7 +106,7 @@ type StaffIntakeRequest struct {
 // StaffIntake owns the staff-booked intake.
 type StaffIntake struct {
 	db        *store.DB
-	petitions KhoPhieuGhi
+	petitions StaffIntakePetitions
 	deadlines ResolveDeadlineReader
 	fields    StaffIntakeFields
 
@@ -113,7 +121,7 @@ type StaffIntake struct {
 	clock   func() time.Time
 }
 
-func NewStaffIntake(db *store.DB, petitions KhoPhieuGhi, events KhoSuKien, deadlines ResolveDeadlineReader,
+func NewStaffIntake(db *store.DB, petitions StaffIntakePetitions, events KhoSuKien, deadlines ResolveDeadlineReader,
 	fields StaffIntakeFields) *StaffIntake {
 	return &StaffIntake{
 		db: db, petitions: petitions, events: events, deadlines: deadlines, fields: fields,
@@ -210,6 +218,10 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 	if err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("nhap_ho_phan_anh: sinh mã tra cứu: %w", err)
 	}
+	logID, err := uc.newID()
+	if err != nil {
+		return domain.PhieuPhanAnh{}, fmt.Errorf("nhap_ho_phan_anh: sinh mã dòng nhật ký: %w", err)
+	}
 
 	p := domain.PhieuPhanAnh{
 		ID:       id,
@@ -238,9 +250,24 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 	}
 	p.PublicationStatus = domain.InitialPublicationStatus(p.LinhVuc)
 
-	// STEP 3 — the row and its trail, in ONE transaction (rule 6, invariant 3).
+	// STEP 3 — the row, its timeline row and its trail, in ONE transaction (rule 6, invariant 3).
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if err := uc.petitions.Tao(ctx, tx, p); err != nil {
+			return err
+		}
+		// THE TIMELINE ROW ("cán bộ X nhập hộ", ADR 0028 Bổ sung 2026-10-02 row 6). Without it the drawer
+		// shows a petition that arrived with nobody named — exactly what a citizen-sent one looks like.
+		// The officer's BUSINESS CODE (rule 6, invariant 8 — audit.Actor.ID is Principal.Ma, refused empty
+		// above), the booking instant, the status the petition is born in, and NO NOTE: the content may
+		// quote the reporter and already lives on the petition row (rule 3).
+		if err := uc.petitions.GhiNhatKy(ctx, tx, domain.NhatKyPhanAnh{
+			ID:             logID,
+			PhieuPhanAnhID: p.ID,
+			ThoiDiem:       bookedAt,
+			NguoiMa:        officer.ID,
+			HanhVi:         domain.LogActionStaffIntake,
+			TrangThai:      p.TrangThai,
+		}); err != nil {
 			return err
 		}
 		// NO PERSONAL DATA IN THE DELTA, not even masked — the reasoning is on the citizen intake's delta.
@@ -258,6 +285,7 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 			"truong_da_dien":     truongDaDien(p),
 			"do_dai_noi_dung":    len([]rune(p.NoiDung)),
 			"publication_status": string(p.PublicationStatus),
+			"nhat_ky_id":         logID,
 		}
 		// ADR 0028 F4: every origin the officer typed is recorded with BEFORE (the default the system
 		// would have used — the booking instant) and AFTER (what was typed). English key, rule 12.

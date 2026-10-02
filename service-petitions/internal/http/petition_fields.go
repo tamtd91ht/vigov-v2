@@ -19,6 +19,7 @@ import (
 //	GET   /api/v1/citizen-report-fields          staff, `admin.lookup` — every code, disabled and retired too
 //	PATCH /api/v1/citizen-report-fields/{code}   staff, `admin.lookup` — label, order, on/off for one code
 //	GET   /api/v1/my-citizen-report-fields       citizen, session-only — what the new-submission form offers
+//	GET   /api/v1/citizen-report-intake-fields   staff, `feedback.create` — what the staff intake modal offers
 //
 // NO POST, NO DELETE: a commune cannot add or remove a code (ADR 0026). "Back to the default" is a
 // PATCH carrying the default label / order, which the staff response hands over as default_label /
@@ -29,6 +30,9 @@ import (
 type PetitionFieldCatalogue interface {
 	Catalogue(ctx context.Context) ([]domain.PetitionFieldView, error)
 	Edit(ctx context.Context, code string, e domain.PetitionFieldEdit, actor audit.Actor) (domain.PetitionFieldView, error)
+	// StaffIntakeCatalogue is the staff intake modal's list — the same predicate the intake write checks
+	// (app.PetitionFieldCatalogue.CheckStaffIntakeField), so the two cannot disagree.
+	StaffIntakeCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error)
 }
 
 // CitizenFieldCatalogue is the citizen side — the filtered read and nothing else, so the citizen
@@ -154,6 +158,29 @@ func (h *HandlerCongDan) ListCitizenReportFields(w http.ResponseWriter, r *http.
 	offered, err := h.d.CitizenFields.CitizenCatalogue(r.Context())
 	if err != nil {
 		writeFieldCatalogueError(w, r, h.d.Log.Error, "đọc danh mục lĩnh vực cho công dân", err)
+		return
+	}
+	out := citizenFieldListOut{Items: make([]citizenFieldOut, 0, len(offered))}
+	for _, v := range offered {
+		out.Items = append(out.Items, citizenFieldOut{Code: v.Code, Label: v.Label,
+			Icon: nullIfEmpty(v.Icon), Tone: nullIfEmpty(v.Tone)})
+	}
+	vietJSON(w, http.StatusOK, out)
+}
+
+// ListStaffIntakeFields serves the fields the commune offers to STAFF INTAKE ("Nhập hộ phản ánh",
+// docs/ui-ux/09 §11), in the commune's order. GET /api/v1/citizen-report-intake-fields
+//
+// THE CITIZEN LIST'S SHAPE ({items:[{code,label,icon,tone}]}, icon/tone null when undeclared) and the
+// citizen list's type, on purpose: the modal renders the same picker, and a second type for the same
+// four fields is a second place to drift. What differs is the PREDICATE (`can-bo` is offered here,
+// domain.PetitionFieldView.OfferedToStaffIntake says why) and the surface (staff chain, `feedback.create`).
+//
+// NO AUDIT ENTRY: configuration, not personal data, not a cross-commune read (rule 6, invariant 7).
+func (h *Handler) ListStaffIntakeFields(w http.ResponseWriter, r *http.Request) {
+	offered, err := h.d.PetitionFields.StaffIntakeCatalogue(r.Context())
+	if err != nil {
+		writeFieldCatalogueError(w, r, h.d.Log.Error, "đọc danh mục lĩnh vực cho nhập hộ", err)
 		return
 	}
 	out := citizenFieldListOut{Items: make([]citizenFieldOut, 0, len(offered))}

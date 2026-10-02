@@ -36,11 +36,11 @@ type fieldCatalogueFake struct {
 	byCommune map[tenant.ID][]domain.PetitionFieldView
 	err       error
 
-	catalogueCalls, editCalls, citizenCalls int
-	lastCommune                             tenant.ID
-	lastCode                                string
-	lastEdit                                domain.PetitionFieldEdit
-	lastActor                               audit.Actor
+	catalogueCalls, editCalls, citizenCalls, intakeCalls int
+	lastCommune                                          tenant.ID
+	lastCode                                             string
+	lastEdit                                             domain.PetitionFieldEdit
+	lastActor                                            audit.Actor
 }
 
 // newFieldCatalogueFake: commune A holds four codes covering every case a filter could get wrong —
@@ -99,6 +99,16 @@ func (f *fieldCatalogueFake) CitizenCatalogue(ctx context.Context) ([]domain.Pet
 		return nil, f.err
 	}
 	return domain.CitizenCatalogue(f.byCommune[f.lastCommune]), nil
+}
+
+// StaffIntakeCatalogue applies the REAL domain filter too, for the reason CitizenCatalogue does.
+func (f *fieldCatalogueFake) StaffIntakeCatalogue(ctx context.Context) ([]domain.PetitionFieldView, error) {
+	f.intakeCalls++
+	f.lastCommune = tenant.MustFrom(ctx)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return domain.StaffIntakeCatalogue(f.byCommune[f.lastCommune]), nil
 }
 
 const (
@@ -269,6 +279,87 @@ func TestPetitionFields_EditRefusesRenamingTheCode(t *testing.T) {
 	doiMa(t, w, http.StatusBadRequest)
 	if m.fields.editCalls != 0 {
 		t.Error("a body renaming the code reached the use case")
+	}
+}
+
+// --- staff intake GET: rule 5, invariant 7 ----------------------------------------------------------
+
+const pathIntakeFields = "/api/v1/citizen-report-intake-fields"
+
+func TestStaffIntakeFields_AsksFeedbackCreate(t *testing.T) {
+	// A LITERAL: a fake checker grants any string, so only this catches a key `quyen` lacks (rule 5, 3c).
+	m := dungMayChuGhi(t)
+	m.goi(t, http.MethodGet, hostA, pathIntakeFields, canBoGhi(xaA))
+	if got := m.checker.hoiKhoaCuoi(); got != "feedback.create" {
+		t.Fatalf("route asked key %q, want \"feedback.create\" — the key of the write this list fills", got)
+	}
+}
+
+func TestStaffIntakeFields_401WithoutSession(t *testing.T) {
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, "feedback.create")
+	doiMa(t, m.goi(t, http.MethodGet, hostA, pathIntakeFields, nil), http.StatusUnauthorized)
+	if m.fields.intakeCalls != 0 {
+		t.Error("catalogue read without a session")
+	}
+}
+
+func TestStaffIntakeFields_403WrongPermission(t *testing.T) {
+	// `admin.lookup` opens the configuration list; it does not make its holder somebody who books.
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, QuyenDanhMuc, "feedback.read")
+	doiMa(t, m.goi(t, http.MethodGet, hostA, pathIntakeFields, canBoGhi(xaA)), http.StatusForbidden)
+	if m.fields.intakeCalls != 0 {
+		t.Error("catalogue read with the wrong permission")
+	}
+}
+
+func TestStaffIntakeFields_403RightPermissionWrongCommune(t *testing.T) {
+	// Signed in at commune B as commune B's officer; `feedback.create` was granted in commune A only.
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, "feedback.create")
+	doiMa(t, m.goi(t, http.MethodGet, hostB, pathIntakeFields, canBoGhi(xaB)), http.StatusForbidden)
+	if m.fields.intakeCalls != 0 {
+		t.Error("a grant in commune A opened commune B's intake list")
+	}
+}
+
+func TestStaffIntakeFields_401SessionOfAnotherCommune(t *testing.T) {
+	// A principal of commune A presented at commune B's domain: the commune is compared before the key.
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, "feedback.create")
+	m.capQuyen(xaB, "feedback.create")
+	doiMa(t, m.goi(t, http.MethodGet, hostB, pathIntakeFields, canBoGhi(xaA)), http.StatusUnauthorized)
+	if m.fields.intakeCalls != 0 {
+		t.Error("a session of another commune read the list")
+	}
+}
+
+func TestStaffIntakeFields_200OfferedFieldsOnlyCitizenShape(t *testing.T) {
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, "feedback.create")
+	w := m.goi(t, http.MethodGet, hostA, pathIntakeFields, canBoGhi(xaA))
+	doiMa(t, w, http.StatusOK)
+	// EXACT BYTES: switched-off and retired codes absent, `can-bo` PRESENT (the officer may book it —
+	// the write accepts it), commune order and wording, the citizen list's four fields and nothing else.
+	want := `{"items":[{"code":"rac-thai","label":"Rác thải xã A","icon":"Trash2","tone":"green"},` +
+		`{"code":"can-bo","label":"Thái độ cán bộ","icon":"UserX","tone":"red"}]}` + "\n"
+	if w.Body.String() != want {
+		t.Fatalf("body =\n%s\nwant\n%s", w.Body.String(), want)
+	}
+	if m.fields.lastCommune != xaA {
+		t.Errorf("read commune %q, want %q", m.fields.lastCommune, xaA)
+	}
+}
+
+func TestStaffIntakeFields_503WhenPlatformIsDown(t *testing.T) {
+	m := dungMayChuGhi(t)
+	m.capQuyen(xaA, "feedback.create")
+	m.fields.err = app.ErrFieldCatalogueUnavailable
+	w := m.goi(t, http.MethodGet, hostA, pathIntakeFields, canBoGhi(xaA))
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if e := loiTra(t, w); e.Code != "field_catalogue_unavailable" {
+		t.Errorf("error key %q", e.Code)
 	}
 }
 

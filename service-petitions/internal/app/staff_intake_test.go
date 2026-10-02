@@ -72,10 +72,30 @@ func staffDeadlines() *hanGia {
 	}}
 }
 
+// staffIntakeStoreFake is the citizen intake's petition fake plus the REAL timeline writer, so the row the
+// fake driver sees is the store's own INSERT with its own argument order.
+type staffIntakeStoreFake struct {
+	rows   *khoPhieuGia
+	log    *petstore.PhieuPhanAnhStore
+	logErr error // when set, the timeline write fails after its statement ran
+}
+
+func (k *staffIntakeStoreFake) Tao(ctx context.Context, tx *pkgstore.ScopedTx, p domain.PhieuPhanAnh) error { // vi-name-ok: implements the existing store method
+	return k.rows.Tao(ctx, tx, p)
+}
+
+func (k *staffIntakeStoreFake) GhiNhatKy(ctx context.Context, tx *pkgstore.ScopedTx, e domain.NhatKyPhanAnh) error { // vi-name-ok: implements the existing store method
+	if err := k.log.GhiNhatKy(ctx, tx, e); err != nil {
+		return err
+	}
+	return k.logErr
+}
+
 func newStaffIntakeForTest(k *khoGia, kho *khoPhieuGia, han ResolveDeadlineReader,
 	fields StaffIntakeFields) *StaffIntake {
 	db := pkgstore.New(sql.OpenDB(k))
-	uc := NewStaffIntake(db, kho, petstore.NewSuKienDiStore(db), han, fields)
+	uc := NewStaffIntake(db, &staffIntakeStoreFake{rows: kho, log: petstore.NewPhieuPhanAnhStore(db)},
+		petstore.NewSuKienDiStore(db), han, fields)
 	uc.newID = func() (string, error) { return idCoDinh, nil }
 	uc.newCode = func() (string, error) { return maCoDinh, nil }
 	uc.clock = func() time.Time { return staffBookedAt }
@@ -168,11 +188,13 @@ func TestStaffIntakeOneTransactionNoOutboxRow(t *testing.T) {
 		Book(ctxXa(xaThu), staffRequest(), staffOfficer()); err != nil {
 		t.Fatalf("Book: %v", err)
 	}
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh, muốn 2 (phiếu + vết; KHÔNG sự kiện vì không có người nhận): %v", len(k.lenh), k.lenh)
+	if len(k.lenh) != 3 {
+		t.Fatalf("chạy %d câu lệnh, muốn 3 (phiếu + nhật ký + vết; KHÔNG sự kiện vì không có người nhận): %v", len(k.lenh), k.lenh)
 	}
-	if !strings.Contains(k.lenh[0].sql, "INSERT INTO phieu_phan_anh") || !strings.Contains(k.lenh[1].sql, "INSERT INTO audit_log") {
-		t.Errorf("thứ tự câu lệnh sai: %q / %q", k.lenh[0].sql, k.lenh[1].sql)
+	if !strings.Contains(k.lenh[0].sql, "INSERT INTO phieu_phan_anh") ||
+		!strings.Contains(k.lenh[1].sql, "INSERT INTO nhat_ky_phan_anh") ||
+		!strings.Contains(k.lenh[2].sql, "INSERT INTO audit_log") {
+		t.Errorf("thứ tự câu lệnh sai: %q / %q / %q", k.lenh[0].sql, k.lenh[1].sql, k.lenh[2].sql)
 	}
 	for i, l := range k.lenh {
 		if !l.trongGiaoDich {
@@ -183,9 +205,72 @@ func TestStaffIntakeOneTransactionNoOutboxRow(t *testing.T) {
 		t.Errorf("commit=%d rollback=%d", k.commit, k.rollback)
 	}
 	// $1 tenant · $2 actor · $3 kind · $4 ip · $5 action · $6 subject
-	a := k.lenh[1].args
+	a := k.lenh[2].args
 	if a[0] != string(xaThu) || a[1] != "CB-00123" || a[2] != "staff" || a[4] != ActionStaffIntake || a[5] != maCoDinh {
 		t.Errorf("vết sai: %v", a[:6])
+	}
+}
+
+// ADR 0028 Bổ sung 2026-10-02 row 6: ONE timeline row, `nhap-ho`, in the petition's transaction — the
+// officer's business code, the booking instant, the status the petition is born in, no note.
+//
+// Argument order is the store's INSERT: tenant, id, petition id, at, author, action, status, unit,
+// assignee, note.
+func TestStaffIntakeWritesOneTimelineRow(t *testing.T) {
+	k, kho := &khoGia{}, &khoPhieuGia{}
+	if _, err := newStaffIntakeForTest(k, kho, staffDeadlines(), &staffFieldsFake{}).
+		Book(ctxXa(xaThu), staffRequest(), staffOfficer()); err != nil {
+		t.Fatalf("Book: %v", err)
+	}
+	var rows []int
+	for i, l := range k.lenh {
+		if strings.Contains(l.sql, "INSERT INTO nhat_ky_phan_anh") {
+			rows = append(rows, i)
+		}
+	}
+	if len(rows) != 1 {
+		t.Fatalf("%d dòng nhật ký, muốn đúng 1", len(rows))
+	}
+	r := k.lenh[rows[0]]
+	if !r.trongGiaoDich {
+		t.Error("dòng nhật ký ghi ngoài giao dịch (luật 6 bất biến 3)")
+	}
+	if len(r.args) != 10 {
+		t.Fatalf("dòng nhật ký có %d tham số, muốn 10", len(r.args))
+	}
+	if r.args[0] != string(xaThu) || r.args[2] != idCoDinh || r.args[4] != "CB-00123" ||
+		r.args[5] != string(domain.LogActionStaffIntake) || r.args[6] != string(domain.DaTiepNhan) ||
+		r.args[7] != nil || r.args[8] != nil || r.args[9] != nil {
+		t.Errorf("dòng nhật ký sai: %v", r.args)
+	}
+	if at, _ := r.args[3].(time.Time); !at.Equal(staffBookedAt) {
+		t.Errorf("thời điểm = %v, muốn lúc vào sổ %v", r.args[3], staffBookedAt)
+	}
+	for _, cam := range []string{"Nguyễn Văn An", "0900000000", "Hà Lam"} {
+		for _, a := range r.args {
+			if s, ok := a.(string); ok && strings.Contains(s, cam) {
+				t.Errorf("dòng nhật ký mang dữ liệu cá nhân %q", cam)
+			}
+		}
+	}
+	if k.commit != 1 {
+		t.Errorf("commit = %d", k.commit)
+	}
+}
+
+// The timeline row failing rolls the petition back with it: never a petition with no "who booked it".
+func TestStaffIntakeTimelineFailureLeavesNothing(t *testing.T) {
+	k := &khoGia{}
+	uc := newStaffIntakeForTest(k, &khoPhieuGia{}, staffDeadlines(), &staffFieldsFake{})
+	uc.petitions.(*staffIntakeStoreFake).logErr = errors.New("pg: nhat_ky_phan_anh_hanh_vi_hop_le")
+	p, err := uc.Book(ctxXa(xaThu), staffRequest(), staffOfficer())
+	if err == nil || k.commit != 0 || k.rollback != 1 || p.MaTraCuu != "" {
+		t.Errorf("err=%v commit=%d rollback=%d mã=%q", err, k.commit, k.rollback, p.MaTraCuu)
+	}
+	for _, l := range k.lenh {
+		if strings.Contains(l.sql, "INSERT INTO audit_log") {
+			t.Error("the trail was written although the timeline row failed")
+		}
 	}
 }
 
@@ -205,7 +290,7 @@ func TestStaffIntakeDeltaHasNoPersonalDataAndNullClocks(t *testing.T) {
 		Book(ctxXa(xaThu), staffRequest(), staffOfficer()); err != nil {
 		t.Fatalf("Book: %v", err)
 	}
-	raw := k.lenh[1].args[7].([]byte)
+	raw := k.lenh[2].args[7].([]byte)
 	for _, cam := range []string{"Nguyễn Văn An", "0900000000", "Đống rác", "đống rác", "Hà Lam"} {
 		if strings.Contains(string(raw), cam) {
 			t.Errorf("delta mang dữ liệu cá nhân %q: %s", cam, raw)
@@ -247,7 +332,7 @@ func TestStaffIntakeTypedClockFromIsUsedAndAudited(t *testing.T) {
 			After  time.Time `json:"after"`
 		} `json:"clock_from_override"`
 	}
-	if err := json.Unmarshal(k.lenh[1].args[7].([]byte), &d); err != nil {
+	if err := json.Unmarshal(k.lenh[2].args[7].([]byte), &d); err != nil {
 		t.Fatal(err)
 	}
 	if d.Override == nil || !d.Override.Before.Equal(staffBookedAt) || !d.Override.After.Equal(typed) {

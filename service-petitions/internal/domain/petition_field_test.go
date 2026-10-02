@@ -79,6 +79,20 @@ func TestCitizenCatalogueHidesDisabledRetiredAndStaffConduct(t *testing.T) {
 	}
 }
 
+func TestStaffIntakeCatalogueHidesDisabledAndRetiredKeepsStaffConduct(t *testing.T) {
+	merged := MergePetitionFields(tier1Sample(), []NhanLinhVuc{{Ma: "giao-thong", Enabled: false}})
+	if got := codesOf(StaffIntakeCatalogue(merged)); got != "rac-thai,can-bo" {
+		t.Fatalf("staff intake catalogue = %s, want rac-thai,can-bo", got)
+	}
+	for _, v := range merged {
+		listed := strings.Contains(","+codesOf(StaffIntakeCatalogue(merged))+",", ","+v.Code+",")
+		if listed != v.OfferedToStaffIntake() {
+			t.Errorf("%s: listed %v but OfferedToStaffIntake %v — the modal and the write disagree",
+				v.Code, listed, v.OfferedToStaffIntake())
+		}
+	}
+}
+
 func TestStaffConductFieldIsNeverOfferedEvenWhenEnabled(t *testing.T) {
 	v := PetitionFieldView{Code: LinhVucHanChe, Active: true, Enabled: true}
 	if v.OfferedToCitizens() {

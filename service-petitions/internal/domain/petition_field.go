@@ -128,6 +128,19 @@ func CitizenCatalogue(all []PetitionFieldView) []PetitionFieldView {
 	return out
 }
 
+// StaffIntakeCatalogue keeps what the staff intake modal may offer (OfferedToStaffIntake), in the
+// commune's order — the list app.PetitionFieldCatalogue.CheckStaffIntakeField also searches, so the
+// modal and the write cannot disagree.
+func StaffIntakeCatalogue(all []PetitionFieldView) []PetitionFieldView {
+	out := make([]PetitionFieldView, 0, len(all))
+	for _, v := range all {
+		if v.OfferedToStaffIntake() {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // FindFieldDefault returns the tier-1 entry for code, retired or not.
 func FindFieldDefault(defaults []FieldDefault, code string) (FieldDefault, bool) {
 	for _, d := range defaults {

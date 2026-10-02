@@ -459,6 +459,16 @@ type vpPetitions struct {
 	byCommune  map[tenant.ID]map[string]domain.PhieuPhanAnh
 	statusAtLk *domain.TrangThai
 	locked     int
+
+	// reopenedAt is the timeline's latest `mo-lai-theo-danh-gia` instant per commune and petition id;
+	// absent = no such row (the zero time, as store.LatestReopenAtTx answers NULL).
+	reopenedAt  map[tenant.ID]map[string]time.Time
+	reopenReads int
+}
+
+func (p *vpPetitions) LatestReopenAtTx(_ context.Context, tx *pkgstore.ScopedTx, petitionID string) (time.Time, error) {
+	p.reopenReads++
+	return p.reopenedAt[tx.TenantID()][petitionID], nil
 }
 
 func (p *vpPetitions) TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error) { // vi-name-ok: implements the existing store method
@@ -524,6 +534,42 @@ func (f *vpFiles) CountForSubjectTx(_ context.Context, tx *pkgstore.ScopedTx, _,
 
 func (f *vpFiles) CountForSubject(ctx context.Context, _, subjectID, purpose string, pendingSince time.Time) (int, error) {
 	return f.countPurpose(tenant.MustFrom(ctx), subjectID, purpose, pendingSince), nil
+}
+
+// countAfter is countPurpose restricted to slots issued STRICTLY AFTER `after` — the store's
+// `created_at > $n` cut.
+func (f *vpFiles) countAfter(commune tenant.ID, subjectID, purpose string, after, pendingSince time.Time) int {
+	n := 0
+	for _, sf := range f.all(commune) {
+		if sf.SubjectID != subjectID || sf.Purpose != purpose || !sf.CreatedAt.After(after) {
+			continue
+		}
+		switch sf.Status {
+		case domain.StoredFileStored, domain.StoredFileProcessing, domain.StoredFileReady:
+			n++
+		case domain.StoredFilePending, domain.StoredFileScanning:
+			if !pendingSince.IsZero() && !sf.CreatedAt.Before(pendingSince) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func (f *vpFiles) CountStoredCreatedAfterTx(_ context.Context, tx *pkgstore.ScopedTx, _, subjectID, purpose string,
+	after time.Time) (int, error) {
+	if after.IsZero() {
+		return 0, errors.New("fake: a zero cut")
+	}
+	return f.countAfter(tx.TenantID(), subjectID, purpose, after, time.Time{}), nil
+}
+
+func (f *vpFiles) CountLiveCreatedAfterTx(_ context.Context, tx *pkgstore.ScopedTx, _, subjectID, purpose string,
+	after, pendingSince time.Time) (int, error) {
+	if after.IsZero() || pendingSince.IsZero() {
+		return 0, errors.New("fake: a zero bound")
+	}
+	return f.countAfter(tx.TenantID(), subjectID, purpose, after, pendingSince), nil
 }
 
 // VerificationPhotos returns EVERY petition file the store's purpose filter would NOT drop — and a log
@@ -731,6 +777,145 @@ func TestVerificationPhoto_RequestRefusals(t *testing.T) {
 				t.Error("a refused request wrote a row or a trail")
 			}
 		})
+	}
+}
+
+// --- verification photos: the cap counts PER ROUND (ADR 0047 (e)) ------------------------------------------
+
+// vpReopen marks the harness petition reopened once, at `at`, with the timeline row to match.
+func (h *vpHarness) vpReopen(at time.Time) {
+	p := h.pets.byCommune[xaThu][vpCode]
+	p.SoLanMoLai = 1
+	h.pets.byCommune[xaThu][vpCode] = p
+	h.pets.reopenedAt = map[tenant.ID]map[string]time.Time{xaThu: {ppPetition: at}}
+}
+
+// vpSeedPhotos puts n verification photos of `status` on the petition, their slots issued at `created`.
+func (h *vpHarness) vpSeedPhotos(prefix string, n int, status domain.StoredFileStatus, created time.Time) {
+	for i := 0; i < n; i++ {
+		id := prefix + string(rune('a'+i))
+		h.files.all(xaThu)[id] = domain.StoredFile{ID: id, SubjectType: domain.StoredFileSubjectPetition,
+			SubjectID: ppPetition, Purpose: domain.PurposePetitionVerificationPhoto, Status: status,
+			UploadedBy: maCanBoThu, CreatedAt: created, UpdatedAt: created}
+	}
+}
+
+func TestVerificationPhoto_ReopenedWithFiveOldPhotosAcceptsANewSlot(t *testing.T) {
+	h := buildVerification(t)
+	reopenedAt := ppNow.Add(-2 * time.Hour)
+	h.vpSeedPhotos("old", 5, domain.StoredFileStored, reopenedAt.Add(-time.Hour))
+	h.vpReopen(reopenedAt)
+	if _, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+		canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("five photos of the rejected round blocked the new round's first photo: %v", err)
+	}
+	if h.pets.reopenReads != 1 {
+		t.Errorf("round start read %d times, want once, inside the transaction", h.pets.reopenReads)
+	}
+}
+
+func TestVerificationPhoto_FiveInTheCurrentRoundRefuse(t *testing.T) {
+	reopenedAt := ppNow.Add(-2 * time.Hour)
+	for name, seed := range map[string]func(h *vpHarness){
+		"five stored": func(h *vpHarness) {
+			h.vpSeedPhotos("new", 5, domain.StoredFileStored, reopenedAt.Add(time.Minute))
+		},
+		// An unexpired form of THIS round is a place already promised, exactly as before the change.
+		"four stored, one live pending slot": func(h *vpHarness) {
+			h.vpSeedPhotos("new", 4, domain.StoredFileStored, reopenedAt.Add(time.Minute))
+			h.vpSeedPhotos("pnd", 1, domain.StoredFilePending, ppNow.Add(-time.Minute))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := buildVerification(t)
+			h.vpSeedPhotos("old", 5, domain.StoredFileStored, reopenedAt.Add(-time.Hour))
+			seed(h)
+			h.vpReopen(reopenedAt)
+			_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+				canBoThu(), khongQuyenHanChe)
+			if !errors.Is(err, ErrVerificationPhotoCountReached) {
+				t.Fatalf("err = %v, want ErrVerificationPhotoCountReached (409 photo_limit)", err)
+			}
+			if len(h.files.inserted) != 0 || len(h.db.audits()) != 0 {
+				t.Error("a refused request wrote a row or a trail")
+			}
+		})
+	}
+}
+
+// An EXPIRED pending slot of the current round holds no place — the pending window still applies.
+func TestVerificationPhoto_ExpiredSlotOfTheRoundDoesNotCount(t *testing.T) {
+	h := buildVerification(t)
+	reopenedAt := ppNow.Add(-2 * time.Hour)
+	h.vpSeedPhotos("new", 4, domain.StoredFileStored, reopenedAt.Add(time.Minute))
+	h.vpSeedPhotos("exp", 1, domain.StoredFilePending, reopenedAt.Add(2*time.Minute)) // long expired
+	h.vpReopen(reopenedAt)
+	if _, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+		canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("an abandoned form held a place: %v", err)
+	}
+}
+
+func TestVerificationPhoto_ReopenedWithoutTimelineRowRefuses(t *testing.T) {
+	h := buildVerification(t)
+	p := h.pets.byCommune[xaThu][vpCode]
+	p.SoLanMoLai = 1 // the counter says reopened; the timeline has no reopen row
+	h.pets.byCommune[xaThu][vpCode] = p
+	_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+		canBoThu(), khongQuyenHanChe)
+	if !errors.Is(err, errReopenInstantMissing) {
+		t.Fatalf("err = %v, want errReopenInstantMissing — never a guess at the round", err)
+	}
+	if len(h.files.inserted) != 0 {
+		t.Error("a slot was issued without knowing the round")
+	}
+}
+
+func TestVerificationPhoto_CompletionRecheckCountsPerRound(t *testing.T) {
+	reopenedAt := ppNow.Add(-2 * time.Hour)
+	for name, c := range map[string]struct {
+		currentRound int
+		wantStored   bool
+	}{
+		"five old, none this round: stored":  {0, true},
+		"five old, four this round: stored":  {4, true},
+		"five old, five this round: refused": {5, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := buildVerification(t)
+			h.vpSeedPhotos("old", 5, domain.StoredFileStored, reopenedAt.Add(-time.Hour))
+			h.vpSeedPhotos("new", c.currentRound, domain.StoredFileStored, reopenedAt.Add(time.Minute))
+			h.vpReopen(reopenedAt)
+			h.seedPending(maCanBoThu, "jpg", ppJPEG(t, 16, 16, 1), ppNow)
+			f, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
+			if c.wantStored {
+				if err != nil || f.Status != domain.StoredFileStored {
+					t.Fatalf("Complete = %+v, %v — want stored", f, err)
+				}
+				return
+			}
+			var rej *AttachmentRejection
+			if !errors.As(err, &rej) || rej.Reason != RejectCountReached {
+				t.Fatalf("err = %v, want the count-reached rejection", err)
+			}
+			if h.files.all(xaThu)[ppFileID].Status != domain.StoredFileRejected {
+				t.Errorf("row = %s, want rejected", h.files.all(xaThu)[ppFileID].Status)
+			}
+		})
+	}
+}
+
+// Never reopened: unchanged — every stored photo counts, the timeline is not read.
+func TestVerificationPhoto_NeverReopenedCountsEveryPhoto(t *testing.T) {
+	h := buildVerification(t)
+	h.vpSeedPhotos("old", 5, domain.StoredFileStored, ppNow.Add(-48*time.Hour))
+	_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+		canBoThu(), khongQuyenHanChe)
+	if !errors.Is(err, ErrVerificationPhotoCountReached) {
+		t.Fatalf("err = %v, want ErrVerificationPhotoCountReached", err)
+	}
+	if h.pets.reopenReads != 0 {
+		t.Error("the timeline was read for a petition never reopened")
 	}
 }
 

@@ -865,6 +865,33 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.UpdatePetitionField))))
 
+	// The fields the STAFF INTAKE modal offers ("Nhập hộ phản ánh", docs/ui-ux/09 §11; ADR 0028 Bổ sung
+	// 2026-10-02 row 4): active on the platform and enabled by the commune, `can-bo` included — EXACTLY
+	// the predicate POST /api/v1/citizen-reports checks the picked field against
+	// (app.PetitionFieldCatalogue.StaffIntakeCatalogue / CheckStaffIntakeField), so a code the modal
+	// shows is a code the write accepts. A route of its own rather than the configuration read above:
+	// that one is `admin.lookup` and lists switched-off and retired codes, which the modal must not offer.
+	//
+	// `feedback.create` ("Tiếp nhận phản ánh", seeded at service-identity/migrations/0001_init.sql:298) —
+	// the key of the write this list fills, so whoever may book may pick, and nobody else is handed a
+	// list they cannot use. The citizen counterpart is GET /api/v1/my-citizen-report-fields; same shape.
+	//
+	// 401 no session AND a session of another commune (authz compares the commune before the key). 403
+	// no `feedback.create`, or the key granted in another commune. 503 `field_catalogue_unavailable` when
+	// platform cannot be read and the cached answer is older than 60 s — never a built-in list (ADR 0060 §3).
+	// No idem.*: a GET changes no state.
+	//
+	// @summary  Lĩnh vực phản ánh xã đang nhận cho ô chọn của biểu mẫu cán bộ nhập hộ — mã đang dùng trên nền tảng và đang bật ở xã (gồm cả `can-bo`), theo thứ tự của xã
+	// @screen   09-phan-anh-nguoi-dan §11
+	// @reply    200 citizenFieldListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-report-intake-fields",
+		authz.RequirePermission(d.Checker, "feedback.create")(
+			http.HandlerFunc(h.ListStaffIntakeFields)))
+
 	// --- the petition register ---------------------------------------------------------------
 	//
 	// `citizen-reports` is the settled URL noun for `phan_anh`
