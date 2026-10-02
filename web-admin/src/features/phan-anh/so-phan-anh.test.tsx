@@ -653,6 +653,7 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
       unit: "",
       assignee: "",
       note: "",
+      attachments: [],
       ...sua,
     };
   }
@@ -1103,6 +1104,7 @@ describe("log — the two citizen-rating rows", () => {
       unit: "",
       assignee: "",
       note: "Người dân đánh giá 4 sao",
+      attachments: [],
       ...sua,
     };
   }

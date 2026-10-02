@@ -324,6 +324,7 @@ describe("timeline label of `tao-nhiem-vu`", () => {
       unit: "",
       assignee: "",
       note: "NV12",
+      attachments: [],
     };
     const html = renderToStaticMarkup(
       <DanhSachNhatKy
