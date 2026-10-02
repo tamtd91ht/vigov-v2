@@ -114,6 +114,28 @@ func TestAuditLogReadPG(t *testing.T) {
 		t.Error("actor filter matched a citizen's internal id")
 	}
 
+	// ADR 0070 §"Bổ sung 02/10/2026" #7: an operator's entry is STORED in the commune's audit_log and
+	// NEVER returned by the commune's screen — not by default, not by its VH- code, not by its verb.
+	seedAuditEntry(t, db, a, "VH-00001", audit.KindOperator, "198.51.100.1", "dat_secret_app_rieng", "1234567890", t0)
+	for name, q := range map[string]audit.Query{
+		"default": {}, "actor": {Actor: "VH-00001"}, "action": {Action: "dat_secret_app_rieng"}, "subject": {Subject: "1234567890"},
+	} {
+		res, err = log.Read(ctx, reader, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range res.Items {
+			if e.ActorKind == audit.KindOperator {
+				t.Errorf("%s: an operator entry reached the commune's screen: %+v", name, e)
+			}
+		}
+	}
+	var stored int
+	if err := db.QueryRow(`SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND actor_kind = $2`,
+		a, audit.KindOperator).Scan(&stored); err != nil || stored != 1 {
+		t.Fatalf("operator entry stored %d times (%v), want 1 — withheld from the screen, never from storage", stored, err)
+	}
+
 	var n int
 	if err := db.QueryRow(`SELECT count(*) FROM pg_indexes WHERE tablename = 'audit_log' AND indexname = 'audit_log_by_time'`).Scan(&n); err != nil {
 		t.Fatal(err)

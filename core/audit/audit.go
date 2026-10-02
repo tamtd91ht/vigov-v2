@@ -27,14 +27,21 @@ import (
 
 // Actor identifies who performed the action.
 type Actor struct {
-	ID   string // staff code, citizen id, or SystemActor
-	Kind string // "staff" | "citizen" | "system"
+	ID   string // staff code, citizen id, operator code (VH-…), or SystemActor
+	Kind string // "staff" | "citizen" | "system" | KindOperator
 	IP   string
 }
 
 // SystemActor is used for background jobs and migrations. System actions are audited too;
 // an unattributed change is the thing this package exists to prevent.
 const SystemActor = "system"
+
+// KindOperator is the actor_kind of a Vihat OPERATOR acting on a commune's data (ADR 0048, ADR 0070
+// §"Bổ sung 02/10/2026" #7). The entry is written in the commune's audit_log, in the same transaction
+// as the change, with the operator's VH- code as actor — and it is WITHHELD from the commune's own
+// audit screen (Log.Read): the owner decided an operator's act on a commune shows in the operator log
+// only. The column carries no CHECK in any service, so the fourth value needs no migration.
+const KindOperator = "operator"
 
 // Entry is one immutable record of a write.
 type Entry struct {

@@ -16,8 +16,11 @@ package audit
 //     service's own *store.DB (rule 2, invariant 2; ADR 0054 stop condition #1).
 //   - Re-mask `delta`. It is returned exactly as stored — masked at write time (rule 6, invariant 5).
 //     A delta found holding raw personal data is a rule 3 incident AT THE WRITE SITE (ADR 0054 §4).
-//   - Edit, delete or hide the content of any stored entry (ADR 0054 stop condition #4). The only
-//     thing withheld is two columns of a citizen's entries, and it is withheld from the RESPONSE.
+//   - Edit, delete or hide the content of any stored entry (ADR 0054 stop condition #4). What is
+//     withheld is withheld from the RESPONSE, never from storage: two columns of a citizen's entries,
+//     and every entry whose actor_kind is KindOperator — a Vihat operator's act on the commune is
+//     shown in the operator log only, by the owner's decision (ADR 0070 §"Bổ sung 02/10/2026" #7).
+//     The entry still exists, in the same transaction as the change (rule 6, invariant 1).
 
 import (
 	"context"
@@ -258,6 +261,10 @@ func (l *Log) readPage(ctx context.Context, tx *store.ScopedTx, f filter) (page.
 		args = append(args, v)
 		next++
 	}
+	// UNCONDITIONAL, before every filter: no actor, action or subject a client sends can bring an
+	// operator's entry back onto the commune's screen (ADR 0070 §"Bổ sung 02/10/2026" #7). A constant
+	// literal, not a placeholder, so the numbering of every client filter is unchanged.
+	tail.WriteString(" AND actor_kind <> '" + KindOperator + "'")
 	if f.hasFrom {
 		add(" AND at >= $%d", f.from)
 	}

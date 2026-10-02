@@ -26,6 +26,7 @@ import (
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
 	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -153,6 +154,59 @@ func TestOperatorServiceAnswersWithoutCommune(t *testing.T) {
 	}
 	if store.txs != 0 {
 		t.Fatalf("store reached %d times for tokens the signature refuses", store.txs)
+	}
+}
+
+// miniAppsUntouched fails the test if a Mini App secret act runs: the calls below must be refused first.
+type miniAppsUntouched struct{ t *testing.T }
+
+func (m miniAppsUntouched) SetSecretAsOperator(context.Context, app.MiniAppOperator, string, secret.Secret, string) (app.MiniAppSecretSet, error) {
+	m.t.Error("SetSecretAsOperator ran")
+	return app.MiniAppSecretSet{}, errors.New("untouched")
+}
+
+func (m miniAppsUntouched) RetireAsOperator(context.Context, app.MiniAppOperator, string, string) (app.MiniAppSecretRetired, error) {
+	m.t.Error("RetireAsOperator ran")
+	return app.MiniAppSecretRetired{}, errors.New("untouched")
+}
+
+// The two RPCs that act ON a commune are NOT exempt from the commune (operator.proto): through the
+// real chain, no x-tenant-id is INVALID_ARGUMENT before the handler; WITH it, the handler runs and a
+// token the signature refuses is SESSION_NOT_LIVE — nothing reaches the operator store or the use case.
+func TestOperatorServiceMiniAppSecretRPCsNeedTheCommune(t *testing.T) {
+	store := &operatorStoreStub{}
+	var logs bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	op := operatorServerOn(t, store, log).WithMiniAppSecrets(miniAppsUntouched{t})
+	cl := dialOperatorService(t, op,
+		grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia), grpcx.UnaryClientInterceptor()))
+
+	const fakeSecret = "FAKE-APP-SECRET-WIRING-0000"
+	set := &identityv1.SetMiniAppSecretRequest{SessionToken: "op1.garbage.garbage", AppId: "1234567890",
+		AppSecret: fakeSecret, Reason: "kiểm thử"}
+	ret := &identityv1.RetireMiniAppSecretRequest{SessionToken: "op1.garbage.garbage", AppId: "1234567890", Reason: "kiểm thử"}
+
+	if _, err := cl.SetMiniAppSecret(context.Background(), set); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("SetMiniAppSecret without x-tenant-id: %v, want InvalidArgument", status.Code(err))
+	}
+	if _, err := cl.RetireMiniAppSecret(context.Background(), ret); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("RetireMiniAppSecret without x-tenant-id: %v, want InvalidArgument", status.Code(err))
+	}
+
+	ctx := tenant.Into(context.Background(), ulidThu)
+	sr, err := cl.SetMiniAppSecret(ctx, set)
+	if err != nil || sr.GetOutcome() != identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE {
+		t.Fatalf("SetMiniAppSecret with commune, bad token: %v %v, want SESSION_NOT_LIVE", sr, err)
+	}
+	rr, err := cl.RetireMiniAppSecret(ctx, ret)
+	if err != nil || rr.GetOutcome() != identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE {
+		t.Fatalf("RetireMiniAppSecret with commune, bad token: %v %v, want SESSION_NOT_LIVE", rr, err)
+	}
+	if store.txs != 0 {
+		t.Fatalf("operator store reached %d times", store.txs)
+	}
+	if strings.Contains(logs.String(), fakeSecret) {
+		t.Fatal("the app secret reached the log")
 	}
 }
 

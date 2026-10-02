@@ -13,6 +13,7 @@ import (
 
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
@@ -37,11 +38,21 @@ import (
 // tokens, TOTP secrets and recovery codes. The use case logs the business code and the outcome; this
 // file logs ONE thing, the cause of an Internal answer, and never a field of the request.
 //
+// # THE TWO RPCs THAT ACT ON A COMMUNE
+//
+// SetMiniAppSecret and RetireMiniAppSecret are the exception to the paragraph above, stated once in
+// operator.proto: they write a commune's own data, so they are NOT on methodsWithoutTenant and their
+// commune is the "x-tenant-id" metadata the interceptor lifted into ctx — read here with tenant.From,
+// refused when absent, never defaulted. The acting operator is resolved HERE from the session token
+// (uc.ResolveSession) and must hold ops.mini_app.manage; the request names no operator.
+//
 // # NOTHING IS AUDITED HERE
 //
-// Every write these RPCs cause is audited by the use case, in operator_audit_log, in the transaction
-// of the write (rule 6, invariant 3), with the operator's VH- code as actor. A second entry written
-// here could not even name a "who" (ADR 0025: the caller key proves the deployment, not the service).
+// Every write these RPCs cause is audited by the use case, in the transaction of the write (rule 6,
+// invariant 3), with the operator's VH- code as actor: the seven realm RPCs in operator_audit_log,
+// the two Mini App secret RPCs in the TARGET commune's audit_log with actor_kind operator. A second
+// entry written here could not even name a "who" (ADR 0025: the caller key proves the deployment,
+// not the service).
 
 // userAgentMaxRunes is the contract's bound on operator_session.user_agent (operator.proto,
 // OpenOperatorSessionRequest.user_agent): the first 256 runes are KEPT, the rest dropped, never
@@ -61,13 +72,33 @@ type OperatorAuthenticator interface {
 	CompleteEnrollment(ctx context.Context, in app.OperatorEnrollmentCompletion) (app.OperatorEnrollmentResult, error)
 }
 
+// MiniAppSecretOperator is the use case behind SetMiniAppSecret / RetireMiniAppSecret.
+// *app.MiniAppSecretAdmin satisfies it.
+type MiniAppSecretOperator interface {
+	SetSecretAsOperator(ctx context.Context, op app.MiniAppOperator, appID string, value secret.Secret,
+		reason string) (app.MiniAppSecretSet, error)
+	RetireAsOperator(ctx context.Context, op app.MiniAppOperator, appID, reason string) (app.MiniAppSecretRetired, error)
+}
+
 // OperatorServer implements identityv1.OperatorServiceServer. The embedded Unimplemented server is
-// the seam an eighth RPC arrives through: Unimplemented, never a stub that answers something.
+// the seam a new RPC arrives through: Unimplemented, never a stub that answers something.
 type OperatorServer struct {
 	identityv1.UnimplementedOperatorServiceServer
 
-	uc  OperatorAuthenticator
-	log *slog.Logger
+	uc       OperatorAuthenticator
+	miniApps MiniAppSecretOperator // nil until WithMiniAppSecrets: both RPCs answer Unimplemented
+	log      *slog.Logger
+}
+
+// WithMiniAppSecrets wires the two Mini App secret RPCs. Without it they answer Unimplemented — the
+// answer the embedded server gave before they existed, never a guess. A nil use case is refused here,
+// where a process start is watched.
+func (s *OperatorServer) WithMiniAppSecrets(m MiniAppSecretOperator) *OperatorServer {
+	if m == nil {
+		panic("identity/grpc: WithMiniAppSecrets without a use case")
+	}
+	s.miniApps = m
+	return s
 }
 
 // NewOperatorServer refuses a missing use case at construction, where a human watches a process
@@ -90,6 +121,7 @@ const (
 	outEnrollment = identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_ENROLLMENT_REQUIRED
 	outNotLive    = identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE
 	outRejected   = identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED
+	outDenied     = identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED
 )
 
 // errEmptyToken is the wiring fault every session-bound RPC refuses before any lookup. One value, so
@@ -281,6 +313,130 @@ func (s *OperatorServer) CompleteOperatorEnrollment(ctx context.Context, req *id
 		return &identityv1.CompleteOperatorEnrollmentResponse{Outcome: outRefused}, nil
 	}
 	return nil, s.fault(ctx, "CompleteOperatorEnrollment", err)
+}
+
+// SetMiniAppSecret — ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED; FAILED_PRECONDITION when the
+// platform does not bind the App ID, live, to the target commune as its own app.
+func (s *OperatorServer) SetMiniAppSecret(ctx context.Context, req *identityv1.SetMiniAppSecretRequest) (
+	*identityv1.SetMiniAppSecretResponse, error) {
+
+	// NEVER LOG req: it carries the commune's Zalo app secret and a bearer token. The secret is held
+	// as secret.Secret from here on, so every %v / slog of it prints the mask.
+	if s.miniApps == nil {
+		return nil, errMiniAppsNotWired
+	}
+	value := secret.Secret(req.GetAppSecret())
+	if err := miniAppRequestShape(ctx, req.GetSessionToken(), func() error {
+		_, _, err := app.CheckMiniAppSecretShape(req.GetAppId(), value, req.GetReason())
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	op, out, err := s.miniAppOperator(ctx, "SetMiniAppSecret", req.GetSessionToken(), req.GetClientIp())
+	if err != nil {
+		return nil, err
+	}
+	if out != outAccepted {
+		return &identityv1.SetMiniAppSecretResponse{Outcome: out}, nil
+	}
+	set, err := s.miniApps.SetSecretAsOperator(ctx, op, req.GetAppId(), value, req.GetReason())
+	switch {
+	case err == nil:
+		return &identityv1.SetMiniAppSecretResponse{Outcome: outAccepted, Version: &identityv1.MiniAppSecretVersion{
+			AppId: set.AppID, Version: set.Version, SetAt: timestamppb.New(set.SetAt), SetBy: set.SetBy,
+		}}, nil
+	case errors.Is(err, app.ErrMiniAppNotOwnApp):
+		// ONE answer for unregistered, off, another commune's, the shared app, commune inactive.
+		return nil, status.Error(codes.FailedPrecondition,
+			"App ID chưa được gắn và bật làm app riêng của xã này — gắn hoặc bật App ID trước")
+	}
+	return nil, s.fault(ctx, "SetMiniAppSecret", err)
+}
+
+// RetireMiniAppSecret — ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED; NOT_FOUND when the App ID
+// has no live settings in the target commune.
+func (s *OperatorServer) RetireMiniAppSecret(ctx context.Context, req *identityv1.RetireMiniAppSecretRequest) (
+	*identityv1.RetireMiniAppSecretResponse, error) {
+
+	// NEVER LOG req: it carries a bearer token.
+	if s.miniApps == nil {
+		return nil, errMiniAppsNotWired
+	}
+	if err := miniAppRequestShape(ctx, req.GetSessionToken(), func() error {
+		_, _, err := app.CheckMiniAppRetireShape(req.GetAppId(), req.GetReason())
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	op, out, err := s.miniAppOperator(ctx, "RetireMiniAppSecret", req.GetSessionToken(), req.GetClientIp())
+	if err != nil {
+		return nil, err
+	}
+	if out != outAccepted {
+		return &identityv1.RetireMiniAppSecretResponse{Outcome: out}, nil
+	}
+	r, err := s.miniApps.RetireAsOperator(ctx, op, req.GetAppId(), req.GetReason())
+	switch {
+	case err == nil:
+		return &identityv1.RetireMiniAppSecretResponse{Outcome: outAccepted, Retirement: &identityv1.MiniAppSecretRetirement{
+			AppId: r.AppID, RetiredVersion: r.Version, RetiredAt: timestamppb.New(r.RetiredAt), RetiredBy: r.RetiredBy,
+		}}, nil
+	case errors.Is(err, app.ErrMiniAppSettingsNotFound):
+		return nil, status.Error(codes.NotFound, "App ID không có cấu hình đang dùng ở xã này")
+	}
+	return nil, s.fault(ctx, "RetireMiniAppSecret", err)
+}
+
+var errMiniAppsNotWired = status.Error(codes.Unimplemented, "chưa nối thao tác khoá Mini App")
+
+// miniAppRequestShape is every INVALID_ARGUMENT of the two Mini App RPCs, decided from the request
+// alone, BEFORE the session is resolved (a lookup that also refreshes the idle timer): the commune in
+// ctx, a non-empty token, then the fields. The messages name the rule, never a value.
+func miniAppRequestShape(ctx context.Context, token string, fields func() error) error {
+	if _, ok := tenant.From(ctx); !ok {
+		// The commune interceptor refuses this before the handler on a wired server; checked again
+		// because a write into a commune's data with no commune must not depend on the chain alone.
+		return status.Error(codes.InvalidArgument, "thiếu xã đích trong metadata x-tenant-id")
+	}
+	if token == "" {
+		return errEmptyToken
+	}
+	switch err := fields(); {
+	case err == nil:
+		return nil
+	case errors.Is(err, app.ErrMiniAppIDInvalid):
+		return status.Error(codes.InvalidArgument, "app_id phải là 1-32 chữ số")
+	case errors.Is(err, app.ErrMiniAppSecretInvalid):
+		return status.Error(codes.InvalidArgument, "app_secret phải là 1-256 ký tự in được, không có khoảng trắng")
+	case errors.Is(err, app.ErrMiniAppReasonInvalid):
+		return status.Error(codes.InvalidArgument, "reason phải có 1-500 ký tự, không ký tự điều khiển ngoài xuống dòng")
+	default:
+		return status.Error(codes.InvalidArgument, "yêu cầu không hợp lệ")
+	}
+}
+
+// miniAppOperator resolves the token to the acting operator and checks ops.mini_app.manage on THAT
+// principal (ADR 0070 #5) — never on a check made in service-platform alone. outAccepted with the
+// operator, or the outcome to answer (SESSION_NOT_LIVE / PERMISSION_DENIED), or a status error.
+func (s *OperatorServer) miniAppOperator(ctx context.Context, rpc, token, ip string) (
+	app.MiniAppOperator, identityv1.OperatorAuthOutcome, error) {
+	p, err := s.uc.ResolveSession(ctx, token)
+	if errors.Is(err, app.ErrOperatorUnauthenticated) {
+		return app.MiniAppOperator{}, outNotLive, nil
+	}
+	if err != nil {
+		return app.MiniAppOperator{}, 0, s.fault(ctx, rpc, err)
+	}
+	if p.Code == "" {
+		// As ResolveOperatorSession: a principal with no VH- code would leave the trail with no
+		// "who" (rule 6, invariant 8) — refused, no fallback to the id.
+		s.log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: phiên vận hành không có operator_code", "rpc", rpc)
+		return app.MiniAppOperator{}, 0, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+	}
+	if !p.Has(domain.OperatorPermissionMiniAppManage) {
+		return app.MiniAppOperator{}, outDenied, nil
+	}
+	return app.MiniAppOperator{Code: p.Code, IP: ip}, outAccepted, nil
 }
 
 // fault maps everything that is not a decision onto the status table. ANY sentinel an RPC does not

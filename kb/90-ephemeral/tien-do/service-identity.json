@@ -444,6 +444,14 @@
       "no_confirm": [],
       "tiep_theo": "web-admin dùng logo_url/web_admin_banner_url (TASK-5). citizen-app readCommuneProfiles cần nhận logo_url (TASK-6). Mỗi lần dựng trang web-admin thêm một lời gọi gRPC identity→platform, không bộ đệm. Giới hạn tần suất của các tuyến công khai vẫn chưa khai (chưa có core/ratelimit).",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "operator-set-retire-mini-app-secret",
+      "viec": "OperatorService.SetMiniAppSecret / RetireMiniAppSecret trên cổng vận hành 9093 (TASK-P2b, ADR 0070 §Bổ sung 02/10/2026 #6, #7): người vận hành ViHAT đặt/thu hồi khoá bí mật App ID của xã thay operatorctl",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 (chưa commit). internal/grpc/operator.go: hai RPC; kiểm hình dạng (x-tenant-id, session_token, app_id 1-32 chữ số, app_secret 1-256 ký tự in được không khoảng trắng, reason 1-500 rune không ký tự điều khiển trừ xuống dòng) TRƯỚC ResolveSession; phiên tự giải ở identity → mã VH- + quyền đọc sống, thiếu ops.mini_app.manage → PERMISSION_DENIED; ErrMiniAppNotOwnApp → FAILED_PRECONDITION, ErrMiniAppSettingsNotFound → NOT_FOUND; trả về chỉ siêu dữ liệu. OperatorServer.WithMiniAppSecrets (chưa nối = Unimplemented); cmd/server/main.go nối MiniAppSecretAdmin trên kho có phạm vi xã + envelope + nenTang. internal/app/mini_app_secret.go: change() nhận changeActor; SetSecretAsOperator / RetireAsOperator ghi set_by/deleted_by = mã VH-, audit_log của xã đích cùng giao dịch, actor_kind operator, actor_ip = client_ip, ly_do = lý do người vận hành gõ; đường operatorctl (system + ticket) giữ nguyên. Khoá bí mật đi dạng secret.Secret từ handler, không vào log/lỗi/vết. Ca kiểm: internal/app/mini_app_secret_operator_test.go (5 ca), internal/grpc/operator_mini_app_test.go (6 ca, gồm bắt log), cmd/server/operator_wiring_test.go TestOperatorServiceMiniAppSecretRPCsNeedTheCommune (chuỗi thật: thiếu x-tenant-id → INVALID_ARGUMENT), store/audit_log_pg_test.go thêm phần dòng operator bị ẩn. go test ./... service-identity xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Ca PostgreSQL (audit_log_pg_test, mini_app_secret_pg_test) chưa chạy — thiếu VIGOV_TEST_DSN. Dòng nhật ký operator đã LƯU trong audit_log của xã nhưng CHƯA CÓ NƠI NÀO XEM: chưa có trình đọc 'nhật ký vận hành' (operator_audit_log cũng chưa có tuyến đọc). Tuyến REST ở service-platform (P2c) và màn platform-admin (P3) chưa làm. Khi môi trường dev thiếu SECRET_ENCRYPTION_KEYS, SetMiniAppSecret trả Internal (log ghi crypto.ErrNotConfigured). retired_at trả về là đồng hồ identity trong giao dịch; deleted_at do now() của PostgreSQL đóng dấu. Chú thích identity.proto:445 và core/identityclient/ten_can_bo.go vẫn liệt kê ba loại actor_kind — thuộc contract-designer."
     }
   ]
 }

@@ -73,6 +73,7 @@ func testEnvelope(t *testing.T) *crypto.Envelope {
 type versionRepoFake struct {
 	rows  []idstore.MiniAppSecret
 	dead  map[string]string // id -> reason
+	by    map[string]string // id -> who retired it
 	calls []string
 }
 
@@ -95,10 +96,16 @@ func (r *versionRepoFake) LiveForUpdate(_ context.Context, _ *store.ScopedTx, ap
 
 func (r *versionRepoFake) Retire(_ context.Context, _ *store.ScopedTx, id, by, reason string) error {
 	r.calls = append(r.calls, "retire")
-	if by != domain.SystemActor || !strings.HasPrefix(reason, "ticket:") {
-		return errors.New("retire must be signed by the system principal with the ticket")
+	// CHECK mini_app_secret_soft_delete_complete: both non-blank. WHICH who and reason is asserted by
+	// each path's own test (system + ticket for operatorctl, VH- + typed reason for an operator).
+	if strings.TrimSpace(by) == "" || strings.TrimSpace(reason) == "" {
+		return errors.New("CHECK mini_app_secret_soft_delete_complete violated")
 	}
 	r.dead[id] = reason
+	if r.by == nil {
+		r.by = map[string]string{}
+	}
+	r.by[id] = by
 	return nil
 }
 

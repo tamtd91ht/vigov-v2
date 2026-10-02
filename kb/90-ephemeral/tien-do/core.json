@@ -266,6 +266,14 @@
       "bang_chung": "core/platformclient/tenant_profile.go ánh xạ hai getter sinh từ proto; tenant_profile_test.go TestTenantProfileMapsEveryField kiểm cả hai. Bên gọi: service-identity /communes/current và /commune-profiles (TASK-4).",
       "no_confirm": [],
       "tiep_theo": "Không còn gì ở core cho việc này."
+    },
+    {
+      "id": "audit-actor-kind-operator-an-khoi-man-xa",
+      "viec": "core/audit: loại người làm thứ tư KindOperator = \"operator\" (người vận hành ViHAT, mã VH-) và Log.Read (màn Nhật ký hệ thống của cán bộ xã, ADR 0054) LUÔN loại dòng actor_kind = operator — ADR 0070 §Bổ sung 02/10/2026 #7",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 (TASK-P2b, chưa commit). core/audit/audit.go hằng KindOperator + chú thích Actor; core/audit/read.go readPage thêm ' AND actor_kind <> 'operator'' ngay sau mã xã, là hằng chuỗi nên số thứ tự tham số của bộ lọc không đổi; không lọc nào (actor VH-, action, subject, đọc-nhật-ký, SeeHidden) đưa dòng ấy trở lại. Áp cho cả năm dịch vụ dùng audit.NewLog (identity, documents, finance, comms, petitions). Ca kiểm: core/audit/read_test.go TestRead_OperatorEntriesNeverReachTheCommuneScreen; service-identity/internal/store/audit_log_pg_test.go (dòng lưu 1 lần, không hiện ở 4 kiểu truy vấn). go test ./core/audit xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Ca PostgreSQL chưa chạy (thiếu VIGOV_TEST_DSN). Chưa có trình đọc 'nhật ký vận hành' nào đọc các dòng operator này."
     }
   ]
 }

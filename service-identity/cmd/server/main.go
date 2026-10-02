@@ -696,7 +696,15 @@ func run(log *slog.Logger) error {
 	//
 	// ALWAYS STARTED, configured realm or not: with no operator keys every RPC answers
 	// FAILED_PRECONDITION (buildOperatorAuth), exactly as it did on 9090.
-	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(), svcgrpc.NewOperatorServer(operatorAuth, log), log)
+	//
+	// SetMiniAppSecret / RetireMiniAppSecret (ADR 0070 §"Bổ sung 02/10/2026" #6) act on a COMMUNE's
+	// mini_app_secret, so they run on the scoped `kho` — the commune comes from x-tenant-id — with the
+	// same envelope and the same platform binding read the own-app sign-in uses: one AAD, one binding.
+	// A nil envelope (dev without SECRET_ENCRYPTION_KEYS) makes Set answer Internal, by name in the
+	// log (crypto.ErrNotConfigured); Retire seals nothing and keeps working.
+	miniAppSecrets := app.NewMiniAppSecretAdmin(kho, idstore.NewMiniAppSecretStore(kho), envelope, nenTang, time.Now)
+	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(),
+		svcgrpc.NewOperatorServer(operatorAuth, log).WithMiniAppSecrets(miniAppSecrets), log)
 	opLis, err := net.Listen("tcp", cfg.OperatorGRPCListenAddr())
 	if err != nil {
 		return fmt.Errorf("identity: không mở được cổng gRPC vận hành %q: %w", cfg.OperatorGRPCListenAddr(), err)

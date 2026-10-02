@@ -611,6 +611,42 @@ func TestRead_WithoutHiddenSubjectsRecordsTheSubject(t *testing.T) {
 	}
 }
 
+// ADR 0070 §"Bổ sung 02/10/2026" #7: an operator's act on the commune is shown in the operator log
+// only. The exclusion is in the statement for EVERY query shape — no filter a client sends (actor =
+// the VH- code, action = the verb, subject = the App ID, the read verb, a cursor) brings it back — and
+// it is a literal, so the numbering of the client's filters is untouched.
+func TestRead_OperatorEntriesNeverReachTheCommuneScreen(t *testing.T) {
+	const clause = "AND actor_kind <> '" + KindOperator + "'"
+	for name, q := range map[string]Query{
+		"default":        {},
+		"actor VH- code": {Actor: "VH-00001"},
+		"operator verb":  {Action: "dat_secret_app_rieng", Subject: "1234567890"},
+		"read verb":      {Action: ActionReadLog},
+		"range":          {From: "2026-10-01T00:00:00Z", To: "2026-10-03T00:00:00Z"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := &rdDB{}
+			l, ctx := newLog(t, d)
+			if _, err := l.Read(ctx, reader, q); err != nil {
+				t.Fatal(err)
+			}
+			s := theRead(t, d)
+			if !strings.Contains(s.sql, "WHERE tenant_id = $1  "+clause+" ") {
+				t.Fatalf("operator exclusion missing or not first:\n%s", s.sql)
+			}
+		})
+	}
+	// With hidden subjects too (petitions).
+	d := &rdDB{}
+	l, ctx := newLog(t, d, WithHiddenSubjects("SELECT ma FROM x WHERE tenant_id = $1"))
+	if _, err := l.Read(ctx, reader, Query{SeeHidden: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(theRead(t, d).sql, clause) {
+		t.Fatal("SeeHidden lifted the operator exclusion — it is not a hidden-subject rule")
+	}
+}
+
 func TestRead_LimitAboveCapIsCapped(t *testing.T) {
 	d := &rdDB{}
 	l, ctx := newLog(t, d)
