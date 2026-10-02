@@ -341,11 +341,25 @@
       "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:162"
     },
     {
+      "entity": "PetitionLogAttachment",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "petition_log_attachment",
+      "source": "service-petitions/migrations/0027_petition_staff_files.sql:144"
+    },
+    {
       "entity": "PetitionLogEntry",
       "service": "petitions",
       "scope": "tenant",
       "table": "nhat_ky_phan_anh",
       "source": "service-petitions/migrations/0013_nhat_ky_phan_anh.sql:76"
+    },
+    {
+      "entity": "PetitionSettings",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "petition_settings",
+      "source": "service-petitions/migrations/0028_petition_settings.sql:85"
     },
     {
       "entity": "PetitionsStoredFile",

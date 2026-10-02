@@ -2717,7 +2717,7 @@
     },
     "/api/v1/citizen-report-summary": {
       "get": {
-        "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)",
+        "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to); hiện trạng: số phiếu được dân chấm sao và tổng số sao, số phiếu bị đánh giá thấp (1–2 sao), số phiếu chờ kiểm duyệt công khai",
         "operationId": "petitions_get_citizen_report_summary",
         "tags": [
           "petitions"
@@ -2992,6 +2992,117 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu",
+        "operationId": "petitions_post_citizen_reports",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §11",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.create"
+        },
+        "x-vigov-task": "3cf7f55058ad",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.staffIntakeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuPhanAnhRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -3420,6 +3531,349 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_log_attachments",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "0319874b75ce",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.taskAttachmentUploadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskAttachmentUploadOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "fa420680988f",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskAttachmentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Liên kết tải về một tệp đính kèm của nhật ký xử lý phiếu (sống tối đa 15 phút)",
+        "operationId": "petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "9a4fafb884ed",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskAttachmentDownloadOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -4291,6 +4745,329 @@
               "task_document",
               "task_tree"
             ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/verification-photos": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Ảnh sau xử lý cán bộ đã tải cho một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút",
+        "operationId": "petitions_get_citizen_reports_by_maTraCuu_verification_photos",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "bb9a31edbc91",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.photoListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_verification_photos",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.resolve"
+        },
+        "x-vigov-task": "6863f139c231",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.photoUploadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.photoUploadOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.resolve"
+        },
+        "x-vigov-task": "fe28a3877f1f",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.photoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal Server Error",
@@ -13037,6 +13814,101 @@
         }
       }
     },
+    "/api/v1/my-citizen-reports/{maTraCuu}/verification-photos": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Ảnh sau xử lý cán bộ đã lưu cho phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút",
+        "operationId": "petitions_get_my_citizen_reports_by_maTraCuu_verification_photos",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
+        },
+        "x-vigov-task": "db8b9a7b9053",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.photoListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "summary": "Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang",
@@ -14414,7 +15286,7 @@
     },
     "/api/v1/overdue-citizen-reports": {
       "get": {
-        "summary": "Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không",
+        "summary": "Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không, số giây làm việc đã trễ (khi đo được)",
         "operationId": "petitions_get_overdue_citizen_reports",
         "tags": [
           "petitions"
@@ -32864,6 +33736,30 @@
           },
           "late": {
             "type": "integer"
+          },
+          "rating_sample": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rating_sum": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "low_rating": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "publication_pending": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -33067,6 +33963,12 @@
         "properties": {
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -33412,6 +34314,12 @@
           },
           "note": {
             "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.taskAttachmentOut"
+            }
           }
         },
         "required": [
@@ -33419,6 +34327,7 @@
           "actor_code",
           "assignee",
           "at",
+          "attachments",
           "id",
           "note",
           "status",
@@ -33638,6 +34547,13 @@
           },
           "critical": {
             "type": "boolean"
+          },
+          "late_working_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         },
         "required": [
@@ -34332,6 +35248,112 @@
         },
         "required": [
           "text"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.staffIntakeIn": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "reporter_name": {
+            "type": "string"
+          },
+          "reporter_phone": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "clock_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "citizen_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cong_dan_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "linh_vuc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hamlet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thon_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "field"
         ],
         "additionalProperties": false
       },

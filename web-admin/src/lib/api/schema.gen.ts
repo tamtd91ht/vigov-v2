@@ -2257,6 +2257,10 @@ export type petitions_citizenReportSummaryOut = {
   "on_time_sample": number;
   "on_time": number;
   "late": number;
+  "rating_sample"?: number | null;
+  "rating_sum"?: number | null;
+  "low_rating"?: number | null;
+  "publication_pending"?: number | null;
 };
 
 export type petitions_danhSachLoaiNhiemVuRa = {
@@ -2311,6 +2315,7 @@ export type petitions_dongPhieuVao = {
 
 export type petitions_ghiChuPhieuVao = {
   "note": string;
+  "attachments"?: Array<string>;
 };
 
 export type petitions_guiPhanAnhVao = {
@@ -2399,6 +2404,7 @@ export type petitions_nhatKyPhieuRa = {
   "unit": string;
   "assignee": string;
   "note": string;
+  "attachments": Array<petitions_taskAttachmentOut>;
 };
 
 export type petitions_nhiemVuKetLuanRa = {
@@ -2453,6 +2459,7 @@ export type petitions_overdueItemOut = {
   "category_code": string;
   "missed_deadline": string;
   "critical": boolean;
+  "late_working_seconds"?: number | null;
 };
 
 export type petitions_overdueQueueOut = {
@@ -2630,6 +2637,28 @@ export type petitions_ratingInput = {
 
 export type petitions_rewordSystemMessageIn = {
   "text": string;
+};
+
+export type petitions_staffIntakeIn = {
+  "field": string;
+  "content": string;
+  "address"?: string;
+  "reporter_name"?: string;
+  "reporter_phone"?: string;
+  "anonymous"?: boolean;
+  "clock_from"?: string | null;
+  "citizen_id"?: string | null;
+  "cong_dan_id"?: string | null;
+  "linh_vuc"?: string | null;
+  "channel"?: string | null;
+  "code"?: string | null;
+  "status"?: string | null;
+  "acknowledge_due"?: string | null;
+  "resolve_due"?: string | null;
+  "hamlet"?: string | null;
+  "thon_id"?: string | null;
+  "lat"?: number | null;
+  "lng"?: number | null;
 };
 
 export type petitions_suaBienBanVao = {
@@ -3490,7 +3519,7 @@ export type petitions_patch_citizen_report_fields_by_code = {
   };
 };
 
-/** GET /api/v1/citizen-report-summary — Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to) */
+/** GET /api/v1/citizen-report-summary — Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to); hiện trạng: số phiếu được dân chấm sao và tổng số sao, số phiếu bị đánh giá thấp (1–2 sao), số phiếu chờ kiểm duyệt công khai */
 export type petitions_get_citizen_report_summary = {
   duongDan: "/api/v1/citizen-report-summary";
   phuongThuc: "GET";
@@ -3540,6 +3569,26 @@ export type petitions_get_citizen_reports = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports — Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu */
+export type petitions_post_citizen_reports = {
+  duongDan: "/api/v1/citizen-reports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_staffIntakeIn;
+  phanHoi: {
+    201: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -3625,6 +3674,72 @@ export type petitions_post_citizen_reports_by_maTraCuu_closure = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments — Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type petitions_post_citizen_reports_by_maTraCuu_log_attachments = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_taskAttachmentUploadIn;
+  phanHoi: {
+    201: petitions_taskAttachmentUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion — Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
+export type petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskAttachmentOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download — Liên kết tải về một tệp đính kèm của nhật ký xử lý phiếu (sống tối đa 15 phút) */
+export type petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskAttachmentDownloadOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -3798,6 +3913,71 @@ export type petitions_post_citizen_reports_by_maTraCuu_tasks = {
   };
   errorCodes: {
     409: "code_taken" | "petition_not_classified" | "petition_state" | "request_in_progress" | "restricted_field_no_task" | "task_document" | "task_tree";
+  };
+};
+
+/** GET /api/v1/citizen-reports/{maTraCuu}/verification-photos — Ảnh sau xử lý cán bộ đã tải cho một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút */
+export type petitions_get_citizen_reports_by_maTraCuu_verification_photos = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/verification-photos — Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type petitions_post_citizen_reports_by_maTraCuu_verification_photos = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_photoUploadIn;
+  phanHoi: {
+    201: petitions_photoUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion — Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ */
+export type petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
@@ -5688,6 +5868,29 @@ export type petitions_post_my_citizen_reports_by_maTraCuu_rating = {
   };
 };
 
+/** GET /api/v1/my-citizen-reports/{maTraCuu}/verification-photos — Ảnh sau xử lý cán bộ đã lưu cho phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút */
+export type petitions_get_my_citizen_reports_by_maTraCuu_verification_photos = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/verification-photos";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_photoListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
+};
+
 /** GET /api/v1/notifications — Hộp thông báo ở chuông của CHÍNH cán bộ đang đăng nhập — mới nhất trước, có con trỏ trang */
 export type comms_get_notifications = {
   duongDan: "/api/v1/notifications";
@@ -5986,7 +6189,7 @@ export type documents_delete_outgoing_documents_by_id = {
   };
 };
 
-/** GET /api/v1/overdue-citizen-reports — Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không */
+/** GET /api/v1/overdue-citizen-reports — Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không, số giây làm việc đã trễ (khi đo được) */
 export type petitions_get_overdue_citizen_reports = {
   duongDan: "/api/v1/overdue-citizen-reports";
   phuongThuc: "GET";
