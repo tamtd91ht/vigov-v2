@@ -3519,6 +3519,24 @@ export type petitions_patch_citizen_report_fields_by_code = {
   };
 };
 
+/** GET /api/v1/citizen-report-intake-fields — Lĩnh vực phản ánh xã đang nhận cho ô chọn của biểu mẫu cán bộ nhập hộ — mã đang dùng trên nền tảng và đang bật ở xã (gồm cả `can-bo`), theo thứ tự của xã */
+export type petitions_get_citizen_report_intake_fields = {
+  duongDan: "/api/v1/citizen-report-intake-fields";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenFieldListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-report-summary — Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to); hiện trạng: số phiếu được dân chấm sao và tổng số sao, số phiếu bị đánh giá thấp (1–2 sao), số phiếu chờ kiểm duyệt công khai */
 export type petitions_get_citizen_report_summary = {
   duongDan: "/api/v1/citizen-report-summary";

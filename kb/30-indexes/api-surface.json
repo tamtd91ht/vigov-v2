@@ -656,6 +656,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-report-intake-fields",
+      "operation_id": "petitions_get_citizen_report_intake_fields",
+      "task_id": "7bc60cb247e2",
+      "summary": "Lĩnh vực phản ánh xã đang nhận cho ô chọn của biểu mẫu cán bộ nhập hộ — mã đang dùng trên nền tảng và đang bật ở xã (gồm cả `can-bo`), theo thứ tự của xã",
+      "screen": "09-phan-anh-nguoi-dan §11",
+      "permission_kind": "permission",
+      "permission": "feedback.create",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.citizenFieldListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-report-summary",
       "operation_id": "petitions_get_citizen_report_summary",
       "task_id": "7faa1955f707",

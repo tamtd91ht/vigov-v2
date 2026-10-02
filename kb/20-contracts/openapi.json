@@ -2715,6 +2715,73 @@
         }
       }
     },
+    "/api/v1/citizen-report-intake-fields": {
+      "get": {
+        "summary": "Lĩnh vực phản ánh xã đang nhận cho ô chọn của biểu mẫu cán bộ nhập hộ — mã đang dùng trên nền tảng và đang bật ở xã (gồm cả `can-bo`), theo thứ tự của xã",
+        "operationId": "petitions_get_citizen_report_intake_fields",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §11",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.create"
+        },
+        "x-vigov-task": "7bc60cb247e2",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.citizenFieldListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-report-summary": {
       "get": {
         "summary": "Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to); hiện trạng: số phiếu được dân chấm sao và tổng số sao, số phiếu bị đánh giá thấp (1–2 sao), số phiếu chờ kiểm duyệt công khai",
