@@ -163,7 +163,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
-	// @summary  Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo
+	// LOGO (ADR 0069 #8): `logo_url` is platform logo_public_url — a ViGov-issued public-bucket image —
+	// never the deprecated typed logo_url. No web-admin banner here (ADR 0069 #6).
+	//
+	// @summary  Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc, logo) cho Mini App — không trả mã xã
 	// @consumer citizen-app
 	// NO @screen: docs/ui-ux/ has no section for the Mini App commune screen.
 	//
@@ -179,7 +182,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune-profiles",
-		authz.Public("Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân")(
+		authz.Public("Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5), cùng logo xã tự tải lên (ADR 0069); không trả mã xã, không dữ liệu cá nhân")(
 			http.HandlerFunc(h.CommuneProfiles)))
 
 	// --- a commune's OWN Mini App signing a citizen in (ADR 0066) ----------------------------------

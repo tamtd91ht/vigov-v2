@@ -1,12 +1,21 @@
 package http
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/tenant"
 )
 
 // WHAT THIS FILE IS FOR: GET /api/v1/communes/current is the only PUBLIC route in this service that
@@ -111,10 +120,164 @@ func TestThongTinXaKhongTraTenantID(t *testing.T) {
 	// `province` was added deliberately and passed the question this assertion asks of every
 	// field: it is not personal data, it is not an identifier anything is keyed by, and it says
 	// nothing about the commune's internal operation. `id` is still absent and still the point.
-	muon := []string{"host", "name", "province"}
+	// `logo_url` and `web_admin_banner_url` (ADR 0069 #8) passed the same question: images the commune
+	// itself published, no personal data, not a key anything is looked up by.
+	muon := []string{"host", "logo_url", "name", "province", "web_admin_banner_url"}
 	if strings.Join(khoa, ",") != strings.Join(muon, ",") {
 		t.Fatalf("trường trả về = %v, muốn đúng %v — mỗi trường thêm vào một tuyến CÔNG KHAI "+
 			"phải được cân nhắc lại từ đầu", khoa, muon)
+	}
+}
+
+// --- (2b) logo and web-admin banner (ADR 0069 #8) ----------------------------------------------
+
+// Fixture URLs. They carry NO tenant id on purpose — see TestCurrentCommuneTenantIDOnlyInsideImageURLs
+// for the realistic t_<tenant_id> shape.
+const (
+	fixtureLogoURL   = "https://public.example/vigov-public/logo-fixture.png"
+	fixtureBannerURL = "https://public.example/vigov-public/banner-fixture.jpg"
+)
+
+// brandingFake answers TenantProfile with a fixed result, or blocks until ctx ends when hang is set.
+type brandingFake struct {
+	profile   platformclient.TenantProfile
+	err       error
+	hang      bool
+	remaining time.Duration // time left on ctx when called, for the timeout assertion
+	commune   tenant.ID
+}
+
+func (f *brandingFake) TenantProfile(ctx context.Context) (platformclient.TenantProfile, bool, error) {
+	f.commune = tenant.MustFrom(ctx)
+	if dl, ok := ctx.Deadline(); ok {
+		f.remaining = time.Until(dl)
+	}
+	if f.hang {
+		<-ctx.Done()
+		return platformclient.TenantProfile{}, false, fmt.Errorf("platformclient: GetTenantProfile: %w", ctx.Err())
+	}
+	return f.profile, f.err == nil, f.err
+}
+
+func decodeCurrentCommune(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	return body
+}
+
+func TestCurrentCommuneReturnsLogoAndBanner(t *testing.T) {
+	m := dungMayChu(t)
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
+	doiMa(t, w, http.StatusOK)
+	body := decodeCurrentCommune(t, w)
+	if body["logo_url"] != fixtureLogoURL || body["web_admin_banner_url"] != fixtureBannerURL {
+		t.Fatalf("logo/banner = %v / %v, muốn %q / %q", body["logo_url"], body["web_admin_banner_url"],
+			fixtureLogoURL, fixtureBannerURL)
+	}
+}
+
+func TestCurrentCommuneWithoutImagesKeepsKeysEmpty(t *testing.T) {
+	// Commune B has no profile at all: both keys PRESENT and "", never omitted, never commune A's.
+	m := dungMayChu(t)
+	w := m.goi(t, "GET", hostB, "/api/v1/communes/current", "", "")
+	doiMa(t, w, http.StatusOK)
+	body := decodeCurrentCommune(t, w)
+	for _, k := range []string{"logo_url", "web_admin_banner_url"} {
+		v, present := body[k]
+		if !present || v != "" {
+			t.Fatalf("%s = %v (có khoá: %v), muốn có khoá và chuỗi rỗng", k, v, present)
+		}
+	}
+}
+
+func TestCurrentCommuneNeverForwardsDeprecatedTypedLogo(t *testing.T) {
+	// Only the deprecated typed logo_url is set: the route must answer "", never that URL.
+	m := dungMayChu(t)
+	m.dungLai(t, func(d *Deps) {
+		d.Profile = &brandingFake{profile: platformclient.TenantProfile{LogoURL: "https://typed.example/logo.png"}}
+	})
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
+	doiMa(t, w, http.StatusOK)
+	if body := decodeCurrentCommune(t, w); body["logo_url"] != "" || strings.Contains(w.Body.String(), "typed.example") {
+		t.Fatalf("lọt logo gõ tay: %s", w.Body.String())
+	}
+}
+
+func TestCurrentCommunePlatformErrorDegradesTo200(t *testing.T) {
+	var logBuf bytes.Buffer
+	m := dungMayChu(t)
+	f := &brandingFake{err: errors.New("rpc error: code = Unavailable desc = down")}
+	m.dungLai(t, func(d *Deps) {
+		d.Profile = f
+		d.Log = slog.New(slog.NewJSONHandler(&logBuf, nil))
+	})
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
+	doiMa(t, w, http.StatusOK)
+	body := decodeCurrentCommune(t, w)
+	if body["name"] != "Xã Thăng Bình" || body["logo_url"] != "" || body["web_admin_banner_url"] != "" {
+		t.Fatalf("nền tảng lỗi: %v — muốn tên xã vẫn đúng, hai ảnh rỗng", body)
+	}
+	if strings.Contains(w.Body.String(), "rpc error") {
+		t.Fatalf("lộ chi tiết lỗi ra client: %s", w.Body.String())
+	}
+	if f.commune != xaA {
+		t.Fatalf("hồ sơ đọc cho xã %q, muốn xã của Host (%q)", f.commune, xaA)
+	}
+	if !strings.Contains(logBuf.String(), "logo/banner") {
+		t.Fatalf("lỗi nền tảng không để lại dòng nhật ký: %q", logBuf.String())
+	}
+}
+
+func TestCurrentCommunePlatformHangTimesOutTo200(t *testing.T) {
+	m := dungMayChu(t)
+	f := &brandingFake{hang: true}
+	m.dungLai(t, func(d *Deps) { d.Profile = f })
+
+	start := time.Now()
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
+	elapsed := time.Since(start)
+
+	doiMa(t, w, http.StatusOK)
+	if body := decodeCurrentCommune(t, w); body["logo_url"] != "" || body["web_admin_banner_url"] != "" {
+		t.Fatalf("nền tảng treo: %v — muốn hai ảnh rỗng", body)
+	}
+	if f.remaining <= 0 || f.remaining > brandingReadTimeout {
+		t.Fatalf("hạn còn lại khi gọi = %v, muốn trong (0, %v]", f.remaining, brandingReadTimeout)
+	}
+	if elapsed > brandingReadTimeout+2*time.Second {
+		t.Fatalf("tuyến chờ %v khi nền tảng treo — hạn %v không có tác dụng", elapsed, brandingReadTimeout)
+	}
+}
+
+func TestCurrentCommuneTenantIDOnlyInsideImageURLs(t *testing.T) {
+	// The realistic public path carries t_<tenant_id> (ADR 0052 §2, accepted by ADR 0069 #8). That
+	// must be the ONLY place the id appears: drop the two URL values and the body has none.
+	logo := "https://public.example/vigov-public/t_" + string(xaA) + "/01JLOGO.png"
+	banner := "https://public.example/vigov-public/t_" + string(xaA) + "/01JBANNER.jpg"
+	m := dungMayChu(t)
+	m.dungLai(t, func(d *Deps) {
+		d.Profile = &brandingFake{profile: platformclient.TenantProfile{LogoPublicURL: logo, WebAdminBannerPublicURL: banner}}
+	})
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
+	doiMa(t, w, http.StatusOK)
+	body := decodeCurrentCommune(t, w)
+	if _, present := body["id"]; present {
+		t.Fatalf("có khoá id: %v", body)
+	}
+	if body["logo_url"] != logo || body["web_admin_banner_url"] != banner {
+		t.Fatalf("ảnh = %v", body)
+	}
+	delete(body, "logo_url")
+	delete(body, "web_admin_banner_url")
+	rest, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(rest), string(xaA)) {
+		t.Fatalf("tenant_id ngoài đường ảnh: %s", rest)
 	}
 }
 

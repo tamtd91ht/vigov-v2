@@ -15,6 +15,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
@@ -825,6 +826,12 @@ func dungMayChu(t *testing.T) *mayChu {
 		GhiSLA: ghiSLA,
 		// The audit-log reader — audit_entries_test.go.
 		AuditLog: auditLog,
+		// The logo/banner read behind /communes/current — xa_test.go. Commune A has both images,
+		// commune B has none; URLs here deliberately carry no tenant id so the "no id" tests stay
+		// about the response shape (the t_<tenant_id> path case is its own test).
+		Profile: &profileReaderFake{byCommune: map[tenant.ID]platformclient.TenantProfile{
+			xaA: {LogoPublicURL: fixtureLogoURL, WebAdminBannerPublicURL: fixtureBannerURL},
+		}},
 		// The three automation routes — automation_test.go.
 		Automation: automation,
 		Signer:     signer,

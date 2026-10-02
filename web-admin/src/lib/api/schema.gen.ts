@@ -1489,6 +1489,7 @@ export type identity_communeProfileOut = {
   "office_address": string;
   "hotline": string;
   "office_hours_text": string;
+  "logo_url": string;
 };
 
 export type identity_communeProfilesOut = {
@@ -1976,6 +1977,8 @@ export type identity_thongTinXa = {
   "name": string;
   "host": string;
   "province": string;
+  "logo_url": string;
+  "web_admin_banner_url": string;
 };
 
 export type identity_timCanBoVao = {
@@ -4297,7 +4300,7 @@ export type comms_get_commune_news_by_id = {
   };
 };
 
-/** GET /api/v1/commune-profiles — Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo */
+/** GET /api/v1/commune-profiles — Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc, logo) cho Mini App — không trả mã xã */
 export type identity_get_commune_profiles = {
   duongDan: "/api/v1/commune-profiles";
   phuongThuc: "GET";
@@ -4351,7 +4354,7 @@ export type identity_get_communes = {
   };
 };
 
-/** GET /api/v1/communes/current — Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập */
+/** GET /api/v1/communes/current — Thông tin xã ứng với tên miền đang gọi (tên, tỉnh, logo, banner web-admin), cho màn hình đăng nhập và mọi trang web-admin — không trả mã xã */
 export type identity_get_communes_current = {
   duongDan: "/api/v1/communes/current";
   phuongThuc: "GET";

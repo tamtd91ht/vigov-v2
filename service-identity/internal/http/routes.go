@@ -584,6 +584,11 @@ type Deps struct {
 	// *audit.Log in production. Refused at construction when missing.
 	AuditLog AuditLogReader
 
+	// Profile is the commune display-profile read (PLATFORM data over gRPC, ADR 0045 decision 5) behind
+	// the logo and web-admin banner on GET /api/v1/communes/current (ADR 0069 #8). The same interface the
+	// public chain uses; *platformclient.Directory in production. Refused at construction when missing.
+	Profile TenantProfileReader
+
 	Log *slog.Logger
 }
 
@@ -685,6 +690,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
 	case d.Automation == nil:
 		panic("identity/http: thiếu use case tự động hoá — ba tuyến /api/v1/automation-jobs sẽ panic khi có người gọi")
+	case d.Profile == nil:
+		panic("identity/http: thiếu lối đọc hồ sơ hiển thị xã — GET /api/v1/communes/current sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -802,12 +809,21 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// NO idem.* DECLARATION: GET, changes no state.
 	//
-	// @summary  Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập
+	// LOGO AND WEB-ADMIN BANNER (ADR 0069 #8): two more fields on THIS route, not a new one, so the
+	// sign-in screen reads them before any session exists. They come from platform GetTenantProfile
+	// and DEGRADE to "" when the platform does not answer — see ThongTinXa for why that is not a
+	// fail-open on the isolation path.
+	//
+	// RATE LIMIT (rule 13, invariant 7): none declared, unchanged by ADR 0069 — the same standing as
+	// the public routes in routes_cong_dan.go (no core/ratelimit to declare against yet).
+	//
+	// @summary  Thông tin xã ứng với tên miền đang gọi (tên, tỉnh, logo, banner web-admin), cho màn hình đăng nhập và mọi trang web-admin — không trả mã xã
 	// @screen   15-phu-luc-giao-dien-chung §1
 	// MỘT mã trả lời duy nhất, và đó là hệ quả trực tiếp của việc biên mang cả tenant.Tenant:
 	// handler không còn phân giải gì nữa nên không còn thất bại nào để khai. Tên miền không
 	// thuộc xã nào thì bị biên từ chối bằng 404 TRƯỚC khi tới đây, nên 404 không phải kết quả
-	// của tuyến này mà của chuỗi trước nó.
+	// của tuyến này mà của chuỗi trước nó. Nền tảng không trả lời thì logo_url và
+	// web_admin_banner_url là "" — vẫn 200, không bao giờ 503.
 	//
 	// @reply    200 thongTinXa
 	mux.Handle("GET /api/v1/communes/current",

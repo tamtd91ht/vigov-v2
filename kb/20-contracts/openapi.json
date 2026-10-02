@@ -6363,14 +6363,14 @@
     },
     "/api/v1/commune-profiles": {
       "get": {
-        "summary": "Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc) cho Mini App — không trả mã xã, không trả logo",
+        "summary": "Hồ sơ hiển thị của xã theo tên miền (địa chỉ trụ sở, đường dây nóng, giờ làm việc, logo) cho Mini App — không trả mã xã",
         "operationId": "identity_get_commune_profiles",
         "tags": [
           "identity"
         ],
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5); không trả mã xã, không trả logo, không dữ liệu cá nhân"
+          "reason": "Mini App hiện cách liên hệ trụ sở xã TRƯỚC khi có phiên nào: tên xã, địa chỉ trụ sở, đường dây nóng chính thức và giờ làm việc dạng chữ — thông tin công vụ xã tự công bố (ADR 0045 quyết định 5), cùng logo xã tự tải lên (ADR 0069); không trả mã xã, không dữ liệu cá nhân"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "5c84a99b7030",
@@ -6565,7 +6565,7 @@
     },
     "/api/v1/communes/current": {
       "get": {
-        "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
+        "summary": "Thông tin xã ứng với tên miền đang gọi (tên, tỉnh, logo, banner web-admin), cho màn hình đăng nhập và mọi trang web-admin — không trả mã xã",
         "operationId": "identity_get_communes_current",
         "tags": [
           "identity"
@@ -31593,10 +31593,14 @@
           },
           "office_hours_text": {
             "type": "string"
+          },
+          "logo_url": {
+            "type": "string"
           }
         },
         "required": [
           "hotline",
+          "logo_url",
           "name",
           "office_address",
           "office_hours_text"
@@ -33412,12 +33416,20 @@
           },
           "province": {
             "type": "string"
+          },
+          "logo_url": {
+            "type": "string"
+          },
+          "web_admin_banner_url": {
+            "type": "string"
           }
         },
         "required": [
           "host",
+          "logo_url",
           "name",
-          "province"
+          "province",
+          "web_admin_banner_url"
         ],
         "additionalProperties": false
       },

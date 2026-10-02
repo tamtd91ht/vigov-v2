@@ -1,7 +1,9 @@
 package http
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/tenant"
 )
@@ -77,7 +79,29 @@ type thongTinXa struct {
 	// Province is the province or centrally-governed city the commune sits in. "" means the
 	// commune has not declared one — render nothing, never a placeholder, never a guess.
 	Province string `json:"province"`
+
+	// LogoURL is the commune's logo (ADR 0069 #4): a ViGov-issued public-bucket URL, read from
+	// platform TenantProfile.logo_public_url and NEVER from the deprecated typed logo_url. "" means no
+	// logo is set OR the platform did not answer in time — the screen draws its building icon either
+	// way (ADR 0069 #7). Each upload is a new URL, so a client must not cache it past this read.
+	//
+	// SAFE ON A PUBLIC ROUTE, asked field by field like `province`: an image the commune itself
+	// published, no personal data. The path carries `t_<tenant_id>` like every public object (ADR 0052
+	// §2) — the one place this route exposes the id, accepted by ADR 0069 #8; `id` stays absent.
+	LogoURL string `json:"logo_url"`
+
+	// WebAdminBannerURL is the web-admin banner strip (ADR 0069 #5), same provenance and same ""
+	// meaning as LogoURL; "" draws no strip. NOT the Mini App banner (ADR 0069 #6).
+	WebAdminBannerURL string `json:"web_admin_banner_url"`
 }
+
+// brandingReadTimeout bounds the platform read behind LogoURL / WebAdminBannerURL.
+//
+// SHORTER THAN platformclient.HanGoi (3 s) ON PURPOSE: web-admin calls this route server-side on
+// EVERY render, the sign-in page included, with no cache (web-admin/src/lib/tenant-config.ts). A
+// platform outage must cost each page at most this long, not 3 s, for two decorative images. The
+// in-cluster call normally answers in milliseconds, so 1 s only fires on a real fault.
+const brandingReadTimeout = 1 * time.Second
 
 // ThongTinXa serves the commune this request's Host resolves to. GET /api/v1/communes/current
 //
@@ -101,5 +125,29 @@ func (h *Handler) ThongTinXa(w http.ResponseWriter, r *http.Request) {
 	// MustCurrent panic khi thiếu, và đó là chủ ý: nếu handler này chạy ngoài biên HTTP thì
 	// nó sẽ hiển thị tên rỗng — một cơ quan nhà nước hiện sai tên mình, không có gì đỏ.
 	xa := tenant.MustCurrent(r.Context())
-	vietJSON(w, http.StatusOK, thongTinXa{Name: xa.Name, Host: xa.Host, Province: xa.Province})
+	out := thongTinXa{Name: xa.Name, Host: xa.Host, Province: xa.Province}
+
+	// LOGO AND BANNER DEGRADE TO "", THEY NEVER FAIL THE ROUTE (ADR 0069 #8).
+	//
+	// This is not a default on the isolation path (rule 1, forbidden #1): the commune was resolved
+	// fail-closed by the edge above and is not touched here. What degrades is two decorative images.
+	// Answering 503 instead would make the sign-in page — and every web-admin page — unreachable
+	// whenever the platform is, locking staff out of a government system for want of a picture. The
+	// "" is the same value as "not set", so no client builds a separate outage branch.
+	//
+	// The commune read is THE ONE IN ctx, put there by the edge (rule 1, invariant 4); nothing from
+	// the request reaches it.
+	ctx, cancel := context.WithTimeout(r.Context(), brandingReadTimeout)
+	defer cancel()
+	profile, _, err := h.d.Profile.TenantProfile(ctx)
+	if err != nil {
+		// The commune id and the error only — a profile holds no personal data, and none is logged.
+		h.d.Log.WarnContext(ctx, "thông tin xã: không đọc được logo/banner từ dịch vụ nền tảng, trả rỗng",
+			"xa", string(xa.ID), "err", err)
+	} else {
+		// ok=false (no profile declared) needs no branch: the zero TenantProfile is "" in both.
+		out.LogoURL = profile.LogoPublicURL
+		out.WebAdminBannerURL = profile.WebAdminBannerPublicURL
+	}
+	vietJSON(w, http.StatusOK, out)
 }

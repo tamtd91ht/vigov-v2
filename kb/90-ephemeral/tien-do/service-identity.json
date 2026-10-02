@@ -435,6 +435,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai gọi: service-petitions dùng ở hàng đợi quá hạn (thẻ hành vi petitions đợt 02/10). Màn cán bộ không hiện số (ADR 0007 10a). Dòng log của s.loiLich vẫn mang tiền tố 'AdvanceWorkingHours:' khi MeasureWorkingHours gọi.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "logo-banner-tren-tuyen-cong-khai",
+      "viec": "Logo xã + banner web-admin ra qua hai tuyến công khai SẴN CÓ (ADR 0069 #8): GET /api/v1/communes/current thêm logo_url + web_admin_banner_url; GET /api/v1/commune-profiles thêm logo_url. Không mở tuyến mới, không đổi quyền, không thêm mã xã",
+      "trang_thai": "xong",
+      "bang_chung": "internal/http/xa.go ThongTinXa: đọc platform GetTenantProfile qua Deps.Profile (bắt buộc, Register panic khi thiếu; main.go nối nenTang), hạn brandingReadTimeout = 1 giây; nền tảng lỗi/quá hạn → vẫn 200, hai trường \"\", một dòng log cảnh báo chỉ mã xã + lỗi. commune_profile.go: logo_url lấy từ LogoPublicURL, KHÔNG BAO GIỜ từ logo_url gõ tay; không banner; lỗi hồ sơ vẫn 503 như cũ. core/platformclient.TenantProfile mang LogoPublicURL + WebAdminBannerPublicURL. Ca kiểm: TestCurrentCommuneReturnsLogoAndBanner, ...WithoutImagesKeepsKeysEmpty, ...NeverForwardsDeprecatedTypedLogo, ...PlatformErrorDegradesTo200, ...PlatformHangTimesOutTo200, ...TenantIDOnlyInsideImageURLs; TestCommuneProfileShapeAndNoTypedLogoNoIdNoIntroduction, TestCommuneProfileLogoIsPublicURLOnlyAndNoBanner. openapi + schema.gen.ts sinh lại; transaction-boundaries có luồng doc_logo_banner_xa_tren_tuyen_cong_khai.",
+      "no_confirm": [],
+      "tiep_theo": "web-admin dùng logo_url/web_admin_banner_url (TASK-5). citizen-app readCommuneProfiles cần nhận logo_url (TASK-6). Mỗi lần dựng trang web-admin thêm một lời gọi gRPC identity→platform, không bộ đệm. Giới hạn tần suất của các tuyến công khai vẫn chưa khai (chưa có core/ratelimit).",
+      "menu": "cau-hinh"
     }
   ]
 }

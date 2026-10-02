@@ -36,15 +36,17 @@ type communeProfilesOut struct {
 
 // communeProfileOut is what anybody who knows a commune's domain may read about it.
 //
-// NAME comes from the registry (the same value GET /api/v1/communes returns); the other three from the
+// NAME comes from the registry (the same value GET /api/v1/communes returns); the others from the
 // commune's declared profile, "" when not declared — the screen renders nothing, never a default.
 //
 // WHAT IS ABSENT IS THE CONTRACT:
-//   - no `id`, no `host` — same reasons as xaCongKhai.
-//   - NO LOGO. platform.proto TenantProfile.logo_url is "a URL to an image served elsewhere — not bytes
-//     and not a storage key", i.e. not an approved derivative in ViGov's public bucket (ADR 0052 §2).
-//     Forwarding it would make every Mini App fetch whatever host was typed. It arrives when logos are
-//     stored as public-bucket objects.
+//   - no `id`, no `host` — same reasons as xaCongKhai. The logo URL's path carries `t_<tenant_id>` like
+//     every public object (ADR 0052 §2); ADR 0069 #8 accepted that, and it is the only place it appears.
+//   - NOT THE DEPRECATED TYPED LOGO. platform.proto TenantProfile.logo_url (2) is a URL somebody typed,
+//     pointing at an image served elsewhere; forwarding it would make every Mini App fetch whatever host
+//     was typed. `logo_url` HERE is logo_public_url (6) only — a ViGov-issued public-bucket derivative
+//     (ADR 0069 #4) — and is "" when that is unset, never a fallback to the typed one.
+//   - no web-admin banner — web-admin only; the Mini App banner is comms content (ADR 0069 #6).
 //   - no `introduction` — outside the fields this route was approved for (2026-09-29).
 type communeProfileOut struct {
 	Name          string `json:"name"`
@@ -56,6 +58,11 @@ type communeProfileOut struct {
 	// OfficeHoursText is DISPLAY TEXT. The working-hours calendar deadlines count against is this
 	// service's own (ADR 0007); a client must never parse this.
 	OfficeHoursText string `json:"office_hours_text"`
+
+	// LogoURL is the commune's logo (ADR 0069 #4, #8) — from platform logo_public_url ONLY, "" when no
+	// logo is set; the Mini App then shows its building icon (ADR 0069 #7). A new upload is a new URL,
+	// so a client must not cache it past this read.
+	LogoURL string `json:"logo_url"`
 }
 
 // CommuneProfiles serves the display profile of the commune a domain belongs to.
@@ -65,7 +72,11 @@ type communeProfileOut struct {
 // byte-identical to GET /api/v1/communes for the same domain, so this route answers no existence
 // question that one does not already answer.
 //
-// AN ACTIVE COMMUNE WITH NO DECLARED PROFILE is one item carrying the name and three "": the name is
+// THE PROFILE READ STILL FAILS CLOSED HERE (503), unlike the logo on /communes/current which degrades:
+// this route's address, hotline and hours are the payload itself, and an empty profile would read as
+// "this commune published nothing". The logo rides on the same read and is not split out.
+//
+// AN ACTIVE COMMUNE WITH NO DECLARED PROFILE is one item carrying the name and four "": the name is
 // already public on /communes, and an empty list here would read as "no such commune".
 //
 // NO AUDIT ENTRY: nothing is written and nothing personal is read (rule 6, invariant 7).
@@ -102,6 +113,8 @@ func (h *HandlerCongKhai) CommuneProfiles(w http.ResponseWriter, r *http.Request
 		OfficeAddress:   profile.OfficeAddress,
 		Hotline:         profile.Hotline,
 		OfficeHoursText: profile.OfficeHoursText,
+		// LogoPublicURL, never profile.LogoURL (deprecated, typed) — see communeProfileOut.
+		LogoURL: profile.LogoPublicURL,
 	})
 	vietJSON(w, http.StatusOK, out)
 }

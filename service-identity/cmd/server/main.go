@@ -497,7 +497,10 @@ func run(log *slog.Logger) error {
 		GhiSLA:     ghiSLA,
 		Automation: automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
-		AuditLog:     audit.NewLog(kho),
+		AuditLog: audit.NewLog(kho),
+		// Logo + web-admin banner on GET /api/v1/communes/current (ADR 0069 #8): the SAME platform client
+		// the public chain reads profiles through, over gRPC — never platform's database (rule 2).
+		Profile:      nenTang,
 		Signer:       signer, // the SAME pointer app.NewDangNhap was given above
 		Phien:        phien,
 		CanBo:        canBo,

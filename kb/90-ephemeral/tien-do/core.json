@@ -258,6 +258,14 @@
       "bang_chung": "02/10/2026 (TASK-3, chưa commit): core/imaging/imaging.go thêm hai hàm + scaleLongerTo; core/imaging/render_branding_test.go (alpha pixel = 0 sau mã hoá lại, 512x512, đệm logo ngang, 1600xN đúng tỉ lệ, ca cao vượt trần, tham số vô lý bị từ chối). Không thêm phụ thuộc: golang.org/x/image v0.46.0 đã có sẵn trong core/go.mod (giải mã WebP + nhân thu nhỏ); service-platform/go.mod nhận nó dạng indirect qua go mod tidy. core/storage/storage.go chỉ sửa chú thích PutServerProduced (bốn luồng). go test ./core/imaging rc=0; make check rc=0.",
       "no_confirm": [],
       "tiep_theo": "Commit cùng TASK-3 của service-platform (là bên gọi duy nhất)."
+    },
+    {
+      "id": "platformclient-tenant-profile-logo-banner",
+      "viec": "core/platformclient.TenantProfile mang hai trường của ADR 0069: LogoPublicURL (logo_public_url = 6) và WebAdminBannerPublicURL (web_admin_banner_public_url = 7); LogoURL gõ tay giữ nguyên, ghi rõ đã bỏ dùng",
+      "trang_thai": "xong",
+      "bang_chung": "core/platformclient/tenant_profile.go ánh xạ hai getter sinh từ proto; tenant_profile_test.go TestTenantProfileMapsEveryField kiểm cả hai. Bên gọi: service-identity /communes/current và /commune-profiles (TASK-4).",
+      "no_confirm": [],
+      "tiep_theo": "Không còn gì ở core cho việc này."
     }
   ]
 }

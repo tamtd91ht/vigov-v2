@@ -13,13 +13,20 @@ import (
 //
 // THE WHOLE CONTRACT IS CARRIED, AND EACH CONSUMER DECIDES WHAT IT PUBLISHES. In particular LogoURL is a
 // link to an image served ELSEWHERE, not an object in ViGov's public bucket (ADR 0052 §2): a public
-// route that forwards it makes every reader fetch whatever host a commune typed.
+// route that forwards it makes every reader fetch whatever host a commune typed. It is deprecated by
+// ADR 0069; a consumer that wants the logo reads LogoPublicURL and never falls back to LogoURL.
 type TenantProfile struct {
 	OfficeAddress   string
-	LogoURL         string
+	LogoURL         string // DEPRECATED (ADR 0069): a typed URL — never publish it, never fall back to it
 	Hotline         string // the commune's official line — public-service information (#16)
 	OfficeHoursText string // DISPLAY TEXT ONLY; never parsed into hours (ADR 0007)
 	Introduction    string
+
+	// LogoPublicURL and WebAdminBannerPublicURL are ViGov-issued public-bucket URLs (ADR 0069 #4, #5;
+	// ADR 0052 §2), "" when not set. Each new upload is a new URL, so a consumer must not cache them
+	// past the read. The banner is web-admin's only — it is NOT the Mini App banner (ADR 0069 #6).
+	LogoPublicURL           string
+	WebAdminBannerPublicURL string
 }
 
 // TenantProfile reads the profile of THE COMMUNE ALREADY IN ctx. The commune is not a parameter
@@ -51,5 +58,8 @@ func (d *Directory) TenantProfile(ctx context.Context) (TenantProfile, bool, err
 		Hotline:         p.GetHotline(),
 		OfficeHoursText: p.GetOfficeHoursText(),
 		Introduction:    p.GetIntroduction(),
+
+		LogoPublicURL:           p.GetLogoPublicUrl(),
+		WebAdminBannerPublicURL: p.GetWebAdminBannerPublicUrl(),
 	}, true, nil
 }

@@ -6428,7 +6428,7 @@
     },
     "http.CommuneProfiles": {
       "kind": "func",
-      "at": "service-identity/internal/http/commune_profile.go:72"
+      "at": "service-identity/internal/http/commune_profile.go:83"
     },
     "http.CommuneReader": {
       "kind": "type",
@@ -7768,7 +7768,7 @@
     },
     "http.ThongTinXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/xa.go:91"
+      "at": "service-identity/internal/http/xa.go:115"
     },
     "http.TienTrangThaiPhieu": {
       "kind": "func",
@@ -8984,7 +8984,7 @@
     },
     "platformclient.TenantProfile": {
       "kind": "func",
-      "at": "core/platformclient/tenant_profile.go:32"
+      "at": "core/platformclient/tenant_profile.go:39"
     },
     "platformclient.XaTheoHost": {
       "kind": "func",

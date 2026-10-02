@@ -29,10 +29,14 @@ func (f *profileFake) GetTenantProfile(context.Context, *platformv1.GetTenantPro
 func TestTenantProfileMapsEveryField(t *testing.T) {
 	d := NewDirectory(&profileFake{res: &platformv1.GetTenantProfileResponse{Profile: &platformv1.TenantProfile{
 		OfficeAddress: "Số 1", LogoUrl: "https://x/logo.png", Hotline: "0900000000",
-		OfficeHoursText: "Sáng 7h30", Introduction: "Giới thiệu"}}}, nil)
+		OfficeHoursText: "Sáng 7h30", Introduction: "Giới thiệu",
+		LogoPublicUrl:           "https://public.example/t_x/logo.png",
+		WebAdminBannerPublicUrl: "https://public.example/t_x/banner.jpg"}}}, nil)
 	p, ok, err := d.TenantProfile(tenant.Into(context.Background(), ulidThu))
 	if err != nil || !ok || p.OfficeAddress != "Số 1" || p.LogoURL != "https://x/logo.png" ||
-		p.Hotline != "0900000000" || p.OfficeHoursText != "Sáng 7h30" || p.Introduction != "Giới thiệu" {
+		p.Hotline != "0900000000" || p.OfficeHoursText != "Sáng 7h30" || p.Introduction != "Giới thiệu" ||
+		p.LogoPublicURL != "https://public.example/t_x/logo.png" ||
+		p.WebAdminBannerPublicURL != "https://public.example/t_x/banner.jpg" {
 		t.Fatalf("hồ sơ = %+v ok=%v err=%v", p, ok, err)
 	}
 }

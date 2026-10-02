@@ -69,7 +69,8 @@ func readProfiles(t *testing.T, w *httptest.ResponseRecorder) []map[string]any {
 	return out.Items
 }
 
-func TestCommuneProfileShapeAndNoLogoNoIdNoIntroduction(t *testing.T) {
+func TestCommuneProfileShapeAndNoTypedLogoNoIdNoIntroduction(t *testing.T) {
+	// twoProfiles sets ONLY the deprecated typed LogoURL: `logo_url` must be "", never that URL.
 	h := profileServer(t, &nenTangXaGia{}, twoProfiles(), nil)
 	w := goiCongKhai(h, CommuneProfilesPath, qHost(hostQR))
 	doiMa(t, w, http.StatusOK)
@@ -83,18 +84,43 @@ func TestCommuneProfileShapeAndNoLogoNoIdNoIntroduction(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	// EXACT key set: logo, introduction, id, host are each a new publication question.
-	if got := strings.Join(keys, ","); got != "hotline,name,office_address,office_hours_text" {
+	// EXACT key set: introduction, banner, id, host are each a new publication question.
+	if got := strings.Join(keys, ","); got != "hotline,logo_url,name,office_address,office_hours_text" {
 		t.Fatalf("trường = %s", got)
 	}
 	if items[0]["name"] != "Xã Quế Sơn" || items[0]["office_address"] != "Thôn 1, xã Quế Sơn" ||
-		items[0]["hotline"] != "0900000000" || items[0]["office_hours_text"] != "Thứ 2–6: 7h30–11h30" {
+		items[0]["hotline"] != "0900000000" || items[0]["office_hours_text"] != "Thứ 2–6: 7h30–11h30" ||
+		items[0]["logo_url"] != "" {
 		t.Fatalf("hồ sơ = %v", items[0])
 	}
 	body := w.Body.String()
-	for _, banned := range []string{string(xaQR), hostQR, "logo", "Giới thiệu", "anh.example"} {
+	for _, banned := range []string{string(xaQR), hostQR, "Giới thiệu", "anh.example", "banner"} {
 		if strings.Contains(body, banned) {
 			t.Fatalf("phản hồi chứa %q: %s", banned, body)
+		}
+	}
+}
+
+func TestCommuneProfileLogoIsPublicURLOnlyAndNoBanner(t *testing.T) {
+	// Both logo fields and the banner are set: `logo_url` is logo_public_url, the typed one and the
+	// web-admin banner never leave (ADR 0069 #6, #8).
+	public := "https://public.example/vigov-public/t_" + string(xaQR) + "/01JLOGO.png"
+	pr := &profileReaderFake{byCommune: map[tenant.ID]platformclient.TenantProfile{
+		xaQR: {LogoURL: "https://anh.example/typed.png", LogoPublicURL: public,
+			WebAdminBannerPublicURL: "https://public.example/vigov-public/banner-only-web-admin.jpg"},
+	}}
+	w := goiCongKhai(profileServer(t, &nenTangXaGia{}, pr, nil), CommuneProfilesPath, qHost(hostQR))
+	doiMa(t, w, http.StatusOK)
+	items := readProfiles(t, w)
+	if len(items) != 1 || items[0]["logo_url"] != public {
+		t.Fatalf("hồ sơ = %v, muốn logo_url = %q", items, public)
+	}
+	if _, present := items[0]["id"]; present {
+		t.Fatalf("có khoá id: %v", items[0])
+	}
+	for _, banned := range []string{"anh.example", "banner-only-web-admin", "web_admin_banner"} {
+		if strings.Contains(w.Body.String(), banned) {
+			t.Fatalf("phản hồi chứa %q: %s", banned, w.Body.String())
 		}
 	}
 }
@@ -141,8 +167,8 @@ func TestCommuneProfileNotDeclaredIsNameWithEmptyFields(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	items := readProfiles(t, w)
 	if len(items) != 1 || items[0]["name"] != "Xã Quế Sơn" || items[0]["office_address"] != "" ||
-		items[0]["hotline"] != "" || items[0]["office_hours_text"] != "" {
-		t.Fatalf("xã chưa khai hồ sơ: %v — muốn tên xã và ba trường rỗng, không mặc định", items)
+		items[0]["hotline"] != "" || items[0]["office_hours_text"] != "" || items[0]["logo_url"] != "" {
+		t.Fatalf("xã chưa khai hồ sơ: %v — muốn tên xã và bốn trường rỗng, không mặc định", items)
 	}
 }
 

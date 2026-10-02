@@ -140,6 +140,8 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		SLA:      slaMau(),
 		GhiSLA:   ghiSLAMau(),
 		AuditLog: &auditLogFake{},
+		// Register refuses a Deps without the profile read (logo/banner on /communes/current).
+		Profile: &profileReaderFake{},
 		// Register refuses a Deps without the automation use case.
 		Automation: automationSample(),
 		CanBo:      &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
