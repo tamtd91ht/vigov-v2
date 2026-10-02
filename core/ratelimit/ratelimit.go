@@ -54,9 +54,9 @@ const (
 )
 
 // The citizen scene-photo upload threshold — ADR 0052 §12 requires "giới hạn tần suất theo công dân"
-// and names NO number. ⚠ THESE TWO VALUES ARE THE BUILDER'S PROPOSAL OF 02/10/2026, NOT AN OWNER
-// DECISION: choosing a security threshold is a rule 13 stop condition, so they must be confirmed (or
-// replaced) by the owner before this ships. The reasoning offered for them: one photo costs TWO
+// and names NO number. CHOSEN BY THE OWNER on 02/10/2026 (asked as a rule 13 stop condition; ADR 0047,
+// row "Ảnh hiện trường khi gửi phản ánh"); changing either is a rule 13 stop condition again. The
+// reasoning they were proposed with: one photo costs TWO
 // counted requests (the upload slot and its completion), a petition holds at most 5 photos, so 30
 // per 15 minutes lets a citizen attach a full set to three petitions — and retry each photo once — in
 // one sitting, while bounding what one session can make the server decode and scan.
