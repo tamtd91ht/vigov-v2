@@ -398,6 +398,62 @@ def tu_kiem_citizen() -> list[str]:
     return sai
 
 
+# deploy/Jenkinsfile — the action picker and its "removed action" guard must list the SAME actions.
+#
+# WHY: the guard refuses any HANH_DONG not in its own hand-written list (so a "Rebuild" of an old run
+# with a since-removed action cannot go green doing nothing). On 02/10/2026 `tao-tai-khoan-van-hanh`
+# was added to `choices` but not to the guard, so the job refused the very action it offered and no
+# operator account could be created. Two hand-kept copies of one list drift; this check is the second
+# copy's owner.
+DEPLOY_JENKINSFILE = os.path.join(GOC, "deploy", "Jenkinsfile")
+
+
+def _quoted(items: str) -> list[str]:
+    return re.findall(r"'([^']+)'", items)
+
+
+def check_deploy_actions(text: str) -> list[str]:
+    """PURE: Jenkinsfile text in, violations out — so `self_test_deploy_actions()` can grade it."""
+    code = bo_chu_thich_groovy(text)
+    choices = re.search(r"choice\s*\(\s*name\s*:\s*'HANH_DONG'\s*,\s*choices\s*:\s*\[([^\]]*)\]", code, re.S)
+    guard = re.search(r"params\.HANH_DONG\s+in\s+\[([^\]]*)\]\s*\)\s*\)", code, re.S)
+    if choices is None:
+        return ["không tìm thấy `choice(name: 'HANH_DONG', choices: [...])`"]
+    if guard is None:
+        return ["không tìm thấy phép kiểm `!(params.HANH_DONG in [...])` của việc đã gỡ"]
+    offered, allowed = _quoted(choices.group(1)), _quoted(guard.group(1))
+    out: list[str] = []
+    for a in offered:
+        if a not in allowed:
+            out.append(f"việc '{a}' có trong `choices` nhưng phép kiểm việc-đã-gỡ từ chối nó "
+                       "— job tự từ chối việc nó vừa cho chọn")
+    for a in allowed:
+        if a not in offered:
+            out.append(f"việc '{a}' còn trong phép kiểm việc-đã-gỡ nhưng đã ra khỏi `choices` "
+                       "— gỡ ở cả hai chỗ")
+    return out
+
+
+_DEPLOY_GOOD = (
+    "choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log'], description: 'x')\n"
+    "if (!(params.HANH_DONG in ['kiem-tra', 'xem-log'])) { error('x') }\n"
+)
+
+
+def self_test_deploy_actions() -> list[str]:
+    """Grade the check itself: the good text must pass, each broken variant must fail."""
+    bad: list[str] = []
+    if check_deploy_actions(_DEPLOY_GOOD):
+        bad.append("ca PHẢI XANH bị đỏ oan")
+    for name, broken in {
+        "thêm vào choices mà quên phép kiểm": _DEPLOY_GOOD.replace("'xem-log'], desc", "'xem-log', 'moi'], desc"),
+        "gỡ khỏi choices mà quên phép kiểm": _DEPLOY_GOOD.replace("['kiem-tra', 'xem-log'], desc", "['kiem-tra'], desc"),
+    }.items():
+        if broken == _DEPLOY_GOOD or not check_deploy_actions(broken):
+            bad.append(f"ca PHẢI ĐỎ lọt qua: {name}")
+    return bad
+
+
 def kiem_dong_em(svcs: list[str], loi: list[str]) -> int:
     """Hạn `Shutdown` trong mã phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest.
 
@@ -619,6 +675,16 @@ def main() -> int:
         with open(CITIZEN_JENKINSFILE, encoding="utf-8") as f:
             for l in kiem_jenkins_citizen(f.read()):
                 loi.append(f"citizen-app/Jenkinsfile {l}")
+
+    # deploy/Jenkinsfile: action picker vs removed-action guard. Self-test first, same reason.
+    for s in self_test_deploy_actions():
+        loi.append(f"tools/check_build.py — phép kiểm deploy/Jenkinsfile: {s}")
+    if os.path.isfile(DEPLOY_JENKINSFILE):
+        with open(DEPLOY_JENKINSFILE, encoding="utf-8") as f:
+            for l in check_deploy_actions(f.read()):
+                loi.append(f"deploy/Jenkinsfile {l}")
+    else:
+        loi.append("deploy/Jenkinsfile KHÔNG TỒN TẠI")
 
     if loi:
         print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web-admin + platform-admin")

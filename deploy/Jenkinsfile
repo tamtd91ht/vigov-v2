@@ -164,11 +164,15 @@ pipeline {
           // Một việc đã GỠ khỏi `choices` vẫn tới được đây qua "Rebuild" một lượt cũ (đo được
           // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
+          //
+          // THIS LIST MUST EQUAL `choices` OF HANH_DONG ABOVE, item for item. On 02/10/2026
+          // `tao-tai-khoan-van-hanh` was added to `choices` but not here, so the job refused the one
+          // action it had just offered ("không còn trong job này"). Add/remove an action in BOTH places.
           if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'kiem-tra-dang-nhap-app-rieng', 'bat-demo-mini-app', 'tat-demo-mini-app',
-                                  'dung-clamav'])) {
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
