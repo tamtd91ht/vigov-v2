@@ -182,6 +182,48 @@ func TestCongKhaiTheoIDChiDangHienBuocXa(t *testing.T) {
 	}
 }
 
+// The view increment (ADR 0047, row 02/10/2026): ONE statement, the public read's predicate, the
+// commune bound to $1 from ctx, and nothing but `luot_xem` in its SET list.
+func TestIncrementPublicViewCountIsOneScopedStatement(t *testing.T) {
+	k := &khoNDGia{dong: []dongNDMiniApp{dongNDMau()}} // luotXem 7
+	repo, ctx := khoNoiDung(t, k)
+
+	n, err := repo.IncrementPublicViewCount(ctx, "nd-001")
+	if err != nil {
+		t.Fatalf("tăng lượt xem lỗi: %v", err)
+	}
+	if n != 8 {
+		t.Fatalf("lượt xem trả về = %d, muốn 8 (giá trị RETURNING)", n)
+	}
+	if len(k.lenh) != 1 {
+		t.Fatalf("số câu lệnh = %d, muốn đúng 1 (không đọc-rồi-ghi): %+v", len(k.lenh), k.lenh)
+	}
+	l := k.lenh[0]
+	// MUTATIONS THAT MUST TURN THIS RED: the commune dropped (another commune's article counted), the
+	// state or soft-delete clause dropped (a draft or a removed article counted), a read-modify-write
+	// (`luot_xem = $n`), or a second column touched (an edit stamp on a read).
+	for _, want := range []string{"SET luot_xem = luot_xem + 1 WHERE", "tenant_id = $1", "id = $2",
+		"deleted_at IS NULL", "trang_thai = $3", "RETURNING luot_xem"} {
+		if !strings.Contains(l.sql, want) {
+			t.Errorf("câu tăng lượt xem thiếu %q: %s", want, l.sql)
+		}
+	}
+	set := l.sql[strings.Index(l.sql, " SET ")+5 : strings.Index(l.sql, " WHERE ")]
+	if set != "luot_xem = luot_xem + 1" {
+		t.Errorf("SET = %q — chỉ được chạm luot_xem (không cap_nhat_luc, không da_sua_tay)", set)
+	}
+	if l.args[0] != string(xaMotND) || l.args[1] != "nd-001" || l.args[2] != "dang-hien" {
+		t.Fatalf("tham số = %v, muốn [xã của ngữ cảnh, nd-001, dang-hien]", l.args)
+	}
+}
+
+func TestIncrementPublicViewCountNoRowIsNotFound(t *testing.T) {
+	repo, ctx := khoNoiDung(t, &khoNDGia{})
+	if _, err := repo.IncrementPublicViewCount(ctx, "nd-ban-nhap"); !errors.Is(err, ErrNoiDungKhongTonTai) {
+		t.Fatalf("lỗi = %v, muốn ErrNoiDungKhongTonTai", err)
+	}
+}
+
 func TestCongKhaiTheoIDKhongCoDongThiBaoKhongTonTai(t *testing.T) {
 	// A draft, another commune's id and no id at all are ONE answer: the predicate returns no row.
 	kho, ctx := khoNoiDung(t, &khoNDGia{})

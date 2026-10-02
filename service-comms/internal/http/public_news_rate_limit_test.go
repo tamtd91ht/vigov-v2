@@ -61,7 +61,7 @@ func rlServer(t *testing.T, c *memCounter, log *slog.Logger) http.Handler {
 		log = slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	}
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiterOn(c), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm,
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiterOn(c), Xa: &ckNenTang{}, NoiDung: nd, Views: nd, DanhMuc: dm,
 		CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}, Log: log})
 	return mux
 }

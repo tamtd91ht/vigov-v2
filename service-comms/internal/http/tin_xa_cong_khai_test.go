@@ -82,6 +82,26 @@ type ckNoiDung struct {
 
 	// bannerLimit is the limit the handler passed on the last banner-strip read.
 	bannerLimit int
+
+	// views records every IncrementPublicViewCount as "<commune>/<id>"; viewErr makes it fail.
+	views   []string
+	viewErr error
+}
+
+// IncrementPublicViewCount applies the STORE's predicate (this commune, published) and bumps the row.
+func (k *ckNoiDung) IncrementPublicViewCount(ctx context.Context, id string) (int, error) {
+	xa := tenant.MustFrom(ctx)
+	k.views = append(k.views, string(xa)+"/"+id)
+	if k.viewErr != nil {
+		return 0, k.viewErr
+	}
+	for i := range k.theoXa[xa] {
+		if n := &k.theoXa[xa][i]; n.ID == id && n.TrangThai == domain.TrangThaiDangHien {
+			n.LuotXem++
+			return n.LuotXem, nil
+		}
+	}
+	return 0, commsstore.ErrNoiDungKhongTonTai
 }
 
 // subtree is the fake's publicCategorySubtree: ids reachable from root through the commune's live tree.
@@ -255,7 +275,7 @@ func ckMayChu(t *testing.T, nt *ckNenTang, nd *ckNoiDung, dm *ckDanhMuc, log *sl
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: nt, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}, Log: log})
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: nt, NoiDung: nd, Views: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}, Log: log})
 	return mux
 }
 
@@ -375,9 +395,10 @@ func TestTinXaChiTraDungCacTruongVaVanBanThuan(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	// No body on the list; no status, author, portal id, view count, image or ids of anything else.
+	// No body on the list; no status, author, portal id, image or ids of anything else. `view_count` is
+	// the stored count (ADR 0047, row 02/10/2026).
 	// `source_url` is absent because the row has none.
-	if got := strings.Join(khoa, ","); got != "category_name,id,published_on,source,summary,title,type" {
+	if got := strings.Join(khoa, ","); got != "category_name,id,published_on,source,summary,title,type,view_count" {
 		t.Fatalf("trường của trang = %s", got)
 	}
 	if it["title"] != "Tiêm chủng tháng 10" || it["summary"] != "Tóm tắt" || it["type"] != "tin-tuc" ||
@@ -407,7 +428,7 @@ func TestMotTinXaToanVanLaVanBanThuan(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	if got := strings.Join(khoa, ","); got != "body,body_blocks,category_name,id,published_on,source,summary,title,type" {
+	if got := strings.Join(khoa, ","); got != "body,body_blocks,category_name,id,published_on,source,summary,title,type,view_count" {
 		t.Fatalf("trường của chi tiết = %s", got)
 	}
 	// ADR 0067 §1: the same legacy (unsanitised) row as structure — sanitised on THIS read, the script,
@@ -678,7 +699,7 @@ func TestTinXaTuongThuHaiBoMucChuaDangVaGhiNhatKy(t *testing.T) {
 func TestMauTinXaKhopTuyenDaDangKy(t *testing.T) {
 	nd, dm := ckDuLieu()
 	mux := http.NewServeMux()
-	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}})
+	RegisterCongKhai(mux, DepsCongKhai{Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, Views: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}})
 	for p, muon := range map[string]string{
 		MauTinXa:                 "GET " + MauTinXa,
 		MauTinXa + "/abc":        "GET " + MauTinXa + "/{id}",
@@ -693,13 +714,14 @@ func TestMauTinXaKhopTuyenDaDangKy(t *testing.T) {
 func TestRegisterCongKhaiThieuKhoThiPanic(t *testing.T) {
 	nd, dm := ckDuLieu()
 	for ten, d := range map[string]DepsCongKhai{
-		"thiếu nền tảng": {Limiter: ckLimiter(), NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu nội dung": {Limiter: ckLimiter(), Xa: &ckNenTang{}, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu danh mục": {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
-		"thiếu ảnh bìa":  {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm},
-		"thiếu âm thanh": {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}},
+		"thiếu nền tảng":     {Limiter: ckLimiter(), NoiDung: nd, Views: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu nội dung":     {Limiter: ckLimiter(), Xa: &ckNenTang{}, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu đếm lượt xem": {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu danh mục":     {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, Views: nd, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu ảnh bìa":      {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, Views: nd, DanhMuc: dm},
+		"thiếu âm thanh":     {Limiter: ckLimiter(), Xa: &ckNenTang{}, NoiDung: nd, Views: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}},
 		// Rule 13 invariant 7: no public route is mounted without its rate limit.
-		"thiếu giới hạn tần suất": {Xa: &ckNenTang{}, NoiDung: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
+		"thiếu giới hạn tần suất": {Xa: &ckNenTang{}, NoiDung: nd, Views: nd, DanhMuc: dm, CoverImages: &fakePublicCovers{}, Audio: &fakePublicAudio{}},
 	} {
 		func() {
 			defer func() {

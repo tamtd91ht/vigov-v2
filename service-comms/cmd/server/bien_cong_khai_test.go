@@ -54,6 +54,11 @@ func (noiDungCongKhaiThu) PublicBanners(ctx context.Context, _ int) ([]domain.No
 	return nil, nil
 }
 
+func (noiDungCongKhaiThu) IncrementPublicViewCount(ctx context.Context, _ string) (int, error) {
+	tenant.MustFrom(ctx)
+	return 1, nil
+}
+
 func (noiDungCongKhaiThu) CongKhaiTheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error) {
 	tenant.MustFrom(ctx)
 	return domain.NoiDungMiniApp{ID: id, TieuDe: "Tin", TrangThai: domain.TrangThaiDangHien}, nil
@@ -80,7 +85,7 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 	}
 	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{
 		Limiter: lim,
-		Xa:      xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
+		Xa:      xaTheoHostThu{}, NoiDung: noiDungCongKhaiThu{}, Views: noiDungCongKhaiThu{}, DanhMuc: danhMucThu{},
 		// The real use case with nothing configured: every image is absent, never an error.
 		CoverImages: commsapp.NewContentCovers(nil, nil, nil, nil, nil, nil),
 		Audio:       commsapp.NewContentAudio(nil, nil, nil, nil, nil, nil),

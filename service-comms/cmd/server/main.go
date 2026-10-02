@@ -355,6 +355,7 @@ func main() {
 		Limiter:     publicLimiter,
 		Xa:          publicDirectory,
 		NoiDung:     noiDung,
+		Views:       noiDung,
 		DanhMuc:     danhMucNoiDung,
 		CoverImages: covers,
 		Audio:       broadcastAudio,

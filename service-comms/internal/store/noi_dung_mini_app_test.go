@@ -234,6 +234,14 @@ func (c *connND) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		}
 		return &rowsGhiGia{cot: []string{"id", "name"}, hang: hang}, nil
 	}
+	if strings.HasPrefix(q, "UPDATE noi_dung_mini_app SET luot_xem") {
+		// The view increment's RETURNING: the first row's count plus one, or no row when the fake holds
+		// none (the predicate matched nothing).
+		if len(c.k.dong) == 0 {
+			return &rowsGhiGia{cot: []string{"luot_xem"}}, nil
+		}
+		return &rowsGhiGia{cot: []string{"luot_xem"}, hang: [][]driver.Value{{c.k.dong[0].luotXem + 1}}}, nil
+	}
 	if strings.Contains(q, "SELECT DISTINCT nd.danh_muc_id") {
 		hang := make([][]driver.Value, 0, len(c.k.categoriesWithItems))
 		for _, id := range c.k.categoriesWithItems {

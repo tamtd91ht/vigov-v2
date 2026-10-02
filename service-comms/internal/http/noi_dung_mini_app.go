@@ -167,8 +167,10 @@ type noiDungRa struct {
 	// a day, not at an instant, and a timestamp would invent a time zone for it.
 	PublishedOn string `json:"published_on"`
 
-	// ViewCount is §6's `👁 {n}`. IT IS ZERO ON EVERY ROW TODAY: the only thing that legitimately
-	// increments it is a resident opening the article, and the citizen-facing read is not built.
+	// ViewCount is §6's `👁 {n}`: residents' reads of the public detail route, counted since 02/10/2026
+	// (ADR 0047, row 02/10/2026 — tin_xa_cong_khai.go, MotTinXa), so an article older than the counter
+	// shows fewer views than it had. OUTPUT ONLY: no staff create or edit body accepts it — the public
+	// read is its one writer.
 	ViewCount int `json:"view_count"`
 
 	// Status is §6's chip: `dang-hien` · `cho-duyet` · `an`.

@@ -196,3 +196,73 @@ func TestPgPublicContentFiltersByType(t *testing.T) {
 		t.Fatalf("trang công khai su-kien xã 1 = %v, muốn đúng [su-kien]", ids)
 	}
 }
+
+// The view increment against the real schema (ADR 0047, row 02/10/2026). EACH ROW MAKES ONE DEFECT
+// VISIBLE, as above, plus the two only a real database can show: the immutability trigger lets an
+// increase through, and concurrent increments are not lost (the UPDATE's row lock, not Go, serialises).
+func TestPgIncrementPublicViewCount(t *testing.T) {
+	xa1, xa2 := xaRieng(t)
+	db := moKetNoi(t)
+	luc := time.Now().UTC()
+	themNoiDungThat(t, xa1, "cong-khai", "tin-tuc", "Tin đã đăng", "dang-hien", "thu-cong", "", luc)
+	themNoiDungThat(t, xa1, "an", "tin-tuc", "Bản nháp", "an", "thu-cong", "", luc)
+	themNoiDungThat(t, xa1, "da-xoa", "tin-tuc", "Đã xoá", "dang-hien", "thu-cong", "", luc)
+	themNoiDungThat(t, xa2, "cong-khai", "tin-tuc", "Tin xã 2 cùng id", "dang-hien", "thu-cong", "", luc)
+	if _, err := db.Exec(
+		`UPDATE noi_dung_mini_app SET deleted_at = now(), deleted_by = 'CB-TEST', delete_reason = 'thử'
+		  WHERE tenant_id = $1 AND id = 'da-xoa'`, xa1); err != nil {
+		t.Fatalf("xoá mềm: %v", err)
+	}
+	read := func(tenantID, id string) (int, time.Time) {
+		t.Helper()
+		var n int
+		var updated time.Time
+		if err := db.QueryRow(`SELECT luot_xem, cap_nhat_luc FROM noi_dung_mini_app WHERE tenant_id = $1 AND id = $2`,
+			tenantID, id).Scan(&n, &updated); err != nil {
+			t.Fatalf("đọc %s: %v", id, err)
+		}
+		return n, updated
+	}
+	_, updatedBefore := read(xa1, "cong-khai")
+
+	kho := khoNoiDungThat(t)
+	ctx := ctxXa(tenant.ID(xa1))
+	n, err := kho.IncrementPublicViewCount(ctx, "cong-khai")
+	if err != nil || n != 1 {
+		t.Fatalf("tăng lượt xem tin đã đăng: n = %d, lỗi = %v — muốn 1, nil (trigger bất biến phải cho tăng)", n, err)
+	}
+	for _, id := range []string{"an", "da-xoa"} {
+		if _, err := kho.IncrementPublicViewCount(ctx, id); !errors.Is(err, ErrNoiDungKhongTonTai) {
+			t.Errorf("tăng lượt xem %s: lỗi = %v, muốn ErrNoiDungKhongTonTai", id, err)
+		}
+		if got, _ := read(xa1, id); got != 0 {
+			t.Errorf("%s bị đếm: luot_xem = %d", id, got)
+		}
+	}
+
+	// Concurrent views: every one counted.
+	const parallel = 8
+	errs := make(chan error, parallel)
+	for i := 0; i < parallel; i++ {
+		go func() {
+			_, err := kho.IncrementPublicViewCount(ctx, "cong-khai")
+			errs <- err
+		}()
+	}
+	for i := 0; i < parallel; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("tăng song song: %v", err)
+		}
+	}
+	got, updatedAfter := read(xa1, "cong-khai")
+	if got != 1+parallel {
+		t.Fatalf("luot_xem = %d sau %d lượt, muốn %d — mất lượt khi đồng thời", got, 1+parallel, 1+parallel)
+	}
+	if !updatedAfter.Equal(updatedBefore) {
+		t.Errorf("cap_nhat_luc đổi %v → %v — một lượt xem không phải một lần sửa", updatedBefore, updatedAfter)
+	}
+	// The same id in commune 2 is another row, untouched (rule 1).
+	if other, _ := read(xa2, "cong-khai"); other != 0 {
+		t.Errorf("tin cùng id của xã 2 bị đếm: luot_xem = %d", other)
+	}
+}

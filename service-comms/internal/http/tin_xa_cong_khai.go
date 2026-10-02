@@ -16,8 +16,14 @@ package http
 //	                server-side (xaTheoHost). No tenant_id is ever taken from the request (rule 1,
 //	                forbidden #2), and no commune ULID is ever returned
 //
-// WHAT IS DELIBERATELY ABSENT (owner decision 2026-09-27): no view counting (`luot_xem` stays as it is —
-// a GET that writes is not a GET, and a public counter is a number anybody can inflate).
+// VIEW COUNTING — ABSENT BY THE 2026-09-27 DECISION ("a GET that writes is not a GET, and a public
+// counter is a number anybody can inflate"), REVERSED BY THE OWNER ON 02/10/2026 (ADR 0047, row
+// 02/10/2026): the DETAIL route adds one to `luot_xem` per read, the list never does, and every item
+// carries `view_count`. The two objections are answered, not ignored: the write is one best-effort
+// statement that can never fail the read (MotTinXa), and inflation is bounded by the route's rate limit
+// — so a view is NOT counted when that limit could not be consulted (Redis down, fail-open), nor when
+// the client says the read is only a refresh (`no_view=1`). Not audited per view: the owner's exception
+// in the same row.
 //
 // A CATEGORIES ENDPOINT WAS ABSENT TOO, BY THE SAME 2026-09-27 DECISION — AND ON 2026-09-30 THE USER
 // REVERSED IT, explicitly, for the Mini App news tab's two-level chip row (vigov-require NewsPage.tsx:
@@ -31,7 +37,7 @@ package http
 // ADDED 2026-09-29 for SRS M6.1.4 (the Mini App's news screen, P0), all OPTIONAL on the wire so the
 // contract only grows (rule 2, forbidden #4): `type` on each item, an optional `type` filter on the list,
 // and the provenance pair `source` / `source_url`. STILL ABSENT, each for a reason on tinXaRa: the image
-// and the view count.
+// (the view count arrived 02/10/2026 — `view_count`, below).
 //
 // ADDED 2026-09-30 (ADR 0047 §6, migration 0011), optional in the same way: `published_at` (G1),
 // `event_starts_at` / `event_ends_at` / `event_place` on `su-kien`, `video_url` on `video`.
@@ -91,10 +97,22 @@ type NoiDungCongKhaiDoc interface {
 	PublicBanners(ctx context.Context, limit int) ([]domain.NoiDungMiniApp, error)
 }
 
+// PublicViewCounter is the ONE write the public surface makes (ADR 0047, row 02/10/2026): one view of a
+// published item. *commsstore.NoiDungMiniAppStore satisfies it. A separate interface so the read
+// interface above stays read-only, and the only write reachable from these routes is this one.
+type PublicViewCounter interface {
+	// IncrementPublicViewCount adds one to the published item's `luot_xem` in the commune of ctx and
+	// returns the new count; commsstore.ErrNoiDungKhongTonTai when no published row matched.
+	IncrementPublicViewCount(ctx context.Context, id string) (int, error)
+}
+
 // DepsCongKhai is everything the public routes may touch. Nothing else is reachable from them.
 type DepsCongKhai struct {
 	Xa      TraXaTheoHost
 	NoiDung NoiDungCongKhaiDoc
+
+	// Views counts a detail read (MotTinXa).
+	Views PublicViewCounter
 
 	// DanhMuc resolves `category_name`. The commune's category tree is the name under which it files its
 	// own public articles — public by construction, and bounded (commsstore.TranDanhMucMiniApp).
@@ -156,8 +174,8 @@ func newHandlerCongKhai(d DepsCongKhai) *HandlerCongKhai {
 //     (migrations/0006_noi_dung_mini_app.sql:277-280) — not an approved derivative in the public bucket
 //     (ADR 0052 §2). Handing it to every resident would make the Mini App fetch whatever host was typed.
 //     The image residents get is `image_url` (2026-10-01): the UPLOADED cover's published derivative.
-//   - NO VIEW COUNT. Nothing increments `luot_xem` (0006:93-97), so it is 0 on every row; a public 0 reads
-//     as "nobody read this", which is false.
+//
+// `view_count` IS PRESENT SINCE 02/10/2026 (ADR 0047, row 02/10/2026) — see ViewCount.
 type tinXaRa struct {
 	// ID is the item's own ULID — what the detail route takes. Random, so it enumerates nothing (rule 4,
 	// invariant 4). NEVER the commune's id.
@@ -230,6 +248,15 @@ type tinXaRa struct {
 	// BodyBlocks is the body as structure, DETAIL ONLY (ADR 0067 §1 decision 3). ABSENT when the body has
 	// no text — the client then shows `body`. Never HTML: every `text` is plain text, every `href` https.
 	BodyBlocks []bodyBlockOut `json:"body_blocks,omitempty"`
+
+	// ViewCount is `luot_xem` (ADR 0047, row 02/10/2026): reads of the DETAIL route counted since that
+	// day — not before, so an article older than the counter shows fewer views than it had. On the list
+	// it is the stored count; on the detail it INCLUDES the read being answered, unless that read was not
+	// counted (MotTinXa says when). ALWAYS SENT, 0 included: the owner wants a new article to read
+	// "0 lượt xem", and the Mini App treats an ABSENT field as "this server does not count" and shows
+	// nothing — so omitting 0 would hide exactly the count the owner asked to show. Optional in the
+	// contract only for older servers (rule 2, forbidden #4).
+	ViewCount int `json:"view_count"`
 }
 
 // bodyBlockOut is one block of `body_blocks`.
@@ -329,6 +356,7 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 		PublishedOn:  n.NgayDang.Format("2006-01-02"),
 		CategoryName: tenDanhMuc[n.DanhMucID],
 		Source:       string(n.Nguon),
+		ViewCount:    n.LuotXem,
 	}
 	if u, err := domain.ChuanHoaURL(n.NguonURL); err == nil {
 		// An invalid stored link is dropped, not an error: the article is still worth showing, and the
@@ -408,12 +436,20 @@ func viet404Tin(w http.ResponseWriter) {
 // ResolveHost per TTL; a flood of DISTINCT host names still costs one each until the cache's TranMuc
 // ceiling, after which misses are no longer remembered (that cache's stated trade-off).
 func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, host, viec string) (tenant.Tenant, bool, bool) {
+	xa, co, ok, _ := h.resolveHostLimited(w, r, host, viec)
+	return xa, co, ok
+}
+
+// resolveHostLimited is xaTheoHost plus whether the rate limit was ENFORCED for this request — false when
+// the limiter could not be consulted and served anyway (fail-open, ratelimit.NotEnforced). Only the
+// detail route reads it: a view counted while nothing bounds the caller is a view anybody can inflate.
+func (h *HandlerCongKhai) resolveHostLimited(w http.ResponseWriter, r *http.Request, host, viec string) (tenant.Tenant, bool, bool, bool) {
 	xa, co, err := h.d.Xa.XaTheoHost(r.Context(), host)
 	if err != nil {
 		h.d.Log.WarnContext(r.Context(), viec+": không hỏi được dịch vụ nền tảng", "host", host, "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "platform_unavailable",
 			"Hệ thống đang bận. Vui lòng thử lại sau ít phút.", "")
-		return tenant.Tenant{}, false, false
+		return tenant.Tenant{}, false, false, false
 	}
 	resolved := co && xa.Active && xa.ID.Valid()
 	ctx := r.Context()
@@ -428,15 +464,17 @@ func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, hos
 		// unscoped counter for a commune's route is the default rule 1 forbids.
 		h.d.Log.ErrorContext(ctx, viec+": không dựng được khoá giới hạn tần suất", "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
-		return tenant.Tenant{}, false, false
+		return tenant.Tenant{}, false, false, false
 	}
-	if !ratelimit.Gate(w, r.WithContext(ctx), h.d.Limiter, key, h.d.Log, attrs...) {
-		return tenant.Tenant{}, false, false
+	outcome := ratelimit.GateOutcome(w, r.WithContext(ctx), h.d.Limiter, key, h.d.Log, attrs...)
+	if outcome == ratelimit.Refused {
+		return tenant.Tenant{}, false, false, false
 	}
+	enforced := outcome == ratelimit.Enforced
 	if !resolved {
-		return tenant.Tenant{}, false, true
+		return tenant.Tenant{}, false, true, enforced
 	}
-	return xa, true, true
+	return xa, true, true, enforced
 }
 
 // tenDanhMuc reads the commune's category names, keyed by id — only when some item is filed under one.
@@ -761,11 +799,23 @@ func (h *HandlerCongKhai) categoryError(ctx context.Context, w http.ResponseWrit
 // longer cannot name one, and answers the same 404 without a query.
 const maTinToiDa = 64
 
-// MotTinXa serves one published item, body as plain text. GET /api/v1/commune-news/{id}?host=
+// MotTinXa serves one published item, body as plain text. GET /api/v1/commune-news/{id}?host=[&no_view=1]
 //
 // ONE 404 for: no such id, another commune's id, an item not published (`an`, `cho-duyet`), a
 // soft-deleted item, and a domain no active commune holds. Byte-identical — telling any two apart would
 // say what a commune holds or is preparing (rule 4, forbidden #2).
+//
+// IT COUNTS ONE VIEW (ADR 0047, row 02/10/2026) — AFTER the item was read and passed HienChoDan, so a
+// failed read, a 404 and a 500 never count. BEST EFFORT: an increment failure is logged with the item
+// id only (a ULID, not personal data; never the host or the client address) and the reply is still 200
+// with the count as read. NOT COUNTED when:
+//
+//	the rate limit was not enforced  ratelimit.NotEnforced — Redis down, the policy failed open. The read
+//	                                 is served, but nothing bounds the caller, so counting would hand an
+//	                                 unbounded client an unbounded figure.
+//	`no_view=1`                      the commune app re-reading only to refresh an expired signed audio
+//	                                 link. Trusting the client is safe here because the flag can only
+//	                                 LOWER the count; any other value counts normally.
 func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 	gia := r.URL.Query()["host"]
 	if len(gia) != 1 || !domain.HopLeTenMienXa(gia[0]) {
@@ -778,7 +828,7 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xa, co, ok := h.xaTheoHost(w, r, gia[0], "chi tiết tin của xã")
+	xa, co, ok, limitEnforced := h.resolveHostLimited(w, r, gia[0], "chi tiết tin của xã")
 	if !ok {
 		return
 	}
@@ -819,7 +869,22 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	noStoreIfSigned(w, audio)
+	if limitEnforced && !viewRefreshOnly(r.URL.Query()) {
+		// Not audited per view — the owner's exception, ADR 0047 row 02/10/2026 (rule 6).
+		if count, err := h.d.Views.IncrementPublicViewCount(ctx, n.ID); err != nil {
+			h.d.Log.WarnContext(ctx, "chi tiết tin của xã: không tăng được lượt xem — vẫn trả tin",
+				"xa", string(xa.ID), "id", n.ID, "err", err)
+		} else {
+			n.LuotXem = count
+		}
+	}
 	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, audio, true))
+}
+
+// viewRefreshOnly is the detail's OPTIONAL `no_view`: true only for exactly "1". A helper for the reason
+// publicTypeFilter gives — the generated contract must publish the parameter as optional.
+func viewRefreshOnly(q url.Values) bool {
+	return thamSoLoc(q, "no_view") == "1"
 }
 
 // noStoreIfSigned marks a reply carrying a presigned audio link `no-store`: a cache that kept it would

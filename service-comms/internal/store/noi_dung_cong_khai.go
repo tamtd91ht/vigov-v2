@@ -22,6 +22,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/vihat/vigov/core/page"
@@ -168,6 +169,43 @@ func (s *NoiDungMiniAppStore) CongKhaiTheoID(ctx context.Context, id string) (do
 		return domain.NoiDungMiniApp{}, ErrNoiDungKhongTonTai
 	}
 	return quetNoiDungMiniApp(rows, true)
+}
+
+// incrementPublicViewCount is the ONE writer of `luot_xem` (ADR 0047, row 02/10/2026). One atomic
+// statement: the row lock PostgreSQL takes for the UPDATE serialises concurrent readers, so two views
+// are two increments, never a lost update — no read-modify-write in Go.
+//
+// THE SAME PREDICATE AS CongKhaiTheoID — this commune ($1), this id, not soft-deleted, `dang-hien` —
+// so a row the public read would not return is never counted, even if it was unpublished between the
+// read and this statement. It SETS NOTHING ELSE: not `cap_nhat_luc` (a view is not an edit, and the
+// staff register sorts and shows "last updated" by it), not `da_sua_tay` (§10.4's flag means a member
+// of staff changed the text). The triggers on this table allow it: noi_dung_mini_app_bat_bien refuses
+// only a DECREASE of `luot_xem` (0011:503-507), and the cover/audio/banner/portal-category triggers
+// fire only on UPDATE OF their own columns (0011:452, 0012:232,274, 0013:462).
+const incrementPublicViewCount = `UPDATE noi_dung_mini_app SET luot_xem = luot_xem + 1 ` +
+	`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND trang_thai = $3 RETURNING luot_xem`
+
+// IncrementPublicViewCount adds one view to a PUBLISHED item of this commune and returns the new count.
+// ErrNoiDungKhongTonTai when the predicate matches no row (another commune's id, not published,
+// soft-deleted, no such id) — nothing was written then.
+//
+// NO AUDIT ENTRY, BY THE OWNER'S EXCEPTION (ADR 0047, row 02/10/2026): a view is a resident reading
+// what the commune published, not an act on a record; one audit row per read would make the trail a
+// read log of the notice board. The commune comes from ctx (rule 1, invariant 4) through the scoped
+// transaction, never from an argument.
+func (s *NoiDungMiniAppStore) IncrementPublicViewCount(ctx context.Context, id string) (int, error) {
+	var count int
+	err := s.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		return tx.Underlying().QueryRowContext(ctx, incrementPublicViewCount,
+			string(tx.TenantID()), id, string(domain.TrangThaiDangHien)).Scan(&count)
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNoiDungKhongTonTai
+	}
+	if err != nil {
+		return 0, fmt.Errorf("noi_dung_mini_app: tăng lượt xem: %w", err)
+	}
+	return count, nil
 }
 
 // PublicBannerStripMax bounds the banner strip. Not a customer figure: it is page.MaxLimit, the bound

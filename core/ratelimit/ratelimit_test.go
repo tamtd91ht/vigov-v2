@@ -408,6 +408,46 @@ func TestGateFailOpenServesAndWarnsOncePerWindow(t *testing.T) {
 	}
 }
 
+// GateOutcome keeps the three outcomes apart; Gate's bool is exactly "not Refused". The case that
+// matters is the fail-open one: SERVED, yet NotEnforced — a caller whose side effect needs the bound
+// (the public news view count) must be able to see that the bound was not there.
+func TestGateOutcomeSeparatesEnforcedFromFailOpen(t *testing.T) {
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+	k, _ := PublicHostIPKey(ctx, true, "xa.vigov.vn", "203.0.113.7")
+
+	up, _ := New(newFake(), PublicNewsRead)
+	rec := httptest.NewRecorder()
+	if got := GateOutcome(rec, gateReq(), up, k, nil); got != Enforced || rec.Code != http.StatusOK {
+		t.Fatalf("store up, within limit: outcome = %v, code = %d — want Enforced, nothing written", got, rec.Code)
+	}
+	for i := 1; i < PublicNewsReadLimit; i++ {
+		GateOutcome(httptest.NewRecorder(), gateReq(), up, k, nil)
+	}
+	rec = httptest.NewRecorder()
+	if got := GateOutcome(rec, gateReq(), up, k, nil); got != Refused || rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("over the limit: outcome = %v, code = %d — want Refused, 429", got, rec.Code)
+	}
+
+	down := newFake()
+	down.fail = errors.New("dial tcp: connection refused")
+	open, _ := New(down, PublicNewsRead)
+	rec = httptest.NewRecorder()
+	if got := GateOutcome(rec, gateReq(), open, k, nil); got != NotEnforced || rec.Code != http.StatusOK {
+		t.Fatalf("fail-open, store down: outcome = %v, code = %d — want NotEnforced, nothing written", got, rec.Code)
+	}
+	if !Gate(httptest.NewRecorder(), gateReq(), open, k, nil) {
+		t.Fatal("Gate stopped serving on the fail-open outage — its behaviour must not change")
+	}
+
+	closedDown := newFake()
+	closedDown.fail = errors.New("i/o timeout")
+	rec = httptest.NewRecorder()
+	if got := GateOutcome(rec, gateReq(), mustNew(t, closedDown), OperatorIPKey("203.0.113.7"), nil); got != Refused ||
+		rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("closed policy, store down: outcome = %v, code = %d — want Refused, 503", got, rec.Code)
+	}
+}
+
 // The closed policy through Gate is still closed.
 func TestGateClosedPolicyAnswers503(t *testing.T) {
 	f := newFake()

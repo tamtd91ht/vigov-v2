@@ -516,6 +516,7 @@ export type comms_tinXaRa = {
   "audio_url"?: string;
   "audio_url_expires_at"?: string | null;
   "body_blocks"?: Array<comms_bodyBlockOut>;
+  "view_count": number;
 };
 
 export type comms_unreadCountOut = {
@@ -4285,6 +4286,7 @@ export type comms_get_commune_news_by_id = {
   };
   truyVan: {
     "host"?: string;
+    "no_view"?: string;
   };
   than: never;
   phanHoi: {

@@ -135,5 +135,13 @@
     "compensation": "Khong co gi de bu: khong ghi. /communes/current: nen tang loi hoac qua han 1 giay (brandingReadTimeout) thi VAN 200, hai truong anh la chuoi rong, ghi mot dong log canh bao chi mang ma xa va loi (khong du lieu ca nhan). /commune-profiles: GIU nguyen 503 nhu truoc — logo di chung mot lan doc voi dia chi/duong day nong/gio lam viec, ma ba truong ay la noi dung chinh cua tuyen.",
     "why": "/communes/current duoc web-admin goi phia may chu o MOI lan dung trang, ke ca trang dang nhap, khong cache (web-admin/src/lib/tenant-config.ts). Logo va banner chi la trang tri; xa da duoc bien phan giai theo Host va tu choi kieu fail-closed TRUOC khi toi day, nen ha cap o day khong cham duong co lap (luat 1). Tra 503 se khoa can bo khoi mot he thong nha nuoc chi vi thieu mot buc anh. Chuoi rong trung nghia 'chua dat anh', nen client khong phai dung nhanh rieng cho su co. Han 1 giay ngan hon platformclient.HanGoi (3 giay) de su co nen tang ton moi trang toi da 1 giay. Gia phai tra, noi ro: them mot vong gRPC identity→platform cho moi lan dung trang web-admin; trong luc nen tang hong, logo/banner bien mat tren moi trang. /commune-profiles khong ha cap vi mot ho so rong se doc thanh 'xa khong cong bo gi'.",
     "adr": "kb/10-decisions/0069-nhan-dien-xa-logo-banner.md (#7, #8)"
+  },
+  "dem_luot_xem_tin_cong_khai": {
+    "consistency": "manh",
+    "scope": "service-comms, MOT cau lenh UPDATE noi_dung_mini_app SET luot_xem = luot_xem + 1 ... RETURNING luot_xem (store.IncrementPublicViewCount, loc tenant + id + chua xoa + dang hien), goi tu GET /api/v1/commune-news/{id} sau khi doc tin thanh cong. Khong giao dich nhieu buoc. Khong ghi nhat ky kiem toan tung luot (ngoai le chu du an, ADR 0047 dong 'Luot xem tin' 02/10/2026). Khong dong cap_nhat_luc / da_sua_tay.",
+    "max_lag": null,
+    "compensation": "Khong bu tru — best-effort: tang loi thi ghi log ma tin (khong host, khong IP), van tra 200 voi luot xem da doc. Khong dem khi bo gioi han tan suat khong kiem duoc (Redis hong, fail-open cho viec doc) hoac khi client gui no_view=1 (doc lai chi de lam moi link am thanh).",
+    "why": "Luot xem la con so hien thi, khong phai ho so co gia tri phap ly: mot lan nguoi dan doc tin khong bao gio duoc hong vi bo dem. Mot cau lenh nguyen tu thi khong mat luot khi dong thoi; trigger noi_dung_mini_app_bat_bien chi cam giam. Khong dem luc su co de so khong bi thoi phong khong gioi han.",
+    "adr": "kb/10-decisions/0047-hai-luong-dung-citizen-app-theo-ten-mien.md"
   }
 }

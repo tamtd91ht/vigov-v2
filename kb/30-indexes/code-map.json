@@ -6552,7 +6552,7 @@
     },
     "http.DanhSachDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:497"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:499"
     },
     "http.DanhSachDeNghiLuiHan": {
       "kind": "func",
@@ -6600,7 +6600,7 @@
     },
     "http.DanhSachNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:379"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:381"
     },
     "http.DanhSachPhieu": {
       "kind": "func",
@@ -6624,7 +6624,7 @@
     },
     "http.DanhSachTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:496"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:534"
     },
     "http.DanhSachTrangThaiNhiemVu": {
       "kind": "func",
@@ -6664,11 +6664,11 @@
     },
     "http.DeleteContentCategory": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:903"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:905"
     },
     "http.DeleteContentItem": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:775"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:777"
     },
     "http.DeleteMapFieldSchema": {
       "kind": "func",
@@ -7124,11 +7124,11 @@
     },
     "http.MotNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:460"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:462"
     },
     "http.MotTinXa": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:769"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:819"
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
@@ -7188,7 +7188,7 @@
     },
     "http.NoiDungCongKhaiDoc": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:81"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:87"
     },
     "http.NoiDungMiniAppDoc": {
       "kind": "type",
@@ -7344,15 +7344,19 @@
     },
     "http.PublicAudioLinks": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:128"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:146"
     },
     "http.PublicCoverImages": {
       "kind": "type",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:122"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:140"
     },
     "http.PublicNewsCategories": {
       "kind": "func",
-      "at": "service-comms/internal/http/tin_xa_cong_khai.go:700"
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:738"
+    },
+    "http.PublicViewCounter": {
+      "kind": "type",
+      "at": "service-comms/internal/http/tin_xa_cong_khai.go:103"
     },
     "http.PublishStaffBulk": {
       "kind": "func",
@@ -7588,7 +7592,7 @@
     },
     "http.SuaNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:709"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:711"
     },
     "http.SuaSLA": {
       "kind": "func",
@@ -7700,7 +7704,7 @@
     },
     "http.ThemDanhMucNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:821"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:823"
     },
     "http.ThemDuAn": {
       "kind": "func",
@@ -7752,7 +7756,7 @@
     },
     "http.ThemNoiDung": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:589"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:591"
     },
     "http.ThemVanBanDen": {
       "kind": "func",
@@ -7792,7 +7796,7 @@
     },
     "http.UpdateContentCategory": {
       "kind": "func",
-      "at": "service-comms/internal/http/noi_dung_mini_app.go:875"
+      "at": "service-comms/internal/http/noi_dung_mini_app.go:877"
     },
     "http.UpdateMapFieldSchema": {
       "kind": "func",
@@ -9158,6 +9162,10 @@
       "kind": "func",
       "at": "core/ratelimit/middleware.go:59"
     },
+    "ratelimit.GateOutcome": {
+      "kind": "func",
+      "at": "core/ratelimit/middleware.go:81"
+    },
     "ratelimit.Incr": {
       "kind": "func",
       "at": "core/ratelimit/redis.go:56"
@@ -9189,6 +9197,10 @@
     "ratelimit.OperatorIPKey": {
       "kind": "func",
       "at": "core/ratelimit/ratelimit.go:208"
+    },
+    "ratelimit.Outcome": {
+      "kind": "type",
+      "at": "core/ratelimit/middleware.go:65"
     },
     "ratelimit.Policy": {
       "kind": "func",
@@ -9784,7 +9796,7 @@
     },
     "store.CongKhaiTheoID": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_cong_khai.go:156"
+      "at": "service-comms/internal/store/noi_dung_cong_khai.go:157"
     },
     "store.CorrectDeadline": {
       "kind": "func",
@@ -9884,7 +9896,7 @@
     },
     "store.DanhSachCongKhai": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_cong_khai.go:50"
+      "at": "service-comms/internal/store/noi_dung_cong_khai.go:51"
     },
     "store.DanhSachCuaCongDan": {
       "kind": "func",
@@ -10121,6 +10133,10 @@
     "store.IncomingMetricFilter": {
       "kind": "type",
       "at": "service-documents/internal/store/incoming_dashboard.go:29"
+    },
+    "store.IncrementPublicViewCount": {
+      "kind": "func",
+      "at": "service-comms/internal/store/noi_dung_cong_khai.go:196"
     },
     "store.Insert": {
       "kind": "func",
@@ -10892,7 +10908,7 @@
     },
     "store.PublicBanners": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_cong_khai.go:183"
+      "at": "service-comms/internal/store/noi_dung_cong_khai.go:221"
     },
     "store.PublicForSubject": {
       "kind": "func",
@@ -10904,7 +10920,7 @@
     },
     "store.PublishedCategoryIDs": {
       "kind": "func",
-      "at": "service-comms/internal/store/noi_dung_cong_khai.go:114"
+      "at": "service-comms/internal/store/noi_dung_cong_khai.go:115"
     },
     "store.PublishedOfPurpose": {
       "kind": "func",

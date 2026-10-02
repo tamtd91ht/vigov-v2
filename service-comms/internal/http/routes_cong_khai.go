@@ -28,6 +28,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 		panic("comms/http: thiếu kho tra xã theo tên miền — tuyến tin của xã sẽ panic khi có người gọi")
 	case d.NoiDung == nil:
 		panic("comms/http: thiếu kho nội dung công khai — tuyến tin của xã sẽ panic khi có người gọi")
+	case d.Views == nil:
+		// Refused rather than "no counter = no counting": a wiring slip would silently stop the figure
+		// the owner decided to show, with every test of the read still green.
+		panic("comms/http: thiếu đường đếm lượt xem tin công khai (ADR 0047, 02/10/2026)")
 	case d.DanhMuc == nil:
 		panic("comms/http: thiếu kho danh mục nội dung — tuyến tin của xã sẽ panic khi có người gọi")
 	case d.CoverImages == nil:
@@ -48,7 +52,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// khai cho Mini App đọc"). The commune published these items TO its residents; a resident opening
 	// the Mini App has no account and needs none to read the commune's own notice board.
 	//
-	// NO idem.* DECLARATION: a GET changes no state (and nothing here counts views).
+	// NO idem.* DECLARATION: the list and the categories change no state. The DETAIL adds one view to
+	// `luot_xem` (owner, ADR 0047 row 02/10/2026) — a counter, not a resource a retry could duplicate in
+	// any way that matters: a retried GET is a second read, and it is counted as one. Not counted when the
+	// rate limit could not be consulted, nor on `no_view=1` (tin_xa_cong_khai.go, MotTinXa).
 	//
 	// RATE LIMIT — ratelimit.PublicNewsRead, ON ALL THREE ROUTES BELOW (rule 13, invariant 7; owner
 	// 02/10/2026): 120 requests per minute per (host, client network), counted in xaTheoHost once the
@@ -127,6 +134,10 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// structure — paragraphs, headings, lists, bold/italic/https-link runs — built here from the body
 	// sanitised AGAIN on this read (ADR 0067 §1). No field is ever HTML. A broadcast carries its audio
 	// link as on the list.
+	//
+	// EACH 200 COUNTS ONE VIEW (ADR 0047, row 02/10/2026) and `view_count` includes it — best effort: a
+	// counting failure still answers 200 with the count as read. Not counted with `no_view=1` (a re-read
+	// only to refresh the audio link), nor when the rate limit could not be consulted.
 	//
 	// @summary  Một tin đã đăng của xã, toàn văn dạng văn bản thuần (body) và dạng khối có định dạng (body_blocks) — tin chưa đăng hay của xã khác trả cùng một 404
 	// @screen   11-noi-dung-mini-app §9

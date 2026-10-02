@@ -6292,6 +6292,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "no_view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -28095,6 +28103,9 @@
             "items": {
               "$ref": "#/components/schemas/comms.bodyBlockOut"
             }
+          },
+          "view_count": {
+            "type": "integer"
           }
         },
         "required": [
@@ -28102,7 +28113,8 @@
           "id",
           "published_on",
           "summary",
-          "title"
+          "title",
+          "view_count"
         ],
         "additionalProperties": false
       },

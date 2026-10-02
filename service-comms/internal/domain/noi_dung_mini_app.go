@@ -594,8 +594,8 @@ type NoiDungMiniApp struct {
 	// the portal with the portal's own publication date.
 	NgayDang time.Time
 
-	// LuotXem is §6's `👁 {n}`. NOTHING INCREMENTS IT IN THIS PASS: the only thing that legitimately
-	// would is a resident opening the article, and the citizen-facing read of §9 is not built.
+	// LuotXem is §6's `👁 {n}`. Its ONE writer is the public detail read (ADR 0047, row 02/10/2026:
+	// store.IncrementPublicViewCount); no staff write sets it.
 	LuotXem int
 
 	TrangThai TrangThaiNoiDung

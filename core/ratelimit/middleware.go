@@ -57,6 +57,28 @@ func Middleware(l *Limiter, keyOf func(*http.Request) Key, log *slog.Logger) fun
 // attrs are extra fields of the security event — the public routes pass the commune — and must be
 // identifiers only: never a body, a query value, a title (rule 3).
 func Gate(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, log *slog.Logger, attrs ...any) bool {
+	return GateOutcome(w, r, l, key, log, attrs...) != Refused
+}
+
+// Outcome is what GateOutcome decided. Gate folds it into a bool; GateOutcome exists for the one caller
+// that must tell "served WITHIN the limit" from "served because the limit could not be consulted".
+type Outcome int
+
+const (
+	// Refused: the response (429 or 503) is ALREADY WRITTEN; the caller stops.
+	Refused Outcome = iota
+	// Enforced: the store counted this request and it is within the limit.
+	Enforced
+	// NotEnforced: the store could not be asked and the policy FailsOpen, so the request is served
+	// UNBOUNDED. A caller whose side effect is only safe under the bound must skip it on this outcome —
+	// the public news detail does not count a view (ADR 0047, row 02/10/2026): with the limiter down,
+	// nothing stops one client inflating the figure.
+	NotEnforced
+)
+
+// GateOutcome is Gate with the three outcomes kept apart. The responses it writes, the logs it emits
+// and the fail-open behaviour are exactly Gate's — Gate is this function folded to a bool.
+func GateOutcome(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, log *slog.Logger, attrs ...any) Outcome {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -69,7 +91,7 @@ func Gate(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, log *slog
 				log.WarnContext(r.Context(), "CẢNH BÁO BẢO MẬT: không đếm được giới hạn tần suất — vẫn phục vụ (mở theo chính sách, chủ dự án 02/10/2026)",
 					"event", "rate_limit.store_unavailable", "outcome", "allowed", "chinh_sach", l.p.name, "err", err)
 			}
-			return true
+			return NotEnforced
 		}
 		// The key is NOT logged: it holds a client address, and the policy name is what an
 		// operator needs to find the failing dependency.
@@ -77,7 +99,7 @@ func Gate(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, log *slog
 			"chinh_sach", l.p.name, "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "rate_limit_unavailable",
 			"Hệ thống tạm thời không xử lý được yêu cầu. Vui lòng thử lại sau.", "")
-		return false
+		return Refused
 	}
 	if !allowed {
 		// A SECURITY EVENT, not a debug line (skills/security-logging, "rate limit hit"): a burst of
@@ -91,9 +113,9 @@ func Gate(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, log *slog
 		w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))
 		httpx.WriteError(w, http.StatusTooManyRequests, "rate_limited",
 			"Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.", "")
-		return false
+		return Refused
 	}
-	return true
+	return Enforced
 }
 
 // retryAfterSeconds renders a delay as RFC 9110 delay-seconds. Rounded UP: rounding down tells the
