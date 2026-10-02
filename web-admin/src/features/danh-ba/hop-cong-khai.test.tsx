@@ -65,7 +65,8 @@ describe("hộp công khai", () => {
   it("đã tick: nút bấm được", () => {
     const nut = nutGui(ve({ kieu: "congKhai", canBo: CB }, { daHoiY: true, thuTu: "2" }));
     expect(nut).toContain(NUT_XAC_NHAN_CONG_KHAI);
-    expect(nut).not.toMatch(/disabled/);
+    // The ATTRIBUTE, not the word: the button's utility classes contain `disabled:` variants.
+    expect(nut).not.toMatch(/\sdisabled=""/);
   });
 
   it("có ô tick bắt buộc, chưa tick sẵn, và câu cảnh báo dữ liệu cá nhân; tiêu đề gọi tên người", () => {
@@ -92,7 +93,8 @@ describe("hộp rút", () => {
     expect(html).toContain(CANH_BAO_RUT);
     const nut = nutGui(html);
     expect(nut).toContain(NUT_XAC_NHAN_RUT);
-    expect(nut).not.toMatch(/disabled/);
+    // The ATTRIBUTE, not the word: the button's utility classes contain `disabled:` variants.
+    expect(nut).not.toMatch(/\sdisabled=""/);
     expect(html).not.toContain('type="checkbox"');
     expect(html).not.toContain(O_THU_TU);
   });

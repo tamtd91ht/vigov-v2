@@ -23,9 +23,12 @@ import { QUYEN_CONG_KHAI_DANH_BA, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 /* ---- bảng ----------------------------------------------------------------------------------- */
 
-/** Cột và hai nhãn chip — nguyên văn đặc tả §4. */
+/**
+ * Cột và hai nhãn chip — chữ của đặc tả §4. Dấu "✓" đặc tả vẽ trước "Đang hiện" nay là icon
+ * `CircleCheck` của huy hiệu (ADR 0068), nên không còn nằm trong chuỗi.
+ */
 export const COT_MINI_APP = "Trên Mini App";
-export const CHIP_DANG_HIEN = "✓ Đang hiện";
+export const CHIP_DANG_HIEN = "Đang hiện";
 export const CHIP_CHUA_HIEN = "Chưa hiện";
 
 /** Dòng phụ dưới số di động (đặc tả §4). */

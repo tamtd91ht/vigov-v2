@@ -1,4 +1,7 @@
+import { ContactRound, ShieldCheck } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -51,11 +54,25 @@ export default async function TrangDanhBa() {
         <ThanhBen />
         <DauTrang />
         <main className="than-trang">
-          <h1>{TIEU_DE_TRANG}</h1>
-          <p className="mo-ta-trang">{MO_TA_TRANG}</p>
-          <CongQuyen khoa={QUYEN_QUAN_LY_NGUOI_DUNG} cauThieuQuyen={CAU_THIEU_QUYEN}>
-            <DanhBaLienHe />
-          </CongQuyen>
+          {/* `relative`: the screen lifts its count badge and "Công khai nhiều người" button into the
+              right of this header row from `lg` up (`danh-ba-lien-he.tsx`); `lg:pr-*` keeps the
+              title and subtitle clear of them. The `<h1>` stays here, outside the gate. */}
+          <div className="relative">
+            <PageHeader
+              icon={ContactRound}
+              title={TIEU_DE_TRANG}
+              className="lg:pr-[25rem]"
+              subtitle={
+                <span className="flex items-start gap-1.5">
+                  <ShieldCheck aria-hidden="true" focusable="false" className="mt-0.5 text-success-600" />
+                  <span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_TRANG}</span>
+                </span>
+              }
+            />
+            <CongQuyen khoa={QUYEN_QUAN_LY_NGUOI_DUNG} cauThieuQuyen={CAU_THIEU_QUYEN}>
+              <DanhBaLienHe />
+            </CongQuyen>
+          </div>
         </main>
         </div>
       </PhienProvider>

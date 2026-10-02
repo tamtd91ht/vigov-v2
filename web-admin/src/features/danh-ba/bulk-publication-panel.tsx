@@ -21,6 +21,7 @@ import {
   type BulkResultLine,
   type BulkSelection,
 } from "./bulk-publication";
+import { BUSY_PUBLISHING, BusyLabel } from "./busy-label";
 import { CANH_BAO_CONG_KHAI } from "./cong-khai";
 
 /** What the last submit produced — shown until the panel is closed or the selection changes. */
@@ -142,8 +143,13 @@ export function BulkPublicationPanel({
       {outcome !== null && <BulkOutcomeView outcome={outcome} />}
 
       <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={sending || consented === 0}>
-          {BULK_SUBMIT}
+        <button
+          type="submit"
+          className="nut-chinh"
+          disabled={sending || consented === 0}
+          aria-busy={sending}
+        >
+          <BusyLabel busy={sending} label={BULK_SUBMIT} busyText={BUSY_PUBLISHING} />
         </button>
         <button type="button" className="nut-phu" onClick={onClose} disabled={sending}>
           {BULK_CLOSE}

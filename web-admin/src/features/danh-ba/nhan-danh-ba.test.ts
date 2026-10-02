@@ -6,6 +6,7 @@ import {
   MO_TA_TRANG,
   demSoKhoi,
   nhanSoKhoi,
+  unitCountText,
 } from "./nhan-danh-ba";
 
 /**
@@ -41,6 +42,15 @@ describe("thẻ KPI số khối / đơn vị", () => {
     const kq = demSoKhoi({ ok: false, thongBao: "Phiên làm việc đã hết hạn." });
     expect(kq).toEqual({ pha: "loi", thongBao: "Phiên làm việc đã hết hạn." });
     expect(nhanSoKhoi(kq)).not.toMatch(/^\d+$/);
+  });
+});
+
+describe("huy hiệu số khối / đơn vị ở đầu trang", () => {
+  it("chỉ ghép con số khi đã đếm xong; lúc đang đếm hay hỏng thì KHÔNG có chữ số nào", () => {
+    expect(unitCountText({ pha: "xong", so: 3 })).toBe("3 khối / đơn vị");
+    expect(unitCountText({ pha: "xong", so: 0 })).toBe("0 khối / đơn vị");
+    expect(unitCountText({ pha: "dangDoc" })).not.toMatch(/\d/);
+    expect(unitCountText({ pha: "loi", thongBao: "x" })).not.toMatch(/\d/);
   });
 });
 

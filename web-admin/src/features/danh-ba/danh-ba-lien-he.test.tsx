@@ -6,7 +6,7 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { BULK_OPEN_BUTTON } from "./bulk-publication";
 import { NUT_RUT_MINI_APP, NUT_THEM_MINI_APP } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
-import { NUT_XOA_DONG } from "./xoa-dong";
+import { NHAN_XOA_DONG } from "./xoa-dong";
 import { GOI_Y_O_TIM, TAT_CA_KHOI, TRUY_VAN_DAU } from "./loc-danh-ba";
 import { PHAN_CHUA_DUNG, TIEU_DE_PHAN_CHUA_DUNG } from "./nhan-danh-ba";
 
@@ -60,7 +60,7 @@ describe("màn danh bạ — nút Mini App (một người lẫn nhiều ngườ
     expect(html).not.toMatch(/đã chọn|Chọn tất cả/);
     expect(html).not.toContain(NUT_THEM_MINI_APP);
     expect(html).not.toContain(NUT_RUT_MINI_APP);
-    expect(html).not.toContain(NUT_XOA_DONG);
+    expect(html).not.toContain(NHAN_XOA_DONG);
     expect(html).not.toContain(BULK_OPEN_BUTTON);
   });
 });
@@ -101,7 +101,10 @@ describe("hàng lọc — chữ tìm không có đường lên URL", () => {
 
   it("ô trạng thái: đánh dấu đúng lựa chọn đang áp", () => {
     const html = dung({ tuKhoa: null, boPhan: "BP-CHAN", hienThi: "0" });
-    expect(html).toContain('<option value="0" selected="">Chưa hiện</option>');
+    // A segmented control now (spec §7): exactly one radio checked, and it is the "0" one.
+    expect(html.match(/name="loc-hien-thi-danh-ba"/g)).toHaveLength(3);
+    expect(html.match(/checked=""/g)).toHaveLength(1);
+    expect(html).toMatch(/<input (?=[^>]*name="loc-hien-thi-danh-ba")(?=[^>]*value="0")(?=[^>]*checked="")[^>]*>/);
     expect(html).toContain('<option value="BP-CHAN" selected="">');
   });
 });

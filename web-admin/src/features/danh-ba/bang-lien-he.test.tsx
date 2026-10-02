@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BangLienHe } from "./bang-lien-he";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+
+import { BangLienHe, initialsOf } from "./bang-lien-he";
 import {
   CHIP_CHUA_HIEN,
   CHIP_DANG_HIEN,
@@ -12,7 +14,7 @@ import {
   NUT_RUT_MINI_APP,
   NUT_THEM_MINI_APP,
 } from "./cong-khai";
-import { NHAN_XOA_DONG, NUT_XOA_DONG } from "./xoa-dong";
+import { NHAN_XOA_DONG } from "./xoa-dong";
 import { CAU_THIEU_QUYEN, NUT_SUA_THONG_TIN } from "./nhan-danh-ba";
 
 /**
@@ -199,8 +201,8 @@ describe("nút 🗑 xoá dòng nhập trùng", () => {
   }
 
   it("KHÔNG có `admin.user.delete` (không truyền `onXoa`) → không một nút 🗑 nào (ca bị từ chối)", () => {
+    // The trash icon carries no text of its own: the label below IS the button (ADR 0068).
     const html = dung([canBo(), canBo({ id: "b", full_name: "Trần Thị B" })]);
-    expect(html).not.toContain(NUT_XOA_DONG);
     expect(html).not.toContain(NHAN_XOA_DONG);
   });
 
@@ -213,7 +215,69 @@ describe("nút 🗑 xoá dòng nhập trùng", () => {
   it("dòng CÓ tài khoản VẪN có nút — hộp mở ra để nói vì sao không xoá được", () => {
     const html = dungXoa([canBo({ has_account: true })]);
     expect(html).toContain(`aria-label="${NHAN_XOA_DONG}: Nguyễn Văn A"`);
-    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>🗑/);
+    const nut = /<button[^>]*aria-label="Xoá khỏi danh bạ: Nguyễn Văn A"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(nut).not.toBe("");
+    expect(nut).not.toMatch(/\sdisabled=""/);
+  });
+});
+
+/**
+ * THE DESKTOP "⋯" MENU. A closed Radix menu renders no items to the HTML, so the string checks above
+ * only see the phone-card buttons. These read the menu's `items` prop from the unrendered tree
+ * (`BangLienHe` has no hooks), so a permission that stops gating the DESKTOP actions turns red too.
+ */
+describe("menu ⋯ của bảng — mục theo đúng khoá của phiên", () => {
+  type El = { type: unknown; props: Record<string, unknown> };
+  function menus(props: Parameters<typeof BangLienHe>[0]): { label: string; items: readonly ActionMenuItem[] }[] {
+    const out: { label: string; items: readonly ActionMenuItem[] }[] = [];
+    const walk = (n: unknown) => {
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (typeof n !== "object" || n === null || !("props" in n)) return;
+      const el = n as El;
+      if (el.type === ActionMenu) out.push(el.props as unknown as { label: string; items: readonly ActionMenuItem[] });
+      walk(el.props.children);
+    };
+    walk(BangLienHe(props));
+    return out;
+  }
+  const words = (items: readonly ActionMenuItem[]) =>
+    items.map((it) => (it.kind === "item" ? it.label : "—"));
+
+  it("không `content.update`, không `admin.user.delete` → chỉ 'Sửa thông tin cán bộ' (ca bị từ chối)", () => {
+    const [m] = menus({ danhSach: [canBo()], traBoPhan: TRA_XONG, onSua: () => undefined });
+    expect(m?.label).toBe("Thao tác khác: Nguyễn Văn A");
+    expect(words(m?.items ?? [])).toEqual([NUT_SUA_THONG_TIN]);
+  });
+
+  it("đủ khoá → sửa, thêm/rút theo trạng thái dòng, gạch ngăn, xoá ĐỎ ở cuối; mỗi mục gọi đúng handler", () => {
+    const goi: string[] = [];
+    const ds = [canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })];
+    const [a, b] = menus({
+      danhSach: ds,
+      traBoPhan: TRA_XONG,
+      onSua: (cb) => goi.push(`sua:${cb.id}`),
+      congKhai: { onThem: (cb) => goi.push(`them:${cb.id}`), onRut: (cb) => goi.push(`rut:${cb.id}`) },
+      onXoa: (cb) => goi.push(`xoa:${cb.id}`),
+    });
+    expect(words(a?.items ?? [])).toEqual([NUT_SUA_THONG_TIN, NUT_THEM_MINI_APP, "—", NHAN_XOA_DONG]);
+    expect(words(b?.items ?? [])).toEqual([NUT_SUA_THONG_TIN, NUT_RUT_MINI_APP, "—", NHAN_XOA_DONG]);
+    const xoa = a?.items.at(-1);
+    expect(xoa?.kind === "item" && xoa.tone).toBe("danger");
+    for (const it of [...(a?.items ?? []), ...(b?.items ?? [])]) if (it.kind === "item") it.onSelect();
+    expect(goi).toEqual([
+      `sua:${ds[0]!.id}`, `them:${ds[0]!.id}`, `xoa:${ds[0]!.id}`,
+      `sua:b`, `rut:b`, `xoa:b`,
+    ]);
+  });
+});
+
+describe("chữ tắt ảnh đại diện", () => {
+  it("hai chữ: họ cuối + tên; một từ thì một chữ; dạng tách dấu vẫn ra một chữ", () => {
+    expect(initialsOf("Nguyễn Văn An")).toBe("VA");
+    expect(initialsOf("  Lê   Văn  Cường ")).toBe("VC");
+    expect(initialsOf("admin")).toBe("A");
+    expect(initialsOf("Nguyễn Thị Ấn".normalize("NFD"))).toBe("TẤ");
+    expect(initialsOf("")).toBe("");
   });
 });
 

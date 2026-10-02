@@ -2,6 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
+import {
+  Building2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CloudOff,
+  Construction,
+  Eye,
+  EyeOff,
+  List,
+  RotateCw,
+  Search,
+  SearchX,
+  Send,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
 import { BieuMauGhiCanBo, type MucChon } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
 import {
   BAN_TRONG,
@@ -25,6 +44,14 @@ import {
   suaCanBo,
   xoaCanBo,
 } from "@/lib/api/can-bo";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardFooter } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field, Toolbar } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { Segmented } from "@/components/ui/segmented";
+import { cn } from "@/lib/cn";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
   identity_canBoTomTat,
@@ -73,17 +100,23 @@ import {
   maHienThi,
   thamSoDoc,
   type LocDanhBa,
+  type MaHienThi,
   type TruyVanDanhBa,
 } from "./loc-danh-ba";
 import {
   DANH_BA_RONG,
   GHI_CHU_SO_DIEN_THOAI,
   KHONG_KHOP_LOC,
+  LOAD_FAILED_TITLE,
+  NO_MATCH_TITLE,
+  PAGE_NEXT,
+  PAGE_PREVIOUS,
   PHAN_CHUA_DUNG,
-  NHAN_SO_KHOI,
+  RELOAD,
   TIEU_DE_PHAN_CHUA_DUNG,
   demSoKhoi,
-  nhanSoKhoi,
+  notBuiltSummary,
+  unitCountText,
 } from "./nhan-danh-ba";
 
 /**
@@ -467,32 +500,73 @@ export function DanhBaLienHe() {
     [duocCongKhai, moCongKhai],
   );
 
+  /**
+   * "Tải lại" after a failed read — the SAME mechanism a completed write uses (`lanDoc`): the effect
+   * re-reads with the very query on screen. `dangTai` is set here, in the event, for the reason
+   * `doiTruyVan` gives.
+   */
+  const docLai = useCallback(() => {
+    datTrangThai({ pha: "dangTai" });
+    datLanDoc((n) => n + 1);
+  }, []);
+
   return (
-    <section className="man-danh-ba" aria-labelledby="tieu-de-danh-ba-lien-he">
+    <section className="man-danh-ba mt-0 flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-danh-ba-lien-he">
       <h2 id="tieu-de-danh-ba-lien-he" className="an-thi-giac">
         Danh sách cán bộ
       </h2>
 
-      {/* MỘT THẺ KPI, KHÔNG BA — xem `PHAN_CHUA_DUNG`. Dựng bằng `dl` chứ không bằng một thẻ
-          trang trí: nhãn và con số phải đi liền nhau cả với trình đọc màn hình. */}
-      <dl className="danh-sach-truong">
-        <dt>{NHAN_SO_KHOI}</dt>
-        <dd>{nhanSoKhoi(soKhoi)}</dd>
-      </dl>
+      {/*
+        THE RIGHT HALF OF THE PAGE HEADER. The `<h1>` stays in `app/danh-ba/page.tsx`, OUTSIDE the
+        permission gate, so the page keeps its title while the gate is still reading the session or
+        when it refuses. The count badge and the "Công khai nhiều người" button need this screen's
+        state, so they render here — and from `lg` up they are lifted into the header row by
+        `lg:absolute` against the `relative` wrapper `page.tsx` puts around header + gate (the
+        header reserves the space with `lg:pr-*`). Below `lg` they simply flow as the first row.
+
+        MỘT THẺ KPI, KHÔNG BA — xem `PHAN_CHUA_DUNG`. Con số chỉ ghép khi đã đếm xong (`unitCountText`).
+      */}
+      <div className="flex flex-wrap items-center gap-3 lg:absolute lg:top-0 lg:right-0 lg:h-12 lg:justify-end">
+        <p className="m-0">
+          <Badge tone="info" icon={Building2}>
+            {unitCountText(soKhoi)}
+          </Badge>
+        </p>
+        {duocCongKhai && !bulkOpen && (
+          // A native `<button>` whose ONLY child is the label: the flow test finds this button by
+          // `children === BULK_OPEN_BUTTON`. The `Send` icon is therefore drawn beside it, over the
+          // button's left padding, and lets clicks through.
+          <span className="relative inline-flex">
+            <button
+              type="button"
+              className={cn("nut-chinh", buttonVariants({ variant: "primary" }), "pl-11 max-lg:h-11")}
+              onClick={openBulk}
+            >
+              {BULK_OPEN_BUTTON}
+            </button>
+            <Send
+              aria-hidden="true"
+              focusable="false"
+              className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-white"
+            />
+          </span>
+        )}
+      </div>
 
       {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, không để hai mươi ô cùng báo lỗi. Hiện
           đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
       {soKhoi.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           Danh mục khối / đơn vị: {soKhoi.thongBao}
         </p>
       )}
 
-      {/* Hàng lọc đứng ngay dưới thẻ KPI, trên bảng — đúng bố cục đặc tả §2. */}
-      <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
-
       {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+      {cauDaXong !== "" && (
+        <Notice tone="info" icon={CircleCheck} role="status">
+          {cauDaXong}
+        </Notice>
+      )}
 
       {/*
         MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT TRÊN BẢNG.
@@ -502,14 +576,6 @@ export function DanhBaLienHe() {
         thấy nó đã mở. Tiêu đề biểu mẫu luôn gọi tên người đang được sửa (`tieuDeSua`), nên không
         có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
       */}
-      {duocCongKhai && !bulkOpen && (
-        <p className="cum-nut">
-          <button type="button" className="nut-phu" onClick={openBulk}>
-            {BULK_OPEN_BUTTON}
-          </button>
-        </p>
-      )}
-
       {/* Gated by `content.update` like the single-person buttons — convenience only: the server
           checks the key on the request itself (rule 5, forbidden #1). */}
       {duocCongKhai && bulkOpen && (
@@ -570,43 +636,96 @@ export function DanhBaLienHe() {
         />
       )}
 
-      {trangThai.pha === "dangTai" && <p role="status">Đang tải danh bạ…</p>}
+      {/* ONE card: filter row, then exactly one of loading · error · empty · table, then the pager.
+          Below 768px the card frame drops away and the rows are cards of their own (spec §9). */}
+      <Card className="max-md:overflow-visible max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none">
+        <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
 
-      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
-          đều trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code` để
-          đoán chuyện gì đã xảy ra, và `trace_id` không hiện ra: nó là mốc tra log, không phải mã
-          lỗi nghiệp vụ (`lib/api/goi.ts`). */}
-      {trangThai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {trangThai.thongBao}
-        </p>
-      )}
+        {trangThai.pha === "dangTai" && <LoadingRows />}
 
-      {trangThai.pha === "xong" && trangThai.trang.items.length === 0 && (
-        <p className="trang-thai-rong">{dangLoc(truyVan.loc) ? KHONG_KHOP_LOC : DANH_BA_RONG}</p>
-      )}
+        {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
+            đều trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code` để
+            đoán chuyện gì đã xảy ra, và `trace_id` không hiện ra: nó là mốc tra log, không phải mã
+            lỗi nghiệp vụ (`lib/api/goi.ts`). */}
+        {trangThai.pha === "loi" && (
+          <div role="alert">
+            <EmptyState
+              icon={CloudOff}
+              title={LOAD_FAILED_TITLE}
+              description={trangThai.thongBao}
+              className="[&>span:first-child]:bg-danger-50 [&>span:first-child]:text-danger-600"
+              action={
+                <Button type="button" variant="secondary" icon={<RotateCw aria-hidden="true" />} onClick={docLai}>
+                  {RELOAD}
+                </Button>
+              }
+            />
+          </div>
+        )}
+
+        {trangThai.pha === "xong" &&
+          trangThai.trang.items.length === 0 &&
+          (dangLoc(truyVan.loc) ? (
+            <EmptyState icon={SearchX} title={NO_MATCH_TITLE} description={KHONG_KHOP_LOC} />
+          ) : (
+            <EmptyState icon={Users} title={DANH_BA_RONG} />
+          ))}
+
+        {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
+          <>
+            <BangLienHe
+              danhSach={trangThai.trang.items}
+              traBoPhan={traBoPhan}
+              onSua={moSua}
+              congKhai={hanhDongCongKhai}
+              onXoa={duocXoa ? moXoa : undefined}
+            />
+            <CardFooter className="justify-end max-md:mt-3 max-md:border-0 max-md:px-0">
+              <DieuHuongTrang
+                nganXep={truyVan.nganXep}
+                conTroTiep={trangThai.trang.next_cursor}
+                conTrangSau={trangThai.trang.has_more}
+                diToiTrang={diToiTrang}
+              />
+            </CardFooter>
+          </>
+        )}
+      </Card>
 
       {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
-        <>
-          <BangLienHe
-            danhSach={trangThai.trang.items}
-            traBoPhan={traBoPhan}
-            onSua={moSua}
-            congKhai={hanhDongCongKhai}
-            onXoa={duocXoa ? moXoa : undefined}
-          />
-          <p className="ghi-chu">{GHI_CHU_SO_DIEN_THOAI}</p>
-          <DieuHuongTrang
-            nganXep={truyVan.nganXep}
-            conTroTiep={trangThai.trang.next_cursor}
-            conTrangSau={trangThai.trang.has_more}
-            diToiTrang={diToiTrang}
-          />
-        </>
+        <Notice tone="legal" className="m-0">
+          {GHI_CHU_SO_DIEN_THOAI}
+        </Notice>
       )}
 
       <KhoiChuaMo />
     </section>
+  );
+}
+
+/**
+ * First-load placeholder in the shape of the table rows (spec v2 §8b) — static grey blocks, no
+ * shimmer: a moving background is the motion the spec rules out. The words stay for a screen reader
+ * (`role="status"`), the blocks are hidden from it.
+ */
+function LoadingRows() {
+  return (
+    <div role="status" className="px-4 py-2 max-md:px-0">
+      <span className="an-thi-giac">Đang tải danh bạ…</span>
+      <ul aria-hidden="true" className="m-0 list-none p-0">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li key={i} className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
+            <span className="size-8 shrink-0 rounded-full bg-[#eef1f6]" />
+            <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="h-3 w-2/5 max-w-48 rounded bg-[#eef1f6]" />
+              <span className="h-2.5 w-1/4 max-w-28 rounded bg-[#eef1f6]" />
+            </span>
+            <span className="hidden h-3 w-28 rounded bg-[#eef1f6] md:block" />
+            <span className="h-6 w-20 rounded-full bg-[#eef1f6]" />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -653,31 +772,51 @@ export function HangLoc({
   }
 
   return (
-    <div className="hang-loc">
-      <form className="form-tra-cuu" role="search" method="post" onSubmit={gui}>
-        <div className="o-nhap">
-          <label htmlFor="tim-danh-ba">{NHAN_O_TIM}</label>
-          <input
-            id="tim-danh-ba"
-            type="search"
-            value={oTim}
-            onChange={(e) => datOTim(e.target.value)}
-            placeholder={GOI_Y_O_TIM}
-            autoComplete="off"
-            aria-describedby="loi-tim-danh-ba"
-            aria-invalid={loiTim !== ""}
-          />
-        </div>
-        <button className="nut-phu" type="submit">
-          {NUT_TIM}
-        </button>
-      </form>
-      <p id="loi-tim-danh-ba" className="thong-bao-loi" role="alert">
-        {loiTim}
-      </p>
+    <Toolbar className="hang-loc m-0 flex-row max-md:border-0 max-md:px-0 max-md:pt-0">
+      <div className="flex min-w-0 flex-[1_1_320px] flex-col md:max-w-[30rem]">
+        <form className="form-tra-cuu m-0 flex flex-row items-end gap-2" role="search" method="post" onSubmit={gui}>
+          <Field
+            label={NHAN_O_TIM}
+            htmlFor="tim-danh-ba"
+            hideLabel
+            icon={Search}
+            grow="search"
+            className={cn("max-w-none", TALL_ON_PHONE)}
+          >
+            <input
+              id="tim-danh-ba"
+              type="search"
+              value={oTim}
+              onChange={(e) => datOTim(e.target.value)}
+              placeholder={GOI_Y_O_TIM}
+              autoComplete="off"
+              aria-describedby="loi-tim-danh-ba"
+              aria-invalid={loiTim !== ""}
+            />
+          </Field>
+          <Button type="submit" variant="secondary" className="max-md:h-11">
+            {NUT_TIM}
+          </Button>
+        </form>
+        {/* Always in the DOM (a live region added later is not read by every screen reader), but
+            zero-height while empty so it does not push the row's bottom edge out of line. */}
+        <p
+          id="loi-tim-danh-ba"
+          className="thong-bao-loi m-0 min-h-0 [&:not(:empty)]:mt-1.5"
+          role="alert"
+        >
+          {loiTim}
+        </p>
+      </div>
 
-      <p className="chon-hang-muc">
-        <label htmlFor="loc-khoi-danh-ba">{NHAN_LOC_KHOI}</label>{" "}
+      <Field
+        label={NHAN_LOC_KHOI}
+        htmlFor="loc-khoi-danh-ba"
+        hideLabel
+        icon={Building2}
+        kind="select"
+        className={cn("max-md:flex-[1_1_100%]", TALL_ON_PHONE)}
+      >
         <select
           id="loc-khoi-danh-ba"
           value={loc.boPhan}
@@ -690,25 +829,34 @@ export function HangLoc({
             </option>
           ))}
         </select>
-      </p>
+      </Field>
 
-      <p className="chon-hang-muc">
-        <label htmlFor="loc-hien-thi-danh-ba">{NHAN_LOC_HIEN_THI}</label>{" "}
-        <select
-          id="loc-hien-thi-danh-ba"
-          value={loc.hienThi}
-          onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
-        >
-          {THU_TU_HIEN_THI.map((ma) => (
-            <option key={ma} value={ma}>
-              {LUA_CHON_HIEN_THI[ma].nhan}
-            </option>
-          ))}
-        </select>
-      </p>
-    </div>
+      {/* THREE OPTIONS → SEGMENTED (spec §7), emitting EXACTLY the select's three codes ("", "1",
+          "0") through the same `maHienThi` → `doiLoc`. Its radios carry a `name` (a radio group needs
+          one) and that is safe for the reason the search box has none: they sit OUTSIDE the search
+          `<form>`, so no native submit can put them in a URL — and they hold a filter code, never
+          what somebody typed. */}
+      <Segmented
+        legend={NHAN_LOC_HIEN_THI}
+        name="loc-hien-thi-danh-ba"
+        value={loc.hienThi}
+        options={THU_TU_HIEN_THI.map((ma) => ({
+          value: ma,
+          label: LUA_CHON_HIEN_THI[ma].nhan,
+          icon: SEGMENT_ICON[ma],
+        }))}
+        onChange={(v) => doiLoc({ hienThi: maHienThi(v) })}
+        className="max-md:[&_label]:h-[38px]"
+      />
+    </Toolbar>
   );
 }
+
+/** Field descendants at 44px below 768px — the same selectors Field uses for 40px, so they win there. */
+const TALL_ON_PHONE =
+  "max-md:[&_input:not([type=checkbox]):not([type=radio])]:h-11 max-md:[&_select]:h-11";
+
+const SEGMENT_ICON: Record<MaHienThi, LucideIcon> = { "": List, "1": Eye, "0": EyeOff };
 
 /**
  * Danh sách "đặc tả có, ở đây không" — hiện ngay trên màn hình, không giấu trong chú thích.
@@ -716,19 +864,34 @@ export function HangLoc({
  * ĐẶT CUỐI TRANG, KHÔNG ĐẦU TRANG: người mở danh bạ đến để tìm một số điện thoại, và bảy dòng giải
  * thích chắn trước bảng là bảy dòng bị lướt qua mỗi ngày. Ở cuối, nó là thứ người ta đọc đúng lúc
  * đi tìm một nút không thấy.
+ *
+ * THU GỌN, XÁM, VIỀN ĐỨT (đặc tả giao diện §8.1, ADR 0068): đây không phải báo động. Nội dung vẫn
+ * nguyên văn và vẫn trong HTML khi đóng — `<details>` chỉ thu gọn, không bỏ đi; mở ra bằng một cú
+ * bấm hay phím Enter/Space trên dòng tiêu đề.
  */
 function KhoiChuaMo() {
   return (
-    <aside className="khoi-chua-khai" aria-labelledby="tieu-de-danh-ba-chua-mo">
-      <h3 id="tieu-de-danh-ba-chua-mo">{TIEU_DE_PHAN_CHUA_DUNG}</h3>
-      <ul>
+    <details className="khoi-chua-khai group m-0" aria-labelledby="tieu-de-danh-ba-chua-mo">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
+        <span className="font-semibold text-ink-700">{notBuiltSummary(PHAN_CHUA_DUNG.length)}</span>
+        <ChevronDown
+          aria-hidden="true"
+          focusable="false"
+          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <h3 id="tieu-de-danh-ba-chua-mo" className="mt-2 mb-1.5 text-[13px] font-semibold text-ink-700">
+        {TIEU_DE_PHAN_CHUA_DUNG}
+      </h3>
+      <ul className="m-0 pl-5">
         {PHAN_CHUA_DUNG.map((p) => (
-          <li key={p.ten}>
+          <li key={p.ten} className="mb-1.5">
             <strong>{p.ten}</strong> — {p.viSao}
           </li>
         ))}
       </ul>
-    </aside>
+    </details>
   );
 }
 
@@ -754,23 +917,27 @@ function DieuHuongTrang({
   // khi con trỏ rỗng thì `sangTrangSau` ném lỗi — nút phải mờ đi trước khi tới đó.
   const coSau = conTrangSau && conTroTiep !== "";
   return (
-    <nav className="dieu-huong-trang" aria-label="Phân trang danh bạ cán bộ">
-      <button
+    <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh bạ cán bộ">
+      <Button
         type="button"
-        className="nut-phu"
+        variant="secondary"
+        className="max-md:h-11"
+        icon={<ChevronLeft aria-hidden="true" />}
         disabled={!coTrangTruoc(nganXep)}
         onClick={() => diToiTrang(veTrangTruoc(nganXep))}
       >
-        Trang trước
-      </button>
-      <button
+        {PAGE_PREVIOUS}
+      </Button>
+      <Button
         type="button"
-        className="nut-phu"
+        variant="secondary"
+        className="max-md:h-11"
         disabled={!coSau}
         onClick={() => diToiTrang(sangTrangSau(nganXep, conTroTiep))}
       >
-        Trang sau
-      </button>
+        {PAGE_NEXT}
+        <ChevronRight aria-hidden="true" />
+      </Button>
     </nav>
   );
 }

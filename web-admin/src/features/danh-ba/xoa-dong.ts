@@ -19,9 +19,15 @@ import { LY_DO_XOA_TOI_DA, chuanHoaLyDoXoa, type LyDoXoaHopLe } from "@/lib/api/
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { QUYEN_XOA_DONG_DANH_BA, quyetDinhTheoKhoa } from "@/lib/quyen";
 
-/** Nút theo dòng — biểu tượng của đặc tả §4; nhãn trợ năng nói việc và tên người. */
-export const NUT_XOA_DONG = "🗑";
+/**
+ * Nút theo dòng — nhãn trợ năng (và `title`) nói việc và tên người. Hình của nút là icon `Trash2`
+ * (ADR 0068: bỏ emoji làm icon), nên nhãn này là chữ DUY NHẤT của nút: kiểm "không có nút xoá" là
+ * kiểm vắng nhãn này.
+ */
 export const NHAN_XOA_DONG = "Xoá khỏi danh bạ";
+
+/** Chữ HIỆN của nút xoá trên thẻ điện thoại — phần đầu của `ariaXoaDong`, nên khớp nhãn trợ năng. */
+export const DELETE_SHORT = "Xoá";
 
 export function ariaXoaDong(hoTen: string): string {
   return `${NHAN_XOA_DONG}: ${hoTen}`;
@@ -29,6 +35,15 @@ export function ariaXoaDong(hoTen: string): string {
 
 export function tieuDeXoa(hoTen: string): string {
   return `${NHAN_XOA_DONG}: ${hoTen}`;
+}
+
+/**
+ * Câu hỏi hiện làm tiêu đề hộp xác nhận (đặc tả giao diện v2 §7: tiêu đề là câu hỏi cụ thể). Cùng
+ * việc với `NHAN_XOA_DONG` — xoá một dòng KHỎI DANH BẠ — chứ không phải "Xoá cán bộ": việc này gỡ
+ * một dòng nhập trùng, không xoá một con người khỏi hồ sơ cơ quan.
+ */
+export function deleteQuestion(hoTen: string): string {
+  return `Xoá ${hoTen} khỏi danh bạ?`;
 }
 
 /**

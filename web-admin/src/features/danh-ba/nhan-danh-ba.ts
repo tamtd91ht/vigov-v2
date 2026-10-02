@@ -21,16 +21,16 @@ import type { KetQua } from "@/lib/api/goi";
 export const TIEU_DE_TRANG = "Danh bạ cán bộ";
 
 /**
- * Câu mô tả dưới tiêu đề.
+ * Câu mô tả dưới tiêu đề — MỘT DÒNG (đặc tả giao diện 02/10/2026 §5: dòng phụ ≤ ~80 ký tự).
  *
  * NỬA ĐẦU LÀ NGUYÊN VĂN ĐẶC TẢ, NỬA SAU THÌ KHÔNG — VÀ ĐÓ LÀ CHỦ Ý. Đặc tả (§1, §2) viết:
  * *"Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App' để bà con
  * gọi được."* Câu dưới nhấn vào điều #12 giữ nguyên kể cả ở khung "Công khai nhiều người" (chốt
  * 30/09/2026): sự đồng ý là của TỪNG người, sau khi hỏi ý — chọn nhiều người không thay được việc ấy.
+ * Rút gọn khi làm mới giao diện (ADR 0068) nhưng giữ đủ ba ý ấy: hỏi ý, từng người, đồng ý.
  */
 export const MO_TA_TRANG =
-  "Toàn bộ cán bộ của xã: chức vụ, khối/đơn vị và số liên hệ. Công khai số lên Zalo Mini App làm " +
-  "cho từng người, sau khi đã hỏi ý và được chính người đó đồng ý.";
+  "Toàn bộ cán bộ của xã. Chỉ công khai số lên Mini App khi đã hỏi ý và từng người đồng ý.";
 
 /**
  * Câu hiện khi tài khoản thiếu `admin.user`.
@@ -87,6 +87,30 @@ export function nhanSoKhoi(so: SoKhoi): string {
   }
 }
 
+/**
+ * Chữ của huy hiệu đếm khối / đơn vị ở đầu trang (đặc tả giao diện §8.1: "N khối / đơn vị").
+ *
+ * CHỈ GHÉP CON SỐ KHI ĐÃ ĐẾM XONG. Khi còn đọc hay đọc hỏng, huy hiệu nói rõ nhãn và trạng thái
+ * (`nhanSoKhoi`) — "đang đếm… khối / đơn vị" là một câu sai ngữ pháp, còn "0 khối / đơn vị" lúc chưa
+ * đọc xong là một câu sai sự thật.
+ */
+export function unitCountText(so: SoKhoi): string {
+  return so.pha === "xong" ? `${so.so} khối / đơn vị` : `${NHAN_SO_KHOI}: ${nhanSoKhoi(so)}`;
+}
+
+/* ---- trạng thái của vùng danh sách (đặc tả giao diện v2 §8b) --------------------------------- */
+
+/** Tiêu đề khi đọc danh sách hỏng; câu bên dưới là câu NGUYÊN VĂN của máy chủ. */
+export const LOAD_FAILED_TITLE = "Chưa tải được danh sách";
+/** Nút đọc lại đúng trang đang xem, cùng bộ lọc — cơ chế đọc lại sau mỗi lần ghi. */
+export const RELOAD = "Tải lại";
+/** Tiêu đề khi đang tìm / lọc mà không ai khớp; câu gợi ý bên dưới là `KHONG_KHOP_LOC`. */
+export const NO_MATCH_TITLE = "Không có cán bộ phù hợp";
+
+/** Hai nút phân trang (đặc tả giao diện §8.1: "‹ Trước / Sau ›"); vùng `nav` đã nói là phân trang. */
+export const PAGE_PREVIOUS = "Trước";
+export const PAGE_NEXT = "Sau";
+
 /* ---- bảng ----------------------------------------------------------------------------------- */
 
 /**
@@ -114,6 +138,22 @@ export const NUT_SUA_THONG_TIN = "Sửa thông tin cán bộ";
 
 export function ariaSua(hoTen: string): string {
   return `${NUT_SUA_THONG_TIN}: ${hoTen}`;
+}
+
+/**
+ * Chữ HIỆN của nút sửa trên thẻ điện thoại. Nhãn trợ năng vẫn là `ariaSua` — và vì chữ hiện là
+ * phần ĐẦU của nhãn ấy, người dùng điều khiển bằng giọng nói nói "Sửa" là trúng nút (WCAG 2.5.3).
+ */
+export const EDIT_SHORT = "Sửa";
+
+/** Nhãn trợ năng (và `title`) của nút "⋯" trên một dòng — gọi tên người, cùng lý do với `ariaSua`. */
+export function ariaMoreActions(hoTen: string): string {
+  return `Thao tác khác: ${hoTen}`;
+}
+
+/** Tiêu đề thu gọn của khối "phần chưa mở" (đặc tả giao diện §8.1: "N phần chưa mở"). */
+export function notBuiltSummary(count: number): string {
+  return `${count} phần chưa mở`;
 }
 
 /**
