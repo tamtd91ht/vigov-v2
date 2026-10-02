@@ -499,6 +499,15 @@
       "no_confirm": [],
       "tiep_theo": "(1) Host kho ảnh công khai (phần host của OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL trong common-config) phải vào danh sách tên miền của App ID từng app xã ở Zalo Developer Console — không nằm trong kho này, cũng không trong vihat-miniapp (ADR 0052 Còn mở #3); chưa xem trên webview Zalo thật. (2) Câu chính sách quyền riêng tư: app nay tải logo từ host kho ảnh công khai lúc mở — gộp vào câu G9 đang chờ duyệt (xem chinh-sach-dung-voi-ban-dung), không viết lời văn trong lượt này; khi_nao của dòng /commune-profiles trong content/ket-xuat-ho-so.ts chưa nhắc logo, sửa cùng lượt G9. (3) Lần mở đầu thấy ảnh chép rồi đổi sang logo tải khi hồ sơ về (cùng ô, không nhảy bố cục). (4) Gỡ ảnh chép lúc dựng + scripts/logo-xa khi mọi xã đã tải logo — chủ dự án quyết lúc nào.",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "hien-luot-xem-tin",
+      "menu": [
+        "noi-dung-mini-app"
+      ],
+      "viec": "Hiện '{n} lượt xem' ở danh sách tin và chi tiết bài của cả app riêng xã và app chung (ADR 0047 §6 'Lượt xem tin', 02/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 6a29447b: readViewCount (hop-dong-cong-khai.ts), ViewCount + biểu tượng mắt; thẻ Tin liên quan và chi tiết bài video cũng hiện, không ở thẻ gọn Trang chủ và danh sách Video; rereadAudio gửi no_view=1; khai no_view trong hồ sơ Zalo; chính sách quyền riêng tư không đổi (chủ dự án). npm test 1663/1663, typecheck sạch."
     }
   ]
 }

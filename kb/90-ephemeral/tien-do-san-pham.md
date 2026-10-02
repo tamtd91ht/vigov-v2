@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 6993ba4a
+derived_from_commit: e8a9b9b4
 expires: 2026-12-31
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -64,13 +64,13 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 7 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 19 |
 | 8 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 1 |
 | 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 9 |
-| 10 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 2 |
+| 10 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 1 |
 | 11 | Bản đồ kinh tế số | — | — | ✗ | |
 | 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 3 |
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 
-**11/14** mục menu có màn thật. **56** phần chưa dựng đang hiện trên các màn ấy.
+**11/14** mục menu có màn thật. **55** phần chưa dựng đang hiện trên các màn ấy.
 
 ## 3 · Mini App công dân
 
@@ -108,12 +108,12 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 36 | 18 | 3 | 0 |
+| `citizen-app` | 37 | 18 | 3 | 0 |
 | `core` | 28 | 3 | 1 | 1 |
 | `deploy` | 18 | 11 | 1 | 0 |
 | `platform-admin` | 4 | 0 | 1 | 0 |
 | `proto` | 14 | 1 | 0 | 0 |
-| `service-comms` | 20 | 8 | 2 | 4 |
+| `service-comms` | 21 | 8 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 19 | 4 | 0 | 0 |
 | `service-identity` | 37 | 11 | 2 | 1 |
@@ -121,5 +121,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 12 | 8 | 9 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 32 | 29 | 3 | 1 |
+| `web-admin` | 33 | 29 | 3 | 1 |
 
