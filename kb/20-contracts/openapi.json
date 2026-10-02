@@ -6252,6 +6252,84 @@
           }
         }
       ],
+      "delete": {
+        "summary": "Xoá mềm một mục nội dung Mini App, kèm lý do bắt buộc — gỡ khỏi Mini App ngay trong cùng lần ghi",
+        "operationId": "comms_delete_content_items_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "894b32b83548",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.deleteContentItemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "summary": "Một mục nội dung Mini App kèm toàn văn — dùng cho modal sửa ở §7",
         "operationId": "comms_get_content_items_by_id",
@@ -24950,6 +25028,18 @@
         "additionalProperties": false
       },
       "comms.deleteCategoryIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.deleteContentItemIn": {
         "type": "object",
         "properties": {
           "reason": {

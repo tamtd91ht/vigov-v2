@@ -1393,6 +1393,29 @@
     },
     {
       "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/content-items/{id}",
+      "operation_id": "comms_delete_content_items_by_id",
+      "task_id": "894b32b83548",
+      "summary": "Xoá mềm một mục nội dung Mini App, kèm lý do bắt buộc — gỡ khỏi Mini App ngay trong cùng lần ghi",
+      "screen": "11-noi-dung-mini-app §6",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một mục đã xoá cho cùng một kết quả: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do",
+      "request_schema": "comms.deleteContentItemIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
       "method": "GET",
       "path": "/api/v1/content-items/{id}",
       "operation_id": "comms_get_content_items_by_id",

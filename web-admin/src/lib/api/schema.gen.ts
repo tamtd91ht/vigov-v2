@@ -124,6 +124,10 @@ export type comms_deleteCategoryIn = {
   "reason": string;
 };
 
+export type comms_deleteContentItemIn = {
+  "reason": string;
+};
+
 export type comms_deleteMapFieldSchemaIn = {
   "reason": string;
 };
@@ -4246,6 +4250,26 @@ export type comms_patch_content_items_by_id = {
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/content-items/{id} — Xoá mềm một mục nội dung Mini App, kèm lý do bắt buộc — gỡ khỏi Mini App ngay trong cùng lần ghi */
+export type comms_delete_content_items_by_id = {
+  duongDan: "/api/v1/content-items/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteContentItemIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
   };
 };
 
