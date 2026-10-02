@@ -299,6 +299,8 @@ export const ZALO_FAILURE = {
     phone: "lấy số điện thoại",
     location: "lấy vị trí",
     name: "lấy tên Zalo",
+    camera: "dùng máy ảnh",
+    photos: "mở cửa sổ chọn ảnh",
   },
   transient: (what: string) => `Zalo chưa trả lời khi ứng dụng ${what}.`,
   not_allowed: (what: string) =>
@@ -998,8 +1000,11 @@ export const XA_PA = {
   thieu_nguoi_gui: "Bà con nhập họ tên người gửi, hoặc bật “Gửi ẩn danh”.",
   an_danh: "Gửi ẩn danh",
   an_danh_giai_thich: "Bật lên thì cán bộ không thấy họ tên và số điện thoại của bà con.",
-  anh_bat_buoc: "Ảnh hoặc video (bắt buộc, tối đa 5 tệp)",
-  anh_sap_co: "Ứng dụng chưa gửi được ảnh, video — tính năng sắp có. Trong lúc chờ, bà con mô tả thật rõ sự việc.",
+  // 02/10/2026 (ADR 0047 row "Ảnh hiện trường khi gửi phản ánh"): photos are OPTIONAL, at most 5, images only —
+  // replacing SRS M4.2's "bắt buộc … ảnh/video". `anh_bat_buoc` keeps its name (rule 12 #3), not its meaning.
+  anh_bat_buoc: "Ảnh hiện trường (không bắt buộc, tối đa 5 ảnh)",
+  // Where the form has NO photo buttons (the `--demo` build, like the location button; tests).
+  anh_sap_co: "Bà con mô tả thật rõ sự việc ở ô trên. Ứng dụng này chưa gửi kèm được ảnh.",
   vi_tri_bat_buoc: "Vị trí trên bản đồ (bắt buộc)",
   // 29/09/2026: the app now takes the current location (button under the address box); a MAP pin is still
   // not there, and a location is still not enforced (ADR 0050 #9 — the server keeps it optional, b5d17bb).
@@ -1009,8 +1014,9 @@ export const XA_PA = {
   location_without_button: "Bà con ghi rõ nơi xảy ra ở ô dưới: thôn, tổ, đường, số nhà.",
   so_dien_thoai: "Số điện thoại",
   goi_y_so: "Để cán bộ liên hệ khi cần",
-  bat_buoc: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí, họ tên người gửi.",
-  bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, ảnh hoặc video, vị trí.",
+  // Photos left this list on 02/10/2026 — optional by the owner's decision (`anh_bat_buoc`).
+  bat_buoc: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên người gửi.",
+  bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, vị trí.",
   gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
   // Said only after a 201: the petition is in the commune's register and has its lookup code (rule 10 #1).
   xong_tieu_de: "Đã gửi phản ánh",
@@ -1024,4 +1030,81 @@ export const XA_PA = {
   draft_discard: "Bỏ nháp",
   draft_kept_on_phone:
     "Phản ánh đang soạn được giữ trên điện thoại này cho tới khi bà con gửi đi hoặc bỏ nháp.",
+} as const;
+
+/**
+ * ẢNH HIỆN TRƯỜNG — app riêng của xã (`scene-photos.tsx`; ADR 0047 row "Ảnh hiện trường khi gửi phản ánh").
+ * Every failure says what to do next and carries no code; none blames the citizen for the server; none says
+ * the petition failed — it never does because of a photo (owner, 02/10/2026). No server threshold is written
+ * here (the rate limit, the size limit): those are the server's and may change.
+ */
+export const SCENE_PHOTOS = {
+  label: XA_PA.anh_bat_buoc,
+  why: "Ảnh giúp cán bộ xã thấy rõ sự việc. Ảnh được gửi tới xã ngay sau khi phản ánh được ghi nhận.",
+  not_in_draft: "Ảnh đã chọn không được giữ trong bản nháp. Nếu đóng ứng dụng trước khi gửi, bà con chọn lại ảnh.",
+  take: "Chụp ảnh",
+  pick: "Chọn ảnh có sẵn",
+  picking: "Đang chờ bà con chụp hoặc chọn ảnh…",
+  count: (n: number, max: number) => `Đã chọn ${n}/${max} ảnh.`,
+  full: (max: number) => `Đã đủ ${max} ảnh. Muốn đổi ảnh, bà con bỏ bớt một ảnh trước.`,
+  photo_alt: (i: number) => `Ảnh hiện trường thứ ${i}`,
+  no_preview: (i: number) => `Ảnh thứ ${i} — máy này không xem trước được, ảnh vẫn được gửi.`,
+  remove: (i: number) => `Bỏ ảnh thứ ${i}`,
+  // The card BEFORE Zalo's own dialog (Zalo policy 3.3.4): what for, and that Zalo will ask.
+  camera_title: "Chụp ảnh hiện trường",
+  camera_why:
+    "Ứng dụng cần dùng máy ảnh để bà con chụp nơi xảy ra sự việc. Bấm “Tiếp tục” thì Zalo sẽ hỏi bà con có cho phép dùng máy ảnh không. Ảnh chỉ được gửi tới xã, kèm phản ánh này.",
+  library_title: "Chọn ảnh có sẵn trong máy",
+  library_why:
+    "Bấm “Tiếp tục” thì Zalo mở cửa sổ chọn ảnh trên điện thoại. Chỉ những ảnh bà con chọn mới được gửi tới xã, kèm phản ánh này. Ứng dụng không xem các ảnh khác trong máy.",
+  continue: "Tiếp tục",
+  later: "Để sau",
+  camera_refused: "Bà con chưa cho phép dùng máy ảnh. Bà con vẫn gửi được phản ánh, hoặc bấm “Chọn ảnh có sẵn”.",
+  library_refused: "Bà con chưa cho phép mở ảnh trong máy. Bà con vẫn gửi được phản ánh không kèm ảnh.",
+  outside_zalo: "Chỉ chụp hoặc chọn ảnh được khi mở ứng dụng trong Zalo. Bà con vẫn gửi được phản ánh không kèm ảnh.",
+  pick_failed: "Chưa lấy được ảnh. Bà con bấm lại nút, hoặc gửi phản ánh không kèm ảnh.",
+  /** Zalo refused with a code (`zaloFailureSentence`). Only a "try again later" code invites a retry. */
+  pick_zalo_failed: (zalo: string, transient: boolean) =>
+    transient ? `${zalo} Bà con chờ một lát rồi bấm lại nút.` : `${zalo} Bà con vẫn gửi được phản ánh không kèm ảnh.`,
+  /** In the send footer, under the commune's name: what goes with the petition. */
+  footer_with: (n: number) => `Kèm ${n} ảnh hiện trường, gửi ngay sau phản ánh.`,
+  uploads_title: "Ảnh hiện trường",
+  sending: (i: number, n: number) => `Đang gửi ảnh ${i}/${n} tới xã…`,
+  all_sent: (n: number) => `Đã gửi ${n}/${n} ảnh tới xã.`,
+  some_failed: (ok: number, n: number) =>
+    `Đã gửi ${ok}/${n} ảnh. Ảnh chưa gửi được, bà con xem lý do ở từng ảnh dưới đây. Trong lúc phản ánh còn ở bước “Đã tiếp nhận”, bà con cũng tải lại được từ “Phản ánh của tôi”.`,
+  petition_kept: "Phản ánh của bà con đã được ghi nhận, kể cả khi ảnh chưa gửi được.",
+  row_waiting: (i: number) => `Ảnh thứ ${i}: đang chờ gửi.`,
+  row_sending: (i: number) => `Ảnh thứ ${i}: đang gửi…`,
+  row_sent: (i: number) => `Ảnh thứ ${i}: đã gửi tới xã.`,
+  row_failed: (i: number, why: string) => `Ảnh thứ ${i}: chưa gửi được. ${why}`,
+  retry: (i: number) => `Tải lại ảnh thứ ${i}`,
+  failures: {
+    "not-readable": "Không đọc được ảnh này trên máy. Bà con chụp lại hoặc chọn ảnh khác.",
+    "not-a-photo": "Chỉ gửi được ảnh JPEG, PNG hoặc WebP. Bà con chọn ảnh khác, hoặc chụp lại bằng nút “Chụp ảnh”.",
+    "not-accepted": "Ảnh quá lớn hoặc không đúng loại ảnh xã nhận. Bà con chọn ảnh khác, hoặc chụp lại.",
+    "not-found": "Không tìm thấy phản ánh này để đính ảnh. Bà con mở lại phản ánh trong “Phản ánh của tôi”.",
+    "petition-moved":
+      "Phản ánh đã được xã chuyển sang bước xử lý, nên không đính thêm ảnh được nữa. Phản ánh vẫn được xử lý bình thường.",
+    limit: "Phản ánh đã có đủ số ảnh tối đa, nên ảnh này không được đính thêm.",
+    rejected: "Ảnh bị từ chối vì không đọc được hoặc không an toàn, và không được lưu. Bà con chụp hoặc chọn ảnh khác.",
+    expired: "Lượt gửi ảnh này đã hết hạn. Bà con bấm “Tải lại” để gửi lại ảnh.",
+    "storage-refused": "Kho lưu ảnh của xã chưa nhận ảnh này. Bà con bấm “Tải lại”; nếu vẫn không được, hãy chọn ảnh khác.",
+    "rate-limited": "Bà con đã gửi nhiều ảnh trong thời gian ngắn. Bà con chờ ít phút rồi bấm “Tải lại”.",
+    busy: "Hệ thống của xã tạm thời chưa kiểm tra được ảnh. Bà con chờ ít phút rồi bấm “Tải lại”.",
+    "not-configured": "Hệ thống của xã chưa sẵn sàng nhận ảnh. Bà con thử lại sau trong “Phản ánh của tôi”.",
+    session:
+      "Phiên làm việc với xã đã hết hạn. Bà con xác nhận lại số điện thoại, ứng dụng sẽ gửi tiếp ảnh.",
+    closed: "Ứng dụng chưa kết nối được với hệ thống của xã, nên chưa gửi được ảnh.",
+    network: "Mất kết nối khi đang gửi ảnh. Bà con kiểm tra mạng rồi bấm “Tải lại”.",
+    server: "Hệ thống của xã chưa nhận được ảnh. Bà con chờ ít phút rồi bấm “Tải lại”.",
+  },
+  // The petition detail (`OwnScenePhotos`).
+  own_title: "Ảnh hiện trường bà con đã gửi",
+  own_loading: "Đang tải ảnh hiện trường…",
+  own_failed: "Chưa tải được ảnh hiện trường của phản ánh này. Bà con bấm “Thử lại”.",
+  own_retry: "Thử lại",
+  add_title: "Thêm ảnh hiện trường",
+  add_why:
+    "Phản ánh đang ở bước “Đã tiếp nhận”, nên bà con còn đính thêm ảnh được (không bắt buộc, tối đa 5 ảnh). Ảnh được gửi ngay khi bà con chụp hoặc chọn xong.",
 } as const;

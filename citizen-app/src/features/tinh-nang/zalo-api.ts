@@ -196,23 +196,45 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
   },
   {
+    // `nua` BECAME "ca-hai" ON 02/10/2026: "Chụp ảnh" on "Gửi phản ánh" of the commune's own app asks this
+    // same permission (`takeScenePhoto`). The shared sentences stay the shared app's: that App ID never
+    // receives the scene-photo functions (`App.tsx` `AppChung`), so nothing changed for its reviewer.
     api: "requestCameraPermission",
-    nua: "thuong-mai",
+    nua: "ca-hai",
     man: "Danh thiếp",
     tinh_nang: "Số hoá thiếp giấy",
     de_lam_gi: "Hỏi bạn có cho phép dùng máy ảnh hay không, trước khi mở cửa sổ chọn ảnh.",
     hoi_nguoi_dung: true,
     roi_khoi_may: "",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc, sau khi ứng dụng đã nói rõ ảnh dùng để làm gì.",
+      // The question itself sends nothing; the photo's way out is the `openMediaPicker` row below.
+      roi_khoi_may: "",
+    },
   },
   {
+    // `nua` BECAME "ca-hai" ON 02/10/2026 — the scene photos of the commune's own app (`takeScenePhoto`,
+    // `chooseScenePhotos`). In the shared app nothing leaves the phone, as before; in the commune app the photo
+    // the citizen took or picked goes to the commune's system AFTER the petition is sent — said in its view.
     api: "openMediaPicker",
-    nua: "thuong-mai",
+    nua: "ca-hai",
     man: "Danh thiếp",
     tinh_nang: "Số hoá thiếp giấy",
     de_lam_gi:
       "Mở cửa sổ chọn ảnh để bạn chụp hoặc chọn một tấm thiếp giấy. Ảnh chỉ hiện lên màn hình này.",
     hoi_nguoi_dung: true,
     roi_khoi_may: "",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Mở máy ảnh của Zalo để bà con chụp, hoặc mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn, chỉ khi chính bà con bấm “Chụp ảnh” hoặc “Chọn ảnh có sẵn”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chụp hoặc chọn, không xem các ảnh khác trong máy.",
+      roi_khoi_may:
+        "Ảnh bà con đã chụp hoặc chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+    },
   },
   {
     api: "vibrate",
@@ -363,7 +385,7 @@ export type KetQuaXin<T> =
  * sign-in asks for two things (session code, then phone), so the capability is the step that failed,
  * not the function that was called.
  */
-export type ZaloCapability = "access-token" | "phone" | "location" | "name" | "other";
+export type ZaloCapability = "access-token" | "phone" | "location" | "name" | "camera" | "photos" | "other";
 
 export type SdkFailure = {
   readonly capability: ZaloCapability;
@@ -685,6 +707,77 @@ export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
     const { data } = await sdk.openMediaPicker({ type: "photo" });
     return typeof data === "string" ? [data] : data;
   });
+}
+
+/* ==============================================================================================
+   SCENE PHOTOS — "Gửi phản ánh" of the COMMUNE'S OWN APP only (owner, 02/10/2026; ADR 0047 row "Ảnh hiện
+   trường khi gửi phản ánh"). The SAME two calls as "Số hoá thiếp giấy" above, for a different purpose — so
+   the two declaration rows are `ca-hai` and carry a `commune_app` view.
+
+   ⚠ STILL NO `serverUploadUrl`, AND THIS IS NOT A LOOPHOLE: the picker hands back LOCAL temp paths and uploads
+     nothing (`index.d.ts:4721`). The bytes leave the phone only through the state half's presigned POST
+     (`cong-dan/api/goi-vigov.ts` `postPhotoToStorage`), after the citizen pressed "Gửi phản ánh" — a path the
+     tripwires can see, declared in the dossier (`content/ket-xuat-ho-so.ts`). Only `App.tsx` `AppRieng`
+     injects these two functions; the shared app never receives them (`ranh-gioi-hai-nua.test.ts`).
+   ============================================================================================== */
+
+/**
+ * The citizen's own refusal codes for these two calls — `node_modules/zmp-sdk/apis/constants.js` (2.53.0):
+ * `USER_DENIED:-2002 · USER_CANCEL:-2003`. Read from the SDK, not guessed: a CANCEL is not a failure (the
+ * citizen closed the picker) and must not be answered with "Zalo chưa cho phép…".
+ */
+const SCENE_PHOTO_DENIED = -2002;
+const SCENE_PHOTO_CANCELLED = -2003;
+
+/** A pick: the temp paths, or the citizen closed the picker (`huy`), or `KetQuaXin`'s other branches. */
+export type ScenePhotoPick = KetQuaXin<readonly string[]> | { kieu: "huy" };
+
+/** `xin`'s answer, with the two citizen codes above turned into what they are. */
+function asPick(kq: KetQuaXin<readonly string[]>): ScenePhotoPick {
+  if (kq.kieu !== "khong-lay-duoc" || kq.failure === undefined) return kq;
+  if (kq.failure.code === SCENE_PHOTO_CANCELLED) return { kieu: "huy" };
+  if (kq.failure.code === SCENE_PHOTO_DENIED) return { kieu: "tu-choi" };
+  return kq;
+}
+
+/** `data` is `string[] | string` (`OpenMediaPickerReturns`); only non-empty strings are paths. */
+function tempPaths(data: readonly string[] | string): readonly string[] {
+  return (typeof data === "string" ? [data] : data).filter((p) => typeof p === "string" && p !== "");
+}
+
+/**
+ * Picker options for a scene photo. `editView` OFF: by default the SDK opens an edit view that crops to 1:1
+ * (`apis/common/apis/general/openMediaPicker.js`), and a cropped scene loses the very thing the officer needs.
+ * `compressLevel: 1` ("Nén nhẹ"): an uncompressed modern photo can pass the server's 10 MB policy (G3) and is
+ * slow on a rural line; the server re-encodes anyway. ⚠ An assumption, stated: the owner chose no level.
+ */
+const SCENE_PICKER = { editView: { enable: false }, compressLevel: 1 } as const;
+
+/**
+ * "Chụp ảnh": the camera permission first (`requestCameraPermission` answers `userAllow`, it does not throw),
+ * then Zalo's camera for ONE photo. `userAllow === false` is the citizen's no → `tu-choi`.
+ */
+export async function takeScenePhoto(): Promise<ScenePhotoPick> {
+  const kq = await xin("camera", async (sdk, step) => {
+    const { userAllow } = await sdk.requestCameraPermission();
+    if (!userAllow) return null;
+    step("photos");
+    const { data } = await sdk.openMediaPicker({ type: "zcamera_photo", maxSelectItem: 1, ...SCENE_PICKER });
+    return tempPaths(data);
+  });
+  if (kq.kieu === "xong") return kq.du_lieu === null ? { kieu: "tu-choi" } : { kieu: "xong", du_lieu: kq.du_lieu };
+  return asPick(kq);
+}
+
+/** "Chọn ảnh có sẵn": the photo picker, at most `max` photos (the slots the petition still has). */
+export async function chooseScenePhotos(max: number): Promise<ScenePhotoPick> {
+  const limit = Math.max(1, Math.floor(max));
+  return asPick(
+    await xin("photos", async (sdk) => {
+      const { data } = await sdk.openMediaPicker({ type: "photo", maxSelectItem: limit, ...SCENE_PICKER });
+      return tempPaths(data).slice(0, limit);
+    }),
+  );
 }
 
 /**

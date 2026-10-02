@@ -556,6 +556,51 @@ describe("3b — không nửa nào ghi định danh xuống thiết bị", () =>
   });
 });
 
+/**
+ * SCENE PHOTOS ARE THE COMMUNE APP'S BUTTON ONLY (owner 02/10/2026: "chỉ trên app chính của xã nhé, không phải
+ * app vihat"). The server does not check the app (ADR 0047: "mở ở đâu cũng được"), so THIS is the whole rule:
+ * the shell's two picker functions are reached from `App.tsx` alone, and only `AppRieng` hands the state half
+ * the capability. `AppChung` (the shared ViHAT app, `KenhCongDan` → `GuiPhanAnhScreen`) never receives it.
+ */
+const SCENE_PHOTO_SHELL_CALL = /\b(takeScenePhoto|chooseScenePhotos)\b/;
+const SCENE_PHOTO_CAPABILITY = /pickScenePhotos|PickScenePhotos|pickCommuneScenePhotos|takeScenePhoto|chooseScenePhotos/;
+
+describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () => {
+  it("only App.tsx (and zalo-api.ts, which defines them) names the shell's camera/picker functions", () => {
+    expect(
+      TEP_SAN_XUAT.filter((f) => SCENE_PHOTO_SHELL_CALL.test(f.code)).map((f) => f.path).sort(),
+      "a file other than the shell reaches the scene-photo camera/picker — the shared app's screens could then open it",
+    ).toEqual(["./App.tsx", "./features/tinh-nang/zalo-api.ts"]);
+  });
+
+  it("AppChung never receives the scene-photo capability; AppRieng injects it", () => {
+    const app = boChuThich(RAW_SOURCES["./App.tsx"] ?? "");
+    const shared = sharedAppBody(app);
+    const commune = communeAppBody(app);
+    expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
+    expect(
+      shared,
+      "AppChung references the scene-photo capability. The owner put the photo button in the commune's own app only.",
+    ).not.toMatch(SCENE_PHOTO_CAPABILITY);
+    expect(commune, "AppRieng no longer injects the scene-photo picker — the feature is dead").toMatch(
+      /pickScenePhotos=\{DEMO_BUILD \? undefined : pickCommuneScenePhotos\}/,
+    );
+    // Must-still-catch: the same wiring written into AppChung is red.
+    expect(sharedAppBody(`${app}\n<KenhCongDan pickScenePhotos={pickCommuneScenePhotos} />`)).toMatch(SCENE_PHOTO_CAPABILITY);
+  });
+
+  it("the shared app's send screen has no way to receive it at all", () => {
+    // `KenhCongDan` → `GuiPhanAnhScreen` is the shared app's petition path: neither names the capability, so
+    // no prop can carry it there even by mistake.
+    for (const path of ["./cong-dan/man/KenhCongDan.tsx", "./cong-dan/man/GuiPhanAnhScreen.tsx"]) {
+      const f = TEP_SAN_XUAT.find((t) => t.path === path);
+      expect(f, `${path} không còn trong lượt quét`).toBeDefined();
+      expect(f!.code, path).not.toMatch(SCENE_PHOTO_CAPABILITY);
+      expect(f!.code, path).not.toMatch(/scene-photos/);
+    }
+  });
+});
+
 /* =============================================================================================
    RÀNG BUỘC 3c — MỖI LỜI GỌI SDK KHAI MỤC ĐÍCH TẠI CHỖ
    ============================================================================================= */

@@ -4098,6 +4098,76 @@ button.xa-o-nhanh {
 .xa-vi-tri p {
   margin: 0;
 }
+/* Scene photos (`cong-dan/man/scene-photos.tsx`, commune app only). Buttons are `.xa-nut` — already measured
+   at calc(var(--tap-min) + 4px). Thumbnails are pictures, not tap targets: removing one is its own button. */
+.xa-photos {
+  display: grid;
+  gap: 8px;
+}
+.xa-photos p {
+  margin: 0;
+}
+.xa-photos__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.xa-photos__item {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.xa-photos__thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--xa-vien);
+  background: var(--xa-nen);
+}
+.xa-photos__no-preview {
+  padding: 10px;
+  border: 1px dashed var(--xa-vien);
+  border-radius: 10px;
+  color: var(--ink);
+}
+.xa-photo-buttons {
+  display: grid;
+  gap: 6px;
+}
+.xa-photo-buttons p {
+  margin: 0;
+}
+.xa-photo-why {
+  display: grid;
+  gap: 8px;
+}
+.xa-photo-why p {
+  margin: 0;
+}
+.xa-photo-uploads p {
+  margin: 0 0 6px;
+}
+.xa-photo-uploads__list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.xa-photo-uploads__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: start;
+}
+.xa-photo-uploads__row .xa-nut {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
 .xa-dem-ky-tu {
   text-align: right;
   margin: -4px 0 0;

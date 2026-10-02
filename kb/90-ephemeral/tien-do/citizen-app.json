@@ -446,6 +446,15 @@
       "no_confirm": [],
       "tiep_theo": "CHƯA LÀM, NÊU RA: (a) Thời gian chờ mặc định 5 giây và trần 60 giây của lần thử lại dải banner là lựa chọn của lượt này (không phải ngưỡng bảo mật; cửa sổ máy chủ là 1 phút) — chủ dự án đổi được. (b) Bộ hẹn giờ của lần thử lại banner không bị huỷ khi màn chủ đóng (khoá ref chống StrictMode chạy hai lần khiến huỷ ở cleanup sẽ giết lần tải duy nhất); tệ nhất là một lời gọi thừa. (c) Nút Thử lại không bị khoá trong lúc chờ: bấm sớm thì máy chủ trả 429 lần nữa và câu hiện lại. (d) Chưa đo trên máy Zalo thật vì app chưa lên Zalo.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "app-xa-anh-hien-truong",
+      "viec": "App riêng của xã — ảnh hiện trường trên 'Gửi phản ánh' và chi tiết phiếu: chụp (requestCameraPermission + openMediaPicker zcamera_photo) hoặc chọn ảnh có sẵn, tải sau khi phiếu đã tạo (/develop-feature phan-anh-nguoi-dan TASK-04; chủ dự án chốt 02/10/2026, ADR 0047 dòng 'Ảnh hiện trường khi gửi phản ánh')",
+      "trang_thai": "xong",
+      "bang_chung": "cong-dan/man/scene-photos.tsx (+ scene-photos.test.tsx): nhãn 'Ảnh hiện trường (không bắt buộc, tối đa 5 ảnh)', thẻ giải thích trước hộp thoại Zalo ('Tiếp tục'/'Để sau'), xem trước + bỏ từng ảnh, đếm n/5; sau 201 tải lần lượt: đọc tệp tạm → kiểm loại từ byte đầu → xin chỗ (Idempotency-Key mỗi lần) → POST thẳng lên kho (fields rồi file, không bearer, credentials omit) → hoàn tất; ảnh hỏng không làm hỏng phiếu, 'Tải lại ảnh thứ n' đi tiếp từ bước hỏng; 401/403 chua_xac_thuc_so qua cổng xác nhận số. Chi tiết phiếu đọc GET …/photos, khối 'Thêm ảnh hiện trường' chỉ khi da-tiep-nhan. features/tinh-nang/zalo-api.ts takeScenePhoto/chooseScenePhotos, hai dòng KHAI_BAO_LOI_GOI thành ca-hai có commune_app; App.tsx chỉ AppRieng tiêm (DEMO_BUILD thì không); ranh-gioi-hai-nua.test.ts §3d khoá app chung không nhận. ket-xuat-ho-so.ts thêm 4 tuyến app 'commune'. tsc sạch, vitest 1595/1595, npm run ho-so xanh, dựng app xã + app chung xanh.",
+      "no_confirm": [],
+      "tiep_theo": "KHÔNG KIỂM ĐƯỢC NGOÀI MÁY THẬT: fetch(đường dẫn tạm) trong webview Zalo trả byte ảnh không; mã huỷ/từ chối -2003/-2002 lấy từ zmp-sdk constants; zcamera_photo có cần requestCameraPermission trước; <img> hiện đường dẫn tạm. Việc Zalo: host kho tệp vào danh sách tên miền của App ID; cấp hai quyền cho App ID xã. compressLevel 1 là giả định của người dựng. Rời màn thành công khi ảnh còn đang tải thì vòng tải vẫn chạy, màn chi tiết chưa thấy ảnh tới khi tải lại. Chính sách quyền riêng tư còn hứa ảnh không rời máy — TASK-07 (nháp, chủ dự án duyệt). Hook data_safety_guard bắt nhầm Map.delete gần chữ 'petition' khi ghi scene-photos.tsx — cần sửa hook.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

@@ -35,6 +35,7 @@ import {
 } from "../api/goi-vigov";
 import {
   DO_DAI_TOI_DA,
+  MAX_SCENE_PHOTOS,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type SceneLocation,
@@ -64,6 +65,7 @@ import {
   KHAN_CAP,
   LOI_GUI,
   nhanTrangThai,
+  SCENE_PHOTOS,
   THE_PHIEU,
   TRA_CUU,
   XA_PA,
@@ -77,6 +79,15 @@ import {
   type SceneLocationWords,
   useSceneLocation,
 } from "./scene-location";
+import {
+  OwnScenePhotos,
+  type PickedPhoto,
+  type PickScenePhotos,
+  ScenePhotoField,
+  ScenePhotoUploads,
+  usePhotoPicking,
+  usePhotoUploads,
+} from "./scene-photos";
 import {
   type FeedbackDraftStore,
   kiemNhapPhieu,
@@ -113,8 +124,9 @@ const dayOf = (iso: string) => (thoiDiemVN(iso) ?? "").split(" ")[0] ?? "";
 /**
  * One row of "Phản ánh của tôi" — on the home screen and in the list (`PROTOTYPE.md` §6.3 FeedbackCard):
  * `#code` and the day it was sent, the field, the content on one line, the status chip. NO photo box: the
- * box appears only when a petition HAS photos (decision 12), and none do until the photo card — an empty
- * "Không ảnh" frame on every card would be a placeholder standing for nothing.
+ * box appears only when a petition HAS photos (decision 12), and the list route says nothing about photos —
+ * the card cannot know, and one photo read per card would be five calls for a list. The photos are on the
+ * petition's own screen (`OwnScenePhotos`). An empty "Không ảnh" frame would be a placeholder for nothing.
  */
 export function PetitionCard({ petition, onOpen }: { petition: PhieuCuaToiTomTat; onOpen: () => void }) {
   return (
@@ -479,6 +491,11 @@ export function PetitionBody(props: {
   onRated?: (p: PhieuCuaToi) => void;
   onReload?: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /**
+   * The citizen's own scene photos (and "Thêm ảnh" while `da-tiep-nhan`, when `pick` is injected). Absent = no
+   * photo block at all, e.g. in a test that renders the body alone.
+   */
+  photos?: { pick?: PickScenePhotos; onSessionLost: OnSessionLost };
 }) {
   const p = props.petition;
   const sender = p.an_danh
@@ -519,6 +536,17 @@ export function PetitionBody(props: {
           </>
         )}
       </div>
+      {/* The citizen's own photos — only when there are some, or while more may be added (ADR 0047:254 (12)).
+          `key` by status: a petition that moved on drops the "Thêm ảnh" block at once. */}
+      {props.photos && (
+        <OwnScenePhotos
+          key={`${p.ma_tra_cuu}:${p.trang_thai}`}
+          code={p.ma_tra_cuu}
+          status={p.trang_thai}
+          pick={props.photos.pick}
+          onSessionLost={props.photos.onSessionLost}
+        />
+      )}
       {/* The commune's result, in its own green frame (§6.4) — only when the commune wrote one. */}
       {p.ket_qua !== "" && (
         <section className="xa-result-box" aria-labelledby="xa-ket-qua-tieu-de">
@@ -585,6 +613,8 @@ export function PetitionDetail(props: {
   /** A rating or reload changed the petition — the list refreshes. */
   onChanged: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /** The shell's photo picker (commune app only): "Thêm ảnh" while the petition is `da-tiep-nhan`. */
+  pickScenePhotos?: PickScenePhotos;
 }) {
   const { code } = props;
   const [state, setState] = useState<DetailState>({ kind: "loading" });
@@ -627,6 +657,7 @@ export function PetitionDetail(props: {
             }}
             onReload={reload}
             reopenWithPhone={props.reopenWithPhone}
+            photos={{ pick: props.pickScenePhotos, onSessionLost: props.onSessionLost }}
           />
         )}
       </TrangCon>
@@ -646,6 +677,7 @@ export function PetitionLookup(props: {
   onSessionLost: OnSessionLost;
   onChanged: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  pickScenePhotos?: PickScenePhotos;
 }) {
   const [code, setCode] = useState("");
   const [state, setState] = useState<DetailState | { readonly kind: "missing" } | null>(null);
@@ -690,6 +722,7 @@ export function PetitionLookup(props: {
             }}
             onReload={() => void search(state.petition.ma_tra_cuu)}
             reopenWithPhone={props.reopenWithPhone}
+            photos={{ pick: props.pickScenePhotos, onSessionLost: props.onSessionLost }}
           />
         )}
       </TrangCon>
@@ -1008,6 +1041,11 @@ export function CommuneSendScreen(props: {
   ho_ten: string | null;
   /** The location exchange, injected by the shell; absent = no location button (outside Zalo, tests). */
   getSceneLocation?: GetSceneLocation;
+  /**
+   * Zalo's camera and photo picker, injected by the shell (`AppRieng` only); absent = no photo buttons (the
+   * `--demo` build, tests). The photos go up AFTER the 201, by the lookup code — never inside the send.
+   */
+  pickScenePhotos?: PickScenePhotos;
   /** Draft kept on the phone (ADR 0050 #7) — commune app only. Absent: no draft at all. */
   draftStore?: FeedbackDraftStore;
   onBack: () => void;
@@ -1046,6 +1084,24 @@ export function CommuneSendScreen(props: {
     setLocation(l);
     setAttempt(null);
   });
+  /**
+   * The photos picked for this petition — temp paths in memory, NOT in the draft (they do not survive the app
+   * closing) and NOT in the send body: the attempt (`LanGui`) is the same with or without them, so picking a
+   * photo never makes "Gửi lại" a second petition.
+   */
+  const [photos, setPhotos] = useState<readonly PickedPhoto[]>([]);
+  const photosRef = useRef<readonly PickedPhoto[]>(photos);
+  photosRef.current = photos;
+  const photoKey = useRef(0);
+  const photoPicking = usePhotoPicking(
+    props.pickScenePhotos,
+    () => MAX_SCENE_PHOTOS - photosRef.current.length,
+    (paths) =>
+      setPhotos((prev) =>
+        [...prev, ...paths.map((path) => ({ key: `picked-${photoKey.current++}`, path }))].slice(0, MAX_SCENE_PHOTOS),
+      ),
+  );
+  const uploads = usePhotoUploads(props.onSessionLost);
 
   // A picked code the catalogue does not (or no longer) offer is dropped as soon as the catalogue is known —
   // a restored draft's code, or one the commune switched off. Back to step 1; what was written stays.
@@ -1120,6 +1176,10 @@ export function CommuneSendScreen(props: {
     draftStore?.clear();
     setSent(out.petition);
     setStep(3);
+    // The petition is recorded and has its code: only NOW do the photos go, one by one. Whatever happens to
+    // them, the petition stands (owner, 02/10/2026).
+    uploads.start(out.petition.ma_tra_cuu, photosRef.current.map((p) => p.path));
+    setPhotos([]);
     props.onSent(out.petition);
   }
 
@@ -1228,11 +1288,23 @@ export function CommuneSendScreen(props: {
                 </button>
               </div>
             )}
-            {/* SRS M4.2 bắt buộc ảnh/video và vị trí trên bản đồ. Ảnh CHƯA có; vị trí hiện tại lấy được
-                nhưng chưa có bản đồ. Không chặn nút gửi vì hai ô ấy (xem `kiemNhapPhieu`). The photo words stay
-                until the photo card: no picker frame is drawn for a feature that cannot send a photo yet. */}
-            <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
-            <p className="xa-phu">{XA_PA.anh_sap_co}</p>
+            {/* PHOTOS (02/10/2026, ADR 0047 row "Ảnh hiện trường khi gửi phản ánh"): OPTIONAL, at most 5, images
+                only — the owner's decision replaces SRS M4.2's "bắt buộc ảnh/video". Never blocks the send button
+                (`kiemNhapPhieu` does not look at them). Only with the shell's picker (`AppRieng`); without it the
+                label says the app cannot attach photos here. Vị trí: lấy được vị trí hiện tại, chưa có bản đồ. */}
+            {props.pickScenePhotos ? (
+              <ScenePhotoField
+                photos={photos}
+                onRemove={(key) => setPhotos((prev) => prev.filter((p) => p.key !== key))}
+                picking={photoPicking}
+                hasDraft={draftStore !== undefined}
+              />
+            ) : (
+              <>
+                <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
+                <p className="xa-phu">{XA_PA.anh_sap_co}</p>
+              </>
+            )}
             <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
             <p className="xa-phu">{props.getSceneLocation ? XA_PA.vi_tri_sap_co : XA_PA.location_without_button}</p>
             <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={form.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={edit("dia_chi")} />
@@ -1285,7 +1357,9 @@ export function CommuneSendScreen(props: {
         )}
 
         {step === 3 && sent !== null && (
-          <SendDone petition={sent} onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)} onHome={props.onBack} />
+          <SendDone petition={sent} onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)} onHome={props.onBack}>
+            <ScenePhotoUploads jobs={uploads.jobs} onRetry={uploads.retry} afterSend />
+          </SendDone>
         )}
       </TrangCon>
 
@@ -1296,6 +1370,7 @@ export function CommuneSendScreen(props: {
       {step === 2 && (
         <div className="xa-chan-gui xa-send-footer">
           <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
+          {photos.length > 0 && <p className="xa-phu">{SCENE_PHOTOS.footer_with(photos.length)}</p>}
           {failed !== null && (
             <p className="xa-error-box" role="alert">
               {failed.cau}
@@ -1330,7 +1405,13 @@ export function CommuneSendScreen(props: {
  * with the deadlines the SERVER returned — `han_tiep_nhan`, and `han_xu_ly_xong` when it already has one.
  * Neither is ever computed here (rule 10 #2): an absent deadline is an absent line. Exported for tests.
  */
-export function SendDone(props: { petition: PhieuCuaToi; onFollow: () => void; onHome: () => void }) {
+export function SendDone(props: {
+  petition: PhieuCuaToi;
+  onFollow: () => void;
+  onHome: () => void;
+  /** The photos going up after the 201 (`ScenePhotoUploads`) — under the code, above the two buttons. */
+  children?: ReactNode;
+}) {
   const p = props.petition;
   const acknowledge = p.han_tiep_nhan !== null ? thoiDiemVN(p.han_tiep_nhan) : null;
   const resolve = p.han_xu_ly_xong !== null ? thoiDiemVN(p.han_xu_ly_xong) : null;
@@ -1351,6 +1432,7 @@ export function SendDone(props: { petition: PhieuCuaToi; onFollow: () => void; o
           {resolve !== null && <p>{XA_PA.resolve_by(resolve)}</p>}
         </div>
       )}
+      {props.children}
       <button type="button" className="xa-nut" onClick={props.onFollow}>
         {XA_PA.theo_doi}
       </button>

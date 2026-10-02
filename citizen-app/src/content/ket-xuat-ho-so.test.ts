@@ -17,7 +17,15 @@ import {
   newsCategoriesAddress,
 } from "../cong-dan/api/hop-dong-cong-khai";
 import { diaChiViGov } from "../cong-dan/api/dia-chi-vigov";
-import { CITIZEN_FIELDS_PATH, citizenFieldsAddress } from "../cong-dan/api/hop-dong-phan-anh";
+import {
+  CITIZEN_FIELDS_PATH,
+  citizenFieldsAddress,
+  PHOTO_UPLOAD_FIELDS,
+  photoCompletionAddress,
+  photosAddress,
+  photoUploadBody,
+  STORAGE_FILE_FIELD,
+} from "../cong-dan/api/hop-dong-phan-anh";
 import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN, XA_TN } from "../cong-dan/man/noi-dung";
 import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import {
@@ -48,6 +56,14 @@ import {
   DUONG_CONG_KHAI,
   DUONG_ROI_KHOI_MAY,
   PHONE_VERIFICATION_SCREENS,
+  SCENE_PHOTO_COMPLETION_FIELDS,
+  SCENE_PHOTO_COMPLETION_PATH,
+  SCENE_PHOTO_LIST_FIELDS,
+  SCENE_PHOTO_SCREENS,
+  SCENE_PHOTO_SLOT_FIELDS,
+  SCENE_PHOTO_STORAGE_FIELDS,
+  SCENE_PHOTO_STORAGE_TARGET,
+  SCENE_PHOTOS_PATH,
   SEND_SCREEN_NAME,
   TEN_MAN_CONG_KHAI,
   khoiRoiKhoiMay,
@@ -450,7 +466,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // office, read when the commune app opens (`/commune-profiles`). + 1: the commune's field list for
     // step 1 of "Gửi phản ánh" (`/my-citizen-report-fields`) — no field sent, only the session header.
     // + 1 (30/09, card D2): the news category chips (`/commune-news/categories`), on the citizen's tap.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(14);
+    // + 4 (02/10/2026): the commune app's scene photos — slot, upload to the store, completion, own list.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(18);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -602,6 +619,44 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     }
   });
 
+  /**
+   * SCENE PHOTOS (02/10/2026) — the four commune-app rows are COPIES (boundary, as the public routes), locked
+   * here to the addresses and the body the state half really builds. A new key in `photoUploadBody`, a renamed
+   * path, or a row moved into the shared app is red.
+   */
+  it("ảnh hiện trường: bốn đường của app riêng, đường dẫn và trường gửi đi khoá với hợp đồng thật", () => {
+    const rows = DUONG_ROI_KHOI_MAY.filter((d) =>
+      [SCENE_PHOTOS_PATH, SCENE_PHOTO_COMPLETION_PATH, SCENE_PHOTO_STORAGE_TARGET].includes(d.tuyen),
+    );
+    expect(rows).toHaveLength(4);
+    for (const r of rows) {
+      expect(r.app, r.tuyen).toBe("commune");
+      expect(r.nguoi_dung_bam, r.tuyen).toBe(true);
+      expect(r.man).toBe(SCENE_PHOTO_SCREENS);
+    }
+    const CODE = "PA7K2QX9M4TD";
+    expect(new URL(photosAddress(CODE)).pathname).toBe(SCENE_PHOTOS_PATH.replace("{maTraCuu}", CODE));
+    expect(new URL(photoCompletionAddress(CODE, "f-1")).pathname).toBe(
+      SCENE_PHOTO_COMPLETION_PATH.replace("{maTraCuu}", CODE).replace("{id}", "f-1"),
+    );
+    // Slot: the path's code plus EXACTLY the body's keys, both ways.
+    const body = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
+    expect(body).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
+    expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).sort()).toEqual(["maTraCuu", ...body].sort());
+    // Upload: the issued form, then the file, under the field name the client writes.
+    expect(SCENE_PHOTO_STORAGE_FIELDS.map((t) => t.khoa)).toEqual(["fields", STORAGE_FILE_FIELD]);
+    // Completion and list: path parameters only, no body.
+    expect(SCENE_PHOTO_COMPLETION_FIELDS.map((t) => t.khoa)).toEqual(["maTraCuu", "id"]);
+    expect(SCENE_PHOTO_LIST_FIELDS.map((t) => t.khoa)).toEqual(["maTraCuu"]);
+    // The copied screen names are the real ones.
+    expect(SCENE_PHOTO_SCREENS).toBe(`Ứng dụng của xã: ${[GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de].join(" · ")}`);
+    // And the commune app's dossier prints them; the shared one does not carry the commune rows' screens.
+    const communeBlock = khoiRoiKhoiMay(communeAppRoutes(DUONG_ROI_KHOI_MAY), { communeApp: true });
+    for (const t of [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS]) {
+      expect(communeBlock, t.khoa).toContain(t.trong_chinh_sach);
+    }
+  });
+
   it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
     expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
     expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
@@ -616,7 +671,7 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("12 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("16 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

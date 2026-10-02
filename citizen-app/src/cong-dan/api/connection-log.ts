@@ -28,7 +28,11 @@ export type ConnectionRoute =
   | "news"
   | "news-categories"
   | "news-item"
-  | "banners";
+  | "banners"
+  | "photo-slot"
+  | "photo-storage"
+  | "photo-complete"
+  | "photo-list";
 
 export type ConnectionFailure = {
   readonly route: ConnectionRoute;

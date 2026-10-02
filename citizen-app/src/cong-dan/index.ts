@@ -30,6 +30,7 @@ export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
 export { TrangXa, type XaCuaApp } from "./man/TrangXa";
 export type { FeedbackDraftStore, KetQuaLayTen, LayTenZalo, NhapPhieu } from "./man/trai-nghiem";
 export type { GetSceneLocation, SceneLocationFailure, SceneLocationResult } from "./man/scene-location";
+export type { PickScenePhotos, ScenePhotoPickResult, ScenePhotoSource } from "./man/scene-photos";
 export type { OpenVideo } from "./man/TinTucAppXa";
 export type { OpenExternal } from "./man/leave-app";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";

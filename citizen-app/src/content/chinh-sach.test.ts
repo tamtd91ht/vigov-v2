@@ -15,6 +15,7 @@ import {
   TOKEN_KHONG_CHUA_GI,
 } from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
+import { PHOTO_UPLOAD_FIELDS, photoUploadBody } from "../cong-dan/api/hop-dong-phan-anh";
 
 import {
   CAU_DAU,
@@ -23,6 +24,11 @@ import {
   PHIEN_BAN_CHINH_SACH,
 } from "./chinh-sach-rieng-tu";
 import { COMPANY } from "./company-profile";
+import {
+  SCENE_PHOTO_COMPLETION_FIELDS,
+  SCENE_PHOTO_SLOT_FIELDS,
+  SCENE_PHOTO_STORAGE_FIELDS,
+} from "./ket-xuat-ho-so";
 
 /**
  * CHÍNH SÁCH QUYỀN RIÊNG TƯ — PHÉP KIỂM CỦA MỘT VĂN BẢN PHÁP LÝ, KHÔNG PHẢI CỦA MỘT MÀN HÌNH.
@@ -232,6 +238,28 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     expect(policy, "the policy now declares the commune-app login — turn this case into a two-way lock").not.toContain(
       appId.trong_chinh_sach,
     );
+  });
+
+  /**
+   * ⚠ KHOẢNG HỞ CÒN NỢ — ẢNH HIỆN TRƯỜNG (02/10/2026, app riêng của xã).
+   *
+   *   The commune app now sends the citizen's scene photos to ViGov after a petition is recorded. The four
+   *   routes are declared in the Zalo submission (`ket-xuat-ho-so.ts` `SCENE_PHOTO_*`), but the policy has no
+   *   section for them, and it still says photos never leave the phone (true of the SHARED app only). The
+   *   wording is the project owner's (ADR 0047: drafted, "chờ duyệt", approved before Zalo) — a later card
+   *   (TASK-07), not written here. Pinned at EXACTLY the two slot keys, and at the sentences being absent:
+   *   the day the section is approved, this case turns red and becomes a two-way lock.
+   */
+  it("ảnh hiện trường: thân xin chỗ tải gửi đúng hai khoá đã khai — mục chính sách cho ảnh CÒN NỢ", () => {
+    const keys = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
+    expect(keys).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
+    expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).filter((k) => k !== "maTraCuu").sort()).toEqual(keys);
+    const policy = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
+    for (const t of [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS]) {
+      expect(policy, "the policy now declares the scene photos — turn this case into a two-way lock").not.toContain(
+        t.trong_chinh_sach,
+      );
+    }
   });
 
   it("đổi mã vị trí: thân gửi đúng hai khoá đã khai — mục chính sách cho tuyến này CÒN NỢ", () => {

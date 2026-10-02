@@ -399,6 +399,107 @@ export const TEN_MAN_CONG_KHAI = {
 export const COMMUNE_APP_ROUTES_OWED =
   "> ⚠ **CHƯA ĐỦ — CÁC TUYẾN PHẢN ÁNH CHƯA ĐƯỢC KHAI Ở ĐÂY:** gửi phản ánh, *Phản ánh của tôi*, tra cứu phiếu, đánh giá kết quả xử lý. Chúng mang nội dung phản ánh, họ tên, số điện thoại người dân tự gõ và toạ độ (nếu người dân đã lấy vị trí), tới ViGov — dịch vụ `petitions`. Khai chúng ở `citizen-app/src/content/ket-xuat-ho-so.ts` trước khi nộp.";
 
+/* ---------------------------------------------------------------------------------------------
+   ẢNH HIỆN TRƯỜNG (02/10/2026) — four routes of the COMMUNE'S OWN APP only, copied, not imported
+   ---------------------------------------------------------------------------------------------
+
+   Same boundary as the public routes above: the paths and the slot body live in the state half's contract
+   (`cong-dan/api/hop-dong-phan-anh.ts` `photosAddress`, `photoCompletionAddress`, `photoUploadBody`), which
+   this file may not import. `ket-xuat-ho-so.test.ts` locks each copy to the real address and body, both ways.
+
+   ⚠ THE PRIVACY-POLICY SECTION FOR THESE FOUR ROUTES IS STILL OWED — the legal wording is the project
+     owner's (ADR 0047 row "Ảnh hiện trường khi gửi phản ánh": Claude drafts, marked "chờ duyệt", the owner
+     approves before Zalo), drafted in a later card (TASK-07), not here. The current policy still says photos
+     never leave the phone (`chinh-sach-rieng-tu.ts:15`), which stays true of the SHARED app only.
+     `chinh-sach.test.ts` pins the gap. */
+
+/** POST (slot) and GET (the citizen's own photos) — copied from `photosAddress`; the test pins it. */
+export const SCENE_PHOTOS_PATH = "/api/v1/my-citizen-reports/{maTraCuu}/photos";
+/** POST completion — copied from `photoCompletionAddress`; the test pins it. */
+export const SCENE_PHOTO_COMPLETION_PATH = "/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion";
+/** The upload goes to the address ViGov hands out — not a path of ours, so it is named, not written. */
+export const SCENE_PHOTO_STORAGE_TARGET = "{upload.url}";
+
+/** The screens where photos are taken or added — copied like the other commune screen names; the test pins it. */
+export const SCENE_PHOTO_SCREENS = "Ứng dụng của xã: Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi";
+
+const PETITION_CODE_FIELD: TruongGuiDi = {
+  khoa: "maTraCuu",
+  trong_chinh_sach:
+    "mã tra cứu của phản ánh bạn đã gửi, do chính hệ thống của xã cấp, nằm trên đường dẫn; nó chỉ mở được phản ánh của chính bạn",
+};
+
+/** The slot request: the code on the path, and the two keys of `photoUploadBody`. */
+export const SCENE_PHOTO_SLOT_FIELDS: readonly TruongGuiDi[] = [
+  PETITION_CODE_FIELD,
+  { khoa: "content_type", trong_chinh_sach: "loại ảnh (JPEG, PNG hoặc WebP), đọc từ chính ảnh" },
+  { khoa: "size", trong_chinh_sach: "dung lượng ảnh tính bằng byte" },
+];
+
+/** The presigned POST: the form ViGov issued, echoed, then the photo. */
+export const SCENE_PHOTO_STORAGE_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "fields",
+    trong_chinh_sach:
+      "các trường của biểu mẫu tải lên mà chính ViGov cấp ở bước xin chỗ tải (khoá, hạn, chữ ký), gửi lại nguyên văn; không có thông tin nào của bạn",
+  },
+  {
+    khoa: "file",
+    trong_chinh_sach:
+      "ảnh bạn đã chụp hoặc chọn, đúng loại đã khai; hệ thống của xã bỏ toàn bộ thông tin kèm theo ảnh (như vị trí chụp, thiết bị) trước khi lưu",
+  },
+];
+
+export const SCENE_PHOTO_COMPLETION_FIELDS: readonly TruongGuiDi[] = [
+  PETITION_CODE_FIELD,
+  { khoa: "id", trong_chinh_sach: "mã của ảnh, do chính hệ thống của xã cấp ở bước xin chỗ tải" },
+];
+
+export const SCENE_PHOTO_LIST_FIELDS: readonly TruongGuiDi[] = [PETITION_CODE_FIELD];
+
+const SCENE_PHOTO_ROUTES: readonly DuongRoiKhoiMay[] = [
+  {
+    tuyen: SCENE_PHOTOS_PATH,
+    may_chu: "ViGov — dịch vụ `petitions`",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, ngay sau khi phản ánh người dùng tự bấm gửi đã được ghi nhận, nếu người dùng đã chụp hoặc chọn ảnh — mỗi ảnh một lần; và khi người dùng tự bấm “Tải lại ảnh thứ …”, hoặc chụp, chọn thêm ảnh ở một phản ánh của mình còn ở bước “Đã tiếp nhận”",
+    nguoi_dung_bam: true,
+    man: SCENE_PHOTO_SCREENS,
+    truong: SCENE_PHOTO_SLOT_FIELDS,
+    app: "commune",
+  },
+  {
+    tuyen: SCENE_PHOTO_STORAGE_TARGET,
+    may_chu:
+      "kho lưu tệp nội bộ của ViGov (không phải bên thứ ba), tại địa chỉ có chữ ký, dùng được trong 15 phút, do dịch vụ `petitions` cấp ở đường ngay trên; không mang phiên làm việc với xã",
+    khi_nao: "ngay sau đường ngay trên, cho đúng ảnh ấy",
+    nguoi_dung_bam: true,
+    man: SCENE_PHOTO_SCREENS,
+    truong: SCENE_PHOTO_STORAGE_FIELDS,
+    app: "commune",
+  },
+  {
+    tuyen: SCENE_PHOTO_COMPLETION_PATH,
+    may_chu:
+      "ViGov — dịch vụ `petitions`, quét mã độc, mã hoá lại ảnh và bỏ toàn bộ thông tin kèm theo trước khi lưu vào kho riêng của xã",
+    khi_nao: "ngay sau khi ảnh đã lên kho lưu tệp, cho đúng ảnh ấy; và khi người dùng tự bấm “Tải lại ảnh thứ …”",
+    nguoi_dung_bam: true,
+    man: SCENE_PHOTO_SCREENS,
+    truong: SCENE_PHOTO_COMPLETION_FIELDS,
+    app: "commune",
+  },
+  {
+    tuyen: SCENE_PHOTOS_PATH,
+    may_chu: "ViGov — dịch vụ `petitions`; trả đường dẫn xem ảnh có chữ ký, dùng được tối đa 15 phút",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, người dùng tự mở một phản ánh của mình, để hiện những ảnh đã gửi; đọc lại khi đường dẫn xem ảnh sắp hết hạn trong lúc phản ánh còn mở, hoặc sau khi một ảnh mới vừa được lưu",
+    nguoi_dung_bam: true,
+    man: SCENE_PHOTO_SCREENS,
+    truong: SCENE_PHOTO_LIST_FIELDS,
+    app: "commune",
+  },
+];
+
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: "/api/v1/communes",
@@ -537,7 +638,8 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
  *
  * ⚠ CHƯA KHAI Ở ĐÂY: các tuyến phản ánh của ViGov (`petitions`) — gửi phản ánh, "Phản ánh của tôi",
  * tra cứu. Chúng mang nội dung phản ánh, họ tên và số điện thoại — và từ 29/09/2026 cả toạ độ `lat`/`lng`
- * khi công dân đã bấm lấy vị trí. Việc khai chúng chưa thuộc lượt nào.
+ * khi công dân đã bấm lấy vị trí. Việc khai chúng chưa thuộc lượt nào. The four SCENE-PHOTO routes (02/10/2026)
+ * ARE declared (`SCENE_PHOTO_ROUTES`); their policy section is still owed (see that block).
  */
 export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
@@ -662,6 +764,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
       nguoi_dung_bam: true,
     },
   },
+  // 02/10/2026: the commune app's scene photos — slot, upload, completion, the citizen's own list.
+  ...SCENE_PHOTO_ROUTES,
   ...DUONG_CONG_KHAI.slice(1),
 ];
 

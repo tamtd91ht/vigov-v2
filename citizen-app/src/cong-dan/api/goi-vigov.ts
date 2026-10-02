@@ -22,6 +22,11 @@
  *   Cổng của chúng là TÊN MIỀN: không đúng khuôn (`lib/launch-params.ts` `laTenMien`) thì không gọi.
  *   Chúng đi qua CÙNG MỘT `fetch(` ở `goi` bên dưới — tệp này vẫn chỉ có một chỗ gọi mạng.
  *
+ * ⚠ SCENE PHOTOS (02/10/2026, commune app only) add the ONLY two `fetch(` outside `goi`, each for a reason
+ *   `goi` cannot serve: `readPickedPhoto` reads the picker's LOCAL temp file (no server at all), and
+ *   `postPhotoToStorage` posts the bytes to the presigned object-store URL ViGov handed out — no bearer, no
+ *   cookie, the form being the credential. Every ViGov route still goes through `goi`.
+ *
  * ⚠ BEARER CHỈ ĐẾN TỪ `layPhienViGov()`. Không hàm nào ở đây nhận token qua tham số — một tham số
  * là một khe để ai đó nhét phiếu phiên của `vihat-miniapp` vào, và phiếu ấy KHÔNG phải phiên ViGov.
  *
@@ -42,8 +47,19 @@ import {
   FIELD_NOT_OFFERED_CODE,
   isPhoneNotVerified,
   type PhieuCuaToi,
+  photoCompletionAddress,
+  photosAddress,
+  type PhotoSlot,
+  type PhotoUploadForm,
   ratingAddress,
   readCitizenFields,
+  readPhotoSlot,
+  readScenePhoto,
+  readScenePhotoList,
+  type ScenePhotoLink,
+  type ScenePhotoOut,
+  type ScenePhotoType,
+  STORAGE_FILE_FIELD,
   type TrangPhieuCuaToi,
 } from "./hop-dong-phan-anh";
 import {
@@ -134,6 +150,13 @@ export type RateLimited = { kieu: "rate-limited"; retryAfterSeconds: number | nu
 type CallResult<T> = { kieu: "xong"; gia_tri: T } | NhanhKhongThanh | RateLimited;
 
 /**
+ * A refusal the server explained with an error `code` — only for the photo routes (`refusals: true`), whose
+ * 400/404/409/422/503 each carry several codes meaning different next steps (`PHOTO_ERROR`). 401, 403 and
+ * 429 keep their shared branches. `code` is `null` when the body had none.
+ */
+export type Refused = { kieu: "refused"; status: number; code: string | null };
+
+/**
  * Routes with no 429 in their contract (the petition routes): one arriving there is a stray, and stays
  * `loi-may-chu` exactly as it was before 02/10/2026.
  */
@@ -169,8 +192,8 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
 }
 
 /**
- * CHỖ DUY NHẤT GỌI `fetch` — mọi tuyến đi qua đây (`bundle-for-zalo.test.ts` đếm đúng một `fetch(`
- * của nửa này). `doc` đọc thân 200/201; `null` là sai khuôn.
+ * CHỖ DUY NHẤT GỌI `fetch` TỚI ViGov — mọi tuyến ViGov đi qua đây (the two photo-byte calls below are not
+ * ViGov routes; see the file header). `doc` đọc thân 200/201; `null` là sai khuôn.
  */
 async function goi<T>(
   dia_chi: string,
@@ -179,6 +202,27 @@ async function goi<T>(
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
 ): Promise<CallResult<T>> {
+  const kq = await callLogged(dia_chi, tuy_chon, doc, khi_404);
+  // Unreachable: `refusals` is not set on this path, so `callOnce` never answers `refused` here.
+  return kq.kieu === "refused" ? { kieu: "loi-may-chu" } : kq;
+}
+
+/** `goi` for the photo routes: the server's refusal `code` comes back (`Refused`) instead of being folded. */
+async function goiWithRefusals<T>(
+  dia_chi: string,
+  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token: string; khoa?: string; than?: string },
+  doc: (than: unknown) => T | null,
+): Promise<CallResult<T> | Refused> {
+  return callLogged(dia_chi, { ...tuy_chon, refusals: true }, doc, { kieu: "khong-thay" });
+}
+
+/** One call, and the fixed-shape log line when it did not succeed (`connection-log.ts`). */
+async function callLogged<T>(
+  dia_chi: string,
+  tuy_chon: { route: ConnectionRoute; method: "GET" | "POST"; token?: string; khoa?: string; than?: string; refusals?: boolean },
+  doc: (than: unknown) => T | null,
+  khi_404: NhanhKhongThanh,
+): Promise<CallResult<T> | Refused> {
   const startedAt = Date.now();
   const trace: CallTrace = {};
   const kq = await callOnce(dia_chi, tuy_chon, doc, khi_404, trace);
@@ -201,11 +245,11 @@ type CallTrace = { status?: number; error?: string };
 /** `goi` without the log. */
 async function callOnce<T>(
   dia_chi: string,
-  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
+  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string; refusals?: boolean },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
   trace: CallTrace,
-): Promise<CallResult<T>> {
+): Promise<CallResult<T> | Refused> {
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
 
@@ -222,6 +266,11 @@ async function callOnce<T>(
       signal: bo_dieu_khien.signal,
     });
     trace.status = tra_loi.status;
+
+    const s = tra_loi.status;
+    if (tuy_chon.refusals === true && s >= 400 && s !== 401 && s !== 403 && s !== 429) {
+      return { kieu: "refused", status: s, code: await readErrorCode(tra_loi) };
+    }
 
     switch (tra_loi.status) {
       case 200:
@@ -403,6 +452,141 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
     ),
   );
   return kq.kieu === "kenh-chua-mo" ? { kieu: "loi-may-chu" } : kq;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * SCENE PHOTOS — the citizen's own petition, by its lookup code (`hop-dong-phan-anh.ts` §SCENE PHOTOS)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** What a photo route can become. No "whose" parameter: citizen and commune come from the session. */
+export type PhotoCallResult<T> = { kieu: "xong"; gia_tri: T } | NhanhKhongThanh | RateLimited | Refused;
+
+/**
+ * Ask for ONE upload slot. `key` is the `Idempotency-Key` of this attempt — a NEW one for every attempt: a
+ * replay carries no form (`readPhotoSlot`), so reusing a key could only ever bring back nothing to upload.
+ */
+export async function requestScenePhotoSlot(
+  ma_tra_cuu: string,
+  body: string,
+  key: string,
+): Promise<PhotoCallResult<PhotoSlot>> {
+  const ma = ma_tra_cuu.trim();
+  const cong = moCong(photosAddress(ma === "" ? "x" : ma));
+  if ("kieu" in cong) return cong;
+  if (ma === "") return { kieu: "khong-thay" };
+  return goiWithRefusals(
+    cong.dia_chi,
+    { route: "photo-slot", method: "POST", token: cong.token, khoa: key, than: body },
+    readPhotoSlot,
+  );
+}
+
+/** Ask the server to check and keep the photo just posted to the store (scan, re-encode without EXIF). */
+export async function completeScenePhoto(ma_tra_cuu: string, id: string): Promise<PhotoCallResult<ScenePhotoOut>> {
+  const ma = ma_tra_cuu.trim();
+  const cong = moCong(photoCompletionAddress(ma === "" ? "x" : ma, id === "" ? "x" : id));
+  if ("kieu" in cong) return cong;
+  if (ma === "" || id === "") return { kieu: "khong-thay" };
+  return goiWithRefusals(cong.dia_chi, { route: "photo-complete", method: "POST", token: cong.token }, readScenePhoto);
+}
+
+/** The citizen's own stored photos, each with a read link that lives ≤ 15 minutes. */
+export async function listScenePhotos(ma_tra_cuu: string): Promise<PhotoCallResult<readonly ScenePhotoLink[]>> {
+  const ma = ma_tra_cuu.trim();
+  const cong = moCong(photosAddress(ma === "" ? "x" : ma));
+  if ("kieu" in cong) return cong;
+  if (ma === "") return { kieu: "khong-thay" };
+  return goiWithRefusals(cong.dia_chi, { route: "photo-list", method: "GET", token: cong.token }, readScenePhotoList);
+}
+
+/**
+ * The bytes of a photo the citizen just picked, from the LOCAL temporary path Zalo's picker returned
+ * (`openMediaPicker` without an upload URL: "đường dẫn tạm thời (local cache path)", `zmp-sdk/index.d.ts:4721`).
+ *
+ * ⚠ NOT A NETWORK CALL TO ANY SERVER: the path names a file on this phone. `fetch` is how a webview reads it,
+ *   and this file is the one place the state half may write `fetch(` (`phase1-collects-nothing.test.ts`).
+ *   Whether Zalo's webview serves that path to `fetch` has NOT been measured on a device — an unreadable path is
+ *   `null`, and the screen says so in a sentence; it never throws. Nothing here logs the path.
+ */
+export async function readPickedPhoto(path: string): Promise<Blob | null> {
+  if (path === "") return null;
+  try {
+    const answer = await fetch(path);
+    // A local file read may answer status 0 (no HTTP involved) — only an explicit HTTP failure is refused.
+    if (answer.status >= 400) return null;
+    const blob = await answer.blob();
+    return blob.size > 0 ? blob : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One upload to the object store can take a while on a rural connection; the API calls keep `HAN_CHO_MS`. */
+const UPLOAD_WAIT_MS = 90_000;
+
+export type StorageUploadResult = { kieu: "xong" } | { kieu: "tu-choi"; status: number } | { kieu: "loi-mang" } | { kieu: "loi-may-chu" };
+
+/**
+ * The presigned POST to the object store ViGov named in `form.url` — every `fields` entry first, the file LAST
+ * as `file`, the type exactly as declared in the slot request. NO bearer and NO cookie: the form IS the
+ * credential (ADR 0052), and the ViGov session must never reach the storage host. A non-https URL is refused
+ * before a byte leaves (`readPhotoSlot` already checks; checked again because this is where bytes go).
+ *
+ * 4xx → `tu-choi` (the form expired, or the store refused the size/type): a NEW slot is the next step.
+ */
+export async function postPhotoToStorage(
+  form: PhotoUploadForm,
+  photo: Blob,
+  content_type: ScenePhotoType,
+): Promise<StorageUploadResult> {
+  let host = "";
+  try {
+    const url = new URL(form.url);
+    if (url.protocol !== "https:") return { kieu: "loi-may-chu" };
+    host = url.host;
+  } catch {
+    return { kieu: "loi-may-chu" };
+  }
+  const startedAt = Date.now();
+  const trace: CallTrace = {};
+  const out = await uploadOnce(form, photo, content_type, trace);
+  if (out.kieu !== "xong") {
+    logConnectionFailure({
+      route: "photo-storage",
+      method: "POST",
+      host,
+      outcome: out.kieu,
+      ...trace,
+      elapsed_ms: Date.now() - startedAt,
+    });
+  }
+  return out;
+}
+
+async function uploadOnce(
+  form: PhotoUploadForm,
+  photo: Blob,
+  content_type: ScenePhotoType,
+  trace: CallTrace,
+): Promise<StorageUploadResult> {
+  const body = new FormData();
+  for (const [k, v] of Object.entries(form.fields)) body.append(k, v);
+  // The part's name is a fixed word, never anything of the citizen's (rule 3, forbidden #4).
+  body.append(STORAGE_FILE_FIELD, new Blob([photo], { type: content_type }), "photo");
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), UPLOAD_WAIT_MS);
+  try {
+    const answer = await fetch(form.url, { method: "POST", body, credentials: "omit", signal: stop.signal });
+    trace.status = answer.status;
+    if (answer.status >= 200 && answer.status < 300) return { kieu: "xong" };
+    if (answer.status >= 400 && answer.status < 500) return { kieu: "tu-choi", status: answer.status };
+    return { kieu: "loi-may-chu" };
+  } catch (err) {
+    trace.error = describeThrown(err);
+    return { kieu: "loi-mang" };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════

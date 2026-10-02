@@ -14,9 +14,11 @@ import {
   type OpenCommuneAppSession,
   type OpenExternal,
   type OpenVideo,
+  type PickScenePhotos,
   type ReopenWithPhone,
   type ReopenWithPhoneResult,
   type SceneLocationResult,
+  type ScenePhotoPickResult,
   TrangXa,
   XacNhanXa,
   type ZaloFailure,
@@ -38,7 +40,13 @@ import {
   getCurrentLocation,
 } from "./features/dang-nhap/current-location";
 import { moRaNgoai } from "./features/tinh-nang/mo-ra-ngoai";
-import { layTenZalo, type SdkFailure } from "./features/tinh-nang/zalo-api";
+import {
+  layTenZalo,
+  chooseScenePhotos,
+  type ScenePhotoPick,
+  type SdkFailure,
+  takeScenePhoto,
+} from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
@@ -286,11 +294,16 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
   // `getLocation`, and Zalo refuses both to an app it has not approved yet — the button could only fail. No
   // fake coordinates instead: the address field stays, and the citizen writes where it happened. Not
   // injecting the function is what removes the control (`CommuneSendScreen`: absent = no button).
+  //
+  // SCENE PHOTOS (owner 02/10/2026): THIS app only — `AppChung` below never receives `pickScenePhotos`
+  // (`ranh-gioi-hai-nua.test.ts`). Same `--demo` stance as the location button: Zalo refuses the camera and
+  // the picker to an app it has not approved, so the button could only fail there.
   return (
     <TrangXa
       ten_mien={ten_mien}
       lay_ten={layTenChoXa}
       getSceneLocation={DEMO_BUILD ? undefined : getCommuneSceneLocation}
+      pickScenePhotos={DEMO_BUILD ? undefined : pickCommuneScenePhotos}
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
       openVideo={openCommuneVideo}
@@ -419,6 +432,36 @@ const getSceneLocation: GetSceneLocation = async () => toSceneLocationResult(awa
  * uses its own secret (`getCommuneAppLocation`). The shared app above keeps the two-key body.
  */
 const getCommuneSceneLocation: GetSceneLocation = async () => toSceneLocationResult(await getCommuneAppLocation());
+
+/**
+ * THE SCENE-PHOTO BRIDGE — the commune's own app ONLY. The shell builds it, the state half only declares its
+ * type (`PickScenePhotos`), exactly like the location bridge above. What comes down is LOCAL temp paths: the
+ * picker uploads nothing, and the bytes leave the phone only through the state half's presigned POST, after
+ * the petition is recorded.
+ *
+ * Table by WHAT THE CITIZEN DOES NEXT:
+ *   xong                → the paths
+ *   huy                 → nothing (they closed the picker)
+ *   tu-choi · ngoai-zalo→ the same branch
+ *   khong-lay-duoc      → `thu-lai`, with Zalo's code when Zalo refused (`toZaloFailure`)
+ */
+export function toScenePhotoPickResult(result: ScenePhotoPick): ScenePhotoPickResult {
+  switch (result.kieu) {
+    case "xong":
+      return { kind: "xong", paths: result.du_lieu };
+    case "huy":
+    case "tu-choi":
+    case "ngoai-zalo":
+      return { kind: result.kieu };
+    default: {
+      const zalo = toZaloFailure(result.failure);
+      return zalo === undefined ? { kind: "thu-lai" } : { kind: "thu-lai", zalo };
+    }
+  }
+}
+
+const pickCommuneScenePhotos: PickScenePhotos = async (source, max) =>
+  toScenePhotoPickResult(source === "camera" ? await takeScenePhoto() : await chooseScenePhotos(max));
 
 /**
  * CẦU HỌ TÊN — `getUserInfo`, gọi CHỈ từ bước mở app của `TrangXa` (29/09/2026): "check" không bật hộp

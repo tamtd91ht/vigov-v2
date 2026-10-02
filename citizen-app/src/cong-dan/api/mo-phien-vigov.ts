@@ -39,7 +39,7 @@ import { laTenMien } from "../../lib/launch-params";
  *
  * Never carries a message from the platform, a token or anything personal: a code is a number.
  */
-export type ZaloCapability = "access-token" | "phone" | "location" | "name";
+export type ZaloCapability = "access-token" | "phone" | "location" | "name" | "camera" | "photos";
 export type ZaloFailure = {
   readonly capability: ZaloCapability;
   readonly code: number;

@@ -77,6 +77,7 @@ import {
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, NewsOfType, type OpenVideo, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
+import type { PickScenePhotos } from "./scene-photos";
 import {
   afterNameAsk,
   afterNameCheck,
@@ -726,6 +727,7 @@ function AppCuaXa(props: {
   onAgreeName: () => void;
   onDeclineName: () => void;
   getSceneLocation?: GetSceneLocation;
+  pickScenePhotos?: PickScenePhotos;
   draftStore?: FeedbackDraftStore;
   openSession?: OpenCommuneAppSession;
   openVideo?: OpenVideo;
@@ -803,6 +805,7 @@ function AppCuaXa(props: {
           ten_xa={xa.ten}
           ho_ten={shownName}
           getSceneLocation={props.getSceneLocation}
+          pickScenePhotos={props.pickScenePhotos}
           draftStore={props.draftStore}
           onBack={ve}
           onSessionLost={sessionLost("submit")}
@@ -820,6 +823,7 @@ function AppCuaXa(props: {
           onSessionLost={sessionLost("mine")}
           onChanged={() => void petitions.load()}
           reopenWithPhone={reopenWithPhone}
+          pickScenePhotos={props.pickScenePhotos}
         />
       );
       break;
@@ -836,6 +840,7 @@ function AppCuaXa(props: {
           onSessionLost={sessionLost("lookup")}
           onChanged={() => void petitions.load()}
           reopenWithPhone={reopenWithPhone}
+          pickScenePhotos={props.pickScenePhotos}
         />
       );
       break;
@@ -1034,6 +1039,11 @@ export function TrangXa(props: {
    */
   getSceneLocation?: GetSceneLocation;
   /**
+   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`), do lớp vỏ tiêm — CHỈ app riêng
+   * của xã (`AppRieng`, owner 02/10/2026). Không truyền thì không có nút ảnh nào (bản `--demo`, test).
+   */
+  pickScenePhotos?: PickScenePhotos;
+  /**
    * Nháp phản ánh đang soạn (ADR 0050 #7), do lớp vỏ tiêm — CHỈ app riêng của xã. Không truyền thì không
    * có nháp (app chung, chạy thử, test): nửa này không tự chạm kho lưu trữ nào.
    */
@@ -1057,7 +1067,7 @@ export function TrangXa(props: {
    */
   openLink?: OpenExternal;
 }) {
-  const { ten_mien, lay_ten, getSceneLocation, draftStore, openSession, openVideo, openLink } = props;
+  const { ten_mien, lay_ten, getSceneLocation, pickScenePhotos, draftStore, openSession, openVideo, openLink } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -1116,6 +1126,7 @@ export function TrangXa(props: {
         onAgreeName={() => void askName()}
         onDeclineName={() => setName({ kind: "settled", name: null })}
         getSceneLocation={getSceneLocation}
+        pickScenePhotos={pickScenePhotos}
         draftStore={draftStore}
         openSession={openSession}
         openVideo={openVideo}
