@@ -1,13 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  CircleCheck,
+  CloudOff,
+  FileOutput,
+  Pencil,
+  Plus,
+  RefreshCw,
+  SearchX,
+  Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { IconButton } from "@/components/ui/icon-button";
+import { Notice } from "@/components/ui/notice";
 import {
   TRANG_DAU,
+  coTrangTruoc,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 import { bangTraTuKetQua, traTen, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layLoaiVanBan } from "@/lib/api/danh-muc-nghiep-vu";
@@ -50,6 +70,7 @@ import {
   sapXepTheoThuTu,
   type MaThuTu,
 } from "./loc-so-van-ban";
+import { Glyph, REGISTER_TABLE_SCROLLER, RegisterRowsSkeleton } from "./document-ui";
 import { DieuHuongTrang } from "./so-van-ban-den";
 import { guiGoVanBanDi } from "./thao-tac-van-ban";
 
@@ -275,6 +296,8 @@ export function SoVanBanDi() {
   return (
     <ManSoVanBanDi
       kq={kq !== null && kq.loc === loc ? kq.kq : null}
+      // "Tải lại" after a failed read asks the SAME read again through the existing re-read key.
+      onReload={() => datLanDoc((n) => n + 1)}
       nam={nam}
       namGoc={namGoc}
       datNam={(n) => doiLoc(() => datNam(n))}
@@ -316,6 +339,7 @@ export function SoVanBanDi() {
 
 export function ManSoVanBanDi({
   kq,
+  onReload,
   nam,
   namGoc,
   datNam,
@@ -336,6 +360,8 @@ export function ManSoVanBanDi({
   form,
 }: {
   kq: KetQua<page_Result_documents_vanBanDiRa> | null;
+  /** Re-read after a failed load ("Tải lại"). Absent → the error state draws no button. */
+  onReload?: () => void;
   nam: number;
   namGoc: number;
   datNam: (n: number) => void;
@@ -355,38 +381,58 @@ export function ManSoVanBanDi({
   diToiTrang: (toi: NganXepConTro) => void;
   form: ReactNode;
 }) {
+  // "Nothing at all" vs "nothing under these filters" (spec §8b), read off the props already held.
+  const filtered = nam !== namGoc || loaiLoc !== "" || tim !== "" || coTrangTruoc(nganXep);
+
   return (
-    <section className="man-van-ban" aria-labelledby="tieu-de-so-di">
-      <h2 id="tieu-de-so-di">Sổ văn bản đi</h2>
-      <p className="ghi-chu">{DAN_SO_DI}</p>
-
-      {thieuQuyenGhi && (
-        <p className="trang-thai-rong">
-          Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
-        </p>
-      )}
-
-      {coQuyenGhi && (
-        <p className="cum-nut">
-          <button type="button" className="nut-chinh" onClick={thaoTac.them}>
+    <section
+      className="man-van-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+      aria-labelledby="tieu-de-so-di"
+    >
+      <Card>
+      <CardHeader className="justify-between">
+        <div className="min-w-0 flex-1 basis-64">
+          <CardTitle as="h2" id="tieu-de-so-di" className="flex items-center gap-2">
+            <Glyph icon={FileOutput} className="size-[18px] shrink-0 text-brand-600" />
+            Sổ văn bản đi
+          </CardTitle>
+          <p className="m-0 mt-1 text-[13px] text-ink-500">{DAN_SO_DI}</p>
+        </div>
+        {coQuyenGhi && (
+          <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} onClick={thaoTac.them}>
             {NUT_CAP_SO}
-          </button>
-        </p>
-      )}
+          </Button>
+        )}
+      </CardHeader>
 
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
-      {loiNgoaiForm !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiNgoaiForm}
-        </p>
-      )}
+      {/* Messages and the open form, in the order they always had; no room taken when empty. */}
+      <div className="flex min-w-0 flex-col gap-3 border-b border-line px-4 py-3 empty:hidden [&>*]:my-0">
+        {thieuQuyenGhi && (
+          <Notice tone="neutral">
+            Tài khoản của bạn không có quyền cấp số, sửa hay gỡ văn bản đi. Sổ dưới đây vẫn xem được.
+          </Notice>
+        )}
 
-      {form}
+        {cauDaXong !== "" && (
+          <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
+            <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+            {cauDaXong}
+          </p>
+        )}
+        {loiNgoaiForm !== "" && (
+          <p className="thong-bao-loi" role="alert">
+            {loiNgoaiForm}
+          </p>
+        )}
+
+        {form}
+      </div>
 
       {/* Search first (owner, 02/10/2026), then the register's year; type and order sit behind
           "Bộ lọc". The count is of those two not at their default ("" = all, "" = number order). */}
       <FilterBar
         id="outgoing-document-filters"
+        className="m-0 border-b border-line px-4 py-3.5"
         moreActiveCount={[loaiLoc !== "", thuTu !== ""].filter(Boolean).length}
         primary={
           <>
@@ -420,16 +466,21 @@ export function ManSoVanBanDi({
         coQuyenGhi={coQuyenGhi}
         thaoTac={thaoTac}
         soCuTruoc={thuTu === "so-tang"}
+        filtered={filtered}
+        onReload={onReload}
       />
 
       {kq !== null && kq.ok && (
-        <DieuHuongTrang
-          nganXep={nganXep}
-          conTroTiep={kq.duLieu.next_cursor}
-          conTrangSau={kq.duLieu.has_more}
-          diToiTrang={diToiTrang}
-        />
+        <CardFooter className="justify-end">
+          <DieuHuongTrang
+            nganXep={nganXep}
+            conTroTiep={kq.duLieu.next_cursor}
+            conTrangSau={kq.duLieu.has_more}
+            diToiTrang={diToiTrang}
+          />
+        </CardFooter>
       )}
+      </Card>
     </section>
   );
 }
@@ -448,6 +499,8 @@ export function BangVanBanDi({
   coQuyenGhi,
   thaoTac,
   soCuTruoc = false,
+  filtered = false,
+  onReload,
 }: {
   kq: KetQua<page_Result_documents_vanBanDiRa> | null;
   traLoai: BangTraDanhMuc;
@@ -455,19 +508,54 @@ export function BangVanBanDi({
   thaoTac: ThaoTacDi;
   /** Chú thích bảng nói đúng thứ tự đang xem — xem `BangVanBanDen`. */
   soCuTruoc?: boolean;
+  /** A filter or a later page is on: an empty answer is "nothing matches", not "nothing yet". */
+  filtered?: boolean;
+  /** "Tải lại" on a failed read. Absent → no button. */
+  onReload?: () => void;
 }) {
-  if (kq === null) return <p role="status">Đang tải sổ văn bản đi…</p>;
-  if (!kq.ok) {
+  if (kq === null) {
+    // FIRST LOAD (spec §8b) — same shape as `BangVanBanDen`.
     return (
-      <p className="thong-bao-loi" role="alert">
-        {kq.thongBao}
-      </p>
+      <>
+        <p role="status" className="an-thi-giac">
+          Đang tải sổ văn bản đi…
+        </p>
+        <RegisterRowsSkeleton />
+      </>
     );
   }
-  if (kq.duLieu.items.length === 0) return <p className="trang-thai-rong">{SO_DI_RONG}</p>;
+  if (!kq.ok) {
+    return (
+      <EmptyState
+        icon={CloudOff}
+        title="Chưa tải được sổ văn bản đi"
+        description={
+          <span className="text-danger-600" role="alert">
+            {kq.thongBao}
+          </span>
+        }
+        action={
+          onReload !== undefined ? (
+            <Button type="button" variant="secondary" icon={<Glyph icon={RefreshCw} />} onClick={onReload}>
+              Tải lại
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  }
+  if (kq.duLieu.items.length === 0) {
+    return (
+      <EmptyState
+        icon={filtered ? SearchX : FileOutput}
+        title={SO_DI_RONG}
+        description={filtered ? "Thử đổi hoặc bỏ bớt bộ lọc." : undefined}
+      />
+    );
+  }
 
   return (
-    <div className="bang-cuon" role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
+    <div className={REGISTER_TABLE_SCROLLER} role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
       <table className="bang-danh-muc bang-van-ban">
         <caption className="an-thi-giac">
           Các văn bản xã đã phát hành, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}
@@ -492,30 +580,29 @@ export function BangVanBanDi({
             const so = nhanSoVaoSo(vb.number, vb.year);
             return (
               <tr key={vb.id}>
-                <td>{so}</td>
+                <td className="font-semibold text-ink-900">{so}</td>
                 <td>{nhanNgayCoThe(vb.document_date)}</td>
                 <td>{nhanLoaiVanBan(traTen(traLoai, vb.document_type))}</td>
                 <td className="o-trich-yeu">{vb.summary}</td>
                 <td>{vb.recipient}</td>
                 <td>{vb.signer === undefined || vb.signer === "" ? "Không ghi" : vb.signer}</td>
                 {coQuyenGhi && (
-                  <td className="o-thao-tac">
-                    <button
-                      type="button"
-                      className="nut-phu"
-                      aria-label={`${NUT_SUA} văn bản đi số ${so}`}
-                      onClick={() => thaoTac.sua(vb)}
-                    >
-                      {NUT_SUA}
-                    </button>
-                    <button
-                      type="button"
-                      className="nut-phu nut-xoa"
-                      aria-label={`${NUT_GO} văn bản đi số ${so}`}
-                      onClick={() => thaoTac.go(vb)}
-                    >
-                      {NUT_GO}
-                    </button>
+                  <td>
+                    {/* Sửa as an icon, "Gỡ khỏi sổ" with its words in "⋯" (spec v2 §7). Both labels
+                        name the row by its NUMBER, never by recipient or summary (rule 3, #4). */}
+                    <span className="flex items-center justify-end gap-1">
+                      <IconButton
+                        type="button"
+                        label={`${NUT_SUA} văn bản đi số ${so}`}
+                        onClick={() => thaoTac.sua(vb)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </IconButton>
+                      <ActionMenu
+                        label={`Thao tác khác: văn bản đi số ${so}`}
+                        items={outgoingRowMoreActions(vb, thaoTac)}
+                      />
+                    </span>
                   </td>
                 )}
               </tr>
@@ -527,13 +614,26 @@ export function BangVanBanDi({
   );
 }
 
+/**
+ * The "⋯" items of one outgoing row: "Gỡ khỏi sổ", red. Drawn only with `document.create` — the
+ * same gate as the whole actions column. Exported so tests read it without opening a Radix menu.
+ */
+export function outgoingRowMoreActions(doc: documents_vanBanDiRa, actions: ThaoTacDi): ActionMenuItem[] {
+  return [{ kind: "item", id: "go", label: NUT_GO, icon: Trash2, tone: "danger", onSelect: () => actions.go(doc) }];
+}
+
 /* ---- biểu mẫu ------------------------------------------------------------------------------ */
 
-const TIEU_DE_DI: Record<NonNullable<DangMoDi>["kieu"], string> = {
+/** Titles of the two entry forms. The removal form asks the specific question instead. */
+const TIEU_DE_DI: Record<"them" | "sua", string> = {
   them: "Cấp số văn bản đi",
   sua: "Sửa văn bản đi",
-  go: "Gỡ văn bản đi khỏi sổ",
 };
+
+/** Removal question (spec v2 §7), naming the document by its NUMBER only — it is also the `aria-label`. */
+export function removeOutgoingQuestion(number: string): string {
+  return `Gỡ văn bản đi số ${number} khỏi sổ?`;
+}
 
 export function BieuMauVanBanDi({
   dangMo,
@@ -555,28 +655,77 @@ export function BieuMauVanBanDi({
   onGui: () => void;
   onHuy: () => void;
 }) {
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onGui();
+  };
+
+  const refusal =
+    loi !== "" ? (
+      <p className="thong-bao-loi m-0 sm:col-span-2" role="alert">
+        {loi}
+      </p>
+    ) : null;
+
+  if (dangMo.kieu === "go") {
+    const question = removeOutgoingQuestion(nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year));
+    return (
+      <ConfirmDialog
+        as="form"
+        tone="danger"
+        icon={Trash2}
+        title={question}
+        aria-label={question}
+        onSubmit={submit}
+        actions={
+          <>
+            <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
+              <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_GO} busyText="Đang gỡ…" />
+            </Button>
+            <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
+              {NUT_HUY}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0">{CANH_BAO_GO_KHONG_TRA_SO}</p>
+        <Field
+          label={O_LY_DO_GO}
+          htmlFor="o-ly-do-go-di"
+          grow="auto"
+          hint={<span id="giai-thich-ly-do-go-di">{GIAI_THICH_LY_DO_GO}</span>}
+        >
+          <input
+            id="o-ly-do-go-di"
+            name="lyDoGo"
+            required
+            value={ban.lyDoGo}
+            onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
+            aria-invalid={loi === LOI_THIEU_LY_DO_GO}
+            aria-describedby="giai-thich-ly-do-go-di"
+          />
+        </Field>
+        {refusal}
+      </ConfirmDialog>
+    );
+  }
+
   const tieuDe = TIEU_DE_DI[dangMo.kieu];
-  const laNhap = dangMo.kieu === "them" || dangMo.kieu === "sua";
 
   return (
-    <form
-      className="form-danh-muc"
-      aria-label={tieuDe}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onGui();
-      }}
-    >
-      <h4>{tieuDe}</h4>
+    <Card as="form" aria-label={tieuDe} onSubmit={submit}>
+      <CardHeader className="justify-between">
+        <CardTitle as="h3">{tieuDe}</CardTitle>
+        {dangMo.kieu === "sua" && (
+          <p className="m-0 text-[13px] text-ink-500 tabular-nums">
+            Văn bản đi số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}
+          </p>
+        )}
+      </CardHeader>
 
-      {dangMo.kieu !== "them" && (
-        <p className="ghi-chu">Văn bản đi số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}</p>
-      )}
-
-      {laNhap && (
-        <>
-          <div className="o-nhap">
-            <label htmlFor="o-ngay-van-ban-di">{O_NGAY_VAN_BAN}</label>
+      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
+          <Field label={O_NGAY_VAN_BAN} htmlFor="o-ngay-van-ban-di" grow="auto">
             <input
               id="o-ngay-van-ban-di"
               name="ngayVanBan"
@@ -584,10 +733,9 @@ export function BieuMauVanBanDi({
               value={ban.ngayVanBan}
               onChange={(e) => datBan({ ...ban, ngayVanBan: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-loai-van-ban-di">{O_LOAI_VAN_BAN}</label>
+          <Field label={O_LOAI_VAN_BAN} htmlFor="o-loai-van-ban-di" kind="select" grow="auto">
             <select
               id="o-loai-van-ban-di"
               name="loaiVanBan"
@@ -606,83 +754,56 @@ export function BieuMauVanBanDi({
                   <option value={ban.loaiVanBan}>{ban.loaiVanBan} (không còn trong danh mục)</option>
                 )}
             </select>
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-trich-yeu-di">{O_TRICH_YEU}</label>
+          <Field label={O_TRICH_YEU} htmlFor="o-trich-yeu-di" grow="auto" className="sm:col-span-2">
             <textarea
               id="o-trich-yeu-di"
               name="trichYeu"
               rows={3}
+              className="py-2"
               value={ban.trichYeu}
               onChange={(e) => datBan({ ...ban, trichYeu: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-noi-nhan">{O_NOI_NHAN}</label>
+          <Field label={O_NOI_NHAN} htmlFor="o-noi-nhan" grow="auto">
             <input
               id="o-noi-nhan"
               name="noiNhan"
               value={ban.noiNhan}
               onChange={(e) => datBan({ ...ban, noiNhan: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-nguoi-ky">{O_NGUOI_KY}</label>
+          <Field label={O_NGUOI_KY} htmlFor="o-nguoi-ky" grow="auto">
             <input
               id="o-nguoi-ky"
               name="nguoiKy"
               value={ban.nguoiKy}
               onChange={(e) => datBan({ ...ban, nguoiKy: e.target.value })}
             />
-          </div>
+          </Field>
 
           {dangMo.kieu === "them" && (
-            <p className="canh-bao-pham-vi">
+            <Notice tone="neutral" className="sm:col-span-2">
               Hệ thống cấp số đi ngay khi lưu, và số đã cấp không bao giờ được cấp lại. Kiểm lại
               nội dung trước khi bấm {NUT_LUU}.
-            </p>
+            </Notice>
           )}
-        </>
-      )}
 
-      {dangMo.kieu === "go" && (
-        <>
-          <p className="canh-bao-pham-vi">{CANH_BAO_GO_KHONG_TRA_SO}</p>
-          <div className="o-nhap">
-            <label htmlFor="o-ly-do-go-di">{O_LY_DO_GO}</label>
-            <input
-              id="o-ly-do-go-di"
-              name="lyDoGo"
-              required
-              value={ban.lyDoGo}
-              onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
-              aria-invalid={loi === LOI_THIEU_LY_DO_GO}
-              aria-describedby="giai-thich-ly-do-go-di"
-            />
-            <p className="ghi-chu" id="giai-thich-ly-do-go-di">
-              {GIAI_THICH_LY_DO_GO}
-            </p>
-          </div>
-        </>
-      )}
-
-      {loi !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {dangMo.kieu === "go" ? NUT_XAC_NHAN_GO : NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </button>
+          {refusal}
       </div>
-    </form>
+
+      {/* Same order as before (submit, then cancel), right-aligned (spec §6.5). */}
+      <CardFooter className="justify-end">
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+          <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
+          {NUT_HUY}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

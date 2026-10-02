@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import type { KetQua } from "@/lib/api/goi";
@@ -122,6 +123,38 @@ describe("bảng sổ văn bản đến — quá hạn SUY RA lúc vẽ", () => 
   });
 });
 
+/**
+ * THE ROW "⋯" MENU. A closed Radix menu renders no items to the HTML, so a string check on the
+ * markup cannot see "Gỡ khỏi sổ" or "Chuyển xử lý" once they live there — and a `not.toContain` on
+ * them would go green for the wrong reason. These read the menu's `items` prop from the UNRENDERED
+ * tree instead (`BangVanBanDen` has no hooks, so it can be called as a plain function), the same way
+ * `danh-ba/bang-lien-he.test.tsx` reads its menu.
+ */
+type MenuProps = { label: string; items: readonly ActionMenuItem[] };
+function menus(perm: { ghi: boolean; chuyen: boolean }, actions: ThaoTacDen = KHONG_LAM_GI): MenuProps[] {
+  const out: MenuProps[] = [];
+  const walk = (n: unknown): void => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (typeof n !== "object" || n === null || !("props" in n)) return;
+    const el = n as { type: unknown; props: Record<string, unknown> };
+    if (el.type === ActionMenu) out.push(el.props as unknown as MenuProps);
+    walk(el.props.children);
+  };
+  walk(
+    BangVanBanDen({
+      kq: trang([dong()]),
+      bayGio: TRUOC_HAN,
+      traLoai: TRA_LOAI,
+      traBoPhan: TRA_BO_PHAN,
+      coQuyenGhi: perm.ghi,
+      coQuyenChuyen: perm.chuyen,
+      thaoTac: actions,
+    }),
+  );
+  return out;
+}
+const words = (items: readonly ActionMenuItem[]) => items.map((it) => (it.kind === "item" ? it.label : "—"));
+
 describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
   it("thiếu cả hai quyền ghi: bảng VẪN hiện đủ dòng, chỉ mất cụm nút", () => {
     // Đây là quy tắc của cả màn: ẩn bảng là giao diện từ chối điều máy chủ đang phục vụ. Tuyến đọc
@@ -132,6 +165,7 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     expect(html).toContain("1742-CV/BTCTU");
     expect(html).not.toContain("Gỡ khỏi sổ");
     expect(html).not.toContain("Chuyển xử lý");
+    expect(menus({ ghi: false, chuyen: false })).toEqual([]);
   });
 
   it("có `document.create` nhưng thiếu `document.route`: có Sửa và Gỡ, KHÔNG có Chuyển xử lý", () => {
@@ -140,8 +174,31 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     // xã giao việc nhập cho văn thư và giữ việc phân luồng cho lãnh đạo là cách làm bình thường.
     const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: true, chuyen: false });
 
-    expect(html).toContain("Gỡ khỏi sổ");
+    expect(html).toContain('aria-label="Sửa văn bản đến số 7/2026"');
     expect(html).not.toContain("Chuyển xử lý");
+    // "Gỡ khỏi sổ" sits in the row's "⋯" menu (ADR 0068, spec v2 §7) — and "Chuyển xử lý" does not.
+    const m = menus({ ghi: true, chuyen: false });
+    expect(m).toHaveLength(1);
+    expect(words(m[0]!.items)).toEqual(["Gỡ khỏi sổ"]);
+  });
+
+  it("đủ hai quyền: Sửa hiện ngay, Chuyển xử lý rồi Gỡ khỏi sổ (đỏ, cuối) trong ⋯ — đúng handler", () => {
+    const calls: string[] = [];
+    const actions: ThaoTacDen = {
+      ...KHONG_LAM_GI,
+      chuyen: (vb) => calls.push(`chuyen:${vb.id}`),
+      go: (vb) => calls.push(`go:${vb.id}`),
+    };
+    const m = menus({ ghi: true, chuyen: true }, actions);
+
+    expect(m).toHaveLength(1);
+    // The trigger names the row by its NUMBER, never by summary or issuing body (rule 3, #4).
+    expect(m[0]!.label).toBe("Thao tác khác: văn bản đến số 7/2026");
+    expect(words(m[0]!.items)).toEqual(["Chuyển xử lý", "—", "Gỡ khỏi sổ"]);
+    const remove = m[0]!.items.at(-1);
+    expect(remove?.kind === "item" && remove.tone).toBe("danger");
+    for (const it of m[0]!.items) if (it.kind === "item") it.onSelect();
+    expect(calls).toEqual(["chuyen:01JVBDEN0000000000000001", "go:01JVBDEN0000000000000001"]);
   });
 
   it("có `document.route` nhưng thiếu `document.create`: chỉ có Chuyển xử lý", () => {
@@ -150,6 +207,7 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     expect(html).toContain("Chuyển xử lý");
     expect(html).not.toContain("Gỡ khỏi sổ");
     expect(html).not.toContain("nut-xoa");
+    expect(menus({ ghi: false, chuyen: true })).toEqual([]);
   });
 });
 
@@ -186,6 +244,24 @@ describe("bảng ở ba trạng thái không phải 'có dữ liệu'", () => {
 
     expect(html).toContain("Chưa có văn bản đến nào");
     expect(html).not.toContain('role="alert"');
+  });
+
+  it("rỗng theo bộ lọc: cùng câu của sổ, thêm gợi ý đổi bộ lọc; không lọc thì không có gợi ý", () => {
+    const base = { bayGio: TRUOC_HAN, traLoai: TRA_LOAI, traBoPhan: TRA_BO_PHAN, coQuyenGhi: true, coQuyenChuyen: true, thaoTac: KHONG_LAM_GI };
+    const filtered = renderToStaticMarkup(<BangVanBanDen kq={trang([])} {...base} filtered />);
+    const plain = renderToStaticMarkup(<BangVanBanDen kq={trang([])} {...base} />);
+
+    expect(filtered).toContain("Chưa có văn bản đến nào");
+    expect(filtered).toContain("Thử đổi hoặc bỏ bớt bộ lọc.");
+    expect(plain).not.toContain("Thử đổi hoặc bỏ bớt bộ lọc.");
+  });
+
+  it("tải hỏng: nút Tải lại gọi lại đúng lượt đọc của màn; không truyền thì không có nút", () => {
+    const base = { bayGio: TRUOC_HAN, traLoai: TRA_LOAI, traBoPhan: TRA_BO_PHAN, coQuyenGhi: true, coQuyenChuyen: true, thaoTac: KHONG_LAM_GI };
+    const failed = { ok: false as const, thongBao: "Máy chủ đang bận." };
+
+    expect(renderToStaticMarkup(<BangVanBanDen kq={failed} {...base} onReload={() => {}} />)).toContain("Tải lại");
+    expect(renderToStaticMarkup(<BangVanBanDen kq={failed} {...base} />)).not.toContain("Tải lại");
   });
 });
 

@@ -1,10 +1,33 @@
 "use client";
 
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CloudOff,
+  Forward,
+  Inbox,
+  Pencil,
+  Plus,
+  RefreshCw,
+  SearchX,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { IconButton } from "@/components/ui/icon-button";
+import { Notice } from "@/components/ui/notice";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 import {
   bangTraTuKetQua,
   traTen,
@@ -67,10 +90,8 @@ import {
   O_SO_KY_HIEU,
   O_TRICH_YEU,
   SO_DEN_RONG,
-  lopHanVanBan,
   nhanBoPhanDangGiu,
   nhanDoKhan,
-  nhanHanVanBan,
   nhanLoaiVanBan,
   nhanNgayCoThe,
   nhanSoVaoSo,
@@ -86,6 +107,13 @@ import {
   sapXepTheoThuTu,
   type MaThuTu,
 } from "./loc-so-van-ban";
+import {
+  DeadlineMark,
+  DocumentStatusBadge,
+  Glyph,
+  REGISTER_TABLE_SCROLLER,
+  RegisterRowsSkeleton,
+} from "./document-ui";
 import { NganVanBanDen } from "./ngan-van-ban-den";
 import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
 
@@ -490,6 +518,8 @@ export function SoVanBanDen({
       drillDown={drillDown}
       showInvalidDrillDown={!filtersChanged}
       kq={kq !== null && kq.loc === loc ? kq.kq : null}
+      // "Tải lại" after a failed read asks the SAME read again through the existing re-read key.
+      onReload={() => datLanDoc((n) => n + 1)}
       bayGio={new Date()}
       nam={nam}
       namGoc={namGoc}
@@ -570,6 +600,7 @@ export function ManSoVanBanDen({
   drillDown = NO_DRILL_DOWN,
   showInvalidDrillDown = true,
   kq,
+  onReload,
   bayGio,
   nam,
   namGoc,
@@ -602,6 +633,8 @@ export function ManSoVanBanDen({
   drillDown?: DrillDown<"incoming-documents">;
   showInvalidDrillDown?: boolean;
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
+  /** Re-read after a failed load ("Tải lại"). Absent → the error state draws no button. */
+  onReload?: () => void;
   /** Thời điểm hiện tại TRUYỀN VÀO, không đọc đồng hồ trong lúc vẽ: bài kiểm phải đứng được ở
    *  hai phía của một hạn. */
   bayGio: Date;
@@ -634,40 +667,69 @@ export function ManSoVanBanDen({
   ngan?: ReactNode;
   form: ReactNode;
 }) {
+  // "Nothing at all" vs "nothing under these filters" (spec §8b) — read off the props this screen
+  // already holds: the default year, every filter empty, the first page, no drill-down. Only then
+  // may the empty table say the register has nothing yet.
+  const filtered =
+    drillDown.kind === "active" ||
+    nam !== namGoc ||
+    trangThai !== "" ||
+    loaiLoc !== "" ||
+    boPhanLoc !== "" ||
+    tim !== "" ||
+    coTrangTruoc(nganXep);
+
   return (
-    <section className="man-van-ban" aria-labelledby="tieu-de-so-den">
-      <h2 id="tieu-de-so-den">Sổ văn bản đến</h2>
-      <p className="ghi-chu">{DAN_SO_DEN}</p>
+    <section
+      className="man-van-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+      aria-labelledby="tieu-de-so-den"
+    >
+      <Card>
+        <CardHeader className="justify-between">
+          <div className="min-w-0 flex-1 basis-64">
+            <CardTitle as="h2" id="tieu-de-so-den" className="flex items-center gap-2">
+              <Glyph icon={Inbox} className="size-[18px] shrink-0 text-brand-600" />
+              Sổ văn bản đến
+            </CardTitle>
+            <p className="m-0 mt-1 text-[13px] text-ink-500">{DAN_SO_DEN}</p>
+          </div>
+          {coQuyenGhi && (
+            <Button type="button" variant="primary" icon={<Glyph icon={Plus} />} onClick={thaoTac.them}>
+              {NUT_VAO_SO}
+            </Button>
+          )}
+        </CardHeader>
 
-      {thieuQuyenGhi && (
-        <p className="trang-thai-rong">
-          Tài khoản của bạn không có quyền vào sổ, sửa hay gỡ văn bản. Sổ dưới đây vẫn xem được.
-        </p>
-      )}
+        {/* Messages, the open form and the drill-down line, in the order they always had. `empty:hidden`:
+            with nothing to say the block takes no room. */}
+        <div className="flex min-w-0 flex-col gap-3 border-b border-line px-4 py-3 empty:hidden [&>*]:my-0">
+          {thieuQuyenGhi && (
+            <Notice tone="neutral">
+              Tài khoản của bạn không có quyền vào sổ, sửa hay gỡ văn bản. Sổ dưới đây vẫn xem được.
+            </Notice>
+          )}
 
-      {coQuyenGhi && (
-        <p className="cum-nut">
-          <button type="button" className="nut-chinh" onClick={thaoTac.them}>
-            {NUT_VAO_SO}
-          </button>
-        </p>
-      )}
+          {cauDaXong !== "" && (
+            <p role="status" className="flex items-center gap-2 text-sm font-medium text-success-600">
+              <Glyph icon={CircleCheck} className="size-[18px] shrink-0" />
+              {cauDaXong}
+            </p>
+          )}
+          {loiNgoaiForm !== "" && (
+            <p className="thong-bao-loi" role="alert">
+              {loiNgoaiForm}
+            </p>
+          )}
 
-      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
-      {loiNgoaiForm !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loiNgoaiForm}
-        </p>
-      )}
+          {form}
 
-      {form}
-
-      <DrillDownBanner
-        drillDown={drillDown}
-        clearHref="/van-ban"
-        note={DRILL_DOWN_NOTE_INCOMING}
-        showInvalid={showInvalidDrillDown}
-      />
+          <DrillDownBanner
+            drillDown={drillDown}
+            clearHref="/van-ban"
+            note={DRILL_DOWN_NOTE_INCOMING}
+            showInvalid={showInvalidDrillDown}
+          />
+        </div>
 
       {drillDown.kind !== "active" && (
         <LocSoVanBanDen
@@ -699,16 +761,21 @@ export function ManSoVanBanDen({
         thaoTac={thaoTac}
         soCuTruoc={thuTu === "so-tang"}
         idDangXem={idDangXem}
+        filtered={filtered}
+        onReload={onReload}
       />
 
       {kq !== null && kq.ok && (
-        <DieuHuongTrang
-          nganXep={nganXep}
-          conTroTiep={kq.duLieu.next_cursor}
-          conTrangSau={kq.duLieu.has_more}
-          diToiTrang={diToiTrang}
-        />
+        <CardFooter className="justify-end">
+          <DieuHuongTrang
+            nganXep={nganXep}
+            conTroTiep={kq.duLieu.next_cursor}
+            conTrangSau={kq.duLieu.has_more}
+            diToiTrang={diToiTrang}
+          />
+        </CardFooter>
       )}
+      </Card>
 
       {ngan}
     </section>
@@ -758,6 +825,7 @@ function LocSoVanBanDen({
   return (
     <FilterBar
       id="incoming-document-filters"
+      className="m-0 border-b border-line px-4 py-3.5"
       moreActiveCount={moreActiveCount}
       primary={
         <>
@@ -835,6 +903,8 @@ export function BangVanBanDen({
   thaoTac,
   soCuTruoc = false,
   idDangXem = null,
+  filtered = false,
+  onReload,
 }: {
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
   bayGio: Date;
@@ -846,22 +916,61 @@ export function BangVanBanDen({
   /** Chú thích bảng nói đúng thứ tự đang xem — một câu "số mới nhất trước" trên bảng xếp tăng là sai. */
   soCuTruoc?: boolean;
   idDangXem?: string | null;
+  /** A filter, a later page or a drill-down is on: an empty answer is "nothing matches", not "nothing yet". */
+  filtered?: boolean;
+  /** "Tải lại" on a failed read. Absent → no button. */
+  onReload?: () => void;
 }) {
-  if (kq === null) return <p role="status">Đang tải sổ văn bản đến…</p>;
-  if (!kq.ok) {
-    // NGUYÊN VĂN câu máy chủ viết — kể cả 403 của tài khoản thiếu `document.read`.
+  if (kq === null) {
+    // FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye gets
+    // row-shaped placeholders so the card does not jump when the page arrives.
     return (
-      <p className="thong-bao-loi" role="alert">
-        {kq.thongBao}
-      </p>
+      <>
+        <p role="status" className="an-thi-giac">
+          Đang tải sổ văn bản đến…
+        </p>
+        <RegisterRowsSkeleton />
+      </>
     );
   }
-  if (kq.duLieu.items.length === 0) return <p className="trang-thai-rong">{SO_DEN_RONG}</p>;
+  if (!kq.ok) {
+    // NGUYÊN VĂN câu máy chủ viết — kể cả 403 của tài khoản thiếu `document.read`. The screen does
+    // not branch on the status code, so there is ONE error look here, not a separate "no permission".
+    return (
+      <EmptyState
+        icon={CloudOff}
+        title="Chưa tải được sổ văn bản đến"
+        description={
+          <span className="text-danger-600" role="alert">
+            {kq.thongBao}
+          </span>
+        }
+        action={
+          onReload !== undefined ? (
+            <Button type="button" variant="secondary" icon={<Glyph icon={RefreshCw} />} onClick={onReload}>
+              Tải lại
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  }
+  if (kq.duLieu.items.length === 0) {
+    // The sentence is the register's own (`SO_DEN_RONG`), unchanged; only the icon and the hint say
+    // whether a filter is the reason.
+    return (
+      <EmptyState
+        icon={filtered ? SearchX : Inbox}
+        title={SO_DEN_RONG}
+        description={filtered ? "Thử đổi hoặc bỏ bớt bộ lọc." : undefined}
+      />
+    );
+  }
 
   const coThaoTac = coQuyenGhi || coQuyenChuyen;
 
   return (
-    <div className="bang-cuon" role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
+    <div className={REGISTER_TABLE_SCROLLER} role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
       <table className="bang-danh-muc bang-van-ban">
         <caption className="an-thi-giac">
           Các văn bản đến đã vào sổ, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}
@@ -891,9 +1000,11 @@ export function BangVanBanDen({
             const han = trangThaiHanVanBan(vb.due_at, bayGio);
             const so = nhanSoVaoSo(vb.number, vb.year);
             const dangXem = vb.id === idDangXem;
+            const more = incomingRowMoreActions(vb, coQuyenGhi, coQuyenChuyen, thaoTac);
             return (
               <tr
                 key={vb.id}
+                className="cursor-pointer"
                 // BẤM MỘT DÒNG LÀ MỞ NGĂN (§3.1) — lối tắt cho chuột. Lối cho bàn phím và trình đọc
                 // màn hình là nút ở ô "Số đến"; bấm trúng một nút hay ô nhập trong dòng thì để nút
                 // ấy làm việc của nó, không mở ngăn chồng lên.
@@ -903,16 +1014,18 @@ export function BangVanBanDen({
                 }}
               >
                 <td>
-                  <button
+                  <Button
                     type="button"
                     id={idNutXem(vb.id)}
-                    className="nut-phu"
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 font-semibold text-brand-700 tabular-nums"
                     aria-expanded={dangXem}
                     aria-label={`${NUT_XEM} văn bản đến số ${so}`}
                     onClick={() => thaoTac.xem(vb)}
                   >
                     {so}
-                  </button>
+                  </Button>
                 </td>
                 <td>{nhanNgayCoThe(vb.received_date)}</td>
                 <td>{vb.reference_no === undefined || vb.reference_no === "" ? "Không ghi" : vb.reference_no}</td>
@@ -921,40 +1034,43 @@ export function BangVanBanDen({
                 <td className="o-trich-yeu">{vb.summary}</td>
                 <td>{nhanDoKhan(vb.urgency ?? "")}</td>
                 <td>{nhanBoPhanDangGiu(traTen(traBoPhan, vb.holding_unit ?? ""))}</td>
-                <td className={lopHanVanBan(han)}>{nhanHanVanBan(han)}</td>
-                <td>{nhanTrangThai(vb.status)}</td>
+                <td>
+                  <DeadlineMark deadline={han} />
+                </td>
+                <td>
+                  <DocumentStatusBadge status={vb.status}>{nhanTrangThai(vb.status)}</DocumentStatusBadge>
+                </td>
                 {coThaoTac && (
-                  <td className="o-thao-tac">
-                    {coQuyenGhi && (
-                      <button
-                        type="button"
-                        className="nut-phu"
-                        aria-label={`${NUT_SUA} văn bản đến số ${so}`}
-                        onClick={() => thaoTac.sua(vb)}
-                      >
-                        {NUT_SUA}
-                      </button>
-                    )}
-                    {coQuyenChuyen && (
-                      <button
-                        type="button"
-                        className="nut-phu"
-                        aria-label={`${NUT_CHUYEN} văn bản đến số ${so}`}
-                        onClick={() => thaoTac.chuyen(vb)}
-                      >
-                        {NUT_CHUYEN}
-                      </button>
-                    )}
-                    {coQuyenGhi && (
-                      <button
-                        type="button"
-                        className="nut-phu nut-xoa"
-                        aria-label={`${NUT_GO} văn bản đến số ${so}`}
-                        onClick={() => thaoTac.go(vb)}
-                      >
-                        {NUT_GO}
-                      </button>
-                    )}
+                  <td>
+                    {/* ONE visible control for the row's everyday action, the rest in "⋯" with WORDS
+                        (spec v2 §7): Sửa as an icon when the account may write, otherwise "Chuyển xử
+                        lý" with its words. Every label names the row by its NUMBER, never by its
+                        summary or issuing body (rule 3, forbidden #4). */}
+                    <span className="flex items-center justify-end gap-1">
+                      {coQuyenGhi ? (
+                        <IconButton
+                          type="button"
+                          label={`${NUT_SUA} văn bản đến số ${so}`}
+                          onClick={() => thaoTac.sua(vb)}
+                        >
+                          <Pencil aria-hidden="true" />
+                        </IconButton>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          icon={<Glyph icon={Forward} />}
+                          aria-label={`${NUT_CHUYEN} văn bản đến số ${so}`}
+                          onClick={() => thaoTac.chuyen(vb)}
+                        >
+                          {NUT_CHUYEN}
+                        </Button>
+                      )}
+                      {more.length > 0 && (
+                        <ActionMenu label={`Thao tác khác: văn bản đến số ${so}`} items={more} />
+                      )}
+                    </span>
                   </td>
                 )}
               </tr>
@@ -964,6 +1080,31 @@ export function BangVanBanDen({
       </table>
     </div>
   );
+}
+
+/**
+ * The "⋯" items of one incoming row — everything the visible control does not already do:
+ * "Chuyển xử lý" (`document.route`) when Sửa holds the visible slot, then — after a separator, red,
+ * last — "Gỡ khỏi sổ" (`document.create`). Without `document.create` the visible control IS
+ * "Chuyển xử lý", so the list is empty and no menu is drawn. Each item calls the existing handler.
+ *
+ * Exported so tests read which actions a row offers without opening a Radix menu (a closed menu
+ * renders no items to the HTML).
+ */
+export function incomingRowMoreActions(
+  doc: documents_vanBanDenRa,
+  canWrite: boolean,
+  canRoute: boolean,
+  actions: ThaoTacDen,
+): ActionMenuItem[] {
+  if (!canWrite) return [];
+  const items: ActionMenuItem[] = [];
+  if (canRoute) {
+    items.push({ kind: "item", id: "chuyen", label: NUT_CHUYEN, icon: Forward, onSelect: () => actions.chuyen(doc) });
+    items.push({ kind: "separator", id: "tach-go" });
+  }
+  items.push({ kind: "item", id: "go", label: NUT_GO, icon: Trash2, tone: "danger", onSelect: () => actions.go(doc) });
+  return items;
 }
 
 /** Hai nút trang. Đọc theo mốc nên "trang trước" phải tự nhớ — `ngan-xep-con-tro.ts`. */
@@ -981,34 +1122,47 @@ export function DieuHuongTrang({
   // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi tới đó.
   const coSau = conTrangSau && conTroTiep !== "";
   return (
-    <nav className="dieu-huong-trang" aria-label="Phân trang sổ văn bản">
-      <button
+    <nav className="dieu-huong-trang m-0 flex gap-2" aria-label="Phân trang sổ văn bản">
+      <Button
         type="button"
-        className="nut-phu"
+        variant="secondary"
+        size="sm"
+        icon={<Glyph icon={ChevronLeft} />}
         disabled={!coTrangTruoc(nganXep)}
         onClick={() => diToiTrang(veTrangTruoc(nganXep))}
       >
         Trang trước
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className="nut-phu"
+        variant="secondary"
+        size="sm"
         disabled={!coSau}
         onClick={() => diToiTrang(sangTrangSau(nganXep, conTroTiep))}
       >
         Trang sau
-      </button>
+        <Glyph icon={ChevronRight} />
+      </Button>
     </nav>
   );
 }
 
 /* ---- biểu mẫu ------------------------------------------------------------------------------ */
 
-const TIEU_DE_DEN: Record<NonNullable<DangMoDen>["kieu"], string> = {
+/** Titles of the two entry forms. The removal form asks the specific question instead — see below. */
+const TIEU_DE_DEN: Record<"them" | "sua", string> = {
   them: "Vào sổ văn bản đến",
   sua: "Sửa văn bản đến",
-  go: "Gỡ văn bản đến khỏi sổ",
 };
+
+/**
+ * Title of the removal confirmation (spec v2 §7 "Hộp xác nhận"): the SPECIFIC question, naming the
+ * document by its NUMBER — never by summary or issuing body, since the title is also the form's
+ * `aria-label` (rule 3, forbidden #4).
+ */
+export function removeIncomingQuestion(number: string): string {
+  return `Gỡ văn bản đến số ${number} khỏi sổ?`;
+}
 
 /**
  * Một biểu mẫu cho cả ba thao tác vào sổ / sửa / gỡ. Chuyển xử lý nằm trong ngăn chi tiết.
@@ -1043,31 +1197,84 @@ export function BieuMauVanBanDen({
   onGui: () => void;
   onHuy: () => void;
 }) {
+  const submit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onGui();
+  };
+
+  // CÂU TỪ CHỐI RA NGUYÊN VĂN, dù nó đến từ phép kiểm ở client hay từ máy chủ. Không rẽ nhánh theo
+  // `code`, không hiện `trace_id`, không hiện số hiệu HTTP — trong đó có câu 409 nói xã chưa cấu
+  // hình thời hạn xử lý, và câu ấy do máy chủ viết.
+  const refusal =
+    loi !== "" ? (
+      <p className="thong-bao-loi m-0 sm:col-span-2" role="alert">
+        {loi}
+      </p>
+    ) : null;
+
+  if (dangMo.kieu === "go") {
+    const question = removeIncomingQuestion(nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year));
+    return (
+      <ConfirmDialog
+        as="form"
+        tone="danger"
+        icon={Trash2}
+        title={question}
+        aria-label={question}
+        onSubmit={submit}
+        actions={
+          <>
+            <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
+              <BusyLabel busy={dangGui} label={NUT_XAC_NHAN_GO} busyText="Đang gỡ…" />
+            </Button>
+            <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
+              {NUT_HUY}
+            </Button>
+          </>
+        }
+      >
+        {/* CÂU QUAN TRỌNG NHẤT MÀN HÌNH, và nó đứng ĐÚNG CHỖ sắp bấm xoá. */}
+        <p className="m-0">{CANH_BAO_GO_KHONG_TRA_SO}</p>
+        <Field
+          label={O_LY_DO_GO}
+          htmlFor="o-ly-do-go-den"
+          grow="auto"
+          hint={<span id="giai-thich-ly-do-go-den">{GIAI_THICH_LY_DO_GO}</span>}
+        >
+          {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được một
+              ô toàn dấu cách, và tắt được. Phép kiểm thật chạy trong `guiGoVanBanDen`. */}
+          <input
+            id="o-ly-do-go-den"
+            name="lyDoGo"
+            required
+            value={ban.lyDoGo}
+            onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
+            aria-invalid={loi === LOI_THIEU_LY_DO_GO}
+            aria-describedby="giai-thich-ly-do-go-den"
+          />
+        </Field>
+        {refusal}
+      </ConfirmDialog>
+    );
+  }
+
   const tieuDe = TIEU_DE_DEN[dangMo.kieu];
-  const laNhap = dangMo.kieu === "them" || dangMo.kieu === "sua";
 
   return (
-    <form
-      className="form-danh-muc"
-      aria-label={tieuDe}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onGui();
-      }}
-    >
-      <h4>{tieuDe}</h4>
+    <Card as="form" aria-label={tieuDe} onSubmit={submit}>
+      <CardHeader className="justify-between">
+        <CardTitle as="h3">{tieuDe}</CardTitle>
+        {dangMo.kieu === "sua" && (
+          <p className="m-0 text-[13px] text-ink-500 tabular-nums">
+            Văn bản đến số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}
+          </p>
+        )}
+      </CardHeader>
 
-      {dangMo.kieu !== "them" && (
-        <p className="ghi-chu">
-          Văn bản đến số {nhanSoVaoSo(dangMo.vb.number, dangMo.vb.year)}
-        </p>
-      )}
-
-      {laNhap && (
-        <>
+      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
           {/* THỨ TỰ Ô LÀ THỨ TỰ NGƯỜI TA ĐỌC TRÊN TỜ VĂN BẢN, không phải thứ tự cột của CSDL. */}
-          <div className="o-nhap">
-            <label htmlFor="o-ngay-den">{O_NGAY_DEN}</label>
+          <Field label={O_NGAY_DEN} htmlFor="o-ngay-den" grow="auto">
             {/* `type="date"` phát ra đúng `YYYY-MM-DD`, đúng khuôn hợp đồng đòi. Một ô chữ tự do
                 mời gõ "2/9/2026" rồi nhận một lời từ chối không nói được phải gõ ra sao. */}
             <input
@@ -1077,10 +1284,9 @@ export function BieuMauVanBanDen({
               value={ban.ngayDen}
               onChange={(e) => datBan({ ...ban, ngayDen: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-so-ky-hieu">{O_SO_KY_HIEU}</label>
+          <Field label={O_SO_KY_HIEU} htmlFor="o-so-ky-hieu" grow="auto">
             <input
               id="o-so-ky-hieu"
               name="soKyHieu"
@@ -1088,10 +1294,9 @@ export function BieuMauVanBanDen({
               onChange={(e) => datBan({ ...ban, soKyHieu: e.target.value })}
               placeholder="1742-CV/BTCTU"
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-ngay-van-ban">{O_NGAY_VAN_BAN}</label>
+          <Field label={O_NGAY_VAN_BAN} htmlFor="o-ngay-van-ban" grow="auto">
             <input
               id="o-ngay-van-ban"
               name="ngayVanBan"
@@ -1099,20 +1304,18 @@ export function BieuMauVanBanDen({
               value={ban.ngayVanBan}
               onChange={(e) => datBan({ ...ban, ngayVanBan: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-co-quan">{O_CO_QUAN_BAN_HANH}</label>
+          <Field label={O_CO_QUAN_BAN_HANH} htmlFor="o-co-quan" grow="auto">
             <input
               id="o-co-quan"
               name="coQuanBanHanh"
               value={ban.coQuanBanHanh}
               onChange={(e) => datBan({ ...ban, coQuanBanHanh: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-loai-van-ban">{O_LOAI_VAN_BAN}</label>
+          <Field label={O_LOAI_VAN_BAN} htmlFor="o-loai-van-ban" kind="select" grow="auto">
             <select
               id="o-loai-van-ban"
               name="loaiVanBan"
@@ -1133,21 +1336,20 @@ export function BieuMauVanBanDen({
                   <option value={ban.loaiVanBan}>{ban.loaiVanBan} (không còn trong danh mục)</option>
                 )}
             </select>
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-trich-yeu">{O_TRICH_YEU}</label>
+          <Field label={O_TRICH_YEU} htmlFor="o-trich-yeu" grow="auto" className="sm:col-span-2">
             <textarea
               id="o-trich-yeu"
               name="trichYeu"
               rows={3}
+              className="py-2"
               value={ban.trichYeu}
               onChange={(e) => datBan({ ...ban, trichYeu: e.target.value })}
             />
-          </div>
+          </Field>
 
-          <div className="o-nhap">
-            <label htmlFor="o-do-khan">{O_DO_KHAN}</label>
+          <Field label={O_DO_KHAN} htmlFor="o-do-khan" kind="select" grow="auto">
             <select
               id="o-do-khan"
               name="doKhan"
@@ -1162,63 +1364,32 @@ export function BieuMauVanBanDen({
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
           {dangMo.kieu === "them" && (
-            <>
-              <p className="ghi-chu">{DAN_HAN_DO_MAY_CHU_AN_DINH}</p>
+            <div className="flex min-w-0 flex-col gap-3 sm:col-span-2">
+              <p className="m-0 text-[13px] text-ink-500">{DAN_HAN_DO_MAY_CHU_AN_DINH}</p>
               {/* ĐƯỜNG DẪN HIỆN THƯỜNG TRỰC, không chỉ khi máy chủ từ chối — xem
                   `DAN_DUONG_TOI_CAU_HINH`: rẽ nhánh theo lời văn của máy chủ là dựng một bản sao
                   của quy tắc nghiệp vụ ở client, và bản ấy hỏng lặng lẽ khi câu chữ đổi. */}
-              <p className="canh-bao-pham-vi">
+              <Notice tone="neutral" icon={Settings}>
                 {DAN_DUONG_TOI_CAU_HINH} <Link href="/cau-hinh">{NHAN_DUONG_TOI_CAU_HINH}</Link>
-              </p>
-            </>
+              </Notice>
+            </div>
           )}
-        </>
-      )}
 
-      {dangMo.kieu === "go" && (
-        <>
-          {/* CÂU QUAN TRỌNG NHẤT MÀN HÌNH, và nó đứng ĐÚNG CHỖ sắp bấm xoá. */}
-          <p className="canh-bao-pham-vi">{CANH_BAO_GO_KHONG_TRA_SO}</p>
-          <div className="o-nhap">
-            <label htmlFor="o-ly-do-go-den">{O_LY_DO_GO}</label>
-            {/* `required` là lớp nhắc của trình duyệt, KHÔNG phải phép kiểm: nó không bắt được một
-                ô toàn dấu cách, và tắt được. Phép kiểm thật chạy trong `guiGoVanBanDen`. */}
-            <input
-              id="o-ly-do-go-den"
-              name="lyDoGo"
-              required
-              value={ban.lyDoGo}
-              onChange={(e) => datBan({ ...ban, lyDoGo: e.target.value })}
-              aria-invalid={loi === LOI_THIEU_LY_DO_GO}
-              aria-describedby="giai-thich-ly-do-go-den"
-            />
-            <p className="ghi-chu" id="giai-thich-ly-do-go-den">
-              {GIAI_THICH_LY_DO_GO}
-            </p>
-          </div>
-        </>
-      )}
-
-      {/* CÂU TỪ CHỐI RA NGUYÊN VĂN, dù nó đến từ phép kiểm ở client hay từ máy chủ. Không rẽ
-          nhánh theo `code`, không hiện `trace_id`, không hiện số hiệu HTTP — trong đó có câu 409
-          nói xã chưa cấu hình thời hạn xử lý, và câu ấy do máy chủ viết. */}
-      {loi !== "" && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <div className="cum-nut">
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {dangMo.kieu === "go" ? NUT_XAC_NHAN_GO : NUT_LUU}
-        </button>
-        <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
-          {NUT_HUY}
-        </button>
+          {refusal}
       </div>
-    </form>
+
+      {/* Same order as before (submit, then cancel), right-aligned (spec §6.5). */}
+      <CardFooter className="justify-end">
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+          <BusyLabel busy={dangGui} label={NUT_LUU} busyText="Đang lưu…" />
+        </Button>
+        <Button type="button" variant="secondary" onClick={onHuy} disabled={dangGui}>
+          {NUT_HUY}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

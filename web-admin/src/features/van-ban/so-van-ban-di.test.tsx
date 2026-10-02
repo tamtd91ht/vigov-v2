@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import type { KetQua } from "@/lib/api/goi";
@@ -99,6 +100,21 @@ describe("bảng sổ văn bản đi — đúng sáu cột của hợp đồng, 
     expect(html).toContain("UBND huyện Thăng Bình");
     expect(html).not.toContain("Gỡ khỏi sổ");
     expect(html).not.toContain("nut-xoa");
+    // "Gỡ khỏi sổ" lives in the row's "⋯" menu, which renders no items while closed — so the
+    // string check above alone would pass for the wrong reason. No menu at all is the real check.
+    expect(menus(false)).toEqual([]);
+  });
+
+  it("đủ quyền ghi: Sửa hiện ngay, Gỡ khỏi sổ (đỏ) trong ⋯ — gọi đúng handler", () => {
+    const calls: string[] = [];
+    const m = menus(true, { ...KHONG_LAM_GI, go: (vb) => calls.push(`go:${vb.id}`) });
+
+    expect(m).toHaveLength(1);
+    expect(m[0]!.items.map((it) => (it.kind === "item" ? it.label : "—"))).toEqual(["Gỡ khỏi sổ"]);
+    const remove = m[0]!.items[0];
+    expect(remove?.kind === "item" && remove.tone).toBe("danger");
+    if (remove?.kind === "item") remove.onSelect();
+    expect(calls).toEqual(["go:01JVBDI00000000000000001"]);
   });
 
   it("nơi nhận KHÔNG đi vào một thuộc tính nào — nó có thể là tên một công dân", () => {
@@ -108,9 +124,27 @@ describe("bảng sổ văn bản đi — đúng sáu cột của hợp đồng, 
 
     expect(html).toContain("<td>Ông Nguyễn Văn A, thôn Bình Trị</td>");
     expect(html).not.toMatch(/aria-label="[^"]*Nguyễn Văn A/);
-    expect(html).toContain('aria-label="Gỡ khỏi sổ văn bản đi số 12/2026"');
+    expect(html).not.toMatch(/title="[^"]*Nguyễn Văn A/);
+    // Both row controls name the row by its NUMBER: the Sửa icon and the "⋯" trigger.
+    expect(html).toContain('aria-label="Sửa văn bản đi số 12/2026"');
+    expect(html).toContain('aria-label="Thao tác khác: văn bản đi số 12/2026"');
   });
 });
+
+/** Reads the "⋯" menus from the unrendered tree — see `so-van-ban-den.test.tsx`, `menus`. */
+type MenuProps = { label: string; items: readonly ActionMenuItem[] };
+function menus(canWrite: boolean, actions: ThaoTacDi = KHONG_LAM_GI): MenuProps[] {
+  const out: MenuProps[] = [];
+  const walk = (n: unknown): void => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (typeof n !== "object" || n === null || !("props" in n)) return;
+    const el = n as { type: unknown; props: Record<string, unknown> };
+    if (el.type === ActionMenu) out.push(el.props as unknown as MenuProps);
+    walk(el.props.children);
+  };
+  walk(BangVanBanDi({ kq: trang([dong()]), traLoai: TRA_LOAI, coQuyenGhi: canWrite, thaoTac: actions }));
+  return out;
+}
 
 function veForm(dangMo: Parameters<typeof BieuMauVanBanDi>[0]["dangMo"], loi = "") {
   return renderToStaticMarkup(

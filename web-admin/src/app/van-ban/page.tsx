@@ -1,4 +1,7 @@
+import { ListTodo, Mail } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -57,12 +60,21 @@ export default async function TrangVanBan({
         <ThanhBen />
         <DauTrang />
         <main className="than-trang">
-          <h1>Văn bản &amp; đơn thư</h1>
-          <p className="mo-ta-trang">
-            Vào sổ văn bản đến, cấp số văn bản đi, phân công xử lý và theo dõi hạn giải quyết.
-          </p>
-          <SoVanBanDen key={drillDownKey(drillDown)} drillDown={drillDown} />
-          <SoVanBanDi />
+          <PageHeader
+            icon={Mail}
+            title="Văn bản & đơn thư"
+            subtitle={
+              <span className="inline-flex items-center gap-1.5">
+                <ListTodo aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                Vào sổ văn bản đến, cấp số văn bản đi, phân công xử lý và theo dõi hạn giải quyết.
+              </span>
+            }
+          />
+          {/* The two registers stay one after the other, NOT tabs — see "CHƯA CÓ THANH TAB" above. */}
+          <div className="flex min-w-0 flex-col gap-6">
+            <SoVanBanDen key={drillDownKey(drillDown)} drillDown={drillDown} />
+            <SoVanBanDi />
+          </div>
         </main>
         </div>
       </PhienProvider>
