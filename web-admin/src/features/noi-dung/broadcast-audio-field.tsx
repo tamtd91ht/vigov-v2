@@ -1,5 +1,6 @@
 "use client";
 
+import { AudioLines } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { CONTENT_TYPE_BROADCAST, layMotNoiDung, removeContentAudio } from "@/lib/api/noi-dung";
@@ -143,8 +144,16 @@ export function BroadcastAudioField({
   const refused = state.kind === "refused" || state.kind === "retry";
 
   return (
-    <div className="o-nhap task-attachments" role="group" aria-labelledby="am-thanh-nhan">
-      <span id="am-thanh-nhan">{AUDIO_LABEL}</span>
+    // Same panel as the cover block above it (`CoverImageField`): one look for every upload of the form.
+    <div
+      className="o-nhap task-attachments m-0 flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface-muted p-4 [&_p]:m-0"
+      role="group"
+      aria-labelledby="am-thanh-nhan"
+    >
+      <span id="am-thanh-nhan" className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <AudioLines aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+        {AUDIO_LABEL}
+      </span>
       <p className="ghi-chu">{AUDIO_ATTACHES_AT_ONCE}</p>
 
       {saved !== null ? (

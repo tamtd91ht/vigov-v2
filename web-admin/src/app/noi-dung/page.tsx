@@ -2,7 +2,6 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
-import { MO_TA_MAN, TIEU_DE_MAN } from "@/features/noi-dung/nhan-noi-dung";
 import { SoNoiDung } from "@/features/noi-dung/so-noi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { layCauHinhXa } from "@/lib/tenant.server";
@@ -24,7 +23,7 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * #1). Inside the screen the WRITE controls are hidden without `content.update` (`canEditContent`,
  * 02/10/2026) — convenience on top of that check, never instead of it.
  *
- * TIÊU ĐỀ VÀ CÂU MÔ TẢ LẤY TỪ `nhan-noi-dung.ts`, không gõ lại ở đây: chúng là chữ NGUYÊN VĂN của
+ * TIÊU ĐỀ VÀ CÂU MÔ TẢ LẤY TỪ `nhan-noi-dung.ts` (qua `SoNoiDung`), không gõ lại ở đây: chúng là chữ NGUYÊN VĂN của
  * §1 và §3, và một bản thứ hai của một câu là một bản sẽ trôi (luật 9, cấm #2).
  */
 export const dynamic = "force-dynamic";
@@ -43,8 +42,9 @@ export default async function TrangNoiDungMiniApp() {
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>{TIEU_DE_MAN}</h1>
-            <p className="mo-ta-trang">{MO_TA_MAN}</p>
+            {/* The page header (`<h1>`, the §1 sentence, `+ Thêm nội dung`) is drawn by `SoNoiDung`: the
+                button sits on the title row (spec §5) and its state — the open form, the
+                `content.update` gate — lives in that component. Same split as `/nhiem-vu`. */}
             <SoNoiDung />
           </main>
         </div>

@@ -1,8 +1,13 @@
 "use client";
 
+import { Eye, EyeOff, FolderTree, ListOrdered, Pencil, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
 import type { UpdateCategoryIn } from "@/lib/api/noi-dung";
 import type { comms_danhMucRa } from "@/lib/api/schema.gen";
 
@@ -82,30 +87,35 @@ export function CategoryAdmin({
   if (tree.length === 0) return <p className="ghi-chu">{DANH_MUC_RONG}</p>;
 
   return (
-    <div className="category-admin">
-      <h3>Danh mục tin của xã</h3>
-      <p className="ghi-chu">{CATEGORY_HIDE_EXPLAINER}</p>
-      <ul className="category-list">
+    <div className="category-admin flex flex-col gap-2">
+      <h3 className="m-0 text-[15px] font-semibold text-ink-900">Danh mục tin của xã</h3>
+      <p className="ghi-chu m-0">{CATEGORY_HIDE_EXPLAINER}</p>
+      <ul className="category-list m-0 rounded-xl border border-line px-4">
         {tree.map((m) => {
           const dm = m.dm;
           const rowError = error !== null && error.id === dm.id ? error.message : null;
           const editing = open !== null && open.id === dm.id && open.kind === "edit";
           const deleting = open !== null && open.id === dm.id && open.kind === "delete";
           return (
-            <li key={dm.id} className="category-row">
-              <div>
+            <li key={dm.id} className="category-row last:border-b-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="ten-can-bo">{nhanMucDanhMuc(m)}</span>
-                <span className="dong-phu">
+                <Badge tone={dm.hidden ? "neutral" : "success"} icon={dm.hidden ? EyeOff : Eye}>
+                  {dm.hidden ? CATEGORY_HIDDEN : CATEGORY_SHOWN}
+                </Badge>
+                <span className="dong-phu basis-full">
                   Slug: {dm.slug} · Thứ tự: {dm.order}
                 </span>
-                <span className={dm.hidden ? "chip chip-ngung" : "chip chip-hoat-dong"}>
-                  {dm.hidden ? CATEGORY_HIDDEN : CATEGORY_SHOWN}
-                </span>
               </div>
+              {/* Every action keeps its word (spec §7: an act with consequences is never icon-only).
+                  `min-h-0` lifts the legacy 44px of `.category-row .nut-phu` to the 34px row size. */}
               <div className="cum-nut">
-                <button
+                <Button
                   type="button"
-                  className="nut-phu"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-0"
+                  icon={<Pencil aria-hidden="true" focusable="false" />}
                   aria-expanded={editing}
                   disabled={busy}
                   aria-label={`${CATEGORY_EDIT_BUTTON} danh mục ${dm.name}`}
@@ -115,19 +125,25 @@ export function CategoryAdmin({
                   }}
                 >
                   {CATEGORY_EDIT_BUTTON}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="nut-phu"
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-0"
+                  icon={dm.hidden ? <Eye aria-hidden="true" focusable="false" /> : <EyeOff aria-hidden="true" focusable="false" />}
                   disabled={busy}
                   aria-label={`${dm.hidden ? CATEGORY_SHOW_BUTTON : CATEGORY_HIDE_BUTTON}: ${dm.name}`}
                   onClick={() => run(dm.id, update(dm.id, { hidden: !dm.hidden }))}
                 >
                   {dm.hidden ? CATEGORY_SHOW_BUTTON : CATEGORY_HIDE_BUTTON}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="nut-phu nut-xoa"
+                  variant="danger"
+                  size="sm"
+                  className="min-h-0"
+                  icon={<Trash2 aria-hidden="true" focusable="false" />}
                   aria-expanded={deleting}
                   disabled={busy}
                   aria-label={`${CATEGORY_DELETE_BUTTON} danh mục ${dm.name}`}
@@ -137,7 +153,7 @@ export function CategoryAdmin({
                   }}
                 >
                   {CATEGORY_DELETE_BUTTON}
-                </button>
+                </Button>
               </div>
 
               {rowError !== null && !editing && !deleting && (
@@ -218,14 +234,13 @@ export function CategoryEditForm({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={submit} aria-labelledby={`${fid}-tieu-de`}>
+    <form className={SUB_FORM_CLASS} onSubmit={submit} aria-labelledby={`${fid}-tieu-de`}>
       <h4 id={`${fid}-tieu-de`}>Sửa danh mục: {category.name}</h4>
-      <p className="ghi-chu">
+      <p className="ghi-chu m-0">
         Slug: <code>{category.slug}</code> — {CATEGORY_SLUG_FIXED}
       </p>
 
-      <div className="o-nhap">
-        <label htmlFor={`${fid}-ten`}>Tên danh mục *</label>
+      <Field label="Tên danh mục *" htmlFor={`${fid}-ten`} grow="auto">
         <input
           id={`${fid}-ten`}
           name={`${fid}-ten`}
@@ -234,52 +249,54 @@ export function CategoryEditForm({
           autoComplete="off"
           onChange={(e) => setV({ ...v, name: e.target.value })}
         />
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor={`${fid}-cha`}>Danh mục cha</label>
-        <select
-          id={`${fid}-cha`}
-          value={v.parentId}
-          aria-describedby={`${fid}-cha-goi-y`}
-          onChange={(e) => setV({ ...v, parentId: e.target.value })}
-        >
-          <option value="">— Không có danh mục cha —</option>
-          {choices.map((m) => (
-            <option key={m.dm.id} value={m.dm.id}>
-              {nhanMucDanhMuc(m)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p className="ghi-chu" id={`${fid}-cha-goi-y`}>
-        {CATEGORY_PARENT_HINT}
-      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Field label="Danh mục cha" htmlFor={`${fid}-cha`} kind="select" icon={FolderTree} grow="auto">
+            <select
+              id={`${fid}-cha`}
+              value={v.parentId}
+              aria-describedby={`${fid}-cha-goi-y`}
+              onChange={(e) => setV({ ...v, parentId: e.target.value })}
+            >
+              <option value="">— Không có danh mục cha —</option>
+              {choices.map((m) => (
+                <option key={m.dm.id} value={m.dm.id}>
+                  {nhanMucDanhMuc(m)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="ghi-chu m-0" id={`${fid}-cha-goi-y`}>
+            {CATEGORY_PARENT_HINT}
+          </p>
+        </div>
 
-      <div className="o-nhap">
-        <label htmlFor={`${fid}-thu-tu`}>Thứ tự hiển thị</label>
-        <input
-          id={`${fid}-thu-tu`}
-          name={`${fid}-thu-tu`}
-          type="number"
-          min={0}
-          max={THU_TU_DANH_MUC_TOI_DA}
-          value={v.order}
-          onChange={(e) => setV({ ...v, order: e.target.value })}
-        />
+        <Field label="Thứ tự hiển thị" htmlFor={`${fid}-thu-tu`} icon={ListOrdered} grow="auto">
+          <input
+            id={`${fid}-thu-tu`}
+            name={`${fid}-thu-tu`}
+            type="number"
+            min={0}
+            max={THU_TU_DANH_MUC_TOI_DA}
+            value={v.order}
+            onChange={(e) => setV({ ...v, order: e.target.value })}
+          />
+        </Field>
       </div>
 
       {error !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {error}
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={busy} onClick={cancel}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={cancel}>
           {NHAN_NUT_HUY}
         </button>
-        <button type="submit" className="nut-chinh" disabled={busy || !ready}>
+        <button type="submit" className={cn("nut-chinh", SUB_BUTTON, buttonVariants({ variant: "primary" }))} disabled={busy || !ready}>
           {NHAN_NUT_LUU}
         </button>
       </div>
@@ -321,12 +338,11 @@ export function CategoryDeleteForm({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={submit} aria-labelledby={`${fid}-tieu-de`}>
+    <form className={SUB_FORM_CLASS} onSubmit={submit} aria-labelledby={`${fid}-tieu-de`}>
       <h4 id={`${fid}-tieu-de`}>Xoá danh mục: {category.name}</h4>
-      <p className="ghi-chu">{CATEGORY_DELETE_NOTE}</p>
+      <p className="ghi-chu m-0">{CATEGORY_DELETE_NOTE}</p>
 
-      <div className="o-nhap">
-        <label htmlFor={`${fid}-ly-do`}>{CATEGORY_REASON_LABEL}</label>
+      <Field label={CATEGORY_REASON_LABEL} htmlFor={`${fid}-ly-do`} grow="auto" className="[&_textarea]:py-2.5">
         <textarea
           id={`${fid}-ly-do`}
           name={`${fid}-ly-do`}
@@ -336,27 +352,41 @@ export function CategoryDeleteForm({
           maxLength={DELETE_REASON_MAX_CHARS}
           onChange={(e) => setReason(e.target.value)}
         />
-      </div>
+      </Field>
 
       {error !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {error}
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={busy} onClick={cancel}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={cancel}>
           {NHAN_NUT_HUY}
         </button>
         {!category.hidden && (
-          <button type="button" className="nut-phu" disabled={busy} onClick={hideInstead}>
+          <button type="button" className={cn("nut-phu", SUB_BUTTON, buttonVariants({ variant: "secondary" }))} disabled={busy} onClick={hideInstead}>
+            <EyeOff aria-hidden="true" focusable="false" />
             Ẩn thay vì xoá
           </button>
         )}
-        <button type="submit" className="nut-phu nut-xoa" disabled={busy || trimmed === ""}>
+        <button type="submit" className={cn("nut-phu nut-xoa", SUB_BUTTON, buttonVariants({ variant: "danger" }))} disabled={busy || trimmed === ""}>
+          <Trash2 aria-hidden="true" focusable="false" />
           Xoá danh mục
         </button>
       </div>
     </form>
   );
 }
+
+/**
+ * The inline edit / delete form under a row: a muted panel, not the legacy blue-edged box. `h4` restyled
+ * from here because `.form-danh-muc h4` sets its own margin and size.
+ */
+const SUB_FORM_CLASS = cn(
+  "form-danh-muc mt-1 mb-0 flex flex-col gap-4 rounded-xl border border-line border-l-line bg-surface-muted p-4",
+  "[&_h4]:m-0 [&_h4]:text-sm [&_h4]:font-semibold",
+);
+
+/** Native buttons keep `type` first; the legacy 44px / full-width rules of `.form-danh-muc` are lifted. */
+const SUB_BUTTON = "w-auto min-h-0";

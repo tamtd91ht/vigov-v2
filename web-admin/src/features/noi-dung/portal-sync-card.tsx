@@ -1,8 +1,10 @@
 "use client";
 
+import { Clock, Shapes } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Field } from "@/components/ui/field";
 import type { KetQua } from "@/lib/api/goi";
 import {
   getPortalCategories,
@@ -554,8 +556,8 @@ function SettingsFormView({
         ))}
       </fieldset>
 
-      <div className="o-chon">
-        <label htmlFor="portal-sync-interval">Nhịp đồng bộ</label>
+      {/* Label above, 40px, ChevronDown — the same select as every other on this screen (owner, 02/10/2026). */}
+      <Field label="Nhịp đồng bộ" htmlFor="portal-sync-interval" kind="select" icon={Clock} grow="auto" className="mb-4 max-w-sm">
         <select
           id="portal-sync-interval"
           value={String(form.interval_hours)}
@@ -567,7 +569,7 @@ function SettingsFormView({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
       <div className="o-nhap">
         <label htmlFor="portal-sync-window">Lấy tin đăng trong bao nhiêu ngày gần nhất</label>
@@ -790,17 +792,30 @@ export function CategoryPicker({ api }: { api: PortalSyncApi }) {
                   </label>
                   {!c.on_portal && <span className="chip chip-ngung"> {MISSING_ON_PORTAL}</span>}
                   {c.selected && (
-                    <select
-                      aria-label={`Loại nội dung của chuyên mục ${c.name}`}
-                      value={c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind}
-                      onChange={(e) => update(c.external_id, { target_kind: e.target.value })}
+                    // Field with the label hidden: the row's name already says which category this is,
+                    // and `aria-label` stays the select's accessible name, word for word.
+                    <Field
+                      label={`Loại nội dung của chuyên mục ${c.name}`}
+                      htmlFor={`${tickId}-kind`}
+                      hideLabel
+                      kind="select"
+                      icon={Shapes}
+                      grow="auto"
+                      className="w-full max-w-xs"
                     >
-                      {TARGET_KIND_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      <select
+                        id={`${tickId}-kind`}
+                        aria-label={`Loại nội dung của chuyên mục ${c.name}`}
+                        value={c.target_kind === "" ? DEFAULT_TARGET_KIND : c.target_kind}
+                        onChange={(e) => update(c.external_id, { target_kind: e.target.value })}
+                      >
+                        {TARGET_KIND_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                   )}
                 </li>
               );

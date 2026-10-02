@@ -17,7 +17,7 @@ import {
   ERR_VIDEO_URL_INVALID,
   EVENT_TIME_HINT,
   ACTIONS_COLUMN_LABEL,
-  CONTENT_DELETE_SYMBOL,
+  CONTENT_DELETE_TITLE,
   contentDeleteAriaLabel,
   FORM_TRONG,
   giaTriTuHang,
@@ -224,7 +224,9 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain("Hội nghị diễn ra sáng 14/9");
     expect(html).toContain("Tin tức");
     expect(html).toContain("Chuyển đổi số");
-    expect(html).toContain("🔗 Có ảnh");
+    // The `🔗` of the label is drawn as a lucide icon now (ADR 0068 §2); the words are unchanged.
+    expect(html).toContain(">Có ảnh<");
+    expect(html).toContain("lucide-image");
     expect(html).toContain("14/9/2026");
     expect(html).toContain("Đang hiện");
   });
@@ -239,10 +241,10 @@ describe("bảng nội dung §6", () => {
     expect(html.match(/<th scope="col">/g)?.length).toBe(7);
   });
 
-  it("the action column holds `✎` and `🗑` — the prototype's pencil and trash", () => {
+  it("the action column holds the pencil and the trash (lucide icons since ADR 0068)", () => {
     const html = veBang([hang()]);
     expect(html).toContain(NHAN_NUT_SUA);
-    expect(html).toContain(CONTENT_DELETE_SYMBOL);
+    expect(html).toContain(`title="${CONTENT_DELETE_TITLE}"`);
     expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
   });
 
@@ -292,7 +294,7 @@ describe("`content.update` gates the table's write controls", () => {
   it("DENIED: no `✎`, no `🗑`, no action column — the data columns stay", () => {
     const html = veBang([hang()], [danhMuc()], false);
     expect(html).not.toContain(NHAN_NUT_SUA);
-    expect(html).not.toContain(CONTENT_DELETE_SYMBOL);
+    expect(html).not.toContain(CONTENT_DELETE_TITLE);
     expect(html).not.toContain("Xoá");
     expect(html).not.toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
     expect(html).not.toContain("aria-haspopup");
@@ -300,10 +302,10 @@ describe("`content.update` gates the table's write controls", () => {
     expect(html).toContain("Xã tổ chức hội nghị tổng kết công tác chuyển đổi số");
   });
 
-  it("ALLOWED: `✎` and `🗑` on every row, each saying it opens a dialog", () => {
+  it("ALLOWED: the pencil and the trash on every row, each saying it opens a dialog", () => {
     const html = veBang([hang({ id: "A" }), hang({ id: "B" })], [danhMuc()], true);
     expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(4);
-    expect(html.match(new RegExp(CONTENT_DELETE_SYMBOL, "g"))?.length).toBe(2);
+    expect(html.match(new RegExp(`title="${CONTENT_DELETE_TITLE}"`, "g"))?.length).toBe(2);
     expect(html).toContain(`>${ACTIONS_COLUMN_LABEL}</th>`);
   });
 
@@ -384,7 +386,9 @@ describe("biểu mẫu nội dung §7", () => {
   });
 
   it("nút Lưu TẮT khi tiêu đề rỗng — máy chủ vẫn là nơi từ chối thật", () => {
-    expect(veForm()).toContain("disabled");
+    // The submit button ITSELF: since ADR 0068 every button's classes carry `disabled:…` utilities, so a
+    // bare `toContain("disabled")` would be green on any form.
+    expect(veForm()).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
     expect(veForm({ ...FORM_TRONG, title: "Có tiêu đề" })).toContain(">Lưu</button>");
   });
 
@@ -643,7 +647,8 @@ describe("§6 status filter", () => {
 
   it("offers Tất cả / Đang hiện / Ẩn / Chờ duyệt with the server's three codes, Tất cả sending nothing", () => {
     const html = filterRow("");
-    expect(html).toContain('<label for="loc-trang-thai">Trạng thái</label>');
+    // The label is Field's now (label above, its own classes); still a real `<label for>` on the select.
+    expect(html).toMatch(/<label for="loc-trang-thai"[^>]*>Trạng thái<\/label>/);
     const options = [...html.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)]
       .map((m) => [m[1], m[2]])
       .filter(([v]) => ["", "dang-hien", "an", "cho-duyet"].includes(v ?? "x"));

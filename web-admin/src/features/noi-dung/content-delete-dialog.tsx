@@ -1,7 +1,11 @@
 "use client";
 
+import { LoaderCircle, Trash2, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
 import type { CallResult } from "@/lib/api/task-attachments";
 import type { comms_noiDungRa } from "@/lib/api/schema.gen";
 
@@ -9,6 +13,7 @@ import {
   CONTENT_DELETE_NOTE,
   CONTENT_DELETE_REASON_LABEL,
   CONTENT_DELETE_SUBMIT,
+  CLOSE_LABEL,
   CONTENT_DELETE_TITLE,
   deleteReasonCounter,
   deleteReasonLength,
@@ -86,43 +91,74 @@ export function ContentDeleteDialog({
 
   return (
     <OverlayDialog titleId={TITLE_ID} onDismiss={dismiss}>
-      <form onSubmit={submit} aria-labelledby={TITLE_ID}>
-        <h3 id={TITLE_ID}>{CONTENT_DELETE_TITLE}</h3>
-        <p>
+      <form className="flex max-w-xl flex-col gap-4" onSubmit={submit} aria-labelledby={TITLE_ID}>
+        <div className="flex items-center gap-3 border-b border-line pb-3">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-danger-50 text-danger-600">
+            <Trash2 className="size-[18px]" strokeWidth={1.8} focusable="false" />
+          </span>
+          <h3 id={TITLE_ID} className="m-0 min-w-0 flex-1 text-base font-semibold text-ink-900">
+            {CONTENT_DELETE_TITLE}
+          </h3>
+          {/* Same exit as `Huỷ`, refused while in flight for the same reason. */}
+          <IconButton type="button" label={CLOSE_LABEL} className="min-h-0" disabled={busy} onClick={dismiss}>
+            <X aria-hidden="true" focusable="false" />
+          </IconButton>
+        </div>
+        <p className="m-0 rounded-xl border border-line bg-surface-muted px-3.5 py-3">
           <span className="ten-can-bo">{item.title}</span>
         </p>
-        <p className="ghi-chu">{CONTENT_DELETE_NOTE}</p>
+        <p className="ghi-chu m-0 text-[13px]">{CONTENT_DELETE_NOTE}</p>
 
-        <div className="o-nhap">
-          <label htmlFor={REASON_ID}>{CONTENT_DELETE_REASON_LABEL}</label>
-          <textarea
-            id={REASON_ID}
-            name={REASON_ID}
-            rows={3}
-            required
-            value={reason}
-            aria-describedby={`${REASON_ID}-counter`}
-            aria-invalid={tooLong}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <p className="ghi-chu" id={`${REASON_ID}-counter`} aria-live="polite">
+        <div className="flex flex-col gap-1.5">
+          <Field label={CONTENT_DELETE_REASON_LABEL} htmlFor={REASON_ID} grow="auto"
+            // Past 500 the frame turns red too — the counter's words carry the meaning, colour is second.
+            className="[&_textarea]:py-2.5 [&_textarea[aria-invalid=true]]:border-danger-600"
+          >
+            <textarea
+              id={REASON_ID}
+              name={REASON_ID}
+              rows={3}
+              required
+              value={reason}
+              aria-describedby={`${REASON_ID}-counter`}
+              aria-invalid={tooLong}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
+          <p
+            className={tooLong ? "ghi-chu m-0 text-right text-danger-600" : "ghi-chu m-0 text-right"}
+            id={`${REASON_ID}-counter`}
+            aria-live="polite"
+          >
             {deleteReasonCounter(reason)}
           </p>
         </div>
 
         {error !== null && (
-          <p className="thong-bao-loi" role="alert">
+          <p className="thong-bao-loi m-0" role="alert">
             {error}
           </p>
         )}
 
-        <div className="cum-nut">
-          <button type="button" className="nut-phu" disabled={busy} onClick={dismiss}>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+          <Button type="button" variant="secondary" disabled={busy} onClick={dismiss}>
             {NHAN_NUT_HUY}
-          </button>
-          <button type="submit" className="nut-phu nut-xoa" disabled={busy || !ready}>
+          </Button>
+          <Button
+            type="submit"
+            variant="danger"
+            disabled={busy || !ready}
+            aria-busy={busy || undefined}
+            icon={
+              busy ? (
+                <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" />
+              ) : (
+                <Trash2 aria-hidden="true" focusable="false" />
+              )
+            }
+          >
             {CONTENT_DELETE_SUBMIT}
-          </button>
+          </Button>
         </div>
       </form>
     </OverlayDialog>

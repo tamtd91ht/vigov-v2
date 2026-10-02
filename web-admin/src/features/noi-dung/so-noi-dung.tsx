@@ -1,9 +1,53 @@
 "use client";
 
+import {
+  ArrowRight,
+  AudioLines,
+  BookUser,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleDot,
+  Clock,
+  CloudOff,
+  Eye,
+  EyeOff,
+  FileText,
+  FolderTree,
+  Image as ImageIcon,
+  ImagePlus,
+  LayoutGrid,
+  Link as LinkIcon,
+  ListOrdered,
+  LoaderCircle,
+  MapPin,
+  Newspaper,
+  Pencil,
+  Pilcrow,
+  Plus,
+  RefreshCw,
+  Send,
+  Shapes,
+  Smartphone,
+  Trash2,
+  Video,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -52,7 +96,6 @@ import {
   CHUA_XEP_DANH_MUC,
   CLOSE_LABEL,
   CONTENT_DELETE_GONE,
-  CONTENT_DELETE_SYMBOL,
   CONTENT_DELETE_TITLE,
   CONTENT_DELETED,
   contentDeleteAriaLabel,
@@ -73,8 +116,8 @@ import {
   LINK_TO_HINT,
   LINK_TO_MAX_CHARS,
   LOAI_MAC_DINH,
-  lopChipTrangThai,
   MO_TA_FORM_THEM,
+  MO_TA_MAN,
   MOI_DANH_MUC,
   MOI_LOAI,
   MOI_LOAI_NHAN,
@@ -105,6 +148,7 @@ import {
   STATUS_PENDING_REVIEW,
   TEN_DANH_MUC_TOI_DA,
   TIEU_DE_FORM_THEM,
+  TIEU_DE_MAN,
   TIEU_DE_THE_DANH_BA,
   TIEU_DE_TOI_DA,
   THAN_BAI_RONG,
@@ -201,6 +245,35 @@ type BoLocMan = {
 };
 
 const LOC_TRONG: BoLocMan = { loai: "", danhMucID: "", tim: "", status: "" };
+
+/** The submit button's word while the save is in flight (spec §8b "Nút đang xử lý"). */
+const SAVING_LABEL = "Đang lưu…";
+
+/**
+ * The editor dialog draws its own sticky header and footer, so the dialog's scroll box loses its
+ * padding (they would otherwise stick 1rem short of its edges). Wider than the default overlay: two
+ * selects side by side need the room.
+ */
+const EDITOR_DIALOG_CLASS = "w-[min(52rem,calc(100vw-1rem))] p-0";
+
+/**
+ * The table's own scroller, both ways, so the header row can stay put (`sticky` inside an `overflow`
+ * box sticks to THAT box) — same shape as the task register (`so-nhiem-vu.tsx`). 48px rows (spec v2).
+ */
+const TABLE_SCROLL_CLASS = cn(
+  "bang-cuon m-0 max-h-[70vh] overflow-auto rounded-none border-0 shadow-none",
+  "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:shadow-[inset_0_-1px_0_var(--line)]",
+  "[&_tbody_td]:h-12",
+);
+
+/**
+ * A label without the symbol it starts with (`⊞ Danh mục tin` → `Danh mục tin`, `🔗 Có ảnh` → `Có ảnh`):
+ * where a lucide icon now draws it (ADR 0068 §2, no emoji as icon). The words themselves stay the
+ * labels file's, unchanged. Only for labels known to start with a symbol — `—` alone would be emptied.
+ */
+function withoutLeadingGlyph(label: string): string {
+  return label.replace(/^[^\p{L}\p{N}]+\s*/u, "");
+}
 
 export function SoNoiDung() {
   const [loc, datLoc] = useState<BoLocMan>(LOC_TRONG);
@@ -396,20 +469,27 @@ export function SoNoiDung() {
   }
 
   return (
-    <section className="man-noi-dung" aria-labelledby="tieu-de-so-noi-dung">
-      <h2 id="tieu-de-so-noi-dung">Sổ nội dung Mini App</h2>
+    <div className="man-noi-dung mt-0">
+      {/* §2: `[+ Thêm nội dung]` sits in the page header, above the two cards. The header is drawn here,
+          not by the page: the button's state (the open form, the `content.update` gate) lives in this
+          component — same split as `/nhiem-vu`. Title and sentence stay `nhan-noi-dung.ts`'s. */}
+      <PageHeader
+        icon={Smartphone}
+        title={TIEU_DE_MAN}
+        subtitle={MO_TA_MAN}
+        actions={
+          <HeaderActions
+            canEdit={canEdit}
+            addOpen={dangMoThem}
+            openAdd={() => {
+              dongMoiBieuMau();
+              datDangMoThem(true);
+            }}
+          />
+        }
+      />
 
       <KhoiChuaDung />
-
-      {/* §2: `[+ Thêm nội dung]` sits in the page header, above the two cards. */}
-      <HeaderActions
-        canEdit={canEdit}
-        addOpen={dangMoThem}
-        openAdd={() => {
-          dongMoiBieuMau();
-          datDangMoThem(true);
-        }}
-      />
 
       {/* §2: Card 1 and Card 2 side by side on a wide screen, stacked at 320px. */}
       <div className="content-top-cards">
@@ -426,7 +506,7 @@ export function SoNoiDung() {
       </div>
 
       {canEdit && dangMoThem && (
-        <OverlayDialog titleId="tieu-de-form-noi-dung" onDismiss={dismissOverlay}>
+        <OverlayDialog titleId="tieu-de-form-noi-dung" onDismiss={dismissOverlay} className={EDITOR_DIALOG_CLASS}>
           <FormNoiDung
             // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
             key={`them|${lanGhiXong}`}
@@ -444,11 +524,14 @@ export function SoNoiDung() {
 
       {canEdit && dangMoDanhMuc && (
         <OverlayDialog titleId="tieu-de-hop-danh-muc" onDismiss={dismissOverlay}>
-          <div className="dau-khoi-chi-tiet">
-            <h3 id="tieu-de-hop-danh-muc">{NHAN_NUT_DANH_MUC}</h3>
-            <button type="button" className="nut-phu" disabled={dangGui} onClick={dongMoiBieuMau}>
-              {CLOSE_LABEL}
-            </button>
+          <div className="dau-khoi-chi-tiet mb-2 flex-nowrap border-b border-line pb-3">
+            <h3 id="tieu-de-hop-danh-muc" className="flex items-center gap-2 text-base">
+              <LayoutGrid aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+              {withoutLeadingGlyph(NHAN_NUT_DANH_MUC)}
+            </h3>
+            <IconButton type="button" label={CLOSE_LABEL} className="min-h-0" disabled={dangGui} onClick={dongMoiBieuMau}>
+              <X aria-hidden="true" focusable="false" />
+            </IconButton>
           </div>
           <CategoryAdmin
             categories={dsDanhMuc}
@@ -468,7 +551,11 @@ export function SoNoiDung() {
       )}
 
       {canEdit && chiTiet !== null && dangSuaID !== null && (
-        <OverlayDialog titleId="tieu-de-form-noi-dung" onDismiss={dismissOverlay}>
+        <OverlayDialog
+          titleId="tieu-de-form-noi-dung"
+          onDismiss={dismissOverlay}
+          className={chiTiet.pha === "xong" ? EDITOR_DIALOG_CLASS : undefined}
+        >
           {chiTiet.pha === "xong" ? (
             <FormNoiDung
               key={`sua|${dangSuaID}|${lanGhiXong}`}
@@ -485,21 +572,34 @@ export function SoNoiDung() {
           ) : (
             // The dialog opens at once on `✎`; the full text arrives a moment later. Until then it
             // carries a heading (its accessible name) and a way out.
-            <>
-              <h3 id="tieu-de-form-noi-dung">{EDIT_FORM_TITLE}</h3>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3 border-b border-line pb-3">
+                <h3 id="tieu-de-form-noi-dung" className="m-0 min-w-0 flex-1 text-base font-semibold">
+                  {EDIT_FORM_TITLE}
+                </h3>
+                <IconButton type="button" label={CLOSE_LABEL} className="min-h-0" onClick={dongMoiBieuMau}>
+                  <X aria-hidden="true" focusable="false" />
+                </IconButton>
+              </div>
               {chiTiet.pha === "dangTai" ? (
-                <p role="status">{DANG_TAI_TOAN_VAN}</p>
+                <>
+                  <p role="status" className="an-thi-giac">
+                    {DANG_TAI_TOAN_VAN}
+                  </p>
+                  <FormSkeleton />
+                </>
               ) : (
-                <p className="thong-bao-loi" role="alert">
-                  {chiTiet.thongBao}
+                <p className="thong-bao-loi m-0 flex items-start gap-2" role="alert">
+                  <CloudOff aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-0.5 size-[18px] shrink-0" />
+                  <span>{chiTiet.thongBao}</span>
                 </p>
               )}
-              <div className="cum-nut">
-                <button type="button" className="nut-phu" onClick={dongMoiBieuMau}>
+              <div className="flex justify-end">
+                <Button type="button" variant="secondary" onClick={dongMoiBieuMau}>
                   {CLOSE_LABEL}
-                </button>
+                </Button>
               </div>
-            </>
+            </div>
           )}
         </OverlayDialog>
       )}
@@ -515,6 +615,11 @@ export function SoNoiDung() {
         />
       )}
 
+      {/* Spec §8.5: ONE list card — tabs, the filter row, the table and its pagination. */}
+      <Card as="section" className="mt-4" aria-labelledby="tieu-de-so-noi-dung">
+      <CardHeader className="border-b-0 pb-0">
+        <CardTitle id="tieu-de-so-noi-dung">Sổ nội dung Mini App</CardTitle>
+      </CardHeader>
       <ThanhTabLoai
         loai={loc.loai}
         datLoai={(l) => {
@@ -553,33 +658,65 @@ export function SoNoiDung() {
           // edit/hide/delete and the add form, nothing to read in it that the filter does not show.
           extra={
             canEdit ? (
-              <button
+              <Button
                 type="button"
-                className="nut-phu"
+                variant="secondary"
                 aria-haspopup="dialog"
+                icon={<LayoutGrid aria-hidden="true" focusable="false" />}
                 onClick={() => {
                   dongMoiBieuMau();
                   datDangMoDanhMuc(true);
                 }}
               >
-                {NHAN_NUT_DANH_MUC}
-              </button>
+                {withoutLeadingGlyph(NHAN_NUT_DANH_MUC)}
+              </Button>
             ) : null
           }
         />
 
         {danhMuc !== null && !danhMuc.ok && (
-          <p className="thong-bao-loi" role="alert">
+          <p className="thong-bao-loi mx-4 my-3" role="alert">
             {danhMuc.thongBao}
           </p>
         )}
 
-        {deleteNotice !== null && <p role="status">{deleteNotice}</p>}
-        {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+        {deleteNotice !== null && (
+          <Notice className="mx-4 my-3" icon={CircleCheck} role="status">
+            {deleteNotice}
+          </Notice>
+        )}
+        {/* LOADING (spec §8b): the sentence stays the live announcement; the eye gets rows shaped like
+            the table, so the card does not jump when the answer lands. */}
+        {so.pha === "dangTai" && (
+          <>
+            <p role="status" className="an-thi-giac">
+              {DANG_TAI_SO}
+            </p>
+            <RowsSkeleton />
+          </>
+        )}
+        {/* LOAD ERROR: the server's sentence VERBATIM stays the alert; `Tải lại` asks the same read again
+            through the screen's existing re-read key (`lanTai`) — no new call, no new route. */}
         {so.pha === "loi" && (
-          <p className="thong-bao-loi" role="alert">
-            {so.thongBao}
-          </p>
+          <EmptyState
+            icon={CloudOff}
+            title="Chưa tải được danh sách nội dung"
+            description={
+              <span className="text-danger-600" role="alert">
+                {so.thongBao}
+              </span>
+            }
+            action={
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<RefreshCw aria-hidden="true" focusable="false" />}
+                onClick={() => datLanTai((n) => n + 1)}
+              >
+                Tải lại
+              </Button>
+            }
+          />
         )}
 
         {so.pha === "xong" && (
@@ -597,30 +734,39 @@ export function SoNoiDung() {
             }}
             canEdit={canEdit}
           />
-          <nav className="dieu-huong-trang" aria-label="Phân trang sổ nội dung Mini App">
-            <button
+          <nav
+            className="dieu-huong-trang m-0 border-t border-line px-4 py-3"
+            aria-label="Phân trang sổ nội dung Mini App"
+          >
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
+              icon={<ChevronLeft aria-hidden="true" focusable="false" />}
               disabled={!coTrangTruoc(nganXep)}
               onClick={() => datNganXep(veTrangTruoc(nganXep))}
             >
               Trang trước
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="nut-phu"
+              variant="secondary"
+              size="sm"
+              className="flex-row-reverse"
+              icon={<ChevronRight aria-hidden="true" focusable="false" />}
               // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
               // tới đó.
               disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
               onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
             >
               Trang sau
-            </button>
+            </Button>
           </nav>
         </>
         )}
       </div>
-    </section>
+      </Card>
+    </div>
   );
 }
 
@@ -640,15 +786,9 @@ export function HeaderActions({
   if (!canEdit) return null;
   return (
     <div className="cum-nut">
-      <button
-        type="button"
-        className="nut-chinh"
-        aria-haspopup="dialog"
-        aria-expanded={addOpen}
-        onClick={openAdd}
-      >
+      <Button type="button" variant="primary" aria-haspopup="dialog" aria-expanded={addOpen} onClick={openAdd}>
         {NHAN_NUT_THEM}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -689,15 +829,22 @@ export function KhoiChuaDung() {
 export function TheDanhBaChinhQuyen({ publishedCount }: { publishedCount: KetQua<number> | null }) {
   const text = publishedStaffText(publishedCount);
   return (
-    <section className="khoi-chi-tiet" aria-labelledby="government-directory-title">
+    <section className="khoi-chi-tiet flex flex-col gap-2" aria-labelledby="government-directory-title">
       <div className="dau-khoi-chi-tiet">
-        <h3 id="government-directory-title">📖 {TIEU_DE_THE_DANH_BA}</h3>
-        <Link className="nut-phu" href="/danh-ba">
-          Mở danh bạ cán bộ →
+        <h3 id="government-directory-title" className="flex items-center gap-2">
+          <BookUser aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+          {TIEU_DE_THE_DANH_BA}
+        </h3>
+        <Link
+          className={cn("nut-phu flex-row-reverse", buttonVariants({ variant: "secondary", size: "sm" }))}
+          href="/danh-ba"
+        >
+          <ArrowRight aria-hidden="true" focusable="false" />
+          Mở danh bạ cán bộ
         </Link>
       </div>
-      <p>{text.line}</p>
-      {text.note !== null && <p className="ghi-chu">{text.note}</p>}
+      <p className="m-0 text-sm text-ink-700">{text.line}</p>
+      {text.note !== null && <p className="ghi-chu m-0">{text.note}</p>}
     </section>
   );
 }
@@ -743,7 +890,7 @@ export function ThanhTabLoai({
   }
 
   return (
-    <div className="thanh-tab-cau-hinh" role="tablist" aria-label="Loại nội dung">
+    <div className="thanh-tab-cau-hinh mt-2 px-2" role="tablist" aria-label="Loại nội dung">
       {types.map((type, i) => (
         <button
           key={type === "" ? "all" : type}
@@ -800,7 +947,7 @@ export function HangLocNoiDung({
   }
 
   return (
-    <div className="hang-loc">
+    <div className="hang-loc m-0 border-b border-line px-4 py-3.5">
       {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
           đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
       <form className="form-tra-cuu" onSubmit={gui} role="search">
@@ -823,8 +970,8 @@ export function HangLocNoiDung({
         </button>
       </form>
 
-      <div className="o-chon">
-        <label htmlFor="loc-danh-muc">Danh mục</label>
+      {/* `max-md:flex-none`: below 768px the row is a COLUMN, where Field's 220px basis would be a height. */}
+      <Field label="Danh mục" htmlFor="loc-danh-muc" kind="select" icon={FolderTree} className="max-md:flex-none">
         <select
           id="loc-danh-muc"
           value={danhMucID}
@@ -837,10 +984,9 @@ export function HangLocNoiDung({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
-      <div className="o-chon">
-        <label htmlFor="loc-trang-thai">Trạng thái</label>
+      <Field label="Trạng thái" htmlFor="loc-trang-thai" kind="select" icon={CircleDot} className="max-md:flex-none">
         <select id="loc-trang-thai" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUS_FILTER_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -848,7 +994,7 @@ export function HangLocNoiDung({
             </option>
           ))}
         </select>
-      </div>
+      </Field>
 
       {extra}
     </div>
@@ -884,11 +1030,13 @@ export function BangNoiDung({
   remove: (nd: comms_noiDungRa) => void;
   canEdit: boolean;
 }) {
-  if (ds.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  // ONE sentence for "nothing yet" and "nothing in this slice": the screen does not tell the two apart,
+  // and `SO_RONG` already says "trong lát cắt đang xem" (spec §8b: only states the code distinguishes).
+  if (ds.length === 0) return <EmptyState icon={Newspaper} title={SO_RONG} />;
 
   return (
     <>
-      <div className="bang-cuon">
+      <div className={TABLE_SCROLL_CLASS}>
         <table className="bang-can-bo">
           <caption className="an-thi-giac">Sổ nội dung Mini App của xã</caption>
           <thead>
@@ -925,38 +1073,54 @@ export function BangNoiDung({
                   </td>
                   <td>{nhanLoai(nd.type)}</td>
                   <td>{tenDanhMuc(nd.category_id, danhMuc)}</td>
-                  <td>{nhanTepDinhKem(nd.has_image)}</td>
+                  <td>
+                    {nd.has_image ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <ImageIcon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-ink-500" />
+                        {withoutLeadingGlyph(nhanTepDinhKem(true))}
+                      </span>
+                    ) : (
+                      nhanTepDinhKem(false)
+                    )}
+                  </td>
                   <td>
                     {nhanNgayDang(nd.published_on)}
                     {firstPublished !== null && <span className="dong-phu">{firstPublished}</span>}
                   </td>
                   <td>
-                    <span className={lopChipTrangThai(nd.status)}>{nhanTrangThai(nd.status)}</span>
+                    <ContentStatusBadge status={nd.status} />
                   </td>
                   {canEdit && (
-                    <td className="o-thao-tac">
-                      <button
+                    <td className="o-thao-tac flex-nowrap justify-end gap-1">
+                      {/* 34px icon buttons (spec §7 "Nút trong bảng"). `min-h-0` lifts the legacy 44px of
+                          `.o-thao-tac .nut-phu`; the names below are unchanged. */}
+                      <Button
                         type="button"
-                        className="nut-phu"
+                        variant="icon"
+                        size="sm"
+                        className="min-h-0"
                         aria-haspopup="dialog"
                         onClick={() => sua(nd.id)}
                         // Ký hiệu một mình không đọc được bằng trình đọc màn hình, và sáu hàng đều
                         // mang cùng một ký hiệu. Nhãn mang theo tiêu đề để nói rõ đang sửa bài nào.
                         aria-label={`${NHAN_NUT_SUA} Sửa: ${nd.title}`}
+                        title="Sửa"
                       >
-                        {NHAN_NUT_SUA}
-                      </button>
-                      <button
+                        <Pencil aria-hidden="true" focusable="false" />
+                      </Button>
+                      <Button
                         type="button"
-                        className="nut-phu nut-xoa"
+                        variant="icon"
+                        size="sm"
+                        className="nut-xoa min-h-0 border-transparent text-danger-600 hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
                         aria-haspopup="dialog"
                         onClick={() => remove(nd)}
-                        // Same reason as `✎`: the symbol alone names no row.
+                        // Same reason as the pencil: the icon alone names no row.
                         aria-label={contentDeleteAriaLabel(nd.title)}
                         title={CONTENT_DELETE_TITLE}
                       >
-                        {CONTENT_DELETE_SYMBOL}
-                      </button>
+                        <Trash2 aria-hidden="true" focusable="false" />
+                      </Button>
                     </td>
                   )}
                 </tr>
@@ -1052,272 +1216,317 @@ export function FormNoiDung({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-labelledby="tieu-de-form-noi-dung">
-      <h3 id="tieu-de-form-noi-dung">{tieuDeForm}</h3>
-      <p className="ghi-chu">{moTa}</p>
-
-      {hang !== undefined && <ThongTinChiDoc hang={hang} />}
-
-      <div className="o-chon">
-        <label htmlFor="loai-noi-dung">Loại nội dung</label>
-        <select
-          id="loai-noi-dung"
-          value={gt.type === "" ? LOAI_MAC_DINH : gt.type}
-          onChange={(e) => datGT({ ...gt, type: e.target.value })}
-        >
-          {MOI_LOAI.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanLoai(ma)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="o-chon">
-        <label htmlFor="danh-muc-noi-dung">Danh mục</label>
-        <select
-          id="danh-muc-noi-dung"
-          value={gt.category_id}
-          onChange={(e) => datGT({ ...gt, category_id: e.target.value })}
-        >
-          <option value="">{CHUA_XEP_DANH_MUC}</option>
-          {dungCayDanhMuc(danhMuc).map((m) => (
-            <option key={m.dm.id} value={m.dm.id}>
-              {nhanMucDanhMuc(m)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="tieu-de-noi-dung">Tiêu đề *</label>
-        <input
-          id="tieu-de-noi-dung"
-          name="tieu-de-noi-dung"
-          value={gt.title}
-          maxLength={TIEU_DE_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datGT({ ...gt, title: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="tom-tat-noi-dung">Tóm tắt</label>
-        <textarea
-          id="tom-tat-noi-dung"
-          name="tom-tat-noi-dung"
-          rows={3}
-          value={gt.summary}
-          maxLength={TOM_TAT_TOI_DA}
-          onChange={(e) => datGT({ ...gt, summary: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <span id="than-bai-noi-dung-nhan" className="nhan-o">
-          Nội dung
-        </span>
-        {/* The editor starts from the body as it was when the form opened (`giaTriDau`), never from
-            `gt.body`: feeding its own output back in would reset the cursor on every keystroke. */}
-        <RichTextEditor
-          id="than-bai-noi-dung"
-          labelId="than-bai-noi-dung-nhan"
-          initialHtml={giaTriDau.body}
-          disabled={dangGui}
-          onChange={(body) => datGT((g) => ({ ...g, body }))}
-        />
-        <p className="ghi-chu" id="than-bai-noi-dung-hint">
-          {CANH_BAO_HTML_THO}
-        </p>
-        {gt.body === "" && <p className="ghi-chu">{THAN_BAI_RONG}</p>}
-      </div>
-
-      <CoverImageField
-        fileId={gt.cover_image_file_id}
-        savedFileId={hang?.cover_image_file_id ?? ""}
-        savedCover={hang?.cover_image}
-        state={cover}
-        disabled={dangGui}
-        onPick={(file) => void runCoverUpload(file, hang?.id, onCoverState)}
-        onRetry={(id) => void retryCoverCompletion(id, onCoverState)}
-        onRemove={() => {
-          setCover({ kind: "idle" });
-          datGT((g) => ({ ...g, cover_image_file_id: "" }));
-        }}
-      />
-
-      {/* :131 of the spec, ADR 0047 §6. Rendered only for the type that can carry them — the server
-          refuses an event field on any other type, and a box that is shown is a box somebody fills. */}
-      {gt.type === CONTENT_TYPE_EVENT && (
-        <>
-          <div className="o-nhap">
-            <label htmlFor="bat-dau-su-kien">Bắt đầu</label>
-            <input
-              id="bat-dau-su-kien"
-              name="bat-dau-su-kien"
-              type="datetime-local"
-              value={gt.event_starts_local}
-              onChange={(e) => datGT({ ...gt, event_starts_local: e.target.value })}
-            />
-          </div>
-          <div className="o-nhap">
-            <label htmlFor="ket-thuc-su-kien">Kết thúc</label>
-            <input
-              id="ket-thuc-su-kien"
-              name="ket-thuc-su-kien"
-              type="datetime-local"
-              value={gt.event_ends_local}
-              onChange={(e) => datGT({ ...gt, event_ends_local: e.target.value })}
-            />
-            <p className="ghi-chu">{EVENT_TIME_HINT}</p>
-          </div>
-          <div className="o-nhap">
-            <label htmlFor="dia-diem-su-kien">Địa điểm</label>
-            <input
-              id="dia-diem-su-kien"
-              name="dia-diem-su-kien"
-              value={gt.event_place}
-              maxLength={EVENT_PLACE_MAX_CHARS}
-              autoComplete="off"
-              onChange={(e) => datGT({ ...gt, event_place: e.target.value })}
-            />
-          </div>
-        </>
-      )}
-
-      {gt.type === CONTENT_TYPE_VIDEO && (
-        <div className="o-nhap">
-          <label htmlFor="lien-ket-video">Liên kết video</label>
-          <input
-            id="lien-ket-video"
-            name="lien-ket-video"
-            type="url"
-            value={gt.video_url}
-            maxLength={URL_TOI_DA}
-            placeholder="https://"
-            autoComplete="off"
-            onChange={(e) => datGT({ ...gt, video_url: e.target.value })}
-          />
-          <p className="ghi-chu">{VIDEO_URL_HINT}</p>
+    <form className="form-danh-muc m-0 border-0 bg-transparent p-0" onSubmit={guiNgay} aria-labelledby="tieu-de-form-noi-dung">
+      {/* HEADER sticks to the top of the dialog's own scroll box (the dialog is `p-0` for it): the
+          title and the way out stay in view while the officer scrolls a long article. The X calls the
+          same `huy` as `Huỷ`, and is off while saving for the same reason. */}
+      <div className="sticky top-0 z-10 flex items-start gap-3 border-b border-line bg-surface px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <h3 id="tieu-de-form-noi-dung" className="m-0 text-lg leading-snug font-semibold text-ink-900">
+            {tieuDeForm}
+          </h3>
         </div>
-      )}
+        <IconButton type="button" label={CLOSE_LABEL} className="-mt-1 -mr-2 min-h-0" disabled={dangGui} onClick={huy}>
+          <X aria-hidden="true" focusable="false" />
+        </IconButton>
+      </div>
 
-      {/* ADR 0067 §4. The audio is uploaded for a SAVED broadcast: on the create form, or on an item
-          saved as another type, the officer is told to save first instead of being shown a picker the
-          server would refuse (400 / 422 `audio_only_for_truyen_thanh`). */}
-      {gt.type === CONTENT_TYPE_BROADCAST && !savedAsBroadcast && (
-        <p className="ghi-chu" role="note">
-          {AUDIO_SAVE_FIRST}
-        </p>
-      )}
-      {savedAsBroadcast && (
-        <BroadcastAudioField
-          itemId={hang.id}
-          initialAudio={hang.audio ?? null}
-          currentType={gt.type}
-          disabled={dangGui}
-          onBusyChange={setAudioBusy}
-          initialState={initialAudioState}
-        />
-      )}
+      <div className="flex flex-col gap-5 px-5 py-5">
+        {hang !== undefined && <ThongTinChiDoc hang={hang} />}
 
-      {/* ADR 0067 §5. Only for `Banner`: the server refuses `link_to` / `display_order` on any other type
-          (422), and a type change away from banner clears both there — so these boxes are not sent then. */}
-      {gt.type === CONTENT_TYPE_BANNER && (
-        <>
-          <p className="ghi-chu">{BANNER_COVER_NOTICE}</p>
-          <div className="o-nhap">
-            <label htmlFor="lien-ket-banner">Liên kết khi bấm</label>
+        <FormSection title="Thông tin chung" icon={FileText}>
+          {/* TWO SELECTS, ONE ROW from 640px — each a full column, label above, 40px (owner, 02/10/2026:
+              the selects were too narrow, label beside them). The native `<select>` is unchanged. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Loại nội dung" htmlFor="loai-noi-dung" kind="select" icon={Shapes} grow="auto">
+              <select
+                id="loai-noi-dung"
+                value={gt.type === "" ? LOAI_MAC_DINH : gt.type}
+                onChange={(e) => datGT({ ...gt, type: e.target.value })}
+              >
+                {MOI_LOAI.map((ma) => (
+                  <option key={ma} value={ma}>
+                    {nhanLoai(ma)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Danh mục" htmlFor="danh-muc-noi-dung" kind="select" icon={FolderTree} grow="auto">
+              <select
+                id="danh-muc-noi-dung"
+                value={gt.category_id}
+                onChange={(e) => datGT({ ...gt, category_id: e.target.value })}
+              >
+                <option value="">{CHUA_XEP_DANH_MUC}</option>
+                {dungCayDanhMuc(danhMuc).map((m) => (
+                  <option key={m.dm.id} value={m.dm.id}>
+                    {nhanMucDanhMuc(m)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Tiêu đề *" htmlFor="tieu-de-noi-dung" grow="auto">
             <input
-              id="lien-ket-banner"
-              name="lien-ket-banner"
-              value={gt.link_to}
-              maxLength={LINK_TO_MAX_CHARS}
-              placeholder="/tin-tuc hoặc https://"
+              id="tieu-de-noi-dung"
+              name="tieu-de-noi-dung"
+              value={gt.title}
+              maxLength={TIEU_DE_TOI_DA}
               autoComplete="off"
-              list="lien-ket-banner-duong-app"
-              aria-describedby={
-                bannerLinkWarning === null ? "lien-ket-banner-goi-y" : "lien-ket-banner-goi-y lien-ket-banner-canh-bao"
-              }
-              onChange={(e) => datGT({ ...gt, link_to: e.target.value })}
+              onChange={(e) => datGT({ ...gt, title: e.target.value })}
             />
-            {/* The in-app paths the citizen Mini App can open (`BANNER_APP_PATHS`); free https:// still typed. */}
-            <datalist id="lien-ket-banner-duong-app">
-              {BANNER_APP_PATHS.map((p) => (
-                <option key={p.path} value={p.path} label={p.label} />
-              ))}
-            </datalist>
-            <p className="ghi-chu" id="lien-ket-banner-goi-y">
-              {LINK_TO_HINT} {BANNER_ARTICLE_PATH_HINT}
+          </Field>
+
+          <Field label="Tóm tắt" htmlFor="tom-tat-noi-dung" grow="auto" className="[&_textarea]:py-2.5">
+            <textarea
+              id="tom-tat-noi-dung"
+              name="tom-tat-noi-dung"
+              rows={3}
+              value={gt.summary}
+              maxLength={TOM_TAT_TOI_DA}
+              onChange={(e) => datGT({ ...gt, summary: e.target.value })}
+            />
+          </Field>
+
+          {/* :131 of the spec, ADR 0047 §6. Rendered only for the type that can carry them — the server
+              refuses an event field on any other type, and a box that is shown is a box somebody fills. */}
+          {gt.type === CONTENT_TYPE_EVENT && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Bắt đầu" htmlFor="bat-dau-su-kien" icon={CalendarClock} grow="auto">
+                  <input
+                    id="bat-dau-su-kien"
+                    name="bat-dau-su-kien"
+                    type="datetime-local"
+                    value={gt.event_starts_local}
+                    onChange={(e) => datGT({ ...gt, event_starts_local: e.target.value })}
+                  />
+                </Field>
+                <Field label="Kết thúc" htmlFor="ket-thuc-su-kien" icon={CalendarClock} grow="auto">
+                  <input
+                    id="ket-thuc-su-kien"
+                    name="ket-thuc-su-kien"
+                    type="datetime-local"
+                    value={gt.event_ends_local}
+                    onChange={(e) => datGT({ ...gt, event_ends_local: e.target.value })}
+                  />
+                </Field>
+                <p className="m-0 text-xs text-ink-500 sm:col-span-2">{EVENT_TIME_HINT}</p>
+              </div>
+              <Field label="Địa điểm" htmlFor="dia-diem-su-kien" icon={MapPin} grow="auto">
+                <input
+                  id="dia-diem-su-kien"
+                  name="dia-diem-su-kien"
+                  value={gt.event_place}
+                  maxLength={EVENT_PLACE_MAX_CHARS}
+                  autoComplete="off"
+                  onChange={(e) => datGT({ ...gt, event_place: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {gt.type === CONTENT_TYPE_VIDEO && (
+            <Field label="Liên kết video" htmlFor="lien-ket-video" icon={Video} grow="auto" hint={VIDEO_URL_HINT}>
+              <input
+                id="lien-ket-video"
+                name="lien-ket-video"
+                type="url"
+                value={gt.video_url}
+                maxLength={URL_TOI_DA}
+                placeholder="https://"
+                autoComplete="off"
+                onChange={(e) => datGT({ ...gt, video_url: e.target.value })}
+              />
+            </Field>
+          )}
+        </FormSection>
+
+        <FormSection title="Nội dung" icon={Pilcrow}>
+          <div className="flex flex-col gap-1.5">
+            <span id="than-bai-noi-dung-nhan" className="nhan-o text-xs leading-tight font-semibold text-ink-700">
+              Nội dung
+            </span>
+            {/* The editor starts from the body as it was when the form opened (`giaTriDau`), never from
+                `gt.body`: feeding its own output back in would reset the cursor on every keystroke. */}
+            <RichTextEditor
+              id="than-bai-noi-dung"
+              labelId="than-bai-noi-dung-nhan"
+              initialHtml={giaTriDau.body}
+              disabled={dangGui}
+              onChange={(body) => datGT((g) => ({ ...g, body }))}
+            />
+            <p className="ghi-chu m-0 text-xs text-ink-500" id="than-bai-noi-dung-hint">
+              {CANH_BAO_HTML_THO}
             </p>
-            {bannerLinkWarning !== null && (
-              // A WARNING, not a refusal: the server accepts any in-app path, and the Mini App may learn
-              // the screen later. The officer just must not believe it is tappable today.
-              <p className="ghi-chu" role="status" id="lien-ket-banner-canh-bao">
-                {bannerLinkWarning}
-              </p>
+            {gt.body === "" && <p className="ghi-chu m-0 text-xs text-ink-500">{THAN_BAI_RONG}</p>}
+          </div>
+        </FormSection>
+
+        <FormSection title="Ảnh, âm thanh và đính kèm" icon={ImageIcon}>
+          {gt.type === CONTENT_TYPE_BANNER && (
+            <Notice tone="info">{BANNER_COVER_NOTICE}</Notice>
+          )}
+
+          <CoverImageField
+            fileId={gt.cover_image_file_id}
+            savedFileId={hang?.cover_image_file_id ?? ""}
+            savedCover={hang?.cover_image}
+            state={cover}
+            disabled={dangGui}
+            onPick={(file) => void runCoverUpload(file, hang?.id, onCoverState)}
+            onRetry={(id) => void retryCoverCompletion(id, onCoverState)}
+            onRemove={() => {
+              setCover({ kind: "idle" });
+              datGT((g) => ({ ...g, cover_image_file_id: "" }));
+            }}
+          />
+
+          {/* ADR 0067 §4. The audio is uploaded for a SAVED broadcast: on the create form, or on an item
+              saved as another type, the officer is told to save first instead of being shown a picker the
+              server would refuse (400 / 422 `audio_only_for_truyen_thanh`). */}
+          {gt.type === CONTENT_TYPE_BROADCAST && !savedAsBroadcast && (
+            <Notice tone="neutral" icon={AudioLines} role="note">
+              {AUDIO_SAVE_FIRST}
+            </Notice>
+          )}
+          {savedAsBroadcast && (
+            <BroadcastAudioField
+              itemId={hang.id}
+              initialAudio={hang.audio ?? null}
+              currentType={gt.type}
+              disabled={dangGui}
+              onBusyChange={setAudioBusy}
+              initialState={initialAudioState}
+            />
+          )}
+
+          {/* ADR 0067 §5. Only for `Banner`: the server refuses `link_to` / `display_order` on any other type
+              (422), and a type change away from banner clears both there — so these boxes are not sent then. */}
+          {gt.type === CONTENT_TYPE_BANNER && (
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <div className="flex flex-col gap-1.5">
+                <Field label="Liên kết khi bấm" htmlFor="lien-ket-banner" icon={LinkIcon} grow="auto">
+                  <input
+                    id="lien-ket-banner"
+                    name="lien-ket-banner"
+                    value={gt.link_to}
+                    maxLength={LINK_TO_MAX_CHARS}
+                    placeholder="/tin-tuc hoặc https://"
+                    autoComplete="off"
+                    list="lien-ket-banner-duong-app"
+                    aria-describedby={
+                      bannerLinkWarning === null ? "lien-ket-banner-goi-y" : "lien-ket-banner-goi-y lien-ket-banner-canh-bao"
+                    }
+                    onChange={(e) => datGT({ ...gt, link_to: e.target.value })}
+                  />
+                </Field>
+                {/* The in-app paths the citizen Mini App can open (`BANNER_APP_PATHS`); free https:// still typed. */}
+                <datalist id="lien-ket-banner-duong-app">
+                  {BANNER_APP_PATHS.map((p) => (
+                    <option key={p.path} value={p.path} label={p.label} />
+                  ))}
+                </datalist>
+                <p className="ghi-chu m-0 text-xs text-ink-500" id="lien-ket-banner-goi-y">
+                  {LINK_TO_HINT} {BANNER_ARTICLE_PATH_HINT}
+                </p>
+                {bannerLinkWarning !== null && (
+                  // A WARNING, not a refusal: the server accepts any in-app path, and the Mini App may learn
+                  // the screen later. The officer just must not believe it is tappable today.
+                  <p className="ghi-chu m-0 text-xs text-warning-600" role="status" id="lien-ket-banner-canh-bao">
+                    {bannerLinkWarning}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Field label="Thứ tự hiển thị" htmlFor="thu-tu-banner" icon={ListOrdered} grow="auto">
+                  <input
+                    id="thu-tu-banner"
+                    name="thu-tu-banner"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={DISPLAY_ORDER_MAX}
+                    step={1}
+                    value={gt.display_order}
+                    aria-describedby="thu-tu-banner-goi-y"
+                    onChange={(e) => datGT({ ...gt, display_order: e.target.value })}
+                  />
+                </Field>
+                <p className="ghi-chu m-0 text-xs text-ink-500" id="thu-tu-banner-goi-y">
+                  {DISPLAY_ORDER_HINT}
+                </p>
+              </div>
+            </div>
+          )}
+        </FormSection>
+
+        <FormSection title="Đăng lên Mini App" icon={Send}>
+          {hang !== undefined && hang.status === "cho-duyet" && (
+            <Notice tone="info" icon={Clock} role="note">
+              {PENDING_REVIEW_HINT}
+            </Notice>
+          )}
+          <label
+            htmlFor="dang-len-mini-app"
+            // The tint follows the form's own value (no `:checked` selector: the tests read the markup for
+            // the word `checked` to know whether the box is ticked).
+            className={cn(
+              "flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 text-sm font-semibold text-ink-900",
+              gt.publish ? "border-brand-500 bg-brand-50" : "border-line-strong bg-surface",
             )}
-          </div>
-          <div className="o-nhap">
-            <label htmlFor="thu-tu-banner">Thứ tự hiển thị</label>
+          >
             <input
-              id="thu-tu-banner"
-              name="thu-tu-banner"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={DISPLAY_ORDER_MAX}
-              step={1}
-              value={gt.display_order}
-              aria-describedby="thu-tu-banner-goi-y"
-              onChange={(e) => datGT({ ...gt, display_order: e.target.value })}
-            />
-            <p className="ghi-chu" id="thu-tu-banner-goi-y">
-              {DISPLAY_ORDER_HINT}
-            </p>
-          </div>
-        </>
-      )}
+              id="dang-len-mini-app"
+              name="dang-len-mini-app"
+              type="checkbox"
+              className="size-5 shrink-0 accent-brand-600"
+              checked={gt.publish}
+              onChange={(e) => datGT({ ...gt, publish: e.target.checked })}
+            />{" "}
+            {NHAN_O_DANG}
+          </label>
+          {/* The dialog's sentence (§7) is about exactly this tick, so it stands next to it. */}
+          <Notice tone="neutral">{moTa}</Notice>
+        </FormSection>
 
-      {typeFieldError !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {typeFieldError}
-        </p>
-      )}
-
-      <div className="o-nhap">
-        {hang !== undefined && hang.status === "cho-duyet" && (
-          <p className="ghi-chu" role="note">
-            {PENDING_REVIEW_HINT}
+        {typeFieldError !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {typeFieldError}
           </p>
         )}
-        <label htmlFor="dang-len-mini-app">
-          <input
-            id="dang-len-mini-app"
-            name="dang-len-mini-app"
-            type="checkbox"
-            checked={gt.publish}
-            onChange={(e) => datGT({ ...gt, publish: e.target.checked })}
-          />{" "}
-          {NHAN_O_DANG}
-        </label>
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
       </div>
 
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      {coverBusy && <p className="ghi-chu">{COVER_WAIT_NOTE}</p>}
-      {audioBusy && <p className="ghi-chu">{AUDIO_WAIT_NOTE}</p>}
-
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
+      {/* FOOTER sticks to the bottom of the dialog: `Lưu` is reachable without scrolling to the end of a
+          long article. `type` FIRST on the native buttons — the tests read `<button type="submit"…`. */}
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
+        {coverBusy && <p className="ghi-chu m-0 mr-auto text-xs text-ink-500">{COVER_WAIT_NOTE}</p>}
+        {audioBusy && <p className="ghi-chu m-0 mr-auto text-xs text-ink-500">{AUDIO_WAIT_NOTE}</p>}
+        <button
+          type="button"
+          className={cn("nut-phu w-auto min-h-0", buttonVariants({ variant: "secondary", size: "md" }))}
+          disabled={dangGui}
+          onClick={huy}
+        >
           {NHAN_NUT_HUY}
         </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || !duDieuKien}>
-          {NHAN_NUT_LUU}
+        {/* Busy: the word becomes "Đang lưu…" with a spinner, in a button that keeps its width. */}
+        <button
+          type="submit"
+          className={cn("nut-chinh w-auto min-h-0 min-w-[7.5rem]", buttonVariants({ variant: "primary", size: "md" }))}
+          disabled={dangGui || !duDieuKien}
+          aria-busy={dangGui || undefined}
+        >
+          {dangGui && <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" />}
+          {dangGui ? SAVING_LABEL : NHAN_NUT_LUU}
         </button>
       </div>
     </form>
@@ -1366,8 +1575,15 @@ export function CoverImageField({
   const refused = state.kind === "refused" || state.kind === "retry";
 
   return (
-    <div className="o-nhap task-attachments" role="group" aria-labelledby="anh-noi-dung-nhan">
-      <span id="anh-noi-dung-nhan">Ảnh đại diện</span>
+    <div
+      className="o-nhap task-attachments m-0 flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface-muted p-4 [&_p]:m-0"
+      role="group"
+      aria-labelledby="anh-noi-dung-nhan"
+    >
+      <span id="anh-noi-dung-nhan" className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <ImagePlus aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+        Ảnh đại diện
+      </span>
 
       {showingSaved && (
         <>
@@ -1376,7 +1592,12 @@ export function CoverImageField({
             // A plain <img>, not next/image: the optimiser would fetch this presigned link server-side
             // and cache a bearer credential under the commune's own origin.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewSrc} alt={COVER_PREVIEW_ALT} width={240} />
+            <img
+              src={previewSrc}
+              alt={COVER_PREVIEW_ALT}
+              width={240}
+              className="h-auto max-w-full rounded-lg border border-line bg-surface"
+            />
           ) : (
             <p className="ghi-chu">{COVER_PREVIEW_MISSING}</p>
           )}
@@ -1405,7 +1626,7 @@ export function CoverImageField({
         {fileId === "" ? COVER_PICK_BUTTON : COVER_REPLACE_BUTTON}
         <span className="an-thi-giac"> — Ảnh đại diện</span>
       </label>
-      <p className="ghi-chu" id="anh-noi-dung-goi-y">
+      <p className="ghi-chu text-xs text-ink-500" id="anh-noi-dung-goi-y">
         {COVER_HINT}
       </p>
 
@@ -1418,14 +1639,28 @@ export function CoverImageField({
       {(state.kind === "retry" || fileId !== "") && (
         <div className="cum-nut">
           {state.kind === "retry" && (
-            <button type="button" className="nut-phu" disabled={disabled} onClick={() => onRetry(state.id)}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw aria-hidden="true" focusable="false" />}
+              disabled={disabled}
+              onClick={() => onRetry(state.id)}
+            >
               {COVER_RETRY_BUTTON}
-            </button>
+            </Button>
           )}
           {fileId !== "" && (
-            <button type="button" className="nut-phu" disabled={disabled || busy} onClick={onRemove}>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              icon={<X aria-hidden="true" focusable="false" />}
+              disabled={disabled || busy}
+              onClick={onRemove}
+            >
               {COVER_REMOVE_BUTTON}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -1446,11 +1681,17 @@ export function CoverImageField({
 export function ThongTinChiDoc({ hang }: { hang: comms_noiDungRa }) {
   const firstPublished = publishedAtLabel(hang);
   return (
-    <dl className="danh-sach-truong">
+    // `dt`/`dd` stay class-free (the tests read `<dt>…</dt><dd>…</dd>`): the frame styles them from here.
+    <dl
+      className={cn(
+        "danh-sach-truong m-0 grid gap-x-6 gap-y-3 rounded-xl border border-line bg-surface-muted p-4 sm:grid-cols-2",
+        "[&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-500 [&_dd]:m-0 [&_dd]:mt-0.5 [&_dd]:text-sm [&_dd]:text-ink-900",
+      )}
+    >
       <div>
         <dt>Trạng thái</dt>
         <dd>
-          <span className={lopChipTrangThai(hang.status)}>{nhanTrangThai(hang.status)}</span>
+          <ContentStatusBadge status={hang.status} />
         </dd>
       </div>
       <div>
@@ -1538,81 +1779,163 @@ export function FormDanhMuc({
   const cay = dungCayDanhMuc(danhMuc);
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-labelledby="tieu-de-form-danh-muc">
-      <h3 id="tieu-de-form-danh-muc">Thêm danh mục tin</h3>
+    <form
+      className="form-danh-muc mt-4 mb-0 flex flex-col gap-4 rounded-xl border border-line border-l-line bg-surface-muted p-4 [&_h3]:m-0 [&_h3]:text-[15px]"
+      onSubmit={guiNgay}
+      aria-labelledby="tieu-de-form-danh-muc"
+    >
+      <h3 id="tieu-de-form-danh-muc" className="flex items-center gap-2">
+        <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] text-brand-600" />
+        Thêm danh mục tin
+      </h3>
 
-      {cay.length === 0 && <p className="ghi-chu">{DANH_MUC_RONG}</p>}
+      {cay.length === 0 && <p className="ghi-chu m-0">{DANH_MUC_RONG}</p>}
 
-      <div className="o-nhap">
-        <label htmlFor="ten-danh-muc">Tên danh mục *</label>
-        <input
-          id="ten-danh-muc"
-          name="ten-danh-muc"
-          value={ten}
-          maxLength={TEN_DANH_MUC_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datTen(e.target.value)}
-        />
-      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Tên danh mục *" htmlFor="ten-danh-muc" grow="auto">
+          <input
+            id="ten-danh-muc"
+            name="ten-danh-muc"
+            value={ten}
+            maxLength={TEN_DANH_MUC_TOI_DA}
+            autoComplete="off"
+            onChange={(e) => datTen(e.target.value)}
+          />
+        </Field>
 
-      <div className="o-nhap">
-        <label htmlFor="slug-danh-muc">Slug *</label>
-        <input
-          id="slug-danh-muc"
-          name="slug-danh-muc"
-          value={slug}
-          maxLength={SLUG_DANH_MUC_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datSlug(e.target.value)}
-        />
+        <Field label="Slug *" htmlFor="slug-danh-muc" grow="auto">
+          <input
+            id="slug-danh-muc"
+            name="slug-danh-muc"
+            value={slug}
+            maxLength={SLUG_DANH_MUC_TOI_DA}
+            autoComplete="off"
+            onChange={(e) => datSlug(e.target.value)}
+          />
+        </Field>
         {/* MÁY CHỦ TỪ CHỐI CHỨ KHÔNG TỰ HẠ CHỮ HOA: `Chuyen-Doi-So` bị trả 400 thay vì lặng lẽ
             thành `chuyen-doi-so`, vì mã lưu xuống phải đúng mã người ta thấy lúc gõ. Nói trước
             điều đó thay vì để họ gõ xong mới biết. */}
-        <p className="ghi-chu">
+        <p className="ghi-chu m-0 sm:col-span-2">
           Chỉ gồm chữ thường a-z, số và dấu gạch ngang, ví dụ <code>chuyen-doi-so</code>. Slug đã
           cấp thì KHÔNG cấp lại, kể cả khi danh mục mang slug đó đã bị xoá.
         </p>
-      </div>
 
-      <div className="o-chon">
-        <label htmlFor="cha-danh-muc">Danh mục cha</label>
-        <select id="cha-danh-muc" value={chaID} onChange={(e) => datChaID(e.target.value)}>
-          <option value="">— Không có danh mục cha —</option>
-          {cay.map((m) => (
-            <option key={m.dm.id} value={m.dm.id}>
-              {nhanMucDanhMuc(m)}
-            </option>
-          ))}
-        </select>
-      </div>
+        <Field label="Danh mục cha" htmlFor="cha-danh-muc" kind="select" icon={FolderTree} grow="auto">
+          <select id="cha-danh-muc" value={chaID} onChange={(e) => datChaID(e.target.value)}>
+            <option value="">— Không có danh mục cha —</option>
+            {cay.map((m) => (
+              <option key={m.dm.id} value={m.dm.id}>
+                {nhanMucDanhMuc(m)}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-      <div className="o-nhap">
-        <label htmlFor="thu-tu-danh-muc">Thứ tự hiển thị</label>
-        <input
-          id="thu-tu-danh-muc"
-          name="thu-tu-danh-muc"
-          type="number"
-          min={0}
-          max={THU_TU_DANH_MUC_TOI_DA}
-          value={thuTu}
-          onChange={(e) => datThuTu(e.target.value)}
-        />
+        <Field label="Thứ tự hiển thị" htmlFor="thu-tu-danh-muc" icon={ListOrdered} grow="auto">
+          <input
+            id="thu-tu-danh-muc"
+            name="thu-tu-danh-muc"
+            type="number"
+            min={0}
+            max={THU_TU_DANH_MUC_TOI_DA}
+            value={thuTu}
+            onChange={(e) => datThuTu(e.target.value)}
+          />
+        </Field>
       </div>
 
       {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {loi}
         </p>
       )}
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          className={cn("nut-phu w-auto min-h-0", buttonVariants({ variant: "secondary", size: "md" }))}
+          disabled={dangGui}
+          onClick={huy}
+        >
           {NHAN_NUT_HUY}
         </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || !duDieuKien}>
-          {NHAN_NUT_LUU}
+        <button
+          type="submit"
+          className={cn("nut-chinh w-auto min-h-0 min-w-[7.5rem]", buttonVariants({ variant: "primary", size: "md" }))}
+          disabled={dangGui || !duDieuKien}
+          aria-busy={dangGui || undefined}
+        >
+          {dangGui && <LoaderCircle aria-hidden="true" focusable="false" className="animate-spin" />}
+          {dangGui ? SAVING_LABEL : NHAN_NUT_LUU}
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Status pill by the server's CODE (spec §7: icon + word, never colour alone). The word is still
+ * `nhanTrangThai`'s; only the look follows the code — `Chờ duyệt` is amber (waiting), `Ẩn` grey.
+ */
+function ContentStatusBadge({ status }: { status: string }) {
+  const look =
+    status === "dang-hien"
+      ? { tone: "success" as const, icon: Eye }
+      : status === STATUS_PENDING_REVIEW
+        ? { tone: "warning" as const, icon: Clock }
+        : { tone: "neutral" as const, icon: EyeOff };
+  return (
+    <Badge tone={look.tone} icon={look.icon}>
+      {nhanTrangThai(status)}
+    </Badge>
+  );
+}
+
+/** One titled group of the editor form (Thông tin chung · Nội dung · …). Presentation only. */
+function FormSection({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4 border-t border-line pt-5 first:border-t-0 first:pt-0">
+      <h4 className="m-0 flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 text-brand-600" />
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+/*
+ * LOCAL SKELETONS — plain markup, no shared component (a shared Skeleton is being built in another
+ * change; this file must not depend on it yet). Decorative: `aria-hidden`, the status sentence next to
+ * them is what a screen reader hears. Fixed widths, never random (rule 13 forbids `Math.random`).
+ */
+const SKELETON_BAR = "block h-3 rounded-full bg-line motion-safe:animate-pulse";
+const SKELETON_WIDTHS = ["w-3/5", "w-2/5", "w-1/2", "w-3/4", "w-2/5"] as const;
+
+function RowsSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex flex-col">
+      {SKELETON_WIDTHS.map((w, i) => (
+        <div key={i} className="flex h-12 items-center gap-4 border-b border-line px-4">
+          <span className={cn(SKELETON_BAR, w)} />
+          <span className={cn(SKELETON_BAR, "ml-auto w-16")} />
+          <span className={cn(SKELETON_BAR, "w-20")} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FormSkeleton() {
+  return (
+    <div aria-hidden="true" className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <span className="block h-10 rounded-control bg-line motion-safe:animate-pulse" />
+        <span className="block h-10 rounded-control bg-line motion-safe:animate-pulse" />
+      </div>
+      <span className="block h-10 rounded-control bg-line motion-safe:animate-pulse" />
+      <span className="block h-48 rounded-control bg-line motion-safe:animate-pulse" />
+    </div>
   );
 }

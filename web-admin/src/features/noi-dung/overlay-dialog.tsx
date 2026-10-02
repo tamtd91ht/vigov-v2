@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { cn } from "@/lib/cn";
+
 /**
  * The overlay of §7 ("Modal `Thêm nội dung`") and §3 ("modal cấu hình đồng bộ"): a native `<dialog>`
  * opened with `showModal()`.
@@ -25,12 +27,18 @@ import { useEffect, useRef, type ReactNode } from "react";
 export function OverlayDialog({
   titleId,
   onDismiss,
+  className,
   children,
 }: {
   /** Id of the heading inside — the dialog's accessible name. */
   titleId: string;
   /** Esc, or the browser closing the dialog. The parent decides whether it closes. */
   onDismiss: () => void;
+  /**
+   * Presentation only — e.g. `p-0` for a form that draws its own sticky header and footer, which need
+   * the dialog's scroll box to have no padding to stick flush to its edges.
+   */
+  className?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -54,7 +62,7 @@ export function OverlayDialog({
   return (
     <dialog
       ref={ref}
-      className="overlay-dialog"
+      className={cn("overlay-dialog", className)}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
