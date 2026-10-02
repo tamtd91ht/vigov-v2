@@ -493,6 +493,15 @@
       "no_confirm": [],
       "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "luu-tru-anh-nghiem-thu-dinh-kem-nhat-ky",
+      "viec": "Lưu trữ ảnh nghiệm thu của cán bộ (tối đa 5/phiếu) và đính kèm nhật ký phiếu (bảng petition_log_attachment) — migration 0027 (phản ánh đợt 02/10/2026)",
+      "bang_chung": "migrations/0027_petition_staff_files.sql: CHECK hình dạng hai mục đích (subject petition, lớp records, bucket private); trigger riêng đếm ảnh nghiệm thu (khoá phiếu FOR UPDATE, ≤5, tách khỏi đếm ảnh của dân); petition_log_attachment theo khuôn task_log_attachment 0021 (32 phân vùng băm, chỉ thêm, kiểm mục nhật ký cùng xã + cùng giao dịch + tệp đúng phiếu, đúng tác giả, đúng mục đích). core/storage/key.go hai hằng mục đích, lớp records (bằng chứng trên hồ sơ lưu trữ — không bị xoá 24 tháng như citizen-media). Chủ dự án chốt 02/10: ảnh nghiệm thu được MÃ HOÁ LẠI BỎ EXIF dù lớp records (storage.go:586 hôm nay cấm — thẻ hành vi phải nới đúng cho mục đích này). petition_staff_files_test.go. go test ./... xanh, check_khoa_duy_nhat / check_audit_actor xanh.",
+      "tiep_theo": "Thẻ hành vi: tuyến cán bộ tải ảnh nghiệm thu + đính kèm nhật ký, chặn đóng khi thiếu ảnh theo petition_settings (0028, TASK-M1b), người dân đọc ảnh nghiệm thu (lọc theo mục đích — store/petition_photo.go:19 hôm nay lọc uploaded_by='cong-dan'). Chưa quyết: cán bộ có tải petition-photo cho phiếu nhập hộ không.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

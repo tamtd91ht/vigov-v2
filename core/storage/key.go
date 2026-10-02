@@ -70,12 +70,24 @@ const (
 	// content-source, private bucket only: there is no public variant of audio (no transcoder yet,
 	// ADR 0067 Còn mở #2), so it is delivered by a short-lived presigned GET, never a public key.
 	PurposeContentAudio Purpose = "content-audio"
+	// The "after processing" photo staff upload on a petition (petitions; docs/ui-ux/09 §8.4 "SAU KHI
+	// XỬ LÝ", owner decision C of 02/10/2026). "verification" is the glossary's English for nghiệm thu
+	// (kb/00-foundation/ubiquitous-language.md), the act this photo evidences and the name of the
+	// per-commune switch that makes it mandatory. Staff-uploaded evidence that a public authority did
+	// what it committed to, so its key class is ClassRecords like PurposeTaskAttachment — never
+	// auto-purged, never public. NOT PurposePetitionPhoto: that is the citizen's, with its own count.
+	PurposePetitionVerificationPhoto Purpose = "petition-verification-photo"
+	// A file attached to a petition processing-log entry (petitions; docs/ui-ux/09 :197, :312, owner
+	// decision B of 02/10/2026). Staff-only, never shown to a citizen. The petition counterpart of
+	// PurposeTaskAttachment, and in its class for its reason: ClassRecords.
+	PurposePetitionLogAttachment Purpose = "petition-log-attachment"
 )
 
 var knownPurposes = map[Purpose]bool{
 	PurposeContentVideo: true, PurposeContentImage: true, PurposeContentAttachment: true,
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
 	PurposeTaskAttachment: true, PurposeContentAudio: true,
+	PurposePetitionVerificationPhoto: true, PurposePetitionLogAttachment: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

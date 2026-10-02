@@ -101,7 +101,7 @@ func allSeeds(t *testing.T) []seedRow {
 }
 
 // The owner's values, exactly: six of 2026-09-28 (0008), task-attachment of 2026-09-29 (0010),
-// content-audio of 2026-10-01 (0013, ADR 0067 §4).
+// content-audio of 2026-10-01 (0013, ADR 0067 §4), the two staff petition purposes of 2026-10-02 (0015).
 // These are the SEEDED values as written in each file. content-image's seed is later rewritten by
 // 0012 (TestUploadPolicyContentImageCoverChange pins that) and petition-photo's by 0014
 // (TestUploadPolicyPetitionPhotoNoHEICChange, G3: no HEIC), so their effective values are not these.
@@ -118,6 +118,11 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 		"task-attachment": {maxBytes: 52428800, mimes: []string{"application/pdf", "image/jpeg", "image/png"}, maxFiles: "NULL", file: "0010_upload_policy_seed_task_attachment.sql"},
 		// Chủ dự án chốt 01/10/2026 (ADR 0067 §4): 30 MiB, MP3/M4A, one broadcast file per item.
 		"content-audio": {maxBytes: 31457280, mimes: []string{"audio/mpeg", "audio/mp4"}, maxFiles: "1", file: "0013_upload_policy_content_audio.sql"},
+		// Chủ dự án chốt 02/10/2026 that both kinds exist (C, B); the VALUES were set by precedent the
+		// same day (0015 header): the photo = petition-photo after 0014 (10 MiB, no HEIC, 5), the log
+		// attachment = task-attachment of 0010.
+		"petition-verification-photo": {maxBytes: 10485760, mimes: []string{"image/jpeg", "image/png", "image/webp"}, maxFiles: "5", file: "0015_upload_policy_petition_staff_files.sql"},
+		"petition-log-attachment":     {maxBytes: 52428800, mimes: []string{"application/pdf", "image/jpeg", "image/png"}, maxFiles: "NULL", file: "0015_upload_policy_petition_staff_files.sql"},
 	}
 	for p, w := range want {
 		if w.file == "" {

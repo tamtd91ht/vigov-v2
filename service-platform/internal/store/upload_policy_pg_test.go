@@ -113,9 +113,9 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	// 0008 seeds six, 0010 seeds task-attachment.
-	if len(ps) != 7 {
-		t.Fatalf("policies = %d, want the 7 seeded", len(ps))
+	// 0008 seeds six, 0010 task-attachment, 0013 content-audio, 0015 the two staff petition purposes.
+	if len(ps) != 10 {
+		t.Fatalf("policies = %d, want the 10 seeded", len(ps))
 	}
 	for _, p := range ps {
 		switch p.Purpose {
@@ -124,6 +124,18 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 			if !p.FileCountLimited || p.MaxFilesPerSubject != 5 || p.MaxBytes != 10485760 ||
 				!slices.Equal(p.AllowedMIMETypes, []string{"image/jpeg", "image/png", "image/webp"}) {
 				t.Errorf("petition-photo = %+v", p)
+			}
+		case "petition-verification-photo":
+			// 0015, set by precedent 02/10/2026: petition-photo's effective values.
+			if !p.FileCountLimited || p.MaxFilesPerSubject != 5 || p.MaxBytes != 10485760 ||
+				!slices.Equal(p.AllowedMIMETypes, []string{"image/jpeg", "image/png", "image/webp"}) {
+				t.Errorf("petition-verification-photo = %+v", p)
+			}
+		case "petition-log-attachment":
+			// 0015, set by precedent 02/10/2026: task-attachment's values (0010).
+			if p.FileCountLimited || p.MaxBytes != 52428800 ||
+				!slices.Equal(p.AllowedMIMETypes, []string{"application/pdf", "image/jpeg", "image/png"}) {
+				t.Errorf("petition-log-attachment = %+v", p)
 			}
 		case "content-video":
 			if p.FileCountLimited || p.MaxBytes != 2147483648 || len(p.AllowedMIMETypes) != 2 {

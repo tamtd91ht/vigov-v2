@@ -221,6 +221,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa có bên đọc petition-photo (service-petitions TASK-03 sẽ đọc). NỢ CŨ ngoài lượt này: TestPgUploadPolicySeedAndRead còn đòi 7 chính sách / 7 dòng seeded và TestPgUploadPolicySoftDeletedIsAbsent đòi 6 — sau 0013 (content-audio) phải là 8/8/7; sẽ đỏ lần đầu chạy với Postgres thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "chinh-sach-tai-len-anh-nghiem-thu-dinh-kem-nhat-ky",
+      "viec": "Chính sách tải lên petition-verification-photo (ảnh nghiệm thu của cán bộ) và petition-log-attachment (đính kèm nhật ký phiếu) — migration 0015 + hai giá trị UploadPurpose trong platform.proto (phản ánh đợt 02/10/2026)",
+      "bang_chung": "migrations/0015_upload_policy_petition_staff_files.sql: verification-photo 10 MB jpeg/png/webp tối đa 5 (theo petition-photo sau 0014), log-attachment 50 MB pdf/jpeg/png không trần số (theo task-attachment 0010) — giá trị TẠM theo tiền lệ, ghi trong header và ADR 0047; vết upload_policy.seeded cùng câu lệnh. platform.proto UPLOAD_PURPOSE_PETITION_VERIFICATION_PHOTO=9, _PETITION_LOG_ATTACHMENT=10 (buf lint/breaking xanh). upload_policy_pg_test đếm 10 chính sách (số cũ 7 đã sai từ 0013). go test ./... xanh; TestPg* bỏ qua vì không có VIGOV_TEST_DSN.",
+      "tiep_theo": "Chưa chạy trên Postgres thật.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
