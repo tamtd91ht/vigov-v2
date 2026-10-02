@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 78e8e543
+derived_from_commit: a78dc80f
 expires: 2026-12-31
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -37,7 +37,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
 | **07** Thu – Chi ngân sách xã | 15 | 12/15 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 21 | 12/13 +8 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 30 | 13/21 +9 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 22 | 19/19 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 7 | 5/6 +1 ngoài web | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **261 tuyến** trong hợp đồng. **8** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **270 tuyến** trong hợp đồng. **8** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -81,7 +81,7 @@ một lời trấn an không có gì đứng sau.
 
 | | |
 |---|---|
-| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 12 |
+| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 13 |
 | Trong đó `citizen-app` đang gọi | 7 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
@@ -99,6 +99,7 @@ một lời trấn an không có gì đứng sau.
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/photos` | ✗ |
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion` | ✗ |
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/rating` | ✗ |
+| GET | `/api/v1/my-citizen-reports/{maTraCuu}/verification-photos` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
 gọi `/api/v1/citizen-sessions`, `/api/v1/commune-news`, `/api/v1/commune-news/categories`, `/api/v1/commune-news/{id}`, `/api/v1/commune-profiles`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
@@ -112,7 +113,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 34 | 18 | 3 | 0 |
+| `citizen-app` | 35 | 18 | 3 | 0 |
 | `core` | 27 | 1 | 1 | 1 |
 | `deploy` | 18 | 10 | 1 | 0 |
 | `platform-admin` | 4 | 0 | 1 | 0 |
@@ -121,9 +122,9 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 19 | 4 | 0 | 0 |
 | `service-identity` | 36 | 11 | 2 | 1 |
-| `service-petitions` | 37 | 16 | 4 | 0 |
+| `service-petitions` | 41 | 16 | 4 | 0 |
 | `service-platform` | 12 | 6 | 9 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 19 | 0 | 0 | 0 |
-| `web-admin` | 28 | 16 | 3 | 1 |
+| `web-admin` | 29 | 19 | 3 | 1 |
 
