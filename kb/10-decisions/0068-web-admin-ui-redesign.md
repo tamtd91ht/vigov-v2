@@ -15,6 +15,8 @@ owns_facts:
   - "topbar hiện 'Ủy ban nhân dân' làm dòng chú thích phía trên displayName của xã giữ nguyên văn — tên xã không bao giờ được ghép chuỗi"
   - "đặc tả giao diện chủ dự án cung cấp 02/10/2026 thay docs/ui-ux/15 về mặt hình thức (sidebar trắng thay navy); docs/ui-ux là bản sao yêu cầu, không sửa"
   - "làm mới giao diện được ưu tiên hơn mọi việc web-admin khác; Phản ánh đứng đầu đợt 2; đợt 1 = nền móng + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập; đợt 2 = 9 màn còn lại + bố cục thẻ trên điện thoại + rà căn hàng/trợ năng"
+  - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt ('Chưa có', @fontsource, topbar 'Ủy ban nhân dân') thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
+  - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
 ---
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
@@ -158,6 +160,39 @@ dừng ngắn rẻ hơn hợp nhất về sau.
 |---|---|
 | 1 | Nền móng (token, phông, icon, khung sidebar/topbar, bộ component dùng chung, chặn tràn ngang) + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập |
 | 2 | 9 màn còn lại — 8 màn có trên menu (Phản ánh trước, rồi Biên bản họp, Văn bản & Đơn thư, Giải ngân, Thu – Chi, Thông báo, Nội dung Mini App, Cấu hình) và trang đổi mật khẩu (`mat-khau`) — + bố cục thẻ trên điện thoại + rà căn hàng và trợ năng |
+
+### 11. Đặc tả v2: "hiện đại = ít ma sát, không phải trang trí"
+
+Chủ dự án đưa bản đặc tả thứ hai cùng ngày 02/10/2026 (`UI_UPGRADE_SPEC.md` v2 + `ROADMAP_PHASE2.md`).
+Bản v2 thắng bản đầu ở chỗ hai bản khác nhau: nền phẳng sáng, bóng rất nhẹ, **không** kính mờ
+(backdrop-blur), **không** gradient làm phong cách chính; dòng bảng 48px, tiêu đề bảng dính; thao
+tác phụ vào menu "⋯", thao tác quan trọng luôn có chữ; mỗi màn có đủ trạng thái đang tải / rỗng /
+rỗng theo bộ lọc / lỗi + Tải lại / không có quyền — chỉ những trạng thái mã nguồn đã phân biệt được.
+Ba chỗ v2 khác quyết định đã chốt thì **quyết định đã chốt thắng**: huy hiệu "Chưa có" (§6, v2 viết
+"Sắp có"), phông `@fontsource` (§2, v2 viết `next/font`), topbar "Ủy ban nhân dân" + tên xã nguyên
+văn (§7). Các mục của `ROADMAP_PHASE2.md` (tìm kiếm toàn hệ thống, lịch sử thao tác, xuất Excel,
+chọn nhiều dòng, ẩn/hiện cột, tổng số bản ghi, trợ lý AI, biểu đồ, chế độ tối…) **không** làm trong
+đợt này — giao diện chỉ chừa chỗ (khoảng giữa topbar, khe phải của Toolbar, khe metadata của
+PageHeader, mọi màu qua token).
+
+**Vì sao:** đây là cơ quan nhà nước; hiệu ứng trang trí làm mất vẻ trang trọng mà không bớt việc
+nào cho cán bộ.
+
+### 12. Thanh lọc: ô tìm bên trái, chỉ hiện bộ lọc chính, còn lại sau nút "Bộ lọc"
+
+Chủ dự án chốt 02/10/2026, sau khi xem thanh lọc sổ văn bản đến (ô cao thấp lệch nhau, ô tìm nhảy
+lên trên): áp dụng cho **mọi** thanh lọc của web-admin.
+
+| Quy tắc | Nội dung |
+|---|---|
+| Hàng chính | Ô tìm kiếm **đứng đầu, bên trái**, giãn rộng; tiếp theo tối đa 2 bộ lọc quyết định nhất (năm/kỳ của sổ, rồi trạng thái); nút "Bộ lọc" ở cuối hàng |
+| Căn hàng | Mọi ô cao bằng nhau (40px), nhãn đặt trên ô cùng một kiểu, cạnh dưới thẳng hàng |
+| Phần mở rộng | Các bộ lọc còn lại xếp lưới cột đều, mở bằng nút "Bộ lọc" |
+| Bộ lọc ẩn đang dùng | Nút ghi "Bộ lọc · N" (N = số bộ lọc ẩn khác mặc định) và phần mở rộng mở sẵn |
+| Hàng ≤ 3 ô | Không có nút "Bộ lọc"; ô tìm vẫn đứng đầu, vẫn căn hàng |
+
+**Vì sao số đếm trên nút là bắt buộc:** một bộ lọc đang chọn mà bị giấu thì danh sách rỗng trông
+như "chưa có văn bản nào" — cán bộ kết luận sai rằng văn bản chưa vào sổ.
 
 ## Hệ quả
 
