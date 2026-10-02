@@ -190,7 +190,8 @@ pipeline {
             PETITIONS_HTTP_ADDR=http://vigov-service-petitions:8080 \
             FINANCE_HTTP_ADDR=http://vigov-service-finance:8080 \
             COMMS_HTTP_ADDR=http://vigov-service-comms:8080 \
-            REPORTING_HTTP_ADDR=http://vigov-service-reporting:8080
+            REPORTING_HTTP_ADDR=http://vigov-service-reporting:8080 \
+            PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080
         '''
         // `*=` — mọi container: trên cụm, container của Deployment này tên `vigov-service-reporting`.
         sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'

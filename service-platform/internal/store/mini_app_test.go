@@ -26,13 +26,26 @@ func TestTruyVanMiniAppLoaiDongTatVaDongXoaMem(t *testing.T) {
 }
 
 func TestHoSoHienThiLoaiDongXoaMemVaQuetDungThuTu(t *testing.T) {
-	if !strings.Contains(duoiHoSoHienThi, "deleted_at IS NULL") {
-		t.Errorf("đọc hồ sơ hiển thị không loại dòng xoá mềm: %q", duoiHoSoHienThi)
+	// Soft-deleted profile rows AND soft-deleted / unfinished / wrong-purpose image files are excluded;
+	// every joined table is pinned to the commune ($1) — QueryJoin's contract.
+	for _, clause := range []string{
+		"WHERE h.tenant_id = $1 AND h.deleted_at IS NULL",
+		"l.tenant_id = $1 AND l.id = h.logo_file_id",
+		"l.purpose = 'tenant-logo' AND l.status = 'ready' AND l.deleted_at IS NULL",
+		"b.tenant_id = $1 AND b.id = h.web_admin_banner_file_id",
+		"b.purpose = 'tenant-banner' AND b.status = 'ready' AND b.deleted_at IS NULL",
+	} {
+		if !strings.Contains(profileReadStmt, clause) {
+			t.Errorf("profile read lacks %q:\n%s", clause, profileReadStmt)
+		}
 	}
-	// The column list is positional — see Doc.
-	const muon = `dia_chi_tru_so, COALESCE(logo_url, ''), duong_day_nong, gio_lam_viec_hien_thi, gioi_thieu`
-	if cotHoSoHienThi != muon {
-		t.Fatalf("thứ tự cột = %q, muốn %q — Doc quét theo VỊ TRÍ", cotHoSoHienThi, muon)
+	// The column list is positional — see Doc. logo_url stays its own column and is never the source
+	// of the logo key (ADR 0069: no fallback to the typed URL).
+	const cols = `SELECT h.dia_chi_tru_so, COALESCE(h.logo_url, ''), h.duong_day_nong,
+	h.gio_lam_viec_hien_thi, h.gioi_thieu,
+	COALESCE(l.public_object_key, ''), COALESCE(b.public_object_key, '')`
+	if !strings.HasPrefix(profileReadStmt, cols) {
+		t.Fatalf("column order changed — Doc scans by POSITION:\n%s", profileReadStmt)
 	}
 }
 

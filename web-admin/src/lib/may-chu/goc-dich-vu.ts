@@ -29,6 +29,8 @@ const BIEN_GOC: { readonly [K in DichVuAPI]: { readonly bien: string; readonly m
   finance: { bien: "FINANCE_HTTP_ADDR", macDinh: "http://finance:8080" },
   comms: { bien: "COMMS_HTTP_ADDR", macDinh: "http://comms:8080" },
   reporting: { bien: "REPORTING_HTTP_ADDR", macDinh: "http://reporting:8080" },
+  // Since 02/10/2026 (ADR 0069): the commune's logo / web-admin banner settings, /api/v1/commune-branding.
+  platform: { bien: "PLATFORM_HTTP_ADDR", macDinh: "http://platform:8080" },
 };
 
 /**

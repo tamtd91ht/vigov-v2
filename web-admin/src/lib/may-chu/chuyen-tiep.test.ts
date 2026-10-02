@@ -24,6 +24,7 @@ const BIEN = [
   "FINANCE_HTTP_ADDR",
   "COMMS_HTTP_ADDR",
   "REPORTING_HTTP_ADDR",
+  "PLATFORM_HTTP_ADDR",
 ] as const;
 
 type DaNhan = { dichVu: string; method: string; url: string; headers: IncomingHttpHeaders; than: Buffer };
@@ -70,6 +71,7 @@ beforeAll(async () => {
     ["FINANCE_HTTP_ADDR", "finance"],
     ["COMMS_HTTP_ADDR", "comms"],
     ["REPORTING_HTTP_ADDR", "reporting"],
+    ["PLATFORM_HTTP_ADDR", "platform"],
   ] as const) {
     GOC[bien] = await dungMayGia(dv);
   }

@@ -2922,6 +2922,38 @@ export type petitions_xoaNhiemVuVao = {
   "reason": string;
 };
 
+export type platform_brandingFileOut = {
+  "id": string;
+  "mime_type": string;
+  "size_bytes": number;
+  "status": string;
+  "public_url": string;
+};
+
+export type platform_brandingPresignedPost = {
+  "url": string;
+  "fields": Record<string, string>;
+  "expires_at": string;
+};
+
+export type platform_brandingSettingsOut = {
+  "logo_public_url": string;
+  "web_admin_banner_public_url": string;
+  "updated_at"?: string | null;
+  "updated_by"?: string;
+};
+
+export type platform_brandingUploadIn = {
+  "file_name": string;
+  "content_type": string;
+  "size": number;
+};
+
+export type platform_brandingUploadOut = {
+  "file": platform_brandingFileOut;
+  "upload": platform_brandingPresignedPost;
+};
+
 export type reporting_rewordSystemMessageIn = {
   "text": string;
 };
@@ -4050,6 +4082,143 @@ export type comms_get_comms_audit_entries = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/commune-branding — Xem logo và banner web-admin hiện tại của xã (tab Cấu hình › Nhận diện xã) */
+export type platform_get_commune_branding = {
+  duongDan: "/api/v1/commune-branding";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: platform_brandingSettingsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/commune-branding/banner — Gỡ banner web-admin của xã — không còn dải banner dưới thanh trên cùng */
+export type platform_delete_commune_branding_banner = {
+  duongDan: "/api/v1/commune-branding/banner";
+  phuongThuc: "DELETE";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/commune-branding/banner-uploads — Xin tải banner web-admin của xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type platform_post_commune_branding_banner_uploads = {
+  duongDan: "/api/v1/commune-branding/banner-uploads";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: platform_brandingUploadIn;
+  phanHoi: {
+    201: platform_brandingUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/commune-branding/banner-uploads/{id}/completion — Hoàn tất tải banner web-admin — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại */
+export type platform_post_commune_branding_banner_uploads_by_id_completion = {
+  duongDan: "/api/v1/commune-branding/banner-uploads/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: platform_brandingFileOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/commune-branding/logo — Gỡ logo xã — thanh bên và màn đăng nhập quay về biểu tượng toà nhà */
+export type platform_delete_commune_branding_logo = {
+  duongDan: "/api/v1/commune-branding/logo";
+  phuongThuc: "DELETE";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/commune-branding/logo-uploads — Xin tải logo xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+export type platform_post_commune_branding_logo_uploads = {
+  duongDan: "/api/v1/commune-branding/logo-uploads";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: platform_brandingUploadIn;
+  phanHoi: {
+    201: platform_brandingUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/commune-branding/logo-uploads/{id}/completion — Hoàn tất tải logo xã — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại */
+export type platform_post_commune_branding_logo_uploads_by_id_completion = {
+  duongDan: "/api/v1/commune-branding/logo-uploads/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: platform_brandingFileOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

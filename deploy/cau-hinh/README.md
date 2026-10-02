@@ -22,6 +22,13 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 `PETITIONS_GRPC_ADDR`/`DOCUMENTS_GRPC_ADDR`, `COMMS_GRPC_ADDR`, `OBJECT_STORAGE_*`, `MALWARE_SCANNER_ADDRESS`,
 `SECRET_ENCRYPTION_KEYS`.
 
+**Trước khi rollout platform có logo/banner xã (ADR 0069, 02/10/2026):** platform nay khai thêm
+`IdentityClient`, `ObjectStore`, `PublicMedia`, `MalwareScan`, nên thiếu một trong `IDENTITY_GRPC_ADDR`
+(manifest đã có), `OBJECT_STORAGE_ENDPOINT` · `_PUBLIC_ENDPOINT` · `_BUCKET_PREFIX` ·
+`_PUBLIC_MEDIA_BASE_URL` · `MALWARE_SCANNER_ADDRESS` (common-config) hoặc `OBJECT_STORAGE_ACCESS_KEY` ·
+`_SECRET_KEY` (`platform-secrets`, cặp MinIO riêng `…/platform/*` + ghi bucket public) là pod platform
+**không khởi động** — và platform chết là mọi xã trả 404.
+
 ## 1. Secret
 
 ### `<dịch vụ>-secrets` — type `Opaque`, mỗi dịch vụ một cái
@@ -47,8 +54,8 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 | `OPERATOR_SESSION_SIGNING_KEYS` | **có (prod)** — identity, platform | `identity-secrets` · `platform-secrets` — **cùng một giá trị** | Khoá ký phiên nhà vận hành: identity ký, platform kiểm chữ ký (ADR 0048 §01/10 #2). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá ≥ 32 byte. Khác mọi khoá của `SESSION_SIGNING_KEYS` |
 | `OPERATOR_TOTP_ENCRYPTION_KEY` | **có (prod)** — identity | `identity-secrets` | Khoá mã hoá bí mật TOTP nhà vận hành. Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` |
 | `SECRET_ENCRYPTION_KEYS` | **có (prod)** — comms, identity | `comms-secrets` · `identity-secrets` | Khoá mã hoá bí mật riêng của từng xã trong CSDL (ADR 0009): comms niêm mật khẩu máy chủ thư, identity niêm secret Zalo của app riêng từng xã (ADR 0066). Tự sinh | `<khoá mới>,<khoá cũ>`, mỗi khoá `openssl rand -base64 32` — **mỗi Secret một giá trị riêng** (hai CSDL, hai bộ khoá dữ liệu). **Sao lưu riêng trước khi lưu bí mật đầu tiên** — mất là mất hết |
-| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions, comms | `petitions-secrets` · `comms-secrets` — **mỗi Secret một cặp khác** | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ `…/<dịch vụ>/*` của môi trường; comms còn cần ghi bucket public (bản dẫn xuất ảnh bìa, ADR 0052 §11) | access key MinIO riêng của dịch vụ |
-| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions, comms | `petitions-secrets` · `comms-secrets` | Nửa kia của cặp trên | secret key đi cặp |
+| `OBJECT_STORAGE_ACCESS_KEY` | **có (prod)** — petitions, comms, platform (từ 02/10/2026) | `petitions-secrets` · `comms-secrets` · `platform-secrets` — **mỗi Secret một cặp khác** | Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (`mc admin user add`), policy chỉ `…/<dịch vụ>/*` của môi trường; comms và platform còn cần ghi bucket public (bản dẫn xuất ảnh bìa; logo + banner web-admin của xã, ADR 0052 §11, ADR 0069) | access key MinIO riêng của dịch vụ |
+| `OBJECT_STORAGE_SECRET_KEY` | **có (prod)** — petitions, comms, platform | `petitions-secrets` · `comms-secrets` · `platform-secrets` | Nửa kia của cặp trên | secret key đi cặp |
 
 **Việc cần làm trên cụm đang chạy — `SESSION_SIGNING_KEYS`:** chỉ để ở `identity-secrets`. **Xoá key
 này khỏi** `platform-secrets`, `documents-secrets`, `finance-secrets`, `petitions-secrets`,
@@ -74,12 +81,12 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | `TRUSTED_PROXY_CIDRS` | **có (prod)** — mọi dịch vụ | Dải IP Pod của ingress-nginx và web-admin — trạm được tin khi báo IP người dùng qua `X-Forwarded-For`; thiếu thì vết kiểm toán ghi IP pod thay vì IP người thao tác. Cách lấy: ngay dưới bảng | dải IP pod ingress-nginx và web-admin, vd `10.42.0.0/16` |
 | `CITIZEN_CORS_ALLOWED_ORIGINS` | **có (prod)** — identity, petitions, comms | Miền Zalo Mini App được gọi API công dân (CORS). Chép đúng giá trị bên phải | `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me` |
 | `CITIZEN_SESSION_TTL` | không — mặc định `720h` | Thời hạn phiên công dân | `720h` |
-| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions, comms | MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin (ADR 0052). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
-| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions, comms | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
-| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App dựng từ đây. Thiếu thì comms **không khởi động** ở prod/staging. Người vận hành MinIO: tạo bucket `<tiền tố>-public` trong MinIO đang có, chỉ `GetObject` ẩn danh — lệnh ở mục 6, "Bucket media công khai" | `<OBJECT_STORAGE_PUBLIC_ENDPOINT>/vigov-prod-public` — **không** phải `OBJECT_STORAGE_ENDPOINT` |
+| `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions, comms, platform | MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin, logo/banner xã (ADR 0052, ADR 0069). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions, comms, platform | MinIO trình duyệt thấy, nằm trong presigned URL. Người vận hành MinIO | `https://<minio trình duyệt thấy>` |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026), platform (từ 02/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App và `logo_public_url` / `web_admin_banner_public_url` của xã dựng từ đây. Thiếu thì comms và platform **không khởi động** ở prod/staging. Người vận hành MinIO: tạo bucket `<tiền tố>-public` trong MinIO đang có, chỉ `GetObject` ẩn danh — lệnh ở mục 6, "Bucket media công khai" | `<OBJECT_STORAGE_PUBLIC_ENDPOINT>/vigov-prod-public` — **không** phải `OBJECT_STORAGE_ENDPOINT` |
 | `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
-| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions, comms | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
-| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions, comms | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
+| `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions, comms, platform | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
+| `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions, comms, platform | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
 
 **Lấy `TRUSTED_PROXY_CIDRS`:**
 
@@ -99,7 +106,7 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 |---|---|---|---|---|
 | `LISTEN_ADDR` | không — mặc định `:8080` | cả 7 | Cổng REST | `:8080` |
 | `PLATFORM_GRPC_ADDR` | **có (prod)** — identity, documents, finance, petitions, comms, reporting | 6 dịch vụ trừ `platform` | gRPC của platform — phân giải tên miền ra xã. Tên Service + `9090` | `platform:9090` |
-| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting | 5 dịch vụ trừ `identity` và `platform` | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090`. Platform **không** dùng biến này từ 01/10/2026: phiên vận hành đi cổng riêng, xem `IDENTITY_OPERATOR_GRPC_ADDR` | `identity:9090` |
+| `IDENTITY_GRPC_ADDR` | **có (prod)** — documents, finance, petitions, comms, reporting, platform (từ 02/10/2026) | 6 dịch vụ trừ `identity` (manifest platform đã đặt sẵn) | gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + `9090`. Platform dùng lại biến này từ 02/10/2026 cho tuyến logo + banner web-admin của xã (ADR 0069, quyền `admin.org`); phiên vận hành vẫn đi cổng riêng, xem `IDENTITY_OPERATOR_GRPC_ADDR` | `identity:9090` |
 | `IDENTITY_OPERATOR_GRPC_ADDR` | **có (prod)** — platform | `vigov-service-platform` **chỉ nơi này** | gRPC `OperatorService` của identity — tra / mở phiên vận hành (ADR 0048 §01/10 #2; cổng riêng chốt 01/10/2026). Cổng `9093`, **không** phải `9090`: 9090 nhận năm dịch vụ cán bộ, 9093 chỉ nhận platform (quy tắc 11 của `deploy/base/mang/netpol.yaml`). Danh sách `host:port[,host:port]` | `identity:9093` — khớp cổng `grpc-operator` của Deployment/Service identity |
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của documents — như trên | `documents:9090` |

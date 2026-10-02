@@ -39,6 +39,22 @@ type moiTruong struct {
 // produce a host outside the `*.<DuoiAPI>` wildcard and a TLS error nobody could trace.
 var nhanDNS = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
 
+// servicesWithoutAPIHost are the services that get no public `<service>.<api_suffix>` host, each with
+// the reason. A per-service host rule is `path: /` — it forwards EVERY path of that pod's REST port.
+//
+//	platform  its REST port ALSO serves the operator realm (ADR 0048), separated from the commune chain
+//	          only by an in-process Host comparison against OPERATOR_HOST. A public `/` rule would put
+//	          /api/v1/operator-sessions one spoofed Host (or one OPERATOR_HOST misconfiguration) away from
+//	          the internet — exactly what ADR 0048 #6(c) keeps off the generated Ingress. Its only commune
+//	          routes (ADR 0069, /api/v1/commune-branding) are staff routes, and staff reach them through
+//	          web-admin in-cluster (PLATFORM_HTTP_ADDR); it has no citizen or public route at all.
+//
+// Adding a citizen/public route to platform is therefore a decision, not a generator run: it needs its
+// own path-scoped rule and an ADR, never this entry removed.
+var servicesWithoutAPIHost = map[string]string{
+	"platform": "REST port shared with the operator realm (ADR 0048 #6(c)); staff-only commune routes (ADR 0069)",
+}
+
 // hostDichVu is one per-service host rule: the service, its REST port name, and the resource
 // prefixes it owns (rendered as a comment only — the host rule itself routes `/`).
 type hostDichVu struct {
@@ -51,10 +67,16 @@ type hostDichVu struct {
 // web proxy table is rendered from. No hand list: a service gets a host the day the contract
 // gives it a route, and loses it the day it has none. Sorted by name, so rule indices are
 // deterministic — the overlays address rules by index.
+//
+// A service in servicesWithoutAPIHost gets NO host rule: its commune routes are reached only through
+// web-admin's in-cluster gateway (dinh-tuyen.gen.ts), never from the internet.
 func cacHostDichVu(luats []luatIngress) ([]hostDichVu, error) {
 	theoTen := map[string]*hostDichVu{}
 	for _, l := range luats {
 		if l.BatHet {
+			continue
+		}
+		if _, skip := servicesWithoutAPIHost[l.DichVu]; skip {
 			continue
 		}
 		if !nhanDNS.MatchString(l.DichVu) {

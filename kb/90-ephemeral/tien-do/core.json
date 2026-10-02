@@ -250,6 +250,14 @@
       "bang_chung": "core/storage/key.go (hằng + knownPurposes). Đối xứng với UPLOAD_PURPOSE_TENANT_BANNER = 11 trong platform.proto. 02/10/2026: go test ./core/... xanh (gồm phép so enum <-> danh sách storage hai chiều).",
       "no_confirm": [],
       "tiep_theo": "Đỏ có chủ đích ở service-platform/internal/store TestUploadPolicyPurposeCheckMatchesStorage cho tới khi migration platform thêm 'tenant-banner' vào CHECK và gieo dòng giới hạn (≤ 2 MB, PNG/WebP/JPEG, không HEIC — ADR 0069 #5). core/platformclient.TenantProfile chưa mang hai trường mới — việc của bước service."
+    },
+    {
+      "id": "imaging-png-giu-alpha-banner-1600",
+      "viec": "core/imaging: RenderPNGSquare (logo xã — PNG vuông, GIỮ nền trong, đệm không cắt, không metadata) và RenderJPEGWidth (banner web-admin — đúng chiều rộng, giữ tỉ lệ, trần chiều cao) cho ADR 0069 #4, #5; core/storage ghi luồng (d) của PutServerProduced",
+      "trang_thai": "dang_lam",
+      "bang_chung": "02/10/2026 (TASK-3, chưa commit): core/imaging/imaging.go thêm hai hàm + scaleLongerTo; core/imaging/render_branding_test.go (alpha pixel = 0 sau mã hoá lại, 512x512, đệm logo ngang, 1600xN đúng tỉ lệ, ca cao vượt trần, tham số vô lý bị từ chối). Không thêm phụ thuộc: golang.org/x/image v0.46.0 đã có sẵn trong core/go.mod (giải mã WebP + nhân thu nhỏ); service-platform/go.mod nhận nó dạng indirect qua go mod tidy. core/storage/storage.go chỉ sửa chú thích PutServerProduced (bốn luồng). go test ./core/imaging rc=0; make check rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "Commit cùng TASK-3 của service-platform (là bên gọi duy nhất)."
     }
   ]
 }

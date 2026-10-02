@@ -25,10 +25,17 @@ import (
 	platformv1 "github.com/vihat/vigov/core/gen/vigov/platform/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/identityclient"
+	"github.com/vihat/vigov/core/malwarescan"
 	"github.com/vihat/vigov/core/migrate"
+	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/staffauth"
+	"github.com/vihat/vigov/core/storage"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	svcapp "github.com/vihat/vigov/service-platform/internal/app"
 	svcgrpc "github.com/vihat/vigov/service-platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-platform/internal/http"
 	svcstore "github.com/vihat/vigov/service-platform/internal/store"
@@ -47,14 +54,29 @@ import (
 // IDENTITY_OPERATOR_GRPC_ADDR, REDIS_DSN and OPERATOR_SESSION_SIGNING_KEYS for platform before this
 // image rolls out.
 //
-// NOT IdentityClient any more (01/10/2026): its IDENTITY_GRPC_ADDR is identity's STAFF port 9090,
-// which no longer serves OperatorService, and platform makes no other call to identity.
+// SINCE 02/10/2026 (ADR 0069) platform takes its FIRST STAFF WRITES — the commune logo and web-admin
+// banner — and so declares what every staff-facing file owner declares:
+//
+//	IdentityClient   IDENTITY_GRPC_ADDR: ResolveStaffPrincipal on identity's STAFF port 9090, the one
+//	                 way a session cookie becomes a principal here (core/staffauth, as comms/petitions).
+//	                 OperatorService stays on its own port (IDENTITY_OPERATOR_GRPC_ADDR, OperatorEdge)
+//	ObjectStore      OBJECT_STORAGE_*: the private/temp/public buckets (ADR 0052)
+//	PublicMedia      OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL: the published logo/banner URLs, also on
+//	                 GetTenantProfile (logo_public_url, web_admin_banner_public_url)
+//	MalwareScan      MALWARE_SCANNER_ADDRESS: every image is scanned before it is stored (ADR 0052 §9)
+//
+// Declared => required in staging and prod (ADR 0057): platform refuses to start there without them, and
+// that is the point — a pod that started without the scanner would refuse every upload while green.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
 	config.TenantCache,
 	config.Redis,
 	config.OperatorEdge,
+	config.IdentityClient,
+	config.ObjectStore,
+	config.PublicMedia,
+	config.MalwareScan,
 )
 
 func main() {
@@ -139,29 +161,81 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	// 4. checker — authz.Checker backed by the identity service.
-	// TODO(next): identity does not expose the permission contract yet. Until it does, no
-	// business route may be registered here: a route without a real checker is a route open to
-	// every signed-in account (rule 5, invariant 2).
+	// 4. staff authentication — session cookie -> staff principal, over gRPC to identity's STAFF port
+	//    (ResolveStaffPrincipal), exactly as comms and petitions do. This service owns no session registry
+	//    and may not import identity's (rule 2, forbidden #1). Checker is core/staffauth.Checker: it decides
+	//    from the permission set the middleware obtained for THIS request, in THIS commune.
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
+	if err != nil {
+		return fmt.Errorf("platform: không nối được dịch vụ định danh: %w", err)
+	}
+	defer dinhDanh.Close()
+
+	// Idempotency store for the two upload-request routes (idem.Required(MoKhiHong)). REDIS_DSN is
+	// required in staging/prod (config.Redis is declared); in DEV without it each route behaves per its
+	// CheDoHong. Declared as the INTERFACE and left nil: a nil *idem.RedisStore inside it would be a
+	// non-nil interface and idem would call methods on it.
+	var idemStore idem.Store
+	if cfg.RedisDSN() != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN().Lo())
+		if err != nil {
+			return fmt.Errorf("platform: không mở được Redis cho chống trùng thao tác: %w", err)
+		}
+		defer r.Close()
+		idemStore = r
+	}
+
+	// The commune's identity images (ADR 0069). Object storage and the scanner are declared, so in
+	// staging/prod config.Load already refused to start without them; in DEV they may be absent and the
+	// upload routes then answer 503 while everything else serves. DECLARED AS THE INTERFACES AND LEFT nil
+	// WHEN ABSENT, for the same nil-interface reason as idemStore.
+	kho := store.New(db)
+	hoSo := svcstore.NewHoSoHienThiStore(kho)
+	var objects svcapp.BrandingObjectStore
+	switch c, err := storage.New(cfg.ObjectStorage()); {
+	case err == nil:
+		objects = c
+	case errors.Is(err, storage.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — logo và banner của xã bị từ chối, URL ảnh trả rỗng",
+			"service", "platform", "err", err)
+	default:
+		return fmt.Errorf("platform: cấu hình kho lưu tệp không hợp lệ: %w", err)
+	}
+	var scanner svcapp.MalwareScanner
+	switch sc, err := malwarescan.New(cfg.MalwareScanner()); {
+	case err == nil:
+		scanner = sc
+	case errors.Is(err, malwarescan.ErrNotConfigured):
+		log.Warn("CẢNH BÁO: chưa cấu hình máy quét mã độc — logo và banner của xã bị từ chối",
+			"service", "platform", "err", err)
+	default:
+		return fmt.Errorf("platform: cấu hình máy quét mã độc không hợp lệ: %w", err)
+	}
+	// The upload limits are THIS service's own table (migrations 0008, 0016). They are read through the
+	// SAME core/platformclient/uploadpolicy reader every other file owner uses — same narrowing to the
+	// storage allow-list, same fail-closed answers, same 60 s cache — fed in-process by this service's
+	// own ListUploadPolicies handler instead of a network hop to itself (localUploadPolicies).
+	policyReader := svcstore.NewUploadPolicyStore(db)
+	fields := svcstore.NewPetitionFieldStore(db)
+	policies := uploadpolicy.New(localUploadPolicies{srv: svcgrpc.NewServer(svcgrpc.Deps{
+		Dir: danhBa, Apps: danhBa, HoSo: hoSo, Policies: policyReader, Fields: fields,
+	}, log)}, log)
+	branding := svcapp.NewBranding(kho, svcstore.NewStoredFileStore(kho), hoSo, objects, scanner, policies, log)
 
 	// 5. consumers — event handlers; each refuses a message with no commune.
 	// TODO(next): no events published yet.
 
 	mux := http.NewServeMux()
 
-	svchttp.Register(mux, svchttp.Deps{})
+	svchttp.Register(mux, svchttp.Deps{
+		Checker:  staffauth.Checker{},
+		Branding: branding,
+		URLs:     branding,
+		Log:      log,
+	})
 
-	// The edge chain. Order matters and is not negotiable:
-	//   StripTenantHeaders  a client naming its own commune is a client granting itself access
-	//   Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
-	//   TenantMiddleware    resolves Host -> commune; unknown Host returns 404, never a default
-	//
-	// Recover sits OUTSIDE TenantMiddleware so a panic raised while resolving the commune is
-	// still caught; it sits INSIDE StripTenantHeaders because stripping cannot panic.
-	var h http.Handler = mux
-	h = httpx.TenantMiddleware(directory)(h)
-	h = httpx.Recover(traceID)(h)
-	h = httpx.StripTenantHeaders(h)
+	// The commune-host edge chain — buildCommuneEdge, below, says why each layer sits where it does.
+	h := buildCommuneEdge(mux, directory, dinhDanh, idemStore, log)
 
 	// The OPERATOR edge (operator_edge.go): its own chain for Host == OPERATOR_HOST, or nothing at
 	// all when OPERATOR_HOST is unset. Its registry writes go through the SCOPED store, each one
@@ -253,12 +327,16 @@ func run(log *slog.Logger) error {
 	// they get their own raw-handle reader — not the directory, which reads only the registry. The
 	// tier-1 petition field codes (migration 0011, ADR 0060) are the same kind of table and get the
 	// same kind of reader.
+	//
+	// URLs builds logo_public_url / web_admin_banner_public_url from OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL
+	// (the branding use case; "" when object storage is not configured — never a guessed URL).
 	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
 		Dir:      danhBa,
 		Apps:     danhBa,
-		HoSo:     svcstore.NewHoSoHienThiStore(store.New(db)),
-		Policies: svcstore.NewUploadPolicyStore(db),
-		Fields:   svcstore.NewPetitionFieldStore(db),
+		HoSo:     hoSo,
+		Policies: policyReader,
+		Fields:   fields,
+		URLs:     branding,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())
@@ -357,6 +435,47 @@ func dungGRPCServer(khoaGoi secret.Secret, dv svcgrpc.Deps, log *slog.Logger) *g
 	)
 	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(dv, log))
 	return srv
+}
+
+// buildCommuneEdge builds the COMMUNE-HOST chain. A NAMED FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN:
+// core/staffauth proves what its middleware does, but only a test of THIS function sees whether this
+// binary installs it — and without it every staff request answers 401, with nothing else turning red.
+//
+// ORDER MATTERS AND IS NOT NEGOTIABLE, outermost first:
+//
+//	StripTenantHeaders  a client naming its own commune is a client granting itself access
+//	Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
+//	TenantMiddleware    resolves Host -> commune; unknown Host returns 404, never a default
+//	idem.Middleware     INSIDE TenantMiddleware: the idempotency key is prefixed with the commune
+//	                    (rule 1, invariant 7) — outside it two communes would share one key space
+//	staffauth           rebuilds authz.Principal by asking identity; INSIDE TenantMiddleware, because
+//	                    the outgoing call carries the commune from the context and identity compares
+//	                    it with the commune inside the session (rule 1, invariant 8)
+//
+// Recover sits OUTSIDE TenantMiddleware so a panic raised while resolving the commune is still caught;
+// it sits INSIDE StripTenantHeaders because stripping cannot panic.
+func buildCommuneEdge(mux http.Handler, dir tenant.Directory, staff staffauth.Resolver, idemStore idem.Store,
+	log *slog.Logger) http.Handler {
+
+	h := mux
+	h = staffauth.Middleware(staff, log)(h)
+	h = idem.Middleware(idemStore, log)(h)
+	h = httpx.TenantMiddleware(dir)(h)
+	h = httpx.Recover(traceID)(h)
+	h = httpx.StripTenantHeaders(h)
+	return h
+}
+
+// localUploadPolicies feeds uploadpolicy.Reader from this service's OWN ListUploadPolicies handler,
+// in-process. The reader's contract is the gRPC client's; the handler's answer is exactly what every
+// other service receives over the wire, so the narrowing and the fail-closed rules are one code path.
+// The handler reads no commune (upload_policy.go), and the reader requires one in ctx — the HTTP edge
+// has resolved it from Host before any upload route runs.
+type localUploadPolicies struct{ srv *svcgrpc.Server }
+
+func (l localUploadPolicies) ListUploadPolicies(ctx context.Context, in *platformv1.ListUploadPoliciesRequest,
+	_ ...grpc.CallOption) (*platformv1.ListUploadPoliciesResponse, error) {
+	return l.srv.ListUploadPolicies(ctx, in)
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

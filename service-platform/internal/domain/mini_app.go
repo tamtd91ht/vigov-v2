@@ -50,4 +50,10 @@ type HoSoHienThi struct {
 	DuongDayNong      string // official office number — public-service information (open question #16)
 	GioLamViecHienThi string
 	GioiThieu         string
+
+	// The PUBLIC-BUCKET KEYS of the current identity images (ADR 0069), "" unless the referenced
+	// stored_file is `ready`, live and published. Keys, not URLs: the base URL is per-environment
+	// configuration (ADR 0052 §4), applied where the profile leaves the service.
+	LogoPublicKey           string
+	WebAdminBannerPublicKey string
 }

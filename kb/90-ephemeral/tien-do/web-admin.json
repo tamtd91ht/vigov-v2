@@ -568,6 +568,14 @@
       "viec": "Bỏ chữ 'ViGov' khỏi mọi chỗ cán bộ nhìn thấy (thay bằng tên xã đang đăng nhập) và hiện phần đặc tả chưa dựng thành control thật vô hiệu có dấu '?' đúng vị trí đặc tả (ADR 0068 §13 §14, chủ dự án duyệt vị trí 02/10/2026)",
       "trang_thai": "xong",
       "bang_chung": "Commit 7bbe9864 (tiêu đề tab '<Màn> · <tên xã>' qua communePageMetadata, 404 'Hệ thống điều hành số cấp xã', khối đăng nhập, ô người gửi thư), 6dd3bc27 (câu phạm vi ngân sách + thư thử, service-finance/comms), 7e445766 (components/ui/pending-feature.tsx; menu Sổ tay/Bản đồ/Báo cáo đổi 'Chưa có' → '?'), d3d20296 (Văn bản, Biên bản), 54e3acb7 (Giải ngân, Thu-Chi), 54927d37 (Tổng quan, ô tìm kiếm, Cấu hình, Danh bạ), 8b5c37b0 (Thông báo, Phản ánh), 6b07b705 (Điểm hài lòng số thật ở Tổng quan, ô Ảnh đại diện form cán bộ, mô tả viết lại cho cán bộ đọc, xoá khối cũ). web-admin: typecheck 0, lint 0, vitest 192 tệp / 3503 test xanh 02/10/2026. Còn lại có chủ ý: issuer TOTP 'ViGov' của tài khoản vận hành (ADR 0068 §13); câu phạm vi xã đã tự sửa không ghi đè; docs/ui-ux còn chữ ViGov (đặc tả gốc, không phải giao diện)."
+    },
+    {
+      "id": "cong-api-them-platform",
+      "viec": "Cổng API web-admin biết đường tới platform (tài nguyên /api/v1/commune-branding, ADR 0069) — PLATFORM_HTTP_ADDR",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 (TASK-3, chưa commit): src/lib/may-chu/goc-dich-vu.ts thêm platform { PLATFORM_HTTP_ADDR, mặc định http://platform:8080 } — kiểu ánh xạ trên DichVuAPI đỏ cho tới khi có dòng này; chuyen-tiep.test.ts thêm vào hai danh sách; web-admin/Jenkinsfile set env PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080. dinh-tuyen.gen.ts + schema.gen.ts SINH LẠI. tsc + vitest src/lib/may-chu xanh; make check rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "TASK-5: màn Cấu hình › Nhận diện xã dùng 7 tuyến commune-branding (tasks/web/open/)."
     }
   ]
 }

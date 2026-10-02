@@ -140,8 +140,12 @@ func TestRealContractCarriesNoOperatorRoute(t *testing.T) {
 	for p, ops := range doc.Paths {
 		for m, op := range ops {
 			for _, tag := range op.Tags {
-				if tag == "platform" {
-					t.Errorf("%s %s tagged platform in the commune contract — platform has no commune REST route", m, p)
+				// ONE platform commune resource exists, by owner decision: the commune's logo and web-admin
+				// banner (ADR 0069, 02/10/2026). Any other platform path in the commune contract is still a
+				// route that reached the wrong surface — a second one needs its own ADR first.
+				if tag == "platform" && p != "/api/v1/commune-branding" &&
+					!strings.HasPrefix(p, "/api/v1/commune-branding/") {
+					t.Errorf("%s %s tagged platform in the commune contract — platform's only commune REST resource is /api/v1/commune-branding (ADR 0069)", m, p)
 				}
 			}
 			if b, _ := json.Marshal(op.Permission); strings.Contains(string(b), "operator-") {

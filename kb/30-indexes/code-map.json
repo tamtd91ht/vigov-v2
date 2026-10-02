@@ -102,6 +102,38 @@
       "kind": "func",
       "at": "service-petitions/internal/app/staff_intake.go:136"
     },
+    "app.Branding": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:238"
+    },
+    "app.BrandingFiles": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:214"
+    },
+    "app.BrandingObjectStore": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:187"
+    },
+    "app.BrandingProfiles": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:229"
+    },
+    "app.BrandingRejection": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:140"
+    },
+    "app.BrandingSettings": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:307"
+    },
+    "app.BrandingUpload": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:354"
+    },
+    "app.BrandingUploadRequest": {
+      "kind": "type",
+      "at": "service-platform/internal/app/branding.go:347"
+    },
     "app.BudgetPeriodCloseRequest": {
       "kind": "type",
       "at": "service-finance/internal/app/budget_period_close.go:69"
@@ -244,7 +276,7 @@
     },
     "app.Complete": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:376"
+      "at": "service-platform/internal/app/branding.go:489"
     },
     "app.CompleteEnrollment": {
       "kind": "func",
@@ -444,7 +476,7 @@
     },
     "app.Error": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:117"
+      "at": "service-platform/internal/app/branding.go:142"
     },
     "app.Export": {
       "kind": "func",
@@ -580,7 +612,7 @@
     },
     "app.Is": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:118"
+      "at": "service-platform/internal/app/branding.go:143"
     },
     "app.IsAutomationInputError": {
       "kind": "func",
@@ -872,7 +904,7 @@
     },
     "app.MalwareScanner": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:137"
+      "at": "service-platform/internal/app/branding.go:204"
     },
     "app.MapAssetTypeImportRejected": {
       "kind": "type",
@@ -937,6 +969,10 @@
     "app.NewAutomationRunner": {
       "kind": "func",
       "at": "service-petitions/internal/app/automation_runner.go:113"
+    },
+    "app.NewBranding": {
+      "kind": "func",
+      "at": "service-platform/internal/app/branding.go:259"
     },
     "app.NewCapitalPlanCategoryImporter": {
       "kind": "func",
@@ -1494,6 +1530,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/content_cover.go:826"
     },
+    "app.PublicURL": {
+      "kind": "func",
+      "at": "service-platform/internal/app/branding.go:332"
+    },
     "app.PublishMany": {
       "kind": "func",
       "at": "service-identity/internal/app/danh_ba_can_bo.go:1035"
@@ -1556,7 +1596,7 @@
     },
     "app.Remove": {
       "kind": "func",
-      "at": "service-identity/internal/app/org_unit_delete.go:94"
+      "at": "service-platform/internal/app/branding.go:757"
     },
     "app.ReopenBudgetPeriodClose": {
       "kind": "func",
@@ -1568,7 +1608,7 @@
     },
     "app.RequestUpload": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:248"
+      "at": "service-platform/internal/app/branding.go:362"
     },
     "app.ResetMFA": {
       "kind": "func",
@@ -1712,7 +1752,7 @@
     },
     "app.Settings": {
       "kind": "func",
-      "at": "service-comms/internal/app/portal_sync_admin.go:121"
+      "at": "service-platform/internal/app/branding.go:316"
     },
     "app.SignIn": {
       "kind": "func",
@@ -2012,7 +2052,7 @@
     },
     "app.UploadPolicies": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:142"
+      "at": "service-platform/internal/app/branding.go:209"
     },
     "app.VanBanDen": {
       "kind": "type",
@@ -2998,6 +3038,14 @@
       "kind": "type",
       "at": "service-identity/internal/domain/bo_phan.go:10"
     },
+    "domain.BrandingImage": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/branding.go:71"
+    },
+    "domain.BrandingView": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/branding.go:140"
+    },
     "domain.BudgetPeriodClose": {
       "kind": "type",
       "at": "service-finance/internal/domain/budget_period_close.go:30"
@@ -3052,7 +3100,7 @@
     },
     "domain.CanMoveTo": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/stored_file.go:62"
+      "at": "service-platform/internal/domain/branding.go:51"
     },
     "domain.CapChongNhau": {
       "kind": "type",
@@ -3530,6 +3578,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/content_cover.go:130"
     },
+    "domain.CleanFileName": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/branding.go:172"
+    },
     "domain.CleanRecipients": {
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:171"
@@ -3845,6 +3897,10 @@
     "domain.FieldOption": {
       "kind": "type",
       "at": "service-comms/internal/domain/map_field_schema.go:39"
+    },
+    "domain.FileID": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/branding.go:130"
     },
     "domain.FindActiveClose": {
       "kind": "func",
@@ -5094,6 +5150,10 @@
       "kind": "type",
       "at": "service-comms/internal/domain/portal_sync.go:124"
     },
+    "domain.ProfileBranding": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/branding.go:121"
+    },
     "domain.Province": {
       "kind": "type",
       "at": "service-platform/internal/domain/commune.go:35"
@@ -5428,7 +5488,7 @@
     },
     "domain.StoredFile": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:94"
+      "at": "service-platform/internal/domain/branding.go:85"
     },
     "domain.StoredFileEdges": {
       "kind": "func",
@@ -5436,11 +5496,11 @@
     },
     "domain.StoredFileFacts": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:123"
+      "at": "service-platform/internal/domain/branding.go:114"
     },
     "domain.StoredFileStatus": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/stored_file.go:20"
+      "at": "service-platform/internal/domain/branding.go:26"
     },
     "domain.StoredFileStatuses": {
       "kind": "func",
@@ -5760,7 +5820,7 @@
     },
     "domain.Valid": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/summary_metrics.go:149"
+      "at": "service-platform/internal/domain/branding.go:79"
     },
     "domain.ValidContentStatus": {
       "kind": "func",
@@ -6004,7 +6064,7 @@
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:71"
+      "at": "service-platform/internal/grpc/server.go:77"
     },
     "grpc.Directory": {
       "kind": "type",
@@ -6012,11 +6072,11 @@
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:135"
+      "at": "service-platform/internal/grpc/server.go:147"
     },
     "grpc.GetTenantProfile": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:228"
+      "at": "service-platform/internal/grpc/server.go:245"
     },
     "grpc.HoSoHienThi": {
       "kind": "type",
@@ -6056,7 +6116,7 @@
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:93"
+      "at": "service-platform/internal/grpc/server.go:104"
     },
     "grpc.NgayLamBuDoc": {
       "kind": "type",
@@ -6104,7 +6164,7 @@
     },
     "grpc.PetitionFields": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:66"
+      "at": "service-platform/internal/grpc/server.go:72"
     },
     "grpc.PhienCongDanDoc": {
       "kind": "type",
@@ -6113,6 +6173,10 @@
     "grpc.PhienDoc": {
       "kind": "type",
       "at": "service-identity/internal/grpc/server.go:116"
+    },
+    "grpc.PublicURLs": {
+      "kind": "type",
+      "at": "service-platform/internal/grpc/server.go:60"
     },
     "grpc.QuyenDoc": {
       "kind": "type",
@@ -6148,7 +6212,7 @@
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:105"
+      "at": "service-platform/internal/grpc/server.go:117"
     },
     "grpc.ResolveLeadershipStaff": {
       "kind": "func",
@@ -6164,7 +6228,7 @@
     },
     "grpc.ResolveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:178"
+      "at": "service-platform/internal/grpc/server.go:190"
     },
     "grpc.ResolveOperatorSession": {
       "kind": "func",
@@ -6208,7 +6272,7 @@
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:80"
+      "at": "service-platform/internal/grpc/server.go:90"
     },
     "grpc.SoMiniApp": {
       "kind": "type",
@@ -6224,7 +6288,7 @@
     },
     "grpc.UploadPolicies": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:60"
+      "at": "service-platform/internal/grpc/server.go:66"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
@@ -6281,6 +6345,10 @@
     "http.BookStaffIntake": {
       "kind": "func",
       "at": "service-petitions/internal/http/staff_intake.go:90"
+    },
+    "http.BrandingActs": {
+      "kind": "type",
+      "at": "service-platform/internal/http/branding.go:26"
     },
     "http.CanBoDanhBa": {
       "kind": "type",
@@ -8128,31 +8196,39 @@
     },
     "imaging.Decode": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:247"
+      "at": "core/imaging/imaging.go:249"
     },
     "imaging.DecodeCost": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:140"
+      "at": "core/imaging/imaging.go:142"
     },
     "imaging.FitInside": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:305"
+      "at": "core/imaging/imaging.go:421"
     },
     "imaging.Header": {
       "kind": "type",
-      "at": "core/imaging/imaging.go:61"
+      "at": "core/imaging/imaging.go:63"
     },
     "imaging.JPEGOrientation": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:366"
+      "at": "core/imaging/imaging.go:482"
     },
     "imaging.ReadHeader": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:85"
+      "at": "core/imaging/imaging.go:87"
     },
     "imaging.RenderJPEG": {
       "kind": "func",
-      "at": "core/imaging/imaging.go:270"
+      "at": "core/imaging/imaging.go:272"
+    },
+    "imaging.RenderJPEGWidth": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:363"
+    },
+    "imaging.RenderPNGSquare": {
+      "kind": "func",
+      "at": "core/imaging/imaging.go:320"
     },
     "mail.Account": {
       "kind": "type",
@@ -8177,6 +8253,10 @@
     "main.Incr": {
       "kind": "func",
       "at": "service-platform/cmd/server/operator_edge.go:89"
+    },
+    "main.ListUploadPolicies": {
+      "kind": "func",
+      "at": "service-platform/cmd/server/main.go:476"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -9236,7 +9316,7 @@
     },
     "storage.ExportPath": {
       "kind": "func",
-      "at": "core/storage/key.go:183"
+      "at": "core/storage/key.go:190"
     },
     "storage.ExtForMIME": {
       "kind": "func",
@@ -9244,19 +9324,19 @@
     },
     "storage.Format": {
       "kind": "func",
-      "at": "core/storage/storage.go:732"
+      "at": "core/storage/storage.go:734"
     },
     "storage.GoString": {
       "kind": "func",
-      "at": "core/storage/storage.go:730"
+      "at": "core/storage/storage.go:732"
     },
     "storage.Key": {
       "kind": "type",
-      "at": "core/storage/key.go:138"
+      "at": "core/storage/key.go:145"
     },
     "storage.LogValue": {
       "kind": "func",
-      "at": "core/storage/storage.go:731"
+      "at": "core/storage/storage.go:733"
     },
     "storage.New": {
       "kind": "func",
@@ -9264,7 +9344,7 @@
     },
     "storage.NewObjectID": {
       "kind": "func",
-      "at": "core/storage/key.go:151"
+      "at": "core/storage/key.go:158"
     },
     "storage.ObjectInfo": {
       "kind": "type",
@@ -9276,23 +9356,23 @@
     },
     "storage.ParseExportKey": {
       "kind": "func",
-      "at": "core/storage/key.go:284"
+      "at": "core/storage/key.go:291"
     },
     "storage.ParseKey": {
       "kind": "func",
-      "at": "core/storage/key.go:227"
+      "at": "core/storage/key.go:234"
     },
     "storage.ParseUploadKey": {
       "kind": "func",
-      "at": "core/storage/key.go:275"
+      "at": "core/storage/key.go:282"
     },
     "storage.Path": {
       "kind": "func",
-      "at": "core/storage/key.go:160"
+      "at": "core/storage/key.go:167"
     },
     "storage.PresignDownload": {
       "kind": "func",
-      "at": "core/storage/storage.go:741"
+      "at": "core/storage/storage.go:743"
     },
     "storage.PresignUpload": {
       "kind": "func",
@@ -9304,7 +9384,7 @@
     },
     "storage.PresignedURL": {
       "kind": "type",
-      "at": "core/storage/storage.go:724"
+      "at": "core/storage/storage.go:726"
     },
     "storage.Produced": {
       "kind": "type",
@@ -9320,15 +9400,15 @@
     },
     "storage.PublicURL": {
       "kind": "func",
-      "at": "core/storage/storage.go:762"
+      "at": "core/storage/storage.go:764"
     },
     "storage.PublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:814"
+      "at": "core/storage/storage.go:816"
     },
     "storage.PurgeAllVersions": {
       "kind": "func",
-      "at": "core/storage/storage.go:898"
+      "at": "core/storage/storage.go:900"
     },
     "storage.Purpose": {
       "kind": "type",
@@ -9336,15 +9416,15 @@
     },
     "storage.Purposes": {
       "kind": "func",
-      "at": "core/storage/key.go:98"
+      "at": "core/storage/key.go:105"
     },
     "storage.PutServerProduced": {
       "kind": "func",
-      "at": "core/storage/storage.go:587"
+      "at": "core/storage/storage.go:589"
     },
     "storage.Read": {
       "kind": "func",
-      "at": "core/storage/storage.go:679"
+      "at": "core/storage/storage.go:681"
     },
     "storage.ReadHead": {
       "kind": "func",
@@ -9372,19 +9452,19 @@
     },
     "storage.String": {
       "kind": "func",
-      "at": "core/storage/storage.go:729"
+      "at": "core/storage/storage.go:731"
     },
     "storage.URL": {
       "kind": "func",
-      "at": "core/storage/storage.go:728"
+      "at": "core/storage/storage.go:730"
     },
     "storage.UnpublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:880"
+      "at": "core/storage/storage.go:882"
     },
     "storage.UploadPath": {
       "kind": "func",
-      "at": "core/storage/key.go:173"
+      "at": "core/storage/key.go:180"
     },
     "store.Account": {
       "kind": "func",
@@ -9498,6 +9578,10 @@
       "kind": "type",
       "at": "service-identity/internal/store/bo_phan.go:13"
     },
+    "store.BrandingView": {
+      "kind": "func",
+      "at": "service-platform/internal/store/branding.go:126"
+    },
     "store.BudgetPeriodCloseByCode": {
       "kind": "func",
       "at": "service-finance/internal/store/budget_period_close.go:130"
@@ -9516,7 +9600,7 @@
     },
     "store.ByID": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:215"
+      "at": "service-platform/internal/store/stored_file.go:86"
     },
     "store.ByIDForUpdate": {
       "kind": "func",
@@ -9746,6 +9830,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:922"
     },
+    "store.CountLiveOfPurpose": {
+      "kind": "func",
+      "at": "service-platform/internal/store/stored_file.go:242"
+    },
     "store.CountOpenHeldByOrgUnit": {
       "kind": "func",
       "at": "service-petitions/internal/store/org_unit_holdings.go:47"
@@ -9868,7 +9956,7 @@
     },
     "store.Doc": {
       "kind": "func",
-      "at": "service-platform/internal/store/ho_so_hien_thi.go:39"
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:57"
     },
     "store.DocumentsForTasks": {
       "kind": "func",
@@ -9914,6 +10002,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/residential_unit_write.go:237"
     },
+    "store.EnsureProfile": {
+      "kind": "func",
+      "at": "service-platform/internal/store/branding.go:56"
+    },
     "store.Exec": {
       "kind": "func",
       "at": "core/store/scoped.go:132"
@@ -9936,7 +10028,7 @@
     },
     "store.ForUpdate": {
       "kind": "func",
-      "at": "service-petitions/internal/store/stored_file.go:72"
+      "at": "service-platform/internal/store/stored_file.go:72"
     },
     "store.Get": {
       "kind": "func",
@@ -10012,7 +10104,7 @@
     },
     "store.HoSoHienThiStore": {
       "kind": "type",
-      "at": "service-platform/internal/store/ho_so_hien_thi.go:21"
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:23"
     },
     "store.HostHeld": {
       "kind": "func",
@@ -10048,7 +10140,7 @@
     },
     "store.InsertPending": {
       "kind": "func",
-      "at": "service-petitions/internal/store/stored_file.go:53"
+      "at": "service-platform/internal/store/stored_file.go:54"
     },
     "store.InsertRole": {
       "kind": "func",
@@ -10340,7 +10432,7 @@
     },
     "store.MarkStored": {
       "kind": "func",
-      "at": "service-petitions/internal/store/stored_file.go:130"
+      "at": "service-platform/internal/store/stored_file.go:148"
     },
     "store.MiniApp": {
       "kind": "func",
@@ -10444,7 +10536,7 @@
     },
     "store.NewHoSoHienThiStore": {
       "kind": "func",
-      "at": "service-platform/internal/store/ho_so_hien_thi.go:25"
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:27"
     },
     "store.NewKhoiNhiemVuStore": {
       "kind": "func",
@@ -10580,7 +10672,7 @@
     },
     "store.NewStoredFileStore": {
       "kind": "func",
-      "at": "service-petitions/internal/store/stored_file.go:27"
+      "at": "service-platform/internal/store/stored_file.go:35"
     },
     "store.NewSuKienDiStore": {
       "kind": "func",
@@ -10790,6 +10882,10 @@
       "kind": "type",
       "at": "service-comms/internal/store/portal_sync.go:56"
     },
+    "store.ProfileForUpdate": {
+      "kind": "func",
+      "at": "service-platform/internal/store/branding.go:39"
+    },
     "store.Provinces": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:155"
@@ -10809,6 +10905,10 @@
     "store.PublishedCategoryIDs": {
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_cong_khai.go:114"
+    },
+    "store.PublishedOfPurpose": {
+      "kind": "func",
+      "at": "service-platform/internal/store/stored_file.go:192"
     },
     "store.QuanHeCongDanXaStore": {
       "kind": "type",
@@ -10942,13 +11042,17 @@
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:380"
     },
+    "store.SetBrandingFile": {
+      "kind": "func",
+      "at": "service-platform/internal/store/branding.go:83"
+    },
     "store.SetPrimaryDomain": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:271"
     },
     "store.SetPublicObjectKey": {
       "kind": "func",
-      "at": "service-comms/internal/store/stored_file.go:175"
+      "at": "service-platform/internal/store/stored_file.go:168"
     },
     "store.SetPublicationStatus": {
       "kind": "func",
@@ -11016,7 +11120,7 @@
     },
     "store.StoredFileStore": {
       "kind": "type",
-      "at": "service-petitions/internal/store/stored_file.go:23"
+      "at": "service-platform/internal/store/stored_file.go:31"
     },
     "store.SuKienDi": {
       "kind": "type",
@@ -11208,7 +11312,7 @@
     },
     "store.Transition": {
       "kind": "func",
-      "at": "service-petitions/internal/store/stored_file.go:113"
+      "at": "service-platform/internal/store/stored_file.go:131"
     },
     "store.Tx": {
       "kind": "func",

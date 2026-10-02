@@ -162,6 +162,15 @@ func TestMoiTuyenHopDongCoDungMotLuatIngress(t *testing.T) {
 				khop = append(khop, i)
 			}
 		}
+		// A service with no public host by decision (servicesWithoutAPIHost) must have ZERO rules — its
+		// commune routes travel only through web-admin's in-cluster gateway (dinh-tuyen.gen.ts).
+		if _, none := servicesWithoutAPIHost[tuyen.DichVu]; none {
+			if len(khop) != 0 {
+				t.Errorf("tuyến %s (%s): %d quy tắc host công khai, mong 0 — %s", tuyen.Duong, tuyen.DichVu,
+					len(khop), servicesWithoutAPIHost[tuyen.DichVu])
+			}
+			continue
+		}
 		if len(khop) != 1 {
 			t.Errorf("tuyến %s (%s): %d quy tắc host %s.%s, mong đúng 1", tuyen.Duong, tuyen.DichVu, len(khop), tuyen.DichVu, apiProd)
 			continue

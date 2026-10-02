@@ -114,8 +114,16 @@ func TestBangTSKhopHostDichVuIngress(t *testing.T) {
 		tsDS = append(tsDS, d)
 	}
 	sort.Strings(tsDS)
-	if strings.Join(host, ",") != strings.Join(tsDS, ",") {
-		t.Errorf("host dịch vụ trong ingress.yaml = %v, dịch vụ trong %s = %v", host, duongTepTS, tsDS)
+	// The gateway reaches every service; the Ingress reaches every service EXCEPT those that have no
+	// public host by decision (servicesWithoutAPIHost) — those are reachable in-cluster only.
+	var tsCoHost []string
+	for _, d := range tsDS {
+		if _, none := servicesWithoutAPIHost[d]; !none {
+			tsCoHost = append(tsCoHost, d)
+		}
+	}
+	if strings.Join(host, ",") != strings.Join(tsCoHost, ",") {
+		t.Errorf("host dịch vụ trong ingress.yaml = %v, dịch vụ có host công khai trong %s = %v", host, duongTepTS, tsCoHost)
 	}
 	if strings.Join(kieu, ",") != strings.Join(tsDS, ",") {
 		t.Errorf("DichVuAPI = %v, mong đúng tập dịch vụ có dòng, đã sắp: %v", kieu, tsDS)

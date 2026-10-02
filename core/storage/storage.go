@@ -542,7 +542,9 @@ type Produced struct {
 
 // PutServerProduced writes bytes the server itself produced to dst in the PRIVATE bucket. It is
 // the only write path in this package whose bytes do not come from a client upload, and it serves
-// exactly three flows (a and b: ADR 0047 §6, approved 2026-09-30; c: owner decision 02/10/2026):
+// exactly four flows (a and b: ADR 0047 §6, approved 2026-09-30; c: owner decision 02/10/2026;
+// d: ADR 0069, 02/10/2026 — the commune logo `thumb-512.png` and web-admin banner `thumb-1600.jpg`
+// of service-platform, class content-source, the same shape as (a) and published the same way):
 //
 //	a. news cover image: the promoted original is decoded, oriented, resized and re-encoded; the
 //	   result is stored as a derivative (`thumb-1280`, class content-source) so PublishDerivative

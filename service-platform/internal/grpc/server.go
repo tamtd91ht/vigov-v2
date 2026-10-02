@@ -55,6 +55,12 @@ type HoSoHienThi interface {
 	Doc(ctx context.Context) (domain.HoSoHienThi, error)
 }
 
+// PublicURLs turns a public-bucket key into its anonymous URL, or "" — no key, object storage not
+// configured, or a key storage refuses (app.Branding.PublicURL). "" is the contract's "not set".
+type PublicURLs interface {
+	PublicURL(key string) string
+}
+
 // UploadPolicies reads the live platform-wide upload limits (migration 0008). No commune argument
 // and none in the query: the same answer for every commune today (platform.proto).
 type UploadPolicies interface {
@@ -74,6 +80,10 @@ type Deps struct {
 	HoSo     HoSoHienThi
 	Policies UploadPolicies
 	Fields   PetitionFields
+	// URLs is the ONE optional dependency: nil answers "" for both image URLs — the same answer as
+	// object storage not configured — and never a guessed URL. Optional because it is a pure function
+	// with a safe zero, unlike the readers above whose nil would be a panic on the first call.
+	URLs PublicURLs
 }
 
 // Server implements platformv1.PlatformServiceServer.
@@ -85,6 +95,7 @@ type Server struct {
 	hoSo     HoSoHienThi
 	policies UploadPolicies
 	fields   PetitionFields
+	urls     PublicURLs
 	log      *slog.Logger
 }
 
@@ -94,7 +105,8 @@ func NewServer(d Deps, log *slog.Logger) *Server {
 	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || d.Fields == nil || log == nil {
 		panic("platform grpc: NewServer thiếu phụ thuộc")
 	}
-	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, fields: d.Fields, log: log}
+	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, fields: d.Fields,
+		urls: d.URLs, log: log}
 }
 
 // ResolveHost maps an incoming Host to a commune.
@@ -225,6 +237,11 @@ func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMini
 //
 // NOT exempt: the interceptor has already refused a call without a commune, and the store reads
 // the commune from ctx. There is no request field that could name another one.
+//
+// THE TWO IMAGE URLS (ADR 0069) are OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL + the public key of the
+// current file — only when that file is `ready`, live and published (the store's join), else "".
+// A profile whose only content is branding is still a profile. logo_url keeps its deprecated meaning
+// and is NEVER the source of logo_public_url.
 func (s *Server) GetTenantProfile(ctx context.Context, _ *platformv1.GetTenantProfileRequest) (
 	*platformv1.GetTenantProfileResponse, error) {
 
@@ -243,7 +260,18 @@ func (s *Server) GetTenantProfile(ctx context.Context, _ *platformv1.GetTenantPr
 		Hotline:         hs.DuongDayNong,
 		OfficeHoursText: hs.GioLamViecHienThi,
 		Introduction:    hs.GioiThieu,
+
+		LogoPublicUrl:           s.publicURL(hs.LogoPublicKey),
+		WebAdminBannerPublicUrl: s.publicURL(hs.WebAdminBannerPublicKey),
 	}}, nil
+}
+
+// publicURL is s.urls.PublicURL, or "" when no builder is wired (Deps.URLs).
+func (s *Server) publicURL(key string) string {
+	if s.urls == nil || key == "" {
+		return ""
+	}
+	return s.urls.PublicURL(key)
 }
 
 // loi maps a directory failure to a gRPC code.

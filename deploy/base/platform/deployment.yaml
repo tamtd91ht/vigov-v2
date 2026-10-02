@@ -71,13 +71,35 @@ spec:
             # Required in prod (config.OperatorEdge, ADR 0057) even while OPERATOR_HOST is unset.
             - name: IDENTITY_OPERATOR_GRPC_ADDR
               value: identity:9093
+            # TỪ 02/10/2026 (ADR 0069 — logo + banner web-admin do xã tự tải lên, quyền admin.org):
+            # cổng CÁN BỘ 9090 của identity, nơi ResolveStaffPrincipal biến cookie phiên thành principal
+            # (`core/staffauth`, như comms/petitions). Bắt buộc ở prod (config.IdentityClient, ADR 0057).
+            # Đòi NetworkPolicy 3b + 4b cho platform → identity:9090 (`deploy/base/mang/netpol.yaml`).
+            - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
+            # GIỚI HẠN MỀM của bộ thu gom Go (runtime đọc, không phải biến của core/config): ~78% của
+            # `limits.memory: 384Mi` bên dưới. Từ 02/10/2026 pod này giải mã ảnh logo/banner (tới 96 MiB
+            # ước tính một lượt, ADR 0069); không có dòng này GC chỉ chạy theo GOGC và heap có thể vượt
+            # 384Mi trước khi GC kịp thu — OOM-kill platform là MỌI xã trả 404, vì nó phân giải Host → xã
+            # cho mọi dịch vụ. Đổi limits.memory thì đổi số này cùng lúc.
+            - { name: GOMEMLIMIT, value: "300MiB" }
           envFrom:
+            # ⚠ TỪ 02/10/2026 `common-config` phải có OBJECT_STORAGE_ENDPOINT · _PUBLIC_ENDPOINT ·
+            # _BUCKET_PREFIX · _PUBLIC_MEDIA_BASE_URL · MALWARE_SCANNER_ADDRESS (cùng khoá comms đang đọc).
+            # `configUses` khai ObjectStore, PublicMedia, MalwareScan, nên ở staging/prod thiếu một key là
+            # pod platform TỪ CHỐI KHỞI ĐỘNG và gọi tên key. Đường ra 9000/3310:
+            # NetworkPolicy `allow-platform-egress-storage`.
             - configMapRef: { name: common-config }
             # BA khoá: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.
             # KHÔNG có REDIS_DSN, và đó là sửa ngày 23/09/2026 chứ không phải chỗ sót: dịch vụ
             # này không đọc `cfg.RedisDSN` ở bất cứ đâu. Năm dịch vụ kia thì có — chúng dựng
             # kho chống trùng `core/idem` từ nó. Một khoá thừa trong Secret là một dòng người
             # vận hành phải đọc rồi tự hỏi mình có quên đặt không.
+            # (Ghi chú trên đã cũ từ 01/10: platform nay đọc REDIS_DSN — giới hạn đăng nhập vận hành, và
+            # từ 02/10 chống trùng hai tuyến xin tải ảnh nhận diện.)
+            # ⚠ TỪ 02/10/2026 (ADR 0069) Secret này PHẢI có thêm OBJECT_STORAGE_ACCESS_KEY ·
+            # OBJECT_STORAGE_SECRET_KEY — cặp khoá MinIO RIÊNG của platform, IAM chỉ `…/platform/*` ở
+            # private/temp và ghi bucket public cho bản dẫn xuất (ADR 0052 §3, §11). Chưa cấp thì pod
+            # platform không khởi động ở staging/prod.
             - secretRef:    { name: platform-secrets }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý

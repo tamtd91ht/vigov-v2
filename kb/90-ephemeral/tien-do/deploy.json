@@ -236,6 +236,14 @@
       "bang_chung": "CHƯA COMMIT. deploy/base/mang/netpol.yaml quy tắc 7c: except 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10; chú thích nói đây là lớp thứ hai sau phép kiểm lúc quay số, NetworkPolicy là phép hợp nên chỉ hẹp đường 443 của luật này. kubectl kustomize deploy/overlays/prod và staging: exit 0, except có trong bản render.",
       "tiep_theo": "Áp lên cụm cùng bản comms. Mục netpol-comms-ra-443-cong-ttdt vẫn còn nợ thay 0.0.0.0/0 bằng egress gateway / FQDN policy.",
       "no_confirm": []
+    },
+    {
+      "id": "platform-kho-tep-va-phien-can-bo",
+      "viec": "Triển khai cho platform nhận tuyến cán bộ logo/banner xã (ADR 0069): biến kho tệp / máy quét / IDENTITY_GRPC_ADDR và NetworkPolicy",
+      "trang_thai": "dang_lam",
+      "bang_chung": "02/10/2026 (TASK-3, chưa commit): deploy/base/platform/deployment.yaml env IDENTITY_GRPC_ADDR=identity:9090 + chú thích khoá phải có trong common-config / platform-secrets; deploy/base/mang/netpol.yaml quy tắc 3b thêm platform, đối tượng mới allow-platform-egress-identity-staff-grpc (9090) và allow-platform-egress-storage (9000/3310); quy tắc 11 (9093) giữ nguyên. deploy/cau-hinh/README.md: các dòng OBJECT_STORAGE_* / MALWARE_SCANNER_ADDRESS / IDENTITY_GRPC_ADDR nêu platform + đoạn 'trước khi rollout'. ingress.yaml + hai overlay SINH LẠI (make kb): luật host platform.api.vigov.vn (khuôn mọi dịch vụ; TenantMiddleware trả 404 vì là host dành riêng). make check rc=0. Sau rà soát: KHÔNG còn host công khai platform.api.vigov.vn — tools/ingress không sinh host API cho platform (servicesWithoutAPIHost: cổng REST dùng chung với miền vận hành, ADR 0048 #6(c)); ingress + overlay trở về như HEAD trừ dòng đếm tuyến. deployment platform thêm GOMEMLIMIT=300MiB (~78% của 384Mi).",
+      "no_confirm": [],
+      "tiep_theo": "Người vận hành: tạo user MinIO riêng của platform (…/platform/* ở private/temp + ghi public), đặt hai khoá vào platform-secrets, đảm bảo common-config có đủ khoá kho tệp/máy quét, áp netpol mới TRƯỚC khi lên ảnh platform; DNS/TLS cho platform.api.vigov.vn theo wildcard *.api."
     }
   ]
 }

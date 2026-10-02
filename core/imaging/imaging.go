@@ -1,11 +1,13 @@
 // Package imaging decodes an uploaded image, turns it upright by its EXIF Orientation, fits it
 // inside a square and re-encodes it as a JPEG that carries NO metadata at all.
 //
-// TWO FLOWS USE IT, in two services, which is why it lives in core and not in either service's
-// internal/ (rule 2, forbidden #1 — a service never imports another's internal package):
+// THREE SERVICES USE IT, which is why it lives in core and not in any service's internal/ (rule 2,
+// forbidden #1 — a service never imports another's internal package):
 //
 //	comms      news cover derivative `thumb-1280` (ADR 0052 "Bổ sung 30/09/2026 (lần hai)" (a))
 //	petitions  a citizen's scene photo, stored as the clean `original` (ADR 0047 G3, ADR 0052 (b))
+//	platform   the commune logo `thumb-512.png` (RenderPNGSquare, alpha KEPT) and the web-admin
+//	           banner `thumb-1600.jpg` (RenderJPEGWidth) — ADR 0069 #4, #5
 //
 // The code was written for the first flow (service-comms/internal/app/cover_image.go) and moved
 // here unchanged on 2026-10-02 when the second one arrived; comms now calls it with its own two
@@ -299,6 +301,120 @@ func RenderJPEG(src image.Image, orientation, maxSide, quality int) ([]byte, err
 		return nil, fmt.Errorf("imaging: encode JPEG: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// RenderPNGSquare orients a decoded image, scales it so its LONGER side is exactly side (up or
+// down), centres it on a fully TRANSPARENT side × side canvas and encodes it as a PNG with no
+// metadata. The commune logo (service-platform, ADR 0069 #4: "PNG vuông 512px giữ nền trong").
+//
+// WHY A SEPARATE RENDERER AND NOT A FLAG ON RenderJPEG: a logo with a transparent background
+// flattened onto white is a white box on the web-admin sidebar — the defect ADR 0069 names. JPEG
+// has no alpha channel, so the only fix is a different encoder; the flatten step is skipped here.
+//
+// PADDED, NEVER CROPPED: a seal or emblem cut at its edge is an official symbol shown wrong (an
+// incident for a public authority), while transparent padding is invisible on every background.
+// ENLARGED when smaller than side, so every consumer receives one size; a blurry upscale is visible
+// to the commune that uploaded it and is fixed by uploading a larger image.
+//
+// image/png writes no tEXt / iTXt / eXIf chunk, so nothing of the upload's metadata survives.
+func RenderPNGSquare(src image.Image, orientation, side int) ([]byte, error) {
+	if side <= 0 {
+		return nil, fmt.Errorf("imaging: side %d out of range", side)
+	}
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= 0 || h <= 0 {
+		return nil, ErrUndecodable
+	}
+	ow, oh := w, h
+	if orientation >= 5 && orientation <= 8 {
+		ow, oh = h, w
+	}
+	tw, th := scaleLongerTo(ow, oh, side)
+	sw, sh := tw, th
+	if orientation >= 5 && orientation <= 8 {
+		sw, sh = th, tw
+	}
+	// draw.Src onto a zeroed RGBA keeps every source alpha value: nothing is composited underneath.
+	scaled := image.NewRGBA(image.Rect(0, 0, sw, sh))
+	draw.BiLinear.Scale(scaled, scaled.Bounds(), src, b, draw.Src, nil)
+	upright := orient(scaled, orientation)
+
+	canvas := image.NewRGBA(image.Rect(0, 0, side, side)) // zero value = fully transparent
+	off := image.Pt((side-tw)/2, (side-th)/2)
+	draw.Draw(canvas, image.Rectangle{Min: off, Max: off.Add(image.Pt(tw, th))}, upright,
+		upright.Bounds().Min, draw.Src)
+
+	var buf bytes.Buffer
+	enc := png.Encoder{CompressionLevel: png.BestCompression}
+	if err := enc.Encode(&buf, canvas); err != nil {
+		return nil, fmt.Errorf("imaging: encode PNG: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// RenderJPEGWidth orients a decoded image, scales it to EXACTLY width pixels wide (up or down,
+// aspect kept), flattens it onto white and re-encodes it as a JPEG with no metadata. The web-admin
+// banner (service-platform, ADR 0069 #5: "chuẩn hoá về rộng 1600px").
+//
+// THE ONE BOUND ON HEIGHT: when width-scaling would make the image TALLER than maxHeight, it is fitted
+// inside width × maxHeight instead (narrower than width). Not a refusal — ADR 0069 states no aspect
+// rule and none is invented here — only a ceiling so a tall upload cannot produce an unbounded strip.
+func RenderJPEGWidth(src image.Image, orientation, width, maxHeight, quality int) ([]byte, error) {
+	if width <= 0 || maxHeight <= 0 || quality < 1 || quality > 100 {
+		return nil, fmt.Errorf("imaging: width %d / maxHeight %d / quality %d out of range",
+			width, maxHeight, quality)
+	}
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w <= 0 || h <= 0 {
+		return nil, ErrUndecodable
+	}
+	ow, oh := w, h
+	if orientation >= 5 && orientation <= 8 {
+		ow, oh = h, w
+	}
+	tw := width
+	th := int(int64(oh) * int64(width) / int64(ow))
+	if th > maxHeight {
+		th = maxHeight
+		tw = int(int64(ow) * int64(maxHeight) / int64(oh))
+	}
+	if tw < 1 {
+		tw = 1
+	}
+	if th < 1 {
+		th = 1
+	}
+	sw, sh := tw, th
+	if orientation >= 5 && orientation <= 8 {
+		sw, sh = th, tw
+	}
+	scaled := image.NewRGBA(image.Rect(0, 0, sw, sh))
+	draw.Draw(scaled, scaled.Bounds(), image.White, image.Point{}, draw.Src)
+	draw.BiLinear.Scale(scaled, scaled.Bounds(), src, b, draw.Over, nil)
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, orient(scaled, orientation), &jpeg.Options{Quality: quality}); err != nil {
+		return nil, fmt.Errorf("imaging: encode JPEG: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// scaleLongerTo returns w×h scaled (up or down) so the longer side is exactly n, never 0.
+func scaleLongerTo(w, h, n int) (int, int) {
+	if w >= h {
+		nh := int(int64(h) * int64(n) / int64(w))
+		if nh < 1 {
+			nh = 1
+		}
+		return n, nh
+	}
+	nw := int(int64(w) * int64(n) / int64(h))
+	if nw < 1 {
+		nw = 1
+	}
+	return nw, n
 }
 
 // FitInside returns w×h scaled down so the longer side is at most max, never scaled up, never 0.

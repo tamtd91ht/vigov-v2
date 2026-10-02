@@ -73,7 +73,7 @@ spec:
       ports:
         - { port: 9090, protocol: TCP }
 ---
-# 3b. identity 9090 ← CHỈ năm dịch vụ hỏi danh tính cán bộ (`identityclient`).
+# 3b. identity 9090 ← CHỈ sáu dịch vụ hỏi danh tính cán bộ (`identityclient`) — platform thêm 02/10/2026.
 #
 # Từ 01/10/2026 (người dùng chốt "Cổng riêng cho OperatorService") 9090 KHÔNG còn mang RPC vận hành:
 # OperatorService chỉ đăng ký trên cổng 9093 của identity, và chỉ quy tắc 11 cho vào 9093. Trước đó
@@ -81,9 +81,10 @@ spec:
 # OpenOperatorSession — vòng qua giới hạn theo IP của platform, giả client_ip, khoá người vận hành 12
 # giờ. NetworkPolicy chỉ phân biệt theo pod và cổng, không theo RPC: tách cổng là cách duy nhất.
 #
-# platform KHÔNG có trong danh sách này và KHÔNG cần: lời gọi duy nhất của nó tới identity là
-# OperatorService (mã: `service-platform/cmd/server/operator_edge.go` — không `identityclient.Dial`
-# nào). Cầu phiên công dân 9091 là quy tắc 8, không phải ở đây.
+# platform VÀO danh sách từ 02/10/2026 (ADR 0069): tuyến ghi cán bộ đầu tiên của nó (logo + banner
+# web-admin, quyền admin.org) cần ResolveStaffPrincipal — `identityclient.Dial` trong
+# `service-platform/cmd/server/main.go`. 9090 chỉ còn RPC cán bộ (OperatorService đã sang 9093 từ
+# 01/10), nên điều này KHÔNG mở lại lỗ quy tắc 11 đã đóng. Cầu phiên công dân 9091 là quy tắc 8.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -99,6 +100,7 @@ spec:
         - podSelector: { matchLabels: { app.kubernetes.io/name: finance } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: petitions } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: reporting } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: platform } }
       ports:
         - { port: 9090, protocol: TCP }
 ---
@@ -505,8 +507,8 @@ spec:
 # giữ được RPC: năm dịch vụ cán bộ ở quy tắc 3b tới được 9090 nhưng không tới được 9093, và 9090 trả
 # Unimplemented cho mọi RPC vận hành. Thêm 9093 vào một chính sách khác là mở lại đúng lỗ đã đóng.
 #
-# platform KHÔNG còn được vào identity:9090: nó không gọi RPC cán bộ nào (không `identityclient.Dial`
-# trong `service-platform/cmd/`).
+# platform → identity:9090 (RPC CÁN BỘ, từ 02/10/2026, ADR 0069) KHÔNG nằm ở hai đối tượng này mà ở
+# quy tắc 3b + `allow-platform-egress-identity-staff-grpc` ngay dưới: hai đối tượng này giữ đúng 9093.
 #
 # ⚠ ĐỔI CỔNG TRÊN CỤM ĐANG CHẠY: áp bản render này SỬA TẠI CHỖ hai đối tượng dưới đây (giữ TÊN cũ).
 # Thứ tự triển khai: identity (mở 9093) TRƯỚC platform (quay số 9093) — ngược lại thì trong khoảng
@@ -543,6 +545,46 @@ spec:
             matchLabels: { app.kubernetes.io/name: identity }
       ports:
         - { port: 9093, protocol: TCP }
+---
+# 11b. platform → identity gRPC 9090 (cổng CÁN BỘ): ResolveStaffPrincipal cho tuyến ghi logo + banner
+#      web-admin của xã (ADR 0069, quyền admin.org). Mặt RA của quy tắc 3b — cùng khuôn với 4b của năm
+#      dịch vụ cán bộ kia. MỘT ĐỐI TƯỢNG RIÊNG, không nới `allow-platform-egress-identity-grpc`: đối tượng
+#      ấy là kênh mang mật khẩu/TOTP của người vận hành, và đọc tên phải biết nó chỉ mở 9093.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-egress-identity-staff-grpc
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: identity }
+      ports:
+        - { port: 9090, protocol: TCP }
+---
+# 7d. Đường RA của RIÊNG platform: kho tệp MinIO và máy quét clamd (ADR 0052; logo + banner web-admin
+#     của xã, ADR 0069, 02/10/2026). Cùng khuôn và cùng nợ với 7 (petitions) và 7b (comms): đích tạm mở
+#     (`_chung/netpol-duong-ra-tam-mo`), GIỮ giới hạn CỔNG 9000/3310 — phải khớp OBJECT_STORAGE_ENDPOINT
+#     và MALWARE_SCANNER_ADDRESS, sai cổng thì mọi lần tải ảnh nhận diện trả 503 dù pod xanh.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-egress-storage
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của MinIO / clamd
+      ports:
+        - { port: 9000, protocol: TCP }
+        - { port: 3310, protocol: TCP }
 ---
 # 6. Đường RA của RIÊNG web-admin: tới REST 8080 của các pod trong namespace.
 #
