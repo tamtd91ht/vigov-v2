@@ -19,6 +19,7 @@ owns_facts:
   - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
   - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên (chốt 02/10/2026)"
   - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ; vị trí do Claude đề xuất, chủ dự án duyệt trước khi dựng (chốt 02/10/2026)"
+  - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
 ---
 
 # 0068. Làm mới giao diện web-admin — chỉ trình bày, Tailwind v4 + shadcn/ui
@@ -238,6 +239,19 @@ gì để giữ chỗ — một chỗ giữ cho nó là báo một tính năng c
 
 **Chưa chốt:** mục menu chưa có màn đang mang huy hiệu "Chưa có" (§6) có chuyển sang dấu "?" hay
 không. Tới khi chủ dự án chốt, §6 giữ nguyên.
+
+### 15. Bốn điểm trình bày chủ dự án chốt sau đợt 2
+
+Chủ dự án chốt 02/10/2026, sau khi đợt 2 dựng xong — giữ nguyên như đã dựng:
+
+| Điểm | Chốt |
+|---|---|
+| Thanh lọc Phản ánh hiện sẵn 3 bộ lọc (Tìm + Phạm vi + Trạng thái), vượt mức 2 của §12 | **Tạm giữ** — Phạm vi đóng vai thanh tab của màn |
+| Nút thanh soạn thảo Nội dung cao 36px (spec v2), không 44px như trước | **Giữ 36px** |
+| "Thông báo" nằm ở nhóm **Công việc** của menu (sổ thông báo nội bộ, spec v2 §5) | **Giữ** |
+| Câu hộp xác nhận mới ở Cấu hình: "Ngừng dùng <tên>?", "Xác nhận khôi phục câu mặc định" | **Giữ** |
+
+**Vì sao ghi:** để phiên sau không "sửa" lại cho khớp đặc tả và không hỏi lại.
 
 ## Hệ quả
 
