@@ -3,7 +3,7 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 09928975
+derived_from_commit: 8b5c37b0
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026)"
@@ -17,8 +17,8 @@ owns_facts:
   - "làm mới giao diện được ưu tiên hơn mọi việc web-admin khác; Phản ánh đứng đầu đợt 2; đợt 1 = nền móng + Danh bạ, Tổng quan, Nhiệm vụ, Đăng nhập; đợt 2 = 9 màn còn lại + bố cục thẻ trên điện thoại + rà căn hàng/trợ năng"
   - "đặc tả giao diện v2 (02/10/2026): hiện đại = ít ma sát, không trang trí — không backdrop-blur, không gradient làm phong cách chính; quyết định đã chốt (@fontsource, topbar 'Ủy ban nhân dân'; dấu '?' thay 'Chưa có' theo §14) thắng chỗ v2 viết khác; mục ROADMAP_PHASE2 không làm trong đợt này"
   - "mọi thanh lọc web-admin: ô tìm đứng đầu bên trái, tối đa 2 bộ lọc chính hiện sẵn, còn lại sau nút 'Bộ lọc' hiện số bộ lọc ẩn đang khác mặc định và mở sẵn khi số ấy > 0; mọi ô cao bằng nhau, nhãn trên ô (chốt 02/10/2026)"
-  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên (chốt 02/10/2026)"
-  - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ, mục ROADMAP_PHASE2 thì có (mô tả ghi giai đoạn 2); khối gập 'phần chưa dựng' cuối màn bị bỏ; bảng vị trí từng màn chủ dự án đã duyệt (chốt 02/10/2026)"
+  - "web-admin không hiện chữ 'ViGov' ở bất cứ chỗ nào cán bộ nhìn thấy; chỗ đứng tên sản phẩm thay bằng tên xã đang đăng nhập (đọc lúc chạy theo tên miền), câu 'hệ thống ViGov' thành 'hệ thống'; đăng nhập = tên xã + 'Hệ thống điều hành số', tab mặc định 'Hệ thống điều hành số cấp xã', tab màn '<Màn> · <tên xã>'; định danh mã, chú thích, tên gói, tên biến môi trường và tên miền vigov.vn giữ nguyên; issuer TOTP 'ViGov' của tài khoản vận hành nhà cung cấp giữ nguyên vì cán bộ xã không thấy (chốt 02/10/2026)"
+  - "phần đặc tả màn web-admin chưa dựng hiện đúng vị trí đặc tả dưới dạng control nó sẽ là, bị vô hiệu, mang dấu '?': di chuột hiện 'Tính năng đang phát triển', bấm mở mô tả; không gọi máy chủ, không lưu gì; việc chủ dự án quyết không làm thì không có chỗ giữ, mục ROADMAP_PHASE2 thì có (mô tả ghi giai đoạn 2); khối gập 'phần chưa dựng' cuối màn bị bỏ; bảng vị trí từng màn chủ dự án đã duyệt, kèm bảng điều chỉnh khi dựng thắng dòng tương ứng — Điểm hài lòng Tổng quan dựng số thật, không còn là chỗ giữ (chốt 02/10/2026)"
   - "sau đợt 2 giữ nguyên: thanh lọc Phản ánh hiện sẵn Tìm + Phạm vi + Trạng thái; nút thanh soạn thảo Nội dung 36px; 'Thông báo' ở nhóm Công việc của menu; câu 'Ngừng dùng <tên>?' và 'Xác nhận khôi phục câu mặc định' (chốt 02/10/2026)"
 ---
 
@@ -211,6 +211,7 @@ bỏ đi"*; hỏi lại thì chốt chữ thay là **"Tên xã đang đăng nh�
 | Câu nhắc tới sản phẩm ("hệ thống ViGov") | Bỏ chữ "ViGov": **"hệ thống"** |
 | Định danh trong mã, chú thích, tên gói, tên biến môi trường | **Giữ** — cán bộ không nhìn thấy; đổi tên cũ là việc rule 12 bất biến 3 không cho |
 | Tên miền `vigov.vn` | **Giữ** — là tên miền thật, không phải tên sản phẩm hiện ra |
+| Issuer TOTP "ViGov" trong ứng dụng xác thực của tài khoản vận hành nhà cung cấp (`totpIssuer`, `service-identity/internal/app/operator_auth.go`) | **Giữ** — cán bộ xã không nhìn thấy, §13 không áp (chốt 02/10/2026) |
 
 Tên xã đọc **lúc chạy** theo tên miền (luật 1 bất biến 10) qua `communes/current` — xem
 `kb/00-foundation/ubiquitous-language.md` mục "Xã của yêu cầu này". Hiện **nguyên văn**, không ghép
@@ -303,6 +304,16 @@ tính năng đang phát triển, có thể view thêm mô tả"*.
 | Cổng quyền phía trình duyệt của Thông báo | Đã dựng — bỏ |
 | Nhập Danh bạ từ Excel | Đã dựng ở Cấu hình (ADR 0059) — bỏ |
 | Bản quét Biên bản, lý do "kho chưa có nơi lưu tệp" | Nơi lưu tệp đã có (ADR 0052) — viết lại lý do, giữ chỗ |
+
+**Điều chỉnh khi dựng — chủ dự án chốt 02/10/2026** (thắng dòng tương ứng của bảng vị trí trên):
+
+| Màn | Phần | Chốt |
+|---|---|---|
+| Văn bản & Đơn thư | 4 nút chuyển trạng thái (ngăn kéo văn bản đến) | Nhãn theo vòng đời văn bản đến đã chốt 30/09 (C2): Chờ trình/phân luồng · Đã chuyển xử lý · Đang xử lý · Hoàn thành — **không** dùng nhãn đơn thư vẽ ở spec 05 §3.5. Một dấu "?" cho cả hàng |
+| Thu – Chi | ⬆ Nạp từ Excel | Ở PageHeader. Nút "Gỡ bảng" thật nằm trên thanh công cụ của cây và chỉ hiện khi đã có bảng, nên "trước nút 🗑 Gỡ" được hiểu là vị trí PageHeader |
+| Thông báo | Chip Đã xác nhận, chip trạng thái thư | Ở khung chi tiết, **không** trên từng thẻ |
+| Biên bản | Hạn gợi ý | Ngay trên biểu mẫu Giao việc mở bằng Tách, **không** cạnh ô hạn — ô ấy thuộc `FormGiaoViec` dùng chung với Nhiệm vụ và Phản ánh |
+| Tổng quan | Điểm hài lòng | **Dựng số thật** (máy chủ đã trả `rating_sum`/`rating_sample`) — bỏ khỏi danh sách chỗ giữ |
 
 **Vì sao:** chủ dự án không muốn giữ cách hiện tại (khối chữ "Chưa dựng" đứng riêng). Không gọi máy
 chủ, không lưu: chỗ giữ là trình bày, không phải tính năng (§1). Việc đã quyết không làm thì không có
