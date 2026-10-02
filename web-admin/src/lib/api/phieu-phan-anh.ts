@@ -16,6 +16,20 @@
  *   POST /api/v1/citizen-reports/{maTraCuu}/tasks           task.create + feedback.read, Idempotency-Key
  *   GET  /api/v1/citizen-reports/{maTraCuu}/photos          feedback.read (signed links, ≤ 15 min)
  *
+ * Added 02/10/2026 (backend of the same day):
+ *
+ *   GET  /api/v1/citizen-report-intake-fields               feedback.create
+ *   POST /api/v1/citizen-reports                            feedback.create, Idempotency-Key
+ *   POST …/{maTraCuu}/log-attachments                       feedback.read + note rule, Idempotency-Key
+ *   POST …/{maTraCuu}/log-attachments/{id}/completion       feedback.read
+ *   GET  …/{maTraCuu}/log-attachments/{id}/download         feedback.read (audited)
+ *   GET  …/{maTraCuu}/verification-photos                   feedback.read (audited, ≤ 15 min)
+ *   POST …/{maTraCuu}/verification-photos                   feedback.resolve, Idempotency-Key
+ *   POST …/{maTraCuu}/verification-photos/{id}/completion   feedback.resolve
+ *
+ * The KPI cards read GET /api/v1/citizen-report-summary through `lib/api/dashboard.ts`
+ * (`fetchCitizenReportSummary`) — one client for that route, not two.
+ *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_phieuPhanAnhRa`, `petitions_phanLoaiVao`,
  * `petitions_phanCongVao`, `petitions_dongPhieuVao` đều đến từ `schema.gen.ts`.
  *
@@ -56,8 +70,26 @@ import {
   thongBaoLoi,
   type KetQua,
 } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
-import type { CallResult } from "./task-attachments";
+import { UPLOAD_FORM_MISSING, type CallResult } from "./task-attachments";
 import type {
+  httpx_Error,
+  petitions_citizenFieldListOut,
+  petitions_get_citizen_report_intake_fields,
+  petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download,
+  petitions_get_citizen_reports_by_maTraCuu_verification_photos,
+  petitions_photoOut,
+  petitions_photoUploadIn,
+  petitions_photoUploadOut,
+  petitions_post_citizen_reports,
+  petitions_post_citizen_reports_by_maTraCuu_log_attachments,
+  petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion,
+  petitions_post_citizen_reports_by_maTraCuu_verification_photos,
+  petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion,
+  petitions_staffIntakeIn,
+  petitions_taskAttachmentDownloadOut,
+  petitions_taskAttachmentOut,
+  petitions_taskAttachmentUploadIn,
+  petitions_taskAttachmentUploadOut,
   petitions_chuyenCapTrenVao,
   petitions_dongPhieuVao,
   petitions_get_citizen_reports,
@@ -361,17 +393,71 @@ export function tienTrangThaiPhieu(
  * HAI ĐIỂM ĐÓNG, MÁY CHỦ QUYẾT (`domain.DongDuoc`): `cho-dan-xac-nhan`, và `da-xu-ly` khi phiếu
  * KHÔNG có tài khoản công dân nào đứng sau (không ai để xác nhận — quyết định ngày 24/09/2026).
  */
-export function dongPhieu(
+export async function dongPhieu(
   maTraCuu: string,
   ketQua: string,
   ghiChu?: string,
-): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+): Promise<CloseResult> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_closure["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/closure";
   const than: petitions_dongPhieuVao = { result: ketQua, ...thanGhiChu(ghiChu) };
-  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
-    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
-  );
+  let res: Response;
+  try {
+    res = await fetch(duongDanPhieu(mau, maTraCuu), {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(than),
+    });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO, afterPhotoRequired: false };
+  }
+  if (res.status === 200) {
+    try {
+      return { ok: true, duLieu: (await res.json()) as petitions_phieuPhanAnhRa };
+    } catch {
+      return { ok: false, thongBao: LOI_KHONG_RO, afterPhotoRequired: false };
+    }
+  }
+  const err = await readError(res);
+  return {
+    ok: false,
+    thongBao: err.message,
+    afterPhotoRequired: res.status === 409 && err.code === AFTER_PHOTO_REQUIRED_CODE,
+  };
+}
+
+/**
+ * The closure's answer. A refusal additionally says whether it is THE commune's verification-photo
+ * gate (409 `after_photo_required`, ADR 0008 decision 3) — the ONE code of this route the screen reads.
+ *
+ * WHY THIS CODE IS READ when `goi.ts` says never to branch on `code`: the server gives this refusal a
+ * code of its own precisely so the screen can point at the "Sau khi xử lý" upload instead of telling
+ * the officer to reload (`service-petitions/internal/http/xu_ly_phan_anh.go`, the
+ * `ErrVerificationPhotoRequired` case). The SENTENCE is still the server's, verbatim — it is the
+ * commune's "Lời hệ thống" wording of `feedback.after_photo_required`, and rewriting it here would be a
+ * second copy of the commune's voice. Every other refusal is `afterPhotoRequired: false` and reads
+ * exactly as before.
+ *
+ * Assignable to `KetQua<petitions_phieuPhanAnhRa>`, so a caller that ignores the flag is unchanged.
+ */
+export type CloseResult =
+  | { ok: true; duLieu: petitions_phieuPhanAnhRa }
+  | { ok: false; thongBao: string; afterPhotoRequired: boolean };
+
+export const AFTER_PHOTO_REQUIRED_CODE = "after_photo_required";
+
+/** `message` (verbatim, else `LOI_KHONG_RO`) and `code` of an `httpx.Error` body. Never logged. */
+async function readError(res: Response): Promise<{ message: string; code: string }> {
+  try {
+    const body = (await res.json()) as httpx_Error;
+    return {
+      message: typeof body?.message === "string" && body.message !== "" ? body.message : LOI_KHONG_RO,
+      code: typeof body?.code === "string" ? body.code : "",
+    };
+  } catch {
+    return { message: LOI_KHONG_RO, code: "" };
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -558,10 +644,17 @@ export function ghiNhatKyPhieu(
   maTraCuu: string,
   ghiChu: string,
   khoaChongTrung: string,
+  attachments: readonly string[] = [],
 ): Promise<KetQua<petitions_nhatKyPhieuRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_log_entries["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/log-entries";
-  const than: petitions_ghiChuPhieuVao = { note: ghiChu.trim() };
+  // `attachments` ABSENT when there is none — the entry's shape before files existed, so a note
+  // without a file is byte-for-byte the request it always was. Only STORED ids reach this list
+  // (`storedIds`); a refused or unfinished upload is never named here.
+  const than: petitions_ghiChuPhieuVao =
+    attachments.length === 0
+      ? { note: ghiChu.trim() }
+      : { note: ghiChu.trim(), attachments: [...attachments] };
   return docThanLoiGoi<petitions_nhatKyPhieuRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 201, {
       "Idempotency-Key": khoaChongTrung,
@@ -616,4 +709,238 @@ export function createTaskFromPetition(
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", sent, 201, { "Idempotency-Key": idempotencyKey }),
   );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * STAFF INTAKE — "Nhập hộ phản ánh" (§11): GET …/citizen-report-intake-fields, POST …/citizen-reports
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * GET /api/v1/citizen-report-intake-fields — the fields the commune takes NOW, in its order, `can-bo`
+ * included (ADR 0028 Bổ sung 2026-10-02 row 4). The modal's select reads THIS list and never the
+ * hand-copied `LINH_VUC_PHAN_ANH`: a code the list offers is a code the write accepts, because the
+ * server checks the pick against the same predicate. 503 `field_catalogue_unavailable` comes back as
+ * the server's sentence; there is no built-in fallback list (ADR 0060 §3).
+ */
+export function listIntakeFields(): Promise<KetQua<petitions_citizenFieldListOut>> {
+  const duongDan: petitions_get_citizen_report_intake_fields["duongDan"] =
+    "/api/v1/citizen-report-intake-fields";
+  return docJSON<petitions_citizenFieldListOut>(duongDan);
+}
+
+/**
+ * What the modal collects. Strings as typed; `clockFrom` is already RFC 3339 WITH a zone, or `""` for
+ * "the booking instant".
+ */
+export type StaffIntakeInput = {
+  readonly field: string;
+  readonly content: string;
+  readonly address: string;
+  readonly reporterName: string;
+  readonly reporterPhone: string;
+  readonly anonymous: boolean;
+  readonly clockFrom: string;
+};
+
+/**
+ * The body of POST /api/v1/citizen-reports, BUILT FIELD BY FIELD.
+ *
+ * `petitions_staffIntakeIn` also lists `citizen_id`, `channel`, `code`, `status`, the two deadlines,
+ * `hamlet`, `lat`/`lng` and their Vietnamese spellings — and the server answers 400 to EVERY one of
+ * them (`service-petitions/internal/http/staff_intake.go`, `notTheClients` / `notAcceptedYet`): the
+ * channel is always `can-bo-nhap-ho` and the petition is linked to no citizen (ADR 0028 Bổ sung
+ * 2026-10-02 rows 1, 5). None of them can be set from here, whatever the caller passes.
+ *
+ * Optional strings that are blank are ABSENT, not `""`; `anonymous` is sent only when ticked. Every
+ * string is trimmed — the server counts lengths on the trimmed string, and a stray space must not be
+ * stored as the citizen's name.
+ */
+export function staffIntakeBody(input: StaffIntakeInput): petitions_staffIntakeIn {
+  const body: petitions_staffIntakeIn = { field: input.field, content: input.content.trim() };
+  const address = input.address.trim();
+  const name = input.reporterName.trim();
+  const phone = input.reporterPhone.trim();
+  if (address !== "") body.address = address;
+  if (name !== "") body.reporter_name = name;
+  if (phone !== "") body.reporter_phone = phone;
+  if (input.anonymous) body.anonymous = true;
+  if (input.clockFrom !== "") body.clock_from = input.clockFrom;
+  return body;
+}
+
+/**
+ * POST /api/v1/citizen-reports — book one petition on behalf of a citizen. 201 with the petition.
+ *
+ * THE ANSWER IS READ FOR ITS `code` ONLY. A replay of the same `Idempotency-Key` answers 201 with
+ * `{code, replayed}` and nothing else (`core/idem` `PhatLai`: the first body is never stored), so the
+ * type promises nothing more than the lookup code — the one thing the officer must hand over.
+ *
+ * `idempotencyKey` IS A PARAMETER held by the form for one opening: a retry after a network error
+ * reuses it (the first send may have booked a code already); a new key only after a 201. A double
+ * click therefore books ONE petition, not two that could only be soft deleted (rule 7).
+ *
+ * Every refusal is the server's sentence verbatim — 400 `clock_from_out_of_range`, `field_not_offered`,
+ * 503 `intake_not_configured`, `field_catalogue_unavailable`, 409 `request_in_progress` — each written
+ * for the officer and saying what to do. Personal data (name, phone, content) travels in the BODY only.
+ */
+export function bookStaffIntake(
+  input: StaffIntakeInput,
+  idempotencyKey: string,
+): Promise<KetQua<Pick<petitions_phieuPhanAnhRa, "code">>> {
+  const duongDan: petitions_post_citizen_reports["duongDan"] = "/api/v1/citizen-reports";
+  const than: petitions_post_citizen_reports["than"] = staffIntakeBody(input);
+  return docThanLoiGoi<Pick<petitions_phieuPhanAnhRa, "code">>(
+    goiGhi(duongDan, "POST", than, 201, { "Idempotency-Key": idempotencyKey }),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * FILES OF A PETITION — log attachments (§8.7) and verification photos (§8.4 `Sau khi xử lý`)
+ *
+ * The task attachment's flow (ADR 0052, `lib/api/task-attachments.ts`): declare → POST the bytes
+ * straight to the object store (`uploadToStorage`, reused) → completion. Every call returns its HTTP
+ * STATUS, because the status picks what the screen offers next (422 refused for good; 503 / 409 retry
+ * the completion). The sentence is always the server's.
+ *
+ * ⚠ The upload form and every signed `url` are BEARER CREDENTIALS: used at once, never logged, never
+ * stored beyond component state, `no-store`. A file on a petition is evidence about one citizen's case.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+const NO_ANSWER = 0;
+
+function filePath(template: string, maTraCuu: string, id?: string): string {
+  const p = duongDanPhieu(template, maTraCuu);
+  return id === undefined ? p : p.replace("{id}", encodeURIComponent(id));
+}
+
+async function callWithStatus<T>(path: string, init: RequestInit, want: number): Promise<CallResult<T>> {
+  let res: Response;
+  try {
+    res = await fetch(path, { ...CHUNG, ...init });
+  } catch {
+    // Nothing logged: the answer would have held a signed link or an upload form.
+    return { ok: false, status: NO_ANSWER, message: LOI_KHONG_RO };
+  }
+  if (res.status !== want) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, status: res.status, message: LOI_KHONG_RO };
+  }
+}
+
+/** A declaration's 201 without its form is a replay (`core/idem` stores a code, never a body). */
+function withForm<T extends { upload: { url: string; fields: Record<string, string> } }>(
+  r: CallResult<T>,
+): CallResult<T> {
+  if (r.ok && (r.data?.upload?.url === undefined || r.data.upload.fields === undefined)) {
+    return { ok: false, status: 201, message: UPLOAD_FORM_MISSING };
+  }
+  return r;
+}
+
+function jsonPost(body: unknown, idempotencyKey: string): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(body),
+  };
+}
+
+/**
+ * POST …/log-attachments — declare one file for the next log entry. ONE KEY PER ATTEMPT (minted by the
+ * caller): a replay cannot carry the form again. Whether THIS officer may attach to THIS petition is the
+ * note rule, decided by the server (the assignee, or feedback.resolve / .assign / .classify); its 403
+ * comes back verbatim. Field by field — never `...body`.
+ */
+export async function requestLogAttachmentUpload(
+  maTraCuu: string,
+  body: petitions_taskAttachmentUploadIn,
+  idempotencyKey: string,
+): Promise<CallResult<petitions_taskAttachmentUploadOut>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_log_attachments["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
+  const sent: petitions_taskAttachmentUploadIn = {
+    file_name: body.file_name,
+    content_type: body.content_type,
+    size: body.size,
+  };
+  return withForm(
+    await callWithStatus<petitions_taskAttachmentUploadOut>(
+      filePath(template, maTraCuu),
+      jsonPost(sent, idempotencyKey),
+      201,
+    ),
+  );
+}
+
+/** POST …/log-attachments/{id}/completion — sniff, scan, store. Safe to repeat. */
+export function completeLogAttachment(
+  maTraCuu: string,
+  id: string,
+): Promise<CallResult<petitions_taskAttachmentOut>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion";
+  return callWithStatus<petitions_taskAttachmentOut>(filePath(template, maTraCuu, id), { method: "POST" }, 200);
+}
+
+/**
+ * GET …/log-attachments/{id}/download — a link of at most 15 minutes. AUDITED by the server (a file on
+ * a petition's log is evidence about a citizen's case), so it is asked for AT THE CLICK, never
+ * prefetched, and never kept.
+ */
+export function logAttachmentDownloadLink(
+  maTraCuu: string,
+  id: string,
+): Promise<CallResult<petitions_taskAttachmentDownloadOut>> {
+  const template: petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download";
+  return callWithStatus<petitions_taskAttachmentDownloadOut>(
+    filePath(template, maTraCuu, id),
+    { method: "GET" },
+    200,
+  );
+}
+
+/**
+ * GET …/verification-photos — the "after" photos staff uploaded, each with a signed link ≤ 15 minutes.
+ * AUDITED per call (a photograph cannot be masked): called when the column is shown, after an upload,
+ * and when a link has expired — NEVER on a timer. 503 keeps its status for the column's own sentence.
+ */
+export function listVerificationPhotos(maTraCuu: string): Promise<CallResult<petitions_photoListOut>> {
+  const template: petitions_get_citizen_reports_by_maTraCuu_verification_photos["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
+  return callWithStatus<petitions_photoListOut>(filePath(template, maTraCuu), { method: "GET" }, 200);
+}
+
+/**
+ * POST …/verification-photos — declare ONE photo (`feedback.resolve`). ONE KEY PER ATTEMPT. 409
+ * `petition_state` (the petition ended) and `photo_limit` (five per processing round) are the server's
+ * sentences verbatim; the screen counts nothing.
+ */
+export async function requestVerificationPhotoUpload(
+  maTraCuu: string,
+  body: petitions_photoUploadIn,
+  idempotencyKey: string,
+): Promise<CallResult<petitions_photoUploadOut>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_verification_photos["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
+  const sent: petitions_photoUploadIn = { content_type: body.content_type, size: body.size };
+  return withForm(
+    await callWithStatus<petitions_photoUploadOut>(
+      filePath(template, maTraCuu),
+      jsonPost(sent, idempotencyKey),
+      201,
+    ),
+  );
+}
+
+/** POST …/verification-photos/{id}/completion — scan, re-encode without EXIF, store. Safe to repeat. */
+export function completeVerificationPhoto(
+  maTraCuu: string,
+  id: string,
+): Promise<CallResult<petitions_photoOut>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion";
+  return callWithStatus<petitions_photoOut>(filePath(template, maTraCuu, id), { method: "POST" }, 200);
 }

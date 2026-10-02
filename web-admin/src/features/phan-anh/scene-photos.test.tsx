@@ -8,7 +8,6 @@ import {
   congThaoTac,
   photoLinkUsable,
   PHOTO_LINK_MARGIN_MS,
-  SCENE_PHOTOS_AFTER_NOT_BUILT,
   SCENE_PHOTOS_EMPTY,
   SCENE_PHOTOS_LOADING,
   SCENE_PHOTOS_TITLE,
@@ -140,11 +139,15 @@ describe("ScenePhotosView — what the officer reads", () => {
     expect(html).toContain(asHtml(SCENE_PHOTOS_LOADING));
   });
 
-  it("the 'after' column says it is not built — and never claims a closing rule that is not enforced", () => {
-    const html = renderToStaticMarkup(<ScenePhotosView lookupCode="PA-1" state={{ kind: "empty" }} />);
-    expect(html).toContain(asHtml(SCENE_PHOTOS_AFTER_NOT_BUILT));
-    expect(html).not.toContain("Bắt buộc phải có trước khi đóng phiếu");
-    expect(html).not.toContain("Tải ảnh sau xử lý");
+  it("the 'after' column: its heading is the close block's link target, its content is the slot", () => {
+    const html = renderToStaticMarkup(
+      <ScenePhotosView lookupCode="PA-1" state={{ kind: "empty" }} after={<p>NOI-DUNG-SAU</p>} />,
+    );
+    expect(html).toContain('id="sau-xu-ly-PA-1"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain("NOI-DUNG-SAU");
+    // The "not built" sentence is gone for good.
+    expect(html).not.toContain("Chưa dựng");
   });
 
   it("full-size view: an in-page dialog titled by position, with the larger image", () => {

@@ -1,10 +1,12 @@
 "use client";
 
 import { ChevronDown, History, LockKeyhole, NotebookPen } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { AttachmentPicker } from "@/features/nhiem-vu/task-attachments-ui";
+import { ATTACH_WAIT_NOTE, anyInFlight, storedIds } from "@/features/nhiem-vu/task-attachments";
 import { cn } from "@/lib/cn";
 import { khoaSauLanGhi } from "@/features/thu-chi/nhan-thu-chi";
 import type { KetQua } from "@/lib/api/goi";
@@ -47,6 +49,7 @@ import {
   SectionTitle,
   TEXTAREA_CLASS,
 } from "./petition-ui";
+import { PetitionLogAttachmentList, usePetitionLogAttachments } from "./petition-log-attachments";
 
 /**
  * Nhật ký xử lý của MỘT phiếu (§8.7) — dòng thời gian mới nhất trước, "Xem thêm" theo con trỏ, và
@@ -114,6 +117,9 @@ export function NhatKyPhieu({
   const [dangGui, datDangGui] = useState(false);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const nutGhi = useRef<HTMLButtonElement>(null);
+  // `📎 Đính kèm` (§8.7). Only STORED files go with the entry; the entry waits while any still moves.
+  const tep = usePetitionLogAttachments(maTraCuu);
+  const choTep = anyInFlight(tep.items);
 
   const khoaDoc = `${maTraCuu}|${lanLamMoi}|${lanTaiLai}`;
 
@@ -161,8 +167,9 @@ export function NhatKyPhieu({
   }
 
   function gui(): void {
+    if (choTep) return;
     datDangGui(true);
-    ghiNhatKyPhieu(maTraCuu, noiDung, khoa).then((kq) => {
+    ghiNhatKyPhieu(maTraCuu, noiDung, khoa, storedIds(tep.items)).then((kq) => {
       datDangGui(false);
       datKhoa((k) => khoaSauLanGhi(k, kq.ok, khoaChongTrungMoi));
       if (!kq.ok) {
@@ -172,6 +179,7 @@ export function NhatKyPhieu({
       }
       datLoiGhi(null);
       datNoiDung("");
+      tep.clear();
       datMoGhi(false);
       datLanTaiLai((n) => n + 1);
       nutGhi.current?.focus();
@@ -209,6 +217,17 @@ export function NhatKyPhieu({
           loi={loiGhi}
           gui={gui}
           huy={dongBieuMau}
+          choTep={choTep}
+          dinhKem={
+            <AttachmentPicker
+              fieldId={`bieu-mau-nhat-ky-${maTraCuu}`}
+              items={tep.items}
+              disabled={dangGui}
+              onAdd={tep.add}
+              onRetry={tep.retry}
+              onRemove={tep.remove}
+            />
+          }
         />
       )}
 
@@ -224,7 +243,7 @@ export function NhatKyPhieu({
       )}
       {hienTai !== null && hienTai.ok && (
         <>
-          <DanhSachNhatKy dong={hienTai.dong} tenBoPhan={tenBoPhan} danhBa={danhBa} />
+          <DanhSachNhatKy dong={hienTai.dong} tenBoPhan={tenBoPhan} danhBa={danhBa} maTraCuu={maTraCuu} />
           {loiThem !== null && (
             <p className="thong-bao-loi" role="alert">
               {loiThem}
@@ -262,10 +281,13 @@ export function DanhSachNhatKy({
   dong,
   tenBoPhan,
   danhBa,
+  maTraCuu,
 }: {
   dong: readonly petitions_nhatKyPhieuRa[];
   tenBoPhan: ReadonlyMap<string, string>;
   danhBa: DanhBaTheoMa | null;
+  /** The petition's lookup code — the download route of a row's files needs it. Absent = no files drawn. */
+  maTraCuu?: string;
 }) {
   if (dong.length === 0) {
     return (
@@ -318,6 +340,10 @@ export function DanhSachNhatKy({
               <p className="ghi-chu-nhat-ky">{d.note}</p>
             </div>
           )}
+          {/* The row's files (§8.7): a download link each, asked for at the click — never prefetched. */}
+          {maTraCuu !== undefined && (
+            <PetitionLogAttachmentList lookupCode={maTraCuu} attachments={d.attachments ?? []} />
+          )}
         </li>
       ))}
     </ol>
@@ -339,6 +365,8 @@ export function BieuMauGhiNhatKy({
   loi,
   gui,
   huy,
+  dinhKem,
+  choTep = false,
 }: {
   id: string;
   noiDung: string;
@@ -347,6 +375,10 @@ export function BieuMauGhiNhatKy({
   loi: string | null;
   gui: () => void;
   huy: () => void;
+  /** The `📎 Đính kèm` picker (`AttachmentPicker`), passed in by the block that owns the files. */
+  dinhKem?: ReactNode;
+  /** A chosen file is still uploading or being checked: the entry waits for it. */
+  choTep?: boolean;
 }) {
   const oNhap = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -369,7 +401,7 @@ export function BieuMauGhiNhatKy({
       className="form-danh-muc m-0 flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (loiO === null && !dangGui) gui();
+        if (loiO === null && !dangGui && !choTep) gui();
       }}
     >
       <div>
@@ -401,6 +433,8 @@ export function BieuMauGhiNhatKy({
           {NHAC_DU_LIEU_CA_NHAN}
         </p>
       </div>
+      {dinhKem}
+      {choTep && <p className="ghi-chu m-0">{ATTACH_WAIT_NOTE}</p>}
       {loi !== null && (
         <p className="thong-bao-loi m-0" role="alert">
           {loi}
@@ -408,7 +442,7 @@ export function BieuMauGhiNhatKy({
       )}
       <div className="cum-nut justify-end">
         {/* Busy = THIS form's own send (`dangGui` is the log block's state, not the drawer's). */}
-        <button type="submit" className={buttonClass("primary")} disabled={dangGui || loiO !== null}>
+        <button type="submit" className={buttonClass("primary")} disabled={dangGui || choTep || loiO !== null}>
           <BusyLabel busy={dangGui}>Lưu vào nhật ký</BusyLabel>
         </button>
         <button type="button" className={buttonClass("secondary")} onClick={huy} disabled={dangGui}>

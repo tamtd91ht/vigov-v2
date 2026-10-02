@@ -43,6 +43,11 @@ const METRICS = {
     on_time_sample: { label: "Có hạn trong kỳ", period: true },
     on_time: { label: "Đúng hạn", period: true },
     late: { label: "Trễ hạn trong kỳ", period: true },
+    // STOCK, the three figures of docs/ui-ux/09 §3 cards 3–4 (`summary_metrics.go:116-132`): the
+    // register as it stands, like the `rating_max` filter the low-rating list is.
+    rating_sample: { label: "Được người dân chấm điểm", period: false },
+    low_rating: { label: "Bị đánh giá thấp", period: false },
+    publication_pending: { label: "Chờ kiểm duyệt", period: false },
   },
   "incoming-documents": {
     arrived: { label: "Đến trong kỳ", period: true },

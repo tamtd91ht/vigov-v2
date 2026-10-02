@@ -5,13 +5,12 @@ import {
   ChevronRight,
   Clock,
   CloudOff,
-  Construction,
   ImageOff,
   Images,
   RefreshCw,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
@@ -28,7 +27,6 @@ import {
   SCENE_PHOTO_NEXT,
   SCENE_PHOTO_PREVIOUS,
   SCENE_PHOTOS_AFTER,
-  SCENE_PHOTOS_AFTER_NOT_BUILT,
   SCENE_PHOTOS_BEFORE,
   SCENE_PHOTOS_EMPTY,
   SCENE_PHOTOS_LOADING,
@@ -128,10 +126,13 @@ export async function freshLinksFor(
 export function ScenePhotos({
   lookupCode,
   load = listPetitionPhotos,
+  after,
 }: {
   lookupCode: string;
   /** Injected only by tests; the screen always reads the contract route. */
   load?: (lookupCode: string) => Promise<PhotoList>;
+  /** The `Sau khi xử lý` column's content (`VerificationPhotos`). */
+  after?: ReactNode;
 }) {
   const [retries, setRetries] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; result: PhotoList } | null>(null);
@@ -223,6 +224,7 @@ export function ScenePhotos({
       close={() => setOpenId(null)}
       retry={retry}
       onFullImageError={onFullImageError}
+      after={after}
     />
   );
 }
@@ -241,7 +243,9 @@ export function ScenePhotosView({
   close = () => {},
   retry = () => {},
   onFullImageError = () => {},
+  after,
 }: {
+  after?: ReactNode;
   lookupCode: string;
   state: ScenePhotosState;
   /** Index into `state.items` of the photo shown full size; -1 = none. */
@@ -365,21 +369,28 @@ export function ScenePhotosView({
         />
       )}
 
-      <h5 className={COLUMN_TITLE}>{SCENE_PHOTOS_AFTER}</h5>
-      <p className="inline-flex items-start gap-2 text-sm text-ink-500">
-        <Glyph icon={Construction} className="mt-0.5 size-4 shrink-0" />
-        {SCENE_PHOTOS_AFTER_NOT_BUILT}
-      </p>
+      {/* `Sau khi xử lý` — the verification photos (`VerificationPhotos`, passed in by the drawer: it
+          reads the network and the drawer is called as a plain function in one test). The heading is
+          the target of the close block's "Đến mục Sau khi xử lý" link, hence its id and tabIndex. */}
+      <h5 id={afterPhotosHeadingId(lookupCode)} tabIndex={-1} className={cn(COLUMN_TITLE, "outline-none")}>
+        {SCENE_PHOTOS_AFTER}
+      </h5>
+      {after}
       </CardContent>
     </Card>
   );
 }
 
 /** Square-ish thumbnails, as many columns as fit (spec §6.5 grid rule), never wider than the card. */
-const THUMB_GRID = "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3";
+export const THUMB_GRID = "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3";
 
 /** `Trước khi xử lý` / `Sau khi xử lý` — 12px/600 column labels (spec §3). */
 const COLUMN_TITLE = "m-0 text-xs font-semibold text-ink-700";
+
+/** Id of the `Sau khi xử lý` heading — the close block links to it. */
+export function afterPhotosHeadingId(lookupCode: string): string {
+  return `sau-xu-ly-${lookupCode}`;
+}
 
 function thumbId(lookupCode: string, photoId: string): string {
   return `anh-phieu-${lookupCode}-${photoId}`;

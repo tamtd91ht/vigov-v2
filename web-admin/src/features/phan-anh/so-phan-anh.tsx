@@ -2,6 +2,7 @@
 
 import {
   AlarmClock,
+  ArrowUp,
   ArrowUpRight,
   Ban,
   Building2,
@@ -74,7 +75,7 @@ import type {
   petitions_phieuPhanAnhRa,
 } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
-import { coQuyen } from "@/lib/quyen";
+import { coQuyen, REPORT_READ_PERMISSION } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
@@ -83,6 +84,8 @@ import { residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
 import {
   buocLuongChinh,
   buocReNhanh,
+  AFTER_PHOTO_GO_TO,
+  AFTER_PHOTO_REQUIRED_HINT,
   CANH_BAO_RE_NHANH,
   CAU_THIEU_QUYEN_DONG,
   CAU_THIEU_QUYEN_PHAN_CONG,
@@ -137,6 +140,7 @@ import {
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
+  PETITION_INTAKE_PERMISSION,
   petitionTaskOffered,
   phanLoaiDuoc,
   RE_NHANH,
@@ -172,7 +176,10 @@ import {
   TOGGLE_TRACK,
   toggleButtonClass,
 } from "./petition-ui";
-import { ScenePhotos } from "./scene-photos";
+import { PetitionKpis } from "./petition-kpis";
+import { afterPhotosHeadingId, ScenePhotos } from "./scene-photos";
+import { StaffIntakeButton } from "./staff-intake";
+import { VerificationPhotos } from "./verification-photos";
 import {
   QUYEN_DONG_PHAN_ANH,
   QUYEN_PHAN_CONG_PHAN_ANH,
@@ -283,6 +290,9 @@ export function SoPhanAnh({
   const [dangMo, datDangMo] = useState<petitions_phieuPhanAnhRa | null>(null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
+  // The commune's 409 `after_photo_required` sentence — shown IN the close block, not the drawer's
+  // general error line, because what it asks for (a verification photo) is one card above it.
+  const [closeRefusal, setCloseRefusal] = useState<string | null>(null);
 
   const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
 
@@ -377,6 +387,7 @@ export function SoPhanAnh({
   const openPetition = (p: petitions_phieuPhanAnhRa) => {
     datDangMo(p);
     datLoiGhi(null);
+    setCloseRefusal(null);
   };
   const listTable = (items: readonly petitions_phieuPhanAnhRa[]) => (
     <DanhSachThe
@@ -407,6 +418,18 @@ export function SoPhanAnh({
       <h2 id="tieu-de-so-phan-anh" className="an-thi-giac">
         Sổ phản ánh của xã
       </h2>
+
+      {/* §2 header action `+ Nhập hộ phản ánh` — `feedback.create` only (UX; the server decides). Here
+          rather than in the page's PageHeader because the session's keys are read in this component. */}
+      {coQuyen(dsQuyen, PETITION_INTAKE_PERMISSION) && (
+        <div className="flex justify-end">
+          <StaffIntakeButton permissions={dsQuyen} onBooked={() => datLanTai((n) => n + 1)} />
+        </div>
+      )}
+
+      {/* §3 — the four KPI cards. The route checks `feedback.read` AND `report.read`; without the
+          second the row is not drawn at all (an account that may not read reports gets no figures). */}
+      {coQuyen(dsQuyen, QUYEN_XEM_PHAN_ANH) && coQuyen(dsQuyen, REPORT_READ_PERMISSION) && <PetitionKpis />}
 
       <KhoiChuaDung />
 
@@ -532,13 +555,30 @@ export function SoPhanAnh({
           dong={() => {
             datDangMo(null);
             datLoiGhi(null);
+            setCloseRefusal(null);
           }}
           phanLoai={(linhVuc, ghiChu) => chay(phanLoaiPhieu(dangMo.code, linhVuc, ghiChu))}
           chuyenXuLy={(boPhanID, maCanBo, ghiChu) =>
             chay(chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo, ghiChu))
           }
           tienTrangThai={(ghiChu) => chay(tienTrangThaiPhieu(dangMo.code, ghiChu))}
-          dongPhieuLai={(ketQua, ghiChu) => chay(dongPhieu(dangMo.code, ketQua, ghiChu))}
+          closeRefusal={closeRefusal}
+          dongPhieuLai={(ketQua, ghiChu) => {
+            datDangGui(true);
+            return dongPhieu(dangMo.code, ketQua, ghiChu).then((kq) => {
+              if (!kq.ok && kq.afterPhotoRequired) {
+                // The commune requires a verification photo: say it in the close block, next to the
+                // way out, in the commune's own words. The petition did not change — nothing to re-read.
+                datDangGui(false);
+                datLoiGhi(null);
+                setCloseRefusal(kq.thongBao);
+                return false;
+              }
+              setCloseRefusal(null);
+              xongGhi(kq);
+              return kq.ok;
+            });
+          }}
           khongTiepNhan={(lyDo, ghiChu) => chay(khongTiepNhanPhieu(dangMo.code, lyDo, ghiChu))}
           chuyenCapTren={(lyDo, coQuan, ghiChu) =>
             chay(chuyenCapTrenPhieu(dangMo.code, lyDo, coQuan, ghiChu))
@@ -980,6 +1020,7 @@ export function ChiTietPhieu({
   khongTiepNhan,
   chuyenCapTren,
   setPublication,
+  closeRefusal = null,
 }: {
   phieu: petitions_phieuPhanAnhRa;
   bayGio: Date;
@@ -1012,6 +1053,11 @@ export function ChiTietPhieu({
   chuyenXuLy: (boPhanID: string, maCanBo: string | undefined, ghiChu: string) => KetQuaGui;
   tienTrangThai: (ghiChu: string) => KetQuaGui;
   dongPhieuLai: (ketQua: string, ghiChu: string) => KetQuaGui;
+  /**
+   * The commune's refusal to close without a verification photo (409 `after_photo_required`), verbatim,
+   * or `null`. Drawn inside the close block with the way to the `Sau khi xử lý` upload.
+   */
+  closeRefusal?: string | null;
   khongTiepNhan: (lyDo: string, ghiChu: string) => KetQuaGui;
   chuyenCapTren: (lyDo: string, coQuanTiepNhan: string, ghiChu: string) => KetQuaGui;
   /**
@@ -1215,7 +1261,18 @@ export function ChiTietPhieu({
       {/* §8.4 photos. A separate component, NOT a hook here: it reads the network (`useEffect`), and
           `chon-can-bo.test.tsx` calls this block as a plain function. Hidden without `feedback.read` —
           UX only; the route checks the same key and `feedback.restricted` (rule 5, forbidden #1). */}
-      {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && <ScenePhotos lookupCode={phieu.code} />}
+      {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && (
+        <ScenePhotos
+          lookupCode={phieu.code}
+          after={
+            <VerificationPhotos
+              lookupCode={phieu.code}
+              status={phieu.status}
+              canUpload={coQuyen(permissions, QUYEN_DONG_PHAN_ANH)}
+            />
+          }
+        />
+      )}
 
       <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-phieu" />
 
@@ -1464,6 +1521,22 @@ export function ChiTietPhieu({
             <p className={HINT_CLASS}>{GHI_CHU_O_KET_QUA}</p>
           </div>
           <ONhapGhiChuNoiBo id="ghi-chu-dong" giaTri={ghiChuDong} datGiaTri={datGhiChuDong} />
+          {/* 409 `after_photo_required`: the commune's sentence VERBATIM, then where to go. */}
+          {closeRefusal !== null && (
+            <div className="flex flex-col gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+              <p className="thong-bao-loi inline-flex items-start gap-2" role="alert">
+                <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+                <span>{closeRefusal}</span>
+              </p>
+              <p className="text-sm text-ink-700">{AFTER_PHOTO_REQUIRED_HINT}</p>
+              <p>
+                <a className={buttonClass("secondary", "sm")} href={`#${afterPhotosHeadingId(phieu.code)}`}>
+                  <Glyph icon={ArrowUp} />
+                  {AFTER_PHOTO_GO_TO}
+                </a>
+              </p>
+            </div>
+          )}
           <div className="cum-nut justify-end">
             <button
               type="submit"

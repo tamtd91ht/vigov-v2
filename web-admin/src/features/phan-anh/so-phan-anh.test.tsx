@@ -416,15 +416,17 @@ describe("lĩnh vực hạn chế — màn hình KHÔNG nói ra rằng có phi�
 });
 
 describe("phần chưa dựng được — ra tới màn hình, không giấu trong chú thích mã", () => {
-  it("khối ấy nêu đích danh ảnh sau xử lý còn thiếu (G8) và hệ quả với luật “phải có ảnh sau”", () => {
+  it("every entry reaches the page; the built photo halves and the intake modal are no longer listed", () => {
     const html = renderToStaticMarkup(<KhoiChuaDung />);
-    // The "before" photos are built; only the staff "after" photos stay listed, deferred by the owner.
-    expect(html).toContain("ADR 0047, G8");
+    // Both photo halves are built (02/10/2026; the "after" row of ADR 0047 replaces G8), and the close
+    // gate is enforced by the server — no entry may still claim it is not.
+    expect(html).not.toContain("ADR 0047, G8");
+    expect(html).not.toContain("bat_buoc_anh_nghiem_thu");
     expect(html).not.toContain("anh_phan_anh");
+    expect(html).not.toContain("POST /api/v1/citizen-reports` không tồn tại");
     // Nhật ký xử lý ĐÃ dựng (26/09/2026) — nó không còn là "phần chưa dựng được".
     expect(html).not.toContain("nhat_ky_phan_anh");
-    // Hệ quả nặng nhất phải có mặt: không cưỡng chế được luật “không đóng phiếu khi thiếu ảnh sau”.
-    expect(html).toContain("bat_buoc_anh_nghiem_thu");
+    expect(html).toContain(`${PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được`);
     for (const p of PHAN_CHUA_DUNG) {
       expect(html).toContain(nhuTrongHTML(p.ten));
     }

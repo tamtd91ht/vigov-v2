@@ -1,9 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bookStaffIntake,
   chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
+  completeLogAttachment,
+  completeVerificationPhoto,
   dongPhieu,
+  listIntakeFields,
+  listVerificationPhotos,
+  logAttachmentDownloadLink,
+  requestLogAttachmentUpload,
+  requestVerificationPhotoUpload,
+  staffIntakeBody,
+  type StaffIntakeInput,
   duongDanNhatKyPhieu,
   duongDanSoPhanAnh,
   ghiNhatKyPhieu,
@@ -15,6 +25,7 @@ import {
   tienTrangThaiPhieu,
 } from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
+import { UPLOAD_FORM_MISSING } from "./task-attachments";
 
 function batFetch(tra: Response) {
   // Tham số được khai rõ để `mock.calls[0][0]` có kiểu — một `vi.fn(async () => …)`
@@ -778,5 +789,281 @@ describe("kiểm duyệt công khai — PUT …/publication", () => {
     batPut(403, { code: "forbidden", message: cau, trace_id: "01JTRACE" });
     const kq = await setPetitionPublication("PA-2026-0021", "an");
     expect(kq.ok === false && kq.thongBao).toBe(cau);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * 02/10/2026 — staff intake, log attachments, verification photos, the close gate
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+type Call = [string, RequestInit | undefined];
+
+function answer(status: number, body: unknown) {
+  const fake = vi.fn(async (_path: string, _init?: RequestInit) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }),
+  );
+  vi.stubGlobal("fetch", fake);
+  return fake;
+}
+
+function call(fake: ReturnType<typeof answer>, i = 0): Call {
+  return fake.mock.calls[i] as unknown as Call;
+}
+
+/** The commune's own origin, no cache, no tenant in any form (rule 1, forbidden #2). */
+function expectCommon(path: string, init: RequestInit | undefined) {
+  expect(path.startsWith("/api/v1/")).toBe(true);
+  expect(path).not.toMatch(/tenant/i);
+  expect(init?.credentials).toBe("same-origin");
+  expect(init?.cache).toBe("no-store");
+  expect(String(init?.body ?? "")).not.toMatch(/tenant/i);
+}
+
+const INTAKE: StaffIntakeInput = {
+  field: "rac-thai",
+  content: "  Rác tồn đọng ở đầu ngõ.  ",
+  address: "",
+  reporterName: "",
+  reporterPhone: "",
+  anonymous: false,
+  clockFrom: "",
+};
+
+describe("GET /api/v1/citizen-report-intake-fields", () => {
+  it("path, GET, no-store, no tenant; the list verbatim", async () => {
+    const items = [{ code: "rac-thai", label: "Rác thải – Vệ sinh môi trường", icon: null, tone: null }];
+    const fake = answer(200, { items });
+    const r = await listIntakeFields();
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-report-intake-fields");
+    expect(init?.method).toBe("GET");
+    expectCommon(path, init);
+    expect(r).toEqual({ ok: true, duLieu: { items } });
+  });
+
+  it("503 `field_catalogue_unavailable`: the server's sentence, never a built-in list", async () => {
+    const cau = "Chưa đọc được danh mục lĩnh vực. Vui lòng thử lại sau ít phút.";
+    answer(503, { code: "field_catalogue_unavailable", message: cau, trace_id: "01JT" });
+    expect(await listIntakeFields()).toEqual({ ok: false, thongBao: cau });
+  });
+});
+
+describe("POST /api/v1/citizen-reports — staff intake", () => {
+  it("path, POST, Idempotency-Key, no-store, no tenant; the minimal body", async () => {
+    const fake = answer(201, { code: "PA-2026-0042" });
+    const r = await bookStaffIntake(INTAKE, "khoa-1");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports");
+    expect(init?.method).toBe("POST");
+    expectCommon(path, init);
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("khoa-1");
+    // Blank optionals ABSENT, content trimmed; no channel, no citizen, no hamlet, no deadline.
+    expect(JSON.parse(String(init?.body))).toEqual({ field: "rac-thai", content: "Rác tồn đọng ở đầu ngõ." });
+    expect(r).toEqual({ ok: true, duLieu: { code: "PA-2026-0042" } });
+  });
+
+  it("every optional field when set — and nothing the server decides", () => {
+    const body = staffIntakeBody({
+      field: "an-ninh",
+      content: "Đánh nhau ở chợ.",
+      address: " Chợ thôn Hà Lam ",
+      reporterName: " Nguyễn Văn Hùng ",
+      reporterPhone: "0900000000",
+      anonymous: true,
+      clockFrom: "2026-10-02T08:30:00+07:00",
+    });
+    expect(body).toEqual({
+      field: "an-ninh",
+      content: "Đánh nhau ở chợ.",
+      address: "Chợ thôn Hà Lam",
+      reporter_name: "Nguyễn Văn Hùng",
+      reporter_phone: "0900000000",
+      anonymous: true,
+      clock_from: "2026-10-02T08:30:00+07:00",
+    });
+    for (const k of ["channel", "citizen_id", "cong_dan_id", "code", "status", "hamlet", "thon_id", "acknowledge_due", "resolve_due", "lat", "lng", "linh_vuc"]) {
+      expect(Object.keys(body), k).not.toContain(k);
+    }
+  });
+
+  it("`anonymous` unticked is ABSENT, not `false`", () => {
+    expect(Object.keys(staffIntakeBody(INTAKE))).not.toContain("anonymous");
+  });
+
+  it("a replay of the same key answers `{code, replayed}` — the code is still read", async () => {
+    answer(201, { code: "PA-2026-0042", replayed: true });
+    expect(await bookStaffIntake(INTAKE, "khoa-1")).toEqual({
+      ok: true,
+      duLieu: { code: "PA-2026-0042", replayed: true },
+    });
+  });
+
+  it.each([
+    [400, "clock_from_out_of_range", "Thời điểm người dân phản ánh không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn hơn lúc vào sổ. Hãy kiểm tra lại ô \"Dân phản ánh lúc\"."],
+    [503, "intake_not_configured", "Chưa ấn định được thời hạn xử lý theo cấu hình của xã nên phiếu CHƯA được vào sổ. Hãy kiểm tra bảng thời hạn xử lý và lịch làm việc ở màn hình Cấu hình."],
+    [503, "field_catalogue_unavailable", "Chưa kiểm tra được lĩnh vực nên phiếu CHƯA được vào sổ. Vui lòng thử lại sau ít phút."],
+    [409, "request_in_progress", "Yêu cầu trước đó với cùng mã này đang được xử lý. Vui lòng thử lại sau giây lát."],
+  ])("%i `%s`: the server's sentence VERBATIM", async (status, code, message) => {
+    answer(status, { code, message, trace_id: "01JT" });
+    expect(await bookStaffIntake(INTAKE, "k")).toEqual({ ok: false, thongBao: message });
+  });
+});
+
+describe("POST …/log-entries — files ride on the note", () => {
+  it("stored ids go as `attachments`", async () => {
+    const fake = answer(201, {});
+    await ghiNhatKyPhieu("PA-1", " Đã tới hiện trường. ", "k", ["01JFILE1", "01JFILE2"]);
+    expect(JSON.parse(String(call(fake)[1]?.body))).toEqual({
+      note: "Đã tới hiện trường.",
+      attachments: ["01JFILE1", "01JFILE2"],
+    });
+  });
+
+  it("no file: `attachments` ABSENT — the request it always was", async () => {
+    const fake = answer(201, {});
+    await ghiNhatKyPhieu("PA-1", "Ghi chú.", "k");
+    expect(Object.keys(JSON.parse(String(call(fake)[1]?.body)))).toEqual(["note"]);
+  });
+});
+
+describe("log attachments — declare · complete · download", () => {
+  const FORM = { url: "https://kho.example.test/tmp", fields: { key: "t_01J/x", policy: "p" }, expires_at: "2026-10-02T03:15:00Z" };
+  const FILE = { id: "01JFILE1", file_name: "bien-ban.pdf", mime_type: "application/pdf", size_bytes: 1200, status: "pending" };
+
+  it("declare: path (code encoded), POST, Idempotency-Key, field-by-field body, 201 kept with its status", async () => {
+    const fake = answer(201, { attachment: FILE, upload: FORM });
+    const r = await requestLogAttachmentUpload(
+      "PA/1",
+      { file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1200, extra: "x" } as never,
+      "k-1",
+    );
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA%2F1/log-attachments");
+    expect(init?.method).toBe("POST");
+    expectCommon(path, init);
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("k-1");
+    expect(JSON.parse(String(init?.body))).toEqual({ file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1200 });
+    expect(r.ok).toBe(true);
+  });
+
+  it("a replayed 201 without the form is a refusal, said in one sentence", async () => {
+    answer(201, { code: "01JFILE1", replayed: true });
+    const r = await requestLogAttachmentUpload("PA-1", { file_name: "a.pdf", content_type: "application/pdf", size: 1 }, "k");
+    expect(r).toEqual({ ok: false, status: 201, message: UPLOAD_FORM_MISSING });
+  });
+
+  it("completion: path, POST, status kept (422 / 503)", async () => {
+    const fake = answer(422, { code: "attachment_rejected", message: "Tệp bị từ chối vì phát hiện mã độc.", trace_id: "t" });
+    const r = await completeLogAttachment("PA-1", "01J/FILE");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA-1/log-attachments/01J%2FFILE/completion");
+    expect(init?.method).toBe("POST");
+    expectCommon(path, init);
+    expect(r).toEqual({ ok: false, status: 422, message: "Tệp bị từ chối vì phát hiện mã độc." });
+  });
+
+  it("download: path, GET, no-store; the signed link returned as is", async () => {
+    const fake = answer(200, { url: "https://kho.example.test/f?sig=1", expires_at: "2026-10-02T03:15:00Z" });
+    const r = await logAttachmentDownloadLink("PA-1", "01JFILE1");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA-1/log-attachments/01JFILE1/download");
+    expect(init?.method).toBe("GET");
+    expectCommon(path, init);
+    expect(r.ok && r.data.url).toBe("https://kho.example.test/f?sig=1");
+  });
+
+  it("no answer at all is status 0", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("network"))));
+    const r = await logAttachmentDownloadLink("PA-1", "x");
+    expect(r.ok === false && r.status).toBe(0);
+  });
+});
+
+describe("verification photos — list · declare · complete", () => {
+  it("list: path, GET, no-store, no tenant", async () => {
+    const fake = answer(200, { items: [] });
+    const r = await listVerificationPhotos("PA 1");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA%201/verification-photos");
+    expect(init?.method).toBe("GET");
+    expectCommon(path, init);
+    expect(r).toEqual({ ok: true, data: { items: [] } });
+  });
+
+  it("list 503 keeps its status (the column's own sentence)", async () => {
+    answer(503, { code: "storage_not_configured", message: "x", trace_id: "t" });
+    const r = await listVerificationPhotos("PA-1");
+    expect(r.ok === false && r.status).toBe(503);
+  });
+
+  it("declare: POST, Idempotency-Key, body {content_type, size} only", async () => {
+    const fake = answer(201, {
+      photo: { id: "01JP", content_type: "image/jpeg", size_bytes: 10, status: "pending", created_at: "x" },
+      upload: { url: "https://kho.example.test/tmp", fields: { key: "k" }, expires_at: "x" },
+    });
+    await requestVerificationPhotoUpload("PA-1", { content_type: "image/jpeg", size: 10, kind: "sau" } as never, "k-9");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA-1/verification-photos");
+    expect(init?.method).toBe("POST");
+    expectCommon(path, init);
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("k-9");
+    expect(JSON.parse(String(init?.body))).toEqual({ content_type: "image/jpeg", size: 10 });
+  });
+
+  it.each([
+    ["photo_limit", "Phiếu đã có đủ số ảnh sau xử lý tối đa."],
+    ["petition_state", "Phiếu đã kết thúc nên không thêm ảnh sau xử lý được nữa."],
+  ])("declare 409 `%s`: status and the server's sentence", async (code, message) => {
+    answer(409, { code, message, trace_id: "t" });
+    expect(await requestVerificationPhotoUpload("PA-1", { content_type: "image/png", size: 1 }, "k")).toEqual({
+      ok: false,
+      status: 409,
+      message,
+    });
+  });
+
+  it("completion: path, POST", async () => {
+    const fake = answer(200, { id: "01JP", content_type: "image/jpeg", size_bytes: 10, status: "stored", created_at: "x" });
+    const r = await completeVerificationPhoto("PA-1", "01JP");
+    const [path, init] = call(fake);
+    expect(path).toBe("/api/v1/citizen-reports/PA-1/verification-photos/01JP/completion");
+    expect(init?.method).toBe("POST");
+    expectCommon(path, init);
+    expect(r.ok && r.data.status).toBe("stored");
+  });
+});
+
+describe("POST …/closure — the commune's verification-photo gate", () => {
+  it("409 `after_photo_required`: flagged, and the COMMUNE'S sentence verbatim", async () => {
+    // A reworded sentence: no client copy of the default could pass this.
+    const cau = "Xã yêu cầu có ảnh nghiệm thu trước khi đóng phiếu.";
+    answer(409, { code: "after_photo_required", message: cau, trace_id: "t" });
+    expect(await dongPhieu("PA-1", "Đã dọn xong.")).toEqual({ ok: false, thongBao: cau, afterPhotoRequired: true });
+  });
+
+  it("another 409 is NOT the gate", async () => {
+    answer(409, { code: "petition_state", message: "Phiếu đã chuyển trạng thái.", trace_id: "t" });
+    expect(await dongPhieu("PA-1", "x")).toEqual({
+      ok: false,
+      thongBao: "Phiếu đã chuyển trạng thái.",
+      afterPhotoRequired: false,
+    });
+  });
+
+  it("the same code on another status is NOT the gate either", async () => {
+    answer(400, { code: "after_photo_required", message: "x", trace_id: "t" });
+    const r = await dongPhieu("PA-1", "x");
+    expect(r.ok === false && r.afterPhotoRequired).toBe(false);
+  });
+
+  it("200: the petition; POST, JSON body, no-store, no Idempotency-Key", async () => {
+    const fake = answer(200, { code: "PA-1", status: "da-dong" });
+    const r = await dongPhieu("PA-1", "Đã dọn xong.");
+    const [, init] = call(fake);
+    expect(init?.method).toBe("POST");
+    expect(init?.cache).toBe("no-store");
+    expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
+    expect(new Headers(init?.headers).has("Idempotency-Key")).toBe(false);
+    expect(r.ok && r.duLieu.status).toBe("da-dong");
   });
 });

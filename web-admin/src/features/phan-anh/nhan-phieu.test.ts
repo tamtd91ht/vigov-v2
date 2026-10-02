@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
@@ -55,6 +58,16 @@ import {
   reopenLine,
   SCENE_LOCATION_LABEL,
   sceneCoordinates,
+  afterPhotoType,
+  afterPhotoUploadOpen,
+  clockFromBounds,
+  clockFromRfc3339,
+  INTAKE_DESCRIPTION,
+  intakeContentError,
+  onTimePercent,
+  PETITION_INTAKE_PERMISSION,
+  ratingAverage,
+  toLocalInputValue,
 } from "./nhan-phieu";
 
 function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
@@ -383,12 +396,37 @@ describe("StatusStepper §8.2", () => {
     expect(buocLuongChinh("mot-ma-moi").every((x) => x.vaiTro === "chuaToi")).toBe(true);
   });
 
-  it("chỉ MỘT trong chín trạng thái có câu giải thích — tám câu còn lại không được bịa", () => {
-    const coCau = MOI_TRANG_THAI.filter((ma) => cauGiaiThichTrangThai(ma) !== null);
-    expect(coCau).toEqual(["dang-phan-loai"]);
-    expect(cauGiaiThichTrangThai("dang-phan-loai")).toBe(
-      "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.",
+  it("all nine statuses carry the prototype's sentence, VERBATIM (ADR 0027 Bổ sung 2026-10-02)", () => {
+    // Typed again from `../vigov-require` `apps/admin/src/lib/feedback-display.ts:136-146` — NOT read
+    // from the table under test. Eight equal the citizen app's `TRANG_THAI`; `da-dong` is the staff's
+    // full sentence (row 5: the citizen reads only "Phiếu đã đóng.").
+    expect(MOI_TRANG_THAI.map((ma) => [ma, cauGiaiThichTrangThai(ma)])).toEqual([
+      ["da-tiep-nhan", "Phiếu vừa vào sổ, chưa phân cho ai."],
+      ["dang-phan-loai", "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không."],
+      ["da-chuyen-xu-ly", "Đã giao cho bộ phận, chưa bắt tay làm."],
+      ["dang-xu-ly", "Bộ phận đang xử lý tại hiện trường."],
+      ["da-xu-ly", "Đã làm xong, chờ báo lại cho người dân."],
+      ["cho-dan-xac-nhan", "Đã báo người dân, chờ họ xác nhận và chấm điểm."],
+      ["da-dong", "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được."],
+      ["khong-tiep-nhan", "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do."],
+      ["chuyen-cap-tren", "Vượt thẩm quyền của xã, đã chuyển lên cấp trên."],
+    ]);
+  });
+
+  it("the eight shared sentences equal the citizen app's table, character for character", () => {
+    const citizen = readFileSync(
+      fileURLToPath(new URL("../../../../citizen-app/src/cong-dan/man/noi-dung.ts", import.meta.url)),
+      "utf8",
     );
+    for (const ma of MOI_TRANG_THAI.filter((m) => m !== "da-dong")) {
+      expect(citizen, ma).toContain(`"${ma}": { giai_thich: "${cauGiaiThichTrangThai(ma)}" }`);
+    }
+  });
+
+  it("an unknown code has NO sentence — never one the web made up", () => {
+    expect(cauGiaiThichTrangThai("mot-ma-moi")).toBeNull();
+    expect(cauGiaiThichTrangThai("constructor")).toBeNull();
+    expect(cauGiaiThichTrangThai("")).toBeNull();
   });
 });
 
@@ -595,6 +633,8 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
     "mo-lai-theo-danh-gia",
     // `domain.LogActionTaskCreated` — a task booked from the petition (POST …/tasks).
     "tao-nhiem-vu",
+    // `domain.LogActionStaffIntake` — the staff intake (ADR 0028 Bổ sung 2026-10-02 row 6).
+    "nhap-ho",
   ] as const satisfies readonly MaThaoTacNhatKy[];
 
   // Mức KIỂU: hợp mọc thêm một mã mà danh sách trên không có → `tsc` đỏ tại đây.
@@ -602,7 +642,7 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
   const _duMa: DuMa = true;
   void _duMa;
 
-  it("bảng nhãn có ĐÚNG mười khoá, không hơn", () => {
+  it("bảng nhãn có ĐÚNG mười một khoá, không hơn", () => {
     expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...LOG_ACTIONS].sort());
   });
 
@@ -618,6 +658,7 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
       "Người dân đánh giá",
       "Mở lại do đánh giá thấp",
       "Tạo nhiệm vụ",
+      "Nhập hộ phản ánh",
     ]);
   });
 
@@ -657,12 +698,12 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
   it("không còn mục nào về nhật ký, còn mọi mục khác vẫn nguyên", () => {
     const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
     expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
-    // Chín mục: chín trừ hai (lọc đánh giá thấp và nút công khai đã dựng) cộng một (§8.6 không
-    // dựng theo quyết định của chủ dự án) cộng một (bản đồ nhỏ §8.4 — toạ độ đã về, nhà cung cấp
-    // bản đồ chưa được quyết) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
-    expect(PHAN_CHUA_DUNG.length).toBe(9);
-    // Only the "after" half stays listed: the citizen's "before" photos are built (02/10/2026).
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(true);
+    // Bảy mục (02/10/2026): chín trừ ba đã dựng (modal nhập hộ, tám câu giải thích trạng thái, ảnh
+    // sau xử lý) cộng một (ô thôn và nút đính ảnh của modal nhập hộ — máy chủ chưa nhận) — bỏ nhầm
+    // một mục khác cùng lúc là đỏ ở đây.
+    expect(PHAN_CHUA_DUNG.length).toBe(7);
+    // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
   });
 });
@@ -682,12 +723,35 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(muc?.viSao).toContain("cán bộ không ghi đánh giá thay người dân");
   });
 
-  it("the KPI entry no longer says there is no summary route (ADR 0053) and names what is missing", () => {
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bốn thẻ KPI"));
-    expect(muc?.viSao).not.toContain("Không có tuyến thống kê");
+  it("the KPI cards left the list; only the heat-map (§9) and Báo cáo (§10) tabs remain, with why", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("KPI") || p.ten.includes("§3"))).toBe(false);
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Tab Bản đồ nhiệt"));
+    expect(muc?.ten).toBe("Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)");
+    expect(muc?.viSao).toContain("Bốn thẻ số liệu (§3) nay đã có");
     expect(muc?.viSao).toContain("citizen-report-summary");
     expect(muc?.viSao).toContain("`lat`/`lng`");
-    expect(muc?.viSao).toContain("bản đồ nhiệt");
+    // One reason per tab: the undecided map provider, and no count by field / unit / hamlet.
+    expect(muc?.viSao).toContain("nhà cung cấp bản đồ");
+    expect(muc?.viSao).toContain("không tuyến nào đếm theo lĩnh vực, bộ phận hay thôn");
+  });
+
+  it("02/10/2026: the three built entries are gone, the others kept, the one added is the intake's hamlet/photos", () => {
+    const ten = PHAN_CHUA_DUNG.map((p) => p.ten);
+    expect(ten).not.toContain("Modal `Nhập hộ phản ánh` (§11)");
+    expect(ten).not.toContain("Câu giải thích trạng thái, tám trong chín (§8.2)");
+    expect(ten).not.toContain("Ảnh sau khi xử lý (§8.4)");
+    expect(ten).toEqual([
+      "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",
+      "Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)",
+      "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
+      "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
+      "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
+      "Ô `Thôn, tổ dân phố` và nút `Đính ảnh hiện trường` của modal Nhập hộ phản ánh (§11)",
+      "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
+    ]);
+    // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
+    const tre = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`⚠ Quá hạn 3 ngày`"));
+    expect(tre?.viSao).toContain("giờ làm việc");
   });
 });
 
@@ -699,7 +763,7 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
   });
 
   it("the heatmap and the mini-map both name the undecided map provider (rule 3 stop #2)", () => {
-    const kpi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bốn thẻ KPI"));
+    const kpi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Tab Bản đồ nhiệt"));
     expect(kpi?.viSao).toContain("nhà cung cấp bản đồ");
     expect(kpi?.viSao).toContain("luật 3, điểm dừng #2");
     const ban = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bản đồ nhỏ"));
@@ -722,5 +786,86 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
     expect(sceneCoordinates({ lat: 21.028511, lng: null })).toBeNull();
     expect(sceneCoordinates({ lat: Number.NaN, lng: 105.804817 })).toBeNull();
     expect(sceneCoordinates({ lat: 21.028511, lng: Number.POSITIVE_INFINITY })).toBeNull();
+  });
+});
+
+describe("staff intake — the words and the clock (§11)", () => {
+  it("the modal's description is the sentence the owner approved on 30/09/2026, verbatim", () => {
+    expect(INTAKE_DESCRIPTION).toBe(
+      "Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi " +
+        "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn — hãy " +
+        "ghi đúng thời điểm người dân phản ánh.",
+    );
+    // The old sentence (ADR 0028 E/F made it false) never comes back.
+    expect(INTAKE_DESCRIPTION).not.toContain("cùng thời hạn");
+  });
+
+  it("the key is the seeded `feedback.create`", () => {
+    expect(PETITION_INTAKE_PERMISSION).toBe("feedback.create");
+  });
+
+  it("`Dân phản ánh lúc` is read on the COMMUNE'S clock (+07:00), whatever the browser's zone", () => {
+    expect(clockFromRfc3339("2026-10-02T08:30")).toBe("2026-10-02T08:30:00+07:00");
+    expect(clockFromRfc3339("2026-10-02T08:30:15")).toBe("2026-10-02T08:30:15+07:00");
+    expect(clockFromRfc3339("")).toBe("");
+    expect(clockFromRfc3339("   ")).toBe("");
+    // Not the input's shape: refused, never guessed.
+    expect(clockFromRfc3339("02/10/2026 08:30")).toBeNull();
+    expect(clockFromRfc3339("2026-10-02T08:30Z")).toBeNull();
+  });
+
+  it("the picker's bounds are seven days back to now, in Vietnam time (tests run under TZ=UTC)", () => {
+    const now = new Date("2026-10-02T01:30:00Z"); // 08:30 in Hà Nội
+    expect(toLocalInputValue(now)).toBe("2026-10-02T08:30");
+    expect(toLocalInputValue(new Date("2026-10-01T17:05:00Z"))).toBe("2026-10-02T00:05");
+    expect(clockFromBounds(now)).toEqual({ min: "2026-09-25T08:30", max: "2026-10-02T08:30" });
+  });
+
+  it("content is required: blank or spaces refuse before sending", () => {
+    expect(intakeContentError("")).not.toBeNull();
+    expect(intakeContentError("  \n ")).not.toBeNull();
+    expect(intakeContentError("Rác")).toBeNull();
+  });
+});
+
+describe("KPI arithmetic (§3) — two divisions, never a 0 for 'no value'", () => {
+  it("average = sum / sample, ONE decimal, Vietnamese comma", () => {
+    expect(ratingAverage(13, 3)).toBe("4,3/5");
+    expect(ratingAverage(8, 2)).toBe("4,0/5");
+    expect(ratingAverage(1, 1)).toBe("1,0/5");
+  });
+
+  it("sample 0 → no value (the card shows —), NEVER 0,0/5", () => {
+    expect(ratingAverage(0, 0)).toBeNull();
+  });
+
+  it("fields absent or null (a server before 02/10/2026) → no value", () => {
+    expect(ratingAverage(undefined, undefined)).toBeNull();
+    expect(ratingAverage(null, 3)).toBeNull();
+    expect(ratingAverage(12, null)).toBeNull();
+  });
+
+  it("on-time rate: on_time / on_time_sample, one decimal; sample 0 → no value, never 0%", () => {
+    expect(onTimePercent(1, 3)).toBe("33,3%");
+    expect(onTimePercent(0, 21)).toBe("0,0%");
+    expect(onTimePercent(0, 0)).toBeNull();
+  });
+});
+
+describe("verification photos — when, and which files (§8.4)", () => {
+  it("upload is offered on every status but the three endings — the server's own rule", () => {
+    for (const ma of MOI_TRANG_THAI) {
+      expect(afterPhotoUploadOpen(ma), ma).toBe(!["da-dong", "khong-tiep-nhan", "chuyen-cap-tren"].includes(ma));
+    }
+    // An unknown status keeps the button: the server's 409 is the answer (a deny list, like the server's).
+    expect(afterPhotoUploadOpen("mot-ma-moi")).toBe(true);
+  });
+
+  it("JPEG / PNG / WebP declared; anything else, or an empty file, refused before upload", () => {
+    expect(afterPhotoType({ name: "a.jpg", type: "image/jpeg", size: 10 })).toEqual({ ok: true, contentType: "image/jpeg" });
+    expect(afterPhotoType({ name: "a.webp", type: "", size: 10 })).toEqual({ ok: true, contentType: "image/webp" });
+    expect(afterPhotoType({ name: "a.pdf", type: "application/pdf", size: 10 }).ok).toBe(false);
+    expect(afterPhotoType({ name: "a.heic", type: "", size: 10 }).ok).toBe(false);
+    expect(afterPhotoType({ name: "a.png", type: "image/png", size: 0 }).ok).toBe(false);
   });
 });

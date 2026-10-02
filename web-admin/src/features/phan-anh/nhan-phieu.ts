@@ -181,9 +181,12 @@ export function sceneCoordinates(
  * SCENE PHOTOS (§8.4 `Ảnh trước và sau khi xử lý`) — owner, 02/10/2026 (ADR 0047, row "Ảnh hiện
  * trường khi gửi phản ánh"): staff with `feedback.read` see the photos the citizen attached.
  *
- * ONLY THE "BEFORE" HALF EXISTS. Staff "after" photos are deferred (ADR 0047 G8): the "after" column
- * says so and points at `PHAN_CHUA_DUNG`, and it does NOT print the spec's red "Bắt buộc phải có trước
- * khi đóng phiếu" — no rule enforces it today, and a sentence claiming one would be false.
+ * THE "AFTER" HALF (owner, 02/10/2026 — ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"): staff
+ * with `feedback.resolve` upload verification photos; anyone with `feedback.read` sees them. The empty
+ * column does NOT print the spec's red "Bắt buộc phải có trước khi đóng phiếu": whether a photo is
+ * required is the commune's `bat_buoc_anh_nghiem_thu` switch (ADR 0008 decision 3), which no route
+ * lets this screen read — a commune with it off would be told something false. The obligation is said
+ * where it is KNOWN: the closure's 409 `after_photo_required`, in the commune's own words.
  *
  * A PHOTOGRAPH IS PERSONAL DATA (rule 3) that cannot be masked. Its alt text is a position ("Ảnh hiện
  * trường 2/3"), never the reporter's name or anything else from the petition.
@@ -206,8 +209,75 @@ export const SCENE_PHOTO_GONE = "Ảnh này không còn trong danh sách ảnh c
 export const SCENE_PHOTO_PREVIOUS = "Xem ảnh liền trước";
 export const SCENE_PHOTO_NEXT = "Xem ảnh tiếp theo";
 export const SCENE_PHOTO_CLOSE = "Đóng ảnh";
-export const SCENE_PHOTOS_AFTER_NOT_BUILT =
-  "Chưa dựng: cán bộ chưa tải được ảnh sau khi xử lý. Lý do ở mục “Ảnh sau khi xử lý (§8.4)” trong danh sách phần chưa dựng đầu màn.";
+
+/* ── "Sau khi xử lý" — verification photos ─────────────────────────────────────────────── */
+
+export const AFTER_PHOTOS_LOADING = "Đang tải ảnh sau xử lý…";
+export const AFTER_PHOTOS_EMPTY = "Chưa có ảnh sau xử lý.";
+/** 503 `storage_not_configured` — same shape as the "before" column's sentence. */
+export const AFTER_PHOTOS_UNAVAILABLE =
+  "Kho ảnh tạm thời chưa sẵn sàng nên chưa xem được ảnh sau xử lý. Các thông tin khác của phiếu vẫn dùng bình thường.";
+/** Spec §8.4 `⬆ Tải ảnh sau xử lý`; the arrow is a lucide icon beside the words (ADR 0068). */
+export const AFTER_PHOTO_UPLOAD_BUTTON = "Tải ảnh sau xử lý";
+export const AFTER_PHOTO_INPUT_LABEL = "Chọn ảnh sau xử lý (JPG, PNG, WebP)";
+export const AFTER_PHOTO_NOTE =
+  "Mỗi ảnh được quét mã độc và lưu lại không kèm thông tin của máy chụp. Người dân gửi phiếu từ ứng " +
+  "dụng xem được ảnh này trong phiếu của mình. Số ảnh tối đa do hệ thống quy định.";
+/** The pre-check's list — the server's (`petition_staff_file.go`: JPEG, PNG, WebP). */
+export const AFTER_PHOTO_TYPES: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
+export const AFTER_PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
+export const AFTER_PHOTO_TYPE_REFUSED = "Chỉ tải được ảnh JPG, PNG hoặc WebP.";
+export const AFTER_PHOTO_EMPTY_REFUSED = "Tệp rỗng — không có ảnh nào để tải lên.";
+/** Shown on the three statuses where the server refuses an upload (409 `petition_state`). */
+export const AFTER_PHOTO_CLOSED = "Phiếu đã kết thúc nên không thêm ảnh sau xử lý được nữa.";
+export const AFTER_PHOTO_UPLOAD_DENIED =
+  "Tài khoản của bạn không có quyền kết thúc xử lý phản ánh (feedback.resolve), nên không tải được " +
+  "ảnh sau xử lý.";
+
+/**
+ * The statuses where the server REFUSES a verification photo (`domain.VerificationPhotoUploadOpen`:
+ * every status but the three endings). A DENY list, mirroring the server's own: a status code the
+ * screen does not know keeps the button, and the server's 409 sentence is the answer.
+ */
+const AFTER_PHOTO_CLOSED_STATUSES: readonly string[] = ["da-dong", "khong-tiep-nhan", "chuyen-cap-tren"];
+
+export function afterPhotoUploadOpen(status: string): boolean {
+  return !AFTER_PHOTO_CLOSED_STATUSES.includes(status);
+}
+
+/** `Ảnh sau xử lý 2/3` — alt text and button label; never anything from the petition. */
+export function afterPhotoAlt(index: number, total: number): string {
+  return `Ảnh sau xử lý ${index + 1}/${total}`;
+}
+
+/** The type to DECLARE, or a refusal. The server sniffs the bytes and refuses a mismatch. */
+export function afterPhotoType(file: { readonly name: string; readonly type: string; readonly size: number }):
+  | { readonly ok: true; readonly contentType: string }
+  | { readonly ok: false; readonly message: string } {
+  if (file.size <= 0) return { ok: false, message: AFTER_PHOTO_EMPTY_REFUSED };
+  if (file.type !== "") {
+    return AFTER_PHOTO_TYPES.includes(file.type)
+      ? { ok: true, contentType: file.type }
+      : { ok: false, message: AFTER_PHOTO_TYPE_REFUSED };
+  }
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const byExt: Readonly<Record<string, string>> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+  };
+  const t = byExt[ext];
+  return t === undefined ? { ok: false, message: AFTER_PHOTO_TYPE_REFUSED } : { ok: true, contentType: t };
+}
+
+/**
+ * The close block's line under the commune's refusal (409 `after_photo_required`): WHERE to go next.
+ * The refusal itself is the server's sentence, shown above this one, verbatim.
+ */
+export const AFTER_PHOTO_REQUIRED_HINT =
+  "Tải ảnh ở mục “Sau khi xử lý” trong khối Ảnh trước và sau khi xử lý, rồi bấm Đóng phiếu lại.";
+export const AFTER_PHOTO_GO_TO = "Đến mục Sau khi xử lý";
 
 /** `Ảnh hiện trường 2/3` — 1-based position. Alt text, dialog title and button label all use it. */
 export function scenePhotoAlt(index: number, total: number): string {
@@ -599,18 +669,37 @@ export function buocReNhanh(trangThai: string): readonly OBuoc[] {
 }
 
 /**
- * Câu giải thích trạng thái hiện tại (§8.2, dòng dưới stepper).
+ * One explanation sentence per status (§8.2, the line under the stepper) — the PROTOTYPE'S NINE,
+ * VERBATIM (owner, ADR 0027 Bổ sung 2026-10-02 row 1: *"Dùng nguyên câu bản mẫu"*):
+ * `../vigov-require` `apps/admin/src/lib/feedback-display.ts:136-146` (`FEEDBACK_STATUS_HINT`).
  *
- * ĐẶC TẢ CHO ĐÚNG MỘT CÂU TRONG CHÍN, và tám câu còn lại **không được bịa ra ở đây**: đó là chữ
- * hiện trên màn hình cán bộ của một cơ quan nhà nước, và §11 của chính chương này vừa cho thấy hậu
- * quả — một câu mô tả cũ, không ai duyệt lại, nói sai về thời hạn của phiếu nhập hộ. Trả `null`
- * thì màn hình không hiện dòng nào, chứ không hiện một câu do web nghĩ ra.
+ * Eight are character-for-character the citizen app's table (`citizen-app/src/cong-dan/man/noi-dung.ts`
+ * `TRANG_THAI`, row 4: one table for both apps). The NINTH differs on purpose: the citizen reads only
+ * "Phiếu đã đóng." (row 5), while staff read the prototype's full sentence — the closing rule is a rule
+ * for STAFF, shown only here.
+ *
+ * ⚠ The `da-dong` sentence is true only where the commune's `bat_buoc_anh_nghiem_thu` switch is on
+ * (ADR 0008 decision 3, default on); the contract exposes no read of that switch, so the screen cannot
+ * tell. The owner chose the verbatim sentence knowing this (ADR 0027 Bổ sung, "Hai chỗ chưa khớp").
+ *
+ * The words are the software's, not the commune's: a commune does not reword them. An unknown code
+ * returns `null` — no line, never a sentence the web made up.
  */
+const STATUS_EXPLANATION: Readonly<Record<string, string>> = {
+  "da-tiep-nhan": "Phiếu vừa vào sổ, chưa phân cho ai.",
+  "dang-phan-loai": "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.",
+  "da-chuyen-xu-ly": "Đã giao cho bộ phận, chưa bắt tay làm.",
+  "dang-xu-ly": "Bộ phận đang xử lý tại hiện trường.",
+  "da-xu-ly": "Đã làm xong, chờ báo lại cho người dân.",
+  "cho-dan-xac-nhan": "Đã báo người dân, chờ họ xác nhận và chấm điểm.",
+  "da-dong": "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được.",
+  "khong-tiep-nhan": "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do.",
+  "chuyen-cap-tren": "Vượt thẩm quyền của xã, đã chuyển lên cấp trên.",
+};
+
 export function cauGiaiThichTrangThai(trangThai: string): string | null {
-  if (trangThai === "dang-phan-loai") {
-    return "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.";
-  }
-  return null;
+  // `hasOwn`, not a bare index: `constructor` is a key of the prototype, not a status.
+  return Object.hasOwn(STATUS_EXPLANATION, trangThai) ? (STATUS_EXPLANATION[trangThai] ?? null) : null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -895,7 +984,9 @@ export type MaThaoTacNhatKy =
   | "mo-lai-theo-danh-gia"
   // A task booked from this petition (`domain.LogActionTaskCreated`); the row's note holds the task's
   // register number only.
-  | "tao-nhiem-vu";
+  | "tao-nhiem-vu"
+  // The staff intake booked this petition (ADR 0028 Bổ sung 2026-10-02 row 6, "cán bộ X nhập hộ").
+  | "nhap-ho";
 
 /** Nhãn nguyên văn do chuyên gia nghiệp vụ chốt. `phan-cong` hiện là "Chuyển xử lý", như nút §8.5. */
 export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = {
@@ -911,6 +1002,7 @@ export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = 
   "danh-gia": "Người dân đánh giá",
   "mo-lai-theo-danh-gia": "Mở lại do đánh giá thấp",
   "tao-nhiem-vu": "Tạo nhiệm vụ",
+  "nhap-ho": "Nhập hộ phản ánh",
 };
 
 export function nhanThaoTacNhatKy(ma: string): string {
@@ -1049,6 +1141,165 @@ export const TASK_REGISTER_HREF = "/nhiem-vu";
 export const TASK_REGISTER_LINK_LABEL = "Mở sổ Nhiệm vụ";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * "NHẬP HỘ PHẢN ÁNH" (§11) — POST /api/v1/citizen-reports, `feedback.create`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** "Tiếp nhận phản ánh" — seeded at `service-identity/migrations/0001_init.sql:298`, spec §14.6. */
+export const PETITION_INTAKE_PERMISSION = "feedback.create";
+
+export const INTAKE_BUTTON = "Nhập hộ phản ánh";
+export const INTAKE_TITLE = "Nhập hộ phản ánh của người dân";
+/** Spec §11, approved by the owner 30/09/2026 (spec 09:248-249) — verbatim. */
+export const INTAKE_DESCRIPTION =
+  "Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi " +
+  "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn — hãy " +
+  "ghi đúng thời điểm người dân phản ánh.";
+export const INTAKE_FIELD_LABEL = "Lĩnh vực";
+export const INTAKE_FIELD_PLACEHOLDER = "— Chọn lĩnh vực —";
+export const INTAKE_FIELDS_LOADING = "Đang tải danh sách lĩnh vực…";
+export const INTAKE_FIELDS_EMPTY =
+  "Xã chưa bật lĩnh vực phản ánh nào, nên chưa nhập hộ được. Hãy bật lĩnh vực ở màn hình Cấu hình.";
+export const INTAKE_CLOCK_LABEL = "Dân phản ánh lúc";
+export const INTAKE_CLOCK_HINT =
+  "Để trống thì lấy lúc vào sổ. Không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn hơn lúc vào sổ.";
+export const INTAKE_CONTENT_LABEL = "Nội dung phản ánh";
+export const INTAKE_CONTENT_PLACEHOLDER = "Ghi lại lời người dân: sự việc gì, ở đâu, từ khi nào.";
+export const INTAKE_ADDRESS_LABEL = "Địa chỉ, vị trí";
+export const INTAKE_ADDRESS_PLACEHOLDER = "Đầu ngõ thôn Hà Lam";
+export const INTAKE_NAME_LABEL = "Người gửi";
+export const INTAKE_PHONE_LABEL = "Số điện thoại";
+export const INTAKE_ANONYMOUS_LABEL = "Người dân đề nghị gửi ẩn danh";
+export const INTAKE_SUBMIT = "Vào sổ phản ánh";
+export const INTAKE_CANCEL = "Huỷ";
+export const INTAKE_CHANNEL_NOTE = "Kênh tiếp nhận: Cán bộ, trưởng thôn nhập hộ.";
+
+export const INTAKE_DONE_TITLE = "Đã vào sổ phản ánh";
+export const INTAKE_DONE_CODE_LABEL = "Mã tra cứu";
+/**
+ * ADR 0028 Bổ sung 2026-10-02 rows 1–3: the petition is linked to NO citizen account, so it never
+ * appears in "Phản ánh của tôi" — the code the officer hands over is the citizen's only handle. Says
+ * nothing about WHERE the citizen can use it: lookup without a session is rule 4 stop condition #2,
+ * not decided (same ADR, "Hệ quả — chưa chốt").
+ */
+export const INTAKE_DONE_SENTENCE =
+  "Hãy đọc hoặc đưa mã tra cứu này cho người dân và dặn họ giữ lại. Phiếu nhập hộ không gắn với tài " +
+  "khoản Zalo nào, nên không hiện trong mục “Phản ánh của tôi” trên ứng dụng của người dân.";
+export const INTAKE_DONE_CLOSE = "Đóng";
+export const INTAKE_DONE_ANOTHER = "Nhập phiếu khác";
+
+/** The content is required, and the server refuses a blank one — say so before sending. */
+export function intakeContentError(content: string): string | null {
+  return demKyTu(content) === 0 ? "Cần ghi nội dung phản ánh." : null;
+}
+
+/**
+ * The commune's administrative clock — a PLATFORM constant, not per commune: Vietnam has one zone and
+ * no daylight saving (same pin as `nhanThoiDiem`, `lib/drill-down.ts`).
+ */
+const ADMINISTRATIVE_OFFSET = "+07:00";
+
+/**
+ * `<input type="datetime-local">` (`2026-10-02T08:30`) → RFC 3339 WITH a zone
+ * (`2026-10-02T08:30:00+07:00`), or `""` when blank.
+ *
+ * THE VALUE IS READ AS VIETNAM TIME, NOT AS THE BROWSER'S ZONE: the officer types the hour the citizen
+ * called, on the commune's clock. A laptop set to another zone would otherwise move the deadline's
+ * starting point by hours — and the deadline is a commitment counted from that point (rule 10). A
+ * string that is not the input's shape returns `null`: refused here, never guessed.
+ */
+export function clockFromRfc3339(local: string): string | null {
+  const v = local.trim();
+  if (v === "") return "";
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(v);
+  if (m === null) return null;
+  return `${m[1]}T${m[2]}:${m[3]}:${m[4] ?? "00"}${ADMINISTRATIVE_OFFSET}`;
+}
+
+const LOCAL_INPUT_PARTS = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** An instant as a `datetime-local` value on the commune's clock — for the input's `min`/`max`. */
+export function toLocalInputValue(at: Date): string {
+  const parts = LOCAL_INPUT_PARTS.formatToParts(at);
+  const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
+  // `en-GB` writes midnight as `24` in some engines; the input wants `00`.
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+}
+
+/**
+ * The input's `min` / `max` — a HINT to the picker only. The server decides against the BOOKING
+ * instant, which is a few seconds after this; its 400 `clock_from_out_of_range` sentence is the answer.
+ */
+export function clockFromBounds(now: Date): { readonly min: string; readonly max: string } {
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+  return { min: toLocalInputValue(new Date(now.getTime() - sevenDays)), max: toLocalInputValue(now) };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * THE FOUR KPI CARDS (§3) — GET /api/v1/citizen-report-summary (`feedback.read` AND `report.read`)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Spec §3 card 1: "TỔNG PHẢN ÁNH 90 NGÀY". Cards 1 and 2 read the same window. */
+export const KPI_WINDOW_DAYS = 90;
+
+export const KPI_TOTAL_LABEL = "Tổng phản ánh 90 ngày";
+export const KPI_ON_TIME_LABEL = "Đúng hạn / trễ hạn";
+export const KPI_RATING_LABEL = "Điểm hài lòng trung bình";
+export const KPI_PENDING_LABEL = "Chờ kiểm duyệt";
+/** Spec §3 card 4's line, verbatim. */
+export const KPI_PENDING_CAPTION = "Kiểm duyệt trước khi hiển thị công khai";
+export const KPI_LOADING = "Đang tải số liệu phản ánh…";
+export const KPI_NO_RATING = "Chưa có phiếu nào được người dân chấm điểm";
+export const KPI_NO_DEADLINE_SAMPLE = "Chưa có phiếu nào có hạn trong 90 ngày qua";
+
+const ONE_DECIMAL = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const COUNT = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
+
+export function kpiCount(n: number): string {
+  return COUNT.format(n);
+}
+
+/**
+ * The average rating, `sum / sample`, one decimal (`4,3/5`), or `null` for NO VALUE.
+ *
+ * `null` WHEN THE SAMPLE IS 0, NEVER `0,0/5`: a commune nobody has rated yet is not a commune rated
+ * zero, and a 0 printed here is the figure that travels upward. `null` too when the server predates the
+ * fields (absent / null) — unknown is not zero either. The division is the client's by the server's own
+ * contract (`summary_metrics.go`: "divided by the client like every ratio here").
+ */
+export function ratingAverage(sum: number | null | undefined, sample: number | null | undefined): string | null {
+  if (typeof sum !== "number" || typeof sample !== "number" || !(sample > 0)) return null;
+  return `${ONE_DECIMAL.format(sum / sample)}/${RATING_MAX_STARS}`;
+}
+
+/** `on_time / on_time_sample` as `33,3%`, or `null` when the sample is 0 — never 0%. */
+export function onTimePercent(onTime: number, sample: number): string | null {
+  if (!(sample > 0)) return null;
+  return `${ONE_DECIMAL.format((onTime / sample) * 100)}%`;
+}
+
+export function lowRatingCaption(n: number): string {
+  return `${kpiCount(n)} phiếu bị đánh giá thấp`;
+}
+
+export function inProgressCaption(n: number): string {
+  return `${kpiCount(n)} phiếu đang xử lý`;
+}
+
+/** Accessible name of a KPI link — the dashboard's wording (`drillLabel`, spec 01 §4/§9). */
+export function kpiLinkLabel(label: string): string {
+  return `Xem danh sách đằng sau: ${label}`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
  * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn
@@ -1062,16 +1313,6 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Ảnh sau khi xử lý (§8.4)",
-    viSao:
-      "Ảnh người dân gửi kèm phiếu (cột `Trước khi xử lý`) nay đã hiện trong chi tiết phiếu. Ảnh " +
-      "nghiệm thu do cán bộ tải lên sau khi xử lý thì chủ dự án đã hoãn (ADR 0047, G8): hợp đồng " +
-      "chưa có tuyến nào cho cán bộ tải ảnh. Hệ quả nặng hơn một ô ảnh trống: quy tắc §14.2 " +
-      "*“không đóng phiếu được khi thiếu ảnh sau xử lý”* hôm nay KHÔNG được cưỡng chế ở đâu cả, vì " +
-      "cả ảnh sau xử lý lẫn cờ `bat_buoc_anh_nghiem_thu` của ADR 0008 đều chưa có. Nút Đóng phiếu " +
-      "bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
-  },
-  {
     ten: "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",
     viSao:
       "Toạ độ `lat`/`lng` người dân gửi kèm nay đã về và hiện thành chữ ở ô `Vị trí hiện trường`. " +
@@ -1081,16 +1322,14 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "thôn thì phiếu trả về không mang, nên không hiện cạnh địa chỉ.",
   },
   {
-    ten: "Bốn thẻ KPI (§3), tab Bản đồ nhiệt (§9), tab Báo cáo (§10)",
+    ten: "Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)",
     viSao:
-      "Tuyến đếm `GET /api/v1/citizen-report-summary` (ADR 0053) đã có và trang Tổng quan đang dùng " +
-      "nó, nhưng nó chỉ trả số tiếp nhận, đang xử lý, đúng hạn và trễ hạn — không có điểm hài lòng " +
-      "trung bình, số phiếu bị đánh giá thấp hay số phiếu chờ kiểm duyệt của hai thẻ còn lại. Không " +
-      "có tuyến bản đồ nhiệt: phiếu nay đã mang `lat`/`lng` (toạ độ người dân gửi kèm), nhưng vẽ " +
-      "bản đồ nhiệt cần một nhà cung cấp bản đồ, tức là gửi toạ độ của người dân ra một dịch vụ " +
-      "ngoài — việc chủ dự án chưa quyết (luật 3, điểm dừng #2). Không tuyến nào đếm theo lĩnh vực, " +
-      "bộ phận hay thôn cho tab Báo cáo. Dựng những con số ấy bằng cách đếm trang đang xem sẽ là con " +
-      "số của MỘT TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
+      "Bốn thẻ số liệu (§3) nay đã có, đọc từ tuyến đếm `GET /api/v1/citizen-report-summary`. Hai " +
+      "tab còn lại thì chưa. Bản đồ nhiệt: phiếu đã mang `lat`/`lng` (toạ độ người dân gửi kèm), nhưng " +
+      "vẽ bản đồ nhiệt cần một nhà cung cấp bản đồ, tức là gửi toạ độ của người dân ra một dịch vụ " +
+      "ngoài — việc chủ dự án chưa quyết (luật 3, điểm dừng #2). Báo cáo: không tuyến nào đếm theo " +
+      "lĩnh vực, bộ phận hay thôn. Dựng những con số ấy bằng cách đếm trang đang xem sẽ là con số của " +
+      "MỘT TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
   },
   {
     ten: "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
@@ -1114,18 +1353,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
   },
   {
-    ten: "Modal `Nhập hộ phản ánh` (§11)",
+    ten: "Ô `Thôn, tổ dân phố` và nút `Đính ảnh hiện trường` của modal Nhập hộ phản ánh (§11)",
     viSao:
-      "Không có tuyến vào sổ phía cán bộ: `POST /api/v1/citizen-reports` không tồn tại, chỉ có " +
-      "`POST /api/v1/my-citizen-reports` của công dân trong Mini App. Ngoài ra câu mô tả của modal " +
-      "ấy đã sai từ ADR 0028 và đang chờ khách duyệt câu thay thế (§11).",
-  },
-  {
-    ten: "Câu giải thích trạng thái, tám trong chín (§8.2)",
-    viSao:
-      "Đặc tả chỉ cho nguyên văn MỘT câu (`Đang phân loại`). Tám câu còn lại là chữ hiện ra cho cán " +
-      "bộ của một cơ quan nhà nước; viết thêm ở đây là tự quyết chữ chưa ai duyệt — đúng chỗ §11 " +
-      "của chính chương này vừa hỏng.",
+      "Máy chủ chưa nhận hai thứ ấy ở biểu mẫu nhập hộ và trả 400 nếu được gửi: chưa có đường nào " +
+      "kiểm một thôn do cán bộ chọn có đúng là thôn của xã hay không, và luồng tải ảnh hiện trường " +
+      "đang gắn với phiên của người dân. Vị trí ghi vào ô `Địa chỉ, vị trí`. Ô `Tiếp nhận qua kênh` " +
+      "thì không phải phần thiếu: phiếu nhập hộ luôn ở kênh `Cán bộ nhập hộ` (ADR 0028, bổ sung " +
+      "02/10/2026).",
   },
   {
     ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
