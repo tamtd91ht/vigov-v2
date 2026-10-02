@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-01",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -426,6 +426,15 @@
       "trang_thai": "xong",
       "bang_chung": "internal/grpc/phien_cong_dan.go ResolveCitizenSession: phiên có xã → hỏi sổ xã qua tenant.CachedCommune (TENANT_CACHE_TTL, cùng nhịp phân giải Host); xã ngừng / không còn → khongCoPhienCongDan() y hệt phiên hết hạn (luật 4 cấm #2); không hỏi được platform → UNAVAILABLE (đóng kín). Phiên chưa chọn xã không hỏi. Chỗ đặt: RPC này là đường DUY NHẤT mọi rìa công dân (core/httpx.CitizenEdge qua core/identityclient) đi qua; identity không có rìa HTTP công dân. Deps.Communes bắt buộc (NewServer panic). Kiểm: TestCitizenSessionActiveCommuneResolves, ...InactiveCommuneIsNoSession, ...DeactivatedMidSessionIsRefused, ...RegistryDownIsUnavailable, ...WithoutCommuneSkipsTheCheck; khung TTL ở core/tenant (đồng hồ giả).",
       "tiep_theo": "Mỗi yêu cầu công dân thêm một lời gọi GetTenant tới platform khi bộ đệm hết hạn (mỗi xã một lần / 30 giây mỗi bản sao identity)."
+    },
+    {
+      "id": "measure-working-hours",
+      "viec": "gRPC IdentityService.MeasureWorkingHours — đo giờ làm việc đã trôi giữa hai mốc theo lịch của xã, theo lô (ADR 0007 quyết định 10, chủ dự án 02/10/2026: 'thêm grpc luôn đi cho đồng bộ')",
+      "trang_thai": "xong",
+      "bang_chung": "proto 6dc98be9. domain/tien_gio_lam_viec.go MeasureWorkingTime trên cùng working walk của AdvanceWorkingHours (một lượt đi, một bộ đọc năm mỗi lời gọi); grpc/measure_working_hours.go kiểm đối số trước mọi lần đọc (1–500 khoảng, end≥start, ≤10 năm), lỗi lịch qua s.loiLich (lịch rỗng = FAILED_PRECONDITION, không 0), gộp khoảng trùng, giây nguyên cắt xuống. core/identityclient MeasureWorkingSeconds + ErrWorkingCalendarNotConfigured. 17 ca domain+grpc (tính chất ngược measure(t,Advance(t,h))==h qua cuối tuần, nghỉ lễ, làm bù, nghỉ trưa, 168h, xã chỉ làm thứ Bảy; 523 ngày làm việc trong 2 năm; mọi INVALID_ARGUMENT không đọc lịch; độc lập múi giờ tiến trình) + 4 ca client. go test -count=1 ./... xanh, go vet sạch.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai gọi: service-petitions dùng ở hàng đợi quá hạn (thẻ hành vi petitions đợt 02/10). Màn cán bộ không hiện số (ADR 0007 10a). Dòng log của s.loiLich vẫn mang tiền tố 'AdvanceWorkingHours:' khi MeasureWorkingHours gọi.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

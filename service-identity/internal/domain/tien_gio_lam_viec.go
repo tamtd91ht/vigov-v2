@@ -325,6 +325,117 @@ func DueSoonCutoff(asOf time.Time, tuan []CaLamViec, docNam DocLichNam, hours in
 	return cutoff, nil
 }
 
+// WorkingSpan is two instants, Start inclusive and End exclusive, whose working time is measured.
+type WorkingSpan struct {
+	Start time.Time
+	End   time.Time
+}
+
+// MeasureWorkingTime answers, for each span, the length of [Start, End) that falls inside this
+// commune's working sessions — the answer behind MeasureWorkingHours, and the inverse of
+// TienGioLamViec: MeasureWorkingTime(t, TienGioLamViec(t, h)) == h hours, against the same calendar.
+//
+// # One walk, not a second calendar
+//
+// The sessions, holidays, swap days and every refusal come from the SAME workingWalk TienGioLamViec
+// and DueSoonCutoff use. The walk starts ONCE, at the earliest Start of the call, and accrues
+// F(x) = working time in [origin, x) at every endpoint; each span is then F(End) − F(Start). One walk
+// and one per-year memo for the whole call, so every span is measured against one calendar read.
+//
+// An endpoint outside working time contributes nothing and is not "snapped" anywhere: F is flat
+// across closed time, which is what makes a span from Friday 22:00 measure the same as one from
+// Monday 07:30 (ADR 0007 decision 8) without a branch saying so.
+//
+// # What it refuses, and what it never produces
+//
+// Every calendar fault TienGioLamViec refuses, unchanged — the empty calendar included: it would
+// measure 0 everywhere, and 0 reads as "not late". LoiVuotChanTroi is NEVER produced: both endpoints
+// are the caller's, there is no answer to land past the holidays anybody entered, and the bound on how
+// far the walk goes is the gRPC boundary's ten-year check, which is the caller's fault and not the
+// commune's. The walk below therefore runs to the last End's date instead of the 366-day horizon.
+//
+// Years are read lazily, as everywhere: the walk enters a date only if some span covers part of it,
+// so a fault in a year no span enters cannot change this answer.
+//
+// No span, or End before Start, is a plain error: the boundary refuses both as INVALID_ARGUMENT, so
+// reaching here means this service's own two halves disagree.
+func MeasureWorkingTime(spans []WorkingSpan, week []CaLamViec, readYear DocLichNam) ([]time.Duration, error) {
+	if len(spans) == 0 {
+		return nil, fmt.Errorf("lịch làm việc: không có khoảng thời gian nào để đo")
+	}
+	origin, last := spans[0].Start, spans[0].End
+	for _, sp := range spans {
+		if sp.End.Before(sp.Start) {
+			return nil, fmt.Errorf("lịch làm việc: khoảng đo có mốc kết thúc trước mốc bắt đầu")
+		}
+		if sp.Start.Before(origin) {
+			origin = sp.Start
+		}
+		if sp.End.After(last) {
+			last = sp.End
+		}
+	}
+
+	// Validates the week (empty, overlapping) and resolves the zone BEFORE anything else — an empty
+	// calendar is refused even when every span is empty, because "no working time here" is a reading
+	// of a calendar the commune has not given.
+	w, err := newWorkingWalk(origin, week, readYear)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]time.Duration, len(spans))
+	if !last.After(origin) {
+		// Every span is start == end: each measures 0 and no date is entered, so no year is read.
+		return out, nil
+	}
+	// END IS EXCLUSIVE, so the last date entered is the one holding the instant just before it. A call
+	// ending at 00:00 on 1 January never reads the new year — a fault there cannot touch this answer.
+	w.lastDay = nuaDem(last.Add(-time.Nanosecond), w.zone)
+
+	// Every endpoint, ordered as instants. Duplicates need no collapsing: equal instants get equal F.
+	points := make([]int, 0, 2*len(spans))
+	at := func(p int) time.Time {
+		if p%2 == 0 {
+			return spans[p/2].Start
+		}
+		return spans[p/2].End
+	}
+	for p := 0; p < 2*len(spans); p++ {
+		points = append(points, p)
+	}
+	sort.SliceStable(points, func(i, j int) bool { return at(points[i]).Before(at(points[j])) })
+
+	accrued := make([]time.Duration, 2*len(spans))
+	var total time.Duration
+	i := 0
+	err = w.each(func(start, end time.Time) bool {
+		// Endpoints at or before this interval opens: nothing more accrued since the previous one closed.
+		for i < len(points) && !at(points[i]).After(start) {
+			accrued[points[i]] = total
+			i++
+		}
+		// Endpoints inside it: credited up to that instant.
+		for i < len(points) && at(points[i]).Before(end) {
+			accrued[points[i]] = total + at(points[i]).Sub(start)
+			i++
+		}
+		total += end.Sub(start)
+		return i == len(points)
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Endpoints after the last interval the walk visited: everything there is to accrue has accrued.
+	for ; i < len(points); i++ {
+		accrued[points[i]] = total
+	}
+
+	for k := range spans {
+		out[k] = accrued[2*k+1] - accrued[2*k]
+	}
+	return out, nil
+}
+
 // workingWalk is ONE commune's calendar, validated and ready to be walked from one instant.
 //
 // IT EXISTS SO THE WALK HAS ONE IMPLEMENTATION. TienGioLamViec (earliest instant N hours are
