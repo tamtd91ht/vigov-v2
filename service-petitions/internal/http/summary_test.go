@@ -68,8 +68,10 @@ func (f *citizenReportSummaryFake) CitizenReportSummary(ctx context.Context, p d
 
 func citizenReportSummarySample() *citizenReportSummaryFake {
 	return &citizenReportSummaryFake{byTenant: map[tenant.ID]domain.CitizenReportSummary{
-		xaA: {Received: 2, InProgress: 14, OnTimeSample: 6, OnTime: 4, Late: 2},
-		xaB: {Received: 50, InProgress: 60, OnTimeSample: 70, OnTime: 30, Late: 40},
+		xaA: {Received: 2, InProgress: 14, OnTimeSample: 6, OnTime: 4, Late: 2,
+			RatingSample: 3, RatingSum: 11, LowRating: 1, PublicationPending: 16},
+		xaB: {Received: 50, InProgress: 60, OnTimeSample: 70, OnTime: 30, Late: 40,
+			RatingSample: 80, RatingSum: 90, LowRating: 25, PublicationPending: 35},
 	}}
 }
 
@@ -281,7 +283,8 @@ func TestCitizenReportSummaryFieldsAreMetrics(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatalf("thân không phải JSON số: %v", err)
 	}
-	want := map[string]int{"received": 2, "in_progress": 14, "on_time_sample": 6, "on_time": 4, "late": 2}
+	want := map[string]int{"received": 2, "in_progress": 14, "on_time_sample": 6, "on_time": 4, "late": 2,
+		"rating_sample": 3, "rating_sum": 11, "low_rating": 1, "publication_pending": 16}
 	if len(out) != len(want) {
 		t.Errorf("trả %d trường, muốn %d: %v", len(out), len(want), out)
 	}
@@ -289,9 +292,50 @@ func TestCitizenReportSummaryFieldsAreMetrics(t *testing.T) {
 		if out[k] != v {
 			t.Errorf("%s = %d, muốn %d", k, out[k], v)
 		}
-		if !domain.CitizenReportMetric(k).Valid() {
+		// rating_sum IS THE ONE FIELD THAT IS NOT A COUNT OF ROWS — the numerator of the average over
+		// the rating_sample rows — so it has no list of its own. Every other field is a drill-down.
+		if k != "rating_sum" && !domain.CitizenReportMetric(k).Valid() {
 			t.Errorf("trường %q không phải một metric của GET /api/v1/citizen-reports", k)
 		}
+	}
+	if domain.CitizenReportMetric("rating_sum").Valid() {
+		t.Error("rating_sum là tổng số sao, không phải số phiếu — không được là một metric có danh sách")
+	}
+}
+
+// TestCitizenReportSummaryNewFiguresZeroTravelsAsZero — the three stock figures are optional in the
+// contract but SET on every response: a commune with nothing rated gets 0 and 0, never an absent key
+// (absent means "server predates the field").
+func TestCitizenReportSummaryNewFiguresZeroTravelsAsZero(t *testing.T) {
+	m := dungMayChu(t)
+	m.reportSummary.byTenant[xaA] = domain.CitizenReportSummary{Received: 1}
+	grantBoth(m, t, "feedback.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/citizen-report-summary"+periodQuery, canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	for _, k := range []string{`"rating_sample":0`, `"rating_sum":0`, `"low_rating":0`, `"publication_pending":0`} {
+		if !strings.Contains(w.Body.String(), k) {
+			t.Errorf("thiếu %s: %s", k, w.Body.String())
+		}
+	}
+	// NO RATIO ON THE WIRE — the average is the client's division.
+	for _, cam := range []string{"average", "avg", "ratio", "percent"} {
+		if strings.Contains(w.Body.String(), cam) {
+			t.Errorf("phản hồi mang tỷ lệ %q", cam)
+		}
+	}
+}
+
+func TestCitizenReportListNewStockMetricsIgnorePeriod(t *testing.T) {
+	for _, m := range []domain.CitizenReportMetric{domain.CitizenReportRatingSample, domain.CitizenReportLowRating,
+		domain.CitizenReportPublicationPending} {
+		t.Run(string(m), func(t *testing.T) {
+			s := dungMayChu(t)
+			doiMa(t, s.goi(t, http.MethodGet, hostA, "/api/v1/citizen-reports?metric="+string(m), canBoCuaXa(xaA)),
+				http.StatusOK)
+			if s.danhSach.loc.Metric != m || !s.danhSach.loc.Period.From.IsZero() {
+				t.Errorf("metric=%s xuống kho = %+v", m, s.danhSach.loc)
+			}
+		})
 	}
 }
 
@@ -415,6 +459,38 @@ func TestOverdueQueueCarriesNoPersonalData(t *testing.T) {
 	}
 	if m.overdue.restricted {
 		t.Error("không có feedback.restricted mà use case vẫn được bảo lấy cả lĩnh vực can-bo")
+	}
+}
+
+// TestOverdueQueueLateWorkingSecondsOptional — present as a number when the use case measured it,
+// ABSENT (never 0, never null) when it did not, and the page is 200 either way.
+func TestOverdueQueueLateWorkingSecondsOptional(t *testing.T) {
+	m := dungMayChu(t)
+	measured := uint64(97213)
+	zero := uint64(0)
+	m.overdue.reports[xaA] = []domain.OverdueItem{
+		{Kind: domain.DeadlineResolution, Code: "PA-AAAA-AAAA-AAAA", MissedDeadline: missedAt, LateWorkingSeconds: &measured},
+		{Kind: domain.DeadlineResolution, Code: "PA-CCCC-CCCC-CCCC", MissedDeadline: missedAt},
+		// A measured 0 is a real answer (deadline missed outside working hours) and travels as 0.
+		{Kind: domain.DeadlineResolution, Code: "PA-DDDD-DDDD-DDDD", MissedDeadline: missedAt, LateWorkingSeconds: &zero},
+	}
+	grantBoth(m, t, "feedback.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/overdue-citizen-reports", canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	var out struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Items[0]["late_working_seconds"] != float64(97213) {
+		t.Errorf("dòng đo được = %v", out.Items[0]["late_working_seconds"])
+	}
+	if _, ok := out.Items[1]["late_working_seconds"]; ok {
+		t.Errorf("dòng không đo được vẫn mang khoá late_working_seconds: %v", out.Items[1])
+	}
+	if out.Items[2]["late_working_seconds"] != float64(0) {
+		t.Errorf("số 0 đo được bị bỏ: %v", out.Items[2])
 	}
 }
 

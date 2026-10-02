@@ -246,6 +246,9 @@ type mayChu struct {
 
 	// fields is the petition field catalogue — petition_fields_test.go.
 	fields *fieldCatalogueFake
+
+	// staffIntake is "Nhập hộ phản ánh" — staff_intake_test.go.
+	staffIntake *staffIntakeFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -261,6 +264,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	// commune B's page contains only commune B's.
 	danhSach := danhSachTuPhieuMau(phieu)
 	xuLy := &xuLyPhieuGia{}
+	// The staff intake — staff_intake_test.go.
+	staffIntake := &staffIntakeFake{}
 	// The processing logbook read, keyed by commune AND petition id — see nhatKyPhieuGia.
 	nhatKy := nhatKyMau()
 	// ONE fake for BOTH task read routes, keyed by commune — the same object the wiring in
@@ -339,6 +344,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			Vet:                 vet,
 			DanhSachPhieu:       danhSach,
 			XuLyPhieu:           xuLy,
+			StaffIntake:         staffIntake,
 			NhatKyPhieu:         nhatKy,
 			NhiemVu:             nhiemVu,
 			DanhSachNhiemVu:     nhiemVu,
@@ -402,6 +408,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		petitionLogFiles:   petitionLogFiles,
 
 		fields: fields,
+
+		staffIntake: staffIntake,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -490,6 +498,7 @@ func depsDay() Deps {
 		Vet:                 &vetXemGia{},
 		DanhSachPhieu:       danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:           &xuLyPhieuGia{},
+		StaffIntake:         &staffIntakeFake{},
 		NhatKyPhieu:         nhatKyMau(),
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:            nhiemVuMau(),
@@ -543,7 +552,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// it breaks classify, assign, advance and close at once, which puts the service back in the
 		// state it was in before these routes existed — petitions arriving and nothing able to move
 		// them.
-		"thiếu use case xử lý phiếu": func(d *Deps) { d.XuLyPhieu = nil },
+		"thiếu use case xử lý phiếu":      func(d *Deps) { d.XuLyPhieu = nil },
+		"thiếu use case nhập hộ phản ánh": func(d *Deps) { d.StaffIntake = nil },
 		// The timeline column of the petition drawer (migration 0013).
 		"thiếu đường đọc nhật ký xử lý phiếu": func(d *Deps) { d.NhatKyPhieu = nil },
 		// THE CASE WITH THE QUIETEST FAILURE MODE. A nil here does not break a screen: it breaks

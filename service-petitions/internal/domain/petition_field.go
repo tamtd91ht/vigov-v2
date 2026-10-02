@@ -50,6 +50,20 @@ func (v PetitionFieldView) OfferedToCitizens() bool {
 	return v.Active && v.Enabled && v.Code != LinhVucHanChe
 }
 
+// OfferedToStaffIntake is the rule for the staff-booked modal (docs/ui-ux/09 §11, "Lĩnh vực" required):
+// active on the platform and enabled by the commune — the commune's switch hides a code from EVERY
+// new-submission form (ADR 0026 §Bổ sung cuối ngày: "Tắt chỉ tác động lên đường TẠO MỚI"), and this
+// modal is one.
+//
+// `can-bo` IS OFFERED HERE, unlike on the citizen form, and the difference is who types it. §11 lists
+// all twelve fields; classification already lets an officer settle `can-bo` (XuLyPhanAnh.ChotLinhVuc
+// gates nothing on the target field); and a petition born there is hidden from every reader without
+// `feedback.restricted` and from the public page (InitialPublicationStatus). Refusing it would leave a
+// citizen who phones in a complaint about an officer with no way to be booked at all.
+func (v PetitionFieldView) OfferedToStaffIntake() bool {
+	return v.Active && v.Enabled
+}
+
 // MergePetitionFields applies overrides to the tier-1 set and returns EVERY tier-1 code, retired
 // ones included, in effective order: position, then tier-1 order, then code — a total order, so
 // two reads never swap two entries.

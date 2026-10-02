@@ -16,8 +16,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/vihat/vigov/core/identityclient"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -32,12 +35,17 @@ type CitizenReportOverdueReader interface {
 	OverdueCitizenReports(ctx context.Context, limit int, restricted bool) ([]domain.OverdueItem, error)
 }
 
-// WorkingHoursCalculator is identity's AdvanceWorkingHours, as core/identityclient exposes it.
-// *identityclient.Client satisfies it — the SAME client the deadline paths already use, so this panel
-// and those paths never disagree about identity's health.
+// WorkingHoursCalculator is identity's AdvanceWorkingHours and MeasureWorkingHours, as
+// core/identityclient exposes them. *identityclient.Client satisfies it — the SAME client the deadline
+// paths already use, so this panel and those paths never disagree about identity's health.
 type WorkingHoursCalculator interface {
 	// vi-name-ok: the method name of the existing core/identityclient.Client this interface must match
 	TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error)
+
+	// MeasureWorkingSeconds answers the working time inside each span, one calendar read per call
+	// (commit 1c28348a). Used for the petition panel's `late_working_seconds` only.
+	MeasureWorkingSeconds(ctx context.Context, spans []identityclient.WorkingSpan) (
+		map[identityclient.WorkingSpan]uint64, error)
 }
 
 // ErrWorkingHoursUnavailable means identity could not say when an item becomes critical.
@@ -55,11 +63,15 @@ type OverdueQueue struct {
 
 	// clock is the seam critical compares identity's instant with. Tests replace it; nothing else does.
 	clock func() time.Time
+
+	// log records why `late_working_seconds` is absent from a page — the field degrades silently on
+	// the wire by design, so the cause has to be somewhere an operator can read it.
+	log *slog.Logger
 }
 
 func NewOverdueQueue(tasks TaskOverdueReader, reports CitizenReportOverdueReader,
 	hours WorkingHoursCalculator) *OverdueQueue {
-	return &OverdueQueue{tasks: tasks, reports: reports, hours: hours, clock: time.Now}
+	return &OverdueQueue{tasks: tasks, reports: reports, hours: hours, clock: time.Now, log: slog.Default()}
 }
 
 // Tasks returns at most `limit` overdue tasks, oldest missed deadline first, each with Critical set.
@@ -80,7 +92,70 @@ func (q *OverdueQueue) CitizenReports(ctx context.Context, limit int, restricted
 	if err != nil {
 		return nil, fmt.Errorf("hàng đợi quá hạn phản ánh: %w", err)
 	}
-	return q.markCritical(ctx, items)
+	items, err = q.markCritical(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	return q.measureLate(ctx, items), nil
+}
+
+// measureLate fills LateWorkingSeconds — the working time between each missed deadline and the `now`
+// the overdue predicate used (OverdueItem.AsOf) — in ONE MeasureWorkingHours call per
+// identityclient.MaxMeasuredSpansPerCall spans. The page is at most OverdueQueueMax (ten) rows, so that
+// is one call; the chunking exists so a larger page can never become a refused request.
+//
+// ALL OR NOTHING, AND NOTHING IS NOT AN ERROR. Any failure — identity unavailable, the commune's
+// calendar not configured, a span that cannot be measured, a short answer — leaves the field ABSENT on
+// EVERY item and the page is still returned: "Quá hạn" is derivable without it (the proto comment), and
+// a page where some rows carry a number and some do not would read as "those rows are not late". NEVER
+// 0 and never a default. ADR 0007 decision 10: the screen shows no number yet; this only makes one
+// available. Never stored.
+func (q *OverdueQueue) measureLate(ctx context.Context, items []domain.OverdueItem) []domain.OverdueItem {
+	if len(items) == 0 {
+		return items
+	}
+	spans := make([]identityclient.WorkingSpan, 0, len(items))
+	for _, it := range items {
+		// The predicate guarantees MissedDeadline < AsOf; checked anyway, because a zero AsOf (a store
+		// that did not fill it) would otherwise be sent as a span ending in the year 1.
+		if it.AsOf.IsZero() || it.MissedDeadline.IsZero() || it.AsOf.Before(it.MissedDeadline) {
+			q.log.WarnContext(ctx, "CẢNH BÁO: không đo được thời gian trễ theo giờ làm việc — dòng thiếu mốc",
+				"xa", string(tenant.MustFrom(ctx)))
+			return items
+		}
+		spans = append(spans, identityclient.WorkingSpan{Start: it.MissedDeadline.UTC(), End: it.AsOf.UTC()})
+	}
+
+	measured := make(map[identityclient.WorkingSpan]uint64, len(spans))
+	for start := 0; start < len(spans); start += identityclient.MaxMeasuredSpansPerCall {
+		end := min(start+identityclient.MaxMeasuredSpansPerCall, len(spans))
+		got, err := q.hours.MeasureWorkingSeconds(ctx, spans[start:end])
+		if err != nil {
+			// identityclient already logged the gRPC code; the commune says which calendar to open.
+			q.log.WarnContext(ctx, "CẢNH BÁO: không đo được thời gian trễ theo giờ làm việc — trả hàng đợi không kèm số",
+				"xa", string(tenant.MustFrom(ctx)), "err", err)
+			return items
+		}
+		for k, v := range got {
+			measured[k] = v
+		}
+	}
+
+	out := make([]domain.OverdueItem, len(items))
+	for i, it := range items {
+		v, ok := measured[spans[i]]
+		if !ok {
+			// identityclient refuses a short answer itself; this is the floor for a fake or a future
+			// client. One row unmeasured -> no row measured.
+			q.log.WarnContext(ctx, "CẢNH BÁO HỢP ĐỒNG: thiếu một khoảng đã hỏi — trả hàng đợi không kèm số",
+				"xa", string(tenant.MustFrom(ctx)))
+			return items
+		}
+		late := v
+		it.LateWorkingSeconds = &late
+		out[i] = it
+	}
+	return out
 }
 
 // markCritical asks identity ONCE PER DISTINCT MISSED DEADLINE, and at most OverdueQueueMax times.

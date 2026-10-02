@@ -40,16 +40,23 @@ func TestMetricSetsAreClosedAndPeriodBoundIsDeclared(t *testing.T) {
 			t.Errorf("%s: PeriodBound = %v", m, m.PeriodBound())
 		}
 	}
-	if len(CitizenReportMetrics) != 5 {
-		t.Fatalf("%d chỉ số phản ánh, muốn 5", len(CitizenReportMetrics))
+	if len(CitizenReportMetrics) != 8 {
+		t.Fatalf("%d chỉ số phản ánh, muốn 8", len(CitizenReportMetrics))
 	}
+	// The four STOCK figures: in progress, and the three of 2026-10-02 (their lists take no period).
+	stockReport := map[CitizenReportMetric]bool{CitizenReportInProgress: true, CitizenReportRatingSample: true,
+		CitizenReportLowRating: true, CitizenReportPublicationPending: true}
 	for _, m := range CitizenReportMetrics {
 		if !m.Valid() {
 			t.Errorf("%s không hợp lệ", m)
 		}
-		if m.PeriodBound() == (m == CitizenReportInProgress) {
+		if m.PeriodBound() == stockReport[m] {
 			t.Errorf("%s: PeriodBound = %v", m, m.PeriodBound())
 		}
+	}
+	// "Low" and "reopens" are one number (ADR 0050 point 2, docs/ui-ux/09 §4 "phiếu 1–2 sao").
+	if low, reopen := LowRatingMaxStars, RatingReopenThreshold; low != 2 || low != reopen {
+		t.Errorf("LowRatingMaxStars = %d, RatingReopenThreshold = %d, muốn cùng là 2", low, reopen)
 	}
 	for _, bad := range []string{"", "late", "Overdue", "in-progress"} {
 		if TaskMetric(bad).Valid() {

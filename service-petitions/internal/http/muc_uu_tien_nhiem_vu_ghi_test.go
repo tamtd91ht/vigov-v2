@@ -176,6 +176,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		// see the same note in loai_nhiem_vu_ghi_test.go.
 		DanhSachPhieu: danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:     &xuLyPhieuGia{},
+		StaffIntake:   &staffIntakeFake{},
 		NhatKyPhieu:   nhatKyMau(),
 		// The two TASK read routes. Register refuses a nil dependency at construction, and
 		// nothing in this file calls them — their own suite is nhiem_vu_test.go.

@@ -144,6 +144,22 @@ func (c *PetitionFieldCatalogue) CheckCitizenIntakeField(ctx context.Context, co
 	return "", ErrFieldNotOffered
 }
 
+// CheckStaffIntakeField is CheckCitizenIntakeField for the staff-booked modal: the same catalogue read
+// and the same single refusal, under domain.PetitionFieldView.OfferedToStaffIntake (which, unlike the
+// citizen rule, admits `can-bo`).
+func (c *PetitionFieldCatalogue) CheckStaffIntakeField(ctx context.Context, code string) (string, error) {
+	merged, err := c.Catalogue(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, v := range merged {
+		if v.Code == code && v.OfferedToStaffIntake() {
+			return v.Code, nil
+		}
+	}
+	return "", ErrFieldNotOffered
+}
+
 // EffectiveFieldLabels answers every tier-1 code, retired ones included, with the label a screen shows:
 // the commune's wording, else the platform default (ADR 0026 §Quyết định). It satisfies the label
 // catalogue interface every petition read path already calls, so the list, the detail and the staff

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -40,6 +41,13 @@ type hoursFake struct {
 	amount []uint32
 	err    error
 	drop   bool // answer without the amount asked for
+
+	// The MeasureWorkingHours half.
+	seconds      map[time.Time]uint64
+	measureErr   error
+	measureDrop  bool // leave the last span of each call unanswered
+	measureCalls int
+	measured     []identityclient.WorkingSpan
 }
 
 // vi-name-ok: implements the existing core/identityclient.Client method WorkingHoursCalculator mirrors
@@ -53,6 +61,25 @@ func (h *hoursFake) TienGioLamViec(_ context.Context, from time.Time, gio []uint
 		return map[uint32]time.Time{}, nil
 	}
 	return map[uint32]time.Time{gio[0]: h.answer[from]}, nil
+}
+
+// MeasureWorkingSeconds answers a FIXED number per span start — deliberately not End-Start, so a use
+// case that computed wall-clock seconds itself would produce different numbers.
+func (h *hoursFake) MeasureWorkingSeconds(_ context.Context, spans []identityclient.WorkingSpan) (
+	map[identityclient.WorkingSpan]uint64, error) {
+	h.measureCalls++
+	h.measured = append(h.measured, spans...)
+	if h.measureErr != nil {
+		return nil, h.measureErr
+	}
+	out := map[identityclient.WorkingSpan]uint64{}
+	for i, sp := range spans {
+		if h.measureDrop && i == len(spans)-1 {
+			continue
+		}
+		out[sp] = h.seconds[sp.Start]
+	}
+	return out, nil
 }
 
 var (
@@ -150,5 +177,143 @@ func TestOverdueQueueStoreErrorWrapped(t *testing.T) {
 	_, err := newQueueForTest(&overdueStoreFake{err: cause}, &hoursFake{}).Tasks(context.Background(), 10)
 	if !errors.Is(err, cause) || errors.Is(err, ErrWorkingHoursUnavailable) {
 		t.Errorf("err = %v — lỗi kho phải được bọc và không bị nhận nhầm là lỗi identity", err)
+	}
+}
+
+// --- late_working_seconds (identity MeasureWorkingHours) ---------------------------------------------
+
+// asOfDB is the database's `now()` the overdue predicate used — deliberately NOT queueNow, the app clock
+// `critical` compares with, so a measurement ending at the wrong clock shows up as a wrong span.
+var asOfDB = time.Date(2026, 9, 28, 9, 59, 58, 0, time.UTC)
+
+func overdueReportsWithAsOf() *overdueStoreFake {
+	return &overdueStoreFake{items: []domain.OverdueItem{
+		{Kind: domain.DeadlineResolution, Code: "PA-A", MissedDeadline: dueFriday, AsOf: asOfDB},
+		{Kind: domain.DeadlineClassification, Code: "PA-B", MissedDeadline: dueThursday.In(time.FixedZone("ICT", 7*3600)), AsOf: asOfDB},
+	}}
+}
+
+func hoursWithMeasure() *hoursFake {
+	return &hoursFake{
+		answer: map[time.Time]time.Time{
+			dueFriday:   time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC),
+			dueThursday: time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC),
+		},
+		seconds: map[time.Time]uint64{dueFriday: 97213, dueThursday: 41},
+	}
+}
+
+func TestOverdueQueueLateWorkingSecondsOneCallSameNow(t *testing.T) {
+	h := hoursWithMeasure()
+	got, err := newQueueForTest(overdueReportsWithAsOf(), h).CitizenReports(ctxXa(xaThu), 10, false)
+	if err != nil {
+		t.Fatalf("CitizenReports: %v", err)
+	}
+	if h.measureCalls != 1 {
+		t.Fatalf("gọi MeasureWorkingHours %d lần, muốn 1 cho cả trang", h.measureCalls)
+	}
+	want := []identityclient.WorkingSpan{{Start: dueFriday, End: asOfDB}, {Start: dueThursday, End: asOfDB}}
+	for i, sp := range h.measured {
+		if !sp.Start.Equal(want[i].Start) || !sp.End.Equal(want[i].End) || sp.Start.Location() != time.UTC {
+			t.Errorf("khoảng %d = %+v, muốn %+v (UTC, kết thúc ở now() của câu lọc)", i, sp, want[i])
+		}
+	}
+	if got[0].LateWorkingSeconds == nil || *got[0].LateWorkingSeconds != 97213 ||
+		got[1].LateWorkingSeconds == nil || *got[1].LateWorkingSeconds != 41 {
+		t.Errorf("số giây = %v %v, muốn 97213 41 — nguyên văn identity", got[0].LateWorkingSeconds, got[1].LateWorkingSeconds)
+	}
+	if !got[0].Critical || got[1].Critical {
+		t.Error("cờ critical bị đổi khi thêm phép đo")
+	}
+}
+
+// Identity down, calendar not configured, a short answer: ABSENT on every row, the page still returns.
+func TestOverdueQueueLateWorkingSecondsAbsentNeverZero(t *testing.T) {
+	for name, mutate := range map[string]func(h *hoursFake){
+		"identity không trả lời": func(h *hoursFake) {
+			h.measureErr = errors.Join(identityclient.ErrIdentityUnavailable, errors.New("rpc Unavailable"))
+		},
+		"xã chưa cấu hình lịch": func(h *hoursFake) {
+			h.measureErr = errors.Join(identityclient.ErrWorkingCalendarNotConfigured, errors.New("FailedPrecondition"))
+		},
+		"trả thiếu một khoảng": func(h *hoursFake) { h.measureDrop = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := hoursWithMeasure()
+			mutate(h)
+			got, err := newQueueForTest(overdueReportsWithAsOf(), h).CitizenReports(ctxXa(xaThu), 10, false)
+			if err != nil {
+				t.Fatalf("lỗi đo làm hỏng cả hàng đợi: %v", err)
+			}
+			if len(got) != 2 {
+				t.Fatalf("trả %d dòng", len(got))
+			}
+			for _, it := range got {
+				if it.LateWorkingSeconds != nil {
+					t.Errorf("%s mang %d giây dù không đo được — phải VẮNG, không bao giờ 0", it.Code, *it.LateWorkingSeconds)
+				}
+			}
+			if !got[0].Critical {
+				t.Error("critical bị mất khi phép đo hỏng")
+			}
+		})
+	}
+}
+
+// A row without AsOf cannot be measured honestly: no call, no number on any row.
+func TestOverdueQueueLateWorkingSecondsNeedsAsOf(t *testing.T) {
+	s := overdueReportsWithAsOf()
+	s.items[1].AsOf = time.Time{}
+	h := hoursWithMeasure()
+	got, err := newQueueForTest(s, h).CitizenReports(ctxXa(xaThu), 10, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.measureCalls != 0 || got[0].LateWorkingSeconds != nil {
+		t.Errorf("đo %d lần, dòng đầu mang %v", h.measureCalls, got[0].LateWorkingSeconds)
+	}
+}
+
+func TestOverdueQueueTasksAreNotMeasured(t *testing.T) {
+	h := hoursWithMeasure()
+	got, err := newQueueForTest(&overdueStoreFake{items: []domain.OverdueItem{
+		{Kind: domain.DeadlineTask, Code: "NV01", MissedDeadline: dueFriday, AsOf: asOfDB},
+	}}, h).Tasks(ctxXa(xaThu), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.measureCalls != 0 || got[0].LateWorkingSeconds != nil {
+		t.Error("hàng đợi nhiệm vụ bị đo — chỉ bảng phản ánh mang trường này")
+	}
+}
+
+// A page larger than the contract's 500 spans is CHUNKED, never refused.
+func TestOverdueQueueLateWorkingSecondsChunked(t *testing.T) {
+	n := identityclient.MaxMeasuredSpansPerCall + 1
+	s := &overdueStoreFake{}
+	for i := 0; i < n; i++ {
+		s.items = append(s.items, domain.OverdueItem{Kind: domain.DeadlineResolution, Code: "PA",
+			MissedDeadline: dueFriday, AsOf: asOfDB})
+	}
+	h := hoursWithMeasure()
+	got, err := newQueueForTest(s, h).CitizenReports(ctxXa(xaThu), 10, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.measureCalls != 2 {
+		t.Errorf("gọi %d lần cho %d khoảng, muốn 2", h.measureCalls, n)
+	}
+	if got[n-1].LateWorkingSeconds == nil {
+		t.Error("dòng cuối (khúc thứ hai) không được đo")
+	}
+}
+
+func TestOverdueQueueEmptyMeasuresNothing(t *testing.T) {
+	h := hoursWithMeasure()
+	if _, err := newQueueForTest(&overdueStoreFake{}, h).CitizenReports(ctxXa(xaThu), 10, false); err != nil {
+		t.Fatal(err)
+	}
+	if h.measureCalls != 0 {
+		t.Error("không có dòng nào mà vẫn gọi MeasureWorkingHours")
 	}
 }

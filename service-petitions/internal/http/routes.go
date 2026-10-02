@@ -493,6 +493,10 @@ type Deps struct {
 	DanhSachPhieu PhieuPhanAnhDanhSach
 	XuLyPhieu     XuLyPhieuPhanAnh
 
+	// StaffIntake books a petition on a citizen's behalf ("Nhập hộ phản ánh", docs/ui-ux/09 §11) — a
+	// write that opens its transaction and audits inside it (app.StaffIntake), hence its own field.
+	StaffIntake StaffIntakeBooker
+
 	// The processing logbook's READ (migration 0013). Its one write, the manual note, is on
 	// XuLyPhieu because it opens a transaction and audits inside it, like the six acts.
 	NhatKyPhieu NhatKyPhieuDoc
@@ -628,6 +632,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// act a member of staff can perform on a petition, which means petitions come in and nothing
 		// can be done with them — the exact state this service was in before these routes existed.
 		panic("petitions/http: thiếu use case xử lý phiếu — bốn tuyến phân loại/phân công/chuyển trạng thái/đóng phiếu sẽ panic khi có người gọi")
+	case d.StaffIntake == nil:
+		panic("petitions/http: thiếu use case nhập hộ phản ánh — POST /api/v1/citizen-reports sẽ panic khi có người gọi")
 	case d.NhatKyPhieu == nil:
 		panic("petitions/http: thiếu đường đọc nhật ký xử lý phiếu — GET /api/v1/citizen-reports/{maTraCuu}/log-entries sẽ panic khi có người gọi")
 	case d.NhiemVu == nil:
@@ -859,7 +865,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.UpdatePetitionField))))
 
-	// --- the petition register. ONE READ ROUTE, AND THREE WRITE ROUTES THAT ARE NOT HERE ------
+	// --- the petition register ---------------------------------------------------------------
 	//
 	// `citizen-reports` is the settled URL noun for `phan_anh`
 	// (kb/00-foundation/ubiquitous-language.md §Tên tài nguyên trên URL). It is NOT `feedback`:
@@ -867,24 +873,51 @@ func Register(mux *http.ServeMux, d Deps) {
 	// submission with a processing deadline and somebody answerable for it. The permission keys
 	// say `feedback.*` because they were fixed earlier, and that mismatch is a known, recorded
 	// cost rather than a licence to spell the resource the same way.
+
+	// NHẬP HỘ PHẢN ÁNH — staff intake (docs/ui-ux/09 §11). The two decisions this comment used to wait
+	// for are taken: the modal wording was APPROVED by the user on 30/09/2026 (spec 09:248-249 — "Vì đã
+	// biết lĩnh vực ngay, hạn xử lý được ấn định luôn", replacing "cùng thời hạn với phiếu gửi từ
+	// Zalo", per ADR 0028 E/F), and the hamlet ships WITHOUT `thon_id` — no identity RPC validates a
+	// hamlet, so it would be written straight from the client (rule 1, forbidden #2 in spirit); a
+	// contract comes first (contract-designer). Scene photos are out too: that flow is bound to a
+	// citizen session. app.StaffIntake carries ADR 0028 E/F decision by decision.
 	//
-	// WHY STAFF INTAKE (`POST /api/v1/citizen-reports`, nhập hộ, docs/ui-ux/09 §11) IS STILL ABSENT.
-	// Rewritten 2026-09-30: the list that stood here named three missing writes, and two of them
-	// have since shipped — classification (below, `…/classification`) and the citizen's own
-	// submission (`POST /api/v1/my-citizen-reports`, routes_cong_dan.go). The plumbing that list
-	// was waiting for exists too: identity `ResolveDeadlines` (identity.proto:1183, ADR 0029) fixes
-	// both deadlines, and the tier-1 field check is `PetitionFieldSet.CheckForIntake`
-	// (core/platformclient/petition_fields.go:81, ADR 0060) — the citizen route uses both.
+	// `feedback.create` ("Tiếp nhận phản ánh"), seeded at service-identity/migrations/0001_init.sql:298
+	// and named by spec 09 §14.6. The petition is linked to NO citizen account (ADR 0028 §Bổ sung
+	// 2026-10-02): the officer hands over the lookup code in the 201.
 	//
-	// What is left is DECISIONS, not plumbing, and writing the route anyway would decide them:
-	//   - the §11 modal wording is awaiting the customer (spec 09:244-253): the spec says a staff
-	//     booking carries the same deadlines as a Zalo submission, ADR 0028 E/F says it does not;
-	//   - the hamlet (`thon_id`) the form offers has no identity RPC to validate it, so it would be
-	//     written straight from the client (rule 1, forbidden #2 in spirit) — ship without it, or a
-	//     new contract first (contract-designer).
+	// `channel` IS NOT A BODY FIELD although §11 draws a "Tiếp nhận qua kênh" select defaulting to `Cán
+	// bộ, trưởng thôn nhập hộ`. Every row booked here is `can-bo-nhap-ho`: another value would change
+	// which deadline shape applies (ADR 0028 E, stop condition #6), and nobody has said whether a call
+	// logged as `zalo-oa` or `web-xa` from this modal gets the field-at-booking shape. A body naming it
+	// is a 400.
 	//
-	// The store already carries the mechanical half — Tao takes a *store.ScopedTx, so the audit
-	// entry cannot be written anywhere but inside the same transaction (rule 6, invariant 3).
+	// idem.Required(idem.MoKhiHong): a double click books a SECOND petition with a second code, which
+	// can only be soft deleted (rule 7). MoKhiHong, the citizen intake's choice: refusing an officer
+	// with a citizen on the telephone because a cache is down is worse than a rare visible duplicate.
+	// A replay is told the code (idem.RecordCode).
+	//
+	// 400 `invalid_request` (shape, missing field/content, lengths, a system-decided field, hamlet or
+	// coordinates sent) · `field_not_offered` · `clock_from_out_of_range` (ADR 0028 F3 — refused, never
+	// clamped). 401 no session AND a session of another commune (authz compares the commune before the
+	// key). 403 no `feedback.create`. 409 `request_in_progress` (idem). 503 `intake_not_configured` (identity could not fix the resolve
+	// deadline — no SLA table, calendar, or identity down) · `field_catalogue_unavailable`. Nothing is
+	// written and no code is issued on any refusal.
+	//
+	// @summary  Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu
+	// @screen   09-phan-anh-nguoi-dan §11
+	// @request  staffIntakeIn
+	// @reply    201 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports",
+		authz.RequirePermission(d.Checker, "feedback.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.BookStaffIntake))))
 
 	// @summary  Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân
 	// @screen   09-phan-anh-nguoi-dan §8
@@ -2112,7 +2145,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `feedback.restricted` absent -> the `can-bo` field is excluded from EVERY figure, as it is from the
 	// register list the figures drill down into. It changes no status code.
 	//
-	// @summary  Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)
+	// THREE MORE STOCK FIGURES (2026-10-02, docs/ui-ux/09 §3): `rating_sample` + `rating_sum` (the average
+	// citizen rating, divided by the client), `low_rating` (1–2 stars, the `rating_max=2` list) and
+	// `publication_pending` (`cho-duyet`, never `can-bo`). Optional on the wire; the five above unchanged.
+	//
+	// @summary  Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to); hiện trạng: số phiếu được dân chấm sao và tổng số sao, số phiếu bị đánh giá thấp (1–2 sao), số phiếu chờ kiểm duyệt công khai
 	// @screen   01-tong-quan-dieu-hanh §4.5
 	// @reply    200 citizenReportSummaryOut
 	// @reply    400 httpx.Error
@@ -2148,7 +2185,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// classification ceiling, or when its work is not done past its resolve deadline; `kind` says which.
 	// NO CONTENT AND NO REPORTER on the wire. `feedback.restricted` absent -> `can-bo` excluded.
 	//
-	// @summary  Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không
+	// `late_working_seconds` (optional, 2026-10-02): working time since the missed deadline, measured
+	// by identity MeasureWorkingHours in ONE call for the page, up to the same `now` the overdue
+	// predicate used. Identity or the calendar unavailable -> ABSENT on every row and the page is still
+	// 200 (unlike `critical`, whose absence would be a guess and is therefore a 503). Never stored.
+	//
+	// @summary  Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không, số giây làm việc đã trễ (khi đo được)
 	// @screen   01-tong-quan-dieu-hanh §5
 	// @reply    200 overdueQueueOut
 	// @reply    400 httpx.Error

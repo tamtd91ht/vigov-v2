@@ -13,6 +13,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -81,8 +82,39 @@ func citizenReportMetricCondition(m domain.CitizenReportMetric, from, to string)
 		return "((" + settled + " AND xu_ly_xong_luc <= han_xu_ly_xong) AND NOT (" + ceilingMissed + "))"
 	case domain.CitizenReportLate:
 		return "((" + settled + " AND xu_ly_xong_luc > han_xu_ly_xong) OR (" + ceilingMissed + "))"
+	case domain.CitizenReportRatingSample:
+		return "(" + citizenReportRatedCondition + ")"
+	case domain.CitizenReportLowRating:
+		// THE REGISTER FILTER'S OWN TEXT (ratingAtMostCondition), with the bound written from the domain
+		// constant instead of a placeholder — so this figure and `?rating_max=2` are one predicate.
+		return "(" + ratingAtMostCondition(strconv.Itoa(domain.LowRatingMaxStars)) + ")"
+	case domain.CitizenReportPublicationPending:
+		// `cho-duyet` OUTSIDE `can-bo`, even for a reader holding `feedback.restricted`. A staff-conduct
+		// petition can NEVER be published (ADR 0050 point 8; migration 0017's CHECK
+		// `phieu_phan_anh_staff_conduct_never_public`), so it is not awaiting a moderation decision —
+		// counting it would put on the card a queue nobody can empty. Such a row should not exist (it is
+		// born `an`, and classifying into `can-bo` hides it), so the clause is a floor, not a filter that
+		// changes today's number.
+		//
+		// SPELLED `IS DISTINCT FROM` AND NOT WITH restrictedFieldExclusion ON PURPOSE: that constant is the
+		// READER's scope (absent exactly when the reader holds `feedback.restricted`), and this is a rule
+		// about the record that holds for every reader. One text for two rules would make "does this
+		// statement apply the reader's scope" unanswerable by reading it. NULL `linh_vuc` is counted.
+		return "(publication_status = '" + string(domain.PublicationPending) + "'" +
+			" AND linh_vuc IS DISTINCT FROM '" + domain.LinhVucHanChe + "')"
 	}
 	return "(FALSE)"
+}
+
+// citizenReportRatedCondition is "the citizen has rated this petition". `diem_hai_long` has ONE writer,
+// the citizen route (ADR 0062), so every rated row is a citizen's own verdict.
+const citizenReportRatedCondition = "diem_hai_long IS NOT NULL"
+
+// ratingAtMostCondition is "rated, and at most `bound` stars" — THE ONE SPELLING shared by the register's
+// `rating_max` filter (bound = a placeholder) and the `low_rating` figure (bound = a constant). An
+// unrated row is never in it: "no verdict" is not a poor verdict.
+func ratingAtMostCondition(bound string) string {
+	return citizenReportRatedCondition + " AND diem_hai_long <= " + bound
 }
 
 // citizenReportMetricFilter appends one metric's predicate to the list's WHERE clause — see
@@ -116,7 +148,8 @@ func validateCitizenReportMetric(loc LocPhieu) error {
 }
 
 // citizenReportSummaryColumns is the SELECT list of CitizenReportSummary, in the order of
-// domain.CitizenReportMetrics, with the period bound once as $2/$3.
+// domain.CitizenReportMetrics, with the period bound once as $2/$3 — then ONE aggregate that is not a
+// count: the sum of the stars over exactly the `rating_sample` rows, the numerator of the average.
 func citizenReportSummaryColumns() string {
 	var cols string
 	for i, m := range domain.CitizenReportMetrics {
@@ -125,8 +158,13 @@ func citizenReportSummaryColumns() string {
 		}
 		cols += "count(*) FILTER (WHERE " + citizenReportMetricCondition(m, "$2", "$3") + ")"
 	}
-	return cols
+	return cols + ", " + citizenReportRatingSumColumn
 }
+
+// citizenReportRatingSumColumn is NULL when no row is rated (SQL's sum of nothing); the scan reads that
+// as 0 beside a 0 sample, which the client renders as a dash — never as an average of 0.
+var citizenReportRatingSumColumn = "sum(diem_hai_long) FILTER (WHERE " +
+	citizenReportMetricCondition(domain.CitizenReportRatingSample, "$2", "$3") + ")"
 
 // scopeFilter is the WHERE tail every overview read of the register starts from: live rows only, and
 // the restricted field excluded unless the reader holds `feedback.restricted`.
@@ -139,7 +177,7 @@ func scopeFilter(restricted bool) string {
 }
 
 // CitizenReportSummary counts every petition figure of the commune in ONE statement — one instant of
-// the register for all five, as TaskSummary argues.
+// the register for every figure, as TaskSummary argues.
 //
 // `restricted` IS THE CALLER'S ANSWER TO "does this reader hold `feedback.restricted`". False — the
 // zero value — excludes the `can-bo` field from every figure, exactly as LocPhieu.ChoPhepHanChe does
@@ -163,20 +201,28 @@ func (s *PhieuPhanAnhStore) CitizenReportSummary(ctx context.Context, p domain.P
 		}
 		return domain.CitizenReportSummary{}, errors.New("phieu_phan_anh: tổng quan: câu đếm không trả dòng nào")
 	}
-	var counts [5]int64
-	if err := rows.Scan(&counts[0], &counts[1], &counts[2], &counts[3], &counts[4]); err != nil {
+	var (
+		counts    [8]int64
+		ratingSum sql.NullInt64
+	)
+	if err := rows.Scan(&counts[0], &counts[1], &counts[2], &counts[3], &counts[4],
+		&counts[5], &counts[6], &counts[7], &ratingSum); err != nil {
 		return domain.CitizenReportSummary{}, fmt.Errorf("phieu_phan_anh: tổng quan: đọc dòng: %w", err)
 	}
 	if err := rows.Err(); err != nil {
 		return domain.CitizenReportSummary{}, fmt.Errorf("phieu_phan_anh: tổng quan: %w", err)
 	}
-	// POSITIONAL, in the order of domain.CitizenReportMetrics.
+	// POSITIONAL, in the order of domain.CitizenReportMetrics, then the sum.
 	return domain.CitizenReportSummary{
-		Received:     int(counts[0]),
-		InProgress:   int(counts[1]),
-		OnTimeSample: int(counts[2]),
-		OnTime:       int(counts[3]),
-		Late:         int(counts[4]),
+		Received:           int(counts[0]),
+		InProgress:         int(counts[1]),
+		OnTimeSample:       int(counts[2]),
+		OnTime:             int(counts[3]),
+		Late:               int(counts[4]),
+		RatingSample:       int(counts[5]),
+		LowRating:          int(counts[6]),
+		PublicationPending: int(counts[7]),
+		RatingSum:          int(ratingSum.Int64), // NULL (nothing rated) -> 0, beside a 0 sample
 	}, nil
 }
 
@@ -199,10 +245,15 @@ var citizenReportResolutionOverdue = `trang_thai IN ('` + string(domain.DaTiepNh
 // overdueCitizenReportColumns is the SELECT list of OverdueCitizenReports. THE CASE IS WRITTEN ONCE
 // PER COLUMN FROM ONE CONDITION, and the query orders on column 4 by position, so the kind and the
 // instant cannot come from two different branches.
+//
+// COLUMN 5 IS `now()` ITSELF — the instant the two predicates compared against, constant for the whole
+// statement — so the use case measures the working time late up to exactly the `now` that made the row
+// late (domain.OverdueItem.AsOf). It is appended, so the ORDER BY position of column 4 does not move.
 var overdueCitizenReportColumns = `ma_tra_cuu, COALESCE(linh_vuc, '') AS linh_vuc,` +
 	` CASE WHEN ` + citizenReportClassificationOverdue + ` THEN '` + string(domain.DeadlineClassification) +
 	`' ELSE '` + string(domain.DeadlineResolution) + `' END AS kind,` +
-	` CASE WHEN ` + citizenReportClassificationOverdue + ` THEN han_phan_loai ELSE han_xu_ly_xong END AS missed`
+	` CASE WHEN ` + citizenReportClassificationOverdue + ` THEN han_phan_loai ELSE han_xu_ly_xong END AS missed,` +
+	` now() AS as_of`
 
 // OverdueCitizenReports reads at most `limit` petitions currently past one of their two deadlines,
 // oldest missed deadline first. `restricted` as in CitizenReportSummary.
@@ -235,7 +286,7 @@ func (s *PhieuPhanAnhStore) OverdueCitizenReports(ctx context.Context, limit int
 			it   domain.OverdueItem
 			kind string
 		)
-		if err := rows.Scan(&it.Code, &it.CategoryCode, &kind, &it.MissedDeadline); err != nil {
+		if err := rows.Scan(&it.Code, &it.CategoryCode, &kind, &it.MissedDeadline, &it.AsOf); err != nil {
 			return nil, fmt.Errorf("phieu_phan_anh: hàng đợi quá hạn: đọc dòng: %w", err)
 		}
 		it.Kind = domain.DeadlineKind(kind)

@@ -520,6 +520,15 @@
       "no_confirm": [],
       "tiep_theo": "GHI CHÚ PHÁT HÀNH BẮT BUỘC: từ bản này mọi xã chưa tắt cờ (chưa có dòng petition_settings) KHÔNG đóng được phiếu thiếu ảnh nghiệm thu, kể cả phiếu đang dở. Câu hỏi cho chủ dự án: (1) ảnh nghiệm thu trước khi mở lại có còn thoả cổng đóng không (đang: có); (2) dân thấy ảnh nghiệm thu khi phiếu chưa đóng không (đang: có, mọi trạng thái); (3) chỉ người có feedback.resolve tải ảnh nghiệm thu — trưởng thôn chỉ có feedback.read thì không; (4) bản sạch records còn lại khi từ chối muộn tích lại không xoá được — cần chính sách dọn?; (5) tải tệp nhật ký có vết (khác nhiệm vụ) có chấp nhận không. Chưa chạy Postgres/MinIO/ClamAV thật. Tệp dò tạm tools/apidoc/zz_tmp_probe_test.go chưa xoá (bị chặn) — không commit.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "nhap-ho-kpi-qua-han-gio-lam-viec",
+      "viec": "Phản ánh: POST /api/v1/citizen-reports nhập hộ (ADR 0028 F + Bổ sung 02/10), ba con số KPI mới trên citizen-report-summary, giờ làm việc quá hạn trên overdue-citizen-reports qua identity MeasureWorkingHours (đợt 02/10/2026, TASK-P2)",
+      "trang_thai": "xong",
+      "bang_chung": "Nhập hộ: RequirePermission feedback.create, idem Required, kênh cố định can-bo-nhap-ho, cong_dan_id rỗng (không gắn Zalo, không dòng outbox), hạn xử lý đặt lúc vào sổ qua identity, han_tiep_nhan/han_phan_loai NULL, goc_dem_han tuỳ chọn ngoài [vào sổ − 7 ngày, vào sổ] thì TỪ CHỐI 400 clock_from_out_of_range (theo ADR 0028 F3/đk dừng #4, không kẹp), vết can_bo_nhap_ho_phan_anh cùng giao dịch, trả phiếu đã che; không thôn, không ảnh. KPI: rating_sample, rating_sum (khách tự chia — không gửi tỉ lệ), low_rating (cùng vị từ lọc rating_max=2), publication_pending (không đếm lĩnh vực can-bo) — số tồn, không theo kỳ; năm con số cũ giữ nguyên SQL. Quá hạn: late_working_seconds mỗi dòng, một lời gọi theo lô mỗi trang, mốc cuối = now() của CSDL mà bộ lọc trễ dùng; lỗi identity/lịch → vắng trường ở mọi dòng, danh sách vẫn 200. openapi.json đã sinh (make kb). go test -count=1 ./... xanh, vet sạch, check_quyen/security/audit_actor xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Câu cho chủ dự án: (1) ô chọn lĩnh vực của modal nhập hộ không có tuyến cán bộ gọi được (GET citizen-report-fields cần admin.lookup) — dùng khoá nào; (2) ô 'Tiếp nhận qua kênh' §11 — cán bộ có ghi zalo-oa/web-xa được không (đang: từ chối, ADR 0028 đk dừng #6); (3) không có dòng nhật ký lúc nhập hộ (hanh_vi chưa có giá trị) — cần migration nới CHECK; (4) trạng thái đầu da-tiep-nhan cho phiếu nhập hộ có đúng không; (5) cán bộ không có feedback.restricted có được nhập hộ phiếu lĩnh vực can-bo không (đang: được); (6) ba KPI có cần theo kỳ không; (7) 'critical' của bảng quá hạn còn so đồng hồ ứng dụng, late_working_seconds dùng now() của CSDL. transaction-boundaries.json: nhập hộ = nhất quán mạnh một giao dịch, đọc đồng bộ ResolveDeadlines trước (lỗi → 503 không ghi gì); bảng quá hạn = thêm một lời đọc MeasureWorkingHours mỗi trang, lỗi → vắng trường.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

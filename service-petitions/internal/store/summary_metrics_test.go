@@ -367,7 +367,8 @@ func TestCitizenReportRestrictedExclusionIsShared(t *testing.T) {
 	}
 
 	for _, restricted := range []bool{false, true} {
-		d := &countDriver{row: []driver.Value{int64(1), int64(2), int64(3), int64(4), int64(5)}}
+		d := &countDriver{row: []driver.Value{int64(1), int64(2), int64(3), int64(4), int64(5),
+			int64(6), int64(7), int64(8), int64(9)}}
 		s := NewPhieuPhanAnhStore(store.New(sql.OpenDB(d)))
 		if _, err := s.CitizenReportSummary(ctxXa(xaThu), periodA, restricted); err != nil {
 			t.Fatalf("CitizenReportSummary: %v", err)
@@ -380,13 +381,15 @@ func TestCitizenReportRestrictedExclusionIsShared(t *testing.T) {
 }
 
 func TestCitizenReportSummaryStatement(t *testing.T) {
-	d := &countDriver{row: []driver.Value{int64(21), int64(22), int64(23), int64(24), int64(25)}}
+	d := &countDriver{row: []driver.Value{int64(21), int64(22), int64(23), int64(24), int64(25),
+		int64(26), int64(27), int64(28), int64(101)}}
 	s := NewPhieuPhanAnhStore(store.New(sql.OpenDB(d)))
 	got, err := s.CitizenReportSummary(ctxXa(xaThu), periodA, false)
 	if err != nil {
 		t.Fatalf("CitizenReportSummary: %v", err)
 	}
-	want := domain.CitizenReportSummary{Received: 21, InProgress: 22, OnTimeSample: 23, OnTime: 24, Late: 25}
+	want := domain.CitizenReportSummary{Received: 21, InProgress: 22, OnTimeSample: 23, OnTime: 24, Late: 25,
+		RatingSample: 26, LowRating: 27, PublicationPending: 28, RatingSum: 101}
 	if got != want {
 		t.Errorf("= %+v, muốn %+v", got, want)
 	}
@@ -492,5 +495,93 @@ func TestOverdueCitizenReportsStatement(t *testing.T) {
 	}
 	if strings.Contains(d2.stmts[0].sql, restrictedFieldExclusion) {
 		t.Error("có feedback.restricted mà hàng đợi vẫn loại can-bo")
+	}
+}
+
+// --- the three stock figures of 2026-10-02 --------------------------------------------------------------
+
+// TestCitizenReportSummaryExistingFiguresUnchanged — the five figures that existed before keep their
+// SQL text BYTE FOR BYTE and their positions; the new ones are appended after them.
+func TestCitizenReportSummaryExistingFiguresUnchanged(t *testing.T) {
+	var before string
+	for i, m := range domain.CitizenReportMetrics[:5] {
+		if i > 0 {
+			before += ", "
+		}
+		before += "count(*) FILTER (WHERE " + citizenReportMetricCondition(m, "$2", "$3") + ")"
+	}
+	if !strings.HasPrefix(citizenReportSummaryColumns(), before+", ") {
+		t.Error("năm chỉ số cũ không còn đứng đầu, nguyên văn, đúng thứ tự")
+	}
+	if got := domain.CitizenReportMetrics[:5]; got[0] != domain.CitizenReportReceived ||
+		got[1] != domain.CitizenReportInProgress || got[2] != domain.CitizenReportOnTimeSample ||
+		got[3] != domain.CitizenReportOnTime || got[4] != domain.CitizenReportLate {
+		t.Errorf("thứ tự năm chỉ số cũ đổi: %v", got)
+	}
+	if !strings.HasSuffix(citizenReportSummaryColumns(),
+		", sum(diem_hai_long) FILTER (WHERE (diem_hai_long IS NOT NULL))") {
+		t.Errorf("cột tổng số sao không phải cột cuối, lọc đúng mẫu rating_sample: %s", citizenReportSummaryColumns())
+	}
+}
+
+// TestLowRatingFigureIsTheRatingMaxFilter — the card "n phiếu bị đánh giá thấp" and the register's
+// "Bị đánh giá thấp" filter (rating_max=2) are ONE predicate.
+func TestLowRatingFigureIsTheRatingMaxFilter(t *testing.T) {
+	where, args := locPhieuThanhSQL(LocPhieu{ChoPhepHanChe: true, RatingMax: domain.LowRatingMaxStars})
+	if where != " AND "+ratingAtMostCondition("$2") || len(args) != 1 || args[0] != 2 {
+		t.Fatalf("bộ lọc rating_max = %q %v", where, args)
+	}
+	fig := citizenReportMetricCondition(domain.CitizenReportLowRating, "", "")
+	if fig != "("+strings.Replace(ratingAtMostCondition("$2"), "$2", "2", 1)+")" {
+		t.Errorf("chỉ số low_rating = %q — không cùng câu với bộ lọc rating_max=2", fig)
+	}
+	if !strings.Contains(fig, "diem_hai_long IS NOT NULL") {
+		t.Error("phiếu chưa chấm sao bị tính là đánh giá thấp")
+	}
+	// The filter text itself did not move.
+	if ratingAtMostCondition("$%d") != "diem_hai_long IS NOT NULL AND diem_hai_long <= $%d" {
+		t.Errorf("câu lọc rating_max đổi chữ: %q", ratingAtMostCondition("$%d"))
+	}
+}
+
+func TestPublicationPendingNeverCountsStaffConduct(t *testing.T) {
+	c := citizenReportMetricCondition(domain.CitizenReportPublicationPending, "", "")
+	if c != "(publication_status = 'cho-duyet' AND linh_vuc IS DISTINCT FROM 'can-bo')" {
+		t.Errorf("chờ kiểm duyệt = %q — phải là cho-duyet và loại can-bo kể cả với người có feedback.restricted", c)
+	}
+	for _, m := range []domain.CitizenReportMetric{domain.CitizenReportRatingSample, domain.CitizenReportLowRating,
+		domain.CitizenReportPublicationPending} {
+		if m.PeriodBound() {
+			t.Errorf("%s phải là chỉ số hiện trạng (không theo kỳ) — danh sách nó mở không lọc theo kỳ", m)
+		}
+		if strings.Contains(citizenReportMetricCondition(m, "$2", "$3"), "$") {
+			t.Errorf("%s dùng tham số kỳ", m)
+		}
+	}
+}
+
+// TestCitizenReportSummaryNothingRatedSumIsZero — SQL's sum over no row is NULL; with a 0 sample it is
+// read as 0, and the client shows a dash.
+func TestCitizenReportSummaryNothingRatedSumIsZero(t *testing.T) {
+	d := &countDriver{row: []driver.Value{int64(1), int64(0), int64(0), int64(0), int64(0),
+		int64(0), int64(0), int64(0), nil}}
+	got, err := NewPhieuPhanAnhStore(store.New(sql.OpenDB(d))).CitizenReportSummary(ctxXa(xaThu), periodA, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RatingSum != 0 || got.RatingSample != 0 {
+		t.Errorf("= %+v", got)
+	}
+}
+
+// TestOverdueCitizenReportsReadsTheStatementNow — column 5 is now() itself, so the working time late
+// is measured up to the instant the overdue predicate used; column 4 stays the ORDER BY key.
+func TestOverdueCitizenReportsReadsTheStatementNow(t *testing.T) {
+	if !strings.HasSuffix(overdueCitizenReportColumns, " AS missed, now() AS as_of") {
+		t.Errorf("cột cuối không phải now(): %s", overdueCitizenReportColumns)
+	}
+	if !strings.Contains(citizenReportResolutionOverdue, "han_xu_ly_xong < now()") ||
+		!strings.Contains(citizenReportClassificationOverdue, "han_phan_loai < now()") {
+		t.Error("vị từ quá hạn không còn so với now() của chính câu lệnh")
 	}
 }

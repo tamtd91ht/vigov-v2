@@ -347,6 +347,9 @@ func chay(log *slog.Logger) error {
 		// verification photos in its own transaction; `storedFiles` also links a note's attachments.
 		XuLyPhieu: app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
 			petstore.NewPetitionSettingsStore(kho), storedFiles),
+		// "Nhập hộ phản ánh" (§11): the SAME petition store, outbox store and identity client as the
+		// citizen intake, and the SAME field catalogue — under the staff rule (CheckStaffIntakeField).
+		StaffIntake: app.NewStaffIntake(kho, phieu, suKien, dinhDanh, fieldCatalogue),
 		// The processing logbook's read (migration 0013) — the SAME store the acts write it through.
 		NhatKyPhieu: phieu,
 		// The trail for a full-view read of a reporter's name and number. It takes the same

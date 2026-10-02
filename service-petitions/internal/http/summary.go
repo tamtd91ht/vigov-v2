@@ -82,12 +82,33 @@ type taskSummaryOut struct {
 //
 // on_time + late == on_time_sample. The sample includes petitions that missed the classification
 // ceiling (open question #26, ADR 0035 §C), always as late — see store.citizenReportMetricCondition.
+//
+//	rating_sample · low_rating · publication_pending   stock (2026-10-02, docs/ui-ux/09 §3 cards 3–4)
+//	rating_sum                                         NOT a metric: the stars summed over the
+//	                                                   rating_sample rows; average = sum / sample,
+//	                                                   divided by the client, dash when sample is 0
+//
+// THE FOUR ARE POINTERS WITH omitempty, SET ON EVERY RESPONSE — the ReopenCount precedent: omitempty makes
+// tools/apidoc declare them optional so yesterday's fixtures stay valid, the pointer makes 0 travel as 0.
+// Absent therefore means "this server predates the field", never zero.
 type citizenReportSummaryOut struct {
 	Received     int `json:"received"`
 	InProgress   int `json:"in_progress"`
 	OnTimeSample int `json:"on_time_sample"`
 	OnTime       int `json:"on_time"`
 	Late         int `json:"late"`
+
+	// RatingSample is the number of petitions carrying a CITIZEN's rating (ADR 0062 decision 2 — staff
+	// cannot record one). Drill-down: `metric=rating_sample`.
+	RatingSample *int `json:"rating_sample,omitempty"`
+	// RatingSum is the sum of their stars, 1–5 each.
+	RatingSum *int `json:"rating_sum,omitempty"`
+	// LowRating is "n phiếu bị đánh giá thấp": rated 1–2 stars — the SAME rows as
+	// GET /api/v1/citizen-reports?rating_max=2 and as `metric=low_rating`.
+	LowRating *int `json:"low_rating,omitempty"`
+	// PublicationPending is "CHỜ KIỂM DUYỆT": `publication_status = cho-duyet`, never counting `can-bo`
+	// (it can never be published). Drill-down: `metric=publication_pending`.
+	PublicationPending *int `json:"publication_pending,omitempty"`
 }
 
 // overdueItemOut is one row of a "Cần xử lý ngay" panel. NO PERSONAL DATA and no free text — code,
@@ -106,6 +127,12 @@ type overdueItemOut struct {
 	// Critical is true once CriticalWorkingHours WORKING hours have passed since MissedDeadline, as
 	// identity's calendar counts them.
 	Critical bool `json:"critical"`
+	// LateWorkingSeconds is the WORKING time, in whole seconds, between MissedDeadline and the instant
+	// the server judged the row overdue — identity's MeasureWorkingHours on the commune's calendar.
+	// PETITION PANEL ONLY. ABSENT — never 0 — when it could not be measured (identity unavailable,
+	// calendar not configured): "Quá hạn" stands without it. Measured on every read, never stored; the
+	// screen shows no number yet (ADR 0007 decision 10).
+	LateWorkingSeconds *uint64 `json:"late_working_seconds,omitempty"`
 }
 
 // overdueQueueOut wraps the rows. `items` is [] — never null — when nothing is overdue.
@@ -126,7 +153,7 @@ var (
 			"completed, on_time_sample, on_time")
 	errCitizenReportMetric = errors.New(
 		"`metric` không phải một chỉ số tổng quan phản ánh: received, in_progress, on_time_sample, " +
-			"on_time, late")
+			"on_time, late, rating_sample, low_rating, publication_pending")
 	errQueueLimit = errors.New("`limit` phải là số nguyên dương")
 )
 
@@ -277,6 +304,11 @@ func (h *Handler) CitizenReportSummary(w http.ResponseWriter, r *http.Request) {
 		OnTimeSample: s.OnTimeSample,
 		OnTime:       s.OnTime,
 		Late:         s.Late,
+
+		RatingSample:       &s.RatingSample,
+		RatingSum:          &s.RatingSum,
+		LowRating:          &s.LowRating,
+		PublicationPending: &s.PublicationPending,
 	})
 }
 
@@ -334,6 +366,8 @@ func (h *Handler) writeOverdueQueue(w http.ResponseWriter, r *http.Request, item
 			CategoryCode:   it.CategoryCode,
 			MissedDeadline: it.MissedDeadline,
 			Critical:       it.Critical,
+
+			LateWorkingSeconds: it.LateWorkingSeconds,
 		})
 	}
 	vietJSON(w, http.StatusOK, out)

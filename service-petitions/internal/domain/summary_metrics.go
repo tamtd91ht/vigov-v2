@@ -112,15 +112,40 @@ const (
 	CitizenReportOnTimeSample CitizenReportMetric = "on_time_sample"
 	CitizenReportOnTime       CitizenReportMetric = "on_time"
 	CitizenReportLate         CitizenReportMetric = "late"
+
+	// Stock — the three figures of docs/ui-ux/09 §3 cards 3 and 4 ("ĐIỂM HÀI LÒNG TRUNG BÌNH · n phiếu
+	// bị đánh giá thấp", "CHỜ KIỂM DUYỆT"). STOCK AND NOT PERIOD, and that is a choice stated as one: the
+	// register's own `rating_max` filter — the list "Bị đánh giá thấp" opens — takes no period, and a
+	// figure counted in [from, to) would not equal the list it drills into. A period variant is a
+	// question for the screen's owner, not a default chosen here.
+	//
+	// CitizenReportRatingSample counts petitions that carry a citizen rating; the AVERAGE is
+	// CitizenReportSummary.RatingSum / RatingSample, divided by the client like every ratio here.
+	// ADR 0062 decision 2 ("only the citizen's own ratings") holds BY CONSTRUCTION: the only writer of
+	// `diem_hai_long` is the citizen route (POST …/my-citizen-reports/{code}/rating, ADR 0062 decision 1).
+	CitizenReportRatingSample CitizenReportMetric = "rating_sample"
+	// CitizenReportLowRating counts petitions rated at most LowRatingMaxStars — the SAME predicate as
+	// GET /api/v1/citizen-reports?rating_max=2, which is what web-admin's "Bị đánh giá thấp" sends.
+	CitizenReportLowRating CitizenReportMetric = "low_rating"
+	// CitizenReportPublicationPending counts `publication_status = 'cho-duyet'` (migration 0017, ADR
+	// 0050 point 8) OUTSIDE the `can-bo` field — see store.citizenReportMetricCondition for why.
+	CitizenReportPublicationPending CitizenReportMetric = "publication_pending"
 )
 
-// CitizenReportMetrics is every petition figure, in reply order.
+// LowRatingMaxStars is the highest rating that counts as LOW: 1 or 2 stars — docs/ui-ux/09 §4 ("phiếu
+// 1–2 sao") and the same number that reopens a petition (RatingReopenThreshold, ADR 0050 point 2).
+// Tied to that constant rather than written again, so "low" and "reopens" can never drift apart.
+const LowRatingMaxStars = RatingReopenThreshold
+
+// CitizenReportMetrics is every petition figure, in reply order. The three stock figures added on
+// 2026-10-02 are APPENDED, so the five before them keep their positions and their SQL.
 var CitizenReportMetrics = []CitizenReportMetric{
 	CitizenReportReceived, CitizenReportInProgress,
 	CitizenReportOnTimeSample, CitizenReportOnTime, CitizenReportLate,
+	CitizenReportRatingSample, CitizenReportLowRating, CitizenReportPublicationPending,
 }
 
-// Valid reports whether m is one of the five. Fail closed, as TaskMetric.Valid.
+// Valid reports whether m is one of CitizenReportMetrics. Fail closed, as TaskMetric.Valid.
 func (m CitizenReportMetric) Valid() bool {
 	for _, k := range CitizenReportMetrics {
 		if k == m {
@@ -130,8 +155,15 @@ func (m CitizenReportMetric) Valid() bool {
 	return false
 }
 
-// PeriodBound reports whether the figure is counted inside a Period.
-func (m CitizenReportMetric) PeriodBound() bool { return m != CitizenReportInProgress }
+// PeriodBound reports whether the figure is counted inside a Period. LISTED, not "everything but the
+// stock one": with four stock figures a negative rule would make every new one period-bound by default.
+func (m CitizenReportMetric) PeriodBound() bool {
+	switch m {
+	case CitizenReportReceived, CitizenReportOnTimeSample, CitizenReportOnTime, CitizenReportLate:
+		return true
+	}
+	return false
+}
 
 // CitizenReportSummary is the petition register's figures.
 //
@@ -143,6 +175,14 @@ type CitizenReportSummary struct {
 	OnTimeSample int
 	OnTime       int
 	Late         int
+
+	// RatingSample and RatingSum carry the average citizen rating as a numerator and a denominator:
+	// the client divides and shows a dash for a zero sample (the file comment on percentages).
+	// RatingSum is the sum of the stars of exactly the RatingSample rows.
+	RatingSample       int
+	RatingSum          int
+	LowRating          int
+	PublicationPending int
 }
 
 // --- the overdue queue -----------------------------------------------------------------------------
@@ -189,6 +229,19 @@ type OverdueItem struct {
 
 	// Critical is IsCritical's answer for this item.
 	Critical bool
+
+	// AsOf is the DATABASE instant the overdue predicate compared the deadline with (`now()` of the
+	// statement that read the row). Petition queue only; zero on a task item. It exists so that
+	// LateWorkingSeconds measures up to the SAME `now` that decided the row is late — a second clock
+	// read later could disagree with it by the length of a network call, or by clock skew.
+	AsOf time.Time
+
+	// LateWorkingSeconds is the WORKING time elapsed between MissedDeadline and AsOf, in whole seconds,
+	// as identity's MeasureWorkingHours counts it on the commune's calendar (ADR 0007). nil = NOT
+	// MEASURED — identity unavailable, calendar not configured, or a task item — and NEVER 0 in that
+	// case: 0 reads as "not late" on a row that is. Derived on every read and never stored (rule 10,
+	// invariant 3). Never add it to an instant (rule 10, forbidden #2).
+	LateWorkingSeconds *uint64
 }
 
 // CriticalWorkingHours is how far past its deadline, in WORKING hours, an overdue item becomes

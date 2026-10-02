@@ -407,6 +407,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// internal/http/xu_ly_phan_anh_test.go.
 		DanhSachPhieu: khoPhieu{},
 		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil, nil, nil, nil),
+		// Never invoked here; Register refuses a nil. Own suites: internal/app/staff_intake_test.go and
+		// internal/http/staff_intake_test.go.
+		StaffIntake: app.NewStaffIntake(nil, nil, nil, nil, nil),
 		// Never invoked here; Register refuses a nil. Own suite: internal/http/nhat_ky_phan_anh_test.go.
 		NhatKyPhieu:     petstore.NewPhieuPhanAnhStore(nil),
 		NhiemVu:         khoNhiemVu{},

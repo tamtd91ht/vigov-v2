@@ -231,7 +231,10 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 	if loc.RatingMax > 0 {
 		// BOUND, like every other filter. `IS NOT NULL` is spelled out although `<=` already excludes a
 		// NULL rating, so the reader does not have to know three-valued logic to see it.
-		them(" AND diem_hai_long IS NOT NULL AND diem_hai_long <= $%d", loc.RatingMax)
+		//
+		// THE SAME TEXT AS THE `low_rating` OVERVIEW FIGURE (ratingAtMostCondition), so the card and the
+		// list it opens cannot disagree.
+		them(" AND "+ratingAtMostCondition("$%d"), loc.RatingMax)
 	}
 
 	if loc.Metric != "" {

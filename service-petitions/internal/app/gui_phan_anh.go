@@ -112,8 +112,8 @@ const kenhCongDan = domain.KenhZaloMiniApp
 // action this system already writes (`dang_nhap`, `xem_day_du_nguoi_gui`, `them_loai_nhiem_vu`) —
 // an inspection reads these strings, and a function name would tell them nothing.
 //
-// IT NAMES THE CITIZEN'S ACT, not the staff one. When the staff-booked intake is written it gets a
-// verb of its own: "who filed this" is the first question asked of a disputed petition, and one
+// IT NAMES THE CITIZEN'S ACT, not the staff one. The staff-booked intake has a verb of its own
+// (ActionStaffIntake, staff_intake.go): "who filed this" is the first question asked of a disputed petition, and one
 // verb across both channels would make the ledger unable to answer it without reading a row that
 // may since have been edited.
 const HanhViGuiPhanAnh = "cong_dan_gui_phan_anh"
