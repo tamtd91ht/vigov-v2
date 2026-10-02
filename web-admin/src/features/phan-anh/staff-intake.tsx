@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Shapes,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
+import { PendingButton, PendingField } from "@/components/ui/pending-feature";
 import { khoaSauLanGhi } from "@/features/thu-chi/nhan-thu-chi";
 import type { KetQua } from "@/lib/api/goi";
 import { bookStaffIntake, listIntakeFields, type StaffIntakeInput } from "@/lib/api/phieu-phan-anh";
@@ -55,6 +57,7 @@ import {
   intakeContentError,
   NHAC_DU_LIEU_CA_NHAN,
   PETITION_INTAKE_PERMISSION,
+  petitionPendingPart,
 } from "./nhan-phieu";
 import { BusyLabel, Glyph, HINT_CLASS, LABEL_CLASS, TEXTAREA_CLASS } from "./petition-ui";
 
@@ -63,8 +66,9 @@ import { BusyLabel, Glyph, HINT_CLASS, LABEL_CLASS, TEXTAREA_CLASS } from "./pet
  * office or met the hamlet head. `POST /api/v1/citizen-reports` (`feedback.create`).
  *
  * WHAT IS NOT ON THE FORM, ON PURPOSE (ADR 0028 Bổ sung 2026-10-02): no channel select — the channel is
- * always `can-bo-nhap-ho` (row 5); no hamlet and no photos — the server does not accept them yet and
- * answers 400 (`PHAN_CHUA_DUNG`). The petition is linked to NO citizen account (row 1), so the success
+ * always `can-bo-nhap-ho` (row 5). The hamlet select and the scene-photo picker are DISABLED
+ * placeholders with their "?" (ADR 0068 §14): the server does not accept either yet and answers 400
+ * (`PHAN_CHUA_DUNG`), so neither has a value in this form's state nor a key in the body. The petition is linked to NO citizen account (row 1), so the success
  * screen shows the LOOKUP CODE large and tells the officer to hand it over (row 3).
  *
  * The button is UX only: the server checks `feedback.create` on both routes (rule 5, forbidden #1).
@@ -405,6 +409,15 @@ export function StaffIntakeFormView({
         />
       </Field>
 
+      {/* §11 `Thôn, tổ dân phố` — placeholder (ADR 0068 §14); `id` unique on the page. */}
+      <PendingField
+        info={petitionPendingPart("intakeHamlet")}
+        id="nhap-ho-thon"
+        kind="select"
+        placeholder="— Chưa xác định —"
+        className="max-w-none flex-auto"
+      />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={INTAKE_NAME_LABEL} htmlFor="nhap-ho-nguoi-gui" icon={UserRound} grow="auto">
           <input
@@ -444,6 +457,10 @@ export function StaffIntakeFormView({
       </div>
 
       <p className="m-0 text-xs text-ink-500">{INTAKE_CHANNEL_NOTE}</p>
+
+      {/* §11 `⬆ Đính ảnh hiện trường` — placeholder (ADR 0068 §14): a disabled picker button, never a
+          `type="file"` input, so no file can be chosen and none can be sent. */}
+      <PendingButton info={petitionPendingPart("intakePhotos")} icon={<Glyph icon={Upload} />} className="self-start" />
 
       {refusal !== null && (
         <p className="thong-bao-loi m-0" role="alert">

@@ -2,21 +2,19 @@
 
 import {
   CheckCheck,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Construction,
   Eye,
-  Info,
+  Mail,
   Megaphone,
   MousePointerClick,
   Pin,
   Plus,
+  Save,
   Send,
   Trash2,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
@@ -28,8 +26,9 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
-import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
+import { PendingButton, PendingFeature, PendingMarker, PendingSection } from "@/components/ui/pending-feature";
+import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
@@ -52,8 +51,6 @@ import {
   CANH_BAO_GHIM_TRONG_TRANG,
   CHIP_BAT_BUOC_XAC_NHAN,
   CHON_NGUOI_NHAN_RONG,
-  CHO_DANH_SACH_NGUOI_NHAN,
-  CHO_NUT_GO,
   CHUA_CHON_THONG_BAO,
   cauLoiDanhBa,
   coChipTrangThai,
@@ -80,8 +77,20 @@ import {
   nhanTrangThaiThu,
   NOI_DUNG_TOI_DA,
   NUT_THEM_NGUOI_NHAN,
-  PHAM_VI_DANG_HIEN,
-  PHAN_CHUA_DUNG,
+  ACKNOWLEDGED_CHIP,
+  EMAIL_STATUS_CHIP,
+  pendingPart,
+  RECIPIENT_UNITS_BLOCK_TITLE,
+  RECIPIENT_UNITS_CHIP,
+  RECIPIENT_UNITS_FIELD_LABEL,
+  recipientsTitle,
+  SAVE_DRAFT_LABEL,
+  SCOPE_ALL,
+  SCOPE_ALL_LABEL,
+  SCOPE_LEGEND,
+  SCOPE_MINE,
+  SCOPE_MINE_LABEL,
+  WITHDRAW_LABEL,
   PINNED_LABEL,
   PLACEHOLDER_TIEU_DE,
   PUBLISH_BUSY_LABEL,
@@ -107,18 +116,22 @@ import {
  * §5 (biểu mẫu soạn).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG CÓ Ô CHỌN BỘ PHẬN**, và sự vắng mặt ấy là một câu
- * trả lời chứ không phải một phần còn thiếu.
+ * ĐIỀU QUAN TRỌNG NHẤT CỦA MÀN NÀY: **KHÔNG CÓ Ô CHỌN BỘ PHẬN DÙNG ĐƯỢC**, và đó là một câu trả
+ * lời chứ không phải một phần quên vẽ.
  *
  * `POST /api/v1/announcements` trả **501 `not_implemented`** cho mọi thân mang `org_unit_ids`.
  * Nở một bộ phận thành danh sách cán bộ là dữ liệu của `identity` và chưa có RPC nào làm việc ấy.
- * Vẽ năm con chip bộ phận như §5 mô tả sẽ là vẽ đúng năm nút mà mọi lần bấm đều hỏng — và hỏng
- * sau khi cán bộ đã gõ xong cả nội dung. Lý do đầy đủ nằm ở `PHAN_CHUA_DUNG`, hiện ngay đầu màn.
+ * Vì thế chỗ của ô chọn bộ phận là MỘT chip bị vô hiệu kèm dấu "?" (ADR 0068 §14) — không phải năm
+ * nút mà mọi lần bấm đều hỏng sau khi cán bộ đã gõ xong cả nội dung. Thân yêu cầu không bao giờ
+ * mang `org_unit_ids`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ CỔNG QUYỀN Ở CLIENT, và đó là một quyết định đã ghi — xem `PHAN_CHUA_DUNG`.
- * `service-comms` kiểm `announcement.create` trên TỪNG lời gọi; tài khoản thiếu khoá nhận nguyên
- * câu 403 của máy chủ ra màn hình. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1).
+ * PHẦN CHƯA DỰNG (ADR 0068 §14): vẽ đúng chỗ đặc tả, vô hiệu, dấu "?" mở mô tả lấy từ
+ * `PHAN_CHUA_DUNG` (`pendingPart`). Không gọi máy chủ, không lưu gì.
+ *
+ * KHÔNG CÓ CỔNG QUYỀN Ở TRANG: `service-comms` kiểm `announcement.create` trên TỪNG lời gọi; tài
+ * khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình. Ẩn một nút chưa bao giờ là biện
+ * pháp (luật 5, cấm #1).
  *
  * NỘI DUNG THÔNG BÁO LÀ CHỮ MỘT CÁN BỘ VỪA GÕ VÀ CÓ THỂ NHẮC TỚI HỒ SƠ CÔNG DÂN: không dòng nào ở
  * đây ghi nó vào log, vào tên tệp hay vào một URL (luật 3, cấm #1 và #4). Mã cán bộ người nhận
@@ -132,7 +145,7 @@ import {
  * và chỉ trả mã · họ tên · chức vụ · bộ phận. `GET /api/v1/staff` đòi `admin.user` — một khoá quản
  * trị mà người soạn thông báo gần như không bao giờ cầm, và nó trả cả số di động cá nhân mà ô chọn
  * này không cần. KHÔNG truyền `permission`: ai trong xã cũng nhận được thông báo. Cả xã, không lọc
- * bộ phận — người nhận chọn theo từng người (bộ phận trả 501, xem `PHAN_CHUA_DUNG`).
+ * bộ phận — người nhận chọn theo từng người (bộ phận trả 501, xem `PHAN_CHUA_DUNG`, mục `byUnit`).
  */
 export function docDanhBaNguoiNhan(): Promise<KetQua<identity_danhBaChonNguoiRa>> {
   return layDanhBaChonNguoi();
@@ -247,18 +260,33 @@ export function SoThongBao() {
         title={TIEU_DE_MAN}
         subtitle={<span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_MAN}</span>}
         actions={
-          <Button
-            type="button"
-            variant="primary"
-            icon={<Glyph icon={dangMoBieuMau ? X : Plus} />}
-            aria-expanded={dangMoBieuMau}
-            onClick={() => {
-              datDangMoBieuMau(!dangMoBieuMau);
-              datLoiBieuMau(null);
-            }}
-          >
-            {NHAN_NUT_SOAN}
-          </Button>
+          <>
+            {/* §2 segmented filter. `Cả sổ thông báo` is what the list shows and the only answerable
+                segment; `Gửi cho tôi` is the disabled placeholder (ADR 0068 §14). Nothing is emitted:
+                the read route takes no scope at all. */}
+            <Segmented
+              legend={SCOPE_LEGEND}
+              name="announcement-scope"
+              value={SCOPE_ALL}
+              onChange={() => {}}
+              options={[
+                { value: SCOPE_MINE, label: SCOPE_MINE_LABEL, pending: pendingPart("scopeMine") },
+                { value: SCOPE_ALL, label: SCOPE_ALL_LABEL },
+              ]}
+            />
+            <Button
+              type="button"
+              variant="primary"
+              icon={<Glyph icon={dangMoBieuMau ? X : Plus} />}
+              aria-expanded={dangMoBieuMau}
+              onClick={() => {
+                datDangMoBieuMau(!dangMoBieuMau);
+                datLoiBieuMau(null);
+              }}
+            >
+              {NHAN_NUT_SOAN}
+            </Button>
+          </>
         }
       />
 
@@ -267,8 +295,6 @@ export function SoThongBao() {
         className="man-thong-bao mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
         aria-labelledby="tieu-de-so-thong-bao"
       >
-        <KhoiChuaDung />
-
         {dangMoBieuMau && (
           <FormSoanThongBao
             // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
@@ -290,10 +316,6 @@ export function SoThongBao() {
             <h2 id="tieu-de-so-thong-bao" className="m-0 text-[15px] leading-snug font-semibold text-ink-900">
               Danh sách thông báo
             </h2>
-            <p className="ghi-chu m-0 flex items-start gap-1.5 text-[13px] text-ink-500">
-              <Glyph icon={Info} className="mt-0.5 size-4 shrink-0" />
-              <span>{PHAM_VI_DANG_HIEN}</span>
-            </p>
 
             {/* LOADING (spec v2 §8b). The sentence stays the live region; the eye gets a 2px bar and
                 either the previous page dimmed (a re-read) or card-shaped placeholders (first read). */}
@@ -365,41 +387,6 @@ export function SoThongBao() {
         </div>
       </section>
     </>
-  );
-}
-
-/**
- * Những phần đặc tả đòi mà hợp đồng hoặc lượt làm này không có — HIỆN LÊN ĐẦU MÀN, không giấu
- * trong chú thích mã.
- *
- * `<details>` chứ không phải một khối luôn mở: một bức tường chữ trên đầu màn hình là bức tường
- * người ta học cách không đọc.
- */
-export function KhoiChuaDung() {
-  // COLLAPSED, GREY (spec v2 §8.1, ADR 0068): a list of what is not built is not an alarm. The words
-  // stay verbatim and stay in the HTML while closed — `<details>` only folds them.
-  return (
-    <details className="khoi-chua-khai group m-0">
-      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <Glyph icon={Construction} className="size-[18px] shrink-0 text-ink-500" />
-        <span className="font-semibold text-ink-700">
-          {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
-          do
-        </span>
-        <Glyph
-          icon={ChevronDown}
-          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <dl className="danh-sach-truong">
-        {PHAN_CHUA_DUNG.map((p) => (
-          <div key={p.ten}>
-            <dt>{p.ten}</dt>
-            <dd>{p.viSao}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
   );
 }
 
@@ -523,9 +510,11 @@ export function TheThongBao({
  * không có tuyến chi tiết nào, và máy chủ cố ý KHÔNG cắt bớt nó ở đó (nếu cắt, cột này sẽ hiện một
  * thông báo cụt mà không dòng nào nói ra).
  *
- * HAI KHỐI CỦA §4 KHÔNG CÓ Ở ĐÂY — `BỘ PHẬN NHẬN` và `NGƯỜI NHẬN (12)`. Chỗ của chúng là một dòng
- * chữ nói vì sao, không phải một danh sách rỗng: một danh sách rỗng nói với cán bộ rằng thông báo
- * này không có người nhận nào, trong khi sự thật là màn hình không đọc được danh sách ấy.
+ * PHẦN CHƯA DỰNG CỦA §3/§4 (ADR 0068 §14 — the owner placed all four in this panel): chip `Đã xác
+ * nhận` and the mail-status chip under the title, `BỘ PHẬN NHẬN` with `🗑 Gỡ`, `NGƯỜI NHẬN (N)`.
+ * Each is the control it will be, disabled, with its "?". NEVER an empty list: an empty list tells an
+ * officer this announcement reached nobody, while the truth is the screen cannot read the list. The
+ * `(N)` is the server's own `recipient_count`, so the heading itself is a true figure.
  */
 export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | null }) {
   if (thongBao === null) {
@@ -547,6 +536,32 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
+        {/* §3 chips of the signed-in officer and of the mail, as disabled placeholders. `✓ Đã xác nhận`
+            only where the announcement asks for it; the mail chip only where mail was requested —
+            the same flags that would decide the real chips. */}
+        {(thongBao.ack_required || thongBao.email_requested) && (
+          <div className="flex flex-wrap items-center gap-3">
+            {thongBao.ack_required && (
+              <PendingFeature info={pendingPart("acknowledge")}>
+                <span aria-disabled="true" className="opacity-60">
+                  <Badge tone="neutral" icon={CheckCheck}>
+                    {ACKNOWLEDGED_CHIP}
+                  </Badge>
+                </span>
+              </PendingFeature>
+            )}
+            {thongBao.email_requested && (
+              <PendingFeature info={pendingPart("emailStatus")}>
+                <span aria-disabled="true" className="opacity-60">
+                  <Badge tone="neutral" icon={Mail}>
+                    {EMAIL_STATUS_CHIP}
+                  </Badge>
+                </span>
+              </PendingFeature>
+            )}
+          </div>
+        )}
+
         {/* `whitespace-pre-line`: the line breaks the author typed are kept. Toàn văn, không cắt. */}
         <p className="m-0 text-sm leading-relaxed break-words whitespace-pre-line text-ink-900">
           {thongBao.body}
@@ -579,15 +594,27 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
           </div>
         </dl>
 
-        {/* CHỖ CỦA KHỐI NGƯỜI NHẬN VÀ NÚT GỠ — hai dòng chữ nói rõ vì sao, không phải hai nút mờ.
-            Một nút mờ nói "bạn không có quyền"; sự thật là màn hình chưa dựng, và hai câu ấy không
-            được lẫn vào nhau. */}
-        <Notice tone="neutral" icon={Users}>
-          {CHO_DANH_SACH_NGUOI_NHAN}
-        </Notice>
-        <Notice tone="neutral" icon={Trash2}>
-          {CHO_NUT_GO}
-        </Notice>
+        {/* §4 `BỘ PHẬN NHẬN` + `🗑 Gỡ`, then `NGƯỜI NHẬN (N)`. The "?" — not a bare greyed control —
+            is what says "not built yet" rather than "you may not" (ADR 0068 §14). */}
+        <PendingSection
+          info={pendingPart("byUnit")}
+          title={RECIPIENT_UNITS_BLOCK_TITLE}
+          titleAs="h4"
+          className="shadow-none"
+        >
+          <div className="flex flex-col items-start gap-3">
+            <span>{DAU_GACH}</span>
+            <PendingButton info={pendingPart("withdraw")} size="sm" icon={<Glyph icon={Trash2} />}>
+              {WITHDRAW_LABEL}
+            </PendingButton>
+          </div>
+        </PendingSection>
+        <PendingSection
+          info={pendingPart("recipients")}
+          title={recipientsTitle(thongBao.recipient_count)}
+          titleAs="h4"
+          className="shadow-none"
+        />
       </CardContent>
     </Card>
   );
@@ -600,9 +627,10 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
  * lớp phủ là đổi cách mở/đóng biểu mẫu (bẫy focus, Esc, bấm ra ngoài), tức đổi hành vi chứ không
  * chỉ đổi hình (ADR 0068 §1).
  *
- * HAI THỨ CỦA §5 KHÔNG CÓ Ở ĐÂY: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có
- * tuyến). Ô chọn người nhận CÓ, trên danh bạ chọn người (`docDanhBaNguoiNhan`), nhưng không có email
- * như §5 vẽ vì danh bạ ấy không trả email. Lý do từng cái nằm ở `PHAN_CHUA_DUNG`, hiện ngay đầu màn.
+ * HAI THỨ CỦA §5 CHỈ LÀ CHỖ GIỮ: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có
+ * tuyến) — vô hiệu, dấu "?" (ADR 0068 §14). Ô chọn người nhận CÓ, trên danh bạ chọn người
+ * (`docDanhBaNguoiNhan`), nhưng không có email như §5 vẽ vì danh bạ ấy không trả email. Lý do từng
+ * cái nằm ở `PHAN_CHUA_DUNG`.
  */
 export function FormSoanThongBao({
   dangGui,
@@ -700,6 +728,26 @@ export function FormSoanThongBao({
           maxLength={NOI_DUNG_TOI_DA}
           onChange={(e) => datNoiDung(e.target.value)}
         />
+      </div>
+
+      {/* §5 `Bộ phận nhận thông báo` — ONE disabled chip with its "?" (ADR 0068 §14), never the
+          commune's unit names: those are the commune's data, and five chips that each end in a 501
+          after the whole text is typed are worse than none. Nothing here reaches the body. */}
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <p className="m-0 text-xs leading-tight font-semibold text-ink-500">{RECIPIENT_UNITS_FIELD_LABEL}</p>
+          <PendingMarker info={pendingPart("byUnit")} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled
+            aria-pressed={false}
+            className="inline-flex h-8 cursor-not-allowed items-center rounded-full border border-dashed border-line-strong bg-transparent px-3 [font-family:inherit] text-[13px] font-medium text-ink-500 opacity-60"
+          >
+            {RECIPIENT_UNITS_CHIP}
+          </button>
+        </div>
       </div>
 
       {/* The picker: ONE row — the select grows, the add button keeps its width beside it, bottoms
@@ -841,6 +889,11 @@ export function FormSoanThongBao({
         <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
           {NHAN_NUT_HUY}
         </Button>
+        {/* §5 `Lưu nháp`, between Huỷ and Phát hành — a disabled placeholder (ADR 0068 §14). It is NOT
+            a submit button: it can never publish. */}
+        <PendingButton info={pendingPart("saveDraft")} icon={<Glyph icon={Save} />}>
+          {SAVE_DRAFT_LABEL}
+        </PendingButton>
         <button
           type="submit"
           className={cn(LEGACY_BUTTON_CLASS.primary, buttonVariants({ variant: "primary" }))}

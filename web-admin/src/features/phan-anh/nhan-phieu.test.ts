@@ -43,6 +43,7 @@ import {
   nhanThoiDiem,
   nhanTrangThai,
   PHAN_CHUA_DUNG,
+  petitionPendingPart,
   phanLoaiDuoc,
   RE_NHANH,
   trangThaiHan,
@@ -698,10 +699,10 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
   it("không còn mục nào về nhật ký, còn mọi mục khác vẫn nguyên", () => {
     const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
     expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
-    // Bảy mục (02/10/2026): chín trừ ba đã dựng (modal nhập hộ, tám câu giải thích trạng thái, ảnh
-    // sau xử lý) cộng một (ô thôn và nút đính ảnh của modal nhập hộ — máy chủ chưa nhận) — bỏ nhầm
-    // một mục khác cùng lúc là đỏ ở đây.
-    expect(PHAN_CHUA_DUNG.length).toBe(7);
+    // Chín mục (02/10/2026, ADR 0068 §14): bảy mục cũ, trong đó hai mục tách đôi để mỗi dấu "?" mở
+    // đúng một mô tả (tab Bản đồ nhiệt / tab Báo cáo; ô thôn / nút đính ảnh của modal nhập hộ). Bỏ
+    // nhầm một mục khác cùng lúc là đỏ ở đây.
+    expect(PHAN_CHUA_DUNG.length).toBe(9);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -725,14 +726,13 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
 
   it("the KPI cards left the list; only the heat-map (§9) and Báo cáo (§10) tabs remain, with why", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("KPI") || p.ten.includes("§3"))).toBe(false);
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Tab Bản đồ nhiệt"));
-    expect(muc?.ten).toBe("Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)");
-    expect(muc?.viSao).toContain("Bốn thẻ số liệu (§3) nay đã có");
-    expect(muc?.viSao).toContain("citizen-report-summary");
-    expect(muc?.viSao).toContain("`lat`/`lng`");
-    // One reason per tab: the undecided map provider, and no count by field / unit / hamlet.
-    expect(muc?.viSao).toContain("nhà cung cấp bản đồ");
-    expect(muc?.viSao).toContain("không tuyến nào đếm theo lĩnh vực, bộ phận hay thôn");
+    // One entry per tab — each "?" opens its own reason: the undecided map provider, and no count by
+    // field / unit / hamlet for the whole commune.
+    expect(petitionPendingPart("heatMapTab").ten).toBe("Bản đồ nhiệt");
+    expect(petitionPendingPart("heatMapTab").viSao).toContain("nhà cung cấp bản đồ");
+    expect(petitionPendingPart("reportTab").ten).toBe("Báo cáo");
+    expect(petitionPendingPart("reportTab").viSao).toContain("theo lĩnh vực, theo bộ phận hay theo thôn");
+    expect(petitionPendingPart("reportTab").viSao).toContain("Bốn thẻ số liệu");
   });
 
   it("02/10/2026: the three built entries are gone, the others kept, the one added is the intake's hamlet/photos", () => {
@@ -741,12 +741,14 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(ten).not.toContain("Câu giải thích trạng thái, tám trong chín (§8.2)");
     expect(ten).not.toContain("Ảnh sau khi xử lý (§8.4)");
     expect(ten).toEqual([
-      "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",
-      "Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)",
-      "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
+      "Bản đồ hiện trường và tên thôn",
+      "Bản đồ nhiệt",
+      "Báo cáo",
+      "Liên quan đến tôi",
       "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
-      "Ô `Thôn, tổ dân phố` và nút `Đính ảnh hiện trường` của modal Nhập hộ phản ánh (§11)",
+      "Thôn, tổ dân phố",
+      "Đính ảnh hiện trường",
       "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
     ]);
     // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
@@ -763,13 +765,14 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
   });
 
   it("the heatmap and the mini-map both name the undecided map provider (rule 3 stop #2)", () => {
-    const kpi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Tab Bản đồ nhiệt"));
-    expect(kpi?.viSao).toContain("nhà cung cấp bản đồ");
-    expect(kpi?.viSao).toContain("luật 3, điểm dừng #2");
-    const ban = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bản đồ nhỏ"));
-    expect(ban?.ten).toContain("§8.4");
-    expect(ban?.viSao).toContain("luật 3, điểm dừng #2");
-    expect(ban?.viSao).toContain(SCENE_LOCATION_LABEL);
+    // Staff-readable now (ADR 0068 §14: the sentence opens behind a "?"); the rule reference lives in
+    // the code comment above each entry.
+    expect(petitionPendingPart("heatMapTab").viSao).toContain("nhà cung cấp bản đồ bên ngoài");
+    const map = petitionPendingPart("sceneMap");
+    expect(map.viSao).toContain("nhà cung cấp bản đồ bên ngoài");
+    expect(map.viSao).toContain("chưa được quyết");
+    expect(map.viSao).toContain(SCENE_LOCATION_LABEL);
+    expect(map.viSao).toContain("tên thôn");
   });
 
   it("six decimals, latitude first", () => {

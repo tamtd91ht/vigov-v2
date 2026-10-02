@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Ban,
   Building2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
@@ -15,11 +14,13 @@ import {
   CircleCheck,
   CircleDot,
   CloudOff,
-  Construction,
   FileText,
+  Flame,
   Forward,
   Inbox,
   Landmark,
+  Map as MapIcon,
+  List,
   ListChecks,
   MapPin,
   Radio,
@@ -31,6 +32,7 @@ import {
   Tags,
   UserRound,
   Workflow,
+  BarChart3,
   X,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
@@ -43,6 +45,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
+import { PendingMarker, PendingSection, PendingTab } from "@/components/ui/pending-feature";
+import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
@@ -139,7 +143,7 @@ import {
   nhanTrangThai,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
-  PHAN_CHUA_DUNG,
+  petitionPendingPart,
   PETITION_INTAKE_PERMISSION,
   petitionTaskOffered,
   phanLoaiDuoc,
@@ -148,6 +152,7 @@ import {
   reopenLine,
   ratingStars,
   SCENE_LOCATION_LABEL,
+  SCOPE_RELATED_LABEL,
   SO_RONG,
   TIM_PLACEHOLDER,
   trangThaiHan,
@@ -431,7 +436,16 @@ export function SoPhanAnh({
           second the row is not drawn at all (an account that may not read reports gets no figures). */}
       {coQuyen(dsQuyen, QUYEN_XEM_PHAN_ANH) && coQuyen(dsQuyen, REPORT_READ_PERMISSION) && <PetitionKpis />}
 
-      <KhoiChuaDung />
+      {/* §2 main tabs `[Danh sách] [Bản đồ nhiệt] [Báo cáo]`. Only the list exists; the other two are
+          disabled placeholders with their "?" (ADR 0068 §14). One live tab, so no arrow-key handling
+          to teach about disabled tabs. */}
+      <TabList aria-label="Phần của sổ phản ánh">
+        <Tab selected id="petition-tab-list" aria-controls="petition-list-panel" icon={List}>
+          Danh sách
+        </Tab>
+        <PendingTab info={petitionPendingPart("heatMapTab")} icon={Flame} />
+        <PendingTab info={petitionPendingPart("reportTab")} icon={BarChart3} />
+      </TabList>
 
       <DrillDownBanner
         drillDown={drillDown}
@@ -442,7 +456,7 @@ export function SoPhanAnh({
 
       {/* THE LIST CARD (spec §8.5): the filter row at its head, the table in its own scroller, the
           paging in its footer. */}
-      <Card className="overflow-visible">
+      <Card className="overflow-visible" id="petition-list-panel" role="tabpanel" aria-labelledby="petition-tab-list">
         {!drillDownActive && (
           <HangLoc
             loc={loc}
@@ -593,39 +607,6 @@ export function SoPhanAnh({
 }
 
 /**
- * Những phần đặc tả đòi mà hợp đồng không có — HIỆN LÊN ĐẦU MÀN, không giấu trong chú thích mã.
- *
- * `<details>` chứ không phải một khối luôn mở: danh sách dài hơn quyển sổ ở những ngày đầu, và một
- * bức tường chữ trên đầu màn hình là bức tường người ta học cách không đọc.
- */
-export function KhoiChuaDung() {
-  // Collapsed, dashed, neutral grey (spec §8.1 — the same disclosure as Danh bạ): a list of what is
-  // not built is not an alarm. The words and the list are unchanged.
-  return (
-    <details className="khoi-chua-khai group m-0">
-      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <Glyph icon={Construction} className="size-[18px] shrink-0 text-ink-500" />
-        <span className="font-semibold text-ink-700">
-          {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý do
-        </span>
-        <Glyph
-          icon={ChevronDown}
-          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <dl className="danh-sach-truong">
-        {PHAN_CHUA_DUNG.map((p) => (
-          <div key={p.ten}>
-            <dt>{p.ten}</dt>
-            <dd>{p.viSao}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
-/**
  * Bộ lọc §4: hai tab phạm vi và tám ô (thêm `Bị đánh giá thấp` → `rating_max=2`), đúng những tham số máy chủ nhận — không vẽ ô nào không có
  * tuyến đứng sau. Phạm vi nằm CHUNG `BoLoc` với bảy ô, nên đổi tab giữ nguyên các ô đang chọn và
  * về trang đầu như mọi bộ lọc khác; cùng cách giữ trạng thái (state của trang, không lên URL).
@@ -699,9 +680,10 @@ export function HangLoc({
           </form>
 
           {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã
-              cán bộ từ PHIÊN. Tab `Liên quan đến tôi` không vẽ: máy chủ trả 400 cho `scope=related`
-              (xem `PHAN_CHUA_DUNG`). Drawn as a segmented control; the buttons stay native
-              `aria-pressed` toggles, their text the only child (tests read it). */}
+              cán bộ từ PHIÊN. Tab thứ ba `Liên quan đến tôi` là CHỖ GIỮ vô hiệu có dấu "?" (ADR 0068
+              §14): máy chủ trả 400 cho `scope=related`, nên nó không có `onClick` và không bao giờ đặt
+              `phamVi`. Drawn as a segmented control; the buttons stay native `aria-pressed` toggles,
+              their text the only child (tests read it). */}
           <div className="flex flex-col gap-1.5">
             <span aria-hidden="true" className="text-xs leading-tight font-semibold text-ink-700">
               Phạm vi
@@ -723,6 +705,17 @@ export function HangLoc({
               >
                 {PHAM_VI_GIAO_CHO_TOI}
               </button>
+              <span className="relative inline-flex">
+                <button
+                  type="button"
+                  disabled
+                  aria-pressed={false}
+                  className={cn(toggleButtonClass(false), "cursor-not-allowed pr-8 opacity-60 hover:text-ink-500")}
+                >
+                  {SCOPE_RELATED_LABEL}
+                </button>
+                <PendingMarker info={petitionPendingPart("scopeRelated")} side="bottom" placement="end" />
+              </span>
             </div>
           </div>
 
@@ -1245,6 +1238,18 @@ export function ChiTietPhieu({
       </dl>
         </CardContent>
       </Card>
+
+      {/* §8.4 `Vị trí — địa chỉ + bản đồ nhúng với marker`, and the hamlet beside the address: a
+          disabled placeholder with its "?" (ADR 0068 §14). It draws NO map and loads NO tile — that
+          is exactly the undecided step (a citizen's coordinates sent to an outside provider). */}
+      <PendingSection info={petitionPendingPart("sceneMap")} titleAs="h3">
+        <div
+          aria-hidden="true"
+          className="grid h-32 place-items-center rounded-lg border border-dashed border-line-strong bg-surface-muted text-ink-400"
+        >
+          <MapIcon className="size-6" strokeWidth={1.6} focusable="false" />
+        </div>
+      </PendingSection>
 
       {/* Right under the list, so a refusal of the publication buttons above (409 `never_public`)
           reads next to the box that caused it. The `<p>` itself is unchanged (a test reads it); the

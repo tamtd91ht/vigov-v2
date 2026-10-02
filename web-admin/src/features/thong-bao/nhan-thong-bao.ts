@@ -62,13 +62,31 @@ export const SO_RONG = "Chưa có thông báo nào.";
 export const DANG_TAI_SO = "Đang tải danh sách thông báo…";
 
 /**
- * Nhãn của phạm vi ĐANG hiện. §2 vẽ hai nút phân đoạn `Gửi cho tôi` · `Cả sổ thông báo`; máy chủ
- * chỉ trả lời được vế thứ hai, nên màn hiện MỘT nhãn nói rõ mình đang hiện gì, thay vì hai nút mà
- * một nút không đổi được gì.
+ * §2 segmented filter `[Gửi cho tôi] [Cả sổ thông báo]`. Only the second is answerable: the first is
+ * drawn disabled with its "?" (ADR 0068 §14), so `Cả sổ thông báo` is the one selected segment and
+ * says what the list shows.
  */
-export const PHAM_VI_DANG_HIEN =
-  "Đang hiện: Cả sổ thông báo. Bộ lọc “Gửi cho tôi” chưa dựng được — xem phần chưa dựng được ở " +
-  "đầu màn.";
+export const SCOPE_LEGEND = "Phạm vi";
+export const SCOPE_MINE_LABEL = "Gửi cho tôi";
+export const SCOPE_ALL_LABEL = "Cả sổ thông báo";
+/** Segment values — presentation only: the read route takes no scope parameter at all. */
+export const SCOPE_MINE = "gui-cho-toi";
+export const SCOPE_ALL = "ca-so";
+
+/** §5 and §4 words of the parts drawn as placeholders (ADR 0068 §14). */
+export const RECIPIENT_UNITS_FIELD_LABEL = "Bộ phận nhận thông báo";
+/** The one disabled chip standing for the unit list — unit names are the commune's data, never typed here. */
+export const RECIPIENT_UNITS_CHIP = "Chọn bộ phận";
+export const RECIPIENT_UNITS_BLOCK_TITLE = "Bộ phận nhận";
+export const SAVE_DRAFT_LABEL = "Lưu nháp";
+export const WITHDRAW_LABEL = "Gỡ";
+export const ACKNOWLEDGED_CHIP = "Đã xác nhận";
+export const EMAIL_STATUS_CHIP = "Trạng thái thư";
+
+/** §4 `NGƯỜI NHẬN (12)` — the count is the server's own `recipient_count`; only the list is missing. */
+export function recipientsTitle(count: number): string {
+  return `Người nhận (${count})`;
+}
 
 /**
  * Câu đứng ngay dưới ô tick "Gửi thư điện tử" của §5.
@@ -132,16 +150,6 @@ export function themMaNguoiNhan(chu: string, ma: string): string {
   const dau = chu.replace(/\s+$/, "");
   return dau === "" ? gon : `${dau}\n${gon}`;
 }
-
-/**
- * Chỗ đáng lẽ là nút `Gỡ` của §4 — một dòng chữ, không phải một nút mờ. The `🗑` glyph is a lucide
- * `Trash2` drawn beside the sentence (ADR 0068 §2).
- */
-export const CHO_NUT_GO = "Gỡ — chưa dựng, xem phần chưa dựng được ở đầu màn";
-
-/** Chỗ đáng lẽ là danh sách `NGƯỜI NHẬN (12)` của §4. */
-export const CHO_DANH_SACH_NGUOI_NHAN =
-  "Danh sách người nhận và trạng thái từng người chưa đọc về được — xem phần chưa dựng được ở đầu màn.";
 
 /* ── Phép định dạng ────────────────────────────────────────────────────────────────────────── */
 
@@ -363,31 +371,44 @@ export function tachMaNguoiNhan(chu: string): string[] {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
+ * NHỮNG PHẦN CỦA ĐẶC TẢ **CHƯA DỰNG ĐƯỢC** — mô tả sau dấu "?" (ADR 0068 §14)
  *
- * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn
- * Biên bản họp và màn Nhiệm vụ.
+ * Mỗi phần được vẽ ĐÚNG CHỖ đặc tả đặt nó, đúng loại control, bị vô hiệu, kèm dấu "?"; bấm "?" là
+ * đọc `ten` + `viSao` của mục ấy, nguyên văn. Vì thế `viSao` viết cho CÁN BỘ đọc: ngắn, không tên
+ * tuyến, không tên bảng. Lý do kỹ thuật đầy đủ nằm ở chú thích ngay trên từng mục.
+ *
+ * `id` là khoá để màn lấy đúng mục (`pendingPart`), không lấy theo vị trí trong mảng: thêm một mục
+ * ở giữa không được làm dấu "?" của nút này mở mô tả của nút khác.
+ *
+ * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây (`tools/tien_do_san_pham.py` đếm mảng này cho báo
+ * cáo tiến độ): thư điện tử trong ô chọn người nhận (chưa nằm trong bảng vị trí đã duyệt), ghim cả
+ * sổ và biểu mẫu dạng lớp phủ (ADR 0068 §14: lựa chọn bố cục, không có gì để giữ chỗ).
+ *
+ * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type PhanChuaDung = {
+  /** English key the screen looks the entry up by — see `pendingPart`. */
+  readonly id: string;
   readonly ten: string;
   readonly viSao: string;
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // §5 chips + §4 `BỘ PHẬN NHẬN`. `POST /api/v1/announcements` answers 501 `not_implemented` to any
+  // body carrying `org_unit_ids` (service-comms/internal/http/thong_bao_noi_bo.go, re-read
+  // 02/10/2026): expanding a unit into its staff is identity's data and `IdentityService` has no RPC
+  // for it (rule 2). Recording the units and sending to nobody is the one outcome this module must
+  // never have — a card in the book, `0/0`, and an author who believes the whole commune was told.
   {
-    ten: "Ô chọn `Bộ phận nhận thông báo` (§5) và khối `BỘ PHẬN NHẬN` (§4)",
+    id: "byUnit",
+    ten: "Gửi theo bộ phận",
     viSao:
-      "Máy chủ trả **501 `not_implemented`** cho bất kỳ thân yêu cầu nào mang `org_unit_ids`, kèm " +
-      "nguyên câu chỉ đường: “Hãy chọn từng người ở mục Gửi thêm đích danh”. Đó là TỪ CHỐI CÓ CHỦ " +
-      "Ý chứ không phải lỗi — nở một bộ phận thành danh sách cán bộ là dữ liệu của `identity`, và " +
-      "`IdentityService` không có RPC nào làm việc ấy (`proto/` là nguồn chuẩn của hợp đồng ấy, " +
-      "luật 2). Lối còn lại — ghi nhận bộ phận rồi gửi cho không ai — là kết cục duy nhất module " +
-      "này không được có: không lỗi ở đâu cả, một tấm thẻ trong sổ, bộ đếm đọc `0/0`, và người " +
-      "soạn tin rằng cả xã đã được báo. Vì thế màn KHÔNG vẽ ô chọn bộ phận: một ô mà mọi lần bấm " +
-      "đều nhận 501 là một ô tệ hơn là không có ô.",
+      "Hệ thống chưa lấy được danh sách cán bộ của từng bộ phận, nên chưa gửi thông báo theo bộ " +
+      "phận được. Hãy chọn từng người ở mục “Gửi thêm đích danh”.",
   },
   {
+    id: "emailInPicker",
     ten: "Thư điện tử trong ô chọn người nhận `Họ tên — email` (§5)",
     viSao:
       "Ô chọn theo họ tên ĐÃ DỰNG, trên danh bạ chọn người `GET /api/v1/staff-directory` — mọi cán " +
@@ -396,59 +417,69 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "— mã` thay vì `Họ tên — email`. Hiện email ở đây nghĩa là mở một tuyến trả email cho mọi " +
       "cán bộ, một thay đổi hợp đồng chứ không phải một việc của màn hình.",
   },
+  // §5 `Lưu nháp`. No route creates a draft: status `nhap` exists in the schema (§6) but no write
+  // path produces it — an announcement that exists is an issued one. Drawing the button and letting
+  // it publish would turn "save to edit later" into "send to the whole commune".
   {
-    ten: "Nút `Lưu nháp` (§5)",
+    id: "saveDraft",
+    ten: "Lưu nháp",
     viSao:
-      "Không có tuyến nào tạo nháp. Trạng thái `nhap` CÓ trong lược đồ vì §6 khai nó, nhưng không " +
-      "đường ghi nào viết ra nó — một thông báo tồn tại là một thông báo đã phát hành. Vẽ nút ấy " +
-      "rồi cho nó phát hành luôn là biến một nút “lưu để sửa tiếp” thành một nút gửi đi cả xã.",
+      "Chưa lưu được thông báo ở dạng nháp: thông báo được tạo ra là phát hành ngay tới người " +
+      "nhận. Bấm “Huỷ” sẽ bỏ phần đang soạn.",
+  },
+  // §2 `Gửi cho tôi`. The read route takes NO scope parameter, on purpose. Deeper: the `quyen` table
+  // holds no announcement READ key — `announcement.create` is the group's only key — so "every officer
+  // reads what was sent to them" needs a key that does not exist (open question #27, never an
+  // `INSERT`) or `AnyAuthenticated` (rule 5 stop condition 1). Both are the customer's call.
+  {
+    id: "scopeMine",
+    ten: "Bộ lọc “Gửi cho tôi”",
+    viSao:
+      "Lọc riêng thông báo gửi cho mình cần một quyền đọc thông báo dành cho mọi cán bộ. Danh mục " +
+      "quyền hiện chưa có quyền ấy, và việc thêm quyền là quyết định của đơn vị (câu hỏi mở #27).",
+  },
+  // §4 `NGƯỜI NHẬN (12)`. No detail route (`GET /api/thong-bao/:id` of §7 does not exist) and the list
+  // response carries two COUNTS, not the people. The list would add staff NAMES, which service-comms
+  // does not own (rule 2) — an identity call, not an SQL join.
+  {
+    id: "recipients",
+    ten: "Danh sách người nhận",
+    viSao:
+      "Chưa xem được từng người nhận và trạng thái của họ (chưa mở, đã mở, đã xác nhận). Hiện chỉ " +
+      "có hai con số: số người nhận và số người đã xác nhận.",
+  },
+  // §4 `🗑 Gỡ`. No route. §9.2 forbids editing after issue ("gỡ và soạn lại"), so without it a typo has
+  // no fix on this screen. Status `da-go` exists and has a chip — nothing sets it.
+  {
+    id: "withdraw",
+    ten: "Gỡ thông báo",
+    viSao:
+      "Chưa gỡ được thông báo đã phát hành. Nội dung đã phát hành không sửa được, nên hiện chưa có " +
+      "cách thu hồi một thông báo gõ sai trên màn này.",
+  },
+  // §3/§4 `✓ Đã xác nhận` of the SIGNED-IN officer, and the acknowledge / opened acts. The response
+  // carries no per-viewer field — only two totals — and `…/xac-nhan`, `…/da-mo` of §7 do not exist.
+  // Deriving the chip from `ack_count > 0` answers another question: "someone confirmed" is not "I did".
+  {
+    id: "acknowledge",
+    ten: "Xác nhận đã đọc",
+    viSao:
+      "Chưa ghi được việc bạn xác nhận đã đọc thông báo, và hệ thống chưa cho biết bạn đã xác " +
+      "nhận hay chưa — chỉ có tổng số người đã xác nhận.",
+  },
+  // §3 e-mail status chip. The repository has no mail sender, so `trang_thai_thu` is `chua-gui` on
+  // EVERY row (service-comms/internal/domain/thong_bao_noi_bo.go; no write path sets the other three,
+  // re-read 02/10/2026). The `Gửi thư điện tử` box is still drawn: `gui_thu_dien_tu` records what was
+  // REQUESTED, a different fact from "mail went out".
+  {
+    id: "emailStatus",
+    ten: "Trạng thái gửi thư",
+    viSao:
+      "Hệ thống chưa gửi thư điện tử, nên chưa có trạng thái “Đang gửi thư”, “Đã gửi thư” hay “Gửi " +
+      "thư lỗi”. Ô “Gửi thư điện tử” hiện chỉ ghi lại yêu cầu.",
   },
   {
-    ten: "Bộ lọc `Gửi cho tôi` (§2)",
-    viSao:
-      "Tuyến đọc KHÔNG nhận `pham_vi` — cố ý, chứ không phải nhận rồi bỏ qua: một tham số được " +
-      "đọc mà không có tác dụng là cách một màn hình mang nhãn “Gửi cho tôi” hiện ra cả sổ. Lý do " +
-      "sâu hơn nằm ở phân quyền: bảng `quyen` KHÔNG CÓ khoá đọc thông báo nào — `announcement." +
-      "create` là khoá duy nhất của nhóm `THÔNG BÁO` — nên “mọi cán bộ đọc thông báo gửi cho " +
-      "mình” hôm nay chỉ diễn đạt được bằng một khoá chưa tồn tại (câu hỏi mở #27, không bao giờ " +
-      "là một `INSERT`) hoặc bằng `AnyAuthenticated`, đúng điều kiện dừng thứ nhất của luật 5. Cả " +
-      "hai đều là quyết định của khách.",
-  },
-  {
-    ten: "Panel chi tiết: danh sách `NGƯỜI NHẬN` và trạng thái từng người (§4)",
-    viSao:
-      "Không có tuyến chi tiết (`GET /api/thong-bao/:id` của §7 chưa tồn tại), và phản hồi danh " +
-      "sách chỉ mang HAI CON SỐ đếm chứ không mang danh sách người. Thứ một tuyến chi tiết sẽ " +
-      "THÊM chính là danh sách ấy kèm HỌ TÊN cán bộ — mà `service-comms` không sở hữu danh bạ " +
-      "(luật 2), nên đó là một lời gọi `identity`, không phải một phép nối SQL. Cột phải vì thế " +
-      "hiện TOÀN VĂN nội dung (đã có sẵn trên phản hồi danh sách) và nói thẳng rằng phần người " +
-      "nhận chưa đọc về được.",
-  },
-  {
-    ten: "Nút `Gỡ` thu hồi thông báo (§4)",
-    viSao:
-      "Không có tuyến nào. §9.2 cấm sửa nội dung sau khi phát hành và bảo “muốn sửa thì gỡ và " +
-      "soạn lại”, nên thiếu nút gỡ nghĩa là một thông báo gõ sai chữ không có đường sửa nào ở màn " +
-      "này. Trạng thái `da-go` có trong lược đồ và màn hình vẽ được chip cho nó — chỉ không có " +
-      "đường nào đặt nó.",
-  },
-  {
-    ten: "Chip `Đã xác nhận` của người đang đăng nhập, và hành vi `xác nhận` / `đã mở` (§3, §4)",
-    viSao:
-      "Phản ánh của §3 là chip theo NGƯỜI ĐANG XEM, nhưng phản hồi không mang trường nào nói " +
-      "người đang xem đã xác nhận hay chưa — chỉ có hai con số tổng. Hai tuyến `…/xac-nhan` và " +
-      "`…/da-mo` của §7 cũng chưa có. Suy chip ấy từ `ack_count > 0` là dựng một câu trả lời cho " +
-      "một câu hỏi khác hẳn: “có người xác nhận” không phải “TÔI đã xác nhận”.",
-  },
-  {
-    ten: "Chip trạng thái thư trên thẻ (§3) và ô `Cấu hình → Máy chủ thư`",
-    viSao:
-      "Kho không có bộ gửi thư nào, nên `trang_thai_thu` ở MỌI hàng là `chua-gui` và §3 không có " +
-      "nhãn cho giá trị ấy — chip thư vì thế không bao giờ hiện. Ô tick `Gửi thư điện tử` VẪN " +
-      "được vẽ, vì cột `gui_thu_dien_tu` ghi lại ĐIỀU ĐÃ ĐƯỢC YÊU CẦU (một sự thật khác với “thư " +
-      "đã đi”), nhưng ngay dưới nó là một câu nói rõ chưa có thư nào rời khỏi máy chủ.",
-  },
-  {
+    id: "pinWholeBook",
     ten: "Ghim lên đầu CẢ SỔ (§3)",
     viSao:
       "`core/page` mang ĐÚNG MỘT cột sắp xếp cộng `id` phá hoà, nên `ORDER BY ghim DESC, tao_luc " +
@@ -458,14 +489,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "trang 3 thì nó ở đầu trang 3.",
   },
   {
-    ten: "Hộp thư chuông ở header (§8)",
-    viSao:
-      "Bảng `hop_thu_thong_bao` chưa tồn tại và §8 nói rõ nó là hộp thư HỢP NHẤT — bốn loại mục, " +
-      "ba trong số đó do `service-petitions` đẩy vào. Đó là một hợp đồng giữa các service, không " +
-      "phải một hàng mà module này được tự tạo. Không có tuyến `…/chua-doc`, nên chuông không có " +
-      "gì để đếm.",
-  },
-  {
+    id: "overlayForm",
     ten: "Biểu mẫu Soạn thông báo dạng lớp phủ (§5)",
     viSao:
       "Biểu mẫu dựng nối tiếp trong trang, ngay dưới đầu màn, thay vì làm lớp phủ: đổi sang lớp " +
@@ -473,14 +497,14 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "đang chọn và trích 2 dòng đã dựng; trích vẫn cắt trước theo ký tự, toàn văn nằm ở phần chi " +
       "tiết.",
   },
-  {
-    ten: "Cổng quyền `announcement.create` ở phía giao diện",
-    viSao:
-      "`src/lib/quyen.ts` chưa có hằng cho khoá ấy và lượt này không được sửa tệp đó, còn gõ " +
-      "thẳng chuỗi vào màn là dựng bản sao thứ hai của một khoá phân quyền. Vì thế màn này KHÔNG " +
-      "có cổng ở client — đúng khuôn màn Văn bản đang dùng cho `document.read`: `service-comms` " +
-      "kiểm quyền trên TỪNG lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra " +
-      "màn hình. Ẩn một nút chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn " +
-      "một lần bấm.",
-  },
 ];
+
+/**
+ * The entry behind one "?" on this screen. THROWS on an unknown `id`: a renamed entry must turn the
+ * screen's tests red, never open an empty description in front of an officer.
+ */
+export function pendingPart(id: string): PhanChuaDung {
+  const entry = PHAN_CHUA_DUNG.find((p) => p.id === id);
+  if (entry === undefined) throw new Error(`nhan-thong-bao: PHAN_CHUA_DUNG has no entry "${id}"`);
+  return entry;
+}

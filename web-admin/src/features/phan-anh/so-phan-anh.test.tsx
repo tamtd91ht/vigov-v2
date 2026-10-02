@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { KetQua } from "@/lib/api/goi";
 import type {
@@ -38,6 +39,8 @@ import {
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
+  petitionPendingPart,
+  SCOPE_RELATED_LABEL,
   SO_RONG,
   TIEU_DE_NHAT_KY,
 } from "./nhan-phieu";
@@ -46,7 +49,6 @@ import {
   ChiTietPhieu,
   DanhSachThe,
   HangLoc,
-  KhoiChuaDung,
   ONhapGhiChuNoiBo,
   ThePhieu,
 } from "./so-phan-anh";
@@ -306,11 +308,15 @@ describe("hai tab phạm vi (§4)", () => {
     );
   }
 
-  it("có `Toàn xã` và `Giao cho tôi`, KHÔNG có `Liên quan đến tôi`", () => {
+  it("có `Toàn xã` và `Giao cho tôi`; `Liên quan đến tôi` chỉ là CHỖ GIỮ vô hiệu có dấu '?'", () => {
     const html = veHangLoc();
     expect(html).toContain(PHAM_VI_TOAN_XA);
     expect(html).toContain(PHAM_VI_GIAO_CHO_TOI);
-    expect(html).not.toContain("Liên quan đến tôi");
+    // The server answers 400 to `scope=related`: the third tab is a disabled native button, never live.
+    const related = html.match(new RegExp(`<button[^>]*>${SCOPE_RELATED_LABEL}</button>`))?.[0] ?? "";
+    expect(related).toContain('disabled=""');
+    expect(related).toContain('aria-pressed="false"');
+    expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("scopeRelated").ten))}"`);
   });
 
   it("đúng MỘT tab được đánh dấu, theo bộ lọc đang chọn", () => {
@@ -415,21 +421,23 @@ describe("lĩnh vực hạn chế — màn hình KHÔNG nói ra rằng có phi�
   });
 });
 
-describe("phần chưa dựng được — ra tới màn hình, không giấu trong chú thích mã", () => {
-  it("every entry reaches the page; the built photo halves and the intake modal are no longer listed", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
+describe("phần chưa dựng — mô tả sau dấu '?' (ADR 0068 §14)", () => {
+  it("no entry claims a built part is missing: both photo halves, the intake modal, the log", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
     // Both photo halves are built (02/10/2026; the "after" row of ADR 0047 replaces G8), and the close
     // gate is enforced by the server — no entry may still claim it is not.
-    expect(html).not.toContain("ADR 0047, G8");
-    expect(html).not.toContain("bat_buoc_anh_nghiem_thu");
-    expect(html).not.toContain("anh_phan_anh");
-    expect(html).not.toContain("POST /api/v1/citizen-reports` không tồn tại");
+    expect(all).not.toContain("ADR 0047, G8");
+    expect(all).not.toContain("bat_buoc_anh_nghiem_thu");
+    expect(all).not.toContain("anh_phan_anh");
+    expect(all).not.toContain("POST /api/v1/citizen-reports` không tồn tại");
     // Nhật ký xử lý ĐÃ dựng (26/09/2026) — nó không còn là "phần chưa dựng được".
-    expect(html).not.toContain("nhat_ky_phan_anh");
-    expect(html).toContain(`${PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được`);
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(nhuTrongHTML(p.ten));
-    }
+    expect(all).not.toContain("nhat_ky_phan_anh");
+  });
+
+  it("every entry has its own `id`; an unknown one throws instead of opening an empty description", () => {
+    const ids = PHAN_CHUA_DUNG.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(() => petitionPendingPart("khong-co")).toThrow();
   });
 });
 

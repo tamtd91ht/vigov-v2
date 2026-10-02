@@ -12,11 +12,21 @@ import type { KetQua } from "@/lib/api/goi";
 import type { StaffIntakeInput } from "@/lib/api/phieu-phan-anh";
 import type { petitions_citizenFieldListOut } from "@/lib/api/schema.gen";
 
-import { INTAKE_DESCRIPTION, INTAKE_DONE_SENTENCE, INTAKE_TITLE } from "./nhan-phieu";
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+
+import { INTAKE_DESCRIPTION, INTAKE_DONE_SENTENCE, INTAKE_TITLE, petitionPendingPart } from "./nhan-phieu";
 import { StaffIntakeButton, StaffIntakeForm, StaffIntakeFormView } from "./staff-intake";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // Radix measures the "?" to place its description; jsdom has no ResizeObserver.
+  if (!("ResizeObserver" in globalThis)) {
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
 });
 
 let root: Root | null = null;
@@ -107,11 +117,32 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(html).toContain('<option value="can-bo">Thái độ / tác phong cán bộ</option>');
   });
 
-  it("NO channel select, NO hamlet, NO photo input (ADR 0028 Bổ sung 2026-10-02 row 5; server refuses)", () => {
+  it("NO channel select; hamlet and photos are DISABLED placeholders only (ADR 0028 row 5, ADR 0068 §14; server refuses)", () => {
     expect(html).not.toContain("Tiếp nhận qua kênh");
-    expect(html).not.toContain("Thôn, tổ dân phố");
+    // No file can be chosen: the photo picker is a disabled button, never a file input.
     expect(html).not.toContain('type="file"');
-    expect(html.match(/<select/g)?.length).toBe(1);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Đính ảnh hiện trường<\/button>/s);
+    // Two selects: the live field list, and the hamlet placeholder — disabled.
+    expect(html.match(/<select/g)?.length).toBe(2);
+    expect(html).toMatch(/<select id="nhap-ho-thon" disabled=""/);
+    expect(html).toContain("Thôn, tổ dân phố");
+    expect(html).toContain(pendingMarkerLabel("Thôn, tổ dân phố"));
+    expect(html).toContain(pendingMarkerLabel("Đính ảnh hiện trường"));
+  });
+
+  it("pressing the two '?' opens their descriptions and reaches no network; the body gains no key", () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const h = mount(vi.fn());
+    for (const id of ["intakeHamlet", "intakePhotos"]) {
+      const info = petitionPendingPart(id);
+      const b = q<HTMLButtonElement>(h, `button[aria-label="${pendingMarkerLabel(info.ten)}"]`);
+      act(() => b.click());
+      expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(info.viSao);
+      act(() => b.click());
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("503 on the field list: the server's sentence and Tải lại, the select disabled", () => {

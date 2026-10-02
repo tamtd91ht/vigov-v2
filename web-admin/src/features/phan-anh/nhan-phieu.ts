@@ -955,9 +955,13 @@ export function nhanLuaChonCanBo(cb: identity_canBoChonNguoiRa): string {
 export const NHAN_CHON_CAN_BO = "Cán bộ xử lý";
 export const DE_BO_PHAN_PHAN_CONG = "— Để bộ phận phân công —";
 
-/** Hai tab phạm vi của §4. Tab thứ ba — `Liên quan đến tôi` — không vẽ, xem `PHAN_CHUA_DUNG`. */
+/**
+ * Ba tab phạm vi của §4. Tab thứ ba — `Liên quan đến tôi` — là chỗ giữ vô hiệu có dấu "?" (ADR 0068
+ * §14), xem `PHAN_CHUA_DUNG` mục `scopeRelated`.
+ */
 export const PHAM_VI_TOAN_XA = "Toàn xã";
 export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
+export const SCOPE_RELATED_LABEL = "Liên quan đến tôi";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHẬT KÝ XỬ LÝ (§8.7) và GHI CHÚ NỘI BỘ của sáu thao tác
@@ -1300,45 +1304,74 @@ export function kpiLinkLabel(label: string): string {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
+ * NHỮNG PHẦN CỦA ĐẶC TẢ **CHƯA DỰNG ĐƯỢC** — mô tả sau dấu "?" (ADR 0068 §14)
  *
- * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn
- * Thu - Chi ngân sách.
+ * Mỗi phần được vẽ ĐÚNG CHỖ đặc tả đặt nó, đúng loại control, bị vô hiệu, kèm dấu "?"; bấm "?" là
+ * đọc `ten` + `viSao` của mục ấy, nguyên văn. Vì thế `viSao` viết cho CÁN BỘ đọc: ngắn, không tên
+ * tuyến, không tên bảng. Lý do kỹ thuật đầy đủ nằm ở chú thích ngay trên từng mục.
+ *
+ * `id` là khoá để màn lấy đúng mục (`petitionPendingPart`), không lấy theo vị trí trong mảng.
+ *
+ * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây, vì `tools/tien_do_san_pham.py` đếm mảng này cho
+ * báo cáo tiến độ: ghi nhận đánh giá thay người dân (ĐÃ QUYẾT KHÔNG LÀM, ADR 0062 — câu của mục nói
+ * rõ điều ấy, nên báo cáo không đọc nó thành việc còn nợ), email cán bộ và số ngày quá hạn (chưa nằm
+ * trong bảng vị trí đã duyệt, ADR 0068 §14).
+ *
+ * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 export type PhanChuaDung = {
+  /** English key the screen looks the entry up by — see `petitionPendingPart`. */
+  readonly id: string;
   readonly ten: string;
   readonly viSao: string;
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // §8.4 mini map + hamlet beside the address. The coordinates the citizen sent (`lat`/`lng`) are
+  // shown as text in `Vị trí hiện trường`. A map means asking an outside tile provider for the area
+  // around that point — sending a citizen's coordinates to an external service for the first time,
+  // which the owner has not decided (rule 3, stop condition 2); hence no "open in map" link either.
+  // The petition response carries no hamlet (`petitions_phieuPhanAnhRa`, re-read 02/10/2026).
   {
-    ten: "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",
+    id: "sceneMap",
+    ten: "Bản đồ hiện trường và tên thôn",
     viSao:
-      "Toạ độ `lat`/`lng` người dân gửi kèm nay đã về và hiện thành chữ ở ô `Vị trí hiện trường`. " +
-      "Bản đồ nhỏ thì chưa vẽ: vẽ nó là xin ảnh nền bản đồ quanh điểm ấy từ một nhà cung cấp bên " +
-      "ngoài, tức là gửi toạ độ của người dân ra một dịch vụ ngoài lần đầu — việc chủ dự án chưa " +
-      "quyết (luật 3, điểm dừng #2). Vì cùng lý do, màn này không có liên kết “mở bản đồ”. Tên " +
-      "thôn thì phiếu trả về không mang, nên không hiện cạnh địa chỉ.",
+      "Vị trí người dân gửi kèm đã hiện thành chữ ở ô “Vị trí hiện trường”. Bản đồ nhỏ chưa vẽ vì " +
+      "phải gửi toạ độ của người dân tới một nhà cung cấp bản đồ bên ngoài — việc này chưa được " +
+      "quyết. Phiếu cũng chưa mang tên thôn.",
+  },
+  // §9 heat map tab: same external-map-provider question as `sceneMap` (rule 3, stop condition 2).
+  {
+    id: "heatMapTab",
+    ten: "Bản đồ nhiệt",
+    viSao:
+      "Bản đồ nhiệt cần gửi toạ độ của người dân tới một nhà cung cấp bản đồ bên ngoài — việc này " +
+      "chưa được quyết, nên tab này chưa mở được.",
+  },
+  // §10 report tab. The only counting route is `GET /api/v1/citizen-report-summary` (the four KPI
+  // cards, §3); none counts by field, unit or hamlet (service-petitions routes, re-read 02/10/2026).
+  // Counting the page in view would be the figure of ONE PAGE, not of the commune — and it is the
+  // figure leadership reads and reports upward.
+  {
+    id: "reportTab",
+    ten: "Báo cáo",
+    viSao:
+      "Hệ thống chưa đếm được phản ánh theo lĩnh vực, theo bộ phận hay theo thôn cho cả xã. Bốn thẻ " +
+      "số liệu đầu màn là số của cả xã và đã dùng được.",
+  },
+  // §4 scope tab. The petition list answers 400 to `scope=related`
+  // (service-petitions/internal/http/xu_ly_phan_anh.go, errPhamViLienQuanChuaCo): who counts as
+  // "related" and what a related officer may do is undecided with the customer.
+  {
+    id: "scopeRelated",
+    ten: "Liên quan đến tôi",
+    viSao:
+      "Chưa chốt thế nào là phiếu “liên quan đến tôi” và người liên quan được làm gì với phiếu, nên " +
+      "bộ lọc này chưa dùng được. “Toàn xã” và “Giao cho tôi” đã dùng được.",
   },
   {
-    ten: "Tab Bản đồ nhiệt (§9) và tab Báo cáo (§10)",
-    viSao:
-      "Bốn thẻ số liệu (§3) nay đã có, đọc từ tuyến đếm `GET /api/v1/citizen-report-summary`. Hai " +
-      "tab còn lại thì chưa. Bản đồ nhiệt: phiếu đã mang `lat`/`lng` (toạ độ người dân gửi kèm), nhưng " +
-      "vẽ bản đồ nhiệt cần một nhà cung cấp bản đồ, tức là gửi toạ độ của người dân ra một dịch vụ " +
-      "ngoài — việc chủ dự án chưa quyết (luật 3, điểm dừng #2). Báo cáo: không tuyến nào đếm theo " +
-      "lĩnh vực, bộ phận hay thôn. Dựng những con số ấy bằng cách đếm trang đang xem sẽ là con số của " +
-      "MỘT TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
-  },
-  {
-    ten: "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
-    viSao:
-      "Máy chủ trả 400 cho `scope=related`: thế nào là “liên quan” và người liên quan được làm gì " +
-      "chưa được chốt với khách. Vẽ tab ấy là vẽ một tab biến quyển sổ thành trang lỗi. Hai tab " +
-      "`Toàn xã` và `Giao cho tôi` thì đã có.",
-  },
-  {
+    id: "staffRecordedRating",
     ten: "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
     viSao:
       "Không dựng theo quyết định của chủ dự án: cán bộ không ghi đánh giá thay người dân. Điểm " +
@@ -1346,22 +1379,35 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "ở khối `Đánh giá của người dân`.",
   },
   {
+    id: "staffEmail",
     ten: "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
     viSao:
       "Danh bạ chọn người (`GET /api/v1/staff-directory`) cố ý chỉ trả mã, tên, chức vụ và bộ " +
       "phận — không email, không số điện thoại — để mọi cán bộ đăng nhập đọc được nó. Màn hình vì " +
       "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
   },
+  // §11 hamlet select of the intake modal. The intake route answers 400 to `hamlet` / `thon_id`
+  // (service-petitions/internal/http/staff_intake.go): no identity RPC checks that a hamlet an officer
+  // picks is one of this commune's. The channel select is NOT a missing part: an intake is always
+  // `can-bo-nhap-ho` (ADR 0028, Bổ sung 02/10/2026).
   {
-    ten: "Ô `Thôn, tổ dân phố` và nút `Đính ảnh hiện trường` của modal Nhập hộ phản ánh (§11)",
+    id: "intakeHamlet",
+    ten: "Thôn, tổ dân phố",
     viSao:
-      "Máy chủ chưa nhận hai thứ ấy ở biểu mẫu nhập hộ và trả 400 nếu được gửi: chưa có đường nào " +
-      "kiểm một thôn do cán bộ chọn có đúng là thôn của xã hay không, và luồng tải ảnh hiện trường " +
-      "đang gắn với phiên của người dân. Vị trí ghi vào ô `Địa chỉ, vị trí`. Ô `Tiếp nhận qua kênh` " +
-      "thì không phải phần thiếu: phiếu nhập hộ luôn ở kênh `Cán bộ nhập hộ` (ADR 0028, bổ sung " +
-      "02/10/2026).",
+      "Phiếu nhập hộ chưa ghi được thôn do cán bộ chọn: hệ thống chưa kiểm được thôn ấy có đúng là " +
+      "thôn của xã hay không. Hãy ghi vị trí vào ô “Địa chỉ, vị trí”.",
+  },
+  // §11 scene photos of the intake modal. The intake body has no attachment, and the scene-photo
+  // upload is bound to the CITIZEN's session (Mini App), not to an officer's.
+  {
+    id: "intakePhotos",
+    ten: "Đính ảnh hiện trường",
+    viSao:
+      "Phiếu nhập hộ chưa đính được ảnh hiện trường: hiện chỉ người dân gửi ảnh được, từ Zalo Mini " +
+      "App.",
   },
   {
+    id: "overdueDays",
     ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
     viSao:
       "Hạn đếm bằng **giờ làm việc** của chính xã, cần lịch làm việc, ngày nghỉ lễ và ngày làm bù " +
@@ -1370,3 +1416,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "cuối, không nói mấy ngày.",
   },
 ];
+
+/**
+ * The entry behind one "?" on this screen. THROWS on an unknown `id`: a renamed entry must turn the
+ * screen's tests red, never open an empty description in front of an officer.
+ */
+export function petitionPendingPart(id: string): PhanChuaDung {
+  const entry = PHAN_CHUA_DUNG.find((p) => p.id === id);
+  if (entry === undefined) throw new Error(`nhan-phieu: PHAN_CHUA_DUNG has no entry "${id}"`);
+  return entry;
+}

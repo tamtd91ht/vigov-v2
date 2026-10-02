@@ -37,7 +37,9 @@ describe("`+ Nhập hộ phản ánh` — `feedback.create`", () => {
     for (const p of [["feedback.read", "feedback.resolve", "report.read"], null]) {
       session.permissions = p;
       expect(render()).not.toMatch(INTAKE_BUTTON);
-      expect(render()).not.toContain('aria-haspopup="dialog"');
+      // Every dialog trigger left must be a placeholder's "?" (ADR 0068 §14), never the intake button.
+      const triggers = render().match(/<button[^>]*aria-haspopup="dialog"[^>]*>/g) ?? [];
+      for (const tag of triggers) expect(tag).toContain("data-pending-marker");
     }
   });
 });

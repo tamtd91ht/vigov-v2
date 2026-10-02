@@ -3,14 +3,13 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { KetQua } from "@/lib/api/goi";
 import type { comms_thongBaoRa, identity_danhBaChonNguoiRa } from "@/lib/api/schema.gen";
 
 import {
   CANH_BAO_CHUA_GUI_THU,
   CHIP_BAT_BUOC_XAC_NHAN,
-  CHO_DANH_SACH_NGUOI_NHAN,
-  CHO_NUT_GO,
   CHUA_CHON_THONG_BAO,
   DANG_TAI_DANH_BA,
   DANH_BA_NGUOI_NHAN_RONG,
@@ -18,7 +17,10 @@ import {
   NHAN_CHON_NGUOI_NHAN,
   NHAN_NUT_PHAT_HANH,
   PHAN_CHUA_DUNG,
+  pendingPart,
   PINNED_LABEL,
+  RECIPIENT_UNITS_CHIP,
+  SAVE_DRAFT_LABEL,
   SO_RONG,
 } from "./nhan-thong-bao";
 import {
@@ -26,18 +28,16 @@ import {
   DanhSachThongBao,
   docDanhBaNguoiNhan,
   FormSoanThongBao,
-  KhoiChuaDung,
   TheThongBao,
 } from "./so-thong-bao";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
  *
- * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM **BỘ PHẬN NHẬN**, và nó canh một sự VẮNG MẶT — thứ khó
- * canh nhất, vì không có gì để tìm trên trang. Máy chủ trả 501 cho mọi thân mang `org_unit_ids`,
- * nên một ô chọn bộ phận vẽ ra ở §5 là năm cái nút mà mọi lần bấm đều hỏng, sau khi cán bộ đã gõ
- * xong cả nội dung. Bài kiểm ở đây đòi hai điều cùng lúc: ô ấy KHÔNG có trên biểu mẫu, và lý do
- * thì CÓ, ở khối đầu màn.
+ * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM **BỘ PHẬN NHẬN**. Máy chủ trả 501 cho mọi thân mang
+ * `org_unit_ids`, nên ô chọn bộ phận của §5 chỉ là MỘT chip vô hiệu kèm dấu "?" (ADR 0068 §14):
+ * không tên bộ phận nào, không nút nào bấm được, và lý do nằm sau dấu "?". Bấm "?" thật sự không
+ * gọi mạng: `announcement-placeholders.test.tsx` (jsdom).
  */
 
 /**
@@ -192,14 +192,28 @@ describe("panel chi tiết §4", () => {
     expect(khong).toContain("Không yêu cầu gửi");
   });
 
-  it("chỗ của danh sách người nhận và nút Gỡ là DÒNG CHỮ, không phải danh sách rỗng hay nút mờ", () => {
+  it("người nhận, bộ phận nhận, Gỡ và hai chip là CHỖ GIỮ có dấu '?', không phải danh sách rỗng", () => {
     const html = renderToStaticMarkup(<ChiTietThongBao thongBao={thongBao()} />);
 
-    expect(html).toContain(nhuTrongHTML(CHO_DANH_SACH_NGUOI_NHAN));
-    expect(html).toContain(nhuTrongHTML(CHO_NUT_GO));
-    // Không một `<button>` nào trong panel: một nút mờ nói "bạn không có quyền", và đó là một câu
-    // khác hẳn với "màn hình chưa dựng".
-    expect(html).not.toContain("<button");
+    // `(12)` is the server's `recipient_count` — the heading is a true figure, only the list is missing.
+    expect(html).toContain("Người nhận (12)");
+    expect(html).toContain("Bộ phận nhận");
+    for (const id of ["recipients", "byUnit", "withdraw", "acknowledge", "emailStatus"]) {
+      expect(html, id).toContain(nhuTrongHTML(pendingMarkerLabel(pendingPart(id).ten)));
+    }
+    // The ONLY live buttons are the "?" markers; the Gỡ control itself is a disabled native button.
+    const live = [...html.matchAll(/<button(?![^>]*disabled="")[^>]*>/g)].map((m) => m[0]);
+    expect(live.length).toBeGreaterThan(0);
+    for (const tag of live) expect(tag).toContain("data-pending-marker");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Gỡ<\/button>/s);
+  });
+
+  it("chip `Đã xác nhận` chỉ khi bắt buộc xác nhận; chip thư chỉ khi có yêu cầu gửi thư", () => {
+    const tat = renderToStaticMarkup(
+      <ChiTietThongBao thongBao={thongBao({ ack_required: false, email_requested: false })} />,
+    );
+    expect(tat).not.toContain(nhuTrongHTML(pendingMarkerLabel(pendingPart("acknowledge").ten)));
+    expect(tat).not.toContain(nhuTrongHTML(pendingMarkerLabel(pendingPart("emailStatus").ten)));
   });
 });
 
@@ -231,19 +245,25 @@ describe("biểu mẫu Soạn thông báo §5", () => {
     expect(html).toContain(nhuTrongHTML(NHAN_NUT_PHAT_HANH));
   });
 
-  it("KHÔNG CÓ Ô CHỌN BỘ PHẬN — máy chủ trả 501 cho mọi thân mang `org_unit_ids`", () => {
+  it("ô chọn bộ phận chỉ là CHỖ GIỮ — một chip vô hiệu, không tên bộ phận nào, máy chủ trả 501", () => {
     const html = veForm();
 
-    // Năm bộ phận §5 liệt kê. Một trong năm xuất hiện trên biểu mẫu là dấu hiệu ô ấy đã được vẽ.
+    // Tên bộ phận là dữ liệu của xã: không một tên nào được gõ sẵn vào màn.
     expect(html).not.toContain("THƯỜNG TRỰC ĐẢNG UỶ");
-    expect(html).not.toContain("Bộ phận nhận thông báo");
     expect(html).not.toContain("org_unit");
+    expect(html).toContain("Bộ phận nhận thông báo");
+    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${RECIPIENT_UNITS_CHIP}</button>`));
+    expect(html).toContain(nhuTrongHTML(pendingMarkerLabel(pendingPart("byUnit").ten)));
   });
 
-  it("KHÔNG CÓ NÚT `Lưu nháp` — không có tuyến nào tạo nháp", () => {
-    // Vẽ nút ấy rồi cho nó phát hành luôn là biến một nút "lưu để sửa tiếp" thành một nút gửi đi
-    // cả xã.
-    expect(veForm()).not.toContain("Lưu nháp");
+  it("`Lưu nháp` là CHỖ GIỮ vô hiệu giữa Huỷ và Phát hành — không bao giờ là nút gửi", () => {
+    // Một nút "lưu để sửa tiếp" mà phát hành luôn là một nút gửi đi cả xã.
+    const html = veForm();
+    const draft = html.match(new RegExp(`<button[^>]*>(?:(?!</button>).)*${SAVE_DRAFT_LABEL}</button>`, "s"))?.[0] ?? "";
+    expect(draft).toContain('type="button"');
+    expect(draft).toContain('disabled=""');
+    expect(html.indexOf("Huỷ")).toBeLessThan(html.indexOf(SAVE_DRAFT_LABEL));
+    expect(html.indexOf(SAVE_DRAFT_LABEL)).toBeLessThan(html.indexOf('type="submit"'));
   });
 
   it("nút Phát hành TẮT khi chưa gõ gì — ba trường, không phải hai", () => {
@@ -286,25 +306,21 @@ describe("biểu mẫu Soạn thông báo §5", () => {
   });
 });
 
-describe("phần chưa dựng được — ra tới màn hình, không giấu trong chú thích mã", () => {
-  it("mọi mục có mặt", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(nhuTrongHTML(p.ten));
-    }
+describe("phần chưa dựng — mô tả sau dấu '?' (ADR 0068 §14)", () => {
+  it("không còn mục đã dựng: chuông thông báo, cổng quyền phía giao diện", () => {
+    const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
+    expect(ten).not.toMatch(/chuông/i);
+    expect(ten).not.toContain("announcement.create");
   });
 
-  it("bốn phát hiện nặng nhất gọi đích danh thứ còn thiếu", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
+  it("mỗi mục có `id` riêng; `pendingPart` từ chối một `id` lạ thay vì mở mô tả rỗng", () => {
+    const ids = PHAN_CHUA_DUNG.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(() => pendingPart("khong-co")).toThrow();
+  });
 
-    // 501 theo bộ phận — điều quan trọng nhất của màn này.
-    expect(html).toContain("501");
-    // Cổng quyền client: thứ người đọc màn sẽ đi tìm.
-    expect(html).toContain("announcement.create");
-    // Vì sao không có bộ lọc `Gửi cho tôi`: bảng `quyen` thiếu khoá đọc, và đó là câu hỏi mở #27.
-    expect(html).toContain("#27");
-    // Vì sao ghim không sắp lại cả sổ.
-    expect(html).toContain("core/page");
+  it("vì sao không có `Gửi cho tôi`: thiếu khoá đọc thông báo — câu hỏi mở #27", () => {
+    expect(pendingPart("scopeMine").viSao).toContain("#27");
   });
 });
 
