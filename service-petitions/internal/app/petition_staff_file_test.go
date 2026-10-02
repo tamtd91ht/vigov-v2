@@ -61,6 +61,9 @@ type staffFilesFake struct {
 	countErr error
 	counted  []string // "subjectType|subjectID|purpose|pendingWindow"
 
+	photosAfter int         // stored photos uploaded after the reopening cut
+	cuts        []time.Time // the cuts CountStoredCreatedAfterTx was asked for
+
 	cands      map[string]domain.AttachCandidate
 	linkedTo   string
 	linkedIDs  []string
@@ -78,6 +81,18 @@ func (f *staffFilesFake) CountForSubjectTx(_ context.Context, tx *pkgstore.Scope
 		return 0, errors.New("count outside a transaction")
 	}
 	return f.photos, f.countErr
+}
+
+// CountStoredCreatedAfterTx answers photosAfter — the stored photos uploaded after the cut — and records
+// the cut it was asked for.
+func (f *staffFilesFake) CountStoredCreatedAfterTx(_ context.Context, tx *pkgstore.ScopedTx, subjectType, subjectID,
+	purpose string, after time.Time) (int, error) {
+	f.counted = append(f.counted, subjectType+"|"+subjectID+"|"+purpose+"|after")
+	f.cuts = append(f.cuts, after)
+	if tx == nil {
+		return 0, errors.New("count outside a transaction")
+	}
+	return f.photosAfter, f.countErr
 }
 
 func (f *staffFilesFake) PetitionAttachCandidates(_ context.Context, _ *pkgstore.ScopedTx, ids []string) (
@@ -209,6 +224,168 @@ func TestCloseGate_AfterTheLifecycleCheck(t *testing.T) {
 	}
 	if sw.calls != 0 {
 		t.Error("gate read before the lifecycle check")
+	}
+}
+
+// --- the citizen's view of verification photos by status (owner decision (b), 02/10/2026) ----------
+
+func TestVerificationPhoto_CitizenSeesThemOnlyFromAwaitingConfirmation(t *testing.T) {
+	reopened := vpPetitionRow(domain.DangXuLy, "rac-thai")
+	reopened.SoLanMoLai = 1 // shown at cho-dan-xac-nhan before, reopened since: hidden again
+	for name, c := range map[string]struct {
+		row  domain.PhieuPhanAnh
+		want int
+	}{
+		"dang-xu-ly":                   {vpPetitionRow(domain.DangXuLy, "rac-thai"), 0},
+		"da-xu-ly":                     {vpPetitionRow(domain.DaXuLy, "rac-thai"), 0},
+		"reopened, back at dang-xu-ly": {reopened, 0},
+		"khong-tiep-nhan":              {vpPetitionRow(domain.KhongTiepNhan, "rac-thai"), 0},
+		"cho-dan-xac-nhan":             {vpPetitionRow(domain.ChoDanXacNhan, "rac-thai"), 1},
+		"da-dong":                      {vpPetitionRow(domain.DaDong, "rac-thai"), 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := buildVerification(t)
+			h.pets.byCommune[xaThu][vpCode] = c.row
+			h.addFile("v1", domain.PurposePetitionVerificationPhoto, domain.StoredFileStored)
+			uc := NewCitizenVerificationPhotos(h.pets, h.files, h.objects)
+			links, err := uc.ListPhotos(h.ctx, vpCode, ppCitizenActor())
+			if err != nil {
+				t.Fatalf("ListPhotos: %v — the petition is the citizen's own, so never an error", err)
+			}
+			if links == nil {
+				t.Fatal("nil list — the route must answer `items: []`, not null")
+			}
+			if len(links) != c.want {
+				t.Errorf("links = %d, want %d", len(links), c.want)
+			}
+			if len(h.objects.presigned) != 0 {
+				t.Error("an upload form was signed on a read")
+			}
+		})
+	}
+	// Hidden is NOT a different answer for somebody else's petition: another citizen still gets the 404.
+	h := buildVerification(t)
+	uc := NewCitizenVerificationPhotos(h.pets, h.files, h.objects)
+	if _, err := uc.ListPhotos(h.ctx, vpCode, audit.Actor{ID: ppOther, Kind: "citizen"}); !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
+		t.Errorf("another citizen at dang-xu-ly: %v, want the one 404", err)
+	}
+}
+
+// --- the close gate on a REOPENED petition (owner decision (c), 02/10/2026) ---------------------------
+
+// reopenedAtFixture is when the citizen's 1–2 star rating reopened the petition — before the close.
+var reopenedAtFixture = time.Date(2026, 9, 21, 10, 11, 12, 0, time.UTC)
+
+func reopenedClosablePetition() *khoPhieuXuLyGia {
+	k := khoPhieuMau()
+	k.hang = dongPhieuMau(map[string]any{
+		"trang_thai": string(domain.ChoDanXacNhan), "xu_ly_xong_luc": mocThaoTac, "linh_vuc": "rac-thai",
+		"so_lan_mo_lai": int64(1),
+	})
+	k.latestReopen = reopenedAtFixture
+	return k
+}
+
+func TestCloseGate_ReopenedWithOnlyOldPhotosRefuses(t *testing.T) {
+	k := reopenedClosablePetition()
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	files := &staffFilesFake{photos: 3, photosAfter: 0} // three photos, all from before the reopening
+	uc.settings, uc.staffFiles = &closeSwitchFake{required: true}, files
+
+	_, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe)
+	if !errors.Is(err, domain.ErrVerificationPhotoRequired) {
+		t.Fatalf("err = %v, want ErrVerificationPhotoRequired", err)
+	}
+	if k.coCau("UPDATE phieu_phan_anh") || k.coCau("INSERT INTO audit_log") || k.coCau("INSERT INTO nhat_ky_phan_anh") {
+		t.Error("closed, audited or logged although the gate refused")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Errorf("commit %d rollback %d — want 0 and 1", k.daCommit, k.daRollback)
+	}
+	if len(files.counted) != 1 || files.counted[0] !=
+		domain.StoredFileSubjectPetition+"|"+idPhieuThu+"|"+domain.PurposePetitionVerificationPhoto+"|after" {
+		t.Errorf("counted %v — want ONLY the after-the-reopening count of THIS petition's verification photos",
+			files.counted)
+	}
+	if len(files.cuts) != 1 || !files.cuts[0].Equal(reopenedAtFixture) {
+		t.Errorf("cut = %v, want the latest reopening %v", files.cuts, reopenedAtFixture)
+	}
+	if strings.Contains(err.Error(), maPhieuThu) {
+		t.Errorf("error carries the lookup code: %v", err)
+	}
+	// The reopening instant is read IN the closing transaction, scoped, from the reopening rows only.
+	q := k.cau("max(thoi_diem)")
+	if len(q) != 1 || !q[0].trongGiaoDich {
+		t.Fatalf("reopen read = %+v — want one read inside the transaction", q)
+	}
+	for _, frag := range []string{"FROM nhat_ky_phan_anh WHERE tenant_id = $1", "phieu_phan_anh_id = $2", "hanh_vi = $3"} {
+		if !strings.Contains(q[0].sql, frag) {
+			t.Errorf("reopen read lacks %q: %s", frag, q[0].sql)
+		}
+	}
+	if len(q[0].args) != 3 || q[0].args[0] != string(xaThu) || q[0].args[1] != idPhieuThu ||
+		q[0].args[2] != string(domain.LogActionReopenByRating) {
+		t.Errorf("reopen read args = %v", q[0].args)
+	}
+}
+
+func TestCloseGate_ReopenedWithANewPhotoCloses(t *testing.T) {
+	k := reopenedClosablePetition()
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	uc.settings, uc.staffFiles = &closeSwitchFake{required: true}, &staffFilesFake{photos: 4, photosAfter: 1}
+	after, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe)
+	if err != nil || after.TrangThai != domain.DaDong {
+		t.Fatalf("Dong = %v, %v", after.TrangThai, err)
+	}
+	if !k.coCau("UPDATE phieu_phan_anh") || k.daCommit != 1 {
+		t.Error("closing not written")
+	}
+}
+
+func TestCloseGate_ReopenedSwitchOffClosesRegardless(t *testing.T) {
+	k := reopenedClosablePetition()
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	files := &staffFilesFake{}
+	uc.settings, uc.staffFiles = &closeSwitchFake{required: false}, files
+	if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("Dong with the switch off: %v", err)
+	}
+	if len(files.counted) != 0 || k.coCau("max(thoi_diem)") {
+		t.Error("photos counted or the reopening read although the switch is off")
+	}
+}
+
+// A counter above zero with no reopening row on the timeline: the gate cannot tell old from new, so it
+// refuses as a fault (500) — never ErrVerificationPhotoRequired, never a close on the old photos.
+func TestCloseGate_ReopenedWithoutATimelineRowFailsClosed(t *testing.T) {
+	k := reopenedClosablePetition()
+	k.latestReopen = nil
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	files := &staffFilesFake{photos: 5, photosAfter: 5}
+	uc.settings, uc.staffFiles = &closeSwitchFake{required: true}, files
+	_, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe)
+	if !errors.Is(err, errReopenInstantMissing) || errors.Is(err, domain.ErrVerificationPhotoRequired) {
+		t.Fatalf("err = %v, want errReopenInstantMissing", err)
+	}
+	if k.coCau("UPDATE phieu_phan_anh") || k.daCommit != 0 || len(files.counted) != 0 {
+		t.Error("closed or counted although the reopening instant is unknown")
+	}
+}
+
+// Never reopened: the rule is unchanged — any stored photo, and the timeline is not read.
+func TestCloseGate_NeverReopenedCountsEveryStoredPhoto(t *testing.T) {
+	k := closablePetition()
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	files := &staffFilesFake{photos: 1, photosAfter: 0}
+	uc.settings, uc.staffFiles = &closeSwitchFake{required: true}, files
+	if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("Dong: %v", err)
+	}
+	if k.coCau("max(thoi_diem)") || len(files.cuts) != 0 {
+		t.Error("a never-reopened petition was measured against a reopening")
+	}
+	if len(files.counted) != 1 || !strings.HasSuffix(files.counted[0], "|stored-only") {
+		t.Errorf("counted %v — want the unchanged every-stored-photo count", files.counted)
 	}
 }
 
@@ -685,6 +862,9 @@ func TestVerificationPhoto_StaffListIsAuditedByBusinessCode(t *testing.T) {
 
 func TestVerificationPhoto_CitizenListOwnPetitionOnlyNeverALogAttachment(t *testing.T) {
 	h := buildVerification(t)
+	// At a status where the citizen sees the photos at all (owner decision (b)) — the visibility rule
+	// has its own test below; this one is about whose photos and which purpose.
+	h.pets.byCommune[xaThu][vpCode] = vpPetitionRow(domain.ChoDanXacNhan, "rac-thai")
 	h.addFile("v1", domain.PurposePetitionVerificationPhoto, domain.StoredFileStored)
 	h.addFile("v2", domain.PurposePetitionVerificationPhoto, domain.StoredFilePending)
 	h.addFile("l1", domain.PurposePetitionLogAttachment, domain.StoredFileStored)
@@ -818,6 +998,16 @@ func TestStaffFilePurposesMatchCoreStorage(t *testing.T) {
 	if domain.PurposePetitionVerificationPhoto != string(storage.PurposePetitionVerificationPhoto) ||
 		domain.PurposePetitionLogAttachment != string(storage.PurposePetitionLogAttachment) {
 		t.Fatal("domain purposes drifted from core/storage")
+	}
+}
+
+func TestVerificationPhotosVisibleToCitizen(t *testing.T) {
+	for _, s := range []domain.TrangThai{domain.DaTiepNhan, domain.DangPhanLoai, domain.DaChuyenXuLy, domain.DangXuLy,
+		domain.DaXuLy, domain.ChoDanXacNhan, domain.DaDong, domain.KhongTiepNhan, domain.ChuyenCapTren, "not-a-status"} {
+		want := s == domain.ChoDanXacNhan || s == domain.DaDong
+		if got := domain.VerificationPhotosVisibleToCitizen(s); got != want {
+			t.Errorf("%s: visible = %v, want %v", s, got, want)
+		}
 	}
 }
 

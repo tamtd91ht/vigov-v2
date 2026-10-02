@@ -87,6 +87,10 @@ type khoPhieuXuLyGia struct {
 	// row — takes the business write AND the audit entry down with it.
 	loiSau string
 	daNo   bool
+
+	// latestReopen is what `SELECT max(thoi_diem) FROM nhat_ky_phan_anh …` answers — the latest
+	// reopening (store.LatestReopenAtTx). nil is the NULL of "no reopening row".
+	latestReopen driver.Value
 }
 
 func khoPhieuMau() *khoPhieuXuLyGia {
@@ -237,6 +241,9 @@ func (c *connPhieuGia) QueryContext(_ context.Context, q string, args []driver.N
 	c.k.ghi(q, args)
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
+	}
+	if strings.Contains(q, "SELECT max(thoi_diem) FROM nhat_ky_phan_anh") {
+		return &rowsPhieuGia{cot: []string{"max(thoi_diem)"}, hang: [][]driver.Value{{c.k.latestReopen}}}, nil
 	}
 	if !strings.Contains(q, "FROM phieu_phan_anh") {
 		return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)

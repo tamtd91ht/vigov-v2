@@ -386,6 +386,31 @@ func (s *StoredFileStore) CountForSubject(ctx context.Context,
 		subjectType, subjectID, purpose, pendingSince))
 }
 
+// countStoredCreatedAfterTail is countStoredForSubjectTail narrowed to rows whose upload slot was
+// issued STRICTLY AFTER $5. `created_at` and not `updated_at`: the slot is requested when the officer
+// picks the photo, and `updated_at` moves on every later transition (stored → ready), so it would date a
+// photo chosen before a reopening as if it came after.
+const countStoredCreatedAfterTail = countStoredForSubjectTail + ` AND created_at > $5`
+
+// errCreatedAfterZero: CountStoredCreatedAfterTx was asked for "after the zero time", which would count
+// every photo — the very answer the caller is narrowing away from. Refused rather than answered.
+var errCreatedAfterZero = errors.New("stored_file: đếm tệp sau một mốc rỗng")
+
+// CountStoredCreatedAfterTx counts the STORED files (stored / processing / ready, not soft-deleted) of
+// one purpose on one subject whose upload slot was issued strictly after `after`, inside the caller's
+// transaction — the close gate's count on a reopened petition (app.XuLyPhanAnh.Dong). A zero `after`
+// is an error, never "no bound".
+func (s *StoredFileStore) CountStoredCreatedAfterTx(ctx context.Context, tx *store.ScopedTx,
+	subjectType, subjectID, purpose string, after time.Time) (int, error) {
+
+	if after.IsZero() {
+		return 0, errCreatedAfterZero
+	}
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
+	return scanCount(tx.Query(ctx, "count(*)", "stored_file", countStoredCreatedAfterTail,
+		subjectType, subjectID, purpose, after))
+}
+
 func scanCount(rows *sql.Rows, err error) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("stored_file: đếm tệp: %w", err)

@@ -96,6 +96,10 @@ type KhoPhieuXuLy interface {
 	// else on the row — see petition_publication.go.
 	SetPublicationStatus(ctx context.Context, tx *store.ScopedTx, id string,
 		from, to domain.PublicationStatus) error
+
+	// LatestReopenAtTx is the instant of the most recent reopening, read from the timeline (zero = none)
+	// — the close gate's cut on a reopened petition (checkVerificationPhotoGate).
+	LatestReopenAtTx(ctx context.Context, tx *store.ScopedTx, petitionID string) (time.Time, error)
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -430,6 +434,8 @@ type VerificationPhotoSwitch interface {
 type PetitionStaffFiles interface {
 	CountForSubjectTx(ctx context.Context, tx *store.ScopedTx, subjectType, subjectID, purpose string,
 		pendingSince time.Time) (int, error)
+	CountStoredCreatedAfterTx(ctx context.Context, tx *store.ScopedTx, subjectType, subjectID, purpose string,
+		after time.Time) (int, error)
 	PetitionAttachCandidates(ctx context.Context, tx *store.ScopedTx, ids []string) (
 		map[string]domain.AttachCandidate, error)
 	LinkToPetitionLogEntry(ctx context.Context, tx *store.ScopedTx, logEntryID string, fileIDs []string) error
@@ -449,8 +455,17 @@ var errCloseGateNotWired = errors.New("xu_ly_phan_anh: chưa nối dây kiểm �
 // processing / ready, not soft-deleted (CountForSubjectTx with no pending window): a pending upload is
 // not evidence.
 //
-// ⚠ A PHOTO STORED BEFORE A REOPENING STILL COUNTS. The switch says "at least one photo", and nothing
-// decided says a reopened petition needs a NEW one. Reported as an open question, not chosen silently.
+// A REOPENED PETITION NEEDS A PHOTO UPLOADED AFTER THE MOST RECENT REOPENING (owner decision (c),
+// 02/10/2026, ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"): the older photos are the result the
+// citizen has just rejected with 1–2 stars. "Reopened" is `so_lan_mo_lai > 0`; the instant is the
+// timeline's latest `mo-lai-theo-danh-gia` row (store.LatestReopenAtTx says why not `danh_gia_luc`);
+// "after" is the photo's upload slot issued strictly later. A counter above zero with NO such row is a
+// register that contradicts itself — refused as an error, never closed on the old photos.
+//
+// ⚠ COST, NOT DECIDED HERE: a petition that already holds the maximum of 5 stored photos when it is
+// reopened cannot receive a sixth (migration 0027's trigger and RequestUpload both count every stored
+// photo), and there is no route that removes one — so in a commune with the switch on, such a petition
+// cannot be closed again until that is decided.
 func (uc *XuLyPhanAnh) checkVerificationPhotoGate(ctx context.Context, tx *store.ScopedTx,
 	p domain.PhieuPhanAnh) error {
 	if uc.settings == nil || uc.staffFiles == nil {
@@ -463,6 +478,25 @@ func (uc *XuLyPhanAnh) checkVerificationPhotoGate(ctx context.Context, tx *store
 	if !required {
 		return nil
 	}
+	if p.SoLanMoLai > 0 {
+		reopenedAt, err := uc.kho.LatestReopenAtTx(ctx, tx, p.ID)
+		if err != nil {
+			return fmt.Errorf("xu_ly_phan_anh: đọc lần mở lại gần nhất: %w", err)
+		}
+		if reopenedAt.IsZero() {
+			return errReopenInstantMissing
+		}
+		n, err := uc.staffFiles.CountStoredCreatedAfterTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
+			domain.PurposePetitionVerificationPhoto, reopenedAt)
+		if err != nil {
+			return fmt.Errorf("xu_ly_phan_anh: đếm ảnh sau xử lý tải sau lần mở lại: %w", err)
+		}
+		if n == 0 {
+			return fmt.Errorf("%w (phiếu đã mở lại; chưa có ảnh nào tải sau lần mở lại gần nhất)",
+				domain.ErrVerificationPhotoRequired)
+		}
+		return nil
+	}
 	n, err := uc.staffFiles.CountForSubjectTx(ctx, tx, domain.StoredFileSubjectPetition, p.ID,
 		domain.PurposePetitionVerificationPhoto, time.Time{})
 	if err != nil {
@@ -473,6 +507,12 @@ func (uc *XuLyPhanAnh) checkVerificationPhotoGate(ctx context.Context, tx *store
 	}
 	return nil
 }
+
+// errReopenInstantMissing: `so_lan_mo_lai` says the petition was reopened, and the timeline holds no
+// reopening row. A 500 — the gate cannot tell old photos from new, and closing on a guess is the one
+// outcome that cannot be undone.
+var errReopenInstantMissing = errors.New(
+	"xu_ly_phan_anh: phiếu có so_lan_mo_lai > 0 nhưng nhật ký không có dòng mở lại — không kiểm được ảnh sau xử lý")
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
 // location changes nothing that is stored — it is fixed so a value read back in a test compares equal

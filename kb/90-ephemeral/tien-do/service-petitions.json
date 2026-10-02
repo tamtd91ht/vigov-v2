@@ -529,6 +529,15 @@
       "no_confirm": [],
       "tiep_theo": "Câu cho chủ dự án: (1) ô chọn lĩnh vực của modal nhập hộ không có tuyến cán bộ gọi được (GET citizen-report-fields cần admin.lookup) — dùng khoá nào; (2) ô 'Tiếp nhận qua kênh' §11 — cán bộ có ghi zalo-oa/web-xa được không (đang: từ chối, ADR 0028 đk dừng #6); (3) không có dòng nhật ký lúc nhập hộ (hanh_vi chưa có giá trị) — cần migration nới CHECK; (4) trạng thái đầu da-tiep-nhan cho phiếu nhập hộ có đúng không; (5) cán bộ không có feedback.restricted có được nhập hộ phiếu lĩnh vực can-bo không (đang: được); (6) ba KPI có cần theo kỳ không; (7) 'critical' của bảng quá hạn còn so đồng hồ ứng dụng, late_working_seconds dùng now() của CSDL. transaction-boundaries.json: nhập hộ = nhất quán mạnh một giao dịch, đọc đồng bộ ResolveDeadlines trước (lỗi → 503 không ghi gì); bảng quá hạn = thêm một lời đọc MeasureWorkingHours mỗi trang, lỗi → vắng trường.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "anh-nghiem-thu-cua-so-dan-va-mo-lai",
+      "viec": "Ảnh nghiệm thu: dân chỉ thấy khi phiếu ở cho-dan-xac-nhan hoặc da-dong; phiếu mở lại thì đóng lần sau cần ảnh tải SAU lần mở lại gần nhất (ADR 0047 dòng THAY G8, câu (b)(c), 02/10/2026 — TASK-P1b)",
+      "trang_thai": "xong",
+      "bang_chung": "domain.VerificationPhotosVisibleToCitizen: chỉ trạng thái HIỆN TẠI ∈ {cho-dan-xac-nhan, da-dong}; mở lại về dang-xu-ly thì dân không thấy ảnh nào (cả ảnh cũ) cho tới khi phiếu lại sang cho-dan-xac-nhan; ẩn = 200 items:[] (không 404; 404 đồng nhất vẫn giữ cho phiếu không phải của mình). checkVerificationPhotoGate: cờ tắt → đóng; chưa mở lại → mọi ảnh đã lưu; đã mở lại → cần ≥1 ảnh có stored_file.created_at > dòng mo-lai-theo-danh-gia mới nhất của nhat_ky_phan_anh (đọc trong giao dịch đóng; không dùng danh_gia_luc vì bị ghi đè); so_lan_mo_lai>0 mà không có dòng mở lại → 500, không bao giờ đóng bằng ảnh cũ. go test -count=1 ./... xanh, vet sạch.",
+      "no_confirm": [],
+      "tiep_theo": "NGÕ CỤT CHỜ CHỦ DỰ ÁN: trần 5 ảnh nghiệm thu đếm MỌI ảnh đã lưu (RequestUpload + trigger 0027) và không tuyến nào gỡ ảnh — phiếu bị mở lại khi đã đủ 5 ảnh thì không tải được ảnh mới, ở xã bật cờ sẽ KHÔNG BAO GIỜ đóng được. Hai mốc 'sau' dựa vào đồng hồ ứng dụng của hai pod. citizen-app chưa đối chiếu với danh sách rỗng trước cho-dan-xac-nhan. Chưa chạy Postgres thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

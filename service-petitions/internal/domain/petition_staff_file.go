@@ -50,6 +50,24 @@ func VerificationPhotoUploadOpen(s TrangThai) bool {
 	return true
 }
 
+// VerificationPhotosVisibleToCitizen reports whether the citizen may see the verification photos of
+// their own petition in this status: `cho-dan-xac-nhan` and `da-dong`, AND NOTHING ELSE (owner decision
+// (b), 02/10/2026, ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8": "từ khi phiếu sang
+// `cho-dan-xac-nhan` trở đi (và sau khi đóng), không phải ngay lúc cán bộ tải").
+//
+// THE CURRENT STATUS DECIDES, NOT THE HISTORY. A petition reopened by a 1–2 star rating is back at
+// `dang-xu-ly`, and from then until it again reaches `cho-dan-xac-nhan` the citizen sees NO verification
+// photo — not even the ones shown before the reopening. Two reasons: the photos uploaded during the
+// reopened work are exactly what (b) keeps from the citizen until staff present them, and the old ones
+// are the result the citizen has just rejected (decision (c)); showing those alone would need a
+// per-photo cut at the reopening instant that nobody decided, and would present rejected evidence as
+// the current answer. `da-dong` is shown whether or not the petition passed through `cho-dan-xac-nhan`
+// ("và sau khi đóng"). `da-xu-ly`, the early statuses and the two terminal branches are hidden —
+// fail closed: a status not named by the owner shows nothing.
+func VerificationPhotosVisibleToCitizen(s TrangThai) bool {
+	return s == ChoDanXacNhan || s == DaDong
+}
+
 // IsVerificationPhotoOf reports whether f is a verification photo of the petition with internal id
 // petitionID — subject `petition`, purpose verification, uploaded by a member of staff (never the
 // citizen marker, which migration 0026 keeps off this purpose anyway).
@@ -101,5 +119,9 @@ func MayDownloadPetitionLogAttachment(f StoredFile, petitionID, linkedTo, reader
 // ErrVerificationPhotoRequired refuses closing a petition that holds no stored verification photo in
 // a commune whose switch requires one (ADR 0008 decision 3, `bat_buoc_anh_nghiem_thu`, default ON).
 // Its wire sentence is the commune's "Lời hệ thống" wording of KeyFeedbackAfterPhotoRequired.
+//
+// A REOPENED petition is refused with the same sentinel when none of its stored photos was uploaded
+// after the most recent reopening (owner decision (c), 02/10/2026) — wrapped, so errors.Is still holds
+// and the wire answer is the same 409 `after_photo_required`.
 var ErrVerificationPhotoRequired = errors.New(
 	"phan_anh: xã bắt buộc có ảnh sau xử lý trước khi đóng phiếu, và phiếu chưa có ảnh nào")

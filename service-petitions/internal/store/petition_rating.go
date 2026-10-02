@@ -113,3 +113,40 @@ func (s *PhieuPhanAnhStore) ReopenByRating(ctx context.Context, tx *store.Scoped
 	}
 	return doiMotDongPhieu(kq, "mở lại theo đánh giá")
 }
+
+// LatestReopenAtTx answers the instant of the MOST RECENT reopening of petition `petitionID` (its
+// internal id), inside the caller's transaction. The zero time means the timeline holds no reopening.
+//
+// READ FROM THE TIMELINE, NOT FROM THE PETITION ROW, because the row has no column that holds it:
+// `danh_gia_luc` is stamped by the reopening but OVERWRITTEN by any later 3–5 star rating (RecordRating
+// — "lần mới thay lần cũ"), so after reopen → photo → resolve → 4 stars it would name the 4-star rating
+// and make the photo look older than the reopening. The `mo-lai-theo-danh-gia` row of `nhat_ky_phan_anh`
+// is written in the reopening's own transaction (app.RatePetition), `thoi_diem` is that act's instant,
+// and the table is append-only (migration 0013), so the instant can never move. The index
+// `nhat_ky_theo_phieu_phan_anh` (tenant_id, phieu_phan_anh_id, thoi_diem DESC, id DESC) serves it.
+//
+// No soft-delete predicate: the table has none (migration 0013 header).
+func (s *PhieuPhanAnhStore) LatestReopenAtTx(ctx context.Context, tx *store.ScopedTx, petitionID string) (
+	time.Time, error) {
+
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the transaction.
+	rows, err := tx.Query(ctx, "max(thoi_diem)", "nhat_ky_phan_anh",
+		`AND phieu_phan_anh_id = $2 AND hanh_vi = $3`, petitionID, string(domain.LogActionReopenByRating))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("nhat_ky_phan_anh: đọc lần mở lại gần nhất: %w", err)
+	}
+	defer rows.Close()
+	var at sql.NullTime
+	if rows.Next() {
+		if err := rows.Scan(&at); err != nil {
+			return time.Time{}, fmt.Errorf("nhat_ky_phan_anh: quét lần mở lại gần nhất: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return time.Time{}, fmt.Errorf("nhat_ky_phan_anh: duyệt lần mở lại gần nhất: %w", err)
+	}
+	if !at.Valid {
+		return time.Time{}, nil
+	}
+	return at.Time.UTC(), nil
+}

@@ -78,6 +78,80 @@ func TestLinkedLogEntry(t *testing.T) {
 	}
 }
 
+func TestCountStoredCreatedAfterTx(t *testing.T) {
+	d := &sfDB{rows: []map[string]driver.Value{{"count(*)": int64(2)}}}
+	s, h := sfStore(d)
+	var n int
+	err := sfInTx(t, h, xaThu, func(ctx context.Context, tx *pkgstore.ScopedTx) error {
+		var e error
+		n, e = s.CountStoredCreatedAfterTx(ctx, tx, "petition", "pa-1", "petition-verification-photo", sfAt)
+		return e
+	})
+	if err != nil || n != 2 {
+		t.Fatalf("count = %d, %v", n, err)
+	}
+	st := d.stmts[0]
+	for _, frag := range []string{"FROM stored_file WHERE tenant_id = $1", "subject_type = $2", "subject_id = $3",
+		"purpose = $4", "deleted_at IS NULL", "status IN ('stored', 'processing', 'ready')", "created_at > $5"} {
+		if !strings.Contains(st.sql, frag) {
+			t.Errorf("statement lacks %q: %s", frag, st.sql)
+		}
+	}
+	if strings.Contains(st.sql, "'pending'") {
+		t.Errorf("a pending upload counts as evidence: %s", st.sql)
+	}
+	want := []driver.Value{string(xaThu), "petition", "pa-1", "petition-verification-photo", sfAt}
+	if !reflect.DeepEqual(st.args, want) {
+		t.Errorf("args = %v\nwant   %v", st.args, want)
+	}
+
+	// A zero cut would count every photo — refused before any statement.
+	d2 := &sfDB{rows: []map[string]driver.Value{{"count(*)": int64(9)}}}
+	s2, h2 := sfStore(d2)
+	err = sfInTx(t, h2, xaThu, func(ctx context.Context, tx *pkgstore.ScopedTx) error {
+		_, e := s2.CountStoredCreatedAfterTx(ctx, tx, "petition", "pa-1", "petition-verification-photo", time.Time{})
+		return e
+	})
+	if !errors.Is(err, errCreatedAfterZero) || len(d2.stmts) != 0 {
+		t.Errorf("zero cut: err %v, %d statements — want refused, none", err, len(d2.stmts))
+	}
+}
+
+func TestLatestReopenAtTx(t *testing.T) {
+	at := time.Date(2026, 9, 25, 1, 2, 3, 0, time.UTC)
+	for name, c := range map[string]struct {
+		val  driver.Value
+		want time.Time
+	}{
+		"a reopening": {at, at},
+		"none (NULL)": {nil, time.Time{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := &sfDB{rows: []map[string]driver.Value{{"max(thoi_diem)": c.val}}}
+			_, h := sfStore(d)
+			p := NewPhieuPhanAnhStore(h)
+			var got time.Time
+			err := sfInTx(t, h, xaThu, func(ctx context.Context, tx *pkgstore.ScopedTx) error {
+				var e error
+				got, e = p.LatestReopenAtTx(ctx, tx, "pa-1")
+				return e
+			})
+			if err != nil || !got.Equal(c.want) {
+				t.Fatalf("LatestReopenAtTx = %v, %v — want %v", got, err, c.want)
+			}
+			st := d.stmts[0]
+			if !strings.Contains(st.sql, "SELECT max(thoi_diem) FROM nhat_ky_phan_anh WHERE tenant_id = $1") ||
+				!strings.Contains(st.sql, "phieu_phan_anh_id = $2") || !strings.Contains(st.sql, "hanh_vi = $3") {
+				t.Errorf("statement %s", st.sql)
+			}
+			want := []driver.Value{string(xaThu), "pa-1", string(domain.LogActionReopenByRating)}
+			if !reflect.DeepEqual(st.args, want) {
+				t.Errorf("args = %v\nwant   %v", st.args, want)
+			}
+		})
+	}
+}
+
 func TestCountForSubject(t *testing.T) {
 	since := sfAt.Add(-15 * time.Minute)
 	for _, c := range []struct {
