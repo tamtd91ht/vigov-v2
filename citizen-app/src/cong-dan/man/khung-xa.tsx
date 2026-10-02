@@ -42,23 +42,64 @@ export function DrumPattern() {
 }
 
 /**
- * LOGO XÃ ở ô trái header của bốn tab gốc. TẠM THỜI: `deploy.mjs --vao-thang` chép
- * `scripts/logo-xa/<tên-miền>.png` vào bản dựng thành `./logo-xa.png` (chủ dự án, 28/09/2026); nguồn thật sau
- * này là hồ sơ hiển thị của xã ở service-platform, cấu hình qua platform-admin. Không có tệp thì ô trở về biểu
- * tượng tòa nhà. `alt=""`: tên xã đứng ngay cạnh bằng chữ. Chuyển từ `TrangXa.tsx` (30/09/2026) để mọi header
- * gốc dùng chung một ô.
+ * The file `deploy.mjs --vao-thang` copies from `scripts/logo-xa/<domain>.png` into the build (ADR 0047:246).
+ * KEPT AS A FALLBACK until every commune has uploaded its own logo (ADR 0069 Hệ quả, same reasoning as ADR 0067
+ * B11 for the banner): removing it early turns the header of a commune that has not uploaded yet from its logo
+ * into the building icon.
  */
-// vi-name-ok: existing component moved from TrangXa.tsx, not renamed (rule 12 #3)
-export function LogoXa() {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
+export const BUNDLED_LOGO_SRC = "./logo-xa.png";
+
+/**
+ * The pictures the header tries, in order: the logo the commune uploaded (`/commune-profiles` `logo_url`, read
+ * at runtime — ADR 0069 #4, #8), then the bundled file. `""` (none uploaded, or the profile not read) skips
+ * the first. After the list, the building icon (ADR 0069 #7). PURE.
+ */
+export function logoSources(runtimeLogoUrl: string): readonly string[] {
+  return runtimeLogoUrl === "" ? [BUNDLED_LOGO_SRC] : [runtimeLogoUrl, BUNDLED_LOGO_SRC];
+}
+
+/**
+ * What the header slot draws, given which sources already failed to load: the first source not failed, or the
+ * building icon when none is left. Hookless so tests can call it and fire `onError` directly.
+ *
+ * `alt=""`: decoration — the commune's name stands right beside it in words (the header title), so a screen
+ * reader reading "logo Xã …" before "Xã …" says the name twice. The box is the same 40×40 for picture and icon
+ * (`.xa-hero__logo` / `.xa-hero__dai-dien`), so a swap or a failure never moves the title.
+ */
+export function CommuneLogoView(props: {
+  sources: readonly string[];
+  failed: readonly string[];
+  onFail: (src: string) => void;
+}) {
+  const src = props.sources.find((s) => !props.failed.includes(s));
+  if (src === undefined) {
     return (
       <span className="xa-hero__dai-dien" aria-hidden="true">
         <BieuTuong ten="build" co={22} />
       </span>
     );
   }
-  return <img className="xa-hero__logo" src="./logo-xa.png" alt="" onError={() => setFailed(true)} />;
+  // `key`: a new element per source, so a late `onError` of the previous picture cannot be read as this one's.
+  return <img key={src} className="xa-hero__logo" src={src} alt="" decoding="async" onError={() => props.onFail(src)} />;
+}
+
+/**
+ * LOGO XÃ ở ô trái header của bốn tab gốc: logo xã tự tải (đọc lúc chạy) → ảnh chép lúc dựng → biểu tượng tòa
+ * nhà; ảnh tải hỏng thì xuống bước sau. Chuyển từ `TrangXa.tsx` (30/09/2026) để mọi header gốc dùng chung một ô.
+ *
+ * Failures are remembered BY URL, not as one flag: the profile arrives after the first paint, so the slot first
+ * shows the bundled file and then the uploaded logo — a bundled file that already failed must stay skipped, and
+ * an uploaded logo that fails falls to the bundled one, not straight to the icon.
+ */
+// vi-name-ok: existing component moved from TrangXa.tsx, not renamed (rule 12 #3)
+export function LogoXa({ logoUrl = "" }: { logoUrl?: string }) {
+  const [failed, setFailed] = useState<readonly string[]>([]);
+  return <CommuneLogoView sources={logoSources(logoUrl)} failed={failed} onFail={(src) => setFailed((f) => markLogoFailed(f, src))} />;
+}
+
+/** `failed` with `src` added once. PURE — the state step `LogoXa` takes on an image error, exported for tests. */
+export function markLogoFailed(failed: readonly string[], src: string): readonly string[] {
+  return failed.includes(src) ? failed : [...failed, src];
 }
 
 /**
@@ -80,11 +121,12 @@ function HeaderShell(props: { className: string; left: ReactNode; right?: ReactN
 /**
  * Header of the four root tabs: the commune's logo on the left, the title (and an optional line under it —
  * the greeting on home) in the middle. `right`: no screen passes one any more (decision 10); the slot is
- * kept so the title stays centred between two equal sides.
+ * kept so the title stays centred between two equal sides. `logoUrl`: the uploaded logo from the profile
+ * read (`""` or absent = none — see `LogoXa`).
  */
-export function RootTabHeader(props: { title: string; subtitle?: string; right?: ReactNode }) {
+export function RootTabHeader(props: { title: string; subtitle?: string; right?: ReactNode; logoUrl?: string }) {
   return (
-    <HeaderShell className="xa-dau-tab" left={<LogoXa />} right={props.right}>
+    <HeaderShell className="xa-dau-tab" left={<LogoXa logoUrl={props.logoUrl} />} right={props.right}>
       <h1 className="xa-dau-con__tieu-de">{props.title}</h1>
       {props.subtitle !== undefined && props.subtitle !== "" && <p className="xa-header__subtitle">{props.subtitle}</p>}
     </HeaderShell>

@@ -490,6 +490,15 @@
       "no_confirm": [],
       "tiep_theo": "CHỜ CHỦ DỰ ÁN: (1) app CHUNG cũng nhận 9 câu mới vì TRANG_THAI là một bảng (khung.tsx:108) — ADR 0027 chỉ nói cán bộ + app xã; (2) câu da-dong 'Phải có ảnh sau xử lý mới đóng được' sai ở xã tắt cờ; (3) mấy câu viết cho cán bộ, nói về người dân ở ngôi thứ ba ('chờ báo lại cho người dân', 'chờ họ xác nhận'); câu da-tiep-nhan cũ cố ý tránh ngụ ý xã đã đọc phiếu; 'chuyển lên cấp trên' có thể trái dòng cơ quan nhận. Chưa thử trên máy thật.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "app-xa-logo-doc-luc-chay",
+      "viec": "App riêng của xã: logo header đọc lúc chạy từ /commune-profiles logo_url (ADR 0069 #4 #7 #8; máy chủ d93851b9) — logo xã tải → ảnh chép lúc dựng → biểu tượng tòa nhà",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 (TASK-6, chưa commit). api/hop-dong-cong-khai.ts: CommuneProfile thêm logo_url; readLogoUrl — vắng = '' (máy chủ cũ), không phải chuỗi = cả trả lời sai khuôn, chuỗi chỉ giữ khi readHttpsLink nhận (https tuyệt đối, có host, không phần user), khác → ''. man/khung-xa.tsx: BUNDLED_LOGO_SRC, logoSources, CommuneLogoView (không hook), markLogoFailed; LogoXa nhớ ảnh hỏng THEO URL (hồ sơ tới sau lần vẽ đầu: ảnh chép hỏng trước đó vẫn bị bỏ qua, logo tải hỏng thì xuống ảnh chép chứ không thẳng biểu tượng); alt='' vì tên xã đứng cạnh bằng chữ; ô 40×40 cố định cho cả ảnh lẫn biểu tượng. man/TrangXa.tsx: profileLogoUrl, cả bốn header tab gốc truyền logoUrl. Banner trang chủ và deploy.mjs KHÔNG đổi. Ca kiểm: commune-logo.test.tsx (10 ca), commune-public-reads.test.tsx (+4 ca logo_url). Thử đột biến: đảo thứ tự nguồn → 3 ca đỏ; bỏ lọc https → 1 ca đỏ; đã hoàn nguyên bằng Edit. tsc rc=0, vitest 63 tệp 1649/1649 rc=0, npm run build rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Host kho ảnh công khai (phần host của OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL trong common-config) phải vào danh sách tên miền của App ID từng app xã ở Zalo Developer Console — không nằm trong kho này, cũng không trong vihat-miniapp (ADR 0052 Còn mở #3); chưa xem trên webview Zalo thật. (2) Câu chính sách quyền riêng tư: app nay tải logo từ host kho ảnh công khai lúc mở — gộp vào câu G9 đang chờ duyệt (xem chinh-sach-dung-voi-ban-dung), không viết lời văn trong lượt này; khi_nao của dòng /commune-profiles trong content/ket-xuat-ho-so.ts chưa nhắc logo, sửa cùng lượt G9. (3) Lần mở đầu thấy ảnh chép rồi đổi sang logo tải khi hồ sơ về (cùng ô, không nhảy bố cục). (4) Gỡ ảnh chép lúc dựng + scripts/logo-xa khi mọi xã đã tải logo — chủ dự án quyết lúc nào.",
+      "menu": "cau-hinh"
     }
   ]
 }

@@ -516,7 +516,11 @@ function TrangChuXa(props: {
       {/* Header theo prototype (`AppHeader.tsx`): logo xã trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
           cuộn — chỉ phần giữa cuộn (§5.2). Góc phải để trống cho Zalo: chuông đã bỏ (quyết định 10, 30/09/2026),
           "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
-      <RootTabHeader title={xa.ten} subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh} />
+      <RootTabHeader
+        title={xa.ten}
+        subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh}
+        logoUrl={profileLogoUrl(props.profile)}
+      />
       <div className="xa-trang">
         <HomeBanner
           items={props.banners}
@@ -617,8 +621,17 @@ export function PetitionSendFooter({ onSend }: { onSend: () => void }) {
 }
 
 /** Header of a root tab other than home: the commune's logo, the tab's title centred (`RootTabHeader`). */
-function DauTab({ tieu_de }: { tieu_de: string }) {
-  return <RootTabHeader title={tieu_de} />;
+function DauTab({ tieu_de, logoUrl }: { tieu_de: string; logoUrl: string }) {
+  return <RootTabHeader title={tieu_de} logoUrl={logoUrl} />;
+}
+
+/**
+ * The uploaded logo of the profile this open read, or `""` while it loads / when it failed — the header then
+ * shows the bundled file (`LogoXa`). The profile is the one `/commune-profiles` returned for THIS build's domain;
+ * nothing the citizen sends chooses it. PURE, exported for tests.
+ */
+export function profileLogoUrl(profile: CommuneProfile | null): string {
+  return profile === null ? "" : profile.logo_url;
 }
 
 /**
@@ -963,7 +976,7 @@ function AppCuaXa(props: {
   } else if (tab === "tin-tuc") {
     than = (
       <>
-        <DauTab tieu_de={XA_TN.news_tab_title} />
+        <DauTab tieu_de={XA_TN.news_tab_title} logoUrl={profileLogoUrl(profile)} />
         <div className="xa-trang xa-trang--tab">
           <DanhSachTinXa ten_mien={ten_mien} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} />
         </div>
@@ -972,7 +985,7 @@ function AppCuaXa(props: {
   } else if (tab === "phan-anh") {
     than = (
       <>
-        <DauTab tieu_de={CUA_TOI.tieu_de} />
+        <DauTab tieu_de={CUA_TOI.tieu_de} logoUrl={profileLogoUrl(profile)} />
         <div className="xa-trang xa-trang--tab xa-trang--co-chan">
           <PetitionList
             state={petitions.state}
@@ -989,7 +1002,7 @@ function AppCuaXa(props: {
   } else {
     than = (
       <>
-        <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} />
+        <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} logoUrl={profileLogoUrl(profile)} />
         <CaNhanXa
           ho_ten={shownName}
           ten_xa={xa.ten}

@@ -22,17 +22,47 @@ const STAFF = { full_name: "Lê Văn Bình", position: "", department_name: "", 
 describe("/commune-profiles — read field by field", () => {
   const P = { name: "Xã Thử Nghiệm", office_address: "Số 1 đường A", hotline: "0900000000", office_hours_text: "Thứ Hai–Thứ Sáu, 7:30–17:00" };
 
+  const LOGO = "https://media.example.test/vigov-public/t_01HZZZZZZZZZZZZZZZZZZZZZZZ/logo.png";
+
   it("one profile; an empty list; malformed on a missing or wrong-typed field", () => {
-    expect(readCommuneProfiles({ items: [P] })).toEqual([P]);
+    expect(readCommuneProfiles({ items: [{ ...P, logo_url: LOGO }] })).toEqual([{ ...P, logo_url: LOGO }]);
     expect(readCommuneProfiles({ items: [] })).toEqual([]);
     expect(readCommuneProfiles({ items: [{ ...P, hotline: undefined }] })).toBeNull();
     expect(readCommuneProfiles({ items: [{ ...P, office_hours_text: 7 }] })).toBeNull();
     expect(readCommuneProfiles({})).toBeNull();
   });
 
-  it("no logo is read — the route has none by design", () => {
-    const got = readCommuneProfiles({ items: [{ ...P, logo_url: "https://x.example/logo.png" }] })!;
-    expect(got[0]).not.toHaveProperty("logo_url");
+  it("logo_url (ADR 0069): kept as received when it is an absolute https URL", () => {
+    // Opaque: the exact string comes back — not normalised, not re-encoded, not split.
+    const odd = "https://media.example.test/vigov-public/t_X/a%20b.png?v=1";
+    expect(readCommuneProfiles({ items: [{ ...P, logo_url: odd }] })![0]!.logo_url).toBe(odd);
+  });
+
+  it("logo_url \"\" or absent (an older server) → \"\": no uploaded logo, the rest of the profile still read", () => {
+    expect(readCommuneProfiles({ items: [{ ...P, logo_url: "" }] })).toEqual([{ ...P, logo_url: "" }]);
+    expect(readCommuneProfiles({ items: [P] })).toEqual([{ ...P, logo_url: "" }]);
+  });
+
+  it("logo_url of any other shape → \"\", never an src: http, javascript, data, relative, user part, junk", () => {
+    for (const bad of [
+      "http://media.example.test/logo.png",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "./logo-xa.png",
+      "/vigov-public/logo.png",
+      "//media.example.test/logo.png",
+      "https://gov.vn@other.example/logo.png",
+      "not a url",
+    ]) {
+      const got = readCommuneProfiles({ items: [{ ...P, logo_url: bad }] });
+      expect(got, bad).toEqual([{ ...P, logo_url: "" }]);
+    }
+  });
+
+  it("logo_url present but not a string → malformed, the whole answer (as every other field here)", () => {
+    for (const bad of [7, null, true, {}, ["https://media.example.test/logo.png"]]) {
+      expect(readCommuneProfiles({ items: [{ ...P, logo_url: bad }] })).toBeNull();
+    }
   });
 });
 
@@ -42,6 +72,7 @@ describe("the office block — only what the commune declared, nothing in its pl
     office_address: "Số 1 đường A",
     hotline: "0900.000 000",
     office_hours_text: "Thứ Hai–Thứ Sáu",
+    logo_url: "",
   };
 
   it("rows in reading order; blank fields dropped", () => {

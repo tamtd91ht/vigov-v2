@@ -3,7 +3,8 @@
  *
  *   GET identity  /api/v1/communes?host=<tên miền>        → { items: [{ name, province }] }
  *   GET identity  /api/v1/commune-profiles?host=…         → { items: [{ name, office_address, hotline,
- *                                                             office_hours_text }] }   (cdbf276)
+ *                                                             office_hours_text, logo_url? }] }
+ *                                                             (cdbf276; logo_url: d93851b9, ADR 0069)
  *   GET identity  /api/v1/commune-staff?host=<tên miền>   → { items: [{ full_name, position,
  *                                                             department_name, phone, mobile, has_zalo,
  *                                                             display_order?, residential_units_headed? }] }
@@ -37,10 +38,11 @@
  * ⚠ `host` LÀ KHOÁ TRA, KHÔNG PHẢI THAM CHIẾU XÃ (ADR 0047 câu 3, điều kiện dừng #1). Không có mã xã
  * nào đi lên, và không TRƯỜNG nào mang mã xã đi về: `/communes` cố ý chỉ trả tên và tỉnh.
  *
- * ONE EXCEPTION, AND IT IS OPAQUE: a news item's `image_url` is an object URL in the public bucket, whose
- * key carries `t_<tenant_id>` (ADR 0052). This app never reads that out of it — the URL is handed to `<img
- * src>` as received (after the protocol check in `readImageUrl`), never split, never logged, never used as
- * a key — so the commune id is not a value anything here can act on.
+ * ONE KIND OF EXCEPTION, AND IT IS OPAQUE: a news item's `image_url` and a profile's `logo_url` are object
+ * URLs in the public bucket, whose key carries `t_<tenant_id>` (ADR 0052, ADR 0069). This app never reads that
+ * out of them — the URL is handed to `<img src>` as received (after the protocol check in `readImageUrl` /
+ * `readLogoUrl`), never split, never logged, never used as a key — so the commune id is not a value anything
+ * here can act on.
  *
  * ⚠ KIỂM TỪNG TRƯỜNG, KHÔNG ÉP KIỂU — cùng lý do với `docPhieu`: một `as` cho `undefined` đi tiếp và
  * hiện ra màn hình thành chữ "undefined". Sai khuôn ở một dòng thì cả trang là `null`, không bỏ dòng
@@ -160,8 +162,13 @@ export function docXa(than: unknown): readonly XaTraDuoc[] | null {
 
 /**
  * What the commune declared about its office. Every field may be `""` (not declared) — the screen then
- * shows nothing for it, never a default. NO LOGO: the route deliberately has none (a typed URL is not an
- * approved public-bucket object, ADR 0052 §2), so the header keeps the logo file shipped with the build.
+ * shows nothing for it, never a default.
+ *
+ * `logo_url` (ADR 0069 #4, #8; identity d93851b9) is the logo the COMMUNE uploaded in web-admin, as the public
+ * derivative's absolute `https:` URL — never the old hand-typed URL (the server sends only platform
+ * `logo_public_url`). `""` = no uploaded logo: the header then falls back to the bundled file, then the icon
+ * (`khung-xa.tsx` `LogoXa`). OPAQUE like a news `image_url`: its key carries `t_<tenant_id>`, and it goes to
+ * `<img src>` untouched — never parsed, logged, or used as a key.
  *
  * `hotline` is the commune's OFFICIAL line — public-service information, not personal data (#16).
  * `office_hours_text` is DISPLAY TEXT: never parsed — the calendar deadlines count against is identity's
@@ -172,7 +179,24 @@ export type CommuneProfile = {
   readonly office_address: string;
   readonly hotline: string;
   readonly office_hours_text: string;
+  /** An absolute `https:` URL, or `""` (none uploaded, an older server, or a value `readLogoUrl` refused). */
+  readonly logo_url: string;
 };
+
+/**
+ * `logo_url` on the wire → what the header may load. Absent → `""` (a server from before d93851b9 — additive
+ * field, not malformed). Present and not a string → `null`: malformed, the whole answer is refused, as for
+ * every other field here. A string is kept ONLY when `readHttpsLink` accepts it (absolute `https:`, a host, no
+ * user part); anything else becomes `""`, not malformed — the office block is still worth showing without a
+ * logo. Why only `https:`: the Mini App runs over https, so an `http:` picture is mixed content (a broken box
+ * on a public authority's header), and `javascript:` / `data:` / a relative path must never become an `src` —
+ * the server writes only its own public bucket's URL here, so anything else means something upstream is wrong.
+ */
+function readLogoUrl(v: unknown): string | null {
+  if (v === undefined) return "";
+  if (!laChuoi(v)) return null;
+  return readHttpsLink(v) ?? "";
+}
 
 /**
  * `null` = malformed. `[]` = no commune for that domain (same answer `/communes` gives). More than one item
@@ -188,7 +212,9 @@ export function readCommuneProfiles(body: unknown): readonly CommuneProfile[] | 
     if (!laChuoi(r.name) || !laChuoi(r.office_address) || !laChuoi(r.hotline) || !laChuoi(r.office_hours_text)) {
       return null;
     }
-    out.push({ name: r.name, office_address: r.office_address, hotline: r.hotline, office_hours_text: r.office_hours_text });
+    const logo_url = readLogoUrl(r.logo_url);
+    if (logo_url === null) return null;
+    out.push({ name: r.name, office_address: r.office_address, hotline: r.hotline, office_hours_text: r.office_hours_text, logo_url });
   }
   return out;
 }
