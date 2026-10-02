@@ -60,9 +60,18 @@ type coverHeader struct {
 	cfg         image.Config
 	orientation int // EXIF 1..8; 1 when absent
 	progressive bool
+	// read is the header exactly as imaging.ReadHeader returned it. It also carries the layout facts
+	// read from the head (PNG interlace / tRNS, WebP chunk kind) that the three fields above cannot hold.
+	// Rebuilding the Header from those three fields drops them, and core/imaging then charges the WORST
+	// layout — which refused ordinary PNG covers above ~20 MP once that estimate became honest (e4164f97).
+	read    imaging.Header
+	hasRead bool
 }
 
 func (h coverHeader) core() imaging.Header {
+	if h.hasRead {
+		return h.read
+	}
 	return imaging.Header{Config: h.cfg, Orientation: h.orientation, Progressive: h.progressive}
 }
 
@@ -72,7 +81,7 @@ func readCoverHeader(mime string, head []byte) (coverHeader, error) {
 	if err != nil {
 		return coverHeader{}, errCoverUndecodable
 	}
-	return coverHeader{cfg: h.Config, orientation: h.Orientation, progressive: h.Progressive}, nil
+	return coverHeader{cfg: h.Config, orientation: h.Orientation, progressive: h.Progressive, read: h, hasRead: true}, nil
 }
 
 // decodeCost estimates the bytes a full decode allocates (imaging.DecodeCost).
