@@ -64,6 +64,12 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	case d.CitizenFields == nil:
 		panic("petitions/http: thiếu danh mục lĩnh vực cho công dân — " +
 			"GET /api/v1/my-citizen-report-fields sẽ panic khi có người dân mở bước chọn lĩnh vực")
+	case d.Photos == nil:
+		panic("petitions/http: thiếu use case ảnh hiện trường — ba tuyến " +
+			"/api/v1/my-citizen-reports/{maTraCuu}/photos sẽ panic khi có người dân đính ảnh")
+	case d.PhotoLimiter == nil:
+		panic("petitions/http: thiếu bộ giới hạn tần suất ảnh hiện trường (ratelimit.CitizenPhotoUpload) — " +
+			"tuyến ghi ảnh của công dân không được phục vụ khi không có giới hạn (ADR 0052 §12)")
 	}
 
 	h := NewHandlerCongDan(d)
@@ -295,6 +301,132 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 			httpx.XaTuPhien()(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.RatePetition)))))
+
+	// --- the citizen's scene photos on their own petition (ADR 0047 G3 + row "Ảnh hiện trường") ------
+	//
+	// `photos`, A SUB-RESOURCE OF `my-citizen-reports/{code}`, so it rides the citizen chain through the
+	// prefix rule cmd/server already has, as `rating` does. Owner decisions of 02/10/2026: optional, at
+	// most 5, JPEG/PNG/WebP within platform's `petition-photo` policy, attached AFTER the petition exists
+	// and ONLY while it is `da-tiep-nhan`; re-encoded without EXIF; private, never public; signed short
+	// links issued only after the session identity and commune matched. A photo failure never fails the
+	// petition: none of these routes touches the petition row's content or status.
+	//
+	// RATE LIMIT ON THE TWO WRITES — ratelimit.CitizenPhotoUpload, keyed `t:<tenant>:…:citizen:<digest>`
+	// from the SESSION (ADR 0052 §12). Over it: 429 `rate_limited` + Retry-After. Redis down: 503
+	// `rate_limit_unavailable` (fail closed). ⚠ The threshold is a builder's PROPOSAL awaiting the owner
+	// (rule 13 stop condition) — see core/ratelimit.
+	//
+	// ⚠ NOT ENFORCED: "only the commune's OWN app". The citizen session carries no fact about which app
+	// opened it (httpx.CitizenSession has three fields), so nothing here can refuse a shared-app session.
+	// Reported, not invented — internal/app/petition_photo.go.
+	//
+	// @summary  Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// @request  photoUploadIn
+	// 201 carries the pending photo and the presigned POST form (a bearer credential, never logged).
+	// The stored photo will be a JPEG whatever was declared.
+	//
+	// 400 is a body that is not JSON, a type outside JPEG/PNG/WebP or outside the commune's policy (HEIC
+	// and video included), or a size above the policy or not positive.
+	//
+	// 401 is the same three situations the other citizen routes fold together (ADR 0022).
+	//
+	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
+	//
+	// 404 is the SAME FOUR CAUSES AND THE SAME BODY as GET /api/v1/my-citizen-reports/{maTraCuu}:
+	// no such code · another citizen's code · another commune's code · soft deleted (rule 4, forbidden #2).
+	//
+	// 409 `petition_state`: the petition is no longer `da-tiep-nhan`. `photo_limit`: it already holds the
+	// policy's maximum, unfinished uploads of the last 15 minutes included. `request_in_progress`: idem.
+	//
+	// 429 `rate_limited`: the citizen's photo budget is spent; Retry-After says when it refills.
+	//
+	// 503 `storage_not_configured` · `upload_limits_unavailable` · `rate_limit_unavailable`: nothing written.
+	//
+	// idem.Required(idem.MoKhiHong): a replay after the first finished answers the FILE ID
+	// (`{"code": "<id>", "replayed": true}`), never a second row and never the form. MoKhiHong because
+	// the residue of a Redis outage is one unused pending row that stops counting after 15 minutes —
+	// and the rate limit, which fails closed, refuses during that outage anyway.
+	//
+	// @reply    201 photoUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    429 httpx.Error rate_limited
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/photos",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				idem.Required(idem.MoKhiHong)(
+					http.HandlerFunc(h.RequestPetitionPhotoUpload)))))
+
+	// HOÀN TẤT TẢI ẢNH — `completion`, the nominalised sub-resource the task attachments use
+	// (skills/rest-api-design §3). Stat · sniff (the declared type is never trusted) · the CURRENT policy
+	// · ClamAV on the raw bytes · decode · orient by EXIF · re-encode JPEG (≤ 2560 px, NO EXIF, GPS gone)
+	// · write ONLY the clean copy to the private bucket · purge the temp upload · `stored` + trail in ONE
+	// transaction that re-checks `da-tiep-nhan` and the count under the petition's lock.
+	//
+	// @summary  Công dân hoàn tất tải một ảnh hiện trường — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 200 is the stored photo (`content_type` image/jpeg). A second completion of a stored photo answers
+	// it again and writes nothing — hence idem.KhongCan.
+	//
+	// 401 / 403 `chua_xac_thuc_so`: as above.
+	//
+	// 404: the petition's four causes (same body as the GET), or `id` is not a photo of this petition.
+	//
+	// 409 `petition_state` (moved on — a photo processed meanwhile is recorded as refused and its clean
+	// copy removed) · `photo_state` (already refused or expired) · `upload_not_received` (not uploaded
+	// yet; call again) · `upload_expired` · `upload_changed`.
+	//
+	// 422 `photo_rejected`: infected, not an allowed image, not the declared type, too large, undecodable,
+	// too many pixels, or the petition already full. The temp upload is deleted; the trail says why.
+	//
+	// 429 `rate_limited`: as above.
+	//
+	// 503 `storage_not_configured` · `upload_limits_unavailable` · `malware_scan_unavailable` ·
+	// `rate_limit_unavailable`: nothing stored, the upload stays retryable, never stored unscanned.
+	//
+	// @reply    200 photoOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    429 httpx.Error rate_limited
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				idem.KhongCan("hoàn tất lần hai trên ảnh đã lưu trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng phiếu")(
+					http.HandlerFunc(h.CompletePetitionPhoto)))))
+
+	// ẢNH CỦA CHÍNH MÌNH — the stored photos with signed links (at most 15 minutes), for any status of the
+	// petition. Pending, refused and expired uploads are not listed. NO idem.* DECLARATION: a GET changes
+	// no state. Not audited — the citizen reading their own petition, as the GET above is not.
+	//
+	// @summary  Ảnh hiện trường đã lưu của phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 200 WITH `items: []` when the petition has no photo.
+	//
+	// 404: the SAME FOUR CAUSES AND THE SAME BODY as GET /api/v1/my-citizen-reports/{maTraCuu}.
+	//
+	// 503 `storage_not_configured`: no object store to sign links against.
+	//
+	// @reply    200 photoListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error chua_xac_thuc_so
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/my-citizen-reports/{maTraCuu}/photos",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				http.HandlerFunc(h.ListMyPetitionPhotos))))
 
 	// --- the fields the commune offers on the new-submission form (ADR 0050 point 1) --------------
 	//

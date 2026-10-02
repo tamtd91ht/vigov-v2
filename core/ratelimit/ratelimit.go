@@ -24,6 +24,8 @@ package ratelimit
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -49,6 +51,18 @@ const (
 const (
 	PublicNewsReadLimit  = 120
 	PublicNewsReadWindow = time.Minute
+)
+
+// The citizen scene-photo upload threshold — ADR 0052 §12 requires "giới hạn tần suất theo công dân"
+// and names NO number. ⚠ THESE TWO VALUES ARE THE BUILDER'S PROPOSAL OF 02/10/2026, NOT AN OWNER
+// DECISION: choosing a security threshold is a rule 13 stop condition, so they must be confirmed (or
+// replaced) by the owner before this ships. The reasoning offered for them: one photo costs TWO
+// counted requests (the upload slot and its completion), a petition holds at most 5 photos, so 30
+// per 15 minutes lets a citizen attach a full set to three petitions — and retry each photo once — in
+// one sitting, while bounding what one session can make the server decode and scan.
+const (
+	CitizenPhotoUploadLimit  = 30
+	CitizenPhotoUploadWindow = 15 * time.Minute
 )
 
 // Policy is one limit: at most Limit attempts per key per Window.
@@ -86,6 +100,14 @@ var OperatorSignIn = Policy{name: "op-signin", limit: OperatorSignInLimit, windo
 // are built by PublicHostIPKey. FAILS OPEN — see Policy.failOpen.
 var PublicNewsRead = Policy{name: "public-news", limit: PublicNewsReadLimit, window: PublicNewsReadWindow,
 	event: "public_news.rate_limited", failOpen: true}
+
+// CitizenPhotoUpload is the policy of the citizen scene-photo upload and completion routes
+// (service-petitions, ADR 0052 §12). Keys from CitizenKey. FAILS CLOSED, the package default: what it
+// bounds is server-side decoding, malware scanning and object writes driven by one weak identity
+// (rule 4), and nobody has decided that a Redis outage may lift that bound. The petition itself is
+// never behind this limit — a photo failure never fails the petition send (owner, 02/10/2026).
+var CitizenPhotoUpload = Policy{name: "citizen-photo", limit: CitizenPhotoUploadLimit,
+	window: CitizenPhotoUploadWindow, event: "citizen_photo.rate_limited"}
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a
@@ -139,6 +161,34 @@ func PublicHostIPKey(ctx context.Context, resolved bool, host, ip string) (Key, 
 	}
 	return Key{tenant: string(id), subject: subject}, nil
 }
+
+// CitizenKey is the key of a per-CITIZEN limit: one counter per (commune, citizen).
+//
+//	→ "t:<tenant>:rl:<policy>:citizen:<sha256(citizenID) hex>"
+//
+// The commune comes from ctx (rule 1, invariant 4) — on the citizen chain that is the session's,
+// set by httpx.XaTuPhien — and ErrNoCommune when there is none. citizenID is the SESSION's opaque
+// citizen id (authz.Principal.ID of a citizen principal), never a request value (rule 4, invariant 2);
+// an empty one is refused rather than turned into one counter every anonymous caller would share.
+//
+// HASHED, NOT WRITTEN AS IS: the id is opaque, but it names one person across every key this
+// process writes, and a cache key is somewhere rule 3 forbidden #4 keeps person-linked values out
+// of. A digest still separates citizens and cannot be read back (sha256 — rule 13 forbids md5/sha1).
+func CitizenKey(ctx context.Context, citizenID string) (Key, error) {
+	if strings.TrimSpace(citizenID) == "" {
+		return Key{}, ErrNoCitizen
+	}
+	id, ok := tenant.From(ctx)
+	if !ok || !id.Valid() {
+		return Key{}, ErrNoCommune
+	}
+	sum := sha256.Sum256([]byte(citizenID))
+	return Key{tenant: string(id), subject: "citizen:" + hex.EncodeToString(sum[:])}, nil
+}
+
+// ErrNoCitizen — a per-citizen key was asked for with no citizen id. A wiring fault (the route lost
+// the session identity); the caller refuses, never counts under a shared key.
+var ErrNoCitizen = errors.New("ratelimit: no citizen id for a per-citizen key")
 
 // OperatorIPKey is the key of the operator sign-in limit: one counter per client NETWORK.
 //

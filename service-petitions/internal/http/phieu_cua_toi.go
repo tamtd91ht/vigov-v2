@@ -12,6 +12,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/privacy"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
@@ -91,6 +92,16 @@ type DepsCongDan struct {
 	// uses, and sharing it is right here: it is a commune's public vocabulary, not a staff-only
 	// fact, and two readers of one catalogue would be two things to keep in step.
 	NhanLinhVuc NhanLinhVucDanhMuc
+
+	// Photos is the citizen's scene photos on their own petition (app.CitizenPetitionPhotos) — built even
+	// when object storage, the scanner or platform's limits are absent; its routes then answer 503 and
+	// the petition intake is untouched. Required.
+	Photos CitizenPetitionPhotos
+
+	// PhotoLimiter is ratelimit.CitizenPhotoUpload: the per-citizen bound ADR 0052 §12 requires on the
+	// two photo write routes. Required — a write route a weak identity can drive without bound is not
+	// served at all.
+	PhotoLimiter *ratelimit.Limiter
 
 	Log *slog.Logger
 }

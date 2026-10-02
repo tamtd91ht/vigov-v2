@@ -27,6 +27,7 @@ import (
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -435,6 +436,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// suites: internal/app/task_attachment_test.go and internal/http/task_attachment_test.go.
 		TaskAttachments:    app.NewTaskAttachments(nil, nil, nil, nil, nil, nil),
 		TaskLogAttachments: petstore.NewStoredFileStore(nil),
+		PetitionPhotos:     app.NewStaffPetitionPhotos(nil, nil, nil),
 		DanhSachBienBan:    khoBienBan{},
 		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
@@ -464,7 +466,11 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		Rating:        app.NewRatePetition(nil, nil, nil),
 		NhanLinhVuc:   khoNhanLinhVuc{},
 		CitizenFields: fieldCatalogueStub{},
-		Log:           log,
+		Photos:        app.NewCitizenPetitionPhotos(nil, nil, nil, nil, nil, nil),
+		// The dev wiring with no Redis: the always-failing counter under the fail-CLOSED citizen photo
+		// policy — what main builds when REDIS_DSN is unset.
+		PhotoLimiter: testPhotoLimiter(t),
+		Log:          log,
 	})
 
 	danhBa := thuMucGia{
@@ -898,4 +904,13 @@ func TestCitizenFieldCatalogueRidesTheCitizenChain(t *testing.T) {
 
 	// No session -> 401 at the chain, not 404: the route exists on the citizen surface.
 	doiMa(t, m.goiCongDan(t, svchttp.CitizenFieldsPath, ""), http.StatusUnauthorized)
+}
+
+func testPhotoLimiter(t *testing.T) *ratelimit.Limiter {
+	t.Helper()
+	l, err := ratelimit.New(unavailableCounter{}, ratelimit.CitizenPhotoUpload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
 }

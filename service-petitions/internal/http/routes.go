@@ -529,6 +529,10 @@ type Deps struct {
 	TaskAttachments    TaskAttachmentActs
 	TaskLogAttachments TaskLogAttachmentReader
 
+	// PetitionPhotos lists a petition's citizen scene photos with signed links for "TRƯỚC KHI XỬ LÝ"
+	// (app.StaffPetitionPhotos — built even without object storage; its route then answers 503).
+	PetitionPhotos StaffPetitionPhotos
+
 	// The MEETING MINUTES register — one read path in this pass (migration 0007). It is the ORIGIN
 	// of the tasks above: a conclusion is split into a task and the task keeps a permanent back-link
 	// to it through `nguon_giao`/`nguon_id`, which is why both registers live in this service.
@@ -639,6 +643,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case tạo nhiệm vụ từ phiếu — POST /api/v1/citizen-reports/{maTraCuu}/tasks sẽ panic khi có người gọi")
 	case d.TaskAttachments == nil:
 		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
+	case d.PetitionPhotos == nil:
+		panic("petitions/http: thiếu đường đọc ảnh hiện trường — GET /api/v1/citizen-reports/{maTraCuu}/photos sẽ panic khi có người gọi")
 	case d.TaskLogAttachments == nil:
 		panic("petitions/http: thiếu đường đọc tệp đính kèm của nhật ký — GET /api/v1/tasks/{ma}/log-entries sẽ panic khi có người gọi")
 	case d.DanhSachBienBan == nil:
@@ -900,6 +906,33 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.DocPhieuPhanAnh)))
+
+	// ẢNH HIỆN TRƯỜNG — "TRƯỚC KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4): the photos the
+	// citizen attached (internal/app/petition_photo.go), each with a presigned GET of at most 15 minutes.
+	//
+	// `feedback.read` — THE KEY THE PETITION DETAIL ITSELF DECLARES, two statements up, seeded in
+	// service-identity/migrations/0001_init.sql (rule 5, invariant 3c: NO KEY INVENTED). The owner's
+	// words: "cán bộ có quyền đọc phiếu xem được". `feedback.restricted` is consulted inside, as on the
+	// detail: a `can-bo` petition without it is the detail's own 404.
+	//
+	// NOT AUDITED — the footing of the detail read, stated on app.StaffPetitionPhotos.ListPhotos, and put to
+	// the owner as an open question because a photo cannot be masked. `Cache-Control: no-store`.
+	//
+	// @summary  Ảnh hiện trường người dân gửi kèm một phiếu phản ánh, mỗi ảnh kèm liên kết xem có ký, sống tối đa 15 phút
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 200 WITH `items: []` when the citizen attached none. 404 is the detail's four causes, one body.
+	// 401 is no session AND a session of another commune (authz.xacNhanXa, before the key is consulted).
+	// 503 `storage_not_configured`: no object store to sign links against.
+	//
+	// @reply    200 photoListOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/photos",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			http.HandlerFunc(h.ListPetitionPhotos)))
 
 	// --- THE STAFF PROCESSING PATH. SEVEN ROUTES (the two branches added 25/09/2026) --------------
 	//

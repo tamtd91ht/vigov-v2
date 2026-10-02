@@ -34,6 +34,7 @@ import (
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/storage"
@@ -182,6 +183,23 @@ func chay(log *slog.Logger) error {
 		idemStore = r
 	}
 
+	// The citizen scene-photo rate limit (ratelimit.CitizenPhotoUpload) over the same REDIS_DSN. No DSN
+	// (dev only) → a counter that always fails, and the policy fails CLOSED: photo writes answer 503,
+	// everything else serves. An unparseable DSN stops the process, like idem's.
+	var photoCounter ratelimit.Counter = unavailableCounter{}
+	if dsn := cfg.RedisDSN(); dsn != "" {
+		rc, err := ratelimit.NewRedisCounter(dsn.Lo())
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		photoCounter = rc
+	}
+	photoLimiter, err := ratelimit.New(photoCounter, ratelimit.CitizenPhotoUpload)
+	if err != nil {
+		return err
+	}
+
 	loaiNhiemVu := petstore.NewLoaiNhiemVuStore(kho)
 	mucUuTien := petstore.NewMucUuTienNhiemVuStore(kho)
 
@@ -246,9 +264,14 @@ func chay(log *slog.Logger) error {
 	// DECLARED AS THE INTERFACES AND LEFT nil WHEN ABSENT: a nil *storage.Client assigned into the
 	// interface would be a non-nil interface, pass the use case's nil check, and panic on first use.
 	var objects app.ObjectStore
+	// photoObjects is the SAME client behind the scene-photo flow's wider interface (it also calls
+	// PutServerProduced). A second variable rather than a type assertion so both stay UNTYPED nil
+	// together when storage is absent.
+	var photoObjects app.PhotoObjectStore
 	switch c, err := storage.New(cfg.ObjectStorage()); {
 	case err == nil:
 		objects = c
+		photoObjects = c
 	case errors.Is(err, storage.ErrNotConfigured):
 		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — đính kèm nhiệm vụ bị từ chối", "service", "petitions", "err", err)
 	default:
@@ -358,6 +381,10 @@ func chay(log *slog.Logger) error {
 		// row the entry attaches and the timeline reads back.
 		TaskAttachments:    app.NewTaskAttachments(kho, nhiemVu, storedFiles, objects, scanner, policies),
 		TaskLogAttachments: storedFiles,
+		// "TRƯỚC KHI XỬ LÝ": the citizen's scene photos, signed links only. The SAME stored-file store the
+		// citizen upload writes through, and the SAME object store — `photoObjects` is `objects` as the
+		// wider interface, nil when object storage is not configured (the route then answers 503).
+		PetitionPhotos: app.NewStaffPetitionPhotos(phieu, storedFiles, photoObjects),
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register
@@ -418,7 +445,15 @@ func chay(log *slog.Logger) error {
 		NhanLinhVuc: app.NewEffectiveFieldLabels(fieldCatalogue),
 		// What the new-submission form offers — the SAME use case the staff configuration routes use.
 		CitizenFields: fieldCatalogue,
-		Log:           log,
+		// The citizen's scene photos (ADR 0047 G3, migration 0026): the identity-filtered petition reads,
+		// the SAME stored-file store, object store, scanner and platform policy reader as the task
+		// attachments. Any of the three absent → the photo routes answer 503; the intake is untouched.
+		Photos: app.NewCitizenPetitionPhotos(kho, phieu, storedFiles, photoObjects, scanner, policies),
+		// Per-citizen bound on the two photo writes (ADR 0052 §12), counted in the SAME Redis as the
+		// idempotency store. FAILS CLOSED: with no REDIS_DSN (dev only — staging and prod refuse to start
+		// without it, config.Redis is declared) every photo write answers 503 `rate_limit_unavailable`.
+		PhotoLimiter: photoLimiter,
+		Log:          log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
@@ -755,4 +790,13 @@ func chayMigration(ctx context.Context, log *slog.Logger, db *sql.DB) error {
 	// out the replica is already at the schema they expected, without opening a psql prompt.
 	log.Info("migration xong", "service", "petitions", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
 	return nil
+}
+
+// unavailableCounter is the citizen photo rate-limit store when REDIS_DSN is unset (dev only — staging
+// and prod refuse to start without it). It fails every count, and ratelimit.CitizenPhotoUpload fails
+// CLOSED, so the two photo write routes answer 503 while every other route serves.
+type unavailableCounter struct{}
+
+func (unavailableCounter) Incr(context.Context, string, time.Duration) (int64, time.Duration, error) {
+	return 0, 0, errors.New("REDIS_DSN chưa đặt")
 }

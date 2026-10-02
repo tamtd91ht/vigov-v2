@@ -38,7 +38,7 @@ func intakeServerWithLog(t *testing.T) (*mayChuGui, *bytes.Buffer) {
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Log: log,
+		Phieu: m.so, GuiPhieu: m.so, Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(), Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(m.kho, log)(h)

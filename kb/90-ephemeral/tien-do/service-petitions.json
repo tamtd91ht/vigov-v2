@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-02",
   "muc": [
     {
+      "id": "anh-hien-truong-cong-dan-tai-len",
+      "viec": "Công dân tải ảnh hiện trường lên phiếu của mình (≤ 5 ảnh, chỉ khi phiếu da-tiep-nhan) — xin chỗ tải, tải thẳng lên kho, hoàn tất: quét, giải mã, xoay, mã hoá lại JPEG bỏ EXIF, chỉ bản sạch vào private",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Mã do một phiên khác viết, commit nguyên trạng ngày 02/10/2026 theo yêu cầu người dùng 'commit + push hết': service-petitions/internal/{app,domain,http,store}/petition_photo.go (+ test), core/imaging, sửa core/ratelimit + routes_cong_dan.go. Dựa trên migration 0026 (4772d817) và chính sách petition-photo (649612d7). Kiểm 02/10: go vet + go test -count=1 ./... rc=0 ở core, service-petitions, service-comms; make check rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA qua rà cô lập / rà bảo mật, chưa chạy ca PG, chưa có màn citizen-app gọi tuyến. Phiên làm tiếp: đọc chú thích đầu app/petition_photo.go (mục 'NOT YET ENFORCED — THE APP THE SESSION CAME FROM'), chạy /review-isolation + /review-security cho phần này trước khi coi là xong."
+    },
+    {
       "id": "vong-doi-phieu-phan-anh",
       "viec": "Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu",
       "trang_thai": "dang_lam",

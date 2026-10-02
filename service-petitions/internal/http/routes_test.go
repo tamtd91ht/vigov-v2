@@ -237,6 +237,9 @@ type mayChu struct {
 	taskAttachments *taskAttachmentsFake
 	logAttachments  *logAttachmentsFake
 
+	// staffPhotos is the petition's scene photos, staff read — petition_photo_test.go.
+	staffPhotos *staffPhotosFake
+
 	// fields is the petition field catalogue — petition_fields_test.go.
 	fields *fieldCatalogueFake
 }
@@ -286,6 +289,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	taskImport := &taskImportFake{}
 	taskAttachments := &taskAttachmentsFake{}
 	logAttachments := &logAttachmentsFake{}
+	// The petition's scene photos, staff read — petition_photo_test.go.
+	staffPhotos := newStaffPhotosFake()
 	// The field catalogue — petition_fields_test.go.
 	fields := newFieldCatalogueFake()
 
@@ -338,6 +343,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			PetitionTasks:        petitionTasks,
 			TaskAttachments:      taskAttachments,
 			TaskLogAttachments:   logAttachments,
+			PetitionPhotos:       staffPhotos,
 			DanhSachBienBan:      bienBan,
 			GhiBienBan:           ghiBienBan,
 			TaskSummary:          taskSummary,
@@ -379,6 +385,7 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		taskAttachments: taskAttachments,
 		logAttachments:  logAttachments,
+		staffPhotos:     staffPhotos,
 
 		fields: fields,
 	}
@@ -481,6 +488,7 @@ func depsDay() Deps {
 		PetitionTasks:      &petitionTaskFake{},
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
+		PetitionPhotos:     &staffPhotosFake{},
 		DanhSachBienBan:    bienBanMau(),
 		GhiBienBan:         &ghiBienBanGia{},
 		// The leadership overview.
@@ -547,6 +555,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu use case tạo nhiệm vụ từ phiếu":     func(d *Deps) { d.PetitionTasks = nil },
 		"thiếu use case tệp đính kèm nhiệm vụ":     func(d *Deps) { d.TaskAttachments = nil },
 		"thiếu đường đọc tệp đính kèm của nhật ký": func(d *Deps) { d.TaskLogAttachments = nil },
+		"missing petition photo read":              func(d *Deps) { d.PetitionPhotos = nil },
 		// The leadership overview: two tiles' worth of figures and the "Cần xử lý ngay" panel.
 		"thiếu đường đếm tổng quan nhiệm vụ": func(d *Deps) { d.TaskSummary = nil },
 		"thiếu đường đếm tổng quan phản ánh": func(d *Deps) { d.CitizenReportSummary = nil },

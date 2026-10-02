@@ -442,3 +442,53 @@ func TestGate429CarriesAttrs(t *testing.T) {
 		t.Fatalf("event shape: %s", buf.String())
 	}
 }
+
+// The citizen photo policy: its numbers pinned (a change must turn something red — they are a rule 13
+// threshold, and today a PROPOSAL awaiting the owner), and it fails CLOSED like every policy but one.
+func TestCitizenPhotoUploadPolicyIsPinnedAndFailsClosed(t *testing.T) {
+	if CitizenPhotoUploadLimit != 30 || CitizenPhotoUploadWindow != 15*time.Minute {
+		t.Fatalf("citizen photo threshold = %d per %s", CitizenPhotoUploadLimit, CitizenPhotoUploadWindow)
+	}
+	if CitizenPhotoUpload.FailsOpen() {
+		t.Fatal("the citizen photo policy must fail closed — nobody decided a Redis outage lifts it")
+	}
+	if _, err := New(newFake(), CitizenPhotoUpload); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// One counter per (commune, citizen); the citizen id never appears in the key as written; no commune
+// or no citizen is a refusal, never a shared key.
+func TestCitizenKeyShape(t *testing.T) {
+	f := newFake()
+	l, _ := New(f, CitizenPhotoUpload)
+	a := tenant.Into(context.Background(), tenant.ID(testCommune))
+	b := tenant.Into(context.Background(), tenant.ID("01JTESTCOMMUNEB00000000000"))
+
+	ka, err := CitizenKey(a, "cd-01JCONGDANTHU")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb, _ := CitizenKey(b, "cd-01JCONGDANTHU")
+	kOther, _ := CitizenKey(a, "cd-01JNGUOIKHAC")
+	for _, k := range []Key{ka, kb, kOther} {
+		_, _, _ = l.Allow(a, k)
+	}
+	if len(f.keys) != 3 || f.keys[0] == f.keys[1] || f.keys[0] == f.keys[2] {
+		t.Fatalf("keys not separated per commune and citizen: %v", f.keys)
+	}
+	if !strings.HasPrefix(f.keys[0], "t:"+testCommune+":rl:citizen-photo:citizen:") {
+		t.Errorf("key = %q", f.keys[0])
+	}
+	for _, k := range f.keys {
+		if strings.Contains(k, "CONGDAN") || strings.Contains(k, "NGUOIKHAC") {
+			t.Errorf("citizen id written into the key: %q", k)
+		}
+	}
+	if _, err := CitizenKey(context.Background(), "cd-1"); !errors.Is(err, ErrNoCommune) {
+		t.Errorf("no commune: %v", err)
+	}
+	if _, err := CitizenKey(a, " "); !errors.Is(err, ErrNoCitizen) {
+		t.Errorf("no citizen: %v", err)
+	}
+}

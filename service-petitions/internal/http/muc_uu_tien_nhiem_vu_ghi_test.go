@@ -186,6 +186,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		PetitionTasks:      &petitionTaskFake{},
 		TaskAttachments:    &taskAttachmentsFake{},
 		TaskLogAttachments: &logAttachmentsFake{},
+		PetitionPhotos:     &staffPhotosFake{},
 		DanhSachBienBan:    bienBanMau(),
 		GhiBienBan:         &ghiBienBanGia{},
 		// The overview reads — present because Register refuses a nil dependency.

@@ -264,7 +264,7 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 		// surface. The write surface has its own suite, gui_phan_anh_test.go.
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
@@ -360,7 +360,7 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 		Phieu:       m.phieu,
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux
@@ -594,6 +594,8 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu kho nhãn lĩnh vực":         func(d *DepsCongDan) { d.NhanLinhVuc = nil },
 		"thiếu use case đánh giá":         func(d *DepsCongDan) { d.Rating = nil },
 		"missing citizen field catalogue": func(d *DepsCongDan) { d.CitizenFields = nil },
+		"missing scene-photo use case":    func(d *DepsCongDan) { d.Photos = nil },
+		"missing photo rate limiter":      func(d *DepsCongDan) { d.PhotoLimiter = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {
@@ -602,7 +604,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 				}
 			}()
 			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
-				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake()}
+				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -618,7 +620,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), PhotoLimiter: photoLimiterThu(),
 	})
 }
 
