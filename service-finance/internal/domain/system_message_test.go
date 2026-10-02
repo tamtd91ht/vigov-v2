@@ -18,7 +18,7 @@ func TestShippedMessagesHoldsOnlyFinanceKeyWithTheAgreedDefault(t *testing.T) {
 	}
 	const want = "Hệ thống là công cụ theo dõi và điều hành, không phải phần mềm kế toán. Số liệu phục vụ chỉ đạo, không thay thế sổ sách kế toán và không đối chiếu với Kho bạc."
 	if got[0].DefaultText != want {
-		t.Errorf("default = %q, want the sentence of docs/ui-ux/06-giai-ngan.md:13 with the product name dropped (ADR 0068 §13)",got[0].DefaultText)
+		t.Errorf("default = %q, want the sentence of docs/ui-ux/06-giai-ngan.md:13 with the product name dropped (ADR 0068 §13)", got[0].DefaultText)
 	}
 	// The shipped default must itself pass the rule a commune's wording is held to.
 	if _, err := NormalizeMessageText(got[0].DefaultText); err != nil {
