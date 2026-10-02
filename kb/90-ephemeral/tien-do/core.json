@@ -274,6 +274,14 @@
       "bang_chung": "02/10/2026 (TASK-P2b, chưa commit). core/audit/audit.go hằng KindOperator + chú thích Actor; core/audit/read.go readPage thêm ' AND actor_kind <> 'operator'' ngay sau mã xã, là hằng chuỗi nên số thứ tự tham số của bộ lọc không đổi; không lọc nào (actor VH-, action, subject, đọc-nhật-ký, SeeHidden) đưa dòng ấy trở lại. Áp cho cả năm dịch vụ dùng audit.NewLog (identity, documents, finance, comms, petitions). Ca kiểm: core/audit/read_test.go TestRead_OperatorEntriesNeverReachTheCommuneScreen; service-identity/internal/store/audit_log_pg_test.go (dòng lưu 1 lần, không hiện ở 4 kiểu truy vấn). go test ./core/audit xanh.",
       "no_confirm": [],
       "tiep_theo": "Ca PostgreSQL chưa chạy (thiếu VIGOV_TEST_DSN). Chưa có trình đọc 'nhật ký vận hành' nào đọc các dòng operator này."
+    },
+    {
+      "id": "operatorclient-khoa-bi-mat-mini-app",
+      "viec": "core/operatorclient: SetMiniAppSecret / RetireMiniAppSecret (ADR 0070 Bổ sung #6) — hai RPC duy nhất của OperatorService mang xã đích trong metadata",
+      "trang_thai": "xong",
+      "bang_chung": "02/10/2026 (TASK-P2c, chưa commit). core/operatorclient/mini_app_secret.go: ctx không có xã → ErrInvalidRequest tại chỗ, không gửi; token rỗng → ErrInvalidRequest; FAILED_PRECONDITION trên Set → ErrMiniAppNotBound (không phải ErrRealmNotConfigured), NOT_FOUND trên Retire → ErrNoLiveSecret (không log), INVALID_ARGUMENT → ErrArgumentRefused; outcome ACCEPTED / SESSION_NOT_LIVE / PERMISSION_DENIED (OutcomePermissionDenied mới), UNSPECIFIED hay REFUSED → ErrContract; ACCEPTED thiếu siêu dữ liệu → ErrContract. Khoá đi dạng secret.Secret, chỉ .Lo() ở dòng dựng yêu cầu; không log yêu cầu/trả lời/thông điệp trạng thái. Chú thích đầu gói sửa: bảy RPC miền không mang xã, hai RPC này mang. Ca kiểm: core/operatorclient/mini_app_secret_test.go (bufconn + chuỗi interceptor thật: x-tenant-id đúng một giá trị; từ chối tại chỗ; bảng mã trạng thái; khoá/token không vào log). go test -race ./core/... xanh trong make check.",
+      "no_confirm": [],
+      "tiep_theo": "Không còn gì ở core cho việc này. Bên gọi: service-platform operator_mini_app_secrets.go."
     }
   ]
 }

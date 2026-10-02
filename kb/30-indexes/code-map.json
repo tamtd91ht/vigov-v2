@@ -198,6 +198,14 @@
       "kind": "func",
       "at": "service-petitions/internal/app/petition_field_catalogue.go:134"
     },
+    "app.CheckMiniAppRetireShape": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:184"
+    },
+    "app.CheckMiniAppSecretShape": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:171"
+    },
     "app.CheckStaffIntakeField": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_field_catalogue.go:161"
@@ -940,15 +948,27 @@
     },
     "app.MiniAppBinding": {
       "kind": "type",
-      "at": "service-identity/internal/app/mini_app_secret.go:63"
+      "at": "service-identity/internal/app/mini_app_secret.go:80"
+    },
+    "app.MiniAppOperator": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:136"
     },
     "app.MiniAppSecretAdmin": {
       "kind": "type",
-      "at": "service-identity/internal/app/mini_app_secret.go:87"
+      "at": "service-identity/internal/app/mini_app_secret.go:104"
     },
     "app.MiniAppSecretRepo": {
       "kind": "type",
-      "at": "service-identity/internal/app/mini_app_secret.go:73"
+      "at": "service-identity/internal/app/mini_app_secret.go:90"
+    },
+    "app.MiniAppSecretRetired": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:160"
+    },
+    "app.MiniAppSecretSet": {
+      "kind": "type",
+      "at": "service-identity/internal/app/mini_app_secret.go:150"
     },
     "app.Mo": {
       "kind": "func",
@@ -1088,7 +1108,7 @@
     },
     "app.NewMiniAppSecretAdmin": {
       "kind": "func",
-      "at": "service-identity/internal/app/mini_app_secret.go:95"
+      "at": "service-identity/internal/app/mini_app_secret.go:112"
     },
     "app.NewNganSach": {
       "kind": "func",
@@ -1652,7 +1672,11 @@
     },
     "app.Retire": {
       "kind": "func",
-      "at": "service-identity/internal/app/mini_app_secret.go:172"
+      "at": "service-identity/internal/app/mini_app_secret.go:311"
+    },
+    "app.RetireAsOperator": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:327"
     },
     "app.Revoke": {
       "kind": "func",
@@ -1724,7 +1748,7 @@
     },
     "app.SecretSealer": {
       "kind": "type",
-      "at": "service-identity/internal/app/mini_app_secret.go:68"
+      "at": "service-identity/internal/app/mini_app_secret.go:85"
     },
     "app.SeedDefaults": {
       "kind": "func",
@@ -1740,7 +1764,7 @@
     },
     "app.SetDemo": {
       "kind": "func",
-      "at": "service-identity/internal/app/mini_app_secret.go:138"
+      "at": "service-identity/internal/app/mini_app_secret.go:274"
     },
     "app.SetPublication": {
       "kind": "func",
@@ -1748,7 +1772,11 @@
     },
     "app.SetSecret": {
       "kind": "func",
-      "at": "service-identity/internal/app/mini_app_secret.go:107"
+      "at": "service-identity/internal/app/mini_app_secret.go:217"
+    },
+    "app.SetSecretAsOperator": {
+      "kind": "func",
+      "at": "service-identity/internal/app/mini_app_secret.go:235"
     },
     "app.Settings": {
       "kind": "func",
@@ -2372,43 +2400,43 @@
     },
     "audit.Entry": {
       "kind": "type",
-      "at": "core/audit/audit.go:40"
+      "at": "core/audit/audit.go:47"
     },
     "audit.EntryView": {
       "kind": "type",
-      "at": "core/audit/read.go:78"
+      "at": "core/audit/read.go:81"
     },
     "audit.HTTPError": {
       "kind": "func",
-      "at": "core/audit/read.go:427"
+      "at": "core/audit/read.go:434"
     },
     "audit.Log": {
       "kind": "type",
-      "at": "core/audit/read.go:96"
+      "at": "core/audit/read.go:99"
     },
     "audit.NewLog": {
       "kind": "func",
-      "at": "core/audit/read.go:130"
+      "at": "core/audit/read.go:133"
     },
     "audit.Option": {
       "kind": "type",
-      "at": "core/audit/read.go:102"
+      "at": "core/audit/read.go:105"
     },
     "audit.Query": {
       "kind": "type",
-      "at": "core/audit/read.go:62"
+      "at": "core/audit/read.go:65"
     },
     "audit.Read": {
       "kind": "func",
-      "at": "core/audit/read.go:207"
+      "at": "core/audit/read.go:210"
     },
     "audit.WithHiddenSubjects": {
       "kind": "func",
-      "at": "core/audit/read.go:115"
+      "at": "core/audit/read.go:118"
     },
     "audit.Write": {
       "kind": "func",
-      "at": "core/audit/audit.go:68"
+      "at": "core/audit/audit.go:75"
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
@@ -6020,7 +6048,7 @@
     },
     "grpc.BeginOperatorEnrollment": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:234"
+      "at": "service-identity/internal/grpc/operator.go:266"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
@@ -6044,7 +6072,7 @@
     },
     "grpc.ChangeOperatorPassword": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:185"
+      "at": "service-identity/internal/grpc/operator.go:217"
     },
     "grpc.ClaimDueAutomationRuns": {
       "kind": "func",
@@ -6052,7 +6080,7 @@
     },
     "grpc.CompleteOperatorEnrollment": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:259"
+      "at": "service-identity/internal/grpc/operator.go:291"
     },
     "grpc.CountOrgUnitHoldings": {
       "kind": "func",
@@ -6102,6 +6130,10 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/measure_working_hours.go:41"
     },
+    "grpc.MiniAppSecretOperator": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/operator.go:77"
+    },
     "grpc.MoPhienCau": {
       "kind": "type",
       "at": "service-identity/internal/grpc/cau_phien.go:36"
@@ -6112,7 +6144,7 @@
     },
     "grpc.NewOperatorServer": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:76"
+      "at": "service-identity/internal/grpc/operator.go:107"
     },
     "grpc.NewServer": {
       "kind": "func",
@@ -6136,15 +6168,15 @@
     },
     "grpc.OpenOperatorSession": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:100"
+      "at": "service-identity/internal/grpc/operator.go:132"
     },
     "grpc.OperatorAuthenticator": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/operator.go:54"
+      "at": "service-identity/internal/grpc/operator.go:65"
     },
     "grpc.OperatorServer": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/operator.go:66"
+      "at": "service-identity/internal/grpc/operator.go:85"
     },
     "grpc.OrgUnitHoldingsCounter": {
       "kind": "type",
@@ -6188,7 +6220,7 @@
     },
     "grpc.RegenerateOperatorRecoveryCodes": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:213"
+      "at": "service-identity/internal/grpc/operator.go:245"
     },
     "grpc.ResolveAssignableStaff": {
       "kind": "func",
@@ -6232,7 +6264,7 @@
     },
     "grpc.ResolveOperatorSession": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:131"
+      "at": "service-identity/internal/grpc/operator.go:163"
     },
     "grpc.ResolveOrgUnitNames": {
       "kind": "func",
@@ -6262,9 +6294,13 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/unassigned_hold.go:27"
     },
+    "grpc.RetireMiniAppSecret": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:358"
+    },
     "grpc.RevokeOperatorSession": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/operator.go:168"
+      "at": "service-identity/internal/grpc/operator.go:200"
     },
     "grpc.SLADoc": {
       "kind": "type",
@@ -6273,6 +6309,10 @@
     "grpc.Server": {
       "kind": "type",
       "at": "service-platform/internal/grpc/server.go:90"
+    },
+    "grpc.SetMiniAppSecret": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:320"
     },
     "grpc.SoMiniApp": {
       "kind": "type",
@@ -6289,6 +6329,10 @@
     "grpc.UploadPolicies": {
       "kind": "type",
       "at": "service-platform/internal/grpc/server.go:66"
+    },
+    "grpc.WithMiniAppSecrets": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/operator.go:96"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
@@ -7792,7 +7836,7 @@
     },
     "http.UnmarshalJSON": {
       "kind": "func",
-      "at": "service-identity/internal/http/sla.go:300"
+      "at": "service-platform/internal/http/operator_mini_app_secrets.go:55"
     },
     "http.UpdateContentCategory": {
       "kind": "func",
@@ -8456,31 +8500,31 @@
     },
     "operatorclient.BeginEnrollment": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:234"
+      "at": "core/operatorclient/calls.go:235"
     },
     "operatorclient.BeginEnrollmentRequest": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:217"
+      "at": "core/operatorclient/calls.go:218"
     },
     "operatorclient.BeginEnrollmentResult": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:226"
+      "at": "core/operatorclient/calls.go:227"
     },
     "operatorclient.ChangePassword": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:150"
+      "at": "core/operatorclient/calls.go:151"
     },
     "operatorclient.ChangePasswordRequest": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:134"
+      "at": "core/operatorclient/calls.go:135"
     },
     "operatorclient.ChangePasswordResult": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:143"
+      "at": "core/operatorclient/calls.go:144"
     },
     "operatorclient.Client": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:141"
+      "at": "core/operatorclient/operatorclient.go:148"
     },
     "operatorclient.Close": {
       "kind": "func",
@@ -8488,79 +8532,111 @@
     },
     "operatorclient.CompleteEnrollment": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:284"
+      "at": "core/operatorclient/calls.go:285"
     },
     "operatorclient.CompleteEnrollmentRequest": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:264"
+      "at": "core/operatorclient/calls.go:265"
     },
     "operatorclient.CompleteEnrollmentResult": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:276"
+      "at": "core/operatorclient/calls.go:277"
     },
     "operatorclient.Dial": {
       "kind": "func",
       "at": "core/operatorclient/dial.go:30"
     },
+    "operatorclient.MiniAppSecretRetirement": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:59"
+    },
+    "operatorclient.MiniAppSecretVersion": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:50"
+    },
     "operatorclient.New": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:165"
+      "at": "core/operatorclient/operatorclient.go:172"
     },
     "operatorclient.NewFromConn": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:160"
+      "at": "core/operatorclient/operatorclient.go:167"
     },
     "operatorclient.NewPasswordRefusal": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:123"
+      "at": "core/operatorclient/operatorclient.go:130"
     },
     "operatorclient.Open": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:43"
+      "at": "core/operatorclient/calls.go:44"
     },
     "operatorclient.OpenRequest": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:21"
+      "at": "core/operatorclient/calls.go:22"
     },
     "operatorclient.OpenResult": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:33"
+      "at": "core/operatorclient/calls.go:34"
     },
     "operatorclient.Outcome": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:71"
+      "at": "core/operatorclient/operatorclient.go:73"
     },
     "operatorclient.Principal": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:113"
+      "at": "core/operatorclient/operatorclient.go:120"
     },
     "operatorclient.RecoveryCodesResult": {
       "kind": "type",
-      "at": "core/operatorclient/calls.go:182"
+      "at": "core/operatorclient/calls.go:183"
     },
     "operatorclient.RegenerateRecoveryCodes": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:188"
+      "at": "core/operatorclient/calls.go:189"
     },
     "operatorclient.Resolve": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:81"
+      "at": "core/operatorclient/calls.go:82"
+    },
+    "operatorclient.RetireMiniAppSecret": {
+      "kind": "func",
+      "at": "core/operatorclient/mini_app_secret.go:181"
+    },
+    "operatorclient.RetireMiniAppSecretRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:85"
+    },
+    "operatorclient.RetireMiniAppSecretResult": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:93"
     },
     "operatorclient.Revoke": {
       "kind": "func",
-      "at": "core/operatorclient/calls.go:116"
+      "at": "core/operatorclient/calls.go:117"
     },
     "operatorclient.SessionGrant": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:100"
+      "at": "core/operatorclient/operatorclient.go:107"
+    },
+    "operatorclient.SetMiniAppSecret": {
+      "kind": "func",
+      "at": "core/operatorclient/mini_app_secret.go:133"
+    },
+    "operatorclient.SetMiniAppSecretRequest": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:67"
+    },
+    "operatorclient.SetMiniAppSecretResult": {
+      "kind": "type",
+      "at": "core/operatorclient/mini_app_secret.go:79"
     },
     "operatorclient.String": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:85"
+      "at": "core/operatorclient/operatorclient.go:90"
     },
     "operatorclient.UnaryInterceptors": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:155"
+      "at": "core/operatorclient/operatorclient.go:162"
     },
     "operatorstore.ActivateTOTP": {
       "kind": "func",
@@ -9492,7 +9568,7 @@
     },
     "store.AddDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:240"
+      "at": "service-platform/internal/store/operator_writes.go:254"
     },
     "store.AddOverride": {
       "kind": "func",
@@ -9528,7 +9604,7 @@
     },
     "store.AttachMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:456"
+      "at": "service-platform/internal/store/operator_writes.go:472"
     },
     "store.AttachTreeFactsTx": {
       "kind": "func",
@@ -9804,7 +9880,7 @@
     },
     "store.CorrectName": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:333"
+      "at": "service-platform/internal/store/operator_writes.go:347"
     },
     "store.CotCuaBang": {
       "kind": "func",
@@ -9860,7 +9936,7 @@
     },
     "store.CreateCommune": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:125"
+      "at": "service-platform/internal/store/operator_writes.go:139"
     },
     "store.CreateDEK": {
       "kind": "func",
@@ -10512,7 +10588,7 @@
     },
     "store.NewCommune": {
       "kind": "type",
-      "at": "service-platform/internal/store/operator_writes.go:114"
+      "at": "service-platform/internal/store/operator_writes.go:128"
     },
     "store.NewDanhMucMiniAppStore": {
       "kind": "func",
@@ -11006,6 +11082,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/data_encryption_key.go:110"
     },
+    "store.ReplaceMiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:611"
+    },
     "store.ResealKey": {
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:193"
@@ -11056,15 +11136,19 @@
     },
     "store.SetActivation": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:380"
+      "at": "service-platform/internal/store/operator_writes.go:394"
     },
     "store.SetBrandingFile": {
       "kind": "func",
       "at": "service-platform/internal/store/branding.go:83"
     },
+    "store.SetMiniAppActivation": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:679"
+    },
     "store.SetPrimaryDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:271"
+      "at": "service-platform/internal/store/operator_writes.go:285"
     },
     "store.SetPublicObjectKey": {
       "kind": "func",

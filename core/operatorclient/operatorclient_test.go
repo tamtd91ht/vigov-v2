@@ -53,6 +53,10 @@ type fakeServer struct {
 	regen   *identityv1.RegenerateOperatorRecoveryCodesResponse
 	begin   *identityv1.BeginOperatorEnrollmentResponse
 	done    *identityv1.CompleteOperatorEnrollmentResponse
+	// The two Mini App secret RPCs (mini_app_secret_test.go).
+	setSecret    *identityv1.SetMiniAppSecretResponse
+	retireSecret *identityv1.RetireMiniAppSecretResponse
+	sawSet       *identityv1.SetMiniAppSecretRequest
 
 	calls     int
 	sawTenant [][]string

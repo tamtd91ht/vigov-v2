@@ -13,10 +13,12 @@
 // password in the person's mind — and never "not signed in" — that would sign every operator out
 // through the service that is down. Fail closed means "refuse to proceed", not "pretend to know".
 //
-// NO COMMUNE TRAVELS ON THESE CALLS. Every OperatorService RPC is on core/grpcx.methodsWithoutTenant
-// (owner's decision 2026-10-01), and grpcx.UnaryClientInterceptor sends no x-tenant-id for an
-// exempt method even when the context holds a commune: the exemption depends on the list, never on
-// the caller's state.
+// NO COMMUNE TRAVELS ON THE SEVEN REALM CALLS. They are on core/grpcx.methodsWithoutTenant (owner's
+// decision 2026-10-01), and grpcx.UnaryClientInterceptor sends no x-tenant-id for an exempt method
+// even when the context holds a commune: the exemption depends on the list, never on the caller's
+// state. THE TWO MINI APP SECRET CALLS (mini_app_secret.go) ARE NOT EXEMPT: they write a commune's
+// own data, so the target commune travels in metadata from the context like any inter-service call
+// (rule 2, invariant 8), and a context without one is refused here, before anything is sent.
 //
 // NOTHING HERE LOGS A REQUEST, A RESPONSE, OR ANY CREDENTIAL FIELD — at any level. The generated
 // String() prints every field in full (operator.proto, last paragraph of the service comment):
@@ -80,6 +82,9 @@ const (
 	OutcomeSessionNotLive
 	// OutcomeNewPasswordRejected: see the result's Refusal.
 	OutcomeNewPasswordRejected
+	// OutcomePermissionDenied: the Mini App secret RPCs only — a live session whose operator lacks
+	// `ops.mini_app.manage`. The caller answers 403. Nothing was written.
+	OutcomePermissionDenied
 )
 
 func (o Outcome) String() string {
@@ -92,6 +97,8 @@ func (o Outcome) String() string {
 		return "session_not_live"
 	case OutcomeNewPasswordRejected:
 		return "new_password_rejected"
+	case OutcomePermissionDenied:
+		return "permission_denied"
 	}
 	return "refused"
 }
@@ -202,6 +209,8 @@ func outcome(rpc string, o identityv1.OperatorAuthOutcome, allowed ...identityv1
 			return OutcomeSessionNotLive, nil
 		case identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED:
 			return OutcomeNewPasswordRejected, nil
+		case identityv1.OperatorAuthOutcome_OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED:
+			return OutcomePermissionDenied, nil
 		}
 	}
 	return OutcomeRefused, fmt.Errorf("%w: %s answered outcome %d", ErrContract, rpc, int32(o))

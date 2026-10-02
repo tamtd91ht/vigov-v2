@@ -289,9 +289,9 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("a repeat is refused by mini_app.app_id, the primary key, which keeps soft-deleted rows")(
 				http.HandlerFunc(h.attachMiniApp))))
 
-	// @summary  Đổi App ID Mini App riêng của xã: gắn App ID mới và tắt App ID ở đường dẫn, một giao dịch (bắt buộc lý do)
+	// @summary  Đổi App ID Mini App riêng của xã: gắn App ID mới và tắt App ID ở đường dẫn, một giao dịch (bắt buộc lý do); sau đó tự thu hồi khoá bí mật của App ID cũ
 	// @request  miniAppReplacementBody
-	// @reply    201 communeDetailView
+	// @reply    201 miniAppChangeView
 	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
@@ -304,9 +304,9 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("a repeat is refused: the old App ID is no longer running (mini_app_inactive) and the new one has a row (mini_app_taken)")(
 				http.HandlerFunc(h.replaceMiniApp))))
 
-	// @summary  Gỡ (tắt) hoặc bật lại một Mini App riêng của xã (bắt buộc lý do); không chuyển App ID sang xã khác
+	// @summary  Gỡ (tắt) hoặc bật lại một Mini App riêng của xã (bắt buộc lý do); gỡ thì tự thu hồi khoá bí mật của App ID; không chuyển App ID sang xã khác
 	// @request  miniAppActivationBody
-	// @reply    200 communeDetailView
+	// @reply    200 miniAppChangeView
 	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
@@ -318,4 +318,37 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
 			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
 				http.HandlerFunc(h.setMiniAppActivation))))
+
+	// THE TWO SECRET ROUTES below forward a commune's Zalo app secret to identity and keep nothing
+	// (operator_mini_app_secrets.go lists every place the value goes). KhongCan is also what keeps
+	// the body out of any idempotency store — and core/idem never stores a body in any mode.
+
+	// @summary  Đặt khoá bí mật Zalo cho một App ID Mini App riêng của xã (bắt buộc lý do); chuyển tiếp sang identity, không lưu ở đây
+	// @request  miniAppSecretBody
+	// @reply    200 miniAppSecretView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found mini_app_not_found
+	// @reply    409 httpx.Error mini_app_not_bound
+	// @reply    422 httpx.Error invalid_secret invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable mini_app_secret_unavailable
+	mux.Handle("PUT /api/v1/communes/{id}/mini-apps/{app_id}/secret",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("a retry after a lost response writes one more version holding the same secret — two true entries, never a wrong state (operator.proto); and no store may hold this body")(
+				http.HandlerFunc(h.setMiniAppSecret))))
+
+	// @summary  Thu hồi khoá bí mật Zalo của một App ID Mini App riêng của xã (bắt buộc lý do); không còn khoá thì trả 200 retired=false
+	// @request  miniAppSecretRetireBody
+	// @reply    200 miniAppSecretRetirementView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found mini_app_not_found
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable mini_app_secret_unavailable
+	mux.Handle("DELETE /api/v1/communes/{id}/mini-apps/{app_id}/secret",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("retiring what is already retired is NOT_FOUND in identity, answered as the same end state with nothing written")(
+				http.HandlerFunc(h.retireMiniAppSecret))))
 }

@@ -27,6 +27,9 @@ type OperatorIdentity interface {
 	RegenerateRecoveryCodes(ctx context.Context, token, totpCode secret.Secret, clientIP string) (operatorclient.RecoveryCodesResult, error)
 	BeginEnrollment(ctx context.Context, req operatorclient.BeginEnrollmentRequest) (operatorclient.BeginEnrollmentResult, error)
 	CompleteEnrollment(ctx context.Context, req operatorclient.CompleteEnrollmentRequest) (operatorclient.CompleteEnrollmentResult, error)
+	// The two that act ON a commune (operator_mini_app_secrets.go): the commune is ctx's.
+	SetMiniAppSecret(ctx context.Context, req operatorclient.SetMiniAppSecretRequest) (operatorclient.SetMiniAppSecretResult, error)
+	RetireMiniAppSecret(ctx context.Context, req operatorclient.RetireMiniAppSecretRequest) (operatorclient.RetireMiniAppSecretResult, error)
 }
 
 type operatorHandlers struct{ d OperatorDeps }

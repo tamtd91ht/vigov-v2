@@ -65,6 +65,17 @@ type identityFake struct {
 	sawOpen   operatorclient.OpenRequest
 	revoked   int
 	errAnswer error
+
+	// The two Mini App secret RPCs (operator_mini_app_secrets_test.go). A nil result answers
+	// ACCEPTED with complete metadata.
+	setRes          *operatorclient.SetMiniAppSecretResult
+	setErr          error
+	retireRes       *operatorclient.RetireMiniAppSecretResult
+	retireErr       error
+	sawSet          []operatorclient.SetMiniAppSecretRequest
+	sawRetire       []operatorclient.RetireMiniAppSecretRequest
+	sawSetTenant    []tenant.ID
+	sawRetireTenant []tenant.ID
 }
 
 func (f *identityFake) hit() error {
@@ -126,8 +137,12 @@ func (registryFake) Commune(_ context.Context, id string) (domain.Commune, []dom
 	if id != communeIDFake && id != newIDFake {
 		return domain.Commune{}, nil, store.ErrCommuneNotFound
 	}
+	// Two dedicated apps, one on and one off — the secret routes answer 404 for any other App ID.
 	return domain.Commune{ID: id, Name: "Xã Thăng Bình", Province: "Đà Nẵng", Active: true,
-		Domains: []string{"thangbinh-danang.vigov.vn"}}, nil, nil
+			Domains: []string{"thangbinh-danang.vigov.vn"}}, []domain.CommuneMiniApp{
+			{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, CreatedBy: opCodeFake},
+			{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false, CreatedBy: opCodeFake},
+		}, nil
 }
 
 func (registryFake) Provinces(context.Context) ([]domain.Province, error) {
@@ -331,6 +346,10 @@ var guarded = []guardedRoute{
 		`{"new_app_id":"3043188591857102858","reason":"Xã đổi App ID"}`, []string{"ops.mini_app.manage"}, 201},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/activation",
 		`{"active":false,"reason":"Xã ngừng dùng app riêng"}`, []string{"ops.mini_app.manage"}, 200},
+	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
+		`{"secret":"zalo-app-secret-FAKE-NOT-REAL","reason":"Đặt khoá cho app riêng"}`, []string{"ops.mini_app.manage"}, 200},
+	{"DELETE", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
+		`{"reason":"Thu hồi khoá cũ"}`, []string{"ops.mini_app.manage"}, 200},
 	{"GET", "/api/v1/operator-sessions/current", "", nil, 200},
 	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204},
 }

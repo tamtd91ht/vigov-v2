@@ -473,7 +473,11 @@ func (h *operatorHandlers) replaceMiniApp(w http.ResponseWriter, r *http.Request
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	h.respondCommune(w, r, id, http.StatusCreated)
+	// Committed. The old App ID's secret is retired AFTER, and its failure is reported, never rolled
+	// back into the binding (operator_mini_app_secrets.go, retireAfterUnbind). The NEW App ID's
+	// secret is the operator's next act (PUT …/{new}/secret): it needs the new binding live first.
+	retired, problem := h.retireAfterUnbind(ctx, r, oldAppID, reason)
+	h.respondCommuneAfterChange(w, r, id, http.StatusCreated, &retired, problem)
 }
 
 // setMiniAppActivation detaches (active=false) or reactivates (active=true) one of the commune's
@@ -504,5 +508,12 @@ func (h *operatorHandlers) setMiniAppActivation(w http.ResponseWriter, r *http.R
 		h.writeRegistryError(w, r, err)
 		return
 	}
-	h.respondCommune(w, r, id, http.StatusOK)
+	if *b.Active {
+		h.respondCommuneAfterChange(w, r, id, http.StatusOK, nil, "")
+		return
+	}
+	// Detached (or already off — a repeat is how a retirement that failed the first time is retried
+	// from the same dialog). Retired after the commit, as in replaceMiniApp.
+	retired, problem := h.retireAfterUnbind(ctx, r, appID, reason)
+	h.respondCommuneAfterChange(w, r, id, http.StatusOK, &retired, problem)
 }
