@@ -44,6 +44,12 @@ import "google/protobuf/timestamp.proto";
 // (migration 0016) counted forward from the instant a unit began holding work with nobody assigned,
 // for the `sla_reminders` job. Why it is its own RPC and not a field on the fourth: its comment.
 //
+// AND MeasureWorkingHours IS THE SIXTH (user decision 2026-10-02), and the first that answers a
+// LENGTH rather than an instant: the working time between two instants the caller already holds —
+// the measuring half of AdvanceWorkingHours, through the same one walk. It reads no `sla` row, so
+// ADR 0029 §Bổ sung ("no `sla` hours leave this service") is not touched by it; why a length may
+// leave when an `sla` number may not is on its own comment.
+//
 // AND IT OWNS ONE MORE THING SINCE THE SAME DATE: the per-commune SETTINGS OF THE AUTOMATION JOBS
 // (docs/ui-ux/14-cau-hinh.md §9, "Tự động hoá") and their run state. ClaimDueAutomationRuns and
 // RecordAutomationRunOutcome are the whole of what crosses this boundary for them; the schedule
@@ -1048,6 +1054,133 @@ service IdentityService {
   // weekday conversion is where an off-by-one lives for a year before anybody notices the
   // deadline is a day out.
   rpc AdvanceWorkingHours(AdvanceWorkingHoursRequest) returns (AdvanceWorkingHoursResponse);
+
+  // MeasureWorkingHours answers, for ONE commune and for each span of two instants the caller
+  // holds, how much WORKING time of that commune lies between them — the inverse question of
+  // AdvanceWorkingHours.
+  //
+  // WHY IT EXISTS (user decision 2026-10-02): "Quá hạn" stays derived (rule 10, invariant 3), but
+  // HOW LATE a record is — the working time from its stored deadline to `now` — must be counted the
+  // way its deadline was counted. Every caller outside this service has only wall-clock arithmetic
+  // within reach, and `now - deadline` counts nights, weekends, `ngay_nghi_le` and `ngay_lam_bu` as
+  // lateness: the direction that reports an authority later than it was. This RPC gives every
+  // service the same count identity uses for deadlines, so no second count is ever written (ADR 0007;
+  // rule 10, forbidden #2). No screen prints the figure yet; the contract exists so the first one to
+  // do so has nothing to invent.
+  //
+  // # WHAT IS MEASURED — one rule, and every edge case falls out of it
+  //
+  //   working_seconds = the total length of [start, end) ∩ this commune's working sessions
+  //
+  // where "working sessions" is exactly the set AdvanceWorkingHours walks: the ordinary week of
+  // `lich_lam_viec`, minus every `ngay_nghi_le`, plus every `ngay_lam_bu`, each wall-clock session
+  // made an instant in Asia/Ho_Chi_Minh inside this server (see "Times on this boundary" above).
+  //
+  //   An endpoint OUTSIDE working time contributes nothing, and is not "snapped" anywhere. ADR 0007
+  //   decision 8 is therefore satisfied by the shape, not by a branch: a span starting Friday 22:00
+  //   measures the same as one starting Monday 07:30, exactly as the two deadlines are equal.
+  //   An endpoint INSIDE a session counts from / up to that instant.
+  //   start == end measures 0, and is OK.
+  //   end BEFORE start is INVALID_ARGUMENT, never a negative number and never a silent 0. A signed
+  //   answer invites "remaining = -elapsed" arithmetic on the caller's side; a 0 reads as "not late"
+  //   and hides a caller that swapped its two instants. Remaining working time is a span too: send
+  //   (now, deadline).
+  //
+  // # THE INVERSE PROPERTY, and the one direction in which it does NOT hold
+  //
+  //   for every h:  measure(t, AdvanceWorkingHours(t, h)) == h × 3600 seconds
+  //
+  // against the same calendar. The other direction does not hold, by design: measure is FLAT across
+  // every closed stretch, so many instants measure the same h, and AdvanceWorkingHours returns the
+  // EARLIEST of them (its `reached_at` comment). A caller must never "recover" a deadline by
+  // advancing a measured figure.
+  //
+  // THE SAME CALENDAR IS PART OF THAT PROPERTY. ADR 0007 decision 6: a calendar change is not
+  // retroactive for a STORED deadline. This RPC measures with the calendar AS IT STANDS AT THE CALL,
+  // so a holiday entered after a record was received changes how late it now measures, never its
+  // deadline. That is the right split — the deadline is a commitment, the lateness is a reading —
+  // and it is why lateness is measured FROM THE STORED DEADLINE, never re-derived from the receipt
+  // instant and the `sla` row.
+  //
+  // # WHY A LENGTH MAY LEAVE THIS SERVICE WHEN AN `sla` NUMBER MAY NOT
+  //
+  // ADR 0029 §Bổ sung keeps `sla` hours inside identity because a caller holding "72 working hours"
+  // must turn it into an instant, and only wall-clock arithmetic is within its reach. A MEASURED
+  // length is the opposite direction: both instants are already the caller's, the answer is a
+  // reading for display or a report, and there is nothing it needs to be turned into. THE ONE
+  // MISUSE IS ADDING IT TO AN INSTANT — `deadline + working_seconds`, `now + …` — which walks
+  // straight through the closed time this RPC exists to exclude. That is rule 10, forbidden #2, and
+  // the warning on `Deadline` applies to this figure word for word.
+  //
+  // WHAT IT DOES NOT DECIDE. Whether a record closed "on time" is a comparison of two INSTANTS
+  // (closed_at vs the stored deadline), not a measurement, and the owner's open question on how
+  // "đúng hạn" is counted (vigov-require reconciliation 2026-10-02) is not answered here. Nor does
+  // this RPC know what a deadline is: it measures any two instants.
+  //
+  // # BATCHED, because the caller is a LIST
+  //
+  // The consumer is the overdue queue: one page, N late records, each measured from its own deadline
+  // to the SAME `now`. One call per row is N hops and N reads of a calendar that could change
+  // between them — two rows of one page measured against two calendars. One call per page is one hop
+  // and one calendar read (skills/load-data-once; ADR 0012's batching default, which here applies in
+  // full). Spans are general pairs rather than "N starts, one end", so a report measuring
+  // receipt → closure per record uses the same RPC.
+  //
+  // # BOUNDS, and why they are INVALID_ARGUMENT rather than FAILED_PRECONDITION
+  //
+  //   1 TO 500 SPANS per call — the bound ResolveEscalationInstants uses, for the same reason: never a
+  //   silent truncation, and a caller with more pages.
+  //
+  //   THE WHOLE CALL FITS IN TEN YEARS: from the earliest `start` to the latest `end` of the request,
+  //   at most 10 calendar years in Asia/Ho_Chi_Minh. This is NOT AdvanceWorkingHours' 366-day
+  //   horizon, deliberately. That horizon refuses an ANSWER that would land past the holidays anybody
+  //   entered; here both endpoints are the caller's own, so there is no answer to land anywhere, and
+  //   366 days would fail a whole page the day one record on it has been late for a year — with the
+  //   caller unable to pre-filter it without the very calendar-days arithmetic rule 10 forbids it.
+  //   What the bound refuses is a GARBAGE instant: an unset deadline column read as year 1, or the
+  //   Unix epoch, which would walk decades of calendar for one row. Both endpoints come from the
+  //   caller, so exceeding it is the caller's fault by construction — never the commune's
+  //   configuration. A real span past ten years is a change to this comment, and additive.
+  //
+  //   THE CALENDAR IS NOT MADE COMPLETE BY ANY BOUND, here as on AdvanceWorkingHours: a span through a
+  //   year whose holidays nobody entered measures that year's holidays as working time. That gap
+  //   belongs to whoever operates the configuration screen.
+  //
+  // # Configuration faults are refused, and an empty calendar is NOT "zero working time"
+  //
+  // The four calendar faults AdvanceWorkingHours lists are FAILED_PRECONDITION here too, detected by
+  // the same code, under the same laziness: a fault in a year no span of this call enters cannot
+  // change this answer. THE EMPTY CALENDAR DESERVES ITS SENTENCE: mathematically it measures 0
+  // everywhere, and 0 reads as "not late" on every row of the queue. It is refused, exactly as
+  // AdvanceWorkingHours refuses it — the commune has not said when it is open, so nothing about its
+  // working time can be read. AdvanceWorkingHours' fifth fault, the horizon, is never produced: the
+  // ten-year bound above replaces it and is the caller's.
+  //
+  // # The commune travels in metadata; not cached; not stored; not audited; retry is safe
+  //
+  // ONE CALL, ONE COMMUNE: "x-tenant-id" names whose calendar is read, no field can name a second,
+  // and an exemption is not expressible (ADR 0012, decision 1). NOT CACHED: a commune correcting its
+  // holidays must see the reading change on the next load. NEVER STORE THE ANSWER: it moves with
+  // `end` (usually `now`) and with the calendar, so a stored "late by" is a state built from a
+  // comparison — rule 10, invariant 3, one step removed. A read of configuration: it writes nothing,
+  // publishes nothing, and leaves no audit entry.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  one item per DISTINCT span — all of them, or the call fails. No partial
+  //                       success: every span is measured against one calendar, so anything that
+  //                       stops one stops all, and a page with some rows measured and some silently
+  //                       absent reads the absent ones as 0.
+  //   INVALID_ARGUMENT    the CALLER is wrong: no spans, more than 500, an unset span, an unset or
+  //                       invalid `start` / `end`, `end` before `start`, or a call wider than ten
+  //                       years. Checked BEFORE anything is read.
+  //   FAILED_PRECONDITION the COMMUNE'S CALENDAR is missing or wrong — the four faults above. The
+  //                       caller shows "chưa cấu hình lịch làm việc", never a number.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "0 hours late": show no figure (the
+  //                       "Quá hạn" state is still derivable without it), never a default.
+  rpc MeasureWorkingHours(MeasureWorkingHoursRequest) returns (MeasureWorkingHoursResponse);
 
   // ResolveDeadlines answers, for ONE commune and ONE administrative record, the instants at
   // which that record's processing commitments fall due.
@@ -2633,6 +2766,70 @@ message WorkingHoursReached {
   // holidays may not be entered yet. That gap belongs to whoever operates the configuration
   // screen; it is named here so the next reader does not mistake the horizon for a guarantee.
   google.protobuf.Timestamp reached_at = 2;
+}
+
+message MeasureWorkingHoursRequest {
+  // The spans to measure. 1 TO 500 ENTRIES, checked on what the caller SENT and before duplicates
+  // are collapsed; empty or more is INVALID_ARGUMENT, never a silent truncation.
+  //
+  // DUPLICATES ARE COLLAPSED (a page of late records often shares a deadline) and the order carries
+  // no meaning. Map the response by `span` — both instants compared as instants (seconds and
+  // nanos) — never by position.
+  //
+  // AN UNSET ENTRY IS INVALID_ARGUMENT, never skipped: skipping it would return fewer items than
+  // asked for, which this contract defines as a fault.
+  repeated WorkingTimeSpan spans = 1;
+}
+
+// Two instants, in order. Used as the request entry AND echoed as the response key, so the caller
+// maps by the very value it sent.
+//
+// INSTANTS, not wall-clock times: the zone is applied inside the server, once, as for every other
+// working-hours RPC here. Neither is compared with `now`.
+message WorkingTimeSpan {
+  // Where the measurement begins — for lateness, the record's STORED deadline exactly as stored.
+  // UNSET or invalid is INVALID_ARGUMENT: there is no "from now" default, for the reason
+  // AdvanceWorkingHoursRequest.count_from gives.
+  google.protobuf.Timestamp start = 1;
+
+  // Where it ends, EXCLUSIVE — for lateness, the caller's own `now`, the same one its `late` filter
+  // compares against. UNSET or invalid is INVALID_ARGUMENT; there is no server-side "now": two
+  // clocks one request apart make a record late by a negative amount. Before `start` is
+  // INVALID_ARGUMENT; equal to `start` measures 0.
+  google.protobuf.Timestamp end = 2;
+}
+
+// Wrapped, not a bare repeated item: adding a field later must not change the RPC signature.
+message MeasureWorkingHoursResponse {
+  // ONE ITEM PER DISTINCT SPAN REQUESTED — ALL OF THEM, OR THE CALL FAILS. Map by `span`;
+  // len(items) can be smaller than the request because duplicates collapse.
+  repeated WorkingTimeMeasured items = 1;
+}
+
+// One span and the working time of this commune inside it.
+message WorkingTimeMeasured {
+  // Echoed from the request — the KEY the caller maps by.
+  WorkingTimeSpan span = 1;
+
+  // The total length of [span.start, span.end) that falls inside this commune's working sessions,
+  // in WHOLE SECONDS, truncated toward zero.
+  //
+  // SECONDS AND NOT HOURS, because lateness is not a whole number of hours: a record twenty minutes
+  // late would read 0 — "not late" — in an hours field. Rounding to the hour, half-hour or minute is
+  // a DISPLAY decision of the screen that prints it, and it is plain division of this number. The
+  // calendar's own boundaries are whole seconds (this server reads every session as seconds since
+  // midnight, service-identity domain.GioTrongNgay), so only
+  // the caller's two endpoints can carry a fraction, and dropping it moves no session boundary.
+  //
+  // AN INTEGER AND NOT A google.protobuf.Duration, for the reason AdvanceWorkingHoursRequest gives
+  // for `working_hours`: a Duration means wall-clock time everywhere else it appears, and
+  // `deadline.Add(d)` would type-check. The unit sits in the field name. NEVER ADD IT TO AN INSTANT
+  // (rule 10, forbidden #2); never store it (rule 10, invariant 3).
+  //
+  // ALWAYS SET IN AN OK RESPONSE; 0 is a real answer only when the span holds no working time (a
+  // span inside a weekend, a night, or start == end). A commune with no calendar at all is
+  // FAILED_PRECONDITION, never 0.
+  uint64 working_seconds = 2;
 }
 
 // WorkKind is the kind of work one `sla` row applies to — FOUR BUSINESS DOMAINS, not four
