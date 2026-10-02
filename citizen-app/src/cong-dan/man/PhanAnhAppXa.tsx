@@ -80,7 +80,7 @@ import {
   useSceneLocation,
 } from "./scene-location";
 import {
-  OwnScenePhotos,
+  PetitionPhotos,
   type PickedPhoto,
   type PickScenePhotos,
   ScenePhotoField,
@@ -536,10 +536,11 @@ export function PetitionBody(props: {
           </>
         )}
       </div>
-      {/* The citizen's own photos — only when there are some, or while more may be added (ADR 0047:254 (12)).
-          `key` by status: a petition that moved on drops the "Thêm ảnh" block at once. */}
+      {/* "Trước khi xử lý" (the citizen's own photos) and "Sau khi xử lý" (the commune's) — each only when it
+          has photos, the own block also while more may be added (ADR 0047:254 (12)). `key` by status: a
+          petition that moved on drops "Thêm ảnh" and refetches the "after" list at once. */}
       {props.photos && (
-        <OwnScenePhotos
+        <PetitionPhotos
           key={`${p.ma_tra_cuu}:${p.trang_thai}`}
           code={p.ma_tra_cuu}
           status={p.trang_thai}

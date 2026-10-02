@@ -61,6 +61,7 @@ import {
   type ScenePhotoType,
   STORAGE_FILE_FIELD,
   type TrangPhieuCuaToi,
+  verificationPhotosAddress,
 } from "./hop-dong-phan-anh";
 import {
   type BaiTinXa,
@@ -497,6 +498,27 @@ export async function listScenePhotos(ma_tra_cuu: string): Promise<PhotoCallResu
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   return goiWithRefusals(cong.dia_chi, { route: "photo-list", method: "GET", token: cong.token }, readScenePhotoList);
+}
+
+/**
+ * The commune's "sau xử lý" photos of the citizen's OWN petition — empty until `cho-dan-xac-nhan` (the server
+ * decides, ADR 0047 row "THAY G8"). Each link lives ≤ 15 minutes: shown, refetched, never kept.
+ *
+ * `goi`, NOT `goiWithRefusals`: the contract has no refusal codes here (200 · 401 · 403 · 404 · 500 · 503), and
+ * 404 carries the same body as GET …/{maTraCuu} — so it is the SAME `khong-thay` the lookup gives, one answer
+ * for "no such code", "someone else's" and "another commune's" (rule 4, forbidden #2). 429 is not in the
+ * contract and stays `loi-may-chu`, as on the petition routes.
+ */
+export async function listVerificationPhotos(ma_tra_cuu: string): Promise<PhotoCallResult<readonly ScenePhotoLink[]>> {
+  const ma = ma_tra_cuu.trim();
+  const cong = moCong(verificationPhotosAddress(ma === "" ? "x" : ma));
+  if ("kieu" in cong) return cong;
+  if (ma === "") return { kieu: "khong-thay" };
+  return withoutRateLimit(
+    await goi(cong.dia_chi, { route: "verification-photo-list", method: "GET", token: cong.token }, readScenePhotoList, {
+      kieu: "khong-thay",
+    }),
+  );
 }
 
 /**

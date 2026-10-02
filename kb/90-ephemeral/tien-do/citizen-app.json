@@ -481,6 +481,15 @@
       "no_confirm": [],
       "tiep_theo": "Thẻ việc theo thứ tự: migration (platform + petitions) → hợp đồng RPC identity → hành vi petitions → cổng hợp đồng → Web Admin ‖ app xã → ca kiểm.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "app-xa-anh-truoc-sau-va-9-cau",
+      "viec": "App riêng của xã: ảnh trước/sau xử lý trên phiếu của người dân (khối 'Sau khi xử lý' chỉ khi có ảnh) + 9 câu giải thích trạng thái nguyên văn bản mẫu (đợt 02/10/2026; ADR 0047 dòng THAY G8, ADR 0027 Bổ sung 02/10)",
+      "trang_thai": "xong",
+      "bang_chung": "api: verificationPhotosAddress + listVerificationPhotos (GET …/my-citizen-reports/{maTraCuu}/verification-photos; 404 như traCuuPhieu, 403 chua_xac_thuc_so → cổng số). scene-photos.tsx: hook chung usePhotoLinks (làm mới link trước khi hết hạn, đọc lại khi ảnh lỗi) cho cả hai danh sách; PetitionPhotos xếp 'Trước khi xử lý' trên 'Sau khi xử lý'; khối sau ẩn khi rỗng/đang tải. PhanAnhAppXa PetitionBody dùng PetitionPhotos (chi tiết + tra cứu). noi-dung.ts TRANG_THAI = 9 câu FEEDBACK_STATUS_HINT của vigov-require feedback-display.ts:136-146 (neo 0053854, khớp một-một qua nhãn bước feedback-adapter.ts:91-101). verification-photos.test.tsx 19 ca; ranh-gioi-hai-nua §3e. tsc sạch, vitest 1636/1636, dựng app xã xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHỜ CHỦ DỰ ÁN: (1) app CHUNG cũng nhận 9 câu mới vì TRANG_THAI là một bảng (khung.tsx:108) — ADR 0027 chỉ nói cán bộ + app xã; (2) câu da-dong 'Phải có ảnh sau xử lý mới đóng được' sai ở xã tắt cờ; (3) mấy câu viết cho cán bộ, nói về người dân ở ngôi thứ ba ('chờ báo lại cho người dân', 'chờ họ xác nhận'); câu da-tiep-nhan cũ cố ý tránh ngụ ý xã đã đọc phiếu; 'chuyển lên cấp trên' có thể trái dòng cơ quan nhận. Chưa thử trên máy thật.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

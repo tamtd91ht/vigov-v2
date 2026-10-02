@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   completeScenePhoto,
   listScenePhotos,
+  listVerificationPhotos,
   type PhotoCallResult,
   postPhotoToStorage,
   readPickedPhoto,
@@ -46,7 +47,7 @@ import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not 
 import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
-import { SCENE_PHOTOS, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
+import { SCENE_PHOTOS, VERIFICATION_PHOTOS, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
 import type { OnSessionLost } from "./PhanAnhAppXa";
 
 /* ═══════════════════════════════ PICKING — the injected capability ═══════════════════════════════ */
@@ -670,37 +671,30 @@ export function msUntilRefresh(items: readonly ScenePhotoLink[], now: number): n
   return Math.min(Math.max(first - now - 30_000, 5_000), 15 * 60_000);
 }
 
+/** A list route of short-lived photo links: the scene list, or the commune's "sau xử lý" list. */
+export type PhotoLinkLoader = (code: string) => Promise<PhotoCallResult<readonly ScenePhotoLink[]>>;
+
 /**
- * The photos block of a petition the citizen opened: their own photos when there ARE some (decision 12 — no
- * empty frame), and "Thêm ảnh hiện trường" while the petition is `da-tiep-nhan` and the app has the picker.
- * The links are fetched, shown and refetched — never kept anywhere but this state.
+ * THE ONE PLACE a list of read links is fetched, refetched before the first link expires (`msUntilRefresh`),
+ * and refetched once when an image fails to load — shared by the citizen's own photos and the commune's "sau
+ * xử lý" photos, so the two lists can never refresh by two different rules. The links live in this state only.
  */
-export function OwnScenePhotos(props: {
-  code: string;
-  status: string;
-  pick?: PickScenePhotos;
-  onSessionLost: OnSessionLost;
-}) {
-  const { code } = props;
+export function usePhotoLinks(load: PhotoLinkLoader, code: string) {
   const [list, setList] = useState<OwnPhotoList>({ kind: "loading" });
   const [round, setRound] = useState(0);
   /** The round an image error already reloaded — one reload per load, never a loop on a broken link. */
   const reloadedAt = useRef(-1);
   const reload = () => setRound((n) => n + 1);
-  const uploads = usePhotoUploads(props.onSessionLost, reload);
-  const canAdd = props.pick !== undefined && props.status === "da-tiep-nhan";
-  const stored = list.kind === "ready" ? list.items.length : 0;
-  const remaining = () => MAX_SCENE_PHOTOS - stored - photosInFlight(uploads.jobs);
-  const picking = usePhotoPicking(props.pick, remaining, (paths) => uploads.start(code, paths));
 
   useEffect(() => {
     let alive = true;
-    void listScenePhotos(code).then((kq) => {
+    void load(code).then((kq) => {
       if (alive) setList(ownPhotoListOutcome(kq));
     });
     return () => {
       alive = false;
     };
+    // `load` is a module function, fixed for the block's life.
   }, [code, round]);
 
   useEffect(() => {
@@ -715,9 +709,118 @@ export function OwnScenePhotos(props: {
     reload();
   };
 
+  return { list, reload, onImageError };
+}
+
+/**
+ * The photos of a petition the citizen opened, "Trước khi xử lý" then "Sau khi xử lý" (ADR 0047 row "THAY
+ * G8"), STACKED: the detail is one phone column wide, and each block says which it is in WORDS, never by its
+ * position. The "after" block appears only when the commune's list is non-empty (ADR 0047:254 (12)); then, and
+ * only then, the citizen's own block is titled "Trước khi xử lý" — without an "after" there is no "before".
+ */
+export function PetitionPhotos(props: {
+  code: string;
+  status: string;
+  pick?: PickScenePhotos;
+  onSessionLost: OnSessionLost;
+}) {
+  const after = usePhotoLinks(listVerificationPhotos, props.code);
+  const hasAfter = after.list.kind === "ready" && after.list.items.length > 0;
+  return (
+    <>
+      <OwnScenePhotos {...props} title={hasAfter ? VERIFICATION_PHOTOS.before_title : undefined} />
+      <VerificationPhotosView
+        list={after.list}
+        status={props.status}
+        onRetry={after.reload}
+        onImageError={after.onImageError}
+      />
+    </>
+  );
+}
+
+/**
+ * The statuses at which the server shows the commune's "sau xử lý" photos (ADR 0047 row "THAY G8", (b)). Used
+ * ONLY to decide whether a FAILED load is worth a sentence: elsewhere the list is empty by rule, and "chưa tải
+ * được ảnh sau khi xử lý" on a petition nobody has handled yet would promise photos that do not exist. What is
+ * SHOWN always follows the server's list, never this set.
+ */
+const AFTER_PHOTO_STATUSES: ReadonlySet<string> = new Set(["cho-dan-xac-nhan", "da-dong"]);
+
+/**
+ * The "Sau khi xử lý" block without its effects — what the tests render. Nothing while loading, nothing for an
+ * empty list (no empty frame), the photos when there are some, and a retry line when the load failed at a
+ * status where the photos can exist. A session problem is that retry line too, not a second phone gate: the
+ * petition above was just read with this same session (as `ownPhotoListOutcome`).
+ */
+export function VerificationPhotosView(props: {
+  list: OwnPhotoList;
+  status: string;
+  onRetry: () => void;
+  onImageError: () => void;
+}) {
+  const { list } = props;
+  if (list.kind === "loading") return null;
+  if (list.kind === "ready" && list.items.length === 0) return null;
+  if (list.kind === "failed" && !AFTER_PHOTO_STATUSES.has(props.status)) return null;
+  return (
+    <section className="xa-the xa-the--dem xa-khoi xa-photos" aria-labelledby="xa-after-photos-title">
+      <h2 className="xa-dau-khoi__tieu-de" id="xa-after-photos-title">
+        {VERIFICATION_PHOTOS.after_title}
+      </h2>
+      {list.kind === "failed" ? (
+        <>
+          <p className="xa-loi-o" role="status">
+            {VERIFICATION_PHOTOS.failed}
+          </p>
+          <button type="button" className="xa-nut xa-nut--phu" onClick={props.onRetry}>
+            <BieuTuong ten="refresh" co={20} />
+            {VERIFICATION_PHOTOS.retry}
+          </button>
+        </>
+      ) : (
+        <ul className="xa-photos__list">
+          {list.items.map((p, i) => (
+            <li key={p.id} className="xa-photos__item">
+              <img
+                className="xa-photos__thumb"
+                src={p.url}
+                alt={VERIFICATION_PHOTOS.photo_alt(i + 1)}
+                onError={props.onImageError}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The photos block of a petition the citizen opened: their own photos when there ARE some (decision 12 — no
+ * empty frame), and "Thêm ảnh hiện trường" while the petition is `da-tiep-nhan` and the app has the picker.
+ * The links are fetched, shown and refetched — never kept anywhere but this state.
+ */
+export function OwnScenePhotos(props: {
+  code: string;
+  status: string;
+  pick?: PickScenePhotos;
+  onSessionLost: OnSessionLost;
+  /** "Trước khi xử lý" when the commune's "after" photos are shown under it (`PetitionPhotos`). */
+  title?: string;
+}) {
+  const { code } = props;
+  const { list, reload, onImageError } = usePhotoLinks(listScenePhotos, code);
+  const uploads = usePhotoUploads(props.onSessionLost, reload);
+  const canAdd = props.pick !== undefined && props.status === "da-tiep-nhan";
+  const stored = list.kind === "ready" ? list.items.length : 0;
+  const remaining = () => MAX_SCENE_PHOTOS - stored - photosInFlight(uploads.jobs);
+  const picking = usePhotoPicking(props.pick, remaining, (paths) => uploads.start(code, paths));
+
   return (
     <OwnScenePhotosView
       list={list}
+      title={props.title}
       canAdd={canAdd}
       count={stored + photosInFlight(uploads.jobs)}
       picking={picking}
@@ -732,6 +835,8 @@ export function OwnScenePhotos(props: {
 /** The block without its effects — what the tests render. */
 export function OwnScenePhotosView(props: {
   list: OwnPhotoList;
+  /** Overrides the heading when there are photos (`OwnScenePhotos.title`). */
+  title?: string;
   canAdd: boolean;
   count: number;
   picking: PhotoPicking;
@@ -748,7 +853,7 @@ export function OwnScenePhotosView(props: {
   return (
     <section className="xa-the xa-the--dem xa-khoi xa-photos" aria-labelledby="xa-own-photos-title">
       <h2 className="xa-dau-khoi__tieu-de" id="xa-own-photos-title">
-        {items.length > 0 ? SCENE_PHOTOS.own_title : SCENE_PHOTOS.add_title}
+        {items.length > 0 ? (props.title ?? SCENE_PHOTOS.own_title) : SCENE_PHOTOS.add_title}
       </h2>
       {list.kind === "loading" && (
         <p className="xa-phu" role="status">

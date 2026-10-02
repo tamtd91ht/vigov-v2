@@ -20,31 +20,29 @@ import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
  * còn mở mà hiện "Đã đóng" là nói sai với dân): nó hiện một câu trung tính kèm việc cần làm.
  *
  * `giai_thich` là DÒNG PHỤ cho người dân, không thay nhãn. Với bốn nhóm, dòng phụ là chỗ DUY NHẤT phân
- * biệt "Không tiếp nhận" / "Chuyển cấp trên" với "Đã đóng" thường — đừng gỡ nó. Bốn dòng có câu:
- *   `da-tiep-nhan`   "Đã gửi, đang chờ cán bộ xã xem." — theo góp ý nghiệp vụ của lượt này: phần mềm
- *                    tự sinh trạng thái ấy, chưa ai ở xã đọc phiếu, nên "đã tiếp nhận" trần dễ bị
- *                    hiểu là xã đã nhận việc.
- *   `dang-phan-loai` câu duy nhất đặc tả cho (`docs/ui-ux/09` §8.2).
- *   `khong-tiep-nhan`, `chuyen-cap-tren` — hai nhánh KẾT THÚC: phiếu dừng ở xã, và người dân không
- *                    có bước nào khác trên ứng dụng. Câu chỉ nói sự việc và chỉ xuống lý do / cơ quan
- *                    nhận mà thẻ phiếu hiện ngay bên dưới (migration 0011). Chưa qua khách duyệt câu chữ.
- * Năm dòng còn lại để `null` — không bịa câu chưa ai duyệt, đúng khuôn `cauGiaiThichTrangThai`.
+ * biệt "Không tiếp nhận" / "Chuyển cấp trên" với "Đã đóng" thường — đừng gỡ nó.
+ *
+ * CHÍN CÂU LÀ NGUYÊN VĂN BẢN MẪU (ADR 0027 "Bổ sung 2026-10-02", chủ dự án: "Dùng nguyên câu bản mẫu"):
+ * `../vigov-require` `apps/admin/src/lib/feedback-display.ts:136-146` `FEEDBACK_STATUS_HINT`, neo `0053854`.
+ * Khoá tiếng Anh của bản mẫu → mã ở đây theo đúng bảng nhãn bước của chính bản mẫu
+ * (`apps/miniapp/src/services/feedback-adapter.ts:91-101` ↔ `STEP_LABEL` của `status-groups.ts`):
+ *   received→da-tiep-nhan · screening→dang-phan-loai · assigned→da-chuyen-xu-ly · in_progress→dang-xu-ly ·
+ *   resolved→da-xu-ly · awaiting_citizen_confirm→cho-dan-xac-nhan · closed→da-dong ·
+ *   rejected→khong-tiep-nhan · out_of_scope→chuyen-cap-tren
+ * ĐỪNG SỬA CHỮ Ở ĐÂY — câu là quyết định của chủ dự án, `cong-dan.test.tsx` ghim từng câu với từng mã.
+ * ⚠ Câu của `da-dong` ("… Phải có ảnh sau xử lý mới đóng được.") chỉ đúng ở xã bật cờ
+ *   `bat_buoc_anh_nghiem_thu` (ADR 0008 quyết định 3) — ADR 0027 ghi đó là chỗ CHƯA KHỚP, chưa chốt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 export const TRANG_THAI: Readonly<Record<string, { giai_thich: string | null }>> = {
-  "da-tiep-nhan": { giai_thich: "Đã gửi, đang chờ cán bộ xã xem." },
+  "da-tiep-nhan": { giai_thich: "Phiếu vừa vào sổ, chưa phân cho ai." },
   "dang-phan-loai": { giai_thich: "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không." },
-  "da-chuyen-xu-ly": { giai_thich: null },
-  "dang-xu-ly": { giai_thich: null },
-  "da-xu-ly": { giai_thich: null },
-  "cho-dan-xac-nhan": { giai_thich: null },
-  "da-dong": { giai_thich: null },
-  "khong-tiep-nhan": {
-    giai_thich: "Ủy ban nhân dân xã không tiếp nhận phản ánh này. Lý do ghi ở dưới.",
-  },
-  "chuyen-cap-tren": {
-    giai_thich:
-      "Ủy ban nhân dân xã đã chuyển phản ánh tới cơ quan có thẩm quyền. Tên cơ quan ghi ở dưới.",
-  },
+  "da-chuyen-xu-ly": { giai_thich: "Đã giao cho bộ phận, chưa bắt tay làm." },
+  "dang-xu-ly": { giai_thich: "Bộ phận đang xử lý tại hiện trường." },
+  "da-xu-ly": { giai_thich: "Đã làm xong, chờ báo lại cho người dân." },
+  "cho-dan-xac-nhan": { giai_thich: "Đã báo người dân, chờ họ xác nhận và chấm điểm." },
+  "da-dong": { giai_thich: "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được." },
+  "khong-tiep-nhan": { giai_thich: "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do." },
+  "chuyen-cap-tren": { giai_thich: "Vượt thẩm quyền của xã, đã chuyển lên cấp trên." },
 };
 
 export const TRANG_THAI_CHUA_CO_NHAN =
@@ -1107,4 +1105,17 @@ export const SCENE_PHOTOS = {
   add_title: "Thêm ảnh hiện trường",
   add_why:
     "Phản ánh đang ở bước “Đã tiếp nhận”, nên bà con còn đính thêm ảnh được (không bắt buộc, tối đa 5 ảnh). Ảnh được gửi ngay khi bà con chụp hoặc chọn xong.",
+} as const;
+
+/**
+ * ẢNH TRƯỚC / SAU KHI XỬ LÝ trên phiếu của chính người dân — app riêng của xã (`scene-photos.tsx`
+ * `PetitionPhotos`; ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"). Hai tiêu đề nói bằng CHỮ khối nào
+ * là "trước", khối nào là "sau" — không để người xem suy ra từ vị trí. Câu lỗi nói việc làm tiếp, không mã.
+ */
+export const VERIFICATION_PHOTOS = {
+  before_title: "Trước khi xử lý",
+  after_title: "Sau khi xử lý",
+  photo_alt: (i: number) => `Ảnh sau khi xử lý thứ ${i}`,
+  failed: "Chưa tải được ảnh sau khi xử lý của phản ánh này. Bà con bấm “Thử lại”.",
+  retry: "Thử lại",
 } as const;

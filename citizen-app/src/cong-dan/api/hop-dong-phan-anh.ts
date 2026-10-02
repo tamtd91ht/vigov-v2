@@ -648,6 +648,16 @@ export function photosAddress(ma_tra_cuu: string): string {
   return one === "" ? "" : `${one}/photos`;
 }
 
+/**
+ * GET …/{maTraCuu}/verification-photos, or EMPTY — the commune's "sau xử lý" photos of the citizen's OWN
+ * petition (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8", (b)(c)(e)). Same `photoListOut` as the scene
+ * list (`readScenePhotoList`). The SERVER decides visibility: an empty list before `cho-dan-xac-nhan`.
+ */
+export function verificationPhotosAddress(ma_tra_cuu: string): string {
+  const one = diaChiTraCuu(ma_tra_cuu);
+  return one === "" ? "" : `${one}/verification-photos`;
+}
+
 /** POST …/{maTraCuu}/photos/{id}/completion, or EMPTY. The id is the server's own, encoded like the code. */
 export function photoCompletionAddress(ma_tra_cuu: string, id: string): string {
   const photos = photosAddress(ma_tra_cuu);

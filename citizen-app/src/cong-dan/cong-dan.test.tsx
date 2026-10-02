@@ -34,6 +34,7 @@ import {
 } from "./man/noi-dung";
 import * as NOI_DUNG from "./man/noi-dung";
 import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
+import { DongThoiGian } from "./man/PhanAnhAppXa";
 import { thoiDiemVN } from "../lib/thoi-diem";
 import { KetQuaTraCuu, TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
 
@@ -186,7 +187,7 @@ describe("chữ của màn hình", () => {
       ].sort(),
     );
     expect(nhanTrangThai("da-tiep-nhan")).toBe("Đã tiếp nhận");
-    expect(giaiThichTrangThai("da-tiep-nhan")).toContain("chờ cán bộ");
+    expect(giaiThichTrangThai("da-tiep-nhan")).toBe("Phiếu vừa vào sổ, chưa phân cho ai.");
     // Mã lạ: không hiện mã thô cho người dân.
     expect(nhanTrangThai("ma-la")).not.toContain("ma-la");
     // PINNED (ADR 0050 #5 in the shared app): an unknown code is the neutral sentence, NOT a guessed group.
@@ -200,6 +201,67 @@ describe("chữ của màn hình", () => {
     // The nine staff labels that were merged away no longer reach the citizen.
     expect(nhanTrangThai("cho-dan-xac-nhan")).toBe("Đã xử lý xong");
     expect(nhanTrangThai("khong-tiep-nhan")).toBe("Đã đóng");
+  });
+
+  /**
+   * PINNED: the owner chose the prototype's nine sentences VERBATIM (ADR 0027 "Bổ sung 2026-10-02"):
+   * `../vigov-require` `apps/admin/src/lib/feedback-display.ts:136-146` `FEEDBACK_STATUS_HINT`, anchor `0053854`.
+   * English key → code by the prototype's own step labels (`feedback-adapter.ts:91-101` = `STEP_LABEL`). A
+   * reworded sentence here is a decision nobody took — change it only with a new owner decision.
+   */
+  const PROTOTYPE_STATUS_HINT: Readonly<Record<string, [prototypeKey: string, sentence: string]>> = {
+    "da-tiep-nhan": ["received", "Phiếu vừa vào sổ, chưa phân cho ai."],
+    "dang-phan-loai": ["screening", "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không."],
+    "da-chuyen-xu-ly": ["assigned", "Đã giao cho bộ phận, chưa bắt tay làm."],
+    "dang-xu-ly": ["in_progress", "Bộ phận đang xử lý tại hiện trường."],
+    "da-xu-ly": ["resolved", "Đã làm xong, chờ báo lại cho người dân."],
+    "cho-dan-xac-nhan": ["awaiting_citizen_confirm", "Đã báo người dân, chờ họ xác nhận và chấm điểm."],
+    "da-dong": ["closed", "Phiếu đã đóng. Phải có ảnh sau xử lý mới đóng được."],
+    "khong-tiep-nhan": ["rejected", "Không thuộc thẩm quyền hoặc không đủ căn cứ. Đã ghi lý do."],
+    "chuyen-cap-tren": ["out_of_scope", "Vượt thẩm quyền của xã, đã chuyển lên cấp trên."],
+  };
+
+  it("each of the nine codes has EXACTLY its prototype sentence — none null, none shared, none extra", () => {
+    expect(Object.keys(TRANG_THAI).sort()).toEqual(Object.keys(PROTOTYPE_STATUS_HINT).sort());
+    for (const [code, [, sentence]] of Object.entries(PROTOTYPE_STATUS_HINT)) {
+      expect(giaiThichTrangThai(code), code).toBe(sentence);
+    }
+    // One-to-one: nine codes, nine distinct sentences, nine distinct prototype keys.
+    const sentences = Object.values(PROTOTYPE_STATUS_HINT).map(([, s]) => s);
+    const keys = Object.values(PROTOTYPE_STATUS_HINT).map(([k]) => k);
+    expect(new Set(sentences).size).toBe(9);
+    expect(new Set(keys).size).toBe(9);
+    // An unknown code still has no sentence: none is guessed for it.
+    expect(giaiThichTrangThai("ma-la")).toBeNull();
+    expect(giaiThichTrangThai("toString")).toBeNull();
+  });
+
+  it("the commune app shows the status's own sentence under its current step — where it was shown before", () => {
+    const base: PhieuCuaToi = {
+      ma_tra_cuu: "PA7K2QX9M4TD",
+      trang_thai: "da-tiep-nhan",
+      linh_vuc: "",
+      nhan_linh_vuc: "",
+      noi_dung: "x",
+      dia_chi: "",
+      ho_ten_da_che: "",
+      dien_thoai_da_che: "",
+      an_danh: true,
+      goc_dem_han: "2026-10-02T01:00:00Z",
+      han_tiep_nhan: null,
+      han_xu_ly_xong: null,
+      ket_qua: "",
+      ly_do: "",
+      co_quan_nhan: "",
+      rating: null,
+      rated_at: null,
+    };
+    for (const [code, [, sentence]] of Object.entries(PROTOTYPE_STATUS_HINT)) {
+      const html = renderToStaticMarkup(createElement(DongThoiGian, { petition: { ...base, trang_thai: code } }));
+      expect(html, code).toContain(`<span class="xa-dong-tg__note">${sentence}</span>`);
+      // Only the CURRENT step carries a sentence: the earlier steps' sentences do not reach the citizen.
+      expect(html.match(/xa-dong-tg__note/g), code).toHaveLength(1);
+    }
   });
 
   it("nội dung bắt buộc, độ dài theo máy chủ, và ẩn danh không tính họ tên", () => {

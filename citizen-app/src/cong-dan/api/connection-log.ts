@@ -32,7 +32,8 @@ export type ConnectionRoute =
   | "photo-slot"
   | "photo-storage"
   | "photo-complete"
-  | "photo-list";
+  | "photo-list"
+  | "verification-photo-list";
 
 export type ConnectionFailure = {
   readonly route: ConnectionRoute;

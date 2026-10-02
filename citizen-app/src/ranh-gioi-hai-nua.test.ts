@@ -601,6 +601,53 @@ describe("3d — ảnh hiện trường chỉ có ở app riêng của xã", () 
   });
 });
 
+/**
+ * THE COMMUNE'S "SAU XỬ LÝ" PHOTOS ARE THE COMMUNE APP'S ONLY (ADR 0047 row "THAY G8"; this round's brief: the
+ * shared app gets nothing new). The server serves the route to any citizen session, so — as for the scene
+ * photos — the whole rule is HERE: the route is called from one state file and drawn by one, and neither is
+ * reachable from the shared app's citizen screens.
+ */
+const VERIFICATION_PHOTO_REFERENCE = /listVerificationPhotos|verificationPhotosAddress|verification-photos|PetitionPhotos|VerificationPhotosView/;
+
+describe("3e — ảnh sau xử lý chỉ có ở app riêng của xã", () => {
+  it("only the contract, the network layer and the commune app's photo screen name the route", () => {
+    expect(
+      TEP_SAN_XUAT.filter((f) => /listVerificationPhotos|verificationPhotosAddress|verification-photos/.test(f.code))
+        .map((f) => f.path)
+        .sort(),
+      "a new file reaches the 'sau xử lý' photo route — check it is not on the shared app's path",
+    ).toEqual(["./cong-dan/api/goi-vigov.ts", "./cong-dan/api/hop-dong-phan-anh.ts", "./cong-dan/man/scene-photos.tsx"]);
+  });
+
+  it("the block is drawn only from the commune app's petition body", () => {
+    expect(
+      TEP_SAN_XUAT.filter((f) => /\bPetitionPhotos\b/.test(f.code)).map((f) => f.path).sort(),
+    ).toEqual(["./cong-dan/man/PhanAnhAppXa.tsx", "./cong-dan/man/scene-photos.tsx"]);
+  });
+
+  it("the shared app's citizen screens and AppChung never name it", () => {
+    for (const path of [
+      "./cong-dan/man/KenhCongDan.tsx",
+      "./cong-dan/man/GuiPhanAnhScreen.tsx",
+      "./cong-dan/man/PhanAnhCuaToiScreen.tsx",
+      "./cong-dan/man/TraCuuPhieuScreen.tsx",
+      "./cong-dan/man/khung.tsx",
+    ]) {
+      const f = TEP_SAN_XUAT.find((t) => t.path === path);
+      expect(f, `${path} không còn trong lượt quét`).toBeDefined();
+      expect(f!.code, path).not.toMatch(VERIFICATION_PHOTO_REFERENCE);
+      // …nor reach the commune app's petition screens, where the block lives.
+      expect(f!.code, path).not.toMatch(/PhanAnhAppXa|scene-photos|TrangXa/);
+    }
+    const shared = sharedAppBody(boChuThich(RAW_SOURCES["./App.tsx"] ?? ""));
+    expect(shared.length, "không tìm thấy `function AppChung(` trong App.tsx").toBeGreaterThan(500);
+    expect(shared).not.toMatch(VERIFICATION_PHOTO_REFERENCE);
+    expect(shared, "AppChung renders the commune app's screens").not.toMatch(/<TrangXa\b|PetitionDetail|PetitionLookup/);
+    // Must-still-catch: the same block written into AppChung is red.
+    expect(sharedAppBody("function AppChung() { return <PetitionPhotos code={c} />; }")).toMatch(VERIFICATION_PHOTO_REFERENCE);
+  });
+});
+
 /* =============================================================================================
    RÀNG BUỘC 3c — MỖI LỜI GỌI SDK KHAI MỤC ĐÍCH TẠI CHỖ
    ============================================================================================= */
