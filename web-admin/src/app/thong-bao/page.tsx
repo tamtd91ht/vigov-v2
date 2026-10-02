@@ -3,7 +3,6 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
-import { MO_TA_MAN, TIEU_DE_MAN } from "@/features/thong-bao/nhan-thong-bao";
 import { SoThongBao } from "@/features/thong-bao/so-thong-bao";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
@@ -26,8 +25,10 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * hiện trạng của mã — loại chú thích hết hạn nhanh nhất, và phiên này đã gặp năm lần trong một
  * ngày. Điều CÒN đúng là dòng trên: màn vẫn cố ý không bọc `<CongQuyen>`.
  *
- * TIÊU ĐỀ VÀ CÂU MÔ TẢ LẤY TỪ `nhan-thong-bao.ts`, không gõ lại ở đây: chúng là chữ NGUYÊN VĂN của
- * §1 và §3, và một bản thứ hai của một câu là một bản sẽ trôi (luật 9, cấm #2).
+ * TIÊU ĐỀ VÀ CÂU MÔ TẢ LẤY TỪ `nhan-thong-bao.ts`, không gõ lại: chúng là chữ NGUYÊN VĂN của §1 và
+ * §3, và một bản thứ hai của một câu là một bản sẽ trôi (luật 9, cấm #2). They are drawn by
+ * `SoThongBao`'s `PageHeader` (ADR 0068): the `Soạn thông báo` button sits on the title row and the
+ * state it toggles lives in that component.
  */
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,6 @@ export default async function TrangThongBao() {
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>{TIEU_DE_MAN}</h1>
-            <p className="mo-ta-trang">{MO_TA_MAN}</p>
             <SoThongBao />
           </main>
         </div>

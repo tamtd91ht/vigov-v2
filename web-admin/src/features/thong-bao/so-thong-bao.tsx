@@ -1,8 +1,36 @@
 "use client";
 
+import {
+  CheckCheck,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Construction,
+  Eye,
+  Info,
+  Megaphone,
+  MousePointerClick,
+  Pin,
+  Plus,
+  Send,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants, LEGACY_BUTTON_CLASS } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { PageHeader } from "@/components/ui/page-header";
+import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -33,10 +61,10 @@ import {
   DANG_TAI_SO,
   DANH_BA_NGUOI_NHAN_RONG,
   DAU_GACH,
-  DAU_GHIM,
   GHI_CHU_GHIM_TRONG_TRANG,
   GHI_CHU_NGUOI_NHAN,
   MA_CAN_BO_TOI_DA,
+  MO_TA_MAN,
   MO_TA_SOAN,
   mocThe,
   nangGhimLenDau,
@@ -54,13 +82,25 @@ import {
   NUT_THEM_NGUOI_NHAN,
   PHAM_VI_DANG_HIEN,
   PHAN_CHUA_DUNG,
+  PINNED_LABEL,
   PLACEHOLDER_TIEU_DE,
+  PUBLISH_BUSY_LABEL,
   SO_RONG,
   tachMaNguoiNhan,
   themMaNguoiNhan,
+  TIEU_DE_MAN,
   TIEU_DE_TOI_DA,
   trichNoiDung,
 } from "./nhan-thong-bao";
+import {
+  AckRequiredBadge,
+  AnnouncementCardsSkeleton,
+  AnnouncementStatusBadge,
+  EmailStatusBadge,
+  Glyph,
+  LoadingBar,
+  SubmitContent,
+} from "./announcement-ui";
 
 /**
  * Sổ Thông báo nội bộ — `docs/ui-ux/08-thong-bao.md` §2 (bố cục), §3 (thẻ), §4 (chi tiết),
@@ -190,81 +230,141 @@ export function SoThongBao() {
   const dsTrongTrang = so.pha === "xong" ? nangGhimLenDau(so.duLieu.items) : [];
   const theDangChon = dsTrongTrang.find((t) => t.id === dangChon) ?? null;
 
+  // The previous page, while a re-read is in flight (after a publish, or "Tải lại"): drawn dimmed
+  // and `inert`, never acted on (spec v2 §8b "Đang tải lại"). A DIFFERENT subtree from the fresh
+  // list, so the fresh list mounts anew exactly as before.
+  const previousPage =
+    so.pha === "dangTai" && daTai !== null && daTai.kq.ok && daTai.kq.duLieu.items.length > 0
+      ? nangGhimLenDau(daTai.kq.duLieu.items)
+      : null;
+
   return (
-    <section className="man-thong-bao" aria-labelledby="tieu-de-so-thong-bao">
-      <h2 id="tieu-de-so-thong-bao">Danh sách thông báo</h2>
+    <>
+      {/* The `<h1>` moved here from `page.tsx`: the primary button sits on the title row (spec §5)
+          and the state it toggles — whether the form is open — lives in this component. */}
+      <PageHeader
+        icon={Megaphone}
+        title={TIEU_DE_MAN}
+        subtitle={<span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_MAN}</span>}
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            icon={<Glyph icon={dangMoBieuMau ? X : Plus} />}
+            aria-expanded={dangMoBieuMau}
+            onClick={() => {
+              datDangMoBieuMau(!dangMoBieuMau);
+              datLoiBieuMau(null);
+            }}
+          >
+            {NHAN_NUT_SOAN}
+          </Button>
+        }
+      />
 
-      <KhoiChuaDung />
+      {/* `[&>*]:my-0`: the section's `gap` is the one spacing between blocks (spec §6.9). */}
+      <section
+        className="man-thong-bao mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
+        aria-labelledby="tieu-de-so-thong-bao"
+      >
+        <KhoiChuaDung />
 
-      <p className="ghi-chu">{PHAM_VI_DANG_HIEN}</p>
-
-      <div className="cum-nut">
-        <button
-          type="button"
-          className="nut-chinh"
-          aria-expanded={dangMoBieuMau}
-          onClick={() => {
-            datDangMoBieuMau(!dangMoBieuMau);
-            datLoiBieuMau(null);
-          }}
-        >
-          {NHAN_NUT_SOAN}
-        </button>
-      </div>
-
-      {dangMoBieuMau && (
-        <FormSoanThongBao
-          // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
-          key={`bieu-mau|${lanGhiXong}`}
-          dangGui={dangGui}
-          loi={loiBieuMau}
-          danhBa={danhBa}
-          huy={() => {
-            datDangMoBieuMau(false);
-            datLoiBieuMau(null);
-          }}
-          phatHanh={phatHanh}
-        />
-      )}
-
-      {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-      {so.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {so.thongBao}
-        </p>
-      )}
-
-      {so.pha === "xong" && (
-        <>
-          <DanhSachThongBao
-            thongBao={dsTrongTrang}
-            dangChon={dangChon}
-            chon={datDangChon}
+        {dangMoBieuMau && (
+          <FormSoanThongBao
+            // Khoá dựng lại: mỗi lần GHI XONG là một biểu mẫu mới, một khoá chống trùng mới.
+            key={`bieu-mau|${lanGhiXong}`}
+            dangGui={dangGui}
+            loi={loiBieuMau}
+            danhBa={danhBa}
+            huy={() => {
+              datDangMoBieuMau(false);
+              datLoiBieuMau(null);
+            }}
+            phatHanh={phatHanh}
           />
-          <ChiTietThongBao thongBao={theDangChon} />
-          <nav className="dieu-huong-trang" aria-label="Phân trang danh sách thông báo">
-            <button
-              type="button"
-              className="nut-phu"
-              disabled={!coTrangTruoc(nganXep)}
-              onClick={() => datNganXep(veTrangTruoc(nganXep))}
-            >
-              Trang trước
-            </button>
-            <button
-              type="button"
-              className="nut-phu"
-              // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
-              // tới đó.
-              disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
-              onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
-            >
-              Trang sau
-            </button>
-          </nav>
-        </>
-      )}
-    </section>
+        )}
+
+        {/* §2: list 2/3, detail 1/3 from 1024px; stacked (list, then detail) below that. */}
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+          <div className="flex min-w-0 flex-col gap-3">
+            <h2 id="tieu-de-so-thong-bao" className="m-0 text-[15px] leading-snug font-semibold text-ink-900">
+              Danh sách thông báo
+            </h2>
+            <p className="ghi-chu m-0 flex items-start gap-1.5 text-[13px] text-ink-500">
+              <Glyph icon={Info} className="mt-0.5 size-4 shrink-0" />
+              <span>{PHAM_VI_DANG_HIEN}</span>
+            </p>
+
+            {/* LOADING (spec v2 §8b). The sentence stays the live region; the eye gets a 2px bar and
+                either the previous page dimmed (a re-read) or card-shaped placeholders (first read). */}
+            {so.pha === "dangTai" && (
+              <div className="flex min-w-0 flex-col gap-3">
+                <LoadingBar />
+                <p className="an-thi-giac" role="status">
+                  {DANG_TAI_SO}
+                </p>
+                {previousPage !== null ? (
+                  <div inert className="pointer-events-none opacity-60 transition-opacity">
+                    <DanhSachThongBao thongBao={previousPage} dangChon={dangChon} chon={() => {}} />
+                  </div>
+                ) : (
+                  <AnnouncementCardsSkeleton />
+                )}
+              </div>
+            )}
+
+            {/* LOAD ERROR (spec v2 §8b): the server's sentence VERBATIM is the alert; `Tải lại` asks the
+                same read again through the screen's existing re-read key (`lanTai`). */}
+            {so.pha === "loi" && (
+              <Card>
+                <ErrorState
+                  role="alert"
+                  title="Chưa tải được danh sách thông báo"
+                  message={so.thongBao}
+                  onRetry={() => datLanTai((n) => n + 1)}
+                />
+              </Card>
+            )}
+
+            {so.pha === "xong" && (
+              <>
+                <DanhSachThongBao thongBao={dsTrongTrang} dangChon={dangChon} chon={datDangChon} />
+                <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh sách thông báo">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    icon={<Glyph icon={ChevronLeft} />}
+                    disabled={!coTrangTruoc(nganXep)}
+                    onClick={() => datNganXep(veTrangTruoc(nganXep))}
+                  >
+                    Trang trước
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi
+                    // tới đó.
+                    disabled={!so.duLieu.has_more || so.duLieu.next_cursor === ""}
+                    onClick={() => datNganXep(sangTrangSau(nganXep, so.duLieu.next_cursor))}
+                  >
+                    Trang sau
+                    <Glyph icon={ChevronRight} />
+                  </Button>
+                </nav>
+              </>
+            )}
+          </div>
+
+          {so.pha === "xong" && (
+            <div className="min-w-0 lg:sticky lg:top-4">
+              <ChiTietThongBao thongBao={theDangChon} />
+            </div>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -276,11 +376,20 @@ export function SoThongBao() {
  * người ta học cách không đọc.
  */
 export function KhoiChuaDung() {
+  // COLLAPSED, GREY (spec v2 §8.1, ADR 0068): a list of what is not built is not an alarm. The words
+  // stay verbatim and stay in the HTML while closed — `<details>` only folds them.
   return (
-    <details className="khoi-chua-khai">
-      <summary>
-        {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
-        do
+    <details className="khoi-chua-khai group m-0">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <Glyph icon={Construction} className="size-[18px] shrink-0 text-ink-500" />
+        <span className="font-semibold text-ink-700">
+          {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý
+          do
+        </span>
+        <Glyph
+          icon={ChevronDown}
+          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
+        />
       </summary>
       <dl className="danh-sach-truong">
         {PHAN_CHUA_DUNG.map((p) => (
@@ -297,10 +406,9 @@ export function KhoiChuaDung() {
 /**
  * Cột trái §2 — danh sách thẻ, mới nhất ở trên, thẻ ghim được nâng lên đầu TRANG.
  *
- * KHÔNG GẮN LỚP CSS MỚI: `globals.css` chưa có lớp cho lưới hai cột hay cho viền thẻ đang chọn, và
- * lượt này không được thêm CSS. Tên lớp cần thêm đã báo về — xem `PHAN_CHUA_DUNG`. Thẻ đang chọn
- * vì thế được đánh dấu bằng `aria-current`, thứ đọc được bằng trình đọc màn hình và không cần một
- * lớp nào.
+ * THE SELECTED CARD IS MARKED BY `aria-current`, and its blue border is DRAWN FROM that attribute
+ * (`aria-[current=true]:` utilities): one source for "selected", readable by a screen reader, with
+ * no second class that could disagree with it.
  */
 export function DanhSachThongBao({
   thongBao,
@@ -311,12 +419,27 @@ export function DanhSachThongBao({
   dangChon: string | null;
   chon: (id: string) => void;
 }) {
-  if (thongBao.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  if (thongBao.length === 0) {
+    // The screen has no filter, so "empty" here is only ever the empty register — never "empty under
+    // these filters".
+    return (
+      <Card>
+        <EmptyState
+          icon={Megaphone}
+          title={SO_RONG}
+          description={`Bấm “${NHAN_NUT_SOAN}” để soạn thông báo đầu tiên.`}
+        />
+      </Card>
+    );
+  }
 
   return (
     <>
-      <p className="ghi-chu">{GHI_CHU_GHIM_TRONG_TRANG}</p>
-      <ul aria-label="Danh sách thông báo nội bộ">
+      <p className="ghi-chu m-0 flex items-start gap-1.5 text-[13px] text-ink-500">
+        <Glyph icon={Pin} className="mt-0.5 size-4 shrink-0" />
+        <span>{GHI_CHU_GHIM_TRONG_TRANG}</span>
+      </p>
+      <ul aria-label="Danh sách thông báo nội bộ" className="m-0 flex list-none flex-col gap-3 p-0">
         {thongBao.map((tb) => (
           <li key={tb.id}>
             <TheThongBao thongBao={tb} dangChon={tb.id === dangChon} chon={chon} />
@@ -341,29 +464,55 @@ export function TheThongBao({
   const chipThu = nhanTrangThaiThu(thongBao.email_status);
 
   return (
-    <div className="khoi-chi-tiet" aria-current={dangChon ? "true" : undefined}>
-      <div className="dau-khoi-chi-tiet">
-        {/* Ký hiệu ghim §3. `aria-hidden` vì chữ "Ghim" đứng ngay cạnh trong một chip nói rõ hơn. */}
-        {thongBao.pinned && <span aria-hidden="true">{DAU_GHIM}</span>}
-        <h3>{thongBao.title}</h3>
-        {thongBao.ack_required && <span className="chip">{CHIP_BAT_BUOC_XAC_NHAN}</span>}
-        {coChipTrangThai(thongBao.status) && (
-          <span className="chip chip-ngung">{nhanTrangThai(thongBao.status)}</span>
-        )}
+    <Card
+      className="flex flex-col gap-3 p-4 transition-[border-color,box-shadow] aria-[current=true]:border-brand-500 aria-[current=true]:shadow-[0_0_0_3px_var(--brand-100)]"
+      aria-current={dangChon ? "true" : undefined}
+    >
+      <div className="flex min-w-0 flex-wrap items-start gap-2">
+        <h3 className="m-0 min-w-0 flex-1 basis-60 text-[15px] leading-snug font-semibold break-words text-ink-900">
+          {thongBao.title}
+        </h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Dấu ghim §3: icon + chữ, không còn một ký hiệu đứng một mình. */}
+          {thongBao.pinned && (
+            <Badge tone="info" icon={Pin}>
+              {PINNED_LABEL}
+            </Badge>
+          )}
+          {thongBao.ack_required && <AckRequiredBadge>{CHIP_BAT_BUOC_XAC_NHAN}</AckRequiredBadge>}
+          {coChipTrangThai(thongBao.status) && (
+            <AnnouncementStatusBadge code={thongBao.status}>{nhanTrangThai(thongBao.status)}</AnnouncementStatusBadge>
+          )}
+        </div>
       </div>
 
-      <p>{trichNoiDung(thongBao.body)}</p>
+      {/* `line-clamp-2` on top of the character cut of `trichNoiDung` (§3 "2 dòng, cắt bớt"). */}
+      <p className="m-0 line-clamp-2 text-sm text-ink-700">{trichNoiDung(thongBao.body)}</p>
 
-      <p className="dong-phu">
-        {mocThe(thongBao)}
-        {boDem !== null && <> · {boDem}</>}
-        {chipThu !== null && <> · {chipThu}</>}
-      </p>
-
-      <button type="button" className="nut-phu" onClick={() => chon(thongBao.id)}>
-        Xem chi tiết
-      </button>
-    </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-ink-500">
+        <span className="inline-flex items-center gap-1.5">
+          <Glyph icon={Clock} className="size-4 shrink-0" />
+          {mocThe(thongBao)}
+        </span>
+        {boDem !== null && (
+          <span className="inline-flex items-center gap-1.5">
+            <Glyph icon={CheckCheck} className="size-4 shrink-0" />
+            {boDem}
+          </span>
+        )}
+        {chipThu !== null && <EmailStatusBadge code={thongBao.email_status}>{chipThu}</EmailStatusBadge>}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="ml-auto"
+          icon={<Glyph icon={Eye} />}
+          onClick={() => chon(thongBao.id)}
+        >
+          Xem chi tiết
+        </Button>
+      </div>
+    </Card>
   );
 }
 
@@ -380,60 +529,76 @@ export function TheThongBao({
  */
 export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | null }) {
   if (thongBao === null) {
-    return <p className="trang-thai-rong">{CHUA_CHON_THONG_BAO}</p>;
+    return (
+      <Card>
+        <EmptyState icon={MousePointerClick} tone="neutral" title={CHUA_CHON_THONG_BAO} />
+      </Card>
+    );
   }
 
   const boDem = nhanBoDemXacNhan(thongBao);
 
   return (
-    <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-thong-bao">
-      <h3 id="tieu-de-chi-tiet-thong-bao">{thongBao.title}</h3>
+    <Card aria-labelledby="tieu-de-chi-tiet-thong-bao">
+      <CardHeader>
+        <CardTitle as="h3" id="tieu-de-chi-tiet-thong-bao" className="min-w-0 flex-1 break-words">
+          {thongBao.title}
+        </CardTitle>
+      </CardHeader>
 
-      {/* `white-space: pre-line` không có lớp nào trong `globals.css`, nên đoạn văn nhiều dòng
-          hiện liền mạch. Toàn văn vẫn ra đủ chữ — không mất câu nào. */}
-      <p>{thongBao.body}</p>
+      <CardContent className="flex flex-col gap-4">
+        {/* `whitespace-pre-line`: the line breaks the author typed are kept. Toàn văn, không cắt. */}
+        <p className="m-0 text-sm leading-relaxed break-words whitespace-pre-line text-ink-900">
+          {thongBao.body}
+        </p>
 
-      <dl className="danh-sach-truong">
-        <div>
-          <dt>Phát hành lúc</dt>
-          <dd>{nhanMoc(thongBao.issued_at)}</dd>
-        </div>
-        <div>
-          <dt>Người soạn</dt>
-          {/* MÃ NGHIỆP VỤ (`CB-2026-7K3M9Q`), không phải họ tên và không phải id nội bộ (luật 6,
-              bất biến 8). `service-comms` không sở hữu danh bạ cán bộ nên không có tên để nối. */}
-          <dd>{thongBao.author_code === "" ? DAU_GACH : thongBao.author_code}</dd>
-        </div>
-        <div>
-          <dt>Xác nhận đã đọc</dt>
-          <dd>{boDem ?? "Không bắt buộc xác nhận"}</dd>
-        </div>
-        <div>
-          <dt>Thư điện tử</dt>
-          {/* HAI SỰ THẬT, KHÔNG MỘT: `email_requested` là điều đã được yêu cầu, `email_status` là
-              điều đã xảy ra. Gộp chúng lại sẽ làm "chưa gửi được" không phân biệt được với "không
-              ai yêu cầu gửi thư". */}
-          <dd>
-            {thongBao.email_requested ? "Có yêu cầu gửi" : "Không yêu cầu gửi"} ·{" "}
-            {nhanTrangThaiThu(thongBao.email_status) ?? "Chưa gửi"}
-          </dd>
-        </div>
-      </dl>
+        <dl className="danh-sach-truong m-0 grid gap-3 [&_dd]:m-0 [&_dd]:text-sm [&_dd]:text-ink-900 [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-500">
+          <div>
+            <dt>Phát hành lúc</dt>
+            <dd>{nhanMoc(thongBao.issued_at)}</dd>
+          </div>
+          <div>
+            <dt>Người soạn</dt>
+            {/* MÃ NGHIỆP VỤ (`CB-2026-7K3M9Q`), không phải họ tên và không phải id nội bộ (luật 6,
+                bất biến 8). `service-comms` không sở hữu danh bạ cán bộ nên không có tên để nối. */}
+            <dd>{thongBao.author_code === "" ? DAU_GACH : thongBao.author_code}</dd>
+          </div>
+          <div>
+            <dt>Xác nhận đã đọc</dt>
+            <dd>{boDem ?? "Không bắt buộc xác nhận"}</dd>
+          </div>
+          <div>
+            <dt>Thư điện tử</dt>
+            {/* HAI SỰ THẬT, KHÔNG MỘT: `email_requested` là điều đã được yêu cầu, `email_status` là
+                điều đã xảy ra. Gộp chúng lại sẽ làm "chưa gửi được" không phân biệt được với "không
+                ai yêu cầu gửi thư". */}
+            <dd>
+              {thongBao.email_requested ? "Có yêu cầu gửi" : "Không yêu cầu gửi"} ·{" "}
+              {nhanTrangThaiThu(thongBao.email_status) ?? "Chưa gửi"}
+            </dd>
+          </div>
+        </dl>
 
-      {/* CHỖ CỦA KHỐI NGƯỜI NHẬN VÀ NÚT GỠ — hai dòng chữ nói rõ vì sao, không phải hai nút mờ.
-          Một nút mờ nói "bạn không có quyền"; sự thật là màn hình chưa dựng, và hai câu ấy không
-          được lẫn vào nhau. */}
-      <p className="ghi-chu">{CHO_DANH_SACH_NGUOI_NHAN}</p>
-      <p className="ghi-chu">{CHO_NUT_GO}</p>
-    </div>
+        {/* CHỖ CỦA KHỐI NGƯỜI NHẬN VÀ NÚT GỠ — hai dòng chữ nói rõ vì sao, không phải hai nút mờ.
+            Một nút mờ nói "bạn không có quyền"; sự thật là màn hình chưa dựng, và hai câu ấy không
+            được lẫn vào nhau. */}
+        <Notice tone="neutral" icon={Users}>
+          {CHO_DANH_SACH_NGUOI_NHAN}
+        </Notice>
+        <Notice tone="neutral" icon={Trash2}>
+          {CHO_NUT_GO}
+        </Notice>
+      </CardContent>
+    </Card>
   );
 }
 
 /**
  * Biểu mẫu "Soạn thông báo" §5.
  *
- * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một khối nằm trong trang — KHÔNG phải một lớp phủ — vì một
- * lớp phủ cần lớp CSS chưa có trong `globals.css`, và lượt này không được thêm CSS.
+ * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một thẻ nằm trong trang — KHÔNG phải một lớp phủ: đổi sang
+ * lớp phủ là đổi cách mở/đóng biểu mẫu (bẫy focus, Esc, bấm ra ngoài), tức đổi hành vi chứ không
+ * chỉ đổi hình (ADR 0068 §1).
  *
  * HAI THỨ CỦA §5 KHÔNG CÓ Ở ĐÂY: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có
  * tuyến). Ô chọn người nhận CÓ, trên danh bạ chọn người (`docDanhBaNguoiNhan`), nhưng không có email
@@ -493,10 +658,25 @@ export function FormSoanThongBao({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-labelledby="tieu-de-soan-thong-bao">
-      <h3 id="tieu-de-soan-thong-bao">Soạn thông báo</h3>
-      <p className="ghi-chu">{MO_TA_SOAN}</p>
+    <Card as="form" onSubmit={guiNgay} aria-labelledby="tieu-de-soan-thong-bao">
+      <CardHeader>
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600"
+        >
+          <Megaphone className="size-[18px]" strokeWidth={1.8} focusable="false" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <CardTitle as="h3" id="tieu-de-soan-thong-bao">
+            Soạn thông báo
+          </CardTitle>
+          <p className={HINT}>{MO_TA_SOAN}</p>
+        </div>
+      </CardHeader>
 
+      {/* `[&_.o-nhap]:mb-0`: the `gap` is the one spacing between fields; the legacy 1rem bottom
+          margin of `.o-nhap` would double it. Labels stay above their controls (`.o-nhap`). */}
+      <CardContent className="flex flex-col gap-4 [&_.o-nhap]:mb-0">
       <div className="o-nhap">
         <label htmlFor="tieu-de-thong-bao">Tiêu đề *</label>
         <input
@@ -522,19 +702,17 @@ export function FormSoanThongBao({
         />
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="chon-nguoi-nhan-thong-bao">{NHAN_CHON_NGUOI_NHAN}</label>
-        {danhBa === null && <p role="status">{DANG_TAI_DANH_BA}</p>}
-        {danhBa !== null && !danhBa.ok && (
-          <p className="thong-bao-loi" role="alert">
-            {cauLoiDanhBa(danhBa.thongBao)}
-          </p>
-        )}
-        {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length === 0 && (
-          <p className="trang-thai-rong">{DANH_BA_NGUOI_NHAN_RONG}</p>
-        )}
-        {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length > 0 && (
-          <>
+      {/* The picker: ONE row — the select grows, the add button keeps its width beside it, bottoms
+          aligned (both 40px). It wraps under the select only when the row is too narrow for both. */}
+      {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length > 0 ? (
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <Field
+            label={NHAN_CHON_NGUOI_NHAN}
+            htmlFor="chon-nguoi-nhan-thong-bao"
+            kind="select"
+            grow="auto"
+            className="min-w-0 flex-[1_1_260px]"
+          >
             <select
               id="chon-nguoi-nhan-thong-bao"
               name="chon-nguoi-nhan-thong-bao"
@@ -548,20 +726,40 @@ export function FormSoanThongBao({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="nut-phu"
-              disabled={maDangChon === ""}
-              onClick={() => {
-                datNguoiNhan(themMaNguoiNhan(nguoiNhan, maDangChon));
-                datMaDangChon("");
-              }}
-            >
-              {NUT_THEM_NGUOI_NHAN}
-            </button>
-          </>
-        )}
-      </div>
+          </Field>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Glyph icon={UserPlus} />}
+            disabled={maDangChon === ""}
+            onClick={() => {
+              datNguoiNhan(themMaNguoiNhan(nguoiNhan, maDangChon));
+              datMaDangChon("");
+            }}
+          >
+            {NUT_THEM_NGUOI_NHAN}
+          </Button>
+        </div>
+      ) : (
+        // No select to label (loading, failed, empty directory): the caption and the ONE sentence that
+        // says why, in the same place the picker would be.
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <p className="m-0 text-xs leading-tight font-semibold text-ink-700">{NHAN_CHON_NGUOI_NHAN}</p>
+          {danhBa === null && (
+            <p className="m-0 text-[13px] text-ink-500" role="status">
+              {DANG_TAI_DANH_BA}
+            </p>
+          )}
+          {danhBa !== null && !danhBa.ok && (
+            <p className="thong-bao-loi m-0" role="alert">
+              {cauLoiDanhBa(danhBa.thongBao)}
+            </p>
+          )}
+          {danhBa !== null && danhBa.ok && (
+            <p className="m-0 text-[13px] text-ink-500">{DANH_BA_NGUOI_NHAN_RONG}</p>
+          )}
+        </div>
+      )}
 
       <div className="o-nhap">
         <label htmlFor="nguoi-nhan-thong-bao">Gửi thêm đích danh *</label>
@@ -575,67 +773,91 @@ export function FormSoanThongBao({
           // từ chối bằng câu của nó, và câu ấy nói đúng chỗ sai.
           onChange={(e) => datNguoiNhan(e.target.value)}
         />
-        <p className="ghi-chu">
+        <p className={HINT}>
           {GHI_CHU_NGUOI_NHAN} Tối đa {NGUOI_NHAN_TOI_DA} người, mỗi mã tối đa{" "}
           {MA_CAN_BO_TOI_DA} ký tự.
         </p>
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="ghim-thong-bao">
-          <input
-            id="ghim-thong-bao"
-            name="ghim-thong-bao"
-            type="checkbox"
-            checked={ghim}
-            onChange={(e) => datGhim(e.target.checked)}
-          />{" "}
-          Ghim lên đầu danh sách
-        </label>
-        <p className="ghi-chu">{CANH_BAO_GHIM_TRONG_TRANG}</p>
-      </div>
+      {/* Three options side by side from 768px, each a tile: the box + its words, and the one
+          sentence that bounds what the option does today right under it. The className sits AFTER
+          `checked` on each box: tests read `id="…"[^>]*checked` inside the tag. */}
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className={OPTION_TILE}>
+          <label htmlFor="ghim-thong-bao" className={OPTION_LABEL}>
+            <input
+              id="ghim-thong-bao"
+              name="ghim-thong-bao"
+              type="checkbox"
+              checked={ghim}
+              onChange={(e) => datGhim(e.target.checked)}
+              className={OPTION_BOX}
+            />{" "}
+            Ghim lên đầu danh sách
+          </label>
+          <p className={HINT}>{CANH_BAO_GHIM_TRONG_TRANG}</p>
+        </div>
 
-      <div className="o-nhap">
-        <label htmlFor="bat-buoc-xac-nhan">
-          <input
-            id="bat-buoc-xac-nhan"
-            name="bat-buoc-xac-nhan"
-            type="checkbox"
-            checked={batBuocXacNhan}
-            onChange={(e) => datBatBuocXacNhan(e.target.checked)}
-          />{" "}
-          Bắt buộc xác nhận đã đọc
-        </label>
-      </div>
+        <div className={OPTION_TILE}>
+          <label htmlFor="bat-buoc-xac-nhan" className={OPTION_LABEL}>
+            <input
+              id="bat-buoc-xac-nhan"
+              name="bat-buoc-xac-nhan"
+              type="checkbox"
+              checked={batBuocXacNhan}
+              onChange={(e) => datBatBuocXacNhan(e.target.checked)}
+              className={OPTION_BOX}
+            />{" "}
+            Bắt buộc xác nhận đã đọc
+          </label>
+        </div>
 
-      <div className="o-nhap">
-        <label htmlFor="gui-thu-dien-tu">
-          <input
-            id="gui-thu-dien-tu"
-            name="gui-thu-dien-tu"
-            type="checkbox"
-            checked={guiThu}
-            onChange={(e) => datGuiThu(e.target.checked)}
-          />{" "}
-          Gửi thư điện tử cho người nhận
-        </label>
-        <p className="ghi-chu">{CANH_BAO_CHUA_GUI_THU}</p>
+        <div className={OPTION_TILE}>
+          <label htmlFor="gui-thu-dien-tu" className={OPTION_LABEL}>
+            <input
+              id="gui-thu-dien-tu"
+              name="gui-thu-dien-tu"
+              type="checkbox"
+              checked={guiThu}
+              onChange={(e) => datGuiThu(e.target.checked)}
+              className={OPTION_BOX}
+            />{" "}
+            Gửi thư điện tử cho người nhận
+          </label>
+          <p className={HINT}>{CANH_BAO_CHUA_GUI_THU}</p>
+        </div>
       </div>
 
       {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {loi}
         </p>
       )}
+      </CardContent>
 
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
+      {/* Huỷ / Phát hành right-aligned at the foot (spec §6.5); Phát hành is the form's one solid
+          button and stays LAST. Native submit `<button>` with `type` first, as before. */}
+      <CardFooter className="justify-end">
+        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
           {NHAN_NUT_HUY}
+        </Button>
+        <button
+          type="submit"
+          className={cn(LEGACY_BUTTON_CLASS.primary, buttonVariants({ variant: "primary" }))}
+          disabled={dangGui || !duDieuKien}
+          aria-busy={dangGui}
+        >
+          <SubmitContent busy={dangGui} icon={Send} label={NHAN_NUT_PHAT_HANH} busyText={PUBLISH_BUSY_LABEL} />
         </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || !duDieuKien}>
-          {NHAN_NUT_PHAT_HANH}
-        </button>
-      </div>
-    </form>
+      </CardFooter>
+    </Card>
   );
 }
+
+/** One helper line under a control (spec §3 "Chú thích": 12px, `--ink-500`). */
+const HINT = "ghi-chu mt-1.5 mb-0 text-xs text-ink-500";
+
+/** Frame of one checkbox option of the compose form. */
+const OPTION_TILE = "flex min-w-0 flex-col rounded-xl border border-line bg-surface-muted p-3";
+const OPTION_LABEL = "flex cursor-pointer items-start gap-2 text-sm font-semibold text-ink-900";
+const OPTION_BOX = "mt-0.5 size-4 shrink-0 cursor-pointer accent-brand-600";

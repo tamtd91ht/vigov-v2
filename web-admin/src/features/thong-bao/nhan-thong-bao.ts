@@ -33,10 +33,14 @@ export const TIEU_DE_MAN = "Thông báo";
 export const MO_TA_MAN =
   "Gửi tới các bộ phận, kèm thư điện tử. Người nhận thấy ngay ở trang này.";
 
-export const NHAN_NUT_SOAN = "+ Soạn thông báo";
+// ADR 0068 §2: the `+` and `➤` glyphs of §5 are lucide icons now (`Plus`, `Send`), drawn by the
+// button; the words are unchanged.
+export const NHAN_NUT_SOAN = "Soạn thông báo";
 export const NHAN_NUT_HUY = "Huỷ";
-/** §5 — nguyên văn, kể cả mũi tên. */
-export const NHAN_NUT_PHAT_HANH = "➤ Phát hành";
+/** §5 — nguyên văn chữ; mũi tên `➤` của đặc tả là icon `Send` trên nút. */
+export const NHAN_NUT_PHAT_HANH = "Phát hành";
+/** Busy words of the publish button (spec v2 §8b). */
+export const PUBLISH_BUSY_LABEL = "Đang gửi…";
 
 /** §5 — nguyên văn mô tả dưới tiêu đề modal. */
 export const MO_TA_SOAN =
@@ -129,8 +133,11 @@ export function themMaNguoiNhan(chu: string, ma: string): string {
   return dau === "" ? gon : `${dau}\n${gon}`;
 }
 
-/** Chỗ đáng lẽ là nút `🗑 Gỡ` của §4 — một dòng chữ, không phải một nút mờ. */
-export const CHO_NUT_GO = "🗑 Gỡ — chưa dựng, xem phần chưa dựng được ở đầu màn";
+/**
+ * Chỗ đáng lẽ là nút `Gỡ` của §4 — một dòng chữ, không phải một nút mờ. The `🗑` glyph is a lucide
+ * `Trash2` drawn beside the sentence (ADR 0068 §2).
+ */
+export const CHO_NUT_GO = "Gỡ — chưa dựng, xem phần chưa dựng được ở đầu màn";
 
 /** Chỗ đáng lẽ là danh sách `NGƯỜI NHẬN (12)` của §4. */
 export const CHO_DANH_SACH_NGUOI_NHAN =
@@ -213,9 +220,10 @@ export function mocThe(tb: comms_thongBaoRa): string {
  * Trích nội dung cho thẻ §3 (*"2 dòng, cắt bớt"*).
  *
  * CẮT THEO KÝ TỰ, KHÔNG THEO DÒNG, và sự khác ấy được nói thẳng chứ không giấu: "2 dòng" là một
- * phép cắt của CSS (`line-clamp`), phụ thuộc bề rộng thật của cột — `globals.css` chưa có lớp nào
- * cho nó và lượt này không được thêm CSS. Cắt theo ký tự là một phép XẤP XỈ; toàn văn nằm ở cột
- * phải, nên không có chữ nào mất hẳn khỏi màn.
+ * phép cắt của CSS (`line-clamp`), phụ thuộc bề rộng thật của cột. The card now also applies
+ * `line-clamp-2` (ADR 0068) ON TOP of this cut, so a narrow column never shows more than two lines;
+ * the character cut stays because the markup — and the tests — carry the excerpt, not the CSS. Cắt
+ * theo ký tự là một phép XẤP XỈ; toàn văn nằm ở cột phải, nên không có chữ nào mất hẳn khỏi màn.
  *
  * Xuống dòng bị đổi thành dấu cách: một đoạn văn nhiều dòng nhét vào một dòng trích sẽ dính chữ
  * cuối dòng trên vào chữ đầu dòng dưới.
@@ -297,8 +305,11 @@ export function nhanBoDemXacNhan(tb: comms_thongBaoRa): string | null {
 /** Chip cam của §3, chỉ hiện khi bật cờ. */
 export const CHIP_BAT_BUOC_XAC_NHAN = "Bắt buộc xác nhận";
 
-/** Ký hiệu ghim ở đầu thẻ §3. */
-export const DAU_GHIM = "📌";
+/**
+ * Dấu ghim ở đầu thẻ §3. Was the `📌` glyph alone; now a lucide `Pin` WITH this word, so the state is
+ * never carried by a symbol only (ADR 0068 §2, spec §7 "icon + chữ").
+ */
+export const PINNED_LABEL = "Đã ghim";
 
 /* ── Ghim: nâng trong TRANG, không phải thứ tự toàn sổ ─────────────────────────────────────── */
 
@@ -414,7 +425,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "nhận chưa đọc về được.",
   },
   {
-    ten: "Nút `🗑 Gỡ` thu hồi thông báo (§4)",
+    ten: "Nút `Gỡ` thu hồi thông báo (§4)",
     viSao:
       "Không có tuyến nào. §9.2 cấm sửa nội dung sau khi phát hành và bảo “muốn sửa thì gỡ và " +
       "soạn lại”, nên thiếu nút gỡ nghĩa là một thông báo gõ sai chữ không có đường sửa nào ở màn " +
@@ -422,7 +433,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "đường nào đặt nó.",
   },
   {
-    ten: "Chip `✓ Đã xác nhận` của người đang đăng nhập, và hành vi `xác nhận` / `đã mở` (§3, §4)",
+    ten: "Chip `Đã xác nhận` của người đang đăng nhập, và hành vi `xác nhận` / `đã mở` (§3, §4)",
     viSao:
       "Phản ánh của §3 là chip theo NGƯỜI ĐANG XEM, nhưng phản hồi không mang trường nào nói " +
       "người đang xem đã xác nhận hay chưa — chỉ có hai con số tổng. Hai tuyến `…/xac-nhan` và " +
@@ -455,15 +466,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "gì để đếm.",
   },
   {
-    ten: "Cắt trích đúng 2 dòng, viền xanh thẻ đang chọn, và bố cục hai cột 2/3 – 1/3 (§2, §3)",
+    ten: "Biểu mẫu Soạn thông báo dạng lớp phủ (§5)",
     viSao:
-      "Cả ba là chuyện của CSS: `globals.css` chưa có lớp nào cho lưới hai cột, cho viền thẻ đang " +
-      "chọn, cho `line-clamp`, và cũng chưa có `.man-thong-bao` — lượt này không được thêm CSS. " +
-      "Thẻ đang chọn vì thế đánh dấu bằng `aria-current`, thứ không cần lớp nào. Màn dùng lại các " +
-      "lớp sẵn có " +
-      "(`khoi-chi-tiet`, `chip`, `dong-phu`), xếp hai phần NỐI TIẾP thay vì hai cột, và trích nội " +
-      "dung bằng cách cắt theo KÝ TỰ — một phép xấp xỉ, với toàn văn nằm ngay ở phần chi tiết. " +
-      "Biểu mẫu §5 cũng dựng nối tiếp trong trang thay vì làm lớp phủ. Tên lớp cần thêm đã báo về.",
+      "Biểu mẫu dựng nối tiếp trong trang, ngay dưới đầu màn, thay vì làm lớp phủ: đổi sang lớp " +
+      "phủ là đổi cách mở và đóng biểu mẫu, không chỉ đổi hình. Bố cục hai cột 2/3 – 1/3, viền thẻ " +
+      "đang chọn và trích 2 dòng đã dựng; trích vẫn cắt trước theo ký tự, toàn văn nằm ở phần chi " +
+      "tiết.",
   },
   {
     ten: "Cổng quyền `announcement.create` ở phía giao diện",

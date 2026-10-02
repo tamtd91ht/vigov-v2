@@ -18,6 +18,7 @@ import {
   NHAN_CHON_NGUOI_NHAN,
   NHAN_NUT_PHAT_HANH,
   PHAN_CHUA_DUNG,
+  PINNED_LABEL,
   SO_RONG,
 } from "./nhan-thong-bao";
 import {
@@ -110,8 +111,10 @@ describe("thẻ thông báo §3", () => {
   });
 
   it("thẻ ghim mang dấu ghim, thẻ thường thì không", () => {
-    expect(veThe(thongBao({ pinned: true }))).toContain("📌");
-    expect(veThe(thongBao())).not.toContain("📌");
+    // ADR 0068 §2/§5: the `📌` glyph is a lucide `Pin` + the word `PINNED_LABEL` now — presentational
+    // pin changed, the behaviour (marked iff `pinned`) is the same assertion.
+    expect(veThe(thongBao({ pinned: true }))).toContain(PINNED_LABEL);
+    expect(veThe(thongBao())).not.toContain(PINNED_LABEL);
   });
 
   it("thẻ đang chọn đánh dấu bằng `aria-current` — không mượn một lớp CSS của thứ khác", () => {
@@ -246,7 +249,9 @@ describe("biểu mẫu Soạn thông báo §5", () => {
   it("nút Phát hành TẮT khi chưa gõ gì — ba trường, không phải hai", () => {
     // Hợp đồng chỉ đánh dấu `title` và `body` bắt buộc, nhưng máy chủ còn từ chối một thông báo
     // không có người nhận nào.
-    expect(veForm()).toContain("disabled");
+    // Read the ATTRIBUTE on the submit tag: since ADR 0068 every button carries the Tailwind class
+    // `disabled:…`, so a bare `toContain("disabled")` would be green on any form.
+    expect(veForm()).toMatch(/<button type="submit"[^>]*\sdisabled=""/);
   });
 
   it("ô tick gửi thư mặc định BẬT, kèm câu nói rõ chưa có thư nào đi", () => {
