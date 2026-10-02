@@ -12,6 +12,7 @@ owns_facts:
   - "cả hai đồng hồ hạn của phiếu khởi động từ lúc công dân bấm gửi"
   - "đồng hồ tiếp nhận dừng khi có cán bộ động vào, không phải khi sinh phiếu"
   - "vì sao mã trạng thái lấy theo nhãn tiếng Việt chứ không theo chuỗi tiếng Anh của bản mẫu"
+  - "câu giải thích từng trạng thái, cho cán bộ và người dân, lấy nguyên văn chín câu của bản mẫu (chủ dự án, 02/10/2026)"
 ---
 
 # 0027. Chín trạng thái cố định, và hai đồng hồ đếm từ lúc dân bấm gửi
@@ -220,6 +221,29 @@ phía chặt.
 
 > 28/09/2026 → ADR 0050 điểm 5: app riêng của xã cho người dân thấy **bốn nhóm** và nhãn từng bước của
 > prototype (gộp ở client, chín mã và chín nhãn phía cán bộ không đổi). Phạm vi app chung: chờ chủ dự án.
+
+## Bổ sung 2026-10-02 — câu giải thích từng trạng thái: nguyên văn bản mẫu
+
+**Trạng thái:** đã chốt · **Ngày:** 2026-10-02 · **Chủ dự án chốt** (ở `/develop-web-admin
+phan-anh-nguoi-dan`, câu trả lời: *"Dùng nguyên câu bản mẫu"*)
+
+| # | Quyết định |
+|---|---|
+| 1 | Mỗi trạng thái có **một câu giải thích**, lấy **nguyên văn** chín câu của bản mẫu: `../vigov-require` `apps/admin/src/lib/feedback-display.ts:136-146` (`FEEDBACK_STATUS_HINT`, neo `0053854`) |
+| 2 | Áp cho **cán bộ** (Web Admin) **và người dân** (app riêng của xã) |
+| 3 | Câu nằm trong mã, **không chép sang `kb/`**. Cũng như nhãn (mục trên), câu là chuỗi của phần mềm: xã không đổi |
+
+**Vì sao ghi ở đây.** Tệp này sở hữu chín trạng thái và luật "xã không đổi nhãn"; câu giải thích
+là phần nói thêm của cùng chín nhãn ấy. ADR 0041 chỉ sở hữu **lời báo** khi chuyển trạng thái, không
+phải chữ hiện trên màn.
+
+**Hai chỗ chưa khớp — chưa chốt, đừng tự sửa chữ:**
+
+- Câu của `da-dong` (`feedback-display.ts:143`, *"… Phải có ảnh sau xử lý mới đóng được."*) chỉ
+  **đúng** ở xã bật cờ `bat_buoc_anh_nghiem_thu` (ADR 0008 quyết định 3), và chỉ **sau khi** ảnh sau
+  xử lý được dựng (ADR 0047, dòng thay G8). Trước đó câu sai với mọi xã; sau đó vẫn sai với xã tắt cờ.
+- Người dân thấy **bốn nhóm**, không phải chín trạng thái (ADR 0050 điểm 5). Câu nào hiện cạnh nhóm
+  hay bước nào ở phía dân là việc của lượt dựng, chưa ai chốt.
 
 ## Bổ sung 2026-09-20 (muộn hơn trong ngày) — #23 và #24 đã đóng, ADR 0028
 

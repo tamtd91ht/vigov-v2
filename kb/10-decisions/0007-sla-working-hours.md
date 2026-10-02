@@ -11,6 +11,7 @@ owns_facts:
   - "cách tính hạn xử lý từ mốc tiếp nhận"
   - "hồ sơ tiếp nhận ngoài giờ làm việc thì đếm từ đầu ca làm việc kế tiếp"
   - "ngày làm bù rơi vào ngày đã có ca làm việc là lỗi cấu hình, hệ thống từ chối"
+  - "thời gian quá hạn đo bằng giờ làm việc qua một gRPC của identity; màn cán bộ chỉ hiện 'Quá hạn' và hạn, không hiện số (chủ dự án, 02/10/2026)"
 ---
 
 # 0007. Hạn xử lý đếm bằng GIỜ LÀM VIỆC
@@ -148,6 +149,27 @@ hằng năm của Thủ tướng. Một dòng làm bù rơi vào ngày mà **th�
 Cùng nguyên tắc với ngày có mặt ở **cả** `ngay_nghi_le` lẫn `ngay_lam_bu`: không có quy tắc ưu
 tiên ngầm, vì một bên thắng lặng lẽ làm một dòng cấu hình đang hiện trên màn hình trở thành vô
 nghĩa mà không ai thấy.
+
+## Bổ sung 2026-10-02 — quyết định 10: đo thời gian đã trôi cũng bằng giờ làm việc, ở identity
+
+**Trạng thái:** đã chốt · **Ngày:** 2026-10-02 · **Chủ dự án chốt** (ở `/develop-web-admin
+phan-anh-nguoi-dan`, câu trả lời: *"1 nhưng thêm grpc luôn đi cho đồng bộ"*)
+
+| # | Quyết định |
+|---|---|
+| 10a | Màn cán bộ hiện **"Quá hạn" và mốc hạn**. **Không hiện số** giờ/ngày quá hạn |
+| 10b | `identity` có thêm **một gRPC ĐO** số giờ làm việc đã trôi giữa hai thời điểm, theo lịch của chính xã — chiều ngược của `AdvanceWorkingHours`. Dựng **ngay**, để mọi service đếm thời gian quá hạn đúng như identity đếm hạn |
+
+**Vì sao.** Bản mẫu đếm số ngày quá hạn bằng `remaining_hours / 24`
+(`../vigov-require` `apps/admin/src/lib/feedback-display.ts:154-173`) — đổi giờ ra ngày theo đồng hồ,
+không theo lịch làm việc, đúng thứ luật 10 cấm #2 cấm ở mọi nơi ngoài `identity`. Hạn đã đếm bằng giờ làm việc (quyết định 2) mà quá hạn
+lại đếm bằng giờ đồng hồ thì hai con số trên cùng một phiếu nói hai thang đo: một phiếu quá hạn qua
+cuối tuần sẽ "trễ 2 ngày" trong khi cơ quan chưa có một giờ làm việc nào. Chỉ một nơi giữ ba bảng lịch
+thì chỉ một nơi được đo.
+
+**Không đổi:** quá hạn vẫn **suy ra** từ hạn so với hiện tại, không có cột (quyết định 7, luật 10
+bất biến 3). gRPC mới chỉ **đo khoảng**, không lưu gì. Tên và hình dạng của nó nằm ở
+`proto/vigov/identity/v1/identity.proto` khi dựng — **chưa dựng** lúc ghi mục này.
 
 → Lược đồ ba bảng và lý do từng ràng buộc: `service-identity/migrations/0006_lich_lam_viec.sql`
 → Hợp đồng đọc lịch và danh sách lệnh từ chối: `proto/vigov/identity/v1/identity.proto`,

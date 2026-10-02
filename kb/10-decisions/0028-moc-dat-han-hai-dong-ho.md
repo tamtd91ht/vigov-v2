@@ -11,6 +11,7 @@ owns_facts:
   - "mốc khởi động đồng hồ của phiếu nhập hộ và khoảng chặn bảy ngày"
   - "vì sao hạn tiếp nhận của phiếu nhập hộ ghi NULL chứ không ghi 0 giờ"
   - "nghĩa của chữ 'lúc tiếp nhận' trong luật 10 bất biến 2 khi một phiếu có hai đồng hồ"
+  - "phiếu nhập hộ không gắn tài khoản Zalo nào, không hiện ở 'Phản ánh của tôi'; cán bộ đưa mã tra cứu (chủ dự án, 02/10/2026)"
 ---
 
 # 0028. Hai đồng hồ đặt ở HAI thời điểm — và mốc đếm của phiếu nhập hộ
@@ -207,6 +208,34 @@ nào đang chạy, và sửa lĩnh vực của một phiếu đã đóng là **s
 Sai số thống kê thì sửa bằng một phiếu đính chính, không bằng một lần `UPDATE`.
 
 **MỞ LẠI KHI NÀO:** có màn hình web hoàn chỉnh và có phản hồi các bên.
+
+## Bổ sung 2026-10-02 — phiếu nhập hộ KHÔNG gắn tài khoản người dân
+
+**Trạng thái:** đã chốt · **Ngày:** 2026-10-02 · **Chủ dự án chốt** (ở `/develop-web-admin
+phan-anh-nguoi-dan`, câu trả lời: *"Không — cán bộ đưa mã tra cứu"*)
+
+| # | Quyết định |
+|---|---|
+| 1 | Phiếu nhập hộ (`can-bo-nhap-ho`, `docs/ui-ux/09-phan-anh-nguoi-dan.md` §11) **không gắn với tài khoản Zalo nào** |
+| 2 | Phiếu ấy **không hiện** ở "Phản ánh của tôi" của người dân, kể cả khi số điện thoại cán bộ gõ trùng số của một tài khoản |
+| 3 | Cán bộ **đưa mã tra cứu** cho người dân lúc vào sổ (luật 10 bất biến 1) |
+
+**Vì sao không ghép theo số điện thoại cán bộ gõ.** Số ấy là thứ một người gõ lại từ cuộc gọi hay
+tờ giấy. Gõ sai một chữ số thì phiếu — nội dung, nơi xảy ra, họ tên người phản ánh — hiện ra trong app của
+**một người dân khác**. Đó là đúng thứ luật 4 bất biến 1 cấm, và không lỗi phần mềm nào cần có:
+một lần gõ nhầm là đủ. Danh tính công dân chỉ đến từ phiên (luật 4 bất biến 2), không từ một ô
+nhập liệu của cán bộ.
+
+**Vì sao ghi ở đây chứ không ở ADR 0050.** Tệp này đã sở hữu các sự thật về phiếu nhập hộ (quyết
+định F); ADR 0050 sở hữu kênh công dân theo kho yêu cầu, và nhập hộ là kênh của cán bộ.
+
+**Hệ quả — chưa chốt, đừng suy từ quyết định này:**
+
+- Phiếu không có `cong_dan_id` thì không có người nhận cho lời báo của ADR 0041 (sổ
+  `service-petitions` đã ghi: không người nhận thì không ghi sự kiện). Có báo cho người dân qua số
+  cán bộ gõ hay không là câu riêng.
+- Người dân dùng mã tra cứu ở đâu: tra cứu **không cần phiên** là luật 4 điều kiện dừng #2 — hỏi
+  khi dựng.
 
 ## Phải trả
 

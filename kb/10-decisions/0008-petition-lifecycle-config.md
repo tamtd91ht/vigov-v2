@@ -42,6 +42,9 @@ cán bộ không thể chung một quy tắc cứng.
 | 4 | Chặn ở **tầng service**, không chỉ ở giao diện (luật 5 cấm #1) |
 | 5 | Đóng phiếu bắt buộc ghi **kết quả dân đọc được** (luật 10 #6) |
 
+> 02/10/2026 → ADR 0047 dòng *"Ảnh 'sau xử lý' của cán bộ — THAY G8"*: ảnh sau xử lý dựng ngay; chủ dự án
+> giữ dòng 3 ở trên nguyên như đã chốt (khác kho yêu cầu, nơi công tắc mặc định tắt — `vigov-require` `b9a9718`).
+
 **Vì sao không hard-code "người xử lý không tự đóng":** xã nhỏ có khi chỉ một người phụ trách
 cả lĩnh vực. Hard-code thì xã đó không dùng được, mà nới ra sau lại là đổi luật trên hồ sơ đã
 đóng. Để cờ, xã nào cần siết thì siết.

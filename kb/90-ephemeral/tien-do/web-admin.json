@@ -250,7 +250,7 @@
       "trang_thai": "xong",
       "bang_chung": "commit web phiên 29/09 (xem git log -- web-admin/src/features/phan-anh) trên hợp đồng f0b4cc3/7359484 · npm run typecheck, lint sạch; vitest phan-anh 5 tệp/201 ca; toàn bộ 118 tệp/2341 ca; check:api khớp. Kiểm trên worktree sạch.",
       "no_confirm": [],
-      "tiep_theo": "Chưa mở trình duyệt ở 320px. Đường 200 của PUT publication (vẽ lại ngăn + tải lại danh sách) chỉ có ca API, SoPhanAnh chưa có khung test. Nhãn công khai theo đặc tả §8.3/require feedback-display.ts:75-94. PHAN_CHUA_DUNG còn 8 (thêm dòng §8.6 'cán bộ không nhập hộ đánh giá' — quyết định người dùng 27/09, CHƯA CÓ ADR ghi nó). Lọc không đẩy lên URL (các lọc khác cũng không).",
+      "tiep_theo": "Chưa mở trình duyệt ở 320px. Đường 200 của PUT publication (vẽ lại ngăn + tải lại danh sách) chỉ có ca API, SoPhanAnh chưa có khung test. Nhãn công khai theo đặc tả §8.3/require feedback-display.ts:75-94. PHAN_CHUA_DUNG còn 8 (thêm dòng §8.6 'cán bộ không nhập hộ đánh giá' — quyết định người dùng 27/09, CHƯA CÓ ADR ghi nó). Lọc không đẩy lên URL (các lọc khác cũng không). SỬA 02/10/2026: quyết định 'cán bộ không nhập hộ đánh giá' nay đã có ADR — kb/10-decisions/0062-can-bo-khong-ghi-danh-gia-thay-dan.md; chữ 'CHƯA CÓ ADR' ở trên đã cũ.",
       "menu": "phan-anh-nguoi-dan"
     },
     {
