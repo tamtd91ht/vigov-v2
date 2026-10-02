@@ -6,6 +6,7 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { BangDuAn } from "@/features/giai-ngan/bang-du-an";
+import { DisbursementHeaderActions } from "@/features/giai-ngan/pending-parts";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
@@ -54,6 +55,8 @@ export default async function TrangGiaiNgan() {
                 Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ.
               </span>
             }
+            // Disabled "?" placeholders at the spec's PageHeader position (ADR 0068 §14).
+            actions={<DisbursementHeaderActions />}
           />
           <CongQuyen
             khoa={QUYEN_XEM_GIAI_NGAN}

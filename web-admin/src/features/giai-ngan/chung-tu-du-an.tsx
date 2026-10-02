@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { Notice } from "@/components/ui/notice";
+import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
@@ -51,8 +52,10 @@ import {
   thaoTacChungTu,
   thanSuaChungTu,
   thanThemChungTu,
+  pendingPart,
   type GiaTriFormChungTu,
 } from "./nhan-ghi-giai-ngan";
+import { VOUCHER_FUNDING_COLUMN } from "./pending-parts";
 import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
 
 /**
@@ -290,6 +293,8 @@ export function BangChungTu({
             <th scope="col" className="text-right">
               Số tiền
             </th>
+            {/* Spec §8.2's NGUỒN VỐN column — a "?" placeholder (ADR 0068 §14), "—" in every row. */}
+            <PendingColumnHeader info={pendingPart(VOUCHER_FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
             <th scope="col">Nội dung</th>
             <th scope="col">Chứng từ</th>
             <th scope="col">Trạng thái</th>
@@ -308,6 +313,7 @@ export function BangChungTu({
                 {/* IN ĐÚNG CON SỐ MÁY CHỦ TRẢ. Không đổi đơn vị, không làm tròn: một con số sai ở
                     đây đi thẳng vào báo cáo ngân sách. */}
                 <td className="text-right tabular-nums">{nhanTien(ct.amount)}</td>
+                <PendingCell />
                 <td className="whitespace-normal">
                   {ct.description}
                   {ct.counterparty !== undefined && ct.counterparty !== "" && (

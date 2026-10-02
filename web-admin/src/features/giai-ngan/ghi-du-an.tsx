@@ -24,6 +24,7 @@ import {
   thanThemDuAn,
   type GiaTriFormDuAn,
 } from "./nhan-ghi-giai-ngan";
+import { AutoCodePending, FundingListPending, UnitAndOfficerPending } from "./pending-parts";
 import { DeniedNote, Glyph } from "./project-ui";
 
 /**
@@ -109,27 +110,31 @@ export function FormDuAn({
         {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
         <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           {maChiDoc === undefined && (
-            <Field
-              label="Mã dự án *"
-              htmlFor="ma-du-an"
-              grow="auto"
-              /* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
-                 trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa xem
-                 hết danh sách và không thấy mã ấy ở đâu. */
-              hint={
-                "Chỉ gồm chữ cái, chữ số và dấu gạch nối. Hệ thống chưa tự sinh mã. Mã đã cấp thì " +
-                "không cấp lại, kể cả khi dự án mang mã đó đã rút khỏi danh sách."
-              }
-            >
-              <input
-                id="ma-du-an"
-                name="ma-du-an"
-                value={gt.ma}
-                maxLength={MA_DU_AN_TOI_DA}
-                autoComplete="off"
-                onChange={(e) => datGT({ ...gt, ma: e.target.value })}
-              />
-            </Field>
+            <div className="flex min-w-0 flex-col gap-1">
+              <Field
+                label="Mã dự án *"
+                htmlFor="ma-du-an"
+                grow="auto"
+                /* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
+                   trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa
+                   xem hết danh sách và không thấy mã ấy ở đâu. */
+                hint={
+                  "Chỉ gồm chữ cái, chữ số và dấu gạch nối. Hệ thống chưa tự sinh mã. Mã đã cấp thì " +
+                  "không cấp lại, kể cả khi dự án mang mã đó đã rút khỏi danh sách."
+                }
+              >
+                <input
+                  id="ma-du-an"
+                  name="ma-du-an"
+                  value={gt.ma}
+                  maxLength={MA_DU_AN_TOI_DA}
+                  autoComplete="off"
+                  onChange={(e) => datGT({ ...gt, ma: e.target.value })}
+                />
+              </Field>
+              {/* Spec §9's `☑ Tự sinh mã` — a disabled "?" placeholder (ADR 0068 §14), Thêm only. */}
+              <AutoCodePending />
+            </div>
           )}
 
           <Field
@@ -199,6 +204,11 @@ export function FormDuAn({
               onChange={(e) => datGT({ ...gt, tongMucDuyet: e.target.value })}
             />
           </Field>
+
+          {/* Spec §9 fields with no route behind them yet — disabled "?" placeholders (ADR 0068
+              §14), on the Thêm form only: the edit form never had them in the spec's §8. */}
+          {maChiDoc === undefined && <FundingListPending />}
+          {maChiDoc === undefined && <UnitAndOfficerPending />}
 
           <Field label="Ngày khởi công" htmlFor="ngay-khoi-cong" grow="auto">
             <input

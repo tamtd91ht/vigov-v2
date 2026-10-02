@@ -8,6 +8,7 @@ import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { BangThuChi } from "@/features/thu-chi/bang-thu-chi";
+import { BudgetSheetHeaderActions } from "@/features/thu-chi/header-actions";
 import { CAU_THIEU_QUYEN_XEM } from "@/features/thu-chi/nhan-thu-chi";
 import { QUYEN_XEM_GIAI_NGAN } from "@/lib/quyen";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -53,8 +54,8 @@ export default async function TrangThuChiNganSach() {
             {/* MÔ TẢ TRANG KHÔNG CHÉP NGUYÊN VĂN §1, và đó là một lựa chọn có lý do. Câu của đặc
                 tả mở đầu bằng "Nạp thẳng tệp Excel của Phòng Tài chính" — một chức năng hợp đồng
                 hôm nay KHÔNG có tuyến nào phía sau. In nguyên câu ấy lên đầu trang là hứa với cán
-                bộ một việc họ sẽ đi tìm nút để làm và không thấy. Khối "chưa dựng được" trong màn
-                nói đủ vì sao. */}
+                bộ một việc họ sẽ đi tìm nút để làm và không thấy. Nút "Nạp từ Excel" vô hiệu
+                có dấu "?" ở góc phải nói vì sao (ADR 0068 §14). */}
             <PageHeader
               icon={Wallet}
               title="Thu - Chi ngân sách xã"
@@ -65,6 +66,7 @@ export default async function TrangThuChiNganSach() {
                   số liệu nhập trên lưới, và ba chỉ số của năm.
                 </span>
               }
+              actions={<BudgetSheetHeaderActions />}
             />
             {/* Câu thiếu quyền nằm ở `nhan-thu-chi.ts`, không viết thẳng ở đây: nhánh ấy là nhánh
                 người viết mã không bao giờ nhìn thấy, nên nó phải kiểm được bằng một bài test. */}

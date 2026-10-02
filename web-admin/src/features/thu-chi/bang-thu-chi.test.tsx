@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type {
   finance_bangDayDuRa,
@@ -18,11 +19,11 @@ import {
   FormDoiCachTinh,
   FormGoKemLyDo,
   FormSuaDong,
-  KhoiChuaDung,
   TheChiSoNam,
   TheTomTat,
 } from "./bang-thu-chi";
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi";
+import { BudgetSheetHeaderActions } from "./header-actions";
 import {
   changeColumnType,
   ColumnFieldsets,
@@ -608,19 +609,22 @@ describe("lập bảng — thứ thay cho `⬆ Nạp từ Excel`", () => {
 });
 
 describe("những phần đặc tả vẽ mà chưa dựng được", () => {
-  it("mọi phần còn lại ra TỚI MÀN HÌNH kèm lý do — và ba phần đã dựng thì KHÔNG còn trong đó", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
+  it("phần còn lại là nút `Nạp từ Excel` VÔ HIỆU có dấu '?' ở PageHeader — ba phần đã dựng thì KHÔNG còn", () => {
+    // ADR 0068 §14: the collapsed block is retired; the one remaining part is drawn where the spec
+    // puts it, as the control it will be, disabled. Its description is the array entry itself.
+    const html = renderToStaticMarkup(<BudgetSheetHeaderActions />);
 
     // Chỉ còn Nạp từ Excel: cột % trên từng dòng đã dựng (máy chủ tính, 30/09/2026).
     expect(PHAN_CHUA_DUNG).toHaveLength(1);
-    expect(html).not.toContain("Cột phần trăm trên từng dòng");
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ")).not.toMatch(/Cột phần trăm trên từng dòng/);
     for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(p.ten);
+      expect(html).toContain(`aria-label="${pendingMarkerLabel(p.ten)}"`);
     }
-    expect(html).toContain("Nạp từ Excel");
-    expect(html).not.toContain("Các đợt thu, chi");
-    expect(html).not.toContain("Cách tính");
-    expect(html).not.toContain("Luỹ kế");
+    expect(html).toMatch(/<button[^>]* disabled=""[^>]*>.*Nạp từ Excel<\/button>/);
+    // No file picker: a placeholder never takes a file (the contract has no route that would).
+    expect(html).not.toContain('type="file"');
+    // The description opens only when "?" is pressed — it is not printed on the page.
+    expect(html).not.toContain(PHAN_CHUA_DUNG[0]!.viSao);
   });
 });
 

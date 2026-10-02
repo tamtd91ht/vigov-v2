@@ -10,6 +10,7 @@ import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field, Toolbar } from "@/components/ui/field";
+import { PendingCell, PendingColumnHeader } from "@/components/ui/pending-feature";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layDanhSachDuAn } from "@/lib/api/du-an";
@@ -21,7 +22,6 @@ import { namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH } from "@/lib/quyen";
 
 import { KhoiThemDuAn } from "./ghi-du-an";
-import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
   GHI_CHU_CHI_XEM_GIAI_NGAN,
   hangMucDuAn,
@@ -35,6 +35,13 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { pendingPart } from "./nhan-ghi-giai-ngan";
+import {
+  DisbursementOverviewPending,
+  FUNDING_COLUMN,
+  LATEST_ISSUE_COLUMN,
+  ProjectFilterPending,
+} from "./pending-parts";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -47,7 +54,9 @@ import { ScopeNotice } from "./scope-notice";
  *   4 thẻ KPI · biểu đồ luỹ kế · bảng tiến độ theo hạng mục · khối tiến độ theo nguồn vốn ·
  *   chip nguồn vốn trên từng dòng · cột "Vướng mắc mới nhất" · cột "Đơn vị / phụ trách" bằng TÊN
  *
- * Không thứ nào trong số đó có tuyến phía sau trong hợp đồng REST. Nguồn vốn và vướng mắc chưa có
+ * All but the last are drawn as disabled "?" placeholders at their spec position (ADR 0068 §14,
+ * `pending-parts.tsx`); none shows a figure. Không thứ nào trong số đó có tuyến phía sau trong hợp
+ * đồng REST. Nguồn vốn và vướng mắc chưa có
  * tuyến nào; `org_unit_id` và `assignee_id` về dưới dạng ID nội bộ, và tra chúng thành tên người
  * là việc của tuyến khác dưới quyền khác. Vẽ ra một ô rỗng gắn nhãn "0 vướng mắc" là nói với lãnh
  * đạo một con số không ai đo.
@@ -148,7 +157,7 @@ export function BangDuAn() {
       {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duLieu.scope_notice} />}
       <p className="m-0 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
 
-      <KhoiChuaDungGhi />
+      <DisbursementOverviewPending />
 
       <KhoiThemDuAn
         nam={nam}
@@ -188,6 +197,9 @@ export function BangDuAn() {
               ))}
             </select>
           </Field>
+
+          {/* Spec §7.1's two checkboxes — disabled "?" placeholders (ADR 0068 §14). */}
+          <ProjectFilterPending />
         </Toolbar>
 
         {trangThai.pha === "dangTai" && (
@@ -273,7 +285,11 @@ export function BangDanhSach({
               Còn lại
             </th>
             <th scope="col">Tiến độ</th>
+            {/* Spec §7.2 puts the funding chip under the Tiến độ cell; drawn as its own column so the
+                placeholder never sits inside a real figure's cell. */}
+            <PendingColumnHeader info={pendingPart(FUNDING_COLUMN)}>Nguồn vốn</PendingColumnHeader>
             <th scope="col">Thời hạn giải ngân</th>
+            <PendingColumnHeader info={pendingPart(LATEST_ISSUE_COLUMN)}>Vướng mắc mới nhất</PendingColumnHeader>
           </tr>
         </thead>
         <tbody>
@@ -303,7 +319,9 @@ export function BangDanhSach({
                   <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
                   <span className="dong-phu mt-1 tabular-nums">{nhanTyLeGiaiNgan(d.disbursed_ratio)}</span>
                 </td>
+                <PendingCell />
                 <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
+                <PendingCell />
               </tr>
             );
           })}

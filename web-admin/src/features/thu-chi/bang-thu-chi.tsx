@@ -9,7 +9,6 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
-  Construction,
   Database,
   FileSpreadsheet,
   Gauge,
@@ -107,7 +106,6 @@ import {
   O_TRONG,
   percentCell,
   phangCay,
-  PHAN_CHUA_DUNG,
   suaDuocOSo,
   type DongHien,
   type DonViHien,
@@ -130,7 +128,8 @@ function Glyph({ icon: Icon, className }: { icon: LucideIcon; className?: string
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐẶC TẢ CỦA CHƯƠNG NÀY CÒN VÀI CHỖ HỢP ĐỒNG CHƯA ĐỠ, VÀ MÀN HÌNH NÓI RA TỪNG CHỖ THAY VÌ DỰNG THEO.
- * Danh sách nằm ở `PHAN_CHUA_DUNG` và **hiện lên đầu màn**, không giấu trong chú thích mã. Cái
+ * Danh sách nằm ở `PHAN_CHUA_DUNG`; each entry is the description behind a disabled "?" placeholder
+ * at its spec position (ADR 0068 §14, `header-actions.tsx`), không giấu trong chú thích mã. Cái
  * quyết định ở mọi chỗ hai bên lệch là HỢP ĐỒNG và handler thật, không phải bản vẽ (luật 2 bất
  * biến 7).
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -280,8 +279,6 @@ export function BangThuChi() {
       <h2 id="tieu-de-thu-chi" className="an-thi-giac">
         Thu - Chi ngân sách xã
       </h2>
-
-      <KhoiChuaDung />
 
       {/* ONE filter (the year), no search box on this screen: an aligned row, no "Bộ lọc" button
           (ADR 0068 §12, "Hàng ≤ 3 ô"). The year decides which budget every figure below belongs to. */}
@@ -571,39 +568,6 @@ export function BangThuChi() {
         )}
       </div>
     </section>
-  );
-}
-
-/**
- * Những phần đặc tả vẽ mà máy chủ hôm nay không đỡ — HIỆN RA MÀN HÌNH.
- *
- * Không phải trang trí và không được rút gọn: cán bộ mở màn này là để làm đúng những việc §5 và §6
- * vẽ, và một màn hình im lặng về bốn việc ấy sẽ được đọc thành "hệ thống hỏng".
- */
-export function KhoiChuaDung() {
-  // COLLAPSED, GREY, DASHED (spec §8.1, ADR 0068) — same shape as the other screens' block. The
-  // words stay verbatim and stay in the HTML while closed — `<details>` only folds them.
-  return (
-    <details className="khoi-chua-khai group m-0">
-      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
-        <span className="font-semibold text-ink-700">
-          Những phần của bản thiết kế chưa dựng được ({PHAN_CHUA_DUNG.length}) — bấm để xem lý do
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          focusable="false"
-          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
-        />
-      </summary>
-      <ul>
-        {PHAN_CHUA_DUNG.map((p) => (
-          <li key={p.ten}>
-            <strong>{p.ten}</strong> — {p.viSao}
-          </li>
-        ))}
-      </ul>
-    </details>
   );
 }
 

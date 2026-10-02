@@ -1,11 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { finance_chungTuRa, finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 
 import { BangChungTu, FormChungTu, giaTriTuChungTu } from "./chung-tu-du-an";
 import { FormDuAn, giaTriTuDuAn, KhoiSuaXoaDuAn, KhoiThemDuAn } from "./ghi-du-an";
-import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
   CANH_BAO_SUA_VE_NHAP,
   CAU_THIEU_QUYEN_GHI,
@@ -17,6 +17,14 @@ import {
   FORM_DU_AN_TRONG,
   PHAN_CHUA_DUNG_GHI,
 } from "./nhan-ghi-giai-ngan";
+import { BangDanhSach } from "./bang-du-an";
+import {
+  DisbursementHeaderActions,
+  DisbursementOverviewPending,
+  ProjectFilterPending,
+  ProjectFundingPending,
+  ProjectRecordTabs,
+} from "./pending-parts";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không — bổ cho `nhan-ghi-giai-ngan.test.ts`, vốn chỉ
@@ -416,20 +424,98 @@ describe("BIỂU MẪU DỰ ÁN", () => {
   });
 });
 
-describe("KHỐI PHẦN CHƯA DỰNG", () => {
-  it("MỌI mục ra tới HTML — tên và lý do, từng mục một", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDungGhi />);
+/** Every "?" of the Giải ngân screens, server-rendered — the spots ADR 0068 §14 approved. */
+function allPlaceholders(): string {
+  return [
+    renderToStaticMarkup(<DisbursementHeaderActions />),
+    renderToStaticMarkup(<DisbursementOverviewPending />),
+    renderToStaticMarkup(<ProjectFilterPending />),
+    renderToStaticMarkup(
+      <BangDanhSach
+        duLieu={{ items: [DU_AN], year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }}
+        danhMuc={HANG_MUC}
+      />,
+    ),
+    renderToStaticMarkup(<ProjectFundingPending />),
+    renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>),
+    renderToStaticMarkup(
+      <FormDuAn
+        tieuDeForm="Thêm dự án"
+        giaTriDau={FORM_DU_AN_TRONG}
+        danhMuc={HANG_MUC}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    ),
+    veBang(true, true, [chungTu()]),
+  ].join("\n");
+}
 
-    for (const p of PHAN_CHUA_DUNG_GHI) {
-      expect(html).toContain(nhuTrongHTML(p.ten));
-      expect(html).toContain(nhuTrongHTML(p.viSao));
+describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 0068 §14)", () => {
+  it("MỌI mục (trừ mục đầu) có một dấu '?' trên màn, mang đúng tên của mục ấy", () => {
+    const html = allPlaceholders();
+    for (const p of PHAN_CHUA_DUNG_GHI.slice(1)) {
+      expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel(p.ten))}"`);
     }
-    expect(html).toContain(`${PHAN_CHUA_DUNG_GHI.length} phần`);
+    // The description opens only when "?" is pressed: no sentence is printed on the page.
+    for (const p of PHAN_CHUA_DUNG_GHI) {
+      expect(html).not.toContain(nhuTrongHTML(p.viSao));
+    }
   });
 
-  it("mục đầu tiên nói ra điều nặng nhất: không có tuyến ĐỌC danh sách chứng từ", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDungGhi />);
+  it("mục đầu tiên (không có tuyến ĐỌC danh sách chứng từ) vẫn được nói ra — ở bảng chứng từ rỗng", () => {
+    // No placeholder of its own: it is a limit of a BUILT table, and every page load starts empty.
+    expect(PHAN_CHUA_DUNG_GHI[0]!.viSao).toContain("KHÔNG " + "có tuyến nào đọc danh sách chứng từ");
+    expect(veBang(true, true, [])).toContain("chưa có tuyến đọc danh sách chứng từ");
+  });
 
-    expect(html).toContain(nhuTrongHTML("KHÔNG " + "có tuyến nào đọc danh sách chứng từ"));
+  it("khối gập 'N phần chưa dựng' không còn trên màn", () => {
+    const html = allPlaceholders();
+    expect(html).not.toContain("phần của bản thiết kế chưa dựng được");
+    expect(html).not.toContain("<details");
+  });
+
+  it("control giữ chỗ là control THẬT, VÔ HIỆU: nút, ô chọn, tab, ô đánh dấu", () => {
+    const header = renderToStaticMarkup(<DisbursementHeaderActions />);
+    expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Hạng mục<\/button>/);
+    expect(header).toMatch(/<button[^>]* disabled=""[^>]*>.*Nhập giải ngân<\/button>/);
+
+    const filters = renderToStaticMarkup(<ProjectFilterPending />);
+    expect(filters).toContain('id="loc-chi-du-an-cham" type="checkbox" disabled=""');
+    // Unchecked: a ticked box that does nothing would claim the table is grouped.
+    expect(filters).toContain('id="loc-gop-hang-muc" type="checkbox" disabled=""');
+    expect(filters).not.toContain("checked");
+
+    const tabs = renderToStaticMarkup(<ProjectRecordTabs>panel</ProjectRecordTabs>);
+    for (const name of ["Vướng mắc", "Biểu đồ", "Trao đổi"]) {
+      expect(tabs).toMatch(new RegExp(`role="tab" aria-selected="false"[^>]* disabled=""[^>]*>.*${name}<\/button>`));
+    }
+    // The one live tab is Chứng từ, selected, and its panel holds the voucher block.
+    expect(tabs).toMatch(/role="tab" aria-selected="true"[^>]*>.*Chứng từ<\/button>/);
+    expect(tabs).toContain('role="tabpanel"');
+  });
+
+  it("biểu mẫu SỬA dự án KHÔNG mang ba ô giữ chỗ của hộp Thêm dự án", () => {
+    const html = renderToStaticMarkup(
+      <FormDuAn
+        tieuDeForm="Sửa dự án"
+        giaTriDau={giaTriTuDuAn(DU_AN)}
+        maChiDoc={DU_AN.code}
+        danhMuc={HANG_MUC}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    expect(html).not.toContain("data-pending-marker");
+  });
+
+  it("thẻ số liệu giữ chỗ KHÔNG in con số nào — chỉ '—'", () => {
+    const html = renderToStaticMarkup(<DisbursementOverviewPending />);
+    expect(html).not.toMatch(/\d+(\.\d{3})+ đ/);
+    expect(html).not.toContain("0 đ");
   });
 });

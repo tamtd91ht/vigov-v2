@@ -573,9 +573,12 @@ export const CAU_THIEU_QUYEN_XAC_NHAN =
 
 /**
  * ══════════════════════════════════════════════════════════════════════════════════════════
- * NHỮNG PHẦN CỦA BẢN THIẾT KẾ MÀ LƯỢT NÀY KHÔNG DỰNG ĐƯỢC — HIỆN LÊN ĐẦU MÀN, không giấu trong
- * chú thích mã và không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn Nội dung
- * Mini App, màn Thông báo, màn Biên bản họp, màn Nhiệm vụ và màn Thu - Chi.
+ * NHỮNG PHẦN CỦA BẢN THIẾT KẾ MÀ LƯỢT NÀY KHÔNG DỰNG ĐƯỢC — không giấu trong chú thích mã và không
+ * vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của các màn khác.
+ *
+ * Each entry is the description behind a disabled "?" placeholder AT ITS SPEC POSITION (ADR 0068
+ * §14, `components/ui/pending-feature.tsx`), looked up with `pendingPart`. The first entry has no
+ * placeholder of its own: the voucher table's empty state says it on every page load.
  * ══════════════════════════════════════════════════════════════════════════════════════════
  */
 export type PhanChuaDung = {
@@ -629,11 +632,97 @@ export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
       "được khai hai dòng cùng một nguồn hay không — và đó là quyết định của khách.",
   },
   {
-    ten: "Modal `⬆ Nhập giải ngân` từ Excel (§10) và nút `☰ Hạng mục` (§5)",
+    ten: "Modal `⬆ Nhập giải ngân` từ Excel (§10)",
     viSao:
       "Không tuyến nào trong hợp đồng nhận tệp Excel, và quy tắc all-or-nothing của §10 là quy " +
       "tắc của MÁY CHỦ (kiểm cả tệp, có lỗi thì không nhận dòng nào) — dựng một nửa ở trình " +
-      "duyệt là hứa một điều không có gì bảo đảm. Quản lý hạng mục kế hoạch vốn có tuyến thật " +
-      "nhưng đứng sau `admin.lookup` và thuộc màn Cấu hình §5, không thuộc lượt này.",
+      "duyệt là hứa một điều không có gì bảo đảm.",
+  },
+  {
+    ten: "Nút `☰ Hạng mục` (§5)",
+    viSao:
+      "Thêm, sửa tên và thứ tự hạng mục kế hoạch vốn đã làm được ở màn Cấu hình, phần Danh mục " +
+      "(quyền admin.lookup). Đặt thời hạn giải ngân và kế hoạch vốn năm cho từng hạng mục như bản " +
+      "thiết kế vẽ thì máy chủ chưa có, nên nút mở thẳng từ màn này chưa dựng.",
+  },
+  {
+    ten: "Bốn thẻ số liệu: Kế hoạch vốn năm, Đã giải ngân, Còn phải giải ngân, Cần chú ý (§3)",
+    viSao:
+      "Máy chủ chưa trả các số tổng của cả năm ngân sách (tổng kế hoạch vốn, tổng đã giải ngân, " +
+      "số dự án chậm) và chưa có số liệu vướng mắc. Cộng ở trình duyệt từ danh sách đang lọc sẽ " +
+      "ra con số sai mỗi khi có bộ lọc.",
+  },
+  {
+    ten: "Biểu đồ Luỹ kế giải ngân so với kế hoạch (§4)",
+    viSao:
+      "Máy chủ chưa trả số giải ngân luỹ kế theo từng tháng của năm, nên chưa có số liệu để vẽ.",
+  },
+  {
+    ten: "Bảng Tiến độ theo hạng mục (§5)",
+    viSao:
+      "Bảng cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục, cộng trên toàn bộ dự án " +
+      "của năm. Máy chủ chưa trả các tổng ấy.",
+  },
+  {
+    ten: "Khối Tiến độ theo nguồn vốn và nút Quản lý nguồn vốn (§6)",
+    viSao:
+      "Máy chủ chưa có chức năng xem hay quản lý danh mục nguồn vốn, nên chưa tính được số đã phân " +
+      "bổ và đã giải ngân theo từng nguồn.",
+  },
+  {
+    ten: "Ô lọc Chỉ dự án chậm (§7.1)",
+    viSao:
+      "Máy chủ chưa nhận điều kiện lọc này: danh sách dự án hiện chỉ lọc được theo năm ngân sách " +
+      "và hạng mục.",
+  },
+  {
+    ten: "Ô Gộp theo hạng mục (§7.1)",
+    viSao:
+      "Gộp cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trên toàn bộ dự án của " +
+      "năm. Máy chủ chưa trả các tổng ấy; cộng ở trình duyệt sẽ sai ngay khi danh sách đang được " +
+      "lọc.",
+  },
+  {
+    ten: "Cột Nguồn vốn của bảng dự án (§7.2)",
+    viSao:
+      "Danh sách dự án chưa trả nguồn vốn của từng dự án, và máy chủ chưa có chức năng xem danh " +
+      "mục nguồn vốn.",
+  },
+  {
+    ten: "Cột Vướng mắc mới nhất (§7.2)",
+    viSao: "Hệ thống chưa có chức năng ghi nhận vướng mắc của dự án, nên chưa có nội dung để hiện.",
+  },
+  {
+    ten: "Mục Giải ngân theo nguồn vốn của dự án (§8)",
+    viSao:
+      "Khi xem chi tiết, máy chủ chưa trả phân bổ nguồn vốn của dự án, và chưa có chức năng xem " +
+      "danh mục nguồn vốn.",
+  },
+  {
+    ten: "Tab Vướng mắc (§8.1)",
+    viSao: "Hệ thống chưa có chức năng ghi nhận và theo dõi vướng mắc của dự án.",
+  },
+  {
+    ten: "Tab Biểu đồ (§8.3)",
+    viSao:
+      "Máy chủ chưa trả số giải ngân luỹ kế theo tháng của dự án, nên chưa có số liệu để vẽ.",
+  },
+  {
+    ten: "Tab Trao đổi (§8.4)",
+    viSao: "Hệ thống chưa có chức năng lưu trao đổi giữa các cán bộ về một dự án.",
   },
 ];
+
+/**
+ * One `PHAN_CHUA_DUNG_GHI` entry by its exact `ten`, for the "?" placeholders (ADR 0068 §14).
+ *
+ * LOOKED UP, NOT COPIED: the entries must stay literal inside the array (`tools/tien_do_san_pham.py`
+ * counts `ten: "` lines inside its block), and a second copy of a sentence here would drift.
+ * THROWS on a missing name rather than drawing a placeholder with no description — `ghi-giai-ngan
+ * .test.tsx` renders every placeholder, so a renamed entry fails there instead of on a staff screen.
+ */
+export function pendingPart(ten: string): PhanChuaDung {
+  const part = PHAN_CHUA_DUNG_GHI.find((p) => p.ten === ten);
+  if (part === undefined) throw new Error(`PHAN_CHUA_DUNG_GHI has no entry "${ten}"`);
+  return part;
+}

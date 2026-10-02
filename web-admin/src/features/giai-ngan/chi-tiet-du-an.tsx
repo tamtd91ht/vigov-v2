@@ -17,7 +17,6 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/qu
 
 import { KhoiChungTu } from "./chung-tu-du-an";
 import { KhoiSuaXoaDuAn } from "./ghi-du-an";
-import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
   nhanNgay,
   nhanTien,
@@ -25,6 +24,7 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { ProjectFundingPending, ProjectRecordTabs } from "./pending-parts";
 import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
@@ -33,8 +33,8 @@ import { ScopeNotice } from "./scope-notice";
  * và khối "Chứng từ" của §8.2.
  *
  * BA TRONG BỐN TAB CỦA ĐẶC TẢ VẪN KHÔNG CÓ (Vướng mắc · Biểu đồ · Trao đổi): không tab nào có
- * tuyến phía sau trong hợp đồng REST. Một thanh tab mà bấm vào không ra gì là những lần hứa suông
- * với cán bộ — tab chỉ mọc khi tuyến mọc.
+ * tuyến phía sau trong hợp đồng REST. They are drawn DISABLED with a "?" (ADR 0068 §14,
+ * `pending-parts.tsx`) — never a live tab that opens an empty panel.
  *
  * TAB "CHỨNG TỪ" NAY CÓ SÁU TUYẾN GHI VÀ KHÔNG CÓ TUYẾN ĐỌC. Khối chứng từ dưới đây vì thế chỉ giữ
  * được những chứng từ của chính phiên làm việc này, và nó NÓI RA điều đó — xem `chung-tu-du-an.tsx`
@@ -42,7 +42,7 @@ import { ScopeNotice } from "./scope-notice";
  *
  * KHỐI "GIẢI NGÂN THEO NGUỒN VỐN" CŨNG KHÔNG: `phan_bo_nguon_von` chưa có tuyến nào, và một khối
  * rỗng gắn nhãn "0 đ / 0 đ" đọc thành "xã chưa gắn nguồn nào" — một khẳng định về dữ liệu của xã
- * mà màn hình này không có căn cứ để đưa ra.
+ * mà màn hình này không có căn cứ để đưa ra. Its placeholder carries no figure at all.
  *
  * KHÔNG CÓ VẠCH "THỜI GIAN ĐÃ TRÔI QUA" (§8, thanh tiến độ). Con số ấy là một phép tính trên
  * đồng hồ và trên biên của năm ngân sách; máy chủ tính nó để ra `delay_score` nhưng KHÔNG gửi
@@ -130,8 +130,6 @@ export function ChiTietDuAn({ id }: { id: string }) {
         </Card>
       ) : (
         <>
-          <KhoiChuaDungGhi />
-
           {trangThai.pha === "dangTai" && (
             // FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets the card shape.
             <Card>
@@ -175,14 +173,18 @@ export function ChiTietDuAn({ id }: { id: string }) {
                 daXoaXong={() => datDaXoa(true)}
               />
 
+              <ProjectFundingPending />
+
               {/* MỖI LẦN GHI CHỨNG TỪ XONG LÀ MỘT LẦN ĐỌC LẠI DỰ ÁN: `disbursed_amount`,
                   `remaining_amount`, `disbursed_ratio` và `delay_score` đều suy ra từ chứng từ. */}
-              <KhoiChungTu
-                duAnID={trangThai.duAn.id}
-                coGhi={coGhi}
-                coXacNhan={coXacNhan}
-                daGhiXong={() => datLanTai((n) => n + 1)}
-              />
+              <ProjectRecordTabs>
+                <KhoiChungTu
+                  duAnID={trangThai.duAn.id}
+                  coGhi={coGhi}
+                  coXacNhan={coXacNhan}
+                  daGhiXong={() => datLanTai((n) => n + 1)}
+                />
+              </ProjectRecordTabs>
             </>
           )}
         </>
