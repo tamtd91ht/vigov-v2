@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-09-29",
+  "cap_nhat": "2026-10-02",
   "muc": [
     {
       "id": "resolve-staff-names",
@@ -119,6 +119,14 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai CÀI và chưa ai GỌI: (1) identity — bảng cài đặt tác vụ + trạng thái lượt chạy theo (tác vụ, loại việc), màn admin.sla, năm RPC; (2) comms — hộp thư chuông (hop_thu_thong_bao, 08-thong-bao.md §8) + đăng ký CommsService; (3) petitions/documents — bộ chạy. CẦN NGƯỜI DÙNG XÁC NHẬN: mốc neo của gio_bao_lanh_dao/gio_bao_chu_tich là HẠN ĐÃ LỠ (cách đọc của hợp đồng); 'Báo Chủ tịch' đi tới cả LÃNH ĐẠO (la_lanh_dao, gồm Phó CT); thời gian ân hạn 'việc bộ phận giữ chưa phân công' chưa có nguồn số liệu nên chưa có trong hợp đồng.",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "tenant-profile-logo-banner-adr-0069",
+      "viec": "Hợp đồng nhận diện xã (ADR 0069): TenantProfile thêm logo_public_url = 6 và web_admin_banner_public_url = 7 (URL ảnh dẫn xuất công khai do ViGov phát hành, \"\" = chưa đặt); logo_url = 2 đánh dấu deprecated, giữ NGUYÊN nghĩa URL gõ tay; UploadPurpose thêm UPLOAD_PURPOSE_TENANT_BANNER = 11",
+      "trang_thai": "dang_lam",
+      "bang_chung": "proto/vigov/platform/v1/platform.proto (TenantProfile, UploadPurpose). 02/10/2026 trên máy Windows: buf generate rc=0 (core/gen bị .gitignore, không commit) · buf lint rc=0 · buf breaking --against '.git#ref=HEAD' rc=0 · go build core + 7 service rc=0 · go vet core/platform/identity rc=0. Trường mới là string thường theo quy ước sẵn có của TenantProfile (\"\" = chưa khai), không phải trường bắt buộc.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa xong vì service-platform chưa có dòng chính sách tải lên cho tenant-banner: TestUploadPolicyPurposeCheckMatchesStorage (service-platform/internal/store) ĐỎ cho tới khi có migration định nghĩa lại CHECK purpose và gieo dòng 'tenant-banner' — PHẢI vào cùng commit (ADR 0052 §10). Sau đó: platform điền hai trường mới trong GetTenantProfile, core/platformclient.TenantProfile mang hai trường, identity đưa ra /communes/current và /commune-profiles."
     }
   ]
 }

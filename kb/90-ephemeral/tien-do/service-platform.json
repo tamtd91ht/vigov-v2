@@ -66,7 +66,6 @@
       "bang_chung": "26/09/2026: domain.LaTenMienDanhRieng + chặn ở grpc.ResolveHost, store.ByHost, store.ByHostErr (trả y như tên miền lạ, không truy vấn); migration 0007 CHECK NOT VALID; ca khoá-bước Go↔SQL đọc chính tệp 0007 (đột biến bỏ 'www' bị bắt). go build/vet/test -p 1 service-platform xanh; check_khoa_duy_nhat PASS. _pg_test SKIP (không Docker).",
       "no_confirm": [],
       "tiep_theo": "CHỦ DỰ ÁN QUYẾT 26/09/2026 quy hoạch 4 tên miền; nhãn dành riêng admin · admin-stg · api · api-stg · stg · www (dưới vigov.vn và stg.vigov.vn), đỉnh vigov.vn/stg.vigov.vn, mọi host dưới .api.vigov.vn/.api-stg.vigov.vn. Hai dòng cũ admin.vigov.vn/admin-stg.vigov.vn → Xã Thăng Bình GIỮ NGUYÊN (không xoá — việc chủ dự án quyết) nhưng hết phân giải; CHECK NOT VALID khiến mọi UPDATE hai dòng ấy bị từ chối — KHÔNG chạy VALIDATE CONSTRAINT khi chúng còn. THỨ TỰ TRIỂN KHAI: DNS/TLS/Ingress mới → bước Jenkins doi-ten-mien-thang-binh → job service-platform (bật 0007 + chặn) — đảo thứ tự là khoá mình ngoài hệ thống. Bộ đệm tenant.NewCachedDirectory ở mỗi dịch vụ giữ ánh xạ cũ tối đa TENANT_CACHE_TTL (mặc định 30s) sau khi platform lên. Chưa chặn x.admin.vigov.vn / x.www.vigov.vn (ngoài phạm vi đã nêu). Không có tuyến Go nào ghi tenant_domain — CHECK là rào ghi duy nhất.",
-      "menu": null,
       "id": "ten-mien-danh-rieng"
     },
     {
@@ -230,6 +229,15 @@
       "trang_thai": "xong",
       "no_confirm": [],
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "nhan-dien-xa-logo-banner-luoc-do",
+      "viec": "Nhận diện xã (ADR 0069) — phần lược đồ: chính sách tải lên tenant-logo/tenant-banner, bảng stored_file của platform, hai tham chiếu logo/banner trên ho_so_hien_thi_xa",
+      "trang_thai": "dang_lam",
+      "bang_chung": "02/10/2026 (TASK-2, chưa commit): migrations/0016_upload_policy_tenant_logo_banner.sql — CHECK purpose thêm 'tenant-banner'; dòng tenant-logo seed 0008 còn nguyên (system, 10 MB, có HEIC) đổi thành 2097152 byte, png/webp/jpeg, vết upload_policy.changed cùng câu (UPDATE…FROM, PG 16); seed tenant-banner 2097152, png/webp/jpeg, không trần số tệp, vết upload_policy.seeded. migrations/0017_tenant_branding_files.sql — stored_file (@entity PlatformStoredFile, @scope tenant; khuôn comms 0011; PK (tenant_id,id), UNIQUE (tenant_id,object_key), (tenant_id,public_object_key); tenant_id REFERENCES tenant; purpose chỉ tenant-logo|tenant-banner; subject_type 'tenant-display-profile', subject_id = tenant_id; lớp content-source, bucket private; khoá …/platform/{purpose}/{id}/…; không phân vùng; trigger stored_file_guard), ho_so_hien_thi_xa thêm logo_file_id + web_admin_banner_file_id (NULL được, FK (tenant_id, …) → stored_file), trigger chỉ cho trỏ tới tệp cùng xã, đúng mục đích, chưa xoá mềm, status ready + có public_object_key; logo_url GIỮ, chỉ đổi COMMENT thành lỗi thời. Không ghi dòng nghiệp vụ nào, không backfill. Ca kiểm: internal/store/upload_policy_test.go TestUploadPolicyTenantLogoBannerChange + dòng want tenant-banner; migrations/tenant_branding_files_test.go; upload_policy_pg_test đếm 11 chính sách / 11 vết seed / 10 sau rút (sửa luôn hai số cũ sai từ 0013 mà mục petition-photo-bo-heic ghi nợ). go test ./core/... ./service-platform/... rc=0; make check rc=0; TestPg* SKIP — không VIGOV_TEST_DSN, không Docker, migration 0016/0017 CHƯA CHẠY TRÊN POSTGRES THẬT.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Commit cùng TASK-1 (core/storage PurposeTenantBanner + proto UPLOAD_PURPOSE_TENANT_BANNER) — tách ra là TestUploadPolicyPurposeCheckMatchesStorage đỏ. (2) TASK-3 đường ghi: upsert ho_so_hien_thi_xa chỉ cần (tenant_id, cột tham chiếu, tao_boi, cap_nhat_boi); dòng đã xoá mềm vẫn giữ khoá chính tenant_id — đường ghi phải quyết khôi phục hay từ chối, không chèn dòng mới. Thay ảnh: trỏ hồ sơ sang tệp mới RỒI mới gỡ đăng tệp cũ, cùng giao dịch với vết. Bên đọc coi tệp có public_object_key NULL hoặc deleted_at là 'chưa có'. (3) retain_until của content-source cho ảnh bị thay: ADR 0052 Còn mở #1 chưa chốt — không tự đặt. (4) Chạy TestPg* với VIGOV_TEST_DSN; chưa có ca pg cho trigger chọn logo/banner — nên viết khi có CSDL.",
+      "menu": "cau-hinh"
     }
   ]
 }

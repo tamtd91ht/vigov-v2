@@ -81,6 +81,12 @@ const (
 	// decision B of 02/10/2026). Staff-only, never shown to a citizen. The petition counterpart of
 	// PurposeTaskAttachment, and in its class for its reason: ClassRecords.
 	PurposePetitionLogAttachment Purpose = "petition-log-attachment"
+	// The commune's web-admin banner (platform; ADR 0069 #5): the strip under the topbar on every
+	// web-admin page, uploaded by the commune itself. Its own purpose, not PurposeTenantLogo, because
+	// its limits and normalisation differ (1600px wide vs a 512px square) and the platform policy row
+	// is per purpose. NOT the Mini App `banner` content of comms (ADR 0067 §5): that one is
+	// PurposeContentImage under comms, for citizens; ADR 0069 #6 keeps the two apart.
+	PurposeTenantBanner Purpose = "tenant-banner"
 )
 
 var knownPurposes = map[Purpose]bool{
@@ -88,6 +94,7 @@ var knownPurposes = map[Purpose]bool{
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
 	PurposeTaskAttachment: true, PurposeContentAudio: true,
 	PurposePetitionVerificationPhoto: true, PurposePetitionLogAttachment: true,
+	PurposeTenantBanner: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

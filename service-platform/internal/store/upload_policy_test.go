@@ -123,6 +123,9 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 		// attachment = task-attachment of 0010.
 		"petition-verification-photo": {maxBytes: 10485760, mimes: []string{"image/jpeg", "image/png", "image/webp"}, maxFiles: "5", file: "0015_upload_policy_petition_staff_files.sql"},
 		"petition-log-attachment":     {maxBytes: 52428800, mimes: []string{"application/pdf", "image/jpeg", "image/png"}, maxFiles: "NULL", file: "0015_upload_policy_petition_staff_files.sql"},
+		// Chủ dự án chốt 02/10/2026 (ADR 0069 #5): banner web-admin 2 MiB, PNG/WebP/JPEG, no count limit.
+		// tenant-logo's seed above is rewritten by 0016 (TestUploadPolicyTenantLogoBannerChange).
+		"tenant-banner": {maxBytes: 2097152, mimes: []string{"image/png", "image/webp", "image/jpeg"}, maxFiles: "NULL", file: tenantLogoBannerMigration},
 	}
 	for p, w := range want {
 		if w.file == "" {
@@ -416,6 +419,52 @@ func TestUploadPolicyPetitionPhotoNoHEICChange(t *testing.T) {
 	}
 	if want := []string{storage.MIMEJPEG, storage.MIMEPNG, storage.MIMEWebP}; !slices.Equal(got, want) {
 		t.Errorf("petition-photo MIME list = %v, want %v (G3; no HEIC)", got, want)
+	}
+}
+
+const tenantLogoBannerMigration = "0016_upload_policy_tenant_logo_banner.sql"
+
+// Chủ dự án chốt 02/10/2026 (ADR 0069 #4): the commune logo is PNG/WebP/JPEG ≤ 2 MiB, no HEIC. 0016
+// rewrites 0008's tenant-logo row to that — ONLY while the row still holds 0008's seed, signed
+// 'system' and live — and writes the trail from what the UPDATE returned, in the same statement. Each
+// clause is one whose loss would turn no other test red.
+func TestUploadPolicyTenantLogoBannerChange(t *testing.T) {
+	b, err := fs.ReadFile(migrations.FS, tenantLogoBannerMigration)
+	if err != nil {
+		t.Fatalf("read %s: %v", tenantLogoBannerMigration, err)
+	}
+	sql := sqlLineComment.ReplaceAllString(string(b), "")
+	for _, clause := range []string{
+		"SET max_bytes          = 2097152",
+		"allowed_mime_types = ARRAY['image/png', 'image/webp', 'image/jpeg'],",
+		"updated_by         = 'system'",
+		// The filter: one purpose, untouched seed state only (rule 7 forbidden #2; never overwrite).
+		"WHERE u.purpose = 'tenant-logo'",
+		"AND u.deleted_at IS NULL",
+		"AND u.updated_by = 'system'",
+		"AND u.max_bytes = 10485760",
+		"AND u.allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic']::text[]",
+		"AND u.max_files_per_subject IS NULL",
+		// The trail, same statement, before and after from the row itself (rule 6 inv 3, 5, 6).
+		"INSERT INTO platform_audit_log (actor, action, subject, before, after, reason)",
+		"'system', 'upload_policy.changed'",
+		"FROM changed c;",
+		"'migration " + tenantLogoBannerMigration + ":",
+	} {
+		if !strings.Contains(sql, clause) {
+			t.Errorf("%s lacks %q", tenantLogoBannerMigration, clause)
+		}
+	}
+	set := regexp.MustCompile(`SET max_bytes          = \d+,\s*allowed_mime_types = ARRAY\[([^\]]*)\],`).FindStringSubmatch(sql)
+	if set == nil {
+		t.Fatal("new tenant-logo MIME list not found")
+	}
+	var got []string
+	for _, q := range strings.Split(set[1], ",") {
+		got = append(got, strings.Trim(strings.TrimSpace(q), "'"))
+	}
+	if want := []string{storage.MIMEPNG, storage.MIMEWebP, storage.MIMEJPEG}; !slices.Equal(got, want) {
+		t.Errorf("tenant-logo MIME list = %v, want %v (ADR 0069 #4; no HEIC)", got, want)
 	}
 }
 

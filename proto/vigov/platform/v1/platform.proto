@@ -151,7 +151,8 @@ service PlatformService {
   rpc ResolveMiniApp(ResolveMiniAppRequest) returns (ResolveMiniAppResponse);
 
   // GetTenantProfile returns the display profile of THE COMMUNE IN "x-tenant-id" — office address,
-  // logo, hotline, working hours as text, introduction (ADR 0045, decision 5).
+  // logo, hotline, working hours as text, introduction (ADR 0045, decision 5), web-admin banner
+  // (ADR 0069).
   //
   // NOT EXEMPT FROM "x-tenant-id", AND NOT IN THE REGISTRY CATEGORY ABOVE. The commune is read
   // from metadata and the request has no field naming one: this is a commune's own content, read
@@ -401,6 +402,7 @@ enum UploadPurpose {
   UPLOAD_PURPOSE_CONTENT_AUDIO = 8;       // Mini App content, type truyen-thanh: the broadcast audio (comms) — ADR 0067 §4
   UPLOAD_PURPOSE_PETITION_VERIFICATION_PHOTO = 9;  // staff "after processing" (nghiệm thu) photo on a petition (petitions), records class — owner decision C 02/10/2026; NOT the citizen's PETITION_PHOTO
   UPLOAD_PURPOSE_PETITION_LOG_ATTACHMENT = 10;     // staff file on a petition processing-log entry (petitions), records class, never shown to the citizen — owner decision B 02/10/2026
+  UPLOAD_PURPOSE_TENANT_BANNER = 11;      // commune's web-admin banner (platform) — ADR 0069 #5; NOT the Mini App `banner` content (comms)
 }
 
 // UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no
@@ -443,8 +445,9 @@ message GetTenantProfileResponse {
   TenantProfile profile = 1;
 }
 
-// TenantProfile is what a citizen reads about one commune. Display only: nothing routes on, or
-// computes from, any field here.
+// TenantProfile is what a citizen — and, since ADR 0069, the web-admin login screen before any
+// session — reads about one commune. All of it is public by design. Display only: nothing routes
+// on, or computes from, any field here.
 //
 // Every field is plain `string`, "" meaning "not declared" — not proto3 `optional`, for the reason
 // given on Tenant.province: the store has one spelling of "not declared", so presence would offer
@@ -452,9 +455,13 @@ message GetTenantProfileResponse {
 message TenantProfile {
   string office_address = 1;
 
-  // A URL to an image served elsewhere — not bytes and not a storage key; there is no file storage
-  // in ViGov yet (service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql).
-  string logo_url = 2;
+  // DEPRECATED by ADR 0069 — read logo_public_url (6). Kept, unchanged in meaning, so no consumer
+  // silently starts reading a different thing under the same name: this is a URL a person TYPED,
+  // pointing at an image served elsewhere (service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql),
+  // and a public route that forwards it makes every reader fetch whatever host was typed. It never
+  // carries a ViGov-issued image. Removing it later means `reserved 2; reserved "logo_url";`, never
+  // reusing the number.
+  string logo_url = 2 [deprecated = true];
 
   // The commune's OFFICIAL hotline / office landline: public-service information, not personal
   // data (open question #16). Published to citizens as is.
@@ -465,6 +472,30 @@ message TenantProfile {
   string office_hours_text = 4;
 
   string introduction = 5;
+
+  // The commune's logo (ADR 0069 #4), uploaded by the commune itself in web-admin. One image for
+  // every surface: web-admin sidebar and login screen, and the commune's Mini App.
+  //
+  // ALWAYS A ViGov-ISSUED URL: the public-bucket derivative of a stored file of purpose
+  // UPLOAD_PURPOSE_TENANT_LOGO (ADR 0052 §2; square 512px PNG, transparency kept). Never a typed
+  // URL, never a presigned link, never a storage key. It contains `t_<tenant_id>` like every public
+  // object (ADR 0052, accepted by ADR 0069 #8). A new upload is a NEW URL — public objects are
+  // cached as immutable for a year — so a consumer must not cache this value past the profile read.
+  //
+  // "" = no logo set. The consumer shows its building icon (ADR 0069 #7); it never falls back to
+  // logo_url or to an image baked into a build.
+  string logo_public_url = 6;
+
+  // The web-admin banner (ADR 0069 #5): the strip under the topbar on every web-admin page. Same
+  // provenance rules as logo_public_url, purpose UPLOAD_PURPOSE_TENANT_BANNER, normalised to 1600px
+  // wide.
+  //
+  // NOT the Mini App banner. That is the `banner` content type of comms (ADR 0067 §5, ADR 0069 #6)
+  // — many images, links, ordering, for citizens. The two are different things and are never read
+  // as substitutes for each other.
+  //
+  // "" = no banner set. The consumer draws no strip.
+  string web_admin_banner_public_url = 7;
 }
 
 message ResolveMiniAppRequest {

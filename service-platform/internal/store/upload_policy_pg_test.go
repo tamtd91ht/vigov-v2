@@ -113,12 +113,19 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	// 0008 seeds six, 0010 task-attachment, 0013 content-audio, 0015 the two staff petition purposes.
-	if len(ps) != 10 {
-		t.Fatalf("policies = %d, want the 10 seeded", len(ps))
+	// 0008 seeds six, 0010 task-attachment, 0013 content-audio, 0015 the two staff petition purposes,
+	// 0016 tenant-banner.
+	if len(ps) != 11 {
+		t.Fatalf("policies = %d, want the 11 seeded", len(ps))
 	}
 	for _, p := range ps {
 		switch p.Purpose {
+		case "tenant-logo", "tenant-banner":
+			// 0016 (ADR 0069 #4, #5): 2 MiB, png/webp/jpeg, no HEIC, no count limit.
+			if p.FileCountLimited || p.MaxBytes != 2097152 ||
+				!slices.Equal(p.AllowedMIMETypes, []string{"image/png", "image/webp", "image/jpeg"}) {
+				t.Errorf("%s = %+v", p.Purpose, p)
+			}
 		case "petition-photo":
 			// 0014 (G3, ADR 0047): jpeg/png/webp, no HEIC; 10 MiB and 5 files kept from 0008.
 			if !p.FileCountLimited || p.MaxFilesPerSubject != 5 || p.MaxBytes != 10485760 ||
@@ -179,8 +186,20 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 		WHERE action = 'upload_policy.seeded' AND actor = 'system'`).Scan(&entries); err != nil {
 		t.Fatalf("count trail: %v", err)
 	}
-	if entries != 7 {
-		t.Errorf("seed trail entries = %d, want 7 — one per seeded policy, same transaction", entries)
+	// 6 (0008) + 1 (0010) + 1 (0013) + 2 (0015) + 1 (0016). The old want of 7 was stale since 0013.
+	if entries != 11 {
+		t.Errorf("seed trail entries = %d, want 11 — one per seeded policy, same transaction", entries)
+	}
+
+	// 0016 rewrote tenant-logo once: before holds 0008's 10 MiB and HEIC, after 2 MiB without HEIC.
+	if err := db.QueryRow(`SELECT count(*), min(before::text), min(after::text) FROM platform_audit_log
+		WHERE action = 'upload_policy.changed' AND actor = 'system' AND subject = 'tenant-logo'`).
+		Scan(&changed, &before, &after); err != nil {
+		t.Fatalf("count tenant-logo change trail: %v", err)
+	}
+	if changed != 1 || !strings.Contains(before, `10485760`) || !strings.Contains(before, `image/heic`) ||
+		!strings.Contains(after, `2097152`) || strings.Contains(after, `image/heic`) {
+		t.Errorf("tenant-logo change trail: %d entries, before %s, after %s", changed, before, after)
 	}
 }
 
@@ -200,8 +219,9 @@ func TestPgUploadPolicySoftDeletedIsAbsent(t *testing.T) {
 			t.Fatal("soft-deleted policy still served")
 		}
 	}
-	if len(ps) != 6 {
-		t.Errorf("policies = %d, want 6", len(ps))
+	// 11 seeded (TestPgUploadPolicySeedAndRead) minus the withdrawn one. The old want of 6 was stale.
+	if len(ps) != 10 {
+		t.Errorf("policies = %d, want 10", len(ps))
 	}
 }
 

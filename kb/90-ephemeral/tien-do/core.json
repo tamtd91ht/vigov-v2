@@ -242,6 +242,14 @@
       "bang_chung": "CHƯA COMMIT. ratelimit.go: Policy.failOpen (chỉ PublicNewsRead true; OperatorSignIn vẫn đóng kín — test ghim), Key.tenant + redisKey 't:<tenant>:rl:<policy>:<subject>', ErrNoCommune, ipSubject dùng chung (IPv6 /64). middleware.go: Gate (429 + Retry-After; 503 khi chính sách đóng; mở + đúng 1 cảnh báo rate_limit.store_unavailable mỗi cửa sổ, không IP/khoá); Middleware gọi Gate. go test ./ratelimit xanh; service-platform internal/http, cmd/server, internal/opauth xanh (người dùng cũ của Middleware). core/tenant/cache.go: HostResolver + CachedDirectory.XaTheoHost, ErrNoHostResolver; cache_host_resolver_test.go (50 lần tra một host lạ = 1 lần gọi nền tảng; lỗi không được nhớ; trần TranMuc giữ nguyên).",
       "tiep_theo": "Chính sách thứ ba trở đi: mở khi Redis hỏng chỉ khi chủ dự án quyết như D2 — mặc định đóng.",
       "no_confirm": []
+    },
+    {
+      "id": "storage-tenant-banner",
+      "viec": "core/storage: thêm mục đích PurposeTenantBanner = \"tenant-banner\" cho banner web-admin của xã (ADR 0069 #5), tách khỏi tenant-logo và khỏi banner Mini App (content-image của comms)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "core/storage/key.go (hằng + knownPurposes). Đối xứng với UPLOAD_PURPOSE_TENANT_BANNER = 11 trong platform.proto. 02/10/2026: go test ./core/... xanh (gồm phép so enum <-> danh sách storage hai chiều).",
+      "no_confirm": [],
+      "tiep_theo": "Đỏ có chủ đích ở service-platform/internal/store TestUploadPolicyPurposeCheckMatchesStorage cho tới khi migration platform thêm 'tenant-banner' vào CHECK và gieo dòng giới hạn (≤ 2 MB, PNG/WebP/JPEG, không HEIC — ADR 0069 #5). core/platformclient.TenantProfile chưa mang hai trường mới — việc của bước service."
     }
   ]
 }

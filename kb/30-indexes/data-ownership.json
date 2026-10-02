@@ -383,6 +383,13 @@
       "source": "service-platform/migrations/0008_upload_policy.sql:132"
     },
     {
+      "entity": "PlatformStoredFile",
+      "service": "platform",
+      "scope": "tenant",
+      "table": "stored_file",
+      "source": "service-platform/migrations/0017_tenant_branding_files.sql:48"
+    },
+    {
       "entity": "PortalCategory",
       "service": "comms",
       "scope": "tenant",
