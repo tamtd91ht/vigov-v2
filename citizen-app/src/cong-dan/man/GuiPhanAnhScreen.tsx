@@ -41,7 +41,7 @@ import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { type Catalogue, fieldLabelOf, offeredCodes, readCatalogueAnswer } from "./field-catalogue";
-import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
+import { BangXa, KenhChuaMo, LoadingNotice, ThePhieu } from "./khung";
 import { CUA_TOI, GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI, SEND_LOCATION_WORDS } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
@@ -144,11 +144,7 @@ export function FieldPickStep(props: {
 
   let body: ReactNode;
   if (catalogue.kind === "loading") {
-    body = (
-      <p className="cd-cau" role="status">
-        {GUI.field_loading}
-      </p>
-    );
+    body = <LoadingNotice cau={GUI.field_loading} shape="card" />;
   } else if (catalogue.kind === "failed") {
     body = (
       <>

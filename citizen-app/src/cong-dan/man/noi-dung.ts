@@ -475,6 +475,8 @@ export const CUA_TOI = {
   tieu_de: "Phản ánh của tôi",
   dang_tai: "Đang tải danh sách phản ánh…",
   trong: "Bạn chưa gửi phản ánh nào.",
+  /** Under `trong`, the "Gửi phản ánh" button right below (prototype `FeedbackListPage.tsx:48`, `${unit}` = xã). */
+  empty_hint: "Chạm nút bên dưới để gửi phản ánh đầu tiên tới xã.",
   nut_xem: "Xem chi tiết",
   nut_xem_them: "Xem thêm",
   dang_tai_them: "Đang tải thêm…",
@@ -594,6 +596,11 @@ export const TIN_XA = {
   dang_tai: "Đang tải tin của xã…",
   dang_tai_them: "Đang tải thêm tin…",
   trong: "Hiện chưa có tin nào được đăng trên ứng dụng.",
+  /**
+   * Under `trong` (prototype `NewsPage.tsx:143`, `${unit}` = xã). The shared app addresses the reader as "bạn"
+   * everywhere, so "bà con" of the prototype is "bạn" here; the commune app keeps "bà con" (`XA_TN.news_empty_hint`).
+   */
+  empty_hint: "Khi xã đăng nội dung mới, bạn sẽ thấy ngay ở đây.",
   nut_doc: "Đọc tin",
   nut_xem_them: "Xem thêm tin",
   nut_thu_lai: "Thử lại",
@@ -731,6 +738,22 @@ export const XA_TN = {
   o_video: "Video",
   o_ban_do: "Bản đồ tiện ích",
   chua_co_phieu: "Bà con chưa gửi phản ánh nào.",
+  // Empty-state hints (UI-1, owner 02/10/2026). The prototype's words where it has them (`vigov-require`
+  // `apps/miniapp/src/pages`, `${unit}` = "xã"); the others are new and listed for the owner's review.
+  /** Home "Phản ánh của tôi" with nothing sent — the "Gửi phản ánh" tile is above (`HomePage.tsx:82`). */
+  home_petitions_empty_hint: "Chạm ô “Gửi phản ánh” ở trên để gửi phản ánh đầu tiên.",
+  /** A news list with nothing in it — home "Tin tức mới", the type tabs, Sự kiện, Video (`NewsPage.tsx:143`). */
+  news_empty_hint: "Khi xã đăng nội dung mới, bà con sẽ thấy ngay ở đây.",
+  /** A chosen news category with nothing in it (`BroadcastPage.tsx:138`, the prototype's chip-filter hint). */
+  news_category_empty_hint: "Bà con chọn chuyên mục khác hoặc xem mục Tất cả.",
+  /** Truyền thanh with nothing published (`BroadcastPage.tsx:139`). */
+  broadcast_empty_hint: "Bản tin phát thanh của xã sẽ được đăng lại ở đây để bà con nghe khi rảnh.",
+  /** A status filter with nothing in it. NEW — shaped on the prototype's filter hint (`VideoPage.tsx:44`). */
+  petition_filter_empty_hint: "Bà con chọn trạng thái khác hoặc xem mục Tất cả.",
+  /** A directory search with no match (`DirectoryPage.tsx:76`). */
+  directory_search_empty_hint: "Bà con thử gõ ngắn hơn, ví dụ chỉ gõ họ hoặc tên bộ phận.",
+  /** Bản đồ tiện ích, not on the app yet. NEW — no prototype wording. */
+  map_empty_hint: "Khi xã đưa bản đồ tiện ích lên ứng dụng, bà con sẽ xem được ngay ở đây.",
   // Phản ánh
   loc_tat_ca: "Tất cả",
   loc_trong: "Chưa có phản ánh nào ở trạng thái này.",

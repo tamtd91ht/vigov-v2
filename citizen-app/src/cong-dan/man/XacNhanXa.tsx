@@ -25,6 +25,7 @@ import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type KetQuaXacNhan, type MoPhienViGov, moPhienSauXacNhan } from "../api/mo-phien-vigov";
 
 import { confirmCommuneZaloFailed, XAC_NHAN_XA, ZALO_FAILURE, zaloFailureSentence } from "./noi-dung";
+import { LoadingSkeleton } from "./state-visuals";
 import { GoiYXaScreen, phanGiaiGoiY, type XaGoiY } from "../../features/kham-pha";
 
 /** Trạng thái của màn, THUẦN — test dựng thẳng từng bước mà không cần DOM. */
@@ -115,6 +116,8 @@ export function ManXacNhanXa(props: {
         <p className="goi-y__tiep" role="status">
           {XAC_NHAN_XA.dang_tra}
         </p>
+        {/* The shape of the confirmation card that is coming (UI-1); the sentence above stays the status. */}
+        <LoadingSkeleton prefix="cd" shape="card" />
       </section>
     );
   }

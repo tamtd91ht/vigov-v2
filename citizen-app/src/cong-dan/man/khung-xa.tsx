@@ -5,13 +5,15 @@
  *
  * Khác prototype ở chỗ bắt buộc (`skills/accessibility-elderly`, `accessibility.test.ts`) và ở các quyết định
  * của chủ dự án: chữ không dưới 16px (prototype cho 13px), đích chạm không dưới 48px, nút chính màu ĐỎ thương
- * hiệu (prototype: xanh), "đang tải" là CHỮ (prototype: khối xám nhấp nháy), nút lùi giữ chữ "Quay lại" cạnh
+ * hiệu (prototype: xanh), "đang tải" là CÂU CHỮ HIỆN RÕ kèm khối xám hình nội dung (từ 02/10/2026; trước đó chỉ chữ
+ * — câu vẫn mang `role="status"`, khối chỉ trang trí), nút lùi giữ chữ "Quay lại" cạnh
  * mũi tên (prototype: chỉ mũi tên), và ô trái header là LOGO CỦA XÃ (prototype: quốc huy vẽ tay).
  */
 import { type ReactNode, useState } from "react";
 
 import { QUAY_LAI, XA_GIAO_DIEN } from "./noi-dung";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
+import { EmptyIllustration, type IllustrationKind, LoadingSkeleton, type SkeletonShape } from "./state-visuals";
 
 /* ═══════════════════════════════ HEADER ═══════════════════════════════ */
 
@@ -247,10 +249,23 @@ export function CommuneButton(props: {
 /* ═══════════════════════════════ STATES ═══════════════════════════════ */
 
 /**
+ * The drawing an EMPTY state shows, from the icon the caller already names — so every empty list of a kind looks
+ * alike without each call site choosing. Unknown icons get the generic tray. PURE, exported for tests.
+ */
+export function illustrationFor(icon: TenBieuTuong): IllustrationKind {
+  if (icon === "news" || icon === "newspaper") return "news";
+  if (icon === "chat" || icon === "message-square-plus" || icon === "message-square-warning") return "petition";
+  if (icon === "users" || icon === "contact-book") return "directory";
+  return "generic";
+}
+
+/**
  * Khối trạng thái (`PROTOTYPE.md` §7 `ErrorState` / `EmptyState`), luôn là chữ đọc được, không chỉ biểu tượng:
- *   · đang tải — CHỮ, không vòng quay, không khối nhấp nháy (quyết định của chủ dự án);
+ *   · đang tải — CÂU CHỮ (`role="status"`, luôn hiện) + khối xám hình nội dung sắp tới (`shape`), không vòng quay.
+ *     Quyết định của chủ dự án 02/10/2026 (UI-1), thay quyết định cũ "chỉ chữ, không khối nhấp nháy": khối chỉ
+ *     nhấp nháy bằng độ mờ, và đứng yên hẳn khi máy xin giảm chuyển động (`styles.css`);
  *   · lỗi     — vòng 80px đỏ nhạt + biểu tượng, câu nói việc cần làm, nút phụ (thường là "Thử lại");
- *   · trống   — vòng 80px xanh nhạt + biểu tượng, câu làm tiêu đề, `hint` (tuỳ chọn) nói bước tiếp theo.
+ *   · trống   — hình minh hoạ nhỏ (`illustrationFor`), câu làm tiêu đề, `hint` (tuỳ chọn) nói bước tiếp theo.
  */
 export function KhoiTrangThai(props: {
   bieu_tuong: TenBieuTuong;
@@ -262,19 +277,28 @@ export function KhoiTrangThai(props: {
   support_code?: string | null;
   /** Empty state: one muted sentence under the title saying what the citizen can do next. */
   hint?: string | null;
+  /** Loading: the shape of what is coming (`state-visuals.tsx`). Default `list`; `none` = the sentence alone. */
+  shape?: SkeletonShape;
+  /** Loading, list shapes: how many rows to draw (default 3). */
+  rows?: number;
 }) {
   if (props.dang_tai && !props.loi) {
     return (
       <div className="xa-trang-thai xa-trang-thai--tai">
         <p role="status">{props.cau}</p>
+        <LoadingSkeleton prefix="xa" shape={props.shape ?? "list"} rows={props.rows} />
       </div>
     );
   }
   return (
     <div className={`xa-trang-thai${props.loi ? " xa-trang-thai--loi" : ""}`}>
-      <span className="xa-status-circle" aria-hidden="true">
-        <BieuTuong ten={props.bieu_tuong} co={36} />
-      </span>
+      {props.loi ? (
+        <span className="xa-status-circle" aria-hidden="true">
+          <BieuTuong ten={props.bieu_tuong} co={36} />
+        </span>
+      ) : (
+        <EmptyIllustration kind={illustrationFor(props.bieu_tuong)} className="xa-illus" />
+      )}
       <p className="xa-status-title" role={props.loi ? "alert" : undefined}>
         {props.cau}
       </p>

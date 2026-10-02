@@ -175,6 +175,25 @@ describe("text and targets stay usable for an ageing eye", () => {
         `an animation is declared outside @media (prefers-reduced-motion: no-preference) at offset ${match.index}`,
       ).toBe(true);
     }
+    // UI-1 (02/10/2026) brought the first `transition:` and the first press-down `transform` on `:active`. Both are
+    // motion too, so both sit in the same guard — a press that moves under "reduce" is the same broken promise.
+    const guard = styles.slice(start, end);
+    for (const match of styles.matchAll(/transition(?:-property)?\s*:/g)) {
+      expect(
+        match.index! > start && match.index! < end && start >= 0,
+        `a transition is declared outside @media (prefers-reduced-motion: no-preference) at offset ${match.index}`,
+      ).toBe(true);
+    }
+    for (const match of styles.matchAll(/:active[^{]*\{([^}]*)\}/g)) {
+      if (!/transform\s*:/.test(match[1]!)) continue;
+      expect(
+        match.index! > start && match.index! < end,
+        `a pressed state moves (transform) outside the reduced-motion guard at offset ${match.index}`,
+      ).toBe(true);
+    }
+    expect(guard, "the press-down feedback left the guard — this case would pass for the wrong reason").toMatch(
+      /:active[^{]*\{[^}]*transform:\s*scale\(0\.98\)/,
+    );
   });
 
   it("keeps pinch-zoom available", () => {
@@ -785,6 +804,10 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       // Wave 1 (30/09/2026): `.xa-noi-bat` (the featured news card), `.xa-can-bo__goi` (the round call button)
       // and `.xa-hero__chuong` (the home bell, decision 10) are gone with their markup. The directory's call
       // buttons are `.xa-nut` now, measured just below.
+      // UI-1 (owner, 02/10/2026): a featured card is BACK on the home screen under a new name, `.xa-featured-news`
+      // — but only with the commune's own cover, loaded (no coloured block standing in for a picture, the reason
+      // `.xa-noi-bat` went). The whole card is one tap.
+      ".xa-featured-news",
       ".xa-nut",
       ".xa-tab__muc",
       ".xa-noi",

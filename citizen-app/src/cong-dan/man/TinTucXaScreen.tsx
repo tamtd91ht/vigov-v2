@@ -19,7 +19,7 @@ import { layPhienViGov } from "../api/phien-vigov";
 
 import { ArticleBody } from "./article-body";
 import { BieuTuong } from "./BieuTuong";
-import { BangXa } from "./khung";
+import { BangXa, EmptyNotice, LoadingNotice } from "./khung";
 import { QUAY_LAI, TIN_XA } from "./noi-dung";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
 
@@ -151,12 +151,8 @@ export function ThanTinXa(props: { ds: DanhSachTin; onMo: (id: string) => void; 
   const { ds } = props;
   return (
     <>
-      {!ds.da_co_trang_dau && ds.dang_tai && (
-        <p className="cd-cau" role="status">
-          {TIN_XA.dang_tai}
-        </p>
-      )}
-      {ds.da_co_trang_dau && ds.muc.length === 0 && <p className="cd-cau">{TIN_XA.trong}</p>}
+      {!ds.da_co_trang_dau && ds.dang_tai && <LoadingNotice cau={TIN_XA.dang_tai} />}
+      {ds.da_co_trang_dau && ds.muc.length === 0 && <EmptyNotice kind="news" cau={TIN_XA.trong} hint={TIN_XA.empty_hint} />}
       {ds.muc.length > 0 && (
         <ul className="cd-cua-toi">
           {ds.muc.map((t) => (
@@ -228,13 +224,7 @@ export function BaiTin({ bai }: { bai: BaiTinXa }) {
 
 export function ThanBaiTin(props: { trang: TrangBai; onTai: () => void }) {
   const { trang } = props;
-  if (trang.kieu === "dang-tai") {
-    return (
-      <p className="cd-cau" role="status">
-        {TIN_XA.dang_tai_bai}
-      </p>
-    );
-  }
+  if (trang.kieu === "dang-tai") return <LoadingNotice cau={TIN_XA.dang_tai_bai} shape="article" />;
   if (trang.kieu === "xong") return <BaiTin bai={trang.bai} />;
   if (trang.kieu === "khong-thay") {
     return (

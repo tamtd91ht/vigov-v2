@@ -75,7 +75,7 @@ import {
   useMyPetitions,
 } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
-import { BaiTinXa, DanhSachTinXa, HangTin, NewsOfType, type OpenVideo, useTinXa } from "./TinTucAppXa";
+import { BaiTinXa, DanhSachTinXa, FeaturedNews, HangTin, NewsOfType, type OpenVideo, useTinXa } from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
 import type { PickScenePhotos } from "./scene-photos";
 import {
@@ -119,6 +119,25 @@ type ManXa =
   | { readonly kieu: "ban-do" }
   | { readonly kieu: "thong-bao" }
   | { readonly kieu: "su-kien" };
+
+/**
+ * One string per screen a citizen can be on — what the entry motion compares to tell "moved to another screen" from
+ * "the same screen re-rendered". Two articles (or two petitions) are two screens. Memory only: never logged, never
+ * sent. PURE, exported for tests.
+ */
+export function screenKey(m: ManXa): string {
+  if (m.kieu === "tab") return `tab:${m.tab}`;
+  if (m.kieu === "bai") return `bai:${m.id}`;
+  if (m.kieu === "phieu") return `phieu:${m.ma}`;
+  return m.kieu;
+}
+
+/**
+ * How long the frame keeps its entry class: the 200ms of `xa-enter` (`styles.css`) plus a margin. After that the
+ * class is GONE, which is the point: a frame that is later hidden by the gate and shown again must not play the
+ * entry a second time (a `display: none` → shown element restarts any animation it still carries).
+ */
+const SCREEN_ENTRY_MS = 260;
 
 // The prototype's four marks (`PROTOTYPE.md` §5.4): House · MessageSquareWarning · Newspaper · User.
 const TAB: ReadonlyArray<{ tab: TabXa; nhan: string; bieu_tuong: TenBieuTuong }> = [
@@ -567,7 +586,7 @@ function TrangChuXa(props: {
                 ))}
               </ul>
             ) : (
-              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
+              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} hint={XA_TN.home_petitions_empty_hint} />
             )}
           </section>
 
@@ -582,12 +601,18 @@ function TrangChuXa(props: {
             ) : !tin.ds.da_co_trang_dau && tin.ds.loi !== null ? (
               <KhoiTrangThai bieu_tuong="alert" loi cau={TIN_XA.loi_may_chu} nut={{ nhan: TIN_XA.nut_thu_lai, onBam: tin.taiTiep }} />
             ) : tin_moi.length === 0 ? (
-              <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} />
+              <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} hint={XA_TN.news_empty_hint} />
             ) : (
               <ul className="xa-ds">
-                {tin_moi.map((t) => (
+                {/* The newest item may be the large card — only with a cover that loaded (`FeaturedNews`); the
+                    second stays compact. */}
+                {tin_moi.map((t, i) => (
                   <li key={t.id}>
-                    <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                    {i === 0 ? (
+                      <FeaturedNews tin={t} onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                    ) : (
+                      <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -663,7 +688,7 @@ export function SessionGateScreen(props: {
       <TrangCon>
         {state.kieu === "dang-mo" && (
           <>
-            <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai />
+            <KhoiTrangThai bieu_tuong="user" cau={COMMUNE_APP_SESSION.working} dang_tai shape="none" />
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onClose}>
               {XA_TN.nut_ve_trang_chu}
             </button>
@@ -760,6 +785,21 @@ function AppCuaXa(props: {
   const leave = useLeaveApp(props.openLink);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
   const lop = `xa-app xa-co-chu--${co_chu}`;
+
+  /*
+   * THE ENTRY MOTION (owner, UI-1 02/10/2026). `entering` is decided DURING the render that changes the screen —
+   * never in an effect after it, which would paint the new screen once still and then fade it in from nothing (a
+   * flash). The effect only removes the class once the motion is over (`SCREEN_ENTRY_MS`). No `key` is added
+   * anywhere: the tab bodies keep their state (a loaded petition list, the news pages) exactly as before.
+   */
+  const shownKey = screenKey(man);
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+  const entering = settledKey !== shownKey;
+  useEffect(() => {
+    if (!entering) return;
+    const timer = setTimeout(() => setSettledKey(shownKey), SCREEN_ENTRY_MS);
+    return () => clearTimeout(timer);
+  }, [entering, shownKey]);
 
   /* ── THE GATE: every personal act asks here first (`commune-session.ts`) ── */
   const { gate, state: gateState } = useSessionGate(openSession, xa.ten);
@@ -872,6 +912,7 @@ function AppCuaXa(props: {
               type={newsType}
               onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
               empty={newsType === "video" ? XA_TN.video_trong : XA_TN.truyen_thanh_trong}
+              hint={newsType === "video" ? XA_TN.news_empty_hint : XA_TN.broadcast_empty_hint}
             />
           </TrangCon>
         </>
@@ -879,7 +920,15 @@ function AppCuaXa(props: {
       break;
     }
     case "ban-do":
-      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.ban_do_tieu_de} bieu_tuong="map" cau={XA_TN.ban_do_trong} onQuayLai={ve} />;
+      man_con = (
+        <ManChuaCoDuLieu
+          tieu_de={XA_TN.ban_do_tieu_de}
+          bieu_tuong="map"
+          cau={XA_TN.ban_do_trong}
+          hint={XA_TN.map_empty_hint}
+          onQuayLai={ve}
+        />
+      );
       break;
     case "su-kien":
       // The items the commune published AS EVENTS — the server's `?type=su-kien` (comms b22bf76), no longer
@@ -893,6 +942,7 @@ function AppCuaXa(props: {
               type="su-kien"
               onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
               empty={XA_TN.su_kien_trong}
+              hint={XA_TN.news_empty_hint}
             />
           </TrangCon>
         </>
@@ -930,10 +980,15 @@ function AppCuaXa(props: {
   // rest of it, holding a header, ONE scrolling `.xa-trang`, and any footer / tab bar — so only the middle
   // moves, and the header and bottom bar stay on screen. `hidden` on a frame must still hide it:
   // `.xa-frame[hidden]` in styles.css, since `display: flex` would otherwise win over the attribute.
+  //
+  // Motion: the gate's frame is a NEW element each time the gate opens, so it always carries the entry class — it
+  // plays once, on mount, and its state changes (asking → working → refused) reuse the element and play nothing.
+  // The covered frame carries the class only while `entering`, so being un-hidden when the gate closes replays
+  // nothing; it plays when the gate's act moved the citizen to a new screen, which is an entry.
   const withGate = (content: ReactNode) => (
     <div className={lop}>
-      {gateScreen !== null && <div className="xa-frame">{gateScreen}</div>}
-      <div className="xa-frame" hidden={gateScreen !== null}>
+      {gateScreen !== null && <div className="xa-frame xa-frame--enter">{gateScreen}</div>}
+      <div className={entering ? "xa-frame xa-frame--enter" : "xa-frame"} hidden={gateScreen !== null}>
         {content}
       </div>
     </div>
@@ -1152,7 +1207,7 @@ export function TrangXa(props: {
     <div className="xa-app">
       <div className="xa-trang xa-trang--con">
         {trang.kieu === "dang-tra" ? (
-          <KhoiTrangThai bieu_tuong="build" cau={APP_RIENG.dang_mo} dang_tai />
+          <KhoiTrangThai bieu_tuong="build" cau={APP_RIENG.dang_mo} dang_tai shape="none" />
         ) : (
           <KhoiTrangThai
             bieu_tuong="alert"

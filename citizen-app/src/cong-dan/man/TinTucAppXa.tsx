@@ -233,6 +233,74 @@ export function HangTin({
   );
 }
 
+/** What is known of the featured card's cover: not yet, it loaded, or it failed. */
+export type CoverState = "pending" | "loaded" | "failed";
+
+/**
+ * THE FEATURED CARD OF THE HOME SCREEN (owner, UI-1 02/10/2026): the newest item as a large card — the cover 16:9
+ * edge to edge across the card, then the title and the day — ONLY when the item has a cover AND that picture
+ * actually loaded. No cover, a cover not loaded yet, or one that failed → the ordinary compact card, exactly as
+ * before. There is no placeholder picture and no prebuilt background: wave 1 removed `.xa-noi-bat` because a big
+ * coloured block with nothing in it read as "the most important news" when it was only the newest, and a large
+ * card is only honest when the commune's own picture fills it.
+ *
+ * NO VIEW COUNT, like the compact home card (the rule of 6a29447b): the home screen is a glance at what is new,
+ * the count is for the lists. PURE — `cover` is the caller's state, so every branch renders without a DOM.
+ */
+export function FeaturedNewsView(props: {
+  tin: TinXaTomTat;
+  cover: CoverState;
+  onFail: () => void;
+  onMo: (id: string) => void;
+  today: string;
+}) {
+  const { tin } = props;
+  if (tin.imageUrl === undefined || props.cover !== "loaded") {
+    return <HangTin tin={tin} compact onMo={props.onMo} today={props.today} />;
+  }
+  return (
+    <button type="button" className="xa-the xa-featured-news" onClick={() => props.onMo(tin.id)}>
+      {/* Decoration: the title below is the card's words, and the whole card is the one tap target. */}
+      <span className="xa-featured-news__cover" aria-hidden="true">
+        <img className="xa-featured-news__image" src={tin.imageUrl} alt="" decoding="async" onError={props.onFail} />
+      </span>
+      <span className="xa-featured-news__body">
+        <strong className="xa-hang-tin__tieu-de xa-cat-2">{tin.tieu_de}</strong>
+        <span className="xa-phu">{relativeDay(tin.ngay_dang, props.today)}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * `FeaturedNewsView` with its state: the cover is probed off-screen first, so the large card appears only once its
+ * picture is really there — never as an empty frame that later fills or collapses. Until then (and on any
+ * failure) the compact card stands in its place.
+ */
+export function FeaturedNews({ tin, onMo, today = todayVN() }: { tin: TinXaTomTat; onMo: (id: string) => void; today?: string }) {
+  const [cover, setCover] = useState<CoverState>("pending");
+  const url = tin.imageUrl;
+  useEffect(() => {
+    if (url === undefined) return;
+    setCover("pending");
+    let live = true;
+    const probe = new Image();
+    probe.onload = () => {
+      if (live) setCover("loaded");
+    };
+    probe.onerror = () => {
+      if (live) setCover("failed");
+    };
+    probe.src = url;
+    return () => {
+      live = false;
+      probe.onload = null;
+      probe.onerror = null;
+    };
+  }, [url]);
+  return <FeaturedNewsView tin={tin} cover={cover} onFail={() => setCover("failed")} onMo={onMo} today={today} />;
+}
+
 /**
  * The length of a broadcast on its list row (ADR 0067 §4): a speaker icon and "3:20" for the eye, the words
  * ("Bản tin dài 3 phút 20 giây") for a screen reader — the row is one button, and "3:20" read aloud is a clock
@@ -425,6 +493,7 @@ function NewsTypePanel(props: { ten_mien: string; type: NewsType; onMo: (id: str
         category={category}
         onMo={props.onMo}
         empty={chosen !== undefined ? XA_TN.news_category_empty(chosen.name) : XA_TN.news_type_empty(NEWS_TYPE_LABEL[props.type])}
+        hint={chosen !== undefined ? XA_TN.news_category_empty_hint : XA_TN.news_empty_hint}
       />
     </>
   );
@@ -465,11 +534,20 @@ export function NewsOfType(props: {
   category?: string | null;
   onMo: (id: string) => void;
   empty: string;
+  /** What to do next under `empty` (`KhoiTrangThai` `hint`), or none. */
+  hint?: string;
 }) {
   const news = useTinXa(props.ten_mien, props.type, props.category ?? null);
   // The Video list carries no view count (owner, 02/10/2026).
   return (
-    <NewsListBody ds={news.ds} onMo={props.onMo} onTai={news.taiTiep} empty={props.empty} showViews={props.type !== "video"} />
+    <NewsListBody
+      ds={news.ds}
+      onMo={props.onMo}
+      onTai={news.taiTiep}
+      empty={props.empty}
+      hint={props.hint}
+      showViews={props.type !== "video"}
+    />
   );
 }
 
@@ -479,6 +557,7 @@ export function NewsListBody(props: {
   onMo: (id: string) => void;
   onTai: () => void;
   empty: string;
+  hint?: string;
   showViews?: boolean;
 }) {
   const { ds } = props;
@@ -496,7 +575,7 @@ export function NewsListBody(props: {
       />
     );
   }
-  if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={props.empty} />;
+  if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={props.empty} hint={props.hint} />;
   return (
     <>
       {/* Every item the same card — no featured first card (wave 1): a big coloured block with no picture in it
@@ -635,7 +714,7 @@ export function BaiTinXa(props: {
     <>
       <DauManCon tieu_de={title} onQuayLai={props.onQuayLai} />
       <TrangCon>
-        {trang.kieu === "dang-tai" && <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai_bai} dang_tai />}
+        {trang.kieu === "dang-tai" && <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai_bai} dang_tai shape="article" />}
         {trang.kieu === "khong-thay" && <KhoiTrangThai bieu_tuong="news" loi cau={TIN_XA.khong_thay} />}
         {trang.kieu === "loi" && (
           <KhoiTrangThai

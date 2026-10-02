@@ -7,11 +7,14 @@ import {
   CommuneButton,
   DauManCon,
   DrumPattern,
+  illustrationFor,
   KhoiTrangThai,
   RootTabHeader,
   SectionHeader,
 } from "./khung-xa";
-import { NEWS_TYPE_LABEL, QUAY_LAI, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
+import { EmptyIllustration, LoadingSkeleton } from "./state-visuals";
+import { TIN_DAU, ThanTinXa } from "./TinTucXaScreen"; // vi-name-ok: existing shared-app names
+import { NEWS_TYPE_LABEL, QUAY_LAI, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
 import { DanhSachTinXa, NEWS_TABS } from "./TinTucAppXa";
 import { CommuneBanner, PetitionSendFooter } from "./TrangXa";
 
@@ -122,9 +125,88 @@ describe("khối trạng thái: lỗi · trống · đang tải", () => {
     expect(render({ bieu_tuong: "chat", cau: "Chưa có phản ánh" })).not.toContain("xa-status-hint");
   });
 
-  it("loading stays WORDS: a status sentence, no circle, nothing that pulses or spins", () => {
+  /**
+   * UI-1 (owner, 02/10/2026) replaced "loading stays WORDS, nothing that pulses": the sentence stays — visible,
+   * `role="status"` on it and on nothing else — and decorative blocks in the shape of what is coming follow it.
+   */
+  it("loading: the visible status sentence FIRST, then aria-hidden blocks of the asked shape; no circle, no spinner", () => {
     const html = render({ bieu_tuong: "news", cau: "Đang tải…", dang_tai: true });
-    expect(html).toBe('<div class="xa-trang-thai xa-trang-thai--tai"><p role="status">Đang tải…</p></div>');
+    expect(html).toMatch(
+      /^<div class="xa-trang-thai xa-trang-thai--tai"><p role="status">Đang tải…<\/p><span class="xa-skeleton xa-skeleton--list" aria-hidden="true">/,
+    );
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html.match(/class="skel-row"/g)).toHaveLength(3);
+    expect(html).not.toContain("xa-status-circle");
+    expect(html).not.toContain("<svg");
+    expect(render({ bieu_tuong: "news", cau: "x", dang_tai: true, rows: 2 }).match(/class="skel-row"/g)).toHaveLength(2);
+    expect(render({ bieu_tuong: "news", cau: "x", dang_tai: true, shape: "article" })).toContain("xa-skeleton--article");
+    // An article skeleton promises no cover: a grey 16:9 band would stand for a picture the item may not have.
+    expect(render({ bieu_tuong: "news", cau: "x", dang_tai: true, shape: "article" })).not.toMatch(/skel--thumb|cover/);
+    // `none`: a wait that is not for content (opening a session) — the sentence alone, exactly the old markup.
+    expect(render({ bieu_tuong: "user", cau: "Đang mở…", dang_tai: true, shape: "none" })).toBe(
+      '<div class="xa-trang-thai xa-trang-thai--tai"><p role="status">Đang mở…</p></div>',
+    );
+  });
+
+  it("empty: a small drawing instead of the circle — aria-hidden, unfocusable, chosen by the icon", () => {
+    const html = render({ bieu_tuong: "news", cau: "Chưa có tin" });
+    expect(html).toMatch(/^<div class="xa-trang-thai"><svg class="xa-illus" viewBox="0 0 120 90"[^>]*aria-hidden="true" focusable="false">/);
+    expect(html).not.toContain("xa-status-circle");
+    expect(illustrationFor("news")).toBe("news");
+    expect(illustrationFor("message-square-plus")).toBe("petition");
+    expect(illustrationFor("chat")).toBe("petition");
+    expect(illustrationFor("users")).toBe("directory");
+    expect(illustrationFor("map")).toBe("generic");
+    // An error keeps its red circle: a drawing there would soften a sentence that asks the citizen to act.
+    expect(render({ bieu_tuong: "alert", cau: "Lỗi", loi: true })).not.toContain("xa-illus");
+  });
+});
+
+describe("loading blocks and drawings, both apps (UI-1)", () => {
+  it("every skeleton shape is aria-hidden; heights follow the text size (em), no gradient; the pulse is opacity only", async () => {
+    for (const shape of ["list", "rows", "card", "article"] as const) {
+      for (const prefix of ["xa", "cd"] as const) {
+        const html = renderToStaticMarkup(createElement(LoadingSkeleton, { prefix, shape }));
+        expect(html).toMatch(new RegExp(`^<span class="${prefix}-skeleton ${prefix}-skeleton--${shape}" aria-hidden="true">`));
+      }
+    }
+    expect(renderToStaticMarkup(createElement(LoadingSkeleton, { prefix: "xa", shape: "none" }))).toBe("");
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    const rules = [...css.matchAll(/(?:\.(?:xa|cd)-skeleton )?\.skel(?:--[a-z]+)?\s*\{([^}]*)\}/g)].map((m) => m[1]!);
+    expect(rules.length).toBeGreaterThan(3);
+    for (const r of rules) {
+      expect(r).not.toMatch(/gradient/);
+      const height = /(?:^|;)\s*height:\s*([^;]+);/.exec(r)?.[1];
+      if (height !== undefined) expect(height, "a skeleton height in px would not follow .xa-co-chu--*").toMatch(/em$/);
+    }
+    const pulse = /@keyframes skel-pulse\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(pulse).toContain("opacity");
+    expect(pulse).not.toMatch(/transform|background/);
+  });
+
+  it("shared app: the loading sentence stays the one visible status; the empty list gets the drawing and the hint", () => {
+    const onMo = () => {};
+    const loading = renderToStaticMarkup(createElement(ThanTinXa, { ds: TIN_DAU, onMo, onTai: onMo }));
+    expect(loading).toContain(`<div class="cd-tai"><p class="cd-cau" role="status">${TIN_XA.dang_tai}</p><span class="cd-skeleton cd-skeleton--rows" aria-hidden="true">`);
+    expect(loading.match(/role="status"/g)).toHaveLength(1);
+    const empty = renderToStaticMarkup(
+      createElement(ThanTinXa, { ds: { ...TIN_DAU, da_co_trang_dau: true, dang_tai: false }, onMo, onTai: onMo }),
+    );
+    expect(empty).toMatch(
+      new RegExp(`^<div class="cd-trong"><svg class="cd-illus"[^>]*aria-hidden="true"[\\s\\S]*</svg><p class="cd-cau">${TIN_XA.trong}</p><p class="cd-ghi-chu">${TIN_XA.empty_hint}</p></div>$`),
+    );
+  });
+
+  it("each drawing is a JSX svg, aria-hidden, with no text in it", () => {
+    for (const kind of ["news", "petition", "directory", "generic"] as const) {
+      const svg = renderToStaticMarkup(createElement(EmptyIllustration, { kind, className: "cd-illus" }));
+      expect(svg).toMatch(/^<svg class="cd-illus"[^>]*aria-hidden="true" focusable="false">/);
+      expect(svg).not.toMatch(/<text|<title/);
+    }
   });
 });
 

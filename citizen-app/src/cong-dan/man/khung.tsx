@@ -1,5 +1,5 @@
 /**
- * Ba mảnh dùng chung của hai màn nửa nhà nước, THUẦN — nhận mọi thứ qua tham số, để dựng được bằng
+ * Các mảnh dùng chung của các màn nửa nhà nước (app chung), THUẦN — nhận mọi thứ qua tham số, để dựng được bằng
  * `react-dom/server` trong test (không có DOM để bấm).
  */
 import type { ReactNode } from "react";
@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
 import { giaiThichTrangThai, KENH_CHUA_MO, NHAN_XA_DANG_GUI, nhanTrangThai, THE_PHIEU } from "./noi-dung";
+import { EmptyIllustration, type IllustrationKind, LoadingSkeleton, type SkeletonShape } from "./state-visuals";
 import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "../../lib/thoi-diem";
 
 /**
@@ -19,6 +20,36 @@ export function BangXa({ ten_xa }: { ten_xa: string }) {
       <span className="cd-xa__nhan">{NHAN_XA_DANG_GUI}</span>
       <strong className="cd-xa__ten">{ten_xa}</strong>
     </p>
+  );
+}
+
+/**
+ * "Đang tải…" of a shared-app screen (UI-1, owner 02/10/2026): the SAME sentence as before, still a visible
+ * `<p class="cd-cau" role="status">`, with flat blocks in the shape of what is coming under it — decoration,
+ * `aria-hidden` (`state-visuals.tsx`). Default `rows`: the shared app's lists are text-only cards.
+ */
+export function LoadingNotice({ cau, shape = "rows", rows }: { cau: string; shape?: SkeletonShape; rows?: number }) {
+  return (
+    <div className="cd-tai">
+      <p className="cd-cau" role="status">
+        {cau}
+      </p>
+      <LoadingSkeleton prefix="cd" shape={shape} rows={rows} />
+    </div>
+  );
+}
+
+/**
+ * An empty list of a shared-app screen: a small drawing (decoration), the sentence that says it is empty, and —
+ * when there is one — the next step in a muted line under it.
+ */
+export function EmptyNotice({ kind, cau, hint }: { kind: IllustrationKind; cau: string; hint?: string }) {
+  return (
+    <div className="cd-trong">
+      <EmptyIllustration kind={kind} className="cd-illus" />
+      <p className="cd-cau">{cau}</p>
+      {hint !== undefined && hint !== "" && <p className="cd-ghi-chu">{hint}</p>}
+    </div>
   );
 }
 

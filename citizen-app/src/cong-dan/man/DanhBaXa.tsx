@@ -155,7 +155,7 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
     [trang, tu_khoa],
   );
 
-  if (trang.kieu === "dang-tai") return <KhoiTrangThai bieu_tuong="users" cau={DANH_BA.dang_tai} dang_tai />;
+  if (trang.kieu === "dang-tai") return <KhoiTrangThai bieu_tuong="users" cau={DANH_BA.dang_tai} dang_tai shape="rows" />;
   if (trang.kieu === "loi") {
     return (
       <KhoiTrangThai
@@ -182,7 +182,7 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
         />
       </div>
       {loc.length === 0 ? (
-        <KhoiTrangThai bieu_tuong="users" cau={XA_GIAO_DIEN.khong_thay_can_bo} />
+        <KhoiTrangThai bieu_tuong="users" cau={XA_GIAO_DIEN.khong_thay_can_bo} hint={XA_TN.directory_search_empty_hint} />
       ) : (
         nhomTheoBoPhan(loc, XA_TN.nhom_khac).map((n) => (
           <section key={n.bo_phan} className="xa-nhom">

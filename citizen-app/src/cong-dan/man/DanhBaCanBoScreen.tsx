@@ -17,7 +17,7 @@ import { danhBaCanBoXa, type KetQuaCongKhai } from "../api/goi-vigov";
 import type { CanBoCongKhai } from "../api/hop-dong-cong-khai";
 import { layPhienViGov } from "../api/phien-vigov";
 
-import { BangXa } from "./khung";
+import { BangXa, EmptyNotice, LoadingNotice } from "./khung";
 import { DANH_BA, QUAY_LAI } from "./noi-dung";
 
 export type LoiDanhBa = "loi-mang" | "loi-may-chu" | "khong-hop-le";
@@ -100,13 +100,7 @@ export function TheCanBo({ cb }: { cb: CanBoCongKhai }) {
 
 export function ThanDanhBa(props: { trang: TrangDanhBa; onTai: () => void }) {
   const { trang } = props;
-  if (trang.kieu === "dang-tai") {
-    return (
-      <p className="cd-cau" role="status">
-        {DANH_BA.dang_tai}
-      </p>
-    );
-  }
+  if (trang.kieu === "dang-tai") return <LoadingNotice cau={DANH_BA.dang_tai} />;
   if (trang.kieu === "loi") {
     return (
       <div className="cd-buoc">
@@ -121,7 +115,8 @@ export function ThanDanhBa(props: { trang: TrangDanhBa; onTai: () => void }) {
       </div>
     );
   }
-  if (trang.can_bo.length === 0) return <p className="cd-cau">{DANH_BA.trong}</p>;
+  // The sentence already says where to go next (the commune office), so it needs no hint line.
+  if (trang.can_bo.length === 0) return <EmptyNotice kind="directory" cau={DANH_BA.trong} />;
   return (
     <>
       <p className="cd-cau">{DANH_BA.gioi_thieu}</p>

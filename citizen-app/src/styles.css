@@ -1005,6 +1005,97 @@ body {
   .xa-pop {
     animation: xa-pop 280ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
   }
+
+  /*
+   * UI-1 (owner, 02/10/2026, ADR 0047 §6): "livelier" — every rule below is INSIDE this guard, so a phone set to
+   * reduce motion gets the app exactly as still as before. Transform and opacity only (see `.hien-len` above), and
+   * nothing longer than 250ms except the skeleton's slow pulse, which is opacity alone.
+   *
+   * SCREEN ENTRY. Commune app: the SCROLLING BODY of a frame that just changed screen fades in and rises 8px — not
+   * the frame itself, so the header (the commune's name) and the tab bar never move, and no transform ever sits on
+   * an ancestor of the `position: fixed` leave-app dialog (it is a sibling of `.xa-trang`, never inside it).
+   * `.xa-frame--enter` is on the frame only for the motion's length (`TrangXa.tsx` `SCREEN_ENTRY_MS`), so the frame
+   * the gate hid and shows again does not replay it. `backwards`, not `both`: once it ends, no transform is left on
+   * the scroller. Shared app: each citizen screen (`.cd-man`) is a fresh mount per navigation, so it plays on mount;
+   * the kept list a citizen returns to after reading one item (`hidden` → shown) plays it again, which is the
+   * same "back to the list" entry, not a stray one.
+   */
+  .xa-frame--enter .xa-trang,
+  .cd-man {
+    animation: xa-enter 200ms ease-out backwards;
+  }
+
+  /* A card or box that opens in place — the cancel question, the draft offer, the leave-app box. */
+  .xa-card-open,
+  .xa-leave-app__box {
+    animation: xa-enter 180ms ease-out backwards;
+  }
+
+  /* Loading blocks breathe — opacity only, slow, and not at all under reduce (they then stand still). */
+  .skel {
+    animation: skel-pulse 1.4s ease-in-out infinite alternate;
+  }
+
+  /*
+   * PRESS FEEDBACK: a tap pushes the control down a little (scale .98, 120ms), so a finger that tapped knows it
+   * did. No vibration: that would be a platform call (`zmp-sdk`), and this half calls none. Disabled controls do
+   * not move — they cannot be pressed.
+   */
+  .xa-nut,
+  .xa-o-4,
+  button.xa-the,
+  button.xa-hang,
+  .xa-tab__muc,
+  .xa-tabs-tin__muc,
+  .xa-chip,
+  .xa-o-lv,
+  .xa-banner-strip__tap,
+  .cd-nut,
+  .cd-nut-phu,
+  .cd-the-cua-toi,
+  .cd-goi,
+  .cd-field {
+    transition: transform 120ms ease-out;
+  }
+
+  .xa-nut:active:not(:disabled),
+  .xa-o-4:active,
+  button.xa-the:active,
+  button.xa-hang:active,
+  .xa-tab__muc:active,
+  .xa-tabs-tin__muc:active,
+  .xa-chip:active,
+  .xa-o-lv:active,
+  .xa-banner-strip__tap:active,
+  .cd-nut:active:not(:disabled),
+  .cd-nut-phu:active:not(:disabled),
+  .cd-the-cua-toi:active,
+  .cd-goi:active,
+  .cd-field:active {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes xa-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes skel-pulse {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
 }
 
 @keyframes xa-pop {
@@ -2726,6 +2817,32 @@ body {
   outline-offset: 2px;
 }
 
+/* Loading and empty, shared app (`khung.tsx` `LoadingNotice` / `EmptyNotice`, UI-1 02/10/2026). The sentence keeps
+   `.cd-cau` and stays visible; the blocks and the drawing are decoration beside it (`state-visuals.tsx`). */
+.cd-tai {
+  margin: 0 0 12px;
+}
+.cd-tai .cd-skeleton {
+  margin-top: -2px;
+}
+.cd-trong {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 0 4px;
+  text-align: center;
+}
+.cd-trong .cd-cau,
+.cd-trong .cd-ghi-chu {
+  margin: 0;
+  max-width: 22rem;
+}
+/* Inside the commune-check card (`XacNhanXa.tsx`): the blocks sit under the sentence with the card's spacing. */
+.goi-y .cd-skeleton {
+  margin-top: 12px;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════════════════════
  * APP RIÊNG CỦA MỘT XÃ (`--vao-thang`, ADR 0047 §6) — giao diện theo bản mẫu `vi-gov/zalo-miniapp`
  * (`src/styles/global.css`), chủ dự án chọn 28/09/2026. Mọi lớp mang tiền tố `.xa-`: app chung dùng
@@ -2736,7 +2853,7 @@ body {
  *   · chữ không dưới `--text-small` (bản mẫu 14px thân, 10,5px nhãn tab);
  *   · đích chạm không dưới `calc(var(--tap-min) + 4px)`;
  *   · chữ phụ `--ink-muted`, liên kết và lỗi dùng màu đậm hơn bản mẫu — màu bản mẫu dưới 4,5:1;
- *   · không vòng quay động: "đang tải" là chữ.
+ *   · không vòng quay động: "đang tải" là câu chữ hiện rõ, kèm khối xám hình nội dung (từ 02/10/2026, UI-1).
  * ════════════════════════════════════════════════════════════════════════════════════════════ */
 :root {
   /* Text navy: headings, card titles, names, codes, news covers. NOT the brand any more (below). */
@@ -3179,6 +3296,36 @@ button.xa-o-nhanh {
   object-fit: cover;
   display: block;
 }
+/* THE HOME SCREEN'S FEATURED CARD (`TinTucAppXa.tsx` `FeaturedNews`, UI-1 02/10/2026): drawn only once the cover
+   has loaded, so the 16:9 band is never an empty box — and it has no background colour of its own for the same
+   reason. The cover runs edge to edge across the card (the card clips it to its corners); title and day below,
+   in the compact card's own classes. The whole card is the one tap target. */
+.xa-featured-news {
+  display: grid;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0;
+  overflow: hidden;
+}
+.xa-featured-news__cover {
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+.xa-featured-news__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.xa-featured-news__body {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 14px;
+}
+.xa-featured-news:focus-visible {
+  outline: 3px solid var(--xa-navy);
+  outline-offset: 2px;
+}
 /* The event block of a `su-kien` article (§6.5: "khối sự kiện nền purple-50"): the purple tone the Sự kiện tile
    already carries (`xa-mau--tim`), so no new colour family. Labels purple-ink, values ink — both pairs measured
    in `accessibility.test.ts` ("tông tím", "tên lĩnh vực trên ô tông tím"). Body-size text, never smaller. */
@@ -3374,9 +3521,101 @@ button.xa-o-nhanh {
 .xa-trang-thai .xa-nut--phu {
   margin-top: 12px;
 }
-/* Loading is WORDS (owner decision): no circle, no pulse, no spinner. */
+/*
+ * LOADING (owner, UI-1 02/10/2026 — replaces "words only, no pulse"): the sentence stays, visible and centred, with
+ * `role="status"`; under it flat blocks in the shape of what is coming (`state-visuals.tsx` `LoadingSkeleton`). No
+ * circle, no spinner. The blocks pulse by opacity only, inside the reduced-motion guard; static otherwise.
+ */
 .xa-trang-thai--tai {
+  justify-items: stretch;
+  gap: 14px;
+  padding: 12px 0 8px;
   color: var(--ink-muted);
+}
+/* The empty-state drawing (`EmptyIllustration`): blue-50 fill, blue-ink line — the pair the status circle used. */
+.xa-illus {
+  display: block;
+  margin-bottom: 4px;
+}
+.xa-illus .illus-fill,
+.xa-illus .illus-line {
+  stroke: var(--xa-blue-ink);
+}
+.cd-illus .illus-fill,
+.cd-illus .illus-line {
+  stroke: var(--navy);
+}
+.xa-illus .illus-fill {
+  fill: var(--xa-blue-50);
+}
+.cd-illus .illus-fill {
+  fill: var(--surface-tint);
+}
+.illus-fill,
+.illus-line {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.illus-line {
+  fill: none;
+}
+/*
+ * SKELETON BLOCKS, both apps. Flat colour — a border tone of each app (`--xa-vien` / `--hairline`), never a
+ * gradient — and heights in `em`, so they follow the commune app's text size (`.xa-co-chu--*`). No text sits on
+ * them, so they add no colour pair to measure.
+ */
+.xa-skeleton,
+.cd-skeleton {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface);
+}
+.xa-skeleton .skel-row {
+  border: 1px solid var(--xa-vien);
+  border-radius: 14px;
+}
+.cd-skeleton .skel-row {
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+.skel-lines {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.5em;
+}
+.skel {
+  display: block;
+  height: 1em;
+  border-radius: 6px;
+}
+.xa-skeleton .skel {
+  background: var(--xa-vien);
+}
+.cd-skeleton .skel {
+  background: var(--hairline);
+}
+.skel--short {
+  width: 45%;
+}
+.skel--title {
+  height: 1.4em;
+  width: 80%;
+}
+/* The news row's picture slot, the size of `.xa-hang-tin__o` at body text (96×80 at 17px). */
+.skel--thumb {
+  flex: none;
+  width: 5.6em;
+  height: 4.7em;
+  border-radius: 12px;
 }
 .xa-ghi-chu {
   display: flex;
@@ -4397,7 +4636,8 @@ button.xa-o-nhanh {
 }
 
 /* ---------- "Bạn sắp rời ứng dụng để mở …" (`leave-app.tsx`) ---------- */
-/* Over the whole screen, the box at the bottom where the thumb is. No transition: it appears, it does not slide. */
+/* Over the whole screen, the box at the bottom where the thumb is. It does not slide in from off-screen: since UI-1
+   (02/10/2026) the box only fades in with an 8px rise, 180ms, and not at all under reduced motion (the guard). */
 .xa-leave-app {
   position: fixed;
   inset: 0;

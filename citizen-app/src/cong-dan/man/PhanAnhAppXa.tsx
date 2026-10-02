@@ -291,7 +291,7 @@ export function NeedSessionCard({ onOpen }: { onOpen: () => void }) {
 export function ListStatus(props: { state: MyPetitions; onOpen: () => void; onRetry: () => void }) {
   const { state } = props;
   if (state.kind === "idle") return <NeedSessionCard onOpen={props.onOpen} />;
-  if (state.kind === "loading") return <KhoiTrangThai bieu_tuong="chat" cau={CUA_TOI.dang_tai} dang_tai />;
+  if (state.kind === "loading") return <KhoiTrangThai bieu_tuong="chat" cau={CUA_TOI.dang_tai} dang_tai shape="rows" />;
   if (state.kind === "failed") {
     return (
       <KhoiTrangThai
@@ -353,11 +353,12 @@ export function PetitionList(props: {
           </div>
           {shown.length === 0 ? (
             // Nothing sent yet: the title and what to do next — the "Gửi phản ánh mới" button right below
-            // (§6.3, `04-phan-anh-cua-toi-rong.png`). A filter with nothing in it needs no such hint.
+            // (§6.3, `04-phan-anh-cua-toi-rong.png`). A filter with nothing in it gets a different hint: the way
+            // out is another chip, not the send button.
             items.length === 0 ? (
               <KhoiTrangThai bieu_tuong="message-square-plus" cau={XA_PA.chua_co_phieu} hint={XA_PA.empty_list_hint} />
             ) : (
-              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.loc_trong} />
+              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.loc_trong} hint={XA_TN.petition_filter_empty_hint} />
             )
           ) : (
             <ul className="xa-ds">
@@ -642,7 +643,7 @@ export function PetitionDetail(props: {
     <>
       <DauManCon tieu_de={XA_PA.ticket_title(code)} onQuayLai={props.onBack} />
       <TrangCon>
-        {state.kind === "loading" && <KhoiTrangThai bieu_tuong="chat" cau={XA_PA.loading_ticket} dang_tai />}
+        {state.kind === "loading" && <KhoiTrangThai bieu_tuong="chat" cau={XA_PA.loading_ticket} dang_tai shape="card" />}
         {state.kind === "session" && (
           <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} nut={{ nhan: CUA_TOI.nut_thu_lai, onBam: reload }} />
         )}
@@ -711,7 +712,7 @@ export function PetitionLookup(props: {
           </button>
         </div>
         {state?.kind === "missing" && <KhoiTrangThai bieu_tuong="info" loi cau={XA_PA.thieu_ma} />}
-        {state?.kind === "loading" && <KhoiTrangThai bieu_tuong="search" cau={TRA_CUU.dang_tra} dang_tai />}
+        {state?.kind === "loading" && <KhoiTrangThai bieu_tuong="search" cau={TRA_CUU.dang_tra} dang_tai shape="card" />}
         {state?.kind === "session" && <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} />}
         {state?.kind === "failed" && <KhoiTrangThai bieu_tuong="search" loi cau={state.text} />}
         {state?.kind === "found" && (
@@ -995,7 +996,7 @@ export function FieldStep(props: {
   onRetry: () => void;
 }) {
   const { catalogue } = props;
-  if (catalogue.kind === "loading") return <KhoiTrangThai bieu_tuong="text" cau={XA_PA.fields_loading} dang_tai />;
+  if (catalogue.kind === "loading") return <KhoiTrangThai bieu_tuong="text" cau={XA_PA.fields_loading} dang_tai shape="card" />;
   if (catalogue.kind === "failed") {
     return (
       <KhoiTrangThai
@@ -1220,7 +1221,7 @@ export function CommuneSendScreen(props: {
       <StepBar step={step} />
       <TrangCon>
         {confirmCancel && (
-          <div className="xa-the xa-the--dem xa-khoi" role="alertdialog" aria-label={XA_TN.hoi_huy_tieu_de}>
+          <div className="xa-the xa-the--dem xa-khoi xa-card-open" role="alertdialog" aria-label={XA_TN.hoi_huy_tieu_de}>
             <h2 className="xa-dau-khoi__tieu-de">{XA_TN.hoi_huy_tieu_de}</h2>
             <p>{XA_PA.hoi_huy_cau}</p>
             <button type="button" className="xa-nut" onClick={() => setConfirmCancel(false)}>
@@ -1233,7 +1234,7 @@ export function CommuneSendScreen(props: {
         )}
 
         {draftOffer !== null && (
-          <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-nhap-tieu-de">
+          <section className="xa-the xa-the--dem xa-khoi xa-card-open" aria-labelledby="xa-nhap-tieu-de">
             <h2 className="xa-dau-khoi__tieu-de" id="xa-nhap-tieu-de">
               {XA_PA.draft_title}
             </h2>

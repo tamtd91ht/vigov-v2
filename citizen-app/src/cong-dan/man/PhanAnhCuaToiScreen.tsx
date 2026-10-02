@@ -25,7 +25,7 @@ import type { PhieuCuaToiTomTat } from "../api/hop-dong-phan-anh";
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
-import { BangXa, KenhChuaMo, nhanLinhVuc } from "./khung";
+import { BangXa, EmptyNotice, KenhChuaMo, LoadingNotice, nhanLinhVuc } from "./khung";
 import { CUA_TOI, GUI, nhanTrangThai, QUAY_LAI, THE_PHIEU } from "./noi-dung";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
 import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "../../lib/thoi-diem";
@@ -145,15 +145,11 @@ export function ThanDanhSach(props: {
   const { ds } = props;
   return (
     <>
-      {!ds.da_co_trang_dau && ds.dang_tai && (
-        <p className="cd-cau" role="status">
-          {CUA_TOI.dang_tai}
-        </p>
-      )}
+      {!ds.da_co_trang_dau && ds.dang_tai && <LoadingNotice cau={CUA_TOI.dang_tai} />}
 
       {ds.da_co_trang_dau && ds.muc.length === 0 && (
         <div className="cd-buoc">
-          <p className="cd-cau">{CUA_TOI.trong}</p>
+          <EmptyNotice kind="petition" cau={CUA_TOI.trong} hint={CUA_TOI.empty_hint} />
           <button type="button" className="cd-nut" onClick={props.onGuiPhanAnh}>
             {GUI.tieu_de}
           </button>

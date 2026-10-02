@@ -26,8 +26,10 @@ import { CaNhanXa, dossierLookupReady, initials, TraCuuHoSoXa } from "./TienIchA
 import {
   ArticleCover,
   BaiTinXa,
+  type CoverState,
   EventDetails,
   eventTimeLabel,
+  FeaturedNewsView,
   HangTin,
   NewsArticle,
   NewsListBody,
@@ -39,7 +41,7 @@ import {
   WatchVideo,
 } from "./TinTucAppXa";
 import { BaiTin, TheTin } from "./TinTucXaScreen"; // vi-name-ok: existing shared-app components
-import { NHOM_CHUC_NANG } from "./TrangXa";
+import { NHOM_CHUC_NANG, screenKey } from "./TrangXa";
 import { VONG_DOI } from "./trai-nghiem";
 
 /**
@@ -516,6 +518,92 @@ describe("Tin tức: cover picture (card and detail)", () => {
     (img!.props.onError as () => void)();
     expect(reported).toBe(1);
     expect(ArticleCover({ imageUrl: undefined, failed: false, onFail: noop })).toBeNull();
+  });
+});
+
+/**
+ * THE HOME SCREEN'S FEATURED CARD (owner, UI-1 02/10/2026): the newest item, large, ONLY with its own cover loaded.
+ * Everything short of that is the compact card as before — the reason wave 1 removed `.xa-noi-bat` still holds.
+ */
+describe("Trang chủ: the featured card (UI-1)", () => {
+  const COVER = "https://media.vigov.example/t_TENANT/cover-1280.jpg";
+  const plain: TinXaTomTat = { id: "1", tieu_de: "Tin một", tom_tat: "", chuyen_muc: "", ngay_dang: "2026-09-30", type: "tin-tuc" };
+  const withCover: TinXaTomTat = { ...plain, imageUrl: COVER, viewCount: 42 };
+  const view = (tin: TinXaTomTat, cover: CoverState) =>
+    html(createElement(FeaturedNewsView, { tin, cover, onFail: noop, onMo: noop, today: "2026-09-30" }));
+
+  it("large only when the cover LOADED: the 16:9 band edge to edge, then the title and the day — one button", () => {
+    // React's server render may add a `<link rel="preload">` for a non-lazy image (as in the article test above).
+    const card = view(withCover, "loaded").replace(/^<link rel="preload"[^>]*\/>/, "");
+    expect(card).toMatch(
+      new RegExp(
+        `^<button type="button" class="xa-the xa-featured-news"><span class="xa-featured-news__cover" aria-hidden="true"><img class="xa-featured-news__image" src="${COVER.replace(/[.]/g, "\\.")}" alt="" decoding="async"/></span><span class="xa-featured-news__body"><strong class="xa-hang-tin__tieu-de xa-cat-2">Tin một</strong><span class="xa-phu">${TIN_XA.today}</span></span></button>$`,
+      ),
+    );
+    // No view count, like the compact home card (6a29447b).
+    expect(card).not.toContain("lượt xem");
+  });
+
+  it("not loaded yet, failed, or no cover at all → the ordinary compact card, nothing in its place", () => {
+    for (const [tin, cover] of [
+      [withCover, "pending"],
+      [withCover, "failed"],
+      [plain, "loaded"],
+    ] as const) {
+      const card = view(tin, cover);
+      expect(card).toMatch(/^<button type="button" class="xa-the xa-hang-tin xa-hang-tin--compact">/);
+      expect(card).not.toMatch(/xa-featured-news|lượt xem/);
+    }
+  });
+
+  it("the band's onError is what turns it back into the compact card", () => {
+    let failed = 0;
+    const tree = FeaturedNewsView({ tin: withCover, cover: "loaded", onFail: () => failed++, onMo: noop, today: "2026-09-30" });
+    const kids = (tree.props as { children: unknown[] }).children;
+    const coverSpan = kids.find((c) => isValidElement(c) && (c.props as { className?: string }).className === "xa-featured-news__cover") as ReactElement<{
+      children: ReactElement<{ onError: () => void }>;
+    }>;
+    coverSpan.props.children.props.onError();
+    expect(failed).toBe(1);
+  });
+
+  it("the home screen features the FIRST item only; the second stays compact; lists keep one card shape", () => {
+    const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    expect(src).toMatch(/i === 0 \? \(\s*<FeaturedNews tin=\{t\}/);
+    expect(src).not.toMatch(/<FeaturedNews[^>]*showViews/);
+    const tinSrc = Object.values(import.meta.glob("./TinTucAppXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    const listBody = tinSrc.slice(tinSrc.indexOf("export function NewsListBody("), tinSrc.indexOf("export function useTinXa("));
+    expect(listBody).not.toContain("FeaturedNews");
+  });
+});
+
+/**
+ * THE ENTRY MOTION (owner, UI-1 02/10/2026): the commune app has no router, so "a new screen" is a new
+ * `screenKey`. The frame carries `xa-frame--enter` only while the key is new (`TrangXa.tsx`).
+ */
+describe("navigation: what counts as a new screen", () => {
+  it("each tab, each article, each petition is its own screen; a child screen is its kind", () => {
+    expect(screenKey({ kieu: "tab", tab: "trang-chu" })).toBe("tab:trang-chu");
+    expect(screenKey({ kieu: "tab", tab: "tin-tuc" })).not.toBe(screenKey({ kieu: "tab", tab: "trang-chu" }));
+    expect(screenKey({ kieu: "bai", id: "1", tu: "trang-chu" })).toBe(screenKey({ kieu: "bai", id: "1", tu: "tin-tuc" }));
+    expect(screenKey({ kieu: "bai", id: "1", tu: "trang-chu" })).not.toBe(screenKey({ kieu: "bai", id: "2", tu: "trang-chu" }));
+    expect(screenKey({ kieu: "phieu", ma: "A", tu: "phan-anh" })).not.toBe(screenKey({ kieu: "phieu", ma: "B", tu: "phan-anh" }));
+    expect(screenKey({ kieu: "danh-ba" })).toBe("danh-ba");
+  });
+
+  it("the entry animates the scrolling body, not the frame — so no transform sits on the leave-app dialog's ancestors", async () => {
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.xa-frame--enter \.xa-trang,\s*\.cd-man \{\s*animation: xa-enter 200ms ease-out backwards;/);
+    expect(css).not.toMatch(/\.xa-frame--enter\s*\{/);
+    // ≤ 250ms, and the press feedback ≤ 150ms.
+    expect(css).toMatch(/transition: transform 120ms ease-out;/);
+    const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    // No key was added to remount the tab bodies (their loaded state must survive a tab switch).
+    expect(src).not.toMatch(/<(TrangChuXa|PetitionList|DanhSachTinXa|CaNhanXa)[^>]*\bkey=/);
   });
 });
 
