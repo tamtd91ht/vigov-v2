@@ -21,6 +21,7 @@ import {
   CAU_DAU,
   MUC_CHINH_SACH,
   NGAY_HIEU_LUC,
+  PENDING_APPROVAL_MARK,
   PHIEN_BAN_CHINH_SACH,
 } from "./chinh-sach-rieng-tu";
 import { COMPANY } from "./company-profile";
@@ -241,25 +242,128 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
   });
 
   /**
-   * ⚠ KHOẢNG HỞ CÒN NỢ — ẢNH HIỆN TRƯỜNG (02/10/2026, app riêng của xã).
+   * ẢNH HIỆN TRƯỜNG (02/10/2026, app riêng của xã) — THE GAP IS DRAFTED, NOT YET APPROVED.
    *
-   *   The commune app now sends the citizen's scene photos to ViGov after a petition is recorded. The four
-   *   routes are declared in the Zalo submission (`ket-xuat-ho-so.ts` `SCENE_PHOTO_*`), but the policy has no
-   *   section for them, and it still says photos never leave the phone (true of the SHARED app only). The
-   *   wording is the project owner's (ADR 0047: drafted, "chờ duyệt", approved before Zalo) — a later card
-   *   (TASK-07), not written here. Pinned at EXACTLY the two slot keys, and at the sentences being absent:
-   *   the day the section is approved, this case turns red and becomes a two-way lock.
+   *   The commune app sends the citizen's scene photos to ViGov after a petition is recorded. The four routes
+   *   are declared in the Zalo submission (`ket-xuat-ho-so.ts` `SCENE_PHOTO_*`); since TASK-07a the policy has
+   *   a section for them (`anh-hien-truong`), every paragraph marked `PENDING_APPROVAL_MARK` until the owner
+   *   approves (ADR 0047). This case is now the two-way lock the old gap case promised:
+   *     · body ⇄ declared keys (the slot body sends exactly the declared keys, both ways);
+   *     · declared sentence ⇄ policy text (every `trong_chinh_sach` sits VERBATIM in that section).
+   *   Reword a declaration in `ket-xuat-ho-so.ts` without rewording the policy — or the reverse — and it is red.
    */
-  it("ảnh hiện trường: thân xin chỗ tải gửi đúng hai khoá đã khai — mục chính sách cho ảnh CÒN NỢ", () => {
-    const keys = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
-    expect(keys).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
-    expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).filter((k) => k !== "maTraCuu").sort()).toEqual(keys);
-    const policy = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
-    for (const t of [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS]) {
-      expect(policy, "the policy now declares the scene photos — turn this case into a two-way lock").not.toContain(
-        t.trong_chinh_sach,
+  describe("ảnh hiện trường — thân gửi đi, bảng khai và mục chính sách khoá nhau", () => {
+    const section = () => {
+      const muc = MUC_CHINH_SACH.find((m) => m.ma === "anh-hien-truong");
+      expect(muc, "the policy lost its scene-photo section").toBeDefined();
+      return muc!;
+    };
+    const text = () => section().doan.join("\n");
+
+    it("thân xin chỗ tải gửi đúng những khoá đã khai, không thừa không thiếu", () => {
+      const keys = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
+      expect(keys).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
+      expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).filter((k) => k !== "maTraCuu").sort()).toEqual(keys);
+    });
+
+    it("MỌI câu khai của bốn tuyến ảnh có mặt NGUYÊN VĂN trong mục ảnh hiện trường", () => {
+      const declared = [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS];
+      expect(declared.length, "no declared scene-photo field — this case would pass on nothing").toBeGreaterThan(0);
+      for (const t of declared) {
+        expect(text(), `the scene-photo section no longer says: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
+          t.trong_chinh_sach,
+        );
+      }
+    });
+
+    it("nói đủ những gì đã dựng: chỉ app xã · không bắt buộc · tối đa 5 · chỉ khi bấm · sau khi ghi nhận", () => {
+      const t = text();
+      expect(section().tieu_de, "the heading must name the commune app").toMatch(/ứng dụng của xã/);
+      expect(t, "does not say the shared app has no photo button").toMatch(/không có nút gửi ảnh nào/);
+      expect(t).toMatch(/KHÔNG BẮT BUỘC/);
+      expect(t).toMatch(/tối đa 5 ảnh hiện trường/);
+      expect(t).toMatch(/JPEG, PNG hoặc WebP, không nhận video/);
+      expect(t, "does not name both buttons").toMatch(/'Chụp ảnh'[^\n]*'Chọn ảnh có sẵn'/);
+      expect(t).toMatch(/chỉ khi chính bạn bấm/);
+      expect(t).toMatch(/trước khi hộp thoại của Zalo hiện ra/);
+      expect(t, "does not say the upload waits for the petition").toMatch(/SAU KHI phản ánh của bạn đã được ghi nhận/);
+      // No `serverUploadUrl` anywhere (`phase1-collects-nothing.test.ts`) — the text says Zalo uploads nothing.
+      expect(t).toMatch(/Zalo không tải ảnh lên hộ/);
+    });
+
+    it("nói đủ cách hệ thống giữ ảnh: quét mã độc · mã hoá lại · bỏ EXIF · không công khai · 15 phút · ghi vết", () => {
+      const t = text();
+      expect(t).toMatch(/quét mã độc/);
+      expect(t).toMatch(/mã hoá lại ảnh thành JPEG/);
+      expect(t, "does not say ALL EXIF is dropped, location included").toMatch(/BỎ TOÀN BỘ thông tin kèm theo ảnh \(EXIF\), kể cả vị trí chụp/);
+      expect(t).toMatch(/bản bạn gửi lên không được giữ/);
+      expect(t).toMatch(/không bao giờ được công khai/);
+      expect(t, "does not say who may see").toMatch(/chính bạn, và cán bộ của đúng xã ấy có quyền xem phản ánh/);
+      expect(t).toMatch(/tối đa 15 phút/);
+      expect(t, "does not say staff views are recorded").toMatch(/cán bộ xem ảnh đều được ghi lại/);
+      expect(t, "does not say the photo is not kept in the draft").toMatch(/không nằm trong bản nháp phản ánh/);
+      expect(t, "does not name the recipient as the rest of the policy does (#28)").toMatch(
+        /máy chủ của Tập đoàn ViHAT Group/,
       );
+    });
+
+    it("thời hạn lưu ảnh: nói CHƯA CHỐT và gắn 'giá trị tạm' — không in 24 tháng như một con số đã chốt", () => {
+      // ADR 0052 §6: 24 months after closing is a PLACEHOLDER owed to the customer, and no purge job exists.
+      // Printing it as final is promising a mechanism that is not there.
+      const t = text();
+      expect(t).toMatch(/THỜI HẠN LƯU ẢNH HIỆN TRƯỜNG: CHƯA CHỐT/);
+      expect(t).toMatch(/GIÁ TRỊ TẠM\] Mức đang dự kiến là 24 tháng sau khi phản ánh được đóng/);
+      expect(t, "states the photo retention as settled").not.toMatch(/THỜI HẠN LƯU ẢNH HIỆN TRƯỜNG: 24/);
+      expect(t, "promises a deletion that no code performs").not.toMatch(/ảnh (sẽ )?bị xoá sau/);
+    });
+  });
+
+  /**
+   * "ẢNH KHÔNG RỜI KHỎI MÁY" STAYS TRUE OF THE BUSINESS CARD — AND MUST SAY SO.
+   *
+   *   The shared app's promise is untouched (the `serverUploadUrl` tripwire still holds it), but from 02/10/2026
+   *   an unscoped "ảnh không rời khỏi máy" reads as covering the commune app's scene photos too — false. So the
+   *   promises must still be there, and every paragraph making one must name the business card.
+   */
+  it("lời hứa ảnh danh thiếp không rời máy vẫn còn, và đoạn nào hứa cũng nêu đúng tính năng danh thiếp", () => {
+    const all = [...MUC_CHINH_SACH.flatMap((m) => m.doan)];
+    const joined = all.join("\n");
+    expect(joined, "the business-card promise was deleted").toMatch(/Ảnh không được sao chép đi đâu và không được tải lên máy chủ nào/);
+    expect(joined, "the permission-section promise was deleted").toMatch(/KHÔNG RỜI KHỎI MÁY/);
+    const promises = all.filter((d) =>
+      /không rời khỏi máy|không được tải lên máy chủ nào|không tải ảnh lên bất kỳ máy chủ/i.test(d),
+    );
+    expect(promises.length, "found no photo promise — this case would pass on nothing").toBeGreaterThan(1);
+    for (const d of promises) {
+      expect(d, `a "photo never leaves" promise does not name its feature: ${d.slice(0, 60)}…`).toMatch(/danh thiếp/);
     }
+  });
+
+  /**
+   * DẤU CHỜ DUYỆT — the drafted paragraphs, section by section. RED THE DAY A MARK DISAPPEARS, on purpose: the
+   * only legitimate removal is the owner's approval (ADR 0047), and whoever removes it must change this map in
+   * the same change — that is the record that the approval happened. Do NOT loosen it to "some mark somewhere".
+   */
+  it("dấu chờ duyệt đứng đầu đúng những đoạn đã soạn nháp, và chỉ gỡ được cùng lời duyệt", () => {
+    expect(PENDING_APPROVAL_MARK).toMatch(/^\[CHỜ DUYỆT — /);
+    const marked: Record<string, number> = {};
+    for (const m of MUC_CHINH_SACH) {
+      for (const d of m.doan) {
+        if (d.includes("CHỜ DUYỆT")) {
+          expect(d.startsWith(PENDING_APPROVAL_MARK), `mark not at the start of a ${m.ma} paragraph`).toBe(true);
+          marked[m.ma] = (marked[m.ma] ?? 0) + 1;
+        }
+      }
+    }
+    expect(marked).toEqual({
+      "du-lieu": 1,
+      "anh-hien-truong": MUC_CHINH_SACH.find((m) => m.ma === "anh-hien-truong")!.doan.length,
+      "cac-quyen": 1,
+      "tung-quyen": 2,
+      "cach-thuc": 2,
+    });
+    // The whole scene-photo section is a draft: no paragraph of it may lose its mark alone.
+    expect(marked["anh-hien-truong"]).toBe(11);
   });
 
   it("đổi mã vị trí: thân gửi đúng hai khoá đã khai — mục chính sách cho tuyến này CÒN NỢ", () => {

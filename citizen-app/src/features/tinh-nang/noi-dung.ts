@@ -444,7 +444,10 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   // kết luận SAI mà chính văn bản này vừa mời gọi. Nói ra ngay tại chỗ, đừng bắt người đọc tự
   // đối chiếu hai mục cách nhau nửa trang.
   "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu. (Riêng khi bạn bấm đăng nhập, máy chủ nhìn thấy địa chỉ IP của lời gọi ấy và ghi vào nhật ký đăng nhập — xem mục Đăng nhập.)",
-  "Với máy ảnh và cửa sổ chọn ảnh, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo.",
+  // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`, `content/chinh-sach-rieng-tu.ts`): "KHÔNG RỜI KHỎI MÁY" is true of
+  // the business-card feature only; the commune app's scene photos are uploaded. The feature is now named and the
+  // exception pointed to — the approved promise itself is unchanged.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với máy ảnh và cửa sổ chọn ảnh ở tính năng số hoá danh thiếp giấy, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo. Riêng ảnh hiện trường bạn tự gửi kèm một phản ánh trong ứng dụng riêng của một xã thì được tải lên: mục 'Ảnh hiện trường gửi kèm phản ánh' nói rõ.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   // LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA. Câu này và câu `ghi-tep` trong chính sách
   // phải khớp nhau VÀ khớp với `vcard.ts`.
@@ -490,7 +493,9 @@ export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",
   "Rung (vibrate) — để báo bằng một nhịp rung khi một việc bạn vừa bấm đã xong, cho người không nhìn màn hình liên tục.",
   "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
-  "Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy.",
-  "Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy. Ảnh không rời khỏi máy.",
+  // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`): both permissions gained a second purpose in the commune app
+  // (`zalo-api.ts` rows `camera` / `photos`, `nua: "ca-hai"`). "Ảnh không rời khỏi máy" now names its feature.
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy; và, trong ứng dụng riêng của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh.",
+  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trong ứng dụng riêng của một xã, còn để bạn chụp bằng máy ảnh của Zalo hoặc chọn tối đa 5 ảnh hiện trường gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
 ];

@@ -12,7 +12,13 @@
  *
  *     "không lưu gì xuống máy bạn"  <- dây bẫy cấm localStorage / sessionStorage / cookie /
  *                                      indexedDB, KHÔNG miễn cho tệp nào
- *     "ảnh không rời khỏi máy"      <- dây bẫy cấm `serverUploadUrl` trên toàn cây mã
+ *     "ảnh không rời khỏi máy"      <- dây bẫy cấm `serverUploadUrl` trên toàn cây mã. ⚠ TỪ 02/10/2026
+ *                                      CÂU NÀY CHỈ NÓI VỀ ẢNH DANH THIẾP (tính năng của app chung).
+ *                                      Ảnh hiện trường của APP RIÊNG CỦA XÃ có rời máy — không qua
+ *                                      `serverUploadUrl` (lệnh cấm vẫn nguyên), mà qua lời gọi của nửa
+ *                                      phản ánh (`cong-dan/api/goi-vigov.ts`) sau khi phiếu đã tạo. Mục
+ *                                      `anh-hien-truong` khai việc ấy; mọi câu "ảnh không rời máy" còn
+ *                                      lại phải nêu tên tính năng danh thiếp — `chinh-sach.test.ts` ghim.
  *     "gửi đi ở đúng HAI chỗ"       <- dây bẫy cấm fetch / XHR / WebSocket / EventSource /
  *                                      axios ở MỌI tệp, miễn cho ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN:
  *                                      `features/dang-nhap/goi-may-chu.ts` (đăng nhập) và
@@ -214,6 +220,20 @@ export const NGAY_HIEU_LUC = "20/09/2026";
 
 export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
 
+/**
+ * THE "CHỜ DUYỆT" MARK — at the START of every paragraph whose wording the project owner has not approved
+ * (ADR 0047, row "Ảnh hiện trường khi gửi phản ánh"; G9). Written INTO each string, never concatenated at run
+ * time, because `bundle-for-zalo.test.ts` requires some sections verbatim in the bundle. The mark shows on screen
+ * and in the generated dossier on purpose: a text still carrying it is a text that must NOT be submitted, and
+ * anybody reading the dossier sees that at once.
+ *
+ * ⚠ REMOVE ONLY ON THE OWNER'S APPROVAL, from EVERY paragraph at once, together with the "dấu chờ duyệt" case in
+ * `chinh-sach.test.ts` (it turns red when the mark disappears — that is the point). Removing it without an
+ * approval publishes, under a real legal entity's name, a sentence nobody has answered for.
+ * `PHIEN_BAN_CHINH_SACH` stays 1.0 meanwhile (version block above): no user has ever received this text.
+ */
+export const PENDING_APPROVAL_MARK = "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt]";
+
 
 /**
  * CÂU ĐỨNG ĐẦU — MỘT CÂU, ĐÚNG CHO CẢ HAI BIẾN THỂ.
@@ -264,6 +284,9 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // Một chính sách mô tả sai bản dựng nó nằm trong là thứ Nghị định 13 nhắm tới, và là thứ
       // không sửa lại được sau khi đã nộp duyệt.
       "Ứng dụng không tự đọc thư viện ảnh của bạn. Nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ chọn ảnh của Zalo, và chỉ khi chính bạn bấm nút chọn ảnh.",
+      // DRAFT 02/10/2026 (PENDING_APPROVAL_MARK): the sentence above stays true, but since 02/10 the commune
+      // app also takes a photo with Zalo's camera, and that photo leaves the phone — say so here and point on.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trong ứng dụng riêng của một xã, bạn còn có thể tự bấm chụp ảnh bằng máy ảnh của Zalo, hoặc chọn ảnh có sẵn, để gửi kèm một phản ánh. Những ảnh ấy được gửi đi; mục 'Ảnh hiện trường gửi kèm phản ánh' bên dưới nói rõ chúng đi đâu và ai xem được.",
     ],
   },
   {
@@ -339,6 +362,49 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ],
   },
   {
+    /**
+     * SCENE PHOTOS — DRAFT 02/10/2026, EVERY PARAGRAPH CARRIES `PENDING_APPROVAL_MARK` (ADR 0047 row "Ảnh hiện
+     * trường khi gửi phản ánh"; the owner approves the wording before the Zalo submission).
+     *
+     *   Its own heading for the reason `ghi-tep` and `dang-nhap` have one: this is the first time a citizen's
+     *   PICTURE leaves the phone, and a reader asking "where do my photos go" must find it by a heading. It
+     *   names the COMMUNE APP in the heading because the shared app has no photo button (ADR 0047), and the
+     *   business-card sentences elsewhere ("ảnh không rời khỏi máy") stay true of THAT feature.
+     *
+     *   Every claim is read from built code: optional, at most 5, JPEG/PNG/WebP, camera or picker only on the
+     *   citizen's tap, explained before Zalo's dialog (`cong-dan/man/scene-photos.tsx`, `zalo-api.ts`); no
+     *   `serverUploadUrl`; upload after the petition exists (`cong-dan/api/goi-vigov.ts`); malware scan, re-encode
+     *   to JPEG, all EXIF dropped, private bucket, signed links ≤ 15 min, staff views audited (service-petitions,
+     *   ADR 0047 G3, ADR 0052 §12); not in the draft (`noi-dung.ts` `not_in_draft`).
+     *
+     *   ⚠ THE THREE "KHI …" PARAGRAPHS CONTAIN, VERBATIM, every `trong_chinh_sach` of `SCENE_PHOTO_SLOT_FIELDS`,
+     *   `SCENE_PHOTO_STORAGE_FIELDS`, `SCENE_PHOTO_COMPLETION_FIELDS` (`ket-xuat-ho-so.ts`). `chinh-sach.test.ts`
+     *   locks it: change a declaration there without changing it here and the case is red.
+     *
+     *   ⚠ RETENTION IS A PLACEHOLDER (ADR 0052 §6: 24 months after closing, still owed to the customer) and no
+     *   purge job exists, so the text says "chưa chốt", names the value as provisional, and promises only what the
+     *   code does today: the photo stays with the petition.
+     *
+     *   ⚠ RECIPIENT: written as "máy chủ của Tập đoàn ViHAT Group" — ADR 0044 (02/10/2026: one shared policy;
+     *   data recipient ViHAT Group, #28). The owner must confirm this naming for ViGov's storage when approving.
+     */
+    ma: "anh-hien-truong",
+    tieu_de: "Ảnh hiện trường gửi kèm phản ánh (chỉ trong ứng dụng của xã)",
+    doan: [
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Mục này chỉ nói về ứng dụng riêng của một xã. Ứng dụng chung của Tập đoàn ViHAT Group không có nút gửi ảnh nào. Những câu ở các mục khác nói rằng ảnh không rời khỏi máy là nói về tính năng số hoá danh thiếp giấy, và vẫn đúng cho tính năng ấy.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Khi gửi một phản ánh, bạn CÓ THỂ đính kèm tối đa 5 ảnh hiện trường. Việc này KHÔNG BẮT BUỘC: không có ảnh, phản ánh vẫn gửi được như thường. Ứng dụng chỉ nhận ảnh JPEG, PNG hoặc WebP, không nhận video.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh chỉ đến từ hai nút, và chỉ khi chính bạn bấm: 'Chụp ảnh' mở máy ảnh của Zalo — Zalo hỏi bạn có cho phép dùng máy ảnh hay không; 'Chọn ảnh có sẵn' mở cửa sổ chọn ảnh của Zalo. Ứng dụng nói rõ ảnh dùng để làm gì trước khi hộp thoại của Zalo hiện ra. Ứng dụng chỉ nhận những ảnh bạn đã chụp hoặc chọn, không xem các ảnh khác trong máy.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh chỉ được gửi đi SAU KHI phản ánh của bạn đã được ghi nhận, và đi thẳng vào kho lưu tệp riêng, không công khai, của hệ thống tiếp nhận phản ánh của xã (hệ thống ViGov), trên máy chủ của Tập đoàn ViHAT Group. Zalo không tải ảnh lên hộ: ứng dụng không giao cho Zalo một địa chỉ tải lên nào. Ảnh nào tải chưa được thì không làm hỏng phản ánh đã gửi; bạn tải lại ảnh ấy, hoặc chụp, chọn thêm ảnh, ở 'Phản ánh của tôi' trong lúc phản ánh còn ở bước 'Đã tiếp nhận'.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI XIN CHỖ TẢI MỘT ẢNH, ứng dụng gửi đúng những thứ sau, và không gì khác: mã tra cứu của phản ánh bạn đã gửi, do chính hệ thống của xã cấp, nằm trên đường dẫn; nó chỉ mở được phản ánh của chính bạn · loại ảnh (JPEG, PNG hoặc WebP), đọc từ chính ảnh · dung lượng ảnh tính bằng byte.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI TẢI ẢNH LÊN, ứng dụng gửi tới kho lưu tệp, qua một địa chỉ có chữ ký dùng được trong 15 phút, đúng những thứ sau, và không gì khác: các trường của biểu mẫu tải lên mà chính ViGov cấp ở bước xin chỗ tải (khoá, hạn, chữ ký), gửi lại nguyên văn; không có thông tin nào của bạn · ảnh bạn đã chụp hoặc chọn, đúng loại đã khai; hệ thống của xã bỏ toàn bộ thông tin kèm theo ảnh (như vị trí chụp, thiết bị) trước khi lưu.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI BÁO ĐÃ TẢI XONG, ứng dụng gửi lại mã tra cứu ấy cùng mã của ảnh, do chính hệ thống của xã cấp ở bước xin chỗ tải. Khi bạn mở một phản ánh của mình để xem lại ảnh đã gửi, ứng dụng chỉ gửi mã tra cứu ấy.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] TRƯỚC KHI LƯU, hệ thống quét mã độc trong ảnh, rồi giải mã và mã hoá lại ảnh thành JPEG. Việc mã hoá lại BỎ TOÀN BỘ thông tin kèm theo ảnh (EXIF), kể cả vị trí chụp và thông tin thiết bị. Chỉ bản đã làm sạch được giữ lại; bản bạn gửi lên không được giữ.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] AI XEM ĐƯỢC ẢNH: chính bạn, và cán bộ của đúng xã ấy có quyền xem phản ánh. Ảnh không bao giờ được công khai. Mỗi lần xem là qua một đường dẫn có chữ ký, dùng được tối đa 15 phút. Mỗi lần cán bộ xem ảnh đều được ghi lại trong nhật ký của hệ thống: ai xem, và xem lúc nào.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh không được giữ trên máy bạn: ảnh không nằm trong bản nháp phản ánh, và ứng dụng không lưu ảnh vào thư viện ảnh của máy. Nếu bạn đóng ứng dụng trước khi gửi, bạn chọn lại ảnh.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] THỜI HẠN LƯU ẢNH HIỆN TRƯỜNG: CHƯA CHỐT. [CHỜ DUYỆT — GIÁ TRỊ TẠM] Mức đang dự kiến là 24 tháng sau khi phản ánh được đóng. Cho tới khi thời hạn được chốt, ảnh được giữ cùng phản ánh; thời hạn chính thức sẽ được công bố trong một bản cập nhật của chính sách này trước khi áp dụng.",
+    ],
+  },
+  {
     ma: "cac-quyen",
     tieu_de: "Các quyền ứng dụng xin, và vì sao",
     doan: DOAN_CHINH_SACH_TINH_NANG,
@@ -390,6 +456,9 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     doan: [
       "Trên máy bạn, dữ liệu chỉ tồn tại trong bộ nhớ tạm của phiên làm việc và mất đi khi bạn rời màn hình hoặc đóng ứng dụng.",
       "Tấm ảnh danh thiếp bạn chọn cũng vậy: ứng dụng chỉ giữ đường dẫn tạm của nó trong bộ nhớ để hiện lên màn hình, và buông ra khi bạn chọn ảnh khác hoặc rời màn hình. Ảnh không được sao chép đi đâu và không được tải lên máy chủ nào.",
+      // DRAFT 02/10/2026 (PENDING_APPROVAL_MARK): the business-card sentence above stays true and stays put; this
+      // one keeps a reader from carrying it over to the commune app's scene photos, which DO leave the phone.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh hiện trường bạn tự gửi kèm một phản ánh trong ứng dụng riêng của một xã thì khác ảnh danh thiếp: ảnh ấy được tải lên và lưu ở hệ thống của xã, như mục 'Ảnh hiện trường gửi kèm phản ánh' bên trên nói rõ.",
       "Kiểu kết nối mạng đọc được cũng chỉ hiện lên màn hình rồi mất đi. Ứng dụng không ghi lại lịch sử bạn đã kiểm tra những lần nào.",
       "Phiếu phiên nhận được sau khi bạn đăng nhập cũng chỉ nằm trong bộ nhớ ấy: ứng dụng không ghi nó xuống máy bạn, nên đóng ứng dụng là nó mất đi và lần sau bạn đăng nhập lại bằng một lần chạm.",
       "Trên máy bạn không có việc lưu trữ, nên không có bản sao lưu nào trên máy bạn chứa dữ liệu của bạn.",
@@ -398,6 +467,10 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // TRỌN VẸN — thiếu một mục thì cả câu thành sai, không chỉ thiếu.
       "Ở máy chủ, năm thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; những yêu cầu tư vấn hoặc đề nghị gọi lại bạn đã gửi, nói ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' bên trên; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
       "Ngoài năm thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      // DRAFT 02/10/2026 (PENDING_APPROVAL_MARK): "không ảnh" above is a COMPLETE claim about the login and
+      // consultation server; left unscoped it now reads as "no photo is stored anywhere", which the commune
+      // app's scene photos make false. Scoped here, without editing the approved sentence.
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Năm thứ và câu 'không ảnh' ở trên nói về phần máy chủ phục vụ đăng nhập và yêu cầu tư vấn. Riêng về ảnh: ảnh hiện trường bạn tự gửi kèm một phản ánh trong ứng dụng riêng của một xã được lưu ở hệ thống tiếp nhận phản ánh của xã, như mục 'Ảnh hiện trường gửi kèm phản ánh' bên trên nói rõ.",
       "THỜI HẠN LƯU YÊU CẦU TƯ VẤN: 24 THÁNG kể từ ngày gửi, rồi phần ghi chú bạn tự gõ bị xoá và hàng ấy được đánh dấu là đã ẩn danh. Chi tiết ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' bên trên.",
       "THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: CHẬM NHẤT 90 NGÀY. Đây là mức trần: chúng tôi dọn nhật ký theo từng lô mỗi tuần chứ không xoá từng dòng đúng vào ngày thứ 90, nên một dòng có thể bị xoá SỚM HƠN — sớm nhất là ngày thứ 83. Không dòng nào sống quá 90 ngày.",
       "Thời hạn ấy áp cho MỌI dòng, kể cả những dòng của một lượt đăng nhập không thành công. Nghĩa là nếu bạn chưa từng đăng nhập thành công, nên không có gì để yêu cầu xoá, thì địa chỉ IP trong những dòng ấy vẫn tự mất đi trong vòng 90 ngày mà bạn không phải làm gì cả.",
