@@ -337,7 +337,11 @@ export function PendingField({
   /** `id` of the disabled control — unique on the page, as for any `<label htmlFor>`. */
   id: string;
   label?: ReactNode;
-  kind?: "input" | "select" | "textarea";
+  /**
+   * `file`: a disabled native file input with NO `name` — even with `disabled` removed by hand it
+   * would contribute nothing to a submitted form, so a placeholder can never upload a file.
+   */
+  kind?: "input" | "select" | "textarea" | "file";
   placeholder?: string;
   className?: string;
 }) {
@@ -356,6 +360,10 @@ export function PendingField({
         </select>
       ) : kind === "textarea" ? (
         <textarea id={id} disabled placeholder={placeholder} className={control} />
+      ) : kind === "file" ? (
+        // Not `controlClass`: a native file input draws its own button, and a 40px bordered box
+        // around it reads as a text box.
+        <input id={id} type="file" disabled className="max-w-full cursor-not-allowed text-sm text-ink-500 opacity-60" />
       ) : (
         <input id={id} type="text" disabled placeholder={placeholder} className={control} />
       )}

@@ -181,16 +181,59 @@ describe("CitizenReportBlock", () => {
     on_time: 1,
     late: 2,
   };
-  it("labels, ratio with sample, and the satisfaction cell without data", () => {
-    const html = renderToStaticMarkup(
-      <CitizenReportBlock pair={{ current: ok(r), previous: ok(r) }} windows={WINDOWS} />,
-    );
+  const block = (current: petitions_citizenReportSummaryOut) =>
+    renderToStaticMarkup(<CitizenReportBlock pair={{ current: ok(current), previous: ok(current) }} windows={WINDOWS} />);
+
+  it("labels, ratio with sample", () => {
+    const html = block(r);
     expect(html).toContain("Nhận vào trong kỳ");
     expect(html).toContain("33,3%");
     expect(html).toContain("1/3 phiếu có hạn");
     expect(html).toContain("Trễ hạn trong kỳ");
-    expect(html).toContain("Điểm hài lòng");
     expect(html).toContain('href="/phan-anh?metric=in_progress"');
+  });
+
+  it("Điểm hài lòng: the real average with its sample, linked to the rated petitions, no period", () => {
+    const html = block({ ...r, rating_sum: 13, rating_sample: 3 });
+    expect(valueOf(html, "citizen-reports-rating")).toBe("4,3/5");
+    expect(html).toContain("3 phiếu được chấm");
+    expect(html).toContain('aria-label="Xem danh sách đằng sau: Điểm hài lòng"');
+    expect(html).toContain('href="/phan-anh?metric=rating_sample"');
+    // the same division as the Phản ánh screen; no "?" left for it
+    expect(html).not.toContain(pendingMarkerLabel("Điểm hài lòng"));
+  });
+
+  it("Điểm hài lòng with an EMPTY sample: '—' and the no-rating sentence — never 0 or 0,0/5", () => {
+    const html = block({ ...r, rating_sum: 0, rating_sample: 0 });
+    expect(valueOf(html, "citizen-reports-rating")).toBe("—");
+    expect(html).toContain("Chưa có phiếu nào được người dân chấm điểm");
+    expect(html).not.toContain("0,0/5");
+  });
+
+  it("Điểm hài lòng from a server without the two fields: '—', no sentence, no fake average", () => {
+    const html = block(r);
+    expect(valueOf(html, "citizen-reports-rating")).toBe("—");
+    expect(html).not.toContain("phiếu được chấm");
+  });
+
+  it("DENIED: without feedback.read the block — and its rating — is not drawn", () => {
+    const rated = { ...r, rating_sum: 13, rating_sample: 3 };
+    const html = page(
+      { citizenReports: { current: ok(rated), previous: ok(rated) } },
+      blockVisibility(["report.read", "task.read"]),
+    );
+    expect(html).not.toContain("Điểm hài lòng");
+    expect(html).not.toContain("4,3/5");
+    expect(html).not.toContain('href="/phan-anh?metric=rating_sample"');
+  });
+
+  it("ALLOWED: with report.read and feedback.read the page shows the rating", () => {
+    const rated = { ...r, rating_sum: 13, rating_sample: 3 };
+    const html = page(
+      { citizenReports: { current: ok(rated), previous: ok(rated) } },
+      blockVisibility(["report.read", "feedback.read"]),
+    );
+    expect(valueOf(html, "citizen-reports-rating")).toBe("4,3/5");
   });
 });
 
@@ -398,7 +441,7 @@ describe("every link RENDERED on the page is valid at the receiving list", () =>
       (m[1] ?? "").replaceAll("&amp;", "&"),
     );
     const lists = hrefs.filter((h) => (h.split("?")[0] ?? "") in REGISTER);
-    expect(lists).toHaveLength(12); // 5 tasks + 3 documents + 4 citizen reports
+    expect(lists).toHaveLength(13); // 5 tasks + 3 documents + 5 citizen reports (rating included)
     for (const href of lists) {
       const [path, query = ""] = href.split("?") as [keyof typeof REGISTER, string];
       const parsed = parseDrillDown(REGISTER[path], Object.fromEntries(new URLSearchParams(query)));

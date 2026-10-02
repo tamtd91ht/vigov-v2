@@ -1,6 +1,6 @@
 import { CalendarClock } from "lucide-react";
 
-import { PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
+import { PendingField, PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
 
 import { PHAN_CHUA_DUNG } from "./nhan-bien-ban";
 
@@ -20,26 +20,18 @@ function part(prefix: string): PendingFeatureInfo {
 }
 
 /**
- * Spec §4 last field, "Tệp đính kèm — bản scan biên bản". `PendingField` has no file kind, so it is
- * drawn here in the same shape: label above, "?" beside the label (NEVER inside it — its sentence
- * would join the control's accessible name), a disabled native file input below.
+ * Spec §4 last field, "Tệp đính kèm — bản scan biên bản": `PendingField`'s file kind — label above,
+ * "?" beside the label, a disabled native file input with no `name` below.
  */
 export function ScanAttachmentField() {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5" data-pending="">
-      <div className="flex items-center gap-1.5">
-        <label htmlFor="tep-dinh-kem-bien-ban" className="text-xs leading-tight font-semibold text-ink-500">
-          Tệp đính kèm
-        </label>
-        <PendingMarker info={part("Tệp đính kèm")} />
-      </div>
-      <input
-        id="tep-dinh-kem-bien-ban"
-        type="file"
-        disabled
-        className="max-w-full cursor-not-allowed text-sm text-ink-500 opacity-60"
-      />
-    </div>
+    <PendingField
+      info={part("Tệp đính kèm")}
+      id="tep-dinh-kem-bien-ban"
+      label="Tệp đính kèm"
+      kind="file"
+      className="min-w-0 flex-none"
+    />
   );
 }
 
@@ -53,7 +45,7 @@ export function SuggestedDeadlineHint() {
     <p className="m-0 inline-flex items-center gap-1.5 text-[13px] text-ink-400" aria-disabled="true" data-pending="">
       <CalendarClock aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
       Hạn gợi ý từ ngày nêu trong kết luận
-      <PendingMarker info={part("HẠN GỢI Ý")} />
+      <PendingMarker info={part("Hạn gợi ý")} />
     </p>
   );
 }

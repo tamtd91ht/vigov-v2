@@ -565,7 +565,7 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(tep).toContain('id="tep-dinh-kem-bien-ban"');
     expect(tep).toContain('disabled=""');
     expect(tep).not.toContain("name=");
-    expect(html).toContain("Tệp đính kèm — bản scan biên bản (§4) — tính năng đang phát triển");
+    expect(html).toContain("Tệp đính kèm — bản scan biên bản — tính năng đang phát triển");
     expect(html.indexOf('id="tep-dinh-kem-bien-ban"')).toBeGreaterThan(html.indexOf('id="cac-ket-luan"'));
     // Bản sửa cũng có ô ấy: đặc tả §4 dùng một biểu mẫu cho cả hai.
     expect(veForm(null, { loai: "sua", ban: bienBan() })).toContain('id="tep-dinh-kem-bien-ban"');

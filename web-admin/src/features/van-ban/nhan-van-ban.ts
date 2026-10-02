@@ -425,29 +425,35 @@ export type PendingPart = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
+  // No service holds a citizen-letter register (`don_thu`) — no entity, no route.
   {
     ten: "Đơn thư công dân",
     viSao:
-      "Sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị, đề nghị của công dân chưa có ở máy chủ, nên " +
+      "Hệ thống chưa có sổ theo dõi đơn khiếu nại, tố cáo, kiến nghị, đề nghị của công dân, nên " +
       "tab này chưa có dữ liệu để hiện.",
   },
+  // The report counts the citizen-letter register, which does not exist yet (entry above).
   {
     ten: "Báo cáo",
     viSao:
       "Báo cáo tiến độ tiếp nhận và xử lý đơn thư lấy số liệu từ sổ đơn thư công dân, mà sổ ấy " +
-      "chưa có ở máy chủ.",
+      "hệ thống chưa có.",
   },
+  // No OCR adapter. Sending scans (which may carry citizens' personal data) to an external OCR
+  // service for the first time is rule 3 stop condition 2 — the authority's call, not ours.
   {
     ten: "Quét & OCR",
     viSao:
       "Hệ thống chưa có phần đọc chữ từ bản quét. Gửi bản quét — có thể chứa thông tin cá nhân " +
       "của công dân — tới một dịch vụ nhận dạng chữ bên ngoài là việc chờ cơ quan quyết định.",
   },
+  // The C2 lifecycle is decided, but no route moves an incoming document between those statuses;
+  // forwarding to another unit is a separate, built route.
   {
     ten: "Chuyển trạng thái văn bản đến",
     viSao:
       "Các bước của văn bản đến đã được chốt: Đã vào sổ → Chờ trình/phân luồng → Đã chuyển xử lý → " +
-      "Đang xử lý → Hoàn thành. Máy chủ chưa có chức năng đổi trạng thái theo các bước ấy, nên các " +
-      "nút chưa bấm được. Chuyển văn bản cho bộ phận khác vẫn làm được như hiện nay.",
+      "Đang xử lý → Hoàn thành. Hệ thống chưa đổi được trạng thái theo các bước ấy, nên các nút " +
+      "chưa bấm được. Chuyển văn bản cho bộ phận khác vẫn làm được như hiện nay.",
   },
 ];

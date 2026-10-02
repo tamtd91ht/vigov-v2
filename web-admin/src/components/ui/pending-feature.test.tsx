@@ -299,6 +299,18 @@ describe("control shapes: the control is the real kind, disabled; only the '?' i
     }
   });
 
+  it("PendingField file: a DISABLED file input with no name — nothing a form could submit", () => {
+    const el = mount(<PendingField info={{ ten: "Ảnh", viSao: "Chưa dựng." }} id="anh" kind="file" />);
+    const input = el.querySelector<HTMLInputElement>("#anh")!;
+    expect(input.tagName.toLowerCase()).toBe("input");
+    expect(input.type).toBe("file");
+    expect(input.disabled).toBe(true);
+    expect(input.name).toBe("");
+    expect(el.querySelector("label")!.htmlFor).toBe("anh");
+    expect(el.querySelector("label")!.querySelector("button")).toBeNull();
+    expect(el.querySelector("button[data-pending-marker]")).not.toBeNull();
+  });
+
   it("PendingFeature: wraps a control the screen drew disabled, '?' pinned to its corner", () => {
     const el = mount(
       <PendingFeature info={INFO}>

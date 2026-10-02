@@ -114,6 +114,7 @@ import {
   unitCountText,
 } from "./nhan-danh-ba";
 import { PendingStaffKpis } from "./pending-staff-kpis";
+import { StaffAvatarField } from "./staff-avatar-field";
 
 /**
  * Màn **Danh bạ cán bộ** — `docs/ui-ux/12-danh-ba-can-bo.md`, đường dẫn `/danh-ba`.
@@ -609,6 +610,7 @@ export function DanhBaLienHe() {
           dangGui={dangGui}
           onGui={guiSua}
           onHuy={dongSua}
+          avatarField={<StaffAvatarField />}
         />
       )}
 

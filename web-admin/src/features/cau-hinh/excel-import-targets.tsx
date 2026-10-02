@@ -58,7 +58,7 @@ import {
  * beside `lib/api/map-asset-type-import.ts`, add ONE target here, and — for a catalogue group — one
  * entry in `CATALOGUE_IMPORTS`. The panel, the flow and the key-per-attempt rule need no change. Every
  * Danh mục group imports today, so `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`) no longer carries an Excel
- * item; `khoi-chua-dung.test.tsx` fails if one comes back while `CATALOGUE_IMPORTS` covers every group.
+ * item; `pending-entries.test.tsx` fails if one comes back while `CATALOGUE_IMPORTS` covers every group.
  */
 
 /** Sơ đồ tổ chức (§1) — `admin.org`, gated by `tab-so-do-to-chuc.tsx`. */

@@ -467,7 +467,7 @@ describe("PHẦN CHƯA DỰNG — dấu '?' đúng vị trí đặc tả (ADR 00
 
   it("mục đầu tiên (không có tuyến ĐỌC danh sách chứng từ) vẫn được nói ra — ở bảng chứng từ rỗng", () => {
     // No placeholder of its own: it is a limit of a BUILT table, and every page load starts empty.
-    expect(PHAN_CHUA_DUNG_GHI[0]!.viSao).toContain("KHÔNG " + "có tuyến nào đọc danh sách chứng từ");
+    expect(PHAN_CHUA_DUNG_GHI[0]!.viSao).toContain("chưa có cách đọc lại danh sách chứng từ");
     expect(veBang(true, true, [])).toContain("chưa có tuyến đọc danh sách chứng từ");
   });
 

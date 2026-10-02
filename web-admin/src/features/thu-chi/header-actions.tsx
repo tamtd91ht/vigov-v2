@@ -27,4 +27,4 @@ export function BudgetSheetHeaderActions() {
 }
 
 /** Exact `ten` of the entry — the description shown behind the "?". */
-export const IMPORT_EXCEL = "⬆ Nạp từ Excel (§6)";
+export const IMPORT_EXCEL = "Nạp từ Excel";

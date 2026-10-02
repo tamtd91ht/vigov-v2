@@ -84,7 +84,7 @@ export const SYSTEM_SEARCH_PENDING: PendingFeatureInfo = {
   ten: "Tìm kiếm toàn hệ thống",
   viSao:
     "Một ô tìm được cùng lúc nhiệm vụ, văn bản và phản ánh, kết quả lọc theo quyền của từng người. " +
-    "Máy chủ chưa có tuyến tìm kiếm chung cho các phân hệ.",
+    "Hệ thống chưa tìm chung được trên các phân hệ; hiện mỗi sổ có bộ lọc riêng trên màn của nó.",
 };
 
 /**

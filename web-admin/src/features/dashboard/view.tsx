@@ -35,6 +35,7 @@ import { PendingSection, PendingStatCard } from "@/components/ui/pending-feature
 import { Segmented } from "@/components/ui/segmented";
 import { NO_DATA_CAPTION, StatCard, type StatTone } from "@/components/ui/stat-card";
 import { TodoList, type TodoItem } from "@/components/ui/todo-list";
+import { KPI_NO_RATING, ratingAverage } from "@/features/phan-anh/nhan-phieu";
 import { OTien } from "@/features/thu-chi/o-tien";
 import {
   GHI_CHU_CHENH_LECH,
@@ -861,6 +862,7 @@ export function CitizenReportBlock({
       alert: true,
       icon: AlarmClock,
     }),
+    ratingFigure(id, pair.current, period),
   ];
   return (
     <SectionCard title="Phản ánh người dân" icon={MessageSquareWarning}>
@@ -870,10 +872,38 @@ export function CitizenReportBlock({
           <MetricRow key={f.id} figure={f} />
         ))}
       </MetricList>
-      {/* Spec §4.5's fifth figure, as the KPI card it will be, with the "?" (ADR 0068 §14). */}
-      <PendingStatCard info={pendingPart("Điểm hài lòng")} icon={Star} />
     </SectionCard>
   );
+}
+
+/**
+ * Spec §4.5's fifth figure, "Điểm hài lòng" — the average star rating, from the SAME response the
+ * block already reads (`rating_sum` / `rating_sample` of citizen-report-summary), divided by the
+ * Phản ánh screen's own `ratingAverage`, so the two screens cannot show two averages.
+ *
+ * A STOCK figure (the register as it stands, `lib/drill-down.ts`): no comparison line, and the link
+ * opens the rated petitions without a period. An empty sample is "—" plus the Phản ánh screen's
+ * sentence, NEVER 0 or 0,0/5. A server that predates the two fields gives "—" with no sentence.
+ */
+function ratingFigure(
+  blockId: string,
+  current: Loaded<petitions_citizenReportSummaryOut>,
+  period: { from: string; to: string },
+): Figure {
+  const r = current !== null && current.ok ? current.duLieu : null;
+  const sample = r?.rating_sample;
+  const known = typeof sample === "number" && typeof r?.rating_sum === "number";
+  const average = r === null ? null : ratingAverage(r.rating_sum, sample);
+  const target: DrillTarget = { list: "citizen-reports", metric: "rating_sample" };
+  return {
+    id: `${blockId}-rating`,
+    label: "Điểm hài lòng",
+    display: current === null ? LOADING : (average ?? NO_VALUE),
+    href: drillHref(target, period),
+    note: !known ? undefined : average === null ? KPI_NO_RATING : `${formatCount(sample)} phiếu được chấm`,
+    comparison: null,
+    icon: Star,
+  };
 }
 
 /** Appends "đồng" after a number — never after `—` or a server sentence (as `bang-thu-chi.tsx`). */

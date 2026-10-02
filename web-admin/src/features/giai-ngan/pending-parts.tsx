@@ -40,26 +40,27 @@ import { pendingPart } from "./nhan-ghi-giai-ngan";
  * renderable on their own in tests.
  */
 
-const IMPORT_EXCEL = "Modal `⬆ Nhập giải ngân` từ Excel (§10)";
-const CATEGORIES = "Nút `☰ Hạng mục` (§5)";
-const KPI_CARDS = "Bốn thẻ số liệu: Kế hoạch vốn năm, Đã giải ngân, Còn phải giải ngân, Cần chú ý (§3)";
-const CUMULATIVE_CHART = "Biểu đồ Luỹ kế giải ngân so với kế hoạch (§4)";
-const CATEGORY_PROGRESS = "Bảng Tiến độ theo hạng mục (§5)";
-const FUNDING_PROGRESS = "Khối Tiến độ theo nguồn vốn và nút Quản lý nguồn vốn (§6)";
-const ONLY_DELAYED = "Ô lọc Chỉ dự án chậm (§7.1)";
-const GROUP_BY_CATEGORY = "Ô Gộp theo hạng mục (§7.1)";
+// Exact `ten` of each `PHAN_CHUA_DUNG_GHI` entry (spec sections in the entry's comment there).
+const IMPORT_EXCEL = "Nhập giải ngân từ Excel"; // §10
+const CATEGORIES = "Hạng mục"; // §5
+const KPI_CARDS = "Số liệu tổng hợp của năm"; // §3
+const CUMULATIVE_CHART = "Luỹ kế giải ngân so với kế hoạch"; // §4
+const CATEGORY_PROGRESS = "Tiến độ theo hạng mục"; // §5
+const FUNDING_PROGRESS = "Tiến độ theo nguồn vốn"; // §6
+const ONLY_DELAYED = "Chỉ dự án chậm"; // §7.1
+const GROUP_BY_CATEGORY = "Gộp theo hạng mục"; // §7.1
 /** Names of the list table's two pending columns, read by `bang-du-an.tsx`. */
-export const FUNDING_COLUMN = "Cột Nguồn vốn của bảng dự án (§7.2)";
-export const LATEST_ISSUE_COLUMN = "Cột Vướng mắc mới nhất (§7.2)";
-const PROJECT_FUNDING = "Mục Giải ngân theo nguồn vốn của dự án (§8)";
-const ISSUES_TAB = "Tab Vướng mắc (§8.1)";
-const CHART_TAB = "Tab Biểu đồ (§8.3)";
-const DISCUSSION_TAB = "Tab Trao đổi (§8.4)";
+export const FUNDING_COLUMN = "Nguồn vốn của dự án"; // §7.2
+export const LATEST_ISSUE_COLUMN = "Vướng mắc mới nhất"; // §7.2
+const PROJECT_FUNDING = "Giải ngân theo nguồn vốn"; // §8
+const ISSUES_TAB = "Vướng mắc"; // §8.1
+const CHART_TAB = "Biểu đồ"; // §8.3
+const DISCUSSION_TAB = "Trao đổi"; // §8.4
 /** Names used by the Thêm dự án form and the voucher table. */
-export const AUTO_CODE = "Ô `☑ Tự sinh mã` của modal Thêm dự án (§9)";
-export const UNIT_AND_OFFICER = "Hai ô chọn `Đơn vị thực hiện` và `Cán bộ phụ trách` của modal Thêm dự án (§9)";
-export const FUNDING_LIST = "Danh sách động `Nguồn vốn` trong modal Thêm dự án (§9) và phép sửa phân bổ ở §8";
-export const VOUCHER_FUNDING_COLUMN = "Cột `NGUỒN VỐN` và ô chọn nguồn vốn ở biểu mẫu chứng từ (§8.2, §6)";
+export const AUTO_CODE = "Tự sinh mã"; // §9
+export const UNIT_AND_OFFICER = "Đơn vị thực hiện và Cán bộ phụ trách"; // §9
+export const FUNDING_LIST = "Thêm nguồn vốn cho dự án"; // §9, §8
+export const VOUCHER_FUNDING_COLUMN = "Nguồn vốn của chứng từ"; // §8.2, §6
 
 /** PageHeader buttons, spec §2: `[☰ Hạng mục] [⬆ Nhập giải ngân]`, before `+ Thêm dự án`. */
 export function DisbursementHeaderActions() {

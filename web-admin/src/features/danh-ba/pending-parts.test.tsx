@@ -10,9 +10,13 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
+import { BieuMauGhiCanBo } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
+import { banTuCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
+
 import { BangLienHe } from "./bang-lien-he";
 import { pendingPart, PHAN_CHUA_DUNG } from "./nhan-danh-ba";
 import { PendingStaffKpis } from "./pending-staff-kpis";
+import { StaffAvatarField } from "./staff-avatar-field";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -101,6 +105,59 @@ describe("Danh bạ — unbuilt parts at their spec position (ADR 0068 §14)", (
       pendingPart("Tổng số cán bộ").viSao,
     );
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("the staff form has the 'Ảnh đại diện' file field after 'Có Zalo': disabled, no name, '?', no fetch", () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const el = mount(
+      <BieuMauGhiCanBo
+        dangMo={{ kieu: "sua", canBo: STAFF }}
+        ban={banTuCanBo(STAFF)}
+        datBan={() => undefined}
+        vaiTroID=""
+        datVaiTroID={() => undefined}
+        boPhan={[]}
+        vaiTro={[]}
+        loiMayChu=""
+        dangGui={false}
+        onGui={() => undefined}
+        onHuy={() => undefined}
+        avatarField={<StaffAvatarField />}
+      />,
+    );
+    const file = el.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(file.id).toBe("o-anh-dai-dien-can-bo");
+    expect(file.disabled).toBe(true);
+    expect(file.name).toBe("");
+    // Spec §5 order: after the Có Zalo checkbox.
+    const zalo = el.querySelector("#o-co-zalo-can-bo")!;
+    expect(zalo.compareDocumentPosition(file) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing of it goes into the submitted form.
+    expect([...new FormData(el.querySelector("form")!).keys()]).not.toContain("o-anh-dai-dien-can-bo");
+
+    act(() => marker(el, "Ảnh đại diện").click());
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(pendingPart("Ảnh đại diện").viSao);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("without the slot (Cấu hình's staff dialog) the form has no file field", () => {
+    const el = mount(
+      <BieuMauGhiCanBo
+        dangMo={{ kieu: "sua", canBo: STAFF }}
+        ban={banTuCanBo(STAFF)}
+        datBan={() => undefined}
+        vaiTroID=""
+        datVaiTroID={() => undefined}
+        boPhan={[]}
+        vaiTro={[]}
+        loiMayChu=""
+        dangGui={false}
+        onGui={() => undefined}
+        onHuy={() => undefined}
+      />,
+    );
+    expect(el.querySelector('input[type="file"]')).toBeNull();
   });
 
   it("every entry is drawn somewhere — none is a description with no '?' behind it", () => {

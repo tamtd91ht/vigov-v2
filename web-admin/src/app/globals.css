@@ -1272,8 +1272,7 @@ div.thong-bao-loi:not(:empty) {
    dùng bàn phím mất hẳn đường điều hướng khi thanh đang thu, mà nút thu gọn thì vẫn ở đó. */
 .thanh-ben.thu-gon .commune-identity-text,
 .thanh-ben.thu-gon .thanh-ben-nhan-nhom,
-.thanh-ben.thu-gon .thanh-ben-nhan,
-.thanh-ben.thu-gon .thanh-ben-dau-chua-co {
+.thanh-ben.thu-gon .thanh-ben-nhan {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1406,20 +1405,6 @@ div.thong-bao-loi:not(:empty) {
   color: var(--ink-400);
 }
 
-/* "Chưa có" badge, merged into the item itself (owner decision 02/10/2026 — never "Sắp có", which
-   would read as a promise made by a public authority). */
-.thanh-ben-dau-chua-co {
-  flex: none;
-  margin-left: auto;
-  padding: 0.0625rem 0.4375rem;
-  border-radius: 999px;
-  background: #f1f4f8;
-  color: var(--ink-500);
-  font-size: 0.625rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
 /* Collapse control at the BOTTOM (spec §5): icon + small word, icon only when collapsed. */
 .thanh-ben-chan {
   flex: none;
@@ -1524,8 +1509,7 @@ div.thong-bao-loi:not(:empty) {
 
   /* A collapsed choice saved on a wide screen must not hide labels on a narrow one. */
   .thanh-ben.thu-gon .commune-identity-text,
-  .thanh-ben.thu-gon .thanh-ben-nhan,
-  .thanh-ben.thu-gon .thanh-ben-dau-chua-co {
+  .thanh-ben.thu-gon .thanh-ben-nhan {
     position: static;
     width: auto;
     height: auto;

@@ -19,21 +19,17 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 // vi-name-ok: the progress tool (`tools/tien_do_san_pham.py`) matches this exact constant name
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   {
-    ten: "Điểm hài lòng",
-    viSao:
-      "Điểm trung bình người dân tự chấm (1 đến 5 sao) cho phiếu phản ánh. Màn Phản ánh đã hiện " +
-      "điểm này; thẻ trên màn Tổng quan chưa được nối với số liệu ấy.",
-  },
-  {
     ten: "Đơn thư trong kỳ",
     viSao:
       "Số đơn thư công dân vào sổ trong kỳ. Hệ thống chưa có sổ đơn thư, nên chưa có gì để đếm.",
   },
+  // No finance route returns the commune-wide disbursement aggregates (rate, elapsed share of the
+  // budget year, delayed projects, open issues, amount disbursed); issues are not recorded at all.
   {
     ten: "Giải ngân ngân sách",
     viSao:
       "Năm chỉ số của cả xã: tỷ lệ giải ngân, thời gian đã trôi qua của năm ngân sách, số dự án " +
-      "chậm, vướng mắc chưa gỡ và số tiền đã giải ngân. Máy chủ chưa trả các số tổng hợp ấy.",
+      "chậm, vướng mắc chưa gỡ và số tiền đã giải ngân. Hệ thống chưa tính các số tổng hợp ấy.",
   },
   {
     ten: "Kinh tế & Tài nguyên",

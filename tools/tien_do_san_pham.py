@@ -233,8 +233,9 @@ def so_chua_dung(thu_muc: str) -> int | None:
 
     `None` KHÁC `0`, và gộp hai thứ lại là chỗ bảng này nói dối dễ nhất: `0` nghĩa là màn có
     khai một danh sách và danh sách ấy rỗng — tức mọi phần của đặc tả đã dựng. `None` nghĩa là
-    màn chưa bao giờ khai, nên không ai biết nó còn thiếu gì. Ba màn đang ở trạng thái sau
-    (`van-ban`, `danh-ba`, `cau-hinh`), và in `—` cho cả hai sẽ đọc ra thành "xong rồi".
+    màn chưa bao giờ khai, nên không ai biết nó còn thiếu gì. Màn nào đang ở trạng thái sau thì
+    bảng tự in `không khai` (đếm từ mã, không liệt kê tay ở đây), và in `—` cho cả hai sẽ đọc ra
+    thành "xong rồi".
 
     Quét MỌI tệp nguồn trong thư mục, không chỉ `nhan-*.ts`: chỗ đặt hằng số là quy ước, và một
     quy ước không có rào nào canh thì một màn đặt chỗ khác là con số ở đây tụt về 0 trong im lặng.

@@ -587,128 +587,146 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
+  // §8.2 voucher table. THE MOST IMPORTANT ENTRY HERE. The contract has SIX voucher write routes and
+  // NO read route for a project's voucher list — on purpose, and the server says why
+  // (`service-finance/internal/http/chung_tu_giai_ngan.go`, file header: a read route brings the
+  // pagination question and "what does a commune with 4000 vouchers a year get"). So the table holds
+  // only what THIS session just wrote or re-stated, because those four routes return the whole row.
+  // No "?" of its own: the empty voucher table says it on every page load (`chung-tu-du-an.tsx`).
   {
-    ten: "Bảng chứng từ của một dự án (§8.2) — danh sách đầy đủ, mở màn là thấy",
+    ten: "Danh sách chứng từ của dự án",
     viSao:
-      "ĐÂY LÀ MỤC QUAN TRỌNG NHẤT CỦA DANH SÁCH NÀY. Hợp đồng có SÁU tuyến ghi chứng từ và KHÔNG " +
-      "có tuyến nào đọc danh sách chứng từ — máy chủ nói thẳng đó là chủ ý và nói vì sao " +
-      "(`service-finance/internal/http/chung_tu_giai_ngan.go`, khối đầu tệp: một tuyến đọc mang " +
-      "theo câu hỏi phân trang và câu hỏi 'xã có 4000 chứng từ một năm thì nhận được gì'). Hệ " +
-      "quả thật thà: bảng dưới đây CHỈ giữ những chứng từ do chính phiên làm việc này vừa ghi " +
-      "hoặc vừa đổi trạng thái, vì bốn tuyến ấy trả về nguyên hàng. Tải lại trang là bảng trống " +
-      "— không phải vì xã không có chứng từ, mà vì không có đường nào hỏi.",
+      "Hệ thống chưa có cách đọc lại danh sách chứng từ đã ghi của một dự án. Bảng chứng từ chỉ " +
+      "hiện những chứng từ vừa ghi hoặc vừa đổi trạng thái trong lần làm việc này; tải lại trang " +
+      "thì bảng trống, dù dự án vẫn có chứng từ.",
   },
+  // §8.2 `NGUỒN VỐN` column + the voucher form's funding select (§6). No contract route reads the
+  // `nguon_von` catalogue, so no select can be built — a box for pasting a ULID is not a select. A
+  // voucher with no funding source is a state §13 rule 6 defines and §6 reports ("spent, not yet
+  // drawn from any source"), so leaving it empty is a valid path. `PATCH` already accepts it.
   {
-    ten: "Cột `NGUỒN VỐN` và ô chọn nguồn vốn ở biểu mẫu chứng từ (§8.2, §6)",
+    ten: "Nguồn vốn của chứng từ",
     viSao:
-      "Không có tuyến nào đọc danh mục nguồn vốn (`nguon_von`) trong hợp đồng, nên không có ô " +
-      "chọn nào dựng được. Một ô cho cán bộ dán một chuỗi ULID không phải là một ô chọn. Chứng " +
-      "từ ghi mà chưa gắn nguồn là trạng thái §13 quy tắc 6 định nghĩa và §6 báo cáo ('đã chi " +
-      "nhưng chưa ghi rút từ nguồn nào'), nên biểu mẫu bỏ trống trường ấy là một đường hợp lệ, " +
-      "không phải một khiếm khuyết bị giấu. Tuyến `PATCH` đã sẵn sàng nhận nó ngày danh mục có.",
+      "Hệ thống chưa có danh mục nguồn vốn để chọn, nên chứng từ được ghi mà chưa gắn nguồn vốn. " +
+      "Chứng từ chưa gắn nguồn vốn vẫn là chứng từ hợp lệ.",
   },
+  // §9 `☑ Tự sinh mã`. The server does not generate codes and says why (`domain.ErrThieuMaDuAn`): the
+  // spec gives two contradicting formats (`DA01` in §9, `DA-2026-be-tong-hoa-duong-ngo-xo-2` in §7.2)
+  // and never says what range a sequence runs in. A project code is an ISSUED code (rule 7: never
+  // renumbered), so a sequence invented on screen cannot be taken back. A question for the customer.
   {
-    ten: "Ô `☑ Tự sinh mã` của modal Thêm dự án (§9)",
+    ten: "Tự sinh mã",
     viSao:
-      "Máy chủ CHƯA tự sinh mã và nói thẳng vì sao (`domain.ErrThieuMaDuAn`): đặc tả đưa ra hai " +
-      "khuôn mã mâu thuẫn nhau (`DA01` ở §9 và `DA-2026-be-tong-hoa-duong-ngo-xo-2` ở §7.2) và " +
-      "không nói dãy chạy trong phạm vi nào. Mã dự án là MÃ ĐÃ CẤP, thứ luật 7 cấm đánh lại, nên " +
-      "một dãy tự chế ở màn hình là thứ không rút lại được. Câu để HỎI khách, không phải để đoán.",
+      "Hệ thống chưa tự sinh mã dự án, vì quy cách đánh mã chưa được thống nhất. Mã đã cấp không " +
+      "được đánh lại, nên hiện mỗi dự án cần được nhập mã bằng tay.",
   },
+  // §9 `Đơn vị thực hiện` / `Cán bộ phụ trách`. The contract takes `org_unit_id` and `assignee_id`,
+  // but both are ids of records `service-identity` owns; turning them into two selects needs another
+  // route under another permission, and a text box for a ULID is not an interface. Projects are
+  // created with both empty, as §9 draws (`— Chưa xác định —`, `— Chưa phân công —`).
   {
-    ten: "Hai ô chọn `Đơn vị thực hiện` và `Cán bộ phụ trách` của modal Thêm dự án (§9)",
+    ten: "Đơn vị thực hiện và Cán bộ phụ trách",
     viSao:
-      "Hợp đồng nhận `org_unit_id` và `assignee_id`, nhưng cả hai là id của bản ghi do " +
-      "`service-identity` sở hữu; ghép chúng thành hai ô chọn là việc của tuyến khác dưới quyền " +
-      "khác, và dán một chuỗi ULID vào ô nhập không phải một giao diện. Dự án tạo ra để trống hai " +
-      "trường ấy, đúng như §9 vẽ (`— Chưa xác định —`, `— Chưa phân công —`).",
+      "Chưa chọn được đơn vị thực hiện và cán bộ phụ trách khi thêm dự án. Dự án được tạo với hai " +
+      "mục này để trống.",
   },
+  // §9 dynamic `Nguồn vốn` list + editing allocations in §8. `POST` ACCEPTS `funding_allocations`, so
+  // the server is not the gap here — the funding-source select is (entry above). EDITING allocations
+  // is deliberately absent: `PATCH` does not take the field until open question (b) of migration 0007
+  // is answered (may a project declare two lines from the same source) — the customer's call.
   {
-    ten: "Danh sách động `Nguồn vốn` trong modal Thêm dự án (§9) và phép sửa phân bổ ở §8",
+    ten: "Thêm nguồn vốn cho dự án",
     viSao:
-      "Tuyến `POST` NHẬN `funding_allocations`, nên nửa này không thiếu ở máy chủ — thiếu là ô " +
-      "chọn nguồn vốn (xem mục trên). Còn SỬA phân bổ thì hợp đồng cố ý không có: `PATCH` không " +
-      "nhận trường ấy vì phải trả lời trước câu hỏi mở (b) của migration 0007 — một dự án có " +
-      "được khai hai dòng cùng một nguồn hay không — và đó là quyết định của khách.",
+      "Chưa khai được nguồn vốn khi thêm dự án, vì hệ thống chưa có danh mục nguồn vốn để chọn. " +
+      "Việc sửa phân bổ nguồn vốn của dự án còn chờ đơn vị quyết định cách ghi.",
   },
+  // §10 Excel import modal. No contract route takes an Excel file, and §10's all-or-nothing rule is a
+  // SERVER rule (check the whole file; any error, accept no row) — half of it in the browser would
+  // promise something nothing guarantees.
   {
-    ten: "Modal `⬆ Nhập giải ngân` từ Excel (§10)",
+    ten: "Nhập giải ngân từ Excel",
     viSao:
-      "Không tuyến nào trong hợp đồng nhận tệp Excel, và quy tắc all-or-nothing của §10 là quy " +
-      "tắc của MÁY CHỦ (kiểm cả tệp, có lỗi thì không nhận dòng nào) — dựng một nửa ở trình " +
-      "duyệt là hứa một điều không có gì bảo đảm.",
+      "Chưa nhập được giải ngân từ tệp Excel. Hãy ghi từng khoản chi ở trang chi tiết của dự án.",
   },
+  // §5 `☰ Hạng mục`. Add / rename / reorder categories already works in Cấu hình → Danh mục
+  // (`admin.lookup`). A per-category disbursement deadline and yearly capital plan, as the spec draws
+  // them, have no server support, so the button that opens them from this screen is not built.
   {
-    ten: "Nút `☰ Hạng mục` (§5)",
+    ten: "Hạng mục",
     viSao:
-      "Thêm, sửa tên và thứ tự hạng mục kế hoạch vốn đã làm được ở màn Cấu hình, phần Danh mục " +
-      "(quyền admin.lookup). Đặt thời hạn giải ngân và kế hoạch vốn năm cho từng hạng mục như bản " +
-      "thiết kế vẽ thì máy chủ chưa có, nên nút mở thẳng từ màn này chưa dựng.",
+      "Thêm, sửa tên và sắp xếp hạng mục đã làm được ở màn Cấu hình, phần Danh mục. Đặt thời hạn " +
+      "giải ngân và kế hoạch vốn năm cho từng hạng mục thì hệ thống chưa có.",
   },
+  // §3 four KPI cards. No route returns whole-year totals (capital plan, disbursed, delayed count) and
+  // there is no issue data. Summing the filtered list in the browser is wrong whenever a filter is on.
   {
-    ten: "Bốn thẻ số liệu: Kế hoạch vốn năm, Đã giải ngân, Còn phải giải ngân, Cần chú ý (§3)",
+    ten: "Số liệu tổng hợp của năm",
     viSao:
-      "Máy chủ chưa trả các số tổng của cả năm ngân sách (tổng kế hoạch vốn, tổng đã giải ngân, " +
-      "số dự án chậm) và chưa có số liệu vướng mắc. Cộng ở trình duyệt từ danh sách đang lọc sẽ " +
-      "ra con số sai mỗi khi có bộ lọc.",
+      "Hệ thống chưa tính các số tổng của cả năm ngân sách (kế hoạch vốn, đã giải ngân, số dự án " +
+      "chậm) và chưa ghi nhận vướng mắc, nên chưa có số liệu để hiện.",
   },
+  // §4 cumulative chart: no route returns cumulative disbursement per month of the year.
   {
-    ten: "Biểu đồ Luỹ kế giải ngân so với kế hoạch (§4)",
+    ten: "Luỹ kế giải ngân so với kế hoạch",
+    viSao: "Hệ thống chưa tính số giải ngân luỹ kế theo từng tháng, nên chưa có số liệu để vẽ.",
+  },
+  // §5 per-category table: needs per-category totals over every project of the year; no route has them.
+  {
+    ten: "Tiến độ theo hạng mục",
     viSao:
-      "Máy chủ chưa trả số giải ngân luỹ kế theo từng tháng của năm, nên chưa có số liệu để vẽ.",
+      "Bảng cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
+      "tính các tổng ấy.",
   },
+  // §6 per-funding-source block + `Quản lý nguồn vốn`: no route reads or manages the funding catalogue.
   {
-    ten: "Bảng Tiến độ theo hạng mục (§5)",
+    ten: "Tiến độ theo nguồn vốn",
     viSao:
-      "Bảng cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục, cộng trên toàn bộ dự án " +
-      "của năm. Máy chủ chưa trả các tổng ấy.",
+      "Hệ thống chưa có danh mục nguồn vốn, nên chưa tính được số đã phân bổ và đã giải ngân theo " +
+      "từng nguồn, và chưa quản lý được nguồn vốn.",
   },
+  // §7.1 filter: the project list route filters by budget year and category only.
   {
-    ten: "Khối Tiến độ theo nguồn vốn và nút Quản lý nguồn vốn (§6)",
+    ten: "Chỉ dự án chậm",
+    viSao: "Chưa lọc được riêng các dự án chậm. Danh sách hiện lọc được theo năm ngân sách và hạng mục.",
+  },
+  // §7.1 grouping: needs per-category totals over the whole year; summing in the browser is wrong as
+  // soon as the list is filtered.
+  {
+    ten: "Gộp theo hạng mục",
     viSao:
-      "Máy chủ chưa có chức năng xem hay quản lý danh mục nguồn vốn, nên chưa tính được số đã phân " +
-      "bổ và đã giải ngân theo từng nguồn.",
+      "Gộp cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trong năm. Hệ thống chưa " +
+      "tính các tổng ấy.",
   },
+  // §7.2 column: the list response carries no funding source per project, and no route reads the
+  // funding catalogue.
   {
-    ten: "Ô lọc Chỉ dự án chậm (§7.1)",
+    ten: "Nguồn vốn của dự án",
+    viSao: "Danh sách dự án chưa có thông tin nguồn vốn, vì hệ thống chưa có danh mục nguồn vốn.",
+  },
+  // §7.2 column: no issue-tracking data exists anywhere yet.
+  {
+    ten: "Vướng mắc mới nhất",
+    viSao: "Hệ thống chưa ghi nhận vướng mắc của dự án, nên chưa có nội dung để hiện.",
+  },
+  // §8 block: the detail response carries no funding allocation, and no route reads the catalogue.
+  {
+    ten: "Giải ngân theo nguồn vốn",
     viSao:
-      "Máy chủ chưa nhận điều kiện lọc này: danh sách dự án hiện chỉ lọc được theo năm ngân sách " +
-      "và hạng mục.",
+      "Trang chi tiết chưa có phân bổ nguồn vốn của dự án, vì hệ thống chưa có danh mục nguồn vốn.",
   },
+  // §8.1 tab: no issue-tracking routes.
   {
-    ten: "Ô Gộp theo hạng mục (§7.1)",
-    viSao:
-      "Gộp cần tổng kế hoạch vốn và tổng đã giải ngân của từng hạng mục trên toàn bộ dự án của " +
-      "năm. Máy chủ chưa trả các tổng ấy; cộng ở trình duyệt sẽ sai ngay khi danh sách đang được " +
-      "lọc.",
-  },
-  {
-    ten: "Cột Nguồn vốn của bảng dự án (§7.2)",
-    viSao:
-      "Danh sách dự án chưa trả nguồn vốn của từng dự án, và máy chủ chưa có chức năng xem danh " +
-      "mục nguồn vốn.",
-  },
-  {
-    ten: "Cột Vướng mắc mới nhất (§7.2)",
-    viSao: "Hệ thống chưa có chức năng ghi nhận vướng mắc của dự án, nên chưa có nội dung để hiện.",
-  },
-  {
-    ten: "Mục Giải ngân theo nguồn vốn của dự án (§8)",
-    viSao:
-      "Khi xem chi tiết, máy chủ chưa trả phân bổ nguồn vốn của dự án, và chưa có chức năng xem " +
-      "danh mục nguồn vốn.",
-  },
-  {
-    ten: "Tab Vướng mắc (§8.1)",
+    ten: "Vướng mắc",
     viSao: "Hệ thống chưa có chức năng ghi nhận và theo dõi vướng mắc của dự án.",
   },
+  // §8.3 tab: no route returns a project's cumulative disbursement per month.
   {
-    ten: "Tab Biểu đồ (§8.3)",
-    viSao:
-      "Máy chủ chưa trả số giải ngân luỹ kế theo tháng của dự án, nên chưa có số liệu để vẽ.",
+    ten: "Biểu đồ",
+    viSao: "Hệ thống chưa tính số giải ngân luỹ kế theo tháng của dự án, nên chưa có số liệu để vẽ.",
   },
+  // §8.4 tab: no discussion storage for a project.
   {
-    ten: "Tab Trao đổi (§8.4)",
+    ten: "Trao đổi",
     viSao: "Hệ thống chưa có chức năng lưu trao đổi giữa các cán bộ về một dự án.",
   },
 ];

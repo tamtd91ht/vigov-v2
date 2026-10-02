@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import {
@@ -80,7 +82,14 @@ export function BieuMauGhiCanBo({
   dangGui,
   onGui,
   onHuy,
+  avatarField,
 }: {
+  /**
+   * Spec §5 `Ảnh đại diện` placeholder (ADR 0068 §14), drawn on the profile forms only. A slot, not
+   * drawn here: the Danh bạ screen owns that entry, and the Cấu hình staff dialog (14-cau-hinh §3)
+   * has no such field.
+   */
+  avatarField?: ReactNode;
   dangMo: DangMoGhi;
   ban: BanNhapCanBo;
   datBan: (b: BanNhapCanBo) => void;
@@ -201,6 +210,9 @@ export function BieuMauGhiCanBo({
           </p>
         </div>
       )}
+
+      {/* Spec §5 order: after `Có Zalo`, before `Thứ tự hiển thị`. */}
+      {coOHoSo && avatarField}
 
       {dangMo.kieu === "vaiTro" && (
         <OChon

@@ -192,16 +192,18 @@ describe("phần chưa dựng được", () => {
    * chưa dựng, thì đúng ca này đỏ.
    */
   it("thứ CÒN THIẾU của §3 là HẠN GỢI Ý, và lý do nói rõ đó là câu chờ khách", () => {
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("HẠN GỢI Ý"));
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Hạn gợi ý"));
 
     expect(muc).toBeDefined();
     // ĐIỀN SẴN đã dựng xong (`tieuDeCoSan`), nên nó KHÔNG được còn nằm trong danh sách như một
     // thứ chưa có — một danh sách kể tên thứ đã dựng là danh sách khiến người sau dựng lần hai.
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("ĐIỀN SẴN"))).toBe(false);
-    // Lý do phải dẫn ĐÚNG CHỖ máy chủ đã từ chối tự suy ngày, kèm số đo. Thiếu nó thì mục này
-    // đọc ra như một việc chưa ai làm, và người sau sẽ làm — ở client, nơi không ai kiểm được.
-    expect(muc?.viSao).toContain("bien_ban_hop_ghi.go");
-    expect(muc?.viSao).toContain("ba trên bốn lần");
+    expect(PHAN_CHUA_DUNG.some((p) => /điền sẵn/i.test(p.ten))).toBe(false);
+    // Câu cho CÁN BỘ đọc (ADR 0068 §14): nói hệ thống CỐ Ý không đoán và việc ấy chờ đơn vị quyết —
+    // thiếu nó thì mục này đọc ra như một việc chưa ai làm, và người sau sẽ làm ở client. Chỗ máy
+    // chủ từ chối và số đo "ba trên bốn lần" nằm ở chú thích ngay trên mục, không trong câu này.
+    expect(muc?.viSao).toContain("không tự đoán hạn");
+    expect(muc?.viSao).toContain("chờ đơn vị quyết định");
+    expect(muc?.viSao).not.toMatch(/`|\.go|§/);
   });
 
   /**
@@ -228,7 +230,7 @@ describe("phần chưa dựng được", () => {
     expect(ten).not.toContain("Thứ tự thẻ theo NGÀY HỌP");
 
     expect(ten).toContain("Tệp đính kèm");
-    expect(ten).toContain("HẠN GỢI Ý");
+    expect(ten).toContain("Hạn gợi ý");
     expect(ten).not.toContain("Lớp CSS");
     expect(ten).not.toContain("modal");
     expect(ten).not.toContain("task.create");

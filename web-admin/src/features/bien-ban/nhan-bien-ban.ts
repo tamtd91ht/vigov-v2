@@ -674,26 +674,29 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // §3 suggested deadline of the Tách form. The button and the pre-filled content ARE built (it opens
+  // `02-nhiem-vu.md` §7's "Giao việc mới", reusing `FormGiaoViec`). What is missing is reading a date
+  // out of the conclusion's sentence (`báo cáo trước ngày 20/8` → 20/8). NOT a pending chore but a
+  // question waiting on the customer: the server derives NOTHING on purpose
+  // (`service-petitions/internal/http/bien_ban_hop_ghi.go`, comment above the split body, ~:183-190):
+  // the sibling implementation measured guessing — right three times out of four, and the fourth
+  // leaves a wrong task in a register that cannot be deleted, only withdrawn. A client-side guesser
+  // rebuilds exactly what the server refused, where nobody can check it. The "Nguồn giao" and
+  // `nguon_id` of §3's table are not missing: the contract has no field for them, the server derives
+  // the pair from the conclusion named in the path.
   {
-    ten: "HẠN GỢI Ý của biểu mẫu Tách (§3) — nút và điền sẵn thì đã dựng",
+    ten: "Hạn gợi ý từ ngày nêu trong kết luận",
     viSao:
-      "Nút `Tách thành nhiệm vụ` đã có, mở đúng biểu mẫu “Giao việc mới” của `02-nhiem-vu.md` " +
-      "§7 (dùng lại nguyên `FormGiaoViec`, không bản thứ hai), và ô “Nội dung nhiệm vụ” NAY ĐÃ " +
-      "ĐIỀN SẴN nội dung kết luận. Thứ còn thiếu là HẠN GỢI Ý: §3 muốn đọc ngày từ chính câu kết " +
-      "luận (`báo cáo trước ngày 20/8` → 20/8). Đây KHÔNG phải một việc chưa tới lượt mà là một " +
-      "câu chờ khách chốt — máy chủ CỐ Ý không suy ngày, và " +
-      "`service-petitions/internal/http/bien_ban_hop_ghi.go:130-135` ghi số đo của bản cài đặt " +
-      "anh em: đúng ba trên bốn lần, lần thứ tư để lại một nhiệm vụ SAI HẠN trong một quyển sổ " +
-      "không xoá được, chỉ thu hồi được. Dựng bộ đoán ngày ở client là dựng lại đúng thứ máy chủ " +
-      "vừa từ chối, chỉ khác là ở chỗ không ai kiểm được. Hai ô “Nguồn giao” và `nguon_id` của " +
-      "bảng §3 thì không thiếu gì cả: hợp đồng không có trường nào cho chúng, máy chủ suy cặp ấy " +
-      "từ kết luận nêu trong đường dẫn.",
+      "Hệ thống không tự đoán hạn hoàn thành từ câu kết luận: đoán sai một lần là tạo ra một nhiệm " +
+      "vụ sai hạn, không xoá được. Có gợi ý hạn hay không đang chờ đơn vị quyết định. Hiện hãy " +
+      "nhập hạn ở ô “Hạn hoàn thành”.",
   },
+  // §4 last field. File storage exists (ADR 0052), but there is no upload purpose for meeting-minute
+  // scans, and no route attaches a file to a meeting or reads an attached one back.
   {
-    ten: "Tệp đính kèm — bản scan biên bản (§4)",
+    ten: "Tệp đính kèm — bản scan biên bản",
     viSao:
-      "Hệ thống đã có nơi lưu tệp, nhưng chưa có loại tệp dành cho bản scan biên bản họp, và máy " +
-      "chủ chưa có chức năng gắn tệp vào một biên bản hay đọc lại tệp đã gắn. Cho chọn tệp lúc này " +
-      "là mời cán bộ đưa một bản scan lên rồi mất.",
+      "Hệ thống đã có nơi lưu tệp, nhưng chưa có cách gắn tệp vào một biên bản họp hay mở lại tệp " +
+      "đã gắn. Cho chọn tệp lúc này thì bản scan tải lên sẽ không được lưu cùng biên bản.",
   },
 ];

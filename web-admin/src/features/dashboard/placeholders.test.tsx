@@ -89,19 +89,22 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
     expect(el.textContent).not.toContain("cũ hơn 10 phút");
   });
 
-  it("the unbuilt KPI cards show '—', never a figure and never a link", () => {
+  it("the unbuilt KPI card shows '—', never a figure and never a link", () => {
     const el = page();
-    for (const ten of ["Điểm hài lòng", "Đơn thư trong kỳ"]) {
-      const card = marker(el, ten)!.closest("[data-pending]")!;
-      expect(card.textContent).toContain("—");
-      expect(card.querySelector("a")).toBeNull();
-    }
+    const card = marker(el, "Đơn thư trong kỳ")!.closest("[data-pending]")!;
+    expect(card.textContent).toContain("—");
+    expect(card.querySelector("a")).toBeNull();
+  });
+
+  it("'Điểm hài lòng' is a real figure now (owner, 02/10/2026): no '?' for it anywhere", () => {
+    const el = page();
+    expect(marker(el, "Điểm hài lòng")).toBeNull();
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten === "Điểm hài lòng")).toBe(false);
   });
 
   it("DENIED: without budget.read the 'Giải ngân ngân sách' placeholder is not drawn either", () => {
     const el = page(blockVisibility(["report.read"]));
     expect(marker(el, "Giải ngân ngân sách")).toBeNull();
-    expect(marker(el, "Điểm hài lòng")).toBeNull();
     expect(marker(el, "Đơn thư trong kỳ")).toBeNull();
     // no key of its own: shown under the page gate alone
     expect(marker(el, "Kinh tế & Tài nguyên")).not.toBeNull();

@@ -210,23 +210,28 @@ export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
  * "Nhập từ Excel" đã ra khỏi danh sách: nhập cán bộ từ Excel đã dựng ở Cấu hình (ADR 0059).
  */
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // The directory route is paginated and deliberately returns no total. Counting the rows of the open
+  // page and calling it the total would report a figure nobody computed.
   {
     ten: "Tổng số cán bộ",
     viSao:
-      "Máy chủ đọc danh bạ theo từng trang và cố ý không đếm tổng, nên chưa có con số này. Đếm số " +
-      "dòng của trang đang mở rồi gọi đó là tổng là báo một con số không ai tính.",
+      "Danh bạ được tải theo từng trang và hệ thống chưa đếm tổng số cán bộ, nên chưa có con số " +
+      "này. Lấy số dòng của trang đang mở làm tổng sẽ ra một con số sai.",
   },
+  // No route returns how many staff are shown on the Mini App, commune-wide or per block — which is
+  // also why the block filter shows block names only.
   {
     ten: "Đang hiện trên Mini App",
     viSao:
-      "Máy chủ chưa trả số cán bộ đang hiện trên Mini App, của cả xã lẫn của từng khối, nên ô lọc " +
-      "khối cũng chỉ ghi tên khối. Muốn biết ai đang hiện, dùng bộ lọc “Đang hiện trên Mini App”.",
+      "Hệ thống chưa đếm số cán bộ đang hiện trên Mini App, của cả xã lẫn của từng khối. Muốn biết " +
+      "ai đang hiện, dùng bộ lọc “Đang hiện trên Mini App”.",
   },
+  // The staff record has no photo field, and there is no upload purpose / route for a staff photo.
   {
     ten: "Ảnh đại diện",
     viSao:
-      "Hồ sơ cán bộ chưa có trường ảnh và máy chủ chưa có tuyến tải ảnh cán bộ lên, nên bảng và " +
-      "biểu mẫu chưa có ảnh; danh bạ hiện chữ cái đầu của họ tên thay ảnh.",
+      "Hồ sơ cán bộ chưa lưu được ảnh, nên bảng và biểu mẫu chưa có ảnh. Danh bạ hiện chữ cái đầu " +
+      "của họ tên thay cho ảnh.",
   },
 ];
 

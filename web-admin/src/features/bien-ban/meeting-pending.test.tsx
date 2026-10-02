@@ -74,11 +74,12 @@ describe("chỗ giữ “?” của màn Biên bản (ADR 0068 §14)", () => {
     expect(el.querySelector('[aria-disabled="true"]')).not.toBeNull();
     expect(el.textContent).not.toMatch(/\d{1,2}\/\d{1,2}/);
 
-    const muc = entry("HẠN GỢI Ý");
+    const muc = entry("Hạn gợi ý");
     const marker = el.querySelector<HTMLButtonElement>("button[data-pending-marker]")!;
     expect(marker.getAttribute("aria-label")).toBe(pendingMarkerLabel(muc.ten));
     act(() => marker.click());
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("ba trên bốn lần");
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(muc.viSao);
+    expect(muc.viSao).toContain("chờ đơn vị quyết định");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
