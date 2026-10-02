@@ -24,8 +24,13 @@ import { formatDateTime } from "./period";
 /** A figure that has no value — failed call, empty sample. NEVER `0`. */
 export const NO_VALUE = "—";
 
-/** One muted line for a block or cell with no source data in wave 1. Never 0, never invented. */
-export const NO_SOURCE_DATA = "Chưa có dữ liệu nguồn";
+/**
+ * Why a block or cell has no figure in wave 1: no service holds the source yet. Never 0, never
+ * invented. Shown under the "Chưa có dữ liệu" empty state (and as the `title` of a no-source cell),
+ * so "no source exists" stays distinguishable from a FAILED call, which shows "—" and its error.
+ * States a fact, not a date: a public authority does not promise when a source will arrive.
+ */
+export const NO_SOURCE_DATA = "Hệ thống chưa có nguồn số liệu cho mục này.";
 
 /** Spec §8, verbatim. */
 export const NOTHING_URGENT = "Không có việc nào cần xử lý ngay.";

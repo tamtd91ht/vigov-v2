@@ -11,16 +11,17 @@ import type {
 } from "@/lib/api/schema.gen";
 import { parseDrillDown } from "@/lib/drill-down";
 
-import { NO_SOURCE_DATA, NOTHING_URGENT } from "./figures";
+import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
+
+import { NOTHING_URGENT } from "./figures";
 import { MISSING_REPORT_READ } from "./overview";
 import { periodWindows } from "./period";
 import {
   blockVisibility,
   CitizenReportBlock,
   DashboardView,
+  DocumentSourcesBlock,
   FiscalBlock,
-  IncomingDocumentBlock,
-  TaskBlock,
   UrgentPanel,
 } from "./view";
 import type { DashboardData, SummaryPair } from "./view";
@@ -49,20 +50,46 @@ function valuesOf(html: string): string[] {
   return [...html.matchAll(/id="[^"]*-value"[^>]*>([^<]*)</g)].map((m) => m[1] ?? "");
 }
 
-describe("TaskBlock", () => {
+/** The value inside the element `aria-describedby` points at — `undefined` if not rendered. */
+function valueOf(html: string, id: string): string | undefined {
+  return new RegExp(`id="${id}-value"[^>]*>([^<]*)<`).exec(html)?.[1];
+}
+
+const TASK_KEYS = blockVisibility(["report.read", "task.read"]);
+const DOCUMENT_KEYS = blockVisibility(["report.read", "document.read"]);
+
+/** The page with the given loads — the task and document figures live in two row-1 blocks now. */
+function page(patch: Partial<DashboardData>, visible = TASK_KEYS): string {
+  return renderToStaticMarkup(
+    <DashboardView data={{ ...emptyData(), ...patch }} visible={visible} onPeriodChange={() => {}} />,
+  );
+}
+
+const NOTHING_PENDING = "Không có việc tồn đọng";
+
+describe("task figures (Cần xử lý · Tình hình trong kỳ)", () => {
   it("count 0 shows 0; an empty on-time sample shows '—', never 0%", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock pair={{ current: ok(TASKS_ZERO), previous: ok(TASKS_ZERO) }} windows={WINDOWS} />,
-    );
-    expect(valuesOf(html)).toEqual(["0", "0", "0", "0", "—"]);
+    const html = page({ tasks: { current: ok(TASKS_ZERO), previous: ok(TASKS_ZERO) } });
+    // every row of "Cần xử lý" answered 0 → the positive empty state replaces the overdue row
+    expect(html).toContain(NOTHING_PENDING);
+    expect(valuesOf(html)).toEqual(["0", "0", "0", "—"]);
     expect(html).not.toContain("0,0%");
     expect(html).toContain("0/0 việc có hạn");
   });
 
+  it("an overdue count above 0 keeps its row, its number and its link", () => {
+    const html = page({
+      tasks: { current: ok({ ...TASKS_ZERO, overdue: 2 }), previous: ok(TASKS_ZERO) },
+    });
+    expect(html).not.toContain(NOTHING_PENDING);
+    expect(valueOf(html, "tasks-overdue")).toBe("2");
+    expect(html).toContain("Nhiệm vụ quá hạn");
+  });
+
   it("every figure is a link named 'Xem danh sách đằng sau: {nhãn}' to its list", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock pair={{ current: ok(TASKS_ZERO), previous: ok(TASKS_ZERO) }} windows={WINDOWS} />,
-    );
+    const html = page({
+      tasks: { current: ok({ ...TASKS_ZERO, overdue: 1 }), previous: ok(TASKS_ZERO) },
+    });
     expect(html).toContain('aria-label="Xem danh sách đằng sau: Quá hạn"');
     expect(html).toContain('href="/nhiem-vu?metric=overdue"');
     // the % cell leads to the numerator, with the period
@@ -70,54 +97,47 @@ describe("TaskBlock", () => {
   });
 
   it("stock figures carry no comparison line; period figures do", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock
-        pair={{
-          current: ok({ ...TASKS_ZERO, in_progress: 24, completed: 9 }),
-          previous: ok({ ...TASKS_ZERO, in_progress: 10, completed: 8 }),
-        }}
-        windows={WINDOWS}
-      />,
-    );
+    const html = page({
+      tasks: {
+        current: ok({ ...TASKS_ZERO, in_progress: 24, completed: 9 }),
+        previous: ok({ ...TASKS_ZERO, in_progress: 10, completed: 8 }),
+      },
+    });
     expect(html).toContain("↑ +12,5% so với kỳ trước");
     // 24 vs 10 would be +140,0% — must not be drawn for a stock figure
     expect(html).not.toContain("140,0%");
     expect(html).not.toContain("chưa có kỳ trước");
   });
 
-  it("a FAILED call shows '—' and the server's sentence — never 0", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock
-        pair={{ current: failed("Đã xảy ra lỗi. Vui lòng thử lại."), previous: ok(TASKS_ZERO) }}
-        windows={WINDOWS}
-      />,
-    );
+  it("a FAILED call shows '—' and the server's sentence — never 0, never 'nothing pending'", () => {
+    const html = page({
+      tasks: { current: failed("Đã xảy ra lỗi. Vui lòng thử lại."), previous: ok(TASKS_ZERO) },
+    });
     expect(valuesOf(html)).toEqual(["—", "—", "—", "—", "—"]);
     expect(html).toContain("Đã xảy ra lỗi. Vui lòng thử lại.");
     expect(html).toContain('role="alert"');
+    expect(html).toContain("Tải lại");
+    expect(html).not.toContain(NOTHING_PENDING);
   });
 
   it("a failed PREVIOUS call keeps the current figures and says the previous is missing", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock
-        pair={{ current: ok({ ...TASKS_ZERO, completed: 3 }), previous: failed("Mạng hỏng.") }}
-        windows={WINDOWS}
-      />,
-    );
-    expect(valuesOf(html)[3]).toBe("3");
+    const html = page({
+      tasks: { current: ok({ ...TASKS_ZERO, completed: 3 }), previous: failed("Mạng hỏng.") },
+    });
+    expect(valueOf(html, "tasks-completed")).toBe("3");
     expect(html).toContain("Kỳ trước: —");
     expect(html).toContain("Không tải được số liệu kỳ trước: Mạng hỏng.");
   });
 
-  it("loading shows neither 0 nor '—'", () => {
-    const html = renderToStaticMarkup(
-      <TaskBlock pair={{ current: null, previous: null }} windows={WINDOWS} />,
-    );
+  it("loading shows neither 0 nor '—', and is not 'nothing pending'", () => {
+    const html = page({ tasks: { current: null, previous: null } });
     expect(valuesOf(html)).toEqual(["…", "…", "…", "…", "…"]);
+    expect(html).not.toContain(NOTHING_PENDING);
+    expect(html).not.toContain("Tải lại");
   });
 });
 
-describe("IncomingDocumentBlock", () => {
+describe("incoming document figures", () => {
   const doc: documents_incomingSummaryOut = {
     from: "2026-09-01T00:00:00+07:00",
     to: "2026-09-28T16:43:01+07:00",
@@ -126,9 +146,7 @@ describe("IncomingDocumentBlock", () => {
     open: 6,
     overdue: 4,
   };
-  const html = renderToStaticMarkup(
-    <IncomingDocumentBlock pair={{ current: ok(doc), previous: ok(doc) }} windows={WINDOWS} />,
-  );
+  const html = page({ incomingDocuments: { current: ok(doc), previous: ok(doc) } }, DOCUMENT_KEYS);
 
   it("`open` and `overdue` link WITHOUT from/to; `arrived` with them", () => {
     expect(html).toContain('href="/van-ban?metric=open"');
@@ -140,10 +158,16 @@ describe("IncomingDocumentBlock", () => {
     expect(html).toContain("tính đến 16:43 28/09/2026");
   });
 
-  it("cells with no source say so — never 0", () => {
-    expect(html).toContain("Đơn thư trong kỳ");
-    expect(html).toContain("Tỷ lệ đúng hạn văn bản");
-    expect(html.split(NO_SOURCE_DATA)).toHaveLength(3);
+  it("an account without task.read sees no task figure", () => {
+    expect(html).not.toContain('href="/nhiem-vu');
+  });
+
+  it("cells with no source say so — never 0, never a link", () => {
+    const sources = renderToStaticMarkup(<DocumentSourcesBlock />);
+    expect(sources).toContain("Đơn thư trong kỳ");
+    expect(sources).toContain("Tỷ lệ đúng hạn văn bản");
+    expect(sources.split(NO_DATA_CAPTION)).toHaveLength(3);
+    expect(sources).not.toContain("href=");
   });
 });
 
@@ -281,10 +305,17 @@ describe("DashboardView — access per block", () => {
     const html = renderToStaticMarkup(
       <DashboardView data={emptyData()} visible={visible} onPeriodChange={() => {}} />,
     );
-    expect(html).not.toContain('aria-label="Nhiệm vụ"');
-    expect(html).not.toContain('aria-label="Văn bản đến"');
+    // no figure of any module: no link to its list, no block that groups them
+    expect(html).not.toContain('href="/nhiem-vu');
+    expect(html).not.toContain('href="/van-ban');
+    expect(html).not.toContain('href="/phan-anh');
+    expect(html).not.toContain('href="/giai-ngan');
+    expect(html).not.toContain('aria-label="Cần xử lý"');
+    expect(html).not.toContain('aria-label="Tình hình trong kỳ"');
+    expect(html).not.toContain('aria-label="Văn bản &amp; Đơn thư"');
     expect(html).not.toContain('aria-label="Phản ánh người dân"');
     expect(html).not.toContain("Thu – Chi ngân sách");
+    expect(html).not.toContain("Giải ngân ngân sách");
     expect(html).not.toContain("Cần xử lý ngay");
     // the block with no source and no key of its own stays, muted
     expect(html).toContain("Kinh tế &amp; Tài nguyên");
@@ -305,11 +336,19 @@ describe("DashboardView — access per block", () => {
     const html = renderToStaticMarkup(
       <DashboardView data={emptyData()} visible={visible} onPeriodChange={() => {}} />,
     );
-    expect(html).toContain('aria-label="Nhiệm vụ"');
-    expect(html).toContain('aria-label="Văn bản đến"');
+    expect(html).toContain('aria-label="Cần xử lý"');
+    expect(html).toContain('aria-label="Tình hình trong kỳ"');
+    expect(html).toContain('aria-label="Văn bản &amp; Đơn thư"');
     expect(html).toContain('aria-label="Phản ánh người dân"');
     expect(html).toContain("Giải ngân ngân sách");
-    expect(html).toContain("Kỳ tháng này: 1/9/2026 – 30/9/2026 · tính đến 16:43 28/09/2026");
+    expect(html).toContain("Thu – Chi ngân sách");
+    // the period, and the instant the figures were read (formerly "· tính đến …" on one line)
+    expect(html).toContain("Kỳ tháng này: 1/9/2026 – 30/9/2026");
+    expect(html).toContain("Cập nhật 16:43 28/09/2026");
+    // what "kỳ trước" means — visible text, not a hover-only tooltip
+    expect(html).toContain(
+      "So với cùng khoảng thời gian đã trôi qua của kỳ trước: 00:00 01/08/2026",
+    );
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain("Tháng này");
     expect(html).toContain(NOTHING_URGENT);

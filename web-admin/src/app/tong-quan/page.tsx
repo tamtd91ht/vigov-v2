@@ -1,4 +1,7 @@
+import { LayoutDashboard } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { DashboardPage } from "@/features/dashboard/overview";
@@ -34,7 +37,8 @@ export default async function OverviewPage() {
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>Tổng quan điều hành</h1>
+            {/* Outside the `report.read` gate: an account without the key still reads the title. */}
+            <PageHeader icon={LayoutDashboard} title="Tổng quan điều hành" />
             <DashboardPage />
           </main>
         </div>
