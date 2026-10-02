@@ -1,9 +1,29 @@
 "use client";
 
+import {
+  ArrowLeftRight,
+  CircleCheck,
+  ListOrdered,
+  LockKeyhole,
+  PencilLine,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
 import type {
   finance_budgetPeriodCloseOut,
   finance_cotRa,
@@ -130,14 +150,24 @@ export function HopDotThuChi({
   const monthsHint = closedMonthsHint(closes, sheetYear);
 
   return (
-    <section className="khoi-chi-tiet" role="dialog" aria-labelledby="tieu-de-hop-dot">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-hop-dot">{tieuDeHopDot(tenKhoanMuc)}</h3>
-        <button type="button" className="nut-phu" onClick={dong}>
+    <Card as="section" role="dialog" aria-labelledby="tieu-de-hop-dot">
+      <CardHeader className="justify-between">
+        <CardTitle as="h3" id="tieu-de-hop-dot" className="inline-flex min-w-0 items-center gap-2">
+          <ArrowLeftRight aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          {tieuDeHopDot(tenKhoanMuc)}
+        </CardTitle>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon={<X aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={dong}
+        >
           Đóng
-        </button>
-      </div>
+        </Button>
+      </CardHeader>
 
+      <div className="flex min-w-0 flex-col gap-4 p-4">
       <NoiDungHopDot
         method={method}
         cot={cot}
@@ -154,16 +184,22 @@ export function HopDotThuChi({
         }}
       >
         {loi !== null && (
-          <p className="thong-bao-loi" role="alert">
+          <p className="thong-bao-loi m-0" role="alert">
             {loi}
           </p>
         )}
-        {thongBao !== null && <p role="status">{thongBao}</p>}
+        {thongBao !== null && (
+          <p role="status" className="m-0 inline-flex items-center gap-1.5 text-sm text-success-600">
+            <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
+            {thongBao}
+          </p>
+        )}
 
         {dangGo !== null && (
           <FormGoKemLyDo
             idTruong="go-dot-reason"
-            tieuDe={`Gỡ đợt ngày ${nhanNgayLuyKe(dangGo.date)}`}
+            tieuDe={`Gỡ đợt ngày ${nhanNgayLuyKe(dangGo.date)}?`}
+            submitLabel="Gỡ đợt"
             canhBao={
               "Gỡ một đợt đổi ngay con số của khoản mục nếu khoản mục đang Cộng theo đợt, và cả hai " +
               "chỉ số của năm. Đợt vẫn được giữ kèm người gỡ và lý do."
@@ -179,9 +215,16 @@ export function HopDotThuChi({
           />
         )}
 
-        {coGhi && sheetLock !== null && <p className="canh-bao-pham-vi">{sheetLock}</p>}
+        {coGhi && sheetLock !== null && (
+          <Notice tone="legal" icon={LockKeyhole}>
+            {sheetLock}
+          </Notice>
+        )}
         {coGhi && sheetLock === null && monthsHint !== null && (
-          <p className="ghi-chu">{monthsHint}</p>
+          <p className="m-0 inline-flex items-center gap-1.5 text-xs text-ink-500">
+            <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5 shrink-0" />
+            {monthsHint}
+          </p>
         )}
 
         {coGhi && sheetLock === null && (
@@ -206,7 +249,8 @@ export function HopDotThuChi({
           />
         )}
       </NoiDungHopDot>
-    </section>
+      </div>
+    </Card>
   );
 }
 
@@ -249,25 +293,34 @@ export function NoiDungHopDot({
 
   return (
     <>
-      <p className="mo-ta-trang">{MO_TA_HOP_DOT}</p>
-      <p className="ghi-chu">{cauDieuKienDot(methodHien)}</p>
-      <p className="ghi-chu">Số tiền theo đơn vị của bảng: {donVi.nhan}.</p>
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="m-0 text-sm text-ink-700">{MO_TA_HOP_DOT}</p>
+        <p className="m-0 text-xs text-ink-500">{cauDieuKienDot(methodHien)}</p>
+        <p className="m-0 text-xs text-ink-500">Số tiền theo đơn vị của bảng: {donVi.nhan}.</p>
+      </div>
 
       {children}
 
-      <h4>Các đợt đã ghi</h4>
-      {danhSach.pha === "dangTai" && <p role="status">Đang tải các đợt…</p>}
+      <h4 className="m-0 text-sm font-semibold text-ink-900">Các đợt đã ghi</h4>
+      {danhSach.pha === "dangTai" && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải các đợt…
+          </p>
+          <SkeletonRows rows={3} className="-mx-4" />
+        </>
+      )}
       {danhSach.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {danhSach.thongBao}
         </p>
       )}
       {danhSach.pha === "xong" && danhSach.duLieu.entries.length === 0 && (
-        <p className="trang-thai-rong">{DOT_TRONG}</p>
+        <EmptyState icon={ListOrdered} title={DOT_TRONG} className="py-6" />
       )}
       {danhSach.pha === "xong" && danhSach.duLieu.entries.length > 0 && (
-        <div className="bang-cuon" role="region" aria-label="Các đợt đã ghi" tabIndex={0}>
-          <table className="bang-danh-muc">
+        <TableScroll aria-label="Các đợt đã ghi" className="rounded-xl">
+          <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
             <thead>
               <tr>
                 <th scope="col">Ngày</th>
@@ -275,11 +328,15 @@ export function NoiDungHopDot({
                 <th scope="col">Đơn vị, cá nhân</th>
                 <th scope="col">Số chứng từ</th>
                 {cot.map((c) => (
-                  <th key={c.id} scope="col">
+                  <th key={c.id} scope="col" className="text-right">
                     {c.name}
                   </th>
                 ))}
-                {coXacNhan && <th scope="col">Thao tác</th>}
+                {coXacNhan && (
+                  <th scope="col" className="text-right">
+                    Thao tác
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -288,11 +345,13 @@ export function NoiDungHopDot({
                 const adjustment = d.adjustment_reason ?? "";
                 return (
                 <tr key={d.id}>
-                  <td>{nhanNgayLuyKe(d.date)}</td>
-                  <td>
+                  <td className="tabular-nums">{nhanNgayLuyKe(d.date)}</td>
+                  <td className="whitespace-normal">
                     {adjustment !== "" && (
                       <>
-                        <span className="chip">Điều chỉnh</span>{" "}
+                        <Badge tone="warning" icon={PencilLine}>
+                          Điều chỉnh
+                        </Badge>{" "}
                       </>
                     )}
                     {d.content}
@@ -307,7 +366,7 @@ export function NoiDungHopDot({
                   <td>{d.counterparty !== undefined && d.counterparty !== "" ? d.counterparty : O_TRONG}</td>
                   <td>{d.document_no !== undefined && d.document_no !== "" ? d.document_no : O_TRONG}</td>
                   {cot.map((c) => (
-                    <td key={c.id}>
+                    <td key={c.id} className="text-right tabular-nums">
                       <OTien
                         chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
                         lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
@@ -315,21 +374,27 @@ export function NoiDungHopDot({
                     </td>
                   ))}
                   {coXacNhan && (
-                    <td className="o-thao-tac">
+                    <td className="text-right">
                       {lock === null ? (
-                        <button
+                        // A removal keeps its WORDS (spec v2 §7) and the red outline.
+                        <Button
                           type="button"
-                          className="nut-phu"
+                          variant="danger"
+                          size="sm"
+                          icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                           disabled={dangGui}
                           aria-label={`Gỡ đợt ngày ${nhanNgayLuyKe(d.date)}`}
                           onClick={() => moGo(d)}
                         >
-                          🗑 Gỡ đợt
-                        </button>
+                          Gỡ đợt
+                        </Button>
                       ) : (
                         // No remove button on a closed period: it could only answer 409. The
                         // reason is printed, not hidden in a tooltip — touch screens cannot hover.
-                        <span className="ghi-chu">🔒 {lock}</span>
+                        <span className="ghi-chu inline-flex items-start gap-1 text-left whitespace-normal">
+                          <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-0.5 size-3.5 shrink-0" />
+                          {lock}
+                        </span>
                       )}
                     </td>
                   )}
@@ -338,7 +403,7 @@ export function NoiDungHopDot({
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
       )}
       {/* Số tiền của một đợt ghi TRƯỚC khi trần hạ xuống 2^53 − 1 có thể vượt trần: máy chủ gửi
           `null` kèm câu, và đợt ấy phải TÌM ĐƯỢC để gỡ — nên nói ra ngày và cột của nó. */}
@@ -389,6 +454,7 @@ export function FormGhiDot({
 
   return (
     <form
+      className="flex min-w-0 flex-col gap-4 rounded-xl border border-line p-4"
       onSubmit={(e) => {
         e.preventDefault();
         const bieuMau = e.currentTarget;
@@ -408,86 +474,95 @@ export function FormGhiDot({
         );
       }}
     >
-      <h4>Ghi một đợt</h4>
-      <p>
-        <label htmlFor="dot-date">Ngày</label>{" "}
-        <input
-          id="dot-date"
-          name="date"
-          className="o-nhap"
-          type="date"
-          required
-          defaultValue={ngayMacDinh}
-        />
-      </p>
-      <p>
-        <label htmlFor="dot-content">Nội dung</label>{" "}
-        <input
-          id="dot-content"
-          name="content"
-          className="o-nhap"
-          type="text"
-          required
-          maxLength={DO_DAI_TOI_DA_DOT.content}
-          placeholder="Thu tiền sử dụng đất đợt 2"
-        />
-      </p>
-      <p>
-        <label htmlFor="dot-counterparty">Đơn vị, cá nhân</label>{" "}
-        <input
-          id="dot-counterparty"
-          name="counterparty"
-          className="o-nhap"
-          type="text"
-          maxLength={DO_DAI_TOI_DA_DOT.counterparty}
-          autoComplete="off"
-        />
-      </p>
-      <p>
-        <label htmlFor="dot-document-no">Số chứng từ</label>{" "}
-        <input
-          id="dot-document-no"
-          name="document_no"
-          className="o-nhap"
-          type="text"
-          maxLength={DO_DAI_TOI_DA_DOT.document_no}
-        />
-      </p>
-      <p>
-        <label htmlFor="dot-adjustment-reason">Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)</label>
-        <br />
-        <textarea
-          id="dot-adjustment-reason"
-          name="adjustment_reason"
-          className="o-nhap"
-          rows={2}
-          maxLength={DO_DAI_TOI_DA_DOT.adjustment_reason}
-          aria-describedby="dot-adjustment-reason-hint"
-        />
-        <br />
-        <span id="dot-adjustment-reason-hint" className="ghi-chu">
-          Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là đợt
-          thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
-        </span>
-      </p>
-      {cot.map((c) => (
-        <p key={c.id}>
-          <label htmlFor={`dot-gia-${c.id}`}>
-            {c.name} ({donVi.nhan.toLowerCase()})
-          </label>{" "}
+      <h4 className="m-0 text-sm font-semibold text-ink-900">Ghi một đợt</h4>
+      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <Field label="Ngày" htmlFor="dot-date" grow="auto">
           <input
-            id={`dot-gia-${c.id}`}
-            name={`dot-gia:${c.id}`}
+            id="dot-date"
+            name="date"
+            className="o-nhap"
+            type="date"
+            required
+            defaultValue={ngayMacDinh}
+          />
+        </Field>
+        <Field label="Nội dung" htmlFor="dot-content" grow="auto">
+          <input
+            id="dot-content"
+            name="content"
             className="o-nhap"
             type="text"
-            inputMode="decimal"
+            required
+            maxLength={DO_DAI_TOI_DA_DOT.content}
+            placeholder="Thu tiền sử dụng đất đợt 2"
+          />
+        </Field>
+        <Field label="Đơn vị, cá nhân" htmlFor="dot-counterparty" grow="auto">
+          <input
+            id="dot-counterparty"
+            name="counterparty"
+            className="o-nhap"
+            type="text"
+            maxLength={DO_DAI_TOI_DA_DOT.counterparty}
             autoComplete="off"
           />
-        </p>
-      ))}
-      <button type="submit" className="nut-chinh" disabled={dangGui}>
-        + Ghi đợt
-      </button>
+        </Field>
+        <Field label="Số chứng từ" htmlFor="dot-document-no" grow="auto">
+          <input
+            id="dot-document-no"
+            name="document_no"
+            className="o-nhap"
+            type="text"
+            maxLength={DO_DAI_TOI_DA_DOT.document_no}
+          />
+        </Field>
+        {/* SAME FIELD ORDER AS BEFORE (keyboard order is behaviour): the reason, then the money. */}
+        <Field
+          label="Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)"
+          htmlFor="dot-adjustment-reason"
+          grow="auto"
+          className="sm:col-span-2"
+          hint={
+            <span id="dot-adjustment-reason-hint">
+              Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là
+              đợt thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
+            </span>
+          }
+        >
+          <textarea
+            id="dot-adjustment-reason"
+            name="adjustment_reason"
+            className="o-nhap py-2"
+            rows={2}
+            maxLength={DO_DAI_TOI_DA_DOT.adjustment_reason}
+            aria-describedby="dot-adjustment-reason-hint"
+          />
+        </Field>
+        {cot.map((c) => (
+          <Field key={c.id} label={`${c.name} (${donVi.nhan.toLowerCase()})`} htmlFor={`dot-gia-${c.id}`} grow="auto">
+            <input
+              id={`dot-gia-${c.id}`}
+              name={`dot-gia:${c.id}`}
+              className="o-nhap text-right tabular-nums"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+            />
+          </Field>
+        ))}
+      </div>
+      <p className="m-0 flex justify-end">
+        <Button
+          type="submit"
+          variant="primary"
+          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          disabled={dangGui}
+          aria-busy={dangGui || undefined}
+        >
+          <BusyLabel busy={dangGui} label="Ghi đợt" busyText={BUSY_SAVING} />
+        </Button>
+      </p>
     </form>
   );
 }

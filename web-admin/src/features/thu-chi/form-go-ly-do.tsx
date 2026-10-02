@@ -1,5 +1,13 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
+import type { FormEvent } from "react";
+
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Field } from "@/components/ui/field";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
+
 /**
  * Hộp xác nhận GỠ — **có ô lý do**, và ô ấy không phải để cho đẹp.
  *
@@ -19,7 +27,9 @@ export function FormGoKemLyDo({
   huy,
   luu,
   idTruong = "go-reason",
+  submitLabel = "Gỡ",
 }: {
+  /** The SPECIFIC question of the confirm box (spec v2 §7), e.g. "Gỡ bảng X?". */
   tieuDe: string;
   canhBao: string;
   dangGui: boolean;
@@ -27,37 +37,38 @@ export function FormGoKemLyDo({
   luu: (lyDo: string) => void;
   /** `id` của ô lý do — hộp `⇄` truyền một `id` khác để không trùng với hộp gỡ của bảng. */
   idTruong?: string;
+  /** The confirm button names the action ("Gỡ bảng"), never "OK" (spec v2 §7). */
+  submitLabel?: string;
 }) {
   return (
-    <form
-      className="khoi-chua-khai"
-      onSubmit={(e) => {
+    <ConfirmDialog
+      as="form"
+      tone="danger"
+      icon={Trash2}
+      title={tieuDe}
+      aria-label={tieuDe}
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         const lyDo = String(fd.get("reason") ?? "").trim();
         if (lyDo === "") return;
         luu(lyDo);
       }}
+      actions={
+        <>
+          <Button type="submit" variant="danger" disabled={dangGui} aria-busy={dangGui || undefined}>
+            <BusyLabel busy={dangGui} label={submitLabel} busyText="Đang gỡ…" />
+          </Button>
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+            Huỷ
+          </Button>
+        </>
+      }
     >
-      <h3>{tieuDe}</h3>
-      <p className="hau-qua">{canhBao}</p>
-      <p>
-        <label htmlFor={idTruong}>Lý do gỡ (bắt buộc, được lưu cùng bản ghi)</label>{" "}
-        <input
-          id={idTruong}
-          name="reason"
-          className="o-nhap"
-          type="text"
-          required
-          maxLength={500}
-        />
-      </p>
-      <button type="submit" className="nut-chinh" disabled={dangGui}>
-        Gỡ
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-        Huỷ
-      </button>
-    </form>
+      <p className="m-0">{canhBao}</p>
+      <Field label="Lý do gỡ (bắt buộc, được lưu cùng bản ghi)" htmlFor={idTruong} grow="auto">
+        <input id={idTruong} name="reason" className="o-nhap" type="text" required maxLength={500} />
+      </Field>
+    </ConfirmDialog>
   );
 }

@@ -1,9 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Calculator,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Construction,
+  Database,
+  FileSpreadsheet,
+  Gauge,
+  Info,
+  ListPlus,
+  LockKeyhole,
+  Pencil,
+  Plus,
+  Star,
+  TableProperties,
+  Trash2,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { Skeleton, SkeletonRows } from "@/components/ui/skeleton";
+import { Tab, TabList } from "@/components/ui/tabs";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { listBudgetPeriodCloses } from "@/lib/api/budget-period-close";
 import type { KetQua } from "@/lib/api/goi";
@@ -31,6 +66,7 @@ import {
   type LoaiBang,
   type SuaDongVao,
 } from "@/lib/api/thu-chi";
+import { cn } from "@/lib/cn";
 import { namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
@@ -83,6 +119,11 @@ import { FormSuaBang } from "./sua-bang";
 
 // Giữ đường nhập cũ cho phía gọi và bài kiểm: hộp gỡ nay nằm ở tệp riêng vì hộp `⇄` cũng dùng nó.
 export { FormGoKemLyDo };
+
+/** Decorative icon inside a button or a line of text: hidden from assistive tech, never focusable. */
+function Glyph({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
+  return <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className={className} />;
+}
 
 /**
  * Màn "Thu - Chi ngân sách" (`docs/ui-ux/07-thu-chi-ngan-sach.md`).
@@ -234,12 +275,17 @@ export function BangThuChi() {
   }
 
   return (
-    <section className="man-giai-ngan" aria-labelledby="tieu-de-thu-chi">
-      <h2 id="tieu-de-thu-chi">Thu - Chi ngân sách xã</h2>
+    <section className="man-giai-ngan flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-thu-chi">
+      {/* The page's `<h1>` already says this; the heading stays as the region's accessible name. */}
+      <h2 id="tieu-de-thu-chi" className="an-thi-giac">
+        Thu - Chi ngân sách xã
+      </h2>
 
       <KhoiChuaDung />
 
-      <div className="hang-loc">
+      {/* ONE filter (the year), no search box on this screen: an aligned row, no "Bộ lọc" button
+          (ADR 0068 §12, "Hàng ≤ 3 ô"). The year decides which budget every figure below belongs to. */}
+      <div className="hang-loc m-0">
         <ChonNam
           id="nam-ngan-sach-thu-chi"
           nhan="Năm ngân sách"
@@ -254,6 +300,34 @@ export function BangThuChi() {
         />
       </div>
 
+      {/* THẺ BA CHỈ SỐ NẰM NGOÀI TAB, có chủ ý: con số chênh lệch cần CẢ HAI bảng, nên đặt nó
+          trong một tab sẽ nói rằng con số ấy thuộc về tab ấy. */}
+      {chiSo.pha === "dangTai" && (
+        <Card>
+          <p role="status" className="an-thi-giac">
+            Đang tải chỉ số ngân sách…
+          </p>
+          <div aria-hidden="true" className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="flex flex-col gap-3 rounded-xl border border-line p-4">
+                <Skeleton className="w-24" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      {chiSo.pha === "loi" && (
+        <Card>
+          <ErrorState
+            title="Chưa tải được chỉ số ngân sách"
+            message={<span role="alert">{chiSo.thongBao}</span>}
+            onRetry={() => datLanTai((n) => n + 1)}
+          />
+        </Card>
+      )}
+      {chiSo.pha === "xong" && <TheChiSoNam chiSo={chiSo.duLieu} />}
+
       {/* THE CLOSE BLOCK SITS OUTSIDE THE TABS: a close covers a period of the commune's budget,
           both the revenue and the expenditure sheet of that year. */}
       <BudgetPeriodClosePanel
@@ -266,16 +340,14 @@ export function BangThuChi() {
       />
 
       {/* Hai tab của §2. `role="tablist"` đúng chuẩn như `15-phu-luc §8` đòi. */}
-      <div role="tablist" aria-label="Chọn bảng thu hoặc bảng chi">
+      <TabList aria-label="Chọn bảng thu hoặc bảng chi">
         {(["chi", "thu"] as const).map((l) => (
-          <button
+          <Tab
             key={l}
-            type="button"
-            role="tab"
             id={`tab-ngan-sach-${l}`}
-            aria-selected={loai === l}
+            selected={loai === l}
+            icon={l === "chi" ? ArrowUpFromLine : ArrowDownToLine}
             aria-controls={`bang-ngan-sach-${l}`}
-            className={loai === l ? "nut-chinh" : "nut-phu"}
             onClick={() => {
               datLoai(l);
               datDangMo(null);
@@ -284,44 +356,52 @@ export function BangThuChi() {
             }}
           >
             {nhanTab(l, nam)}
-          </button>
+          </Tab>
         ))}
-      </div>
-
-      {/* THẺ BA CHỈ SỐ NẰM NGOÀI TAB, có chủ ý: con số chênh lệch cần CẢ HAI bảng, nên đặt nó
-          trong một tab sẽ nói rằng con số ấy thuộc về tab ấy. */}
-      {chiSo.pha === "dangTai" && <p role="status">Đang tải chỉ số ngân sách…</p>}
-      {chiSo.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {chiSo.thongBao}
-        </p>
-      )}
-      {chiSo.pha === "xong" && <TheChiSoNam chiSo={chiSo.duLieu} />}
+      </TabList>
 
       <div
         role="tabpanel"
         id={`bang-ngan-sach-${loai}`}
         aria-labelledby={`tab-ngan-sach-${loai}`}
         tabIndex={0}
+        className="flex min-w-0 flex-col gap-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
       >
         {loiGhi !== null && (
-          <p className="thong-bao-loi" role="alert">
+          <p className="thong-bao-loi m-0" role="alert">
             {loiGhi}
           </p>
         )}
 
-        {bang.pha === "dangTai" && <p role="status">Đang tải bảng ngân sách…</p>}
+        {bang.pha === "dangTai" && (
+          <Card>
+            <p role="status" className="an-thi-giac">
+              Đang tải bảng ngân sách…
+            </p>
+            <SkeletonRows rows={6} />
+          </Card>
+        )}
 
         {bang.pha === "loi" && (
-          <>
-            {/* KHÔNG ĐOÁN VÌ SAO KHÔNG ĐỌC ĐƯỢC: hiện NGUYÊN câu máy chủ. 404 ở tuyến này thường
-                là "xã chưa lập bảng", nhưng phân biệt bằng cách đọc câu chữ là dựng lại đúng thứ
-                `goi.ts` cố ý giấu đi — nên câu dưới nói cả hai khả năng và không khẳng định. */}
-            <p className="thong-bao-loi" role="alert">
-              {bang.thongBao}
-            </p>
-            <p className="trang-thai-rong">{nhanChuaCoBang(nam, loai)}</p>
-          </>
+          <Card>
+            <CardContent className="flex flex-col gap-4">
+              {/* KHÔNG ĐOÁN VÌ SAO KHÔNG ĐỌC ĐƯỢC: hiện NGUYÊN câu máy chủ. 404 ở tuyến này thường
+                  là "xã chưa lập bảng", nhưng phân biệt bằng cách đọc câu chữ là dựng lại đúng thứ
+                  `goi.ts` cố ý giấu đi — nên câu dưới nói cả hai khả năng và không khẳng định.
+                  The server's sentence (e.g. "ngan_sach: không có bảng ngân sách này trong xã") is
+                  shown VERBATIM per ADR 0035 §A — a muted note, not a red alarm, because the usual
+                  cause is "not set up yet". Rewording it is a separate, open decision. */}
+              <Notice tone="neutral" icon={Database} role="alert">
+                {bang.thongBao}
+              </Notice>
+              <EmptyState
+                icon={TableProperties}
+                tone="neutral"
+                title={nhanChuaCoBang(nam, loai)}
+                className="py-4"
+              />
+            </CardContent>
+          </Card>
         )}
 
         {bang.pha === "xong" && (
@@ -446,7 +526,8 @@ export function BangThuChi() {
 
         {dangMo !== null && dangMo.kieu === "goDong" && (
           <FormGoKemLyDo
-            tieuDe={`Gỡ khoản mục ${dangMo.dong.name}`}
+            tieuDe={`Gỡ khoản mục ${dangMo.dong.name}?`}
+            submitLabel="Gỡ khoản mục"
             canhBao={CANH_BAO_GO_KHOAN_MUC}
             dangGui={dangGui}
             huy={() => datDangMo(null)}
@@ -459,7 +540,8 @@ export function BangThuChi() {
 
         {dangMo !== null && dangMo.kieu === "goBang" && bang.pha === "xong" && (
           <FormGoKemLyDo
-            tieuDe={`Gỡ bảng ${bang.duLieu.sheet.title}`}
+            tieuDe={`Gỡ bảng ${bang.duLieu.sheet.title}?`}
+            submitLabel="Gỡ bảng"
             canhBao={CANH_BAO_GO_BANG}
             dangGui={dangGui}
             huy={() => datDangMo(null)}
@@ -499,10 +581,20 @@ export function BangThuChi() {
  * vẽ, và một màn hình im lặng về bốn việc ấy sẽ được đọc thành "hệ thống hỏng".
  */
 export function KhoiChuaDung() {
+  // COLLAPSED, GREY, DASHED (spec §8.1, ADR 0068) — same shape as the other screens' block. The
+  // words stay verbatim and stay in the HTML while closed — `<details>` only folds them.
   return (
-    <details className="khoi-chua-khai">
-      <summary>
-        Những phần của bản thiết kế chưa dựng được ({PHAN_CHUA_DUNG.length}) — bấm để xem lý do
+    <details className="khoi-chua-khai group m-0">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <Construction aria-hidden="true" focusable="false" className="size-[18px] shrink-0 text-ink-500" />
+        <span className="font-semibold text-ink-700">
+          Những phần của bản thiết kế chưa dựng được ({PHAN_CHUA_DUNG.length}) — bấm để xem lý do
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          focusable="false"
+          className="ml-auto size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
+        />
       </summary>
       <ul>
         {PHAN_CHUA_DUNG.map((p) => (
@@ -531,23 +623,35 @@ export function KhoiChuaDung() {
  */
 export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
   return (
-    <div className="khoi-chi-tiet">
-      <div className="dau-khoi-chi-tiet">
-        <h3>Chỉ số ngân sách năm {chiSo.year}</h3>
-      </div>
-      <dl className="danh-sach-truong">
+    <Card>
+      <CardHeader>
+        <CardTitle as="h3" className="inline-flex items-center gap-2">
+          <Gauge aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          Chỉ số ngân sách năm {chiSo.year}
+        </CardTitle>
+      </CardHeader>
+      <dl className={FIGURE_TILES}>
         <OChiSo chi={chiSo.revenue_achievement} />
         <OChiSo chi={chiSo.expenditure_achievement} />
         <div>
-          <dt>{NHAN_CHENH_LECH}</dt>
-          <dd>{soTienDong(nhanSoTienChiSo(chiSo.balance, "dong"), chiSo.balance.amount !== null)}</dd>
+          <dt title={NHAN_CHENH_LECH}>{NHAN_CHENH_LECH}</dt>
+          <dd>
+            {chiSo.balance.amount !== null || nhanSoTienChiSo(chiSo.balance, "dong") === O_TRONG ? (
+              soTienDong(nhanSoTienChiSo(chiSo.balance, "dong"), chiSo.balance.amount !== null)
+            ) : (
+              // The server's reason, at body size — see `FIGURE_TILES`.
+              <span className="text-[13px] leading-snug font-medium text-ink-700">
+                {nhanSoTienChiSo(chiSo.balance, "dong")}
+              </span>
+            )}
+          </dd>
         </div>
         {/* TỔNG THU mang câu lý do cho MỌI trường hợp không đưa ra được con số (chưa có dòng tổng,
             cột trống, tổng quá lớn) — nên `null` kèm câu là "không tính được", còn `null` không câu
             vẫn là `—`. */}
         {chiSo.revenue_totals.map((o) => (
           <div key={o.column_id}>
-            <dt>{o.name}</dt>
+            <dt title={o.name}>{o.name}</dt>
             <dd>
               <OTien
                 chu={soTienDong(nhanSoTien(o.value, "dong"), o.value !== null)}
@@ -558,12 +662,35 @@ export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
           </div>
         ))}
       </dl>
-      <p className="ghi-chu">
-        {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
-      </p>
-    </div>
+      <CardFooter>
+        <span className="inline-flex items-start gap-1.5">
+          <Info aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
+          </span>
+        </span>
+      </CardFooter>
+    </Card>
   );
 }
+
+/**
+ * Figure tiles of the two summary cards — the look of `StatCard` (spec §7 "Thẻ số liệu": one-line
+ * 12px label, a large tabular figure, equal heights) drawn on the cards' EXISTING `<dl>`.
+ *
+ * NOT `StatCard` ITSELF, on purpose: each figure here is a `<dt>`/`<dd>` pair, and the `<dd>` may
+ * hold a server sentence instead of a number ("Không tính được — <câu>"), which must stay readable
+ * at text size, not at 26px. So the `<dd>` keeps its bare markup and is styled from the list: a
+ * plain figure is large and bold; a `title`-bearing "không tính được" mark (`OTien`) or a long
+ * sentence (`nhanChiSo`'s reason) drops back to body size.
+ */
+const FIGURE_TILES = cn(
+  "m-0 grid min-w-0 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4",
+  "[&>div]:flex [&>div]:min-w-0 [&>div]:flex-col [&>div]:gap-2 [&>div]:rounded-xl [&>div]:border [&>div]:border-line [&>div]:bg-surface [&>div]:p-4",
+  "[&_dt]:truncate [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-500",
+  "[&_dd]:m-0 [&_dd]:text-[22px] [&_dd]:leading-tight [&_dd]:font-bold [&_dd]:break-words [&_dd]:text-ink-900 [&_dd]:tabular-nums",
+  "[&_dd>span[title]]:text-[13px] [&_dd>span[title]]:leading-snug [&_dd>span[title]]:font-medium",
+);
 
 /** Gắn chữ "đồng" sau một con số — không gắn sau `—` hay sau một câu lý do của máy chủ. */
 function soTienDong(chu: string, coSo: boolean): string {
@@ -575,10 +702,23 @@ function OChiSo({ chi }: { chi: finance_chiSoRa }) {
     <div>
       {/* TÊN CHỈ SỐ LẤY TỪ MÁY CHỦ, không gõ lại: `ChiSoDatDuToan` đặt tên theo loại bảng, và một
           bản sao ở client sẽ gọi bảng thu là "Chi đạt dự toán" vào ngày ai đó đổi thứ tự. */}
-      <dt>{chi.name}</dt>
-      <dd>{nhanChiSo(chi)}</dd>
+      <dt title={chi.name}>{chi.name}</dt>
+      {/* `nhanChiSo` prints the server's reason when there is no figure; that sentence is drawn at
+          body size, a figure (or `—`) at tile size. Same words either way. */}
+      <dd>
+        {isFigureOrDash(chi) ? (
+          nhanChiSo(chi)
+        ) : (
+          <span className="text-[13px] leading-snug font-medium text-ink-700">{nhanChiSo(chi)}</span>
+        )}
+      </dd>
     </div>
   );
+}
+
+/** True when `nhanChiSo` prints a figure or `—`, false when it prints the server's sentence. */
+function isFigureOrDash(indicator: finance_chiSoRa): boolean {
+  return indicator.basis_points !== null || nhanChiSo(indicator) === O_TRONG;
 }
 
 /** Thẻ tiêu đề báo cáo (§2) + thanh công cụ (§4.3) + bảng cây (§4.1). */
@@ -636,9 +776,9 @@ export function BangDayDu({
   return (
     <>
       {locked && (
-        <p className="canh-bao-pham-vi" role="note">
-          🔒 {sheetLock}
-        </p>
+        <Notice tone="legal" icon={LockKeyhole} role="note">
+          {sheetLock}
+        </Notice>
       )}
       <TheTomTat
         bang={duLieu.sheet}
@@ -647,62 +787,87 @@ export function BangDayDu({
         donVi={donVi}
       />
 
-      <div className="hang-loc">
-        <button
-          type="button"
-          className="nut-phu"
-          onClick={() => datThuGon(moiDongCoCon(duLieu.lines))}
-        >
-          › Chỉ xem mục lớn
-        </button>
-        <button type="button" className="nut-phu" onClick={() => datThuGon(new Set())}>
-          ⌄ Mở hết chi tiết
-        </button>
-        <span className="dem-muc">{nhanBoDem(dongHien.length, duLieu.lines.length)}</span>
-        {coGhi && (
-          <button
+      <Card>
+        {/* Toolbar of the tree (§4.3): view controls and the count on the left, the sheet's write
+            actions on the right. No solid button here — none of these is the page's main action,
+            and the removal is the red outline (spec §5, §7). Every word kept; glyphs → lucide. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+          <Button
             type="button"
-            className="nut-phu"
-            disabled={dangGui || locked}
-            title={lockTitle}
-            onClick={() => moThem("", "cấp cao nhất", thuTuKeTiep(duLieu.lines, ""))}
+            variant="secondary"
+            size="sm"
+            icon={<Glyph icon={ChevronsDownUp} />}
+            onClick={() => datThuGon(moiDongCoCon(duLieu.lines))}
           >
-            ⊞ Thêm khoản mục cấp cao nhất
-          </button>
-        )}
-        {coGhi && (
-          <button
+            Chỉ xem mục lớn
+          </Button>
+          <Button
             type="button"
-            className="nut-phu"
-            disabled={dangGui || locked}
-            title={lockTitle}
-            onClick={moSuaBang}
+            variant="secondary"
+            size="sm"
+            icon={<Glyph icon={ChevronsUpDown} />}
+            onClick={() => datThuGon(new Set())}
           >
-            ✎ Sửa thông tin bảng
-          </button>
-        )}
-        {coXacNhan && (
-          <button
-            type="button"
-            className="nut-phu"
-            disabled={dangGui || locked}
-            title={lockTitle}
-            onClick={moGoBang}
-          >
-            🗑 Gỡ bảng
-          </button>
-        )}
-      </div>
+            Mở hết chi tiết
+          </Button>
+          <span className="dem-muc tabular-nums">{nhanBoDem(dongHien.length, duLieu.lines.length)}</span>
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            {coGhi && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={<Glyph icon={ListPlus} />}
+                disabled={dangGui || locked}
+                title={lockTitle}
+                onClick={() => moThem("", "cấp cao nhất", thuTuKeTiep(duLieu.lines, ""))}
+              >
+                Thêm khoản mục cấp cao nhất
+              </Button>
+            )}
+            {coGhi && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={<Glyph icon={Pencil} />}
+                disabled={dangGui || locked}
+                title={lockTitle}
+                onClick={moSuaBang}
+              >
+                Sửa thông tin bảng
+              </Button>
+            )}
+            {coXacNhan && (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                icon={<Glyph icon={Trash2} />}
+                disabled={dangGui || locked}
+                title={lockTitle}
+                onClick={moGoBang}
+              >
+                Gỡ bảng
+              </Button>
+            )}
+          </span>
+        </div>
 
-      <div className="bang-cuon" role="region" aria-label={`Khoản mục của ${duLieu.sheet.title}`} tabIndex={0}>
-        <table className="bang-danh-muc">
+      <TableScroll
+        sticky
+        aria-label={`Khoản mục của ${duLieu.sheet.title}`}
+        className="rounded-none border-0 shadow-none"
+      >
+        <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
           <caption className="an-thi-giac">{duLieu.sheet.title}</caption>
           <thead>
             <tr>
               <th scope="col">TT</th>
               <th scope="col">Nội dung</th>
               {duLieu.columns.map((c) => (
-                <th key={c.id} scope="col">
+                // Figure columns right-aligned so digits line up down the column (spec §6.7).
+                <th key={c.id} scope="col" className="text-right">
                   {c.name}
                   {/* Chú thích công thức của cột `%` — chữ HIỆN RÕ chứ không chỉ `title`, vì màn
                       cảm ứng không rê chuột được. Chỉ là chữ: tỷ lệ tính từ hai toán hạng, không
@@ -710,13 +875,15 @@ export function BangDayDu({
                   {c.type === "phan_tram" && (c.formula ?? "").trim() !== "" && (
                     <>
                       <br />
-                      <span className="ghi-chu">{c.formula}</span>
+                      <span className="ghi-chu font-normal">{c.formula}</span>
                     </>
                   )}
                 </th>
               ))}
               <th scope="col">Cách tính</th>
-              <th scope="col">Thao tác</th>
+              <th scope="col" className="text-right">
+                Thao tác
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -762,7 +929,8 @@ export function BangDayDu({
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
+      </Card>
       <DanhSachKhongTinh tieuDe="Ô không tính được con số" o={oKhongTinhCuaCay(duLieu)} />
       <UnresolvedPercentColumns columns={duLieu.columns} />
     </>
@@ -778,10 +946,14 @@ export function BangDayDu({
 function UnresolvedPercentColumns({ columns }: { columns: readonly finance_cotRa[] }) {
   const unresolved = columns.filter(isUnresolvedPercentColumn);
   if (unresolved.length === 0) return null;
+  // Red on purpose: a column whose ratio cannot be computed is wrong and needs the sheet fixed.
   return (
-    <div className="thong-bao-loi">
-      <p>Cột phần trăm chưa tính được tỷ lệ ({unresolved.length})</p>
-      <ul>
+    <div className="thong-bao-loi m-0 rounded-xl border border-danger-200 bg-danger-50 px-4 py-3">
+      <p className="m-0 inline-flex items-center gap-1.5 font-semibold">
+        <Glyph icon={TriangleAlert} className="size-4 shrink-0" />
+        Cột phần trăm chưa tính được tỷ lệ ({unresolved.length})
+      </p>
+      <ul className="m-0 mt-1 pl-5">
         {unresolved.map((c) => (
           <li key={c.id}>
             <strong>{c.name}</strong>: cột lập trước khi hệ thống lưu rõ cột tử số và cột mẫu số, và
@@ -847,31 +1019,39 @@ export function TheTomTat({
   donVi: DonViHien;
 }) {
   return (
-    <div className="khoi-chi-tiet">
-      <div className="dau-khoi-chi-tiet">
-        <h3>{bang.title}</h3>
-      </div>
-      <p className="ghi-chu">{dongPhuTieuDe(bang, soKhoanMuc)}</p>
-      {/* ĐƠN VỊ CŨ CHƯA ÁNH XẠ ĐƯỢC: nói NỔI BẬT, vì số đang in bằng đồng trong khi tờ giấy của
-          xã in theo đơn vị khác — người đọc so hai bản sẽ thấy lệch hàng nghìn lần. */}
-      {donVi.canhBao !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {donVi.canhBao}
-          {donVi.nhanCu !== null && ` Đơn vị đang lưu: "${donVi.nhanCu}".`}
+    <Card>
+      <CardHeader>
+        <div className="min-w-0">
+          <CardTitle as="h3" className="inline-flex items-center gap-2">
+            <Glyph icon={FileSpreadsheet} className="size-[18px] shrink-0 text-brand-600" />
+            {bang.title}
+          </CardTitle>
+          <p className="m-0 mt-1 text-[13px] text-ink-500 tabular-nums">{dongPhuTieuDe(bang, soKhoanMuc)}</p>
+        </div>
+      </CardHeader>
+      <div className="flex min-w-0 flex-col gap-1 px-4 pt-4 text-xs text-ink-500">
+        {/* ĐƠN VỊ CŨ CHƯA ÁNH XẠ ĐƯỢC: nói NỔI BẬT, vì số đang in bằng đồng trong khi tờ giấy của
+            xã in theo đơn vị khác — người đọc so hai bản sẽ thấy lệch hàng nghìn lần. */}
+        {donVi.canhBao !== null && (
+          <p className="thong-bao-loi m-0 mb-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3" role="alert">
+            {donVi.canhBao}
+            {donVi.nhanCu !== null && ` Đơn vị đang lưu: "${donVi.nhanCu}".`}
+          </p>
+        )}
+        <p className="m-0">{cauQuyDoi(donVi)}</p>
+        <p className="m-0 inline-flex items-center gap-1">
+          <Glyph icon={Star} className="size-3.5 shrink-0 fill-current text-warning-600" />
+          Con số tổng lấy từ dòng được đánh sao. Bấm ngôi sao ở đầu một dòng khác để đổi.
         </p>
-      )}
-      <p className="ghi-chu">{cauQuyDoi(donVi)}</p>
-      <p className="ghi-chu">
-        Con số tổng lấy từ dòng được đánh sao. Bấm ngôi sao ở đầu một dòng khác để đổi.
-      </p>
+      </div>
 
       {tomTat.unavailable_reason !== undefined && tomTat.unavailable_reason !== "" ? (
-        <p className="trang-thai-rong">{tomTat.unavailable_reason}</p>
+        <EmptyState icon={Star} tone="neutral" title={tomTat.unavailable_reason} className="py-6" />
       ) : (
-        <dl className="danh-sach-truong">
+        <dl className={FIGURE_TILES}>
           {tomTat.cells.map((o) => (
             <div key={o.column_id}>
-              <dt>{o.name}</dt>
+              <dt title={o.name}>{o.name}</dt>
               <dd>
                 <OTien
                   chu={nhanSoTien(o.value, donVi.ma)}
@@ -881,13 +1061,10 @@ export function TheTomTat({
               </dd>
             </div>
           ))}
-          <div>
-            <dt>{tomTat.indicator.name}</dt>
-            <dd>{nhanChiSo(tomTat.indicator)}</dd>
-          </div>
+          <OChiSo chi={tomTat.indicator} />
         </dl>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -936,46 +1113,63 @@ export function DongKhoanMuc({
 
   return (
     <tr>
-      <td className="ma-muc">{d.no === "" ? O_TRONG : d.no}</td>
-      <td>
+      <td className="ma-muc text-[13px] text-ink-500">{d.no === "" ? O_TRONG : d.no}</td>
+      <td className={hien.cap === 0 ? "font-semibold text-ink-900" : undefined}>
         {/* Thụt lề bằng khoảng cách chứ không bằng một cột riêng: §4.1 vẽ cây trong CHÍNH cột
             Nội dung. `paddingInlineStart` (không phải `paddingLeft`) để không hỏng nếu giao diện
             có ngày chạy ở chiều ngược lại. */}
-        <span style={{ paddingInlineStart: `${hien.cap * 1.25}rem`, display: "inline-block" }}>
-          {hien.coCon && (
+        <span
+          style={{ paddingInlineStart: `${hien.cap * 1.25}rem` }}
+          className="inline-flex min-w-0 items-center gap-1"
+        >
+          {hien.coCon ? (
             <button
               type="button"
-              className="nut-phu"
+              className={TREE_ICON_BUTTON}
               aria-expanded={hien.moRong}
               onClick={moRongDoi}
             >
-              {hien.moRong ? "⌄" : "›"}
+              <Glyph icon={hien.moRong ? ChevronDown : ChevronRight} className="size-4" />
               <span className="an-thi-giac">
                 {hien.moRong ? `Thu gọn ${d.name}` : `Mở ${d.name}`}
               </span>
             </button>
-          )}{" "}
+          ) : (
+            // Same width as the toggle, so a leaf's name lines up with its siblings' names.
+            <span aria-hidden="true" className="inline-block w-7 shrink-0" />
+          )}
           {coXacNhan ? (
             <button
               type="button"
-              className="nut-phu"
+              className={TREE_ICON_BUTTON}
               aria-label={nhanDatDongTong(d.name)}
               aria-pressed={laDongTong}
               disabled={editDisabled}
-              title={lockTitle}
+              title={lockTitle ?? nhanDatDongTong(d.name)}
               onClick={datTong}
             >
-              {laDongTong ? "★" : "☆"}
+              <Glyph
+                icon={Star}
+                className={cn("size-4", laDongTong ? "fill-current text-warning-600" : "text-ink-400")}
+              />
             </button>
           ) : (
             // Không có quyền đổi thì ngôi sao vẫn phải ĐỌC ĐƯỢC: dòng nào đang là con số tổng là
-            // thông tin ai xem bảng cũng cần, kể cả người không đổi được nó.
-            laDongTong && <span title="Dòng đang là con số tổng">★</span>
-          )}{" "}
+            // thông tin ai xem bảng cũng cần, kể cả người không đổi được nó. The sentence that was
+            // only a tooltip is now also the accessible name (the `★` glyph read as "ngôi sao").
+            laDongTong && (
+              <span title={HEADLINE_LINE_LABEL} className="inline-flex w-7 shrink-0 justify-center">
+                <Glyph icon={Star} className="size-4 fill-current text-warning-600" />
+                <span className="an-thi-giac">{HEADLINE_LINE_LABEL}</span>
+              </span>
+            )
+          )}
           {coGhi ? (
+            // The name IS the edit control (§4.1, `NHAN_SUA_TEN`): drawn as text with a link colour,
+            // not as a bordered button on every row.
             <button
               type="button"
-              className="nut-phu"
+              className="cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left [font-family:inherit] text-[length:inherit] [font-weight:inherit] text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:text-ink-700 disabled:no-underline"
               aria-label={NHAN_SUA_TEN}
               disabled={editDisabled}
               title={lockTitle}
@@ -992,7 +1186,7 @@ export function DongKhoanMuc({
       {cot.map((c) => {
         if (c.type === "so") {
           return (
-            <td key={c.id}>
+            <td key={c.id} className="text-right tabular-nums">
               <OTien
                 chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
                 lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
@@ -1004,7 +1198,7 @@ export function DongKhoanMuc({
         // đây. Không có tỷ lệ thì máy chủ gửi câu lý do, và ô vẽ đúng dấu "Không tính được".
         const cell = percentCell(d, c.id);
         return (
-          <td key={c.id}>
+          <td key={c.id} className="text-right tabular-nums">
             <OTien chu={cell.text} lyDo={cell.reason} />
           </td>
         );
@@ -1015,11 +1209,15 @@ export function DongKhoanMuc({
           // CHỌN KHÔNG GỬI NGAY: đổi cách tính đổi con số đang hiện, nên lựa chọn mở một hộp cảnh
           // báo (`FormDoiCachTinh`) và chỉ gửi khi cán bộ xác nhận. Ô chọn vẫn hiện chế độ ĐANG LƯU
           // cho tới khi bảng được đọc lại.
+          //
+          // COMPACT 32px INSIDE THE CELL: the global select frame is 40px (`globals.css`), which
+          // made this one row taller than every other. Utilities win over the legacy layer.
           <select
             aria-label={`Cách tính của ${d.name}`}
             value={d.method}
             disabled={editDisabled}
             title={lockTitle}
+            className="h-8 min-h-8 py-0 pr-8 pl-2.5 text-[13px] not-italic"
             onChange={(e) => {
               const den = e.target.value;
               if ((den === "manual" || den === "entries") && den !== d.method) doiCachTinh(den);
@@ -1036,46 +1234,66 @@ export function DongKhoanMuc({
         )}
       </td>
 
-      <td className="o-thao-tac">
-        {laLa && (
-          <button
-            type="button"
-            className="nut-phu"
-            aria-label={nhanNutDot(d.name)}
-            disabled={dangGui}
-            onClick={moDot}
-          >
-            ⇄
-          </button>
-        )}
-        {coGhi && (
-          <button
-            type="button"
-            className="nut-phu"
-            aria-label={nhanThemCon(d.name)}
-            disabled={editDisabled}
-            title={lockTitle}
-            onClick={them}
-          >
-            ＋
-          </button>
-        )}
-        {coXacNhan && (
-          <button
-            type="button"
-            className="nut-phu"
-            aria-label={nhanGoKhoanMuc(d.name)}
-            disabled={editDisabled}
-            title={lockTitle}
-            onClick={go}
-          >
-            🗑
-          </button>
-        )}
+      <td>
+        {/* Icon-only, 34px: each carries its full name as `aria-label` and as the tooltip — or,
+            under a year close, the lock reason as the tooltip (same as before). */}
+        <span className="flex items-center justify-end gap-1">
+          {laLa && (
+            <Button
+              type="button"
+              variant="icon"
+              size="sm"
+              aria-label={nhanNutDot(d.name)}
+              title={nhanNutDot(d.name)}
+              disabled={dangGui}
+              onClick={moDot}
+            >
+              <Glyph icon={ArrowLeftRight} />
+            </Button>
+          )}
+          {coGhi && (
+            <Button
+              type="button"
+              variant="icon"
+              size="sm"
+              aria-label={nhanThemCon(d.name)}
+              disabled={editDisabled}
+              title={lockTitle ?? nhanThemCon(d.name)}
+              onClick={them}
+            >
+              <Glyph icon={Plus} />
+            </Button>
+          )}
+          {coXacNhan && (
+            <Button
+              type="button"
+              variant="icon"
+              size="sm"
+              className="hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
+              aria-label={nhanGoKhoanMuc(d.name)}
+              disabled={editDisabled}
+              title={lockTitle ?? nhanGoKhoanMuc(d.name)}
+              onClick={go}
+            >
+              <Glyph icon={Trash2} />
+            </Button>
+          )}
+        </span>
       </td>
     </tr>
   );
 }
+
+/** "Dòng đang là con số tổng" — the read-only star's tooltip and accessible name. */
+const HEADLINE_LINE_LABEL = "Dòng đang là con số tổng";
+
+/** The two small in-cell toggles of the tree (expand, headline star): 28px, no frame. */
+const TREE_ICON_BUTTON = cn(
+  "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-ink-500",
+  "hover:not-disabled:bg-brand-50 hover:not-disabled:text-brand-700",
+  "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+  "disabled:cursor-not-allowed disabled:opacity-60",
+);
 
 /**
  * Dòng đang sửa: TT, tên, thứ tự và các ô số của một dòng.
@@ -1111,8 +1329,11 @@ export function FormSuaDong({
 
   return (
     <tr>
-      <td colSpan={soCotBang}>
+      {/* The row under edit opens in place, as a tinted panel spanning the table (§4.1). */}
+      <td colSpan={soCotBang} className="bg-brand-50/40 whitespace-normal">
         <form
+          aria-label={`Sửa khoản mục ${dong.name}`}
+          className="flex min-w-0 flex-col gap-4 py-2"
           onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);
@@ -1137,99 +1358,107 @@ export function FormSuaDong({
             luu(dong.id, than);
           }}
         >
-          <p>
-            <label htmlFor={`sua-no-${dong.id}`}>Số thứ tự (TT)</label>{" "}
-            <input
-              id={`sua-no-${dong.id}`}
-              name="no"
-              className="o-nhap"
-              type="text"
-              defaultValue={dong.no}
-              maxLength={32}
-            />
-          </p>
-          <p>
-            <label htmlFor={`sua-name-${dong.id}`}>Nội dung khoản mục</label>{" "}
-            <input
-              id={`sua-name-${dong.id}`}
-              name="name"
-              className="o-nhap"
-              type="text"
-              defaultValue={dong.name}
-              required
-            />
-          </p>
-          <p>
-            <label htmlFor={`sua-order-${dong.id}`}>Thứ tự hiển thị</label>{" "}
-            <input
-              id={`sua-order-${dong.id}`}
-              name="order"
-              className="o-nhap"
-              type="number"
-              step={1}
-              defaultValue={dong.order}
-            />
-          </p>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Số thứ tự (TT)" htmlFor={`sua-no-${dong.id}`} grow="auto">
+              <input
+                id={`sua-no-${dong.id}`}
+                name="no"
+                className="o-nhap"
+                type="text"
+                defaultValue={dong.no}
+                maxLength={32}
+              />
+            </Field>
+            <Field label="Nội dung khoản mục" htmlFor={`sua-name-${dong.id}`} grow="auto">
+              <input
+                id={`sua-name-${dong.id}`}
+                name="name"
+                className="o-nhap"
+                type="text"
+                defaultValue={dong.name}
+                required
+              />
+            </Field>
+            <Field label="Thứ tự hiển thị" htmlFor={`sua-order-${dong.id}`} grow="auto">
+              <input
+                id={`sua-order-${dong.id}`}
+                name="order"
+                className="o-nhap"
+                type="number"
+                step={1}
+                defaultValue={dong.order}
+              />
+            </Field>
 
-          {moO ? (
-            cot.map((c) => {
-              const lyDo = lyDoKhongTinh(dong.unavailable_reasons?.[c.id]);
-              const idGoiY = `sua-gia-goi-y-${dong.id}-${c.id}`;
-              return (
-                <p key={c.id}>
-                  <label htmlFor={`sua-gia-${dong.id}-${c.id}`}>
-                    {c.name} ({donVi.nhan.toLowerCase()})
-                  </label>{" "}
-                  {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
-                      Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
-                      nên "Lưu" mà không sửa gì không đổi con số nào. Ô KHÔNG TÍNH ĐƯỢC điền chữ
-                      `O_KHONG_TINH_DUOC`, không điền rỗng — xem `dungGiaSuaDong`. */}
-                  <input
-                    id={`sua-gia-${dong.id}-${c.id}`}
-                    name={`gia:${c.id}`}
-                    className="o-nhap"
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    aria-describedby={lyDo === null ? undefined : idGoiY}
-                    defaultValue={
-                      lyDo === null ? giaDienSan(dong.values[c.id] ?? null, donVi) : O_KHONG_TINH_DUOC
+            {moO ? (
+              cot.map((c) => {
+                const lyDo = lyDoKhongTinh(dong.unavailable_reasons?.[c.id]);
+                const idGoiY = `sua-gia-goi-y-${dong.id}-${c.id}`;
+                return (
+                  <Field
+                    key={c.id}
+                    label={`${c.name} (${donVi.nhan.toLowerCase()})`}
+                    htmlFor={`sua-gia-${dong.id}-${c.id}`}
+                    grow="auto"
+                    hint={
+                      lyDo !== null ? (
+                        <span id={idGoiY} className="inline-flex items-start gap-1 text-warning-600">
+                          <Glyph icon={TriangleAlert} className="mt-0.5 size-3.5 shrink-0" />
+                          <span>
+                            Ô này không tính được: {lyDo}. Để nguyên chữ “{O_KHONG_TINH_DUOC}” thì
+                            con số đang lưu được giữ nguyên; gõ số mới để thay; xoá trắng ô để xoá
+                            con số.
+                          </span>
+                        </span>
+                      ) : undefined
                     }
-                  />
-                  {lyDo !== null && (
-                    <span id={idGoiY} className="ghi-chu">
-                      {" "}
-                      ⚠ Ô này không tính được: {lyDo}. Để nguyên chữ “{O_KHONG_TINH_DUOC}” thì con
-                      số đang lưu được giữ nguyên; gõ số mới để thay; xoá trắng ô để xoá con số.
-                    </span>
-                  )}
-                </p>
-              );
-            })
-          ) : dong.method === "entries" ? (
-            <p className="ghi-chu">
-              Khoản mục này đang Cộng theo đợt: con số của nó là tổng các đợt ghi ở hộp ⇄, không gõ
-              thẳng vào đây. Muốn gõ tay, đổi Cách tính về Nhập trực tiếp.
-            </p>
-          ) : (
-            <p className="ghi-chu">
-              Khoản mục này có khoản mục con nên con số của nó là tổng các con — máy chủ từ chối số
-              gõ thẳng vào đây. Sửa ở từng dòng con.
-            </p>
-          )}
+                  >
+                    {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
+                        Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
+                        nên "Lưu" mà không sửa gì không đổi con số nào. Ô KHÔNG TÍNH ĐƯỢC điền chữ
+                        `O_KHONG_TINH_DUOC`, không điền rỗng — xem `dungGiaSuaDong`. */}
+                    <input
+                      id={`sua-gia-${dong.id}-${c.id}`}
+                      name={`gia:${c.id}`}
+                      className="o-nhap"
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      aria-describedby={lyDo === null ? undefined : idGoiY}
+                      defaultValue={
+                        lyDo === null ? giaDienSan(dong.values[c.id] ?? null, donVi) : O_KHONG_TINH_DUOC
+                      }
+                    />
+                  </Field>
+                );
+              })
+            ) : dong.method === "entries" ? (
+              <p className="m-0 text-xs text-ink-500 sm:col-span-2 lg:col-span-3">
+                Khoản mục này đang Cộng theo đợt: con số của nó là tổng các đợt ghi ở hộp ⇄, không
+                gõ thẳng vào đây. Muốn gõ tay, đổi Cách tính về Nhập trực tiếp.
+              </p>
+            ) : (
+              <p className="m-0 text-xs text-ink-500 sm:col-span-2 lg:col-span-3">
+                Khoản mục này có khoản mục con nên con số của nó là tổng các con — máy chủ từ chối
+                số gõ thẳng vào đây. Sửa ở từng dòng con.
+              </p>
+            )}
+          </div>
 
           {loiO !== null && (
-            <p className="thong-bao-loi" role="alert">
+            <p className="thong-bao-loi m-0" role="alert">
               {loiO}
             </p>
           )}
 
-          <button type="submit" className="nut-chinh" disabled={dangGui}>
-            Lưu khoản mục
-          </button>{" "}
-          <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-            Huỷ
-          </button>
+          <p className="m-0 flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+              Huỷ
+            </Button>
+            <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+              <BusyLabel busy={dangGui} label="Lưu khoản mục" busyText={BUSY_SAVING} />
+            </Button>
+          </p>
         </form>
       </td>
     </tr>
@@ -1259,9 +1488,10 @@ export function FormThemKhoanMuc({
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
 
   return (
-    <form
-      className="khoi-chi-tiet"
-      onSubmit={(e) => {
+    <Card
+      as="form"
+      aria-labelledby="tieu-de-them-khoan-muc"
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         luu(
@@ -1272,39 +1502,51 @@ export function FormThemKhoanMuc({
         );
       }}
     >
-      <div className="dau-khoi-chi-tiet">
-        <h3>Thêm khoản mục dưới {tenCha}</h3>
+      <CardHeader>
+        <div className="min-w-0">
+          <CardTitle as="h3" id="tieu-de-them-khoan-muc">
+            Thêm khoản mục dưới {tenCha}
+          </CardTitle>
+          <p className="m-0 mt-1 text-[13px] text-ink-500">
+            Khoản mục mới bắt đầu ở Nhập trực tiếp. Khi chưa có khoản mục con, có thể đổi sang Cộng
+            theo đợt ở cột Cách tính; khi có khoản mục con đầu tiên, nó thành dòng cộng con.
+          </p>
+        </div>
+      </CardHeader>
+      {/* Labels above, 40px controls; the three fields share one row from 1024px. */}
+      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Field label="Số thứ tự (TT)" htmlFor="them-no" grow="auto">
+          <input id="them-no" name="no" className="o-nhap" type="text" maxLength={32} />
+        </Field>
+        <Field label="Nội dung khoản mục" htmlFor="them-name" grow="auto">
+          <input id="them-name" name="name" className="o-nhap" type="text" required />
+        </Field>
+        <Field label="Thứ tự hiển thị" htmlFor="them-order" grow="auto">
+          <input
+            id="them-order"
+            name="order"
+            className="o-nhap"
+            type="number"
+            step={1}
+            defaultValue={thuTuGoiY}
+          />
+        </Field>
       </div>
-      <p className="ghi-chu">
-        Khoản mục mới bắt đầu ở Nhập trực tiếp. Khi chưa có khoản mục con, có thể đổi sang Cộng theo
-        đợt ở cột Cách tính; khi có khoản mục con đầu tiên, nó thành dòng cộng con.
-      </p>
-      <p>
-        <label htmlFor="them-no">Số thứ tự (TT)</label>{" "}
-        <input id="them-no" name="no" className="o-nhap" type="text" maxLength={32} />
-      </p>
-      <p>
-        <label htmlFor="them-name">Nội dung khoản mục</label>{" "}
-        <input id="them-name" name="name" className="o-nhap" type="text" required />
-      </p>
-      <p>
-        <label htmlFor="them-order">Thứ tự hiển thị</label>{" "}
-        <input
-          id="them-order"
-          name="order"
-          className="o-nhap"
-          type="number"
-          step={1}
-          defaultValue={thuTuGoiY}
-        />
-      </p>
-      <button type="submit" className="nut-chinh" disabled={dangGui}>
-        Thêm khoản mục
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-        Huỷ
-      </button>
-    </form>
+      <CardFooter className="justify-end">
+        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+          Huỷ
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={<Glyph icon={Plus} />}
+          disabled={dangGui}
+          aria-busy={dangGui || undefined}
+        >
+          <BusyLabel busy={dangGui} label="Thêm khoản mục" busyText={BUSY_SAVING} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -1340,24 +1582,29 @@ export function FormDoiCachTinh({
   huy: () => void;
   luu: () => void;
 }) {
+  // A confirm box (spec v2 §7): the specific question, the consequence, the button naming the act.
+  // Not red — changing how a line is computed destroys nothing; the consequence sentence says what.
   return (
-    <form
-      className="khoi-chua-khai"
-      onSubmit={(e) => {
+    <ConfirmDialog
+      as="form"
+      icon={Calculator}
+      title={`Đổi cách tính của ${ten} sang ${nhanCachTinh(den)}?`}
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         luu();
       }}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+            <BusyLabel busy={dangGui} label="Đổi cách tính" busyText={BUSY_SAVING} />
+          </Button>
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+            Huỷ
+          </Button>
+        </>
+      }
     >
-      <h3>
-        Đổi cách tính của {ten} sang {nhanCachTinh(den)}
-      </h3>
-      <p className="hau-qua">{canhBaoDoiCachTinh(den)}</p>
-      <button type="submit" className="nut-chinh" disabled={dangGui}>
-        Đổi cách tính
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-        Huỷ
-      </button>
-    </form>
+      <p className="m-0">{canhBaoDoiCachTinh(den)}</p>
+    </ConfirmDialog>
   );
 }

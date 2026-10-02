@@ -10,7 +10,7 @@ import type {
 
 import { BangDayDu } from "./bang-thu-chi"; // vi-name-ok: existing component under test
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi"; // vi-name-ok: existing components under test
-import { donViCuaBang, dungThanDot } from "./nhan-thu-chi"; // vi-name-ok: existing helpers under test
+import { donViCuaBang, dungThanDot, nhanGoKhoanMuc, nhanNutDot, nhanThemCon } from "./nhan-thu-chi"; // vi-name-ok: existing helpers under test
 import {
   buildCloseBody,
   closeConsequence,
@@ -102,6 +102,8 @@ const SHEET: finance_bangDayDuRa = {
   },
 };
 const UNIT = donViCuaBang(SHEET.sheet);
+/** The one line of `SHEET` — its row buttons are named after it. */
+const LEAF_NAME = "Chi đầu tư phát triển";
 
 const ENTRIES: finance_danhSachDotRa = {
   line_id: "I",
@@ -128,8 +130,30 @@ function inHtml(s: string): string {
 function buttonTag(html: string, text: string): string {
   const at = html.indexOf(`>${text}</button>`);
   expect(at).toBeGreaterThan(-1);
-  return html.slice(html.lastIndexOf("<button", at), at + 1);
+  return openingTagAround(html, at);
 }
+
+/**
+ * The opening `<button …>` tag whose `aria-label` is `label` — for the icon-only row buttons, which
+ * have no text of their own since the `＋` / `🗑` / `⇄` glyphs became lucide icons (ADR 0068 §5).
+ */
+function buttonTagByLabel(html: string, label: string): string {
+  const at = html.indexOf(`aria-label="${inHtml(label)}"`);
+  expect(at).toBeGreaterThan(-1);
+  return openingTagAround(html, at);
+}
+
+function openingTagAround(html: string, at: number): string {
+  const start = html.lastIndexOf("<button", at);
+  return html.slice(start, html.indexOf(">", at) + 1);
+}
+
+/**
+ * `disabled=""` — the ATTRIBUTE. Not the bare word: since the buttons carry Tailwind utilities, their
+ * `class` contains `disabled:opacity-60`, so `not.toContain("disabled")` would be red on a live
+ * button and `toContain("disabled")` green on one (the same trap `so-phan-anh.test.tsx` measured).
+ */
+const DISABLED = 'disabled=""';
 
 describe("lock display helpers", () => {
   it("period label: month and whole year", () => {
@@ -415,18 +439,23 @@ describe("sheet under a year close", () => {
     const html = renderSheet(reason);
 
     expect(html.split(reason).length - 1).toBeGreaterThanOrEqual(1);
-    expect(html).toContain("🔒");
-    for (const label of ["✎ Sửa thông tin bảng", "🗑 Gỡ bảng", "⊞ Thêm khoản mục cấp cao nhất", "＋", "🗑"]) {
-      expect(buttonTag(html, label)).toContain('disabled=""');
+    // Presentational pins (ADR 0068 §5): the `🔒` glyph of the notice became a lucide icon, so the
+    // notice is found by its `role="note"`; the glyph prefixes of the buttons became icons too.
+    expect(html).toContain('role="note"');
+    for (const label of ["Sửa thông tin bảng", "Gỡ bảng", "Thêm khoản mục cấp cao nhất"]) {
+      expect(buttonTag(html, label)).toContain(DISABLED);
+    }
+    for (const label of [nhanThemCon(LEAF_NAME), nhanGoKhoanMuc(LEAF_NAME)]) {
+      expect(buttonTagByLabel(html, label)).toContain(DISABLED);
     }
     // Reading entries stays open.
-    expect(buttonTag(html, "⇄")).not.toContain("disabled");
+    expect(buttonTagByLabel(html, nhanNutDot(LEAF_NAME))).not.toContain(DISABLED);
   });
 
   it("no year close: the same controls are live", () => {
     const html = renderSheet(null);
-    expect(html).not.toContain("🔒");
-    expect(buttonTag(html, "✎ Sửa thông tin bảng")).not.toContain("disabled");
-    expect(buttonTag(html, "🗑 Gỡ bảng")).not.toContain("disabled");
+    expect(html).not.toContain('role="note"');
+    expect(buttonTag(html, "Sửa thông tin bảng")).not.toContain(DISABLED);
+    expect(buttonTag(html, "Gỡ bảng")).not.toContain(DISABLED);
   });
 });

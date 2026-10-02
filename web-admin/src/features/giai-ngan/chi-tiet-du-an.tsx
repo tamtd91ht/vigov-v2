@@ -1,8 +1,13 @@
 "use client";
 
+import { ArrowLeft, CircleCheck } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import { layChiTietDuAn } from "@/lib/api/du-an";
@@ -14,13 +19,13 @@ import { KhoiChungTu } from "./chung-tu-du-an";
 import { KhoiSuaXoaDuAn } from "./ghi-du-an";
 import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
-  lopTienDo,
   nhanNgay,
   nhanTien,
   nhanTienDo,
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
 /**
@@ -98,33 +103,63 @@ export function ChiTietDuAn({ id }: { id: string }) {
   const coXacNhan = coQuyen(dsQuyen, QUYEN_XAC_NHAN_NGAN_SACH);
 
   return (
-    <section className="man-giai-ngan" aria-labelledby="tieu-de-chi-tiet-du-an">
-      <p className="duong-lui">
-        <Link href="/giai-ngan">← Theo dõi giải ngân</Link>
+    <section className="man-giai-ngan flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-chi-tiet-du-an">
+      <p className="duong-lui m-0">
+        <Link href="/giai-ngan" className="inline-flex items-center gap-1.5">
+          <Glyph icon={ArrowLeft} className="size-4 shrink-0" />
+          Theo dõi giải ngân
+        </Link>
       </p>
-      <h2 id="tieu-de-chi-tiet-du-an">Chi tiết dự án</h2>
+      {/* The page's `<h1>` already says "Chi tiết dự án"; this heading stays for the region's name. */}
+      <h2 id="tieu-de-chi-tiet-du-an" className="an-thi-giac">
+        Chi tiết dự án
+      </h2>
       {/* Câu của máy chủ trên chính dự án (`scope_notice`), chỉ khi dự án đã về — `scope-notice.tsx`. */}
       {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duAn.scope_notice} />}
 
       {/* DỰ ÁN VỪA BỊ GỠ THÌ KHÔNG DỰNG LẠI NÓ. Máy chủ trả 204 không thân, và đọc lại sẽ ra 404 —
           một câu "Không tìm thấy dự án" ngay sau một thao tác thành công đọc như một lỗi. */}
       {daXoa ? (
-        <p className="trang-thai-rong">
-          Đã gỡ dự án. Bản ghi vẫn còn trong hệ thống kèm người gỡ và lý do (xoá mềm), và mã dự án
-          không quay lại dãy. <Link href="/giai-ngan">Về danh sách dự án</Link>
-        </p>
+        <Card>
+          <EmptyState
+            icon={CircleCheck}
+            title="Đã gỡ dự án."
+            description="Bản ghi vẫn còn trong hệ thống kèm người gỡ và lý do (xoá mềm), và mã dự án không quay lại dãy."
+            action={<Link href="/giai-ngan">Về danh sách dự án</Link>}
+          />
+        </Card>
       ) : (
         <>
           <KhoiChuaDungGhi />
 
-          {trangThai.pha === "dangTai" && <p role="status">Đang tải dự án…</p>}
+          {trangThai.pha === "dangTai" && (
+            // FIRST LOAD (spec §8b): the sentence stays the live region; the eye gets the card shape.
+            <Card>
+              <p role="status" className="an-thi-giac">
+                Đang tải dự án…
+              </p>
+              <div aria-hidden="true" className="flex flex-col gap-4 p-4">
+                <Skeleton className="h-5 w-2/3" />
+                <Skeleton className="w-40" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <Skeleton key={i} className="h-4" />
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* MỘT CÂU DUY NHẤT CHO CẢ "KHÔNG CÓ DỰ ÁN ẤY" LẪN "DỰ ÁN CỦA XÃ KHÁC": máy chủ trả cùng
               một 404 cho cả hai, và giao diện không dựng lại sự phân biệt ấy. */}
           {trangThai.pha === "loi" && (
-            <p className="thong-bao-loi" role="alert">
-              {trangThai.thongBao}
-            </p>
+            <Card>
+              <ErrorState
+                title="Chưa tải được dự án"
+                message={<span role="alert">{trangThai.thongBao}</span>}
+                onRetry={() => datLanTai((n) => n + 1)}
+              />
+            </Card>
           )}
 
           {trangThai.pha === "xong" && (
@@ -161,57 +196,69 @@ export function ThongTinDuAn({ duAn }: { duAn: finance_duAnRa }) {
   const tienDo = tienDoDuAn(duAn.delay_score, duAn.is_delayed);
 
   return (
-    <div className="khoi-chi-tiet">
-      <div className="dau-khoi-chi-tiet">
-        <h3>{duAn.name}</h3>
-        <span className={lopTienDo(tienDo)}>{nhanTienDo(tienDo)}</span>
+    <Card>
+      <CardHeader className="justify-between">
+        <div className="min-w-0">
+          <CardTitle as="h3" className="text-base">
+            {duAn.name}
+          </CardTitle>
+          <p className="ma-muc m-0 mt-1 text-[13px] text-ink-500">{duAn.code}</p>
+        </div>
+        <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
+      </CardHeader>
+
+      <div className="flex min-w-0 flex-col gap-4 p-4">
+        {/* Label–value pairs (spec v2 §8b), in the same order as before. */}
+        <dl className={DETAIL_LIST}>
+          <DetailItem label="Năm ngân sách">{duAn.year}</DetailItem>
+
+          <DetailItem label="Kế hoạch vốn năm">{nhanTien(duAn.planned_amount)}</DetailItem>
+
+          {/* "Tổng mức được duyệt" về đây đã áp sẵn quy tắc §9 cho ô để trống — máy chủ làm việc
+              ấy, nên không có nhánh "để trống thì lấy bằng kế hoạch vốn" nào ở phía web. */}
+          <DetailItem label="Tổng mức được duyệt">{nhanTien(duAn.approved_amount)}</DetailItem>
+
+          <DetailItem label="Đã giải ngân">{nhanTien(duAn.disbursed_amount)}</DetailItem>
+
+          <DetailItem label="Còn lại">{nhanTien(duAn.remaining_amount)}</DetailItem>
+
+          <DetailItem label="Tỷ lệ giải ngân">{nhanTyLeGiaiNgan(duAn.disbursed_ratio)}</DetailItem>
+
+          {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU. §9 nói rõ: công trình xong tháng 3 vẫn có thể
+              phải giải ngân trước 31/12, nên "ngày hoàn thành" không thay được "thời hạn giải
+              ngân". Gộp hai dòng này làm một là mất đúng mốc bị hỏi khi quyết toán. */}
+          <DetailItem label="Thời hạn giải ngân">{nhanNgay(duAn.disbursement_deadline)}</DetailItem>
+
+          {/* Trường tuỳ chọn trong hợp đồng: vắng mặt nghĩa là máy chủ không nói gì, và `nhanNgay`
+              nói ra điều đó bằng "Chưa đặt" chứ không bằng một ô trống. */}
+          <DetailItem label="Ngày khởi công">{nhanNgay(duAn.start_date ?? "")}</DetailItem>
+
+          <DetailItem label="Ngày hoàn thành">{nhanNgay(duAn.completion_date ?? "")}</DetailItem>
+        </dl>
+
+        {duAn.description !== undefined && duAn.description !== "" && (
+          <p className="m-0 text-sm whitespace-pre-line text-ink-700">{duAn.description}</p>
+        )}
       </div>
-      <p className="ma-muc">{duAn.code}</p>
-
-      <dl className="danh-sach-truong">
-        <dt>Năm ngân sách</dt>
-        <dd>{duAn.year}</dd>
-
-        <dt>Kế hoạch vốn năm</dt>
-        <dd>{nhanTien(duAn.planned_amount)}</dd>
-
-        {/* "Tổng mức được duyệt" về đây đã áp sẵn quy tắc §9 cho ô để trống — máy chủ làm việc
-            ấy, nên không có nhánh "để trống thì lấy bằng kế hoạch vốn" nào ở phía web. */}
-        <dt>Tổng mức được duyệt</dt>
-        <dd>{nhanTien(duAn.approved_amount)}</dd>
-
-        <dt>Đã giải ngân</dt>
-        <dd>{nhanTien(duAn.disbursed_amount)}</dd>
-
-        <dt>Còn lại</dt>
-        <dd>{nhanTien(duAn.remaining_amount)}</dd>
-
-        <dt>Tỷ lệ giải ngân</dt>
-        <dd>{nhanTyLeGiaiNgan(duAn.disbursed_ratio)}</dd>
-
-        {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU. §9 nói rõ: công trình xong tháng 3 vẫn có thể
-            phải giải ngân trước 31/12, nên "ngày hoàn thành" không thay được "thời hạn giải
-            ngân". Gộp hai dòng này làm một là mất đúng mốc bị hỏi khi quyết toán. */}
-        <dt>Thời hạn giải ngân</dt>
-        <dd>{nhanNgay(duAn.disbursement_deadline)}</dd>
-
-        <dt>Ngày khởi công</dt>
-        {/* Trường tuỳ chọn trong hợp đồng: vắng mặt nghĩa là máy chủ không nói gì, và `nhanNgay`
-            nói ra điều đó bằng "Chưa đặt" chứ không bằng một ô trống. */}
-        <dd>{nhanNgay(duAn.start_date ?? "")}</dd>
-
-        <dt>Ngày hoàn thành</dt>
-        <dd>{nhanNgay(duAn.completion_date ?? "")}</dd>
-      </dl>
-
-      {duAn.description !== undefined && duAn.description !== "" && (
-        <p className="mo-ta-du-an">{duAn.description}</p>
-      )}
 
       {/* ĐƠN VỊ THỰC HIỆN VÀ CÁN BỘ PHỤ TRÁCH KHÔNG HIỆN Ở ĐÂY. Hợp đồng chỉ trả ID nội bộ
           (`org_unit_id`, `assignee_id`); tra chúng thành tên bộ phận và tên cán bộ là việc của
           tuyến khác dưới quyền khác, và in một chuỗi ULID lên màn hình cán bộ không nói với ai
           điều gì. */}
+    </Card>
+  );
+}
+
+/** Label–value grid of the project card: one column on a phone, two pairs per row from 640px. */
+const DETAIL_LIST =
+  "m-0 grid min-w-0 gap-x-6 gap-y-3 rounded-xl border border-line bg-surface-muted p-4 sm:grid-cols-2";
+
+/** One `<dt>`/`<dd>` pair; figures in tabular digits so amounts line up down the column. */
+function DetailItem({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-xs font-semibold text-ink-500">{label}</dt>
+      <dd className="m-0 text-sm font-medium break-words text-ink-900 tabular-nums">{children}</dd>
     </div>
   );
 }

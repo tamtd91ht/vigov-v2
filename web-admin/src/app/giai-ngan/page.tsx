@@ -1,4 +1,7 @@
+import { Banknote, FolderKanban } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -41,10 +44,16 @@ export default async function TrangGiaiNgan() {
         <ThanhBen />
         <DauTrang />
         <main className="than-trang">
-          <h1>Theo dõi giải ngân</h1>
-          <p className="mo-ta-trang">
-            Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ.
-          </p>
+          <PageHeader
+            icon={Banknote}
+            title="Theo dõi giải ngân"
+            subtitle={
+              <span className="inline-flex items-center gap-1.5">
+                <FolderKanban aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                Tiến độ giải ngân theo dự án, chứng từ và vướng mắc cần tháo gỡ.
+              </span>
+            }
+          />
           <CongQuyen
             khoa={QUYEN_XEM_GIAI_NGAN}
             cauThieuQuyen={

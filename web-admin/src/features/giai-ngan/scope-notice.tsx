@@ -1,3 +1,7 @@
+import { ShieldCheck } from "lucide-react";
+
+import { Notice } from "@/components/ui/notice";
+
 /**
  * The mandatory banner of the budget screens (`06-giai-ngan §1`) — "ViGov is not accounting software".
  *
@@ -10,9 +14,14 @@
  * NO FALLBACK TEXT: absent or blank renders nothing. Inventing the sentence client-side is exactly
  * the second copy this component exists to remove; the server always sends it.
  *
- * Not `role="alert"`: it is always there, not an event that just happened.
+ * Not `role="alert"`: it is always there, not an event that just happened. Drawn as the neutral
+ * scope note of spec §7 ("không phải phần mềm kế toán" is its own example), not as a warning.
  */
 export function ScopeNotice({ text }: { text: string | undefined }) {
   if (text === undefined || text.trim() === "") return null;
-  return <p className="canh-bao-pham-vi">{text}</p>;
+  return (
+    <Notice tone="neutral" icon={ShieldCheck}>
+      {text}
+    </Notice>
+  );
 }

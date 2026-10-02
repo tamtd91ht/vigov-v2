@@ -1,6 +1,12 @@
 "use client";
 
+import { LockKeyholeOpen, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Field } from "@/components/ui/field";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { CAU_THIEU_LY_DO, LY_DO_TOI_DA, lyDoDuDung } from "./nhan-ghi-giai-ngan";
 
@@ -31,7 +37,10 @@ export function FormLyDo({
   loi,
   huy,
   xacNhan,
+  tone = "danger",
+  busyText = "Đang lưu…",
 }: {
+  /** The SPECIFIC question of the confirm box (spec v2 §7), e.g. "Gỡ dự án X?". Also the form's name. */
   tieuDe: string;
   /** Câu nói TRƯỚC hậu quả của thao tác. Nhận vào chứ không viết cứng: ba thao tác, ba hậu quả. */
   moTa: string;
@@ -40,23 +49,53 @@ export function FormLyDo({
   loi: string | null;
   huy: () => void;
   xacNhan: (lyDo: string) => void;
+  /** `danger` for a removal (red icon and button); `default` for an unlock, which destroys nothing. */
+  tone?: "danger" | "default";
+  /** Words of the submit button while the request runs; the button keeps its width (`BusyLabel`). */
+  busyText?: string;
 }) {
   const [lyDo, datLyDo] = useState("");
   const duDieuKien = lyDoDuDung(lyDo);
 
-  function guiNgay(e: FormEvent) {
+  function guiNgay(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!duDieuKien) return;
     xacNhan(lyDo.trim());
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-label={tieuDe}>
-      <h4>{tieuDe}</h4>
-      <p className="ghi-chu">{moTa}</p>
+    <ConfirmDialog
+      as="form"
+      tone={tone}
+      icon={tone === "danger" ? Trash2 : LockKeyholeOpen}
+      title={tieuDe}
+      titleAs="h4"
+      aria-label={tieuDe}
+      onSubmit={guiNgay}
+      actions={
+        <>
+          <Button
+            type="submit"
+            variant={tone === "danger" ? "danger" : "primary"}
+            disabled={dangGui || !duDieuKien}
+            aria-busy={dangGui || undefined}
+          >
+            <BusyLabel busy={dangGui} label={nhanNut} busyText={busyText} />
+          </Button>
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+            Huỷ
+          </Button>
+        </>
+      }
+    >
+      <p className="m-0">{moTa}</p>
 
-      <div className="o-nhap">
-        <label htmlFor="ly-do-giai-ngan">Lý do *</label>
+      <Field
+        label="Lý do *"
+        htmlFor="ly-do-giai-ngan"
+        grow="auto"
+        hint={!duDieuKien ? CAU_THIEU_LY_DO : undefined}
+      >
         <textarea
           id="ly-do-giai-ngan"
           name="ly-do-giai-ngan"
@@ -65,26 +104,16 @@ export function FormLyDo({
           maxLength={LY_DO_TOI_DA}
           onChange={(e) => datLyDo(e.target.value)}
         />
-        {!duDieuKien && <p className="ghi-chu">{CAU_THIEU_LY_DO}</p>}
-      </div>
+      </Field>
 
       {/* NGUYÊN VĂN câu máy chủ: 409 của các tuyến này mang đúng quy tắc nghiệp vụ đã từ chối
           ("dự án còn chứng từ", "người vừa khoá không tự mở lại được"), và viết lại nó ở client là
           dựng bản sao thứ hai của một quy tắc rồi để nó trôi. */}
       {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {loi}
         </p>
       )}
-
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-          Huỷ
-        </button>
-        <button type="submit" className="nut-xoa" disabled={dangGui || !duDieuKien}>
-          {nhanNut}
-        </button>
-      </div>
-    </form>
+    </ConfirmDialog>
   );
 }

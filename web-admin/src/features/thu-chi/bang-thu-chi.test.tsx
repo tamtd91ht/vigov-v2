@@ -232,7 +232,12 @@ describe("CỔNG QUYỀN — nhánh bị từ chối", () => {
   it("tài khoản chỉ đọc vẫn ĐỌC ĐƯỢC dòng nào đang là con số tổng", () => {
     // Đó là thông tin ai xem bảng cũng cần, kể cả người không đổi được nó — ẩn luôn ngôi sao sẽ
     // làm người đọc không biết ba con số tóm tắt phía trên lấy từ dòng nào.
-    expect(veBang(false, false)).toContain("★");
+    // Presentational pin (ADR 0068 §5): the `★` glyph became a lucide `Star`; the mark is now found
+    // by its tooltip, which is also its accessible name. Still: shown to a read-only account, and
+    // not as the button that changes it.
+    const html = veBang(false, false);
+    expect(html).toContain('title="Dòng đang là con số tổng"');
+    expect(html).not.toContain('aria-pressed=');
   });
 });
 
@@ -793,7 +798,9 @@ describe("hộp các đợt thu, chi (§5)", () => {
       />,
     );
 
-    expect(html).not.toContain("+ Ghi đợt");
+    // Presentational pin (ADR 0068 §5): "+ Ghi đợt" became a `Plus` icon + "Ghi đợt", matched as the
+    // button's own text (`>Ghi đợt<`) so the title "Ghi một đợt" cannot satisfy it.
+    expect(html).not.toContain(">Ghi đợt<");
   });
 
   it("danh sách rỗng hiện 'Chưa ghi đợt nào.'", () => {
@@ -831,7 +838,7 @@ describe("hộp các đợt thu, chi (§5)", () => {
     expect(html).toContain('name="counterparty"');
     expect(html).toContain('name="document_no"');
     expect(html).toContain("Thu tiền sử dụng đất đợt 2");
-    expect(html).toContain("+ Ghi đợt");
+    expect(html).toContain(">Ghi đợt<");
   });
 
   it("hộp gỡ đợt dùng hộp gỡ có ô lý do BẮT BUỘC", () => {

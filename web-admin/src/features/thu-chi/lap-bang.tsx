@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { FilePlus2, Plus, Trash2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_cotVao } from "@/lib/api/schema.gen";
 import { taoBang, type LoaiBang, type TaoBangVao } from "@/lib/api/thu-chi";
@@ -67,19 +73,26 @@ export function LapBang({
   const [loi, datLoi] = useState<string | null>(null);
 
   if (!mo) {
+    // The one action of the "no sheet yet" state, so it is that region's solid button (spec §5).
     return (
-      <p>
-        <button type="button" className="nut-phu" onClick={() => datMo(true)}>
+      <p className="m-0 flex justify-center">
+        <Button
+          type="button"
+          variant="primary"
+          icon={<FilePlus2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          onClick={() => datMo(true)}
+        >
           Lập bảng {nhanLoaiBang(loai).toLowerCase()} năm {nam}
-        </button>
+        </Button>
       </p>
     );
   }
 
   return (
-    <form
-      className="khoi-chi-tiet"
-      onSubmit={(e) => {
+    <Card
+      as="form"
+      aria-labelledby="tieu-de-lap-bang"
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         const dung = dungThanTaoBang({
@@ -99,90 +112,112 @@ export function LapBang({
         taoBang(dung.than, khoaChongTrung).then(xong);
       }}
     >
-      <div className="dau-khoi-chi-tiet">
-        <h3>
+      <CardHeader>
+        <CardTitle as="h3" id="tieu-de-lap-bang">
           Lập bảng {nhanLoaiBang(loai).toLowerCase()} năm {nam}
-        </h3>
+        </CardTitle>
+      </CardHeader>
+
+      <div className="flex min-w-0 flex-col gap-4 p-4">
+        <Notice tone="neutral">
+          Hệ thống chưa nhận tệp Excel của Phòng Tài chính: hợp đồng chưa có tuyến nạp tệp. Bộ cột
+          dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng, không
+          phải cấu trúc cố định.
+        </Notice>
+
+        {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          <Field
+            label="Tiêu đề bảng (in trên đầu báo cáo)"
+            htmlFor="lap-title"
+            grow="auto"
+            className="sm:col-span-2"
+          >
+            <input
+              id="lap-title"
+              name="title"
+              className="o-nhap"
+              type="text"
+              required
+              maxLength={300}
+              placeholder="BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ … NĂM …"
+            />
+          </Field>
+
+          <Field
+            label="Đơn vị tính"
+            htmlFor="lap-unit"
+            kind="select"
+            grow="auto"
+            hint={
+              "Số liệu luôn lưu bằng đồng. Đơn vị tính chỉ quyết định cách hiện và cách gõ số trên " +
+              "bảng, và đổi được về sau mà không con số nào bị quy đổi."
+            }
+          >
+            <select id="lap-unit" name="unit" required defaultValue={DON_VI_KHOI_DIEM}>
+              {DON_VI_TINH.map((d) => (
+                <option key={d.ma} value={d.ma}>
+                  {d.nhan}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Luỹ kế đến (sửa được về sau)" htmlFor="lap-cumulative" grow="auto">
+            <input id="lap-cumulative" name="cumulative_to" className="o-nhap" type="date" />
+          </Field>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-1">
+          <h4 className="m-0 text-sm font-semibold text-ink-900">Cột của bảng</h4>
+          <p className="m-0 text-xs text-ink-500">
+            Cột đánh dấu vai trò là cột hai chỉ số của năm đọc số từ đó. Bảng lập thiếu vai trò thì
+            `Thu đạt dự toán` và `Chi đạt dự toán` trống suốt năm.
+          </p>
+        </div>
+
+        <ColumnFieldsets kind={loai} columns={cot} onChange={datCot} />
+
+        <p className="m-0">
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={() => datCot([...cot, { name: "", order: cot.length + 1, type: "so" }])}
+          >
+            Thêm cột
+          </Button>
+        </p>
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
       </div>
 
-      <p className="ghi-chu">
-        Hệ thống chưa nhận tệp Excel của Phòng Tài chính: hợp đồng chưa có tuyến nạp tệp. Bộ cột
-        dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng, không phải
-        cấu trúc cố định.
-      </p>
-
-      <p>
-        <label htmlFor="lap-title">Tiêu đề bảng (in trên đầu báo cáo)</label>{" "}
-        <input
-          id="lap-title"
-          name="title"
-          className="o-nhap"
-          type="text"
-          required
-          maxLength={300}
-          placeholder="BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ … NĂM …"
-        />
-      </p>
-
-      <p>
-        <label htmlFor="lap-unit">Đơn vị tính</label>{" "}
-        <select id="lap-unit" name="unit" required defaultValue={DON_VI_KHOI_DIEM}>
-          {DON_VI_TINH.map((d) => (
-            <option key={d.ma} value={d.ma}>
-              {d.nhan}
-            </option>
-          ))}
-        </select>
-      </p>
-      <p className="ghi-chu">
-        Số liệu luôn lưu bằng đồng. Đơn vị tính chỉ quyết định cách hiện và cách gõ số trên bảng, và
-        đổi được về sau mà không con số nào bị quy đổi.
-      </p>
-
-      <p>
-        <label htmlFor="lap-cumulative">Luỹ kế đến (sửa được về sau)</label>{" "}
-        <input id="lap-cumulative" name="cumulative_to" className="o-nhap" type="date" />
-      </p>
-
-      <h4>Cột của bảng</h4>
-      <p className="ghi-chu">
-        Cột đánh dấu vai trò là cột hai chỉ số của năm đọc số từ đó. Bảng lập thiếu vai trò thì
-        `Thu đạt dự toán` và `Chi đạt dự toán` trống suốt năm.
-      </p>
-
-      <ColumnFieldsets kind={loai} columns={cot} onChange={datCot} />
-
-      <p>
-        <button
+      <CardFooter className="justify-end">
+        <Button
           type="button"
-          className="nut-phu"
-          onClick={() => datCot([...cot, { name: "", order: cot.length + 1, type: "so" }])}
+          variant="secondary"
+          disabled={dangGui}
+          onClick={() => {
+            datMo(false);
+            datCot(boCotKhoiDiem(loai, nam));
+          }}
         >
-          Thêm cột
-        </button>
-      </p>
-
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <button type="submit" className="nut-chinh" disabled={dangGui || cot.length === 0}>
-        Lập bảng
-      </button>{" "}
-      <button
-        type="button"
-        className="nut-phu"
-        disabled={dangGui}
-        onClick={() => {
-          datMo(false);
-          datCot(boCotKhoiDiem(loai, nam));
-        }}
-      >
-        Huỷ
-      </button>
-    </form>
+          Huỷ
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={dangGui || cot.length === 0}
+          aria-busy={dangGui || undefined}
+        >
+          <BusyLabel busy={dangGui} label="Lập bảng" busyText={BUSY_SAVING} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -202,78 +237,83 @@ export function ColumnFieldsets({
   return (
     <>
       {columns.map((c, i) => (
-        <fieldset key={i}>
-          <legend>Cột {i + 1}</legend>
-          <p>
-            <label htmlFor={`cot-ten-${i}`}>Tên cột</label>{" "}
-            <input
-              id={`cot-ten-${i}`}
-              className="o-nhap"
-              type="text"
-              required
-              maxLength={200}
-              value={c.name}
-              onChange={(e) => onChange(doiCot(columns, i, { name: e.target.value }))}
-            />
-          </p>
-          <p>
-            <label htmlFor={`cot-kieu-${i}`}>Kiểu cột</label>{" "}
-            <select
-              id={`cot-kieu-${i}`}
-              value={c.type}
-              onChange={(e) => onChange(changeColumnType(columns, i, e.target.value))}
-            >
-              <option value="so">Cột số</option>
-              <option value="phan_tram">Cột phần trăm</option>
-            </select>
-          </p>
-
-          {c.type === "so" ? (
-            <p>
-              <label htmlFor={`cot-vaitro-${i}`}>Vai trò trong chỉ số</label>{" "}
+        // One bordered box per column, its controls on a 2-column grid from 640px; the remove
+        // button sits at the box's top right, with its words and the column number.
+        <fieldset key={i} className="m-0 min-w-0 rounded-xl border border-line p-4">
+          <legend className="px-1 text-xs font-semibold text-ink-700">Cột {i + 1}</legend>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <Field label="Tên cột" htmlFor={`cot-ten-${i}`} grow="auto">
+              <input
+                id={`cot-ten-${i}`}
+                className="o-nhap"
+                type="text"
+                required
+                maxLength={200}
+                value={c.name}
+                onChange={(e) => onChange(doiCot(columns, i, { name: e.target.value }))}
+              />
+            </Field>
+            <Field label="Kiểu cột" htmlFor={`cot-kieu-${i}`} kind="select" grow="auto">
               <select
-                id={`cot-vaitro-${i}`}
-                value={c.role ?? ""}
-                onChange={(e) => onChange(doiCot(columns, i, { role: e.target.value }))}
+                id={`cot-kieu-${i}`}
+                value={c.type}
+                onChange={(e) => onChange(changeColumnType(columns, i, e.target.value))}
               >
-                <option value="">Cột thường</option>
-                {vaiTroChoLoai(kind).map((v) => (
-                  <option key={v.ma} value={v.ma}>
-                    {v.nhan}
-                  </option>
-                ))}
+                <option value="so">Cột số</option>
+                <option value="phan_tram">Cột phần trăm</option>
               </select>
-            </p>
-          ) : (
-            <>
-              <OperandSelect
-                id={`cot-tuso-${i}`}
-                label="Tử số"
-                columns={columns}
-                value={c.numerator_index}
-                onChange={(v) => onChange(doiCot(columns, i, { numerator_index: v }))}
-              />
-              <OperandSelect
-                id={`cot-mauso-${i}`}
-                label="Mẫu số"
-                columns={columns}
-                value={c.denominator_index}
-                onChange={(v) => onChange(doiCot(columns, i, { denominator_index: v }))}
-              />
-              <p className="ghi-chu">
-                Tỷ lệ của từng dòng = Tử số / Mẫu số × 100, do hệ thống tính từ số liệu của chính
-                dòng đó. Mẫu số bằng 0 hoặc để trống thì ô hiện “Không tính được”.
-              </p>
-            </>
-          )}
+            </Field>
 
-          <button
-            type="button"
-            className="nut-phu"
-            onClick={() => onChange(removeColumnAt(columns, i))}
-          >
-            Bỏ cột {i + 1}
-          </button>
+            {c.type === "so" ? (
+              <Field label="Vai trò trong chỉ số" htmlFor={`cot-vaitro-${i}`} kind="select" grow="auto">
+                <select
+                  id={`cot-vaitro-${i}`}
+                  value={c.role ?? ""}
+                  onChange={(e) => onChange(doiCot(columns, i, { role: e.target.value }))}
+                >
+                  <option value="">Cột thường</option>
+                  {vaiTroChoLoai(kind).map((v) => (
+                    <option key={v.ma} value={v.ma}>
+                      {v.nhan}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <>
+                <OperandSelect
+                  id={`cot-tuso-${i}`}
+                  label="Tử số"
+                  columns={columns}
+                  value={c.numerator_index}
+                  onChange={(v) => onChange(doiCot(columns, i, { numerator_index: v }))}
+                />
+                <OperandSelect
+                  id={`cot-mauso-${i}`}
+                  label="Mẫu số"
+                  columns={columns}
+                  value={c.denominator_index}
+                  onChange={(v) => onChange(doiCot(columns, i, { denominator_index: v }))}
+                />
+                <p className="m-0 text-xs text-ink-500 sm:col-span-2">
+                  Tỷ lệ của từng dòng = Tử số / Mẫu số × 100, do hệ thống tính từ số liệu của chính
+                  dòng đó. Mẫu số bằng 0 hoặc để trống thì ô hiện “Không tính được”.
+                </p>
+              </>
+            )}
+          </div>
+
+          <p className="m-0 mt-3 flex justify-end">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+              onClick={() => onChange(removeColumnAt(columns, i))}
+            >
+              Bỏ cột {i + 1}
+            </Button>
+          </p>
         </fieldset>
       ))}
     </>
@@ -310,8 +350,7 @@ function OperandSelect({
   onChange: (v: number | null) => void;
 }) {
   return (
-    <p>
-      <label htmlFor={id}>{label}</label>{" "}
+    <Field label={label} htmlFor={id} kind="select" grow="auto">
       <select
         id={id}
         required
@@ -327,7 +366,7 @@ function OperandSelect({
           ) : null,
         )}
       </select>
-    </p>
+    </Field>
   );
 }
 

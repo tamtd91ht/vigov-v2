@@ -1,8 +1,14 @@
 "use client";
 
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { suaDuAn, themDuAn, xoaDuAn } from "@/lib/api/giai-ngan";
 import type { finance_duAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 
@@ -18,6 +24,7 @@ import {
   thanThemDuAn,
   type GiaTriFormDuAn,
 } from "./nhan-ghi-giai-ngan";
+import { DeniedNote, Glyph } from "./project-ui";
 
 /**
  * Ba tuyến GHI của dự án đầu tư — §9 (`Thêm dự án`), §8 (`✎ Sửa dự án`), §7 (xoá mềm kèm lý do).
@@ -80,169 +87,194 @@ export function FormDuAn({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-label={tieuDeForm}>
-      <h3>{tieuDeForm}</h3>
-
-      {thieuDanhMuc && (
-        <p className="ghi-chu">
-          Danh mục hạng mục kế hoạch vốn của xã đang rỗng, mà mỗi dự án phải thuộc đúng một hạng
-          mục. Cần khai hạng mục ở màn Cấu hình (quyền admin.lookup) trước khi thêm dự án.
-        </p>
-      )}
-
-      {maChiDoc === undefined ? (
-        <div className="o-nhap">
-          <label htmlFor="ma-du-an">Mã dự án *</label>
-          <input
-            id="ma-du-an"
-            name="ma-du-an"
-            value={gt.ma}
-            maxLength={MA_DU_AN_TOI_DA}
-            autoComplete="off"
-            onChange={(e) => datGT({ ...gt, ma: e.target.value })}
-          />
-          {/* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
-              trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa xem
-              hết danh sách và không thấy mã ấy ở đâu. */}
-          <p className="ghi-chu">
-            Chỉ gồm chữ cái, chữ số và dấu gạch nối. Hệ thống chưa tự sinh mã. Mã đã cấp thì không
-            cấp lại, kể cả khi dự án mang mã đó đã rút khỏi danh sách.
+    <Card as="form" onSubmit={guiNgay} aria-label={tieuDeForm}>
+      <CardHeader className="justify-between">
+        <CardTitle as="h3">{tieuDeForm}</CardTitle>
+        {maChiDoc !== undefined && (
+          <p className="m-0 text-[13px] text-ink-500">
+            Mã dự án: <span className="ma-muc text-ink-700">{maChiDoc}</span> — mã đã cấp thì không
+            đánh lại, nên ô này chỉ để đọc.
           </p>
+        )}
+      </CardHeader>
+
+      <div className="flex min-w-0 flex-col gap-4 p-4">
+        {thieuDanhMuc && (
+          <Notice tone="info">
+            Danh mục hạng mục kế hoạch vốn của xã đang rỗng, mà mỗi dự án phải thuộc đúng một hạng
+            mục. Cần khai hạng mục ở màn Cấu hình (quyền admin.lookup) trước khi thêm dự án.
+          </Notice>
+        )}
+
+        {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          {maChiDoc === undefined && (
+            <Field
+              label="Mã dự án *"
+              htmlFor="ma-du-an"
+              grow="auto"
+              /* MÃ ĐÃ CẤP THÌ KHÔNG CẤP LẠI, KỂ CẢ KHI DỰ ÁN MANG MÃ ẤY ĐÃ RÚT KHỎI DANH SÁCH — nói
+                 trước, vì nếu không thì câu 409 của máy chủ đọc như một lỗi trước mặt người vừa xem
+                 hết danh sách và không thấy mã ấy ở đâu. */
+              hint={
+                "Chỉ gồm chữ cái, chữ số và dấu gạch nối. Hệ thống chưa tự sinh mã. Mã đã cấp thì " +
+                "không cấp lại, kể cả khi dự án mang mã đó đã rút khỏi danh sách."
+              }
+            >
+              <input
+                id="ma-du-an"
+                name="ma-du-an"
+                value={gt.ma}
+                maxLength={MA_DU_AN_TOI_DA}
+                autoComplete="off"
+                onChange={(e) => datGT({ ...gt, ma: e.target.value })}
+              />
+            </Field>
+          )}
+
+          <Field
+            label="Hạng mục *"
+            htmlFor="hang-muc-du-an"
+            kind="select"
+            grow="auto"
+            hint="Báo cáo tiến độ cộng dồn theo hạng mục, nên mỗi dự án thuộc đúng một hạng mục."
+          >
+            <select
+              id="hang-muc-du-an"
+              value={gt.hangMucID}
+              disabled={thieuDanhMuc}
+              onChange={(e) => datGT({ ...gt, hangMucID: e.target.value })}
+            >
+              <option value="">— Chọn hạng mục —</option>
+              {danhMuc.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Tên dự án *" htmlFor="ten-du-an" grow="auto" className="sm:col-span-2">
+            <input
+              id="ten-du-an"
+              name="ten-du-an"
+              value={gt.ten}
+              maxLength={TEN_DU_AN_TOI_DA}
+              autoComplete="off"
+              placeholder="Bê tông hoá đường trục chính thôn Hà Lam"
+              onChange={(e) => datGT({ ...gt, ten: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Số tiền bố trí năm (đồng) *" htmlFor="ke-hoach-von-du-an" grow="auto">
+            {/* Ô CHỮ, KHÔNG PHẢI `type=number`: một ô số của trình duyệt nhận cả `1e9` và cả dấu
+                phẩy thập phân theo vùng miền, rồi đưa xuống một giá trị không phải thứ người ta gõ.
+                Đơn vị ở đây là ĐỒNG và con số là số nguyên — `docSoTien` đọc đúng một khuôn và từ
+                chối phần còn lại bằng một câu. */}
+            <input
+              id="ke-hoach-von-du-an"
+              name="ke-hoach-von-du-an"
+              value={gt.keHoachVon}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="7.500.000.000"
+              className="tabular-nums"
+              onChange={(e) => datGT({ ...gt, keHoachVon: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label="Tổng mức được duyệt cả dự án (đồng)"
+            htmlFor="tong-muc-du-an"
+            grow="auto"
+            hint="Để trống thì lấy bằng số tiền bố trí năm nay."
+          >
+            <input
+              id="tong-muc-du-an"
+              name="tong-muc-du-an"
+              value={gt.tongMucDuyet}
+              inputMode="numeric"
+              autoComplete="off"
+              className="tabular-nums"
+              onChange={(e) => datGT({ ...gt, tongMucDuyet: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Ngày khởi công" htmlFor="ngay-khoi-cong" grow="auto">
+            <input
+              id="ngay-khoi-cong"
+              name="ngay-khoi-cong"
+              type="date"
+              value={gt.ngayKhoiCong}
+              onChange={(e) => datGT({ ...gt, ngayKhoiCong: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Ngày hoàn thành" htmlFor="ngay-hoan-thanh" grow="auto">
+            <input
+              id="ngay-hoan-thanh"
+              name="ngay-hoan-thanh"
+              type="date"
+              value={gt.ngayHoanThanh}
+              onChange={(e) => datGT({ ...gt, ngayHoanThanh: e.target.value })}
+            />
+          </Field>
+
+          {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU — §9 nói rõ và §8 lặp lại. */}
+          <Field
+            label="Thời hạn giải ngân"
+            htmlFor="thoi-han-giai-ngan"
+            grow="auto"
+            className="sm:col-span-2"
+            hint={
+              "Mốc phải hoàn tất phần vốn của năm. Khác với ngày hoàn thành công trình: công trình " +
+              "xong tháng 3 vẫn có thể phải giải ngân trước 31/12. Để trống thì lấy mặc định 31/12."
+            }
+          >
+            <input
+              id="thoi-han-giai-ngan"
+              name="thoi-han-giai-ngan"
+              type="date"
+              value={gt.thoiHanGiaiNgan}
+              className="sm:max-w-[calc(50%-0.5rem)]"
+              onChange={(e) => datGT({ ...gt, thoiHanGiaiNgan: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Mô tả" htmlFor="mo-ta-du-an" grow="auto" className="sm:col-span-2">
+            <textarea
+              id="mo-ta-du-an"
+              name="mo-ta-du-an"
+              rows={3}
+              value={gt.moTa}
+              maxLength={MO_TA_DU_AN_TOI_DA}
+              className="py-2"
+              onChange={(e) => datGT({ ...gt, moTa: e.target.value })}
+            />
+          </Field>
         </div>
-      ) : (
-        <p className="ma-muc">
-          Mã dự án: {maChiDoc} — mã đã cấp thì không đánh lại, nên ô này chỉ để đọc.
-        </p>
-      )}
 
-      <div className="o-chon">
-        <label htmlFor="hang-muc-du-an">Hạng mục *</label>
-        <select
-          id="hang-muc-du-an"
-          value={gt.hangMucID}
-          disabled={thieuDanhMuc}
-          onChange={(e) => datGT({ ...gt, hangMucID: e.target.value })}
-        >
-          <option value="">— Chọn hạng mục —</option>
-          {danhMuc.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.label}
-            </option>
-          ))}
-        </select>
-        <p className="ghi-chu">
-          Báo cáo tiến độ cộng dồn theo hạng mục, nên mỗi dự án thuộc đúng một hạng mục.
-        </p>
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="ten-du-an">Tên dự án *</label>
-        <input
-          id="ten-du-an"
-          name="ten-du-an"
-          value={gt.ten}
-          maxLength={TEN_DU_AN_TOI_DA}
-          autoComplete="off"
-          placeholder="Bê tông hoá đường trục chính thôn Hà Lam"
-          onChange={(e) => datGT({ ...gt, ten: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="ke-hoach-von-du-an">Số tiền bố trí năm (đồng) *</label>
-        {/* Ô CHỮ, KHÔNG PHẢI `type=number`: một ô số của trình duyệt nhận cả `1e9` và cả dấu phẩy
-            thập phân theo vùng miền, rồi đưa xuống một giá trị không phải thứ người ta gõ. Đơn vị
-            ở đây là ĐỒNG và con số là số nguyên — `docSoTien` đọc đúng một khuôn và từ chối phần
-            còn lại bằng một câu. */}
-        <input
-          id="ke-hoach-von-du-an"
-          name="ke-hoach-von-du-an"
-          value={gt.keHoachVon}
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="7.500.000.000"
-          onChange={(e) => datGT({ ...gt, keHoachVon: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="tong-muc-du-an">Tổng mức được duyệt cả dự án (đồng)</label>
-        <input
-          id="tong-muc-du-an"
-          name="tong-muc-du-an"
-          value={gt.tongMucDuyet}
-          inputMode="numeric"
-          autoComplete="off"
-          onChange={(e) => datGT({ ...gt, tongMucDuyet: e.target.value })}
-        />
-        <p className="ghi-chu">Để trống thì lấy bằng số tiền bố trí năm nay.</p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="ngay-khoi-cong">Ngày khởi công</label>
-        <input
-          id="ngay-khoi-cong"
-          name="ngay-khoi-cong"
-          type="date"
-          value={gt.ngayKhoiCong}
-          onChange={(e) => datGT({ ...gt, ngayKhoiCong: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="ngay-hoan-thanh">Ngày hoàn thành</label>
-        <input
-          id="ngay-hoan-thanh"
-          name="ngay-hoan-thanh"
-          type="date"
-          value={gt.ngayHoanThanh}
-          onChange={(e) => datGT({ ...gt, ngayHoanThanh: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="thoi-han-giai-ngan">Thời hạn giải ngân</label>
-        <input
-          id="thoi-han-giai-ngan"
-          name="thoi-han-giai-ngan"
-          type="date"
-          value={gt.thoiHanGiaiNgan}
-          onChange={(e) => datGT({ ...gt, thoiHanGiaiNgan: e.target.value })}
-        />
-        {/* HAI MỐC KHÁC NHAU, CỐ Ý ĐỂ CẠNH NHAU — §9 nói rõ và §8 lặp lại. */}
-        <p className="ghi-chu">
-          Mốc phải hoàn tất phần vốn của năm. Khác với ngày hoàn thành công trình: công trình xong
-          tháng 3 vẫn có thể phải giải ngân trước 31/12. Để trống thì lấy mặc định 31/12.
-        </p>
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="mo-ta-du-an">Mô tả</label>
-        <textarea
-          id="mo-ta-du-an"
-          name="mo-ta-du-an"
-          rows={3}
-          value={gt.moTa}
-          maxLength={MO_TA_DU_AN_TOI_DA}
-          onChange={(e) => datGT({ ...gt, moTa: e.target.value })}
-        />
-      </div>
-
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
+      <CardFooter className="justify-end">
+        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
           Huỷ
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui || thieuDanhMuc}>
-          Lưu dự án
-        </button>
-      </div>
-    </form>
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={dangGui || thieuDanhMuc}
+          aria-busy={dangGui || undefined}
+        >
+          <BusyLabel busy={dangGui} label="Lưu dự án" busyText={BUSY_SAVING} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -273,7 +305,7 @@ export function KhoiThemDuAn({
   // `Idempotency-Key` sinh ra để làm.
   const [lanGhiXong, datLanGhiXong] = useState(0);
 
-  if (!coGhi) return <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>;
+  if (!coGhi) return <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>;
 
   function them(gt: GiaTriFormDuAn, khoa: string): void {
     const than = thanThemDuAn(nam, gt);
@@ -298,18 +330,22 @@ export function KhoiThemDuAn({
   }
 
   return (
-    <div className="cum-nut">
-      <button
-        type="button"
-        className="nut-chinh"
-        aria-expanded={dangMo}
-        onClick={() => {
-          datLoi(null);
-          datDangMo(!dangMo);
-        }}
-      >
-        + Thêm dự án
-      </button>
+    <div className="flex min-w-0 flex-col gap-4">
+      {/* The page's ONE solid button (spec §5), at the right end of its row. */}
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="primary"
+          icon={<Glyph icon={Plus} />}
+          aria-expanded={dangMo}
+          onClick={() => {
+            datLoi(null);
+            datDangMo(!dangMo);
+          }}
+        >
+          Thêm dự án
+        </Button>
+      </div>
 
       {dangMo && (
         <FormDuAn
@@ -415,38 +451,41 @@ export function KhoiSuaXoaDuAn({
   }
 
   return (
-    <div className="cum-nut">
-      {coGhi ? (
-        <button
-          type="button"
-          className="nut-phu"
-          aria-expanded={dangMo === "sua"}
-          onClick={() => {
-            datLoi(null);
-            datDangMo(dangMo === "sua" ? null : "sua");
-          }}
-        >
-          ✎ Sửa dự án
-        </button>
-      ) : (
-        <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>
-      )}
-
-      {coXacNhan ? (
-        <button
-          type="button"
-          className="nut-xoa"
-          aria-expanded={dangMo === "xoa"}
-          onClick={() => {
-            datLoi(null);
-            datDangMo(dangMo === "xoa" ? null : "xoa");
-          }}
-        >
-          🗑 Gỡ dự án
-        </button>
-      ) : (
-        <p className="trang-thai-rong">{CAU_THIEU_QUYEN_XAC_NHAN}</p>
-      )}
+    <div className="flex min-w-0 flex-col gap-4">
+      {/* Both actions keep their WORDS (spec v2 §7: an action with consequences is never icon-only).
+          Removal is the danger outline, never the solid colour. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {coGhi && (
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<Glyph icon={Pencil} />}
+            aria-expanded={dangMo === "sua"}
+            onClick={() => {
+              datLoi(null);
+              datDangMo(dangMo === "sua" ? null : "sua");
+            }}
+          >
+            Sửa dự án
+          </Button>
+        )}
+        {coXacNhan && (
+          <Button
+            type="button"
+            variant="danger"
+            icon={<Glyph icon={Trash2} />}
+            aria-expanded={dangMo === "xoa"}
+            onClick={() => {
+              datLoi(null);
+              datDangMo(dangMo === "xoa" ? null : "xoa");
+            }}
+          >
+            Gỡ dự án
+          </Button>
+        )}
+      </div>
+      {!coGhi && <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>}
+      {!coXacNhan && <DeniedNote>{CAU_THIEU_QUYEN_XAC_NHAN}</DeniedNote>}
 
       {dangMo === "sua" && coGhi && (
         <FormDuAn
@@ -466,7 +505,8 @@ export function KhoiSuaXoaDuAn({
 
       {dangMo === "xoa" && coXacNhan && (
         <FormLyDo
-          tieuDe={`Gỡ dự án: ${duAn.name}`}
+          tieuDe={`Gỡ dự án “${duAn.name}”?`}
+          busyText="Đang gỡ…"
           moTa={
             "Dự án được xoá MỀM: hàng vẫn còn kèm người xoá và lý do, và mã dự án KHÔNG quay lại " +
             "dãy — nhập lại phải chọn mã khác. Dự án còn chứng từ giải ngân thì máy chủ từ chối, " +

@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { finance_bangRa } from "@/lib/api/schema.gen";
 import type { SuaBangVao } from "@/lib/api/thu-chi";
 
@@ -31,9 +35,10 @@ export function FormSuaBang({
   const [loi, datLoi] = useState<string | null>(null);
 
   return (
-    <form
-      className="khoi-chi-tiet"
-      onSubmit={(e) => {
+    <Card
+      as="form"
+      aria-labelledby="tieu-de-sua-bang"
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
         const dung = dungThanSuaBang(bang, {
@@ -49,65 +54,77 @@ export function FormSuaBang({
         luu(dung.than);
       }}
     >
-      <div className="dau-khoi-chi-tiet">
-        <h3>Sửa thông tin bảng</h3>
+      <CardHeader>
+        <CardTitle as="h3" id="tieu-de-sua-bang">
+          Sửa thông tin bảng
+        </CardTitle>
+      </CardHeader>
+
+      {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+      <div className="grid min-w-0 gap-4 p-4 sm:grid-cols-2">
+        <Field
+          label="Tiêu đề bảng (in trên đầu báo cáo)"
+          htmlFor="sua-bang-title"
+          grow="auto"
+          className="sm:col-span-2"
+        >
+          <input
+            id="sua-bang-title"
+            name="title"
+            className="o-nhap"
+            type="text"
+            required
+            maxLength={300}
+            defaultValue={bang.title}
+          />
+        </Field>
+
+        <Field
+          label="Luỹ kế đến"
+          htmlFor="sua-bang-cumulative"
+          grow="auto"
+          hint="Để trống để bỏ mốc luỹ kế khỏi đầu báo cáo."
+        >
+          <input
+            id="sua-bang-cumulative"
+            name="cumulative_to"
+            className="o-nhap"
+            type="date"
+            defaultValue={bang.cumulative_to ?? ""}
+          />
+        </Field>
+
+        <Field label="Đơn vị tính" htmlFor="sua-bang-unit" kind="select" grow="auto" hint={GOI_Y_DOI_DON_VI}>
+          <select
+            id="sua-bang-unit"
+            name="unit"
+            required
+            defaultValue={laMaDonVi(bang.unit) ? bang.unit : ""}
+          >
+            {!laMaDonVi(bang.unit) && <option value="">— Chọn đơn vị tính —</option>}
+            {DON_VI_TINH.map((d) => (
+              <option key={d.ma} value={d.ma}>
+                {d.nhan}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0 sm:col-span-2" role="alert">
+            {loi}
+          </p>
+        )}
       </div>
 
-      <p>
-        <label htmlFor="sua-bang-title">Tiêu đề bảng (in trên đầu báo cáo)</label>{" "}
-        <input
-          id="sua-bang-title"
-          name="title"
-          className="o-nhap"
-          type="text"
-          required
-          maxLength={300}
-          defaultValue={bang.title}
-        />
-      </p>
-
-      <p>
-        <label htmlFor="sua-bang-cumulative">Luỹ kế đến</label>{" "}
-        <input
-          id="sua-bang-cumulative"
-          name="cumulative_to"
-          className="o-nhap"
-          type="date"
-          defaultValue={bang.cumulative_to ?? ""}
-        />
-      </p>
-      <p className="ghi-chu">Để trống để bỏ mốc luỹ kế khỏi đầu báo cáo.</p>
-
-      <p>
-        <label htmlFor="sua-bang-unit">Đơn vị tính</label>{" "}
-        <select
-          id="sua-bang-unit"
-          name="unit"
-          required
-          defaultValue={laMaDonVi(bang.unit) ? bang.unit : ""}
-        >
-          {!laMaDonVi(bang.unit) && <option value="">— Chọn đơn vị tính —</option>}
-          {DON_VI_TINH.map((d) => (
-            <option key={d.ma} value={d.ma}>
-              {d.nhan}
-            </option>
-          ))}
-        </select>
-      </p>
-      <p className="ghi-chu">{GOI_Y_DOI_DON_VI}</p>
-
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <button type="submit" className="nut-chinh" disabled={dangGui}>
-        Lưu thông tin bảng
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
-        Huỷ
-      </button>
-    </form>
+      <CardFooter className="justify-end">
+        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+          Huỷ
+        </Button>
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+          <BusyLabel busy={dangGui} label="Lưu thông tin bảng" busyText={BUSY_SAVING} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

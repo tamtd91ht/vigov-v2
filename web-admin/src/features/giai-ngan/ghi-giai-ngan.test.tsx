@@ -66,11 +66,14 @@ function chungTu(sua: Partial<finance_chungTuRa> = {}): finance_chungTuRa {
 }
 
 const NGAY = "07/09/2026";
-const NHAN_SUA = `✎ Sửa chứng từ ngày ${NGAY}`;
+// Presentational pins (ADR 0068 §5): the `✎` / `🗑` glyphs left the accessible names when they became
+// lucide icons; the names still carry the action and the voucher's date, so each still names ONE
+// button and the permission assertions below are unchanged.
+const NHAN_SUA = `Sửa chứng từ ngày ${NGAY}`;
 const NHAN_XAC_NHAN = `Xác nhận chứng từ ngày ${NGAY}`;
 const NHAN_KHOA = `Khoá chứng từ ngày ${NGAY}`;
 const NHAN_MO_KHOA = `Mở khoá chứng từ ngày ${NGAY}`;
-const NHAN_GO = `🗑 Gỡ chứng từ ngày ${NGAY}`;
+const NHAN_GO = `Gỡ chứng từ ngày ${NGAY}`;
 
 function veBang(coGhi: boolean, coXacNhan: boolean, ds: readonly finance_chungTuRa[]): string {
   return renderToStaticMarkup(
@@ -263,13 +266,22 @@ describe("BIỂU MẪU CHỨNG TỪ — cảnh báo ADR 0036", () => {
   });
 });
 
+/**
+ * The three project buttons by their VISIBLE WORDS, as text between tags. Presentational pins (ADR
+ * 0068 §5): the `+` / `✎` / `🗑` glyphs became lucide icons in front of the same words. Matched as
+ * `>Words<` so the words inside a refusal sentence or a form title can never satisfy the check.
+ */
+const NUT_THEM_DU_AN = ">Thêm dự án<";
+const NUT_SUA_DU_AN = ">Sửa dự án<";
+const NUT_GO_DU_AN = ">Gỡ dự án<";
+
 describe("NÚT THÊM DỰ ÁN — cổng budget.update", () => {
   it("thiếu `budget.update`: KHÔNG có nút, và câu từ chối GỌI ĐÚNG TÊN KHOÁ", () => {
     const html = renderToStaticMarkup(
       <KhoiThemDuAn nam={2026} danhMuc={HANG_MUC} coGhi={false} daGhiXong={() => {}} />,
     );
 
-    expect(html).not.toContain("+ Thêm dự án");
+    expect(html).not.toContain(NUT_THEM_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
     expect(html).toContain("budget.update");
   });
@@ -279,7 +291,7 @@ describe("NÚT THÊM DỰ ÁN — cổng budget.update", () => {
       <KhoiThemDuAn nam={2026} danhMuc={HANG_MUC} coGhi daGhiXong={() => {}} />,
     );
 
-    expect(html).toContain("+ Thêm dự án");
+    expect(html).toContain(NUT_THEM_DU_AN);
   });
 });
 
@@ -296,8 +308,8 @@ describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
       />,
     );
 
-    expect(html).toContain("✎ Sửa dự án");
-    expect(html).not.toContain("🗑 Gỡ dự án");
+    expect(html).toContain(NUT_SUA_DU_AN);
+    expect(html).not.toContain(NUT_GO_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
     expect(html).toContain("budget.confirm");
   });
@@ -314,8 +326,8 @@ describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
       />,
     );
 
-    expect(html).toContain("🗑 Gỡ dự án");
-    expect(html).not.toContain("✎ Sửa dự án");
+    expect(html).toContain(NUT_GO_DU_AN);
+    expect(html).not.toContain(NUT_SUA_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
   });
 
@@ -331,8 +343,8 @@ describe("SỬA / GỠ DỰ ÁN — hai cổng riêng", () => {
       />,
     );
 
-    expect(html).not.toContain("✎ Sửa dự án");
-    expect(html).not.toContain("🗑 Gỡ dự án");
+    expect(html).not.toContain(NUT_SUA_DU_AN);
+    expect(html).not.toContain(NUT_GO_DU_AN);
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_GHI));
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_XAC_NHAN));
   });
@@ -356,7 +368,9 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     // Gửi đi lúc ấy chỉ nhận 404 "không tìm thấy hạng mục kế hoạch vốn này trong xã". Phép so nhắm
     // ĐÚNG nút gửi chứ không tìm chữ `disabled` ở đâu đó — ô chọn hạng mục cũng đang bị tắt, nên
     // một phép so lỏng sẽ xanh kể cả khi nút Lưu vẫn bấm được.
-    expect(html).toContain('<button type="submit" class="nut-chinh" disabled="">Lưu dự án</button>');
+    // Presentational pin (ADR 0068 §5): the button now carries the `Button` utilities after its
+    // legacy `nut-chinh` class; what is asserted is still THE SUBMIT BUTTON, disabled.
+    expect(html).toMatch(/<button class="nut-chinh [^"]*" type="submit" disabled="">Lưu dự án<\/button>/);
   });
 
   it("khi SỬA: mã dự án chỉ ĐỌC, không có ô nhập mã", () => {

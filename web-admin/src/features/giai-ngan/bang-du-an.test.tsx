@@ -61,7 +61,22 @@ describe("bảng dự án kết xuất ra trang", () => {
     );
 
     expect(html).toContain("Chậm 31,36 điểm");
-    expect(html).toContain("chip-cham");
+    // Presentational pin (ADR 0068 §5): the red pill of `Badge tone="danger"`, which replaced the
+    // legacy `chip-cham` class. Only a late project paints red on this table.
+    expect(html).toContain("bg-danger-50");
+  });
+
+  it("dự án bám sát tiến độ KHÔNG mang màu đỏ — đỏ chỉ dành cho dự án máy chủ báo chậm", () => {
+    const html = renderToStaticMarkup(
+      <BangDanhSach
+        duLieu={danhSach([duAn({ delay_score: 500, is_delayed: false }), duAn({ id: "01JDUAN2" })])}
+        danhMuc={[]}
+      />,
+    );
+
+    expect(html).toContain("Bám sát tiến độ");
+    expect(html).toContain("Chưa bố trí vốn");
+    expect(html).not.toContain("bg-danger-50");
   });
 
   it("dự án chưa bố trí vốn KHÔNG bao giờ hiện thành 0%", () => {
@@ -150,7 +165,10 @@ describe("trang chi tiết dự án kết xuất ra trang", () => {
 describe("banner phạm vi (`scope_notice`) — câu của máy chủ, không câu của web", () => {
   it("hiện NGUYÊN VĂN câu máy chủ gửi, kể cả khi xã đã sửa lời", () => {
     const html = renderToStaticMarkup(<ScopeNotice text={COMMUNE_WORDING} />);
-    expect(html).toBe(`<p class="canh-bao-pham-vi">${COMMUNE_WORDING}</p>`);
+    // Presentational pin (ADR 0068 §5): the markup is now the neutral `Notice`, so the exact-string
+    // pin became "the sentence is there, verbatim, once — and it is not announced as an alert".
+    expect(html.split(COMMUNE_WORDING)).toHaveLength(2);
+    expect(html).not.toContain('role="alert"');
   });
 
   it("vắng hoặc trống thì KHÔNG hiện gì — không tự bịa câu dự phòng", () => {

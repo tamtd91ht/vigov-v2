@@ -1,4 +1,7 @@
+import { TableProperties, Wallet } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
@@ -46,16 +49,22 @@ export default async function TrangThuChiNganSach() {
           <ThanhBen />
           <DauTrang />
           <main className="than-trang">
-            <h1>Thu - Chi ngân sách xã</h1>
             {/* MÔ TẢ TRANG KHÔNG CHÉP NGUYÊN VĂN §1, và đó là một lựa chọn có lý do. Câu của đặc
                 tả mở đầu bằng "Nạp thẳng tệp Excel của Phòng Tài chính" — một chức năng hợp đồng
                 hôm nay KHÔNG có tuyến nào phía sau. In nguyên câu ấy lên đầu trang là hứa với cán
                 bộ một việc họ sẽ đi tìm nút để làm và không thấy. Khối "chưa dựng được" trong màn
                 nói đủ vì sao. */}
-            <p className="mo-ta-trang">
-              Bảng thu và bảng chi ngân sách của đơn vị theo từng năm: khoản mục dựng thành cây, số
-              liệu nhập trên lưới, và ba chỉ số của năm.
-            </p>
+            <PageHeader
+              icon={Wallet}
+              title="Thu - Chi ngân sách xã"
+              subtitle={
+                <span className="inline-flex items-center gap-1.5">
+                  <TableProperties aria-hidden="true" focusable="false" strokeWidth={1.8} />
+                  Bảng thu và bảng chi ngân sách của đơn vị theo từng năm: khoản mục dựng thành cây,
+                  số liệu nhập trên lưới, và ba chỉ số của năm.
+                </span>
+              }
+            />
             {/* Câu thiếu quyền nằm ở `nhan-thu-chi.ts`, không viết thẳng ở đây: nhánh ấy là nhánh
                 người viết mã không bao giờ nhìn thấy, nên nó phải kiểm được bằng một bài test. */}
             <CongQuyen khoa={QUYEN_XEM_GIAI_NGAN} cauThieuQuyen={CAU_THIEU_QUYEN_XEM}>

@@ -1,9 +1,28 @@
 "use client";
 
+import {
+  CircleCheck,
+  LockKeyhole,
+  LockKeyholeOpen,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { IconButton } from "@/components/ui/icon-button";
+import { Notice } from "@/components/ui/notice";
+import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
+import { cn } from "@/lib/cn";
 import {
   goChungTu,
   khoaChungTu,
@@ -25,7 +44,6 @@ import {
   DAU_GACH,
   DOI_TAC_TOI_DA,
   FORM_CHUNG_TU_TRONG,
-  lopTrangThaiChungTu,
   NOI_DUNG_CHUNG_TU_TOI_DA,
   nhanMocKhoa,
   nhanTrangThaiChungTu,
@@ -35,6 +53,7 @@ import {
   thanThemChungTu,
   type GiaTriFormChungTu,
 } from "./nhan-ghi-giai-ngan";
+import { DeniedNote, Glyph, VoucherStatusBadge } from "./project-ui";
 
 /**
  * Tab "Chứng từ" của §8.2 — sáu tuyến ghi của vòng đời chứng từ giải ngân.
@@ -113,92 +132,102 @@ export function FormChungTu({
   }
 
   return (
-    <form className="form-danh-muc" onSubmit={guiNgay} aria-label={tieuDeForm}>
-      <h4>{tieuDeForm}</h4>
+    <Card as="form" onSubmit={guiNgay} aria-label={tieuDeForm}>
+      <CardHeader>
+        <CardTitle as="h4">{tieuDeForm}</CardTitle>
+      </CardHeader>
 
-      {trangThaiHienTai === CHUNG_TU_DA_XAC_NHAN && (
-        <p className="canh-bao-pham-vi">{CANH_BAO_SUA_VE_NHAP}</p>
-      )}
+      <div className="flex min-w-0 flex-col gap-4 p-4">
+        {trangThaiHienTai === CHUNG_TU_DA_XAC_NHAN && (
+          <Notice tone="legal" icon={TriangleAlert}>
+            {CANH_BAO_SUA_VE_NHAP}
+          </Notice>
+        )}
 
-      <div className="o-nhap">
-        <label htmlFor="ngay-chi-chung-tu">Ngày chi *</label>
-        <input
-          id="ngay-chi-chung-tu"
-          name="ngay-chi-chung-tu"
-          type="date"
-          value={gt.ngayChi}
-          onChange={(e) => datGT({ ...gt, ngayChi: e.target.value })}
-        />
-        {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
-            mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
-        <p className="ghi-chu">Ngày tiền thực sự chi ra, không phải ngày gõ vào sổ.</p>
+        {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          {/* HAI NGÀY KHÁC NHAU, và xã nhập chứng từ tuần trước vào sáng thứ Hai là chuyện thường —
+              mọi biểu đồ luỹ kế của §4 xếp theo ngày CHI, không theo ngày gõ. */}
+          <Field
+            label="Ngày chi *"
+            htmlFor="ngay-chi-chung-tu"
+            grow="auto"
+            hint="Ngày tiền thực sự chi ra, không phải ngày gõ vào sổ."
+          >
+            <input
+              id="ngay-chi-chung-tu"
+              name="ngay-chi-chung-tu"
+              type="date"
+              value={gt.ngayChi}
+              onChange={(e) => datGT({ ...gt, ngayChi: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Số tiền (đồng) *" htmlFor="so-tien-chung-tu" grow="auto">
+            <input
+              id="so-tien-chung-tu"
+              name="so-tien-chung-tu"
+              value={gt.soTien}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="30.000.000"
+              className="tabular-nums"
+              onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Nội dung *" htmlFor="noi-dung-chung-tu" grow="auto" className="sm:col-span-2">
+            <textarea
+              id="noi-dung-chung-tu"
+              name="noi-dung-chung-tu"
+              rows={2}
+              value={gt.noiDung}
+              maxLength={NOI_DUNG_CHUNG_TU_TOI_DA}
+              placeholder="Thanh toán đợt 3"
+              className="py-2"
+              onChange={(e) => datGT({ ...gt, noiDung: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Đối tác" htmlFor="doi-tac-chung-tu" grow="auto">
+            <input
+              id="doi-tac-chung-tu"
+              name="doi-tac-chung-tu"
+              value={gt.doiTac}
+              maxLength={DOI_TAC_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => datGT({ ...gt, doiTac: e.target.value })}
+            />
+          </Field>
+
+          <Field label="Số chứng từ" htmlFor="so-chung-tu" grow="auto">
+            <input
+              id="so-chung-tu"
+              name="so-chung-tu"
+              value={gt.soChungTu}
+              maxLength={SO_CHUNG_TU_TOI_DA}
+              autoComplete="off"
+              onChange={(e) => datGT({ ...gt, soChungTu: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        {loi !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {loi}
+          </p>
+        )}
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="so-tien-chung-tu">Số tiền (đồng) *</label>
-        <input
-          id="so-tien-chung-tu"
-          name="so-tien-chung-tu"
-          value={gt.soTien}
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="30.000.000"
-          onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="noi-dung-chung-tu">Nội dung *</label>
-        <textarea
-          id="noi-dung-chung-tu"
-          name="noi-dung-chung-tu"
-          rows={2}
-          value={gt.noiDung}
-          maxLength={NOI_DUNG_CHUNG_TU_TOI_DA}
-          placeholder="Thanh toán đợt 3"
-          onChange={(e) => datGT({ ...gt, noiDung: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="doi-tac-chung-tu">Đối tác</label>
-        <input
-          id="doi-tac-chung-tu"
-          name="doi-tac-chung-tu"
-          value={gt.doiTac}
-          maxLength={DOI_TAC_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datGT({ ...gt, doiTac: e.target.value })}
-        />
-      </div>
-
-      <div className="o-nhap">
-        <label htmlFor="so-chung-tu">Số chứng từ</label>
-        <input
-          id="so-chung-tu"
-          name="so-chung-tu"
-          value={gt.soChungTu}
-          maxLength={SO_CHUNG_TU_TOI_DA}
-          autoComplete="off"
-          onChange={(e) => datGT({ ...gt, soChungTu: e.target.value })}
-        />
-      </div>
-
-      {loi !== null && (
-        <p className="thong-bao-loi" role="alert">
-          {loi}
-        </p>
-      )}
-
-      <div className="cum-nut">
-        <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
+      <CardFooter className="justify-end">
+        <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
           Huỷ
-        </button>
-        <button type="submit" className="nut-chinh" disabled={dangGui}>
-          Lưu chứng từ
-        </button>
-      </div>
-    </form>
+        </Button>
+        <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+          <BusyLabel busy={dangGui} label="Lưu chứng từ" busyText={BUSY_SAVING} />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
@@ -239,40 +268,47 @@ export function BangChungTu({
   khoa: (id: string) => void;
 }) {
   if (ds.length === 0) {
+    // The sentence is unchanged, split between the title and the one guidance line (spec §7).
     return (
-      <p className="trang-thai-rong">
-        Chưa có chứng từ nào trong phiên làm việc này. Bảng này không đọc được chứng từ đã lưu từ
-        trước — hợp đồng chưa có tuyến đọc danh sách chứng từ.
-      </p>
+      <EmptyState
+        icon={ReceiptText}
+        title="Chưa có chứng từ nào trong phiên làm việc này."
+        description="Bảng này không đọc được chứng từ đã lưu từ trước — hợp đồng chưa có tuyến đọc danh sách chứng từ."
+      />
     );
   }
 
   return (
-    <div className="bang-cuon" role="region" aria-label="Chứng từ giải ngân vừa ghi" tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll sticky aria-label="Chứng từ giải ngân vừa ghi" className="rounded-none border-0 shadow-none">
+      <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
         <caption className="an-thi-giac">
           Chứng từ giải ngân đã ghi hoặc đã đổi trạng thái trong phiên làm việc này
         </caption>
         <thead>
           <tr>
             <th scope="col">Ngày chi</th>
-            <th scope="col">Số tiền</th>
+            <th scope="col" className="text-right">
+              Số tiền
+            </th>
             <th scope="col">Nội dung</th>
             <th scope="col">Chứng từ</th>
             <th scope="col">Trạng thái</th>
-            <th scope="col">Thao tác</th>
+            <th scope="col" className="text-right">
+              Thao tác
+            </th>
           </tr>
         </thead>
         <tbody>
           {ds.map((ct) => {
             const cho = thaoTacChungTu(ct.status);
+            const ngay = nhanNgay(ct.payment_date);
             return (
               <tr key={ct.id}>
-                <td>{nhanNgay(ct.payment_date)}</td>
+                <td className="tabular-nums">{ngay}</td>
                 {/* IN ĐÚNG CON SỐ MÁY CHỦ TRẢ. Không đổi đơn vị, không làm tròn: một con số sai ở
                     đây đi thẳng vào báo cáo ngân sách. */}
-                <td>{nhanTien(ct.amount)}</td>
-                <td>
+                <td className="text-right tabular-nums">{nhanTien(ct.amount)}</td>
+                <td className="whitespace-normal">
                   {ct.description}
                   {ct.counterparty !== undefined && ct.counterparty !== "" && (
                     <span className="dong-phu">{ct.counterparty}</span>
@@ -280,82 +316,92 @@ export function BangChungTu({
                 </td>
                 <td>{ct.voucher_no === undefined || ct.voucher_no === "" ? DAU_GACH : ct.voucher_no}</td>
                 <td>
-                  <span className={lopTrangThaiChungTu(ct.status)}>
-                    {nhanTrangThaiChungTu(ct.status)}
-                  </span>
+                  <VoucherStatusBadge status={ct.status}>{nhanTrangThaiChungTu(ct.status)}</VoucherStatusBadge>
                   {/* MỐC KHOÁ VÀ SỐ LẦN MỞ KHOÁ ĐỀU HIỆN, và `unlock_count` là con số nói rằng đã
                       có những lần mở khoá KHÁC — bốn trường mở khoá chỉ mô tả lần gần nhất. */}
                   {ct.locked_at !== undefined && ct.locked_at !== "" && (
-                    <span className="dong-phu">Khoá lúc {nhanMocKhoa(ct.locked_at)}</span>
+                    <span className="dong-phu mt-1 tabular-nums">Khoá lúc {nhanMocKhoa(ct.locked_at)}</span>
                   )}
                   {ct.unlock_count > 0 && (
                     <span className="dong-phu">Đã mở khoá {ct.unlock_count} lần</span>
                   )}
                 </td>
-                <td className="o-thao-tac">
-                  {coGhi && cho.sua && (
-                    <button
-                      type="button"
-                      className="nut-phu"
-                      disabled={dangGui}
-                      onClick={() => moSua(ct.id)}
-                      aria-label={`✎ Sửa chứng từ ngày ${nhanNgay(ct.payment_date)}`}
-                    >
-                      ✎ Sửa
-                    </button>
-                  )}
-                  {coXacNhan && cho.xacNhan && (
-                    <button
-                      type="button"
-                      className="nut-chinh"
-                      disabled={dangGui}
-                      onClick={() => xacNhan(ct.id)}
-                      aria-label={`Xác nhận chứng từ ngày ${nhanNgay(ct.payment_date)}`}
-                    >
-                      Xác nhận
-                    </button>
-                  )}
-                  {coXacNhan && cho.khoa && (
-                    <button
-                      type="button"
-                      className="nut-phu"
-                      disabled={dangGui}
-                      onClick={() => khoa(ct.id)}
-                      aria-label={`Khoá chứng từ ngày ${nhanNgay(ct.payment_date)}`}
-                      title={CANH_BAO_KHOA}
-                    >
-                      Khoá
-                    </button>
-                  )}
-                  {coXacNhan && cho.moKhoa && (
-                    <button
-                      type="button"
-                      className="nut-phu"
-                      disabled={dangGui}
-                      onClick={() => moMoKhoa(ct.id)}
-                      aria-label={`Mở khoá chứng từ ngày ${nhanNgay(ct.payment_date)}`}
-                    >
-                      Mở khoá
-                    </button>
-                  )}
-                  {coXacNhan && cho.go && (
-                    <button
-                      type="button"
-                      className="nut-xoa"
-                      disabled={dangGui}
-                      onClick={() => moGo(ct.id)}
-                      aria-label={`🗑 Gỡ chứng từ ngày ${nhanNgay(ct.payment_date)}`}
-                    >
-                      🗑 Gỡ
-                    </button>
-                  )}
+                <td>
+                  {/* Sửa is the everyday action: an icon with its name as label + tooltip. The
+                      four `budget.confirm` actions keep their WORDS (spec v2 §7); Gỡ is the red
+                      outline and sits last. Every label names the voucher by its DATE. */}
+                  <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    {coGhi && cho.sua && (
+                      <IconButton
+                        type="button"
+                        label={`Sửa chứng từ ngày ${ngay}`}
+                        disabled={dangGui}
+                        onClick={() => moSua(ct.id)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </IconButton>
+                    )}
+                    {coXacNhan && cho.xacNhan && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        icon={<Glyph icon={CircleCheck} />}
+                        disabled={dangGui}
+                        onClick={() => xacNhan(ct.id)}
+                        aria-label={`Xác nhận chứng từ ngày ${ngay}`}
+                      >
+                        Xác nhận
+                      </Button>
+                    )}
+                    {coXacNhan && cho.khoa && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        icon={<Glyph icon={LockKeyhole} />}
+                        disabled={dangGui}
+                        onClick={() => khoa(ct.id)}
+                        aria-label={`Khoá chứng từ ngày ${ngay}`}
+                        title={CANH_BAO_KHOA}
+                      >
+                        Khoá
+                      </Button>
+                    )}
+                    {coXacNhan && cho.moKhoa && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        icon={<Glyph icon={LockKeyholeOpen} />}
+                        disabled={dangGui}
+                        onClick={() => moMoKhoa(ct.id)}
+                        aria-label={`Mở khoá chứng từ ngày ${ngay}`}
+                      >
+                        Mở khoá
+                      </Button>
+                    )}
+                    {coXacNhan && cho.go && (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        icon={<Glyph icon={Trash2} />}
+                        disabled={dangGui}
+                        onClick={() => moGo(ct.id)}
+                        aria-label={`Gỡ chứng từ ngày ${ngay}`}
+                      >
+                        Gỡ
+                      </Button>
+                    )}
+                  </span>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -478,36 +524,39 @@ export function KhoiChungTu({
   }
 
   return (
-    <section className="khoi-chi-tiet" aria-labelledby="tieu-de-chung-tu">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-chung-tu">Chứng từ giải ngân</h3>
-      </div>
-
-      {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
-      <p className="ghi-chu">
-        Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền budget.update; xác
-        nhận, khoá, mở khoá và gỡ cần quyền budget.confirm.
-      </p>
-
-      {coGhi ? (
-        <div className="cum-nut">
-          <button
+    <Card as="section" aria-labelledby="tieu-de-chung-tu">
+      <CardHeader className="justify-between">
+        <div className="min-w-0">
+          <CardTitle as="h3" id="tieu-de-chung-tu" className="inline-flex items-center gap-2">
+            <Glyph icon={ReceiptText} className="size-[18px] shrink-0 text-brand-600" />
+            Chứng từ giải ngân
+          </CardTitle>
+          {/* VÒNG ĐỜI NÓI RA NGAY TRÊN BẢNG, không để cán bộ suy từ việc nút nào hiện nút nào không. */}
+          <p className="m-0 mt-1 text-[13px] text-ink-500">
+            Vòng đời: Kế toán nhập → Đã xác nhận → Đã khoá. Nhập và sửa cần quyền budget.update; xác
+            nhận, khoá, mở khoá và gỡ cần quyền budget.confirm.
+          </p>
+        </div>
+        {coGhi && (
+          <Button
             type="button"
-            className="nut-chinh"
+            variant="primary"
+            icon={<Glyph icon={Plus} />}
             aria-expanded={dangMo?.kieu === "them"}
             onClick={() => {
               datLoi(null);
               datDangMo(dangMo?.kieu === "them" ? null : { kieu: "them" });
             }}
           >
-            + Ghi nhận khoản chi
-          </button>
-        </div>
-      ) : (
-        <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>
-      )}
+            Ghi nhận khoản chi
+          </Button>
+        )}
+      </CardHeader>
 
-      {!coXacNhan && <p className="trang-thai-rong">{CAU_THIEU_QUYEN_XAC_NHAN}</p>}
+      <div className="flex min-w-0 flex-col gap-4 p-4 empty:hidden">
+      {!coGhi && <DeniedNote>{CAU_THIEU_QUYEN_GHI}</DeniedNote>}
+
+      {!coXacNhan && <DeniedNote>{CAU_THIEU_QUYEN_XAC_NHAN}</DeniedNote>}
 
       {dangMo?.kieu === "them" && coGhi && (
         <FormChungTu
@@ -544,7 +593,8 @@ export function KhoiChungTu({
 
       {dangMo?.kieu === "go" && coXacNhan && (
         <FormLyDo
-          tieuDe="Gỡ chứng từ"
+          tieuDe={`Gỡ chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
+          busyText="Đang gỡ…"
           moTa={
             "Chứng từ được gỡ MỀM: hàng vẫn còn kèm người gỡ và lý do, nhưng nó thôi cộng vào số " +
             "đã giải ngân của dự án — tức là một con số đã báo cáo vừa thay đổi."
@@ -564,7 +614,9 @@ export function KhoiChungTu({
 
       {dangMo?.kieu === "moKhoa" && coXacNhan && (
         <FormLyDo
-          tieuDe="Mở khoá chứng từ"
+          tieuDe={`Mở khoá chứng từ ngày ${nhanNgay(dangMo.ct.payment_date)}?`}
+          tone="default"
+          busyText="Đang mở khoá…"
           moTa={
             "Mở khoá đưa chứng từ về Đã xác nhận để sửa được. Lý do là bắt buộc, và NGƯỜI VỪA KHOÁ " +
             "không tự mở lại được — cần một cán bộ khác có quyền budget.confirm."
@@ -584,10 +636,11 @@ export function KhoiChungTu({
 
       {/* LỖI CỦA MỘT THAO TÁC KHÔNG MỞ BIỂU MẪU NÀO (xác nhận, khoá) vẫn phải ra màn hình. */}
       {loi !== null && dangMo === null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {loi}
         </p>
       )}
+      </div>
 
       <BangChungTu
         ds={ds}
@@ -615,6 +668,6 @@ export function KhoiChungTu({
         xacNhan={xacNhan}
         khoa={khoa}
       />
-    </section>
+    </Card>
   );
 }

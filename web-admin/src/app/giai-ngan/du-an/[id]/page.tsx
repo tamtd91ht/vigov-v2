@@ -1,4 +1,7 @@
+import { Banknote } from "lucide-react";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { PageHeader } from "@/components/ui/page-header";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { ChiTietDuAn } from "@/features/giai-ngan/chi-tiet-du-an";
@@ -30,16 +33,18 @@ export default async function TrangChiTietDuAn({ params }: { params: Promise<{ i
       <PhienProvider>
         <DauTrang withCommune />
         <main className="than-trang">
-          <h1>Chi tiết dự án</h1>
-          <CongQuyen
-            khoa={QUYEN_XEM_GIAI_NGAN}
-            cauThieuQuyen={
-              "Tài khoản của bạn không có quyền xem theo dõi giải ngân (budget.read), nên phần " +
-              "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
-            }
-          >
-            <ChiTietDuAn id={id} />
-          </CongQuyen>
+          <div className="page--detail">
+            <PageHeader icon={Banknote} title="Chi tiết dự án" />
+            <CongQuyen
+              khoa={QUYEN_XEM_GIAI_NGAN}
+              cauThieuQuyen={
+                "Tài khoản của bạn không có quyền xem theo dõi giải ngân (budget.read), nên phần " +
+                "này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
+              }
+            >
+              <ChiTietDuAn id={id} />
+            </CongQuyen>
+          </div>
         </main>
       </PhienProvider>
     </CauHinhXaProvider>

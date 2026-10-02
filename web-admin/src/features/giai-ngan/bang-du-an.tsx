@@ -1,14 +1,22 @@
 "use client";
 
+import { FolderKanban, Gauge } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Field, Toolbar } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layDanhSachDuAn } from "@/lib/api/du-an";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_danhSachDuAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
+import { cn } from "@/lib/cn";
 import { namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH } from "@/lib/quyen";
 
@@ -18,7 +26,6 @@ import {
   GHI_CHU_CHI_XEM_GIAI_NGAN,
   hangMucDuAn,
   lopHangMuc,
-  lopTienDo,
   nhanHangMuc,
   nhanNamRong,
   nhanNgay,
@@ -28,6 +35,7 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { Glyph, ProgressBadge } from "./project-ui";
 import { ScopeNotice } from "./scope-notice";
 
 /**
@@ -134,13 +142,11 @@ export function BangDuAn() {
   const coGhi = coQuyen(dsQuyen, QUYEN_GHI_NGAN_SACH);
 
   return (
-    <section className="man-giai-ngan" aria-labelledby="tieu-de-du-an">
-      <h2 id="tieu-de-du-an">Dự án đầu tư</h2>
-
+    <section className="man-giai-ngan flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-du-an">
       {/* BANNER BẮT BUỘC (§1) — câu của MÁY CHỦ (`scope_notice`, xã sửa được ở Lời hệ thống), nên nó
           chỉ hiện khi danh sách đã về. Không câu dự phòng ở client: xem `scope-notice.tsx`. */}
       {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duLieu.scope_notice} />}
-      <p className="ghi-chu">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
+      <p className="m-0 text-[13px] text-ink-500">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
 
       <KhoiChuaDungGhi />
 
@@ -151,51 +157,78 @@ export function BangDuAn() {
         daGhiXong={() => datLanTai((n) => n + 1)}
       />
 
-      <div className="hang-loc">
-        <ChonNam id="nam-ngan-sach" nhan="Năm ngân sách" nam={nam} namGoc={namGoc} datNam={datNam} />
+      <Card>
+        <CardHeader>
+          <CardTitle id="tieu-de-du-an" className="inline-flex items-center gap-2">
+            <Glyph icon={FolderKanban} className="size-[18px] shrink-0 text-brand-600" />
+            Dự án đầu tư
+          </CardTitle>
+        </CardHeader>
 
-        <p className="chon-hang-muc">
-          <label htmlFor="loc-hang-muc">Hạng mục</label>{" "}
-          <select
-            id="loc-hang-muc"
-            value={hangMucId}
-            onChange={(e) => datHangMucId(e.target.value)}
-            // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ
-            // còn một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc
-            // được gì.
-            disabled={danhMuc.length === 0}
-          >
-            <option value="">Tất cả hạng mục</option>
-            {danhMuc.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.label}
-              </option>
-            ))}
-          </select>
-        </p>
-      </div>
+        {/* TWO filters, no search box on this screen: an aligned row, no "Bộ lọc" button (ADR 0068
+            §12, "Hàng ≤ 3 ô"). Year first — it decides which budget every figure belongs to. */}
+        <Toolbar className="[&_.chon-nam]:m-0 [&_.chon-nam_label]:text-xs [&_.chon-nam_select]:h-10">
+          <ChonNam id="nam-ngan-sach" nhan="Năm ngân sách" nam={nam} namGoc={namGoc} datNam={datNam} />
 
-      {trangThai.pha === "dangTai" && <p role="status">Đang tải danh sách dự án…</p>}
+          <Field label="Hạng mục" htmlFor="loc-hang-muc" kind="select">
+            <select
+              id="loc-hang-muc"
+              value={hangMucId}
+              onChange={(e) => datHangMucId(e.target.value)}
+              // Danh mục rỗng là đường THÔNG THƯỜNG hôm nay (danh mục ship rỗng), nên ô chọn chỉ
+              // còn một lựa chọn "Tất cả" — tắt nó đi để không mời cán bộ bấm vào một ô không lọc
+              // được gì.
+              disabled={danhMuc.length === 0}
+            >
+              <option value="">Tất cả hạng mục</option>
+              {danhMuc.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </Toolbar>
 
-      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
-      {trangThai.pha === "loi" && (
-        <p className="thong-bao-loi" role="alert">
-          {trangThai.thongBao}
-        </p>
-      )}
+        {trangThai.pha === "dangTai" && (
+          // FIRST LOAD (spec §8b): the sentence stays the live region, read out as before; the eye
+          // gets row-shaped placeholders so the card does not jump when the list arrives.
+          <>
+            <p role="status" className="an-thi-giac">
+              Đang tải danh sách dự án…
+            </p>
+            <SkeletonRows />
+          </>
+        )}
 
-      {trangThai.pha === "xong" && (
-        <>
-          {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. */}
-          <p className="ghi-chu">{nhanNguongCham(trangThai.duLieu.delay_threshold)}</p>
+        {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`.
+            "Tải lại" bumps the reload counter this list already has (`lanTai`). */}
+        {trangThai.pha === "loi" && (
+          <ErrorState
+            title="Chưa tải được danh sách dự án"
+            message={<span role="alert">{trangThai.thongBao}</span>}
+            onRetry={() => datLanTai((n) => n + 1)}
+          />
+        )}
 
-          {trangThai.duLieu.items.length === 0 ? (
-            <p className="trang-thai-rong">{nhanNamRong(trangThai.duLieu.year)}</p>
+        {trangThai.pha === "xong" &&
+          (trangThai.duLieu.items.length === 0 ? (
+            <EmptyState icon={FolderKanban} title={nhanNamRong(trangThai.duLieu.year)} />
           ) : (
             <BangDanhSach duLieu={trangThai.duLieu} danhMuc={danhMuc} />
-          )}
-        </>
-      )}
+          ))}
+
+        {/* NGƯỠNG LÀ CỦA MÁY CHỦ, HIỆN RA ĐỂ NGƯỜI ĐỌC BIẾT CHỮ "CHẬM" ĐANG ĐO BẰNG GÌ. Metadata of
+            the list, so it sits in the card footer. */}
+        {trangThai.pha === "xong" && (
+          <CardFooter>
+            <span className="inline-flex items-center gap-1.5">
+              <Glyph icon={Gauge} className="size-3.5 shrink-0" />
+              {nhanNguongCham(trangThai.duLieu.delay_threshold)}
+            </span>
+          </CardFooter>
+        )}
+      </Card>
     </section>
   );
 }
@@ -215,13 +248,12 @@ export function BangDanhSach({
   danhMuc: readonly finance_hangMucRa[];
 }) {
   return (
-    <div
-      className="bang-cuon"
-      role="region"
+    <TableScroll
+      sticky
       aria-label={`Danh sách dự án đầu tư năm ${duLieu.year}`}
-      tabIndex={0}
+      className="rounded-none border-0 shadow-none"
     >
-      <table className="bang-danh-muc">
+      <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
         <caption className="an-thi-giac">
           Dự án đầu tư của đơn vị trong năm ngân sách {duLieu.year}
         </caption>
@@ -230,9 +262,16 @@ export function BangDanhSach({
             <th scope="col">Mã</th>
             <th scope="col">Dự án</th>
             <th scope="col">Hạng mục</th>
-            <th scope="col">KH vốn năm</th>
-            <th scope="col">Đã giải ngân</th>
-            <th scope="col">Còn lại</th>
+            {/* Money columns right-aligned so the digits of every row line up (spec §6.7). */}
+            <th scope="col" className="text-right">
+              KH vốn năm
+            </th>
+            <th scope="col" className="text-right">
+              Đã giải ngân
+            </th>
+            <th scope="col" className="text-right">
+              Còn lại
+            </th>
             <th scope="col">Tiến độ</th>
             <th scope="col">Thời hạn giải ngân</th>
           </tr>
@@ -243,28 +282,33 @@ export function BangDanhSach({
             const hangMuc = hangMucDuAn(d.category_id, danhMuc);
             return (
               <tr key={d.id}>
-                <td className="ma-muc">{d.code}</td>
-                <td>
+                <td className="ma-muc text-[13px] text-ink-500">{d.code}</td>
+                <td className="min-w-48 whitespace-normal">
                   {/* Đường dẫn con đúng như đặc tả ghi ở đầu chương: `/giai-ngan/du-an/:id`. */}
-                  <Link href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}>{d.name}</Link>
+                  <Link
+                    href={`/giai-ngan/du-an/${encodeURIComponent(d.id)}`}
+                    className="font-semibold text-brand-700 no-underline hover:underline"
+                  >
+                    {d.name}
+                  </Link>
                 </td>
                 <td>
                   <span className={lopHangMuc(hangMuc)}>{nhanHangMuc(hangMuc)}</span>
                 </td>
-                <td>{nhanTien(d.planned_amount)}</td>
-                <td>{nhanTien(d.disbursed_amount)}</td>
+                <td className="text-right tabular-nums">{nhanTien(d.planned_amount)}</td>
+                <td className="text-right tabular-nums">{nhanTien(d.disbursed_amount)}</td>
                 {/* Số âm hiện nguyên là số âm: giải ngân vượt kế hoạch phải nhìn thấy được. */}
-                <td>{nhanTien(d.remaining_amount)}</td>
+                <td className="text-right tabular-nums">{nhanTien(d.remaining_amount)}</td>
                 <td>
-                  <span className={lopTienDo(tienDo)}>{nhanTienDo(tienDo)}</span>
-                  <span className="dong-phu">{nhanTyLeGiaiNgan(d.disbursed_ratio)}</span>
+                  <ProgressBadge progress={tienDo}>{nhanTienDo(tienDo)}</ProgressBadge>
+                  <span className="dong-phu mt-1 tabular-nums">{nhanTyLeGiaiNgan(d.disbursed_ratio)}</span>
                 </td>
-                <td>{nhanNgay(d.disbursement_deadline)}</td>
+                <td className="tabular-nums">{nhanNgay(d.disbursement_deadline)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }

@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { CircleCheck, LockKeyhole, LockKeyholeOpen } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key generator
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
+import { Field } from "@/components/ui/field";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { BusyLabel } from "@/features/danh-ba/busy-label";
+import { cn } from "@/lib/cn";
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing shared result type
 import { closeBudgetPeriod, reopenBudgetPeriodClose } from "@/lib/api/budget-period-close";
 import type {
@@ -83,25 +93,43 @@ export function BudgetPeriodClosePanel({
   }
 
   return (
-    <section className="khoi-chi-tiet" aria-labelledby="tieu-de-chot-ky">
-      <div className="dau-khoi-chi-tiet">
-        <h3 id="tieu-de-chot-ky">Chốt kỳ ngân sách năm {year}</h3>
-      </div>
-      <p className="ghi-chu">
-        Chốt theo tháng khoá việc thêm, gỡ đợt thu chi của tháng đó. Chốt cả năm khoá thêm việc sửa
-        bảng, khoản mục và số liệu của năm.
-      </p>
+    <Card as="section" aria-labelledby="tieu-de-chot-ky">
+      <CardHeader className="justify-between">
+        <div className="min-w-0">
+          <CardTitle as="h3" id="tieu-de-chot-ky" className="inline-flex items-center gap-2">
+            <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+            Chốt kỳ ngân sách năm {year}
+          </CardTitle>
+          <p className="m-0 mt-1 text-[13px] text-ink-500">
+            Chốt theo tháng khoá việc thêm, gỡ đợt thu chi của tháng đó. Chốt cả năm khoá thêm việc
+            sửa bảng, khoản mục và số liệu của năm.
+          </p>
+        </div>
+      </CardHeader>
 
+      <div className="flex min-w-0 flex-col gap-4 p-4">
       {error !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {error}
         </p>
       )}
-      {notice !== null && <p role="status">{notice}</p>}
+      {notice !== null && (
+        <p role="status" className="m-0 inline-flex items-center gap-1.5 text-sm text-success-600">
+          <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
+          {notice}
+        </p>
+      )}
 
-      {view.phase === "loading" && <p role="status">Đang tải các lần chốt kỳ…</p>}
+      {view.phase === "loading" && (
+        <>
+          <p role="status" className="an-thi-giac">
+            Đang tải các lần chốt kỳ…
+          </p>
+          <SkeletonRows rows={2} className="-mx-4" />
+        </>
+      )}
       {view.phase === "error" && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {view.message} Chưa đọc được trạng thái chốt kỳ; máy chủ vẫn từ chối mọi thao tác ghi
           vào kỳ đã chốt.
         </p>
@@ -167,7 +195,8 @@ export function BudgetPeriodClosePanel({
             }}
           />
         ))}
-    </section>
+      </div>
+    </Card>
   );
 }
 
@@ -187,11 +216,16 @@ export function PeriodCloseList({
   onReopen: (close: finance_budgetPeriodCloseOut) => void;
 }) {
   if (closes.length === 0) {
-    return <p className="trang-thai-rong">Năm này chưa có kỳ nào được chốt.</p>;
+    return (
+      <p className="m-0 inline-flex items-center gap-2 text-sm text-ink-500">
+        <LockKeyholeOpen aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
+        Năm này chưa có kỳ nào được chốt.
+      </p>
+    );
   }
   return (
-    <div className="bang-cuon" role="region" aria-label="Các lần chốt kỳ ngân sách" tabIndex={0}>
-      <table className="bang-danh-muc">
+    <TableScroll aria-label="Các lần chốt kỳ ngân sách" className="rounded-xl">
+      <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
         <thead>
           <tr>
             <th scope="col">Kỳ</th>
@@ -199,7 +233,11 @@ export function PeriodCloseList({
             <th scope="col">Trạng thái</th>
             <th scope="col">Chốt</th>
             <th scope="col">Mở chốt</th>
-            {canConfirm && <th scope="col">Thao tác</th>}
+            {canConfirm && (
+              <th scope="col" className="text-right">
+                Thao tác
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -208,36 +246,43 @@ export function PeriodCloseList({
               <td>{periodLabel(c)}</td>
               <td className="ma-muc">{c.code}</td>
               <td>
-                <span className={c.active ? "chip chip-hoat-dong" : "chip chip-ngung"}>
+                {/* Tone by the `active` FLAG, never by the label: in force = the lock icon, reopened
+                    = the open lock in grey. Icon + word, never colour alone. */}
+                <Badge
+                  tone={c.active ? "info" : "neutral"}
+                  icon={c.active ? LockKeyhole : LockKeyholeOpen}
+                >
                   {closeStatusLabel(c)}
-                </span>
+                </Badge>
               </td>
-              <td>
+              <td className="tabular-nums">
                 {c.closed_by} · {formatInstant(c.closed_at)}
               </td>
-              <td>
+              <td className="tabular-nums">
                 {c.active ? (
                   "—"
                 ) : (
                   <>
                     {c.reopened_by ?? "—"} · {formatInstant(c.reopened_at)}
                     <br />
-                    <span className="ghi-chu">Lý do: {c.reopen_reason ?? "—"}</span>
+                    <span className="ghi-chu whitespace-normal">Lý do: {c.reopen_reason ?? "—"}</span>
                   </>
                 )}
               </td>
               {canConfirm && (
-                <td className="o-thao-tac">
+                <td className="text-right">
                   {c.active && (
-                    <button
+                    <Button
                       type="button"
-                      className="nut-phu"
+                      variant="secondary"
+                      size="sm"
+                      icon={<LockKeyholeOpen aria-hidden="true" focusable="false" strokeWidth={1.8} />}
                       disabled={busy}
                       aria-label={`Mở chốt ${periodLabel(c).toLowerCase()}`}
                       onClick={() => onReopen(c)}
                     >
                       Mở chốt
-                    </button>
+                    </Button>
                   )}
                 </td>
               )}
@@ -245,7 +290,7 @@ export function PeriodCloseList({
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 }
 
@@ -266,6 +311,8 @@ export function CloseForm({
 }) {
   return (
     <form
+      aria-labelledby="tieu-de-chot-mot-ky"
+      className="flex min-w-0 flex-col gap-3 border-t border-line pt-4"
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
@@ -274,24 +321,35 @@ export function CloseForm({
         else invalid(built.thongBao);
       }}
     >
-      <h4>Chốt một kỳ</h4>
-      <p>
-        <label htmlFor="chot-ky-period">Kỳ cần chốt</label>{" "}
-        <select id="chot-ky-period" name="period" className="o-chon" required defaultValue="">
-          <option value="" disabled>
-            Chọn kỳ
-          </option>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <option key={m} value={String(m)}>
-              Tháng {m}/{year}
+      <h4 id="tieu-de-chot-mot-ky" className="m-0 text-sm font-semibold text-ink-900">
+        Chốt một kỳ
+      </h4>
+      {/* One select and its button on one bottom-aligned row (spec §6.2). The select no longer
+          carries `o-chon`: that class is the TICK-BOX wrapper, and on a `<select>` it picked up
+          `display: flex` from `globals.css` `.o-chon`. `Field` draws the frame and the chevron. */}
+      <div className="flex min-w-0 flex-wrap items-end gap-3">
+        <Field label="Kỳ cần chốt" htmlFor="chot-ky-period" kind="select">
+          <select id="chot-ky-period" name="period" required defaultValue="">
+            <option value="" disabled>
+              Chọn kỳ
             </option>
-          ))}
-          <option value="year">Cả năm {year}</option>
-        </select>
-      </p>
-      <button type="submit" className="nut-chinh" disabled={busy}>
-        Chốt kỳ…
-      </button>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={String(m)}>
+                Tháng {m}/{year}
+              </option>
+            ))}
+            <option value="year">Cả năm {year}</option>
+          </select>
+        </Field>
+        <Button
+          type="submit"
+          variant="primary"
+          icon={<LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+          disabled={busy}
+        >
+          Chốt kỳ…
+        </Button>
+      </div>
     </form>
   );
 }
@@ -309,23 +367,29 @@ export function CloseConfirm({
   cancel: () => void;
 }) {
   return (
-    <form
-      className="khoi-chua-khai"
-      onSubmit={(e) => {
+    <ConfirmDialog
+      as="form"
+      icon={LockKeyhole}
+      title={closeConfirmTitle(body)}
+      titleAs="h4"
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         confirm();
       }}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy || undefined}>
+            <BusyLabel busy={busy} label="Chốt kỳ" busyText="Đang chốt…" />
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>
+            Huỷ
+          </Button>
+        </>
+      }
     >
-      <h4>{closeConfirmTitle(body)}</h4>
-      <p className="hau-qua">{closeConsequence(body)}</p>
-      <p className="ghi-chu">{AFTER_CLOSE_NOTE}</p>
-      <button type="submit" className="nut-chinh" disabled={busy}>
-        Chốt kỳ
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={busy} onClick={cancel}>
-        Huỷ
-      </button>
-    </form>
+      <p className="m-0">{closeConsequence(body)}</p>
+      <p className="m-0 text-xs text-ink-500">{AFTER_CLOSE_NOTE}</p>
+    </ConfirmDialog>
   );
 }
 
@@ -346,9 +410,12 @@ export function ReopenForm({
   const count = charCount(text.trim());
 
   return (
-    <form
-      className="khoi-chua-khai"
-      onSubmit={(e) => {
+    <ConfirmDialog
+      as="form"
+      icon={LockKeyholeOpen}
+      title={`Mở chốt ${periodLabel(close).toLowerCase()} (${close.code})?`}
+      titleAs="h4"
+      onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const checked = validateReopenReason(text);
         if (!checked.ok) {
@@ -358,38 +425,44 @@ export function ReopenForm({
         setError(null);
         submit(checked.than);
       }}
+      actions={
+        <>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy || undefined}>
+            <BusyLabel busy={busy} label="Mở chốt" busyText="Đang mở chốt…" />
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={cancel}>
+            Huỷ
+          </Button>
+        </>
+      }
     >
-      <h4>Mở chốt {periodLabel(close).toLowerCase()} ({close.code})</h4>
-      <p className="hau-qua">{reopenConsequence(close)}</p>
-      <p>
-        <label htmlFor="mo-chot-reason">Lý do mở chốt (bắt buộc, được lưu cùng lần chốt)</label>
-        <br />
+      <p className="m-0">{reopenConsequence(close)}</p>
+      <Field
+        label="Lý do mở chốt (bắt buộc, được lưu cùng lần chốt)"
+        htmlFor="mo-chot-reason"
+        grow="auto"
+        hint={
+          <span id="mo-chot-reason-count" aria-live="polite" className="tabular-nums">
+            {count}/{REOPEN_REASON_MAX} ký tự
+          </span>
+        }
+      >
         <textarea
           id="mo-chot-reason"
           name="reason"
-          className="o-nhap"
+          className="o-nhap py-2"
           rows={3}
           required
           value={text}
           aria-describedby="mo-chot-reason-count"
           onChange={(e) => setText(e.target.value)}
         />
-        <br />
-        <span id="mo-chot-reason-count" className="ghi-chu" aria-live="polite">
-          {count}/{REOPEN_REASON_MAX} ký tự
-        </span>
-      </p>
+      </Field>
       {error !== null && (
-        <p className="thong-bao-loi" role="alert">
+        <p className="thong-bao-loi m-0" role="alert">
           {error}
         </p>
       )}
-      <button type="submit" className="nut-chinh" disabled={busy}>
-        Mở chốt
-      </button>{" "}
-      <button type="button" className="nut-phu" disabled={busy} onClick={cancel}>
-        Huỷ
-      </button>
-    </form>
+    </ConfirmDialog>
   );
 }
