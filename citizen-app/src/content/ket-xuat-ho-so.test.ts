@@ -26,7 +26,7 @@ import {
   photoUploadBody,
   STORAGE_FILE_FIELD,
 } from "../cong-dan/api/hop-dong-phan-anh";
-import { CUA_TOI, DANH_BA, GUI, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN, XA_TN } from "../cong-dan/man/noi-dung";
+import { CUA_TOI, DANH_BA, GUI, KHAN_CAP, RATING, TIN_XA, TRA_CUU, XA_GIAO_DIEN, XA_TN } from "../cong-dan/man/noi-dung";
 import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import {
   BRIDGE_FIELDS_WITH_PHONE,
@@ -48,7 +48,18 @@ import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo
 
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
 import {
+  COMMUNE_TERMS_EFFECTIVE_DATE,
+  COMMUNE_TERMS_EMERGENCY,
+  COMMUNE_TERMS_VERSION,
+  communeTerms,
+  communeTermsValuesFor,
+  type CommuneTermsValues,
+} from "./commune-terms";
+import { COMPANY } from "./company-profile";
+import { MUC_DIEU_KHOAN, NGAY_HIEU_LUC_DIEU_KHOAN, PHIEN_BAN_DIEU_KHOAN } from "./dieu-khoan";
+import {
   canhBaoVanXuoi,
+  communeTermsDocument,
   COMMUNE_APP_ROUTES_OWED,
   COMMUNE_APP_SESSION_SCREENS,
   communeAppCalls,
@@ -146,7 +157,7 @@ describe("1 — bản kết xuất mang đủ mọi mục của văn bản ngu�
   });
 
   it("phần đầu nói đủ: đây là bản sinh ra · tiêu đề · phiên bản · ngày hiệu lực · câu mở đầu", () => {
-    for (const vb of [VAN_BAN_CHINH_SACH, VAN_BAN_DIEU_KHOAN]) {
+    for (const vb of [VAN_BAN_CHINH_SACH, VAN_BAN_DIEU_KHOAN, THANG_BINH_TERMS()]) {
       const chu = ketXuatVanBan(vb);
       // DÒNG ĐẦU TIÊN, không phải "có ở đâu đó": một tệp sinh ra mà trông như tệp viết tay là
       // tệp sẽ có người sửa tay, và bản sửa ấy biến mất không báo trước ở lần sinh lại.
@@ -157,7 +168,15 @@ describe("1 — bản kết xuất mang đủ mọi mục của văn bản ngu�
       expect(chu).toContain(`Phiên bản ${vb.phien_ban}`);
       expect(chu).toContain(vb.ngay_hieu_luc);
       expect(chu).toContain(vb.cau_dau);
+      // The app line is the document's own, right under the title (banner · blank · title · app line).
+      expect(chu.split("\n")[3]).toBe(vb.appLine);
     }
+  });
+
+  it("commune app terms: no section, no paragraph left out", () => {
+    const doc = THANG_BINH_TERMS();
+    expect(mucBiBoQuen(ketXuatVanBan(doc), doc.muc)).toEqual([]);
+    expect(doc.muc.length).toBeGreaterThanOrEqual(10);
   });
 
   it("bắt được một mục bị bỏ quên — kể cả khi chỉ MẤT PHẦN NỘI DUNG", () => {
@@ -825,5 +844,163 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
 
   it("the commune app's blocks do not trip the prose guard", () => {
     expect(canhBaoVanXuoi(khoiRoiKhoiMay(routes, { communeApp: true }))).toEqual([]);
+  });
+});
+
+/* =============================================================================================
+   8 — THE COMMUNE APP'S TERMS OF USE: one template, filled per commune, in the commune's name only
+   ============================================================================================= */
+
+/**
+ * The REAL per-commune table, read through `import.meta.glob` rather than an `import`: the file is a `.mjs` under
+ * `scripts/` with no type declarations, and a test file may read it (`dich-den.test.mjs` exempts `*.test.*`).
+ * Reading the real row — not a copy typed here — is what makes "renders with Thăng Bình's values" mean the values
+ * the generator will use.
+ */
+const DOMAIN_TABLE_MODULE = Object.values(
+  import.meta.glob("../../scripts/ung-dung-theo-ten-mien.mjs", { eager: true }),
+)[0] as {
+  COMMUNE_TERMS_BY_DOMAIN: Record<string, Partial<CommuneTermsValues>>;
+  APP_ID_THEO_TEN_MIEN: Record<string, string>;
+};
+
+const THANG_BINH = "thangbinh-danang.vigov.vn";
+const THANG_BINH_URL = "https://thangbinh.danang.gov.vn/gioi-thieu/gioi-thieu-chung";
+
+function THANG_BINH_TERMS(): VanBanPhapLy {
+  return communeTermsDocument(communeTermsValuesFor(DOMAIN_TABLE_MODULE.COMMUNE_TERMS_BY_DOMAIN, THANG_BINH), THANG_BINH);
+}
+
+/** The text a reviewer reads: everything after the generated-file banner, which is stripped before pasting. */
+const readerText = (doc: VanBanPhapLy) => ketXuatVanBan(doc).split("\n").slice(1).join("\n");
+
+const VALID: CommuneTermsValues = {
+  displayName: "Xã Thử",
+  province: "Tỉnh Thử",
+  introductionUrl: "https://xa-thu.example.gov.vn/gioi-thieu",
+};
+
+describe("8 — the commune app's terms of use", () => {
+  it("the table holds the values the owner gave for Thăng Bình, under the same key as its App ID", () => {
+    expect(DOMAIN_TABLE_MODULE.COMMUNE_TERMS_BY_DOMAIN[THANG_BINH]).toEqual({
+      displayName: "Xã Thăng Bình",
+      province: "Thành phố Đà Nẵng",
+      introductionUrl: THANG_BINH_URL,
+    });
+    // Same key in both tables: a commune with terms but no app (or the reverse) is a dossier that cannot be filed.
+    expect(Object.keys(DOMAIN_TABLE_MODULE.APP_ID_THEO_TEN_MIEN)).toContain(THANG_BINH);
+  });
+
+  it("renders with Thăng Bình's values: name, province, People's Committee, version and date", () => {
+    const text = readerText(THANG_BINH_TERMS());
+    expect(text).toContain("ĐIỀU KHOẢN SỬ DỤNG");
+    expect(text).toContain("Mini App Xã Thăng Bình, Thành phố Đà Nẵng");
+    expect(text).toContain(
+      "Ủy ban nhân dân xã Thăng Bình cung cấp ứng dụng này cho người dân và chịu trách nhiệm về ứng dụng.",
+    );
+    // `skills/administrative-language`: the unit is lower case after "Ủy ban nhân dân".
+    expect(text).not.toContain("Ủy ban nhân dân Xã");
+    expect(text).toContain(`Phiên bản ${COMMUNE_TERMS_VERSION} — Hiệu lực từ ngày ${COMMUNE_TERMS_EFFECTIVE_DATE}`);
+    expect(COMMUNE_TERMS_VERSION).toBe("1.0");
+    expect(COMMUNE_TERMS_EFFECTIVE_DATE).toBe("02/10/2026");
+  });
+
+  it("names no company anywhere — not ViHAT, not VihatSoftware, not the shared app's publisher (owner, 02/10/2026)", () => {
+    // The whole rendered file, banner included.
+    const whole = ketXuatVanBan(THANG_BINH_TERMS());
+    expect(whole).not.toMatch(/vihat/i);
+    expect(whole).not.toContain(COMPANY.name);
+    expect(whole).not.toMatch(/tập đoàn|công ty|doanh nghiệp/i);
+    // The measure measures: the shared terms DO carry the name.
+    expect(ketXuatVanBan(VAN_BAN_DIEU_KHOAN)).toMatch(/ViHAT/);
+  });
+
+  it("the contact section gives the owner's sentence with the commune's introduction page", () => {
+    const contact = THANG_BINH_TERMS().muc.find((m) => m.ma === "luat-va-lien-he")!;
+    const sentence = `Mọi câu hỏi hoặc khiếu nại liên quan tới ứng dụng và nội dung của xã, xin liên hệ Ủy ban nhân dân xã Thăng Bình theo thông tin tại trang Giới thiệu của xã: ${THANG_BINH_URL}`;
+    expect(contact.doan).toContain(sentence);
+    // The URL ends its paragraph — no full stop to be copied with it.
+    expect(contact.doan.at(-1)).toBe(sentence);
+  });
+
+  it("carries no phone number and no e-mail address — the only contact route is the introduction page", () => {
+    const text = readerText(THANG_BINH_TERMS());
+    const PHONE = /(?:\+84|\b0)\d(?:[ .-]?\d){7,9}\b/;
+    const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+    expect(text).not.toMatch(PHONE);
+    expect(text).not.toMatch(EMAIL);
+    // The measure measures.
+    expect("Gọi 0900000000").toMatch(PHONE);
+    expect("Gọi 0900 000 000").toMatch(PHONE);
+    expect("viết tới hop-thu@xa-thu.example").toMatch(EMAIL);
+    // The three emergency numbers are short codes, not a contact line — and they are the send screen's sentence.
+    expect(COMMUNE_TERMS_EMERGENCY).toBe(KHAN_CAP);
+    expect(text).toContain(KHAN_CAP);
+  });
+
+  it("states no data recipient — it points to the privacy policy (open question #28)", () => {
+    const text = readerText(THANG_BINH_TERMS());
+    expect(text).toContain("Chính sách quyền riêng tư");
+    expect(text).not.toMatch(/máy chủ của \S/);
+  });
+
+  it("says a petition here is not a complaint, a denunciation or an administrative procedure", () => {
+    const send = THANG_BINH_TERMS().muc.find((m) => m.ma === "gui-phan-anh")!;
+    expect(send.doan.join(" ")).toContain(
+      "không phải là đơn khiếu nại hay đơn tố cáo, và không thay thế các thủ tục, hồ sơ hành chính theo quy định",
+    );
+  });
+
+  it("cites no law but Decree 13/2023", () => {
+    const text = readerText(THANG_BINH_TERMS());
+    // `\w` would stop at "Đ" of "NĐ-CP": the citation runs to the next space, minus a sentence's full stop.
+    const cited = [...text.matchAll(/(?:Nghị định|Luật|Thông tư|Quyết định)\s+(?:số\s+)?\d[^\s,;)]*/gu)].map((m) =>
+      m[0].replace(/\.$/, ""),
+    );
+    expect(cited).toEqual(["Nghị định 13/2023/NĐ-CP"]);
+  });
+
+  it("a missing commune, or any missing value, FAILS — no default, no placeholder printed", () => {
+    expect(() => communeTermsValuesFor({}, "xa-khac.vigov.example")).toThrow(
+      /COMMUNE_TERMS_BY_DOMAIN\["xa-khac\.vigov\.example"\]/,
+    );
+    for (const key of ["displayName", "province", "introductionUrl"] as const) {
+      const rest: Partial<CommuneTermsValues> = { ...VALID };
+      delete rest[key];
+      expect(() => communeTermsValuesFor({ x: rest }, "x"), `${key} absent`).toThrow(new RegExp(`${key}: chưa điền`));
+      expect(() => communeTermsValuesFor({ x: { ...VALID, [key]: "  " } }, "x"), `${key} blank`).toThrow(
+        new RegExp(key),
+      );
+      expect(() => communeTermsValuesFor({ x: { ...VALID, [key]: "<CHUA-CO>" } }, "x"), `${key} placeholder`).toThrow(
+        /chỗ giữ chỗ/,
+      );
+      // The renderer refuses on its own too: a caller skipping the lookup still cannot print a hole.
+      expect(() => communeTerms({ ...VALID, [key]: "" }), `${key} empty at render`).toThrow();
+    }
+    expect(() => communeTermsValuesFor({ x: { ...VALID, introductionUrl: "http://xa-thu.example.gov.vn" } }, "x")).toThrow(
+      /https/,
+    );
+    expect(() => communeTermsValuesFor({ x: { ...VALID, introductionUrl: "xa-thu.example.gov.vn" } }, "x")).toThrow(/https/);
+    expect(() => communeTermsValuesFor({ x: { ...VALID, displayName: "Thăng Bình" } }, "x")).toThrow(
+      /Xã \/ Phường \/ Đặc khu/,
+    );
+    // And a valid row passes, for each unit type.
+    for (const displayName of ["Xã Thử", "Phường Thử", "Đặc khu Thử"]) {
+      expect(() => communeTermsValuesFor({ x: { ...VALID, displayName } }, "x")).not.toThrow();
+    }
+    expect(readerText(communeTermsDocument({ ...VALID, displayName: "Phường Thử" }, "x"))).toContain(
+      "Ủy ban nhân dân phường Thử",
+    );
+  });
+
+  it("the shared app's terms are unchanged: ViHAT Group's text, version and date, from dieu-khoan.ts", () => {
+    expect(VAN_BAN_DIEU_KHOAN.muc).toBe(MUC_DIEU_KHOAN);
+    expect(VAN_BAN_DIEU_KHOAN.phien_ban).toBe(PHIEN_BAN_DIEU_KHOAN);
+    expect(VAN_BAN_DIEU_KHOAN.ngay_hieu_luc).toBe(NGAY_HIEU_LUC_DIEU_KHOAN);
+    expect(VAN_BAN_DIEU_KHOAN.ngay_hieu_luc).toBe("21/09/2026");
+    expect(VAN_BAN_DIEU_KHOAN.nguon).toBe("citizen-app/src/content/dieu-khoan.ts");
+    expect(VAN_BAN_DIEU_KHOAN.appLine).toBe(`Mini App ${COMPANY.name}`);
+    expect(VAN_BAN_CHINH_SACH.appLine).toBe(`Mini App ${COMPANY.name}`);
+    expect(ketXuatVanBan(VAN_BAN_DIEU_KHOAN)).toMatch(/Mini App giới thiệu của Tập đoàn ViHAT Group/);
   });
 });

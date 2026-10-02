@@ -8,12 +8,16 @@
  * |---|---|
  * | `tmp/xin-quyen-zalo/README.md`, hai khối giữa các mốc | `communeAppCalls` / `communeAppRoutes` (`src/content/ket-xuat-ho-so.ts`) |
  * | `tmp/xin-quyen-zalo/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
- * | `tmp/xin-quyen-zalo/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
+ * | `tmp/xin-quyen-zalo/dieu-khoan-su-dung.txt` | `src/content/commune-terms.ts` + `COMMUNE_TERMS_BY_DOMAIN[DOSSIER_COMMUNE_DOMAIN]` (`ung-dung-theo-ten-mien.mjs`) |
+ * | `tmp/xin-quyen-zalo/app-chung-vihat/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
  * | `tmp/xin-quyen-zalo/app-chung-vihat/README.md`, hai khối giữa các mốc | `KHAI_BAO_LOI_GOI` trong `src/features/tinh-nang/zalo-api.ts` |
  *
- * The two `.txt` files sit at the folder root, ONE copy for both dossiers: every app is published by
- * ViHAT Group and shares one privacy policy (ADR 0044 §Hệ quả, open question #28 DECIDED). A copy per
- * dossier would be two copies of one legal text.
+ * The PRIVACY POLICY sits at the folder root, ONE copy for both dossiers: every app shares one privacy policy
+ * (ADR 0044 §Hệ quả, open question #28 DECIDED). A copy per dossier would be two copies of one legal text.
+ *
+ * The TERMS OF USE are two different texts since 02/10/2026 (owner; ADR 0044 §"Đã quyết 02/10/2026"): the
+ * commune app's terms stand in the name of "Ủy ban nhân dân <xã>" only, filled per commune; the shared app keeps
+ * ViHAT Group's terms, now inside its own folder.
  *
  * ⚠ VÌ SAO TỆP NÀY TỒN TẠI — MỘT LỖI ĐÃ ĐO ĐƯỢC, KHÔNG PHẢI MỘT Ý THÍCH:
  *
@@ -44,10 +48,19 @@ import { fileURLToPath } from "node:url";
 
 import { createServer } from "vite";
 
+import { APP_ID_THEO_TEN_MIEN, COMMUNE_TERMS_BY_DOMAIN } from "./ung-dung-theo-ten-mien.mjs";
+
 const GOC_APP = fileURLToPath(new URL("..", import.meta.url));
 const GOC_KHO = fileURLToPath(new URL("../..", import.meta.url));
 const COMMUNE_APP_DIR = fileURLToPath(new URL("../../tmp/xin-quyen-zalo/", import.meta.url));
 const SHARED_APP_DIR = fileURLToPath(new URL("../../tmp/xin-quyen-zalo/app-chung-vihat/", import.meta.url));
+
+/**
+ * THE COMMUNE WHOSE APP THE ROOT DOSSIER IS FOR. One commune app is one App ID and one Zalo submission
+ * (README of the dossier), and today that is Thăng Bình — the only commune with an App ID the owner gave. Its terms
+ * are filled from its row of `COMMUNE_TERMS_BY_DOMAIN`; a second commune's submission changes this constant.
+ */
+const DOSSIER_COMMUNE_DOMAIN = "thangbinh-danang.vigov.vn";
 
 /**
  * Dòng đầu của README hồ sơ — tệp DUY NHẤT trong ba tệp kết quả vẫn còn phần viết tay.
@@ -100,11 +113,31 @@ async function main() {
 
     const da_ghi = [];
 
-    for (const [ten_tep, van_ban] of [
-      ["chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
-      ["dieu-khoan-su-dung.txt", ket_xuat.VAN_BAN_DIEU_KHOAN],
+    // The commune dossier is for a commune APP: no App ID for the domain means there is nothing to submit, and a
+    // terms text for it would be a text for an app that does not exist.
+    if (!Object.prototype.hasOwnProperty.call(APP_ID_THEO_TEN_MIEN, DOSSIER_COMMUNE_DOMAIN)) {
+      throw new Error(
+        `"${DOSSIER_COMMUNE_DOMAIN}" chưa có App ID trong scripts/ung-dung-theo-ten-mien.mjs (APP_ID_THEO_TEN_MIEN).\n` +
+          "Hồ sơ app xã là hồ sơ của một App ID. Điền App ID chủ dự án giao, hoặc đổi DOSSIER_COMMUNE_DOMAIN trong scripts/ho-so-zalo.mjs.",
+      );
+    }
+    const commune_terms = await may_chu.ssrLoadModule("/src/content/commune-terms.ts");
+    // Throws, naming the table row and every missing field, BEFORE any file is written. The file path is added
+    // here: `src/` may not name this table's file (`dich-den.test.mjs`).
+    let commune_values;
+    try {
+      commune_values = commune_terms.communeTermsValuesFor(COMMUNE_TERMS_BY_DOMAIN, DOSSIER_COMMUNE_DOMAIN);
+    } catch (error) {
+      throw new Error(`citizen-app/scripts/ung-dung-theo-ten-mien.mjs: ${error instanceof Error ? error.message : error}`);
+    }
+    const commune_source = `citizen-app/src/content/commune-terms.ts + COMMUNE_TERMS_BY_DOMAIN["${DOSSIER_COMMUNE_DOMAIN}"] (citizen-app/scripts/ung-dung-theo-ten-mien.mjs)`;
+
+    for (const [dir, ten_tep, van_ban] of [
+      [COMMUNE_APP_DIR, "chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
+      [COMMUNE_APP_DIR, "dieu-khoan-su-dung.txt", ket_xuat.communeTermsDocument(commune_values, commune_source)],
+      [SHARED_APP_DIR, "dieu-khoan-su-dung.txt", ket_xuat.VAN_BAN_DIEU_KHOAN],
     ]) {
-      const duong_dan = resolve(COMMUNE_APP_DIR, ten_tep);
+      const duong_dan = resolve(dir, ten_tep);
       await writeFile(duong_dan, ket_xuat.ketXuatVanBan(van_ban), "utf8");
       da_ghi.push(`${duongDanNgan(duong_dan)}  <- ${van_ban.nguon}`);
     }

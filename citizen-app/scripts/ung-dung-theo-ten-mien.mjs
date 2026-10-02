@@ -14,6 +14,9 @@
  *
  * App ID không phải bí mật. `ZMP_TOKEN` thì CÓ — nó không bao giờ nằm ở đây (luật 8).
  *
+ * Since 02/10/2026 this file also holds a second table, `COMMUNE_TERMS_BY_DOMAIN` (bottom), read by
+ * `ho-so-zalo.mjs` only. The sentences above about "chỉ deploy.mjs nhập tệp này" speak of `APP_ID_THEO_TEN_MIEN`.
+ *
  * KHÓA là TÊN MIỀN, chữ thường, không scheme, không cổng, không đường dẫn. Một xã giữ được nhiều
  * tên miền (sáp nhập — `service-platform/internal/domain/tenant.go:19-25`), nên hai khoá cùng trỏ
  * một App ID là hợp lệ. Tên miền ở đây chỉ là khoá tra lúc đẩy, KHÔNG BAO GIỜ là tham chiếu xã.
@@ -39,3 +42,27 @@ export const APP_ID_THEO_TEN_MIEN = {
  * khai nó thì `deploy.mjs` còn kiểm được token trong môi trường đúng là token của app chung.
  */
 export const APP_ID_APP_CHUNG = null;
+
+/**
+ * PER-COMMUNE VALUES OF THE COMMUNE APP'S TERMS OF USE (owner, 02/10/2026; ADR 0044 §"Đã quyết 02/10/2026").
+ *
+ * Read ONLY by `scripts/ho-so-zalo.mjs`, which fills `src/content/commune-terms.ts` with one row to write the commune
+ * dossier's `dieu-khoan-su-dung.txt`. Like the table above, nothing here reaches the bundle: no production file
+ * under `src/` imports this file (`dich-den.test.mjs`), and `bundle-for-zalo.test.ts` reads this file raw.
+ *
+ * Same key as `APP_ID_THEO_TEN_MIEN` — the commune's domain — so the two rows of one commune sit side by side and
+ * a reviewer sees both. A commune's dossier needs both rows; `ho-so-zalo.mjs` refuses when either is missing.
+ *
+ * Every field is REQUIRED, and a missing or `<…>` value stops the dossier (`communeTermsValuesFor`): this text is
+ * published in the commune's name, so no default and no placeholder is ever printed into it. Fill only what the
+ * owner has given. Field keys are unquoted on purpose: `bundle-for-zalo.test.ts` treats every `"key": "value"`
+ * line of this file as an App ID mapping, and a province name is not one.
+ */
+export const COMMUNE_TERMS_BY_DOMAIN = {
+  // Given by the owner 2026-10-02.
+  "thangbinh-danang.vigov.vn": {
+    displayName: "Xã Thăng Bình",
+    province: "Thành phố Đà Nẵng",
+    introductionUrl: "https://thangbinh.danang.gov.vn/gioi-thieu/gioi-thieu-chung",
+  },
+};

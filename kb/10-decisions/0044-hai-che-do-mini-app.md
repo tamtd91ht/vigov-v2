@@ -9,6 +9,7 @@ owns_facts:
   - "hai chế độ Mini App — app chính mở xã bằng QR, app riêng gắn cứng một xã theo App ID — dùng chung một bản build citizen-app"
   - "xã của app riêng do máy chủ suy ra từ App ID mà app secret xác minh được, qua bảng app_id → tenant_id của platform"
   - "mở app chính không kèm QR thì không vào được nội dung của xã nào"
+  - "điều khoản sử dụng của app riêng của xã đứng tên riêng Ủy ban nhân dân xã ấy, một khuôn cho mọi xã; chính sách riêng tư vẫn một bản dùng chung (chốt 02/10/2026)"
 ---
 
 # 0044. Hai chế độ Mini App, một bản build `citizen-app`
@@ -113,6 +114,34 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
   biết công dân là ai. Thiết kế cầu phiên phải trả lời mở lại không QR thì nhận danh tính bằng
   cách nào trước khi quyết định hiện giới thiệu hay vào xã A.
 - Chính sách riêng tư dùng chung mọi app, vì cùng một pháp nhân đứng tên và vận hành.
+
+## Đã quyết 02/10/2026 — điều khoản sử dụng của app riêng đứng tên UBND xã
+
+Chủ dự án trả lời tại một cổng duyệt, **chọn ngược phương án được đề xuất và biết rõ điều đó**.
+
+| Văn bản | App | Đứng tên / bên chịu trách nhiệm |
+|---|---|---|
+| **Điều khoản sử dụng** | **App riêng của xã** | **Chỉ "Ủy ban nhân dân <xã>"**. Không nêu ViHAT Group hay VihatSoftware là bên phát hành hay bên chịu trách nhiệm |
+| Điều khoản sử dụng | App chung ViHAT | Giữ như cũ — ViHAT Group phát hành (ADR 0031) |
+| **Chính sách riêng tư** | Mọi app | **Giữ một bản dùng chung**. Bên nhận dữ liệu theo câu hỏi mở #28: ViHAT Group |
+
+- **Một khuôn cho mọi app xã.** Tên xã, tỉnh/thành, URL trang giới thiệu của xã điền theo từng xã lúc
+  sinh hồ sơ. Không viết cứng số điện thoại hay email. Xã đầu tiên: Xã Thăng Bình, Thành phố Đà Nẵng,
+  liên hệ qua `https://thangbinh.danang.gov.vn/gioi-thieu/gioi-thieu-chung`.
+- **Phạm vi chỉ là điều khoản sử dụng của app xã.** Phần xử lý dữ liệu trong điều khoản của app xã
+  **trỏ sang** chính sách riêng tư, không chép lại (cùng nguyên tắc luật 9).
+- **Không chạm ĐIỀU KIỆN DỪNG #3 của ADR này.** Đơn vị đứng tên app trên Zalo vẫn là tài khoản dev
+  của ViHAT (ADR 0066), bên nhận dữ liệu vẫn là ViHAT Group (#28). Lần này chỉ đổi bên đứng tên
+  **văn bản điều khoản**. Có đề xuất cho UBND xã đứng tên **app** hay làm **bên nhận dữ liệu** thì
+  điều kiện dừng #3 vẫn nguyên hiệu lực.
+- Câu *"Chính sách riêng tư dùng chung mọi app"* ở §Hệ quả vẫn đúng từng chữ. Câu ấy chưa bao giờ
+  nói về điều khoản sử dụng.
+
+**Cái giá, chủ dự án đã chấp nhận:** người dân đọc điều khoản của app xã thấy **xã** là bên chịu
+trách nhiệm. Bên vận hành hạ tầng kỹ thuật chỉ được khai trong chính sách riêng tư. Muốn biết dữ
+liệu của mình đi đâu, người dân phải mở văn bản thứ hai.
+
+**Chưa quyết — không tự chọn hộ:** chính sách riêng tư có cần thêm một bản riêng cho app xã không.
 
 ## ĐIỀU KIỆN DỪNG
 

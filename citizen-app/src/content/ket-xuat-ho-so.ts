@@ -42,6 +42,13 @@ import {
 } from "./chinh-sach-rieng-tu";
 import { COMPANY } from "./company-profile";
 import {
+  COMMUNE_TERMS_EFFECTIVE_DATE,
+  COMMUNE_TERMS_TITLE,
+  COMMUNE_TERMS_VERSION,
+  communeTerms,
+  type CommuneTermsValues,
+} from "./commune-terms";
+import {
   CAU_DAU_DIEU_KHOAN,
   MUC_DIEU_KHOAN,
   NGAY_HIEU_LUC_DIEU_KHOAN,
@@ -56,6 +63,11 @@ export type VanBanPhapLy = {
   ngay_hieu_luc: string;
   cau_dau: string;
   muc: readonly MucChinhSach[];
+  /**
+   * The line under the title naming the app the text belongs to. Per document since 02/10/2026: the commune
+   * app's terms must not print the company name the two shared texts print (ADR 0044, owner 02/10/2026).
+   */
+  appLine: string;
   /** Đường dẫn tệp NGUỒN, in vào dòng đầu để người mở tệp biết sửa ở đâu. */
   nguon: string;
 };
@@ -86,7 +98,7 @@ export function ketXuatVanBan(vb: VanBanPhapLy): string {
     banSinhRa(vb.nguon),
     "",
     vb.tieu_de.toUpperCase(),
-    `Mini App ${COMPANY.name}`,
+    vb.appLine,
     `Phiên bản ${vb.phien_ban} — Hiệu lực từ ngày ${vb.ngay_hieu_luc}`,
     "",
     vb.cau_dau,
@@ -106,6 +118,7 @@ export const VAN_BAN_CHINH_SACH: VanBanPhapLy = {
   ngay_hieu_luc: NGAY_HIEU_LUC,
   cau_dau: CAU_DAU,
   muc: MUC_CHINH_SACH,
+  appLine: `Mini App ${COMPANY.name}`,
   nguon: "citizen-app/src/content/chinh-sach-rieng-tu.ts",
 };
 
@@ -115,8 +128,28 @@ export const VAN_BAN_DIEU_KHOAN: VanBanPhapLy = {
   ngay_hieu_luc: NGAY_HIEU_LUC_DIEU_KHOAN,
   cau_dau: CAU_DAU_DIEU_KHOAN,
   muc: MUC_DIEU_KHOAN,
+  appLine: `Mini App ${COMPANY.name}`,
   nguon: "citizen-app/src/content/dieu-khoan.ts",
 };
+
+/**
+ * The terms of ONE commune's own app, from the template and that commune's row of `COMMUNE_TERMS_BY_DOMAIN`.
+ * `communeTerms` throws on a missing value, so a half-filled text can never reach the dossier. `source` only goes
+ * into the generated-file banner (stripped before pasting into Zalo); the caller writes it, because a file under
+ * `src/` may not name the per-commune table's file (the deploy-target check under `scripts/`).
+ */
+export function communeTermsDocument(values: CommuneTermsValues, source: string): VanBanPhapLy {
+  const terms = communeTerms(values);
+  return {
+    tieu_de: COMMUNE_TERMS_TITLE,
+    phien_ban: COMMUNE_TERMS_VERSION,
+    ngay_hieu_luc: COMMUNE_TERMS_EFFECTIVE_DATE,
+    cau_dau: terms.opening,
+    muc: terms.sections,
+    appLine: terms.appLine,
+    nguon: source,
+  };
+}
 
 /* =============================================================================================
    BẢNG TÓM TẮT QUYỀN TRONG README CỦA HỒ SƠ
