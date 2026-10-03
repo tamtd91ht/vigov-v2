@@ -3,13 +3,14 @@ id: 0067-mini-app-content-part-a
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: c0e068cc
+derived_from_commit: cf82fde6
 expires: null
 owns_facts:
   - "thân bài nội dung Mini App là HTML đã làm sạch ở máy chủ lúc ghi theo danh sách cho phép (p, br, strong, em, ul, ol, li, h2, h3, a chỉ href https); Mini App dựng từ body_blocks có cấu trúc, không bao giờ dựng HTML; body văn bản thuần giữ cho bản app cũ — thay quyết định 27/09/2026 'không HTML nào tới dân'. Từ 03/10/2026 danh sách ấy là chính sách ghi của đường Cổng; bài cán bộ soạn và đường đọc theo chính sách cán bộ (§Sửa đổi 03/10/2026, K1, K7)"
   - "bài cán bộ soạn có ảnh xen giữa các đoạn (tải lên hoặc dán link https), ảnh có chú thích tuỳ chọn, trích dẫn, dòng tác giả/nguồn chữ tự do; sapo là ô Tóm tắt hiện in đậm dưới tiêu đề; trần 20 ảnh thân bài mỗi bài ở upload_policy; app chung hiện ảnh thân bài như app riêng (chốt 03/10/2026)"
   - "hai chính sách làm sạch, một cho mỗi nguồn ghi: chính sách cán bộ cho POST/PATCH của cán bộ và cho làm sạch lại trên đường đọc (ảnh chỉ giữ khi mã tệp đổi ra đúng tệp); chính sách cũ cho đường ghi của Cổng — thay B1 'một hàm duy nhất' (03/10/2026)"
   - "ảnh thân bài lưu MÃ TỆP, không lưu URL; máy chủ đổi mã ra URL công khai lúc đọc, chỉ cho tệp của đúng xã, đúng bài, mục đích content-body-image; link ảnh dán vào do MÁY CHỦ tải về qua rào SSRF, quét mã độc, bỏ EXIF — người dân không tải ảnh từ host lạ (03/10/2026)"
+  - "ảnh máy chủ tải từ link dán vào chỉ giữ bản mã hoá lại thumb-1280, không giữ bản gốc; tải về chặn ở min(chính sách, 10 MiB), 4 lần tải đồng thời mỗi tiến trình; giữ bản gốc là việc của chủ dự án (03/10/2026, K9, L4)"
   - "ảnh trong thân tin đồng bộ từ Cổng TTĐT để đợt sau; chính sách làm sạch của đường Cổng không đổi (03/10/2026)"
   - "dòng nội dung đã lưu không bị viết lại; dòng cũ chưa làm sạch được làm sạch lại trên tuyến đọc công khai"
   - "đồng bộ Cổng TTĐT: chỉ API cổng dùng chung của Đà Nẵng; https và host đuôi .gov.vn; ảnh chỉ cùng host với api_url; mặc định chờ duyệt; không ghi đè tin đã có, không nhập lại tin đã xoá mềm; 90 ngày và 100 tin/lượt là mặc định và TRẦN (1..90, 1..100), trần 30 chuyên mục được chọn mỗi xã, dòng vượt trần bị kẹp lúc đọc/chạy chứ không viết lại (chốt 02/10/2026, D1); 3 chuyên mục và 6 ảnh song song, nhịp 0–24 giờ mặc định 6"
@@ -376,7 +377,7 @@ dưới đây trỏ tới chỗ sẽ phải đổi hoặc chỗ làm lý do.
 | H4 | Ảnh trong thân tin **đồng bộ từ Cổng TTĐT: để đợt sau**. Chính sách làm sạch của đường Cổng **không đổi** | Ảnh của Cổng nằm ở mọi host; nhận chúng là mở lại §2 điều 2 và điều kiện dừng #4 | `service-comms/internal/app/portal_sync_runner.go:972` |
 | H5 | Link ảnh dán vào: **MÁY CHỦ tải về và lưu lại** — qua rào SSRF, quét mã độc, bỏ EXIF, như ảnh tải lên | **Người dân không bao giờ tải ảnh từ một host lạ**: máy dân chỉ nối tới kho công khai của ViGov. Cái giá: một đường gọi ra ngoài mới (K6) | — |
 | H6 | **Sapo = ô `Tóm tắt` sẵn có**, hiện **in đậm ngay dưới tiêu đề** ở trang bài Mini App | Một nguồn: ô ấy vẫn là dòng xem trước ở danh sách; không thêm ô thứ hai nói cùng một điều | — |
-| H7 | Trần **20 ảnh thân bài mỗi bài** — giá trị cấu hình nền tảng (`upload_policy`), đổi được sau | Giới hạn theo mục đích do platform sở hữu (ADR 0052 §10); đổi bằng cấu hình, không đổi mã | `service-platform/migrations/0008_upload_policy.sql:66` |
+| H7 | Trần **20 ảnh thân bài mỗi bài** — giá trị cấu hình nền tảng (`upload_policy`), đổi được sau | Giới hạn theo mục đích do platform sở hữu (ADR 0052 §10); đổi bằng cấu hình, không đổi mã | gieo ở `service-platform/migrations/0018_upload_policy_content_body_image.sql:70`; cột ở `0008_upload_policy.sql:66` |
 | H8 | **App chung (ViHAT) hiện ảnh thân bài như app riêng** | Khác ảnh bìa — ảnh bìa chỉ ở app riêng (ADR 0047, dòng "Ảnh bìa tin trong app riêng", `kb/10-decisions/0047-hai-luong-dung-citizen-app-theo-ten-mien.md:259`). Ảnh thân bài là một phần nội dung bài; bỏ nó ở app chung là bài đọc thiếu | — |
 | H9 | Dòng tác giả/nguồn: **chữ tự do do cán bộ gõ** | **Luật 3:** tên người xuất hiện ở đây là do cán bộ **chủ động công bố**. Hệ thống **không tự điền** tên cán bộ; đường Cổng **vẫn không đọc `TacGia`** — B17 giữ nguyên | `service-comms/internal/app/portal_sync_runner.go:756-763` (B17) |
 | H10 | Bản mẫu `vigov-require` đặt ảnh **SAU** phần chữ; H1 **thay** cách ấy cho tin cán bộ soạn | Lý do của bản mẫu là thân bài chữ thuần không còn dấu vết ảnh nằm ở đoạn nào (cách đọc chú thích ấy). Bài cán bộ soạn mang vị trí ảnh trong chính thân bài, nên lý do ấy không còn | `../vigov-require/apps/miniapp/src/pages/NewsDetailPage.tsx:108-123` |
@@ -393,6 +394,7 @@ dưới đây trỏ tới chỗ sẽ phải đổi hoặc chỗ làm lý do.
 | K7 | Đường đọc công khai làm sạch **mọi dòng** bằng chính sách cán bộ, rồi chỉ giữ một ảnh khi mã tệp của nó đổi ra tệp `content-body-image` của **đúng xã, đúng bài** (K2); mã không đổi được thì bỏ cả khối ảnh. Đường **ghi** của Cổng vẫn dùng chính sách hẹp | Không cần cột hay migration để phân biệt dòng cũ với bài soạn sau 03/10: dòng Cổng đã làm sạch hẹp lúc ghi nên không mang mã tệp; `<img src>` thô trong dòng cũ không có mã tệp nên bị bỏ; một tệp `content-body-image` của bài chỉ sinh ra từ tuyến tải lên của cán bộ cho chính bài ấy. Thẻ chữ mới (trích dẫn, dòng tác giả) trong dòng cũ chỉ đổi cách hiện, nội dung vẫn là chữ React thoát ký tự | — |
 | K8 | Tuyến tải ảnh thân bài và tuyến máy chủ tải link ảnh khai **`content.update`** — cùng khoá với tuyến ảnh bìa (`routes.go:781`), đã có trong bảng `quyen`. Không thêm trần tần suất riêng | Tuyến có xác thực, có vết kiểm toán, và bị chặn bởi trần 20 tệp mỗi bài của `upload_policy` (H7). Luật 13 bất biến 7 chỉ buộc trần tần suất cho tuyến **không** xác thực | `service-identity/migrations/0001_init.sql:292-293` |
 | K6 | Máy chủ tải link ảnh là **đường gọi ra ngoài MỚI**: https, cổng 443, kiểm IP lúc quay số, giới hạn chuyển hướng, trần kích thước. Dùng lại rào của gói `portal` ở mức có thể; **không** giới hạn đuôi `.gov.vn` như Cổng | Cán bộ dán ảnh từ báo, từ trang khác — giới hạn `.gov.vn` làm H1 vô dụng. Ranh giới SSRF là phép kiểm lúc quay số (B12) và luật mạng 7c (E4), không phải tên miền | `service-comms/internal/portal/guard.go:6-19`, `:36-38` |
+| K9 | Ảnh máy chủ tải từ link dán vào **chỉ giữ bản mã hoá lại** (`thumb-1280`), **không giữ bản gốc** — như ảnh bìa từ Cổng. Tải về bị chặn ở **min(chính sách, 10 MiB)**, tối đa **4 lần tải đồng thời mỗi tiến trình** | `core/storage` từ chối máy chủ ghi một bản gốc `content-source`: bản gốc lớp ấy chỉ vào qua `Promote` — tệp xã tải lên, đã quét ở temp (ADR 0052, Bổ sung 30/09 lần hai). Ảnh tải về không phải tệp xã tải lên. Hai trần là trần **bộ nhớ** của nhà cung cấp, không phải con số của khách: cả thân ảnh nằm trong bộ nhớ để sniff, quét và giải mã, nên 50 MB của chính sách nhân với vài cán bộ dán cùng lúc là đủ làm cạn pod; 4 × 10 MiB là mức tối đa giữ cùng lúc. Giữ bản gốc cần một thao tác `core/storage` mới — L4 | `core/storage/storage.go:543-601` · `service-comms/internal/app/portal_image.go:9-14` · `service-comms/internal/app/content_body_image_url.go:55-66` |
 
 ### L. Còn mở — không quyết ở đây
 
@@ -401,6 +403,7 @@ dưới đây trỏ tới chỗ sẽ phải đổi hoặc chỗ làm lý do.
 | L1 | Danh sách tên miền của app Zalo cho host kho công khai — ADR 0052 §Còn mở #3 | Chủ dự án |
 | L2 | Lời văn câu chính sách quyền riêng tư về ảnh thân bài — ADR 0047 G9, mục C1 ở trên | Chủ dự án |
 | L3 | Ảnh trong thân tin đồng bộ từ Cổng (H4) | Chủ dự án, đợt sau |
+| L4 | Giữ **bản gốc** của ảnh máy chủ tải từ link (K9) — cần một thao tác mới trong `core/storage`, tức sửa danh sách đường ghi phía máy chủ của ADR 0052 | Chủ dự án |
 
 ### Điều kiện dừng — thay điều kiện dừng #1
 
