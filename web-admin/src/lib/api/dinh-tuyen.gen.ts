@@ -8,6 +8,7 @@ export type DichVuAPI = "comms" | "documents" | "finance" | "identity" | "petiti
 export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly dichVu: DichVuAPI }> = [
   { tienTo: "/api/v1/incoming-document-overdue-queue", dichVu: "documents" },
   { tienTo: "/api/v1/citizen-report-intake-fields", dichVu: "petitions" },
+  { tienTo: "/api/v1/commune-external-contacts", dichVu: "comms" },
   { tienTo: "/api/v1/incoming-document-summary", dichVu: "documents" },
   { tienTo: "/api/v1/petitions-system-messages", dichVu: "petitions" },
   { tienTo: "/api/v1/reporting-system-messages", dichVu: "reporting" },
@@ -30,6 +31,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/my-citizen-reports", dichVu: "petitions" },
   { tienTo: "/api/v1/outgoing-documents", dichVu: "documents" },
   { tienTo: "/api/v1/budget-indicators", dichVu: "finance" },
+  { tienTo: "/api/v1/external-contacts", dichVu: "comms" },
   { tienTo: "/api/v1/map-field-schemas", dichVu: "comms" },
   { tienTo: "/api/v1/residential-units", dichVu: "identity" },
   { tienTo: "/api/v1/swap-working-days", dichVu: "identity" },
@@ -58,6 +60,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/working-hours", dichVu: "identity" },
   { tienTo: "/api/v1/budget-lines", dichVu: "finance" },
   { tienTo: "/api/v1/commune-news", dichVu: "comms" },
+  { tienTo: "/api/v1/staff-counts", dichVu: "identity" },
   { tienTo: "/api/v1/task-summary", dichVu: "petitions" },
   { tienTo: "/api/v1/portal-sync", dichVu: "comms" },
   { tienTo: "/api/v1/task-counts", dichVu: "petitions" },

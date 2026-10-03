@@ -194,6 +194,13 @@
       "source": "service-documents/migrations/0003_danh_muc_loai_van_ban.sql:190"
     },
     {
+      "entity": "ExternalContact",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "external_contacts",
+      "source": "service-comms/migrations/0014_external_contacts.sql:106"
+    },
+    {
       "entity": "FundingAllocation",
       "service": "finance",
       "scope": "tenant",

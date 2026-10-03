@@ -6027,6 +6027,87 @@
         }
       }
     },
+    "/api/v1/commune-external-contacts": {
+      "get": {
+        "summary": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) theo tên miền của xã — cho danh bạ trên Zalo Mini App, nhóm theo `category`",
+        "operationId": "comms_get_commune_external_contacts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §8",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "danh bạ liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) mà xã nhập để người dân gọi, hiện trên Zalo Mini App (người dùng quyết định 03/10/2026): người dân đọc không cần tài khoản; chỉ trả dòng chưa xoá của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "01c6a8f66485",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.externalContactListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/commune-news": {
       "get": {
         "summary": "Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ",
@@ -7403,6 +7484,379 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/content-items/body-images": {
+      "post": {
+        "summary": "Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
+        "operationId": "comms_post_content_items_body_images",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "22ad084291b4",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.bodyImageUploadIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.bodyImageUploadOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/content-items/body-images/from-url": {
+      "post": {
+        "summary": "Tải ảnh thân bài từ liên kết https cán bộ dán — máy chủ tải về, dò kiểu, quét mã độc, tạo bản 1280px không EXIF, trả ảnh đã sẵn sàng kèm liên kết xem trước; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
+        "operationId": "comms_post_content_items_body_images_from_url",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "358bfd8b4135",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.bodyImageFromURLIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.bodyImageFileOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/content-items/body-images/{id}/completion": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng",
+        "operationId": "comms_post_content_items_body_images_by_id_completion",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "1a3fd1f7d874",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.bodyImageFileOut"
                 }
               }
             }
@@ -9254,6 +9708,339 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/external-contacts": {
+      "get": {
+        "summary": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) — cả danh sách của xã theo thứ tự hiển thị, cho tab trong Danh bạ",
+        "operationId": "comms_get_external_contacts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "86d4579e3adf",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.externalContactListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm một liên hệ ngoài bộ máy xã — hiện ngay trên danh bạ Zalo Mini App (không có cờ công khai)",
+        "operationId": "comms_post_external_contacts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "872ceb73eec8",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.createExternalContactIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.externalContactOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/external-contacts/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một liên hệ ngoài bộ máy xã, kèm lý do bắt buộc — gỡ khỏi danh bạ Mini App ngay trong cùng lần ghi",
+        "operationId": "comms_delete_external_contacts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "7fbba3385b7a",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.deleteExternalContactIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa tên, nhóm, số điện thoại, địa chỉ hoặc thứ tự của một liên hệ ngoài bộ máy xã",
+        "operationId": "comms_patch_external_contacts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "d162fced397a",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.updateExternalContactIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.externalContactOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -19659,6 +20446,63 @@
         }
       }
     },
+    "/api/v1/staff-counts": {
+      "get": {
+        "summary": "Số cán bộ trong danh bạ của xã và số đang công khai trên Mini App — toàn xã và theo từng bộ phận",
+        "operationId": "identity_get_staff_counts",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "23e8732c633e",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.staffCountsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff-directory": {
       "get": {
         "summary": "Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email",
@@ -20487,6 +21331,114 @@
           }
         }
       ],
+      "delete": {
+        "summary": "Thu hồi tài khoản đăng nhập của một cán bộ, giữ dòng danh bạ — xoá mật khẩu, kết thúc mọi phiên, bắt buộc lý do",
+        "operationId": "identity_delete_staff_by_id_account",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user.revoke"
+        },
+        "x-vigov-task": "c82b3a6a8f67",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.revokeAccountIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.canBoTomTat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "self_target_forbidden"
+            ]
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "staff_not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "account_missing",
+              "last_admin"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Cấp tài khoản đăng nhập cho một cán bộ đang có trong danh bạ — hệ thống sinh mật khẩu tạm, trả về ĐÚNG MỘT LẦN",
         "operationId": "identity_post_staff_by_id_account",
@@ -26386,10 +27338,156 @@
             "items": {
               "$ref": "#/components/schemas/comms.listItemOut"
             }
+          },
+          "paragraphs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.paragraphOut"
+            }
+          },
+          "src": {
+            "type": "string"
+          },
+          "alt": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.inlineRunOut"
+            }
           }
         },
         "required": [
           "kind"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyImageFileOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "content_item_id": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "preview_url": {
+            "type": "string"
+          },
+          "preview_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "content_item_id",
+          "id",
+          "mime_type",
+          "size_bytes",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyImageFromURLIn": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "content_item_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyImageOut": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "public": {
+            "type": "boolean"
+          },
+          "preview_url": {
+            "type": "string"
+          },
+          "preview_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "file_id",
+          "public",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyImageUploadIn": {
+        "type": "object",
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "content_item_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_type",
+          "file_name",
+          "size"
+        ],
+        "additionalProperties": false
+      },
+      "comms.bodyImageUploadOut": {
+        "type": "object",
+        "properties": {
+          "body_image": {
+            "$ref": "#/components/schemas/comms.coverFileOut"
+          },
+          "content_item_id": {
+            "type": "string"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/comms.presignedUploadOut"
+          }
+        },
+        "required": [
+          "body_image",
+          "content_item_id",
+          "upload"
         ],
         "additionalProperties": false
       },
@@ -26485,6 +27583,35 @@
         "required": [
           "cover_image",
           "upload"
+        ],
+        "additionalProperties": false
+      },
+      "comms.createExternalContactIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "category",
+          "name",
+          "phone"
         ],
         "additionalProperties": false
       },
@@ -26615,6 +27742,18 @@
         ],
         "additionalProperties": false
       },
+      "comms.deleteExternalContactIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "comms.deleteMapFieldSchemaIn": {
         "type": "object",
         "properties": {
@@ -26624,6 +27763,54 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.externalContactListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.externalContactOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.externalContactOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "category",
+          "id",
+          "name",
+          "phone"
         ],
         "additionalProperties": false
       },
@@ -27100,6 +28287,12 @@
               }
             ]
           },
+          "body_images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.bodyImageOut"
+            }
+          },
           "published_on": {
             "type": "string"
           },
@@ -27251,6 +28444,21 @@
           "read",
           "read_at",
           "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.paragraphOut": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.inlineRunOut"
+            }
+          }
+        },
+        "required": [
+          "runs"
         ],
         "additionalProperties": false
       },
@@ -28160,6 +29368,42 @@
           "slug": {
             "type": [
               "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "comms.updateExternalContactIn": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_order": {
+            "type": [
+              "integer",
               "null"
             ]
           }
@@ -31938,6 +33182,26 @@
         ],
         "additionalProperties": false
       },
+      "identity.departmentCountOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "published": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "published",
+          "total"
+        ],
+        "additionalProperties": false
+      },
       "identity.doiMatKhauVao": {
         "type": "object",
         "properties": {
@@ -32670,6 +33934,18 @@
         ],
         "additionalProperties": false
       },
+      "identity.revokeAccountIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "identity.roleTemplateRefOut": {
         "type": "object",
         "properties": {
@@ -32716,6 +33992,33 @@
           "created",
           "skipped_deleted",
           "skipped_existing"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffCountsOut": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "published": {
+            "type": "integer"
+          },
+          "no_department": {
+            "$ref": "#/components/schemas/identity.staffTallyOut"
+          },
+          "departments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.departmentCountOut"
+            }
+          }
+        },
+        "required": [
+          "departments",
+          "no_department",
+          "published",
+          "total"
         ],
         "additionalProperties": false
       },
@@ -32908,6 +34211,22 @@
           "errors",
           "message",
           "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffTallyOut": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "published": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "published",
+          "total"
         ],
         "additionalProperties": false
       },

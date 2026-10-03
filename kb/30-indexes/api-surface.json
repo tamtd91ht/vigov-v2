@@ -1361,6 +1361,27 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/commune-external-contacts",
+      "operation_id": "comms_get_commune_external_contacts",
+      "task_id": "01c6a8f66485",
+      "summary": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) theo tên miền của xã — cho danh bạ trên Zalo Mini App, nhóm theo `category`",
+      "screen": "12-danh-ba-can-bo §8",
+      "permission_kind": "public",
+      "permission_reason": "danh bạ liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) mà xã nhập để người dân gọi, hiện trên Zalo Mini App (người dùng quyết định 03/10/2026): người dân đọc không cần tài khoản; chỉ trả dòng chưa xoá của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.externalContactListOut",
+        "400": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/external_contacts.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/commune-news",
       "operation_id": "comms_get_commune_news",
       "task_id": "b0dbfeba1b92",
@@ -1673,6 +1694,82 @@
       "reply_schemas": {
         "200": "comms.audioFileOut",
         "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items/body-images",
+      "operation_id": "comms_post_content_items_body_images",
+      "task_id": "22ad084291b4",
+      "summary": "Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.bodyImageUploadIn",
+      "reply_schemas": {
+        "201": "comms.bodyImageUploadOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items/body-images/from-url",
+      "operation_id": "comms_post_content_items_body_images_from_url",
+      "task_id": "358bfd8b4135",
+      "summary": "Tải ảnh thân bài từ liên kết https cán bộ dán — máy chủ tải về, dò kiểu, quét mã độc, tạo bản 1280px không EXIF, trả ảnh đã sẵn sàng kèm liên kết xem trước; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.bodyImageFromURLIn",
+      "reply_schemas": {
+        "201": "comms.bodyImageFileOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items/body-images/{id}/completion",
+      "operation_id": "comms_post_content_items_body_images_by_id_completion",
+      "task_id": "1a3fd1f7d874",
+      "summary": "Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng",
+      "reply_schemas": {
+        "200": "comms.bodyImageFileOut",
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
@@ -2115,6 +2212,94 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/external-contacts",
+      "operation_id": "comms_get_external_contacts",
+      "task_id": "86d4579e3adf",
+      "summary": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) — cả danh sách của xã theo thứ tự hiển thị, cho tab trong Danh bạ",
+      "screen": "12-danh-ba-can-bo §2",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.externalContactListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/external_contacts.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/external-contacts",
+      "operation_id": "comms_post_external_contacts",
+      "task_id": "872ceb73eec8",
+      "summary": "Thêm một liên hệ ngoài bộ máy xã — hiện ngay trên danh bạ Zalo Mini App (không có cờ công khai)",
+      "screen": "12-danh-ba-can-bo §2",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "comms.createExternalContactIn",
+      "reply_schemas": {
+        "201": "comms.externalContactOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/external_contacts.go"
+    },
+    {
+      "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/external-contacts/{id}",
+      "operation_id": "comms_delete_external_contacts_by_id",
+      "task_id": "7fbba3385b7a",
+      "summary": "Xoá mềm một liên hệ ngoài bộ máy xã, kèm lý do bắt buộc — gỡ khỏi danh bạ Mini App ngay trong cùng lần ghi",
+      "screen": "12-danh-ba-can-bo §2",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một liên hệ đã xoá trả 404: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "comms.deleteExternalContactIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/external_contacts.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/external-contacts/{id}",
+      "operation_id": "comms_patch_external_contacts_by_id",
+      "task_id": "d162fced397a",
+      "summary": "Sửa tên, nhóm, số điện thoại, địa chỉ hoặc thứ tự của một liên hệ ngoài bộ máy xã",
+      "screen": "12-danh-ba-can-bo §2",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "comms.updateExternalContactIn",
+      "reply_schemas": {
+        "200": "comms.externalContactOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/external_contacts.go"
     },
     {
       "service": "finance",
@@ -4632,6 +4817,25 @@
     {
       "service": "identity",
       "method": "GET",
+      "path": "/api/v1/staff-counts",
+      "operation_id": "identity_get_staff_counts",
+      "task_id": "23e8732c633e",
+      "summary": "Số cán bộ trong danh bạ của xã và số đang công khai trên Mini App — toàn xã và theo từng bộ phận",
+      "screen": "12-danh-ba-can-bo §2",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.staffCountsOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
       "path": "/api/v1/staff-directory",
       "operation_id": "identity_get_staff_directory",
       "task_id": "8cb874693096",
@@ -4835,6 +5039,30 @@
       "idempotency": "khong-can",
       "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
       "request_schema": "identity.suaCanBoVao",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/staff/{id}/account",
+      "operation_id": "identity_delete_staff_by_id_account",
+      "task_id": "c82b3a6a8f67",
+      "summary": "Thu hồi tài khoản đăng nhập của một cán bộ, giữ dòng danh bạ — xoá mật khẩu, kết thúc mọi phiên, bắt buộc lý do",
+      "screen": "12-danh-ba-can-bo §4",
+      "permission_kind": "permission",
+      "permission": "admin.user.revoke",
+      "idempotency": "khong-can",
+      "idempotency_reason": "tài khoản LÀ khoá tự nhiên: lần thứ hai thấy co_tai_khoan = false trên dòng đã khoá và trả 409, câu UPDATE mang `AND co_tai_khoan` nên không ghi gì và không thêm vết",
+      "request_schema": "identity.revokeAccountIn",
       "reply_schemas": {
         "200": "identity.canBoTomTat",
         "400": "httpx.Error",

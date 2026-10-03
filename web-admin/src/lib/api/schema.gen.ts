@@ -63,6 +63,46 @@ export type comms_bodyBlockOut = {
   "level"?: number;
   "runs"?: Array<comms_inlineRunOut>;
   "items"?: Array<comms_listItemOut>;
+  "paragraphs"?: Array<comms_paragraphOut>;
+  "src"?: string;
+  "alt"?: string;
+  "caption"?: Array<comms_inlineRunOut>;
+};
+
+export type comms_bodyImageFileOut = {
+  "id": string;
+  "content_item_id": string;
+  "mime_type": string;
+  "size_bytes": number;
+  "status": string;
+  "preview_url"?: string;
+  "preview_expires_at"?: string | null;
+};
+
+export type comms_bodyImageFromURLIn = {
+  "url": string;
+  "content_item_id"?: string;
+};
+
+export type comms_bodyImageOut = {
+  "file_id": string;
+  "status": string;
+  "public": boolean;
+  "preview_url"?: string;
+  "preview_expires_at"?: string | null;
+};
+
+export type comms_bodyImageUploadIn = {
+  "file_name": string;
+  "content_type": string;
+  "size": number;
+  "content_item_id"?: string;
+};
+
+export type comms_bodyImageUploadOut = {
+  "body_image": comms_coverFileOut;
+  "content_item_id": string;
+  "upload": comms_presignedUploadOut;
 };
 
 export type comms_coverFileOut = {
@@ -90,6 +130,14 @@ export type comms_coverUploadIn = {
 export type comms_coverUploadOut = {
   "cover_image": comms_coverFileOut;
   "upload": comms_presignedUploadOut;
+};
+
+export type comms_createExternalContactIn = {
+  "name": string;
+  "category": string;
+  "phone": string;
+  "address"?: string;
+  "display_order"?: number | null;
 };
 
 export type comms_createMapFieldSchemaIn = {
@@ -128,8 +176,25 @@ export type comms_deleteContentItemIn = {
   "reason": string;
 };
 
+export type comms_deleteExternalContactIn = {
+  "reason": string;
+};
+
 export type comms_deleteMapFieldSchemaIn = {
   "reason": string;
+};
+
+export type comms_externalContactListOut = {
+  "items": Array<comms_externalContactOut>;
+};
+
+export type comms_externalContactOut = {
+  "id": string;
+  "name": string;
+  "category": string;
+  "phone": string;
+  "address"?: string;
+  "display_order"?: number | null;
 };
 
 export type comms_fieldOptionIn = {
@@ -270,6 +335,7 @@ export type comms_noiDungRa = {
   "has_image": boolean;
   "cover_image_file_id"?: string;
   "cover_image"?: comms_coverImageOut | null;
+  "body_images"?: Array<comms_bodyImageOut>;
   "published_on": string;
   "view_count": number;
   "status": string;
@@ -302,6 +368,10 @@ export type comms_notificationOut = {
   "read": boolean;
   "read_at": string | null;
   "created_at": string;
+};
+
+export type comms_paragraphOut = {
+  "runs": Array<comms_inlineRunOut>;
 };
 
 export type comms_phatHanhThongBaoVao = {
@@ -529,6 +599,14 @@ export type comms_updateCategoryIn = {
   "order"?: number | null;
   "hidden"?: boolean | null;
   "slug"?: string | null;
+};
+
+export type comms_updateExternalContactIn = {
+  "name"?: string | null;
+  "category"?: string | null;
+  "phone"?: string | null;
+  "address"?: string | null;
+  "display_order"?: number | null;
 };
 
 export type comms_updateMapFieldSchemaIn = {
@@ -1575,6 +1653,12 @@ export type identity_datVaiTroVao = {
   "role_id": string;
 };
 
+export type identity_departmentCountOut = {
+  "id": string;
+  "total": number;
+  "published": number;
+};
+
 export type identity_doiMatKhauVao = {
   "current_password": string;
   "new_password": string;
@@ -1783,6 +1867,10 @@ export type identity_residentialUnitImportUnitOut = {
   "order": number;
 };
 
+export type identity_revokeAccountIn = {
+  "reason": string;
+};
+
 export type identity_roleTemplateRefOut = {
   /** vai_tro.ma, e.g. "chu-tich-ubnd" */
   "code": string;
@@ -1796,6 +1884,13 @@ export type identity_seedRoleTemplatesOut = {
   "skipped_existing": Array<identity_roleTemplateRefOut>;
   /** xã đã XOÁ vai trò mang mã này — không tạo lại, không khôi phục */
   "skipped_deleted": Array<identity_roleTemplateRefOut>;
+};
+
+export type identity_staffCountsOut = {
+  "total": number;
+  "published": number;
+  "no_department": identity_staffTallyOut;
+  "departments": Array<identity_departmentCountOut>;
 };
 
 export type identity_staffImportCreatedOut = {
@@ -1851,6 +1946,11 @@ export type identity_staffImportRejectedOut = {
   "message": string;
   "trace_id": string;
   "errors": Array<identity_staffImportErrorOut>;
+};
+
+export type identity_staffTallyOut = {
+  "total": number;
+  "published": number;
 };
 
 export type identity_suaBoPhanVao = {
@@ -4226,6 +4326,28 @@ export type platform_post_commune_branding_logo_uploads_by_id_completion = {
   };
 };
 
+/** GET /api/v1/commune-external-contacts — Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) theo tên miền của xã — cho danh bạ trên Zalo Mini App, nhóm theo `category` */
+export type comms_get_commune_external_contacts = {
+  duongDan: "/api/v1/commune-external-contacts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_externalContactListOut;
+    400: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
+  };
+};
+
 /** GET /api/v1/commune-news — Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ */
 export type comms_get_commune_news = {
   duongDan: "/api/v1/commune-news";
@@ -4530,6 +4652,72 @@ export type comms_post_content_items_audio_files_by_id_completion = {
   phanHoi: {
     200: comms_audioFileOut;
     400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/body-images — Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu */
+export type comms_post_content_items_body_images = {
+  duongDan: "/api/v1/content-items/body-images";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_bodyImageUploadIn;
+  phanHoi: {
+    201: comms_bodyImageUploadOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/body-images/from-url — Tải ảnh thân bài từ liên kết https cán bộ dán — máy chủ tải về, dò kiểu, quét mã độc, tạo bản 1280px không EXIF, trả ảnh đã sẵn sàng kèm liên kết xem trước; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu */
+export type comms_post_content_items_body_images_from_url = {
+  duongDan: "/api/v1/content-items/body-images/from-url";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_bodyImageFromURLIn;
+  phanHoi: {
+    201: comms_bodyImageFileOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items/body-images/{id}/completion — Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng */
+export type comms_post_content_items_body_images_by_id_completion = {
+  duongDan: "/api/v1/content-items/body-images/{id}/completion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_bodyImageFileOut;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
@@ -4924,6 +5112,82 @@ export type documents_get_documents_audit_entries = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/external-contacts — Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) — cả danh sách của xã theo thứ tự hiển thị, cho tab trong Danh bạ */
+export type comms_get_external_contacts = {
+  duongDan: "/api/v1/external-contacts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_externalContactListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/external-contacts — Thêm một liên hệ ngoài bộ máy xã — hiện ngay trên danh bạ Zalo Mini App (không có cờ công khai) */
+export type comms_post_external_contacts = {
+  duongDan: "/api/v1/external-contacts";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_createExternalContactIn;
+  phanHoi: {
+    201: comms_externalContactOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/external-contacts/{id} — Sửa tên, nhóm, số điện thoại, địa chỉ hoặc thứ tự của một liên hệ ngoài bộ máy xã */
+export type comms_patch_external_contacts_by_id = {
+  duongDan: "/api/v1/external-contacts/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_updateExternalContactIn;
+  phanHoi: {
+    200: comms_externalContactOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/external-contacts/{id} — Xoá mềm một liên hệ ngoài bộ máy xã, kèm lý do bắt buộc — gỡ khỏi danh bạ Mini App ngay trong cùng lần ghi */
+export type comms_delete_external_contacts_by_id = {
+  duongDan: "/api/v1/external-contacts/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteExternalContactIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -7242,6 +7506,23 @@ export type identity_post_staff = {
   };
 };
 
+/** GET /api/v1/staff-counts — Số cán bộ trong danh bạ của xã và số đang công khai trên Mini App — toàn xã và theo từng bộ phận */
+export type identity_get_staff_counts = {
+  duongDan: "/api/v1/staff-counts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_staffCountsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/staff-directory — Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email */
 export type identity_get_staff_directory = {
   duongDan: "/api/v1/staff-directory";
@@ -7453,6 +7734,33 @@ export type identity_post_staff_by_id_account = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/staff/{id}/account — Thu hồi tài khoản đăng nhập của một cán bộ, giữ dòng danh bạ — xoá mật khẩu, kết thúc mọi phiên, bắt buộc lý do */
+export type identity_delete_staff_by_id_account = {
+  duongDan: "/api/v1/staff/{id}/account";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_revokeAccountIn;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    403: "self_target_forbidden";
+    404: "staff_not_found";
+    409: "account_missing" | "last_admin";
   };
 };
 

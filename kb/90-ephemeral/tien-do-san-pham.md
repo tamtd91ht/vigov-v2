@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 2959e8a7
+derived_from_commit: 2e5b993d
 expires: 2027-01-01
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -39,13 +39,13 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 30 | 20/21 +9 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 22 | 19/19 +3 ngoài web | ✓ |
-| **12** Danh bạ cán bộ | 8 | 5/7 +1 ngoài web | ✓ |
+| **11** Quản trị nội dung Mini App | 25 | 19/22 +3 ngoài web | ✓ |
+| **12** Danh bạ cán bộ | 14 | 5/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **278 tuyến** trong hợp đồng. **15** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **287 tuyến** trong hợp đồng. **15** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -76,12 +76,13 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 
 | | |
 |---|---|
-| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 13 |
+| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 14 |
 | Trong đó `citizen-app` đang gọi | 7 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
+| GET | `/api/v1/commune-external-contacts` | ✗ |
 | GET | `/api/v1/commune-news` | ✓ |
 | GET | `/api/v1/commune-news/categories` | ✓ |
 | GET | `/api/v1/commune-news/{id}` | ✓ |
@@ -113,10 +114,10 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `deploy` | 18 | 11 | 1 | 0 |
 | `platform-admin` | 6 | 0 | 1 | 0 |
 | `proto` | 15 | 1 | 0 | 0 |
-| `service-comms` | 21 | 9 | 3 | 4 |
+| `service-comms` | 21 | 10 | 2 | 4 |
 | `service-documents` | 10 | 3 | 4 | 0 |
 | `service-finance` | 19 | 4 | 0 | 0 |
-| `service-identity` | 39 | 11 | 2 | 1 |
+| `service-identity` | 40 | 11 | 2 | 1 |
 | `service-petitions` | 42 | 16 | 4 | 0 |
 | `service-platform` | 13 | 10 | 9 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |

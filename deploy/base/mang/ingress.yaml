@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     204 tuyến của 7 dịch vụ — petitions 69 · identity 61 · comms 28 · finance 24 · documents 13 · platform 7 · reporting 2
+#     211 tuyến của 7 dịch vụ — petitions 69 · identity 62 · comms 34 · finance 24 · documents 13 · platform 7 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -55,10 +55,11 @@ spec:
                 name: web-admin
                 port: { name: http }
     #
-    # comms — 10 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
-    #   /api/v1/commune-news · /api/v1/content-categories · /api/v1/content-items
-    #   /api/v1/mail-settings · /api/v1/map-asset-types · /api/v1/map-field-schemas
-    #   /api/v1/notifications · /api/v1/portal-sync
+    # comms — 12 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
+    #   /api/v1/commune-external-contacts · /api/v1/commune-news · /api/v1/content-categories
+    #   /api/v1/content-items · /api/v1/external-contacts · /api/v1/mail-settings
+    #   /api/v1/map-asset-types · /api/v1/map-field-schemas · /api/v1/notifications
+    #   /api/v1/portal-sync
     - host: "comms.api.vigov.vn"
       http:
         paths:
@@ -96,12 +97,13 @@ spec:
                 name: finance
                 port: { name: rest }
     #
-    # identity — 19 tài nguyên: /api/v1/automation-jobs · /api/v1/citizen-sessions
+    # identity — 20 tài nguyên: /api/v1/automation-jobs · /api/v1/citizen-sessions
     #   /api/v1/commune-profiles · /api/v1/commune-staff · /api/v1/communes
     #   /api/v1/identity-audit-entries · /api/v1/org-units · /api/v1/public-holidays
     #   /api/v1/residential-unit-types · /api/v1/residential-units · /api/v1/role-permissions
-    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-directory
-    #   /api/v1/swap-working-days · /api/v1/task-blocs · /api/v1/working-hours
+    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-counts
+    #   /api/v1/staff-directory · /api/v1/swap-working-days · /api/v1/task-blocs
+    #   /api/v1/working-hours
     - host: "identity.api.vigov.vn"
       http:
         paths:
