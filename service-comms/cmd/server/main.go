@@ -317,6 +317,18 @@ func main() {
 		Log:             log,
 	})
 
+	// External contacts (migration 0014; user decision 03/10/2026) — four staff routes on the SAME staff
+	// mux, the same checker. ONE store behind the read and the use case; the use case owns every write's
+	// transaction and its audit entry. Registered beside Register rather than inside it: see
+	// internal/http/external_contacts.go.
+	externalContacts := commsstore.NewExternalContactStore(kho)
+	svchttp.RegisterExternalContacts(mux, svchttp.ExternalContactDeps{
+		Checker: staffauth.Checker{},
+		Reader:  externalContacts,
+		Writer:  commsapp.NewExternalContacts(kho, externalContacts),
+		Log:     log,
+	})
+
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
@@ -360,6 +372,15 @@ func main() {
 		CoverImages: covers,
 		Audio:       broadcastAudio,
 		Log:         log,
+	})
+	// The public external-contact read — the SAME platform lookup and the SAME limiter instance as the
+	// news routes (the user chose the existing PublicNewsRead policy, 03/10/2026), so one client network
+	// has one budget per host across both.
+	svchttp.RegisterPublicExternalContacts(muxCongKhai, svchttp.PublicExternalContactDeps{
+		Xa:       publicDirectory,
+		Contacts: externalContacts,
+		Limiter:  publicLimiter,
+		Log:      log,
 	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
 
@@ -532,6 +553,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
 // # TWO CHAINS, ONE PORT, SPLIT ON THE OUTER MUX BY PATH (since 2026-09-27)
 //
 //	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (congKhai, dungBienCongKhai)
+//	/api/v1/commune-external-contacts              PUBLIC chain
 //	everything else                                STAFF chain — commune from `Host`
 //
 // The split exists because the two disagree on the first question of every request — which commune.
@@ -565,6 +587,9 @@ func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staf
 	// `/api/v1/commune-news/` — a path no public route matches, so the list would 404.
 	ngoai.Handle(svchttp.MauTinXa, congKhai)
 	ngoai.Handle(svchttp.MauTinXa+"/", congKhai)
+	// The collection only: the public external-contact surface has no subtree. Its own path ELEMENT, so
+	// it captures neither `/api/v1/external-contacts` (staff) nor anything under it.
+	ngoai.Handle(svchttp.PublicExternalContactsPath, congKhai)
 	ngoai.Handle("/", h)
 	return ngoai
 }

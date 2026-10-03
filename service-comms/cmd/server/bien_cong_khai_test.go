@@ -91,7 +91,44 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 		Audio:       commsapp.NewContentAudio(nil, nil, nil, nil, nil, nil),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
+	svchttp.RegisterPublicExternalContacts(mux, svchttp.PublicExternalContactDeps{
+		Xa: xaTheoHostThu{}, Contacts: fakeContactList{}, Limiter: lim,
+	})
 	return dungBienCongKhai(mux, nguon)
+}
+
+// fakeContactList is the external-contact read, asserting it is asked inside a commune.
+type fakeContactList struct{}
+
+func (fakeContactList) List(ctx context.Context) ([]domain.ExternalContact, error) {
+	tenant.MustFrom(ctx)
+	return []domain.ExternalContact{{ID: "ec-1", Name: "Công an xã", Category: "Công an", Phone: "113"}}, nil
+}
+
+// The public external-contact read rides the public chain on the reserved API host — no session, CORS
+// for the Mini App — and the STAFF noun `external-contacts` does not.
+func TestPublicExternalContactsOnPublicChain(t *testing.T) {
+	h, cb := ngoaiThu(t)
+	w := goiApi(h, http.MethodGet, svchttp.PublicExternalContactsPath+"?host=xa-a.vigov.vn", nguonMiniAppThu)
+	if w.Code != http.StatusOK {
+		t.Fatalf("public external contacts on the reserved API host: %d, want 200 — body: %s", w.Code, w.Body.String())
+	}
+	if got := strings.TrimSpace(w.Body.String()); got != `{"items":[{"id":"ec-1","name":"Công an xã","category":"Công an","phone":"113"}]}` {
+		t.Fatalf("body = %s", got)
+	}
+	if cb.goi != 0 {
+		t.Fatal("the staff chain was reached")
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != nguonMiniAppThu {
+		t.Fatalf("no ACAO: %v", w.Header())
+	}
+	for _, p := range []string{"/api/v1/external-contacts", "/api/v1/external-contacts/ec-1",
+		svchttp.PublicExternalContactsPath + "/ec-1", svchttp.PublicExternalContactsPath + "x"} {
+		h, _ := ngoaiThu(t)
+		if w := goiApi(h, http.MethodGet, p+"?host=xa-a.vigov.vn", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404 from the staff chain's TenantMiddleware", p, w.Code)
+		}
+	}
 }
 
 // canBoDanhDauComms stands in for the staff chain: it only records that it was reached.
