@@ -35,7 +35,7 @@ import (
 // ucTaiKhoanThat builds the credential use case over a real pool — no functions pinned.
 func ucTaiKhoanThat(db *sql.DB) *TaiKhoanCanBo {
 	kho := pkgstore.New(db)
-	return NewTaiKhoanCanBo(kho, idstore.NewCanBoStore(kho), idstore.NewPhienStore(kho))
+	return NewTaiKhoanCanBo(kho, idstore.NewCanBoStore(kho), idstore.NewPhienStore(kho), slogBoQua())
 }
 
 // themDongDanhBaPg seeds a DIRECTORY-ONLY row: `co_tai_khoan = false`, empty hash. That is exactly

@@ -170,6 +170,9 @@ type (
 		Cap(ctx context.Context, id string, nguoi app.NguoiThucHien) (app.KetQuaCapMatKhau, error)
 		DatLai(ctx context.Context, id string, nguoi app.NguoiThucHien) (app.KetQuaCapMatKhau, error)
 		DoiCuaChinhMinh(ctx context.Context, yc app.YeuCauDoiMatKhau, nguoi app.NguoiThucHien) error
+		// Revoke — DELETE /api/v1/staff/{id}/account, `admin.user.revoke` (user decision
+		// 2026-10-03). On this interface because it is the fourth act on the same credential.
+		Revoke(ctx context.Context, id, reason string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 	}
 
 	CanBoGhiDanhBa interface {
@@ -1338,7 +1341,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// WHAT IS REFUSED, each inside the transaction on the row read FOR UPDATE:
 	//
 	//	409 staff_has_account   the row carries a sign-in account. Revoking it is its own act
-	//	                        (`admin.user.revoke`, ADR 0035 — not built); retiring is the lock.
+	//	                        (DELETE .../account, `admin.user.revoke`); retiring is the lock.
 	//	409 last_admin          #13, defensive — unreachable while being an administrator needs an
 	//	                        account, and kept so that stays true if that ever changes.
 	//	403 self_target_forbidden  #14.
@@ -1390,11 +1393,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// "this person was given access" and "this person's password was reset" are the same entry
 	// cannot answer an inspection without somebody interpreting every delta (rule 6, invariant 2).
 	//
-	// `account` IS A STATE SUB-RESOURCE, the same shape as `lockout`: POST creates it. A future
-	// `GET .../account` describing when it was issued fits without a new path, and a `DELETE` —
-	// withdrawing somebody's access while keeping their directory entry — is DELIBERATELY ABSENT.
-	// It is a third act with its own permission, no key in the 35-key `quyen` table means it, and
-	// rule 5, invariant 3c forbids inventing one. Same finding for #27 as the soft delete of #10.
+	// `account` IS A STATE SUB-RESOURCE, the same shape as `lockout`: POST creates it and DELETE
+	// removes it (withdrawing somebody's access while keeping their directory entry — its own act,
+	// under its own key `admin.user.revoke`, seeded by migration 0022). A future `GET .../account`
+	// describing when it was issued fits without a new path.
 	//
 	// ALL THREE DECLARE A PERMISSION EXPLICITLY, and the two administrator routes declare
 	// `admin.user` — CHECKED AGAINST THE TABLE, not assumed: it is the key the Cấu hình → Người
@@ -1432,6 +1434,50 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.user")(
 			idem.KhongCan("tài khoản LÀ khoá tự nhiên: câu UPDATE mang `AND NOT co_tai_khoan` và use case từ chối trước đó, cả hai trong giao dịch giữ dòng — nên lần gửi thứ hai trả 409 chứ không cấp thêm tài khoản nào")(
 				http.HandlerFunc(h.CapTaiKhoanCanBo))))
+
+	// Revoking somebody's sign-in account, keeping their directory row. DELETE /api/v1/staff/{id}/account
+	//
+	// USER DECISION 2026-10-03: the password is cleared, EVERY live session of that person is
+	// revoked, the row becomes "directory only", a reason is mandatory, and the act is audited in the
+	// same transaction (actor = staff code). The account can be issued again by POST .../account
+	// above; the now account-less row is also what DELETE /api/v1/staff/{id} accepts for a duplicate.
+	//
+	// `admin.user.revoke` AND NOT `admin.user` — its own key (migration 0022), granted to no role
+	// there, so this route answers 403 to everyone until a commune administrator ticks it. Revoking
+	// cuts a person off immediately; a commune may want it in fewer hands than account issuance.
+	//
+	// WHAT IS REFUSED, inside the transaction, after the administrator set and then the row are
+	// locked (the order DatKhoa and Xoa take, so the three cannot deadlock each other):
+	//
+	//	409 account_missing        the row has no account — nothing to revoke, nothing written.
+	//	409 last_admin             #13: the target is the commune's only administrator.
+	//	403 self_target_forbidden  #14, mirroring the lockout route.
+	//	404 staff_not_found        another commune's id, an invented one, or a soft-deleted row —
+	//	                           one answer (rule 4, forbidden #2).
+	//	400 invalid_request        missing/blank/over-long reason, or a body that is not JSON.
+	//
+	// THE ROLE IS KEPT, so a re-issue restores the same authority (app.TaiKhoanCanBo.Revoke).
+	//
+	// idem.KhongCan — the account itself is the natural key: a second request finds `co_tai_khoan =
+	// false` on the locked row and answers 409, and the UPDATE carries `AND co_tai_khoan`, so it
+	// writes nothing and files no second entry.
+	//
+	// SECURITY LOG after the commit: `staff.account_revoked` (Info), staff codes only.
+	//
+	// @summary  Thu hồi tài khoản đăng nhập của một cán bộ, giữ dòng danh bạ — xoá mật khẩu, kết thúc mọi phiên, bắt buộc lý do
+	// @screen   12-danh-ba-can-bo §4
+	// @request  revokeAccountIn
+	// @reply    200 canBoTomTat
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error self_target_forbidden
+	// @reply    404 httpx.Error staff_not_found
+	// @reply    409 httpx.Error account_missing last_admin
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/staff/{id}/account",
+		authz.RequirePermission(d.Checker, "admin.user.revoke")(
+			idem.KhongCan("tài khoản LÀ khoá tự nhiên: lần thứ hai thấy co_tai_khoan = false trên dòng đã khoá và trả 409, câu UPDATE mang `AND co_tai_khoan` nên không ghi gì và không thêm vết")(
+				http.HandlerFunc(h.RevokeStaffAccount))))
 
 	// An administrator resetting somebody's password. PUT /api/v1/staff/{id}/password
 	//

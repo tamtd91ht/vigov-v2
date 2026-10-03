@@ -1,11 +1,13 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -54,7 +56,26 @@ type khoTaiKhoanGia struct {
 	bamDatLai string
 	bamTuDoi  string
 
+	// admins is what the locked administrator read answers (#13); revokedID is what RevokeAccount
+	// was handed.
+	admins    []string
+	revokedID string
+
 	loi error
+}
+
+func (k *khoTaiKhoanGia) RevokeAccount(ctx context.Context, tx *store.ScopedTx, id string) error {
+	k.revokedID = id
+	_, err := tx.Exec(ctx, "UPDATE nguoi_dung (dau-hieu-thu-hoi-tai-khoan)", id)
+	return err
+}
+
+// A real statement, so a test can prove the administrator set is locked BEFORE the target row.
+func (k *khoTaiKhoanGia) QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error) { // vi-name-ok: implements the existing store method idstore.CanBoStore.QuanTriDangHoatDong (rule 12 inv 3: existing names are not renamed)
+	if _, err := tx.Exec(ctx, "SELECT admin-set FROM nguoi_dung FOR UPDATE", string(tx.TenantID())); err != nil {
+		return nil, err
+	}
+	return k.admins, nil
 }
 
 func (k *khoTaiKhoanGia) TheoIDDeGhi(ctx context.Context, tx *store.ScopedTx, id string) (domain.CanBoTomTat, error) {
@@ -138,6 +159,7 @@ type banThuTaiKhoan struct {
 	kho   *khoTaiKhoanGia
 	phien *phienGiaThuHoi
 	ghi   *ghiChep
+	log   *bytes.Buffer // the security log, JSON lines
 }
 
 const matKhauCuGia = "mat-khau-cu-KHONG-PHAI-THAT"
@@ -165,9 +187,13 @@ func dungBanThuTaiKhoan(t *testing.T) *banThuTaiKhoan {
 			CoTaiKhoan:     true, DangHoatDong: true,
 		},
 	}
+	// Two administrators by default — the actor and somebody else — so #13 permits the ordinary case
+	// and a test that wants the refusal has to shorten the list.
+	kho.admins = []string{idNoiBo, idQuanTri2}
 	phien := &phienGiaThuHoi{}
 
-	uc := NewTaiKhoanCanBo(db, kho, phien)
+	var logBuf bytes.Buffer
+	uc := NewTaiKhoanCanBo(db, kho, phien, slog.New(slog.NewJSONHandler(&logBuf, nil)))
 	lan := 0
 	uc.sinhMatKhau = func() (string, error) {
 		lan++
@@ -181,7 +207,7 @@ func dungBanThuTaiKhoan(t *testing.T) *banThuTaiKhoan {
 		return nil
 	}
 
-	return &banThuTaiKhoan{uc: uc, kho: kho, phien: phien, ghi: g}
+	return &banThuTaiKhoan{uc: uc, kho: kho, phien: phien, ghi: g, log: &logBuf}
 }
 
 // moiThamSoChuoi returns every string argument of every statement the driver saw.

@@ -152,7 +152,7 @@ func TestXoaCanBoAnhXaTungLoiVeDungMaTrangThai(t *testing.T) {
 }
 
 // THE 409 FOR AN ACCOUNT NAMES BOTH WAYS FORWARD: lock for a retirement, revoke for a genuine
-// duplicate — and says plainly that revocation does not exist yet.
+// duplicate (DELETE /api/v1/staff/{id}/account).
 func TestXoaCanBoCoTaiKhoanNoiRoHaiLoiRa(t *testing.T) {
 	m := dungMayChu(t)
 	coAdminUserDelete(t, m)

@@ -281,7 +281,9 @@ func run(log *slog.Logger) error {
 	// revokes every open session, and that revocation shares the transaction with the credential
 	// write (rule 6, invariant 3). Wired without it, a reset would leave the sessions opened with
 	// the old password working — which is the one thing a reset exists to stop.
-	taiKhoan := app.NewTaiKhoanCanBo(kho, canBo, phien)
+	// `log` — the same logger as the register above, so a revocation (`admin.user.revoke`) reaches
+	// the security log beside staff.account_locked.
+	taiKhoan := app.NewTaiKhoanCanBo(kho, canBo, phien, log)
 	// The staff Excel import (user decision 2026-09-29, ADR 0059 §1): the SAME *idstore.CanBoStore, so an
 	// imported person is inserted, assigned and given an account by the statements the three forms run.
 	staffImports := app.NewStaffImporter(kho, canBo)

@@ -459,13 +459,12 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 		// refused is the operation against the STATE of this row. The sentence names BOTH ways
 		// forward, because the person pressing the button is in one of two situations and the
 		// answer differs: a retirement is a lock (the row stays), a genuine duplicate needs its
-		// account revoked first — an act this system does not offer yet (`admin.user.revoke`,
-		// ADR 0035), which is said plainly rather than sending them to look for it.
+		// account revoked first — DELETE /api/v1/staff/{id}/account (`admin.user.revoke`).
 		httpx.WriteError(w, http.StatusConflict, "staff_has_account",
 			"Cán bộ này đang có tài khoản đăng nhập nên không xoá được — xoá chỉ dành cho dòng danh bạ "+
 				"nhập trùng không có tài khoản. Nếu người này nghỉ hưu hoặc chuyển công tác, hãy khoá "+
-				"tài khoản thay vì xoá. Nếu đây đúng là dòng nhập trùng, cần thu hồi tài khoản trước; "+
-				"chức năng thu hồi tài khoản chưa có trên hệ thống.", "")
+				"tài khoản thay vì xoá. Nếu đây đúng là dòng nhập trùng, hãy thu hồi tài khoản trước "+
+				"rồi xoá.", "")
 
 	case errors.Is(err, app.ErrStaffEmailIsLogin):
 		// 409 AND NOT 400: the value is a legitimate one — a blank address is allowed on a row
@@ -507,6 +506,7 @@ func laLoiDauVaoCanBo(err error) bool {
 		domain.ErrIDThamChieuQuaDai,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
 		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+		domain.ErrRevokeReasonMissing, domain.ErrRevokeReasonTooLong,
 		domain.ErrBulkPublicationEmpty, domain.ErrBulkPublicationTooLarge,
 		domain.ErrBulkPublicationMissingID, domain.ErrBulkPublicationDuplicateID,
 	} {

@@ -117,6 +117,48 @@ func (h *Handler) DatLaiMatKhauCanBo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// revokeAccountIn is the body of DELETE /api/v1/staff/{id}/account.
+//
+// THE SAME SHAPE AS xoaCanBoVao (DELETE /api/v1/staff/{id}), copied rather than invented: a
+// mandatory reason in a JSON body, because a query string would put free text about a government
+// record into every access log and proxy. Trimmed, required and bounded by the use case
+// (domain.NormalizeRevokeReason).
+type revokeAccountIn struct {
+	Reason string `json:"reason"`
+}
+
+// RevokeStaffAccount removes one person's sign-in account and keeps their directory row.
+// DELETE /api/v1/staff/{id}/account
+//
+// 200 WITH THE RECORD, like DELETE .../lockout: the row is still in the directory, and the screen
+// redraws it as "directory only" (`has_account: false`). Not 204 — the resource that went is the
+// account, not the person.
+func (h *Handler) RevokeStaffAccount(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var body revokeAccountIn
+	if !docThanCanBo(w, r, &body) {
+		return
+	}
+
+	cb, err := h.d.TaiKhoan.Revoke(r.Context(), r.PathValue("id"), body.Reason, nguoi)
+	if err != nil {
+		if errors.Is(err, app.ErrChuaCoTaiKhoan) {
+			// The shared mapping's sentence for this code says "issue an account first", which is the
+			// reset route's way forward, not this one's.
+			httpx.WriteError(w, http.StatusConflict, "account_missing",
+				"Cán bộ này không có tài khoản đăng nhập nên không có gì để thu hồi.", "")
+			return
+		}
+		h.traLoiLoiTaiKhoan(w, r, "thu hồi tài khoản cán bộ", false, err)
+		return
+	}
+	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
+}
+
 // DoiMatKhauChinhMinh is the person changing their own password.
 // PUT /api/v1/staff/current/password
 //

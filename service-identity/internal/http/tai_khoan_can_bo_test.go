@@ -55,6 +55,8 @@ type taiKhoanGia struct {
 	idCuoi    string
 	nguoiCuoi app.NguoiThucHien
 	doiCuoi   app.YeuCauDoiMatKhau
+	// lastReason is what Revoke was handed.
+	lastReason string
 
 	matKhauTam string
 	kq         domain.CanBoTomTat
@@ -101,6 +103,20 @@ func (g *taiKhoanGia) DatLai(_ context.Context, id string, nguoi app.NguoiThucHi
 		return app.KetQuaCapMatKhau{}, g.loi
 	}
 	return app.KetQuaCapMatKhau{CanBo: g.kq, MatKhauTam: g.matKhauTam}, nil
+}
+
+// Revoke records the reason it was handed and answers the account-less row.
+func (g *taiKhoanGia) Revoke(_ context.Context, id, reason string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error) {
+	g.ghiNhan(nguoi, id)
+	g.mu.Lock()
+	g.lastReason = reason
+	g.mu.Unlock()
+	if g.loi != nil {
+		return domain.CanBoTomTat{}, g.loi
+	}
+	cb := g.kq
+	cb.CoTaiKhoan = false
+	return cb, nil
 }
 
 func (g *taiKhoanGia) DoiCuaChinhMinh(_ context.Context, yc app.YeuCauDoiMatKhau, nguoi app.NguoiThucHien) error {

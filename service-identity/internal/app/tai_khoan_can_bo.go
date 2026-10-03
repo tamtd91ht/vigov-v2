@@ -25,14 +25,13 @@ package app
 // harder case, because a leaked one is not merely readable — it is USABLE, under the name of a
 // member of staff whose name then appears on archival records (rule 6, invariant 2).
 //
+// REVOKING AN ACCOUNT (Revoke below, user decision 2026-10-03) IS THE FOURTH ACT, under its own key
+// `admin.user.revoke` (migration 0022). It is not a lock: a lock (#10) keeps the credential for a
+// person who may come back; a revocation removes the credential and leaves a directory-only row,
+// which the existing soft delete (#10, `admin.user.delete`) then accepts for a duplicated entry.
+//
 // WHAT THIS FILE DELIBERATELY DOES NOT DO:
 //
-//	WITHDRAW AN ACCOUNT   there is no `HuyTaiKhoan`. Taking a sign-in account away from somebody
-//	                      who keeps their directory entry is a third act with a third consequence,
-//	                      and #10's reading — a retirement is a LOCK, not a removal — already
-//	                      covers the situation a commune actually meets. Nothing in the `quyen`
-//	                      table distinguishes it from `admin.user` either; adding a key is rule 5,
-//	                      invariant 3c and a finding for #27.
 //	MINT A PASSWORD ON    POST /api/v1/staff writes `co_tai_khoan = false` and an empty hash as
 //	CREATE                LITERALS (store/can_bo_ghi.go). Adding an account there would put the
 //	                      one-time plaintext into the response of a route whose body a commune
@@ -44,10 +43,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/password"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
@@ -69,6 +70,10 @@ type KhoTaiKhoanCanBo interface {
 	CapTaiKhoan(ctx context.Context, tx *store.ScopedTx, id, bam string) error
 	DatMatKhauTam(ctx context.Context, tx *store.ScopedTx, id, bam string) error
 	DoiMatKhauChinhMinh(ctx context.Context, tx *store.ScopedTx, id, bam string) error
+	// RevokeAccount and QuanTriDangHoatDong serve Revoke. The second is the SAME locked read
+	// DanhBaCanBo's three paths take for #13 (store.truyVanQuanTriDeGhi) — one query, not a copy.
+	RevokeAccount(ctx context.Context, tx *store.ScopedTx, id string) error
+	QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error)
 }
 
 // KhoPhienTaiKhoan revokes the open sessions of one account.
@@ -141,21 +146,35 @@ const (
 	HanhViCapTaiKhoan   = "cap_tai_khoan_can_bo"
 	HanhViDatLaiMatKhau = "dat_lai_mat_khau_can_bo"
 	HanhViDoiMatKhau    = "doi_mat_khau"
+
+	// ActionAccountRevoked — somebody's ability to act in the system was TAKEN AWAY while their
+	// directory entry stayed. The mirror of cap_tai_khoan_can_bo: between the two entries is the
+	// window in which this person could sign in at all.
+	ActionAccountRevoked = "thu_hoi_tai_khoan_can_bo"
 )
 
 // The reasons written onto a revoked session row. They are read by an administrator looking at why
 // somebody was signed out, so they are sentences rather than codes.
 const (
-	lyDoThuHoiCapTaiKhoan = "cấp tài khoản"
-	lyDoThuHoiDatLai      = "quản trị viên đặt lại mật khẩu"
-	lyDoThuHoiDoiMatKhau  = "đổi mật khẩu"
+	lyDoThuHoiCapTaiKhoan  = "cấp tài khoản"
+	lyDoThuHoiDatLai       = "quản trị viên đặt lại mật khẩu"
+	lyDoThuHoiDoiMatKhau   = "đổi mật khẩu"
+	sessionRevokedByRevoke = "quản trị viên thu hồi tài khoản"
 )
 
-// TaiKhoanCanBo owns issuing, resetting and changing one commune's staff credentials.
+// EventStaffAccountRevoked is the security-log event of Revoke (skills/security-logging: access
+// taken away is an account-monitoring event, beside staff.account_locked).
+const EventStaffAccountRevoked = "staff.account_revoked"
+
+// TaiKhoanCanBo owns issuing, resetting, changing and revoking one commune's staff credentials.
 type TaiKhoanCanBo struct {
 	db    *store.DB
 	kho   KhoTaiKhoanCanBo
 	phien KhoPhienTaiKhoan
+
+	// log is the SECURITY log — the same *slog.Logger DanhBaCanBo writes staff.account_locked to, so
+	// a revocation lands in the stream an alert reads. Not the audit trail (that is audit.Write).
+	log *slog.Logger
 
 	// Injected so a test can pin them. In production: domain.SinhMatKhauTam, password.Bam,
 	// password.KiemTra.
@@ -169,9 +188,14 @@ type TaiKhoanCanBo struct {
 	kiemTraBam  func(matKhau, bam string) error
 }
 
-func NewTaiKhoanCanBo(db *store.DB, kho KhoTaiKhoanCanBo, phien KhoPhienTaiKhoan) *TaiKhoanCanBo {
+// NewTaiKhoanCanBo refuses a nil logger for the reason NewDanhBaCanBo does: a revocation would
+// still be audited but never reach the security log, and nothing would report the gap.
+func NewTaiKhoanCanBo(db *store.DB, kho KhoTaiKhoanCanBo, phien KhoPhienTaiKhoan, log *slog.Logger) *TaiKhoanCanBo {
+	if log == nil {
+		panic("app.NewTaiKhoanCanBo: log is required — account revocation must reach the security log")
+	}
 	return &TaiKhoanCanBo{
-		db: db, kho: kho, phien: phien,
+		db: db, kho: kho, phien: phien, log: log,
 		sinhMatKhau: domain.SinhMatKhauTam,
 		bam:         password.Bam,
 		kiemTraBam:  password.KiemTra,
@@ -335,6 +359,129 @@ func (uc *TaiKhoanCanBo) mint(ctx context.Context, id string, nguoi NguoiThucHie
 		return KetQuaCapMatKhau{}, err
 	}
 	return KetQuaCapMatKhau{CanBo: sau, MatKhauTam: matKhau}, nil
+}
+
+// Revoke removes one person's SIGN-IN ACCOUNT and keeps their directory row (user decision
+// 2026-10-03). Credential cleared, every live session revoked, the row becomes "directory only",
+// the reason is mandatory, and the act is audited in the same transaction.
+//
+// WHAT IT DECIDES, each in the transaction that writes:
+//
+//	#14  NOT ONESELF. Same rule and placement as DatKhoa: an administrator cutting off their own
+//	     sign-in mid-session is refused before anything is read.
+//	#13  NEVER THE LAST ADMINISTRATOR. Being an administrator requires `co_tai_khoan`
+//	     (`dieuKienGiuQuyen`), so this write REMOVES somebody from the set — the same harm as locking
+//	     them. The SAME locked read DatKhoa and Xoa take, in the SAME order (administrator set first,
+//	     in id order, then the target), so revoke, lock and delete cannot deadlock each other.
+//	NO ACCOUNT → ErrChuaCoTaiKhoan (409). Nothing to take away; nothing written, nothing audited.
+//	A LOCKED ACCOUNT IS ACCEPTED. A retired person whose row turns out to be a duplicate must be
+//	     revocable before it can be soft-deleted; refusing it would make the lock a dead end.
+//
+// THE ROLE (`vai_tro_id`) IS KEPT, ON PURPOSE. It is an organisational fact about the person, moved
+// only by PUT .../role, the route carrying #14's two guards. While the row has no account the role
+// grants nothing — `dieuKienGiuQuyen` requires `co_tai_khoan` — so keeping it opens nothing; and when
+// the account is issued again (POST .../account) the person comes back with the authority they had,
+// instead of an administrator having to re-grant it, which would run #14's "may not grant what you
+// do not hold" check against whoever happens to be re-issuing. Clearing it here would also be a
+// role change with no `doi_vai_tro_can_bo` entry.
+//
+// `phai_doi_mat_khau` IS SET TO true, the value a fresh directory row carries; the next issue sets it
+// true anyway. The automatic sign-in lock (#39) and the Mini App publication are NOT touched: the
+// first is security state that expires on its own, the second is directory data that this act does
+// not change.
+//
+// SESSIONS: the SAME registry call every credential path here uses (KhoPhienTaiKhoan,
+// PhienStore.ThuHoiCuaCanBo), in the same transaction. The edge would also refuse them on the next
+// request (store.TheoID filters `co_tai_khoan`), but a revocation that leaves sessions marked live
+// in the registry has not ended them in the record an inspection reads.
+func (uc *TaiKhoanCanBo) Revoke(ctx context.Context, id, rawReason string,
+	nguoi NguoiThucHien) (domain.CanBoTomTat, error) {
+
+	if err := nguoi.hopLe(); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	if id == "" {
+		return domain.CanBoTomTat{}, idstore.ErrCanBoKhongTonTai
+	}
+	// Shape first, outside the transaction: a refused reason must not hold a row lock.
+	reason, err := domain.NormalizeRevokeReason(rawReason)
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	if id == nguoi.ID {
+		return domain.CanBoTomTat{}, ErrTuThaoTacChinhMinh
+	}
+
+	var after domain.CanBoTomTat
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		admins, err := uc.kho.QuanTriDangHoatDong(ctx, tx)
+		if err != nil {
+			return err
+		}
+		before, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !before.CoTaiKhoan {
+			return ErrChuaCoTaiKhoan
+		}
+		if laNguoiQuanTriCuoiCung(admins, before.ID) {
+			return ErrQuanTriCuoiCung
+		}
+
+		if err := uc.kho.RevokeAccount(ctx, tx, before.ID); err != nil {
+			return err
+		}
+		if err := uc.phien.ThuHoiCuaCanBo(ctx, tx, before.ID, sessionRevokedByRevoke); err != nil {
+			return err
+		}
+		after = before
+		after.CoTaiKhoan = false
+
+		// SAME TRANSACTION AS THE WRITE (rule 6, invariant 3). Actor = staff code (nguoi.Vet),
+		// Subject = the target's staff code; neither is an internal id (invariant 8).
+		//
+		// THE REASON IS IN THE DELTA, unlike Xoa's, and that is forced rather than chosen: Xoa keeps
+		// its reason in `delete_reason` on the row and records only the length here; revocation has
+		// no column for it (no migration in this task), so the trail is the ONE durable place it can
+		// live. It is the administrator's free text, so the screen must ask for a reason, not for
+		// personal data — reported to the user as a finding.
+		//
+		// The credential column is NAMED, never valued (deltaMatKhau). `vai_tro_id` is recorded on
+		// both sides so the ledger says which authority a re-issue would restore.
+		delta := map[string]any{
+			"truoc": map[string]any{
+				"co_tai_khoan":   before.CoTaiKhoan,
+				"dang_hoat_dong": before.DangHoatDong,
+				"vai_tro_id":     before.VaiTroID,
+			},
+			"sau": map[string]any{
+				"co_tai_khoan":      false,
+				"phai_doi_mat_khau": true,
+				"dang_hoat_dong":    before.DangHoatDong,
+				"vai_tro_id":        before.VaiTroID,
+			},
+			"cot_da_dat":    []string{"mat_khau_hash"},
+			"thu_hoi_phien": true,
+			"ly_do":         reason,
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   nguoi.Vet,
+			Action:  ActionAccountRevoked,
+			Subject: before.Ma,
+			Delta:   deltaCanBo(delta),
+		})
+	})
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+
+	// AFTER THE COMMIT: a line for an act that rolled back would describe access never taken away.
+	// Staff codes, commune and IP only — never the reason text (free text, rule 3).
+	uc.log.Info("quản trị viên thu hồi tài khoản đăng nhập của cán bộ",
+		"event", EventStaffAccountRevoked, "outcome", "revoked",
+		"actor", nguoi.Vet.ID, "subject", after.Ma, "xa", string(tenant.MustFrom(ctx)), "ip", nguoi.Vet.IP)
+	return after, nil
 }
 
 // YeuCauDoiMatKhau is one person replacing their own password.

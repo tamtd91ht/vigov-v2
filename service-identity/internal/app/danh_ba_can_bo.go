@@ -23,10 +23,10 @@ package app
 //
 // WHAT THIS FILE DELIBERATELY DOES NOT DO, and each absence is a decision rather than an omission:
 //
-//	REVOKING AN ACCOUNT      `admin.user.revoke` (ADR 0035 #27) is not seeded and not built. Xoa
-//	                         below therefore REFUSES a row that has an account rather than revoking
-//	                         it on the way: the soft delete of #10 is for a duplicated directory
-//	                         row, under its own key `admin.user.delete` (migration 0010 §4).
+//	REVOKING AN ACCOUNT      `admin.user.revoke` (migration 0022) — TaiKhoanCanBo.Revoke, a separate
+//	                         act. Xoa below still REFUSES a row that has an account rather than
+//	                         revoking it on the way: the soft delete of #10 is for a duplicated
+//	                         directory row, under its own key `admin.user.delete` (migration 0010 §4).
 //	ISSUING AN ACCOUNT      #9/#17/#18 — a separate flow (`cap-tai-khoan-can-bo`). Nothing here
 //	                         writes `co_tai_khoan` or `mat_khau_hash`; the store has no parameter
 //	                         for either.
@@ -144,7 +144,7 @@ var (
 
 	// ErrCanBoCoTaiKhoan — the soft delete of #10 is for a DUPLICATED DIRECTORY ROW, and a row
 	// carrying a sign-in account is not that (user decision 2026-09-24). Revoking the account is
-	// its own act under its own key (`admin.user.revoke`, ADR 0035 — not built); retiring somebody
+	// its own act under its own key (`admin.user.revoke`, TaiKhoanCanBo.Revoke); retiring somebody
 	// is the lock. Deleting the row here would leave a credential attached to a record every screen
 	// has stopped showing.
 	ErrCanBoCoTaiKhoan = errors.New("danh_ba_can_bo: dòng danh bạ này đang có tài khoản đăng nhập, không xoá được")

@@ -1,6 +1,7 @@
 package store
 
-// The three WRITE paths that touch a staff credential, and the one read they all decide on.
+// The three WRITE paths that touch a staff credential, and the one read they all decide on — plus
+// RevokeAccount, the fourth, which removes the credential and the account together.
 //
 // WHY THREE STATEMENTS AND NOT ONE WITH PARAMETERS. Each writes `mat_khau_hash` together with a
 // DIFFERENT value of `phai_doi_mat_khau`, and that pairing is the whole of open question #9:
@@ -151,6 +152,42 @@ func (s *CanBoStore) DatMatKhauTam(ctx context.Context, tx *store.ScopedTx, id, 
 const doiMatKhauChinhMinh = `UPDATE nguoi_dung
 	SET mat_khau_hash = $3, phai_doi_mat_khau = false, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong`
+
+// revokeStaffAccount turns an account back into a DIRECTORY-ONLY row (user decision 2026-10-03,
+// `admin.user.revoke`).
+//
+// THE THREE VALUES ARE LITERALS, NOT PARAMETERS — the same reading chenCanBo gives them. After this
+// statement the row is indistinguishable, in the three account columns, from one POST /api/v1/staff
+// has just created:
+//
+//	co_tai_khoan = false       the row is not an account. TheoID/TheoEmail filter on it, so the next
+//	                           request of any open session finds no principal, and sign-in finds no row.
+//	mat_khau_hash = ''         THE CREDENTIAL IS GONE, not merely unusable. Leaving the hash would keep
+//	                           an offline-cracking target for a person who no longer has access, and
+//	                           would make a later re-issue depend on nobody ever flipping the flag back
+//	                           by hand. 0009 §3's CHECK (`NOT co_tai_khoan OR mat_khau_hash <> ''`)
+//	                           permits this pair and refuses every half of it.
+//	phai_doi_mat_khau = true   the column's DEFAULT, i.e. what a fresh directory row carries. It is
+//	                           NOT the flag being "cleared" by a second path (doiMatKhauChinhMinh's
+//	                           exclusivity is about writing false); CapTaiKhoan sets true again anyway.
+//
+// `vai_tro_id` IS NOT HERE, deliberately — see app.TaiKhoanCanBo.Revoke for why the role stays.
+//
+// `AND co_tai_khoan` is the same kind of predicate datMatKhauTamCanBo carries: this statement can
+// only take an account away, never "revoke" a directory row into some third state. With the FOR
+// UPDATE read before it, a second concurrent revoke matches no row and doiMotDong reports it.
+const revokeStaffAccount = `UPDATE nguoi_dung
+	SET co_tai_khoan = false, mat_khau_hash = '', phai_doi_mat_khau = true, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL AND co_tai_khoan`
+
+// RevokeAccount removes one person's sign-in account and keeps their directory row.
+func (s *CanBoStore) RevokeAccount(ctx context.Context, tx *store.ScopedTx, id string) error {
+	kq, err := tx.Exec(ctx, revokeStaffAccount, string(tx.TenantID()), id)
+	if err != nil {
+		return dichLoiGhiCanBo("thu hồi tài khoản", err)
+	}
+	return doiMotDong(kq, "thu hồi tài khoản")
+}
 
 // DoiMatKhauChinhMinh is the person setting their own password — the one act that clears the flag.
 func (s *CanBoStore) DoiMatKhauChinhMinh(ctx context.Context, tx *store.ScopedTx, id, bam string) error {
