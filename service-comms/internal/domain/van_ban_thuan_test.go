@@ -74,6 +74,27 @@ func TestVanBanThuanChoDanBoCaScript(t *testing.T) {
 	}
 }
 
+// ADR 0067 §Sửa đổi 03/10/2026, K5: the staff shapes keep their TEXT as paragraphs; the image goes.
+func TestPlainBodyKeepsStaffShapeTextDropsImage(t *testing.T) {
+	const fileID = "01JABCDEFGHJKMNPQRSTVWXYZ0" // made up, ULID-shaped
+	for _, tc := range []struct{ in, want string }{
+		{`<p>Mở đầu</p><figure><img data-file-id="` + fileID + `" alt="Lễ ra quân"><figcaption>Ảnh: <em>UBND xã</em></figcaption></figure><p>Tiếp</p>`,
+			"Mở đầu\n\nẢnh: UBND xã\n\nTiếp"},
+		{`<figure><img data-file-id="` + fileID + `" alt="chữ thay thế"></figure><p>Chỉ chữ</p>`, "Chỉ chữ"},
+		{`<blockquote><p>Câu một</p><p>Câu <strong>hai</strong></p></blockquote>`, "Câu một\n\nCâu hai"},
+		{`<p>Thân</p><p data-role="byline">Văn phòng UBND xã</p>`, "Thân\n\nVăn phòng UBND xã"},
+	} {
+		got := VanBanThuanChoDan(tc.in)
+		phaiThuan(t, tc.in, got)
+		if got != tc.want {
+			t.Errorf("VanBanThuanChoDan(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+		if strings.Contains(got, fileID) {
+			t.Errorf("file id leaked into body: %q", got)
+		}
+	}
+}
+
 func TestVanBanThuanChoDanBoKyTuDieuKhien(t *testing.T) {
 	got := VanBanThuanChoDan("a\x00b\x1bc\x07")
 	if got != "abc" {

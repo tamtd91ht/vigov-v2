@@ -202,8 +202,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 	nguoi audit.Actor) (domain.NoiDungMiniApp, error) {
 
 	// THE BODY IS SANITISED FIRST, on this and every other write path (ADR 0067 §1 decision 2), and
-	// BEFORE KiemTra so the length bound is checked on what will actually be stored.
-	yc.NoiDung = richtext.Sanitize(yc.NoiDung)
+	// BEFORE KiemTra so the length bound is checked on what will actually be stored. STAFF policy: this
+	// is staff composing (ADR 0067 §Sửa đổi 03/10/2026, K1) — body images by file id, quote, byline.
+	yc.NoiDung = richtext.SanitizeStaff(yc.NoiDung)
 
 	// VALIDATED BEFORE THE TRANSACTION OPENS. A request that fails its shape must never hold a
 	// transaction open while doing so, and the caller needs the reason rather than a rollback.
@@ -395,9 +396,10 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 	}
 	// Sanitised before KiemTra, as on the create (ADR 0067 §1 decision 2). Only a body the request
 	// SENDS is touched: an edit that does not mention the body leaves a legacy row's stored HTML exactly
-	// as it is (rule 7) — the public read sanitises that one on the way out.
+	// as it is (rule 7) — the public read sanitises that one on the way out. STAFF policy, as on the
+	// create (K1) — also when the row came from the portal: the edit is a member of staff writing.
 	if yc.NoiDung != nil {
-		clean := richtext.Sanitize(*yc.NoiDung)
+		clean := richtext.SanitizeStaff(*yc.NoiDung)
 		yc.NoiDung = &clean
 	}
 	// Shape first, outside the transaction. A request that fails its shape must never hold a row

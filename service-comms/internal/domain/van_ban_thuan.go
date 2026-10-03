@@ -12,10 +12,16 @@ import (
 //
 // THE 27/09/2026 DECISION THIS COMMENT USED TO STATE ("no HTML ever reaches the citizen") WAS REPLACED
 // ON 01/10/2026 BY ADR 0067 §1: the body now reaches residents WITH FORMATTING — but as STRUCTURE
-// (`body_blocks`, built by internal/richtext from the allow-list-sanitised HTML), never as markup. What
-// still holds from 27/09: no field of the public answer is HTML, and no client is ever asked to render
-// markup safely — a client asked that is one update away from innerHTML. This function keeps serving
-// every plain-text field, `body` included (ADR 0067 §1 decision 4), unchanged.
+// (`body_blocks`, built by internal/richtext from the sanitised HTML), never as markup. What still holds
+// from 27/09: no field of the public answer is HTML, and no client is ever asked to render markup
+// safely — a client asked that is one update away from innerHTML. This function keeps serving every
+// plain-text field, `body` included (ADR 0067 §1 decision 4), unchanged.
+//
+// THE STAFF SHAPES OF 03/10/2026 (ADR 0067 §Sửa đổi 03/10/2026, K5) need nothing new here: an image
+// caption (`figcaption`), a quote (`blockquote` and its `p`) and a byline (`p data-role`) are
+// block-level, so each keeps its TEXT as a paragraph; an image (`img`) has no text — its file id and alt
+// live in attributes, and every attribute goes with its tag — so it is dropped. The two forms of the
+// body say the same thing, minus the pictures.
 //
 // This is a STRIPPER, not a sanitiser: nothing it returns is meant to be interpreted as HTML at all, so
 // it does not have to decide which markup is safe — it keeps none. The sanitiser is internal/richtext.

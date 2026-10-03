@@ -968,7 +968,9 @@ func buildPortalItem(c *candidate, st domain.PortalSyncSettings, base *url.URL, 
 		}
 		body += domain.PortalSourceCredit(label)
 	}
-	// THE SANITISER, on this write path like on every other (ADR 0067 §1 decision 2).
+	// THE SANITISER, on this write path like on every other (ADR 0067 §1 decision 2) — the NARROW portal
+	// policy, deliberately not SanitizeStaff: portal images live on every host, and taking them is H4's
+	// later batch (ADR 0067 §Sửa đổi 03/10/2026, stop condition 2).
 	body = richtext.Sanitize(body)
 	if utf8.RuneCountInString(body) > domain.ThanNoiDungToiDa {
 		return domain.NoiDungMiniApp{}, "item-body-too-long"

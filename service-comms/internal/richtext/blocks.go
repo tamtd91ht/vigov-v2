@@ -11,8 +11,10 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// BlockKind is one of the four block shapes the Mini App draws. Closed: a fifth kind is a shape no
-// client knows, and an old app build on a resident's phone would show nothing for it.
+// BlockKind is one of the block shapes the Mini App draws. Closed: a kind outside this list is a shape
+// no client knows, and an app build on a resident's phone would show nothing for it. The last three
+// came with ADR 0067 §Sửa đổi 03/10/2026 (K4) — acceptable then only because no Mini App build was on
+// Zalo yet; the next addition has no such excuse.
 type BlockKind string
 
 const (
@@ -20,6 +22,9 @@ const (
 	KindHeading     BlockKind = "heading"
 	KindBulletList  BlockKind = "bullet_list"
 	KindOrderedList BlockKind = "ordered_list"
+	KindImage       BlockKind = "image"
+	KindQuote       BlockKind = "quote"
+	KindByline      BlockKind = "byline"
 )
 
 // Run is a stretch of text with one formatting. Href is "" or an https URL (it came through Sanitize);
@@ -33,21 +38,32 @@ type Run struct {
 	Href   string
 }
 
-// Block is one block. Runs is set on paragraph and heading; Items on the two list kinds, one slice of
-// runs per item. Level is 2 or 3 on a heading and 0 otherwise.
+// Block is one block:
+//
+//	paragraph, heading, byline   Runs. Level is 2 or 3 on a heading and 0 otherwise.
+//	bullet_list, ordered_list    Items, one slice of runs per item.
+//	quote                        Paragraphs, one slice of runs per paragraph of the quote.
+//	image                        FileID (a ULID — NEVER a URL, and never sent to a resident: the public
+//	                             read swaps it for the URL of this article's own published file, K2/K7),
+//	                             Alt ("" when none), Caption (nil when none, H3).
 type Block struct {
-	Kind  BlockKind
-	Level int
-	Runs  []Run
-	Items [][]Run
+	Kind       BlockKind
+	Level      int
+	Runs       []Run
+	Items      [][]Run
+	Paragraphs [][]Run
+	FileID     string
+	Alt        string
+	Caption    []Run
 }
 
-// Blocks builds the block structure from SANITISED HTML (call Sanitize first — the public read does).
+// Blocks builds the block structure from SANITISED HTML (call SanitizeStaff first — the public read
+// does).
 //
 // WHAT IT DOES WITH STRUCTURE IT DOES NOT MODEL: flattens it to text. A list nested in a list item, a
 // paragraph inside a list item, an `li` outside any list — the text survives, separated by a space,
-// and the nesting does not. Losing a level of indentation is the fail-safe side; a fifth block kind
-// is not.
+// and the nesting does not. Losing a level of indentation is the fail-safe side; a block kind outside
+// the closed list is not.
 //
 // LOOSE TEXT at the top level (a body typed into a plain textarea before the editor existed, or text
 // between blocks) becomes paragraphs: a blank line separates two, a single newline is a line break —
@@ -133,9 +149,25 @@ func (b *builder) top(n *html.Node) {
 		}
 	case html.ElementNode:
 		switch n.DataAtom {
-		case atom.P, atom.Li:
+		case atom.P:
+			b.flushLoose()
+			kind := KindParagraph
+			if attrOf(n, "data-role") == bylineValue {
+				kind = KindByline
+			}
+			b.addRuns(Block{Kind: kind}, inline(n))
+		case atom.Li:
 			b.flushLoose()
 			b.addRuns(Block{Kind: KindParagraph}, inline(n))
+		case atom.Figure:
+			b.flushLoose()
+			b.figure(n)
+		case atom.Blockquote:
+			b.flushLoose()
+			b.quote(n)
+		case atom.Img:
+			// Outside a figure: not a shape (SanitizeStaff removes it; only an unsanitised caller gets
+			// here). An image is never inferred from a bare img — least of all from its src.
 		case atom.H2, atom.H3:
 			b.flushLoose()
 			level := 2
@@ -209,6 +241,58 @@ func (b *builder) list(n *html.Node) {
 	}
 	flushStray()
 	if len(blk.Items) > 0 {
+		b.blocks = append(b.blocks, blk)
+	}
+}
+
+// figure adds an image block when n holds a direct-child img with a file id of ULID shape — checked
+// again here, so a caller that skipped SanitizeStaff still gets no image from anything else. The first
+// figcaption is the caption.
+func (b *builder) figure(n *html.Node) {
+	blk := Block{Kind: KindImage}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type != html.ElementNode {
+			continue
+		}
+		switch {
+		case c.DataAtom == atom.Img && blk.FileID == "":
+			if id := attrOf(c, "data-file-id"); fileIDShape.MatchString(id) {
+				blk.FileID = id
+				blk.Alt = strings.Join(strings.Fields(decodedText(attrOf(c, "alt"))), " ")
+			}
+		case c.DataAtom == atom.Figcaption && blk.Caption == nil:
+			blk.Caption = inline(c)
+		}
+	}
+	if blk.FileID == "" {
+		return
+	}
+	b.blocks = append(b.blocks, blk)
+}
+
+// quote adds a quote block: one paragraph per `p`, and loose content between them gathered into a
+// paragraph of its own — the same rule as a list's stray content. No paragraph with text, no block.
+func (b *builder) quote(n *html.Node) {
+	blk := Block{Kind: KindQuote}
+	var stray []piece
+	flushStray := func() {
+		if runs := normalise(stray); len(runs) > 0 {
+			blk.Paragraphs = append(blk.Paragraphs, runs)
+		}
+		stray = nil
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && c.DataAtom == atom.P {
+			flushStray()
+			if runs := inline(c); len(runs) > 0 {
+				blk.Paragraphs = append(blk.Paragraphs, runs)
+			}
+			continue
+		}
+		collect(c, style{}, &stray)
+	}
+	flushStray()
+	if len(blk.Paragraphs) > 0 {
 		b.blocks = append(b.blocks, blk)
 	}
 }

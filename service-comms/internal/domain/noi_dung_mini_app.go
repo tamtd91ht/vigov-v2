@@ -423,9 +423,9 @@ func ChuanHoaTieuDeNoiDung(tieuDe string) (string, error) {
 // browser on Windows sends CRLF, and refusing it would reject an ordinary form submission.
 //
 // IT DOES NOT SANITISE HTML ITSELF — this package imports the standard library only. The body is
-// sanitised BEFORE it gets here, on every write path, by internal/richtext.Sanitize (ADR 0067 §1: the
-// allow-list p, br, strong, em, ul, ol, li, h2, h3, a[href https]); internal/app calls it ahead of
-// KiemTra, so the bound below is checked on what is actually stored. Rows written before 01/10/2026
+// sanitised BEFORE it gets here, on every write path, by the sanitiser of that write source —
+// richtext.SanitizeStaff for staff, richtext.Sanitize for the portal (ADR 0067 §1, amendment 03/10/2026
+// K1); internal/app calls it ahead of KiemTra, so the bound below is checked on what is actually stored. Rows written before 01/10/2026
 // were stored as given and are not rewritten (rule 7); the public read sanitises them again.
 func ChuanHoaVanBanDai(s string, tran int, quaDai error) (string, error) {
 	s = strings.TrimSpace(s)

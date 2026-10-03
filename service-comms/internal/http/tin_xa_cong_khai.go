@@ -44,10 +44,11 @@ package http
 //
 // ADDED 2026-10-01 (ADR 0067 §1, §5; migration 0012), optional in the same way:
 //
-//	body_blocks   on the detail: the body as STRUCTURE (paragraph · heading · list · inline runs), built
-//	              here from the allow-list-sanitised HTML (internal/richtext). Sanitised AGAIN on this
-//	              read, so a row stored before the sanitiser existed leaves clean too. `body` stays the
-//	              plain text it always was, for app builds already on residents' phones.
+//	body_blocks   on the detail: the body as STRUCTURE (paragraph · heading · list · inline runs; since
+//	              03/10/2026 also image · quote · byline), built here from the sanitised HTML
+//	              (internal/richtext). Sanitised AGAIN on this read with the staff policy, so a row
+//	              stored before the sanitiser existed leaves clean too. `body` stays the plain text it
+//	              always was, for app builds already on residents' phones.
 //	?type=banner  the home-screen banner strip, and ONLY there: the default list no longer carries banners.
 //	link_to       on a banner: an in-app path or an https URL, re-checked on the way out.
 //	audio_*       on a published `truyen-thanh` (ADR 0067 §4): the typed duration and a short-lived
@@ -59,6 +60,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/httpx"
@@ -261,23 +263,52 @@ type tinXaRa struct {
 
 // bodyBlockOut is one block of `body_blocks`.
 type bodyBlockOut struct {
-	// Kind is `paragraph`, `heading`, `bullet_list` or `ordered_list` — a closed list.
+	// Kind is `paragraph`, `heading`, `bullet_list`, `ordered_list`, `image`, `quote` or `byline` — a
+	// closed list (the last three since 03/10/2026, ADR 0067 §Sửa đổi 03/10/2026 K4). A client SKIPS a
+	// kind it does not know.
 	Kind string `json:"kind"`
 
 	// Level is 2 or 3 on a heading, absent otherwise.
 	Level int `json:"level,omitempty"`
 
-	// Runs is set on `paragraph` and `heading`.
+	// Runs is set on `paragraph`, `heading` and `byline` (the author/source line a member of staff typed
+	// at the end of the article, H9 — drawn apart from the text, never a person the system filled in).
 	Runs []inlineRunOut `json:"runs,omitempty"`
 
 	// Items is set on the two list kinds, one entry per list item.
 	Items []listItemOut `json:"items,omitempty"`
+
+	// Paragraphs is set on `quote`, one entry per paragraph of the quotation.
+	Paragraphs []paragraphOut `json:"paragraphs,omitempty"`
+
+	// Src is set on `image`: an https URL of the article's own published body-image file in ViGov's
+	// public store (K2, K7) — the only host the Mini App loads a body image from (H5). Never a URL a
+	// client sent, never a file id. An image whose file does not resolve is not sent at all.
+	Src string `json:"src,omitempty"`
+
+	// Alt is the image's text alternative, on `image` only, absent when staff typed none.
+	Alt string `json:"alt,omitempty"`
+
+	// Caption is the image's caption, on `image` only, absent when it has none (H3).
+	Caption []inlineRunOut `json:"caption,omitempty"`
 }
 
 // listItemOut is one item of a list block.
 type listItemOut struct {
 	Runs []inlineRunOut `json:"runs"`
 }
+
+// paragraphOut is one paragraph of a quote block.
+type paragraphOut struct {
+	Runs []inlineRunOut `json:"runs"`
+}
+
+// bodyImageResolver turns a body image's FILE ID into the public URL of THIS article's published
+// `content-body-image` file (ADR 0067 §Sửa đổi 03/10/2026, K2, K7). ok=false — unknown id, another
+// commune's or another article's file, another purpose, not published, storage not configured — and the
+// whole image block is dropped. nil resolves nothing: until the body-image files exist (TASK-03) every
+// image block is dropped, fail closed (amendment stop condition 4).
+type bodyImageResolver func(fileID string) (publicURL string, ok bool)
 
 // inlineRunOut is a stretch of text with one formatting. "\n" inside `text` is a line break.
 type inlineRunOut struct {
@@ -290,10 +321,12 @@ type inlineRunOut struct {
 	Href string `json:"href,omitempty"`
 }
 
-// bodyBlocksOut sanitises the stored body AGAIN (legacy rows were stored as given, rule 7 forbids
-// rewriting them) and converts the blocks to the wire shape. nil when there is nothing to show.
-func bodyBlocksOut(stored string) []bodyBlockOut {
-	blocks := richtext.Blocks(richtext.Sanitize(stored))
+// bodyBlocksOut sanitises the stored body AGAIN with the STAFF policy (K7: legacy rows were stored as
+// given, rule 7 forbids rewriting them; portal rows were stored narrow and pass unchanged) and converts
+// the blocks to the wire shape. An image block leaves only when resolve maps its file id to an https URL;
+// otherwise it is dropped whole. nil when there is nothing to show.
+func bodyBlocksOut(stored string, resolve bodyImageResolver) []bodyBlockOut {
+	blocks := richtext.Blocks(richtext.SanitizeStaff(stored))
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -307,13 +340,36 @@ func bodyBlocksOut(stored string) []bodyBlockOut {
 	out := make([]bodyBlockOut, 0, len(blocks))
 	for _, b := range blocks {
 		o := bodyBlockOut{Kind: string(b.Kind), Level: b.Level}
+		if b.Kind == richtext.KindImage {
+			if resolve == nil {
+				continue
+			}
+			u, ok := resolve(b.FileID)
+			// https only, a second wall under the resolver: the URL is the one host every resident's
+			// phone is sent to.
+			if !ok || !strings.HasPrefix(u, "https://") {
+				continue
+			}
+			o.Src, o.Alt = u, b.Alt
+			if len(b.Caption) > 0 {
+				o.Caption = runs(b.Caption)
+			}
+			out = append(out, o)
+			continue
+		}
 		if len(b.Runs) > 0 {
 			o.Runs = runs(b.Runs)
 		}
 		for _, item := range b.Items {
 			o.Items = append(o.Items, listItemOut{Runs: runs(item)})
 		}
+		for _, p := range b.Paragraphs {
+			o.Paragraphs = append(o.Paragraphs, paragraphOut{Runs: runs(p)})
+		}
 		out = append(out, o)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
@@ -401,7 +457,8 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 		// `body` EXACTLY AS BEFORE (ADR 0067 §1 decision 4): older app builds read it.
 		than := domain.VanBanThuanChoDan(n.NoiDung)
 		ra.Body = &than
-		ra.BodyBlocks = bodyBlocksOut(n.NoiDung)
+		// No resolver yet: body images are dropped until their files exist (TASK-03, K2/K7).
+		ra.BodyBlocks = bodyBlocksOut(n.NoiDung, nil)
 	}
 	return ra
 }
