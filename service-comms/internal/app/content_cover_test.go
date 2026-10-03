@@ -51,6 +51,10 @@ type fakeCoverFiles struct {
 	// admitCalls is the order of the admission calls (SubjectReservedBy, LockSubjectCount,
 	// CountForSubjectTx, InsertPending), "<call>:<subject>" — the order IS the property for the count lock.
 	admitCalls []string
+
+	// issuedArticles are article ids a noi_dung_mini_app row carries, SOFT-DELETED ones included — the
+	// store's NOT EXISTS in SubjectReservedBy. A live article is the content fake's (khoNDGia.dongHienCo).
+	issuedArticles map[string]bool
 }
 
 // newFakeDB is the real core/store over the fake driver, one connection so statements stay ordered.
@@ -76,10 +80,11 @@ func (f *fakeCoverFiles) get(id string) *domain.StoredFile {
 	return &c
 }
 
+// LiveForSubject mirrors the store: live AND ready rows only (liveForSubjectTail).
 func (f *fakeCoverFiles) LiveForSubject(_ context.Context, subjectID, purpose string) ([]domain.StoredFile, error) {
 	var out []domain.StoredFile
 	for id, r := range f.rows {
-		if !f.deleted[id] && r.SubjectID == subjectID && r.Purpose == purpose {
+		if !f.deleted[id] && r.SubjectID == subjectID && r.Purpose == purpose && r.Status == domain.StoredFileReady {
 			out = append(out, *r)
 		}
 	}
@@ -87,6 +92,9 @@ func (f *fakeCoverFiles) LiveForSubject(_ context.Context, subjectID, purpose st
 }
 func (f *fakeCoverFiles) SubjectReservedBy(_ context.Context, _ *store.ScopedTx, subjectID, by string) (bool, error) {
 	f.admitCalls = append(f.admitCalls, "reserved:"+subjectID)
+	if f.issuedArticles[subjectID] {
+		return false, nil
+	}
 	for id, r := range f.rows {
 		if !f.deleted[id] && r.SubjectID == subjectID && r.UploadedBy == by {
 			return true, nil

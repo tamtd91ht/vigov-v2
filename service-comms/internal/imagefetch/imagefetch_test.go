@@ -305,6 +305,28 @@ func TestTLSIsVerified(t *testing.T) {
 	}
 }
 
+// SECURITY #4 (03/10/2026): headers count against the memory budget too. A response whose headers pass
+// maxResponseHeaderBytes is a fetch failure — a class that is not a refusal and not too-large (the
+// caller's 502) — and its headers are never read further; 60 KiB of headers is still an ordinary fetch.
+func TestOversizedResponseHeadersFailTheFetch(t *testing.T) {
+	big := newRig(t, func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Padding", strings.Repeat("a", 100<<10))
+		_, _ = w.Write([]byte("x"))
+	})
+	_, err := fetch(t, big, "https://"+newsHost+"/a.jpg", 1<<20)
+	if err == nil || !errors.Is(err, ErrConnect) || IsRefusal(err) {
+		t.Fatalf("err = %v, want the connect class (a fetch failure, 502)", err)
+	}
+
+	ok := newRig(t, func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Padding", strings.Repeat("a", 60<<10))
+		_, _ = w.Write([]byte("x"))
+	})
+	if b, err := fetch(t, ok, "https://"+newsHost+"/a.jpg", 1<<20); err != nil || string(b) != "x" {
+		t.Fatalf("headers under the bound: %q, %v", b, err)
+	}
+}
+
 func TestUnknownHostIsDNS(t *testing.T) {
 	r := newRig(t, func(w http.ResponseWriter, req *http.Request) {})
 	if _, err := fetch(t, r, "https://nowhere.example.com/a.jpg", 1<<20); !errors.Is(err, ErrDNS) {

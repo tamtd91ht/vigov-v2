@@ -315,13 +315,20 @@ func (s *StoredFileStore) ReadyObjectKeys(ctx context.Context, purpose string, i
 }
 
 // LIMIT is MaxStoredFileBatch + 1: the one extra row is how "too many" is told apart from "exactly enough".
+//
+// `status = 'ready'` IS WHAT BOUNDS THIS READ. Every caller (BodyImageViews, PublicBodyImageURLs,
+// retireUnreferencedBodyImages) acts on ready rows only, and ready rows are what platform's per-article
+// count admits (≤ max_files_per_subject, 20 for body images). Pending, rejected, failed and expired rows
+// are counted by nothing and retired by nothing: without this clause they accumulate on an article for
+// ever, and past MaxStoredFileBatch the refusal below would 500 its public detail and every save.
 var liveForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
-	AND deleted_at IS NULL ORDER BY id LIMIT ` + strconv.Itoa(MaxStoredFileBatch+1)
+	AND status = 'ready' AND deleted_at IS NULL ORDER BY id LIMIT ` + strconv.Itoa(MaxStoredFileBatch+1)
 
-// LiveForSubject reads every live file of ONE purpose on ONE article in one statement — the body images
-// of an article for its staff preview and its public read (ADR 0067 §Sửa đổi 03/10/2026, K2/K7), so a
-// detail with twenty images is one query, never twenty. More than MaxStoredFileBatch rows is refused
-// (ErrStoredFileList) rather than silently cut: a cut list would drop images from a published article.
+// LiveForSubject reads every live, READY file of ONE purpose on ONE article in one statement — the body
+// images of an article for its staff preview and its public read (ADR 0067 §Sửa đổi 03/10/2026, K2/K7),
+// so a detail with twenty images is one query, never twenty. A row in any other status is absent (see
+// liveForSubjectTail). More than MaxStoredFileBatch rows is refused (ErrStoredFileList) rather than
+// silently cut: a cut list would drop images from a published article.
 func (s *StoredFileStore) LiveForSubject(ctx context.Context, subjectID, purpose string) ([]domain.StoredFile, error) {
 	if subjectID == "" || purpose == "" {
 		return nil, ErrStoredFileList
@@ -354,15 +361,22 @@ func (s *StoredFileStore) LiveForSubject(ctx context.Context, subjectID, purpose
 // subject id — i.e. the id was minted for them by an upload request (ADR 0052 §1a) for an article not
 // saved yet. It is what lets a second upload (another body image, or the cover after a body image) name
 // the same unsaved article; anybody else's minted id answers false, like an unknown one.
+//
+// AN ID ANY ARTICLE OF THIS COMMUNE HAS EVER CARRIED IS NOT A RESERVATION — the article row deleted or
+// not (rule 7, invariant 3: an issued id is never reissued). The files of a soft-deleted article stay
+// with the record, so without the NOT EXISTS its author could upload onto the deleted id again, or
+// create a new article under it (a PK violation, i.e. a 500, instead of a refusal).
 func (s *StoredFileStore) SubjectReservedBy(ctx context.Context, tx *store.ScopedTx, subjectID,
 	uploadedBy string) (bool, error) {
 
 	if subjectID == "" || uploadedBy == "" {
 		return false, nil
 	}
-	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context.
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context; the subquery
+	// binds the same $1 to the article table, qualified so it cannot read stored_file's column.
 	n, err := scanStoredFileCount(tx.Query(ctx, "count(*)", "stored_file",
-		`AND subject_type = $2 AND subject_id = $3 AND uploaded_by = $4 AND deleted_at IS NULL`,
+		`AND subject_type = $2 AND subject_id = $3 AND uploaded_by = $4 AND deleted_at IS NULL
+		AND NOT EXISTS (SELECT 1 FROM noi_dung_mini_app n WHERE n.tenant_id = $1 AND n.id = $3)`,
 		domain.StoredFileSubjectContentItem, subjectID, uploadedBy))
 	if err != nil {
 		return false, err

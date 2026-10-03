@@ -354,6 +354,92 @@ func TestCreateUnderAnExistingArticlesBodyImageIsRefused(t *testing.T) {
 	}
 }
 
+// ISOLATION #1 (03/10/2026): officer B of the SAME commune cites officer A's file — cover or first body
+// image — to create an article under the id A's draft reserved. Refused with the file's single 422, and
+// nothing written: A's draft keeps its id.
+func TestCreateNamedByAnotherOfficersFileIsRefused(t *testing.T) {
+	const officerA = "CB-2026-KHAC00"
+	for _, tc := range []struct {
+		name string
+		yc   func() (domain.YeuCauThemNoiDung, func(*fakeCoverFiles))
+		want error
+	}{
+		{"cover", func() (domain.YeuCauThemNoiDung, func(*fakeCoverFiles)) {
+			yc := ycThemMau()
+			yc.CoverImageFileID = coverFileID
+			return yc, func(f *fakeCoverFiles) { readyCover(f, coverFileID, coverItemID).UploadedBy = officerA }
+		}, domain.ErrCoverNotUsable},
+		{"body image", func() (domain.YeuCauThemNoiDung, func(*fakeCoverFiles)) {
+			yc := ycThemMau()
+			yc.NoiDung = figure(bodyFileA)
+			return yc, func(f *fakeCoverFiles) { readyBodyImage(f, bodyFileA, coverItemID).UploadedBy = officerA }
+		}, domain.ErrBodyImageNotUsable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := &khoNDGia{}
+			uc, files, objects, ctx := soanWithCovers(t, k)
+			yc, setup := tc.yc()
+			setup(files)
+			yc.DangLenMiniApp = true
+			if _, err := uc.Them(ctx, yc, nguoiSoanND()); !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if k.coCau("INSERT INTO noi_dung_mini_app") || k.daCommit != 0 || len(objects.published) != 0 {
+				t.Error("another officer's file named an article")
+			}
+		})
+	}
+}
+
+// ISOLATION #3 (03/10/2026): the id of a SOFT-DELETED article is never reissued (rule 7, invariant 3). Its
+// files stay with the record, uploaded by its author — and still the id is no reservation: an upload onto
+// it is the 404 of any unknown id, and a create citing one of its files is the file's 422, never the 500 of
+// a primary-key violation.
+func TestDeletedArticlesIDIsNeverReissued(t *testing.T) {
+	t.Run("upload", func(t *testing.T) {
+		r := newCoverRig(t, &khoNDGia{}) // no LIVE article: TheoIDDeSua answers "not found"
+		r.uc.policies = bodyPolicy(20)
+		readyBodyImage(r.files, bodyFileA, coverItemID)
+		r.files.issuedArticles = map[string]bool{coverItemID: true}
+		_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: coverItemID, FileName: "a.jpg",
+			ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+		if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
+			t.Fatalf("err = %v, want the 404 of an unknown article", err)
+		}
+		if len(r.files.inserted) != 0 {
+			t.Error("a row was written under a deleted article's id")
+		}
+	})
+	for _, tc := range []struct {
+		name  string
+		setup func(*fakeCoverFiles, *domain.YeuCauThemNoiDung)
+		want  error
+	}{
+		{"create by body image", func(f *fakeCoverFiles, yc *domain.YeuCauThemNoiDung) {
+			readyBodyImage(f, bodyFileA, coverItemID)
+			yc.NoiDung = figure(bodyFileA)
+		}, domain.ErrBodyImageNotUsable},
+		{"create by cover", func(f *fakeCoverFiles, yc *domain.YeuCauThemNoiDung) {
+			readyCover(f, coverFileID, coverItemID)
+			yc.CoverImageFileID = coverFileID
+		}, domain.ErrCoverNotUsable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			k := &khoNDGia{}
+			uc, files, _, ctx := soanWithCovers(t, k)
+			files.issuedArticles = map[string]bool{coverItemID: true}
+			yc := ycThemMau()
+			tc.setup(files, &yc)
+			if _, err := uc.Them(ctx, yc, nguoiSoanND()); !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if k.coCau("INSERT INTO noi_dung_mini_app") || k.daCommit != 0 {
+				t.Error("an article was inserted under a deleted article's id")
+			}
+		})
+	}
+}
+
 // --- removed images and the purpose-aware settle -------------------------------------------------------
 
 func publishedItemWithBody(body, cover string) domain.NoiDungMiniApp {

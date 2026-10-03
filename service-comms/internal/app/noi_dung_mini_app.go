@@ -232,6 +232,12 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 	// (migration 0011: §7 uploads before `Lưu`) — read from the FILE ROW, never from the request, so a
 	// client cannot name the id of a new record. Every other file must then carry the same id
 	// (checkAttach / checkBodyImages), so a body image of another draft is refused like any other.
+	//
+	// ONLY THE OFFICER THE ID WAS RESERVED FOR MAY NAME IT — the naming file's `uploaded_by` must be the
+	// saving officer's business code, the comparison admitSubject makes through SubjectReservedBy. Without
+	// it officer B of the same commune, citing officer A's file id, would create an article under the id
+	// A's draft reserved, and A's own save would then be refused as "the id is taken". The refusal is the
+	// same single 422 as any unusable file: telling "another officer's draft" apart would confirm the draft.
 	var id string
 	fromUpload := false
 	if sach.CoverImageFileID != "" {
@@ -248,6 +254,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		if err := domain.CheckCoverUsable(f, f.SubjectID, string(coverPurpose)); err != nil {
 			return domain.NoiDungMiniApp{}, err
 		}
+		if f.UploadedBy != nguoi.ID {
+			return domain.NoiDungMiniApp{}, domain.ErrCoverNotUsable
+		}
 		id, fromUpload = f.SubjectID, true
 	} else if len(bodyImages) > 0 {
 		f, err := uc.covers.files.ByID(ctx, bodyImages[0])
@@ -259,6 +268,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		}
 		if err := domain.CheckBodyImageUsable(f, f.SubjectID, string(bodyImagePurpose)); err != nil {
 			return domain.NoiDungMiniApp{}, err
+		}
+		if f.UploadedBy != nguoi.ID {
+			return domain.NoiDungMiniApp{}, domain.ErrBodyImageNotUsable
 		}
 		id, fromUpload = f.SubjectID, true
 	} else if id, err = uc.sinhID(); err != nil {
@@ -333,6 +345,20 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 				return domain.ErrBodyImageNotUsable
 			case !errors.Is(err, commsstore.ErrNoiDungKhongTonTai):
 				return err
+			}
+			// ...and never issued at all: TheoIDDeSua reads LIVE rows only, so the id of a SOFT-DELETED
+			// article passes it — and the INSERT would then die on the primary key (a 500). SubjectReservedBy
+			// answers false for an id any article row of this commune carries, deleted or not (rule 7,
+			// invariant 3), and re-asks, under this transaction, that the id is this officer's reservation.
+			reserved, err := uc.covers.files.SubjectReservedBy(ctx, tx, moi.ID, nguoi.ID)
+			if err != nil {
+				return err
+			}
+			if !reserved && moi.CoverImageFileID != "" {
+				return domain.ErrCoverNotUsable
+			}
+			if !reserved {
+				return domain.ErrBodyImageNotUsable
 			}
 		}
 		if moi.CoverImageFileID != "" {

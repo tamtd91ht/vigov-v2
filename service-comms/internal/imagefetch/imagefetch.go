@@ -56,6 +56,12 @@ const (
 	// fetchTimeout bounds the WHOLE call — DNS, every redirect, the body. The officer is waiting on the
 	// request; a site slower than this is a site whose image they should download and upload instead.
 	fetchTimeout = 30 * time.Second
+	// maxResponseHeaderBytes bounds the status line and headers of every response (redirects included).
+	// net/http's default is 1 MiB per response, OUTSIDE the body cap the caller passes: a site answering
+	// with a megabyte of headers on each of MaxRedirects+1 hops, times the caller's concurrent fetches,
+	// would hold memory the stated budget (bodyImageFetchSlots × the body cap) never counted. 64 KiB is
+	// far above any real image response's headers. Over it, the fetch fails (`connect` class, a 502).
+	maxResponseHeaderBytes = 64 << 10
 )
 
 const httpsPort = "443"
@@ -195,15 +201,16 @@ func New(o Options) *Client {
 	gd := &guardedDialer{resolver: o.Resolver, dial: o.Dial}
 	return &Client{hc: &http.Client{
 		Transport: &http.Transport{
-			Proxy:                 nil,
-			DialContext:           gd.DialContext,
-			TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: o.RootCAs},
-			TLSHandshakeTimeout:   tlsHandshakeTimeout,
-			ResponseHeaderTimeout: responseHeaderTimeout,
-			MaxIdleConns:          8,
-			MaxIdleConnsPerHost:   2,
-			IdleConnTimeout:       30 * time.Second,
-			ForceAttemptHTTP2:     true,
+			Proxy:                  nil,
+			DialContext:            gd.DialContext,
+			TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: o.RootCAs},
+			TLSHandshakeTimeout:    tlsHandshakeTimeout,
+			ResponseHeaderTimeout:  responseHeaderTimeout,
+			MaxResponseHeaderBytes: maxResponseHeaderBytes,
+			MaxIdleConns:           8,
+			MaxIdleConnsPerHost:    2,
+			IdleConnTimeout:        30 * time.Second,
+			ForceAttemptHTTP2:      true,
 		},
 		CheckRedirect: checkRedirect,
 		Jar:           nil, // no cookies, ever: nothing a site sets follows the officer's next paste

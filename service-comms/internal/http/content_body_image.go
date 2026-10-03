@@ -25,6 +25,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -66,7 +67,8 @@ type bodyImageUploadOut struct {
 // /api/v1/content-items/{id}), in body order — what the editor draws each `<img data-file-id>` with.
 type bodyImageOut struct {
 	FileID string `json:"file_id"`
-	// Status of the file; "" when the id is no live body image of this article (the public read drops it).
+	// Status of the file: `ready`, or "" when the id is no live, ready body image of this article (the public
+	// read drops it). A body only ever references ready images (the save checks it), so "" is the odd case.
 	Status string `json:"status"`
 	// Public: a public copy is recorded — residents see this image now.
 	Public bool `json:"public"`
@@ -174,37 +176,73 @@ func (h *Handler) FetchBodyImageFromURL(w http.ResponseWriter, r *http.Request) 
 
 // logBodyImageFetch records ONE line per pasted link: commune, actor, HOST and outcome — never the path,
 // the query or a remote error text (rule 3). A destination this side refused is the security event
-// `outbound_url_refused`, as in the portal sync (R2, 02/10/2026).
+// `outbound_url_refused`, as in the portal sync (R2, 02/10/2026) — at the SHAPE check (an IP literal, a
+// single-label name, http, a port, user:password@) exactly as at dial time: a pasted
+// `https://169.254.169.254/…` is the same probe whichever check stops it, and logging only the second
+// would hide the cheaper, more common attempt.
 func (h *Handler) logBodyImageFetch(r *http.Request, actor audit.Actor, rawURL string, err error) {
-	host := ""
-	if u, perr := imagefetch.ParseURL(rawURL); perr == nil {
-		host = strings.ToLower(u.Hostname())
-	}
+	host := pastedHost(rawURL)
 	xa := string(tenant.MustFrom(r.Context()))
 	var fe *app.ImageFetchError
 	switch {
 	case err == nil:
 		h.d.Log.Info("ảnh thân bài: đã tải ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
 			"outcome", "stored")
+	case errors.Is(err, app.ErrImageURLInvalid):
+		h.logOutboundRefused(r, actor, xa, imagefetch.ErrURLRefused.Class, host)
 	case errors.As(err, &fe) && fe.Refused:
-		h.d.Log.Warn("CẢNH BÁO BẢO MẬT: từ chối một địa chỉ gọi ra ngoài",
-			"event", "outbound_url_refused", "outcome", "refused", "xa", xa, "actor", actor.ID,
-			"class", fe.Class, "call", "body-image", "host", host)
+		h.logOutboundRefused(r, actor, xa, fe.Class, host)
 	case errors.As(err, &fe):
 		h.d.Log.Warn("ảnh thân bài: không tải được ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
 			"outcome", "fetch-failed", "class", fe.Class)
 	default:
 		var rej *app.CoverRejection
 		outcome := "error"
-		switch {
-		case errors.Is(err, app.ErrImageURLInvalid):
-			outcome = "url-invalid"
-		case errors.As(err, &rej):
+		if errors.As(err, &rej) {
 			outcome = "rejected-" + rej.Reason
 		}
 		h.d.Log.Info("ảnh thân bài: không nhận ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
 			"outcome", outcome)
 	}
+}
+
+// logOutboundRefused is the security event (skills/security-logging): event, outcome, commune, actor as
+// the BUSINESS CODE, source ip (the address the edge resolved — httpx.ClientIP, carried by audit.Actor),
+// route, the refusal class, and the host. NEVER the URL, its path or its query (rule 3). No request id:
+// this service has none yet (cmd/server/main.go traceID returns "") — a field always empty would read as
+// "not observed".
+func (h *Handler) logOutboundRefused(r *http.Request, actor audit.Actor, xa, class, host string) {
+	h.d.Log.Warn("CẢNH BÁO BẢO MẬT: từ chối một địa chỉ gọi ra ngoài",
+		"event", "outbound_url_refused", "outcome", "refused", "xa", xa, "actor", actor.ID,
+		"ip", actor.IP, "route", routeOf(r), "class", class, "call", "body-image", "host", host)
+}
+
+// routeOf is the matched route pattern (`POST /api/v1/…`) — fixed text, never a path a client chose.
+func routeOf(r *http.Request) string {
+	if r.Pattern != "" {
+		return r.Pattern
+	}
+	return r.Method + " " + r.URL.Path
+}
+
+// pastedHost is the HOST of a pasted link and nothing else — also for one the shape check refused, where
+// the host (an IP literal, a cluster name) is the very thing the event is about. Userinfo, port, path and
+// query are dropped by Hostname; an input or a host past their bounds yields "" rather than a long string
+// of somebody's choosing.
+func pastedHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || len(raw) > imagefetch.MaxURLLen {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if len(host) > 253 {
+		return ""
+	}
+	return host
 }
 
 // answerBodyImageFromURLError maps the two refusals only this route has, then the body-image ones.

@@ -8,6 +8,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -118,15 +119,40 @@ func TestBodyImageFromURLErrorsMapToTheirStatus(t *testing.T) {
 }
 
 func TestBodyImageFromURLRefusalIsTheSecurityEvent(t *testing.T) {
-	m := dungMayChuND(t)
-	m.capQuyen(xaA, QuyenSuaNoiDung)
-	m.covers.err = &app.ImageFetchError{Class: "address-refused", Refused: true}
-	m.goi(t, http.MethodPost, hostA, pathBodyImageFromURL, bodyBodyImageFromURLOK, canBo(xaA))
-	logs := m.logs.String()
-	for _, want := range []string{"event=outbound_url_refused", "class=address-refused", "host=img.news.example.com",
-		"actor=" + canBo(xaA).Ma} {
-		if !strings.Contains(logs, want) {
-			t.Errorf("security event lacks %q: %s", want, logs)
-		}
+	// SECURITY #1 (03/10/2026, TCVN 5.8): a refusal at the SHAPE check is the same event as one at dial
+	// time, and every such line carries ip, route, commune and actor code — never the path or the query.
+	const ipLiteral = "https://169.254.169.254/latest/PATHMARK?token=QUERYMARK"
+	for _, tc := range []struct {
+		name, url, class, host string
+		err                    error
+	}{
+		{"dial time", pastedURL, "address-refused", "img.news.example.com",
+			&app.ImageFetchError{Class: "address-refused", Refused: true}},
+		{"shape: IP literal", ipLiteral, "url-refused", "169.254.169.254", app.ErrImageURLInvalid},
+		{"shape: plain http with userinfo", "http://user:SECRETPW@intranet/PATHMARK?q=QUERYMARK", "url-refused",
+			"intranet", app.ErrImageURLInvalid},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			m.covers.err = tc.err
+			m.goi(t, http.MethodPost, hostA, pathBodyImageFromURL, `{"url":"`+tc.url+`"}`, canBo(xaA))
+			logs := m.logs.String()
+			for _, want := range []string{"level=WARN", "event=outbound_url_refused", "outcome=refused",
+				"class=" + tc.class, "host=" + tc.host, "actor=" + canBo(xaA).Ma, "xa=" + string(xaA),
+				`route="POST ` + pathBodyImageFromURL + `"`} {
+				if !strings.Contains(logs, want) {
+					t.Errorf("security event lacks %q: %s", want, logs)
+				}
+			}
+			if !regexp.MustCompile(`\bip=\S+`).MatchString(logs) || strings.Contains(logs, `ip="" `) {
+				t.Errorf("security event lacks the source ip: %s", logs)
+			}
+			for _, leak := range []string{"PATHMARK", "QUERYMARK", "SECRETPW", "latest"} {
+				if strings.Contains(logs, leak) {
+					t.Errorf("the security event carries %q: %s", leak, logs)
+				}
+			}
+		})
 	}
 }
