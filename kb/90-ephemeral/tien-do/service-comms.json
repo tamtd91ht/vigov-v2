@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-03",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -296,6 +296,16 @@
       "viec": "Đếm lượt xem tin Mini App ở tuyến công khai GET /api/v1/commune-news/{id} (ADR 0047 §6 dòng 'Lượt xem tin', chủ dự án 02/10/2026)",
       "trang_thai": "xong",
       "bang_chung": "Commit e8a9b9b4: store.IncrementPublicViewCount (một UPDATE nguyên tử theo xã, chỉ tin đang hiện, không đổi cap_nhat_luc), MotTinXa cộng sau khi đọc thành công, best-effort; không cộng khi ratelimit.GateOutcome = NotEnforced hoặc no_view=1; view_count luôn có (kể cả 0). Test: internal/http/public_news_view_count_test.go, store noi_dung_cong_khai_test.go; make check xanh 02/10. CHƯA CHẠY: TestPgIncrementPublicViewCount (VIGOV_TEST_DSN chưa đặt trên máy này). Ranh giới giao dịch: dem_luot_xem_tin_cong_khai."
+    },
+    {
+      "id": "lien-he-ngoai-bo-may-xa",
+      "menu": [
+        "danh-ba-can-bo"
+      ],
+      "viec": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) trên Danh bạ Mini App — bảng riêng của comms, không tài khoản, xã tự nhập (U6/U7 chốt 30/09; chủ dự án chốt 03/10/2026: comms sở hữu, danh từ URL external-contacts / commune-external-contacts?host=, màn nhập là tab trong /danh-ba, quyền ghi content.update, tuyến công khai dùng ngưỡng ratelimit.PublicNewsRead)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 584e62a0 (TASK-05): migrations/0014_external_contacts.sql — phân mảnh hash 32, PK (tenant_id,id), xoá mềm đủ ba cột, trigger chặn xoá cứng/sửa dòng đã xoá/đổi định danh, chỉ mục (tenant_id, display_order, id) WHERE deleted_at IS NULL, @entity ExternalContact. TestMigration0014ExternalContacts xanh; make check xanh (golangci-lint không cài trên máy — bước lint bị bỏ qua). CHƯA ÁP trên PostgreSQL thật (không VIGOV_TEST_DSN).",
+      "tiep_theo": "TASK-06: store/app/http — tuyến ghi /api/v1/external-contacts (content.update, vết cùng giao dịch, che phone trong delta), tuyến công khai /api/v1/commune-external-contacts?host= (Public + PublicNewsRead), ORDER BY display_order, id. Sau đó web tab trong /danh-ba và hai màn Danh bạ Mini App. Lựa chọn của nhà cung cấp ghi trong đầu tệp migration: không cờ công khai, category chữ tự do, không khoá duy nhất nghiệp vụ."
     }
   ]
 }
