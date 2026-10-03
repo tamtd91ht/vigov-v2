@@ -1,16 +1,19 @@
 "use client";
 
-import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
+import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import {
   Bold,
   Heading1,
   Heading2,
+  ImagePlus,
   Italic,
   Link as LinkIcon,
   List,
   ListOrdered,
   Pilcrow,
+  Quote,
   Redo2,
+  Signature,
   Undo2,
   Unlink,
   type LucideIcon,
@@ -21,7 +24,10 @@ import { Button } from "@/components/ui/button";
 import { controlClass } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
 
-import { bodyFromEditor, isHttpsLink, richTextExtensions } from "./rich-text";
+import { BODY_IMAGE_LIMIT_REACHED, BODY_IMAGE_MAX } from "./body-image";
+import { BodyImagePanel, type BodyImageSource } from "./body-image-panel";
+import { BodyImagePreviews, BodyImageView } from "./body-image-view";
+import { bodyFromEditor, countFigures, isHttpsLink, richTextExtensions } from "./rich-text";
 
 /**
  * §7 `Nội dung` — the rich-text box (ADR 0067 §1 decision 6). Tiptap, headless, with the schema of
@@ -37,6 +43,12 @@ import { bodyFromEditor, isHttpsLink, richTextExtensions } from "./rich-text";
  *
  * `immediatelyRender: false` because the page is rendered on the server first and an editor needs a DOM;
  * until it mounts, a sentence stands in its place.
+ *
+ * BODY IMAGES (ADR 0067 §Sửa đổi 03/10/2026): `Chèn ảnh` opens `BodyImagePanel`; the form's `images`
+ * source runs the upload / server fetch and fills `previews`; a READY image is inserted at the cursor as
+ * a figure naming its file id. The editor draws it through `BodyImageView` with the preview map in
+ * context — the `src` never enters the document. `Trích dẫn` wraps the paragraphs in a quote;
+ * `Dòng tác giả/nguồn` turns the paragraph into the byline.
  */
 
 export const EDITOR_LOADING = "Đang mở ô soạn thảo…";
@@ -52,6 +64,9 @@ type ToolbarState = {
   italic: boolean;
   bulletList: boolean;
   orderedList: boolean;
+  blockquote: boolean;
+  byline: boolean;
+  figures: number;
   link: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -67,6 +82,9 @@ function toolbarState(editor: Editor | null): ToolbarState | null {
     italic: editor.isActive("italic"),
     bulletList: editor.isActive("bulletList"),
     orderedList: editor.isActive("orderedList"),
+    blockquote: editor.isActive("blockquote"),
+    byline: editor.isActive("byline"),
+    figures: countFigures(editor.state.doc),
     link: editor.isActive("link"),
     canUndo: editor.can().undo(),
     canRedo: editor.can().redo(),
@@ -79,6 +97,8 @@ export function RichTextEditor({
   initialHtml,
   disabled,
   onChange,
+  previews,
+  images,
 }: {
   /** id of the editable area — the hint below points at it. */
   id: string;
@@ -87,12 +107,17 @@ export function RichTextEditor({
   initialHtml: string;
   disabled: boolean;
   onChange: (body: string) => void;
+  /** `file_id → preview_url` — what each figure is drawn with. Absent = none (every figure a sentence). */
+  previews?: ReadonlyMap<string, string>;
+  /** How images get in. Absent = `Chèn ảnh` stays off. */
+  images?: BodyImageSource;
 }) {
   const [linkDraft, setLinkDraft] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [imagePanelOpen, setImagePanelOpen] = useState(false);
 
   const editor = useEditor({
-    extensions: richTextExtensions(),
+    extensions: richTextExtensions({ figureView: ReactNodeViewRenderer(BodyImageView, { as: "div" }) }),
     content: initialHtml,
     editable: !disabled,
     immediatelyRender: false,
@@ -151,6 +176,11 @@ export function RichTextEditor({
   }
 
   const off = disabled;
+  // Why `Chèn ảnh` is off, said next to it — the server's 409 still answers if this count is stale.
+  const imageBlocked =
+    images === undefined ? null : state.figures >= BODY_IMAGE_MAX ? BODY_IMAGE_LIMIT_REACHED : images.blocked;
+  const imageOff = off || images === undefined || imageBlocked !== null;
+  const panelShown = imagePanelOpen && !imageOff && images !== undefined;
   // ICON BUTTONS THAT KEEP THEIR WORD. The Vietnamese name stays in the button as visually hidden text
   // (`an-thi-giac`), so the accessible name — and the toolbar's test — read exactly what the old text
   // button said; `title` gives a sighted officer the same word on hover. No Radix Tooltip: the toolbar
@@ -160,13 +190,16 @@ export function RichTextEditor({
     label: string,
     Icon: LucideIcon,
     run: () => void,
-    opts: { pressed?: boolean; disabled?: boolean } = {},
+    opts: { pressed?: boolean; disabled?: boolean; expanded?: boolean; controls?: string; describedBy?: string } = {},
   ) => (
     <button
       type="button"
       className={TOOL_CLASS}
       title={label}
       aria-pressed={opts.pressed}
+      aria-expanded={opts.expanded}
+      aria-controls={opts.controls}
+      aria-describedby={opts.describedBy}
       disabled={off || opts.disabled === true}
       onMouseDown={(e) => e.preventDefault() /* keep the selection in the editor */}
       onClick={run}
@@ -186,6 +219,10 @@ export function RichTextEditor({
         // and its focus ring stands in for the area's legacy outline.
         "[&_.rich-text-area]:min-h-48 [&_.rich-text-area]:rounded-none [&_.rich-text-area]:border-0",
         "[&_.rich-text-area]:px-3.5 [&_.rich-text-area]:py-3 [&_.rich-text-area:focus-visible]:outline-none",
+        // The quote and the byline LOOK like what they are; the document carries no class for it.
+        "[&_.rich-text-area_blockquote]:my-2 [&_.rich-text-area_blockquote]:border-l-4 [&_.rich-text-area_blockquote]:border-brand-100",
+        "[&_.rich-text-area_blockquote]:pl-3 [&_.rich-text-area_blockquote]:text-ink-700",
+        "[&_.rich-text-area_p[data-role=byline]]:text-right [&_.rich-text-area_p[data-role=byline]]:italic",
       )}
     >
       <div
@@ -209,6 +246,19 @@ export function RichTextEditor({
         })}
         {tool("Danh sách số", ListOrdered, () => editor.chain().focus().toggleOrderedList().run(), {
           pressed: state.orderedList,
+        })}
+        <ToolSeparator />
+        {tool("Trích dẫn", Quote, () => editor.chain().focus().toggleBlockquote().run(), {
+          pressed: state.blockquote,
+        })}
+        {tool("Dòng tác giả/nguồn", Signature, () => editor.chain().focus().toggleByline().run(), {
+          pressed: state.byline,
+        })}
+        {tool("Chèn ảnh", ImagePlus, () => setImagePanelOpen((o) => !o), {
+          disabled: imageOff,
+          expanded: panelShown,
+          controls: panelShown ? `${id}-image-panel` : undefined,
+          describedBy: imageBlocked !== null ? `${id}-image-blocked` : undefined,
         })}
         <ToolSeparator />
         {tool("Hoàn tác", Undo2, () => editor.chain().focus().undo().run(), { disabled: !state.canUndo })}
@@ -284,10 +334,43 @@ export function RichTextEditor({
         )}
       </div>
 
-      <EditorContent editor={editor} />
+      {imageBlocked !== null && (
+        <p
+          id={`${id}-image-blocked`}
+          className="m-0 border-b border-line bg-surface-muted px-3 py-1.5 text-[13px] text-ink-600"
+          role="note"
+        >
+          {imageBlocked}
+        </p>
+      )}
+
+      {panelShown && images !== undefined && (
+        <BodyImagePanel
+          id={id}
+          disabled={off}
+          source={images}
+          onReady={(image, caption) => {
+            // The selection the officer left in the area is still the editor's: insert there.
+            editor.chain().focus().insertFigure({ fileId: image.fileId, caption }).run();
+            setImagePanelOpen(false);
+          }}
+          onClose={() => {
+            setImagePanelOpen(false);
+            editor.commands.focus();
+          }}
+        />
+      )}
+
+      {/* The preview map reaches each figure's NodeView through context: node views render as portals
+          inside EditorContent, so they sit under this provider. */}
+      <BodyImagePreviews.Provider value={previews ?? NO_PREVIEWS}>
+        <EditorContent editor={editor} />
+      </BodyImagePreviews.Provider>
     </div>
   );
 }
+
+const NO_PREVIEWS: ReadonlyMap<string, string> = new Map();
 
 /** 36px square, pressed = brand tint. No legacy class: `.rich-text-toolbar .nut-phu` would force 44px. */
 const TOOL_CLASS = cn(

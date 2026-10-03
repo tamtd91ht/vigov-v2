@@ -9,6 +9,9 @@
  *   DELETE /api/v1/content-items/{id}  {reason}                   content.update  → 204 (soft delete)
  *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC
  *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
+ *   POST  /api/v1/content-items/body-images                       content.update  + Idempotency-Key BẮT BUỘC (ảnh thân bài)
+ *   POST  /api/v1/content-items/body-images/{id}/completion       content.update
+ *   POST  /api/v1/content-items/body-images/from-url              content.update  + Idempotency-Key BẮT BUỘC
  *   POST  /api/v1/content-items/audio-files                       content.update  + Idempotency-Key BẮT BUỘC (ADR 0067 §4)
  *   POST  /api/v1/content-items/audio-files/{id}/completion       content.update  {audio_duration_seconds}
  *   GET   /api/v1/content-categories                              content.read
@@ -85,6 +88,10 @@ import type {
   comms_audioFileOut,
   comms_audioUploadIn,
   comms_audioUploadOut,
+  comms_bodyImageFileOut,
+  comms_bodyImageFromURLIn,
+  comms_bodyImageUploadIn,
+  comms_bodyImageUploadOut,
   comms_coverFileOut,
   comms_coverUploadIn,
   comms_coverUploadOut,
@@ -100,6 +107,9 @@ import type {
   comms_patch_content_categories_by_id,
   comms_post_content_items_audio_files,
   comms_post_content_items_audio_files_by_id_completion,
+  comms_post_content_items_body_images,
+  comms_post_content_items_body_images_by_id_completion,
+  comms_post_content_items_body_images_from_url,
   comms_post_content_items_cover_images,
   comms_post_content_items_cover_images_by_id_completion,
   comms_suaNoiDungVao,
@@ -590,6 +600,102 @@ export async function completeAudioUpload(
       body: JSON.stringify({ audio_duration_seconds: durationSeconds }),
     });
     return await readAudioJSON<comms_audioFileOut>(res, 200);
+  } catch {
+    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/* ── Ảnh thân bài — ADR 0067 §Sửa đổi 03/10/2026 (H1–H10, K1–K8), backend a8fbd9e3 / 2e5b993d ─────────
+ *
+ * The cover's three steps for an image INSIDE the body, plus a fourth route where the SERVER downloads a
+ * pasted https link. The file then rides in `body` as `<figure><img data-file-id="…">…</figure>` — never a
+ * URL (K2); the save checks every id (422 `invalid_body_image`).
+ *
+ * `content_item_id`: absent on the FIRST image of an unsaved article — the server reserves the article's
+ * id and returns it — then sent back on every later body image AND the cover of that article
+ * (`features/noi-dung/body-image.ts` threads it).
+ *
+ * The answers carry the server's `code` (same reader as the audio): the screen words each refusal itself
+ * (`bodyImageErrorText`), so it needs to know which one it got.
+ *
+ * ⚠ Same bearer-credential rule as the cover: `upload.url` + `upload.fields` and every `preview_url` are
+ * used where they are meant and never logged. A pasted URL can carry a token (rule 3): it goes in the
+ * request body only.
+ */
+
+/** A call's answer with the server's error `code` — the audio's shape, shared. */
+export type CodedCallResult<T> = AudioCallResult<T>;
+
+export const BODY_IMAGE_FORM_MISSING =
+  "Máy chủ không gửi kèm biểu mẫu tải lên cho ảnh này. Hãy chọn lại ảnh.";
+
+/** a. Declare one body image. One Idempotency-Key per attempt (see the cover's). */
+export async function requestBodyImageUpload(
+  body: comms_bodyImageUploadIn,
+  idempotencyKey: string,
+): Promise<CodedCallResult<comms_bodyImageUploadOut>> {
+  const path: comms_post_content_items_body_images["duongDan"] = "/api/v1/content-items/body-images";
+  // Field by field — never `...body`. An empty id is left out: "" would be a third spelling of "none".
+  const sent: comms_bodyImageUploadIn = {
+    file_name: body.file_name,
+    content_type: body.content_type,
+    size: body.size,
+  };
+  if (body.content_item_id) sent.content_item_id = body.content_item_id;
+  try {
+    const res = await fetch(path, {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(sent),
+    });
+    const r = await readAudioJSON<comms_bodyImageUploadOut>(res, 201);
+    if (
+      r.ok &&
+      (r.data?.upload?.url === undefined ||
+        r.data.upload.fields === undefined ||
+        r.data.body_image?.id === undefined ||
+        !r.data.content_item_id)
+    ) {
+      return { ok: false, status: 201, code: "", message: BODY_IMAGE_FORM_MISSING };
+    }
+    return r;
+  } catch {
+    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/** c. Complete one body image. Safe to repeat — a file already `ready` answers itself again. */
+export async function completeBodyImageUpload(id: string): Promise<CodedCallResult<comms_bodyImageFileOut>> {
+  const template: comms_post_content_items_body_images_by_id_completion["duongDan"] =
+    "/api/v1/content-items/body-images/{id}/completion";
+  try {
+    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), { ...CHUNG, method: "POST" });
+    return await readAudioJSON<comms_bodyImageFileOut>(res, 200);
+  } catch {
+    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
+  }
+}
+
+/**
+ * The server downloads a pasted https link into a READY body image (sniffed, scanned, 1280 px copy).
+ * One Idempotency-Key per attempt.
+ */
+export async function fetchBodyImageFromUrl(
+  body: comms_bodyImageFromURLIn,
+  idempotencyKey: string,
+): Promise<CodedCallResult<comms_bodyImageFileOut>> {
+  const path: comms_post_content_items_body_images_from_url["duongDan"] = "/api/v1/content-items/body-images/from-url";
+  const sent: comms_bodyImageFromURLIn = { url: body.url };
+  if (body.content_item_id) sent.content_item_id = body.content_item_id;
+  try {
+    const res = await fetch(path, {
+      ...CHUNG,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(sent),
+    });
+    return await readAudioJSON<comms_bodyImageFileOut>(res, 201);
   } catch {
     return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
   }

@@ -124,7 +124,11 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
     expect(viPham).toEqual([]);
   });
 
-  it("every `src` the screen builds is a server-signed preview, through `coverPreviewSrc` / `audioPreviewSrc`", () => {
+  it("every `src` the screen builds is a server-signed preview, through `coverPreviewSrc` / `audioPreviewSrc` / `bodyImagePreviewSrc`", () => {
+    // Body images (ADR 0067 §Sửa đổi 03/10/2026) brought a third: the editor's figure NodeView draws the
+    // server's signed preview of each body image, through `bodyImagePreviewSrc` (the cover's parse). It is
+    // allowed in THAT FILE ONLY — the NodeView is the one place a body image is drawn, and the document
+    // itself never holds a src (`rich-text.test.ts`).
     // The broadcast audio (ADR 0067 §4) brought the `<audio>` player: its `src` is held to the same rule,
     // through `audioPreviewSrc` (`broadcast-audio.test.ts`: only `preview_url`, only http(s), only `ready`).
     // The cover upload (§7) brought the first `<img>` to this screen. The rule above forbids two
@@ -139,17 +143,33 @@ describe("ranh giới HTML của màn Nội dung Mini App", () => {
         const expr = (m[1] ?? "").trim();
         found.push(`${t.duongDan}: ${expr}`);
         const binding = new RegExp(`const\\s+${expr}\\s*=([^;]*);`).exec(t.noiDung);
+        const allowed =
+          t.duongDan === "body-image-view.tsx"
+            ? /\bbodyImagePreviewSrc\(/
+            : /\b(coverPreviewSrc|audioPreviewSrc)\(/;
         const ok =
           /^[A-Za-z_$][\w$]*$/.test(expr) &&
           binding !== null &&
-          /\b(coverPreviewSrc|audioPreviewSrc)\(/.test(binding[1] ?? "") &&
+          allowed.test(binding[1] ?? "") &&
           !/image_url|source_url|createObjectURL|blob:/.test(binding[1] ?? "");
         if (!ok) viPham.push(`${t.duongDan}: src={${expr}}`);
       }
     }
-    // A scan that finds nothing is a scan that is always green: the preview exists, so it must be seen.
-    expect(found.length).toBeGreaterThanOrEqual(2);
+    // A scan that finds nothing is a scan that is always green: the previews exist, so they must be seen.
+    expect(found.length).toBeGreaterThanOrEqual(3);
     expect(found.some((f) => f.startsWith("broadcast-audio-field.tsx"))).toBe(true);
+    expect(found.some((f) => f.startsWith("body-image-view.tsx"))).toBe(true);
+    // `bodyImagePreviewSrc` anywhere else is not a way around the rule above: only the NodeView may bind it.
+    expect(
+      TEP.filter((t) => t.duongDan !== "body-image-view.tsx" && t.duongDan !== "body-image.ts")
+        .filter((t) => /\bbodyImagePreviewSrc\(/.test(t.noiDung))
+        .map((t) => t.duongDan),
+    ).toEqual([]);
+    // No src is set through the DOM either (`img.src = …`, `setAttribute("src", …)`): the scan above only
+    // reads JSX, so a NodeView written with plain DOM would pass it unseen.
+    expect(
+      TEP.filter((t) => /\.src\s*=|setAttribute\(\s*["']src["']/.test(t.noiDung)).map((t) => t.duongDan),
+    ).toEqual([]);
     expect(viPham).toEqual([]);
   });
 

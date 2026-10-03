@@ -146,6 +146,7 @@ import {
   SOURCE_PORTAL_SYNC,
   STATUS_FILTER_OPTIONS,
   STATUS_PENDING_REVIEW,
+  SUMMARY_SAPO_HINT,
   TEN_DANH_MUC_TOI_DA,
   TIEU_DE_FORM_THEM,
   TIEU_DE_MAN,
@@ -187,6 +188,15 @@ import {
   type CoverUploadState,
 } from "./cover-image";
 import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
+import {
+  BODY_IMAGE_AFTER_COVER,
+  previewsFromItem,
+  retryBodyImageCompletion,
+  runBodyImageFromUrl,
+  runBodyImageUpload,
+  type BodyImageState,
+} from "./body-image";
+import type { BodyImageSource } from "./body-image-panel";
 import { BroadcastAudioField } from "./broadcast-audio-field";
 import { CategoryAdmin } from "./category-admin";
 import { ContentDeleteDialog } from "./content-delete-dialog";
@@ -1196,6 +1206,13 @@ export function FormNoiDung({
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const [cover, setCover] = useState<CoverUploadState>(initialCoverState ?? { kind: "idle" });
   const [audioBusy, setAudioBusy] = useState(false);
+  // THE ARTICLE EVERY FILE OF THIS FORM BELONGS TO: the saved article's id on the edit form; on the create
+  // form, unknown until the first body image reserves one (`body-image.ts`). Sent on every later body image
+  // and on the cover, so the save finds all of them under one id.
+  const [articleId, setArticleId] = useState<string | undefined>(hang?.id);
+  // `file_id → preview_url` for the editor's figures: the detail's `body_images`, then each ready reply.
+  const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(() => previewsFromItem(hang?.body_images));
+  const [bodyImageBusy, setBodyImageBusy] = useState(false);
 
   const tieuDeGon = gt.title.trim();
   // MỘT ĐIỀU KIỆN, KHÔNG BA. Hợp đồng đánh dấu `title` và `type` bắt buộc; `type` luôn có giá trị
@@ -1210,7 +1227,8 @@ export function FormNoiDung({
   // A cover still moving holds Lưu: saving now would drop the image the officer just chose.
   const coverBusy = coverInFlight(cover);
   // An audio upload still moving holds Lưu too: closing the form mid-upload would hide its outcome.
-  const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy && !audioBusy;
+  // A body image still moving holds Lưu too: it is inserted only once ready, and the form would be gone.
+  const duDieuKien = tieuDeGon !== "" && typeFieldError === null && !coverBusy && !audioBusy && !bodyImageBusy;
   // The audio is uploaded for a SAVED broadcast only (the server requires `content_item_id`).
   const savedAsBroadcast = hang !== undefined && hang.type === CONTENT_TYPE_BROADCAST;
   const bannerLinkWarning = gt.type === CONTENT_TYPE_BANNER ? bannerLinkTapWarning(gt.link_to) : null;
@@ -1221,6 +1239,48 @@ export function FormNoiDung({
     setCover(s);
     if (s.kind === "ready") datGT((g) => ({ ...g, cover_image_file_id: s.id }));
   }
+
+  /**
+   * Each body-image report. `ready` adds its preview and fixes the article id; busy follows the state.
+   * Functional updates: the reply lands after renders the officer may have made meanwhile.
+   */
+  function onBodyImageState(s: BodyImageState): void {
+    setBodyImageBusy(s.kind === "requesting" || s.kind === "uploading" || s.kind === "checking" || s.kind === "fetching");
+    if (s.kind !== "ready") return;
+    const { fileId, contentItemId, previewUrl } = s.image;
+    setArticleId((a) => a ?? contentItemId);
+    if (previewUrl !== undefined && previewUrl !== "") {
+      setPreviews((m) => new Map(m).set(fileId, previewUrl));
+    }
+  }
+
+  // A cover started on a NEW article before any body image reserved an id: its reply does not say which
+  // id it reserved, so a body image now would land on a second draft (see `body-image.ts`).
+  const coverHidesArticle = articleId === undefined && (gt.cover_image_file_id !== "" || coverBusy);
+
+  const bodyImages: BodyImageSource = {
+    blocked: coverHidesArticle ? BODY_IMAGE_AFTER_COVER : null,
+    upload: (file, onState) =>
+      runBodyImageUpload(
+        file,
+        articleId,
+        (s) => {
+          onBodyImageState(s);
+          onState(s);
+        },
+        (id) => setArticleId((a) => a ?? id),
+      ),
+    fromUrl: (url, onState) =>
+      runBodyImageFromUrl(url, articleId, (s) => {
+        onBodyImageState(s);
+        onState(s);
+      }),
+    retry: (id, onState) =>
+      retryBodyImageCompletion(id, (s) => {
+        onBodyImageState(s);
+        onState(s);
+      }),
+  };
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -1292,7 +1352,13 @@ export function FormNoiDung({
             />
           </Field>
 
-          <Field label="Tóm tắt" htmlFor="tom-tat-noi-dung" grow="auto" className="[&_textarea]:py-2.5">
+          <Field
+            label="Tóm tắt"
+            htmlFor="tom-tat-noi-dung"
+            grow="auto"
+            className="[&_textarea]:py-2.5"
+            hint={SUMMARY_SAPO_HINT}
+          >
             <textarea
               id="tom-tat-noi-dung"
               name="tom-tat-noi-dung"
@@ -1370,6 +1436,8 @@ export function FormNoiDung({
               initialHtml={giaTriDau.body}
               disabled={dangGui}
               onChange={(body) => datGT((g) => ({ ...g, body }))}
+              previews={previews}
+              images={bodyImages}
             />
             <p className="ghi-chu m-0 text-xs text-ink-500" id="than-bai-noi-dung-hint">
               {CANH_BAO_HTML_THO}
@@ -1388,8 +1456,11 @@ export function FormNoiDung({
             savedFileId={hang?.cover_image_file_id ?? ""}
             savedCover={hang?.cover_image}
             state={cover}
-            disabled={dangGui}
-            onPick={(file) => void runCoverUpload(file, hang?.id, onCoverState)}
+            // While the FIRST body image of a new article is still reserving its id, a cover would
+            // reserve another one.
+            disabled={dangGui || (bodyImageBusy && articleId === undefined)}
+            // The article id the body images reserved, when there is one — one draft for every file.
+            onPick={(file) => void runCoverUpload(file, articleId, onCoverState)}
             onRetry={(id) => void retryCoverCompletion(id, onCoverState)}
             onRemove={() => {
               setCover({ kind: "idle" });

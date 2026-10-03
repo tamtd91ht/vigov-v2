@@ -174,8 +174,15 @@ export async function retryCoverCompletion(
  * `src`. `ranh-gioi-html.test.ts` holds every `src={…}` of the screen to this function.
  */
 export function coverPreviewSrc(cover: comms_coverImageOut | null | undefined): string | null {
-  const raw = cover?.preview_url;
-  if (raw === undefined || raw === "") return null;
+  return signedPreviewSrc(cover?.preview_url);
+}
+
+/**
+ * The parse behind `coverPreviewSrc` and `bodyImagePreviewSrc` (`body-image.ts`): a server-signed
+ * `preview_url` → a `src`, only when it is an absolute http(s) URL. One rule for both previews.
+ */
+export function signedPreviewSrc(raw: string | undefined | null): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
   let u: URL;
   try {
     u = new URL(raw);

@@ -53,6 +53,12 @@ export const TIEU_DE_TOI_DA = 300;
 export const TOM_TAT_TOI_DA = 2000;
 export const THAN_BAI_TOI_DA = 200000;
 export const URL_TOI_DA = 2000;
+
+/**
+ * Under `Tóm tắt`: the owner's 03/10/2026 decision (ADR 0067 §Sửa đổi) — the summary IS the article's
+ * sapo, shown bold under the title in the Mini App. No second field for it.
+ */
+export const SUMMARY_SAPO_HINT = "Đoạn mở đầu (sapo) — Mini App in đậm ngay dưới tiêu đề bài.";
 export const TEN_DANH_MUC_TOI_DA = 200;
 export const SLUG_DANH_MUC_TOI_DA = 64;
 export const THU_TU_DANH_MUC_TOI_DA = 9999;
