@@ -100,15 +100,15 @@
     },
     "app.BodyImageFromURLRequest": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_body_image_url.go:103"
+      "at": "service-comms/internal/app/content_body_image_url.go:104"
     },
     "app.BodyImageView": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:971"
+      "at": "service-comms/internal/app/content_cover.go:979"
     },
     "app.BodyImageViews": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:979"
+      "at": "service-comms/internal/app/content_cover.go:987"
     },
     "app.Book": {
       "kind": "func",
@@ -300,7 +300,7 @@
     },
     "app.CompleteBodyImageUpload": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:489"
+      "at": "service-comms/internal/app/content_cover.go:497"
     },
     "app.CompleteEnrollment": {
       "kind": "func",
@@ -312,7 +312,7 @@
     },
     "app.ContentCovers": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:221"
+      "at": "service-comms/internal/app/content_cover.go:222"
     },
     "app.CoverFiles": {
       "kind": "type",
@@ -328,15 +328,15 @@
     },
     "app.CoverUpload": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:298"
+      "at": "service-comms/internal/app/content_cover.go:299"
     },
     "app.CoverUploadRequest": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:288"
+      "at": "service-comms/internal/app/content_cover.go:289"
     },
     "app.CoverView": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:900"
+      "at": "service-comms/internal/app/content_cover.go:908"
     },
     "app.Create": {
       "kind": "func",
@@ -524,7 +524,7 @@
     },
     "app.FetchBodyImage": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_body_image_url.go:110"
+      "at": "service-comms/internal/app/content_body_image_url.go:111"
     },
     "app.FieldOverrideStore": {
       "kind": "type",
@@ -628,11 +628,11 @@
     },
     "app.ImageFetchError": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_body_image_url.go:81"
+      "at": "service-comms/internal/app/content_body_image_url.go:82"
     },
     "app.ImageFetcher": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_body_image_url.go:90"
+      "at": "service-comms/internal/app/content_body_image_url.go:91"
     },
     "app.Import": {
       "kind": "func",
@@ -1068,7 +1068,7 @@
     },
     "app.NewContentCovers": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:247"
+      "at": "service-comms/internal/app/content_cover.go:248"
     },
     "app.NewDangNhap": {
       "kind": "func",
@@ -1596,11 +1596,11 @@
     },
     "app.PublicBodyImageURLs": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:1038"
+      "at": "service-comms/internal/app/content_cover.go:1046"
     },
     "app.PublicImageURLs": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:949"
+      "at": "service-comms/internal/app/content_cover.go:957"
     },
     "app.PublicURL": {
       "kind": "func",
@@ -1676,7 +1676,7 @@
     },
     "app.RequestBodyImageUpload": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:315"
+      "at": "service-comms/internal/app/content_cover.go:316"
     },
     "app.RequestRun": {
       "kind": "func",
@@ -2160,7 +2160,7 @@
     },
     "app.View": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:916"
+      "at": "service-comms/internal/app/content_cover.go:924"
     },
     "app.Wait": {
       "kind": "func",
@@ -2180,7 +2180,7 @@
     },
     "app.WithImageFetcher": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_body_image_url.go:96"
+      "at": "service-comms/internal/app/content_body_image_url.go:97"
     },
     "app.WorkingHoursAdvancer": {
       "kind": "type",
@@ -6596,7 +6596,7 @@
     },
     "http.CompleteCoverUpload": {
       "kind": "func",
-      "at": "service-comms/internal/http/content_cover.go:141"
+      "at": "service-comms/internal/http/content_cover.go:151"
     },
     "http.CompletePetitionLogAttachment": {
       "kind": "func",
@@ -7612,7 +7612,7 @@
     },
     "http.RequestCoverUpload": {
       "kind": "func",
-      "at": "service-comms/internal/http/content_cover.go:114"
+      "at": "service-comms/internal/http/content_cover.go:123"
     },
     "http.RequestPetitionLogAttachmentUpload": {
       "kind": "func",
@@ -10693,6 +10693,10 @@
     "store.LockStaffImport": {
       "kind": "func",
       "at": "service-identity/internal/store/staff_import.go:38"
+    },
+    "store.LockSubjectCount": {
+      "kind": "func",
+      "at": "service-comms/internal/store/stored_file.go:397"
     },
     "store.LockTree": {
       "kind": "func",

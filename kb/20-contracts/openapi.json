@@ -27497,6 +27497,9 @@
           "id": {
             "type": "string"
           },
+          "content_item_id": {
+            "type": "string"
+          },
           "mime_type": {
             "type": "string"
           },
@@ -27509,6 +27512,7 @@
           }
         },
         "required": [
+          "content_item_id",
           "id",
           "mime_type",
           "size_bytes",
@@ -27576,11 +27580,15 @@
           "cover_image": {
             "$ref": "#/components/schemas/comms.coverFileOut"
           },
+          "content_item_id": {
+            "type": "string"
+          },
           "upload": {
             "$ref": "#/components/schemas/comms.presignedUploadOut"
           }
         },
         "required": [
+          "content_item_id",
           "cover_image",
           "upload"
         ],

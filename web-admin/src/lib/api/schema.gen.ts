@@ -107,6 +107,7 @@ export type comms_bodyImageUploadOut = {
 
 export type comms_coverFileOut = {
   "id": string;
+  "content_item_id": string;
   "mime_type": string;
   "size_bytes": number;
   "status": string;
@@ -129,6 +130,7 @@ export type comms_coverUploadIn = {
 
 export type comms_coverUploadOut = {
   "cover_image": comms_coverFileOut;
+  "content_item_id": string;
   "upload": comms_presignedUploadOut;
 };
 

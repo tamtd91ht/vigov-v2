@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: cf82fde6
+derived_from_commit: 2586eceb
 expires: 2027-01-01
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -39,7 +39,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 30 | 20/21 +9 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 25 | 19/22 +3 ngoài web | ✓ |
+| **11** Quản trị nội dung Mini App | 25 | 22/22 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 5/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 119 | 117/119 | ✓ |
@@ -109,7 +109,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 37 | 19 | 3 | 0 |
+| `citizen-app` | 37 | 20 | 3 | 0 |
 | `core` | 30 | 3 | 1 | 1 |
 | `deploy` | 18 | 11 | 1 | 0 |
 | `platform-admin` | 6 | 0 | 1 | 0 |
@@ -122,5 +122,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 13 | 10 | 9 | 1 |
 | `service-reporting` | 3 | 0 | 1 | 0 |
 | `tools` | 20 | 0 | 0 | 0 |
-| `web-admin` | 33 | 29 | 3 | 1 |
+| `web-admin` | 33 | 30 | 3 | 1 |
 
