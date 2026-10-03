@@ -462,6 +462,16 @@
       "trang_thai": "xong",
       "bang_chung": "Commit ae2ce9c4 (TASK-01). Quyền admin.user (khoá của GET /staff, không tạo khoá mới). total = locTomTat (store/can_bo_danh_sach.go:102); published = locDanhBaCongKhai (store/danh_ba_cong_khai.go:98) nên bằng số bà con thấy. Hình dạng {total, published, no_department{total,published}, departments[{id,total,published}]}. Test 401/403/403 sai xã/200 + store xanh; make check xanh (golangci-lint không cài). TestPgStaffCounts SKIP (không VIGOV_TEST_DSN).",
       "tiep_theo": "Web: thay hai thẻ KPI '?' và thêm bộ đếm theo khối (TASK-09). Chạy TestPgStaffCounts trên PostgreSQL thật."
+    },
+    {
+      "id": "thu-hoi-tai-khoan-giu-danh-ba",
+      "menu": [
+        "danh-ba-can-bo"
+      ],
+      "viec": "Thu hồi tài khoản đăng nhập của cán bộ, giữ dòng danh bạ — DELETE /api/v1/staff/{id}/account, khoá admin.user.revoke (ADR 0035; chủ dự án chốt nghĩa 03/10/2026: gỡ mật khẩu + mọi phiên, lý do bắt buộc, cấp lại được bằng nút Cấp tài khoản, dòng đã thu hồi xoá mềm được)",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 6311a6ac (migration 0022 gieo khoá, không gán vai trò nào — như 0010; tools/quyen_keys.py nhận khoá ba vế) + 2dfc1307 (tuyến). 409 account_missing / last_admin, 403 self_target_forbidden, 404 gộp. Vai trò GIỮ. Test domain/app/http xanh; make check: identity xanh, đỏ ở comms (việc dở của phiên song song) và web check:api (openapi lệch do tệp sinh chưa commit). 4 ca account_revoke_pg_test SKIP — cấp lại sau thu hồi và xoá mềm sau thu hồi CHỈ được chứng minh trong các ca PG ấy.",
+      "tiep_theo": "Web: nút Thu hồi tài khoản (TASK-09). PHÁT HIỆN cần chủ dự án biết: (1) lý do thu hồi chỉ nằm trong delta nhật ký (ly_do) — chữ tự do vào bảng chỉ-thêm, cán bộ có thể gõ dữ liệu cá nhân; muốn tách thì cần cột lý do trên nguoi_dung (migration). (2) Đường cấp/đặt lại/đổi mật khẩu chưa ghi nhật ký an ninh (skills/security-logging). (3) admin.user.revoke không nằm trong vai trò mẫu (role_template_test.go:154) — vai trò quan-tri-he-thong đã có phải tick ở Phân quyền. (4) ubiquitous-language.md còn nói thu hồi chưa dựng."
     }
   ]
 }
