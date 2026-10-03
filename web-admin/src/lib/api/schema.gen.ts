@@ -4702,6 +4702,7 @@ export type comms_post_content_items_body_images_from_url = {
     404: httpx_Error;
     409: httpx_Error;
     422: httpx_Error;
+    429: httpx_Error;
     500: httpx_Error;
     502: httpx_Error;
     503: httpx_Error;

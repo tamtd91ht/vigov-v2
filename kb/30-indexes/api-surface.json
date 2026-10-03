@@ -1750,6 +1750,7 @@
         "404": "httpx.Error",
         "409": "httpx.Error",
         "422": "httpx.Error",
+        "429": "httpx.Error",
         "500": "httpx.Error",
         "502": "httpx.Error",
         "503": "httpx.Error"
