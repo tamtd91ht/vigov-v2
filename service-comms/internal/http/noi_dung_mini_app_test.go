@@ -15,6 +15,7 @@ package http
 // let anybody who may LOOK at the commune's news also PUBLISH it.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -205,6 +206,7 @@ type mayChuND struct {
 	checker *checkerDanhMucGia
 	covers  *fakeCovers
 	audio   *fakeAudio
+	logs    *bytes.Buffer
 }
 
 func dungMayChuND(t *testing.T) *mayChuND {
@@ -219,7 +221,9 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	checker := &checkerDanhMucGia{}
 	covers := &fakeCovers{}
 	audio := &fakeAudio{}
-	im := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// The handler's log lines land here, so a test can assert what a line does NOT carry (rule 3).
+	logs := &bytes.Buffer{}
+	im := slog.New(slog.NewTextHandler(logs, nil))
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
@@ -260,7 +264,8 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers, audio: audio}
+	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers, audio: audio,
+		logs: logs}
 }
 
 func (m *mayChuND) capQuyen(xa tenant.ID, perm ...authz.Perm) {
@@ -372,6 +377,9 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.covers.bodyRequests > 0 }},
 		{"hoàn tất ảnh thân bài", http.MethodPost, pathBodyImageCompletion, sua, doc, "", http.StatusOK,
 			func(m *mayChuND) bool { return m.covers.bodyCompletions > 0 }},
+		// The body image fetched from a pasted link (H5, K6, K8): `content.update`.
+		{"tải ảnh thân bài từ liên kết", http.MethodPost, pathBodyImageFromURL, sua, doc, bodyBodyImageFromURLOK,
+			http.StatusCreated, func(m *mayChuND) bool { return m.covers.fetches > 0 }},
 		// The broadcast audio (content_audio.go, ADR 0067 §4.3): `content.update` on both.
 		{"xin tải âm thanh truyền thanh", http.MethodPost, pathAudioFiles, sua, doc, bodyAudioUploadOK,
 			http.StatusCreated, func(m *mayChuND) bool { return m.audio.requests > 0 }},

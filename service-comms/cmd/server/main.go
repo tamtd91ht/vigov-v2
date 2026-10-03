@@ -42,6 +42,7 @@ import (
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	svcgrpc "github.com/vihat/vigov/service-comms/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
+	"github.com/vihat/vigov/service-comms/internal/imagefetch"
 	"github.com/vihat/vigov/service-comms/internal/mail"
 	"github.com/vihat/vigov/service-comms/internal/portal"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
@@ -224,7 +225,11 @@ func main() {
 	// Platform's per-purpose limits over the SAME connection the directory uses — its interceptors put
 	// "x-tenant-id" on every call, which ListUploadPolicies requires; the reader caches per commune.
 	policies := uploadpolicy.New(nenTang.Client(), log)
-	covers := commsapp.NewContentCovers(kho, noiDung, storedFiles, objects, scanner, policies)
+	// The body image from a pasted link (ADR 0067 §Sửa đổi 03/10/2026, H5, K6) gets its OWN outbound
+	// client: any host is allowed, unlike the portal's, so it shares the portal's address predicate
+	// (internal/imagefetch → portal.AddrAllowed) and nothing of its `.gov.vn`/same-host rules. No variable.
+	covers := commsapp.NewContentCovers(kho, noiDung, storedFiles, objects, scanner, policies).
+		WithImageFetcher(imagefetch.New(imagefetch.Options{}))
 	// The broadcast audio (ADR 0067 §4): the same object store, scanner and limits reader, its own
 	// purpose (content-audio). A nil `objects` converts to a nil AudioObjectStore — still "not configured".
 	var audioObjects commsapp.AudioObjectStore

@@ -233,6 +233,11 @@ type ContentCovers struct {
 	// and two at once would be two budgets against one pod memory limit.
 	decodeSlot chan struct{}
 
+	// fetcher downloads a body image from a pasted link (content_body_image_url.go); nil = not configured.
+	// fetchSlots bounds the downloads in flight (bodyImageFetchSlots).
+	fetcher    ImageFetcher
+	fetchSlots chan struct{}
+
 	newID func() (string, error)
 	now   func() time.Time
 }
@@ -383,30 +388,8 @@ func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purp
 	verbs := verbsFor(string(purpose))
 	var out CoverUpload
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-		if req.ContentItemID != "" {
-			if _, err := uc.items.TheoIDDeSua(ctx, tx, req.ContentItemID); err != nil {
-				if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
-					return err
-				}
-				// No article yet: an id this officer's earlier upload reserved, or nothing.
-				reserved, rerr := uc.files.SubjectReservedBy(ctx, tx, req.ContentItemID, actor.ID)
-				if rerr != nil {
-					return rerr
-				}
-				if !reserved {
-					return err
-				}
-			}
-		}
-		if pol.FileCountLimited {
-			live, err := uc.files.CountForSubjectTx(ctx, tx, subject, string(purpose),
-				now.Add(-storage.UploadTTL))
-			if err != nil {
-				return err
-			}
-			if live >= pol.MaxFilesPerSubject {
-				return ErrCoverCountReached
-			}
+		if err := uc.admitSubject(ctx, tx, purpose, pol, req.ContentItemID, subject, actor, now); err != nil {
+			return err
 		}
 		f := domain.StoredFile{
 			ID: id, Bucket: domain.StoredFileBucketPrivate, ObjectKey: objectKey,
@@ -437,6 +420,39 @@ func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purp
 		return CoverUpload{}, bocNoiDung(ctx, "xin tải ảnh bìa", err)
 	}
 	return out, nil
+}
+
+// admitSubject is the in-transaction check of the article an upload names (named; "" = a fresh
+// reservation) and of the purpose's per-article count on subject. Shared by requestUpload and the body
+// image fetched from a link (FetchBodyImage), so the two cannot drift on who may add a file to what.
+func (uc *ContentCovers) admitSubject(ctx context.Context, tx *store.ScopedTx, purpose storage.Purpose,
+	pol uploadpolicy.Policy, named, subject string, actor audit.Actor, now time.Time) error {
+
+	if named != "" {
+		if _, err := uc.items.TheoIDDeSua(ctx, tx, named); err != nil {
+			if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
+				return err
+			}
+			// No article yet: an id this officer's earlier upload reserved, or nothing.
+			reserved, rerr := uc.files.SubjectReservedBy(ctx, tx, named, actor.ID)
+			if rerr != nil {
+				return rerr
+			}
+			if !reserved {
+				return err
+			}
+		}
+	}
+	if pol.FileCountLimited {
+		live, err := uc.files.CountForSubjectTx(ctx, tx, subject, string(purpose), now.Add(-storage.UploadTTL))
+		if err != nil {
+			return err
+		}
+		if live >= pol.MaxFilesPerSubject {
+			return ErrCoverCountReached
+		}
+	}
+	return nil
 }
 
 // --- c. complete an upload --------------------------------------------------------------------------

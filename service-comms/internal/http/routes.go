@@ -861,6 +861,43 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
 				http.HandlerFunc(h.CompleteBodyImageUpload))))
 
+	// ẢNH THÂN BÀI TỪ LIÊN KẾT — the server downloads a pasted https link (ADR 0067 §Sửa đổi 03/10/2026,
+	// H5, K6) and stores it as a READY body image: the residents' phones then load it from ViGov's public
+	// store, never from the pasted host. `from-url` is a creation of the same collection by another source
+	// (skills/rest-api-design §3), so it sits under `body-images`.
+	//
+	// `content.update` — K8 names this route too; the cover routes' key, seeded
+	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c). No rate
+	// limit of its own (K8): authenticated, audited, bounded by the per-article count of platform's policy.
+	//
+	// THE OUTBOUND CALL IS AN SSRF SURFACE (internal/imagefetch): the URL shape is checked before any
+	// network (400 `invalid_image_url`), every resolved address at dial time with the portal's predicate,
+	// ≤ 3 re-checked redirects, verified TLS, 30 s. Every network failure is ONE answer, 502
+	// `image_fetch_failed` — distinct answers would let a caller map internal addresses. Over the size cap,
+	// not an image, infected, undecodable → 422 `body_image_rejected`; the 21st image → 409
+	// `body_image_limit`; scanner / storage / platform limits down → 503, nothing stored.
+	//
+	// idem.Required(idem.MoKhiHong): as on the upload request — a double submit replays the first answer;
+	// the worst a missed replay does is one more fetched image in the article's count.
+	//
+	// @summary  Tải ảnh thân bài từ liên kết https cán bộ dán — máy chủ tải về, dò kiểu, quét mã độc, tạo bản 1280px không EXIF, trả ảnh đã sẵn sàng kèm liên kết xem trước; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu
+	// @screen   11-noi-dung-mini-app §7
+	// @request  bodyImageFromURLIn
+	// @reply    201 bodyImageFileOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    502 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/body-images/from-url",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.FetchBodyImageFromURL))))
+
 	// --- the broadcast audio of a `truyen-thanh` item: ADR 0052's three-step upload (ADR 0067 §4) -------
 	//
 	// internal/app/content_audio.go has the whole flow and says why it differs from the cover: the item

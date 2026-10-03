@@ -22,6 +22,11 @@ package app
 //     (ADR 0067 §2 "Ghi" #3) and held in memory, and six × the policy's 50 MB would exceed the pod.
 //   - an image that fails ANY check is dropped and counted; the article is still imported without it
 //     (ADR 0067 §2, "6 ảnh song song; failures counted"). Never stored unscanned.
+//
+// THE BODY IMAGE FROM A PASTED LINK (content_body_image_url.go, ADR 0067 §Sửa đổi 03/10/2026, H5) is the
+// same situation — bytes this service fetched, not a commune upload — so it runs through the SAME
+// prepareFetchedImage and recordPortalCover under its own purpose, and stores no original for the same
+// reason: admitting one would be a new server write path in ADR 0052's list.
 
 import (
 	"bytes"
@@ -33,6 +38,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/storage"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
@@ -81,7 +87,31 @@ func (uc *ContentCovers) preparePortalCover(ctx context.Context, itemID string, 
 	if err != nil {
 		return portalCover{}, err
 	}
-	if len(data) == 0 || int64(len(data)) > min(pol.MaxBytes, portalImageMaxBytes) {
+	return uc.prepareFetchedImage(ctx, fetchedImage{
+		purpose: coverPurpose, pol: pol, maxBytes: min(pol.MaxBytes, portalImageMaxBytes),
+		itemID: itemID, data: data, now: now, uploadedBy: audit.SystemActor, name: portalCoverName,
+	})
+}
+
+// fetchedImage is one image THIS SERVICE downloaded — a portal cover, or a body image from a pasted link
+// (content_body_image_url.go) — on its way through prepareFetchedImage.
+type fetchedImage struct {
+	purpose    storage.Purpose
+	pol        uploadpolicy.Policy // read by the caller for purpose — never a constant
+	maxBytes   int64               // the policy's MaxBytes, or a smaller memory bound the caller states
+	itemID     string
+	data       []byte
+	now        time.Time
+	uploadedBy string // the staff business code, or audit.SystemActor
+	name       string // a FIXED name: the remote file name can carry a person's name (rule 3)
+}
+
+// prepareFetchedImage runs the pipeline over downloaded bytes and stores the derivative — the file
+// header's "what differs" holds for every fetched image, whatever its purpose. A refusal of the FILE is a
+// *CoverRejection; anything else is an error. No row is written here; recordPortalCover writes it.
+func (uc *ContentCovers) prepareFetchedImage(ctx context.Context, in fetchedImage) (portalCover, error) {
+	data, pol := in.data, in.pol
+	if len(data) == 0 || int64(len(data)) > in.maxBytes {
 		return portalCover{}, &CoverRejection{Reason: CoverRejectTooLarge}
 	}
 	head := data[:min(len(data), storage.SniffBytes)]
@@ -106,29 +136,29 @@ func (uc *ContentCovers) preparePortalCover(ctx context.Context, itemID string, 
 
 	fileID, err := uc.newID()
 	if err != nil {
-		return portalCover{}, fmt.Errorf("ảnh bìa: sinh mã tệp: %w", err)
+		return portalCover{}, fmt.Errorf("ảnh: sinh mã tệp: %w", err)
 	}
 	key := storage.Key{
-		Class: storage.ClassContentSource, TenantID: string(tenant.MustFrom(ctx)), CreatedAt: now,
-		Service: storage.ServiceComms, Purpose: coverPurpose,
+		Class: storage.ClassContentSource, TenantID: string(tenant.MustFrom(ctx)), CreatedAt: in.now,
+		Service: storage.ServiceComms, Purpose: in.purpose,
 		ObjectID: fileID, Variant: CoverDerivativeVariant, Ext: "jpg",
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return portalCover{}, fmt.Errorf("ảnh bìa: dựng khoá bản dẫn xuất: %w", err)
+		return portalCover{}, fmt.Errorf("ảnh: dựng khoá bản dẫn xuất: %w", err)
 	}
 	prod, err := uc.objects.PutServerProduced(ctx, key, bytes.NewReader(jpg), int64(len(jpg)))
 	if err != nil {
-		return portalCover{}, coverStorageErr("ghi ảnh bìa nhập từ Cổng", err)
+		return portalCover{}, coverStorageErr("ghi ảnh tải về", err)
 	}
 	sum := sha256.Sum256(data)
 	return portalCover{
 		file: domain.StoredFile{
 			ID: fileID, Bucket: domain.StoredFileBucketPrivate, ObjectKey: objectKey,
-			RetentionClass: string(storage.ClassContentSource), Purpose: string(coverPurpose),
-			SubjectType: domain.StoredFileSubjectContentItem, SubjectID: itemID, OriginalName: portalCoverName,
+			RetentionClass: string(storage.ClassContentSource), Purpose: string(in.purpose),
+			SubjectType: domain.StoredFileSubjectContentItem, SubjectID: in.itemID, OriginalName: in.name,
 			MIMEType: prod.ContentType, SizeBytes: prod.Size, SHA256: prod.SHA256,
-			Status: domain.StoredFileReady, UploadedBy: audit.SystemActor, CreatedAt: now, UpdatedAt: now,
+			Status: domain.StoredFileReady, UploadedBy: in.uploadedBy, CreatedAt: in.now, UpdatedAt: in.now,
 		},
 		sourceSHA256: hex.EncodeToString(sum[:]),
 	}, nil

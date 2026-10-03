@@ -34,6 +34,25 @@ type fakeCovers struct {
 	askedBodyIDs                             []string
 	bodyView                                 map[string]app.BodyImageView
 	bodyCompleteStatus                       domain.StoredFileStatus // "" = ready
+
+	// FetchBodyImage (content_body_image_url_test.go).
+	fetches   int
+	lastFetch app.BodyImageFromURLRequest
+}
+
+func (f *fakeCovers) FetchBodyImage(ctx context.Context, req app.BodyImageFromURLRequest, actor audit.Actor) (
+	domain.StoredFile, error) {
+	f.fetches++
+	f.tenantID, f.actor, f.lastFetch = tenant.MustFrom(ctx), actor, req
+	if f.err != nil {
+		return domain.StoredFile{}, f.err
+	}
+	subject := req.ContentItemID
+	if subject == "" {
+		subject = "01JRESERVEDITEM00000000000"
+	}
+	return domain.StoredFile{ID: "01JFETCHEDFILE000000000000", Status: domain.StoredFileReady, MIMEType: "image/jpeg",
+		SizeBytes: 5555, SubjectID: subject}, nil
 }
 
 func (f *fakeCovers) RequestUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (

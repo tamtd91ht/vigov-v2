@@ -46,6 +46,8 @@ type ContentCoverActs interface {
 	RequestBodyImageUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (app.CoverUpload, error)
 	CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error)
 	BodyImageViews(ctx context.Context, itemID string, fileIDs []string) ([]app.BodyImageView, error)
+	// FetchBodyImage: the server downloads a pasted https link into a ready body image (H5, K6).
+	FetchBodyImage(ctx context.Context, req app.BodyImageFromURLRequest, actor audit.Actor) (domain.StoredFile, error)
 }
 
 // coverUploadIn is what the browser declares before it uploads. CHECKED against platform's

@@ -5,6 +5,8 @@ package http
 //
 //	POST /api/v1/content-items/body-images                   content.update — pending row + presigned POST
 //	POST /api/v1/content-items/body-images/{id}/completion   content.update — the uploader only
+//	POST /api/v1/content-items/body-images/from-url          content.update — the server fetches a pasted
+//	                                                         https link (H5, K6; app/content_body_image_url.go)
 //
 // The file then rides on the article INSIDE the body: `<figure><img data-file-id="{id}" alt="…">
 // <figcaption>…</figcaption></figure>` in `body` on POST / PATCH /api/v1/content-items, checked on every
@@ -23,12 +25,15 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	"github.com/vihat/vigov/service-comms/internal/imagefetch"
 )
 
 // bodyImageUploadIn is what the browser declares before it uploads one body image. CHECKED against
@@ -112,7 +117,14 @@ func (h *Handler) CompleteBodyImageUpload(w http.ResponseWriter, r *http.Request
 		h.answerBodyImageError(w, r, "hoàn tất ảnh thân bài", err)
 		return
 	}
-	out := bodyImageFileOut{ID: f.ID, MIMEType: f.MIMEType, SizeBytes: f.SizeBytes, Status: string(f.Status)}
+	vietJSON(w, http.StatusOK, h.bodyImageFileReply(w, r, f))
+}
+
+// bodyImageFileReply builds bodyImageFileOut for a body-image row — the completion's reply and the
+// from-url reply alike.
+func (h *Handler) bodyImageFileReply(w http.ResponseWriter, r *http.Request, f domain.StoredFile) bodyImageFileOut {
+	out := bodyImageFileOut{ID: f.ID, ContentItemID: f.SubjectID, MIMEType: f.MIMEType, SizeBytes: f.SizeBytes,
+		Status: string(f.Status)}
 	if f.Status == domain.StoredFileReady {
 		// THE EDITOR'S ONLY WAY TO SHOW THE IMAGE BEFORE THE FIRST SAVE: web-admin draws no local file
 		// (no blob:, no createObjectURL), so the preview is the server's — the same signed derivative link
@@ -123,7 +135,90 @@ func (h *Handler) CompleteBodyImageUpload(w http.ResponseWriter, r *http.Request
 			w.Header().Set("Cache-Control", "no-store")
 		}
 	}
-	vietJSON(w, http.StatusOK, out)
+	return out
+}
+
+// bodyImageFromURLIn is a pasted image link. ⚠ THE URL CAN CARRY A TOKEN OR A PERSON'S DATA in its path
+// or query (rule 3): never logged, never echoed, never stored — the trail keeps its host.
+type bodyImageFromURLIn struct {
+	// URL is the pasted https link: port 443 only, no user:password@, a DNS host name (no IP address),
+	// at most 2048 characters. ANY host — not only .gov.vn (K6).
+	URL string `json:"url"`
+	// ContentItemID follows the upload request's rule: ABSENT for the first image of an unsaved article
+	// (the server reserves an id, returned as `content_item_id`); otherwise a live article of this commune
+	// or an id an earlier upload of THIS officer reserved. Anything else → 404.
+	ContentItemID string `json:"content_item_id,omitempty"`
+}
+
+// FetchBodyImageFromURL has the server download a pasted image link into a ready body image.
+// POST /api/v1/content-items/body-images/from-url
+func (h *Handler) FetchBodyImageFromURL(w http.ResponseWriter, r *http.Request) {
+	var in bodyImageFromURLIn
+	if !docThan(w, r, &in) {
+		return
+	}
+	actor, ok := nguoiThucHien(r)
+	if !ok {
+		h.missingCoverPrincipal(w, r)
+		return
+	}
+	f, err := h.d.ContentCovers.FetchBodyImage(r.Context(),
+		app.BodyImageFromURLRequest{URL: in.URL, ContentItemID: in.ContentItemID}, actor)
+	h.logBodyImageFetch(r, actor, in.URL, err)
+	if err != nil {
+		h.answerBodyImageFromURLError(w, r, err)
+		return
+	}
+	vietJSON(w, http.StatusCreated, h.bodyImageFileReply(w, r, f))
+}
+
+// logBodyImageFetch records ONE line per pasted link: commune, actor, HOST and outcome — never the path,
+// the query or a remote error text (rule 3). A destination this side refused is the security event
+// `outbound_url_refused`, as in the portal sync (R2, 02/10/2026).
+func (h *Handler) logBodyImageFetch(r *http.Request, actor audit.Actor, rawURL string, err error) {
+	host := ""
+	if u, perr := imagefetch.ParseURL(rawURL); perr == nil {
+		host = strings.ToLower(u.Hostname())
+	}
+	xa := string(tenant.MustFrom(r.Context()))
+	var fe *app.ImageFetchError
+	switch {
+	case err == nil:
+		h.d.Log.Info("ảnh thân bài: đã tải ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
+			"outcome", "stored")
+	case errors.As(err, &fe) && fe.Refused:
+		h.d.Log.Warn("CẢNH BÁO BẢO MẬT: từ chối một địa chỉ gọi ra ngoài",
+			"event", "outbound_url_refused", "outcome", "refused", "xa", xa, "actor", actor.ID,
+			"class", fe.Class, "call", "body-image", "host", host)
+	case errors.As(err, &fe):
+		h.d.Log.Warn("ảnh thân bài: không tải được ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
+			"outcome", "fetch-failed", "class", fe.Class)
+	default:
+		var rej *app.CoverRejection
+		outcome := "error"
+		switch {
+		case errors.Is(err, app.ErrImageURLInvalid):
+			outcome = "url-invalid"
+		case errors.As(err, &rej):
+			outcome = "rejected-" + rej.Reason
+		}
+		h.d.Log.Info("ảnh thân bài: không nhận ảnh từ liên kết", "xa", xa, "actor", actor.ID, "host", host,
+			"outcome", outcome)
+	}
+}
+
+// answerBodyImageFromURLError maps the two refusals only this route has, then the body-image ones.
+func (h *Handler) answerBodyImageFromURLError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, app.ErrImageURLInvalid):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_image_url",
+			"Liên kết ảnh không hợp lệ: cần là địa chỉ https có tên miền, không kèm cổng khác 443 hay thông tin đăng nhập, và không quá 2048 ký tự.", "")
+	case errors.Is(err, app.ErrImageFetchFailed):
+		httpx.WriteError(w, http.StatusBadGateway, "image_fetch_failed",
+			"Không tải được ảnh từ liên kết này. Hãy kiểm tra liên kết, hoặc tải ảnh về máy rồi tải lên.", "")
+	default:
+		h.answerBodyImageError(w, r, "tải ảnh thân bài từ liên kết", err)
+	}
 }
 
 // bodyImageFileOut is the completion reply of a body image: coverFileOut's four fields, plus the preview
@@ -133,6 +228,9 @@ func (h *Handler) CompleteBodyImageUpload(w http.ResponseWriter, r *http.Request
 // is how a contract silently loses half its shape.
 type bodyImageFileOut struct {
 	ID string `json:"id"`
+	// ContentItemID is the article the image belongs to — the id the server reserved when the request
+	// named none. Send it as `content_item_id` on every later image of the same unsaved article.
+	ContentItemID string `json:"content_item_id"`
 	// MIMEType is the SNIFFED type of the original; "" while `pending`.
 	MIMEType string `json:"mime_type"`
 	// SizeBytes is the measured size of the original; 0 while `pending`.
