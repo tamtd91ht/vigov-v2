@@ -221,10 +221,10 @@ func (h *Handler) answerBodyImageFromURLError(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// bodyImageFileOut is the completion reply of a body image: coverFileOut's four fields, plus the preview
+// bodyImageFileOut is the completion reply of a body image: coverFileOut's five fields, plus the preview
 // once `ready`. ITS OWN TYPE so the cover's completion contract does not change.
 //
-// The four fields are WRITTEN OUT, not embedded: tools/apidoc reads named fields, and an embedded struct
+// The five fields are WRITTEN OUT, not embedded: tools/apidoc reads named fields, and an embedded struct
 // is how a contract silently loses half its shape.
 type bodyImageFileOut struct {
 	ID string `json:"id"`

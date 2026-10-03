@@ -69,6 +69,11 @@ type coverUploadIn struct {
 // what the uploader typed: the preview is its own signed URL on the article's detail.
 type coverFileOut struct {
 	ID string `json:"id"`
+	// ContentItemID is the article the file was issued for — the id the server reserved when the upload
+	// request named none. Send it as `content_item_id` on every later upload (cover or body image) of the
+	// same unsaved article: without it a later body image reserves a SECOND id and the save answers 422
+	// `invalid_body_image`. Always set (the row's subject).
+	ContentItemID string `json:"content_item_id"`
 	// MIMEType is the SNIFFED type of the original; "" while `pending`.
 	MIMEType string `json:"mime_type"`
 	// SizeBytes is the measured size of the original; 0 while `pending`.
@@ -79,14 +84,18 @@ type coverFileOut struct {
 }
 
 func coverFileFrom(f domain.StoredFile) coverFileOut {
-	return coverFileOut{ID: f.ID, MIMEType: f.MIMEType, SizeBytes: f.SizeBytes, Status: string(f.Status)}
+	return coverFileOut{ID: f.ID, ContentItemID: f.SubjectID, MIMEType: f.MIMEType, SizeBytes: f.SizeBytes,
+		Status: string(f.Status)}
 }
 
 // coverUploadOut is the reply of POST …/cover-images. `upload` is the form: every `fields` entry as a
 // form field, then the file as the LAST field named `file`, POSTed to `url`; valid until `expires_at`.
 type coverUploadOut struct {
-	CoverImage coverFileOut       `json:"cover_image"`
-	Upload     presignedUploadOut `json:"upload"`
+	CoverImage coverFileOut `json:"cover_image"`
+	// ContentItemID is the article this cover belongs to — the reserved id when the request named none.
+	// The same place in the reply as bodyImageUploadOut's, so web-admin reads one shape for both uploads.
+	ContentItemID string             `json:"content_item_id"`
+	Upload        presignedUploadOut `json:"upload"`
 }
 
 // presignedUploadOut is a presigned POST into the temp bucket (15 minutes, ADR 0052 §1a).
@@ -131,8 +140,9 @@ func (h *Handler) RequestCoverUpload(w http.ResponseWriter, r *http.Request) {
 	// A form is a bearer credential: no cache between here and the officer's browser keeps it.
 	w.Header().Set("Cache-Control", "no-store")
 	vietJSON(w, http.StatusCreated, coverUploadOut{
-		CoverImage: coverFileFrom(up.File),
-		Upload:     presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
+		CoverImage:    coverFileFrom(up.File),
+		ContentItemID: up.File.SubjectID,
+		Upload:        presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
 	})
 }
 

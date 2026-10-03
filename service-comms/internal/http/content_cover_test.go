@@ -30,6 +30,9 @@ type fakeCovers struct {
 	view                         app.CoverView
 	err                          error
 
+	// completeSubject is the article the completed cover row names; "" = the reserved id.
+	completeSubject string
+
 	bodyRequests, bodyCompletions, bodyViews int
 	askedBodyIDs                             []string
 	bodyView                                 map[string]app.BodyImageView
@@ -62,9 +65,13 @@ func (f *fakeCovers) RequestUpload(ctx context.Context, req app.CoverUploadReque
 	if f.err != nil {
 		return app.CoverUpload{}, f.err
 	}
+	subject := req.ContentItemID
+	if subject == "" {
+		subject = "01JRESERVEDITEM00000000000"
+	}
 	return app.CoverUpload{
 		File: domain.StoredFile{ID: "01JCOVERFILE00000000000000", Status: domain.StoredFilePending,
-			OriginalName: "trao-qua.jpg"},
+			SubjectID: subject, OriginalName: "trao-qua.jpg"},
 		Post: storage.PresignedPost{URL: "https://minio.example/vigov-prod-temp",
 			Fields: map[string]string{"key": "upload/x"}, ExpiresAt: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)},
 	}, nil
@@ -76,7 +83,12 @@ func (f *fakeCovers) Complete(ctx context.Context, id string, actor audit.Actor)
 	if f.err != nil {
 		return domain.StoredFile{}, f.err
 	}
-	return domain.StoredFile{ID: id, Status: domain.StoredFileReady, MIMEType: "image/jpeg", SizeBytes: 1234}, nil
+	subject := f.completeSubject
+	if subject == "" {
+		subject = "01JRESERVEDITEM00000000000"
+	}
+	return domain.StoredFile{ID: id, Status: domain.StoredFileReady, MIMEType: "image/jpeg", SizeBytes: 1234,
+		SubjectID: subject}, nil
 }
 
 func (f *fakeCovers) View(ctx context.Context, fileID string) (app.CoverView, error) {
@@ -160,6 +172,57 @@ func TestCoverUploadReplyCarriesTheFormAndNoStore(t *testing.T) {
 	if m.covers.actor.ID != canBo(xaA).Ma || m.covers.lastRequest.ContentItemID != "nd-001" ||
 		m.covers.lastRequest.Size != 2048 {
 		t.Errorf("use case got actor=%q req=%+v", m.covers.actor.ID, m.covers.lastRequest)
+	}
+}
+
+// THE COVER REPLIES NAME THE ARTICLE (TASK-03c): an officer who uploads the cover FIRST on a new article
+// must learn the reserved id, or a later body image reserves a second one and the save answers 422.
+func TestCoverUploadReplyCarriesContentItemID(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"fresh reservation", bodyCoverUploadOK, "01JRESERVEDITEM00000000000"},
+		{"existing article",
+			`{"file_name":"trao-qua.jpg","content_type":"image/jpeg","size":2048,"content_item_id":"nd-001"}`, "nd-001"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			w := m.goi(t, http.MethodPost, hostA, pathCoverImages, tc.body, canBo(xaA))
+			doiMa(t, w, http.StatusCreated)
+			var out coverUploadOut
+			if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+				t.Fatalf("body is not JSON: %v", err)
+			}
+			if out.ContentItemID != tc.want || out.CoverImage.ContentItemID != tc.want {
+				t.Errorf("content_item_id = %q / cover_image.content_item_id = %q, want %q",
+					out.ContentItemID, out.CoverImage.ContentItemID, tc.want)
+			}
+		})
+	}
+}
+
+func TestCoverCompletionReplyCarriesContentItemID(t *testing.T) {
+	for _, tc := range []struct {
+		name, subject, want string
+	}{
+		{"fresh reservation", "", "01JRESERVEDITEM00000000000"},
+		{"existing article", "nd-001", "nd-001"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			m.covers.completeSubject = tc.subject
+			w := m.goi(t, http.MethodPost, hostA, pathCoverCompletion, "", canBo(xaA))
+			doiMa(t, w, http.StatusOK)
+			var out coverFileOut
+			if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+				t.Fatalf("body is not JSON: %v", err)
+			}
+			if out.ContentItemID != tc.want || out.ID != "01JCOVERFILE00000000000000" || out.Status != "ready" {
+				t.Errorf("reply = %+v, want content_item_id %q", out, tc.want)
+			}
+		})
 	}
 }
 
