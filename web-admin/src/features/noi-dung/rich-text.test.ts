@@ -226,7 +226,7 @@ describe("figure, quote and byline print EXACTLY the stored contract", () => {
     expect(e.commands.insertFigure({ fileId: "01jbdyxmg00000000000000003" })).toBe(false);
     expect(e.commands.insertFigure({ fileId: FILE_A, caption: " Ảnh hội nghị " })).toBe(true);
     const html = e.getHTML();
-    expect(html).toContain(`<figure><img data-file-id="${FILE_A}"><figcaption>Ảnh hội nghị</figcaption></figure>`);
+    expect(html).toContain(`<figure><img data-file-id="${FILE_A}" alt="Ảnh hội nghị"><figcaption>Ảnh hội nghị</figcaption></figure>`);
     expect(html).not.toMatch(/\ssrc=/);
     expectOnlyServerMarkup(html);
   });
@@ -304,6 +304,60 @@ describe("figure, quote and byline print EXACTLY the stored contract", () => {
     expect(countFigures(editorWith("<p>a</p>").state.doc)).toBe(0);
     const two = `<figure><img data-file-id="${FILE_A}"></figure><p>b</p><figure><img data-file-id="${FILE_B}"></figure>`;
     expect(countFigures(editorWith(two).state.doc)).toBe(2);
+  });
+});
+
+describe("a body image's alt — the caption's text, never the file name", () => {
+  /** The `alt` of every figure, in order, read from the stored shape (`null` = no alt printed). */
+  const alts = (e: Editor) =>
+    Array.from(new DOMParser().parseFromString(`<body>${e.getHTML()}</body>`, "text/html").body.querySelectorAll("figure > img")).map(
+      (i) => i.getAttribute("alt"),
+    );
+
+  /** Replace the caption text of the FIRST figure (doc position 0 → figcaption at 1, text from 2). */
+  const setCaption = (e: Editor, text: string) => {
+    const caption = e.state.doc.firstChild!.firstChild!;
+    e.chain()
+      .setTextSelection({ from: 2, to: 2 + caption.content.size })
+      .command(({ tr }) => {
+        if (text === "") tr.deleteSelection();
+        else tr.insertText(text);
+        return true;
+      })
+      .run();
+  };
+
+  it("a new image takes its caption, plain and trimmed, as alt; no caption ⇒ decorative (no alt)", () => {
+    const e = editorWith("<p>a</p>");
+    e.commands.focus("start");
+    e.commands.insertFigure({ fileId: FILE_A, caption: "  Lễ hội làng  " });
+    e.commands.insertFigure({ fileId: FILE_B });
+    expect(alts(e)).toEqual(["Lễ hội làng", null]);
+  });
+
+  it("editing the caption later carries an alt that still matched it; emptying it makes the image decorative", () => {
+    const e = editorWith("");
+    e.commands.insertFigure({ fileId: FILE_A, caption: "Lễ hội" });
+    expect(e.state.doc.firstChild?.type.name).toBe("figure");
+    setCaption(e, "Lễ hội làng Đông");
+    expect(alts(e)).toEqual(["Lễ hội làng Đông"]);
+    setCaption(e, "");
+    expect(alts(e)).toEqual([null]);
+    // Decorative and then captioned: the empty alt matched the empty caption, so it follows again.
+    setCaption(e, "Cổng làng");
+    expect(alts(e)).toEqual(["Cổng làng"]);
+  });
+
+  it("an alt that says something else than the caption is the author's — a caption edit leaves it alone", () => {
+    const e = editorWith(`<figure><img data-file-id="${FILE_A}" alt="Cổng làng nhìn từ phía đông"><figcaption>Cổng</figcaption></figure><p>x</p>`);
+    setCaption(e, "Cổng làng");
+    expect(alts(e)).toEqual(["Cổng làng nhìn từ phía đông"]);
+  });
+
+  it("an edit elsewhere in the body moves no alt", () => {
+    const e = editorWith(`<p>đầu</p><figure><img data-file-id="${FILE_A}" alt="Chú"><figcaption>Chú</figcaption></figure><p>x</p>`);
+    e.chain().setTextSelection(1).insertContent("Mở ").run();
+    expect(alts(e)).toEqual(["Chú"]);
   });
 });
 

@@ -49,6 +49,8 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import { UndoRedo } from "@tiptap/extensions";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Mapping } from "@tiptap/pm/transform";
 
 /** Heading levels the server keeps (`h2`, `h3`). An `h1` pasted in is read as a paragraph. */
 export const HEADING_LEVELS = [2, 3] as const;
@@ -149,7 +151,10 @@ const TOP_BLOCK = "topBlock";
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     figure: {
-      /** Insert a READY body image at the cursor. Refuses an id that is not a ULID. */
+      /**
+       * Insert a READY body image at the cursor. Refuses an id that is not a ULID. `alt` absent = the
+       * caption's text (see `figureAltFollowsCaption`).
+       */
       insertFigure: (attrs: { fileId: string; alt?: string; caption?: string }) => ReturnType;
     };
     blockquote: {
@@ -265,6 +270,10 @@ const Figure = Node.create<{ view: NodeViewRenderer | null }>({
     return this.options.view;
   },
 
+  addProseMirrorPlugins() {
+    return [figureAltFollowsCaption()];
+  },
+
   addCommands() {
     return {
       insertFigure:
@@ -275,7 +284,9 @@ const Figure = Node.create<{ view: NodeViewRenderer | null }>({
           return chain()
             .insertContent({
               type: this.name,
-              attrs: { fileId, alt: (alt ?? "").trim() },
+              // The caption IS the description a screen reader needs; none = decorative (`alt` omitted).
+              // Never the file name: "IMG_0412.jpg" read aloud describes nothing, and can name a person.
+              attrs: { fileId, alt: (alt ?? text).trim() },
               content: [{ type: "figcaption", content: text === "" ? [] : [{ type: "text", text }] }],
             })
             .command(({ tr, state }) => {
@@ -290,6 +301,45 @@ const Figure = Node.create<{ view: NodeViewRenderer | null }>({
     };
   },
 });
+
+/** A figure's caption as plain text, trimmed — what its `alt` is compared with and copied from. */
+function captionText(figure: PMNode): string {
+  return figure.textContent.trim();
+}
+
+/**
+ * KEEPS A FIGURE'S `alt` IN STEP WITH ITS CAPTION while the two still say the same thing. An image gets
+ * its caption as `alt` when inserted (`insertFigure`); when the caption is edited later, an `alt` that
+ * still equals the OLD caption follows it (an empty caption gives `alt=""`: decorative). An `alt` that
+ * differs — one written for a stored body — is the author's own and is never touched.
+ *
+ * Figures are top level only, so the document's own children are all there is to look at. Each old
+ * figure is followed through the step maps to where it now stands; a deleted one is skipped.
+ */
+function figureAltFollowsCaption(): Plugin {
+  return new Plugin({
+    key: new PluginKey("figureAltFollowsCaption"),
+    appendTransaction(transactions, oldState, newState) {
+      if (!transactions.some((t) => t.docChanged)) return null;
+      const mapping = new Mapping();
+      for (const t of transactions) mapping.appendMapping(t.mapping);
+      const tr = newState.tr;
+      oldState.doc.forEach((before, pos) => {
+        if (before.type.name !== "figure") return;
+        const oldAlt = String(before.attrs.alt ?? "");
+        if (oldAlt !== captionText(before)) return;
+        const mapped = mapping.mapResult(pos, 1);
+        if (mapped.deleted) return;
+        const after = newState.doc.nodeAt(mapped.pos);
+        if (after === null || after.type.name !== "figure" || after.attrs.fileId !== before.attrs.fileId) return;
+        const next = captionText(after);
+        if (String(after.attrs.alt ?? "") === next) return;
+        tr.setNodeMarkup(mapped.pos, undefined, { ...after.attrs, alt: next });
+      });
+      return tr.docChanged ? tr : null;
+    },
+  });
+}
 
 /** The caption of a figure. Only ever parsed INSIDE a figure (`context`): a stray figcaption is text. */
 const Figcaption = Node.create({

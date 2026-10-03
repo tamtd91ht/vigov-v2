@@ -119,13 +119,19 @@ export function coverStateText(s: CoverUploadState): string {
 /**
  * The flow a → b → c for ONE file, reporting each state. Returns the last state.
  *
- * `contentItemId`: the saved article's id on the EDIT form; `undefined` on the create form (the server
- * reserves one). One Idempotency-Key per attempt (see `requestCoverUpload`).
+ * `contentItemId`: the form's article id — the saved article's on the EDIT form, the one a body image
+ * already reserved on a new article, `undefined` before any file (the server reserves one). One
+ * Idempotency-Key per attempt (see `requestCoverUpload`).
+ *
+ * `onArticle` hears the article id the declaration answered with AS SOON AS it is known — the same
+ * contract as `runBodyImageUpload` — so a body image inserted after a cover uploaded first on a new
+ * article names the SAME reserved article, and a later failure of this cover still leaves the form on it.
  */
 export async function runCoverUpload(
   file: File,
   contentItemId: string | undefined,
   onState: (s: CoverUploadState) => void,
+  onArticle: (id: string) => void = () => {},
 ): Promise<CoverUploadState> {
   const report = (s: CoverUploadState) => {
     onState(s);
@@ -141,6 +147,7 @@ export async function runCoverUpload(
   );
   // The policy refusal, 503 "not configured", 403, 404 — the server's sentence verbatim.
   if (!req.ok) return report({ kind: "refused", message: req.message });
+  if (req.data.content_item_id) onArticle(req.data.content_item_id);
 
   const id = req.data.cover_image.id;
   report({ kind: "uploading", id, percent: 0 });
@@ -151,16 +158,22 @@ export async function runCoverUpload(
   // The store's refusal is its XML, not a sentence for an officer: one sentence of our own.
   if (!up.ok) return report({ kind: "refused", message: COVER_STORAGE_FAILED });
 
-  return retryCoverCompletion(id, onState);
+  return retryCoverCompletion(id, onState, onArticle);
 }
 
-/** c. alone — the `Kiểm tra lại` button: the bytes are already in the store, never re-upload. */
+/**
+ * c. alone — the `Kiểm tra lại` button: the bytes are already in the store, never re-upload. The
+ * completion names the cover's article too; `onArticle` hears it (the form keeps the first id it learns).
+ */
 export async function retryCoverCompletion(
   id: string,
   onState: (s: CoverUploadState) => void,
+  onArticle: (id: string) => void = () => {},
 ): Promise<CoverUploadState> {
   onState({ kind: "checking", id });
-  const s = afterCoverCompletion(id, await completeCoverUpload(id));
+  const r = await completeCoverUpload(id);
+  if (r.ok && r.data.content_item_id) onArticle(r.data.content_item_id);
+  const s = afterCoverCompletion(id, r);
   onState(s);
   return s;
 }

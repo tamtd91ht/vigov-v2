@@ -12,12 +12,12 @@
  * ONE ARTICLE ID FOR EVERY FILE OF AN UNSAVED ARTICLE. The first body image of a new article reserves
  * the article's id at the server (`content_item_id` in the reply); the form keeps it and sends it on
  * every later body image AND on the cover — otherwise the save finds files of two different drafts and
- * answers 422. The edit form starts with the saved article's id.
+ * answers 422. The edit form starts with the saved article's id. A cover uploaded FIRST reserves it the
+ * same way: its declaration (and completion) reply names `content_item_id`, and the form keeps that id.
  *
- * ⚠ CONTRACT GAP (reported, not patched here): the COVER's reply carries no `content_item_id`. A cover
- * uploaded FIRST on a new article reserves an id this screen never learns, so a body image after it would
- * reserve a second one. Until the cover's reply carries it, that order is held off with a sentence
- * (`BODY_IMAGE_AFTER_COVER`) instead of failing at Lưu.
+ * The only order still held off is the instant BETWEEN a first declaration and its reply: two
+ * declarations in flight with no id would reserve two drafts. `BODY_IMAGE_WAIT_COVER` says so for the
+ * cover's few hundred milliseconds; the cover picker is disabled for the body image's.
  */
 
 import {
@@ -39,8 +39,7 @@ import { isHttpsLink } from "./rich-text";
 export const BODY_IMAGE_MAX = 20;
 
 export const BODY_IMAGE_LIMIT_REACHED = `Bài đã có ${BODY_IMAGE_MAX} ảnh trong thân bài — gỡ bớt một ảnh để chèn ảnh khác.`;
-export const BODY_IMAGE_AFTER_COVER =
-  "Ảnh bìa của bài mới đã tải lên trước, nên chưa chèn được ảnh vào thân bài: hãy bấm Lưu rồi mở lại bài để chèn ảnh.";
+export const BODY_IMAGE_WAIT_COVER = "Đang xin tải ảnh bìa lên — chờ giây lát rồi chèn ảnh vào thân bài.";
 export const BODY_IMAGE_URL_INVALID =
   "Liên kết ảnh phải bắt đầu bằng https:// và có tên miền, không có dấu cách.";
 export const BODY_IMAGE_NO_PREVIEW = "Ảnh chưa xem trước được — lưu rồi mở lại để xem";

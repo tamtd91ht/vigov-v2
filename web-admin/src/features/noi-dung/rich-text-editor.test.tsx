@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { BODY_IMAGE_AFTER_COVER, BODY_IMAGE_LIMIT_REACHED, BODY_IMAGE_NO_PREVIEW, type BodyImageState } from "./body-image";
+import { BODY_IMAGE_LIMIT_REACHED, BODY_IMAGE_WAIT_COVER, BODY_IMAGE_NO_PREVIEW, type BodyImageState } from "./body-image";
 import { BODY_IMAGE_URL_BUTTON, type BodyImageSource } from "./body-image-panel";
 import { LINK_INVALID, LINK_NEEDS_SELECTION, RichTextEditor } from "./rich-text-editor";
 
@@ -227,7 +227,8 @@ describe("body images in the editor", () => {
     await act(async () => buttonByText(BODY_IMAGE_URL_BUTTON).click());
     expect(got.urls).toEqual(["https://bao.vn/anh.jpg"]);
     const body = lastBody(onChange);
-    expect(body).toContain(`<figure><img data-file-id="${FILE_A}"><figcaption>Ảnh lễ hội</figcaption></figure>`);
+    // The caption is the image's alt too (a screen reader's description); the link is neither.
+    expect(body).toContain(`<figure><img data-file-id="${FILE_A}" alt="Ảnh lễ hội"><figcaption>Ảnh lễ hội</figcaption></figure>`);
     expect(body).not.toContain("bao.vn");
     // The panel closes after the insert.
     expect(host!.querySelector("#than-bai-image-panel")).toBeNull();
@@ -246,6 +247,24 @@ describe("body images in the editor", () => {
     });
     expect(got.files).toEqual([file]);
     expect(lastBody(onChange)).toContain(`data-file-id="${FILE_A}"`);
+    // No caption typed: decorative — no alt, and never the file name.
+    expect(lastBody(onChange)).not.toContain("alt=");
+    expect(lastBody(onChange)).not.toContain("a.jpg");
+  });
+
+  it("a captioned upload: alt is the caption, never the file name", async () => {
+    const { src } = source();
+    const onChange = await mount("<p>a</p>", vi.fn(), { images: src });
+    await act(async () => buttonByText("Chèn ảnh").click());
+    typeInto(host!.querySelector<HTMLInputElement>("#than-bai-image-caption")!, "  Cổng làng  ");
+    const input = host!.querySelector<HTMLInputElement>("#than-bai-image-file")!;
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "IMG_0412.jpg", { type: "image/jpeg" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(lastBody(onChange)).toContain(`<img data-file-id="${FILE_A}" alt="Cổng làng">`);
+    expect(lastBody(onChange)).not.toContain("IMG_0412");
   });
 
   it("a refusal is shown in the panel as a sentence (role=alert) and nothing is inserted", async () => {
@@ -280,10 +299,10 @@ describe("body images in the editor", () => {
     expect(buttonByText("Chèn ảnh").disabled).toBe(false);
   });
 
-  it("the form's reason to block (cover uploaded first on a new article) is said and holds the button", async () => {
-    await mount("<p>a</p>", vi.fn(), { images: source(undefined, BODY_IMAGE_AFTER_COVER).src });
+  it("the form's reason to block (a cover's first declaration in flight) is said and holds the button", async () => {
+    await mount("<p>a</p>", vi.fn(), { images: source(undefined, BODY_IMAGE_WAIT_COVER).src });
     expect(buttonByText("Chèn ảnh").disabled).toBe(true);
-    expect(host!.querySelector("#than-bai-image-blocked")?.textContent).toBe(BODY_IMAGE_AFTER_COVER);
+    expect(host!.querySelector("#than-bai-image-blocked")?.textContent).toBe(BODY_IMAGE_WAIT_COVER);
   });
 
   it("without an image source, `Chèn ảnh` is off", async () => {

@@ -189,7 +189,7 @@ import {
 } from "./cover-image";
 import { AUDIO_SAVE_FIRST, AUDIO_WAIT_NOTE, type AudioUploadState } from "./broadcast-audio";
 import {
-  BODY_IMAGE_AFTER_COVER,
+  BODY_IMAGE_WAIT_COVER,
   previewsFromItem,
   retryBodyImageCompletion,
   runBodyImageFromUrl,
@@ -1207,8 +1207,9 @@ export function FormNoiDung({
   const [cover, setCover] = useState<CoverUploadState>(initialCoverState ?? { kind: "idle" });
   const [audioBusy, setAudioBusy] = useState(false);
   // THE ARTICLE EVERY FILE OF THIS FORM BELONGS TO: the saved article's id on the edit form; on the create
-  // form, unknown until the first body image reserves one (`body-image.ts`). Sent on every later body image
-  // and on the cover, so the save finds all of them under one id.
+  // form, unknown until the first file — body image OR cover — reserves one (`body-image.ts`). Sent on
+  // every later body image and on the cover, so the save finds all of them under one id. The first id
+  // learned is kept (`a ?? id`).
   const [articleId, setArticleId] = useState<string | undefined>(hang?.id);
   // `file_id → preview_url` for the editor's figures: the detail's `body_images`, then each ready reply.
   const [previews, setPreviews] = useState<ReadonlyMap<string, string>>(() => previewsFromItem(hang?.body_images));
@@ -1235,6 +1236,11 @@ export function FormNoiDung({
 
   // Each state report; a `ready` one makes its id the form's cover. Functional update: the upload
   // resolves after renders the officer may have made meanwhile (typing the title), and those stay.
+  // The first article id any file's reply names is the form's; a later one never replaces it.
+  function keepArticleId(id: string): void {
+    setArticleId((a) => a ?? id);
+  }
+
   function onCoverState(s: CoverUploadState): void {
     setCover(s);
     if (s.kind === "ready") datGT((g) => ({ ...g, cover_image_file_id: s.id }));
@@ -1254,12 +1260,12 @@ export function FormNoiDung({
     }
   }
 
-  // A cover started on a NEW article before any body image reserved an id: its reply does not say which
-  // id it reserved, so a body image now would land on a second draft (see `body-image.ts`).
-  const coverHidesArticle = articleId === undefined && (gt.cover_image_file_id !== "" || coverBusy);
+  // A cover's FIRST declaration on a new article is in flight: its reply will name the reserved id, and
+  // a body image declared now, with no id, would reserve a second draft. Held for that one round trip.
+  const coverReserving = articleId === undefined && cover.kind === "requesting";
 
   const bodyImages: BodyImageSource = {
-    blocked: coverHidesArticle ? BODY_IMAGE_AFTER_COVER : null,
+    blocked: coverReserving ? BODY_IMAGE_WAIT_COVER : null,
     upload: (file, onState) =>
       runBodyImageUpload(
         file,
@@ -1268,7 +1274,7 @@ export function FormNoiDung({
           onBodyImageState(s);
           onState(s);
         },
-        (id) => setArticleId((a) => a ?? id),
+        keepArticleId,
       ),
     fromUrl: (url, onState) =>
       runBodyImageFromUrl(url, articleId, (s) => {
@@ -1459,9 +1465,10 @@ export function FormNoiDung({
             // While the FIRST body image of a new article is still reserving its id, a cover would
             // reserve another one.
             disabled={dangGui || (bodyImageBusy && articleId === undefined)}
-            // The article id the body images reserved, when there is one — one draft for every file.
-            onPick={(file) => void runCoverUpload(file, articleId, onCoverState)}
-            onRetry={(id) => void retryCoverCompletion(id, onCoverState)}
+            // The article id a body image reserved, when there is one — one draft for every file. A
+            // cover uploaded first reserves it instead, and the body images then use the cover's.
+            onPick={(file) => void runCoverUpload(file, articleId, onCoverState, keepArticleId)}
+            onRetry={(id) => void retryCoverCompletion(id, onCoverState, keepArticleId)}
             onRemove={() => {
               setCover({ kind: "idle" });
               datGT((g) => ({ ...g, cover_image_file_id: "" }));

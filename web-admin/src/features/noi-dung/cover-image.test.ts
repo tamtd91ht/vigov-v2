@@ -61,7 +61,7 @@ describe("pre-check — convenience; the server's policy still decides", () => {
 });
 
 describe("completion answers → state", () => {
-  const ready = { id: "C", mime_type: "image/jpeg", size_bytes: 9, status: "ready" };
+  const ready = { id: "C", content_item_id: "01JND9", mime_type: "image/jpeg", size_bytes: 9, status: "ready" };
   it("200 ready ⇒ ready; 200 anything else ⇒ refused; 422 ⇒ refused VERBATIM; 503 / 409 / no answer ⇒ retry", () => {
     expect(afterCoverCompletion("C", { ok: true, data: ready })).toEqual({ kind: "ready", id: "C" });
     expect(afterCoverCompletion("C", { ok: true, data: { ...ready, status: "rejected" } })).toEqual({
@@ -101,8 +101,12 @@ describe("preview `src` — only the server's signed `preview_url`, only http(s)
 
 /* ── The flow over a fake fetch and a fake XMLHttpRequest ─────────────────────────────────────── */
 
+/** The article id the server reserved for a new article's first file (a ULID-shaped stand-in). */
+const RESERVED = "01JRESERVEDITEM00000000000";
+
 const UPLOAD = {
-  cover_image: { id: "01JCOVER1", mime_type: "", size_bytes: 0, status: "pending" },
+  cover_image: { id: "01JCOVER1", content_item_id: RESERVED, mime_type: "", size_bytes: 0, status: "pending" },
+  content_item_id: RESERVED,
   upload: {
     url: "https://files.example.test/vigov-stg-temp",
     fields: { key: "upload/t_01JXA/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/jpeg" },
@@ -205,6 +209,42 @@ describe("runCoverUpload — a → b → c, then the id on the create", () => {
     const create = calls[2];
     expect(create?.url).toBe("/api/v1/content-items");
     expect(JSON.parse(String(create?.init?.body)).cover_image_file_id).toBe("01JCOVER1");
+  });
+
+  it("new article: the reserved article id is heard right after the declaration, and again at completion", async () => {
+    fakeXHR(204);
+    fakeFetch(json({ ...UPLOAD.cover_image, status: "ready" }, 200));
+    const heard: string[] = [];
+    const seenAt: string[] = [];
+    await runCoverUpload(
+      photo(),
+      undefined,
+      (s) => seenAt.push(s.kind),
+      (id) => {
+        heard.push(id);
+        seenAt.push(`article:${id}`);
+      },
+    );
+    expect(heard).toEqual([RESERVED, RESERVED]);
+    // Before any byte moves: a body image inserted while this cover uploads already names the article.
+    expect(seenAt.indexOf(`article:${RESERVED}`)).toBeLessThan(seenAt.indexOf("uploading"));
+  });
+
+  it("`Kiểm tra lại` hears the article id from the completion too", async () => {
+    fakeFetch(json({ ...UPLOAD.cover_image, status: "ready" }, 200));
+    const heard: string[] = [];
+    await retryCoverCompletion("01JCOVER1", () => {}, (id) => heard.push(id));
+    expect(heard).toEqual([RESERVED]);
+  });
+
+  it("a refused declaration names no article", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ code: "invalid_request", message: "Ảnh quá lớn." }, 400)),
+    );
+    const heard: string[] = [];
+    await runCoverUpload(photo(), undefined, () => {}, (id) => heard.push(id));
+    expect(heard).toEqual([]);
   });
 
   it("edit form: the declaration names the article", async () => {

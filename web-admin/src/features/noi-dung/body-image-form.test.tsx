@@ -9,7 +9,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { comms_noiDungRa } from "@/lib/api/schema.gen";
 
-import { BODY_IMAGE_AFTER_COVER } from "./body-image";
+import { BODY_IMAGE_WAIT_COVER } from "./body-image";
 import { BODY_IMAGE_URL_BUTTON } from "./body-image-panel";
 // vi-name-ok: existing exports of nhan-noi-dung.ts / so-noi-dung.tsx (rule 12 inv 3)
 import { FORM_TRONG, giaTriTuHang, SUMMARY_SAPO_HINT, type GiaTriFormNoiDung } from "./nhan-noi-dung";
@@ -23,6 +23,9 @@ import { FormNoiDung } from "./so-noi-dung";
 const FILE_A = "01JBDYXMG00000000000000001";
 const FILE_B = "01JBDYXMG00000000000000002";
 const RESERVED = "01JRESERVEDITEM00000000000";
+/** The article id a cover uploaded FIRST on a new article reserves. */
+const COVER_RESERVED = "01JCOVERRESERVED0000000000";
+const COVER_ID = "01JCOVER0000000000000000001";
 const PREVIEW_A = "https://files.example.test/p/a.jpg?X-Amz-Signature=a";
 const PREVIEW_B = "https://files.example.test/p/b.jpg?X-Amz-Signature=b";
 
@@ -42,12 +45,19 @@ const PRESIGNED = {
   expires_at: "2026-10-03T03:15:00Z",
 };
 
-function stubNetwork() {
+/**
+ * `coverGate`: when given, the cover's DECLARATION answers only once it resolves — the window in which the
+ * reserved id is not known yet. The server ECHOES a named article and reserves one otherwise, as it does.
+ */
+function stubNetwork(coverGate?: Promise<void>) {
   const calls: { url: string; body: Record<string, unknown> | null }[] = [];
+  let coverArticle = COVER_RESERVED;
+  let bodyArticle = "01JND1";
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({ url, body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null });
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
+      calls.push({ url, body });
       switch (url) {
         case "/api/v1/content-items/body-images/from-url":
           return json(
@@ -55,23 +65,34 @@ function stubNetwork() {
             201,
           );
         case "/api/v1/content-items/body-images":
+          bodyArticle = typeof body?.content_item_id === "string" ? body.content_item_id : "01JND1";
           return json(
-            { body_image: { id: FILE_B, mime_type: "", size_bytes: 0, status: "pending" }, content_item_id: "01JND1", upload: PRESIGNED },
+            {
+              body_image: { id: FILE_B, content_item_id: bodyArticle, mime_type: "", size_bytes: 0, status: "pending" },
+              content_item_id: bodyArticle,
+              upload: PRESIGNED,
+            },
             201,
           );
         case `/api/v1/content-items/body-images/${FILE_B}/completion`:
           return json(
-            { id: FILE_B, content_item_id: "01JND1", mime_type: "image/png", size_bytes: 3, status: "ready", preview_url: PREVIEW_B },
+            { id: FILE_B, content_item_id: bodyArticle, mime_type: "image/png", size_bytes: 3, status: "ready", preview_url: PREVIEW_B },
             200,
           );
         case "/api/v1/content-items/cover-images":
+          if (coverGate !== undefined) await coverGate;
+          coverArticle = typeof body?.content_item_id === "string" ? body.content_item_id : COVER_RESERVED;
           return json(
-            { cover_image: { id: "01JCOVER0000000000000000001", mime_type: "", size_bytes: 0, status: "pending" }, upload: PRESIGNED },
+            {
+              cover_image: { id: COVER_ID, content_item_id: coverArticle, mime_type: "", size_bytes: 0, status: "pending" },
+              content_item_id: coverArticle,
+              upload: PRESIGNED,
+            },
             201,
           );
         default:
           if (url.startsWith("/api/v1/content-items/cover-images/")) {
-            return json({ id: "01JCOVER0000000000000000001", mime_type: "image/jpeg", size_bytes: 3, status: "ready" }, 200);
+            return json({ id: COVER_ID, content_item_id: coverArticle, mime_type: "image/jpeg", size_bytes: 3, status: "ready" }, 200);
           }
           return json({ code: "not_found", message: "?" }, 404);
       }
@@ -213,12 +234,39 @@ describe("new article: one reserved id for every file", () => {
     expect(sent.body).not.toContain("src");
   });
 
-  it("a cover uploaded FIRST holds `Chèn ảnh` off with the sentence (its reply does not name the article)", async () => {
-    stubNetwork();
+  it("a cover uploaded FIRST reserves the id; a body image after it names THAT article, and Lưu carries both", async () => {
+    const calls = stubNetwork();
+    const onSave = await mountForm({ ...FORM_TRONG, title: "Lễ hội" });
+    await pickFile(host!.querySelector<HTMLInputElement>("#anh-noi-dung")!, jpg("bia.jpg"));
+    // First file of an unsaved article: no id sent.
+    expect(calls.find((c) => c.url === "/api/v1/content-items/cover-images")?.body?.content_item_id).toBeUndefined();
+
+    const insert = button("Chèn ảnh");
+    expect(insert.disabled).toBe(false);
+    expect(host!.textContent).not.toContain(BODY_IMAGE_WAIT_COVER);
+    await act(async () => insert.click());
+    await pickFile(host!.querySelector<HTMLInputElement>("#than-bai-noi-dung-image-file")!, jpg("than-bai.jpg"));
+    expect(calls.find((c) => c.url === "/api/v1/content-items/body-images")?.body?.content_item_id).toBe(COVER_RESERVED);
+
+    await act(async () => button("Lưu").click());
+    const sent = onSave.mock.calls[0]?.[0] as GiaTriFormNoiDung;
+    expect(sent.cover_image_file_id).toBe(COVER_ID);
+    expect(sent.body).toContain(`data-file-id="${FILE_B}"`);
+  });
+
+  it("only while the cover's FIRST declaration is unanswered is `Chèn ảnh` held, with the sentence", async () => {
+    let open!: () => void;
+    const calls = stubNetwork(new Promise<void>((r) => (open = r)));
     await mountForm({ ...FORM_TRONG, title: "Lễ hội" });
     await pickFile(host!.querySelector<HTMLInputElement>("#anh-noi-dung")!, jpg("bia.jpg"));
     expect(button("Chèn ảnh").disabled).toBe(true);
-    expect(host!.textContent).toContain(BODY_IMAGE_AFTER_COVER);
+    expect(host!.textContent).toContain(BODY_IMAGE_WAIT_COVER);
+
+    await act(async () => open());
+    await settle();
+    expect(button("Chèn ảnh").disabled).toBe(false);
+    expect(host!.textContent).not.toContain(BODY_IMAGE_WAIT_COVER);
+    expect(calls.filter((c) => c.url === "/api/v1/content-items/cover-images")).toHaveLength(1);
   });
 });
 

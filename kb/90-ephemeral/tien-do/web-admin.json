@@ -601,8 +601,8 @@
       "id": "noi-dung-anh-trich-dan-tac-gia",
       "viec": "Trình soạn thân bài: chèn ảnh (tải lên hoặc dán link https, chú thích tuỳ chọn), trích dẫn, dòng tác giả/nguồn; gợi ý Tóm tắt = sapo (ADR 0067 sửa đổi 03/10/2026)",
       "trang_thai": "dang_lam",
-      "bang_chung": "(sha commit này) — rich-text.ts (figure/figcaption/blockquote/byline, img chỉ data-file-id), body-image*.ts(x) (tải lên, from-url, NodeView xem trước từ preview_url — nơi duy nhất có src), so-noi-dung.tsx (giữ content_item_id, chờ ảnh đang tải trước khi Lưu, tắt Chèn ảnh ở 20). typecheck + lint + vitest 195 tệp/3590 ca + check:api xanh. Chưa chạy với comms thật.",
-      "tiep_theo": "Hợp đồng ảnh bìa (coverUploadOut, service-comms/internal/http/content_cover.go:87) không trả content_item_id → bài MỚI tải ảnh bìa trước thì Chèn ảnh bị tắt tới khi Lưu (đang sửa: T3c + T5b). alt ảnh mới để rỗng — chú thích là figcaption. Chạy với comms thật và xem bố cục 320/640/1280.",
+      "bang_chung": "9093a2d9 — rich-text.ts (figure/figcaption/blockquote/byline, img chỉ data-file-id), body-image*.ts(x) (tải lên, from-url, NodeView xem trước từ preview_url — nơi duy nhất có src), so-noi-dung.tsx (giữ content_item_id, chờ ảnh đang tải trước khi Lưu, tắt Chèn ảnh ở 20). typecheck + lint + vitest 195 tệp/3590 ca + check:api xanh. Chưa chạy với comms thật. T5b: ảnh bìa trả content_item_id (2586eceb) → bài mới tải ảnh bìa trước vẫn chèn ảnh (chỉ chặn trong lúc chờ phản hồi xin tải ảnh bìa); alt mặc định theo chú thích, đi theo khi sửa chú thích; sửa fixture làm typecheck đỏ ở 160ce751. vitest 3599 ca xanh.",
+      "tiep_theo": "Chạy với comms thật (tải lên, dán link, lưu, mở lại thấy xem trước) và xem bố cục 320/640/1280; chủ dự án duyệt giao diện.",
       "menu": "noi-dung-mini-app"
     }
   ]
