@@ -87,6 +87,11 @@ const (
 	// is per purpose. NOT the Mini App `banner` content of comms (ADR 0067 §5): that one is
 	// PurposeContentImage under comms, for citizens; ADR 0069 #6 keeps the two apart.
 	PurposeTenantBanner Purpose = "tenant-banner"
+	// An image inside a Mini App article body (comms; ADR 0067 amendment 03/10/2026, K3). Its own
+	// purpose, not PurposeContentImage, because the platform policy row is per purpose and the counts
+	// differ: one cover per item, up to 20 body images. Same class as the cover — ClassContentSource,
+	// private original, public derivative.
+	PurposeContentBodyImage Purpose = "content-body-image"
 )
 
 var knownPurposes = map[Purpose]bool{
@@ -94,7 +99,7 @@ var knownPurposes = map[Purpose]bool{
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
 	PurposeTaskAttachment: true, PurposeContentAudio: true,
 	PurposePetitionVerificationPhoto: true, PurposePetitionLogAttachment: true,
-	PurposeTenantBanner: true,
+	PurposeTenantBanner: true, PurposeContentBodyImage: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

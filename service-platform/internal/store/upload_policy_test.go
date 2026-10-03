@@ -126,6 +126,9 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 		// Chủ dự án chốt 02/10/2026 (ADR 0069 #5): banner web-admin 2 MiB, PNG/WebP/JPEG, no count limit.
 		// tenant-logo's seed above is rewritten by 0016 (TestUploadPolicyTenantLogoBannerChange).
 		"tenant-banner": {maxBytes: 2097152, mimes: []string{"image/png", "image/webp", "image/jpeg"}, maxFiles: "NULL", file: tenantLogoBannerMigration},
+		// Chủ dự án chốt 03/10/2026 (ADR 0067 amendment): body images of a Mini App article — the cover's
+		// values after 0012 (TestUploadPolicyContentBodyImageCopiesCover pins the link), at most 20 per article.
+		"content-body-image": {maxBytes: 52428800, mimes: []string{"image/jpeg", "image/png", "image/webp"}, maxFiles: "20", file: contentBodyImageMigration},
 	}
 	for p, w := range want {
 		if w.file == "" {
@@ -465,6 +468,48 @@ func TestUploadPolicyTenantLogoBannerChange(t *testing.T) {
 	}
 	if want := []string{storage.MIMEPNG, storage.MIMEWebP, storage.MIMEJPEG}; !slices.Equal(got, want) {
 		t.Errorf("tenant-logo MIME list = %v, want %v (ADR 0069 #4; no HEIC)", got, want)
+	}
+}
+
+const contentBodyImageMigration = "0018_upload_policy_content_body_image.sql"
+
+// Chủ dự án chốt 03/10/2026: body images take the COVER's size and types, only the count differs. The
+// size and MIME list are read from BOTH files — 0012's SET and 0018's seed — so a later edit of either
+// value in one place turns this red instead of silently splitting the two image purposes.
+func TestUploadPolicyContentBodyImageCopiesCover(t *testing.T) {
+	cb, err := fs.ReadFile(migrations.FS, contentImageCoverMigration)
+	if err != nil {
+		t.Fatalf("read %s: %v", contentImageCoverMigration, err)
+	}
+	cover := regexp.MustCompile(`SET max_bytes\s+= (\d+),\s*allowed_mime_types = ARRAY\[([^\]]*)\],`).
+		FindStringSubmatch(sqlLineComment.ReplaceAllString(string(cb), ""))
+	if cover == nil {
+		t.Fatalf("%s: cover values not found", contentImageCoverMigration)
+	}
+	var coverMimes []string
+	for _, q := range strings.Split(cover[2], ",") {
+		coverMimes = append(coverMimes, strings.Trim(strings.TrimSpace(q), "'"))
+	}
+
+	var body *seedRow
+	for _, r := range allSeeds(t) {
+		if r.purpose == "content-body-image" {
+			found := r
+			body = &found
+		}
+	}
+	if body == nil {
+		t.Fatal("content-body-image not seeded")
+	}
+	if body.file != contentBodyImageMigration {
+		t.Errorf("content-body-image seeded in %s, want %s", body.file, contentBodyImageMigration)
+	}
+	if strconv.FormatInt(body.maxBytes, 10) != cover[1] || !slices.Equal(body.mimes, coverMimes) {
+		t.Errorf("content-body-image = %d %v, cover (0012) = %s %v — the owner decided they are the same",
+			body.maxBytes, body.mimes, cover[1], coverMimes)
+	}
+	if body.maxFiles != "20" {
+		t.Errorf("content-body-image max_files_per_subject = %s, want 20 (owner, 03/10/2026)", body.maxFiles)
 	}
 }
 

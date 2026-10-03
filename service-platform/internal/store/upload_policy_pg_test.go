@@ -114,12 +114,18 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	// 0008 seeds six, 0010 task-attachment, 0013 content-audio, 0015 the two staff petition purposes,
-	// 0016 tenant-banner.
-	if len(ps) != 11 {
-		t.Fatalf("policies = %d, want the 11 seeded", len(ps))
+	// 0016 tenant-banner, 0018 content-body-image.
+	if len(ps) != 12 {
+		t.Fatalf("policies = %d, want the 12 seeded", len(ps))
 	}
 	for _, p := range ps {
 		switch p.Purpose {
+		case "content-body-image":
+			// 0018 (chủ dự án chốt 03/10/2026): the cover's values after 0012, at most 20 per article.
+			if !p.FileCountLimited || p.MaxFilesPerSubject != 20 || p.MaxBytes != 52428800 ||
+				!slices.Equal(p.AllowedMIMETypes, []string{"image/jpeg", "image/png", "image/webp"}) {
+				t.Errorf("content-body-image = %+v", p)
+			}
 		case "tenant-logo", "tenant-banner":
 			// 0016 (ADR 0069 #4, #5): 2 MiB, png/webp/jpeg, no HEIC, no count limit.
 			if p.FileCountLimited || p.MaxBytes != 2097152 ||
@@ -186,9 +192,9 @@ func TestPgUploadPolicySeedAndRead(t *testing.T) {
 		WHERE action = 'upload_policy.seeded' AND actor = 'system'`).Scan(&entries); err != nil {
 		t.Fatalf("count trail: %v", err)
 	}
-	// 6 (0008) + 1 (0010) + 1 (0013) + 2 (0015) + 1 (0016). The old want of 7 was stale since 0013.
-	if entries != 11 {
-		t.Errorf("seed trail entries = %d, want 11 — one per seeded policy, same transaction", entries)
+	// 6 (0008) + 1 (0010) + 1 (0013) + 2 (0015) + 1 (0016) + 1 (0018). The old want of 7 was stale since 0013.
+	if entries != 12 {
+		t.Errorf("seed trail entries = %d, want 12 — one per seeded policy, same transaction", entries)
 	}
 
 	// 0016 rewrote tenant-logo once: before holds 0008's 10 MiB and HEIC, after 2 MiB without HEIC.
@@ -219,9 +225,9 @@ func TestPgUploadPolicySoftDeletedIsAbsent(t *testing.T) {
 			t.Fatal("soft-deleted policy still served")
 		}
 	}
-	// 11 seeded (TestPgUploadPolicySeedAndRead) minus the withdrawn one. The old want of 6 was stale.
-	if len(ps) != 10 {
-		t.Errorf("policies = %d, want 10", len(ps))
+	// 12 seeded (TestPgUploadPolicySeedAndRead) minus the withdrawn one. The old want of 6 was stale.
+	if len(ps) != 11 {
+		t.Errorf("policies = %d, want 11", len(ps))
 	}
 }
 

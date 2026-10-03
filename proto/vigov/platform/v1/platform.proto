@@ -403,6 +403,7 @@ enum UploadPurpose {
   UPLOAD_PURPOSE_PETITION_VERIFICATION_PHOTO = 9;  // staff "after processing" (nghiệm thu) photo on a petition (petitions), records class — owner decision C 02/10/2026; NOT the citizen's PETITION_PHOTO
   UPLOAD_PURPOSE_PETITION_LOG_ATTACHMENT = 10;     // staff file on a petition processing-log entry (petitions), records class, never shown to the citizen — owner decision B 02/10/2026
   UPLOAD_PURPOSE_TENANT_BANNER = 11;      // commune's web-admin banner (platform) — ADR 0069 #5; NOT the Mini App `banner` content (comms)
+  UPLOAD_PURPOSE_CONTENT_BODY_IMAGE = 12; // image inside a Mini App article body (comms) — ADR 0067 amendment 03/10/2026 K3; NOT the cover's CONTENT_IMAGE
 }
 
 // UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no
