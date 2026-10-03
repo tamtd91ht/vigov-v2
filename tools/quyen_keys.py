@@ -48,7 +48,13 @@ import re
 # xử cách đặt tên. Nới ra thì một khoá sai quy ước vẫn bị đem so với bảng và vẫn bị bắt vì
 # thiếu — tức chặt hơn, không lỏng hơn. Quy ước đặt tên đã có `drift_guard` tín hiệu 3 của câu
 # mở #27 canh.
-HINH_DANG_KHOA = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+#
+# MỘT DẤU CHẤM TRỞ LÊN, không phải đúng một. Bảng `quyen` có khoá ba vế thật (`admin.user.delete`,
+# migration 0010; `admin.user.revoke`, 0022). Bản cũ chỉ nhận đúng một dấu chấm, nên ở hình dạng 4
+# (literal `map[authz.Perm]bool{...}`) một khoá ba vế gõ sai — `"admin.user.revok": true` — bị bỏ
+# qua IM LẶNG: đo ngày 03/10/2026, `khoa_trong_go` trả rỗng cho đúng chuỗi ấy. Các hình dạng 1, 2,
+# 3, 5 không dùng biểu thức này nên vốn đã thấy khoá ba vế.
+HINH_DANG_KHOA = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 
 # Thư mục migration sở hữu bảng `quyen`. MỘT dịch vụ, vì `quyen` thuộc `identity`
 # (kb/30-indexes/data-ownership.json). Quét cả kho sẽ làm rào LỎNG đi chứ không chặt hơn: một

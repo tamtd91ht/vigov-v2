@@ -1309,6 +1309,14 @@ KHOA_QUYEN_CASES = [
     ('c := checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{'
      'xaA: {idNoiBo: {"task.read": true}}}}',
      set(), "cùng hình dạng, khoá thật — phải im"),
+    # Khoá BA VẾ trong literal (admin.user.delete, 0010). Trước 03/10/2026 HINH_DANG_KHOA chỉ nhận
+    # một dấu chấm, nên khoá ba vế gõ sai ở hình dạng này lọt qua im lặng.
+    ('c := checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{'
+     'xaA: {idNoiBo: {"admin.user.delet": true}}}}',
+     {"admin.user.delet"}, "khoá ba vế lệch một chữ trong literal — hình dạng từng mù"),
+    ('c := checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{'
+     'xaA: {idNoiBo: {"admin.user.delete": true}}}}',
+     set(), "khoá ba vế thật trong literal — phải im"),
     # `map[authz.Perm]struct{}` (core/staffauth/staffauth.go:124): cặp ngoặc rỗng của `struct{}`
     # không phải literal, và bước nhầm vào nó là bỏ sót trọn literal thật ngay sau.
     ('khoa := map[authz.Perm]struct{}{"map.read": {}}',
