@@ -87,6 +87,25 @@ func Blocks(sanitised string) []Block {
 	return b.blocks
 }
 
+// ImageFileIDs returns the distinct file ids of the image blocks of a body, in body order — exactly the
+// images Blocks would draw, because it IS Blocks over the staff policy. Any body may be passed (stored,
+// legacy, already sanitised): SanitizeStaff runs first, so an id the policy would drop is never returned.
+//
+// ONE DEFINITION OF "THE BODY'S IMAGES" for the attach check on save, the retire of removed images, the
+// publish of a published article's images and the staff preview — four readers that must agree on which
+// files an article shows, or one publishes a file another never checked.
+func ImageFileIDs(body string) []string {
+	var ids []string
+	seen := map[string]bool{}
+	for _, b := range Blocks(SanitizeStaff(body)) {
+		if b.Kind == KindImage && b.FileID != "" && !seen[b.FileID] {
+			seen[b.FileID] = true
+			ids = append(ids, b.FileID)
+		}
+	}
+	return ids
+}
+
 // strictOnce builds the no-tags policy decodedText uses.
 var (
 	strictOnce sync.Once

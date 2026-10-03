@@ -29,6 +29,11 @@ type fakeCovers struct {
 	lastID                       string
 	view                         app.CoverView
 	err                          error
+
+	bodyRequests, bodyCompletions, bodyViews int
+	askedBodyIDs                             []string
+	bodyView                                 map[string]app.BodyImageView
+	bodyCompleteStatus                       domain.StoredFileStatus // "" = ready
 }
 
 func (f *fakeCovers) RequestUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (
@@ -59,6 +64,55 @@ func (f *fakeCovers) View(ctx context.Context, fileID string) (app.CoverView, er
 	f.views++
 	f.tenantID = tenant.MustFrom(ctx)
 	return f.view, nil
+}
+
+// The body-image half (content_body_image.go) — counted apart, so the permission table can tell which
+// route reached the use case.
+func (f *fakeCovers) RequestBodyImageUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (
+	app.CoverUpload, error) {
+	f.bodyRequests++
+	f.tenantID, f.actor, f.lastRequest = tenant.MustFrom(ctx), actor, req
+	if f.err != nil {
+		return app.CoverUpload{}, f.err
+	}
+	subject := req.ContentItemID
+	if subject == "" {
+		subject = "01JRESERVEDITEM00000000000"
+	}
+	return app.CoverUpload{
+		File: domain.StoredFile{ID: "01JBODYFILE000000000000000", Status: domain.StoredFilePending,
+			SubjectID: subject, OriginalName: "anh-hien-truong.jpg"},
+		Post: storage.PresignedPost{URL: "https://minio.example/vigov-prod-temp",
+			Fields: map[string]string{"key": "upload/y"}, ExpiresAt: time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)},
+	}, nil
+}
+
+func (f *fakeCovers) CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error) {
+	f.bodyCompletions++
+	f.tenantID, f.actor, f.lastID = tenant.MustFrom(ctx), actor, id
+	if f.err != nil {
+		return domain.StoredFile{}, f.err
+	}
+	status := domain.StoredFileReady
+	if f.bodyCompleteStatus != "" {
+		status = f.bodyCompleteStatus
+	}
+	return domain.StoredFile{ID: id, Status: status, MIMEType: "image/jpeg", SizeBytes: 4321,
+		SubjectID: "01JRESERVEDITEM00000000000"}, nil
+}
+
+func (f *fakeCovers) BodyImageViews(ctx context.Context, itemID string, fileIDs []string) ([]app.BodyImageView, error) {
+	f.bodyViews++
+	f.tenantID, f.lastID, f.askedBodyIDs = tenant.MustFrom(ctx), itemID, fileIDs
+	out := make([]app.BodyImageView, 0, len(fileIDs))
+	for _, id := range fileIDs {
+		v, ok := f.bodyView[id]
+		if !ok {
+			v = app.BodyImageView{FileID: id}
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }
 
 const (

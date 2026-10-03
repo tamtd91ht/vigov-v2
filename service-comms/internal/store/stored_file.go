@@ -194,8 +194,10 @@ const publicForSubjectStmt = `SELECT ` + storedFileCols + ` FROM stored_file
 	ORDER BY id FOR UPDATE`
 
 // PublicForSubject reads, inside the transaction and LOCKED, every file of one article that still
-// carries a public key — the current cover when published, and any earlier cover whose withdrawal has
-// not been confirmed yet. Soft-deleted rows cannot carry one (0011's CHECK).
+// carries a public key, OF EVERY PURPOSE — the current cover and body images when published, and any
+// earlier one whose withdrawal has not been confirmed yet. Soft-deleted rows cannot carry one (0011's
+// CHECK). Deciding which of them stay public is the caller's (app coverPublisher.settle, by purpose):
+// SQL here would have to know what an article's body references, and only the app layer does.
 func (s *StoredFileStore) PublicForSubject(ctx context.Context, tx *store.ScopedTx, subjectID string) (
 	[]domain.StoredFile, error) {
 
@@ -310,6 +312,62 @@ func (s *StoredFileStore) ReadyObjectKeys(ctx context.Context, purpose string, i
 		return nil, fmt.Errorf("stored_file: duyệt khoá tệp sẵn sàng: %w", err)
 	}
 	return out, nil
+}
+
+// LIMIT is MaxStoredFileBatch + 1: the one extra row is how "too many" is told apart from "exactly enough".
+var liveForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
+	AND deleted_at IS NULL ORDER BY id LIMIT ` + strconv.Itoa(MaxStoredFileBatch+1)
+
+// LiveForSubject reads every live file of ONE purpose on ONE article in one statement — the body images
+// of an article for its staff preview and its public read (ADR 0067 §Sửa đổi 03/10/2026, K2/K7), so a
+// detail with twenty images is one query, never twenty. More than MaxStoredFileBatch rows is refused
+// (ErrStoredFileList) rather than silently cut: a cut list would drop images from a published article.
+func (s *StoredFileStore) LiveForSubject(ctx context.Context, subjectID, purpose string) ([]domain.StoredFile, error) {
+	if subjectID == "" || purpose == "" {
+		return nil, ErrStoredFileList
+	}
+	// Scoped.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context.
+	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file", liveForSubjectTail,
+		domain.StoredFileSubjectContentItem, subjectID, purpose)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc tệp của mục: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.StoredFile
+	for rows.Next() {
+		f, err := scanStoredFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt tệp của mục: %w", err)
+	}
+	if len(out) > MaxStoredFileBatch {
+		return nil, ErrStoredFileList
+	}
+	return out, nil
+}
+
+// SubjectReservedBy reports, inside the transaction, whether THIS OFFICER holds a live upload on a
+// subject id — i.e. the id was minted for them by an upload request (ADR 0052 §1a) for an article not
+// saved yet. It is what lets a second upload (another body image, or the cover after a body image) name
+// the same unsaved article; anybody else's minted id answers false, like an unknown one.
+func (s *StoredFileStore) SubjectReservedBy(ctx context.Context, tx *store.ScopedTx, subjectID,
+	uploadedBy string) (bool, error) {
+
+	if subjectID == "" || uploadedBy == "" {
+		return false, nil
+	}
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1` and binds the commune from the context.
+	n, err := scanStoredFileCount(tx.Query(ctx, "count(*)", "stored_file",
+		`AND subject_type = $2 AND subject_id = $3 AND uploaded_by = $4 AND deleted_at IS NULL`,
+		domain.StoredFileSubjectContentItem, subjectID, uploadedBy))
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // countForSubjectTail is platform's `max_files_per_subject` count: the files of one purpose on one

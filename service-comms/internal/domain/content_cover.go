@@ -173,9 +173,31 @@ func cleanFileID(s string) (string, error) {
 // cover without its derivative could never be published (ADR 0052 §11 publishes the derivative, never
 // the original) and the article would go live with no image and no error. The trigger stays the floor.
 func CheckCoverUsable(f *StoredFile, itemID, purpose string) error {
-	if f == nil || itemID == "" || f.SubjectType != StoredFileSubjectContentItem ||
-		f.SubjectID != itemID || f.Purpose != purpose || f.Status != StoredFileReady {
+	if !fileUsableFor(f, itemID, purpose) {
 		return ErrCoverNotUsable
 	}
 	return nil
+}
+
+// ErrBodyImageNotUsable refuses a body naming an image file (`<img data-file-id>`, ADR 0067 §Sửa đổi
+// 03/10/2026, K2). ONE SENTENCE FOR EVERY CAUSE — unknown id, another commune's, uploaded for another
+// article, the cover's file, not finished, refused, deleted — for ErrCoverNotUsable's reason: telling them
+// apart would say which ids exist (rule 4, forbidden #2, applied to staff).
+var ErrBodyImageNotUsable = errors.New(
+	"ảnh trong thân bài: chỉ dùng được ảnh đã tải lên cho thân bài của chính mục nội dung này và đã xử lý xong")
+
+// CheckBodyImageUsable is CheckCoverUsable for a body image: uploaded FOR THIS ARTICLE under the body-image
+// purpose, `ready` (its derivative exists — the one thing a publish copies), not deleted. There is NO
+// trigger under it: the body is free text, so this check on the write path is the whole wall.
+func CheckBodyImageUsable(f *StoredFile, itemID, purpose string) error {
+	if !fileUsableFor(f, itemID, purpose) {
+		return ErrBodyImageNotUsable
+	}
+	return nil
+}
+
+// fileUsableFor: a live row (the store reads live rows only), issued for itemID under purpose, ready.
+func fileUsableFor(f *StoredFile, itemID, purpose string) bool {
+	return f != nil && itemID != "" && purpose != "" && f.SubjectType == StoredFileSubjectContentItem &&
+		f.SubjectID == itemID && f.Purpose == purpose && f.Status == StoredFileReady
 }

@@ -42,6 +42,11 @@ type fakeCoverFiles struct {
 	// publicSetRolledBack makes SetPublicObjectKey record the call but not keep the value — what a
 	// transaction that rolls back leaves behind in PostgreSQL. The fake has no transactions of its own.
 	publicSetRolledBack bool
+
+	// deleted are the soft-deleted rows (SoftDelete): every read below skips them, like the store's
+	// `deleted_at IS NULL`. softDeleted records each call, by id.
+	deleted     map[string]bool
+	softDeleted []string
 }
 
 // newFakeDB is the real core/store over the fake driver, one connection so statements stay ordered.
@@ -54,16 +59,64 @@ func newFakeDB(t *testing.T, k *khoNDGia) *store.DB {
 }
 
 func newFakeCoverFiles() *fakeCoverFiles {
-	return &fakeCoverFiles{rows: map[string]*domain.StoredFile{}}
+	return &fakeCoverFiles{rows: map[string]*domain.StoredFile{}, deleted: map[string]bool{}}
 }
 
+// get reads one LIVE row, as ByID / ForUpdate do: unknown and soft-deleted are both nil.
 func (f *fakeCoverFiles) get(id string) *domain.StoredFile {
 	r, ok := f.rows[id]
-	if !ok {
+	if !ok || f.deleted[id] {
 		return nil
 	}
 	c := *r
 	return &c
+}
+
+func (f *fakeCoverFiles) LiveForSubject(_ context.Context, subjectID, purpose string) ([]domain.StoredFile, error) {
+	var out []domain.StoredFile
+	for id, r := range f.rows {
+		if !f.deleted[id] && r.SubjectID == subjectID && r.Purpose == purpose {
+			out = append(out, *r)
+		}
+	}
+	return out, nil
+}
+func (f *fakeCoverFiles) SubjectReservedBy(_ context.Context, _ *store.ScopedTx, subjectID, by string) (bool, error) {
+	for id, r := range f.rows {
+		if !f.deleted[id] && r.SubjectID == subjectID && r.UploadedBy == by {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+func (f *fakeCoverFiles) SoftDelete(_ context.Context, _ *store.ScopedTx, id, by, _ string, _ time.Time) error {
+	r := f.rows[id]
+	if r == nil || f.deleted[id] || r.PublicObjectKey != "" || by == "" {
+		return commsstore.ErrStoredFileMoved
+	}
+	f.deleted[id] = true
+	f.softDeleted = append(f.softDeleted, id)
+	return nil
+}
+
+// liveCount is the store's `max_files_per_subject` count (countForSubjectTail): live rows of the purpose
+// on the subject that are past the scan, or pending (the fake has no clock for the TTL half).
+func (f *fakeCoverFiles) liveCount(subjectID, purpose string, withPending bool) int {
+	n := 0
+	for id, r := range f.rows {
+		if f.deleted[id] || r.SubjectID != subjectID || r.Purpose != purpose {
+			continue
+		}
+		switch r.Status {
+		case domain.StoredFileStored, domain.StoredFileProcessing, domain.StoredFileReady:
+			n++
+		case domain.StoredFilePending, domain.StoredFileScanning:
+			if withPending {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 func (f *fakeCoverFiles) InsertPending(_ context.Context, _ *store.ScopedTx, r domain.StoredFile) error {
@@ -112,8 +165,8 @@ func (f *fakeCoverFiles) SetPublicObjectKey(_ context.Context, _ *store.ScopedTx
 func (f *fakeCoverFiles) PublicForSubject(_ context.Context, _ *store.ScopedTx, subjectID string) (
 	[]domain.StoredFile, error) {
 	var out []domain.StoredFile
-	for _, r := range f.rows {
-		if r.SubjectID == subjectID && r.PublicObjectKey != "" {
+	for id, r := range f.rows {
+		if !f.deleted[id] && r.SubjectID == subjectID && r.PublicObjectKey != "" {
 			out = append(out, *r)
 		}
 	}
@@ -128,10 +181,13 @@ func (f *fakeCoverFiles) PublicObjectKeys(_ context.Context, ids []string) (map[
 	}
 	return out, nil
 }
-func (f *fakeCoverFiles) CountForSubjectTx(context.Context, *store.ScopedTx, string, string, time.Time) (int, error) {
-	return 0, nil
+func (f *fakeCoverFiles) CountForSubjectTx(_ context.Context, _ *store.ScopedTx, subjectID, purpose string,
+	_ time.Time) (int, error) {
+	return f.liveCount(subjectID, purpose, true), nil
 }
-func (f *fakeCoverFiles) CountForSubject(context.Context, string, string) (int, error) { return 0, nil }
+func (f *fakeCoverFiles) CountForSubject(_ context.Context, subjectID, purpose string) (int, error) {
+	return f.liveCount(subjectID, purpose, false), nil
+}
 
 type fakeCoverObjects struct {
 	temp, private map[string][]byte

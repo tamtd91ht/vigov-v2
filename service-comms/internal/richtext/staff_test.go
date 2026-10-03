@@ -170,3 +170,21 @@ func TestBlocksEmptyQuoteAndInvalidFigureAreNothing(t *testing.T) {
 		t.Errorf("got %#v, want nil", got)
 	}
 }
+
+// --- ImageFileIDs: the one reading of "which files does this body show" --------------------------
+
+func TestImageFileIDsIsDistinctInBodyOrderAndOnlyWhatThePolicyKeeps(t *testing.T) {
+	const second = "01JZZZZZZZZZZZZZZZZZZZZZZZ"
+	body := `<p>a</p><figure><img data-file-id="` + second + `"></figure>` +
+		`<figure><img data-file-id="` + fakeFileID + `" alt="x"><figcaption>c</figcaption></figure>` +
+		`<figure><img data-file-id="` + second + `"></figure>` + // the same file twice: once
+		`<img src="https://evil.example/a.jpg">` + // a URL, not a file id: dropped by the policy
+		`<p><img data-file-id="` + fakeFileID + `0"></p>` // not top level, not a figure: dropped
+	got := ImageFileIDs(body)
+	if !reflect.DeepEqual(got, []string{second, fakeFileID}) {
+		t.Errorf("ImageFileIDs = %v", got)
+	}
+	if got := ImageFileIDs("<p>không có ảnh</p>"); len(got) != 0 {
+		t.Errorf("a body without images gave %v", got)
+	}
+}

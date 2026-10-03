@@ -286,6 +286,25 @@ type fakePublicCovers struct {
 	asked    []string
 	tenantID tenant.ID
 	err      error
+
+	// bodies is commune → article → body-image file id → URL: the published body images, keyed the way
+	// the store reads them (commune from the context, article named), so a resolver built for the wrong
+	// commune or article finds nothing.
+	bodies      map[tenant.ID]map[string]map[string]string
+	askedBodies []string
+}
+
+func (a *fakePublicCovers) PublicBodyImageURLs(ctx context.Context, itemID string) (map[string]string, error) {
+	a.tenantID = tenant.MustFrom(ctx)
+	a.askedBodies = append(a.askedBodies, itemID)
+	if a.err != nil {
+		return nil, a.err
+	}
+	out := map[string]string{}
+	for id, u := range a.bodies[a.tenantID][itemID] {
+		out[id] = u
+	}
+	return out, nil
 }
 
 func (a *fakePublicCovers) PublicImageURLs(ctx context.Context, ids []string) (map[string]string, error) {

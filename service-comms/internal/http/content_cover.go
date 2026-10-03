@@ -40,6 +40,12 @@ type ContentCoverActs interface {
 	RequestUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (app.CoverUpload, error)
 	Complete(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error)
 	View(ctx context.Context, fileID string) (app.CoverView, error)
+
+	// The body images (content_body_image.go): the same acts under `content-body-image`, and the staff
+	// previews of the images one article's body references.
+	RequestBodyImageUpload(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (app.CoverUpload, error)
+	CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error)
+	BodyImageViews(ctx context.Context, itemID string, fileIDs []string) ([]app.BodyImageView, error)
 }
 
 // coverUploadIn is what the browser declares before it uploads. CHECKED against platform's

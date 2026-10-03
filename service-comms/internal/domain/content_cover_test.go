@@ -32,6 +32,29 @@ func TestCheckCoverUsableAdmitsOnlyThisArticlesReadyCover(t *testing.T) {
 	}
 }
 
+func TestCheckBodyImageUsableRefusesEveryOtherFileWithOneError(t *testing.T) {
+	ok := &StoredFile{SubjectType: StoredFileSubjectContentItem, SubjectID: "item-1", Purpose: "content-body-image",
+		Status: StoredFileReady}
+	if err := CheckBodyImageUsable(ok, "item-1", "content-body-image"); err != nil {
+		t.Fatalf("a ready body image of this article refused: %v", err)
+	}
+	for name, mutate := range map[string]func(f *StoredFile){
+		"another article":     func(f *StoredFile) { f.SubjectID = "item-2" },
+		"the cover's purpose": func(f *StoredFile) { f.Purpose = "content-image" },
+		"not finished":        func(f *StoredFile) { f.Status = StoredFileProcessing },
+		"rejected":            func(f *StoredFile) { f.Status = StoredFileRejected },
+	} {
+		f := *ok
+		mutate(&f)
+		if err := CheckBodyImageUsable(&f, "item-1", "content-body-image"); !errors.Is(err, ErrBodyImageNotUsable) {
+			t.Errorf("%s: err = %v, want ErrBodyImageNotUsable", name, err)
+		}
+	}
+	if err := CheckBodyImageUsable(nil, "item-1", "content-body-image"); !errors.Is(err, ErrBodyImageNotUsable) {
+		t.Errorf("unknown / another commune's (no row): err = %v", err)
+	}
+}
+
 func TestCoverFileIDShapeOnTheWire(t *testing.T) {
 	if v, err := cleanFileID("  01JFFFFFFFFFFFFFFFFFFFFFFF "); err != nil || v != "01JFFFFFFFFFFFFFFFFFFFFFFF" {
 		t.Errorf("valid id: %q %v", v, err)

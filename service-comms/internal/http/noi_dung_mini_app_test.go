@@ -367,6 +367,11 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.covers.requests > 0 }},
 		{"hoàn tất ảnh bìa", http.MethodPost, pathCoverCompletion, sua, doc, "", http.StatusOK,
 			func(m *mayChuND) bool { return m.covers.completions > 0 }},
+		// The body images (content_body_image.go, ADR 0067 §Sửa đổi 03/10/2026, K8): `content.update` on both.
+		{"xin tải ảnh thân bài", http.MethodPost, pathBodyImages, sua, doc, bodyBodyImageUploadOK, http.StatusCreated,
+			func(m *mayChuND) bool { return m.covers.bodyRequests > 0 }},
+		{"hoàn tất ảnh thân bài", http.MethodPost, pathBodyImageCompletion, sua, doc, "", http.StatusOK,
+			func(m *mayChuND) bool { return m.covers.bodyCompletions > 0 }},
 		// The broadcast audio (content_audio.go, ADR 0067 §4.3): `content.update` on both.
 		{"xin tải âm thanh truyền thanh", http.MethodPost, pathAudioFiles, sua, doc, bodyAudioUploadOK,
 			http.StatusCreated, func(m *mayChuND) bool { return m.audio.requests > 0 }},

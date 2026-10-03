@@ -99,6 +99,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	"github.com/vihat/vigov/service-comms/internal/richtext"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
@@ -161,6 +162,12 @@ type noiDungRa struct {
 	// /api/v1/content-items/{id}), absent from the list (one signature per row is a bearer credential
 	// per row nobody asked for) and from the write replies.
 	CoverImage *coverImageOut `json:"cover_image,omitempty"`
+
+	// BodyImages are the images the body references (`<img data-file-id>`, ADR 0067 §Sửa đổi 03/10/2026),
+	// one entry per distinct file id IN BODY ORDER, each with a short-lived preview link — on the DETAIL
+	// only, like CoverImage, and absent when the body has no image. The editor draws each figure from the
+	// entry with the same `file_id`; it never builds an image URL of its own.
+	BodyImages []bodyImageOut `json:"body_images,omitempty"`
 
 	// PublishedOn is §6's `Ngày đăng`, a DATE. It is sent as a date-only string rather than a
 	// timestamp because that is what it is: an article carried over from the portal was published on
@@ -479,6 +486,10 @@ func (h *Handler) MotNoiDung(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.AudioFileID != "" {
 		ra.Audio = h.audioView(r, n)
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if ids := richtext.ImageFileIDs(n.NoiDung); len(ids) > 0 {
+		ra.BodyImages = h.bodyImageViews(r, n.ID, ids)
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	vietJSON(w, http.StatusOK, ra)
@@ -982,6 +993,12 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 		// what is refused is this file against the state of the data.
 		httpx.WriteError(w, http.StatusConflict, "cover_not_usable",
 			"Ảnh bìa đã chọn không dùng được: chỉ dùng ảnh đã tải lên cho chính mục nội dung này và đã xử lý xong.", "")
+	case errors.Is(err, domain.ErrBodyImageNotUsable):
+		// ONE code and one sentence for every cause — another commune's, another article's, the cover's,
+		// unknown, unfinished (domain.ErrBodyImageNotUsable says why). 422: the JSON is well-formed; an image
+		// the body names is not one this article may show.
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_body_image",
+			"Có ảnh trong thân bài không dùng được: chỉ dùng ảnh đã tải lên cho thân bài của chính mục nội dung này và đã xử lý xong. Hãy tải lại ảnh đó.", "")
 	case errors.Is(err, app.ErrCoverPublishUnavailable):
 		h.d.Log.Warn("CẢNH BÁO: chưa đăng được ảnh bìa lên kho công khai — không ghi gì",
 			"xa", string(tenant.MustFrom(r.Context())), "viec", viec, "err", err)

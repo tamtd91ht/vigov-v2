@@ -221,9 +221,19 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		return domain.NoiDungMiniApp{}, err
 	}
 
-	// THE ID. With a cover it is the id the upload minted (migration 0011: §7 uploads before `Lưu`) —
-	// read from the FILE ROW, never from the request, so a client cannot name the id of a new record.
+	// THE BODY'S IMAGES (ADR 0067 §Sửa đổi 03/10/2026, K2): every file id the sanitised body references.
+	// Each is checked in the transaction below; the first also names the article when there is no cover.
+	bodyImages := richtext.ImageFileIDs(sach.NoiDung)
+	if len(bodyImages) > 0 && uc.covers == nil {
+		return domain.NoiDungMiniApp{}, ErrCoverUploadNotConfigured
+	}
+
+	// THE ID. With a cover — or, without one, with a body image — it is the id the upload minted
+	// (migration 0011: §7 uploads before `Lưu`) — read from the FILE ROW, never from the request, so a
+	// client cannot name the id of a new record. Every other file must then carry the same id
+	// (checkAttach / checkBodyImages), so a body image of another draft is refused like any other.
 	var id string
+	fromUpload := false
 	if sach.CoverImageFileID != "" {
 		if uc.covers == nil {
 			return domain.NoiDungMiniApp{}, ErrCoverUploadNotConfigured
@@ -238,7 +248,19 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		if err := domain.CheckCoverUsable(f, f.SubjectID, string(coverPurpose)); err != nil {
 			return domain.NoiDungMiniApp{}, err
 		}
-		id = f.SubjectID
+		id, fromUpload = f.SubjectID, true
+	} else if len(bodyImages) > 0 {
+		f, err := uc.covers.files.ByID(ctx, bodyImages[0])
+		if err != nil {
+			return domain.NoiDungMiniApp{}, bocNoiDung(ctx, "thêm nội dung Mini App", err)
+		}
+		if f == nil {
+			return domain.NoiDungMiniApp{}, domain.ErrBodyImageNotUsable
+		}
+		if err := domain.CheckBodyImageUsable(f, f.SubjectID, string(bodyImagePurpose)); err != nil {
+			return domain.NoiDungMiniApp{}, err
+		}
+		id, fromUpload = f.SubjectID, true
 	} else if id, err = uc.sinhID(); err != nil {
 		return domain.NoiDungMiniApp{}, fmt.Errorf("noi_dung_mini_app: sinh mã: %w", err)
 	}
@@ -301,16 +323,26 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 				return commsstore.ErrDanhMucKhongTonTaiMiniApp
 			}
 		}
-		if moi.CoverImageFileID != "" {
+		if fromUpload {
 			// The upload's id must still be FREE: an upload issued for an existing article cannot be
 			// used to create a second one under its id.
 			switch _, err := uc.kho.TheoIDDeSua(ctx, tx, moi.ID); {
-			case err == nil:
+			case err == nil && moi.CoverImageFileID != "":
 				return domain.ErrCoverNotUsable
+			case err == nil:
+				return domain.ErrBodyImageNotUsable
 			case !errors.Is(err, commsstore.ErrNoiDungKhongTonTai):
 				return err
 			}
+		}
+		if moi.CoverImageFileID != "" {
 			if err := uc.covers.checkAttach(ctx, tx, moi.ID, moi.CoverImageFileID); err != nil {
+				return err
+			}
+		}
+		// SAME TRANSACTION AS THE INSERT (rule 6, invariant 3): every referenced file locked and checked.
+		if len(bodyImages) > 0 {
+			if err := uc.covers.checkBodyImages(ctx, tx, moi.ID, bodyImages); err != nil {
 				return err
 			}
 		}
@@ -318,13 +350,27 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 			return err
 		}
 		after := tomTatNoiDungMiniApp(moi)
+		if len(bodyImages) > 0 {
+			after["body_image_file_ids"] = bodyImages // internal handles, never a file name (rule 3)
+		}
 		if uc.covers != nil {
-			var err error
+			// Ready body images uploaded for this (reserved) id that the saved body does not place: retired
+			// here, recorded in this entry (retireUnreferencedBodyImages). Pending uploads stay.
+			retired, err := uc.covers.retireUnreferencedBodyImages(ctx, tx, moi.ID, moi.NoiDung, nguoi.ID, luc)
+			if err != nil {
+				return err
+			}
+			if len(retired) > 0 {
+				after["body_images_retired"] = retired
+			}
 			if cover, err = uc.covers.settle(ctx, tx, moi, luc); err != nil {
 				return err
 			}
 			if cover.published != "" {
 				after["cover_published_file_id"] = cover.published
+			}
+			if len(cover.bodyPublished) > 0 {
+				after["body_images_published"] = cover.bodyPublished
 			}
 		}
 
@@ -344,9 +390,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		})
 	})
 	if err != nil {
-		// Nothing was committed: no item, no trail. The two agree — and a copy made for it is withdrawn.
-		if cover.copied {
-			uc.covers.undoPublish(ctx, moi.CoverImageFileID)
+		// Nothing was committed: no item, no trail. The two agree — and every copy made for it is withdrawn.
+		if len(cover.copied) > 0 {
+			uc.covers.undoCopies(ctx, cover)
 		}
 		return domain.NoiDungMiniApp{}, coverRefusal(ctx, "thêm nội dung Mini App", err)
 	}
@@ -359,7 +405,7 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 // coverRefusal returns a cover refusal UNWRAPPED (the handler answers it with its own sentence, which
 // names no commune) and wraps every other failure with bocNoiDung.
 func coverRefusal(ctx context.Context, viec string, err error) error {
-	for _, r := range []error{domain.ErrCoverNotUsable, ErrCoverPublishUnavailable,
+	for _, r := range []error{domain.ErrCoverNotUsable, domain.ErrBodyImageNotUsable, ErrCoverPublishUnavailable,
 		ErrCoverUploadNotConfigured} {
 		if errors.Is(err, r) {
 			return err
@@ -549,6 +595,23 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			}
 		}
 
+		// A BODY THE REQUEST SENDS (ADR 0067 §Sửa đổi 03/10/2026, K2): every image it references is
+		// checked under lock — all of them, not only the new ones, so a body saved before this check
+		// existed cannot carry an unverified id through its next edit. Every ready body image the saved
+		// body does not reference is retired after the UPDATE below.
+		if sach.NoiDung != nil {
+			now := richtext.ImageFileIDs(sau.NoiDung)
+			if len(now) > 0 {
+				if uc.covers == nil {
+					refusal = ErrCoverUploadNotConfigured
+					return refusal
+				}
+				if err := uc.covers.checkBodyImages(ctx, tx, sau.ID, now); err != nil {
+					return err
+				}
+			}
+		}
+
 		if khongDoiNoiDungMiniApp(truoc, sau) {
 			return nil
 		}
@@ -604,14 +667,28 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			afterDelta["audio_file_retired"] = retiredAudio
 		}
 		if uc.covers != nil {
-			// THE COVER'S PUBLIC COPY FOLLOWS THE ROW JUST WRITTEN (coverPublisher): published with a
-			// cover → copied and recorded here; anything else still public → withdrawn after commit.
-			var err error
+			// EVERY READY BODY IMAGE THE SAVED BODY DOES NOT REFERENCE (removed by this edit, or uploaded
+			// and never placed), not public: retired here, in this transaction, recorded in this entry. A
+			// public one is retired by withdrawAfterCommit once its copy is gone. Pending uploads stay.
+			retired, err := uc.covers.retireUnreferencedBodyImages(ctx, tx, sau.ID, sau.NoiDung, nguoi.ID,
+				uc.bayGio().UTC())
+			if err != nil {
+				return err
+			}
+			if len(retired) > 0 {
+				afterDelta["body_images_retired"] = retired
+			}
+			// THE PUBLIC COPIES FOLLOW THE ROW JUST WRITTEN (coverPublisher.settle, per purpose):
+			// published → the cover and every referenced body image copied and recorded here; anything
+			// else still public → withdrawn after commit.
 			if cover, err = uc.covers.settle(ctx, tx, sau, uc.bayGio().UTC()); err != nil {
 				return err
 			}
 			if cover.published != "" {
 				afterDelta["cover_published_file_id"] = cover.published
+			}
+			if len(cover.bodyPublished) > 0 {
+				afterDelta["body_images_published"] = cover.bodyPublished
 			}
 		}
 		delta, err := json.Marshal(map[string]any{
@@ -629,9 +706,9 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			Delta:   delta,
 		})
 	})
-	if err != nil && cover.copied {
-		// Rolled back after the public copy was made: withdraw it (coverPublisher, PUBLISH).
-		uc.covers.undoPublish(ctx, sau.CoverImageFileID)
+	if err != nil && len(cover.copied) > 0 {
+		// Rolled back after public copies were made: withdraw them (coverPublisher, PUBLISH).
+		uc.covers.undoCopies(ctx, cover)
 	}
 	if refusal != nil {
 		// Rolled back (the closure returned it); nothing was written, no trail.

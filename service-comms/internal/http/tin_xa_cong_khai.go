@@ -139,8 +139,13 @@ type DepsCongKhai struct {
 
 // PublicCoverImages maps cover file ids to the anonymous URL of their published derivative; a file
 // with no recorded public copy is absent (ADR 0052 §2, §11).
+//
+// PublicBodyImageURLs does the same for the BODY images of one article (ADR 0067 §Sửa đổi 03/10/2026,
+// K2/K7): ONE read of that article's published `content-body-image` files in the request's commune, keyed
+// by file id — the detail's bodyImageResolver is a lookup in it, so twenty images are one query.
 type PublicCoverImages interface {
 	PublicImageURLs(ctx context.Context, fileIDs []string) (map[string]string, error)
+	PublicBodyImageURLs(ctx context.Context, itemID string) (map[string]string, error)
 }
 
 // PublicAudioLinks maps audio file ids to a presigned GET of the private original; a file that is not a
@@ -306,9 +311,21 @@ type paragraphOut struct {
 // bodyImageResolver turns a body image's FILE ID into the public URL of THIS article's published
 // `content-body-image` file (ADR 0067 §Sửa đổi 03/10/2026, K2, K7). ok=false — unknown id, another
 // commune's or another article's file, another purpose, not published, storage not configured — and the
-// whole image block is dropped. nil resolves nothing: until the body-image files exist (TASK-03) every
-// image block is dropped, fail closed (amendment stop condition 4).
+// whole image block is dropped. nil resolves nothing (the list routes, which carry no body): fail closed
+// (amendment stop condition 4). The detail builds one from PublicBodyImageURLs (resolverFrom).
 type bodyImageResolver func(fileID string) (publicURL string, ok bool)
+
+// resolverFrom turns one article's published body images (file id → public URL) into its resolver. nil
+// for an empty map, so "no published image" and "no resolver" are the same fail-closed answer.
+func resolverFrom(urls map[string]string) bodyImageResolver {
+	if len(urls) == 0 {
+		return nil
+	}
+	return func(fileID string) (string, bool) {
+		u, ok := urls[fileID]
+		return u, ok
+	}
+}
 
 // inlineRunOut is a stretch of text with one formatting. "\n" inside `text` is a line break.
 type inlineRunOut struct {
@@ -402,8 +419,10 @@ func coverIDs(ds []domain.NoiDungMiniApp) []string {
 	return ids
 }
 
+// bodyImages is the detail's file id → public URL of THIS article's published body images (nil on the
+// lists, which carry no body).
 func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images map[string]string,
-	audio map[string]app.PublicAudio, coThan bool) tinXaRa {
+	audio map[string]app.PublicAudio, coThan bool, bodyImages map[string]string) tinXaRa {
 	ra := tinXaRa{
 		ID:           n.ID,
 		Type:         string(n.Loai),
@@ -457,8 +476,13 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 		// `body` EXACTLY AS BEFORE (ADR 0067 §1 decision 4): older app builds read it.
 		than := domain.VanBanThuanChoDan(n.NoiDung)
 		ra.Body = &than
-		// No resolver yet: body images are dropped until their files exist (TASK-03, K2/K7).
-		ra.BodyBlocks = bodyBlocksOut(n.NoiDung, nil)
+		// ONLY A PUBLISHED ITEM'S images resolve, a second wall under the store's predicate (public key set
+		// only while `dang-hien`) and MotTinXa's own HienChoDan check.
+		var resolve bodyImageResolver
+		if n.HienChoDan() {
+			resolve = resolverFrom(bodyImages)
+		}
+		ra.BodyBlocks = bodyBlocksOut(n.NoiDung, resolve)
 	}
 	return ra
 }
@@ -660,7 +684,7 @@ func (h *HandlerCongKhai) DanhSachTinXa(w http.ResponseWriter, r *http.Request) 
 				"xa", string(xa.ID), "trang_thai", string(n.TrangThai))
 			continue
 		}
-		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, audio, false))
+		ra.Items = append(ra.Items, tinXaRaNgoai(n, ten, images, audio, false, nil))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -699,7 +723,7 @@ func (h *HandlerCongKhai) publicBannerStrip(ctx context.Context, w http.Response
 				"xa", string(tenant.MustFrom(ctx)), "trang_thai", string(n.TrangThai), "loai", string(n.Loai))
 			continue
 		}
-		item := tinXaRaNgoai(n, nil, images, nil, false)
+		item := tinXaRaNgoai(n, nil, images, nil, false, nil)
 		if item.ImageURL == "" {
 			continue
 		}
@@ -925,6 +949,13 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 		h.loi500(ctx, w, "chi tiết tin của xã: âm thanh truyền thanh", err)
 		return
 	}
+	// THE BODY'S IMAGES: one read of THIS article's published body-image files in THIS commune (the
+	// context carries the commune the Host resolved to; the store binds it to $1).
+	bodyImages, err := h.d.CoverImages.PublicBodyImageURLs(ctx, n.ID)
+	if err != nil {
+		h.loi500(ctx, w, "chi tiết tin của xã: ảnh trong thân bài", err)
+		return
+	}
 	noStoreIfSigned(w, audio)
 	if limitEnforced && !viewRefreshOnly(r.URL.Query()) {
 		// Not audited per view — the owner's exception, ADR 0047 row 02/10/2026 (rule 6).
@@ -935,7 +966,7 @@ func (h *HandlerCongKhai) MotTinXa(w http.ResponseWriter, r *http.Request) {
 			n.LuotXem = count
 		}
 	}
-	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, audio, true))
+	vietJSON(w, http.StatusOK, tinXaRaNgoai(n, ten, images, audio, true, bodyImages))
 }
 
 // viewRefreshOnly is the detail's OPTIONAL `no_view`: true only for exactly "1". A helper for the reason

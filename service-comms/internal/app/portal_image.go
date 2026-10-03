@@ -192,7 +192,7 @@ func (uc *ContentCovers) publishPortalCover(ctx context.Context, tx *store.Scope
 
 	p := &coverPublisher{files: uc.files, objects: uc.objects}
 	s, err := p.settle(ctx, tx, n, at)
-	return s.copied, err
+	return len(s.copied) > 0, err
 }
 
 // withdrawPortalCover is the compensation of a publish whose transaction did not commit. NOT

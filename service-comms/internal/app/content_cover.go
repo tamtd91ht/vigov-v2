@@ -22,8 +22,14 @@ package app
 //   - completion also produces the `thumb-1280` JPEG derivative (cover_image.go): an upload is `ready`,
 //     and so usable as a cover, only once a publishable derivative exists.
 //
+// THE BODY IMAGES (ADR 0067 §Sửa đổi 03/10/2026, K2/K3) RUN THROUGH THE SAME ACTS under their own purpose,
+// `content-body-image` — POST …/body-images and …/body-images/{id}/completion — and ride on the article
+// as `<img data-file-id>` inside the body, checked on every save (coverPublisher.checkBodyImages). The
+// publish step decides per purpose (settle), so publishing or replacing a cover never withdraws an image
+// the body still shows.
+//
 // THE LIMITS ARE PLATFORM'S, NEVER THIS FILE'S (ADR 0052 §10): size and types come from the
-// `content-image` policy on every request and again at completion. Not configured → refusal; platform
+// `content-image` (or `content-body-image`) policy on every request and again at completion. Not configured → refusal; platform
 // unreachable → 503. The 50 MB / JPG·PNG·WebP of 01/10/2026 lives in platform's seed, not here.
 //
 // WHY THE OBJECT-STORE WORK HAPPENS OUTSIDE ANY TRANSACTION: scanning, hashing and decoding are network
@@ -51,6 +57,7 @@ import (
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	"github.com/vihat/vigov/service-comms/internal/richtext"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
@@ -61,7 +68,37 @@ const (
 	ActionCoverRejected        = "tu_choi_anh_bia_noi_dung"
 	ActionCoverExpired         = "anh_bia_noi_dung_het_han_tai"
 	ActionCoverWithdrawn       = "go_anh_bia_cong_khai"
+
+	// The body images of an article (ADR 0067 §Sửa đổi 03/10/2026, K3): the SAME upload acts under their
+	// own purpose, so their own verbs — an inspection reading "ảnh bìa" for an image in the body would be
+	// reading the wrong record.
+	ActionBodyImageUploadRequested = "yeu_cau_tai_anh_than_bai_noi_dung"
+	ActionBodyImageStored          = "luu_anh_than_bai_noi_dung"
+	ActionBodyImageRejected        = "tu_choi_anh_than_bai_noi_dung"
+	ActionBodyImageExpired         = "anh_than_bai_noi_dung_het_han_tai"
+	ActionBodyImageWithdrawn       = "go_anh_than_bai_cong_khai"
 )
+
+// uploadVerbs are the trail's verbs and subject prefix for one upload purpose.
+type uploadVerbs struct {
+	requested, stored, rejected, expired, withdrawn string
+	subject                                         string // + the UTC date, see coverAuditSubject
+}
+
+var (
+	coverVerbs = uploadVerbs{ActionCoverUploadRequested, ActionCoverStored, ActionCoverRejected,
+		ActionCoverExpired, ActionCoverWithdrawn, "noi-dung-mini-app/anh-bia/"}
+	bodyImageVerbs = uploadVerbs{ActionBodyImageUploadRequested, ActionBodyImageStored,
+		ActionBodyImageRejected, ActionBodyImageExpired, ActionBodyImageWithdrawn, "noi-dung-mini-app/anh-than-bai/"}
+)
+
+// verbsFor picks the verbs by the FILE's purpose — the row says what it is, never the route it came by.
+func verbsFor(purpose string) uploadVerbs {
+	if purpose == string(bodyImagePurpose) {
+		return bodyImageVerbs
+	}
+	return coverVerbs
+}
 
 // Rejection reasons — the `ly_do` of a rejected entry and the key the handler picks its sentence by.
 const (
@@ -142,8 +179,14 @@ type UploadPolicies interface {
 	Policy(ctx context.Context, purpose storage.Purpose) (uploadpolicy.Policy, bool, error)
 }
 
-// CoverFiles is the part of *store.StoredFileStore the cover acts call.
+// CoverFiles is the part of *store.StoredFileStore the cover and body-image acts call.
 type CoverFiles interface {
+	// The body images (ADR 0067 §Sửa đổi 03/10/2026): one batched read per article, the reservation of an
+	// unsaved article's id, and the retire of an image taken out of the body.
+	LiveForSubject(ctx context.Context, subjectID, purpose string) ([]domain.StoredFile, error)
+	SubjectReservedBy(ctx context.Context, tx *store.ScopedTx, subjectID, uploadedBy string) (bool, error)
+	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, by, reason string, at time.Time) error
+
 	InsertPending(ctx context.Context, tx *store.ScopedTx, f domain.StoredFile) error
 	ForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (*domain.StoredFile, error)
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
@@ -161,6 +204,18 @@ type CoverFiles interface {
 
 // coverPurpose is the one purpose a cover is uploaded under (core/storage, platform's policy).
 const coverPurpose = storage.PurposeContentImage
+
+// bodyImagePurpose is the one purpose an image INSIDE the body is uploaded under (ADR 0067 §Sửa đổi
+// 03/10/2026, K3; platform's `content-body-image` policy: types, size and the per-article count H7).
+//
+// A PURPOSE OF ITS OWN, NOT content-image: the cover's publish step withdraws every other public file of
+// the article, and the per-article count is a body-image limit the cover must not share. Same pipeline —
+// sniff, ClamAV, EXIF-free `thumb-1280` derivative, publish/withdraw with the article — no copy of it.
+const bodyImagePurpose = storage.PurposeContentBodyImage
+
+// bodyImageRetireReason is the `delete_reason` of a body image an edit took out of the body (rule 7: the
+// row and the object stay; only the per-article slot of H7 is freed).
+const bodyImageRetireReason = "gỡ ảnh khỏi thân bài (sửa mục nội dung)"
 
 // ContentCovers owns the upload acts, the staff preview and the public URLs.
 type ContentCovers struct {
@@ -202,7 +257,13 @@ func (uc *ContentCovers) uploadsConfigured() bool {
 }
 
 func (uc *ContentCovers) policy(ctx context.Context) (uploadpolicy.Policy, error) {
-	p, ok, err := uc.policies.Policy(ctx, coverPurpose)
+	return uc.policyFor(ctx, coverPurpose)
+}
+
+// policyFor reads platform's limits for one purpose — size, types and `max_files_per_subject` (for body
+// images the 20 of H7). NEVER a Go constant: the owner changes them by configuration (ADR 0052 §10).
+func (uc *ContentCovers) policyFor(ctx context.Context, purpose storage.Purpose) (uploadpolicy.Policy, error) {
+	p, ok, err := uc.policies.Policy(ctx, purpose)
 	switch {
 	case errors.Is(err, uploadpolicy.ErrUnavailable):
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: %w", ErrCoverLimitsUnavailable, err)
@@ -210,7 +271,7 @@ func (uc *ContentCovers) policy(ctx context.Context) (uploadpolicy.Policy, error
 		return uploadpolicy.Policy{}, fmt.Errorf("ảnh bìa: đọc giới hạn tải tệp: %w", err)
 	case !ok:
 		return uploadpolicy.Policy{}, fmt.Errorf("%w: platform has no limit for %s",
-			ErrCoverUploadNotConfigured, coverPurpose)
+			ErrCoverUploadNotConfigured, purpose)
 	}
 	return p, nil
 }
@@ -240,6 +301,27 @@ type CoverUpload struct {
 // failure leaves no row behind.
 func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
 	CoverUpload, error) {
+	return uc.requestUpload(ctx, coverPurpose, req, actor)
+}
+
+// RequestBodyImageUpload is RequestUpload for an image INSIDE the body (ADR 0067 §Sửa đổi 03/10/2026, K3):
+// same acts, purpose `content-body-image`, its own policy — and so its own `max_files_per_subject` (H7),
+// counted against the article's live body images in the same transaction as the pending row.
+func (uc *ContentCovers) RequestBodyImageUpload(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
+	CoverUpload, error) {
+	return uc.requestUpload(ctx, bodyImagePurpose, req, actor)
+}
+
+// requestUpload is the one implementation behind both. ContentItemID may name:
+//
+//	""                          a new article: its id is minted here (File.SubjectID tells the client);
+//	a live article of this commune
+//	an unsaved article's id     ONLY one THIS OFFICER already holds an upload on (SubjectReservedBy) — how a
+//	                            second body image, or the cover after a body image, joins the article the
+//	                            first upload reserved. Anybody else's minted id answers 404, like an unknown
+//	                            one (rule 4, forbidden #2 on the commune axis).
+func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purpose, req CoverUploadRequest,
+	actor audit.Actor) (CoverUpload, error) {
 
 	if actor.ID == "" {
 		return CoverUpload{}, ErrThieuNguoiTaoNoiDung
@@ -257,7 +339,7 @@ func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadReque
 	if !uc.uploadsConfigured() {
 		return CoverUpload{}, ErrCoverUploadNotConfigured
 	}
-	pol, err := uc.policy(ctx)
+	pol, err := uc.policyFor(ctx, purpose)
 	if err != nil {
 		return CoverUpload{}, err
 	}
@@ -286,7 +368,7 @@ func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadReque
 	now := uc.clock()
 	key := storage.Key{
 		Class: storage.ClassContentSource, TenantID: string(tenant.MustFrom(ctx)), CreatedAt: now,
-		Service: storage.ServiceComms, Purpose: coverPurpose,
+		Service: storage.ServiceComms, Purpose: purpose,
 		ObjectID: id, Variant: storage.VariantOriginal, Ext: ext,
 	}
 	objectKey, err := key.Path()
@@ -298,15 +380,26 @@ func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadReque
 		return CoverUpload{}, fmt.Errorf("ảnh bìa: dựng khoá tải lên: %w", err)
 	}
 
+	verbs := verbsFor(string(purpose))
 	var out CoverUpload
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if req.ContentItemID != "" {
 			if _, err := uc.items.TheoIDDeSua(ctx, tx, req.ContentItemID); err != nil {
-				return err
+				if !errors.Is(err, commsstore.ErrNoiDungKhongTonTai) {
+					return err
+				}
+				// No article yet: an id this officer's earlier upload reserved, or nothing.
+				reserved, rerr := uc.files.SubjectReservedBy(ctx, tx, req.ContentItemID, actor.ID)
+				if rerr != nil {
+					return rerr
+				}
+				if !reserved {
+					return err
+				}
 			}
 		}
 		if pol.FileCountLimited {
-			live, err := uc.files.CountForSubjectTx(ctx, tx, subject, string(coverPurpose),
+			live, err := uc.files.CountForSubjectTx(ctx, tx, subject, string(purpose),
 				now.Add(-storage.UploadTTL))
 			if err != nil {
 				return err
@@ -317,7 +410,7 @@ func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadReque
 		}
 		f := domain.StoredFile{
 			ID: id, Bucket: domain.StoredFileBucketPrivate, ObjectKey: objectKey,
-			RetentionClass: string(storage.ClassContentSource), Purpose: string(coverPurpose),
+			RetentionClass: string(storage.ClassContentSource), Purpose: string(purpose),
 			SubjectType: domain.StoredFileSubjectContentItem, SubjectID: subject, OriginalName: name,
 			Status: domain.StoredFilePending, UploadedBy: actor.ID, CreatedAt: now, UpdatedAt: now,
 		}
@@ -328,10 +421,10 @@ func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadReque
 		if err != nil {
 			return fmt.Errorf("ảnh bìa: ký lượt tải lên: %w", err)
 		}
-		if err := writeCoverAudit(ctx, tx, actor, ActionCoverUploadRequested, now, map[string]any{
+		if err := writeCoverAudit(ctx, tx, actor, verbs, verbs.requested, now, map[string]any{
 			"tep_id":          id,
 			"muc_noi_dung_id": subject,
-			"muc_dich":        string(coverPurpose),
+			"muc_dich":        string(purpose),
 			"loai_khai_bao":   req.ContentType,
 			"kich_thuoc_khai": req.Size,
 		}); err != nil {
@@ -371,6 +464,19 @@ type coverInspection struct {
 //
 // IDEMPOTENT: a file already `ready` is returned as it is — a retried request answers the same outcome.
 func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Actor) (domain.StoredFile, error) {
+	return uc.complete(ctx, coverPurpose, id, actor)
+}
+
+// CompleteBodyImageUpload is Complete for a body image — the same sniff, scan, hash, promote and `thumb-1280`
+// EXIF-free derivative. A cover's id answers 404 here and a body image's id answers 404 on Complete: the
+// purpose of the route must be the purpose of the row.
+func (uc *ContentCovers) CompleteBodyImageUpload(ctx context.Context, id string, actor audit.Actor) (
+	domain.StoredFile, error) {
+	return uc.complete(ctx, bodyImagePurpose, id, actor)
+}
+
+func (uc *ContentCovers) complete(ctx context.Context, purpose storage.Purpose, id string, actor audit.Actor) (
+	domain.StoredFile, error) {
 	if actor.ID == "" {
 		return domain.StoredFile{}, ErrThieuNguoiTaoNoiDung
 	}
@@ -385,7 +491,7 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 	if err != nil {
 		return domain.StoredFile{}, bocNoiDung(ctx, "hoàn tất ảnh bìa", err)
 	}
-	if !ownCoverUpload(f, actor.ID) {
+	if !ownUpload(f, actor.ID, purpose) {
 		return domain.StoredFile{}, ErrCoverFileNotFound
 	}
 	switch f.Status {
@@ -395,7 +501,7 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 	default:
 		return domain.StoredFile{}, ErrCoverNotPending
 	}
-	pol, err := uc.policy(ctx)
+	pol, err := uc.policyFor(ctx, purpose)
 	if err != nil {
 		return domain.StoredFile{}, err
 	}
@@ -413,13 +519,14 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 	}
 
 	now := uc.clock()
+	verbs := verbsFor(string(purpose))
 	var done domain.StoredFile
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		cur, err := uc.files.ForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
 		}
-		if !ownCoverUpload(cur, actor.ID) {
+		if !ownUpload(cur, actor.ID, purpose) {
 			return ErrCoverFileNotFound
 		}
 		if cur.Status == domain.StoredFileReady {
@@ -433,12 +540,12 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 				return err
 			}
 			if insp.kind == coverFailed {
-				return writeCoverAudit(ctx, tx, actor, ActionCoverRejected, now, map[string]any{
+				return writeCoverAudit(ctx, tx, actor, verbs, verbs.rejected, now, map[string]any{
 					"tep_id": id, "ly_do": insp.reason, "muc_noi_dung_id": cur.SubjectID,
 				})
 			}
 			done = final
-			return writeCoverAudit(ctx, tx, actor, ActionCoverStored, now, map[string]any{
+			return writeCoverAudit(ctx, tx, actor, verbs, verbs.stored, now, map[string]any{
 				"tep_id": id, "muc_noi_dung_id": cur.SubjectID, "loai_tep": insp.facts.MIMEType,
 				"kich_thuoc": insp.facts.SizeBytes, "sha256": insp.facts.SHA256,
 				"ban_dan_xuat": CoverDerivativeVariant, "khoi_phuc_tu_dich": insp.recovered,
@@ -447,10 +554,10 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 			if cur.Status != domain.StoredFilePending {
 				return ErrCoverNotPending
 			}
-			to, action := domain.StoredFileRejected, ActionCoverRejected
+			to, action := domain.StoredFileRejected, verbs.rejected
 			d := map[string]any{"tep_id": id, "muc_noi_dung_id": cur.SubjectID}
 			if insp.kind == coverExpired {
-				to, action = domain.StoredFileFailed, ActionCoverExpired
+				to, action = domain.StoredFileFailed, verbs.expired
 			} else {
 				d["ly_do"], d["da_xoa_tep_tam"] = insp.reason, insp.tempRemoved
 				if insp.signature != "" {
@@ -460,7 +567,7 @@ func (uc *ContentCovers) Complete(ctx context.Context, id string, actor audit.Ac
 			if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, to, now); err != nil {
 				return err
 			}
-			return writeCoverAudit(ctx, tx, actor, action, now, d)
+			return writeCoverAudit(ctx, tx, actor, verbs, action, now, d)
 		}
 		return fmt.Errorf("ảnh bìa: kết quả kiểm tra không rõ (%d)", insp.kind)
 	})
@@ -512,26 +619,26 @@ func (uc *ContentCovers) walkToEnd(ctx context.Context, tx *store.ScopedTx, cur 
 	return cur, nil
 }
 
-// ownCoverUpload: the row exists, is a content-item cover, and was issued to THIS officer.
-func ownCoverUpload(f *domain.StoredFile, officer string) bool {
+// ownUpload: the row exists, is a content-item file of THIS purpose, and was issued to THIS officer.
+func ownUpload(f *domain.StoredFile, officer string, purpose storage.Purpose) bool {
 	return f != nil && officer != "" && f.SubjectType == domain.StoredFileSubjectContentItem &&
-		f.UploadedBy == officer && f.Purpose == string(coverPurpose)
+		f.UploadedBy == officer && f.Purpose == string(purpose)
 }
 
-// coverAuditSubject is the trail's locator for a cover file: an article has no business code
-// (chuDeNoiDungMiniApp explains), and the file's own id is in the delta.
-func coverAuditSubject(at time.Time) string {
-	return "noi-dung-mini-app/anh-bia/" + at.UTC().Format("2006-01-02")
+// coverAuditSubject is the trail's locator for an article's file (cover or body image, by v.subject): an
+// article has no business code (chuDeNoiDungMiniApp explains), and the file's own id is in the delta.
+func coverAuditSubject(v uploadVerbs, at time.Time) string {
+	return v.subject + at.UTC().Format("2006-01-02")
 }
 
-func writeCoverAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor, action string,
+func writeCoverAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor, v uploadVerbs, action string,
 	at time.Time, d map[string]any) error {
 	delta, err := json.Marshal(d)
 	if err != nil {
 		return fmt.Errorf("ảnh bìa: mã hoá delta: %w", err)
 	}
 	// SAME TRANSACTION AS THE ROW (rule 6, invariant 3); TenantID filled by audit.Write from the tx.
-	return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: action, Subject: coverAuditSubject(at),
+	return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: action, Subject: coverAuditSubject(v, at),
 		At: at, Delta: delta})
 }
 
@@ -573,7 +680,7 @@ func (uc *ContentCovers) inspect(ctx context.Context, f domain.StoredFile, key s
 		return uc.reject(ctx, uploadKey, CoverRejectTypeMismatch, ""), nil
 	}
 	if pol.FileCountLimited {
-		have, err := uc.files.CountForSubject(ctx, f.SubjectID, string(coverPurpose))
+		have, err := uc.files.CountForSubject(ctx, f.SubjectID, f.Purpose) // the row's purpose: cover or body image
 		if err != nil {
 			return coverInspection{}, err
 		}
@@ -842,6 +949,98 @@ func (uc *ContentCovers) PublicImageURLs(ctx context.Context, fileIDs []string) 
 	return out, nil
 }
 
+// BodyImageView is what the staff detail shows about one image the body references: CoverView's fields,
+// for the editor to draw the figure. PreviewURL is "" when the id is not a ready body image of THIS article
+// (unknown, another article's, another purpose, not finished) or storage is not configured.
+type BodyImageView = CoverView
+
+// BodyImageViews describes the body images an article's body references, in fileIDs order (the caller
+// passes richtext.ImageFileIDs of the stored body). ONE READ of the article's live body-image rows, then
+// one offline signature per ready file — never a read per image. NOT AUDITED, for View's reason.
+//
+// A signing failure leaves that image without its URL and is returned beside the views, so the handler
+// can log it and still show the article.
+func (uc *ContentCovers) BodyImageViews(ctx context.Context, itemID string, fileIDs []string) (
+	[]BodyImageView, error) {
+
+	if len(fileIDs) == 0 || itemID == "" {
+		return nil, nil
+	}
+	rows, err := uc.files.LiveForSubject(ctx, itemID, string(bodyImagePurpose))
+	if err != nil {
+		return nil, fmt.Errorf("ảnh thân bài: đọc tệp của mục: %w", err)
+	}
+	byID := make(map[string]domain.StoredFile, len(rows))
+	for _, f := range rows {
+		byID[f.ID] = f
+	}
+	var firstErr error
+	out := make([]BodyImageView, 0, len(fileIDs))
+	for _, id := range fileIDs {
+		v := BodyImageView{FileID: id}
+		f, ok := byID[id]
+		if ok {
+			v.Status, v.Public = f.Status, f.PublicObjectKey != ""
+		}
+		if ok && f.Status == domain.StoredFileReady && uc.objects != nil {
+			u, err := uc.presignDerivative(ctx, f)
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+			if err == nil {
+				v.PreviewURL, v.PreviewExpiresAt = u, uc.clock().Add(storage.MaxDownloadTTL)
+			}
+		}
+		out = append(out, v)
+	}
+	return out, firstErr
+}
+
+// presignDerivative signs a short GET of a file's PRIVATE `thumb-1280` derivative — what residents would
+// see once published, EXIF-free. The mechanism and TTL of the cover preview (View).
+func (uc *ContentCovers) presignDerivative(ctx context.Context, f domain.StoredFile) (storage.PresignedURL, error) {
+	orig, err := storage.ParseKey(f.ObjectKey)
+	if err != nil {
+		return "", fmt.Errorf("ảnh: khoá đối tượng đã ghi không hợp lệ: %w", err)
+	}
+	derivKey, err := coverDerivativeKey(orig).Path()
+	if err != nil {
+		return "", fmt.Errorf("ảnh: dựng khoá bản dẫn xuất: %w", err)
+	}
+	u, err := uc.objects.PresignDownload(ctx, storage.BucketPrivate, derivKey, storage.MaxDownloadTTL, f.OriginalName)
+	if err != nil {
+		return "", coverStorageErr("ký liên kết xem trước", err)
+	}
+	return u, nil
+}
+
+// PublicBodyImageURLs maps the PUBLISHED body images of ONE article of the CURRENT commune to their
+// anonymous URL — the public detail's resolver (ADR 0067 §Sửa đổi 03/10/2026, K2/K7). One read: the
+// article's live `content-body-image` rows (commune bound to $1, subject = itemID), keeping only those
+// with a recorded public copy. Another commune's, another article's, the cover, an unpublished file: absent,
+// and the read path drops the image block. No object storage → empty, never a guessed link.
+func (uc *ContentCovers) PublicBodyImageURLs(ctx context.Context, itemID string) (map[string]string, error) {
+	out := map[string]string{}
+	if itemID == "" || uc.objects == nil {
+		return out, nil
+	}
+	rows, err := uc.files.LiveForSubject(ctx, itemID, string(bodyImagePurpose))
+	if err != nil {
+		return nil, fmt.Errorf("ảnh thân bài: đọc tệp công khai của mục: %w", err)
+	}
+	for _, f := range rows {
+		if f.PublicObjectKey == "" || f.Status != domain.StoredFileReady {
+			continue
+		}
+		u, err := uc.objects.PublicURL(f.PublicObjectKey)
+		if err != nil {
+			continue // a key the schema admitted but storage refuses: omitted, never guessed
+		}
+		out[f.ID] = u
+	}
+	return out, nil
+}
+
 // --- publishing the derivative with the article (ADR 0052 §11) ---------------------------------------
 
 // coverPublisher keeps the public copy of an article's cover in step with the article. It is used by
@@ -901,20 +1100,100 @@ func (p *coverPublisher) checkAttach(ctx context.Context, tx *store.ScopedTx, it
 	return domain.CheckCoverUsable(f, itemID, string(coverPurpose))
 }
 
+// checkBodyImages is the attach check of a body on save (ADR 0067 §Sửa đổi 03/10/2026, K2): EVERY file id
+// the sanitised body references, locked and checked in the article's transaction — a completed, clean
+// `content-body-image` of THIS commune (the read is commune-bound), uploaded for THIS article. One error
+// for every cause (domain.ErrBodyImageNotUsable). No trigger stands under this one: the body is free text.
+func (p *coverPublisher) checkBodyImages(ctx context.Context, tx *store.ScopedTx, itemID string, ids []string) error {
+	for _, id := range ids {
+		f, err := p.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := domain.CheckBodyImageUsable(f, itemID, string(bodyImagePurpose)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// retireUnreferencedBodyImages soft-deletes, in the save's transaction, the body images the saved body does
+// not show — freeing their slot of H7's per-article count (rule 7: soft, the object stays, `deleted_by` is
+// the officer's business code). Only a `content-body-image` file uploaded for THIS article is ever touched
+// (read by subject and purpose, re-checked under lock): never the cover, never another article's file. A file still carrying a public key is NOT retired here — the schema refuses a
+// deleted row with a key, and the copy must go first: withdrawAfterCommit retires it once withdrawn.
+//
+// NO audit.Write HERE, deliberately: tx is the SAVE's transaction, and Them / Sua write the returned ids
+// into that save's own entry (`body_images_retired`) — one act, one entry, one transaction (rule 6, invariant 3),
+// exactly as it records `audio_file_retired`.
+//
+// WHICH FILES (coordinator, 03/10/2026): every READY body image of this article the SAVED body does not
+// reference — the ones this edit removed AND the ones uploaded, completed and never put in the body (the
+// "orphans" that would otherwise hold a slot for ever). A `pending` / `scanning` / `stored` / `processing`
+// upload is LEFT ALONE: it may be in flight while the officer saves, and its figure arrives with the next
+// save. Run on every successful create and edit, so the count stays honest without a sweep job.
+func (p *coverPublisher) retireUnreferencedBodyImages(ctx context.Context, tx *store.ScopedTx, itemID,
+	body string, by string, at time.Time) ([]string, error) {
+
+	live, err := p.files.LiveForSubject(ctx, itemID, string(bodyImagePurpose))
+	if err != nil {
+		return nil, err
+	}
+	inBody := map[string]bool{}
+	for _, id := range richtext.ImageFileIDs(body) {
+		inBody[id] = true
+	}
+	var retired []string
+	for _, cand := range live {
+		if inBody[cand.ID] || cand.Status != domain.StoredFileReady {
+			continue
+		}
+		id := cand.ID
+		f, err := p.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return nil, err
+		}
+		if f == nil || f.SubjectType != domain.StoredFileSubjectContentItem || f.SubjectID != itemID ||
+			f.Purpose != string(bodyImagePurpose) || f.Status != domain.StoredFileReady || f.PublicObjectKey != "" {
+			continue
+		}
+		err = p.files.SoftDelete(ctx, tx, id, by, bodyImageRetireReason, at)
+		if err != nil && !errors.Is(err, commsstore.ErrStoredFileMoved) {
+			return nil, err
+		}
+		retired = append(retired, id)
+	}
+	return retired, nil
+}
+
 // settlement is what settle decided inside the article's transaction.
 type settlement struct {
-	// published is the file whose public key this transaction records ("" = none newly recorded).
+	// published is the cover whose public key this transaction records ("" = none newly recorded).
 	published string
-	// copied: PublishDerivative ran in this transaction — a rollback must undo it (undoPublish).
-	copied bool
+	// bodyPublished are the body images whose public key this transaction records.
+	bodyPublished []string
+	// copied are the files PublishDerivative ran for in this transaction — a rollback must undo each
+	// (undoPublish).
+	copied []string
 	// withdraw are the files whose public copy goes after commit (withdrawAfterCommit).
 	withdraw []domain.StoredFile
 }
 
 // settle runs INSIDE the article's transaction, after the article row is written and while it is
-// locked. The cover that must be public (article `dang-hien` with a cover) gets its derivative copied
-// and its public key recorded; every other file of the article still carrying a key is listed for
-// withdrawal after commit. Nothing that is not THIS article's `ready` cover is ever copied.
+// locked, and decides PER PURPOSE which public copies the article must have:
+//
+//	content-image        the cover — public iff the article is `dang-hien` and points at it
+//	content-body-image   every image the body references (richtext.ImageFileIDs) — public iff the
+//	                     article is `dang-hien` (ADR 0067 §Sửa đổi 03/10/2026, K3)
+//	anything else        never public: withdrawn
+//
+// Wanted and not yet public → copied and recorded here. Public and not wanted (hidden, unpublished,
+// deleted, replaced, removed from the body) → listed for withdrawal after commit. A body image that is
+// referenced but not usable (not this article's, not ready — a body saved before the attach check) is
+// skipped, never copied: the public read drops it anyway. An unusable COVER still refuses the write.
+//
+// THE LOCK IS HELD FOR THE COPIES: one ≤ 1 MB server-side copy per newly published image, at most the
+// policy's per-article count (H7) — the same reasoning as coverPublisher's PUBLISH paragraph, times n.
 func (p *coverPublisher) settle(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp,
 	at time.Time) (settlement, error) {
 
@@ -922,57 +1201,104 @@ func (p *coverPublisher) settle(ctx context.Context, tx *store.ScopedTx, n domai
 	if err != nil {
 		return settlement{}, err
 	}
-	want := ""
-	if n.HienChoDan() && n.CoverImageFileID != "" {
-		want = n.CoverImageFileID
+	wantCover := ""
+	var wantBody []string
+	if n.HienChoDan() {
+		wantCover = n.CoverImageFileID
+		wantBody = richtext.ImageFileIDs(n.NoiDung)
+	}
+	inBody := make(map[string]bool, len(wantBody))
+	for _, id := range wantBody {
+		inBody[id] = true
 	}
 	var s settlement
-	have := false
+	have := map[string]bool{}
 	for _, f := range public {
-		if f.ID == want {
-			have = true
+		keep := (f.Purpose == string(coverPurpose) && f.ID == wantCover && wantCover != "") ||
+			(f.Purpose == string(bodyImagePurpose) && inBody[f.ID])
+		if keep {
+			have[f.ID] = true
 			continue
 		}
 		s.withdraw = append(s.withdraw, f)
 	}
-	if want == "" || have {
-		return s, nil
+	if wantCover != "" && !have[wantCover] {
+		f, err := p.files.ForUpdate(ctx, tx, wantCover)
+		if err != nil {
+			return settlement{}, err
+		}
+		if err := domain.CheckCoverUsable(f, n.ID, string(coverPurpose)); err != nil {
+			return settlement{}, err
+		}
+		if err := p.publish(ctx, tx, *f, at, &s); err != nil {
+			return s, err
+		}
+		s.published = wantCover
 	}
-	f, err := p.files.ForUpdate(ctx, tx, want)
-	if err != nil {
-		return settlement{}, err
+	for _, id := range wantBody {
+		if have[id] {
+			continue
+		}
+		f, err := p.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return s, err
+		}
+		if domain.CheckBodyImageUsable(f, n.ID, string(bodyImagePurpose)) != nil {
+			continue
+		}
+		if err := p.publish(ctx, tx, *f, at, &s); err != nil {
+			return s, err
+		}
+		s.bodyPublished = append(s.bodyPublished, id)
 	}
-	if err := domain.CheckCoverUsable(f, n.ID, string(coverPurpose)); err != nil {
-		return settlement{}, err
-	}
+	return s, nil
+}
+
+// publish copies one ready file's derivative to its public twin and records the key, in the article's
+// transaction. The copy is listed in s.copied BEFORE the key is written, so a failure of the write still
+// undoes the copy.
+func (p *coverPublisher) publish(ctx context.Context, tx *store.ScopedTx, f domain.StoredFile, at time.Time,
+	s *settlement) error {
+
 	if p.objects == nil {
-		return settlement{}, ErrCoverUploadNotConfigured
+		return ErrCoverUploadNotConfigured
 	}
 	orig, err := storage.ParseKey(f.ObjectKey)
 	if err != nil {
-		return settlement{}, fmt.Errorf("ảnh bìa: khoá đối tượng đã ghi không hợp lệ: %w", err)
+		return fmt.Errorf("ảnh: khoá đối tượng đã ghi không hợp lệ: %w", err)
 	}
 	pub, err := coverPublicKey(orig).Path()
 	if err != nil {
-		return settlement{}, fmt.Errorf("ảnh bìa: dựng khoá công khai: %w", err)
+		return fmt.Errorf("ảnh: dựng khoá công khai: %w", err)
 	}
 	if err := p.objects.PublishDerivative(ctx, coverDerivativeKey(orig), coverPublicKey(orig)); err != nil {
-		return settlement{}, fmt.Errorf("%w: %w", ErrCoverPublishUnavailable, err)
+		return fmt.Errorf("%w: %w", ErrCoverPublishUnavailable, err)
 	}
-	s.copied = true
-	if err := p.files.SetPublicObjectKey(ctx, tx, want, pub, at); err != nil {
-		return s, err
+	s.copied = append(s.copied, f.ID)
+	return p.files.SetPublicObjectKey(ctx, tx, f.ID, pub, at)
+}
+
+// undoCopies is the compensation of every copy a rolled-back transaction made.
+func (p *coverPublisher) undoCopies(ctx context.Context, s settlement) {
+	for _, id := range s.copied {
+		p.undoPublish(ctx, id)
 	}
-	s.published = want
-	return s, nil
 }
 
 // withdrawAfterCommit removes the public copies settle listed, then clears each key with its own audit
 // entry. Failures are logged by object key (no personal data in a key, ADR 0052 §3) and left for the
 // next edit to retry: the key stays set, which is the durable record that a copy may still exist.
+//
+// A BODY IMAGE THE ARTICLE'S BODY NO LONGER REFERENCES is also retired (soft-deleted) in that second
+// transaction, once its key is cleared — the published counterpart of retireUnreferencedBodyImages. One that is
+// still referenced (the article was hidden or deleted) keeps its row: it is part of the record (rule 7).
 func (p *coverPublisher) withdrawAfterCommit(ctx context.Context, db *store.DB, n domain.NoiDungMiniApp,
 	files []domain.StoredFile, actor audit.Actor, at time.Time) {
 
+	inBody := map[string]bool{}
+	for _, id := range richtext.ImageFileIDs(n.NoiDung) {
+		inBody[id] = true
+	}
 	for _, f := range files {
 		if p.objects == nil {
 			p.log.Warn("ảnh bìa: chưa cấu hình kho lưu tệp — bản công khai của ảnh bìa cũ CHƯA được gỡ",
@@ -988,15 +1314,25 @@ func (p *coverPublisher) withdrawAfterCommit(ctx context.Context, db *store.DB, 
 				"xa", string(tenant.MustFrom(ctx)), "khoa_cong_khai", f.PublicObjectKey, "err", err)
 			continue
 		}
+		retire := f.Purpose == string(bodyImagePurpose) && !inBody[f.ID]
 		err = db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 			if err := p.files.SetPublicObjectKey(ctx, tx, f.ID, "", at); err != nil {
 				return err
 			}
-			delta, err := json.Marshal(map[string]any{"id": n.ID, "tep_id": f.ID})
+			d := map[string]any{"id": n.ID, "tep_id": f.ID}
+			if retire {
+				err := p.files.SoftDelete(ctx, tx, f.ID, actor.ID, bodyImageRetireReason, at)
+				if err != nil && !errors.Is(err, commsstore.ErrStoredFileMoved) {
+					return err
+				}
+				d["da_go_khoi_than_bai"] = true
+			}
+			delta, err := json.Marshal(d)
 			if err != nil {
 				return fmt.Errorf("ảnh bìa: mã hoá delta: %w", err)
 			}
-			return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: ActionCoverWithdrawn,
+			// SAME TRANSACTION AS THE KEY CLEAR AND THE RETIRE (rule 6, invariant 3).
+			return audit.Write(ctx, tx, audit.Entry{Actor: actor, Action: verbsFor(f.Purpose).withdrawn,
 				Subject: chuDeNoiDungMiniApp(n), At: at, Delta: delta})
 		})
 		if err != nil {

@@ -809,6 +809,58 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
 				http.HandlerFunc(h.CompleteCoverUpload))))
 
+	// --- the images INSIDE the body: the same three-step upload (ADR 0067 §Sửa đổi 03/10/2026) -----------
+	//
+	// internal/http/content_body_image.go has the contract; internal/app/content_cover.go the flow. The
+	// cover's pipeline under purpose `content-body-image`: sniff, ClamAV, `thumb-1280` derivative without
+	// EXIF, published and withdrawn with the article. `content.update` on both — K8 names it, the key the
+	// cover routes use, seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5,
+	// invariant 3c). No rate limit of its own (K8): authenticated, audited, and bounded by the per-article
+	// count of platform's policy (H7, 20 on 03/10/2026 — read per request, never a constant here).
+	//
+	// 404 is a `content_item_id` that is neither a live article of this commune nor an id an earlier upload
+	// of THIS officer reserved — one answer for all (rule 4, forbidden #2 on the commune axis). 409
+	// `body_image_limit` when the article already holds the policy's count of live body images.
+	//
+	// idem.Required(idem.MoKhiHong): as on the cover route — a double submit issues one more pending row
+	// (one slot for 15 minutes), never a stored file.
+	//
+	// @summary  Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu
+	// @screen   11-noi-dung-mini-app §7
+	// @request  bodyImageUploadIn
+	// @reply    201 bodyImageUploadOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/body-images",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.RequestBodyImageUpload))))
+
+	// HOÀN TẤT TẢI ẢNH THÂN BÀI — the cover completion's acts on a body-image upload. Only the officer it
+	// was issued to; anybody else's id, and a cover's id, answer 404. 422 `body_image_rejected` for an
+	// infected, mistyped, oversized, undecodable or over-count file; 503 when the scanner or platform is
+	// down — nothing written, retryable, NEVER stored unscanned (ADR 0052 §9).
+	//
+	// @summary  Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng
+	// @screen   11-noi-dung-mini-app §7
+	// @reply    200 bodyImageFileOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/content-items/body-images/{id}/completion",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("hoàn tất lần hai trên ảnh đã sẵn sàng trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
+				http.HandlerFunc(h.CompleteBodyImageUpload))))
+
 	// --- the broadcast audio of a `truyen-thanh` item: ADR 0052's three-step upload (ADR 0067 §4) -------
 	//
 	// internal/app/content_audio.go has the whole flow and says why it differs from the cover: the item
