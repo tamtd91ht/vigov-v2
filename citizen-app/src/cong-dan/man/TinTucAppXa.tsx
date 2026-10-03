@@ -31,7 +31,7 @@ import {
   ViewCount,
 } from "./TinTucXaScreen";
 
-import { ArticleBody } from "./article-body";
+import { ArticleBody, NewsSapo } from "./article-body";
 import { BieuTuong } from "./BieuTuong";
 import { BroadcastPlayer, durationWords, formatClock } from "./broadcast-player";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
@@ -760,7 +760,7 @@ export function ArticleCover(props: { imageUrl: string | undefined; failed: bool
 }
 
 /**
- * A loaded article — cover, title, meta line (published at), the event block, the "Xem video" button, body,
+ * A loaded article — cover, title, sapo (the summary, bold; absent when empty), meta line (published at), the event block, the "Xem video" button, body,
  * related items. PURE: the cover's and the video's failures are the caller's.
  *
  * "Xem video" (owner, 01/10/2026, ADR 0047 §6): only when the caller passes `onWatchVideo`, which `BaiTinXa` does
@@ -786,6 +786,7 @@ export function NewsArticle(props: {
     <article className="xa-bai">
       <ArticleCover imageUrl={bai.imageUrl} failed={props.coverFailed} onFail={props.onCoverFail} />
       <h2 className="xa-bai__tieu-de">{bai.tieu_de}</h2>
+      <NewsSapo summary={bai.tom_tat} />
       <p className={bai.viewCount === undefined ? "xa-phu" : "xa-phu news-meta"}>
         {dongPhu(bai)}
         {bai.viewCount !== undefined && <ViewCount count={bai.viewCount} />}

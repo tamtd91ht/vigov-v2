@@ -391,7 +391,17 @@ export type BodyRun = {
 export type BodyBlock =
   | { readonly kind: "paragraph"; readonly runs: readonly BodyRun[] }
   | { readonly kind: "heading"; readonly level: 2 | 3; readonly runs: readonly BodyRun[] }
-  | { readonly kind: "bullet_list" | "ordered_list"; readonly items: readonly (readonly BodyRun[])[] };
+  | { readonly kind: "bullet_list" | "ordered_list"; readonly items: readonly (readonly BodyRun[])[] }
+  /**
+   * A body image (ADR 0067 §Sửa đổi 03/10/2026, H1–H5). `src` is an absolute `https:` URL — the server sends one
+   * only for the article's own PUBLISHED file on ViGov's public store; this app adds the protocol wall again and
+   * nothing more. `alt` is `""` when staff typed none. `caption` ABSENT when it has none or nothing in it read.
+   */
+  | { readonly kind: "image"; readonly src: string; readonly alt: string; readonly caption?: readonly BodyRun[] }
+  /** A quotation: one entry per paragraph, each with at least one run. */
+  | { readonly kind: "quote"; readonly paragraphs: readonly (readonly BodyRun[])[] }
+  /** The author / source line staff typed at the end of the article (H9) — drawn where it stands. */
+  | { readonly kind: "byline"; readonly runs: readonly BodyRun[] };
 
 /**
  * A link target the app may offer to open: an absolute `https:` URL with a host and no user part, or
@@ -435,6 +445,11 @@ function readRuns(v: unknown): BodyRun[] {
  * one would cost them the article. So: not an array → absent; an unknown `kind` (a later server's block, or
  * anything that ever said `script`) → that block skipped; a block left with no text → skipped; nothing left
  * → absent. A heading level other than 3 is drawn as level 2 — a size, not a fact.
+ *
+ * AN IMAGE whose `src` is not an absolute `https:` URL with a host and no user part is skipped WHOLE, caption included: the
+ * server sends an image block only for a resolved https file, so anything else means something upstream is wrong
+ * — and the caption's words are already in the plain `body`, which is not what is drawn here, so nothing is
+ * claimed about them. An `alt` that is not a string is `""` (decorative), never a reason to drop the picture.
  */
 export function readBodyBlocks(v: unknown): readonly BodyBlock[] | undefined {
   if (!Array.isArray(v)) return undefined;
@@ -442,10 +457,24 @@ export function readBodyBlocks(v: unknown): readonly BodyBlock[] | undefined {
   for (const b of v) {
     if (typeof b !== "object" || b === null) continue;
     const r = b as Record<string, unknown>;
-    if (r.kind === "paragraph" || r.kind === "heading") {
+    if (r.kind === "paragraph" || r.kind === "heading" || r.kind === "byline") {
       const runs = readRuns(r.runs);
       if (runs.length === 0) continue;
-      out.push(r.kind === "heading" ? { kind: "heading", level: r.level === 3 ? 3 : 2, runs } : { kind: "paragraph", runs });
+      if (r.kind === "heading") out.push({ kind: "heading", level: r.level === 3 ? 3 : 2, runs });
+      else out.push({ kind: r.kind, runs });
+    } else if (r.kind === "image") {
+      // `readHttpsLink`, not only `readImageUrl`'s protocol check: `https://store@other.example/x.jpg` is an https
+      // URL that loads from `other.example` — a host every resident's phone would then be sent to (stop condition 5).
+      const src = readHttpsLink(r.src);
+      if (src === null) continue;
+      const caption = readRuns(r.caption);
+      out.push({ kind: "image", src, alt: laChuoi(r.alt) ? r.alt : "", ...(caption.length === 0 ? {} : { caption }) });
+    } else if (r.kind === "quote") {
+      if (!Array.isArray(r.paragraphs)) continue;
+      const paragraphs = r.paragraphs
+        .map((p) => (typeof p === "object" && p !== null ? readRuns((p as Record<string, unknown>).runs) : []))
+        .filter((runs) => runs.length > 0);
+      if (paragraphs.length > 0) out.push({ kind: "quote", paragraphs });
     } else if (r.kind === "bullet_list" || r.kind === "ordered_list") {
       if (!Array.isArray(r.items)) continue;
       const items = r.items

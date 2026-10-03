@@ -65,6 +65,48 @@ const WIRE_BLOCKS = [
   { kind: "ordered_list", items: [{ runs: [{ text: "Đăng ký" }] }, { runs: [{ text: "Tiêm" }] }] },
 ];
 
+/** A published body image on the (fake) public store host. */
+const IMG_SRC = "https://kho.example.vn/t_TENANT/content-body-image/anh-1.jpg";
+
+/** The three kinds added 03/10/2026 (ADR 0067 §Sửa đổi 03/10/2026, K4), on the wire. */
+const RICH_BLOCKS = [
+  { kind: "paragraph", runs: [{ text: "Mở đầu." }] },
+  { kind: "image", src: IMG_SRC, alt: "Đoàn kiểm tra tại trạm y tế", caption: [{ text: "Ảnh: " }, { text: "trạm y tế", href: LINK }] },
+  { kind: "quote", paragraphs: [{ runs: [{ text: "Câu trích một." }] }, { runs: [{ text: "Câu trích ", italic: true }, { text: "hai", href: LINK }] }] },
+  { kind: "byline", runs: [{ text: "Nguồn: " }, { text: "Văn phòng UBND", bold: true }] },
+];
+
+/** RICH_BLOCKS as the parser returns them. */
+const RICH: BodyBlock[] = [
+  { kind: "paragraph", runs: [{ text: "Mở đầu.", bold: false, italic: false }] },
+  {
+    kind: "image",
+    src: IMG_SRC,
+    alt: "Đoàn kiểm tra tại trạm y tế",
+    caption: [
+      { text: "Ảnh: ", bold: false, italic: false },
+      { text: "trạm y tế", bold: false, italic: false, href: LINK },
+    ],
+  },
+  {
+    kind: "quote",
+    paragraphs: [
+      [{ text: "Câu trích một.", bold: false, italic: false }],
+      [
+        { text: "Câu trích ", bold: false, italic: true },
+        { text: "hai", bold: false, italic: false, href: LINK },
+      ],
+    ],
+  },
+  {
+    kind: "byline",
+    runs: [
+      { text: "Nguồn: ", bold: false, italic: false },
+      { text: "Văn phòng UBND", bold: true, italic: false },
+    ],
+  },
+];
+
 const ARTICLE: ArticleData = {
   id: "tin-1",
   tieu_de: "Tiêm chủng",
@@ -92,11 +134,11 @@ describe("body_blocks — the parser keeps what it can draw, and nothing else", 
     });
   });
 
-  it("an unknown kind — `script`, `image`, a later server's block — is skipped, the rest stays", () => {
+  it("an unknown kind — `script`, `iframe`, a later server's block — is skipped, the rest stays", () => {
     const blocks = readBodyBlocks([
       { kind: "script", runs: [{ text: "alert(1)" }] },
-      { kind: "image", src: "https://anh.example.vn/x.jpg" },
       { kind: "iframe", runs: [{ text: "x" }] },
+      { kind: "video", src: "https://anh.example.vn/x.mp4" },
       { kind: "paragraph", runs: [{ text: "Còn lại." }] },
       null,
       "paragraph",
@@ -129,6 +171,47 @@ describe("body_blocks — the parser keeps what it can draw, and nothing else", 
     // A run with an empty or non-string text is skipped; a heading level that is not 3 draws as 2.
     expect(readBodyBlocks([{ kind: "heading", level: 7, runs: [{ text: "" }, { text: 5 }, { text: "Đầu mục" }] }])).toEqual([
       { kind: "heading", level: 2, runs: [{ text: "Đầu mục", bold: false, italic: false }] },
+    ]);
+  });
+
+  it("image: kept only with an https src (host, no user part); alt defaults to empty; caption read as runs", () => {
+    expect(readBodyBlocks(RICH_BLOCKS)).toEqual(RICH);
+    for (const src of [
+      "http://anh.example.vn/x.jpg",
+      "javascript:alert(1)",
+      "data:image/png;base64,AAAA",
+      "/x.jpg",
+      "//anh.example.vn/x.jpg",
+      "https://kho.example.vn@lua-dao.example/x.jpg",
+      "",
+      undefined,
+      7,
+    ]) {
+      // Skipped WHOLE, caption included; the paragraph after it stays.
+      expect(
+        readBodyBlocks([{ kind: "image", src, alt: "a", caption: [{ text: "Chú thích" }] }, { kind: "paragraph", runs: [{ text: "Sau." }] }]),
+        String(src),
+      ).toEqual([{ kind: "paragraph", runs: [{ text: "Sau.", bold: false, italic: false }] }]);
+    }
+    // No alt, a non-string alt, an empty or unreadable caption → still a picture, with alt "" and no caption key.
+    for (const extra of [{}, { alt: 5 }, { caption: [] }, { caption: "x" }, { caption: [{ text: "" }] }]) {
+      const [b] = readBodyBlocks([{ kind: "image", src: IMG_SRC, ...extra }])!;
+      expect(b, JSON.stringify(extra)).toEqual({ kind: "image", src: IMG_SRC, alt: "" });
+    }
+  });
+
+  it("quote and byline: empty paragraphs / runs dropped; nothing readable → the block is skipped", () => {
+    expect(
+      readBodyBlocks([
+        { kind: "quote", paragraphs: [{ runs: [] }, { runs: [{ text: "Một" }] }, null, { runs: [{ text: 3 }] }] },
+        { kind: "quote", paragraphs: [] },
+        { kind: "quote", paragraphs: "x" },
+        { kind: "byline", runs: [] },
+        { kind: "byline", runs: [{ text: "Tác giả" }] },
+      ]),
+    ).toEqual([
+      { kind: "quote", paragraphs: [[{ text: "Một", bold: false, italic: false }]] },
+      { kind: "byline", runs: [{ text: "Tác giả", bold: false, italic: false }] },
     ]);
   });
 
@@ -209,6 +292,126 @@ describe("the body drawn — React elements, never markup", () => {
     expect(shared).not.toContain("<button");
     // And an older server: the shared app's paragraphs keep their class.
     expect(html(createElement(BaiTin, { bai: ARTICLE }))).toContain('<p class="cd-tin__doan">Bản văn bản thuần.</p>');
+  });
+});
+
+describe("body images, quotes and the byline — drawn as elements, the same in both apps", () => {
+  const draw = (onLink?: (h: string) => void) =>
+    html(createElement(ArticleBody, { blocks: RICH, text: "không dùng", paragraphClass: "xa-bai__doan", onLink }));
+
+  it("image: a figure with a lazy img (src, alt as sent) and its caption; quote: a blockquote of paragraphs; byline: its own line", () => {
+    const page = draw(noop);
+    expect(page).toContain(
+      `<figure class="xa-body-figure"><img class="xa-body-figure__image" src="${IMG_SRC}" alt="Đoàn kiểm tra tại trạm y tế" loading="lazy" decoding="async"/>` +
+        '<figcaption class="xa-body-figure__caption">Ảnh: <button type="button" class="xa-body-link">trạm y tế</button></figcaption></figure>',
+    );
+    expect(page).toContain(
+      '<blockquote class="xa-body-quote"><p class="xa-body-quote__paragraph">Câu trích một.</p>' +
+        '<p class="xa-body-quote__paragraph"><em>Câu trích </em><button type="button" class="xa-body-link">hai</button></p></blockquote>',
+    );
+    expect(page).toContain('<p class="xa-body-byline">Nguồn: <strong>Văn phòng UBND</strong></p>');
+    // In the server's order: paragraph, figure, quote, byline.
+    const at = (s: string) => page.indexOf(s);
+    expect(at("Mở đầu.")).toBeLessThan(at("<figure"));
+    expect(at("<figure")).toBeLessThan(at("<blockquote"));
+    expect(at("<blockquote")).toBeLessThan(at("xa-body-byline"));
+  });
+
+  it("no alt typed → alt=\"\"; no caption → no figcaption", () => {
+    const page = html(
+      createElement(ArticleBody, { blocks: [{ kind: "image", src: IMG_SRC, alt: "" }], text: "", paragraphClass: "xa-bai__doan" }),
+    );
+    expect(page).toBe(`<figure class="xa-body-figure"><img class="xa-body-figure__image" src="${IMG_SRC}" alt="" loading="lazy" decoding="async"/></figure>`);
+  });
+
+  it("links in caption, quote and byline go to the handler like body links; without an opener they are plain words", () => {
+    const taps: string[] = [];
+    const tree = ArticleBody({ blocks: RICH, text: "", paragraphClass: "xa-bai__doan", onLink: (h) => taps.push(h) });
+    const links = buttons(tree);
+    expect(links).toHaveLength(2);
+    for (const l of links) l.props.onClick();
+    expect(taps).toEqual([LINK, LINK]);
+    const plain = draw(undefined);
+    expect(plain).not.toContain("<button");
+    expect(plain).toContain("Ảnh: trạm y tế</figcaption>");
+  });
+
+  it("a picture that fails to load is hidden; the caption stays", () => {
+    const tree = expand(ArticleBody({ blocks: RICH, text: "", paragraphClass: "xa-bai__doan" }));
+    const img = tree.find((e) => e.type === "img") as ReactElement<{ onError: (e: { currentTarget: { hidden: boolean } }) => void }>;
+    const el = { hidden: false };
+    img.props.onError({ currentTarget: el });
+    expect(el.hidden).toBe(true);
+    // The caption is the img's sibling, not inside it, so hiding the picture leaves the caption on screen.
+    const figure = tree.find((e) => e.type === "figure")!;
+    const kids = (figure.props as { children: unknown[] }).children;
+    expect(kids).toHaveLength(2);
+    expect(html(kids[1] as ReactElement)).toContain("Ảnh: trạm y tế");
+  });
+
+  it("text in a caption, quote or byline that looks like markup stays text", () => {
+    const evil = "<img src=x onerror=alert(1)><script>x</script>";
+    const blocks = readBodyBlocks([
+      { kind: "image", src: IMG_SRC, alt: evil, caption: [{ text: evil }] },
+      { kind: "quote", paragraphs: [{ runs: [{ text: evil }] }] },
+      { kind: "byline", runs: [{ text: evil }] },
+    ]);
+    const page = html(createElement(ArticleBody, { blocks, text: "", paragraphClass: "xa-bai__doan" }));
+    expect(page).not.toMatch(/<script\b|<img src=x/i);
+    expect(page.match(/<img\b/g)).toHaveLength(1); // only the real picture
+    // alt (an escaped attribute value), caption, quote, byline.
+    expect(page.match(/&lt;script&gt;/g)).toHaveLength(4);
+  });
+
+  it("the shared app's article draws the pictures too (H8), caption and quote with links as plain words", () => {
+    const shared = html(createElement(BaiTin, { bai: { ...ARTICLE, bodyBlocks: RICH } }));
+    expect(shared).toContain(`<img class="xa-body-figure__image" src="${IMG_SRC}"`);
+    expect(shared).toContain("Ảnh: trạm y tế</figcaption>");
+    expect(shared).toContain('<blockquote class="xa-body-quote">');
+    expect(shared).toContain('<p class="xa-body-byline">');
+    expect(shared).not.toContain("<button");
+    const commune = html(createElement(NewsArticle, { bai: { ...ARTICLE, bodyBlocks: RICH }, coverFailed: false, onCoverFail: noop, ds: [] }));
+    expect(commune).toContain(`<img class="xa-body-figure__image" src="${IMG_SRC}"`);
+  });
+
+  it("CSS: the picture's box is reserved (16:9, contained, never cropped); hidden really hides; caption/quote/byline body-size ink", async () => {
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    const rule = (sel: string) => new RegExp(`${sel.replace(/[.[\]]/g, "\\$&")} \\{([^}]*)\\}`).exec(css)![1]!;
+    expect(rule(".xa-body-figure__image")).toMatch(/width: 100%;[\s\S]*aspect-ratio: 16 \/ 9;[\s\S]*object-fit: contain;/);
+    expect(rule(".xa-body-figure__image[hidden]")).toMatch(/display: none;/);
+    for (const sel of [".xa-body-figure__caption", ".xa-body-quote__paragraph", ".xa-body-byline", ".news-sapo"]) {
+      expect(rule(sel), sel).toMatch(/font-size: var\(--text-body\);/);
+      expect(rule(sel), sel).toMatch(/color: var\(--ink\);/);
+    }
+    expect(rule(".xa-body-quote")).toMatch(/border-left: 4px solid/);
+    expect(rule(".xa-body-byline")).toMatch(/font-style: italic;/);
+    expect(rule(".xa-body-byline")).toMatch(/text-align: right;/);
+  });
+});
+
+describe("the sapo — the summary, bold, right under the title, in both apps", () => {
+  const SUMMARY = "Trạm y tế xã tổ chức tiêm chủng đợt hai.";
+
+  it("commune app: a bold paragraph directly after the title", () => {
+    const page = html(createElement(NewsArticle, { bai: { ...ARTICLE, tom_tat: SUMMARY }, coverFailed: false, onCoverFail: noop, ds: [] }));
+    expect(page).toContain(`<h2 class="xa-bai__tieu-de">Tiêm chủng</h2><p class="news-sapo"><strong>${SUMMARY}</strong></p>`);
+  });
+
+  it("shared app: a bold paragraph directly after the title", () => {
+    const page = html(createElement(BaiTin, { bai: { ...ARTICLE, tom_tat: SUMMARY } }));
+    expect(page).toContain(`<h2 class="cd-tieu-de-phu">Tiêm chủng</h2><p class="news-sapo"><strong>${SUMMARY}</strong></p>`);
+  });
+
+  it("an empty or blank summary → no sapo line at all, in either app", () => {
+    for (const summary of ["", "   "]) {
+      const bai = { ...ARTICLE, tom_tat: summary };
+      expect(html(createElement(NewsArticle, { bai, coverFailed: false, onCoverFail: noop, ds: [] }))).not.toContain("news-sapo");
+      expect(html(createElement(BaiTin, { bai }))).not.toContain("news-sapo");
+    }
   });
 });
 

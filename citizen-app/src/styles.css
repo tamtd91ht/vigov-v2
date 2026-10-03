@@ -4634,6 +4634,60 @@ button.xa-o-nhanh {
   outline: 3px solid var(--xa-blue-ink);
   outline-offset: 2px;
 }
+/* Body images, quotes and the byline (`article-body.tsx`, ADR 0067 §Sửa đổi 03/10/2026). Used by BOTH apps, so
+   every `--xa-*` colour carries a fallback the shared app defines. The image holds a fixed 16:9 box before it
+   loads (no jump under the finger) and is fitted inside it, never cropped. A picture that failed carries
+   `hidden`, which `display: block` would otherwise override. Caption, quote and byline are body-size `--ink`:
+   an elderly reader is the one who needs them, so none is small or grey. */
+.xa-body-figure {
+  margin: 0 0 16px;
+}
+.xa-body-figure__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: var(--xa-nen, var(--surface-alt));
+  border-radius: 8px;
+}
+.xa-body-figure__image[hidden] {
+  display: none;
+}
+.xa-body-figure__caption {
+  margin: 8px 0 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--ink);
+}
+.xa-body-quote {
+  margin: 0 0 16px;
+  padding: 4px 0 4px 16px;
+  border-left: 4px solid var(--xa-navy, var(--navy));
+}
+.xa-body-quote__paragraph {
+  margin: 0 0 10px;
+  font-size: var(--text-body);
+  line-height: 1.625;
+  color: var(--ink);
+}
+.xa-body-quote__paragraph:last-child {
+  margin-bottom: 0;
+}
+.xa-body-byline {
+  margin: 16px 0 14px;
+  font-size: var(--text-body);
+  font-style: italic;
+  line-height: 1.5;
+  text-align: right;
+  color: var(--ink);
+}
+/* The sapo: the article's summary, bold, right under the title — in both apps (owner, 03/10/2026). */
+.news-sapo {
+  margin: 0 0 10px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
 
 /* ---------- "Bạn sắp rời ứng dụng để mở …" (`leave-app.tsx`) ---------- */
 /* Over the whole screen, the box at the bottom where the thumb is. It does not slide in from off-screen: since UI-1

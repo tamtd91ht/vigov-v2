@@ -17,7 +17,7 @@ import { baiTinCuaXa, type NewsReadResult, tinCuaXa } from "../api/goi-vigov";
 import { type BaiTinXa, type TinXaTomTat, type TrangTinXa } from "../api/hop-dong-cong-khai";
 import { layPhienViGov } from "../api/phien-vigov";
 
-import { ArticleBody } from "./article-body";
+import { ArticleBody, NewsSapo } from "./article-body";
 import { BieuTuong } from "./BieuTuong";
 import { BangXa, EmptyNotice, LoadingNotice } from "./khung";
 import { QUAY_LAI, TIN_XA } from "./noi-dung";
@@ -214,6 +214,7 @@ export function BaiTin({ bai }: { bai: BaiTinXa }) {
   return (
     <article className="cd-tin">
       <h2 className="cd-tieu-de-phu">{bai.tieu_de}</h2>
+      <NewsSapo summary={bai.tom_tat} />
       <p className="cd-ghi-chu">
         <DongPhu tin={bai} />
       </p>

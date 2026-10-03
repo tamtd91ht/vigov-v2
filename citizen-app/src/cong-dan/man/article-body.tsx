@@ -11,6 +11,10 @@
  * bold, real `<ul>`/`<ol>` so a screen reader announces "list, 3 items", and a link that says so twice — colour
  * AND underline, never colour alone — with a tap area grown to 44px by padding (`.xa-body-link`).
  *
+ * BODY IMAGES, QUOTES, BYLINE (ADR 0067 §Sửa đổi 03/10/2026): a picture is an `<img>` whose `src` the parser
+ * already held to https (`readBodyBlocks`), drawn the SAME in both apps (H8); its caption, the quote and the byline
+ * are runs like any paragraph, so a link inside them behaves exactly as a body link does.
+ *
  * HEADING LEVELS: the article title is the screen's `<h2>`, so the body's level 2 is drawn as `<h3>` and level 3
  * as `<h4>` — a screen reader's outline then reads the body as under the title, not beside it.
  */
@@ -84,10 +88,77 @@ function Block({ block, paragraphClass, onLink }: { block: BodyBlock; paragraphC
         </Tag>
       );
     }
+    case "image":
+      return <BodyImage block={block} onLink={onLink} />;
+    case "quote":
+      return (
+        <blockquote className="xa-body-quote">
+          {block.paragraphs.map((runs, i) => (
+            <p key={i} className="xa-body-quote__paragraph">
+              <Runs runs={runs} onLink={onLink} />
+            </p>
+          ))}
+        </blockquote>
+      );
+    case "byline":
+      return (
+        <p className="xa-body-byline">
+          <Runs runs={block.runs} onLink={onLink} />
+        </p>
+      );
     default:
-      // The parser keeps only the four kinds above; a fifth reaching here is drawn as nothing, never guessed.
+      // The parser keeps only the kinds above; another reaching here is drawn as nothing, never guessed.
       return null;
   }
+}
+
+/**
+ * A body image between paragraphs, with its caption under it (ADR 0067 §Sửa đổi 03/10/2026, H1–H5).
+ *
+ * THE BOX IS RESERVED BEFORE THE PICTURE ARRIVES: the server sends no width/height, so the `<img>` holds a fixed
+ * 16:9 box (`.xa-body-figure__image`) and the picture is fitted INSIDE it (`object-fit: contain`) — the text below
+ * does not jump under the reader's finger when a slow picture lands, and a portrait photo of a notice is shown
+ * whole rather than cropped. Cost, stated: a tall picture is letterboxed inside the band.
+ *
+ * A PICTURE THAT FAILS TO LOAD IS HIDDEN, THE CAPTION STAYS — a broken-image box under a public authority's name
+ * reads as a page that failed; the caption's words are still worth reading. Done on the element (`hidden`), not
+ * with React state, so this component stays hook-free like the rest of the body (the tests expand it as a pure
+ * tree). `alt` is what staff typed, or `""` — then the caption, if any, says what the picture shows.
+ */
+function BodyImage({ block, onLink }: { block: Extract<BodyBlock, { kind: "image" }>; onLink?: (href: string) => void }) {
+  return (
+    <figure className="xa-body-figure">
+      <img
+        className="xa-body-figure__image"
+        src={block.src}
+        alt={block.alt}
+        loading="lazy"
+        decoding="async"
+        onError={(e) => {
+          e.currentTarget.hidden = true;
+        }}
+      />
+      {block.caption !== undefined && (
+        <figcaption className="xa-body-figure__caption">
+          <Runs runs={block.caption} onLink={onLink} />
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+/**
+ * The sapo — the article's existing summary (`summary` on the wire, `tom_tat` here), BOLD, right under the title,
+ * in both apps (owner, 03/10/2026). An empty or blank summary → nothing at all: an empty bold line is a gap that
+ * reads as something missing. Plain text, a React text node, like every other field. PURE.
+ */
+export function NewsSapo({ summary }: { summary: string }) {
+  if (summary.trim() === "") return null;
+  return (
+    <p className="news-sapo">
+      <strong>{summary}</strong>
+    </p>
+  );
 }
 
 /**
