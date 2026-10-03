@@ -114,9 +114,13 @@ type (
 	// /api/v1/staff/searches passes the same filters plus the text. One store method means one
 	// predicate, one soft-delete clause and one keyset walk for both — two would be two places for
 	// `deleted_at IS NULL` to be forgotten.
+	//
+	// StaffCounts IS ON THIS INTERFACE, not a new one, because GET /api/v1/staff-counts is the same
+	// register behind the same key (`admin.user`): a separate interface would buy no narrower authority.
 	CanBoDanhBa interface {
 		DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error)
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
+		StaffCounts(ctx context.Context) (domain.StaffCounts, error)
 	}
 
 	// DanhBaChonNguoi is the staff PICKER, for GET /api/v1/staff-directory.
@@ -903,6 +907,30 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff/{id}",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.ChiTietCanBo)))
+
+	// THE REGISTER'S COUNTS (12-danh-ba-can-bo.md §2 KPI cards, §3 per-unit `{đang hiện}/{tổng}`).
+	// A top-level `staff-counts`, user-approved 2026-10-03, and not `staff/counts`, which
+	// `staff/{id}` above would read as a person whose id is `counts` — the reason petitions' GET
+	// /api/v1/task-counts gives. Not a total inside page.Result: core/page refuses one on purpose.
+	//
+	// `admin.user`, the key of the list it mirrors: the counts reveal nothing the list does not, and a
+	// different key would let an account see figures for a register it may not list, or the reverse.
+	// Already seeded (migration 0001:278); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// NO FILTERS: the KPI cards are commune-wide, and the per-department numbers are what the unit
+	// dropdown needs. NO idem.* DECLARATION: a GET changes no state. NO AUDIT ENTRY: counts, no
+	// personal data. 401 is RequirePermission's answer to no session; another commune's session is 403
+	// here as on the two routes above.
+	//
+	// @summary  Số cán bộ trong danh bạ của xã và số đang công khai trên Mini App — toàn xã và theo từng bộ phận
+	// @screen   12-danh-ba-can-bo §2
+	// @reply    200 staffCountsOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff-counts",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			http.HandlerFunc(h.StaffCounts)))
 
 	// --- the staff PICKER. One read route, a SEPARATE RESOURCE from `staff` -----------------------
 	//

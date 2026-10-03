@@ -28,6 +28,9 @@ type ckLenh struct {
 type ckGhi struct {
 	lenh []ckLenh
 	hang [][]driver.Value // returned for every query
+	// columns overrides the column list the rows report; nil = the public directory's eight. Set by
+	// staff_counts_test.go, whose statement returns three.
+	columns []string
 }
 
 type ckConnector struct{ g *ckGhi }
@@ -53,15 +56,19 @@ func (c *ckConn) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		v[i] = a.Value
 	}
 	c.g.lenh = append(c.g.lenh, ckLenh{sql: q, args: v})
-	return &ckRows{hang: c.g.hang}, nil
+	return &ckRows{hang: c.g.hang, columns: c.g.columns}, nil
 }
 
 type ckRows struct {
-	hang [][]driver.Value
-	i    int
+	hang    [][]driver.Value
+	i       int
+	columns []string
 }
 
 func (r *ckRows) Columns() []string {
+	if r.columns != nil {
+		return r.columns
+	}
 	return []string{"ho_ten", "chuc_vu", "ten", "dien_thoai_co_quan", "di_dong_ca_nhan", "co_zalo",
 		"thu_tu_danh_ba", "units_headed"}
 }
