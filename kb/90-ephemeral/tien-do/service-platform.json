@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-03",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -263,6 +263,14 @@
       "bang_chung": "02/10/2026 (TASK-P2c, chưa commit). Hai tuyến mới trên OPERATOR_HOST, opauth.RequireKey(KeyMiniAppManage), idem.KhongCan (internal/http/operator_routes.go, operator_mini_app_secrets.go): PUT /api/v1/communes/{id}/mini-apps/{app_id}/secret {secret, reason} → 200 {app_id, version, set_at, set_by}; DELETE cùng đường dẫn {reason} → 200 {app_id, retired:true, retired_version, retired_at, retired_by} hoặc 200 {retired:false} khi identity NOT_FOUND. Ánh xạ: SESSION_NOT_LIVE 401 (xoá cookie) · PERMISSION_DENIED 403 · FAILED_PRECONDITION (Set) 409 mini_app_not_bound · INVALID_ARGUMENT 422 invalid_secret · lỗi khác 503 mini_app_secret_unavailable. Trước khi gọi identity: App ID phải là app riêng CỦA XÃ ĐƯỜNG DẪN (bật hay tắt), không thì 404 mini_app_not_found. Khoá: giải mã JSON thẳng vào secret.Secret (secretInput), không vào phản hồi/log/lỗi/vết; idem KhongCan không lưu gì. Tự thu hồi: replaceMiniApp và setMiniAppActivation{active:false} gọi RetireMiniAppSecret cho App ID vừa tắt SAU commit, context.WithoutCancel; hỏng thì liên kết giữ nguyên, phản hồi mang secret_retired=false + secret_retirement_error, log cảnh báo event mini_app.secret_retire_pending; NOT_FOUND = đã xong. core/operatorclient: SetMiniAppSecret/RetireMiniAppSecret (xã đi trong metadata, ctx thiếu xã thì từ chối tại chỗ), OutcomePermissionDenied, ErrMiniAppNotBound/ErrNoLiveSecret/ErrArgumentRefused. ADR 0070 #7: màn nhật ký cán bộ đọc đúng 5 nguồn, KHÔNG có platform — web-admin/src/lib/api/audit-entries.ts:3,34-50; ADR 0054 §2 dòng 74 (platform để sau, proxy web không định tuyến platform) — không cần lọc ở platform. Ca kiểm: internal/http/operator_mini_app_secrets_test.go (9 ca + bảng con: chuyển tiếp đúng xã đường dẫn, khoá không ở phản hồi/log/kho idempotency ghi lại, từ chối tại biên, bảng ánh xạ, thu hồi tự động thành công/hỏng/NOT_FOUND, gỡ thu hồi, bật lại không), 2 dòng trong TestGuardedRoutes (401 · 401 token cán bộ · 403 · 503 · 200); core/operatorclient/mini_app_secret_test.go (bufconn, chuỗi interceptor thật: x-tenant-id đi đúng một giá trị). make check rc=0 (lần chạy sau khi identity P2b c135c08c đã commit; lần trước rc=2 chỉ vì một ca vitest citizen-app hết giờ 5 s, make web chạy lại rc=0); make kb rc=0. Lint bỏ qua: máy không có golangci-lint.",
       "no_confirm": [],
       "tiep_theo": "(0) Chờ người dùng chốt danh từ URL `mini-apps/{app_id}/secret` và tên trường thân `secret` (agent chọn; glossary §Miền vận hành ViHAT chưa có dòng). (1) Cần identity P2b có thân hàm SetMiniAppSecret/RetireMiniAppSecret — tới lúc đó mọi lời gọi là UNIMPLEMENTED → 503, và đổi/gỡ trả secret_retired=false identity_unavailable. (2) Vết operator ở identity: audit_log của identity LÀ một trong năm nguồn web-admin đọc; P2b đang lọc actor_kind = operator ở core/audit Log.Read (sổ core, mục audit-actor-kind-operator-an-khoi-man-xa, chưa commit) — nếu platform về sau mở tuyến platform-audit-entries thì dùng cùng audit.NewLog để được lọc ấy. (3) P3 màn platform-admin: ô nhập khoá cùng màn, hiện 'khoá App ID cũ chưa thu hồi' khi secret_retired=false với nút gọi DELETE …/secret. (4) Bật lại một App ID không khôi phục khoá cũ: phải nhập lại khoá (transaction-boundaries doi_app_id_mini_app_cua_xa)."
+    },
+    {
+      "id": "upload-policy-content-body-image",
+      "viec": "Mục đích tải lên content-body-image cho ảnh trong thân bài tin Mini App — chính sách 50 MB, JPG/PNG/WebP, tối đa 20 ảnh mỗi bài (ADR 0067 sửa đổi 03/10/2026, H7/K3)",
+      "trang_thai": "xong",
+      "bang_chung": "41940cb4: migration 0018_upload_policy_content_body_image.sql (nới CHECK + gieo dòng + vết upload_policy.seeded), core/storage.PurposeContentBodyImage, platform.proto UPLOAD_PURPOSE_CONTENT_BODY_IMAGE = 12. make check exit 0 (go test mọi dịch vụ xanh, buf lint/breaking xanh); golangci-lint KHÔNG chạy — máy chưa cài. 56 ca PG trong internal/store SKIP: migration chưa chạy trên PostgreSQL thật.",
+      "tiep_theo": "Chạy migration 0018 trên PostgreSQL (ca TestPgUploadPolicy*) trước khi phát hành. Phía comms đếm ảnh thân bài theo max_files_per_subject — thuộc mục service-comms anh-trong-than-bai.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

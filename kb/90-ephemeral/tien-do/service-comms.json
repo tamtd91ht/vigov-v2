@@ -306,6 +306,14 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Commit 584e62a0 (TASK-05): migrations/0014_external_contacts.sql — phân mảnh hash 32, PK (tenant_id,id), xoá mềm đủ ba cột, trigger chặn xoá cứng/sửa dòng đã xoá/đổi định danh, chỉ mục (tenant_id, display_order, id) WHERE deleted_at IS NULL, @entity ExternalContact. TestMigration0014ExternalContacts xanh; make check xanh (golangci-lint không cài trên máy — bước lint bị bỏ qua). CHƯA ÁP trên PostgreSQL thật (không VIGOV_TEST_DSN).",
       "tiep_theo": "TASK-06: store/app/http — tuyến ghi /api/v1/external-contacts (content.update, vết cùng giao dịch, che phone trong delta), tuyến công khai /api/v1/commune-external-contacts?host= (Public + PublicNewsRead), ORDER BY display_order, id. Sau đó web tab trong /danh-ba và hai màn Danh bạ Mini App. Lựa chọn của nhà cung cấp ghi trong đầu tệp migration: không cờ công khai, category chữ tự do, không khoá duy nhất nghiệp vụ."
+    },
+    {
+      "id": "anh-trong-than-bai",
+      "viec": "Ảnh trong thân bài + bố cục kiểu tin báo (ADR 0067 sửa đổi 03/10/2026): chính sách làm sạch cán bộ (ảnh theo mã tệp, chú thích, trích dẫn, dòng tác giả) tách khỏi chính sách ghi của Cổng; khối body_blocks image/quote/byline; tuyến tải ảnh thân bài + đăng/gỡ theo trạng thái bài; máy chủ tải link ảnh qua rào SSRF",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Thiết kế + quyết định: 5eb2f816 (ADR). Mục đích tải lên: 41940cb4 (service-platform). Chưa có mã comms.",
+      "tiep_theo": "T2 richtext (2 chính sách + khối mới + body thuần giữ chữ chú thích/trích dẫn) → T3 tuyến tải + gắn mã tệp + vòng đăng/gỡ (đừng để content_cover.go:921-937 rút ảnh thân bài) + đọc công khai đổi mã ra URL (K7) → T4 tải link ảnh phía máy chủ. Yêu cầu đối chiếu: R1 ảnh xen đoạn CONFLICT với prototype vigov-require NewsDetailPage.tsx:108-123 — chủ dự án chọn xen đoạn (H10); R2 dán link CONFLICT với tin_xa_cong_khai.go:173-176 — giải bằng máy chủ tải về (H5); R5 tác giả/nguồn PARTIALLY DONE cho tin Cổng (domain/portal_sync.go:410-419).",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }
