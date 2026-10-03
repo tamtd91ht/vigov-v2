@@ -4,7 +4,9 @@
 // core/store.For(ctx), and that step has to be COUNTABLE, in a directory named after what it does.
 // Every statement here carries its own `// @cross-tenant:`.
 //
-// THREE THINGS, all for the portal sync runner (ADR 0067 §2 "Việc nền", ADR 0058's pattern):
+// THREE THINGS for the portal sync runner (ADR 0067 §2 "Việc nền", ADR 0058's pattern) — and the same
+// two shapes (communes with work, a scheduler lock) for the abandoned body-image sweep (ADR 0067 K11,
+// body_image_sweep.go):
 //
 //  1. the communes whose sync is due — tenant IDENTIFIERS only, never a row of business data;
 //  2. the scheduler's advisory lock, so ONE replica runs a tick;
@@ -105,16 +107,22 @@ func (p *PortalSync) TryLockCommune(ctx context.Context, id tenant.ID) (release 
 // NOT AUDITED, and not a write of business data: a session lock is a lease. What a run did is its
 // `portal_sync_runs` row and the audit entries of its imports.
 func (p *PortalSync) tryLock(ctx context.Context, key int64) (func(), bool, error) {
+	return tryAdvisoryLock(ctx, p.db, key)
+}
+
+// tryAdvisoryLock is tryLock for every runner of this package (the body-image sweep holds its scheduler
+// lock the same way).
+func tryAdvisoryLock(ctx context.Context, db *sql.DB, key int64) (func(), bool, error) {
 	noop := func() {}
-	conn, err := p.db.Conn(ctx)
+	conn, err := db.Conn(ctx)
 	if err != nil {
-		return noop, false, fmt.Errorf("crosstenant: pin a connection for the portal sync lock: %w", err)
+		return noop, false, fmt.Errorf("crosstenant: pin a connection for an advisory lock: %w", err)
 	}
 	var ok bool
 	// @cross-tenant: an advisory lock names a job or a commune's run, reads no table (ADR 0058 §1).
 	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&ok); err != nil {
 		_ = conn.Close()
-		return noop, false, fmt.Errorf("crosstenant: try the portal sync lock: %w", err)
+		return noop, false, fmt.Errorf("crosstenant: try an advisory lock: %w", err)
 	}
 	if !ok {
 		_ = conn.Close()

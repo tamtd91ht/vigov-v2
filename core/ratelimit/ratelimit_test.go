@@ -497,6 +497,79 @@ func TestCitizenPhotoUploadPolicyIsPinnedAndFailsClosed(t *testing.T) {
 	}
 }
 
+// The staff image-fetch policy (owner, 03/10/2026, ADR 0067 K10): pinned, fails CLOSED, answers its own
+// 429 code and sentence.
+func TestStaffImageFetchIsThirtyPerHourClosedWithItsOwnRefusal(t *testing.T) {
+	if StaffImageFetchLimit != 30 || StaffImageFetchWindow != time.Hour {
+		t.Fatalf("K10 decided 30 / hour / officer, got %d / %v", StaffImageFetchLimit, StaffImageFetchWindow)
+	}
+	if StaffImageFetch.limit != StaffImageFetchLimit || StaffImageFetch.window != StaffImageFetchWindow {
+		t.Fatal("StaffImageFetch does not use the named constants")
+	}
+	if StaffImageFetch.FailsOpen() {
+		t.Fatal("the image-fetch limit must fail CLOSED — only the public news read has the owner's exception")
+	}
+	l, err := New(newFake(), StaffImageFetch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+	k, err := ActorKey(ctx, "CB-00123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < StaffImageFetchLimit; i++ {
+		if !Gate(httptest.NewRecorder(), gateReq(), l, k, nil) {
+			t.Fatalf("attempt %d refused", i+1)
+		}
+	}
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), l, k, nil) {
+		t.Fatal("attempt 31 served")
+	}
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") == "" ||
+		!strings.Contains(rec.Body.String(), `"image_fetch_rate_limited"`) ||
+		!strings.Contains(rec.Body.String(), "lấy ảnh từ liên kết quá nhiều lần") {
+		t.Fatalf("code = %d, Retry-After = %q, body = %s", rec.Code, rec.Header().Get("Retry-After"), rec.Body.String())
+	}
+	// The generic policies keep the generic answer.
+	op := mustNew(t, newFake())
+	for i := 0; i < OperatorSignInLimit; i++ {
+		Gate(httptest.NewRecorder(), gateReq(), op, OperatorIPKey("203.0.113.7"), nil)
+	}
+	rec = httptest.NewRecorder()
+	Gate(rec, gateReq(), op, OperatorIPKey("203.0.113.7"), nil)
+	if !strings.Contains(rec.Body.String(), `"rate_limited"`) {
+		t.Fatalf("operator 429 lost its generic code: %s", rec.Body.String())
+	}
+	if _, err := New(newFake(), Policy{name: "x", limit: 1, window: time.Second, event: "x", refusedCode: "c"}); err == nil {
+		t.Fatal("a refusal code without its sentence accepted")
+	}
+}
+
+// One counter per (commune, officer code); no commune or no code is a refusal, never a shared key.
+func TestActorKeyShape(t *testing.T) {
+	f := newFake()
+	l, _ := New(f, StaffImageFetch)
+	a := tenant.Into(context.Background(), tenant.ID(testCommune))
+	b := tenant.Into(context.Background(), tenant.ID("01JTESTCOMMUNEB00000000000"))
+	ka, _ := ActorKey(a, "CB-00123")
+	kb, _ := ActorKey(b, "CB-00123")
+	_, _, _ = l.Allow(a, ka)
+	_, _, _ = l.Allow(b, kb)
+	want := []string{"t:" + testCommune + ":rl:body-image-fetch:actor:CB-00123",
+		"t:01JTESTCOMMUNEB00000000000:rl:body-image-fetch:actor:CB-00123"}
+	if len(f.keys) != 2 || f.keys[0] != want[0] || f.keys[1] != want[1] {
+		t.Fatalf("keys = %v, want %v", f.keys, want)
+	}
+	if _, err := ActorKey(context.Background(), "CB-1"); !errors.Is(err, ErrNoCommune) {
+		t.Errorf("no commune: %v", err)
+	}
+	if _, err := ActorKey(a, " "); !errors.Is(err, ErrNoActor) {
+		t.Errorf("no code: %v", err)
+	}
+}
+
 // One counter per (commune, citizen); the citizen id never appears in the key as written; no commune
 // or no citizen is a refusal, never a shared key.
 func TestCitizenKeyShape(t *testing.T) {

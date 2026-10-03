@@ -34,6 +34,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
@@ -217,6 +218,13 @@ type Deps struct {
 	// Built even when object storage, the scanner or platform's limits are absent: the two routes then
 	// answer 503 and every other route keeps serving.
 	ContentCovers ContentCoverActs
+
+	// ImageFetchLimiter is ratelimit.StaffImageFetch (owner, 03/10/2026, ADR 0067 K10): 30 attempts per
+	// hour per officer on POST /api/v1/content-items/body-images/from-url, every attempt counted. FAILS
+	// CLOSED — and so does its ABSENCE: nil makes that one route answer 503 `rate_limit_unavailable`
+	// (content_body_image.go, imageFetchGate), never serve unbounded. Not a construction panic like the
+	// stores above, because a missing limiter must not take down the other forty routes this mux serves.
+	ImageFetchLimiter *ratelimit.Limiter
 
 	// The broadcast audio of a `truyen-thanh` item (ADR 0067 §4) — internal/http/content_audio.go. Built
 	// even when object storage, the scanner or platform's limits are absent: its two routes then answer
@@ -867,8 +875,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// (skills/rest-api-design §3), so it sits under `body-images`.
 	//
 	// `content.update` — K8 names this route too; the cover routes' key, seeded
-	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c). No rate
-	// limit of its own (K8): authenticated, audited, bounded by the per-article count of platform's policy.
+	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// RATE LIMIT (owner, 03/10/2026, ADR 0067 K10 — replacing K8's "none of its own" for THIS route):
+	// ratelimit.StaffImageFetch, 30 attempts per hour per officer, keyed `t:<tenant>:rl:body-image-fetch:
+	// actor:<business code>`, counted in the handler BEFORE the body is read — every attempt counts, the
+	// malformed, refused and failed ones included. Over → 429 `image_fetch_rate_limited` + Retry-After;
+	// Redis unavailable → 503 `rate_limit_unavailable` (closed, unlike the public news read's D2).
 	//
 	// THE OUTBOUND CALL IS AN SSRF SURFACE (internal/imagefetch): the URL shape is checked before any
 	// network (400 `invalid_image_url`), every resolved address at dial time with the portal's predicate,
@@ -890,6 +903,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    409 httpx.Error
 	// @reply    422 httpx.Error
+	// @reply    429 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    502 httpx.Error
 	// @reply    503 httpx.Error

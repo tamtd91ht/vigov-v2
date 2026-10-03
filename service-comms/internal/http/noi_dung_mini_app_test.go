@@ -32,6 +32,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -207,6 +208,9 @@ type mayChuND struct {
 	covers  *fakeCovers
 	audio   *fakeAudio
 	logs    *bytes.Buffer
+	// fetchCounter is the store behind ImageFetchLimiter (ratelimit.StaffImageFetch, ADR 0067 K10).
+	fetchCounter *memCounter
+	attempt      int // fetchAttempt's idempotency-key sequence
 }
 
 func dungMayChuND(t *testing.T) *mayChuND {
@@ -224,9 +228,15 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	// The handler's log lines land here, so a test can assert what a line does NOT carry (rule 3).
 	logs := &bytes.Buffer{}
 	im := slog.New(slog.NewTextHandler(logs, nil))
+	fetchCounter := &memCounter{}
+	fetchLimiter, err := ratelimit.New(fetchCounter, ratelimit.StaffImageFetch)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
+		ImageFetchLimiter: fetchLimiter,
 		Checker:           checker,
 		LoaiTaiNguyen:     danhMucMau(),
 		GhiLoaiTaiNguyen:  &ghiDanhMucGia{},
@@ -265,7 +275,7 @@ func dungMayChuND(t *testing.T) *mayChuND {
 	h = httpx.StripTenantHeaders(h)
 
 	return &mayChuND{h: h, so: so, ghi: ghi, soDM: soDM, ghiDM: ghiDM, checker: checker, covers: covers, audio: audio,
-		logs: logs}
+		logs: logs, fetchCounter: fetchCounter}
 }
 
 func (m *mayChuND) capQuyen(xa tenant.ID, perm ...authz.Perm) {

@@ -111,8 +111,11 @@ func GateOutcome(w http.ResponseWriter, r *http.Request, l *Limiter, key Key, lo
 			"ip", httpx.ClientIP(r)}, attrs...)
 		log.WarnContext(r.Context(), "CẢNH BÁO BẢO MẬT: vượt giới hạn tần suất — từ chối", fields...)
 		w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))
-		httpx.WriteError(w, http.StatusTooManyRequests, "rate_limited",
-			"Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.", "")
+		code, msg := "rate_limited", "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau."
+		if l.p.refusedCode != "" {
+			code, msg = l.p.refusedCode, l.p.refusedMessage
+		}
+		httpx.WriteError(w, http.StatusTooManyRequests, code, msg, "")
 		return Refused
 	}
 	return Enforced

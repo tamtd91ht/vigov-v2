@@ -12,6 +12,8 @@
 // 120 requests per minute per client network per commune host, and it is the ONE policy that fails
 // OPEN — see Policy.failOpen for why that is a per-policy field and never the package default.
 //
+// The others — CitizenPhotoUpload, StaffImageFetch (ADR 0067 K10) — fail closed, the default.
+//
 // WHY A FIXED WINDOW, NOT A SLIDING ONE: the owner chose it (§01/10 #3), and it is one atomic
 // INCR per attempt with no per-attempt memory. Its known cost — up to 2× the limit across a window
 // boundary — is inside what the decision accepts; a different algorithm is a different threshold,
@@ -65,6 +67,17 @@ const (
 	CitizenPhotoUploadWindow = 15 * time.Minute
 )
 
+// The staff "image from a pasted link" threshold — CHOSEN BY THE OWNER on 03/10/2026 (ADR 0067 table K,
+// K10, which replaces K8's "no limit of its own" for this one route): 30 attempts per hour per OFFICER,
+// counting EVERY attempt, failures and refusals included. The reason it is not "successes only": a
+// stolen session could otherwise fire unbounded outbound requests from a government address, and a
+// deliberately slow host could hold every download slot of the pod. Changing either number is a rule 13
+// stop condition (forbidden #4: never loosened silently).
+const (
+	StaffImageFetchLimit  = 30
+	StaffImageFetchWindow = time.Hour
+)
+
 // Policy is one limit: at most Limit attempts per key per Window.
 type Policy struct {
 	// name goes into every key; it separates the counters of two policies keyed by the same subject.
@@ -86,6 +99,10 @@ type Policy struct {
 	// outage turning every commune's board into a 503 is the worse failure. No other policy may copy
 	// it without the same decision.
 	failOpen bool
+	// refusedCode / refusedMessage are the 429's machine code and its ONE Vietnamese sentence. Empty =
+	// the generic `rate_limited` answer. A field of the policy because a staff screen must be able to tell
+	// "you pasted too many links this hour" from a generic throttle — and the sentence must name the act.
+	refusedCode, refusedMessage string
 }
 
 // FailsOpen reports whether a store outage lets requests through under this policy.
@@ -108,6 +125,16 @@ var PublicNewsRead = Policy{name: "public-news", limit: PublicNewsReadLimit, win
 // never behind this limit — a photo failure never fails the petition send (owner, 02/10/2026).
 var CitizenPhotoUpload = Policy{name: "citizen-photo", limit: CitizenPhotoUploadLimit,
 	window: CitizenPhotoUploadWindow, event: "citizen_photo.rate_limited"}
+
+// StaffImageFetch is the policy of service-comms' POST /api/v1/content-items/body-images/from-url (ADR
+// 0067 K10). Keys from ActorKey. FAILS CLOSED (503 when Redis cannot be asked): the route makes the
+// SERVER call an arbitrary host on an authenticated officer's behalf, and the bound exists precisely for
+// the case where that officer's session is not the officer — nobody decided that a Redis outage may lift
+// it. PublicNewsRead's fail-open exception (D2) is about a public read and does not extend here.
+var StaffImageFetch = Policy{name: "body-image-fetch", limit: StaffImageFetchLimit,
+	window: StaffImageFetchWindow, event: "body_image_fetch.rate_limited",
+	refusedCode:    "image_fetch_rate_limited",
+	refusedMessage: "Đã lấy ảnh từ liên kết quá nhiều lần trong một giờ. Vui lòng thử lại sau."}
 
 // Key is one counter's identity. OPAQUE, built only by the constructors below, so that "which scope
 // does this counter belong to" is decided once, by name, and never by a caller concatenating a
@@ -190,6 +217,31 @@ func CitizenKey(ctx context.Context, citizenID string) (Key, error) {
 // the session identity); the caller refuses, never counts under a shared key.
 var ErrNoCitizen = errors.New("ratelimit: no citizen id for a per-citizen key")
 
+// ActorKey is the key of a per-OFFICER limit: one counter per (commune, staff business code).
+//
+//	→ "t:<tenant>:rl:<policy>:actor:<code>"
+//
+// code is the BUSINESS CODE of the session's principal (authz.Principal.Ma, `CB-00123`) — never a
+// request value. Written as is, unlike CitizenKey's digest: a business code is what the audit trail
+// already names an officer by (rule 6, invariant 8) and is not personal data in itself, and an operator
+// reading Redis during an incident needs to see WHOSE budget ran out. The commune comes from ctx (rule 1,
+// invariant 4) — the officer's code is unique within a commune only, so without the prefix two communes'
+// `CB-00001` would share a budget. No commune → ErrNoCommune; a blank code → ErrNoActor.
+func ActorKey(ctx context.Context, code string) (Key, error) {
+	if strings.TrimSpace(code) == "" {
+		return Key{}, ErrNoActor
+	}
+	id, ok := tenant.From(ctx)
+	if !ok || !id.Valid() {
+		return Key{}, ErrNoCommune
+	}
+	return Key{tenant: string(id), subject: "actor:" + code}, nil
+}
+
+// ErrNoActor — a per-officer key was asked for with no business code. A wiring fault (the route lost
+// the principal, or the principal has no code); the caller refuses, never counts under a shared key.
+var ErrNoActor = errors.New("ratelimit: no business code for a per-officer key")
+
 // OperatorIPKey is the key of the operator sign-in limit: one counter per client NETWORK.
 //
 //	IPv4                one counter per address ("ip:203.0.113.7").
@@ -252,6 +304,9 @@ func New(c Counter, p Policy) (*Limiter, error) {
 	}
 	if p.name == "" || p.event == "" || p.limit <= 0 || p.window <= 0 {
 		return nil, errors.New("ratelimit: empty policy — use a named policy such as ratelimit.OperatorSignIn")
+	}
+	if (p.refusedCode == "") != (p.refusedMessage == "") {
+		return nil, errors.New("ratelimit: a policy's refusal code and sentence come together or not at all")
 	}
 	return &Limiter{c: c, p: p, now: time.Now}, nil
 }

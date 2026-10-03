@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -274,6 +275,108 @@ func (s *StoredFileStore) SoftDelete(ctx context.Context, tx *store.ScopedTx, id
 		return fmt.Errorf("stored_file: xoá mềm tệp: %w", err)
 	}
 	return oneStoredFileRow(res, "xoá mềm tệp")
+}
+
+// --- the abandoned-draft sweep (owner, 03/10/2026, ADR 0067 K11; internal/app/body_image_sweep.go) ------
+//
+// A READY body image whose article id was NEVER SAVED — no noi_dung_mini_app row with that id, soft-deleted
+// rows INCLUDED (an id any article ever carried is a record, rule 7 invariant 3) — and that completed before
+// the cut-off. `updated_at` is the completion: nothing moves a ready row of an unsaved article after its walk
+// to `ready` (no publish without an article; a retire is a soft delete, which this read excludes).
+// `public_object_key IS NULL` is redundant with "never saved" and kept: 0011 refuses a deleted row with a key.
+//
+// TWO STATEMENTS, NOT ONE UPDATE, AND THE SPLIT IS THE RACE GUARD. A save of that very article locks the
+// image rows it references (checkBodyImages / retireUnreferencedBodyImages → ForUpdate) and inserts the
+// article in the same transaction. One UPDATE … WHERE NOT EXISTS that waited on such a lock would, under READ
+// COMMITTED, re-check only the ROW once the save commits — its NOT EXISTS still reads the old snapshot, and it
+// would retire an image the just-saved article shows. Locking first (abandonedBodyImagesStmt), then updating
+// in a NEW statement (a new snapshot) that repeats every clause, sees the committed article and skips it.
+
+// $1 commune · $2 purpose · $3 subject type · $4 cut-off · $5 limit.
+const abandonedBodyImagesStmt = `SELECT id FROM stored_file
+	WHERE tenant_id = $1 AND purpose = $2 AND subject_type = $3 AND status = 'ready'
+	  AND deleted_at IS NULL AND public_object_key IS NULL AND updated_at < $4
+	  AND NOT EXISTS (SELECT 1 FROM noi_dung_mini_app n WHERE n.tenant_id = $1 AND n.id = stored_file.subject_id)
+	ORDER BY id LIMIT $5 FOR UPDATE`
+
+// LockAbandonedBodyImages reads and LOCKS, inside the caller's transaction, at most limit abandoned body
+// images of this commune (see above). The caller retires them with RetireAbandonedBodyImages in the SAME
+// transaction, with its audit entry.
+func (s *StoredFileStore) LockAbandonedBodyImages(ctx context.Context, tx *store.ScopedTx, purpose string,
+	completedBefore time.Time, limit int) ([]string, error) {
+
+	if purpose == "" || limit <= 0 || limit > MaxStoredFileBatch {
+		return nil, ErrStoredFileList
+	}
+	rows, err := tx.Underlying().QueryContext(ctx, abandonedBodyImagesStmt, string(tx.TenantID()), purpose,
+		domain.StoredFileSubjectContentItem, completedBefore, limit)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc ảnh thân bài bỏ dở: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("stored_file: quét ảnh thân bài bỏ dở: %w", err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt ảnh thân bài bỏ dở: %w", err)
+	}
+	return out, nil
+}
+
+// retireAbandonedBodyImagesHead is every clause of abandonedBodyImagesStmt again, re-evaluated on a NEW
+// snapshot (see above); the id list is appended by the caller. $1 commune · $2 at · $3 by · $4 reason ·
+// $5 purpose · $6 subject type · $7 cut-off · $8… ids.
+const retireAbandonedBodyImagesHead = `UPDATE stored_file
+	SET deleted_at = $2, deleted_by = $3, delete_reason = $4, updated_at = $2
+	WHERE tenant_id = $1 AND purpose = $5 AND subject_type = $6 AND status = 'ready'
+	  AND deleted_at IS NULL AND public_object_key IS NULL AND updated_at < $7
+	  AND NOT EXISTS (SELECT 1 FROM noi_dung_mini_app n WHERE n.tenant_id = $1 AND n.id = stored_file.subject_id)
+	  AND id IN (`
+
+// RetireAbandonedBodyImages SOFT-deletes (rule 7: deleted_at / deleted_by / delete_reason, never a DELETE;
+// the private object stays) those of ids that are STILL abandoned, and returns the ids it retired. `by` is
+// the system principal's code for a job (rule 6, invariant 6); 0011's CHECK refuses an empty reason.
+func (s *StoredFileStore) RetireAbandonedBodyImages(ctx context.Context, tx *store.ScopedTx, ids []string,
+	purpose string, completedBefore time.Time, by, reason string, at time.Time) ([]string, error) {
+
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if len(ids) > MaxStoredFileBatch || !distinctNonEmpty(ids) || purpose == "" || by == "" ||
+		strings.TrimSpace(reason) == "" {
+		return nil, ErrStoredFileList
+	}
+	args := []any{string(tx.TenantID()), at, by, reason, purpose, domain.StoredFileSubjectContentItem,
+		completedBefore}
+	marks := make([]string, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+		marks = append(marks, "$"+strconv.Itoa(len(args)))
+	}
+	rows, err := tx.Underlying().QueryContext(ctx,
+		retireAbandonedBodyImagesHead+strings.Join(marks, ", ")+`) RETURNING id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: gỡ mềm ảnh thân bài bỏ dở: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("stored_file: quét ảnh thân bài đã gỡ: %w", err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt ảnh thân bài đã gỡ: %w", err)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // ReadyObjectKeys reads the PRIVATE object key of each `ready`, live file of ONE purpose among ids, in

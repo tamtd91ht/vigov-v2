@@ -291,6 +291,37 @@ func main() {
 	}
 	portalSync := commsapp.NewPortalSyncAdmin(kho, portalStore, envelope, portalClient, portalRunner)
 
+	// THE RATE-LIMIT COUNTER — one Redis client over REDIS_DSN (the idempotency store's; config.Redis is
+	// declared, so staging and prod refuse to start without it), shared by the two policies below. In DEV
+	// without Redis it fails every count: the PUBLIC news read then serves (its owner-decided fail-open,
+	// D2) and the staff image fetch answers 503 (closed, K10) — each policy decides, not the counter.
+	var rateCounter ratelimit.Counter = unavailableCounter{}
+	if dsn := cfg.RedisDSN(); dsn != "" {
+		rc, err := ratelimit.NewRedisCounter(dsn.Lo())
+		if err != nil {
+			log.Error("không mở được Redis cho giới hạn tần suất", "service", "comms", "err", err)
+			os.Exit(1)
+		}
+		rateCounter = rc
+	}
+	// The image-from-a-pasted-link limit (owner, 03/10/2026, ADR 0067 K10): 30 per hour per officer.
+	imageFetchLimiter, err := ratelimit.New(rateCounter, ratelimit.StaffImageFetch)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất lấy ảnh từ liên kết", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
+	// THE ABANDONED-DRAFT BODY-IMAGE SWEEP (owner, 03/10/2026, ADR 0067 K11) — the portal runner's
+	// pattern: an in-process ticker, ONE advisory lock so one replica sweeps, the communes with work listed
+	// as identifiers (internal/store/crosstenant), each commune swept in its own context by the system.
+	bodyImageSweeper, err := commsapp.NewBodyImageSweeper(commsapp.BodyImageSweeperDeps{
+		DB: kho, Repo: storedFiles, Locks: crosstenant.NewBodyImageSweep(db), Registry: nenTang, Log: log,
+	})
+	if err != nil {
+		log.Error("không dựng được việc nền gỡ ảnh thân bài bỏ dở", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -304,6 +335,7 @@ func main() {
 		DanhMucNoiDung:    danhMucNoiDung,
 		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(kho, danhMucNoiDung),
 		ContentCovers:     covers,
+		ImageFetchLimiter: imageFetchLimiter,
 		ContentAudio:      broadcastAudio,
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
@@ -339,20 +371,11 @@ func main() {
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
 	// only through their published-only reads.
 	//
-	// THE PUBLIC RATE LIMIT (ratelimit.PublicNewsRead, owner 02/10/2026) counts in the same Redis as the
-	// idempotency store (REDIS_DSN — config.Redis is declared, so staging and prod refuse to start
-	// without it). In DEV without Redis the counter fails every count and this policy FAILS OPEN by the
-	// owner's decision: the routes serve and one security warning per minute says the bound is off.
-	var publicCounter ratelimit.Counter = unavailableCounter{}
-	if dsn := cfg.RedisDSN(); dsn != "" {
-		rc, err := ratelimit.NewRedisCounter(dsn.Lo())
-		if err != nil {
-			log.Error("không mở được Redis cho giới hạn tần suất tuyến công khai", "service", "comms", "err", err)
-			os.Exit(1)
-		}
-		publicCounter = rc
-	}
-	publicLimiter, err := ratelimit.New(publicCounter, ratelimit.PublicNewsRead)
+	// THE PUBLIC RATE LIMIT (ratelimit.PublicNewsRead, owner 02/10/2026) counts in the same Redis counter
+	// as the staff image-fetch limit above (REDIS_DSN). In DEV without Redis the counter fails every count
+	// and this policy FAILS OPEN by the owner's decision: the routes serve and one security warning per
+	// minute says the bound is off.
+	publicLimiter, err := ratelimit.New(rateCounter, ratelimit.PublicNewsRead)
 	if err != nil {
 		log.Error("không dựng được bộ giới hạn tần suất tuyến công khai", "service", "comms", "err", err)
 		os.Exit(1)
@@ -439,6 +462,13 @@ func main() {
 		defer close(runnerDone)
 		portalRunner.Run(jobs)
 	}()
+	// The body-image sweep (K11) on the same context: cancelled first on shutdown. A sweep cut mid-commune
+	// loses nothing — each commune is one transaction, and what it did not reach is swept next tick.
+	sweepDone := make(chan struct{})
+	go func() {
+		defer close(sweepDone)
+		bodyImageSweeper.Run(jobs)
+	}()
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
 	loi := make(chan error, 2)
@@ -503,6 +533,11 @@ func main() {
 		}
 		if !<-jobsDrained {
 			log.Warn("lượt đồng bộ Cổng chưa xong kịp hạn — sẽ được đóng `that-bai` ở lượt sau", "service", "comms")
+		}
+		select {
+		case <-sweepDone:
+		case <-ctx.Done():
+			log.Warn("việc nền gỡ ảnh thân bài bỏ dở chưa dừng kịp hạn — giao dịch dở sẽ bị cuộn lại", "service", "comms")
 		}
 		if errHTTP != nil {
 			log.Error("đóng không sạch", "err", errHTTP)

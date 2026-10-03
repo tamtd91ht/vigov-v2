@@ -31,6 +31,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/ratelimit"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -155,13 +156,19 @@ type bodyImageFromURLIn struct {
 // FetchBodyImageFromURL has the server download a pasted image link into a ready body image.
 // POST /api/v1/content-items/body-images/from-url
 func (h *Handler) FetchBodyImageFromURL(w http.ResponseWriter, r *http.Request) {
-	var in bodyImageFromURLIn
-	if !docThan(w, r, &in) {
-		return
-	}
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.missingCoverPrincipal(w, r)
+		return
+	}
+	// COUNTED FIRST — before the body is even read (ADR 0067 K10: every attempt, failures and refusals
+	// included). Counting only what reaches the fetch would let a stolen session probe with malformed or
+	// refused links for free; counting only successes is the defect K10 was decided to close.
+	if !h.imageFetchGate(w, r, actor) {
+		return
+	}
+	var in bodyImageFromURLIn
+	if !docThan(w, r, &in) {
 		return
 	}
 	f, err := h.d.ContentCovers.FetchBodyImage(r.Context(),
@@ -172,6 +179,39 @@ func (h *Handler) FetchBodyImageFromURL(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	vietJSON(w, http.StatusCreated, h.bodyImageFileReply(w, r, f))
+}
+
+// imageFetchGate counts one attempt against the OFFICER's budget (ratelimit.StaffImageFetch, owner
+// 03/10/2026, ADR 0067 K10) and answers the request itself when it may not proceed: 429
+// `image_fetch_rate_limited` + Retry-After over the limit, 503 `rate_limit_unavailable` when Redis cannot
+// be asked.
+//
+// FAIL CLOSED, ON PURPOSE AND UNLIKE THE PUBLIC NEWS READ (D2): this route makes the SERVER fetch an
+// arbitrary host on an authenticated officer's behalf, from a government address, holding one of the
+// pod's four download slots. The bound exists for the case where the session is not the officer; a Redis
+// outage that lifted it would lift it exactly when nothing else is watching. A missing limiter (wiring
+// fault) is the same 503, never an unbounded route.
+//
+// The key is the commune from ctx + the principal's BUSINESS CODE (ratelimit.ActorKey) — never a request
+// value, never the URL (rule 3).
+func (h *Handler) imageFetchGate(w http.ResponseWriter, r *http.Request, actor audit.Actor) bool {
+	xa := string(tenant.MustFrom(r.Context()))
+	if h.d.ImageFetchLimiter == nil {
+		h.d.Log.Error("tuyến lấy ảnh từ liên kết chạy mà không có bộ giới hạn tần suất — SAI CẤU HÌNH, từ chối (đóng kín)",
+			"xa", xa)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "rate_limit_unavailable",
+			"Hệ thống tạm thời không xử lý được yêu cầu. Vui lòng thử lại sau.", "")
+		return false
+	}
+	key, err := ratelimit.ActorKey(r.Context(), actor.ID)
+	if err != nil {
+		// Unreachable behind nguoiThucHien (a principal with a code) and TenantMiddleware (a commune):
+		// refused rather than counted under a shared key.
+		h.d.Log.Error("tuyến lấy ảnh từ liên kết: không dựng được khoá giới hạn tần suất — từ chối", "xa", xa, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return false
+	}
+	return ratelimit.Gate(w, r, h.d.ImageFetchLimiter, key, h.d.Log, "xa", xa, "actor", actor.ID)
 }
 
 // logBodyImageFetch records ONE line per pasted link: commune, actor, HOST and outcome — never the path,
