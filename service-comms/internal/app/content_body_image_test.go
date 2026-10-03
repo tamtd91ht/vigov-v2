@@ -12,6 +12,7 @@ package app
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -108,6 +109,85 @@ func TestBodyImageRequestRefusesThe21stFromThePolicyCount(t *testing.T) {
 	acts := auditActions(r.k)
 	if !containsString(acts, ActionBodyImageUploadRequested) || !containsString(acts, "noi-dung-mini-app/anh-than-bai/2026-10-01") {
 		t.Errorf("the trail must name a BODY image, got %v", acts)
+	}
+}
+
+// THE COUNT LOCK (H7 under concurrency): the per-subject lock is taken BEFORE the count on EVERY path —
+// a reserved id (no article row to lock, the case that let two requests at 19 both insert), an existing
+// article (row lock too) and a freshly minted id — and the row is inserted after it. The fake has no
+// transactions, so "the same transaction" is shown as one lock per count, insert last; the PG test
+// (store/stored_file_pg_test.go) is where the lock is shown to actually block.
+func TestBodyImageAdmissionLocksTheSubjectBeforeCounting(t *testing.T) {
+	const lock = "lock:" + coverItemID + ":content-body-image"
+	const count, insert, reserved = "count:" + coverItemID, "insert:" + coverItemID, "reserved:" + coverItemID
+	existing := func() *domain.NoiDungMiniApp {
+		return &domain.NoiDungMiniApp{ID: coverItemID, Loai: domain.LoaiTinTuc, TieuDe: "Tin", NgayDang: lucNDPinned,
+			TrangThai: domain.TrangThaiAn, Nguon: domain.NguonThuCong, NguoiTaoMa: maCanBoSoanND}
+	}
+	for _, tc := range []struct {
+		name    string
+		row     *domain.NoiDungMiniApp
+		named   string
+		reserve bool
+		want    []string
+	}{
+		{"reserved id, no article row", nil, coverItemID, true, []string{reserved, lock, count, insert}},
+		{"existing article", existing(), coverItemID, false, []string{lock, count, insert}},
+		{"fresh id minted here", nil, "", false, []string{lock, count, insert}},
+	} {
+		t.Run("upload/"+tc.name, func(t *testing.T) {
+			r := newCoverRig(t, &khoNDGia{dongHienCo: tc.row})
+			r.uc.policies = bodyPolicy(20)
+			if tc.reserve {
+				readyBodyImage(r.files, bodyFileA, coverItemID)
+			}
+			r.files.admitCalls = nil
+			_, err := r.uc.RequestBodyImageUpload(r.ctx, CoverUploadRequest{ContentItemID: tc.named, FileName: "a.jpg",
+				ContentType: storage.MIMEJPEG, Size: 10}, nguoiSoanND())
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if got := strings.Join(r.files.admitCalls, ","); got != strings.Join(tc.want, ",") {
+				t.Errorf("calls = %s, want %s", got, strings.Join(tc.want, ","))
+			}
+			if tc.row != nil && !r.k.coCau("FOR UPDATE") {
+				t.Error("an existing article was not locked by its row")
+			}
+		})
+	}
+
+	// FetchBodyImage: the pre-check transaction and the write transaction each take the lock before their
+	// count; the row is inserted only in the second, after its own lock.
+	for _, tc := range []struct {
+		name  string
+		row   *domain.NoiDungMiniApp
+		named string
+		want  []string
+	}{
+		{"reserved id, no article row", nil, coverItemID,
+			[]string{reserved, lock, count, reserved, lock, count, insert}},
+		{"existing article", existing(), coverItemID, []string{lock, count, lock, count, insert}},
+		{"fresh id minted here", nil, "", []string{lock, count, lock, count, insert}},
+	} {
+		t.Run("fetch/"+tc.name, func(t *testing.T) {
+			jpg := testJPEG(t, 400, 300, 0)
+			r := newFetchRig(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(jpg) })
+			r.k.dongHienCo = tc.row
+			if tc.named != "" {
+				r.uc.newID = func() (string, error) { return fetchedFile, nil } // no article id is minted
+			}
+			if tc.named != "" && tc.row == nil {
+				readyBodyImage(r.files, bodyFileA, coverItemID)
+			}
+			r.files.admitCalls = nil
+			if _, err := r.uc.FetchBodyImage(r.ctx, BodyImageFromURLRequest{URL: fetchURL, ContentItemID: tc.named},
+				nguoiSoanND()); err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if got := strings.Join(r.files.admitCalls, ","); got != strings.Join(tc.want, ",") {
+				t.Errorf("calls = %s, want %s", got, strings.Join(tc.want, ","))
+			}
+		})
 	}
 }
 

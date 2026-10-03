@@ -197,6 +197,7 @@ type CoverFiles interface {
 	SetPublicObjectKey(ctx context.Context, tx *store.ScopedTx, id, key string, at time.Time) error
 	PublicForSubject(ctx context.Context, tx *store.ScopedTx, subjectID string) ([]domain.StoredFile, error)
 	PublicObjectKeys(ctx context.Context, ids []string) (map[string]string, error)
+	LockSubjectCount(ctx context.Context, tx *store.ScopedTx, subjectID, purpose string) error
 	CountForSubjectTx(ctx context.Context, tx *store.ScopedTx, subjectID, purpose string,
 		pendingSince time.Time) (int, error)
 	CountForSubject(ctx context.Context, subjectID, purpose string) (int, error)
@@ -301,7 +302,7 @@ type CoverUpload struct {
 }
 
 // RequestUpload issues one upload slot (ADR 0052 §1a). ONE TRANSACTION: the article row FOR UPDATE when
-// one is named (it must exist, and two requests for it serialise on the count), the count, the pending
+// one is named (it must exist), the per-subject count lock and the count (admitSubject), the pending
 // row, the audit entry. The presigned POST is signed INSIDE it — offline, no network — so a signing
 // failure leaves no row behind.
 func (uc *ContentCovers) RequestUpload(ctx context.Context, req CoverUploadRequest, actor audit.Actor) (
@@ -425,6 +426,10 @@ func (uc *ContentCovers) requestUpload(ctx context.Context, purpose storage.Purp
 // admitSubject is the in-transaction check of the article an upload names (named; "" = a fresh
 // reservation) and of the purpose's per-article count on subject. Shared by requestUpload and the body
 // image fetched from a link (FetchBodyImage), so the two cannot drift on who may add a file to what.
+//
+// THE COUNT IS TAKEN UNDER LockSubjectCount, ON EVERY PATH — article row or not. The row lock above
+// serialises only an article that exists; a reserved id has no row, and without the subject lock two
+// requests at max-1 both count max-1 and both insert. The caller inserts the row in THIS transaction.
 func (uc *ContentCovers) admitSubject(ctx context.Context, tx *store.ScopedTx, purpose storage.Purpose,
 	pol uploadpolicy.Policy, named, subject string, actor audit.Actor, now time.Time) error {
 
@@ -444,6 +449,9 @@ func (uc *ContentCovers) admitSubject(ctx context.Context, tx *store.ScopedTx, p
 		}
 	}
 	if pol.FileCountLimited {
+		if err := uc.files.LockSubjectCount(ctx, tx, subject, string(purpose)); err != nil {
+			return err
+		}
 		live, err := uc.files.CountForSubjectTx(ctx, tx, subject, string(purpose), now.Add(-storage.UploadTTL))
 		if err != nil {
 			return err

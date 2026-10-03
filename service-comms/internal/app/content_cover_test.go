@@ -47,6 +47,10 @@ type fakeCoverFiles struct {
 	// `deleted_at IS NULL`. softDeleted records each call, by id.
 	deleted     map[string]bool
 	softDeleted []string
+
+	// admitCalls is the order of the admission calls (SubjectReservedBy, LockSubjectCount,
+	// CountForSubjectTx, InsertPending), "<call>:<subject>" — the order IS the property for the count lock.
+	admitCalls []string
 }
 
 // newFakeDB is the real core/store over the fake driver, one connection so statements stay ordered.
@@ -82,6 +86,7 @@ func (f *fakeCoverFiles) LiveForSubject(_ context.Context, subjectID, purpose st
 	return out, nil
 }
 func (f *fakeCoverFiles) SubjectReservedBy(_ context.Context, _ *store.ScopedTx, subjectID, by string) (bool, error) {
+	f.admitCalls = append(f.admitCalls, "reserved:"+subjectID)
 	for id, r := range f.rows {
 		if !f.deleted[id] && r.SubjectID == subjectID && r.UploadedBy == by {
 			return true, nil
@@ -120,6 +125,7 @@ func (f *fakeCoverFiles) liveCount(subjectID, purpose string, withPending bool) 
 }
 
 func (f *fakeCoverFiles) InsertPending(_ context.Context, _ *store.ScopedTx, r domain.StoredFile) error {
+	f.admitCalls = append(f.admitCalls, "insert:"+r.SubjectID)
 	f.inserted = append(f.inserted, r)
 	c := r
 	f.rows[r.ID] = &c
@@ -181,8 +187,13 @@ func (f *fakeCoverFiles) PublicObjectKeys(_ context.Context, ids []string) (map[
 	}
 	return out, nil
 }
+func (f *fakeCoverFiles) LockSubjectCount(_ context.Context, _ *store.ScopedTx, subjectID, purpose string) error {
+	f.admitCalls = append(f.admitCalls, "lock:"+subjectID+":"+purpose)
+	return nil
+}
 func (f *fakeCoverFiles) CountForSubjectTx(_ context.Context, _ *store.ScopedTx, subjectID, purpose string,
 	_ time.Time) (int, error) {
+	f.admitCalls = append(f.admitCalls, "count:"+subjectID)
 	return f.liveCount(subjectID, purpose, true), nil
 }
 func (f *fakeCoverFiles) CountForSubject(_ context.Context, subjectID, purpose string) (int, error) {

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-03",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -519,6 +519,14 @@
       "viec": "Giao diện Mini App sinh động hơn trên CSS sẵn có, cả hai app (ADR 0047 §6, chủ dự án 02/10/2026): chuyển động ≤250ms, khung xương kèm chữ, tin nổi bật có ảnh ở Trang chủ app riêng, màn rỗng có hình minh hoạ + câu hướng dẫn, nút lún khi bấm",
       "trang_thai": "dang_lam",
       "bang_chung": "Commit d232c19e: state-visuals.tsx (LoadingSkeleton, EmptyIllustration), KhoiTrangThai shape/rows, LoadingNotice/EmptyNotice (khung.tsx), FeaturedNews (TinTucAppXa.tsx), .xa-frame--enter/.cd-man/.xa-card-open, :active scale(.98) — tất cả trong khối prefers-reduced-motion: no-preference; accessibility.test.ts nay chặn cả transition/:active ngoài khối. npm test 1673/1673, typecheck sạch, build xanh. CÒN: (a) chưa xem trên máy thật/Zalo webview (320px, trình đọc màn hình, new Image()); (b) chủ dự án duyệt 3 câu mới: petition_filter_empty_hint, map_empty_hint, TIN_XA.empty_hint (app chung xưng 'bạn'); (c) thẻ tin nổi bật hiện SAU khi ảnh tải xong nên khối tin có thể giãn ra một lần."
+    },
+    {
+      "id": "than-bai-anh-trich-dan-sapo",
+      "viec": "Thân tin: ảnh có chú thích, trích dẫn, dòng tác giả; sapo (Tóm tắt) in đậm dưới tiêu đề — app riêng và app chung (ADR 0067 sửa đổi 03/10/2026, H6/H8)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "ceeddf6d: hop-dong-cong-khai.ts (BodyBlock image/quote/byline, src qua readHttpsLink), article-body.tsx (+ NewsSapo), TinTucAppXa.tsx, TinTucXaScreen.tsx, styles.css. typecheck + vitest 64 tệp/1685 ca xanh; citizen-app không có script lint.",
+      "tiep_theo": "Xem trên máy thật trong Zalo: host kho công khai phải nằm trong danh sách tên miền của App ID (ADR 0052 Còn mở #3, ngoài kho) — chưa có thì ảnh hỏng, chỉ còn chú thích; loading=lazy và aspect-ratio trên webview Android cũ; cỡ chữ hệ thống lớn. Câu chính sách quyền riêng tư về host kho công khai chờ chủ dự án (ADR 0067 L2). Client không kiểm được host là kho ViGov — tường duy nhất là bộ đổi mã ở máy chủ.",
+      "menu": "noi-dung-mini-app"
     }
   ]
 }

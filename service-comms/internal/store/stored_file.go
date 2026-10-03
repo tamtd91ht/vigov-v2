@@ -384,8 +384,28 @@ const countForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpo
 const countStoredForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
 	AND deleted_at IS NULL AND status IN ('stored', 'processing', 'ready')`
 
+// LockSubjectCount serialises, until the caller's transaction ends, every admission of a file of one
+// purpose onto one subject in this commune. Call it BEFORE CountForSubjectTx, in the transaction that
+// then inserts the row.
+//
+// WHY AN ADVISORY LOCK AND NOT THE ARTICLE ROW: `max_files_per_subject` is decided by counting and then
+// inserting. When the article exists its row FOR UPDATE serialises that, but an article not saved yet
+// (a reserved id, ADR 0052 §1a) has no row to lock, and count(*) under READ COMMITTED does not see the
+// other request's uncommitted insert — two requests at 19 both pass and the article holds 21 body images
+// (H7 broken silently). The key is tenant-prefixed (rule 1, invariant 7), so no commune waits on another;
+// a hash collision only over-serialises. Released by COMMIT or ROLLBACK — no path forgets it.
+func (s *StoredFileStore) LockSubjectCount(ctx context.Context, tx *store.ScopedTx, subjectID, purpose string) error {
+	const stmt = `SELECT pg_advisory_xact_lock(hashtextextended(` +
+		`'t:' || $1 || ':' || $2 || ':' || $3 || ':' || $4, 0))`
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), domain.StoredFileSubjectContentItem,
+		subjectID, purpose); err != nil {
+		return fmt.Errorf("stored_file: khoá số đếm tệp của mục: %w", err)
+	}
+	return nil
+}
+
 // CountForSubjectTx counts inside the caller's transaction (the upload request), live pending rows
-// included from pendingSince on.
+// included from pendingSince on. The caller holds LockSubjectCount for the same subject and purpose.
 func (s *StoredFileStore) CountForSubjectTx(ctx context.Context, tx *store.ScopedTx,
 	subjectID, purpose string, pendingSince time.Time) (int, error) {
 

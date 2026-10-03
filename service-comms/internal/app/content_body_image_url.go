@@ -24,8 +24,9 @@ package app
 // ORDER, AND WHY: the article and the count are checked BEFORE the download (a refused request costs no
 // fetch, and the route is no probe for an officer without a usable article), the download and the
 // derivative happen OUTSIDE any transaction (network and CPU of unbounded length), and the row and its
-// audit entry are written in ONE short transaction that checks the article and the count AGAIN — two
-// pastes racing for the 20th slot serialise there. A transaction that fails after the derivative was
+// audit entry are written in ONE short transaction that checks the article and the count AGAIN, under
+// the per-subject count lock (admitSubject → LockSubjectCount) — two pastes, or a paste and an upload,
+// racing for the 20th slot serialise there whether or not the article row exists yet. A transaction that fails after the derivative was
 // stored deletes it (discardPortalCover); a failed delete leaves an unreferenced private object, never
 // a row without its object.
 
