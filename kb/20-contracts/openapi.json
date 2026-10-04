@@ -12131,6 +12131,196 @@
         }
       }
     },
+    "/api/v1/map-asset-points": {
+      "get": {
+        "summary": "Điểm tài nguyên trên bản đồ kinh tế số của xã — GeoJSON FeatureCollection, toạ độ [kinh độ, vĩ độ], chỉ thuộc tính nhẹ",
+        "operationId": "comms_get_map_asset_points",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §4, §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.read"
+        },
+        "x-vigov-task": "d471638a69f2",
+        "parameters": [
+          {
+            "name": "asset_type_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "industry_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "residential_unit_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "verified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetPointsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_filter"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "too_many_points"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-asset-summary": {
+      "get": {
+        "summary": "Số đối tượng theo nhóm, tổng số và tỷ lệ đã xác minh của bản đồ kinh tế số",
+        "operationId": "comms_get_map_asset_summary",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §1, §4.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.read"
+        },
+        "x-vigov-task": "896a7669999d",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetSummaryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/map-asset-types": {
       "get": {
         "summary": "Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu",
@@ -12265,6 +12455,76 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-asset-types/defaults": {
+      "post": {
+        "summary": "Nạp 11 nhóm tài nguyên mặc định (ADR 0072) vào danh mục của xã — mã đã có giữ nguyên, mã đã xoá không khôi phục",
+        "operationId": "comms_post_map_asset_types_defaults",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "e57f6f121882",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.seedMapAssetTypesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "catalogue_full"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -12714,6 +12974,682 @@
         }
       }
     },
+    "/api/v1/map-assets": {
+      "get": {
+        "summary": "Sổ địa điểm của xã — một trang, xếp theo nhóm rồi tên; người đại diện và số điện thoại luôn che",
+        "operationId": "comms_get_map_assets",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.read"
+        },
+        "x-vigov-task": "10b01c8a5e51",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asset_type_code"
+              ],
+              "default": "asset_type_code"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          },
+          {
+            "name": "asset_type_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "industry_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "residential_unit_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "verified",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_comms.mapAssetRowOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_cursor",
+              "invalid_filter",
+              "invalid_limit",
+              "invalid_sort"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm một đối tượng lên bản đồ kinh tế số của xã",
+        "operationId": "comms_post_map_assets",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.update"
+        },
+        "x-vigov-task": "ebea21365b9a",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.createMapAssetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "tax_code_taken"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "asset_type_unavailable",
+              "invalid_custom_values"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-assets/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một đối tượng trên bản đồ kinh tế số, kèm lý do bắt buộc",
+        "operationId": "comms_delete_map_assets_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.update"
+        },
+        "x-vigov-task": "70a00564fdde",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.deleteMapAssetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Một đối tượng trên bản đồ kinh tế số, đủ trường kèm giá trị tuỳ biến — che người đại diện, điện thoại, mã số thuế trừ khi có asset.update",
+        "operationId": "comms_get_map_assets_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §6, §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.read"
+        },
+        "x-vigov-task": "a07aff2a5f81",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa một đối tượng trên bản đồ kinh tế số — chỉ trường được gửi; custom_values gộp theo khoá",
+        "operationId": "comms_patch_map_assets_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §7, §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.update"
+        },
+        "x-vigov-task": "22c818176645",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.updateMapAssetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "tax_code_taken"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "asset_type_unavailable",
+              "invalid_custom_values"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-assets/{id}/confirmation": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Xác minh hoặc bỏ xác minh một đối tượng trên bản đồ kinh tế số",
+        "operationId": "comms_post_map_assets_by_id_confirmation",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §7, §10",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.update"
+        },
+        "x-vigov-task": "323d826a2f35",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.mapAssetConfirmationIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapAssetOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/map-field-schemas": {
       "get": {
         "summary": "Các trường tuỳ biến của biểu mẫu tài nguyên bản đồ — của một nhóm hoặc mọi nhóm, kể cả trường đang tắt",
@@ -13063,6 +13999,155 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/map-frame": {
+      "get": {
+        "summary": "Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false",
+        "operationId": "comms_get_map_frame",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "asset.read"
+        },
+        "x-vigov-task": "c000a92deb22",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapFrameOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết",
+        "operationId": "comms_put_map_frame",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "f921dfffcd5a",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.mapFrameIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapFrameOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "center_outside_mainland",
+              "radius_out_of_range"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -27742,6 +28827,80 @@
         ],
         "additionalProperties": false
       },
+      "comms.createMapAssetIn": {
+        "type": "object",
+        "properties": {
+          "asset_type_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "address": {
+            "type": "string"
+          },
+          "residential_unit_id": {
+            "type": "string"
+          },
+          "representative": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "default dang-hoat-dong"
+          },
+          "tax_code": {
+            "type": "string"
+          },
+          "industry_code": {
+            "type": "string"
+          },
+          "employee_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "established_on": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "custom_values": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "asset_type_code",
+          "lat",
+          "lng",
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "comms.createMapFieldSchemaIn": {
         "type": "object",
         "properties": {
@@ -27870,6 +29029,18 @@
         "additionalProperties": false
       },
       "comms.deleteExternalContactIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.deleteMapAssetIn": {
         "type": "object",
         "properties": {
           "reason": {
@@ -28162,6 +29333,299 @@
         ],
         "additionalProperties": false
       },
+      "comms.mapAssetConfirmationIn": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "verified"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetFeatureOut": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "always \"Feature\""
+          },
+          "id": {
+            "type": "string"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/comms.mapAssetGeometryOut"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/comms.mapAssetPointPropsOut"
+          }
+        },
+        "required": [
+          "geometry",
+          "id",
+          "properties",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetGeometryOut": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "always \"Point\""
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "coordinates",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "asset_type_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "residential_unit_id": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "representative": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "verified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "verified_by": {
+            "type": "string",
+            "description": "business code `CB-…`"
+          },
+          "tax_code": {
+            "type": "string"
+          },
+          "industry_code": {
+            "type": "string"
+          },
+          "employee_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "established_on": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "description": {
+            "type": "string"
+          },
+          "custom_values": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "masked": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "asset_type_code",
+          "created_at",
+          "custom_values",
+          "id",
+          "lat",
+          "lng",
+          "masked",
+          "name",
+          "status",
+          "updated_at",
+          "verified"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetPointPropsOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "asset_type_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "asset_type_code",
+          "id",
+          "name",
+          "status",
+          "verified"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetPointsOut": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "always \"FeatureCollection\""
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetFeatureOut"
+            }
+          }
+        },
+        "required": [
+          "features",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetRowOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "asset_type_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "residential_unit_id": {
+            "type": "string"
+          },
+          "representative": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "asset_type_code",
+          "id",
+          "name",
+          "status",
+          "verified"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetSummaryOut": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          },
+          "verified_ratio": {
+            "type": "number",
+            "description": "0..1, four decimals; 0 when total is 0"
+          },
+          "by_type": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeCountOut"
+            }
+          }
+        },
+        "required": [
+          "by_type",
+          "total",
+          "verified",
+          "verified_ratio"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapAssetTypeCountOut": {
+        "type": "object",
+        "properties": {
+          "asset_type_code": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "verified": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "asset_type_code",
+          "count",
+          "verified"
+        ],
+        "additionalProperties": false
+      },
       "comms.mapAssetTypeImportCreatedOut": {
         "type": "object",
         "properties": {
@@ -28280,6 +29744,22 @@
         ],
         "additionalProperties": false
       },
+      "comms.mapAssetTypeRefOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "additionalProperties": false
+      },
       "comms.mapFieldSchemaListOut": {
         "type": "object",
         "properties": {
@@ -28341,6 +29821,81 @@
           "options",
           "sort_order",
           "value_type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapFrameIn": {
+        "type": "object",
+        "properties": {
+          "center_lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "center_lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "radius_km": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "center_lat",
+          "center_lng",
+          "radius_km"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapFrameOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "center_lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "center_lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "radius_km": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured"
         ],
         "additionalProperties": false
       },
@@ -29028,6 +30583,42 @@
         ],
         "additionalProperties": false
       },
+      "comms.seedMapAssetTypesOut": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeRefOut"
+            },
+            "description": "nhóm vừa thêm vào danh mục của xã"
+          },
+          "skipped_existing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeRefOut"
+            },
+            "description": "xã đã có mã này — giữ NGUYÊN"
+          },
+          "skipped_deleted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetTypeRefOut"
+            },
+            "description": "xã đã XOÁ mã này — không khôi phục"
+          },
+          "created_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "created_count",
+          "skipped_deleted",
+          "skipped_existing"
+        ],
+        "additionalProperties": false
+      },
       "comms.suaLoaiTaiNguyenVao": {
         "type": "object",
         "properties": {
@@ -29531,6 +31122,106 @@
           "display_order": {
             "type": [
               "integer",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "comms.updateMapAssetIn": {
+        "type": "object",
+        "properties": {
+          "asset_type_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "residential_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "representative": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "industry_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "employee_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "established_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "custom_values": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "verified": {
+            "type": [
+              "boolean",
               "null"
             ]
           }
@@ -35196,6 +36887,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/audit.EntryView"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_comms.mapAssetRowOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.mapAssetRowOut"
             }
           },
           "next_cursor": {

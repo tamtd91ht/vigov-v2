@@ -556,7 +556,7 @@
     },
     "app.Get": {
       "kind": "func",
-      "at": "service-comms/internal/app/mail_settings.go:121"
+      "at": "service-comms/internal/app/map_frame.go:63"
     },
     "app.GhiBienBanHop": {
       "kind": "type",
@@ -974,6 +974,30 @@
       "kind": "type",
       "at": "service-platform/internal/app/branding.go:204"
     },
+    "app.MapAssetInput": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset.go:74"
+    },
+    "app.MapAssetPatch": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset.go:95"
+    },
+    "app.MapAssetPersonalFields": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_asset.go:366"
+    },
+    "app.MapAssetRepo": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset.go:33"
+    },
+    "app.MapAssetTypeDefaults": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset_type_defaults.go:62"
+    },
+    "app.MapAssetTypeDefaultsRepo": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset_type_defaults.go:36"
+    },
     "app.MapAssetTypeImportRejected": {
       "kind": "type",
       "at": "service-comms/internal/app/map_asset_type_import.go:36"
@@ -982,6 +1006,18 @@
       "kind": "type",
       "at": "service-comms/internal/app/map_asset_type_import.go:45"
     },
+    "app.MapAssetTypeRef": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset_type_defaults.go:47"
+    },
+    "app.MapAssetTypeSeedResult": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset_type_defaults.go:55"
+    },
+    "app.MapAssets": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_asset.go:45"
+    },
     "app.MapFieldSchemaRepo": {
       "kind": "type",
       "at": "service-comms/internal/app/map_field_schema.go:34"
@@ -989,6 +1025,22 @@
     "app.MapFieldSchemas": {
       "kind": "type",
       "at": "service-comms/internal/app/map_field_schema.go:45"
+    },
+    "app.MapFrameInput": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:43"
+    },
+    "app.MapFrameRepo": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:25"
+    },
+    "app.MapFrameView": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:36"
+    },
+    "app.MapFrames": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:48"
     },
     "app.MarkAllRead": {
       "kind": "func",
@@ -1170,9 +1222,21 @@
       "kind": "func",
       "at": "service-comms/internal/app/mail_settings.go:108"
     },
+    "app.NewMapAssetTypeDefaults": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_asset_type_defaults.go:70"
+    },
+    "app.NewMapAssets": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_asset.go:53"
+    },
     "app.NewMapFieldSchemas": {
       "kind": "func",
       "at": "service-comms/internal/app/map_field_schema.go:53"
+    },
+    "app.NewMapFrames": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_frame.go:53"
     },
     "app.NewMiniAppSecretAdmin": {
       "kind": "func",
@@ -1666,6 +1730,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/task_assignment.go:77"
     },
+    "app.RecordFullView": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_asset.go:341"
+    },
     "app.RecordOnSourceInTx": {
       "kind": "type",
       "at": "service-petitions/internal/app/nhiem_vu.go:605"
@@ -1796,7 +1864,7 @@
     },
     "app.Save": {
       "kind": "func",
-      "at": "service-comms/internal/app/mail_settings.go:139"
+      "at": "service-comms/internal/app/map_frame.go:77"
     },
     "app.SaveCategories": {
       "kind": "func",
@@ -1837,6 +1905,10 @@
     "app.SessionIdleExpiry": {
       "kind": "type",
       "at": "service-identity/internal/app/session_idle.go:30"
+    },
+    "app.SetConfirmation": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_asset.go:251"
     },
     "app.SetDemo": {
       "kind": "func",
@@ -3070,6 +3142,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/task_assignment.go:124"
     },
+    "domain.ApplyCustomValues": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset_custom_value.go:61"
+    },
     "domain.ApplyFieldEdit": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_field.go:175"
@@ -3161,6 +3237,10 @@
     "domain.BoPhan": {
       "kind": "type",
       "at": "service-identity/internal/domain/bo_phan.go:10"
+    },
+    "domain.Bounds": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_frame.go:102"
     },
     "domain.BrandingImage": {
       "kind": "type",
@@ -3349,6 +3429,10 @@
     "domain.CheckReopenReason": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:572"
+    },
+    "domain.CheckRequiredCustomValues": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset_custom_value.go:116"
     },
     "domain.CheckResidentialUnitCount": {
       "kind": "func",
@@ -3786,6 +3870,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/nguong_canh_bao_cham.go:55"
     },
+    "domain.CustomValueError": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset_custom_value.go:47"
+    },
     "domain.DaGiaHan": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:409"
@@ -3833,6 +3921,10 @@
     "domain.DeadlineKind": {
       "kind": "type",
       "at": "service-petitions/internal/domain/summary_metrics.go:193"
+    },
+    "domain.DefaultMapAssetTypes": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset_type_defaults.go:20"
     },
     "domain.DefaultPortalSyncSettings": {
       "kind": "func",
@@ -4786,6 +4878,30 @@
       "kind": "type",
       "at": "service-comms/internal/domain/mail_settings.go:89"
     },
+    "domain.MapAsset": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset.go:40"
+    },
+    "domain.MapAssetFilter": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset.go:82"
+    },
+    "domain.MapAssetPoint": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset.go:71"
+    },
+    "domain.MapAssetSummary": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset.go:100"
+    },
+    "domain.MapAssetTypeCount": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset.go:92"
+    },
+    "domain.MapAssetTypeDefault": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_asset_type_defaults.go:5"
+    },
     "domain.MapAssetTypeImportColumns": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_asset_type_import.go:43"
@@ -4801,6 +4917,14 @@
     "domain.MapFieldSchema": {
       "kind": "type",
       "at": "service-comms/internal/domain/map_field_schema.go:45"
+    },
+    "domain.MapFrame": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_frame.go:60"
+    },
+    "domain.MapFrameBounds": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/map_frame.go:71"
     },
     "domain.MayDownload": {
       "kind": "func",
@@ -4998,6 +5122,38 @@
       "kind": "func",
       "at": "service-comms/internal/domain/mail_settings.go:101"
     },
+    "domain.NormalizeMapAsset": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:294"
+    },
+    "domain.NormalizeMapAssetDate": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:259"
+    },
+    "domain.NormalizeMapAssetFilter": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:346"
+    },
+    "domain.NormalizeMapAssetIndustryCode": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:247"
+    },
+    "domain.NormalizeMapAssetLocation": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:181"
+    },
+    "domain.NormalizeMapAssetPhone": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:207"
+    },
+    "domain.NormalizeMapAssetTaxCode": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:220"
+    },
+    "domain.NormalizeMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_frame.go:78"
+    },
     "domain.NormalizeMessageText": {
       "kind": "func",
       "at": "service-reporting/internal/domain/system_message.go:184"
@@ -5021,6 +5177,10 @@
     "domain.NormalizeResidentialUnitCode": {
       "kind": "func",
       "at": "service-identity/internal/domain/residential_unit_write.go:77"
+    },
+    "domain.NormalizeResidentialUnitID": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:273"
     },
     "domain.NormalizeResidentialUnitName": {
       "kind": "func",
@@ -5473,6 +5633,10 @@
     "domain.SameMailSettings": {
       "kind": "func",
       "at": "service-comms/internal/domain/mail_settings.go:176"
+    },
+    "domain.SameMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_frame.go:94"
     },
     "domain.SameOptions": {
       "kind": "func",
@@ -5994,6 +6158,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:83"
     },
+    "domain.ValidMapAssetStatus": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:30"
+    },
     "domain.ValidMiniAppID": {
       "kind": "func",
       "at": "service-identity/internal/domain/mini_app_secret.go:13"
@@ -6101,6 +6269,10 @@
     "domain.VerificationPhotosVisibleToCitizen": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_staff_file.go:67"
+    },
+    "domain.VerifiedRatio": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_asset.go:108"
     },
     "domain.ViecTiepTheo": {
       "kind": "func",
@@ -6674,6 +6846,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:339"
     },
+    "http.CreateMapAsset": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:659"
+    },
     "http.CreateMapFieldSchema": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:184"
@@ -6866,6 +7042,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:385"
     },
+    "http.DeleteMapAsset": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:731"
+    },
     "http.DeleteMapFieldSchema": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:252"
@@ -6969,6 +7149,14 @@
     "http.GetMailSettings": {
       "kind": "func",
       "at": "service-comms/internal/http/mail_settings.go:91"
+    },
+    "http.GetMapAsset": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:581"
+    },
+    "http.GetMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_frame.go:163"
     },
     "http.GetPortalCategories": {
       "kind": "func",
@@ -7230,6 +7418,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:305"
     },
+    "http.ListMapAssets": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:542"
+    },
     "http.ListMapFieldSchemas": {
       "kind": "func",
       "at": "service-comms/internal/http/map_field_schema.go:133"
@@ -7310,9 +7502,33 @@
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:190"
     },
+    "http.MapAssetDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_assets.go:79"
+    },
+    "http.MapAssetPoints": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:507"
+    },
+    "http.MapAssetReader": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_assets.go:56"
+    },
+    "http.MapAssetSummary": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:609"
+    },
     "http.MapAssetTypeImportTemplate": {
       "kind": "func",
       "at": "service-comms/internal/http/map_asset_type_import.go:115"
+    },
+    "http.MapAssetTypeSeeder": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_assets.go:74"
+    },
+    "http.MapAssetWriter": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_assets.go:65"
     },
     "http.MapFieldSchemaReader": {
       "kind": "type",
@@ -7321,6 +7537,18 @@
     "http.MapFieldSchemaWriter": {
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:173"
+    },
+    "http.MapFrameDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_frame.go:53"
+    },
+    "http.MapFrameReader": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_frame.go:42"
+    },
+    "http.MapFrameWriter": {
+      "kind": "type",
+      "at": "service-comms/internal/http/map_frame.go:48"
     },
     "http.MarkAllMyNotificationsRead": {
       "kind": "func",
@@ -7590,6 +7818,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/mail_settings.go:102"
     },
+    "http.PutMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_frame.go:174"
+    },
     "http.PutPortalCategories": {
       "kind": "func",
       "at": "service-comms/internal/http/portal_sync.go:242"
@@ -7629,6 +7861,14 @@
     "http.RegisterExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:162"
+    },
+    "http.RegisterMapAssets": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:261"
+    },
+    "http.RegisterMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_frame.go:103"
     },
     "http.RegisterPublicExternalContacts": {
       "kind": "func",
@@ -7710,6 +7950,10 @@
       "kind": "func",
       "at": "service-identity/internal/http/automation.go:176"
     },
+    "http.SeedMapAssetTypes": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:628"
+    },
     "http.SeedRoleTemplates": {
       "kind": "func",
       "at": "service-identity/internal/http/role_template.go:44"
@@ -7717,6 +7961,10 @@
     "http.SendTestMail": {
       "kind": "func",
       "at": "service-comms/internal/http/mail_settings.go:133"
+    },
+    "http.SetMapAssetConfirmation": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:750"
     },
     "http.SetPublication": {
       "kind": "func",
@@ -8049,6 +8297,10 @@
     "http.UpdateExternalContact": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:363"
+    },
+    "http.UpdateMapAsset": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_assets.go:696"
     },
     "http.UpdateMapFieldSchema": {
       "kind": "func",
@@ -9858,6 +10110,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:801"
     },
+    "store.AssetTypeAvailable": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:304"
+    },
     "store.AssetTypeLive": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:172"
@@ -10126,6 +10382,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:430"
     },
+    "store.CodeStates": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset_type_defaults.go:35"
+    },
     "store.Commune": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:106"
@@ -10378,6 +10638,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:190"
     },
+    "store.FieldsOfType": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:321"
+    },
     "store.FinishRun": {
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:360"
@@ -10392,7 +10656,7 @@
     },
     "store.Get": {
       "kind": "func",
-      "at": "service-comms/internal/store/mail_settings.go:67"
+      "at": "service-comms/internal/store/map_frame.go:62"
     },
     "store.GetDEK": {
       "kind": "func",
@@ -10521,6 +10785,10 @@
     "store.InsertSyncedItem": {
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:487"
+    },
+    "store.InsertSystemRow": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset_type_defaults.go:80"
     },
     "store.InsertUnit": {
       "kind": "func",
@@ -10726,6 +10994,10 @@
       "kind": "func",
       "at": "service-finance/internal/store/budget_period_close.go:50"
     },
+    "store.LockCatalogueForSeed": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset_type_defaults.go:24"
+    },
     "store.LockGrantorSets": {
       "kind": "func",
       "at": "service-identity/internal/store/role_template.go:47"
@@ -10786,9 +11058,17 @@
       "kind": "type",
       "at": "service-comms/internal/store/mail_settings.go:47"
     },
+    "store.MapAssetStore": {
+      "kind": "type",
+      "at": "service-comms/internal/store/map_asset.go:34"
+    },
     "store.MapFieldSchemaStore": {
       "kind": "type",
       "at": "service-comms/internal/store/map_field_schema.go:27"
+    },
+    "store.MapFrameStore": {
+      "kind": "type",
+      "at": "service-comms/internal/store/map_frame.go:40"
     },
     "store.MarkAllRead": {
       "kind": "func",
@@ -10946,9 +11226,17 @@
       "kind": "func",
       "at": "service-comms/internal/store/mail_settings.go:51"
     },
+    "store.NewMapAssetStore": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:38"
+    },
     "store.NewMapFieldSchemaStore": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:31"
+    },
+    "store.NewMapFrameStore": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_frame.go:44"
     },
     "store.NewMiniAppSecretStore": {
       "kind": "func",
@@ -11258,6 +11546,10 @@
       "kind": "type",
       "at": "service-petitions/internal/store/phieu_phan_anh.go:27"
     },
+    "store.Points": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:121"
+    },
     "store.PortalSyncStore": {
       "kind": "type",
       "at": "service-comms/internal/store/portal_sync.go:56"
@@ -11438,6 +11730,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/branding.go:83"
     },
+    "store.SetConfirmation": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:443"
+    },
     "store.SetMiniAppActivation": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:679"
@@ -11554,6 +11850,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/stored_file.go:472"
     },
+    "store.Summary": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:274"
+    },
     "store.SystemMessageOverrideStore": {
       "kind": "type",
       "at": "service-reporting/internal/store/system_message_override.go:21"
@@ -11585,6 +11885,10 @@
     "store.TaskSummary": {
       "kind": "func",
       "at": "service-petitions/internal/store/task_summary.go:159"
+    },
+    "store.TaxCodeTaken": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_asset.go:351"
     },
     "store.TemplateChoices": {
       "kind": "func",

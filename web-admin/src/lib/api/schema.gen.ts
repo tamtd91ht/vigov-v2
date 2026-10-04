@@ -142,6 +142,26 @@ export type comms_createExternalContactIn = {
   "display_order"?: number | null;
 };
 
+export type comms_createMapAssetIn = {
+  "asset_type_code": string;
+  "name": string;
+  "lat": number | null;
+  "lng": number | null;
+  "address"?: string;
+  "residential_unit_id"?: string;
+  "representative"?: string;
+  "phone"?: string;
+  /** default dang-hoat-dong */
+  "status"?: string;
+  "tax_code"?: string;
+  "industry_code"?: string;
+  "employee_count"?: number | null;
+  "established_on"?: string;
+  "description"?: string;
+  "custom_values"?: Record<string, JsonValue>;
+  "verified"?: boolean | null;
+};
+
 export type comms_createMapFieldSchemaIn = {
   "asset_type_code": string;
   "field_code": string;
@@ -179,6 +199,10 @@ export type comms_deleteContentItemIn = {
 };
 
 export type comms_deleteExternalContactIn = {
+  "reason": string;
+};
+
+export type comms_deleteMapAssetIn = {
   "reason": string;
 };
 
@@ -266,6 +290,91 @@ export type comms_mailTestOut = {
   "sent": boolean;
 };
 
+export type comms_mapAssetConfirmationIn = {
+  "verified": boolean | null;
+};
+
+export type comms_mapAssetFeatureOut = {
+  /** always "Feature" */
+  "type": string;
+  "id": string;
+  "geometry": comms_mapAssetGeometryOut;
+  "properties": comms_mapAssetPointPropsOut;
+};
+
+export type comms_mapAssetGeometryOut = {
+  /** always "Point" */
+  "type": string;
+  "coordinates": Array<number>;
+};
+
+export type comms_mapAssetOut = {
+  "id": string;
+  "asset_type_code": string;
+  "name": string;
+  "address"?: string;
+  "residential_unit_id"?: string;
+  "lat": number;
+  "lng": number;
+  "representative"?: string;
+  "phone"?: string;
+  "status": string;
+  "verified": boolean;
+  "verified_at"?: string | null;
+  /** business code `CB-…` */
+  "verified_by"?: string;
+  "tax_code"?: string;
+  "industry_code"?: string;
+  "employee_count"?: number | null;
+  /** YYYY-MM-DD */
+  "established_on"?: string;
+  "description"?: string;
+  "custom_values": Record<string, JsonValue>;
+  "masked": boolean;
+  "created_at": string;
+  "updated_at": string;
+};
+
+export type comms_mapAssetPointPropsOut = {
+  "id": string;
+  "asset_type_code": string;
+  "name": string;
+  "status": string;
+  "verified": boolean;
+};
+
+export type comms_mapAssetPointsOut = {
+  /** always "FeatureCollection" */
+  "type": string;
+  "features": Array<comms_mapAssetFeatureOut>;
+};
+
+export type comms_mapAssetRowOut = {
+  "id": string;
+  "asset_type_code": string;
+  "name": string;
+  "address"?: string;
+  "residential_unit_id"?: string;
+  "representative"?: string;
+  "phone"?: string;
+  "status": string;
+  "verified": boolean;
+};
+
+export type comms_mapAssetSummaryOut = {
+  "total": number;
+  "verified": number;
+  /** 0..1, four decimals; 0 when total is 0 */
+  "verified_ratio": number;
+  "by_type": Array<comms_mapAssetTypeCountOut>;
+};
+
+export type comms_mapAssetTypeCountOut = {
+  "asset_type_code": string;
+  "count": number;
+  "verified": number;
+};
+
 export type comms_mapAssetTypeImportCreatedOut = {
   "created": Array<comms_mapAssetTypeImportRowOut>;
 };
@@ -300,6 +409,11 @@ export type comms_mapAssetTypeImportRowOut = {
   "order": number;
 };
 
+export type comms_mapAssetTypeRefOut = {
+  "code": string;
+  "label": string;
+};
+
 export type comms_mapFieldSchemaListOut = {
   "items": Array<comms_mapFieldSchemaOut>;
 };
@@ -316,6 +430,22 @@ export type comms_mapFieldSchemaOut = {
   "is_required": boolean;
   "sort_order": number;
   "is_active": boolean;
+};
+
+export type comms_mapFrameIn = {
+  "center_lat": number | null;
+  "center_lng": number | null;
+  "radius_km": number | null;
+};
+
+export type comms_mapFrameOut = {
+  "configured": boolean;
+  "center_lat"?: number | null;
+  "center_lng"?: number | null;
+  "radius_km"?: number | null;
+  "bounds"?: Array<number>;
+  "updated_at"?: string | null;
+  "updated_by"?: string;
 };
 
 export type comms_markAllReadOut = {
@@ -489,6 +619,16 @@ export type comms_publicCategoryOut = {
   "order": number;
 };
 
+export type comms_seedMapAssetTypesOut = {
+  /** nhóm vừa thêm vào danh mục của xã */
+  "created": Array<comms_mapAssetTypeRefOut>;
+  /** xã đã có mã này — giữ NGUYÊN */
+  "skipped_existing": Array<comms_mapAssetTypeRefOut>;
+  /** xã đã XOÁ mã này — không khôi phục */
+  "skipped_deleted": Array<comms_mapAssetTypeRefOut>;
+  "created_count": number;
+};
+
 export type comms_suaLoaiTaiNguyenVao = {
   "label"?: string | null;
   "order"?: number | null;
@@ -609,6 +749,25 @@ export type comms_updateExternalContactIn = {
   "phone"?: string | null;
   "address"?: string | null;
   "display_order"?: number | null;
+};
+
+export type comms_updateMapAssetIn = {
+  "asset_type_code"?: string | null;
+  "name"?: string | null;
+  "lat"?: number | null;
+  "lng"?: number | null;
+  "address"?: string | null;
+  "residential_unit_id"?: string | null;
+  "representative"?: string | null;
+  "phone"?: string | null;
+  "status"?: string | null;
+  "tax_code"?: string | null;
+  "industry_code"?: string | null;
+  "employee_count"?: number | null;
+  "established_on"?: string | null;
+  "description"?: string | null;
+  "custom_values"?: Record<string, JsonValue>;
+  "verified"?: boolean | null;
 };
 
 export type comms_updateMapFieldSchemaIn = {
@@ -2171,6 +2330,13 @@ export type identity_xoaLichVao = {
 
 export type page_Result_audit_EntryView = {
   "items": Array<audit_EntryView>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_comms_mapAssetRowOut = {
+  "items": Array<comms_mapAssetRowOut>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -5652,6 +5818,52 @@ export type comms_post_mail_settings_test_messages = {
   };
 };
 
+/** GET /api/v1/map-asset-points — Điểm tài nguyên trên bản đồ kinh tế số của xã — GeoJSON FeatureCollection, toạ độ [kinh độ, vĩ độ], chỉ thuộc tính nhẹ */
+export type comms_get_map_asset_points = {
+  duongDan: "/api/v1/map-asset-points";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "asset_type_code"?: string;
+    "industry_code"?: string;
+    "q"?: string;
+    "residential_unit_id"?: string;
+    "status"?: string;
+    "verified"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapAssetPointsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_filter";
+    422: "too_many_points";
+  };
+};
+
+/** GET /api/v1/map-asset-summary — Số đối tượng theo nhóm, tổng số và tỷ lệ đã xác minh của bản đồ kinh tế số */
+export type comms_get_map_asset_summary = {
+  duongDan: "/api/v1/map-asset-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapAssetSummaryOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/map-asset-types — Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu */
 export type comms_get_map_asset_types = {
   duongDan: "/api/v1/map-asset-types";
@@ -5684,6 +5896,27 @@ export type comms_post_map_asset_types = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/map-asset-types/defaults — Nạp 11 nhóm tài nguyên mặc định (ADR 0072) vào danh mục của xã — mã đã có giữ nguyên, mã đã xoá không khôi phục */
+export type comms_post_map_asset_types_defaults = {
+  duongDan: "/api/v1/map-asset-types/defaults";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_seedMapAssetTypesOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "catalogue_full";
   };
 };
 
@@ -5786,6 +6019,160 @@ export type comms_delete_map_asset_types_by_id = {
   };
 };
 
+/** GET /api/v1/map-assets — Sổ địa điểm của xã — một trang, xếp theo nhóm rồi tên; người đại diện và số điện thoại luôn che */
+export type comms_get_map_assets = {
+  duongDan: "/api/v1/map-assets";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "asset_type_code";
+    "order"?: "asc" | "desc";
+    "asset_type_code"?: string;
+    "industry_code"?: string;
+    "q"?: string;
+    "residential_unit_id"?: string;
+    "status"?: string;
+    "verified"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_mapAssetRowOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_cursor" | "invalid_filter" | "invalid_limit" | "invalid_sort";
+  };
+};
+
+/** POST /api/v1/map-assets — Thêm một đối tượng lên bản đồ kinh tế số của xã */
+export type comms_post_map_assets = {
+  duongDan: "/api/v1/map-assets";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_createMapAssetIn;
+  phanHoi: {
+    201: comms_mapAssetOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "tax_code_taken";
+    422: "asset_type_unavailable" | "invalid_custom_values";
+  };
+};
+
+/** GET /api/v1/map-assets/{id} — Một đối tượng trên bản đồ kinh tế số, đủ trường kèm giá trị tuỳ biến — che người đại diện, điện thoại, mã số thuế trừ khi có asset.update */
+export type comms_get_map_assets_by_id = {
+  duongDan: "/api/v1/map-assets/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapAssetOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "not_found";
+  };
+};
+
+/** PATCH /api/v1/map-assets/{id} — Sửa một đối tượng trên bản đồ kinh tế số — chỉ trường được gửi; custom_values gộp theo khoá */
+export type comms_patch_map_assets_by_id = {
+  duongDan: "/api/v1/map-assets/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_updateMapAssetIn;
+  phanHoi: {
+    200: comms_mapAssetOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+    409: "tax_code_taken";
+    422: "asset_type_unavailable" | "invalid_custom_values";
+  };
+};
+
+/** DELETE /api/v1/map-assets/{id} — Xoá mềm một đối tượng trên bản đồ kinh tế số, kèm lý do bắt buộc */
+export type comms_delete_map_assets_by_id = {
+  duongDan: "/api/v1/map-assets/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteMapAssetIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+  };
+};
+
+/** POST /api/v1/map-assets/{id}/confirmation — Xác minh hoặc bỏ xác minh một đối tượng trên bản đồ kinh tế số */
+export type comms_post_map_assets_by_id_confirmation = {
+  duongDan: "/api/v1/map-assets/{id}/confirmation";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_mapAssetConfirmationIn;
+  phanHoi: {
+    200: comms_mapAssetOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+  };
+};
+
 /** GET /api/v1/map-field-schemas — Các trường tuỳ biến của biểu mẫu tài nguyên bản đồ — của một nhóm hoặc mọi nhóm, kể cả trường đang tắt */
 export type comms_get_map_field_schemas = {
   duongDan: "/api/v1/map-field-schemas";
@@ -5862,6 +6249,46 @@ export type comms_delete_map_field_schemas_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/map-frame — Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false */
+export type comms_get_map_frame = {
+  duongDan: "/api/v1/map-frame";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapFrameOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/map-frame — Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết */
+export type comms_put_map_frame = {
+  duongDan: "/api/v1/map-frame";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_mapFrameIn;
+  phanHoi: {
+    200: comms_mapFrameOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    422: "center_outside_mainland" | "radius_out_of_range";
   };
 };
 

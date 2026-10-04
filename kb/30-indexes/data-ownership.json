@@ -257,6 +257,13 @@
       "source": "service-comms/migrations/0007_map_field_schema.sql:127"
     },
     {
+      "entity": "MapFrame",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "map_frame",
+      "source": "service-comms/migrations/0016_map_frame.sql:102"
+    },
+    {
       "entity": "Meeting",
       "service": "petitions",
       "scope": "tenant",

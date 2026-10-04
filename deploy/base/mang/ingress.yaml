@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     212 tuyến của 7 dịch vụ — petitions 70 · identity 62 · comms 34 · finance 24 · documents 13 · platform 7 · reporting 2
+#     219 tuyến của 7 dịch vụ — petitions 70 · identity 62 · comms 41 · finance 24 · documents 13 · platform 7 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -55,10 +55,11 @@ spec:
                 name: web-admin
                 port: { name: http }
     #
-    # comms — 12 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
+    # comms — 16 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
     #   /api/v1/commune-external-contacts · /api/v1/commune-news · /api/v1/content-categories
     #   /api/v1/content-items · /api/v1/external-contacts · /api/v1/mail-settings
-    #   /api/v1/map-asset-types · /api/v1/map-field-schemas · /api/v1/notifications
+    #   /api/v1/map-asset-points · /api/v1/map-asset-summary · /api/v1/map-asset-types
+    #   /api/v1/map-assets · /api/v1/map-field-schemas · /api/v1/map-frame · /api/v1/notifications
     #   /api/v1/portal-sync
     - host: "comms.api.vigov.vn"
       http:

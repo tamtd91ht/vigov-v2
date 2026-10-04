@@ -2782,6 +2782,46 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/map-asset-points",
+      "operation_id": "comms_get_map_asset_points",
+      "task_id": "d471638a69f2",
+      "summary": "Điểm tài nguyên trên bản đồ kinh tế số của xã — GeoJSON FeatureCollection, toạ độ [kinh độ, vĩ độ], chỉ thuộc tính nhẹ",
+      "screen": "10-ban-do-kinh-te-so §4, §6",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mapAssetPointsOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-asset-summary",
+      "operation_id": "comms_get_map_asset_summary",
+      "task_id": "896a7669999d",
+      "summary": "Số đối tượng theo nhóm, tổng số và tỷ lệ đã xác minh của bản đồ kinh tế số",
+      "screen": "10-ban-do-kinh-te-so §1, §4.1",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mapAssetSummaryOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/map-asset-types",
       "operation_id": "comms_get_map_asset_types",
       "task_id": "1107344fbd75",
@@ -2819,6 +2859,27 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-asset-types/defaults",
+      "operation_id": "comms_post_map_asset_types_defaults",
+      "task_id": "e57f6f121882",
+      "summary": "Nạp 11 nhóm tài nguyên mặc định (ADR 0072) vào danh mục của xã — mã đã có giữ nguyên, mã đã xoá không khôi phục",
+      "screen": "10-ban-do-kinh-te-so §3",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "chạy lần hai thấy mọi mã đã có nên không ghi và không kiểm toán gì; hai lượt cùng lúc tuần tự hoá trên khoá tư vấn theo xã",
+      "reply_schemas": {
+        "200": "comms.seedMapAssetTypesOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
     },
     {
       "service": "comms",
@@ -2936,6 +2997,141 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/map-assets",
+      "operation_id": "comms_get_map_assets",
+      "task_id": "10b01c8a5e51",
+      "summary": "Sổ địa điểm của xã — một trang, xếp theo nhóm rồi tên; người đại diện và số điện thoại luôn che",
+      "screen": "10-ban-do-kinh-te-so §7",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_comms.mapAssetRowOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-assets",
+      "operation_id": "comms_post_map_assets",
+      "task_id": "ebea21365b9a",
+      "summary": "Thêm một đối tượng lên bản đồ kinh tế số của xã",
+      "screen": "10-ban-do-kinh-te-so §8",
+      "permission_kind": "permission",
+      "permission": "asset.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "comms.createMapAssetIn",
+      "reply_schemas": {
+        "201": "comms.mapAssetOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/map-assets/{id}",
+      "operation_id": "comms_delete_map_assets_by_id",
+      "task_id": "70a00564fdde",
+      "summary": "Xoá mềm một đối tượng trên bản đồ kinh tế số, kèm lý do bắt buộc",
+      "screen": "10-ban-do-kinh-te-so §7",
+      "permission_kind": "permission",
+      "permission": "asset.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một đối tượng đã xoá trả 404: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "comms.deleteMapAssetIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-assets/{id}",
+      "operation_id": "comms_get_map_assets_by_id",
+      "task_id": "a07aff2a5f81",
+      "summary": "Một đối tượng trên bản đồ kinh tế số, đủ trường kèm giá trị tuỳ biến — che người đại diện, điện thoại, mã số thuế trừ khi có asset.update",
+      "screen": "10-ban-do-kinh-te-so §6, §8",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mapAssetOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/map-assets/{id}",
+      "operation_id": "comms_patch_map_assets_by_id",
+      "task_id": "22c818176645",
+      "summary": "Sửa một đối tượng trên bản đồ kinh tế số — chỉ trường được gửi; custom_values gộp theo khoá",
+      "screen": "10-ban-do-kinh-te-so §7, §8",
+      "permission_kind": "permission",
+      "permission": "asset.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "comms.updateMapAssetIn",
+      "reply_schemas": {
+        "200": "comms.mapAssetOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-assets/{id}/confirmation",
+      "operation_id": "comms_post_map_assets_by_id_confirmation",
+      "task_id": "323d826a2f35",
+      "summary": "Xác minh hoặc bỏ xác minh một đối tượng trên bản đồ kinh tế số",
+      "screen": "10-ban-do-kinh-te-so §7, §10",
+      "permission_kind": "permission",
+      "permission": "asset.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "đặt về đúng trạng thái đang có thì không ghi và không kiểm toán gì, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết",
+      "request_schema": "comms.mapAssetConfirmationIn",
+      "reply_schemas": {
+        "200": "comms.mapAssetOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_assets.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/map-field-schemas",
       "operation_id": "comms_get_map_field_schemas",
       "task_id": "d20d6b2f6a32",
@@ -3022,6 +3218,48 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-frame",
+      "operation_id": "comms_get_map_frame",
+      "task_id": "c000a92deb22",
+      "summary": "Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false",
+      "screen": "10-ban-do-kinh-te-so §4",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mapFrameOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_frame.go"
+    },
+    {
+      "service": "comms",
+      "method": "PUT",
+      "path": "/api/v1/map-frame",
+      "operation_id": "comms_put_map_frame",
+      "task_id": "f921dfffcd5a",
+      "summary": "Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết",
+      "screen": "10-ban-do-kinh-te-so §4",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lưu là ghi đè khung bằng đúng giá trị trong thân; giá trị (đã làm tròn) trùng giá trị đang lưu thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "comms.mapFrameIn",
+      "reply_schemas": {
+        "200": "comms.mapFrameOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_frame.go"
     },
     {
       "service": "petitions",
