@@ -556,7 +556,7 @@
     },
     "app.Get": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:63"
+      "at": "service-comms/internal/app/map_frame.go:64"
     },
     "app.GhiBienBanHop": {
       "kind": "type",
@@ -976,19 +976,19 @@
     },
     "app.MapAssetInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_asset.go:74"
+      "at": "service-comms/internal/app/map_asset.go:79"
     },
     "app.MapAssetPatch": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_asset.go:95"
+      "at": "service-comms/internal/app/map_asset.go:100"
     },
     "app.MapAssetPersonalFields": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_asset.go:366"
+      "at": "service-comms/internal/app/map_asset.go:391"
     },
     "app.MapAssetRepo": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_asset.go:33"
+      "at": "service-comms/internal/app/map_asset.go:38"
     },
     "app.MapAssetTypeDefaults": {
       "kind": "type",
@@ -1016,7 +1016,7 @@
     },
     "app.MapAssets": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_asset.go:45"
+      "at": "service-comms/internal/app/map_asset.go:50"
     },
     "app.MapFieldSchemaRepo": {
       "kind": "type",
@@ -1028,7 +1028,7 @@
     },
     "app.MapFrameInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:43"
+      "at": "service-comms/internal/app/map_frame.go:44"
     },
     "app.MapFrameRepo": {
       "kind": "type",
@@ -1036,11 +1036,11 @@
     },
     "app.MapFrameView": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:36"
+      "at": "service-comms/internal/app/map_frame.go:37"
     },
     "app.MapFrames": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:48"
+      "at": "service-comms/internal/app/map_frame.go:49"
     },
     "app.MarkAllRead": {
       "kind": "func",
@@ -1228,7 +1228,7 @@
     },
     "app.NewMapAssets": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_asset.go:53"
+      "at": "service-comms/internal/app/map_asset.go:58"
     },
     "app.NewMapFieldSchemas": {
       "kind": "func",
@@ -1236,7 +1236,7 @@
     },
     "app.NewMapFrames": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:53"
+      "at": "service-comms/internal/app/map_frame.go:54"
     },
     "app.NewMiniAppSecretAdmin": {
       "kind": "func",
@@ -1732,7 +1732,7 @@
     },
     "app.RecordFullView": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_asset.go:341"
+      "at": "service-comms/internal/app/map_asset.go:362"
     },
     "app.RecordOnSourceInTx": {
       "kind": "type",
@@ -1864,7 +1864,7 @@
     },
     "app.Save": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:77"
+      "at": "service-comms/internal/app/map_frame.go:78"
     },
     "app.SaveCategories": {
       "kind": "func",
@@ -1908,7 +1908,7 @@
     },
     "app.SetConfirmation": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_asset.go:251"
+      "at": "service-comms/internal/app/map_asset.go:267"
     },
     "app.SetDemo": {
       "kind": "func",
@@ -6848,7 +6848,7 @@
     },
     "http.CreateMapAsset": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:659"
+      "at": "service-comms/internal/http/map_assets.go:665"
     },
     "http.CreateMapFieldSchema": {
       "kind": "func",
@@ -7044,7 +7044,7 @@
     },
     "http.DeleteMapAsset": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:731"
+      "at": "service-comms/internal/http/map_assets.go:740"
     },
     "http.DeleteMapFieldSchema": {
       "kind": "func",
@@ -7152,7 +7152,7 @@
     },
     "http.GetMapAsset": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:581"
+      "at": "service-comms/internal/http/map_assets.go:587"
     },
     "http.GetMapFrame": {
       "kind": "func",
@@ -7420,7 +7420,7 @@
     },
     "http.ListMapAssets": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:542"
+      "at": "service-comms/internal/http/map_assets.go:548"
     },
     "http.ListMapFieldSchemas": {
       "kind": "func",
@@ -7504,19 +7504,19 @@
     },
     "http.MapAssetDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_assets.go:79"
+      "at": "service-comms/internal/http/map_assets.go:85"
     },
     "http.MapAssetPoints": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:507"
+      "at": "service-comms/internal/http/map_assets.go:513"
     },
     "http.MapAssetReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_assets.go:56"
+      "at": "service-comms/internal/http/map_assets.go:60"
     },
     "http.MapAssetSummary": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:609"
+      "at": "service-comms/internal/http/map_assets.go:615"
     },
     "http.MapAssetTypeImportTemplate": {
       "kind": "func",
@@ -7524,11 +7524,11 @@
     },
     "http.MapAssetTypeSeeder": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_assets.go:74"
+      "at": "service-comms/internal/http/map_assets.go:80"
     },
     "http.MapAssetWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_assets.go:65"
+      "at": "service-comms/internal/http/map_assets.go:69"
     },
     "http.MapFieldSchemaReader": {
       "kind": "type",
@@ -7864,7 +7864,7 @@
     },
     "http.RegisterMapAssets": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:261"
+      "at": "service-comms/internal/http/map_assets.go:267"
     },
     "http.RegisterMapFrame": {
       "kind": "func",
@@ -7952,7 +7952,7 @@
     },
     "http.SeedMapAssetTypes": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:628"
+      "at": "service-comms/internal/http/map_assets.go:634"
     },
     "http.SeedRoleTemplates": {
       "kind": "func",
@@ -7964,7 +7964,7 @@
     },
     "http.SetMapAssetConfirmation": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:750"
+      "at": "service-comms/internal/http/map_assets.go:759"
     },
     "http.SetPublication": {
       "kind": "func",
@@ -8300,7 +8300,7 @@
     },
     "http.UpdateMapAsset": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_assets.go:696"
+      "at": "service-comms/internal/http/map_assets.go:702"
     },
     "http.UpdateMapFieldSchema": {
       "kind": "func",
@@ -10997,6 +10997,10 @@
     "store.LockCatalogueForSeed": {
       "kind": "func",
       "at": "service-comms/internal/store/map_asset_type_defaults.go:24"
+    },
+    "store.LockCommuneFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_frame.go:87"
     },
     "store.LockGrantorSets": {
       "kind": "func",
