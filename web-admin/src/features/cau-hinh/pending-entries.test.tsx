@@ -60,13 +60,13 @@ describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () 
     expect(PHAN_CHUA_DUNG.some((p) => /Excel|Nhập từ/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
-  it("Tự động hoá: chỉ còn Gửi báo cáo định kỳ (chờ màn Báo cáo); Tính lại số liệu Tổng quan đã bỏ, không có mục", () => {
+  it("Tự động hoá: chỉ còn Gửi báo cáo định kỳ (chờ xuất báo cáo); Tính lại số liệu Tổng quan đã bỏ, không có mục", () => {
     // ADR 0053 / ADR 0068 §14: a job the owner refused gets no placeholder and no entry — an entry
     // would make the progress report count it as "not built yet".
     expect(PHAN_CHUA_DUNG.some((p) => /Tính lại số liệu/.test(`${p.ten} ${p.viSao}`))).toBe(false);
     const report = PHAN_CHUA_DUNG.filter((p) => p.ten === "Gửi báo cáo định kỳ");
     expect(report).toHaveLength(1);
-    expect(report[0]!.viSao).toMatch(/màn Báo cáo/);
+    expect(report[0]!.viSao).toMatch(/xuất\s+báo cáo/);
   });
 
   it("không còn mục Lời hệ thống — nhóm Báo cáo `report.*` đã có chủ và có tuyến (reporting)", () => {

@@ -85,7 +85,7 @@ describe("tab Lời hệ thống — cổng quyền", () => {
     expect(html).not.toMatch(/chưa sửa được ở đây/);
   });
 
-  it("phần Báo cáo nói thật: câu lưu được nhưng hôm nay chưa hiện ở đâu (màn Báo cáo chưa dựng)", () => {
+  it("phần Báo cáo nói thật: câu lưu được nhưng hôm nay chưa hiện ở đâu (màn Báo cáo chưa xuất tệp, chưa gửi thông báo)", () => {
     fakeSession = sessionWith(["admin.lookup"]);
     const reporting = form.SYSTEM_MESSAGE_SECTIONS.find((s) => s.module === "reporting");
     expect(reporting?.note).toMatch(/chưa hiện ở đâu/);

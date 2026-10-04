@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { MENU_ICONS } from "./menu-icons";
-import { pendingMarkerLabel } from "./ui/pending-feature";
 import { locMenu, NHOM_MENU, PENDING_SCREENS } from "./muc-menu";
 import { AUTHORITY_KIND } from "./commune-identity";
 import { COLLAPSE_LABEL, EXPAND_LABEL, SidebarView } from "./sidebar-view";
@@ -122,25 +121,22 @@ function itemOf(html: string, label: string): string {
 }
 
 describe("items with no screen (ADR 0068 §14)", () => {
-  it("every one has a description, and no built item has one", () => {
-    expect(NOT_BUILT.length).toBeGreaterThan(0);
-    for (const m of NOT_BUILT) {
-      const info = PENDING_SCREENS[m.nhan];
-      expect(info, m.nhan).toBeDefined();
-      expect(info!.ten, m.nhan).toBe(m.nhan);
-      expect(info!.viSao.trim(), m.nhan).not.toBe("");
-    }
-    expect(Object.keys(PENDING_SCREENS).sort()).toEqual(NOT_BUILT.map((m) => m.nhan).sort());
+  // SINCE 04/10/2026 EVERY ITEM HAS A SCREEN: "Báo cáo" (`/bao-cao`, ADR 0053 amendment) was the
+  // last one. The "?" tests that iterated over unbuilt items had nothing left to iterate over — a loop
+  // over an empty list passes for the wrong reason — so they became the two checks below: the table
+  // and the menu agree that nothing is pending, and a `duong: null` item is still drawn inert.
+
+  it("no item is unbuilt today, and PENDING_SCREENS keeps no stale entry", () => {
+    expect(NOT_BUILT).toEqual([]);
+    expect(Object.keys(PENDING_SCREENS)).toEqual([]);
+    expect(view(false)).not.toContain("data-pending-marker");
   });
 
-  it("carry a '?' button INSIDE the item, named with the item — no 'Chưa có' badge left", () => {
-    for (const collapsed of [false, true]) {
-      const html = view(collapsed);
-      expect(html.match(/data-pending-marker=""/g)).toHaveLength(NOT_BUILT.length);
-      for (const m of NOT_BUILT) expect(itemOf(html, m.nhan), m.nhan).toContain(`aria-label="${pendingMarkerLabel(m.nhan)}"`);
-      expect(html).not.toContain("Chưa có");
-      expect(html).not.toContain("thanh-ben-dau-chua-co");
-    }
+  it("the report screen is BUILT (04/10/2026, ADR 0053 amendment): a real link to /bao-cao, no '?'", () => {
+    expect(PENDING_SCREENS["Báo cáo"]).toBeUndefined();
+    const li = itemOf(view(false), "Báo cáo");
+    expect(li).toContain('href="/bao-cao"');
+    expect(li).not.toContain('aria-disabled="true"');
   });
 
   it("the economic map is BUILT (04/10/2026, ADR 0072): a real link to /ban-do, no '?' placeholder", () => {
@@ -154,17 +150,16 @@ describe("items with no screen (ADR 0068 §14)", () => {
     expect(view(true)).not.toContain("Sắp có");
   });
 
-  it("stay non-navigable: no link, aria-disabled, and the '?' is the ONLY button", () => {
-    const html = view(false);
-    for (const m of NOT_BUILT) {
-      const li = itemOf(html, m.nhan);
-      expect(li, m.nhan).toContain('aria-disabled="true"');
-      expect(li, m.nhan).not.toContain("<a ");
-      expect(li.match(/<button/g), m.nhan).toHaveLength(1);
-      expect(li, m.nhan).toMatch(/<button [^>]*data-pending-marker=""/);
-      // The "?" sits OUTSIDE the aria-disabled span: ARIA would otherwise announce it disabled too.
-      const disabledSpan = li.slice(li.indexOf('aria-disabled="true"'), li.indexOf("</span></span>"));
-      expect(disabledSpan, m.nhan).not.toContain("<button");
+  it("an item listed with `duong: null` stays non-navigable: no link, aria-disabled, in both states", () => {
+    const groups = [{ ten: "HỆ THỐNG", muc: [{ nhan: "Báo cáo", duong: null, khoa: null }] }];
+    for (const collapsed of [false, true]) {
+      const html = renderToStaticMarkup(
+        <SidebarView commune={COMMUNE} groups={groups} pathname="/danh-ba" collapsed={collapsed} onToggleCollapsed={() => {}} />,
+      );
+      const li = itemOf(html, "Báo cáo");
+      expect(li).toContain('aria-disabled="true"');
+      expect(li).not.toContain("<a ");
+      expect(li).not.toContain("<button");
     }
   });
 });
@@ -197,15 +192,5 @@ describe("collapse control", () => {
     expect(html).toContain(`aria-expanded="false" aria-label="${EXPAND_LABEL}"`);
     // Labels are hidden from the eye by CSS only — a screen reader and the keyboard keep them.
     for (const g of NHOM_MENU) for (const m of g.muc) expect(html).toContain(`<span class="thanh-ben-nhan">${esc(m.nhan)}</span>`);
-  });
-
-  it("collapsed: an item with no screen still names itself through its '?', pinned to the icon corner", () => {
-    const html = view(true);
-    for (const m of NOT_BUILT) {
-      const li = itemOf(html, m.nhan);
-      expect(li, m.nhan).toContain(`aria-label="${pendingMarkerLabel(m.nhan)}"`);
-      expect(li, m.nhan).toContain("lg:absolute");
-    }
-    expect(itemOf(view(false), NOT_BUILT[0]!.nhan)).not.toContain("lg:absolute");
   });
 });

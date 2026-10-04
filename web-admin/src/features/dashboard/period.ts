@@ -213,7 +213,7 @@ export function periodMetaLabel(w: PeriodWindows): string {
 }
 
 /** States the comparison window, so the reader knows what "kỳ trước" means. */
-export function comparisonNote(w: PeriodWindows): string {
+export function comparisonNote(w: Pick<PeriodWindows, "previous">): string {
   return (
     "So với cùng khoảng thời gian đã trôi qua của kỳ trước: " +
     `${formatDateTime(w.previous.start)} – ${formatDateTime(w.previous.end)}.`

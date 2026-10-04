@@ -23,7 +23,15 @@ import type { QueueSource } from "./figures";
 import { DEFAULT_PERIOD_KIND, periodWindows, toQueryPeriod, zoneYear } from "./period";
 import type { PeriodKind } from "./period";
 import { blockVisibility, DashboardView } from "./view";
-import type { DashboardData, Loaded, SummaryPair, TaskTypeLabels } from "./view";
+import type {
+  BlocksData,
+  BlockVisibility,
+  ComparedWindows,
+  DashboardData,
+  Loaded,
+  SummaryPair,
+  TaskTypeLabels,
+} from "./view";
 
 /** Sentence shown instead of the page to an account without `report.read`. */
 export const MISSING_REPORT_READ =
@@ -95,15 +103,44 @@ function DashboardOverview() {
   const session = usePhien();
   const permissions = session !== null && session.ok ? session.duLieu.permissions : [];
   const visible = blockVisibility(permissions);
-  const visibleKey = `${visible.tasks}|${visible.incomingDocuments}|${visible.citizenReports}|${visible.budget}`;
 
   const [request, setRequest] = useState<{ kind: PeriodKind; at: number }>(() => ({
     kind: DEFAULT_PERIOD_KIND,
     at: new Date().getTime(),
   }));
   const windows = useMemo(() => periodWindows(request.kind, new Date(request.at)), [request]);
-  const fiscalYear = zoneYear(request.at);
-  const token = `${request.kind}|${request.at}|${visibleKey}`;
+  const shown = useDashboardFigures(windows, request.at, visible, true);
+  const data: DashboardData = { ...shown, windows, fetchedAt: request.at };
+
+  return (
+    <DashboardView
+      data={data}
+      visible={visible}
+      onPeriodChange={(kind) => setRequest({ kind, at: new Date().getTime() })}
+    />
+  );
+}
+
+/**
+ * The loader of the overview's figures, shared with `/bao-cao` so the two pages ask the servers the
+ * very same query for the same period (spec 13 §10).
+ *
+ * `at` is the instant of the act that asked (mount, a period button): a new `at` re-asks even for the
+ * same windows — that is "Tải lại". `withQueues` = also read the three overdue queues and the
+ * task-type catalogue that only "Cần xử lý ngay" draws; `/bao-cao` has no such block and does not ask.
+ */
+export function useDashboardFigures(
+  windows: ComparedWindows,
+  at: number,
+  visible: BlockVisibility,
+  withQueues: boolean,
+): BlocksData {
+  const visibleKey = `${visible.tasks}|${visible.incomingDocuments}|${visible.citizenReports}|${visible.budget}`;
+  // Primitives, not the window objects: the effect re-runs on what is ASKED, not on object identity.
+  const { from: curFrom, to: curTo } = toQueryPeriod(windows.current);
+  const { from: prevFrom, to: prevTo } = toQueryPeriod(windows.previous);
+  const fiscalYear = zoneYear(at);
+  const token = `${curFrom}|${curTo}|${prevFrom}|${prevTo}|${at}|${visibleKey}|${withQueues}`;
 
   const [results, setResults] = useState<Results>(() => emptyResults(""));
 
@@ -113,8 +150,8 @@ function DashboardOverview() {
       if (cancelled) return;
       setResults((prev) => ({ ...(prev.token === token ? prev : emptyResults(token)), ...patch }));
     };
-    const current = toQueryPeriod(windows.current);
-    const previous = toQueryPeriod(windows.previous);
+    const current: SummaryPeriod = { from: curFrom, to: curTo };
+    const previous: SummaryPeriod = { from: prevFrom, to: prevTo };
     const [showTasks, showDocuments, showReports, showBudget] = visibleKey
       .split("|")
       .map((v) => v === "true");
@@ -133,7 +170,7 @@ function DashboardOverview() {
     if (showBudget) layChiSoNganSach(fiscalYear).then((kq) => put({ fiscal: kq }));
 
     const queues: Promise<QueueSource>[] = [];
-    if (showTasks) {
+    if (withQueues && showTasks) {
       queues.push(fetchOverdueTasks().then((result) => ({ module: "task" as const, result })));
       layLoaiNhiemVu().then((kq) => {
         const labels: TaskTypeLabels = kq.ok
@@ -142,12 +179,12 @@ function DashboardOverview() {
         put({ taskTypeLabels: labels });
       });
     }
-    if (showReports) {
+    if (withQueues && showReports) {
       queues.push(
         fetchOverdueCitizenReports().then((result) => ({ module: "citizen-report" as const, result })),
       );
     }
-    if (showDocuments) {
+    if (withQueues && showDocuments) {
       queues.push(
         fetchIncomingDocumentOverdueQueue().then((result) => ({
           module: "incoming-document" as const,
@@ -162,12 +199,11 @@ function DashboardOverview() {
     return () => {
       cancelled = true;
     };
-  }, [token, windows, visibleKey, fiscalYear]);
+  }, [token, curFrom, curTo, prevFrom, prevTo, visibleKey, fiscalYear, withQueues]);
 
   const shown = results.token === token ? results : emptyResults(token);
-  const data: DashboardData = {
+  return {
     windows,
-    fetchedAt: request.at,
     fiscalYear,
     tasks: shown.tasks,
     incomingDocuments: shown.incomingDocuments,
@@ -176,12 +212,4 @@ function DashboardOverview() {
     queue: shown.queue,
     taskTypeLabels: shown.taskTypeLabels,
   };
-
-  return (
-    <DashboardView
-      data={data}
-      visible={visible}
-      onPeriodChange={(kind) => setRequest({ kind, at: new Date().getTime() })}
-    />
-  );
 }

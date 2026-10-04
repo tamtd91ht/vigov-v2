@@ -30,8 +30,8 @@ export const SYSTEM_MESSAGES_GUIDANCE =
  * heading when the whole group shares one fact an administrator must know before rewording.
  *
  * WHY "Báo cáo" CARRIES A NOTE: its sentences are the captions of the exported report and the titles
- * of the report notifications. `/bao-cao` is outside the first phase (ADR 0053 §6) and no other service
- * reads these keys yet, so a reworded caption shows nowhere today. Said once for the group rather than
+ * of the report notifications. `/bao-cao` exists since 04/10/2026 but exports nothing and sends nothing
+ * (ADR 0053 amendment, B4), and no service reads these keys yet, so a reworded caption shows nowhere today. Said once for the group rather than
  * on 38 cards (`MESSAGES_NOT_RAISED_YET` is per key, for the one-off case). Remove the note in the same
  * change that makes a feature print these sentences.
  */
@@ -47,8 +47,8 @@ export const SYSTEM_MESSAGE_SECTIONS: readonly {
     title: "Báo cáo",
     note:
       "Các câu nhóm này là tiêu đề, tên khối và tên chỉ số trên báo cáo xuất ra và trên thông báo " +
-      "báo cáo gửi lãnh đạo. Màn Báo cáo chưa dựng, nên câu sửa ở đây được lưu cho xã nhưng hôm nay " +
-      "chưa hiện ở đâu.",
+      "báo cáo gửi lãnh đạo. Màn Báo cáo chưa xuất tệp và chưa gửi thông báo, nên câu sửa ở đây được lưu " +
+      "cho xã nhưng hôm nay chưa hiện ở đâu.",
   },
 ];
 

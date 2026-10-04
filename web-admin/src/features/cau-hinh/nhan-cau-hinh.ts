@@ -29,7 +29,7 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Gửi báo cáo định kỳ",
     viSao:
-      "Tự gửi báo cáo tuần vào đầu tuần và báo cáo tháng vào ngày mùng 1. Việc này chờ màn Báo cáo: " +
-      "chưa có báo cáo thì chưa có gì để gửi.",
+      "Tự gửi báo cáo tuần vào đầu tuần và báo cáo tháng vào ngày mùng 1. Việc này chờ chức năng xuất " +
+      "báo cáo của màn Báo cáo: chưa xuất được tệp thì chưa có gì để gửi.",
   },
 ];

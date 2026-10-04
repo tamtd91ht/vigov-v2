@@ -108,6 +108,12 @@ import type { PeriodKind, PeriodWindows } from "./period";
  * utility; nothing here may reintroduce an unlayered rule.
  */
 
+/**
+ * What the blocks need of a period: the window the figures count and the one they compare with.
+ * Narrower than `PeriodWindows` so `/bao-cao`'s custom period (no named kind) feeds the same blocks.
+ */
+export type ComparedWindows = Pick<PeriodWindows, "current" | "previous">;
+
 /** `null` = still loading — distinct from a failed call, which is `{ ok: false }`. */
 export type Loaded<T> = KetQua<T> | null;
 
@@ -253,7 +259,7 @@ function ratioFigure<T>(
 }
 
 /** Khối NHIỆM VỤ's figures — spec §4.1, labels per the user's decision. */
-function taskFigures(pair: SummaryPair<petitions_taskSummaryOut>, windows: PeriodWindows) {
+function taskFigures(pair: SummaryPair<petitions_taskSummaryOut>, windows: ComparedWindows) {
   const period = toQueryPeriod(windows.current);
   const id = "tasks";
   const count = (s: CountSpec<petitions_taskSummaryOut>) => countFigure(id, pair, s, period);
@@ -309,7 +315,7 @@ function taskFigures(pair: SummaryPair<petitions_taskSummaryOut>, windows: Perio
  */
 function incomingDocumentFigures(
   pair: SummaryPair<documents_incomingSummaryOut>,
-  windows: PeriodWindows,
+  windows: ComparedWindows,
 ) {
   const period = toQueryPeriod(windows.current);
   const id = "incoming-documents";
@@ -701,7 +707,7 @@ export function AttentionBlock({
 }: {
   tasks: SummaryPair<petitions_taskSummaryOut>;
   incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
-  windows: PeriodWindows;
+  windows: ComparedWindows;
   showTasks: boolean;
   showDocuments: boolean;
 }) {
@@ -766,12 +772,15 @@ export function PeriodStatusBlock({
   windows,
   showTasks,
   showDocuments,
+  comparisonText,
 }: {
   tasks: SummaryPair<petitions_taskSummaryOut>;
   incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
-  windows: PeriodWindows;
+  windows: ComparedWindows;
   showTasks: boolean;
   showDocuments: boolean;
+  /** Replaces the closing sentence — `/bao-cao`'s custom period compares differently (ADR 0053 B2). */
+  comparisonText?: string;
 }) {
   const t = showTasks ? taskFigures(tasks, windows) : null;
   const d = showDocuments ? incomingDocumentFigures(incomingDocuments, windows) : null;
@@ -788,7 +797,7 @@ export function PeriodStatusBlock({
       {t !== null && <RatioRow figure={t.onTime} shown={withModule("Nhiệm vụ", t.onTime.label)} />}
       <p className="m-0 mt-auto flex items-start gap-1.5 pt-1 text-xs leading-relaxed text-ink-500">
         <History aria-hidden="true" focusable="false" strokeWidth={1.8} className="mt-px size-3.5 shrink-0" />
-        <span className="min-w-0">{comparisonNote(windows)}</span>
+        <span className="min-w-0">{comparisonText ?? comparisonNote(windows)}</span>
       </p>
     </SectionCard>
   );
@@ -820,7 +829,7 @@ export function CitizenReportBlock({
   onReload,
 }: {
   pair: SummaryPair<petitions_citizenReportSummaryOut>;
-  windows: PeriodWindows;
+  windows: ComparedWindows;
   onReload?: () => void;
 }) {
   const period = toQueryPeriod(windows.current);
@@ -1141,10 +1150,15 @@ export function PeriodPicker({
 }
 
 /** Everything the page shows, already loaded (or loading) — the hook half assembles this. */
-export type DashboardData = {
+export type DashboardData = BlocksData & {
   readonly windows: PeriodWindows;
   /** The instant the windows were computed and the figures asked for. */
   readonly fetchedAt: number;
+};
+
+/** What the blocks under the context row draw — shared by `/tong-quan` and `/bao-cao`. */
+export type BlocksData = {
+  readonly windows: ComparedWindows;
   readonly tasks: SummaryPair<petitions_taskSummaryOut>;
   readonly incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
   readonly citizenReports: SummaryPair<petitions_citizenReportSummaryOut>;
@@ -1199,8 +1213,6 @@ export function DashboardView({
   visible: BlockVisibility;
   onPeriodChange: (k: PeriodKind) => void;
 }) {
-  const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
-  const anyRow1 = visible.tasks || visible.incomingDocuments;
   const reload = () => onPeriodChange(data.windows.kind);
   return (
     <>
@@ -1218,6 +1230,37 @@ export function DashboardView({
         <PeriodPicker kind={data.windows.kind} onChange={onPeriodChange} />
       </div>
 
+      <DashboardBlocks data={data} visible={visible} onReload={reload} />
+    </>
+  );
+}
+
+/**
+ * Every block under the context row, in `/tong-quan`'s order. `/bao-cao` draws the SAME blocks from
+ * the same loader, so the two pages cannot show two numbers for one period (spec 13 §10) — minus
+ * "Cần xử lý ngay" (`urgent={false}`, spec 13 §1).
+ *
+ * `onReload` re-asks the period on screen; `comparisonText` replaces the period block's closing
+ * sentence when the comparison is not the named-period one.
+ */
+export function DashboardBlocks({
+  data,
+  visible,
+  onReload,
+  urgent = true,
+  comparisonText,
+}: {
+  data: BlocksData;
+  visible: BlockVisibility;
+  onReload: () => void;
+  urgent?: boolean;
+  comparisonText?: string;
+}) {
+  const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
+  const anyRow1 = visible.tasks || visible.incomingDocuments;
+  const reload = onReload;
+  return (
+    <>
       {anyRow1 && (
         <div className="mb-4 flex flex-col gap-3">
           {visible.tasks && <PairErrors pair={data.tasks} noun="nhiệm vụ" onReload={reload} />}
@@ -1242,11 +1285,12 @@ export function DashboardView({
             windows={data.windows}
             showTasks={visible.tasks}
             showDocuments={visible.incomingDocuments}
+            comparisonText={comparisonText}
           />
         </div>
       )}
 
-      {anyQueue && (
+      {urgent && anyQueue && (
         <div className="mb-4">
           <UrgentPanel queue={data.queue} taskTypeLabels={data.taskTypeLabels} />
         </div>

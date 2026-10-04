@@ -99,13 +99,9 @@ export type NhomMenu = {
  * KHI MỘT MÀN RA ĐỜI: đổi `duong: null` thành đường dẫn thật, điền `khoa`, xoá dòng của nó trong
  * `PENDING_SCREENS`. Không cần đụng component.
  */
-export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Báo cáo": {
-    ten: "Báo cáo",
-    viSao:
-      "Báo cáo tổng hợp toàn xã theo kỳ để in, xuất và trình bày: chọn được khoảng ngày bất kỳ, có xếp hạng bộ phận và so sánh với kỳ trước. Màn này chưa được dựng.",
-  },
-};
+// EMPTY SINCE 04/10/2026: "Báo cáo" was the last item without a screen (`/bao-cao`, ADR 0053
+// amendment). The table and its mechanism stay for the next item that is listed before it is built.
+export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {};
 
 /**
  * Grouped BY BUSINESS AREA (spec v2 §5, 02/10/2026). Only the grouping and the order moved; every
@@ -152,7 +148,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
     ten: "HỆ THỐNG",
     muc: [
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
-      { nhan: "Báo cáo", duong: null, khoa: null },
+      { nhan: "Báo cáo", duong: "/bao-cao", khoa: REPORT_READ_PERMISSION },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
     ],
   },

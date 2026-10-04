@@ -59,7 +59,7 @@ import { automationTabDecision } from "./quyen-tab";
  *
  * TWO JOBS OF §9 ARE NOT LIVE CARDS: `Tính lại số liệu Tổng quan` is dropped (ADR 0053: the overview
  * counts live, there is nothing to precompute) and gets NO placeholder — a spot for it would announce
- * a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` waits for `/bao-cao` (ADR 0058 §4)
+ * a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` waits for `/bao-cao`'s export (ADR 0058 §4, ADR 0053 B4)
  * and sits in its spec position, the last card, disabled with the "?" (`PendingReportJobCard`).
  */
 export function AutomationTab() {

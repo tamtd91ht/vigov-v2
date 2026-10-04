@@ -397,6 +397,14 @@ export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
 export const REPORT_READ_PERMISSION = "report.read";
 
 /**
+ * `report.export` — "Xuất báo cáo" (`service-identity/migrations/0001_init.sql:304`). `/bao-cao`
+ * draws its export buttons only for an account holding it (spec 13 §9.4). The export itself is not
+ * built (ADR 0053, amendment 04/10/2026, B4), so today the key reveals three disabled buttons; the
+ * export route will check it server-side when it exists.
+ */
+export const REPORT_EXPORT_PERMISSION = "report.export";
+
+/**
  * `asset.read` — "Xem bản đồ tài nguyên" (`service-identity/migrations/0001_init.sql:287`). The READ
  * key of `GET /api/v1/map-field-schemas` (`x-vigov-permission` in `kb/20-contracts/openapi.json`),
  * and so the gate of the whole "Trường bản đồ" tab: without it the list answers 403 and the tab has

@@ -30,7 +30,7 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
   });
 
-  it("KHÔNG quyền nào: mười ba mục có màn biến mất, mục chưa có màn Ở LẠI", () => {
+  it("KHÔNG quyền nào: mọi mục biến mất — từ 04/10/2026 không còn mục nào chưa có màn", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -50,15 +50,14 @@ describe("locMenu", () => {
       "Tổng quan",
       "Sổ tay lãnh đạo",
       "Bản đồ kinh tế số",
+      "Báo cáo",
     ]) {
       expect(ten).not.toContain(n);
     }
-    // Mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc nó theo quyền sẽ
-    // buộc phải ĐOÁN một khoá cho một màn chưa tồn tại. `Tổng quan` rời nhóm này ngày 28/09/2026,
-    // khi màn `/tong-quan` ra đời; `Sổ tay lãnh đạo` và `Bản đồ kinh tế số` ngày 04/10/2026
-    // (ADR 0071, ADR 0072).
-    expect(ten).toHaveLength(1);
-    expect(ten).toContain("Báo cáo");
+    // Mục chưa có màn không mở ra dữ liệu nào cả nên không bị lọc (`locMenu`). `Tổng quan` rời nhóm
+    // ấy ngày 28/09/2026; `Sổ tay lãnh đạo`, `Bản đồ kinh tế số` (ADR 0071, ADR 0072) và `Báo cáo`
+    // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026 — nhóm nay rỗng.
+    expect(ten).toHaveLength(0);
   });
 
   it("CHƯA ĐỌC XONG phiên (null) hành xử như KHÔNG có quyền, không như có", () => {
@@ -76,14 +75,14 @@ describe("locMenu", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.user.delete", "admin.users", "admin"]));
     expect(ten).not.toContain("Cấu hình");
     expect(ten).not.toContain("Danh bạ cán bộ");
-    expect(ten).toHaveLength(1);
+    expect(ten).toHaveLength(0);
   });
 
   it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Danh bạ", () => {
     const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
     expect(names).toContain("Cấu hình");
     expect(names).not.toContain("Danh bạ cán bộ");
-    expect(names).toHaveLength(2);
+    expect(names).toHaveLength(1);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -91,7 +90,7 @@ describe("locMenu", () => {
     // này. Máy chủ trả sổ cho người ấy, nên menu không được giấu lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.read"]));
     expect(ten).toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(2);
+    expect(ten).toHaveLength(1);
   });
 
   it("chỉ có `document.route` (KHÔNG có `document.read`): KHÔNG thấy mục Văn bản & Đơn thư", () => {
@@ -99,13 +98,27 @@ describe("locMenu", () => {
     // lượt đọc, nên một mục menu dẫn tới đó là hứa một chức năng không dùng được.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.route", "document.create"]));
     expect(ten).not.toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(1);
+    expect(ten).toHaveLength(0);
   });
 
-  it("chỉ có `report.read`: THẤY mục Tổng quan, và không mục nào khác", () => {
+  it("chỉ có `report.read`: THẤY Tổng quan và Báo cáo, và không mục nào khác", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["report.read"]));
     expect(ten).toContain("Tổng quan");
+    expect(ten).toContain("Báo cáo");
     expect(ten).toHaveLength(2);
+  });
+
+  it("chỉ có `report.read`: Báo cáo dẫn tới /bao-cao (ADR 0053 sửa đổi 04/10/2026)", () => {
+    const muc = locMenu(NHOM_MENU, ["report.read"]).flatMap((n) => n.muc);
+    const report = muc.find((m) => m.nhan === "Báo cáo");
+    expect(report?.duong).toBe("/bao-cao");
+    expect(report?.khoa).toBe("report.read");
+  });
+
+  it("thiếu `report.read` (kể cả có `report.export`, `task.read`): KHÔNG thấy Báo cáo — ca bị từ chối", () => {
+    for (const ds of [[], ["report.export", "task.read", "budget.read", "report.reads"], null]) {
+      expect(tenMuc(locMenu(NHOM_MENU, ds))).not.toContain("Báo cáo");
+    }
   });
 
   it("có mọi khoá mô-đun nhưng THIẾU `report.read`: KHÔNG thấy mục Tổng quan — ca bị từ chối", () => {
@@ -115,6 +128,7 @@ describe("locMenu", () => {
       locMenu(NHOM_MENU, ["task.read", "document.read", "feedback.read", "budget.read"]),
     );
     expect(ten).not.toContain("Tổng quan");
+    expect(ten).not.toContain("Báo cáo");
   });
 
   it("chỉ có `task.read`: THẤY Sổ tay lãnh đạo, dẫn tới /nhiem-vu/so-tay (ADR 0071)", () => {
@@ -157,8 +171,8 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     // thời hạn — việc mà thiếu nó xã không nhận được phản ánh nào — không tìm thấy lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.sla"]));
     expect(ten).toContain("Cấu hình");
-    // Và KHÔNG mở thêm mục nào khác: mục chưa có màn + đúng một mục này.
-    expect(ten).toHaveLength(2);
+    // Và KHÔNG mở thêm mục nào khác: đúng một mục này.
+    expect(ten).toHaveLength(1);
   });
 
   it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit"])(

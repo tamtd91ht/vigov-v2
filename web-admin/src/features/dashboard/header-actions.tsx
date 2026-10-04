@@ -22,22 +22,7 @@ import { pendingPart } from "./labels";
 export function DashboardHeaderActions() {
   return (
     <>
-      <PendingFeature info={pendingPart("Xuất báo cáo PDF, XLSX, PPTX")} phase2>
-        <span role="group" aria-label="Xuất báo cáo" className="inline-flex gap-1">
-          {(["PDF", "XLSX", "PPTX"] as const).map((format) => (
-            <Button
-              key={format}
-              type="button"
-              variant="secondary"
-              size="md"
-              disabled
-              icon={format === "PDF" ? <FileDown aria-hidden="true" focusable="false" /> : undefined}
-            >
-              {format}
-            </Button>
-          ))}
-        </span>
-      </PendingFeature>
+      <ExportPendingActions />
       <PendingButton
         info={pendingPart("Chế độ trình chiếu phòng họp")}
         phase2
@@ -46,5 +31,31 @@ export function DashboardHeaderActions() {
         Trình chiếu
       </PendingButton>
     </>
+  );
+}
+
+/**
+ * The `[PDF][XLSX][PPTX]` group alone — also drawn by `/bao-cao` (ADR 0053 amendment 04/10/2026, B4:
+ * export not built this round), which has no "Trình chiếu". One component, so the two pages cannot
+ * describe the same unbuilt export in two ways.
+ */
+export function ExportPendingActions() {
+  return (
+    <PendingFeature info={pendingPart("Xuất báo cáo PDF, XLSX, PPTX")} phase2>
+      <span role="group" aria-label="Xuất báo cáo" className="inline-flex gap-1">
+        {(["PDF", "XLSX", "PPTX"] as const).map((format) => (
+          <Button
+            key={format}
+            type="button"
+            variant="secondary"
+            size="md"
+            disabled
+            icon={format === "PDF" ? <FileDown aria-hidden="true" focusable="false" /> : undefined}
+          >
+            {format}
+          </Button>
+        ))}
+      </span>
+    </PendingFeature>
   );
 }

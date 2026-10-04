@@ -39,8 +39,10 @@ import type {
   petitions_get_overdue_citizen_reports,
   petitions_get_overdue_tasks,
   petitions_get_task_summary,
+  petitions_get_task_unit_summary,
   petitions_overdueQueueOut,
   petitions_taskSummaryOut,
+  petitions_taskUnitSummaryOut,
 } from "./schema.gen";
 
 /** A half-open period `[from, to)`, both RFC 3339 WITH an offset. Both required — point 1 above. */
@@ -108,6 +110,27 @@ export function fetchIncomingDocumentSummary(
   period: SummaryPeriod,
 ): Promise<KetQua<documents_incomingSummaryOut>> {
   return docJSON<documents_incomingSummaryOut>(incomingDocumentSummaryPath(period));
+}
+
+/**
+ * GET /api/v1/task-unit-summary path — `/bao-cao`'s "Tình hình thực hiện theo bộ phận" (ADR 0053,
+ * amendment 04/10/2026, B3). Guarded at runtime by `report.read` AND `task.read`, nested like
+ * task-summary (B5c), while `x-vigov-permission` shows one key — point 2 above.
+ */
+export function taskUnitSummaryPath(period: SummaryPeriod): string {
+  const path: petitions_get_task_unit_summary["duongDan"] = "/api/v1/task-unit-summary";
+  const query = new URLSearchParams();
+  const set = thamSoTheoHopDong<petitions_get_task_unit_summary["truyVan"]>(query);
+  set("from", period.from);
+  set("to", period.to);
+  return `${path}?${query.toString()}`;
+}
+
+/** One row per unit holding tasks in the period; `org_unit_id: ""` = tasks with no unit. */
+export function fetchTaskUnitSummary(
+  period: SummaryPeriod,
+): Promise<KetQua<petitions_taskUnitSummaryOut>> {
+  return docJSON<petitions_taskUnitSummaryOut>(taskUnitSummaryPath(period));
 }
 
 export function overdueTasksPath(): string {
