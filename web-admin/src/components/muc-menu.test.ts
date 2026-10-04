@@ -18,6 +18,7 @@ const DU_QUYEN = [
   "announcement.create",
   "content.read",
   "report.read",
+  "asset.read",
 ] as const;
 
 function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
@@ -29,7 +30,7 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
   });
 
-  it("KHÔNG quyền nào: mười hai mục có màn biến mất, hai mục chưa có màn Ở LẠI", () => {
+  it("KHÔNG quyền nào: mười ba mục có màn biến mất, mục chưa có màn Ở LẠI", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -48,14 +49,15 @@ describe("locMenu", () => {
       "Nội dung Mini App",
       "Tổng quan",
       "Sổ tay lãnh đạo",
+      "Bản đồ kinh tế số",
     ]) {
       expect(ten).not.toContain(n);
     }
-    // Hai mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
-    // quyền sẽ buộc phải ĐOÁN một khoá cho một màn chưa tồn tại. `Tổng quan` rời nhóm này ngày
-    // 28/09/2026, khi màn `/tong-quan` ra đời; `Sổ tay lãnh đạo` ngày 04/10/2026 (ADR 0071).
-    expect(ten).toHaveLength(2);
-    expect(ten).toContain("Bản đồ kinh tế số");
+    // Mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc nó theo quyền sẽ
+    // buộc phải ĐOÁN một khoá cho một màn chưa tồn tại. `Tổng quan` rời nhóm này ngày 28/09/2026,
+    // khi màn `/tong-quan` ra đời; `Sổ tay lãnh đạo` và `Bản đồ kinh tế số` ngày 04/10/2026
+    // (ADR 0071, ADR 0072).
+    expect(ten).toHaveLength(1);
     expect(ten).toContain("Báo cáo");
   });
 
@@ -74,14 +76,14 @@ describe("locMenu", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.user.delete", "admin.users", "admin"]));
     expect(ten).not.toContain("Cấu hình");
     expect(ten).not.toContain("Danh bạ cán bộ");
-    expect(ten).toHaveLength(2);
+    expect(ten).toHaveLength(1);
   });
 
   it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Danh bạ", () => {
     const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
     expect(names).toContain("Cấu hình");
     expect(names).not.toContain("Danh bạ cán bộ");
-    expect(names).toHaveLength(3);
+    expect(names).toHaveLength(2);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -89,7 +91,7 @@ describe("locMenu", () => {
     // này. Máy chủ trả sổ cho người ấy, nên menu không được giấu lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.read"]));
     expect(ten).toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(3);
+    expect(ten).toHaveLength(2);
   });
 
   it("chỉ có `document.route` (KHÔNG có `document.read`): KHÔNG thấy mục Văn bản & Đơn thư", () => {
@@ -97,13 +99,13 @@ describe("locMenu", () => {
     // lượt đọc, nên một mục menu dẫn tới đó là hứa một chức năng không dùng được.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.route", "document.create"]));
     expect(ten).not.toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(2);
+    expect(ten).toHaveLength(1);
   });
 
   it("chỉ có `report.read`: THẤY mục Tổng quan, và không mục nào khác", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["report.read"]));
     expect(ten).toContain("Tổng quan");
-    expect(ten).toHaveLength(3);
+    expect(ten).toHaveLength(2);
   });
 
   it("có mọi khoá mô-đun nhưng THIẾU `report.read`: KHÔNG thấy mục Tổng quan — ca bị từ chối", () => {
@@ -130,6 +132,19 @@ describe("locMenu", () => {
     }
   });
 
+  it("chỉ có `asset.read`: THẤY Bản đồ kinh tế số, dẫn tới /ban-do (ADR 0072)", () => {
+    const muc = locMenu(NHOM_MENU, ["asset.read"]).flatMap((n) => n.muc);
+    const map = muc.find((m) => m.nhan === "Bản đồ kinh tế số");
+    expect(map?.duong).toBe("/ban-do");
+    expect(map?.khoa).toBe("asset.read");
+  });
+
+  it("thiếu `asset.read` (kể cả có `asset.update`, `admin.lookup`): KHÔNG thấy Bản đồ kinh tế số — ca bị từ chối", () => {
+    for (const ds of [[], ["asset.update", "admin.lookup", "asset.reads"], null]) {
+      expect(tenMuc(locMenu(NHOM_MENU, ds))).not.toContain("Bản đồ kinh tế số");
+    }
+  });
+
   it("nhóm rỗng thì biến mất, không để lại một nhãn nhóm trống", () => {
     const nhom = locMenu([{ ten: "RỖNG", muc: [{ nhan: "X", duong: "/x", khoa: "khong.co" }] }], []);
     expect(nhom).toHaveLength(0);
@@ -142,8 +157,8 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     // thời hạn — việc mà thiếu nó xã không nhận được phản ánh nào — không tìm thấy lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.sla"]));
     expect(ten).toContain("Cấu hình");
-    // Và KHÔNG mở thêm mục nào khác: hai mục chưa có màn + đúng một mục này.
-    expect(ten).toHaveLength(3);
+    // Và KHÔNG mở thêm mục nào khác: mục chưa có màn + đúng một mục này.
+    expect(ten).toHaveLength(2);
   });
 
   it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit"])(

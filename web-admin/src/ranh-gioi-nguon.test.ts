@@ -123,5 +123,8 @@ describe("ranh giới của mã nguồn web quản trị", () => {
     expect(viPham(/dangerouslySetInnerHTML/)).toEqual([]);
     expect(viPham(/\.\s*innerHTML\s*=/)).toEqual([]);
     expect(viPham(/document\s*\.\s*write\s*\(/)).toEqual([]);
+    // Bản đồ kinh tế số (ADR 0072): a MapLibre popup's `setHTML` is the same raw-HTML path under a
+    // fourth name — details go into a React panel instead.
+    expect(viPham(/\.\s*setHTML\s*\(/)).toEqual([]);
   });
 });

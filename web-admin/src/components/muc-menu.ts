@@ -1,6 +1,7 @@
 import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { coQuyen } from "@/lib/quyen";
 import {
+  ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
@@ -99,11 +100,6 @@ export type NhomMenu = {
  * `PENDING_SCREENS`. Không cần đụng component.
  */
 export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Bản đồ kinh tế số": {
-    ten: "Bản đồ kinh tế số",
-    viSao:
-      "Bản đồ số của xã: định vị doanh nghiệp, hộ kinh doanh, hợp tác xã, chợ, trường học, cơ sở y tế, di tích và công trình trên địa bàn, kèm sổ địa điểm dạng bảng. Chưa dựng vì chưa chọn nhà cung cấp bản đồ.",
-  },
   "Báo cáo": {
     ten: "Báo cáo",
     viSao:
@@ -149,7 +145,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
     muc: [
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
       { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
-      { nhan: "Bản đồ kinh tế số", duong: null, khoa: null },
+      { nhan: "Bản đồ kinh tế số", duong: "/ban-do", khoa: ASSET_READ_PERMISSION },
     ],
   },
   {

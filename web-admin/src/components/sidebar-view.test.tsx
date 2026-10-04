@@ -143,8 +143,10 @@ describe("items with no screen (ADR 0068 §14)", () => {
     }
   });
 
-  it("the map's blocker is stated, not only 'not built'", () => {
-    expect(PENDING_SCREENS["Bản đồ kinh tế số"]!.viSao).toContain("chưa chọn nhà cung cấp bản đồ");
+  it("the economic map is BUILT (04/10/2026, ADR 0072): a real link to /ban-do, no '?' placeholder", () => {
+    expect(PENDING_SCREENS["Bản đồ kinh tế số"]).toBeUndefined();
+    expect(NOT_BUILT.map((m) => m.nhan)).not.toContain("Bản đồ kinh tế số");
+    expect(itemOf(view(false), "Bản đồ kinh tế số")).toContain('href="/ban-do"');
   });
 
   it("never say 'Sắp có' — a public authority does not promise a date nobody set", () => {

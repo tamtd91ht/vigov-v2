@@ -54,6 +54,10 @@ spec:
           env:
             - { name: PORT,      value: "3000" }
             - { name: HOSTNAME,  value: "0.0.0.0" }   # mặc định của Next là 127.0.0.1 → probe không tới được
+            # URL style nền của Bản đồ kinh tế số (ADR 0072 H1): hằng số TOÀN NỀN TẢNG, đọc lúc chạy ở
+            # máy chủ (`src/lib/may-chu/map-style.ts`), không bao giờ NEXT_PUBLIC_*. Bỏ dòng này thì
+            # trang `/ban-do` không có nền — không rơi về host nào khác.
+            - { name: MAP_STYLE_URL, value: "https://tiles.openfreemap.org/styles/liberty" }
 
           # web-admin là CỔNG của `/api/v1/*` (quyết định 25/09/2026: k8s chỉ cấp Secret +
           # ConfigMap, định tuyến nằm trong ứng dụng). Nó đọc `*_HTTP_ADDR` — địa chỉ nội bộ
