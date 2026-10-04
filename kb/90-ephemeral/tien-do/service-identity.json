@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-03",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -472,6 +472,14 @@
       "trang_thai": "xong",
       "bang_chung": "Commit 6311a6ac (migration 0022 gieo khoá, không gán vai trò nào — như 0010; tools/quyen_keys.py nhận khoá ba vế) + 2dfc1307 (tuyến). 409 account_missing / last_admin, 403 self_target_forbidden, 404 gộp. Vai trò GIỮ. Test domain/app/http xanh; make check: identity xanh, đỏ ở comms (việc dở của phiên song song) và web check:api (openapi lệch do tệp sinh chưa commit). 4 ca account_revoke_pg_test SKIP — cấp lại sau thu hồi và xoá mềm sau thu hồi CHỈ được chứng minh trong các ca PG ấy.",
       "tiep_theo": "Web: nút Thu hồi tài khoản (TASK-09). PHÁT HIỆN cần chủ dự án biết: (1) lý do thu hồi chỉ nằm trong delta nhật ký (ly_do) — chữ tự do vào bảng chỉ-thêm, cán bộ có thể gõ dữ liệu cá nhân; muốn tách thì cần cột lý do trên nguoi_dung (migration). (2) Đường cấp/đặt lại/đổi mật khẩu chưa ghi nhật ký an ninh (skills/security-logging). (3) admin.user.revoke không nằm trong vai trò mẫu (role_template_test.go:154) — vai trò quan-tri-he-thong đã có phải tick ở Phân quyền. (4) ubiquitous-language.md còn nói thu hồi chưa dựng."
+    },
+    {
+      "id": "khoa-van-hanh-thu-bay-petition-field",
+      "viec": "Khoá vận hành thứ bảy ops.petition_field.manage (ADR 0073 #3, chủ dự án 04/10/2026) vào danh mục đóng của identity",
+      "trang_thai": "dang_lam",
+      "bang_chung": "04/10/2026 PA2-2 (chưa commit). migrations/0023_operator_petition_field_key.sql: MỘT câu ALTER TABLE operator_permission_grant DROP CONSTRAINT IF EXISTS + ADD CONSTRAINT operator_permission_grant_key_known với 7 khoá (chỉ NỚI — mọi dòng cấp cũ vẫn hợp lệ), không chèn dòng nào, không đụng quyen; KHÔNG sửa 0012. internal/domain/operator.go OperatorPermissionPetitionFieldManage vào OperatorPermissions(). internal/store/operatorstore/store_params_test.go TestPermissionCheckMatchesDomainList nay đọc migration MỚI NHẤT định nghĩa ràng buộc (bỏ chú thích -- trước khi so), không còn đọc cứng 0012. migrations/operator_petition_field_key_test.go (hai ca văn bản). KIỂM: go test ./service-identity/... xanh trong make check (-race). CHƯA CHẠY 0023 trên PostgreSQL thật (không VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "Triển khai identity (áp 0023 + bản Go mới) TRƯỚC khi chạy job Jenkins tao-tai-khoan-van-hanh cấp đủ 7 khoá — đảo thứ tự thì lần grant thứ bảy bị CHECK từ chối và job thoát 1 (tài khoản vẫn tạo, cấp nốt bằng operatorctl grant). Tài khoản vận hành đã có không tự nhận khoá mới: operatorctl grant --permission ops.petition_field.manage --ticket … cho từng người."
     }
   ]
 }

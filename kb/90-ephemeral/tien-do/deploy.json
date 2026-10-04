@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "bo-vigov-deploy-job-dich-vu-tu-dat-anh",
@@ -215,9 +215,9 @@
     },
     {
       "id": "jenkins-tao-tai-khoan-van-hanh",
-      "viec": "vigov-deploy: HANH_DONG=tao-tai-khoan-van-hanh — operatorctl create (email + tên) rồi grant đủ 6 quyền ops.* cho platform-admin, pod một lượt từ ảnh identity đang chạy (chủ dự án 02/10/2026: seed qua máy chủ triển khai)",
+      "viec": "vigov-deploy: HANH_DONG=tao-tai-khoan-van-hanh — operatorctl create (email + tên) rồi grant đủ 7 quyền ops.* cho platform-admin (khoá thứ bảy ops.petition_field.manage thêm 04/10/2026, ADR 0073 #3), pod một lượt từ ảnh identity đang chạy (chủ dự án 02/10/2026: seed qua máy chủ triển khai)",
       "trang_thai": "dang_lam",
-      "bang_chung": "deploy/Jenkinsfile stage 'Tạo tài khoản vận hành' (sau stage 'Bật/tắt demo Mini App'); tham số EMAIL_VAN_HANH, TEN_VAN_HANH, TICKET; MT=prod + XAC_NHAN=vigov-prod. Đúng ADR 0048: tên đăng nhập là email, mật khẩu do hệ thống sinh — KHÔNG nhận mật khẩu đặt trước (chủ dự án hỏi user admin + mật khẩu cố định; được nêu lệch ADR 0048 và chọn phương án Jenkins). bash -n trên khối shell đã giải mã: sạch; JSON lệnh pod dựng thử đúng; make buildfiles + check_security PASS. CHƯA CHẠY trên Jenkins thật.",
+      "bang_chung": "deploy/Jenkinsfile stage 'Tạo tài khoản vận hành' (sau stage 'Bật/tắt demo Mini App'); tham số EMAIL_VAN_HANH, TEN_VAN_HANH, TICKET; MT=prod + XAC_NHAN=vigov-prod. Đúng ADR 0048: tên đăng nhập là email, mật khẩu do hệ thống sinh — KHÔNG nhận mật khẩu đặt trước (chủ dự án hỏi user admin + mật khẩu cố định; được nêu lệch ADR 0048 và chọn phương án Jenkins). bash -n trên khối shell đã giải mã: sạch; JSON lệnh pod dựng thử đúng; make buildfiles + check_security PASS. CHƯA CHẠY trên Jenkins thật. 04/10/2026 PA2-2 (chưa commit): vòng for perm thêm ops.petition_field.manage, mô tả HANH_DONG đổi 'đủ 6' → 'đủ 7'; make check: buildfiles + security PASS.",
       "no_confirm": [],
       "tiep_theo": "Chạy job trên Jenkins (lượt đầu sau khi đổi parameters có thể chỉ nạp tham số — bấm lại). GIÁ ĐÃ CHẤP NHẬN: mật khẩu tạm in vào log lượt build (giữ 200 lượt) — người nhận phải đăng nhập, đổi mật khẩu và đăng ký TOTP ngay; tạm tự hết hạn 24 giờ."
     },

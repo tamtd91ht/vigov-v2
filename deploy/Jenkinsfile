@@ -114,7 +114,7 @@ pipeline {
                         'dung-clamav: áp deploy/cluster/clamav.yaml (clamd, ADR 0052 §9) vào namespace của MT, đợi sẵn sàng, ' +
                         'thử PING/PONG, rồi đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config NẾU CHƯA CÓ ' +
                         '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions) · ' +
-                        'tao-tai-khoan-van-hanh: operatorctl create cho EMAIL_VAN_HANH + TEN_VAN_HANH rồi cấp đủ 6 quyền ops.* ' +
+                        'tao-tai-khoan-van-hanh: operatorctl create cho EMAIL_VAN_HANH + TEN_VAN_HANH rồi cấp đủ 7 quyền ops.* ' +
                         '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc). ⚠ MẬT KHẨU TẠM IN VÀO LOG LƯỢT BUILD NÀY ' +
                         '(chủ dự án chấp nhận 02/10/2026): đăng nhập platform-admin, đổi mật khẩu + đăng ký TOTP NGAY; ' +
                         'mật khẩu tạm tự hết hạn sau 24 giờ')
@@ -1482,7 +1482,7 @@ EOF
           echo "── đã tạo $CODE"
 
           failed=""
-          for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue; do
+          for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue ops.petition_field.manage; do
             suffix="grant-$(printf '%s' "$perm" | tr '._' '--')"
             if run_op "$suffix" "[\\"/operatorctl\\",\\"grant\\",\\"--code\\",\\"$CODE\\",\\"--permission\\",\\"$perm\\",\\"--ticket\\",\\"$TICKET\\"]"; then
               echo "   ✓ $perm"

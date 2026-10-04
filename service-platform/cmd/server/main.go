@@ -242,9 +242,11 @@ func run(log *slog.Logger) error {
 	// audited in the target commune's audit_log; its reads use the registry's raw handle, like
 	// the directory. Forget drops a written host from THIS process's cache at once.
 	// The upload limits (policyReader, the same raw-handle store the gRPC read uses) and the operator
-	// log are this service's own tables too (ADR 0073 #2, #5).
+	// log are this service's own tables too (ADR 0073 #2, #5), as are the shared Mini App row and the
+	// tier-1 petition field codes (fields, the same store the gRPC read uses — ADR 0073 #3).
 	opEdge, err := wireOperatorEdge(cfg, svcstore.NewOperatorRegistry(db),
-		svcstore.NewRegistryWriter(store.New(db)), policyReader, svcstore.NewOperatorLog(db), directory.Forget, log)
+		svcstore.NewRegistryWriter(store.New(db)), policyReader, svcstore.NewOperatorLog(db),
+		svcstore.NewSharedMiniAppStore(db), fields, directory.Forget, log)
 	if err != nil {
 		return err
 	}

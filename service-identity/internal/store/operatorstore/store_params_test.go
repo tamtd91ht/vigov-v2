@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -585,15 +586,38 @@ func TestNoDeleteStatement(t *testing.T) {
 	}
 }
 
-// The migration's CHECK list and the Go closed list are the same six keys.
+// The migration's CHECK list and the Go closed list are the same keys.
+//
+// THE NEWEST migration defining the constraint is the one the database holds (0012 created it with
+// six keys, 0023 replaced it with seven — ADR 0073 #3). Reading 0012 alone would stay green while a
+// later file narrowed or widened the list. `--` comments are removed first, so prose naming the
+// constraint cannot stand in for the DDL.
 func TestPermissionCheckMatchesDomainList(t *testing.T) {
-	b, err := fs.ReadFile(migrations.FS, "0012_operator_accounts.sql")
+	names, err := fs.Glob(migrations.FS, "*.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := regexp.MustCompile(`(?s)operator_permission_grant_key_known CHECK \(permission_key IN \((.*?)\)\)`).FindSubmatch(b)
+	sort.Strings(names)
+	re := regexp.MustCompile(`(?s)operator_permission_grant_key_known CHECK \(permission_key IN \((.*?)\)\)`)
+	var m [][]byte
+	for _, name := range names {
+		b, err := fs.ReadFile(migrations.FS, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var code []string
+		for _, line := range strings.Split(string(b), "\n") {
+			if i := strings.Index(line, "--"); i >= 0 {
+				line = line[:i]
+			}
+			code = append(code, line)
+		}
+		if found := re.FindSubmatch([]byte(strings.Join(code, "\n"))); found != nil {
+			m = found
+		}
+	}
 	if m == nil {
-		t.Fatal("CHECK operator_permission_grant_key_known not found in 0012")
+		t.Fatal("CHECK operator_permission_grant_key_known not found in any migration")
 	}
 	var inSQL []string
 	for _, part := range strings.Split(string(m[1]), ",") {

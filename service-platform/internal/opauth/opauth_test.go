@@ -150,6 +150,7 @@ func TestRequireAnyKey(t *testing.T) {
 		"literal sentinel":      {[]string{"ops.*"}, 403},
 		"only ops.qr.issue":     {[]string{string(KeyQRIssue)}, 200},
 		"only mini app":         {[]string{string(KeyMiniAppManage)}, 200},
+		"only petition field":   {[]string{string(KeyPetitionFieldManage)}, 200},
 		"unknown + one decided": {[]string{"ops.anything.goes", string(KeyDomainManage)}, 200},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -162,6 +163,21 @@ func TestRequireAnyKey(t *testing.T) {
 	}
 	if rec := serve(RequireKey(newAuth(t, &resolverFake{}), AnyKey)(okHandler), ""); rec.Code != 401 {
 		t.Fatalf("no cookie: status = %d, want 401", rec.Code)
+	}
+}
+
+// The closed set, spelled out independently: the six keys of ADR 0048 §28/09 #3 and the seventh of
+// ADR 0073 #3 — the same list identity's migration 0023 holds. Growing it is an owner decision.
+func TestDecidedKeysAreTheSevenOwnerKeys(t *testing.T) {
+	want := []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage", "ops.mini_app.manage",
+		"ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage"}
+	if len(decidedKeys) != len(want) {
+		t.Fatalf("decided keys: %d, want %d", len(decidedKeys), len(want))
+	}
+	for _, k := range want {
+		if !decidedKeys[Key(k)] {
+			t.Errorf("%s is not a decided key", k)
+		}
 	}
 }
 

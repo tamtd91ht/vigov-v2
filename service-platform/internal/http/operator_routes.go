@@ -47,6 +47,10 @@ type OperatorDeps struct {
 	// Policies is upload_policy (ADR 0073 #5); OperatorLog the operator log (ADR 0073 #2).
 	Policies    UploadPolicyEditor
 	OperatorLog OperatorLogReader
+	// SharedApp is the shared Mini App + QR link source (owner 04/10/2026); Fields the tier-1 petition
+	// field codes (ADR 0073 #3).
+	SharedApp SharedMiniAppEditor
+	Fields    PetitionFieldEditor
 	// OperatorHost is refused as a commune host (ADR 0048 stop condition #6).
 	OperatorHost string
 	NewID        func() (string, error)
@@ -407,4 +411,95 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	mux.Handle("GET /api/v1/communes/{id}/operator-audit-entries",
 		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
 			http.HandlerFunc(h.listCommuneOperatorLog)))
+
+	// --- the shared Mini App and the commune QR link (owner 04/10/2026, ADR 0073 #5) -----------------
+
+	// @summary  Mini App dùng chung của nền tảng (dòng mini_app chế độ chinh đang chạy)
+	// @reply    200 sharedMiniAppView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error shared_mini_app_not_declared
+	// @reply    409 httpx.Error shared_mini_app_ambiguous
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/shared-mini-app",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.getSharedMiniApp)))
+
+	// @summary  Khai báo / đổi App ID của Mini App dùng chung (bắt buộc lý do): gắn dòng chinh mới và tắt dòng cũ, một giao dịch; vết shared_mini_app.changed ở platform_audit_log
+	// @request  sharedMiniAppBody
+	// @reply    200 sharedMiniAppView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    409 httpx.Error mini_app_taken shared_mini_app_ambiguous
+	// @reply    422 httpx.Error invalid_app_id invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/shared-mini-app",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("declaring the App ID that is already the running shared app changes nothing and writes no entry")(
+				http.HandlerFunc(h.declareSharedMiniApp))))
+
+	// @summary  Liên kết mở Mini App dùng chung cho tên miền chính của xã (in thành QR ở trình duyệt); không ghi vết (ADR 0048 §30/09 #9)
+	// @reply    200 launchLinkView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 httpx.Error commune_inactive commune_no_primary_domain shared_mini_app_not_declared shared_mini_app_ambiguous
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/communes/{id}/mini-app-launch-link",
+		opauth.RequireKey(h.d.Auth, opauth.KeyQRIssue)(
+			http.HandlerFunc(h.getLaunchLink)))
+
+	// --- tier-1 petition field codes (ADR 0073 #3, ADR 0060) -----------------------------------------
+
+	// @summary  Bộ mã lĩnh vực phản ánh cấp 1 (mọi mã, kể cả mã đã ngừng dùng) và các tông màu được phép
+	// @reply    200 petitionFieldListView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/petition-fields",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.listPetitionFields)))
+
+	// @summary  Cấp một mã lĩnh vực cấp 1 mới (bắt buộc lý do); mã không bao giờ đổi, không cấp lại; vết petition_field.created
+	// @request  createPetitionFieldBody
+	// @reply    201 petitionFieldView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    409 httpx.Error petition_field_code_taken
+	// @reply    422 httpx.Error invalid_code invalid_label invalid_sort_order invalid_icon invalid_tone invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("POST /api/v1/petition-fields",
+		opauth.RequireKey(h.d.Auth, opauth.KeyPetitionFieldManage)(
+			idem.KhongCan("a repeat is refused by petition_field.code, the primary key, which keeps every row")(
+				http.HandlerFunc(h.createPetitionField))))
+
+	// @summary  Sửa nhãn mặc định, thứ tự, biểu tượng, tông màu của một mã cấp 1 (bắt buộc lý do); không đổi mã; vết petition_field.changed
+	// @request  editPetitionFieldBody
+	// @reply    200 petitionFieldView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error petition_field_not_found
+	// @reply    422 httpx.Error invalid_label invalid_sort_order invalid_icon invalid_tone invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/petition-fields/{code}",
+		opauth.RequireKey(h.d.Auth, opauth.KeyPetitionFieldManage)(
+			idem.KhongCan("setting the values it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.editPetitionField))))
+
+	// @summary  Ngừng dùng / dùng lại một mã cấp 1 ở mọi xã (bắt buộc lý do); phiếu cũ giữ nhãn; vết petition_field.deactivated / reactivated
+	// @request  petitionFieldActivationBody
+	// @reply    200 petitionFieldView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error petition_field_not_found
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/petition-fields/{code}/activation",
+		opauth.RequireKey(h.d.Auth, opauth.KeyPetitionFieldManage)(
+			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.setPetitionFieldActivation))))
 }

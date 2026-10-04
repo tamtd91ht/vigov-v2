@@ -49,10 +49,11 @@ func TestValidOperatorCode(t *testing.T) {
 	}
 }
 
-// The closed list is exactly the six keys of ADR 0048 §Chốt #3. Growing it is an owner decision.
+// The closed list is exactly the six keys of ADR 0048 §Chốt #3 plus the seventh of ADR 0073 #3.
+// Growing it is an owner decision.
 func TestOperatorPermissionsClosedList(t *testing.T) {
 	want := []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage",
-		"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue"}
+		"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage"}
 	got := OperatorPermissions()
 	if len(got) != len(want) {
 		t.Fatalf("closed list has %d keys, want %d", len(got), len(want))

@@ -28,7 +28,8 @@ import (
 // grant. The `ops.` prefix guarantees an operator key can never collide with a commune key.
 type OperatorPermission string
 
-// THE CLOSED LIST decided by the owner on 2026-09-28. Adding a key is ADR 0048 stop condition #1
+// THE CLOSED LIST decided by the owner on 2026-09-28, grown to seven on 2026-10-04 (ADR 0073 #3:
+// `ops.petition_field.manage`, migration 0023). Adding a key is ADR 0048 stop condition #1
 // (authority beyond one commune) — an owner decision, never a line added here in passing. The
 // migration's CHECK on operator_permission_grant.permission_key is the database's copy of this
 // list; internal/store/operatorstore tests compare the two.
@@ -39,6 +40,8 @@ const (
 	OperatorPermissionMiniAppManage      OperatorPermission = "ops.mini_app.manage"
 	OperatorPermissionUploadPolicyManage OperatorPermission = "ops.upload_policy.manage"
 	OperatorPermissionQRIssue            OperatorPermission = "ops.qr.issue"
+	// The tier-1 petition field codes (ADR 0060), edited in the operator area (ADR 0073 #3).
+	OperatorPermissionPetitionFieldManage OperatorPermission = "ops.petition_field.manage"
 )
 
 // OperatorPermissions returns the closed list, in a stable order. A fresh slice every call, so no
@@ -51,6 +54,7 @@ func OperatorPermissions() []OperatorPermission {
 		OperatorPermissionMiniAppManage,
 		OperatorPermissionUploadPolicyManage,
 		OperatorPermissionQRIssue,
+		OperatorPermissionPetitionFieldManage,
 	}
 }
 

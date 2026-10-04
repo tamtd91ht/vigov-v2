@@ -285,6 +285,9 @@ Chỉ phục vụ trên `OPERATOR_HOST`, **không** nằm trong `kb/20-contracts
 | Gỡ / bật lại App ID | `communes/{id}/mini-apps/{app_id}/activation` | **Người dùng chốt 04/10/2026**. Cùng hình dạng `communes/{id}/activation`. Vết `tat_mini_app` / **`bat_lai_mini_app`** (động từ vết mới, chốt cùng ngày) |
 | Khoá bí mật của App ID | `communes/{id}/mini-apps/{app_id}/secret`, thân `{secret, reason}` | **Người dùng chốt 04/10/2026** (ADR 0070 bổ sung #6). Platform chỉ chuyển tiếp sang identity, không lưu, không log. Vết bản sao ở platform: `dat_khoa_mini_app` / `thu_hoi_khoa_mini_app` (chỉ siêu dữ liệu) |
 | Giới hạn tải lên | `upload-policies` · `upload-policies/{purpose}` | **Người dùng chốt 04/10/2026** (ADR 0073). Sửa cần `ops.upload_policy.manage`; vết `upload_policy.changed` ở `platform_audit_log` |
+| Mini App dùng chung | `shared-mini-app` | **Người dùng chốt 04/10/2026** (ADR 0073). Dòng `mini_app` chế độ `chinh`, không có xã; khai/thay cần `ops.mini_app.manage`; vết `shared_mini_app.changed` |
+| Liên kết mở Mini App để in QR | `communes/{id}/mini-app-launch-link` | **Người dùng chốt 04/10/2026**. `https://zalo.me/s/<app dùng chung>/?d=<tên miền chính>&src=qr`; quyền `ops.qr.issue`, không ghi vết (ADR 0048 §30/09 #9) |
+| Lĩnh vực phản ánh cấp 1 | `petition-fields` · `petition-fields/{code}` · `petition-fields/{code}/activation` | **Người dùng chốt 04/10/2026** (ADR 0073 #3, khoá `ops.petition_field.manage`). Mã đã cấp không đổi, không xoá; vết `petition_field.created/changed/deactivated/reactivated` |
 | Nhật ký vận hành | `operator-audit-entries` · `communes/{id}/operator-audit-entries` | **Người dùng chốt 04/10/2026** (ADR 0073 #2). Đọc chéo mọi xã — chính lần xem cũng để vết `operator_log.read` (luật 6 bất biến 7), dòng ấy không hiện lại trong danh sách |
 
 ⚠ `GET /api/v1/communes` có **hai** người gọi trên **hai** host: công dân (Mini App, `identity`,

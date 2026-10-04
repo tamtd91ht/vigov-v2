@@ -142,6 +142,7 @@ type operatorWiring struct {
 // 503 for a reason only the startup log could have named.
 func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.CommuneWriter,
 	policies svchttp.UploadPolicyEditor, oplog svchttp.OperatorLogReader,
+	shared svchttp.SharedMiniAppEditor, fields svchttp.PetitionFieldEditor,
 	forget func(string), log *slog.Logger) (operatorWiring, error) {
 	host := cfg.OperatorHost()
 	signingKeys := cfg.OperatorSessionSigningKeys()
@@ -197,6 +198,8 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 		Writer:       w,
 		Policies:     policies,
 		OperatorLog:  oplog,
+		SharedApp:    shared,
+		Fields:       fields,
 		OperatorHost: host,
 		NewID:        ulid.Moi,
 		Forget:       forget,

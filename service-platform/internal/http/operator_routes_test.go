@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -254,6 +255,8 @@ type harness struct {
 	w       *writerFake
 	pol     *policyFake
 	oplog   *opLogFake
+	shared  *sharedAppFake
+	fields  *fieldsFake
 	counter *memCounter
 	forgot  []string
 	logs    *bytes.Buffer // JSON lines the handlers logged
@@ -262,7 +265,7 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
-		counter: &memCounter{}, logs: &bytes.Buffer{}}
+		shared: newSharedAppFake(), fields: newFieldsFake(), counter: &memCounter{}, logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
 	if err != nil {
 		t.Fatal(err)
@@ -280,6 +283,8 @@ func newHarness(t *testing.T) *harness {
 		Writer:       h.w,
 		Policies:     h.pol,
 		OperatorLog:  h.oplog,
+		SharedApp:    h.shared,
+		Fields:       h.fields,
 		OperatorHost: operatorHostFake,
 		NewID:        func() (string, error) { return newIDFake, nil },
 		Forget:       func(host string) { h.forgot = append(h.forgot, host) },
@@ -349,7 +354,7 @@ type guardedRoute struct {
 
 // decidedKeysFake is the closed operator key set, spelled out independently of opauth.
 var decidedKeysFake = []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage",
-	"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue"}
+	"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage"}
 
 var guarded = []guardedRoute{
 	{"GET", "/api/v1/communes", "", nil, 200, true},
@@ -381,6 +386,19 @@ var guarded = []guardedRoute{
 		`{"secret":"zalo-app-secret-FAKE-NOT-REAL","reason":"Đặt khoá cho app riêng"}`, []string{"ops.mini_app.manage"}, 200, false},
 	{"DELETE", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
 		`{"reason":"Thu hồi khoá cũ"}`, []string{"ops.mini_app.manage"}, 200, false},
+	{"GET", "/api/v1/shared-mini-app", "", nil, 200, true},
+	{"PUT", "/api/v1/shared-mini-app", `{"app_id":"1234567890123456789","reason":"Khai báo app dùng chung"}`,
+		[]string{"ops.mini_app.manage"}, 200, false},
+	{"GET", "/api/v1/communes/" + communeIDFake + "/mini-app-launch-link", "", []string{"ops.qr.issue"}, 200, false},
+	{"GET", "/api/v1/petition-fields", "", nil, 200, true},
+	{"POST", "/api/v1/petition-fields",
+		`{"code":"cay-xanh","default_label":"Cây xanh","sort_order":13,"icon":"Trees","tone":"green","reason":"Xã đề nghị"}`,
+		[]string{"ops.petition_field.manage"}, 201, false},
+	{"PUT", "/api/v1/petition-fields/dien",
+		`{"default_label":"Điện – chiếu sáng","sort_order":4,"icon":"Zap","tone":"orange","reason":"Sửa nhãn"}`,
+		[]string{"ops.petition_field.manage"}, 200, false},
+	{"PUT", "/api/v1/petition-fields/dien/activation", `{"active":false,"reason":"Gộp vào mã khác"}`,
+		[]string{"ops.petition_field.manage"}, 200, false},
 	{"GET", "/api/v1/operator-sessions/current", "", nil, 200, false},
 	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204, false},
 }
@@ -430,10 +448,21 @@ func TestGuardedRoutes(t *testing.T) {
 			}
 
 			if len(rt.keys) > 0 {
-				// Every key but the last — the wrong permission set.
-				h.id.keys = append([]string{"ops.qr.issue"}, rt.keys[:len(rt.keys)-1]...)
+				// Every key but the last, plus EVERY decided key the route does not list — the wrong
+				// permission set, as wide as it can be. (A fixed filler key would be the route's own
+				// key for a route guarded by that key alone, and the 403 case would silently pass.)
+				wrong := append([]string{}, rt.keys[:len(rt.keys)-1]...)
+				for _, k := range decidedKeysFake {
+					if !slices.Contains(rt.keys, k) {
+						wrong = append(wrong, k)
+					}
+				}
+				h.id.keys = wrong
 				if rec := h.do(rt.method, rt.path, rt.body, opCookie(t)); rec.Code != 403 {
 					t.Errorf("missing a key: %d, want 403", rec.Code)
+				}
+				if h.shared.declared+h.shared.launchReads+h.fields.writes != 0 {
+					t.Errorf("a store ran without its key")
 				}
 				if h.w.target != "" {
 					t.Errorf("a write ran without its key (target %s)", h.w.target)
