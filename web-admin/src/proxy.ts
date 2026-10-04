@@ -59,5 +59,9 @@ export const config = {
   // đính kèm tới 25MB sẽ tới dịch vụ Go thiếu đuôi.
   //
   // `/healthz` là đầu dò k8s, gọi bằng IP pod: không cookie, không xã nào.
-  matcher: ["/((?!api/|healthz$|_next/static|_next/image|favicon.ico).*)"],
+  //
+  // `/maplibre/` là worker tĩnh của MapLibre (scripts/copy-maplibre-worker.mjs) — mã thư viện công
+  // khai, không dữ liệu xã nào. Đi qua middleware thì một lần tải worker có thể bị chuyển hướng về
+  // `/dang-nhap`, và trình duyệt chỉ báo "Worker failed to load" — bản đồ trắng.
+  matcher: ["/((?!api/|healthz$|_next/static|_next/image|favicon.ico|maplibre/).*)"],
 };

@@ -37,6 +37,16 @@ describe("economic map — source boundaries", () => {
     for (const f of FILES) expect(/setMaxBounds\s*\(/.test(f.src), f.name).toBe(false);
   });
 
+  it("every map is created only after setWorkerUrl(MAPLIBRE_WORKER_URL) — blank map under Turbopack otherwise", () => {
+    const creators = FILES.filter((f) => /new\s+ml\.Map\(/.test(f.src));
+    expect(creators.map((f) => f.name).sort()).toEqual(["economic-map.tsx", "position-picker.tsx"]);
+    for (const f of creators) {
+      const set = f.src.indexOf("ml.setWorkerUrl(MAPLIBRE_WORKER_URL)");
+      expect(set, f.name).toBeGreaterThan(-1);
+      expect(set, f.name).toBeLessThan(f.src.search(/new\s+ml\.Map\(/));
+    }
+  });
+
   it("no DOM marker per asset: the only Marker is the form's own pin", () => {
     const withMarker = FILES.filter((f) => /new\s+ml\.Marker\(/.test(f.src)).map((f) => f.name);
     expect(withMarker).toEqual(["position-picker.tsx"]);

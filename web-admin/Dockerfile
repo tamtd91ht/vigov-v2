@@ -82,10 +82,14 @@ ENV NODE_ENV=production \
 # ảnh này KHÔNG mang mã nguồn lẫn cây phụ thuộc đầy đủ. Ít thứ trong ảnh cũng là ít thứ phải
 # vá khi có CVE.
 #
-# KHÔNG chép `public/`: thư mục đó chưa tồn tại, và một dòng COPY trỏ vào chỗ không có sẽ làm
-# build đổ. Khi nào có tài sản tĩnh thì thêm dòng ấy cùng lúc.
+# `public/` CHỈ chứa tài sản sinh lúc build: worker của MapLibre do `prebuild`
+# (scripts/copy-maplibre-worker.mjs) chép vào `public/maplibre/`. Bản standalone KHÔNG tự mang
+# `public/` theo — thiếu dòng dưới thì /maplibre/maplibre-gl-worker.mjs trả 404 và trang /ban-do
+# trắng ("Worker failed to load", 04/10/2026). Thư mục luôn tồn tại vì `npm run build` ở trên
+# chạy `prebuild` trước.
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
 
 EXPOSE 3000
 

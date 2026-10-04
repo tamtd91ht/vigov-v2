@@ -138,6 +138,7 @@ const ml = vi.hoisted(() => {
 });
 
 vi.mock("maplibre-gl", () => ({
+  setWorkerUrl: () => {},
   Map: ml.FakeMap,
   AttributionControl: ml.FakeControl,
   NavigationControl: ml.FakeControl,

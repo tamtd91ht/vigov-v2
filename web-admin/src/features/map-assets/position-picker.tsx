@@ -4,7 +4,7 @@ import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
 import { OPENFREEMAP_ATTRIBUTION } from "./labels";
-import { insideFrame, round6, type MapFrame } from "./map-logic";
+import { MAPLIBRE_WORKER_URL, insideFrame, round6, type MapFrame } from "./map-logic";
 
 /**
  * The small map of the add / edit form (spec §8.1): click to place the pin, drag it to adjust.
@@ -51,6 +51,8 @@ export function PositionPicker({
     const bounds: [number, number, number, number] = [minLng, minLat, maxLng, maxLat];
     void import("maplibre-gl").then((ml) => {
       if (cancelled || containerRef.current === null) return;
+      // Before ANY map exists — see MAPLIBRE_WORKER_URL for why the default URL is empty under Turbopack.
+      ml.setWorkerUrl(MAPLIBRE_WORKER_URL);
       const map = new ml.Map({
         container: containerRef.current,
         style: styleUrl,

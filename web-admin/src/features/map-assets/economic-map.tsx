@@ -20,6 +20,7 @@ import {
   LAYER_LABELS,
   LAYER_POINTS,
   LAYER_SELECTED,
+  MAPLIBRE_WORKER_URL,
   SOURCE_ID,
   VIETNAMESE_TEXT_FIELD,
   colourExpression,
@@ -102,6 +103,8 @@ export function EconomicMap({
 
     void import("maplibre-gl").then((ml) => {
       if (cancelled || containerRef.current === null) return;
+      // Before ANY map exists — see MAPLIBRE_WORKER_URL for why the default URL is empty under Turbopack.
+      ml.setWorkerUrl(MAPLIBRE_WORKER_URL);
       const map = new ml.Map({
         container: containerRef.current,
         style: styleUrl,

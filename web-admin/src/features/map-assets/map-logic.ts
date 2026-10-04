@@ -142,6 +142,21 @@ export function round6(x: number): number {
   return Math.round(x * 1e6) / 1e6;
 }
 
+/* ---- worker ----------------------------------------------------------------------------------- */
+
+/**
+ * Where MapLibre's web worker is served — a SAME-ORIGIN static copy made by
+ * `scripts/copy-maplibre-worker.mjs` (run by `prebuild` / `predev`) into `public/maplibre/`.
+ *
+ * WHY IT MUST BE SET: maplibre-gl 6 finds its worker from `import.meta.url`, and Turbopack rewrites that
+ * to `file:///ROOT/node_modules/…`, which fails MapLibre's `^https?:` check → worker URL "" →
+ * `new Worker("")` → "Worker failed to load" and a map that never loads its style: a blank frame with
+ * only the controls (production, 04/10/2026). Turbopack does not emit the worker file either, so
+ * guessing the URL would 404. Same origin also keeps the future CSP at `worker-src 'self'`, no `blob:`.
+ * Call `setWorkerUrl(MAPLIBRE_WORKER_URL)` BEFORE every `new Map`.
+ */
+export const MAPLIBRE_WORKER_URL = "/maplibre/maplibre-gl-worker.mjs";
+
 /* ---- layers ----------------------------------------------------------------------------------- */
 
 export const SOURCE_ID = "economic-places";
