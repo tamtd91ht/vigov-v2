@@ -52,10 +52,9 @@ export const MAP_FIELD_NOTE =
   "Trường đã xoá thì dữ liệu cũ vẫn còn trong hồ sơ, chỉ không hiện lên trên biểu mẫu nữa. Trường " +
   "đang tắt vẫn nằm trong danh sách và bật lại được.";
 
-/** Said once, plainly: these fields describe a form whose records do not exist yet. */
+/** Said once, plainly: where these fields show up (the asset register on /ban-do, 7f9afdc1). */
 export const NO_REGISTER_NOTE =
-  "Bản đồ kinh tế số hiện chưa lưu hồ sơ tài nguyên; các trường khai ở đây sẽ là biểu mẫu của hồ sơ " +
-  "ấy khi phân hệ được đưa vào dùng.";
+  "Các trường khai ở đây hiện trong biểu mẫu Thêm/Sửa đối tượng của nhóm tương ứng trên Bản đồ kinh tế số.";
 
 /** Empty state when the commune has no asset type: fields hang off a type, so types come first. */
 export const NO_ASSET_TYPES =

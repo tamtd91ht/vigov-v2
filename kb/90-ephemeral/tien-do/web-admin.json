@@ -622,6 +622,14 @@
       "viec": "Lối vào tự nguyện trang Đổi mật khẩu: liên kết 'Đổi mật khẩu' (biểu tượng chìa khoá) trên đầu trang, cạnh Đăng xuất. Trước đó /doi-mat-khau chỉ mở được khi máy chủ BẮT đổi (lần đầu, quản trị đặt lại)",
       "trang_thai": "xong",
       "bang_chung": "DauTrang (src/components/dau-trang.tsx) vẽ liên kết khi đã đọc được phiên; dưới 640px chữ ẩn với mắt, giữ làm tên truy cập. Test header-password-link.test.tsx. web-admin: tsc, eslint sạch, vitest 3636/3636. Tuyến máy chủ PUT /api/v1/staff/current/password có sẵn, không đổi."
+    },
+    {
+      "id": "ban-do-kinh-te-so-trang",
+      "viec": "Trang /ban-do — Bản đồ kinh tế số trên MapLibre + OpenFreeMap, khung xã cứng, sổ địa điểm (ADR 0072 + sửa đổi 04/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "7f9afdc1: maplibre-gl 6.11.2, MAP_STYLE_URL đọc phía máy chủ (deployment + Jenkinsfile), bản đồ chỉ tạo khi map-frame configured:true với maxBounds trong constructor, camera không ra ngoài khung, nhãn name:vi, nguồn GeoJSON phân cụm + 5 lớp, panel chi tiết/bottom sheet, thêm/sửa/xác minh/xoá, sổ địa điểm, nạp 11 nhóm, menu bật (asset.read). typecheck + lint + 3700 test + check:api + make vuln xanh. Câu tab Trường bản đồ đã sửa.",
+      "tiep_theo": "Chỉ kiểm được trên trình duyệt: tile/glyph/sprite tải từ tiles.openfreemap.org, nhãn tiếng Việt thực hiện, không có khung hình đầu ở tầm thế giới, bố cục 320px. Khi trả nợ CSP (missing-security-headers): /ban-do cần connect-src + img-src https://tiles.openfreemap.org, img-src data: blob:, worker-src blob: + child-src blob:. Điểm chỉ bấm được bằng chuột/chạm — đường bàn phím là ô tìm hoặc sổ địa điểm. Để sau theo ADR 0072: bản đồ nhiệt, mật độ thôn, quy mô lao động, Excel, trình chiếu (đang là control '?'). Hằng asset.update đặt tạm ở features/map-assets/labels.ts (lib/quyen.ts chưa có).",
+      "menu": "ban-do-kinh-te-so"
     }
   ]
 }

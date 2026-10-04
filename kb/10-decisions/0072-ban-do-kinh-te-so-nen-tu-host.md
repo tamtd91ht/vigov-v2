@@ -228,6 +228,12 @@ Phải thay biểu thức để ưu tiên tên tiếng Việt khi tile có (`nam
   hiện trường của phiếu phản ánh. Vẫn **chưa quyết**; giao diện đang ghi đúng như vậy ở
   `web-admin/src/features/phan-anh/nhan-phieu.ts:1336-1351` (`sceneMap`, `heatMapTab`). Quyết định
   ở đây **không** được dẫn để mở hai phần ấy.
+- **Hộ kinh doanh** (`ho-kinh-doanh`, thường là nhà ở) **thuộc** "tài nguyên của xã" — chủ dự án chốt
+  04/10/2026 sau rà bảo mật: địa chỉ và vị trí chính xác hiện cho mọi người có `asset.read` như doanh
+  nghiệp. Người đại diện, điện thoại, mã số thuế **vẫn che** (chỉ `asset.update` xem đủ, có vết). Vì
+  vậy địa chỉ và toạ độ cố ý **không che** — chú thích dữ liệu cá nhân ở `0015_map_asset.sql` viết
+  trước quyết định này; tệp đã áp nên không sửa, quyết định ở đây thay nó. Tên hộ kinh doanh (thường là
+  tên người) được che bằng `MaskName` trong phần trước/sau của vết kiểm toán.
 
 ### H3. Khung xã — khung CỨNG
 
