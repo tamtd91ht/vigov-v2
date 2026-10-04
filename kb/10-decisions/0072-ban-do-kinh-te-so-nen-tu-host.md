@@ -3,12 +3,15 @@ id: 0072-ban-do-kinh-te-so-nen-tu-host
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 6170a977
+derived_from_commit: 55eef86a
 expires: null
 owns_facts:
+  - "Bản đồ kinh tế số — khung MẶC ĐỊNH theo xã (tâm + bán kính) do quản trị nền tảng đặt ở khu vận hành, lưu ở service-platform, là siêu dữ liệu xã trong ranh giới ADR 0003; giá trị riêng của xã thắng, mặc định chỉ áp khi xã chưa có giá trị riêng; 'Về mặc định' ngừng dùng giá trị riêng, có vết, không xoá cứng (chốt 04/10/2026, lần 2)"
+  - "Bản đồ kinh tế số — bán kính khung: > 0 và trần CỨNG 50 km, không cận chính sách nào khác; người đặt chịu trách nhiệm; khu vận hành cảnh báo và đòi xác nhận khi lệch xa mức khuyến nghị (đề xuất 10 km, lệch xa = dưới 3 km hoặc trên 20 km); phép kiểm chủ quyền với trần 50 km (chốt 04/10/2026, lần 2)"
+  - "Bản đồ kinh tế số — văn bản lưu ý pháp lý khi xã đổi khung bản đồ, phiên bản 2026-10-04.1: mỗi lần đổi tâm hoặc bán kính ở web-admin phải tích xác nhận, máy chủ từ chối lưu khi thiếu xác nhận, vết ghi xác nhận + phiên bản văn bản (chốt 04/10/2026, lần 2)"
   - "Bản đồ kinh tế số — nền bản đồ = bản công cộng OpenFreeMap (tiles.openfreemap.org; không khoá API, không giới hạn lượt, cho dùng thương mại, không SLA; ghi nguồn bắt buộc 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap'); URL style là biến phía máy chủ toàn nền tảng của web-admin đọc lúc chạy, không NEXT_PUBLIC_*, thiếu thì không có nền và một câu trên màn hình, không bao giờ rơi về host khác (chủ dự án chốt 04/10/2026, thay PMTiles tự phục vụ)"
   - "Bản đồ kinh tế số — luật 3 điểm dừng #2 ĐÃ QUYẾT chỉ cho bản đồ tài nguyên của xã phía cán bộ (viewport ra host nước ngoài được chấp nhận); vẽ toạ độ phản ánh của công dân (bản đồ nhiệt, bản đồ hiện trường) trên nền ngoài VẪN CHƯA QUYẾT (chốt 04/10/2026)"
-  - "Bản đồ kinh tế số — khung xã CỨNG: mỗi xã lưu tâm (lat/lng) + bán kính (km) ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã chưa đặt khung thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; bán kính có cận dưới/cận trên đặt tên; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026)"
+  - "Bản đồ kinh tế số — khung xã CỨNG: giá trị riêng của xã (tâm lat/lng + bán kính km) lưu ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã không có giá trị riêng lẫn mặc định thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026; cận bán kính thay ở lần 2)"
   - "Bản đồ kinh tế số — danh mục loại tài nguyên = đúng 11 nhóm của đặc tả §3, mã tiếng Việt không dấu theo ADR 0011 (doanh-nghiep … cong-trinh-dau-tu-cong), vào từng xã bằng hành động 'nạp 11 nhóm mặc định' có vết, không bằng migration (chốt 04/10/2026)"
   - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: lớp nhiệt phản ánh, mật độ theo thôn, nhập Excel, Mini App, PostGIS/vector tile, geocoding ngoài"
   - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất"
@@ -22,6 +25,9 @@ owns_facts:
 của §Quyết định); phiên chính chọn các điểm ở §5, có lý do kèm theo.
 **Sửa đổi 04/10/2026:** mục 1 và 2 bị thay bởi §Sửa đổi 04/10/2026 — OpenFreeMap và khung
 xã (cuối tệp). Văn bản gốc giữ nguyên bên dưới.
+**Sửa đổi 04/10/2026 (lần 2):** khung mặc định ở platform-admin, trần bán kính 50 km, lưu ý pháp
+lý khi xã đổi khung — thay một phần H3, H4 và việc còn mở #4 của lần 1 (§Sửa đổi 04/10/2026 (lần
+2), cuối tệp).
 
 ## Bối cảnh
 
@@ -237,6 +243,9 @@ Phải thay biểu thức để ưu tiên tên tiếng Việt khi tile có (`nam
 
 ### H3. Khung xã — khung CỨNG
 
+> **Thay một phần ở lần 2 (04/10/2026):** dòng "Ai đặt", "Chưa đặt", "Bán kính" và lý do 3 — xem
+> §Sửa đổi 04/10/2026 (lần 2), K5. Các dòng còn lại giữ.
+
 | Điểm | Nội dung |
 |---|---|
 | Lưu gì | Mỗi xã một **tâm** (lat/lng) + **bán kính** (km), ở `service-comms`, cạnh sổ tài nguyên (`service-comms/migrations/0015_map_asset.sql`). Là cấu hình theo xã đọc lúc chạy (luật 1 bất biến 10) |
@@ -262,6 +271,9 @@ ngoài khung đất liền, nên không đặt được khung và không có b�
 
 ### H4. Những gì bị thay
 
+> Dòng "Điểm dừng 2" bên dưới được viết lại ở lần 2 (K5): nay là nâng trần **50 km** hoặc nới khung
+> đất liền.
+
 | Gốc | Nay |
 |---|---|
 | Mục 1 — PMTiles tự phục vụ | OpenFreeMap (H1) |
@@ -283,5 +295,104 @@ cần bản đồ (H3).
 | 1 | Xác nhận pháp lý về thể hiện chủ quyền — vẫn mở, nay với khung xã cứng trên tile phủ toàn cầu | Chủ dự án |
 | 2 | OpenFreeMap không SLA: sập thì bản đồ trắng; sổ tài nguyên dạng danh sách vẫn chạy. Có cần tự host không | Chủ dự án |
 | 3 | Nhà cung cấp nền cho lớp nhiệt phản ánh / bản đồ hiện trường (H2) — vẫn mở, cùng #2 bảng gốc | Chủ dự án |
-| 4 | Cận bán kính 1–30 km (đề xuất) và giá trị khung đất liền | Chủ dự án duyệt khi dựng |
+| 4 | Cận bán kính 1–30 km (đề xuất) và giá trị khung đất liền — **phần bán kính đã chốt ở lần 2** (K2: > 0, trần 50 km); khung đất liền giữ nguyên | Chủ dự án duyệt khi dựng |
 | 5 | Tile có mang `name:vi` không | Kiểm khi dựng |
+
+## Sửa đổi 04/10/2026 (lần 2) — khung mặc định ở platform-admin, trần 50 km, cảnh báo pháp lý
+
+Chủ dự án chốt 04/10/2026 (K1–K4, K6). K5 ghi những gì bị thay. Phần **luồng và chủ sở hữu** (K3)
+là **thiết kế của phiên chính**, ghi rõ như vậy; chủ dự án sửa được.
+
+### K1. Khung mặc định theo xã — quản trị nền tảng đặt
+
+| Điểm | Nội dung |
+|---|---|
+| Ai đặt | Quản trị nền tảng, ở khu vận hành (`platform-admin`, host `OPERATOR_HOST` — ADR 0048) |
+| Đặt gì | **Theo từng xã**: một tâm (lat/lng) + một bán kính (km) làm khung mặc định |
+| Vì sao không trái ADR 0003 | Vị trí của xã là **siêu dữ liệu xã**, cùng loại với tên, tỉnh, tên miền — cột "Được" của ADR 0003 (`0003:30-31`). Không đụng dữ liệu nghiệp vụ, không dữ liệu cá nhân (tâm xã là địa điểm công cộng, như `service-comms/migrations/0016_map_frame.sql:68` đã ghi) |
+| Ràng buộc | Cùng luật với giá trị của xã: tâm trong khung đất liền (H3, không đổi), bán kính theo K2 |
+| Vết | Mỗi lần đặt/đổi có vết vận hành ở platform (luật 6) |
+
+### K2. Bán kính — trần cứng 50 km, người đặt chịu trách nhiệm
+
+| Điểm | Nội dung |
+|---|---|
+| Giới hạn cứng | **> 0 và ≤ 50 km**. Chủ dự án **không** chọn cận chính sách nào khác; người quản trị đặt giá trị **phải chịu trách nhiệm** |
+| Cảnh báo ở khu vận hành | Bán kính lệch xa mức khuyến nghị → hiện cảnh báo, phải **xác nhận** mới lưu |
+| Mức khuyến nghị | **Đề xuất của phiên chính**, chủ dự án chỉnh được: khuyến nghị **10 km**; "lệch xa" = **dưới 3 km hoặc trên 20 km** |
+| Tâm | Vẫn trong khung đất liền của H3 (`0016_map_frame.sql:125-126`: lat 8,4–23,4, lng 102,1–109,5) — **không đổi** |
+| Bước | `radius_km` là `numeric(4,1)` (`0016_map_frame.sql:113`) → "> 0" trên thực tế là ≥ 0,1 km |
+
+**Phép kiểm chủ quyền với trần 50 km.** Tâm xa nhất về phía đông là 109,5°E. Kinh độ lớn nhất khung
+chạm tới = 109,5 + 50 / (111,32 · cos φ):
+
+| Vĩ độ φ | maxLng |
+|---|---|
+| 8,4°N (mép nam khung đất liền) | ≈ 109,95°E |
+| 23,4°N (mép bắc) | ≈ 109,99°E |
+
+Hoàng Sa bắt đầu ≈ 111,2°E, Trường Sa ≈ 111,5°E → còn cách **≥ 1,2° (~130 km)**. Trần 50 km vì vậy
+vẫn giữ khung xa hai quần đảo — lý do 3 của H3 vẫn đúng, chỉ đổi con số.
+
+### K3. Lưu ở đâu, đọc thế nào (thiết kế của phiên chính)
+
+| Điểm | Nội dung |
+|---|---|
+| Khung mặc định | Ở **`service-platform`** — chủ sổ xã (`tenant`, `service-platform/migrations/0001_init.sql:69`). Đặt qua một tuyến của khu vận hành |
+| Giá trị riêng của xã | Vẫn ở **`service-comms`**, bảng `map_frame` (`kb/30-indexes/data-ownership.json`, `MapFrame`) |
+| Thứ tự ưu tiên | **Giá trị riêng của xã thắng.** Mặc định chỉ áp khi xã **chưa có** giá trị riêng (chủ dự án chốt) |
+| Đọc | `GET /api/v1/map-frame` (`service-comms/internal/http/map_frame.go:6`): xã không có giá trị riêng → comms đọc mặc định qua **gRPC** từ platform (luật 2 bất biến 3; RPC do contract-designer thêm vào `.proto`). Phản hồi nói **nguồn nào đang áp** (của xã / mặc định) và **mang kèm mặc định**, để web-admin đưa ra "Về mặc định" |
+| Hướng gọi | comms → platform, đọc siêu dữ liệu xã. **Không** mở chiều platform → dịch vụ nghiệp vụ mà ADR 0003 cấm (`0003:37-39`) |
+| Không có cả hai | Như H3 "Chưa đặt": không vẽ bản đồ, chỉ câu hướng dẫn và biểu mẫu cho người giữ `admin.lookup` |
+
+### K4. web-admin — xã vẫn đổi được, mỗi lần đổi phải nhận lưu ý pháp lý
+
+| Điểm | Nội dung |
+|---|---|
+| Ai đổi | Người giữ `admin.lookup` (như H3). Đổi được cả tâm lẫn bán kính, cùng trần 50 km (K2) |
+| Lưu ý pháp lý | **Mỗi lần đổi** tâm hoặc bán kính: hiện văn bản K6 và ô tích xác nhận |
+| Máy chủ | **Từ chối lưu** khi thiếu xác nhận — không chỉ chặn ở giao diện (luật 5 điều cấm #1: giao diện sửa được) |
+| Vết | Dòng vết của lần lưu ghi **đã xác nhận** + **phiên bản văn bản** (luật 6), cạnh giá trị trước/sau |
+| "Về mặc định" | Ngừng dùng giá trị riêng của xã → quay về khung mặc định của platform. **Có vết.** **Không xoá cứng** (tinh thần luật 7): trigger của 0016 từ chối `DELETE` (`0016_map_frame.sql:85-89`), và chính tệp ấy đã ghi trước rằng trạng thái này "là một cột, không bao giờ là DELETE" (`0016_map_frame.sql:42-46`) |
+
+### K5. Những gì bị thay
+
+| Gốc | Nay |
+|---|---|
+| H3 "Bán kính" — cận dưới/cận trên đặt tên, **đề xuất 1–30 km** | **> 0 và ≤ 50 km** (K2). Hằng số trong mã: `service-comms/internal/domain/map_frame.go:36-37` (1,0 / 30,0) phải đổi theo |
+| CHECK `map_frame_radius_range` (`radius_km BETWEEN 1 AND 30`, `0016_map_frame.sql:128`) | Một **migration mới** của comms thay bằng `radius_km > 0 AND radius_km <= 50`. **Không sửa 0016** — core/migrate so checksum tệp đã áp (`0016_map_frame.sql:13`); chú thích "~109,8°E ở trần 30 km" (`0016:31`) để nguyên làm lịch sử, K2 là con số hiện hành |
+| H3 "Ai đặt" — chỉ người giữ `admin.lookup` | Thêm quản trị nền tảng đặt **mặc định** (K1); xã vẫn đặt giá trị riêng (K4) |
+| H3 "Chưa đặt" — xã chưa đặt thì không có bản đồ | Chỉ khi **không có cả** giá trị riêng lẫn mặc định (K3) |
+| 0016 "không có trạng thái quay về không khung" (`0016:44-46`) | Có trạng thái "Về mặc định" (K4) — bằng cột, không `DELETE` |
+| H4 điểm dừng — "nới cận trên bán kính" | Nâng trần **50 km**, hoặc nới khung đất liền cho tâm |
+
+### K6. Văn bản lưu ý pháp lý — phiên bản `2026-10-04.1`
+
+ADR này **sở hữu** văn bản. Mã giữ nó thành **hằng số + phiên bản**, chú thích dẫn về ADR 0072 K6.
+Đổi một chữ = **phiên bản mới**, ghi ở đây trước.
+
+> Lưu ý trước khi thay đổi khung bản đồ của xã
+>
+> 1. Bản đồ nền do nhà cung cấp bên thứ ba (OpenFreeMap, dữ liệu OpenStreetMap) cung cấp miễn phí. Nhà cung cấp không cam kết về độ chính xác, tính đầy đủ hay tính liên tục của dịch vụ; bản đồ có thể tạm thời không hiển thị.
+> 2. Ranh giới, địa danh, đường sá và vị trí trên bản đồ nền có thể chưa khớp với thực tế hoặc với bản đồ hành chính, bản đồ địa chính do cơ quan có thẩm quyền ban hành.
+> 3. Bản đồ chỉ dùng để tham khảo và hỗ trợ quản lý. Không dùng làm căn cứ pháp lý để xác định ranh giới hành chính, diện tích, quyền sử dụng đất hay giải quyết tranh chấp.
+> 4. Khi xem bản đồ, trình duyệt gửi yêu cầu tải bản đồ nền tới máy chủ của nhà cung cấp đặt ở nước ngoài; khu vực đang xem có thể được nhà cung cấp ghi nhận.
+> 5. Việc thể hiện chủ quyền quốc gia, gồm hai quần đảo Hoàng Sa và Trường Sa, phải tuân thủ quy định pháp luật. Hệ thống giới hạn khung bản đồ trong địa bàn xã; nếu phát hiện thông tin sai lệch, báo ngay cho quản trị viên hệ thống.
+> 6. Thay đổi này được ghi vào nhật ký hệ thống: người thực hiện, thời điểm, giá trị trước và sau.
+>
+> ☐ Tôi đã đọc, hiểu các lưu ý trên và chịu trách nhiệm về thay đổi khung bản đồ của xã.
+
+### Điểm dừng — thêm ở lần 2
+
+1. Nâng trần bán kính quá **50 km**.
+2. Nới khung đất liền cho tâm.
+3. Đổi văn bản K6 mà không ra phiên bản mới.
+
+### Việc còn mở sau lần 2
+
+| # | Việc | Ai |
+|---|---|---|
+| 1 | Pháp chế rà văn bản K6 trước khi chạy thật | Chủ dự án + pháp chế |
+| 2 | Mức khuyến nghị 10 km và ngưỡng "lệch xa" 3–20 km (đề xuất của phiên chính) | Chủ dự án chỉnh được |
+| 3 | ~~Khoá vận hành nào cho tuyến đặt khung mặc định~~ — **phiên chính chốt 04/10/2026:** dùng khoá sẵn có của quản lý xã (`KeyTenantManage`), không thêm khoá thứ tám. Lý do: tâm và bán kính mặc định là siêu dữ liệu của xã, cùng loại với tên xã mà khoá ấy đã canh (ADR 0073 `0073:35-37` — tập khoá đóng giữ nguyên) | Đã chốt |
+| 4 | Xác nhận pháp lý về thể hiện chủ quyền (việc còn mở #1 của lần 1) — vẫn mở | Chủ dự án |
