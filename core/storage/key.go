@@ -92,6 +92,15 @@ const (
 	// differ: one cover per item, up to 20 body images. Same class as the cover — ClassContentSource,
 	// private original, public derivative.
 	PurposeContentBodyImage Purpose = "content-body-image"
+	// A staff member's profile photo (identity; menu `danh-ba-can-bo`). PERSONAL DATA under Decree
+	// 13/2023 (rule 3): the original sits in the private bucket and staff read it through signed,
+	// expiring links. A public variant exists ONLY while the person is published in the commune
+	// directory AND has consented under the 03/10/2026 wording "số điện thoại và ảnh"; withdrawing
+	// either must withdraw the public variant. Class mirrors PurposeTenantLogo (service-platform
+	// branding.go): ClassContentSource for the private original, ClassPublicMedia for the derivative.
+	// NOT ClassRecords: a profile photo is replaceable display material, not an administrative
+	// record — "never purged automatically" would keep every superseded photo of a person forever.
+	PurposeStaffAvatar Purpose = "staff-avatar"
 )
 
 var knownPurposes = map[Purpose]bool{
@@ -99,7 +108,7 @@ var knownPurposes = map[Purpose]bool{
 	PurposeTenantLogo: true, PurposePetitionPhoto: true, PurposeDocumentScan: true,
 	PurposeTaskAttachment: true, PurposeContentAudio: true,
 	PurposePetitionVerificationPhoto: true, PurposePetitionLogAttachment: true,
-	PurposeTenantBanner: true, PurposeContentBodyImage: true,
+	PurposeTenantBanner: true, PurposeContentBodyImage: true, PurposeStaffAvatar: true,
 }
 
 // Purposes returns the closed list, sorted, as a fresh slice the caller may keep.

@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 9e361573
+derived_from_commit: f46cea92
 expires: 2027-01-02
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 122 |
 | chưa làm | 39 |
 | treo | 14 |
-| xong | 330 |
+| xong | 331 |
 
 ## Theo menu
 
@@ -1023,7 +1023,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 
 ## `service-platform`
 
-Cập nhật 2026-10-03 · 33 mục
+Cập nhật 2026-10-03 · 34 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1060,6 +1060,7 @@ Cập nhật 2026-10-03 · 33 mục
 | `petition-photo-bo-heic` — Chính sách tải lên petition-photo bỏ HEIC — chỉ JPEG/PNG/WebP, giữ 10 MB và 5 ảnh (G3, ADR 0047; chủ dự án chốt lại 02/10/2026, /develop-feature phan-anh-nguoi-dan TASK-01) | xong | migrations/0014_upload_policy_petition_photo_no_heic.sql: một câu UPDATE…FROM chỉ khớp dòng seed 0008 còn nguyên (updated_by=system, đủ bốn giá trị cũ) + platform_audit_log 'upload_policy.changed' có before/after cùng câu; chạy lại không ghi gì. Ca kiểm: internal/store/upload_policy_test.go TestUploadPolicyPetitionPhotoNoHEICChange; upload_policy_pg_test.go TestPgPetitionPhotoNoHEICKeepsOperatorEdit + TestPgUploadPolicySeedAndRead đòi giá trị mới. go test ./... xanh; TestPg* bỏ qua vì không có VIGOV_TEST_DSN — CHƯA chạy trên Postgres thật. | — | Chưa có bên đọc petition-photo (service-petitions TASK-03 sẽ đọc). NỢ CŨ ngoài lượt này: TestPgUploadPolicySeedAndRead còn đòi 7 chính sách / 7 dòng seeded và TestPgUploadPolicySoftDeletedIsAbsent đòi 6 — sau 0013 (content-audio) phải là 8/8/7; sẽ đỏ lần đầu chạy với Postgres thật. |
 | `chinh-sach-tai-len-anh-nghiem-thu-dinh-kem-nhat-ky` — Chính sách tải lên petition-verification-photo (ảnh nghiệm thu của cán bộ) và petition-log-attachment (đính kèm nhật ký phiếu) — migration 0015 + hai giá trị UploadPurpose trong platform.proto (phản ánh đợt 02/10/2026) | xong | migrations/0015_upload_policy_petition_staff_files.sql: verification-photo 10 MB jpeg/png/webp tối đa 5 (theo petition-photo sau 0014), log-attachment 50 MB pdf/jpeg/png không trần số (theo task-attachment 0010) — giá trị TẠM theo tiền lệ, ghi trong header và ADR 0047; vết upload_policy.seeded cùng câu lệnh. platform.proto UPLOAD_PURPOSE_PETITION_VERIFICATION_PHOTO=9, _PETITION_LOG_ATTACHMENT=10 (buf lint/breaking xanh). upload_policy_pg_test đếm 10 chính sách (số cũ 7 đã sai từ 0013). go test ./... xanh; TestPg* bỏ qua vì không có VIGOV_TEST_DSN. | — | Chưa chạy trên Postgres thật. |
 | `upload-policy-content-body-image` — Mục đích tải lên content-body-image cho ảnh trong thân bài tin Mini App — chính sách 50 MB, JPG/PNG/WebP, tối đa 20 ảnh mỗi bài (ADR 0067 sửa đổi 03/10/2026, H7/K3) | xong | 41940cb4: migration 0018_upload_policy_content_body_image.sql (nới CHECK + gieo dòng + vết upload_policy.seeded), core/storage.PurposeContentBodyImage, platform.proto UPLOAD_PURPOSE_CONTENT_BODY_IMAGE = 12. make check exit 0 (go test mọi dịch vụ xanh, buf lint/breaking xanh); golangci-lint KHÔNG chạy — máy chưa cài. 56 ca PG trong internal/store SKIP: migration chưa chạy trên PostgreSQL thật. | — | Chạy migration 0018 trên PostgreSQL (ca TestPgUploadPolicy*) trước khi phát hành. Phía comms đếm ảnh thân bài theo max_files_per_subject — thuộc mục service-comms anh-trong-than-bai. |
+| `upload-policy-staff-avatar` — Mục đích tải staff-avatar (ảnh đại diện cán bộ, Danh bạ cán bộ §5): migration 0019 mở CHECK + seed chính sách, cùng commit với hằng số core/storage và enum proto (ADR 0052 §10) | xong | service-platform/migrations/0019_upload_policy_staff_avatar.sql; upload_policy_test.go want staff-avatar 2097152 png/webp/jpeg NULL; upload_policy_pg_test.go 13 chính sách / 13 dòng seed. make check rc=0 (04/10/2026). Ca TestPg* bỏ qua vì không có VIGOV_TEST_DSN. | — | Giá trị đặt THEO TIỀN LỆ logo xã (ADR 0069 #4: ≤ 2 MB, PNG/WebP/JPEG, không giới hạn số tệp) — chủ dự án chưa chốt riêng cho ảnh đại diện; đổi thì người vận hành sửa dòng chính sách, không sửa migration. Đường ghi ảnh đại diện ở identity là việc của phiên làm Danh bạ cán bộ. |
 
 ## `service-reporting`
 

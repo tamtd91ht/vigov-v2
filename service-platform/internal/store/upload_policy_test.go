@@ -129,6 +129,8 @@ func TestUploadPolicySeedMatchesOwnerDecision(t *testing.T) {
 		// Chủ dự án chốt 03/10/2026 (ADR 0067 amendment): body images of a Mini App article — the cover's
 		// values after 0012 (TestUploadPolicyContentBodyImageCopiesCover pins the link), at most 20 per article.
 		"content-body-image": {maxBytes: 52428800, mimes: []string{"image/jpeg", "image/png", "image/webp"}, maxFiles: "20", file: contentBodyImageMigration},
+		// 04/10/2026, by precedent (0019 header): staff profile photo = the commune logo's values (ADR 0069 #4).
+		"staff-avatar": {maxBytes: 2097152, mimes: []string{"image/png", "image/webp", "image/jpeg"}, maxFiles: "NULL", file: "0019_upload_policy_staff_avatar.sql"},
 	}
 	for p, w := range want {
 		if w.file == "" {

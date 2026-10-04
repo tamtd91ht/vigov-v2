@@ -404,6 +404,13 @@ enum UploadPurpose {
   UPLOAD_PURPOSE_PETITION_LOG_ATTACHMENT = 10;     // staff file on a petition processing-log entry (petitions), records class, never shown to the citizen — owner decision B 02/10/2026
   UPLOAD_PURPOSE_TENANT_BANNER = 11;      // commune's web-admin banner (platform) — ADR 0069 #5; NOT the Mini App `banner` content (comms)
   UPLOAD_PURPOSE_CONTENT_BODY_IMAGE = 12; // image inside a Mini App article body (comms) — ADR 0067 amendment 03/10/2026 K3; NOT the cover's CONTENT_IMAGE
+  // Staff profile photo, Danh bạ cán bộ §5 "Ảnh đại diện" — owner decision 03/10/2026. Owner: identity
+  // (it owns nguoi_dung). PERSONAL DATA (Decree 13): stored in the PRIVATE bucket, served to staff of
+  // the same commune through signed, expiring links only. A PUBLIC variant exists only while the person
+  // is published on the directory AND consent under the wording covering "số điện thoại và ảnh" is
+  // recorded; it is withdrawn when either stops holding. Public/private mechanics mirror TENANT_LOGO /
+  // CONTENT_IMAGE (publish/unpublish a derivative).
+  UPLOAD_PURPOSE_STAFF_AVATAR = 13;       // staff profile photo (identity); NOT a citizen's photo
 }
 
 // UploadPolicy is the limit set for ONE purpose. Platform-wide configuration: no personal data, no

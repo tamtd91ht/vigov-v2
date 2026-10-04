@@ -271,6 +271,14 @@
       "bang_chung": "41940cb4: migration 0018_upload_policy_content_body_image.sql (nới CHECK + gieo dòng + vết upload_policy.seeded), core/storage.PurposeContentBodyImage, platform.proto UPLOAD_PURPOSE_CONTENT_BODY_IMAGE = 12. make check exit 0 (go test mọi dịch vụ xanh, buf lint/breaking xanh); golangci-lint KHÔNG chạy — máy chưa cài. 56 ca PG trong internal/store SKIP: migration chưa chạy trên PostgreSQL thật.",
       "tiep_theo": "Chạy migration 0018 trên PostgreSQL (ca TestPgUploadPolicy*) trước khi phát hành. Phía comms đếm ảnh thân bài theo max_files_per_subject — thuộc mục service-comms anh-trong-than-bai.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "upload-policy-staff-avatar",
+      "viec": "Mục đích tải staff-avatar (ảnh đại diện cán bộ, Danh bạ cán bộ §5): migration 0019 mở CHECK + seed chính sách, cùng commit với hằng số core/storage và enum proto (ADR 0052 §10)",
+      "trang_thai": "xong",
+      "bang_chung": "service-platform/migrations/0019_upload_policy_staff_avatar.sql; upload_policy_test.go want staff-avatar 2097152 png/webp/jpeg NULL; upload_policy_pg_test.go 13 chính sách / 13 dòng seed. make check rc=0 (04/10/2026). Ca TestPg* bỏ qua vì không có VIGOV_TEST_DSN.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị đặt THEO TIỀN LỆ logo xã (ADR 0069 #4: ≤ 2 MB, PNG/WebP/JPEG, không giới hạn số tệp) — chủ dự án chưa chốt riêng cho ảnh đại diện; đổi thì người vận hành sửa dòng chính sách, không sửa migration. Đường ghi ảnh đại diện ở identity là việc của phiên làm Danh bạ cán bộ."
     }
   ]
 }
