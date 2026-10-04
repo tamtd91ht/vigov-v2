@@ -236,6 +236,13 @@
       "source": "service-comms/migrations/0008_mail_settings.sql:115"
     },
     {
+      "entity": "MapAsset",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "map_asset",
+      "source": "service-comms/migrations/0015_map_asset.sql:126"
+    },
+    {
       "entity": "MapAssetType",
       "service": "comms",
       "scope": "tenant",
