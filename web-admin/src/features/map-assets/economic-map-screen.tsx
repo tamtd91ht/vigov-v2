@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Expand, Layers, List, Map as MapIcon, MapPinned, Plus, Upload } from "lucide-react";
+import { Download, Expand, Layers, List, Map as MapIcon, MapPinned, Plus, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
@@ -44,7 +44,7 @@ import { AssetDialog, type AssetDialogMode } from "./asset-dialog";
 import { DeleteAssetDialog, DetailPanel } from "./detail-panel";
 import { EconomicMap, type FlyRequest } from "./economic-map";
 import { MapExpandToggle } from "./map-expand";
-import { FrameForm } from "./frame-form";
+import { FrameForm, ResetFrameDialog } from "./frame-form";
 import {
   ADD_BUTTON,
   ASSET_UPDATE_PERMISSION,
@@ -52,6 +52,10 @@ import {
   FRAME_CHANGE_BUTTON,
   FRAME_LOAD_FAILED,
   FRAME_NOT_SET,
+  FRAME_RESET_BUTTON,
+  FRAME_RESET_DONE,
+  FRAME_RESET_DONE_NO_DEFAULT,
+  FRAME_SAVED,
   MAP_LOAD_FAILED,
   NO_BASEMAP,
   NO_BASEMAP_DETAIL,
@@ -68,7 +72,9 @@ import {
 } from "./labels";
 import {
   EMPTY_COLLECTION,
+  frameDefaultFromApi,
   frameFromApi,
+  frameHintsFromApi,
   insideFrame,
   meanCentre,
   summaryLine,
@@ -83,7 +89,8 @@ type View = "map" | "register";
 type Dialog =
   | { readonly kind: "asset"; readonly mode: AssetDialogMode }
   | { readonly kind: "delete"; readonly asset: { readonly id: string; readonly name: string } }
-  | { readonly kind: "frame" };
+  | { readonly kind: "frame" }
+  | { readonly kind: "reset" };
 
 type Points = { readonly ok: true; readonly collection: EconomicCollection } | { readonly ok: false; readonly message: string };
 
@@ -103,8 +110,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  * The register ("Sổ địa điểm") works in every one of those cases.
  *
  * PERMISSIONS ARE CONVENIENCE HERE (rule 5, #1): `asset.read` gates the whole screen (`page.tsx`),
- * `asset.update` shows the write controls, `admin.lookup` the frame form and the default-groups
- * button. The server checks each on every request.
+ * `asset.update` shows the write controls, `admin.lookup` the frame form, "Về mặc định" and the
+ * default-groups button. The server checks each on every request.
  */
 /** The region "Mở rộng bản đồ" grows into the page overlay (`aria-controls` of the toggle). */
 const MAP_REGION_ID = "economic-map-region";
@@ -240,7 +247,10 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
     () => (types !== null && types.ok ? [...types.duLieu.items].sort((a, b) => a.order - b.order) : []),
     [types],
   );
-  const frame = useMemo(() => (frameRes !== null && frameRes.ok ? frameFromApi(frameRes.duLieu) : null), [frameRes]);
+  const frameOut = frameRes !== null && frameRes.ok ? frameRes.duLieu : null;
+  const frame = useMemo(() => (frameOut === null ? null : frameFromApi(frameOut)), [frameOut]);
+  const defaultFrame = useMemo(() => (frameOut === null ? null : frameDefaultFromApi(frameOut)), [frameOut]);
+  const hints = useMemo(() => (frameOut === null ? null : frameHintsFromApi(frameOut)), [frameOut]);
   const collection = points !== null && points.ok ? points.collection : EMPTY_COLLECTION;
   const visible = useMemo(() => {
     const codes = new Set<string>(typeItems.map((t) => t.code));
@@ -278,6 +288,12 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   }, [mapExpanded, dialog]);
 
   /* ---- actions -------------------------------------------------------------------------------- */
+
+  /** A frame reply from a write or a reload becomes the frame in effect; a failed map gets a new chance. */
+  const adoptFrame = useCallback((out: comms_mapFrameOut) => {
+    setFrameRes({ ok: true, duLieu: out });
+    setMapFailed(false);
+  }, []);
 
   const openAsset = useCallback(
     async (id: string, fly: boolean) => {
@@ -425,15 +441,18 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
       return (
         <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4" data-frame-unset="">
           <p className="m-0 text-[15px] font-semibold text-ink-900">{FRAME_NOT_SET}</p>
-          {canAdminLookup ? (
+          {canAdminLookup && hints !== null ? (
             <FrameForm
               current={null}
+              defaultFrame={defaultFrame}
+              hints={hints}
               suggestedCentre={meanCentre(collection.features)}
               titleId="frame-form-inline"
               onSaved={(out) => {
-                setFrameRes({ ok: true, duLieu: out });
-                setNotice("Đã lưu khung bản đồ của xã.");
+                adoptFrame(out);
+                setNotice(FRAME_SAVED);
               }}
+              onReloaded={adoptFrame}
             />
           ) : (
             <p className="m-0 text-[13px] text-ink-500">{FRAME_ASK_ADMIN}</p>
@@ -544,6 +563,11 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
             {FRAME_CHANGE_BUTTON}
           </Button>
         )}
+        {canAdminLookup && frame !== null && frame.source === "commune" && (
+          <Button type="button" variant="secondary" size="sm" icon={<RotateCcw aria-hidden="true" />} onClick={() => setDialog({ kind: "reset" })}>
+            {FRAME_RESET_BUTTON}
+          </Button>
+        )}
       </div>
 
       {notice !== "" && (
@@ -589,6 +613,7 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
             }
             onHideAll={() => setHidden(new Set(typeItems.map((t) => t.code)))}
             onShowAll={() => setHidden(new Set())}
+            centreIsDefault={frame?.source === "default"}
           />
           <FilterPanel
             value={{ search, industryCode: filter.industryCode, residentialUnitId: filter.residentialUnitId, status: filter.status }}
@@ -658,21 +683,36 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           }}
         />
       )}
-      {dialog !== null && dialog.kind === "frame" && (
+      {dialog !== null && dialog.kind === "frame" && hints !== null && (
         <OverlayDialog titleId="frame-form-dialog" onDismiss={() => setDialog(null)}>
           <FrameForm
             current={frame}
+            defaultFrame={defaultFrame}
+            hints={hints}
             suggestedCentre={meanCentre(collection.features)}
             titleId="frame-form-dialog"
             onCancel={() => setDialog(null)}
             onSaved={(out) => {
               setDialog(null);
-              setFrameRes({ ok: true, duLieu: out });
-              setMapFailed(false);
-              setNotice("Đã lưu khung bản đồ của xã.");
+              adoptFrame(out);
+              setNotice(FRAME_SAVED);
             }}
+            onReloaded={adoptFrame}
           />
         </OverlayDialog>
+      )}
+      {dialog !== null && dialog.kind === "reset" && hints !== null && (
+        <ResetFrameDialog
+          defaultFrame={defaultFrame}
+          hints={hints}
+          onCancel={() => setDialog(null)}
+          onReloaded={adoptFrame}
+          onDone={(out) => {
+            setDialog(null);
+            adoptFrame(out);
+            setNotice(out.configured ? FRAME_RESET_DONE : FRAME_RESET_DONE_NO_DEFAULT);
+          }}
+        />
       )}
     </div>
   );

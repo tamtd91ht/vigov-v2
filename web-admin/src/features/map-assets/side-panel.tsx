@@ -17,6 +17,7 @@ import {
   STATUS_OPTIONS,
   UNVERIFIED_LEGEND,
   CENTRE_LEGEND,
+  CENTRE_LEGEND_DEFAULT,
   pendingPart,
 } from "./labels";
 import { groupSwatchClass } from "./map-logic";
@@ -33,6 +34,7 @@ export function LayerPanel({
   onToggle,
   onHideAll,
   onShowAll,
+  centreIsDefault = false,
 }: {
   types: readonly comms_loaiTaiNguyenRa[];
   counts: ReadonlyMap<string, number>;
@@ -40,6 +42,8 @@ export function LayerPanel({
   onToggle: (code: string) => void;
   onHideAll: () => void;
   onShowAll: () => void;
+  /** The frame in effect is the platform default (ADR 0072 K3): the legend says the centre is the default one. */
+  centreIsDefault?: boolean;
 }) {
   const allHidden = types.length > 0 && types.every((t) => hidden.has(t.code));
   return (
@@ -84,7 +88,7 @@ export function LayerPanel({
       <p className="m-0 text-xs text-ink-500">{UNVERIFIED_LEGEND}</p>
       <p className="m-0 flex items-center gap-2 text-xs text-ink-500">
         <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full border-2 border-white bg-[#dc2626] ring-2 ring-[#dc2626]/30" />
-        {CENTRE_LEGEND}
+        <span data-centre-legend="">{centreIsDefault ? CENTRE_LEGEND_DEFAULT : CENTRE_LEGEND}</span>
       </p>
       <div className="flex min-h-10 items-center gap-2" data-pending="">
         <input id="heatmap-toggle" type="checkbox" role="switch" disabled className="size-4 cursor-not-allowed" />

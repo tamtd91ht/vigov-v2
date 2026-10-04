@@ -9,7 +9,7 @@ import {
   setMapAssetConfirmation,
   updateMapAsset,
 } from "./map-assets";
-import { getMapFrame, putMapFrame } from "./map-frame";
+import { getMapFrame, putMapFrame, resetMapFrame } from "./map-frame";
 
 type Call = { path: string; init: RequestInit };
 
@@ -73,13 +73,38 @@ describe("map-asset clients — relative paths, no tenant anywhere, contract nam
     expect(calls[1]!.init.body).toBeUndefined();
   });
 
-  it("frame: GET and PUT on /api/v1/map-frame; a 422 is the server's own sentence", async () => {
+  it("frame: GET and PUT on /api/v1/map-frame; PUT carries notice_version; a 422 is the server's own sentence", async () => {
     let calls = fake(200, { configured: false });
     await getMapFrame();
     expect(calls[0]!.path).toBe("/api/v1/map-frame");
     calls = fake(422, { code: "center_outside_mainland", message: "Tâm khung phải nằm trên đất liền Việt Nam." });
-    const r = await putMapFrame({ center_lat: 16.5, center_lng: 112.3, radius_km: 10 });
-    expect(r).toEqual({ ok: false, thongBao: "Tâm khung phải nằm trên đất liền Việt Nam." });
+    const r = await putMapFrame({ center_lat: 16.5, center_lng: 112.3, radius_km: 10, notice_version: "2026-10-04.1" });
+    expect(r).toEqual({ ok: false, thongBao: "Tâm khung phải nằm trên đất liền Việt Nam.", noticeStale: false });
     expect(calls[0]!.init.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
+      center_lat: 16.5,
+      center_lng: 112.3,
+      radius_km: 10,
+      notice_version: "2026-10-04.1",
+    });
+    expect(calls[0]!.path).not.toContain("tenant");
+  });
+
+  it("frame: 422 notice_not_acknowledged is flagged stale (the only code read); the sentence stays the server's", async () => {
+    fake(422, { code: "notice_not_acknowledged", message: "Văn bản lưu ý đã đổi." });
+    expect(await putMapFrame({ center_lat: 15.7, center_lng: 108.3, radius_km: 10, notice_version: "old" })).toEqual({
+      ok: false,
+      thongBao: "Văn bản lưu ý đã đổi.",
+      noticeStale: true,
+    });
+  });
+
+  it("frame reset: POST /api/v1/map-frame/reset with only notice_version", async () => {
+    const calls = fake(200, { configured: false });
+    const r = await resetMapFrame("2026-10-04.1");
+    expect(r.ok).toBe(true);
+    expect(calls[0]!.path).toBe("/api/v1/map-frame/reset");
+    expect(calls[0]!.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ notice_version: "2026-10-04.1" });
   });
 });

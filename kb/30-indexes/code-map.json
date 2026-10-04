@@ -560,7 +560,7 @@
     },
     "app.Get": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:64"
+      "at": "service-comms/internal/app/map_frame.go:116"
     },
     "app.GhiBienBanHop": {
       "kind": "type",
@@ -1030,21 +1030,29 @@
       "kind": "type",
       "at": "service-comms/internal/app/map_field_schema.go:45"
     },
+    "app.MapFrameDefaultView": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:64"
+    },
+    "app.MapFrameDefaults": {
+      "kind": "type",
+      "at": "service-comms/internal/app/map_frame.go:47"
+    },
     "app.MapFrameInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:44"
+      "at": "service-comms/internal/app/map_frame.go:85"
     },
     "app.MapFrameRepo": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:25"
+      "at": "service-comms/internal/app/map_frame.go:37"
     },
     "app.MapFrameView": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:37"
+      "at": "service-comms/internal/app/map_frame.go:75"
     },
     "app.MapFrames": {
       "kind": "type",
-      "at": "service-comms/internal/app/map_frame.go:49"
+      "at": "service-comms/internal/app/map_frame.go:91"
     },
     "app.MarkAllRead": {
       "kind": "func",
@@ -1240,7 +1248,7 @@
     },
     "app.NewMapFrames": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:54"
+      "at": "service-comms/internal/app/map_frame.go:98"
     },
     "app.NewMiniAppSecretAdmin": {
       "kind": "func",
@@ -1778,6 +1786,10 @@
       "kind": "func",
       "at": "service-platform/internal/app/branding.go:362"
     },
+    "app.Reset": {
+      "kind": "func",
+      "at": "service-comms/internal/app/map_frame.go:257"
+    },
     "app.ResetMFA": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_admin.go:354"
@@ -1868,7 +1880,7 @@
     },
     "app.Save": {
       "kind": "func",
-      "at": "service-comms/internal/app/map_frame.go:78"
+      "at": "service-comms/internal/app/map_frame.go:201"
     },
     "app.SaveCategories": {
       "kind": "func",
@@ -3252,7 +3264,7 @@
     },
     "domain.Bounds": {
       "kind": "func",
-      "at": "service-comms/internal/domain/map_frame.go:102"
+      "at": "service-comms/internal/domain/map_frame.go:146"
     },
     "domain.BrandingImage": {
       "kind": "type",
@@ -3409,6 +3421,10 @@
     "domain.CheckExternalContactDisplayOrder": {
       "kind": "func",
       "at": "service-comms/internal/domain/external_contact.go:114"
+    },
+    "domain.CheckMapFrameNotice": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/map_frame.go:129"
     },
     "domain.CheckMayChangeStatus": {
       "kind": "func",
@@ -3972,7 +3988,7 @@
     },
     "domain.Disabled": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:254"
+      "at": "service-identity/internal/domain/operator.go:258"
     },
     "domain.DoKhan": {
       "kind": "type",
@@ -4164,7 +4180,7 @@
     },
     "domain.Format": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:242"
+      "at": "service-identity/internal/domain/operator.go:246"
     },
     "domain.FormatLocalInstant": {
       "kind": "func",
@@ -4172,7 +4188,7 @@
     },
     "domain.FormatOperatorCode": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:97"
+      "at": "service-identity/internal/domain/operator.go:101"
     },
     "domain.GanNguon": {
       "kind": "func",
@@ -4200,7 +4216,7 @@
     },
     "domain.GoString": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:239"
+      "at": "service-identity/internal/domain/operator.go:243"
     },
     "domain.GopNhanTrangThai": {
       "kind": "func",
@@ -4784,7 +4800,7 @@
     },
     "domain.LogValue": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:251"
+      "at": "service-identity/internal/domain/operator.go:255"
     },
     "domain.LoiBienBanConNhiemVu": {
       "kind": "func",
@@ -4932,11 +4948,11 @@
     },
     "domain.MapFrame": {
       "kind": "type",
-      "at": "service-comms/internal/domain/map_frame.go:60"
+      "at": "service-comms/internal/domain/map_frame.go:93"
     },
     "domain.MapFrameBounds": {
       "kind": "type",
-      "at": "service-comms/internal/domain/map_frame.go:71"
+      "at": "service-comms/internal/domain/map_frame.go:105"
     },
     "domain.MayDownload": {
       "kind": "func",
@@ -4965,6 +4981,10 @@
     "domain.MiniApp": {
       "kind": "type",
       "at": "service-platform/internal/domain/mini_app.go:22"
+    },
+    "domain.MiniAppLaunchLink": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/shared_mini_app.go:48"
     },
     "domain.MocDatDuoc": {
       "kind": "type",
@@ -5164,7 +5184,7 @@
     },
     "domain.NormalizeMapFrame": {
       "kind": "func",
-      "at": "service-comms/internal/domain/map_frame.go:78"
+      "at": "service-comms/internal/domain/map_frame.go:112"
     },
     "domain.NormalizeMessageText": {
       "kind": "func",
@@ -5228,7 +5248,7 @@
     },
     "domain.OperatorAccount": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:179"
+      "at": "service-identity/internal/domain/operator.go:183"
     },
     "domain.OperatorActor": {
       "kind": "type",
@@ -5236,11 +5256,11 @@
     },
     "domain.OperatorAuditAction": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:266"
+      "at": "service-identity/internal/domain/operator.go:270"
     },
     "domain.OperatorAuditEntry": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:311"
+      "at": "service-identity/internal/domain/operator.go:315"
     },
     "domain.OperatorLogEntry": {
       "kind": "type",
@@ -5252,7 +5272,7 @@
     },
     "domain.OperatorPermissions": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:46"
+      "at": "service-identity/internal/domain/operator.go:49"
     },
     "domain.OrgUnitCodeMatch": {
       "kind": "type",
@@ -5308,7 +5328,7 @@
     },
     "domain.ParseOperatorPermission": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:73"
+      "at": "service-identity/internal/domain/operator.go:77"
     },
     "domain.ParseTaskImportRow": {
       "kind": "func",
@@ -5320,7 +5340,7 @@
     },
     "domain.PendingTOTPExpiredAt": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:215"
+      "at": "service-identity/internal/domain/operator.go:219"
     },
     "domain.PercentBasisPoints": {
       "kind": "func",
@@ -5356,7 +5376,7 @@
     },
     "domain.PetitionField": {
       "kind": "type",
-      "at": "service-platform/internal/domain/petition_field.go:9"
+      "at": "service-platform/internal/domain/petition_field.go:14"
     },
     "domain.PetitionFieldEdit": {
       "kind": "type",
@@ -5652,11 +5672,15 @@
     },
     "domain.SameMapFrame": {
       "kind": "func",
-      "at": "service-comms/internal/domain/map_frame.go:94"
+      "at": "service-comms/internal/domain/map_frame.go:138"
     },
     "domain.SameOptions": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_field_schema.go:237"
+    },
+    "domain.SamePetitionFieldPresentation": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/petition_field.go:96"
     },
     "domain.SamePortalSyncSettings": {
       "kind": "func",
@@ -5705,6 +5729,10 @@
     "domain.SetsVideoURL": {
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:905"
+    },
+    "domain.SharedMiniApp": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/shared_mini_app.go:15"
     },
     "domain.SheetLockingClose": {
       "kind": "func",
@@ -5860,7 +5888,7 @@
     },
     "domain.String": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:228"
+      "at": "service-identity/internal/domain/operator.go:232"
     },
     "domain.Subject": {
       "kind": "func",
@@ -5876,7 +5904,7 @@
     },
     "domain.TOTPEnrolled": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:263"
+      "at": "service-identity/internal/domain/operator.go:267"
     },
     "domain.Tang": {
       "kind": "func",
@@ -5948,7 +5976,7 @@
     },
     "domain.TemporaryPasswordExpiredAt": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:206"
+      "at": "service-identity/internal/domain/operator.go:210"
     },
     "domain.TenCanBo": {
       "kind": "type",
@@ -6200,7 +6228,7 @@
     },
     "domain.ValidOperatorCode": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:107"
+      "at": "service-identity/internal/domain/operator.go:111"
     },
     "domain.ValidPublicCategoryID": {
       "kind": "func",
@@ -6245,6 +6273,14 @@
     "domain.ValidateMiniAppID": {
       "kind": "func",
       "at": "service-platform/internal/domain/operator_commune.go:185"
+    },
+    "domain.ValidatePetitionFieldCode": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/petition_field.go:57"
+    },
+    "domain.ValidatePetitionFieldPresentation": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/petition_field.go:68"
     },
     "domain.ValidatePortalAPIKey": {
       "kind": "func",
@@ -7184,7 +7220,7 @@
     },
     "http.GetMapFrame": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_frame.go:163"
+      "at": "service-comms/internal/http/map_frame.go:257"
     },
     "http.GetPortalCategories": {
       "kind": "func",
@@ -7568,15 +7604,15 @@
     },
     "http.MapFrameDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_frame.go:53"
+      "at": "service-comms/internal/http/map_frame.go:59"
     },
     "http.MapFrameReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_frame.go:42"
+      "at": "service-comms/internal/http/map_frame.go:47"
     },
     "http.MapFrameWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/map_frame.go:48"
+      "at": "service-comms/internal/http/map_frame.go:53"
     },
     "http.MarkAllMyNotificationsRead": {
       "kind": "func",
@@ -7672,7 +7708,7 @@
     },
     "http.OperatorHandler": {
       "kind": "func",
-      "at": "service-platform/internal/http/operator_routes.go:67"
+      "at": "service-platform/internal/http/operator_routes.go:71"
     },
     "http.OperatorIdentity": {
       "kind": "type",
@@ -7709,6 +7745,10 @@
     "http.PetitionFieldCatalogue": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_fields.go:30"
+    },
+    "http.PetitionFieldEditor": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_petition_fields.go:20"
     },
     "http.PetitionLogAttachmentActs": {
       "kind": "type",
@@ -7852,7 +7892,7 @@
     },
     "http.PutMapFrame": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_frame.go:174"
+      "at": "service-comms/internal/http/map_frame.go:268"
     },
     "http.PutPortalCategories": {
       "kind": "func",
@@ -7900,7 +7940,7 @@
     },
     "http.RegisterMapFrame": {
       "kind": "func",
-      "at": "service-comms/internal/http/map_frame.go:103"
+      "at": "service-comms/internal/http/map_frame.go:165"
     },
     "http.RegisterPublicExternalContacts": {
       "kind": "func",
@@ -7937,6 +7977,10 @@
     "http.RequestVerificationPhotoUpload": {
       "kind": "func",
       "at": "service-petitions/internal/http/petition_staff_file.go:65"
+    },
+    "http.ResetMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/map_frame.go:296"
     },
     "http.ResidentialUnitImportTemplate": {
       "kind": "func",
@@ -8001,6 +8045,10 @@
     "http.SetPublication": {
       "kind": "func",
       "at": "service-petitions/internal/http/petition_publication.go:30"
+    },
+    "http.SharedMiniAppEditor": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_launch.go:21"
     },
     "http.StaffCounts": {
       "kind": "func",
@@ -8848,7 +8896,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:478"
+      "at": "service-platform/cmd/server/main.go:480"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -8896,67 +8944,67 @@
     },
     "opauth.Auth": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:137"
+      "at": "service-platform/internal/opauth/opauth.go:141"
     },
     "opauth.ClearCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:320"
+      "at": "service-platform/internal/opauth/opauth.go:324"
     },
     "opauth.From": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:115"
+      "at": "service-platform/internal/opauth/opauth.go:119"
     },
     "opauth.Has": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:96"
+      "at": "service-platform/internal/opauth/opauth.go:100"
     },
     "opauth.Into": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:121"
+      "at": "service-platform/internal/opauth/opauth.go:125"
     },
     "opauth.Key": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:56"
+      "at": "service-platform/internal/opauth/opauth.go:57"
     },
     "opauth.NewAuth": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:147"
+      "at": "service-platform/internal/opauth/opauth.go:151"
     },
     "opauth.Principal": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:87"
+      "at": "service-platform/internal/opauth/opauth.go:91"
     },
     "opauth.Public": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:284"
+      "at": "service-platform/internal/opauth/opauth.go:288"
     },
     "opauth.RequireKey": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:226"
+      "at": "service-platform/internal/opauth/opauth.go:230"
     },
     "opauth.SessionResolver": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:131"
+      "at": "service-platform/internal/opauth/opauth.go:135"
     },
     "opauth.SetCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:296"
+      "at": "service-platform/internal/opauth/opauth.go:300"
     },
     "opauth.SignedIn": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:263"
+      "at": "service-platform/internal/opauth/opauth.go:267"
     },
     "opauth.TokenFrom": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:167"
+      "at": "service-platform/internal/opauth/opauth.go:171"
     },
     "opauth.TokenVerifier": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:126"
+      "at": "service-platform/internal/opauth/opauth.go:130"
     },
     "opauth.WithClock": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:158"
+      "at": "service-platform/internal/opauth/opauth.go:162"
     },
     "operatorauth.CodeAt": {
       "kind": "func",
@@ -9573,6 +9621,10 @@
     "platformclient.Lookup": {
       "kind": "func",
       "at": "core/platformclient/petition_fields.go:69"
+    },
+    "platformclient.MapFrameDefault": {
+      "kind": "func",
+      "at": "core/platformclient/map_frame_default.go:47"
     },
     "platformclient.MiniApp": {
       "kind": "func",
@@ -10434,6 +10486,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:106"
     },
+    "store.CommuneLaunchHost": {
+      "kind": "func",
+      "at": "service-platform/internal/store/shared_mini_app.go:209"
+    },
     "store.ConTrucTiep": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:115"
@@ -10513,6 +10569,10 @@
     "store.CreateDEK": {
       "kind": "func",
       "at": "service-identity/internal/store/data_encryption_key.go:84"
+    },
+    "store.CreatePetitionField": {
+      "kind": "func",
+      "at": "service-platform/internal/store/petition_field.go:154"
     },
     "store.CuaCongDanTheoMaTraCuu": {
       "kind": "func",
@@ -10598,6 +10658,10 @@
       "kind": "type",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:744"
     },
+    "store.DeclareSharedMiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/store/shared_mini_app.go:120"
+    },
     "store.DemChungTuConSong": {
       "kind": "func",
       "at": "service-finance/internal/store/du_an_ghi.go:278"
@@ -10613,6 +10677,10 @@
     "store.Directory": {
       "kind": "type",
       "at": "service-platform/internal/store/directory.go:28"
+    },
+    "store.Disable": {
+      "kind": "func",
+      "at": "service-comms/internal/store/map_frame.go:154"
     },
     "store.Doc": {
       "kind": "func",
@@ -10658,6 +10726,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/ghep_phien.go:210"
     },
+    "store.EditPetitionField": {
+      "kind": "func",
+      "at": "service-platform/internal/store/petition_field.go:193"
+    },
     "store.EligibleHeadByCode": {
       "kind": "func",
       "at": "service-identity/internal/store/residential_unit_write.go:237"
@@ -10700,7 +10772,7 @@
     },
     "store.Get": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_frame.go:62"
+      "at": "service-comms/internal/store/map_frame.go:74"
     },
     "store.GetDEK": {
       "kind": "func",
@@ -10944,7 +11016,7 @@
     },
     "store.ListPetitionFields": {
       "kind": "func",
-      "at": "service-platform/internal/store/petition_field.go:40"
+      "at": "service-platform/internal/store/petition_field.go:48"
     },
     "store.ListUploadPolicies": {
       "kind": "func",
@@ -11044,7 +11116,7 @@
     },
     "store.LockCommuneFrame": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_frame.go:87"
+      "at": "service-comms/internal/store/map_frame.go:99"
     },
     "store.LockGrantorSets": {
       "kind": "func",
@@ -11116,7 +11188,7 @@
     },
     "store.MapFrameStore": {
       "kind": "type",
-      "at": "service-comms/internal/store/map_frame.go:40"
+      "at": "service-comms/internal/store/map_frame.go:51"
     },
     "store.MarkAllRead": {
       "kind": "func",
@@ -11284,7 +11356,7 @@
     },
     "store.NewMapFrameStore": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_frame.go:44"
+      "at": "service-comms/internal/store/map_frame.go:55"
     },
     "store.NewMiniAppSecretStore": {
       "kind": "func",
@@ -11340,7 +11412,7 @@
     },
     "store.NewPetitionFieldStore": {
       "kind": "func",
-      "at": "service-platform/internal/store/petition_field.go:23"
+      "at": "service-platform/internal/store/petition_field.go:31"
     },
     "store.NewPetitionSettingsStore": {
       "kind": "func",
@@ -11385,6 +11457,10 @@
     "store.NewSLAStore": {
       "kind": "func",
       "at": "service-identity/internal/store/sla.go:38"
+    },
+    "store.NewSharedMiniAppStore": {
+      "kind": "func",
+      "at": "service-platform/internal/store/shared_mini_app.go:33"
     },
     "store.NewStaffNotificationStore": {
       "kind": "func",
@@ -11556,7 +11632,7 @@
     },
     "store.PetitionFieldStore": {
       "kind": "type",
-      "at": "service-platform/internal/store/petition_field.go:19"
+      "at": "service-platform/internal/store/petition_field.go:27"
     },
     "store.PetitionPhotos": {
       "kind": "func",
@@ -11806,6 +11882,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:684"
     },
+    "store.SetPetitionFieldActive": {
+      "kind": "func",
+      "at": "service-platform/internal/store/petition_field.go:227"
+    },
     "store.SetPrimaryDomain": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_writes.go:290"
@@ -11837,6 +11917,14 @@
     "store.SettingsWithKey": {
       "kind": "func",
       "at": "service-comms/internal/store/portal_sync.go:103"
+    },
+    "store.SharedMiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/store/shared_mini_app.go:99"
+    },
+    "store.SharedMiniAppStore": {
+      "kind": "type",
+      "at": "service-platform/internal/store/shared_mini_app.go:29"
     },
     "store.SignInLockForUpdate": {
       "kind": "func",

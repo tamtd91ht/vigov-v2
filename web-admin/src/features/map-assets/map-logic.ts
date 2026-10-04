@@ -24,8 +24,8 @@ import type {
 /** `[minLng, minLat, maxLng, maxLat]` — the server's `bounds`, the shape MapLibre's LngLatBoundsLike reads. */
 export type FrameBounds = readonly [number, number, number, number];
 
-/** A configured frame, checked. */
-export type MapFrame = {
+/** Centre + radius + bounds, checked — the shape of both the effective frame and the platform default. */
+export type FrameValues = {
   readonly centerLat: number;
   readonly centerLng: number;
   readonly radiusKm: number;
@@ -33,20 +33,75 @@ export type MapFrame = {
 };
 
 /**
- * The frame the map may be built in, or `null`. FAIL CLOSED: `configured:false`, a missing field, or
- * bounds that are not four finite, ordered, in-range numbers all mean NO MAP — never a world view, never
- * a guessed box (a world view shows the archipelagos with OSM's names, ADR 0072 H3).
+ * Whose frame is in effect (ADR 0072 K3): the commune's own (`commune`) or the platform default set by
+ * the vendor's operator (`default`). The commune's own always wins when it exists.
  */
-export function frameFromApi(out: comms_mapFrameOut): MapFrame | null {
-  if (!out.configured) return null;
-  const b = out.bounds;
+export type FrameSource = "commune" | "default";
+
+/** The frame in effect, checked. */
+export type MapFrame = FrameValues & { readonly source: FrameSource };
+
+function checkedValues(lat: unknown, lng: unknown, r: unknown, b: unknown): FrameValues | null {
   if (!Array.isArray(b) || b.length !== 4 || !b.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
   const [minLng, minLat, maxLng, maxLat] = b as [number, number, number, number];
   if (!(minLng < maxLng && minLat < maxLat)) return null;
   if (minLng < -180 || maxLng > 180 || minLat < -90 || maxLat > 90) return null;
-  const { center_lat: lat, center_lng: lng, radius_km: r } = out;
   if (typeof lat !== "number" || typeof lng !== "number" || typeof r !== "number") return null;
   return { centerLat: lat, centerLng: lng, radiusKm: r, bounds: [minLng, minLat, maxLng, maxLat] };
+}
+
+/**
+ * The frame the map may be built in, or `null`. FAIL CLOSED: `configured:false`, a missing field, a
+ * `source` that is neither `commune` nor `default`, or bounds that are not four finite, ordered,
+ * in-range numbers all mean NO MAP — never a world view, never a guessed box (a world view shows the
+ * archipelagos with OSM's names, ADR 0072 H3). An unknown source is refused rather than read as one of
+ * the two: the screen would otherwise tell the officer whose frame this is, and say it wrongly.
+ */
+export function frameFromApi(out: comms_mapFrameOut): MapFrame | null {
+  if (!out.configured) return null;
+  if (out.source !== "commune" && out.source !== "default") return null;
+  const v = checkedValues(out.center_lat, out.center_lng, out.radius_km, out.bounds);
+  return v === null ? null : { ...v, source: out.source };
+}
+
+/**
+ * The platform default carried by the reply (`default`), or `null` — absent, or malformed. Always present
+ * with `source: "default"`; only best-effort with `source: "commune"` (the server may fail to read it),
+ * so `null` there means "not known", never "the platform has none".
+ */
+export function frameDefaultFromApi(out: comms_mapFrameOut): FrameValues | null {
+  const d = out.default;
+  if (d === null || d === undefined) return null;
+  return checkedValues(d.center_lat, d.center_lng, d.radius_km, d.bounds);
+}
+
+/** The form's hints and the notice version, as the SERVER sent them (ADR 0072 K2 open item #2: owner may tune). */
+export type FrameHints = {
+  /** `recommended_radius_km`, or `null` when not a positive number. */
+  readonly recommendedKm: number | null;
+  /** `usual_radius_km` as `[low, high]`, or `null` when not two ordered numbers — then no warning is shown. */
+  readonly usualKm: readonly [number, number] | null;
+  /** The server's current version of the K6 text; what an acknowledgement must carry. */
+  readonly noticeVersion: string;
+};
+
+export function frameHintsFromApi(out: comms_mapFrameOut): FrameHints {
+  const rec = out.recommended_radius_km;
+  const u = out.usual_radius_km;
+  const usual =
+    Array.isArray(u) && u.length === 2 && u.every((n) => typeof n === "number" && Number.isFinite(n)) && u[0]! < u[1]!
+      ? ([u[0]!, u[1]!] as const)
+      : null;
+  return {
+    recommendedKm: typeof rec === "number" && Number.isFinite(rec) && rec > 0 ? rec : null,
+    usualKm: usual,
+    noticeVersion: typeof out.notice_version === "string" ? out.notice_version : "",
+  };
+}
+
+/** True when the radius lies outside the usual range — a WARNING, never a refusal (K2: the officer decides). */
+export function radiusUnusual(radiusKm: number, usualKm: readonly [number, number] | null): boolean {
+  return usualKm !== null && (radiusKm < usualKm[0] || radiusKm > usualKm[1]);
 }
 
 /** True when `[lng, lat]` lies inside the frame (edges included). */
@@ -56,9 +111,14 @@ export function insideFrame(bounds: FrameBounds, lng: number, lat: number): bool
   return lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat;
 }
 
-/** Radius bounds of the frame form — proposal 1–30 km; the server's named constants are the authority (ADR 0072 H3, open #4). */
-export const FRAME_RADIUS_MIN_KM = 1;
-export const FRAME_RADIUS_MAX_KM = 30;
+/**
+ * Hard radius bounds of the frame form — "> 0 and ≤ 50 km" (ADR 0072 K2), and > 0 is ≥ 0.1 in practice
+ * because the column is `numeric(4,1)`. The SAME for every commune (a platform rule, not a per-commune
+ * value), and only a convenience: the server re-checks and its sentence wins. Raising 50 is a stop
+ * condition of the ADR, not an edit here.
+ */
+export const FRAME_RADIUS_MIN_KM = 0.1;
+export const FRAME_RADIUS_MAX_KM = 50;
 
 /* ---- points ----------------------------------------------------------------------------------- */
 
@@ -171,7 +231,7 @@ export const LAYER_CENTRE_LABEL = "commune-centre-label";
 export const CENTRE_COLOUR = "#dc2626";
 
 /** One Point at the frame centre, `[lng, lat]` (GeoJSON order), labelled with the commune's name. */
-export function centreCollection(frame: MapFrame, label: string) {
+export function centreCollection(frame: FrameValues, label: string) {
   return {
     type: "FeatureCollection" as const,
     features: [

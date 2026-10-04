@@ -432,20 +432,38 @@ export type comms_mapFieldSchemaOut = {
   "is_active": boolean;
 };
 
+export type comms_mapFrameDefaultOut = {
+  "center_lat": number;
+  "center_lng": number;
+  "radius_km": number;
+  "bounds": Array<number>;
+};
+
 export type comms_mapFrameIn = {
   "center_lat": number | null;
   "center_lng": number | null;
   "radius_km": number | null;
+  "notice_version": string | null;
 };
 
 export type comms_mapFrameOut = {
   "configured": boolean;
+  "source"?: string;
   "center_lat"?: number | null;
   "center_lng"?: number | null;
   "radius_km"?: number | null;
   "bounds"?: Array<number>;
   "updated_at"?: string | null;
   "updated_by"?: string;
+  "default"?: comms_mapFrameDefaultOut | null;
+  "recommended_radius_km": number;
+  "usual_radius_km": Array<number>;
+  "max_radius_km": number;
+  "notice_version": string;
+};
+
+export type comms_mapFrameResetIn = {
+  "notice_version": string | null;
 };
 
 export type comms_markAllReadOut = {
@@ -6266,7 +6284,7 @@ export type comms_delete_map_field_schemas_by_id = {
   };
 };
 
-/** GET /api/v1/map-frame — Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false */
+/** GET /api/v1/map-frame — Khung bản đồ kinh tế số đang áp cho xã — của xã hoặc mặc định của nền tảng (source), tâm, bán kính, khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, khung mặc định (default) khi có, và các gợi ý cho biểu mẫu; không có khung nào thì configured=false */
 export type comms_get_map_frame = {
   duongDan: "/api/v1/map-frame";
   phuongThuc: "GET";
@@ -6280,10 +6298,14 @@ export type comms_get_map_frame = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "map_frame_default_unavailable";
   };
 };
 
-/** PUT /api/v1/map-frame — Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết */
+/** PUT /api/v1/map-frame — Đặt hoặc đổi khung bản đồ kinh tế số riêng của xã — phải xác nhận lưu ý pháp lý phiên bản hiện hành (notice_version); tâm trong khung đất liền Việt Nam, bán kính lớn hơn 0 và không quá 50 km; có ghi vết */
 export type comms_put_map_frame = {
   duongDan: "/api/v1/map-frame";
   phuongThuc: "PUT";
@@ -6302,7 +6324,32 @@ export type comms_put_map_frame = {
   };
   errorCodes: {
     400: "invalid_request";
-    422: "center_outside_mainland" | "radius_out_of_range";
+    422: "center_outside_mainland" | "notice_not_acknowledged" | "radius_out_of_range";
+  };
+};
+
+/** POST /api/v1/map-frame/reset — Về khung mặc định của nền tảng — xã thôi dùng khung riêng (giữ lại giá trị cũ, không xoá); phải xác nhận lưu ý pháp lý phiên bản hiện hành; có ghi vết; trả về khung đang áp sau khi đổi */
+export type comms_post_map_frame_reset = {
+  duongDan: "/api/v1/map-frame/reset";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_mapFrameResetIn;
+  phanHoi: {
+    200: comms_mapFrameOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    422: "notice_not_acknowledged";
+    503: "map_frame_default_unavailable";
   };
 };
 

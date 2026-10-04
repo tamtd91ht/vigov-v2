@@ -3225,7 +3225,7 @@
       "path": "/api/v1/map-frame",
       "operation_id": "comms_get_map_frame",
       "task_id": "c000a92deb22",
-      "summary": "Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false",
+      "summary": "Khung bản đồ kinh tế số đang áp cho xã — của xã hoặc mặc định của nền tảng (source), tâm, bán kính, khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, khung mặc định (default) khi có, và các gợi ý cho biểu mẫu; không có khung nào thì configured=false",
       "screen": "10-ban-do-kinh-te-so §4",
       "permission_kind": "permission",
       "permission": "asset.read",
@@ -3234,7 +3234,8 @@
         "200": "comms.mapFrameOut",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/map_frame.go"
     },
@@ -3244,12 +3245,12 @@
       "path": "/api/v1/map-frame",
       "operation_id": "comms_put_map_frame",
       "task_id": "f921dfffcd5a",
-      "summary": "Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết",
+      "summary": "Đặt hoặc đổi khung bản đồ kinh tế số riêng của xã — phải xác nhận lưu ý pháp lý phiên bản hiện hành (notice_version); tâm trong khung đất liền Việt Nam, bán kính lớn hơn 0 và không quá 50 km; có ghi vết",
       "screen": "10-ban-do-kinh-te-so §4",
       "permission_kind": "permission",
       "permission": "admin.lookup",
       "idempotency": "khong-can",
-      "idempotency_reason": "lưu là ghi đè khung bằng đúng giá trị trong thân; giá trị (đã làm tròn) trùng giá trị đang lưu thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "idempotency_reason": "lưu là ghi đè khung bằng đúng giá trị trong thân; giá trị (đã làm tròn) trùng giá trị đang lưu và đang bật thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
       "request_schema": "comms.mapFrameIn",
       "reply_schemas": {
         "200": "comms.mapFrameOut",
@@ -3258,6 +3259,30 @@
         "403": "httpx.Error",
         "422": "httpx.Error",
         "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/map_frame.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-frame/reset",
+      "operation_id": "comms_post_map_frame_reset",
+      "task_id": "b3e625f8de97",
+      "summary": "Về khung mặc định của nền tảng — xã thôi dùng khung riêng (giữ lại giá trị cũ, không xoá); phải xác nhận lưu ý pháp lý phiên bản hiện hành; có ghi vết; trả về khung đang áp sau khi đổi",
+      "screen": "10-ban-do-kinh-te-so §4",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "về mặc định là đặt trạng thái 'không dùng khung riêng'; xã chưa có khung riêng hoặc đã tắt thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một vết",
+      "request_schema": "comms.mapFrameResetIn",
+      "reply_schemas": {
+        "200": "comms.mapFrameOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/map_frame.go"
     },

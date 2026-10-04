@@ -5,6 +5,9 @@
 // the frame passed IN THE CONSTRUCTOR, a toggle that filters without a request, a filter that does
 // request, no camera move outside the frame, and the denied cases of every permission-gated control.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,16 +16,34 @@ import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: exi
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
 
 import { EconomicMapScreen } from "./economic-map-screen";
+import { RADIUS_ERROR } from "./frame-form";
 import {
+  CENTRE_LEGEND,
+  CENTRE_LEGEND_DEFAULT,
   DELETE_REASON_REQUIRED,
   FRAME_ASK_ADMIN,
+  FRAME_CHANGE_BUTTON,
   FRAME_NOT_SET,
+  FRAME_RADIUS_UNUSUAL,
+  FRAME_RESET_BUTTON,
+  FRAME_RESET_DONE,
+  FRAME_RESET_DONE_NO_DEFAULT,
+  FRAME_SAVED,
+  FRAME_SOURCE_COMMUNE,
+  FRAME_SOURCE_DEFAULT,
   MAP_COLLAPSE,
   MAP_EXPAND,
+  MAP_FRAME_NOTICE_ACK,
+  MAP_FRAME_NOTICE_ITEMS,
+  MAP_FRAME_NOTICE_TITLE,
+  MAP_FRAME_NOTICE_VERSION,
+  NOTICE_CONFIRM_BUTTON,
+  NOTICE_RELOADED,
   NO_BASEMAP,
   NO_GROUPS,
   OUTSIDE_FRAME,
   SEED_DEFAULTS_BUTTON,
+  noticeOutdated,
 } from "./labels";
 import { CENTRE_SOURCE_ID, LAYER_CENTRE, LAYER_CENTRE_LABEL, LAYER_LABELS, LAYER_POINTS, SOURCE_ID } from "./map-logic";
 
@@ -156,7 +177,20 @@ vi.mock("maplibre-gl", () => ({
 /* ---- fake server ------------------------------------------------------------------------------- */
 
 const BOUNDS = [108.1, 15.5, 108.6, 15.9];
-const FRAME_SET = { configured: true, center_lat: 15.7, center_lng: 108.35, radius_km: 20, bounds: BOUNDS };
+const DEFAULT_BOUNDS = [108.0, 15.4, 108.5, 15.8];
+/** Hint fields every map-frame reply carries (contract `comms_mapFrameOut`); merged into each fake reply. */
+const HINTS = { recommended_radius_km: 10, usual_radius_km: [3, 20], max_radius_km: 50, notice_version: "2026-10-04.1" };
+const DEFAULT = { center_lat: 15.6, center_lng: 108.25, radius_km: 12, bounds: DEFAULT_BOUNDS };
+const FRAME_SET = {
+  configured: true,
+  source: "commune",
+  center_lat: 15.7,
+  center_lng: 108.35,
+  radius_km: 20,
+  bounds: BOUNDS,
+  default: DEFAULT,
+};
+const FRAME_DEFAULT = { configured: true, source: "default", ...DEFAULT, default: DEFAULT };
 const TYPES = [
   { id: "t1", code: "doanh-nghiep", label: "Doanh nghiệp", is_default: true, active: true, order: 1, source: "he-thong", tier: 1 },
   { id: "t2", code: "cho", label: "Chợ, trung tâm thương mại", is_default: true, active: true, order: 4, source: "he-thong", tier: 1 },
@@ -186,7 +220,20 @@ const DETAIL_MASKED = {
 };
 const FAR_AWAY = { ...DETAIL_MASKED, id: "far", name: "Ngoài khung", lat: 16.5, lng: 112.3 };
 
-type Setup = { permissions: string[]; frame?: unknown; frameStatus?: number; types?: unknown[] };
+type Reply = { readonly status: number; readonly body: unknown };
+
+type Setup = {
+  permissions: string[];
+  frame?: Record<string, unknown>;
+  frameStatus?: number;
+  types?: unknown[];
+  /** GET map-frame replies after the first, in order (a reload after a stale notice). */
+  laterFrames?: Record<string, unknown>[];
+  /** Replies of PUT map-frame, in order; the last repeats. Default: 200 with the saved values. */
+  puts?: Reply[];
+  /** Reply of POST map-frame/reset. */
+  reset?: Reply;
+};
 
 let calls: { path: string; method: string; body: unknown }[] = [];
 
@@ -194,8 +241,10 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPES }: Setup) {
+function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPES, laterFrames = [], puts = [], reset }: Setup) {
   calls = [];
+  let frameGets = 0;
+  let putCount = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (path: string, init?: RequestInit) => {
@@ -203,8 +252,21 @@ function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPE
       calls.push({ path, method, body: init?.body === undefined ? undefined : JSON.parse(String(init.body)) });
       if (path === "/api/v1/sessions/current") return json(200, { permissions, must_change_password: false });
       if (path === "/api/v1/map-asset-types") return json(200, { items: types });
-      if (path === "/api/v1/map-frame")
-        return frameStatus === 200 ? json(200, frame) : json(frameStatus, { code: "x", message: "Máy chủ lỗi." });
+      if (path === "/api/v1/map-frame" && method === "PUT") {
+        const r = puts[Math.min(putCount++, puts.length - 1)];
+        if (r !== undefined) return json(r.status, r.status === 200 ? { ...HINTS, ...(r.body as object) } : r.body);
+        const b = JSON.parse(String(init!.body)) as Record<string, number>;
+        return json(200, { ...HINTS, ...FRAME_SET, center_lat: b.center_lat, center_lng: b.center_lng, radius_km: b.radius_km });
+      }
+      if (path === "/api/v1/map-frame/reset" && method === "POST") {
+        const r = reset ?? { status: 200, body: FRAME_DEFAULT };
+        return json(r.status, r.status === 200 ? { ...HINTS, ...(r.body as object) } : r.body);
+      }
+      if (path === "/api/v1/map-frame") {
+        const f = frameGets === 0 ? frame : (laterFrames[frameGets - 1] ?? laterFrames.at(-1) ?? frame);
+        frameGets += 1;
+        return frameStatus === 200 ? json(200, { ...HINTS, ...f }) : json(frameStatus, { code: "x", message: "Máy chủ lỗi." });
+      }
       if (path === "/api/v1/map-asset-summary")
         return json(200, { total: 2, verified: 1, verified_ratio: 0.5, by_type: [{ asset_type_code: "cho", count: 1, verified: 0 }] });
       if (path === "/api/v1/residential-units") return json(200, { items: [] });
@@ -566,5 +628,233 @@ describe("add button follows asset.update", () => {
     await settle();
     expect(host!.querySelector("#asset-name")).not.toBeNull();
     expect(host!.querySelector<HTMLInputElement>("#asset-lat")!.value).toBe("15.700000");
+  });
+});
+
+/* ---- frame change: limits, legal notice, "Về mặc định" (ADR 0072 lần 2, K2/K4/K6) ------------------ */
+
+function confirmStep(): HTMLElement | null {
+  return host!.querySelector<HTMLElement>("[data-notice-confirm]");
+}
+
+function inStep(label: string): HTMLButtonElement | undefined {
+  return Array.from(confirmStep()!.querySelectorAll("button")).find((b) => b.textContent === label);
+}
+
+function ack(): HTMLInputElement {
+  return confirmStep()!.querySelector<HTMLInputElement>("[data-notice-ack]")!;
+}
+
+async function type(id: string, value: string): Promise<void> {
+  const input = host!.querySelector<HTMLInputElement>(`#${id}`)!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function pressSave(): Promise<void> {
+  await act(async () => button("Lưu khung bản đồ")!.form!.requestSubmit());
+  await settle();
+}
+
+async function tickAndConfirm(): Promise<void> {
+  await act(async () => ack().click());
+  await act(async () => inStep(NOTICE_CONFIRM_BUTTON)!.click());
+  await settle();
+}
+
+function writes(): { path: string; method: string; body: unknown }[] {
+  return calls.filter((c) => c.path.startsWith("/api/v1/map-frame") && c.method !== "GET");
+}
+
+async function openChange(setup: Partial<Setup> = {}): Promise<void> {
+  await mount({ permissions: ["asset.read", "admin.lookup"], ...setup });
+  await act(async () => button(FRAME_CHANGE_BUTTON)!.click());
+  await settle();
+}
+
+describe("the legal notice text is ADR 0072 K6, verbatim", () => {
+  it("version 2026-10-04.1; title, six numbered items and the acknowledgement appear word for word in the ADR", () => {
+    expect(MAP_FRAME_NOTICE_VERSION).toBe("2026-10-04.1");
+    expect(MAP_FRAME_NOTICE_ITEMS).toHaveLength(6);
+    // Read the owning file itself (rule 9): a paraphrase here, or an edit there without a new version, turns this red.
+    // `process.cwd()` is web-admin/ (vitest root); jsdom's own `URL` refuses a file URL here.
+    const adr = readFileSync(join(process.cwd(), "..", "kb", "10-decisions", "0072-ban-do-kinh-te-so-nen-tu-host.md"), "utf8");
+    const k6 = adr.slice(adr.indexOf("### K6."), adr.indexOf("### Điểm dừng — thêm ở lần 2"));
+    expect(k6).toContain(`phiên bản \`${MAP_FRAME_NOTICE_VERSION}\``);
+    expect(k6).toContain(`> ${MAP_FRAME_NOTICE_TITLE}\n`);
+    MAP_FRAME_NOTICE_ITEMS.forEach((item, i) => expect(k6).toContain(`> ${i + 1}. ${item}\n`));
+    expect(k6).toContain(`> ☐ ${MAP_FRAME_NOTICE_ACK}\n`);
+  });
+});
+
+describe("frame form — source, hints, limits", () => {
+  it("dialog: prefilled from the commune frame, says whose frame is in effect, shows the default and the server's hint", async () => {
+    await openChange();
+    expect(host!.querySelector<HTMLInputElement>("#frame-radius")!.value).toBe("20");
+    expect(host!.querySelector("[data-frame-source]")!.textContent).toBe(FRAME_SOURCE_COMMUNE);
+    expect(host!.querySelector("[data-frame-default]")!.textContent).toContain("bán kính 12 km");
+    expect(host!.querySelector("#frame-radius-hint")!.textContent).toContain("Đề xuất: 10 km (thường 3–20 km).");
+    expect(host!.querySelector("[data-radius-warning]")).toBeNull();
+  });
+
+  it("no frame at all: the inline form is prefilled with the recommended radius", async () => {
+    await mount({ permissions: ["asset.read", "admin.lookup"], frame: { configured: false } });
+    expect(host!.querySelector<HTMLInputElement>("#frame-radius")!.value).toBe("10");
+    expect(host!.querySelector("[data-frame-source]")).toBeNull();
+  });
+
+  it("radius > 50 refused before any step; 0.1 accepted", async () => {
+    await openChange();
+    await type("frame-radius", "50.1");
+    await pressSave();
+    expect(text()).toContain(RADIUS_ERROR);
+    expect(confirmStep()).toBeNull();
+    await type("frame-radius", "0.1");
+    await pressSave();
+    expect(confirmStep()).not.toBeNull();
+    await tickAndConfirm();
+    expect(writes()).toHaveLength(1);
+    expect((writes()[0]!.body as { radius_km: number }).radius_km).toBe(0.1);
+  });
+
+  it("outside the usual 3–20 km: the warning shows, and the save still goes through", async () => {
+    await openChange();
+    await type("frame-radius", "45");
+    expect(host!.querySelector("[data-radius-warning]")!.textContent).toContain(FRAME_RADIUS_UNUSUAL);
+    await pressSave();
+    await tickAndConfirm();
+    expect(writes()).toEqual([
+      { path: "/api/v1/map-frame", method: "PUT", body: { center_lat: 15.7, center_lng: 108.35, radius_km: 45, notice_version: "2026-10-04.1" } },
+    ]);
+    expect(text()).toContain(FRAME_SAVED);
+  });
+});
+
+describe("frame change goes through the legal notice (K4)", () => {
+  it("Lưu opens the notice; confirm disabled until ticked; the PUT carries notice_version", async () => {
+    await openChange();
+    await pressSave();
+    const step = confirmStep()!;
+    expect(step.textContent).toContain(MAP_FRAME_NOTICE_TITLE);
+    expect(step.querySelectorAll("[data-notice-items] li")).toHaveLength(6);
+    expect(step.textContent).toContain(MAP_FRAME_NOTICE_ACK);
+    expect(document.activeElement).toBe(ack());
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
+    await act(async () => inStep(NOTICE_CONFIRM_BUTTON)!.click());
+    expect(writes()).toEqual([]);
+    await act(async () => ack().click());
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(false);
+    await act(async () => inStep(NOTICE_CONFIRM_BUTTON)!.click());
+    await settle();
+    expect(writes()).toHaveLength(1);
+    expect((writes()[0]!.body as { notice_version: string }).notice_version).toBe("2026-10-04.1");
+    expect(confirmStep()).toBeNull();
+    expect(text()).toContain(FRAME_SAVED);
+  });
+
+  it("Huỷ on the notice sends nothing and returns to the form", async () => {
+    await openChange();
+    await pressSave();
+    await act(async () => ack().click());
+    await act(async () => inStep("Huỷ")!.click());
+    await settle();
+    expect(confirmStep()).toBeNull();
+    expect(writes()).toEqual([]);
+    expect(host!.querySelector("#frame-radius")).not.toBeNull();
+  });
+
+  it("422 notice_not_acknowledged: reloads the frame and shows the notice again, unticked", async () => {
+    await openChange({ puts: [{ status: 422, body: { code: "notice_not_acknowledged", message: "Văn bản lưu ý đã đổi." } }] });
+    const getsBefore = calls.filter((c) => c.path === "/api/v1/map-frame" && c.method === "GET").length;
+    await pressSave();
+    await tickAndConfirm();
+    expect(calls.filter((c) => c.path === "/api/v1/map-frame" && c.method === "GET").length).toBe(getsBefore + 1);
+    expect(confirmStep()).not.toBeNull();
+    expect(confirmStep()!.textContent).toContain(NOTICE_RELOADED);
+    expect(ack().checked).toBe(false);
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
+  });
+
+  it("422 and the reload brings a NEWER version than this page carries: refused here until the page is reloaded", async () => {
+    await openChange({
+      puts: [{ status: 422, body: { code: "notice_not_acknowledged", message: "Văn bản lưu ý đã đổi." } }],
+      laterFrames: [{ ...FRAME_SET, notice_version: "2026-11-01.1" }],
+    });
+    await pressSave();
+    await tickAndConfirm();
+    expect(confirmStep()!.textContent).toContain(noticeOutdated("2026-11-01.1"));
+    expect(ack().disabled).toBe(true);
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it("server already on another version: the officer is never asked to tick a text they are not shown", async () => {
+    await openChange({ frame: { ...FRAME_SET, notice_version: "2026-11-01.1" } });
+    await pressSave();
+    expect(confirmStep()!.textContent).toContain(noticeOutdated("2026-11-01.1"));
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
+    expect(writes()).toEqual([]);
+  });
+});
+
+describe("Về mặc định (K4)", () => {
+  it("through the notice → POST reset with notice_version → the default frame applies", async () => {
+    await mount({ permissions: ["asset.read", "admin.lookup"] });
+    await load();
+    expect(host!.querySelector("[data-centre-legend]")!.textContent).toBe(CENTRE_LEGEND);
+    await act(async () => button(FRAME_RESET_BUTTON)!.click());
+    await settle();
+    expect(host!.querySelector("[data-frame-reset-lead]")!.textContent).toContain("bán kính 12 km");
+    expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
+    await tickAndConfirm();
+    expect(writes()).toEqual([{ path: "/api/v1/map-frame/reset", method: "POST", body: { notice_version: "2026-10-04.1" } }]);
+    expect(text()).toContain(FRAME_RESET_DONE);
+    expect(button(FRAME_RESET_BUTTON)).toBeUndefined();
+    expect(host!.querySelector("[data-centre-legend]")!.textContent).toBe(CENTRE_LEGEND_DEFAULT);
+    // A new map, bounded by the DEFAULT frame.
+    expect(ml.FakeMap.instances.at(-1)!.opts.maxBounds).toEqual(DEFAULT_BOUNDS);
+  });
+
+  it("no default on the platform: the reply is configured:false → no map, the no-frame state", async () => {
+    await mount({ permissions: ["asset.read", "admin.lookup"], reset: { status: 200, body: { configured: false } } });
+    await act(async () => button(FRAME_RESET_BUTTON)!.click());
+    await settle();
+    await tickAndConfirm();
+    expect(text()).toContain(FRAME_RESET_DONE_NO_DEFAULT);
+    expect(text()).toContain(FRAME_NOT_SET);
+    expect(host!.querySelector("#frame-center-lat")).not.toBeNull();
+  });
+
+  it("Huỷ sends nothing; Esc on the notice closes IT and leaves the expanded map expanded", async () => {
+    await mount({ permissions: ["asset.read", "admin.lookup"] });
+    await load();
+    await act(async () => button(MAP_EXPAND)!.click());
+    await act(async () => button(FRAME_RESET_BUTTON)!.click());
+    await settle();
+    await act(async () => {
+      ack().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(confirmStep()).toBeNull();
+    expect(host!.querySelector("#economic-map-region")!.hasAttribute("data-map-expanded")).toBe(true);
+    await act(async () => button(FRAME_RESET_BUTTON)!.click());
+    await settle();
+    await act(async () => inStep("Huỷ")!.click());
+    expect(confirmStep()).toBeNull();
+    expect(writes()).toEqual([]);
+  });
+
+  it("default frame in effect: no Về mặc định, the form says so, the legend says (mặc định)", async () => {
+    await openChange({ frame: FRAME_DEFAULT });
+    expect(button(FRAME_RESET_BUTTON)).toBeUndefined();
+    expect(host!.querySelector("[data-frame-source]")!.textContent).toBe(FRAME_SOURCE_DEFAULT);
+    expect(host!.querySelector("[data-centre-legend]")!.textContent).toBe(CENTRE_LEGEND_DEFAULT);
+  });
+
+  it("DENIED: without admin.lookup, neither Đổi khung bản đồ nor Về mặc định", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    expect(button(FRAME_CHANGE_BUTTON)).toBeUndefined();
+    expect(button(FRAME_RESET_BUTTON)).toBeUndefined();
   });
 });

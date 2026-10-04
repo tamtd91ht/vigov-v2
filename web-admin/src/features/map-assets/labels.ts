@@ -25,6 +25,50 @@ export const FRAME_CHANGE_BUTTON = "Đổi khung bản đồ";
 export const FRAME_FROM_POINTS_BUTTON = "Lấy tâm từ các đối tượng đã có";
 export const FRAME_FORM_NOTE =
   "Bản đồ chỉ hiện trong khung này: không kéo hay thu nhỏ ra ngoài được. Tâm phải nằm trên đất liền Việt Nam.";
+export const FRAME_SOURCE_COMMUNE = "Đang dùng khung của xã";
+export const FRAME_SOURCE_DEFAULT = "Đang dùng khung mặc định do nhà cung cấp đặt";
+export const FRAME_RADIUS_UNUSUAL =
+  "Bán kính lệch nhiều so với đề xuất — khung có thể quá nhỏ hoặc trùm cả địa bàn ngoài xã.";
+export const FRAME_RESET_BUTTON = "Về mặc định";
+export const FRAME_RESET_TITLE = "Về khung mặc định";
+export const FRAME_RESET_LEAD =
+  "Xã sẽ thôi dùng khung riêng và dùng khung mặc định do nhà cung cấp đặt. Giá trị khung riêng vẫn được lưu giữ, không bị xoá.";
+/** Shown when the reply carried no default: `default` is best-effort beside a commune frame, so "unknown", not "none". */
+export const FRAME_RESET_NO_DEFAULT_KNOWN =
+  "Chưa đọc được khung mặc định của nhà cung cấp. Nếu nhà cung cấp chưa đặt khung mặc định, sau khi về mặc định bản đồ sẽ không hiển thị cho tới khi xã đặt lại khung.";
+export const FRAME_SAVED = "Đã lưu khung bản đồ của xã.";
+export const FRAME_RESET_DONE = "Đã chuyển về khung mặc định do nhà cung cấp đặt.";
+export const FRAME_RESET_DONE_NO_DEFAULT =
+  "Đã thôi dùng khung riêng của xã. Nhà cung cấp chưa đặt khung mặc định, nên bản đồ chưa hiển thị.";
+export const NOTICE_CONFIRM_BUTTON = "Xác nhận thay đổi";
+/** After a 422 `notice_not_acknowledged` whose reload brought back the text this bundle carries. */
+export const NOTICE_RELOADED = "Văn bản lưu ý vừa được cập nhật trên máy chủ. Hãy đọc lại và xác nhận.";
+/**
+ * The server's notice version is not the one whose text this bundle carries. The officer cannot
+ * acknowledge a text they are not shown, so the change is refused here until the page is reloaded.
+ */
+export function noticeOutdated(serverVersion: string): string {
+  return `Văn bản lưu ý trên máy chủ đã sang phiên bản ${serverVersion || "khác"}, trang này đang giữ phiên bản ${MAP_FRAME_NOTICE_VERSION}. Hãy tải lại trang để đọc bản mới trước khi đổi khung bản đồ.`;
+}
+
+/**
+ * THE LEGAL NOTICE — verbatim from ADR 0072 §Sửa đổi lần 2, K6, version `2026-10-04.1`. The ADR OWNS this
+ * text: change one character there first, as a NEW version, then here — never paraphrase, never edit in
+ * place (stop condition 3 of K6). The version string travels with every save as `notice_version`; the
+ * server refuses a version that is not its current one. `economic-map-screen.test.tsx` pins both.
+ */
+export const MAP_FRAME_NOTICE_VERSION = "2026-10-04.1";
+export const MAP_FRAME_NOTICE_TITLE = "Lưu ý trước khi thay đổi khung bản đồ của xã";
+export const MAP_FRAME_NOTICE_ITEMS: readonly string[] = [
+  "Bản đồ nền do nhà cung cấp bên thứ ba (OpenFreeMap, dữ liệu OpenStreetMap) cung cấp miễn phí. Nhà cung cấp không cam kết về độ chính xác, tính đầy đủ hay tính liên tục của dịch vụ; bản đồ có thể tạm thời không hiển thị.",
+  "Ranh giới, địa danh, đường sá và vị trí trên bản đồ nền có thể chưa khớp với thực tế hoặc với bản đồ hành chính, bản đồ địa chính do cơ quan có thẩm quyền ban hành.",
+  "Bản đồ chỉ dùng để tham khảo và hỗ trợ quản lý. Không dùng làm căn cứ pháp lý để xác định ranh giới hành chính, diện tích, quyền sử dụng đất hay giải quyết tranh chấp.",
+  "Khi xem bản đồ, trình duyệt gửi yêu cầu tải bản đồ nền tới máy chủ của nhà cung cấp đặt ở nước ngoài; khu vực đang xem có thể được nhà cung cấp ghi nhận.",
+  "Việc thể hiện chủ quyền quốc gia, gồm hai quần đảo Hoàng Sa và Trường Sa, phải tuân thủ quy định pháp luật. Hệ thống giới hạn khung bản đồ trong địa bàn xã; nếu phát hiện thông tin sai lệch, báo ngay cho quản trị viên hệ thống.",
+  "Thay đổi này được ghi vào nhật ký hệ thống: người thực hiện, thời điểm, giá trị trước và sau.",
+];
+export const MAP_FRAME_NOTICE_ACK = "Tôi đã đọc, hiểu các lưu ý trên và chịu trách nhiệm về thay đổi khung bản đồ của xã.";
+
 export const OUTSIDE_FRAME = "Đối tượng nằm ngoài khung bản đồ của xã";
 export const PIN_OUTSIDE_FRAME = "Vị trí nằm ngoài khung bản đồ của xã. Hãy chọn một điểm trong khung.";
 export const MY_LOCATION_OUTSIDE = "Vị trí của bạn nằm ngoài khung bản đồ của xã, nên không đặt ghim theo vị trí này.";
@@ -133,6 +177,7 @@ export const HIDE_ALL = "Ẩn hết";
 export const SHOW_ALL = "Hiện hết";
 export const UNVERIFIED_LEGEND = "Chấm nhạt: chưa xác minh.";
 export const CENTRE_LEGEND = "Chấm đỏ có quầng: tâm xã đã lưu trong khung bản đồ.";
+export const CENTRE_LEGEND_DEFAULT = "Chấm đỏ có quầng: tâm xã (mặc định) trong khung bản đồ.";
 /** Label of the centre dot when the commune's name is not available. */
 export const CENTRE_FALLBACK_LABEL = "Tâm xã";
 export const MAP_EXPAND = "Mở rộng bản đồ";

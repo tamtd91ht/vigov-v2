@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import type { comms_mapAssetPointsOut } from "@/lib/api/schema.gen";
+import type { comms_mapAssetPointsOut, comms_mapFrameOut } from "@/lib/api/schema.gen";
 
 import {
   GROUP_COLOURS,
   GROUP_SWATCH_CLASS,
   VIETNAMESE_TEXT_FIELD,
+  frameDefaultFromApi,
   frameFromApi,
+  frameHintsFromApi,
   insideFrame,
   meanCentre,
   nameLabelLayers,
   pointsFilter,
+  radiusUnusual,
   summaryLine,
   toEconomicCollection,
   visibleCollection,
@@ -18,22 +21,59 @@ import {
 
 const BOUNDS = [108.1, 15.5, 108.6, 15.9] as const;
 
+/** The hint fields every map-frame reply carries (contract `comms_mapFrameOut`). */
+const HINTS = { recommended_radius_km: 10, usual_radius_km: [3, 20], max_radius_km: 50, notice_version: "2026-10-04.1" };
+
+function out(fields: Partial<comms_mapFrameOut> & { configured: boolean }): comms_mapFrameOut {
+  return { ...HINTS, ...fields };
+}
+
 describe("frameFromApi — fail closed: anything but a well-formed configured frame is NO map", () => {
-  it("configured frame → bounds exactly as the server sent them", () => {
-    const f = frameFromApi({ configured: true, center_lat: 15.7, center_lng: 108.35, radius_km: 10, bounds: [...BOUNDS] });
+  it("configured frame → bounds exactly as the server sent them, and its source", () => {
+    const f = frameFromApi(out({ configured: true, source: "commune", center_lat: 15.7, center_lng: 108.35, radius_km: 10, bounds: [...BOUNDS] }));
     expect(f?.bounds).toEqual(BOUNDS);
+    expect(f?.source).toBe("commune");
+    const d = frameFromApi(out({ configured: true, source: "default", center_lat: 15.7, center_lng: 108.35, radius_km: 10, bounds: [...BOUNDS] }));
+    expect(d?.source).toBe("default");
   });
 
   it.each([
     ["configured:false", { configured: false }],
-    ["no bounds", { configured: true, center_lat: 15.7, center_lng: 108.35, radius_km: 10 }],
-    ["three numbers", { configured: true, center_lat: 1, center_lng: 1, radius_km: 1, bounds: [1, 2, 3] }],
-    ["min > max", { configured: true, center_lat: 1, center_lng: 1, radius_km: 1, bounds: [108.6, 15.5, 108.1, 15.9] }],
-    ["NaN", { configured: true, center_lat: 1, center_lng: 1, radius_km: 1, bounds: [Number.NaN, 15.5, 108.1, 15.9] }],
-    ["the whole world", { configured: true, center_lat: 0, center_lng: 0, radius_km: 1, bounds: [-200, -85, 200, 85] }],
-    ["no centre", { configured: true, radius_km: 1, bounds: [...BOUNDS] }],
-  ])("%s → null", (_name, out) => {
-    expect(frameFromApi(out)).toBeNull();
+    ["no bounds", { configured: true, source: "commune", center_lat: 15.7, center_lng: 108.35, radius_km: 10 }],
+    ["three numbers", { configured: true, source: "commune", center_lat: 1, center_lng: 1, radius_km: 1, bounds: [1, 2, 3] }],
+    ["min > max", { configured: true, source: "commune", center_lat: 1, center_lng: 1, radius_km: 1, bounds: [108.6, 15.5, 108.1, 15.9] }],
+    ["NaN", { configured: true, source: "commune", center_lat: 1, center_lng: 1, radius_km: 1, bounds: [Number.NaN, 15.5, 108.1, 15.9] }],
+    ["the whole world", { configured: true, source: "commune", center_lat: 0, center_lng: 0, radius_km: 1, bounds: [-200, -85, 200, 85] }],
+    ["no centre", { configured: true, source: "commune", radius_km: 1, bounds: [...BOUNDS] }],
+    ["no source", { configured: true, center_lat: 15.7, center_lng: 108.35, radius_km: 10, bounds: [...BOUNDS] }],
+    ["unknown source", { configured: true, source: "platform", center_lat: 15.7, center_lng: 108.35, radius_km: 10, bounds: [...BOUNDS] }],
+  ])("%s → null", (_name, fields) => {
+    expect(frameFromApi(out(fields))).toBeNull();
+  });
+});
+
+describe("frameDefaultFromApi / frameHintsFromApi / radiusUnusual", () => {
+  it("the default, when present and well-formed; null otherwise (never a guessed one)", () => {
+    const def = { center_lat: 15.6, center_lng: 108.3, radius_km: 12, bounds: [...BOUNDS] };
+    expect(frameDefaultFromApi(out({ configured: true, default: def }))).toEqual({
+      centerLat: 15.6,
+      centerLng: 108.3,
+      radiusKm: 12,
+      bounds: BOUNDS,
+    });
+    expect(frameDefaultFromApi(out({ configured: true }))).toBeNull();
+    expect(frameDefaultFromApi(out({ configured: true, default: null }))).toBeNull();
+    expect(frameDefaultFromApi(out({ configured: true, default: { ...def, bounds: [1, 2, 3] } }))).toBeNull();
+  });
+
+  it("hints are the server's figures; malformed ranges give no warning", () => {
+    expect(frameHintsFromApi(out({ configured: false }))).toEqual({ recommendedKm: 10, usualKm: [3, 20], noticeVersion: "2026-10-04.1" });
+    expect(frameHintsFromApi(out({ configured: false, usual_radius_km: [20, 3] })).usualKm).toBeNull();
+    expect(radiusUnusual(2.9, [3, 20])).toBe(true);
+    expect(radiusUnusual(3, [3, 20])).toBe(false);
+    expect(radiusUnusual(20, [3, 20])).toBe(false);
+    expect(radiusUnusual(20.1, [3, 20])).toBe(true);
+    expect(radiusUnusual(45, null)).toBe(false);
   });
 });
 

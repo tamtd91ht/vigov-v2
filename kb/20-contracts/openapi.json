@@ -14015,7 +14015,7 @@
     },
     "/api/v1/map-frame": {
       "get": {
-        "summary": "Khung bản đồ kinh tế số của xã — tâm, bán kính và khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds; xã chưa đặt thì chỉ có configured=false",
+        "summary": "Khung bản đồ kinh tế số đang áp cho xã — của xã hoặc mặc định của nền tảng (source), tâm, bán kính, khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, khung mặc định (default) khi có, và các gợi ý cho biểu mẫu; không có khung nào thì configured=false",
         "operationId": "comms_get_map_frame",
         "tags": [
           "comms"
@@ -14066,11 +14066,24 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "map_frame_default_unavailable"
+            ]
           }
         }
       },
       "put": {
-        "summary": "Đặt hoặc đổi khung bản đồ kinh tế số của xã — tâm phải trong khung đất liền Việt Nam, bán kính trong giới hạn; có ghi vết",
+        "summary": "Đặt hoặc đổi khung bản đồ kinh tế số riêng của xã — phải xác nhận lưu ý pháp lý phiên bản hiện hành (notice_version); tâm trong khung đất liền Việt Nam, bán kính lớn hơn 0 và không quá 50 km; có ghi vết",
         "operationId": "comms_put_map_frame",
         "tags": [
           "comms"
@@ -14146,6 +14159,7 @@
             },
             "x-vigov-error-codes": [
               "center_outside_mainland",
+              "notice_not_acknowledged",
               "radius_out_of_range"
             ]
           },
@@ -14158,6 +14172,112 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/map-frame/reset": {
+      "post": {
+        "summary": "Về khung mặc định của nền tảng — xã thôi dùng khung riêng (giữ lại giá trị cũ, không xoá); phải xác nhận lưu ý pháp lý phiên bản hiện hành; có ghi vết; trả về khung đang áp sau khi đổi",
+        "operationId": "comms_post_map_frame_reset",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "10-ban-do-kinh-te-so §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "b3e625f8de97",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.mapFrameResetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.mapFrameOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "notice_not_acknowledged"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "map_frame_default_unavailable"
+            ]
           }
         }
       }
@@ -29909,6 +30029,33 @@
         ],
         "additionalProperties": false
       },
+      "comms.mapFrameDefaultOut": {
+        "type": "object",
+        "properties": {
+          "center_lat": {
+            "type": "number"
+          },
+          "center_lng": {
+            "type": "number"
+          },
+          "radius_km": {
+            "type": "number"
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "bounds",
+          "center_lat",
+          "center_lng",
+          "radius_km"
+        ],
+        "additionalProperties": false
+      },
       "comms.mapFrameIn": {
         "type": "object",
         "properties": {
@@ -29929,11 +30076,18 @@
               "number",
               "null"
             ]
+          },
+          "notice_version": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "center_lat",
           "center_lng",
+          "notice_version",
           "radius_km"
         ],
         "additionalProperties": false
@@ -29943,6 +30097,9 @@
         "properties": {
           "configured": {
             "type": "boolean"
+          },
+          "source": {
+            "type": "string"
           },
           "center_lat": {
             "type": [
@@ -29977,10 +30134,54 @@
           },
           "updated_by": {
             "type": "string"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.mapFrameDefaultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommended_radius_km": {
+            "type": "number"
+          },
+          "usual_radius_km": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "max_radius_km": {
+            "type": "number"
+          },
+          "notice_version": {
+            "type": "string"
           }
         },
         "required": [
-          "configured"
+          "configured",
+          "max_radius_km",
+          "notice_version",
+          "recommended_radius_km",
+          "usual_radius_km"
+        ],
+        "additionalProperties": false
+      },
+      "comms.mapFrameResetIn": {
+        "type": "object",
+        "properties": {
+          "notice_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "notice_version"
         ],
         "additionalProperties": false
       },
