@@ -3,21 +3,25 @@ id: 0072-ban-do-kinh-te-so-nen-tu-host
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 8ac95fe7
+derived_from_commit: 6170a977
 expires: null
 owns_facts:
-  - "Bản đồ kinh tế số — nền bản đồ là tệp Protomaps PMTiles TỰ PHỤC VỤ (dữ liệu OSM, ghi nguồn ODbL), một tệp tĩnh cho mỗi vùng do vận hành tải lên một chỗ tĩnh của ViGov (không qua core/storage, không theo khoá theo xã của ADR 0052; hỗ trợ Range + CORS), MapLibre GL JS đọc qua giao thức pmtiles; không gọi máy chủ tile/style/glyph/sprite nào bên ngoài (chốt 04/10/2026)"
-  - "Bản đồ kinh tế số — chủ quyền: tệp nền cắt theo khung đất liền của tỉnh, nhãn tiếng Việt, maxBounds = khung của chính tệp cộng minZoom; chưa có xác nhận pháp lý (chốt 04/10/2026)"
+  - "Bản đồ kinh tế số — nền bản đồ = bản công cộng OpenFreeMap (tiles.openfreemap.org; không khoá API, không giới hạn lượt, cho dùng thương mại, không SLA; ghi nguồn bắt buộc 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap'); URL style là biến phía máy chủ toàn nền tảng của web-admin đọc lúc chạy, không NEXT_PUBLIC_*, thiếu thì không có nền và một câu trên màn hình, không bao giờ rơi về host khác (chủ dự án chốt 04/10/2026, thay PMTiles tự phục vụ)"
+  - "Bản đồ kinh tế số — luật 3 điểm dừng #2 ĐÃ QUYẾT chỉ cho bản đồ tài nguyên của xã phía cán bộ (viewport ra host nước ngoài được chấp nhận); vẽ toạ độ phản ánh của công dân (bản đồ nhiệt, bản đồ hiện trường) trên nền ngoài VẪN CHƯA QUYẾT (chốt 04/10/2026)"
+  - "Bản đồ kinh tế số — khung xã CỨNG: mỗi xã lưu tâm (lat/lng) + bán kính (km) ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã chưa đặt khung thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; bán kính có cận dưới/cận trên đặt tên; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026)"
   - "Bản đồ kinh tế số — danh mục loại tài nguyên = đúng 11 nhóm của đặc tả §3, mã tiếng Việt không dấu theo ADR 0011 (doanh-nghiep … cong-trinh-dau-tu-cong), vào từng xã bằng hành động 'nạp 11 nhóm mặc định' có vết, không bằng migration (chốt 04/10/2026)"
   - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: lớp nhiệt phản ánh, mật độ theo thôn, nhập Excel, Mini App, PostGIS/vector tile, geocoding ngoài"
-  - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất; bản đồ mở theo phạm vi tài nguyên của xã, không cấu hình tâm xã; URL nền là biến phía máy chủ đọc lúc chạy, thiếu thì nền xám"
-  - "Bản đồ kinh tế số — cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng"
+  - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất"
+  - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: connect-src/img-src gồm tiles.openfreemap.org, worker-src blob:"
+  - "Bản đồ kinh tế số — phương án dự phòng nếu bỏ OpenFreeMap: cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ"
 ---
 
 # 0072. Bản đồ kinh tế số — nền tự phục vụ, 11 nhóm tài nguyên, phạm vi MVP
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-04 · **Người quyết:** chủ dự án, 04/10/2026 (mục 1–4
 của §Quyết định); phiên chính chọn các điểm ở §5, có lý do kèm theo.
+**Sửa đổi 04/10/2026:** mục 1 và 2 bị thay bởi §Sửa đổi 04/10/2026 — OpenFreeMap và khung
+xã (cuối tệp). Văn bản gốc giữ nguyên bên dưới.
 
 ## Bối cảnh
 
@@ -48,6 +52,9 @@ chủ tile, chưa có tệp thì nền xám).
 
 ### 1. Nền bản đồ — PMTiles tự phục vụ (chủ dự án chốt)
 
+> **BỊ THAY 04/10/2026** — nền là OpenFreeMap, xem §Sửa đổi 04/10/2026 (H1). Giữ lại làm lịch sử
+> và làm phương án dự phòng.
+
 - Dữ liệu OpenStreetMap đóng gói bởi Protomaps, **một tệp `.pmtiles` cho mỗi vùng**, đặt ở một
   chỗ tĩnh do ViGov kiểm soát (ngoài `core/storage` — xem §Hệ quả), trình duyệt đọc bằng HTTP
   range request.
@@ -57,6 +64,9 @@ chủ tile, chưa có tệp thì nền xám).
 - Ghi nguồn bắt buộc, hiện ở góc bản đồ: `© OpenStreetMap contributors` (giấy phép ODbL).
 
 ### 2. Chủ quyền (chủ dự án chốt)
+
+> **BỊ THAY 04/10/2026** — cách giảm rủi ro bằng cắt tệp nền không còn áp dụng (tile OpenFreeMap
+> phủ cả thế giới); thay bằng khung xã cứng, xem §Sửa đổi 04/10/2026 (H3).
 
 - Tệp nền được **cắt theo khung đất liền của tỉnh** → Hoàng Sa, Trường Sa **không có trong dữ
   liệu**, nên không thể bị vẽ sai.
@@ -111,6 +121,10 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 
 ### 5. Các chọn lựa của phiên chính (có lý do)
 
+> Ba dòng cuối bảng (mở theo phạm vi tài nguyên / không tâm xã · URL tệp nền · CSP host storage)
+> bị thay 04/10/2026 — xem §Sửa đổi 04/10/2026, H1, H3, H4. Hai dòng đầu và dòng số điện thoại
+> vẫn giữ.
+
 | Chọn | Vì sao |
 |---|---|
 | Toạ độ `numeric(10,6)`, **bắt buộc** | Đặc tả `10:199` và quy tắc `10:251`. PostGIS không có trong hạ tầng (ADR 0010, bảng `0010:40` chỉ có PostgreSQL); độ chính xác 6 chữ số ≈ 0,1 m là đủ cho một ghim |
@@ -134,6 +148,9 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 
 ## Dựng và cập nhật tệp nền
 
+> **Từ 04/10/2026: phương án dự phòng nếu bỏ OpenFreeMap** (§Sửa đổi 04/10/2026, H4). Không phải
+> việc phải làm khi dựng `/ban-do`.
+
 1. Lấy `pmtiles` (go-pmtiles, https://github.com/protomaps/go-pmtiles/releases).
 2. Cắt vùng từ một bản dựng hằng ngày của Protomaps:
 
@@ -152,6 +169,8 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 
 ## Điểm dừng — hỏi người dùng, không tự quyết
 
+> Điểm 1, 2 và 4 được viết lại ở §Sửa đổi 04/10/2026 (H4); bản dưới là bản gốc.
+
 1. Bất kỳ host bên ngoài nào cho tile, style, glyph, sprite hay geocoding.
 2. Mở rộng `maxBounds` hoặc `bbox` ra vùng biển, đảo.
 3. Thêm PostGIS.
@@ -166,3 +185,97 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 | 2 | Lớp nhiệt phản ánh và "Mật độ theo thôn" — cần hợp đồng đọc từ `petitions` | Chủ dự án + kiến trúc |
 | 3 | Geocoding địa chỉ đường phố | Chủ dự án |
 | 4 | Bề mặt Mini App | Chủ dự án |
+
+## Sửa đổi 04/10/2026 — OpenFreeMap và khung xã
+
+Chủ dự án chốt 04/10/2026, sau khi đọc khuyến nghị PMTiles ở trên: *"dùng OpenFreeMap, giới hạn
+khung bản đồ trong xã"*. Mục 1 và cách giảm rủi ro của mục 2 bị thay; mục 3, 4 và phần còn hiệu
+lực của §5 giữ nguyên.
+
+### H1. Nền bản đồ — OpenFreeMap bản công cộng
+
+| Điểm | Nội dung |
+|---|---|
+| Nguồn | Bản công cộng của OpenFreeMap (https://openfreemap.org): miễn phí, không khoá API, không giới hạn lượt, cho dùng thương mại. **Không SLA**, cung cấp nguyên trạng |
+| Ghi nguồn | Bắt buộc, hiện ở góc bản đồ: `OpenFreeMap © OpenMapTiles Data from OpenStreetMap`. Đúng chuỗi TileJSON `https://tiles.openfreemap.org/planet` trả về (đọc 04/10/2026) |
+| URL style | **Biến phía máy chủ** của web-admin, toàn nền tảng, đọc lúc chạy. **Không** `NEXT_PUBLIC_*`, không nướng vào bundle — cùng lý do bảng phương án ở trên (`web-admin/Dockerfile:56-65`, luật 8 bất biến 4–5). Tên biến đặt khi dựng, theo `skills/infra-config` |
+| Thiếu biến | Không có nền, một câu giải thích trên màn hình. **Không bao giờ** rơi về host khác: fallback chỉ xảy ra đúng ngày cấu hình hỏng, và gửi viewport tới một host chưa ai chốt |
+| Đường lui | Tự host bộ OpenFreeMap sau này vẫn làm được **mà không đổi mô hình dữ liệu**: cùng lược đồ OpenMapTiles, chỉ đổi URL style. Phương án PMTiles (§Dựng và cập nhật tệp nền) là dự phòng thứ hai |
+
+Host mà style `liberty` tham chiếu (tải `https://tiles.openfreemap.org/styles/liberty` ngày
+04/10/2026, kèm TileJSON của nguồn vector):
+
+| Thành phần | URL | Host |
+|---|---|---|
+| Nguồn vector `openmaptiles` | `https://tiles.openfreemap.org/planet` → tile `…/planet/<phiên-bản>/{z}/{x}/{y}.pbf` | `tiles.openfreemap.org` |
+| Nguồn raster `ne2_shaded` | `https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png` | `tiles.openfreemap.org` |
+| Glyph | `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf` | `tiles.openfreemap.org` |
+| Sprite | `https://tiles.openfreemap.org/sprites/ofm_f384/ofm` | `tiles.openfreemap.org` |
+
+Chỉ một host. Phiên bản trong URL tile và sprite đổi theo thời gian — CSP phải cho cả host, không
+cho từng đường dẫn.
+
+**Nhãn:** style `liberty` gốc hiện `name_en` trước `name` (biểu thức `text-field`, đọc 04/10/2026).
+Phải thay biểu thức để ưu tiên tên tiếng Việt khi tile có (`name:vi`, rồi `name`). Tile có mang
+`name:vi` cho từng đối tượng hay không **chưa kiểm** — kiểm khi dựng.
+
+### H2. Hệ quả nói thẳng — luật 3 điểm dừng #2 đã quyết, chỉ cho bề mặt này
+
+- Mỗi yêu cầu tile để lộ **viewport** — vùng của xã và những chỗ cán bộ phóng to vào — cho một
+  host nước ngoài. Chủ dự án chấp nhận điều này.
+- **Phạm vi quyết định:** chỉ bản đồ kinh tế số **phía cán bộ**, vẽ **tài nguyên của xã**.
+- **Không thuộc phạm vi:** vẽ toạ độ phản ánh của công dân lên nền này — bản đồ nhiệt và bản đồ
+  hiện trường của phiếu phản ánh. Vẫn **chưa quyết**; giao diện đang ghi đúng như vậy ở
+  `web-admin/src/features/phan-anh/nhan-phieu.ts:1336-1351` (`sceneMap`, `heatMapTab`). Quyết định
+  ở đây **không** được dẫn để mở hai phần ấy.
+
+### H3. Khung xã — khung CỨNG
+
+| Điểm | Nội dung |
+|---|---|
+| Lưu gì | Mỗi xã một **tâm** (lat/lng) + **bán kính** (km), ở `service-comms`, cạnh sổ tài nguyên (`service-comms/migrations/0015_map_asset.sql`). Là cấu hình theo xã đọc lúc chạy (luật 1 bất biến 10) |
+| Áp thế nào | web-admin đặt `maxBounds` của MapLibre theo khung ấy → không kéo hay thu nhỏ ra tầm quốc gia được |
+| Ai đặt | Người giữ `admin.lookup` (quyền "Quản lý danh mục", `service-identity/migrations/0001_init.sql:281`), **có vết** (luật 6) |
+| Chưa đặt | Trang **không vẽ bản đồ nào** — chỉ một câu hướng dẫn, và biểu mẫu đặt khung cho người giữ `admin.lookup`. Sổ tài nguyên dạng danh sách vẫn dùng được. Thay dòng "mở theo phạm vi tài nguyên của xã" ở §5 |
+| Bán kính | Cận dưới và cận trên là **hằng số có tên**. **Đề xuất 1–30 km** — chưa chốt |
+| Tâm | Phải nằm trong **khung đất liền Việt Nam** (hằng số có tên; giá trị chính xác chốt khi dựng) |
+
+**Vì sao cứng, không phải "mở mặc định ở xã":**
+
+1. Tile OpenFreeMap phủ **cả thế giới** (TileJSON `bounds` = `[-180, -85.05, 180, 85.05]`, đọc
+   04/10/2026), gồm Hoàng Sa, Trường Sa với tên theo OSM. Cắt dữ liệu như mục 2 gốc không còn làm
+   được; chỉ còn cách không cho khung nhìn tới đó.
+2. Một bản đồ Việt Nam tầm quốc gia **thiếu** hai quần đảo cũng bị xử phạt: Grab Việt Nam bị phạt
+   60 triệu đồng (viettimes.vn/grab-viet-nam-bi-phat-60-trieu-dong-post165893.html — phiên chính
+   tìm qua web 04/10/2026, mới đọc tóm tắt kết quả tìm kiếm, chưa đọc nguyên bài). Không có tầm quốc gia thì không có câu hỏi thể hiện hay thiếu.
+3. Cận trên của bán kính là thứ giữ khung xa quần đảo: tâm trong khung đất liền + bán kính nhỏ
+   → khung không chạm vùng biển xa bờ. Nới cận trên là điểm dừng (H4).
+
+**Hệ quả chưa có lời giải:** đơn vị hành chính cấp xã nằm **trên** Hoàng Sa hay Trường Sa có tâm
+ngoài khung đất liền, nên không đặt được khung và không có bản đồ. Không tự mở ngoại lệ — điểm dừng.
+
+### H4. Những gì bị thay
+
+| Gốc | Nay |
+|---|---|
+| Mục 1 — PMTiles tự phục vụ | OpenFreeMap (H1) |
+| Mục 2 — cắt tệp nền theo khung đất liền tỉnh, `maxBounds` = khung tệp | Khung xã cứng (H3). Nhãn tiếng Việt vẫn là yêu cầu |
+| §Dựng và cập nhật tệp nền | Giữ làm **phương án dự phòng nếu bỏ OpenFreeMap** |
+| §5 — URL tệp nền, thiếu thì nền xám | URL style (H1), thiếu thì không có nền |
+| §5 — CSP có host storage | CSP khi nợ `missing-security-headers` (`tools/security_debt.json:32-37`) được trả: `connect-src` và `img-src` gồm `tiles.openfreemap.org` (host duy nhất ở bảng H1), cộng `worker-src blob:` |
+| Điểm dừng 1 — bất kỳ host ngoài nào | Bất kỳ host ngoài nào **khác OpenFreeMap** cho tile, style, glyph, sprite. **Geocoding vẫn chỉ nội bộ** — không host ngoài nào |
+| Điểm dừng 2 — mở `maxBounds`/`bbox` ra biển, đảo | Nới cận trên bán kính, nới khung đất liền cho tâm, hay bỏ khung cứng |
+| Điểm dừng 4 — host tệp nền phải của ViGov | Chỉ áp khi quay về phương án dự phòng PMTiles |
+
+Điểm dừng thêm: vẽ **bất kỳ toạ độ nào của công dân** lên nền OpenFreeMap (H2); xã trên quần đảo
+cần bản đồ (H3).
+
+### Việc còn mở sau sửa đổi
+
+| # | Việc | Ai |
+|---|---|---|
+| 1 | Xác nhận pháp lý về thể hiện chủ quyền — vẫn mở, nay với khung xã cứng trên tile phủ toàn cầu | Chủ dự án |
+| 2 | OpenFreeMap không SLA: sập thì bản đồ trắng; sổ tài nguyên dạng danh sách vẫn chạy. Có cần tự host không | Chủ dự án |
+| 3 | Nhà cung cấp nền cho lớp nhiệt phản ánh / bản đồ hiện trường (H2) — vẫn mở, cùng #2 bảng gốc | Chủ dự án |
+| 4 | Cận bán kính 1–30 km (đề xuất) và giá trị khung đất liền | Chủ dự án duyệt khi dựng |
+| 5 | Tile có mang `name:vi` không | Kiểm khi dựng |
