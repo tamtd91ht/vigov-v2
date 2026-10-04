@@ -287,6 +287,14 @@
       "bang_chung": "service-platform/migrations/0019_upload_policy_staff_avatar.sql; upload_policy_test.go want staff-avatar 2097152 png/webp/jpeg NULL; upload_policy_pg_test.go 13 chính sách / 13 dòng seed. make check rc=0 (04/10/2026). Ca TestPg* bỏ qua vì không có VIGOV_TEST_DSN.",
       "no_confirm": [],
       "tiep_theo": "Giá trị đặt THEO TIỀN LỆ logo xã (ADR 0069 #4: ≤ 2 MB, PNG/WebP/JPEG, không giới hạn số tệp) — chủ dự án chưa chốt riêng cho ảnh đại diện; đổi thì người vận hành sửa dòng chính sách, không sửa migration. Đường ghi ảnh đại diện ở identity là việc của phiên làm Danh bạ cán bộ."
+    },
+    {
+      "id": "khung-ban-do-mac-dinh",
+      "viec": "Khung bản đồ mặc định theo xã cho Bản đồ kinh tế số — bảng, tuyến khu vận hành, RPC GetMapFrameDefault (ADR 0072 sửa đổi lần 2)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "7abf9b47 proto + core/platformclient; 2ec6dfa4 migration 0020 commune_map_frame_default, GET/PUT /api/v1/communes/{id}/map-frame-default (đọc: mọi khoá ops.*, ghi: KeyTenantManage + lý do; bán kính ngoài 3–20 km cần acknowledged_unusual — máy chủ kiểm), RPC đọc xã từ x-tenant-id. go test xanh, ca PG SKIP.",
+      "tiep_theo": "Giao diện platform-admin (P2). Chạy ca PG trên PostgreSQL thật. Giá trị đề xuất 10 km / 3–20 km là đề xuất, chủ dự án chỉnh được.",
+      "menu": "ban-do-kinh-te-so"
     }
   ]
 }
