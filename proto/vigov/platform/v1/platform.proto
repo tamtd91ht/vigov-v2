@@ -327,6 +327,62 @@ service PlatformService {
   //
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc ListPetitionFields(ListPetitionFieldsRequest) returns (ListPetitionFieldsResponse);
+
+  // GetMapFrameDefault returns the DEFAULT map frame of THE COMMUNE IN "x-tenant-id" — a centre and
+  // a radius set for that commune by Vihat in the operations console (ADR 0072, amendment 2).
+  //
+  // Its caller is service-comms' map-frame read: comms owns the commune's OWN frame and falls back to
+  // this one only when the commune has set none. Direction is COMMS → PLATFORM only.
+  //
+  // NOT EXEMPT FROM "x-tenant-id", AND THE REQUEST HAS NO FIELD NAMING A COMMUNE (rule 1, forbidden
+  // #2; rule 2, invariant 8). There is deliberately no way to ask for another commune's frame.
+  //
+  // # WHAT THE CALLER MAY DECIDE FROM IT
+  //
+  //   OK + no `frame`     NOT CONFIGURED. The caller draws no map — it never substitutes a built-in
+  //                       centre, another commune's frame, or a frame derived from anything else.
+  //   OK + frame          the frame. An entry outside the bounds on MapFrameDefault is treated
+  //                       exactly like "not configured" — never clamped into range.
+  //   INVALID_ARGUMENT    no "x-tenant-id" (refused by the interceptor before this RPC runs).
+  //   NOT_FOUND           NEVER produced. Not configured is an ABSENT `frame`, never an error.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "not configured": answer 503, so a
+  //                       platform outage is never shown to staff as "this commune has no frame".
+  //
+  // # Reading this is NOT audited
+  //
+  // Commune configuration, no personal data, no caller identity on this port (ADR 0025). CHANGING
+  // the frame is audited in this service by the operations-zone write path.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc GetMapFrameDefault(GetMapFrameDefaultRequest) returns (GetMapFrameDefaultResponse);
+}
+
+// Empty on purpose: the commune is "x-tenant-id" in metadata, never a field (see the RPC).
+message GetMapFrameDefaultRequest {}
+
+message GetMapFrameDefaultResponse {
+  // ABSENT MEANS NOT CONFIGURED. Presence is the signal — not a `configured` flag, which would allow
+  // the answer "configured = false, centre = (x, y)" that nobody can interpret.
+  MapFrameDefault frame = 1;
+}
+
+// MapFrameDefault is one commune's default map frame: a circle the map is held inside (MapLibre
+// maxBounds). Commune configuration, public by nature (it is drawn on a map); no personal data.
+//
+// BOUNDS — the server refuses to store anything outside them, and a caller treats an answer outside
+// them as NOT CONFIGURED:
+//   * centre inside the mainland box: 8.4 <= center_lat <= 23.4, 102.1 <= center_lng <= 109.5;
+//   * 0 < radius_km <= 50.
+// Stored as numeric(10,6) / numeric(10,6) / numeric(4,1); `double` carries all of them exactly
+// enough for a map, and nothing computes a legal or financial figure from them.
+message MapFrameDefault {
+  double center_lat = 1;
+  double center_lng = 2;
+  double radius_km = 3;
+
+  // When this frame last changed. For diagnostics and the operations screen; a caller never decides
+  // anything from it.
+  google.protobuf.Timestamp updated_at = 4;
 }
 
 // Empty on purpose: the commune is "x-tenant-id" in metadata, and the answer is always the whole set

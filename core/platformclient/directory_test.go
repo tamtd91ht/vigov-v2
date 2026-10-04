@@ -281,3 +281,10 @@ func (k kiemHan) ListPetitionFields(context.Context, *platformv1.ListPetitionFie
 	...grpc.CallOption) (*platformv1.ListPetitionFieldsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// GetMapFrameDefault is a commune's default map frame (ADR 0072, amendment 2) — commune
+// configuration, not a Host resolution. Present for the interface alone, like the six above.
+func (k kiemHan) GetMapFrameDefault(context.Context, *platformv1.GetMapFrameDefaultRequest,
+	...grpc.CallOption) (*platformv1.GetMapFrameDefaultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}
