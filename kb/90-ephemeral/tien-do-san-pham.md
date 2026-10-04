@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 12b5a2a9
+derived_from_commit: 5d8dec22
 expires: 2027-01-02
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -117,7 +117,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `citizen-app` | 38 | 20 | 3 | 0 |
 | `core` | 30 | 3 | 1 | 1 |
 | `deploy` | 18 | 11 | 1 | 0 |
-| `platform-admin` | 8 | 0 | 0 | 0 |
+| `platform-admin` | 8 | 1 | 0 | 0 |
 | `proto` | 15 | 1 | 0 | 0 |
 | `service-comms` | 21 | 11 | 3 | 3 |
 | `service-documents` | 10 | 3 | 4 | 0 |
