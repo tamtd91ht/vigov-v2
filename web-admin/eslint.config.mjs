@@ -19,6 +19,9 @@ const cauHinh = [
       "next-env.d.ts",
       "src/lib/api/schema.gen.ts",
       "src/lib/api/dinh-tuyen.gen.ts",
+      // MapLibre's minified worker, copied from node_modules by scripts/copy-maplibre-worker.mjs at
+      // build/dev start — third-party build output, not our source.
+      "public/maplibre/**",
     ],
   },
   ...nextVitals,

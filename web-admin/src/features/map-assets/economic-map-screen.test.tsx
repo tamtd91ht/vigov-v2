@@ -9,6 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
 
 import { EconomicMapScreen } from "./economic-map-screen";
@@ -21,7 +22,7 @@ import {
   OUTSIDE_FRAME,
   SEED_DEFAULTS_BUTTON,
 } from "./labels";
-import { LAYER_LABELS, LAYER_POINTS, SOURCE_ID } from "./map-logic";
+import { CENTRE_SOURCE_ID, LAYER_CENTRE, LAYER_CENTRE_LABEL, LAYER_LABELS, LAYER_POINTS, SOURCE_ID } from "./map-logic";
 
 /* ---- fake MapLibre ------------------------------------------------------------------------------ */
 
@@ -249,9 +250,11 @@ async function mount(setup: Setup, styleUrl: string | null = "https://tiles.open
   root = createRoot(host);
   act(() =>
     root!.render(
-      <PhienProvider>
-        <EconomicMapScreen styleUrl={styleUrl} />
-      </PhienProvider>,
+      <CauHinhXaProvider giaTri={{ displayName: "Xã Thăng Bình", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" }}>
+        <PhienProvider>
+          <EconomicMapScreen styleUrl={styleUrl} />
+        </PhienProvider>
+      </CauHinhXaProvider>,
     ),
   );
   await settle();
@@ -313,6 +316,24 @@ describe("no frame → NO map (ADR 0072 H3)", () => {
   });
 });
 
+describe("the saved commune centre is drawn as a landmark", () => {
+  it("one point at the frame's centre [lng, lat], labelled with the commune name, beneath every asset layer", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = await load();
+    const src = map.getSource(CENTRE_SOURCE_ID) as unknown as { data: { features: { geometry: { coordinates: number[] }; properties: { label: string } }[] } };
+    expect(src.data.features).toHaveLength(1);
+    const [centre] = src.data.features;
+    expect(centre?.geometry.coordinates).toEqual([FRAME_SET.center_lng, FRAME_SET.center_lat]);
+    expect(centre?.properties.label).toBe("Xã Thăng Bình");
+    const ids = map.layers.map((l) => l.id);
+    expect(ids).toContain(LAYER_CENTRE);
+    expect(ids).toContain(LAYER_CENTRE_LABEL);
+    // Beneath the assets: it never covers an asset nor takes its clicks.
+    expect(ids.indexOf(LAYER_CENTRE)).toBeLessThan(ids.indexOf(LAYER_POINTS));
+    expect(ids.indexOf(LAYER_CENTRE_LABEL)).toBeLessThan(ids.indexOf(LAYER_POINTS));
+  });
+});
+
 describe("the map — created once, bounded in the constructor, removed on unmount", () => {
   it("maxBounds AND bounds = the API's bounds, in the constructor; no world copies; one map; remove() on unmount", async () => {
     await mount({ permissions: ["asset.read"] });
@@ -329,7 +350,7 @@ describe("the map — created once, bounded in the constructor, removed on unmou
     expect(map.removed).toBe(true);
   });
 
-  it("one clustered GeoJSON source, points as [lng, lat], and the five layers", async () => {
+  it("one clustered GeoJSON source, points as [lng, lat], the centre landmark first, then the five asset layers", async () => {
     await mount({ permissions: ["asset.read"] });
     const map = await load();
     const src = map.getSource(SOURCE_ID)!;
@@ -340,6 +361,9 @@ describe("the map — created once, bounded in the constructor, removed on unmou
       [108.4, 15.8],
     ]);
     expect(map.layers.map((l) => l.id)).toEqual([
+      "commune-centre-halo",
+      "commune-centre-point",
+      "commune-centre-label",
       "economic-clusters",
       "economic-cluster-count",
       "economic-points",

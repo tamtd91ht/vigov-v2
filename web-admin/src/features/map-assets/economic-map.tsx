@@ -12,6 +12,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { OPENFREEMAP_ATTRIBUTION } from "./labels";
 import {
+  CENTRE_COLOUR,
+  CENTRE_SOURCE_ID,
+  LAYER_CENTRE,
+  LAYER_CENTRE_HALO,
+  LAYER_CENTRE_LABEL,
+  centreCollection,
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS,
   LABEL_MIN_ZOOM,
@@ -58,6 +64,8 @@ export type FlyRequest = { readonly lng: number; readonly lat: number; readonly 
 export type EconomicMapProps = {
   styleUrl: string;
   frame: MapFrame;
+  /** Name drawn beside the saved frame centre (the commune's display name). */
+  centreLabel: string;
   collection: EconomicCollection;
   visible: ReadonlySet<string>;
   selectedId: string | null;
@@ -73,6 +81,7 @@ const POINT_COLOUR = colourExpression() as unknown as ExpressionSpecification;
 export function EconomicMap({
   styleUrl,
   frame,
+  centreLabel,
   collection,
   visible,
   selectedId,
@@ -88,10 +97,14 @@ export function EconomicMap({
   const onPointClickRef = useRef(onPointClick);
   const onLoadErrorRef = useRef(onLoadError);
   const dataRef = useRef({ collection, visible, selectedId });
+  // The saved centre, read when the map loads; a changed frame remounts this component (`key`), so a
+  // stale centre cannot survive. The label may change (name corrected) and is pushed by an effect below.
+  const centreRef = useRef(centreCollection(frame, centreLabel));
   useEffect(() => {
     onPointClickRef.current = onPointClick;
     onLoadErrorRef.current = onLoadError;
     dataRef.current = { collection, visible, selectedId };
+    centreRef.current = centreCollection(frame, centreLabel);
   });
 
   const [minLng, minLat, maxLng, maxLat] = frame.bounds;
@@ -141,6 +154,45 @@ export function EconomicMap({
         for (const id of nameLabelLayers(map.getStyle().layers ?? [])) {
           map.setLayoutProperty(id, "text-field", VIETNAMESE_TEXT_FIELD as unknown as ExpressionSpecification);
         }
+
+        // The saved commune centre — added FIRST so every asset layer draws above it and keeps its clicks.
+        map.addSource(CENTRE_SOURCE_ID, {
+          type: "geojson",
+          data: centreRef.current as unknown as GeoJSON.FeatureCollection,
+        });
+        map.addLayer({
+          id: LAYER_CENTRE_HALO,
+          type: "circle",
+          source: CENTRE_SOURCE_ID,
+          paint: { "circle-radius": 16, "circle-color": CENTRE_COLOUR, "circle-opacity": 0.18 },
+        });
+        map.addLayer({
+          id: LAYER_CENTRE,
+          type: "circle",
+          source: CENTRE_SOURCE_ID,
+          paint: {
+            "circle-radius": 7,
+            "circle-color": CENTRE_COLOUR,
+            "circle-stroke-width": 3,
+            "circle-stroke-color": "#ffffff",
+          },
+        });
+        map.addLayer({
+          id: LAYER_CENTRE_LABEL,
+          type: "symbol",
+          source: CENTRE_SOURCE_ID,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-font": ["Noto Sans Bold"],
+            "text-size": 14,
+            "text-offset": [0, 1.4],
+            "text-anchor": "top",
+            // Always shown: it is the one landmark that answers "where is the commune".
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          },
+          paint: { "text-color": "#991b1b", "text-halo-color": "#ffffff", "text-halo-width": 2 },
+        });
 
         const d = dataRef.current;
         map.addSource(SOURCE_ID, {
@@ -272,6 +324,13 @@ export function EconomicMap({
     if (!ready || map === null) return;
     map.setFilter(LAYER_SELECTED, selectedFilter(selectedId) as unknown as FilterSpecification);
   }, [ready, selectedId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || map === null) return;
+    const source = map.getSource(CENTRE_SOURCE_ID) as GeoJSONSource | undefined;
+    source?.setData(centreRef.current as unknown as GeoJSON.FeatureCollection);
+  }, [ready, centreLabel]);
 
   useEffect(() => {
     const map = mapRef.current;

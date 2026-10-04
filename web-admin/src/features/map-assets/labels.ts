@@ -132,6 +132,9 @@ export const FILTERS_TITLE = "BỘ LỌC";
 export const HIDE_ALL = "Ẩn hết";
 export const SHOW_ALL = "Hiện hết";
 export const UNVERIFIED_LEGEND = "Chấm nhạt: chưa xác minh.";
+export const CENTRE_LEGEND = "Chấm đỏ có quầng: tâm xã đã lưu trong khung bản đồ.";
+/** Label of the centre dot when the commune's name is not available. */
+export const CENTRE_FALLBACK_LABEL = "Tâm xã";
 
 /* ---- parts of the spec that are not built (ADR 0068 §14) -------------------------------------- */
 

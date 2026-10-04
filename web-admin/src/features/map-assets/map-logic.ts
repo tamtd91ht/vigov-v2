@@ -157,6 +157,33 @@ export function round6(x: number): number {
  */
 export const MAPLIBRE_WORKER_URL = "/maplibre/maplibre-gl-worker.mjs";
 
+/* ---- commune centre --------------------------------------------------------------------------- */
+
+/**
+ * The SAVED frame centre (map-frame `center_lat`/`center_lng`), drawn as a fixed landmark so staff
+ * see where the commune is the moment the map opens (owner, 04/10/2026). Its own source and layers,
+ * BENEATH the asset layers: it never covers an asset nor takes its clicks, and it is not an asset.
+ */
+export const CENTRE_SOURCE_ID = "commune-centre";
+export const LAYER_CENTRE_HALO = "commune-centre-halo";
+export const LAYER_CENTRE = "commune-centre-point";
+export const LAYER_CENTRE_LABEL = "commune-centre-label";
+export const CENTRE_COLOUR = "#dc2626";
+
+/** One Point at the frame centre, `[lng, lat]` (GeoJSON order), labelled with the commune's name. */
+export function centreCollection(frame: MapFrame, label: string) {
+  return {
+    type: "FeatureCollection" as const,
+    features: [
+      {
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [frame.centerLng, frame.centerLat] as [number, number] },
+        properties: { label },
+      },
+    ],
+  };
+}
+
 /* ---- layers ----------------------------------------------------------------------------------- */
 
 export const SOURCE_ID = "economic-places";

@@ -16,6 +16,7 @@ import {
   SHOW_ALL,
   STATUS_OPTIONS,
   UNVERIFIED_LEGEND,
+  CENTRE_LEGEND,
   pendingPart,
 } from "./labels";
 import { groupSwatchClass } from "./map-logic";
@@ -81,6 +82,10 @@ export function LayerPanel({
         })}
       </ul>
       <p className="m-0 text-xs text-ink-500">{UNVERIFIED_LEGEND}</p>
+      <p className="m-0 flex items-center gap-2 text-xs text-ink-500">
+        <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full border-2 border-white bg-[#dc2626] ring-2 ring-[#dc2626]/30" />
+        {CENTRE_LEGEND}
+      </p>
       <div className="flex min-h-10 items-center gap-2" data-pending="">
         <input id="heatmap-toggle" type="checkbox" role="switch" disabled className="size-4 cursor-not-allowed" />
         <label htmlFor="heatmap-toggle" className="text-[13px] text-ink-500">

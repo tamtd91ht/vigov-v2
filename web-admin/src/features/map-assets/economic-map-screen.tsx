@@ -3,6 +3,7 @@
 import { Download, Expand, Layers, List, Map as MapIcon, MapPinned, Plus, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -61,6 +62,7 @@ import {
   SEED_DEFAULTS_BUTTON,
   VIEW_MAP,
   VIEW_REGISTER,
+  CENTRE_FALLBACK_LABEL,
   pendingPart,
 } from "./labels";
 import {
@@ -112,6 +114,8 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const [types, setTypes] = useState<KetQua<comms_danhSachLoaiTaiNguyenRa> | null>(null);
   const [typesReload, setTypesReload] = useState(0);
   const [frameRes, setFrameRes] = useState<KetQua<comms_mapFrameOut> | null>(null);
+  // Commune name for the centre landmark — the same display name the header shows (from Host, ADR 0069).
+  const centreLabel = useCauHinhXa().displayName.trim() || CENTRE_FALLBACK_LABEL;
   const [frameReload, setFrameReload] = useState(0);
   const [summary, setSummary] = useState<KetQua<comms_mapAssetSummaryOut> | null>(null);
   const [units, setUnits] = useState<readonly identity_thonToDanPhoRa[]>([]);
@@ -424,6 +428,7 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         key={frame.bounds.join(",")}
         styleUrl={styleUrl}
         frame={frame}
+        centreLabel={centreLabel}
         collection={collection}
         visible={visible}
         selectedId={selectedId}
