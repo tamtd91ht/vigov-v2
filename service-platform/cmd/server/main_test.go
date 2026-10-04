@@ -79,9 +79,17 @@ func (fieldsFake) ListPetitionFields(context.Context) ([]domain.PetitionField, e
 	return []domain.PetitionField{{Code: "khac", DefaultLabel: "Khác", SortOrder: 12, Active: true}}, nil
 }
 
+// framesFake answers "not configured" — and only when a commune is in the context.
+type framesFake struct{}
+
+func (framesFake) MapFrameDefault(ctx context.Context) (domain.MapFrameDefault, bool, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.MapFrameDefault{}, false, nil
+}
+
 func depsGia() svcgrpc.Deps {
 	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}, Policies: policiesFake{},
-		Fields: fieldsFake{}}
+		Fields: fieldsFake{}, MapFrames: framesFake{}}
 }
 
 // moMay starts the real server on an in-memory connection and returns a client dialled with the

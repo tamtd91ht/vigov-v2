@@ -21,7 +21,7 @@ func (urlsFake) PublicURL(key string) string { return "https://media.example/" +
 func profileServer(hs domain.HoSoHienThi, urls svcgrpc.PublicURLs) *svcgrpc.Server {
 	return svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(),
 		HoSo:     hoSoGia{theoXa: map[tenant.ID]domain.HoSoHienThi{xaTanPhu: hs}},
-		Policies: samplePolicies(), Fields: sampleFields(), URLs: urls},
+		Policies: samplePolicies(), Fields: sampleFields(), MapFrames: sampleFrames(), URLs: urls},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 

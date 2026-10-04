@@ -41,7 +41,7 @@ func sampleFields() fieldsFake {
 func fieldsClient(t *testing.T, f svcgrpc.PetitionFields) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
 	return dungVoi(t, svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
-		Policies: samplePolicies(), Fields: f})
+		Policies: samplePolicies(), Fields: f, MapFrames: sampleFrames()})
 }
 
 // Every column crosses, and a RETIRED code is returned with active=false — old petitions still need
@@ -121,5 +121,5 @@ func TestNewServerWithoutPetitionFieldsPanics(t *testing.T) {
 		}
 	}()
 	_ = svcgrpc.NewServer(svcgrpc.Deps{Dir: danhBaMau(), Apps: soMiniAppMau(), HoSo: hoSoMau(),
-		Policies: samplePolicies()}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		Policies: samplePolicies(), MapFrames: sampleFrames()}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }

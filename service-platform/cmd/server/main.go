@@ -217,8 +217,12 @@ func run(log *slog.Logger) error {
 	// own ListUploadPolicies handler instead of a network hop to itself (localUploadPolicies).
 	policyReader := svcstore.NewUploadPolicyStore(db)
 	fields := svcstore.NewPetitionFieldStore(db)
+	// The commune's DEFAULT map frame (migration 0020, ADR 0072 amendment 2): a commune's own row, so
+	// the SCOPED store — the gRPC read gets the commune from "x-tenant-id", the operator routes from
+	// the path.
+	mapFrames := svcstore.NewMapFrameDefaultStore(kho)
 	policies := uploadpolicy.New(localUploadPolicies{srv: svcgrpc.NewServer(svcgrpc.Deps{
-		Dir: danhBa, Apps: danhBa, HoSo: hoSo, Policies: policyReader, Fields: fields,
+		Dir: danhBa, Apps: danhBa, HoSo: hoSo, Policies: policyReader, Fields: fields, MapFrames: mapFrames,
 	}, log)}, log)
 	branding := svcapp.NewBranding(kho, svcstore.NewStoredFileStore(kho), hoSo, objects, scanner, policies, log)
 
@@ -246,7 +250,7 @@ func run(log *slog.Logger) error {
 	// tier-1 petition field codes (fields, the same store the gRPC read uses — ADR 0073 #3).
 	opEdge, err := wireOperatorEdge(cfg, svcstore.NewOperatorRegistry(db),
 		svcstore.NewRegistryWriter(store.New(db)), policyReader, svcstore.NewOperatorLog(db),
-		svcstore.NewSharedMiniAppStore(db), fields, directory.Forget, log)
+		svcstore.NewSharedMiniAppStore(db), fields, mapFrames, directory.Forget, log)
 	if err != nil {
 		return err
 	}
@@ -335,12 +339,13 @@ func run(log *slog.Logger) error {
 	// URLs builds logo_public_url / web_admin_banner_public_url from OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL
 	// (the branding use case; "" when object storage is not configured — never a guessed URL).
 	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey(), svcgrpc.Deps{
-		Dir:      danhBa,
-		Apps:     danhBa,
-		HoSo:     hoSo,
-		Policies: policyReader,
-		Fields:   fields,
-		URLs:     branding,
+		Dir:       danhBa,
+		Apps:      danhBa,
+		HoSo:      hoSo,
+		Policies:  policyReader,
+		Fields:    fields,
+		MapFrames: mapFrames,
+		URLs:      branding,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr())

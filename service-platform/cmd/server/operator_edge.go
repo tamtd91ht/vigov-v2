@@ -143,6 +143,7 @@ type operatorWiring struct {
 func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.CommuneWriter,
 	policies svchttp.UploadPolicyEditor, oplog svchttp.OperatorLogReader,
 	shared svchttp.SharedMiniAppEditor, fields svchttp.PetitionFieldEditor,
+	mapFrames svchttp.MapFrameDefaultEditor,
 	forget func(string), log *slog.Logger) (operatorWiring, error) {
 	host := cfg.OperatorHost()
 	signingKeys := cfg.OperatorSessionSigningKeys()
@@ -200,6 +201,7 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 		OperatorLog:  oplog,
 		SharedApp:    shared,
 		Fields:       fields,
+		MapFrames:    mapFrames,
 		OperatorHost: host,
 		NewID:        ulid.Moi,
 		Forget:       forget,

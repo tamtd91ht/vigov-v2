@@ -51,6 +51,8 @@ type OperatorDeps struct {
 	// field codes (ADR 0073 #3).
 	SharedApp SharedMiniAppEditor
 	Fields    PetitionFieldEditor
+	// MapFrames is a commune's default map frame (ADR 0072 amendment 2, K1).
+	MapFrames MapFrameDefaultEditor
 	// OperatorHost is refused as a commune host (ADR 0048 stop condition #6).
 	OperatorHost string
 	NewID        func() (string, error)
@@ -363,6 +365,33 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
 			idem.KhongCan("retiring what is already retired is NOT_FOUND in identity, answered as the same end state with nothing written")(
 				http.HandlerFunc(h.retireMiniAppSecret))))
+
+	// --- the commune's default map frame (ADR 0072 amendment 2, K1–K2) -----------------------------
+
+	// @summary  Khung bản đồ mặc định của một xã (tâm, bán kính, khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn]); chưa đặt thì configured=false; kèm bán kính khuyến nghị, khoảng thường dùng, trần
+	// @reply    200 mapFrameDefaultView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("GET /api/v1/communes/{id}/map-frame-default",
+		opauth.RequireKey(h.d.Auth, opauth.AnyKey)(
+			http.HandlerFunc(h.getMapFrameDefault)))
+
+	// @summary  Đặt / đổi khung bản đồ mặc định của một xã (bắt buộc lý do); bán kính ngoài 3–20 km phải kèm acknowledged_unusual=true; vết dat_khung_ban_do_mac_dinh ở audit_log của xã, cùng giao dịch
+	// @request  mapFrameDefaultBody
+	// @reply    200 mapFrameDefaultView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 httpx.Error commune_inactive
+	// @reply    422 httpx.Error center_outside_mainland radius_out_of_range radius_unusual_unconfirmed invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/communes/{id}/map-frame-default",
+		opauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(
+			idem.KhongCan("setting the values it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.setMapFrameDefault))))
 
 	// --- upload limits (ADR 0073 #5, ADR 0052 §10) -------------------------------------------------
 

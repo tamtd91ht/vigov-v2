@@ -2,7 +2,8 @@
 //
 // It answers registry questions — "which commune owns this Host", "what is this commune called",
 // "which mode and commune does this Mini App have" — plus ONE commune-scoped read, that commune's
-// own display profile (ADR 0045, decision 5) — plus platform-wide operating configuration, today
+// own display profile (ADR 0045, decision 5), and that commune's default map frame (ADR 0072
+// amendment 2, map_frame_default.go) — plus platform-wide operating configuration, today
 // the upload limits (ADR 0052 §10, upload_policy.go) — plus tier 1 of the petition field catalogue
 // (ADR 0026, ADR 0060, petition_field.go). It is deliberately incapable of answering a
 // question about a commune's business content. ADR 0003: the
@@ -73,13 +74,20 @@ type PetitionFields interface {
 	ListPetitionFields(ctx context.Context) ([]domain.PetitionField, error)
 }
 
+// MapFrameDefaults reads the default map frame of THE COMMUNE IN ctx (migration 0020). Scoped: no
+// commune argument. ok=false = not configured.
+type MapFrameDefaults interface {
+	MapFrameDefault(ctx context.Context) (domain.MapFrameDefault, bool, error)
+}
+
 // Deps are what the server reads. Every field is required.
 type Deps struct {
-	Dir      Directory
-	Apps     SoMiniApp
-	HoSo     HoSoHienThi
-	Policies UploadPolicies
-	Fields   PetitionFields
+	Dir       Directory
+	Apps      SoMiniApp
+	HoSo      HoSoHienThi
+	Policies  UploadPolicies
+	Fields    PetitionFields
+	MapFrames MapFrameDefaults
 	// URLs is the ONE optional dependency: nil answers "" for both image URLs — the same answer as
 	// object storage not configured — and never a guessed URL. Optional because it is a pure function
 	// with a safe zero, unlike the readers above whose nil would be a panic on the first call.
@@ -95,6 +103,7 @@ type Server struct {
 	hoSo     HoSoHienThi
 	policies UploadPolicies
 	fields   PetitionFields
+	frames   MapFrameDefaults
 	urls     PublicURLs
 	log      *slog.Logger
 }
@@ -102,11 +111,12 @@ type Server struct {
 // NewServer panics on a missing dependency, at construction: a nil one would otherwise surface as
 // a panic on the first call of that RPC, in production, as a 500 nobody can explain.
 func NewServer(d Deps, log *slog.Logger) *Server {
-	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || d.Fields == nil || log == nil {
+	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || d.Policies == nil || d.Fields == nil ||
+		d.MapFrames == nil || log == nil {
 		panic("platform grpc: NewServer thiếu phụ thuộc")
 	}
 	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, policies: d.Policies, fields: d.Fields,
-		urls: d.URLs, log: log}
+		frames: d.MapFrames, urls: d.URLs, log: log}
 }
 
 // ResolveHost maps an incoming Host to a commune.

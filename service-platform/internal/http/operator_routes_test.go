@@ -257,6 +257,7 @@ type harness struct {
 	oplog   *opLogFake
 	shared  *sharedAppFake
 	fields  *fieldsFake
+	frames  *mapFramesFake
 	counter *memCounter
 	forgot  []string
 	logs    *bytes.Buffer // JSON lines the handlers logged
@@ -265,7 +266,8 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
-		shared: newSharedAppFake(), fields: newFieldsFake(), counter: &memCounter{}, logs: &bytes.Buffer{}}
+		shared: newSharedAppFake(), fields: newFieldsFake(), frames: newMapFramesFake(), counter: &memCounter{},
+		logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
 	if err != nil {
 		t.Fatal(err)
@@ -285,6 +287,7 @@ func newHarness(t *testing.T) *harness {
 		OperatorLog:  h.oplog,
 		SharedApp:    h.shared,
 		Fields:       h.fields,
+		MapFrames:    h.frames,
 		OperatorHost: operatorHostFake,
 		NewID:        func() (string, error) { return newIDFake, nil },
 		Forget:       func(host string) { h.forgot = append(h.forgot, host) },
@@ -399,6 +402,10 @@ var guarded = []guardedRoute{
 		[]string{"ops.petition_field.manage"}, 200, false},
 	{"PUT", "/api/v1/petition-fields/dien/activation", `{"active":false,"reason":"Gộp vào mã khác"}`,
 		[]string{"ops.petition_field.manage"}, 200, false},
+	{"GET", "/api/v1/communes/" + communeIDFake + "/map-frame-default", "", nil, 200, true},
+	{"PUT", "/api/v1/communes/" + communeIDFake + "/map-frame-default",
+		`{"center_lat":15.730507,"center_lng":108.37811,"radius_km":10,"reason":"Đặt khung mặc định"}`,
+		[]string{"ops.tenant.manage"}, 200, false},
 	{"GET", "/api/v1/operator-sessions/current", "", nil, 200, false},
 	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204, false},
 }
@@ -461,7 +468,7 @@ func TestGuardedRoutes(t *testing.T) {
 				if rec := h.do(rt.method, rt.path, rt.body, opCookie(t)); rec.Code != 403 {
 					t.Errorf("missing a key: %d, want 403", rec.Code)
 				}
-				if h.shared.declared+h.shared.launchReads+h.fields.writes != 0 {
+				if h.shared.declared+h.shared.launchReads+h.fields.writes+h.frames.writes != 0 {
 					t.Errorf("a store ran without its key")
 				}
 				if h.w.target != "" {
