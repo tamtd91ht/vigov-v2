@@ -2922,6 +2922,10 @@ export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
 };
 
+export type petitions_taskExtensionCountOut = {
+  "count": number;
+};
+
 export type petitions_taskImportErrorOut = {
   "row": number;
   "column": string;
@@ -8106,6 +8110,7 @@ export type petitions_get_task_counts = {
     "assignee"?: string;
     "bloc"?: string;
     "from"?: string;
+    "incomplete"?: string;
     "late"?: string;
     "metric"?: string;
     "parent"?: string;
@@ -8128,6 +8133,26 @@ export type petitions_get_task_counts = {
     409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-extension-counts — Số đề nghị lùi hạn đang chờ duyệt, cùng bộ lọc với hàng chờ (`approver=me` · `task=NV19`) — số trên huy hiệu "Duyệt lùi hạn" của Sổ tay lãnh đạo */
+export type petitions_get_task_extension_counts = {
+  duongDan: "/api/v1/task-extension-counts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "approver"?: string;
+    "task"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskExtensionCountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
   };
 };
 
@@ -8481,7 +8506,7 @@ export type petitions_delete_task_types_by_id = {
   };
 };
 
-/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title` */
+/** GET /api/v1/tasks — Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title` */
 export type petitions_get_tasks = {
   duongDan: "/api/v1/tasks";
   phuongThuc: "GET";
@@ -8496,6 +8521,7 @@ export type petitions_get_tasks = {
     "bloc"?: string;
     "from"?: string;
     "include"?: string;
+    "incomplete"?: string;
     "late"?: string;
     "metric"?: string;
     "parent"?: string;
@@ -8590,6 +8616,7 @@ export type petitions_get_tasks_register_export = {
     "assignee"?: string;
     "bloc"?: string;
     "from"?: string;
+    "incomplete"?: string;
     "late"?: string;
     "metric"?: string;
     "order"?: string;

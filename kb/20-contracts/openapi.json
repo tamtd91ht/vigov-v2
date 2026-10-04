@@ -22998,6 +22998,14 @@
             }
           },
           {
+            "name": "incomplete",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "late",
             "in": "query",
             "required": false,
@@ -23157,6 +23165,91 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/task-extension-counts": {
+      "get": {
+        "summary": "Số đề nghị lùi hạn đang chờ duyệt, cùng bộ lọc với hàng chờ (`approver=me` · `task=NV19`) — số trên huy hiệu \"Duyệt lùi hạn\" của Sổ tay lãnh đạo",
+        "operationId": "petitions_get_task_extension_counts",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "03-so-tay-lanh-dao §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "480a70705e3d",
+        "parameters": [
+          {
+            "name": "approver",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskExtensionCountOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -24717,7 +24810,7 @@
     },
     "/api/v1/tasks": {
       "get": {
-        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
+        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
         "operationId": "petitions_get_tasks",
         "tags": [
           "petitions"
@@ -24806,6 +24899,14 @@
           },
           {
             "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "incomplete",
             "in": "query",
             "required": false,
             "schema": {
@@ -25297,6 +25398,14 @@
           },
           {
             "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "incomplete",
             "in": "query",
             "required": false,
             "schema": {
@@ -38030,6 +38139,18 @@
         },
         "required": [
           "by_status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskExtensionCountOut": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
         ],
         "additionalProperties": false
       },

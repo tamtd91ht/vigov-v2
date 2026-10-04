@@ -23,6 +23,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/residential-unit-types", dichVu: "identity" },
   { tienTo: "/api/v1/citizen-report-fields", dichVu: "petitions" },
   { tienTo: "/api/v1/finance-audit-entries", dichVu: "finance" },
+  { tienTo: "/api/v1/task-extension-counts", dichVu: "petitions" },
   { tienTo: "/api/v1/budget-period-closes", dichVu: "finance" },
   { tienTo: "/api/v1/comms-audit-entries", dichVu: "comms" },
   { tienTo: "/api/v1/investment-projects", dichVu: "finance" },

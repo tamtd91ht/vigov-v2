@@ -5480,6 +5480,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/task-extension-counts",
+      "operation_id": "petitions_get_task_extension_counts",
+      "task_id": "480a70705e3d",
+      "summary": "Số đề nghị lùi hạn đang chờ duyệt, cùng bộ lọc với hàng chờ (`approver=me` · `task=NV19`) — số trên huy hiệu \"Duyệt lùi hạn\" của Sổ tay lãnh đạo",
+      "screen": "03-so-tay-lanh-dao §3",
+      "permission_kind": "permission",
+      "permission": "task.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.taskExtensionCountOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/task-extensions",
       "operation_id": "petitions_get_task_extensions",
       "task_id": "ced63971b0e8",
@@ -5874,7 +5894,7 @@
       "path": "/api/v1/tasks",
       "operation_id": "petitions_get_tasks",
       "task_id": "cc3579e36137",
-      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related`) · trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
+      "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
       "screen": "02-nhiem-vu §3, §4, §5.10",
       "permission_kind": "permission",
       "permission": "task.read",
