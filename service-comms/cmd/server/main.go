@@ -379,6 +379,17 @@ func main() {
 		Log:          log,
 	})
 
+	// The economic map's frame (migration 0016; ADR 0072 H3) — two staff routes on the SAME staff mux.
+	// One use case behind both: the read and the save (its transaction and audit entry). See
+	// internal/http/map_frame.go.
+	mapFrames := commsapp.NewMapFrames(kho, commsstore.NewMapFrameStore(kho))
+	svchttp.RegisterMapFrame(mux, svchttp.MapFrameDeps{
+		Checker: staffauth.Checker{},
+		Reader:  mapFrames,
+		Writer:  mapFrames,
+		Log:     log,
+	})
+
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
