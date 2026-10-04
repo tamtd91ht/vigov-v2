@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-03",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -613,6 +613,15 @@
       "bang_chung": "9093a2d9 — rich-text.ts (figure/figcaption/blockquote/byline, img chỉ data-file-id), body-image*.ts(x) (tải lên, from-url, NodeView xem trước từ preview_url — nơi duy nhất có src), so-noi-dung.tsx (giữ content_item_id, chờ ảnh đang tải trước khi Lưu, tắt Chèn ảnh ở 20). typecheck + lint + vitest 195 tệp/3590 ca + check:api xanh. Chưa chạy với comms thật. T5b: ảnh bìa trả content_item_id (2586eceb) → bài mới tải ảnh bìa trước vẫn chèn ảnh (chỉ chặn trong lúc chờ phản hồi xin tải ảnh bìa); alt mặc định theo chú thích, đi theo khi sửa chú thích; sửa fixture làm typecheck đỏ ở 160ce751. vitest 3599 ca xanh.",
       "tiep_theo": "Chạy với comms thật (tải lên, dán link, lưu, mở lại thấy xem trước) và xem bố cục 320/640/1280; chủ dự án duyệt giao diện.",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "loi-vao-doi-mat-khau-tu-nguyen",
+      "menu": [
+        "cau-hinh"
+      ],
+      "viec": "Lối vào tự nguyện trang Đổi mật khẩu: liên kết 'Đổi mật khẩu' (biểu tượng chìa khoá) trên đầu trang, cạnh Đăng xuất. Trước đó /doi-mat-khau chỉ mở được khi máy chủ BẮT đổi (lần đầu, quản trị đặt lại)",
+      "trang_thai": "xong",
+      "bang_chung": "DauTrang (src/components/dau-trang.tsx) vẽ liên kết khi đã đọc được phiên; dưới 640px chữ ẩn với mắt, giữ làm tên truy cập. Test header-password-link.test.tsx. web-admin: tsc, eslint sạch, vitest 3636/3636. Tuyến máy chủ PUT /api/v1/staff/current/password có sẵn, không đổi."
     }
   ]
 }

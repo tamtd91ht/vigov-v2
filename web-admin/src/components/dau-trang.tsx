@@ -1,8 +1,10 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { KeyRound, Search } from "lucide-react";
+import Link from "next/link";
 
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
+import { DUONG_DAN_DOI_MAT_KHAU } from "@/features/mat-khau/bat-doi-mat-khau";
 import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
@@ -71,6 +73,17 @@ export function DauTrang({ withCommune = false }: { withCommune?: boolean }) {
             </div>
           </div>
         ) : null}
+        {/* The voluntary way into `/doi-mat-khau`. Before this link the page was reachable only when
+            the server FORCED a change (first login, admin reset), so a staff member who suspected a
+            colleague had seen their password had no way to change it. Drawn only with a read
+            session: it is the signed-in person's own password, and the route takes it from the
+            session — no identity travels in the link. */}
+        {nguoi.hien && (
+          <Link className="nut-phu" href={DUONG_DAN_DOI_MAT_KHAU} title="Đổi mật khẩu">
+            <KeyRound aria-hidden="true" focusable="false" strokeWidth={1.8} />
+            <span className="topbar-action-label">Đổi mật khẩu</span>
+          </Link>
+        )}
         <NutDangXuat />
       </div>
     </header>

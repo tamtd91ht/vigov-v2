@@ -1026,13 +1026,15 @@ div.thong-bao-loi:not(:empty) {
 
 /* Logout keeps its visible word from 640px up; below, the word is clipped for the eye only and
  * stays the button's accessible name. */
-.logout-label {
+.logout-label,
+.topbar-action-label {
   white-space: nowrap;
 }
 
 @media (max-width: 639px) {
   .topbar-user-text,
-  .logout-label {
+  .logout-label,
+  .topbar-action-label {
     position: absolute;
     width: 1px;
     height: 1px;
