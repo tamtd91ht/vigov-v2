@@ -366,6 +366,19 @@ func main() {
 		Log:     log,
 	})
 
+	// The economic map's asset register (migration 0015; ADR 0072) — nine staff routes on the SAME staff
+	// mux, the same checker. ONE store behind the reads and the use case; the use case owns every write's
+	// transaction and its audit entry. The default-groups seed writes the type catalogue through its own
+	// store (loaiTaiNguyen, above). See internal/http/map_assets.go.
+	mapAssets := commsstore.NewMapAssetStore(kho)
+	svchttp.RegisterMapAssets(mux, svchttp.MapAssetDeps{
+		Checker:      staffauth.Checker{},
+		Reader:       mapAssets,
+		Writer:       commsapp.NewMapAssets(kho, mapAssets),
+		TypeDefaults: commsapp.NewMapAssetTypeDefaults(kho, loaiTaiNguyen),
+		Log:          log,
+	})
+
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
 	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached

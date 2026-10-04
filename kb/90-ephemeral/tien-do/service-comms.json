@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-03",
+  "cap_nhat": "2026-10-04",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -315,6 +315,14 @@
       "bang_chung": "Thiết kế: 5eb2f816 (ADR). Mục đích tải lên: 41940cb4. T2 5f4a9484: SanitizeStaff (figure/img data-file-id/figcaption, blockquote, p data-role=byline; img không giữ src), Sanitize hẹp cho Cổng, khối image/quote/byline trên body_blocks, đường đọc công khai bỏ mọi ảnh khi chưa có bộ đổi mã (tinXaRaNgoai truyền nil), body thuần giữ chữ chú thích/trích dẫn/tác giả. go test service-comms xanh, ca PG SKIP. T3 a8fbd9e3: POST /api/v1/content-items/body-images + /{id}/completion (content.update, preview_url khi ready), gắn mã tệp khi lưu (422 invalid_body_image một mã), gỡ mềm ảnh ready không còn trong thân mỗi lần lưu, settle theo mục đích (không rút ảnh thân bài), GET cán bộ body_images[], tuyến công khai đổi mã ra URL bằng một lần đọc gộp. go test xanh; stored_file_pg_test SKIP. T4: POST /api/v1/content-items/body-images/from-url (content.update) — imagefetch: https/443, host DNS, kiểm IP lúc quay số bằng portal.AddrAllowed, ≤3 chuyển hướng, 30 s, trần min(policy, 10 MiB), 4 lượt/tiến trình; cùng ống sniff/ClamAV/thumb-1280; vết ghi host, không ghi URL; chỉ lưu bản dẫn xuất, không lưu bản gốc (ADR 0052: core/storage không cho máy chủ ghi bản gốc — như ảnh Cổng). T3b 9abf3aeb khoá tư vấn trước khi đếm; T3c 2586eceb ảnh bìa trả content_item_id; T3d 06009588 sửa theo rà cô lập + bảo mật (mã nháp chỉ của người tải, LiveForSubject chỉ ready, mã bài đã xoá không cấp lại, outbound_url_refused đủ trường, header 64 KiB); T3e 5e826db6 trần 30/giờ/cán bộ (K10, Redis hỏng → đóng) + việc nền gỡ ảnh bài nháp chưa lưu sau 7 ngày (K11). Rà cô lập: không rò xuyên xã. Rà bảo mật: không lỗ khai thác được.",
       "tiep_theo": "Chạy mọi ca PG (stored_file_pg_test, stored_file_sweep_pg_test, migration service-platform/migrations/0018_upload_policy_content_body_image.sql — comms không có 0018) trên PostgreSQL thật trước phát hành. Hở còn lại, đã ghi: service-comms chưa có request id cho dòng nhật ký an ninh (cmd/server/main.go:646 traceID rỗng); gỡ công khai hỏng sau xoá bài không thử lại; khoá bài giữ trong N≤20 lần sao chép lúc đăng; ảnh đã gỡ còn trong cache CDN/trình duyệt tới 1 năm (như ảnh bìa); tuyến from-url là cửa đo trạng thái GET mù tới host công khai (422 vs 502) — chấp nhận, xem lại nếu có danh sách IP tin cậy; nhịp sweep mỗi giờ / 200 tệp / 10 phút là lựa chọn kỹ thuật. Chú thích cũ nhắc richtext.Sanitize: store/noi_dung_mini_app.go:982, portal/client.go:605 (đúng cho đường Cổng).",
       "menu": "noi-dung-mini-app"
+    },
+    {
+      "id": "ban-do-so-doi-tuong",
+      "viec": "Bản đồ kinh tế số — sổ đối tượng bản đồ (MapAsset) + nạp 11 nhóm mặc định + khung xã (ADR 0072 và sửa đổi 04/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "05a43e7e migration 0015 map_asset. (commit này) 9 tuyến: POST /api/v1/map-asset-types/defaults (admin.lookup, 11 nhóm hàng hệ thống, không hồi sinh dòng đã xoá), GET map-asset-points (GeoJSON [lng,lat], không dữ liệu cá nhân, trần 5000 → 422 too_many_points), GET map-assets (trang, che người đại diện/điện thoại), GET map-assets/{id} (che trừ asset.update; xem đầy đủ có vết xem_day_du_doi_tuong_ban_do), GET map-asset-summary, POST/PATCH/DELETE map-assets (asset.update, xoá mềm có lý do), POST map-assets/{id}/confirmation (Xác minh — tên chủ dự án chốt). go test xanh; ca PG SKIP.",
+      "tiep_theo": "M2/B3 khung xã (tâm + bán kính, admin.lookup) → cổng bàn giao → web-admin /ban-do. Chưa: lọc quy mô lao động (bậc chưa định nghĩa), q chưa tìm theo mã số thuế, industry_code chỉ kiểm hình dạng, residential_unit_id chỉ kiểm hình dạng (kiểm tồn tại phải đọc identity). Để sau theo ADR 0072: bản đồ nhiệt, mật độ thôn, Excel, Mini App.",
+      "menu": "ban-do-kinh-te-so"
     }
   ]
 }
