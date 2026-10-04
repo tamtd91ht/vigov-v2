@@ -4,10 +4,18 @@ managed:
   override:
     - file_option: go_package_prefix
       value: github.com/vihat/vigov/core/gen
+# LOCAL plugins, pinned, run through `go run` — NOT `remote: buf.build/...`.
+# 1. The build machines must not depend on buf.build being reachable: on 04/10/2026 every service
+#    job on Jenkins stopped at `buf generate` with "x509: certificate is valid for *.omicrm.services,
+#    not buf.build" (that host's DNS/proxy). `go run pkg@version` fetches through the Go module proxy,
+#    the same path every `go build` already uses.
+# 2. The remote plugins were UNPINNED (latest on every run), so generated code could change between
+#    two builds of the same commit. These versions are the ones the checked-in generated headers carry.
+# Bump a version here deliberately, together with regenerating core/gen.
 plugins:
-  - remote: buf.build/protocolbuffers/go
+  - local: ["go", "run", "google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12"]
     out: core/gen
     opt: paths=source_relative
-  - remote: buf.build/grpc/go
+  - local: ["go", "run", "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2"]
     out: core/gen
     opt: paths=source_relative
