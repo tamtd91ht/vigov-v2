@@ -438,14 +438,20 @@ export type OHan = {
   readonly phanTre: string;
 };
 
+/**
+ * `trễ 6 ngày` · `trễ dưới 1 ngày` — the lateness words of the list cell (§4.2) and of the Sổ tay
+ * row (`03-so-tay-lanh-dao.md` §3), ONE source so the two screens cannot print different figures for
+ * the same task. Never `trễ 0 ngày` — see `nhanHanThe`.
+ */
+export function lateText(soNgay: number): string {
+  return soNgay < 1 ? "trễ dưới 1 ngày" : `trễ ${soNgay} ngày`;
+}
+
 export function oHan(hanISO: string | null, bayGio: Date): OHan {
   const tt = tinhTrangHan(hanISO, bayGio);
   if (tt.loai === "khong-han") return { ngay: O_TRONG, phanTre: "" };
   if (tt.loai === "tre") {
-    return {
-      ngay: nhanNgay(hanISO),
-      phanTre: tt.soNgay < 1 ? "(trễ dưới 1 ngày)" : `(trễ ${tt.soNgay} ngày)`,
-    };
+    return { ngay: nhanNgay(hanISO), phanTre: `(${lateText(tt.soNgay)})` };
   }
   return { ngay: nhanNgay(hanISO), phanTre: "" };
 }

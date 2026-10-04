@@ -69,6 +69,7 @@ import type {
   petitions_delete_tasks_by_ma,
   petitions_doiTrangThaiVao,
   petitions_get_task_counts,
+  petitions_get_task_extension_counts,
   petitions_get_task_extensions,
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
@@ -88,6 +89,7 @@ import type {
   petitions_taoNhiemVuVao,
   petitions_taskAssignmentIn,
   petitions_taskCountsOut,
+  petitions_taskExtensionCountOut,
   petitions_taskLogEntryIn,
   petitions_vanBanNhiemVuVao,
   petitions_xoaNhiemVuVao,
@@ -124,7 +126,12 @@ export type LocNhiemVu = {
    * `?scope=mine` **không** mang theo danh tính nào (`nhiem_vu.go:273-288`). Đó là điều kiện để
    * nó không phải một lời client tự khai mình là ai (luật 1, cấm #2).
    */
-  phamVi?: "all" | "mine" | "related";
+  phamVi?: "all" | "mine" | "related" | "assigned-by-me";
+  /**
+   * `incomplete=true` — every status but `hoan-thanh` (ADR 0071, the Sổ tay's "Việc tôi đã giao").
+   * The server accepts ONLY the string `true` (400 otherwise), so `false` sends nothing.
+   */
+  incomplete?: boolean;
   /**
    * §3 `☐ Sắp đến hạn` — `soon=true`. The THRESHOLD is the commune's (identity, working hours); the
    * screen sends only the switch and never a number — `72 giờ` in the spec is a default the commune
@@ -233,6 +240,9 @@ function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // `related` carries NO identity either: the server reads the caller's code from the session and
   // asks identity for their units (`nhiem_vu.go:602-611`). It narrows; it never grants.
   if (loc.phamVi === "related") truyVan.set("scope", "related");
+  // `assigned-by-me` (ADR 0071): creator OR assigner = the caller's code, which the server takes
+  // from the SESSION (`nhiem_vu.go:747`). No identity travels here either.
+  if (loc.phamVi === "assigned-by-me") truyVan.set("scope", "assigned-by-me");
 
   if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
   if (loc.nguonGiao !== undefined && loc.nguonGiao !== "") truyVan.set("source", loc.nguonGiao);
@@ -255,6 +265,8 @@ function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // counts route checks the names against BOTH routes' shared subset, not only the list route.
   const dat = thamSoTheoHopDong<petitions_get_task_counts["truyVan"]>(truyVan);
   dat("parent", loc.parent);
+  // Same rule as `late`: only `true` exists on the wire (`nhiem_vu.go:758-760`).
+  if (loc.incomplete === true) dat("incomplete", "true");
 
   // SỐ LIỆU CỦA TỔNG QUAN. Kỳ đi lên CHỈ khi số liệu đếm theo kỳ: máy chủ bỏ qua kỳ ở số liệu tồn
   // (`summary.go:182-185`), nên gửi nó là gửi một câu hỏi máy chủ không trả lời — và `from`/`to` mà
@@ -469,6 +481,28 @@ export function layHangChoLuiHan(
   loc: LocHangChoLuiHan = {},
 ): Promise<KetQua<page_Result_petitions_deNghiChoDuyetRa>> {
   return docJSON<page_Result_petitions_deNghiChoDuyetRa>(duongDanHangChoLuiHan(loc));
+}
+
+/**
+ * Path of `GET /api/v1/task-extension-counts` — the server's count of pending extension requests
+ * under the SAME filters as the queue (`approver`, `task`). Paging is dropped: a total does not
+ * depend on the page, and the route declares no paging parameter.
+ */
+export function taskExtensionCountPath(loc: LocHangChoLuiHan = {}): string {
+  const duongDan: petitions_get_task_extension_counts["duongDan"] = "/api/v1/task-extension-counts";
+  const truyVan = new URLSearchParams();
+  const dat = thamSoTheoHopDong<petitions_get_task_extension_counts["truyVan"]>(truyVan);
+  dat("approver", loc.approver);
+  dat("task", loc.task);
+  const chuoi = truyVan.toString();
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/** GET /api/v1/task-extension-counts — `task.read`, `{count}`. The Sổ tay's "Duyệt lùi hạn" badge. */
+export function getTaskExtensionCount(
+  loc: LocHangChoLuiHan = {},
+): Promise<KetQua<petitions_taskExtensionCountOut>> {
+  return docJSON<petitions_taskExtensionCountOut>(taskExtensionCountPath(loc));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

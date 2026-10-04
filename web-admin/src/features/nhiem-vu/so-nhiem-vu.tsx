@@ -546,9 +546,12 @@ export const DRILL_DOWN_NOTE_TASKS =
 
 export function SoNhiemVu({
   drillDown = NO_DRILL_DOWN,
+  openTask = null,
 }: {
   /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/nhiem-vu/page.tsx`). */
   drillDown?: DrillDown<"tasks">;
+  /** `?task=NV19` (`task-link.ts`), read server-side: open this task's detail once, on arrival. */
+  openTask?: string | null;
 } = {}) {
   const drillDownActive = drillDown.kind === "active";
   /**
@@ -790,6 +793,37 @@ export function SoNhiemVu({
     };
   }, [maDrawer, luotDoc]);
 
+  // `?task=NV19` from another screen (`task-link.ts`): read the task through the detail route — the
+  // same `task.read` + commune check as every read — and open it through the SAME drawer action as a
+  // click on a row. A refusal (one 404 sentence for every case) is shown verbatim above the list.
+  // The detail is read twice on this path (here, then by the drawer's own effect): accepted, so the
+  // drawer keeps exactly one way of opening.
+  const [openTaskError, setOpenTaskError] = useState<string | null>(null);
+  // A ref, not state: it only tells the effect below to scroll once; nothing renders from it.
+  const scrollToDrawer = useRef<string | null>(null);
+  useEffect(() => {
+    if (openTask === null) return;
+    let cancelled = false;
+    layNhiemVu(openTask).then((kq) => {
+      if (cancelled) return;
+      if (!kq.ok) {
+        setOpenTaskError(kq.thongBao);
+        return;
+      }
+      scrollToDrawer.current = kq.duLieu.code;
+      guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openTask]);
+  // The detail renders BELOW the list; arriving by link, the clerk must not have to look for it.
+  useEffect(() => {
+    if (scrollToDrawer.current === null || maDrawer !== scrollToDrawer.current) return;
+    scrollToDrawer.current = null;
+    document.getElementById("tieu-de-chi-tiet-nhiem-vu")?.scrollIntoView({ block: "start" });
+  }, [maDrawer]);
+
   const phien = usePhien();
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có mã cán bộ — và không có mã thì
   // không so được với `lanh_dao_giao_viec_ma`, nên nút duyệt lùi hạn ẩn (luật 1, cấm #1).
@@ -1027,6 +1061,12 @@ export function SoNhiemVu({
       </h2>
 
       <KhoiChuaDung />
+
+      {openTaskError !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {openTaskError}
+        </p>
+      )}
 
       <CanhBaoNhanTrangThai canhBao={canhBaoNhanTT} />
 

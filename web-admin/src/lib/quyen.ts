@@ -218,6 +218,10 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
  * `/nhiem-vu/bien-ban` đều KHÔNG có `<CongQuyen>`, tài khoản thiếu khoá vẫn nhận 403 nguyên văn
  * từ máy chủ, đúng khuôn `/van-ban`. Nó chỉ quyết định MỤC MENU có hiện hay không.
  *
+ * MỘT NGOẠI LỆ CÓ CHỦ Ý (04/10/2026): thân `/nhiem-vu/so-tay` BỌC `<CongQuyen>` bằng khoá này. Màn ấy
+ * đọc tới tám lần các tuyến nhiệm vụ cùng lúc và MỌI tuyến ấy khai đúng `task.read`, nên cổng không thể
+ * giấu thứ máy chủ đang phục vụ — còn không cổng thì người thiếu khoá đọc một loạt câu 403 giống hệt nhau.
+ *
  * VÌ SAO MỤC MENU CẦN MỘT KHOÁ, VÀ VÌ SAO PHẢI LÀ ĐÚNG KHOÁ NÀY: `muc-menu.ts` đã từ chối vẽ
  * chín mục chưa có màn thành liên kết, vì "vẽ ra thứ không bấm được là hứa một chức năng không
  * tồn tại". Một mục menu dẫn thẳng vào 403 là cùng lời hứa ấy. Nhưng khoá canh mục menu phải là

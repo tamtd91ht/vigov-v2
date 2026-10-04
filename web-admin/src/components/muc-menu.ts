@@ -99,11 +99,6 @@ export type NhomMenu = {
  * `PENDING_SCREENS`. Không cần đụng component.
  */
 export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Sổ tay lãnh đạo": {
-    ten: "Sổ tay lãnh đạo",
-    viSao:
-      "Màn dành cho lãnh đạo, gom ba việc cần biết ngay: việc quá hạn, việc chờ duyệt và việc mình đã giao. Màn này chưa được dựng.",
-  },
   "Bản đồ kinh tế số": {
     ten: "Bản đồ kinh tế số",
     viSao:
@@ -139,7 +134,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_XEM_VAN_BAN },
       { nhan: "Thông báo", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
-      { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
+      { nhan: "Sổ tay lãnh đạo", duong: "/nhiem-vu/so-tay", khoa: QUYEN_XEM_NHIEM_VU },
     ],
   },
   {
