@@ -25893,6 +25893,91 @@
         }
       }
     },
+    "/api/v1/task-unit-summary": {
+      "get": {
+        "summary": "Tình hình thực hiện nhiệm vụ theo bộ phận trong kỳ [from, to) — mỗi bộ phận: số việc đang nắm trong kỳ · hoàn thành · mẫu đúng hạn · đúng hạn (theo kỳ) và quá hạn (hiện trạng)",
+        "operationId": "petitions_get_task_unit_summary",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "13-bao-cao §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "report.read"
+        },
+        "x-vigov-task": "cfdaa7788357",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.taskUnitSummaryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tasks": {
       "get": {
         "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo phạm vi (`all` · `mine` · `related` · `assigned-by-me` = tôi tạo hoặc tôi là lãnh đạo giao việc) · trạng thái · chưa hoàn thành (`incomplete=true`, mọi trạng thái trừ `hoan-thanh`) · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · sắp đến hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối) · `priority` (theo thứ tự danh mục mức ưu tiên của xã, việc không có mức ở cuối) · `title`",
@@ -39986,6 +40071,58 @@
           "on_time_sample",
           "overdue",
           "suspended"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskUnitRowOut": {
+        "type": "object",
+        "properties": {
+          "org_unit_id": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "on_time_sample": {
+            "type": "integer"
+          },
+          "on_time": {
+            "type": "integer"
+          },
+          "overdue": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "completed",
+          "on_time",
+          "on_time_sample",
+          "org_unit_id",
+          "overdue",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.taskUnitSummaryOut": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.taskUnitRowOut"
+            }
+          }
+        },
+        "required": [
+          "as_of",
+          "units"
         ],
         "additionalProperties": false
       },

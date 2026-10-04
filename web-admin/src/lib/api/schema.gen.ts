@@ -3125,6 +3125,20 @@ export type petitions_taskSummaryOut = {
   "on_time": number;
 };
 
+export type petitions_taskUnitRowOut = {
+  "org_unit_id": string;
+  "total": number;
+  "completed": number;
+  "on_time_sample": number;
+  "on_time": number;
+  "overdue": number;
+};
+
+export type petitions_taskUnitSummaryOut = {
+  "as_of": string;
+  "units": Array<petitions_taskUnitRowOut>;
+};
+
 export type petitions_themKetLuanVao = {
   "content": string;
 };
@@ -8929,6 +8943,26 @@ export type petitions_delete_task_types_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-unit-summary — Tình hình thực hiện nhiệm vụ theo bộ phận trong kỳ [from, to) — mỗi bộ phận: số việc đang nắm trong kỳ · hoàn thành · mẫu đúng hạn · đúng hạn (theo kỳ) và quá hạn (hiện trạng) */
+export type petitions_get_task_unit_summary = {
+  duongDan: "/api/v1/task-unit-summary";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "from"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_taskUnitSummaryOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
     500: httpx_Error;
   };
 };

@@ -6129,6 +6129,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/task-unit-summary",
+      "operation_id": "petitions_get_task_unit_summary",
+      "task_id": "cfdaa7788357",
+      "summary": "Tình hình thực hiện nhiệm vụ theo bộ phận trong kỳ [from, to) — mỗi bộ phận: số việc đang nắm trong kỳ · hoàn thành · mẫu đúng hạn · đúng hạn (theo kỳ) và quá hạn (hiện trạng)",
+      "screen": "13-bao-cao §5",
+      "permission_kind": "permission",
+      "permission": "report.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.taskUnitSummaryOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/tasks",
       "operation_id": "petitions_get_tasks",
       "task_id": "cc3579e36137",

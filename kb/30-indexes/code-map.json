@@ -242,6 +242,10 @@
       "kind": "func",
       "at": "service-documents/internal/app/van_ban_den.go:589"
     },
+    "app.ChoicesFor": {
+      "kind": "func",
+      "at": "service-platform/internal/app/upload_policy.go:88"
+    },
     "app.ChotLinhVuc": {
       "kind": "func",
       "at": "service-petitions/internal/app/xu_ly_phan_anh.go:549"
@@ -2230,6 +2234,14 @@
       "kind": "type",
       "at": "service-platform/internal/app/branding.go:209"
     },
+    "app.UploadPolicyChoices": {
+      "kind": "type",
+      "at": "service-platform/internal/app/upload_policy.go:81"
+    },
+    "app.ValidateUploadPolicy": {
+      "kind": "func",
+      "at": "service-platform/internal/app/upload_policy.go:99"
+    },
     "app.VanBanDen": {
       "kind": "type",
       "at": "service-documents/internal/app/van_ban_den.go:191"
@@ -3776,11 +3788,11 @@
     },
     "domain.CitizenReportMetric": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/summary_metrics.go:104"
+      "at": "service-petitions/internal/domain/summary_metrics.go:132"
     },
     "domain.CitizenReportSummary": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/summary_metrics.go:172"
+      "at": "service-petitions/internal/domain/summary_metrics.go:200"
     },
     "domain.Clamped": {
       "kind": "func",
@@ -3920,7 +3932,7 @@
     },
     "domain.DeadlineKind": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/summary_metrics.go:193"
+      "at": "service-petitions/internal/domain/summary_metrics.go:221"
     },
     "domain.DefaultMapAssetTypes": {
       "kind": "func",
@@ -4304,7 +4316,7 @@
     },
     "domain.IsCritical": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/summary_metrics.go:263"
+      "at": "service-petitions/internal/domain/summary_metrics.go:291"
     },
     "domain.IsMessageInputError": {
       "kind": "func",
@@ -5230,6 +5242,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/operator.go:311"
     },
+    "domain.OperatorLogEntry": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/operator_log.go:12"
+    },
     "domain.OperatorPermission": {
       "kind": "type",
       "at": "service-identity/internal/domain/operator.go:29"
@@ -5264,7 +5280,7 @@
     },
     "domain.OverdueItem": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/summary_metrics.go:213"
+      "at": "service-petitions/internal/domain/summary_metrics.go:241"
     },
     "domain.OverdueKey": {
       "kind": "func",
@@ -5324,7 +5340,7 @@
     },
     "domain.PeriodBound": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/summary_metrics.go:160"
+      "at": "service-petitions/internal/domain/summary_metrics.go:188"
     },
     "domain.PeriodCloseConflict": {
       "kind": "type",
@@ -5662,6 +5678,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/automation.go:161"
     },
+    "domain.SecretForward": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/operator_log.go:29"
+    },
     "domain.Sentence": {
       "kind": "func",
       "at": "service-identity/internal/domain/org_unit_delete.go:68"
@@ -5909,6 +5929,14 @@
     "domain.TaskSummary": {
       "kind": "type",
       "at": "service-petitions/internal/domain/summary_metrics.go:91"
+    },
+    "domain.TaskUnitFigures": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/summary_metrics.go:107"
+    },
+    "domain.TaskUnitSummary": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/summary_metrics.go:121"
     },
     "domain.TaskWorkRight": {
       "kind": "type",
@@ -6768,11 +6796,11 @@
     },
     "http.CitizenReportSummary": {
       "kind": "func",
-      "at": "service-petitions/internal/http/summary.go:288"
+      "at": "service-petitions/internal/http/summary.go:344"
     },
     "http.CitizenReportSummaryReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/summary.go:45"
+      "at": "service-petitions/internal/http/summary.go:48"
     },
     "http.CitizenSessions": {
       "kind": "func",
@@ -6792,7 +6820,7 @@
     },
     "http.CommuneWriter": {
       "kind": "type",
-      "at": "service-platform/internal/http/operator_communes.go:28"
+      "at": "service-platform/internal/http/operator_communes.go:29"
     },
     "http.CompleteAudioUpload": {
       "kind": "func",
@@ -7640,15 +7668,19 @@
     },
     "http.OperatorDeps": {
       "kind": "type",
-      "at": "service-platform/internal/http/operator_routes.go:37"
+      "at": "service-platform/internal/http/operator_routes.go:38"
     },
     "http.OperatorHandler": {
       "kind": "func",
-      "at": "service-platform/internal/http/operator_routes.go:63"
+      "at": "service-platform/internal/http/operator_routes.go:67"
     },
     "http.OperatorIdentity": {
       "kind": "type",
       "at": "service-platform/internal/http/operator_sessions.go:23"
+    },
+    "http.OperatorLogReader": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_platform.go:30"
     },
     "http.OrgUnitImportTemplate": {
       "kind": "func",
@@ -7660,15 +7692,15 @@
     },
     "http.OverdueCitizenReports": {
       "kind": "func",
-      "at": "service-petitions/internal/http/summary.go:329"
+      "at": "service-petitions/internal/http/summary.go:385"
     },
     "http.OverdueQueueReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/summary.go:52"
+      "at": "service-petitions/internal/http/summary.go:55"
     },
     "http.OverdueTasks": {
       "kind": "func",
-      "at": "service-petitions/internal/http/summary.go:316"
+      "at": "service-petitions/internal/http/summary.go:372"
     },
     "http.OwnAppSignInner": {
       "kind": "type",
@@ -8168,15 +8200,19 @@
     },
     "http.TaskSummary": {
       "kind": "func",
-      "at": "service-petitions/internal/http/summary.go:259"
+      "at": "service-petitions/internal/http/summary.go:286"
     },
     "http.TaskSummaryReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/summary.go:39"
+      "at": "service-petitions/internal/http/summary.go:41"
     },
     "http.TaskTypeImportTemplate": {
       "kind": "func",
       "at": "service-petitions/internal/http/catalogue_import.go:382"
+    },
+    "http.TaskUnitSummary": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/summary.go:311"
     },
     "http.TenantProfileReader": {
       "kind": "type",
@@ -8288,7 +8324,7 @@
     },
     "http.UnmarshalJSON": {
       "kind": "func",
-      "at": "service-platform/internal/http/operator_mini_app_secrets.go:55"
+      "at": "service-platform/internal/http/operator_platform.go:62"
     },
     "http.UpdateContentCategory": {
       "kind": "func",
@@ -8313,6 +8349,10 @@
     "http.UpdateResidentialUnit": {
       "kind": "func",
       "at": "service-identity/internal/http/residential_unit_write.go:141"
+    },
+    "http.UploadPolicyEditor": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_platform.go:24"
     },
     "http.VaiTroDanhMuc": {
       "kind": "type",
@@ -8808,7 +8848,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:476"
+      "at": "service-platform/cmd/server/main.go:478"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -8856,67 +8896,67 @@
     },
     "opauth.Auth": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:115"
+      "at": "service-platform/internal/opauth/opauth.go:137"
     },
     "opauth.ClearCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:292"
+      "at": "service-platform/internal/opauth/opauth.go:320"
     },
     "opauth.From": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:93"
+      "at": "service-platform/internal/opauth/opauth.go:115"
     },
     "opauth.Has": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:81"
+      "at": "service-platform/internal/opauth/opauth.go:96"
     },
     "opauth.Into": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:99"
+      "at": "service-platform/internal/opauth/opauth.go:121"
     },
     "opauth.Key": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:55"
+      "at": "service-platform/internal/opauth/opauth.go:56"
     },
     "opauth.NewAuth": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:125"
+      "at": "service-platform/internal/opauth/opauth.go:147"
     },
     "opauth.Principal": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:72"
+      "at": "service-platform/internal/opauth/opauth.go:87"
     },
     "opauth.Public": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:256"
+      "at": "service-platform/internal/opauth/opauth.go:284"
     },
     "opauth.RequireKey": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:204"
+      "at": "service-platform/internal/opauth/opauth.go:226"
     },
     "opauth.SessionResolver": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:109"
+      "at": "service-platform/internal/opauth/opauth.go:131"
     },
     "opauth.SetCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:268"
+      "at": "service-platform/internal/opauth/opauth.go:296"
     },
     "opauth.SignedIn": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:235"
+      "at": "service-platform/internal/opauth/opauth.go:263"
     },
     "opauth.TokenFrom": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:145"
+      "at": "service-platform/internal/opauth/opauth.go:167"
     },
     "opauth.TokenVerifier": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:104"
+      "at": "service-platform/internal/opauth/opauth.go:126"
     },
     "opauth.WithClock": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:136"
+      "at": "service-platform/internal/opauth/opauth.go:158"
     },
     "operatorauth.CodeAt": {
       "kind": "func",
@@ -10084,7 +10124,7 @@
     },
     "store.AddDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:254"
+      "at": "service-platform/internal/store/operator_writes.go:259"
     },
     "store.AddOverride": {
       "kind": "func",
@@ -10124,7 +10164,7 @@
     },
     "store.AttachMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:472"
+      "at": "service-platform/internal/store/operator_writes.go:477"
     },
     "store.AttachTreeFactsTx": {
       "kind": "func",
@@ -10278,6 +10318,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:158"
     },
+    "store.ChangeUploadPolicy": {
+      "kind": "func",
+      "at": "service-platform/internal/store/upload_policy.go:121"
+    },
     "store.Checker": {
       "kind": "type",
       "at": "service-identity/internal/store/checker.go:20"
@@ -10404,7 +10448,7 @@
     },
     "store.CorrectName": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:347"
+      "at": "service-platform/internal/store/operator_writes.go:352"
     },
     "store.CotCuaBang": {
       "kind": "func",
@@ -10464,7 +10508,7 @@
     },
     "store.CreateCommune": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:139"
+      "at": "service-platform/internal/store/operator_writes.go:144"
     },
     "store.CreateDEK": {
       "kind": "func",
@@ -10904,7 +10948,7 @@
     },
     "store.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/internal/store/upload_policy.go:42"
+      "at": "service-platform/internal/store/upload_policy.go:44"
     },
     "store.Live": {
       "kind": "func",
@@ -11156,7 +11200,7 @@
     },
     "store.NewCommune": {
       "kind": "type",
-      "at": "service-platform/internal/store/operator_writes.go:128"
+      "at": "service-platform/internal/store/operator_writes.go:133"
     },
     "store.NewDanhMucMiniAppStore": {
       "kind": "func",
@@ -11286,6 +11330,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:107"
     },
+    "store.NewOperatorLog": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_log.go:41"
+    },
     "store.NewOperatorRegistry": {
       "kind": "func",
       "at": "service-platform/internal/store/operator_registry.go:27"
@@ -11368,7 +11416,7 @@
     },
     "store.NewUploadPolicyStore": {
       "kind": "func",
-      "at": "service-platform/internal/store/upload_policy.go:25"
+      "at": "service-platform/internal/store/upload_policy.go:27"
     },
     "store.NewVaiTroStore": {
       "kind": "func",
@@ -11458,6 +11506,14 @@
       "kind": "func",
       "at": "service-petitions/internal/store/automation.go:61"
     },
+    "store.OperatorLog": {
+      "kind": "type",
+      "at": "service-platform/internal/store/operator_log.go:36"
+    },
+    "store.OperatorLogQuery": {
+      "kind": "type",
+      "at": "service-platform/internal/store/operator_log.go:51"
+    },
     "store.OperatorRegistry": {
       "kind": "type",
       "at": "service-platform/internal/store/operator_registry.go:20"
@@ -11476,7 +11532,7 @@
     },
     "store.OverdueTasks": {
       "kind": "func",
-      "at": "service-petitions/internal/store/task_summary.go:210"
+      "at": "service-petitions/internal/store/task_summary.go:322"
     },
     "store.PageSpec": {
       "kind": "type",
@@ -11630,6 +11686,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:846"
     },
+    "store.Read": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_log.go:73"
+    },
     "store.ReadyObjectKeys": {
       "kind": "func",
       "at": "service-comms/internal/store/stored_file.go:385"
@@ -11641,6 +11701,10 @@
     "store.Reassign": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_ghi.go:610"
+    },
+    "store.RecordMiniAppSecretForward": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:744"
     },
     "store.RecordRating": {
       "kind": "func",
@@ -11668,7 +11732,7 @@
     },
     "store.ReplaceMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:611"
+      "at": "service-platform/internal/store/operator_writes.go:616"
     },
     "store.ResealKey": {
       "kind": "func",
@@ -11728,7 +11792,7 @@
     },
     "store.SetActivation": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:394"
+      "at": "service-platform/internal/store/operator_writes.go:399"
     },
     "store.SetBrandingFile": {
       "kind": "func",
@@ -11740,11 +11804,11 @@
     },
     "store.SetMiniAppActivation": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:679"
+      "at": "service-platform/internal/store/operator_writes.go:684"
     },
     "store.SetPrimaryDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:285"
+      "at": "service-platform/internal/store/operator_writes.go:290"
     },
     "store.SetPublicObjectKey": {
       "kind": "func",
@@ -11888,7 +11952,11 @@
     },
     "store.TaskSummary": {
       "kind": "func",
-      "at": "service-petitions/internal/store/task_summary.go:159"
+      "at": "service-petitions/internal/store/task_summary.go:161"
+    },
+    "store.TaskUnitSummary": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/task_summary.go:259"
     },
     "store.TaxCodeTaken": {
       "kind": "func",
@@ -12068,7 +12136,7 @@
     },
     "store.UploadPolicyStore": {
       "kind": "type",
-      "at": "service-platform/internal/store/upload_policy.go:21"
+      "at": "service-platform/internal/store/upload_policy.go:23"
     },
     "store.Upsert": {
       "kind": "func",
