@@ -80,12 +80,85 @@ export type SecondFactor = { kind: "totp"; code: string } | { kind: "recovery"; 
 
 export type SignInInput = { email: string; password: string; secondFactor: SecondFactor };
 
-/** `ops.*` keys the console hints with (service-platform/internal/opauth/opauth.go `Key…`). */
+/**
+ * The `ops.*` keys (service-platform/internal/opauth/opauth.go `Key…`, the CLOSED set `decidedKeys`):
+ * the six of ADR 0048 §28/09 #3 plus the seventh of ADR 0073 #3. A key outside this set grants the
+ * console nothing — the same closed set the server's `opauth.AnyKey` reads.
+ */
 export const OPS_KEYS = {
   tenantManage: "ops.tenant.manage",
   domainManage: "ops.domain.manage",
+  profileManage: "ops.profile.manage",
   miniAppManage: "ops.mini_app.manage",
+  uploadPolicyManage: "ops.upload_policy.manage",
+  qrIssue: "ops.qr.issue",
+  petitionFieldManage: "ops.petition_field.manage",
 } as const;
+
+export const ALL_OPS_KEYS: readonly string[] = Object.values(OPS_KEYS);
+
+// --- wave 2 (ADR 0073) wire shapes ------------------------------------------------------------
+
+/** operator_platform.go `uploadPolicyView`. `max_files_per_subject` null = deliberately no count limit. */
+export type UploadPolicy = {
+  purpose: string;
+  max_bytes: number;
+  allowed_mime_types: string[];
+  max_files_per_subject: number | null;
+  updated_at: string;
+  updated_by: string;
+  /** Types this purpose's pipeline handles; empty = a purpose no PUT can change. */
+  mime_choices: string[];
+  max_bytes_cap: number;
+};
+
+/** PUT /upload-policies/{purpose} body (operator_platform.go `uploadPolicyBody`). Every key always sent. */
+export type UploadPolicyChange = {
+  max_bytes: number;
+  allowed_mime_types: string[];
+  max_files_per_subject: number | null;
+  reason: string;
+};
+
+/** operator_launch.go `sharedMiniAppView`. */
+export type SharedMiniApp = { app_id: string; created_at: string; created_by: string };
+
+/** operator_launch.go `launchLinkView`. */
+export type LaunchLink = { url: string; domain: string; app_id: string };
+
+/** operator_petition_fields.go `petitionFieldView`. */
+export type PetitionField = {
+  code: string;
+  default_label: string;
+  sort_order: number;
+  icon: string;
+  tone: string;
+  active: boolean;
+};
+
+/** operator_petition_fields.go `petitionFieldListView`: every code, retired ones included. */
+export type PetitionFieldList = { items: PetitionField[]; tones: string[] };
+
+/** The editable part of a tier-1 code. The code itself is never in an edit body (ADR 0060 §4). */
+export type PetitionFieldPresentation = { defaultLabel: string; sortOrder: number; icon: string; tone: string };
+
+/** operator_platform.go `operatorAuditEntryView`. `before`/`after` differ per action — shown, never parsed. */
+export type OperatorAuditEntry = {
+  at: string;
+  actor: string;
+  action: string;
+  commune: { id: string; name: string } | null;
+  subject: string;
+  before: unknown;
+  after: unknown;
+  reason: string;
+};
+
+/** operator_platform.go `operatorAuditPageView` — no total, by core/page's rule. */
+export type OperatorAuditPage = { items: OperatorAuditEntry[]; next_cursor: string; has_more: boolean };
+
+/** RFC 3339 instants, half-open [from, to). Either may be absent. */
+export type OperatorAuditQuery = { from?: string; to?: string; limit?: number; cursor?: string };
 
 /** passwordRejectionView.problem (operator_sessions.go). */
 export type PasswordProblem = "empty" | "not_utf8" | "too_short" | "too_long" | "same_as_current";
@@ -356,4 +429,81 @@ export function setMiniAppSecret(
 
 export function retireMiniAppSecret(communeId: string, appId: string, input: { reason: string }): Promise<MiniAppSecretRetirement> {
   return call("DELETE", `/communes/${id(communeId)}/mini-apps/${id(appId)}/secret`, { reason: input.reason });
+}
+
+// --- wave 2 (ADR 0073) ------------------------------------------------------------------------
+
+export async function listUploadPolicies(): Promise<UploadPolicy[]> {
+  const res = await call<{ items: UploadPolicy[] }>("GET", "/upload-policies");
+  return res.items;
+}
+
+/** Platform-wide; the services reading the limits see it within their 60-second cache. */
+export function changeUploadPolicy(purpose: string, body: UploadPolicyChange): Promise<UploadPolicy> {
+  return call("PUT", `/upload-policies/${id(purpose)}`, body);
+}
+
+/** 404 `shared_mini_app_not_declared` when nothing is declared yet. */
+export function getSharedMiniApp(): Promise<SharedMiniApp> {
+  return call("GET", "/shared-mini-app");
+}
+
+/** First declaration and replacement are one act with one shape (operator_launch.go). */
+export function declareSharedMiniApp(input: { appId: string; reason: string }): Promise<SharedMiniApp> {
+  return call("PUT", "/shared-mini-app", { app_id: input.appId, reason: input.reason });
+}
+
+/** Not trailed by decision (ADR 0048 §30/09 #9); `ops.qr.issue` is the gate. */
+export function getLaunchLink(communeId: string): Promise<LaunchLink> {
+  return call("GET", `/communes/${id(communeId)}/mini-app-launch-link`);
+}
+
+export function listPetitionFields(): Promise<PetitionFieldList> {
+  return call("GET", "/petition-fields");
+}
+
+export function createPetitionField(input: PetitionFieldPresentation & { code: string; reason: string }): Promise<PetitionField> {
+  return call("POST", "/petition-fields", {
+    code: input.code,
+    default_label: input.defaultLabel,
+    sort_order: input.sortOrder,
+    icon: input.icon,
+    tone: input.tone,
+    reason: input.reason,
+  });
+}
+
+/** No `code` key: the server refuses an unknown field, so a rename cannot even be asked. */
+export function editPetitionField(code: string, input: PetitionFieldPresentation & { reason: string }): Promise<PetitionField> {
+  return call("PUT", `/petition-fields/${id(code)}`, {
+    default_label: input.defaultLabel,
+    sort_order: input.sortOrder,
+    icon: input.icon,
+    tone: input.tone,
+    reason: input.reason,
+  });
+}
+
+export function setPetitionFieldActivation(code: string, input: { active: boolean; reason: string }): Promise<PetitionField> {
+  return call("PUT", `/petition-fields/${id(code)}/activation`, { active: input.active, reason: input.reason });
+}
+
+function auditQueryString(q: OperatorAuditQuery): string {
+  const p = new URLSearchParams();
+  if (q.from) p.set("from", q.from);
+  if (q.to) p.set("to", q.to);
+  if (q.limit !== undefined) p.set("limit", String(q.limit));
+  if (q.cursor) p.set("cursor", q.cursor);
+  const s = p.toString();
+  return s ? "?" + s : "";
+}
+
+/**
+ * Every commune's operator acts plus the platform-wide changes. With `communeId`, that commune's
+ * only — the commune is the PATH's, never a query parameter (operator_platform.go `parseLogQuery`).
+ * Each page read is itself trailed by the server.
+ */
+export function listOperatorAuditEntries(q: OperatorAuditQuery, communeId?: string): Promise<OperatorAuditPage> {
+  const base = communeId === undefined ? "/operator-audit-entries" : `/communes/${id(communeId)}/operator-audit-entries`;
+  return call("GET", base + auditQueryString(q));
 }

@@ -160,3 +160,121 @@ export function secretRetirementText(code: string | undefined): string {
 export function communeError(err: ApiError): { field: CommuneField; text: string } | null {
   return COMMUNE_ERRORS[err.code] ?? null;
 }
+
+// --- wave 2 (ADR 0073) --------------------------------------------------------------------------
+
+const REASON_TEXT = "Hãy ghi lý do, tối đa 500 ký tự.";
+
+/** PUT /upload-policies/{purpose} (operator_platform.go `writePolicyError`). */
+export type UploadPolicyField = "maxBytes" | "mimeTypes" | "maxFiles" | "reason" | "form";
+
+const UPLOAD_POLICY_ERRORS: Record<string, { field: UploadPolicyField; text: string }> = {
+  upload_policy_not_found: {
+    field: "form",
+    text: "Mục đích tải lên này không còn giới hạn nào để sửa. Tải lại trang rồi chọn lại.",
+  },
+  invalid_max_bytes: {
+    field: "maxBytes",
+    text: "Dung lượng tối đa phải lớn hơn 0 và không vượt mức trần của mục đích này.",
+  },
+  invalid_mime_types: {
+    field: "mimeTypes",
+    text: "Chọn ít nhất một kiểu tệp, và chỉ trong các kiểu mục đích này xử lý được.",
+  },
+  invalid_max_files: {
+    field: "maxFiles",
+    text: "Số tệp tối đa phải từ 1 đến 100, hoặc chọn “Không giới hạn”.",
+  },
+  invalid_reason: { field: "reason", text: REASON_TEXT },
+};
+
+export function uploadPolicyError(err: ApiError): { field: UploadPolicyField; text: string } | null {
+  return UPLOAD_POLICY_ERRORS[err.code] ?? null;
+}
+
+/** GET/PUT /shared-mini-app (operator_launch.go). */
+export type SharedMiniAppField = "appId" | "reason" | "form";
+
+export const SHARED_APP_NOT_DECLARED = "Nền tảng chưa khai báo App ID của Mini App dùng chung.";
+
+const SHARED_APP_AMBIGUOUS =
+  "Sổ Mini App đang có hơn một Mini App dùng chung chạy cùng lúc. Báo nhóm nền tảng xử lý; không tự chọn App ID nào.";
+
+const SHARED_APP_ERRORS: Record<string, { field: SharedMiniAppField; text: string }> = {
+  shared_mini_app_not_declared: { field: "form", text: SHARED_APP_NOT_DECLARED },
+  shared_mini_app_ambiguous: { field: "form", text: SHARED_APP_AMBIGUOUS },
+  invalid_app_id: { field: "appId", text: "App ID chỉ gồm chữ số, tối đa 32 chữ số." },
+  mini_app_taken: {
+    field: "appId",
+    text: "App ID này đã có trong sổ Mini App (của một xã, hoặc đã từng dùng). Mỗi App ID chỉ dùng cho một Mini App.",
+  },
+  invalid_reason: { field: "reason", text: REASON_TEXT },
+};
+
+export function sharedMiniAppError(err: ApiError): { field: SharedMiniAppField; text: string } | null {
+  return SHARED_APP_ERRORS[err.code] ?? null;
+}
+
+/**
+ * GET /communes/{id}/mini-app-launch-link refusals (409s of operator_launch.go). `toSharedAppPage`
+ * says the next step is on the "Mini App dùng chung" page, so the card links there.
+ */
+const LAUNCH_LINK_ERRORS: Record<string, { text: string; toSharedAppPage: boolean }> = {
+  commune_inactive: {
+    text: "Xã đang ngừng hoạt động nên không phát hành mã QR: mã QR sẽ đưa người dân tới một xã không còn nhận phản ánh.",
+    toSharedAppPage: false,
+  },
+  commune_no_primary_domain: {
+    text: "Xã chưa có tên miền chính dùng được trong liên kết mở Mini App. Kiểm tra mục Tên miền của xã; nếu xã đã có tên miền chính, báo nhóm nền tảng.",
+    toSharedAppPage: false,
+  },
+  shared_mini_app_not_declared: {
+    text: "Chưa khai báo Mini App dùng chung, nên chưa tạo được liên kết mở Mini App. Người giữ quyền Mini App khai báo App ID ở trang Mini App dùng chung trước.",
+    toSharedAppPage: true,
+  },
+  shared_mini_app_ambiguous: { text: SHARED_APP_AMBIGUOUS, toSharedAppPage: false },
+  commune_not_found: { text: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại.", toSharedAppPage: false },
+};
+
+export function launchLinkError(err: ApiError): { text: string; toSharedAppPage: boolean } | null {
+  return LAUNCH_LINK_ERRORS[err.code] ?? null;
+}
+
+/** Tier-1 petition fields (operator_petition_fields.go `writeFieldError`). */
+export type PetitionFieldFormField = "code" | "label" | "sortOrder" | "icon" | "tone" | "reason" | "form";
+
+const PETITION_FIELD_ERRORS: Record<string, { field: PetitionFieldFormField; text: string }> = {
+  petition_field_not_found: { field: "form", text: "Không còn mã lĩnh vực này. Tải lại trang rồi chọn lại." },
+  petition_field_code_taken: {
+    field: "code",
+    text: "Mã này đã được cấp (kể cả mã đã ngừng dùng). Mã đã cấp không cấp lại; nếu là mã đã ngừng dùng, chọn “Dùng lại” ở dòng của mã đó.",
+  },
+  invalid_code: {
+    field: "code",
+    text: "Mã không đúng dạng: chữ thường không dấu và chữ số, các phần nối bằng dấu gạch ngang; tối đa 64 ký tự.",
+  },
+  invalid_label: { field: "label", text: "Nhãn mặc định không để trống, tối đa 200 ký tự, trên một dòng." },
+  invalid_sort_order: { field: "sortOrder", text: "Thứ tự phải là số nguyên từ 1 đến 10000." },
+  invalid_icon: {
+    field: "icon",
+    text: "Tên biểu tượng không hợp lệ: viết như tên biểu tượng lucide (ví dụ Trash2), hoặc để trống.",
+  },
+  invalid_tone: { field: "tone", text: "Tông màu không thuộc bộ cho phép. Chọn lại trong danh sách." },
+  invalid_reason: { field: "reason", text: REASON_TEXT },
+};
+
+export function petitionFieldError(err: ApiError): { field: PetitionFieldFormField; text: string } | null {
+  return PETITION_FIELD_ERRORS[err.code] ?? null;
+}
+
+/** The operator log's refusals (operator_platform.go `parseLogQuery`, core/page). */
+const OPERATOR_LOG_ERRORS: Record<string, string> = {
+  invalid_range: "Khoảng thời gian không hợp lệ: ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+  invalid_cursor: "Không tải tiếp được trang sau. Tải lại trang để xem lại từ đầu.",
+  invalid_limit: "Số dòng mỗi trang không hợp lệ. Tải lại trang.",
+  commune_not_found: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại.",
+};
+
+export function operatorLogError(err: ApiError): string | null {
+  return OPERATOR_LOG_ERRORS[err.code] ?? null;
+}

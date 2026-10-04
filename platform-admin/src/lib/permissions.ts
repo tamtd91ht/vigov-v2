@@ -1,4 +1,4 @@
-import { OPS_KEYS } from "@/lib/api";
+import { ALL_OPS_KEYS, OPS_KEYS } from "@/lib/api";
 
 /**
  * Which controls to SHOW. UX only, never security (rule 5 forbidden #1): service-platform checks
@@ -11,6 +11,14 @@ export function hasAll(keys: readonly string[], ...required: string[]): boolean 
   return required.every((k) => keys.includes(k));
 }
 
+/**
+ * The console's pure READS — commune list and detail, provinces, upload limits, the shared Mini App,
+ * tier-1 petition fields, the operator log: ANY one decided key (ADR 0073 #1, `opauth.AnyKey`). Only
+ * a key of the closed set counts, like the server's: a string it does not know grants nothing, and a
+ * session holding no key still reads nothing.
+ */
+export const canReadConsole = (keys: readonly string[]) => keys.some((k) => ALL_OPS_KEYS.includes(k));
+
 /** POST /communes: ops.tenant.manage AND ops.domain.manage. */
 export const canCreateCommune = (keys: readonly string[]) =>
   hasAll(keys, OPS_KEYS.tenantManage, OPS_KEYS.domainManage);
@@ -21,5 +29,14 @@ export const canManageDomains = (keys: readonly string[]) => hasAll(keys, OPS_KE
 /** PUT …/name, PUT …/activation: ops.tenant.manage. */
 export const canManageCommune = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.tenantManage);
 
-/** POST …/mini-apps: ops.mini_app.manage. */
+/** Every commune Mini App write, and PUT /shared-mini-app: ops.mini_app.manage. */
 export const canManageMiniApps = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.miniAppManage);
+
+/** PUT /upload-policies/{purpose}: ops.upload_policy.manage. */
+export const canManageUploadPolicies = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.uploadPolicyManage);
+
+/** GET /communes/{id}/mini-app-launch-link: ops.qr.issue (a read with its OWN key, not AnyKey). */
+export const canIssueQr = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.qrIssue);
+
+/** POST /petition-fields, PUT …/{code}, PUT …/{code}/activation: ops.petition_field.manage. */
+export const canManagePetitionFields = (keys: readonly string[]) => hasAll(keys, OPS_KEYS.petitionFieldManage);

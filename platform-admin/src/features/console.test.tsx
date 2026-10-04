@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { ACCOUNT_ITEMS, Sidebar } from "@/components/sidebar";
+import { ACCOUNT_ITEMS, Sidebar, SidebarView } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import type { CommuneDetail, MiniApp } from "@/lib/api";
 import { canCreateCommune, canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
@@ -235,7 +235,7 @@ describe("list and shell", () => {
   // The sign-out button moved from the sidebar to the topbar in the 02/10/2026 redesign (ADR 0068
   // look): where it is drawn is presentation; that the signed-in shell carries it is the behaviour.
   it("the sidebar carries the account menu, and the topbar the operator code and sign-out", () => {
-    const html = renderToString(<Sidebar />);
+    const html = renderToString(<SidebarView permissionKeys={[MINI_APP]} />);
     expect(html).toContain("Danh sách xã");
     expect(html).toContain('aria-current="page"');
     for (const item of ACCOUNT_ITEMS) expect(html).toContain(`href="${item.href}"`);

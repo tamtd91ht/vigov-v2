@@ -1,19 +1,35 @@
 "use client";
 
-import { KeyRound, Landmark, LifeBuoy, PanelLeftClose, PanelLeftOpen, ServerCog, type LucideIcon } from "lucide-react";
+import {
+  FileUp,
+  KeyRound,
+  Landmark,
+  LifeBuoy,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ScrollText,
+  ServerCog,
+  Smartphone,
+  Tags,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { usePermissionKeys } from "@/features/operator/operator-context";
 import { cn } from "@/lib/cn";
+import { canReadConsole } from "@/lib/permissions";
 
 /**
  * Console navigation — drawn like web-admin's sidebar (`web-admin/src/components/sidebar-view.tsx`):
  * white, 240px, an icon per item, the active item filled `--brand-50` with a 3px bar. Wave 1
- * (ADR 0048 §01/10 #4) has one section with screens, plus the operator's own account pages.
+ * (ADR 0048 §01/10 #4) had one section; wave 2 (ADR 0073) adds the shared Mini App, tier-1 petition
+ * fields, upload limits and the operator log. Plus the operator's own account pages, which need only
+ * a session.
  *
- * Wave-2 sections are NOT listed as disabled entries: a menu of greyed-out promises reads as a
- * product that does not work. Later cards add entries as their screens land.
+ * Unbuilt sections are NOT listed as disabled entries: a menu of greyed-out promises reads as a
+ * product that does not work.
  *
  * Showing an entry is UX, not authorisation: service-platform checks `ops.*` on every call.
  *
@@ -27,7 +43,23 @@ import { cn } from "@/lib/cn";
  */
 export type NavItem = { label: string; href: string; icon: LucideIcon };
 
-export const NAV_ITEMS: readonly NavItem[] = [{ label: "Danh sách xã", href: "/xa", icon: Landmark }];
+/**
+ * Every console section is a READ open to ANY one `ops.*` key (ADR 0073 #1, `opauth.AnyKey`); the
+ * writes inside each page follow their own key. So the whole group shows or hides as one: an operator
+ * whose session holds no key (created, never granted) sees no section, because every one would 403.
+ */
+export const NAV_ITEMS: readonly NavItem[] = [
+  { label: "Danh sách xã", href: "/xa", icon: Landmark },
+  { label: "Mini App dùng chung", href: "/mini-app-dung-chung", icon: Smartphone },
+  { label: "Lĩnh vực phản ánh", href: "/linh-vuc-phan-anh", icon: Tags },
+  { label: "Giới hạn tải lên", href: "/gioi-han-tai-len", icon: FileUp },
+  { label: "Nhật ký vận hành", href: "/nhat-ky-van-hanh", icon: ScrollText },
+];
+
+/** The sections to list for these keys — pure, so the denied case is tested without a session. */
+export function visibleNavItems(keys: readonly string[]): readonly NavItem[] {
+  return canReadConsole(keys) ? NAV_ITEMS : [];
+}
 
 export const ACCOUNT_ITEMS: readonly NavItem[] = [
   { label: "Đổi mật khẩu", href: "/tai-khoan/doi-mat-khau", icon: KeyRound },
@@ -97,7 +129,13 @@ function NavGroup({
 }
 
 export function Sidebar() {
+  return <SidebarView permissionKeys={usePermissionKeys()} />;
+}
+
+/** The bar for a given key set; no context read, so tests render it per key. */
+export function SidebarView({ permissionKeys }: { permissionKeys: readonly string[] }) {
   const pathname = usePathname() ?? "/";
+  const navItems = visibleNavItems(permissionKeys);
   const [collapsed, setCollapsed] = useState(false);
   const toggleLabel = collapsed ? EXPAND_LABEL : COLLAPSE_LABEL;
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
@@ -126,7 +164,7 @@ export function Sidebar() {
       </div>
 
       <div className="flex min-w-0 gap-1 overflow-x-auto px-3 pb-2 lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-3">
-        <NavGroup title={null} items={NAV_ITEMS} pathname={pathname} collapsed={collapsed} />
+        {navItems.length > 0 ? <NavGroup title={null} items={navItems} pathname={pathname} collapsed={collapsed} /> : null}
         <NavGroup title="Tài khoản" items={ACCOUNT_ITEMS} pathname={pathname} collapsed={collapsed} />
       </div>
 

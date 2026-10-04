@@ -1,6 +1,17 @@
 "use client";
 
-import { Globe, Landmark, Pencil, Plus, Power, Smartphone, Star, TriangleAlert } from "lucide-react";
+import {
+  Globe,
+  Landmark,
+  Pencil,
+  Plus,
+  Power,
+  QrCode as QrCodeIcon,
+  ScrollText,
+  Smartphone,
+  Star,
+  TriangleAlert,
+} from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { Dialog, DialogActions } from "@/components/dialog";
@@ -25,9 +36,11 @@ import {
   type CommuneDetail,
 } from "@/lib/api";
 import { communeError, type CommuneField } from "@/lib/errors";
-import { canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
+import { OperatorLog } from "@/features/operator-log/operator-log";
+import { canIssueQr, canManageCommune, canManageDomains, canManageMiniApps } from "@/lib/permissions";
 
 import { StatusBadge } from "./commune-parts";
+import { LaunchLinkCard } from "./launch-link-card";
 import { MiniAppSection } from "./mini-app-section";
 
 /**
@@ -42,8 +55,11 @@ import { MiniAppSection } from "./mini-app-section";
  * server checks each call. Every write answers the commune as the registry now holds it, and that
  * answer replaces what is on screen: the page never patches its own copy.
  *
+ * The page itself is a READ open to any `ops.*` key (ADR 0073 #1); so is its operator log (#2). The
+ * QR card needs `ops.qr.issue`.
+ *
  * LAYOUT (ADR 0068 look, presentation only): a page header with the commune's name, then one card
- * per concern — name and status, domains, Mini Apps. The commune's name is printed exactly
+ * per concern — name and status, domains, Mini Apps, QR, operator log. The commune's name is printed exactly
  * as the registry holds it, never rebuilt (ADR 0068 §7).
  */
 
@@ -149,6 +165,7 @@ export function CommuneDetailBody({
   const domainsAllowed = canManageDomains(permissionKeys);
   const communeAllowed = canManageCommune(permissionKeys);
   const miniAppsAllowed = canManageMiniApps(permissionKeys);
+  const qrAllowed = canIssueQr(permissionKeys);
 
   return (
     <div className="flex max-w-[1120px] min-w-0 flex-col gap-4">
@@ -187,6 +204,18 @@ export function CommuneDetailBody({
           onChanged={onChanged}
           onMiniAppAttached={onMiniAppAttached}
         />
+      </SectionCard>
+
+      {/* ops.qr.issue guards the link itself (a read with its own key), so without it the card is
+          absent rather than a card that can only ever say "forbidden". */}
+      {qrAllowed ? (
+        <SectionCard id="commune-launch-link" title="Mã QR mở Mini App" icon={QrCodeIcon}>
+          <LaunchLinkCard communeId={commune.id} />
+        </SectionCard>
+      ) : null}
+
+      <SectionCard id="commune-operator-log" title="Nhật ký vận hành của xã" icon={ScrollText}>
+        <OperatorLog communeId={commune.id} />
       </SectionCard>
     </div>
   );
