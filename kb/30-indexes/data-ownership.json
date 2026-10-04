@@ -138,6 +138,13 @@
       "source": "service-comms/migrations/0011_content_item_media_and_event.sql:52"
     },
     {
+      "entity": "CommuneMapFrameDefault",
+      "service": "platform",
+      "scope": "tenant",
+      "table": "commune_map_frame_default",
+      "source": "service-platform/migrations/0020_commune_map_frame_default.sql:89"
+    },
+    {
       "entity": "ContentCategory",
       "service": "comms",
       "scope": "tenant",

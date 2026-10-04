@@ -3264,7 +3264,7 @@
     },
     "domain.Bounds": {
       "kind": "func",
-      "at": "service-comms/internal/domain/map_frame.go:146"
+      "at": "service-platform/internal/domain/map_frame_default.go:131"
     },
     "domain.BrandingImage": {
       "kind": "type",
@@ -3489,6 +3489,10 @@
     "domain.CheckTypeFields": {
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:673"
+    },
+    "domain.CheckUnusualRadius": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/map_frame_default.go:115"
     },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
@@ -4358,6 +4362,10 @@
       "kind": "func",
       "at": "service-platform/internal/domain/operator_commune.go:86"
     },
+    "domain.IsUnusualRadius": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/map_frame_default.go:110"
+    },
     "domain.IsVerificationPhotoOf": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_staff_file.go:74"
@@ -4952,7 +4960,11 @@
     },
     "domain.MapFrameBounds": {
       "kind": "type",
-      "at": "service-comms/internal/domain/map_frame.go:105"
+      "at": "service-platform/internal/domain/map_frame_default.go:86"
+    },
+    "domain.MapFrameDefault": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/map_frame_default.go:75"
     },
     "domain.MayDownload": {
       "kind": "func",
@@ -5185,6 +5197,10 @@
     "domain.NormalizeMapFrame": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_frame.go:112"
+    },
+    "domain.NormalizeMapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/map_frame_default.go:93"
     },
     "domain.NormalizeMessageText": {
       "kind": "func",
@@ -5673,6 +5689,10 @@
     "domain.SameMapFrame": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_frame.go:138"
+    },
+    "domain.SameMapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/map_frame_default.go:123"
     },
     "domain.SameOptions": {
       "kind": "func",
@@ -6468,23 +6488,27 @@
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:77"
+      "at": "service-platform/internal/grpc/server.go:84"
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:42"
+      "at": "service-platform/internal/grpc/server.go:43"
+    },
+    "grpc.GetMapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/grpc/map_frame_default.go:25"
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:147"
+      "at": "service-platform/internal/grpc/server.go:157"
     },
     "grpc.GetTenantProfile": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:245"
+      "at": "service-platform/internal/grpc/server.go:255"
     },
     "grpc.HoSoHienThi": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:54"
+      "at": "service-platform/internal/grpc/server.go:55"
     },
     "grpc.IdleSessionRevoker": {
       "kind": "type",
@@ -6501,6 +6525,10 @@
     "grpc.ListUploadPolicies": {
       "kind": "func",
       "at": "service-platform/internal/grpc/upload_policy.go:26"
+    },
+    "grpc.MapFrameDefaults": {
+      "kind": "type",
+      "at": "service-platform/internal/grpc/server.go:79"
     },
     "grpc.MeasureWorkingHours": {
       "kind": "func",
@@ -6524,7 +6552,7 @@
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:104"
+      "at": "service-platform/internal/grpc/server.go:113"
     },
     "grpc.NgayLamBuDoc": {
       "kind": "type",
@@ -6572,7 +6600,7 @@
     },
     "grpc.PetitionFields": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:72"
+      "at": "service-platform/internal/grpc/server.go:73"
     },
     "grpc.PhienCongDanDoc": {
       "kind": "type",
@@ -6584,7 +6612,7 @@
     },
     "grpc.PublicURLs": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:60"
+      "at": "service-platform/internal/grpc/server.go:61"
     },
     "grpc.QuyenDoc": {
       "kind": "type",
@@ -6620,7 +6648,7 @@
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:117"
+      "at": "service-platform/internal/grpc/server.go:127"
     },
     "grpc.ResolveLeadershipStaff": {
       "kind": "func",
@@ -6636,7 +6664,7 @@
     },
     "grpc.ResolveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:190"
+      "at": "service-platform/internal/grpc/server.go:200"
     },
     "grpc.ResolveOperatorSession": {
       "kind": "func",
@@ -6684,7 +6712,7 @@
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:90"
+      "at": "service-platform/internal/grpc/server.go:98"
     },
     "grpc.SetMiniAppSecret": {
       "kind": "func",
@@ -6692,7 +6720,7 @@
     },
     "grpc.SoMiniApp": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:49"
+      "at": "service-platform/internal/grpc/server.go:50"
     },
     "grpc.StaffNotificationDeliverer": {
       "kind": "type",
@@ -6704,7 +6732,7 @@
     },
     "grpc.UploadPolicies": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:66"
+      "at": "service-platform/internal/grpc/server.go:67"
     },
     "grpc.WithMiniAppSecrets": {
       "kind": "func",
@@ -7602,6 +7630,10 @@
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:173"
     },
+    "http.MapFrameDefaultEditor": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_map_frame_default.go:27"
+    },
     "http.MapFrameDeps": {
       "kind": "type",
       "at": "service-comms/internal/http/map_frame.go:59"
@@ -7708,7 +7740,7 @@
     },
     "http.OperatorHandler": {
       "kind": "func",
-      "at": "service-platform/internal/http/operator_routes.go:71"
+      "at": "service-platform/internal/http/operator_routes.go:73"
     },
     "http.OperatorIdentity": {
       "kind": "type",
@@ -8896,7 +8928,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:480"
+      "at": "service-platform/cmd/server/main.go:485"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -11186,6 +11218,14 @@
       "kind": "type",
       "at": "service-comms/internal/store/map_field_schema.go:27"
     },
+    "store.MapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/store/map_frame_default.go:49"
+    },
+    "store.MapFrameDefaultStore": {
+      "kind": "type",
+      "at": "service-platform/internal/store/map_frame_default.go:24"
+    },
     "store.MapFrameStore": {
       "kind": "type",
       "at": "service-comms/internal/store/map_frame.go:51"
@@ -11353,6 +11393,10 @@
     "store.NewMapFieldSchemaStore": {
       "kind": "func",
       "at": "service-comms/internal/store/map_field_schema.go:31"
+    },
+    "store.NewMapFrameDefaultStore": {
+      "kind": "func",
+      "at": "service-platform/internal/store/map_frame_default.go:29"
     },
     "store.NewMapFrameStore": {
       "kind": "func",
@@ -11589,6 +11633,10 @@
     "store.OperatorLogQuery": {
       "kind": "type",
       "at": "service-platform/internal/store/operator_log.go:51"
+    },
+    "store.OperatorMapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/store/map_frame_default.go:82"
     },
     "store.OperatorRegistry": {
       "kind": "type",
@@ -11877,6 +11925,10 @@
     "store.SetConfirmation": {
       "kind": "func",
       "at": "service-comms/internal/store/map_asset.go:443"
+    },
+    "store.SetMapFrameDefault": {
+      "kind": "func",
+      "at": "service-platform/internal/store/map_frame_default.go:122"
     },
     "store.SetMiniAppActivation": {
       "kind": "func",
